@@ -909,6 +909,11 @@ def warm_maps(layout: Layout, settings: Settings) -> None:
             if getattr(chosen, "mode", "shoot") == "shoot":
                 round_.update(0.0)
             chosen.draw_world(scratch, round_, 0.0)
+            if isinstance(round_, maps.western.WesternRound):
+                # High Noon's street is a new picture every hour of the round,
+                # not just the first: build the rest now, not as each turns.
+                maps.western.build_hours(round_, layout.window.width,
+                                         layout.window.height)
             # And the dimmed art the results card will sit on: a tenth of a
             # second to build, and the moment it is wanted is the moment the
             # round ends.

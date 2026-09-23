@@ -1026,6 +1026,25 @@ def test_the_maps_are_pre_built_so_the_first_frame_does_not_freeze():
         assert time.perf_counter() - started < 0.05, f"{chosen.key} first frame is slow"
 
 
+def test_every_hour_of_high_noon_is_pre_built_not_just_the_first():
+    """The street is a new picture each hour of the round; building one as
+    the hour turns was a 75 ms stutter every ten seconds."""
+    from handy import app, maps
+    from handy.maps import western
+
+    layout = layout_for(960, 540)
+    settings = Settings(seed=3, window_width=960, window_height=540)
+    app.warm_maps(layout, settings)
+
+    round_ = app.new_round(settings, layout, maps.WESTERN)
+    round_.update(0.0)
+    canvas = np.zeros((540, 960, 3), np.uint8)
+    built = western._backdrop.cache_info().misses
+    for hour in range(western.HOURS):
+        maps.WESTERN.draw_world(canvas, round_, settings.duration * (hour + 0.5) / western.HOURS)
+    assert western._backdrop.cache_info().misses == built
+
+
 # --- no toll booths in front of the race -------------------------------------
 
 def test_map_kart_asks_no_aiming_questions(monkeypatch, tmp_path, model_path):

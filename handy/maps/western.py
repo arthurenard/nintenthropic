@@ -2181,6 +2181,20 @@ def _draw_tally(canvas: np.ndarray, round_: WesternRound) -> None:
         x += w + gap
 
 
+def build_hours(round_: WesternRound, width: int, height: int) -> None:
+    """Build the street at every hour this round will show, ahead of time.
+
+    Each hour is a new picture - the sun lower, the shadows longer - and one
+    takes the best part of a tenth of a second to build. Built as the hour
+    turns, that is a stutter every ten seconds of a minute's round; built
+    here, off the play thread, they are all waiting in the cache.
+    """
+    area = round_.area
+    for hour in range(HOURS if round_.duration else 1):
+        _backdrop((area.x, area.y, area.width, area.height), width, height,
+                  round_.options.seed or 0, hour)
+
+
 def draw_world(canvas: np.ndarray, round_: WesternRound, now: float) -> None:
     area = round_.area
     street = round_.street
