@@ -19,6 +19,7 @@ from typing import Any
 
 from . import fusion, homography
 from .homography import Matrix, Point
+from .storage import write_atomically
 
 #: Two poses can only be told apart if they separate by more than this many
 #: noise widths; below it the measurement is not trustworthy.
@@ -44,6 +45,10 @@ GRID_MARGIN = 0.08
 FIT_TIE = 0.004
 
 DEFAULT_MAPPING = homography.box_mapping((0.15, 0.15), (0.85, 0.85))
+
+#: The calibration file's format, written into it so a later change can tell
+#: what it is reading. Every file from before the field existed is version 1.
+BOOK_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -241,10 +246,12 @@ class Rig:
     def usable(self) -> tuple[bool, ...]:
         return tuple(camera.usable for camera in self.cameras)
 
+    def to_dict(self) -> dict:
+        return {"cameras": [camera.to_dict() for camera in self.cameras]}
+
     def save(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"cameras": [camera.to_dict() for camera in self.cameras]}
-        path.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
+        write_atomically(path, json.dumps(self.to_dict(), indent=2,
+                                          allow_nan=False) + "\n")
 
     @classmethod
     def from_dict(cls, data: dict) -> "Rig":
@@ -278,8 +285,8 @@ class RigBook:
         self.rigs[scheme] = rig
 
     def to_dict(self) -> dict:
-        return {"schemes": {key: {"cameras": [c.to_dict() for c in rig.cameras]}
-                            for key, rig in self.rigs.items()}}
+        return {"version": BOOK_VERSION,
+                "schemes": {key: rig.to_dict() for key, rig in self.rigs.items()}}
 
     def save(self, path: Path) -> bool:
         """Write the book out. False, with a line printed, if the disk said no.
@@ -290,11 +297,10 @@ class RigBook:
         instant setup succeeded, and the round never starting at all.
         """
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
             # Strict JSON: nothing non-finite should exist to write, and if it
             # somehow does, losing the save beats poisoning every later load.
-            path.write_text(json.dumps(self.to_dict(), indent=2, allow_nan=False)
-                            + "\n")
+            write_atomically(path, json.dumps(self.to_dict(), indent=2,
+                                              allow_nan=False) + "\n")
         except (OSError, ValueError) as error:
             print(f"Could not save the calibration to {path}: {error}\n"
                   f"This session is calibrated; the next one will ask again.")
@@ -303,19 +309,31 @@ class RigBook:
 
     @classmethod
     def load(cls, path: Path) -> "RigBook":
-        """Read the book. Anything unreadable simply starts an empty one."""
+        """Read the book, one scheme's rig at a time.
+
+        A file that cannot be read at all starts an empty book. An entry that
+        cannot be read - a rig from an older version, a hand edit gone wrong -
+        is skipped on its own. It used to take every other scheme's rig down
+        with it, and the next save then made the loss permanent.
+        """
         try:
             data = json.loads(path.read_text())
         except (OSError, ValueError):
             return cls()
-        try:
-            if "schemes" in data:
-                return cls({key: Rig.from_dict(entry)
-                            for key, entry in data["schemes"].items()})
-            # A file from before there was more than one way to aim.
-            return cls({"pistol": Rig.from_dict(data)})
-        except (ValueError, KeyError, TypeError, AttributeError):
+        if not isinstance(data, dict):
             return cls()
+        # A file from before there was more than one way to aim holds one rig.
+        entries = data["schemes"] if "schemes" in data else {"pistol": data}
+        if not isinstance(entries, dict):
+            return cls()
+        rigs = {}
+        for key, entry in entries.items():
+            try:
+                rigs[str(key)] = Rig.from_dict(entry)
+            except (ValueError, KeyError, TypeError, AttributeError) as error:
+                print(f"Skipping the saved {key} calibration in {path}: "
+                      f"it could not be read ({error}).")
+        return cls(rigs)
 
 
 @dataclass(frozen=True)

@@ -592,3 +592,73 @@ def test_a_calibration_that_can_be_written_says_so(tmp_path):
     book.set("pistol", Rig((Calibration(gain=1.5),)))
     assert book.save(path) is True
     assert RigBook.load(path).get("pistol").cameras[0].gain == 1.5
+
+
+# --- the book of every scheme's rig ------------------------------------------
+
+def a_book_on_disk(path):
+    from handy.calibration import RigBook
+
+    book = RigBook()
+    book.set("pistol", Rig((Calibration(gain=1.5, aim_fitted=True),)))
+    book.set("gaze", Rig((Calibration(signal="wink", cocked=0.05, folded=0.6),)))
+    book.save(path)
+    return json.loads(path.read_text())
+
+
+@pytest.mark.parametrize("stale", [
+    {"cameras": [{"mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                  "signal": "wink", "cocked": 0.6, "folded": 0.6}]},
+    {"cameras": []},
+    None,
+    "gaze",
+    [1, 2, 3],
+])
+def test_one_unreadable_entry_does_not_take_the_others_down(tmp_path, stale):
+    """Any entry that failed to read discarded the whole book - a stale gaze
+    rig took the valid pistol rig with it - and the next save wrote that
+    emptiness over everything."""
+    from handy.calibration import RigBook
+
+    path = tmp_path / "calibration.json"
+    data = a_book_on_disk(path)
+    data["schemes"]["gaze"] = stale
+    data["schemes"]["marksman"] = stale
+    path.write_text(json.dumps(data))
+
+    book = RigBook.load(path)
+    assert book.get("pistol").cameras[0].gain == 1.5
+    assert book.get("gaze") is None and book.get("marksman") is None
+
+    # And saving it back keeps what could be read.
+    book.save(path)
+    assert RigBook.load(path).get("pistol").cameras[0].gain == 1.5
+
+
+def test_the_book_says_which_format_it_is(tmp_path):
+    from handy.calibration import BOOK_VERSION
+
+    assert a_book_on_disk(tmp_path / "calibration.json")["version"] == BOOK_VERSION
+
+
+def test_a_save_replaces_the_book_whole_or_not_at_all(tmp_path, monkeypatch):
+    """The book was written in place: truncated first, filled after. A crash
+    or a full disk in between left half a file, which reads as an empty book,
+    and the next save then made the loss permanent."""
+    import os
+
+    from handy.calibration import RigBook
+
+    path = tmp_path / "calibration.json"
+    a_book_on_disk(path)
+    before = path.read_text()
+
+    def disk_full(source, destination):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(os, "replace", disk_full)
+    book = RigBook.load(path)
+    book.set("pistol", Rig((Calibration(gain=2.5),)))
+    assert book.save(path) is False
+    assert path.read_text() == before, "the old book is untouched"
+    assert list(tmp_path.iterdir()) == [path], "and nothing is left beside it"
