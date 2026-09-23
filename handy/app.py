@@ -1295,17 +1295,19 @@ def _session(scheme, settings: Settings, layout: Layout,
             if unfitted or untriggered:
                 trouble = []
                 if unfitted:
-                    # A camera the fit could not use is left out of the aim
-                    # altogether - not aimed with a default map - so say so.
-                    trouble.append("AIM: camera " + ", ".join(map(str, unfitted))
-                                   + " could not be fitted and sits this one out")
+                    trouble.append("AIM: could not fit camera "
+                                   + ", ".join(map(str, unfitted)))
+                    # With other cameras fitted, the one that failed is left out
+                    # of the aim altogether; with none fitted, setup fell back
+                    # on the previous or default map, and that is what aims.
+                    trouble.append(
+                        "Playing on defaults. Press c to try again."
+                        if len(unfitted) == len(measured.cameras) else
+                        "It sits this one out. Press c to try again.")
                 if untriggered:
-                    trouble.append("TRIGGER: the two poses looked too alike; "
-                                   "using the default trigger")
-                show_notice(canvas, [
-                    "SETUP DID NOT FULLY SUCCEED", *trouble,
-                    "Press c to try again.",
-                ], scale=layout.scale)
+                    trouble.append("TRIGGER: the two poses looked too alike")
+                show_notice(canvas, ["SETUP DID NOT FULLY SUCCEED", *trouble],
+                            scale=layout.scale)
             return True
 
         while True:
