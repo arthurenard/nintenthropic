@@ -1,7 +1,7 @@
 [project]
 name = "handy"
 version = "0.1.0"
-description = "A webcam arcade: five shooting galleries and a kart race you steer with your hands, powered by MediaPipe."
+description = "A webcam arcade: four finger-pistol shooting games you play with your hand, powered by MediaPipe."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
@@ -15,9 +15,9 @@ dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [tool.uv]
 # Dependencies only: the app is imported straight from this directory. Installing
-# it (even editable) would rely on a .pth file inside .venv, and a background
-# process on this Mac flags everything under a dot-directory on the Desktop as
-# hidden -- which CPython then skips, silently breaking the import.
+# it (even editable) would rely on a .pth file inside .venv, and iCloud Drive
+# flags everything under a dot-directory in a synced folder (such as the
+# Desktop) as hidden -- which CPython then skips, silently breaking the import.
 package = false
 
 [tool.ruff]
