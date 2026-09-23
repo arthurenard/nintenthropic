@@ -1833,6 +1833,11 @@ def vary(wave: np.ndarray, rng: np.random.Generator, pitch_spread: float = 0.03,
     return (PEAK_CEILING * soft_knee(out / PEAK_CEILING)).astype(np.float32)
 
 
+def _own(named: dict[str, list[np.ndarray]]) -> dict[str, list[np.ndarray]]:
+    """A cue table of one's own: the same waves, in lists nobody else holds."""
+    return {name: list(takes) for name, takes in named.items()}
+
+
 class Sounds:
     """The game's sound set, synthesised once and played on demand.
 
@@ -1853,11 +1858,22 @@ class Sounds:
                    "_flesh", "_hurt", "_named")
 
     def __init__(self, audio: Audio, rings: int, seed: int = 0,
-                 variants: int = VARIANTS, background: bool = False) -> None:
+                 variants: int = VARIANTS, background: bool = False,
+                 synthesise: bool = True) -> None:
         self.audio = audio
         self.rng = np.random.default_rng(seed)
         self._variants = max(1, variants)
         self.ready = True
+
+        if not synthesise:
+            # An empty set, for a game nobody can hear: muted, or with no
+            # output device. The full set is seconds of CPU and tens of
+            # megabytes, and not one sample of it would reach a speaker.
+            self._shot, self._miss, self._cock, self._over = [], [], [], []
+            self._hits, self._groans, self._hurt = [], [], []
+            self._flesh = {True: [], False: []}
+            self._named = {}
+            return
 
         key = (rings, seed, self._variants)
         with Sounds._CACHE_LOCK:
@@ -1865,6 +1881,10 @@ class Sounds:
         if built is not None:
             for name in self._WAVE_ATTRS:
                 setattr(self, name, built[name])
+            # The cue table is the one thing `register` writes to, so each set
+            # gets its own; sharing the cache's let one set's registered cue
+            # turn up in every set built after it.
+            self._named = _own(built["_named"])
             return
 
         if not background:
@@ -1935,26 +1955,27 @@ class Sounds:
             return  # keep the stub rather than kill the thread noisily
         # Anything a map registered while the stub was live is kept: those cues
         # exist nowhere else, and swapping the set in wholesale would silence
-        # them for the rest of the round. Merged into a fresh dict, because the
-        # one the full set carries is now shared with the process-wide cache.
+        # them for the rest of the round. The full set's cue table is its own,
+        # never the cache's, so merging into it touches no other set.
         # The stand-in takes planted above are dropped, not merged: the full
         # set carries richer ones under the same names.
         mine = {id(take) for take in planted}
         registered = {name: [t for t in takes if id(t) not in mine]
                       for name, takes in self._named.items()}
         registered = {name: takes for name, takes in registered.items() if takes}
+        named = _own(full._named)
+        for name, takes in registered.items():
+            named.setdefault(name, []).extend(takes)
         for name in self._WAVE_ATTRS:
-            setattr(self, name, getattr(full, name))
-        if registered:
-            self._named = {name: list(takes) for name, takes in full._named.items()}
-            for name, takes in registered.items():
-                self._named.setdefault(name, []).extend(takes)
+            setattr(self, name, named if name == "_named" else getattr(full, name))
         self.ready = True
 
     def _store(self, key) -> None:
         with Sounds._CACHE_LOCK:
             Sounds._CACHE[key] = {name: getattr(self, name)
                                   for name in self._WAVE_ATTRS}
+            # A copy, so a cue this set registers later stays in this set.
+            Sounds._CACHE[key]["_named"] = _own(self._named)
 
     def _takes(self, build: Callable[[float, float], np.ndarray]) -> list[np.ndarray]:
         """Several takes of one sound: the first is the straight one."""
@@ -1968,20 +1989,32 @@ class Sounds:
     def _pick(self, takes: list[np.ndarray]) -> np.ndarray:
         return vary(takes[int(self.rng.integers(len(takes)))], self.rng)
 
+    def _play(self, takes: list[np.ndarray] | None) -> None:
+        """Start one take, varied - unless there is nobody to hear it.
+
+        Asked here, before the take is varied, rather than left to
+        :meth:`Audio.play`: `vary` resamples the whole wave, and a muted game
+        used to pay for that on every shot only to throw the result away.
+        """
+        if takes and self.audio.is_on:
+            self.audio.play(self._pick(takes))
+
     def shot(self) -> None:
-        self.audio.play(self._pick(self._shot))
+        self._play(self._shot)
 
     def hit(self, ring: int) -> None:
-        self.audio.play(self._pick(self._hits[min(max(ring, 0), len(self._hits) - 1)]))
+        if self._hits:
+            self._play(self._hits[min(max(ring, 0), len(self._hits) - 1)])
 
     def miss(self) -> None:
-        self.audio.play(self._pick(self._miss))
+        self._play(self._miss)
 
     def cock(self) -> None:
-        self.audio.play(self._pick(self._cock))
+        self._play(self._cock)
 
     def round_over(self) -> None:
-        self.audio.play(self._over[0])
+        if self._over:
+            self.audio.play(self._over[0])
 
     def register(self, name: str, wave: np.ndarray) -> None:
         """Add a named sound a map can ask for by string, with no coupling.
@@ -1990,18 +2023,16 @@ class Sounds:
 
     def play_named(self, name: str) -> None:
         """Play a registered sound; an unknown name is silently nothing."""
-        takes = self._named.get(name)
-        if takes:
-            self.audio.play(self._pick(takes))
+        self._play(self._named.get(name))
 
     def groan(self) -> None:
-        self.audio.play(self._pick(self._groans))
+        self._play(self._groans)
 
     def flesh(self, headshot: bool) -> None:
-        self.audio.play(self._pick(self._flesh[bool(headshot)]))
+        self._play(self._flesh[bool(headshot)])
 
     def hurt(self) -> None:
-        self.audio.play(self._pick(self._hurt))
+        self._play(self._hurt)
 
     # --- introspection, for tests and the render script ----------------------
 

@@ -1057,8 +1057,9 @@ def _session(scheme, settings: Settings, layout: Layout,
             Audio(volume=settings.volume, enabled=not settings.mute))
         eyes = Eyes(captures, streams, mirror=settings.mirror)
         # Synthesised off the main thread: the full set is seconds of DSP, and
-        # a stub kit covers the menus until the real one is swapped in.
-        sounds = Sounds(audio, RINGS, background=True)
+        # a stub kit covers the menus until the real one is swapped in. Not
+        # synthesised at all when there is no sound to play it through.
+        sounds = Sounds(audio, RINGS, background=True, synthesise=audio.is_on)
         if not audio.is_on and audio.reason != "muted":
             print(f"Playing without sound: {audio.reason}")
         needs_setup = rig is None and not settings.skip_calibration
