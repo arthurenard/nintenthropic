@@ -374,6 +374,20 @@ def test_a_short_window_does_not_end_the_game(server):
         assert status == 200 and data["state"] == "calibration"
 
 
+@pytest.mark.parametrize("failure", [TimeoutError, ConnectionResetError])
+def test_a_failed_model_download_is_reported_not_mistaken_for_a_closed_tab(
+    server, monkeypatch, capsys, failure
+):
+    def download(_name):
+        raise failure("the model server stopped answering")
+
+    monkeypatch.setattr(browser, "ensure_model", download)
+    status, data, _ = call(server, "POST", "/api/start", {"control": "pistol"})
+    assert status == 500 and "terminal" in data["error"]
+    assert "stopped answering" in capsys.readouterr().err
+    assert server.session is None
+
+
 def test_every_response_forbids_cross_origin_embedding(server):
     for path in ("/", "/app.js", "/art/western", "/api/config", "/missing"):
         response = call(server, "GET", path)[2]

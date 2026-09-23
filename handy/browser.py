@@ -755,9 +755,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= MAX_BODY:
-                raise ValueError("Request is too large or empty")
-            data = json.loads(self.rfile.read(size))
+        except ValueError:
+            size = 0
+        if not 0 < size <= MAX_BODY:
+            self.respond(400, {"error": "Request is too large or empty"})
+            return
+        # Read outside the try below, as the answer is written outside it: only
+        # these two touch the tab's connection, and its failures are handle()'s.
+        # A model download failing the same way inside is a real error.
+        body = self.rfile.read(size)
+        try:
+            data = json.loads(body)
             if not isinstance(data, dict):
                 raise ValueError("Expected a JSON object")
             if self.path == "/api/start":
@@ -767,8 +775,6 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})
             return
-        except (ConnectionError, TimeoutError):
-            raise  # the connection itself failed; handle() lets it go quietly
         except Exception as error:
             # Keep the interface usable after a model, device, or renderer fails.
             print(f"Browser request failed: {error!r}", file=sys.stderr, flush=True)
@@ -780,7 +786,6 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
-        # Outside the try: a tab that left before its answer is not a failure.
         self.respond(200, result)
 
 
