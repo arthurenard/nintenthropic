@@ -390,12 +390,29 @@ async function start() {
   }
 }
 function cameraFrame() {
-  if (!media || $("camera").readyState < 2) return null;
+  const video = $("camera");
+  if (!media || video.readyState < 2 || !video.videoWidth) return null;
+  // Send the centred 4:3 view the preview shows (object-fit: cover), cropped
+  // rather than squashed: squeezing a 16:9 camera into 4:3 bends the hand's
+  // angles and the eye-openness ratios the scope reads, and misplaces the
+  // skeleton drawn over the preview.
+  const scale = Math.min(video.videoWidth / 640, video.videoHeight / 480);
+  const [width, height] = [640 * scale, 480 * scale];
   // Mirror exactly once, matching the preview and the native control conventions.
   captureContext.save();
   captureContext.translate(640, 0);
   captureContext.scale(-1, 1);
-  captureContext.drawImage($("camera"), 0, 0, 640, 480);
+  captureContext.drawImage(
+    video,
+    (video.videoWidth - width) / 2,
+    (video.videoHeight - height) / 2,
+    width,
+    height,
+    0,
+    0,
+    640,
+    480,
+  );
   captureContext.restore();
   return captureCanvas.toDataURL("image/jpeg", 0.7).split(",")[1];
 }
