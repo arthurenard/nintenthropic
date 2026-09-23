@@ -144,6 +144,119 @@ def test_verification_miss_cannot_count_a_training_point_as_a_hit():
         assert not session.hits  # every new fit must be independently rechecked
 
 
+def fold(session, poses, fps=30):
+    """Play (thumb degrees, fingertip) poses one frame each, fresh every frame."""
+    now, stamp = 0.0, 0
+    for degrees, tip in poses:
+        stamp += 1
+        now += 1 / fps
+        frame = replace(frame_of(make_hand(degrees, index_tip=tip)), timestamp_ms=stamp)
+        session.update([frame], now)
+
+
+@pytest.mark.parametrize("pause", [0, 7, 10, 20])
+def test_a_fold_that_pauses_part_way_still_counts(pause):
+    """Aim samples were kept only while the thumb was up, and expired after a
+    quarter of a second. A fold that paused part way for longer than that
+    reached the trigger with nothing left, and the shot just fired was thrown
+    away - with a message telling the player to raise their thumb."""
+    session = ShotCalibration(PISTOL)
+    target = session.target
+    tip = (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+    assert 0.35 < thumb_pull(make_hand(42)) < 0.5, "part way: armed, not fired"
+
+    fold(session, [(20, tip)] * 10 + [(42, tip)] * pause + [(70, tip)] * 4)
+
+    assert session.shot_count == 1 and len(session.samples) == 1
+    assert session.samples[0][0][0] == pytest.approx(tip)
+
+
+def test_a_fold_given_up_part_way_does_not_leave_its_aim_behind():
+    """Holding the aim through a fold must not hold it through the next one."""
+    session = ShotCalibration(PISTOL)
+    target = session.target
+    old, new = (0.3, 0.3), (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+
+    fold(session, [(20, old)] * 10 + [(42, old)] * 10 + [(20, new)] * 10
+         + [(70, new)] * 4)
+
+    assert session.samples[0][0][0] == pytest.approx(new)
+
+
+def feed_pair(session, now, stamp, second, first=None):
+    """One shot seen by two cameras. ``second`` places the hand for camera two
+    given the target, or returns None when that camera cannot see it."""
+    target = session.target
+    one = first or (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+    two = second(target)
+    for degrees in [20] * 8 + [70] * 4:
+        stamp += 1
+        now += 0.05
+        frames = [frame_of(make_hand(degrees, index_tip=one)),
+                  frame_of(make_hand(degrees, index_tip=two)) if two else frame_of()]
+        session.update([replace(f, timestamp_ms=stamp) for f in frames], now)
+    return now, stamp
+
+
+def shoot_until_complete(session, second, shots=16):
+    now, stamp = 0.0, 0
+    for _ in range(shots):
+        now, stamp = feed_pair(session, now, stamp, second)
+        if session.complete:
+            break
+    return session
+
+
+def test_a_badly_placed_second_camera_sits_out_instead_of_failing_the_fit():
+    """One camera the fit could not use failed it for the whole rig: a second
+    camera nearly side-on gave forty shots and not a single fit. A second
+    camera is supposed to cost nothing; now it is told to sit the game out."""
+    def side_on(target):  # it barely sees the sideways sweep at all
+        return (0.5 + 0.03 * target[0], 0.3 + 0.4 * target[1])
+
+    session = shoot_until_complete(ShotCalibration(PISTOL, cameras=2), side_on)
+
+    assert session.complete, session.message
+    good, idle = session.rig.cameras
+    assert good.aim_fitted and good.usable
+    assert not idle.aim_fitted and not idle.usable
+    assert session.rig.fitted
+
+
+def test_a_camera_that_cannot_see_every_shot_does_not_hold_up_the_rest():
+    """Every camera had to see the hand on every shot or the shot never
+    happened: a second camera that could not see the left of the room kept
+    the first target lit for ever."""
+    def right_half_only(target):
+        return None if target[0] < 0.5 else (0.3 + 0.4 * target[0],
+                                             0.3 + 0.4 * target[1])
+
+    session = shoot_until_complete(ShotCalibration(PISTOL, cameras=2),
+                                   right_half_only)
+
+    assert session.complete, session.message
+    assert session.rig.cameras[0].aim_fitted
+
+
+def test_both_cameras_learn_when_both_see_the_shots():
+    def good(target):
+        return (0.3 + 0.4 * target[0], 0.3 + 0.4 * target[1])
+
+    session = shoot_until_complete(ShotCalibration(PISTOL, cameras=2), good)
+    assert session.complete
+    assert all(camera.aim_fitted and camera.usable for camera in session.rig.cameras)
+
+
+def test_the_fit_still_fails_when_no_camera_can_aim():
+    session = ShotCalibration(PISTOL, cameras=2)
+    now, stamp = 0.0, 0
+    for _ in range(2):  # a hand that never moved, in both views
+        now, stamp = feed_pair(session, now, stamp, lambda _: (0.5, 0.5),
+                               first=(0.5, 0.5))
+    assert not session.fitted and len(session.samples) == 1
+    assert "too similar" in session.message
+
+
 def test_eye_scope_uses_held_closure_and_filters_brief_blinks():
     from handy.aiming import EyeScope
     from handy.schemes import MARKSMAN

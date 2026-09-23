@@ -45,7 +45,7 @@ class ShotCalibration:
         self.last_fresh = [float("-inf")] * cameras
         self.last_shot = float("-inf")
         self.aim = Aim()
-        self.testing = all(c.aim_fitted for c in self.initial.cameras)
+        self.testing = self.initial.fitted
         self.hits = set()
         self.viewport = (960, 540)
         self.last_hit = False
@@ -66,13 +66,11 @@ class ShotCalibration:
 
     @property
     def preview(self):
-        return self.fitted or all(c.aim_fitted for c in self.initial.cameras)
+        return self.fitted or self.initial.fitted
 
     @property
     def ready(self):
-        return (self.fitted and len(self.samples) >= 3) or all(
-            c.aim_fitted for c in self.initial.cameras
-        )
+        return (self.fitted and len(self.samples) >= 3) or self.initial.fitted
 
     @property
     def complete(self):
@@ -85,39 +83,39 @@ class ShotCalibration:
         for camera, fallback in enumerate(self.initial.cameras):
             source, targets = [], []
             for target in dict.fromkeys(t for _, t in self.samples):
-                points = [points[camera] for points, t in self.samples if t == target][
-                    -3:
-                ]
+                points = [points[camera] for points, t in self.samples
+                          if t == target and points[camera] is not None][-3:]
                 if points:
                     source.append(
                         tuple(statistics.median(p[a] for p in points) for a in (0, 1))
                     )
                     targets.append(target)
-            matrix = (
-                homography.fit_affine(source, targets)
-                if len(source) >= 3
-                else homography.fit_scaled(source, targets)
-            )
-            if matrix is None:
-                return False
-            gain = max(homography.gain(matrix, p) for p in source)
-            error = homography.residual(matrix, source, targets)
-            if not math.isfinite(gain) or gain > GAIN_LIMIT or error > 0.12:
-                return False
-            profiles.append(
-                replace(
-                    fallback,
-                    mapping=matrix,
-                    aim_fitted=True,
-                    fit_error=error,
-                    generalisation=0.0,
-                    gain=gain,
-                    tuning=self.scheme.default_tuning,
-                    slide=(0.0, 0.0),
-                )
-            )
+            profiles.append(self._fit_camera(fallback, source, targets))
+        # One camera the fit cannot use must not fail it for the others: a
+        # second camera is supposed to cost nothing, and a side-on one used to
+        # cost every fit. It sits out instead - but somebody has to aim.
+        if not any(profile.aim_fitted for profile in profiles):
+            return False
         self.rig = Rig(tuple(profiles))
         return True
+
+    def _fit_camera(self, fallback, source, targets):
+        """This camera's map, or the camera told to sit the game out."""
+        matrix = None
+        if len(source) >= 2:
+            matrix = (homography.fit_affine(source, targets) if len(source) >= 3
+                      else homography.fit_scaled(source, targets))
+        if matrix is not None:
+            gain = max(homography.gain(matrix, p) for p in source)
+            error = homography.residual(matrix, source, targets)
+            if math.isfinite(gain) and gain <= GAIN_LIMIT and error <= 0.12:
+                return replace(fallback, mapping=matrix, aim_fitted=True,
+                               fit_error=error, generalisation=0.0, gain=gain,
+                               tuning=self.scheme.default_tuning, slide=(0.0, 0.0))
+        # An infinite gain is how a camera is told to sit the game out: fusion
+        # stops listening to it, and so does the accuracy check.
+        return replace(fallback, aim_fitted=False, gain=float("inf"),
+                       tuning=self.scheme.default_tuning, slide=(0.0, 0.0))
 
     def suspend(self):
         """A pause cannot carry an old aim into a new thumb pull."""
@@ -152,20 +150,25 @@ class ShotCalibration:
             if now - max(self.last_fresh) > 0.35:
                 self.aim = self.controller.update([], now)
             return False
-        # Do not let a camera which missed this shot contribute an old position.
-        if not all(
-            f.subjects and now - self.last_fresh[i] < 0.15 for i, f in enumerate(frames)
-        ):
-            self.aim = self.controller.update([], now)
-            return False
-        self.aim = self.controller.update(list(zip(frames, self.rig.cameras)), now)
-        for i, frame in enumerate(frames):
-            while self.history[i] and now - self.history[i][0][0] > 0.25:
-                self.history[i].popleft()
-            # Keep the last thumb-up aim, rather than the fingertip after firing.
-            if self.aim.armed and self.aim.travel < 0.35:
+        # A camera which missed this frame sits it out rather than contribute
+        # an old position - and only it: waiting for every camera to see the
+        # hand at once held a whole shot hostage to the worst-placed one.
+        seeing = [i for i, frame in enumerate(frames)
+                  if frame.subjects and now - self.last_fresh[i] < 0.15]
+        self.aim = self.controller.update(
+            [(frames[i], self.rig.cameras[i]) for i in seeing], now)
+        # Keep the last thumb-up aim, rather than the fingertip after firing.
+        # The window rolls only while the thumb is up; once the fold begins it
+        # holds still, however long the fold takes. It used to go on expiring,
+        # so a fold that paused part way reached the trigger with nothing left
+        # and the shot just fired was thrown away. Raising the thumb again
+        # rolls the window on, so an abandoned fold leaves nothing behind.
+        if self.aim.armed and self.aim.travel < 0.35:
+            for i in seeing:
+                while self.history[i] and now - self.history[i][0][0] > 0.25:
+                    self.history[i].popleft()
                 point = self.scheme.pointer(
-                    frame.subjects[0], self.scheme.default_tuning
+                    frames[i].subjects[0], self.scheme.default_tuning
                 )
                 if all(math.isfinite(v) for v in point):
                     self.history[i].append((now, point))
@@ -173,28 +176,35 @@ class ShotCalibration:
             return False
         self.last_shot = now
         self.last_hit = False
-        if not all(self.history):
+        if not any(self.history):
             self.message = (
                 "Raise your thumb, aim, then fold it. Keep your hand in view."
             )
             return False
+        # A camera with no aim from before this pull has no say in this shot.
         points = tuple(
-            tuple(statistics.median(p[a] for _, p in h) for a in (0, 1))
+            tuple(statistics.median(p[a] for _, p in h) for a in (0, 1)) if h else None
             for h in self.history
         )
         self.shot_count += 1
         target = self.target
         if self.testing:
             projected = [
-                profile.project(point)
+                landed
                 for profile, point in zip(self.rig.cameras, points)
+                if point is not None and profile.usable
+                and (landed := profile.project(point)) is not None
             ]
-            shot = tuple(statistics.median(p[i] for p in projected) for i in (0, 1))
             width, height = self.viewport
-            error = math.hypot(
-                (shot[0] - target[0]) * width, (shot[1] - target[1]) * height
-            )
-            self.last_impact = (shot, now)
+            # An aim the map cannot place at all is past its horizon: a miss,
+            # and one worth learning from.
+            error = float("inf")
+            if projected:
+                shot = tuple(statistics.median(p[i] for p in projected) for i in (0, 1))
+                error = math.hypot(
+                    (shot[0] - target[0]) * width, (shot[1] - target[1]) * height
+                )
+                self.last_impact = (shot, now)
             if error <= min(width, height) * HIT_RADIUS:
                 self.hits.add(len(self.hits))
                 self.last_hit = True

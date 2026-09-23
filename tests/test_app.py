@@ -267,19 +267,87 @@ def test_the_eyes_use_one_camera_however_many_are_plugged_in():
 
 
 def test_a_saved_rig_for_the_wrong_number_of_cameras_is_not_reused(tmp_path):
-    from handy.app import Settings, saved_rig
+    from handy.app import Settings, rig_setup, saved_rig
     from handy.calibration import Calibration, Rig, RigBook
     from handy.schemes import GAZE, PISTOL
 
-    book = RigBook()
-    book.set("pistol", Rig((Calibration(), Calibration())))
-    book.set("gaze", Rig((Calibration(),)))
+    fitted = Calibration(aim_fitted=True)
     settings = Settings(cameras=(0, 1))
+    book = RigBook()
+    book.set("pistol", Rig((fitted, fitted), rig_setup(settings, (0, 1))))
+    book.set("gaze", Rig((fitted,), rig_setup(settings, (0,))))
 
-    assert saved_rig(book, settings, PISTOL, 2) is not None
-    assert saved_rig(book, settings, PISTOL, 1) is None, "was calibrated for two"
-    assert saved_rig(book, settings, GAZE, 1) is not None
-    assert saved_rig(book, settings, GAZE, 2) is None
+    assert saved_rig(book, settings, PISTOL, (0, 1)) is not None
+    assert saved_rig(book, settings, PISTOL, (0,)) is None, "was calibrated for two"
+    assert saved_rig(book, settings, GAZE, (0,)) is not None
+    assert saved_rig(book, settings, GAZE, (0, 1)) is None
+
+
+def launch_on_the_range(monkeypatch, model_path, path, **changes):
+    """One launch straight into the range, quitting on the first round."""
+    import itertools
+
+    import cv2
+
+    from handy import app
+
+    headless(monkeypatch)
+    keys = itertools.chain([255], itertools.repeat(ord("q")))
+    monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
+    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range",
+                         mute=True, model_path=model_path, calibration_path=path,
+                         **changes))
+
+
+def test_a_setup_is_reused_only_on_the_image_it_was_fitted_on(monkeypatch,
+                                                                tmp_path,
+                                                                model_path):
+    """The saved rig was reused on a camera count alone. Launch with the image
+    unmirrored and the map fitted on the mirrored one aimed every movement
+    backwards, for the whole session, with nothing said."""
+    from handy import app
+    from handy.calibration import Calibration, Rig
+
+    setups = []
+    monkeypatch.setattr(app, "run_calibration", lambda *args, **kwargs: (
+        setups.append(1) or Rig((Calibration(aim_fitted=True),))))
+    path = tmp_path / "calibration.json"
+
+    launch_on_the_range(monkeypatch, model_path, path)
+    assert len(setups) == 1, "nothing saved yet: setup runs"
+    launch_on_the_range(monkeypatch, model_path, path)
+    assert len(setups) == 1, "the same setup reuses it"
+    launch_on_the_range(monkeypatch, model_path, path, mirror=False)
+    assert len(setups) == 2, "a flipped image sets up again"
+    launch_on_the_range(monkeypatch, model_path, path, capture_width=640, capture_height=480)
+    assert len(setups) == 3, "and so does another capture size"
+
+
+def test_an_old_unverified_save_sends_the_player_to_setup(monkeypatch, tmp_path,
+                                                          model_path):
+    """What a real machine had on disk: a pose-calibration map with no fitted
+    flag, no record of its setup, and its horizon inside the camera frame. It
+    was reused on every launch, and a hand a little past the screen edge threw
+    the crosshair into the opposite corner."""
+    import json
+
+    from handy import app
+    from handy.calibration import Calibration, Rig
+
+    legacy = {"mapping": [2.871934573670249, -0.061145355513888985,
+                          -1.2142552975804075, -0.9041251222717106,
+                          2.3601729633571686, -0.8949543501390803,
+                          -1.2131671258909114, 0.4386268157484197, 1.0],
+              "signal": "reach", "cocked": 2.70, "folded": 2.15,
+              "fit_error": 0.023, "generalisation": 0.044, "gain": 5.42}
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps({"schemes": {"pistol": {"cameras": [legacy]}}}))
+    setups = []
+    monkeypatch.setattr(app, "run_calibration", lambda *args, **kwargs: (
+        setups.append(1) or Rig((Calibration(aim_fitted=True),))))
+
+    launch_on_the_range(monkeypatch, model_path, path)
+    assert setups, "the old map was played on without a single check"
 
 
 # --- the startup path ------------------------------------------------------
@@ -1897,7 +1965,10 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
     monkeypatch.setattr(app, "model_bundles", lambda *_: [Path("unused")])
     monkeypatch.setattr(app, "refit", lambda layout, canvas: (layout, canvas))
     headless(monkeypatch)
-    rig = Rig((Calibration(aim_fitted=True, trigger_fitted=True),))
+    settings = app.Settings(cameras=(0,), mute=True, calibration_path=tmp_path / "setup.json")
+    # Stamped with the setup it was fitted on, as every rig setup saves is.
+    rig = Rig((Calibration(aim_fitted=True, trigger_fitted=True),),
+              app.rig_setup(settings, (0,)))
     book = RigBook()
     if has_setup:
         book.set("pistol", rig)
@@ -1914,7 +1985,6 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
         return None, "maps" if chosen.key == "sniper" else "quit"
 
     monkeypatch.setattr(app, "play", play)
-    settings = app.Settings(cameras=(0,), mute=True, calibration_path=tmp_path / "setup.json")
     app._session(pistol, settings, layout_for(960, 540), [FakeCapture()],
                  np.zeros((540, 960, 3), np.uint8), book, HighScores(tmp_path / "scores.json"))
     assert setups == ([] if has_setup else ["marksman"])
