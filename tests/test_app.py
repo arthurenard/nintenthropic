@@ -517,11 +517,13 @@ def test_the_mirror_setting_still_reaches_the_cameras(monkeypatch, tmp_path,
 # --- the screens actually draw what they are for ----------------------------
 
 class OneFrameEyes:
-    """A fake Eyes: every camera hands over one blank frame per read."""
+    """A fake Eyes: every camera hands over one blank frame per read, and its
+    recogniser a new (empty) result for each."""
 
     def __init__(self, count: int = 1) -> None:
         self.count = count
         self.mirror = True
+        self.reads = 0
 
     def __len__(self) -> int:
         return self.count
@@ -529,8 +531,9 @@ class OneFrameEyes:
     def read(self):
         from handy.recognition import Frame
 
+        self.reads += 1
         blank = np.zeros((720, 1280, 3), np.uint8)
-        return [blank] * self.count, [Frame()] * self.count
+        return [blank] * self.count, [Frame(timestamp_ms=self.reads)] * self.count
 
 
 def test_the_map_chooser_draws_the_cards(monkeypatch, layout):
@@ -1553,6 +1556,73 @@ def test_a_hit_asks_the_map_for_its_own_hit_sound(monkeypatch):
 
     assert ("hit", 0) in sounds.calls, "the gold ring's ping never played"
     assert "miss" not in sounds.names()
+
+
+class ScriptedEyes:
+    """A fake Eyes whose recogniser hands back these results, one per read -
+    the same result object twice, when a camera outruns its recogniser."""
+
+    def __init__(self, frames) -> None:
+        self.frames = list(frames)
+        self.mirror = True
+
+    def __len__(self) -> int:
+        return 1
+
+    def read(self):
+        frame = self.frames.pop(0) if len(self.frames) > 1 else self.frames[0]
+        return [np.zeros((720, 1280, 3), np.uint8)], [frame]
+
+
+def test_a_result_is_heard_by_the_trigger_once(monkeypatch):
+    from handy import app, schemes
+    from handy.calibration import default_rig
+    from handy.recognition import Frame
+
+    heard: list[int] = []
+
+    class Controller:
+        def update(self, views, now):
+            heard.append(views[0][0].timestamp_ms)
+            return Aim(position=(0.5, 0.5), armed=True, fired=True)
+
+    trigger = app.FreshAim(Controller(), default_rig(schemes.PISTOL, 1))
+    shots = [trigger.update([Frame(timestamp_ms=stamp)], 0.0).fired
+             for stamp in (1, 1, 1, 2, 2, 3)]
+
+    assert heard == [1, 2, 3]
+    assert shots == [True, False, False, True, False, True], "a result fires once"
+
+
+def test_a_misread_delivered_twice_is_not_a_shot(monkeypatch):
+    """Each loop fed `latest()` to the trigger whether or not it was new. One
+    misread frame read twice is two of the median's three readings, and the
+    gun fired on its own."""
+    import cv2
+    from hands import make_hand
+
+    from handy import app, maps, schemes
+    from handy.calibration import default_rig
+    from handy.recognition import Frame
+
+    up, down = make_hand(thumb_degrees=12.0), make_hand(thumb_degrees=70.0)
+    misread = Frame(hands=(down,), timestamp_ms=4)
+    results = [Frame(hands=(up,), timestamp_ms=1), Frame(hands=(up,), timestamp_ms=2),
+               Frame(hands=(up,), timestamp_ms=3), misread, misread,
+               Frame(hands=(up,), timestamp_ms=5), Frame(hands=(up,), timestamp_ms=6)]
+
+    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
+    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    key_sequence(monkeypatch, [NOTHING] * len(results) + [ord("q")])
+    settings = Settings(recoil=0.0, seed=1)
+    round_, reason = app.play(
+        ScriptedEyes(results), np.zeros((HEIGHT, WIDTH, 3), np.uint8), settings,
+        layout_for(WIDTH, HEIGHT), app.make_controller(settings, schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE, schemes.PISTOL)
+
+    assert reason == "quit"
+    assert round_.shots == 0, "the gun fired on a single misread frame"
 
 
 def test_a_miss_thuds(monkeypatch):

@@ -634,6 +634,32 @@ def make_controller(settings: Settings, scheme) -> AimController:
                          native_thumb=scheme.key in ("pistol", "marksman"))
 
 
+class FreshAim:
+    """The aim controller, handed each recognition result once.
+
+    The loops run as fast as the cameras do, and a recogniser's ``latest()``
+    keeps answering with the same result until the next one lands. Fed twice,
+    one misread frame is two of the three readings the trigger's median looks
+    at - a majority, and a shot the player never took. So the controller only
+    hears from a camera whose result is new; in between, the last aim stands,
+    and never fires again.
+    """
+
+    def __init__(self, controller: AimController, rig: Rig) -> None:
+        self.controller = controller
+        self.rig = rig
+        self._stamps: tuple[int, ...] | None = None
+        self._aim = Aim()
+
+    def update(self, hands: list, now: float) -> Aim:
+        stamps = tuple(frame.timestamp_ms for frame in hands)
+        if stamps == self._stamps:
+            return replace(self._aim, fired=False)
+        self._stamps = stamps
+        self._aim = self.controller.update(list(zip(hands, self.rig.cameras)), now)
+        return self._aim
+
+
 def crosshair_for(aim: Aim, layout: Layout, recoil: Recoil,
                   now: float) -> tuple[int, int] | None:
     """The aim point after the gun has kicked, clamped to the window."""
@@ -673,11 +699,12 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
     # the round's first update, so a build done inside the first frame came
     # out of the player's sixty seconds. Once warm, this is a millisecond.
     chosen.draw_world(canvas, round_, time.monotonic())
+    trigger = FreshAim(controller, rig)
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
-        aim = controller.update(list(zip(hands, rig.cameras)), now)
+        aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
 
         # Looking down the scope: the eye decides, the map moves its view to
@@ -764,11 +791,12 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     recoil = Recoil(kick=0.0)
+    trigger = FreshAim(controller, rig)
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
-        aim = controller.update(list(zip(hands, rig.cameras)), now)
+        aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
 
         entries = []
@@ -846,11 +874,12 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
     recoil = Recoil(kick=0.0)  # the round is over; no kick to fight
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
+    trigger = FreshAim(controller, rig)
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
-        aim = controller.update(list(zip(hands, rig.cameras)), now)
+        aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
 
         scene.draw_results(canvas, summary, best, is_best,
