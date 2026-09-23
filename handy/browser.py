@@ -495,6 +495,10 @@ class Handler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
         )
+        # Another site's page may not even embed a response from here: an image
+        # or script load would pull it into that page's process, where a side
+        # channel such as Spectre could read it despite the same-origin policy.
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         if status >= 400:
             # A refusal may leave the request body unread, and whatever follows
             # it on this connection could not be trusted as the next request.
@@ -509,8 +513,28 @@ class Handler(BaseHTTPRequestHandler):
         port = self.server.server_port
         return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
 
+    def same_origin(self):
+        """False for a request another page made, other than a link to here.
+
+        Browsers label what they send with where it came from. A server on
+        another port of this machine counts as the same *site*, so only the
+        same origin passes. Following a link or bookmark to the arcade is fine:
+        the page that linked here cannot read what it opened. Clients that send
+        no labels at all, such as scripts, still need the Host and the token.
+        """
+        origin = self.headers.get("Origin")
+        if origin is not None and origin != f"http://{self.headers.get('Host')}":
+            return False
+        if self.headers.get("Sec-Fetch-Site") in (None, "same-origin", "none"):
+            return True
+        return (
+            self.command == "GET"
+            and self.headers.get("Sec-Fetch-Mode") == "navigate"
+            and self.headers.get("Sec-Fetch-Dest") == "document"
+        )
+
     def do_GET(self):
-        if not self.valid_host():
+        if not self.valid_host() or not self.same_origin():
             self.respond(403, {"error": "Use the local Handy address"})
             return
         path = urlsplit(self.path).path
@@ -553,8 +577,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         # Compared as bytes: a header carrying non-ASCII would make the string
         # comparison raise instead of simply failing.
-        if not self.valid_host() or not secrets.compare_digest(
-            self.headers.get("X-Handy-Token", "").encode(), self.server.token.encode()
+        if (
+            not self.valid_host()
+            or not self.same_origin()
+            or not secrets.compare_digest(
+                self.headers.get("X-Handy-Token", "").encode(),
+                self.server.token.encode(),
+            )
         ):
             self.respond(403, {"error": "Reload Handy to reconnect"})
             return

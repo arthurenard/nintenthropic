@@ -225,3 +225,61 @@ def test_unexpected_failures_answer_500_and_are_reported_on_stderr(
     status, data, _ = call(server, "POST", "/api/frame", {"id": session["id"]})
     assert status == 500 and "terminal" in data["error"]
     assert "renderer fell over" in capsys.readouterr().err
+
+
+def test_every_response_forbids_cross_origin_embedding(server):
+    for path in ("/", "/app.js", "/art/western", "/api/config", "/missing"):
+        response = call(server, "GET", path)[2]
+        assert response.getheader("Cross-Origin-Resource-Policy") == "same-origin"
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        # Another website fetching the token, or drawing the art into a canvas.
+        {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors"},
+        {
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-Mode": "no-cors",
+            "Sec-Fetch-Dest": "image",
+        },
+        # A server on another port of this machine is the same site, not origin.
+        {"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "cors"},
+        # Framing the arcade from elsewhere.
+        {
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "iframe",
+        },
+        {"Origin": "http://evil.example"},
+        {"Origin": "null"},
+    ],
+)
+def test_other_sites_cannot_read_or_post(server, labels):
+    assert call(server, "GET", "/api/config", headers=labels)[0] == 403
+    assert call(server, "GET", "/art/zombies", headers=labels)[0] == 403
+    assert call(server, "POST", "/api/start", {}, headers=labels)[0] == 403
+    assert server.session is None
+
+
+def test_the_page_itself_and_links_to_it_are_allowed(server):
+    port = server.server_port
+    own = {
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Origin": f"http://localhost:{port}",
+        "Host": f"localhost:{port}",
+    }
+    assert call(server, "GET", "/api/config", headers=own)[0] == 200
+    assert call(server, "POST", "/api/start", {}, headers=own)[0] == 200
+    # Opened from the terminal, a bookmark, or a link on another website.
+    for site in ("none", "cross-site"):
+        link = {
+            "Sec-Fetch-Site": site,
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+        }
+        assert call(server, "GET", "/", headers=link)[0] == 200
+    # A form on another site may navigate here, but never post.
+    form = {**link, "Origin": "http://evil.example"}
+    assert call(server, "POST", "/api/start", {}, headers=form)[0] == 403
