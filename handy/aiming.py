@@ -155,7 +155,7 @@ class CameraProfile(Protocol):
     signal: str
     tuning: tuple[float, float]
 
-    def project(self, point: Point) -> Point: ...
+    def project(self, point: Point) -> Point | None: ...
 
     def local_gain(self, point: Point) -> float: ...
 
@@ -308,7 +308,7 @@ class AimController:
         """One frame from each camera, paired with that camera's calibration."""
         opinions = [self._opinion(frame, profile) for frame, profile in views
                     if frame.subjects]
-        fused = fuse(opinions)
+        fused = fuse([opinion for opinion in opinions if opinion is not None])
         if fused is None:
             gone_for = (float("inf") if self._last_seen is None
                         else timestamp - self._last_seen)
@@ -386,11 +386,21 @@ class AimController:
                    baseline=self._trough, spread=fused.spread, cameras=fused.cameras,
                    depth=fused.depth)
 
-    def _opinion(self, frame: object, profile: CameraProfile) -> Opinion:
+    def _opinion(self, frame: object, profile: CameraProfile) -> Opinion | None:
+        """What this camera makes of the hand, or None if its map cannot say.
+
+        A camera whose map has no image for the fingertip - past the map's
+        horizon, or a non-finite reading - sits the frame out. Anything else
+        would hand fusion a point on the wrong side of the screen, or a NaN
+        that the filter would carry for the rest of the round.
+        """
         subject = frame.subjects[0]
         pointed = self.scheme.pointer(subject, profile.tuning)
+        position = profile.project(pointed)
+        if position is None or not all(math.isfinite(v) for v in position):
+            return None
         measured = self.scheme.measure(profile.signal, subject)
-        return Opinion(position=profile.project(pointed),
+        return Opinion(position=position,
                        travel=(thumb_pull(subject) if self.native_thumb
                                else profile.travel(measured)),
                        gain=profile.local_gain(pointed), slide=profile.slide,

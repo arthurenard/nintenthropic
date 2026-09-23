@@ -186,15 +186,20 @@ class ShotCalibration:
         target = self.target
         if self.testing:
             projected = [
-                profile.project(point)
+                landed
                 for profile, point in zip(self.rig.cameras, points)
+                if (landed := profile.project(point)) is not None
             ]
-            shot = tuple(statistics.median(p[i] for p in projected) for i in (0, 1))
             width, height = self.viewport
-            error = math.hypot(
-                (shot[0] - target[0]) * width, (shot[1] - target[1]) * height
-            )
-            self.last_impact = (shot, now)
+            # An aim the map cannot place at all is past its horizon: a miss,
+            # and one worth learning from.
+            error = float("inf")
+            if projected:
+                shot = tuple(statistics.median(p[i] for p in projected) for i in (0, 1))
+                error = math.hypot(
+                    (shot[0] - target[0]) * width, (shot[1] - target[1]) * height
+                )
+                self.last_impact = (shot, now)
             if error <= min(width, height) * HIT_RADIUS:
                 self.hits.add(len(self.hits))
                 self.last_hit = True

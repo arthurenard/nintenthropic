@@ -228,6 +228,26 @@ def test_a_native_thumb_says_where_it_is_while_the_hand_blinks_out():
     assert all(armed), "a raised thumb stays cocked through every blip"
 
 
+def test_a_fingertip_past_a_cameras_horizon_is_not_aimed_at_the_opposite_corner():
+    """A projective map sends everything past its horizon back from the far
+    side, mirrored. The map an old setup saved on a real machine has its
+    horizon inside the camera frame, and a hand a quarter of the frame past
+    the screen's right edge put the crosshair in the bottom-left corner."""
+    legacy = Calibration(mapping=(
+        2.871934573670249, -0.061145355513888985, -1.2142552975804075,
+        -0.9041251222717106, 2.3601729633571686, -0.8949543501390803,
+        -1.2131671258909114, 0.4386268157484197, 1.0))
+    control = controller(native_thumb=True)
+    past = frame_of(make_hand(thumb_degrees=20, index_tip=(0.95, 0.2)))
+
+    assert control.update(views(past, profile=legacy), 0.0).position is None
+
+    # A second camera that can place the hand carries the aim on its own.
+    aim = control.update([(past, legacy), (past, PROFILE)], 1 / 30)
+    assert aim.cameras == 1
+    assert aim.position == pytest.approx(PROFILE.to_play_area((0.95, 0.2)))
+
+
 def test_the_aim_is_mapped_through_the_calibrated_box():
     # The box runs 0.2..0.8, so those edges are the edges of the window. The
     # filter never lands exactly, hence the tolerance.

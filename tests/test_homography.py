@@ -164,10 +164,66 @@ def test_a_scaled_fit_refuses_what_cannot_determine_it():
                                  [(0.1, 0.1), (0.9, 0.9)]) is None
 
 
-def test_a_point_on_the_horizon_does_not_blow_up():
-    # A transform whose weight goes to zero somewhere in the plane.
+def test_a_point_on_or_past_the_horizon_has_no_image():
+    """On the horizon the old code answered the centre of the screen; a hair
+    past it, the far side of the screen, mirrored. Neither is where the hand is."""
+    # A transform whose weight goes to zero along x = 0.5, positive beyond it.
     matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -0.5)
-    assert homography.apply(matrix, (0.5, 0.2)) == (0.5, 0.5)
+    assert homography.apply(matrix, (0.5, 0.2)) is None
+    assert homography.apply(matrix, (0.5 - 1e-11, 0.2)) is None
+    assert homography.apply(matrix, (0.4, 0.2)) is None
+    assert homography.apply(matrix, (0.6, 0.2)) == pytest.approx((6.0, 2.0))
+    assert homography.gain(matrix, (0.4, 0.2)) == float("inf")
+
+
+# The map an old pose calibration saved on the player's own machine. Its
+# horizon crosses the camera frame at x = 0.82 along the top edge.
+LEGACY = (2.871934573670249, -0.061145355513888985, -1.2142552975804075,
+          -0.9041251222717106, 2.3601729633571686, -0.8949543501390803,
+          -1.2131671258909114, 0.4386268157484197, 1.0)
+
+
+def test_a_fingertip_past_the_horizon_is_not_thrown_to_the_opposite_corner():
+    """A quarter of the frame past the screen edge the crosshair used to flip
+    from the top-right corner to the bottom-left: the weight changes sign and
+    both coordinates with it."""
+    before = homography.apply(LEGACY, (0.895, 0.2))
+    assert before[0] > 1.0 and before[1] < 0.0, "off the top right, as it should be"
+    assert homography.apply(LEGACY, (0.899, 0.2)) is None
+    assert homography.apply(LEGACY, (0.95, 0.2)) is None
+
+
+def test_whether_a_map_is_defined_across_a_whole_box():
+    frame = ((0.0, 0.0), (1.0, 1.0))
+    assert homography.defined_over(homography.IDENTITY, *frame)
+    assert homography.defined_over(homography.fit(SKEWED, CORNERS), *frame)
+    assert not homography.defined_over(LEGACY, *frame), "its horizon is in view"
+    assert homography.defined_over(LEGACY, (0.2, 0.2), (0.7, 0.8))
+    assert not homography.defined_over((float("nan"),) * 9, *frame)
+
+
+def test_a_fit_is_defined_on_the_side_of_the_horizon_its_points_came_from():
+    """A homography's sign is free, and the fit normalised it by one entry - so
+    points on the far side of the origin from the horizon came out with negative
+    weight everywhere they were fitted, and would all read as past the horizon."""
+    truth = np.array([[1.0, 0.2, 0.0], [0.1, 1.0, 0.0], [-5.0, 0.0, 1.0]])
+    hand = [(0.30, 0.30), (0.70, 0.35), (0.65, 0.70), (0.35, 0.65), (0.5, 0.5)]
+    screen = []
+    for x, y in hand:
+        u, v, w = truth @ np.array([x, y, 1.0])
+        screen.append((u / w, v / w))
+
+    matrix = homography.fit(hand, screen)
+    assert matrix is not None
+    for point, target in zip(hand, screen):
+        assert homography.apply(matrix, point) == pytest.approx(target, abs=1e-6)
+    # Its horizon (x = 0.2) is still a horizon: nothing short of it is mapped.
+    assert homography.apply(matrix, (0.1, 0.5)) is None
+
+
+def test_a_residual_counts_a_point_it_cannot_place_as_infinitely_wrong():
+    matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -0.5)
+    assert homography.residual(matrix, [(0.4, 0.2)], [(0.4, 0.2)]) == float("inf")
 
 
 def test_a_residual_without_points_is_zero():

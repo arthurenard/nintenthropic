@@ -77,17 +77,19 @@ class Calibration:
         """False for a camera placed where its map has to stretch beyond sense."""
         return self.gain <= fusion.GAIN_LIMIT
 
-    def project(self, point: Point) -> Point:
+    def project(self, point: Point) -> Point | None:
         """Map a camera-space point onto the screen, without clamping.
 
         Fusion needs the raw answer: clamping first would hide exactly the
-        disagreement between cameras that the depth solve reads.
+        disagreement between cameras that the depth solve reads. None where
+        the map has no answer at all - past its horizon, see ``apply``.
         """
         return homography.apply(self.mapping, point)
 
-    def to_play_area(self, point: Point) -> Point:
+    def to_play_area(self, point: Point) -> Point | None:
         """Map a camera-space point onto the screen, 0..1, clamped at the edges."""
-        return clamp(self.project(point))
+        projected = self.project(point)
+        return None if projected is None else clamp(projected)
 
     def local_gain(self, point: Point) -> float:
         """How much this camera's map magnifies movement right here."""
@@ -573,6 +575,8 @@ class CalibrationSession:
         if near is None or far is None:
             return (0.0, 0.0)
         close, distant = homography.apply(mapping, near), homography.apply(mapping, far)
+        if close is None or distant is None:
+            return (0.0, 0.0)  # a reach the map cannot place measures nothing
         return ((distant[0] - close[0]) / 2.0, (distant[1] - close[1]) / 2.0)
 
     def _jitter(self, index: int, fallback: Calibration,
@@ -663,8 +667,10 @@ def _generalisation(observed: list[Point], intended: list[Point],
                      intended[:held] + intended[held + 1:])
         if matrix is None:
             return float("inf")
-        errors.append(math.dist(homography.apply(matrix, observed[held]),
-                                intended[held]))
+        predicted = homography.apply(matrix, observed[held])
+        if predicted is None:
+            return float("inf")  # the held-out marker fell past the horizon
+        errors.append(math.dist(predicted, intended[held]))
     return sum(errors) / len(errors)
 
 
