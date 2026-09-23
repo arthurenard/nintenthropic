@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import numpy as np
 import pytest
@@ -5,9 +7,10 @@ import pytest
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, GAITS, LOW_HEALTH, MAX_WALKERS,
-                                MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
-                                Perspective, Walker, ZombieRound, _paint,
-                                draw_emblem, draw_hud, draw_robot, draw_world)
+                                MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
+                                Perspective, Walker, ZombieRound, _bloom,
+                                _environment, _paint, _skyline, draw_emblem,
+                                draw_hud, draw_robot, draw_world)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -334,6 +337,26 @@ def test_the_world_draws_at_every_stage():
     canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
     draw_world(canvas, round_, 10.1)
     assert canvas.any()
+
+
+def test_the_moon_bloom_is_the_full_size_blur_to_within_a_couple_of_levels():
+    height, width, moon = 400, 640, (486, 60)
+    for radius in (136, 48, 20):
+        full = np.zeros((height, width, 3), np.uint8)
+        cv2.circle(full, moon, radius, MOONLIGHT, -1, cv2.LINE_AA)
+        full = cv2.GaussianBlur(full, (0, 0), radius / 2.0).astype(int)
+        assert np.abs(_bloom(height, width, moon, radius, MOONLIGHT) - full).max() <= 2
+
+
+def test_the_backdrop_builds_in_well_under_a_second():
+    """It is built on the first frame at a new window size, where any delay is
+    a freeze the player feels; the moon's glow alone used to take three
+    seconds of it."""
+    area = Rect(31, 294, 1450, 578)
+    started = time.perf_counter()
+    _environment.__wrapped__((area.x, area.y, area.width, area.height), 1512, 945, 0,
+                             _skyline(area, 0))
+    assert time.perf_counter() - started < 1.0
 
 
 def test_a_walker_too_small_to_see_is_skipped_without_error():

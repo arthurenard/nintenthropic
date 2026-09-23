@@ -710,6 +710,44 @@ def _draw_moon(canvas: np.ndarray, centre: tuple[int, int], disc: int,
     canvas[y0:y1, x0:x1] = np.clip(patch, 0, 255).astype(np.uint8)
 
 
+def _bloom(height: int, width: int, centre: tuple[int, int], radius: int,
+           colour) -> np.ndarray:
+    """A disc of ``colour`` blurred by half its radius: one ring of the moon's
+    bloom, as an image the size of the frame.
+
+    The widest ring is a Gaussian of sigma 160 on a full-size frame, and
+    blurred at that size it took nearly three seconds - the whole of the
+    backdrop's cold build - for a picture with nothing sharp left in it. So
+    the disc is painted and blurred small, with about eight pixels of blur
+    left at the small size, and scaled back up: within a level of the full
+    blur everywhere. Rings too small to gain anything are blurred as they are.
+    """
+    sigma = radius / 2.0
+    step = max(1, int(sigma / 8.0))
+    if step == 1:
+        glow = np.zeros((height, width, 3), np.uint8)
+        cv2.circle(glow, centre, radius, colour, -1, cv2.LINE_AA)
+        return cv2.GaussianBlur(glow, (0, 0), sigma)
+    # Painted at full size and averaged down in blocks, so the small disc
+    # carries exactly the light the big one does, in exactly the same place.
+    # It is mirrored out past the frame first, as the full blur mirrors the
+    # frame at its edges, and the block average is itself a little blur, taken
+    # off the one that follows.
+    disc = np.zeros((height, width, 3), np.uint8)
+    cv2.circle(disc, centre, radius, colour, -1, cv2.LINE_AA)
+    margin = math.ceil(4.0 * sigma / step) * step
+    rows, cols = -(-height // step), -(-width // step)
+    disc = cv2.copyMakeBorder(disc, margin, margin + rows * step - height,
+                              margin, margin + cols * step - width, cv2.BORDER_REFLECT_101)
+    small = cv2.resize(disc, (disc.shape[1] // step, disc.shape[0] // step),
+                       interpolation=cv2.INTER_AREA).astype(np.float32)
+    cv2.GaussianBlur(small, (0, 0), math.sqrt(sigma ** 2 - (step ** 2 - 1) / 12.0) / step,
+                     dst=small)
+    grown = cv2.resize(small, (disc.shape[1], disc.shape[0]), interpolation=cv2.INTER_CUBIC)
+    return np.clip(grown[margin:margin + height, margin:margin + width] + 0.5, 0,
+                   255).astype(np.uint8)
+
+
 @lru_cache(maxsize=6)
 def _environment(area: tuple, width: int, height: int, seed: int,
                  skyline: tuple) -> np.ndarray:
@@ -738,7 +776,6 @@ def _environment(area: tuple, width: int, height: int, seed: int,
 
     # Moon: a hard disc inside a bloom the haze carries a long way.
     moon = (int(width * 0.76), int(horizon - height * 0.17))
-    glow = np.zeros((height, width, 3), np.uint8)
     # The radii double as blur sigmas, and a GaussianBlur of sigma 0 with no
     # kernel size to fall back on is an assertion failure, not a no-op. On the
     # chooser card this environment is drawn a couple of dozen pixels tall, and
@@ -746,13 +783,11 @@ def _environment(area: tuple, width: int, height: int, seed: int,
     for radius, weight in ((max(1, int(height * 0.34)), 0.16),
                            (max(1, int(height * 0.12)), 0.30),
                            (max(1, int(height * 0.05)), 0.34)):
-        glow[:] = 0
-        cv2.circle(glow, moon, radius, MOONLIGHT, -1, cv2.LINE_AA)
-        cv2.GaussianBlur(glow, (0, 0), radius / 2.0, dst=glow)
+        glow = _bloom(height, width, moon, radius, MOONLIGHT)
         cv2.addWeighted(canvas, 1.0, glow, weight, 0.0, dst=canvas)
     # Rays: the haze lit in shafts fanning down and to the left from the moon,
     # the one key light everything else in the picture agrees with.
-    glow[:] = 0
+    glow = np.zeros((height, width, 3), np.uint8)
     for index in range(7):
         angle = math.radians(118 + index * 9.5 + 4 * math.sin(index * 2.3))
         spread = math.radians(1.6 + 1.2 * (index % 3))
