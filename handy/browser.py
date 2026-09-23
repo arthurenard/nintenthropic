@@ -49,6 +49,18 @@ def number(value, low, high):
     return value
 
 
+def stage_size(aspect):
+    """The canvas (width, height) for a stage of this width-to-height shape.
+
+    Shapes beyond 1:4 and 8:1 are drawn at the nearest one the renderer
+    supports. A short or narrow window is not a mistake to refuse: the page
+    sends its shape with every frame, and one refusal would end the game.
+    """
+    aspect = min(max(number(aspect, 0, math.inf), 0.25), 8)
+    height = min(900, round(WIDTH / aspect))
+    return round(height * aspect), height
+
+
 def jpeg(image):
     ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 82])
     if not ok:
@@ -89,9 +101,10 @@ def jpeg_size(raw):
 
 class BrowserSession:
     def __init__(self, config):
-        aspect = number(config.get("viewAspect", WIDTH / HEIGHT), 0.25, 8)
-        self.height = min(900, round(WIDTH / aspect))
-        self.width = round(self.height * aspect)
+        aspect = config.get("viewAspect")
+        self.width, self.height = stage_size(
+            WIDTH / HEIGHT if aspect is None else aspect
+        )
         self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
         if self.map.key not in maps.keys():
             raise ValueError("Choose a game from the arcade")
@@ -295,10 +308,10 @@ class BrowserSession:
         if self.state not in ("paused", "over"):
             self.clock += dt
         now = self.clock
-        if self.state in ("calibration", "practice") and "viewAspect" in data:
-            aspect = number(data["viewAspect"], 0.25, 8)
-            height = min(900, round(WIDTH / aspect))
-            width = round(height * aspect)
+        # A stage with no size yet measures 0 by 0, which JSON sends as null.
+        aspect = data.get("viewAspect")
+        if self.state in ("calibration", "practice") and aspect is not None:
+            width, height = stage_size(aspect)
             if (width, height) != (self.width, self.height):
                 self.width, self.height = width, height
                 self.canvas = np.zeros((height, width, 3), np.uint8)

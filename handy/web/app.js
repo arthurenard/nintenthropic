@@ -214,6 +214,13 @@ function drawHandGraph(hands) {
     });
   }
 }
+function stageAspect() {
+  // A stage with no size yet measures 0 by 0. Leave its shape out rather than
+  // send NaN, which JSON turns into null; the server keeps the current shape.
+  const rect = $("stage").getBoundingClientRect();
+  const aspect = rect.width / rect.height;
+  return Number.isFinite(aspect) && aspect > 0 ? aspect : undefined;
+}
 function stopCamera() {
   if (media) media.getTracks().forEach((track) => track.stop());
   media = null;
@@ -262,9 +269,8 @@ async function start() {
     $("lobby").hidden = true;
     $("game").hidden = false;
     $("game").classList.toggle("immersive", selectedControl === "pistol");
-    const stageRect = $("stage").getBoundingClientRect();
     session = await request("/api/start", {
-      viewAspect: stageRect.width / stageRect.height,
+      viewAspect: stageAspect(),
       map: selectedMap,
       control: selectedControl,
       enemy: $("enemy").value,
@@ -458,9 +464,8 @@ async function loop(run) {
       fire = false;
       const down = (...codes) =>
         codes.some((c) => keys.has(c) || touchKeys.has(c));
-      const stageRect = $("stage").getBoundingClientRect();
       const data = await request("/api/frame", {
-        viewAspect: stageRect.width / stageRect.height,
+        viewAspect: stageAspect(),
         id: session.id,
         ...pointer,
         fire: shot,

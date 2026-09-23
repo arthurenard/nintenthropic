@@ -127,7 +127,9 @@ def test_other_host_names_are_refused(server, host):
 @pytest.mark.parametrize("token", [None, "", "wrong", "café"])
 def test_posts_without_the_page_token_are_refused(server, token):
     headers = {} if token is None else {"X-Handy-Token": token}
-    status, data, _ = call(server, "POST", "/api/start", {}, headers=headers, token=False)
+    status, data, _ = call(
+        server, "POST", "/api/start", {}, headers=headers, token=False
+    )
     assert status == 403 and "Reload" in data["error"]
     assert server.session is None
 
@@ -158,7 +160,11 @@ def test_frames_share_one_kept_alive_connection(server):
         local = connection.sock.getsockname()
         for _ in range(3):
             status, data, _ = call(
-                server, "POST", "/api/frame", {"id": session["id"]}, connection=connection
+                server,
+                "POST",
+                "/api/frame",
+                {"id": session["id"]},
+                connection=connection,
             )
             assert status == 200 and data["image"]
             assert connection.sock.getsockname() == local
@@ -330,6 +336,17 @@ def test_a_decode_bomb_is_refused(server):
         server, "POST", "/api/frame", {"id": session["id"], "camera": bomb}
     )
     assert status == 400 and "1280 by 720" in data["error"]
+
+
+def test_a_short_window_does_not_end_the_game(server):
+    # A stage 1200 by 100 pixels: every warm-up frame used to be refused.
+    assert start(server, viewAspect=20)["state"] == "playing"
+    session = start(server, control="pistol", viewAspect=12)
+    for aspect in (12, 0.1, None):
+        status, data, _ = call(
+            server, "POST", "/api/frame", {"id": session["id"], "viewAspect": aspect}
+        )
+        assert status == 200 and data["state"] == "calibration"
 
 
 def test_every_response_forbids_cross_origin_embedding(server):

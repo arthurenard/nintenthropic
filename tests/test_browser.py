@@ -175,7 +175,8 @@ def test_jpeg_size_is_read_from_the_header(progressive):
 
 
 @pytest.mark.parametrize(
-    "raw", [b"\xff\xd8", b"\xff\xd8\xff\xd9", b"\xff\xd8\xff\xda\x00\x02", b"\xff\xd8junk"]
+    "raw",
+    [b"\xff\xd8", b"\xff\xd8\xff\xd9", b"\xff\xd8\xff\xda\x00\x02", b"\xff\xd8junk"],
 )
 def test_jpeg_without_a_frame_header_is_invalid(raw):
     with pytest.raises(ValueError):
@@ -422,6 +423,34 @@ def test_calibration_resizes_to_stage_and_keeps_it_for_gameplay(monkeypatch):
         shoot_setup_target(session, stream)
     assert session.options.area.width == 960 and session.options.area.height == 400
     assert session.round.area.height == 400
+
+
+@pytest.mark.parametrize(
+    "aspect, size",
+    [(12, (960, 120)), (8, (960, 120)), (0.1, (225, 900)), (0, (225, 900))],
+)
+def test_extreme_stage_shapes_are_clamped_not_refused(aspect, size, monkeypatch):
+    # A window a few hundred pixels tall must not end the game on its first frame.
+    assert BrowserSession({"viewAspect": aspect}).width == size[0]
+    session, _stream = camera_session(monkeypatch)
+    session.tick({**camera_payload(), "viewAspect": aspect}, session.last_tick)
+    assert (session.width, session.height) == size
+    assert session.canvas.shape[:2] == size[::-1]
+
+
+def test_an_unmeasured_stage_keeps_the_current_shape(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+    before = (session.width, session.height)
+    session.tick({**camera_payload(), "viewAspect": None}, session.last_tick)
+    assert (session.width, session.height) == before
+    assert BrowserSession({"viewAspect": None}).width == browser.WIDTH
+
+
+@pytest.mark.parametrize("aspect", ["wide", float("nan"), float("inf"), -1, True])
+def test_a_stage_shape_that_is_not_a_number_is_refused(aspect, monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+    with pytest.raises(ValueError):
+        session.tick({"viewAspect": aspect}, session.last_tick)
 
 
 def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):
