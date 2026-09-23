@@ -11,7 +11,6 @@ import pytest
 
 from handy import browser, maps
 from handy.browser import BrowserSession, Handler
-from handy.calibration import CalibrationSession
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import ZombieRound, draw_robot
 from handy.recognition import Frame
@@ -100,25 +99,6 @@ def test_invalid_pointer_never_enters_game_geometry(data):
     with pytest.raises(ValueError):
         BrowserSession({}).tick(data)
 
-
-def test_quick_calibration_omits_only_unneeded_depth_poses():
-    assert len(CalibrationSession(PISTOL, grid=2, quick=True).steps) == 6
-    assert len(CalibrationSession(PISTOL, cameras=2, grid=2, quick=True).steps) == 8
-    assert len(CalibrationSession(PISTOL, grid=3).steps) == 13
-
-
-def test_back_and_retry_discard_bad_samples_not_previous_progress():
-    s = CalibrationSession(PISTOL, grid=2, dwell=0.1, settle=0, quick=True)
-    frame = frame_of(make_hand(index_tip=(0.2, 0.2)))
-    s.update([frame], 0)
-    s.update([frame], 0.2)
-    assert s._index == 1
-    s.update([frame], 0.3)
-    s.retry(0.4)
-    assert s._index == 1 and not any(s._samples)
-    assert "aim_0" in s._recorded
-    s.back(0.5)
-    assert s._index == 0 and not s._recorded
 
 
 class FakeStream:

@@ -93,7 +93,7 @@ def draw_eyes(image: np.ndarray, frame, scale: float = 1.0) -> np.ndarray:
     """Sketch the eyes and irises. Mutates and returns ``image``.
 
     Only the eyes: a full face mesh in a corner of the screen is noise, and the
-    eyes are the whole of what this scheme reads.
+    eyes are the whole of what the scope reads.
     """
     height, width = image.shape[:2]
     for face in frame.subjects:

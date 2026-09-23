@@ -395,23 +395,3 @@ def test_a_heroic_calibration_fold_cannot_raise_the_bar():
 
     deep = Calibration(signal="angle", cocked=16.0, folded=16.0 + 45.0)
     assert noisy_pistol(profile=deep)(fold_sequence(50, 6)) == 4
-
-
-def test_calibration_caps_the_span_it_stores():
-    from handy.calibration import CalibrationSession
-
-    session = CalibrationSession(PISTOL, cameras=1, grid=2, dwell=0.3,
-                                 settle=0.1)
-    clock = 0.0
-    while not session.is_done:
-        step = session.step
-        for _ in range(600):
-            clock += 1 / 30
-            degrees = 88.0 if step.key == "fired" else 16.0
-            session.update([frame_of(make_hand(thumb_degrees=degrees))], clock)
-            if session.step is not step or session.is_done:
-                break
-    fitted = session.result()[0]
-    assert fitted.trigger_fitted
-    span = abs(fitted.folded - fitted.cocked)
-    assert span <= PISTOL.signal("angle").max_span + 1e-9

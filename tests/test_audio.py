@@ -306,7 +306,7 @@ def test_the_game_actually_asks_for_the_background_build(monkeypatch, tmp_path,
     monkeypatch.setattr(Sounds, "__init__", spy)
     test_app.headless(monkeypatch)
     app.run(app.Settings(map_key="range", mute=True, skip_calibration=True,
-                         control="pistol", duration=60.0,
+                         duration=60.0,
                          model_path=model_path,
                          calibration_path=tmp_path / "calibration.json"))
 

@@ -135,7 +135,6 @@ class BrowserSession:
             arm_below=self.scheme.arm_below,
             min_cutoff=self.scheme.smoothing[0],
             beta=self.scheme.smoothing[1],
-            median=self.scheme.trigger_median,
             native_thumb=True,
         )
 

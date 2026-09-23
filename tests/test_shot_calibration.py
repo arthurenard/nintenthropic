@@ -120,7 +120,6 @@ def test_native_setup_starts_after_five_verified_hits(monkeypatch):
         np.zeros((720, 1280, 3), np.uint8),
         app.layout_for(1280, 720),
         PISTOL,
-        2,
         None,
     )
     assert rig[0].aim_fitted and not rig[0].trigger_fitted

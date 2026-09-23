@@ -153,7 +153,6 @@ class CameraProfile(Protocol):
     jitter: float
     usable: bool
     signal: str
-    tuning: tuple[float, float]
 
     def project(self, point: Point) -> Point: ...
 
@@ -165,7 +164,7 @@ class CameraProfile(Protocol):
 class Scheme(Protocol):
     """How the player aims and fires. Duck-typed to keep the modules apart."""
 
-    def pointer(self, subject: object, tuning: tuple[float, float]) -> Point: ...
+    def pointer(self, subject: object) -> Point: ...
 
     def measure(self, signal: str, subject: object) -> float: ...
 
@@ -243,16 +242,15 @@ class AimController:
     DIP_FRAMES = 5
 
     #: How long the subject may vanish before the trigger forgets its state.
-    #: Trackers drop a frame now and then - and a face is likeliest to be lost
-    #: in the very moment an eye closes. Resetting on a single missing frame
-    #: disarms the gun and re-seeds the resting level at the wink itself, which
-    #: turns the shot into nothing. A brief gap is bridged instead.
+    #: Trackers drop a frame now and then, and a hand is likeliest to be lost
+    #: mid-fold, when the thumb blurs. Resetting on a single missing frame
+    #: disarms the gun, which turns the shot into nothing. A brief gap is
+    #: bridged instead.
     GRACE = 0.3
 
     def __init__(self, scheme: Scheme, *, fire_above: float = 0.50,
                  arm_below: float = 0.30, min_cutoff: float = 1.2,
-                 beta: float = 0.8, median: bool = True,
-                 native_thumb: bool = False) -> None:
+                 beta: float = 0.8, native_thumb: bool = False) -> None:
         if arm_below >= fire_above:
             raise ValueError("arm_below must be under fire_above to give hysteresis")
         self.scheme = scheme
@@ -261,10 +259,8 @@ class AimController:
         self.fire_above = fire_above
         self.arm_below = arm_below
         self._filter = PointFilter(min_cutoff=min_cutoff, beta=beta)
-        # The median-of-three guards a slow trigger (a thumb) against one misread
-        # frame. A fast one (an eye) can be over and done inside a single
-        # detection, and the same guard would swallow the shot.
-        self._travel = MedianOf3() if median else None
+        # The median-of-three guards the thumb against one misread frame.
+        self._travel = MedianOf3()
         self._armed = True
         self._trough: float | None = None
         self._below = 0
@@ -316,8 +312,7 @@ class AimController:
                 # Properly lost. Forget everything, so a shot never fires on
                 # re-acquisition from a stale stroke.
                 self._filter.reset()
-                if self._travel is not None:
-                    self._travel.reset()
+                self._travel.reset()
                 self._armed = False
                 self._thumb_ready = False
                 self._trough = None
@@ -327,8 +322,7 @@ class AimController:
         self._last_seen = timestamp
         position = self._filter(_clamp(fused.position), timestamp)
 
-        travel = (self._travel(fused.travel) if self._travel is not None
-                  else fused.travel)
+        travel = self._travel(fused.travel)
 
         if self.native_thumb:
             fired = self._thumb_ready and travel > self.fire_above
@@ -381,7 +375,7 @@ class AimController:
 
     def _opinion(self, frame: object, profile: CameraProfile) -> Opinion:
         subject = frame.subjects[0]
-        pointed = self.scheme.pointer(subject, profile.tuning)
+        pointed = self.scheme.pointer(subject)
         measured = self.scheme.measure(profile.signal, subject)
         return Opinion(position=profile.project(pointed),
                        travel=(thumb_pull(subject) if self.native_thumb

@@ -112,7 +112,6 @@ class ShotCalibration:
                     fit_error=error,
                     generalisation=0.0,
                     gain=gain,
-                    tuning=self.scheme.default_tuning,
                     slide=(0.0, 0.0),
                 )
             )
@@ -164,9 +163,7 @@ class ShotCalibration:
                 self.history[i].popleft()
             # Keep the last thumb-up aim, rather than the fingertip after firing.
             if self.aim.armed and self.aim.travel < 0.35:
-                point = self.scheme.pointer(
-                    frame.subjects[0], self.scheme.default_tuning
-                )
+                point = self.scheme.pointer(frame.subjects[0])
                 if all(math.isfinite(v) for v in point):
                     self.history[i].append((now, point))
         if not self.aim.fired or now - self.last_shot < 0.45:

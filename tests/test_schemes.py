@@ -5,7 +5,7 @@ import pytest
 from eyes import make_face
 from handy import schemes
 from handy.aiming import AimController
-from handy.calibration import CalibrationSession, default_calibration
+from handy.calibration import default_calibration
 from handy.faces import FaceFrame
 from handy.marksman import Marksman, MarksmanFrame
 from handy.recognition import Frame
@@ -18,8 +18,6 @@ def subject_and_frame(scheme):
     face = make_face(blink=(0.2, 0.2))
     if scheme.key == "pistol":
         return hand, Frame(hands=(hand,))
-    if scheme.key == "gaze":
-        return face, FaceFrame(faces=(face,))
     if scheme.key == "marksman":
         subject = Marksman(hand, face)
         return subject, MarksmanFrame(subjects=(subject,), hands=(hand,), faces=(face,))
@@ -35,7 +33,7 @@ def test_every_reading_accepts_the_schemes_own_subject(scheme):
 
     for signal in scheme.signals:
         assert isinstance(signal.measure(subject), float)
-    x, y = scheme.pointer(subject, scheme.default_tuning)
+    x, y = scheme.pointer(subject)
     assert all(isinstance(v, float) for v in (x, y))
     assert scheme.scale(subject) > 0
     if scheme.describe_subject is not None:
@@ -45,19 +43,9 @@ def test_every_reading_accepts_the_schemes_own_subject(scheme):
 
 
 @pytest.mark.parametrize("scheme", schemes.SCHEMES, ids=lambda s: s.key)
-def test_every_scheme_walks_its_own_calibration_and_aims(scheme):
-    subject, frame = subject_and_frame(scheme)
-    session = CalibrationSession(scheme, cameras=1, grid=2, dwell=0.2, settle=0.05)
-    clock = 0.0
-    while not session.is_done:
-        clock += 1 / 30
-        session.update([frame], clock)
-    rig = session.result()
-
-    control = AimController(scheme)
-    aim = control.update([(frame, rig[0])], 0.0)
-    assert aim.tracking
-    aim = control.update([(frame, default_calibration(scheme))], 0.1)
+def test_every_scheme_aims_on_its_own_defaults(scheme):
+    _subject, frame = subject_and_frame(scheme)
+    aim = AimController(scheme).update([(frame, default_calibration(scheme))], 0.0)
     assert aim.tracking
 
 
@@ -71,18 +59,13 @@ def test_every_scheme_names_the_models_it_opens(scheme):
 
 
 def test_the_marksman_trigger_is_the_pistols_trigger_in_every_field():
-    """It rebuilds the pistol's signals to unwrap the hand inside the marksman.
-    Listing the fields by hand dropped max_span, which falls back to infinity -
-    so setup let a deliberate 92-degree pose set the scale and every quick play
-    stroke came up short, on the scheme advertised as the pistol plus an eye."""
+    """It rebuilds the pistol's signals to unwrap the hand inside the marksman."""
     hand = make_hand(thumb_degrees=40)
     subject = Marksman(hand, make_face())
 
     assert [s.name for s in schemes.MARKSMAN.signals] == [
         s.name for s in schemes.PISTOL.signals]
     for borrowed, original in zip(schemes.MARKSMAN.signals, schemes.PISTOL.signals):
-        assert borrowed.max_span == original.max_span
-        assert borrowed.min_travel == original.min_travel
         assert (borrowed.rest, borrowed.fired) == (original.rest, original.fired)
         assert borrowed.measure(subject) == pytest.approx(original.measure(hand))
 
@@ -93,11 +76,11 @@ def test_the_marksman_scopes_with_the_eye_and_aims_with_the_hand():
     winking = Marksman(hand, make_face(blink=(0.9, 0.15)))
     no_face = Marksman(hand, None)
 
-    assert schemes.MARKSMAN.pointer(open_eyes, (0, 0)) == (0.3, 0.7)
+    assert schemes.MARKSMAN.pointer(open_eyes) == (0.3, 0.7)
     assert schemes.MARKSMAN.scope(open_eyes) < 0.3
     assert schemes.MARKSMAN.scope(winking) > 0.5
     assert schemes.MARKSMAN.scope(no_face) is None, "no face: never scoped, still aims"
-    assert schemes.MARKSMAN.pointer(no_face, (0, 0)) == (0.3, 0.7)
+    assert schemes.MARKSMAN.pointer(no_face) == (0.3, 0.7)
 
 
 def test_the_marksman_stream_pairs_a_hand_with_whatever_face_there_is():

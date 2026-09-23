@@ -170,10 +170,10 @@ def fit_scaled(source: Sequence[Point], destination: Sequence[Point]) -> Matrix 
 def fit_affine(source: Sequence[Point], destination: Sequence[Point]) -> Matrix | None:
     """Least-squares affine map taking ``source`` onto ``destination``.
 
-    Six degrees of freedom instead of the homography's eight. For a signal like
-    gaze - small angles, heavy noise - the true map is very nearly affine, and
-    the two projective parameters do nothing but chase noise: on nine calibration
-    points they buy a tighter training fit and a wilder map everywhere else.
+    Six degrees of freedom instead of the homography's eight. On the handful of
+    noisy points setup collects, the two projective parameters do nothing but
+    chase noise: they buy a tighter training fit and a wilder map everywhere
+    else.
     """
     if len(source) != len(destination) or len(source) < MIN_AFFINE_POINTS:
         return None

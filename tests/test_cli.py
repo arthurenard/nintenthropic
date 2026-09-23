@@ -90,7 +90,7 @@ def test_the_ordinary_flags_still_get_through():
         "--recoil", "0", "--seed", "7", "--mute",
         "--no-mirror", "--debug",
     ])
-    assert settings.control == "pistol" and settings.map_key == "sniper"
+    assert settings.map_key == "sniper"
     assert settings.duration == 30.0 and settings.fire_above == 0.6
     assert settings.arm_below == 0.2 and settings.volume == 0.4
     assert settings.recoil == 0.0
