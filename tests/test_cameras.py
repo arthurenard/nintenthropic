@@ -152,3 +152,32 @@ def test_a_desk_with_nothing_working_finds_nothing(monkeypatch):
 
     assert first_live() is None
     assert all(device.live is False for device in probe())
+
+
+# --- keeping OpenCV quiet while it is asked about indices that are not there -
+
+def test_opencv_is_really_silenced_while_the_cameras_are_counted(monkeypatch):
+    """The quiet used to set OPENCV_LOG_LEVEL, which OpenCV reads once, when it
+    starts - long before the search - so every missing index still printed."""
+    logging = cameras.cv2.utils.logging
+    levels = []
+
+    def capture_for(index):
+        levels.append(logging.getLogLevel())
+        return FakeCapture([], opened=False)
+
+    monkeypatch.setattr(cameras.cv2, "VideoCapture", capture_for)
+    monkeypatch.setattr(cameras, "system_camera_names", lambda: [])
+    before = logging.getLogLevel()
+
+    assert probe() == [] and first_live() is None
+    assert levels and set(levels) == {logging.LOG_LEVEL_SILENT}
+    assert logging.getLogLevel() == before, "and the level is put back after"
+
+
+def test_the_log_level_comes_back_even_when_the_search_fails():
+    logging = cameras.cv2.utils.logging
+    before = logging.getLogLevel()
+    with pytest.raises(RuntimeError), cameras._quiet():
+        raise RuntimeError("a backend blew up")
+    assert logging.getLogLevel() == before
