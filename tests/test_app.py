@@ -1586,6 +1586,92 @@ def test_s_saves_a_screenshot_without_ending_the_round(monkeypatch, tmp_path):
     assert list(tmp_path.glob("*.png"))
 
 
+def test_a_screenshot_that_cannot_be_written_is_said_and_the_round_goes_on(
+        monkeypatch, tmp_path, capsys):
+    """A folder that cannot be made raised out of the round, which lost the
+    score - and main() then blamed the network for it."""
+    from handy import app
+
+    blocker = tmp_path / "a file, not a folder"
+    blocker.write_text("")
+    notices: list[list[str]] = []
+    monkeypatch.setattr(app, "show_notice", lambda canvas, lines, seconds=3.0,
+                        scale=1.0: notices.append(lines))
+
+    _, reason = play_once(monkeypatch, keys=[ord("s"), ord("q")],
+                          settings=Settings(screenshot_dir=blocker / "shots", seed=1))
+
+    assert reason == "quit", "the round carried on after the failed save"
+    assert notices and "SCREENSHOT NOT SAVED" in notices[0]
+    assert "Saved" not in capsys.readouterr().out
+
+
+def test_the_results_card_survives_a_failed_screenshot(monkeypatch, tmp_path):
+    from handy import app, scene, schemes
+    from handy.calibration import default_rig
+    from handy.game import Summary
+
+    import cv2
+    for name in ("imshow", "setMouseCallback"):
+        monkeypatch.setattr(cv2, name, lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app, "show_notice", lambda *args, **kwargs: None)
+    key_sequence(monkeypatch, [ord("s"), ord("q")])
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+
+    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
+                      perfect=0, duration=60.0)
+    assert app.show_results(
+        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
+        Settings(screenshot_dir=blocker / "shots"), layout_for(WIDTH, HEIGHT),
+        app.make_controller(Settings(), schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), summary, 5, True) == "quit"
+
+
+def test_a_screenshot_imwrite_refused_is_not_reported_as_saved(monkeypatch, tmp_path):
+    """imwrite says no by returning False, and "Saved" was printed regardless."""
+    import cv2
+
+    from handy import app
+
+    monkeypatch.setattr(cv2, "imwrite", lambda *args: False)
+    with pytest.raises(OSError):
+        app.save_screenshot(np.zeros((4, 4, 3), np.uint8), tmp_path)
+
+
+def test_two_screenshots_in_the_same_second_are_two_files(monkeypatch, tmp_path):
+    """Named to the second, a quick second press overwrote the first frame."""
+    from handy import app
+
+    monkeypatch.setattr(app.time, "time", lambda: 1_790_000_000.25)
+    first = app.save_screenshot(np.zeros((4, 4, 3), np.uint8), tmp_path)
+    second = app.save_screenshot(np.full((4, 4, 3), 9, np.uint8), tmp_path)
+
+    assert first != second
+    assert len(list(tmp_path.glob("*.png"))) == 2
+    assert first.stem.endswith("-250"), "the milliseconds are in the name"
+
+
+def test_a_model_mediapipe_cannot_read_is_named_not_a_traceback(monkeypatch,
+                                                                tmp_path, capsys):
+    """A corrupt --model raised a bare RuntimeError out of the session."""
+    from handy import app, cli
+
+    bogus = tmp_path / "hand.task"
+    bogus.write_bytes(b"not a zip archive")
+    headless(monkeypatch)
+    monkeypatch.setattr(app, "open_window", lambda settings: (960, 540))
+
+    assert cli.main(["--camera", "0", "--model", str(bogus), "--mute",
+                     "--no-calibration", "--map", "zombies",
+                     "--calibration-file", str(tmp_path / "calibration.json")]) == 1
+    err = capsys.readouterr().err
+    assert "hand.task" in err and ".task bundle" in err
+    assert "network" not in err
+
+
 def test_a_round_that_runs_out_of_time_ends_by_itself(monkeypatch):
     """The `is_over` exit: the only way a round ends without a key."""
     _, reason = play_once(monkeypatch, key=NOTHING,

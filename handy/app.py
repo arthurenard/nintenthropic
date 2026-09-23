@@ -299,9 +299,43 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
 
 
 def save_screenshot(image: np.ndarray, directory: Path) -> Path:
+    """Write the frame into ``directory`` and say where. OSError if it could not.
+
+    The name carries milliseconds, and never reuses a file already there: at
+    one-second resolution two quick presses wrote the same name, and the
+    first frame was quietly replaced by the second.
+    """
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"handy-{time.strftime('%Y%m%d-%H%M%S')}.png"
-    cv2.imwrite(str(path), image)
+    now = time.time()
+    stem = (f"handy-{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}"
+            f"-{int(now * 1000) % 1000:03d}")
+    path, copy = directory / f"{stem}.png", 1
+    while path.exists():
+        path, copy = directory / f"{stem}-{copy}.png", copy + 1
+    # imwrite reports a failure by returning False, not by raising, and was
+    # believed regardless: "Saved" was printed for files that never existed.
+    if not cv2.imwrite(str(path), image):
+        raise OSError(f"could not write {path}")
+    return path
+
+
+def take_screenshot(canvas: np.ndarray, settings: Settings,
+                    scale: float = 1.0) -> Path | None:
+    """The 's' key: save the frame, or say on screen why not, and play on.
+
+    A folder that cannot be written to used to raise out of the round - which
+    ended it, lost the score, and had main() blame the network.
+    """
+    try:
+        path = save_screenshot(canvas, settings.screenshot_dir)
+    except (OSError, cv2.error) as error:
+        print(f"Could not save a screenshot in {settings.screenshot_dir}: {error}")
+        show_notice(canvas, ["SCREENSHOT NOT SAVED",
+                             "The screenshot folder cannot be written to.",
+                             "Choose another with --screenshot-dir."],
+                    seconds=2.0, scale=scale)
+        return None
+    print(f"Saved {path}")
     return path
 
 
@@ -689,7 +723,7 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
         elif key == ord("n") and chosen.key == "zombies":
             return round_, "enemy"
         elif key == ord("s"):
-            print(f"Saved {save_screenshot(canvas, settings.screenshot_dir)}")
+            take_screenshot(canvas, settings, layout.scale)
 
 
 def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
@@ -830,7 +864,7 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         if key == ord("c"):
             return "recalibrate"
         if key == ord("s"):
-            print(f"Saved {save_screenshot(canvas, settings.screenshot_dir)}")
+            take_screenshot(canvas, settings, layout.scale)
 
 
 def cameras_for(scheme, indices: tuple[int, ...]) -> tuple[int, ...]:
@@ -1012,6 +1046,30 @@ def prefetch_models(settings: Settings) -> None:
         ensure_model(name)
 
 
+class ModelError(RuntimeError):
+    """A model bundle that is there, but that MediaPipe will not load."""
+
+
+def open_streams(stack: contextlib.ExitStack, scheme, paths: list[Path],
+                 count: int) -> list:
+    """One tracking stream per camera, closed with ``stack``.
+
+    A bundle MediaPipe cannot read - a damaged download, a --model that is not
+    a .task file at all - fails here with a bare RuntimeError ("Unable to open
+    zip archive"), which used to escape as a traceback. It leaves as a
+    ModelError that says which file, and what to do about it.
+    """
+    try:
+        return [stack.enter_context(scheme.open_stream(*paths))
+                for _ in range(count)]
+    except RuntimeError as error:
+        listed = ", ".join(str(path) for path in paths)
+        raise ModelError(
+            f"Could not load the tracking model ({listed}): {error}. A --model "
+            f"has to be a MediaPipe .task bundle; a damaged download can be "
+            f"deleted, and the game fetches it again.") from error
+
+
 def model_bundles(settings: Settings, scheme) -> list[Path]:
     """Resolve tracking models, preserving a hand override when adding the scope."""
     if settings.model_path is None:
@@ -1051,8 +1109,7 @@ def _session(scheme, settings: Settings, layout: Layout,
         # chooser and the next session's menus go back to the plain grid.
         stack.callback(scene.set_ambient_art, None)
         stream_stack = stack.enter_context(contextlib.ExitStack())
-        streams = [stream_stack.enter_context(scheme.open_stream(*model_paths))
-                   for _ in captures]
+        streams = open_streams(stream_stack, scheme, model_paths, len(captures))
         audio = stack.enter_context(
             Audio(volume=settings.volume, enabled=not settings.mute))
         eyes = Eyes(captures, streams, mirror=settings.mirror)
@@ -1123,8 +1180,8 @@ def _session(scheme, settings: Settings, layout: Layout,
                     # rig and setup state; replace only the tracking streams.
                     paths = model_bundles(settings, wanted)
                     stream_stack.close()
-                    streams = [stream_stack.enter_context(wanted.open_stream(*paths))
-                               for _ in captures]
+                    streams = open_streams(stream_stack, wanted, paths,
+                                           len(captures))
                     scheme = wanted
                     eyes = Eyes(captures, streams, mirror=settings.mirror)
             # The menus that follow a round sit on the map's own art, dimmed;

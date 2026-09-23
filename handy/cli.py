@@ -9,7 +9,7 @@ import urllib.error
 from pathlib import Path
 
 from . import __version__, cameras, maps, schemes
-from .app import Settings, run
+from .app import ModelError, Settings, run
 from .cameras import CameraError
 
 #: The largest picture any webcam could be asked for: 8K. Past this a typo,
@@ -327,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         return list_cameras()
     try:
         run(_settings(args))
-    except (CameraError, ValueError) as error:
+    except (CameraError, ModelError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
     except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
