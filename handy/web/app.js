@@ -76,7 +76,9 @@ const storage = {
   },
 };
 function showError(message) {
-  $("error-message").textContent = message;
+  // Some failures carry no message of their own; never show an empty banner.
+  $("error-message").textContent =
+    message || "Something went wrong. Return to the arcade and try again.";
   $("error").hidden = false;
 }
 function title(text) {
@@ -99,12 +101,19 @@ function selectedMode() {
     : mode;
 }
 async function request(path, body) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Handy-Token": token },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json();
+  let response, data;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Handy-Token": token },
+      body: JSON.stringify(body),
+    });
+    data = await response.json();
+  } catch {
+    // No answer, or not Handy's: the browser's own wording ("Failed to fetch",
+    // "Unexpected token") would mean nothing to the player.
+    throw new Error("Could not connect to Handy.");
+  }
   if (!response.ok)
     throw new Error(data.error || "Could not connect to Handy.");
   return data;
@@ -390,27 +399,41 @@ function cameraFrame() {
   captureContext.restore();
   return captureCanvas.toDataURL("image/jpeg", 0.7).split(",")[1];
 }
+function setText(id, text) {
+  // Most of what renderState writes repeats every frame. Rewriting it anyway
+  // makes live regions announce it again, some 30 times a second.
+  const element = $(id);
+  text = String(text);
+  if (element.textContent !== text) element.textContent = text;
+}
 function renderState(data) {
   currentState = data.state;
-  $("score").textContent = data.score;
-  $("time").textContent =
-    data.remaining === null ? "3 laps" : Math.ceil(data.remaining);
-  $("accuracy").textContent = `${data.accuracy ?? 0}%`;
-  $("health").textContent = data.health ?? 100;
-  $("notice").textContent =
+  setText("score", data.score);
+  setText(
+    "time",
+    data.remaining === null ? "3 laps" : Math.ceil(data.remaining),
+  );
+  setText("accuracy", `${data.accuracy ?? 0}%`);
+  setText("health", data.health ?? 100);
+  setText(
+    "notice",
     data.notice ||
-    (selectedControl === "wheel"
-      ? "Hold both hands up like a steering wheel. Keep it level through the three-light countdown."
-      : "");
-  $("tracking-label").textContent = data.tracking
-    ? data.scopeTracked === false
-      ? "Hand tracked · show your face for the scope"
-      : "Tracking you"
-    : "Move into view · light your hand / face";
+      (selectedControl === "wheel"
+        ? "Hold both hands up like a steering wheel. Keep it level through the three-light countdown."
+        : ""),
+  );
+  setText(
+    "tracking-label",
+    data.tracking
+      ? data.scopeTracked === false
+        ? "Hand tracked · show your face for the scope"
+        : "Tracking you"
+      : "Move into view · light your hand / face",
+  );
   $("tracking-light").classList.toggle("live", !!data.tracking);
   $("calibration-coach").hidden = data.state !== "calibration";
   $("practice-coach").hidden = data.state !== "practice";
-  $("pause").textContent = data.state === "paused" ? "Resume (P)" : "Pause (P)";
+  setText("pause", data.state === "paused" ? "Resume (P)" : "Pause (P)");
   $("pause").disabled = data.state === "over";
   $("recalibrate").disabled = data.state === "calibration";
   $("game").classList.toggle(
@@ -420,32 +443,47 @@ function renderState(data) {
 
   const warmingUp =
     data.state === "calibration" || (data.state === "paused" && !!data.step);
-  $("game-title").textContent = warmingUp
-    ? "Target Range"
-    : title(config.maps.find((m) => m.key === selectedMap).title);
-  $("game-category").textContent = warmingUp
-    ? `WARM-UP → ${title(config.maps.find((m) => m.key === selectedMap).title)}`
-    : MAP_COPY[selectedMap][0].toUpperCase();
+  setText(
+    "game-title",
+    warmingUp
+      ? "Target Range"
+      : title(config.maps.find((m) => m.key === selectedMap).title),
+  );
+  setText(
+    "game-category",
+    warmingUp
+      ? `WARM-UP → ${title(config.maps.find((m) => m.key === selectedMap).title)}`
+      : MAP_COPY[selectedMap][0].toUpperCase(),
+  );
   if (data.step) {
     const step = data.step;
-    $("step-count").textContent = step.testing
-      ? `${step.hits} / 5 ACCURATE HITS`
-      : `LEARNING YOUR AIM · ${step.learningShots} / 3 SHOTS`;
-    $("step-title").textContent = step.testing
-      ? "Five centre hits to start."
-      : "Welcome to Target Range.";
-    $("step-detail").textContent =
-      data.notice || "Point naturally at the target and fold your thumb.";
-    $("trigger-status").textContent = !data.tracking
-      ? "Show your hand to the camera"
-      : step.armed
-        ? "Thumb up · ready to shoot"
-        : "Raise your thumb for the next shot";
+    setText(
+      "step-count",
+      step.testing
+        ? `${step.hits} / 5 ACCURATE HITS`
+        : `LEARNING YOUR AIM · ${step.learningShots} / 3 SHOTS`,
+    );
+    setText(
+      "step-title",
+      step.testing ? "Five centre hits to start." : "Welcome to Target Range.",
+    );
+    setText(
+      "step-detail",
+      data.notice || "Point naturally at the target and fold your thumb.",
+    );
+    setText(
+      "trigger-status",
+      !data.tracking
+        ? "Show your hand to the camera"
+        : step.armed
+          ? "Thumb up · ready to shoot"
+          : "Raise your thumb for the next shot",
+    );
     $("undo-shot").disabled = step.shots === 0 && step.hits === 0;
     $("aim-hits").value = step.hits;
   }
   if (data.hands) drawHandGraph(data.hands);
-  $("practice-score").textContent = `${data.practiceHits} / 3 targets`;
+  setText("practice-score", `${data.practiceHits} / 3 targets`);
   if (data.calibration) {
     const encoded = JSON.stringify(data.calibration);
     if (encoded !== lastSaved) {
@@ -456,14 +494,20 @@ function renderState(data) {
   const overlay = ["paused", "over"].includes(data.state);
   $("stage-overlay").hidden = !overlay;
   if (overlay) {
-    $("overlay-title").textContent =
-      data.state === "paused" ? "Take a breather." : "Round complete.";
-    $("overlay-copy").textContent =
+    setText(
+      "overlay-title",
+      data.state === "paused" ? "Take a breather." : "Round complete.",
+    );
+    setText(
+      "overlay-copy",
       data.state === "paused"
         ? "Your game is paused. Pick up where you left off."
-        : data.result;
-    $("overlay-action").textContent =
-      data.state === "paused" ? "Resume playing" : "Play again ↗";
+        : data.result,
+    );
+    setText(
+      "overlay-action",
+      data.state === "paused" ? "Resume playing" : "Play again ↗",
+    );
     if (data.state === "over") {
       const key = `handy.best.${selectedMap}.${selectedControl}.${$("enemy").value}.${$("duration").value}`;
       if (
