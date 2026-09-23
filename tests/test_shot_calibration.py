@@ -144,6 +144,45 @@ def test_verification_miss_cannot_count_a_training_point_as_a_hit():
         assert not session.hits  # every new fit must be independently rechecked
 
 
+def fold(session, poses, fps=30):
+    """Play (thumb degrees, fingertip) poses one frame each, fresh every frame."""
+    now, stamp = 0.0, 0
+    for degrees, tip in poses:
+        stamp += 1
+        now += 1 / fps
+        frame = replace(frame_of(make_hand(degrees, index_tip=tip)), timestamp_ms=stamp)
+        session.update([frame], now)
+
+
+@pytest.mark.parametrize("pause", [0, 7, 10, 20])
+def test_a_fold_that_pauses_part_way_still_counts(pause):
+    """Aim samples were kept only while the thumb was up, and expired after a
+    quarter of a second. A fold that paused part way for longer than that
+    reached the trigger with nothing left, and the shot just fired was thrown
+    away - with a message telling the player to raise their thumb."""
+    session = ShotCalibration(PISTOL)
+    target = session.target
+    tip = (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+    assert 0.35 < thumb_pull(make_hand(42)) < 0.5, "part way: armed, not fired"
+
+    fold(session, [(20, tip)] * 10 + [(42, tip)] * pause + [(70, tip)] * 4)
+
+    assert session.shot_count == 1 and len(session.samples) == 1
+    assert session.samples[0][0][0] == pytest.approx(tip)
+
+
+def test_a_fold_given_up_part_way_does_not_leave_its_aim_behind():
+    """Holding the aim through a fold must not hold it through the next one."""
+    session = ShotCalibration(PISTOL)
+    target = session.target
+    old, new = (0.3, 0.3), (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+
+    fold(session, [(20, old)] * 10 + [(42, old)] * 10 + [(20, new)] * 10
+         + [(70, new)] * 4)
+
+    assert session.samples[0][0][0] == pytest.approx(new)
+
+
 def feed_pair(session, now, stamp, second, first=None):
     """One shot seen by two cameras. ``second`` places the hand for camera two
     given the target, or returns None when that camera cannot see it."""

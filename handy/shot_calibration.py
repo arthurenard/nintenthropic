@@ -157,11 +157,16 @@ class ShotCalibration:
                   if frame.subjects and now - self.last_fresh[i] < 0.15]
         self.aim = self.controller.update(
             [(frames[i], self.rig.cameras[i]) for i in seeing], now)
-        for i in seeing:
-            while self.history[i] and now - self.history[i][0][0] > 0.25:
-                self.history[i].popleft()
-            # Keep the last thumb-up aim, rather than the fingertip after firing.
-            if self.aim.armed and self.aim.travel < 0.35:
+        # Keep the last thumb-up aim, rather than the fingertip after firing.
+        # The window rolls only while the thumb is up; once the fold begins it
+        # holds still, however long the fold takes. It used to go on expiring,
+        # so a fold that paused part way reached the trigger with nothing left
+        # and the shot just fired was thrown away. Raising the thumb again
+        # rolls the window on, so an abandoned fold leaves nothing behind.
+        if self.aim.armed and self.aim.travel < 0.35:
+            for i in seeing:
+                while self.history[i] and now - self.history[i][0][0] > 0.25:
+                    self.history[i].popleft()
                 point = self.scheme.pointer(
                     frames[i].subjects[0], self.scheme.default_tuning
                 )
