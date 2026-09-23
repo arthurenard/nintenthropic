@@ -205,6 +205,11 @@ class Round:
 
     def shoot(self, x: float, y: float, now: float) -> Impact:
         """Resolve a shot and book it. Maps decide what it struck in :meth:`resolve`."""
+        if self.is_over(now):
+            # The trigger can go on the very frame the clock runs out or the
+            # pane fails. The round is already decided, so the shot is neither
+            # scored nor counted against the player's accuracy.
+            return Impact(x=x, y=y, score=0, at=now)
         self.shots += 1
         hit = self.resolve(x, y, now)
 

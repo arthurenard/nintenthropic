@@ -128,6 +128,24 @@ def test_accuracy_tracks_hits_over_shots():
     assert round_.accuracy == pytest.approx(0.5)
 
 
+def test_a_shot_on_the_frame_the_round_ends_goes_nowhere():
+    round_ = make_round(duration=5, script=[Hit(points=50, ring=0, perfect=True)])
+    round_.update(0.0)
+    impact = round_.shoot(1, 1, 5.0)
+
+    assert not impact.is_hit and impact.score == 0
+    assert (round_.score, round_.shots, round_.hits, round_.perfect) == (0, 0, 0, 0)
+    assert round_.script, "the map is never asked what the shot struck"
+
+
+def test_a_shot_after_the_round_is_lost_goes_nowhere():
+    round_ = make_round(duration=60, script=[Hit(points=50, ring=0)])
+    round_.update(0.0)
+    round_.lost = True
+    round_.shoot(1, 1, 1.0)
+    assert (round_.score, round_.shots) == (0, 0)
+
+
 def test_old_impacts_are_forgotten():
     round_ = make_round()
     round_.shoot(10, 10, 0.0)
