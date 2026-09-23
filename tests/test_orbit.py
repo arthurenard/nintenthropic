@@ -321,6 +321,38 @@ def test_the_field_fills_and_more_comes_later():
     assert round_.integrity == FULL_INTEGRITY
 
 
+def debris_log(fps: int = 30, shoot: bool = False) -> tuple[list, list]:
+    """The size of every piece of debris sent in over half a minute, in order,
+    and what the player's shots did - one at the biggest every three seconds."""
+    round_ = make_round(seed=7, duration=60.0)
+    sent, labels = [], []
+    for frame in range(30 * fps):
+        now = 1000.0 + frame / fps
+        round_.update(now)
+        if shoot and frame % (3 * fps) == fps and round_.targets:
+            biggest = max(round_.targets, key=lambda f: f.radius)
+            labels.append(round_.shoot(biggest.x, biggest.y, now).label)
+        for piece in round_.targets:
+            if piece.generation == 0 and all(piece is not s for s in sent):
+                sent.append(piece)
+    return [piece.radius for piece in sent], labels
+
+
+def test_what_the_player_breaks_does_not_change_what_comes_next():
+    quiet, _ = debris_log()
+    busy, labels = debris_log(shoot=True)
+    assert "SPLIT" in labels
+    common = min(len(quiet), len(busy))
+    assert common > 12 and busy[:common] == quiet[:common]
+
+
+def test_the_frame_rate_does_not_change_what_comes():
+    slow, _ = debris_log(fps=30)
+    fast, _ = debris_log(fps=60)
+    common = min(len(slow), len(fast))
+    assert common > 12 and fast[:common] == slow[:common]
+
+
 def test_the_shot_is_always_heard_inside():
     round_ = make_round()
     round_.shoot(AREA.centre_x, AREA.y + AREA.height // 2, 0.0)

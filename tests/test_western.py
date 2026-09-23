@@ -44,6 +44,38 @@ def test_the_same_seed_builds_the_same_street():
     assert make_round(seed=9).street != make_round(seed=10).street
 
 
+def who_comes_out(fire) -> list:
+    """Who stepped out, where and when, over half a minute of a seeded round;
+    ``fire(round_, frame, now)`` is called every frame to take the player's shots."""
+    round_ = WesternRound(RoundOptions(area=AREA, seed=7))
+    seen = []
+    for frame in range(30 * 30):
+        now = 1000.0 + frame / 30
+        round_.update(now)
+        fire(round_, frame, now)
+        for figure in round_.figures:
+            key = (round(figure.appeared_at - 1000.0, 2), figure.spot.x, figure.bandit,
+                   figure.variant, figure.lifetime)
+            if key not in seen:
+                seen.append(key)
+    return seen
+
+
+def test_what_the_player_shoots_does_not_change_who_comes_out_next():
+    def fire(round_, frame, now):
+        if frame == 15:
+            round_.shoot(AREA.x + 5, AREA.y + 3, now)  # into the open sky
+        elif frame == 45:
+            bottle = round_.bottles[0]  # glass everywhere, and a refill to come
+            round_.shoot(bottle.x, bottle.y, now)
+        elif frame == 75 and round_.signs:
+            round_.shoot(round_.signs[0].x, round_.signs[0].y, now)
+
+    quiet = who_comes_out(lambda *_: None)
+    assert len(quiet) > 10
+    assert who_comes_out(fire) == quiet
+
+
 # --- the rail ------------------------------------------------------------------
 
 def test_the_rail_starts_full():

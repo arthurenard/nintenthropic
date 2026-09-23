@@ -129,7 +129,26 @@ class Round:
     PERFECT_LABEL = "perfect"
 
     def __post_init__(self) -> None:
+        #: What the world does: who comes out, and where, and when.
         self.rng = random.Random(self.options.seed)
+        #: What the player's own shots set off - bullet holes, flying glass, a
+        #: split rock's pieces - and anything drawn a frame at a time. Kept
+        #: apart from ``rng`` because every draw from a generator moves every
+        #: draw after it: a miss into the sky, or a faster machine, would
+        #: otherwise change which bandit comes out next, and the same
+        #: ``--seed`` would not be the same round.
+        self.effects_rng = self.stream("effects")
+
+    def stream(self, name: str) -> random.Random:
+        """A generator of its own for one part of the map, seeded from the round's.
+
+        Two timers drawing from one generator can swap turns at a different
+        frame rate - both come due within one frame at thirty, in separate
+        frames at sixty - so anything that runs on its own clock gets its own
+        stream and cannot shift the rest.
+        """
+        seed = self.options.seed
+        return random.Random(None if seed is None else f"{seed}:{name}")
 
     # --- the round ---------------------------------------------------------
 

@@ -377,10 +377,12 @@ class Sign:
     def y(self) -> float:
         return self.centre[1]
 
-    def step(self, dt: float, now: float) -> None:
+    def step(self, dt: float, elapsed: float) -> None:
         # A pendulum in a light breeze: the gusts keep it from ever hanging still.
+        # They blow on the round's clock, so a sign swings the same way at the
+        # same moment of every round, and so where a shot finds it does too.
         accel = -16.0 * math.sin(self.angle) - 0.9 * self.velocity
-        accel += 2.2 * math.sin(now * 1.3 + self.pivot[0] * 0.01)
+        accel += 2.2 * math.sin(elapsed * 1.3 + self.pivot[0] * 0.01)
         self.velocity += accel * dt
         self.angle += self.velocity * dt
 
@@ -562,6 +564,11 @@ class WesternRound(Round):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        # ``rng`` decides who steps out of the doorways. The rail restocks after
+        # the player's hits and the weather runs on timers of its own, so each
+        # keeps its own dice and neither can change who comes out next.
+        self.rail_rng = self.stream("rail")
+        self.weather_rng = self.stream("weather")
         self.street = build_street(self.options.area, self.options.seed or 0)
         u = self.street.unit
         self.signs = [Sign(pivot=pivot, length=0.075 * self.area.height,
@@ -620,7 +627,7 @@ class WesternRound(Round):
             self.cues.append("bell_toll")
 
         for sign in self.signs:
-            sign.step(dt, now)
+            sign.step(dt, self.elapsed(now))
 
         for shard in self.shards:
             shard.step(dt, self.gravity)
@@ -655,13 +662,13 @@ class WesternRound(Round):
         if now >= self._next_devil and len(self.dust_devils) < 2:
             self.dust_devils.append(self._spawn_devil(now))
             self.cues.append("wind_dust")
-            self._next_devil = now + self.rng.uniform(*DUST_DEVIL_INTERVAL)
+            self._next_devil = now + self.weather_rng.uniform(*DUST_DEVIL_INTERVAL)
         for weed in self.tumbleweeds:
             weed.step(dt)
         self.tumbleweeds = [w for w in self.tumbleweeds if not w.is_gone(self.area)]
         if now >= self._next_weed and len(self.tumbleweeds) < 2:
             self.tumbleweeds.append(self._spawn_weed(now))
-            self._next_weed = now + self.rng.uniform(*TUMBLEWEED_INTERVAL)
+            self._next_weed = now + self.weather_rng.uniform(*TUMBLEWEED_INTERVAL)
 
     def resolve(self, x: float, y: float, now: float) -> Hit:
         self.cues.append("rifle_crack")
@@ -686,7 +693,7 @@ class WesternRound(Round):
         wood = self.street.skyline < y < self.street.walk_y
         self.cues.append("wood_splinter" if wood else "ricochet")
         if self.area.contains(x, y):
-            self.holes.append(Hole(int(x), int(y), max(2, int(self.rng.uniform(2.0, 3.5) * self.street.unit)), wood))
+            self.holes.append(Hole(int(x), int(y), max(2, int(self.effects_rng.uniform(2.0, 3.5) * self.street.unit)), wood))
             del self.holes[:-MAX_HOLES]
         return MISS
 
@@ -703,14 +710,15 @@ class WesternRound(Round):
         self._refill_at[can.slot] = now + RAIL_REFILL
         self.cues.append("ricochet")
         # The round goes on through the tin and dents the rail behind it.
-        self.holes.append(Hole(int(can.x + self.rng.uniform(-0.3, 0.3) * can.width),
+        self.holes.append(Hole(int(can.x + self.effects_rng.uniform(-0.3, 0.3) * can.width),
                                int(can.base_y + 0.006 * self.area.height),
                                max(1, int(1.8 * self.street.unit)), True))
         del self.holes[:-MAX_HOLES]
         return Hit(points=CAN_POINTS, ring=2, label="CAN")
 
     def _shoot_sign(self, sign: Sign, now: float) -> Hit:
-        sign.velocity += self.rng.choice((-1, 1)) * self.rng.uniform(4.0, 7.0)
+        dice = self.effects_rng
+        sign.velocity += dice.choice((-1, 1)) * dice.uniform(4.0, 7.0)
         self.cues.append("wood_splinter")
         if now - sign.last_hit < SIGN_COOLDOWN:
             return Hit(points=0, ring=2)
@@ -738,17 +746,17 @@ class WesternRound(Round):
     def _fill_slot(self, slot: int, now: float) -> None:
         street = self.street
         h = self.area.height
-        x = street.slot_x(slot) + self.rng.uniform(-0.01, 0.01) * h
-        if self.rng.random() < 0.3:
+        x = street.slot_x(slot) + self.rail_rng.uniform(-0.01, 0.01) * h
+        if self.rail_rng.random() < 0.3:
             self.cans.append(Can(slot=slot, x=x, base_y=street.rail_y,
-                                 height=self.rng.uniform(0.075, 0.09) * h,
-                                 label=self.rng.randrange(len(CAN_LABELS)), spawned_at=now))
+                                 height=self.rail_rng.uniform(0.075, 0.09) * h,
+                                 label=self.rail_rng.randrange(len(CAN_LABELS)), spawned_at=now))
         else:
             self.bottles.append(Bottle(
                 slot=slot, x=x, base_y=street.rail_y,
-                height=self.rng.uniform(0.12, 0.16) * h,
-                color=self.rng.choice(GLASS_COLORS),
-                neck=self.rng.uniform(0.3, 0.5), spawned_at=now))
+                height=self.rail_rng.uniform(0.12, 0.16) * h,
+                color=self.rail_rng.choice(GLASS_COLORS),
+                neck=self.rail_rng.uniform(0.3, 0.5), spawned_at=now))
 
     def _spawn_figure(self, now: float) -> Figure | None:
         taken = {f.spot for f in self.figures}
@@ -765,22 +773,22 @@ class WesternRound(Round):
     def _spawn_devil(self, now: float) -> DustDevil:
         area = self.area
         street = self.street
-        from_left = self.rng.random() < 0.5
+        from_left = self.weather_rng.random() < 0.5
         return DustDevil(
             x=area.x - 40 if from_left else area.right + 40,
-            y=self.rng.uniform(street.walk_y + 0.04 * area.height, street.rail_y),
-            drift=self.rng.uniform(60, 110) * street.unit * (1 if from_left else -1),
-            born=now, height=self.rng.uniform(0.18, 0.3) * area.height)
+            y=self.weather_rng.uniform(street.walk_y + 0.04 * area.height, street.rail_y),
+            drift=self.weather_rng.uniform(60, 110) * street.unit * (1 if from_left else -1),
+            born=now, height=self.weather_rng.uniform(0.18, 0.3) * area.height)
 
     def _spawn_weed(self, now: float) -> Tumbleweed:
         area = self.area
         street = self.street
-        from_left = self.rng.random() < 0.5
-        radius = self.rng.uniform(0.035, 0.06) * area.height
+        from_left = self.weather_rng.random() < 0.5
+        radius = self.weather_rng.uniform(0.035, 0.06) * area.height
         return Tumbleweed(
             x=area.x - 2 * radius if from_left else area.right + 2 * radius,
-            y=self.rng.uniform(street.walk_y + 0.06 * area.height, street.rail_y - 0.02 * area.height),
-            radius=radius, vx=self.rng.uniform(90, 150) * street.unit * (1 if from_left else -1),
+            y=self.weather_rng.uniform(street.walk_y + 0.06 * area.height, street.rail_y - 0.02 * area.height),
+            radius=radius, vx=self.weather_rng.uniform(90, 150) * street.unit * (1 if from_left else -1),
             born=now)
 
     def _shatter(self, bottle: Bottle, now: float) -> None:
@@ -788,17 +796,18 @@ class WesternRound(Round):
         ground = self.area.bottom - 0.015 * self.area.height
         table = self.street.rail_y + 0.012 * self.area.height
         u = self.street.unit
+        dice = self.effects_rng
         for _ in range(count):
-            angle = self.rng.uniform(-math.pi, 0.0)  # mostly upwards and outwards
-            speed = self.rng.uniform(120, 420) * u
+            angle = dice.uniform(-math.pi, 0.0)  # mostly upwards and outwards
+            speed = dice.uniform(120, 420) * u
             # Most of the glass lands on the table; the rest flies clear to the dirt.
-            floor = table if self.rng.random() < 0.7 else ground
+            floor = table if dice.random() < 0.7 else ground
             self.shards.append(Shard(
-                x=bottle.x + self.rng.uniform(-0.5, 0.5) * bottle.width,
-                y=bottle.base_y - self.rng.uniform(0.1, 1.0) * bottle.height,
+                x=bottle.x + dice.uniform(-0.5, 0.5) * bottle.width,
+                y=bottle.base_y - dice.uniform(0.1, 1.0) * bottle.height,
                 vx=math.cos(angle) * speed, vy=math.sin(angle) * speed * 0.8,
-                size=self.rng.uniform(3.0, 7.0) * u, color=bottle.color,
-                born=now, floor=floor + self.rng.uniform(-3, 3) * u))
+                size=dice.uniform(3.0, 7.0) * u, color=bottle.color,
+                born=now, floor=floor + dice.uniform(-3, 3) * u))
         del self.shards[:-MAX_SHARDS]
 
 

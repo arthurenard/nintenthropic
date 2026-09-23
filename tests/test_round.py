@@ -213,6 +213,27 @@ def test_a_map_plays_the_same_from_any_clock(chosen):
     assert late == early
 
 
+def test_what_moves_under_the_shots_moves_on_the_round_clock():
+    """A sentry's drift, a sign's swing and the array's tilt are what a shot is
+    tested against, so the same moment of the same round must find them in the
+    same place whatever the clock read when it started."""
+    placed = []
+    for start in (0.0, LATE):
+        *_, (t, sniper) = play(maps.SNIPER, start, 5.0)
+        *_, (_, western) = play(maps.WESTERN, start, 5.0)
+        *_, (_, orbit) = play(maps.ORBIT, start, 25.0)
+        orbit.pit_array((1, 1), start + 25.0)
+        sentries = [h for h in sniper.hostiles if h.kind == "sentry"]
+        placed.append(([metres for h in sentries for metres in h.world_at(start + t)],
+                       [sign.angle for sign in western.signs],
+                       orbit.array_strikes[-1][:2]))
+    early, late = placed
+    assert early[1], "this street hangs a sign"
+    assert late[0] == pytest.approx(early[0])
+    assert late[1] == pytest.approx(early[1])
+    assert late[2] == early[2]
+
+
 def test_the_opening_patrols_are_still_walking_on_a_late_clock():
     for start in (0.0, LATE):
         *_, (t, round_) = play(maps.SNIPER, start, 1.0)
