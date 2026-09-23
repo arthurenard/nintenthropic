@@ -14,6 +14,7 @@ from dataclasses import replace
 import json
 import math
 import secrets
+import sys
 import threading
 import time
 import webbrowser
@@ -447,6 +448,9 @@ class BrowserSession:
 
 class BrowserServer(ThreadingHTTPServer):
     daemon_threads = True
+    # Ctrl+C must not wait for handler threads: one may hold a keep-alive
+    # connection open for the page's next frame, or be loading a model.
+    block_on_close = False
 
     def __init__(self, address):
         self.token = secrets.token_urlsafe(32)
@@ -462,8 +466,24 @@ class BrowserServer(ThreadingHTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Keep-alive: the page posts about 30 frames a second, and a fresh connection
+    # (and thread) for each one left hundreds of sockets in TIME_WAIT. It works
+    # because every response below says how long it is.
+    protocol_version = "HTTP/1.1"
+    # A client that connects and then stalls - mid-request, or idle between
+    # requests - gives its thread back after this many seconds.
+    timeout = 10
+
     def log_message(self, *_args):
         pass
+
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionError, TimeoutError):
+            # The tab closed, reloaded or stalled mid-request. Nobody is left to
+            # answer, and a traceback in the terminal would only alarm the player.
+            self.close_connection = True
 
     def send(self, status, body, content_type="application/json"):
         self.send_response(status)
@@ -475,6 +495,10 @@ class Handler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
         )
+        if status >= 400:
+            # A refusal may leave the request body unread, and whatever follows
+            # it on this connection could not be trusted as the next request.
+            self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
 
@@ -527,8 +551,10 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {"error": "Not found"})
 
     def do_POST(self):
+        # Compared as bytes: a header carrying non-ASCII would make the string
+        # comparison raise instead of simply failing.
         if not self.valid_host() or not secrets.compare_digest(
-            self.headers.get("X-Handy-Token", ""), self.server.token
+            self.headers.get("X-Handy-Token", "").encode(), self.server.token.encode()
         ):
             self.respond(403, {"error": "Reload Handy to reconnect"})
             return
@@ -562,12 +588,14 @@ class Handler(BaseHTTPRequestHandler):
                         result = {"ok": True}
                     else:
                         raise ValueError("Unknown operation")
-            self.respond(200, result)
         except (ValueError, KeyError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})
+            return
+        except (ConnectionError, TimeoutError):
+            raise  # the connection itself failed; handle() lets it go quietly
         except Exception as error:
             # Keep the interface usable after a model, device, or renderer fails.
-            print(f"Browser request failed: {error}")
+            print(f"Browser request failed: {error!r}", file=sys.stderr, flush=True)
             self.respond(
                 500,
                 {
@@ -575,6 +603,9 @@ class Handler(BaseHTTPRequestHandler):
                     "Check the terminal, or return to the arcade and try mouse controls."
                 },
             )
+            return
+        # Outside the try: a tab that left before its answer is not a failure.
+        self.respond(200, result)
 
 
 def main(argv=None):

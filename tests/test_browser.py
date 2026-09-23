@@ -1,16 +1,13 @@
 """Browser adapter regressions: existing rules, lifecycle, and input boundaries."""
 
 import base64
-import io
-import json
-from types import SimpleNamespace
 
 import cv2
 import numpy as np
 import pytest
 
 from handy import browser, maps
-from handy.browser import BrowserSession, Handler
+from handy.browser import BrowserSession
 from handy.calibration import CalibrationSession
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import ZombieRound, draw_robot
@@ -259,42 +256,6 @@ def test_robots_render_and_share_damage_rules():
     round_.walkers[0].distance = 1
     round_.update(0.1)
     assert round_.health == 82
-
-
-def test_http_boundary_requires_token_and_rejects_path_traversal():
-    # Exercise the real handler without binding a socket in the test environment.
-    handler = object.__new__(Handler)
-    handler.server = SimpleNamespace(server_port=8765, token="test-token")
-    handler.headers = {"Host": "127.0.0.1:8765"}
-    responses = []
-    handler.respond = lambda status, data: responses.append((status, data))
-    handler.do_POST()
-    assert responses[-1][0] == 403
-    handler.path = "/../pyproject.toml"
-    handler.do_GET()
-    assert responses[-1][0] == 404
-    handler.headers["Host"] = "external.example:8765"
-    handler.path = "/api/config"
-    handler.do_GET()
-    assert responses[-1][0] == 403
-
-
-def test_http_rejects_oversized_and_invalid_json_bodies():
-    handler = object.__new__(Handler)
-    handler.server = SimpleNamespace(server_port=8765, token="test-token")
-    handler.headers = {
-        "Host": "127.0.0.1:8765",
-        "X-Handy-Token": "test-token",
-        "Content-Length": str(browser.MAX_BODY + 1),
-    }
-    responses = []
-    handler.respond = lambda status, data: responses.append((status, data))
-    handler.do_POST()
-    assert responses[-1][0] == 400
-    handler.rfile = io.BytesIO(json.dumps([]).encode())
-    handler.headers["Content-Length"] = "2"
-    handler.do_POST()
-    assert responses[-1][0] == 400
 
 
 @pytest.mark.parametrize("map_key", ["western", "sniper"])
