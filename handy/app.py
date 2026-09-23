@@ -381,44 +381,68 @@ class Eyes:
         self.captures = captures
         self.streams = streams
         self.mirror = mirror
+        self._last: list[np.ndarray | None] = [None] * len(captures)
+        self._failing_since: list[float | None] = [None] * len(captures)
 
     def __len__(self) -> int:
         return len(self.captures)
 
-    #: How many times a camera may fail to hand over a frame before the round
-    #: is given up on. A webcam that hiccups - a USB retry, a Continuity camera
-    #: catching its breath - drops a frame or two and carries on, and ending the
-    #: round over one dropped frame costs the player their score for a fault
-    #: that had already fixed itself. Several failures in a row is a camera that
-    #: has actually gone.
-    ATTEMPTS = 4
+    #: How long a camera may go without handing over a frame before the game
+    #: gives up on it. A webcam that hiccups - a USB retry, a Continuity camera
+    #: catching its breath - drops a frame or a few and carries on, and ending
+    #: the round over that costs the player their score for a fault that fixes
+    #: itself. Measured in time, not tries: a backend that has failed answers
+    #: in microseconds, so four tries in a row were over long before any
+    #: hiccup could have passed.
+    LOST_AFTER = 1.5
 
-    def _grab(self, capture, index: int) -> np.ndarray:
-        """One frame from one camera, retried a few times before giving up.
+    #: The pause between tries when there is no earlier frame to show instead.
+    RETRY_PAUSE = 0.01
+
+    def _grab(self, capture, index: int) -> tuple[np.ndarray, bool]:
+        """One frame from one camera, and whether it is a new one.
+
+        While a camera is failing, its last good frame stands in, so the game
+        keeps drawing and answering keys; only a camera that has handed over
+        nothing for :attr:`LOST_AFTER` seconds raises CameraError. With no
+        frame yet to fall back on, it retries with short pauses instead.
 
         ``read`` reports success in two parts and both have to be believed: a
         backend that answers ``(True, None)`` used to get as far as ``cvtColor``
         inside the recogniser, and a bare OpenCV error instead of the clean
         CameraError that was one line away.
         """
-        for _ in range(self.ATTEMPTS):
+        while True:
             ok, image = capture.read()
             if ok and image is not None:
-                return image
-        raise CameraError(
-            f"Lost the stream from camera {index + 1} - it stopped handing over "
-            f"frames after {self.ATTEMPTS} tries. Unplugging and replugging it, "
-            f"or restarting the game, usually brings it back.")
+                self._last[index] = image
+                self._failing_since[index] = None
+                return image, True
+            now = time.monotonic()
+            if self._failing_since[index] is None:
+                self._failing_since[index] = now
+            elif now - self._failing_since[index] >= self.LOST_AFTER:
+                raise CameraError(
+                    f"Lost the stream from camera {index + 1} - it handed over no "
+                    f"frames for {self.LOST_AFTER:g} seconds. Unplugging and "
+                    f"replugging it, or restarting the game, usually brings it "
+                    f"back.")
+            if self._last[index] is not None:
+                return self._last[index], False
+            time.sleep(self.RETRY_PAUSE)
 
     def read(self) -> tuple[list[np.ndarray], list[Frame]]:
         """The newest image and hands from each camera."""
         images, hands = [], []
         for index, (capture, stream) in enumerate(zip(self.captures, self.streams)):
-            image = self._grab(capture, index)
+            image, fresh = self._grab(capture, index)
             if self.mirror:
                 # Mirroring makes the range behave like a looking glass.
                 image = cv2.flip(image, 1)
-            stream.submit(image)
+            if fresh:
+                # A stand-in frame is not shown to the recogniser again: it
+                # has nothing new to say about it.
+                stream.submit(image)
             images.append(image)
             hands.append(stream.latest())
         return images, hands
@@ -971,47 +995,73 @@ def announce(indices: tuple[int, ...], note: str) -> None:
         print(f"Using {len(indices)} cameras (indices {listed}), fused.")
 
 
+def starting_scheme(settings: Settings):
+    """The scheme a launch opens with, or None if the player is to be asked."""
+    wants_drive = (settings.map_key is not None
+                   and maps.by_key(settings.map_key).mode == "drive")
+    if settings.control:
+        scheme = schemes.by_key(settings.control)
+    elif wants_drive or len(schemes.CONTROLS) == 1:
+        # Straight to the track: a race has no aiming, so asking how the
+        # player wants to aim would be a question with no consequence.
+        scheme = schemes.PISTOL
+    else:
+        return None
+    if scheme.key in ("pistol", "marksman"):
+        scheme = schemes.for_map(settings.map_key)
+    return scheme
+
+
 def run(settings: Settings) -> None:
     """Open the game and play until the user quits."""
+    # The download comes before any camera is woken: a network failure, or a
+    # Ctrl+C while waiting on one, used to leave the camera light on.
+    prefetch_models(settings)
     indices, note = choose_cameras(settings)
     settings = replace(settings, cameras=indices)
-    captures = [open_camera(index, settings.capture_width, settings.capture_height)
-                for index in settings.cameras]
 
     book = RigBook.load(calibration_path(settings))
     scores = HighScores.load(scores_path(settings))
     announce(settings.cameras, note)
-    prefetch_models(settings)
 
-    width, height = open_window(settings)
-    settings = replace(settings, window_width=width, window_height=height)
-    layout = layout_for(width, height)
-    canvas = np.zeros((height, width, 3), np.uint8)
-    start_warm_up(layout, settings)
-    try:
-        wants_drive = (settings.map_key is not None
-                       and maps.by_key(settings.map_key).mode == "drive")
-        if settings.control:
-            scheme = schemes.by_key(settings.control)
-        elif wants_drive or len(schemes.CONTROLS) == 1:
-            # Straight to the track: a race has no aiming, so asking how the
-            # player wants to aim would be a question with no consequence.
-            scheme = schemes.PISTOL
-        else:
+    with contextlib.ExitStack() as cleanup:
+        # Everything opened from here on is handed back however the game ends.
+        # The cameras used to be opened before the try that released them, so
+        # a second camera that would not open left the first one running.
+        captures = []
+        for index in settings.cameras:
+            capture = open_camera(index, settings.capture_width,
+                                  settings.capture_height)
+            cleanup.callback(capture.release)
+            captures.append(capture)
+        cleanup.callback(display.restore_system_chrome)
+        cleanup.callback(cv2.destroyAllWindows)
+
+        width, height = open_window(settings)
+        settings = replace(settings, window_width=width, window_height=height)
+        layout = layout_for(width, height)
+        canvas = np.zeros((height, width, 3), np.uint8)
+        start_warm_up(layout, settings)
+        scheme = starting_scheme(settings)
+        if scheme is None:
             scheme = select_scheme(canvas, layout)
-        if scheme is not None and scheme.key in ("pistol", "marksman"):
-            scheme = schemes.for_map(settings.map_key)
+            if scheme is not None and scheme.key in ("pistol", "marksman"):
+                scheme = schemes.for_map(settings.map_key)
         while scheme is not None:
             print(f"Controls: {scheme.title.lower()}.")
             # Each scheme watches for something different, so switching between
             # them means new recognisers - hence a session per scheme.
-            scheme = _session(scheme, settings, layout, captures, canvas, book,
-                              scores)
-    finally:
-        for capture in captures:
-            capture.release()
-        cv2.destroyAllWindows()
-        display.restore_system_chrome()
+            try:
+                scheme = _session(scheme, settings, layout, captures, canvas, book,
+                                  scores)
+            except CameraError:
+                # A camera that has gone mid-game is said on the screen the
+                # player is looking at, not only in the terminal behind it.
+                show_notice(canvas, ["CAMERA LOST",
+                                     "The camera stopped sending pictures.",
+                                     "Reconnect it and start the game again."],
+                            seconds=6.0, scale=layout.scale)
+                raise
 
 
 def prefetch_models(settings: Settings) -> None:

@@ -1848,7 +1848,40 @@ class NullStream:
         return Frame()
 
 
-def test_a_dropped_frame_does_not_cost_the_round():
+@pytest.fixture
+def camera_clock(monkeypatch):
+    """Monotonic time that only moves when the game sleeps or a frame is read,
+    so seconds of a failing camera pass in no time at all."""
+    from handy import app
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(app.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(app.time, "sleep",
+                        lambda seconds: clock.update(now=clock["now"] + seconds))
+    return clock
+
+
+class GoneCapture:
+    """A webcam that hands over ``good`` frames and then nothing, each read
+    taking ``cost`` seconds of the clock - a failing backend answers in
+    microseconds."""
+
+    def __init__(self, clock, good: int = 1, cost: float = 0.0,
+                 back_after: float | None = None) -> None:
+        self.clock, self.good, self.cost = clock, good, cost
+        self.back_at = None if back_after is None else clock["now"] + back_after
+        self.reads = 0
+
+    def read(self):
+        self.reads += 1
+        self.clock["now"] += self.cost
+        if self.reads <= self.good or (self.back_at is not None
+                                       and self.clock["now"] >= self.back_at):
+            return True, np.full((720, 1280, 3), self.reads % 250, np.uint8)
+        return False, None
+
+
+def test_a_dropped_frame_does_not_cost_the_round(camera_clock):
     """One hiccup from a USB webcam used to end the game and the score with it."""
     from handy.app import Eyes
 
@@ -1861,26 +1894,145 @@ def test_a_dropped_frame_does_not_cost_the_round():
     assert stream.submitted == 1
 
 
-def test_a_camera_that_answers_true_with_no_image_is_still_a_lost_camera():
+def test_a_failing_backend_is_given_time_not_a_count_of_tries(camera_clock):
+    """Four tries back to back were over in microseconds - a failing backend
+    answers at once - so no hiccup was ever short enough to be ridden out."""
+    from handy.app import Eyes
+
+    capture = GoneCapture(camera_clock, good=0, back_after=1.0)
+    images, _ = Eyes([capture], [NullStream()], mirror=False).read()
+
+    assert images[0].shape == (720, 1280, 3)
+    assert capture.reads > 4
+
+
+def test_the_last_good_frame_stands_in_while_the_camera_hiccups(camera_clock):
+    """The game keeps drawing, and answering keys, while a camera catches up."""
+    from handy.app import Eyes
+
+    capture = GoneCapture(camera_clock, good=1, cost=0.05)
+    stream = NullStream()
+    eyes = Eyes([capture], [stream], mirror=False)
+    first, _ = eyes.read()
+    later = [eyes.read()[0][0] for _ in range(10)]  # half a second of failures
+
+    assert all(image is first[0] for image in later), "the last picture stands in"
+    assert stream.submitted == 1, "and is not recognised twice"
+
+
+def test_a_camera_that_answers_true_with_no_image_is_still_a_lost_camera(camera_clock):
     """`ok` alone was believed, so a backend answering (True, None) got as far as
     cvtColor and raised a bare cv2.error instead of the CameraError beside it."""
     from handy.app import Eyes
     from handy.cameras import CameraError
 
-    capture = FlakyCapture(bad=99, answer=(True, None))
+    capture = FlakyCapture(bad=10**9, answer=(True, None))
+    started = camera_clock["now"]
     with pytest.raises(CameraError) as raised:
         Eyes([capture], [NullStream()], mirror=False).read()
 
     assert "camera 1" in str(raised.value)
-    assert capture.reads == Eyes.ATTEMPTS, "it should have tried a few times"
+    assert camera_clock["now"] - started >= Eyes.LOST_AFTER, "it gave the camera time"
 
 
-def test_a_camera_that_has_really_gone_still_ends_the_round():
+def test_a_camera_that_has_really_gone_still_ends_the_round(camera_clock):
     from handy.app import Eyes
     from handy.cameras import CameraError
 
+    eyes = Eyes([GoneCapture(camera_clock, good=1, cost=0.05)], [NullStream()],
+                mirror=False)
+    eyes.read()
+    started = camera_clock["now"]
     with pytest.raises(CameraError):
-        Eyes([FlakyCapture(bad=99)], [NullStream()], mirror=False).read()
+        while camera_clock["now"] - started < 10:
+            eyes.read()
+    assert camera_clock["now"] - started < Eyes.LOST_AFTER + 0.2
+
+
+def test_a_camera_lost_mid_game_is_said_on_screen_and_handed_back(monkeypatch,
+                                                                  tmp_path,
+                                                                  model_path):
+    """The window used to vanish with the message only in the terminal behind it."""
+    from handy import app
+    from handy.cameras import CameraError
+
+    opened = headless(monkeypatch)
+    notices: list[list[str]] = []
+    monkeypatch.setattr(app, "show_notice", lambda canvas, lines, seconds=3.0,
+                        scale=1.0: notices.append(lines))
+
+    def gone(self):
+        raise CameraError("Lost the stream from camera 1")
+
+    monkeypatch.setattr(app.Eyes, "read", gone)
+    with pytest.raises(CameraError):
+        app.run(app.Settings(cameras=(0,), map_key="zombies", mute=True,
+                             skip_calibration=True, model_path=model_path,
+                             calibration_path=tmp_path / "calibration.json"))
+
+    assert notices and notices[-1][0] == "CAMERA LOST"
+    assert opened and all(capture.released for capture in opened)
+
+
+# --- whatever stops the launch, no camera is left on ------------------------
+
+def test_a_second_camera_that_will_not_open_hands_the_first_back(monkeypatch,
+                                                                 tmp_path):
+    import cv2
+
+    from handy import app
+    from handy.cameras import CameraError
+
+    opened = headless(monkeypatch)
+
+    def capture_for(index):
+        opened.append(FakeCapture(index, works=index == 0))
+        return opened[-1]
+
+    monkeypatch.setattr(cv2, "VideoCapture", capture_for)
+    monkeypatch.setattr(app, "ensure_model", lambda name: Path(name))
+    with pytest.raises(CameraError, match="camera 1"):
+        app.run(app.Settings(cameras=(0, 1), mute=True, skip_calibration=True,
+                             calibration_path=tmp_path / "calibration.json"))
+
+    assert [capture.index for capture in opened] == [0, 1]
+    assert opened[0].released, "the camera that did open was left running"
+
+
+@pytest.mark.parametrize("failure", [OSError("no network"), KeyboardInterrupt()],
+                         ids=["no-network", "ctrl-c"])
+def test_no_camera_is_woken_until_the_models_are_in(monkeypatch, tmp_path, failure):
+    """A download that failed, or a Ctrl+C while waiting on one, left the
+    camera light on: the cameras were opened first."""
+    from handy import app
+
+    opened = headless(monkeypatch)
+
+    def fetch(name):
+        raise failure
+
+    monkeypatch.setattr(app, "ensure_model", fetch)
+    with pytest.raises(type(failure)):
+        app.run(app.Settings(cameras=(0,), mute=True, skip_calibration=True,
+                             calibration_path=tmp_path / "calibration.json"))
+    assert opened == []
+
+
+def test_a_failure_after_the_cameras_open_still_hands_them_back(monkeypatch,
+                                                                tmp_path):
+    from handy import app
+
+    opened = headless(monkeypatch)
+    monkeypatch.setattr(app, "ensure_model", lambda name: Path(name))
+
+    def interrupted(settings):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(app, "open_window", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        app.run(app.Settings(cameras=(0, 1), mute=True, skip_calibration=True,
+                             calibration_path=tmp_path / "calibration.json"))
+    assert len(opened) == 2 and all(capture.released for capture in opened)
 
 
 # --- the model download happens before the screen goes black ----------------
