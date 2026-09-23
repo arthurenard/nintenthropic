@@ -867,20 +867,37 @@ def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:
     return None
 
 
+#: How long the score card ignores the gun. A player still firing when the
+#: clock ran out has to get the chance to notice the round is over.
+RESULTS_GRACE = 1.0
+
+
 def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                  layout: Layout, controller: AimController, rig: Rig,
                  summary: Summary, best: int, is_best: bool) -> str:
-    """Hold on the score card until the player shoots to play again, or quits."""
+    """Hold on the score card until the player shoots to play again, or quits.
+
+    A shot counts only once the card has been up for :data:`RESULTS_GRACE`,
+    and only from a trigger seen cocked since then. The controller carries on
+    from the round, so a player shooting at time-up re-armed and fired
+    straight through the card: "again", 0.3 s after the round ended, and the
+    score was never seen.
+    """
     recoil = Recoil(kick=0.0)  # the round is over; no kick to fight
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     trigger = FreshAim(controller, rig)
+    shown_at = time.monotonic()
+    cocked = False
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
         aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
+        settled = now - shown_at >= RESULTS_GRACE
+        shot = aim.fired and cocked
+        cocked = cocked or (settled and aim.armed)
 
         scene.draw_results(canvas, summary, best, is_best,
                            hint="shoot to play again   |   q quit   c recalibrate",
@@ -891,11 +908,12 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                 crosshair is not None and button.contains(*crosshair)),
                 scale=layout.scale)
         if crosshair is not None:
-            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed, since_shot=None,
-                                 scale=layout.scale)
+            # Not shown armed until a shot would count.
+            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed and settled,
+                                 since_shot=None, scale=layout.scale)
         cv2.imshow(WINDOW_TITLE, canvas)
 
-        if aim.fired and crosshair is not None:
+        if shot and crosshair is not None:
             if layout.quit_button.contains(*crosshair):
                 return "quit"
             if layout.maps_button.contains(*crosshair):

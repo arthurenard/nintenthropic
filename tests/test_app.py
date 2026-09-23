@@ -1271,63 +1271,123 @@ def test_the_results_screen_saves_a_screenshot_on_s(monkeypatch, tmp_path):
     assert list(tmp_path.glob("*.png")), "s saved nothing"
 
 
+def on_the_card(monkeypatch, trigger, keys=(NOTHING,)):
+    """Run the real score card at thirty frames a second of a synthetic clock.
+
+    ``trigger(t)`` is the aim ``t`` seconds after the card appeared. Returns
+    the card's answer and how long it had been up when it gave it.
+    """
+    from handy import app, scene, schemes
+    from handy.calibration import default_rig
+    from handy.game import Summary
+
+    import cv2
+    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
+    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
+    key_sequence(monkeypatch, list(keys))
+    clock = {"now": 1000.0}
+
+    def monotonic():
+        clock["now"] += 1 / 30
+        return clock["now"]
+
+    monkeypatch.setattr(app.time, "monotonic", monotonic)
+    start = clock["now"]
+    monkeypatch.setattr(app.AimController, "update",
+                        lambda self, views, now: trigger(now - start))
+    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
+                      perfect=0, duration=60.0)
+
+    choice = app.show_results(
+        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
+        layout_for(WIDTH, HEIGHT), app.make_controller(Settings(), schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), summary, 5, True)
+    return choice, clock["now"] - start
+
+
+def pull_at(position, fire_at: float):
+    """A player holding the gun cocked on ``position``, pulling at ``fire_at``."""
+    from handy.aiming import Aim
+
+    def trigger(t):
+        if t < fire_at:
+            return Aim(position=position, armed=True)
+        if t < fire_at + 1 / 30:
+            return Aim(position=position, fired=True)
+        return Aim(position=position)
+    return trigger
+
+
 @pytest.mark.parametrize("button,expected", [
     ("quit_button", "quit"), ("maps_button", "maps"),
     ("controls_button", "controls"),
 ])
 def test_every_button_answers_a_shot_on_the_results_screen(monkeypatch, button,
                                                            expected):
-    from handy import app, scene, schemes
-    from handy.aiming import Aim
-    from handy.calibration import default_rig
-    from handy.game import Summary
-
-    import cv2
-    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
-    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
-    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
-    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
-    key_sequence(monkeypatch, [NOTHING])
-
     layout = layout_for(WIDTH, HEIGHT)
     rect = getattr(layout, button).rect
-    centre = (rect.x + rect.width // 2, rect.y + rect.height // 2)
-    aim = Aim(position=(centre[0] / (WIDTH - 1), centre[1] / (HEIGHT - 1)),
-              fired=True)
-    monkeypatch.setattr(app.AimController, "update",
-                        lambda self, views, now, _aim=aim: _aim)
-    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
-                      perfect=0, duration=60.0)
+    centre = ((rect.x + rect.width // 2) / (WIDTH - 1),
+              (rect.y + rect.height // 2) / (HEIGHT - 1))
 
-    assert app.show_results(
-        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
-        layout, app.make_controller(Settings(), schemes.PISTOL),
-        default_rig(schemes.PISTOL, 1), summary, 5, True) == expected
+    assert on_the_card(monkeypatch, pull_at(centre, 1.5))[0] == expected
 
 
 def test_shooting_the_world_on_the_results_screen_plays_again(monkeypatch):
     """Anywhere that is not a button means "again" - the README's promise."""
-    from handy import app, scene, schemes
+    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), 1.5))
+    assert choice == "again" and after >= 1.5
+
+
+def test_a_player_still_shooting_at_time_up_gets_to_see_the_score(monkeypatch):
+    """The round's trigger carries on into the card, and a player still firing
+    when the clock ran out re-armed and fired 0.3 s later - straight through
+    the card, and into the next round, without ever seeing the score."""
     from handy.aiming import Aim
-    from handy.calibration import default_rig
-    from handy.game import Summary
 
-    import cv2
-    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
-    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
-    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
-    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
-    key_sequence(monkeypatch, [NOTHING])
-    monkeypatch.setattr(app.AimController, "update",
-                        lambda self, views, now: Aim(position=(0.5, 0.6), fired=True))
-    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
-                      perfect=0, duration=60.0)
+    def still_shooting(t):
+        if t < 0.25:
+            return Aim(position=(0.5, 0.6), armed=True)  # re-armed at time-up
+        if t < 0.3:
+            return Aim(position=(0.5, 0.6), fired=True)  # and fired again
+        return Aim(position=(0.5, 0.6))  # thumb down, reading the card
 
-    assert app.show_results(
-        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
-        layout_for(WIDTH, HEIGHT),
-        app.make_controller(Settings(), schemes.PISTOL),
-        default_rig(schemes.PISTOL, 1), summary, 5, True) == "again"
+    choice, after = on_the_card(monkeypatch, still_shooting,
+                                keys=[NOTHING] * 90 + [ord("q")])
+    assert choice == "quit", "the stray shot played again"
+    assert after >= 3.0
+
+
+def test_a_shot_on_the_card_needs_a_trigger_cocked_after_it_appeared(monkeypatch):
+    """A shot fired inside the grace period is not banked: the gun has to be
+    cocked again, on the card, before a pull counts."""
+    from handy.aiming import Aim
+
+    def fire_recock_fire(t):
+        if t < 0.3:
+            return Aim(position=(0.5, 0.6), armed=True)
+        if t < 0.34:
+            return Aim(position=(0.5, 0.6), fired=True)  # ignored: too soon
+        if t < 1.6:
+            return Aim(position=(0.5, 0.6))  # thumb held down past the grace
+        if t < 1.8:
+            return Aim(position=(0.5, 0.6), armed=True)  # cocked on the card
+        if t < 1.84:
+            return Aim(position=(0.5, 0.6), fired=True)
+        return Aim(position=(0.5, 0.6))
+
+    choice, after = on_the_card(monkeypatch, fire_recock_fire)
+    assert choice == "again" and after >= 1.8
+
+
+def test_a_player_who_waits_needs_only_one_pull(monkeypatch):
+    """Cocked all along and pulling once the card has been read: that shot
+    counts at once; nobody has to fire twice."""
+    from handy import app
+
+    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), app.RESULTS_GRACE + 0.2))
+    assert choice == "again" and after < app.RESULTS_GRACE + 0.3
 
 
 # --- the map chooser, which only quitting had ever exited --------------------
