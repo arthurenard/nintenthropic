@@ -44,6 +44,7 @@ TOWNSFOLK_CHANCE = 0.28
 RAIL_SLOTS = 7
 RAIL_REFILL = 1.0
 SIGN_COOLDOWN = 0.8
+SIGN_SWING = 1.4               # radians either way before the chains fetch it up
 SHARD_LIFE = 1.6
 GRAVITY = 1500.0               # px/s^2 at reference scale, scaled by area height
 DUST_DEVIL_INTERVAL = (5.0, 9.0)
@@ -385,6 +386,12 @@ class Sign:
         accel += 2.2 * math.sin(elapsed * 1.3 + self.pivot[0] * 0.01)
         self.velocity += accel * dt
         self.angle += self.velocity * dt
+        # Hung on chains, it can be kicked up high but never over its bracket:
+        # at the top of its swing the chains fetch it up and it drops back.
+        if abs(self.angle) > SIGN_SWING:
+            self.angle = math.copysign(SIGN_SWING, self.angle)
+            if self.velocity * self.angle > 0:
+                self.velocity *= -0.3
 
     def contains(self, x: float, y: float) -> bool:
         cx, cy = self.centre
@@ -721,7 +728,9 @@ class WesternRound(Round):
         sign.velocity += dice.choice((-1, 1)) * dice.uniform(4.0, 7.0)
         self.cues.append("wood_splinter")
         if now - sign.last_hit < SIGN_COOLDOWN:
-            return Hit(points=0, ring=2)
+            # Still swinging from the last one: it pays once per swing, so
+            # this is not a hit - or ten shots in a second would be ten hits.
+            return MISS
         sign.last_hit = now
         return Hit(points=SIGN_POINTS, ring=2, label="SIGN")
 

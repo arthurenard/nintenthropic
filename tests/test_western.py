@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -6,7 +8,7 @@ from handy.maps.western import (AWNING_Y, BANDIT_POINTS, BOTTLE_POINTS,
                                 CAN_POINTS, DOOR_H, FIGURE_RISE,
                                 FIGURES_AT_ONCE, HOURS, MAX_HOLES,
                                 QUICK_DRAW_BONUS, RAIL_REFILL, RAIL_SLOTS,
-                                SHARD_LIFE, SIGN_POINTS, TOWNSFOLK_PENALTY,
+                                SHARD_LIFE, SIGN_POINTS, SIGN_SWING, TOWNSFOLK_PENALTY,
                                 Can, Figure, Impact, Shard, Tumbleweed,
                                 WesternRound, _backdrop, draw_emblem,
                                 draw_impact, draw_world)
@@ -159,6 +161,29 @@ def test_a_sign_swings_and_pays_once_per_swing():
     assert round_.shoot(sign.x, sign.y, 1.1).score == 0
     sign.step(0.1, 1.2)
     assert sign.angle != 0.0 or sign.velocity != 0.0
+
+
+def test_a_swinging_sign_pays_once_and_the_rest_are_not_hits():
+    round_ = make_round(seed=1)
+    sign = round_.signs[0]
+    for index in range(10):  # ten shots in a second, all on the board
+        now = 1.0 + index * 0.07
+        round_.update(now)
+        assert round_.shoot(sign.x, sign.y, now).is_hit == (index == 0)
+    assert (round_.score, round_.hits, round_.shots) == (SIGN_POINTS, 1, 10)
+    assert round_.best_streak == 1
+
+
+def test_a_sign_is_never_kicked_over_its_bracket():
+    round_ = make_round(seed=1)
+    sign = round_.signs[0]
+    highest = 0.0
+    for kick in range(6):  # the same way every time, as hard as a shot kicks
+        sign.velocity += 7.0
+        for step in range(10):
+            sign.step(1 / 30, kick + step / 30)
+            highest = max(highest, abs(sign.angle))
+    assert highest <= SIGN_SWING < math.pi / 2
 
 
 # --- bandits and townsfolk -----------------------------------------------------------
