@@ -5,7 +5,6 @@ import pytest
 from handy import homography
 from handy.calibration import Calibration, Rig, default_calibration
 from handy.schemes import PISTOL
-from hands import make_hand
 
 DEFAULT = default_calibration(PISTOL)
 
@@ -21,28 +20,9 @@ FITTED = Calibration(mapping=OFF_AXIS, fit_error=0.011, aim_fitted=True, gain=2.
 
 # --- the calibration record ------------------------------------------------
 
-def test_travel_is_zero_when_cocked_and_one_when_fired():
-    calibration = Calibration(signal="angle", cocked=18.0, folded=64.0)
-    measure = PISTOL.signal("angle").measure
-    assert calibration.travel(measure(make_hand(thumb_degrees=18))) == pytest.approx(0.0)
-    assert calibration.travel(measure(make_hand(thumb_degrees=64))) == pytest.approx(1.0)
-    assert calibration.travel(measure(make_hand(thumb_degrees=41))) == pytest.approx(0.5)
-
-
-def test_travel_handles_a_signal_that_runs_the_other_way():
-    """Reach shrinks as the thumb folds; travel still runs 0 -> 1."""
-    calibration = Calibration(signal="reach", cocked=1.0, folded=0.4)
-    measure = PISTOL.signal("reach").measure
-    assert calibration.travel(measure(make_hand(reach=1.0))) == pytest.approx(0.0)
-    assert calibration.travel(measure(make_hand(reach=0.4))) == pytest.approx(1.0)
-    assert calibration.travel(measure(make_hand(reach=0.7))) == pytest.approx(0.5)
-
-
 def test_a_degenerate_record_is_refused():
     with pytest.raises(ValueError):
         Calibration(mapping=(1.0, 0.0, 0.0))
-    with pytest.raises(ValueError):
-        Calibration(cocked=30.0, folded=30.0)
 
 
 def test_aiming_past_the_fitted_map_is_clamped_to_the_screen():
@@ -82,7 +62,8 @@ def test_a_file_from_before_the_flag_existed_is_read_by_its_error_figures(tmp_pa
 
 
 def test_a_file_from_the_pose_by_pose_setup_still_loads(tmp_path):
-    """Saves from the old guided setup carry a pointer tuning nothing reads now."""
+    """Saves from the old guided setup carry a pointer tuning and the two
+    trigger poses it measured; nothing reads either now."""
     path = tmp_path / "old.json"
     path.write_text(json.dumps({"cameras": [{
         "mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1], "signal": "angle",
@@ -101,7 +82,6 @@ def test_a_file_from_before_the_map_was_projective_still_loads(tmp_path):
     assert rig is not None and len(rig) == 1
     loaded = rig[0]
 
-    assert loaded.cocked == 17.0
     assert loaded.to_play_area((0.2, 0.3)) == pytest.approx((0.0, 0.0))
     assert loaded.to_play_area((0.8, 0.7)) == pytest.approx((1.0, 1.0))
 
@@ -112,7 +92,7 @@ def test_a_missing_or_broken_file_reads_as_nothing(tmp_path):
     broken.write_text("{not json")
     assert Rig.load(broken) is None
     incomplete = tmp_path / "incomplete.json"
-    incomplete.write_text(json.dumps({"mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1]}))
+    incomplete.write_text(json.dumps({"signal": "angle", "fit_error": 0.01}))
     assert Rig.load(incomplete) is None
 
 

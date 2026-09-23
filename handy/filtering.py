@@ -105,9 +105,9 @@ class MedianOf3:
     two has no middle - ``sorted(pair)[1]`` is simply the larger of them - so a
     part-filled filter used to pass an upward spike straight through, on the
     frame right after every reset. That is precisely the worst moment for it:
-    the trigger resets this filter when it loses its subject, seeds its resting
-    level on the first frame back, and would then read one misread second frame
-    as a firing stroke - a shot the player never took, at the moment tracking
+    the trigger resets this filter when it loses its subject, arms on the first
+    frame back that shows the thumb up, and would then read one misread second
+    frame as a pull - a shot the player never took, at the moment tracking
     returned. Repeating the first reading costs one frame of lag, once, and
     nothing after that.
     """

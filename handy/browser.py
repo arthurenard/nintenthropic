@@ -135,7 +135,6 @@ class BrowserSession:
             arm_below=self.scheme.arm_below,
             min_cutoff=self.scheme.smoothing[0],
             beta=self.scheme.smoothing[1],
-            native_thumb=True,
         )
 
     def begin_calibration(self):
@@ -315,7 +314,7 @@ class BrowserSession:
                     s.aim.armed,
                     None,
                     0.75,
-                    pull=s.aim.pull,
+                    pull=s.aim.travel,
                     fire_at=self.scheme.fire_above,
                 )
             if s.complete:
@@ -345,7 +344,7 @@ class BrowserSession:
                     aim.armed if aim else True,
                     None,
                     0.75,
-                    pull=aim.pull if aim else 0,
+                    pull=aim.travel if aim else 0,
                     fire_at=self.scheme.fire_above,
                 )
         elif self.state == "playing":
@@ -375,7 +374,7 @@ class BrowserSession:
                     aim.armed if aim else True,
                     now - self.last_shot,
                     0.75,
-                    pull=aim.pull if aim else 0,
+                    pull=aim.travel if aim else 0,
                     fire_at=self.scheme.fire_above if self.scheme else 0.65,
                 )
             if self.round.is_over(now):

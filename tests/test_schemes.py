@@ -26,13 +26,14 @@ def subject_and_frame(scheme):
 
 @pytest.mark.parametrize("scheme", schemes.SCHEMES, ids=lambda s: s.key)
 def test_every_reading_accepts_the_schemes_own_subject(scheme):
-    """The marksman once borrowed the pistol's signals unchanged, and they were
+    """The marksman once borrowed the pistol's readings unchanged, and they were
     handed a Marksman instead of a Hand: a crash on the first setup step."""
+    from handy.aiming import thumb_pull
+
     subject, frame = subject_and_frame(scheme)
     assert frame.subjects[0] is subject
 
-    for signal in scheme.signals:
-        assert isinstance(signal.measure(subject), float)
+    assert isinstance(thumb_pull(subject), float)
     x, y = scheme.pointer(subject)
     assert all(isinstance(v, float) for v in (x, y))
     assert scheme.scale(subject) > 0
@@ -58,16 +59,12 @@ def test_every_scheme_names_the_models_it_opens(scheme):
         assert name in BUNDLES
 
 
-def test_the_marksman_trigger_is_the_pistols_trigger_in_every_field():
-    """It rebuilds the pistol's signals to unwrap the hand inside the marksman."""
-    hand = make_hand(thumb_degrees=40)
-    subject = Marksman(hand, make_face())
+def test_the_marksman_fires_with_the_hand_inside_it():
+    from handy.aiming import thumb_pull
 
-    assert [s.name for s in schemes.MARKSMAN.signals] == [
-        s.name for s in schemes.PISTOL.signals]
-    for borrowed, original in zip(schemes.MARKSMAN.signals, schemes.PISTOL.signals):
-        assert (borrowed.rest, borrowed.fired) == (original.rest, original.fired)
-        assert borrowed.measure(subject) == pytest.approx(original.measure(hand))
+    for degrees in (20, 40, 70):
+        hand = make_hand(thumb_degrees=degrees)
+        assert thumb_pull(Marksman(hand, make_face())) == thumb_pull(hand)
 
 
 def test_the_marksman_scopes_with_the_eye_and_aims_with_the_hand():

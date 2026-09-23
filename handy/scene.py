@@ -581,8 +581,8 @@ def draw_hud(canvas: np.ndarray, round_: Round, aim: Aim, origin: tuple[int, int
     draw_text(canvas, summary, (x, line(124)), color, scale=0.48 * scale, thickness=1)
 
     if debug:
-        # Trigger pull, measured from rest, against the threshold it must cross.
-        detail = f"trigger {aim.pull:+.2f} of {fire_at:.2f}"
+        # How far the thumb has folded, against the threshold it must cross.
+        detail = f"trigger {aim.travel:+.2f} of {fire_at:.2f}"
         if aim.cameras > 1:
             # Spread is what the cameras disagree by; depth is what that solved to.
             detail += (f"   spread {aim.spread * 100:.1f}%"
@@ -907,7 +907,7 @@ def draw_shot_calibration(canvas, session, images, frames, draw, scale=1.0):
     if session.preview and session.aim.position:
         draw_crosshair(canvas, session.aim.position[0] * width,
                        session.aim.position[1] * height, session.aim.armed,
-                       None, scale, pull=session.aim.pull, fire_at=0.5)
+                       None, scale, pull=session.aim.travel, fire_at=0.5)
     status = ("Show your hand to the camera" if not session.aim.tracking else
               "Thumb up - ready to shoot" if session.aim.armed else
               "Raise your thumb for the next shot")

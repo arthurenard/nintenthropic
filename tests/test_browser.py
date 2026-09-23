@@ -188,7 +188,6 @@ def test_range_warmup_verifies_five_hits_then_saves_and_starts(monkeypatch):
     assert session.state == "playing"
     assert session.saved_rig is not None
     assert session.rig[0].mapping == mapping
-    assert not session.rig[0].trigger_fitted
 
 
 def test_browser_returns_hand_skeleton_and_clears_it_on_tracking_loss(monkeypatch):

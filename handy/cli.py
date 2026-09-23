@@ -51,8 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="how fast the filter opens up as the aim moves; "
                              "higher is more responsive (default: per scheme)")
     aiming.add_argument("--fire-above", type=float, default=None, dest="fire_above",
-                        help="fraction of the calibrated trigger travel that fires "
-                             "(default: per control scheme)")
+                        help="how far the thumb has to fold to fire, 0 up to 1 "
+                             "folded (default: per control scheme)")
     aiming.add_argument("--arm-below", type=float, default=None, dest="arm_below",
                         help="fraction it must return under to re-arm "
                              "(default: per control scheme)")
@@ -130,7 +130,7 @@ def parse_args(argv: list[str] | None = None) -> Settings:
     fire, arm = values["fire_above"], values["arm_below"]
     for name, value in (("--fire-above", fire), ("--arm-below", arm)):
         if value is not None and not 0.0 < value < 1.0:
-            parser.error(f"{name} is a fraction of the trigger's travel, "
+            parser.error(f"{name} is a fraction of the thumb's fold, "
                          f"between 0 and 1; got {value}")
     # --control names the one hand scheme there is; the game picks the sniper's
     # scope for itself, so nothing past this check needs to be told.

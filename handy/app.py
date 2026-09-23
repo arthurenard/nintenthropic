@@ -281,7 +281,7 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
         since_shot = None if view.last_shot is None else view.now - view.last_shot
         scene.draw_crosshair(canvas, *crosshair, armed=view.aim.armed,
                              since_shot=since_shot, scale=scale,
-                             pull=view.aim.pull, fire_at=view.fire_at)
+                             pull=view.aim.travel, fire_at=view.fire_at)
 
 
 def save_screenshot(image: np.ndarray, directory: Path) -> Path:
@@ -527,8 +527,7 @@ def make_controller(settings: Settings, scheme) -> AimController:
     return AimController(scheme, fire_above=fire, arm_below=arm,
                          min_cutoff=(settings.min_cutoff
                                      if settings.min_cutoff is not None else cutoff),
-                         beta=settings.beta if settings.beta is not None else beta,
-                         native_thumb=scheme.key in ("pistol", "marksman"))
+                         beta=settings.beta if settings.beta is not None else beta)
 
 
 def crosshair_for(aim: Aim, layout: Layout, recoil: Recoil,

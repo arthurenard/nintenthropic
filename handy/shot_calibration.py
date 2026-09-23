@@ -38,7 +38,7 @@ class ShotCalibration:
         self.scheme = scheme
         self.initial = previous or default_rig(scheme, cameras)
         self.rig = self.initial
-        self.controller = AimController(scheme, native_thumb=True)
+        self.controller = AimController(scheme)
         self.samples = []
         self.history = [deque() for _ in range(cameras)]
         self.stamps = [None] * cameras
@@ -121,7 +121,7 @@ class ShotCalibration:
     def suspend(self):
         """A pause cannot carry an old aim into a new thumb pull."""
         self.history = [deque() for _ in self.history]
-        self.controller = AimController(self.scheme, native_thumb=True)
+        self.controller = AimController(self.scheme)
         self.aim = Aim()
 
     def undo(self):

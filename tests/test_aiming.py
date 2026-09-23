@@ -8,8 +8,7 @@ from handy.schemes import PISTOL
 from handy.recognition import Frame
 from hands import make_hand, frame_of
 
-PROFILE = Calibration(mapping=box_mapping((0.2, 0.2), (0.8, 0.8)),
-                      signal="angle", cocked=20.0, folded=70.0)
+PROFILE = Calibration(mapping=box_mapping((0.2, 0.2), (0.8, 0.8)))
 
 
 def controller(**kwargs) -> AimController:
@@ -112,24 +111,6 @@ def test_a_thumb_still_pointing_up_never_fires():
     assert pistol.shots == 0
 
 
-def test_a_partial_thumb_return_still_earns_the_next_shot():
-    """The stroke is what counts. A thumb that comes half way back up has
-    plainly ended its pull; demanding a return to some absolute line was
-    silently eating every second shot."""
-    pistol = Pistol()
-    pistol.hold(20)
-    pistol.hold(75)
-    assert pistol.shots == 1
-
-    assert pistol.hold(45).armed, "a substantial return re-arms"
-    pistol.hold(75)
-    assert pistol.shots == 2, "and the next fold fires from there"
-
-    assert pistol.hold(18).armed
-    pistol.hold(75)
-    assert pistol.shots == 3
-
-
 def test_a_small_dip_after_firing_does_not_re_arm():
     pistol = Pistol()
     pistol.hold(20)
@@ -155,39 +136,6 @@ def test_a_single_misread_frame_cannot_fire_the_gun():
     pistol.hold(120, frames=1)  # one wild misread from the model
     pistol.hold(20, frames=2)
     assert pistol.shots == 0, "one bad frame is outvoted by its neighbours"
-
-
-def test_a_thumb_that_rests_half_folded_keeps_firing():
-    """Re-arming used to seat the trough at whatever level the thumb came back
-    to. Firing wants a rise of fire_above (0.50 of travel) and re-arming wants a
-    fall of only arm_below (0.30), so any return in between re-armed the gun
-    into a state no stroke could ever fire from: one shot per round, under a
-    crosshair that said ARMED."""
-    pistol = Pistol()
-    pistol.hold(20)          # cocked: travel 0
-    pistol.hold(70)          # the calibrated fired pose: travel 1
-    assert pistol.shots == 1
-
-    # From here the thumb only ever comes back half way - travel 0.6, a 0.40
-    # return: deep enough to re-arm, shallower than the firing stroke.
-    for _ in range(10):
-        assert pistol.hold(50).armed, "half way back is plainly the end of a pull"
-        pistol.hold(70)
-    assert pistol.shots == 11, "every full pull after the first fired too"
-
-
-def test_the_resting_level_never_drifts_above_the_calibrated_fired_pose():
-    """The trough creeps upward to absorb posture. Left uncapped it creeps past
-    the point where even the pose setup measured as `fired` clears it."""
-    pistol = Pistol()
-    pistol.hold(20)
-    pistol.hold(70)
-    pistol.hold(50, frames=120)  # four seconds resting half folded
-    assert pistol.control._trough <= 1.0 - pistol.control.fire_above + 1e-9
-
-    shots = pistol.shots
-    pistol.hold(70)
-    assert pistol.shots == shots + 1, "the fired pose still fires, minutes later"
 
 
 def test_losing_the_hand_for_real_disarms():
@@ -289,8 +237,7 @@ def test_a_disabled_recoil_remembers_no_shots_at_all():
 
 # --- two cameras -----------------------------------------------------------
 
-SECOND = Calibration(mapping=box_mapping((0.1, 0.1), (0.9, 0.9)),
-                     signal="angle", cocked=20.0, folded=70.0)
+SECOND = Calibration(mapping=box_mapping((0.1, 0.1), (0.9, 0.9)))
 
 
 def test_two_cameras_are_combined_into_one_crosshair():
@@ -372,26 +319,13 @@ def test_every_kind_of_fold_fires_every_time(label, peak, frames):
     assert noisy_pistol()(fold_sequence(peak, frames)) == 4, label
 
 
-def test_neither_tremor_nor_slow_drift_ever_fires():
+def test_tremor_at_rest_never_fires():
     import numpy as np
 
-    play = noisy_pistol()
     tremor = [18 + 4 * np.sin(i / 3) for i in range(600)]
-    assert play(tremor, noise=2.5) == 0, "20 s of wobble at rest"
-    assert noisy_pistol(seed=1)(list(np.linspace(18, 55, 600))) == 0, \
-        "20 s of postural drift"
+    assert noisy_pistol()(tremor, noise=2.5) == 0, "20 s of wobble at rest"
 
 
 def test_a_held_fold_is_one_shot():
     sequence = fold_sequence(75, 3, repeats=1)[:-16] + [74.0] * 90
     assert noisy_pistol()(sequence) == 1
-
-
-def test_a_heroic_calibration_fold_cannot_raise_the_bar():
-    """Setup says 'thumb DOWN, as if firing' and people oblige with a thumb
-    slammed to ninety degrees. The scale that sets must stay within what a
-    comfortable play stroke spans, or every quick pull is a near miss."""
-    from handy.calibration import Calibration
-
-    deep = Calibration(signal="angle", cocked=16.0, folded=16.0 + 45.0)
-    assert noisy_pistol(profile=deep)(fold_sequence(50, 6)) == 4

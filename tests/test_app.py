@@ -733,8 +733,7 @@ def test_a_recalibration_that_fell_back_on_the_old_map_is_announced(monkeypatch,
                         notices.append(lines))
     # What a fallback to a previously good rig looks like: real figures, but
     # nothing was fitted this time round.
-    stale = Calibration(fit_error=0.011, generalisation=0.028, aim_fitted=False,
-                        trigger_fitted=True)
+    stale = Calibration(fit_error=0.011, generalisation=0.028, aim_fitted=False)
     monkeypatch.setattr(app, "run_calibration",
                         lambda *args, **kwargs: Rig((stale,)))
     headless(monkeypatch)
@@ -1515,7 +1514,7 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
     monkeypatch.setattr(app, "model_bundles", lambda *_: [Path("unused")])
     monkeypatch.setattr(app, "refit", lambda layout, canvas: (layout, canvas))
     headless(monkeypatch)
-    rig = Rig((Calibration(aim_fitted=True, trigger_fitted=True),))
+    rig = Rig((Calibration(aim_fitted=True),))
     book = RigBook()
     if has_setup:
         book.set("pistol", rig)

@@ -28,16 +28,12 @@ class Calibration:
     """One camera's hand-to-screen map, and what it knows about its own errors."""
 
     mapping: Matrix = DEFAULT_MAPPING
-    signal: str = "angle"  # which of the scheme's trigger signals to read
-    cocked: float = 20.0
-    folded: float = 70.0
     fit_error: float = 0.0  # mean miss of the fit, as a fraction of the screen
     generalisation: float = 0.0  # mean held-out miss: the honest accuracy figure
     #: Did the aim map come from this player's own trace, or is it the fallback?
     #: The error figures cannot answer that: when the fallback is a previously
     #: successful calibration they are inherited from it, non-zero and flattering.
     aim_fitted: bool = False
-    trigger_fitted: bool = False  # were the two trigger poses actually measured?
     jitter: float = 0.004  # this camera's own landmark shake, measured at setup
     gain: float = 1.0  # how much this camera's map magnifies movement
     slide: Point = (0.0, 0.0)  # where its estimate goes when the hand changes depth
@@ -45,8 +41,6 @@ class Calibration:
     def __post_init__(self) -> None:
         if len(self.mapping) != 9:
             raise ValueError("a mapping is nine numbers, row-major")
-        if self.cocked == self.folded:
-            raise ValueError("the cocked and folded poses must differ")
 
     @property
     def usable(self) -> bool:
@@ -69,25 +63,12 @@ class Calibration:
         """How much this camera's map magnifies movement right here."""
         return homography.gain(self.mapping, point)
 
-    def travel(self, measured: float) -> float:
-        """How far the trigger has moved: 0 at the cocked pose, 1 at the fired one.
-
-        Working in travel rather than raw degrees or blink scores means the same
-        thresholds fit every player and every scheme, and a signal may run in
-        either direction.
-        """
-        return (measured - self.cocked) / (self.folded - self.cocked)
-
     def to_dict(self) -> dict:
         return {
             "mapping": list(self.mapping),
-            "signal": self.signal,
-            "cocked": self.cocked,
-            "folded": self.folded,
             "fit_error": self.fit_error,
             "generalisation": self.generalisation,
             "aim_fitted": self.aim_fitted,
-            "trigger_fitted": self.trigger_fitted,
             "jitter": self.jitter,
             "gain": self.gain,
             "slide": list(self.slide),
@@ -95,6 +76,9 @@ class Calibration:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Calibration":
+        """Read one camera back. Anything it does not know is ignored: saves from
+        before the thumb was a built-in gesture carry the trigger poses setup
+        used to measure, and nothing reads them now."""
         if "mapping" in data:
             mapping = tuple(float(value) for value in data["mapping"])
         else:
@@ -103,9 +87,6 @@ class Calibration:
                                              tuple(data["aim_max"]))
         return cls(
             mapping=mapping,
-            signal=str(data["signal"]),
-            cocked=float(data["cocked"]),
-            folded=float(data["folded"]),
             fit_error=float(data.get("fit_error", 0.0)),
             generalisation=float(data.get("generalisation", 0.0)),
             # A file written before the flag existed: a non-zero error figure is
@@ -113,7 +94,6 @@ class Calibration:
             aim_fitted=bool(data.get("aim_fitted",
                                      bool(data.get("fit_error"))
                                      or bool(data.get("generalisation")))),
-            trigger_fitted=bool(data.get("trigger_fitted", False)),
             jitter=float(data.get("jitter", 0.004)),
             gain=float(data.get("gain", 1.0)),
             slide=tuple(data.get("slide", (0.0, 0.0))),
@@ -124,21 +104,15 @@ def clamp(point: Point) -> Point:
     return tuple(min(max(value, 0.0), 1.0) for value in point)
 
 
-
 def default_calibration(scheme) -> Calibration:
-    """A believable starting point for one camera under ``scheme``.
-
-    Everything here is in the scheme's own units - the trigger thresholds in the
-    primary signal's range, the map spanning the box its pointer actually sweeps.
-    This is what the game runs on when setup was skipped, so it has to be
-    playable, not merely well-formed.
+    """A believable starting point for one camera under ``scheme``: a map
+    spanning the box its pointer actually sweeps. This is what the game runs on
+    when setup was skipped, so it has to be playable, not merely well-formed.
     """
-    primary = scheme.signals[0]
     cx, cy = scheme.pointer_centre
     span = scheme.pointer_span
     return Calibration(
-        mapping=homography.box_mapping((cx - span, cy - span), (cx + span, cy + span)),
-        signal=primary.name, cocked=primary.rest, folded=primary.fired)
+        mapping=homography.box_mapping((cx - span, cy - span), (cx + span, cy + span)))
 
 
 def default_rig(scheme, cameras: int) -> "Rig":
