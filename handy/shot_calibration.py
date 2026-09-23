@@ -38,7 +38,7 @@ class ShotCalibration:
         self.scheme = scheme
         self.initial = previous or default_rig(scheme, cameras)
         self.rig = self.initial
-        self.controller = AimController(scheme, native_thumb=True)
+        self.controller = AimController(scheme)
         self.samples = []
         self.history = [deque() for _ in range(cameras)]
         self.stamps = [None] * cameras
@@ -110,17 +110,15 @@ class ShotCalibration:
             error = homography.residual(matrix, source, targets)
             if math.isfinite(gain) and gain <= GAIN_LIMIT and error <= 0.12:
                 return replace(fallback, mapping=matrix, aim_fitted=True,
-                               fit_error=error, generalisation=0.0, gain=gain,
-                               tuning=self.scheme.default_tuning, slide=(0.0, 0.0))
+                               fit_error=error, generalisation=0.0, gain=gain)
         # An infinite gain is how a camera is told to sit the game out: fusion
         # stops listening to it, and so does the accuracy check.
-        return replace(fallback, aim_fitted=False, gain=float("inf"),
-                       tuning=self.scheme.default_tuning, slide=(0.0, 0.0))
+        return replace(fallback, aim_fitted=False, gain=float("inf"))
 
     def suspend(self):
         """A pause cannot carry an old aim into a new thumb pull."""
         self.history = [deque() for _ in self.history]
-        self.controller = AimController(self.scheme, native_thumb=True)
+        self.controller = AimController(self.scheme)
         self.aim = Aim()
 
     def undo(self):
@@ -167,9 +165,7 @@ class ShotCalibration:
             for i in seeing:
                 while self.history[i] and now - self.history[i][0][0] > 0.25:
                     self.history[i].popleft()
-                point = self.scheme.pointer(
-                    frames[i].subjects[0], self.scheme.default_tuning
-                )
+                point = self.scheme.pointer(frames[i].subjects[0])
                 if all(math.isfinite(v) for v in point):
                     self.history[i].append((now, point))
         if not self.aim.fired or now - self.last_shot < 0.45:

@@ -56,7 +56,6 @@ ASPHALT = (38, 34, 31)  # wet tar, blue-grey under the moon
 ROAD_LINE = (150, 148, 138)
 POST = (11, 11, 12)
 TREE = (9, 9, 10)
-SILHOUETTE = (14, 13, 13)
 RAGS = (22, 20, 22)  # what is left of the clothes: near-black, a touch cold
 SHADE = (8, 7, 8)  # the side of a walker away from the moon
 SKIN = (58, 60, 66)  # dead flesh: a dark core, only a shade paler than the rags
@@ -69,7 +68,6 @@ BLOOD = (18, 12, 72)  # maroon, almost black in the dark
 BLOOD_FRESH = (26, 22, 128)
 STAIN = (10, 8, 34)
 GLOSS = (150, 146, 136)  # the moon on a wet pool
-RAIN = (96, 98, 102)
 SCORE_INK = (72, 166, 240)  # the HUD's amber, for the points
 TAG_INK = (120, 196, 244)  # a paler amber for the word
 POPUP_POP = 0.07  # seconds the popup lands oversized, two frames at thirty
@@ -78,8 +76,6 @@ SPECULAR = (224, 216, 200)  # the moon in the wet of the road
 STAIN_LIMIT = 90
 IMPACT_FLASH = 0.3
 MUZZLE_FLASH = 0.08  # seconds the shot lights the road
-
-GAITS = ("shamble", "lurch", "limp", "crawl")
 
 
 @dataclass(frozen=True)

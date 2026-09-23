@@ -14,16 +14,15 @@ def make_round(**options) -> ArcheryRound:
 
 def test_rings_score_from_the_bullseye_outwards():
     target = Target(x=100, y=100, radius=100, spawned_at=0, lifetime=5)
-    assert target.score_at(100, 100) == RING_SCORES[0] == 10
-    assert target.score_at(130, 100) == RING_SCORES[1] == 8
-    assert target.score_at(199, 100) == RING_SCORES[-1] == 2
-    assert target.score_at(201, 100) == 0
+    assert RING_SCORES[target.ring_at(100, 100)] == 10
+    assert RING_SCORES[target.ring_at(130, 100)] == 8
+    assert RING_SCORES[target.ring_at(199, 100)] == 2
     assert target.ring_at(201, 100) is None
 
 
 def test_a_shot_on_the_rim_still_counts():
     target = Target(x=100, y=100, radius=100, spawned_at=0, lifetime=5)
-    assert target.score_at(200, 100) == RING_SCORES[-1]
+    assert target.ring_at(200, 100) == len(RING_SCORES) - 1
 
 
 def test_targets_spawn_up_to_the_limit_and_stay_inside_the_area():

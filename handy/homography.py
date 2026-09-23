@@ -1,11 +1,13 @@
-"""Fitting the projective map from hand space to screen space.
+"""The map from hand space to screen space, and fitting it.
 
 Where the camera sits relative to the screen changes the shape of that map. A
 webcam above a laptop screen sees a very different sweep from one off to the side
 of an external monitor: the hand plane is rotated, sheared and foreshortened
-against the screen plane. An axis-aligned box cannot express any of that, but a
-homography - the general projective transform between two planes - expresses all
-of it, and costs four calibration points instead of two.
+against the screen plane. An axis-aligned box cannot express that; an affine map
+covers the rotation and shear, which is what setup fits from the shots the
+player takes. Every map is kept as a 3x3 homography - the general projective
+transform between two planes - so that a projective map saved by an older setup
+is applied, and its gain measured, exactly as before.
 """
 
 from __future__ import annotations
@@ -17,11 +19,6 @@ import numpy as np
 
 Point = tuple[float, float]
 Matrix = tuple[float, ...]  # 9 numbers, row-major 3x3
-
-IDENTITY: Matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-
-#: Fewer correspondences than this cannot determine a homography.
-MIN_POINTS = 4
 
 #: The most a fit may be ill-conditioned, as a ratio of singular values, before
 #: it is refused as degenerate. Exactly collinear points are not the only ones
@@ -52,9 +49,9 @@ def weight(matrix: Matrix, point: Point) -> float:
     """The projective weight at ``point``: positive on the side the map is for.
 
     A homography's overall sign is free, but every map here keeps it meaning
-    something - ``fit`` makes the weight positive on the points it was fitted
-    to, and an affine map is positive everywhere - so the sign alone says
-    which side of the horizon a point is on.
+    something - setup fits affine maps, positive everywhere, and the old pose
+    fitter pinned its projective maps positive on the points it fitted - so
+    the sign alone says which side of the horizon a point is on.
     """
     x, y = point
     return matrix[6] * x + matrix[7] * y + matrix[8]
@@ -95,8 +92,9 @@ def defined_over(matrix: Matrix, low: Point, high: Point) -> bool:
 def _conditioning(points: np.ndarray) -> np.ndarray:
     """Hartley normalisation: centre on the origin, scale to a mean radius of sqrt(2).
 
-    The direct linear transform is badly conditioned on raw coordinates; this is
-    the standard remedy and costs two matrix multiplies.
+    A fit's conditioning measured on raw coordinates says as much about where
+    the points sit as about their shape; this is the standard remedy, and it
+    costs two matrix multiplies.
     """
     centre = points.mean(axis=0)
     spread = np.sqrt(((points - centre) ** 2).sum(axis=1)).mean()
@@ -114,62 +112,6 @@ def _well_conditioned(matrix: np.ndarray) -> bool:
     """
     singular = np.linalg.svd(matrix, compute_uv=False)
     return bool(singular[-1] * MAX_CONDITION >= singular[0] > 0.0)
-
-
-def fit(source: Sequence[Point], destination: Sequence[Point]) -> Matrix | None:
-    """Least-squares homography taking ``source`` onto ``destination``.
-
-    Returns None when the correspondences cannot determine one - too few points,
-    or points that are collinear or coincident.
-    """
-    if len(source) != len(destination) or len(source) < MIN_POINTS:
-        return None
-
-    src = np.asarray(source, dtype=float)
-    dst = np.asarray(destination, dtype=float)
-    if not (np.all(np.isfinite(src)) and np.all(np.isfinite(dst))):
-        return None
-
-    normalise_src, normalise_dst = _conditioning(src), _conditioning(dst)
-    src_n = (normalise_src @ np.hstack([src, np.ones((len(src), 1))]).T).T
-    dst_n = (normalise_dst @ np.hstack([dst, np.ones((len(dst), 1))]).T).T
-
-    rows = []
-    for (x, y, _), (u, v, _) in zip(src_n, dst_n):
-        rows.append([-x, -y, -1, 0, 0, 0, u * x, u * y, u])
-        rows.append([0, 0, 0, -x, -y, -1, v * x, v * y, v])
-
-    try:
-        _, singular, vectors = np.linalg.svd(np.asarray(rows))
-    except np.linalg.LinAlgError:
-        return None
-    # A near-zero second-smallest singular value means the solution is not unique,
-    # which is what degenerate point sets look like.
-    if singular[-2] < 1e-9:
-        return None
-
-    matrix = vectors[-1].reshape(3, 3)
-    # A unique solution can still be a nonsense one. Three of four points a
-    # hair off a line pass the test above, and the map that comes back is
-    # nearly singular - measured in conditioned coordinates, so the verdict
-    # does not depend on where the points sit or how far they spread.
-    if not _well_conditioned(matrix):
-        return None
-    matrix = np.linalg.inv(normalise_dst) @ matrix @ normalise_src
-    if abs(matrix[2, 2]) < 1e-12 or not np.all(np.isfinite(matrix)):
-        return None
-    matrix = matrix / matrix[2, 2]
-    if abs(np.linalg.det(matrix)) < 1e-12:
-        return None
-    # Pin down the free sign: positive weight on the side the points came
-    # from, which is what ``apply`` reads as in front of the horizon. Points
-    # that straddle their own horizon describe no real placement.
-    if np.all(src @ matrix[2, :2] + matrix[2, 2] < 0.0):
-        matrix = -matrix
-    fitted = tuple(float(value) for value in matrix.reshape(9))
-    if any(apply(fitted, point) is None for point in source):
-        return None
-    return fitted
 
 
 def gain(matrix: Matrix, point: Point) -> float:
@@ -241,10 +183,10 @@ def fit_scaled(source: Sequence[Point], destination: Sequence[Point]) -> Matrix 
 def fit_affine(source: Sequence[Point], destination: Sequence[Point]) -> Matrix | None:
     """Least-squares affine map taking ``source`` onto ``destination``.
 
-    Six degrees of freedom instead of the homography's eight. For a signal like
-    gaze - small angles, heavy noise - the true map is very nearly affine, and
-    the two projective parameters do nothing but chase noise: on nine calibration
-    points they buy a tighter training fit and a wilder map everywhere else.
+    Six degrees of freedom instead of the homography's eight. On the handful of
+    noisy points setup collects, the two projective parameters do nothing but
+    chase noise: they buy a tighter training fit and a wilder map everywhere
+    else.
     """
     if len(source) != len(destination) or len(source) < MIN_AFFINE_POINTS:
         return None

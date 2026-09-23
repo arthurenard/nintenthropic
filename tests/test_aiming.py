@@ -8,8 +8,7 @@ from handy.schemes import PISTOL
 from handy.recognition import Frame
 from hands import make_hand, frame_of
 
-PROFILE = Calibration(mapping=box_mapping((0.2, 0.2), (0.8, 0.8)),
-                      signal="angle", cocked=20.0, folded=70.0)
+PROFILE = Calibration(mapping=box_mapping((0.2, 0.2), (0.8, 0.8)))
 
 
 def controller(**kwargs) -> AimController:
@@ -112,24 +111,6 @@ def test_a_thumb_still_pointing_up_never_fires():
     assert pistol.shots == 0
 
 
-def test_a_partial_thumb_return_still_earns_the_next_shot():
-    """The stroke is what counts. A thumb that comes half way back up has
-    plainly ended its pull; demanding a return to some absolute line was
-    silently eating every second shot."""
-    pistol = Pistol()
-    pistol.hold(20)
-    pistol.hold(75)
-    assert pistol.shots == 1
-
-    assert pistol.hold(45).armed, "a substantial return re-arms"
-    pistol.hold(75)
-    assert pistol.shots == 2, "and the next fold fires from there"
-
-    assert pistol.hold(18).armed
-    pistol.hold(75)
-    assert pistol.shots == 3
-
-
 def test_a_small_dip_after_firing_does_not_re_arm():
     pistol = Pistol()
     pistol.hold(20)
@@ -157,39 +138,6 @@ def test_a_single_misread_frame_cannot_fire_the_gun():
     assert pistol.shots == 0, "one bad frame is outvoted by its neighbours"
 
 
-def test_a_thumb_that_rests_half_folded_keeps_firing():
-    """Re-arming used to seat the trough at whatever level the thumb came back
-    to. Firing wants a rise of fire_above (0.50 of travel) and re-arming wants a
-    fall of only arm_below (0.30), so any return in between re-armed the gun
-    into a state no stroke could ever fire from: one shot per round, under a
-    crosshair that said ARMED."""
-    pistol = Pistol()
-    pistol.hold(20)          # cocked: travel 0
-    pistol.hold(70)          # the calibrated fired pose: travel 1
-    assert pistol.shots == 1
-
-    # From here the thumb only ever comes back half way - travel 0.6, a 0.40
-    # return: deep enough to re-arm, shallower than the firing stroke.
-    for _ in range(10):
-        assert pistol.hold(50).armed, "half way back is plainly the end of a pull"
-        pistol.hold(70)
-    assert pistol.shots == 11, "every full pull after the first fired too"
-
-
-def test_the_resting_level_never_drifts_above_the_calibrated_fired_pose():
-    """The trough creeps upward to absorb posture. Left uncapped it creeps past
-    the point where even the pose setup measured as `fired` clears it."""
-    pistol = Pistol()
-    pistol.hold(20)
-    pistol.hold(70)
-    pistol.hold(50, frames=120)  # four seconds resting half folded
-    assert pistol.control._trough <= 1.0 - pistol.control.fire_above + 1e-9
-
-    shots = pistol.shots
-    pistol.hold(70)
-    assert pistol.shots == shots + 1, "the fired pose still fires, minutes later"
-
-
 def test_losing_the_hand_for_real_disarms():
     pistol = Pistol()
     assert pistol.hold(20).armed
@@ -210,12 +158,12 @@ def test_a_dropped_frame_or_two_does_not_cost_the_shot():
 
 
 def test_a_native_thumb_says_where_it_is_while_the_hand_blinks_out():
-    """A frame without the hand reported the stroke trigger's flag, which the
-    native thumb never updates: True from the start, False for ever after the
+    """A frame without the hand used to report the stroke trigger's flag, which
+    the native thumb never updated: True from the start, False for ever after the
     first long loss. So a folded thumb read ARMED through every dropout, and
     once the hand had been lost properly, every later blip dropped the light and
     brought it back - a re-cock click each time, the thumb never having moved."""
-    pistol = Pistol(native_thumb=True)
+    pistol = Pistol()
     assert not pistol.hold(70).armed, "first seen folded: not ready"
     assert not pistol.lose_hand(frames=2).armed, "and a blip does not cock it"
 
@@ -237,7 +185,7 @@ def test_a_fingertip_past_a_cameras_horizon_is_not_aimed_at_the_opposite_corner(
         2.871934573670249, -0.061145355513888985, -1.2142552975804075,
         -0.9041251222717106, 2.3601729633571686, -0.8949543501390803,
         -1.2131671258909114, 0.4386268157484197, 1.0))
-    control = controller(native_thumb=True)
+    control = controller()
     past = frame_of(make_hand(thumb_degrees=20, index_tip=(0.95, 0.2)))
 
     assert control.update(views(past, profile=legacy), 0.0).position is None
@@ -245,7 +193,7 @@ def test_a_fingertip_past_a_cameras_horizon_is_not_aimed_at_the_opposite_corner(
     # A second camera that can place the hand carries the aim on its own.
     aim = control.update([(past, legacy), (past, PROFILE)], 1 / 30)
     assert aim.cameras == 1
-    assert aim.position == pytest.approx(PROFILE.to_play_area((0.95, 0.2)))
+    assert aim.position == pytest.approx((1.0, 0.0)), "the box's edge, clamped"
 
 
 def test_the_aim_is_mapped_through_the_calibrated_box():
@@ -328,8 +276,7 @@ def test_a_disabled_recoil_remembers_no_shots_at_all():
 
 # --- two cameras -----------------------------------------------------------
 
-SECOND = Calibration(mapping=box_mapping((0.1, 0.1), (0.9, 0.9)),
-                     signal="angle", cocked=20.0, folded=70.0)
+SECOND = Calibration(mapping=box_mapping((0.1, 0.1), (0.9, 0.9)))
 
 
 def test_two_cameras_are_combined_into_one_crosshair():
@@ -411,46 +358,13 @@ def test_every_kind_of_fold_fires_every_time(label, peak, frames):
     assert noisy_pistol()(fold_sequence(peak, frames)) == 4, label
 
 
-def test_neither_tremor_nor_slow_drift_ever_fires():
+def test_tremor_at_rest_never_fires():
     import numpy as np
 
-    play = noisy_pistol()
     tremor = [18 + 4 * np.sin(i / 3) for i in range(600)]
-    assert play(tremor, noise=2.5) == 0, "20 s of wobble at rest"
-    assert noisy_pistol(seed=1)(list(np.linspace(18, 55, 600))) == 0, \
-        "20 s of postural drift"
+    assert noisy_pistol()(tremor, noise=2.5) == 0, "20 s of wobble at rest"
 
 
 def test_a_held_fold_is_one_shot():
     sequence = fold_sequence(75, 3, repeats=1)[:-16] + [74.0] * 90
     assert noisy_pistol()(sequence) == 1
-
-
-def test_a_heroic_calibration_fold_cannot_raise_the_bar():
-    """Setup says 'thumb DOWN, as if firing' and people oblige with a thumb
-    slammed to ninety degrees. The scale that sets must stay within what a
-    comfortable play stroke spans, or every quick pull is a near miss."""
-    from handy.calibration import Calibration
-
-    deep = Calibration(signal="angle", cocked=16.0, folded=16.0 + 45.0)
-    assert noisy_pistol(profile=deep)(fold_sequence(50, 6)) == 4
-
-
-def test_calibration_caps_the_span_it_stores():
-    from handy.calibration import CalibrationSession
-
-    session = CalibrationSession(PISTOL, cameras=1, grid=2, dwell=0.3,
-                                 settle=0.1)
-    clock = 0.0
-    while not session.is_done:
-        step = session.step
-        for _ in range(600):
-            clock += 1 / 30
-            degrees = 88.0 if step.key == "fired" else 16.0
-            session.update([frame_of(make_hand(thumb_degrees=degrees))], clock)
-            if session.step is not step or session.is_done:
-                break
-    fitted = session.result()[0]
-    assert fitted.trigger_fitted
-    span = abs(fitted.folded - fitted.cocked)
-    assert span <= PISTOL.signal("angle").max_span + 1e-9

@@ -8,7 +8,6 @@ import pytest
 
 from handy import browser, maps
 from handy.browser import BrowserSession
-from handy.calibration import CalibrationSession
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import ZombieRound, draw_robot
 from handy.recognition import Frame
@@ -19,23 +18,18 @@ from hands import frame_of, make_hand
 @pytest.mark.parametrize("key", maps.keys())
 def test_every_map_runs_in_browser_without_a_camera(key, monkeypatch):
     def no_models(*_args, **_kwargs):
-        pytest.fail("Mouse/keyboard must not load models")
+        pytest.fail("Mouse controls must not load models")
 
     monkeypatch.setattr(browser, "ensure_model", no_models)
-    session = BrowserSession(
-        {"map": key, "control": "keyboard" if key == "kart" else "mouse"}
-    )
-    data = session.tick(
-        {"x": 0.5, "y": 0.5, "fire": True, "throttle": 1}, session.last_tick + 0.033
-    )
+    session = BrowserSession({"map": key, "control": "mouse"})
+    data = session.tick({"x": 0.5, "y": 0.5, "fire": True}, session.last_tick + 0.033)
     image = cv2.imdecode(
         np.frombuffer(base64.b64decode(data["image"]), np.uint8), cv2.IMREAD_COLOR
     )
     assert image.shape == (540, 960, 3)
     assert np.ptp(image) > 50
     assert data["state"] == "playing"
-    if key != "kart":
-        assert session.round.shots == 1
+    assert session.round.shots == 1
     session.close()
 
 
@@ -81,7 +75,7 @@ def test_a_repeated_play_does_not_restart_the_round():
     assert (session.clock, session.last_tick) == (clock, tick)
 
 
-@pytest.mark.parametrize("name", ["undo", "reset", "finish", "skip", "calibrate"])
+@pytest.mark.parametrize("name", ["undo", "reset", "finish", "calibrate"])
 def test_setup_actions_that_arrive_late_change_nothing(name, monkeypatch):
     session, stream = camera_session(monkeypatch)
     shoot_setup_target(session, stream)
@@ -91,16 +85,17 @@ def test_setup_actions_that_arrive_late_change_nothing(name, monkeypatch):
         assert len(session.calibration.samples) == 1
         return
     # Setup already finished itself, as it does on the fifth accurate hit.
-    session.action("skip", {})
-    session.action("play", {})
+    warm_up(session)
     round_ = session.round
     assert session.action(name, {})["state"] == "playing"
     assert session.round is round_
 
 
-def test_unknown_actions_are_still_refused():
+@pytest.mark.parametrize("name", ["teleport", "skip"])
+def test_unknown_actions_are_still_refused(name):
+    # "skip" went with the practice state it led to; the page never sent it.
     with pytest.raises(ValueError, match="Unknown"):
-        BrowserSession({}).action("teleport", {})
+        BrowserSession({}).action(name, {})
 
 
 def test_round_end_rejects_shots_and_restarts_cleanly():
@@ -119,8 +114,8 @@ def test_round_end_rejects_shots_and_restarts_cleanly():
 @pytest.mark.parametrize(
     "config",
     [
-        {"map": "kart", "control": "gaze"},
-        {"map": "range", "control": "wheel"},
+        {"map": "zombies", "control": "gaze"},
+        {"map": "zombies", "control": "keyboard"},
         {"enemy": "unknown"},
         {"duration": float("nan")},
         {"duration": -1},
@@ -136,25 +131,6 @@ def test_invalid_pointer_never_enters_game_geometry(data):
     with pytest.raises(ValueError):
         BrowserSession({}).tick(data)
 
-
-def test_quick_calibration_omits_only_unneeded_depth_poses():
-    assert len(CalibrationSession(PISTOL, grid=2, quick=True).steps) == 6
-    assert len(CalibrationSession(PISTOL, cameras=2, grid=2, quick=True).steps) == 8
-    assert len(CalibrationSession(PISTOL, grid=3).steps) == 13
-
-
-def test_back_and_retry_discard_bad_samples_not_previous_progress():
-    s = CalibrationSession(PISTOL, grid=2, dwell=0.1, settle=0, quick=True)
-    frame = frame_of(make_hand(index_tip=(0.2, 0.2)))
-    s.update([frame], 0)
-    s.update([frame], 0.2)
-    assert s._index == 1
-    s.update([frame], 0.3)
-    s.retry(0.4)
-    assert s._index == 1 and not any(s._samples)
-    assert "aim_0" in s._recorded
-    s.back(0.5)
-    assert s._index == 0 and not s._recorded
 
 
 class FakeStream:
@@ -266,13 +242,9 @@ def stored_setup(**changes):
 @pytest.mark.parametrize(
     "saved",
     [
-        stored_setup(slide=["a", "b"]),
-        stored_setup(slide=[0.0]),
-        stored_setup(tuning=[0.0, float("nan")]),
         stored_setup(mapping=[1.0] * 8),
         stored_setup(mapping=[float("inf")] + [1.0] * 8),
         stored_setup(gain=10**400),
-        stored_setup(cocked=20.0, folded=20.0),
         stored_setup(mapping=..., aim_min=...),
         {"cameras": [stored_setup()["cameras"][0]] * 2},
         {"cameras": []},
@@ -296,7 +268,7 @@ def test_an_unusable_saved_setup_starts_a_fresh_one(saved, monkeypatch, capsys):
 def test_a_usable_saved_setup_is_kept(monkeypatch):
     from handy.calibration import Rig
 
-    saved = stored_setup(slide=[0.01, -0.02], gain=1.2)
+    saved = stored_setup(fit_error=0.01, gain=1.2)
     session = camera_session(monkeypatch, calibration=saved)[0]
     assert session.rig == Rig.from_dict(saved) and not session.forget_saved
     # A setup from before a field existed may load or not, but never blocks a start.
@@ -313,12 +285,17 @@ def test_shoot_to_calibrate_waits_for_fresh_thumb_pulls(monkeypatch):
     assert session.calibration.samples == []
     with pytest.raises(ValueError, match="five"):
         session.action("finish", {})
-    session.action("skip", {})
-    assert session.state == "practice"
-    session.action("play", {})
-    assert session.state == "playing"
+    # Play is answered with where the game is - still warming up.
+    assert session.action("play", {})["state"] == "calibration"
     session.close()
     assert stream.closed
+
+
+def warm_up(session):
+    """Stand in for five accurate hits, so the round itself can be played."""
+    session.calibration.hits.update(range(5))
+    session.action("finish", {})
+    assert session.state == "playing"
 
 
 def test_range_warmup_verifies_five_hits_then_saves_and_starts(monkeypatch):
@@ -340,7 +317,6 @@ def test_range_warmup_verifies_five_hits_then_saves_and_starts(monkeypatch):
     assert session.state == "playing"
     assert session.saved_rig is not None
     assert session.rig[0].mapping == mapping
-    assert not session.rig[0].trigger_fitted
 
 
 def test_browser_returns_hand_skeleton_and_clears_it_on_tracking_loss(monkeypatch):
@@ -353,11 +329,10 @@ def test_browser_returns_hand_skeleton_and_clears_it_on_tracking_loss(monkeypatc
     assert result["hands"] == []
 
 
-@pytest.mark.parametrize("removed", ["range", "kart"])
-def test_warmup_and_removed_speedway_are_not_selectable_games(removed):
-    assert removed not in maps.keys()
+def test_the_warmup_range_is_not_a_selectable_game():
+    assert "range" not in maps.keys()
     with pytest.raises(ValueError, match="arcade"):
-        BrowserSession({"map": removed})
+        BrowserSession({"map": "range"})
 
 
 def test_bad_shot_can_be_retried_and_reset_discards_unaccepted_fit(monkeypatch):
@@ -409,9 +384,7 @@ def test_hand_input_selects_the_maps_tracker_and_fires(map_key, monkeypatch):
     session = BrowserSession({"control": "pistol", "map": map_key})
     assert fetched == list(scheme.models)
     assert session.calibration.samples == []
-    session.action("skip", {})
-    session.clock = 30
-    session.action("play", {})
+    warm_up(session)
     for stamp, firing in enumerate([False] * 4 + [True] * 4 + [False] * 4, 1):
         hand = make_hand(thumb_degrees=70 if firing else 20)
         if map_key == "sniper":
@@ -448,8 +421,7 @@ def test_sniper_eye_closure_scopes_but_never_shoots(monkeypatch):
     )
     assert session.state == "calibration" and session.calibration is not None
     assert session.rig == hand_rig
-    session.action("skip", {})
-    session.action("play", {})
+    warm_up(session)
     # Both closed is a blink. One closed engages scope. Reopening releases it.
     for stamp, (blink, scoped) in enumerate(
         [

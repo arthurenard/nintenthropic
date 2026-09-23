@@ -39,7 +39,6 @@ let active = false,
   scoped = false;
 let pointer = { x: 0.5, y: 0.5 },
   keys = new Set(),
-  touchKeys = new Set(),
   muted = false,
   audioContext = null;
 let pendingAction = null,
@@ -85,10 +84,7 @@ function title(text) {
   return text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 function isCamera() {
-  return !["mouse", "keyboard"].includes(selectedControl);
-}
-function isDrive() {
-  return false;
+  return selectedControl !== "mouse";
 }
 function selectedMode() {
   const mode = SHOOT.find((c) => c.key === selectedControl);
@@ -141,15 +137,11 @@ function renderControls() {
     };
     $("controls").append(button);
   }
-  $("control-count").textContent = isDrive()
-    ? "Keyboard or camera wheel"
-    : "Mouse or hand controls";
   $("setup-hint").textContent = selectedMode().hint;
   $("start").innerHTML = isCamera()
     ? "Warm up & play <span>↗</span>"
     : "Let's play <span>↗</span>";
   $("enemy-option").hidden = selectedMap !== "zombies";
-  $("duration-option").hidden = isDrive();
 }
 function selectMap(key) {
   selectedMap = key;
@@ -162,32 +154,14 @@ function selectMap(key) {
 }
 function sound(cues) {
   if (muted || !audioContext || !cues.length) return;
-  const relevant = cues.find((c) =>
-    [
-      "hit",
-      "shot",
-      "hurt",
-      "race_go",
-      "countdown_beep",
-      "lap_chime",
-      "race_finish",
-    ].includes(c),
-  );
+  const relevant = cues.find((c) => ["hit", "shot", "hurt"].includes(c));
   if (!relevant) return;
   const now = audioContext.currentTime,
     osc = audioContext.createOscillator(),
     gain = audioContext.createGain();
   osc.type = relevant === "shot" ? "sawtooth" : "sine";
   osc.frequency.setValueAtTime(
-    {
-      hit: 760,
-      shot: 150,
-      hurt: 90,
-      race_go: 880,
-      countdown_beep: 440,
-      lap_chime: 1046,
-      race_finish: 1318,
-    }[relevant],
+    { hit: 760, shot: 150, hurt: 90 }[relevant],
     now,
   );
   osc.frequency.exponentialRampToValueAtTime(
@@ -301,8 +275,6 @@ async function start() {
     $("game").classList.toggle("immersive", selectedControl === "pistol");
     $("stage-overlay").hidden = true;
     $("game-image").hidden = true;
-    $("score-label").textContent = isDrive() ? "Position" : "Score";
-    $("time-label").textContent = isDrive() ? "Race" : "Time";
     $("game-title").textContent = title(
       config.maps.find((m) => m.key === selectedMap).title,
     );
@@ -319,23 +291,16 @@ async function start() {
       (c) => c.key === selectedControl && c.key !== "mouse",
     );
     $("mouse-coach").hidden = isCamera();
-    $("touch-drive").hidden = selectedControl !== "keyboard";
-    $("mouse-help").textContent = isDrive()
-      ? "Hold ↑ or W to accelerate, ← → or A D to steer, and ↓ or S to brake. Touch buttons work too."
-      : "Move your mouse to aim. Click to fire, or tap a target." +
-        (selectedMap === "sniper"
-          ? " Hold right-click or Shift to use the scope."
-          : "");
-    $("play-instructions").textContent = isDrive()
-      ? isCamera()
-        ? "Hold two hands level · Tilt to steer · Open palms to brake"
-        : "↑ / W accelerate · ← → / A D steer · ↓ / S brake"
-      : isCamera()
-        ? selectedMode().detail
-        : "Move to aim · Click / tap to fire" +
-          (selectedMap === "sniper" ? " · Right-click / Shift to scope" : "");
+    $("mouse-help").textContent =
+      "Move your mouse to aim. Click to fire, or tap a target." +
+      (selectedMap === "sniper"
+        ? " Hold right-click or Shift to use the scope."
+        : "");
+    $("play-instructions").textContent = isCamera()
+      ? selectedMode().detail
+      : "Move to aim · Click / tap to fire" +
+        (selectedMap === "sniper" ? " · Right-click / Shift to scope" : "");
     $("health-wrap").hidden = selectedMap !== "zombies";
-    $("accuracy-wrap").hidden = isDrive();
     $("lobby").hidden = true;
     $("game").hidden = false;
     window.scrollTo({ top: 0 });
@@ -361,7 +326,6 @@ async function start() {
     active = true;
     currentState = "";
     keys.clear();
-    touchKeys.clear();
     fire = false;
     scoped = false;
     lastSaved = "";
@@ -426,19 +390,10 @@ function setText(id, text) {
 function renderState(data) {
   currentState = data.state;
   setText("score", data.score);
-  setText(
-    "time",
-    data.remaining === null ? "3 laps" : Math.ceil(data.remaining),
-  );
+  setText("time", Math.ceil(data.remaining));
   setText("accuracy", `${data.accuracy ?? 0}%`);
   setText("health", data.health ?? 100);
-  setText(
-    "notice",
-    data.notice ||
-      (selectedControl === "wheel"
-        ? "Hold both hands up like a steering wheel. Keep it level through the three-light countdown."
-        : ""),
-  );
+  setText("notice", data.notice);
   setText(
     "tracking-label",
     data.tracking
@@ -449,7 +404,6 @@ function renderState(data) {
   );
   $("tracking-light").classList.toggle("live", !!data.tracking);
   $("calibration-coach").hidden = data.state !== "calibration";
-  $("practice-coach").hidden = data.state !== "practice";
   setText("pause", data.state === "paused" ? "Resume (P)" : "Pause (P)");
   $("pause").disabled = data.state === "over";
   $("recalibrate").disabled = data.state === "calibration";
@@ -500,7 +454,6 @@ function renderState(data) {
     $("aim-hits").value = step.hits;
   }
   if (data.hands) drawHandGraph(data.hands);
-  setText("practice-score", `${data.practiceHits} / 3 targets`);
   if (data.calibration) {
     const encoded = JSON.stringify(data.calibration);
     if (encoded !== lastSaved) {
@@ -539,7 +492,6 @@ function queueAction(action, extra = {}) {
   if (!active || pendingAction) return;
   pendingAction = { action, ...extra };
   keys.clear();
-  touchKeys.clear();
   fire = false;
 }
 async function loop(run) {
@@ -565,19 +517,12 @@ async function loop(run) {
     try {
       const shot = fire;
       fire = false;
-      const down = (...codes) =>
-        codes.some((c) => keys.has(c) || touchKeys.has(c));
       const data = await request("/api/frame", {
         viewAspect: stageAspect(),
         id: session.id,
         ...pointer,
         fire: shot,
         scope: scoped || keys.has("Shift"),
-        steer:
-          Number(down("ArrowRight", "d", "right")) -
-          Number(down("ArrowLeft", "a", "left")),
-        throttle: Number(down("ArrowUp", "w", "go")),
-        brake: down("ArrowDown", "s", "brake"),
         camera: currentState === "paused" ? null : cameraFrame(),
       });
       if (generation !== run || !active) return;
@@ -609,7 +554,6 @@ async function back() {
   generation++;
   pendingAction = null;
   keys.clear();
-  touchKeys.clear();
   fire = false;
   stopCamera();
   // A start still loading stops its own session when it arrives; Start stays
@@ -648,19 +592,6 @@ window.addEventListener("pointerup", () => {
 window.addEventListener("pointercancel", () => {
   scoped = false;
 });
-for (const button of document.querySelectorAll("[data-drive]")) {
-  button.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    button.setPointerCapture(event.pointerId);
-    touchKeys.add(button.dataset.drive);
-  });
-  button.addEventListener("pointerup", () =>
-    touchKeys.delete(button.dataset.drive),
-  );
-  button.addEventListener("lostpointercapture", () =>
-    touchKeys.delete(button.dataset.drive),
-  );
-}
 window.addEventListener("keydown", (event) => {
   if (!active || ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName))
     return;
@@ -678,7 +609,6 @@ window.addEventListener("keyup", (event) =>
 );
 function blur() {
   keys.clear();
-  touchKeys.clear();
   scoped = false;
   fire = false;
   if (active && !["paused", "over"].includes(currentState))
@@ -703,7 +633,7 @@ $("back").onclick = back;
 $("undo-shot").onclick = () => queueAction("undo");
 $("reset-aim").onclick = () => queueAction("reset");
 $("recalibrate").onclick = () => queueAction("calibrate");
-$("play-now").onclick = () => queueAction("play");
+
 $("pause").onclick = () =>
   queueAction(currentState === "paused" ? "resume" : "pause");
 $("overlay-action").onclick = () =>

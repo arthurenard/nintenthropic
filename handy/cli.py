@@ -66,9 +66,8 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--camera", type=int, action="append", dest="cameras",
                          metavar="INDEX",
                          help="webcam index; repeat it to aim with two or more "
-                              "at once - two see depth that one cannot. Left "
-                              "out, the first camera showing a live picture is "
-                              "used (see --list-cameras)")
+                              "at once. Left out, the first camera showing a "
+                              "live picture is used (see --list-cameras)")
     capture.add_argument("--list-cameras", action="store_true",
                          help="show which camera indices are available, and exit")
     capture.add_argument("--capture", type=_resolution, default=(1280, 720),
@@ -88,8 +87,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="how fast the filter opens up as the aim moves; "
                              "higher is more responsive (default: per scheme)")
     aiming.add_argument("--fire-above", type=float, default=None, dest="fire_above",
-                        help="fraction of the calibrated trigger travel that fires "
-                             "(default: per control scheme)")
+                        help="how far the thumb has to fold to fire, 0 up to 1 "
+                             "folded (default: per control scheme)")
     aiming.add_argument("--arm-below", type=float, default=None, dest="arm_below",
                         help="fraction it must return under to re-arm "
                              "(default: per control scheme)")
@@ -246,33 +245,30 @@ def _check_desktop(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
     fire, arm = args.fire_above, args.arm_below
     for name, value in (("--fire-above", fire), ("--arm-below", arm)):
         if value is not None and not 0.0 < value < 1.0:
-            parser.error(f"{name} is a fraction of the trigger's travel, "
+            parser.error(f"{name} is a fraction of the thumb's fold, "
                          f"between 0 and 1; got {value}")
+    # --control names the one hand scheme there is; the game picks the sniper's
+    # scope for itself, so nothing past this check needs to be told.
+    scheme = schemes.by_key(args.control)
     if fire is not None or arm is not None:
         # Whichever of the two was left out comes from the scheme, so the pair
-        # can only be judged against the schemes that could actually be played:
-        # the one named by --control, or any of them if the player will choose.
-        candidates = ([schemes.by_key(args.control)] if args.control
-                      else list(schemes.CONTROLS))
-        workable = [scheme for scheme in candidates
-                    if (arm if arm is not None else scheme.arm_below)
-                    < (fire if fire is not None else scheme.fire_above)]
-        if not workable:
+        # is judged against the scheme's own value for it.
+        if not ((arm if arm is not None else scheme.arm_below)
+                < (fire if fire is not None else scheme.fire_above)):
             parser.error(
                 "--arm-below must be under --fire-above, so that the trigger "
                 "has a hysteresis band to re-cock in"
                 + ("" if fire is not None and arm is not None else
-                   " (the one you left out comes from the control scheme: "
-                   + ", ".join(f"{scheme.key} {scheme.fire_above}/"
-                               f"{scheme.arm_below}" for scheme in candidates)
-                   + ")"))
+                   f" (the one you left out comes from the control scheme: "
+                   f"{scheme.key} {scheme.fire_above}/{scheme.arm_below})"))
     if not 0.0 <= args.volume <= 1.0:
         parser.error(f"--volume runs from 0 to 1; got {args.volume}")
 
 
 def _settings(args: argparse.Namespace) -> Settings:
     values = dict(vars(args))
-    for name in ("list_cameras", "browser", "port", "no_open"):
+    # --control has been checked; it names the one hand scheme there is.
+    for name in ("list_cameras", "browser", "port", "no_open", "control"):
         values.pop(name, None)
     values["cameras"] = tuple(values["cameras"] or ())  # empty means: find them
     capture_width, capture_height = values.pop("capture")

@@ -4,11 +4,6 @@ import pytest
 
 from handy import homography
 
-# What an off-axis camera sees when the player traces the four screen corners:
-# rotated, sheared, and with the far side foreshortened.
-SKEWED = [(0.30, 0.42), (0.62, 0.36), (0.68, 0.66), (0.34, 0.72)]
-CORNERS = [(0.08, 0.08), (0.92, 0.08), (0.92, 0.92), (0.08, 0.92)]
-
 
 def test_a_box_mapping_puts_its_corners_at_the_screen_corners():
     matrix = homography.box_mapping((0.2, 0.3), (0.8, 0.7))
@@ -22,64 +17,7 @@ def test_a_box_with_no_area_is_refused():
         homography.box_mapping((0.5, 0.2), (0.5, 0.8))
 
 
-def test_the_fit_reproduces_its_own_calibration_points():
-    matrix = homography.fit(SKEWED, CORNERS)
-    assert matrix is not None
-    for source, target in zip(SKEWED, CORNERS):
-        assert homography.apply(matrix, source) == pytest.approx(target, abs=1e-6)
-    assert homography.residual(matrix, SKEWED, CORNERS) == pytest.approx(0.0, abs=1e-6)
-
-
-def test_it_agrees_with_opencv():
-    """Cross-check the hand-rolled DLT against a trusted implementation."""
-    ours = np.asarray(homography.fit(SKEWED, CORNERS)).reshape(3, 3)
-    theirs = cv2.getPerspectiveTransform(np.float32(SKEWED), np.float32(CORNERS))
-    assert ours == pytest.approx(theirs / theirs[2, 2], abs=1e-6)
-
-
-def test_extra_points_are_averaged_rather_than_rejected():
-    source = SKEWED + [(0.49, 0.54)]
-    destination = CORNERS + [(0.5, 0.5)]
-    matrix = homography.fit(source, destination)
-
-    assert matrix is not None
-    # A least-squares fit spreads the small inconsistency instead of failing.
-    assert homography.residual(matrix, source, destination) < 0.02
-
-
-def test_noise_in_the_samples_barely_moves_a_nine_point_fit():
-    rng = np.random.default_rng(3)
-    truth = homography.fit(SKEWED, CORNERS)
-    grid = [(x, y) for y in (0.08, 0.5, 0.92) for x in (0.08, 0.5, 0.92)]
-    # Invert the picture: where would the hand be for each screen point?
-    inverse = np.linalg.inv(np.asarray(truth).reshape(3, 3))
-    observed = []
-    for point in grid:
-        homogeneous = inverse @ np.array([*point, 1.0])
-        exact = homogeneous[:2] / homogeneous[2]
-        observed.append(tuple(exact + rng.normal(0, 0.004, 2)))
-
-    fitted = homography.fit(observed, grid)
-    assert homography.residual(fitted, observed, grid) < 0.02
-
-
-def test_degenerate_point_sets_are_refused():
-    assert homography.fit([(0, 0), (1, 1), (2, 2), (3, 3)], CORNERS) is None  # collinear
-    assert homography.fit([(0.5, 0.5)] * 4, CORNERS) is None  # all the same point
-    assert homography.fit(SKEWED[:3], CORNERS[:3]) is None  # too few
-    assert homography.fit(SKEWED, CORNERS[:3]) is None  # mismatched
-    assert homography.fit([], []) is None
-
-
-def test_points_a_hair_off_a_line_are_as_degenerate_as_points_on_it():
-    """Only exactly collinear points were refused. A billionth off the line,
-    the fit went through and came back magnifying movement 450 million times."""
-    for offset in (1e-4, 1e-6, 1e-9):
-        nearly = [(0.3, 0.3), (0.5, 0.5 + offset), (0.7, 0.7), (0.3, 0.7)]
-        assert homography.fit(nearly, CORNERS) is None, offset
-
-
-# --- the humbler fitters the shooting setup actually ships -----------------
+# --- the fitters the shooting setup ships -----------------------------------
 
 # An affine placement: rotated, sheared and offset, but no perspective.
 AFFINE = (1.6, 0.4, -0.5,
@@ -195,30 +133,11 @@ def test_a_fingertip_past_the_horizon_is_not_thrown_to_the_opposite_corner():
 
 def test_whether_a_map_is_defined_across_a_whole_box():
     frame = ((0.0, 0.0), (1.0, 1.0))
-    assert homography.defined_over(homography.IDENTITY, *frame)
-    assert homography.defined_over(homography.fit(SKEWED, CORNERS), *frame)
+    assert homography.defined_over(homography.box_mapping((0, 0), (1, 1)), *frame)
+    assert homography.defined_over(AFFINE, *frame), "an affine map has no horizon"
     assert not homography.defined_over(LEGACY, *frame), "its horizon is in view"
     assert homography.defined_over(LEGACY, (0.2, 0.2), (0.7, 0.8))
     assert not homography.defined_over((float("nan"),) * 9, *frame)
-
-
-def test_a_fit_is_defined_on_the_side_of_the_horizon_its_points_came_from():
-    """A homography's sign is free, and the fit normalised it by one entry - so
-    points on the far side of the origin from the horizon came out with negative
-    weight everywhere they were fitted, and would all read as past the horizon."""
-    truth = np.array([[1.0, 0.2, 0.0], [0.1, 1.0, 0.0], [-5.0, 0.0, 1.0]])
-    hand = [(0.30, 0.30), (0.70, 0.35), (0.65, 0.70), (0.35, 0.65), (0.5, 0.5)]
-    screen = []
-    for x, y in hand:
-        u, v, w = truth @ np.array([x, y, 1.0])
-        screen.append((u / w, v / w))
-
-    matrix = homography.fit(hand, screen)
-    assert matrix is not None
-    for point, target in zip(hand, screen):
-        assert homography.apply(matrix, point) == pytest.approx(target, abs=1e-6)
-    # Its horizon (x = 0.2) is still a horizon: nothing short of it is mapped.
-    assert homography.apply(matrix, (0.1, 0.5)) is None
 
 
 def test_a_residual_counts_a_point_it_cannot_place_as_infinitely_wrong():
@@ -227,4 +146,4 @@ def test_a_residual_counts_a_point_it_cannot_place_as_infinitely_wrong():
 
 
 def test_a_residual_without_points_is_zero():
-    assert homography.residual(homography.IDENTITY, [], []) == 0.0
+    assert homography.residual(homography.box_mapping((0, 0), (1, 1)), [], []) == 0.0

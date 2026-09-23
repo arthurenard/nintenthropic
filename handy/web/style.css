@@ -695,17 +695,6 @@ dialog p {
 dialog .primary {
   margin-top: 25px;
 }
-.touch-drive {
-  display: flex;
-  gap: 8px;
-  padding-top: 12px;
-}
-.touch-drive button {
-  flex: 1;
-  padding: 14px 5px;
-  font-size: 11px;
-  touch-action: none;
-}
 #game:fullscreen {
   padding: 20px;
   background: var(--bg);
@@ -861,9 +850,6 @@ dialog .primary {
   .play-footer p {
     font-size: 10px;
   }
-  .touch-drive {
-    display: flex;
-  }
   #mouse-coach .coach-icon {
     display: none;
   }
@@ -968,24 +954,7 @@ dialog .primary {
   background: #101412df;
   padding: 8px;
 }
-.immersive #practice-coach {
-  position: absolute;
-  bottom: 0;
-  left: 20px;
-  right: 20px;
-  background: var(--panel);
-  padding: 8px 20px;
-}
-.immersive #practice-coach h2,
-.immersive #practice-coach p,
-.immersive #practice-coach strong {
-  display: inline;
-  margin-right: 12px;
-}
-.immersive #practice-coach .primary {
-  width: auto;
-  margin: 8px;
-}
+
 .calibrating .hud,
 .calibrating .play-footer,
 .calibrating #calibration-tools,
@@ -1073,9 +1042,6 @@ button:disabled {
   .immersive .game-actions .quiet {
     font-size: 10px;
     padding: 7px;
-  }
-  .immersive #practice-coach {
-    bottom: 0;
   }
 }
 

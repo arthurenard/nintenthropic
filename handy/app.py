@@ -1,13 +1,8 @@
-"""The game loop: capture, recognise, aim, score, draw.
-
-A map that declares itself a `drive` map is handed to `karting.drive()` instead,
-which reads two hands as a steering wheel and returns the same (round, reason).
-"""
+"""The game loop: capture, recognise, aim, score, draw."""
 
 from __future__ import annotations
 
 import contextlib
-import math
 import threading
 import time
 from collections import deque
@@ -20,7 +15,7 @@ import numpy as np
 from . import maps, scene, schemes
 from .aiming import Aim, AimController, Recoil, EyeScope
 from .audio import Audio, Sounds
-from .calibration import CalibrationSession, Rig, RigBook, Setup, default_calibration, default_rig
+from .calibration import Rig, RigBook, Setup, default_calibration, default_rig
 from .shot_calibration import ShotCalibration
 from . import display
 from .cameras import CameraError, first_live, open_camera
@@ -37,9 +32,7 @@ WINDOW_TITLE = "Handy"
 # fitted homography then sends to the opposite side of the screen: the
 # crosshair runs backwards for the rest of the round with nothing said. It is a
 # launch-time choice (--no-mirror) so the setup that follows agrees with it.
-CONTROL_KEYS = ("q quit", "r restart", "b maps", "e controls", "c recalibrate",
-                "s screenshot")
-CONTROLS = "   ".join(CONTROL_KEYS)
+CONTROL_KEYS = ("q quit", "r restart", "b maps", "c recalibrate", "s screenshot")
 
 _QUIT_KEYS = {ord("q"), 27}  # q and Esc
 _ESCAPE = 27
@@ -61,15 +54,13 @@ class Settings:
     window_width: int | None = None
     window_height: int | None = None
 
-    # Aiming. None means: the control scheme's own defaults - a fingertip is a
-    # clean signal, a gaze needs a much heavier hand on the filter.
+    # Aiming. None means: the control scheme's own defaults.
     min_cutoff: float | None = None
     beta: float | None = None
     fire_above: float | None = None
     arm_below: float | None = None
 
     # Calibration
-    calibration_grid: int = 2
     calibrate: bool = False
     skip_calibration: bool = False
     calibration_path: Path | None = None
@@ -82,9 +73,8 @@ class Settings:
     mute: bool = False
     recoil: float = 26.0
 
-    # Map and controls
+    # Map
     map_key: str | None = None
-    control: str | None = "pistol"  # None means: ask on the selection screen
     enemy: str = "zombies"
 
     # Targets
@@ -121,7 +111,6 @@ class Layout:
     hud: tuple[int, int]
     quit_button: scene.Button
     maps_button: scene.Button
-    controls_button: scene.Button
     scale: float = 1.0
 
 
@@ -140,7 +129,7 @@ def layout_for(width: int, height: int) -> Layout:
     margin = unit(16)
     inset = Rect(margin, margin, width // 4, height // 4)
     button_height = unit(46)
-    quit_width, maps_width, controls_width = unit(132), unit(136), unit(164)
+    quit_width, maps_width = unit(132), unit(136)
     gap = unit(16)
 
     quit_button = scene.Button(
@@ -148,9 +137,6 @@ def layout_for(width: int, height: int) -> Layout:
     maps_button = scene.Button(
         Rect(quit_button.rect.x - gap - maps_width, margin, maps_width,
              button_height), "MAPS")
-    controls_button = scene.Button(
-        Rect(maps_button.rect.x - gap - controls_width, margin, controls_width,
-             button_height), "CONTROLS")
 
     top = inset.bottom + unit(28)
     play_area = Rect(unit(24), top, width - 2 * unit(24), height - top - unit(56))
@@ -161,7 +147,6 @@ def layout_for(width: int, height: int) -> Layout:
         hud=(inset.right + unit(28), margin),
         quit_button=quit_button,
         maps_button=maps_button,
-        controls_button=controls_button,
         scale=scale,
     )
 
@@ -261,7 +246,7 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
 
     scale = layout.scale
     # The HUD column: inset, score block and the map's own readouts, on a panel.
-    hud_right = min(layout.hud[0] + round(430 * scale), layout.controls_button.rect.x - round(16 * scale))
+    hud_right = min(layout.hud[0] + round(430 * scale), layout.maps_button.rect.x - round(16 * scale))
     scene.draw_hud_backing(canvas, Rect(layout.inset.x - round(8 * scale),
                                         layout.inset.y - round(8 * scale),
                                         hud_right - layout.inset.x + round(8 * scale),
@@ -276,7 +261,7 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
         view.map.draw_hud(canvas, view.round, layout.hud, view.now)
     scene.draw_timer(canvas, view.remaining, scale)
     crosshair = view.crosshair
-    for button in (layout.quit_button, layout.maps_button, layout.controls_button):
+    for button in (layout.quit_button, layout.maps_button):
         scene.draw_button(canvas, button, highlighted=(
             crosshair is not None and button.contains(*crosshair)), scale=scale)
     segments = [[view.scheme.footer] if view.scheme and view.scheme.footer else [],
@@ -295,7 +280,7 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
         since_shot = None if view.last_shot is None else view.now - view.last_shot
         scene.draw_crosshair(canvas, *crosshair, armed=view.aim.armed,
                              since_shot=since_shot, scale=scale,
-                             pull=view.aim.pull, fire_at=view.fire_at)
+                             pull=view.aim.travel, fire_at=view.fire_at)
 
 
 def save_screenshot(image: np.ndarray, directory: Path) -> Path:
@@ -371,9 +356,8 @@ def choose_cameras(settings: Settings) -> tuple[tuple[int, ...], str]:
 class Eyes:
     """Every camera and its recogniser, read as one.
 
-    The first camera is the one the player faces; any others are there to see the
-    hand from somewhere else, which is what lets the game tell distance from
-    displacement.
+    The first camera is the one the player faces; any others see the hand from
+    somewhere else, and fusion weighs each one's answer by how steady its map is.
     """
 
     def __init__(self, captures: list[cv2.VideoCapture],
@@ -563,10 +547,8 @@ def scores_path(settings: Settings) -> Path:
 
 
 def run_calibration(eyes: Eyes, canvas: np.ndarray, layout: Layout, scheme,
-                    grid: int, previous: Rig | None) -> Rig | None:
+                    previous: Rig | None) -> Rig | None:
     """Use Target Range to learn the aim and verify five centre hits."""
-    if scheme.key not in ("pistol", "marksman"):
-        return run_pose_calibration(eyes, canvas, layout, scheme, grid, previous)
     session = ShotCalibration(scheme, cameras=len(eyes), previous=previous)
     while True:
         images, frames = eyes.read()
@@ -586,34 +568,6 @@ def run_calibration(eyes: Eyes, canvas: np.ndarray, layout: Layout, scheme,
             session = ShotCalibration(scheme, cameras=len(eyes))
 
 
-
-def run_pose_calibration(eyes: Eyes, canvas: np.ndarray, layout: Layout, scheme,
-                         grid: int, previous: Rig | None) -> Rig | None:
-    """Walk the player through the setup poses. None if they skip out of it."""
-    session = CalibrationSession(scheme, cameras=len(eyes), grid=grid,
-                                 fallback=previous, quick=grid == 2)
-    started = time.monotonic()
-
-    while not session.is_done:
-        images, hands = eyes.read()
-        now = time.monotonic()
-        progress = session.update(hands, now)
-        pulse = 0.5 + 0.5 * math.sin((now - started) * 4.0)
-        scene.draw_calibration(canvas, progress, images, hands, pulse, scheme.draw,
-                               layout.scale)
-        cv2.imshow(WINDOW_TITLE, canvas)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key == _ESCAPE or key == ord("q") or window_closed():
-            return None
-        if key == ord("r"):
-            session.retry(now)
-        elif key in (8, 127, ord("b")):
-            session.back(now)
-
-    return session.result()
-
-
 def trigger_thresholds(settings: Settings, scheme) -> tuple[float, float]:
     """Fire and re-arm points: the player's flags, else the scheme's own."""
     fire = (settings.fire_above if settings.fire_above is not None
@@ -624,14 +578,12 @@ def trigger_thresholds(settings: Settings, scheme) -> tuple[float, float]:
 
 
 def make_controller(settings: Settings, scheme) -> AimController:
-    cutoff, beta = getattr(scheme, "smoothing", (1.2, 0.8))
+    cutoff, beta = scheme.smoothing
     fire, arm = trigger_thresholds(settings, scheme)
     return AimController(scheme, fire_above=fire, arm_below=arm,
                          min_cutoff=(settings.min_cutoff
                                      if settings.min_cutoff is not None else cutoff),
-                         beta=settings.beta if settings.beta is not None else beta,
-                         median=getattr(scheme, "trigger_median", True),
-                         native_thumb=scheme.key in ("pistol", "marksman"))
+                         beta=settings.beta if settings.beta is not None else beta)
 
 
 class FreshAim:
@@ -734,8 +686,6 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                 return round_, "quit"  # shot the quit button
             if layout.maps_button.contains(*crosshair):
                 return round_, "maps"
-            if layout.controls_button.contains(*crosshair):
-                return round_, "controls"
             sounds.shot()
             impact = round_.shoot(*crosshair, now)
             if chosen.key == "zombies" and round_.options.enemy == "robots" and impact.is_hit:
@@ -750,8 +700,6 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                 return round_, "quit"
             if layout.maps_button.contains(mouse.x, mouse.y):
                 return round_, "maps"
-            if layout.controls_button.contains(mouse.x, mouse.y):
-                return round_, "controls"
 
         render(canvas, View(map=chosen, round=round_, aim=aim, crosshair=crosshair,
                             cameras=images, hands=hands, now=now,
@@ -773,8 +721,6 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
             return round_, "again"
         elif key == ord("b"):
             return round_, "maps"
-        elif key == ord("e"):
-            return round_, "controls"
         elif key == ord("c"):
             return round_, "recalibrate"
         elif key == ord("n") and chosen.key == "zombies":
@@ -786,7 +732,7 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
 def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                controller: AimController, rig: Rig, scheme,
                scores: HighScores) -> tuple[str, Map | None]:
-    """The map chooser. Shoot a card to play it, or the button to change controls."""
+    """The map chooser. Shoot a card to play it."""
     cards = scene.map_cards(layout.window, len(maps.MAPS), layout.scale)
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
@@ -801,8 +747,7 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
 
         entries = []
         for chosen in maps.MAPS:
-            best = scores.best_for(chosen.key,
-                                   chosen.score_duration(settings.duration))
+            best = scores.best_for(chosen.key, settings.duration)
             entries.append((chosen.title, chosen.blurb,
                             f"best {best}" if best else "not yet played",
                             chosen.draw_emblem))
@@ -820,12 +765,11 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
                         (layout.inset.right + round(28 * scale),
                          layout.inset.y + round(48 * scale)),
                         scene.MUTED, scale=0.5 * scale)
-        for button in (layout.quit_button, layout.controls_button):
-            scene.draw_button(canvas, button, highlighted=(
-                crosshair is not None and button.contains(*crosshair)), scale=scale)
+        scene.draw_button(canvas, layout.quit_button, highlighted=(
+            crosshair is not None and layout.quit_button.contains(*crosshair)),
+            scale=scale)
         scene.draw_footer(
-            canvas, "shoot a card to play   |   e controls   q quit   c recalibrate",
-            scale)
+            canvas, "shoot a card to play   |   q quit   c recalibrate", scale)
         if crosshair is not None:
             scene.draw_crosshair(canvas, *crosshair, armed=aim.armed, since_shot=None,
                                  scale=scale)
@@ -834,15 +778,11 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
         if aim.fired and crosshair is not None:
             if layout.quit_button.contains(*crosshair):
                 return "quit", None
-            if layout.controls_button.contains(*crosshair):
-                return "controls", None
             if aimed is not None:
                 return "play", maps.MAPS[aimed]
         if mouse.take_click():
             if layout.quit_button.contains(mouse.x, mouse.y):
                 return "quit", None
-            if layout.controls_button.contains(mouse.x, mouse.y):
-                return "controls", None
             picked = _card_under(cards, (mouse.x, mouse.y))
             if picked is not None:
                 return "play", maps.MAPS[picked]
@@ -850,8 +790,6 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
         key = cv2.waitKey(1) & 0xFF
         if key in _QUIT_KEYS or window_closed():
             return "quit", None
-        if key == ord("e"):
-            return "controls", None
         if key == ord("c"):
             return "recalibrate", None
         if key in (ord(str(index + 1)) for index in range(len(maps.MAPS))):
@@ -902,8 +840,7 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         scene.draw_results(canvas, summary, best, is_best,
                            hint="shoot to play again   |   q quit   c recalibrate",
                            scale=layout.scale)
-        for button in (layout.quit_button, layout.maps_button,
-                       layout.controls_button):
+        for button in (layout.quit_button, layout.maps_button):
             scene.draw_button(canvas, button, highlighted=(
                 crosshair is not None and button.contains(*crosshair)),
                 scale=layout.scale)
@@ -918,16 +855,12 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                 return "quit"
             if layout.maps_button.contains(*crosshair):
                 return "maps"
-            if layout.controls_button.contains(*crosshair):
-                return "controls"
             return "again"
         if mouse.take_click():
             if layout.quit_button.contains(mouse.x, mouse.y):
                 return "quit"
             if layout.maps_button.contains(mouse.x, mouse.y):
                 return "maps"
-            if layout.controls_button.contains(mouse.x, mouse.y):
-                return "controls"
 
         key = cv2.waitKey(1) & 0xFF
         if key in _QUIT_KEYS or window_closed():
@@ -936,18 +869,10 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
             return "again"
         if key == ord("b"):
             return "maps"
-        if key == ord("e"):
-            return "controls"
         if key == ord("c"):
             return "recalibrate"
         if key == ord("s"):
             take_screenshot(canvas, settings, layout.scale)
-
-
-def cameras_for(scheme, indices: tuple[int, ...]) -> tuple[int, ...]:
-    """Which of the available cameras this scheme will actually use."""
-    limit = getattr(scheme, "max_cameras", None)
-    return indices if limit is None else tuple(indices[:limit])
 
 
 def rig_setup(settings: Settings, indices: tuple[int, ...]) -> Setup:
@@ -976,60 +901,20 @@ def saved_rig(book: RigBook, settings: Settings, scheme,
     return saved
 
 
-SCHEME_EMBLEMS = {"pistol": scene.pistol_emblem, "gaze": scene.gaze_emblem,
-                  "marksman": scene.marksman_emblem}
-
-
-def select_scheme(canvas: np.ndarray, layout: Layout):
-    """Hand control instructions, acknowledged by mouse or keyboard.
-
-    Runs before any camera stream is open - each scheme needs its own model and
-    recogniser, so nothing is listening yet and there is no crosshair to shoot
-    with. A click or a number key is the whole interaction.
-    """
-    cards = scene.map_cards(layout.window, len(schemes.CONTROLS), layout.scale)
-    entries = tuple((scheme.title, scheme.blurb, scheme.footer,
-                     SCHEME_EMBLEMS[scheme.key]) for scheme in schemes.CONTROLS)
-    mouse = Mouse()
-    cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
-
-    while True:
-        hovered = _card_under(cards, (mouse.x, mouse.y))
-        scene.draw_scheme_select(canvas, cards, entries, hovered, layout.scale)
-        scene.draw_footer(canvas, "1 finger pistol   |   sniper adds an eye scope automatically"
-                          "   |   q quit", layout.scale)
-        cv2.imshow(WINDOW_TITLE, canvas)
-
-        if mouse.take_click() and hovered is not None:
-            return schemes.CONTROLS[hovered]
-
-        key = cv2.waitKey(30) & 0xFF
-        if key in _QUIT_KEYS or window_closed():
-            return None
-        if key in (ord(str(index + 1)) for index in range(len(schemes.CONTROLS))):
-            return schemes.CONTROLS[int(chr(key)) - 1]
-
-
-def next_scheme(current) -> object:
-    """Return to hand controls; the selected map owns the scope extension."""
-    return schemes.PISTOL
-
-
 def warm_maps(layout: Layout, settings: Settings) -> None:
     """Build every map's static backdrop once, off the main thread.
 
     Each map caches the scenery it does not redraw - road, sky, station - the
     first time it is drawn at a given size, and the richest take a couple of
     seconds to build. Done on the first frame of play that is a freeze the
-    player feels; done here, it happens while they are still choosing how to
-    aim. A map drawn before its turn simply builds it twice, which is harmless.
+    player feels; done here, it happens while they are still choosing a map.
+    A map drawn before its turn simply builds it twice, which is harmless.
     """
     scratch = np.zeros((layout.window.height, layout.window.width, 3), np.uint8)
     for chosen in maps.MAPS:
         try:
             round_ = new_round(settings, layout, chosen)
-            if getattr(chosen, "mode", "shoot") == "shoot":
-                round_.update(0.0)
+            round_.update(0.0)
             chosen.draw_world(scratch, round_, 0.0)
             if isinstance(round_, maps.western.WesternRound):
                 # High Noon's street is a new picture every hour of the round,
@@ -1064,23 +949,6 @@ def announce(indices: tuple[int, ...], note: str) -> None:
         print(f"Using {len(indices)} cameras (indices {listed}), fused.")
 
 
-def starting_scheme(settings: Settings):
-    """The scheme a launch opens with, or None if the player is to be asked."""
-    wants_drive = (settings.map_key is not None
-                   and maps.by_key(settings.map_key).mode == "drive")
-    if settings.control:
-        scheme = schemes.by_key(settings.control)
-    elif wants_drive or len(schemes.CONTROLS) == 1:
-        # Straight to the track: a race has no aiming, so asking how the
-        # player wants to aim would be a question with no consequence.
-        scheme = schemes.PISTOL
-    else:
-        return None
-    if scheme.key in ("pistol", "marksman"):
-        scheme = schemes.for_map(settings.map_key)
-    return scheme
-
-
 def run(settings: Settings) -> None:
     """Open the game and play until the user quits."""
     # The download comes before any camera is woken: a network failure, or a
@@ -1111,26 +979,16 @@ def run(settings: Settings) -> None:
         layout = layout_for(width, height)
         canvas = np.zeros((height, width, 3), np.uint8)
         start_warm_up(layout, settings)
-        scheme = starting_scheme(settings)
-        if scheme is None:
-            scheme = select_scheme(canvas, layout)
-            if scheme is not None and scheme.key in ("pistol", "marksman"):
-                scheme = schemes.for_map(settings.map_key)
-        while scheme is not None:
-            print(f"Controls: {scheme.title.lower()}.")
-            # Each scheme watches for something different, so switching between
-            # them means new recognisers - hence a session per scheme.
-            try:
-                scheme = _session(scheme, settings, layout, captures, canvas, book,
-                                  scores)
-            except CameraError:
-                # A camera that has gone mid-game is said on the screen the
-                # player is looking at, not only in the terminal behind it.
-                show_notice(canvas, ["CAMERA LOST",
-                                     "The camera stopped sending pictures.",
-                                     "Reconnect it and start the game again."],
-                            seconds=6.0, scale=layout.scale)
-                raise
+        try:
+            _session(settings, layout, captures, canvas, book, scores)
+        except CameraError:
+            # A camera that has gone mid-game is said on the screen the
+            # player is looking at, not only in the terminal behind it.
+            show_notice(canvas, ["CAMERA LOST",
+                                 "The camera stopped sending pictures.",
+                                 "Reconnect it and start the game again."],
+                        seconds=6.0, scale=layout.scale)
+            raise
 
 
 def _bundles_to_fetch(settings: Settings, scheme) -> list[str]:
@@ -1158,14 +1016,9 @@ def prefetch_models(settings: Settings) -> None:
     is only a warning: the pistol maps are playable without it, and choosing
     the map tries again (and says so on screen if it still cannot).
     """
-    start = starting_scheme(settings)
-    needed = [] if start is None else _bundles_to_fetch(settings, start)
-    later: list[str] = []
-    for scheme in ([start] if start is not None else schemes.CONTROLS):
-        reachable = ([schemes.for_map(chosen.key) for chosen in maps.MAPS]
-                     if scheme.key in ("pistol", "marksman") else [scheme])
-        for other in reachable:
-            later += _bundles_to_fetch(settings, other)
+    needed = _bundles_to_fetch(settings, schemes.for_map(settings.map_key))
+    later = [name for chosen in maps.MAPS
+             for name in _bundles_to_fetch(settings, schemes.for_map(chosen.key))]
     for name in dict.fromkeys(needed):
         ensure_model(name)
     for name in dict.fromkeys(later):
@@ -1208,37 +1061,22 @@ def model_bundles(settings: Settings, scheme) -> list[Path]:
         return [ensure_model(name) for name in scheme.models]
     if scheme.key == "marksman":
         return [settings.model_path, ensure_model("face_landmarker")]
-    if len(scheme.models) != 1:
-        wanted = ", ".join(name.replace("_", " ") for name in scheme.models)
-        raise ValueError(
-            f"--model names one bundle, but {scheme.title.lower()} needs "
-            f"{len(scheme.models)} ({wanted}). Drop --model to let the game "
-            f"fetch them, or choose a control scheme that uses one.")
     return [settings.model_path]
 
 
-def _session(scheme, settings: Settings, layout: Layout,
-             captures: list, canvas: np.ndarray, book: RigBook,
-             scores: HighScores):
-    """Play with hand tracking that adapts to each map. None means stop."""
-    if scheme.key in ("pistol", "marksman"):
-        scheme = schemes.for_map(settings.map_key)
+def _session(settings: Settings, layout: Layout, captures: list,
+             canvas: np.ndarray, book: RigBook, scores: HighScores) -> None:
+    """Play with hand tracking that adapts to each map, until the player quits."""
+    scheme = schemes.for_map(settings.map_key)
+    print(f"Controls: {scheme.title.lower()}.")
     model_paths = model_bundles(settings, scheme)
-    indices = cameras_for(scheme, settings.cameras)
-    captures = captures[:len(indices)]
-    if len(indices) < len(settings.cameras):
-        spare = len(settings.cameras) - len(indices)
-        print(f"{scheme.title.title()} uses {len(indices)} camera; "
-              f"{spare} left idle - a second view has nothing to add to it.")
-    rig = saved_rig(book, settings, scheme, indices)
+    rig = saved_rig(book, settings, scheme, settings.cameras)
     chosen = maps.by_key(settings.map_key) if settings.map_key else None
     last: Round | None = None
     last_map: Map | None = None
-    switch_to = None
 
     with contextlib.ExitStack() as stack:
-        # However this session ends, no map is in play afterwards: the scheme
-        # chooser and the next session's menus go back to the plain grid.
+        # However the session ends, no map is in play afterwards.
         stack.callback(scene.set_ambient_art, None)
         stream_stack = stack.enter_context(contextlib.ExitStack())
         streams = open_streams(stream_stack, scheme, model_paths, len(captures))
@@ -1256,8 +1094,7 @@ def _session(scheme, settings: Settings, layout: Layout,
         def calibrate() -> bool:
             """Run setup now. False only if the window has gone."""
             nonlocal rig, needs_setup
-            measured = run_calibration(eyes, canvas, layout, scheme,
-                                       settings.calibration_grid, rig)
+            measured = run_calibration(eyes, canvas, layout, scheme, rig)
             if measured is None:
                 # Backed out - and 'q' quits on every other screen, so this is
                 # as often a reflex as a decision. Asking again before every
@@ -1275,11 +1112,11 @@ def _session(scheme, settings: Settings, layout: Layout,
                 return not window_closed()
             needs_setup = False
             # Say what it was fitted on: the next launch reuses it only there.
-            measured = replace(measured, setup=rig_setup(settings, indices))
+            measured = replace(measured, setup=rig_setup(settings, settings.cameras))
             rig = measured
             book.set(schemes.calibration_key(scheme), measured)
             book.save(calibration_path(settings))
-            print(describe(measured, native_thumb=scheme.key in ("pistol", "marksman")))
+            print(describe(measured))
             # Say it on screen: anything that fell back to the defaults is a
             # part of the game quietly not doing what it should, and a player
             # who does not know that blames the aim.
@@ -1289,56 +1126,47 @@ def _session(scheme, settings: Settings, layout: Layout,
             unfitted = [index + 1
                         for index, camera in enumerate(measured.cameras)
                         if not camera.aim_fitted]
-            untriggered = [index + 1
-                           for index, camera in enumerate(measured.cameras)
-                           if not camera.trigger_fitted and scheme.key not in ("pistol", "marksman")]
-            if unfitted or untriggered:
-                trouble = []
-                if unfitted:
-                    trouble.append("AIM: could not fit camera "
-                                   + ", ".join(map(str, unfitted)))
-                    # With other cameras fitted, the one that failed is left out
-                    # of the aim altogether; with none fitted, setup fell back
-                    # on the previous or default map, and that is what aims.
-                    trouble.append(
-                        "Playing on defaults. Press c to try again."
-                        if len(unfitted) == len(measured.cameras) else
-                        "It sits this one out. Press c to try again.")
-                if untriggered:
-                    trouble.append("TRIGGER: the two poses looked too alike")
-                show_notice(canvas, ["SETUP DID NOT FULLY SUCCEED", *trouble],
-                            scale=layout.scale)
+            if unfitted:
+                show_notice(canvas, [
+                    "SETUP DID NOT FULLY SUCCEED",
+                    "AIM: could not fit camera " + ", ".join(map(str, unfitted)),
+                    # With other cameras fitted, the one that failed is left
+                    # out of the aim altogether; with none fitted, setup fell
+                    # back on the previous or default map, and that is what
+                    # aims.
+                    "Playing on defaults. Press c to try again."
+                    if len(unfitted) == len(measured.cameras) else
+                    "It sits this one out. Press c to try again.",
+                ], scale=layout.scale)
             return True
 
         while True:
             layout, canvas = refit(layout, canvas)
-            if scheme.key in ("pistol", "marksman"):
-                wanted = schemes.for_map(chosen.key if chosen else None)
-                if wanted.key != scheme.key:
-                    # Both read the same hand geometry and trigger. Keep the
-                    # rig and setup state; replace only the tracking streams -
-                    # once the new ones' bundles are in hand, so a download
-                    # that fails leaves the old streams running.
-                    try:
-                        paths = model_bundles(settings, wanted)
-                    except OSError as error:
-                        # Not the end of the game: every other map still
-                        # plays. It used to be, from an uncaught URLError.
-                        print(f"{chosen.title.title()} needs a model that "
-                              f"could not be downloaded: {error}")
-                        show_notice(canvas, [
-                            "MAP UNAVAILABLE",
-                            f"{chosen.title.title()} needs a model that could "
-                            f"not be downloaded.",
-                            "Check the network and choose it again.",
-                        ], scale=layout.scale)
-                        chosen = None
-                        continue
-                    stream_stack.close()
-                    streams = open_streams(stream_stack, wanted, paths,
-                                           len(captures))
-                    scheme = wanted
-                    eyes = Eyes(captures, streams, mirror=settings.mirror)
+            wanted = schemes.for_map(chosen.key if chosen else None)
+            if wanted.key != scheme.key:
+                # Both read the same hand geometry and trigger. Keep the rig
+                # and setup state; replace only the tracking streams - once
+                # the new ones' bundles are in hand, so a download that fails
+                # leaves the old streams running.
+                try:
+                    paths = model_bundles(settings, wanted)
+                except OSError as error:
+                    # Not the end of the game: every other map still plays.
+                    # It used to be, from an uncaught URLError.
+                    print(f"{chosen.title.title()} needs a model that could "
+                          f"not be downloaded: {error}")
+                    show_notice(canvas, [
+                        "MAP UNAVAILABLE",
+                        f"{chosen.title.title()} needs a model that could "
+                        f"not be downloaded.",
+                        "Check the network and choose it again.",
+                    ], scale=layout.scale)
+                    chosen = None
+                    continue
+                stream_stack.close()
+                streams = open_streams(stream_stack, wanted, paths, len(captures))
+                scheme = wanted
+                eyes = Eyes(captures, streams, mirror=settings.mirror)
             # The menus that follow a round sit on the map's own art, dimmed;
             # the chooser and the setup screen belong to no map, so they get
             # the plain grid back.
@@ -1351,9 +1179,6 @@ def _session(scheme, settings: Settings, layout: Layout,
                                             controller, current, scheme, scores)
                 if reason == "quit":
                     break
-                if reason == "controls":
-                    switch_to = next_scheme(scheme)
-                    break
                 if reason == "recalibrate":
                     if not calibrate():
                         break
@@ -1362,27 +1187,16 @@ def _session(scheme, settings: Settings, layout: Layout,
                 continue
 
             last_map = chosen
-            if getattr(chosen, "mode", "shoot") == "drive":
-                # A race needs no aiming and therefore no setup: hands on the
-                # invisible wheel is the whole calibration.
-                from . import karting
-
-                last, reason = karting.drive(captures, canvas, settings, layout,
-                                             chosen, sounds, scores)
-            else:
-                # Setup runs here, at the moment aiming is about to matter -
-                # never as a toll booth in front of the chooser or the kart.
-                if needs_setup and not calibrate():
-                    break
-                current = (rig or default_rig(scheme, len(eyes))).resized(
-                    len(eyes), fill=default_calibration(scheme))
-                controller = make_controller(settings, scheme)
-                last, reason = play(eyes, canvas, settings, layout, controller,
-                                    current, sounds, chosen, scheme)
-            if reason == "quit":
+            # Setup runs here, at the moment aiming is about to matter - never
+            # as a toll booth in front of the chooser.
+            if needs_setup and not calibrate():
                 break
-            if reason == "controls":
-                switch_to = next_scheme(scheme)
+            current = (rig or default_rig(scheme, len(eyes))).resized(
+                len(eyes), fill=default_calibration(scheme))
+            controller = make_controller(settings, scheme)
+            last, reason = play(eyes, canvas, settings, layout, controller,
+                                current, sounds, chosen, scheme)
+            if reason == "quit":
                 break
             if reason == "recalibrate":
                 needs_setup = True
@@ -1405,43 +1219,30 @@ def _session(scheme, settings: Settings, layout: Layout,
                                   current, summary, previous_best, is_best)
             if choice == "quit":
                 break
-            if choice == "controls":
-                switch_to = next_scheme(scheme)
-                break
             if choice == "maps":
                 chosen = None
             needs_setup = choice == "recalibrate"
 
     if last is not None and last_map is not None:
         print(f"{last_map.title}: {last.result_line()}")
-    return switch_to
 
 
-def describe(rig: Rig, *, native_thumb=False) -> str:
+def describe(rig: Rig) -> str:
     """What setup measured, per camera, in words the player can act on."""
     lines = []
     for index, camera in enumerate(rig.cameras, start=1):
         if not camera.aim_fitted:
-            fit = ("DEFAULTS - the trace could not predict itself. Sit closer "
-                   "to the camera, light your face, and recalibrate (c)")
+            fit = ("DEFAULTS - setup could not fit this camera. Sit closer to "
+                   "it, light your hand, and recalibrate (c)")
         elif camera.generalisation:
+            # Only a save from the old pose-by-pose setup carries this figure.
             fit = (f"predicts a fresh marker within "
                    f"{camera.generalisation * 100:.1f}% of the screen")
         else:
             fit = f"fit {camera.fit_error * 100:.1f}% of screen"
-        slide = math.hypot(*camera.slide)
         verdict = "" if camera.usable else "  IGNORED: its view is too side-on"
-        if native_thumb:
-            lines.append(f"  camera {index}: {fit}, gain {camera.gain:.1f}, "
-                         f"built-in thumb gesture (no calibration){verdict}")
-            continue
-        trigger = ("measured" if camera.trigger_fitted
-                   else "DEFAULTS - the two poses were too alike to tell apart")
-        lines.append(
-            f"  camera {index}: {fit}, gain {camera.gain:.1f}, "
-            f"depth slide {slide * 100:.1f}% of screen, "
-            f"trigger on {camera.signal} {camera.cocked:.2f} -> "
-            f"{camera.folded:.2f} ({trigger}){verdict}")
+        lines.append(f"  camera {index}: {fit}, gain {camera.gain:.1f}, "
+                     f"built-in thumb gesture (no calibration){verdict}")
     usable = sum(rig.usable)
     headline = ("Calibrated one camera." if len(rig) == 1 else
                 f"Calibrated {len(rig)} cameras, {usable} in use.")

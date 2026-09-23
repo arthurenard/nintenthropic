@@ -1,12 +1,10 @@
-import math
-
 import pytest
 
-from handy.fusion import GAIN_LIMIT, Opinion, fuse, solve_depth, spread_of
+from handy.fusion import GAIN_LIMIT, Opinion, fuse, spread_of
 
 
 def opinion(x, y, **kwargs) -> Opinion:
-    defaults = dict(travel=0.0, gain=2.0, slide=(0.0, 0.0), span=0.1, jitter=0.001)
+    defaults = dict(travel=0.0, gain=2.0, span=0.1)
     return Opinion(position=(x, y), **{**defaults, **kwargs})
 
 
@@ -17,8 +15,7 @@ def test_no_cameras_means_no_answer():
 def test_one_camera_is_taken_at_its_word():
     result = fuse([opinion(0.3, 0.7)])
     assert result.position == pytest.approx((0.3, 0.7))
-    assert result.cameras == 1 and result.depth == 0.0
-    assert result.agrees
+    assert result.cameras == 1
 
 
 def test_the_steadier_camera_carries_more_weight():
@@ -32,7 +29,6 @@ def test_the_steadier_camera_carries_more_weight():
 def test_disagreement_is_reported_not_hidden():
     result = fuse([opinion(0.40, 0.5), opinion(0.52, 0.5)])
     assert result.spread == pytest.approx(0.12)
-    assert not result.agrees
 
 
 def test_spread_takes_the_widest_pair():
@@ -40,39 +36,8 @@ def test_spread_takes_the_widest_pair():
     assert spread_of([(0.2, 0.2)]) == 0.0
 
 
-# --- the point of a second camera -------------------------------------------
-
-def test_the_disagreement_gives_away_how_far_off_the_surface_the_hand_is():
-    """Both cameras are wrong by their own slide times the same drift."""
-    truth, drift = (0.50, 0.50), 0.8
-    slides = ((0.02, 0.0), (-0.06, 0.01))
-    seen = [opinion(truth[0] + drift * s[0], truth[1] + drift * s[1], slide=s)
-            for s in slides]
-
-    assert solve_depth(*seen) == pytest.approx(drift, abs=0.02)
-    assert fuse(seen).position == pytest.approx(truth, abs=0.005)
-
-
-def test_a_correction_is_damped_when_the_cameras_are_too_noisy_to_trust():
-    """A wide disagreement from shaky cameras is noise, not depth."""
-    slides = ((0.02, 0.0), (-0.03, 0.0))
-    steady = [opinion(0.5, 0.5, slide=slides[0], jitter=1e-6),
-              opinion(0.6, 0.5, slide=slides[1], jitter=1e-6)]
-    shaky = [opinion(0.5, 0.5, slide=slides[0], jitter=0.05),
-             opinion(0.6, 0.5, slide=slides[1], jitter=0.05)]
-
-    assert abs(solve_depth(*shaky)) < abs(solve_depth(*steady)) / 2
-
-
-def test_cameras_that_slide_the_same_way_cannot_measure_depth():
-    together = (0.03, 0.0)
-    assert solve_depth(opinion(0.5, 0.5, slide=together),
-                       opinion(0.6, 0.5, slide=together)) == 0.0
-
-
-def test_without_a_reach_measurement_it_simply_averages():
+def test_equally_steady_cameras_are_simply_averaged():
     result = fuse([opinion(0.4, 0.5), opinion(0.6, 0.5)])
-    assert result.depth == 0.0
     assert result.position == pytest.approx((0.5, 0.5))
 
 
@@ -84,7 +49,7 @@ def test_a_camera_whose_map_is_stretched_beyond_sense_is_ignored():
 
     result = fuse([good, hopeless])
     assert result.position == pytest.approx((0.30, 0.40))
-    assert result.cameras == 1, "it does not even get a vote on depth"
+    assert result.cameras == 1, "it does not even get a vote"
 
 
 def test_a_rig_where_every_camera_is_hopeless_still_answers():
@@ -96,7 +61,6 @@ def test_a_rig_where_every_camera_is_hopeless_still_answers():
 
 def test_an_infinite_gain_carries_no_weight():
     assert opinion(0.5, 0.5, gain=float("inf")).position_weight == 0.0
-    assert math.isinf(opinion(0.5, 0.5, gain=float("inf")).noise)
 
 
 # --- the trigger ------------------------------------------------------------

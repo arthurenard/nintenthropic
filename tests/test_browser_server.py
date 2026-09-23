@@ -342,7 +342,7 @@ def test_an_unusable_saved_setup_is_replaced_and_forgotten(server, capsys):
     from handy.calibration import default_rig
 
     good = default_rig(schemes.PISTOL, 1)[0].to_dict()
-    damaged = {"cameras": [{**good, "slide": ["a", "b"]}]}
+    damaged = {"cameras": [{**good, "mapping": good["mapping"][:8]}]}
     for _ in range(2):  # it used to fail every start, not just the first
         data = start(server, control="pistol", calibration=damaged)
         assert data["state"] == "calibration" and data["forgetSavedSetup"] is True
@@ -354,9 +354,10 @@ def test_an_unusable_saved_setup_is_replaced_and_forgotten(server, capsys):
 
 def test_stale_actions_are_answered_not_refused(server):
     session = start(server, control="pistol")
-    for action in ("skip", "play"):
-        call(server, "POST", "/api/action", {"id": session["id"], "action": action})
-    for action in ("play", "undo", "reset", "skip", "finish", "resume"):
+    # Setup ends itself on the fifth accurate hit; stand in for the five.
+    server.session.calibration.hits.update(range(5))
+    call(server, "POST", "/api/action", {"id": session["id"], "action": "finish"})
+    for action in ("play", "undo", "reset", "finish", "resume"):
         status, data, _ = call(
             server, "POST", "/api/action", {"id": session["id"], "action": action}
         )

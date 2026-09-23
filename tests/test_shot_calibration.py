@@ -20,9 +20,9 @@ def test_thumb_gesture_is_size_and_rotation_independent(scale, roll):
     assert thumb_pull(make_hand(20, reach=0.4, scale=scale, roll=roll)) > 0.5
 
 
-def test_native_thumb_ignores_old_trigger_calibration_and_requires_release():
-    controller = AimController(PISTOL, native_thumb=True)
-    profile = Calibration(signal="reach", cocked=300, folded=400)
+def test_the_thumb_trigger_requires_release():
+    controller = AimController(PISTOL)
+    profile = Calibration()
     shots = []
     # Acquiring an already folded thumb is never a shot; holding it isn't either.
     for i, degrees in enumerate([70] * 8 + [20] * 4 + [70] * 8 + [20] * 4 + [70] * 4):
@@ -120,10 +120,9 @@ def test_native_setup_starts_after_five_verified_hits(monkeypatch):
         np.zeros((720, 1280, 3), np.uint8),
         app.layout_for(1280, 720),
         PISTOL,
-        2,
         None,
     )
-    assert rig[0].aim_fitted and not rig[0].trigger_fitted
+    assert rig[0].aim_fitted
     assert session_ref[-1].complete
     assert len(session_ref[-1].hits) == 5
 

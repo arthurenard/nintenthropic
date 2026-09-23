@@ -101,10 +101,6 @@ class Target:
             return None
         return min(int(offset / (self.radius / RINGS)), RINGS - 1)
 
-    def score_at(self, x: float, y: float) -> int:
-        ring = self.ring_at(x, y)
-        return 0 if ring is None else RING_SCORES[ring]
-
 
 @dataclass(frozen=True)
 class Struck:

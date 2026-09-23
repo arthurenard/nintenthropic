@@ -71,10 +71,7 @@ def test_mouse_click_is_consumed_once():
     assert not mouse.take_click()
 
 
-SHOOTING_MAPS = tuple(m for m in maps.MAPS if m.mode == "shoot")
-
-
-@pytest.mark.parametrize("chosen", SHOOTING_MAPS, ids=lambda m: m.key)
+@pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda m: m.key)
 def test_render_draws_the_camera_into_the_inset(layout, chosen):
     settings = Settings(seed=1)
     round_ = new_round(settings, layout, chosen)
@@ -93,7 +90,7 @@ def test_render_draws_the_camera_into_the_inset(layout, chosen):
     assert canvas.any()
 
 
-@pytest.mark.parametrize("chosen", SHOOTING_MAPS, ids=lambda m: m.key)
+@pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda m: m.key)
 def test_render_survives_a_frame_with_nothing_tracked(layout, chosen):
     settings = Settings(seed=1)
     canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
@@ -111,10 +108,7 @@ def test_every_map_builds_a_round_inside_the_play_area(layout):
     for chosen in maps.MAPS:
         round_ = new_round(settings, layout, chosen)
         assert round_.area == layout.play_area
-        if chosen.mode == "shoot":
-            assert round_.duration == 45
-        else:
-            assert round_.duration is None, "a race ends on the line, not a clock"
+        assert round_.duration == 45
 
 
 def test_the_game_knows_what_each_camera_is_contributing():
@@ -141,15 +135,14 @@ def test_a_camera_beyond_the_calibrated_rig_is_still_described():
 
 
 def test_the_footer_names_the_scheme_the_map_and_the_keys(layout):
-    """A pistol hint under the eye scheme would be nonsense, so it must not appear."""
+    """The scope's hint belongs under the marksman, never under the plain pistol."""
     from handy import maps, schemes
-    from handy.app import CONTROLS, View, render
-    from handy.faces import FaceFrame
+    from handy.app import CONTROL_KEYS, View, render
     from handy.recognition import Frame
 
     from handy.marksman import MarksmanFrame
 
-    empty = {"pistol": Frame(), "gaze": FaceFrame(), "marksman": MarksmanFrame()}
+    empty = {"pistol": Frame(), "marksman": MarksmanFrame()}
     canvases = {}
     for scheme in schemes.SCHEMES:
         canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
@@ -162,8 +155,8 @@ def test_the_footer_names_the_scheme_the_map_and_the_keys(layout):
                layout)
         canvases[scheme.key] = canvas
 
-    assert not np.array_equal(canvases["pistol"], canvases["gaze"])
-    assert CONTROLS and maps.ZOMBIES.footer, "both still have their say"
+    assert not np.array_equal(canvases["pistol"], canvases["marksman"])
+    assert CONTROL_KEYS and maps.ZOMBIES.footer, "both still have their say"
 
 
 def test_maps_are_looked_up_by_key():
@@ -239,48 +232,19 @@ def test_two_cameras_are_used_when_both_are_named(monkeypatch):
     assert choose_cameras(Settings(cameras=(1, 2)))[0] == (1, 2)
 
 
-# --- how many cameras each scheme uses -------------------------------------
-
-def test_the_pistol_uses_every_camera_it_is_given():
-    from handy.app import cameras_for
-    from handy.schemes import PISTOL
-
-    assert cameras_for(PISTOL, (0,)) == (0,)
-    assert cameras_for(PISTOL, (0, 1)) == (0, 1)
-    assert cameras_for(PISTOL, (0, 1, 2)) == (0, 1, 2)
-
-
-def test_the_eyes_use_one_camera_however_many_are_plugged_in():
-    """A second view can only help if it measures something the first cannot.
-
-    Without the reach steps there is no baseline to solve depth from, so two
-    cameras could only be averaged - and averaging is worse than trusting the
-    better one.
-    """
-    from handy.app import cameras_for
-    from handy.schemes import GAZE
-
-    assert GAZE.max_cameras == 1
-    assert cameras_for(GAZE, (0,)) == (0,)
-    assert cameras_for(GAZE, (0, 1)) == (0,)
-    assert cameras_for(GAZE, (0, 1, 2)) == (0,)
-
-
 def test_a_saved_rig_for_the_wrong_number_of_cameras_is_not_reused(tmp_path):
     from handy.app import Settings, rig_setup, saved_rig
     from handy.calibration import Calibration, Rig, RigBook
-    from handy.schemes import GAZE, PISTOL
+    from handy.schemes import MARKSMAN, PISTOL
 
     fitted = Calibration(aim_fitted=True)
     settings = Settings(cameras=(0, 1))
     book = RigBook()
     book.set("pistol", Rig((fitted, fitted), rig_setup(settings, (0, 1))))
-    book.set("gaze", Rig((fitted,), rig_setup(settings, (0,))))
 
     assert saved_rig(book, settings, PISTOL, (0, 1)) is not None
     assert saved_rig(book, settings, PISTOL, (0,)) is None, "was calibrated for two"
-    assert saved_rig(book, settings, GAZE, (0,)) is not None
-    assert saved_rig(book, settings, GAZE, (0, 1)) is None
+    assert saved_rig(book, settings, MARKSMAN, (0, 1)) is not None, "the scope shares it"
 
 
 def launch_on_the_range(monkeypatch, model_path, path, **changes):
@@ -294,7 +258,7 @@ def launch_on_the_range(monkeypatch, model_path, path, **changes):
     headless(monkeypatch)
     keys = itertools.chain([255], itertools.repeat(ord("q")))
     monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range",
+    app.run(app.Settings(cameras=(0,), map_key="range",
                          mute=True, model_path=model_path, calibration_path=path,
                          **changes))
 
@@ -414,85 +378,16 @@ def test_the_game_opens_the_camera_the_search_picked(monkeypatch, tmp_path,
     assert [capture.index for capture in opened] == [1]
 
 
-def test_the_eyes_read_only_the_first_camera(monkeypatch, tmp_path, model_path,
-                                             face_model_path):
-    """Two cameras plugged in, one of them idle for this scheme."""
-    from handy import app
-
-    reads: list[int] = []
-
-    opened = headless(monkeypatch)
-    original = FakeCapture.read
-
-    def counted(self):
-        reads.append(self.index)
-        return original(self)
-
-    monkeypatch.setattr(FakeCapture, "read", counted)
-    app.run(app.Settings(
-        cameras=(0, 1), control="gaze", map_key="range", mute=True,
-        skip_calibration=True, calibration_path=tmp_path / "calibration.json",
-        window_width=800, window_height=480))
-
-    assert [capture.index for capture in opened] == [0, 1], "both still opened"
-    assert set(reads) == {0}, "but only the first is read from"
-
-
-def test_switching_back_to_the_hand_gets_both_cameras_again(monkeypatch, tmp_path,
-                                                            model_path,
-                                                            face_model_path):
-    """The eye scheme parking a camera must not cost the pistol anything."""
-    import itertools
-
-    import cv2
-
-    from handy import app
-
-    reads: list[tuple[str, int]] = []
-    stage = {"control": "gaze"}
-
-    headless(monkeypatch)
-    # Opening the window polls waitKey while it measures itself; skip that here
-    # so the scripted keys below all reach the game loop.
-    monkeypatch.setattr(app, "open_window", lambda settings: (960, 540))
-    original = FakeCapture.read
-
-    def counted(self):
-        reads.append((stage["control"], self.index))
-        return original(self)
-
-    monkeypatch.setattr(FakeCapture, "read", counted)
-
-    # e switches to the pistol, then q ends it.
-    presses = itertools.chain([ord("e")], itertools.repeat(ord("q")))
-
-    def press(*_args):
-        key = next(presses)
-        if key == ord("e"):
-            stage["control"] = "pistol"
-        return key
-
-    monkeypatch.setattr(cv2, "waitKey", press)
-    app.run(app.Settings(
-        cameras=(0, 1), control="gaze", map_key="range", mute=True,
-        skip_calibration=True, calibration_path=tmp_path / "calibration.json",
-        window_width=800, window_height=480))
-
-    assert {index for control, index in reads if control == "gaze"} == {0}
-    assert {index for control, index in reads if control == "pistol"} == {0, 1}
-
-
-@pytest.mark.parametrize("control", ["pistol", "gaze"])
-def test_either_control_scheme_starts_and_shuts_down(monkeypatch, tmp_path,
-                                                     model_path, face_model_path,
-                                                     control):
-    """Each scheme loads a different model and watches for something different."""
+@pytest.mark.parametrize("map_key", ["range", "sniper"])
+def test_either_tracker_starts_and_shuts_down(monkeypatch, tmp_path, model_path,
+                                              face_model_path, map_key):
+    """The sniper opens a face model beside the hand's; both must close again."""
     from handy import app
 
     # Both bundles are cached before the window opens, by the fixtures.
     opened = headless(monkeypatch)
     app.run(app.Settings(
-        cameras=(0,), control=control, map_key="range", mute=True,
+        cameras=(0,), map_key=map_key, mute=True,
         skip_calibration=True, calibration_path=tmp_path / "calibration.json",
         window_width=960, window_height=540))
 
@@ -644,8 +539,8 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
     from handy.highscores import HighScores
 
     scores = HighScores.load(tmp_path / "scores.json")
-    scores.record(maps.ZOMBIES.key, maps.ZOMBIES.score_duration(60.0), 120)
-    scores.record(maps.SNIPER.key, maps.SNIPER.score_duration(60.0), 340)
+    scores.record(maps.ZOMBIES.key, 60.0, 120)
+    scores.record(maps.SNIPER.key, 60.0, 340)
     assert set(scores.best) == {"zombies:60s", "sniper:60s"}
 
     drawn = []
@@ -667,7 +562,7 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
 
 
 def test_every_button_answers_a_shot_in_play(monkeypatch):
-    """QUIT, MAPS and CONTROLS all mean something when shot mid-game."""
+    """QUIT and MAPS both mean something when shot mid-game."""
     from handy import app, maps, schemes
     from handy.aiming import Aim
     from handy.calibration import default_rig
@@ -680,8 +575,7 @@ def test_every_button_answers_a_shot_in_play(monkeypatch):
 
     layout = layout_for(WIDTH, HEIGHT)
     for button, expected in ((layout.quit_button, "quit"),
-                             (layout.maps_button, "maps"),
-                             (layout.controls_button, "controls")):
+                             (layout.maps_button, "maps")):
         centre = (button.rect.x + button.rect.width // 2,
                   button.rect.y + button.rect.height // 2)
         aim = Aim(position=(centre[0] / (WIDTH - 1), centre[1] / (HEIGHT - 1)),
@@ -700,74 +594,12 @@ def test_every_button_answers_a_shot_in_play(monkeypatch):
 
 # --- choosing how to aim, at launch -----------------------------------------
 
-def schemes_all():
-    from handy import schemes
-
-    return schemes.CONTROLS
-
-
-def drive_select(monkeypatch, *, key=None, click=None):
-    """Run select_scheme with a scripted mouse or keyboard."""
-    import itertools
-
-    import cv2
-
-
-    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
-    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
-    keys = itertools.chain([255], itertools.repeat(key if key else ord("q")))
-    monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
-
-    captured = {}
-    monkeypatch.setattr(cv2, "setMouseCallback",
-                        lambda _title, callback: captured.update(callback=callback))
-    layout = layout_for(WIDTH, HEIGHT)
-    canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
-
-    if click is not None:
-        from handy import scene
-
-        cards = scene.map_cards(layout.window, len(schemes_all()), layout.scale)
-        target = cards[click]
-        def first_frame(*args):
-            callback = captured.get("callback")
-            if callback is not None:
-                callback(cv2.EVENT_MOUSEMOVE, target.centre_x,
-                         target.y + target.height // 2, 0, None)
-                callback(cv2.EVENT_LBUTTONDOWN, target.centre_x,
-                         target.y + target.height // 2, 0, None)
-            return None
-
-        monkeypatch.setattr(cv2, "imshow", first_frame)
-
-    from handy import app as app_module
-
-    return app_module.select_scheme(canvas, layout)
-
-
-def test_the_player_chooses_the_hand_with_a_click(monkeypatch):
-    from handy import schemes
-
-    assert drive_select(monkeypatch, click=0) is schemes.PISTOL
-
-
-def test_only_hand_controls_are_offered_to_players(monkeypatch):
-    from handy import schemes
-
-    assert schemes.keys() == ("pistol",)
-    assert schemes.CONTROLS == (schemes.PISTOL,)
-    assert drive_select(monkeypatch, key=ord("1")) is schemes.PISTOL
-
-
-def test_quitting_the_selection_quits_the_game(monkeypatch):
-    assert drive_select(monkeypatch, key=ord("q")) is None
-
-
 def test_the_cli_defaults_to_hand_controls():
+    from handy import schemes
     from handy.cli import parse_args
 
-    assert parse_args([]).control == "pistol"
-    assert parse_args(["--control", "pistol"]).control == "pistol"
+    assert schemes.keys() == ("pistol",)
+    assert parse_args(["--control", "pistol"]) == parse_args([])
 
 
 # --- filling the screen -----------------------------------------------------
@@ -886,7 +718,7 @@ def test_the_interface_grows_with_the_screen():
     assert large.quit_button.rect.width > small.quit_button.rect.width * 1.5
     assert large.quit_button.rect.height > small.quit_button.rect.height * 1.5
     for layout, width in ((small, 1280), (large, 3024)):
-        assert layout.controls_button.rect.x > layout.inset.right, "no overlap"
+        assert layout.maps_button.rect.x > layout.inset.right, "no overlap"
         assert layout.quit_button.rect.right <= width
 
 
@@ -894,9 +726,7 @@ def test_the_buttons_never_overlap_each_other_at_any_size():
     for width, height in ((1280, 720), (1440, 900), (1512, 982), (1920, 1080),
                           (2560, 1440), (3024, 1964)):
         layout = layout_for(width, height)
-        controls, maps_, quit_ = (layout.controls_button.rect,
-                                  layout.maps_button.rect, layout.quit_button.rect)
-        assert controls.right < maps_.x, f"{width}x{height}"
+        maps_, quit_ = layout.maps_button.rect, layout.quit_button.rect
         assert maps_.right < quit_.x, f"{width}x{height}"
         assert quit_.right <= width and layout.play_area.bottom <= height
 
@@ -921,7 +751,7 @@ def test_a_rejected_fit_is_announced_on_screen(monkeypatch, tmp_path, model_path
     keys = itertools.chain([255], itertools.repeat(ord("q")))
     monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
 
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range", mute=True,
+    app.run(app.Settings(cameras=(0,), map_key="range", mute=True,
                          model_path=model_path, calibrate=True,
                          calibration_path=tmp_path / "calibration.json"))
 
@@ -972,15 +802,14 @@ def test_a_recalibration_that_fell_back_on_the_old_map_is_announced(monkeypatch,
                         notices.append(lines))
     # What a fallback to a previously good rig looks like: real figures, but
     # nothing was fitted this time round.
-    stale = Calibration(fit_error=0.011, generalisation=0.028, aim_fitted=False,
-                        trigger_fitted=True)
+    stale = Calibration(fit_error=0.011, generalisation=0.028, aim_fitted=False)
     monkeypatch.setattr(app, "run_calibration",
                         lambda *args, **kwargs: Rig((stale,)))
     headless(monkeypatch)
     keys = itertools.chain([255], itertools.repeat(ord("q")))
     monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
 
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range", mute=True,
+    app.run(app.Settings(cameras=(0,), map_key="range", mute=True,
                          model_path=model_path, calibrate=True,
                          calibration_path=tmp_path / "calibration.json"))
 
@@ -1010,7 +839,7 @@ def test_backing_out_of_setup_says_the_game_is_on_defaults(monkeypatch, tmp_path
     keys = itertools.chain([255], itertools.repeat(ord("q")))
     monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
 
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range", mute=True,
+    app.run(app.Settings(cameras=(0,), map_key="range", mute=True,
                          model_path=model_path, calibrate=True,
                          calibration_path=tmp_path / "calibration.json"))
 
@@ -1037,7 +866,7 @@ def test_the_results_screen_sits_on_the_art_of_the_map_just_played(monkeypatch,
     monkeypatch.setattr(app.Eyes, "read", read)
     monkeypatch.setattr(scene, "_ambient_art", None, raising=False)
     with pytest.raises(KeyboardInterrupt):
-        app.run(app.Settings(cameras=(0,), control="pistol", map_key="zombies",
+        app.run(app.Settings(cameras=(0,), map_key="zombies",
                              mute=True, skip_calibration=True,
                              model_path=model_path,
                              calibration_path=tmp_path / "calibration.json"))
@@ -1085,8 +914,7 @@ def test_the_maps_are_pre_built_so_the_first_frame_does_not_freeze():
     canvas = np.zeros((540, 960, 3), np.uint8)
     for chosen in maps.MAPS:
         round_ = app.new_round(settings, layout, chosen)
-        if chosen.mode == "shoot":
-            round_.update(0.0)
+        round_.update(0.0)
         started = time.perf_counter()
         chosen.draw_world(canvas, round_, 0.5)
         assert time.perf_counter() - started < 0.05, f"{chosen.key} first frame is slow"
@@ -1150,48 +978,6 @@ def test_the_suite_never_touches_the_players_own_calibration_or_scores():
         assert not path.is_relative_to(real_home), path
 
 
-# --- no toll booths in front of the race -------------------------------------
-
-def test_map_kart_asks_no_aiming_questions(monkeypatch, tmp_path, model_path):
-    """`--map kart` must go straight to the track: no scheme screen, no setup."""
-    from handy import app, karting
-
-    headless(monkeypatch)
-    asked = []
-    monkeypatch.setattr(app, "select_scheme",
-                        lambda *args: asked.append("scheme") or None)
-    monkeypatch.setattr(app, "run_calibration",
-                        lambda *args, **kwargs: asked.append("setup") or None)
-    def fake_drive(*args, **kwargs):
-        asked.append("drive")
-        return None, "quit"
-
-    monkeypatch.setattr(karting, "drive", fake_drive)
-
-    app.run(app.Settings(cameras=(0,), control=None, map_key="kart", mute=True,
-                         calibrate=True, model_path=model_path,
-                         calibration_path=tmp_path / "calibration.json"))
-    assert "drive" in asked, "the race ran"
-    assert "scheme" not in asked, "nobody was asked how they want to aim"
-    assert "setup" not in asked, "and nobody calibrated a finger gun to drive"
-
-
-def test_choosing_the_kart_in_game_skips_setup_too(monkeypatch, tmp_path,
-                                                   model_path):
-    from handy import app, karting
-
-    headless(monkeypatch)
-    asked = []
-    monkeypatch.setattr(app, "run_calibration",
-                        lambda *args, **kwargs: asked.append("setup") or None)
-    monkeypatch.setattr(karting, "drive", lambda *args, **kwargs: (None, "quit"))
-
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="kart",
-                         mute=True, calibrate=True, model_path=model_path,
-                         calibration_path=tmp_path / "calibration.json"))
-    assert asked == [], "driving never calibrates"
-
-
 def test_a_shooting_map_still_calibrates_before_play(monkeypatch, tmp_path,
                                                      model_path):
     from handy import app
@@ -1210,7 +996,7 @@ def test_a_shooting_map_still_calibrates_before_play(monkeypatch, tmp_path,
         return real_play(*args, **kwargs)
 
     monkeypatch.setattr(app, "play", spying_play)
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range",
+    app.run(app.Settings(cameras=(0,), map_key="range",
                          mute=True, calibrate=True, model_path=model_path,
                          calibration_path=tmp_path / "calibration.json",
                          window_width=960, window_height=540))
@@ -1264,7 +1050,7 @@ def test_a_finished_round_scores_sounds_and_shows_the_results(monkeypatch, tmp_p
     key_sequence(monkeypatch, [NOTHING] * 400 + [ord("q")])
 
     scores_file = tmp_path / "calibration.json"
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range",
+    app.run(app.Settings(cameras=(0,), map_key="range",
                          duration=0.05, mute=True, skip_calibration=True,
                          recoil=0.0, model_path=model_path,
                          calibration_path=scores_file))
@@ -1295,7 +1081,7 @@ def test_a_real_score_from_a_real_round_reaches_the_score_file(monkeypatch,
     monkeypatch.setattr(Round, "score", 250)
     key_sequence(monkeypatch, [NOTHING] * 400 + [ord("q")])
 
-    settings = app.Settings(cameras=(0,), control="pistol", map_key="range",
+    settings = app.Settings(cameras=(0,), map_key="range",
                             duration=0.05, mute=True, skip_calibration=True,
                             recoil=0.0, model_path=model_path,
                             calibration_path=tmp_path / "calibration.json")
@@ -1308,11 +1094,11 @@ def test_a_real_score_from_a_real_round_reaches_the_score_file(monkeypatch,
 
 
 @pytest.mark.parametrize("key,expected", [
-    (ord("q"), "quit"), (ord("b"), "maps"), (ord("e"), "controls"),
+    (ord("q"), "quit"), (ord("b"), "maps"),
     (ord("r"), "again"), (ord(" "), "again"), (ord("c"), "recalibrate"),
 ])
 def test_every_key_on_the_results_screen_means_something(monkeypatch, key, expected):
-    """All six exits from `show_results`, none of which had ever run."""
+    """All five exits from `show_results`, none of which had ever run."""
     from handy import app, scene, schemes
     from handy.calibration import default_rig
     from handy.game import Summary
@@ -1409,7 +1195,6 @@ def pull_at(position, fire_at: float):
 
 @pytest.mark.parametrize("button,expected", [
     ("quit_button", "quit"), ("maps_button", "maps"),
-    ("controls_button", "controls"),
 ])
 def test_every_button_answers_a_shot_on_the_results_screen(monkeypatch, button,
                                                            expected):
@@ -1545,25 +1330,21 @@ def test_a_number_key_chooses_that_map(monkeypatch, index):
 
 
 @pytest.mark.parametrize("key,expected", [
-    (ord("q"), "quit"), (ord("e"), "controls"), (ord("c"), "recalibrate"),
+    (ord("q"), "quit"), (ord("c"), "recalibrate"),
 ])
 def test_the_chooser_keys_all_mean_something(monkeypatch, key, expected):
     assert chooser(monkeypatch, key=key) == (expected, None)
 
 
-@pytest.mark.parametrize("button,expected", [
-    ("quit_button", "quit"), ("controls_button", "controls"),
-])
-def test_the_chooser_buttons_answer_a_shot_and_a_click(monkeypatch, button, expected):
+def test_the_chooser_quit_button_answers_a_shot_and_a_click(monkeypatch):
     from handy.aiming import Aim
 
-    layout = layout_for(WIDTH, HEIGHT)
-    rect = getattr(layout, button).rect
+    rect = layout_for(WIDTH, HEIGHT).quit_button.rect
     centre = (rect.x + rect.width // 2, rect.y + rect.height // 2)
     shot = Aim(position=(centre[0] / (WIDTH - 1), centre[1] / (HEIGHT - 1)),
                fired=True)
-    assert chooser(monkeypatch, aim=shot) == (expected, None)
-    assert chooser(monkeypatch, click=centre) == (expected, None)
+    assert chooser(monkeypatch, aim=shot) == ("quit", None)
+    assert chooser(monkeypatch, click=centre) == ("quit", None)
 
 
 def test_a_map_picked_in_the_chooser_is_the_map_that_gets_played(monkeypatch,
@@ -1584,7 +1365,7 @@ def test_a_map_picked_in_the_chooser_is_the_map_that_gets_played(monkeypatch,
         return app.new_round(settings, layout, chosen), "quit"
 
     monkeypatch.setattr(app, "play", spying_play)
-    app.run(app.Settings(cameras=(0,), control="pistol", mute=True,
+    app.run(app.Settings(cameras=(0,), mute=True,
                          skip_calibration=True, model_path=model_path,
                          calibration_path=tmp_path / "calibration.json"))
 
@@ -1607,7 +1388,7 @@ def test_asking_the_chooser_to_recalibrate_runs_setup_and_comes_back(monkeypatch
     monkeypatch.setattr(app, "run_calibration",
                         lambda *args, **kwargs: setups.append(1)
                         or default_rig(PISTOL, 1))
-    app.run(app.Settings(cameras=(0,), control="pistol", mute=True,
+    app.run(app.Settings(cameras=(0,), mute=True,
                          skip_calibration=True, model_path=model_path,
                          calibration_path=tmp_path / "calibration.json"))
 
@@ -1787,11 +1568,11 @@ def test_a_miss_thuds(monkeypatch):
 
 
 @pytest.mark.parametrize("key,expected", [
-    (ord("r"), "again"), (ord("b"), "maps"), (ord("e"), "controls"),
+    (ord("r"), "again"), (ord("b"), "maps"),
     (ord("c"), "recalibrate"), (ord("q"), "quit"),
 ])
 def test_every_key_in_a_round_means_something(monkeypatch, key, expected):
-    """r, b, e and c had never been pressed inside `play`."""
+    """r, b and c had never been pressed inside `play`."""
     _, reason = play_once(monkeypatch, key=key)
     assert reason == expected
 
@@ -1932,134 +1713,22 @@ def test_a_slow_first_frame_does_not_come_out_of_the_round(monkeypatch):
 
 # --- setup, at the app level -------------------------------------------------
 
-class TracingEyes:
-    """A player who does exactly what the setup screen asks.
-
-    Reads the step off the overlay the loop just drew and holds the pose for it:
-    a fingertip on the marker for the aim steps, arm in and out for the reach
-    steps, thumb up and thumb down for the trigger.
-    """
-
-    def __init__(self) -> None:
-        self.mirror = True
-        self.progress = None
-        self.frames = 0
-
-    def __len__(self) -> int:
-        return 1
-
-    def read(self):
-        from hands import frame_of, make_hand
-
-        self.frames += 1
-        step = self.progress.step if self.progress is not None else None
-        thumb, reach, tip = 12.0, 1.0, (0.5, 0.5)
-        if step is not None and step.records == "trigger":
-            thumb = 12.0 if step.key == "cocked" else 62.0
-        elif step is not None and step.records == "reach":
-            reach = 0.6 if step.key == "reach_near" else 1.4
-        elif step is not None and step.target is not None:
-            # A clean linear map from marker to fingertip - the fit has to find
-            # it, and an axis that comes out backwards means it found nothing.
-            tip = (0.2 + 0.6 * step.target[0], 0.25 + 0.5 * step.target[1])
-        hand = make_hand(thumb_degrees=thumb, reach=reach, index_tip=tip)
-        return [np.zeros((720, 1280, 3), np.uint8)], [frame_of(hand)]
-
-
-def drive_setup(monkeypatch, *, key=NOTHING, grid=3, eyes=None):
-    """Run the real `run_calibration` loop against a synthetic player."""
-    from handy import app, scene, schemes
-
-    import cv2
-    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
-    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
-    key_sequence(monkeypatch, [key])
-    eyes = eyes or TracingEyes()
-    monkeypatch.setattr(scene, "draw_calibration",
-                        lambda canvas, progress, *args, **kwargs:
-                        setattr(eyes, "progress", progress))
-    # The dwell is measured in seconds of monotonic time; a synthetic clock
-    # walks through them a frame at a time instead of a real fifteen seconds.
-    clock = [1000.0]
-
-    def tick():
-        clock[0] += 0.1
-        return clock[0]
-
-    monkeypatch.setattr(app.time, "monotonic", tick)
-
-    return app.run_pose_calibration(eyes, np.zeros((HEIGHT, WIDTH, 3), np.uint8),
-                               layout_for(WIDTH, HEIGHT), schemes.PISTOL, grid,
-                               None)
-
-
-def test_setup_walks_a_player_through_and_fits_a_rig(monkeypatch):
-    """`run_calibration` is stubbed out by every other test that touches it, so
-    the loop, the overlay and the wiring to `session.result()` had never run."""
-    rig = drive_setup(monkeypatch)
-
-    assert rig is not None, "setup never finished"
-    assert len(rig.cameras) == 1
-    camera = rig.cameras[0]
-    assert camera.aim_fitted, "a clean synthetic trace should fit"
-    assert camera.trigger_fitted, "twelve degrees against sixty is not ambiguous"
-    assert camera.cocked < camera.folded, "the trigger came out backwards"
-    assert 0.5 < camera.gain < 5.0, f"implausible gain {camera.gain}"
-
-
-def test_setup_maps_the_corners_the_right_way_round(monkeypatch):
-    """An axis that comes out reversed means no fit was made at all."""
-    from handy.calibration import GRID_MARGIN
-
-    rig = drive_setup(monkeypatch)
-    camera = rig.cameras[0]
-
-    def screen(marker):
-        return camera.project((0.2 + 0.6 * marker[0], 0.25 + 0.5 * marker[1]))
-
-    low, high = GRID_MARGIN, 1.0 - GRID_MARGIN
-    left, right = screen((low, 0.5)), screen((high, 0.5))
-    top, bottom = screen((0.5, low)), screen((0.5, high))
-    assert left[0] < right[0], "x is mirrored"
-    assert top[1] < bottom[1], "y is upside down"
-    assert abs(left[0] - low) < 0.08 and abs(right[0] - high) < 0.08
-
-
-def test_escape_backs_out_of_setup_without_a_rig(monkeypatch):
-    """esc is the documented way out, and it must not half-apply a calibration."""
-    assert drive_setup(monkeypatch, key=27) is None
-    assert drive_setup(monkeypatch, key=ord("q")) is None
-
-
-def test_a_smaller_grid_asks_for_fewer_markers(monkeypatch):
-    """--calibration-grid 2 is the quick four-corner setup."""
-    quick = TracingEyes()
-    drive_setup(monkeypatch, grid=2, eyes=quick)
-    slow = TracingEyes()
-    drive_setup(monkeypatch, grid=4, eyes=slow)
-
-    assert quick.frames < slow.frames
-
-
 def test_the_rig_setup_measured_is_the_rig_that_gets_saved(monkeypatch, tmp_path,
                                                            model_path):
     """The app-level wiring: what the setup loop returns is written to the book
-    under this scheme's key, and the next launch finds it there.
+    under this scheme's key, and the next launch finds it there."""
+    from handy import app, homography
+    from handy.calibration import Calibration, Rig, RigBook
 
-    The rig here is one a real `run_calibration` pass produced, so what is
-    saved is the shape the loop actually hands back, not a hand-built stand-in.
-    """
-    from handy import app
-    from handy.calibration import RigBook
-
-    measured = drive_setup(monkeypatch)
-    assert measured is not None and measured.cameras[0].aim_fitted
+    measured = Rig((Calibration(
+        mapping=homography.box_mapping((0.2, 0.25), (0.8, 0.75)), fit_error=0.01,
+        aim_fitted=True, gain=1.7),))
 
     headless(monkeypatch)
     monkeypatch.setattr(app, "run_calibration",
                         lambda *args, **kwargs: measured)
     path = tmp_path / "calibration.json"
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="range",
+    app.run(app.Settings(cameras=(0,), map_key="range",
                          mute=True, model_path=model_path,
                          calibration_path=path))
 
@@ -2310,11 +1979,11 @@ def test_the_model_is_resolved_before_the_window_opens(monkeypatch, tmp_path):
     import cv2
     monkeypatch.setattr(cv2, "destroyAllWindows", lambda: None)
 
-    app.run(app.Settings(cameras=(0,), control="gaze", mute=True,
+    app.run(app.Settings(cameras=(0,), map_key="sniper", mute=True,
                          skip_calibration=True,
                          calibration_path=tmp_path / "calibration.json"))
 
-    assert order == ["fetch face_landmarker", "window"]
+    assert order == ["fetch gesture_recognizer", "fetch face_landmarker", "window"]
 
 
 def test_every_model_a_map_can_ask_for_is_fetched_at_launch(monkeypatch):
@@ -2328,8 +1997,7 @@ def test_every_model_a_map_can_ask_for_is_fetched_at_launch(monkeypatch):
     monkeypatch.setattr(app, "ensure_model",
                         lambda name: fetched.append(name) or Path(name))
     for settings in (app.Settings(), app.Settings(map_key="zombies"),
-                     app.Settings(control=None), app.Settings(map_key="sniper"),
-                     app.Settings(control=None, map_key="kart")):
+                     app.Settings(map_key="sniper")):
         fetched.clear()
         app.prefetch_models(settings)
         assert fetched == ["gesture_recognizer", "face_landmarker"], settings
@@ -2400,47 +2068,12 @@ def test_a_map_whose_model_cannot_be_had_is_refused_on_screen(monkeypatch,
 
     settings = app.Settings(cameras=(0,), mute=True, skip_calibration=True,
                             calibration_path=tmp_path / "setup.json")
-    assert app._session(pistol, settings, layout_for(960, 540), [FakeCapture()],
+    assert app._session(settings, layout_for(960, 540), [FakeCapture()],
                         np.zeros((540, 960, 3), np.uint8), RigBook(),
                         HighScores(tmp_path / "scores.json")) is None
 
     assert notices and notices[0][0] == "MAP UNAVAILABLE"
     assert next(answers, "drained") == "drained", "the chooser came back"
-
-
-def test_leaving_the_kart_map_does_not_crash_on_the_way_out(monkeypatch, tmp_path,
-                                                            model_path, capsys):
-    """The session epilogue must never assume a round is a shooting round.
-
-    It used to print `last.score`, `last.hits` and `last.shots`; a race has
-    laps and a finishing position and none of those three, so every exit from
-    SUNSET SPEEDWAY ended the program with an uncaught AttributeError. The
-    tests that nominally covered the map stubbed out the very value that
-    crashed it, so a green suite proved nothing. This one returns the real
-    RaceRound the drive loop really returns.
-    """
-    from handy import app, karting, maps
-
-    headless(monkeypatch)
-    layout = app.layout_for(960, 540)
-    real_round = karting.RaceRound(app.RoundOptions(area=layout.play_area, seed=3))
-    real_round.player.lap = real_round.laps
-    real_round.player.finished_at = 12.0
-    real_round.lap_times = [40.0, 38.5, 39.2]
-
-    def fake_drive(*args, **kwargs):
-        return real_round, "quit"
-
-    monkeypatch.setattr(karting, "drive", fake_drive)
-
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="kart",
-                         mute=True, calibrate=True, model_path=model_path,
-                         calibration_path=tmp_path / "calibration.json",
-                         window_width=960, window_height=540))
-
-    printed = capsys.readouterr().out
-    assert maps.KART.title in printed, "the race reported itself on the way out"
-    assert "best lap" in printed and "laps" in printed
 
 
 def test_every_map_can_describe_its_own_result(layout):
@@ -2480,7 +2113,7 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
     headless(monkeypatch)
     settings = app.Settings(cameras=(0,), mute=True, calibration_path=tmp_path / "setup.json")
     # Stamped with the setup it was fitted on, as every rig setup saves is.
-    rig = Rig((Calibration(aim_fitted=True, trigger_fitted=True),),
+    rig = Rig((Calibration(aim_fitted=True),),
               app.rig_setup(settings, (0,)))
     book = RigBook()
     if has_setup:
@@ -2488,7 +2121,7 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
     choices = iter((maps.SNIPER, maps.RANGE))
     monkeypatch.setattr(app, "choose_map", lambda *_: ("play", next(choices)))
     setups = []
-    monkeypatch.setattr(app, "run_calibration", lambda eyes, canvas, layout, scheme, grid, previous: setups.append(scheme.key) or rig)
+    monkeypatch.setattr(app, "run_calibration", lambda eyes, canvas, layout, scheme, previous: setups.append(scheme.key) or rig)
     played = []
 
     def play(eyes, canvas, settings, layout, controller, current, sounds, chosen, scheme):
@@ -2498,7 +2131,7 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
         return None, "maps" if chosen.key == "sniper" else "quit"
 
     monkeypatch.setattr(app, "play", play)
-    app._session(pistol, settings, layout_for(960, 540), [FakeCapture()],
+    app._session(settings, layout_for(960, 540), [FakeCapture()],
                  np.zeros((540, 960, 3), np.uint8), book, HighScores(tmp_path / "scores.json"))
     assert setups == ([] if has_setup else ["marksman"])
     assert book.get("pistol") == rig

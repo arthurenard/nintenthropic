@@ -73,7 +73,6 @@ IMPACT_FLASH = 0.3
 SUN_DIRECTION = (0.8, -0.15, 0.2)
 #: How far the cloud deck slides under you, in pixels, as the station moves.
 CLOUD_DRIFT = 26.0
-STAGES = ("EARLY", "MID", "LATE")
 
 # Palette, BGR. One light in the scene: a warm key from the sun, up and to
 # the right, and a cool blue fill bouncing up off the planet underneath.
@@ -96,13 +95,11 @@ SUN = (226, 244, 255)
 SUN_WARM = (160, 214, 255)
 KEY_LIGHT = (200, 226, 250)   # the warm rim every lit edge gets
 FILL_LIGHT = (176, 128, 64)   # the cool bounce every underside gets
-ROCK = (92, 96, 104)
 ROCK_RIM = (228, 236, 244)
 EARTHSHINE = (170, 120, 60)
 #: What the debris is made of, as base tones: rock, bare alloy, and the
 #: gold insulation foil everything up here is wrapped in.
 MATERIALS = ((92, 96, 104), (150, 146, 140), (48, 128, 196))
-STREAK = (54, 56, 62)
 SPARK = (200, 225, 245)
 EMBER = (90, 190, 255)
 STRUT = (50, 52, 58)
@@ -285,7 +282,6 @@ class OrbitRound(Round):
     cracks: list[Crack] = field(default_factory=list, init=False)
     integrity: int = field(default=FULL_INTEGRITY, init=False)
     cleared: int = field(default=0, init=False)
-    friendly_hits: int = field(default=0, init=False)
     struck_at: float | None = field(default=None, init=False)
     failed_at: float | None = field(default=None, init=False)
     _alarm_raised: bool = field(default=False, init=False, repr=False)
@@ -550,7 +546,6 @@ class OrbitRound(Round):
         assert self.drone is not None
         self.drone.hit_at = now
         self.drone.spin = self.effects_rng.uniform(3.0, 5.0)
-        self.friendly_hits += 1
         # Floored, as western floors its townsfolk penalty: the drone costs
         # more than any fragment pays, so an early mistake would otherwise
         # send the round - and the high-score table - negative.
@@ -622,13 +617,6 @@ class OrbitRound(Round):
                 generation=parent.generation + 1,
             ))
         return pieces
-
-
-def momentum(fragments) -> tuple[float, float, float]:
-    """Total momentum of some fragments, for the books."""
-    return (sum(f.mass * f.vx for f in fragments),
-            sum(f.mass * f.vy for f in fragments),
-            sum(f.mass * f.vz for f in fragments))
 
 
 def make_crack(x: int, y: int, cost: int, rng, now: float, scale: float = 1.0) -> Crack:
@@ -2056,11 +2044,6 @@ def _relay_wall(canvas: np.ndarray, backdrop: np.ndarray, area: Rect) -> None:
         roi = (slice(cy, cy + corner), slice(cx, cx + corner))
         patch = mask[roi]
         canvas[roi][patch] = backdrop[roi][patch]
-
-
-def draw_hud(canvas: np.ndarray, round_: OrbitRound, origin: tuple[int, int],
-             now: float) -> None:
-    """Optional extra HUD: the readout already lives on the frame."""
 
 
 def draw_emblem(panel: np.ndarray) -> None:

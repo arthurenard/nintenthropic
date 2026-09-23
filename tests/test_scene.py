@@ -2,8 +2,6 @@ import numpy as np
 import pytest
 
 from handy import scene
-from handy.calibration import Progress, aim_steps, reach_steps, trigger_steps
-from handy.schemes import PISTOL
 from handy.recognition import Frame
 
 WIDTH, HEIGHT = 1280, 720
@@ -17,69 +15,6 @@ def canvas():
 @pytest.fixture
 def camera():
     return np.full((720, 1280, 3), 90, np.uint8)
-
-
-AIM_STEPS = aim_steps(PISTOL, 3)
-STEPS = AIM_STEPS + reach_steps(PISTOL) + trigger_steps(PISTOL)
-TARGETS = tuple(step.target for step in AIM_STEPS)
-
-
-def progress_for(index: int, **kwargs) -> Progress:
-    defaults = dict(fraction=0.5, tracking=True, all_targets=TARGETS, seen=(True,))
-    return Progress(STEPS[index], index, len(STEPS), **{**defaults, **kwargs})
-
-
-def test_every_calibration_step_renders(canvas, camera):
-    for index in range(len(STEPS)):
-        canvas[:] = 0
-        scene.draw_calibration(canvas, progress_for(index), [camera], [Frame()])
-        assert canvas.any()
-
-
-def test_each_aim_step_marks_its_own_place_on_screen(canvas, camera):
-    """The marker has to be where the game will later read that hand position."""
-    for index, target in enumerate(TARGETS):
-        canvas[:] = 0
-        scene.draw_calibration(canvas, progress_for(index), [camera], [Frame()])
-        x, y = int(target[0] * (WIDTH - 1)), int(target[1] * (HEIGHT - 1))
-        patch = canvas[max(0, y - 30):y + 30, max(0, x - 30):x + 30]
-        assert np.any(np.all(patch == scene.ARMED, axis=-1)), f"no marker at {target}"
-
-
-def test_the_grid_overview_shows_every_point(canvas, camera):
-    scene.draw_calibration(canvas, progress_for(4), [camera], [Frame()])
-    for target in TARGETS:
-        x, y = int(target[0] * (WIDTH - 1)), int(target[1] * (HEIGHT - 1))
-        patch = canvas[max(0, y - 12):y + 12, max(0, x - 12):x + 12]
-        assert patch.any(), f"nothing drawn at {target}"
-
-
-def test_the_settling_and_untracked_states_render(canvas, camera):
-    for kwargs in ({"settling": True}, {"tracking": False}):
-        canvas[:] = 0
-        scene.draw_calibration(canvas, progress_for(2, **kwargs), [camera], [Frame()])
-        assert canvas.any()
-
-
-def test_the_progress_bar_grows_with_the_fraction(canvas):
-    from handy.game import Rect
-
-    bar = Rect(100, 100, 400, 14)
-    filled = []
-    for fraction in (0.0, 0.5, 1.0):
-        canvas[:] = 0
-        scene.draw_progress_bar(canvas, fraction, bar)
-        strip = canvas[bar.y + 7, bar.x:bar.right]
-        filled.append(int(np.count_nonzero(np.all(strip == scene.ARMED, axis=-1))))
-
-    assert filled[0] == 0 < filled[1] < filled[2]
-
-
-def test_the_progress_bar_clamps_a_silly_fraction(canvas):
-    from handy.game import Rect
-
-    scene.draw_progress_bar(canvas, 4.0, Rect(10, 10, 200, 14))  # must not overflow
-    assert canvas.any()
 
 
 # --- the round clock and the score card ------------------------------------
@@ -255,7 +190,7 @@ def test_the_hud_reads_differently_with_one_camera_and_with_two(canvas):
     from handy.game import Rect, Round, RoundOptions
 
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
-    aim = Aim(position=(0.5, 0.5), armed=True, cameras=2, spread=0.012, depth=0.4)
+    aim = Aim(position=(0.5, 0.5), armed=True, cameras=2, spread=0.012)
 
     scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
     one = canvas.copy()
@@ -273,14 +208,14 @@ def test_debug_shows_what_the_second_camera_measured(canvas):
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
     states = [scene.FUSED, scene.FUSED]
     single = Aim(position=(0.5, 0.5), cameras=1)
-    paired = Aim(position=(0.5, 0.5), cameras=2, spread=0.02, depth=0.55)
+    paired = Aim(position=(0.5, 0.5), cameras=2, spread=0.02)
 
     scene.draw_hud(canvas, round_, single, (400, 16), 30.0, True, states)
     alone = canvas.copy()
     canvas[:] = 0
     scene.draw_hud(canvas, round_, paired, (400, 16), 30.0, True, states)
 
-    assert not np.array_equal(alone, canvas), "spread and depth only appear with two"
+    assert not np.array_equal(alone, canvas), "the spread only appears with two"
 
 
 def test_an_ignored_camera_is_marked_on_its_own_inset(canvas, camera):
@@ -296,24 +231,13 @@ def test_an_ignored_camera_is_marked_on_its_own_inset(canvas, camera):
     assert not np.array_equal(ignored, canvas)
 
 
-def test_the_footer_speaks_the_language_of_the_scheme_in_use():
-    from handy import schemes
-
-    assert "thumb" in schemes.PISTOL.footer
-    assert "wink" in schemes.GAZE.footer
-    assert "thumb" not in schemes.GAZE.footer, "no hand talk in the eye scheme"
-
-
 def test_every_screen_draws_at_any_scale(canvas, camera):
     """The interface is built for 720 tall and scaled; nothing may fall over."""
     from handy import maps
     from handy.aiming import Aim
-    from handy.calibration import Progress, aim_steps, trigger_steps
     from handy.game import Rect, Round, RoundOptions, Summary
     from handy.recognition import Frame
-    from handy.schemes import PISTOL
 
-    steps = aim_steps(PISTOL, 3) + trigger_steps(PISTOL)
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
     summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
                       perfect=1, duration=60)
@@ -332,9 +256,6 @@ def test_every_screen_draws_at_any_scale(canvas, camera):
         cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 2, scale)
         scene.draw_map_select(canvas, cards, entries, 0, scale)
         scene.draw_results(canvas, summary, 5, True, "hint", scale)
-        scene.draw_calibration(canvas, Progress(steps[0], 0, len(steps), 0.5, True,
-                                                all_targets=(), seen=(True,)),
-                               [camera], [Frame()], 0.5, None, scale)
         assert canvas.any(), f"nothing drawn at scale {scale}"
 
 
@@ -492,7 +413,9 @@ def test_the_logo_lockup_sits_bottom_right_on_every_menu(canvas):
     # And it is part of the chooser, the results card and the notice.
     from handy.game import Summary
     cards = scene.map_cards(Rect(0, 0, canvas.shape[1], canvas.shape[0]), 2)
-    entries = (("A", "b", "c", scene.pistol_emblem), ("D", "e", "f", scene.gaze_emblem))
+    from handy import maps
+
+    entries = tuple(("A", "b", "c", m.draw_emblem) for m in maps.MAPS[:2])
     for draw in (lambda: scene.draw_map_select(canvas, cards, entries, None),
                  lambda: scene.draw_results(canvas, Summary(1, 1, 1, 1.0, 1, 0, 9.0),
                                             0, False),
@@ -512,20 +435,6 @@ def test_the_camera_inset_is_framed_in_its_state_colour(canvas, camera):
         scene.draw_camera_inset(canvas, camera, Frame(), rect, "", state)
         frame = canvas[rect.y - 2:rect.bottom + 2, rect.x - 2:rect.right + 2]
         assert np.any(np.all(frame == color, axis=-1))
-
-
-def test_the_scheme_emblems_share_one_finish(canvas):
-    # Every emblem paints the same moody ground, lit from the upper left.
-    panels = []
-    for emblem in (scene.pistol_emblem, scene.gaze_emblem, scene.marksman_emblem):
-        panel = np.zeros((120, 400, 3), np.uint8)
-        emblem(panel)
-        panels.append(panel)
-    for panel in panels:
-        assert panel.mean() > 20 and panel.mean() < 160
-        # Nothing green-saturated: the warm accent is the only colour.
-        b, g, r = panel[:, :, 0].astype(int), panel[:, :, 1].astype(int), panel[:, :, 2].astype(int)
-        assert not np.any((g - np.maximum(r, b)) > 60)
 
 
 # --- the footer always fits --------------------------------------------------
@@ -758,8 +667,6 @@ def test_every_emblem_draws_on_a_card_smaller_than_it_expects():
         for width in (height, int(height * 1.6), int(height * 3)):
             panel = np.zeros((height, max(width, 1), 3), np.uint8)
             for chosen in maps.MAPS:
-                if chosen.mode == "drive":
-                    continue  # the kart map is another agent's ground
                 with warnings.catch_warnings():
                     warnings.simplefilter("error", RuntimeWarning)
                     chosen.draw_emblem(panel)  # must not raise
