@@ -346,12 +346,11 @@ def test_the_game_opens_the_camera_the_search_picked(monkeypatch, tmp_path,
     assert [capture.index for capture in opened] == [1]
 
 
-def test_the_eyes_read_only_the_first_camera(monkeypatch, tmp_path, model_path):
+def test_the_eyes_read_only_the_first_camera(monkeypatch, tmp_path, model_path,
+                                             face_model_path):
     """Two cameras plugged in, one of them idle for this scheme."""
     from handy import app
-    from handy.models import ensure_model
 
-    ensure_model("face_landmarker")
     reads: list[int] = []
 
     opened = headless(monkeypatch)
@@ -372,16 +371,15 @@ def test_the_eyes_read_only_the_first_camera(monkeypatch, tmp_path, model_path):
 
 
 def test_switching_back_to_the_hand_gets_both_cameras_again(monkeypatch, tmp_path,
-                                                            model_path):
+                                                            model_path,
+                                                            face_model_path):
     """The eye scheme parking a camera must not cost the pistol anything."""
     import itertools
 
     import cv2
 
     from handy import app
-    from handy.models import ensure_model
 
-    ensure_model("face_landmarker")
     reads: list[tuple[str, int]] = []
     stage = {"control": "gaze"}
 
@@ -418,14 +416,12 @@ def test_switching_back_to_the_hand_gets_both_cameras_again(monkeypatch, tmp_pat
 
 @pytest.mark.parametrize("control", ["pistol", "gaze"])
 def test_either_control_scheme_starts_and_shuts_down(monkeypatch, tmp_path,
-                                                     model_path, control):
+                                                     model_path, face_model_path,
+                                                     control):
     """Each scheme loads a different model and watches for something different."""
     from handy import app
-    from handy.models import ensure_model
-    from handy.schemes import by_key
 
-    for name in by_key(control).models:  # cached before the window opens
-        ensure_model(name)
+    # Both bundles are cached before the window opens, by the fixtures.
     opened = headless(monkeypatch)
     app.run(app.Settings(
         cameras=(0,), control=control, map_key="range", mute=True,
@@ -599,12 +595,11 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
     assert best[maps.SNIPER.title] == "best 340"
 
 
-def test_every_button_answers_a_shot_in_play(monkeypatch, tmp_path, model_path):
+def test_every_button_answers_a_shot_in_play(monkeypatch):
     """QUIT, MAPS and CONTROLS all mean something when shot mid-game."""
     from handy import app, maps, schemes
     from handy.aiming import Aim
     from handy.calibration import default_rig
-    from handy.audio import Audio, Sounds
     import cv2
 
     monkeypatch.setattr(cv2, "imshow", lambda *args: None)
@@ -627,8 +622,8 @@ def test_every_button_answers_a_shot_in_play(monkeypatch, tmp_path, model_path):
             OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
             Settings(recoil=0.0), layout,
             app.make_controller(Settings(), schemes.PISTOL),
-            default_rig(schemes.PISTOL, 1), Sounds(Audio(enabled=False), 5),
-            maps.RANGE, schemes.PISTOL)
+            default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE,
+            schemes.PISTOL)
         assert reason == expected, f"shooting {button.label} should mean {expected}"
 
 
@@ -1024,6 +1019,45 @@ def test_the_maps_are_pre_built_so_the_first_frame_does_not_freeze():
         started = time.perf_counter()
         chosen.draw_world(canvas, round_, 0.5)
         assert time.perf_counter() - started < 0.05, f"{chosen.key} first frame is slow"
+
+
+@pytest.mark.real_warm_up
+def test_the_game_warms_the_maps_up_off_the_main_thread(monkeypatch, tmp_path,
+                                                         model_path):
+    """The suite skips the warm-up everywhere else, so it is checked here."""
+    import threading
+
+    from handy import app
+
+    warmed: list[tuple[str, tuple[int, int]]] = []
+    done = threading.Event()
+
+    def warm_maps(layout, settings):
+        warmed.append((threading.current_thread().name,
+                       (layout.window.width, layout.window.height)))
+        done.set()
+
+    monkeypatch.setattr(app, "warm_maps", warm_maps)
+    headless(monkeypatch)
+    monkeypatch.setattr(app, "open_window", lambda settings: (960, 540))
+    app.run(app.Settings(cameras=(0,), map_key="range", mute=True,
+                         skip_calibration=True, model_path=model_path,
+                         calibration_path=tmp_path / "calibration.json"))
+
+    assert done.wait(10), "the maps were never warmed"
+    assert warmed == [("warm-maps", (960, 540))]
+
+
+def test_the_suite_never_touches_the_players_own_calibration_or_scores():
+    """A test that forgot its tmp_path used to write into ~/.cache/handy."""
+    import os
+    import pwd
+
+    from handy import app
+
+    real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    for path in (app.calibration_path(Settings()), app.scores_path(Settings())):
+        assert not path.is_relative_to(real_home), path
 
 
 # --- no toll booths in front of the race -------------------------------------

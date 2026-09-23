@@ -918,6 +918,14 @@ def warm_maps(layout: Layout, settings: Settings) -> None:
             print(f"Could not pre-build {chosen.title}: {error}")
 
 
+def start_warm_up(layout: Layout, settings: Settings) -> threading.Thread:
+    """Run :func:`warm_maps` on a worker thread, and hand the thread back."""
+    thread = threading.Thread(target=warm_maps, args=(layout, settings), daemon=True,
+                              name="warm-maps")
+    thread.start()
+    return thread
+
+
 def announce(indices: tuple[int, ...], note: str) -> None:
     if note:
         print(note)
@@ -945,8 +953,7 @@ def run(settings: Settings) -> None:
     settings = replace(settings, window_width=width, window_height=height)
     layout = layout_for(width, height)
     canvas = np.zeros((height, width, 3), np.uint8)
-    threading.Thread(target=warm_maps, args=(layout, settings), daemon=True,
-                     name="warm-maps").start()
+    start_warm_up(layout, settings)
     try:
         wants_drive = (settings.map_key is not None
                        and maps.by_key(settings.map_key).mode == "drive")
