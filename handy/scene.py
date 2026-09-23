@@ -612,9 +612,19 @@ def draw_timer(canvas: np.ndarray, remaining: float | None,
     pad = _px(22, scale)
     pill = Rect((width - text_w) // 2 - pad, _px(14, scale), text_w + 2 * pad,
                 text_h + _px(26, scale))
-    halo = canvas.copy()
-    shade_panel(halo, pill, pill.height // 2, (40, 38, 36), (24, 23, 22), EDGE)
-    blend(canvas, halo, 0.85)
+    # Only the pill's own patch is copied and blended, with a few pixels over
+    # for the anti-aliased rim. A copy of the whole frame blends back to
+    # exactly what it was everywhere else - at the cost of the whole frame.
+    # The patch starts on even coordinates: the rounded ends are traced with
+    # round-half-to-even, so an odd shift would move some of their points.
+    height, rim = canvas.shape[0], 3
+    x0, y0 = max(pill.x - rim, 0) & ~1, max(pill.y - rim, 0) & ~1
+    x1, y1 = min(pill.right + rim + 1, width), min(pill.bottom + rim + 1, height)
+    region = canvas[y0:y1, x0:x1]
+    halo = region.copy()
+    shade_panel(halo, Rect(pill.x - x0, pill.y - y0, pill.width, pill.height),
+                pill.height // 2, (40, 38, 36), (24, 23, 22), EDGE)
+    blend(region, halo, 0.85)
     # Accent ticks either side of the clock, red once it is nearly over.
     tick = DANGER if urgent else ACCENT
     mid = pill.y + pill.height // 2
@@ -845,14 +855,35 @@ def draw_hud_backing(canvas: np.ndarray, rect: Rect, scale: float = 1.0) -> None
     if x1 <= x0 or y1 <= y0:
         return
     region = canvas[y0:y1, x0:x1]
-    # Alpha: 0.62 over the panel, fading to 0 across the feather on the right/bottom.
-    ys = np.arange(y0, y1)[:, None]
-    xs = np.arange(x0, x1)[None, :]
-    fade_y = np.clip((rect.bottom + feather - ys) / feather, 0.0, 1.0)
-    fade_x = np.clip((rect.right + feather - xs) / feather, 0.0, 1.0)
-    alpha = (0.62 * np.minimum(fade_y, fade_x)).astype(np.float32)[:, :, None]
-    shade = np.array((16, 15, 14), np.float32)
-    region[:] = (region * (1 - alpha) + shade * alpha).astype(np.uint8)
+    keep, cover, shade = _hud_backing_weights(y1 - y0, x1 - x0,
+                                              rect.bottom + feather - y0,
+                                              rect.right + feather - x0, feather)
+    cv2.blendLinear(region, shade, keep, cover, dst=region)
+
+
+@lru_cache(maxsize=8)
+def _hud_backing_weights(height: int, width: int, fade_bottom: int, fade_right: int,
+                         feather: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The HUD backing's blend, built once per size rather than every frame.
+
+    Weights for what shows through and for the shade laid over it: 0.62 of
+    shade over the panel, fading to none across the feather on the right and
+    bottom. Rebuilding them - and blending in float - was three milliseconds
+    of every frame on a laptop panel; a cached mask and OpenCV's own weighted
+    blend are a tenth of one.
+    """
+    ys = np.arange(height)[:, None]
+    xs = np.arange(width)[None, :]
+    fade_y = np.clip((fade_bottom - ys) / feather, 0.0, 1.0)
+    fade_x = np.clip((fade_right - xs) / feather, 0.0, 1.0)
+    cover = (0.62 * np.minimum(fade_y, fade_x)).astype(np.float32)
+    shade = np.empty((height, width, 3), np.uint8)
+    shade[:] = (16, 15, 14)
+    for array in (cover, shade):
+        array.flags.writeable = False  # shared by every frame from here on
+    keep = 1.0 - cover
+    keep.flags.writeable = False
+    return keep, cover, shade
 
 
 # --- calibration ------------------------------------------------------------
