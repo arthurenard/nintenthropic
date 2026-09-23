@@ -26,7 +26,6 @@ MUTED = (150, 146, 142)
 ACCENT = (96, 168, 236)  # warm amber: the thin chrome lines of every screen
 ARMED = (120, 230, 130)
 IDLE = (150, 150, 150)
-HIT = (120, 230, 130)
 MISS = (120, 120, 190)
 DANGER = (70, 70, 220)
 

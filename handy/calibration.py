@@ -128,24 +128,11 @@ class Rig:
     def usable(self) -> tuple[bool, ...]:
         return tuple(camera.usable for camera in self.cameras)
 
-    def save(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"cameras": [camera.to_dict() for camera in self.cameras]}
-        path.write_text(json.dumps(payload, indent=2) + "\n")
-
     @classmethod
     def from_dict(cls, data: dict) -> "Rig":
         # A file from before the second camera holds one calibration, bare.
         entries = data["cameras"] if "cameras" in data else [data]
         return cls(tuple(Calibration.from_dict(entry) for entry in entries))
-
-    @classmethod
-    def load(cls, path: Path) -> "Rig | None":
-        """Read a saved rig, or None if it is missing or unusable."""
-        try:
-            return cls.from_dict(json.loads(path.read_text()))
-        except (OSError, ValueError, KeyError, TypeError):
-            return None
 
 
 @dataclass

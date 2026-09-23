@@ -1,11 +1,21 @@
 import numpy as np
 import pytest
 
-from handy.audio import (LIMITER_KNEE, NAMED_BUILDERS, NAMED_CUES, SAMPLE_RATE,
+from handy.audio import (LIMITER_KNEE, NAMED_BUILDERS, SAMPLE_RATE,
                          TARGET_LOUDNESS_DB, Audio, Mixer, Sounds, cock_sound,
                          flesh_sound, groan_sound, hit_sound, hurt_sound,
                          loudness_db, miss_sound, round_over_sound, shot_sound,
                          soft_knee)
+
+#: Every named cue a map may raise, grouped by the map that raises it.
+NAMED_CUES: dict[str, tuple[str, ...]] = {
+    "western": ("rifle_crack", "bottle_break", "ricochet", "wood_splinter",
+                "bandit_down", "bell_toll", "wind_dust"),
+    "orbit": ("suppressed_shot", "debris_hit", "hull_thud", "glass_crack",
+              "alarm", "static"),
+    "sniper": ("sniper_shot", "bolt_cycle", "scope_in", "scope_out",
+               "distant_impact", "headshot_ping", "wind_gust"),
+}
 
 
 @pytest.fixture

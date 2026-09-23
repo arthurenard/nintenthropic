@@ -48,17 +48,6 @@ LIMITER_CEILING = 0.98
 #: How many slightly different takes of each sound the sound set keeps.
 VARIANTS = 4
 
-#: Every named cue a map may raise, grouped by the map family that uses it.
-NAMED_CUES: dict[str, tuple[str, ...]] = {
-    "western": ("rifle_crack", "bottle_break", "ricochet", "wood_splinter",
-                "bandit_down", "bell_toll", "wind_dust"),
-    "orbit": ("suppressed_shot", "debris_hit", "hull_thud", "glass_crack",
-              "alarm", "static"),
-    "sniper": ("sniper_shot", "bolt_cycle", "scope_in", "scope_out",
-               "distant_impact", "headshot_ping", "wind_gust"),
-}
-
-
 # --- building blocks -----------------------------------------------------------
 
 def _samples(seconds: float) -> int:

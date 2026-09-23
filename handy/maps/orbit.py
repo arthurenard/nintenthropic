@@ -2003,11 +2003,6 @@ def _relay_wall(canvas: np.ndarray, backdrop: np.ndarray, area: Rect) -> None:
         canvas[roi][patch] = backdrop[roi][patch]
 
 
-def draw_hud(canvas: np.ndarray, round_: OrbitRound, origin: tuple[int, int],
-             now: float) -> None:
-    """Optional extra HUD: the readout already lives on the frame."""
-
-
 def draw_emblem(panel: np.ndarray) -> None:
     """The card art, composed as a poster: the array sweeping in from the
     foreground, debris tumbling through the middle distance, the drone on

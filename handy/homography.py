@@ -1,11 +1,13 @@
-"""Fitting the projective map from hand space to screen space.
+"""The map from hand space to screen space, and fitting it.
 
 Where the camera sits relative to the screen changes the shape of that map. A
 webcam above a laptop screen sees a very different sweep from one off to the side
 of an external monitor: the hand plane is rotated, sheared and foreshortened
-against the screen plane. An axis-aligned box cannot express any of that, but a
-homography - the general projective transform between two planes - expresses all
-of it, and costs four calibration points instead of two.
+against the screen plane. An axis-aligned box cannot express that; an affine map
+covers the rotation and shear, which is what setup fits from the shots the
+player takes. Every map is kept as a 3x3 homography - the general projective
+transform between two planes - so that a projective map saved by an older setup
+is applied, and its gain measured, exactly as before.
 """
 
 from __future__ import annotations
@@ -17,10 +19,6 @@ import numpy as np
 
 Point = tuple[float, float]
 Matrix = tuple[float, ...]  # 9 numbers, row-major 3x3
-
-
-#: Fewer correspondences than this cannot determine a homography.
-MIN_POINTS = 4
 
 
 def box_mapping(low: Point, high: Point) -> Matrix:
@@ -42,62 +40,6 @@ def apply(matrix: Matrix, point: Point) -> Point:
         return (0.5, 0.5)
     return ((matrix[0] * x + matrix[1] * y + matrix[2]) / weight,
             (matrix[3] * x + matrix[4] * y + matrix[5]) / weight)
-
-
-def _conditioning(points: np.ndarray) -> np.ndarray:
-    """Hartley normalisation: centre on the origin, scale to a mean radius of sqrt(2).
-
-    The direct linear transform is badly conditioned on raw coordinates; this is
-    the standard remedy and costs two matrix multiplies.
-    """
-    centre = points.mean(axis=0)
-    spread = np.sqrt(((points - centre) ** 2).sum(axis=1)).mean()
-    scale = np.sqrt(2) / spread if spread > 1e-12 else 1.0
-    return np.array([[scale, 0.0, -scale * centre[0]],
-                     [0.0, scale, -scale * centre[1]],
-                     [0.0, 0.0, 1.0]])
-
-
-def fit(source: Sequence[Point], destination: Sequence[Point]) -> Matrix | None:
-    """Least-squares homography taking ``source`` onto ``destination``.
-
-    Returns None when the correspondences cannot determine one - too few points,
-    or points that are collinear or coincident.
-    """
-    if len(source) != len(destination) or len(source) < MIN_POINTS:
-        return None
-
-    src = np.asarray(source, dtype=float)
-    dst = np.asarray(destination, dtype=float)
-    if not (np.all(np.isfinite(src)) and np.all(np.isfinite(dst))):
-        return None
-
-    normalise_src, normalise_dst = _conditioning(src), _conditioning(dst)
-    src_n = (normalise_src @ np.hstack([src, np.ones((len(src), 1))]).T).T
-    dst_n = (normalise_dst @ np.hstack([dst, np.ones((len(dst), 1))]).T).T
-
-    rows = []
-    for (x, y, _), (u, v, _) in zip(src_n, dst_n):
-        rows.append([-x, -y, -1, 0, 0, 0, u * x, u * y, u])
-        rows.append([0, 0, 0, -x, -y, -1, v * x, v * y, v])
-
-    try:
-        _, singular, vectors = np.linalg.svd(np.asarray(rows))
-    except np.linalg.LinAlgError:
-        return None
-    # A near-zero second-smallest singular value means the solution is not unique,
-    # which is what degenerate point sets look like.
-    if singular[-2] < 1e-9:
-        return None
-
-    matrix = vectors[-1].reshape(3, 3)
-    matrix = np.linalg.inv(normalise_dst) @ matrix @ normalise_src
-    if abs(matrix[2, 2]) < 1e-12 or not np.all(np.isfinite(matrix)):
-        return None
-    matrix = matrix / matrix[2, 2]
-    if abs(np.linalg.det(matrix)) < 1e-12:
-        return None
-    return tuple(float(value) for value in matrix.reshape(9))
 
 
 def gain(matrix: Matrix, point: Point) -> float:

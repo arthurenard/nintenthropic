@@ -98,7 +98,6 @@ MARKSMAN = Scheme(
 # marksman is selected by the sniper map itself.
 SCHEMES: tuple[Scheme, ...] = (PISTOL, MARKSMAN)
 CONTROLS: tuple[Scheme, ...] = (PISTOL,)
-DEFAULT = PISTOL
 
 
 def keys() -> tuple[str, ...]:

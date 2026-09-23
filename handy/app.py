@@ -33,7 +33,6 @@ WINDOW_TITLE = "Handy"
 # crosshair runs backwards for the rest of the round with nothing said. It is a
 # launch-time choice (--no-mirror) so the setup that follows agrees with it.
 CONTROL_KEYS = ("q quit", "r restart", "b maps", "c recalibrate", "s screenshot")
-CONTROLS = "   ".join(CONTROL_KEYS)
 
 _QUIT_KEYS = {ord("q"), 27}  # q and Esc
 _ESCAPE = 27

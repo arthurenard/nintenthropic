@@ -137,7 +137,7 @@ def test_a_camera_beyond_the_calibrated_rig_is_still_described():
 def test_the_footer_names_the_scheme_the_map_and_the_keys(layout):
     """The scope's hint belongs under the marksman, never under the plain pistol."""
     from handy import maps, schemes
-    from handy.app import CONTROLS, View, render
+    from handy.app import CONTROL_KEYS, View, render
     from handy.recognition import Frame
 
     from handy.marksman import MarksmanFrame
@@ -156,7 +156,7 @@ def test_the_footer_names_the_scheme_the_map_and_the_keys(layout):
         canvases[scheme.key] = canvas
 
     assert not np.array_equal(canvases["pistol"], canvases["marksman"])
-    assert CONTROLS and maps.ZOMBIES.footer, "both still have their say"
+    assert CONTROL_KEYS and maps.ZOMBIES.footer, "both still have their say"
 
 
 def test_maps_are_looked_up_by_key():
