@@ -143,12 +143,16 @@ class Calibration:
             # A file from before the map was projective: read its box instead.
             mapping = homography.box_mapping(tuple(data["aim_min"]),
                                              tuple(data["aim_max"]))
-        gain = data.get("gain", 1.0)
+        # The trigger poses are optional. The built-in thumb trigger ignores
+        # them, and a browser that stored only what it uses was refused on
+        # every start for want of fields nothing would have read.
+        defaults = cls()
+        gain = data.get("gain", defaults.gain)
         return cls(
             mapping=mapping,
-            signal=str(data["signal"]),
-            cocked=float(data["cocked"]),
-            folded=float(data["folded"]),
+            signal=str(data.get("signal", defaults.signal)),
+            cocked=float(data.get("cocked", defaults.cocked)),
+            folded=float(data.get("folded", defaults.folded)),
             tuning=_tuning_from(data.get("tuning", (0.0, 0.0))),
             fit_error=float(data.get("fit_error", 0.0)),
             generalisation=float(data.get("generalisation", 0.0)),

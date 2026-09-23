@@ -287,6 +287,16 @@ def test_a_file_with_nan_or_infinity_in_it_is_refused(tmp_path):
     assert Rig.load(path) is None
 
 
+def test_a_saved_setup_without_the_trigger_poses_still_loads():
+    """The built-in thumb trigger ignores the calibrated poses, and a browser
+    that stored only what it uses was refused on every start, for ever."""
+    loaded = Calibration.from_dict({"mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                                    "aim_fitted": True})
+    assert loaded.aim_fitted and loaded.mapping == homography.IDENTITY
+    assert (loaded.signal, loaded.cocked, loaded.folded) == (
+        Calibration().signal, Calibration().cocked, Calibration().folded)
+
+
 def test_a_rig_survives_a_round_trip_through_disk(tmp_path):
     original = Rig((calibrate(grid=3), Calibration(gain=3.2, slide=(0.04, -0.02))))
     path = tmp_path / "calibration.json"
@@ -339,8 +349,11 @@ def test_a_missing_or_broken_file_reads_as_nothing(tmp_path):
     broken = tmp_path / "broken.json"
     broken.write_text("{not json")
     assert Rig.load(broken) is None
+    # The trigger poses are optional (the built-in thumb ignores them); the
+    # map is the one thing a calibration cannot do without.
     incomplete = tmp_path / "incomplete.json"
-    incomplete.write_text(json.dumps({"mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1]}))
+    incomplete.write_text(json.dumps({"signal": "angle", "cocked": 20.0,
+                                      "folded": 70.0}))
     assert Rig.load(incomplete) is None
 
 
