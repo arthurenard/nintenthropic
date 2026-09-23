@@ -44,6 +44,7 @@ TOWNSFOLK_CHANCE = 0.28
 RAIL_SLOTS = 7
 RAIL_REFILL = 1.0
 SIGN_COOLDOWN = 0.8
+SIGN_SWING = 1.4               # radians either way before the chains fetch it up
 SHARD_LIFE = 1.6
 GRAVITY = 1500.0               # px/s^2 at reference scale, scaled by area height
 DUST_DEVIL_INTERVAL = (5.0, 9.0)
@@ -220,6 +221,12 @@ WIN_W, WIN_H = 0.10, 0.11
 WIN_TOP = 0.43                     # above the ground line
 AWNING_Y = 0.305
 FIGURE_H = 0.275                   # a man in a doorway, feet to hat crown
+# Parts of a figure that stand out past its body, in units of its height (x out
+# from the middle, y up from the feet): drawn from these and hit-tested
+# against them, so what sticks out can be hit.
+HAT_CROWN = (0.11, 1.1)                        # a bandit's: half its width, its top
+RAISED_ARM = ((0.16, 0.72), (0.3, 0.98), 0.03)  # townsfolk: shoulder, wrist, half width
+RAISED_HAND = ((0.3, 1.0), 0.045)               # and the hand held up: centre, radius
 
 
 def build_street(area: Rect, seed: int) -> Street:
@@ -377,12 +384,20 @@ class Sign:
     def y(self) -> float:
         return self.centre[1]
 
-    def step(self, dt: float, now: float) -> None:
+    def step(self, dt: float, elapsed: float) -> None:
         # A pendulum in a light breeze: the gusts keep it from ever hanging still.
+        # They blow on the round's clock, so a sign swings the same way at the
+        # same moment of every round, and so where a shot finds it does too.
         accel = -16.0 * math.sin(self.angle) - 0.9 * self.velocity
-        accel += 2.2 * math.sin(now * 1.3 + self.pivot[0] * 0.01)
+        accel += 2.2 * math.sin(elapsed * 1.3 + self.pivot[0] * 0.01)
         self.velocity += accel * dt
         self.angle += self.velocity * dt
+        # Hung on chains, it can be kicked up high but never over its bracket:
+        # at the top of its swing the chains fetch it up and it drops back.
+        if abs(self.angle) > SIGN_SWING:
+            self.angle = math.copysign(SIGN_SWING, self.angle)
+            if self.velocity * self.angle > 0:
+                self.velocity *= -0.3
 
     def contains(self, x: float, y: float) -> bool:
         cx, cy = self.centre
@@ -451,7 +466,26 @@ class Figure:
         if fy - height * 0.78 <= y <= fy and abs(x - fx) <= height * 0.24:
             return True
         # Head and hat.
-        return fy - height * 1.02 <= y <= fy - height * 0.78 and abs(x - fx) <= height * 0.2
+        if fy - height * 1.02 <= y <= fy - height * 0.78 and abs(x - fx) <= height * 0.2:
+            return True
+        u, v = (x - fx) / height, (fy - y) / height
+        if self.bandit:
+            half, top = HAT_CROWN  # the crown stands up above the brim
+            return abs(u) <= half and v <= top
+        # Townsfolk have their hands up, and a shot on those is a shot on them.
+        (shoulder_x, shoulder_y), (wrist_x, wrist_y), arm = RAISED_ARM
+        (hand_x, hand_y), hand = RAISED_HAND
+        u = abs(u)  # both arms are up
+        return (_to_segment(u, v, (shoulder_x, shoulder_y), (wrist_x, wrist_y)) <= arm
+                or math.hypot(u - hand_x, v - hand_y) <= hand)
+
+
+def _to_segment(x: float, y: float, a: tuple[float, float], b: tuple[float, float]) -> float:
+    """How far the point is from the line segment ``a``-``b``."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    span = dx * dx + dy * dy
+    t = 0.0 if span == 0.0 else min(max(((x - a[0]) * dx + (y - a[1]) * dy) / span, 0.0), 1.0)
+    return math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
 
 
 @dataclass
@@ -562,6 +596,11 @@ class WesternRound(Round):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        # ``rng`` decides who steps out of the doorways. The rail restocks after
+        # the player's hits and the weather runs on timers of its own, so each
+        # keeps its own dice and neither can change who comes out next.
+        self.rail_rng = self.stream("rail")
+        self.weather_rng = self.stream("weather")
         self.street = build_street(self.options.area, self.options.seed or 0)
         u = self.street.unit
         self.signs = [Sign(pivot=pivot, length=0.075 * self.area.height,
@@ -577,6 +616,13 @@ class WesternRound(Round):
             motes.uniform(0, math.tau, MOTE_COUNT), motes.uniform(0.01, 0.035, MOTE_COUNT)], axis=1)
         for slot in range(RAIL_SLOTS):
             self._fill_slot(slot, 0.0)
+
+    def begin(self, now: float) -> None:
+        # The timers start in seconds from the start of the round: the first
+        # tumbleweed a second in, the first dust devil two.
+        self._next_figure += now
+        self._next_devil += now
+        self._next_weed += now
 
     # --- what can be shot ---------------------------------------------------------
 
@@ -613,7 +659,7 @@ class WesternRound(Round):
             self.cues.append("bell_toll")
 
         for sign in self.signs:
-            sign.step(dt, now)
+            sign.step(dt, self.elapsed(now))
 
         for shard in self.shards:
             shard.step(dt, self.gravity)
@@ -648,13 +694,13 @@ class WesternRound(Round):
         if now >= self._next_devil and len(self.dust_devils) < 2:
             self.dust_devils.append(self._spawn_devil(now))
             self.cues.append("wind_dust")
-            self._next_devil = now + self.rng.uniform(*DUST_DEVIL_INTERVAL)
+            self._next_devil = now + self.weather_rng.uniform(*DUST_DEVIL_INTERVAL)
         for weed in self.tumbleweeds:
             weed.step(dt)
         self.tumbleweeds = [w for w in self.tumbleweeds if not w.is_gone(self.area)]
         if now >= self._next_weed and len(self.tumbleweeds) < 2:
             self.tumbleweeds.append(self._spawn_weed(now))
-            self._next_weed = now + self.rng.uniform(*TUMBLEWEED_INTERVAL)
+            self._next_weed = now + self.weather_rng.uniform(*TUMBLEWEED_INTERVAL)
 
     def resolve(self, x: float, y: float, now: float) -> Hit:
         self.cues.append("rifle_crack")
@@ -679,7 +725,7 @@ class WesternRound(Round):
         wood = self.street.skyline < y < self.street.walk_y
         self.cues.append("wood_splinter" if wood else "ricochet")
         if self.area.contains(x, y):
-            self.holes.append(Hole(int(x), int(y), max(2, int(self.rng.uniform(2.0, 3.5) * self.street.unit)), wood))
+            self.holes.append(Hole(int(x), int(y), max(2, int(self.effects_rng.uniform(2.0, 3.5) * self.street.unit)), wood))
             del self.holes[:-MAX_HOLES]
         return MISS
 
@@ -696,17 +742,20 @@ class WesternRound(Round):
         self._refill_at[can.slot] = now + RAIL_REFILL
         self.cues.append("ricochet")
         # The round goes on through the tin and dents the rail behind it.
-        self.holes.append(Hole(int(can.x + self.rng.uniform(-0.3, 0.3) * can.width),
+        self.holes.append(Hole(int(can.x + self.effects_rng.uniform(-0.3, 0.3) * can.width),
                                int(can.base_y + 0.006 * self.area.height),
                                max(1, int(1.8 * self.street.unit)), True))
         del self.holes[:-MAX_HOLES]
         return Hit(points=CAN_POINTS, ring=2, label="CAN")
 
     def _shoot_sign(self, sign: Sign, now: float) -> Hit:
-        sign.velocity += self.rng.choice((-1, 1)) * self.rng.uniform(4.0, 7.0)
+        dice = self.effects_rng
+        sign.velocity += dice.choice((-1, 1)) * dice.uniform(4.0, 7.0)
         self.cues.append("wood_splinter")
         if now - sign.last_hit < SIGN_COOLDOWN:
-            return Hit(points=0, ring=2)
+            # Still swinging from the last one: it pays once per swing, so
+            # this is not a hit - or ten shots in a second would be ten hits.
+            return MISS
         sign.last_hit = now
         return Hit(points=SIGN_POINTS, ring=2, label="SIGN")
 
@@ -731,17 +780,17 @@ class WesternRound(Round):
     def _fill_slot(self, slot: int, now: float) -> None:
         street = self.street
         h = self.area.height
-        x = street.slot_x(slot) + self.rng.uniform(-0.01, 0.01) * h
-        if self.rng.random() < 0.3:
+        x = street.slot_x(slot) + self.rail_rng.uniform(-0.01, 0.01) * h
+        if self.rail_rng.random() < 0.3:
             self.cans.append(Can(slot=slot, x=x, base_y=street.rail_y,
-                                 height=self.rng.uniform(0.075, 0.09) * h,
-                                 label=self.rng.randrange(len(CAN_LABELS)), spawned_at=now))
+                                 height=self.rail_rng.uniform(0.075, 0.09) * h,
+                                 label=self.rail_rng.randrange(len(CAN_LABELS)), spawned_at=now))
         else:
             self.bottles.append(Bottle(
                 slot=slot, x=x, base_y=street.rail_y,
-                height=self.rng.uniform(0.12, 0.16) * h,
-                color=self.rng.choice(GLASS_COLORS),
-                neck=self.rng.uniform(0.3, 0.5), spawned_at=now))
+                height=self.rail_rng.uniform(0.12, 0.16) * h,
+                color=self.rail_rng.choice(GLASS_COLORS),
+                neck=self.rail_rng.uniform(0.3, 0.5), spawned_at=now))
 
     def _spawn_figure(self, now: float) -> Figure | None:
         taken = {f.spot for f in self.figures}
@@ -758,22 +807,22 @@ class WesternRound(Round):
     def _spawn_devil(self, now: float) -> DustDevil:
         area = self.area
         street = self.street
-        from_left = self.rng.random() < 0.5
+        from_left = self.weather_rng.random() < 0.5
         return DustDevil(
             x=area.x - 40 if from_left else area.right + 40,
-            y=self.rng.uniform(street.walk_y + 0.04 * area.height, street.rail_y),
-            drift=self.rng.uniform(60, 110) * street.unit * (1 if from_left else -1),
-            born=now, height=self.rng.uniform(0.18, 0.3) * area.height)
+            y=self.weather_rng.uniform(street.walk_y + 0.04 * area.height, street.rail_y),
+            drift=self.weather_rng.uniform(60, 110) * street.unit * (1 if from_left else -1),
+            born=now, height=self.weather_rng.uniform(0.18, 0.3) * area.height)
 
     def _spawn_weed(self, now: float) -> Tumbleweed:
         area = self.area
         street = self.street
-        from_left = self.rng.random() < 0.5
-        radius = self.rng.uniform(0.035, 0.06) * area.height
+        from_left = self.weather_rng.random() < 0.5
+        radius = self.weather_rng.uniform(0.035, 0.06) * area.height
         return Tumbleweed(
             x=area.x - 2 * radius if from_left else area.right + 2 * radius,
-            y=self.rng.uniform(street.walk_y + 0.06 * area.height, street.rail_y - 0.02 * area.height),
-            radius=radius, vx=self.rng.uniform(90, 150) * street.unit * (1 if from_left else -1),
+            y=self.weather_rng.uniform(street.walk_y + 0.06 * area.height, street.rail_y - 0.02 * area.height),
+            radius=radius, vx=self.weather_rng.uniform(90, 150) * street.unit * (1 if from_left else -1),
             born=now)
 
     def _shatter(self, bottle: Bottle, now: float) -> None:
@@ -781,17 +830,18 @@ class WesternRound(Round):
         ground = self.area.bottom - 0.015 * self.area.height
         table = self.street.rail_y + 0.012 * self.area.height
         u = self.street.unit
+        dice = self.effects_rng
         for _ in range(count):
-            angle = self.rng.uniform(-math.pi, 0.0)  # mostly upwards and outwards
-            speed = self.rng.uniform(120, 420) * u
+            angle = dice.uniform(-math.pi, 0.0)  # mostly upwards and outwards
+            speed = dice.uniform(120, 420) * u
             # Most of the glass lands on the table; the rest flies clear to the dirt.
-            floor = table if self.rng.random() < 0.7 else ground
+            floor = table if dice.random() < 0.7 else ground
             self.shards.append(Shard(
-                x=bottle.x + self.rng.uniform(-0.5, 0.5) * bottle.width,
-                y=bottle.base_y - self.rng.uniform(0.1, 1.0) * bottle.height,
+                x=bottle.x + dice.uniform(-0.5, 0.5) * bottle.width,
+                y=bottle.base_y - dice.uniform(0.1, 1.0) * bottle.height,
                 vx=math.cos(angle) * speed, vy=math.sin(angle) * speed * 0.8,
-                size=self.rng.uniform(3.0, 7.0) * u, color=bottle.color,
-                born=now, floor=floor + self.rng.uniform(-3, 3) * u))
+                size=dice.uniform(3.0, 7.0) * u, color=bottle.color,
+                born=now, floor=floor + dice.uniform(-3, 3) * u))
         del self.shards[:-MAX_SHARDS]
 
 
@@ -1785,8 +1835,11 @@ def _draw_person(canvas: np.ndarray, fx: float, fy: float, H: float, bandit: boo
             cv2.circle(canvas, p(-0.06 + i * 0.05, 0.8 - i * 0.02), max(1, int(0.008 * H)), (236, 236, 240), -1)
         # The hat: a tall crown with a lit left face, a pinched dent, a band,
         # and a wide brim with the sun on its upper-left edge.
-        _poly(canvas, [p(-0.11, 0.95), p(0.11, 0.95), p(0.1, 1.1), p(0.04, 1.08), p(-0.04, 1.08), p(-0.1, 1.1)], BANDIT_HAT)
-        _poly(canvas, [p(-0.11, 0.95), p(-0.01, 0.95), p(-0.01, 1.08), p(-0.04, 1.08), p(-0.1, 1.1)], _warm(BANDIT_HAT, 0.3))
+        half, top = HAT_CROWN
+        _poly(canvas, [p(-half, 0.95), p(half, 0.95), p(half - 0.01, top), p(0.04, top - 0.02),
+                       p(-0.04, top - 0.02), p(-half + 0.01, top)], BANDIT_HAT)
+        _poly(canvas, [p(-half, 0.95), p(-0.01, 0.95), p(-0.01, top - 0.02), p(-0.04, top - 0.02),
+                       p(-half + 0.01, top)], _warm(BANDIT_HAT, 0.3))
         cv2.line(canvas, p(-0.12, 0.975), p(0.12, 0.975), HAT_BAND, max(1, int(0.02 * H)))
         brim = (int(0.2 * H), max(1, int(0.035 * H)))
         cv2.ellipse(canvas, p(0, 0.95), brim, 0, 0, 360, BANDIT_HAT, -1, cv2.LINE_AA)
@@ -1891,13 +1944,18 @@ def _draw_person(canvas: np.ndarray, fx: float, fy: float, H: float, bandit: boo
     cv2.line(canvas, p(-0.02, 0.81), p(0.02, 0.81), _cool(SKIN, 0.4), 1, cv2.LINE_AA)
     cv2.line(canvas, p(0.0, 0.85), p(0.012, 0.825), _cool(SKIN, 0.35), 1, cv2.LINE_AA)
     # Arms up, in sleeves, with the sunward one lit and a shadow under each hand.
+    (shoulder_x, shoulder_y), (wrist_x, wrist_y), arm = RAISED_ARM
+    (hand_x, hand_y), hand = RAISED_HAND
     for side in (-1, 1):
         color = _warm(arm_color, 0.3) if side < 0 else _cool(arm_color, 0.25)
-        cv2.line(canvas, p(side * 0.16, 0.72), p(side * 0.3, 0.98), color, max(2, int(0.06 * H)), cv2.LINE_AA)
+        cv2.line(canvas, p(side * shoulder_x, shoulder_y), p(side * wrist_x, wrist_y), color,
+                 max(2, int(2 * arm * H)), cv2.LINE_AA)
         if sleeve:
-            cv2.line(canvas, p(side * 0.27, 0.92), p(side * 0.3, 0.98), APRON, max(2, int(0.055 * H)), cv2.LINE_AA)
-        cv2.circle(canvas, p(side * 0.3, 1.0), max(2, int(0.045 * H)), SKIN, -1, cv2.LINE_AA)
-        cv2.circle(canvas, p(side * 0.31, 0.99), max(2, int(0.045 * H)), _cool(SKIN, 0.25), 1, cv2.LINE_AA)
+            cv2.line(canvas, p(side * 0.27, 0.92), p(side * wrist_x, wrist_y), APRON,
+                     max(2, int(0.055 * H)), cv2.LINE_AA)
+        cv2.circle(canvas, p(side * hand_x, hand_y), max(2, int(hand * H)), SKIN, -1, cv2.LINE_AA)
+        cv2.circle(canvas, p(side * (hand_x + 0.01), hand_y - 0.01), max(2, int(hand * H)),
+                   _cool(SKIN, 0.25), 1, cv2.LINE_AA)
     cv2.line(canvas, p(-0.06, 0.0), p(0.06, 0.0), BRIM_SHADE, line)
 
 
@@ -2149,6 +2207,20 @@ def _draw_tally(canvas: np.ndarray, round_: WesternRound) -> None:
     for (text, color), (w, _) in zip(parts, sizes):
         cv2.putText(canvas, text, (x, y0 + pad + th), FONT, scale, color, thick, cv2.LINE_AA)
         x += w + gap
+
+
+def build_hours(round_: WesternRound, width: int, height: int) -> None:
+    """Build the street at every hour this round will show, ahead of time.
+
+    Each hour is a new picture - the sun lower, the shadows longer - and one
+    takes the best part of a tenth of a second to build. Built as the hour
+    turns, that is a stutter every ten seconds of a minute's round; built
+    here, off the play thread, they are all waiting in the cache.
+    """
+    area = round_.area
+    for hour in range(HOURS if round_.duration else 1):
+        _backdrop((area.x, area.y, area.width, area.height), width, height,
+                  round_.options.seed or 0, hour)
 
 
 def draw_world(canvas: np.ndarray, round_: WesternRound, now: float) -> None:

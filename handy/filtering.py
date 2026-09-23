@@ -60,13 +60,23 @@ class OneEuroFilter:
         self._last_time: float | None = None
 
     def __call__(self, sample: float, timestamp: float) -> float:
-        if self._last_time is None or timestamp <= self._last_time:
-            # First sample, or a clock that did not advance: nothing to derive.
+        if not (math.isfinite(sample) and math.isfinite(timestamp)):
+            # One NaN folded into the average would stay there for good, and
+            # every later output with it. Hold what we have instead.
+            return sample if self._value.value is None else self._value.value
+        if self._last_time is None:
+            # First sample: nothing to derive a speed from yet.
             self._last_time = timestamp
             self._speed(0.0, 1.0)
             return self._value(sample, 1.0)
 
         dt = timestamp - self._last_time
+        if dt <= 0.0:
+            # A clock that stalled or ran backwards: no time has passed to move
+            # in. Starting afresh here would pass the raw sample straight
+            # through - one unfiltered jump - and throw away the speed estimate;
+            # winding the clock back would mismeasure the next real frame too.
+            return self._value.value
         self._last_time = timestamp
 
         previous = self._value.value

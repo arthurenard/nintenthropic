@@ -45,6 +45,15 @@ MIN_SPLIT_RADIUS = 0.55
 MAX_FRAGMENTS = 14
 #: How hard a round hits, as a momentum kick along the line of fire.
 BULLET_IMPULSE = 0.12
+#: How fast the pieces of a split part, m/s at most, relative to where the
+#: parent was going. The round's energy goes into breaking the rock, not into
+#: flinging it: the pieces carry on with the parent's momentum between them.
+SPLIT_SPEED = 1.0
+#: And never so fast that by the time they reach the glass they have drifted
+#: further than this from where the parent would have struck, as a fraction of
+#: the pane's half height: splitting a rock that is coming at you leaves you
+#: pieces that are still coming at you.
+SPLIT_DRIFT = 0.8
 
 FULL_INTEGRITY = 100
 ALARM_INTEGRITY = 35
@@ -198,6 +207,11 @@ class Fragment:
         self.angle += self.spin * dt
         self.tumble += dt * abs(self.spin) * 0.6
 
+    def time_to_window(self) -> float:
+        if self.vz >= 0:
+            return math.inf
+        return max(0.0, (self.pz - Z_WINDOW) / -self.vz)
+
     def polygon(self) -> np.ndarray:
         """The silhouette on screen this frame, as float vertices."""
         cx, cy = self.view.screen(self.px, self.py, self.pz)
@@ -292,6 +306,17 @@ class OrbitRound(Round):
     def __post_init__(self) -> None:
         super().__post_init__()
         self.view = Projection.for_area(self.options.area)
+        # ``rng`` sends the debris. The drone runs on a timer of its own, so it
+        # keeps its own dice; what the player's shots break, and the pitting
+        # of the array, draw on the effects' - neither can change what comes
+        # out of the dark next.
+        self.drone_rng = self.stream("drone")
+
+    def begin(self, now: float) -> None:
+        # The timers start in seconds from the start of the round: the drone
+        # goes out six seconds in, not on the first frame.
+        self._next_spawn += now
+        self._next_drone += now
 
     # --- rules -------------------------------------------------------------
 
@@ -318,7 +343,7 @@ class OrbitRound(Round):
         self._last_tick = now
         stage = self.stage(now)
 
-        tilt = array_angle(now)
+        tilt = array_angle(self.elapsed(now))
         for fragment in list(self.targets):
             before = fragment.pz
             fragment.advance(dt)
@@ -335,12 +360,13 @@ class OrbitRound(Round):
         self._tend_drone(now)
         # Micrometeoroids too small to see pit the array now and then once the
         # debris field has thickened: the slow wear the late round shows.
+        dice = self.effects_rng
         if self._next_pit is math.inf and stage > 0.25:
-            self._next_pit = now + self.rng.uniform(4.0, 9.0)
+            self._next_pit = now + dice.uniform(4.0, 9.0)
         if now >= self._next_pit:
-            self._next_pit = now + self.rng.uniform(9.0, 15.0)
-            self.pit_array((int(self.rng.randint(0, ARRAY_ROWS - 1)),
-                            int(self.rng.randint(0, ARRAY_COLS - 1))), now)
+            self._next_pit = now + dice.uniform(9.0, 15.0)
+            self.pit_array((int(dice.randint(0, ARRAY_ROWS - 1)),
+                            int(dice.randint(0, ARRAY_COLS - 1))), now)
 
         allowed = min(self.options.density + int(stage * 5), MAX_FRAGMENTS)
         gap = max(self.options.spawn_interval * (1.0 - 0.45 * stage), 0.5)
@@ -388,7 +414,7 @@ class OrbitRound(Round):
         """Scorch one cell of the array and mark the strike for its sparks."""
         if cell not in self.dead_cells and len(self.dead_cells) < ARRAY_ROWS * ARRAY_COLS - 2:
             self.dead_cells.append(cell)
-        corners = array_corners(self.area, array_angle(now)).astype(np.float32)
+        corners = array_corners(self.area, array_angle(self.elapsed(now))).astype(np.float32)
         a, b = (cell[1] + 0.5) / ARRAY_COLS, (cell[0] + 0.5) / ARRAY_ROWS
         near = corners[0] + (corners[3] - corners[0]) * b
         far = corners[1] + (corners[2] - corners[1]) * b
@@ -411,7 +437,7 @@ class OrbitRound(Round):
         area = self.area
         sx = min(max(sx, area.x + 12), area.right - 12)
         sy = min(max(sy, area.y + 12), area.bottom - 12)
-        self.cracks.append(make_crack(int(sx), int(sy), cost, self.rng, now,
+        self.cracks.append(make_crack(int(sx), int(sy), cost, self.effects_rng, now,
                                       self.options.scale))
         del self.cracks[:-24]
 
@@ -428,16 +454,16 @@ class OrbitRound(Round):
             half_w, half_h = self.view.pane_half_extent(z)
             if abs(x) > half_w * 1.4 or y > half_h * 1.6:
                 self.drone = None
-                self._next_drone = now + self.rng.uniform(5.0, 9.0)
+                self._next_drone = now + self.drone_rng.uniform(5.0, 9.0)
             return
         if now >= self._next_drone:
-            side = self.rng.choice((-1.0, 1.0))
+            side = self.drone_rng.choice((-1.0, 1.0))
             half_w, half_h = self.view.pane_half_extent(DRONE_DEPTH)
             self.drone = Drone(
                 x=-side * half_w * 1.3,
-                y=self.rng.uniform(-half_h * 0.7, half_h * 0.2),
+                y=self.drone_rng.uniform(-half_h * 0.7, half_h * 0.2),
                 z=DRONE_DEPTH,
-                vx=side * self.rng.uniform(0.45, 0.7),
+                vx=side * self.drone_rng.uniform(0.45, 0.7),
                 launched_at=now,
             )
 
@@ -497,10 +523,12 @@ class OrbitRound(Round):
             self.cleared += 1
             return Hit(points=int(CLEAR_POINTS * bonus), ring=0, label="CLEARED",
                        perfect=True)
-        pieces = self.split(struck, (x, y))
+        # A split never adds more pieces than there is room for, but always
+        # makes at least two, and none of them is ever thrown away: in a full
+        # field the sky holds back until the pieces have gone by.
+        room = MAX_FRAGMENTS - len(self.targets) + 1
         self.targets.remove(struck)
-        self.targets.extend(pieces)
-        del self.targets[MAX_FRAGMENTS:]
+        self.targets.extend(self.split(struck, (x, y), most=max(2, room)))
         return Hit(points=int(SPLIT_POINTS * bonus), ring=1, label="SPLIT")
 
     def in_pane(self, x: float, y: float) -> bool:
@@ -517,7 +545,7 @@ class OrbitRound(Round):
     def _hit_drone(self, now: float) -> Hit:
         assert self.drone is not None
         self.drone.hit_at = now
-        self.drone.spin = self.rng.uniform(3.0, 5.0)
+        self.drone.spin = self.effects_rng.uniform(3.0, 5.0)
         # Floored, as western floors its townsfolk penalty: the drone costs
         # more than any fragment pays, so an early mistake would otherwise
         # send the round - and the high-score table - negative.
@@ -526,10 +554,12 @@ class OrbitRound(Round):
         self.cues.append("alarm")
         return Hit(points=0, ring=None, label="FRIENDLY")
 
-    def split(self, parent: Fragment, shot: tuple[float, float]) -> list[Fragment]:
-        """Break a fragment into pieces that carry its momentum between them."""
-        rng = self.rng
-        count = 3 if parent.radius > 0.5 else 2
+    def split(self, parent: Fragment, shot: tuple[float, float],
+              most: int = 3) -> list[Fragment]:
+        """Break a fragment into pieces - no more than ``most`` - that carry its
+        momentum between them."""
+        rng = self.effects_rng
+        count = min(3 if parent.radius > 0.5 else 2, most)
         fractions = [rng.uniform(0.6, 1.0) for _ in range(count)]
         total = sum(fractions)
         fractions = [f / total for f in fractions]
@@ -543,8 +573,17 @@ class OrbitRound(Round):
                 (mass * parent.vz + impulse[2]) / mass)
 
         # Internal kicks that sum to zero: the pieces fly apart, the centre of
-        # mass does not care.
-        kick = min(-parent.vz, 6.0) * 0.16
+        # mass does not care. Equal and opposite momentum, so the lightest piece
+        # moves fastest; it is the one held to the separation speed, and that
+        # to what keeps the pieces near the pane by the time they arrive.
+        # Scaled by the parent's mass, so a slab and a chunk come apart at the
+        # same speed rather than the chunk's pieces being flung across the sky.
+        separation = SPLIT_SPEED
+        arrival = parent.time_to_window()
+        if math.isfinite(arrival) and arrival > 0.0:
+            _, half_h = self.view.pane_half_extent(Z_WINDOW)
+            separation = min(separation, SPLIT_DRIFT * half_h / arrival)
+        kick = separation * mass * min(fractions)
         direction = rng.uniform(0.0, math.tau)
         kicks = []
         for index in range(count):
@@ -1048,9 +1087,11 @@ def _array_pivot(along) -> tuple[int, int]:
     return along(0.79, -1.0)
 
 
-def array_angle(now: float) -> float:
-    """The array's tilt this frame, degrees: a slow sway as it tracks the sun."""
-    return ARRAY_SWAY * math.sin(now * 0.05)
+def array_angle(elapsed: float) -> float:
+    """The array's tilt, degrees, ``elapsed`` seconds into the round: a slow sway
+    as it tracks the sun. Debris is tested against it, so it runs on the round's
+    clock - the same moment of every round finds it at the same angle."""
+    return ARRAY_SWAY * math.sin(elapsed * 0.05)
 
 
 def array_corners(area: Rect, angle: float = 0.0) -> np.ndarray:
@@ -1101,11 +1142,12 @@ def _array_sprite(area: tuple, angle_q: int, dead: tuple, bent: tuple) -> tuple:
     return x0, y0, sprite, mask
 
 
-def draw_array(canvas: np.ndarray, area: Rect, now: float, dead: tuple = (),
+def draw_array(canvas: np.ndarray, area: Rect, elapsed: float, dead: tuple = (),
                bent: tuple = ()) -> None:
-    """The array on its arm, swung to this frame's tilt, with its damage."""
+    """The array on its arm, swung to its tilt ``elapsed`` seconds into the
+    round, with its damage."""
     height, width = canvas.shape[:2]
-    angle_q = int(round(array_angle(now) / 0.25))
+    angle_q = int(round(array_angle(elapsed) / 0.25))
     x0, y0, sprite, mask = _array_sprite((area.x, area.y, area.width, area.height),
                                          angle_q, tuple(sorted(dead)), tuple(sorted(bent)))
     x1, y1 = x0 + sprite.shape[1], y0 + sprite.shape[0]
@@ -1714,7 +1756,7 @@ def draw_cracks(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
         if age < 0.8:
             _draw_burst(canvas, (crack.x, crack.y), crack.at, age, SPARK, count=10, reach=60.0)
         if age < 0.5:
-            fresh = 1.0 - age / 0.5
+            fresh = round((1.0 - age / 0.5) * 20) / 20  # quantised, so the sprites cache
             _stamp(canvas, (crack.x, crack.y), _glow_sprite(24, CRACK, 0.8 * fresh, 1.5))
 
 
@@ -1901,7 +1943,8 @@ def draw_world(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
     draw_clouds(canvas, area, seed, now)
     draw_sun(canvas, area, now)
     _restore_truss(canvas, backdrop, key, sun_position(area, now))
-    draw_array(canvas, area, now, tuple(round_.dead_cells), tuple(round_.bent_ribs))
+    draw_array(canvas, area, round_.elapsed(now), tuple(round_.dead_cells),
+               tuple(round_.bent_ribs))
     for x, y, at in round_.array_strikes:
         if now - at < 0.8:
             _draw_burst(canvas, (x, y), at, now - at, SPARK, count=6, reach=36.0)

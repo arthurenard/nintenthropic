@@ -78,7 +78,11 @@ moving your camera or seat. Browser settings are saved per camera and are
 independent of the desktop calibration file.
 
 The browser pauses when you switch tabs or windows. Use **Pause / P**, or resume
-from the overlay. **Arcade** stops the camera and returns to game selection.
+from the overlay. **Arcade** stops the camera and returns to game selection,
+even while a game is still loading. A game whose tab goes quiet for a minute
+(closed, crashed, or asleep) is closed so its models do not stay loaded. A
+saved browser setup that can no longer be used is discarded and setup starts
+afresh.
 
 ## Games and opponents
 
@@ -107,8 +111,9 @@ your terminal; manage it under **System Settings → Privacy & Security → Came
 
 Desktop setup uses the same Target Range warm-up with a live hand skeleton.
 Five accurate hits accept the aim and start play automatically. **B** undoes a
-shot, **R** starts over, and **Esc** skips. Aim is reused from
-`~/.cache/handy/calibration.json`.
+shot, **R** starts over, and **Esc** skips. Aim is saved in
+`~/.cache/handy/calibration.json` and reused only when it was verified with the
+same cameras, capture size and mirroring; otherwise setup runs again.
 
 During desktop play: **Q** quit, **R** restart, **B** maps, **E** controls,
 **C** recalibrate, **S** screenshot. In Dead of Night, **N** switches the opponent
@@ -121,19 +126,19 @@ page; the remaining flags configure the desktop app.
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
-| `--browser` | off | Launch the local browser arcade |
-| `--port` | `8765` | Browser server port |
-| `--no-open` | off | Start browser server without opening a tab |
+| `--browser` | off | Launch the local browser arcade; takes only `--port` and `--no-open` |
+| `--port` | `8765` | Browser server port (with `--browser`) |
+| `--no-open` | off | Start browser server without opening a tab (with `--browser`) |
 | `--control` | `pistol` | Hand controls; the sniper eye scope is automatic |
 | `--map` | chooser | `zombies`, `western`, `orbit`, `sniper` |
 | `--enemy` | `zombies` | Dead of Night: `zombies` or `robots` |
-| `--camera` | auto-detect | Camera index; repeat for multiple cameras |
+| `--camera` | first live camera | Camera index; repeat for multiple cameras |
 | `--list-cameras` | | List cameras and exit |
 | `--capture` | `1280x720` | Camera resolution |
 | `--no-mirror` | off | Use an unmirrored camera view |
 | `--model` | cached bundle | Custom hand `.task` model; sniper also loads the face model |
-| `--duration` | `60` | Seconds per shooting round; `0` is endless |
-| `--calibrate` | off | Redo saved setup |
+| `--duration` | `60` | Seconds per round, up to 3600; `0` is endless |
+| `--calibrate` | off | Redo saved setup (not with `--no-calibration`) |
 | `--no-calibration` | off | Use defaults |
 | `--calibration-file` | cache directory | Override calibration file |
 | `--min-cutoff` | per control | Smoothing when holding still |
@@ -142,9 +147,9 @@ page; the remaining flags configure the desktop app.
 | `--arm-below` | per control | Travel below which the trigger re-arms |
 | `--recoil` | `26` | Crosshair kick in pixels; `0` disables |
 | `--mute` / `--volume` | sound on / `1.0` | Sound output; volume 0–1 |
-| `--targets` | `3` | Initial target density |
-| `--spawn-interval` | `1.1` | Seconds between spawns |
-| `--lifetime` | `5.0` | Target lifetime in seconds |
+| `--targets` | `3` | Targets a round opens with (1–20; not High Noon) |
+| `--spawn-interval` | `1.1` | Seconds between spawns as a round opens (not High Noon) |
+| `--lifetime` | `5.0` | Target Range face lifetime; no playable map reads it |
 | `--seed` | random | Reproducible target sequence |
 | `--debug` | off | Tracking diagnostics |
 | `--screenshot-dir` | `screenshots/` | Screenshot location |

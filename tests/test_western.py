@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -6,10 +8,10 @@ from handy.maps.western import (AWNING_Y, BANDIT_POINTS, BOTTLE_POINTS,
                                 CAN_POINTS, DOOR_H, FIGURE_RISE,
                                 FIGURES_AT_ONCE, HOURS, MAX_HOLES,
                                 QUICK_DRAW_BONUS, RAIL_REFILL, RAIL_SLOTS,
-                                SHARD_LIFE, SIGN_POINTS, TOWNSFOLK_PENALTY,
-                                Can, Figure, Impact, Shard, Tumbleweed,
-                                WesternRound, _backdrop, draw_emblem,
-                                draw_impact, draw_world)
+                                SHARD_LIFE, SIGN_POINTS, SIGN_SWING, TOWNSFOLK_PENALTY,
+                                Can, Figure, Impact, Shard, Spot, Tumbleweed,
+                                WesternRound, _backdrop, _draw_person,
+                                draw_emblem, draw_impact, draw_world)
 
 AREA = Rect(31, 294, 1450, 578)
 
@@ -42,6 +44,38 @@ def test_the_street_is_laid_out_inside_the_play_area():
 def test_the_same_seed_builds_the_same_street():
     assert make_round(seed=9).street == make_round(seed=9).street
     assert make_round(seed=9).street != make_round(seed=10).street
+
+
+def who_comes_out(fire) -> list:
+    """Who stepped out, where and when, over half a minute of a seeded round;
+    ``fire(round_, frame, now)`` is called every frame to take the player's shots."""
+    round_ = WesternRound(RoundOptions(area=AREA, seed=7))
+    seen = []
+    for frame in range(30 * 30):
+        now = 1000.0 + frame / 30
+        round_.update(now)
+        fire(round_, frame, now)
+        for figure in round_.figures:
+            key = (round(figure.appeared_at - 1000.0, 2), figure.spot.x, figure.bandit,
+                   figure.variant, figure.lifetime)
+            if key not in seen:
+                seen.append(key)
+    return seen
+
+
+def test_what_the_player_shoots_does_not_change_who_comes_out_next():
+    def fire(round_, frame, now):
+        if frame == 15:
+            round_.shoot(AREA.x + 5, AREA.y + 3, now)  # into the open sky
+        elif frame == 45:
+            bottle = round_.bottles[0]  # glass everywhere, and a refill to come
+            round_.shoot(bottle.x, bottle.y, now)
+        elif frame == 75 and round_.signs:
+            round_.shoot(round_.signs[0].x, round_.signs[0].y, now)
+
+    quiet = who_comes_out(lambda *_: None)
+    assert len(quiet) > 10
+    assert who_comes_out(fire) == quiet
 
 
 # --- the rail ------------------------------------------------------------------
@@ -127,6 +161,29 @@ def test_a_sign_swings_and_pays_once_per_swing():
     assert round_.shoot(sign.x, sign.y, 1.1).score == 0
     sign.step(0.1, 1.2)
     assert sign.angle != 0.0 or sign.velocity != 0.0
+
+
+def test_a_swinging_sign_pays_once_and_the_rest_are_not_hits():
+    round_ = make_round(seed=1)
+    sign = round_.signs[0]
+    for index in range(10):  # ten shots in a second, all on the board
+        now = 1.0 + index * 0.07
+        round_.update(now)
+        assert round_.shoot(sign.x, sign.y, now).is_hit == (index == 0)
+    assert (round_.score, round_.hits, round_.shots) == (SIGN_POINTS, 1, 10)
+    assert round_.best_streak == 1
+
+
+def test_a_sign_is_never_kicked_over_its_bracket():
+    round_ = make_round(seed=1)
+    sign = round_.signs[0]
+    highest = 0.0
+    for kick in range(6):  # the same way every time, as hard as a shot kicks
+        sign.velocity += 7.0
+        for step in range(10):
+            sign.step(1 / 30, kick + step / 30)
+            highest = max(highest, abs(sign.angle))
+    assert highest <= SIGN_SWING < math.pi / 2
 
 
 # --- bandits and townsfolk -----------------------------------------------------------
@@ -505,6 +562,25 @@ def test_a_bandit_is_hit_on_the_poncho_and_the_hat_but_not_beside_him():
     assert figure.contains(fx + h * 0.2, fy - h * 0.5, now)
     assert figure.contains(fx, fy - h * 0.95, now)
     assert not figure.contains(fx + h * 0.24, fy - h * 0.95, now)
+
+
+@pytest.mark.parametrize("bandit, variant", [(True, 0), (False, 0), (False, 1)])
+def test_what_is_drawn_of_a_figure_can_be_hit(bandit, variant):
+    """The crown of a bandit's hat and the hands the townsfolk hold up stand
+    well outside the body; a shot on either must count."""
+    height, fx, fy = 170.0, 300.0, 400.0
+    spot = Spot("door", fx, fy, height, Rect(0, 0, 600, 600))
+    figure = Figure(spot=spot, bandit=bandit, variant=variant, appeared_at=0.0, lifetime=10.0)
+    canvas = np.zeros((600, 600, 3), np.uint8)
+    _draw_person(canvas, fx, fy, height, bandit, variant)
+    ys, xs = np.nonzero(canvas.any(axis=2))
+    missed = sum(not figure.contains(x, y, 1.0) for x, y in zip(xs, ys))
+    assert missed <= 0.05 * len(xs)
+    if bandit:
+        assert figure.contains(fx, fy - height * 1.07, 1.0), "the crown of the hat"
+    else:
+        for side in (-1, 1):
+            assert figure.contains(fx + side * height * 0.3, fy - height, 1.0), "a raised hand"
 
 
 def test_every_hour_of_the_street_draws():

@@ -53,7 +53,37 @@ def test_a_fast_sweep_is_tracked_more_closely_than_by_a_fixed_low_pass():
 def test_a_stalled_clock_does_not_divide_by_zero():
     filt = OneEuroFilter()
     filt(1.0, 5.0)
-    assert filt(2.0, 5.0) == 2.0  # same timestamp: treated as a fresh start
+    assert filt(2.0, 5.0) == 1.0  # same timestamp: no time has passed to move in
+
+
+def test_a_clock_that_stalls_or_runs_back_holds_the_value_and_the_speed():
+    """A repeated or backwards timestamp used to be read as a fresh start: the
+    raw sample passed straight through - one unfiltered jump of the crosshair -
+    the speed estimate was zeroed, and the clock was wound back, so the next
+    real frame was measured against the wrong moment."""
+    rng = random.Random(1)
+    filt = OneEuroFilter(min_cutoff=1.0, beta=0.5)
+    for step in range(60):
+        held = filt(0.5 + rng.uniform(-0.01, 0.01), step / 30)
+    now = 59 / 30
+
+    assert filt(0.9, now) == held, "a repeated timestamp moves nothing"
+    assert filt(0.9, now - 0.5) == held, "nor does one from the past"
+    # And the next real frame is measured from the last real one, not from
+    # the stale timestamp: one frame's step, not a sixth of a second's.
+    step = filt(0.51, now + 1 / 30)
+    assert step == pytest.approx(held, abs=0.01)
+
+
+def test_one_bad_sample_cannot_poison_the_filter_for_good():
+    """NaN folded into the average stays there: every later output was NaN,
+    and the game loop's round() raised on it."""
+    filt = OneEuroFilter()
+    filt(0.5, 0.0)
+    assert filt(float("nan"), 1 / 30) == 0.5
+    assert filt(float("inf"), 2 / 30) == 0.5
+    assert filt(0.5, 3 / 30) == pytest.approx(0.5)
+    assert filt(0.6, 4 / 30) > 0.5, "and it carries on filtering afterwards"
 
 
 def test_reset_forgets_the_history():

@@ -1376,11 +1376,22 @@ class Sounds:
                    "_flesh", "_hurt", "_named")
 
     def __init__(self, audio: Audio, rings: int, seed: int = 0,
-                 variants: int = VARIANTS, background: bool = False) -> None:
+                 variants: int = VARIANTS, background: bool = False,
+                 synthesise: bool = True) -> None:
         self.audio = audio
         self.rng = np.random.default_rng(seed)
         self._variants = max(1, variants)
         self.ready = True
+
+        if not synthesise:
+            # An empty set, for a game nobody can hear: muted, or with no
+            # output device. The full set is seconds of CPU and tens of
+            # megabytes, and not one sample of it would reach a speaker.
+            self._shot, self._miss, self._cock, self._over = [], [], [], []
+            self._hits, self._groans, self._hurt = [], [], []
+            self._flesh = {True: [], False: []}
+            self._named = {}
+            return
 
         key = (rings, seed, self._variants)
         with Sounds._CACHE_LOCK:
@@ -1475,32 +1486,42 @@ class Sounds:
     def _pick(self, takes: list[np.ndarray]) -> np.ndarray:
         return vary(takes[int(self.rng.integers(len(takes)))], self.rng)
 
-    def shot(self) -> None:
-        self.audio.play(self._pick(self._shot))
+    def _play(self, takes: list[np.ndarray] | None) -> None:
+        """Start one take, varied - unless there is nobody to hear it.
 
-    def hit(self, ring: int) -> None:
-        self.audio.play(self._pick(self._hits[min(max(ring, 0), len(self._hits) - 1)]))
-
-    def miss(self) -> None:
-        self.audio.play(self._pick(self._miss))
-
-    def cock(self) -> None:
-        self.audio.play(self._pick(self._cock))
-
-    def round_over(self) -> None:
-        self.audio.play(self._over[0])
-
-    def play_named(self, name: str) -> None:
-        """Play a registered sound; an unknown name is silently nothing."""
-        takes = self._named.get(name)
-        if takes:
+        Asked here, before the take is varied, rather than left to
+        :meth:`Audio.play`: `vary` resamples the whole wave, and a muted game
+        used to pay for that on every shot only to throw the result away.
+        """
+        if takes and self.audio.is_on:
             self.audio.play(self._pick(takes))
 
+    def shot(self) -> None:
+        self._play(self._shot)
+
+    def hit(self, ring: int) -> None:
+        if self._hits:
+            self._play(self._hits[min(max(ring, 0), len(self._hits) - 1)])
+
+    def miss(self) -> None:
+        self._play(self._miss)
+
+    def cock(self) -> None:
+        self._play(self._cock)
+
+    def round_over(self) -> None:
+        if self._over:
+            self.audio.play(self._over[0])
+
+    def play_named(self, name: str) -> None:
+        """Play a named cue; an unknown name is silently nothing."""
+        self._play(self._named.get(name))
+
     def groan(self) -> None:
-        self.audio.play(self._pick(self._groans))
+        self._play(self._groans)
 
     def flesh(self, headshot: bool) -> None:
-        self.audio.play(self._pick(self._flesh[bool(headshot)]))
+        self._play(self._flesh[bool(headshot)])
 
     def hurt(self) -> None:
-        self.audio.play(self._pick(self._hurt))
+        self._play(self._hurt)

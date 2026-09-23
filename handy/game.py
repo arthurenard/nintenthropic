@@ -129,7 +129,26 @@ class Round:
     PERFECT_LABEL = "perfect"
 
     def __post_init__(self) -> None:
+        #: What the world does: who comes out, and where, and when.
         self.rng = random.Random(self.options.seed)
+        #: What the player's own shots set off - bullet holes, flying glass, a
+        #: split rock's pieces - and anything drawn a frame at a time. Kept
+        #: apart from ``rng`` because every draw from a generator moves every
+        #: draw after it: a miss into the sky, or a faster machine, would
+        #: otherwise change which bandit comes out next, and the same
+        #: ``--seed`` would not be the same round.
+        self.effects_rng = self.stream("effects")
+
+    def stream(self, name: str) -> random.Random:
+        """A generator of its own for one part of the map, seeded from the round's.
+
+        Two timers drawing from one generator can swap turns at a different
+        frame rate - both come due within one frame at thirty, in separate
+        frames at sixty - so anything that runs on its own clock gets its own
+        stream and cannot shift the rest.
+        """
+        seed = self.options.seed
+        return random.Random(None if seed is None else f"{seed}:{name}")
 
     # --- the round ---------------------------------------------------------
 
@@ -194,12 +213,18 @@ class Round:
         """Advance the clock, retire old impacts, then let the map move."""
         if self.started_at is None:
             self.started_at = now  # the clock starts on the first frame
+            self.begin(now)
         self.impacts = [i for i in self.impacts if now - i.at < self.IMPACT_TTL]
         if not self.is_over(now):
             self.advance(now)
 
     def shoot(self, x: float, y: float, now: float) -> Impact:
         """Resolve a shot and book it. Maps decide what it struck in :meth:`resolve`."""
+        if self.is_over(now):
+            # The trigger can go on the very frame the clock runs out or the
+            # pane fails. The round is already decided, so the shot is neither
+            # scored nor counted against the player's accuracy.
+            return Impact(x=x, y=y, score=0, at=now)
         self.shots += 1
         hit = self.resolve(x, y, now)
 
@@ -233,6 +258,18 @@ class Round:
     def scoped_shot(self) -> tuple[int, int] | None:
         """Where a scoped shot lands on screen, or None if this map has no scope."""
         return None
+
+    def begin(self, now: float) -> None:
+        """The first frame: move whatever the map laid out in advance onto the clock.
+
+        A map is built before anyone knows what the clock will read when play
+        starts, and the clock the game runs on is ``time.monotonic()`` - which
+        on a machine that has been up a few days reads hundreds of thousands
+        of seconds, not zero. So anything a map schedules at construction ("the
+        first truck at eight seconds", "these two already walking the road") is
+        written in seconds from the start of the round, and shifted by ``now``
+        here, once.
+        """
 
     def advance(self, now: float) -> None:
         """Move and spawn whatever this map puts in front of the player."""

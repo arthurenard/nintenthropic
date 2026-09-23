@@ -14,6 +14,7 @@ from dataclasses import replace
 import json
 import math
 import secrets
+import sys
 import threading
 import time
 import webbrowser
@@ -35,6 +36,8 @@ from .recognition import Frame, HAND_CONNECTIONS
 WEB_ROOT = Path(__file__).with_name("web")
 WIDTH, HEIGHT = 960, 540
 MAX_BODY = 1_500_000
+#: Seconds without a request after which the open game is presumed abandoned.
+IDLE_TIMEOUT = 60.0
 
 
 def number(value, low, high):
@@ -45,6 +48,18 @@ def number(value, low, high):
     return value
 
 
+def stage_size(aspect):
+    """The canvas (width, height) for a stage of this width-to-height shape.
+
+    Shapes beyond 1:4 and 8:1 are drawn at the nearest one the renderer
+    supports. A short or narrow window is not a mistake to refuse: the page
+    sends its shape with every frame, and one refusal would end the game.
+    """
+    aspect = min(max(number(aspect, 0, math.inf), 0.25), 8)
+    height = min(900, round(WIDTH / aspect))
+    return round(height * aspect), height
+
+
 def jpeg(image):
     ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 82])
     if not ok:
@@ -52,11 +67,56 @@ def jpeg(image):
     return encoded.tobytes()
 
 
+#: Start-of-frame markers: every JPEG coding - baseline, progressive, lossless,
+#: arithmetic - declares the image size in one of these.
+FRAME_MARKERS = frozenset(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
+
+
+def jpeg_size(raw):
+    """The (width, height) a JPEG declares, read from its header alone.
+
+    Decoding first and checking after would let a few hundred bytes that claim
+    to be 30000 by 30000 pixels allocate gigabytes before any check ran.
+    """
+    at = 2  # past the start-of-image marker
+    while at + 4 <= len(raw) and raw[at] == 0xFF:
+        marker = raw[at + 1]
+        if marker == 0xFF:  # padding before a marker
+            at += 1
+        elif marker == 0x01 or 0xD0 <= marker <= 0xD7:  # markers without a length
+            at += 2
+        elif marker in (0xD9, 0xDA):  # the image ended, or its data began
+            break
+        else:
+            length = int.from_bytes(raw[at + 2 : at + 4], "big")
+            if marker in FRAME_MARKERS and length >= 7 and at + 9 <= len(raw):
+                height = int.from_bytes(raw[at + 5 : at + 7], "big")
+                return int.from_bytes(raw[at + 7 : at + 9], "big"), height
+            if length < 2:
+                break
+            at += 2 + length
+    raise ValueError("Invalid camera frame")
+
+
+def saved_rig(saved):
+    """The one-camera rig the page stored, or an error if it is unusable.
+
+    It comes back from browser storage - perhaps written by an older version,
+    perhaps edited by hand. ``Calibration`` itself refuses anything
+    non-finite, so what is left to check here is the camera count.
+    """
+    rig = Rig.from_dict(saved)
+    if len(rig) != 1:
+        raise ValueError("Browser calibration uses one camera")
+    return rig
+
+
 class BrowserSession:
     def __init__(self, config):
-        aspect = number(config.get("viewAspect", WIDTH / HEIGHT), 0.25, 8)
-        self.height = min(900, round(WIDTH / aspect))
-        self.width = round(self.height * aspect)
+        aspect = config.get("viewAspect")
+        self.width, self.height = stage_size(
+            WIDTH / HEIGHT if aspect is None else aspect
+        )
         self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
         if self.map.key not in maps.keys():
             raise ValueError("Choose a game from the arcade")
@@ -79,6 +139,7 @@ class BrowserSession:
         self.scheme = None
         self.rig = None
         self.saved_rig = None
+        self.forget_saved = False  # the page's stored setup could not be used
         self.controller = None
         self.scope = EyeScope()
         self.calibration = None
@@ -97,15 +158,19 @@ class BrowserSession:
             self.rig = default_rig(self.scheme, 1)
             saved = config.get("calibration")
             if saved:
-                candidate = Rig.from_dict(saved)
-                if len(candidate) != 1:
-                    raise ValueError("Browser calibration uses one camera")
-                for value in candidate[0].to_dict().values():
-                    if isinstance(value, (int, float)) and not math.isfinite(value):
-                        raise ValueError("Invalid saved calibration")
-                if not all(math.isfinite(v) for v in candidate[0].mapping):
-                    raise ValueError("Invalid saved calibration")
-                self.rig = candidate
+                try:
+                    self.rig = saved_rig(saved)
+                except (LookupError, ValueError, TypeError, ArithmeticError) as error:
+                    # An older version's format, or a damaged value. Refusing to
+                    # start would refuse every start after it too, since the page
+                    # sends the same setup each time. The player can still aim:
+                    # set up afresh, and have the page forget the stored one.
+                    print(
+                        f"Ignoring a saved browser setup: {error!r}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    self.forget_saved = True
             self._controller()
             self.stream = self.scheme.open_stream(
                 *(ensure_model(m) for m in self.scheme.models)
@@ -156,11 +221,20 @@ class BrowserSession:
             self._controller()
 
     def action(self, name, data):
+        # A double click, or a click that raced a change of state - setup ending
+        # itself on the fifth hit, a round running out - asks for something that
+        # already happened or no longer applies. Answer with where the game is:
+        # an error would end the session in the page.
+        calibrating = self.state == "calibration"
+        if (
+            (name == "calibrate" and calibrating)
+            or (name in ("undo", "reset", "finish") and not calibrating)
+            or (name == "play" and self.state != "over")
+        ):
+            return self.info()
         if name == "calibrate":
             self.begin_calibration()
         elif name in ("undo", "reset", "finish"):
-            if self.state != "calibration":
-                raise ValueError("Start calibration first")
             s = self.calibration
             if name == "undo":
                 s.undo()
@@ -177,8 +251,6 @@ class BrowserSession:
                 self.saved_rig = {"cameras": [self.rig[0].to_dict()]}
                 self._play()
         elif name == "play":
-            if self.state != "over":
-                raise ValueError("Finish setup before playing")
             self._play()
         elif name == "pause":
             if self.state in ("playing", "calibration"):
@@ -233,10 +305,10 @@ class BrowserSession:
         if self.state not in ("paused", "over"):
             self.clock += dt
         now = self.clock
-        if self.state == "calibration" and "viewAspect" in data:
-            aspect = number(data["viewAspect"], 0.25, 8)
-            height = min(900, round(WIDTH / aspect))
-            width = round(height * aspect)
+        # A stage with no size yet measures 0 by 0, which JSON sends as null.
+        aspect = data.get("viewAspect")
+        if self.state == "calibration" and aspect is not None:
+            width, height = stage_size(aspect)
             if (width, height) != (self.width, self.height):
                 self.width, self.height = width, height
                 self.canvas = np.zeros((height, width, 3), np.uint8)
@@ -254,7 +326,13 @@ class BrowserSession:
             # The UI sends 640x480 JPEGs. Reject other encodings and oversized frames.
             if not raw.startswith(b"\xff\xd8"):
                 raise ValueError("Expected a JPEG camera frame")
-            image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            width, height = jpeg_size(raw)
+            if not (0 < width <= 1280 and 0 < height <= 720):
+                raise ValueError("Camera frame must be at most 1280 by 720")
+            try:
+                image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            except cv2.error as error:
+                raise ValueError("Invalid camera frame") from error
             if image is None or image.shape[0] > 720 or image.shape[1] > 1280:
                 raise ValueError("Camera frame must be at most 1280 by 720")
             self.stream.submit(image)
@@ -366,23 +444,121 @@ class BrowserSession:
 
 class BrowserServer(ThreadingHTTPServer):
     daemon_threads = True
+    # Ctrl+C must not wait for handler threads: one may hold a keep-alive
+    # connection open for the page's next frame, or be loading a model.
+    block_on_close = False
 
-    def __init__(self, address):
+    def __init__(self, address, idle_timeout=IDLE_TIMEOUT):
         self.token = secrets.token_urlsafe(32)
         self.session = None
+        # Guards ``session`` and everything done to it. Held for one frame at a
+        # time - milliseconds - and never while a session is being built.
         self.lock = threading.Lock()
+        self.closed = False
+        self.idle_timeout = idle_timeout
+        self.seen = 0.0  # when a request last reached the open session
+        self.expired = None  # the id of the last session closed for silence
         super().__init__(address, Handler)
 
-    def server_close(self):
+    def start(self, config):
+        """Open a new game in place of any other, and describe it."""
+        # Built outside the lock: loading the models - on first use, downloading
+        # them - takes seconds, and every other request would wait behind it:
+        # another tab's frames, a closing tab's stop, and Ctrl+C.
+        session = BrowserSession(config)
         with self.lock:
-            if self.session:
-                self.session.close()
+            if self.closed:
+                # Ctrl+C arrived while the models loaded; nothing would close it.
+                session.close()
+                raise ValueError("Handy is shutting down")
+            previous, self.session = self.session, session
+            self.seen = time.monotonic()
+        # Unreachable now, and no frame can be using it: frames hold the lock.
+        if previous:
+            previous.close()
+        return {**session.info(), "forgetSavedSetup": session.forget_saved}
+
+    def call(self, path, data):
+        """Run one request against the open game."""
+        if path not in ("/api/frame", "/api/action", "/api/stop"):
+            raise ValueError("Unknown operation")
+        with self.lock:
+            session = self.session
+            if session is None or data.get("id") != session.id:
+                if self.expired is not None and data.get("id") == self.expired:
+                    raise ValueError(
+                        "This game closed after a minute with no contact from its tab. "
+                        "Return to the arcade."
+                    )
+                raise ValueError(
+                    "This game was closed or opened in another tab. Return to the arcade."
+                )
+            self.seen = time.monotonic()
+            if path == "/api/frame":
+                return session.tick(data)
+            if path == "/api/action":
+                return session.action(data.get("action"), data)
+            session.close()
+            self.session = None
+            return {"ok": True}
+
+    def service_actions(self):
+        # serve_forever calls this between requests, and at least twice a second.
+        self.close_idle(time.monotonic())
+
+    def close_idle(self, now):
+        """Close the open game if no request has reached it for a while.
+
+        A tab that crashed, or a laptop put to sleep, never says goodbye, and
+        its MediaPipe graphs would stay loaded until the next start or Ctrl+C.
+        A paused game keeps polling for frames, so it never comes close.
+        """
+        # Never wait here: this runs on the thread that accepts connections.
+        if not self.lock.acquire(blocking=False):
+            return
+        try:
+            session = self.session
+            if session is None or now - self.seen < self.idle_timeout:
+                return
+            self.session, self.expired = None, session.id
+        finally:
+            self.lock.release()
+        session.close()
+
+    def server_close(self):
         super().server_close()
+        self.closed = True
+        # A frame holds the lock for milliseconds. Should one ever wedge, leave
+        # its session to the exiting process rather than hang Ctrl+C on it.
+        if not self.lock.acquire(timeout=2):
+            return
+        try:
+            session, self.session = self.session, None
+        finally:
+            self.lock.release()
+        if session:
+            session.close()
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Keep-alive: the page posts about 30 frames a second, and a fresh connection
+    # (and thread) for each one left hundreds of sockets in TIME_WAIT. It works
+    # because every response below says how long it is.
+    protocol_version = "HTTP/1.1"
+    # A client that connects and then stalls - mid-request, or idle between
+    # requests - gives its thread back after this many seconds.
+    timeout = 10
+
     def log_message(self, *_args):
         pass
+
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionError, TimeoutError):
+            # The tab closed, reloaded or stalled mid-request. Nobody is left to
+            # answer, and a traceback in the terminal would only alarm the player.
+            self.close_connection = True
 
     def send(self, status, body, content_type="application/json"):
         self.send_response(status)
@@ -394,6 +570,14 @@ class Handler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
         )
+        # Another site's page may not even embed a response from here: an image
+        # or script load would pull it into that page's process, where a side
+        # channel such as Spectre could read it despite the same-origin policy.
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        if status >= 400:
+            # A refusal may leave the request body unread, and whatever follows
+            # it on this connection could not be trusted as the next request.
+            self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
 
@@ -404,8 +588,28 @@ class Handler(BaseHTTPRequestHandler):
         port = self.server.server_port
         return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
 
+    def same_origin(self):
+        """False for a request another page made, other than a link to here.
+
+        Browsers label what they send with where it came from. A server on
+        another port of this machine counts as the same *site*, so only the
+        same origin passes. Following a link or bookmark to the arcade is fine:
+        the page that linked here cannot read what it opened. Clients that send
+        no labels at all, such as scripts, still need the Host and the token.
+        """
+        origin = self.headers.get("Origin")
+        if origin is not None and origin != f"http://{self.headers.get('Host')}":
+            return False
+        if self.headers.get("Sec-Fetch-Site") in (None, "same-origin", "none"):
+            return True
+        return (
+            self.command == "GET"
+            and self.headers.get("Sec-Fetch-Mode") == "navigate"
+            and self.headers.get("Sec-Fetch-Dest") == "document"
+        )
+
     def do_GET(self):
-        if not self.valid_host():
+        if not self.valid_host() or not self.same_origin():
             self.respond(403, {"error": "Use the local Handy address"})
             return
         path = urlsplit(self.path).path
@@ -445,47 +649,43 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {"error": "Not found"})
 
     def do_POST(self):
-        if not self.valid_host() or not secrets.compare_digest(
-            self.headers.get("X-Handy-Token", ""), self.server.token
+        # Compared as bytes: a header carrying non-ASCII would make the string
+        # comparison raise instead of simply failing.
+        if (
+            not self.valid_host()
+            or not self.same_origin()
+            or not secrets.compare_digest(
+                self.headers.get("X-Handy-Token", "").encode(),
+                self.server.token.encode(),
+            )
         ):
             self.respond(403, {"error": "Reload Handy to reconnect"})
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= MAX_BODY:
-                raise ValueError("Request is too large or empty")
-            data = json.loads(self.rfile.read(size))
+        except ValueError:
+            size = 0
+        if not 0 < size <= MAX_BODY:
+            self.respond(400, {"error": "Request is too large or empty"})
+            return
+        # Read outside the try below, as the answer is written outside it: only
+        # these two touch the tab's connection, and its failures are handle()'s.
+        # A model download failing the same way inside is a real error.
+        body = self.rfile.read(size)
+        try:
+            data = json.loads(body)
             if not isinstance(data, dict):
                 raise ValueError("Expected a JSON object")
-            with self.server.lock:
-                if self.path == "/api/start":
-                    session = BrowserSession(data)
-                    if self.server.session:
-                        self.server.session.close()
-                    self.server.session = session
-                    result = session.info()
-                else:
-                    session = self.server.session
-                    if session is None or data.get("id") != session.id:
-                        raise ValueError(
-                            "This game was closed or opened in another tab. Return to the arcade."
-                        )
-                    if self.path == "/api/frame":
-                        result = session.tick(data)
-                    elif self.path == "/api/action":
-                        result = session.action(data.get("action"), data)
-                    elif self.path == "/api/stop":
-                        session.close()
-                        self.server.session = None
-                        result = {"ok": True}
-                    else:
-                        raise ValueError("Unknown operation")
-            self.respond(200, result)
+            if self.path == "/api/start":
+                result = self.server.start(data)
+            else:
+                result = self.server.call(self.path, data)
         except (ValueError, KeyError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})
+            return
         except Exception as error:
             # Keep the interface usable after a model, device, or renderer fails.
-            print(f"Browser request failed: {error}")
+            print(f"Browser request failed: {error!r}", file=sys.stderr, flush=True)
             self.respond(
                 500,
                 {
@@ -493,6 +693,8 @@ class Handler(BaseHTTPRequestHandler):
                     "Check the terminal, or return to the arcade and try mouse controls."
                 },
             )
+            return
+        self.respond(200, result)
 
 
 def main(argv=None):

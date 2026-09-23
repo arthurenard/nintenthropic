@@ -66,9 +66,18 @@ const storage = {
       );
     }
   },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* Without storage there is nothing saved to forget. */
+    }
+  },
 };
 function showError(message) {
-  $("error-message").textContent = message;
+  // Some failures carry no message of their own; never show an empty banner.
+  $("error-message").textContent =
+    message || "Something went wrong. Return to the arcade and try again.";
   $("error").hidden = false;
 }
 function title(text) {
@@ -88,12 +97,19 @@ function selectedMode() {
     : mode;
 }
 async function request(path, body) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Handy-Token": token },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json();
+  let response, data;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Handy-Token": token },
+      body: JSON.stringify(body),
+    });
+    data = await response.json();
+  } catch {
+    // No answer, or not Handy's: the browser's own wording ("Failed to fetch",
+    // "Unexpected token") would mean nothing to the player.
+    throw new Error("Could not connect to Handy.");
+  }
   if (!response.ok)
     throw new Error(data.error || "Could not connect to Handy.");
   return data;
@@ -188,21 +204,39 @@ function drawHandGraph(hands) {
     });
   }
 }
+function stageAspect() {
+  // A stage with no size yet measures 0 by 0. Leave its shape out rather than
+  // send NaN, which JSON turns into null; the server keeps the current shape.
+  const rect = $("stage").getBoundingClientRect();
+  const aspect = rect.width / rect.height;
+  return Number.isFinite(aspect) && aspect > 0 ? aspect : undefined;
+}
 function stopCamera() {
   if (media) media.getTracks().forEach((track) => track.stop());
   media = null;
   $("camera").srcObject = null;
   drawHandGraph([]);
 }
+function focusStart() {
+  // Back in the lobby, focus returns to the Start button - unless the player
+  // has already put it somewhere else in the lobby.
+  if (!$("lobby").contains(document.activeElement)) $("start").focus();
+}
 async function start() {
   if (busy) return;
   busy = true;
+  // back() moves the generation on. Each wait below checks it, so a start the
+  // player abandoned - by returning to the arcade while it loaded - undoes
+  // itself instead of reopening the game over the lobby.
+  const run = ++generation;
+  const stale = () => generation !== run;
   $("start").disabled = true;
   $("error").hidden = true;
   $("start").textContent = isCamera() ? "Opening camera…" : "Starting game…";
   try {
     audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
     await audioContext.resume();
+    if (stale()) return;
     if (isCamera()) {
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error(
@@ -216,8 +250,10 @@ async function start() {
         },
         audio: false,
       });
+      if (stale()) return;
       $("camera").srcObject = media;
       await $("camera").play();
+      if (stale()) return;
       media.getVideoTracks()[0].addEventListener("ended", () => {
         if (active) {
           showError(
@@ -233,21 +269,11 @@ async function start() {
     $("start").textContent = isCamera()
       ? "Preparing local tracking…"
       : "Opening the arcade…";
-    $("lobby").hidden = true;
-    $("game").hidden = false;
+    // The game view opens while the server loads, since the stage must be laid
+    // out to be measured. Set it up for this game first, clearing whatever the
+    // last one left on the stage.
     $("game").classList.toggle("immersive", selectedControl === "pistol");
-    const stageRect = $("stage").getBoundingClientRect();
-    session = await request("/api/start", {
-      viewAspect: stageRect.width / stageRect.height,
-      map: selectedMap,
-      control: selectedControl,
-      enemy: $("enemy").value,
-      duration: Number($("duration").value),
-      calibration: storage.get(setupKey),
-    });
-    $("lobby").hidden = true;
-    $("game").hidden = false;
-    $("game").classList.toggle("immersive", selectedControl === "pistol");
+    $("stage-overlay").hidden = true;
     $("game-image").hidden = true;
     $("game-title").textContent = title(
       config.maps.find((m) => m.key === selectedMap).title,
@@ -275,6 +301,28 @@ async function start() {
       : "Move to aim · Click / tap to fire" +
         (selectedMap === "sniper" ? " · Right-click / Shift to scope" : "");
     $("health-wrap").hidden = selectedMap !== "zombies";
+    $("lobby").hidden = true;
+    $("game").hidden = false;
+    window.scrollTo({ top: 0 });
+    // The Start button went with the lobby: move focus to what replaced it.
+    $("game-title").focus();
+    const created = await request("/api/start", {
+      viewAspect: stageAspect(),
+      map: selectedMap,
+      control: selectedControl,
+      enemy: $("enemy").value,
+      duration: Number($("duration").value),
+      calibration: storage.get(setupKey),
+    });
+    if (stale()) {
+      // back() had no session to stop yet, so this one would stay open.
+      request("/api/stop", { id: created.id }).catch(() => {});
+      return;
+    }
+    session = created;
+    // The server could not use the stored setup - an older format, or damaged -
+    // and started a fresh one. Forget it, or every start would send it again.
+    if (session.forgetSavedSetup) storage.remove(setupKey);
     active = true;
     currentState = "";
     keys.clear();
@@ -282,10 +330,9 @@ async function start() {
     scoped = false;
     lastSaved = "";
     renderState(session);
-    window.scrollTo({ top: 0 });
-    generation++;
-    loop(generation);
+    loop(run);
   } catch (error) {
+    if (stale()) return; // back() has already restored the lobby
     $("game").hidden = true;
     $("lobby").hidden = false;
     stopCamera();
@@ -298,37 +345,66 @@ async function start() {
     };
     showError(messages[error.name] || error.message);
   } finally {
+    // An abandoned start may have opened the camera after back() closed it.
+    if (stale()) stopCamera();
     busy = false;
     $("start").disabled = false;
     renderControls();
+    if (!$("lobby").hidden) focusStart();
   }
 }
 function cameraFrame() {
-  if (!media || $("camera").readyState < 2) return null;
+  const video = $("camera");
+  if (!media || video.readyState < 2 || !video.videoWidth) return null;
+  // Send the centred 4:3 view the preview shows (object-fit: cover), cropped
+  // rather than squashed: squeezing a 16:9 camera into 4:3 bends the hand's
+  // angles and the eye-openness ratios the scope reads, and misplaces the
+  // skeleton drawn over the preview.
+  const scale = Math.min(video.videoWidth / 640, video.videoHeight / 480);
+  const [width, height] = [640 * scale, 480 * scale];
   // Mirror exactly once, matching the preview and the native control conventions.
   captureContext.save();
   captureContext.translate(640, 0);
   captureContext.scale(-1, 1);
-  captureContext.drawImage($("camera"), 0, 0, 640, 480);
+  captureContext.drawImage(
+    video,
+    (video.videoWidth - width) / 2,
+    (video.videoHeight - height) / 2,
+    width,
+    height,
+    0,
+    0,
+    640,
+    480,
+  );
   captureContext.restore();
   return captureCanvas.toDataURL("image/jpeg", 0.7).split(",")[1];
 }
+function setText(id, text) {
+  // Most of what renderState writes repeats every frame. Rewriting it anyway
+  // makes live regions announce it again, some 30 times a second.
+  const element = $(id);
+  text = String(text);
+  if (element.textContent !== text) element.textContent = text;
+}
 function renderState(data) {
   currentState = data.state;
-  $("score").textContent = data.score;
-  $("time").textContent = Math.ceil(data.remaining);
-  $("accuracy").textContent = `${data.accuracy ?? 0}%`;
-  $("health").textContent = data.health ?? 100;
-  $("notice").textContent = data.notice;
-  $("tracking-label").textContent = data.tracking
-    ? data.scopeTracked === false
-      ? "Hand tracked · show your face for the scope"
-      : "Tracking you"
-    : "Move into view · light your hand / face";
+  setText("score", data.score);
+  setText("time", Math.ceil(data.remaining));
+  setText("accuracy", `${data.accuracy ?? 0}%`);
+  setText("health", data.health ?? 100);
+  setText("notice", data.notice);
+  setText(
+    "tracking-label",
+    data.tracking
+      ? data.scopeTracked === false
+        ? "Hand tracked · show your face for the scope"
+        : "Tracking you"
+      : "Move into view · light your hand / face",
+  );
   $("tracking-light").classList.toggle("live", !!data.tracking);
   $("calibration-coach").hidden = data.state !== "calibration";
-
-  $("pause").textContent = data.state === "paused" ? "Resume (P)" : "Pause (P)";
+  setText("pause", data.state === "paused" ? "Resume (P)" : "Pause (P)");
   $("pause").disabled = data.state === "over";
   $("recalibrate").disabled = data.state === "calibration";
   $("game").classList.toggle(
@@ -338,32 +414,46 @@ function renderState(data) {
 
   const warmingUp =
     data.state === "calibration" || (data.state === "paused" && !!data.step);
-  $("game-title").textContent = warmingUp
-    ? "Target Range"
-    : title(config.maps.find((m) => m.key === selectedMap).title);
-  $("game-category").textContent = warmingUp
-    ? `WARM-UP → ${title(config.maps.find((m) => m.key === selectedMap).title)}`
-    : MAP_COPY[selectedMap][0].toUpperCase();
+  setText(
+    "game-title",
+    warmingUp
+      ? "Target Range"
+      : title(config.maps.find((m) => m.key === selectedMap).title),
+  );
+  setText(
+    "game-category",
+    warmingUp
+      ? `WARM-UP → ${title(config.maps.find((m) => m.key === selectedMap).title)}`
+      : MAP_COPY[selectedMap][0].toUpperCase(),
+  );
   if (data.step) {
     const step = data.step;
-    $("step-count").textContent = step.testing
-      ? `${step.hits} / 5 ACCURATE HITS`
-      : `LEARNING YOUR AIM · ${step.learningShots} / 3 SHOTS`;
-    $("step-title").textContent = step.testing
-      ? "Five centre hits to start."
-      : "Welcome to Target Range.";
-    $("step-detail").textContent =
-      data.notice || "Point naturally at the target and fold your thumb.";
-    $("trigger-status").textContent = !data.tracking
-      ? "Show your hand to the camera"
-      : step.armed
-        ? "Thumb up · ready to shoot"
-        : "Raise your thumb for the next shot";
+    setText(
+      "step-count",
+      step.testing
+        ? `${step.hits} / 5 ACCURATE HITS`
+        : `LEARNING YOUR AIM · ${step.learningShots} / 3 SHOTS`,
+    );
+    setText(
+      "step-title",
+      step.testing ? "Five centre hits to start." : "Welcome to Target Range.",
+    );
+    setText(
+      "step-detail",
+      data.notice || "Point naturally at the target and fold your thumb.",
+    );
+    setText(
+      "trigger-status",
+      !data.tracking
+        ? "Show your hand to the camera"
+        : step.armed
+          ? "Thumb up · ready to shoot"
+          : "Raise your thumb for the next shot",
+    );
     $("undo-shot").disabled = step.shots === 0 && step.hits === 0;
     $("aim-hits").value = step.hits;
   }
   if (data.hands) drawHandGraph(data.hands);
-
   if (data.calibration) {
     const encoded = JSON.stringify(data.calibration);
     if (encoded !== lastSaved) {
@@ -374,14 +464,20 @@ function renderState(data) {
   const overlay = ["paused", "over"].includes(data.state);
   $("stage-overlay").hidden = !overlay;
   if (overlay) {
-    $("overlay-title").textContent =
-      data.state === "paused" ? "Take a breather." : "Round complete.";
-    $("overlay-copy").textContent =
+    setText(
+      "overlay-title",
+      data.state === "paused" ? "Take a breather." : "Round complete.",
+    );
+    setText(
+      "overlay-copy",
       data.state === "paused"
         ? "Your game is paused. Pick up where you left off."
-        : data.result;
-    $("overlay-action").textContent =
-      data.state === "paused" ? "Resume playing" : "Play again ↗";
+        : data.result,
+    );
+    setText(
+      "overlay-action",
+      data.state === "paused" ? "Resume playing" : "Play again ↗",
+    );
     if (data.state === "over") {
       const key = `handy.best.${selectedMap}.${selectedControl}.${$("enemy").value}.${$("duration").value}`;
       if (
@@ -401,22 +497,28 @@ function queueAction(action, extra = {}) {
 async function loop(run) {
   while (active && generation === run) {
     const started = performance.now();
-    try {
-      if (pendingAction) {
-        const action = pendingAction;
-        pendingAction = null;
+    if (pendingAction) {
+      const action = pendingAction;
+      pendingAction = null;
+      try {
         const data = await request("/api/action", {
           id: session.id,
           ...action,
         });
         if (generation !== run) return;
         renderState(data);
+      } catch (error) {
+        if (generation !== run) return;
+        // A refused button press leaves the game running: say why and carry
+        // on. If the game itself is gone, the frame below reports that.
+        showError(error.message);
       }
+    }
+    try {
       const shot = fire;
       fire = false;
-      const stageRect = $("stage").getBoundingClientRect();
       const data = await request("/api/frame", {
-        viewAspect: stageRect.width / stageRect.height,
+        viewAspect: stageAspect(),
         id: session.id,
         ...pointer,
         fire: shot,
@@ -454,6 +556,9 @@ async function back() {
   keys.clear();
   fire = false;
   stopCamera();
+  // A start still loading stops its own session when it arrives; Start stays
+  // disabled until then, so the two cannot overlap.
+  if (busy) $("start").textContent = "Cancelling…";
   try {
     if (session) await request("/api/stop", { id: session.id });
   } catch {
@@ -463,6 +568,7 @@ async function back() {
   $("game").hidden = true;
   $("lobby").hidden = false;
   returning = false;
+  focusStart();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 function point(event) {

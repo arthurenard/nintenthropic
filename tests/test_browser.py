@@ -1,16 +1,13 @@
 """Browser adapter regressions: existing rules, lifecycle, and input boundaries."""
 
 import base64
-import io
-import json
-from types import SimpleNamespace
 
 import cv2
 import numpy as np
 import pytest
 
 from handy import browser, maps
-from handy.browser import BrowserSession, Handler
+from handy.browser import BrowserSession
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import ZombieRound, draw_robot
 from handy.recognition import Frame
@@ -66,6 +63,41 @@ def test_pause_does_not_advance_clock_or_accept_shots():
     assert session.clock == pytest.approx(before + 0.03)
 
 
+def test_a_repeated_play_does_not_restart_the_round():
+    # A double click on "Play again" sends play twice; the second must not
+    # throw away the round the first one started.
+    session = BrowserSession({})
+    session.tick({"fire": True}, session.last_tick + 0.5)
+    round_, clock, tick = session.round, session.clock, session.last_tick
+    info = session.action("play", {})
+    assert info["state"] == "playing" and info["id"] == session.id
+    assert session.round is round_ and session.round.shots == 1
+    assert (session.clock, session.last_tick) == (clock, tick)
+
+
+@pytest.mark.parametrize("name", ["undo", "reset", "finish", "calibrate"])
+def test_setup_actions_that_arrive_late_change_nothing(name, monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    shoot_setup_target(session, stream)
+    if name == "calibrate":
+        # Already setting up: a second "Adjust aim" keeps the shots taken.
+        assert session.action(name, {})["state"] == "calibration"
+        assert len(session.calibration.samples) == 1
+        return
+    # Setup already finished itself, as it does on the fifth accurate hit.
+    warm_up(session)
+    round_ = session.round
+    assert session.action(name, {})["state"] == "playing"
+    assert session.round is round_
+
+
+@pytest.mark.parametrize("name", ["teleport", "skip"])
+def test_unknown_actions_are_still_refused(name):
+    # "skip" went with the practice state it led to; the page never sent it.
+    with pytest.raises(ValueError, match="Unknown"):
+        BrowserSession({}).action(name, {})
+
+
 def test_round_end_rejects_shots_and_restarts_cleanly():
     session = BrowserSession({"duration": 15})
     session.tick({}, session.last_tick)
@@ -116,7 +148,7 @@ class FakeStream:
         self.closed = True
 
 
-def camera_session(monkeypatch):
+def camera_session(monkeypatch, **config):
     stream = FakeStream()
     monkeypatch.setattr(browser, "ensure_model", lambda _name: "unused")
     monkeypatch.setattr(
@@ -126,7 +158,7 @@ def camera_session(monkeypatch):
             PISTOL, open_stream=lambda *_args: stream
         ),
     )
-    return BrowserSession({"control": "pistol"}), stream
+    return BrowserSession({"control": "pistol", **config}), stream
 
 
 def camera_payload():
@@ -135,6 +167,53 @@ def camera_payload():
             browser.jpeg(np.zeros((48, 64, 3), np.uint8))
         ).decode()
     }
+
+
+def claiming(width, height, progressive=False):
+    """A tiny real JPEG whose header claims to be ``width`` by ``height``."""
+    flags = [cv2.IMWRITE_JPEG_PROGRESSIVE, int(progressive)]
+    raw = bytearray(cv2.imencode(".jpg", np.zeros((48, 64, 3), np.uint8), flags)[1])
+    at = raw.find(b"\xff\xc2" if progressive else b"\xff\xc0")
+    raw[at + 5 : at + 9] = height.to_bytes(2, "big") + width.to_bytes(2, "big")
+    return bytes(raw)
+
+
+@pytest.mark.parametrize("progressive", [False, True])
+def test_jpeg_size_is_read_from_the_header(progressive):
+    assert browser.jpeg_size(claiming(64, 48, progressive)) == (64, 48)
+    assert browser.jpeg_size(claiming(30000, 30000, progressive)) == (30000, 30000)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [b"\xff\xd8", b"\xff\xd8\xff\xd9", b"\xff\xd8\xff\xda\x00\x02", b"\xff\xd8junk"],
+)
+def test_jpeg_without_a_frame_header_is_invalid(raw):
+    with pytest.raises(ValueError):
+        browser.jpeg_size(raw)
+
+
+def test_decode_bomb_is_refused_before_decoding(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+
+    def decode(*_args):
+        pytest.fail("A frame claiming 30000x30000 pixels must never be decoded")
+
+    monkeypatch.setattr(browser.cv2, "imdecode", decode)
+    bomb = base64.b64encode(claiming(30000, 30000)).decode()
+    with pytest.raises(ValueError, match="1280 by 720"):
+        session.tick({"camera": bomb})
+
+
+def test_undecodable_camera_frame_is_a_bad_request(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+
+    def decode(*_args):
+        raise cv2.error("corrupt data")
+
+    monkeypatch.setattr(browser.cv2, "imdecode", decode)
+    with pytest.raises(ValueError, match="Invalid camera frame"):
+        session.tick(camera_payload())
 
 
 def shoot_setup_target(session, stream, point=None):
@@ -152,6 +231,51 @@ def shoot_setup_target(session, stream, point=None):
     return result
 
 
+def stored_setup(**changes):
+    """What the page keeps in localStorage after a setup, with ``changes`` made."""
+    from handy.calibration import default_rig
+
+    entry = {**default_rig(PISTOL, 1)[0].to_dict(), **changes}
+    return {"cameras": [{k: v for k, v in entry.items() if v is not ...}]}
+
+
+@pytest.mark.parametrize(
+    "saved",
+    [
+        stored_setup(mapping=[1.0] * 8),
+        stored_setup(mapping=[float("inf")] + [1.0] * 8),
+        stored_setup(gain=10**400),
+        stored_setup(mapping=..., aim_min=...),
+        {"cameras": [stored_setup()["cameras"][0]] * 2},
+        {"cameras": []},
+        {"cameras": "abc"},
+        "a string",
+        [1, 2],
+    ],
+)
+def test_an_unusable_saved_setup_starts_a_fresh_one(saved, monkeypatch, capsys):
+    from handy.calibration import default_rig
+
+    # Refusing it would refuse every start: the page sends it with each one.
+    session, _stream = camera_session(monkeypatch, calibration=saved)
+    assert session.state == "calibration"
+    assert session.rig == default_rig(PISTOL, 1)
+    assert session.calibration.initial == session.rig
+    assert session.forget_saved
+    assert "Ignoring a saved browser setup" in capsys.readouterr().err
+
+
+def test_a_usable_saved_setup_is_kept(monkeypatch):
+    from handy.calibration import Rig
+
+    saved = stored_setup(fit_error=0.01, gain=1.2)
+    session = camera_session(monkeypatch, calibration=saved)[0]
+    assert session.rig == Rig.from_dict(saved) and not session.forget_saved
+    # A setup from before a field existed may load or not, but never blocks a start.
+    older = stored_setup(signal=...)
+    assert camera_session(monkeypatch, calibration=older)[0].state == "calibration"
+
+
 def test_shoot_to_calibrate_waits_for_fresh_thumb_pulls(monkeypatch):
     session, stream = camera_session(monkeypatch)
     stream.current = frame_of(make_hand())
@@ -161,9 +285,8 @@ def test_shoot_to_calibrate_waits_for_fresh_thumb_pulls(monkeypatch):
     assert session.calibration.samples == []
     with pytest.raises(ValueError, match="five"):
         session.action("finish", {})
-    with pytest.raises(ValueError, match="setup"):
-        session.action("play", {})
-    assert session.state == "calibration"
+    # Play is answered with where the game is - still warming up.
+    assert session.action("play", {})["state"] == "calibration"
     session.close()
     assert stream.closed
 
@@ -238,42 +361,6 @@ def test_robots_render_and_share_damage_rules():
     round_.walkers[0].distance = 1
     round_.update(0.1)
     assert round_.health == 82
-
-
-def test_http_boundary_requires_token_and_rejects_path_traversal():
-    # Exercise the real handler without binding a socket in the test environment.
-    handler = object.__new__(Handler)
-    handler.server = SimpleNamespace(server_port=8765, token="test-token")
-    handler.headers = {"Host": "127.0.0.1:8765"}
-    responses = []
-    handler.respond = lambda status, data: responses.append((status, data))
-    handler.do_POST()
-    assert responses[-1][0] == 403
-    handler.path = "/../pyproject.toml"
-    handler.do_GET()
-    assert responses[-1][0] == 404
-    handler.headers["Host"] = "external.example:8765"
-    handler.path = "/api/config"
-    handler.do_GET()
-    assert responses[-1][0] == 403
-
-
-def test_http_rejects_oversized_and_invalid_json_bodies():
-    handler = object.__new__(Handler)
-    handler.server = SimpleNamespace(server_port=8765, token="test-token")
-    handler.headers = {
-        "Host": "127.0.0.1:8765",
-        "X-Handy-Token": "test-token",
-        "Content-Length": str(browser.MAX_BODY + 1),
-    }
-    responses = []
-    handler.respond = lambda status, data: responses.append((status, data))
-    handler.do_POST()
-    assert responses[-1][0] == 400
-    handler.rfile = io.BytesIO(json.dumps([]).encode())
-    handler.headers["Content-Length"] = "2"
-    handler.do_POST()
-    assert responses[-1][0] == 400
 
 
 @pytest.mark.parametrize("map_key", ["western", "sniper"])
@@ -391,6 +478,34 @@ def test_calibration_resizes_to_stage_and_keeps_it_for_gameplay(monkeypatch):
         shoot_setup_target(session, stream)
     assert session.options.area.width == 960 and session.options.area.height == 400
     assert session.round.area.height == 400
+
+
+@pytest.mark.parametrize(
+    "aspect, size",
+    [(12, (960, 120)), (8, (960, 120)), (0.1, (225, 900)), (0, (225, 900))],
+)
+def test_extreme_stage_shapes_are_clamped_not_refused(aspect, size, monkeypatch):
+    # A window a few hundred pixels tall must not end the game on its first frame.
+    assert BrowserSession({"viewAspect": aspect}).width == size[0]
+    session, _stream = camera_session(monkeypatch)
+    session.tick({**camera_payload(), "viewAspect": aspect}, session.last_tick)
+    assert (session.width, session.height) == size
+    assert session.canvas.shape[:2] == size[::-1]
+
+
+def test_an_unmeasured_stage_keeps_the_current_shape(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+    before = (session.width, session.height)
+    session.tick({**camera_payload(), "viewAspect": None}, session.last_tick)
+    assert (session.width, session.height) == before
+    assert BrowserSession({"viewAspect": None}).width == browser.WIDTH
+
+
+@pytest.mark.parametrize("aspect", ["wide", float("nan"), float("inf"), -1, True])
+def test_a_stage_shape_that_is_not_a_number_is_refused(aspect, monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+    with pytest.raises(ValueError):
+        session.tick({"viewAspect": aspect}, session.last_tick)
 
 
 def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):

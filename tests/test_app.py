@@ -233,17 +233,85 @@ def test_two_cameras_are_used_when_both_are_named(monkeypatch):
 
 
 def test_a_saved_rig_for_the_wrong_number_of_cameras_is_not_reused(tmp_path):
-    from handy.app import Settings, saved_rig
+    from handy.app import Settings, rig_setup, saved_rig
     from handy.calibration import Calibration, Rig, RigBook
     from handy.schemes import MARKSMAN, PISTOL
 
-    book = RigBook()
-    book.set("pistol", Rig((Calibration(), Calibration())))
+    fitted = Calibration(aim_fitted=True)
     settings = Settings(cameras=(0, 1))
+    book = RigBook()
+    book.set("pistol", Rig((fitted, fitted), rig_setup(settings, (0, 1))))
 
-    assert saved_rig(book, settings, PISTOL, 2) is not None
-    assert saved_rig(book, settings, PISTOL, 1) is None, "was calibrated for two"
-    assert saved_rig(book, settings, MARKSMAN, 2) is not None, "the scope shares it"
+    assert saved_rig(book, settings, PISTOL, (0, 1)) is not None
+    assert saved_rig(book, settings, PISTOL, (0,)) is None, "was calibrated for two"
+    assert saved_rig(book, settings, MARKSMAN, (0, 1)) is not None, "the scope shares it"
+
+
+def launch_on_the_range(monkeypatch, model_path, path, **changes):
+    """One launch straight into the range, quitting on the first round."""
+    import itertools
+
+    import cv2
+
+    from handy import app
+
+    headless(monkeypatch)
+    keys = itertools.chain([255], itertools.repeat(ord("q")))
+    monkeypatch.setattr(cv2, "waitKey", lambda *args: next(keys))
+    app.run(app.Settings(cameras=(0,), map_key="range",
+                         mute=True, model_path=model_path, calibration_path=path,
+                         **changes))
+
+
+def test_a_setup_is_reused_only_on_the_image_it_was_fitted_on(monkeypatch,
+                                                                tmp_path,
+                                                                model_path):
+    """The saved rig was reused on a camera count alone. Launch with the image
+    unmirrored and the map fitted on the mirrored one aimed every movement
+    backwards, for the whole session, with nothing said."""
+    from handy import app
+    from handy.calibration import Calibration, Rig
+
+    setups = []
+    monkeypatch.setattr(app, "run_calibration", lambda *args, **kwargs: (
+        setups.append(1) or Rig((Calibration(aim_fitted=True),))))
+    path = tmp_path / "calibration.json"
+
+    launch_on_the_range(monkeypatch, model_path, path)
+    assert len(setups) == 1, "nothing saved yet: setup runs"
+    launch_on_the_range(monkeypatch, model_path, path)
+    assert len(setups) == 1, "the same setup reuses it"
+    launch_on_the_range(monkeypatch, model_path, path, mirror=False)
+    assert len(setups) == 2, "a flipped image sets up again"
+    launch_on_the_range(monkeypatch, model_path, path, capture_width=640, capture_height=480)
+    assert len(setups) == 3, "and so does another capture size"
+
+
+def test_an_old_unverified_save_sends_the_player_to_setup(monkeypatch, tmp_path,
+                                                          model_path):
+    """What a real machine had on disk: a pose-calibration map with no fitted
+    flag, no record of its setup, and its horizon inside the camera frame. It
+    was reused on every launch, and a hand a little past the screen edge threw
+    the crosshair into the opposite corner."""
+    import json
+
+    from handy import app
+    from handy.calibration import Calibration, Rig
+
+    legacy = {"mapping": [2.871934573670249, -0.061145355513888985,
+                          -1.2142552975804075, -0.9041251222717106,
+                          2.3601729633571686, -0.8949543501390803,
+                          -1.2131671258909114, 0.4386268157484197, 1.0],
+              "signal": "reach", "cocked": 2.70, "folded": 2.15,
+              "fit_error": 0.023, "generalisation": 0.044, "gain": 5.42}
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps({"schemes": {"pistol": {"cameras": [legacy]}}}))
+    setups = []
+    monkeypatch.setattr(app, "run_calibration", lambda *args, **kwargs: (
+        setups.append(1) or Rig((Calibration(aim_fitted=True),))))
+
+    launch_on_the_range(monkeypatch, model_path, path)
+    assert setups, "the old map was played on without a single check"
 
 
 # --- the startup path ------------------------------------------------------
@@ -311,13 +379,12 @@ def test_the_game_opens_the_camera_the_search_picked(monkeypatch, tmp_path,
 
 
 @pytest.mark.parametrize("map_key", ["range", "sniper"])
-def test_either_tracker_starts_and_shuts_down(monkeypatch, tmp_path, map_key):
+def test_either_tracker_starts_and_shuts_down(monkeypatch, tmp_path, model_path,
+                                              face_model_path, map_key):
     """The sniper opens a face model beside the hand's; both must close again."""
-    from handy import app, schemes
-    from handy.models import ensure_model
+    from handy import app
 
-    for name in schemes.for_map(map_key).models:  # cached before the window opens
-        ensure_model(name)
+    # Both bundles are cached before the window opens, by the fixtures.
     opened = headless(monkeypatch)
     app.run(app.Settings(
         cameras=(0,), map_key=map_key, mute=True,
@@ -413,11 +480,13 @@ def test_the_mirror_setting_still_reaches_the_cameras(monkeypatch, tmp_path,
 # --- the screens actually draw what they are for ----------------------------
 
 class OneFrameEyes:
-    """A fake Eyes: every camera hands over one blank frame per read."""
+    """A fake Eyes: every camera hands over one blank frame per read, and its
+    recogniser a new (empty) result for each."""
 
     def __init__(self, count: int = 1) -> None:
         self.count = count
         self.mirror = True
+        self.reads = 0
 
     def __len__(self) -> int:
         return self.count
@@ -425,8 +494,9 @@ class OneFrameEyes:
     def read(self):
         from handy.recognition import Frame
 
+        self.reads += 1
         blank = np.zeros((720, 1280, 3), np.uint8)
-        return [blank] * self.count, [Frame()] * self.count
+        return [blank] * self.count, [Frame(timestamp_ms=self.reads)] * self.count
 
 
 def test_the_map_chooser_draws_the_cards(monkeypatch, layout):
@@ -491,12 +561,11 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
     assert best[maps.SNIPER.title] == "best 340"
 
 
-def test_every_button_answers_a_shot_in_play(monkeypatch, tmp_path, model_path):
+def test_every_button_answers_a_shot_in_play(monkeypatch):
     """QUIT and MAPS both mean something when shot mid-game."""
     from handy import app, maps, schemes
     from handy.aiming import Aim
     from handy.calibration import default_rig
-    from handy.audio import Audio, Sounds
     import cv2
 
     monkeypatch.setattr(cv2, "imshow", lambda *args: None)
@@ -518,8 +587,8 @@ def test_every_button_answers_a_shot_in_play(monkeypatch, tmp_path, model_path):
             OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
             Settings(recoil=0.0), layout,
             app.make_controller(Settings(), schemes.PISTOL),
-            default_rig(schemes.PISTOL, 1), Sounds(Audio(enabled=False), 5),
-            maps.RANGE, schemes.PISTOL)
+            default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE,
+            schemes.PISTOL)
         assert reason == expected, f"shooting {button.label} should mean {expected}"
 
 
@@ -851,6 +920,64 @@ def test_the_maps_are_pre_built_so_the_first_frame_does_not_freeze():
         assert time.perf_counter() - started < 0.05, f"{chosen.key} first frame is slow"
 
 
+def test_every_hour_of_high_noon_is_pre_built_not_just_the_first():
+    """The street is a new picture each hour of the round; building one as
+    the hour turns was a 75 ms stutter every ten seconds."""
+    from handy import app, maps
+    from handy.maps import western
+
+    layout = layout_for(960, 540)
+    settings = Settings(seed=3, window_width=960, window_height=540)
+    app.warm_maps(layout, settings)
+
+    round_ = app.new_round(settings, layout, maps.WESTERN)
+    round_.update(0.0)
+    canvas = np.zeros((540, 960, 3), np.uint8)
+    built = western._backdrop.cache_info().misses
+    for hour in range(western.HOURS):
+        maps.WESTERN.draw_world(canvas, round_, settings.duration * (hour + 0.5) / western.HOURS)
+    assert western._backdrop.cache_info().misses == built
+
+
+@pytest.mark.real_warm_up
+def test_the_game_warms_the_maps_up_off_the_main_thread(monkeypatch, tmp_path,
+                                                         model_path):
+    """The suite skips the warm-up everywhere else, so it is checked here."""
+    import threading
+
+    from handy import app
+
+    warmed: list[tuple[str, tuple[int, int]]] = []
+    done = threading.Event()
+
+    def warm_maps(layout, settings):
+        warmed.append((threading.current_thread().name,
+                       (layout.window.width, layout.window.height)))
+        done.set()
+
+    monkeypatch.setattr(app, "warm_maps", warm_maps)
+    headless(monkeypatch)
+    monkeypatch.setattr(app, "open_window", lambda settings: (960, 540))
+    app.run(app.Settings(cameras=(0,), map_key="range", mute=True,
+                         skip_calibration=True, model_path=model_path,
+                         calibration_path=tmp_path / "calibration.json"))
+
+    assert done.wait(10), "the maps were never warmed"
+    assert warmed == [("warm-maps", (960, 540))]
+
+
+def test_the_suite_never_touches_the_players_own_calibration_or_scores():
+    """A test that forgot its tmp_path used to write into ~/.cache/handy."""
+    import os
+    import pwd
+
+    from handy import app
+
+    real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    for path in (app.calibration_path(Settings()), app.scores_path(Settings())):
+        assert not path.is_relative_to(real_home), path
+
+
 def test_a_shooting_map_still_calibrates_before_play(monkeypatch, tmp_path,
                                                      model_path):
     from handy import app
@@ -1017,62 +1144,122 @@ def test_the_results_screen_saves_a_screenshot_on_s(monkeypatch, tmp_path):
     assert list(tmp_path.glob("*.png")), "s saved nothing"
 
 
+def on_the_card(monkeypatch, trigger, keys=(NOTHING,)):
+    """Run the real score card at thirty frames a second of a synthetic clock.
+
+    ``trigger(t)`` is the aim ``t`` seconds after the card appeared. Returns
+    the card's answer and how long it had been up when it gave it.
+    """
+    from handy import app, scene, schemes
+    from handy.calibration import default_rig
+    from handy.game import Summary
+
+    import cv2
+    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
+    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
+    key_sequence(monkeypatch, list(keys))
+    clock = {"now": 1000.0}
+
+    def monotonic():
+        clock["now"] += 1 / 30
+        return clock["now"]
+
+    monkeypatch.setattr(app.time, "monotonic", monotonic)
+    start = clock["now"]
+    monkeypatch.setattr(app.AimController, "update",
+                        lambda self, views, now: trigger(now - start))
+    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
+                      perfect=0, duration=60.0)
+
+    choice = app.show_results(
+        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
+        layout_for(WIDTH, HEIGHT), app.make_controller(Settings(), schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), summary, 5, True)
+    return choice, clock["now"] - start
+
+
+def pull_at(position, fire_at: float):
+    """A player holding the gun cocked on ``position``, pulling at ``fire_at``."""
+    from handy.aiming import Aim
+
+    def trigger(t):
+        if t < fire_at:
+            return Aim(position=position, armed=True)
+        if t < fire_at + 1 / 30:
+            return Aim(position=position, fired=True)
+        return Aim(position=position)
+    return trigger
+
+
 @pytest.mark.parametrize("button,expected", [
     ("quit_button", "quit"), ("maps_button", "maps"),
 ])
 def test_every_button_answers_a_shot_on_the_results_screen(monkeypatch, button,
                                                            expected):
-    from handy import app, scene, schemes
-    from handy.aiming import Aim
-    from handy.calibration import default_rig
-    from handy.game import Summary
-
-    import cv2
-    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
-    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
-    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
-    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
-    key_sequence(monkeypatch, [NOTHING])
-
     layout = layout_for(WIDTH, HEIGHT)
     rect = getattr(layout, button).rect
-    centre = (rect.x + rect.width // 2, rect.y + rect.height // 2)
-    aim = Aim(position=(centre[0] / (WIDTH - 1), centre[1] / (HEIGHT - 1)),
-              fired=True)
-    monkeypatch.setattr(app.AimController, "update",
-                        lambda self, views, now, _aim=aim: _aim)
-    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
-                      perfect=0, duration=60.0)
+    centre = ((rect.x + rect.width // 2) / (WIDTH - 1),
+              (rect.y + rect.height // 2) / (HEIGHT - 1))
 
-    assert app.show_results(
-        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
-        layout, app.make_controller(Settings(), schemes.PISTOL),
-        default_rig(schemes.PISTOL, 1), summary, 5, True) == expected
+    assert on_the_card(monkeypatch, pull_at(centre, 1.5))[0] == expected
 
 
 def test_shooting_the_world_on_the_results_screen_plays_again(monkeypatch):
     """Anywhere that is not a button means "again" - the README's promise."""
-    from handy import app, scene, schemes
+    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), 1.5))
+    assert choice == "again" and after >= 1.5
+
+
+def test_a_player_still_shooting_at_time_up_gets_to_see_the_score(monkeypatch):
+    """The round's trigger carries on into the card, and a player still firing
+    when the clock ran out re-armed and fired 0.3 s later - straight through
+    the card, and into the next round, without ever seeing the score."""
     from handy.aiming import Aim
-    from handy.calibration import default_rig
-    from handy.game import Summary
 
-    import cv2
-    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
-    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
-    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
-    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
-    key_sequence(monkeypatch, [NOTHING])
-    monkeypatch.setattr(app.AimController, "update",
-                        lambda self, views, now: Aim(position=(0.5, 0.6), fired=True))
-    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
-                      perfect=0, duration=60.0)
+    def still_shooting(t):
+        if t < 0.25:
+            return Aim(position=(0.5, 0.6), armed=True)  # re-armed at time-up
+        if t < 0.3:
+            return Aim(position=(0.5, 0.6), fired=True)  # and fired again
+        return Aim(position=(0.5, 0.6))  # thumb down, reading the card
 
-    assert app.show_results(
-        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
-        layout_for(WIDTH, HEIGHT),
-        app.make_controller(Settings(), schemes.PISTOL),
-        default_rig(schemes.PISTOL, 1), summary, 5, True) == "again"
+    choice, after = on_the_card(monkeypatch, still_shooting,
+                                keys=[NOTHING] * 90 + [ord("q")])
+    assert choice == "quit", "the stray shot played again"
+    assert after >= 3.0
+
+
+def test_a_shot_on_the_card_needs_a_trigger_cocked_after_it_appeared(monkeypatch):
+    """A shot fired inside the grace period is not banked: the gun has to be
+    cocked again, on the card, before a pull counts."""
+    from handy.aiming import Aim
+
+    def fire_recock_fire(t):
+        if t < 0.3:
+            return Aim(position=(0.5, 0.6), armed=True)
+        if t < 0.34:
+            return Aim(position=(0.5, 0.6), fired=True)  # ignored: too soon
+        if t < 1.6:
+            return Aim(position=(0.5, 0.6))  # thumb held down past the grace
+        if t < 1.8:
+            return Aim(position=(0.5, 0.6), armed=True)  # cocked on the card
+        if t < 1.84:
+            return Aim(position=(0.5, 0.6), fired=True)
+        return Aim(position=(0.5, 0.6))
+
+    choice, after = on_the_card(monkeypatch, fire_recock_fire)
+    assert choice == "again" and after >= 1.8
+
+
+def test_a_player_who_waits_needs_only_one_pull(monkeypatch):
+    """Cocked all along and pulling once the card has been read: that shot
+    counts at once; nobody has to fire twice."""
+    from handy import app
+
+    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), app.RESULTS_GRACE + 0.2))
+    assert choice == "again" and after < app.RESULTS_GRACE + 0.3
 
 
 # --- the map chooser, which only quitting had ever exited --------------------
@@ -1299,6 +1486,73 @@ def test_a_hit_asks_the_map_for_its_own_hit_sound(monkeypatch):
     assert "miss" not in sounds.names()
 
 
+class ScriptedEyes:
+    """A fake Eyes whose recogniser hands back these results, one per read -
+    the same result object twice, when a camera outruns its recogniser."""
+
+    def __init__(self, frames) -> None:
+        self.frames = list(frames)
+        self.mirror = True
+
+    def __len__(self) -> int:
+        return 1
+
+    def read(self):
+        frame = self.frames.pop(0) if len(self.frames) > 1 else self.frames[0]
+        return [np.zeros((720, 1280, 3), np.uint8)], [frame]
+
+
+def test_a_result_is_heard_by_the_trigger_once(monkeypatch):
+    from handy import app, schemes
+    from handy.calibration import default_rig
+    from handy.recognition import Frame
+
+    heard: list[int] = []
+
+    class Controller:
+        def update(self, views, now):
+            heard.append(views[0][0].timestamp_ms)
+            return Aim(position=(0.5, 0.5), armed=True, fired=True)
+
+    trigger = app.FreshAim(Controller(), default_rig(schemes.PISTOL, 1))
+    shots = [trigger.update([Frame(timestamp_ms=stamp)], 0.0).fired
+             for stamp in (1, 1, 1, 2, 2, 3)]
+
+    assert heard == [1, 2, 3]
+    assert shots == [True, False, False, True, False, True], "a result fires once"
+
+
+def test_a_misread_delivered_twice_is_not_a_shot(monkeypatch):
+    """Each loop fed `latest()` to the trigger whether or not it was new. One
+    misread frame read twice is two of the median's three readings, and the
+    gun fired on its own."""
+    import cv2
+    from hands import make_hand
+
+    from handy import app, maps, schemes
+    from handy.calibration import default_rig
+    from handy.recognition import Frame
+
+    up, down = make_hand(thumb_degrees=12.0), make_hand(thumb_degrees=70.0)
+    misread = Frame(hands=(down,), timestamp_ms=4)
+    results = [Frame(hands=(up,), timestamp_ms=1), Frame(hands=(up,), timestamp_ms=2),
+               Frame(hands=(up,), timestamp_ms=3), misread, misread,
+               Frame(hands=(up,), timestamp_ms=5), Frame(hands=(up,), timestamp_ms=6)]
+
+    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
+    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    key_sequence(monkeypatch, [NOTHING] * len(results) + [ord("q")])
+    settings = Settings(recoil=0.0, seed=1)
+    round_, reason = app.play(
+        ScriptedEyes(results), np.zeros((HEIGHT, WIDTH, 3), np.uint8), settings,
+        layout_for(WIDTH, HEIGHT), app.make_controller(settings, schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE, schemes.PISTOL)
+
+    assert reason == "quit"
+    assert round_.shots == 0, "the gun fired on a single misread frame"
+
+
 def test_a_miss_thuds(monkeypatch):
     from handy import maps
     from handy.aiming import Aim
@@ -1330,11 +1584,131 @@ def test_s_saves_a_screenshot_without_ending_the_round(monkeypatch, tmp_path):
     assert list(tmp_path.glob("*.png"))
 
 
+def test_a_screenshot_that_cannot_be_written_is_said_and_the_round_goes_on(
+        monkeypatch, tmp_path, capsys):
+    """A folder that cannot be made raised out of the round, which lost the
+    score - and main() then blamed the network for it."""
+    from handy import app
+
+    blocker = tmp_path / "a file, not a folder"
+    blocker.write_text("")
+    notices: list[list[str]] = []
+    monkeypatch.setattr(app, "show_notice", lambda canvas, lines, seconds=3.0,
+                        scale=1.0: notices.append(lines))
+
+    _, reason = play_once(monkeypatch, keys=[ord("s"), ord("q")],
+                          settings=Settings(screenshot_dir=blocker / "shots", seed=1))
+
+    assert reason == "quit", "the round carried on after the failed save"
+    assert notices and "SCREENSHOT NOT SAVED" in notices[0]
+    assert "Saved" not in capsys.readouterr().out
+
+
+def test_the_results_card_survives_a_failed_screenshot(monkeypatch, tmp_path):
+    from handy import app, scene, schemes
+    from handy.calibration import default_rig
+    from handy.game import Summary
+
+    import cv2
+    for name in ("imshow", "setMouseCallback"):
+        monkeypatch.setattr(cv2, name, lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    monkeypatch.setattr(scene, "draw_results", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app, "show_notice", lambda *args, **kwargs: None)
+    key_sequence(monkeypatch, [ord("s"), ord("q")])
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+
+    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
+                      perfect=0, duration=60.0)
+    assert app.show_results(
+        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
+        Settings(screenshot_dir=blocker / "shots"), layout_for(WIDTH, HEIGHT),
+        app.make_controller(Settings(), schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), summary, 5, True) == "quit"
+
+
+def test_a_screenshot_imwrite_refused_is_not_reported_as_saved(monkeypatch, tmp_path):
+    """imwrite says no by returning False, and "Saved" was printed regardless."""
+    import cv2
+
+    from handy import app
+
+    monkeypatch.setattr(cv2, "imwrite", lambda *args: False)
+    with pytest.raises(OSError):
+        app.save_screenshot(np.zeros((4, 4, 3), np.uint8), tmp_path)
+
+
+def test_two_screenshots_in_the_same_second_are_two_files(monkeypatch, tmp_path):
+    """Named to the second, a quick second press overwrote the first frame."""
+    from handy import app
+
+    monkeypatch.setattr(app.time, "time", lambda: 1_790_000_000.25)
+    first = app.save_screenshot(np.zeros((4, 4, 3), np.uint8), tmp_path)
+    second = app.save_screenshot(np.full((4, 4, 3), 9, np.uint8), tmp_path)
+
+    assert first != second
+    assert len(list(tmp_path.glob("*.png"))) == 2
+    assert first.stem.endswith("-250"), "the milliseconds are in the name"
+
+
+def test_a_model_mediapipe_cannot_read_is_named_not_a_traceback(monkeypatch,
+                                                                tmp_path, capsys):
+    """A corrupt --model raised a bare RuntimeError out of the session."""
+    from handy import app, cli
+
+    bogus = tmp_path / "hand.task"
+    bogus.write_bytes(b"not a zip archive")
+    headless(monkeypatch)
+    monkeypatch.setattr(app, "open_window", lambda settings: (960, 540))
+
+    assert cli.main(["--camera", "0", "--model", str(bogus), "--mute",
+                     "--no-calibration", "--map", "zombies",
+                     "--calibration-file", str(tmp_path / "calibration.json")]) == 1
+    err = capsys.readouterr().err
+    assert "hand.task" in err and ".task bundle" in err
+    assert "network" not in err
+
+
 def test_a_round_that_runs_out_of_time_ends_by_itself(monkeypatch):
     """The `is_over` exit: the only way a round ends without a key."""
     _, reason = play_once(monkeypatch, key=NOTHING,
                           settings=Settings(duration=0.0001, seed=1, recoil=0.0))
     assert reason == "over"
+
+
+def test_a_slow_first_frame_does_not_come_out_of_the_round(monkeypatch):
+    """Dead of Night's first draw costs seconds cold, and play could begin
+    before the warm-up got to it. The clock had already started: a simulated
+    start showed 56.66 s of 60 left on the second frame."""
+    from dataclasses import replace
+
+    from handy import app, maps, scene
+
+    clock = {"now": 1000.0}
+
+    def monotonic():
+        clock["now"] += 1 / 60  # every look at the clock is a moment later
+        return clock["now"]
+
+    monkeypatch.setattr(app.time, "monotonic", monotonic)
+    draws = []
+
+    def cold_then_warm(canvas, round_, now):
+        if not draws:
+            clock["now"] += 3.5  # building the scenery, the first time only
+        draws.append(now)
+        maps.RANGE.draw_world(canvas, round_, now)
+
+    shown: list[float] = []
+    monkeypatch.setattr(scene, "draw_timer",
+                        lambda canvas, remaining, scale=1.0: shown.append(remaining))
+    play_once(monkeypatch, keys=[NOTHING, NOTHING, NOTHING, ord("q")],
+              chosen=replace(maps.RANGE, draw_world=cold_then_warm),
+              settings=Settings(duration=60.0, seed=1, recoil=0.0))
+
+    assert len(shown) == 4
+    assert min(shown) > 59.5, f"the clock ran while the scenery was built: {shown}"
 
 
 # --- setup, at the app level -------------------------------------------------
@@ -1394,7 +1768,40 @@ class NullStream:
         return Frame()
 
 
-def test_a_dropped_frame_does_not_cost_the_round():
+@pytest.fixture
+def camera_clock(monkeypatch):
+    """Monotonic time that only moves when the game sleeps or a frame is read,
+    so seconds of a failing camera pass in no time at all."""
+    from handy import app
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(app.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(app.time, "sleep",
+                        lambda seconds: clock.update(now=clock["now"] + seconds))
+    return clock
+
+
+class GoneCapture:
+    """A webcam that hands over ``good`` frames and then nothing, each read
+    taking ``cost`` seconds of the clock - a failing backend answers in
+    microseconds."""
+
+    def __init__(self, clock, good: int = 1, cost: float = 0.0,
+                 back_after: float | None = None) -> None:
+        self.clock, self.good, self.cost = clock, good, cost
+        self.back_at = None if back_after is None else clock["now"] + back_after
+        self.reads = 0
+
+    def read(self):
+        self.reads += 1
+        self.clock["now"] += self.cost
+        if self.reads <= self.good or (self.back_at is not None
+                                       and self.clock["now"] >= self.back_at):
+            return True, np.full((720, 1280, 3), self.reads % 250, np.uint8)
+        return False, None
+
+
+def test_a_dropped_frame_does_not_cost_the_round(camera_clock):
     """One hiccup from a USB webcam used to end the game and the score with it."""
     from handy.app import Eyes
 
@@ -1407,26 +1814,145 @@ def test_a_dropped_frame_does_not_cost_the_round():
     assert stream.submitted == 1
 
 
-def test_a_camera_that_answers_true_with_no_image_is_still_a_lost_camera():
+def test_a_failing_backend_is_given_time_not_a_count_of_tries(camera_clock):
+    """Four tries back to back were over in microseconds - a failing backend
+    answers at once - so no hiccup was ever short enough to be ridden out."""
+    from handy.app import Eyes
+
+    capture = GoneCapture(camera_clock, good=0, back_after=1.0)
+    images, _ = Eyes([capture], [NullStream()], mirror=False).read()
+
+    assert images[0].shape == (720, 1280, 3)
+    assert capture.reads > 4
+
+
+def test_the_last_good_frame_stands_in_while_the_camera_hiccups(camera_clock):
+    """The game keeps drawing, and answering keys, while a camera catches up."""
+    from handy.app import Eyes
+
+    capture = GoneCapture(camera_clock, good=1, cost=0.05)
+    stream = NullStream()
+    eyes = Eyes([capture], [stream], mirror=False)
+    first, _ = eyes.read()
+    later = [eyes.read()[0][0] for _ in range(10)]  # half a second of failures
+
+    assert all(image is first[0] for image in later), "the last picture stands in"
+    assert stream.submitted == 1, "and is not recognised twice"
+
+
+def test_a_camera_that_answers_true_with_no_image_is_still_a_lost_camera(camera_clock):
     """`ok` alone was believed, so a backend answering (True, None) got as far as
     cvtColor and raised a bare cv2.error instead of the CameraError beside it."""
     from handy.app import Eyes
     from handy.cameras import CameraError
 
-    capture = FlakyCapture(bad=99, answer=(True, None))
+    capture = FlakyCapture(bad=10**9, answer=(True, None))
+    started = camera_clock["now"]
     with pytest.raises(CameraError) as raised:
         Eyes([capture], [NullStream()], mirror=False).read()
 
     assert "camera 1" in str(raised.value)
-    assert capture.reads == Eyes.ATTEMPTS, "it should have tried a few times"
+    assert camera_clock["now"] - started >= Eyes.LOST_AFTER, "it gave the camera time"
 
 
-def test_a_camera_that_has_really_gone_still_ends_the_round():
+def test_a_camera_that_has_really_gone_still_ends_the_round(camera_clock):
     from handy.app import Eyes
     from handy.cameras import CameraError
 
+    eyes = Eyes([GoneCapture(camera_clock, good=1, cost=0.05)], [NullStream()],
+                mirror=False)
+    eyes.read()
+    started = camera_clock["now"]
     with pytest.raises(CameraError):
-        Eyes([FlakyCapture(bad=99)], [NullStream()], mirror=False).read()
+        while camera_clock["now"] - started < 10:
+            eyes.read()
+    assert camera_clock["now"] - started < Eyes.LOST_AFTER + 0.2
+
+
+def test_a_camera_lost_mid_game_is_said_on_screen_and_handed_back(monkeypatch,
+                                                                  tmp_path,
+                                                                  model_path):
+    """The window used to vanish with the message only in the terminal behind it."""
+    from handy import app
+    from handy.cameras import CameraError
+
+    opened = headless(monkeypatch)
+    notices: list[list[str]] = []
+    monkeypatch.setattr(app, "show_notice", lambda canvas, lines, seconds=3.0,
+                        scale=1.0: notices.append(lines))
+
+    def gone(self):
+        raise CameraError("Lost the stream from camera 1")
+
+    monkeypatch.setattr(app.Eyes, "read", gone)
+    with pytest.raises(CameraError):
+        app.run(app.Settings(cameras=(0,), map_key="zombies", mute=True,
+                             skip_calibration=True, model_path=model_path,
+                             calibration_path=tmp_path / "calibration.json"))
+
+    assert notices and notices[-1][0] == "CAMERA LOST"
+    assert opened and all(capture.released for capture in opened)
+
+
+# --- whatever stops the launch, no camera is left on ------------------------
+
+def test_a_second_camera_that_will_not_open_hands_the_first_back(monkeypatch,
+                                                                 tmp_path):
+    import cv2
+
+    from handy import app
+    from handy.cameras import CameraError
+
+    opened = headless(monkeypatch)
+
+    def capture_for(index):
+        opened.append(FakeCapture(index, works=index == 0))
+        return opened[-1]
+
+    monkeypatch.setattr(cv2, "VideoCapture", capture_for)
+    monkeypatch.setattr(app, "ensure_model", lambda name: Path(name))
+    with pytest.raises(CameraError, match="camera 1"):
+        app.run(app.Settings(cameras=(0, 1), mute=True, skip_calibration=True,
+                             calibration_path=tmp_path / "calibration.json"))
+
+    assert [capture.index for capture in opened] == [0, 1]
+    assert opened[0].released, "the camera that did open was left running"
+
+
+@pytest.mark.parametrize("failure", [OSError("no network"), KeyboardInterrupt()],
+                         ids=["no-network", "ctrl-c"])
+def test_no_camera_is_woken_until_the_models_are_in(monkeypatch, tmp_path, failure):
+    """A download that failed, or a Ctrl+C while waiting on one, left the
+    camera light on: the cameras were opened first."""
+    from handy import app
+
+    opened = headless(monkeypatch)
+
+    def fetch(name):
+        raise failure
+
+    monkeypatch.setattr(app, "ensure_model", fetch)
+    with pytest.raises(type(failure)):
+        app.run(app.Settings(cameras=(0,), mute=True, skip_calibration=True,
+                             calibration_path=tmp_path / "calibration.json"))
+    assert opened == []
+
+
+def test_a_failure_after_the_cameras_open_still_hands_them_back(monkeypatch,
+                                                                tmp_path):
+    from handy import app
+
+    opened = headless(monkeypatch)
+    monkeypatch.setattr(app, "ensure_model", lambda name: Path(name))
+
+    def interrupted(settings):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(app, "open_window", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        app.run(app.Settings(cameras=(0, 1), mute=True, skip_calibration=True,
+                             calibration_path=tmp_path / "calibration.json"))
+    assert len(opened) == 2 and all(capture.released for capture in opened)
 
 
 # --- the model download happens before the screen goes black ----------------
@@ -1460,23 +1986,94 @@ def test_the_model_is_resolved_before_the_window_opens(monkeypatch, tmp_path):
     assert order == ["fetch gesture_recognizer", "fetch face_landmarker", "window"]
 
 
-def test_the_face_model_waits_until_the_sniper_is_named(monkeypatch):
-    """Someone who may never pick the sniper should not wait for its face model."""
+def test_every_model_a_map_can_ask_for_is_fetched_at_launch(monkeypatch):
+    """Overwatch Ridge's face model was fetched only for `--map sniper`, so a
+    first-time player who shot its card in the chooser downloaded it on the
+    game's own thread - a frozen window, or offline an uncaught OSError that
+    ended the game."""
     from handy import app
 
     fetched: list[str] = []
     monkeypatch.setattr(app, "ensure_model",
                         lambda name: fetched.append(name) or Path(name))
-    app.prefetch_models(app.Settings())
-    assert fetched == ["gesture_recognizer"]
+    for settings in (app.Settings(), app.Settings(map_key="zombies"),
+                     app.Settings(map_key="sniper")):
+        fetched.clear()
+        app.prefetch_models(settings)
+        assert fetched == ["gesture_recognizer", "face_landmarker"], settings
 
-    fetched.clear()
-    app.prefetch_models(app.Settings(map_key="sniper"))
-    assert fetched == ["gesture_recognizer", "face_landmarker"]
 
-    fetched.clear()
+def test_a_hand_model_of_your_own_still_leaves_the_scope_to_fetch(monkeypatch):
+    from handy import app
+
+    fetched: list[str] = []
+    monkeypatch.setattr(app, "ensure_model",
+                        lambda name: fetched.append(name) or Path(name))
     app.prefetch_models(app.Settings(model_path=Path("/mine.task")))
-    assert fetched == [], "--model stands in for the download"
+    assert fetched == ["face_landmarker"], "--model stands in for the hand only"
+
+
+def test_the_pistol_maps_do_not_wait_on_the_scope_model(monkeypatch, capsys):
+    """The face model is for one map. Failing to fetch it must not stop the
+    other three - but the hand model the game opens with has to arrive."""
+    from handy import app
+
+    def fetch(name):
+        if name == "face_landmarker":
+            raise OSError("no network")
+        return Path(name)
+
+    monkeypatch.setattr(app, "ensure_model", fetch)
+    app.prefetch_models(app.Settings(map_key="zombies"))  # must not raise
+    assert "face landmarker" in capsys.readouterr().out
+
+    with pytest.raises(OSError):
+        app.prefetch_models(app.Settings(map_key="sniper"))
+
+
+def test_a_map_whose_model_cannot_be_had_is_refused_on_screen(monkeypatch,
+                                                              tmp_path):
+    """Shooting Overwatch Ridge offline used to end the game with an uncaught
+    OSError. It is now a notice, and the chooser again."""
+    from contextlib import contextmanager
+    from dataclasses import replace
+
+    from handy import app, maps, schemes
+    from handy.calibration import RigBook
+    from handy.highscores import HighScores
+
+    @contextmanager
+    def tracker():
+        yield NullStream()
+
+    pistol = replace(schemes.PISTOL, open_stream=lambda *_: tracker())
+    scoped = replace(schemes.MARKSMAN, open_stream=lambda *_: tracker())
+    monkeypatch.setattr(schemes, "for_map",
+                        lambda key: scoped if key == "sniper" else pistol)
+
+    def bundles(settings, scheme):
+        if scheme.key == "marksman":
+            raise OSError("no network")
+        return [Path("hand.task")]
+
+    monkeypatch.setattr(app, "model_bundles", bundles)
+    monkeypatch.setattr(app, "refit", lambda layout, canvas: (layout, canvas))
+    headless(monkeypatch)
+    notices: list[list[str]] = []
+    monkeypatch.setattr(app, "show_notice", lambda canvas, lines, seconds=3.0,
+                        scale=1.0: notices.append(lines))
+    answers = iter([("play", maps.SNIPER), ("quit", None)])
+    monkeypatch.setattr(app, "choose_map", lambda *_: next(answers))
+    monkeypatch.setattr(app, "play", lambda *args: pytest.fail("a map was played"))
+
+    settings = app.Settings(cameras=(0,), mute=True, skip_calibration=True,
+                            calibration_path=tmp_path / "setup.json")
+    assert app._session(settings, layout_for(960, 540), [FakeCapture()],
+                        np.zeros((540, 960, 3), np.uint8), RigBook(),
+                        HighScores(tmp_path / "scores.json")) is None
+
+    assert notices and notices[0][0] == "MAP UNAVAILABLE"
+    assert next(answers, "drained") == "drained", "the chooser came back"
 
 
 def test_every_map_can_describe_its_own_result(layout):
@@ -1514,7 +2111,10 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
     monkeypatch.setattr(app, "model_bundles", lambda *_: [Path("unused")])
     monkeypatch.setattr(app, "refit", lambda layout, canvas: (layout, canvas))
     headless(monkeypatch)
-    rig = Rig((Calibration(aim_fitted=True),))
+    settings = app.Settings(cameras=(0,), mute=True, calibration_path=tmp_path / "setup.json")
+    # Stamped with the setup it was fitted on, as every rig setup saves is.
+    rig = Rig((Calibration(aim_fitted=True),),
+              app.rig_setup(settings, (0,)))
     book = RigBook()
     if has_setup:
         book.set("pistol", rig)
@@ -1531,7 +2131,6 @@ def test_sniper_reuses_hand_setup_and_releases_face_tracker_on_leaving(monkeypat
         return None, "maps" if chosen.key == "sniper" else "quit"
 
     monkeypatch.setattr(app, "play", play)
-    settings = app.Settings(cameras=(0,), mute=True, calibration_path=tmp_path / "setup.json")
     app._session(settings, layout_for(960, 540), [FakeCapture()],
                  np.zeros((540, 960, 3), np.uint8), book, HighScores(tmp_path / "scores.json"))
     assert setups == ([] if has_setup else ["marksman"])
