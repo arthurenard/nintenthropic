@@ -115,8 +115,8 @@ shot, **R** starts over, and **Esc** skips. Aim is saved in
 `~/.cache/handy/calibration.json` and reused only when it was verified with the
 same cameras, capture size and mirroring; otherwise setup runs again.
 
-During desktop play: **Q** quit, **R** restart, **B** maps, **E** controls,
-**C** recalibrate, **S** screenshot. In Dead of Night, **N** switches the opponent
+During desktop play: **Q** quit, **R** restart, **B** maps, **C** recalibrate,
+**S** screenshot. In Dead of Night, **N** switches the opponent
 and starts a fresh round. Browser controls are shown beside the play area.
 
 ## Options
@@ -129,7 +129,7 @@ page; the remaining flags configure the desktop app.
 | `--browser` | off | Launch the local browser arcade; takes only `--port` and `--no-open` |
 | `--port` | `8765` | Browser server port (with `--browser`) |
 | `--no-open` | off | Start browser server without opening a tab (with `--browser`) |
-| `--control` | `pistol` | Hand controls; the sniper eye scope is automatic |
+| `--control` | `pistol` | The only hand control, kept for old scripts; the sniper eye scope is automatic |
 | `--map` | chooser | `zombies`, `western`, `orbit`, `sniper` |
 | `--enemy` | `zombies` | Dead of Night: `zombies` or `robots` |
 | `--camera` | first live camera | Camera index; repeat for multiple cameras |

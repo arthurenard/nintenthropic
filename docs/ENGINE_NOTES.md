@@ -596,7 +596,8 @@ at the camera and is so foreshortened that its 2D direction carries almost no
 information. The thumb, side-on to the camera, stays perfectly readable — which
 is why it makes the trigger.
 
-The aim map is fitted in Hartley-normalised coordinates and refused when it is
-ill-conditioned — points a hair off a line are as degenerate as points on it —
-and a point past a projective map's horizon is refused rather than thrown to the
-opposite corner of the screen.
+The affine aim map is a plain least-squares fit, refused when its points are
+ill-conditioned. That is judged in Hartley-normalised coordinates, so points a
+hair off a line count as just as degenerate as points on it. Maps are stored as
+homographies, and a point past a map's horizon is refused rather than thrown to
+the opposite corner of the screen.
