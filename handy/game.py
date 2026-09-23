@@ -198,6 +198,7 @@ class Round:
         """Advance the clock, retire old impacts, then let the map move."""
         if self.started_at is None:
             self.started_at = now  # the clock starts on the first frame
+            self.begin(now)
         self.impacts = [i for i in self.impacts if now - i.at < self.IMPACT_TTL]
         if not self.is_over(now):
             self.advance(now)
@@ -237,6 +238,18 @@ class Round:
     def scoped_shot(self) -> tuple[int, int] | None:
         """Where a scoped shot lands on screen, or None if this map has no scope."""
         return None
+
+    def begin(self, now: float) -> None:
+        """The first frame: move whatever the map laid out in advance onto the clock.
+
+        A map is built before anyone knows what the clock will read when play
+        starts, and the clock the game runs on is ``time.monotonic()`` - which
+        on a machine that has been up a few days reads hundreds of thousands
+        of seconds, not zero. So anything a map schedules at construction ("the
+        first truck at eight seconds", "these two already walking the road") is
+        written in seconds from the start of the round, and shifted by ``now``
+        here, once.
+        """
 
     def advance(self, now: float) -> None:
         """Move and spawn whatever this map puts in front of the player."""

@@ -302,6 +302,12 @@ class OrbitRound(Round):
         super().__post_init__()
         self.view = Projection.for_area(self.options.area)
 
+    def begin(self, now: float) -> None:
+        # The timers start in seconds from the start of the round: the drone
+        # goes out six seconds in, not on the first frame.
+        self._next_spawn += now
+        self._next_drone += now
+
     # --- rules -------------------------------------------------------------
 
     @property

@@ -484,6 +484,18 @@ class SniperRound(Round):
                     phase=2.0),
         ]
 
+    def begin(self, now: float) -> None:
+        # Everything above was set out in seconds from the start of the round.
+        # A patrol's place on the road is worked out from when it was born, so
+        # left at zero against a clock reading 300,000 the opening two would
+        # be kilometres off the end of it and gone on the first frame.
+        for hostile in self.hostiles:
+            hostile.born += now
+        self._next_spawn += now
+        self._next_vehicle += now
+        self._next_gust += now
+        self._next_dust += now
+
     # --- the view ------------------------------------------------------------
 
     def set_frame(self, width: int, height: int) -> None:

@@ -578,6 +578,13 @@ class WesternRound(Round):
         for slot in range(RAIL_SLOTS):
             self._fill_slot(slot, 0.0)
 
+    def begin(self, now: float) -> None:
+        # The timers start in seconds from the start of the round: the first
+        # tumbleweed a second in, the first dust devil two.
+        self._next_figure += now
+        self._next_devil += now
+        self._next_weed += now
+
     # --- what can be shot ---------------------------------------------------------
 
     @property
