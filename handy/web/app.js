@@ -234,15 +234,26 @@ function stopCamera() {
   $("camera").srcObject = null;
   drawHandGraph([]);
 }
+function focusStart() {
+  // Back in the lobby, focus returns to the Start button - unless the player
+  // has already put it somewhere else in the lobby.
+  if (!$("lobby").contains(document.activeElement)) $("start").focus();
+}
 async function start() {
   if (busy) return;
   busy = true;
+  // back() moves the generation on. Each wait below checks it, so a start the
+  // player abandoned - by returning to the arcade while it loaded - undoes
+  // itself instead of reopening the game over the lobby.
+  const run = ++generation;
+  const stale = () => generation !== run;
   $("start").disabled = true;
   $("error").hidden = true;
   $("start").textContent = isCamera() ? "Opening camera…" : "Starting game…";
   try {
     audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
     await audioContext.resume();
+    if (stale()) return;
     if (isCamera()) {
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error(
@@ -256,8 +267,10 @@ async function start() {
         },
         audio: false,
       });
+      if (stale()) return;
       $("camera").srcObject = media;
       await $("camera").play();
+      if (stale()) return;
       media.getVideoTracks()[0].addEventListener("ended", () => {
         if (active) {
           showError(
@@ -273,23 +286,11 @@ async function start() {
     $("start").textContent = isCamera()
       ? "Preparing local tracking…"
       : "Opening the arcade…";
-    $("lobby").hidden = true;
-    $("game").hidden = false;
+    // The game view opens while the server loads, since the stage must be laid
+    // out to be measured. Set it up for this game first, clearing whatever the
+    // last one left on the stage.
     $("game").classList.toggle("immersive", selectedControl === "pistol");
-    session = await request("/api/start", {
-      viewAspect: stageAspect(),
-      map: selectedMap,
-      control: selectedControl,
-      enemy: $("enemy").value,
-      duration: Number($("duration").value),
-      calibration: storage.get(setupKey),
-    });
-    // The server could not use the stored setup - an older format, or damaged -
-    // and started a fresh one. Forget it, or every start would send it again.
-    if (session.forgetSavedSetup) storage.remove(setupKey);
-    $("lobby").hidden = true;
-    $("game").hidden = false;
-    $("game").classList.toggle("immersive", selectedControl === "pistol");
+    $("stage-overlay").hidden = true;
     $("game-image").hidden = true;
     $("score-label").textContent = isDrive() ? "Position" : "Score";
     $("time-label").textContent = isDrive() ? "Race" : "Time";
@@ -326,6 +327,28 @@ async function start() {
           (selectedMap === "sniper" ? " · Right-click / Shift to scope" : "");
     $("health-wrap").hidden = selectedMap !== "zombies";
     $("accuracy-wrap").hidden = isDrive();
+    $("lobby").hidden = true;
+    $("game").hidden = false;
+    window.scrollTo({ top: 0 });
+    // The Start button went with the lobby: move focus to what replaced it.
+    $("game-title").focus();
+    const created = await request("/api/start", {
+      viewAspect: stageAspect(),
+      map: selectedMap,
+      control: selectedControl,
+      enemy: $("enemy").value,
+      duration: Number($("duration").value),
+      calibration: storage.get(setupKey),
+    });
+    if (stale()) {
+      // back() had no session to stop yet, so this one would stay open.
+      request("/api/stop", { id: created.id }).catch(() => {});
+      return;
+    }
+    session = created;
+    // The server could not use the stored setup - an older format, or damaged -
+    // and started a fresh one. Forget it, or every start would send it again.
+    if (session.forgetSavedSetup) storage.remove(setupKey);
     active = true;
     currentState = "";
     keys.clear();
@@ -334,10 +357,9 @@ async function start() {
     scoped = false;
     lastSaved = "";
     renderState(session);
-    window.scrollTo({ top: 0 });
-    generation++;
-    loop(generation);
+    loop(run);
   } catch (error) {
+    if (stale()) return; // back() has already restored the lobby
     $("game").hidden = true;
     $("lobby").hidden = false;
     stopCamera();
@@ -350,9 +372,12 @@ async function start() {
     };
     showError(messages[error.name] || error.message);
   } finally {
+    // An abandoned start may have opened the camera after back() closed it.
+    if (stale()) stopCamera();
     busy = false;
     $("start").disabled = false;
     renderControls();
+    if (!$("lobby").hidden) focusStart();
   }
 }
 function cameraFrame() {
@@ -526,6 +551,9 @@ async function back() {
   touchKeys.clear();
   fire = false;
   stopCamera();
+  // A start still loading stops its own session when it arrives; Start stays
+  // disabled until then, so the two cannot overlap.
+  if (busy) $("start").textContent = "Cancelling…";
   try {
     if (session) await request("/api/stop", { id: session.id });
   } catch {
@@ -535,6 +563,7 @@ async function back() {
   $("game").hidden = true;
   $("lobby").hidden = false;
   returning = false;
+  focusStart();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 function point(event) {
