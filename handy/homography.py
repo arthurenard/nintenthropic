@@ -23,6 +23,14 @@ IDENTITY: Matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 #: Fewer correspondences than this cannot determine a homography.
 MIN_POINTS = 4
 
+#: The most a fit may be ill-conditioned, as a ratio of singular values, before
+#: it is refused as degenerate. Exactly collinear points are not the only ones
+#: that cannot determine a map: a hair off a line, least squares still finds a
+#: unique answer - and it magnifies movement millions of times. Real placements
+#: sit far below this (a camera at the fusion gain limit is around five);
+#: judging those is the gain gate's job, not this one's.
+MAX_CONDITION = 1e3
+
 
 def box_mapping(low: Point, high: Point) -> Matrix:
     """The plain axis-aligned map, as a homography: ``low`` to 0, ``high`` to 1."""
@@ -59,6 +67,16 @@ def _conditioning(points: np.ndarray) -> np.ndarray:
                      [0.0, 0.0, 1.0]])
 
 
+def _well_conditioned(matrix: np.ndarray) -> bool:
+    """Whether ``matrix`` is far enough from singular to mean something.
+
+    Compared as a product rather than a ratio, so a singular value of exactly
+    zero reads as degenerate instead of dividing by it.
+    """
+    singular = np.linalg.svd(matrix, compute_uv=False)
+    return bool(singular[-1] * MAX_CONDITION >= singular[0] > 0.0)
+
+
 def fit(source: Sequence[Point], destination: Sequence[Point]) -> Matrix | None:
     """Least-squares homography taking ``source`` onto ``destination``.
 
@@ -92,6 +110,12 @@ def fit(source: Sequence[Point], destination: Sequence[Point]) -> Matrix | None:
         return None
 
     matrix = vectors[-1].reshape(3, 3)
+    # A unique solution can still be a nonsense one. Three of four points a
+    # hair off a line pass the test above, and the map that comes back is
+    # nearly singular - measured in conditioned coordinates, so the verdict
+    # does not depend on where the points sit or how far they spread.
+    if not _well_conditioned(matrix):
+        return None
     matrix = np.linalg.inv(normalise_dst) @ matrix @ normalise_src
     if abs(matrix[2, 2]) < 1e-12 or not np.all(np.isfinite(matrix)):
         return None
@@ -184,6 +208,13 @@ def fit_affine(source: Sequence[Point], destination: Sequence[Point]) -> Matrix 
 
     ones = np.ones((len(src), 1))
     design = np.hstack([src, ones])
+    # Rank only catches points exactly on a line. A billionth off it, least
+    # squares finds a unique map that magnifies movement 450 million times;
+    # the condition number of the design sees that. Judged on conditioned
+    # coordinates, so it measures the shape of the point cloud - how nearly it
+    # collapses onto a line - and not where it sits or how large it is.
+    if not _well_conditioned((_conditioning(src) @ design.T).T):
+        return None  # collinear, coincident, or as good as
     try:
         coefficients, _, rank, _ = np.linalg.lstsq(design, dst, rcond=None)
     except np.linalg.LinAlgError:
