@@ -209,6 +209,25 @@ def test_a_dropped_frame_or_two_does_not_cost_the_shot():
     assert pistol.hold(75).fired or pistol.shots == 1
 
 
+def test_a_native_thumb_says_where_it_is_while_the_hand_blinks_out():
+    """A frame without the hand reported the stroke trigger's flag, which the
+    native thumb never updates: True from the start, False for ever after the
+    first long loss. So a folded thumb read ARMED through every dropout, and
+    once the hand had been lost properly, every later blip dropped the light and
+    brought it back - a re-cock click each time, the thumb never having moved."""
+    pistol = Pistol(native_thumb=True)
+    assert not pistol.hold(70).armed, "first seen folded: not ready"
+    assert not pistol.lose_hand(frames=2).armed, "and a blip does not cock it"
+
+    pistol.lose_hand(frames=15)  # properly gone
+    assert pistol.hold(20).armed
+    armed = []
+    for _ in range(3):
+        armed.append(pistol.lose_hand(frames=2).armed)
+        armed.append(pistol.hold(20).armed)
+    assert all(armed), "a raised thumb stays cocked through every blip"
+
+
 def test_the_aim_is_mapped_through_the_calibrated_box():
     # The box runs 0.2..0.8, so those edges are the edges of the window. The
     # filter never lands exactly, hence the tolerance.

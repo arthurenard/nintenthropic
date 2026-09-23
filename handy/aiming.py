@@ -322,7 +322,14 @@ class AimController:
                 self._thumb_ready = False
                 self._trough = None
                 self._below = 0
-            return Aim(armed=self._armed, baseline=self._trough or 0.0)
+            # Each trigger reports its own readiness. `_armed` belongs to the
+            # stroke trigger, which the native thumb never updates: it reads
+            # True until the first long loss and False for ever after - so a
+            # folded thumb showed ARMED through every hiccup, and later every
+            # hiccup dropped the light and brought it back with a re-cock
+            # click, the thumb never having moved.
+            armed = self._thumb_ready if self.native_thumb else self._armed
+            return Aim(armed=armed, baseline=self._trough or 0.0)
 
         self._last_seen = timestamp
         position = self._filter(_clamp(fused.position), timestamp)
