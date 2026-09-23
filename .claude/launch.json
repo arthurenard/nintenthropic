@@ -2,9 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "strudelify-web",
-      "url": "http://127.0.0.1:5173",
-      "port": 5173
+      "name": "handy-browser",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "handy", "--browser", "--no-open", "--port", "8765"],
+      "port": 8765
     }
   ]
 }
