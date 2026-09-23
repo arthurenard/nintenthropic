@@ -5,7 +5,7 @@ import pytest
 
 from handy import homography
 from handy.calibration import (GRID_MARGIN, Calibration, CalibrationSession,
-                               Rig, aim_steps, default_calibration,
+                               Rig, Setup, aim_steps, default_calibration,
                                reach_steps, trigger_steps)
 from handy.schemes import PISTOL
 from handy.recognition import Frame
@@ -315,8 +315,11 @@ def test_whether_the_aim_was_really_fitted_survives_the_round_trip(tmp_path):
     assert not loaded[1].aim_fitted, "the defaults were never fitted to anyone"
 
 
-def test_a_file_from_before_the_flag_existed_is_read_by_its_error_figures(tmp_path):
-    """The only trace a real fit left in an older save is a non-zero error."""
+def test_a_file_from_before_the_flag_existed_cannot_vouch_for_its_fit(tmp_path):
+    """Its error figures used to be read as proof of a fit. A non-zero figure
+    says something was fitted, not that it was any good: the old pose fitter
+    left a real player a map whose horizon crossed the camera frame, and it
+    was reused, unchecked, on every launch."""
     path = tmp_path / "old.json"
     common = {"mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1], "signal": "angle",
               "cocked": 20.0, "folded": 70.0}
@@ -326,7 +329,7 @@ def test_a_file_from_before_the_flag_existed_is_read_by_its_error_figures(tmp_pa
     ]}))
     rig = Rig.load(path)
 
-    assert rig[0].aim_fitted
+    assert not rig[0].aim_fitted
     assert not rig[1].aim_fitted
 
 
@@ -662,3 +665,107 @@ def test_a_save_replaces_the_book_whole_or_not_at_all(tmp_path, monkeypatch):
     assert book.save(path) is False
     assert path.read_text() == before, "the old book is untouched"
     assert list(tmp_path.iterdir()) == [path], "and nothing is left beside it"
+
+
+# --- reusing a saved rig -----------------------------------------------------
+
+HERE = Setup(mirror=True, camera_indices=(0,), capture=(1280, 720))
+FITTED = Calibration(aim_fitted=True, fit_error=0.01, gain=2.0)
+
+# What the old pose fitter saved on a real machine: fitted by its own account,
+# with a horizon that crosses the camera frame at x = 0.82 on the top edge.
+LEGACY_ENTRY = {
+    "mapping": [2.871934573670249, -0.061145355513888985, -1.2142552975804075,
+                -0.9041251222717106, 2.3601729633571686, -0.8949543501390803,
+                -1.2131671258909114, 0.4386268157484197, 1.0],
+    "signal": "reach", "cocked": 2.702939951868207, "folded": 2.1529399518682073,
+    "tuning": [0.0, 0.0], "fit_error": 0.022942265668913647,
+    "generalisation": 0.04382763316070792, "trigger_fitted": True,
+    "jitter": 0.007017964000998796, "gain": 5.4213851778088005,
+    "slide": [0.04323528411084698, -0.020166283693333564]}
+
+
+def test_a_rig_remembers_the_setup_it_was_fitted_on(tmp_path):
+    from handy.calibration import RigBook
+
+    path = tmp_path / "calibration.json"
+    book = RigBook()
+    book.set("pistol", Rig((FITTED,), HERE))
+    book.save(path)
+
+    saved = json.loads(path.read_text())["schemes"]["pistol"]["setup"]
+    assert saved == {"mirror": True, "camera_indices": [0], "capture": [1280, 720]}
+    assert RigBook.load(path).get("pistol") == Rig((FITTED,), HERE)
+
+
+def test_a_setup_record_says_exactly_what_it_means():
+    good = {"mirror": True, "camera_indices": [0, 2], "capture": [640, 480]}
+    assert Setup.from_dict(good) == Setup(True, (0, 2), (640, 480))
+    for bad in ({**good, "mirror": "false"}, {**good, "camera_indices": [0.5]},
+                {**good, "capture": [640]}, {**good, "capture": [640, "480"]}):
+        with pytest.raises((ValueError, TypeError)):
+            Setup.from_dict(bad)
+    with pytest.raises(ValueError):
+        Rig((FITTED,), Setup(True, (0, 1), (640, 480)))  # two indices, one camera
+
+
+def test_a_rig_fitted_on_this_very_setup_is_reused():
+    assert Rig((FITTED,), HERE).mismatch(HERE) is None
+
+
+@pytest.mark.parametrize("elsewhere", [
+    Setup(mirror=False, camera_indices=(0,), capture=(1280, 720)),
+    Setup(mirror=True, camera_indices=(1,), capture=(1280, 720)),
+    Setup(mirror=True, camera_indices=(0,), capture=(640, 480)),
+])
+def test_a_rig_is_not_reused_on_a_different_setup(elsewhere):
+    """Mirroring sends x to 1 - x and the fitted map then aims every movement
+    backwards; another camera is another placement; another capture size can
+    crop the frame to another shape. Each leaves a saved map aiming
+    confidently somewhere else, with nothing on screen to say why."""
+    assert Rig((FITTED,), HERE).mismatch(elsewhere) is not None
+
+
+def test_a_rig_that_never_said_what_it_was_fitted_on_is_not_reused():
+    assert "cameras" in Rig((FITTED,)).mismatch(HERE)
+
+
+def test_a_rig_for_another_number_of_cameras_is_not_reused():
+    two = Setup(mirror=True, camera_indices=(0, 1), capture=(1280, 720))
+    assert "2 camera" in Rig((FITTED, FITTED), two).mismatch(HERE)
+
+
+def test_a_rig_nobody_was_fitted_to_is_not_reused():
+    assert Rig((DEFAULT,), HERE).mismatch(HERE) is not None
+    assert Rig((Calibration(aim_fitted=False, fit_error=0.02),), HERE).mismatch(HERE)
+
+
+def test_a_camera_sitting_the_game_out_does_not_stop_the_rest_being_reused():
+    """A camera placed too side-on is told to sit out with an infinite gain; it
+    was never fitted, and has no say in whether the others can be trusted."""
+    two = Setup(mirror=True, camera_indices=(0, 1), capture=(1280, 720))
+    idle = Calibration(gain=float("inf"))
+    assert Rig((FITTED, idle), two).mismatch(two) is None
+    assert Rig((idle, idle), two).mismatch(two) is not None, "but someone must aim"
+
+
+def test_a_map_whose_horizon_is_in_view_is_not_reused():
+    """Even stamped and claiming a fit, a map that folds over inside the camera
+    frame throws the crosshair to the opposite corner when the hand strays."""
+    folded = Calibration.from_dict({**LEGACY_ENTRY, "aim_fitted": True})
+    assert "horizon" in Rig((folded,), HERE).mismatch(HERE)
+
+
+def test_the_legacy_save_from_a_real_machine_is_not_reused(tmp_path):
+    """The file this whole change is about: no aim_fitted flag, no setup, and a
+    horizon in view. Every one of those alone now sends the player to setup."""
+    from handy.calibration import RigBook
+
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps({"schemes": {
+        "pistol": {"cameras": [LEGACY_ENTRY]},
+        "marksman": {"cameras": [LEGACY_ENTRY]}}}))
+    saved = RigBook.load(path).get("pistol")
+
+    assert not saved.cameras[0].aim_fitted
+    assert saved.mismatch(HERE) is not None

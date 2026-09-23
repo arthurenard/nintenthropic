@@ -20,7 +20,7 @@ import numpy as np
 from . import maps, scene, schemes
 from .aiming import Aim, AimController, Recoil, EyeScope
 from .audio import Audio, Sounds
-from .calibration import CalibrationSession, Rig, RigBook, default_calibration, default_rig
+from .calibration import CalibrationSession, Rig, RigBook, Setup, default_calibration, default_rig
 from .shot_calibration import ShotCalibration
 from . import display
 from .cameras import CameraError, first_live, open_camera
@@ -839,17 +839,28 @@ def cameras_for(scheme, indices: tuple[int, ...]) -> tuple[int, ...]:
     return indices if limit is None else tuple(indices[:limit])
 
 
+def rig_setup(settings: Settings, indices: tuple[int, ...]) -> Setup:
+    """What a rig fitted now is fitted on: this image, these cameras, this size."""
+    return Setup(mirror=settings.mirror, camera_indices=tuple(indices),
+                 capture=(settings.capture_width, settings.capture_height))
+
+
 def saved_rig(book: RigBook, settings: Settings, scheme,
-              in_use: int) -> Rig | None:
-    """The saved rig for this scheme, if it still matches the cameras in use."""
+              indices: tuple[int, ...]) -> Rig | None:
+    """The saved rig for this scheme, if it was fitted on exactly this setup.
+
+    Reusing a rig skips setup, so it takes proof - see ``Rig.mismatch``.
+    Anything less runs setup again: a minute of shooting targets, against a
+    session spent aiming with a map that points somewhere else.
+    """
     if settings.calibrate:
         return None  # asked for a fresh one
     saved = book.get(schemes.calibration_key(scheme))
     if saved is None:
         return None
-    if len(saved) != in_use:
-        print(f"Saved {scheme.title.lower()} calibration is for {len(saved)} "
-              f"camera(s) but {in_use} in use: setup again.")
+    problem = saved.mismatch(rig_setup(settings, indices))
+    if problem is not None:
+        print(f"Saved {scheme.title.lower()} calibration not reused: {problem}.")
         return None
     return saved
 
@@ -1033,7 +1044,7 @@ def _session(scheme, settings: Settings, layout: Layout,
         spare = len(settings.cameras) - len(indices)
         print(f"{scheme.title.title()} uses {len(indices)} camera; "
               f"{spare} left idle - a second view has nothing to add to it.")
-    rig = saved_rig(book, settings, scheme, len(indices))
+    rig = saved_rig(book, settings, scheme, indices)
     chosen = maps.by_key(settings.map_key) if settings.map_key else None
     last: Round | None = None
     last_map: Map | None = None
@@ -1077,6 +1088,8 @@ def _session(scheme, settings: Settings, layout: Layout,
                     ], scale=layout.scale)
                 return not window_closed()
             needs_setup = False
+            # Say what it was fitted on: the next launch reuses it only there.
+            measured = replace(measured, setup=rig_setup(settings, indices))
             rig = measured
             book.set(schemes.calibration_key(scheme), measured)
             book.save(calibration_path(settings))
