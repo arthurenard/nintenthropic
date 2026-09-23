@@ -1,0 +1,173 @@
+# Handy
+
+A local webcam arcade with **four games** and a **Target Range warm-up**.
+Play with a finger pistol in your browser or the fullscreen desktop app.
+Mouse and touch are available as a smaller alternative in the browser.
+
+## Play in your browser
+
+```bash
+uv run python -m handy --browser
+```
+
+Open **http://127.0.0.1:8765** if a tab does not open automatically. Keep the
+terminal running; Ctrl+C stops the server. Choose a game and press **Warm up & play**. Finger pistol is selected by default.
+The smaller **Use mouse or touch instead** option needs no camera or calibration.
+
+This is a **local browser interface backed by Python**, not a standalone hosted
+website. The maps use the shared game engine and rendering. There is no
+JavaScript copy of the game rules. It serves only this computer, one active game
+at a time; starting in another tab replaces the previous session.
+
+Camera frames travel only between the browser and the local Python process.
+They are processed in memory, not saved or sent to a cloud service. Camera modes
+download their MediaPipe model bundles on first use; after that they use the
+cached bundles. Mouse and touch do not load models.
+
+For a different port or to open the browser yourself:
+
+```bash
+uv run python -m handy --browser --port 8766 --no-open
+```
+
+Browser launch accepts `--port` and `--no-open`; choose the game, controls,
+opponent, and duration in the page. Other CLI settings below belong to the
+desktop app. Use a current desktop browser with camera permission enabled for
+localhost. If the camera is denied, missing, or busy, choose mouse / touch
+and play immediately.
+
+## Which controls are there?
+
+**Finger pistol is the main control:** move your index fingertip to aim, fold
+your thumb to fire, and raise it to re-arm. The webcam preview shows your hand’s
+tracked joints and connecting bones during warm-up and play.
+
+Mouse / touch is an alternative: point and click or tap. Right-click or Shift
+controls the sniper scope.
+
+**On Overwatch Ridge, hand controls automatically track your eyes too.** Close
+an eye and hold it briefly to look down the scope; open it to zoom out.
+The detector uses lid closure directly and filters short natural blinks.
+While scoped, hand motion moves the view at **one-quarter sensitivity**. You still aim and shoot
+with your hand. There is no separate scope mode to select and **no eye
+calibration**. The hand setup is shared with the other shooting maps.
+
+Mouse players use right-click or Shift for the scope, without a camera.
+
+## Calibration without guessing
+
+Hand controls open **Target Range** before the selected game:
+
+1. Keep your hand visible in the **live mirrored camera view**. The target field
+   fills most of the window and keeps the same size when the game starts.
+2. Point naturally at the lit target and **fold your thumb to shoot**. Raise it
+   before the next shot. Thumb angle and distance from the fingers work out of
+   the box; there are no thumb poses to calibrate.
+3. After **two usable shots**, the crosshair shows your estimated aim. A third
+   shot finishes the initial fit. A saved fit goes straight to the accuracy check.
+4. Hit the centres of **five different targets** with that mapping. Only shots
+   inside the inner two rings count. These hits verify the existing fit; they
+   are not used to train it.
+5. After the fifth accurate hit, the aim saves and your selected game starts
+   automatically. A miss can refine the aim; changing the fit restarts the check.
+   **Undo shot** removes a mistake; **Start over** clears the current attempt.
+
+Setup uses your hand position just before the thumb folds, avoiding movement
+caused by firing. No thumb or eye calibration is needed. Use **Adjust aim** after
+moving your camera or seat. Browser settings are saved per camera and are
+independent of the desktop calibration file.
+
+The browser pauses when you switch tabs or windows. Use **Pause / P**, or resume
+from the overlay. **Arcade** stops the camera and returns to game selection.
+
+## Games and opponents
+
+| Game | What you do |
+| --- | --- |
+| Dead of Night | Survive approaching waves; headshots kill, body shots slow |
+| High Noon | Shoot bottles and bandits in a western street |
+| Orbital Decay | Protect the station from incoming debris |
+| Overwatch Ridge | Aim across a valley with a rifle and scope |
+
+In **Dead of Night**, choose **Zombies** or **Humanoid robots** in the opponent
+selector before starting. Robots have armoured bodies, illuminated visors and
+spark impacts. They use the same head/body damage, score, and wave rules; robots
+remain upright, while zombies also have crawling and limping variants.
+
+## Desktop app
+
+```bash
+uv run python -m handy
+uv run python -m handy --map zombies --enemy robots
+uv run python -m handy --map sniper
+```
+
+`uv` installs the dependencies automatically. macOS may ask for camera access for
+your terminal; manage it under **System Settings → Privacy & Security → Camera**.
+
+Desktop setup uses the same Target Range warm-up with a live hand skeleton.
+Five accurate hits accept the aim and start play automatically. **B** undoes a
+shot, **R** starts over, and **Esc** skips. Aim is reused from
+`~/.cache/handy/calibration.json`.
+
+During desktop play: **Q** quit, **R** restart, **B** maps, **E** controls,
+**C** recalibrate, **S** screenshot. In Dead of Night, **N** switches the opponent
+and starts a fresh round. Browser controls are shown beside the play area.
+
+## Options
+
+Browser launch uses the first three flags. Configure browser gameplay in the
+page; the remaining flags configure the desktop app.
+
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `--browser` | off | Launch the local browser arcade |
+| `--port` | `8765` | Browser server port |
+| `--no-open` | off | Start browser server without opening a tab |
+| `--control` | `pistol` | Hand controls; the sniper eye scope is automatic |
+| `--map` | chooser | `zombies`, `western`, `orbit`, `sniper` |
+| `--enemy` | `zombies` | Dead of Night: `zombies` or `robots` |
+| `--camera` | auto-detect | Camera index; repeat for multiple cameras |
+| `--list-cameras` | | List cameras and exit |
+| `--capture` | `1280x720` | Camera resolution |
+| `--no-mirror` | off | Use an unmirrored camera view |
+| `--model` | cached bundle | Custom hand `.task` model; sniper also loads the face model |
+| `--duration` | `60` | Seconds per shooting round; `0` is endless |
+| `--calibrate` | off | Redo saved setup |
+| `--no-calibration` | off | Use defaults |
+| `--calibration-file` | cache directory | Override calibration file |
+| `--min-cutoff` | per control | Smoothing when holding still |
+| `--beta` | per control | Responsiveness during movement |
+| `--fire-above` | per control | Trigger travel needed to shoot |
+| `--arm-below` | per control | Travel below which the trigger re-arms |
+| `--recoil` | `26` | Crosshair kick in pixels; `0` disables |
+| `--mute` / `--volume` | sound on / `1.0` | Sound output; volume 0–1 |
+| `--targets` | `3` | Initial target density |
+| `--spawn-interval` | `1.1` | Seconds between spawns |
+| `--lifetime` | `5.0` | Target lifetime in seconds |
+| `--seed` | random | Reproducible target sequence |
+| `--debug` | off | Tracking diagnostics |
+| `--screenshot-dir` | `screenshots/` | Screenshot location |
+
+## Development
+
+```bash
+uv run pytest
+uv run ruff check handy tests
+node --check handy/web/app.js
+```
+
+- `handy/browser.py` — local HTTP adapter, session lifecycle and browser input.
+- `handy/web/` — dependency-free HTML, CSS, and JavaScript interface.
+- `handy/shot_calibration.py`, `calibration.py`, `schemes.py`, `aiming.py` — shared control pipeline.
+- `handy/game.py`, `handy/maps/` — shared game rules and drawing.
+- `handy/app.py`, `cli.py` — desktop window and launch commands.
+- `tests/` — game rules, calibration, browser lifecycle, rendering, and tracking.
+
+The browser uses one camera and a game render sized to the target area. It uses lightweight
+browser-generated sound cues; the desktop app retains the full sound mixer,
+multi-camera fusion, and desktop high scores. Browser camera accuracy still
+depends on lighting, framing, and the player; practice before starting a round.
+
+The detailed tracking, rendering, camera-fusion, and map design explanations
+are kept in [Engine notes](docs/ENGINE_NOTES.md).

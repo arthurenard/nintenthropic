@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#101412" />
+    <title>Handy — The webcam arcade</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label="Handy home"
+        ><span class="logo">✳</span> handy<span class="dot">.</span></a
+      ><span class="edition"
+        >THE WEBCAM ARCADE <span>/</span> LOCAL EDITION</span
+      ><span class="local"><i></i> On your computer</span>
+    </header>
+    <main>
+      <div id="lobby">
+        <section class="intro">
+          <div>
+            <p class="eyebrow">HANDS UP. GAME ON.</p>
+            <h1>Your hands.<br />A whole <em>arcade.</em></h1>
+            <p class="lede">
+              Four worlds, one finger pistol. Pick a game, choose your
+              controls,<br class="desktop" />
+              and make yourself at home.
+            </p>
+          </div>
+          <div class="intro-note">
+            <span>01 — 04</span>
+            <p>No controller?<br />You already have two.</p>
+            <small>Mouse and touch are available too.</small>
+          </div>
+        </section>
+        <div class="section-label">
+          <h2><span>01</span> Choose your game</h2>
+          <p>Choose your game. Target Range gets your aim ready.</p>
+        </div>
+        <div id="maps" class="map-grid" aria-label="Games"></div>
+        <section class="setup-panel">
+          <div class="setup-title">
+            <h2><span>02</span> Make it yours</h2>
+            <p id="selected-name">Target Range</p>
+          </div>
+          <div class="setup-body">
+            <div class="control-heading">
+              <h3>How do you want to play?</h3>
+              <span id="control-count">Mouse or hand controls</span>
+            </div>
+            <div id="controls" class="control-grid"></div>
+            <div class="options">
+              <label id="enemy-option" hidden
+                >Opponent<select id="enemy">
+                  <option value="zombies">Zombies</option>
+                  <option value="robots">Humanoid robots</option>
+                </select></label
+              ><label id="duration-option"
+                >Round length<select id="duration">
+                  <option value="60">60 seconds</option>
+                  <option value="120">2 minutes</option>
+                  <option value="180">3 minutes</option>
+                </select></label
+              >
+              <p id="setup-hint">
+                No camera. No calibration. Jump straight in.
+              </p>
+              <button id="start" class="primary">
+                Let's play <span>↗</span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <details class="guide">
+          <summary>How do the controls work?</summary>
+          <div class="guide-content">
+            <p>
+              <strong>Hand controls for shooting:</strong> point your index
+              finger to aim and fold your thumb to fire. On Overwatch Ridge,
+              your eyes are also tracked: close one eye to look down the scope.
+              Shoot a few targets to set your aim. Thumb gestures and the eye
+              scope need no calibration.
+            </p>
+            <p>
+              <strong>Target Range warm-up:</strong> learn your aim by shooting,
+              then land five accurate hits to start your selected game
+              automatically. Mouse and touch remain available as an alternative.
+            </p>
+          </div>
+        </details>
+        <footer>
+          <span>Built for a little everyday play.</span
+          ><span
+            >Camera frames stay on this computer.
+            <a href="#" id="privacy">How it works ↗</a></span
+          >
+        </footer>
+      </div>
+      <section id="game" hidden aria-label="Game session">
+        <div class="game-heading">
+          <button id="back" class="quiet">← Arcade</button>
+          <div>
+            <p class="eyebrow" id="game-category">NOW PLAYING</p>
+            <h1 id="game-title">Target Range</h1>
+          </div>
+          <div class="game-actions">
+            <button id="sound" class="quiet" aria-pressed="false">
+              Sound on</button
+            ><button id="fullscreen" class="quiet">Full screen ↗</button>
+          </div>
+        </div>
+        <div class="play-layout">
+          <div class="game-main">
+            <div class="hud">
+              <span
+                ><span id="score-label">Score</span>
+                <strong id="score">0</strong></span
+              ><span id="health-wrap" hidden
+                >Health <strong id="health">100</strong></span
+              ><span id="accuracy-wrap"
+                >Accuracy <strong id="accuracy">0%</strong></span
+              ><span class="time"
+                ><span id="time-label">Time</span>
+                <strong id="time">60</strong></span
+              >
+            </div>
+            <div class="stage" id="stage">
+              <img
+                id="game-image"
+                width="960"
+                height="540"
+                alt="Game view"
+                draggable="false"
+              />
+              <div id="stage-overlay" class="stage-overlay" hidden>
+                <h2 id="overlay-title">Paused</h2>
+                <p id="overlay-copy"></p>
+                <button class="primary" id="overlay-action">Resume</button>
+              </div>
+            </div>
+            <div class="play-footer">
+              <p id="play-instructions">Move to aim · Click to fire</p>
+              <button id="pause" class="quiet">Pause <kbd>P</kbd></button>
+            </div>
+            <div class="touch-drive" id="touch-drive" hidden>
+              <button data-drive="left">← Left</button
+              ><button data-drive="right">Right →</button
+              ><button data-drive="go">Accelerate</button
+              ><button data-drive="brake">Brake</button>
+            </div>
+          </div>
+          <aside class="coach">
+            <div class="coach-head">
+              <span class="eyebrow">YOUR CONTROLS</span
+              ><strong id="active-control">Mouse & touch</strong>
+            </div>
+            <div id="camera-preview" hidden>
+              <div class="camera-feed">
+                <video id="camera" autoplay playsinline muted></video>
+                <canvas
+                  id="hand-graph"
+                  width="640"
+                  height="480"
+                  aria-label="Tracked hand skeleton"
+                ></canvas>
+              </div>
+              <div class="tracking">
+                <i id="tracking-light"></i
+                ><span id="tracking-label">Looking for you…</span>
+              </div>
+            </div>
+            <div id="calibration-coach" hidden>
+              <div class="aim-instructions">
+                <p class="eyebrow" id="step-count">0 SHOTS RECORDED</p>
+                <h2 id="step-title">Point. Fold your thumb. Shoot.</h2>
+                <p id="step-detail">
+                  Aim naturally at the lit target. Your crosshair appears after
+                  two shots.
+                </p>
+                <strong id="trigger-status" role="status"
+                  >Show your hand to the camera</strong
+                >
+              </div>
+              <div class="aim-actions">
+                <button id="undo-shot" class="quiet">Undo shot</button>
+                <button id="reset-aim" class="quiet">Start over</button>
+                <label class="hit-progress"
+                  >Accurate hits
+                  <progress
+                    id="aim-hits"
+                    max="5"
+                    value="0"
+                    aria-label="Five accurate hits to start"
+                  ></progress>
+                </label>
+              </div>
+            </div>
+            <div id="practice-coach" hidden>
+              <p class="eyebrow">TRY IT OUT</p>
+              <h2>Does it feel right?</h2>
+              <p>
+                Hit the three circles with your chosen gesture. Re-aim, fire,
+                and get comfortable before the clock starts.
+              </p>
+              <strong id="practice-score">0 / 3 targets</strong
+              ><button id="play-now" class="primary">Start the game ↗</button>
+            </div>
+            <p id="scope-note" hidden>
+              Your eyes are also tracked on this map. Hold an eye closed to look
+              down the scope; open it to zoom out. Scoped hand movement is four
+              times slower. Aim and shoot with your hand. No eye calibration
+              needed.
+            </p>
+            <p id="notice" role="status"></p>
+            <div id="calibration-tools" hidden>
+              <button id="recalibrate" class="quiet">Adjust aim</button>
+              <small
+                >Aim is saved for this camera. Thumb gestures work without
+                calibration.</small
+              >
+            </div>
+            <div id="mouse-coach">
+              <div class="coach-icon">⌖</div>
+              <h2>You're all set.</h2>
+              <p id="mouse-help">
+                Move your mouse to aim. Click a target to fire. On a
+                touchscreen, tap the target.
+              </p>
+              <small
+                >You can change controls from the arcade at any time.</small
+              >
+            </div>
+          </aside>
+        </div>
+      </section>
+      <div id="error" class="error" role="alert" hidden>
+        <span id="error-message"></span
+        ><button id="dismiss-error" aria-label="Dismiss error">×</button>
+      </div>
+    </main>
+    <dialog id="privacy-dialog">
+      <h2>Your camera stays local.</h2>
+      <p>
+        This browser interface talks to the Handy Python process running on this
+        computer. Camera frames are processed in memory on your Mac, never
+        uploaded to a cloud service or saved.
+      </p>
+      <p>
+        Camera modes may download MediaPipe models on first use. Mouse and touch
+        modes work without a camera or model download. Keep the local server
+        running while you play.
+      </p>
+      <button id="close-privacy" class="primary">Got it</button>
+    </dialog>
+  </body>
+</html>

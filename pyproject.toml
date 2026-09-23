@@ -1,0 +1,37 @@
+[project]
+name = "handy"
+version = "0.1.0"
+description = "A webcam arcade: five shooting galleries and a kart race you steer with your hands, powered by MediaPipe."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    # MediaPipe 1.x aborts on macOS (Metal graph service unavailable), so stay on 0.10.
+    "mediapipe==0.10.35",
+    "opencv-python>=4.10",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.uv]
+# Dependencies only: the app is imported straight from this directory. Installing
+# it (even editable) would rely on a .pth file inside .venv, and a background
+# process on this Mac flags everything under a dot-directory on the Desktop as
+# hidden -- which CPython then skips, silently breaking the import.
+package = false
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# F811 and F821 in particular: a stale definition shadowing an import, or a name
+# that no longer exists, are the mistakes a test suite of pure units will not
+# catch, because nothing imports the module's entry point.
+select = ["E", "F", "W", "B"]
+# E501 line length is handled by the formatter's own judgement; B905's strict=
+# on every zip is churn where the sequences are paired by construction.
+ignore = ["E501", "B905"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
