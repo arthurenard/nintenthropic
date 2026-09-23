@@ -295,6 +295,34 @@ def test_the_round_spawns_and_the_wind_moves():
     assert all(abs(w) <= 8.0 for w in winds)
 
 
+def valley_log(fps: int = 30, hip_shot: bool = False) -> tuple[list, list, float]:
+    """Who came into the valley, and which way the wind was sent, over 45 s of
+    a round in which each one is cleared away the moment it shows."""
+    round_ = make_round(seed=7)
+    hostiles, gusts = [], []
+    for frame in range(45 * fps):
+        now = 1000.0 + frame / fps
+        round_.update(now)
+        if hip_shot and frame == fps // 2:
+            round_.shoot(700, 50, now)  # from the hip, into the sky
+        hostiles += [(h.kind, h.post, h.direction, h.speed, h.phase) for h in round_.hostiles]
+        round_.hostiles = []
+        if round_.wind_target not in gusts:
+            gusts.append(round_.wind_target)
+    return hostiles, gusts, round_.wind
+
+
+def test_a_shot_from_the_hip_does_not_change_what_comes_next():
+    assert valley_log(hip_shot=True) == valley_log()
+
+
+def test_the_frame_rate_does_not_change_the_valley_or_the_wind():
+    slow, fast = valley_log(fps=30), valley_log(fps=60)
+    assert len(slow[0]) > 10 and len(slow[1]) > 3
+    assert fast[:2] == slow[:2]
+    assert fast[2] == pytest.approx(slow[2], abs=0.25)
+
+
 def test_range_under_the_reticle_reads_the_hostile_or_the_ground():
     round_ = aimed_round()
     sentry = round_.hostiles[0]

@@ -1,3 +1,4 @@
+import copy
 import math
 
 import numpy as np
@@ -6,7 +7,8 @@ import pytest
 from handy.game import Rect, RoundOptions
 from handy.maps.orbit import (ALARM_INTEGRITY, DRONE_DEPTH, FRIENDLY_PENALTY,
                               FULL_INTEGRITY, GRAVITY, MAX_FRAGMENTS,
-                              MIN_SPLIT_RADIUS, SPAWN_DEPTH, Z_WINDOW, Drone, Fragment,
+                              MIN_SPLIT_RADIUS, SPAWN_DEPTH, SPLIT_SPEED, Z_WINDOW,
+                              Drone, Fragment,
                               OrbitRound, Projection, draw_emblem, draw_world,
                               momentum)
 
@@ -150,12 +152,50 @@ def test_the_far_shot_is_worth_more_than_the_near_one():
     assert scores[1] > scores[0]
 
 
-def test_the_field_never_overflows_with_pieces():
+def test_a_split_in_a_full_field_loses_no_pieces():
     round_ = make_round()
     round_.targets = [fragment(x=i * 0.5, z=8.0, radius=0.8) for i in range(MAX_FRAGMENTS)]
     target = round_.targets[0]
     round_.shoot(target.x, target.y, 0.0)
-    assert len(round_.targets) <= MAX_FRAGMENTS
+    pieces = [piece for piece in round_.targets if piece.generation == 1]
+    assert len(pieces) == 2, "as few as a split can make, and none thrown away"
+    assert sum(piece.mass for piece in pieces) == pytest.approx(target.mass)
+    assert len(round_.targets) == MAX_FRAGMENTS + 1
+    round_.update(0.0)
+    round_.update(0.1)
+    assert len(round_.targets) <= MAX_FRAGMENTS + 1, "the sky holds back meanwhile"
+
+
+def cracks_from(pieces, seed: int) -> int:
+    """How many of these pieces crack the pane, flown in on their own."""
+    round_ = make_round(seed=seed, density=0, duration=None)
+    round_.targets = list(pieces)
+    now = 0.0
+    while round_.targets and now < 30.0:
+        round_.update(now)
+        now += 1 / 30
+    return len(round_.cracks)
+
+
+def test_splitting_a_rock_on_its_way_to_the_glass_leaves_pieces_on_their_way():
+    """They keep the momentum the parent had: a careless split turns one
+    problem into two, not into none."""
+    kept = splits = 0
+    for seed in range(60):
+        round_ = make_round(seed=seed)
+        parent = round_.spawn(0.5)
+        while parent.radius < MIN_SPLIT_RADIUS or not cracks_from([copy.deepcopy(parent)], seed):
+            parent = round_.spawn(0.5)
+        for _ in range(30):  # a second in, as a player would take it
+            parent.advance(1 / 30)
+        pieces = round_.split(parent, (parent.x, parent.y))
+        for piece in pieces:
+            parted = math.hypot(piece.vx - parent.vx, piece.vy - parent.vy)
+            assert parted <= SPLIT_SPEED + 0.5, "the round breaks it, it does not fling it"
+        assert len({(round(p.vx, 6), round(p.vy, 6)) for p in pieces}) == len(pieces)
+        kept += cracks_from(pieces, seed) > 0
+        splits += 1
+    assert kept >= 0.85 * splits
 
 
 def test_a_shot_into_the_wall_hits_nothing():
@@ -319,6 +359,38 @@ def test_the_field_fills_and_more_comes_later():
         round_.targets = []
     assert spawned[0] < spawned[1] < spawned[2]
     assert round_.integrity == FULL_INTEGRITY
+
+
+def debris_log(fps: int = 30, shoot: bool = False) -> tuple[list, list]:
+    """The size of every piece of debris sent in over half a minute, in order,
+    and what the player's shots did - one at the biggest every three seconds."""
+    round_ = make_round(seed=7, duration=60.0)
+    sent, labels = [], []
+    for frame in range(30 * fps):
+        now = 1000.0 + frame / fps
+        round_.update(now)
+        if shoot and frame % (3 * fps) == fps and round_.targets:
+            biggest = max(round_.targets, key=lambda f: f.radius)
+            labels.append(round_.shoot(biggest.x, biggest.y, now).label)
+        for piece in round_.targets:
+            if piece.generation == 0 and all(piece is not s for s in sent):
+                sent.append(piece)
+    return [piece.radius for piece in sent], labels
+
+
+def test_what_the_player_breaks_does_not_change_what_comes_next():
+    quiet, _ = debris_log()
+    busy, labels = debris_log(shoot=True)
+    assert "SPLIT" in labels
+    common = min(len(quiet), len(busy))
+    assert common > 12 and busy[:common] == quiet[:common]
+
+
+def test_the_frame_rate_does_not_change_what_comes():
+    slow, _ = debris_log(fps=30)
+    fast, _ = debris_log(fps=60)
+    common = min(len(slow), len(fast))
+    assert common > 12 and fast[:common] == slow[:common]
 
 
 def test_the_shot_is_always_heard_inside():
@@ -542,6 +614,25 @@ def test_cracks_are_kept_as_one_layer_and_rebuilt_only_on_damage():
     assert second is not first and second.sum() > first.sum()
     # Nothing of the crack leaks onto the frame's bevel.
     assert not second[:2].any() and not second[:, :2].any()
+
+
+def test_a_fresh_crack_flashes_from_a_handful_of_cached_sprites():
+    """The flash fades over half a second; drawn every frame at whatever the
+    frame rate is, it must not build a new sprite each time."""
+    from handy.maps.orbit import _glow_sprite, draw_cracks
+    round_ = make_round()
+    round_.update(0.0)
+    round_.damage(fragment(x=0.1, y=0.0, radius=0.7, vz=-5.0), 0.0)
+    frame = canvas()
+    # After the strike's own white-hot core is gone, so this is the crack's
+    # flash alone; at an odd frame rate, then again a few milliseconds out.
+    ages = np.linspace(0.31, 0.49, 37)
+    for age in ages:
+        draw_cracks(frame, round_, float(age))
+    before = _glow_sprite.cache_info().misses
+    for age in ages + 0.003:
+        draw_cracks(frame, round_, float(age))
+    assert _glow_sprite.cache_info().misses == before
 
 
 def test_the_friendly_warning_pulses_and_the_score_popup_sits_on_a_pill():

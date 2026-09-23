@@ -1,12 +1,16 @@
+import time
+
+import cv2
 import numpy as np
 import pytest
 
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, GAITS, LOW_HEALTH, MAX_WALKERS,
-                                MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
-                                Perspective, Walker, ZombieRound, draw_emblem,
-                                draw_world)
+                                MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
+                                Perspective, Walker, ZombieRound, _bloom,
+                                _environment, _paint, _skyline, draw_emblem,
+                                draw_hud, draw_robot, draw_world)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -55,6 +59,64 @@ def test_the_silhouette_and_the_hitbox_are_the_same_measurements():
     assert figure.hit_zone(figure.x, figure.hip_y) == "body"
     assert figure.hit_zone(figure.x, figure.ground_y + 40) is None
     assert figure.hit_zone(figure.x + figure.height, figure.hip_y) is None
+
+
+def painted(walker: Walker, robots: bool) -> np.ndarray:
+    """The walker as the game paints it, alone on black - its rags red and its
+    skin white, or a robot in its own colours - without rim, shade or eyes."""
+    canvas = np.zeros((AREA.bottom + 56, AREA.width, 3), np.uint8)
+    if robots:
+        draw_robot(canvas, walker, VIEW, 0.0)
+    else:
+        _paint(canvas, walker.figure(VIEW, 0.0), (0, 0, 255), (255, 255, 255),
+               grow=0.0, shift=(0.0, 0.0))
+    return canvas
+
+
+def drawn_skull(canvas: np.ndarray, head_radius: float, robots: bool) -> tuple[float, float]:
+    """The middle of the skull as painted: the topmost solid blob of skin once
+    everything thinner than a head - the neck, the arms, the hands - is opened
+    away. A robot's head is all one colour with the rest of it."""
+    skin = canvas.max(axis=2) > 60 if robots else canvas.min(axis=2) > 127
+    size = int(head_radius * 1.2) | 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    solid = cv2.morphologyEx(skin.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+    count, _, stats, centroids = cv2.connectedComponentsWithStats(solid)
+    top = min(range(1, count), key=lambda index: stats[index, cv2.CC_STAT_TOP])
+    return tuple(centroids[top])
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_a_shot_at_the_middle_of_the_drawn_skull_is_a_headshot(enemy):
+    """However far forward it leans - and a lurcher leans a long way - the head
+    that is tested is the head that was painted."""
+    robots = enemy == "robots"
+    round_ = make_round(seed=3, enemy=enemy)
+    gaits = set()
+    for index in range(120):
+        walker = round_._spawn(wave=1 + index % 5)
+        walker.distance, walker.lane = 4.0, 0.0
+        figure = walker.figure(VIEW, 0.0)
+        skull = drawn_skull(painted(walker, robots), figure.head_radius, robots)
+        assert figure.hit_zone(*skull) == "head", (walker.gait, walker.hunch)
+        gaits.add(walker.gait)
+    assert gaits == ({"shamble"} if robots else set(GAITS))
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_every_part_of_the_drawn_figure_can_be_hit(enemy):
+    """The reaching hands most of all: they are drawn well outside the body."""
+    robots = enemy == "robots"
+    round_ = make_round(seed=3, enemy=enemy)
+    for index in range(40):
+        walker = round_._spawn(wave=1 + index % 5)
+        walker.distance, walker.lane = 6.0, 0.0
+        figure = walker.figure(VIEW, 0.0)
+        ys, xs = np.nonzero(painted(walker, robots).max(axis=2) > 60)
+        missed = [(x, y) for x, y in zip(xs, ys) if figure.hit_zone(x, y) is None]
+        assert len(missed) <= 0.04 * len(xs), (walker.gait, len(missed), len(xs))
+        for *_, (hx, hy) in () if robots else figure.arms():
+            assert figure.hit_zone(hx, hy) is not None, walker.gait
 
 
 def test_the_head_sits_above_the_shoulders_and_is_the_smaller_target():
@@ -166,6 +228,24 @@ def test_enough_bites_and_the_night_is_over():
     assert not round_.summary().won
 
 
+def test_the_health_bar_has_a_segment_for_every_bite_you_can_take():
+    round_ = make_round(duration=600)
+    bites, notches = 0, []
+    while not round_.is_lost:
+        hud = np.zeros((720, 400, 3), np.uint8)
+        draw_hud(hud, round_, (20, 0), 0.0)
+        row = hud[153, 21:260]  # through the middle of the bar, inside its frame
+        notches.append(np.flatnonzero((row == (20, 20, 20)).all(axis=1)))
+        lit = np.flatnonzero(((row != (30, 28, 27)) & (row != (20, 20, 20))).any(axis=1))
+        if bites:
+            assert lit.max() + 1 in notches[0], "after a bite the bar stops on a notch"
+        round_.walkers.append(walker_at(0.5))
+        round_.update(bites * 0.1)
+        bites += 1
+    assert bites == 6
+    assert len(notches[0]) + 1 == bites
+
+
 def test_making_it_to_the_end_of_the_round_is_surviving():
     """And the card has to be able to tell that apart from being overrun: both
     are outcomes, and one of them is a win."""
@@ -257,6 +337,26 @@ def test_the_world_draws_at_every_stage():
     canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
     draw_world(canvas, round_, 10.1)
     assert canvas.any()
+
+
+def test_the_moon_bloom_is_the_full_size_blur_to_within_a_couple_of_levels():
+    height, width, moon = 400, 640, (486, 60)
+    for radius in (136, 48, 20):
+        full = np.zeros((height, width, 3), np.uint8)
+        cv2.circle(full, moon, radius, MOONLIGHT, -1, cv2.LINE_AA)
+        full = cv2.GaussianBlur(full, (0, 0), radius / 2.0).astype(int)
+        assert np.abs(_bloom(height, width, moon, radius, MOONLIGHT) - full).max() <= 2
+
+
+def test_the_backdrop_builds_in_well_under_a_second():
+    """It is built on the first frame at a new window size, where any delay is
+    a freeze the player feels; the moon's glow alone used to take three
+    seconds of it."""
+    area = Rect(31, 294, 1450, 578)
+    started = time.perf_counter()
+    _environment.__wrapped__((area.x, area.y, area.width, area.height), 1512, 945, 0,
+                             _skyline(area, 0))
+    assert time.perf_counter() - started < 1.0
 
 
 def test_a_walker_too_small_to_see_is_skipped_without_error():

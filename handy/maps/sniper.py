@@ -353,7 +353,10 @@ class Hostile:
         if self.on_road():
             return ROAD.point_at(self.arc(now))
         x, d = self.post
-        drift = math.sin(now * 0.35 + self.phase) * 0.6
+        # Timed from when they took the post, not from whatever the clock reads,
+        # so where a sentry stands at a given moment of the round is the same
+        # every time the round is played.
+        drift = math.sin((now - self.born) * 0.35 + self.phase) * 0.6
         return (x + drift, d)
 
     def facing_at(self, valley: Valley, now: float) -> float:
@@ -467,10 +470,13 @@ class SniperRound(Round):
         self.frame = frame_for(self.options.area, self.options.scale)
         self.valley = Valley(*self.frame)
         self.view = View.wide(*self.frame)
-        self.wind = self.wind_target = self.rng.uniform(-4.0, 4.0)
+        # The weather keeps its own dice, so the gusts come the same whatever
+        # else happens in the valley; ``rng`` is left to the hostiles.
+        self.weather_rng = self.stream("weather")
+        self.wind = self.wind_target = self.weather_rng.uniform(-4.0, 4.0)
         # Cloud shadows: [x, distance, half-width, half-depth] in metres, drifting.
-        self.clouds = [[self.rng.uniform(-0.4, 0.4) * d, d, self.rng.uniform(28.0, 55.0),
-                        self.rng.uniform(70.0, 150.0)]
+        self.clouds = [[self.weather_rng.uniform(-0.4, 0.4) * d, d,
+                        self.weather_rng.uniform(28.0, 55.0), self.weather_rng.uniform(70.0, 150.0)]
                        for d in (260.0, 380.0, 520.0, 700.0, 950.0)]
         # Something to look at from the first frame.
         self.hostiles = [
@@ -483,6 +489,18 @@ class SniperRound(Round):
             Hostile("patrol", 0.0, start=ROAD.length * 0.62, direction=-1.0, speed=1.1,
                     phase=2.0),
         ]
+
+    def begin(self, now: float) -> None:
+        # Everything above was set out in seconds from the start of the round.
+        # A patrol's place on the road is worked out from when it was born, so
+        # left at zero against a clock reading 300,000 the opening two would
+        # be kilometres off the end of it and gone on the first frame.
+        for hostile in self.hostiles:
+            hostile.born += now
+        self._next_spawn += now
+        self._next_vehicle += now
+        self._next_gust += now
+        self._next_dust += now
 
     # --- the view ------------------------------------------------------------
 
@@ -505,7 +523,9 @@ class SniperRound(Round):
             self.view = View.wide(width, height)
             return
         zoom = SCOPE_ZOOM
-        sway = self.sway(self._now)
+        # Breathing on the round's clock, so the same moment of the same round
+        # sways the same way.
+        sway = self.sway(self.elapsed(self._now))
         cx = self.pan[0] * (width - 1) + sway[0]
         cy = self.pan[1] * (height - 1) + sway[1]
         anchor = View.scope_anchor(width, height)
@@ -572,8 +592,8 @@ class SniperRound(Round):
         # Wind drifts towards a target that is picked afresh every so often.
         if now >= self._next_gust:
             previous = self.wind_target
-            self.wind_target = self.rng.uniform(-MAX_WIND, MAX_WIND)
-            self._next_gust = now + self.rng.uniform(9.0, 15.0)
+            self.wind_target = self.weather_rng.uniform(-MAX_WIND, MAX_WIND)
+            self._next_gust = now + self.weather_rng.uniform(9.0, 15.0)
             if abs(self.wind_target - previous) > 2.5:
                 self.cues.append("wind_gust")
         step = 1.6 * dt
@@ -581,15 +601,18 @@ class SniperRound(Round):
         self.sky_drift += (4.0 + 2.2 * self.wind) * dt * (self.frame[0] / 1280.0)
 
         # Dust off the road and the fields, more of it the harder it blows, and
-        # a plume behind anything driving.
+        # a plume behind anything driving. The plume is rolled for every frame,
+        # so it draws on the effects' dice: from the world's, it made the wind
+        # depend on the frame rate.
+        dice = self.effects_rng
         if now >= self._next_dust:
             strength = 0.5 + abs(self.wind) / MAX_WIND
-            s = self.rng.uniform(0.15, 0.95) * ROAD.length
+            s = dice.uniform(0.15, 0.95) * ROAD.length
             x, d = ROAD.point_at(s)
-            self.dust.append((x + self.rng.uniform(-6.0, 6.0), d, now, strength))
-            self._next_dust = now + self.rng.uniform(0.35, 0.9) / strength
+            self.dust.append((x + dice.uniform(-6.0, 6.0), d, now, strength))
+            self._next_dust = now + dice.uniform(0.35, 0.9) / strength
         for hostile in self.hostiles:
-            if hostile.kind == "vehicle" and hostile.alive_at(now) and self.rng.random() < 4.0 * dt:
+            if hostile.kind == "vehicle" and hostile.alive_at(now) and dice.random() < 4.0 * dt:
                 x, d = hostile.world_at(now)
                 self.dust.append((x - 2.0 * hostile.direction, d + 1.0, now, 0.8))
         self.dust = [p for p in self.dust if now - p[2] < DUST_SECONDS][-MAX_DUST:]
@@ -657,8 +680,8 @@ class SniperRound(Round):
         width = self.frame[0]
         base_x, base_y = self.view.to_base(x, y)
         if not self.scoped:
-            base_x += self.rng.gauss(0.0, HIP_SPREAD * width)
-            base_y += self.rng.gauss(0.0, HIP_SPREAD * width)
+            base_x += self.effects_rng.gauss(0.0, HIP_SPREAD * width)
+            base_y += self.effects_rng.gauss(0.0, HIP_SPREAD * width)
         origin = self.view.to_base(width / 2, self.frame[1])
         focal = self.valley.focal
         zoom = self.view.zoom
