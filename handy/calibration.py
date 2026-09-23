@@ -16,10 +16,6 @@ from pathlib import Path
 from . import fusion, homography
 from .homography import Matrix, Point
 
-#: Pointer settings whose fits land this close together are treated as equally
-#: good, and decided on other grounds.
-FIT_TIE = 0.004
-
 DEFAULT_MAPPING = homography.box_mapping((0.15, 0.15), (0.85, 0.85))
 
 
@@ -52,10 +48,6 @@ class Calibration:
         their estimates together at the edge and hide how far apart they are.
         """
         return homography.apply(self.mapping, point)
-
-    def to_play_area(self, point: Point) -> Point:
-        """Map a camera-space point onto the screen, 0..1, clamped at the edges."""
-        return clamp(self.project(point))
 
     def local_gain(self, point: Point) -> float:
         """How much this camera's map magnifies movement right here."""
@@ -92,10 +84,6 @@ class Calibration:
                                      or bool(data.get("generalisation")))),
             gain=float(data.get("gain", 1.0)),
         )
-
-
-def clamp(point: Point) -> Point:
-    return tuple(min(max(value, 0.0), 1.0) for value in point)
 
 
 def default_calibration(scheme) -> Calibration:

@@ -56,10 +56,6 @@ class Fused:
     spread: float  # how far apart the cameras were, as a fraction of the screen
     cameras: int  # how many were actually listened to
 
-    @property
-    def agrees(self) -> bool:
-        return self.cameras < 2 or self.spread < 0.08
-
 
 def spread_of(positions: list[Point]) -> float:
     """The widest disagreement between any two cameras.

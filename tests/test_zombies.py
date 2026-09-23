@@ -3,13 +3,15 @@ import pytest
 
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
-                                FULL_HEALTH, GAITS, LOW_HEALTH, MAX_WALKERS,
+                                FULL_HEALTH, LOW_HEALTH, MAX_WALKERS,
                                 MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
                                 Perspective, Walker, ZombieRound, draw_emblem,
                                 draw_world)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
+#: Every way a walker can move; the spawner picks among exactly these.
+GAITS = ("shamble", "lurch", "limp", "crawl")
 
 
 def make_round(**options) -> ZombieRound:

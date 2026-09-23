@@ -25,11 +25,6 @@ def test_a_degenerate_record_is_refused():
         Calibration(mapping=(1.0, 0.0, 0.0))
 
 
-def test_aiming_past_the_fitted_map_is_clamped_to_the_screen():
-    corner = FITTED.to_play_area((0.0, 1.0))
-    assert all(0.0 <= value <= 1.0 for value in corner)
-
-
 def test_a_rig_survives_a_round_trip_through_disk(tmp_path):
     original = Rig((FITTED, Calibration(gain=3.2, generalisation=0.02)))
     path = tmp_path / "calibration.json"
@@ -84,8 +79,8 @@ def test_a_file_from_before_the_map_was_projective_still_loads(tmp_path):
     assert rig is not None and len(rig) == 1
     loaded = rig[0]
 
-    assert loaded.to_play_area((0.2, 0.3)) == pytest.approx((0.0, 0.0))
-    assert loaded.to_play_area((0.8, 0.7)) == pytest.approx((1.0, 1.0))
+    assert loaded.project((0.2, 0.3)) == pytest.approx((0.0, 0.0))
+    assert loaded.project((0.8, 0.7)) == pytest.approx((1.0, 1.0))
 
 
 def test_a_missing_or_broken_file_reads_as_nothing(tmp_path):

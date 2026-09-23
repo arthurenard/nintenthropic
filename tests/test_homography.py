@@ -78,4 +78,4 @@ def test_a_point_on_the_horizon_does_not_blow_up():
 
 
 def test_a_residual_without_points_is_zero():
-    assert homography.residual(homography.IDENTITY, [], []) == 0.0
+    assert homography.residual(homography.box_mapping((0, 0), (1, 1)), [], []) == 0.0

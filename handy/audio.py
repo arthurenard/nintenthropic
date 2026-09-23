@@ -199,10 +199,6 @@ def _noise(seconds: float, rng: np.random.Generator, low: float = 20.0,
     return _peak(_bandpass(white, low, high, order, tilt))
 
 
-def _sine(frequency: float, seconds: float, phase: float = 0.0) -> np.ndarray:
-    return np.sin(2 * np.pi * frequency * _time(_samples(seconds)) + phase)
-
-
 def _chirp(start: float, end: float, seconds: float, curve: float = 1.0) -> np.ndarray:
     """A sine whose frequency glides from ``start`` to ``end``."""
     length = _samples(seconds)
@@ -1281,11 +1277,6 @@ class Mixer:
         self._voices: list[tuple[np.ndarray, int]] = []
         self._lock = threading.Lock()
 
-    @property
-    def active(self) -> int:
-        with self._lock:
-            return len(self._voices)
-
     def add(self, wave: np.ndarray) -> None:
         with self._lock:
             # Drop the oldest voices rather than let a stuck loop pile up.
@@ -1466,31 +1457,16 @@ class Sounds:
         # drawing takes out of it on every `_pick`, and a numpy Generator is
         # not safe to share.
         rng = np.random.default_rng((key[1] + 1) * 7919)
-        planted = []
         for name, builder in NAMED_BUILDERS.items():
-            take = builder(rng)
-            self._named.setdefault(name, []).append(take)
-            planted.append(take)
+            self._named[name] = [builder(rng)]
         try:
             full = Sounds(self.audio, rings, seed=key[1], variants=key[2])
         except Exception:
             return  # keep the stub rather than kill the thread noisily
-        # Anything a map registered while the stub was live is kept: those cues
-        # exist nowhere else, and swapping the set in wholesale would silence
-        # them for the rest of the round. Merged into a fresh dict, because the
-        # one the full set carries is now shared with the process-wide cache.
-        # The stand-in takes planted above are dropped, not merged: the full
-        # set carries richer ones under the same names.
-        mine = {id(take) for take in planted}
-        registered = {name: [t for t in takes if id(t) not in mine]
-                      for name, takes in self._named.items()}
-        registered = {name: takes for name, takes in registered.items() if takes}
+        # Swapped in whole: the full set carries richer takes under the same
+        # names, so the stand-ins planted above are simply dropped.
         for name in self._WAVE_ATTRS:
             setattr(self, name, getattr(full, name))
-        if registered:
-            self._named = {name: list(takes) for name, takes in full._named.items()}
-            for name, takes in registered.items():
-                self._named.setdefault(name, []).extend(takes)
         self.ready = True
 
     def _store(self, key) -> None:
@@ -1525,11 +1501,6 @@ class Sounds:
     def round_over(self) -> None:
         self.audio.play(self._over[0])
 
-    def register(self, name: str, wave: np.ndarray) -> None:
-        """Add a named sound a map can ask for by string, with no coupling.
-        Registering a name again adds another take of it."""
-        self._named.setdefault(name, []).append(np.asarray(wave, dtype=np.float32))
-
     def play_named(self, name: str) -> None:
         """Play a registered sound; an unknown name is silently nothing."""
         takes = self._named.get(name)
@@ -1544,25 +1515,3 @@ class Sounds:
 
     def hurt(self) -> None:
         self.audio.play(self._pick(self._hurt))
-
-    # --- introspection, for tests and the render script ----------------------
-
-    def names(self) -> list[str]:
-        return sorted(self._named)
-
-    def variants(self, name: str) -> list[np.ndarray]:
-        """Every take of a named cue (empty for an unknown name)."""
-        return list(self._named.get(name, ()))
-
-    def catalogue(self) -> dict[str, list[np.ndarray]]:
-        """Every sound the set holds, by a readable name, all takes."""
-        out: dict[str, list[np.ndarray]] = {
-            "shot": self._shot, "miss": self._miss, "cock": self._cock,
-            "round_over": self._over, "hurt": self._hurt,
-            "flesh": self._flesh[False], "flesh_headshot": self._flesh[True],
-            "groan": self._groans,
-        }
-        for ring, takes in enumerate(self._hits):
-            out[f"hit_ring{ring}"] = takes
-        out.update(self._named)
-        return out

@@ -18,7 +18,6 @@ import numpy as np
 Point = tuple[float, float]
 Matrix = tuple[float, ...]  # 9 numbers, row-major 3x3
 
-IDENTITY: Matrix = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
 #: Fewer correspondences than this cannot determine a homography.
 MIN_POINTS = 4

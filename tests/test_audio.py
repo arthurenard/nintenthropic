@@ -19,6 +19,25 @@ def sound_set():
         yield Sounds(audio, rings=5)
 
 
+def variants(sounds: Sounds, name: str) -> list[np.ndarray]:
+    """Every take of a named cue (empty for an unknown name)."""
+    return list(sounds._named.get(name, ()))
+
+
+def catalogue(sounds: Sounds) -> dict[str, list[np.ndarray]]:
+    """Every sound the set holds, by a readable name, all takes."""
+    out = {
+        "shot": sounds._shot, "miss": sounds._miss, "cock": sounds._cock,
+        "round_over": sounds._over, "hurt": sounds._hurt,
+        "flesh": sounds._flesh[False], "flesh_headshot": sounds._flesh[True],
+        "groan": sounds._groans,
+    }
+    for ring, takes in enumerate(sounds._hits):
+        out[f"hit_ring{ring}"] = takes
+    out.update(sounds._named)
+    return out
+
+
 def dominant_hz(wave: np.ndarray) -> float:
     spectrum = np.abs(np.fft.rfft(wave.astype(np.float64)))
     return float(np.fft.rfftfreq(len(wave), 1 / SAMPLE_RATE)[np.argmax(spectrum)])
@@ -77,14 +96,14 @@ def test_loudness_gates_out_silence_and_ignores_a_quiet_tail():
 
 
 def test_every_sound_sits_near_the_loudness_target(sound_set):
-    levels = {name: loudness_db(takes[0]) for name, takes in sound_set.catalogue().items()}
+    levels = {name: loudness_db(takes[0]) for name, takes in catalogue(sound_set).items()}
     for name, level in levels.items():
         assert abs(level - TARGET_LOUDNESS_DB) < 3.5, (name, level)
     assert max(levels.values()) - min(levels.values()) < 6.0
 
 
 def test_nothing_ever_clips(sound_set):
-    for name, takes in sound_set.catalogue().items():
+    for name, takes in catalogue(sound_set).items():
         for take in takes:
             assert float(np.max(np.abs(take))) < 0.95, name
 
@@ -103,12 +122,12 @@ def test_the_soft_knee_is_linear_below_the_knee_and_never_reaches_one():
 def test_every_map_cue_is_registered(sound_set):
     for cues in NAMED_CUES.values():
         for cue in cues:
-            assert len(sound_set.variants(cue)) >= 2, cue
+            assert len(variants(sound_set, cue)) >= 2, cue
     assert set(NAMED_BUILDERS) == {cue for cues in NAMED_CUES.values() for cue in cues}
 
 
 def test_takes_of_one_sound_differ(sound_set):
-    takes = sound_set.variants("rifle_crack")
+    takes = variants(sound_set, "rifle_crack")
     for other in takes[1:]:
         assert len(other) != len(takes[0]) or not np.array_equal(other, takes[0])
 
@@ -116,7 +135,7 @@ def test_takes_of_one_sound_differ(sound_set):
 def test_each_named_cue_has_its_own_character(sound_set):
     """The critic cannot listen, so: no two cues may share a spectral fingerprint."""
     prints = {name: (centroid_hz(takes[0]), len(takes[0]))
-              for name, takes in sound_set.catalogue().items()
+              for name, takes in catalogue(sound_set).items()
               if name in NAMED_BUILDERS}
     names = list(prints)
     for i, a in enumerate(names):
@@ -127,7 +146,7 @@ def test_each_named_cue_has_its_own_character(sound_set):
 
 
 def test_the_bolt_cycle_has_two_clicks(sound_set):
-    wave = sound_set.variants("bolt_cycle")[0].astype(np.float64)
+    wave = variants(sound_set, "bolt_cycle")[0].astype(np.float64)
     block = SAMPLE_RATE // 100
     energy = np.array([0.0] + [np.sum(wave[i:i + block] ** 2)
                                 for i in range(0, len(wave) - block, block)])
@@ -138,7 +157,7 @@ def test_the_bolt_cycle_has_two_clicks(sound_set):
 
 
 def test_the_distant_impact_arrives_late(sound_set):
-    wave = sound_set.variants("distant_impact")[0]
+    wave = variants(sound_set, "distant_impact")[0]
     first_tenth = wave[: int(0.15 * SAMPLE_RATE)]
     assert float(np.max(np.abs(first_tenth))) < 0.01
 
@@ -146,15 +165,15 @@ def test_the_distant_impact_arrives_late(sound_set):
 def test_scope_in_rises_and_scope_out_falls(sound_set):
     def centroid_of(wave, start, end):
         return centroid_hz(wave[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)])
-    scope_in = sound_set.variants("scope_in")[0]
-    scope_out = sound_set.variants("scope_out")[0]
+    scope_in = variants(sound_set, "scope_in")[0]
+    scope_out = variants(sound_set, "scope_out")[0]
     assert centroid_of(scope_in, 0.0, 0.1) < centroid_of(scope_in, 0.2, 0.3)
     assert centroid_of(scope_out, 0.0, 0.1) > centroid_of(scope_out, 0.2, 0.3)
 
 
 def test_wind_beds_have_soft_edges_so_they_loop(sound_set):
     for name in ("wind_dust", "wind_gust"):
-        wave = sound_set.variants(name)[0]
+        wave = variants(sound_set, name)[0]
         edge = int(0.05 * SAMPLE_RATE)
         middle = np.sqrt(np.mean(wave[len(wave) // 2 - edge:len(wave) // 2 + edge] ** 2))
         assert np.sqrt(np.mean(wave[:edge] ** 2)) < 0.3 * middle, name
@@ -174,7 +193,7 @@ def test_a_finished_voice_is_retired():
     mixer = Mixer()
     mixer.add(np.full(4, 0.5, np.float32))
     mixer.render(4)
-    assert mixer.active == 0
+    assert not mixer._voices
     assert mixer.render(4) == pytest.approx(np.zeros(4))
 
 
@@ -214,7 +233,7 @@ def test_voices_are_capped_so_nothing_piles_up():
     mixer = Mixer()
     for _ in range(Mixer.MAX_VOICES * 3):
         mixer.add(np.ones(SAMPLE_RATE, np.float32))
-    assert mixer.active <= Mixer.MAX_VOICES
+    assert len(mixer._voices) <= Mixer.MAX_VOICES
 
 
 # --- graceful silence -------------------------------------------------------
@@ -223,7 +242,7 @@ def test_muted_audio_never_raises_and_plays_nothing():
     audio = Audio(enabled=False)
     assert not audio.is_on and audio.reason == "muted"
     audio.play(np.ones(10, np.float32))  # must be a no-op, not an error
-    assert audio.mixer.active == 0
+    assert not audio.mixer._voices
     audio.close()
 
 
@@ -241,9 +260,6 @@ def test_the_sound_set_works_against_silent_audio():
         sounds.hurt()
         sounds.play_named("rifle_crack")
         sounds.play_named("no_such_cue")  # unknown names are silently nothing
-        sounds.register("custom", np.zeros(10, np.float32))
-        assert sounds.variants("custom")[0].dtype == np.float32
-        sounds.play_named("custom")
 
 
 def test_the_game_never_waits_for_the_full_sound_set():
@@ -313,30 +329,6 @@ def test_the_game_actually_asks_for_the_background_build(monkeypatch, tmp_path,
     assert built and built[0] is True, "the session waited for the full set"
 
 
-def test_a_cue_registered_while_the_stub_is_live_survives_the_swap():
-    """_build_in_background replaced _named wholesale, so a cue a map had
-    registered while the stub was live went silent the moment the real set
-    arrived - and it exists nowhere else."""
-    import time
-
-    Sounds._CACHE.clear()
-    with Audio(enabled=False) as audio:
-        sounds = Sounds(audio, rings=5, background=True)
-        mine = np.linspace(0.0, 1.0, 32, dtype=np.float32)
-        sounds.register("my_cue", mine)
-
-        deadline = time.time() + 60
-        while not sounds.ready and time.time() < deadline:
-            time.sleep(0.2)
-        assert sounds.ready
-
-        assert "my_cue" in sounds.names()
-        assert np.array_equal(sounds.variants("my_cue")[0], mine)
-        assert len(sounds.variants("rifle_crack")) > 1, "and the full set is there too"
-        # The set behind the process-wide cache must not have grown a stray cue.
-        assert "my_cue" not in Sounds(audio, rings=5).names()
-
-
 def test_the_named_cues_land_long_before_the_full_set():
     """A map launched straight from the command line raises its own cues in its
     first seconds. The background build used to synthesise the whole set -
@@ -351,9 +343,9 @@ def test_the_named_cues_land_long_before_the_full_set():
         needed = {"rifle_crack", "suppressed_shot", "sniper_shot", "wind_gust"}
 
         deadline = time.time() + 60
-        while not needed <= set(sounds.names()) and time.time() < deadline:
+        while not needed <= set(sounds._named) and time.time() < deadline:
             time.sleep(0.02)
-        assert needed <= set(sounds.names()), "the maps' own cues never landed"
+        assert needed <= set(sounds._named), "the maps' own cues never landed"
         assert not sounds.ready, \
             "the cues arrived only with the full set - the opening is silent"
 
@@ -362,7 +354,7 @@ def test_the_named_cues_land_long_before_the_full_set():
         assert sounds.ready
         # And the stand-ins are gone once the real takes land: every named cue
         # carries exactly the full set's variants, not one extra plain copy.
-        assert all(len(sounds.variants(name)) == sounds._variants
+        assert all(len(variants(sounds, name)) == sounds._variants
                    for name in NAMED_BUILDERS), "a stand-in take outlived the swap"
 
 
@@ -384,7 +376,7 @@ def test_takes_differ_audibly_not_just_in_level(sound_set):
     """Pitch, decay, noise and layer balance all vary: no two takes share a
     spectral centroid or a decay profile within a hair."""
     for name in ("shot", "rifle_crack", "sniper_shot", "hull_thud", "glass_crack", "cock"):
-        takes = sound_set.catalogue()[name]
+        takes = catalogue(sound_set)[name]
         centroids = [centroid_hz(t) for t in takes]
         assert max(centroids) / min(centroids) > 1.02, (name, centroids)
         envelopes = [band_energy_over_time(t, 40, 20_000)[:6] for t in takes]
@@ -420,7 +412,7 @@ def test_the_hit_is_a_bar_not_a_sine():
 
 
 def test_the_cock_is_three_events_over_a_real_span(sound_set):
-    wave = sound_set.catalogue()["cock"][0].astype(np.float64)
+    wave = catalogue(sound_set)["cock"][0].astype(np.float64)
     env = band_energy_over_time(wave, 1_000, 16_000, 0.008)
     loud = env > 0.25 * env.max()
     events = int(np.sum(np.diff(loud.astype(int)) == 1) + loud[0])
@@ -431,7 +423,7 @@ def test_the_cock_is_three_events_over_a_real_span(sound_set):
 
 def test_the_groan_has_formants_that_move(sound_set):
     """Two resonant peaks travel downwards through the moan: a mouth, not a wind."""
-    wave = sound_set.catalogue()["groan"][0].astype(np.float64)
+    wave = catalogue(sound_set)["groan"][0].astype(np.float64)
     size = int(0.1 * SAMPLE_RATE)
     freqs = np.fft.rfftfreq(size, 1 / SAMPLE_RATE)
 
@@ -445,14 +437,14 @@ def test_the_groan_has_formants_that_move(sound_set):
     early_f2, late_f2 = peak_in(0.08, 1_000, 1_800), peak_in(0.85, 500, 1_800)
     assert early_f1 > late_f1 * 1.5, (early_f1, late_f1)
     assert early_f2 > late_f2 * 1.3, (early_f2, late_f2)
-    wind = sound_set.catalogue()["wind_gust"][0]
+    wind = catalogue(sound_set)["wind_gust"][0]
     assert abs(np.log(centroid_hz(wave) / centroid_hz(wind))) > 0.1
 
 
 def test_the_sniper_shot_has_discrete_echoes(sound_set):
     """The report comes back off the hills: the envelope rises again after the
     shot has dropped, more than once."""
-    wave = sound_set.catalogue()["sniper_shot"][0]
+    wave = catalogue(sound_set)["sniper_shot"][0]
     env = band_energy_over_time(wave, 60, 2_000, 0.04)
     db = 20 * np.log10(env / env.max() + 1e-9)
     rises = [i for i in range(2, len(db) - 1)
@@ -461,7 +453,7 @@ def test_the_sniper_shot_has_discrete_echoes(sound_set):
 
 
 def test_the_distant_impact_is_muffled(sound_set):
-    wave = sound_set.catalogue()["distant_impact"][0].astype(np.float64)
+    wave = catalogue(sound_set)["distant_impact"][0].astype(np.float64)
     spectrum = np.abs(np.fft.rfft(wave)) ** 2
     freqs = np.fft.rfftfreq(len(wave), 1 / SAMPLE_RATE)
     above = np.sum(spectrum[freqs > 1_500]) / np.sum(spectrum)
@@ -470,7 +462,7 @@ def test_the_distant_impact_is_muffled(sound_set):
 
 
 def test_the_bell_has_few_clean_widely_spaced_partials(sound_set):
-    wave = sound_set.catalogue()["bell_toll"][0].astype(np.float64)
+    wave = catalogue(sound_set)["bell_toll"][0].astype(np.float64)
     size = len(wave)
     spectrum = np.abs(np.fft.rfft(wave * np.hanning(size)))
     freqs = np.fft.rfftfreq(size, 1 / SAMPLE_RATE)
@@ -524,7 +516,7 @@ def test_shots_fade_into_a_reverb_tail_rather_than_cutting_off(sound_set):
     """Past the body of the sound the level keeps falling gently: no block of
     silence follows a hard edge."""
     for name in ("shot", "rifle_crack", "bandit_down", "debris_hit"):
-        wave = sound_set.catalogue()[name][0]
+        wave = catalogue(sound_set)[name][0]
         env = band_energy_over_time(wave, 40, 20_000, 0.05)
         db = 20 * np.log10(env / env.max() + 1e-9)
         tail = db[len(db) // 2:-2]  # the last blocks are the final ease-out
@@ -534,7 +526,7 @@ def test_shots_fade_into_a_reverb_tail_rather_than_cutting_off(sound_set):
 
 def test_takes_differ_in_length_and_brightness(sound_set):
     for name in ("shot", "cock", "groan", "hull_thud"):
-        takes = sound_set.catalogue()[name]
+        takes = catalogue(sound_set)[name]
         centroids = [centroid_hz(t) for t in takes]
         assert max(centroids) / min(centroids) > 1.04, (name, centroids)
         lengths = [len(t) for t in takes]
@@ -543,7 +535,7 @@ def test_takes_differ_in_length_and_brightness(sound_set):
 
 def test_the_scope_noise_is_enveloped_with_the_tone(sound_set):
     for name in ("scope_in", "scope_out"):
-        wave = sound_set.variants(name)[0]
+        wave = variants(sound_set, name)[0]
         env = band_energy_over_time(wave, 1_500, 8_000, 0.03)
         body = env[: int(0.33 / 0.03)]
         assert body.max() / (body.min() + 1e-9) > 2.5, name  # not a flat slab
@@ -551,7 +543,7 @@ def test_the_scope_noise_is_enveloped_with_the_tone(sound_set):
 
 
 def test_static_crackles_and_has_soft_edges(sound_set):
-    wave = sound_set.variants("static")[0].astype(np.float64)
+    wave = variants(sound_set, "static")[0].astype(np.float64)
     env = band_energy_over_time(wave, 300, 8_000, 0.01)
     assert env[0] < 0.5 * env.max() and env[-1] < 0.5 * env.max()
     inner = env[5:-5]
@@ -559,7 +551,7 @@ def test_static_crackles_and_has_soft_edges(sound_set):
 
 
 def test_alarm_beeps_swell_and_release(sound_set):
-    wave = sound_set.variants("alarm")[0].astype(np.float64)
+    wave = variants(sound_set, "alarm")[0].astype(np.float64)
     env = band_energy_over_time(wave, 500, 4_000, 0.005)
     first = env[: int(0.25 / 0.005)]
     peak = int(np.argmax(first))
@@ -581,7 +573,7 @@ def test_gunshots_have_a_knee_not_one_straight_wedge(sound_set):
     """A room adds a separate low tail: past the crack, the top band has died
     far faster than the bottom band, so the spectrogram bends at a knee."""
     for name, at in (("shot", 11), ("rifle_crack", 11), ("sniper_shot", 6)):
-        wave = sound_set.catalogue()[name][0]
+        wave = catalogue(sound_set)[name][0]
         high = band_energy_over_time(wave, 3_000, 12_000, 0.05)
         low = band_energy_over_time(wave, 60, 500, 0.05)
         high_db = 20 * np.log10(high / high[0] + 1e-9)
@@ -593,7 +585,7 @@ def test_gunshots_carry_early_reflections(sound_set):
     """Within 40..130 ms of the crack the broadband level rises again at
     least once: a delayed copy coming back off a wall."""
     for name in ("shot", "rifle_crack", "sniper_shot"):
-        wave = sound_set.catalogue()[name][0]
+        wave = catalogue(sound_set)[name][0]
         env = band_energy_over_time(wave, 1_500, 12_000, 0.01)
         db = 20 * np.log10(env / env.max() + 1e-9)
         window = db[3:14]
@@ -603,7 +595,7 @@ def test_gunshots_carry_early_reflections(sound_set):
 def test_groan_takes_differ_in_shape_not_just_level(sound_set):
     """Syllable count and vowel path are drawn per take: the envelopes of the
     takes are not scaled copies of each other."""
-    takes = sound_set.catalogue()["groan"]
+    takes = catalogue(sound_set)["groan"]
     lengths = sorted(len(t) for t in takes)
     assert lengths[-1] - lengths[0] > SAMPLE_RATE * 0.3
     shapes = []
@@ -618,7 +610,7 @@ def test_groan_takes_differ_in_shape_not_just_level(sound_set):
 def test_hull_thud_takes_have_different_modes(sound_set):
     """Each take is a different patch of hull: the ringing partials differ."""
     peaks = []
-    for take in sound_set.catalogue()["hull_thud"]:
+    for take in catalogue(sound_set)["hull_thud"]:
         x = take.astype(np.float64)[: SAMPLE_RATE]
         spectrum = np.abs(np.fft.rfft(x * np.hanning(len(x))))
         freqs = np.fft.rfftfreq(len(x), 1 / SAMPLE_RATE)
@@ -631,7 +623,7 @@ def test_mechanical_clicks_have_different_bodies(sound_set):
     """cock / bolt_cycle: the clicks are not one sample repeated - the
     brightest event and the heaviest event sit in different bands."""
     for name in ("cock", "bolt_cycle"):
-        wave = sound_set.catalogue()[name][0].astype(np.float64)
+        wave = catalogue(sound_set)[name][0].astype(np.float64)
         env = band_energy_over_time(wave, 300, 16_000, 0.005)
         loud = np.nonzero(env > 0.3 * env.max())[0]
         events = [loud[0]] + [b for a, b in zip(loud, loud[1:]) if b - a > 4]
@@ -647,7 +639,7 @@ def test_wind_beds_have_a_wandering_ridge(sound_set):
     """The resonant band moves: the peak frequency of the middle of the sound
     is not where it was at the start."""
     for name in ("wind_gust", "wind_dust", "static"):
-        wave = sound_set.catalogue()[name][0].astype(np.float64)
+        wave = catalogue(sound_set)[name][0].astype(np.float64)
         n = len(wave)
         seen = set()
         for start in np.linspace(0.15, 0.85, 8):
@@ -662,7 +654,7 @@ def test_wind_beds_have_a_wandering_ridge(sound_set):
 def test_round_over_is_a_motif_not_a_frozen_comb(sound_set):
     """Two notes: the dominant pitch of the second half is below the first's,
     and the upper harmonics fade faster than the fundamental."""
-    wave = sound_set.catalogue()["round_over"][0].astype(np.float64)
+    wave = catalogue(sound_set)["round_over"][0].astype(np.float64)
     first = dominant_hz(wave[: int(0.35 * SAMPLE_RATE)])
     second = dominant_hz(wave[int(0.6 * SAMPLE_RATE): int(1.2 * SAMPLE_RATE)])
     assert second < first * 0.85, (first, second)
@@ -719,7 +711,7 @@ def test_every_cue_a_map_raises_is_a_sound_that_exists(sound_set):
         raised |= cue_names_raised_in(module)
 
     assert len(raised) >= 20, "the cue scan found almost nothing; has it drifted?"
-    known = set(sound_set.names()) | set(CUES)
+    known = set(sound_set._named) | set(CUES)
     assert raised <= known, f"raised but never synthesised: {sorted(raised - known)}"
 
 
@@ -730,7 +722,7 @@ def test_the_named_cues_the_app_special_cases_are_playable(sound_set):
 
     for name, play in CUES.items():
         play(sound_set)  # must not raise: the method still exists and matches
-        assert name not in sound_set.names(), (
+        assert name not in sound_set._named, (
             f"{name} is both special-cased and named; one of the two is dead")
 
 

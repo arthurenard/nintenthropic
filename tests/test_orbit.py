@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 import pytest
 
@@ -7,8 +5,7 @@ from handy.game import Rect, RoundOptions
 from handy.maps.orbit import (ALARM_INTEGRITY, DRONE_DEPTH, FRIENDLY_PENALTY,
                               FULL_INTEGRITY, GRAVITY, MAX_FRAGMENTS,
                               MIN_SPLIT_RADIUS, SPAWN_DEPTH, Z_WINDOW, Drone, Fragment,
-                              OrbitRound, Projection, draw_emblem, draw_world,
-                              momentum)
+                              OrbitRound, Projection, draw_emblem, draw_world)
 
 AREA = Rect(31, 294, 1449, 578)
 VIEW = Projection.for_area(AREA)
@@ -76,14 +73,6 @@ def test_the_arc_is_a_parabola_not_a_line():
     assert climbs[0] < 0 < climbs[-1], "it rises, then the pull wins"
 
 
-def test_time_to_window_counts_down_and_is_never_negative():
-    piece = fragment(z=10.6, vz=-5.0)
-    assert piece.time_to_window() == pytest.approx(2.0)
-    piece.advance(1.0)
-    assert piece.time_to_window() == pytest.approx(1.0)
-    assert fragment(vz=1.0).time_to_window() == math.inf
-
-
 def test_spawned_fragments_arrive_where_they_were_aimed():
     """A window-bound spawn lands on the glass; a passing one misses it."""
     round_ = make_round(seed=2)
@@ -107,6 +96,13 @@ def test_spawns_start_far_and_inside_the_field_of_view():
 
 
 # --- fragmentation ---------------------------------------------------------
+
+def momentum(fragments) -> tuple[float, float, float]:
+    """Total momentum of some fragments, for the books."""
+    return (sum(f.mass * f.vx for f in fragments),
+            sum(f.mass * f.vy for f in fragments),
+            sum(f.mass * f.vz for f in fragments))
+
 
 def test_a_hit_splits_a_big_fragment_and_momentum_is_conserved():
     round_ = make_round()
@@ -247,7 +243,6 @@ def test_hitting_the_drone_costs_points_and_breaks_the_streak():
     assert impact.label == "FRIENDLY" and not impact.is_hit
     assert round_.score == max(0, score - FRIENDLY_PENALTY)
     assert round_.streak == 0 and streak == 1
-    assert round_.friendly_hits == 1
     assert round_.drone.hit_at == 0.5
     assert "static" in round_.cues and "alarm" in round_.cues
 

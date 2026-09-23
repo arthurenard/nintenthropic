@@ -952,11 +952,6 @@ def _slab(canvas: np.ndarray, x0: int, y0: int, x1: int, y1: int) -> None:
     _rounded_box(canvas, x0, y0, x1 - 1, y1 - 1, radius, SLAB_EDGE, 1)
 
 
-def _outlined_text(canvas, text, origin, color, scale, thickness, edge=SCORE_EDGE) -> None:
-    cv2.putText(canvas, text, origin, FONT, scale, edge, thickness + 4, cv2.LINE_AA)
-    cv2.putText(canvas, text, origin, FONT, scale, color, thickness, cv2.LINE_AA)
-
-
 # --- the hour's light ----------------------------------------------------------------
 
 def _hour_t(hour: int) -> float:

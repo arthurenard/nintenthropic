@@ -52,12 +52,6 @@ def _rounded(x0: int, y0: int, x1: int, y1: int, radius: int) -> np.ndarray:
     return np.concatenate(points).astype(np.int32)
 
 
-def fill_rounded(canvas: np.ndarray, rect: Rect, color: tuple[int, int, int],
-                 radius: int) -> None:
-    cv2.fillPoly(canvas, [_rounded(rect.x, rect.y, rect.right, rect.bottom, radius)],
-                 color, cv2.LINE_AA)
-
-
 def stroke_rounded(canvas: np.ndarray, rect: Rect, color: tuple[int, int, int],
                    radius: int, weight: int = 1) -> None:
     cv2.polylines(canvas, [_rounded(rect.x, rect.y, rect.right, rect.bottom, radius)],
@@ -854,17 +848,6 @@ def draw_hud_backing(canvas: np.ndarray, rect: Rect, scale: float = 1.0) -> None
 
 
 # --- calibration ------------------------------------------------------------
-
-def draw_shot_target(canvas, target, hit=False):
-    """Warm target rings stay distinct from the green aiming crosshair."""
-    height, width = canvas.shape[:2]
-    x, y = round(target[0] * width), round(target[1] * height)
-    radius = max(18, round(min(width, height) * 0.047))
-    color = ARMED if hit else (115, 183, 241)
-    cv2.circle(canvas, (x, y), radius, color, 2, cv2.LINE_AA)
-    cv2.circle(canvas, (x, y), radius // 2, color, 1, cv2.LINE_AA)
-    cv2.circle(canvas, (x, y), 3, color, -1, cv2.LINE_AA)
-
 
 def draw_calibration_range(canvas, session, now):
     """The actual Target Range hall and archery faces serve as the warm-up."""

@@ -16,7 +16,6 @@ def test_one_camera_is_taken_at_its_word():
     result = fuse([opinion(0.3, 0.7)])
     assert result.position == pytest.approx((0.3, 0.7))
     assert result.cameras == 1
-    assert result.agrees
 
 
 def test_the_steadier_camera_carries_more_weight():
@@ -30,7 +29,6 @@ def test_the_steadier_camera_carries_more_weight():
 def test_disagreement_is_reported_not_hidden():
     result = fuse([opinion(0.40, 0.5), opinion(0.52, 0.5)])
     assert result.spread == pytest.approx(0.12)
-    assert not result.agrees
 
 
 def test_spread_takes_the_widest_pair():
