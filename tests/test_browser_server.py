@@ -338,6 +338,17 @@ def test_a_decode_bomb_is_refused(server):
     assert status == 400 and "1280 by 720" in data["error"]
 
 
+def test_stale_actions_are_answered_not_refused(server):
+    session = start(server, control="pistol")
+    for action in ("skip", "play"):
+        call(server, "POST", "/api/action", {"id": session["id"], "action": action})
+    for action in ("play", "undo", "reset", "skip", "finish", "resume"):
+        status, data, _ = call(
+            server, "POST", "/api/action", {"id": session["id"], "action": action}
+        )
+        assert status == 200 and data["state"] == "playing", (action, data)
+
+
 def test_a_short_window_does_not_end_the_game(server):
     # A stage 1200 by 100 pixels: every warm-up frame used to be refused.
     assert start(server, viewAspect=20)["state"] == "playing"

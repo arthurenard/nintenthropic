@@ -206,11 +206,20 @@ class BrowserSession:
         self.notice = self.calibration.message
 
     def action(self, name, data):
+        # A double click, or a click that raced a change of state - setup ending
+        # itself on the fifth hit, a round running out - asks for something that
+        # already happened or no longer applies. Answer with where the game is:
+        # an error would end the session in the page.
+        calibrating = self.state == "calibration"
+        if (
+            (name == "calibrate" and calibrating)
+            or (name in ("undo", "reset", "finish", "skip") and not calibrating)
+            or (name == "play" and self.state not in ("practice", "over"))
+        ):
+            return self.info()
         if name == "calibrate":
             self.begin_calibration()
         elif name in ("undo", "reset", "finish"):
-            if self.state != "calibration":
-                raise ValueError("Start calibration first")
             s = self.calibration
             if name == "undo":
                 s.undo()
@@ -226,14 +235,10 @@ class BrowserSession:
                 return self.action("play", {})
             self.notice = self.calibration.message
         elif name == "skip":
-            if self.state != "calibration":
-                raise ValueError("No calibration to skip")
             self.state = "practice"
             self.notice = "Setup skipped. Using your previous setup or the default aim."
             self._controller()
         elif name == "play":
-            if self.state not in ("practice", "over"):
-                raise ValueError("Finish or skip setup before playing")
             self.round = self._new_round()
             self.state = "playing"
             self.notice = ""

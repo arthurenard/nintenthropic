@@ -449,17 +449,24 @@ function queueAction(action, extra = {}) {
 async function loop(run) {
   while (active && generation === run) {
     const started = performance.now();
-    try {
-      if (pendingAction) {
-        const action = pendingAction;
-        pendingAction = null;
+    if (pendingAction) {
+      const action = pendingAction;
+      pendingAction = null;
+      try {
         const data = await request("/api/action", {
           id: session.id,
           ...action,
         });
         if (generation !== run) return;
         renderState(data);
+      } catch (error) {
+        if (generation !== run) return;
+        // A refused button press leaves the game running: say why and carry
+        // on. If the game itself is gone, the frame below reports that.
+        showError(error.message);
       }
+    }
+    try {
       const shot = fire;
       fire = false;
       const down = (...codes) =>

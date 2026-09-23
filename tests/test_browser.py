@@ -69,6 +69,40 @@ def test_pause_does_not_advance_clock_or_accept_shots():
     assert session.clock == pytest.approx(before + 0.03)
 
 
+def test_a_repeated_play_does_not_restart_the_round():
+    # A double click on "Play again" sends play twice; the second must not
+    # throw away the round the first one started.
+    session = BrowserSession({})
+    session.tick({"fire": True}, session.last_tick + 0.5)
+    round_, clock, tick = session.round, session.clock, session.last_tick
+    info = session.action("play", {})
+    assert info["state"] == "playing" and info["id"] == session.id
+    assert session.round is round_ and session.round.shots == 1
+    assert (session.clock, session.last_tick) == (clock, tick)
+
+
+@pytest.mark.parametrize("name", ["undo", "reset", "finish", "skip", "calibrate"])
+def test_setup_actions_that_arrive_late_change_nothing(name, monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    shoot_setup_target(session, stream)
+    if name == "calibrate":
+        # Already setting up: a second "Adjust aim" keeps the shots taken.
+        assert session.action(name, {})["state"] == "calibration"
+        assert len(session.calibration.samples) == 1
+        return
+    # Setup already finished itself, as it does on the fifth accurate hit.
+    session.action("skip", {})
+    session.action("play", {})
+    round_ = session.round
+    assert session.action(name, {})["state"] == "playing"
+    assert session.round is round_
+
+
+def test_unknown_actions_are_still_refused():
+    with pytest.raises(ValueError, match="Unknown"):
+        BrowserSession({}).action("teleport", {})
+
+
 def test_round_end_rejects_shots_and_restarts_cleanly():
     session = BrowserSession({"duration": 15})
     session.tick({}, session.last_tick)
