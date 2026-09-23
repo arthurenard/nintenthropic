@@ -45,6 +45,15 @@ MIN_SPLIT_RADIUS = 0.55
 MAX_FRAGMENTS = 14
 #: How hard a round hits, as a momentum kick along the line of fire.
 BULLET_IMPULSE = 0.12
+#: How fast the pieces of a split part, m/s at most, relative to where the
+#: parent was going. The round's energy goes into breaking the rock, not into
+#: flinging it: the pieces carry on with the parent's momentum between them.
+SPLIT_SPEED = 1.0
+#: And never so fast that by the time they reach the glass they have drifted
+#: further than this from where the parent would have struck, as a fraction of
+#: the pane's half height: splitting a rock that is coming at you leaves you
+#: pieces that are still coming at you.
+SPLIT_DRIFT = 0.8
 
 FULL_INTEGRITY = 100
 ALARM_INTEGRITY = 35
@@ -518,10 +527,12 @@ class OrbitRound(Round):
             self.cleared += 1
             return Hit(points=int(CLEAR_POINTS * bonus), ring=0, label="CLEARED",
                        perfect=True)
-        pieces = self.split(struck, (x, y))
+        # A split never adds more pieces than there is room for, but always
+        # makes at least two, and none of them is ever thrown away: in a full
+        # field the sky holds back until the pieces have gone by.
+        room = MAX_FRAGMENTS - len(self.targets) + 1
         self.targets.remove(struck)
-        self.targets.extend(pieces)
-        del self.targets[MAX_FRAGMENTS:]
+        self.targets.extend(self.split(struck, (x, y), most=max(2, room)))
         return Hit(points=int(SPLIT_POINTS * bonus), ring=1, label="SPLIT")
 
     def in_pane(self, x: float, y: float) -> bool:
@@ -548,10 +559,12 @@ class OrbitRound(Round):
         self.cues.append("alarm")
         return Hit(points=0, ring=None, label="FRIENDLY")
 
-    def split(self, parent: Fragment, shot: tuple[float, float]) -> list[Fragment]:
-        """Break a fragment into pieces that carry its momentum between them."""
+    def split(self, parent: Fragment, shot: tuple[float, float],
+              most: int = 3) -> list[Fragment]:
+        """Break a fragment into pieces - no more than ``most`` - that carry its
+        momentum between them."""
         rng = self.effects_rng
-        count = 3 if parent.radius > 0.5 else 2
+        count = min(3 if parent.radius > 0.5 else 2, most)
         fractions = [rng.uniform(0.6, 1.0) for _ in range(count)]
         total = sum(fractions)
         fractions = [f / total for f in fractions]
@@ -565,8 +578,17 @@ class OrbitRound(Round):
                 (mass * parent.vz + impulse[2]) / mass)
 
         # Internal kicks that sum to zero: the pieces fly apart, the centre of
-        # mass does not care.
-        kick = min(-parent.vz, 6.0) * 0.16
+        # mass does not care. Equal and opposite momentum, so the lightest piece
+        # moves fastest; it is the one held to the separation speed, and that
+        # to what keeps the pieces near the pane by the time they arrive.
+        # Scaled by the parent's mass, so a slab and a chunk come apart at the
+        # same speed rather than the chunk's pieces being flung across the sky.
+        separation = SPLIT_SPEED
+        arrival = parent.time_to_window()
+        if math.isfinite(arrival) and arrival > 0.0:
+            _, half_h = self.view.pane_half_extent(Z_WINDOW)
+            separation = min(separation, SPLIT_DRIFT * half_h / arrival)
+        kick = separation * mass * min(fractions)
         direction = rng.uniform(0.0, math.tau)
         kicks = []
         for index in range(count):
