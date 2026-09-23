@@ -5,6 +5,7 @@ start instantly and offline; everything between the socket and the session is
 the code the page talks to.
 """
 
+import base64
 import http.client
 import json
 import socket
@@ -13,6 +14,8 @@ import threading
 import time
 from dataclasses import replace
 
+import cv2
+import numpy as np
 import pytest
 
 from handy import browser, schemes
@@ -315,6 +318,18 @@ def test_a_paused_game_that_keeps_polling_stays_open(server):
     while server.session is not None and time.monotonic() < deadline:
         time.sleep(0.05)
     assert server.session is None
+
+
+def test_a_decode_bomb_is_refused(server):
+    session = start(server, control="pistol")
+    raw = bytearray(cv2.imencode(".jpg", np.zeros((48, 64, 3), np.uint8))[1])
+    at = raw.find(b"\xff\xc0")
+    raw[at + 5 : at + 9] = (30000).to_bytes(2, "big") * 2  # 30000 x 30000
+    bomb = base64.b64encode(bytes(raw)).decode()
+    status, data, _ = call(
+        server, "POST", "/api/frame", {"id": session["id"], "camera": bomb}
+    )
+    assert status == 400 and "1280 by 720" in data["error"]
 
 
 def test_every_response_forbids_cross_origin_embedding(server):

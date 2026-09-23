@@ -159,6 +159,52 @@ def camera_payload():
     }
 
 
+def claiming(width, height, progressive=False):
+    """A tiny real JPEG whose header claims to be ``width`` by ``height``."""
+    flags = [cv2.IMWRITE_JPEG_PROGRESSIVE, int(progressive)]
+    raw = bytearray(cv2.imencode(".jpg", np.zeros((48, 64, 3), np.uint8), flags)[1])
+    at = raw.find(b"\xff\xc2" if progressive else b"\xff\xc0")
+    raw[at + 5 : at + 9] = height.to_bytes(2, "big") + width.to_bytes(2, "big")
+    return bytes(raw)
+
+
+@pytest.mark.parametrize("progressive", [False, True])
+def test_jpeg_size_is_read_from_the_header(progressive):
+    assert browser.jpeg_size(claiming(64, 48, progressive)) == (64, 48)
+    assert browser.jpeg_size(claiming(30000, 30000, progressive)) == (30000, 30000)
+
+
+@pytest.mark.parametrize(
+    "raw", [b"\xff\xd8", b"\xff\xd8\xff\xd9", b"\xff\xd8\xff\xda\x00\x02", b"\xff\xd8junk"]
+)
+def test_jpeg_without_a_frame_header_is_invalid(raw):
+    with pytest.raises(ValueError):
+        browser.jpeg_size(raw)
+
+
+def test_decode_bomb_is_refused_before_decoding(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+
+    def decode(*_args):
+        pytest.fail("A frame claiming 30000x30000 pixels must never be decoded")
+
+    monkeypatch.setattr(browser.cv2, "imdecode", decode)
+    bomb = base64.b64encode(claiming(30000, 30000)).decode()
+    with pytest.raises(ValueError, match="1280 by 720"):
+        session.tick({"camera": bomb})
+
+
+def test_undecodable_camera_frame_is_a_bad_request(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+
+    def decode(*_args):
+        raise cv2.error("corrupt data")
+
+    monkeypatch.setattr(browser.cv2, "imdecode", decode)
+    with pytest.raises(ValueError, match="Invalid camera frame"):
+        session.tick(camera_payload())
+
+
 def shoot_setup_target(session, stream, point=None):
     from dataclasses import replace
 

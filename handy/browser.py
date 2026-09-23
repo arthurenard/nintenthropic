@@ -56,6 +56,37 @@ def jpeg(image):
     return encoded.tobytes()
 
 
+#: Start-of-frame markers: every JPEG coding - baseline, progressive, lossless,
+#: arithmetic - declares the image size in one of these.
+FRAME_MARKERS = frozenset(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
+
+
+def jpeg_size(raw):
+    """The (width, height) a JPEG declares, read from its header alone.
+
+    Decoding first and checking after would let a few hundred bytes that claim
+    to be 30000 by 30000 pixels allocate gigabytes before any check ran.
+    """
+    at = 2  # past the start-of-image marker
+    while at + 4 <= len(raw) and raw[at] == 0xFF:
+        marker = raw[at + 1]
+        if marker == 0xFF:  # padding before a marker
+            at += 1
+        elif marker == 0x01 or 0xD0 <= marker <= 0xD7:  # markers without a length
+            at += 2
+        elif marker in (0xD9, 0xDA):  # the image ended, or its data began
+            break
+        else:
+            length = int.from_bytes(raw[at + 2 : at + 4], "big")
+            if marker in FRAME_MARKERS and length >= 7 and at + 9 <= len(raw):
+                height = int.from_bytes(raw[at + 5 : at + 7], "big")
+                return int.from_bytes(raw[at + 7 : at + 9], "big"), height
+            if length < 2:
+                break
+            at += 2 + length
+    raise ValueError("Invalid camera frame")
+
+
 class BrowserSession:
     def __init__(self, config):
         aspect = number(config.get("viewAspect", WIDTH / HEIGHT), 0.25, 8)
@@ -285,7 +316,13 @@ class BrowserSession:
             # The UI sends 640x480 JPEGs. Reject other encodings and oversized frames.
             if not raw.startswith(b"\xff\xd8"):
                 raise ValueError("Expected a JPEG camera frame")
-            image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            width, height = jpeg_size(raw)
+            if not (0 < width <= 1280 and 0 < height <= 720):
+                raise ValueError("Camera frame must be at most 1280 by 720")
+            try:
+                image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            except cv2.error as error:
+                raise ValueError("Invalid camera frame") from error
             if image is None or image.shape[0] > 720 or image.shape[1] > 1280:
                 raise ValueError("Camera frame must be at most 1280 by 720")
             self.stream.submit(image)
