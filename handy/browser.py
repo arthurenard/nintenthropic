@@ -99,6 +99,31 @@ def jpeg_size(raw):
     raise ValueError("Invalid camera frame")
 
 
+def saved_rig(saved):
+    """The one-camera rig the page stored, or an error if any of it is unusable.
+
+    It comes back from browser storage - perhaps written by an older version,
+    perhaps edited by hand - so every number must be finite, and every pair a pair.
+    """
+    rig = Rig.from_dict(saved)
+    if len(rig) != 1:
+        raise ValueError("Browser calibration uses one camera")
+    for name, value in rig[0].to_dict().items():
+        if isinstance(value, (bool, str)):
+            continue
+        values = value if isinstance(value, list) else [value]
+        if name in ("tuning", "slide") and len(values) != 2:
+            raise ValueError(f"The saved {name} is not a pair")
+        for item in values:
+            if (
+                isinstance(item, bool)
+                or not isinstance(item, (int, float))
+                or not math.isfinite(item)
+            ):
+                raise ValueError(f"The saved {name} is not a finite number")
+    return rig
+
+
 class BrowserSession:
     def __init__(self, config):
         aspect = config.get("viewAspect")
@@ -132,6 +157,7 @@ class BrowserSession:
         self.scheme = None
         self.rig = None
         self.saved_rig = None
+        self.forget_saved = False  # the page's stored setup could not be used
         self.controller = None
         self.wheel_reader = WheelController(mirrored=True)
         self.neutral_rolls = []
@@ -156,15 +182,19 @@ class BrowserSession:
             self.rig = default_rig(self.scheme, 1)
             saved = config.get("calibration")
             if saved:
-                candidate = Rig.from_dict(saved)
-                if len(candidate) != 1:
-                    raise ValueError("Browser calibration uses one camera")
-                for value in candidate[0].to_dict().values():
-                    if isinstance(value, (int, float)) and not math.isfinite(value):
-                        raise ValueError("Invalid saved calibration")
-                if not all(math.isfinite(v) for v in candidate[0].mapping):
-                    raise ValueError("Invalid saved calibration")
-                self.rig = candidate
+                try:
+                    self.rig = saved_rig(saved)
+                except (LookupError, ValueError, TypeError, ArithmeticError) as error:
+                    # An older version's format, or a damaged value. Refusing to
+                    # start would refuse every start after it too, since the page
+                    # sends the same setup each time. The player can still aim:
+                    # set up afresh, and have the page forget the stored one.
+                    print(
+                        f"Ignoring a saved browser setup: {error!r}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    self.forget_saved = True
             self._controller()
             self.stream = self.scheme.open_stream(
                 *(ensure_model(m) for m in self.scheme.models)
@@ -537,7 +567,7 @@ class BrowserServer(ThreadingHTTPServer):
         # Unreachable now, and no frame can be using it: frames hold the lock.
         if previous:
             previous.close()
-        return session.info()
+        return {**session.info(), "forgetSavedSetup": session.forget_saved}
 
     def call(self, path, data):
         """Run one request against the open game."""

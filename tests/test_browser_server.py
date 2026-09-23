@@ -338,6 +338,20 @@ def test_a_decode_bomb_is_refused(server):
     assert status == 400 and "1280 by 720" in data["error"]
 
 
+def test_an_unusable_saved_setup_is_replaced_and_forgotten(server, capsys):
+    from handy.calibration import default_rig
+
+    good = default_rig(schemes.PISTOL, 1)[0].to_dict()
+    damaged = {"cameras": [{**good, "slide": ["a", "b"]}]}
+    for _ in range(2):  # it used to fail every start, not just the first
+        data = start(server, control="pistol", calibration=damaged)
+        assert data["state"] == "calibration" and data["forgetSavedSetup"] is True
+    kept = start(server, control="pistol", calibration={"cameras": [good]})
+    assert kept["forgetSavedSetup"] is False
+    assert start(server)["forgetSavedSetup"] is False
+    assert "Ignoring a saved browser setup" in capsys.readouterr().err
+
+
 def test_stale_actions_are_answered_not_refused(server):
     session = start(server, control="pistol")
     for action in ("skip", "play"):

@@ -172,7 +172,7 @@ class FakeStream:
         self.closed = True
 
 
-def camera_session(monkeypatch):
+def camera_session(monkeypatch, **config):
     stream = FakeStream()
     monkeypatch.setattr(browser, "ensure_model", lambda _name: "unused")
     monkeypatch.setattr(
@@ -182,7 +182,7 @@ def camera_session(monkeypatch):
             PISTOL, open_stream=lambda *_args: stream
         ),
     )
-    return BrowserSession({"control": "pistol"}), stream
+    return BrowserSession({"control": "pistol", **config}), stream
 
 
 def camera_payload():
@@ -253,6 +253,55 @@ def shoot_setup_target(session, stream, point=None):
         )
         result = session.tick(camera_payload(), session.last_tick + 0.05)
     return result
+
+
+def stored_setup(**changes):
+    """What the page keeps in localStorage after a setup, with ``changes`` made."""
+    from handy.calibration import default_rig
+
+    entry = {**default_rig(PISTOL, 1)[0].to_dict(), **changes}
+    return {"cameras": [{k: v for k, v in entry.items() if v is not ...}]}
+
+
+@pytest.mark.parametrize(
+    "saved",
+    [
+        stored_setup(slide=["a", "b"]),
+        stored_setup(slide=[0.0]),
+        stored_setup(tuning=[0.0, float("nan")]),
+        stored_setup(mapping=[1.0] * 8),
+        stored_setup(mapping=[float("inf")] + [1.0] * 8),
+        stored_setup(gain=10**400),
+        stored_setup(cocked=20.0, folded=20.0),
+        stored_setup(mapping=..., aim_min=...),
+        {"cameras": [stored_setup()["cameras"][0]] * 2},
+        {"cameras": []},
+        {"cameras": "abc"},
+        "a string",
+        [1, 2],
+    ],
+)
+def test_an_unusable_saved_setup_starts_a_fresh_one(saved, monkeypatch, capsys):
+    from handy.calibration import default_rig
+
+    # Refusing it would refuse every start: the page sends it with each one.
+    session, _stream = camera_session(monkeypatch, calibration=saved)
+    assert session.state == "calibration"
+    assert session.rig == default_rig(PISTOL, 1)
+    assert session.calibration.initial == session.rig
+    assert session.forget_saved
+    assert "Ignoring a saved browser setup" in capsys.readouterr().err
+
+
+def test_a_usable_saved_setup_is_kept(monkeypatch):
+    from handy.calibration import Rig
+
+    saved = stored_setup(slide=[0.01, -0.02], gain=1.2)
+    session = camera_session(monkeypatch, calibration=saved)[0]
+    assert session.rig == Rig.from_dict(saved) and not session.forget_saved
+    # A setup from before a field existed may load or not, but never blocks a start.
+    older = stored_setup(signal=...)
+    assert camera_session(monkeypatch, calibration=older)[0].state == "calibration"
 
 
 def test_shoot_to_calibrate_waits_for_fresh_thumb_pulls(monkeypatch):

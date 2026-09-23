@@ -67,6 +67,13 @@ const storage = {
       );
     }
   },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* Without storage there is nothing saved to forget. */
+    }
+  },
 };
 function showError(message) {
   $("error-message").textContent = message;
@@ -277,6 +284,9 @@ async function start() {
       duration: Number($("duration").value),
       calibration: storage.get(setupKey),
     });
+    // The server could not use the stored setup - an older format, or damaged -
+    // and started a fresh one. Forget it, or every start would send it again.
+    if (session.forgetSavedSetup) storage.remove(setupKey);
     $("lobby").hidden = true;
     $("game").hidden = false;
     $("game").classList.toggle("immersive", selectedControl === "pistol");
