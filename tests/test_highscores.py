@@ -102,3 +102,61 @@ def test_saving_says_whether_it_worked(tmp_path):
     blocked = tmp_path / "file"
     blocked.write_text("x")
     assert HighScores(path=blocked / "scores.json", best={"a": 1}).save() is False
+
+
+def test_one_bad_entry_costs_only_itself(tmp_path):
+    """A single null used to empty the whole table - and the next record then
+    wrote that emptiness over every other best."""
+    path = tmp_path / "scores.json"
+    path.write_text(json.dumps({"best": {"range:60s": 264, "zombies:60s": None,
+                                         "orbit:60s": "lots"}}))
+    scores = HighScores.load(path)
+    assert scores.best == {"range:60s": 264}
+
+    scores.record("sniper", 60, 10)
+    assert HighScores.load(path).best == {"range:60s": 264, "sniper:60s": 10}
+
+
+def test_an_unreadable_table_is_set_aside_rather_than_overwritten(tmp_path, capsys):
+    """A file cut off mid-write read as an empty table, and the next record
+    silently replaced every best in it with the one just set."""
+    path = tmp_path / "scores.json"
+    damaged = '{"best": {"range:60s": 264, "zomb'
+    path.write_text(damaged)
+
+    assert HighScores.load(path).record(RANGE, 60, 5) is True
+    backup = tmp_path / "scores.json.bak"
+    assert backup.read_text() == damaged, "kept, for a person to rescue"
+    assert HighScores.load(path).best_for(RANGE, 60) == 5
+    assert str(backup) in capsys.readouterr().out
+
+
+def test_two_copies_of_the_game_keep_each_others_records(tmp_path):
+    """Each copy wrote out only the table it loaded at launch, so whichever
+    saved last wiped every record the other had set since."""
+    first, second = table(tmp_path), table(tmp_path)
+    assert first.record(RANGE, 60, 100) is True
+    assert second.record("zombies", 60, 50) is True
+    assert second.record(RANGE, 60, 80) is False, "the other copy's 100 stands"
+
+    saved = table(tmp_path)
+    assert saved.best_for(RANGE, 60) == 100
+    assert saved.best_for("zombies", 60) == 50
+
+
+def test_a_save_replaces_the_table_whole_or_not_at_all(tmp_path, monkeypatch):
+    """Written in place, a crash or a full disk mid-write left half a file."""
+    import os
+
+    path = tmp_path / "scores.json"
+    table(tmp_path).record(RANGE, 60, 40)
+    before = path.read_text()
+
+    def disk_full(source, destination):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(os, "replace", disk_full)
+    scores = table(tmp_path)
+    assert scores.record(RANGE, 60, 90) is True, "the record still stands"
+    assert path.read_text() == before, "and the file on disk is untouched"
+    assert list(tmp_path.iterdir()) == [path], "with nothing left beside it"
