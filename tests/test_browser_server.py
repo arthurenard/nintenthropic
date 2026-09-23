@@ -289,6 +289,34 @@ def test_stopping_the_server_does_not_wait_for_a_slow_start(
     assert server.session is None and streams[0].closed
 
 
+def test_a_game_its_tab_abandoned_is_closed(server, streams):
+    session = start(server, control="pistol")
+    later = time.monotonic() + browser.IDLE_TIMEOUT
+    server.close_idle(later - 1)
+    assert server.session is not None and not streams[0].closed
+    server.close_idle(later + 1)
+    assert server.session is None and streams[0].closed
+    status, data, _ = call(server, "POST", "/api/frame", {"id": session["id"]})
+    assert status == 400 and "a minute" in data["error"]
+
+
+def test_a_paused_game_that_keeps_polling_stays_open(server):
+    server.idle_timeout = 1.0
+    session = start(server)
+    call(server, "POST", "/api/action", {"id": session["id"], "action": "pause"})
+    began = time.monotonic()
+    while time.monotonic() - began < 1.5:
+        # A paused tab keeps asking for frames, only without a camera image.
+        status, data, _ = call(server, "POST", "/api/frame", {"id": session["id"]})
+        assert status == 200 and data["state"] == "paused"
+        time.sleep(0.05)
+    # Once it stops polling, the server's own loop closes it.
+    deadline = time.monotonic() + 5
+    while server.session is not None and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert server.session is None
+
+
 def test_every_response_forbids_cross_origin_embedding(server):
     for path in ("/", "/app.js", "/art/western", "/api/config", "/missing"):
         response = call(server, "GET", path)[2]

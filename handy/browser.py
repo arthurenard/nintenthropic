@@ -37,6 +37,8 @@ from .recognition import Frame, GestureStream, HAND_CONNECTIONS
 WEB_ROOT = Path(__file__).with_name("web")
 WIDTH, HEIGHT = 960, 540
 MAX_BODY = 1_500_000
+#: Seconds without a request after which the open game is presumed abandoned.
+IDLE_TIMEOUT = 60.0
 
 
 def number(value, low, high):
@@ -452,13 +454,16 @@ class BrowserServer(ThreadingHTTPServer):
     # connection open for the page's next frame, or be loading a model.
     block_on_close = False
 
-    def __init__(self, address):
+    def __init__(self, address, idle_timeout=IDLE_TIMEOUT):
         self.token = secrets.token_urlsafe(32)
         self.session = None
         # Guards ``session`` and everything done to it. Held for one frame at a
         # time - milliseconds - and never while a session is being built.
         self.lock = threading.Lock()
         self.closed = False
+        self.idle_timeout = idle_timeout
+        self.seen = 0.0  # when a request last reached the open session
+        self.expired = None  # the id of the last session closed for silence
         super().__init__(address, Handler)
 
     def start(self, config):
@@ -473,6 +478,7 @@ class BrowserServer(ThreadingHTTPServer):
                 session.close()
                 raise ValueError("Handy is shutting down")
             previous, self.session = self.session, session
+            self.seen = time.monotonic()
         # Unreachable now, and no frame can be using it: frames hold the lock.
         if previous:
             previous.close()
@@ -485,9 +491,15 @@ class BrowserServer(ThreadingHTTPServer):
         with self.lock:
             session = self.session
             if session is None or data.get("id") != session.id:
+                if self.expired is not None and data.get("id") == self.expired:
+                    raise ValueError(
+                        "This game closed after a minute with no contact from its tab. "
+                        "Return to the arcade."
+                    )
                 raise ValueError(
                     "This game was closed or opened in another tab. Return to the arcade."
                 )
+            self.seen = time.monotonic()
             if path == "/api/frame":
                 return session.tick(data)
             if path == "/api/action":
@@ -495,6 +507,29 @@ class BrowserServer(ThreadingHTTPServer):
             session.close()
             self.session = None
             return {"ok": True}
+
+    def service_actions(self):
+        # serve_forever calls this between requests, and at least twice a second.
+        self.close_idle(time.monotonic())
+
+    def close_idle(self, now):
+        """Close the open game if no request has reached it for a while.
+
+        A tab that crashed, or a laptop put to sleep, never says goodbye, and
+        its MediaPipe graphs would stay loaded until the next start or Ctrl+C.
+        A paused game keeps polling for frames, so it never comes close.
+        """
+        # Never wait here: this runs on the thread that accepts connections.
+        if not self.lock.acquire(blocking=False):
+            return
+        try:
+            session = self.session
+            if session is None or now - self.seen < self.idle_timeout:
+                return
+            self.session, self.expired = None, session.id
+        finally:
+            self.lock.release()
+        session.close()
 
     def server_close(self):
         super().server_close()
