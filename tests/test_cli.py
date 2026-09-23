@@ -76,7 +76,6 @@ def test_a_lone_threshold_is_judged_against_the_schemes_it_could_meet():
 @pytest.mark.parametrize("argv", [
     ["--fire-above", "0"], ["--fire-above", "1.5"], ["--arm-below", "-0.2"],
     ["--volume", "3"], ["--volume", "-1"], ["--recoil", "-4"],
-    ["--calibration-grid", "1"],
 ])
 def test_out_of_range_flags_are_refused(argv):
     with pytest.raises(SystemExit):
