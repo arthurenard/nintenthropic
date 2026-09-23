@@ -1679,6 +1679,40 @@ def test_a_round_that_runs_out_of_time_ends_by_itself(monkeypatch):
     assert reason == "over"
 
 
+def test_a_slow_first_frame_does_not_come_out_of_the_round(monkeypatch):
+    """Dead of Night's first draw costs seconds cold, and play could begin
+    before the warm-up got to it. The clock had already started: a simulated
+    start showed 56.66 s of 60 left on the second frame."""
+    from dataclasses import replace
+
+    from handy import app, maps, scene
+
+    clock = {"now": 1000.0}
+
+    def monotonic():
+        clock["now"] += 1 / 60  # every look at the clock is a moment later
+        return clock["now"]
+
+    monkeypatch.setattr(app.time, "monotonic", monotonic)
+    draws = []
+
+    def cold_then_warm(canvas, round_, now):
+        if not draws:
+            clock["now"] += 3.5  # building the scenery, the first time only
+        draws.append(now)
+        maps.RANGE.draw_world(canvas, round_, now)
+
+    shown: list[float] = []
+    monkeypatch.setattr(scene, "draw_timer",
+                        lambda canvas, remaining, scale=1.0: shown.append(remaining))
+    play_once(monkeypatch, keys=[NOTHING, NOTHING, NOTHING, ord("q")],
+              chosen=replace(maps.RANGE, draw_world=cold_then_warm),
+              settings=Settings(duration=60.0, seed=1, recoil=0.0))
+
+    assert len(shown) == 4
+    assert min(shown) > 59.5, f"the clock ran while the scenery was built: {shown}"
+
+
 # --- setup, at the app level -------------------------------------------------
 
 class TracingEyes:

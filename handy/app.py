@@ -667,6 +667,12 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
     scope = EyeScope()
     reads_scope = getattr(scheme, "scope", None)
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
+    # Draw the world once before the round's clock can start. The first draw
+    # of a map at a new size builds its scenery - seconds, for the richest -
+    # and the warm-up thread may not have got to it yet. The clock starts on
+    # the round's first update, so a build done inside the first frame came
+    # out of the player's sixty seconds. Once warm, this is a millisecond.
+    chosen.draw_world(canvas, round_, time.monotonic())
 
     while True:
         images, hands = eyes.read()
