@@ -257,3 +257,153 @@ def test_the_readme_example_command_actually_parses():
 def test_removed_control_choices_are_rejected(control):
     with pytest.raises(SystemExit):
         cli.parse_args(["--control", control])
+
+
+# --- numbers that parse but cannot be played --------------------------------
+
+@pytest.mark.parametrize("argv", [
+    ["--duration", "inf"], ["--duration", "nan"], ["--duration", "86400"],
+    ["--recoil", "inf"], ["--recoil", "nan"], ["--recoil", "5000"],
+    ["--min-cutoff", "0"], ["--min-cutoff", "-1"], ["--min-cutoff", "nan"],
+    ["--min-cutoff", "inf"],
+    ["--beta", "-1"], ["--beta", "nan"], ["--beta", "inf"],
+    ["--targets", "0"], ["--targets", "-3"], ["--targets", "1000"],
+    ["--spawn-interval", "0"], ["--spawn-interval", "-1"],
+    ["--spawn-interval", "nan"], ["--spawn-interval", "inf"],
+    ["--lifetime", "0"], ["--lifetime", "-1"], ["--lifetime", "nan"],
+    ["--camera", "-1"], ["--camera", "0", "--camera", "-2"],
+    ["--capture", "99999x99999"], ["--capture", "7681x720"],
+    ["--volume", "nan"],
+])
+def test_a_number_that_cannot_be_played_is_refused_at_the_terminal(argv, capsys):
+    """Each of these used to be accepted, then crash - or quietly misbehave -
+    after the camera was open and the window fullscreen."""
+    with pytest.raises(SystemExit) as exited:
+        cli.parse_args(argv)
+    assert exited.value.code == 2
+    assert argv[-2] in capsys.readouterr().err, "the message names the flag"
+
+
+def test_the_edges_of_every_range_are_still_playable():
+    settings = cli.parse_args([
+        "--duration", "3600", "--recoil", "200", "--min-cutoff", "0.01",
+        "--beta", "0", "--targets", "1", "--spawn-interval", "0.1",
+        "--lifetime", "60", "--camera", "0", "--capture", "7680x4320"])
+    assert settings.duration == 3600 and settings.targets == 1
+    assert (settings.capture_width, settings.capture_height) == (7680, 4320)
+    assert cli.parse_args(["--targets", "20", "--beta", "100"]).targets == 20
+
+
+# --- one parse, one program -------------------------------------------------
+
+@pytest.fixture
+def nothing_starts(monkeypatch):
+    """Fail the test if any of the three programs is actually started."""
+    import handy.browser
+
+    monkeypatch.setattr(cli, "run", lambda settings: pytest.fail("the game ran"))
+    monkeypatch.setattr(cli, "list_cameras",
+                        lambda: pytest.fail("the cameras were probed"))
+    monkeypatch.setattr(handy.browser, "main",
+                        lambda argv=None: pytest.fail("the browser server ran"))
+
+
+@pytest.mark.parametrize("argv", [["--brow"], ["--list-cam"], ["--dur", "30"]])
+def test_an_abbreviated_flag_is_refused_rather_than_guessed(argv, nothing_starts):
+    """argparse took --brow for --browser, but main looked for the literal word,
+    so the abbreviation launched the fullscreen game instead of the browser."""
+    with pytest.raises(SystemExit) as exited:
+        cli.main(argv)
+    assert exited.value.code == 2
+
+
+def test_help_wins_over_listing_the_cameras(nothing_starts, capsys):
+    """`--list-cameras --help` probed every camera (and woke the phone)."""
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["--list-cameras", "--help"])
+    assert exited.value.code == 0
+    assert "usage: handy" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("argv", [["--port", "8766"], ["--no-open"],
+                                  ["--map", "zombies", "--port=9000"]])
+def test_browser_flags_without_the_browser_are_an_error(argv, nothing_starts, capsys):
+    with pytest.raises(SystemExit):
+        cli.main(argv)
+    assert "--browser" in capsys.readouterr().err
+
+
+def test_the_browser_refuses_desktop_flags_in_its_own_words(nothing_starts, capsys):
+    """It used to fail inside the browser's parser as "__main__.py: error:
+    unrecognized arguments", which said neither what was wrong nor whose."""
+    with pytest.raises(SystemExit):
+        cli.main(["--browser", "--map", "zombies", "--mute"])
+    err = capsys.readouterr().err
+    assert err.startswith("usage: handy")
+    assert "--map" in err and "--mute" in err and "__main__" not in err
+
+
+def test_the_browser_refuses_a_port_that_does_not_exist(nothing_starts, capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["--browser", "--port", "99999"])
+    assert "--port" in capsys.readouterr().err
+
+
+def test_the_browser_gets_exactly_its_own_flags(monkeypatch):
+    import handy.browser
+
+    seen: list[list[str]] = []
+    monkeypatch.setattr(handy.browser, "main", lambda argv=None: seen.append(argv) or 0)
+    monkeypatch.setattr(cli, "run", lambda settings: pytest.fail("the game ran"))
+
+    assert cli.main(["--browser"]) == 0
+    assert cli.main(["--no-open", "--browser", "--port=8766"]) == 0
+    assert seen == [["--port", "8765"], ["--port", "8766", "--no-open"]]
+
+
+def test_redoing_setup_and_skipping_it_cannot_both_be_asked_for(capsys):
+    with pytest.raises(SystemExit):
+        cli.parse_args(["--calibrate", "--no-calibration"])
+    assert "not allowed with" in capsys.readouterr().err
+
+
+# --- paths ------------------------------------------------------------------
+
+def test_a_tilde_in_a_path_flag_means_home(monkeypatch, tmp_path):
+    """`--calibration-file=~/x.json` escapes the shell's expansion, and was
+    taken literally: a directory called "~" appeared wherever the game ran."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "hand.task").write_bytes(b"bundle")
+
+    settings = cli.parse_args(["--calibration-file=~/x.json",
+                               "--screenshot-dir=~/shots", "--model=~/hand.task"])
+    assert settings.calibration_path == tmp_path / "x.json"
+    assert settings.screenshot_dir == tmp_path / "shots"
+    assert settings.model_path == tmp_path / "hand.task"
+
+
+def test_a_model_that_is_not_there_is_refused_at_the_terminal(tmp_path, capsys):
+    """It used to get as far as the session and come back as the network
+    message, telling the player to check a wifi that was fine."""
+    with pytest.raises(SystemExit):
+        cli.parse_args(["--model", str(tmp_path / "nope.task")])
+    assert "nope.task" in capsys.readouterr().err
+
+
+# --- honest failures ----------------------------------------------------------
+
+def test_a_file_problem_is_not_blamed_on_the_network(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "run", lambda settings: (_ for _ in ()).throw(
+        PermissionError(13, "Permission denied", "/read-only/calibration.json")))
+    assert cli.main([]) == 1
+
+    err = capsys.readouterr().err
+    assert "Permission denied" in err
+    assert "network" not in err and "download" not in err
+
+
+def test_a_stalled_download_is_still_the_network(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "run", lambda settings: (_ for _ in ()).throw(
+        TimeoutError("timed out")))
+    assert cli.main([]) == 1
+    assert "network" in capsys.readouterr().err

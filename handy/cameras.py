@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
 import subprocess
 import sys
 import time
@@ -49,16 +48,19 @@ class Device:
 
 @contextlib.contextmanager
 def _quiet():
-    """Silence OpenCV's chatter about the indices that are not there."""
-    previous = os.environ.get("OPENCV_LOG_LEVEL")
-    os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
+    """Silence OpenCV's chatter about the indices that are not there.
+
+    Through OpenCV's own logging API, not the OPENCV_LOG_LEVEL variable: that
+    is read once, when the library initialises, which has long since happened
+    by the time anyone goes looking for cameras - setting it here did nothing.
+    """
+    logging = cv2.utils.logging
+    previous = logging.getLogLevel()
+    logging.setLogLevel(logging.LOG_LEVEL_SILENT)
     try:
         yield
     finally:
-        if previous is None:
-            os.environ.pop("OPENCV_LOG_LEVEL", None)
-        else:
-            os.environ["OPENCV_LOG_LEVEL"] = previous
+        logging.setLogLevel(previous)
 
 
 def system_camera_names() -> list[str]:

@@ -555,6 +555,127 @@ def test_the_hud_backing_draws_and_darkens(canvas):
     assert canvas[100, 100].mean() < 150 and canvas[600, 1000].mean() == 200
 
 
+# --- the HUD's two translucent panels are drawn every frame -----------------
+
+def reference_hud_backing(canvas, rect, scale):
+    """The backing as it was drawn before it was made cheap: the picture the
+    fast version has to keep."""
+    height, width = canvas.shape[:2]
+    feather = round(14 * scale)
+    x0, y0 = max(rect.x, 0), max(rect.y, 0)
+    x1, y1 = min(rect.right + feather, width), min(rect.bottom + feather, height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    region = canvas[y0:y1, x0:x1]
+    ys = np.arange(y0, y1)[:, None]
+    xs = np.arange(x0, x1)[None, :]
+    fade_y = np.clip((rect.bottom + feather - ys) / feather, 0.0, 1.0)
+    fade_x = np.clip((rect.right + feather - xs) / feather, 0.0, 1.0)
+    alpha = (0.62 * np.minimum(fade_y, fade_x)).astype(np.float32)[:, :, None]
+    shade = np.array((16, 15, 14), np.float32)
+    region[:] = (region * (1 - alpha) + shade * alpha).astype(np.uint8)
+
+
+def reference_timer(canvas, remaining, scale):
+    """The clock as it was drawn when it blended a copy of the whole frame."""
+    import cv2
+
+    from handy.game import Rect
+
+    width = canvas.shape[1]
+    urgent = remaining is not None and remaining <= 10.0
+    if remaining is None:
+        text, color = "PRACTICE", scene.MUTED
+        size = 0.7 * scale
+        text_w, text_h = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size, 2)[0]
+    else:
+        text = f"{int(remaining) // 60}:{int(remaining) % 60:02d}"
+        color = scene.DANGER if urgent else scene.INK
+        size = scene._px(40, scale)
+        text_w, text_h = scene.figures_width(text, size), int(size * 0.72)
+    pad = scene._px(22, scale)
+    pill = Rect((width - text_w) // 2 - pad, scene._px(14, scale), text_w + 2 * pad,
+                text_h + scene._px(26, scale))
+    halo = canvas.copy()
+    scene.shade_panel(halo, pill, pill.height // 2, (40, 38, 36), (24, 23, 22),
+                      scene.EDGE)
+    scene.blend(canvas, halo, 0.85)
+    tick = scene.DANGER if urgent else scene.ACCENT
+    mid = pill.y + pill.height // 2
+    for side in (-1, 1):
+        x0 = pill.x + (pill.width if side > 0 else 0) + side * scene._px(10, scale)
+        cv2.line(canvas, (x0, mid), (x0 + side * scene._px(18, scale), mid), tick,
+                 scene._px(1, scale), cv2.LINE_AA)
+    baseline = pill.y + pill.height - scene._px(13, scale)
+    if remaining is None:
+        scene.draw_text(canvas, text, ((width - text_w) // 2, baseline), color,
+                        scale=size, thickness=2, outline=False)
+    else:
+        scene.draw_figures(canvas, text, ((width - text_w) // 2, baseline), color,
+                           size, 0.05)
+
+
+def busy_frame(width, height, seed=0):
+    return np.random.default_rng(seed).integers(0, 256, (height, width, 3),
+                                                dtype=np.uint8)
+
+
+@pytest.mark.parametrize("size,rect,scale", [
+    ((1512, 949), (10, 10, 849, 266), 1.318),
+    ((1280, 720), (8, 8, 640, 200), 1.0),
+    ((800, 480), (7, 7, 380, 140), 0.7),
+    ((1280, 720), (900, 600, 500, 300), 1.0),  # runs off the right and bottom
+    ((1280, 720), (-20, -10, 300, 100), 1.0),  # and off the top left
+])
+def test_the_cheap_hud_backing_looks_like_the_old_one(size, rect, scale):
+    """Cached weights and OpenCV's blend in place of a float mask per frame: the
+    same picture to within a level of rounding."""
+    from handy.game import Rect
+
+    expected, actual = busy_frame(*size), busy_frame(*size)
+    reference_hud_backing(expected, Rect(*rect), scale)
+    scene.draw_hud_backing(actual, Rect(*rect), scale)
+    assert np.abs(actual.astype(int) - expected.astype(int)).max() <= 1
+
+
+def test_the_hud_backing_builds_its_mask_once_per_size():
+    """Rebuilding the float mask every frame was 3 ms a frame at 1512x949."""
+    from handy.game import Rect
+
+    canvas = busy_frame(1512, 949)
+    scene._hud_backing_weights.cache_clear()
+    for _ in range(5):
+        scene.draw_hud_backing(canvas, Rect(10, 10, 849, 266), 1.318)
+    info = scene._hud_backing_weights.cache_info()
+    assert (info.misses, info.hits) == (1, 4)
+
+
+@pytest.mark.parametrize("remaining", [42.0, 7.0, 600.0, None])
+@pytest.mark.parametrize("size,scale", [((1512, 949), 1.318), ((1280, 720), 1.0),
+                                        ((800, 480), 0.7), ((3024, 1964), 2.4)])
+def test_the_cheap_timer_looks_like_the_old_one(remaining, size, scale):
+    """Blending a patch instead of the frame changes nothing on screen - to
+    within the odd level where OpenCV's vector and scalar blends round apart."""
+    expected, actual = busy_frame(*size), busy_frame(*size)
+    reference_timer(expected, remaining, scale)
+    scene.draw_timer(actual, remaining, scale)
+    assert np.abs(actual.astype(int) - expected.astype(int)).max() <= 1
+
+
+def test_the_timer_blends_only_the_pill_not_the_whole_frame(monkeypatch):
+    """It copied and blended all 1512x949 pixels to shade a pill a few hundred
+    wide: 1.6 ms of every frame, for a region a fiftieth of the size."""
+    blended = []
+    real = scene.blend
+    monkeypatch.setattr(scene, "blend", lambda canvas, overlay, alpha: (
+        blended.append(canvas.shape[0] * canvas.shape[1]),
+        real(canvas, overlay, alpha)))
+
+    canvas = busy_frame(1512, 949)
+    scene.draw_timer(canvas, 42.0, 1.318)
+    assert blended and max(blended) < 0.05 * 1512 * 949
+
+
 # --- the camera inset is on the hot path, every frame -----------------------
 
 def test_the_inset_downscale_still_averages_the_pixels_it_drops():

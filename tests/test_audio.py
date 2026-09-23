@@ -292,6 +292,8 @@ def test_the_game_actually_asks_for_the_background_build(monkeypatch, tmp_path,
     from handy import app
     from handy.audio import Sounds
 
+    from handy.audio import Audio
+
     built: list[bool] = []
     original = Sounds.__init__
 
@@ -304,6 +306,9 @@ def test_the_game_actually_asks_for_the_background_build(monkeypatch, tmp_path,
             assert self._shot and self._cock and self._hits and self._over
 
     monkeypatch.setattr(Sounds, "__init__", spy)
+    # A machine with a sound card, as far as the session can tell: a muted
+    # game builds no sound set at all.
+    monkeypatch.setattr(Audio, "is_on", property(lambda self: True))
     test_app.headless(monkeypatch)
     app.run(app.Settings(map_key="range", mute=True, skip_calibration=True,
                          control="pistol", duration=60.0,
@@ -1197,3 +1202,94 @@ def test_every_map_voices_a_hit_with_the_call_it_was_wired_to(sound_set):
     # And the calls the real mixer is asked to make are calls it actually has.
     maps.RANGE.play_hit(sound_set, gold)
     maps.ZOMBIES.play_hit(sound_set, gold)
+
+
+# --- nobody listening -------------------------------------------------------
+
+def test_a_game_nobody_can_hear_builds_no_sound_set(monkeypatch, tmp_path, model_path):
+    """--mute, or no output device, still synthesised the full set: seconds of
+    CPU on a worker thread and tens of megabytes, none of it ever played."""
+    import test_app
+
+    from handy import app
+
+    built: list[str] = []
+    monkeypatch.setattr(Sounds, "_build", lambda self, rings: built.append("full"))
+    monkeypatch.setattr(Sounds, "_stub", lambda self, rings: built.append("stub"))
+    Sounds._CACHE.clear()
+    test_app.headless(monkeypatch)
+    app.run(app.Settings(map_key="range", mute=True, skip_calibration=True,
+                         cameras=(0,), model_path=model_path,
+                         calibration_path=tmp_path / "calibration.json"))
+
+    assert built == [], "a muted game synthesised sounds"
+
+
+def test_an_empty_sound_set_answers_every_call():
+    with Audio(enabled=False) as audio:
+        sounds = Sounds(audio, rings=5, synthesise=False)
+        assert sounds.ready and sounds.names() == []
+        sounds.shot()
+        sounds.hit(0)
+        sounds.miss()
+        sounds.cock()
+        sounds.round_over()
+        sounds.groan()
+        sounds.flesh(True)
+        sounds.hurt()
+        sounds.play_named("rifle_crack")
+
+
+def test_silence_skips_the_variation_as_well_as_the_playback(monkeypatch, sound_set):
+    """`vary` resamples the whole take, and it ran on every shot of a muted
+    game before Audio.play threw the result away."""
+    import handy.audio
+
+    varied: list[int] = []
+    real = handy.audio.vary
+    monkeypatch.setattr(handy.audio, "vary",
+                        lambda wave, rng, *args: varied.append(1) or real(wave, rng, *args))
+
+    sound_set.shot()
+    sound_set.hit(0)
+    sound_set.play_named("rifle_crack")
+    assert varied == [], "a take was varied for nobody"
+
+    class Listening:
+        is_on = True
+        played: list = []
+
+        def play(self, wave):
+            self.played.append(wave)
+
+    listening = Listening()
+    monkeypatch.setattr(sound_set, "audio", listening)
+    sound_set.shot()
+    assert varied == [1] and len(listening.played) == 1, "but played when heard"
+
+
+def test_registering_a_cue_never_reaches_another_sound_set():
+    """Every set built from the cache shared the cache's own cue table, so a cue
+    one set registered - or a take it added - turned up in every later set."""
+    with Audio(enabled=False) as audio:
+        first = Sounds(audio, rings=5, variants=2)
+        takes = len(first.variants("rifle_crack"))
+        first.register("custom", np.zeros(10, np.float32))
+        first.register("rifle_crack", np.zeros(10, np.float32))
+
+        later = Sounds(audio, rings=5, variants=2)
+        assert "custom" not in later.names()
+        assert len(later.variants("rifle_crack")) == takes
+
+
+def test_the_set_that_filled_the_cache_does_not_write_through_it():
+    """The first set to be built stored its own cue table in the cache."""
+    Sounds._CACHE.pop((1, 7, 1), None)
+    with Audio(enabled=False) as audio:
+        builder = Sounds(audio, rings=1, seed=7, variants=1)
+        builder.register("custom", np.zeros(10, np.float32))
+        builder.register("rifle_crack", np.zeros(10, np.float32))
+
+        later = Sounds(audio, rings=1, seed=7, variants=1)
+        assert "custom" not in later.names()
+        assert len(later.variants("rifle_crack")) == 1

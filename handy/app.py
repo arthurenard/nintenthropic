@@ -299,9 +299,43 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
 
 
 def save_screenshot(image: np.ndarray, directory: Path) -> Path:
+    """Write the frame into ``directory`` and say where. OSError if it could not.
+
+    The name carries milliseconds, and never reuses a file already there: at
+    one-second resolution two quick presses wrote the same name, and the
+    first frame was quietly replaced by the second.
+    """
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"handy-{time.strftime('%Y%m%d-%H%M%S')}.png"
-    cv2.imwrite(str(path), image)
+    now = time.time()
+    stem = (f"handy-{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}"
+            f"-{int(now * 1000) % 1000:03d}")
+    path, copy = directory / f"{stem}.png", 1
+    while path.exists():
+        path, copy = directory / f"{stem}-{copy}.png", copy + 1
+    # imwrite reports a failure by returning False, not by raising, and was
+    # believed regardless: "Saved" was printed for files that never existed.
+    if not cv2.imwrite(str(path), image):
+        raise OSError(f"could not write {path}")
+    return path
+
+
+def take_screenshot(canvas: np.ndarray, settings: Settings,
+                    scale: float = 1.0) -> Path | None:
+    """The 's' key: save the frame, or say on screen why not, and play on.
+
+    A folder that cannot be written to used to raise out of the round - which
+    ended it, lost the score, and had main() blame the network.
+    """
+    try:
+        path = save_screenshot(canvas, settings.screenshot_dir)
+    except (OSError, cv2.error) as error:
+        print(f"Could not save a screenshot in {settings.screenshot_dir}: {error}")
+        show_notice(canvas, ["SCREENSHOT NOT SAVED",
+                             "The screenshot folder cannot be written to.",
+                             "Choose another with --screenshot-dir."],
+                    seconds=2.0, scale=scale)
+        return None
+    print(f"Saved {path}")
     return path
 
 
@@ -347,44 +381,68 @@ class Eyes:
         self.captures = captures
         self.streams = streams
         self.mirror = mirror
+        self._last: list[np.ndarray | None] = [None] * len(captures)
+        self._failing_since: list[float | None] = [None] * len(captures)
 
     def __len__(self) -> int:
         return len(self.captures)
 
-    #: How many times a camera may fail to hand over a frame before the round
-    #: is given up on. A webcam that hiccups - a USB retry, a Continuity camera
-    #: catching its breath - drops a frame or two and carries on, and ending the
-    #: round over one dropped frame costs the player their score for a fault
-    #: that had already fixed itself. Several failures in a row is a camera that
-    #: has actually gone.
-    ATTEMPTS = 4
+    #: How long a camera may go without handing over a frame before the game
+    #: gives up on it. A webcam that hiccups - a USB retry, a Continuity camera
+    #: catching its breath - drops a frame or a few and carries on, and ending
+    #: the round over that costs the player their score for a fault that fixes
+    #: itself. Measured in time, not tries: a backend that has failed answers
+    #: in microseconds, so four tries in a row were over long before any
+    #: hiccup could have passed.
+    LOST_AFTER = 1.5
 
-    def _grab(self, capture, index: int) -> np.ndarray:
-        """One frame from one camera, retried a few times before giving up.
+    #: The pause between tries when there is no earlier frame to show instead.
+    RETRY_PAUSE = 0.01
+
+    def _grab(self, capture, index: int) -> tuple[np.ndarray, bool]:
+        """One frame from one camera, and whether it is a new one.
+
+        While a camera is failing, its last good frame stands in, so the game
+        keeps drawing and answering keys; only a camera that has handed over
+        nothing for :attr:`LOST_AFTER` seconds raises CameraError. With no
+        frame yet to fall back on, it retries with short pauses instead.
 
         ``read`` reports success in two parts and both have to be believed: a
         backend that answers ``(True, None)`` used to get as far as ``cvtColor``
         inside the recogniser, and a bare OpenCV error instead of the clean
         CameraError that was one line away.
         """
-        for _ in range(self.ATTEMPTS):
+        while True:
             ok, image = capture.read()
             if ok and image is not None:
-                return image
-        raise CameraError(
-            f"Lost the stream from camera {index + 1} - it stopped handing over "
-            f"frames after {self.ATTEMPTS} tries. Unplugging and replugging it, "
-            f"or restarting the game, usually brings it back.")
+                self._last[index] = image
+                self._failing_since[index] = None
+                return image, True
+            now = time.monotonic()
+            if self._failing_since[index] is None:
+                self._failing_since[index] = now
+            elif now - self._failing_since[index] >= self.LOST_AFTER:
+                raise CameraError(
+                    f"Lost the stream from camera {index + 1} - it handed over no "
+                    f"frames for {self.LOST_AFTER:g} seconds. Unplugging and "
+                    f"replugging it, or restarting the game, usually brings it "
+                    f"back.")
+            if self._last[index] is not None:
+                return self._last[index], False
+            time.sleep(self.RETRY_PAUSE)
 
     def read(self) -> tuple[list[np.ndarray], list[Frame]]:
         """The newest image and hands from each camera."""
         images, hands = [], []
         for index, (capture, stream) in enumerate(zip(self.captures, self.streams)):
-            image = self._grab(capture, index)
+            image, fresh = self._grab(capture, index)
             if self.mirror:
                 # Mirroring makes the range behave like a looking glass.
                 image = cv2.flip(image, 1)
-            stream.submit(image)
+            if fresh:
+                # A stand-in frame is not shown to the recogniser again: it
+                # has nothing new to say about it.
+                stream.submit(image)
             images.append(image)
             hands.append(stream.latest())
         return images, hands
@@ -576,6 +634,32 @@ def make_controller(settings: Settings, scheme) -> AimController:
                          native_thumb=scheme.key in ("pistol", "marksman"))
 
 
+class FreshAim:
+    """The aim controller, handed each recognition result once.
+
+    The loops run as fast as the cameras do, and a recogniser's ``latest()``
+    keeps answering with the same result until the next one lands. Fed twice,
+    one misread frame is two of the three readings the trigger's median looks
+    at - a majority, and a shot the player never took. So the controller only
+    hears from a camera whose result is new; in between, the last aim stands,
+    and never fires again.
+    """
+
+    def __init__(self, controller: AimController, rig: Rig) -> None:
+        self.controller = controller
+        self.rig = rig
+        self._stamps: tuple[int, ...] | None = None
+        self._aim = Aim()
+
+    def update(self, hands: list, now: float) -> Aim:
+        stamps = tuple(frame.timestamp_ms for frame in hands)
+        if stamps == self._stamps:
+            return replace(self._aim, fired=False)
+        self._stamps = stamps
+        self._aim = self.controller.update(list(zip(hands, self.rig.cameras)), now)
+        return self._aim
+
+
 def crosshair_for(aim: Aim, layout: Layout, recoil: Recoil,
                   now: float) -> tuple[int, int] | None:
     """The aim point after the gun has kicked, clamped to the window."""
@@ -609,11 +693,18 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
     scope = EyeScope()
     reads_scope = getattr(scheme, "scope", None)
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
+    # Draw the world once before the round's clock can start. The first draw
+    # of a map at a new size builds its scenery - seconds, for the richest -
+    # and the warm-up thread may not have got to it yet. The clock starts on
+    # the round's first update, so a build done inside the first frame came
+    # out of the player's sixty seconds. Once warm, this is a millisecond.
+    chosen.draw_world(canvas, round_, time.monotonic())
+    trigger = FreshAim(controller, rig)
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
-        aim = controller.update(list(zip(hands, rig.cameras)), now)
+        aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
 
         # Looking down the scope: the eye decides, the map moves its view to
@@ -689,7 +780,7 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
         elif key == ord("n") and chosen.key == "zombies":
             return round_, "enemy"
         elif key == ord("s"):
-            print(f"Saved {save_screenshot(canvas, settings.screenshot_dir)}")
+            take_screenshot(canvas, settings, layout.scale)
 
 
 def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
@@ -700,11 +791,12 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     recoil = Recoil(kick=0.0)
+    trigger = FreshAim(controller, rig)
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
-        aim = controller.update(list(zip(hands, rig.cameras)), now)
+        aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
 
         entries = []
@@ -775,19 +867,37 @@ def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:
     return None
 
 
+#: How long the score card ignores the gun. A player still firing when the
+#: clock ran out has to get the chance to notice the round is over.
+RESULTS_GRACE = 1.0
+
+
 def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                  layout: Layout, controller: AimController, rig: Rig,
                  summary: Summary, best: int, is_best: bool) -> str:
-    """Hold on the score card until the player shoots to play again, or quits."""
+    """Hold on the score card until the player shoots to play again, or quits.
+
+    A shot counts only once the card has been up for :data:`RESULTS_GRACE`,
+    and only from a trigger seen cocked since then. The controller carries on
+    from the round, so a player shooting at time-up re-armed and fired
+    straight through the card: "again", 0.3 s after the round ended, and the
+    score was never seen.
+    """
     recoil = Recoil(kick=0.0)  # the round is over; no kick to fight
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
+    trigger = FreshAim(controller, rig)
+    shown_at = time.monotonic()
+    cocked = False
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
-        aim = controller.update(list(zip(hands, rig.cameras)), now)
+        aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
+        settled = now - shown_at >= RESULTS_GRACE
+        shot = aim.fired and cocked
+        cocked = cocked or (settled and aim.armed)
 
         scene.draw_results(canvas, summary, best, is_best,
                            hint="shoot to play again   |   q quit   c recalibrate",
@@ -798,11 +908,12 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                 crosshair is not None and button.contains(*crosshair)),
                 scale=layout.scale)
         if crosshair is not None:
-            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed, since_shot=None,
-                                 scale=layout.scale)
+            # Not shown armed until a shot would count.
+            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed and settled,
+                                 since_shot=None, scale=layout.scale)
         cv2.imshow(WINDOW_TITLE, canvas)
 
-        if aim.fired and crosshair is not None:
+        if shot and crosshair is not None:
             if layout.quit_button.contains(*crosshair):
                 return "quit"
             if layout.maps_button.contains(*crosshair):
@@ -830,7 +941,7 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         if key == ord("c"):
             return "recalibrate"
         if key == ord("s"):
-            print(f"Saved {save_screenshot(canvas, settings.screenshot_dir)}")
+            take_screenshot(canvas, settings, layout.scale)
 
 
 def cameras_for(scheme, indices: tuple[int, ...]) -> tuple[int, ...]:
@@ -934,6 +1045,14 @@ def warm_maps(layout: Layout, settings: Settings) -> None:
             print(f"Could not pre-build {chosen.title}: {error}")
 
 
+def start_warm_up(layout: Layout, settings: Settings) -> threading.Thread:
+    """Run :func:`warm_maps` on a worker thread, and hand the thread back."""
+    thread = threading.Thread(target=warm_maps, args=(layout, settings), daemon=True,
+                              name="warm-maps")
+    thread.start()
+    return thread
+
+
 def announce(indices: tuple[int, ...], note: str) -> None:
     if note:
         print(note)
@@ -945,80 +1064,142 @@ def announce(indices: tuple[int, ...], note: str) -> None:
         print(f"Using {len(indices)} cameras (indices {listed}), fused.")
 
 
+def starting_scheme(settings: Settings):
+    """The scheme a launch opens with, or None if the player is to be asked."""
+    wants_drive = (settings.map_key is not None
+                   and maps.by_key(settings.map_key).mode == "drive")
+    if settings.control:
+        scheme = schemes.by_key(settings.control)
+    elif wants_drive or len(schemes.CONTROLS) == 1:
+        # Straight to the track: a race has no aiming, so asking how the
+        # player wants to aim would be a question with no consequence.
+        scheme = schemes.PISTOL
+    else:
+        return None
+    if scheme.key in ("pistol", "marksman"):
+        scheme = schemes.for_map(settings.map_key)
+    return scheme
+
+
 def run(settings: Settings) -> None:
     """Open the game and play until the user quits."""
+    # The download comes before any camera is woken: a network failure, or a
+    # Ctrl+C while waiting on one, used to leave the camera light on.
+    prefetch_models(settings)
     indices, note = choose_cameras(settings)
     settings = replace(settings, cameras=indices)
-    captures = [open_camera(index, settings.capture_width, settings.capture_height)
-                for index in settings.cameras]
 
     book = RigBook.load(calibration_path(settings))
     scores = HighScores.load(scores_path(settings))
     announce(settings.cameras, note)
-    prefetch_models(settings)
 
-    width, height = open_window(settings)
-    settings = replace(settings, window_width=width, window_height=height)
-    layout = layout_for(width, height)
-    canvas = np.zeros((height, width, 3), np.uint8)
-    threading.Thread(target=warm_maps, args=(layout, settings), daemon=True,
-                     name="warm-maps").start()
-    try:
-        wants_drive = (settings.map_key is not None
-                       and maps.by_key(settings.map_key).mode == "drive")
-        if settings.control:
-            scheme = schemes.by_key(settings.control)
-        elif wants_drive or len(schemes.CONTROLS) == 1:
-            # Straight to the track: a race has no aiming, so asking how the
-            # player wants to aim would be a question with no consequence.
-            scheme = schemes.PISTOL
-        else:
+    with contextlib.ExitStack() as cleanup:
+        # Everything opened from here on is handed back however the game ends.
+        # The cameras used to be opened before the try that released them, so
+        # a second camera that would not open left the first one running.
+        captures = []
+        for index in settings.cameras:
+            capture = open_camera(index, settings.capture_width,
+                                  settings.capture_height)
+            cleanup.callback(capture.release)
+            captures.append(capture)
+        cleanup.callback(display.restore_system_chrome)
+        cleanup.callback(cv2.destroyAllWindows)
+
+        width, height = open_window(settings)
+        settings = replace(settings, window_width=width, window_height=height)
+        layout = layout_for(width, height)
+        canvas = np.zeros((height, width, 3), np.uint8)
+        start_warm_up(layout, settings)
+        scheme = starting_scheme(settings)
+        if scheme is None:
             scheme = select_scheme(canvas, layout)
-        if scheme is not None and scheme.key in ("pistol", "marksman"):
-            scheme = schemes.for_map(settings.map_key)
+            if scheme is not None and scheme.key in ("pistol", "marksman"):
+                scheme = schemes.for_map(settings.map_key)
         while scheme is not None:
             print(f"Controls: {scheme.title.lower()}.")
             # Each scheme watches for something different, so switching between
             # them means new recognisers - hence a session per scheme.
-            scheme = _session(scheme, settings, layout, captures, canvas, book,
-                              scores)
-    finally:
-        for capture in captures:
-            capture.release()
-        cv2.destroyAllWindows()
-        display.restore_system_chrome()
+            try:
+                scheme = _session(scheme, settings, layout, captures, canvas, book,
+                                  scores)
+            except CameraError:
+                # A camera that has gone mid-game is said on the screen the
+                # player is looking at, not only in the terminal behind it.
+                show_notice(canvas, ["CAMERA LOST",
+                                     "The camera stopped sending pictures.",
+                                     "Reconnect it and start the game again."],
+                            seconds=6.0, scale=layout.scale)
+                raise
+
+
+def _bundles_to_fetch(settings: Settings, scheme) -> list[str]:
+    """The bundles :func:`model_bundles` would download for ``scheme``."""
+    if settings.model_path is None:
+        return list(scheme.models)
+    # --model stands in for the hand bundle; the scope's face model does not
+    # come with it.
+    return ["face_landmarker"] if scheme.key == "marksman" else []
 
 
 def prefetch_models(settings: Settings) -> None:
-    """Fetch the bundles this launch will certainly need, before the window opens.
+    """Fetch the bundles this launch can ask for, before the window opens.
 
     The download is the only part of the game that touches the network, and the
     only place a first run fails without the player having done anything wrong.
     Left where it was - inside the session, behind a fullscreen window - the
-    failure arrived as a stack trace under a black screen. Done here it is a
-    line in the terminal the player is still looking at.
+    failure arrived as a stack trace under a black screen, and a stalled one
+    froze the window. Done here it is a line in the terminal the player is
+    still looking at.
 
-    Only what is certain: with no ``--control`` the player has yet to choose a
-    scheme, and downloading a face model for someone who is about to pick the
-    pistol is not an improvement.
+    What the opening screen needs has to arrive, or the game cannot start.
+    What a map further on needs - the face model behind Overwatch Ridge's
+    scope, reachable from every chooser - is fetched too, but a failure there
+    is only a warning: the pistol maps are playable without it, and choosing
+    the map tries again (and says so on screen if it still cannot).
     """
-    if settings.model_path is not None:
-        if settings.map_key == "sniper":
-            ensure_model("face_landmarker")
-        return
-    scheme = None
-    if settings.control:
-        scheme = schemes.by_key(settings.control)
-        if scheme.key == "pistol":
-            scheme = schemes.for_map(settings.map_key)
-    elif settings.map_key == "sniper":
-        scheme = schemes.for_map(settings.map_key)
-    elif settings.map_key and maps.by_key(settings.map_key).mode == "drive":
-        scheme = schemes.PISTOL  # a race has no aiming; the chooser is skipped
-    if scheme is None:
-        return
-    for name in scheme.models:
+    start = starting_scheme(settings)
+    needed = [] if start is None else _bundles_to_fetch(settings, start)
+    later: list[str] = []
+    for scheme in ([start] if start is not None else schemes.CONTROLS):
+        reachable = ([schemes.for_map(chosen.key) for chosen in maps.MAPS]
+                     if scheme.key in ("pistol", "marksman") else [scheme])
+        for other in reachable:
+            later += _bundles_to_fetch(settings, other)
+    for name in dict.fromkeys(needed):
         ensure_model(name)
+    for name in dict.fromkeys(later):
+        if name in needed:
+            continue
+        try:
+            ensure_model(name)
+        except OSError as error:
+            print(f"Could not fetch the {name.replace('_', ' ')} model ({error}). "
+                  f"The maps that need it will try again when chosen.")
+
+
+class ModelError(RuntimeError):
+    """A model bundle that is there, but that MediaPipe will not load."""
+
+
+def open_streams(stack: contextlib.ExitStack, scheme, paths: list[Path],
+                 count: int) -> list:
+    """One tracking stream per camera, closed with ``stack``.
+
+    A bundle MediaPipe cannot read - a damaged download, a --model that is not
+    a .task file at all - fails here with a bare RuntimeError ("Unable to open
+    zip archive"), which used to escape as a traceback. It leaves as a
+    ModelError that says which file, and what to do about it.
+    """
+    try:
+        return [stack.enter_context(scheme.open_stream(*paths))
+                for _ in range(count)]
+    except RuntimeError as error:
+        listed = ", ".join(str(path) for path in paths)
+        raise ModelError(
+            f"Could not load the tracking model ({listed}): {error}. A --model "
+            f"has to be a MediaPipe .task bundle; a damaged download can be "
+            f"deleted, and the game fetches it again.") from error
 
 
 def model_bundles(settings: Settings, scheme) -> list[Path]:
@@ -1060,14 +1241,14 @@ def _session(scheme, settings: Settings, layout: Layout,
         # chooser and the next session's menus go back to the plain grid.
         stack.callback(scene.set_ambient_art, None)
         stream_stack = stack.enter_context(contextlib.ExitStack())
-        streams = [stream_stack.enter_context(scheme.open_stream(*model_paths))
-                   for _ in captures]
+        streams = open_streams(stream_stack, scheme, model_paths, len(captures))
         audio = stack.enter_context(
             Audio(volume=settings.volume, enabled=not settings.mute))
         eyes = Eyes(captures, streams, mirror=settings.mirror)
         # Synthesised off the main thread: the full set is seconds of DSP, and
-        # a stub kit covers the menus until the real one is swapped in.
-        sounds = Sounds(audio, RINGS, background=True)
+        # a stub kit covers the menus until the real one is swapped in. Not
+        # synthesised at all when there is no sound to play it through.
+        sounds = Sounds(audio, RINGS, background=True, synthesise=audio.is_on)
         if not audio.is_on and audio.reason != "muted":
             print(f"Playing without sound: {audio.reason}")
         needs_setup = rig is None and not settings.skip_calibration
@@ -1130,11 +1311,27 @@ def _session(scheme, settings: Settings, layout: Layout,
                 wanted = schemes.for_map(chosen.key if chosen else None)
                 if wanted.key != scheme.key:
                     # Both read the same hand geometry and trigger. Keep the
-                    # rig and setup state; replace only the tracking streams.
-                    paths = model_bundles(settings, wanted)
+                    # rig and setup state; replace only the tracking streams -
+                    # once the new ones' bundles are in hand, so a download
+                    # that fails leaves the old streams running.
+                    try:
+                        paths = model_bundles(settings, wanted)
+                    except OSError as error:
+                        # Not the end of the game: every other map still
+                        # plays. It used to be, from an uncaught URLError.
+                        print(f"{chosen.title.title()} needs a model that "
+                              f"could not be downloaded: {error}")
+                        show_notice(canvas, [
+                            "MAP UNAVAILABLE",
+                            f"{chosen.title.title()} needs a model that could "
+                            f"not be downloaded.",
+                            "Check the network and choose it again.",
+                        ], scale=layout.scale)
+                        chosen = None
+                        continue
                     stream_stack.close()
-                    streams = [stream_stack.enter_context(wanted.open_stream(*paths))
-                               for _ in captures]
+                    streams = open_streams(stream_stack, wanted, paths,
+                                           len(captures))
                     scheme = wanted
                     eyes = Eyes(captures, streams, mirror=settings.mirror)
             # The menus that follow a round sit on the map's own art, dimmed;
