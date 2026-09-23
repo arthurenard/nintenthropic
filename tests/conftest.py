@@ -1,21 +1,9 @@
-import os
-import tempfile
 import threading
 from pathlib import Path
 
 import pytest
 
-from handy.models import cache_dir, ensure_model
-
-# No test may read or write the player's own calibration and scores. Their
-# default location is worked out from the home directory when handy.app is
-# imported, so the home directory is swapped for a scratch one here, before
-# any test module gets the chance to import the game. The model cache is
-# pinned to the real one first: the bundles are worth downloading once, not
-# once per run.
-os.environ.setdefault("HANDY_MODEL_DIR", str(cache_dir()))
-_SCRATCH_HOME = tempfile.TemporaryDirectory(prefix="handy-tests-home-")
-os.environ["HOME"] = _SCRATCH_HOME.name
+from handy.models import ensure_model
 
 #: Worker threads the game starts and never waits for. A test that starts one
 #: must not leave it running into the next test, where it competes for the CPU
@@ -51,6 +39,21 @@ def model_path() -> Path:
 def face_model_path() -> Path:
     """The face landmarker bundle, on the same terms as ``model_path``."""
     return _bundle("face_landmarker")
+
+
+@pytest.fixture(autouse=True)
+def not_the_players_own_files(monkeypatch, tmp_path):
+    """No test may read or write the player's calibration and scores.
+
+    A test that forgets to name a calibration file lands on the default one,
+    which is the player's own under ~/.cache/handy. Each test gets its own
+    instead. (Swapping HOME would do it too, but matplotlib, loaded by
+    MediaPipe, then rebuilds its font cache on every run: eleven seconds.)
+    """
+    from handy import app
+
+    monkeypatch.setattr(app, "DEFAULT_CALIBRATION_PATH",
+                        tmp_path / "home" / ".cache" / "handy" / "calibration.json")
 
 
 @pytest.fixture(autouse=True)
