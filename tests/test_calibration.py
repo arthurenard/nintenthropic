@@ -239,6 +239,54 @@ def test_a_degenerate_record_is_refused():
         Calibration(cocked=30.0, folded=30.0)
 
 
+@pytest.mark.parametrize("field, value", [
+    ("mapping", (float("nan"), 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)),
+    ("mapping", (1e309, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)),
+    ("cocked", float("inf")),
+    ("tuning", (0.0, float("nan"))),
+    ("tuning", (0.0,)),
+    ("jitter", float("nan")),
+    ("fit_error", float("inf")),
+    ("generalisation", float("nan")),
+    ("gain", float("nan")),
+    ("gain", -1.0),
+    ("slide", ("a", "b")),
+    ("slide", (0.0, 0.0, 0.0)),
+    ("slide", (float("nan"), 0.0)),
+])
+def test_a_calibration_holds_finite_numbers_only(field, value):
+    """Python's json reads and writes NaN and Infinity without a murmur. One
+    NaN in a map is a NaN crosshair - the filter carries it for the rest of the
+    session and the game loop's round() raises on it."""
+    with pytest.raises(ValueError):
+        Calibration(**{field: value})
+
+
+def test_an_infinite_gain_is_how_a_camera_sits_the_game_out(tmp_path):
+    """The one non-finite number with a meaning. It is written as null, so the
+    file stays strict JSON that anything can read."""
+    idle = Calibration(gain=float("inf"))
+    assert not idle.usable
+    path = tmp_path / "calibration.json"
+    Rig((Calibration(gain=2.0), idle)).save(path)
+
+    def refuse(name):
+        raise AssertionError(f"{name} written to disk")
+
+    raw = json.loads(path.read_text(), parse_constant=refuse)
+    assert raw["cameras"][1]["gain"] is None
+    assert Rig.load(path)[1] == idle
+
+
+def test_a_file_with_nan_or_infinity_in_it_is_refused(tmp_path):
+    path = tmp_path / "calibration.json"
+    entry = {**DEFAULT.to_dict(), "aim_fitted": True}
+    entry["mapping"] = [float("nan")] + entry["mapping"][1:]
+    path.write_text(json.dumps({"cameras": [entry]}))
+    assert "NaN" in path.read_text(), "which the json module happily wrote"
+    assert Rig.load(path) is None
+
+
 def test_a_rig_survives_a_round_trip_through_disk(tmp_path):
     original = Rig((calibrate(grid=3), Calibration(gain=3.2, slide=(0.04, -0.02))))
     path = tmp_path / "calibration.json"

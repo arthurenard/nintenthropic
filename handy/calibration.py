@@ -69,6 +69,19 @@ class Calibration:
     def __post_init__(self) -> None:
         if len(self.mapping) != 9:
             raise ValueError("a mapping is nine numbers, row-major")
+        if len(self.tuning) != 2 or len(self.slide) != 2:
+            raise ValueError("a tuning and a slide are two numbers each")
+        # Python's json reads and writes NaN and Infinity without a murmur, and
+        # one NaN in a map is a NaN crosshair: the filter carries it for the
+        # rest of the session and the game loop's round() raises on it. So
+        # nothing non-finite gets in, whether from disk, a browser or a fit.
+        numbers = (*self.mapping, self.cocked, self.folded, *self.tuning,
+                   *self.slide, self.fit_error, self.generalisation, self.jitter)
+        if not all(_finite(value) for value in numbers):
+            raise ValueError("a calibration holds finite numbers only")
+        # Bar one: an infinite gain is how a camera is told to sit the game out.
+        if not (_finite(self.gain) or self.gain == float("inf")) or self.gain < 0:
+            raise ValueError("a gain is a magnification: zero or more")
         if self.cocked == self.folded:
             raise ValueError("the cocked and folded poses must differ")
 
@@ -116,7 +129,9 @@ class Calibration:
             "aim_fitted": self.aim_fitted,
             "trigger_fitted": self.trigger_fitted,
             "jitter": self.jitter,
-            "gain": self.gain,
+            # An idle camera's infinite gain is written as null: JSON proper
+            # has no Infinity, and the file is saved strictly.
+            "gain": self.gain if math.isfinite(self.gain) else None,
             "slide": list(self.slide),
         }
 
@@ -128,6 +143,7 @@ class Calibration:
             # A file from before the map was projective: read its box instead.
             mapping = homography.box_mapping(tuple(data["aim_min"]),
                                              tuple(data["aim_max"]))
+        gain = data.get("gain", 1.0)
         return cls(
             mapping=mapping,
             signal=str(data["signal"]),
@@ -143,8 +159,8 @@ class Calibration:
                                      or bool(data.get("generalisation")))),
             trigger_fitted=bool(data.get("trigger_fitted", False)),
             jitter=float(data.get("jitter", 0.004)),
-            gain=float(data.get("gain", 1.0)),
-            slide=tuple(data.get("slide", (0.0, 0.0))),
+            gain=float("inf") if gain is None else float(gain),
+            slide=_pair_from(data.get("slide", (0.0, 0.0))),
         )
 
 
@@ -152,11 +168,25 @@ def clamp(point: Point) -> Point:
     return tuple(min(max(value, 0.0), 1.0) for value in point)
 
 
+def _finite(value) -> bool:
+    """A real, finite number; anything else - a string, None - is not."""
+    try:
+        return math.isfinite(value)
+    except TypeError:
+        return False
+
+
 def _tuning_from(value) -> tuple[float, float]:
     """Read a tuning that may be a pair, or a scalar from an older save."""
     if isinstance(value, (int, float)):
         return (float(value), float(value))
     return (float(value[0]), float(value[1]))
+
+
+def _pair_from(value) -> tuple[float, float]:
+    """Exactly two numbers. A string of two characters is not a pair."""
+    first, second = value
+    return (float(first), float(second))
 
 
 def default_calibration(scheme) -> Calibration:
@@ -210,7 +240,7 @@ class Rig:
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"cameras": [camera.to_dict() for camera in self.cameras]}
-        path.write_text(json.dumps(payload, indent=2) + "\n")
+        path.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
 
     @classmethod
     def from_dict(cls, data: dict) -> "Rig":
@@ -257,8 +287,11 @@ class RigBook:
         """
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(self.to_dict(), indent=2) + "\n")
-        except OSError as error:
+            # Strict JSON: nothing non-finite should exist to write, and if it
+            # somehow does, losing the save beats poisoning every later load.
+            path.write_text(json.dumps(self.to_dict(), indent=2, allow_nan=False)
+                            + "\n")
+        except (OSError, ValueError) as error:
             print(f"Could not save the calibration to {path}: {error}\n"
                   f"This session is calibrated; the next one will ask again.")
             return False
