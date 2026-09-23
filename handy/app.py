@@ -1064,36 +1064,49 @@ def run(settings: Settings) -> None:
                 raise
 
 
+def _bundles_to_fetch(settings: Settings, scheme) -> list[str]:
+    """The bundles :func:`model_bundles` would download for ``scheme``."""
+    if settings.model_path is None:
+        return list(scheme.models)
+    # --model stands in for the hand bundle; the scope's face model does not
+    # come with it.
+    return ["face_landmarker"] if scheme.key == "marksman" else []
+
+
 def prefetch_models(settings: Settings) -> None:
-    """Fetch the bundles this launch will certainly need, before the window opens.
+    """Fetch the bundles this launch can ask for, before the window opens.
 
     The download is the only part of the game that touches the network, and the
     only place a first run fails without the player having done anything wrong.
     Left where it was - inside the session, behind a fullscreen window - the
-    failure arrived as a stack trace under a black screen. Done here it is a
-    line in the terminal the player is still looking at.
+    failure arrived as a stack trace under a black screen, and a stalled one
+    froze the window. Done here it is a line in the terminal the player is
+    still looking at.
 
-    Only what is certain: with no ``--control`` the player has yet to choose a
-    scheme, and downloading a face model for someone who is about to pick the
-    pistol is not an improvement.
+    What the opening screen needs has to arrive, or the game cannot start.
+    What a map further on needs - the face model behind Overwatch Ridge's
+    scope, reachable from every chooser - is fetched too, but a failure there
+    is only a warning: the pistol maps are playable without it, and choosing
+    the map tries again (and says so on screen if it still cannot).
     """
-    if settings.model_path is not None:
-        if settings.map_key == "sniper":
-            ensure_model("face_landmarker")
-        return
-    scheme = None
-    if settings.control:
-        scheme = schemes.by_key(settings.control)
-        if scheme.key == "pistol":
-            scheme = schemes.for_map(settings.map_key)
-    elif settings.map_key == "sniper":
-        scheme = schemes.for_map(settings.map_key)
-    elif settings.map_key and maps.by_key(settings.map_key).mode == "drive":
-        scheme = schemes.PISTOL  # a race has no aiming; the chooser is skipped
-    if scheme is None:
-        return
-    for name in scheme.models:
+    start = starting_scheme(settings)
+    needed = [] if start is None else _bundles_to_fetch(settings, start)
+    later: list[str] = []
+    for scheme in ([start] if start is not None else schemes.CONTROLS):
+        reachable = ([schemes.for_map(chosen.key) for chosen in maps.MAPS]
+                     if scheme.key in ("pistol", "marksman") else [scheme])
+        for other in reachable:
+            later += _bundles_to_fetch(settings, other)
+    for name in dict.fromkeys(needed):
         ensure_model(name)
+    for name in dict.fromkeys(later):
+        if name in needed:
+            continue
+        try:
+            ensure_model(name)
+        except OSError as error:
+            print(f"Could not fetch the {name.replace('_', ' ')} model ({error}). "
+                  f"The maps that need it will try again when chosen.")
 
 
 class ModelError(RuntimeError):
@@ -1227,8 +1240,24 @@ def _session(scheme, settings: Settings, layout: Layout,
                 wanted = schemes.for_map(chosen.key if chosen else None)
                 if wanted.key != scheme.key:
                     # Both read the same hand geometry and trigger. Keep the
-                    # rig and setup state; replace only the tracking streams.
-                    paths = model_bundles(settings, wanted)
+                    # rig and setup state; replace only the tracking streams -
+                    # once the new ones' bundles are in hand, so a download
+                    # that fails leaves the old streams running.
+                    try:
+                        paths = model_bundles(settings, wanted)
+                    except OSError as error:
+                        # Not the end of the game: every other map still
+                        # plays. It used to be, from an uncaught URLError.
+                        print(f"{chosen.title.title()} needs a model that "
+                              f"could not be downloaded: {error}")
+                        show_notice(canvas, [
+                            "MAP UNAVAILABLE",
+                            f"{chosen.title.title()} needs a model that could "
+                            f"not be downloaded.",
+                            "Check the network and choose it again.",
+                        ], scale=layout.scale)
+                        chosen = None
+                        continue
                     stream_stack.close()
                     streams = open_streams(stream_stack, wanted, paths,
                                            len(captures))

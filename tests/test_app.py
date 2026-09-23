@@ -2066,37 +2066,95 @@ def test_the_model_is_resolved_before_the_window_opens(monkeypatch, tmp_path):
     assert order == ["fetch face_landmarker", "window"]
 
 
-def test_nothing_is_downloaded_before_the_player_has_chosen_how_to_aim(monkeypatch,
-                                                                      tmp_path):
-    """The chooser needs no model, and someone about to pick the pistol should
-    not be made to wait for a face model they will never use."""
+def test_every_model_a_map_can_ask_for_is_fetched_at_launch(monkeypatch):
+    """Overwatch Ridge's face model was fetched only for `--map sniper`, so a
+    first-time player who shot its card in the chooser downloaded it on the
+    game's own thread - a frozen window, or offline an uncaught OSError that
+    ended the game."""
     from handy import app
 
     fetched: list[str] = []
     monkeypatch.setattr(app, "ensure_model",
                         lambda name: fetched.append(name) or Path(name))
-    app.prefetch_models(app.Settings(
-        control=None, calibration_path=tmp_path / "calibration.json"))
-    assert fetched == []
-
-    app.prefetch_models(app.Settings(control="marksman"))
-    assert fetched == ["gesture_recognizer", "face_landmarker"]
-
-    fetched.clear()
-    app.prefetch_models(app.Settings(control="pistol",
-                                     model_path=Path("/mine.task")))
-    assert fetched == [], "--model stands in for the download"
+    for settings in (app.Settings(), app.Settings(map_key="zombies"),
+                     app.Settings(control=None), app.Settings(map_key="sniper"),
+                     app.Settings(control=None, map_key="kart")):
+        fetched.clear()
+        app.prefetch_models(settings)
+        assert fetched == ["gesture_recognizer", "face_landmarker"], settings
 
 
-def test_the_race_fetches_its_model_up_front_too(monkeypatch):
-    """`--map kart` skips the controls chooser, so its scheme is known early."""
+def test_a_hand_model_of_your_own_still_leaves_the_scope_to_fetch(monkeypatch):
     from handy import app
 
     fetched: list[str] = []
     monkeypatch.setattr(app, "ensure_model",
                         lambda name: fetched.append(name) or Path(name))
-    app.prefetch_models(app.Settings(control=None, map_key="kart"))
-    assert fetched == ["gesture_recognizer"]
+    app.prefetch_models(app.Settings(model_path=Path("/mine.task")))
+    assert fetched == ["face_landmarker"], "--model stands in for the hand only"
+
+
+def test_the_pistol_maps_do_not_wait_on_the_scope_model(monkeypatch, capsys):
+    """The face model is for one map. Failing to fetch it must not stop the
+    other three - but the hand model the game opens with has to arrive."""
+    from handy import app
+
+    def fetch(name):
+        if name == "face_landmarker":
+            raise OSError("no network")
+        return Path(name)
+
+    monkeypatch.setattr(app, "ensure_model", fetch)
+    app.prefetch_models(app.Settings(map_key="zombies"))  # must not raise
+    assert "face landmarker" in capsys.readouterr().out
+
+    with pytest.raises(OSError):
+        app.prefetch_models(app.Settings(map_key="sniper"))
+
+
+def test_a_map_whose_model_cannot_be_had_is_refused_on_screen(monkeypatch,
+                                                              tmp_path):
+    """Shooting Overwatch Ridge offline used to end the game with an uncaught
+    OSError. It is now a notice, and the chooser again."""
+    from contextlib import contextmanager
+    from dataclasses import replace
+
+    from handy import app, maps, schemes
+    from handy.calibration import RigBook
+    from handy.highscores import HighScores
+
+    @contextmanager
+    def tracker():
+        yield NullStream()
+
+    pistol = replace(schemes.PISTOL, open_stream=lambda *_: tracker())
+    scoped = replace(schemes.MARKSMAN, open_stream=lambda *_: tracker())
+    monkeypatch.setattr(schemes, "for_map",
+                        lambda key: scoped if key == "sniper" else pistol)
+
+    def bundles(settings, scheme):
+        if scheme.key == "marksman":
+            raise OSError("no network")
+        return [Path("hand.task")]
+
+    monkeypatch.setattr(app, "model_bundles", bundles)
+    monkeypatch.setattr(app, "refit", lambda layout, canvas: (layout, canvas))
+    headless(monkeypatch)
+    notices: list[list[str]] = []
+    monkeypatch.setattr(app, "show_notice", lambda canvas, lines, seconds=3.0,
+                        scale=1.0: notices.append(lines))
+    answers = iter([("play", maps.SNIPER), ("quit", None)])
+    monkeypatch.setattr(app, "choose_map", lambda *_: next(answers))
+    monkeypatch.setattr(app, "play", lambda *args: pytest.fail("a map was played"))
+
+    settings = app.Settings(cameras=(0,), mute=True, skip_calibration=True,
+                            calibration_path=tmp_path / "setup.json")
+    assert app._session(pistol, settings, layout_for(960, 540), [FakeCapture()],
+                        np.zeros((540, 960, 3), np.uint8), RigBook(),
+                        HighScores(tmp_path / "scores.json")) is None
+
+    assert notices and notices[0][0] == "MAP UNAVAILABLE"
+    assert next(answers, "drained") == "drained", "the chooser came back"
 
 
 def test_leaving_the_kart_map_does_not_crash_on_the_way_out(monkeypatch, tmp_path,
