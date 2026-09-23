@@ -455,14 +455,60 @@ class BrowserServer(ThreadingHTTPServer):
     def __init__(self, address):
         self.token = secrets.token_urlsafe(32)
         self.session = None
+        # Guards ``session`` and everything done to it. Held for one frame at a
+        # time - milliseconds - and never while a session is being built.
         self.lock = threading.Lock()
+        self.closed = False
         super().__init__(address, Handler)
 
-    def server_close(self):
+    def start(self, config):
+        """Open a new game in place of any other, and describe it."""
+        # Built outside the lock: loading the models - on first use, downloading
+        # them - takes seconds, and every other request would wait behind it:
+        # another tab's frames, a closing tab's stop, and Ctrl+C.
+        session = BrowserSession(config)
         with self.lock:
-            if self.session:
-                self.session.close()
+            if self.closed:
+                # Ctrl+C arrived while the models loaded; nothing would close it.
+                session.close()
+                raise ValueError("Handy is shutting down")
+            previous, self.session = self.session, session
+        # Unreachable now, and no frame can be using it: frames hold the lock.
+        if previous:
+            previous.close()
+        return session.info()
+
+    def call(self, path, data):
+        """Run one request against the open game."""
+        if path not in ("/api/frame", "/api/action", "/api/stop"):
+            raise ValueError("Unknown operation")
+        with self.lock:
+            session = self.session
+            if session is None or data.get("id") != session.id:
+                raise ValueError(
+                    "This game was closed or opened in another tab. Return to the arcade."
+                )
+            if path == "/api/frame":
+                return session.tick(data)
+            if path == "/api/action":
+                return session.action(data.get("action"), data)
+            session.close()
+            self.session = None
+            return {"ok": True}
+
+    def server_close(self):
         super().server_close()
+        self.closed = True
+        # A frame holds the lock for milliseconds. Should one ever wedge, leave
+        # its session to the exiting process rather than hang Ctrl+C on it.
+        if not self.lock.acquire(timeout=2):
+            return
+        try:
+            session, self.session = self.session, None
+        finally:
+            self.lock.release()
+        if session:
+            session.close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -594,29 +640,10 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError("Expected a JSON object")
-            with self.server.lock:
-                if self.path == "/api/start":
-                    session = BrowserSession(data)
-                    if self.server.session:
-                        self.server.session.close()
-                    self.server.session = session
-                    result = session.info()
-                else:
-                    session = self.server.session
-                    if session is None or data.get("id") != session.id:
-                        raise ValueError(
-                            "This game was closed or opened in another tab. Return to the arcade."
-                        )
-                    if self.path == "/api/frame":
-                        result = session.tick(data)
-                    elif self.path == "/api/action":
-                        result = session.action(data.get("action"), data)
-                    elif self.path == "/api/stop":
-                        session.close()
-                        self.server.session = None
-                        result = {"ok": True}
-                    else:
-                        raise ValueError("Unknown operation")
+            if self.path == "/api/start":
+                result = self.server.start(data)
+            else:
+                result = self.server.call(self.path, data)
         except (ValueError, KeyError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})
             return

@@ -227,6 +227,68 @@ def test_unexpected_failures_answer_500_and_are_reported_on_stderr(
     assert "renderer fell over" in capsys.readouterr().err
 
 
+@pytest.fixture
+def slow_models(monkeypatch):
+    """Model loads that block, as a first-run download does, until released."""
+    loading, release = threading.Event(), threading.Event()
+
+    def download(_name):
+        loading.set()
+        assert release.wait(10)
+        return "unused"
+
+    monkeypatch.setattr(browser, "ensure_model", download)
+    yield loading, release
+    release.set()
+
+
+def start_in_background(server, **config):
+    answers = []
+    thread = threading.Thread(
+        target=lambda: answers.append(call(server, "POST", "/api/start", config)),
+        daemon=True,
+    )
+    thread.start()
+    return thread, answers
+
+
+def test_a_slow_start_does_not_hold_up_the_open_game(server, slow_models, streams):
+    loading, release = slow_models
+    playing = start(server)
+    thread, answers = start_in_background(server, control="pistol")
+    assert loading.wait(5)
+    began = time.monotonic()
+    for _ in range(3):
+        status, _, _ = call(server, "POST", "/api/frame", {"id": playing["id"]})
+        assert status == 200
+    assert time.monotonic() - began < 2
+    release.set()
+    thread.join(5)
+    status, loaded, _ = answers[0]
+    assert status == 200 and loaded["state"] == "calibration"
+    # The newer start replaced the game that kept running meanwhile.
+    assert server.session.id == loaded["id"]
+    assert call(server, "POST", "/api/frame", {"id": playing["id"]})[0] == 400
+    assert not streams[0].closed
+
+
+def test_stopping_the_server_does_not_wait_for_a_slow_start(
+    server, slow_models, streams
+):
+    loading, release = slow_models
+    thread, answers = start_in_background(server, control="pistol")
+    assert loading.wait(5)
+    began = time.monotonic()
+    server.shutdown()
+    server.server_close()
+    assert time.monotonic() - began < 2
+    release.set()
+    thread.join(5)
+    # The session it finished building is closed, not left behind.
+    assert answers[0][0] == 400
+    assert server.session is None and streams[0].closed
+
+
 def test_every_response_forbids_cross_origin_embedding(server):
     for path in ("/", "/app.js", "/art/western", "/api/config", "/missing"):
         response = call(server, "GET", path)[2]
