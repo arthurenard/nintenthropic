@@ -695,17 +695,6 @@ dialog p {
 dialog .primary {
   margin-top: 25px;
 }
-.touch-drive {
-  display: flex;
-  gap: 8px;
-  padding-top: 12px;
-}
-.touch-drive button {
-  flex: 1;
-  padding: 14px 5px;
-  font-size: 11px;
-  touch-action: none;
-}
 #game:fullscreen {
   padding: 20px;
   background: var(--bg);
@@ -860,9 +849,6 @@ dialog .primary {
   }
   .play-footer p {
     font-size: 10px;
-  }
-  .touch-drive {
-    display: flex;
   }
   #mouse-coach .coach-icon {
     display: none;

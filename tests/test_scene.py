@@ -637,8 +637,6 @@ def test_every_emblem_draws_on_a_card_smaller_than_it_expects():
         for width in (height, int(height * 1.6), int(height * 3)):
             panel = np.zeros((height, max(width, 1), 3), np.uint8)
             for chosen in maps.MAPS:
-                if chosen.mode == "drive":
-                    continue  # the kart map is another agent's ground
                 with warnings.catch_warnings():
                     warnings.simplefilter("error", RuntimeWarning)
                     chosen.draw_emblem(panel)  # must not raise

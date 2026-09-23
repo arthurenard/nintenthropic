@@ -47,7 +47,7 @@
           <div class="setup-body">
             <div class="control-heading">
               <h3>How do you want to play?</h3>
-              <span id="control-count">Mouse or hand controls</span>
+              <span>Mouse or hand controls</span>
             </div>
             <div id="controls" class="control-grid"></div>
             <div class="options">
@@ -56,7 +56,7 @@
                   <option value="zombies">Zombies</option>
                   <option value="robots">Humanoid robots</option>
                 </select></label
-              ><label id="duration-option"
+              ><label
                 >Round length<select id="duration">
                   <option value="60">60 seconds</option>
                   <option value="120">2 minutes</option>
@@ -113,17 +113,11 @@
         <div class="play-layout">
           <div class="game-main">
             <div class="hud">
-              <span
-                ><span id="score-label">Score</span>
-                <strong id="score">0</strong></span
+              <span>Score <strong id="score">0</strong></span
               ><span id="health-wrap" hidden
                 >Health <strong id="health">100</strong></span
-              ><span id="accuracy-wrap"
-                >Accuracy <strong id="accuracy">0%</strong></span
-              ><span class="time"
-                ><span id="time-label">Time</span>
-                <strong id="time">60</strong></span
-              >
+              ><span>Accuracy <strong id="accuracy">0%</strong></span
+              ><span class="time">Time <strong id="time">60</strong></span>
             </div>
             <div class="stage" id="stage">
               <img
@@ -142,12 +136,6 @@
             <div class="play-footer">
               <p id="play-instructions">Move to aim · Click to fire</p>
               <button id="pause" class="quiet">Pause <kbd>P</kbd></button>
-            </div>
-            <div class="touch-drive" id="touch-drive" hidden>
-              <button data-drive="left">← Left</button
-              ><button data-drive="right">Right →</button
-              ><button data-drive="go">Accelerate</button
-              ><button data-drive="brake">Brake</button>
             </div>
           </div>
           <aside class="coach">

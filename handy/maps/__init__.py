@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..game import Impact, Round, RoundOptions
-from . import archery, kart, orbit, sniper, western, zombies
+from . import archery, orbit, sniper, western, zombies
 
 
 def _ring_hit(sounds, impact: Impact) -> None:
@@ -31,19 +31,7 @@ class Map:
     footer: str
     draw_emblem: Callable[[np.ndarray], None]
     play_hit: Callable[..., None] = _ring_hit
-    #: "shoot" runs the aiming loop; "drive" runs the kart loop with the wheel.
-    mode: str = "shoot"
     draw_hud: Callable[[np.ndarray, Round, tuple[int, int], float], None] | None = None
-
-    def score_duration(self, duration: float | None) -> float | None:
-        """The round length this map's scores are filed under.
-
-        A race is not run against the round clock - it ends when the laps do -
-        so every race shares one bucket. Reading and writing must agree on
-        this, or the chooser looks in a bucket nothing was ever written to and
-        the card says "not yet played" however many races have been won.
-        """
-        return None if self.mode == "drive" else duration
 
 
 RANGE = Map(
@@ -104,20 +92,6 @@ SNIPER = Map(
     footer="close an eye to scope in",
 )
 
-KART = Map(
-    key="kart",
-    title="SUNSET SPEEDWAY",
-    blurb="Grip an invisible wheel with both hands and race. Open your hands "
-          "to brake.",
-    mode="drive",
-    play_hit=lambda sounds, impact: None,
-    create=lambda options: __import__("handy.karting", fromlist=["RaceRound"])
-        .RaceRound(options),
-    draw_world=kart.draw_world,
-    draw_emblem=kart.draw_emblem,
-    footer="two hands on the wheel   |   open both hands to brake",
-)
-
 MAPS: tuple[Map, ...] = (ZOMBIES, WESTERN, ORBIT, SNIPER)
 DEFAULT = ZOMBIES
 
@@ -127,8 +101,8 @@ def keys() -> tuple[str, ...]:
 
 
 def by_key(key: str) -> Map:
-    # Range and kart remain internal engine fixtures, not game choices.
-    for chosen in (*MAPS, RANGE, KART):
+    # Range is the setup warm-up and an engine fixture, not a game choice.
+    for chosen in (*MAPS, RANGE):
         if chosen.key == key:
             return chosen
     raise KeyError(f"unknown map {key!r}; try one of {', '.join(keys())}")

@@ -22,23 +22,18 @@ from hands import frame_of, make_hand
 @pytest.mark.parametrize("key", maps.keys())
 def test_every_map_runs_in_browser_without_a_camera(key, monkeypatch):
     def no_models(*_args, **_kwargs):
-        pytest.fail("Mouse/keyboard must not load models")
+        pytest.fail("Mouse controls must not load models")
 
     monkeypatch.setattr(browser, "ensure_model", no_models)
-    session = BrowserSession(
-        {"map": key, "control": "keyboard" if key == "kart" else "mouse"}
-    )
-    data = session.tick(
-        {"x": 0.5, "y": 0.5, "fire": True, "throttle": 1}, session.last_tick + 0.033
-    )
+    session = BrowserSession({"map": key, "control": "mouse"})
+    data = session.tick({"x": 0.5, "y": 0.5, "fire": True}, session.last_tick + 0.033)
     image = cv2.imdecode(
         np.frombuffer(base64.b64decode(data["image"]), np.uint8), cv2.IMREAD_COLOR
     )
     assert image.shape == (540, 960, 3)
     assert np.ptp(image) > 50
     assert data["state"] == "playing"
-    if key != "kart":
-        assert session.round.shots == 1
+    assert session.round.shots == 1
     session.close()
 
 
@@ -88,8 +83,8 @@ def test_round_end_rejects_shots_and_restarts_cleanly():
 @pytest.mark.parametrize(
     "config",
     [
-        {"map": "kart", "control": "gaze"},
-        {"map": "range", "control": "wheel"},
+        {"map": "zombies", "control": "gaze"},
+        {"map": "zombies", "control": "keyboard"},
         {"enemy": "unknown"},
         {"duration": float("nan")},
         {"duration": -1},
@@ -226,11 +221,10 @@ def test_browser_returns_hand_skeleton_and_clears_it_on_tracking_loss(monkeypatc
     assert result["hands"] == []
 
 
-@pytest.mark.parametrize("removed", ["range", "kart"])
-def test_warmup_and_removed_speedway_are_not_selectable_games(removed):
-    assert removed not in maps.keys()
+def test_the_warmup_range_is_not_a_selectable_game():
+    assert "range" not in maps.keys()
     with pytest.raises(ValueError, match="arcade"):
-        BrowserSession({"map": removed})
+        BrowserSession({"map": "range"})
 
 
 def test_bad_shot_can_be_retried_and_reset_discards_unaccepted_fit(monkeypatch):

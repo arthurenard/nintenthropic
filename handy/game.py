@@ -177,13 +177,9 @@ class Round:
         return False
 
     def result_line(self) -> str:
-        """One line describing how the round went, for the console on exit.
-
-        A round knows what its own numbers mean; the session must not. Asking
-        a race for `score`, `hits` and `shots` crashed the program on the way
-        out of the kart map, because a race has laps and a finishing position
-        and never had any of those three.
-        """
+        """One line describing how the round went, for the console on exit and
+        the browser's results card. A round knows what its own numbers mean;
+        the session must not."""
         return (f"{self.score} points, {self.hits}/{self.shots} hits "
                 f"({self.accuracy:.0%}), best streak {self.best_streak}")
 

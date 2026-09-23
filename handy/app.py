@@ -1,8 +1,4 @@
-"""The game loop: capture, recognise, aim, score, draw.
-
-A map that declares itself a `drive` map is handed to `karting.drive()` instead,
-which reads two hands as a steering wheel and returns the same (round, reason).
-"""
+"""The game loop: capture, recognise, aim, score, draw."""
 
 from __future__ import annotations
 
@@ -709,8 +705,7 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
 
         entries = []
         for chosen in maps.MAPS:
-            best = scores.best_for(chosen.key,
-                                   chosen.score_duration(settings.duration))
+            best = scores.best_for(chosen.key, settings.duration)
             entries.append((chosen.title, chosen.blurb,
                             f"best {best}" if best else "not yet played",
                             chosen.draw_emblem))
@@ -906,8 +901,7 @@ def warm_maps(layout: Layout, settings: Settings) -> None:
     for chosen in maps.MAPS:
         try:
             round_ = new_round(settings, layout, chosen)
-            if getattr(chosen, "mode", "shoot") == "shoot":
-                round_.update(0.0)
+            round_.update(0.0)
             chosen.draw_world(scratch, round_, 0.0)
             # And the dimmed art the results card will sit on: a tenth of a
             # second to build, and the moment it is wanted is the moment the
@@ -948,13 +942,9 @@ def run(settings: Settings) -> None:
     threading.Thread(target=warm_maps, args=(layout, settings), daemon=True,
                      name="warm-maps").start()
     try:
-        wants_drive = (settings.map_key is not None
-                       and maps.by_key(settings.map_key).mode == "drive")
         if settings.control:
             scheme = schemes.by_key(settings.control)
-        elif wants_drive or len(schemes.CONTROLS) == 1:
-            # Straight to the track: a race has no aiming, so asking how the
-            # player wants to aim would be a question with no consequence.
+        elif len(schemes.CONTROLS) == 1:
             scheme = schemes.PISTOL
         else:
             scheme = select_scheme(canvas, layout)
@@ -997,8 +987,6 @@ def prefetch_models(settings: Settings) -> None:
             scheme = schemes.for_map(settings.map_key)
     elif settings.map_key == "sniper":
         scheme = schemes.for_map(settings.map_key)
-    elif settings.map_key and maps.by_key(settings.map_key).mode == "drive":
-        scheme = schemes.PISTOL  # a race has no aiming; the chooser is skipped
     if scheme is None:
         return
     for name in scheme.models:
@@ -1142,23 +1130,15 @@ def _session(scheme, settings: Settings, layout: Layout,
                 continue
 
             last_map = chosen
-            if getattr(chosen, "mode", "shoot") == "drive":
-                # A race needs no aiming and therefore no setup: hands on the
-                # invisible wheel is the whole calibration.
-                from . import karting
-
-                last, reason = karting.drive(captures, canvas, settings, layout,
-                                             chosen, sounds, scores)
-            else:
-                # Setup runs here, at the moment aiming is about to matter -
-                # never as a toll booth in front of the chooser or the kart.
-                if needs_setup and not calibrate():
-                    break
-                current = (rig or default_rig(scheme, len(eyes))).resized(
-                    len(eyes), fill=default_calibration(scheme))
-                controller = make_controller(settings, scheme)
-                last, reason = play(eyes, canvas, settings, layout, controller,
-                                    current, sounds, chosen, scheme)
+            # Setup runs here, at the moment aiming is about to matter - never
+            # as a toll booth in front of the chooser.
+            if needs_setup and not calibrate():
+                break
+            current = (rig or default_rig(scheme, len(eyes))).resized(
+                len(eyes), fill=default_calibration(scheme))
+            controller = make_controller(settings, scheme)
+            last, reason = play(eyes, canvas, settings, layout, controller,
+                                current, sounds, chosen, scheme)
             if reason == "quit":
                 break
             if reason == "controls":

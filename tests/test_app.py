@@ -71,10 +71,7 @@ def test_mouse_click_is_consumed_once():
     assert not mouse.take_click()
 
 
-SHOOTING_MAPS = tuple(m for m in maps.MAPS if m.mode == "shoot")
-
-
-@pytest.mark.parametrize("chosen", SHOOTING_MAPS, ids=lambda m: m.key)
+@pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda m: m.key)
 def test_render_draws_the_camera_into_the_inset(layout, chosen):
     settings = Settings(seed=1)
     round_ = new_round(settings, layout, chosen)
@@ -93,7 +90,7 @@ def test_render_draws_the_camera_into_the_inset(layout, chosen):
     assert canvas.any()
 
 
-@pytest.mark.parametrize("chosen", SHOOTING_MAPS, ids=lambda m: m.key)
+@pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda m: m.key)
 def test_render_survives_a_frame_with_nothing_tracked(layout, chosen):
     settings = Settings(seed=1)
     canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
@@ -111,10 +108,7 @@ def test_every_map_builds_a_round_inside_the_play_area(layout):
     for chosen in maps.MAPS:
         round_ = new_round(settings, layout, chosen)
         assert round_.area == layout.play_area
-        if chosen.mode == "shoot":
-            assert round_.duration == 45
-        else:
-            assert round_.duration is None, "a race ends on the line, not a clock"
+        assert round_.duration == 45
 
 
 def test_the_game_knows_what_each_camera_is_contributing():
@@ -577,8 +571,8 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
     from handy.highscores import HighScores
 
     scores = HighScores.load(tmp_path / "scores.json")
-    scores.record(maps.ZOMBIES.key, maps.ZOMBIES.score_duration(60.0), 120)
-    scores.record(maps.SNIPER.key, maps.SNIPER.score_duration(60.0), 340)
+    scores.record(maps.ZOMBIES.key, 60.0, 120)
+    scores.record(maps.SNIPER.key, 60.0, 340)
     assert set(scores.best) == {"zombies:60s", "sniper:60s"}
 
     drawn = []
@@ -1019,53 +1013,10 @@ def test_the_maps_are_pre_built_so_the_first_frame_does_not_freeze():
     canvas = np.zeros((540, 960, 3), np.uint8)
     for chosen in maps.MAPS:
         round_ = app.new_round(settings, layout, chosen)
-        if chosen.mode == "shoot":
-            round_.update(0.0)
+        round_.update(0.0)
         started = time.perf_counter()
         chosen.draw_world(canvas, round_, 0.5)
         assert time.perf_counter() - started < 0.05, f"{chosen.key} first frame is slow"
-
-
-# --- no toll booths in front of the race -------------------------------------
-
-def test_map_kart_asks_no_aiming_questions(monkeypatch, tmp_path, model_path):
-    """`--map kart` must go straight to the track: no scheme screen, no setup."""
-    from handy import app, karting
-
-    headless(monkeypatch)
-    asked = []
-    monkeypatch.setattr(app, "select_scheme",
-                        lambda *args: asked.append("scheme") or None)
-    monkeypatch.setattr(app, "run_calibration",
-                        lambda *args, **kwargs: asked.append("setup") or None)
-    def fake_drive(*args, **kwargs):
-        asked.append("drive")
-        return None, "quit"
-
-    monkeypatch.setattr(karting, "drive", fake_drive)
-
-    app.run(app.Settings(cameras=(0,), control=None, map_key="kart", mute=True,
-                         calibrate=True, model_path=model_path,
-                         calibration_path=tmp_path / "calibration.json"))
-    assert "drive" in asked, "the race ran"
-    assert "scheme" not in asked, "nobody was asked how they want to aim"
-    assert "setup" not in asked, "and nobody calibrated a finger gun to drive"
-
-
-def test_choosing_the_kart_in_game_skips_setup_too(monkeypatch, tmp_path,
-                                                   model_path):
-    from handy import app, karting
-
-    headless(monkeypatch)
-    asked = []
-    monkeypatch.setattr(app, "run_calibration",
-                        lambda *args, **kwargs: asked.append("setup") or None)
-    monkeypatch.setattr(karting, "drive", lambda *args, **kwargs: (None, "quit"))
-
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="kart",
-                         mute=True, calibrate=True, model_path=model_path,
-                         calibration_path=tmp_path / "calibration.json"))
-    assert asked == [], "driving never calibrates"
 
 
 def test_a_shooting_map_still_calibrates_before_play(monkeypatch, tmp_path,
@@ -1814,52 +1765,6 @@ def test_nothing_is_downloaded_before_the_player_has_chosen_how_to_aim(monkeypat
     app.prefetch_models(app.Settings(control="pistol",
                                      model_path=Path("/mine.task")))
     assert fetched == [], "--model stands in for the download"
-
-
-def test_the_race_fetches_its_model_up_front_too(monkeypatch):
-    """`--map kart` skips the controls chooser, so its scheme is known early."""
-    from handy import app
-
-    fetched: list[str] = []
-    monkeypatch.setattr(app, "ensure_model",
-                        lambda name: fetched.append(name) or Path(name))
-    app.prefetch_models(app.Settings(control=None, map_key="kart"))
-    assert fetched == ["gesture_recognizer"]
-
-
-def test_leaving_the_kart_map_does_not_crash_on_the_way_out(monkeypatch, tmp_path,
-                                                            model_path, capsys):
-    """The session epilogue must never assume a round is a shooting round.
-
-    It used to print `last.score`, `last.hits` and `last.shots`; a race has
-    laps and a finishing position and none of those three, so every exit from
-    SUNSET SPEEDWAY ended the program with an uncaught AttributeError. The
-    tests that nominally covered the map stubbed out the very value that
-    crashed it, so a green suite proved nothing. This one returns the real
-    RaceRound the drive loop really returns.
-    """
-    from handy import app, karting, maps
-
-    headless(monkeypatch)
-    layout = app.layout_for(960, 540)
-    real_round = karting.RaceRound(app.RoundOptions(area=layout.play_area, seed=3))
-    real_round.player.lap = real_round.laps
-    real_round.player.finished_at = 12.0
-    real_round.lap_times = [40.0, 38.5, 39.2]
-
-    def fake_drive(*args, **kwargs):
-        return real_round, "quit"
-
-    monkeypatch.setattr(karting, "drive", fake_drive)
-
-    app.run(app.Settings(cameras=(0,), control="pistol", map_key="kart",
-                         mute=True, calibrate=True, model_path=model_path,
-                         calibration_path=tmp_path / "calibration.json",
-                         window_width=960, window_height=540))
-
-    printed = capsys.readouterr().out
-    assert maps.KART.title in printed, "the race reported itself on the way out"
-    assert "best lap" in printed and "laps" in printed
 
 
 def test_every_map_can_describe_its_own_result(layout):

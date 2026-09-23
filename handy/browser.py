@@ -1,4 +1,4 @@
-"""Local browser adapter for the existing six-map engine.
+"""Local browser adapter for the four-game arcade and its Target Range warm-up.
 
 No desktop window or server-owned camera. The browser sends a small mirrored
 camera frame to the loopback server; inference and rendering stay on this Mac.
@@ -29,9 +29,8 @@ from .aiming import Aim, AimController, EyeScope
 from .calibration import Rig, default_rig
 from .shot_calibration import ShotCalibration
 from .game import Rect, RoundOptions
-from .karting import Wheel, WheelController
 from .models import ensure_model
-from .recognition import Frame, GestureStream, HAND_CONNECTIONS
+from .recognition import Frame, HAND_CONNECTIONS
 
 WEB_ROOT = Path(__file__).with_name("web")
 WIDTH, HEIGHT = 960, 540
@@ -62,12 +61,7 @@ class BrowserSession:
         if self.map.key not in maps.keys():
             raise ValueError("Choose a game from the arcade")
         self.control = config.get("control", "mouse")
-        allowed = (
-            ("keyboard", "wheel")
-            if self.map.mode == "drive"
-            else ("mouse", *schemes.keys())
-        )
-        if self.control not in allowed:
+        if self.control not in ("mouse", *schemes.keys()):
             raise ValueError("Choose a control supported by this map")
         enemy = config.get("enemy", "zombies")
         if enemy not in ("zombies", "robots"):
@@ -86,9 +80,6 @@ class BrowserSession:
         self.rig = None
         self.saved_rig = None
         self.controller = None
-        self.wheel_reader = WheelController(mirrored=True)
-        self.neutral_rolls = []
-        self.wheel_calibrated = False
         self.scope = EyeScope()
         self.calibration = None
         self.state = "playing"
@@ -102,9 +93,7 @@ class BrowserSession:
         self.last_camera_at = float("-inf")
         self.id = secrets.token_urlsafe(18)
         # Models are loaded only after the player explicitly chooses a camera mode.
-        if self.control == "wheel":
-            self.stream = GestureStream(ensure_model(), max_hands=2)
-        elif self.control not in ("mouse", "keyboard"):
+        if self.control != "mouse":
             self.scheme = schemes.for_map(self.map.key)
             self.rig = default_rig(self.scheme, 1)
             saved = config.get("calibration")
@@ -192,9 +181,6 @@ class BrowserSession:
             self.notice = ""
             self.clock = 0.0
             self.last_shot = -10.0
-            self.neutral_rolls = []
-            self.wheel_calibrated = False
-            self.wheel_reader = WheelController(mirrored=True)
             self.scope = EyeScope()
             if self.scheme:
                 self._controller()
@@ -236,22 +222,13 @@ class BrowserSession:
                 "hits": len(s.hits),
                 "armed": s.aim.armed,
             }
-        if self.map.mode == "drive":
-            data.update(
-                score=f"P{self.round.position()}",
-                remaining=None,
-                health=None,
-                accuracy=None,
-                result=self.round.result_line(),
-            )
-        else:
-            data.update(
-                score=self.round.score,
-                remaining=self.round.remaining(self.clock),
-                health=getattr(self.round, "health", None),
-                accuracy=round(self.round.accuracy * 100),
-                result=self.round.result_line(),
-            )
+        data.update(
+            score=self.round.score,
+            remaining=self.round.remaining(self.clock),
+            health=getattr(self.round, "health", None),
+            accuracy=round(self.round.accuracy * 100),
+            result=self.round.result_line(),
+        )
         return data
 
     def tick(self, data, wall_time=None):
@@ -373,62 +350,37 @@ class BrowserSession:
                     fire_at=self.scheme.fire_above,
                 )
         elif self.state == "playing":
-            if self.map.mode == "drive":
-                if self.control == "wheel":
-                    wheel = self.wheel_reader.update(
-                        list(frame.hands), now, reading=frame.timestamp_ms
-                    )
-                    if wheel.hands == 2 and fresh and not self.wheel_calibrated:
-                        self.neutral_rolls.append(wheel.roll)
-                        self.neutral_rolls = self.neutral_rolls[-45:]
-                    if self.round.countdown(now) is None and not self.wheel_calibrated:
-                        self.wheel_calibrated = self.wheel_reader.set_neutral(
-                            self.neutral_rolls, clamp=True
-                        )
-                else:
-                    wheel = Wheel(
-                        steer=number(data.get("steer", 0), -1, 1),
-                        throttle=number(data.get("throttle", 0), 0, 1),
-                        brake=data.get("brake") is True,
-                        hands=2,
-                    )
-                self.round.update(now, dt, wheel)
-                self.map.draw_world(self.canvas, self.round, now)
-                maps.kart.draw_hud(self.canvas, self.round, wheel, now, 0.75)
-                if self.round.finished:
-                    self.state = "over"
-            else:
-                self.round.look(position, scoped)
-                self.round.update(now)
-                crosshair = (
-                    (position[0] * self.width, position[1] * self.height)
-                    if position
-                    else None
+            self.round.look(position, scoped)
+            self.round.update(now)
+            crosshair = (
+                (position[0] * self.width, position[1] * self.height)
+                if position
+                else None
+            )
+            if scoped and self.round.scoped_shot is not None and crosshair:
+                crosshair = self.round.scoped_shot
+            if (
+                fire
+                and crosshair
+                and now - self.last_shot >= 0.12
+                and not self.round.is_over(now)
+            ):
+                impact = self.round.shoot(*crosshair, now)
+                self.last_shot = now
+                cues.append("hit" if impact.is_hit else "shot")
+            self.map.draw_world(self.canvas, self.round, now)
+            if crosshair and not scoped:
+                scene.draw_crosshair(
+                    self.canvas,
+                    *crosshair,
+                    aim.armed if aim else True,
+                    now - self.last_shot,
+                    0.75,
+                    pull=aim.pull if aim else 0,
+                    fire_at=self.scheme.fire_above if self.scheme else 0.65,
                 )
-                if scoped and self.round.scoped_shot is not None and crosshair:
-                    crosshair = self.round.scoped_shot
-                if (
-                    fire
-                    and crosshair
-                    and now - self.last_shot >= 0.12
-                    and not self.round.is_over(now)
-                ):
-                    impact = self.round.shoot(*crosshair, now)
-                    self.last_shot = now
-                    cues.append("hit" if impact.is_hit else "shot")
-                self.map.draw_world(self.canvas, self.round, now)
-                if crosshair and not scoped:
-                    scene.draw_crosshair(
-                        self.canvas,
-                        *crosshair,
-                        aim.armed if aim else True,
-                        now - self.last_shot,
-                        0.75,
-                        pull=aim.pull if aim else 0,
-                        fire_at=self.scheme.fire_above if self.scheme else 0.65,
-                    )
-                if self.round.is_over(now):
-                    self.state = "over"
+            if self.round.is_over(now):
+                self.state = "over"
             cues.extend(self.round.take_cues())
         result = self.info()
         result.update(
@@ -501,7 +453,6 @@ class Handler(BaseHTTPRequestHandler):
                             "key": m.key,
                             "title": m.title,
                             "description": m.blurb,
-                            "mode": m.mode,
                         }
                         for m in maps.MAPS
                     ],
