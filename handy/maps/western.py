@@ -221,6 +221,12 @@ WIN_W, WIN_H = 0.10, 0.11
 WIN_TOP = 0.43                     # above the ground line
 AWNING_Y = 0.305
 FIGURE_H = 0.275                   # a man in a doorway, feet to hat crown
+# Parts of a figure that stand out past its body, in units of its height (x out
+# from the middle, y up from the feet): drawn from these and hit-tested
+# against them, so what sticks out can be hit.
+HAT_CROWN = (0.11, 1.1)                        # a bandit's: half its width, its top
+RAISED_ARM = ((0.16, 0.72), (0.3, 0.98), 0.03)  # townsfolk: shoulder, wrist, half width
+RAISED_HAND = ((0.3, 1.0), 0.045)               # and the hand held up: centre, radius
 
 
 def build_street(area: Rect, seed: int) -> Street:
@@ -460,7 +466,26 @@ class Figure:
         if fy - height * 0.78 <= y <= fy and abs(x - fx) <= height * 0.24:
             return True
         # Head and hat.
-        return fy - height * 1.02 <= y <= fy - height * 0.78 and abs(x - fx) <= height * 0.2
+        if fy - height * 1.02 <= y <= fy - height * 0.78 and abs(x - fx) <= height * 0.2:
+            return True
+        u, v = (x - fx) / height, (fy - y) / height
+        if self.bandit:
+            half, top = HAT_CROWN  # the crown stands up above the brim
+            return abs(u) <= half and v <= top
+        # Townsfolk have their hands up, and a shot on those is a shot on them.
+        (shoulder_x, shoulder_y), (wrist_x, wrist_y), arm = RAISED_ARM
+        (hand_x, hand_y), hand = RAISED_HAND
+        u = abs(u)  # both arms are up
+        return (_to_segment(u, v, (shoulder_x, shoulder_y), (wrist_x, wrist_y)) <= arm
+                or math.hypot(u - hand_x, v - hand_y) <= hand)
+
+
+def _to_segment(x: float, y: float, a: tuple[float, float], b: tuple[float, float]) -> float:
+    """How far the point is from the line segment ``a``-``b``."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    span = dx * dx + dy * dy
+    t = 0.0 if span == 0.0 else min(max(((x - a[0]) * dx + (y - a[1]) * dy) / span, 0.0), 1.0)
+    return math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
 
 
 @dataclass
@@ -1815,8 +1840,11 @@ def _draw_person(canvas: np.ndarray, fx: float, fy: float, H: float, bandit: boo
             cv2.circle(canvas, p(-0.06 + i * 0.05, 0.8 - i * 0.02), max(1, int(0.008 * H)), (236, 236, 240), -1)
         # The hat: a tall crown with a lit left face, a pinched dent, a band,
         # and a wide brim with the sun on its upper-left edge.
-        _poly(canvas, [p(-0.11, 0.95), p(0.11, 0.95), p(0.1, 1.1), p(0.04, 1.08), p(-0.04, 1.08), p(-0.1, 1.1)], BANDIT_HAT)
-        _poly(canvas, [p(-0.11, 0.95), p(-0.01, 0.95), p(-0.01, 1.08), p(-0.04, 1.08), p(-0.1, 1.1)], _warm(BANDIT_HAT, 0.3))
+        half, top = HAT_CROWN
+        _poly(canvas, [p(-half, 0.95), p(half, 0.95), p(half - 0.01, top), p(0.04, top - 0.02),
+                       p(-0.04, top - 0.02), p(-half + 0.01, top)], BANDIT_HAT)
+        _poly(canvas, [p(-half, 0.95), p(-0.01, 0.95), p(-0.01, top - 0.02), p(-0.04, top - 0.02),
+                       p(-half + 0.01, top)], _warm(BANDIT_HAT, 0.3))
         cv2.line(canvas, p(-0.12, 0.975), p(0.12, 0.975), HAT_BAND, max(1, int(0.02 * H)))
         brim = (int(0.2 * H), max(1, int(0.035 * H)))
         cv2.ellipse(canvas, p(0, 0.95), brim, 0, 0, 360, BANDIT_HAT, -1, cv2.LINE_AA)
@@ -1921,13 +1949,18 @@ def _draw_person(canvas: np.ndarray, fx: float, fy: float, H: float, bandit: boo
     cv2.line(canvas, p(-0.02, 0.81), p(0.02, 0.81), _cool(SKIN, 0.4), 1, cv2.LINE_AA)
     cv2.line(canvas, p(0.0, 0.85), p(0.012, 0.825), _cool(SKIN, 0.35), 1, cv2.LINE_AA)
     # Arms up, in sleeves, with the sunward one lit and a shadow under each hand.
+    (shoulder_x, shoulder_y), (wrist_x, wrist_y), arm = RAISED_ARM
+    (hand_x, hand_y), hand = RAISED_HAND
     for side in (-1, 1):
         color = _warm(arm_color, 0.3) if side < 0 else _cool(arm_color, 0.25)
-        cv2.line(canvas, p(side * 0.16, 0.72), p(side * 0.3, 0.98), color, max(2, int(0.06 * H)), cv2.LINE_AA)
+        cv2.line(canvas, p(side * shoulder_x, shoulder_y), p(side * wrist_x, wrist_y), color,
+                 max(2, int(2 * arm * H)), cv2.LINE_AA)
         if sleeve:
-            cv2.line(canvas, p(side * 0.27, 0.92), p(side * 0.3, 0.98), APRON, max(2, int(0.055 * H)), cv2.LINE_AA)
-        cv2.circle(canvas, p(side * 0.3, 1.0), max(2, int(0.045 * H)), SKIN, -1, cv2.LINE_AA)
-        cv2.circle(canvas, p(side * 0.31, 0.99), max(2, int(0.045 * H)), _cool(SKIN, 0.25), 1, cv2.LINE_AA)
+            cv2.line(canvas, p(side * 0.27, 0.92), p(side * wrist_x, wrist_y), APRON,
+                     max(2, int(0.055 * H)), cv2.LINE_AA)
+        cv2.circle(canvas, p(side * hand_x, hand_y), max(2, int(hand * H)), SKIN, -1, cv2.LINE_AA)
+        cv2.circle(canvas, p(side * (hand_x + 0.01), hand_y - 0.01), max(2, int(hand * H)),
+                   _cool(SKIN, 0.25), 1, cv2.LINE_AA)
     cv2.line(canvas, p(-0.06, 0.0), p(0.06, 0.0), BRIM_SHADE, line)
 
 

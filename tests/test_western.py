@@ -9,9 +9,9 @@ from handy.maps.western import (AWNING_Y, BANDIT_POINTS, BOTTLE_POINTS,
                                 FIGURES_AT_ONCE, HOURS, MAX_HOLES,
                                 QUICK_DRAW_BONUS, RAIL_REFILL, RAIL_SLOTS,
                                 SHARD_LIFE, SIGN_POINTS, SIGN_SWING, TOWNSFOLK_PENALTY,
-                                Can, Figure, Impact, Shard, Tumbleweed,
-                                WesternRound, _backdrop, draw_emblem,
-                                draw_impact, draw_world)
+                                Can, Figure, Impact, Shard, Spot, Tumbleweed,
+                                WesternRound, _backdrop, _draw_person,
+                                draw_emblem, draw_impact, draw_world)
 
 AREA = Rect(31, 294, 1450, 578)
 
@@ -562,6 +562,25 @@ def test_a_bandit_is_hit_on_the_poncho_and_the_hat_but_not_beside_him():
     assert figure.contains(fx + h * 0.2, fy - h * 0.5, now)
     assert figure.contains(fx, fy - h * 0.95, now)
     assert not figure.contains(fx + h * 0.24, fy - h * 0.95, now)
+
+
+@pytest.mark.parametrize("bandit, variant", [(True, 0), (False, 0), (False, 1)])
+def test_what_is_drawn_of_a_figure_can_be_hit(bandit, variant):
+    """The crown of a bandit's hat and the hands the townsfolk hold up stand
+    well outside the body; a shot on either must count."""
+    height, fx, fy = 170.0, 300.0, 400.0
+    spot = Spot("door", fx, fy, height, Rect(0, 0, 600, 600))
+    figure = Figure(spot=spot, bandit=bandit, variant=variant, appeared_at=0.0, lifetime=10.0)
+    canvas = np.zeros((600, 600, 3), np.uint8)
+    _draw_person(canvas, fx, fy, height, bandit, variant)
+    ys, xs = np.nonzero(canvas.any(axis=2))
+    missed = sum(not figure.contains(x, y, 1.0) for x, y in zip(xs, ys))
+    assert missed <= 0.05 * len(xs)
+    if bandit:
+        assert figure.contains(fx, fy - height * 1.07, 1.0), "the crown of the hat"
+    else:
+        for side in (-1, 1):
+            assert figure.contains(fx + side * height * 0.3, fy - height, 1.0), "a raised hand"
 
 
 def test_every_hour_of_the_street_draws():
