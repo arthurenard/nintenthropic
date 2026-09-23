@@ -1768,7 +1768,7 @@ def draw_cracks(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
         if age < 0.8:
             _draw_burst(canvas, (crack.x, crack.y), crack.at, age, SPARK, count=10, reach=60.0)
         if age < 0.5:
-            fresh = 1.0 - age / 0.5
+            fresh = round((1.0 - age / 0.5) * 20) / 20  # quantised, so the sprites cache
             _stamp(canvas, (crack.x, crack.y), _glow_sprite(24, CRACK, 0.8 * fresh, 1.5))
 
 

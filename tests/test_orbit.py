@@ -616,6 +616,25 @@ def test_cracks_are_kept_as_one_layer_and_rebuilt_only_on_damage():
     assert not second[:2].any() and not second[:, :2].any()
 
 
+def test_a_fresh_crack_flashes_from_a_handful_of_cached_sprites():
+    """The flash fades over half a second; drawn every frame at whatever the
+    frame rate is, it must not build a new sprite each time."""
+    from handy.maps.orbit import _glow_sprite, draw_cracks
+    round_ = make_round()
+    round_.update(0.0)
+    round_.damage(fragment(x=0.1, y=0.0, radius=0.7, vz=-5.0), 0.0)
+    frame = canvas()
+    # After the strike's own white-hot core is gone, so this is the crack's
+    # flash alone; at an odd frame rate, then again a few milliseconds out.
+    ages = np.linspace(0.31, 0.49, 37)
+    for age in ages:
+        draw_cracks(frame, round_, float(age))
+    before = _glow_sprite.cache_info().misses
+    for age in ages + 0.003:
+        draw_cracks(frame, round_, float(age))
+    assert _glow_sprite.cache_info().misses == before
+
+
 def test_the_friendly_warning_pulses_and_the_score_popup_sits_on_a_pill():
     from handy.game import Impact
     from handy.maps.orbit import draw_impact
