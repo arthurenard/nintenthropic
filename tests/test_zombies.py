@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pytest
 
@@ -5,8 +6,8 @@ from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, GAITS, LOW_HEALTH, MAX_WALKERS,
                                 MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
-                                Perspective, Walker, ZombieRound, draw_emblem,
-                                draw_world)
+                                Perspective, Walker, ZombieRound, _paint,
+                                draw_emblem, draw_robot, draw_world)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -55,6 +56,64 @@ def test_the_silhouette_and_the_hitbox_are_the_same_measurements():
     assert figure.hit_zone(figure.x, figure.hip_y) == "body"
     assert figure.hit_zone(figure.x, figure.ground_y + 40) is None
     assert figure.hit_zone(figure.x + figure.height, figure.hip_y) is None
+
+
+def painted(walker: Walker, robots: bool) -> np.ndarray:
+    """The walker as the game paints it, alone on black - its rags red and its
+    skin white, or a robot in its own colours - without rim, shade or eyes."""
+    canvas = np.zeros((AREA.bottom + 56, AREA.width, 3), np.uint8)
+    if robots:
+        draw_robot(canvas, walker, VIEW, 0.0)
+    else:
+        _paint(canvas, walker.figure(VIEW, 0.0), (0, 0, 255), (255, 255, 255),
+               grow=0.0, shift=(0.0, 0.0))
+    return canvas
+
+
+def drawn_skull(canvas: np.ndarray, head_radius: float, robots: bool) -> tuple[float, float]:
+    """The middle of the skull as painted: the topmost solid blob of skin once
+    everything thinner than a head - the neck, the arms, the hands - is opened
+    away. A robot's head is all one colour with the rest of it."""
+    skin = canvas.max(axis=2) > 60 if robots else canvas.min(axis=2) > 127
+    size = int(head_radius * 1.2) | 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    solid = cv2.morphologyEx(skin.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+    count, _, stats, centroids = cv2.connectedComponentsWithStats(solid)
+    top = min(range(1, count), key=lambda index: stats[index, cv2.CC_STAT_TOP])
+    return tuple(centroids[top])
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_a_shot_at_the_middle_of_the_drawn_skull_is_a_headshot(enemy):
+    """However far forward it leans - and a lurcher leans a long way - the head
+    that is tested is the head that was painted."""
+    robots = enemy == "robots"
+    round_ = make_round(seed=3, enemy=enemy)
+    gaits = set()
+    for index in range(120):
+        walker = round_._spawn(wave=1 + index % 5)
+        walker.distance, walker.lane = 4.0, 0.0
+        figure = walker.figure(VIEW, 0.0)
+        skull = drawn_skull(painted(walker, robots), figure.head_radius, robots)
+        assert figure.hit_zone(*skull) == "head", (walker.gait, walker.hunch)
+        gaits.add(walker.gait)
+    assert gaits == ({"shamble"} if robots else set(GAITS))
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_every_part_of_the_drawn_figure_can_be_hit(enemy):
+    """The reaching hands most of all: they are drawn well outside the body."""
+    robots = enemy == "robots"
+    round_ = make_round(seed=3, enemy=enemy)
+    for index in range(40):
+        walker = round_._spawn(wave=1 + index % 5)
+        walker.distance, walker.lane = 6.0, 0.0
+        figure = walker.figure(VIEW, 0.0)
+        ys, xs = np.nonzero(painted(walker, robots).max(axis=2) > 60)
+        missed = [(x, y) for x, y in zip(xs, ys) if figure.hit_zone(x, y) is None]
+        assert len(missed) <= 0.04 * len(xs), (walker.gait, len(missed), len(xs))
+        for *_, (hx, hy) in () if robots else figure.arms():
+            assert figure.hit_zone(hx, hy) is not None, walker.gait
 
 
 def test_the_head_sits_above_the_shoulders_and_is_the_smaller_target():

@@ -134,16 +134,98 @@ class Figure:
     tilt: float = 0.0
     gait: str = "shamble"
     seed: int = 0  # which rags it wears
+    #: How far the shoulders, and the head on them, lead the hips, in pixels.
+    #: Already in ``head``: the skull is drawn where it is tested.
+    lead: float = 0.0
+    #: A machine, not one of them: it stands straight and keeps its hands in.
+    robot: bool = False
+
+    @property
+    def hand_radius(self) -> float:
+        return self.height * (0.04 if self.gait == "crawl" else 0.042)
+
+    def arms(self) -> tuple[tuple[tuple[float, float], ...], ...]:
+        """Shoulder, elbow and hand of each arm, on screen: reaching, hanging,
+        or one clutched to a wound, by gait. The hands reach well outside the
+        body, so the hit test reads them from here as the drawing does."""
+        height, x = self.height, self.x
+        arms = []
+        if self.gait == "crawl":
+            # Planted ahead, one always further than the other.
+            pull = math.sin(self.phase)
+            for side in (-1, 1):
+                ahead = 0.05 * pull * side
+                arms.append(((x + side * height * 0.13, self.ground_y - height * 0.32),
+                             (x + side * height * (0.22 + ahead * 0.4),
+                              self.ground_y - height * 0.16),
+                             (x + side * height * (0.24 + ahead), self.ground_y - height * 0.03)))
+            return tuple(arms)
+        half = self.half_shoulder
+        stiff = 1 if _rag(self.seed, 9) < 0.5 else -1  # which leg the limper drags
+        for side in (-1, 1):
+            reach = math.sin(self.phase + side * 1.7) * height * 0.045
+            shoulder = (x + self.lead + side * half * 0.9, self.shoulder_y + height * 0.03)
+            if self.gait == "lurch":
+                elbow = (shoulder[0] + side * height * 0.035 + reach * 0.5,
+                         shoulder[1] + height * 0.17)
+                hand = (elbow[0] + side * height * 0.015 + reach, elbow[1] + height * 0.16)
+            elif self.gait == "limp" and side == -stiff:
+                elbow = (shoulder[0] + side * height * 0.08, shoulder[1] + height * 0.13)
+                hand = (x + side * height * 0.02, self.hip_y - height * 0.02)
+            else:
+                elbow = (shoulder[0] + side * height * 0.11,
+                         shoulder[1] + height * 0.15 + reach)
+                hand = (x + side * half * 1.9, self.shoulder_y + height * 0.33 + reach)
+            arms.append((shoulder, elbow, hand))
+        return tuple(arms)
+
+    def trailing_legs(self) -> tuple[tuple[tuple[float, float], ...], ...]:
+        """A crawler's hip and foot on each side. They trail up the road behind
+        it, which from here means up the picture, above the rest of it."""
+        pull = math.sin(self.phase)
+        height, ground = self.height, self.ground_y
+        return tuple(((self.x + side * height * 0.05, ground - height * 0.43),
+                      (self.x + side * height * (0.08 + 0.02 * pull * side),
+                       ground - height * (0.55 + 0.03 * _rag(self.seed, 3 + side))))
+                     for side in (-1, 1))
+
+    def centre_at(self, y: float) -> float:
+        """The middle of the body at screen row ``y``: over the feet up to the
+        hips, then leaning out with the shoulders the way the torso is drawn."""
+        if y >= self.hip_y:
+            return self.x
+        rise = (self.hip_y - y) / max(self.hip_y - self.shoulder_y, 1e-6)
+        return self.x + self.lead * min(rise, 1.0)
 
     def hit_zone(self, x: float, y: float) -> str | None:
         """"head", "body", or None. The head is small and worth the trouble."""
         if math.hypot(x - self.head[0], y - self.head[1]) <= self.head_radius * 1.2:
             return "head"
-        # The body box is widened to take in the reaching arms.
-        if (abs(x - self.x) <= self.half_shoulder * 1.45
+        # The body box leans with the shoulders and is widened for the arms
+        # where they leave the body.
+        if (abs(x - self.centre_at(y)) <= self.half_shoulder * 1.45
                 and self.shoulder_y - self.head_radius <= y <= self.ground_y):
             return "body"
+        if self.robot:
+            return None  # its arms hang inside the box
+        # And the arms reaching out past it, forearm and hand, and a crawler's
+        # legs trailing up behind it.
+        reach = self.hand_radius * 1.2
+        limbs = [(a, b) for shoulder, elbow, hand in self.arms()
+                 for a, b in ((shoulder, elbow), (elbow, hand))]
+        if self.gait == "crawl":
+            limbs += self.trailing_legs()
+        if any(_to_segment(x, y, a, b) <= reach for a, b in limbs):
+            return "body"
         return None
+
+
+def _to_segment(x: float, y: float, a: tuple[float, float], b: tuple[float, float]) -> float:
+    """How far the point is from the line segment ``a``-``b``."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    span = dx * dx + dy * dy
+    t = 0.0 if span == 0.0 else min(max(((x - a[0]) * dx + (y - a[1]) * dy) / span, 0.0), 1.0)
+    return math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
 
 
 @dataclass
@@ -162,6 +244,7 @@ class Walker:
     staggered_until: float = 0.0
     gait: str = "shamble"
     seed: int = 0
+    robot: bool = False
 
     def advance(self, dt: float, now: float) -> None:
         pace = self.speed * (0.25 if now < self.staggered_until else 1.0)
@@ -193,13 +276,20 @@ class Walker:
                 shoulder_y=ground_y - height * 0.36,
                 hip_y=ground_y - height * 0.44,
                 half_shoulder=height * 0.20,
-                phase=self.phase, gait=self.gait, seed=self.seed)
+                phase=self.phase, gait=self.gait, seed=self.seed, robot=self.robot)
 
         drop = 0.0
         if self.gait == "limp":
             drop = abs(math.sin(self.phase * 0.5)) * 0.035  # the bad leg gives
         elif self.gait == "lurch":
             drop = 0.045  # bent forward, head thrust out
+        # The shoulders lead the hips by the hunch, and a lurcher's lead further
+        # still. Folded into the head here rather than added when it is drawn,
+        # or a shot at the middle of a lurcher's skull scores nothing.
+        lead = 0.0
+        if not self.robot:
+            lead = self.hunch * height * 0.085 + (height * 0.07 if self.gait == "lurch"
+                                                  else 0.0)
         head_radius = height * 0.076
         return Figure(
             x=x,
@@ -209,8 +299,8 @@ class Walker:
             fog=fog,
             hunch=self.hunch,
             tilt=self.tilt,
-            head=(x + lurch * height * 0.6 + (height * 0.06 if self.gait == "lurch"
-                                               else 0.0),
+            head=(x + lead + lurch * height * 0.6 + (height * 0.06 if self.gait == "lurch"
+                                                      else 0.0),
                   ground_y - height * (0.905 - drop)),
             head_radius=head_radius,
             shoulder_y=ground_y - height * (0.79 - drop),
@@ -219,6 +309,8 @@ class Walker:
             phase=self.phase,
             gait=self.gait,
             seed=self.seed,
+            lead=lead,
+            robot=self.robot,
         )
 
 
@@ -360,6 +452,7 @@ class ZombieRound(Round):
             tilt=self.rng.uniform(-26.0, 26.0),
             gait=gait,
             seed=self.rng.randrange(1 << 16),
+            robot=self.options.enemy == "robots",
         )
 
 
@@ -896,7 +989,7 @@ def _paint(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
     dx, dy = shift
     x, ground = figure.x + dx, figure.ground_y + dy
     gait = figure.gait
-    lead = figure.hunch * height * 0.085 + (height * 0.07 if gait == "lurch" else 0.0)
+    lead = figure.lead
     limb = max(1, int(height * 0.058 + grow))
     half = figure.half_shoulder
     shoulder_y, hip_y = figure.shoulder_y + dy, figure.hip_y + dy
@@ -955,27 +1048,13 @@ def _paint(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
             (x + half * 0.1, hip_y - height * 0.05 * _rag(seed, 16))], np.int32)
         cv2.fillPoly(canvas, [tear], skin, cv2.LINE_AA)
 
-    # Arms. Reaching, hanging, or one clutched to a wound, by gait.
-    for side in (-1, 1):
-        reach = math.sin(figure.phase + side * 1.7) * height * 0.045
-        shoulder = (int(x + lead + side * half * 0.9), int(shoulder_y + height * 0.03))
-        if gait == "lurch":
-            elbow = (int(shoulder[0] + side * height * 0.035 + reach * 0.5),
-                     int(shoulder[1] + height * 0.17))
-            hand = (int(elbow[0] + side * height * 0.015 + reach),
-                    int(elbow[1] + height * 0.16))
-        elif gait == "limp" and side == -stiff:
-            elbow = (int(shoulder[0] + side * height * 0.08),
-                     int(shoulder[1] + height * 0.13))
-            hand = (int(x + side * height * 0.02), int(hip_y - height * 0.02))
-        else:
-            elbow = (int(shoulder[0] + side * height * 0.11),
-                     int(shoulder[1] + height * 0.15 + reach))
-            hand = (int(x + side * half * 1.9), int(shoulder_y + height * 0.33 + reach))
+    # Arms, where the figure says they are: the hit test reads the same joints.
+    for side, joints in zip((-1, 1), figure.arms()):
+        shoulder, elbow, hand = ((int(jx + dx), int(jy + dy)) for jx, jy in joints)
         sleeve = _rag(seed, 5 + side) < 0.55  # a sleeve left, or a bare arm
         cv2.line(canvas, shoulder, elbow, cloth if sleeve else skin, limb, cv2.LINE_AA)
         cv2.line(canvas, elbow, hand, skin, max(1, int(limb * 0.9)), cv2.LINE_AA)
-        cv2.circle(canvas, hand, max(1, int(height * 0.042 + grow)), skin, -1,
+        cv2.circle(canvas, hand, max(1, int(figure.hand_radius + grow)), skin, -1,
                    cv2.LINE_AA)
         # A torn sleeve hanging off the elbow.
         flap = height * (0.04 + 0.06 * _rag(seed, 7 + side))
@@ -986,7 +1065,7 @@ def _paint(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
                 (elbow[0] + side * limb * 0.5, elbow[1] + flap)], np.int32)],
                 cloth, cv2.LINE_AA)
 
-    head = (int(figure.head[0] + lead + dx), int(figure.head[1] + dy))
+    head = (int(figure.head[0] + dx), int(figure.head[1] + dy))
     radius = max(1, int(figure.head_radius + grow))
     cv2.line(canvas, (int(x + lead), int(shoulder_y)), head, skin,
              max(1, int(limb * 0.95)), cv2.LINE_AA)
@@ -1014,13 +1093,10 @@ def _paint_crawler(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
     dx, dy = shift
     x, ground = figure.x + dx, figure.ground_y + dy
     limb = max(1, int(height * 0.045 + grow))
-    pull = math.sin(figure.phase)
 
     # Legs trail behind, which from here means up the picture and foreshortened.
-    for side in (-1, 1):
-        hip = (int(x + side * height * 0.05), int(ground - height * 0.43))
-        foot = (int(x + side * height * (0.08 + 0.02 * pull * side)),
-                int(ground - height * (0.55 + 0.03 * _rag(figure.seed, 3 + side))))
+    for joints in figure.trailing_legs():
+        hip, foot = ((int(jx + dx), int(jy + dy)) for jx, jy in joints)
         cv2.line(canvas, hip, foot, cloth, limb, cv2.LINE_AA)
 
     torso = np.array([
@@ -1033,14 +1109,12 @@ def _paint_crawler(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
     cv2.fillPoly(canvas, [torso], cloth, cv2.LINE_AA)
 
     # Arms planted ahead, one always further than the other.
-    for side in (-1, 1):
-        ahead = 0.05 * pull * side
-        shoulder = (int(x + side * height * 0.13), int(ground - height * 0.32))
-        elbow = (int(x + side * height * (0.22 + ahead * 0.4)), int(ground - height * 0.16))
-        hand = (int(x + side * height * (0.24 + ahead)), int(ground - height * 0.03))
+    for joints in figure.arms():
+        shoulder, elbow, hand = ((int(jx + dx), int(jy + dy)) for jx, jy in joints)
         cv2.line(canvas, shoulder, elbow, cloth, limb, cv2.LINE_AA)
         cv2.line(canvas, elbow, hand, skin, limb, cv2.LINE_AA)
-        cv2.circle(canvas, hand, max(1, int(height * 0.04 + grow)), skin, -1, cv2.LINE_AA)
+        cv2.circle(canvas, hand, max(1, int(figure.hand_radius + grow)), skin, -1,
+                   cv2.LINE_AA)
 
     head = (int(figure.head[0] + dx), int(figure.head[1] + dy))
     radius = max(1, int(figure.head_radius + grow))
@@ -1067,14 +1141,9 @@ def _alpha_ellipse(canvas: np.ndarray, centre: tuple[int, int], axes: tuple[int,
 
 def _eye_points(figure: Figure) -> tuple[tuple[int, int], tuple[int, int]]:
     angle = math.radians(figure.tilt)
-    lead = figure.hunch * figure.height * 0.085
-    if figure.gait == "lurch":
-        lead += figure.height * 0.07
-    if figure.gait == "crawl":
-        lead = 0.0
     eyes = []
     for side in (-0.4, 0.4):
-        eyes.append((int(figure.head[0] + lead + math.cos(angle) * figure.head_radius * side
+        eyes.append((int(figure.head[0] + math.cos(angle) * figure.head_radius * side
                          - math.sin(angle) * figure.head_radius * 0.1),
                      int(figure.head[1] + math.sin(angle) * figure.head_radius * side
                          + math.cos(angle) * figure.head_radius * 0.1)))
