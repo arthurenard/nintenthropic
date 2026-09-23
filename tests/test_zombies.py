@@ -7,7 +7,7 @@ from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, GAITS, LOW_HEALTH, MAX_WALKERS,
                                 MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
                                 Perspective, Walker, ZombieRound, _paint,
-                                draw_emblem, draw_robot, draw_world)
+                                draw_emblem, draw_hud, draw_robot, draw_world)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -223,6 +223,24 @@ def test_enough_bites_and_the_night_is_over():
     assert round_.is_lost and round_.is_over(1.0)
     assert round_.summary().outcome == "OVERRUN"
     assert not round_.summary().won
+
+
+def test_the_health_bar_has_a_segment_for_every_bite_you_can_take():
+    round_ = make_round(duration=600)
+    bites, notches = 0, []
+    while not round_.is_lost:
+        hud = np.zeros((720, 400, 3), np.uint8)
+        draw_hud(hud, round_, (20, 0), 0.0)
+        row = hud[153, 21:260]  # through the middle of the bar, inside its frame
+        notches.append(np.flatnonzero((row == (20, 20, 20)).all(axis=1)))
+        lit = np.flatnonzero(((row != (30, 28, 27)) & (row != (20, 20, 20))).any(axis=1))
+        if bites:
+            assert lit.max() + 1 in notches[0], "after a bite the bar stops on a notch"
+        round_.walkers.append(walker_at(0.5))
+        round_.update(bites * 0.1)
+        bites += 1
+    assert bites == 6
+    assert len(notches[0]) + 1 == bites
 
 
 def test_making_it_to_the_end_of_the_round_is_surviving():

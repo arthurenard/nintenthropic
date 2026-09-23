@@ -1651,8 +1651,10 @@ def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
         if low:
             colour = _mix(colour, (80, 90, 255), _heartbeat(now, 0.85))
         cv2.rectangle(canvas, (bar.x, bar.y), (bar.x + filled, bar.bottom), colour, -1)
-    for tick in range(1, 5):
-        tx = bar.x + bar.width * tick // 5
+    # A notch where the bar will stand after each bite, so it reads in bites
+    # left rather than in percent - however many the constants make that.
+    for bite in range(1, math.ceil(FULL_HEALTH / BITE_DAMAGE)):
+        tx = bar.x + bar.width * (FULL_HEALTH - bite * BITE_DAMAGE) // FULL_HEALTH
         cv2.line(canvas, (tx, bar.y), (tx, bar.bottom), (20, 20, 20), 1)
     cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (120, 116, 110), 1)
     draw_text(canvas, f"WAVE {round_.wave(now)}   {round_.kills} down",
