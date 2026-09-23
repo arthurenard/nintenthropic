@@ -31,7 +31,7 @@ def test_aiming_past_the_fitted_map_is_clamped_to_the_screen():
 
 
 def test_a_rig_survives_a_round_trip_through_disk(tmp_path):
-    original = Rig((FITTED, Calibration(gain=3.2, slide=(0.04, -0.02))))
+    original = Rig((FITTED, Calibration(gain=3.2, generalisation=0.02)))
     path = tmp_path / "calibration.json"
     original.save(path)
     assert Rig.load(path) == original
@@ -62,15 +62,17 @@ def test_a_file_from_before_the_flag_existed_is_read_by_its_error_figures(tmp_pa
 
 
 def test_a_file_from_the_pose_by_pose_setup_still_loads(tmp_path):
-    """Saves from the old guided setup carry a pointer tuning and the two
-    trigger poses it measured; nothing reads either now."""
+    """Saves from the old guided setup carry a pointer tuning, the two trigger
+    poses, the landmark jitter and the depth slide it measured; nothing reads
+    any of them now."""
     path = tmp_path / "old.json"
     path.write_text(json.dumps({"cameras": [{
         "mapping": [1, 0, 0, 0, 1, 0, 0, 0, 1], "signal": "angle",
         "cocked": 20.0, "folded": 70.0, "tuning": [0.2, 0.45],
-        "fit_error": 0.01, "aim_fitted": True}]}))
+        "trigger_fitted": True, "jitter": 0.003, "slide": [0.04, -0.02],
+        "fit_error": 0.01, "aim_fitted": True, "gain": 2.5}]}))
     rig = Rig.load(path)
-    assert rig is not None and rig[0].aim_fitted
+    assert rig is not None and rig[0].aim_fitted and rig[0].gain == 2.5
 
 
 def test_a_file_from_before_the_map_was_projective_still_loads(tmp_path):

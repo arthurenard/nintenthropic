@@ -323,9 +323,8 @@ def choose_cameras(settings: Settings) -> tuple[tuple[int, ...], str]:
 class Eyes:
     """Every camera and its recogniser, read as one.
 
-    The first camera is the one the player faces; any others are there to see the
-    hand from somewhere else, which is what lets the game tell distance from
-    displacement.
+    The first camera is the one the player faces; any others see the hand from
+    somewhere else, and fusion weighs each one's answer by how steady its map is.
     """
 
     def __init__(self, captures: list[cv2.VideoCapture],

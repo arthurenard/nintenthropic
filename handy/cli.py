@@ -31,8 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--camera", type=int, action="append", dest="cameras",
                          metavar="INDEX",
                          help="webcam index; repeat it to name several. Left out, "
-                              "every camera found is used - two see depth that "
-                              "one cannot")
+                              "the first camera showing a picture is used")
     capture.add_argument("--list-cameras", action="store_true",
                          help="show which camera indices are available, and exit")
     capture.add_argument("--capture", type=_resolution, default=(1280, 720),

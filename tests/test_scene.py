@@ -190,7 +190,7 @@ def test_the_hud_reads_differently_with_one_camera_and_with_two(canvas):
     from handy.game import Rect, Round, RoundOptions
 
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
-    aim = Aim(position=(0.5, 0.5), armed=True, cameras=2, spread=0.012, depth=0.4)
+    aim = Aim(position=(0.5, 0.5), armed=True, cameras=2, spread=0.012)
 
     scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
     one = canvas.copy()
@@ -208,14 +208,14 @@ def test_debug_shows_what_the_second_camera_measured(canvas):
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
     states = [scene.FUSED, scene.FUSED]
     single = Aim(position=(0.5, 0.5), cameras=1)
-    paired = Aim(position=(0.5, 0.5), cameras=2, spread=0.02, depth=0.55)
+    paired = Aim(position=(0.5, 0.5), cameras=2, spread=0.02)
 
     scene.draw_hud(canvas, round_, single, (400, 16), 30.0, True, states)
     alone = canvas.copy()
     canvas[:] = 0
     scene.draw_hud(canvas, round_, paired, (400, 16), 30.0, True, states)
 
-    assert not np.array_equal(alone, canvas), "spread and depth only appear with two"
+    assert not np.array_equal(alone, canvas), "the spread only appears with two"
 
 
 def test_an_ignored_camera_is_marked_on_its_own_inset(canvas, camera):

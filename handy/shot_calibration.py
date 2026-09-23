@@ -112,7 +112,6 @@ class ShotCalibration:
                     fit_error=error,
                     generalisation=0.0,
                     gain=gain,
-                    slide=(0.0, 0.0),
                 )
             )
         self.rig = Rig(tuple(profiles))

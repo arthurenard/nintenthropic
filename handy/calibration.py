@@ -34,9 +34,7 @@ class Calibration:
     #: The error figures cannot answer that: when the fallback is a previously
     #: successful calibration they are inherited from it, non-zero and flattering.
     aim_fitted: bool = False
-    jitter: float = 0.004  # this camera's own landmark shake, measured at setup
     gain: float = 1.0  # how much this camera's map magnifies movement
-    slide: Point = (0.0, 0.0)  # where its estimate goes when the hand changes depth
 
     def __post_init__(self) -> None:
         if len(self.mapping) != 9:
@@ -50,8 +48,8 @@ class Calibration:
     def project(self, point: Point) -> Point:
         """Map a camera-space point onto the screen, without clamping.
 
-        Fusion needs the raw answer: clamping first would hide exactly the
-        disagreement between cameras that the depth solve reads.
+        Fusion needs the raw answer: clamping each camera first would pull
+        their estimates together at the edge and hide how far apart they are.
         """
         return homography.apply(self.mapping, point)
 
@@ -69,16 +67,14 @@ class Calibration:
             "fit_error": self.fit_error,
             "generalisation": self.generalisation,
             "aim_fitted": self.aim_fitted,
-            "jitter": self.jitter,
             "gain": self.gain,
-            "slide": list(self.slide),
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "Calibration":
         """Read one camera back. Anything it does not know is ignored: saves from
-        before the thumb was a built-in gesture carry the trigger poses setup
-        used to measure, and nothing reads them now."""
+        the old pose-by-pose setup carry the trigger poses, landmark jitter and
+        depth slide it measured, and nothing reads them now."""
         if "mapping" in data:
             mapping = tuple(float(value) for value in data["mapping"])
         else:
@@ -94,9 +90,7 @@ class Calibration:
             aim_fitted=bool(data.get("aim_fitted",
                                      bool(data.get("fit_error"))
                                      or bool(data.get("generalisation")))),
-            jitter=float(data.get("jitter", 0.004)),
             gain=float(data.get("gain", 1.0)),
-            slide=tuple(data.get("slide", (0.0, 0.0))),
         )
 
 

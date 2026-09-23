@@ -149,8 +149,6 @@ def _clamp(point: Point) -> Point:
 class CameraProfile(Protocol):
     """What :class:`AimController` needs to know about one camera."""
 
-    slide: Point
-    jitter: float
     usable: bool
 
     def project(self, point: Point) -> Point: ...
@@ -176,7 +174,6 @@ class Aim:
     travel: float = 0.0  # the thumb's fold, 0 up to 1 folded (see thumb_pull)
     spread: float = 0.0  # how far apart the cameras were, 0..1 of the screen
     cameras: int = 0  # how many cameras were listened to this frame
-    depth: float = 0.0  # solved drift off the calibration surface
 
     @property
     def tracking(self) -> bool:
@@ -247,16 +244,14 @@ class AimController:
         elif travel < self.arm_below:
             self._armed = True
         return Aim(position=position, armed=self._armed, fired=fired,
-                   travel=travel, spread=fused.spread, cameras=fused.cameras,
-                   depth=fused.depth)
+                   travel=travel, spread=fused.spread, cameras=fused.cameras)
 
     def _opinion(self, frame: object, profile: CameraProfile) -> Opinion:
         subject = frame.subjects[0]
         pointed = self.scheme.pointer(subject)
         return Opinion(position=profile.project(pointed), travel=thumb_pull(subject),
-                       gain=profile.local_gain(pointed), slide=profile.slide,
-                       span=self.scheme.scale(subject), jitter=profile.jitter,
-                       usable=profile.usable)
+                       gain=profile.local_gain(pointed),
+                       span=self.scheme.scale(subject), usable=profile.usable)
 
 
 class ScopeToggle:

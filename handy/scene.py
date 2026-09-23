@@ -584,9 +584,8 @@ def draw_hud(canvas: np.ndarray, round_: Round, aim: Aim, origin: tuple[int, int
         # How far the thumb has folded, against the threshold it must cross.
         detail = f"trigger {aim.travel:+.2f} of {fire_at:.2f}"
         if aim.cameras > 1:
-            # Spread is what the cameras disagree by; depth is what that solved to.
-            detail += (f"   spread {aim.spread * 100:.1f}%"
-                       f"   depth {aim.depth:+.2f}")
+            # Spread is what the cameras disagree by.
+            detail += f"   spread {aim.spread * 100:.1f}%"
         if fps is not None:
             detail += f"   {fps:.0f} fps"
         draw_text(canvas, detail, (x, line(146)), MUTED, scale=0.48 * scale,
