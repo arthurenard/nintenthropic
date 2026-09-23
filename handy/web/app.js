@@ -327,7 +327,7 @@ function renderState(data) {
     : "Move into view · light your hand / face";
   $("tracking-light").classList.toggle("live", !!data.tracking);
   $("calibration-coach").hidden = data.state !== "calibration";
-  $("practice-coach").hidden = data.state !== "practice";
+
   $("pause").textContent = data.state === "paused" ? "Resume (P)" : "Pause (P)";
   $("pause").disabled = data.state === "over";
   $("recalibrate").disabled = data.state === "calibration";
@@ -363,7 +363,7 @@ function renderState(data) {
     $("aim-hits").value = step.hits;
   }
   if (data.hands) drawHandGraph(data.hands);
-  $("practice-score").textContent = `${data.practiceHits} / 3 targets`;
+
   if (data.calibration) {
     const encoded = JSON.stringify(data.calibration);
     if (encoded !== lastSaved) {
@@ -527,7 +527,7 @@ $("back").onclick = back;
 $("undo-shot").onclick = () => queueAction("undo");
 $("reset-aim").onclick = () => queueAction("reset");
 $("recalibrate").onclick = () => queueAction("calibrate");
-$("play-now").onclick = () => queueAction("play");
+
 $("pause").onclick = () =>
   queueAction(currentState === "paused" ? "resume" : "pause");
 $("overlay-action").onclick = () =>

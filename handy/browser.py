@@ -86,7 +86,6 @@ class BrowserSession:
         self.notice = ""
         self.clock = 0.0
         self.last_tick = time.monotonic()
-        self.practice_hits = set()
         self.last_shot = -10.0
         self.last_reading = None
         self.frame = Frame()
@@ -145,6 +144,17 @@ class BrowserSession:
         self.saved_rig = None
         self.notice = self.calibration.message
 
+    def _play(self):
+        """A fresh round of the chosen map, on whatever aim setup settled on."""
+        self.round = self._new_round()
+        self.state = "playing"
+        self.notice = ""
+        self.clock = 0.0
+        self.last_shot = -10.0
+        self.scope = EyeScope()
+        if self.scheme:
+            self._controller()
+
     def action(self, name, data):
         if name == "calibrate":
             self.begin_calibration()
@@ -154,36 +164,24 @@ class BrowserSession:
             s = self.calibration
             if name == "undo":
                 s.undo()
+                self.notice = s.message
             elif name == "reset":
                 self.calibration = ShotCalibration(self.scheme)
                 self.saved_rig = None
-            elif name == "finish":
+                self.notice = self.calibration.message
+            else:
+                # Five verified hits: the warm-up is over and the game starts.
                 if not s.complete:
                     raise ValueError("Land five accurate hits first")
                 self.rig = s.rig
                 self.saved_rig = {"cameras": [self.rig[0].to_dict()]}
-                self.state = "practice"
-                return self.action("play", {})
-            self.notice = self.calibration.message
-        elif name == "skip":
-            if self.state != "calibration":
-                raise ValueError("No calibration to skip")
-            self.state = "practice"
-            self.notice = "Setup skipped. Using your previous setup or the default aim."
-            self._controller()
+                self._play()
         elif name == "play":
-            if self.state not in ("practice", "over"):
-                raise ValueError("Finish or skip setup before playing")
-            self.round = self._new_round()
-            self.state = "playing"
-            self.notice = ""
-            self.clock = 0.0
-            self.last_shot = -10.0
-            self.scope = EyeScope()
-            if self.scheme:
-                self._controller()
+            if self.state != "over":
+                raise ValueError("Finish setup before playing")
+            self._play()
         elif name == "pause":
-            if self.state in ("playing", "practice", "calibration"):
+            if self.state in ("playing", "calibration"):
                 self.resume_state = self.state
                 self.state = "paused"
                 if self.resume_state == "calibration":
@@ -202,7 +200,6 @@ class BrowserSession:
             "state": self.state,
             "notice": self.notice,
             "control": self.control,
-            "practiceHits": len(self.practice_hits),
             "calibration": self.saved_rig,
             "hasSavedAim": bool(self.rig and self.rig[0].aim_fitted),
         }
@@ -236,7 +233,7 @@ class BrowserSession:
         if self.state not in ("paused", "over"):
             self.clock += dt
         now = self.clock
-        if self.state in ("calibration", "practice") and "viewAspect" in data:
+        if self.state == "calibration" and "viewAspect" in data:
             aspect = number(data["viewAspect"], 0.25, 8)
             height = min(900, round(WIDTH / aspect))
             width = round(height * aspect)
@@ -319,34 +316,6 @@ class BrowserSession:
                 )
             if s.complete:
                 self.action("finish", {})
-        elif self.state == "practice":
-            scene.draw_backdrop(self.canvas)
-            for i, (x, y) in enumerate(((0.22, 0.35), (0.5, 0.6), (0.78, 0.35))):
-                px, py = int(x * self.width), int(y * self.height)
-                if (
-                    fire
-                    and position
-                    and math.hypot(
-                        position[0] * self.width - px, position[1] * self.height - py
-                    )
-                    < 42
-                ):
-                    self.practice_hits.add(i)
-                    cues.append("hit")
-                color = (130, 232, 185) if i in self.practice_hits else (180, 190, 205)
-                cv2.circle(self.canvas, (px, py), 42, color, 3, cv2.LINE_AA)
-                cv2.circle(self.canvas, (px, py), 8, color, -1, cv2.LINE_AA)
-            if position:
-                scene.draw_crosshair(
-                    self.canvas,
-                    position[0] * self.width,
-                    position[1] * self.height,
-                    aim.armed if aim else True,
-                    None,
-                    0.75,
-                    pull=aim.travel if aim else 0,
-                    fire_at=self.scheme.fire_above,
-                )
         elif self.state == "playing":
             self.round.look(position, scoped)
             self.round.update(now)

@@ -161,12 +161,18 @@ def test_shoot_to_calibrate_waits_for_fresh_thumb_pulls(monkeypatch):
     assert session.calibration.samples == []
     with pytest.raises(ValueError, match="five"):
         session.action("finish", {})
-    session.action("skip", {})
-    assert session.state == "practice"
-    session.action("play", {})
-    assert session.state == "playing"
+    with pytest.raises(ValueError, match="setup"):
+        session.action("play", {})
+    assert session.state == "calibration"
     session.close()
     assert stream.closed
+
+
+def warm_up(session):
+    """Stand in for five accurate hits, so the round itself can be played."""
+    session.calibration.hits.update(range(5))
+    session.action("finish", {})
+    assert session.state == "playing"
 
 
 def test_range_warmup_verifies_five_hits_then_saves_and_starts(monkeypatch):
@@ -291,9 +297,7 @@ def test_hand_input_selects_the_maps_tracker_and_fires(map_key, monkeypatch):
     session = BrowserSession({"control": "pistol", "map": map_key})
     assert fetched == list(scheme.models)
     assert session.calibration.samples == []
-    session.action("skip", {})
-    session.clock = 30
-    session.action("play", {})
+    warm_up(session)
     for stamp, firing in enumerate([False] * 4 + [True] * 4 + [False] * 4, 1):
         hand = make_hand(thumb_degrees=70 if firing else 20)
         if map_key == "sniper":
@@ -330,8 +334,7 @@ def test_sniper_eye_closure_scopes_but_never_shoots(monkeypatch):
     )
     assert session.state == "calibration" and session.calibration is not None
     assert session.rig == hand_rig
-    session.action("skip", {})
-    session.action("play", {})
+    warm_up(session)
     # Both closed is a blink. One closed engages scope. Reopening releases it.
     for stamp, (blink, scoped) in enumerate(
         [

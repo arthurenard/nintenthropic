@@ -954,24 +954,7 @@ dialog .primary {
   background: #101412df;
   padding: 8px;
 }
-.immersive #practice-coach {
-  position: absolute;
-  bottom: 0;
-  left: 20px;
-  right: 20px;
-  background: var(--panel);
-  padding: 8px 20px;
-}
-.immersive #practice-coach h2,
-.immersive #practice-coach p,
-.immersive #practice-coach strong {
-  display: inline;
-  margin-right: 12px;
-}
-.immersive #practice-coach .primary {
-  width: auto;
-  margin: 8px;
-}
+
 .calibrating .hud,
 .calibrating .play-footer,
 .calibrating #calibration-tools,
@@ -1059,9 +1042,6 @@ button:disabled {
   .immersive .game-actions .quiet {
     font-size: 10px;
     padding: 7px;
-  }
-  .immersive #practice-coach {
-    bottom: 0;
   }
 }
 
