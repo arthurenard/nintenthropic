@@ -363,8 +363,9 @@ def _look(seed: int) -> Look:
 class Figure:
     """Where every part of a walker is on screen, this frame.
 
-    Drawing and hit-testing both read :attr:`parts`, so the silhouette and the
-    hitbox can never drift apart.
+    Drawing and hit-testing both read the outlines in :attr:`mesh`, at the
+    detail in :attr:`groups`, so the silhouette and the hitbox can never drift
+    apart.
     """
 
     x: float
@@ -391,10 +392,6 @@ class Figure:
     recoil: float = 0.0
     #: How much detail it is built with; below zero, as much as its size merits.
     detail: int = -1
-
-    @property
-    def hand_radius(self) -> float:
-        return self.height * (0.04 if self.gait == "crawl" else 0.042)
 
     @property
     def look(self) -> Look:

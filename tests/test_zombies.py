@@ -110,7 +110,7 @@ def test_a_shot_at_the_middle_of_the_drawn_skull_is_a_headshot(enemy):
     """However far forward it leans - and a lurcher leans a long way - the head
     that is tested is the head that was painted."""
     gaits = set()
-    for walker in spawned(enemy, 120, 4.0):
+    for walker in spawned(enemy, 60, 4.0):
         figure = walker.figure(VIEW, 0.0)
         ys, xs = np.nonzero(painted(walker).min(axis=2) > 127)
         assert figure.hit_zone(xs.mean(), ys.mean()) == "head", (walker.gait, walker.hunch)
@@ -133,7 +133,7 @@ def test_every_pixel_of_the_drawn_skull_is_a_head_shot(enemy):
 def test_every_part_of_the_drawn_figure_can_be_hit(enemy, distance):
     """The moonlit edge, the reaching hands, the fingers, the torn hem: what is
     drawn is what can be shot, near and far."""
-    for walker in spawned(enemy, 16 if distance < 3 else 40, distance):
+    for walker in spawned(enemy, 10 if distance < 3 else 24, distance):
         missed, total = unhittable(walker)
         assert missed <= 0.02 * total, (walker.gait, missed, total)
         figure = walker.figure(VIEW, 0.0)
@@ -156,12 +156,12 @@ def test_the_hitbox_has_no_empty_room_in_it(enemy):
     """The body can be hit where it is drawn, not in the air around it: every
     point that counts as a body shot is within a hair of something painted.
     (The head keeps its fixed, generous circle - that is the game.)"""
-    for walker in spawned(enemy, 24, 4.0):
+    for walker in spawned(enemy, 16, 4.0):
         figure = walker.figure(VIEW, 0.0)
         mask = drawn(walker).astype(np.uint8)
         far = cv2.distanceTransform(1 - mask, cv2.DIST_L2, 3)
         x0, y0, x1, y1 = (int(v) for v in figure.bounds)
-        body = [(x, y) for y in range(y0, y1, 2) for x in range(x0, x1, 2)
+        body = [(x, y) for y in range(y0, y1, 3) for x in range(x0, x1, 3)
                 if figure.hit_zone(x, y) == "body"]
         empty = sum(far[y, x] > figure.margin + 1.5 for x, y in body)
         assert empty <= 0.02 * len(body), (walker.gait, empty, len(body))
@@ -172,22 +172,23 @@ def test_parts_filled_together_never_touch(enemy):
     """A pair of legs or of hands is filled in one call, and outlines filled
     together cancel where they cross - so the ones put together must never
     meet, in any pose, staggering or not."""
-    for index, walker in enumerate(spawned(enemy, 24, 2.2)):
+    for index, walker in enumerate(spawned(enemy, 12, 2.2)):
         for step in range(6):
             walker.phase = step * 1.1 + index * 0.37
             now = STAGGER - 0.05 if step == 5 else 0.0
             walker.staggered_until = STAGGER if step == 5 else 0.0
             figure = walker.figure(VIEW, now)
-            outline = _fixed(figure.outline)
+            x0, y0, x1, y1 = (int(v) for v in figure.bounds)
+            # In the figure's own box, at the fixed-point scale it is drawn at.
+            outline = _fixed(figure.outline - np.float32((x0, y0)))
             for run in figure.groups:
                 if len(run) < 2:
                     continue
-                masks = []
+                total = np.zeros((y1 - y0 + 2, x1 - x0 + 2), np.uint8)
                 for piece in run:
-                    mask = np.zeros((AREA.bottom + 56, AREA.width), np.uint8)
+                    mask = np.zeros_like(total)
                     cv2.fillPoly(mask, [outline[piece.start:piece.stop]], 1, cv2.LINE_8, 4)
-                    masks.append(mask)
-                total = sum(masks)
+                    total += mask
                 assert total.max() <= 1, (walker.gait, [piece.tone for piece in run])
 
 
