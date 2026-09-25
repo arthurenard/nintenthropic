@@ -111,9 +111,22 @@ export class Rng {
     return new Rng(hashSeed(this.a, this.b, this.c, this.d, label));
   }
 
-  /** Fill ``out`` with uniform white noise in [-1, 1). */
+  /**
+   * Fill ``out`` with uniform white noise in [-1, 1). Noise is the single
+   * most generated thing in the library, so it comes from a plain xorshift32
+   * held in a local, seeded from this stream: several times faster than
+   * sfc32 through the object's fields, and more than random enough for a
+   * sound (its period is four billion samples).
+   */
   fill(out: Float32Array): Float32Array {
-    for (let i = 0; i < out.length; i++) out[i] = 2 * this.next() - 1;
+    let x = ((this.next() * 4294967296) | 0) || 0x9e3779b9;
+    const n = out.length;
+    for (let i = 0; i < n; i++) {
+      x ^= x << 13;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      out[i] = x * 4.656612873077393e-10;
+    }
     return out;
   }
 }

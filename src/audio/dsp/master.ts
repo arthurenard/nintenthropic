@@ -51,18 +51,14 @@ export function momentaryMaxDb(channels: Channels, sr: number, window = 0.05): n
   const n = channels[0]!.length;
   const size = Math.min(n, samples(sr, window));
   const hop = samples(sr, 0.005);
+  // Power per sample (averaged over channels), then a running window sum.
+  const power = new Float64Array(n);
+  for (const ch of channels) for (let i = 0; i < n; i++) power[i]! += (ch[i]! * ch[i]!) / channels.length;
   let acc = 0;
-  let best = 0;
-  // A running sum of squares over the window.
-  const sq = (i: number): number => {
-    let s = 0;
-    for (const ch of channels) s += ch[i]! * ch[i]!;
-    return s / channels.length;
-  };
-  for (let i = 0; i < size; i++) acc += sq(i);
-  best = acc;
+  for (let i = 0; i < size; i++) acc += power[i]!;
+  let best = acc;
   for (let start = 1; start + size <= n; start++) {
-    acc += sq(start + size - 1) - sq(start - 1);
+    acc += power[start + size - 1]! - power[start - 1]!;
     if (start % hop === 0 && acc > best) best = acc;
   }
   const p = Math.max(best, 0) / size;
@@ -89,10 +85,10 @@ export interface FinishOptions {
  * the loudness and limit. Returns new arrays of the (possibly shorter) length.
  */
 export function finish(channels: Channels, sr: number, o: FinishOptions = {}): Channels {
-  let chans = channels.map((c) => Float32Array.from(c));
+  // Recipes hand over buffers they no longer use, so this works in place.
+  let chans = channels;
   const n0 = chans[0]!.length;
   for (const ch of chans) {
-    if (!Number.isFinite(ch[0]!)) throw new Error("non-finite sample");
     // A loop's DC is removed as its mean (a filter with memory would put a
     // step at the seam); a one-shot's with a gentle one-pole high-pass.
     if (o.loop) {
@@ -128,7 +124,7 @@ export function finish(channels: Channels, sr: number, o: FinishOptions = {}): C
       }
     }
     const keep = Math.min(n0, last + samples(sr, 0.06));
-    chans = chans.map((c) => c.slice(0, keep));
+    if (keep < n0) chans = chans.map((c) => c.slice(0, keep));
     const n = keep;
     const fi = Math.min(n, samples(sr, 0.0005));
     const fo = Math.min(Math.floor(n / 4), samples(sr, 0.06));
@@ -137,12 +133,30 @@ export function finish(channels: Channels, sr: number, o: FinishOptions = {}): C
       for (let i = 0; i < fo; i++) ch[n - 1 - i]! *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fo);
     }
   }
-  // Normalise, limit, and once more: the limiter shaves a little off the loudest.
+  // Normalise and limit; if the limiter bent anything, the loudest moment
+  // came down a little, so measure and do it once more.
   const wanted = TARGET_LOUDNESS_DB + (o.trim ?? 0);
+  const knee = LIMITER_KNEE;
+  const span = LIMITER_CEILING - LIMITER_KNEE;
   for (let pass = 0; pass < 2; pass++) {
     const current = momentaryMaxDb(chans, sr);
+    if (Number.isNaN(current)) throw new Error("non-finite samples");
     const gain = Number.isFinite(current) ? Math.pow(10, (wanted - current) / 20) : 1;
-    for (const ch of chans) for (let i = 0; i < ch.length; i++) ch[i] = softLimitSample(ch[i]! * gain);
+    let bent = false;
+    for (const ch of chans) {
+      for (let i = 0; i < ch.length; i++) {
+        const x = ch[i]! * gain;
+        const m = x < 0 ? -x : x;
+        if (m <= knee) {
+          ch[i] = x;
+        } else {
+          const y = knee + span * Math.tanh((m - knee) / span);
+          ch[i] = x < 0 ? -y : y;
+          bent = true;
+        }
+      }
+    }
+    if (!bent) break;
   }
   return chans;
 }

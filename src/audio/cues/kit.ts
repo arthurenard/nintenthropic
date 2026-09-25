@@ -62,14 +62,30 @@ export function nWave(t: Take, width: number): Mono {
 export function bubble(t: Take, freq: number, tau: number, rise = 1.6): Mono {
   const n = t.n(tau * 7);
   const buf = new Float32Array(n);
-  let ph = 0;
   const k = Math.exp(-1 / (tau * t.sr));
+  const attack = 0.0004 * t.sr;
+  // A rotating phasor, its step re-aimed every 16 samples as the pitch
+  // rises: bubbles come by the hundred in a leak, and a sine and a power
+  // per sample made them the leak's largest cost.
+  let re = 1;
+  let im = 0;
+  let cw = 1;
+  let sw = 0;
   let e = 1;
   for (let i = 0; i < n; i++) {
-    const u = i / n;
-    const f = freq * (1 + (rise - 1) * Math.pow(u, 0.6));
-    buf[i] = Math.sin(ph) * e * Math.min(1, i / (0.0004 * t.sr));
-    ph += (2 * Math.PI * f) / t.sr;
+    if ((i & 15) === 0) {
+      const f = freq * (1 + (rise - 1) * Math.pow(i / n, 0.6));
+      const w = (2 * Math.PI * f) / t.sr;
+      cw = Math.cos(w);
+      sw = Math.sin(w);
+      const norm = 1 / Math.sqrt(re * re + im * im);
+      re *= norm;
+      im *= norm;
+    }
+    buf[i] = im * e * (i < attack ? i / attack : 1);
+    const nr = re * cw - im * sw;
+    im = re * sw + im * cw;
+    re = nr;
     e *= k;
   }
   return buf;

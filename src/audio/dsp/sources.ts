@@ -14,10 +14,10 @@ export function white(n: number, rng: Rng): Mono {
 
 /** Pink noise (−3 dB/octave), Paul Kellet's economy filter, unit-ish peak. */
 export function pink(n: number, rng: Rng): Mono {
-  const out = new Float32Array(n);
+  const out = rng.fill(new Float32Array(n));
   let b0 = 0, b1 = 0, b2 = 0;
   for (let i = 0; i < n; i++) {
-    const w = 2 * rng.next() - 1;
+    const w = out[i]!;
     b0 = 0.99765 * b0 + w * 0.099046;
     b1 = 0.963 * b1 + w * 0.2965164;
     b2 = 0.57 * b2 + w * 1.0526913;
@@ -28,10 +28,10 @@ export function pink(n: number, rng: Rng): Mono {
 
 /** Brown noise (−6 dB/octave): leaky integrated white noise. */
 export function brown(n: number, rng: Rng): Mono {
-  const out = new Float32Array(n);
+  const out = rng.fill(new Float32Array(n));
   let y = 0;
   for (let i = 0; i < n; i++) {
-    y = 0.997 * y + 0.06 * (2 * rng.next() - 1);
+    y = 0.997 * y + 0.06 * out[i]!;
     out[i] = y;
   }
   return out;

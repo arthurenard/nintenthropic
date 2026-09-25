@@ -29,6 +29,36 @@ import {
   ricochet,
   rifleShot,
 } from "./guns";
+import {
+  bodyFall,
+  bottleBreak,
+  glassBreak,
+  hitDirt,
+  hitFlesh,
+  hitGlass,
+  hitHeadshot,
+  hitMetal,
+  hitWater,
+  hitWood,
+  playerHurt,
+  shutterBang,
+  woodSplinter,
+} from "./impacts";
+import {
+  bellToll,
+  churchDoorCreak,
+  doorCreak,
+  dynamiteExplode,
+  dynamiteFuse,
+  dynamiteThrow,
+  feathers,
+  posterFlutter,
+  spurs,
+  tumbleweedRoll,
+  vaneSpin,
+  waterLeak,
+  wind,
+} from "./world";
 
 export type BusName = "sfx" | "world" | "ui";
 /** Sounds are synthesised a pack at a time: "core" at start, a game's pack when it loads. */
@@ -101,6 +131,118 @@ export const CUES: Record<string, CueSpec> = {
   ricochet: {
     recipe: ricochet, pack: "western", bus: "sfx", level: -9, reverb: 0.25, echo: 0.5,
     priority: 1, maxInstances: 3, vary: 0.08, expect: [0.3, 1.1],
+  },
+
+  // --- hits: the player's feedback, never delayed by distance ----------------
+  hit_flesh: {
+    recipe: hitFlesh, pack: "western", bus: "sfx", level: -6, reverb: 0.12, echo: 0.2,
+    priority: 3, maxInstances: 4, vary: 0.06, minGap: 0.03, expect: [0.15, 0.5],
+  },
+  hit_headshot: {
+    recipe: hitHeadshot, pack: "western", bus: "sfx", level: -4, reverb: 0.15, echo: 0.3,
+    priority: 3, maxInstances: 3, vary: 0.04, minGap: 0.03, expect: [0.2, 0.6],
+  },
+  hit_wood: {
+    recipe: hitWood, pack: "western", bus: "sfx", level: -7, reverb: 0.15, echo: 0.3,
+    priority: 2, maxInstances: 4, vary: 0.07, minGap: 0.025, expect: [0.15, 0.6],
+  },
+  hit_dirt: {
+    recipe: hitDirt, pack: "western", bus: "sfx", level: -9, reverb: 0.12, echo: 0.2,
+    priority: 1, maxInstances: 4, vary: 0.08, minGap: 0.025, expect: [0.2, 0.7],
+  },
+  hit_metal: {
+    recipe: hitMetal, pack: "western", bus: "sfx", level: -8, reverb: 0.2, echo: 0.4,
+    priority: 2, maxInstances: 3, vary: 0.05, minGap: 0.03, expect: [0.4, 1.3],
+  },
+  hit_glass: {
+    recipe: hitGlass, pack: "western", bus: "sfx", level: -8, reverb: 0.15, echo: 0.3,
+    priority: 2, maxInstances: 3, vary: 0.05, minGap: 0.03, expect: [0.2, 0.8],
+  },
+  hit_water: {
+    recipe: hitWater, pack: "western", bus: "sfx", level: -9, reverb: 0.15, echo: 0.2,
+    priority: 1, maxInstances: 3, vary: 0.07, minGap: 0.03, expect: [0.3, 1.0],
+  },
+  player_hurt: {
+    recipe: playerHurt, pack: "western", bus: "sfx", level: -3, reverb: 0.05,
+    priority: 3, maxInstances: 2, vary: 0.04, minGap: 0.05, expect: [0.4, 1.0],
+  },
+  body_fall: {
+    recipe: bodyFall, pack: "western", bus: "sfx", level: -10, reverb: 0.2, echo: 0.3,
+    travel: true, priority: 1, maxInstances: 4, vary: 0.05, takes: 4, expect: [0.4, 1.2],
+  },
+
+  // --- breakage ----------------------------------------------------------------
+  glass_break: {
+    recipe: glassBreak, pack: "western", bus: "sfx", level: -7, reverb: 0.2, echo: 0.4,
+    priority: 2, maxInstances: 3, vary: 0.05, expect: [0.8, 1.8],
+  },
+  bottle_break: {
+    recipe: bottleBreak, pack: "western", bus: "sfx", level: -7, reverb: 0.2, echo: 0.3,
+    priority: 2, maxInstances: 4, vary: 0.06, minGap: 0.02, expect: [0.3, 1.0],
+  },
+  wood_splinter: {
+    recipe: woodSplinter, pack: "western", bus: "sfx", level: -8, reverb: 0.2, echo: 0.4,
+    priority: 2, maxInstances: 3, vary: 0.06, expect: [0.3, 0.9],
+  },
+  shutter_bang: {
+    recipe: shutterBang, pack: "western", bus: "world", level: -9, reverb: 0.3, echo: 0.8,
+    travel: true, priority: 1, maxInstances: 2, vary: 0.05, expect: [0.3, 1.1],
+  },
+
+  // --- dynamite ------------------------------------------------------------------
+  dynamite_fuse: {
+    recipe: dynamiteFuse, pack: "western", bus: "sfx", level: -14, loop: true, reverb: 0.05,
+    priority: 2, fadeIn: 0.05, fadeOut: 0.08, vary: 0.04, expect: [1.5, 2.5],
+  },
+  dynamite_throw: {
+    recipe: dynamiteThrow, pack: "western", bus: "sfx", level: -12, reverb: 0.1,
+    priority: 2, vary: 0.06, expect: [0.4, 1.0],
+  },
+  dynamite_explode: {
+    recipe: dynamiteExplode, pack: "western", bus: "sfx", level: -2, reverb: 0.3, echo: 1,
+    travel: true, priority: 3, maxInstances: 3, vary: 0.05, expect: [1.5, 3.6],
+  },
+
+  // --- the town ------------------------------------------------------------------
+  wind: {
+    recipe: wind, pack: "western", bus: "world", level: -20, loop: true,
+    priority: 0, fadeIn: 2.5, fadeOut: 2.0, vary: 0.02, expect: [6, 8],
+  },
+  bell_toll: {
+    recipe: bellToll, pack: "western", bus: "world", level: -8, reverb: 0.35, echo: 0.8,
+    travel: true, priority: 1, maxInstances: 3, vary: 0.005, expect: [4, 7],
+  },
+  church_door_creak: {
+    recipe: churchDoorCreak, pack: "western", bus: "world", level: -11, reverb: 0.3, echo: 0.3,
+    travel: true, priority: 1, maxInstances: 1, vary: 0.03, expect: [1.5, 3.2],
+  },
+  door_creak: {
+    recipe: doorCreak, pack: "western", bus: "world", level: -13, reverb: 0.25, echo: 0.2,
+    travel: true, priority: 0, maxInstances: 2, vary: 0.06, expect: [0.6, 1.8],
+  },
+  vane_spin: {
+    recipe: vaneSpin, pack: "western", bus: "world", level: -12, reverb: 0.3, echo: 0.2,
+    travel: true, priority: 1, maxInstances: 1, vary: 0.03, expect: [2.5, 4.5],
+  },
+  water_leak: {
+    recipe: waterLeak, pack: "western", bus: "world", level: -17, loop: true, reverb: 0.15,
+    priority: 0, fadeIn: 0.4, fadeOut: 1.0, vary: 0.03, expect: [2.5, 3.6],
+  },
+  tumbleweed_roll: {
+    recipe: tumbleweedRoll, pack: "western", bus: "world", level: -17, loop: true, reverb: 0.1,
+    priority: 0, fadeIn: 0.6, fadeOut: 1.2, vary: 0.05, expect: [2, 4.5],
+  },
+  spurs: {
+    recipe: spurs, pack: "western", bus: "world", level: -15, reverb: 0.2,
+    travel: true, priority: 0, maxInstances: 2, vary: 0.04, expect: [1.2, 3.0],
+  },
+  poster_flutter: {
+    recipe: posterFlutter, pack: "western", bus: "world", level: -12, reverb: 0.2,
+    priority: 1, maxInstances: 1, vary: 0.05, expect: [0.9, 2.0],
+  },
+  feathers: {
+    recipe: feathers, pack: "western", bus: "world", level: -14, reverb: 0.15,
+    priority: 1, maxInstances: 2, vary: 0.08, expect: [0.5, 1.2],
   },
 };
 
