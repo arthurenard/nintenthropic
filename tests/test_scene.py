@@ -19,19 +19,27 @@ def camera():
 
 # --- the round clock and the score card ------------------------------------
 
-def test_the_timer_renders_in_both_modes(canvas):
+def test_the_clock_renders_in_both_modes(canvas):
     for remaining in (75.0, 8.0, None):
         canvas[:] = 0
-        scene.draw_timer(canvas, remaining)
+        scene.draw_clock(canvas, remaining, 1.0, 24)
         assert canvas.any()
 
 
-def test_the_timer_turns_red_when_time_is_short(canvas):
-    scene.draw_timer(canvas, 30.0)
-    calm = canvas.copy()
+def test_the_clock_turns_red_when_time_is_short(canvas):
+    pill = scene.draw_clock(canvas, 30.0, 1.0, 24)
+    calm = canvas[pill.y:pill.bottom, pill.x:pill.right]
+    assert not np.any(np.all(calm == scene.DANGER, axis=-1))
     canvas[:] = 0
-    scene.draw_timer(canvas, 5.0)
-    assert not np.array_equal(calm, canvas)
+    pill = scene.draw_clock(canvas, 5.0, 1.0, 24)
+    urgent = canvas[pill.y:pill.bottom, pill.x:pill.right]
+    assert np.any(np.all(urgent == scene.DANGER, axis=-1))
+
+
+def test_the_clock_holds_its_width_as_the_seconds_change():
+    widths = {scene.clock_pill(1280, seconds, 1.0).width for seconds in
+              (59.0, 48.0, 11.0, 10.0, 1.0)}
+    assert len(widths) == 1
 
 
 def test_the_results_card_shows_the_round(canvas):
@@ -191,54 +199,107 @@ def test_one_working_camera_goes_unannounced_and_two_are_accounted_for():
     assert scene.camera_note([scene.FUSED]) is None
     assert scene.camera_note([scene.NO_HAND]) is None, "its own preview says so"
     assert scene.camera_note([]) is None
-    text, color = scene.camera_note([scene.FUSED, scene.FUSED])
-    assert text == "2 cameras fused" and color == scene.ARMED
+    text, _ = scene.camera_note([scene.FUSED, scene.FUSED])
+    assert text == "Both cameras see your hand"
     text, _ = scene.camera_note([scene.FUSED, scene.NO_HAND])
-    assert "cam 2 no hand" in text
+    assert text == "Camera 2 can\u2019t see your hand"
+    text, color = scene.camera_note([scene.IGNORED, scene.FUSED])
+    assert text == "Camera 1 isn\u2019t in use" and color == scene.WARNING
+    # And never the engineering words the debug line uses.
+    for states in ([scene.FUSED] * 3, [scene.NO_HAND, scene.IGNORED]):
+        assert "fused" not in scene.camera_note(states)[0]
 
 
-def test_the_hud_has_no_ready_line_and_no_camera_line(canvas, monkeypatch):
+def said_by(monkeypatch):
+    """Everything :func:`scene.write` is asked to set, from here on."""
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, *args, **kwargs: (
+        said.append(text), real(canvas, text, *args, **kwargs))[1])
+    return said
+
+
+def test_the_score_panel_says_the_score_and_the_tally_and_nothing_else(canvas,
+                                                                       monkeypatch):
     """The crosshair turns green when the gun is cocked; a READY in the corner
-    only competed with it."""
-    from handy.aiming import Aim
+    only competed with it. No label either: the big number is the score."""
     from handy.game import Rect, Round, RoundOptions
 
-    said = []
-    monkeypatch.setattr(scene, "draw_text",
-                        lambda canvas, text, *args, **kwargs: said.append(text))
+    said = said_by(monkeypatch)
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
-    for aim in (Aim(position=(0.5, 0.5), armed=True), Aim()):
-        scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
-    assert said == ["SCORE", "SCORE"]
+    round_.score, round_.shots, round_.hits = 1240, 14, 8
+    scene.draw_score_panel(canvas, round_, (), (400, 16), 600, 1.0)
+    assert said == ["1,240", "8 of 14 hits \u00b7 57%"]
 
 
-def test_a_lost_hand_is_said_on_the_cameras_own_preview(canvas, camera, monkeypatch):
+def test_the_score_panel_lays_out_a_maps_readouts_in_one_panel(canvas, monkeypatch):
+    from handy.game import Readout, Rect, Round, RoundOptions
+
+    said = said_by(monkeypatch)
+    round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
+    readouts = (Readout("Health", "4", meter=0.6), Readout("Wave", "2"),
+                Readout("Wind", "0.4 m/s", meter=-0.5, signed=True, tone="warning"))
+    plain, _ = scene.score_panel(round_, (), (400, 16), 600)
+    panel = scene.draw_score_panel(canvas, round_, readouts, (400, 16), 600, 1.0)
+    assert said[2:] == ["Health", "4", "Wave", "2", "Wind", "0.4 m/s"]
+    assert panel.x == plain.x and panel.y == plain.y and panel.bottom > plain.bottom
+    assert np.any(np.all(canvas[panel.y:panel.bottom, panel.x:panel.right]
+                         == scene.WARNING, axis=-1)), "the tone is the value's colour"
+
+
+@pytest.mark.parametrize("room", [220, 300, 900])
+def test_readouts_wrap_rather_than_outgrow_the_room_they_are_given(room):
+    from handy.game import Readout, Rect, Round, RoundOptions
+
+    round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
+    readouts = tuple(Readout(label, "888") for label in
+                     ("Hostiles", "Down", "Stage", "Townsfolk", "Bottles"))
+    panel, rows = scene.score_panel(round_, readouts, (10, 10), room)
+    assert panel.width <= room
+    assert sum(len(row) for row in rows) == len(readouts)
+    assert len(rows) == 1 or room < 900
+
+
+def test_a_lost_hand_is_said_on_the_cameras_own_preview(canvas, monkeypatch):
     from handy.game import Rect
 
-    said = []
-    real = scene.draw_text
-    monkeypatch.setattr(scene, "draw_text", lambda canvas, text, *args, **kwargs: (
-        said.append(text), real(canvas, text, *args, **kwargs)))
+    camera = np.full((720, 1280, 3), 230, np.uint8)  # a bright room
+    said = said_by(monkeypatch)
     rect = Rect(10, 10, 320, 180)
     scene.draw_camera_inset(canvas, camera, Frame(), rect, "", scene.NO_HAND)
-    assert said == ["NO HAND"]
-    tag = canvas[rect.bottom - 30:rect.bottom - 6, rect.x + 8:rect.x + 100]
-    assert tag.min() < 40, "on a dark tag, so it reads over any picture"
+    assert said == ["Show your hand"]
+    foot = canvas[rect.bottom - 12:rect.bottom - 4, rect.x + 20:rect.right - 20]
+    assert foot.min() < 120, "on a dark wash, so it reads over any picture"
+    edge = canvas[rect.y + rect.height // 2, rect.x:rect.x + 3]
+    assert np.any(np.all(edge == scene.DANGER, axis=-1)), "and its edge turns red"
+
+
+def test_the_camera_picture_is_cropped_to_its_frame_never_squashed(canvas):
+    """A 4:3 camera in a 16:9 picture fills it from the middle."""
+    from handy.game import Rect
+
+    camera = np.zeros((480, 640, 3), np.uint8)
+    camera[:, 320:] = 255  # left half black, right half white
+    rect = Rect(40, 40, 320, 180)
+    scene.draw_camera_inset(canvas, camera, Frame(), rect)
+    row = canvas[rect.y + rect.height // 2, rect.x + 4:rect.right - 4, 0]
+    edge = int(np.argmax(row > 128)) + rect.x + 4
+    assert abs(edge - (rect.x + rect.width // 2)) <= 2
 
 
 def test_debug_shows_what_the_second_camera_measured(canvas):
     from handy.aiming import Aim
     from handy.game import Rect, Round, RoundOptions
 
-    round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
+    del Rect, Round, RoundOptions
     states = [scene.FUSED, scene.FUSED]
     single = Aim(position=(0.5, 0.5), cameras=1)
     paired = Aim(position=(0.5, 0.5), cameras=2, spread=0.02)
 
-    scene.draw_hud(canvas, round_, single, (400, 16), 30.0, True, states)
+    scene.draw_debug_line(canvas, single, 30.0, states)
     alone = canvas.copy()
     canvas[:] = 0
-    scene.draw_hud(canvas, round_, paired, (400, 16), 30.0, True, states)
+    scene.draw_debug_line(canvas, paired, 30.0, states)
 
     assert not np.array_equal(alone, canvas), "the spread only appears with two"
 
@@ -270,10 +331,11 @@ def test_every_screen_draws_at_any_scale(canvas, camera):
 
     for scale in (0.7, 1.0, 1.6, 2.4):
         canvas[:] = 0
-        scene.draw_hud(canvas, round_, Aim(), (400, 16), 30.0, True,
-                       [scene.FUSED], scale)
-        scene.draw_timer(canvas, 42.0, scale)
-        scene.draw_footer(canvas, "some keys", scale)
+        scene.draw_score_panel(canvas, round_, (), (400, 16), 400, scale)
+        scene.draw_debug_line(canvas, Aim(), 30.0, [scene.FUSED], scale)
+        scene.draw_clock(canvas, 42.0, scale, 16)
+        scene.draw_hints(canvas, [("", "some words"), ("P", "Pause")], scale, 0.5, True)
+        scene.draw_pause_sheet(canvas, "High Noon", 1, scale, 0.5)
         scene.draw_crosshair(canvas, 640, 360, True, 0.05, scale)
         scene.draw_camera_insets(canvas, [camera], [Frame()],
                                  Rect(10, 10, 320, 180), (scene.FUSED,), None, scale)
@@ -403,13 +465,29 @@ def test_thumbnails_are_built_once_per_size():
     assert a[2, 150].mean() > a[50, 150].mean() > a[-1, 150].mean()
 
 
-def test_a_highlighted_button_stays_a_neutral_button(canvas):
+def test_the_button_under_the_crosshair_is_ringed_never_coloured(canvas):
+    """No doubt which one a shot would press - and green is kept for the gun."""
     from handy.game import Rect
 
-    button = scene.Button(Rect(100, 100, 200, 60), "MAPS")
-    scene.draw_button(canvas, button, highlighted=True)
-    b, g, r = canvas[130, 120].astype(int)
-    assert r < 140 and abs(r - b) < 30, "lit a little, never red"
+    for kind in (scene.PRIMARY, scene.OVER_WORLD, scene.SECONDARY, scene.DESTRUCTIVE):
+        canvas[:] = 60
+        button = scene.Button(Rect(100, 100, 240, 64), "Restart", "restart", kind)
+        scene.draw_button(canvas, button, highlighted=False)
+        assert canvas[97, 220].max() < 100, "no ring at rest"
+        scene.draw_button(canvas, button, highlighted=True)
+        assert canvas[97, 220].min() > 200, "a white ring just off it"
+        assert not np.any(np.all(canvas == scene.TINT, axis=-1))
+
+
+def test_a_primary_button_is_a_white_pill_with_a_black_label(canvas):
+    from handy.game import Rect
+
+    button = scene.Button(Rect(100, 100, 240, 64), "Play Again", "play", scene.PRIMARY)
+    scene.draw_button(canvas, button)
+    assert (canvas[104, 220] == 255).all()
+    inside = canvas[110:154, 120:320]
+    assert inside.min() < 20, "the label is black"
+    assert (canvas[100, 100] != 255).any(), "a pill: its corners are round"
 
 
 def test_results_headline_names_the_score(canvas, monkeypatch):
@@ -453,30 +531,45 @@ def test_the_camera_inset_is_framed_in_its_state_colour(canvas, camera):
     from handy.game import Rect
 
     rect = Rect(20, 20, 200, 120)
-    for state, color in ((scene.FUSED, scene.ARMED), (scene.IGNORED, scene.DANGER)):
+    for state, color in ((scene.NO_HAND, scene.DANGER), (scene.IGNORED, scene.WARNING)):
         canvas[:] = 0
         scene.draw_camera_inset(canvas, camera, Frame(), rect, "", state)
         frame = canvas[rect.y - 2:rect.bottom + 2, rect.x - 2:rect.right + 2]
         assert np.any(np.all(frame == color, axis=-1))
+    # A camera that is doing its job is framed by a hairline and nothing else:
+    # no colour of its own, and certainly not the gun's green.
+    canvas[:] = 0
+    scene.draw_camera_inset(canvas, camera, Frame(), rect, "", scene.FUSED)
+    frame = canvas[rect.y - 2:rect.bottom + 2, rect.x - 2:rect.right + 2]
+    blue, green, red = (frame[:, :, channel].astype(int) for channel in range(3))
+    assert np.abs(green - red).max() <= 12 and np.abs(green - blue).max() <= 12
 
 
-# --- the footer always fits --------------------------------------------------
+# --- the hints always fit ------------------------------------------------------
 
-def test_the_footer_never_runs_off_the_screen():
-    from handy.app import CONTROL_KEYS
-
-    long_hint = "point to aim, drop your thumb to fire, close an eye to scope in"
-    for width, scale in ((1280, 1.0), (1512, 1.31), (960, 0.9)):
-        line = scene.fit_hints([[long_hint], ["head shots kill outright"],
-                                list(CONTROL_KEYS)], width, scale)
-        assert scene.text_width(line, scene.FOOTER_SCALE * scale) <= width - 48 * scale
-        assert "q quit" in line, "the most important key survives"
+def test_the_hints_never_run_off_the_screen():
+    items = [("", "Point, fold your thumb to fire. Close one eye to scope in."),
+             ("", "Head shots drop them"), ("P", "Pause"), ("S", "Screenshot")]
+    for width, scale in ((1280, 1.0), (1512, 1.31), (640, 0.9)):
+        fitted = scene.fit_hints(items, width, scale)
+        assert scene.hints_width(fitted, scale) <= width
+        assert fitted == items[:len(fitted)], "the last ones go first"
 
 
-def test_the_footer_does_not_repeat_the_scheme_in_the_map():
-    line = scene.fit_hints([["point to aim, close an eye to scope in"],
-                            ["close an eye to scope in"], ["q quit"]], 2000, 1.0)
-    assert line.count("close an eye") == 1
+def test_the_hints_do_not_repeat_the_scheme_in_the_map():
+    fitted = scene.fit_hints([("", "Point, fold your thumb to fire. Close one eye to "
+                                   "scope in."), ("", "close one eye to scope in"),
+                              ("P", "Pause")], 2000, 1.0)
+    assert [text for _, text in fitted].count("close one eye to scope in") == 0
+    assert len(fitted) == 2
+
+
+def test_fading_hints_touch_only_their_own_patch():
+    canvas = busy_frame(1280, 720)
+    before = canvas.copy()
+    scene.draw_hints(canvas, [("", "Point at a target"), ("P", "Pause")], 1.0, 0.5, True)
+    changed = np.argwhere((canvas != before).any(axis=2))
+    assert changed[:, 0].min() > 720 - 80 and changed[:, 0].max() < 720 - 16
 
 
 def test_the_chrome_panel_darkens_inside_and_leaves_the_rest_alone(canvas):
@@ -512,76 +605,23 @@ def test_the_chrome_panel_builds_its_mask_once_per_size():
     assert (info.misses, info.hits) == (1, 4)
 
 
-# --- the HUD's translucent panels are drawn every frame ----------------------
-
-def reference_timer(canvas, remaining, scale):
-    """The clock as it was drawn when it blended a copy of the whole frame."""
-    import cv2
-
-    from handy.game import Rect
-
-    width = canvas.shape[1]
-    urgent = remaining is not None and remaining <= 10.0
-    if remaining is None:
-        text, color = "PRACTICE", scene.MUTED
-        size = 0.7 * scale
-        text_w, text_h = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size, 2)[0]
-    else:
-        text = f"{int(remaining) // 60}:{int(remaining) % 60:02d}"
-        color = scene.DANGER if urgent else scene.INK
-        size = scene._px(40, scale)
-        text_w, text_h = scene.figures_width(text, size), int(size * 0.72)
-    pad = scene._px(22, scale)
-    pill = Rect((width - text_w) // 2 - pad, scene._px(14, scale), text_w + 2 * pad,
-                text_h + scene._px(26, scale))
-    halo = canvas.copy()
-    scene.shade_panel(halo, pill, pill.height // 2, (40, 38, 36), (24, 23, 22),
-                      scene.EDGE)
-    scene.blend(canvas, halo, 0.85)
-    tick = scene.DANGER if urgent else scene.ACCENT
-    mid = pill.y + pill.height // 2
-    for side in (-1, 1):
-        x0 = pill.x + (pill.width if side > 0 else 0) + side * scene._px(10, scale)
-        cv2.line(canvas, (x0, mid), (x0 + side * scene._px(18, scale), mid), tick,
-                 scene._px(1, scale), cv2.LINE_AA)
-    baseline = pill.y + pill.height - scene._px(13, scale)
-    if remaining is None:
-        scene.draw_text(canvas, text, ((width - text_w) // 2, baseline), color,
-                        scale=size, thickness=2, outline=False)
-    else:
-        scene.draw_figures(canvas, text, ((width - text_w) // 2, baseline), color,
-                           size, 0.05)
-
+# --- the HUD's glass is drawn every frame ----------------------------------------
 
 def busy_frame(width, height, seed=0):
     return np.random.default_rng(seed).integers(0, 256, (height, width, 3),
                                                 dtype=np.uint8)
 
 
-@pytest.mark.parametrize("remaining", [42.0, 7.0, 600.0, None])
-@pytest.mark.parametrize("size,scale", [((1512, 949), 1.318), ((1280, 720), 1.0),
-                                        ((800, 480), 0.7), ((3024, 1964), 2.4)])
-def test_the_cheap_timer_looks_like_the_old_one(remaining, size, scale):
-    """Blending a patch instead of the frame changes nothing on screen - to
-    within the odd level where OpenCV's vector and scalar blends round apart."""
-    expected, actual = busy_frame(*size), busy_frame(*size)
-    reference_timer(expected, remaining, scale)
-    scene.draw_timer(actual, remaining, scale)
-    assert np.abs(actual.astype(int) - expected.astype(int)).max() <= 1
-
-
-def test_the_timer_blends_only_the_pill_not_the_whole_frame(monkeypatch):
-    """It copied and blended all 1512x949 pixels to shade a pill a few hundred
-    wide: 1.6 ms of every frame, for a region a fiftieth of the size."""
-    blended = []
-    real = scene.blend
-    monkeypatch.setattr(scene, "blend", lambda canvas, overlay, alpha: (
-        blended.append(canvas.shape[0] * canvas.shape[1]),
-        real(canvas, overlay, alpha)))
-
+def test_the_clock_touches_only_its_own_pill():
+    """The clock used to copy and blend all 1512x949 pixels to shade a pill a
+    few hundred wide."""
     canvas = busy_frame(1512, 949)
-    scene.draw_timer(canvas, 42.0, 1.318)
-    assert blended and max(blended) < 0.05 * 1512 * 949
+    before = canvas.copy()
+    pill = scene.draw_clock(canvas, 42.0, 1.318, 32)
+    changed = np.argwhere((canvas != before).any(axis=2))
+    # To within the pixel the edge's anti-aliasing reaches.
+    assert changed[:, 0].min() >= pill.y - 1 and changed[:, 0].max() <= pill.bottom
+    assert changed[:, 1].min() >= pill.x - 1 and changed[:, 1].max() <= pill.right
 
 
 # --- the camera inset is on the hot path, every frame -----------------------
@@ -919,6 +959,19 @@ def test_figures_are_tabular_so_a_changing_number_holds_still():
     colon = slice(10 + scene._digit_cell(30, 700), 10 + scene._digit_cell(30, 700) +
                   scene._advance(":", 30, 700))
     assert np.array_equal(one[:, colon], eight[:, colon])
+
+
+@pytest.mark.parametrize("scale", [1.0, 2.0], ids=["text size", "display size"])
+def test_every_weight_is_set_at_every_size(scale):
+    """Small text is set at SF Pro Text's optical size, an instance of the
+    face per weight; an instance that did not take left every weight regular."""
+    ink = []
+    for weight in (400, 600, 700):
+        canvas = np.zeros((80, 400, 3), np.uint8)
+        scene.write(canvas, "Resume", (10, 60), scene.Style(16, weight), (255, 255, 255),
+                    scale)
+        ink.append(int(canvas.sum()))
+    assert ink[0] < ink[1] < ink[2]
 
 
 def test_text_right_and_centre_aligned_ends_where_it_is_told():

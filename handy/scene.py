@@ -54,10 +54,9 @@ EDGE = (74, 70, 66)
 INK = (236, 236, 236)
 MUTED = (150, 146, 142)
 ACCENT = (96, 168, 236)  # warm amber: the thin chrome lines of every screen
-ARMED = (120, 230, 130)
+ARMED = TINT
 IDLE = (150, 150, 150)
 MISS = (120, 120, 190)
-DANGER = (70, 70, 220)
 
 RECOIL = 0.18
 
@@ -156,12 +155,11 @@ def _face(optical: int, weight: int):
     """
     face = cv2.FontFace(_font_source())
     if optical:
-        ok, current = face.getInstance()
-        axes = dict(zip(current[::2].tolist(), current[1::2].tolist())) if ok else {}
-        if _axis("opsz") in axes:
-            axes[_axis("opsz")] = optical << 16
-            axes[_axis("wght")] = weight << 16
-            face.setInstance([value for pair in axes.items() for value in pair])
+        # Every axis SF Pro has, named in full: an instance that names only
+        # some of them is not applied. (getInstance reports its tags byte-
+        # swapped, so they cannot simply be read back and edited.)
+        face.setInstance([_axis("wdth"), 100 << 16, _axis("opsz"), optical << 16,
+                          _axis("GRAD"), 400 << 16, _axis("wght"), weight << 16])
     return face
 
 
@@ -418,8 +416,15 @@ def _outline(x: float, y: float, width: float, height: float, radius: float,
     The edge runs along pixel boundaries - ``x`` to ``x + width`` - and
     ``inset`` brings it in, so a one-pixel line can sit wholly inside.
     """
-    x0, y0 = x + inset - 0.5, y + inset - 0.5
-    x1, y1 = x + width - inset - 0.5, y + height - inset - 0.5
+    shape = _outline_at_origin(width, height, radius, inset)
+    return shape + np.array([round(x * _ONE), round(y * _ONE)], np.int32)
+
+
+@lru_cache(maxsize=128)
+def _outline_at_origin(width: float, height: float, radius: float,
+                       inset: float) -> np.ndarray:
+    x0, y0 = inset - 0.5, inset - 0.5
+    x1, y1 = width - inset - 0.5, height - inset - 0.5
     r = max(0.0, min(radius - inset, (x1 - x0) / 2, (y1 - y0) / 2))
     points = []
     for cx, cy, start in ((x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0),
@@ -428,7 +433,9 @@ def _outline(x: float, y: float, width: float, height: float, radius: float,
         for k in range(steps + 1):
             angle = math.radians(start + 90 * k / steps)
             points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
-    return np.round(np.array(points) * _ONE).astype(np.int32)
+    shape = np.round(np.array(points) * _ONE).astype(np.int32)
+    shape.flags.writeable = False
+    return shape
 
 
 @lru_cache(maxsize=64)
@@ -488,26 +495,26 @@ def _frosted(region: np.ndarray, scale: float, opacity: float,
     - as the web's ``saturate(180%)`` does - tinted, and held under
     :data:`GLASS_CEILING`.
 
-    Halved twice with ``pyrDown`` and blurred with two box passes, which
-    together come close to a Gaussian: OpenCV's own Gaussian costs several
-    times as much on an image this small, all of it overhead.
+    Box-averaged down by four and blurred with two box passes, which together
+    come close to a Gaussian: OpenCV's own Gaussian costs several times as
+    much on an image this small, all of it overhead. The colour work is done
+    on the quarter-size image, where it costs next to nothing.
     """
     height, width = region.shape[:2]
-    small = region
-    for _ in range(2):
-        if small.shape[0] >= 4 and small.shape[1] >= 4:
-            small = cv2.pyrDown(small)
+    small = _reduced(region, max(1, width // 4), max(1, height // 4))
+    if small is None:
+        small = cv2.resize(region, (max(1, width // 4), max(1, height // 4)),
+                           interpolation=cv2.INTER_LINEAR)
     box = max(3, int(GLASS_BLUR * scale / 4) | 1)
     for _ in range(2):
         small = cv2.blur(small, (box, box), borderType=cv2.BORDER_REPLICATE)
-    grey = cv2.cvtColor(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
-    small = cv2.addWeighted(small, 1.8, grey, -0.8, 0.0)
-    tinted = np.empty_like(small)
-    tinted[:] = tint
-    glass = cv2.addWeighted(small, 1.0 - opacity, tinted, opacity, 0.0).astype(np.float32)
-    brightest = glass.max(axis=2, keepdims=True)
-    glass *= np.minimum(1.0, GLASS_CEILING / np.maximum(brightest, 1.0))
-    return cv2.resize(glass.astype(np.uint8), (width, height),
+    colour = small.astype(np.float32)
+    grey = colour.mean(axis=2, keepdims=True)
+    colour = grey + (colour - grey) * 1.8
+    colour = colour * (1.0 - opacity) + np.float32(tint) * opacity
+    brightest = np.maximum(colour.max(axis=2, keepdims=True), 1.0)
+    colour *= np.minimum(1.0, GLASS_CEILING / brightest)
+    return cv2.resize(np.clip(colour, 0, 255).astype(np.uint8), (width, height),
                       interpolation=cv2.INTER_LINEAR)
 
 
@@ -727,10 +734,13 @@ def glow_stroke(canvas: np.ndarray, rect: Rect, color: tuple[int, int, int],
 
 @dataclass(frozen=True)
 class Button:
-    """A clickable, and shootable, rectangle."""
+    """A clickable, and shootable, rectangle: a label, an icon, and which of
+    the button styles it is drawn in (see :func:`draw_button`)."""
 
     rect: Rect
     label: str
+    icon: str = ""
+    kind: str = "glass"
 
     def contains(self, x: float, y: float) -> bool:
         return self.rect.contains(x, y)
@@ -1037,30 +1047,24 @@ def _draw_logo_lockup(canvas: np.ndarray, scale: float = 1.0) -> None:
              cv2.LINE_AA)
 
 
-def draw_crosshair(canvas: np.ndarray, x: float, y: float, armed: bool,
-                   since_shot: float | None, scale: float = 1.0,
-                   pull: float = 0.0, fire_at: float = 0.65) -> None:
-    center = (int(x), int(y))
-    color = ARMED if armed else IDLE
-    weight = _px(2, scale)
-    thin = _px(1, scale)
+#: The crosshair at rest: white, a little quieter than a label, so the green of
+#: a cocked gun is the change the eye catches.
+IDLE_CROSSHAIR = (214, 214, 214)
+
+
+def _crosshair_strokes(canvas: np.ndarray, center: tuple[int, int], color, scale: float,
+                       grow: int = 0) -> None:
+    """The mark itself: a ring broken at the four compass points, hairline
+    ticks reaching out of the gaps, and a dot in the middle - open enough to
+    see the target through. ``grow`` fattens every stroke, for its shadow."""
+    weight = _px(2, scale) + grow
+    thin = _px(1, scale) + grow
     radius = round(20 * scale)
-
-    # How far the trigger has come, drawn as an arc filling the ring. Without it
-    # a trigger that never quite reaches its threshold is indistinguishable from
-    # one that is not reading anything at all.
-    if fire_at > 0 and pull > 0.03:
-        fraction = min(pull / fire_at, 1.0)
-        cv2.ellipse(canvas, center, (radius + weight + 2, radius + weight + 2),
-                    -90.0, 0.0, 360.0 * fraction,
-                    ARMED if fraction >= 1.0 else INK, weight, cv2.LINE_AA)
-
-    # A ring broken at the four compass points, hairline ticks reaching out of
-    # the gaps, and a dot in the middle: open enough to see the target through.
     for start in (10, 100, 190, 280):
         cv2.ellipse(canvas, center, (radius, radius), 0, start, start + 70, color,
                     weight, cv2.LINE_AA)
-    cv2.circle(canvas, center, max(1, round(2 * scale)), color, -1, cv2.LINE_AA)
+    cv2.circle(canvas, center, max(1, round(2 * scale)) + grow // 2, color, -1,
+               cv2.LINE_AA)
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         inner = (center[0] + round(dx * 9 * scale), center[1] + round(dy * 9 * scale))
         outer = (center[0] + round(dx * 30 * scale), center[1] + round(dy * 30 * scale))
@@ -1068,21 +1072,86 @@ def draw_crosshair(canvas: np.ndarray, x: float, y: float, armed: bool,
         tip = (center[0] + round(dx * 25 * scale), center[1] + round(dy * 25 * scale))
         cv2.line(canvas, tip, outer, color, weight, cv2.LINE_AA)
 
-    if since_shot is not None and since_shot < RECOIL:
+
+def draw_crosshair(canvas: np.ndarray, x: float, y: float, armed: bool,
+                   since_shot: float | None, scale: float = 1.0,
+                   pull: float = 0.0, fire_at: float = 0.65) -> None:
+    """The gun's mark: green when it is cocked, white when it is not.
+
+    Laid over a faint dark shadow of itself, so a white mark still reads
+    against a noon sky: both come from a sprite built once per colour and
+    size, composited within the mark's own patch, never the frame.
+    """
+    center = (int(x), int(y))
+    weight = _px(2, scale)
+    radius = round(20 * scale)
+    height, width = canvas.shape[:2]
+    flashing = since_shot is not None and since_shot < RECOIL
+    reach = round((56 if flashing else 32) * scale) + 4
+    x0, y0 = max(center[0] - reach, 0), max(center[1] - reach, 0)
+    x1, y1 = min(center[0] + reach + 1, width), min(center[1] + reach + 1, height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    region = canvas[y0:y1, x0:x1]
+    local = (center[0] - x0, center[1] - y0)
+
+    # How far the trigger has come, drawn as an arc filling the ring. Without it
+    # a trigger that never quite reaches its threshold is indistinguishable from
+    # one that is not reading anything at all.
+    if fire_at > 0 and pull > 0.03:
+        fraction = min(pull / fire_at, 1.0)
+        cv2.ellipse(region, local, (radius + weight + 2, radius + weight + 2),
+                    -90.0, 0.0, 360.0 * fraction,
+                    TINT if fraction >= 1.0 else LABEL, weight, cv2.LINE_AA)
+
+    colour, keep, cover = _crosshair_sprite(armed, round(scale, 4))
+    half = colour.shape[0] // 2
+    sx0, sy0 = center[0] - half, center[1] - half
+    cx0, cy0 = max(sx0, 0), max(sy0, 0)
+    cx1, cy1 = min(sx0 + colour.shape[1], width), min(sy0 + colour.shape[0], height)
+    if cx1 > cx0 and cy1 > cy0:
+        patch = canvas[cy0:cy1, cx0:cx1]
+        rows, cols = slice(cy0 - sy0, cy1 - sy0), slice(cx0 - sx0, cx1 - sx0)
+        cv2.blendLinear(patch, colour[rows, cols], keep[rows, cols], cover[rows, cols],
+                        dst=patch)
+
+    if flashing:
         # Muzzle flash: a ring kicking outwards right after the thumb drops.
         kick = since_shot / RECOIL
-        overlay = canvas.copy()
-        cv2.circle(overlay, center, round((20 + 34 * kick) * scale), ARMED, weight,
+        overlay = region.copy()
+        cv2.circle(overlay, local, round((20 + 34 * kick) * scale), TINT, weight,
                    cv2.LINE_AA)
-        blend(canvas, overlay, 1.0 - kick)
+        blend(region, overlay, 1.0 - kick)
 
 
-def inset_slots(rect: Rect, count: int) -> tuple[Rect, ...]:
-    """Split the corner between the cameras, stacked, keeping the same footprint."""
-    count = max(count, 1)
-    height = rect.height // count
-    return tuple(Rect(rect.x, rect.y + index * height, rect.width, height - 2)
-                 for index in range(count))
+@lru_cache(maxsize=8)
+def _crosshair_sprite(armed: bool, scale: float
+                      ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The mark and its shadow as a colour and two blend weights: how much of
+    the world is kept (under the shadow, less) and how much the mark covers."""
+    half = round(32 * scale) + 4
+    size = 2 * half + 1
+    centre = (half, half)
+    shadow = np.zeros((size, size), np.uint8)
+    _crosshair_strokes(shadow, centre, 255, scale, grow=_px(2, scale))
+    mark = np.zeros((size, size), np.uint8)
+    _crosshair_strokes(mark, centre, 255, scale)
+    covered = mark.astype(np.float32) / 255.0
+    shaded = shadow.astype(np.float32) / 255.0 * 0.32
+    keep = (1.0 - shaded) * (1.0 - covered)
+    colour = np.empty((size, size, 3), np.uint8)
+    colour[:] = TINT if armed else IDLE_CROSSHAIR
+    for array in (colour, keep, covered):
+        array.flags.writeable = False
+    return colour, keep, covered
+
+
+def inset_slots(rect: Rect, count: int, gap: int = 0) -> tuple[Rect, ...]:
+    """One picture per camera: the first in ``rect``, any others stacked
+    beneath it at the same size, ``gap`` apart - each a whole picture-in-
+    picture rather than a sliver of one."""
+    return tuple(Rect(rect.x, rect.y + index * (rect.height + gap), rect.width,
+                      rect.height) for index in range(max(count, 1)))
 
 
 def _default_draw(image: np.ndarray, frame: Frame, scale: float) -> None:
@@ -1099,17 +1168,35 @@ def shrink(image: np.ndarray, width: int, height: int) -> np.ndarray:
     finished with ``INTER_LINEAR``: the aliasing ``INTER_AREA`` exists to prevent
     is still gone, at about a twentieth of the cost.
     """
-    source_height, source_width = image.shape[:2]
     copied = False
-    while source_width >= width * 2 and source_height >= height * 2 and width and height:
-        image = cv2.pyrDown(image)
-        source_height, source_width = image.shape[:2]
-        copied = True
-    if (source_width, source_height) != (width, height):
+    while width and height:
+        reduced = _reduced(image, width, height)
+        if reduced is None:
+            break
+        image, copied = reduced, True
+    if image.shape[:2] != (height, width):
         return cv2.resize(image, (width, height), interpolation=cv2.INTER_LINEAR)
     # Callers draw the skeleton onto what comes back, so never hand them the
     # camera's own buffer.
     return image if copied else image.copy()
+
+
+def _reduced(image: np.ndarray, width: int, height: int) -> np.ndarray | None:
+    """``image`` box-averaged down by four, or by two, while it stays at least
+    ``width`` x ``height``; None when it is already within a factor of two.
+
+    ``INTER_AREA`` has a fast path for exact factors of two and four - a
+    twentieth of a millisecond for a 720p frame, a fifth of what ``pyrDown``
+    costs - so the frame loses the odd row or column that would make the
+    factor inexact, which nobody can see in a thumbnail.
+    """
+    source_height, source_width = image.shape[:2]
+    for factor in (4, 2):
+        if source_width >= width * factor and source_height >= height * factor:
+            rows, cols = source_height - source_height % factor, source_width - source_width % factor
+            return cv2.resize(image[:rows, :cols], (cols // factor, rows // factor),
+                              interpolation=cv2.INTER_AREA)
+    return None
 
 
 #: What one camera is contributing this frame.
@@ -1117,65 +1204,95 @@ FUSED = "fused"
 NO_HAND = "no hand"
 IGNORED = "ignored"
 
-STATE_COLORS = {FUSED: ARMED, NO_HAND: MUTED, IGNORED: DANGER}
+#: What the picture says when a camera is not helping aim, and in what colour
+#: its edge turns: said on the picture itself, where a player looks to see why
+#: the crosshair has gone.
+STATE_NOTES = {NO_HAND: ("Show your hand", DANGER), IGNORED: ("Not in use", WARNING)}
+
+#: The picture-in-picture's corners, in 720-tall units: a small panel's.
+PIP_RADIUS = 14
+
+
+def _covering(camera: np.ndarray, width: int, height: int
+              ) -> tuple[np.ndarray, tuple[int, int]]:
+    """The whole camera frame scaled to cover ``width`` x ``height``, and where
+    the centred crop of that size starts in it.
+
+    The picture is cropped, never squashed, to the window's shape; and the
+    skeleton is drawn on the whole frame first, since the landmarks are
+    fractions of the whole frame.
+    """
+    source_height, source_width = camera.shape[:2]
+    factor = max(width / source_width, height / source_height)
+    cover = (max(width, round(source_width * factor)),
+             max(height, round(source_height * factor)))
+    return shrink(camera, *cover), ((cover[0] - width) // 2, (cover[1] - height) // 2)
 
 
 def draw_camera_inset(canvas: np.ndarray, camera: np.ndarray, hands: Frame,
                       rect: Rect, label: str = "", state: str = FUSED,
                       draw=None, scale: float = 1.0) -> None:
-    """Draw one webcam feed, with whatever is being tracked on it, into ``rect``."""
-    inset = shrink(camera, rect.width, rect.height)
-    (draw or _default_draw)(inset, hands, 0.5 * scale)
-    # The same panel treatment as every card: a soft shadow beneath, rounded
-    # corners, a hairline edge and a 1px inner stroke in the state colour.
-    radius = _px(CORNER * 0.7, scale)
-    _panel_shadow(canvas, rect, radius, _px(12, scale))
-    cv2.copyTo(inset, _thumbnail_mask(rect.width, rect.height, radius, True),
-               canvas[rect.y:rect.bottom, rect.x:rect.right])
-    color = STATE_COLORS.get(state, MUTED)
-    stroke_rounded(canvas, Rect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2),
-                   color, radius, 1)
-    stroke_rounded(canvas, rect, EDGE, radius, 1)
-    cv2.line(canvas, (rect.x + _px(10, scale), rect.y), (rect.x + _px(46, scale), rect.y),
-             color, _px(2, scale), cv2.LINE_AA)
+    """One webcam's picture-in-picture, with the hand drawn on it, in ``rect``.
+
+    Rounded like FaceTime's, edged with a hairline and nothing else while all
+    is well; a camera that has lost the hand says so across its foot, and
+    its edge turns red.
+    """
+    frame, (ox, oy) = _covering(camera, rect.width, rect.height)
+    (draw or _default_draw)(frame, hands, rect.height / 200)
+    picture = frame[oy:oy + rect.height, ox:ox + rect.width]
+    note, tone = STATE_NOTES.get(state, ("", None))
+    if note:
+        # A dark wash up from the foot, for the words to sit on.
+        rise = max(1, rect.height * 2 // 5)
+        foot = picture[-rise:].astype(np.float32)
+        wash = _foot_wash(rise)
+        picture = picture.copy()
+        picture[-rise:] = (foot * wash).astype(np.uint8)
+    radius = min(_px(PIP_RADIUS, scale), rect.height // 2)
+    height, width = canvas.shape[:2]
+    clipped = picture[max(0, -rect.y):max(0, min(rect.height, height - rect.y)),
+                      max(0, -rect.x):max(0, min(rect.width, width - rect.x))]
+    _composite(canvas, rect, clipped, radius)
+    if tone is not None:
+        hairline(canvas, rect, radius, tone, _px(2, scale))
+        write(canvas, note, (rect.x + rect.width // 2, rect.bottom - _px(10, scale)),
+              FOOTNOTE if rect.height < _px(140, scale) else SUBHEAD, LABEL, scale,
+              align=CENTRE)
+    else:
+        hairline(canvas, rect, radius, hairline_over(tuple(int(c) for c in picture[2, 2])))
     if label:
-        draw_tag(canvas, label, (rect.x + _px(8, scale), rect.y + _px(28, scale)), color,
-                 scale)
-    if state != FUSED:
-        # Said on the picture itself: this is where a player looks to see why
-        # the crosshair has gone.
-        draw_tag(canvas, state.upper(), (rect.x + _px(8, scale), rect.bottom - _px(8, scale)),
-                 color, scale)
+        draw_tag(canvas, label, (rect.x + _px(6, scale), rect.y + _px(24, scale)), LABEL,
+                 scale, dot=False)
 
 
-TAG_SCALE = 0.42  # a tag's text, at 720 tall
+@lru_cache(maxsize=8)
+def _foot_wash(rise: int) -> np.ndarray:
+    ramp = np.linspace(1.0, 0.35, rise, dtype=np.float32) ** 1.4
+    wash = np.repeat(ramp[:, None, None], 3, axis=2)
+    wash.flags.writeable = False
+    return wash
 
 
 def tag_width(text: str, scale: float = 1.0, dot: bool = True) -> int:
-    """How wide :func:`draw_tag` makes the pill for ``text``."""
-    size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, TAG_SCALE * scale, 1)[0]
-    return _px(22 if dot else 10, scale) + size[0] + _px(9, scale)
+    """How wide :func:`draw_tag` makes the capsule for ``text``."""
+    return _px(18 if dot else 10, scale) + measure(text, FOOTNOTE, scale) + _px(10, scale)
 
 
 def draw_tag(canvas: np.ndarray, text: str, corner: tuple[int, int],
              color: tuple[int, int, int], scale: float = 1.0, dot: bool = True) -> Rect:
-    """A small dark pill - a dot in ``color``, then the text - bottom-left at
-    ``corner``. Returns the pill.
-
-    Small text laid over a picture goes on one of these rather than in a dark
-    halo: OpenCV sets the halo's heavier stroke with wider advances, so along
-    a line of thin text the two drift apart and the words read doubled.
-    """
-    size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, TAG_SCALE * scale, 1)[0]
-    height = _px(20, scale)
+    """A small glass capsule - a dot in ``color``, then the text - bottom-left
+    at ``corner``, for a few words laid over a picture. Returns the capsule."""
+    height = _px(22, scale)
     pill = Rect(corner[0], corner[1] - height, tag_width(text, scale, dot), height)
-    shade_panel(canvas, pill, height // 2, (30, 29, 28), (18, 17, 16), None)
+    draw_glass(canvas, pill, height // 2, scale)
     mid = pill.y + height // 2
     if dot:
-        cv2.circle(canvas, (pill.x + _px(11, scale), mid), _px(3, scale), color, -1,
+        cv2.circle(canvas, (pill.x + _px(10, scale), mid), _px(3, scale), color, -1,
                    cv2.LINE_AA)
-    draw_text(canvas, text, (pill.x + _px(20 if dot else 10, scale), mid + size[1] // 2),
-              color, scale=TAG_SCALE * scale, thickness=1, outline=False)
+    write(canvas, text, (pill.x + _px(18 if dot else 10, scale),
+                         baseline_for(FOOTNOTE, pill.y, height, scale)),
+          FOOTNOTE, LABEL if dot else color, scale)
     return pill
 
 
@@ -1184,9 +1301,9 @@ def draw_camera_insets(canvas: np.ndarray, images: Sequence[np.ndarray],
                        states: Sequence[str] = (), draw=None,
                        scale: float = 1.0) -> None:
     """Every camera in the corner, so you can see what each of them is doing."""
-    slots = inset_slots(rect, len(images))
+    slots = inset_slots(rect, len(images), _px(8, scale))
     for index, (slot, image) in enumerate(zip(slots, images)):
-        label = f"CAM {index + 1}" if len(images) > 1 else ""
+        label = f"Camera {index + 1}" if len(images) > 1 else ""
         state = states[index] if index < len(states) else (
             FUSED if hands[index].subjects else NO_HAND)
         draw_camera_inset(canvas, image, hands[index], slot, label, state, draw, scale)
@@ -1214,177 +1331,428 @@ def camera_summary(states: Sequence[str]) -> tuple[str, tuple[int, int, int]]:
 
 
 
+def camera_note(states: Sequence[str]) -> tuple[str, tuple] | None:
+    """What a player needs to hear about their cameras, in their words.
+
+    One camera is the ordinary case and needs none - its own picture says
+    when it has lost the hand. With several, which of them is helping aim
+    changes frame to frame, so it is said under the pictures.
+    """
+    if len(states) < 2:
+        return None
+    for index, state in enumerate(states):
+        if state == IGNORED:
+            return f"Camera {index + 1} isn’t in use", WARNING
+    for index, state in enumerate(states):
+        if state != FUSED:
+            return f"Camera {index + 1} can’t see your hand", LABEL_SECONDARY
+    if len(states) == 2:
+        return "Both cameras see your hand", LABEL
+    return f"All {len(states)} cameras see your hand", LABEL
+
+
+# --- controls ------------------------------------------------------------------
+#
+# Anything shot with the finger pistol is at least SHOOTABLE units tall at
+# 720p - a hand is less precise than a mouse. Buttons are pills; the one that
+# matters most on a screen is white with a black label, the way Apple Arcade's
+# Play button is. The control the crosshair is over takes focus: it lifts,
+# and a white ring stands just off it, so there is no doubt which one a shot
+# would press.
+
+#: The smallest thing the finger pistol is asked to hit, in 720-tall units.
+SHOOTABLE = 64
+
+PRIMARY, SECONDARY, DESTRUCTIVE, OVER_WORLD = "primary", "secondary", "destructive", "glass"
+
+#: A control under the crosshair: lifted well clear of the raised surface.
+FOCUSED = (86, 84, 84)
+
+
 def draw_button(canvas: np.ndarray, button: Button, highlighted: bool = False,
                 scale: float = 1.0) -> None:
+    """A pill (or, square, a circle) with its icon and label centred."""
     rect = button.rect
-    radius = _px(CORNER * 0.7, scale)
-    # One neutral style for every button; the highlighted one is lit a little
-    # brighter with a longer accent tab, never a different colour of button.
-    if highlighted:
-        shade_panel(canvas, rect, radius, (74, 70, 66), (44, 41, 38), (110, 104, 98))
-        tab = round(rect.width * 0.6)
+    radius = min(rect.width, rect.height) // 2
+    danger = button.kind == DESTRUCTIVE
+    if button.kind == PRIMARY:
+        draw_surface(canvas, rect, radius, LABEL, edge=False)
+        ink = (0, 0, 0)
+    elif highlighted:
+        draw_surface(canvas, rect, radius, FOCUSED, edge=False)
+        ink = DANGER if danger else LABEL
+    elif button.kind == OVER_WORLD:
+        draw_glass(canvas, rect, radius, scale)
+        ink = LABEL
     else:
-        shade_panel(canvas, rect, radius, (50, 47, 44), (32, 30, 28), EDGE)
-        tab = round(rect.width * 0.28)
-    # A short accent tab on the top edge: the one touch of colour at rest.
-    cv2.line(canvas, (rect.x + (rect.width - tab) // 2, rect.y),
-             (rect.x + (rect.width + tab) // 2, rect.y), ACCENT, _px(2, scale),
-             cv2.LINE_AA)
-    text_scale = 0.62 * scale
-    thickness = _px(2, scale)
-    size = cv2.getTextSize(button.label, cv2.FONT_HERSHEY_SIMPLEX, text_scale,
-                           thickness)[0]
-    origin = (rect.x + (rect.width - size[0]) // 2,
-              rect.y + (rect.height + size[1]) // 2)
-    draw_text(canvas, button.label, origin, INK, scale=text_scale,
-              thickness=thickness, outline=False)
+        draw_surface(canvas, rect, radius, SURFACE_RAISED)
+        ink = DANGER if danger else LABEL
+    if highlighted:
+        # Focus: a white ring standing just off the control, whatever it is,
+        # so the one a shot would press is never in doubt.
+        ring = _px(4, scale)
+        hairline(canvas, Rect(rect.x - ring, rect.y - ring, rect.width + 2 * ring,
+                              rect.height + 2 * ring), radius + ring, LABEL, _px(2, scale))
+    # A round button is its icon alone; its label is only its name.
+    label = "" if button.icon and rect.width == rect.height else button.label
+    icon = _px(22 if label else 26, scale)
+    gap = _px(8, scale)
+    label_w = measure(label, HEADLINE, scale) if label else 0
+    total = (icon if button.icon else 0) + (gap if button.icon and label_w else 0) + label_w
+    x = rect.x + (rect.width - total) / 2
+    mid = rect.y + rect.height / 2
+    if button.icon:
+        draw_icon(canvas, button.icon, (x + icon / 2, mid), icon, ink)
+        x += icon + (gap if label_w else 0)
+    if label_w:
+        write(canvas, label, (x, baseline_for(HEADLINE, rect.y, rect.height, scale)),
+              HEADLINE, ink, scale)
 
 
+# --- the round's chrome ----------------------------------------------------------
+#
+# In a round the world owns the centre. The chrome is three things in the
+# corners, all glass: the score top-left (the camera's picture beside it),
+# the clock top-centre, one Pause control top-right. A map's own readouts -
+# health, wave, wind, integrity - sit in the score's panel, not panels of
+# their own.
 
-def draw_hud(canvas: np.ndarray, round_: Round, aim: Aim, origin: tuple[int, int],
-             fps: float | None, debug: bool,
-             camera_states: Sequence[str] = (), scale: float = 1.0,
-             fire_at: float = 0.65, rule: bool = True) -> None:
-    """The score block beside the camera: the score, and the tally under it.
+#: The score panel, in 720-tall units: its side padding, the score's and the
+#: tally's baselines, its height with nothing under the tally, and the gap
+#: between readout columns.
+PANEL_PAD = 16
+SCORE_BASELINE = 37
+TALLY_BASELINE = 58
+PANEL_PLAIN = 72
+READOUT_GAP = 22
+#: A readout row: its label's and its value's baselines below the row's top,
+#: its height, and the extra a meter under the value takes.
+READOUT_LABEL, READOUT_VALUE, READOUT_ROW, READOUT_METER = 20, 44, 58, 10
+#: The narrowest a meter is drawn, so a short value still has a readable bar.
+METER_WIDTH = 72
+PANEL_RADIUS = 16
 
-    There is no "ready" line: the crosshair already turns green when the gun
-    is cocked, right where the player is looking, and a second indicator in
-    the corner only competed with it. Nor is the camera talked about here -
-    a lost hand is said on the camera's own preview, where the player looks
-    to see why. Under --debug a line of measurements sits low on the right.
-    """
-    x, y = origin[0] + _px(14, scale), origin[1]
-
-    def line(offset: float) -> int:
-        return y + round(offset * scale)
-
-    if rule:
-        # A slim accent bar down the left of the block, tying the lines into
-        # one readout rather than stray strings of text.
-        cv2.line(canvas, (x - _px(10, scale), line(10)), (x - _px(10, scale), line(104)),
-                 ACCENT, _px(2, scale), cv2.LINE_AA)
-    draw_text(canvas, "SCORE", (x, line(HUD_LINES["label"])), ACCENT,
-              scale=0.42 * scale, thickness=1, outline=False)
-    draw_figures(canvas, str(round_.score), (x, line(HUD_LINES["score"])), INK,
-                 _px(HUD_FIGURES, scale), 0.05)
-    draw_caption(canvas, hud_tally(round_), (x, line(HUD_LINES["tally"])), SECONDARY,
-                 HUD_TALLY * scale)
-
-    if debug:
-        # How far the thumb has folded, against the threshold it must cross.
-        detail = f"trigger {aim.travel:+.2f} of {fire_at:.2f}"
-        if aim.cameras > 1:
-            # Spread is what the cameras disagree by.
-            detail += f"   spread {aim.spread * 100:.1f}%"
-        if fps is not None:
-            detail += f"   {fps:.0f} fps"
-        summary, _ = camera_summary(camera_states)
-        # In a corner of its own, low on the right, clear of every map's
-        # readout under the score.
-        text = f"{detail}   {summary}"
-        height, width = canvas.shape[:2]
-        draw_tag(canvas, text, (width - _px(16, scale) - tag_width(text, scale, False),
-                                height - _px(64, scale)), INK, scale, dot=False)
-
-
-#: Where each line of the score block sits, in 720-tall units below the HUD's
-#: origin. The app sizes the panel under the block from these.
-HUD_LINES = {"label": 22, "score": 64, "tally": 88}
-HUD_FIGURES = 40  # the score's height, in 720-tall units
-HUD_TALLY = 0.46  # the tally line's text scale, at 720 tall
-
-#: Secondary text on a chrome panel: a step brighter than MUTED, which was
-#: picked for the flat menu panels and sinks on a translucent one.
-SECONDARY = (196, 192, 188)
+TONES = {"": LABEL, "warning": WARNING, "danger": DANGER, "good": TINT}
 
 
 def hud_tally(round_: Round) -> str:
     """The line under the score: hits out of shots, and the accuracy."""
-    return f"{round_.hits}/{round_.shots} hits   {round_.accuracy:.0%}"
+    if not round_.shots:
+        return "No shots yet"
+    return f"{round_.hits} of {round_.shots} hits · {round_.accuracy:.0%}"
 
 
-def hud_block_width(round_: Round, scale: float = 1.0) -> int:
-    """How wide the score block is right now, in pixels, margins included.
+def _readout_width(readout, scale: float) -> int:
+    width = max(measure(readout.label, FOOTNOTE, scale),
+                measure(readout.value, TITLE_3, scale))
+    if readout.meter is not None:
+        width = max(width, _px(METER_WIDTH, scale))
+    return width
 
-    Never narrower than a tally of two- and three-digit counts, so the panel
-    under it holds its width through a round rather than twitching wider with
-    every digit a count gains.
+
+def readout_rows(readouts: Sequence, room: int, scale: float = 1.0) -> list[list]:
+    """The readouts as rows of columns, as many to a row as fit in ``room``."""
+    rows: list[list] = []
+    row: list = []
+    used = 0
+    for readout in readouts:
+        width = _readout_width(readout, scale)
+        needed = width if not row else used + _px(READOUT_GAP, scale) + width
+        if row and needed > room:
+            rows.append(row)
+            row, used = [readout], width
+        else:
+            row.append(readout)
+            used = needed
+    if row:
+        rows.append(row)
+    return rows
+
+
+def _rows_width(rows: list[list], scale: float) -> int:
+    return max((sum(_readout_width(r, scale) for r in row)
+                + _px(READOUT_GAP, scale) * (len(row) - 1) for row in rows), default=0)
+
+
+def _rows_height(rows: list[list], scale: float) -> int:
+    return sum(_px(READOUT_ROW + (READOUT_METER if any(r.meter is not None for r in row)
+                                  else 0), scale) for row in rows)
+
+
+def score_panel(round_: Round, readouts: Sequence, origin: tuple[int, int],
+                room: int, scale: float = 1.0) -> tuple[Rect, list[list]]:
+    """Where the score panel goes and how its readouts are laid out in it.
+
+    As wide as what is on it - never narrower than a four-figure score and a
+    three-figure tally, so it holds its width through a round rather than
+    twitching wider with every digit - and never wider than ``room``: the
+    readouts wrap onto more rows first.
     """
-    content = max(figures_width(str(round_.score), _px(HUD_FIGURES, scale)),
-                  caption_width(hud_tally(round_), HUD_TALLY * scale),
-                  caption_width("88/888 hits   88%", HUD_TALLY * scale))
-    return _px(14, scale) + content + _px(16, scale)
+    pad = _px(PANEL_PAD, scale)
+    content = max(measure(grouped(round_.score), TITLE_1, scale),
+                  measure(hud_tally(round_), FOOTNOTE, scale),
+                  measure("8,888", TITLE_1, scale),
+                  measure("88 of 888 hits · 88%", FOOTNOTE, scale))
+    rows = readout_rows(readouts, max(1, room - 2 * pad), scale)
+    content = max(content, _rows_width(rows, scale))
+    height = _px(PANEL_PLAIN, scale) + _rows_height(rows, scale)
+    if rows:
+        height += _px(6, scale)
+    return Rect(origin[0], origin[1], min(room, content + 2 * pad), height), rows
 
 
-def camera_note(states: Sequence[str]) -> tuple[str, tuple] | None:
-    """:func:`camera_summary`, when there is something worth saying.
+def draw_score_panel(canvas: np.ndarray, round_: Round, readouts: Sequence,
+                     origin: tuple[int, int], room: int, scale: float = 1.0,
+                     now: float = 0.0) -> Rect:
+    """The score, the tally, and the map's readouts, on one glass panel."""
+    panel, rows = score_panel(round_, readouts, origin, room, scale)
+    draw_glass(canvas, panel, _px(PANEL_RADIUS, scale), scale)
+    pad = _px(PANEL_PAD, scale)
+    x = panel.x + pad
+    write(canvas, grouped(round_.score), (x, panel.y + _px(SCORE_BASELINE, scale)),
+          TITLE_1, LABEL, scale)
+    write(canvas, hud_tally(round_), (x, panel.y + _px(TALLY_BASELINE, scale)), FOOTNOTE,
+          LABEL_SECONDARY, scale)
+    top = panel.y + _px(PANEL_PLAIN, scale)
+    if rows:
+        cv2.line(canvas, (x, top - _px(2, scale)), (panel.right - pad, top - _px(2, scale)),
+                 hairline_over(GLASS), 1, cv2.LINE_AA)
+    for row in rows:
+        column = x
+        for readout in row:
+            width = _readout_width(readout, scale)
+            tone = TONES.get(readout.tone, LABEL)
+            write(canvas, readout.label, (column, top + _px(READOUT_LABEL, scale)),
+                  FOOTNOTE, LABEL_SECONDARY, scale)
+            write(canvas, readout.value, (column, top + _px(READOUT_VALUE, scale)),
+                  TITLE_3, tone, scale)
+            if readout.meter is not None:
+                _draw_meter(canvas, Rect(column, top + _px(READOUT_VALUE + 9, scale),
+                                         width, _px(4, scale)),
+                            readout.meter, readout.signed, tone)
+            column += width + _px(READOUT_GAP, scale)
+        top += _px(READOUT_ROW + (READOUT_METER if any(r.meter is not None for r in row)
+                                  else 0), scale)
+    return panel
 
-    One camera is the ordinary case and needs no words beside it - "1 camera"
-    in the corner of every frame read as debug output - and when it loses the
-    hand its own preview says so. Several cameras are always accounted for,
-    since which of them is contributing changes frame to frame.
-    """
-    if len(states) < 2:
-        return None
-    return camera_summary(states)
 
-
-
-def timer_left(width: int, remaining: float | None, scale: float = 1.0) -> int:
-    """Where the clock's chrome starts on the left, ticks included, so what
-    sits beside it can stop short."""
-    if remaining is None:
-        text_w = cv2.getTextSize("PRACTICE", cv2.FONT_HERSHEY_SIMPLEX, 0.7 * scale, 2)[0][0]
+def _draw_meter(canvas: np.ndarray, rect: Rect, value: float, signed: bool,
+                color: tuple[int, int, int]) -> None:
+    """A capsule track with its fill: from the left, or - ``signed`` - out
+    from the middle either way."""
+    radius = max(1, rect.height // 2)
+    draw_surface(canvas, rect, radius, (70, 68, 68), edge=False)
+    value = min(max(value, -1.0 if signed else 0.0), 1.0)
+    if signed:
+        mid = rect.x + rect.width // 2
+        reach = round(value * rect.width / 2)
+        x0, x1 = sorted((mid, mid + reach))
+        cv2.line(canvas, (mid, rect.y - radius), (mid, rect.bottom + radius - 1),
+                 LABEL_SECONDARY, 1, cv2.LINE_AA)
     else:
-        text = f"{int(remaining) // 60}:{int(remaining) % 60:02d}"
-        text_w = figures_width(text, _px(40, scale))
-    return (width - text_w) // 2 - _px(22, scale) - _px(28, scale)
+        x0, x1 = rect.x, rect.x + round(value * rect.width)
+    if x1 - x0 >= 1:
+        draw_surface(canvas, Rect(x0, rect.y, max(x1 - x0, rect.height), rect.height),
+                     radius, color, edge=False)
 
 
-def draw_timer(canvas: np.ndarray, remaining: float | None,
-               scale: float = 1.0) -> None:
-    """The round clock, centred at the top. It turns red as it runs out."""
-    width = canvas.shape[1]
+def draw_debug_line(canvas: np.ndarray, aim: Aim, fps: float | None,
+                    camera_states: Sequence[str], scale: float = 1.0,
+                    fire_at: float = 0.65) -> None:
+    """Under --debug, the measurements behind the aim, low on the right."""
+    # How far the thumb has folded, against the threshold it must cross.
+    detail = f"trigger {aim.travel:+.2f} of {fire_at:.2f}"
+    if aim.cameras > 1:
+        # Spread is what the cameras disagree by.
+        detail += f"   spread {aim.spread * 100:.1f}%"
+    if fps is not None:
+        detail += f"   {fps:.0f} fps"
+    summary, _ = camera_summary(camera_states)
+    text = f"{detail}   {summary}"
+    height, width = canvas.shape[:2]
+    draw_tag(canvas, text, (width - _px(24, scale) - tag_width(text, scale, False),
+                            height - _px(76, scale)), LABEL, scale, dot=False)
+
+
+#: The clock's capsule, in 720-tall units.
+CLOCK_HEIGHT, CLOCK_PAD = 40, 18
+
+
+def clock_pill(width: int, remaining: float | None, scale: float = 1.0,
+               top: int = 0) -> Rect:
+    """Where the clock's capsule sits: centred, at ``top``. Its width holds
+    still as the seconds change - the figures are tabular."""
+    text = "Practice" if remaining is None else clock_text(remaining)
+    text_w = max(measure(text, TITLE_3, scale), measure("0:00", TITLE_3, scale))
+    pill_w = text_w + 2 * _px(CLOCK_PAD, scale)
+    return Rect((width - pill_w) // 2, top, pill_w, _px(CLOCK_HEIGHT, scale))
+
+
+def draw_clock(canvas: np.ndarray, remaining: float | None, scale: float = 1.0,
+               top: int = 0) -> Rect:
+    """The round clock, top-centre on glass. Red for the last ten seconds;
+    never animated - it changes every frame, and moves only by its digits."""
+    pill = clock_pill(canvas.shape[1], remaining, scale, top)
+    draw_glass(canvas, pill, pill.height // 2, scale)
     urgent = remaining is not None and remaining <= 10.0
-    if remaining is None:
-        text, color = "PRACTICE", MUTED
-        size = 0.7 * scale
-        text_w, text_h = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size, 2)[0]
-    else:
-        text = f"{int(remaining) // 60}:{int(remaining) % 60:02d}"
-        color = DANGER if urgent else INK
-        size = _px(40, scale)
-        text_w, text_h = figures_width(text, size), int(size * 0.72)
-    pad = _px(22, scale)
-    pill = Rect((width - text_w) // 2 - pad, _px(14, scale), text_w + 2 * pad,
-                text_h + _px(26, scale))
-    # Only the pill's own patch is copied and blended, with a few pixels over
-    # for the anti-aliased rim. A copy of the whole frame blends back to
-    # exactly what it was everywhere else - at the cost of the whole frame.
-    # The patch starts on even coordinates: the rounded ends are traced with
-    # round-half-to-even, so an odd shift would move some of their points.
-    height, rim = canvas.shape[0], 3
-    x0, y0 = max(pill.x - rim, 0) & ~1, max(pill.y - rim, 0) & ~1
-    x1, y1 = min(pill.right + rim + 1, width), min(pill.bottom + rim + 1, height)
-    region = canvas[y0:y1, x0:x1]
-    halo = region.copy()
-    shade_panel(halo, Rect(pill.x - x0, pill.y - y0, pill.width, pill.height),
-                pill.height // 2, CHROME_TOP, CHROME_BOTTOM, EDGE)
-    blend(region, halo, CHROME_OPACITY)
-    # Accent ticks either side of the clock, red once it is nearly over.
-    tick = DANGER if urgent else ACCENT
-    mid = pill.y + pill.height // 2
-    for side in (-1, 1):
-        x0 = pill.x + (pill.width if side > 0 else 0) + side * _px(10, scale)
-        cv2.line(canvas, (x0, mid), (x0 + side * _px(18, scale), mid), tick,
-                 _px(1, scale), cv2.LINE_AA)
-    baseline = pill.y + pill.height - _px(13, scale)
-    if remaining is None:
-        draw_text(canvas, text, ((width - text_w) // 2, baseline), color, scale=size,
-                  thickness=2, outline=False)
-    else:
-        draw_figures(canvas, text, ((width - text_w) // 2, baseline), color, size, 0.05)
+    text = "Practice" if remaining is None else clock_text(remaining)
+    write(canvas, text, (pill.x + pill.width // 2,
+                         baseline_for(TITLE_3, pill.y, pill.height, scale)),
+          TITLE_3, DANGER if urgent else LABEL, scale, align=CENTRE)
+    return pill
 
+
+# --- hints -----------------------------------------------------------------------
+#
+# A hint is a few words, and sometimes the key that does them: ("P", "Pause").
+# In a round they sit on a glass capsule at the foot of the world, where they
+# can be read over anything, and fade when they stop helping; on the menus
+# they are a quiet line along the foot of the screen.
+
+HINT_GAP = 22  # between hints, in 720-tall units
+
+
+def _hint_width(item: tuple[str, str], scale: float) -> int:
+    key, text = item
+    width = measure(text, FOOTNOTE, scale)
+    if key:
+        width += _keycap_width(key, scale) + _px(6, scale)
+    return width
+
+
+def _keycap_width(key: str, scale: float) -> int:
+    return max(_px(18, scale), measure(key, FOOTNOTE, scale) + _px(10, scale))
+
+
+def hints_width(items: Sequence[tuple[str, str]], scale: float = 1.0) -> int:
+    return (sum(_hint_width(item, scale) for item in items)
+            + _px(HINT_GAP, scale) * max(0, len(items) - 1))
+
+
+def fit_hints(items: Sequence[tuple[str, str]], width: int,
+              scale: float = 1.0) -> list[tuple[str, str]]:
+    """The hints that fit in ``width``: repeats dropped, then the last ones
+    first - the list is written most useful first, and a line that runs off
+    the screen is worse than one that says less."""
+    kept: list[tuple[str, str]] = []
+    for item in items:
+        if item[1] and not any(item[1].lower() in other[1].lower() for other in kept):
+            kept.append(tuple(item))
+    while kept and hints_width(kept, scale) > width:
+        kept.pop()
+    return kept
+
+
+def draw_hints(canvas: np.ndarray, items: Sequence[tuple[str, str]], scale: float = 1.0,
+               alpha: float = 1.0, capsule: bool = False) -> None:
+    """The hints along the foot of the screen, faded to ``alpha``.
+
+    With ``capsule`` - in a round - centred on glass; without, set on the
+    left margin of a menu. A fading line is drawn into a copy of its own
+    patch and blended back, so it costs its patch, not a frame.
+    """
+    if not items or alpha <= 0.0:
+        return
+    height, width = canvas.shape[:2]
+    margin = _px(24, scale)
+    text_w = hints_width(items, scale)
+    if capsule:
+        pill_h = _px(40, scale)
+        pill = Rect((width - text_w) // 2 - _px(20, scale), height - margin - pill_h,
+                    text_w + 2 * _px(20, scale), pill_h)
+    else:
+        pill = Rect(margin - _px(4, scale), height - margin - _px(28, scale),
+                    text_w + _px(8, scale), _px(32, scale))
+    x0, y0 = max(pill.x - 2, 0), max(pill.y - 2, 0)
+    x1, y1 = min(pill.right + 2, width), min(pill.bottom + 2, height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    region = canvas[y0:y1, x0:x1]
+    patch = region.copy() if alpha < 1.0 else region
+    local = Rect(pill.x - x0, pill.y - y0, pill.width, pill.height)
+    if capsule:
+        draw_glass(patch, local, local.height // 2, scale)
+    x = local.x + (_px(20, scale) if capsule else _px(4, scale))
+    baseline = baseline_for(FOOTNOTE, local.y, local.height, scale)
+    ink = LABEL if capsule else LABEL_SECONDARY
+    for key, text in items:
+        if key:
+            cap_w, cap_h = _keycap_width(key, scale), _px(18, scale)
+            cap = Rect(x, local.y + (local.height - cap_h) // 2, cap_w, cap_h)
+            hairline(patch, cap, _px(5, scale), LABEL_SECONDARY if capsule else
+                     LABEL_TERTIARY)
+            write(patch, key, (cap.x + cap_w // 2, baseline), FOOTNOTE, ink, scale,
+                  align=CENTRE)
+            x += cap_w + _px(6, scale)
+        x += write(patch, text, (x, baseline), FOOTNOTE, ink, scale)
+        x += _px(HINT_GAP, scale)
+    if alpha < 1.0:
+        cv2.addWeighted(patch, alpha, region, 1.0 - alpha, 0.0, dst=region)
+
+
+# --- the pause sheet -------------------------------------------------------------
+#
+# Pausing brings a glass sheet up over the dimmed world, with four large
+# choices - each one shootable, each SHOOTABLE units tall.
+
+#: The sheet, in 720-tall units: its width, padding and corner radius, where
+#: its title and subtitle sit, and the space between its buttons.
+SHEET_WIDTH, SHEET_PAD, SHEET_RADIUS = 400, 24, 28
+SHEET_TITLE, SHEET_SUBTITLE, SHEET_BUTTONS, SHEET_GAP = 54, 80, 104, 12
+#: How far the sheet rises as it arrives, and how dark the world goes.
+SHEET_RISE, SHEET_DIM = 36, 0.5
+
+PAUSE_CHOICES = (("Resume", "play", PRIMARY), ("Restart", "restart", SECONDARY),
+                 ("Choose a Game", "grid", SECONDARY), ("Quit", "xmark", DESTRUCTIVE))
+
+
+def pause_sheet(width: int, height: int, scale: float = 1.0
+                ) -> tuple[Rect, tuple[Button, ...]]:
+    """The sheet and its buttons, centred. Drawing and shooting both read this."""
+    sheet_w = min(width - 2 * _px(24, scale), _px(SHEET_WIDTH, scale))
+    button_h = _px(SHOOTABLE, scale)
+    count = len(PAUSE_CHOICES)
+    sheet_h = (_px(SHEET_BUTTONS, scale) + count * button_h
+               + (count - 1) * _px(SHEET_GAP, scale) + _px(SHEET_PAD + 26, scale))
+    sheet = Rect((width - sheet_w) // 2, (height - sheet_h) // 2, sheet_w, sheet_h)
+    pad = _px(SHEET_PAD, scale)
+    buttons = []
+    y = sheet.y + _px(SHEET_BUTTONS, scale)
+    for label, icon, kind in PAUSE_CHOICES:
+        buttons.append(Button(Rect(sheet.x + pad, y, sheet_w - 2 * pad, button_h), label,
+                              icon, kind))
+        y += button_h + _px(SHEET_GAP, scale)
+    return sheet, tuple(buttons)
+
+
+def draw_pause_sheet(canvas: np.ndarray, subtitle: str, focus: int | None,
+                     scale: float = 1.0, arrival: float = 1.0) -> None:
+    """The pause sheet over the dimmed frame already on ``canvas``.
+
+    ``arrival`` runs 0 to 1 as the sheet comes in: the world dims and the
+    sheet rises into place on the arriving curve.
+    """
+    height, width = canvas.shape[:2]
+    eased = ease_out(arrival)
+    dim(canvas, SHEET_DIM * eased)
+    sheet, buttons = pause_sheet(width, height, scale)
+    rise = round((1.0 - eased) * _px(SHEET_RISE, scale))
+    sheet = Rect(sheet.x, sheet.y + rise, sheet.width, sheet.height)
+    radius = _px(SHEET_RADIUS, scale)
+    _panel_shadow(canvas, sheet, radius, _px(24, scale))
+    draw_glass(canvas, sheet, radius, scale, opacity=0.8)
+    centre = sheet.x + sheet.width // 2
+    write(canvas, "Paused", (centre, sheet.y + _px(SHEET_TITLE, scale)), TITLE_1, LABEL,
+          scale, align=CENTRE)
+    write(canvas, fit(subtitle, SUBHEAD, sheet.width - 2 * _px(SHEET_PAD, scale), scale),
+          (centre, sheet.y + _px(SHEET_SUBTITLE, scale)), SUBHEAD, LABEL_SECONDARY, scale,
+          align=CENTRE)
+    for index, button in enumerate(buttons):
+        moved = Button(Rect(button.rect.x, button.rect.y + rise, button.rect.width,
+                            button.rect.height), button.label, button.icon, button.kind)
+        draw_button(canvas, moved, focus == index, scale)
+    write(canvas, "Press P to resume", (centre, sheet.bottom - _px(18, scale)),
+          FOOTNOTE, LABEL_TERTIARY, scale, align=CENTRE)
 
 
 #: The score card's body, and the band of map art above it, in 720-tall units.
@@ -1529,7 +1897,7 @@ def _draw_results_banner(canvas: np.ndarray, rect: Rect, title: str, emblem,
     length_scale = 0.46 * scale
     draw_caption(canvas, length,
                  (rect.right - inner - caption_width(length, length_scale), baseline),
-                 SECONDARY, length_scale)
+                 LABEL_SECONDARY, length_scale)
 
 
 @lru_cache(maxsize=8)
@@ -1637,42 +2005,6 @@ def draw_notice(canvas: np.ndarray, lines: Sequence[str],
 
 
 FOOTER_SCALE = 0.55
-FOOTER_SEPARATOR = "   |   "
-
-
-def fit_hints(segments: Sequence[Sequence[str]], width: int,
-              scale: float = 1.0) -> str:
-    """Join hint segments into one footer line that fits in ``width`` pixels.
-
-    Each segment is a list of tokens ("q quit", "r restart", ...). Segments are
-    joined with a separator; when the line is too wide, tokens are dropped from
-    the END of the LAST segment first (the key reference is least important and
-    its tail least of all), then whole segments from the right. A footer that
-    runs off the screen edge is worse than one that says less.
-    """
-    segments = [list(tokens) for tokens in segments if tokens]
-    # Dedupe: a map repeating the scheme's advice - or a piece of it - is noise.
-    kept: list[str] = []
-    for tokens in segments:
-        fresh = []
-        for token in tokens:
-            if any(token.lower() in earlier.lower() for earlier in kept):
-                continue
-            kept.append(token)
-            fresh.append(token)
-        tokens[:] = fresh
-    segments = [t for t in segments if t]
-
-    def line() -> str:
-        return FOOTER_SEPARATOR.join("   ".join(tokens) for tokens in segments)
-
-    limit = width - round(48 * scale)
-    while segments and text_width(line(), FOOTER_SCALE * scale) > limit:
-        if len(segments[-1]) > 1:
-            segments[-1].pop()
-        else:
-            segments.pop()
-    return line()
 
 
 def draw_footer(canvas: np.ndarray, text: str, scale: float = 1.0,
@@ -1992,7 +2324,7 @@ def _draw_setup_pips(canvas: np.ndarray, panel: Rect, learned: int, hits: int,
 CARDS_PER_ROW = 4
 
 
-def chooser_area(window: Rect, scale: float = 1.0) -> Rect:
+def chooser_area(window: Rect, scale: float = 1.0, margin: int | None = None) -> Rect:
     """Where the chooser's cards may go: the band the game plays in.
 
     The rows ``app.layout_for`` gives the play area - below the camera in the
@@ -2003,9 +2335,10 @@ def chooser_area(window: Rect, scale: float = 1.0) -> Rect:
     def unit(value: float) -> int:
         return max(1, round(value * scale))
 
+    margin = unit(16) if margin is None else margin
     top = window.y + unit(16) + window.height // 4 + unit(28)
     bottom = window.bottom - unit(56)
-    return Rect(window.x + unit(16), top, max(1, window.width - 2 * unit(16)),
+    return Rect(window.x + margin, top, max(1, window.width - 2 * margin),
                 max(1, bottom - top))
 
 
@@ -2035,11 +2368,17 @@ def map_cards(window: Rect, count: int, scale: float = 1.0,
     cards = []
     for row in range(rows):
         in_row = min(columns, count - row * columns)
-        row_width = in_row * width + (in_row - 1) * gap
-        left = area.x + (area.width - row_width) // 2
-        for column in range(in_row):
-            cards.append(Rect(left + column * (width + gap), top + row * (height + gap),
-                              width, height))
+        if in_row == columns and columns > 1:
+            # A full row stands exactly on both margins: the pixels the
+            # division leaves over go into the gaps, not beside the row.
+            lefts = [area.x + round(column * (area.width - width) / (columns - 1))
+                     for column in range(columns)]
+        else:
+            row_width = in_row * width + (in_row - 1) * gap
+            left = area.x + (area.width - row_width) // 2
+            lefts = [left + column * (width + gap) for column in range(in_row)]
+        for left in lefts:
+            cards.append(Rect(left, top + row * (height + gap), width, height))
     return tuple(cards)
 
 

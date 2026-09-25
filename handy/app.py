@@ -20,7 +20,7 @@ from .calibration import Rig, RigBook, Setup, default_calibration, default_rig
 from .shot_calibration import ShotCalibration
 from . import display
 from .cameras import CameraError, first_live, open_camera
-from .game import Rect, Round, RoundOptions, Summary
+from .game import GameClock, Rect, Round, RoundOptions, Summary
 from .highscores import HighScores
 from .maps import Map
 from .maps.archery import RINGS
@@ -107,16 +107,28 @@ class Layout:
     """Where each piece of the window lives."""
 
     window: Rect
-    inset: Rect
+    inset: Rect  # the camera's picture-in-picture, top-left
     play_area: Rect
-    hud: tuple[int, int]
-    quit_button: scene.Button
-    maps_button: scene.Button
+    hud: tuple[int, int]  # the score panel's top-left corner, beside the picture
+    pause_button: scene.Button  # the one control in a round, top-right
+    quit_button: scene.Button  # the chooser's way out, top-right
     scale: float = 1.0
+    margin: int = 24
+
+
+#: The camera's picture-in-picture in a round and on the chooser, in 720-tall
+#: units: small, like FaceTime's, since there the world matters more.
+PIP_HEIGHT = 96
+PIP_ASPECT = 16 / 9
+
+#: The screen's margins in 720-tall units, and on a large window.
+MARGIN, LARGE_MARGIN = 24, 32
+LARGE_WINDOW = 1200
 
 
 def layout_for(width: int, height: int) -> Layout:
-    """Camera in the top-left quarter-by-quarter, targets below it.
+    """The picture top-left with the score beside it, the Pause control
+    top-right, and the targets in the band below them.
 
     Everything fixed is measured in units of a 720-tall window and scaled, so a
     laptop panel and a large display get the same interface rather than the same
@@ -127,28 +139,31 @@ def layout_for(width: int, height: int) -> Layout:
     def unit(value: float) -> int:
         return max(1, round(value * scale))
 
-    margin = unit(16)
-    inset = Rect(margin, margin, width // 4, height // 4)
-    button_height = unit(46)
-    quit_width, maps_width = unit(132), unit(136)
-    gap = unit(16)
-
+    margin = unit(LARGE_MARGIN if height >= LARGE_WINDOW else MARGIN)
+    pip_h = unit(PIP_HEIGHT)
+    inset = Rect(margin, margin, round(pip_h * PIP_ASPECT), pip_h)
+    shootable = unit(scene.SHOOTABLE)
+    pause_button = scene.Button(
+        Rect(width - margin - shootable, margin, shootable, shootable), "Pause", "pause",
+        scene.OVER_WORLD)
+    quit_width = unit(132)
     quit_button = scene.Button(
-        Rect(width - margin - quit_width, margin, quit_width, button_height), "QUIT")
-    maps_button = scene.Button(
-        Rect(quit_button.rect.x - gap - maps_width, margin, maps_width,
-             button_height), "MAPS")
+        Rect(width - margin - quit_width, margin, quit_width, shootable), "Quit", "xmark",
+        scene.OVER_WORLD)
 
-    top = inset.bottom + unit(28)
+    # Where the targets may be: the band the maps were composed for, below
+    # the chrome's corner row and above the foot of the window.
+    top = unit(16) + height // 4 + unit(28)
     play_area = Rect(unit(24), top, width - 2 * unit(24), height - top - unit(56))
     return Layout(
         window=Rect(0, 0, width, height),
         inset=inset,
         play_area=play_area,
-        hud=(inset.right + unit(28), margin),
+        hud=(inset.right + unit(12), margin),
+        pause_button=pause_button,
         quit_button=quit_button,
-        maps_button=maps_button,
         scale=scale,
+        margin=margin,
     )
 
 
@@ -242,52 +257,53 @@ def aim_pixels(aim: Aim, layout: Layout) -> tuple[int, int] | None:
             round(aim.position[1] * (layout.window.height - 1)))
 
 
-#: Maps that lay one panel of their own under the camera and the whole readout,
-#: as part of the world (Overwatch Ridge: see ``sniper.hud_panel``). The app's
-#: panel on top of theirs was a double panel with a seam down the middle.
-OWN_HUD_PANEL = frozenset({"sniper"})
-
-#: Where a map's own readout under the score block starts, in 720-tall units
-#: below the origin it is handed (Dead of Night's health bar), and the size of
-#: the strip the app lays under it. The strip sits at the foot of the camera,
-#: where High Noon keeps its tally on a slab of its own.
+#: Where a map's own drawn readout starts, in 720-tall units below the origin
+#: it is handed, and the size of the glass strip laid under it: for a map
+#: that still draws its HUD itself (``Map.draw_hud``) rather than naming its
+#: readouts (``Round.readouts``), which sit in the score panel instead.
 READOUT_FIRST = 146
 READOUT_SIZE = (268, 60)
 
 
-def hud_panels(view: View, layout: Layout) -> tuple[Rect | None, Rect | None]:
-    """The panels under the score block and under the map's own readout.
-
-    Each is sized to what sits on it, so the map is covered no further than
-    the readout reaches: the score panel stops short of the clock beside it,
-    and a map's readout gets a strip of its own at the camera's foot. None
-    where there is nothing to carry, or where the map lays its own panel.
-    """
-    if view.map.key in OWN_HUD_PANEL:
-        return None, None
+def hud_room(view: View, layout: Layout) -> int:
+    """How wide the score panel may grow: to a little short of the clock."""
     scale = layout.scale
-    x, top = layout.hud[0], layout.inset.y
-    room = (scene.timer_left(layout.window.width, view.remaining, scale)
-            - round(12 * scale) - x)
-    score = Rect(x, top, max(1, min(scene.hud_block_width(view.round, scale), room)),
-                 round((scene.HUD_LINES["tally"] + 18) * scale))
-    if view.map.draw_hud is None:
-        return score, None
+    clock = scene.clock_pill(layout.window.width, view.remaining, scale, layout.margin)
+    return max(1, clock.x - round(16 * scale) - layout.hud[0])
+
+
+def hud_panels(view: View, layout: Layout) -> tuple[Rect, Rect | None]:
+    """The score panel, with the map's readouts in it, and - for a map that
+    draws its own - the strip under it that its drawing sits on."""
+    scale = layout.scale
+    readouts = view.round.readouts(view.now)
+    panel, _ = scene.score_panel(view.round, readouts, layout.hud, hud_room(view, layout),
+                                 scale)
+    if readouts or view.map.draw_hud is None:
+        return panel, None
     width, height = (round(value * scale) for value in READOUT_SIZE)
-    y = max(layout.inset.bottom - height, score.bottom + round(10 * scale))
-    return score, Rect(x, y, width, height)
+    return panel, Rect(panel.x, panel.bottom + round(8 * scale), width, height)
+
+
+#: The keys a round answers to beyond the sheet's own choices, as hints.
+CONTROL_KEYS = (("P", "Pause"), ("S", "Screenshot"))
 
 
 @lru_cache(maxsize=16)
-def hint_line(scheme_hint: str, map_hint: str, width: int, scale: float) -> str:
-    """The footer's hints for this scheme and map, fitted to ``width``.
+def hint_items(scheme_hint: str, map_hint: str, width: int,
+               scale: float) -> tuple[tuple[str, str], ...]:
+    """The round's hints for this scheme and map, fitted to ``width``.
 
-    Cached: fitting measures every token against the width, and the answer
+    Cached: fitting measures every hint against the width, and the answer
     only changes with the map, the scheme or the window.
     """
-    segments = [[scheme_hint] if scheme_hint else [], [map_hint] if map_hint else [],
-                list(CONTROL_KEYS)]
-    return scene.fit_hints(segments, width, scale)
+    items = [("", scheme_hint), ("", map_hint), *CONTROL_KEYS]
+    return tuple(scene.fit_hints([item for item in items if item[1]],
+                                 width - round(88 * scale), scale))
+
+
+#: What the hints say while the hand is out of sight: the one thing to do.
+LOST_HAND_HINT = "Show your hand to the camera"
 
 
 def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
@@ -295,51 +311,49 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     view.map.draw_world(canvas, view.round, view.now)
 
     scale = layout.scale
-    panel, readout = hud_panels(view, layout)
-    for rect in (panel, readout):
-        if rect is not None:
-            scene.draw_chrome_panel(canvas, rect, scale, tab=scene.ACCENT)
     scene.draw_camera_insets(canvas, view.cameras, view.hands, layout.inset,
                              view.camera_states,
                              view.scheme.draw if view.scheme else None, scale)
     note = scene.camera_note(view.camera_states)
     if note is not None:
-        # Under the cameras it is about, in the gap above the play area.
-        scene.draw_tag(canvas, note[0], (layout.inset.x,
-                                         layout.inset.bottom + round(26 * scale)),
+        # Under the pictures it is about.
+        bottom = layout.inset.bottom + (len(view.cameras) - 1) * (
+            layout.inset.height + round(8 * scale))
+        scene.draw_tag(canvas, note[0], (layout.inset.x, bottom + round(30 * scale)),
                        note[1], scale)
-    # On a panel of the app's own the block carries the panel's tab; on a map's
-    # panel, the rule down its side that the map's readout continues.
-    scene.draw_hud(canvas, view.round, view.aim, layout.hud, view.fps, view.debug,
-                   view.camera_states, scale, view.fire_at, rule=panel is None)
-    if view.map.draw_hud is not None:
-        origin = layout.hud
-        if readout is not None:
-            # On its strip, lined up with the text above and inset as it is.
-            origin = (readout.x + round(14 * scale),
-                      readout.y + round((14 - READOUT_FIRST) * scale))
-        view.map.draw_hud(canvas, view.round, origin, view.now)
-    scene.draw_timer(canvas, view.remaining, scale)
+    readouts = view.round.readouts(view.now)
+    scene.draw_score_panel(canvas, view.round, readouts, layout.hud,
+                           hud_room(view, layout), scale, view.now)
+    if not readouts and view.map.draw_hud is not None:
+        # A map that draws its own readout gets glass of its own under the
+        # score, and its drawing lined up with the text above it.
+        _, strip = hud_panels(view, layout)
+        scene.draw_glass(canvas, strip, round(scene.PANEL_RADIUS * scale), scale)
+        view.map.draw_hud(canvas, view.round,
+                          (strip.x + round(14 * scale),
+                           strip.y + round((14 - READOUT_FIRST) * scale)), view.now)
+    scene.draw_clock(canvas, view.remaining, scale, layout.margin)
     crosshair = view.crosshair
-    for button in (layout.quit_button, layout.maps_button):
-        scene.draw_button(canvas, button, highlighted=(
-            crosshair is not None and button.contains(*crosshair)), scale=scale)
-    # The foot of the frame: the hints while they are up, and as they fade,
-    # the mark in the corner that every other screen carries - so a
-    # screenshot of a round says whose it is. The two take turns rather than
-    # share the line: the hints need all of its width.
+    scene.draw_button(canvas, layout.pause_button, highlighted=(
+        crosshair is not None and layout.pause_button.contains(*crosshair)), scale=scale)
+    # The hints, while they help: how to play as the round opens and when a
+    # key does nothing; the one thing to do while the hand is out of sight.
     if view.hints > 0.0:
-        scheme_hint = view.scheme.footer if view.scheme and view.scheme.footer else ""
-        scene.draw_footer(canvas, hint_line(scheme_hint, view.map.footer,
-                                            layout.window.width, scale),
-                          scale, alpha=view.hints)
-    scene.draw_logo(canvas, scale, alpha=1.0 - view.hints)
+        if view.aim.tracking or view.crosshair is not None:
+            scheme_hint = view.scheme.footer if view.scheme and view.scheme.footer else ""
+            items = hint_items(scheme_hint, view.map.footer, layout.window.width, scale)
+        else:
+            items = ((("", LOST_HAND_HINT),) + CONTROL_KEYS[:1])
+        scene.draw_hints(canvas, items, scale, alpha=view.hints, capsule=True)
 
-    describe = getattr(view.scheme, "describe_subject", None) if view.scheme else None
-    if view.debug and describe is not None and view.hands and view.hands[0].subjects:
-        scene.draw_text(canvas, describe(view.hands[0].subjects[0]),
-                        (layout.hud[0], layout.hud[1] + round(206 * scale)),
-                        scene.MUTED, scale=0.5 * scale)
+    if view.debug:
+        scene.draw_debug_line(canvas, view.aim, view.fps, view.camera_states, scale,
+                              view.fire_at)
+        describe = getattr(view.scheme, "describe_subject", None) if view.scheme else None
+        if describe is not None and view.hands and view.hands[0].subjects:
+            scene.draw_tag(canvas, describe(view.hands[0].subjects[0]),
+                           (layout.inset.x, layout.window.height - round(76 * scale)),
+                           scene.LABEL, scale, dot=False)
 
     if crosshair is not None and not view.scoped:
         since_shot = None if view.last_shot is None else view.now - view.last_shot
@@ -725,37 +739,121 @@ CUES = {
 }
 
 
+#: What each of the pause sheet's choices means, in the order it shows them.
+PAUSE_ANSWERS = ("resume", "again", "maps", "quit")
+
+#: How long the sheet takes to arrive, in seconds: the arriving curve.
+SHEET_ARRIVAL = 0.45
+
+#: The keys that open and close the pause sheet: P, and Esc.
+_PAUSE_KEYS = {ord("p"), ord("P"), _ESCAPE}
+
+
+def pause_subtitle(chosen: Map, round_: Round, now: float) -> str:
+    """The line under "Paused": which game, and how much of it is left."""
+    title = scene.title_case(chosen.title)
+    remaining = round_.remaining(now)
+    if remaining is None:
+        return title
+    return f"{title} · {scene.clock_text(remaining)} left"
+
+
+def pause_choice(layout: Layout, point: tuple[int, int] | None) -> int | None:
+    """Which of the sheet's buttons ``point`` is on, if any."""
+    if point is None:
+        return None
+    _, buttons = scene.pause_sheet(layout.window.width, layout.window.height, layout.scale)
+    for index, button in enumerate(buttons):
+        if button.contains(*point):
+            return index
+    return None
+
+
 def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
          controller: AimController, rig: Rig, sounds: Sounds, chosen: Map,
          scheme) -> tuple[Round, str]:
-    """One round on one map. Returns the finished round and why it ended."""
+    """One round on one map. Returns the finished round and why it ended.
+
+    Two clocks run here. The round, its map and everything drawn of them run
+    on the game clock, which stops while the pause sheet is up; the trigger,
+    the recoil and the hints run on the wall clock, since the hand keeps
+    moving whether the round does or not.
+    """
     round_ = new_round(settings, layout, chosen)
     if chosen.key == "sniper":
         round_.scope_sensitivity = 0.25
     recoil = Recoil(kick=settings.recoil)
     mouse = Mouse()
     fps = FpsMeter()
+    clock = GameClock()
     last_shot: float | None = None
     was_armed = False
     scope = EyeScope()
     reads_scope = getattr(scheme, "scope", None)
+    fire_at = trigger_thresholds(settings, scheme)[0]
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     # Draw the world once before the round's clock can start. The first draw
     # of a map at a new size builds its scenery - seconds, for the richest -
     # and the warm-up thread may not have got to it yet. The clock starts on
     # the round's first update, so a build done inside the first frame came
     # out of the player's sixty seconds. Once warm, this is a millisecond.
-    chosen.draw_world(canvas, round_, time.monotonic())
+    chosen.draw_world(canvas, round_, clock.now(time.monotonic()))
     trigger = FreshAim(controller, rig)
     hints = Hints(time.monotonic())
+    paused_at = 0.0
 
     while True:
         images, hands = eyes.read()
-        now = time.monotonic()
-        aim = trigger.update(hands, now)
-        crosshair = crosshair_for(aim, layout, recoil, now)
+        wall = time.monotonic()
+        now = clock.now(wall)
+        aim = trigger.update(hands, wall)
+        crosshair = crosshair_for(aim, layout, recoil, wall)
+        states = camera_states(rig, hands)
+
+        if clock.paused:
+            # The sheet: shots and clicks go to its choices, and the world
+            # holds still behind it on the stopped clock.
+            answer = None
+            if aim.fired and crosshair is not None:
+                answer = pause_choice(layout, crosshair)
+            if mouse.take_click():
+                answer = pause_choice(layout, (mouse.x, mouse.y))
+            render(canvas, View(map=chosen, round=round_, aim=aim, crosshair=None,
+                                cameras=images, hands=hands, now=now,
+                                last_shot=last_shot, remaining=round_.remaining(now),
+                                camera_states=states, scheme=scheme, hints=0.0,
+                                fire_at=fire_at), layout)
+            scene.draw_pause_sheet(canvas, pause_subtitle(chosen, round_, now),
+                                   pause_choice(layout, crosshair), layout.scale,
+                                   (wall - paused_at) / SHEET_ARRIVAL)
+            # The picture stays bright above the dimmed world: aiming at the
+            # sheet is easier while you can see your hand.
+            scene.draw_camera_insets(canvas, images, hands, layout.inset, states,
+                                     scheme.draw, layout.scale)
+            if crosshair is not None:
+                scene.draw_crosshair(canvas, *crosshair, armed=aim.armed, since_shot=None,
+                                     scale=layout.scale, pull=aim.travel, fire_at=fire_at)
+            cv2.imshow(WINDOW_TITLE, canvas)
+            key = cv2.waitKey(1) & 0xFF
+            if window_closed() or key == ord("q"):
+                return round_, "quit"
+            if key in _PAUSE_KEYS or answer == 0:
+                clock.resume(time.monotonic())
+                hints.show(time.monotonic(), Hints.LINGER)
+            elif answer is not None:
+                return round_, PAUSE_ANSWERS[answer]
+            elif key == ord("r"):
+                return round_, "again"
+            elif key == ord("b"):
+                return round_, "maps"
+            elif key == ord("c"):
+                return round_, "recalibrate"
+            elif key == ord("s"):
+                take_screenshot(canvas, settings, layout.scale)
+            continue
+
         if not aim.tracking:
-            hints.show(now, Hints.LINGER)  # no hand: say again how to play
+            hints.show(wall, Hints.LINGER)  # no hand: say again how to play
 
         # Looking down the scope: the eye decides, the map moves its view to
         # follow the hand, and the shot lands where the reticle is fixed.
@@ -763,7 +861,7 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
         if reads_scope is not None:
             primary = hands[0].subjects[0] if hands and hands[0].subjects else None
             reading = reads_scope(primary) if primary is not None else None
-            scoped = scope.update(reading, now)
+            scoped = scope.update(reading, wall)
         round_.look(aim.position, scoped)
         if scoped and round_.scoped_shot is not None and aim.tracking:
             crosshair = round_.scoped_shot
@@ -779,44 +877,43 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
             sounds.cock()  # hearing the pistol re-cock beats reading the HUD
         was_armed = aim.armed
 
+        pause = False
         if aim.fired and crosshair is not None:
-            if layout.quit_button.contains(*crosshair):
-                return round_, "quit"  # shot the quit button
-            if layout.maps_button.contains(*crosshair):
-                return round_, "maps"
-            sounds.shot()
-            impact = round_.shoot(*crosshair, now)
-            if chosen.key == "zombies" and round_.options.enemy == "robots" and impact.is_hit:
-                sounds.play_named("debris_hit")
+            if layout.pause_button.contains(*crosshair):
+                pause = True  # shot the Pause control
             else:
-                chosen.play_hit(sounds, impact) if impact.is_hit else sounds.miss()
-            recoil.fire(now)
-            last_shot = now
+                sounds.shot()
+                impact = round_.shoot(*crosshair, now)
+                if chosen.key == "zombies" and round_.options.enemy == "robots" and impact.is_hit:
+                    sounds.play_named("debris_hit")
+                else:
+                    chosen.play_hit(sounds, impact) if impact.is_hit else sounds.miss()
+                recoil.fire(wall)
+                last_shot = now
 
-        if mouse.take_click():
-            if layout.quit_button.contains(mouse.x, mouse.y):
-                return round_, "quit"
-            if layout.maps_button.contains(mouse.x, mouse.y):
-                return round_, "maps"
+        if mouse.take_click() and layout.pause_button.contains(mouse.x, mouse.y):
+            pause = True
 
         render(canvas, View(map=chosen, round=round_, aim=aim, crosshair=crosshair,
                             cameras=images, hands=hands, now=now,
                             last_shot=last_shot, fps=fps.tick(),
                             debug=settings.debug,
                             remaining=round_.remaining(now),
-                            camera_states=camera_states(rig, hands),
-                            scheme=scheme, scoped=scoped,
-                            fire_at=trigger_thresholds(settings, scheme)[0],
-                            hints=hints.alpha(now)), layout)
+                            camera_states=states,
+                            scheme=scheme, scoped=scoped, fire_at=fire_at,
+                            hints=hints.alpha(wall)), layout)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if round_.is_over(now):
             return round_, "over"
 
         key = cv2.waitKey(1) & 0xFF
-        if key in _QUIT_KEYS or window_closed():
+        if key == ord("q") or window_closed():
             return round_, "quit"
-        if key == ord("r"):
+        if pause or key in _PAUSE_KEYS:
+            paused_at = time.monotonic()
+            clock.pause(paused_at)
+        elif key == ord("r"):
             return round_, "again"
         elif key == ord("b"):
             return round_, "maps"
@@ -827,7 +924,7 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
         elif key == ord("s"):
             take_screenshot(canvas, settings, layout.scale)
         elif key != 255:
-            hints.show(now, Hints.NUDGE)  # a key that does nothing: show the ones that do
+            hints.show(wall, Hints.NUDGE)  # a key that does nothing: show the ones that do
 
 
 def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
@@ -885,7 +982,8 @@ def chooser_cards(layout: Layout, count: int) -> tuple[Rect, ...]:
     Drawing, shooting and clicking all read this, so a card is hit exactly
     where it is drawn.
     """
-    return scene.map_cards(layout.window, count, layout.scale)
+    return scene.map_cards(layout.window, count, layout.scale,
+                           scene.chooser_area(layout.window, layout.scale, layout.margin))
 
 
 CHOOSER_HINT = (f"shoot a card to play   |   1-{len(maps.MAPS)} choose   q quit   "
@@ -940,7 +1038,7 @@ def draw_results_screen(canvas: np.ndarray, layout: Layout, summary: Summary,
     scene.draw_results(canvas, summary, best, is_best, hint=RESULTS_HINT,
                        scale=layout.scale, title=chosen.title if chosen else "",
                        emblem=chosen.draw_emblem if chosen else None)
-    for button in (layout.quit_button, layout.maps_button):
+    for button in (layout.quit_button,):
         scene.draw_button(canvas, button, highlighted=(
             crosshair is not None and button.contains(*crosshair)),
             scale=layout.scale)
@@ -985,14 +1083,10 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         if shot and crosshair is not None:
             if layout.quit_button.contains(*crosshair):
                 return "quit"
-            if layout.maps_button.contains(*crosshair):
-                return "maps"
             return "again"
         if mouse.take_click():
             if layout.quit_button.contains(mouse.x, mouse.y):
                 return "quit"
-            if layout.maps_button.contains(mouse.x, mouse.y):
-                return "maps"
 
         key = cv2.waitKey(1) & 0xFF
         if key in _QUIT_KEYS or window_closed():
