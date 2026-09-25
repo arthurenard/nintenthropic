@@ -1062,7 +1062,7 @@ class ZombieRound(Round):
     fallen: list[tuple[Walker, float, bool]] = field(default_factory=list, init=False)
     #: The backdrop with the settled dead painted into it, kept between frames:
     #: (the backdrop it was painted on, the road, the time it is painted up to).
-    road: tuple | None = field(default=None, init=False, repr=False)
+    road: tuple | None = field(default=None, init=False, repr=False, compare=False)
     health: int = field(default=FULL_HEALTH, init=False)
     kills: int = field(default=0, init=False)
     bitten_at: float | None = field(default=None, init=False)
@@ -2083,7 +2083,7 @@ def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
                              cv2.LINE_AA, FIX_BITS)
     if fall == 0.0:
         if figure.robot:
-            _draw_machine(canvas, figure, haze, light)
+            _draw_machine(canvas, figure, haze)
         else:
             _draw_face(canvas, figure, haze, light)
     elif eyes > 0.0 and not figure.robot:
@@ -2130,7 +2130,7 @@ def _draw_face(canvas: np.ndarray, figure: Figure, haze: float, light: float) ->
                    -1, cv2.LINE_AA, FIX_BITS)
 
 
-def _draw_machine(canvas: np.ndarray, figure: Figure, haze: float, light: float) -> None:
+def _draw_machine(canvas: np.ndarray, figure: Figure, haze: float) -> None:
     """A machine's face is one lit visor; its chest carries a second light,
     and the seams between its plates show once it is near enough."""
     height, x = figure.height, figure.x
@@ -2250,7 +2250,6 @@ def _draw_pools(canvas: np.ndarray, stains: list, now: float) -> None:
         _alpha_ellipse(patch, centre, axes, GLOSS, alpha)
 
 
-
 def _draw_fallen(canvas: np.ndarray, view: Perspective, walker: Walker, at: float,
                  headshot: bool, now: float, light: float = 0.0) -> None:
     """One that has been put down: going over, and then lying where it fell.
@@ -2300,11 +2299,11 @@ def _road(round_: ZombieRound, now: float, width: int, height: int) -> np.ndarra
     area = round_.area
     backdrop = _environment((area.x, area.y, area.width, area.height), width, height,
                             round_.options.seed or 0, round_.skyline)
+    settled = now - FALL - SETTLED
     road = round_.road
-    if road is None or road[0] is not backdrop or now < road[2]:
+    if road is None or road[0] is not backdrop or settled < road[2]:
         road = (backdrop, backdrop.copy(), -math.inf)
     _, image, done = road
-    settled = now - FALL - SETTLED
     if settled > done:
         pools = [stain for stain in round_.stains if done < stain[3] <= settled]
         if pools:
