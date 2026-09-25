@@ -61,7 +61,7 @@ jobs:
         run: uv run ruff check handy tests
 
       - name: Check the browser script parses
-        run: node --check handy/web/app.js
+        run: for f in handy/web/*.js; do node --check "$f"; done
 
       - name: Test
         run: uv run pytest -q -p no:cacheprovider
