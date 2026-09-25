@@ -1100,6 +1100,24 @@ def draw_world(canvas: np.ndarray, round_: ArcheryRound, now: float) -> None:
             draw_impact(canvas, impact, now, round_.IMPACT_TTL, lift=r, anchor=(cx, cy))
 
 
+def hang(canvas: np.ndarray, round_: ArcheryRound, target: Target,
+         strength: float = 1.0) -> None:
+    """One face on the wall at ``strength`` (0 to 1), lit and shadowed by the
+    hall's lamps as :func:`draw_world` would hang it.
+
+    For scenes that lay out faces of their own rather than a round's - setup
+    shows its whole course, the next face lit and the rest faint. A faint face
+    waits for its sprite rather than stall a frame building it.
+    """
+    height, width = canvas.shape[:2]
+    area = _area_key(round_)
+    lamps, _ = _lamps(width, height, area)
+    low, high = round_.RADIUS_RANGE
+    radii = (low * round_.options.scale, high * round_.options.scale)
+    _draw_face(canvas, target, strength, _shadow_lean(target.x, width, lamps),
+               _haze(target.radius, radii), _shadow_fall(target.y, height, area))
+
+
 def draw_emblem(panel: np.ndarray) -> None:
     """The card art: a corner of the range mid-round.
 

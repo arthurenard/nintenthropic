@@ -752,3 +752,117 @@ def test_the_results_card_fits_the_window_at_every_size():
         assert card.x > 0 and card.right < width
         # Clear of the buttons along the top and of the footer line below.
         assert card.y > round(62 * scale) and card.bottom < height - round(40 * scale)
+
+
+# --- setup: the first thing a new player sees --------------------------------
+
+SIZES = ((1280, 720), (1512, 945), (2560, 1440))
+
+
+def setup_faces(width, height):
+    """Every place setup can hang a face, as boxes the size of its straw boss."""
+    from handy.game import Rect
+    from handy.maps.archery import BOSS_SCALE
+    from handy.shot_calibration import CHECK_TARGETS, TARGET_RADIUS, TARGETS
+
+    reach = min(width, height) * TARGET_RADIUS * BOSS_SCALE
+    return [Rect(round(x * width - reach), round(y * height - reach),
+                 round(2 * reach), round(2 * reach)) for x, y in (*TARGETS, *CHECK_TARGETS)]
+
+
+def overlaps(a, b) -> bool:
+    return a.x < b.right and b.x < a.right and a.y < b.bottom and b.y < a.bottom
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_the_setup_console_never_covers_a_face(width, height):
+    scale = height / 720
+    panels = scene.setup_console(width, height, 1, 16 / 9, scale)
+    for panel in panels:
+        assert panel.x >= 0 and panel.right <= width and panel.bottom <= height
+        for face in setup_faces(width, height):
+            assert not overlaps(panel, face)
+    camera, instruction, progress = panels
+    assert camera.right < instruction.x and instruction.right < progress.x
+    assert camera.y == instruction.y == progress.y
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_the_setup_hall_hangs_its_lamps_inside_the_window(width, height):
+    """At the top of the window the fixtures were cut in half."""
+    from handy.maps import archery
+
+    area = scene.setup_arena(width, height)
+    key = (area.x, area.y, area.width, area.height)
+    _, fixture_y = archery._lamps(width, height, key)
+    housing = max(2, int(0.006 * height)) + 4
+    assert fixture_y - housing >= 2
+    for face in setup_faces(width, height):
+        assert face.y > fixture_y + housing
+
+
+def test_the_setup_faces_are_the_calibrations_own(monkeypatch):
+    """The inner-two-rings test reads the rings that are drawn: same centre,
+    same radius, whatever the course looks like around them."""
+    from handy.maps import archery
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import TARGET_RADIUS, ShotCalibration
+
+    hung = []
+    real = archery.hang
+
+    def spy(canvas, round_, target, strength=1.0):
+        hung.append((target, strength))
+        real(canvas, round_, target, strength)
+
+    monkeypatch.setattr(archery, "hang", spy)
+    session = ShotCalibration(PISTOL)
+    canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
+    scene.draw_shot_calibration(canvas, session, [np.zeros((720, 1280, 3), np.uint8)],
+                                [Frame()], lambda *args: None)
+    lit = [target for target, strength in hung if strength == 1.0]
+    assert len(lit) == 1
+    x, y = session.target
+    assert (lit[0].x, lit[0].y) == (x * WIDTH, y * HEIGHT)
+    assert lit[0].radius == min(WIDTH, HEIGHT) * TARGET_RADIUS
+    faint = [target for target, strength in hung if strength < 1.0]
+    assert len(faint) == scene.LEARN_SHOTS - 1, "the rest of this step, faintly"
+
+
+def test_setup_learns_from_as_many_shots_as_its_progress_shows():
+    """The progress pips count LEARN_SHOTS learning shots; ShotCalibration
+    moves on to checking after exactly that many."""
+    from dataclasses import replace
+
+    from hands import frame_of, make_hand
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import ShotCalibration
+
+    session = ShotCalibration(PISTOL)
+    now, stamp = 0.0, 0
+    for shot in range(scene.LEARN_SHOTS):
+        assert not session.testing
+        assert len(scene.setup_course(session)) == scene.LEARN_SHOTS - 1 - shot
+        target = session.target
+        tip = (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+        for degrees in [20] * 8 + [70] * 4:
+            stamp += 1
+            now += 0.05
+            session.update([replace(frame_of(make_hand(degrees, index_tip=tip)),
+                                    timestamp_ms=stamp)], now)
+    assert session.testing
+    assert len(scene.setup_course(session)) == 4, "the check's other four faces"
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_setup_draws_at_every_size(width, height):
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import ShotCalibration
+
+    session = ShotCalibration(PISTOL)
+    canvas = np.zeros((height, width, 3), np.uint8)
+    for cameras in (1, 2):
+        scene.draw_shot_calibration(canvas, session,
+                                    [np.full((720, 1280, 3), 90, np.uint8)] * cameras,
+                                    [Frame()] * cameras, lambda *args: None, height / 720)
+        assert canvas.any()

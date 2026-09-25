@@ -1161,58 +1161,234 @@ def _chrome_layers(width: int, height: int, radius: int,
 
 
 # --- calibration ------------------------------------------------------------
+#
+# Setup is the first thing a new player sees, so it is composed like a screen
+# of the game rather than a test pattern: the Target Range hall with its lamps
+# in, the face to shoot lit and the ones still to come hanging faintly beside
+# it, and along the bottom a console - the camera, what to do now, how far
+# there is to go - clear of every face on the wall. The faces' places and sizes
+# are the calibration's own (shot_calibration's targets and TARGET_RADIUS): the
+# fit and the inner-two-rings test read the very rings that are drawn.
 
-def draw_calibration_range(canvas, session, now):
-    """The actual Target Range hall and archery faces serve as the warm-up."""
+#: Learning shots before setup moves on to checking - ShotCalibration is
+#: ready once its fit has seen three.
+LEARN_SHOTS = 3
+
+#: How faint the faces still to come hang on the wall.
+COURSE_STRENGTH = 0.24
+
+
+def setup_arena(width: int, height: int) -> Rect:
+    """The hall's frame for setup: its top edge set down far enough that the
+    lamps the hall hangs above it are whole, not cut off by the window."""
+    top = int(0.03 * height) + max(2, int(0.006 * height)) + 10
+    return Rect(0, top, width, height - top)
+
+
+def setup_course(session) -> tuple[tuple[float, float], ...]:
+    """The faces still to come in this step of setup, after the one that is lit."""
+    from .shot_calibration import CHECK_TARGETS, REQUIRED_HITS, TARGETS
+
+    if session.testing:
+        return tuple(CHECK_TARGETS[len(session.hits) + 1:REQUIRED_HITS])
+    done = len(session.samples)
+    return tuple(TARGETS[index % len(TARGETS)] for index in range(done + 1, LEARN_SHOTS))
+
+
+def draw_calibration_range(canvas, session, now, course=False):
+    """The actual Target Range hall and archery faces serve as the warm-up.
+
+    With ``course`` the faces still to come in this step hang faintly beside
+    the lit one, and a pool of light marks the lit one out.
+    """
     from .maps import archery
     from .game import RoundOptions
     from .shot_calibration import TARGET_RADIUS
 
     height, width = canvas.shape[:2]
-    arena = archery.ArcheryRound(RoundOptions(Rect(0, 0, width, height), duration=None,
+    arena = archery.ArcheryRound(RoundOptions(setup_arena(width, height), duration=None,
                                              scale=height / 720, seed=0))
-    target = session.target
-    arena.targets = [archery.Target(target[0] * width, target[1] * height,
-                                    min(width, height) * TARGET_RADIUS, now - 1, 100)]
-    archery.draw_world(canvas, arena, now)
+    radius = min(width, height) * TARGET_RADIUS
+
+    def face(point):
+        return archery.Target(point[0] * width, point[1] * height, radius, now - 1, 100)
+
+    target = face(session.target)
+    if not course:
+        arena.targets = [target]
+        archery.draw_world(canvas, arena, now)
+    else:
+        archery.draw_world(canvas, arena, now)  # the hall alone
+        _pool_of_light(canvas, (round(target.x), round(target.y)), round(radius))
+        for point in setup_course(session):
+            archery.hang(canvas, arena, face(point), COURSE_STRENGTH)
+        archery.hang(canvas, arena, target)
     if session.last_impact:
         point, at = session.last_impact
         if now - at < 0.65:
             cv2.drawMarker(canvas, (round(point[0] * width), round(point[1] * height)),
                            ARMED if session.last_hit else MISS, cv2.MARKER_TILTED_CROSS,
-                           15, 2, cv2.LINE_AA)
+                           _px(15, height / 720), _px(2, height / 720), cv2.LINE_AA)
+
+
+def _pool_of_light(canvas: np.ndarray, centre: tuple[int, int], radius: int) -> None:
+    """A warm pool of lamplight on the wall behind the face to shoot."""
+    glow = _light_pool(radius)
+    reach = glow.shape[0] // 2
+    height, width = canvas.shape[:2]
+    x0, y0 = centre[0] - reach, centre[1] - reach
+    sx0, sy0 = max(0, -x0), max(0, -y0)
+    x0, y0 = max(0, x0), max(0, y0)
+    x1 = min(width, centre[0] + reach + 1)
+    y1 = min(height, centre[1] + reach + 1)
+    if x1 <= x0 or y1 <= y0:
+        return
+    region = canvas[y0:y1, x0:x1]
+    cv2.add(region, glow[sy0:sy0 + y1 - y0, sx0:sx0 + x1 - x0], dst=region)
+
+
+@lru_cache(maxsize=4)
+def _light_pool(radius: int) -> np.ndarray:
+    reach = int(radius * 2.8)
+    span = np.arange(-reach, reach + 1, dtype=np.float32) / reach
+    distance = np.sqrt(span[None, :] ** 2 + span[:, None] ** 2)
+    falloff = np.clip(1.0 - distance, 0.0, 1.0) ** 1.8
+    glow = (falloff[:, :, None] * np.float32((46, 60, 76))).astype(np.uint8)
+    glow.flags.writeable = False
+    return glow
+
+
+def setup_console(width: int, height: int, count: int, aspect: float,
+                  scale: float = 1.0) -> tuple[Rect, Rect, Rect]:
+    """The camera, the instruction and the progress panels along the bottom.
+
+    As tall as the room under the lowest face allows, capped, so the console
+    never covers a target the player has to shoot.
+    """
+    from .maps.archery import BOSS_SCALE
+    from .shot_calibration import CHECK_TARGETS, TARGET_RADIUS, TARGETS
+
+    margin, gap = _px(16, scale), _px(16, scale)
+    lowest = max(y for _, y in (*TARGETS, *CHECK_TARGETS)) * height
+    lowest += min(width, height) * TARGET_RADIUS * BOSS_SCALE * 1.15  # its shadow too
+    bottom = height - margin
+    tall = max(_px(60, scale), min(_px(170, scale), bottom - int(lowest) - gap))
+    top = bottom - tall
+    slot = (tall - (count - 1) * _px(4, scale)) / max(count, 1)
+    camera_w = max(_px(80, scale), min(int(slot * aspect), width // 4))
+    camera = Rect(margin, top, camera_w, tall)
+    progress_w = _px(250, scale)
+    progress = Rect(width - margin - progress_w, top, progress_w, tall)
+    instruction = Rect(camera.right + gap, top,
+                       max(1, progress.x - gap - camera.right - gap), tall)
+    return camera, instruction, progress
 
 
 def draw_shot_calibration(canvas, session, images, frames, draw, scale=1.0):
-    """A large target field with a persistent live view."""
-    draw_calibration_range(canvas, session, session.last_shot if session.last_shot > 0 else 0)
+    """Setup: the lit face on the range wall, and the console under it."""
+    from .shot_calibration import REQUIRED_HITS
+
+    now = session.last_shot if session.last_shot > 0 else 0
+    draw_calibration_range(canvas, session, now, course=True)
     height, width = canvas.shape[:2]
-    _centred_text(canvas, f"TARGET RANGE  |  {len(session.hits)} / 5 accurate hits",
-                   round(35 * scale), INK, 0.7 * scale)
-    # The bottom centre stays free of calibration targets.
     count = max(1, len(images))
-    pw = min(width // (count + 3), round(230 * scale))
-    for i, image in enumerate(images):
-        ph = max(1, int(pw * image.shape[0] / image.shape[1]))
-        preview = shrink(image, pw, ph)
-        draw(preview, frames[i], 0.7 * scale)
-        x = (width - count * (pw + 8)) // 2 + i * (pw + 8)
-        y = height - ph - round(85 * scale)
-        canvas[y:y + ph, x:x + pw] = preview
+    aspect = images[0].shape[1] / images[0].shape[0] if images else 16 / 9
+    camera, instruction, progress = setup_console(width, height, count, aspect, scale)
+
+    # The camera, framed as it is in every round, in its state colour.
+    for index, (slot, image) in enumerate(zip(inset_slots(camera, count), images)):
+        state = FUSED if frames[index].subjects else NO_HAND
+        draw_camera_inset(canvas, image, frames[index], slot,
+                          f"CAM {index + 1}" if count > 1 else "", state, draw, scale)
+
+    # What to do now: the largest words on the screen.
+    draw_chrome_panel(canvas, instruction, scale, tab=ACCENT)
+    pad = _px(20, scale)
+    draw_text(canvas, "TARGET RANGE  -  AIM SETUP",
+              (instruction.x + pad, instruction.y + _px(26, scale)), ACCENT,
+              scale=0.42 * scale, thickness=1, outline=False)
+    status_y = instruction.bottom - _px(16, scale)
+    first = instruction.y + _px(40, scale)
+    lines, text_scale, step = _fit_instruction(session.message, instruction.width - 2 * pad,
+                                               status_y - _px(26, scale) - first, scale)
+    y = first + step - _px(6, scale)
+    for line in lines:
+        draw_text(canvas, line, (instruction.x + pad, y), INK, scale=text_scale,
+                  thickness=_px(2, scale), outline=False)
+        y += step
+    status, color = (("Show your hand to the camera", DANGER) if not session.aim.tracking
+                     else ("Thumb up - ready to shoot", ARMED) if session.aim.armed
+                     else ("Raise your thumb for the next shot", ACCENT))
+    cv2.circle(canvas, (instruction.x + pad + _px(4, scale), status_y - _px(5, scale)),
+               _px(4, scale), color, -1, cv2.LINE_AA)
+    draw_text(canvas, status, (instruction.x + pad + _px(16, scale), status_y), color,
+              scale=0.5 * scale, thickness=1, outline=False)
+    keys = "b undo   r start over   esc skip"
+    keys_scale = 0.42 * scale
+    keys_w = text_width(keys, keys_scale, 1, False)
+    if keys_w + text_width(status, 0.5 * scale, 1, False) + _px(56, scale) < instruction.width:
+        draw_text(canvas, keys, (instruction.right - pad - keys_w, status_y), MUTED,
+                  scale=keys_scale, thickness=1, outline=False)
+
+    # How far there is to go.
+    step_color = ARMED if session.testing else ACCENT
+    draw_chrome_panel(canvas, progress, scale, tab=step_color)
+    learned = LEARN_SHOTS if session.testing else min(len(session.samples), LEARN_SHOTS)
+    hits = len(session.hits)
+    draw_text(canvas, "STEP 2 OF 2" if session.testing else "STEP 1 OF 2",
+              (progress.x + pad, progress.y + _px(26, scale)), step_color,
+              scale=0.42 * scale, thickness=1, outline=False)
+    headline = (f"{hits} of {REQUIRED_HITS} centre hits" if session.testing
+                else f"{learned} of {LEARN_SHOTS} shots learned")
+    draw_caption(canvas, headline, (progress.x + pad, progress.y + _px(66, scale)), INK,
+                 0.6 * scale)
+    _draw_setup_pips(canvas, progress, learned, hits, session.testing, REQUIRED_HITS,
+                     scale)
+
     if session.preview and session.aim.position:
         draw_crosshair(canvas, session.aim.position[0] * width,
                        session.aim.position[1] * height, session.aim.armed,
                        None, scale, pull=session.aim.travel, fire_at=0.5)
-    status = ("Show your hand to the camera" if not session.aim.tracking else
-              "Thumb up - ready to shoot" if session.aim.armed else
-              "Raise your thumb for the next shot")
-    _centred_text(canvas, status, height - round(63 * scale), ARMED, 0.5 * scale)
-    message = session.message
-    # Keep feedback readable without clipping on smaller displays.
-    if len(message) > 110:
-        message = message[:107] + "..."
-    _centred_text(canvas, message, height - round(43 * scale), MUTED, 0.4 * scale)
-    draw_footer(canvas, "five centre hits start the game   |   b undo   r start over   esc skip")
+
+
+def _fit_instruction(message: str, width: int, room: int,
+                     scale: float) -> tuple[list[str], float, int]:
+    """The instruction wrapped as large as it will go in the room it has."""
+    for size in (0.8, 0.72, 0.64, 0.56, 0.5):
+        text_scale, step = size * scale, _px(size * 38, scale)
+        lines = _wrapped(message, text_scale, width, _px(2, scale))
+        if len(lines) * step <= room + _px(8, scale):
+            return lines, text_scale, step
+    fits = max(1, (room + _px(8, scale)) // step)
+    if len(lines) > fits:
+        lines = lines[:fits]
+        lines[-1] = _fitted(lines[-1] + " ...", text_scale, width)
+    return lines, text_scale, step
+
+
+def _draw_setup_pips(canvas: np.ndarray, panel: Rect, learned: int, hits: int,
+                     testing: bool, required: int, scale: float) -> None:
+    """Both steps of setup as a row of pips: the shots that teach the aim, then
+    the centre hits that check it - done ones filled, the next one ringed."""
+    radius, pitch, group_gap = _px(8, scale), _px(24, scale), _px(18, scale)
+    x = panel.x + _px(20, scale) + radius
+    y = panel.bottom - _px(46, scale)
+    label_y = panel.bottom - _px(16, scale)
+    groups = ((LEARN_SHOTS, learned, not testing, ACCENT, "LEARN"),
+              (required, hits, testing, ARMED, "CHECK"))
+    for total, done, current, color, label in groups:
+        start = x
+        for index in range(total):
+            if index < done:
+                cv2.circle(canvas, (x, y), radius, color, -1, cv2.LINE_AA)
+            else:
+                ring = color if current and index == done else EDGE
+                cv2.circle(canvas, (x, y), radius, ring, _px(2, scale), cv2.LINE_AA)
+            x += pitch
+        draw_text(canvas, label, (start - radius, label_y),
+                  color if current or done else MUTED, scale=0.38 * scale, thickness=1,
+                  outline=False)
+        x += group_gap
 
 
 # --- choosing a map ---------------------------------------------------------
