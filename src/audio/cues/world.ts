@@ -71,6 +71,9 @@ export function wind(t: Take): Mono[] {
     const walk = wanderTrack(n, rc, 0.8, t.sr);
     const whistle = svf(white(n, rc), t.sr, "bp",
       (u) => (380 + 900 * walk(u)) * t.p * (0.85 + 0.3 * gust[Math.floor(u * n)]!), rc.range(14, 22), 64);
+    // A two-pole band-pass has shallow skirts: on white noise it leaks hiss
+    // across the whole band. The low-pass keeps the whistle a whistle.
+    lowpass(whistle, t.sr, 2400, 2);
     normalize(whistle);
     const grit = bandNoise(n, t.sr, rc, 2800, 9000, 2);
     const flick = wobble(n, t.sr, 30, () => rc.next());

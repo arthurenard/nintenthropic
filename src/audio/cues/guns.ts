@@ -276,13 +276,15 @@ export function ricochet(t: Take): Mono {
   scatter(out, t, 4, 0.01, 0.12, 1500, 7000, 0.18);
   const len = t.n(t.L(r.range(0.55, 0.8)));
   const f0 = r.range(2300, 3500) * t.p;
-  const end = r.range(0.38, 0.5);
+  const end = r.range(0.3, 0.42);
   const tumble = r.range(24, 42);
   const fm = r.range(0.015, 0.03);
   const freq = new Float32Array(len);
   for (let i = 0; i < len; i++) {
     const u = i / len;
-    const recede = 1 - (1 - end) * Math.pow(u, 1.3);
+    // The pitch falls from the moment it leaves the surface — steadily, as
+    // an exponential — which is what the ear knows as a ricochet.
+    const recede = Math.pow(end, Math.pow(u, 0.85));
     freq[i] = f0 * recede * (1 + fm * Math.sin((2 * Math.PI * tumble * i) / t.sr));
   }
   const tone = new Float32Array(len);
@@ -291,7 +293,10 @@ export function ricochet(t: Take): Mono {
     tone[i] = Math.sin(ph) + 0.22 * Math.sin(2 * ph + 0.7);
     ph += (2 * Math.PI * freq[i]!) / t.sr;
   }
-  const air = svf(white(len, r), t.sr, "bp", freq, 14);
+  // The air around the tone: noise tuned tightly to it (a narrow band, and
+  // low-passed so the band-pass's shallow skirts do not leak hiss).
+  const air = svf(white(len, r), t.sr, "bp", freq, 30);
+  lowpass(air, t.sr, 6000, 2);
   normalize(air);
   const whine = new Float32Array(len);
   const am = r.range(0.2, 0.4);
@@ -300,7 +305,7 @@ export function ricochet(t: Take): Mono {
     const spin = 1 - am + am * Math.sin((2 * Math.PI * tumble * i) / t.sr + 1);
     // Louder as it leaves the surface, then falling away with the distance.
     const env = Math.min(1, u * 25) / (1 + 3.5 * u);
-    whine[i] = (0.55 * tone[i]! + 0.8 * air[i]!) * spin * env;
+    whine[i] = (0.65 * tone[i]! + 0.6 * air[i]!) * spin * env;
   }
   perc(whine, t.sr, 0.01, 10);
   lowpass(whine, t.sr, 9000, 2);

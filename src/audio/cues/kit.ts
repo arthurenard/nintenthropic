@@ -94,9 +94,12 @@ export function bubble(t: Take, freq: number, tau: number, rise = 1.6): Mono {
 /** A shard of glass or a pebble: a tiny inharmonic ring with a bright tick. */
 export function addShard(out: Mono, t: Take, at: number, freq: number, amp: number, tau: number): void {
   const r = t.rng;
-  addMode(out, t.sr, at, freq, amp, tau, r.range(0, 6.28));
-  addMode(out, t.sr, at, freq * r.range(1.42, 1.62), amp * 0.45, tau * 0.6, r.range(0, 6.28));
-  addMode(out, t.sr, at, freq * r.range(2.2, 2.9), amp * 0.2, tau * 0.35, r.range(0, 6.28));
+  // The modes start from zero (phase 0 or π): a ring that starts mid-swing
+  // is a step, and a step is a low thump under every tinkle. The tick
+  // below is the strike's edge instead.
+  addMode(out, t.sr, at, freq, amp * r.sign(), tau, 0);
+  addMode(out, t.sr, at, freq * r.range(1.42, 1.62), amp * 0.45 * r.sign(), tau * 0.6, 0);
+  addMode(out, t.sr, at, freq * r.range(2.2, 2.9), amp * 0.2 * r.sign(), tau * 0.35, 0);
   const tick = bandNoise(t.n(0.002), t.sr, r, 3000, 16000, 2);
   decayInPlace(tick, t.sr, 0.0001, 0.0005);
   t.put(out, tick, at, amp * 0.6);
