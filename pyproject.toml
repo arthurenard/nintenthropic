@@ -1,24 +1,65 @@
 [project]
 name = "handy"
-version = "0.1.0"
-description = "A webcam arcade: four finger-pistol shooting games you play with your hand, powered by MediaPipe."
+version = "0.2.0"
+description = "A webcam arcade: four shooting games you play with a finger pistol, tracked on your own computer by MediaPipe."
 readme = "README.md"
+# MediaPipe 0.10.35 ships one py3-none wheel per platform and names 3.9-3.12 in
+# its classifiers; the suite passes on 3.10 through 3.13. Nothing newer has
+# been tried.
 requires-python = ">=3.10,<3.14"
+keywords = [
+    "arcade",
+    "computer-vision",
+    "finger-gun",
+    "game",
+    "gesture",
+    "hand-tracking",
+    "mediapipe",
+    "opencv",
+    "webcam",
+]
+classifiers = [
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: JavaScript",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+]
 dependencies = [
     # MediaPipe 1.x aborts on macOS (Metal graph service unavailable), so stay on 0.10.
     "mediapipe==0.10.35",
+    "numpy",
     "opencv-python>=4.10",
 ]
 
+[project.urls]
+Homepage = "https://github.com/arthurenard/claude-of-duty"
+Repository = "https://github.com/arthurenard/claude-of-duty"
+Issues = "https://github.com/arthurenard/claude-of-duty/issues"
+
+[project.scripts]
+handy = "handy.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Everything under handy/ that .gitignore does not exclude - the browser page in
+# handy/web included, which is served straight from the installed package.
+packages = ["handy"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/handy", "/tests", "/docs", "/README.md"]
+
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.6"]
-
-[tool.uv]
-# Dependencies only: the app is imported straight from this directory. Installing
-# it (even editable) would rely on a .pth file inside .venv, and iCloud Drive
-# flags everything under a dot-directory in a synced folder (such as the
-# Desktop) as hidden -- which CPython then skips, silently breaking the import.
-package = false
 
 [tool.ruff]
 line-length = 88
@@ -34,4 +75,5 @@ ignore = ["E501", "B905"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The suite imports the checkout itself, never a copy installed elsewhere.
 pythonpath = ["."]

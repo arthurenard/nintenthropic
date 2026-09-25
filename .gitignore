@@ -8,3 +8,6 @@ screenshots/
 .claude/*.lock
 .claude/settings.local.json
 .claude/worktrees/
+dist/
+build/
+*.egg-info/

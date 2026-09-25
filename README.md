@@ -4,10 +4,65 @@ A local webcam arcade with **four games** and a **Target Range warm-up**.
 Play with a finger pistol in your browser or the fullscreen desktop app.
 Mouse and touch are available as a smaller alternative in the browser.
 
+## Install and run
+
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/) and
+`git`. uv fetches Python 3.12 and every other dependency itself.
+
+Try it without installing:
+
+```bash
+uvx --python 3.12 --from git+https://github.com/arthurenard/claude-of-duty handy --browser
+```
+
+Or install the `handy` command:
+
+```bash
+uv tool install --python 3.12 git+https://github.com/arthurenard/claude-of-duty
+handy --browser   # the browser arcade
+handy             # the fullscreen desktop app
+```
+
+`uv tool upgrade handy` updates it and `uv tool uninstall handy` removes it.
+Keep `--python 3.12`: without it, uv installs into whichever Python it finds
+first, even one Handy does not support.
+
+From a checkout, prefix any command with `uv run`:
+
+```bash
+git clone https://github.com/arthurenard/claude-of-duty
+cd claude-of-duty
+uv run handy --browser
+```
+
+**First run.** Camera play downloads MediaPipe's hand model (~8 MB) and face
+model (~4 MB), about 12 MB in all, into `~/.cache/handy/models/`. That happens
+once; after it, the game never needs the network. Mouse and touch need no
+model.
+
+**Camera permission.** The browser arcade asks for the camera in the page;
+allow it for `127.0.0.1` (macOS may also ask whether the browser itself may use
+the camera). The desktop app uses your terminal's permission: macOS asks the
+first time, and the setting is under **System Settings → Privacy & Security →
+Camera**. Restart the terminal after changing it.
+
+**Platforms.** Handy runs where MediaPipe 0.10.35 and OpenCV publish wheels:
+
+- **macOS 13 or later on Apple silicon** — where Handy is developed and played.
+- **Linux on x86_64** (glibc 2.28 or later) — CI runs the test suite there, but
+  nobody has played it there with a camera yet. It needs the OpenGL, EGL and
+  GLib libraries a desktop install already has (on Debian or Ubuntu: `libgl1
+  libegl1 libgles2 libglib2.0-0`).
+- **Windows on x86_64** — the wheels exist, but Handy has not been tried there.
+- **Not supported:** Intel Macs, ARM Linux (such as a Raspberry Pi) and Windows
+  on ARM, for which MediaPipe 0.10.35 or OpenCV publishes no wheel.
+
+On macOS the test suite passes on Python 3.10 to 3.13; CI uses 3.12.
+
 ## Play in your browser
 
 ```bash
-uv run python -m handy --browser
+handy --browser
 ```
 
 Open **http://127.0.0.1:8765** if a tab does not open automatically. Keep the
@@ -27,7 +82,7 @@ cached bundles. Mouse and touch do not load models.
 For a different port or to open the browser yourself:
 
 ```bash
-uv run python -m handy --browser --port 8766 --no-open
+handy --browser --port 8766 --no-open
 ```
 
 Browser launch accepts `--port` and `--no-open`; choose the game, controls,
@@ -101,13 +156,13 @@ remain upright, while zombies also have crawling and limping variants.
 ## Desktop app
 
 ```bash
-uv run python -m handy
-uv run python -m handy --map zombies --enemy robots
-uv run python -m handy --map sniper
+handy
+handy --map zombies --enemy robots
+handy --map sniper
 ```
 
-`uv` installs the dependencies automatically. macOS may ask for camera access for
-your terminal; manage it under **System Settings → Privacy & Security → Camera**.
+macOS asks for camera access for your terminal the first time; manage it under
+**System Settings → Privacy & Security → Camera**.
 
 Desktop setup uses the same Target Range warm-up with a live hand skeleton.
 Five accurate hits accept the aim and start play automatically. **B** undoes a
@@ -157,10 +212,17 @@ page; the remaining flags configure the desktop app.
 ## Development
 
 ```bash
+uv sync                          # .venv, with Handy installed in editable mode
 uv run pytest
 uv run ruff check handy tests
 node --check handy/web/app.js
+uv build                         # sdist and wheel, into dist/
 ```
+
+`uv run handy` and `uv run python -m handy` both run the checkout. CI runs the
+lint, the tests and the script check on macOS (Apple silicon) and Ubuntu, then
+builds the wheel, installs it into a clean environment and starts the browser
+arcade from it.
 
 - `handy/browser.py` — local HTTP adapter, session lifecycle and browser input.
 - `handy/web/` — dependency-free HTML, CSS, and JavaScript interface.
