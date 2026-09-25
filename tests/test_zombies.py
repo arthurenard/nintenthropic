@@ -7,7 +7,7 @@ import pytest
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, LOW_HEALTH, MAX_WALKERS,
-                                FALL, MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, SETTLED,
+                                FALL, FOG, MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, SETTLED,
                                 STAGGER, WAVE_SECONDS, Perspective, Walker, ZombieRound,
                                 _bloom, _draw_fallen, _environment, _fill, _fixed, _look,
                                 _skyline, draw_emblem, draw_hud, draw_stains, draw_walker,
@@ -253,6 +253,17 @@ def test_a_walker_far_enough_away_is_a_much_harder_shot():
 def test_the_fog_swallows_the_distant_ones():
     assert walker_at(3.0).figure(VIEW, 0.0).fog == 0.0
     assert walker_at(30.0).figure(VIEW, 0.0).fog > 0.7
+
+    def chest(distance: float) -> np.ndarray:
+        walker = walker_at(distance)
+        canvas = np.zeros((AREA.bottom + 56, AREA.width, 3), np.uint8)
+        draw_walker(canvas, walker, VIEW, 0.0)
+        figure = walker.figure(VIEW, 0.0)
+        return canvas[int((figure.shoulder_y + figure.hip_y) / 2), int(figure.x)].astype(int)
+
+    fog = np.array(FOG)
+    assert np.abs(chest(25.0) - fog).sum() < np.abs(chest(3.0) - fog).sum() / 2, \
+        "a far one is painted most of the way into the fog"
 
 
 # --- shooting them ---------------------------------------------------------
