@@ -2464,7 +2464,8 @@ def draw_rain(canvas: np.ndarray, area: Rect, now: float, drops: int = 110,
     if span <= 0 or width <= 0:
         return
     horizon = view.horizon if view is not None else top + 0.3 * span
-    mask = np.zeros((span, width), np.uint8)
+    # The light, drawn grey straight into three channels, to be added on.
+    mask = np.zeros((span, width, 3), np.uint8)
     for index in range(drops):
         layer = index % 3
         speed = (420, 640, 900)[layer]
@@ -2476,7 +2477,8 @@ def draw_rain(canvas: np.ndarray, area: Rect, now: float, drops: int = 110,
             continue  # the foreground layer falls in front of the road only
         length = int((4 + 6 * layer) + (10 + 14 * layer) * depth)
         tone = int(22 + 58 * (0.25 + 0.35 * layer) * (0.3 + 0.7 * depth))
-        cv2.line(mask, (x, y), (x - 1 - 2 * layer, y + length), tone, 1, cv2.LINE_AA)
+        cv2.line(mask, (x, y), (x - 1 - 2 * layer, y + length), (tone, tone, tone), 1,
+                 cv2.LINE_AA)
     # The bright few: close enough to catch the moon, two pixels wide.
     for index in range(max(4, drops // 14)):
         x = int((_rag(index + 900, 1) * 1.1 - 0.05) * width + now * -70) % (width + 40)
@@ -2484,12 +2486,12 @@ def draw_rain(canvas: np.ndarray, area: Rect, now: float, drops: int = 110,
         if y + top < horizon + span * 0.2:
             continue
         length = int(16 + 18 * _rag(index + 900, 3))
-        cv2.line(mask, (x, y), (x - 3, y + length), 46, 2, cv2.LINE_AA)
-        cv2.line(mask, (x, y), (x - 3, y + length), 96, 1, cv2.LINE_AA)
+        cv2.line(mask, (x, y), (x - 3, y + length), (46, 46, 46), 2, cv2.LINE_AA)
+        cv2.line(mask, (x, y), (x - 3, y + length), (96, 96, 96), 1, cv2.LINE_AA)
     if view is not None:
         _draw_ripples(mask, view, now, max(6, drops // 8), top)
     region = canvas[top:bottom]
-    cv2.add(region, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), dst=region)
+    cv2.add(region, mask, dst=region)
 
 
 def _draw_ripples(mask: np.ndarray, view: Perspective, now: float, count: int,
@@ -2509,7 +2511,8 @@ def _draw_ripples(mask: np.ndarray, view: Perspective, now: float, count: int,
         reach = view.height_px(distance, 0.05 + 0.11 * phase)
         axes = (max(1, int(reach)), max(1, int(reach * 0.28)))
         fade = (1.0 - phase) * (1.0 - min(distance / 22.0, 0.8))
-        cv2.ellipse(mask, (ground[0], y), axes, 0, 0, 360, int(70 * fade), 1, cv2.LINE_AA)
+        tone = int(70 * fade)
+        cv2.ellipse(mask, (ground[0], y), axes, 0, 0, 360, (tone, tone, tone), 1, cv2.LINE_AA)
 
 
 def draw_footer_strip(canvas: np.ndarray, area: Rect) -> None:
