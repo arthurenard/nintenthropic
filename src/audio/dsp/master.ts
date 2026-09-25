@@ -51,14 +51,19 @@ export function momentaryMaxDb(channels: Channels, sr: number, window = 0.05): n
   const n = channels[0]!.length;
   const size = Math.min(n, samples(sr, window));
   const hop = samples(sr, 0.005);
-  // Power per sample (averaged over channels), then a running window sum.
-  const power = new Float64Array(n);
-  for (const ch of channels) for (let i = 0; i < n; i++) power[i]! += (ch[i]! * ch[i]!) / channels.length;
+  // A running window sum of the power, computed in place from the samples:
+  // an array of per-sample power would be allocated three times a take, and
+  // garbage collection was a quarter of the library's synthesis time.
+  const a = channels[0]!;
+  const b = channels[1] ?? a;
+  const k = channels.length > 1 ? 0.5 : 1;
   let acc = 0;
-  for (let i = 0; i < size; i++) acc += power[i]!;
+  for (let i = 0; i < size; i++) acc += k * (a[i]! * a[i]! + (b === a ? 0 : b[i]! * b[i]!));
   let best = acc;
   for (let start = 1; start + size <= n; start++) {
-    acc += power[start + size - 1]! - power[start - 1]!;
+    const j = start + size - 1;
+    const o = start - 1;
+    acc += k * (a[j]! * a[j]! - a[o]! * a[o]! + (b === a ? 0 : b[j]! * b[j]! - b[o]! * b[o]!));
     if (start % hop === 0 && acc > best) best = acc;
   }
   const p = Math.max(best, 0) / size;

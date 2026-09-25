@@ -183,7 +183,14 @@ function whistle(t: Take, notes: Whistled[], seconds: number, vibrato = 1): Mono
     last = note.midi;
   });
   const freq = new Float32Array(n);
-  for (let i = 0; i < n; i++) freq[i] = midiHz(pitch[i]! || last) * t.p;
+  // Pitch to frequency every 8 samples, linearly between: a power per sample
+  // was the whistle's largest cost, and a glide is smooth at this rate.
+  for (let i = 0; i < n; i += 8) {
+    const a = midiHz(pitch[i]! || last) * t.p;
+    const j = Math.min(n - 1, i + 8);
+    const b = midiHz(pitch[j]! || last) * t.p;
+    for (let k = i; k < Math.min(n, i + 8); k++) freq[k] = a + ((b - a) * (k - i)) / 8;
+  }
   const out = new Float32Array(n);
   let ph = 0;
   for (let i = 0; i < n; i++) {

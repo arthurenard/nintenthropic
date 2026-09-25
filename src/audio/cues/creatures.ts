@@ -10,7 +10,7 @@
 import { bandpass, biquad, highpass, lowpass } from "../dsp/filters";
 import { wrap } from "../dsp/master";
 import { type Mono, adsr, fade, normalize, shapeBy } from "../dsp/signal";
-import { formants, glottal, white } from "../dsp/sources";
+import { addMode, formants, glottal, white } from "../dsp/sources";
 import { roomMono } from "../dsp/space";
 import type { Take } from "../dsp/take";
 import { burst, puff, thump } from "./kit";
@@ -458,14 +458,9 @@ export function deathPlayer(t: Take): Mono {
   t.put(body, dust, 0.27, 0.25);
   t.put(body, lubDub(t, 0.3, 1), 0.75, 0.9);
   t.put(body, lubDub(t, 0.36, 1), 1.95, 0.55);
+  // Steady tones as undamped resonators (two multiplies a sample, not a sine).
   const swell = t.canvas(3.3);
-  for (const [f, a] of [[55, 1], [82.4, 0.6], [110, 0.25]] as const) {
-    let ph = r.range(0, 6);
-    for (let i = 0; i < swell.length; i++) {
-      swell[i]! += a * Math.sin(ph);
-      ph += (2 * Math.PI * f * t.p) / t.sr;
-    }
-  }
+  for (const [f, a] of [[55, 1], [82.4, 0.6], [110, 0.25]] as const) addMode(swell, t.sr, 0, f * t.p, a, 1000, r.range(0, 6));
   adsr(swell, t.sr, 0.6, 0.8, 0.6, 1.6);
   t.put(body, swell, 0.2, 0.22);
   lowpass(body, t.sr, 1100, 2);
@@ -473,12 +468,8 @@ export function deathPlayer(t: Take): Mono {
   // The ringing: two close tones beating, rising in and slowly leaving.
   const ring = t.canvas(3.2);
   const f = r.range(3300, 4100);
-  let p1 = 0, p2 = 0;
-  for (let i = 0; i < ring.length; i++) {
-    ring[i] = Math.sin(p1) + 0.6 * Math.sin(p2);
-    p1 += (2 * Math.PI * f) / t.sr;
-    p2 += (2 * Math.PI * (f + 2.5)) / t.sr;
-  }
+  addMode(ring, t.sr, 0, f, 1, 1000, 0);
+  addMode(ring, t.sr, 0, f + 2.5, 0.6, 1000, 0);
   shapeBy(ring, (u) => Math.min(1, u * 6) ** 2 * Math.pow(1 - u, 1.5));
   t.put(out, ring, 0.08, 0.035);
   return out;
