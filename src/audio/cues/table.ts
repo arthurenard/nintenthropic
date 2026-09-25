@@ -348,7 +348,7 @@ export const CUES: Record<string, CueSpec> = {
   },
   quick_draw: {
     recipe: quickDraw, pack: "western", bus: "ui", level: -11,
-    priority: 2, maxInstances: 2, vary: 0, expect: [0.5, 1.2],
+    priority: 2, maxInstances: 2, vary: 0, expect: [0.5, 1.3],
   },
   streak_up: {
     recipe: streakUp, pack: "western", bus: "ui", level: -13,

@@ -10,7 +10,7 @@
  */
 import { biquad, highpass, lowpass, svf } from "../dsp/filters";
 import { Rng, hashSeed } from "../dsp/rng";
-import { type Mono, adsr, normalize, shapeBy } from "../dsp/signal";
+import { type Mono, adsr, normalize, shapeBy, tailOff } from "../dsp/signal";
 import { addMode, addString, bandNoise, click, saw, white } from "../dsp/sources";
 import { room, roomMono } from "../dsp/space";
 import type { Take } from "../dsp/take";
@@ -287,16 +287,18 @@ export function waveStart(t: Take): Mono[] {
   const dry = t.canvas(3.6);
   t.put(dry, bellStrike(t, t.rng.range(540, 580) * t.p, 3.4, 1.1), 0.01, 0.8);
   drum(dry, t, 0.01, t.rng.range(48, 56), 1.0);
+  tailOff(dry, t.sr, 0.5);
   return room(dry, t.sr, t.rng, { t60: 1.8, size: 1, damping: 0.35, mix: 0.35, predelay: 0.02, tail: 0.4 });
 }
 
 /** A wave cleared: a guitar strum from D to G, and a harmonic ringing over it. */
 export function waveClear(t: Take): Mono[] {
-  const dry = t.canvas(2.2);
+  const dry = t.canvas(2.8);
   strum(dry, t, 0.01, [50, 57, 62, 66], 0.7, 1.2);
   strum(dry, t, 0.28, [43, 50, 55, 59, 62, 67], 0.9, 2.4);
   addMode(dry, t.sr, 0.3, midiHz(79) * t.p, 0.1, 0.5, 0);
   addMode(dry, t.sr, 0.3, midiHz(91) * t.p, 0.04, 0.3, 0);
+  tailOff(dry, t.sr, 0.6);
   return room(dry, t.sr, t.rng, { t60: 1.4, size: 0.8, damping: 0.4, mix: 0.25, predelay: 0.015, tail: 0.2 });
 }
 
@@ -320,6 +322,7 @@ export function bossIntro(t: Take): Mono[] {
     { at: 2.52, midi: 71, dur: 1.45, fall: true },
   ];
   t.put(dry, whistle(t, motif, 4.1), 0, 0.55);
+  tailOff(dry, t.sr, 0.6);
   return room(dry, t.sr, t.rng, { t60: 2.6, size: 1, damping: 0.3, mix: 0.4, predelay: 0.03, tail: 0.3 });
 }
 
@@ -344,13 +347,14 @@ export function duelWhistle(t: Take): Mono[] {
   // The valley's answer: a darker copy of the phrase, a beat behind.
   const echo = lowpass(Float32Array.from(w), t.sr, 1800, 2);
   t.put(dry, echo, r.range(0.38, 0.46), 0.22);
+  tailOff(dry, t.sr, 0.4);
   return room(dry, t.sr, r, { t60: 3.0, size: 1, damping: 0.35, mix: 0.45, predelay: 0.05, tail: 0.3 });
 }
 
 /** Quick Draw: a glint of steel — a shimmering *tiing* over a rising *shing* — and two bright harmonics. */
 export function quickDraw(t: Take): Mono {
   const r = t.rng;
-  const out = t.canvas(1.0);
+  const out = t.canvas(1.15);
   t.put(out, shing(t, 0.14, 900, 7000), 0, 0.35);
   for (let k = 0; k < 5; k++) {
     const f = r.range(2600, 7200);
@@ -359,7 +363,7 @@ export function quickDraw(t: Take): Mono {
   }
   twang(out, t, 0.08, 83, 0.6, 0.9, 0.95);
   twang(out, t, 0.15, 88, 0.6, 0.9, 0.95);
-  return out;
+  return tailOff(out, t.sr, 0.4);
 }
 
 /** The streak rises: two bright plucks up a fifth. Pitch is exact, so a game can raise it by rate per level. */
@@ -368,7 +372,7 @@ export function streakUp(t: Take): Mono {
   twang(out, t, 0.005, 86, 0.7, 0.7, 0.95);
   twang(out, t, 0.075, 93, 0.8, 0.8, 0.95);
   glock(out, t, 0.075, 93, 0.05, 0.3);
-  return out;
+  return tailOff(out, t.sr, 0.25);
 }
 
 /** A secret found: a harmonica's *wah* from D to G, a small grin of a sound. */
@@ -382,23 +386,25 @@ export function secretFound(t: Take): Mono {
 
 /** The Golden Revolver: the cylinder spun, a golden arpeggio chiming up, and a glint. */
 export function goldenUnlock(t: Take): Mono[] {
-  const dry = t.canvas(2.4);
+  const dry = t.canvas(2.9);
   const spin = reloadSpin(t);
   t.put(dry, spin, 0, 0.45);
   [67, 71, 74, 79, 83].forEach((midi, k) => glock(dry, t, 0.35 + k * 0.085, midi + 12, 0.35, 0.9));
   t.put(dry, shing(t, 0.25, 1500, 9000), 0.7, 0.2);
   for (let k = 0; k < 8; k++) addMode(dry, t.sr, 0.78 + k * 0.04, t.rng.range(5000, 9500), 0.03, 0.2, 0);
+  tailOff(dry, t.sr, 0.6);
   return room(dry, t.sr, t.rng, { t60: 1.6, size: 0.9, mix: 0.3, predelay: 0.015, tail: 0.2 });
 }
 
 /** The tombstone: a low guitar falling A, E, low A, and a soft drum as it lands. */
 export function gameOver(t: Take): Mono[] {
-  const dry = t.canvas(3.8);
+  const dry = t.canvas(4.4);
   twang(dry, t, 0.02, 57, 0.8, 2.0, 0.7);
   twang(dry, t, 0.6, 52, 0.8, 2.2, 0.7);
   twang(dry, t, 1.2, 45, 0.95, 3.2, 0.65);
   drum(dry, t, 1.2, 46, 0.5);
-  shapeBy(dry, (u) => (u < 0.3 ? 1 : 1 - 0.15 * Math.sin(2 * Math.PI * 4.5 * (u - 0.3) * 3.8)), 16);
+  shapeBy(dry, (u) => (u < 0.3 ? 1 : 1 - 0.15 * Math.sin(2 * Math.PI * 4.5 * (u - 0.3) * 4.4)), 16);
+  tailOff(dry, t.sr, 0.9);
   return room(dry, t.sr, t.rng, { t60: 2.2, size: 1, mix: 0.35, predelay: 0.02, tail: 0.2 });
 }
 

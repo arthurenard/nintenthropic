@@ -121,6 +121,15 @@ export function fade(buf: Mono, sr: number, fadeIn: number, fadeOut: number): Mo
   return buf;
 }
 
+/**
+ * Let a ringing sound go over its last ``seconds`` (a raised cosine), so a
+ * canvas that ends while strings or bells still ring ends in a fade, not a
+ * wall — which is a click once a reverb carries on past it.
+ */
+export function tailOff(buf: Mono, sr: number, seconds: number): Mono {
+  return fade(buf, sr, 0, Math.min(seconds, (buf.length / sr) * 0.5));
+}
+
 /** Multiply by a curve given per sample: ``shape(u)`` with u = 0..1 over the buffer. */
 export function shapeBy(buf: Mono, shape: (u: number) => number, step = 32): Mono {
   const n = buf.length;

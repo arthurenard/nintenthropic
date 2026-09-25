@@ -127,7 +127,15 @@ export function finish(channels: Channels, sr: number, o: FinishOptions = {}): C
     if (keep < n0) chans = chans.map((c) => c.slice(0, keep));
     const n = keep;
     const fi = Math.min(n, samples(sr, 0.0005));
-    const fo = Math.min(Math.floor(n / 4), samples(sr, 0.06));
+    // A safety net for a recipe whose canvas ended while it still rang: if
+    // the last 50 ms are within 45 dB of the loudest, fade over the last
+    // stretch rather than 60 ms, so the ring goes away instead of stopping.
+    const w = Math.min(n, samples(sr, 0.05));
+    let endPower = 0;
+    for (const ch of chans) for (let i = n - w; i < n; i++) endPower += ch[i]! * ch[i]!;
+    endPower /= w * chans.length;
+    const ringing = 10 * Math.log10(endPower + 1e-20) > momentaryMaxDb(chans, sr) - 45;
+    const fo = ringing ? Math.min(Math.floor(n * 0.3), samples(sr, 0.4)) : Math.min(Math.floor(n / 4), samples(sr, 0.06));
     for (const ch of chans) {
       for (let i = 0; i < fi; i++) ch[i]! *= i / fi;
       for (let i = 0; i < fo; i++) ch[n - 1 - i]! *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fo);
