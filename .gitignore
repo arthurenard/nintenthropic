@@ -11,3 +11,9 @@ screenshots/
 dist/
 build/
 *.egg-info/
+node_modules/
+dist/
+test-results/
+playwright-report/
+art/**/*.blend1
+art/**/_renders/
