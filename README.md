@@ -1,240 +1,175 @@
 # Handy
 
-A local webcam arcade with **four games** and a **Target Range warm-up**.
-Play with a finger pistol in your browser or the fullscreen desktop app.
-Mouse and touch are available as a smaller alternative in the browser.
+**An arcade you play with your hand.** Point your finger at the screen, fold
+your thumb to fire. Four games, one webcam, and nothing to hold.
 
-## Install and run
+![Handy's arcade: Dead of Night featured above the four games](docs/media/handy.jpg)
 
-You need [uv](https://docs.astral.sh/uv/getting-started/installation/) and
-`git`. uv fetches Python 3.12 and every other dependency itself.
+Everything runs on your computer. The camera picture never leaves it.
 
-Try it without installing:
+## Play in thirty seconds
+
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/). Then:
 
 ```bash
 uvx --python 3.12 --from git+https://github.com/arthurenard/claude-of-duty handy --browser
 ```
 
-Or install the `handy` command:
+Handy opens in your browser. Pick a game, press **Play**, and allow the camera.
+The first time, it downloads its tracking models (about 12 MB); after that
+it never needs the network.
+
+No camera? Choose **Use Mouse or Trackpad** and play straight away.
+
+## How to play
+
+1. **Point.** Hold your hand like a pistol. The crosshair follows your index
+   fingertip.
+2. **Fire.** Fold your thumb down, like a hammer falling. Raise it to fire again.
+3. **Warm up once.** The first time, Handy asks for a few shots at the Target
+   Range to learn your aim, then five centre hits to check it. Next time it
+   remembers, and you go straight into the game. **Adjust Aim** is always one
+   click away if you move your camera or your chair.
+
+In Overwatch Ridge, close one eye to look down the rifle's scope. There is
+nothing to set up for that; Handy notices.
+
+## The games
+
+| | |
+| --- | --- |
+| ![Dead of Night](docs/media/dead-of-night.jpg) **Dead of Night** — They come up the road out of the fog, wave after wave. Head shots drop them; body shots only slow them down. Choose zombies or humanoid robots. | ![High Noon](docs/media/high-noon.jpg) **High Noon** — Bottles on the rail, bandits in the doorways, and townsfolk you must not hit. The quicker the draw, the bigger the score. |
+| ![Orbital Decay](docs/media/orbital-decay.jpg) **Orbital Decay** — Debris tumbling toward the station window. Big pieces split when you hit them, and keep coming. | ![Overwatch Ridge](docs/media/overwatch-ridge.jpg) **Overwatch Ridge** — A long valley and a rifle. The round drops and the wind drifts it; the reticle's marks tell you how far to hold over. |
+
+Every round ends on a card worth passing round: your score, your best, and
+**Share** for a picture of it.
+
+![A Dead of Night score card](docs/media/share-card.jpg)
+
+## Install it
+
+To keep the `handy` command around:
 
 ```bash
 uv tool install --python 3.12 git+https://github.com/arthurenard/claude-of-duty
-handy --browser   # the browser arcade
-handy             # the fullscreen desktop app
+handy --browser   # the arcade in your browser
+handy             # the same games in a fullscreen window
 ```
 
-`uv tool upgrade handy` updates it and `uv tool uninstall handy` removes it.
-Keep `--python 3.12`: without it, uv installs into whichever Python it finds
-first, even one Handy does not support.
+`uv tool upgrade handy` updates it; `uv tool uninstall handy` removes it. Keep
+`--python 3.12`: without it, uv may pick a Python that Handy does not support.
 
-From a checkout, prefix any command with `uv run`:
+**Camera permission.** In the browser, allow the camera for `127.0.0.1` (macOS
+may also ask whether the browser itself may use it). The fullscreen app uses
+your terminal's permission: macOS asks the first time, and the setting lives in
+**System Settings → Privacy & Security → Camera**. Restart the terminal after
+changing it.
 
-```bash
-git clone https://github.com/arthurenard/claude-of-duty
-cd claude-of-duty
-uv run handy --browser
-```
+**Where it runs.** Handy runs wherever MediaPipe 0.10.35 and OpenCV publish
+wheels:
 
-**First run.** Camera play downloads MediaPipe's hand model (~8 MB) and face
-model (~4 MB), about 12 MB in all, into `~/.cache/handy/models/`. That happens
-once; after it, the game never needs the network. Mouse and touch need no
-model.
-
-**Camera permission.** The browser arcade asks for the camera in the page;
-allow it for `127.0.0.1` (macOS may also ask whether the browser itself may use
-the camera). The desktop app uses your terminal's permission: macOS asks the
-first time, and the setting is under **System Settings → Privacy & Security →
-Camera**. Restart the terminal after changing it.
-
-**Platforms.** Handy runs where MediaPipe 0.10.35 and OpenCV publish wheels:
-
-- **macOS 13 or later on Apple silicon** — where Handy is developed and played.
-- **Linux on x86_64** (glibc 2.28 or later) — CI runs the test suite there, but
-  nobody has played it there with a camera yet. It needs the OpenGL, EGL and
-  GLib libraries a desktop install already has (on Debian or Ubuntu: `libgl1
-  libegl1 libgles2 libglib2.0-0`).
-- **Windows on x86_64** — the wheels exist, but Handy has not been tried there.
+- **macOS 13 or later on Apple silicon**, where it is made and played.
+- **Linux on x86_64** (glibc 2.28 or later). CI runs the tests there, but nobody
+  has played it there with a camera yet. It needs the OpenGL, EGL and GLib
+  libraries a desktop already has (Debian or Ubuntu: `libgl1 libegl1 libgles2
+  libglib2.0-0`).
+- **Windows on x86_64**: the wheels exist, but Handy hasn't been tried there.
 - **Not supported:** Intel Macs, ARM Linux (such as a Raspberry Pi) and Windows
-  on ARM, for which MediaPipe 0.10.35 or OpenCV publishes no wheel.
+  on ARM, which MediaPipe 0.10.35 or OpenCV publishes no wheel for.
 
-On macOS the test suite passes on Python 3.10 to 3.13; CI uses 3.12.
+## Privacy
 
-## Play in your browser
+Hand tracking is Google's MediaPipe, running on your computer's CPU. In the
+browser, camera frames go only from the page to the Handy process on the same
+machine, over `127.0.0.1`; they are read in memory and never saved or sent
+anywhere. The only network access is the one-time model download, which is
+pinned to a version and checked against its SHA-256 before it is used.
 
-```bash
-handy --browser
-```
+## The fullscreen app
 
-Open **http://127.0.0.1:8765** if a tab does not open automatically. Keep the
-terminal running; Ctrl+C stops the server. Choose a game and press **Warm up & play**. Finger pistol is selected by default.
-The smaller **Use mouse or touch instead** option needs no camera or calibration.
+`handy` opens the same games fullscreen, with multi-camera support and the full
+set of options below.
 
-This is a **local browser interface backed by Python**, not a standalone hosted
-website. The maps use the shared game engine and rendering. There is no
-JavaScript copy of the game rules. It serves only this computer, one active game
-at a time; starting in another tab replaces the previous session.
+| Key | In a round | On the score card |
+| --- | --- | --- |
+| `P` or `Esc` | Pause (Resume, Restart, Choose a Game, Quit) | |
+| `R` | Restart | Play again (also `Space`) |
+| `B` | Choose a game | Choose a game |
+| `C` | Adjust aim | Adjust aim |
+| `S` | Save a screenshot | Save the card |
+| `N` | Switch opponent (Dead of Night) | |
+| `Q` | Quit | Quit (also `Esc`) |
 
-Camera frames travel only between the browser and the local Python process.
-They are processed in memory, not saved or sent to a cloud service. Camera modes
-download their MediaPipe model bundles on first use; after that they use the
-cached bundles. Mouse and touch do not load models.
+In the chooser, `1`–`4` pick a game. During aim setup, `B` undoes a shot, `R`
+starts over and `Esc` skips. Everything is also a button you can shoot.
 
-For a different port or to open the browser yourself:
+In the browser: `P`, `Space` or `Esc` pause, `M` mutes, and during aim setup
+`B` undoes a shot and `R` starts over.
 
-```bash
-handy --browser --port 8766 --no-open
-```
+<details>
+<summary><strong>Options</strong></summary>
 
-Browser launch accepts `--port` and `--no-open`; choose the game, controls,
-opponent, and duration in the page. Other CLI settings below belong to the
-desktop app. Use a current desktop browser with camera permission enabled for
-localhost. If the camera is denied, missing, or busy, choose mouse / touch
-and play immediately.
-
-## Which controls are there?
-
-**Finger pistol is the main control:** move your index fingertip to aim, fold
-your thumb to fire, and raise it to re-arm. The webcam preview shows your hand’s
-tracked joints and connecting bones during warm-up and play.
-
-Mouse / touch is an alternative: point and click or tap. Right-click or Shift
-controls the sniper scope.
-
-**On Overwatch Ridge, hand controls automatically track your eyes too.** Close
-an eye and hold it briefly to look down the scope; open it to zoom out.
-The detector uses lid closure directly and filters short natural blinks.
-While scoped, hand motion moves the view at **one-quarter sensitivity**. You still aim and shoot
-with your hand. There is no separate scope mode to select and **no eye
-calibration**. The hand setup is shared with the other shooting maps.
-
-Mouse players use right-click or Shift for the scope, without a camera.
-
-## Calibration without guessing
-
-Hand controls open **Target Range** before the selected game:
-
-1. Keep your hand visible in the **live mirrored camera view**. The target field
-   fills most of the window and keeps the same size when the game starts.
-2. Point naturally at the lit target and **fold your thumb to shoot**. Raise it
-   before the next shot. Thumb angle and distance from the fingers work out of
-   the box; there are no thumb poses to calibrate.
-3. After **two usable shots**, the crosshair shows your estimated aim. A third
-   shot finishes the initial fit. A saved fit goes straight to the accuracy check.
-4. Hit the centres of **five different targets** with that mapping. Only shots
-   inside the inner two rings count. These hits verify the existing fit; they
-   are not used to train it.
-5. After the fifth accurate hit, the aim saves and your selected game starts
-   automatically. A miss can refine the aim; changing the fit restarts the check.
-   **Undo shot** removes a mistake; **Start over** clears the current attempt.
-
-Setup uses your hand position just before the thumb folds, avoiding movement
-caused by firing. No thumb or eye calibration is needed. Use **Adjust aim** after
-moving your camera or seat. Browser settings are saved per camera and are
-independent of the desktop calibration file.
-
-The browser pauses when you switch tabs or windows. Use **Pause / P**, or resume
-from the overlay. **Arcade** stops the camera and returns to game selection,
-even while a game is still loading. A game whose tab goes quiet for a minute
-(closed, crashed, or asleep) is closed so its models do not stay loaded. A
-saved browser setup that can no longer be used is discarded and setup starts
-afresh.
-
-## Games and opponents
-
-| Game | What you do |
-| --- | --- |
-| Dead of Night | Survive approaching waves; headshots kill, body shots slow |
-| High Noon | Shoot bottles and bandits in a western street |
-| Orbital Decay | Protect the station from incoming debris |
-| Overwatch Ridge | Aim across a valley with a rifle and scope |
-
-In **Dead of Night**, choose **Zombies** or **Humanoid robots** in the opponent
-selector before starting. Robots have armoured bodies, illuminated visors and
-spark impacts. They use the same head/body damage, score, and wave rules; robots
-remain upright, while zombies also have crawling and limping variants.
-
-## Desktop app
-
-```bash
-handy
-handy --map zombies --enemy robots
-handy --map sniper
-```
-
-macOS asks for camera access for your terminal the first time; manage it under
-**System Settings → Privacy & Security → Camera**.
-
-Desktop setup uses the same Target Range warm-up with a live hand skeleton.
-Five accurate hits accept the aim and start play automatically. **B** undoes a
-shot, **R** starts over, and **Esc** skips. Aim is saved in
-`~/.cache/handy/calibration.json` and reused only when it was verified with the
-same cameras, capture size and mirroring; otherwise setup runs again.
-
-During desktop play: **Q** quit, **R** restart, **B** maps, **C** recalibrate,
-**S** screenshot. In Dead of Night, **N** switches the opponent
-and starts a fresh round. Browser controls are shown beside the play area.
-
-## Options
-
-Browser launch uses the first three flags. Configure browser gameplay in the
-page; the remaining flags configure the desktop app.
+`--browser` takes only `--port` and `--no-open`; choose everything else in the
+page. The other options are for the fullscreen app.
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
-| `--browser` | off | Launch the local browser arcade; takes only `--port` and `--no-open` |
-| `--port` | `8765` | Browser server port (with `--browser`) |
-| `--no-open` | off | Start browser server without opening a tab (with `--browser`) |
-| `--control` | `pistol` | The only hand control, kept for old scripts; the sniper eye scope is automatic |
-| `--map` | chooser | `zombies`, `western`, `orbit`, `sniper` |
+| `--browser` | off | Open the arcade in your browser |
+| `--port` | `8765` | The browser arcade's port (with `--browser`) |
+| `--no-open` | off | Don't open a tab (with `--browser`) |
+| `--map` | chooser | Start straight into `zombies`, `western`, `orbit` or `sniper` |
 | `--enemy` | `zombies` | Dead of Night: `zombies` or `robots` |
-| `--camera` | first live camera | Camera index; repeat for multiple cameras |
+| `--duration` | `60` | Seconds per round, up to 3600; `0` never ends |
+| `--camera` | first live camera | Camera index; repeat it to aim with several |
 | `--list-cameras` | | List cameras and exit |
 | `--capture` | `1280x720` | Camera resolution |
-| `--no-mirror` | off | Use an unmirrored camera view |
-| `--model` | cached bundle | Custom hand `.task` model; sniper also loads the face model |
-| `--duration` | `60` | Seconds per round, up to 3600; `0` is endless |
-| `--calibrate` | off | Redo saved setup (not with `--no-calibration`) |
-| `--no-calibration` | off | Use defaults |
-| `--calibration-file` | cache directory | Override calibration file |
-| `--min-cutoff` | per control | Smoothing when holding still |
-| `--beta` | per control | Responsiveness during movement |
-| `--fire-above` | per control | Trigger travel needed to shoot |
-| `--arm-below` | per control | Travel below which the trigger re-arms |
-| `--recoil` | `26` | Crosshair kick in pixels; `0` disables |
-| `--mute` / `--volume` | sound on / `1.0` | Sound output; volume 0–1 |
+| `--no-mirror` | off | Use the camera picture unmirrored |
+| `--calibrate` | off | Set up your aim again (not with `--no-calibration`) |
+| `--no-calibration` | off | Skip setup and aim with the defaults |
+| `--calibration-file` | `~/.cache/handy/calibration.json` | Where your aim is saved |
+| `--min-cutoff` | `1.2` | Steadiness when you hold still |
+| `--beta` | `0.8` | Responsiveness when you move |
+| `--fire-above` | `0.5` | How far the thumb folds to fire |
+| `--arm-below` | `0.3` | How far it comes back to fire again |
+| `--recoil` | `26` | Crosshair kick in pixels; `0` turns it off |
+| `--mute` / `--volume` | sound on / `1.0` | Sound; volume 0–1 |
 | `--targets` | `3` | Targets a round opens with (1–20; not High Noon) |
 | `--spawn-interval` | `1.1` | Seconds between spawns as a round opens (not High Noon) |
-| `--lifetime` | `5.0` | Target Range face lifetime; no playable map reads it |
-| `--seed` | random | Reproducible target sequence |
-| `--debug` | off | Tracking diagnostics |
-| `--screenshot-dir` | `screenshots/` | Screenshot location |
+| `--lifetime` | `5.0` | Target Range face lifetime; no game reads it |
+| `--seed` | random | The same round every time, for practice |
+| `--model` | cached download | Your own hand `.task` model |
+| `--screenshot-dir` | `screenshots/` | Where screenshots and cards are saved |
+| `--debug` | off | Show the tracking measurements |
+| `--control` | `pistol` | The only hand control; kept for old scripts |
+
+</details>
 
 ## Development
 
 ```bash
+git clone https://github.com/arthurenard/claude-of-duty
+cd claude-of-duty
 uv sync                          # .venv, with Handy installed in editable mode
+uv run handy --browser
 uv run pytest
 uv run ruff check handy tests
 for f in handy/web/*.js; do node --check "$f"; done
 uv build                         # sdist and wheel, into dist/
 ```
 
-`uv run handy` and `uv run python -m handy` both run the checkout. CI runs the
-lint, the tests and the script check on macOS (Apple silicon) and Ubuntu, then
-builds the wheel, installs it into a clean environment and starts the browser
-arcade from it.
+CI runs the lint, the tests and the script check on macOS (Apple silicon) and
+Ubuntu, then builds the wheel, installs it into a clean environment and starts
+the browser arcade from it.
 
-- `handy/browser.py` — local HTTP adapter, session lifecycle and browser input.
-- `handy/web/` — dependency-free HTML, CSS, and JavaScript interface.
-- `handy/shot_calibration.py`, `calibration.py`, `schemes.py`, `aiming.py` — shared control pipeline.
-- `handy/game.py`, `handy/maps/` — shared game rules and drawing.
-- `handy/app.py`, `cli.py` — desktop window and launch commands.
-- `tests/` — game rules, calibration, browser lifecycle, rendering, and tracking.
+- `handy/browser.py`, `handy/web/`: the browser arcade, a local server and a
+  dependency-free page.
+- `handy/app.py`, `handy/scene.py`, `handy/cli.py`: the fullscreen app.
+- `handy/game.py`, `handy/maps/`: the games' rules and drawing, shared by both.
+- `handy/shot_calibration.py`, `aiming.py`, `recognition.py`: hand tracking,
+  the trigger and aim setup.
+- `tests/`: rules, aim, tracking, drawing, the browser server and the app.
 
-The browser uses one camera and a game render sized to the target area. It uses lightweight
-browser-generated sound cues; the desktop app retains the full sound mixer,
-multi-camera fusion, and desktop high scores. Browser camera accuracy still
-depends on lighting, framing, and the player; practice before starting a round.
-
-The detailed tracking, rendering, camera-fusion, and map design explanations
-are kept in [Engine notes](docs/ENGINE_NOTES.md).
+Every picture in Handy is drawn with OpenCV and numpy; there isn't one image
+file in the game. The design language both surfaces follow is in
+[docs/DESIGN.md](docs/DESIGN.md), and the engine's inner workings are in
+[docs/ENGINE_NOTES.md](docs/ENGINE_NOTES.md).

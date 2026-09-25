@@ -280,28 +280,35 @@ is hopeless.
 - **Score** — each map scores in its own terms, above. Consecutive hits build a
   streak.
 - **Beat the clock** — a round is 60 seconds. When it ends you get a score card
-  with your accuracy, best streak and the map's own highlight, and your record
-  for that map and round length is kept in `~/.cache/handy/scores.json`. The
-  card ignores the trigger for its first second and then wants a fresh pull, so
-  a shot fired at the buzzer cannot skip it; shoot again to play another round.
-- **Quit** — shoot the **QUIT** button in the top-right corner, click it, or
-  press `q`.
+  with the map's art, your accuracy, best streak and the map's own highlight,
+  the score counting up, and New Best in gold only when it is. Your record for
+  that map and round length is kept in `~/.cache/handy/scores.json`. The card
+  ignores the trigger for its first second and then wants a fresh pull, so a
+  shot fired at the buzzer cannot skip it; shoot Play Again, Choose a Game or
+  Save.
+- **Pause** — shoot the Pause button top-right, or press `P` or `Esc`. A glass
+  sheet comes up over the dimmed world with Resume, Restart, Choose a Game and
+  Quit, each big enough to hit with a finger pistol. Pausing stops the round's
+  own clock (`GameClock` in `game.py`), so the world holds still behind the
+  sheet, not just the timer.
 
 Play `--duration 0` for an endless round with no clock.
 
-The webcam preview sits in the top-left corner at a quarter of the window's width
-and height, with the tracked skeleton drawn on it so you can see what the model
-sees.
+In a round the chrome keeps to the corners, on glass: the camera picture
+top-left with your hand drawn on it, one score panel beside it holding the map's
+readouts, the clock top-centre and Pause top-right. Hints show for a round's
+first seconds, while your hand is out of sight, or after a key that does
+nothing, and fade away otherwise.
 
-| Key | Action |
-| --- | --- |
-| `q` / `Esc` | quit |
-| `r` | restart the round |
-| `b` | back to the map chooser |
-| `c` | run setup again |
-| `n` | Dead of Night: switch zombies / robots and start afresh |
-| `space` | on the score card, play again |
-| `s` | save a screenshot to `screenshots/` |
+| Key | In a round | On the score card |
+| --- | --- | --- |
+| `P` / `Esc` | pause | |
+| `r` | restart the round | play again (also `space`) |
+| `b` | back to the chooser | back to the chooser |
+| `c` | set up the aim again | set up the aim again |
+| `s` | save a screenshot to `screenshots/` | save the card |
+| `n` | Dead of Night: switch zombies / robots and start afresh | |
+| `q` | quit | quit (also `Esc`) |
 
 Mirroring is not among them. Setup fits each camera's map against one
 handedness of the landmark stream, so flipping the image mid-round sends every
@@ -379,6 +386,42 @@ The useful one is the soft click when the pistol re-cocks: it tells you the gun
 is ready without your having to look away from the target. If no audio device can
 be opened the game says so once and plays on in silence. `--mute` and
 `--volume 0.4` do what you would expect.
+
+The browser arcade plays the same set. At startup the server renders every named
+cue, in a few takes each, to small WAV files (after it has drawn the page's
+art, which the page shows first); the page fetches them once a game starts,
+decodes them with Web Audio and plays whatever each frame names, with the same
+random take the desktop would pick. Mute is one key (`M`) and is remembered.
+
+## The browser arcade
+
+The browser page is an interface, not a second engine: the rules, the drawing
+and the hand tracking all run in the Python process, and the page shows what it
+is sent. That keeps one game, but it puts a round trip in the aim, so the loop
+is built to keep it short:
+
+- **Paced by the camera.** The page sends a frame the moment the camera has a
+  new one and the previous answer is back (`requestVideoFrameCallback`), not on
+  a timer. The camera picture is mirrored, cropped to 4:3 and encoded to JPEG in
+  a worker (`web/capture.js`), off the page's main thread.
+- **Binary both ways.** A frame is a four-byte length, a little JSON and a JPEG;
+  the answer is the same shape, with the rendered picture decoded by
+  `createImageBitmap` onto a canvas. Nothing is base64-encoded.
+- **Aimed from its own picture.** After handing MediaPipe a frame, the server
+  waits a few milliseconds (at most `RESULT_WAIT`) for that frame's hand rather
+  than using the last one it had, which was always a frame old. Camera picture
+  in to an answer aimed from it takes about 11 ms on an M-series Mac.
+- **Drawn at the screen's own resolution.** The page reports its stage in device
+  pixels and the server draws at that size, capped at about 1920×1080 worth of
+  pixels, instead of stretching a 960-wide picture.
+- **A mouse crosshair with no lag.** With the mouse, the page draws the
+  crosshair itself at the pointer; the server still decides every hit.
+
+The page's glass HUD is HTML over the picture, fed by each frame's state: the
+score, the clock, and the map's readouts, exactly as the desktop's score panel
+shows them. A returning player whose saved aim still fits this camera goes
+straight into the game. The server draws every map's art at the sizes the page
+asks for as soon as it starts, so the first screen never waits on it.
 
 ## What a second camera does
 
@@ -498,8 +541,8 @@ handy/
   scene.py            shared chrome - HUD, crosshair, setup, chooser, score card
   rendering.py        hand skeleton, drawn into the webcam inset
   app.py              window layout and the capture -> aim -> score -> draw loop
-  browser.py          the local browser arcade: HTTP server and game sessions
-  web/                its dependency-free HTML, CSS and JavaScript
+  browser.py          the local browser arcade: HTTP server, game sessions, sound set
+  web/                its dependency-free page: HTML, CSS, app.js and capture.js
   cli.py              argument parsing and entry point
 tests/                geometry, filtering, calibration, game rules, layout and
                       drawing, the browser server, plus the offline guarantee
@@ -512,6 +555,14 @@ one module and one entry in the registry. A map lays out what it schedules in
 seconds from the start of the round and shifts it in `Round.begin`, and draws
 cosmetic randomness from `effects_rng` (or a `stream` of its own) so that
 `--seed` keeps meaning the same round.
+
+A map never draws a HUD of its own. What it keeps on screen beside the score —
+Dead of Night's health, wave and kills, Orbital Decay's pane, Overwatch Ridge's
+wind — it names by overriding `Round.readouts(now)`, which returns `Readout`s: a
+label, a value as it reads, and optionally a meter (0 to 1, or −1 to 1 when
+`signed`), the notches cut into it, and a tone (`warning` or `danger`; there is
+deliberately no green). The desktop lays them in its one glass score panel and
+the browser sends them to the page, so both show the same numbers.
 
 A control scheme supplies a two-dimensional pointer and one trigger measurement.
 The sniper map adds an eye-closure reading for the scope. Hand setup, the aim
