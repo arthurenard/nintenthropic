@@ -145,8 +145,8 @@ def _limb(zone: str, tone: str, *joints: tuple[float, float, float], lod: int = 
 
 
 def _ellipse(zone: str, tone: str, centre: tuple[float, float], rx: float, ry: float,
-             degrees: float = 0.0) -> Part:
-    return Part(zone, tone, ELLIPSE, (centre[0], centre[1], rx, ry, degrees), min(rx, ry))
+             degrees: float = 0.0, lod: int = 0) -> Part:
+    return Part(zone, tone, ELLIPSE, (centre[0], centre[1], rx, ry, degrees), min(rx, ry), lod)
 
 
 def _polygon(zone: str, tone: str, points: list, depth: float, lod: int = 0) -> Part:
@@ -999,7 +999,7 @@ def _robot_parts(figure: Figure) -> list[Part]:
                             [_limb("body", "plate", (*knee, height * 0.036),
                                    (*ankle, height * 0.023))],
                             [_ellipse("body", "plate", (knee[0], knee[1] - height * 0.012),
-                                      height * 0.028, height * 0.03)],
+                                      height * 0.028, height * 0.03, lod=2)],
                             [_ellipse("body", "plate", foot[:2], height * 0.036, height * 0.02,
                                       foot[2])]]
                            for hip, knee, ankle, foot in figure.legs()))
@@ -1025,7 +1025,9 @@ def _robot_parts(figure: Figure) -> list[Part]:
         (x - half * 0.93, top + height * 0.04), (x - half * 0.64, top - height * 0.006)],
         half * 0.5))
     _head_parts(figure, parts, metal=True)
-    _side_by_side(parts, *([[_ellipse("body", "frame", elbow, height * 0.023, height * 0.023)],
+    # The joints showing between the plates, once it is near enough to see them.
+    _side_by_side(parts, *([[_ellipse("body", "frame", elbow, height * 0.023, height * 0.023,
+                                      lod=2)],
                             [_limb("body", "plate", (*elbow, height * 0.03),
                                    (*wrist, height * 0.023))],
                             *_hand_parts(figure, wrist, hand, side, tone="frame", claws=False),
@@ -2218,8 +2220,7 @@ def _draw_machine(canvas: np.ndarray, figure: Figure, haze: float) -> None:
         (-0.58, -0.05), (0.58, -0.05), (0.54, 0.04), (-0.54, 0.04))], np.float32)
     cv2.fillPoly(canvas, [np.rint(slit * FIX).astype(np.int32)], visor, cv2.LINE_AA, FIX_BITS)
     radius = figure.head_radius
-    for px in (-0.3, 0.3):
-        _glow(canvas, _head_point(figure, px, 0.0), max(1.2, radius * 0.35), visor, 0.45)
+    _glow(canvas, _head_point(figure, 0.0, 0.0), max(1.2, radius * 0.5), visor, 0.5)
     core = (x, top + height * 0.075)
     _glow(canvas, core, max(1.2, height * 0.02), visor, 0.5)
     cv2.circle(canvas, (_fix(core[0]), _fix(core[1])), _fix(max(0.8, height * 0.011)), visor,
