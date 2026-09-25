@@ -1892,6 +1892,34 @@ def _shadow_stamp(rx: int, ry: int, degrees: int, strength: int) -> np.ndarray:
     return cv2.merge((keep, keep, keep))
 
 
+@lru_cache(maxsize=256)
+def _standing_shadow(height: int, fade: int, crawl: bool) -> tuple[np.ndarray, tuple]:
+    """The long shadow and the contact patch of one standing ``height`` pixels
+    tall, as one multiplier, and where its middle sits from the feet. ``fade``
+    is in tenths: how much the fog has left of them."""
+    reach = height * (0.28 if crawl else 0.5)
+    shades = (((-reach * 0.42, reach * 0.12), max(2.0, reach * 0.52), height * 0.05, -17.0,
+               0.05 * fade),
+              ((0.0, -height * (0.02 if crawl else 0.0)), height * (0.24 if crawl else 0.15),
+               height * 0.03, 0.0, 0.075 * fade))
+    pad = max(3.0, height * 0.06)
+    x0 = min(c[0] - rx for c, rx, *_ in shades) - pad
+    x1 = max(c[0] + rx for c, rx, *_ in shades) + pad
+    y0 = min(c[1] - rx * 0.35 - ry for c, rx, ry, *_ in shades) - pad
+    y1 = max(c[1] + rx * 0.35 + ry for c, rx, ry, *_ in shades) + pad
+    size = (int(math.ceil(y1 - y0)) | 1, int(math.ceil(x1 - x0)) | 1)
+    keep = np.ones(size, np.float32)
+    for (cx, cy), rx, ry, degrees, strength in shades:
+        mask = np.zeros(size, np.float32)
+        cv2.ellipse(mask, (int(round(cx - x0)), int(round(cy - y0))),
+                    (max(1, int(round(rx))), max(1, int(round(ry)))), degrees, 0, 360, 1.0, -1,
+                    cv2.LINE_AA)
+        keep *= 1.0 - cv2.GaussianBlur(mask, (0, 0), max(0.7, ry * 0.45)) * strength
+    keep = np.clip(keep * 255.0, 0, 255).astype(np.uint8)
+    middle = (x0 + (size[1] // 2), y0 + (size[0] // 2))
+    return cv2.merge((keep, keep, keep)), middle
+
+
 def _shade(canvas: np.ndarray, centre: tuple[float, float], rx: float, ry: float,
            degrees: float, strength: float) -> None:
     """Darken a soft ellipse of the road: a shadow, with no edge to it. Sizes
@@ -1979,6 +2007,11 @@ def _cast_shadow(canvas: np.ndarray, figure: Figure, edge: np.ndarray,
     over, the long shadow shortens and the patch spreads under the body."""
     height, fade = figure.height, 1.0 - figure.fog * 0.6
     crawl = figure.gait == "crawl"
+    if fall == 0.0:
+        # On its feet, both at once, from one stamp for its size.
+        stamp, (dx, dy) = _standing_shadow(_bucket(height), int(fade * 10 + 0.5), crawl)
+        _stamp(canvas, stamp, (figure.x + dx, figure.ground_y + dy), cv2.multiply, 1.0 / 255.0)
+        return
     if fall < 1.0:
         reach = height * (0.28 if crawl else 0.5) * (1.0 - fall)
         _shade(canvas, (figure.x - reach * 0.42, figure.ground_y + reach * 0.12),
