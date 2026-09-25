@@ -2205,7 +2205,11 @@ def draw_world(canvas: np.ndarray, round_: WesternRound, now: float) -> None:
 
 @lru_cache(maxsize=2)
 def _card_art(width: int, height: int) -> np.ndarray:
-    """The chooser card: the real street at the real composition, titled."""
+    """The chooser card: the real street at the real composition.
+
+    Untitled: every place that shows it - the chooser, the results card, the
+    page's posters - sets the name beside it in the interface's own type.
+    """
     # Render at the game's own proportions, then fit the play area to the card.
     full_w, full_h = 1512, 945
     area = Rect(31, 294, 1450, 578)
@@ -2258,66 +2262,6 @@ def _card_art(width: int, height: int) -> np.ndarray:
     warm = np.array((0.8, 0.92, 1.0), np.float32)
     art = np.clip(art.astype(np.float32) * (vig * warm + (1 - vig) * 1.0) * (0.65 + 0.35 * vig), 0, 255).astype(np.uint8)
 
-    # The title on a sign: a plank of weathered wood hung across the bottom on
-    # two chains, bevelled, grained, the letters carved in and lit from the
-    # upper left like everything else on the street, and shot through twice.
-    title = "HIGH NOON"
-    scale = height / 165.0
-    thick = max(2, int(height / 70))
-    (tw, th), _ = cv2.getTextSize(title, SLAB, scale, thick)
-    pad_x, pad_y = int(height * 0.07), int(height * 0.06)
-    bx0, bx1 = (width - tw) // 2 - pad_x, (width + tw) // 2 + pad_x
-    by1 = height - int(height * 0.06)
-    by0 = by1 - th - pad_y * 2
-    bevel = max(2, int(height * 0.012))
-    # Chains up to the top edge.
-    for cx in (bx0 + pad_x, bx1 - pad_x):
-        for ly in range(0, by0, max(3, bevel)):
-            cv2.ellipse(art, (cx, ly + bevel // 2), (max(1, bevel // 3), max(2, bevel // 2)), 0, 0, 360, (70, 74, 82), 1, cv2.LINE_AA)
-    # The plank's shadow on the scene, then the plank.
-    shadow = np.zeros((height, width), np.uint8)
-    cv2.rectangle(shadow, (bx0 + bevel * 2, by0 + bevel * 2), (bx1 + bevel * 2, by1 + bevel * 2), 255, -1)
-    _cast_shadows(art, shadow, 0.7)
-    wood = (78, 112, 150)
-    cv2.rectangle(art, (bx0, by0), (bx1, by1), wood, -1)
-    _grain(art, bx0, by0, bx1, by1, rng, 7.0, streaks=True)
-    for gy in np.linspace(by0 + 4, by1 - 4, 7):
-        cv2.line(art, (bx0, int(gy)), (bx1, int(gy + rng.uniform(-3, 3))), _shade(wood, -0.18), 1, cv2.LINE_AA)
-    # Bevels: lit on top and left, dark below and right.
-    _poly(art, [(bx0, by0), (bx1, by0), (bx1 - bevel, by0 + bevel), (bx0 + bevel, by0 + bevel)], _warm(wood, 0.35))
-    _poly(art, [(bx0, by0), (bx0 + bevel, by0 + bevel), (bx0 + bevel, by1 - bevel), (bx0, by1)], _warm(wood, 0.2))
-    _poly(art, [(bx0, by1), (bx0 + bevel, by1 - bevel), (bx1 - bevel, by1 - bevel), (bx1, by1)], _cool(wood, 0.5))
-    _poly(art, [(bx1, by0), (bx1, by1), (bx1 - bevel, by1 - bevel), (bx1 - bevel, by0 + bevel)], _cool(wood, 0.4))
-    cv2.rectangle(art, (bx0, by0), (bx1, by1), _shade(wood, -0.6), 1)
-    # A crack across one end.
-    cv2.line(art, (bx1 - pad_x // 2, by0 + bevel), (bx1 - pad_x // 3, by0 + (by1 - by0) // 2), _shade(wood, -0.55), 1, cv2.LINE_AA)
-    # Carved letters: a dark groove, its lower-right lip catching the light.
-    tx, ty = (width - tw) // 2, by1 - pad_y
-    cv2.putText(art, title, (tx - 1, ty - 1), SLAB, scale, _shade(wood, -0.75), thick + 2, cv2.LINE_AA)
-    cv2.putText(art, title, (tx + 1, ty + 1), SLAB, scale, _warm(wood, 0.45), thick + 1, cv2.LINE_AA)
-    cv2.putText(art, title, (tx, ty), SLAB, scale, (24, 34, 52), thick, cv2.LINE_AA)
-    cv2.putText(art, title, (tx, ty), SLAB, scale, (36, 48, 70), max(1, thick // 2), cv2.LINE_AA)
-    # Two bullet holes through the plank, splintered around the edges.
-    for hx, hy in ((bx0 + pad_x + int(tw * 0.12), by0 + pad_y // 2 + 2), (bx1 - pad_x - int(tw * 0.06), by1 - pad_y // 2 - 2)):
-        r = max(2, int(height * 0.016))
-        for _ in range(7):
-            a = rng.uniform(0, math.tau)
-            ln = r * rng.uniform(1.4, 2.4)
-            cv2.line(art, (hx, hy), (int(hx + math.cos(a) * ln), int(hy + math.sin(a) * ln)), _warm(wood, 0.5), 1, cv2.LINE_AA)
-        cv2.circle(art, (hx, hy), r + 1, _warm(wood, 0.6), -1, cv2.LINE_AA)
-        cv2.circle(art, (hx, hy), r, (12, 14, 18), -1, cv2.LINE_AA)
-        cv2.ellipse(art, (hx, hy), (r, r), 0, 200, 340, (70, 72, 80), 1, cv2.LINE_AA)
-    # Nails in the corners.
-    for nx, ny in ((bx0 + bevel * 2, by0 + bevel * 2), (bx1 - bevel * 2, by0 + bevel * 2),
-                   (bx0 + bevel * 2, by1 - bevel * 2), (bx1 - bevel * 2, by1 - bevel * 2)):
-        cv2.circle(art, (nx, ny), max(1, bevel // 2), (60, 64, 72), -1, cv2.LINE_AA)
-        cv2.circle(art, (nx - 1, ny - 1), 1, (170, 176, 186), -1)
-    sub = "bottles on the rail  .  bandits in the doors"
-    s2 = scale * 0.3
-    (sw, sh), _ = cv2.getTextSize(sub, FONT, s2, 1)
-    sx, sy = (width - sw) // 2, by0 - int(height * 0.03)
-    cv2.putText(art, sub, (sx + 1, sy + 1), FONT, s2, (10, 10, 12), 1, cv2.LINE_AA)
-    cv2.putText(art, sub, (sx, sy), FONT, s2, (210, 232, 248), 1, cv2.LINE_AA)
     return art
 
 

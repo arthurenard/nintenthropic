@@ -430,21 +430,17 @@ def test_the_results_card_sits_on_the_maps_art_when_one_is_set(canvas):
         scene.set_ambient_art(None)
 
 
-def test_chooser_thumbnails_are_cut_clean_of_the_western_title():
+def test_card_art_does_not_carry_its_own_title():
+    """Every card that shows a poster sets the map's name beside it, so the
+    art must not paint it too: High Noon's hung a titled plank across its foot."""
     from handy.maps import western
 
-    # The western card art hangs its title on a plank of one wood colour
-    # across the bottom; the chooser's frame is cut from above it, so that
-    # band of the frame carries far less of the plank's wood.
     raw = np.zeros((122, 405, 3), np.uint8)
     western.draw_emblem(raw)
-    frame = scene._clean_frame(western.draw_emblem, 405, 122)
-    assert frame.shape == raw.shape
     band = slice(int(122 * 0.6), 122)
-    wood = np.array((78, 112, 150))
-    inked = (np.abs(raw[band].astype(int) - wood).max(axis=2) < 12).sum()
-    clean = (np.abs(frame[band].astype(int) - wood).max(axis=2) < 12).sum()
-    assert inked > 500 and clean < inked * 0.35
+    plank = np.array((78, 112, 150))
+    assert (np.abs(raw[band].astype(int) - plank).max(axis=2) < 12).sum() < 500
+    assert set(scene._CLEAN_FRAMES) == {"archery"}, "no frame is cut to dodge a title"
 
 
 def test_thumbnails_are_built_once_per_size():

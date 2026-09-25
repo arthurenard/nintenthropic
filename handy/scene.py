@@ -2262,15 +2262,14 @@ def map_cards(window: Rect, count: int, scale: float = 1.0,
     return tuple(cards)
 
 
-# Chooser thumbnails are establishing shots: no burnt-in titles, no gameplay
-# popups, no bezels. Where a map's card art carries those, the art is drawn
-# on a larger sheet and a clean frame is cut from it. Keyed by the module the
-# art comes from, as (sheet width, sheet height, crop x, crop y), all as
-# fractions of the frame's own size.
+# Chooser thumbnails are establishing shots: no gameplay popups, no bezels.
+# Where a map's card art carries those, the art is drawn on a larger sheet and
+# a clean frame is cut from it. Keyed by the module the art comes from, as
+# (sheet width, sheet height, crop x, crop y), all as fractions of the frame's
+# own size. (No card art carries its title any more: the name is always set
+# beside it in the interface's own type.)
 _CLEAN_FRAMES = {
-    "western": (1.0, 2.3, 0.0, 0.0),       # the doorways, above the title
     "archery": (1.25, 1.5, 0.15, 0.4),     # below the floating "+10"
-    "orbit": (1.8, 1.0, 0.85, 0.0),        # the right reach, clear of the title
 }
 
 
