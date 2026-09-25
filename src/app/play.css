@@ -189,8 +189,10 @@
   stroke: none;
   overflow: visible;
 }
+/* The view box is centred on the axle, and a view-box reference box starts
+   at the user-space origin: "0 0" is the axle itself. */
 .cylinder .drum {
-  transform-origin: 50% 50%;
+  transform-origin: 0 0;
   transform-box: view-box;
   transition: transform 120ms var(--ease);
 }
@@ -659,7 +661,7 @@
   }
 }
 /* "Aim 97% — you're ready": the moment the check ends. */
-.ready {
+.ready-moment {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -678,19 +680,19 @@
     ready-in 450ms var(--spring) both,
     ready-out 250ms var(--ease) 1.45s forwards;
 }
-.ready .ring {
+.ready-moment .ring {
   width: 88px;
   height: 88px;
   margin-bottom: 8px;
 }
-.ready .ring .track,
-.ready .ring .fill {
+.ready-moment .ring .track,
+.ready-moment .ring .fill {
   stroke-width: 5;
 }
-.ready .ring .fill {
+.ready-moment .ring .fill {
   animation: ring-close 600ms var(--spring) both;
 }
-.ready .ring .check {
+.ready-moment .ring .check {
   stroke: var(--tint);
   stroke-width: 5;
   animation: check-draw 350ms var(--ease) 250ms both;
@@ -759,7 +761,7 @@
   .burst,
   .banner,
   .secret,
-  .ready {
+  .ready-moment {
     animation-name: fade-in !important;
     animation-timing-function: var(--ease) !important;
   }
@@ -773,7 +775,7 @@
       fade-in 250ms var(--ease) both,
       fade-out 250ms var(--ease) 3.2s forwards !important;
   }
-  .ready {
+  .ready-moment {
     animation:
       fade-in 250ms var(--ease) both,
       fade-out 250ms var(--ease) 1.45s forwards !important;
@@ -790,8 +792,8 @@
   .cylinder.reloading .drum {
     animation: none !important;
   }
-  .ready .ring .fill,
-  .ready .ring .check {
+  .ready-moment .ring .fill,
+  .ready-moment .ring .check {
     animation: none !important;
   }
 }

@@ -115,7 +115,6 @@ export class App {
     this.renderHome();
     this.setMuted(this.muted);
     this.showView(prefs.welcomed ? "home" : "welcome");
-    (prefs.welcomed ? $("play") : $("get-started")).focus();
     // The first screen needs neither three.js nor the tracker; fetch them
     // once it is up, so Play does not wait for them.
     const later = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 1200));
@@ -137,7 +136,7 @@ export class App {
     const art = $<HTMLImageElement>("feature-art");
     if (!art.getAttribute("src")) {
       art.onload = () => art.classList.add("loaded");
-      art.onerror = () => art.remove(); // the golden-hour placeholder stays
+      art.onerror = () => (art.hidden = true); // the golden-hour placeholder stays
       art.src = siteUrl(entry.poster);
     }
     const soon = $("soon");

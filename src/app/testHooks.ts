@@ -9,6 +9,7 @@
  *                     webgl, model or game, to see each error sheet
  *   ?tracker=page     track on the page's thread instead of a worker
  */
+import type { HudSink } from "../engine/types";
 import type { HandPose } from "../input/synthetic";
 import { ScriptedHands } from "../input/script";
 import type { App, AppOptions } from "./app";
@@ -27,6 +28,8 @@ export interface HandyTest {
   /** Shows the scripted hand in this pose (null: no hand). */
   pose(pose: HandPose | null): void;
   internals(): App["internals"];
+  /** The HUD, to stage its moments for screenshots. */
+  hud(): HudSink;
 }
 
 declare global {
@@ -42,5 +45,6 @@ export function installTestHooks(app: App, options: AppOptions): void {
       if (options.scripted) options.scripted.pose = pose;
     },
     internals: () => app.internals,
+    hud: () => app.hud,
   };
 }

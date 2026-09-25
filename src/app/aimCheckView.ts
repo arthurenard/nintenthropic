@@ -184,7 +184,7 @@ export class AimCheckView {
   /** "Aim 97% - you're ready." */
   private readyMoment(score: number): void {
     const percent = Math.round(score * 100);
-    const card = element("div", "ready glass");
+    const card = element("div", "ready-moment glass");
     card.setAttribute("role", "status");
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "ring ready");
