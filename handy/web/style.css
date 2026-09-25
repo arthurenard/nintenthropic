@@ -439,6 +439,9 @@ svg {
   transform-origin: 50% 88%;
   animation: g-thumb 2.8s var(--ease) infinite;
 }
+.g-thumb-folded {
+  display: none; /* drawn only for the cross-fade of reduced motion */
+}
 .g-recoil {
   transform-origin: 20% 60%;
   animation: g-recoil 2.8s var(--ease) infinite;
@@ -889,7 +892,11 @@ body[data-view="game"] {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.score.pop {
+#score {
+  display: inline-block;
+  transform-origin: left center;
+}
+#score.pop {
   animation: pop 120ms var(--ease);
 }
 @keyframes pop {
@@ -1528,7 +1535,7 @@ body[data-view="game"] {
   .sheet[open],
   .setup-words.fresh,
   .dots i.pop,
-  .score.pop,
+  #score.pop,
   .new-best.pop,
   .burst,
   .aim-set {
@@ -1557,7 +1564,7 @@ body[data-view="game"] {
   .g-thumb {
     animation: g-fade 2.8s var(--ease) infinite alternate !important;
   }
-  .g-thumb-folded {
+  .gesture-art .g-thumb-folded {
     display: inline;
     animation: g-fade 2.8s var(--ease) infinite alternate-reverse !important;
   }
@@ -1574,7 +1581,4 @@ body[data-view="game"] {
   100% {
     opacity: 0;
   }
-}
-.g-thumb-folded {
-  display: none;
 }

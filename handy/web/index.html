@@ -140,10 +140,12 @@
         <div id="bursts" class="bursts" aria-hidden="true"></div>
 
         <div class="hud-score glass play-only" id="hud-score">
-          <p class="score num" id="score" aria-label="Score">0</p>
+          <p class="score num"><span class="visually-hidden">Score </span><span id="score">0</span></p>
           <dl class="readouts" id="readouts"></dl>
         </div>
-        <p class="hud-clock glass num play-only" id="clock" aria-label="Time left">1:00</p>
+        <p class="hud-clock glass num play-only" id="clock-box" role="timer" aria-label="Time left">
+          <span id="clock">1:00</span>
+        </p>
 
         <div class="setup-progress glass setup-only" id="setup-progress">
           <span class="eyebrow">Aim Setup</span>

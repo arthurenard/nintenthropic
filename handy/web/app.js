@@ -111,6 +111,7 @@ const KEYS = {
   muted: "handy.muted.v1",
   choice: "handy.choice.v1",
   camera: "handy.camera.v1",
+  cameraOpened: "handy.camera-opened.v1",
   // The setup key keeps its old shape, so aims saved before still count.
   setup: (device) => `handy.setup.v1.pistol.${device}`,
   best: (map, duration) => `handy.best.v2.${map}.${duration}`,
@@ -521,15 +522,15 @@ function renderFeature() {
   // Cross-fade to the new art once it has loaded, never through black.
   const current = $("feature-art");
   const source = featureArt(selectedMap);
-  if (current.dataset.map === selectedMap) return;
-  current.dataset.map = selectedMap;
+  if (current.dataset.shows === selectedMap) return;
+  current.dataset.shows = selectedMap;
   const next = new Image();
   next.alt = "";
   next.fetchPriority = "high";
   next.src = source;
   next.decode().then(
     () => {
-      if (current.dataset.map !== selectedMap) return; // chosen past already
+      if (current.dataset.shows !== selectedMap) return; // chosen past already
       if (!current.getAttribute("src")) {
         current.src = source;
         return;
@@ -735,26 +736,50 @@ function prime() {
 
 // --- starting a game ------------------------------------------------------------------------
 
+// Whether the camera may be asked for now: true to go on - perhaps with the
+// mouse instead, if the player chose it - false if not (the reason is shown).
+async function cameraReady() {
+  if (!isCamera()) return true;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    trouble("insecure");
+    return false;
+  }
+  const permission = await cameraPermission();
+  if (permission === "denied") {
+    trouble("denied");
+    return false;
+  }
+  // Said once per browser: where the permission cannot be read (Safari), a
+  // camera that has opened here before is taken as allowed.
+  if (permission === "granted" || storage.get(KEYS.cameraOpened)) return true;
+  const choice = await prime();
+  if (choice === null) {
+    focusPlay();
+    return false;
+  }
+  if (!choice) {
+    selectedControl = "mouse";
+    remember();
+  }
+  return true;
+}
 let adjustNext = false;
 async function start({ adjust = false, again = false } = {}) {
   if (busy) return;
+  busy = true;
+  renderStart();
   if (!again) adjustNext = adjust;
   sound.wake();
-  if (isCamera()) {
-    if (!navigator.mediaDevices?.getUserMedia) return trouble("insecure");
-    const permission = await cameraPermission();
-    if (permission === "denied") return trouble("denied");
-    if (permission !== "granted") {
-      const choice = await prime();
-      if (choice === null) return focusPlay();
-      if (!choice) {
-        selectedControl = "mouse";
-        renderStart();
-        remember();
-      }
+  let ready = false;
+  try {
+    ready = await cameraReady();
+  } finally {
+    if (!ready) {
+      busy = false;
+      renderStart();
     }
   }
-  busy = true;
+  if (!ready) return;
   renderStart();
   // back() moves the generation on. Each wait below checks it, so a start the
   // player abandoned - by choosing a game while it loaded - undoes itself
@@ -775,6 +800,7 @@ async function start({ adjust = false, again = false } = {}) {
         audio: false,
       });
       if (stale()) return;
+      storage.set(KEYS.cameraOpened, true);
       $("camera").srcObject = media;
       await $("camera").play();
       if (stale()) return;
@@ -860,7 +886,7 @@ function openGame(mode) {
   setText("score", "0");
   $("readouts").replaceChildren();
   readoutRows = [];
-  $("clock").hidden = true;
+  $("clock-box").hidden = true;
   hideHint(true);
   showView("game");
   window.scrollTo({ top: 0 });
@@ -1050,19 +1076,21 @@ function hideHint(now = false) {
   }
   hint.classList.add("gone");
 }
+const touch = matchMedia("(pointer: coarse)");
 function roundStarted() {
   roundId++;
   resultsFor = null;
   lastScore = 0;
   const sniper = selectedMap === "sniper";
+  const fire = touch.matches ? "Tap to fire." : "Click to fire.";
   showHint(
     isCamera()
       ? sniper
         ? "Close one eye to look through the scope."
         : "Point at a target. Fold your thumb to fire."
-      : sniper
-        ? "Click to fire. Hold Shift or right-click to scope."
-        : "Click to fire.",
+      : sniper && !touch.matches
+        ? `${fire} Hold Shift or right-click to scope.`
+        : fire,
     4.5,
     "start",
   );
@@ -1101,10 +1129,10 @@ function renderState(data) {
     lastScore = data.score;
   }
   renderReadouts(data.readouts);
-  const clock = $("clock");
+  const clock = $("clock-box");
   clock.hidden = data.remaining === null || data.remaining === undefined;
   if (!clock.hidden) {
-    setText(clock, formatTime(data.remaining));
+    setText("clock", formatTime(data.remaining));
     clock.classList.toggle("late", data.remaining <= 10 && data.state === "playing");
   }
   if (data.step) renderSetup(data.step, data);
@@ -1612,6 +1640,9 @@ window.addEventListener("keydown", (event) => {
   else if (currentState === "calibration" && (key === "b" || key === "Backspace"))
     queueAction("undo");
   else if (currentState === "calibration" && key === "r") queueAction("reset");
+  else if (currentState === "playing" && key.length === 1 && !event.metaKey && !event.ctrlKey)
+    // A key that does nothing: say which ones do, then get out of the way.
+    showHint("Press P to pause, or M to mute.", 3, "keys");
 });
 window.addEventListener("keyup", (event) => {
   keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key);
