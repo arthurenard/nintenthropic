@@ -283,16 +283,19 @@ def hud_panels(view: View, layout: Layout) -> tuple[Rect, Rect | None]:
 #: The keys a round answers to beyond the sheet's own choices, as hints.
 CONTROL_KEYS = (("P", "Pause"), ("S", "Screenshot"))
 
+#: Keys only one map answers to: Dead of Night's other opponent.
+MAP_KEYS = {"zombies": (("N", "Switch opponent"),)}
+
 
 @lru_cache(maxsize=16)
 def hint_items(scheme_hint: str, map_hint: str, width: int,
-               scale: float) -> tuple[tuple[str, str], ...]:
+               scale: float, map_key: str = "") -> tuple[tuple[str, str], ...]:
     """The round's hints for this scheme and map, fitted to ``width``.
 
     Cached: fitting measures every hint against the width, and the answer
     only changes with the map, the scheme or the window.
     """
-    items = [("", scheme_hint), ("", map_hint), *CONTROL_KEYS]
+    items = [("", scheme_hint), ("", map_hint), *CONTROL_KEYS, *MAP_KEYS.get(map_key, ())]
     return tuple(scene.fit_hints([item for item in items if item[1]],
                                  width - round(88 * scale), scale))
 
@@ -336,7 +339,8 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     if view.hints > 0.0:
         if view.aim.tracking or view.crosshair is not None:
             scheme_hint = view.scheme.footer if view.scheme and view.scheme.footer else ""
-            items = hint_items(scheme_hint, view.map.footer, layout.window.width, scale)
+            items = hint_items(scheme_hint, view.map.footer, layout.window.width, scale,
+                               view.map.key)
         else:
             items = ((("", LOST_HAND_HINT),) + CONTROL_KEYS[:1])
         scene.draw_hints(canvas, items, scale, alpha=view.hints, capsule=True)
@@ -1449,7 +1453,7 @@ def _session(settings: Settings, layout: Layout, captures: list,
                 except OSError as error:
                     # Not the end of the game: every other map still plays.
                     # It used to be, from an uncaught URLError.
-                    print(f"{chosen.title.title()} needs a model that could "
+                    print(f"{chosen.title} needs a model that could "
                           f"not be downloaded: {error}")
                     show_notice(canvas, [
                         f"{scene.title_case(chosen.title)} Isn\u2019t Ready",

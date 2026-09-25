@@ -36,7 +36,7 @@ class Map:
 
 RANGE = Map(
     key="range",
-    title="TARGET RANGE",
+    title="Target Range",
     blurb="Archery faces, ten in the gold. Calm, and entirely about aim.",
     create=archery.ArcheryRound,
     draw_world=archery.draw_world,
@@ -46,21 +46,22 @@ RANGE = Map(
 
 ZOMBIES = Map(
     key="zombies",
-    title="DEAD OF NIGHT",
+    title="Dead of Night",
     blurb="They come up the road out of the fog. Head shots drop them; "
           "body shots only slow them down.",
     create=zombies.ZombieRound,
     draw_world=zombies.draw_world,
     draw_hud=zombies.draw_hud,
-    footer="head shots kill outright   |   N change enemy (new round)",
+    footer="Head shots drop them",
     draw_emblem=zombies.draw_emblem,
     play_hit=_flesh_hit,
 )
 
 WESTERN = Map(
     key="western",
-    title="HIGH NOON",
-    blurb="A dusty main street at noon. Bottles on the rail, bandits in the doorways.",
+    title="High Noon",
+    blurb="A dusty main street at noon. Bottles on the rail, bandits in the doorways. "
+          "Spare the townsfolk.",
     play_hit=lambda sounds, impact: None,  # this map voices its own hits by cue
     create=western.WesternRound,
     draw_world=western.draw_world,
@@ -70,7 +71,7 @@ WESTERN = Map(
 
 ORBIT = Map(
     key="orbit",
-    title="ORBITAL DECAY",
+    title="Orbital Decay",
     blurb="Debris tumbling past the station window. Out there, nothing makes a sound.",
     play_hit=lambda sounds, impact: None,  # this map voices its own hits by cue
     create=orbit.OrbitRound,
@@ -81,14 +82,13 @@ ORBIT = Map(
 
 SNIPER = Map(
     key="sniper",
-    title="OVERWATCH RIDGE",
-    blurb="A long valley and a rifle. Aim and fire with your hand. Eyes are also "
-          "tracked: close one to scope. No eye setup needed.",
+    title="Overwatch Ridge",
+    blurb="A long valley and a rifle. Close one eye to look down the scope.",
     play_hit=lambda sounds, impact: None,  # this map voices its own hits by cue
     create=sniper.SniperRound,
     draw_world=sniper.draw_world,
     draw_emblem=sniper.draw_emblem,
-    footer="close an eye to scope in",
+    footer="Close one eye to scope in",
 )
 
 MAPS: tuple[Map, ...] = (ZOMBIES, WESTERN, ORBIT, SNIPER)

@@ -2492,3 +2492,21 @@ def test_the_results_screen_names_the_map_that_was_played(monkeypatch):
     assert seen[0]["title"] == maps.ORBIT.title
     assert seen[0]["emblem"] is maps.ORBIT.draw_emblem
     assert seen[0]["elapsed"] >= 0.0, "so the card can arrive and count up"
+
+
+def test_every_map_and_scheme_speaks_in_the_design_languages_voice():
+    """Names in Title Case, hints in sentence case, no engineering words - and
+    the one key only Dead of Night answers to, said while playing it."""
+    from handy import app, scene, schemes
+
+    for chosen in (*maps.MAPS, maps.RANGE):
+        assert chosen.title == scene.title_case(chosen.title), chosen.title
+        for scheme in schemes.SCHEMES:
+            items = app.hint_items(scheme.footer, chosen.footer, 2560, 1.0, chosen.key)
+            for _key, text in items:
+                assert text[:1].isupper(), text
+                assert not any(word in text.lower() for word in (
+                    "calibrat", "track", "fused", "landmark", "session", "enemy")), text
+    zombies = app.hint_items(schemes.PISTOL.footer, maps.ZOMBIES.footer, 2560, 1.0,
+                             maps.ZOMBIES.key)
+    assert ("N", "Switch opponent") in zombies
