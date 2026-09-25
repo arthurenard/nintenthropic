@@ -331,7 +331,7 @@ def post(mb, f, x, y, z0, z1, mat, r, size=0.12, chamfer=True):
 
 
 def railing(mb, f, s0, s1, y, z0, height, mat, r, baluster=0.11, rail=0.07, spindle=0.035,
-            posts_every=2.4):
+            posts_every=2.4, solid=False):
     """A balcony / porch railing along s at wall-frame y."""
     # posts
     n = max(1, int(round((s1 - s0) / posts_every)))
@@ -342,6 +342,16 @@ def railing(mb, f, s0, s1, y, z0, height, mat, r, baluster=0.11, rail=0.07, spin
            mat, rand=r.random(), grain_axis=0)
     mb.box(f, (s0, y - rail / 2, z0 + 0.08), (s1, y + rail / 2, z0 + 0.14), mat, rand=r.random(),
            grain_axis=0)
+    if solid:
+        # boarded balustrade: vertical boards between the rails (hides a
+        # crouching man, which is the point on a gunfight balcony)
+        s = s0
+        while s < s1 - 0.01:
+            bw = min(r.uniform(0.11, 0.15), s1 - s)
+            mb.box(f, (s + 0.003, y - 0.015, z0 + 0.08), (s + bw - 0.003, y + 0.015, z0 + height - 0.04), mat,
+                   rand=r.random(), grain_axis=2)
+            s += bw
+        return
     if spindle is None or spindle < 0.005:
         # rails only (catwalks, fences): a middle rail instead of spindles
         mb.box(f, (s0, y - rail / 2, z0 + height * 0.5 - 0.03), (s1, y + rail / 2, z0 + height * 0.5 + 0.03),

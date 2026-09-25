@@ -98,11 +98,11 @@ def saloon(b, lib, col):
     sign_panel(wd, F, -Wd / 2 + 0.2, zf - 0.42, Wd / 2 - 0.2, zf - 0.08, sm, y=-P - 0.04, thick=0.02)
     # railing on the gallery edge and its ends
     C.railing(wd, F.sub((0, -P + 0.12, 0)), -Wd / 2 + 0.1, Wd / 2 - 0.1, 0.0, zf - 0.04, 1.0, 'trim_white', r,
-              baluster=0.09, posts_every=Wd / 4)
+              baluster=0.09, posts_every=Wd / 4, solid=True)
     for sg in (-1, 1):
         ef = F.sub((sg * (Wd / 2 - 0.08), -P / 2, 0), rot_z=math.pi / 2)
         C.railing(wd, ef, -P / 2 + 0.1, P / 2 - 0.05, 0.0, zf - 0.04, 1.0, 'trim_white', r, baluster=0.08,
-                  posts_every=3)
+                  posts_every=3, solid=True)
     # gallery roof
     C.shed_roof(b.metal, F, -Wd / 2 - 0.05, Wd / 2 + 0.05, -0.02, -P - 0.3, 7.4, 7.08, 'tin_roof', r)
     wd.box(F, (-Wd / 2 - 0.05, -P - 0.34, 6.88), (Wd / 2 + 0.05, -P - 0.3, 7.12), 'trim_white', grain_axis=0)
@@ -168,7 +168,7 @@ def barber(b, lib, col):
         b.cloth.box(b.F, (sa, -1.07, 2.38), (sb, -1.05, 2.62), 'canvas_stripe', grain_axis=2)
     for s in (aw0, aw1):
         b.metal.board(b.F, (s, -0.02, 2.45), (s, -1.05, 2.6), 0.02, 0.02, 'iron_black', up=(0, 0, 1))
-    sp = b.s_near(0.04)
+    sp = b.s_near(0.96)
     PR.barber_pole(b.wood, b.metal, b.F.sub((sp, -0.28, 1.15)), b.r, h=1.5)
     for z in (1.3, 1.95):
         b.metal.board(b.F, (sp, -0.28, z), (sp, 0.0, z), 0.03, 0.03, 'iron_black', up=(0, 0, 1))
@@ -267,19 +267,27 @@ def hotel(b, lib, col):
     P = B.WALK_DEPTH
     h = b.porch_h
     wd = b.wood
-    C.railing(wd, F.sub((0, -P - 0.15, 0)), -Wd / 2 + 0.1, Wd / 2 - 0.1, 0.0, h + 0.28, 0.95, 'trim_green', r,
-              baluster=0.09, posts_every=Wd / 4)
-    for sg in (-1, 1):
-        ef = F.sub((sg * (Wd / 2 - 0.08), -P / 2, 0), rot_z=math.pi / 2)
-        C.railing(wd, ef, -P / 2 + 0.1, P / 2 - 0.05, 0.0, h + 0.4, 0.95, 'trim_green', r, baluster=0.08,
-                  posts_every=3)
-    s = -Wd / 2
-    while s < Wd / 2:
+    # A narrow balcony at the upper floor, on brackets above the porch roof,
+    # in front of the three windows. Kept shallow (1.1 m) with a low rail:
+    # from the street a deep balcony's rail, seen edge-on, would screen the
+    # windows behind it. Railing only on the front and the far end.
+    zf = 4.05
+    bd = 1.1
+    s = -Wd / 2 + 0.3
+    while s < Wd / 2 - 0.3:
         pw = r.uniform(0.13, 0.17)
-        wd.box(F, (s + 0.004, -P - 0.25, h + 0.52), (min(s + pw, Wd / 2) - 0.004, -0.02, h + 0.56), 'wood_floor',
+        wd.box(F, (s + 0.004, -bd, zf - 0.04), (min(s + pw, Wd / 2 - 0.3) - 0.004, -0.02, zf), 'wood_floor',
                grain_axis=1)
         s += pw
-    b.anchors['balcony'] = dict(kind='roof', floor_z=h + 0.56, edge_y=-P - 0.15, frame=F)
+    wd.box(F, (-Wd / 2 + 0.3, -bd - 0.03, zf - 0.22), (Wd / 2 - 0.3, -bd + 0.02, zf - 0.04), 'trim_green', grain_axis=0)
+    for k in range(7):
+        sb = -Wd / 2 + 0.5 + (Wd - 1.0) * k / 6
+        wd.board(F, (sb, -0.02, zf - 0.55), (sb, -bd + 0.1, zf - 0.06), 0.1, 0.07, 'trim_green', up=(1, 0, 0))
+    C.railing(wd, F.sub((0, -bd + 0.05, 0)), -Wd / 2 + 0.35, Wd / 2 - 0.35, 0.0, zf, 0.9, 'trim_green', r,
+              baluster=0.08, posts_every=Wd / 3)
+    ef = F.sub((-b.near * (Wd / 2 - 0.35), -bd / 2, 0), rot_z=math.pi / 2)
+    C.railing(wd, ef, -bd / 2 + 0.08, bd / 2 - 0.05, 0.0, zf, 0.9, 'trim_green', r, baluster=0.08, posts_every=3)
+    b.anchors['balcony'] = dict(kind='roof', floor_z=zf, edge_y=-bd + 0.05, frame=F)
     sm = make_sign(lib, 'hotel', 7.0, 1.3, combo(text_line("HOTEL", size=1.0, shadow=(0.035, -0.03), spacing=1.35),
                                                   border(0.08, 0.04)), bg=lin(58, 80, 64), fill=CREAM, shadow=DARK,
                    accent=GOLD, wear=0.45)

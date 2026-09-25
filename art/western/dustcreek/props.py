@@ -17,6 +17,7 @@ from .core import Frame, MeshBuilder, rng, tag, smooth
 from . import buildings as B
 
 WALK_EDGE = B.STREET_HALF - B.WALK_DEPTH   # 7.4: street edge of the boardwalks
+WAGON = ((-2.0, 21.5, 0.0), 20.0)           # broken wagon: centre, heading (deg)
 DECK = B.DECK_Z
 
 
@@ -236,7 +237,7 @@ def wagon(mb, metal, f, r):
     for s in (-L / 2 + 0.3, 0.0, L / 2 - 0.3):
         for side in (-1, 1):
             mb.box(tilt_f, (s - 0.03, side * (W / 2 + 0.02) - 0.02, 0.0), (s + 0.03, side * (W / 2 + 0.02) + 0.02,
-                   0.6), 'wood_dark', rand=r.random(), grain_axis=2)
+                   0.42), 'wood_dark', rand=r.random(), grain_axis=2)
     # sills under the bed
     for side in (-1, 1):
         mb.box(tilt_f, (-L / 2, side * 0.4 - 0.05, -0.12), (L / 2, side * 0.4 + 0.05, 0.0), 'wood_dark',
@@ -253,9 +254,14 @@ def wagon(mb, metal, f, r):
           radius=0.52, broken=5)
     # the tongue, dropped
     mb.board(f, (-L / 2 - 0.1, 0.0, 0.35), (-L / 2 - 2.3, 0.25, 0.05), 0.09, 0.08, 'wood_dark', up=(0, 0, 1))
-    # a few spilled things: a crate and a sack by the wagon
-    crate(mb, f.sub((0.2, -W / 2 - 0.7, 0.0), rot_z=0.3), r, sx=0.6, sy=0.45, sz=0.45)
-    sack(mb, f.sub((-0.6, -W / 2 - 0.55, 0.0), rot_z=1.0), r)
+    # spilled cargo: crates slid under the dropped bed, sacks, a crate that
+    # rolled clear toward the street
+    crate(mb, f.sub((0.45, 0.15, 0.0), rot_z=0.12), r, sx=0.95, sy=0.75, sz=0.72)
+    crate(mb, f.sub((-0.55, 0.25, 0.0), rot_z=-0.2), r, sx=0.8, sy=0.7, sz=0.66)
+    sack(mb, f.sub((1.3, 0.1, 0.0), rot_z=0.4), r)
+    sack(mb, f.sub((1.05, 0.45, 0.0), rot_z=1.9), r)
+    crate(mb, f.sub((0.2, -W / 2 - 0.9, 0.0), rot_z=0.3), r, sx=0.6, sy=0.45, sz=0.45)
+    sack(mb, f.sub((-0.6, -W / 2 - 0.65, 0.0), rot_z=1.0), r)
     return tilt_f
 
 
@@ -465,28 +471,35 @@ def build_street(lib, col, blds):
 
     # --- left: wagon (broken, mid-left in the street) -------------------
     wd, mt, cl = G('left_far')
-    wagon(wd, mt, W.sub((-4.3, 27.5, 0.0), rot_z=math.radians(82)), r)
+    wagon(wd, mt, W.sub(WAGON[0], rot_z=math.radians(WAGON[1])), r)
     # barber pole + livery props
     barrel(wd, mt, W.sub((-9.4, 38.0, DECK), rot_z=0.4), r)
 
     # --- right boardwalk ---------------------------------------------------
     wd, mt, cl = G('right_near')
-    crate(wd, W.sub((9.3, 20.8, DECK), rot_z=0.1), r)
-    crate(wd, W.sub((9.2, 21.6, DECK), rot_z=-0.08), r, sx=0.6, sy=0.6, sz=0.6)
-    crate(wd, W.sub((9.28, 21.2, DECK + 0.55), rot_z=0.25), r, sx=0.55, sy=0.45, sz=0.4)
-    bench(wd, W.sub((9.6, 22.9, DECK), rot_z=-math.pi / 2), r)
+    crate(wd, W.sub((9.3, 23.0, DECK), rot_z=0.1), r)
+    crate(wd, W.sub((9.2, 23.75, DECK), rot_z=-0.08), r, sx=0.6, sy=0.6, sz=0.6)
+    crate(wd, W.sub((9.28, 23.35, DECK + 0.55), rot_z=0.25), r, sx=0.55, sy=0.45, sz=0.45)
+    bench(wd, W.sub((9.62, 21.1, DECK), rot_z=-math.pi / 2), r, L=1.4)
     hitching_rail(wd, W.sub((walkR - 0.9, 18.2, 0.0), rot_z=math.pi / 2), r, length=3.0)
     trough(wd, W.sub((walkR - 0.4, 12.5, 0.0), rot_z=math.pi / 2), r, L=1.8)
     barrel(wd, mt, W.sub((9.4, 16.2, DECK), rot_z=1.1), r)
 
     wd, mt, cl = G('right_far')
     hitching_rail(wd, W.sub((walkR - 0.9, 30.0, 0.0), rot_z=math.pi / 2), r, length=3.4)
+    # a freight drop in the street: crates two high, waiting for the store
+    crate(wd, W.sub((5.9, 33.0, 0.0), rot_z=0.25), r, sx=0.9, sy=0.7, sz=0.6)
+    crate(wd, W.sub((6.45, 33.35, 0.0), rot_z=0.1), r, sx=0.7, sy=0.6, sz=0.55)
+    crate(wd, W.sub((5.95, 33.05, 0.6), rot_z=0.35), r, sx=0.75, sy=0.6, sz=0.5)
+    sack(cl, W.sub((5.3, 32.6, 0.0), rot_z=1.2), r)
+    # barrels at the far end of the street, by the blacksmith
+    for (x, y, rz, hh) in ((4.4, 50.5, 0.2, 0.88), (5.0, 50.9, 1.3, 0.88), (4.6, 51.2, 2.0, 0.88),
+                           (4.75, 50.85, 0.7, 0.72)):
+        barrel(wd, mt, W.sub((x, y, 0.0 if hh > 0.8 else 0.88), rot_z=rz), r, h=hh, rad=0.29 if hh > 0.8 else 0.25)
     chair(wd, W.sub((9.4, 28.2, DECK), rot_z=math.pi / 2 - 0.4), r)
     chair(wd, W.sub((9.5, 35.8, DECK), rot_z=math.pi / 2 + 0.2), r)
-    barrel(wd, mt, W.sub((9.5, 39.2, DECK), rot_z=0.3), r)
-    barrel(wd, mt, W.sub((9.0, 39.6, DECK), rot_z=2.3), r, h=0.72, rad=0.25)
     # coffins leaning against the undertaker's front
-    for i, (yy, ang) in enumerate(((41.5, 0.14), (42.3, 0.1), (46.2, 0.16))):
+    for i, (yy, ang) in enumerate(((44.4, 0.14), (45.3, 0.1), (46.4, 0.16))):
         cf = W.sub((9.62, yy, DECK), rot_z=math.pi / 2).sub(rot_x=ang)
         coffin(wd, cf, r)
 

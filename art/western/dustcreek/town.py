@@ -87,7 +87,7 @@ def build_buildings(lib, col):
                        porch_h=3.25)
     sn = store.s_near
     store.window(sn(0.18), 0.95, 1.9, 2.0, cols=3, rows=4, gid='store_1', anchor='win_a')
-    store.door(sn(0.5), w=1.5, h=2.35, style='double', open_deg=0.0, anchor='door', transom=True,
+    store.door(sn(0.5), w=1.5, h=2.35, style='double', open_deg=70.0, anchor='door', transom=True,
                mat='paint_green', gid='store_transom')
     store.window(sn(0.82), 0.95, 1.9, 2.0, cols=3, rows=4, gid='store_2', anchor='win_b')
     store.side_window('far', 4.0, 1.3, 0.9, 1.4, gid='store_side')
@@ -104,10 +104,10 @@ def build_buildings(lib, col):
     saloon.door(sn(0.5), w=1.7, h=2.6, style='batwing', anchor='door', transom=True, mat='paint_brown',
                 gid='saloon_transom')
     saloon.window(sn(0.83), 0.95, 1.8, 2.1, cols=2, rows=4, gid='saloon_1', anchor='win_b')
-    saloon.window(sn(0.2), 4.45, 1.0, 1.9, cols=2, rows=4, gid='saloon_up_1', anchor='up_a')
+    saloon.window(sn(0.2), 4.8, 1.0, 1.7, cols=2, rows=4, gid='saloon_up_1', anchor='up_a')
     saloon.door(sn(0.5), w=1.05, h=2.3, style='panel', z=4.1, open_deg=75, anchor='up_door', mat='paint_brown',
                 hinge='left')
-    saloon.window(sn(0.8), 4.45, 1.0, 1.9, cols=2, rows=4, gid='saloon_up_2', anchor='up_b')
+    saloon.window(sn(0.8), 4.8, 1.0, 1.7, cols=2, rows=4, gid='saloon_up_2', anchor='up_b')
     saloon.side_window('near', 3.5, 4.6, 0.9, 1.6, gid='saloon_side_up')
     out['saloon'] = saloon
 
@@ -116,8 +116,8 @@ def build_buildings(lib, col):
                         wall_mat='paint_blue', side_mat='wood_grey', side_siding='batten', trim_mat='trim_white',
                         porch_roof=False)
     sn = barber.s_near
-    barber.window(sn(0.3), 0.95, 1.6, 1.8, cols=2, rows=3, gid='barber_1', anchor='win')
-    barber.door(sn(0.75), w=1.0, h=2.2, style='panel', open_deg=60, anchor='door', mat='trim_white', hinge='right')
+    barber.window(sn(0.7), 0.95, 1.6, 1.8, cols=2, rows=3, gid='barber_1', anchor='win')
+    barber.door(sn(0.27), w=1.0, h=2.2, style='panel', open_deg=60, anchor='door', mat='trim_white', hinge='right')
     out['barber'] = barber
 
     # ---- RIGHT, near to far ----------------------------------------------
@@ -154,11 +154,11 @@ def build_buildings(lib, col):
                        side_mat='wood_raw', side_siding='rough', trim_mat='trim_green', porch_h=3.55)
     sn = hotel.s_near
     hotel.window(sn(0.2), 0.95, 1.4, 2.0, cols=2, rows=4, gid='hotel_1', anchor='win_a')
-    hotel.door(sn(0.5), w=1.2, h=2.4, style='panel', anchor='door', transom=True, mat='trim_green', open_deg=0,
+    hotel.door(sn(0.5), w=1.2, h=2.4, style='panel', anchor='door', transom=True, mat='trim_green', open_deg=65,
                gid='hotel_transom')
     hotel.window(sn(0.8), 0.95, 1.4, 2.0, cols=2, rows=4, gid='hotel_2', anchor='win_b')
     for i, fr in enumerate((0.2, 0.5, 0.8)):
-        hotel.window(sn(fr), 4.35, 1.05, 2.0, cols=2, rows=4, gid=f'hotel_up_{i + 1}', anchor=f'up_{i + 1}',
+        hotel.window(sn(fr), 4.8, 1.05, 1.75, cols=2, rows=4, gid=f'hotel_up_{i + 1}', anchor=f'up_{i + 1}',
                      shutters='trim_green')
     hotel.side_window('near', 3.0, 4.6, 0.9, 1.6, gid='hotel_side_up')
     hotel.side_window('near', 7.0, 4.6, 0.9, 1.6, gid='hotel_side_up2')
@@ -170,8 +170,8 @@ def build_buildings(lib, col):
                        wall_mat='paint_black', side_mat='wood_grey', side_siding='batten', trim_mat='trim_white',
                        porch_roof=False)
     sn = under.s_near
-    under.door(sn(0.72), w=1.1, h=2.3, style='panel', open_deg=0, anchor='door', mat='paint_black')
-    under.window(sn(0.3), 0.95, 1.4, 1.9, cols=2, rows=3, gid='undertaker_1', anchor='win')
+    under.door(sn(0.28), w=1.1, h=2.3, style='panel', open_deg=70, anchor='door', mat='paint_black', hinge='right')
+    under.window(sn(0.72), 0.95, 1.4, 1.9, cols=2, rows=3, gid='undertaker_1', anchor='win')
     out['undertaker'] = under
 
     for b in out.values():

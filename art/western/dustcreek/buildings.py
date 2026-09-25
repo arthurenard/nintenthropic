@@ -394,9 +394,6 @@ class Building:
             mb.quad(F, [(s0, y1, z0), (s0, y1, z1), (s1, y1, z1), (s1, y1, z0)], 'wood_interior')
             mb.quad(F, [(s0, y0, z0), (s0, y0, z1), (s0, y1, z1), (s0, y1, z0)], 'wood_interior')
             mb.quad(F, [(s1, y0, z0), (s1, y1, z0), (s1, y1, z1), (s1, y0, z1)], 'wood_interior')
-            # inner face of the front wall (seen through side windows/doors)
-            mb.quad(F, [(s0, y0 + 0.02, z0), (s1, y0 + 0.02, z0), (s1, y0 + 0.02, z1), (s0, y0 + 0.02, z1)],
-                    'wood_interior')
 
     # -- output ---------------------------------------------------------------
     def emit(self, col, lib):

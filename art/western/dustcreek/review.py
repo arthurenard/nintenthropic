@@ -35,7 +35,11 @@ def look_at(ob, target):
 def render(scene, path, w, h, samples, fog=True):
     from . import post
     pipeline.render_settings(scene, w, h, samples)
+    cam = scene.camera.data
+    old = cam.clip_end
+    cam.clip_end = 1.0e6     # let the far world (mesas, clouds) into review renders
     post.render_with_fog(scene, path, fog=fog)
+    cam.clip_end = old
     print("wrote", path, flush=True)
 
 

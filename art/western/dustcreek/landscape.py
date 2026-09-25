@@ -200,8 +200,8 @@ def terrain_height(X, Y):
     church (where the windmill stands), low bluffs to the sides."""
     d_town = np.maximum(0, np.maximum(np.abs(X) - 28, 0) + np.maximum(Y - 76, 0) + np.maximum(-Y - 6, 0))
     base = np.clip(d_town / 40.0, 0, 1) ** 1.5
-    ridge = 16.0 * np.exp(-((Y - 215 - 30 * np.sin(X * 0.012 + 0.5)) / 55.0) ** 2) * (0.7 + 0.3 * np.sin(X * 0.02))
-    swell = 3.5 * np.sin(X * 0.021 + 1.2) * np.sin(Y * 0.017) + 2.0 * np.sin(X * 0.05 + Y * 0.03)
+    ridge = 8.0 * np.exp(-((Y - 215 - 30 * np.sin(X * 0.012 + 0.5)) / 55.0) ** 2) * (0.7 + 0.3 * np.sin(X * 0.02))
+    swell = 2.0 * np.sin(X * 0.021 + 1.2) * np.sin(Y * 0.017) + 1.2 * np.sin(X * 0.05 + Y * 0.03)
     bluffs = 10.0 * np.clip((np.abs(X) - 120) / 150.0, 0, 1)
     far = 6.0 * np.clip((Y - 280) / 200.0, 0, 1) * np.sin(X * 0.008 + 2.0)
     return base * (ridge + swell + bluffs + far + 2.0)
@@ -230,7 +230,7 @@ def terrain(lib, col):
     bm.to_mesh(ob.data)
     bm.free()
     ob.data.materials.append(lib['ground_desert'])
-    tag(ob, surface='dirt', group='far')
+    tag(ob, surface='dirt', group='ground')
     return ob
 
 
@@ -252,7 +252,7 @@ def dirt_material(lib):
     mid = g.noise(pos, scale=0.9, detail=6.0, rough=0.6)
     fine = g.noise(pos, scale=18.0, detail=4.0, rough=0.6)
     col = g.ramp(g.add(g.mul(big, 0.6), g.mul(mid, 0.4)), [
-        (0.30, lin(150, 118, 90)), (0.5, lin(174, 142, 110)), (0.72, lin(192, 164, 130))])
+        (0.30, lin(146, 120, 98)), (0.5, lin(168, 142, 116)), (0.72, lin(186, 164, 138))])
     # compacted tracks: a little darker, smoother
     col = g.mix(g.mul(rut, 0.45), col, g.hsv(col, v=0.8, s=1.05))
 
@@ -278,13 +278,13 @@ def dirt_material(lib):
         rim = g.mul(g.mul(g.smooth(e, 0.85, 1.05), g.sub(1.0, g.smooth(e, 1.05, 1.6))), keep)
         return g.mul(shape, keep), rim
 
-    hoof, hrim = prints(2.6, g.madd(lane, 0.7, 0.1), 0.055, 0.062, 0.022, 0.03, 0.6, 0.0)
+    hoof, hrim = prints(2.6, g.madd(lane, 0.5, 0.04), 0.055, 0.062, 0.024, 0.034, 0.6, 0.0)
     walk = g.mul(g.smooth(g.math('ABSOLUTE', x), 4.8, 6.2), g.sub(1.0, g.smooth(g.math('ABSOLUTE', x), 7.3, 7.6)))
     boot, brim = prints(3.2, g.mul(walk, 0.35), 0.045, 0.13, 0.0, 0.0, 1.2, 3.7)
     pr = g.math('MAXIMUM', hoof, boot)
     rim = g.math('MAXIMUM', hrim, brim)
-    col = g.mix(g.mul(rim, 0.5), col, g.rgb(lin(206, 180, 146)))
-    col = g.mix(g.mul(pr, 0.25), col, g.hsv(col, v=0.85))
+    col = g.mix(g.mul(rim, 0.2), col, g.rgb(lin(200, 178, 150)))
+    col = g.mix(g.mul(pr, 0.2), col, g.hsv(col, v=0.88))
 
     # pebbles: voronoi cells, a few darker/greyer stones
     vor = g.voronoi(pos, scale=28.0, feature='F1', out='Distance')
@@ -298,8 +298,8 @@ def dirt_material(lib):
     crack = g.mul(g.sub(1.0, g.smooth(crk, 0.0, 0.02)), g.mul(g.sub(1.0, rut), g.smooth(mid, 0.52, 0.66)))
     col = g.mix(g.mul(crack, 0.3), col, g.hsv(col, v=0.72))
     col = g.mix(g.mul(fine, 0.25), col, g.hsv(col, v=0.85))
-    h = g.add(g.add(g.mul(fine, 0.25), g.mul(pebble, 0.6)), g.add(g.mul(crack, -0.3), g.sub(g.mul(rim, 0.4), pr)))
-    nrm = g.bump(h, strength=0.8, distance=0.012)
+    h = g.add(g.add(g.mul(fine, 0.25), g.mul(pebble, 0.6)), g.add(g.mul(crack, -0.3), g.sub(g.mul(rim, 0.15), pr)))
+    nrm = g.bump(h, strength=0.55, distance=0.01)
     bsdf = g.principled(col, rough=g.mixf(rut, 0.95, 0.86), normal=nrm, spec=0.3)
     g.output(bsdf)
     m["surface"] = 'dirt'

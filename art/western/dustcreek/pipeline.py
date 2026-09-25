@@ -63,6 +63,8 @@ def stage_scene(ctx):
     props.build_street(lib, c_props, blds)
     lm = landmarks.build(lib, c_bld)
     landscape.build(lib, c_land)
+    from . import sky
+    sky.build_far(core.collection("farworld", root))
     contract.build(lib, c_contract, blds, lm)
     print(f"scene built in {time.time() - t:.1f}s: {len(bpy.data.objects)} objects, "
           f"{sum(len(o.data.polygons) for o in bpy.data.objects if o.type == 'MESH')} faces")
@@ -88,11 +90,26 @@ def render_settings(scene, w, h, samples, denoise=True):
     scene.render.resolution_x = w
     scene.render.resolution_y = h
     scene.render.resolution_percentage = 100
-    scene.view_settings.view_transform = 'AgX'
-    scene.view_settings.look = 'AgX - Base Contrast' if False else 'None'
+    scene.view_settings.view_transform = lighting.VIEW_TRANSFORM
+    scene.view_settings.look = lighting.LOOK
+
+
+def stage_sky(ctx):
+    from . import sky
+    open_blend(ctx.blend)
+    scene = bpy.context.scene
+    if ctx.quick:
+        sky.render_sky(ctx, scene, 1024, 512, 24)
+    else:
+        sky.render_sky(ctx, scene)
 
 
 def stage_review(ctx):
     from . import review
     open_blend(ctx.blend)
     review.render_all(ctx)
+
+
+def stage_bake(ctx):
+    from . import bake
+    bake.stage(ctx)

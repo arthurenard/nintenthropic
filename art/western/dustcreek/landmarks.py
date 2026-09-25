@@ -101,9 +101,10 @@ def livery(lib, col):
     for k in range(4):
         wood.box(uf, (k * 0.285, -0.02, 0), ((k + 1) * 0.285 - 0.01, 0.02, 0.95), 'wood_grey', grain_axis=2)
     # loft door swung out, hay showing, hoist beam with pulley and rope
-    lf = F.sub((loft.s0, -0.02, loft.z)).sub(rot_z=math.radians(-115))
+    lf = F.sub((loft.s1, -0.02, loft.z)).sub(rot_z=math.radians(115))
     for k in range(5):
-        wood.box(lf, (k * 0.3, -0.02, 0), ((k + 1) * 0.3 - 0.01, 0.02, 1.65), 'barn_red', rand=r.random(), grain_axis=2)
+        wood.box(lf, (-(k + 1) * 0.3 + 0.01, -0.02, 0), (-k * 0.3, 0.02, 1.65), 'barn_red', rand=r.random(),
+                 grain_axis=2)
     wood.box(F, (s_door - 0.1, -1.3, e + rise - 0.6), (s_door + 0.1, 1.0, e + rise - 0.4), 'wood_post', grain_axis=1)
     metal.cylinder(F.sub((s_door, -1.15, e + rise - 0.75)).sub(rot_y=math.pi / 2), (0, 0, -0.03), 0.1, 0.06, 'iron',
                    segments=12)
@@ -136,13 +137,15 @@ def livery(lib, col):
         inner.quad(F, [(b, 0.1, 0), (b, 8.0, 0), (b, 8.0, e), (b, 0.1, e)], 'wood_interior')
         inner.quad(F, [(a, 0.1, 3.6), (b, 0.1, 3.6), (b, 8.0, 3.6), (a, 8.0, 3.6)], 'wood_dark')
         inner.quad(F, [(a, 0.1, 3.62), (a, 6.0, 3.62), (b, 6.0, 3.62), (b, 0.1, 3.62)], 'hay')
+        # hay loft floor behind the loft door
+        inner.quad(F, [(-2.5, 0.12, 5.95), (-2.5, 4.0, 5.95), (3.5, 4.0, 5.95), (3.5, 0.12, 5.95)], 'wood_interior')
     for k in range(3):
         s = -W / 2 + 2.2 + k * 2.2
         inner.box(F, (s - 0.05, 1.0, 0.0), (s + 0.05, 5.0, 1.5), 'wood_dark', grain_axis=1)
     # hay bales, a loose pile, a cart wheel leaning on the wall, barrels
-    P.hay_bale(hay_mb, F.sub((-2.3, -1.1, 0.0), rot_z=0.08), r)
-    P.hay_bale(hay_mb, F.sub((-2.35, -1.15, 0.38), rot_z=-0.05), r)
-    P.hay_bale(hay_mb, F.sub((-2.2, -1.75, 0.0), rot_z=0.2), r)
+    for (x, y, z, rz) in ((-2.3, -1.1, 0.0, 1.62), (-2.3, -2.1, 0.0, 1.5), (-2.32, -1.15, 0.38, 1.52),
+                          (-2.28, -2.05, 0.38, 1.66), (-2.3, -1.6, 0.76, 1.57)):
+        P.hay_bale(hay_mb, F.sub((x, y, z), rot_z=rz), r)
     P.hay_bale(hay_mb, F.sub((4.6, -1.2, 0.0), rot_z=-0.1), r)
     P.hay_bale(hay_mb, F.sub((4.1, -1.9, 0.0), rot_z=0.5), r)
     P.hay_pile(hay_mb, F.sub((3.4, -0.9, 0.0)), r, rad=0.8, h=0.5)
@@ -157,7 +160,7 @@ def livery(lib, col):
         'door': dict(kind='door', center=F.p(s_door, 0, 0.0), normal=F.d(0, -1, 0), w=3.8, h=3.9, frame=F, s=s_door),
         'loft': dict(kind='window', center=F.p(loft.s, 0, loft.z + 0.8), normal=F.d(0, -1, 0), frame=F,
                      s=loft.s, z=loft.z, w=1.5, h=1.7),
-        'hay': dict(kind='crate', center=F.p(-2.3, -1.1, 0.0), frame=F),
+        'hay': dict(kind='crate', center=F.p(-2.3, -1.6, 0.0), frame=F),
     }
     return objs, anchors, F
 
@@ -290,7 +293,8 @@ def church(lib, col):
             fr = F.sub((TW / 2 - 0.15, ty0 + TW / 2, 0), rot_z=math.pi / 2)
         else:
             fr = F.sub((-TW / 2 + 0.15, ty0 + TW / 2, 0), rot_z=-math.pi / 2)
-        C.railing(wood, fr, -TW / 2 + 0.3, TW / 2 - 0.3, 0.0, bz, 0.9, 'trim_white', r, baluster=0.08, posts_every=9)
+        C.railing(wood, fr, -TW / 2 + 0.3, TW / 2 - 0.3, 0.0, bz, 0.95, 'trim_white', r, baluster=0.08, posts_every=9,
+                  solid=True)
         # pointed arch spandrels at the top of each opening
         wood.box(fr, (-TW / 2 + 0.15, -0.1, bz + 2.3), (TW / 2 - 0.15, 0.05, bz + 2.8), 'trim_white', grain_axis=0)
         for sg in (-1, 1):
@@ -574,7 +578,7 @@ def far_end(lib, col):
     wood = MeshBuilder("far.misc.wood")
     metal = MeshBuilder("far.misc.metal")
     # corral beside the livery
-    fence(wood, W, (-10.4, 53.5, 0), (-10.4, 60.5, 0), r, broken={(1, 2)})
+    fence(wood, W, (-10.4, 54.6, 0), (-10.4, 60.5, 0), r, broken={(1, 2)})
     fence(wood, W, (-10.4, 60.5, 0), (-22.0, 60.5, 0), r)
     fence(wood, W, (-22.0, 60.5, 0), (-22.0, 53.5, 0), r)
     # cemetery on the rise right of the church: picket fence and crosses
@@ -599,7 +603,8 @@ def far_end(lib, col):
     C.siding(wood, bsw, -3.0, 3.0, 0.0, C.top_fn_flat(3.8), [], 'rough', 'wood_grey', r, backing=wood)
     for sg in (-1, 1):
         sf = bs.sub((sg * 3.0, 0, 0), rot_z=sg * math.pi / 2) if sg > 0 else bs.sub((-3.0, 5.0, 0), rot_z=-math.pi / 2)
-        C.siding(wood, sf, 0.0, 5.0, 1.8, C.top_fn_flat(3.5), [], 'rough', 'wood_grey', r)
+        C.siding(wood, sf, 0.0, 5.0, 0.0 if sg > 0 else 1.8, C.top_fn_flat(3.5), [], 'rough', 'wood_grey', r,
+                 backing=wood if sg > 0 else None)
     # forge + anvil
     P.crate(wood, bs.sub((-1.5, 3.8, 0)), r, sx=1.2, sy=1.0, sz=0.9, mat='stone_rubble')
     metal.box(bs, (0.3, 2.5, 0.0), (0.6, 2.8, 0.55), 'wood_dark')
