@@ -171,15 +171,27 @@ class Mesh(NamedTuple):
     ``centre + (radius - inset) * direction`` - a few sums over the whole
     figure at once, however many parts it has."""
 
-    centre: np.ndarray  # (n, 2)
-    direction: np.ndarray  # (n, 2)
-    radius: np.ndarray  # (n,)
+    #: Each point's centre (x, y), direction (x, y) and distance, side by side
+    #: in one array, so blending two poses is one sum rather than three.
+    packed: np.ndarray  # (n, 5)
     depth: np.ndarray  # (n,): half the thickness of the part each point is on
     pieces: tuple[Piece, ...]
     #: Runs of pieces filled in one call: the same colour, and not touching -
     #: a pair of legs, of feet, of hands. Outlines filled in one call cancel
     #: where they cross, so only ones that cannot cross are put together.
     groups: tuple[tuple[int, ...], ...]
+
+    @property
+    def centre(self) -> np.ndarray:
+        return self.packed[:, :2]
+
+    @property
+    def direction(self) -> np.ndarray:
+        return self.packed[:, 2:4]
+
+    @property
+    def radius(self) -> np.ndarray:
+        return self.packed[:, 4]
 
 
 @lru_cache(maxsize=8)
@@ -269,10 +281,9 @@ def _mesh(parts: tuple[Part, ...]) -> Mesh:
                 run.append(index)
                 continue
         groups.append([index])
-    return Mesh(np.concatenate(centres).astype(np.float32),
-                np.concatenate(directions).astype(np.float32),
-                np.concatenate(radii).astype(np.float32),
-                np.concatenate(depths), tuple(pieces), tuple(map(tuple, groups)))
+    packed = np.concatenate((np.concatenate(centres), np.concatenate(directions),
+                             np.concatenate(radii)[:, None]), axis=1).astype(np.float32)
+    return Mesh(packed, np.concatenate(depths), tuple(pieces), tuple(map(tuple, groups)))
 
 
 def _apart(a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray]) -> bool:
@@ -281,6 +292,27 @@ def _apart(a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray]) -
     no pixel of antialiasing brings them into contact."""
     gap = 0.02
     return bool((a[1] + gap < b[0]).any() or (b[1] + gap < a[0]).any())
+
+
+_RUNS: dict[tuple[int, int], tuple] = {}
+
+
+def _runs(groups: tuple[tuple[int, ...], ...], pieces: tuple[Piece, ...],
+          lod: int) -> tuple[tuple[Piece, ...], ...]:
+    """The runs of pieces a figure at detail ``lod`` is filled in. The same few
+    cached poses come round frame after frame, so the answer is kept against
+    the very runs asked about - held, so they cannot be mistaken for others."""
+    key = (id(groups), lod)
+    known = _RUNS.get(key)
+    if known is not None and known[0] is groups:
+        return known[1]
+    runs = tuple(run for run in (tuple(pieces[index] for index in group
+                                       if pieces[index].lod <= lod) for group in groups)
+                 if run)
+    if len(_RUNS) > 4096:
+        _RUNS.clear()
+    _RUNS[key] = (groups, runs)
+    return runs
 
 
 #: How many poses a stride is cached at. Each frame is drawn between the two
@@ -566,33 +598,28 @@ class Figure:
             poses.append((_pose_mesh(*key, 1.0, low % POSE_STEPS),
                           _pose_mesh(*key, 1.0, (low + 1) % POSE_STEPS)))
         first = poses[0][0]
-        if any(mesh.pieces != first.pieces for pair in poses for mesh in pair):
+        if any(len(mesh.packed) != len(first.packed) for pair in poses for mesh in pair):
             poses = [(first, first)]
         groups = first.groups
-        if any(mesh.groups != groups for pair in poses for mesh in pair):
+        if any(mesh.groups is not groups and mesh.groups != groups
+               for pair in poses for mesh in pair):
             # Apart in one pose and not the other: fill them one at a time.
             groups = tuple((index,) for index in range(len(first.pieces)))
-
-        def blend(field: str) -> np.ndarray:
-            walking = [getattr(a, field) + (getattr(b, field) - getattr(a, field)) * t
-                       for a, b in poses]
-            if len(walking) == 1:
-                return walking[0]
-            return walking[0] + (walking[1] - walking[0]) * np.float32(self.recoil)
-
+        blended = [a.packed + (b.packed - a.packed) * t for a, b in poses]
+        packed = blended[0]
+        if len(blended) > 1:
+            packed += (blended[1] - packed) * np.float32(self.recoil)
         height = np.float32(self.height)
-        root = np.float32((self.x - self.lean * self.height, self.ground_y))
-        return Mesh(blend("centre") * height + root, blend("direction"),
-                    blend("radius") * height, first.depth * height, first.pieces, groups)
+        packed[:, :2] *= height
+        packed[:, :2] += np.float32((self.x - self.lean * self.height, self.ground_y))
+        packed[:, 4] *= height
+        return Mesh(packed, first.depth * height, first.pieces, groups)
 
     @cached_property
     def groups(self) -> tuple[tuple[Piece, ...], ...]:
         """The pieces it is drawn and shot with at its size, in the runs they
         are filled in."""
-        lod, pieces = self.lod, self.mesh.pieces
-        runs = (tuple(pieces[index] for index in group if pieces[index].lod <= lod)
-                for group in self.mesh.groups)
-        return tuple(run for run in runs if run)
+        return _runs(self.mesh.groups, self.mesh.pieces, self.lod)
 
     @cached_property
     def outline(self) -> np.ndarray:
