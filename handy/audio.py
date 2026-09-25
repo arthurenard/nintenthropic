@@ -29,7 +29,9 @@ chosen take is additionally re-pitched and re-levelled by a hair.
 
 from __future__ import annotations
 
+import io
 import threading
+import wave as wavefile
 from functools import lru_cache
 from typing import Callable
 
@@ -1251,6 +1253,81 @@ NAMED_BUILDERS: dict[str, Callable[..., np.ndarray]] = {
     "distant_impact": distant_impact_sound, "headshot_ping": headshot_ping_sound,
     "wind_gust": wind_gust_sound,
 }
+
+
+# --- export ----------------------------------------------------------------------
+# The browser plays the same sounds as the desktop, so it is sent this set as
+# files rather than approximating it with a few oscillators of its own.
+
+#: Groan pitches, in Hz: several voices, so the road is not one creature.
+_GROAN_PITCHES = (74.0, 62.0, 88.0)
+
+
+def base_builders(rings: int) -> dict[str, Callable[..., np.ndarray]]:
+    """The kit every map shares, under the names the browser plays it by.
+
+    Each takes ``(rng, pitch, velocity)`` like a named cue. What :class:`Sounds`
+    keeps under attributes - a hit for every ring of the archery face, a
+    head and a body shot into flesh - gets a name of its own here.
+    """
+    builders: dict[str, Callable[..., np.ndarray]] = {
+        "shot": shot_sound,
+        "miss": miss_sound,
+        "cock": cock_sound,
+        "hurt": hurt_sound,
+        "round_over": lambda rng, pitch=1.0, velocity=0.0: round_over_sound(rng),
+        "flesh_head": lambda rng, pitch=1.0, velocity=0.0: flesh_sound(
+            rng, True, pitch, velocity),
+        "flesh_body": lambda rng, pitch=1.0, velocity=0.0: flesh_sound(
+            rng, False, pitch, velocity),
+    }
+    for ring in range(rings):
+        builders[f"hit_{ring}"] = (lambda rng, pitch=1.0, velocity=0.0, r=ring:
+                                   hit_sound(r, rings, rng, pitch, velocity))
+    return builders
+
+
+def cue_names(rings: int) -> tuple[str, ...]:
+    """Every sound the browser can be asked to play: the kit, then the maps' cues."""
+    return (*base_builders(rings), "groan", *NAMED_BUILDERS)
+
+
+def render_cue(name: str, take: int = 0, rings: int = 5, seed: int = 0) -> np.ndarray:
+    """One take of a sound, by name, as the desktop's :class:`Sounds` makes it.
+
+    Take 0 is the straight one; every other take is detuned by up to
+    :attr:`Sounds.PITCH_SPREAD` semitones and re-levelled by up to
+    :attr:`Sounds.VELOCITY_SPREAD` dB, on top of the noise, decay and balance
+    each builder draws for itself. The same name, take and seed always give
+    the same wave. An unknown name raises KeyError.
+    """
+    if name == "groan":
+        builder = None
+    else:
+        builder = {**base_builders(rings), **NAMED_BUILDERS}[name]
+    rng = np.random.default_rng([seed, take, *name.encode()])
+    pitch, velocity = 1.0, 0.0
+    if take:
+        pitch = 2.0 ** (rng.uniform(-Sounds.PITCH_SPREAD, Sounds.PITCH_SPREAD) / 12.0)
+        velocity = float(rng.uniform(-Sounds.VELOCITY_SPREAD, Sounds.VELOCITY_SPREAD))
+    if builder is None:
+        # A groan's pitch is its voice, in Hz: each take is another throat.
+        base = _GROAN_PITCHES[take % len(_GROAN_PITCHES)]
+        return groan_sound(rng, base * pitch, velocity if take else 0.0)
+    return builder(rng, pitch, velocity)
+
+
+def wav_bytes(wave: np.ndarray) -> bytes:
+    """A finished wave as a 16-bit mono WAV file at :data:`SAMPLE_RATE`."""
+    samples = np.clip(np.asarray(wave, dtype=np.float64), -1.0, 1.0)
+    pcm = np.round(samples * 32767.0).astype("<i2")
+    buffer = io.BytesIO()
+    with wavefile.open(buffer, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(SAMPLE_RATE)
+        out.writeframes(pcm.tobytes())
+    return buffer.getvalue()
 
 
 # --- playback ------------------------------------------------------------------
