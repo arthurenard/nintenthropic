@@ -34,6 +34,14 @@ RECOIL = 0.18
 #: Corner radius of every panel, card and button, in 720-tall units.
 CORNER = 10
 
+#: What every floating piece of in-game chrome is made of - the clock's pill,
+#: the score's panel, the setup console: a dark plate, lighter at the top,
+#: translucent enough that the map is still there behind it and dark enough
+#: that grey text reads on a noon sky.
+CHROME_TOP = (40, 38, 36)
+CHROME_BOTTOM = (24, 23, 22)
+CHROME_OPACITY = 0.85
+
 
 def _px(value: float, scale: float, floor: int = 1) -> int:
     return max(floor, round(value * scale))
@@ -282,6 +290,27 @@ def draw_figures(canvas: np.ndarray, text: str, origin: tuple[int, int],
     region[:] = (region * (1 - alpha) + tint * alpha).astype(np.uint8)
 
 
+#: A caption set in the figures face at ``scale`` matches the height of body
+#: text set with draw_text at the same scale.
+CAPTION_SIZE = 30
+
+
+def caption_width(text: str, scale: float) -> int:
+    """Width of ``text`` set by :func:`draw_caption` at ``scale``."""
+    return figures_width(text, max(8, round(CAPTION_SIZE * scale)))
+
+
+def draw_caption(canvas: np.ndarray, text: str, origin: tuple[int, int],
+                 color: tuple[int, int, int], scale: float) -> None:
+    """A short line with numbers in it - a tally, a best - in the figures face.
+
+    The body face's digits are a monospace code font with a slashed zero, and
+    "0/14 hits" or "best 900" set in it read as a terminal's output beside the
+    score set in the figures face above them.
+    """
+    draw_figures(canvas, text, origin, color, max(8, round(CAPTION_SIZE * scale)), 0.0)
+
+
 def _centred_text(canvas: np.ndarray, text: str, y: int,
                   color: tuple[int, int, int], scale: float) -> None:
     width = text_width(text, scale)
@@ -471,12 +500,44 @@ def draw_camera_inset(canvas: np.ndarray, camera: np.ndarray, hands: Frame,
     cv2.line(canvas, (rect.x + _px(10, scale), rect.y), (rect.x + _px(46, scale), rect.y),
              color, _px(2, scale), cv2.LINE_AA)
     if label:
-        draw_text(canvas, label, (rect.x + round(8 * scale), rect.y + round(20 * scale)),
-                  color, scale=0.45 * scale)
+        draw_tag(canvas, label, (rect.x + _px(8, scale), rect.y + _px(28, scale)), color,
+                 scale)
     if state != FUSED:
-        draw_text(canvas, state,
-                  (rect.x + round(8 * scale), rect.bottom - round(10 * scale)),
-                  color, scale=0.45 * scale)
+        # Said on the picture itself: this is where a player looks to see why
+        # the crosshair has gone.
+        draw_tag(canvas, state.upper(), (rect.x + _px(8, scale), rect.bottom - _px(8, scale)),
+                 color, scale)
+
+
+TAG_SCALE = 0.42  # a tag's text, at 720 tall
+
+
+def tag_width(text: str, scale: float = 1.0, dot: bool = True) -> int:
+    """How wide :func:`draw_tag` makes the pill for ``text``."""
+    size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, TAG_SCALE * scale, 1)[0]
+    return _px(22 if dot else 10, scale) + size[0] + _px(9, scale)
+
+
+def draw_tag(canvas: np.ndarray, text: str, corner: tuple[int, int],
+             color: tuple[int, int, int], scale: float = 1.0, dot: bool = True) -> Rect:
+    """A small dark pill - a dot in ``color``, then the text - bottom-left at
+    ``corner``. Returns the pill.
+
+    Small text laid over a picture goes on one of these rather than in a dark
+    halo: OpenCV sets the halo's heavier stroke with wider advances, so along
+    a line of thin text the two drift apart and the words read doubled.
+    """
+    size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, TAG_SCALE * scale, 1)[0]
+    height = _px(20, scale)
+    pill = Rect(corner[0], corner[1] - height, tag_width(text, scale, dot), height)
+    shade_panel(canvas, pill, height // 2, (30, 29, 28), (18, 17, 16), None)
+    mid = pill.y + height // 2
+    if dot:
+        cv2.circle(canvas, (pill.x + _px(11, scale), mid), _px(3, scale), color, -1,
+                   cv2.LINE_AA)
+    draw_text(canvas, text, (pill.x + _px(20 if dot else 10, scale), mid + size[1] // 2),
+              color, scale=TAG_SCALE * scale, thickness=1, outline=False)
+    return pill
 
 
 def draw_camera_insets(canvas: np.ndarray, images: Sequence[np.ndarray],
@@ -544,34 +605,31 @@ def draw_button(canvas: np.ndarray, button: Button, highlighted: bool = False,
 def draw_hud(canvas: np.ndarray, round_: Round, aim: Aim, origin: tuple[int, int],
              fps: float | None, debug: bool,
              camera_states: Sequence[str] = (), scale: float = 1.0,
-             fire_at: float = 0.65) -> None:
-    # The block sits clear of the camera preview beside it: the accent bar is
-    # a good twenty pixels off the preview's frame rather than hugging it.
+             fire_at: float = 0.65, rule: bool = True) -> None:
+    """The score block beside the camera: the score, and the tally under it.
+
+    There is no "ready" line: the crosshair already turns green when the gun
+    is cocked, right where the player is looking, and a second indicator in
+    the corner only competed with it. Nor is the camera talked about here -
+    a lost hand is said on the camera's own preview, where the player looks
+    to see why. Under --debug a line of measurements sits low on the right.
+    """
     x, y = origin[0] + _px(14, scale), origin[1]
 
     def line(offset: float) -> int:
         return y + round(offset * scale)
 
-    # A slim accent bar runs down the left of the block, tying the lines into
-    # one readout rather than four stray strings of text.
-    cv2.line(canvas, (x - _px(10, scale), line(8)), (x - _px(10, scale), line(104)),
-             ACCENT, _px(2, scale), cv2.LINE_AA)
-    draw_text(canvas, "SCORE", (x, line(18)), ACCENT, scale=0.42 * scale,
-              thickness=1)
-    draw_figures(canvas, str(round_.score), (x, line(58)), INK, _px(40, scale), 0.05)
-    draw_text(canvas,
-              f"hits {round_.hits}/{round_.shots}   accuracy {round_.accuracy:.0%}",
-              (x, line(78)), MUTED, scale=0.55 * scale)
-
-    state = "READY" if aim.armed else ("AIM" if aim.tracking else "NOT TRACKING")
-    dot = (x + _px(5, scale), line(96))
-    cv2.circle(canvas, dot, _px(4, scale), ARMED if aim.armed else MUTED, -1,
-               cv2.LINE_AA)
-    draw_text(canvas, state, (x + _px(16, scale), line(102)),
-              ARMED if aim.armed else MUTED, scale=0.55 * scale)
-
-    summary, color = camera_summary(camera_states)
-    draw_text(canvas, summary, (x, line(124)), color, scale=0.48 * scale, thickness=1)
+    if rule:
+        # A slim accent bar down the left of the block, tying the lines into
+        # one readout rather than stray strings of text.
+        cv2.line(canvas, (x - _px(10, scale), line(10)), (x - _px(10, scale), line(104)),
+                 ACCENT, _px(2, scale), cv2.LINE_AA)
+    draw_text(canvas, "SCORE", (x, line(HUD_LINES["label"])), ACCENT,
+              scale=0.42 * scale, thickness=1, outline=False)
+    draw_figures(canvas, str(round_.score), (x, line(HUD_LINES["score"])), INK,
+                 _px(HUD_FIGURES, scale), 0.05)
+    draw_caption(canvas, hud_tally(round_), (x, line(HUD_LINES["tally"])), SECONDARY,
+                 HUD_TALLY * scale)
 
     if debug:
         # How far the thumb has folded, against the threshold it must cross.
@@ -581,9 +639,67 @@ def draw_hud(canvas: np.ndarray, round_: Round, aim: Aim, origin: tuple[int, int
             detail += f"   spread {aim.spread * 100:.1f}%"
         if fps is not None:
             detail += f"   {fps:.0f} fps"
-        draw_text(canvas, detail, (x, line(146)), MUTED, scale=0.48 * scale,
-                  thickness=1)
+        summary, _ = camera_summary(camera_states)
+        # In a corner of its own, low on the right, clear of every map's
+        # readout under the score.
+        text = f"{detail}   {summary}"
+        height, width = canvas.shape[:2]
+        draw_tag(canvas, text, (width - _px(16, scale) - tag_width(text, scale, False),
+                                height - _px(64, scale)), INK, scale, dot=False)
 
+
+#: Where each line of the score block sits, in 720-tall units below the HUD's
+#: origin. The app sizes the panel under the block from these.
+HUD_LINES = {"label": 22, "score": 64, "tally": 88}
+HUD_FIGURES = 40  # the score's height, in 720-tall units
+HUD_TALLY = 0.46  # the tally line's text scale, at 720 tall
+
+#: Secondary text on a chrome panel: a step brighter than MUTED, which was
+#: picked for the flat menu panels and sinks on a translucent one.
+SECONDARY = (196, 192, 188)
+
+
+def hud_tally(round_: Round) -> str:
+    """The line under the score: hits out of shots, and the accuracy."""
+    return f"{round_.hits}/{round_.shots} hits   {round_.accuracy:.0%}"
+
+
+def hud_block_width(round_: Round, scale: float = 1.0) -> int:
+    """How wide the score block is right now, in pixels, margins included.
+
+    Never narrower than a tally of two- and three-digit counts, so the panel
+    under it holds its width through a round rather than twitching wider with
+    every digit a count gains.
+    """
+    content = max(figures_width(str(round_.score), _px(HUD_FIGURES, scale)),
+                  caption_width(hud_tally(round_), HUD_TALLY * scale),
+                  caption_width("88/888 hits   88%", HUD_TALLY * scale))
+    return _px(14, scale) + content + _px(16, scale)
+
+
+def camera_note(states: Sequence[str]) -> tuple[str, tuple] | None:
+    """:func:`camera_summary`, when there is something worth saying.
+
+    One camera is the ordinary case and needs no words beside it - "1 camera"
+    in the corner of every frame read as debug output - and when it loses the
+    hand its own preview says so. Several cameras are always accounted for,
+    since which of them is contributing changes frame to frame.
+    """
+    if len(states) < 2:
+        return None
+    return camera_summary(states)
+
+
+
+def timer_left(width: int, remaining: float | None, scale: float = 1.0) -> int:
+    """Where the clock's chrome starts on the left, ticks included, so what
+    sits beside it can stop short."""
+    if remaining is None:
+        text_w = cv2.getTextSize("PRACTICE", cv2.FONT_HERSHEY_SIMPLEX, 0.7 * scale, 2)[0][0]
+    else:
+        text = f"{int(remaining) // 60}:{int(remaining) % 60:02d}"
+        text_w = figures_width(text, _px(40, scale))
+    return (width - text_w) // 2 - _px(22, scale) - _px(28, scale)
 
 
 def draw_timer(canvas: np.ndarray, remaining: float | None,
@@ -614,8 +730,8 @@ def draw_timer(canvas: np.ndarray, remaining: float | None,
     region = canvas[y0:y1, x0:x1]
     halo = region.copy()
     shade_panel(halo, Rect(pill.x - x0, pill.y - y0, pill.width, pill.height),
-                pill.height // 2, (40, 38, 36), (24, 23, 22), EDGE)
-    blend(region, halo, 0.85)
+                pill.height // 2, CHROME_TOP, CHROME_BOTTOM, EDGE)
+    blend(region, halo, CHROME_OPACITY)
     # Accent ticks either side of the clock, red once it is nearly over.
     tick = DANGER if urgent else ACCENT
     mid = pill.y + pill.height // 2
@@ -831,49 +947,55 @@ def draw_footer(canvas: np.ndarray, text: str, scale: float = 1.0) -> None:
               MUTED, scale=FOOTER_SCALE * scale)
 
 
-def draw_hud_backing(canvas: np.ndarray, rect: Rect, scale: float = 1.0) -> None:
-    """A soft dark panel behind the HUD, so it reads on a bright map too.
+def draw_chrome_panel(canvas: np.ndarray, rect: Rect, scale: float = 1.0,
+                      opacity: float = CHROME_OPACITY,
+                      tab: tuple[int, int, int] | None = None) -> None:
+    """A translucent rounded plate with a hairline edge, sized to what sits on it.
 
-    The HUD was designed over dark ground; over a noon sky its grey text all but
-    vanishes. The panel is translucent with feathered edges, and is composited
-    on its own region only - a full-frame blend per feather step cost more than
-    the whole map.
+    It replaces a feathered slab that ran from the camera most of the way to
+    the buttons: a panel sized to its readout, in the same material and with
+    the same corners as the clock beside it, is far less of the map covered
+    and reads as one family with the rest of the chrome. Composited on its own
+    region with a cached mask, so a frame pays for one small weighted blend.
     """
     height, width = canvas.shape[:2]
-    feather = round(14 * scale)
     x0, y0 = max(rect.x, 0), max(rect.y, 0)
-    x1, y1 = min(rect.right + feather, width), min(rect.bottom + feather, height)
+    x1, y1 = min(rect.right + 1, width), min(rect.bottom + 1, height)
     if x1 <= x0 or y1 <= y0:
         return
+    radius = _px(CORNER * 0.7, scale)
+    keep, cover, shade = _chrome_layers(rect.width + 1, rect.height + 1, radius,
+                                        round(opacity, 3))
+    rows, cols = slice(y0 - rect.y, y1 - rect.y), slice(x0 - rect.x, x1 - rect.x)
     region = canvas[y0:y1, x0:x1]
-    keep, cover, shade = _hud_backing_weights(y1 - y0, x1 - x0,
-                                              rect.bottom + feather - y0,
-                                              rect.right + feather - x0, feather)
-    cv2.blendLinear(region, shade, keep, cover, dst=region)
+    cv2.blendLinear(region, shade[rows, cols], keep[rows, cols], cover[rows, cols],
+                    dst=region)
+    stroke_rounded(canvas, rect, EDGE, radius, 1)
+    if tab is not None:
+        # The short bright tab on the top edge, over the text's margin: the
+        # mark every panel carries.
+        cv2.line(canvas, (rect.x + _px(14, scale), rect.y),
+                 (rect.x + _px(50, scale), rect.y), tab, _px(2, scale), cv2.LINE_AA)
 
 
-@lru_cache(maxsize=8)
-def _hud_backing_weights(height: int, width: int, fade_bottom: int, fade_right: int,
-                         feather: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The HUD backing's blend, built once per size rather than every frame.
+@lru_cache(maxsize=16)
+def _chrome_layers(width: int, height: int, radius: int,
+                   opacity: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """One panel's blend, built once per size rather than every frame.
 
-    Weights for what shows through and for the shade laid over it: 0.62 of
-    shade over the panel, fading to none across the feather on the right and
-    bottom. Rebuilding them - and blending in float - was three milliseconds
-    of every frame on a laptop panel; a cached mask and OpenCV's own weighted
-    blend are a tenth of one.
+    Weights for what shows through and for the plate laid over it, the plate's
+    rounded corners anti-aliased into the weights, and the plate's own shading.
+    Blending in float from a fresh mask was three milliseconds a frame on a
+    laptop panel; a cached mask and OpenCV's own weighted blend are a small
+    fraction of one.
     """
-    ys = np.arange(height)[:, None]
-    xs = np.arange(width)[None, :]
-    fade_y = np.clip((fade_bottom - ys) / feather, 0.0, 1.0)
-    fade_x = np.clip((fade_right - xs) / feather, 0.0, 1.0)
-    cover = (0.62 * np.minimum(fade_y, fade_x)).astype(np.float32)
-    shade = np.empty((height, width, 3), np.uint8)
-    shade[:] = (16, 15, 14)
-    for array in (cover, shade):
+    mask = np.zeros((height, width), np.uint8)
+    cv2.fillPoly(mask, [_rounded(0, 0, width - 1, height - 1, radius)], 255, cv2.LINE_AA)
+    cover = mask.astype(np.float32) * np.float32(opacity / 255.0)
+    keep = np.float32(1.0) - cover
+    shade = _gradient(width, height, CHROME_TOP, CHROME_BOTTOM)
+    for array in (keep, cover):
         array.flags.writeable = False  # shared by every frame from here on
-    keep = 1.0 - cover
-    keep.flags.writeable = False
     return keep, cover, shade
 
 

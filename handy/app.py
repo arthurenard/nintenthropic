@@ -240,25 +240,71 @@ def aim_pixels(aim: Aim, layout: Layout) -> tuple[int, int] | None:
             round(aim.position[1] * (layout.window.height - 1)))
 
 
+#: Maps that lay one panel of their own under the camera and the whole readout,
+#: as part of the world (Overwatch Ridge: see ``sniper.hud_panel``). The app's
+#: panel on top of theirs was a double panel with a seam down the middle.
+OWN_HUD_PANEL = frozenset({"sniper"})
+
+#: Where a map's own readout under the score block starts, in 720-tall units
+#: below the origin it is handed (Dead of Night's health bar), and the size of
+#: the strip the app lays under it. The strip sits at the foot of the camera,
+#: where High Noon keeps its tally on a slab of its own.
+READOUT_FIRST = 146
+READOUT_SIZE = (268, 60)
+
+
+def hud_panels(view: View, layout: Layout) -> tuple[Rect | None, Rect | None]:
+    """The panels under the score block and under the map's own readout.
+
+    Each is sized to what sits on it, so the map is covered no further than
+    the readout reaches: the score panel stops short of the clock beside it,
+    and a map's readout gets a strip of its own at the camera's foot. None
+    where there is nothing to carry, or where the map lays its own panel.
+    """
+    if view.map.key in OWN_HUD_PANEL:
+        return None, None
+    scale = layout.scale
+    x, top = layout.hud[0], layout.inset.y
+    room = (scene.timer_left(layout.window.width, view.remaining, scale)
+            - round(12 * scale) - x)
+    score = Rect(x, top, max(1, min(scene.hud_block_width(view.round, scale), room)),
+                 round((scene.HUD_LINES["tally"] + 18) * scale))
+    if view.map.draw_hud is None:
+        return score, None
+    width, height = (round(value * scale) for value in READOUT_SIZE)
+    y = max(layout.inset.bottom - height, score.bottom + round(10 * scale))
+    return score, Rect(x, y, width, height)
+
+
 def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     """Compose one frame, bottom layer first. The map owns everything below the HUD."""
     view.map.draw_world(canvas, view.round, view.now)
 
     scale = layout.scale
-    # The HUD column: inset, score block and the map's own readouts, on a panel.
-    hud_right = min(layout.hud[0] + round(430 * scale), layout.maps_button.rect.x - round(16 * scale))
-    scene.draw_hud_backing(canvas, Rect(layout.inset.x - round(8 * scale),
-                                        layout.inset.y - round(8 * scale),
-                                        hud_right - layout.inset.x + round(8 * scale),
-                                        layout.play_area.y - layout.inset.y - round(6 * scale)),
-                           scale)
+    panel, readout = hud_panels(view, layout)
+    for rect in (panel, readout):
+        if rect is not None:
+            scene.draw_chrome_panel(canvas, rect, scale, tab=scene.ACCENT)
     scene.draw_camera_insets(canvas, view.cameras, view.hands, layout.inset,
                              view.camera_states,
                              view.scheme.draw if view.scheme else None, scale)
+    note = scene.camera_note(view.camera_states)
+    if note is not None:
+        # Under the cameras it is about, in the gap above the play area.
+        scene.draw_tag(canvas, note[0], (layout.inset.x,
+                                         layout.inset.bottom + round(26 * scale)),
+                       note[1], scale)
+    # On a panel of the app's own the block carries the panel's tab; on a map's
+    # panel, the rule down its side that the map's readout continues.
     scene.draw_hud(canvas, view.round, view.aim, layout.hud, view.fps, view.debug,
-                   view.camera_states, scale, view.fire_at)
+                   view.camera_states, scale, view.fire_at, rule=panel is None)
     if view.map.draw_hud is not None:
-        view.map.draw_hud(canvas, view.round, layout.hud, view.now)
+        origin = layout.hud
+        if readout is not None:
+            # On its strip, lined up with the text above and inset as it is.
+            origin = (readout.x + round(14 * scale),
+                      readout.y + round((14 - READOUT_FIRST) * scale))
+        view.map.draw_hud(canvas, view.round, origin, view.now)
     scene.draw_timer(canvas, view.remaining, scale)
     crosshair = view.crosshair
     for button in (layout.quit_button, layout.maps_button):

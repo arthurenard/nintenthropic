@@ -2148,3 +2148,52 @@ def test_sniper_startup_prefetches_eye_model_with_hand_override(monkeypatch):
     monkeypatch.setattr(app, "ensure_model", lambda name: fetched.append(name))
     app.prefetch_models(app.Settings(map_key="sniper", model_path=Path("hand.task")))
     assert fetched == ["face_landmarker"]
+
+
+# --- the chrome keeps out of the way, at every size --------------------------
+
+SIZES = ((1280, 720), (1512, 945), (2560, 1440))
+
+
+def overlaps(a, b) -> bool:
+    return a.x < b.right and b.x < a.right and a.y < b.bottom and b.y < a.bottom
+
+
+def chrome_view(chosen, layout, **fields):
+    settings = Settings(seed=1)
+    round_ = new_round(settings, layout, chosen)
+    round_.update(0.0)
+    fields.setdefault("remaining", 48.0)
+    return View(map=chosen, round=round_, aim=Aim(position=(0.5, 0.5), armed=True),
+                crosshair=(10, 10), cameras=[np.zeros((720, 1280, 3), np.uint8)],
+                hands=[Frame()], now=0.2, **fields)
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+@pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda m: m.key)
+def test_the_score_panel_stops_short_of_the_clock_and_the_buttons(chosen, width, height):
+    """The old backing was a slab most of the way across the top of the map."""
+    from handy import app, scene
+
+    layout = layout_for(width, height)
+    view = chrome_view(chosen, layout)
+    panel, readout = app.hud_panels(view, layout)
+    if chosen.key in app.OWN_HUD_PANEL:
+        assert (panel, readout) == (None, None), "one panel, the map's own"
+        return
+    clock = scene.timer_left(width, view.remaining, layout.scale)
+    assert layout.inset.right < panel.x and panel.right < clock
+    assert panel.y == layout.inset.y
+    if readout is not None:
+        assert readout.y > panel.bottom and readout.bottom <= layout.inset.bottom
+        assert readout.right < layout.maps_button.rect.x
+        assert readout.bottom < layout.play_area.y
+
+
+def test_overwatch_ridge_gets_no_second_panel_over_its_own(layout):
+    """Its world lays one panel under the camera and the readout; the app's
+    backing on top of it was a double panel with a seam."""
+    from handy import app
+
+    view = chrome_view(maps.SNIPER, layout)
+    assert app.hud_panels(view, layout) == (None, None)

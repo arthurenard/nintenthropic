@@ -185,20 +185,45 @@ def test_no_cameras_at_all_is_not_a_crash():
     assert text and color == scene.DANGER
 
 
-def test_the_hud_reads_differently_with_one_camera_and_with_two(canvas):
+def test_one_working_camera_goes_unannounced_and_two_are_accounted_for():
+    """"1 camera" beside a working preview read as debug output; with two, which
+    of them is contributing changes frame to frame and is always said."""
+    assert scene.camera_note([scene.FUSED]) is None
+    assert scene.camera_note([scene.NO_HAND]) is None, "its own preview says so"
+    assert scene.camera_note([]) is None
+    text, color = scene.camera_note([scene.FUSED, scene.FUSED])
+    assert text == "2 cameras fused" and color == scene.ARMED
+    text, _ = scene.camera_note([scene.FUSED, scene.NO_HAND])
+    assert "cam 2 no hand" in text
+
+
+def test_the_hud_has_no_ready_line_and_no_camera_line(canvas, monkeypatch):
+    """The crosshair turns green when the gun is cocked; a READY in the corner
+    only competed with it."""
     from handy.aiming import Aim
     from handy.game import Rect, Round, RoundOptions
 
+    said = []
+    monkeypatch.setattr(scene, "draw_text",
+                        lambda canvas, text, *args, **kwargs: said.append(text))
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
-    aim = Aim(position=(0.5, 0.5), armed=True, cameras=2, spread=0.012)
+    for aim in (Aim(position=(0.5, 0.5), armed=True), Aim()):
+        scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
+    assert said == ["SCORE", "SCORE"]
 
-    scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
-    one = canvas.copy()
-    canvas[:] = 0
-    scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False,
-                   [scene.FUSED, scene.FUSED])
 
-    assert not np.array_equal(one, canvas)
+def test_a_lost_hand_is_said_on_the_cameras_own_preview(canvas, camera, monkeypatch):
+    from handy.game import Rect
+
+    said = []
+    real = scene.draw_text
+    monkeypatch.setattr(scene, "draw_text", lambda canvas, text, *args, **kwargs: (
+        said.append(text), real(canvas, text, *args, **kwargs)))
+    rect = Rect(10, 10, 320, 180)
+    scene.draw_camera_inset(canvas, camera, Frame(), rect, "", scene.NO_HAND)
+    assert said == ["NO HAND"]
+    tag = canvas[rect.bottom - 30:rect.bottom - 6, rect.x + 8:rect.x + 100]
+    assert tag.min() < 40, "on a dark tag, so it reads over any picture"
 
 
 def test_debug_shows_what_the_second_camera_measured(canvas):
@@ -456,34 +481,40 @@ def test_the_footer_does_not_repeat_the_scheme_in_the_map():
     assert line.count("close an eye") == 1
 
 
-def test_the_hud_backing_draws_and_darkens(canvas):
+def test_the_chrome_panel_darkens_inside_and_leaves_the_rest_alone(canvas):
     from handy.game import Rect
 
     canvas[:] = 200
-    scene.draw_hud_backing(canvas, Rect(10, 10, 600, 250), 1.0)
-    assert canvas[100, 100].mean() < 150 and canvas[600, 1000].mean() == 200
+    scene.draw_chrome_panel(canvas, Rect(10, 10, 300, 120), 1.0)
+    assert canvas[70, 160].mean() < 70, "dark enough for grey text on a noon sky"
+    assert canvas[70, 160].mean() > 200 * (1 - scene.CHROME_OPACITY) - 5, "translucent"
+    assert canvas[400, 1000].mean() == 200 and canvas[135, 160].mean() == 200
+    # Rounded: the very corner is left as it was.
+    assert canvas[11, 11].mean() > canvas[70, 160].mean() + 60
 
 
-# --- the HUD's two translucent panels are drawn every frame -----------------
+@pytest.mark.parametrize("rect", [(1100, 600, 300, 200), (-20, -10, 300, 100)])
+def test_the_chrome_panel_clips_at_the_edges_of_the_window(canvas, rect):
+    from handy.game import Rect
 
-def reference_hud_backing(canvas, rect, scale):
-    """The backing as it was drawn before it was made cheap: the picture the
-    fast version has to keep."""
-    height, width = canvas.shape[:2]
-    feather = round(14 * scale)
-    x0, y0 = max(rect.x, 0), max(rect.y, 0)
-    x1, y1 = min(rect.right + feather, width), min(rect.bottom + feather, height)
-    if x1 <= x0 or y1 <= y0:
-        return
-    region = canvas[y0:y1, x0:x1]
-    ys = np.arange(y0, y1)[:, None]
-    xs = np.arange(x0, x1)[None, :]
-    fade_y = np.clip((rect.bottom + feather - ys) / feather, 0.0, 1.0)
-    fade_x = np.clip((rect.right + feather - xs) / feather, 0.0, 1.0)
-    alpha = (0.62 * np.minimum(fade_y, fade_x)).astype(np.float32)[:, :, None]
-    shade = np.array((16, 15, 14), np.float32)
-    region[:] = (region * (1 - alpha) + shade * alpha).astype(np.uint8)
+    canvas[:] = 200
+    scene.draw_chrome_panel(canvas, Rect(*rect), 1.0)  # must not raise
+    assert canvas.min() < 70
 
+
+def test_the_chrome_panel_builds_its_mask_once_per_size():
+    """Rebuilding a float mask every frame was 3 ms a frame at 1512x949."""
+    from handy.game import Rect
+
+    canvas = busy_frame(1512, 949)
+    scene._chrome_layers.cache_clear()
+    for _ in range(5):
+        scene.draw_chrome_panel(canvas, Rect(446, 21, 180, 139), 1.318)
+    info = scene._chrome_layers.cache_info()
+    assert (info.misses, info.hits) == (1, 4)
+
+
+# --- the HUD's translucent panels are drawn every frame ----------------------
 
 def reference_timer(canvas, remaining, scale):
     """The clock as it was drawn when it blended a copy of the whole frame."""
@@ -527,36 +558,6 @@ def reference_timer(canvas, remaining, scale):
 def busy_frame(width, height, seed=0):
     return np.random.default_rng(seed).integers(0, 256, (height, width, 3),
                                                 dtype=np.uint8)
-
-
-@pytest.mark.parametrize("size,rect,scale", [
-    ((1512, 949), (10, 10, 849, 266), 1.318),
-    ((1280, 720), (8, 8, 640, 200), 1.0),
-    ((800, 480), (7, 7, 380, 140), 0.7),
-    ((1280, 720), (900, 600, 500, 300), 1.0),  # runs off the right and bottom
-    ((1280, 720), (-20, -10, 300, 100), 1.0),  # and off the top left
-])
-def test_the_cheap_hud_backing_looks_like_the_old_one(size, rect, scale):
-    """Cached weights and OpenCV's blend in place of a float mask per frame: the
-    same picture to within a level of rounding."""
-    from handy.game import Rect
-
-    expected, actual = busy_frame(*size), busy_frame(*size)
-    reference_hud_backing(expected, Rect(*rect), scale)
-    scene.draw_hud_backing(actual, Rect(*rect), scale)
-    assert np.abs(actual.astype(int) - expected.astype(int)).max() <= 1
-
-
-def test_the_hud_backing_builds_its_mask_once_per_size():
-    """Rebuilding the float mask every frame was 3 ms a frame at 1512x949."""
-    from handy.game import Rect
-
-    canvas = busy_frame(1512, 949)
-    scene._hud_backing_weights.cache_clear()
-    for _ in range(5):
-        scene.draw_hud_backing(canvas, Rect(10, 10, 849, 266), 1.318)
-    info = scene._hud_backing_weights.cache_info()
-    assert (info.misses, info.hits) == (1, 4)
 
 
 @pytest.mark.parametrize("remaining", [42.0, 7.0, 600.0, None])
