@@ -225,12 +225,12 @@ def setup_words(setup, event):
         if event == "miss":
             return "Just off the centre.", "Try this one again."
         if event == "adjusted":
-            return "Aim adjusted.", "Five centre hits start your game."
+            return "Aim adjusted.", "Now hit five centres."
         if event == "learned":
             return "Got it.", "Now hit five centres to start your game."
         if setup.hits:
             return f"{left} to go.", "Aim for the centre."
-        return "Hit five centres.", "Five centre hits start your game."
+        return "Hit five centres.", "Aim for the gold. Then your game starts."
     if event == "relearn":
         return "Let’s tune your aim.", "Shoot the lit target."
     shots = len(setup.samples)
