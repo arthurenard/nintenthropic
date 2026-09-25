@@ -222,7 +222,9 @@ export class WebAudioEngine implements AudioEngine {
       if (state.stopped || this.closed) return;
       const takes = this.library.get(cue);
       if (!takes) return;
-      const take = takes[pickTake(takes.length, this.lastTake.get(cue) ?? -1, Math.random())]!;
+      const k = pickTake(takes.length, this.lastTake.get(cue) ?? -1, Math.random());
+      this.lastTake.set(cue, k);
+      const take = takes[k]!;
       const ctx = this.ctx;
       const now = ctx.currentTime;
       const d = options.distance ?? 0;
@@ -339,9 +341,11 @@ export class WebAudioEngine implements AudioEngine {
         takes = one ? [one] : undefined;
       }
       if (!takes) {
-        const asked = this.ctx.currentTime;
+        // Lateness by the wall clock: the audio clock stands still while
+        // the context is suspended, and a sound asked for then is stale.
+        const asked = performance.now();
         void this.library.request(cue).then(() => {
-          const late = this.ctx.currentTime - asked;
+          const late = (performance.now() - asked) / 1000;
           if (late < 0.35) this.playInternal(cue, { ...o, delay: Math.max(0, (o.delay ?? 0) - late) }, exemptFromSlowmo);
         });
         return;
@@ -497,9 +501,13 @@ export class WebAudioEngine implements AudioEngine {
     this.duck.gain.setTargetAtTime(h.duck, now, 0.08);
     this.reverbReturn.gain.setTargetAtTime(REVERB_RETURN * s.reverb, now, 0.2);
     if (Math.abs(s.rate - this.rate) > 1e-4) {
+      const stretch = this.rate / s.rate;
       this.rate = s.rate;
       for (const v of this.voices) {
         if (v.exempt) continue;
+        // What is left of it now plays slower (or faster), so it ends later (or sooner).
+        if (v.endsAt > now) v.endsAt = now + (v.endsAt - now) * stretch;
+        v.playbackRate /= stretch;
         v.sources.forEach((src, k) => src.playbackRate.setTargetAtTime(v.rates[k]! * this.rate, now, 0.12));
       }
       for (const loop of this.loops) {
