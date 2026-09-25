@@ -391,8 +391,8 @@ def take_screenshot(canvas: np.ndarray, settings: Settings,
     except (OSError, cv2.error) as error:
         print(f"Could not save a screenshot in {settings.screenshot_dir}: {error}")
         show_notice(canvas if screen is None else screen,
-                    ["SCREENSHOT NOT SAVED",
-                     "The screenshot folder cannot be written to.",
+                    ["Screenshot Not Saved",
+                     "Handy can\u2019t save to that folder.",
                      "Choose another with --screenshot-dir."],
                     seconds=2.0, scale=scale)
         return None
@@ -1279,9 +1279,9 @@ def run(settings: Settings) -> None:
         except CameraError:
             # A camera that has gone mid-game is said on the screen the
             # player is looking at, not only in the terminal behind it.
-            show_notice(canvas, ["CAMERA LOST",
-                                 "The camera stopped sending pictures.",
-                                 "Reconnect it and start the game again."],
+            show_notice(canvas, ["Camera Disconnected",
+                                 "Your camera stopped sending pictures.",
+                                 "Reconnect it, then start Handy again."],
                         seconds=6.0, scale=layout.scale)
             raise
 
@@ -1399,10 +1399,9 @@ def _session(settings: Settings, layout: Layout, captures: list,
                 needs_setup = False
                 if rig is None:
                     show_notice(canvas, [
-                        "SETUP SKIPPED",
-                        "Playing on the built-in defaults; the aim will be "
-                        "approximate.",
-                        "Press c whenever you want to run it.",
+                        "Aim Setup Skipped",
+                        "Your aim will be approximate until you set it up.",
+                        "Press C to set it up any time.",
                     ], scale=layout.scale)
                 return not window_closed()
             needs_setup = False
@@ -1422,16 +1421,18 @@ def _session(settings: Settings, layout: Layout, captures: list,
                         for index, camera in enumerate(measured.cameras)
                         if not camera.aim_fitted]
             if unfitted:
+                # With other cameras fitted, the one that failed is left out
+                # of the aim altogether; with none fitted, setup fell back on
+                # the previous or default map, and that is what aims.
+                everyone = len(unfitted) == len(measured.cameras)
+                which = ("Your camera" if len(measured.cameras) == 1 else
+                         "Camera " + " and ".join(map(str, unfitted)))
                 show_notice(canvas, [
-                    "SETUP DID NOT FULLY SUCCEED",
-                    "AIM: could not fit camera " + ", ".join(map(str, unfitted)),
-                    # With other cameras fitted, the one that failed is left
-                    # out of the aim altogether; with none fitted, setup fell
-                    # back on the previous or default map, and that is what
-                    # aims.
-                    "Playing on defaults. Press c to try again."
-                    if len(unfitted) == len(measured.cameras) else
-                    "It sits this one out. Press c to try again.",
+                    "Aim Setup Didn\u2019t Finish",
+                    f"{which} couldn\u2019t be set up, so your aim is approximate."
+                    if everyone else
+                    f"{which} couldn\u2019t be set up, so it sits this one out.",
+                    "Press C to try again.",
                 ], scale=layout.scale)
             return True
 
@@ -1451,10 +1452,9 @@ def _session(settings: Settings, layout: Layout, captures: list,
                     print(f"{chosen.title.title()} needs a model that could "
                           f"not be downloaded: {error}")
                     show_notice(canvas, [
-                        "MAP UNAVAILABLE",
-                        f"{chosen.title.title()} needs a model that could "
-                        f"not be downloaded.",
-                        "Check the network and choose it again.",
+                        f"{scene.title_case(chosen.title)} Isn\u2019t Ready",
+                        "It needs a download that didn\u2019t finish.",
+                        "Check your connection, then choose it again.",
                     ], scale=layout.scale)
                     chosen = None
                     continue

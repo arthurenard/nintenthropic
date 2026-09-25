@@ -177,12 +177,13 @@ def test_a_long_blurb_is_wrapped_rather_than_running_off_the_card(canvas):
 
 def test_one_camera_says_so_plainly():
     text, color = scene.camera_summary([scene.FUSED])
-    assert text == "1 camera" and color == scene.MUTED
+    assert text == "1 camera" and color == scene.LABEL_SECONDARY
 
 
-def test_two_working_cameras_are_announced_in_green():
+def test_two_working_cameras_are_announced_but_never_in_green():
+    """The debug line says "fused"; green is only ever the gun's."""
     text, color = scene.camera_summary([scene.FUSED, scene.FUSED])
-    assert text == "2 cameras fused" and color == scene.ARMED
+    assert text == "2 cameras fused" and color == scene.LABEL
 
 
 def test_a_camera_that_lost_the_hand_is_named():
@@ -410,14 +411,6 @@ def test_a_short_last_row_is_centred_not_padded_with_placeholders():
     middle = (first[0].x + first[-1].right) / 2
     assert abs((second[0].x + second[-1].right) / 2 - middle) <= 1
     assert not hasattr(scene, "empty_slots")
-
-
-def test_figures_draw_where_they_are_put(canvas):
-    width = scene.figures_width("1840", 60)
-    assert width > 60
-    scene.draw_figures(canvas, "1840", (100, 200), (255, 255, 255), 60)
-    assert canvas[140:205, 100:100 + width].any()
-    assert not canvas[:, 100 + width + 10:].any()
 
 
 def test_the_results_card_sits_on_the_maps_art_when_one_is_set(canvas):
@@ -916,23 +909,6 @@ def test_setup_draws_at_every_size(width, height):
         assert canvas.any()
 
 
-def test_figures_are_never_clipped_by_their_own_box(monkeypatch):
-    """The figures face is set at twice its size and brought down; its box was
-    measured at the smaller size, which is a few pixels short on a long line,
-    so "2 of 3 shots learned" lost the end of its last letter."""
-    if scene._FIGURES_FACE is None:
-        pytest.skip("no figures face in this OpenCV build")
-    text, size = "2 of 3 shots learned", 24
-    drawn = np.zeros((80, 600, 3), np.uint8)
-    scene.draw_figures(drawn, text, (10, 50), (255, 255, 255), size, 0.0)
-    monkeypatch.setattr(scene, "figures_width", lambda text, size: 1000)
-    roomy = np.zeros((80, 600, 3), np.uint8)
-    scene.draw_figures(roomy, text, (10, 50), (255, 255, 255), size, 0.0)
-    assert np.array_equal(drawn, roomy)
-
-
-# --- type ----------------------------------------------------------------------
-
 def test_the_type_scale_grows_with_the_window():
     assert scene.type_size(scene.TITLE_1, 1.0) == 30
     assert scene.type_size(scene.LARGE_TITLE, 2.0) == 88
@@ -1135,3 +1111,45 @@ def test_a_shot_that_teaches_the_aim_is_acknowledged_on_its_face():
     x, y = round(TARGETS[0][0] * WIDTH), round(TARGETS[0][1] * HEIGHT)
     b, g, r = (canvas[y - 30:y + 30, x - 30:x + 30, c].astype(int) for c in range(3))
     assert ((g > r + 80) & (g > b + 80)).sum() > 200
+
+
+# --- notices -----------------------------------------------------------------------
+
+NOTICES = (
+    ["Camera Disconnected", "Your camera stopped sending pictures.",
+     "Reconnect it, then start Handy again."],
+    ["Overwatch Ridge Isn’t Ready", "It needs a download that didn’t finish.",
+     "Check your connection, then choose it again."],
+    ["Aim Setup Skipped", "Your aim will be approximate until you set it up.",
+     "Press C to set it up any time."],
+)
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+@pytest.mark.parametrize("lines", NOTICES, ids=lambda lines: lines[0])
+def test_a_notice_is_a_calm_sheet_its_words_inside_it(width, height, lines, monkeypatch):
+    """What happened and what to do, on glass over the dimmed screen: every
+    word inside the sheet, and nothing red - a notice explains, it does not
+    alarm."""
+    scale = height / 720
+    canvas = np.full((height, width, 3), 200, np.uint8)
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, origin, style, color,
+                        scale_=1.0, align="left", *a, **k: (
+        said.append((text, origin, style, align)),
+        real(canvas, text, origin, style, color, scale_, align, *a, **k))[1])
+    sheet = scene.draw_notice(canvas, lines, scale)
+    assert sheet.x >= 0 and sheet.right <= width and sheet.y >= 0
+    assert canvas[5, 5].max() < 200, "the screen behind is dimmed"
+    words = [text for text, _, _, _ in said if text != "Handy"]
+    assert words[0] == lines[0] and " ".join(words[1:]) == " ".join(lines[1:])
+    for text, (x, y), style, _align in said:
+        if text == "Handy":
+            continue
+        half = scene.measure(text, style, scale) / 2
+        assert sheet.x + 16 * scale < x - half and x + half < sheet.right - 16 * scale
+        assert sheet.y < y < sheet.bottom
+    b, g, r = (canvas[sheet.y:sheet.bottom, sheet.x:sheet.right, c].astype(int)
+               for c in range(3))
+    assert not ((r > g + 80) & (r > b + 80)).any(), "no red"

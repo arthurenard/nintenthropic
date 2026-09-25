@@ -21,7 +21,8 @@ from collections.abc import Sequence
 from .aiming import Aim
 from .game import Rect, Round, Summary
 from .recognition import Frame
-from .rendering import draw_hands, draw_text, text_width
+# draw_text is kept for the maps that still set text through the scene.
+from .rendering import draw_hands, draw_text as draw_text
 
 # --- colour ------------------------------------------------------------------
 #
@@ -45,32 +46,7 @@ DANGER = (58, 69, 255)  # #FF453A
 WARNING = (10, 159, 255)  # #FF9F0A
 GOLD = (10, 214, 255)  # #FFD60A: new best, perfect hits
 
-# Colours are BGR.
-BACKDROP = (28, 26, 24)
-GRID = (40, 38, 36)
-PANEL = (46, 43, 40)
-PANEL_DEEP = (34, 32, 30)
-EDGE = (74, 70, 66)
-INK = (236, 236, 236)
-MUTED = (150, 146, 142)
-ACCENT = (96, 168, 236)  # warm amber: the thin chrome lines of every screen
-ARMED = TINT
-IDLE = (150, 150, 150)
-MISS = (120, 120, 190)
-
 RECOIL = 0.18
-
-#: Corner radius of every panel, card and button, in 720-tall units.
-CORNER = 10
-
-#: What every floating piece of in-game chrome is made of - the clock's pill,
-#: the score's panel, the setup console: a dark plate, lighter at the top,
-#: translucent enough that the map is still there behind it and dark enough
-#: that grey text reads on a noon sky.
-CHROME_TOP = (40, 38, 36)
-CHROME_BOTTOM = (24, 23, 22)
-CHROME_OPACITY = 0.85
-
 
 def _px(value: float, scale: float, floor: int = 1) -> int:
     return max(floor, round(value * scale))
@@ -656,82 +632,6 @@ def _rounded(x0: int, y0: int, x1: int, y1: int, radius: int) -> np.ndarray:
     return np.concatenate(points).astype(np.int32)
 
 
-def stroke_rounded(canvas: np.ndarray, rect: Rect, color: tuple[int, int, int],
-                   radius: int, weight: int = 1) -> None:
-    cv2.polylines(canvas, [_rounded(rect.x, rect.y, rect.right, rect.bottom, radius)],
-                  True, color, weight, cv2.LINE_AA)
-
-
-@lru_cache(maxsize=32)
-def _gradient(width: int, height: int, top: tuple[int, int, int],
-              bottom: tuple[int, int, int]) -> np.ndarray:
-    ramp = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None, None]
-    patch = (np.array(top, np.float32) * (1 - ramp)
-             + np.array(bottom, np.float32) * ramp).astype(np.uint8)
-    return np.ascontiguousarray(np.repeat(patch, width, axis=1))
-
-
-def _shade_poly(canvas: np.ndarray, poly: np.ndarray, top: tuple[int, int, int],
-                bottom: tuple[int, int, int]) -> None:
-    """Fill a polygon with a vertical gradient.
-
-    The edge is a hard mask rather than an anti-aliased blend: every caller
-    strokes a hairline over it anyway, and the blend costs milliseconds per
-    card at full-screen size.
-    """
-    height, width = canvas.shape[:2]
-    x0, y0 = max(int(poly[:, 0].min()), 0), max(int(poly[:, 1].min()), 0)
-    x1, y1 = min(int(poly[:, 0].max()) + 1, width), min(int(poly[:, 1].max()) + 1, height)
-    if x1 <= x0 or y1 <= y0:
-        return
-    mask = np.zeros((y1 - y0, x1 - x0), np.uint8)
-    cv2.fillPoly(mask, [poly - np.array([x0, y0], np.int32)], 255)
-    region = canvas[y0:y1, x0:x1]
-    cv2.copyTo(_gradient(x1 - x0, y1 - y0, top, bottom), mask, region)
-
-
-def shade_panel(canvas: np.ndarray, rect: Rect, radius: int,
-                top: tuple[int, int, int] = PANEL,
-                bottom: tuple[int, int, int] = PANEL_DEEP,
-                edge: tuple[int, int, int] | None = EDGE, weight: int = 1) -> None:
-    """A softly shaded rounded panel: lighter at the top, a hairline around it."""
-    _shade_poly(canvas, _rounded(rect.x, rect.y, rect.right, rect.bottom, radius),
-                top, bottom)
-    if edge is not None:
-        stroke_rounded(canvas, rect, edge, radius, weight)
-
-
-def accent_rule(canvas: np.ndarray, y: int, x0: int, x1: int,
-                color: tuple[int, int, int] = ACCENT, weight: int = 1,
-                gap: int = 0) -> None:
-    """A thin horizontal rule, optionally with a gap left in the middle for text."""
-    if gap and x1 - x0 > gap:
-        mid = (x0 + x1) // 2
-        cv2.line(canvas, (x0, y), (mid - gap // 2, y), color, weight, cv2.LINE_AA)
-        cv2.line(canvas, (mid + gap // 2, y), (x1, y), color, weight, cv2.LINE_AA)
-    else:
-        cv2.line(canvas, (x0, y), (x1, y), color, weight, cv2.LINE_AA)
-
-
-def glow_stroke(canvas: np.ndarray, rect: Rect, color: tuple[int, int, int],
-                radius: int, weight: int) -> None:
-    """A bright outline with a soft halo behind it, for the thing you aim at."""
-    pad = weight * 2
-    x0, y0 = max(rect.x - pad, 0), max(rect.y - pad, 0)
-    x1, y1 = min(rect.right + pad + 1, canvas.shape[1]), min(rect.bottom + pad + 1,
-                                                             canvas.shape[0])
-    region = canvas[y0:y1, x0:x1]
-    halo = region.copy()
-    cv2.polylines(halo, [_rounded(rect.x - x0, rect.y - y0, rect.right - x0,
-                                  rect.bottom - y0, radius)], True, color, weight * 2,
-                  cv2.LINE_AA)
-    cv2.addWeighted(halo, 0.16, region, 0.84, 0.0, dst=region)
-    # The bright line sits a pixel inside the card, so its anti-aliasing stays
-    # on the card and not in the gutter beside it.
-    stroke_rounded(canvas, Rect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2),
-                   color, radius, weight)
-
-
 @dataclass(frozen=True)
 class Button:
     """A clickable, and shootable, rectangle: a label, an icon, and which of
@@ -821,84 +721,6 @@ def draw_ambient_backdrop(canvas: np.ndarray) -> None:
         return
     height, width = canvas.shape[:2]
     canvas[:] = ambient_backdrop_for(_ambient_art, width, height)
-
-
-# --- figures -----------------------------------------------------------------
-#
-# OpenCV 5 renders its Hershey ids with a bundled face whose zero is slashed,
-# which reads as a monospace code font next to the sans everywhere else. The
-# big numbers - score, clock - are set in its plain sans instead, emboldened
-# by a dilation since that face carries no weight axis of its own.
-
-_FIGURES_FACE = cv2.FontFace("uni") if hasattr(cv2, "FontFace") else None
-
-
-def figures_width(text: str, size: int) -> int:
-    """Width in pixels of ``text`` set as figures at ``size`` pixels tall."""
-    if _FIGURES_FACE is None:
-        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 30, 2)[0][0]
-    return cv2.getTextSize((0, 0), text, (0, 0), _FIGURES_FACE, size)[2]
-
-
-def draw_figures(canvas: np.ndarray, text: str, origin: tuple[int, int],
-                 color: tuple[int, int, int], size: int, bold: float = 0.04) -> None:
-    """Draw a number at ``origin`` (baseline left), ``size`` pixels tall."""
-    if _FIGURES_FACE is None:
-        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, size / 30, color,
-                    max(1, round(size * bold)), cv2.LINE_AA)
-        return
-    x, y = origin
-    # The box is measured at the size the text is actually set at - twice this
-    # one - and halved: a face's width does not quite scale, and a long line
-    # measured at the smaller size came out a few pixels short, which cut the
-    # last letter off.
-    width = -(-figures_width(text, size * 2) // 2)
-    pad = max(2, int(size * bold) + 2)
-    x0, y0 = max(0, x - pad), max(0, y - size - pad)
-    x1 = min(canvas.shape[1], x + width + pad)
-    y1 = min(canvas.shape[0], y + int(size * 0.3) + pad)
-    if x1 <= x0 or y1 <= y0:
-        return
-    # Set at twice the size and brought down again: the emboldening dilation
-    # would otherwise leave the edges lumpy.
-    mask = np.zeros(((y1 - y0) * 2, (x1 - x0) * 2), np.uint8)
-    cv2.putText(mask, text, ((x - x0) * 2, (y - y0) * 2), 255, _FIGURES_FACE, size * 2)
-    grow = int(size * bold * 2)
-    if grow > 0:
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (grow * 2 + 1, grow * 2 + 1))
-        mask = cv2.dilate(mask, kernel)
-    mask = cv2.resize(mask, (x1 - x0, y1 - y0), interpolation=cv2.INTER_AREA)
-    region = canvas[y0:y1, x0:x1]
-    alpha = mask.astype(np.float32)[:, :, None] / 255.0
-    tint = np.array(color, np.float32)
-    region[:] = (region * (1 - alpha) + tint * alpha).astype(np.uint8)
-
-
-#: A caption set in the figures face at ``scale`` matches the height of body
-#: text set with draw_text at the same scale.
-CAPTION_SIZE = 30
-
-
-def caption_width(text: str, scale: float) -> int:
-    """Width of ``text`` set by :func:`draw_caption` at ``scale``."""
-    return figures_width(text, max(8, round(CAPTION_SIZE * scale)))
-
-
-def draw_caption(canvas: np.ndarray, text: str, origin: tuple[int, int],
-                 color: tuple[int, int, int], scale: float) -> None:
-    """A short line with numbers in it - a tally, a best - in the figures face.
-
-    The body face's digits are a monospace code font with a slashed zero, and
-    "0/14 hits" or "best 900" set in it read as a terminal's output beside the
-    score set in the figures face above them.
-    """
-    draw_figures(canvas, text, origin, color, max(8, round(CAPTION_SIZE * scale)), 0.0)
-
-
-def _centred_text(canvas: np.ndarray, text: str, y: int,
-                  color: tuple[int, int, int], scale: float) -> None:
-    width = text_width(text, scale)
-    draw_text(canvas, text, ((canvas.shape[1] - width) // 2, y), color, scale=scale)
 
 
 # --- the wordmark ------------------------------------------------------------
@@ -1260,13 +1082,13 @@ def camera_summary(states: Sequence[str]) -> tuple[str, tuple[int, int, int]]:
     working = states.count(FUSED)
     if len(states) == 1:
         return ("1 camera" if working else "1 camera - no hand",
-                MUTED if working else DANGER)
+                LABEL_SECONDARY if working else DANGER)
     if working == len(states):
-        return f"{working} cameras fused", ARMED
+        return f"{working} cameras fused", LABEL
     faults = [f"cam {index + 1} {state}"
               for index, state in enumerate(states) if state != FUSED]
     return (f"{working} of {len(states)} cameras   {', '.join(faults)}",
-            DANGER if IGNORED in states else MUTED)
+            DANGER if IGNORED in states else LABEL_SECONDARY)
 
 
 
@@ -1925,55 +1747,47 @@ def _panel_shadow(canvas: np.ndarray, rect: Rect, radius: int, reach: int) -> No
     cv2.multiply(region, factor, dst=region, scale=1.0 / 255.0)
 
 
-def _modal_panel(canvas: np.ndarray, rect: Rect, radius: int, scale: float) -> None:
-    """The one floating panel both modals share: a faint glow around the edge,
-    the soft shaded plate, a lighter hairline along its top."""
-    reach = _px(3, scale)
-    pad = reach * 5
-    height, width = canvas.shape[:2]
-    x0, y0 = max(rect.x - pad, 0), max(rect.y - pad, 0)
-    x1, y1 = min(rect.right + pad, width), min(rect.bottom + pad, height)
-    region = canvas[y0:y1, x0:x1]
-    halo = region.copy()
-    stroke_rounded(halo, Rect(rect.x - x0 - reach, rect.y - y0 - reach,
-                              rect.width + 2 * reach, rect.height + 2 * reach),
-                   (110, 102, 94), radius + reach, reach * 2)
-    halo = cv2.GaussianBlur(halo, (0, 0), reach * 1.5)
-    cv2.addWeighted(halo, 0.55, region, 0.45, 0.0, dst=region)
-    shade_panel(canvas, rect, radius, (46, 43, 40), (28, 26, 25), EDGE)
-    cv2.line(canvas, (rect.x + radius, rect.y), (rect.right - radius, rect.y),
-             (92, 86, 80), 1, cv2.LINE_AA)
+#: A notice sheet, in 720-tall units: its widest, its padding, and the room
+#: each of its lines takes.
+NOTICE_WIDTH, NOTICE_PAD, NOTICE_LINE = 460, 32, 22
+
+
+def notice_sheet(width: int, height: int, lines: Sequence[str],
+                 scale: float = 1.0) -> tuple[Rect, list[str]]:
+    """Where a notice's sheet goes, and its words wrapped to it."""
+    sheet_w = min(width - 2 * screen_margin(height, scale), _px(NOTICE_WIDTH, scale))
+    inner = sheet_w - 2 * _px(NOTICE_PAD, scale)
+    body = [line for text in lines[1:] for line in wrap(text, BODY, inner, scale)]
+    sheet_h = (_px(NOTICE_PAD + 30, scale) + len(body) * _px(NOTICE_LINE, scale)
+               + _px(NOTICE_PAD + (10 if body else 0), scale))
+    return Rect((width - sheet_w) // 2, (height - sheet_h) // 2, sheet_w, sheet_h), body
 
 
 def draw_notice(canvas: np.ndarray, lines: Sequence[str],
-                scale: float = 1.0) -> None:
-    """A message panel in the middle, over whatever is on screen, dimmed."""
-    height, width = canvas.shape[:2]
-    cv2.convertScaleAbs(canvas, dst=canvas, alpha=0.62, beta=0)
+                scale: float = 1.0) -> Rect:
+    """A calm sheet over the dimmed frame: what happened, then what to do.
 
-    step = round(34 * scale)
-    pad_x = _px(56, scale)
-    widest = max((text_width(line, (0.8 if index == 0 else 0.62) * scale, 2, False)
-                  for index, line in enumerate(lines)), default=0)
-    panel_w = min(width - 2 * _px(40, scale), max(_px(520, scale), widest + 2 * pad_x))
-    panel_h = round(64 * scale) + step * len(lines)
-    panel = Rect((width - panel_w) // 2, (height - panel_h) // 2, panel_w, panel_h)
-    radius = _px(CORNER, scale)
-    _panel_shadow(canvas, panel, radius, _px(18, scale))
-    _modal_panel(canvas, panel, radius, scale)
-    # A red rule above the heading with a short bright tab at the left, and
-    # a hairline under the heading: the same line system as the cards.
-    inner = _px(28, scale)
-    top = panel.y + _px(44, scale)
-    cv2.line(canvas, (panel.x + inner, panel.y), (panel.x + inner + _px(46, scale), panel.y),
-             DANGER, _px(2, scale), cv2.LINE_AA)
-    accent_rule(canvas, top + _px(12, scale), panel.x + inner, panel.right - inner,
-                (60, 40, 110), 1)
-    for index, line in enumerate(lines):
-        _centred_text(canvas, line, top + index * step + (0 if index == 0 else _px(8, scale)),
-                      DANGER if index == 0 else INK,
-                      (0.8 if index == 0 else 0.62) * scale)
+    ``lines`` is the title (Title Case, a few words) and then a sentence or
+    two. No red: a notice explains, it does not alarm.
+    """
+    height, width = canvas.shape[:2]
+    dim(canvas, 0.5)
+    sheet, body = notice_sheet(width, height, lines, scale)
+    radius = _px(SHEET_RADIUS, scale)
+    _panel_shadow(canvas, sheet, radius, _px(24, scale))
+    draw_glass(canvas, sheet, radius, scale, opacity=0.82)
+    centre = sheet.x + sheet.width // 2
+    inner = sheet.width - 2 * _px(NOTICE_PAD, scale)
+    title = lines[0] if lines else ""
+    y = sheet.y + _px(NOTICE_PAD + 20, scale)
+    write(canvas, fit(title, TITLE_3, inner, scale), (centre, y), TITLE_3, LABEL, scale,
+          align=CENTRE)
+    y += _px(14, scale)
+    for line in body:
+        y += _px(NOTICE_LINE, scale)
+        write(canvas, line, (centre, y), BODY, LABEL_SECONDARY, scale, align=CENTRE)
     draw_logo(canvas, scale)
+    return sheet
 
 
 def draw_toast(canvas: np.ndarray, text: str, scale: float = 1.0, alpha: float = 1.0,
@@ -2391,7 +2205,7 @@ def map_cards(window: Rect, count: int, scale: float = 1.0,
 _CLEAN_FRAMES = {
     "western": (1.0, 2.3, 0.0, 0.0),       # the doorways, above the title
     "archery": (1.25, 1.5, 0.15, 0.4),     # below the floating "+10"
-    "orbit": (1.6, 1.0, 0.6, 0.0),         # the right reach, clear of the title
+    "orbit": (1.8, 1.0, 0.85, 0.0),        # the right reach, clear of the title
 }
 
 

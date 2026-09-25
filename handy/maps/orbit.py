@@ -26,7 +26,7 @@ import numpy as np
 
 from ..game import DANGER, MISS, PLAIN, Hit, Impact, Readout, Rect, Round
 from .. import scene
-from ..scene import ACCENT, draw_text
+from ..scene import draw_text
 
 # --- the world --------------------------------------------------------------
 
@@ -104,6 +104,7 @@ MATERIALS = ((92, 96, 104), (150, 146, 140), (48, 128, 196))
 SPARK = (200, 225, 245)
 EMBER = (90, 190, 255)
 STRUT = (50, 52, 58)
+POSTER_RULE = (96, 168, 236)  # the rule under the card art's title
 STRUT_LIT = (112, 116, 124)
 PANEL_BASE = (96, 64, 36)
 PANEL_SPEC = (214, 200, 176)
@@ -2109,4 +2110,4 @@ def draw_emblem(panel: np.ndarray) -> None:
     draw_text(panel, "DECAY", (x0, int(y0 + 30 * scale)), (240, 240, 244), scale=scale,
               thickness=1)
     cv2.line(panel, (x0, int(y0 + 8 * scale)), (x0 + int(w * 0.17), int(y0 + 8 * scale)),
-             ACCENT, 1, cv2.LINE_AA)
+             POSTER_RULE, 1, cv2.LINE_AA)

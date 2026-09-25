@@ -805,8 +805,8 @@ def test_a_rejected_fit_is_announced_on_screen(monkeypatch, tmp_path, model_path
 
     assert notices, "the player was never told"
     joined = " ".join(notices[0])
-    assert "DID NOT FULLY SUCCEED" in joined
-    assert "AIM" in joined and "TRIGGER" not in joined
+    assert notices[0][0] == "Aim Setup Didn\u2019t Finish"
+    assert "aim" in joined and "trigger" not in joined.lower()
 
 
 def test_custom_hand_model_can_be_used_with_the_automatic_eye_scope(monkeypatch):
@@ -862,7 +862,7 @@ def test_a_recalibration_that_fell_back_on_the_old_map_is_announced(monkeypatch,
                          calibration_path=tmp_path / "calibration.json"))
 
     assert notices, "the player was never told"
-    assert "AIM: could not fit camera 1" in notices[0]
+    assert "Your camera couldn\u2019t be set up, so your aim is approximate." in notices[0]
     assert "DEFAULTS" in app.describe(Rig((stale,))), "and the terminal agrees"
 
 
@@ -893,7 +893,8 @@ def test_backing_out_of_setup_says_the_game_is_on_defaults(monkeypatch, tmp_path
 
     assert notices, "backing out was silent"
     joined = " ".join(notices[0])
-    assert "SKIPPED" in joined and "defaults" in joined and "c" in joined
+    assert notices[0][0] == "Aim Setup Skipped"
+    assert "approximate" in joined and "Press C" in joined
 
 
 def test_the_results_screen_sits_on_the_art_of_the_map_just_played(monkeypatch,
@@ -1780,7 +1781,7 @@ def test_a_screenshot_that_cannot_be_written_is_said_and_the_round_goes_on(
                           settings=Settings(screenshot_dir=blocker / "shots", seed=1))
 
     assert reason == "quit", "the round carried on after the failed save"
-    assert notices and "SCREENSHOT NOT SAVED" in notices[0]
+    assert notices and "Screenshot Not Saved" in notices[0]
     assert "Saved" not in capsys.readouterr().out
 
 
@@ -2070,7 +2071,7 @@ def test_a_camera_lost_mid_game_is_said_on_screen_and_handed_back(monkeypatch,
                              skip_calibration=True, model_path=model_path,
                              calibration_path=tmp_path / "calibration.json"))
 
-    assert notices and notices[-1][0] == "CAMERA LOST"
+    assert notices and notices[-1][0] == "Camera Disconnected"
     assert opened and all(capture.released for capture in opened)
 
 
@@ -2252,7 +2253,7 @@ def test_a_map_whose_model_cannot_be_had_is_refused_on_screen(monkeypatch,
                         np.zeros((540, 960, 3), np.uint8), RigBook(),
                         HighScores(tmp_path / "scores.json")) is None
 
-    assert notices and notices[0][0] == "MAP UNAVAILABLE"
+    assert notices and notices[0][0].endswith("Isn\u2019t Ready")
     assert next(answers, "drained") == "drained", "the chooser came back"
 
 
