@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Apple silicon (MediaPipe 0.10.35 has no Intel Mac wheel) and x86_64
+        # Linux: the two desktop platforms MediaPipe publishes wheels for that
+        # Handy is claimed to run on.
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The runner has no display, no camera and no sound card; the suite needs
+      # none of them. It does need the shared libraries the Linux wheels link
+      # against: OpenCV's bundled Qt wants libGL and GLib, MediaPipe's native
+      # library wants EGL and GLES. A desktop install has them already.
+      - name: Install the system libraries OpenCV and MediaPipe load
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libgl1 libglib2.0-0t64 libegl1 libgles2
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      # The ~12 MB of MediaPipe bundles the recognition tests run against.
+      # models.py pins their URLs and checksums, so it is the cache key.
+      - name: Cache the MediaPipe models
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/handy/models
+          key: mediapipe-models-${{ runner.os }}-${{ hashFiles('handy/models.py') }}
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check handy tests
+
+      - name: Check the browser script parses
+        run: node --check handy/web/app.js
+
+      - name: Test
+        run: uv run pytest -q -p no:cacheprovider
+
+  wheel:
+    name: Build the wheel and start it
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install the system libraries OpenCV and MediaPipe load
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libgl1 libglib2.0-0t64 libegl1 libgles2
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      # The wheel is built from the sdist, so this checks both.
+      - name: Build
+        run: uv build
+
+      - name: Install the wheel into a clean environment
+        run: |
+          uv venv "$RUNNER_TEMP/handy"
+          uv pip install --python "$RUNNER_TEMP/handy" dist/*.whl
+
+      # Run from outside the checkout, so nothing can be imported from it: the
+      # page must come out of the installed package.
+      - name: Start the installed game
+        working-directory: ${{ runner.temp }}
+        run: |
+          handy="$RUNNER_TEMP/handy/bin/handy"
+          "$handy" --version
+          "$handy" --help > /dev/null
+          "$handy" --browser --no-open --port 8795 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          for path in / /app.js /style.css /api/config; do
+            curl --silent --show-error --fail --output /dev/null \
+              --retry 30 --retry-delay 1 --retry-all-errors \
+              "http://127.0.0.1:8795$path"
+            echo "served $path"
+          done

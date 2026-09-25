@@ -588,6 +588,18 @@ nothing else is loaded from beside the code. The version is written in both
 `pyproject.toml` and `handy/__init__.py`; `tests/test_packaging.py` keeps the
 two equal and checks that the console script names a function that exists.
 
+CI (`.github/workflows/ci.yml`) runs the three commands above on macOS (Apple
+silicon) and Ubuntu with Python 3.12, caching the model bundles on the hash of
+`models.py`. A second job builds the wheel, installs it into a clean
+environment and starts the browser arcade from it, to prove the page comes out
+of the installed package. The Linux runner has no display, camera or sound card
+and the suite needs none of them: the tests fake OpenCV's window and capture,
+the game plays silent when `sounddevice` cannot load PortAudio, and the screen
+measurement falls back when neither AppKit nor a Tk display answers. What it
+does need are the shared libraries the Linux wheels link against — libGL and
+GLib for OpenCV's bundled Qt, EGL and GLESv2 for MediaPipe — so the workflow
+installs them; a desktop Linux install already has them.
+
 Keep the checkout out of iCloud-synced folders such as the Desktop. iCloud marks
 files under a dot-directory as hidden, CPython skips a hidden `.pth` file, and
 so the editable install stops working minutes after a successful `uv sync`:
