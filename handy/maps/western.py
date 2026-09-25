@@ -23,6 +23,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
+from .. import scene
 from ..game import DANGER, MISS, PLAIN, Hit, Impact, Readout, Rect, Round
 
 # --- rules -------------------------------------------------------------------
@@ -112,11 +113,6 @@ CAN = (176, 182, 186)
 CAN_DARK = (92, 98, 104)
 CAN_LABELS = (((50, 50, 200), "BEANS"), ((160, 110, 40), "COFFEE"), ((60, 150, 60), "PEAS"))
 SIGN_BOARD = (92, 124, 160)
-INK = (236, 236, 236)
-MUTED = (150, 146, 142)
-SCORE_INK = (70, 222, 255)
-SCORE_EDGE = (18, 16, 20)
-PENALTY_INK = (60, 64, 240)
 BANDIT_COAT = (34, 40, 58)
 BANDIT_HAT = (22, 20, 26)
 STRIPE = (52, 62, 96)
@@ -2083,37 +2079,19 @@ def draw_motes(canvas: np.ndarray, motes: np.ndarray, area: Rect, now: float) ->
     canvas[ys, xs + 1] = (220, 226, 232)
 
 
-def _floater(canvas: np.ndarray, text: str, centre: tuple[int, int], color, scale: float, alpha: float,
-             thickness: int = 2) -> None:
-    """A pop-up: one bold line of outlined lettering with nothing behind it."""
-    (tw, th), _ = cv2.getTextSize(text, FONT, scale, thickness)
-    origin = (centre[0] - tw // 2, centre[1] + th // 2)
-    pad = thickness + 6
-
-    def paint(over, dx, dy):
-        o = (origin[0] + dx, origin[1] + dy)
-        cv2.putText(over, text, (o[0] + 2, o[1] + 2), FONT, scale, SCORE_EDGE, thickness + 5, cv2.LINE_AA)
-        cv2.putText(over, text, o, FONT, scale, SCORE_EDGE, thickness + 4, cv2.LINE_AA)
-        cv2.putText(over, text, o, FONT, scale, color, thickness, cv2.LINE_AA)
-        cv2.putText(over, text, (o[0], o[1] - 1), FONT, scale, _shade(color, 0.35), max(1, thickness // 2), cv2.LINE_AA)
-    _roi_blend(canvas, (origin[0] - pad, origin[1] - th - pad, origin[0] + tw + pad + 2, origin[1] + pad + 2),
-               alpha, paint)
-
-
 def draw_impact(canvas: np.ndarray, impact: Impact, now: float, ttl: float,
                 avoid: tuple[int, int] | None = None) -> None:
-    """The shot's mark and its pop-up: one bold line that lands big, settles,
-    and fades as it drifts up. ``avoid`` is a band of rows (the name boards
-    across the fronts) the pop-up is kept out of."""
+    """The shot's mark and its pop-up: "+30", or "Quick Draw +200" in gold, or
+    a penalty in red, popping where the shot landed and gone in 600 ms (see
+    ``scene.draw_popup``). ``avoid`` is a band of rows (the name boards
+    across the fronts) the pop-up is kept out of, all the way up its rise."""
     age = now - impact.at
     life = max(0.0, 1.0 - age / ttl)
     if life <= 0:
         return
     centre = (int(impact.x), int(impact.y))
     unit = canvas.shape[0] / 945.0
-    pop = 1.0 + 0.6 * max(0.0, 1.0 - age / 0.18) ** 2     # lands big, settles fast
-    fade = min(1.0, life / 0.45)                            # holds, then fades out
-    lift = int((16 + 40 * (1 - life)) * unit)               # and drifts upwards
+    scale = canvas.shape[0] / 720.0
     if not impact.is_hit:
         # A puff of dust or a splinter of wood, either way a puff.
         radius = int((6 + 22 * (1 - life)) * unit)
@@ -2121,27 +2099,37 @@ def draw_impact(canvas: np.ndarray, impact: Impact, now: float, ttl: float,
                    0.5 * life, lambda over, dx, dy: cv2.circle(over, (centre[0] + dx, centre[1] + dy), radius,
                                                               (180, 200, 220), -1, cv2.LINE_AA))
         if impact.label:
-            _floater(canvas, impact.label.replace("  ", " "), (centre[0], _clear_of(centre[1] - int(24 * unit) - lift, avoid)),
-                     PENALTY_INK, 0.72 * pop * unit, fade, 2)
+            y = _clear_of(centre[1] - int(24 * unit), avoid, _popup_reach(scale))
+            scene.draw_popup(canvas, scene.title_case(impact.label), (centre[0], y), age,
+                             scale, scene.DANGER)
         return
     if age < 0.25:
         cv2.circle(canvas, centre, int((4 + 14 * age / 0.25) * unit), (255, 255, 255), 2, cv2.LINE_AA)
     if not impact.score:
         return
-    y = _clear_of(centre[1] - int(22 * unit) - lift, avoid)
-    text = f"+{impact.score}"
+    y = _clear_of(centre[1] - int(22 * unit), avoid, _popup_reach(scale))
+    text, colour = f"+{impact.score}", scene.LABEL
     if impact.label and impact.label.upper().startswith("QUICK"):
-        text = f"QUICK DRAW  +{impact.score}"
-    _floater(canvas, text, (centre[0], y), SCORE_INK, 0.82 * pop * unit, fade, 2)
+        # A quick draw is this street's perfect hit: gold, and named.
+        text, colour = f"Quick Draw +{impact.score}", scene.GOLD
+    scene.draw_popup(canvas, text, (centre[0], y), age, scale, colour)
 
 
-def _clear_of(y: int, band: tuple[int, int] | None) -> int:
-    """Keep a pop-up's row out of the band where the name boards are: it is
-    dropped beneath the awnings, never lifted out of the play area."""
+def _popup_reach(scale: float) -> int:
+    """How far above its starting baseline a pop-up reaches: its rise, and its
+    capitals at their largest."""
+    return round(scene.POPUP_RISE * scale
+                 + scene.type_size(scene.TITLE_2, scale) * 1.25 * scene.CAP_HEIGHT) + 2
+
+
+def _clear_of(y: int, band: tuple[int, int] | None, reach: int = 0) -> int:
+    """Keep a pop-up - from its baseline ``y`` up the ``reach`` it rises and
+    stands - out of the band where the name boards are: it is dropped beneath
+    the awnings, never lifted out of the play area."""
     if band is None:
         return y
     top, bottom = band
-    return bottom + 14 if top <= y <= bottom else y
+    return bottom + reach + 4 if y - reach <= bottom and y >= top else y
 
 
 def _shimmer(canvas: np.ndarray, backdrop: np.ndarray, street: Street, now: float) -> None:

@@ -155,6 +155,13 @@ def _hershey(size: int) -> tuple[float, int]:
     return size / 30.0, 1
 
 
+#: What the Hershey fallback sets for the few characters beyond ASCII the
+#: interface uses; it has no glyphs for them and would print question marks.
+_ASCII = str.maketrans({"\u00b7": "-", "\u2019": "'", "\u2018": "'", "\u2013": "-",
+                        "\u2014": "-", "\u2212": "-", "\u2026": "...", "\u2192": ">",
+                        "\u2190": "<"})
+
+
 @lru_cache(maxsize=2048)
 def _advance(text: str, size: int, weight: int) -> int:
     """How far the pen moves setting ``text``: its width for layout."""
@@ -162,7 +169,7 @@ def _advance(text: str, size: int, weight: int) -> int:
         return 0
     if _font_source() is None:
         font_scale, thickness = _hershey(size)
-        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+        return cv2.getTextSize(text.translate(_ASCII), cv2.FONT_HERSHEY_SIMPLEX, font_scale,
                                2 if weight >= 600 else thickness)[0][0]
     face, argument = _setting(size, weight)
     return cv2.getTextSize((0, 0), text, (0, 0), face, size, argument)[2]
@@ -266,8 +273,8 @@ def _put(canvas: np.ndarray, text: str, origin: tuple[int, int],
          color: tuple[int, int, int], size: int, weight: int) -> None:
     if _font_source() is None:
         font_scale, thickness = _hershey(size)
-        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color,
-                    2 if weight >= 600 else thickness, cv2.LINE_AA)
+        cv2.putText(canvas, text.translate(_ASCII), origin, cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale, color, 2 if weight >= 600 else thickness, cv2.LINE_AA)
         return
     face, argument = _setting(size, weight)
     cv2.putText(canvas, text, origin, color, face, size, argument)
@@ -363,6 +370,59 @@ def clock_text(seconds: float) -> str:
     """Seconds as a clock reads them: 0:48, 1:05."""
     whole = max(0, int(seconds))
     return f"{whole // 60}:{whole % 60:02d}"
+
+
+# --- popups ------------------------------------------------------------------
+#
+# What a hit says where it landed - "+30", "Quick Draw +200" - in the system
+# face over a soft shadow, so it reads over sky and road alike without a box.
+# The motion is the design language's: it pops (1.25 to 1 in 120 ms), rises,
+# and is gone in 600 ms. Nothing in the play path lasts longer.
+
+POPUP_LIFE, POPUP_POP, POPUP_RISE = 0.6, 0.12, 34
+
+
+def popup_motion(age: float) -> tuple[float, float, float]:
+    """A popup ``age`` seconds in: its size (1.25 falling to 1), how far it
+    has risen (0 to 1), and how much of it shows (held, then fading)."""
+    pop = 1.25 - 0.25 * min(1.0, max(0.0, age) / POPUP_POP)
+    rise = ease_out(age / POPUP_LIFE)
+    alpha = 1.0 if age < POPUP_LIFE / 2 else max(0.0, (POPUP_LIFE - age) / (POPUP_LIFE / 2))
+    return pop, rise, alpha
+
+
+def draw_popup(canvas: np.ndarray, text: str, centre: tuple[float, float], age: float,
+               scale: float = 1.0, color: tuple[int, int, int] = LABEL,
+               style: Style | None = None) -> Rect | None:
+    """``text`` centred on ``centre`` (its baseline), ``age`` seconds after the
+    hit, as it pops, rises and fades. Returns the box it touched, if any."""
+    if not text or age < 0.0 or age >= POPUP_LIFE:
+        return None
+    style = style or TITLE_2
+    pop, rise, alpha = popup_motion(age)
+    size = Style(style.size * pop, style.weight, style.tracking, style.caps)
+    width = measure(text, size, scale)
+    tall = type_size(size, scale)
+    x = round(centre[0] - width / 2)
+    y = round(centre[1] - rise * POPUP_RISE * scale)
+    pad = max(4, tall // 3)
+    height, full = canvas.shape[:2]
+    x0, y0 = max(x - pad, 0), max(y - tall - pad, 0)
+    x1, y1 = min(x + width + pad, full), min(y + round(tall * DESCENT) + pad, height)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    region = canvas[y0:y1, x0:x1]
+    # The shadow: the words drawn a little lower, softened, and taken out of
+    # the picture under them - darkening only where they fall.
+    shade = np.zeros(region.shape, np.uint8)
+    drop = max(1, round(2 * scale))
+    write(shade, text, (x - x0, y - y0 + drop), size, (255, 255, 255), scale)
+    soft = max(3, round(2 * scale) | 1)
+    shade = cv2.blur(shade, (soft, soft))
+    patch = cv2.multiply(region, 255 - (shade * 0.75).astype(np.uint8), scale=1.0 / 255)
+    write(patch, text, (x - x0, y - y0), size, color, scale)
+    cv2.addWeighted(patch, alpha, region, 1.0 - alpha, 0.0, dst=region)
+    return Rect(x0, y0, x1 - x0, y1 - y0)
 
 
 # --- materials ---------------------------------------------------------------

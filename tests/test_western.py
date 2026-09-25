@@ -428,36 +428,41 @@ def test_a_tumbling_can_never_draws_below_the_play_area():
 
 # --- floaters ---------------------------------------------------------------------
 
-def test_score_floaters_are_outlined_numerals_with_no_box():
+def ink(canvas):
+    """Where a floater's white lettering is, on the grey the tests draw on."""
+    return canvas.min(axis=2) > 235
+
+
+def test_score_floaters_are_white_numerals_on_a_soft_shadow_with_no_box():
     canvas = np.full((300, 400, 3), 200, np.uint8)
     draw_impact(canvas, Impact(x=200, y=200, score=30, at=0.0, ring=1, label="BOTTLE"), 0.05, 1.2)
-    yellow = (canvas[..., 2] > 200) & (canvas[..., 1] > 180) & (canvas[..., 0] < 120)
-    assert yellow.sum() > 40, "the numeral is yellow"
-    dark = (canvas.min(axis=2) < 90).sum()
-    assert 0 < dark < 1500, "only an outline is dark, never a slab"
+    assert ink(canvas).sum() > 40, "the numeral is white"
+    dark = (canvas.min(axis=2) < 150).sum()
+    assert 0 < dark < ink(canvas).sum() * 2, "only a shadow is dark, never a slab"
     gone = np.full((300, 400, 3), 200, np.uint8)
-    draw_impact(gone, Impact(x=200, y=200, score=30, at=0.0, ring=1, label="BOTTLE"), 1.3, 1.2)
-    assert np.array_equal(gone, np.full((300, 400, 3), 200, np.uint8))
+    draw_impact(gone, Impact(x=200, y=200, score=30, at=0.0, ring=1, label="BOTTLE"), 0.61, 1.2)
+    assert np.array_equal(gone, np.full((300, 400, 3), 200, np.uint8)), "gone in 600 ms"
 
 
 def test_floaters_drift_upwards_and_fade():
     def rows_with_ink(age):
         canvas = np.full((300, 400, 3), 200, np.uint8)
         draw_impact(canvas, Impact(x=200, y=200, score=30, at=0.0, ring=1), age, 1.2)
-        ys = np.nonzero(canvas.min(axis=2) < 90)[0]
-        return ys, canvas
-    early, _ = rows_with_ink(0.2)
-    late, _ = rows_with_ink(0.7)
-    _, faded = rows_with_ink(1.1)
+        return np.nonzero(ink(canvas))[0], canvas
+    early, _ = rows_with_ink(0.15)
+    late, _ = rows_with_ink(0.35)
+    _, faded = rows_with_ink(0.55)
     assert late.mean() < early.mean(), "it rises"
-    assert faded.min() > 90, "and fades: nothing is fully dark any more"
+    assert faded.max() < 235, "and fades: nothing is fully white any more"
 
 
 def test_floaters_are_kept_out_of_the_name_board_band():
-    canvas = np.full((300, 400, 3), 200, np.uint8)
-    draw_impact(canvas, Impact(x=200, y=130, score=30, at=0.0, ring=1), 0.3, 1.2, avoid=(60, 160))
-    ys = np.nonzero(canvas.min(axis=2) < 90)[0]
-    assert ys.min() > 160
+    for age in (0.26, 0.4, 0.55):  # after the hit's own ring, at the mark, has gone
+        canvas = np.full((300, 400, 3), 200, np.uint8)
+        draw_impact(canvas, Impact(x=200, y=130, score=30, at=0.0, ring=1), age, 1.2,
+                    avoid=(60, 160))
+        touched = np.nonzero((canvas != 200).any(axis=2))[0]
+        assert touched.min() > 160, f"into the boards at {age} s"
 
 
 def test_penalty_floaters_read_as_a_warning():
@@ -666,32 +671,33 @@ def test_a_bottle_bursts_into_a_proper_spray():
     assert max(s.size for s in round_.shards) > 4
 
 
-def test_floaters_are_one_bold_line_with_no_type_label():
+def test_floaters_are_one_line_with_no_type_label():
     canvas = np.full((300, 400, 3), 200, np.uint8)
     draw_impact(canvas, Impact(x=200, y=200, score=30, at=0.0, ring=1, label="BOTTLE"), 0.3, 1.2)
-    white = ((canvas[..., 0] > 235) & (canvas[..., 1] > 235) & (canvas[..., 2] > 235)).sum()
-    assert white == 0, "no white BOTTLE caption above the number"
-    ys = np.nonzero(canvas.min(axis=2) < 90)[0]
-    assert ys.max() - ys.min() < 60, "a single line of lettering"
+    ys = np.nonzero(ink(canvas))[0]
+    assert ys.max() - ys.min() < 40, "a single line of lettering, no BOTTLE above it"
 
 
-def test_a_quick_draw_is_named_on_its_one_line():
+def test_a_quick_draw_is_named_on_its_one_line_in_gold():
     plain = np.full((300, 600, 3), 200, np.uint8)
-    draw_impact(plain, Impact(x=300, y=200, score=200, at=0.0, ring=0, label="BANDIT"), 0.3, 1.2)
+    draw_impact(plain, Impact(x=300, y=200, score=200, at=0.0, ring=0, label="BANDIT"), 0.26, 1.2)
     quick = np.full((300, 600, 3), 200, np.uint8)
-    draw_impact(quick, Impact(x=300, y=200, score=200, at=0.0, ring=0, label="QUICK DRAW"), 0.3, 1.2)
-    wide = np.nonzero(quick.min(axis=2) < 90)[1]
-    narrow = np.nonzero(plain.min(axis=2) < 90)[1]
+    draw_impact(quick, Impact(x=300, y=200, score=200, at=0.0, ring=0, label="QUICK DRAW"), 0.26, 1.2)
+    gold = (quick[..., 2] > 230) & (quick[..., 1] > 190) & (quick[..., 0] < 60)
+    narrow = np.nonzero(ink(plain))[1]
+    wide = np.nonzero(gold)[1]
     assert wide.max() - wide.min() > (narrow.max() - narrow.min()) * 1.8
+    assert not ink(quick).any(), "gold, not white: the street's perfect hit"
 
 
 def test_floaters_pop_then_settle():
-    def ink_rows(age):
-        canvas = np.full((300, 400, 3), 200, np.uint8)
-        draw_impact(canvas, Impact(x=200, y=200, score=30, at=0.0, ring=1), age, 1.2)
-        ys = np.nonzero(canvas.min(axis=2) < 90)[0]
-        return ys.max() - ys.min()
-    assert ink_rows(0.01) > ink_rows(0.3) * 1.2, "it lands big and settles"
+    """1.25 times its size as it lands, its own size 120 ms later."""
+    def text_width(age):
+        canvas = np.full((945, 400, 3), 200, np.uint8)
+        draw_impact(canvas, Impact(x=200, y=300, score=30, at=0.0, ring=1), age, 1.2)
+        xs = np.nonzero(ink(canvas)[:285])[1]  # the words, above the hit's ring
+        return xs.max() - xs.min()
+    assert text_width(0.005) > text_width(0.15) * 1.15, "it lands big and settles"
 
 
 def test_the_street_has_ruts_debris_and_sheared_barrel_shadows():

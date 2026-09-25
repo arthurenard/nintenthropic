@@ -1666,8 +1666,9 @@ def draw_drone(canvas: np.ndarray, drone: Drone, view: Projection, now: float,
 def _draw_tag(canvas: np.ndarray, area: Rect, text: str, anchor: tuple[int, int],
               size: float) -> None:
     """A small label on a leader line, held clear of the thing it names."""
-    scale = max(0.34, min(0.5, size / 90.0))
-    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)
+    style = scene.Style(max(10.0, min(14.0, size / 6.5)), 500)
+    tw = scene.measure(text, style)
+    th = round(scene.type_size(style) * scene.CAP_HEIGHT)
     inner = _pane_inner(area)
     # Up and away from the station side, so it never sits on the figure.
     x = anchor[0] + int(size * 1.3)
@@ -1679,8 +1680,7 @@ def _draw_tag(canvas: np.ndarray, area: Rect, text: str, anchor: tuple[int, int]
     pill = Rect(x, y - th - 5, tw + 14, th + 10)
     _pill(canvas, pill, 0.55)
     cv2.rectangle(canvas, (pill.x, pill.y), (pill.right, pill.bottom), _tone(SPACE, TETHER, 0.7), 1)
-    draw_text(canvas, text, (x + 7, y), (210, 214, 218), scale=scale, thickness=1,
-              outline=False)
+    scene.write(canvas, text, (x + 7, y), style, (210, 214, 218))
     elbow = (pill.x if x > anchor[0] else pill.right, pill.bottom)
     cv2.line(canvas, (anchor[0] + int(size * 0.4 * (1 if x > anchor[0] else -1)),
                       anchor[1] - int(size * 0.9)), elbow, TETHER, 1, cv2.LINE_AA)
@@ -1783,27 +1783,28 @@ def _pane_inner(area: Rect) -> Rect:
 
 
 def _popup_origin(area: Rect, centre: tuple[int, int], lift: int,
-                  lines: list[tuple[str, float]]) -> tuple[int, int, int]:
+                  lines: list[tuple[str, scene.Style]], scale: float = 1.0
+                  ) -> tuple[int, int, int]:
     """Where a score label goes: up from the hit and outward, away from the
     middle of the pane, clear of the reticle (which sits on the hit), and
     clamped inside the glass.
 
     Returns the left x, the baseline y of the first line, and the line step.
     """
-    widths = [cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)[0][0]
-              for text, scale in lines]
-    step = 20
+    widths = [scene.measure(text, style, scale) for text, style in lines]
+    step = round(24 * scale)
     box_w, box_h = max(widths), step * len(lines)
     inner = _pane_inner(area)
     outward = 1 if centre[0] >= area.centre_x else -1
-    x = centre[0] + 44 if outward > 0 else centre[0] - 44 - box_w
-    y = centre[1] - 42 - lift
+    reach = round(44 * scale)
+    x = centre[0] + reach if outward > 0 else centre[0] - reach - box_w
+    y = centre[1] - round(42 * scale) - lift
     if x + box_w > inner.right:
-        x = centre[0] - 44 - box_w
+        x = centre[0] - reach - box_w
     if x < inner.x:
-        x = centre[0] + 44
+        x = centre[0] + reach
     if y - box_h < inner.y:  # no room above: hang it below instead
-        y = centre[1] + 44 + box_h + lift
+        y = centre[1] + reach + box_h + lift
     x = min(max(x, inner.x), inner.right - box_w)
     y = min(max(y, inner.y + box_h), inner.bottom)
     return x, y - box_h + step - 4, step
@@ -1854,62 +1855,39 @@ def draw_impact(canvas: np.ndarray, area: Rect, impact: Impact, now: float,
     life = max(0.0, 1.0 - age / ttl)
     if life <= 0.0:
         return
+    scale = canvas.shape[0] / 720.0
     centre = (int(impact.x), int(impact.y))
     if impact.label == "FRIENDLY":
-        # The warning pulses: a ring that throbs and a label that flashes
-        # between red and white, so it is not mistaken for a score.
+        # The warning pulses - a ring that throbs, and one racing out - and
+        # says what it cost, in red, so it is not mistaken for a score.
         pulse = 0.5 + 0.5 * math.sin(age * 18.0)
         cv2.circle(canvas, centre, int(14 + 10 * pulse), WARN, 2, cv2.LINE_AA)
         cv2.circle(canvas, centre, int(10 + 40 * (1 - life)), _tone(SPACE, WARN, life), 1,
                    cv2.LINE_AA)
-        lines = [("FRIENDLY", 0.7), (f"-{FRIENDLY_PENALTY}", 0.6)]
-        x, y, step = _popup_origin(area, centre, 0, lines)
-        width = max(cv2.getTextSize(t, cv2.FONT_HERSHEY_SIMPLEX, s, 2)[0][0] for t, s in lines)
-        _pill(canvas, Rect(x - 8, y - 20, width + 16, step * 2 + 8), 0.55)
-        ink = WARN if (age % 0.3) < 0.15 else (240, 240, 250)
-        for text, scale in lines:
-            draw_text(canvas, text, (x, y), ink, scale=scale)
-            y += step
-        # A warning triangle beside it.
-        tx, ty = x - 22, y - step - 8
-        tri = np.array([(tx, ty), (tx - 8, ty + 14), (tx + 8, ty + 14)], np.int32)
-        cv2.polylines(canvas, [tri], True, ink, 2, cv2.LINE_AA)
+        _popup(canvas, area, centre, age, scale, "Friendly", f"-{FRIENDLY_PENALTY}",
+               scene.DANGER)
         return
     if not impact.is_hit:
         if area.contains(*centre):
             cv2.circle(canvas, centre, int(3 + 20 * (1 - life)), (90, 90, 100), 1, cv2.LINE_AA)
         return
     _draw_burst(canvas, centre, impact.at, age, SPARK)
-    # The score: one treatment everywhere - a dark pill, the number in warm
-    # yellow, the word beneath in cream - rising off the hit and fading out.
-    lift = int(46 * (1 - life))
-    lines = [(f"+{impact.score}", 0.6)]
-    if impact.label:
-        lines.append((impact.label, 0.5))
-    x, y, step = _popup_origin(area, centre, lift, lines)
-    _popup(canvas, x, y, step, lines, min(1.0, life * 2.2))
+    _popup(canvas, area, centre, age, scale, f"+{impact.score}",
+           scene.title_case(impact.label), scene.LABEL)
 
 
-def _popup(canvas: np.ndarray, x: int, y: int, step: int, lines: list, alpha: float) -> None:
-    """A score label on its pill, blended in at ``alpha`` so it can fade."""
-    width = max(cv2.getTextSize(t, cv2.FONT_HERSHEY_SIMPLEX, s, 2)[0][0] for t, s in lines)
-    rect = Rect(x - 9, y - 18, width + 18, step * len(lines) + 8)
-    height, full = canvas.shape[:2]
-    x0, y0 = max(0, rect.x - 2), max(0, rect.y - 2)
-    x1, y1 = min(full, rect.right + 3), min(height, rect.bottom + 3)
-    if x1 <= x0 or y1 <= y0:
-        return
-    roi = canvas[y0:y1, x0:x1]
-    over = roi.copy()
-    _pill(over, Rect(rect.x - x0, rect.y - y0, rect.width, rect.height), 0.62)
-    cv2.rectangle(over, (rect.x - x0, rect.y - y0), (rect.right - x0, rect.bottom - y0),
-                  _tone((14, 12, 10), SCORE_INK, 0.35), 1, cv2.LINE_AA)
-    ink = SCORE_INK
-    for text, scale in lines:
-        draw_text(over, text, (x - x0, y - y0), ink, scale=scale, thickness=2, outline=False)
-        ink = (214, 222, 228)
-        y += step
-    cv2.addWeighted(over, alpha, roi, 1 - alpha, 0.0, dst=roi)
+def _popup(canvas: np.ndarray, area: Rect, centre: tuple[int, int], age: float,
+           scale: float, first: str, second: str, colour) -> None:
+    """A score and what it was for - "+160", "Cleared" - popping out on the
+    glass beside the hit, clear of the reticle (see ``scene.draw_popup``)."""
+    lines = [(first, scene.TITLE_2)] + ([(second, scene.SUBHEAD)] if second else [])
+    x, y, step = _popup_origin(area, centre, 0, lines, scale)
+    middle = x + max(scene.measure(text, style, scale) for text, style in lines) // 2
+    scene.draw_popup(canvas, first, (middle, y), age, scale, colour)
+    if second:
+        scene.draw_popup(canvas, second, (middle, y + step), age, scale,
+                         scene.LABEL_SECONDARY if colour == scene.LABEL else colour,
+                         scene.SUBHEAD)
 
 
 def draw_failure(canvas: np.ndarray, round_: OrbitRound) -> None:

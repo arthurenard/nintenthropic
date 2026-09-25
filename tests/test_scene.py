@@ -1153,3 +1153,19 @@ def test_a_notice_is_a_calm_sheet_its_words_inside_it(width, height, lines, monk
     b, g, r = (canvas[sheet.y:sheet.bottom, sheet.x:sheet.right, c].astype(int)
                for c in range(3))
     assert not ((r > g + 80) & (r > b + 80)).any(), "no red"
+
+
+def test_a_popup_pops_rises_and_is_gone_in_six_hundred_milliseconds():
+    """The design language's motion: 1.25 to 1 in 120 ms, rising, faded out
+    by 600 ms - nothing in the play path lasts longer."""
+    assert scene.popup_motion(0.0)[0] == pytest.approx(1.25)
+    assert scene.popup_motion(scene.POPUP_POP)[0] == pytest.approx(1.0)
+    rises = [scene.popup_motion(age)[1] for age in (0.0, 0.2, 0.4, 0.59)]
+    assert rises == sorted(rises) and rises[0] == 0.0
+    assert scene.popup_motion(0.1)[2] == 1.0 and scene.popup_motion(0.59)[2] < 0.1
+    canvas = np.full((200, 400, 3), 128, np.uint8)
+    assert scene.draw_popup(canvas, "+30", (200, 150), 0.61) is None
+    assert (canvas == 128).all()
+    box = scene.draw_popup(canvas, "+30", (200, 150), 0.1)
+    changed = np.argwhere((canvas != 128).any(axis=2))
+    assert box is not None and changed[:, 0].min() >= box.y and changed[:, 1].min() >= box.x

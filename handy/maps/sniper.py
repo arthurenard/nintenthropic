@@ -27,6 +27,7 @@ import cv2
 import numpy as np
 
 from ..game import MISS, Hit, Readout, Rect, Round
+from .. import scene
 from ..scene import blend
 
 # --- the world --------------------------------------------------------------
@@ -106,7 +107,6 @@ WINDOW = (170, 190, 200)
 TRACER = (150, 230, 255)
 DUST = (140, 176, 204)
 BLOOD = (36, 30, 150)
-SCORE_INK = (140, 220, 235)
 RETICLE = (12, 12, 14)
 INFO = (210, 224, 232)
 
@@ -1446,61 +1446,15 @@ def _chromatic_fringe(canvas: np.ndarray, anchor: tuple[int, int] | None = None,
 
 # --- drawing the moving things ------------------------------------------------
 
-_FACE = cv2.FontFace("uni") if hasattr(cv2, "FontFace") else None
-
-
-def _mono_face():
-    """A monospace face for the glass readout, if the system has one."""
-    if not hasattr(cv2, "FontFace"):
-        return None
-    for path in ("/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/SFNSMono.ttf",
-                 "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"):
-        try:
-            face = cv2.FontFace(path)
-            cv2.getTextSize((0, 0), "0", (0, 0), face, 12)
-            return face
-        except cv2.error:
-            continue
-    return None
-
-
-_MONO = _mono_face()
-
-
-def _mono_width(text: str, size: int) -> int:
-    if _MONO is None:
-        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 26, 1)[0][0]
-    return cv2.getTextSize((0, 0), text, (0, 0), _MONO, size)[2]
-
-
-def _mono(canvas: np.ndarray, text: str, origin: tuple[int, int], colour, size: int,
-          weight: int = 400) -> int:
-    origin = (int(origin[0]), int(origin[1]))
-    if _MONO is None:
-        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, size / 26, colour,
-                    2 if weight >= 600 else 1, cv2.LINE_AA)
-    else:
-        cv2.putText(canvas, text, origin, colour, _MONO, size, weight)
-    return _mono_width(text, size)
-
-
-def _label_width(text: str, size: int) -> int:
-    if _FACE is None:
-        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 26, 1)[0][0]
-    return cv2.getTextSize((0, 0), text, (0, 0), _FACE, size)[2]
+def _label_width(text: str, size: int, weight: int = 0) -> int:
+    return scene.measure(text, scene.Style(size, weight or 400))
 
 
 def _label(canvas: np.ndarray, text: str, origin: tuple[int, int], colour,
            size: int, weight: int = 0) -> int:
-    """Text in the interface's own face, ``size`` pixels tall, baseline left.
-    One font for the whole readout, numerals included. Returns the width."""
-    origin = (int(origin[0]), int(origin[1]))
-    if _FACE is None:
-        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, size / 26, colour,
-                    2 if weight >= 600 else 1, cv2.LINE_AA)
-    else:
-        cv2.putText(canvas, text, origin, colour, _FACE, size, weight)
-    return _label_width(text, size)
+    """Text in the interface's face - the system face, figures tabular -
+    ``size`` pixels tall, baseline left. Returns the width."""
+    return scene.write(canvas, text, origin, scene.Style(size, weight or 400), colour)
 
 
 def _soft_blob(canvas: np.ndarray, cx: float, cy: float, rx: float, ry: float,
@@ -1821,13 +1775,14 @@ def _draw_tag(canvas: np.ndarray, figure: Figure, now: float, scale: float) -> N
             cv2.line(canvas, (cx_, cy_), (cx_, int(cy_ - sy_ * gap)), pass_colour, thick, cv2.LINE_AA)
     label = f"{figure.distance:.0f} m"
     size = max(11, round(12.5 * scale))
-    tw = _label_width(label, size)
-    pad = max(3, round(3.5 * scale))
-    tx, ty = int(x + reach + 5 * scale), int(y - reach + size * 0.5)
-    box = (tx - pad, ty - size - pad + 2, tx + tw + pad, ty + pad)
-    cv2.rectangle(canvas, box[:2], box[2:], TAG_DARK, -1)
-    cv2.line(canvas, (box[0], box[1]), (box[0], box[3]), col, max(1, round(2 * scale)))
-    _label(canvas, label, (tx + 1, ty), col, size, 600)
+    tw = _label_width(label, size, 600)
+    pad = max(4, round(6 * scale))
+    tall = round(size * 1.35)
+    tx, ty = int(x + reach + 6 * scale), int(y - reach + size * 0.5)
+    capsule = Rect(tx - pad, ty - round(size * 0.7) - (tall - round(size * 0.7)) // 2,
+                   tw + 2 * pad, tall)
+    scene.draw_surface(canvas, capsule, tall // 2, TAG_DARK, edge=False)
+    _label(canvas, label, (tx, ty), col, size, 600)
 
 
 def _draw_glass_mark(canvas: np.ndarray, figure: Figure, now: float, scale: float) -> None:
@@ -1879,17 +1834,17 @@ def _draw_shot(canvas: np.ndarray, shot: Shot, view: View, now: float, ttl: floa
     else:
         radius = max(2, int(metres_px * 0.35 * (1.0 + (1.0 - life))))
         _soft_blob(canvas, sx, sy, radius, radius, BLOOD, 0.7 * life ** 0.5)
-    if shot.zone is not None and age < 1.6:
-        lift = int((14 + 26 * age) * scale)
-        x_text = centre[0] + int(12 * scale)
-        size = max(12, round(15 * scale))
+    if shot.zone is not None:
+        # What the shot did, over where it landed: a head shot in gold, the
+        # rest in white, gone in 600 ms (see ``scene.draw_popup``).
+        perfect = shot.zone == "head"
+        top = centre[1] - round(16 * scale)
+        scene.draw_popup(canvas, f"+{shot.points}", (centre[0], top), age, scale,
+                         scene.GOLD if perfect else scene.LABEL)
         if shot.label:
-            _label(canvas, shot.label, (x_text + 1, centre[1] - lift + 1), TAG_DARK, size, 700)
-            _label(canvas, shot.label, (x_text, centre[1] - lift), BLOOD if not shot.hit_vehicle else DUST,
-                   size, 700)
-            lift += int(20 * scale)
-        _label(canvas, f"+{shot.points}", (x_text + 1, centre[1] - lift + 1), TAG_DARK, size, 700)
-        _label(canvas, f"+{shot.points}", (x_text, centre[1] - lift), SCORE_INK, size, 700)
+            scene.draw_popup(canvas, scene.title_case(shot.label),
+                             (centre[0], top + round(22 * scale)), age, scale,
+                             scene.GOLD if perfect else scene.LABEL_SECONDARY, scene.SUBHEAD)
 
 
 def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
@@ -1936,8 +1891,8 @@ def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
                max(10, round(11 * scale)), 600)
 
     # The readout: range, hold and wind on a dark band across the foot of the
-    # glass, in a light monospace face, so it reads against anything the
-    # scope happens to be looking at.
+    # glass, in the system face with tabular figures, so it reads against
+    # anything the scope happens to be looking at and holds still as it changes.
     distance, hostile = round_.range_under_reticle(now)
     size = max(12, round(14 * scale))
     big = size + round(9 * scale)
@@ -1946,11 +1901,11 @@ def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
     if math.isfinite(distance):
         hold = mils(bullet_drop(distance), distance)
         drift = mils(wind_drift(distance, round_.wind), distance)
-        arrow = ">" if drift > 0 else "<"
+        arrow = "\u2192" if drift > 0 else "\u2190"
         left = f"{distance:.0f} m"
-        lines = (f"HOLD {hold:.1f}", f"WIND {abs(drift):.1f} {arrow}")
+        lines = (f"Hold {hold:.1f}", f"Wind {abs(drift):.1f} {arrow}")
     else:
-        left, lines = "--- m", ("SKY", "")
+        left, lines = "\u2013 m", ("Sky", "")
     # The range, large, left of centre; the hold and the wind stacked to the
     # right of it, the column divided by a hairline.
     row = int(radius * 0.115)
@@ -1958,11 +1913,11 @@ def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
     y2 = y1 + row
     ty = (y1 + y2) // 2 + big // 2 - round(3 * scale)
     gap = int(14 * scale)
-    x_left = cx - gap - _mono_width(left, big)
+    x_left = cx - gap - _label_width(left, big, 600)
     x_right = cx + gap
-    _mono(canvas, left, (x_left, ty), INFO, big, 600)
-    _mono(canvas, lines[0], (x_right, y1), INFO, size, 400)
-    _mono(canvas, lines[1], (x_right, y2), _lerp(INFO, (0, 0, 0), 0.2), size, 400)
+    _label(canvas, left, (x_left, ty), INFO, big, 600)
+    _label(canvas, lines[0], (x_right, y1), INFO, size, 400)
+    _label(canvas, lines[1], (x_right, y2), _lerp(INFO, (0, 0, 0), 0.2), size, 400)
     cv2.line(canvas, (cx, y1 - size), (cx, y2 + round(3 * scale)), (80, 84, 88), 1, cv2.LINE_AA)
     if hostile is not None:
         # On target: the lock light beside the range.
