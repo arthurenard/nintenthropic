@@ -239,3 +239,25 @@ def test_the_world_and_the_card_art_both_draw():
     panel = np.zeros((200, 320, 3), np.uint8)
     draw_emblem(panel)
     assert panel.any()
+
+
+def test_a_face_hung_by_hand_is_the_face_the_round_would_draw():
+    """Setup lays out its own faces; they must be lit and shadowed exactly as
+    a round's are, or the course and the game would not match."""
+    from handy.maps.archery import hang
+
+    round_ = make_round()
+    target = Target(x=400, y=260, radius=72, spawned_at=0, lifetime=99)
+    by_round = np.zeros((720, 1280, 3), np.uint8)
+    round_.targets = [target]
+    draw_world(by_round, round_, 1.0)
+    by_hand = np.zeros((720, 1280, 3), np.uint8)
+    round_.targets = []
+    draw_world(by_hand, round_, 1.0)
+    hang(by_hand, round_, target)
+    assert np.array_equal(by_round, by_hand)
+    faint = np.zeros((720, 1280, 3), np.uint8)
+    draw_world(faint, round_, 1.0)
+    hall = faint.copy()
+    hang(faint, round_, target, 0.9)
+    assert 0 < np.abs(faint.astype(int) - hall).sum() < np.abs(by_hand.astype(int) - hall).sum()

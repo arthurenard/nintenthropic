@@ -7,6 +7,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path
 
 import cv2
@@ -230,6 +231,7 @@ class View:
     scheme: object | None = None
     fire_at: float = 0.65  # the trigger threshold, for the crosshair's ring
     scoped: bool = False  # looking down a scope: the map draws the reticle
+    hints: float = 1.0  # how much of the hint line shows: 1 in full, 0 not at all
 
 
 def aim_pixels(aim: Aim, layout: Layout) -> tuple[int, int] | None:
@@ -240,35 +242,98 @@ def aim_pixels(aim: Aim, layout: Layout) -> tuple[int, int] | None:
             round(aim.position[1] * (layout.window.height - 1)))
 
 
+#: Maps that lay one panel of their own under the camera and the whole readout,
+#: as part of the world (Overwatch Ridge: see ``sniper.hud_panel``). The app's
+#: panel on top of theirs was a double panel with a seam down the middle.
+OWN_HUD_PANEL = frozenset({"sniper"})
+
+#: Where a map's own readout under the score block starts, in 720-tall units
+#: below the origin it is handed (Dead of Night's health bar), and the size of
+#: the strip the app lays under it. The strip sits at the foot of the camera,
+#: where High Noon keeps its tally on a slab of its own.
+READOUT_FIRST = 146
+READOUT_SIZE = (268, 60)
+
+
+def hud_panels(view: View, layout: Layout) -> tuple[Rect | None, Rect | None]:
+    """The panels under the score block and under the map's own readout.
+
+    Each is sized to what sits on it, so the map is covered no further than
+    the readout reaches: the score panel stops short of the clock beside it,
+    and a map's readout gets a strip of its own at the camera's foot. None
+    where there is nothing to carry, or where the map lays its own panel.
+    """
+    if view.map.key in OWN_HUD_PANEL:
+        return None, None
+    scale = layout.scale
+    x, top = layout.hud[0], layout.inset.y
+    room = (scene.timer_left(layout.window.width, view.remaining, scale)
+            - round(12 * scale) - x)
+    score = Rect(x, top, max(1, min(scene.hud_block_width(view.round, scale), room)),
+                 round((scene.HUD_LINES["tally"] + 18) * scale))
+    if view.map.draw_hud is None:
+        return score, None
+    width, height = (round(value * scale) for value in READOUT_SIZE)
+    y = max(layout.inset.bottom - height, score.bottom + round(10 * scale))
+    return score, Rect(x, y, width, height)
+
+
+@lru_cache(maxsize=16)
+def hint_line(scheme_hint: str, map_hint: str, width: int, scale: float) -> str:
+    """The footer's hints for this scheme and map, fitted to ``width``.
+
+    Cached: fitting measures every token against the width, and the answer
+    only changes with the map, the scheme or the window.
+    """
+    segments = [[scheme_hint] if scheme_hint else [], [map_hint] if map_hint else [],
+                list(CONTROL_KEYS)]
+    return scene.fit_hints(segments, width, scale)
+
+
 def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     """Compose one frame, bottom layer first. The map owns everything below the HUD."""
     view.map.draw_world(canvas, view.round, view.now)
 
     scale = layout.scale
-    # The HUD column: inset, score block and the map's own readouts, on a panel.
-    hud_right = min(layout.hud[0] + round(430 * scale), layout.maps_button.rect.x - round(16 * scale))
-    scene.draw_hud_backing(canvas, Rect(layout.inset.x - round(8 * scale),
-                                        layout.inset.y - round(8 * scale),
-                                        hud_right - layout.inset.x + round(8 * scale),
-                                        layout.play_area.y - layout.inset.y - round(6 * scale)),
-                           scale)
+    panel, readout = hud_panels(view, layout)
+    for rect in (panel, readout):
+        if rect is not None:
+            scene.draw_chrome_panel(canvas, rect, scale, tab=scene.ACCENT)
     scene.draw_camera_insets(canvas, view.cameras, view.hands, layout.inset,
                              view.camera_states,
                              view.scheme.draw if view.scheme else None, scale)
+    note = scene.camera_note(view.camera_states)
+    if note is not None:
+        # Under the cameras it is about, in the gap above the play area.
+        scene.draw_tag(canvas, note[0], (layout.inset.x,
+                                         layout.inset.bottom + round(26 * scale)),
+                       note[1], scale)
+    # On a panel of the app's own the block carries the panel's tab; on a map's
+    # panel, the rule down its side that the map's readout continues.
     scene.draw_hud(canvas, view.round, view.aim, layout.hud, view.fps, view.debug,
-                   view.camera_states, scale, view.fire_at)
+                   view.camera_states, scale, view.fire_at, rule=panel is None)
     if view.map.draw_hud is not None:
-        view.map.draw_hud(canvas, view.round, layout.hud, view.now)
+        origin = layout.hud
+        if readout is not None:
+            # On its strip, lined up with the text above and inset as it is.
+            origin = (readout.x + round(14 * scale),
+                      readout.y + round((14 - READOUT_FIRST) * scale))
+        view.map.draw_hud(canvas, view.round, origin, view.now)
     scene.draw_timer(canvas, view.remaining, scale)
     crosshair = view.crosshair
     for button in (layout.quit_button, layout.maps_button):
         scene.draw_button(canvas, button, highlighted=(
             crosshair is not None and button.contains(*crosshair)), scale=scale)
-    segments = [[view.scheme.footer] if view.scheme and view.scheme.footer else [],
-                [view.map.footer] if view.map.footer else [],
-                list(CONTROL_KEYS)]
-    scene.draw_footer(canvas, scene.fit_hints(segments, layout.window.width, scale),
-                      scale)
+    # The foot of the frame: the hints while they are up, and as they fade,
+    # the mark in the corner that every other screen carries - so a
+    # screenshot of a round says whose it is. The two take turns rather than
+    # share the line: the hints need all of its width.
+    if view.hints > 0.0:
+        scheme_hint = view.scheme.footer if view.scheme and view.scheme.footer else ""
+        scene.draw_footer(canvas, hint_line(scheme_hint, view.map.footer,
+                                            layout.window.width, scale),
+                          scale, alpha=view.hints)
+    scene.draw_logo(canvas, scale, alpha=1.0 - view.hints)
 
     describe = getattr(view.scheme, "describe_subject", None) if view.scheme else None
     if view.debug and describe is not None and view.hands and view.hands[0].subjects:
@@ -612,6 +677,36 @@ class FreshAim:
         return self._aim
 
 
+class Hints:
+    """When the hint line is on screen during a round.
+
+    It used to run along the foot of every frame of every round - a line of
+    keys over the very picture the player is looking at. Now it opens the
+    round, fades, and comes back only when it might help: a key the round does
+    not know, or the hand gone from view.
+    """
+
+    #: Seconds of hints at the start of a round, before they fade.
+    OPENING = 6.0
+    #: After a key that does nothing, long enough to read the keys that do.
+    NUDGE = 4.0
+    #: After the hand comes back into view, a moment before they go again.
+    LINGER = 1.5
+    #: The fade itself.
+    FADE = 0.8
+
+    def __init__(self, now: float) -> None:
+        self._until = now + self.OPENING
+
+    def show(self, now: float, seconds: float) -> None:
+        """Keep the hints up for at least ``seconds`` more."""
+        self._until = max(self._until, now + seconds)
+
+    def alpha(self, now: float) -> float:
+        """How much of the line to draw: 1 while up, easing to 0 over the fade."""
+        return min(max((self._until - now) / self.FADE, 0.0), 1.0)
+
+
 def crosshair_for(aim: Aim, layout: Layout, recoil: Recoil,
                   now: float) -> tuple[int, int] | None:
     """The aim point after the gun has kicked, clamped to the window."""
@@ -652,12 +747,15 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
     # out of the player's sixty seconds. Once warm, this is a millisecond.
     chosen.draw_world(canvas, round_, time.monotonic())
     trigger = FreshAim(controller, rig)
+    hints = Hints(time.monotonic())
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
         aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
+        if not aim.tracking:
+            hints.show(now, Hints.LINGER)  # no hand: say again how to play
 
         # Looking down the scope: the eye decides, the map moves its view to
         # follow the hand, and the shot lands where the reticle is fixed.
@@ -708,7 +806,8 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                             remaining=round_.remaining(now),
                             camera_states=camera_states(rig, hands),
                             scheme=scheme, scoped=scoped,
-                            fire_at=trigger_thresholds(settings, scheme)[0]), layout)
+                            fire_at=trigger_thresholds(settings, scheme)[0],
+                            hints=hints.alpha(now)), layout)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if round_.is_over(now):
@@ -727,13 +826,15 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
             return round_, "enemy"
         elif key == ord("s"):
             take_screenshot(canvas, settings, layout.scale)
+        elif key != 255:
+            hints.show(now, Hints.NUDGE)  # a key that does nothing: show the ones that do
 
 
 def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                controller: AimController, rig: Rig, scheme,
                scores: HighScores) -> tuple[str, Map | None]:
     """The map chooser. Shoot a card to play it."""
-    cards = scene.map_cards(layout.window, len(maps.MAPS), layout.scale)
+    cards = chooser_cards(layout, len(maps.MAPS))
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     recoil = Recoil(kick=0.0)
@@ -751,28 +852,9 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
             entries.append((chosen.title, chosen.blurb,
                             f"best {best}" if best else "not yet played",
                             chosen.draw_emblem))
-        scale = layout.scale
         aimed = _card_under(cards, crosshair)
-        scene.draw_map_select(canvas, cards, tuple(entries), aimed, scale)
-        states = camera_states(rig, hands)
-        scene.draw_camera_insets(canvas, images, hands, layout.inset, states,
-                                 scheme.draw, scale)
-        summary, color = scene.camera_summary(states)
-        scene.draw_text(canvas, summary,
-                        (layout.inset.right + round(28 * scale),
-                         layout.inset.y + round(24 * scale)), color, scale=0.55 * scale)
-        scene.draw_text(canvas, f"controls: {scheme.title.lower()}",
-                        (layout.inset.right + round(28 * scale),
-                         layout.inset.y + round(48 * scale)),
-                        scene.MUTED, scale=0.5 * scale)
-        scene.draw_button(canvas, layout.quit_button, highlighted=(
-            crosshair is not None and layout.quit_button.contains(*crosshair)),
-            scale=scale)
-        scene.draw_footer(
-            canvas, "shoot a card to play   |   q quit   c recalibrate", scale)
-        if crosshair is not None:
-            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed, since_shot=None,
-                                 scale=scale)
+        draw_chooser(canvas, layout, cards, tuple(entries), aimed, images, hands,
+                     camera_states(rig, hands), scheme.draw, crosshair, aim.armed)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if aim.fired and crosshair is not None:
@@ -796,6 +878,44 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
             return "play", maps.MAPS[int(chr(key)) - 1]
 
 
+def chooser_cards(layout: Layout, count: int) -> tuple[Rect, ...]:
+    """Where the chooser's cards sit: in the play area's rows, clear of the
+    camera (see ``scene.chooser_area``).
+
+    Drawing, shooting and clicking all read this, so a card is hit exactly
+    where it is drawn.
+    """
+    return scene.map_cards(layout.window, count, layout.scale)
+
+
+CHOOSER_HINT = (f"shoot a card to play   |   1-{len(maps.MAPS)} choose   q quit   "
+                "c recalibrate")
+
+
+def draw_chooser(canvas: np.ndarray, layout: Layout, cards: tuple, entries: tuple,
+                 aimed: int | None, images: list, hands: list,
+                 states: tuple[str, ...], draw, crosshair: tuple[int, int] | None,
+                 armed: bool) -> None:
+    """One frame of the chooser: the cards, the camera in its corner, QUIT."""
+    scale = layout.scale
+    scene.draw_map_select(canvas, cards, entries, aimed, scale)
+    scene.draw_camera_insets(canvas, images, hands, layout.inset, states, draw, scale)
+    # The cameras are only talked about when something is worth saying:
+    # "1 camera" beside a working preview read as debug output.
+    note = scene.camera_note(states)
+    if note is not None:
+        scene.draw_tag(canvas, note[0], (layout.inset.x,
+                                         layout.inset.bottom + round(26 * scale)),
+                       note[1], scale)
+    scene.draw_button(canvas, layout.quit_button, highlighted=(
+        crosshair is not None and layout.quit_button.contains(*crosshair)),
+        scale=scale)
+    scene.draw_footer(canvas, CHOOSER_HINT, scale)
+    if crosshair is not None:
+        scene.draw_crosshair(canvas, *crosshair, armed=armed, since_shot=None,
+                             scale=scale)
+
+
 def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:
     if point is None:
         return None
@@ -810,9 +930,29 @@ def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:
 RESULTS_GRACE = 1.0
 
 
+RESULTS_HINT = "r play again   b maps   c recalibrate   s screenshot   q quit"
+
+
+def draw_results_screen(canvas: np.ndarray, layout: Layout, summary: Summary,
+                        best: int, is_best: bool, chosen: Map | None,
+                        crosshair: tuple[int, int] | None, armed: bool) -> None:
+    """One frame of the score card, with the buttons and the crosshair over it."""
+    scene.draw_results(canvas, summary, best, is_best, hint=RESULTS_HINT,
+                       scale=layout.scale, title=chosen.title if chosen else "",
+                       emblem=chosen.draw_emblem if chosen else None)
+    for button in (layout.quit_button, layout.maps_button):
+        scene.draw_button(canvas, button, highlighted=(
+            crosshair is not None and button.contains(*crosshair)),
+            scale=layout.scale)
+    if crosshair is not None:
+        scene.draw_crosshair(canvas, *crosshair, armed=armed, since_shot=None,
+                             scale=layout.scale)
+
+
 def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                  layout: Layout, controller: AimController, rig: Rig,
-                 summary: Summary, best: int, is_best: bool) -> str:
+                 summary: Summary, best: int, is_best: bool,
+                 chosen: Map | None = None) -> str:
     """Hold on the score card until the player shoots to play again, or quits.
 
     A shot counts only once the card has been up for :data:`RESULTS_GRACE`,
@@ -837,17 +977,9 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         shot = aim.fired and cocked
         cocked = cocked or (settled and aim.armed)
 
-        scene.draw_results(canvas, summary, best, is_best,
-                           hint="shoot to play again   |   q quit   c recalibrate",
-                           scale=layout.scale)
-        for button in (layout.quit_button, layout.maps_button):
-            scene.draw_button(canvas, button, highlighted=(
-                crosshair is not None and button.contains(*crosshair)),
-                scale=layout.scale)
-        if crosshair is not None:
-            # Not shown armed until a shot would count.
-            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed and settled,
-                                 since_shot=None, scale=layout.scale)
+        # The crosshair is not shown armed until a shot would count.
+        draw_results_screen(canvas, layout, summary, best, is_best, chosen, crosshair,
+                            aim.armed and settled)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if shot and crosshair is not None:
@@ -1216,7 +1348,7 @@ def _session(settings: Settings, layout: Layout, captures: list,
             previous_best = scores.best_for(chosen.key, summary.duration)
             is_best = scores.record(chosen.key, summary.duration, summary.score)
             choice = show_results(eyes, canvas, settings, layout, controller,
-                                  current, summary, previous_best, is_best)
+                                  current, summary, previous_best, is_best, chosen)
             if choice == "quit":
                 break
             if choice == "maps":

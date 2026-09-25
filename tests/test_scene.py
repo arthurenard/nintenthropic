@@ -83,8 +83,8 @@ def test_a_round_you_won_is_not_painted_in_the_colour_of_a_round_you_lost(canvas
                           perfect=1, duration=60, **fields)
         canvas[:] = 0
         scene.draw_results(canvas, summary, best=0, is_best=False)
-        card_top = (HEIGHT - scene._px(400, 1.0)) // 2
-        tab = canvas[card_top, (WIDTH - scene._px(760, 1.0)) // 2 + scene._px(28, 1.0)]
+        card = scene.results_card(WIDTH, HEIGHT, 1.0, banner=False)
+        tab = canvas[card.y, card.x + scene._px(28, 1.0)]
         return tuple(int(channel) for channel in tab)
 
     for heading in ("SURVIVED", "PANE HELD", "CLEANED UP"):
@@ -185,20 +185,45 @@ def test_no_cameras_at_all_is_not_a_crash():
     assert text and color == scene.DANGER
 
 
-def test_the_hud_reads_differently_with_one_camera_and_with_two(canvas):
+def test_one_working_camera_goes_unannounced_and_two_are_accounted_for():
+    """"1 camera" beside a working preview read as debug output; with two, which
+    of them is contributing changes frame to frame and is always said."""
+    assert scene.camera_note([scene.FUSED]) is None
+    assert scene.camera_note([scene.NO_HAND]) is None, "its own preview says so"
+    assert scene.camera_note([]) is None
+    text, color = scene.camera_note([scene.FUSED, scene.FUSED])
+    assert text == "2 cameras fused" and color == scene.ARMED
+    text, _ = scene.camera_note([scene.FUSED, scene.NO_HAND])
+    assert "cam 2 no hand" in text
+
+
+def test_the_hud_has_no_ready_line_and_no_camera_line(canvas, monkeypatch):
+    """The crosshair turns green when the gun is cocked; a READY in the corner
+    only competed with it."""
     from handy.aiming import Aim
     from handy.game import Rect, Round, RoundOptions
 
+    said = []
+    monkeypatch.setattr(scene, "draw_text",
+                        lambda canvas, text, *args, **kwargs: said.append(text))
     round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
-    aim = Aim(position=(0.5, 0.5), armed=True, cameras=2, spread=0.012)
+    for aim in (Aim(position=(0.5, 0.5), armed=True), Aim()):
+        scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
+    assert said == ["SCORE", "SCORE"]
 
-    scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False, [scene.FUSED])
-    one = canvas.copy()
-    canvas[:] = 0
-    scene.draw_hud(canvas, round_, aim, (400, 16), 30.0, False,
-                   [scene.FUSED, scene.FUSED])
 
-    assert not np.array_equal(one, canvas)
+def test_a_lost_hand_is_said_on_the_cameras_own_preview(canvas, camera, monkeypatch):
+    from handy.game import Rect
+
+    said = []
+    real = scene.draw_text
+    monkeypatch.setattr(scene, "draw_text", lambda canvas, text, *args, **kwargs: (
+        said.append(text), real(canvas, text, *args, **kwargs)))
+    rect = Rect(10, 10, 320, 180)
+    scene.draw_camera_inset(canvas, camera, Frame(), rect, "", scene.NO_HAND)
+    assert said == ["NO HAND"]
+    tag = canvas[rect.bottom - 30:rect.bottom - 6, rect.x + 8:rect.x + 100]
+    assert tag.min() < 40, "on a dark tag, so it reads over any picture"
 
 
 def test_debug_shows_what_the_second_camera_measured(canvas):
@@ -288,38 +313,36 @@ def test_five_cards_keep_their_text_inside_the_card(canvas):
     entries = tuple((f"MAP {i}", blurb, "not yet played", scene.draw_backdrop)
                     for i in range(5))
     scene.draw_map_select(canvas, cards, entries, aimed=None)
+    gap = cards[3].y - cards[0].bottom
     for card in cards:
-        below = canvas[card.bottom + 4:card.bottom + 30, card.x:card.right]
-        assert below.max() < 100, "text ran out of the bottom of a card"
+        below = canvas[card.bottom + 3:card.bottom + gap - 3, card.x:card.right]
+        assert below.size and below.max() < 100, "text ran out of the bottom of a card"
 
 
-# --- the grid closes, figures are set cleanly, the map sits behind the card --
+# --- the grid is balanced, figures are set cleanly, the map sits behind the card
 
-def test_five_cards_leave_one_slot_that_closes_the_grid():
-    from handy.game import Rect
-
-    cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 5)
-    slots = scene.empty_slots(cards)
-    assert len(slots) == 1
-    slot = slots[0]
-    assert slot.y == cards[3].y and slot.x > cards[4].right
-    assert slot.right <= WIDTH and slot.width == cards[0].width
-    assert scene.empty_slots(scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 3)) == ()
-
-
-def test_the_chooser_draws_the_placeholder_tile(canvas):
+def test_the_four_maps_stand_in_one_row_of_equal_cards():
+    """Four maps in a grid of three left two "more ground soon" placeholders,
+    which made the game look unfinished."""
     from handy import maps
     from handy.game import Rect
 
     cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), len(maps.MAPS))
-    entries = tuple((m.title, m.blurb, "best 1", m.draw_emblem) for m in maps.MAPS)
-    scene.draw_map_select(canvas, cards, entries, aimed=None)
-    slots = scene.empty_slots(cards)
-    if not slots:
-        pytest.skip("the grid is full: every slot holds a map")
-    slot = slots[0]
-    inside = canvas[slot.y + 5:slot.bottom - 5, slot.x + 5:slot.right - 5]
-    assert inside.any() and inside.max() < 140, "a quiet tile, not a card"
+    assert len({card.y for card in cards}) == 1
+    assert len({(card.width, card.height) for card in cards}) == 1
+    for left, right in zip(cards, cards[1:]):
+        assert left.right < right.x
+
+
+def test_a_short_last_row_is_centred_not_padded_with_placeholders():
+    from handy.game import Rect
+
+    cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 5)
+    first, second = cards[:3], cards[3:]
+    assert len({card.y for card in first}) == 1 and len({card.y for card in second}) == 1
+    middle = (first[0].x + first[-1].right) / 2
+    assert abs((second[0].x + second[-1].right) / 2 - middle) <= 1
+    assert not hasattr(scene, "empty_slots")
 
 
 def test_figures_draw_where_they_are_put(canvas):
@@ -456,34 +479,40 @@ def test_the_footer_does_not_repeat_the_scheme_in_the_map():
     assert line.count("close an eye") == 1
 
 
-def test_the_hud_backing_draws_and_darkens(canvas):
+def test_the_chrome_panel_darkens_inside_and_leaves_the_rest_alone(canvas):
     from handy.game import Rect
 
     canvas[:] = 200
-    scene.draw_hud_backing(canvas, Rect(10, 10, 600, 250), 1.0)
-    assert canvas[100, 100].mean() < 150 and canvas[600, 1000].mean() == 200
+    scene.draw_chrome_panel(canvas, Rect(10, 10, 300, 120), 1.0)
+    assert canvas[70, 160].mean() < 70, "dark enough for grey text on a noon sky"
+    assert canvas[70, 160].mean() > 200 * (1 - scene.CHROME_OPACITY) - 5, "translucent"
+    assert canvas[400, 1000].mean() == 200 and canvas[135, 160].mean() == 200
+    # Rounded: the very corner is left as it was.
+    assert canvas[11, 11].mean() > canvas[70, 160].mean() + 60
 
 
-# --- the HUD's two translucent panels are drawn every frame -----------------
+@pytest.mark.parametrize("rect", [(1100, 600, 300, 200), (-20, -10, 300, 100)])
+def test_the_chrome_panel_clips_at_the_edges_of_the_window(canvas, rect):
+    from handy.game import Rect
 
-def reference_hud_backing(canvas, rect, scale):
-    """The backing as it was drawn before it was made cheap: the picture the
-    fast version has to keep."""
-    height, width = canvas.shape[:2]
-    feather = round(14 * scale)
-    x0, y0 = max(rect.x, 0), max(rect.y, 0)
-    x1, y1 = min(rect.right + feather, width), min(rect.bottom + feather, height)
-    if x1 <= x0 or y1 <= y0:
-        return
-    region = canvas[y0:y1, x0:x1]
-    ys = np.arange(y0, y1)[:, None]
-    xs = np.arange(x0, x1)[None, :]
-    fade_y = np.clip((rect.bottom + feather - ys) / feather, 0.0, 1.0)
-    fade_x = np.clip((rect.right + feather - xs) / feather, 0.0, 1.0)
-    alpha = (0.62 * np.minimum(fade_y, fade_x)).astype(np.float32)[:, :, None]
-    shade = np.array((16, 15, 14), np.float32)
-    region[:] = (region * (1 - alpha) + shade * alpha).astype(np.uint8)
+    canvas[:] = 200
+    scene.draw_chrome_panel(canvas, Rect(*rect), 1.0)  # must not raise
+    assert canvas.min() < 70
 
+
+def test_the_chrome_panel_builds_its_mask_once_per_size():
+    """Rebuilding a float mask every frame was 3 ms a frame at 1512x949."""
+    from handy.game import Rect
+
+    canvas = busy_frame(1512, 949)
+    scene._chrome_layers.cache_clear()
+    for _ in range(5):
+        scene.draw_chrome_panel(canvas, Rect(446, 21, 180, 139), 1.318)
+    info = scene._chrome_layers.cache_info()
+    assert (info.misses, info.hits) == (1, 4)
+
+
+# --- the HUD's translucent panels are drawn every frame ----------------------
 
 def reference_timer(canvas, remaining, scale):
     """The clock as it was drawn when it blended a copy of the whole frame."""
@@ -527,36 +556,6 @@ def reference_timer(canvas, remaining, scale):
 def busy_frame(width, height, seed=0):
     return np.random.default_rng(seed).integers(0, 256, (height, width, 3),
                                                 dtype=np.uint8)
-
-
-@pytest.mark.parametrize("size,rect,scale", [
-    ((1512, 949), (10, 10, 849, 266), 1.318),
-    ((1280, 720), (8, 8, 640, 200), 1.0),
-    ((800, 480), (7, 7, 380, 140), 0.7),
-    ((1280, 720), (900, 600, 500, 300), 1.0),  # runs off the right and bottom
-    ((1280, 720), (-20, -10, 300, 100), 1.0),  # and off the top left
-])
-def test_the_cheap_hud_backing_looks_like_the_old_one(size, rect, scale):
-    """Cached weights and OpenCV's blend in place of a float mask per frame: the
-    same picture to within a level of rounding."""
-    from handy.game import Rect
-
-    expected, actual = busy_frame(*size), busy_frame(*size)
-    reference_hud_backing(expected, Rect(*rect), scale)
-    scene.draw_hud_backing(actual, Rect(*rect), scale)
-    assert np.abs(actual.astype(int) - expected.astype(int)).max() <= 1
-
-
-def test_the_hud_backing_builds_its_mask_once_per_size():
-    """Rebuilding the float mask every frame was 3 ms a frame at 1512x949."""
-    from handy.game import Rect
-
-    canvas = busy_frame(1512, 949)
-    scene._hud_backing_weights.cache_clear()
-    for _ in range(5):
-        scene.draw_hud_backing(canvas, Rect(10, 10, 849, 266), 1.318)
-    info = scene._hud_backing_weights.cache_info()
-    assert (info.misses, info.hits) == (1, 4)
 
 
 @pytest.mark.parametrize("remaining", [42.0, 7.0, 600.0, None])
@@ -687,4 +686,183 @@ def test_the_map_chooser_draws_on_a_small_window():
                          chosen.draw_emblem) for chosen in maps.MAPS)
         canvas = np.zeros((height, width, 3), np.uint8)
         scene.draw_map_select(canvas, cards, entries, None, scale)  # must not raise
+        assert canvas.any()
+
+
+# --- the score card is worth passing round -----------------------------------
+
+def said_on_the_card(canvas, monkeypatch, summary, **options):
+    """Every string the results card sets, whichever face it is set in."""
+    said = []
+    for name in ("draw_text", "draw_caption", "_centred_text"):
+        real = getattr(scene, name)
+        monkeypatch.setattr(scene, name, lambda canvas, text, *args, _real=real, **kwargs: (
+            said.append(text), _real(canvas, text, *args, **kwargs)))
+    scene.draw_results(canvas, summary, **options)
+    return said
+
+
+def test_the_results_card_names_the_map_and_the_round(canvas, monkeypatch):
+    """A card screenshotted and shared has to say what was played."""
+    from handy import maps
+    from handy.game import Summary
+
+    summary = Summary(score=180, shots=22, hits=15, accuracy=15 / 22,
+                      best_streak=6, perfect=4, duration=60, outcome="SURVIVED",
+                      won=True)
+    said = said_on_the_card(canvas, monkeypatch, summary, best=120, is_best=False,
+                            title=maps.ZOMBIES.title, emblem=maps.ZOMBIES.draw_emblem)
+    assert maps.ZOMBIES.title in said
+    assert "60-SECOND ROUND" in said and "SURVIVED" in said
+    assert any("screenshot" in text for text in said), "S saves it: the card says so"
+
+
+def test_the_results_card_carries_the_maps_art(canvas):
+    from handy import maps
+    from handy.game import Summary
+
+    summary = Summary(score=180, shots=22, hits=15, accuracy=15 / 22,
+                      best_streak=6, perfect=4, duration=60)
+    scene.draw_results(canvas, summary, 0, False)
+    plain = canvas.copy()
+    scene.draw_results(canvas, summary, 0, False, title=maps.ORBIT.title,
+                       emblem=maps.ORBIT.draw_emblem)
+    card = scene.results_card(WIDTH, HEIGHT, 1.0)
+    banner = canvas[card.y + 4:card.y + scene._px(scene.RESULTS_BANNER, 1.0) - 4,
+                    card.x + 8:card.right - 8]
+    assert not np.array_equal(plain, canvas)
+    assert banner.std() > 12, "a picture, not a flat plate"
+
+
+@pytest.mark.parametrize("score", [0, 40])
+def test_new_best_is_never_claimed_for_nothing(canvas, monkeypatch, score):
+    """An unshot round cannot "beat" an empty table, whatever the caller says."""
+    from handy.game import Summary
+
+    summary = Summary(score=score, shots=0, hits=0, accuracy=0.0, best_streak=0,
+                      perfect=0, duration=60)
+    said = said_on_the_card(canvas, monkeypatch, summary, best=0, is_best=True)
+    assert ("NEW BEST" in said) == (score > 0)
+
+
+def test_the_results_card_fits_the_window_at_every_size():
+    for width, height in ((1280, 720), (1512, 945), (2560, 1440), (960, 540)):
+        scale = min(max(height / 720, 0.7), 2.4)
+        card = scene.results_card(width, height, scale)
+        assert card.x > 0 and card.right < width
+        # Clear of the buttons along the top and of the footer line below.
+        assert card.y > round(62 * scale) and card.bottom < height - round(40 * scale)
+
+
+# --- setup: the first thing a new player sees --------------------------------
+
+SIZES = ((1280, 720), (1512, 945), (2560, 1440))
+
+
+def setup_faces(width, height):
+    """Every place setup can hang a face, as boxes the size of its straw boss."""
+    from handy.game import Rect
+    from handy.maps.archery import BOSS_SCALE
+    from handy.shot_calibration import CHECK_TARGETS, TARGET_RADIUS, TARGETS
+
+    reach = min(width, height) * TARGET_RADIUS * BOSS_SCALE
+    return [Rect(round(x * width - reach), round(y * height - reach),
+                 round(2 * reach), round(2 * reach)) for x, y in (*TARGETS, *CHECK_TARGETS)]
+
+
+def overlaps(a, b) -> bool:
+    return a.x < b.right and b.x < a.right and a.y < b.bottom and b.y < a.bottom
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_the_setup_console_never_covers_a_face(width, height):
+    scale = height / 720
+    panels = scene.setup_console(width, height, 1, 16 / 9, scale)
+    for panel in panels:
+        assert panel.x >= 0 and panel.right <= width and panel.bottom <= height
+        for face in setup_faces(width, height):
+            assert not overlaps(panel, face)
+    camera, instruction, progress = panels
+    assert camera.right < instruction.x and instruction.right < progress.x
+    assert camera.y == instruction.y == progress.y
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_the_setup_hall_hangs_its_lamps_inside_the_window(width, height):
+    """At the top of the window the fixtures were cut in half."""
+    from handy.maps import archery
+
+    area = scene.setup_arena(width, height)
+    key = (area.x, area.y, area.width, area.height)
+    _, fixture_y = archery._lamps(width, height, key)
+    housing = max(2, int(0.006 * height)) + 4
+    assert fixture_y - housing >= 2
+    for face in setup_faces(width, height):
+        assert face.y > fixture_y + housing
+
+
+def test_the_setup_faces_are_the_calibrations_own(monkeypatch):
+    """The inner-two-rings test reads the rings that are drawn: same centre,
+    same radius, whatever the course looks like around them."""
+    from handy.maps import archery
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import TARGET_RADIUS, ShotCalibration
+
+    hung = []
+    real = archery.hang
+
+    def spy(canvas, round_, target, strength=1.0):
+        hung.append((target, strength))
+        real(canvas, round_, target, strength)
+
+    monkeypatch.setattr(archery, "hang", spy)
+    session = ShotCalibration(PISTOL)
+    canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
+    scene.draw_shot_calibration(canvas, session, [np.zeros((720, 1280, 3), np.uint8)],
+                                [Frame()], lambda *args: None)
+    lit = [target for target, strength in hung if strength == 1.0]
+    assert len(lit) == 1
+    x, y = session.target
+    assert (lit[0].x, lit[0].y) == (x * WIDTH, y * HEIGHT)
+    assert lit[0].radius == min(WIDTH, HEIGHT) * TARGET_RADIUS
+    faint = [target for target, strength in hung if strength < 1.0]
+    assert len(faint) == scene.LEARN_SHOTS - 1, "the rest of this step, faintly"
+
+
+def test_setup_learns_from_as_many_shots_as_its_progress_shows():
+    """The progress pips count LEARN_SHOTS learning shots; ShotCalibration
+    moves on to checking after exactly that many."""
+    from dataclasses import replace
+
+    from hands import frame_of, make_hand
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import ShotCalibration
+
+    session = ShotCalibration(PISTOL)
+    now, stamp = 0.0, 0
+    for shot in range(scene.LEARN_SHOTS):
+        assert not session.testing
+        assert len(scene.setup_course(session)) == scene.LEARN_SHOTS - 1 - shot
+        target = session.target
+        tip = (0.2 + 0.6 * target[0], 0.25 + 0.5 * target[1])
+        for degrees in [20] * 8 + [70] * 4:
+            stamp += 1
+            now += 0.05
+            session.update([replace(frame_of(make_hand(degrees, index_tip=tip)),
+                                    timestamp_ms=stamp)], now)
+    assert session.testing
+    assert len(scene.setup_course(session)) == 4, "the check's other four faces"
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_setup_draws_at_every_size(width, height):
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import ShotCalibration
+
+    session = ShotCalibration(PISTOL)
+    canvas = np.zeros((height, width, 3), np.uint8)
+    for cameras in (1, 2):
+        scene.draw_shot_calibration(canvas, session,
+                                    [np.full((720, 1280, 3), 90, np.uint8)] * cameras,
+                                    [Frame()] * cameras, lambda *args: None, height / 720)
         assert canvas.any()

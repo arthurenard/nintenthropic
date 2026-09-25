@@ -832,3 +832,21 @@ def test_cracks_are_webs_not_scribbles():
     assert len(closed) == 2, "two rings of crazing joining the radials"
     reach = max(np.abs(b - np.array([500, 500])).max() for b in crack.branches)
     assert reach <= 16 + 30 * 2.0 + 2
+
+
+def test_a_strike_jolts_the_glass_without_greying_out_space():
+    """A third of the way to white over the frame's whole rectangle, for a
+    third of a second at every strike, left space a grey haze much of a round -
+    and lifted the cabin wall at the pane's cut corners with it."""
+    round_ = make_round()
+    round_.update(0.0)
+    round_.damage(fragment(x=0.2, y=-0.1, radius=0.6, vz=-6.0), 0.2)
+    struck = canvas()
+    draw_world(struck, round_, 0.21)
+    round_.struck_at = None
+    calm = canvas()
+    draw_world(calm, round_, 0.21)
+    lift = struck.astype(int) - calm.astype(int)
+    space = lift[AREA.y + 60:AREA.y + 120, AREA.x + 200:AREA.x + 400]
+    assert 0 < space.mean() < 30, "felt, not a wash"
+    assert not lift[AREA.y + 2:AREA.y + 10, AREA.x + 2:AREA.x + 10].any(), "the wall"
