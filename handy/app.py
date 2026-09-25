@@ -379,19 +379,21 @@ def save_screenshot(image: np.ndarray, directory: Path) -> Path:
 
 
 def take_screenshot(canvas: np.ndarray, settings: Settings,
-                    scale: float = 1.0) -> Path | None:
+                    scale: float = 1.0, screen: np.ndarray | None = None) -> Path | None:
     """The 's' key: save the frame, or say on screen why not, and play on.
 
     A folder that cannot be written to used to raise out of the round - which
-    ended it, lost the score, and had main() blame the network.
+    ended it, lost the score, and had main() blame the network. ``screen`` is
+    where to say so, when what was being saved is not the frame on show.
     """
     try:
         path = save_screenshot(canvas, settings.screenshot_dir)
     except (OSError, cv2.error) as error:
         print(f"Could not save a screenshot in {settings.screenshot_dir}: {error}")
-        show_notice(canvas, ["SCREENSHOT NOT SAVED",
-                             "The screenshot folder cannot be written to.",
-                             "Choose another with --screenshot-dir."],
+        show_notice(canvas if screen is None else screen,
+                    ["SCREENSHOT NOT SAVED",
+                     "The screenshot folder cannot be written to.",
+                     "Choose another with --screenshot-dir."],
                     seconds=2.0, scale=scale)
         return None
     print(f"Saved {path}")
@@ -1047,44 +1049,84 @@ def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:
 #: clock ran out has to get the chance to notice the round is over.
 RESULTS_GRACE = 1.0
 
+#: The score card's keys, as hints along its foot.
+RESULTS_HINTS = (("R", "Play again"), ("B", "Choose a game"), ("S", "Save card"),
+                 ("C", "Aim setup"), ("Q", "Quit"))
 
-RESULTS_HINT = "r play again   b maps   c recalibrate   s screenshot   q quit"
+#: What each of the card's choices means, in the order it shows them.
+RESULTS_ANSWERS = ("again", "maps", "save")
+
+#: How long "Card saved" stays up.
+TOAST = 2.0
+
+
+def results_choice(layout: Layout, point: tuple[int, int] | None,
+                   banner: bool = True) -> int | None:
+    """Which of the card's choices ``point`` is on, if any."""
+    if point is None:
+        return None
+    for index, button in enumerate(scene.results_buttons(
+            layout.window.width, layout.window.height, layout.scale, banner)):
+        if button.contains(*point):
+            return index
+    return None
 
 
 def draw_results_screen(canvas: np.ndarray, layout: Layout, summary: Summary,
                         best: int, is_best: bool, chosen: Map | None,
-                        crosshair: tuple[int, int] | None, armed: bool) -> None:
-    """One frame of the score card, with the buttons and the crosshair over it."""
-    scene.draw_results(canvas, summary, best, is_best, hint=RESULTS_HINT,
-                       scale=layout.scale, title=chosen.title if chosen else "",
-                       emblem=chosen.draw_emblem if chosen else None)
-    for button in (layout.quit_button,):
-        scene.draw_button(canvas, button, highlighted=(
-            crosshair is not None and button.contains(*crosshair)),
-            scale=layout.scale)
+                        crosshair: tuple[int, int] | None, armed: bool,
+                        elapsed: float | None = None, toast: float = 0.0) -> None:
+    """One frame of the score card, with its hints and the crosshair over it.
+
+    ``toast`` (0 to 1) is how much of "Card saved" is showing.
+    """
+    scale = layout.scale
+    banner = chosen is not None
+    scene.draw_results(canvas, summary, best, is_best, scale=scale,
+                       title=chosen.title if chosen else "",
+                       emblem=chosen.draw_emblem if chosen else None, elapsed=elapsed,
+                       focus=results_choice(layout, crosshair, banner))
+    scene.draw_hints(canvas, scene.fit_hints(RESULTS_HINTS, layout.window.width * 2 // 3,
+                                             scale), scale)
+    scene.draw_logo(canvas, scale)
+    if toast > 0.0:
+        scene.draw_toast(canvas, "Card saved", scale, toast, top=layout.margin)
     if crosshair is not None:
-        scene.draw_crosshair(canvas, *crosshair, armed=armed, since_shot=None,
-                             scale=layout.scale)
+        scene.draw_crosshair(canvas, *crosshair, armed=armed, since_shot=None, scale=scale)
+
+
+def save_card(canvas: np.ndarray, settings: Settings, layout: Layout, summary: Summary,
+              best: int, is_best: bool, chosen: Map | None) -> Path | None:
+    """Save the card as it is shared - settled, no choices, the wordmark at its
+    foot - rather than the whole screen, crosshair and all."""
+    image = scene.results_card_image(
+        summary, best, is_best, layout.window.width, layout.window.height, layout.scale,
+        chosen.title if chosen else "", chosen.draw_emblem if chosen else None)
+    return take_screenshot(image, settings, layout.scale, screen=canvas)
 
 
 def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                  layout: Layout, controller: AimController, rig: Rig,
                  summary: Summary, best: int, is_best: bool,
                  chosen: Map | None = None) -> str:
-    """Hold on the score card until the player shoots to play again, or quits.
+    """Hold on the score card until the player chooses to play again, to choose
+    another game, or quits.
 
     A shot counts only once the card has been up for :data:`RESULTS_GRACE`,
     and only from a trigger seen cocked since then. The controller carries on
     from the round, so a player shooting at time-up re-armed and fired
     straight through the card: "again", 0.3 s after the round ended, and the
-    score was never seen.
+    score was never seen. And only a shot on one of the card's choices does
+    anything: the card is not a target.
     """
     recoil = Recoil(kick=0.0)  # the round is over; no kick to fight
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     trigger = FreshAim(controller, rig)
     shown_at = time.monotonic()
+    saved_at: float | None = None
     cocked = False
+    banner = chosen is not None
 
     while True:
         images, hands = eyes.read()
@@ -1093,20 +1135,26 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         crosshair = crosshair_for(aim, layout, recoil, now)
         settled = now - shown_at >= RESULTS_GRACE
         shot = aim.fired and cocked
-        cocked = cocked or (settled and aim.armed)
+        cocked = (cocked and not shot) or (settled and aim.armed)
 
         # The crosshair is not shown armed until a shot would count.
+        toast = 0.0
+        if saved_at is not None:
+            toast = min(1.0, max(0.0, (TOAST - (now - saved_at)) / 0.25))
         draw_results_screen(canvas, layout, summary, best, is_best, chosen, crosshair,
-                            aim.armed and settled)
+                            aim.armed and settled, now - shown_at, toast)
         cv2.imshow(WINDOW_TITLE, canvas)
 
+        answer = None
         if shot and crosshair is not None:
-            if layout.quit_button.contains(*crosshair):
-                return "quit"
-            return "again"
+            answer = results_choice(layout, crosshair, banner)
         if mouse.take_click():
-            if layout.quit_button.contains(mouse.x, mouse.y):
-                return "quit"
+            answer = results_choice(layout, (mouse.x, mouse.y), banner)
+        if answer is not None:
+            if RESULTS_ANSWERS[answer] != "save":
+                return RESULTS_ANSWERS[answer]
+            if save_card(canvas, settings, layout, summary, best, is_best, chosen):
+                saved_at = time.monotonic()
 
         key = cv2.waitKey(1) & 0xFF
         if key in _QUIT_KEYS or window_closed():
@@ -1118,7 +1166,8 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         if key == ord("c"):
             return "recalibrate"
         if key == ord("s"):
-            take_screenshot(canvas, settings, layout.scale)
+            if save_card(canvas, settings, layout, summary, best, is_best, chosen):
+                saved_at = time.monotonic()
 
 
 def rig_setup(settings: Settings, indices: tuple[int, ...]) -> Setup:

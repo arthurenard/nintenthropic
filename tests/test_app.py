@@ -1189,10 +1189,20 @@ def test_the_results_screen_saves_a_screenshot_on_s(monkeypatch, tmp_path):
                      app.make_controller(Settings(), schemes.PISTOL),
                      default_rig(schemes.PISTOL, 1), summary, 5, True)
 
-    assert list(tmp_path.glob("*.png")), "s saved nothing"
+    saved = list(tmp_path.glob("*.png"))
+    assert saved, "s saved nothing"
+    import cv2
+    image = cv2.imread(str(saved[0]))
+    assert image.shape[0] < HEIGHT and image.shape[1] < WIDTH, (
+        "the card as it is shared, not the whole screen with its crosshair")
 
 
-def on_the_card(monkeypatch, trigger, keys=(NOTHING,)):
+#: Eight seconds of the card with nothing pressed, then q: a card that never
+#: answers ends its test instead of hanging it.
+EIGHT_SECONDS_THEN_QUIT = (NOTHING,) * 240 + (113,)
+
+
+def on_the_card(monkeypatch, trigger, keys=EIGHT_SECONDS_THEN_QUIT):
     """Run the real score card at thirty frames a second of a synthetic clock.
 
     ``trigger(t)`` is the aim ``t`` seconds after the card appeared. Returns
@@ -1241,23 +1251,33 @@ def pull_at(position, fire_at: float):
     return trigger
 
 
-@pytest.mark.parametrize("button,expected", [
-    ("quit_button", "quit"),
-])
-def test_every_button_answers_a_shot_on_the_results_screen(monkeypatch, button,
-                                                           expected):
-    layout = layout_for(WIDTH, HEIGHT)
-    rect = getattr(layout, button).rect
-    centre = ((rect.x + rect.width // 2) / (WIDTH - 1),
-              (rect.y + rect.height // 2) / (HEIGHT - 1))
+def card_choice(index: int) -> tuple[float, float]:
+    """The middle of one of the score card's choices, as an aim reads it (the
+    card these tests show carries no map, so no banner)."""
+    from handy import scene
 
-    assert on_the_card(monkeypatch, pull_at(centre, 1.5))[0] == expected
+    return centre_of(scene.results_buttons(WIDTH, HEIGHT, 1.0, banner=False)[index])
 
 
-def test_shooting_the_world_on_the_results_screen_plays_again(monkeypatch):
-    """Anywhere that is not a button means "again" - the README's promise."""
-    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), 1.5))
-    assert choice == "again" and after >= 1.5
+@pytest.mark.parametrize("index,expected", [(0, "again"), (1, "maps")])
+def test_every_choice_on_the_card_answers_a_shot(monkeypatch, index, expected):
+    assert on_the_card(monkeypatch, pull_at(card_choice(index), 1.5))[0] == expected
+
+
+def test_shooting_the_card_anywhere_but_a_choice_does_nothing(monkeypatch):
+    """The card is not a target: a stray shot used to play again, and a
+    player reading their score lost it to a twitch of the thumb."""
+    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.2), 1.5))
+    assert choice == "quit" and after > 3.0
+
+
+def test_shooting_save_keeps_the_card_up_and_saves_it(monkeypatch, tmp_path):
+    from handy import app
+
+    saved = []
+    monkeypatch.setattr(app, "save_card", lambda *args: saved.append(args) or tmp_path)
+    choice, _ = on_the_card(monkeypatch, pull_at(card_choice(2), 1.5))
+    assert choice == "quit" and len(saved) == 1
 
 
 def test_a_player_still_shooting_at_time_up_gets_to_see_the_score(monkeypatch):
@@ -1284,18 +1304,20 @@ def test_a_shot_on_the_card_needs_a_trigger_cocked_after_it_appeared(monkeypatch
     cocked again, on the card, before a pull counts."""
     from handy.aiming import Aim
 
+    PLAY_AGAIN = card_choice(0)
+
     def fire_recock_fire(t):
         if t < 0.3:
-            return Aim(position=(0.5, 0.6), armed=True)
+            return Aim(position=PLAY_AGAIN, armed=True)
         if t < 0.34:
-            return Aim(position=(0.5, 0.6), fired=True)  # ignored: too soon
+            return Aim(position=PLAY_AGAIN, fired=True)  # ignored: too soon
         if t < 1.6:
-            return Aim(position=(0.5, 0.6))  # thumb held down past the grace
+            return Aim(position=PLAY_AGAIN)  # thumb held down past the grace
         if t < 1.8:
-            return Aim(position=(0.5, 0.6), armed=True)  # cocked on the card
+            return Aim(position=PLAY_AGAIN, armed=True)  # cocked on the card
         if t < 1.84:
-            return Aim(position=(0.5, 0.6), fired=True)
-        return Aim(position=(0.5, 0.6))
+            return Aim(position=PLAY_AGAIN, fired=True)
+        return Aim(position=PLAY_AGAIN)
 
     choice, after = on_the_card(monkeypatch, fire_recock_fire)
     assert choice == "again" and after >= 1.8
@@ -1306,7 +1328,8 @@ def test_a_player_who_waits_needs_only_one_pull(monkeypatch):
     counts at once; nobody has to fire twice."""
     from handy import app
 
-    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), app.RESULTS_GRACE + 0.2))
+    choice, after = on_the_card(monkeypatch, pull_at(card_choice(0),
+                                                     app.RESULTS_GRACE + 0.2))
     assert choice == "again" and after < app.RESULTS_GRACE + 0.3
 
 
@@ -2467,4 +2490,4 @@ def test_the_results_screen_names_the_map_that_was_played(monkeypatch):
 
     assert seen[0]["title"] == maps.ORBIT.title
     assert seen[0]["emblem"] is maps.ORBIT.draw_emblem
-    assert "s screenshot" in seen[0]["hint"]
+    assert seen[0]["elapsed"] >= 0.0, "so the card can arrive and count up"

@@ -80,25 +80,21 @@ def test_a_failed_round_says_so_on_the_card(canvas):
     assert not np.array_equal(failed, canvas)
 
 
-def test_a_round_you_won_is_not_painted_in_the_colour_of_a_round_you_lost(canvas):
+def test_a_round_you_won_is_not_painted_in_the_colour_of_a_round_you_lost():
     """Three maps name the winning ending too - SURVIVED, PANE HELD, CLEANED UP.
     Colouring any non-empty outcome red handed every one of those the same
     alarm card as a player who was overrun."""
     from handy.game import Summary
 
-    def heading_colour(**fields) -> tuple:
-        summary = Summary(score=40, shots=9, hits=3, accuracy=1 / 3, best_streak=2,
-                          perfect=1, duration=60, **fields)
-        canvas[:] = 0
-        scene.draw_results(canvas, summary, best=0, is_best=False)
-        card = scene.results_card(WIDTH, HEIGHT, 1.0, banner=False)
-        tab = canvas[card.y, card.x + scene._px(28, 1.0)]
-        return tuple(int(channel) for channel in tab)
+    def outcome(**fields):
+        return scene.outcome_line(Summary(score=40, shots=9, hits=3, accuracy=1 / 3,
+                                          best_streak=2, perfect=1, duration=60, **fields))
 
     for heading in ("SURVIVED", "PANE HELD", "CLEANED UP"):
-        assert heading_colour(outcome=heading, won=True) == scene.ARMED, heading
-    assert heading_colour(outcome="OVERRUN") == scene.DANGER
-    assert heading_colour(outcome="") == scene.ACCENT, "a plain timed round"
+        assert outcome(outcome=heading, won=True) == (scene.title_case(heading),
+                                                      scene.TINT)
+    assert outcome(outcome="OVERRUN") == ("Overrun", scene.DANGER)
+    assert outcome(outcome="") == ("Final Score", scene.LABEL_SECONDARY), "a timed round"
 
 
 # --- choosing a map --------------------------------------------------------
@@ -353,7 +349,7 @@ def test_every_screen_draws_at_any_scale(canvas, camera):
         scene.draw_notice(canvas, ["A", "B"], scale)
         cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 2, scale)
         scene.draw_map_select(canvas, cards, entries, 0, scale)
-        scene.draw_results(canvas, summary, 5, True, "hint", scale)
+        scene.draw_results(canvas, summary, 5, True, scale, elapsed=0.2, focus=0)
         assert canvas.any(), f"nothing drawn at scale {scale}"
 
 
@@ -502,16 +498,21 @@ def test_a_primary_button_is_a_white_pill_with_a_black_label(canvas):
     assert (canvas[100, 100] != 255).any(), "a pill: its corners are round"
 
 
-def test_results_headline_names_the_score(canvas, monkeypatch):
+def test_results_card_counts_its_score_up_as_it_arrives(canvas, monkeypatch):
+    """Numbers that change a lot count up: the final score over 0.6 s."""
     from handy.game import Summary
 
-    seen = []
-    monkeypatch.setattr(scene, "_centred_text",
-                        lambda canvas, text, *args, **kwargs: seen.append(text))
-    summary = Summary(score=180, shots=22, hits=15, accuracy=15 / 22,
+    summary = Summary(score=1240, shots=22, hits=15, accuracy=15 / 22,
                       best_streak=6, perfect=4, duration=60)
-    scene.draw_results(canvas, summary, best=120, is_best=False)
-    assert "SCORE" in seen and "TIME" not in seen
+    shown = []
+    for elapsed in (0.0, 0.1, 0.3, scene.COUNT_UP, 5.0, None):
+        said = said_by(monkeypatch)
+        scene.draw_results(canvas, summary, best=120, is_best=False, elapsed=elapsed)
+        monkeypatch.undo()
+        shown.append(int(said[1].replace(",", "")))
+    assert shown[0] == 0 and shown[-3:] == [1240, 1240, 1240]
+    assert shown == sorted(shown), "it only ever counts up"
+    assert said[0] == "Final Score" and said[2] == "Best 120"
 
 
 def test_the_wordmark_sits_bottom_right_on_every_menu(canvas, monkeypatch):
@@ -533,9 +534,8 @@ def test_the_wordmark_sits_bottom_right_on_every_menu(canvas, monkeypatch):
     from handy import maps
 
     entries = tuple(("A", "b", "c", m.draw_emblem) for m in maps.MAPS[:2])
+    del Summary  # the results screen lays it through the app (draw_results_screen)
     for draw in (lambda: scene.draw_map_select(canvas, cards, entries, None),
-                 lambda: scene.draw_results(canvas, Summary(1, 1, 1, 1.0, 1, 0, 9.0),
-                                            0, False),
                  lambda: scene.draw_notice(canvas, ["A", "b"])):
         canvas[:] = 0
         draw()
@@ -586,39 +586,6 @@ def test_fading_hints_touch_only_their_own_patch():
     scene.draw_hints(canvas, [("", "Point at a target"), ("P", "Pause")], 1.0, 0.5, True)
     changed = np.argwhere((canvas != before).any(axis=2))
     assert changed[:, 0].min() > 720 - 80 and changed[:, 0].max() < 720 - 16
-
-
-def test_the_chrome_panel_darkens_inside_and_leaves_the_rest_alone(canvas):
-    from handy.game import Rect
-
-    canvas[:] = 200
-    scene.draw_chrome_panel(canvas, Rect(10, 10, 300, 120), 1.0)
-    assert canvas[70, 160].mean() < 70, "dark enough for grey text on a noon sky"
-    assert canvas[70, 160].mean() > 200 * (1 - scene.CHROME_OPACITY) - 5, "translucent"
-    assert canvas[400, 1000].mean() == 200 and canvas[135, 160].mean() == 200
-    # Rounded: the very corner is left as it was.
-    assert canvas[11, 11].mean() > canvas[70, 160].mean() + 60
-
-
-@pytest.mark.parametrize("rect", [(1100, 600, 300, 200), (-20, -10, 300, 100)])
-def test_the_chrome_panel_clips_at_the_edges_of_the_window(canvas, rect):
-    from handy.game import Rect
-
-    canvas[:] = 200
-    scene.draw_chrome_panel(canvas, Rect(*rect), 1.0)  # must not raise
-    assert canvas.min() < 70
-
-
-def test_the_chrome_panel_builds_its_mask_once_per_size():
-    """Rebuilding a float mask every frame was 3 ms a frame at 1512x949."""
-    from handy.game import Rect
-
-    canvas = busy_frame(1512, 949)
-    scene._chrome_layers.cache_clear()
-    for _ in range(5):
-        scene.draw_chrome_panel(canvas, Rect(446, 21, 180, 139), 1.318)
-    info = scene._chrome_layers.cache_info()
-    assert (info.misses, info.hits) == (1, 4)
 
 
 # --- the HUD's glass is drawn every frame ----------------------------------------
@@ -748,12 +715,8 @@ def test_the_map_chooser_draws_on_a_small_window():
 # --- the score card is worth passing round -----------------------------------
 
 def said_on_the_card(canvas, monkeypatch, summary, **options):
-    """Every string the results card sets, whichever face it is set in."""
-    said = []
-    for name in ("draw_text", "draw_caption", "_centred_text"):
-        real = getattr(scene, name)
-        monkeypatch.setattr(scene, name, lambda canvas, text, *args, _real=real, **kwargs: (
-            said.append(text), _real(canvas, text, *args, **kwargs)))
+    """Every string the results card sets."""
+    said = said_by(monkeypatch)
     scene.draw_results(canvas, summary, **options)
     return said
 
@@ -768,9 +731,13 @@ def test_the_results_card_names_the_map_and_the_round(canvas, monkeypatch):
                       won=True)
     said = said_on_the_card(canvas, monkeypatch, summary, best=120, is_best=False,
                             title=maps.ZOMBIES.title, emblem=maps.ZOMBIES.draw_emblem)
-    assert maps.ZOMBIES.title in said
-    assert "60-SECOND ROUND" in said and "SURVIVED" in said
-    assert any("screenshot" in text for text in said), "S saves it: the card says so"
+    assert "Dead of Night" in said
+    assert "60-Second Round" in said and "Survived" in said
+    assert {"Play Again", "Choose a Game"} <= set(said), "its choices (Save is an icon)"
+    shared = said_on_the_card(canvas, monkeypatch, summary, best=120, is_best=False,
+                              title=maps.ZOMBIES.title, emblem=maps.ZOMBIES.draw_emblem,
+                              share=True)
+    assert "Handy" in shared and "Play Again" not in shared, "saved: branded, no choices"
 
 
 def test_the_results_card_carries_the_maps_art(canvas):
@@ -798,16 +765,41 @@ def test_new_best_is_never_claimed_for_nothing(canvas, monkeypatch, score):
     summary = Summary(score=score, shots=0, hits=0, accuracy=0.0, best_streak=0,
                       perfect=0, duration=60)
     said = said_on_the_card(canvas, monkeypatch, summary, best=0, is_best=True)
-    assert ("NEW BEST" in said) == (score > 0)
+    assert ("New Best" in said) == (score > 0)
+    card = scene.results_card(WIDTH, HEIGHT, 1.0, banner=False)
+    gold = np.all(canvas[card.y:card.bottom, card.x:card.right] == scene.GOLD, axis=-1)
+    assert gold.any() == (score > 0), "gold only when it is true"
+
+
+def test_an_old_best_is_quoted_plainly_and_never_in_gold(canvas, monkeypatch):
+    from handy.game import Summary
+
+    summary = Summary(score=40, shots=4, hits=2, accuracy=0.5, best_streak=1,
+                      perfect=0, duration=60)
+    said = said_on_the_card(canvas, monkeypatch, summary, best=1240, is_best=False)
+    assert "Best 1,240" in said and "New Best" not in said
+    assert not np.any(np.all(canvas == scene.GOLD, axis=-1))
 
 
 def test_the_results_card_fits_the_window_at_every_size():
     for width, height in ((1280, 720), (1512, 945), (2560, 1440), (960, 540)):
         scale = min(max(height / 720, 0.7), 2.4)
         card = scene.results_card(width, height, scale)
-        assert card.x > 0 and card.right < width
-        # Clear of the buttons along the top and of the footer line below.
-        assert card.y > round(62 * scale) and card.bottom < height - round(40 * scale)
+        assert card.x > 0 and card.right < width and card.y > 0
+        # Clear of the hints and the wordmark along the foot.
+        footer = scene.footer_baseline(height, scale) - scene.type_size(
+            scene.TITLE_3, scale)
+        assert card.bottom < footer
+        buttons = scene.results_buttons(width, height, scale)
+        for button in buttons:
+            assert button.rect.height >= scene.SHOOTABLE * scale - 1
+            assert card.x < button.rect.x and button.rect.right < card.right
+            assert button.rect.bottom < card.bottom
+            label = scene.measure(button.label, scene.HEADLINE, scale)
+            if button.label != "Save":
+                assert label < button.rect.width - 2 * 22 * scale
+        for left, right in zip(buttons, buttons[1:]):
+            assert left.rect.right < right.rect.x
 
 
 # --- setup: the first thing a new player sees --------------------------------

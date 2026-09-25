@@ -1696,28 +1696,95 @@ def draw_pause_sheet(canvas: np.ndarray, subtitle: str, focus: int | None,
           FOOTNOTE, LABEL_TERTIARY, scale, align=CENTRE)
 
 
-#: The score card's body, and the band of map art above it, in 720-tall units.
-RESULTS_WIDTH, RESULTS_BODY, RESULTS_BANNER = 760, 384, 128
+# --- the results card ------------------------------------------------------------
+#
+# A card worth sharing: the map's art as its header with the map's name over
+# its foot, the outcome in a word or two, the score large - counting up as
+# the card arrives - three or four stats, "New Best" in gold only when it is
+# true, and the choices: Play Again, Choose a Game, and Save.
+
+#: The card, in 720-tall units: its width, the banner of art at its head,
+#: and where each line sits below the banner.
+RESULTS_WIDTH, RESULTS_BANNER, RESULTS_RADIUS = 600, 150, 22
+RESULTS_OUTCOME, RESULTS_SCORE, RESULTS_BEST = 40, 102, 134
+RESULTS_STATS, RESULTS_BUTTONS, RESULTS_BODY = 190, 238, 330
+#: The body of a card saved to share: no buttons, the wordmark at its foot.
+SHARED_BODY = 270
+
+#: How long the score takes to count up, and the card to arrive.
+COUNT_UP, CARD_ARRIVAL = 0.6, 0.45
+
+RESULTS_CHOICES = (("Play Again", "play", PRIMARY), ("Choose a Game", "grid", SECONDARY),
+                   ("Save", "share", SECONDARY))
 
 
 def results_card(width: int, height: int, scale: float = 1.0,
-                 banner: bool = True) -> Rect:
+                 banner: bool = True, share: bool = False) -> Rect:
     """Where the score card sits in a window this size."""
-    card_w = min(width - 2 * _px(60, scale), _px(RESULTS_WIDTH, scale))
-    card_h = _px(RESULTS_BODY + (RESULTS_BANNER if banner else 0), scale)
-    return Rect((width - card_w) // 2, (height - card_h) // 2, card_w, card_h)
+    card_w = min(width - 2 * screen_margin(height, scale), _px(RESULTS_WIDTH, scale))
+    body = SHARED_BODY if share else RESULTS_BODY
+    card_h = _px(body + (RESULTS_BANNER if banner else 0), scale)
+    top = (height - card_h) // 2
+    if not share:
+        # Centred in the room above the hints at the foot.
+        top = max(0, (height - _px(FOOTER_BAND, scale) - card_h) // 2)
+    return Rect((width - card_w) // 2, top, card_w, card_h)
+
+
+def results_buttons(width: int, height: int, scale: float = 1.0,
+                    banner: bool = True) -> tuple[Button, ...]:
+    """The card's choices, in a row across its foot. Drawing and shooting both
+    read this: each is SHOOTABLE units tall."""
+    card = results_card(width, height, scale, banner)
+    body = card.y + (_px(RESULTS_BANNER, scale) if banner else 0)
+    tall = _px(SHOOTABLE, scale)
+    gap = _px(12, scale)
+    widths = []
+    for label, _icon, _kind in RESULTS_CHOICES:
+        if label == "Save":
+            widths.append(tall)
+        else:
+            widths.append(measure(label, HEADLINE, scale) + _px(22 + 8 + 56, scale))
+    x = card.x + (card.width - sum(widths) - gap * (len(widths) - 1)) // 2
+    buttons = []
+    for (label, icon, kind), wide in zip(RESULTS_CHOICES, widths):
+        buttons.append(Button(Rect(x, body + _px(RESULTS_BUTTONS, scale), wide, tall),
+                              label, icon, kind))
+        x += wide + gap
+    return tuple(buttons)
 
 
 def round_length(duration: float | None) -> str:
     """A round's length as the card names it: bests are kept per length."""
     if duration is None:
-        return "PRACTICE"
-    return f"{int(round(duration))}-SECOND ROUND"
+        return "Practice"
+    return f"{int(round(duration))}-Second Round"
+
+
+def outcome_line(summary: Summary) -> tuple[str, tuple[int, int, int]]:
+    """The outcome in a word or two, and its colour: a win in the tint, a loss
+    in red, a round that simply ran its time in secondary.
+
+    Half the outcomes a map can name are the good ending - a night survived,
+    a pane held, a street cleaned up - so the map says which it is rather
+    than the card guessing from the fact that there is one at all.
+    """
+    if not summary.outcome:
+        return "Final Score", LABEL_SECONDARY
+    return title_case(summary.outcome), TINT if summary.won else DANGER
+
+
+def counted(score: int, elapsed: float | None) -> int:
+    """The score as far as it has counted up, ``elapsed`` seconds in."""
+    if elapsed is None or elapsed >= COUNT_UP:
+        return score
+    return round(score * ease_out(max(0.0, elapsed) / COUNT_UP))
 
 
 def draw_results(canvas: np.ndarray, summary: Summary, best: int,
-                 is_best: bool, hint: str = "", scale: float = 1.0,
-                 title: str = "", emblem=None) -> None:
+                 is_best: bool, scale: float = 1.0, title: str = "", emblem=None,
+                 elapsed: float | None = None, focus: int | None = None,
+                 share: bool = False) -> Rect:
     """The end-of-round card, on the map's own art dimmed to a mood.
 
     Deliberately not drawn over a frozen frame of the range: that frame carries
@@ -1725,149 +1792,113 @@ def draw_results(canvas: np.ndarray, summary: Summary, best: int,
     read as a bug however far the picture behind is dimmed. The map's card art,
     blurred and darkened, keeps the screen in the game without that problem.
 
-    Given the map's ``title`` and card art (``emblem``), the card leads with
-    them: a card that is screenshotted and passed round has to say what was
-    played, not only how well.
+    ``elapsed`` is how long the card has been up: it rises into place and its
+    score counts up (None: all settled). ``focus`` is the choice under the
+    crosshair. With ``share`` it is the card as saved - no choices, the
+    wordmark at its foot. Returns the card.
     """
     draw_ambient_backdrop(canvas)
     height, width = canvas.shape[:2]
-
     banner = emblem is not None
-    card = results_card(width, height, scale, banner)
-    radius = _px(CORNER, scale)
-    _panel_shadow(canvas, card, radius, _px(18, scale))
-    _modal_panel(canvas, card, radius, scale)
-    inner = _px(28, scale)
-
-    heading = summary.outcome or "SCORE"
-    # Half the outcomes a map can name are the good ending - a night survived,
-    # a pane held, a street cleaned up - so the map says which it is rather
-    # than the card guessing from the fact that there is one at all.
-    heading_color = (ARMED if summary.won
-                     else DANGER if summary.outcome else ACCENT)
+    card = results_card(width, height, scale, banner, share)
+    rise = 0
+    if elapsed is not None and not share:
+        rise = round((1.0 - ease_out(elapsed / CARD_ARRIVAL)) * _px(40, scale))
+    card = Rect(card.x, card.y + rise, card.width, card.height)
+    radius = _px(RESULTS_RADIUS, scale)
+    _panel_shadow(canvas, card, radius, _px(24, scale))
+    draw_surface(canvas, card, radius, SURFACE, edge=False)
+    centre = card.x + card.width // 2
+    pad = _px(28, scale)
 
     body = card.y
     if banner:
         body = card.y + _px(RESULTS_BANNER, scale)
-        _draw_results_banner(canvas, Rect(card.x, card.y, card.width, body - card.y),
-                             title, emblem, summary.duration, radius, scale)
-    elif title:
-        _centred_text(canvas, title, card.y + _px(40, scale), INK, 0.7 * scale)
-        body = card.y + _px(28, scale)
-    # The short bright tab at the top left, the mark every panel carries.
-    cv2.line(canvas, (card.x + inner, card.y), (card.x + inner + _px(46, scale), card.y),
-             heading_color, _px(2, scale), cv2.LINE_AA)
+        art = _banner_art(emblem, title, card.width, body - card.y)
+        _composite_top(canvas, Rect(card.x, card.y, card.width, body - card.y), art, radius)
+        write(canvas, round_length(summary.duration), (card.x + pad, body - _px(42, scale)),
+              EYEBROW, LABEL, scale)
+        write(canvas, fit(title_case(title), TITLE_2, card.width - 2 * pad, scale),
+              (card.x + pad, body - _px(14, scale)), TITLE_2, LABEL, scale)
 
-    top = body + _px(50, scale)
-    accent_rule(canvas, top - _px(8, scale), card.x + inner, card.right - inner,
-                heading_color, 1, gap=text_width(heading, 0.75 * scale) + _px(40, scale))
-    _centred_text(canvas, heading, top, heading_color, 0.75 * scale)
-
-    score = str(summary.score)
-    size = _px(84, scale)
-    draw_figures(canvas, score, ((width - figures_width(score, size)) // 2,
-                                 top + _px(96, scale)), INK, size, 0.045)
-
+    heading, tone = outcome_line(summary)
+    write(canvas, heading, (centre, body + _px(RESULTS_OUTCOME, scale)), HEADLINE, tone,
+          scale, align=CENTRE)
+    write(canvas, grouped(counted(summary.score, elapsed)),
+          (centre, body + _px(RESULTS_SCORE, scale)), LARGE_TITLE, LABEL, scale,
+          align=CENTRE)
     # A record has to be a score: an unshot round that "beats" an empty
     # table is nobody's best, whatever the caller was told.
     if is_best and summary.score > 0:
-        label, color = "NEW BEST", ARMED
+        write(canvas, "New Best", (centre, body + _px(RESULTS_BEST, scale)), HEADLINE, GOLD,
+              scale, align=CENTRE)
     elif best:
-        label, color = f"best {best}", MUTED
-    else:
-        label, color = "", MUTED
-    if label:
-        if label == "NEW BEST":
-            _centred_text(canvas, label, top + _px(132, scale), color, 0.68 * scale)
-        else:
-            label_scale = 0.62 * scale
-            draw_caption(canvas, label, ((width - caption_width(label, label_scale)) // 2,
-                                         top + _px(132, scale)), color, label_scale)
+        write(canvas, f"Best {grouped(best)}", (centre, body + _px(RESULTS_BEST, scale)),
+              SUBHEAD, LABEL_SECONDARY, scale, align=CENTRE)
 
-    rows = (
-        (f"{summary.hits}/{summary.shots}", "hits"),
-        (f"{summary.accuracy:.0%}", "accuracy"),
-        (str(summary.best_streak), "best streak"),
-        (str(summary.perfect), summary.perfect_label),
+    stats = (
+        (f"{summary.hits} of {summary.shots}", "Hits"),
+        (f"{summary.accuracy:.0%}", "Accuracy"),
+        (str(summary.best_streak), "Best Streak"),
+        (str(summary.perfect), title_case(summary.perfect_label)),
     )
-    row_top = top + _px(154, scale)
-    accent_rule(canvas, row_top, card.x + inner, card.right - inner, EDGE, 1)
-    column = card.width // len(rows)
-    value_size, label_scale = _px(30, scale), 0.48 * scale
-    for index, (value, label) in enumerate(rows):
-        x = card.x + column * index + column // 2
-        if index:
-            cv2.line(canvas, (card.x + column * index, row_top + _px(14, scale)),
-                     (card.x + column * index, row_top + _px(70, scale)), EDGE, 1,
-                     cv2.LINE_AA)
-        draw_figures(canvas, value, (x - figures_width(value, value_size) // 2,
-                                     row_top + _px(46, scale)), INK, value_size, 0.05)
-        width_label = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX,
-                                      label_scale, 1)[0][0]
-        draw_text(canvas, label, (x - width_label // 2, row_top + _px(68, scale)),
-                  MUTED, scale=label_scale, thickness=1, outline=False)
-    accent_rule(canvas, row_top + _px(84, scale), card.x + inner, card.right - inner,
-                EDGE, 1)
+    column = (card.width - 2 * pad) // len(stats)
+    for index, (value, label) in enumerate(stats):
+        x = card.x + pad + column * index + column // 2
+        write(canvas, value, (x, body + _px(RESULTS_STATS, scale)), TITLE_3, LABEL, scale,
+              align=CENTRE)
+        write(canvas, label, (x, body + _px(RESULTS_STATS + 20, scale)), FOOTNOTE,
+              LABEL_SECONDARY, scale, align=CENTRE)
 
-    _centred_text(canvas, "shoot anywhere to play again", card.bottom - _px(50, scale),
-                  ARMED, 0.68 * scale)
-    _draw_keyed_note(canvas, "S", "saves this card as a screenshot",
-                     card.bottom - _px(18, scale), scale)
-    if hint:
-        draw_footer(canvas, hint, scale)
-    draw_logo(canvas, scale)
+    if share:
+        draw_logo(canvas, scale, color=LABEL_TERTIARY,
+                  corner=(centre + logo_size(scale)[0] // 2, card.bottom - _px(24, scale)))
+    else:
+        for index, button in enumerate(results_buttons(width, height, scale, banner)):
+            moved = Button(Rect(button.rect.x, button.rect.y + rise, button.rect.width,
+                                button.rect.height), button.label, button.icon, button.kind)
+            draw_button(canvas, moved, focus == index, scale)
+    hairline(canvas, card, radius, hairline_over(SURFACE))
+    return card
 
 
-def _draw_results_banner(canvas: np.ndarray, rect: Rect, title: str, emblem,
-                         duration: float | None, radius: int, scale: float) -> None:
-    """The top of the score card: the map's own art, its name set over the foot
-    of it, and the round's length opposite."""
-    cv2.copyTo(_banner_art(emblem, title, rect.width, rect.height),
-               _thumbnail_mask(rect.width, rect.height, radius),
-               canvas[rect.y:rect.bottom, rect.x:rect.right])
-    accent_rule(canvas, rect.bottom, rect.x + 1, rect.right - 1, EDGE, 1)
-    inner = _px(28, scale)
-    baseline = rect.bottom - _px(20, scale)
-    # Set in the left of the banner, clear of art that centres its subject.
-    title_scale = 1.05 * scale
-    while title_scale > 0.5 * scale and text_width(title, title_scale) > rect.width * 0.36:
-        title_scale *= 0.94
-    draw_text(canvas, title, (rect.x + inner, baseline), INK, scale=title_scale,
-              thickness=_px(2, scale))
-    length = round_length(duration)
-    length_scale = 0.46 * scale
-    draw_caption(canvas, length,
-                 (rect.right - inner - caption_width(length, length_scale), baseline),
-                 LABEL_SECONDARY, length_scale)
+def _composite_top(canvas: np.ndarray, rect: Rect, art: np.ndarray, radius: int) -> None:
+    """Lay the banner in the card's head: rounded where the card's top corners
+    are, square where it meets the body."""
+    height, width = canvas.shape[:2]
+    y0, y1 = max(rect.y, 0), min(rect.bottom, height)
+    x0, x1 = max(rect.x, 0), min(rect.right, width)
+    if y1 <= y0 or x1 <= x0:
+        return
+    keep, cover = _shape_weights(rect.width, rect.height + radius * 2, radius)
+    rows, cols = slice(y0 - rect.y, y1 - rect.y), slice(x0 - rect.x, x1 - rect.x)
+    region = canvas[y0:y1, x0:x1]
+    cv2.blendLinear(region, art[rows, cols], keep[rows, cols], cover[rows, cols],
+                    dst=region)
 
 
 @lru_cache(maxsize=8)
 def _banner_art(emblem, title: str, width: int, height: int) -> np.ndarray:
     """The card's banner, built once: the thumbnail, its foot settled into the
-    card's plate so the name reads on it without a box of its own."""
+    card's surface so the name reads on it without a box of its own."""
     art = _thumbnail(emblem, title, width, height).astype(np.float32)
-    fade = max(1, int(height * 0.7))
-    ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)[:, None, None] ** 1.4 * 0.9
-    art[-fade:] = art[-fade:] * (1 - ramp) + np.float32((46, 43, 40)) * ramp
+    fade = max(1, int(height * 0.8))
+    ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)[:, None, None] ** 0.8 * 0.93
+    art[-fade:] = art[-fade:] * (1 - ramp) + np.float32(SURFACE) * ramp
     return art.astype(np.uint8)
 
 
-def _draw_keyed_note(canvas: np.ndarray, key: str, note: str, baseline: int,
-                     scale: float) -> None:
-    """A key drawn as a small keycap followed by what it does, centred."""
-    text_scale = 0.46 * scale
-    cap_text = cv2.getTextSize(key, cv2.FONT_HERSHEY_SIMPLEX, text_scale, 1)[0]
-    cap = Rect(0, 0, max(cap_text[0] + _px(12, scale), _px(20, scale)), _px(20, scale))
-    gap = _px(8, scale)
-    total = cap.width + gap + text_width(note, text_scale, 1, False)
-    x = (canvas.shape[1] - total) // 2
-    cap = Rect(x, baseline - cap.height + _px(5, scale), cap.width, cap.height)
-    shade_panel(canvas, cap, _px(4, scale), (58, 55, 52), (40, 38, 36), (96, 92, 88))
-    draw_text(canvas, key, (cap.x + (cap.width - cap_text[0]) // 2,
-                            cap.y + (cap.height + cap_text[1]) // 2),
-              INK, scale=text_scale, thickness=1, outline=False)
-    draw_text(canvas, note, (cap.right + gap, baseline), MUTED, scale=text_scale,
-              thickness=1, outline=False)
+def results_card_image(summary: Summary, best: int, is_best: bool, width: int,
+                       height: int, scale: float = 1.0, title: str = "",
+                       emblem=None) -> np.ndarray:
+    """The card as it is saved and shared: settled, without the choices, with
+    the wordmark at its foot, and a margin of the map's dimmed art round it."""
+    canvas = np.zeros((height, width, 3), np.uint8)
+    draw_results(canvas, summary, best, is_best, scale, title, emblem, share=True)
+    card = results_card(width, height, scale, emblem is not None, share=True)
+    margin = _px(32, scale)
+    return canvas[max(0, card.y - margin):min(height, card.bottom + margin),
+                  max(0, card.x - margin):min(width, card.right + margin)].copy()
 
 
 @lru_cache(maxsize=8)
@@ -1945,96 +1976,29 @@ def draw_notice(canvas: np.ndarray, lines: Sequence[str],
     draw_logo(canvas, scale)
 
 
-FOOTER_SCALE = 0.55
-
-
-def draw_footer(canvas: np.ndarray, text: str, scale: float = 1.0,
-                alpha: float = 1.0) -> None:
-    """The hint line along the bottom, faded to ``alpha`` (nothing drawn at 0).
-
-    A fading line is drawn onto a copy of its own strip and blended back, so a
-    hint on its way out costs a patch the size of the text, not a frame.
-    """
-    if not text or alpha <= 0.0:
-        return
-    origin = (round(24 * scale), canvas.shape[0] - round(22 * scale))
-    text_scale = FOOTER_SCALE * scale
-    if alpha >= 1.0:
-        draw_text(canvas, text, origin, MUTED, scale=text_scale)
+def draw_toast(canvas: np.ndarray, text: str, scale: float = 1.0, alpha: float = 1.0,
+               top: int = 0, icon: str = "checkmark") -> None:
+    """A word that something worked - "Card saved" - on a glass capsule at
+    the top of the screen, faded to ``alpha``."""
+    if alpha <= 0.0:
         return
     height, width = canvas.shape[:2]
-    pad = _px(12, scale)
-    x0, y0 = max(origin[0] - pad, 0), max(origin[1] - _px(22, scale), 0)
-    x1 = min(origin[0] + text_width(text, text_scale) + pad, width)
-    y1 = min(origin[1] + _px(10, scale), height)
-    if x1 <= x0 or y1 <= y0:
-        return
+    pill_h = _px(44, scale)
+    icon_w = _px(20, scale)
+    pill_w = measure(text, HEADLINE, scale) + icon_w + _px(8 + 2 * 20, scale)
+    pill = Rect((width - pill_w) // 2, top, pill_w, pill_h)
+    x0, y0 = max(pill.x - 2, 0), max(pill.y - 2, 0)
+    x1, y1 = min(pill.right + 2, width), min(pill.bottom + 2, height)
     region = canvas[y0:y1, x0:x1]
     patch = region.copy()
-    draw_text(patch, text, (origin[0] - x0, origin[1] - y0), MUTED, scale=text_scale)
+    local = Rect(pill.x - x0, pill.y - y0, pill.width, pill.height)
+    draw_glass(patch, local, pill_h // 2, scale)
+    draw_icon(patch, icon, (local.x + _px(20, scale) + icon_w / 2, local.y + pill_h / 2),
+              icon_w, LABEL)
+    write(patch, text, (local.x + _px(20 + 8, scale) + icon_w,
+                        baseline_for(HEADLINE, local.y, pill_h, scale)), HEADLINE, LABEL,
+          scale)
     cv2.addWeighted(patch, alpha, region, 1.0 - alpha, 0.0, dst=region)
-
-
-def draw_chrome_panel(canvas: np.ndarray, rect: Rect, scale: float = 1.0,
-                      opacity: float = CHROME_OPACITY,
-                      tab: tuple[int, int, int] | None = None) -> None:
-    """A translucent rounded plate with a hairline edge, sized to what sits on it.
-
-    It replaces a feathered slab that ran from the camera most of the way to
-    the buttons: a panel sized to its readout, in the same material and with
-    the same corners as the clock beside it, is far less of the map covered
-    and reads as one family with the rest of the chrome. Composited on its own
-    region with a cached mask, so a frame pays for one small weighted blend.
-    """
-    height, width = canvas.shape[:2]
-    x0, y0 = max(rect.x, 0), max(rect.y, 0)
-    x1, y1 = min(rect.right + 1, width), min(rect.bottom + 1, height)
-    if x1 <= x0 or y1 <= y0:
-        return
-    radius = _px(CORNER * 0.7, scale)
-    keep, cover, shade = _chrome_layers(rect.width + 1, rect.height + 1, radius,
-                                        round(opacity, 3))
-    rows, cols = slice(y0 - rect.y, y1 - rect.y), slice(x0 - rect.x, x1 - rect.x)
-    region = canvas[y0:y1, x0:x1]
-    cv2.blendLinear(region, shade[rows, cols], keep[rows, cols], cover[rows, cols],
-                    dst=region)
-    stroke_rounded(canvas, rect, EDGE, radius, 1)
-    if tab is not None:
-        # The short bright tab on the top edge, over the text's margin: the
-        # mark every panel carries.
-        cv2.line(canvas, (rect.x + _px(14, scale), rect.y),
-                 (rect.x + _px(50, scale), rect.y), tab, _px(2, scale), cv2.LINE_AA)
-
-
-@lru_cache(maxsize=16)
-def _chrome_layers(width: int, height: int, radius: int,
-                   opacity: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """One panel's blend, built once per size rather than every frame.
-
-    Weights for what shows through and for the plate laid over it, the plate's
-    rounded corners anti-aliased into the weights, and the plate's own shading.
-    Blending in float from a fresh mask was three milliseconds a frame on a
-    laptop panel; a cached mask and OpenCV's own weighted blend are a small
-    fraction of one.
-    """
-    mask = np.zeros((height, width), np.uint8)
-    cv2.fillPoly(mask, [_rounded(0, 0, width - 1, height - 1, radius)], 255, cv2.LINE_AA)
-    cover = mask.astype(np.float32) * np.float32(opacity / 255.0)
-    keep = np.float32(1.0) - cover
-    shade = _gradient(width, height, CHROME_TOP, CHROME_BOTTOM)
-    for array in (keep, cover):
-        array.flags.writeable = False  # shared by every frame from here on
-    return keep, cover, shade
-
-
-@lru_cache(maxsize=8)
-def _thumbnail_mask(width: int, height: int, radius: int,
-                    all_corners: bool = False) -> np.ndarray:
-    """Rounded top corners for the art; the body squares off its foot."""
-    mask = np.zeros((height, width), np.uint8)
-    cv2.fillPoly(mask, [_rounded(0, 0, width, height if all_corners else height + radius,
-                                 radius)], 255)
-    return mask
 
 
 # --- calibration ------------------------------------------------------------
