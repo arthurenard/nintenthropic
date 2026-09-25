@@ -469,15 +469,18 @@ class BrowserSession:
                 self.last_shot = now
                 cues.append("hit" if impact.is_hit else "shot")
             self.map.draw_world(self.canvas, self.round, now)
-            if crosshair and not scoped:
+            # The page draws the mouse's crosshair itself, where the pointer is
+            # now rather than where it was a round trip ago. A hand's is drawn
+            # here: only the server knows where its filtered aim will land.
+            if crosshair and not scoped and aim:
                 scene.draw_crosshair(
                     self.canvas,
                     *crosshair,
-                    aim.armed if aim else True,
+                    aim.armed,
                     now - self.last_shot,
                     CROSSHAIR * self.zoom,
-                    pull=aim.travel if aim else 0,
-                    fire_at=self.scheme.fire_above if self.scheme else 0.65,
+                    pull=aim.travel,
+                    fire_at=self.scheme.fire_above,
                 )
             if self.round.is_over(now):
                 self.state = "over"

@@ -561,6 +561,7 @@ function renderState(data) {
         storage.set(key, data.score);
     }
   }
+  redrawCrosshair(); // shown only while a round is being played
 }
 function queueAction(action, extra = {}) {
   if (!active || pendingAction) return;
@@ -652,8 +653,8 @@ async function loop(run) {
           {
             viewSize: stageSize(),
             id: session.id,
-            ...pointer,
-            fire: shot,
+            ...(shot || pointer),
+            fire: !!shot,
             scope: scoped || keys.has("Shift"),
           },
           camera,
@@ -701,29 +702,142 @@ async function back() {
   focusStart();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
-function point(event) {
-  const rect = $("game-image").getBoundingClientRect();
-  pointer = {
-    x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
-    y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+function frameBox() {
+  // Where the frame shows within its element. object-fit can letterbox one
+  // of another shape: a round keeps its size when the stage is resized.
+  const canvas = $("game-image"),
+    rect = canvas.getBoundingClientRect();
+  if (getComputedStyle(canvas).objectFit !== "contain") return rect;
+  const scale = Math.min(
+    rect.width / canvas.width,
+    rect.height / canvas.height,
+  );
+  const [width, height] = [canvas.width * scale, canvas.height * scale];
+  return {
+    left: rect.left + (rect.width - width) / 2,
+    top: rect.top + (rect.height - height) / 2,
+    width,
+    height,
   };
 }
+function point(event) {
+  const box = frameBox();
+  pointer = {
+    x: Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)),
+    y: Math.max(0, Math.min(1, (event.clientY - box.top) / box.height)),
+  };
+  redrawCrosshair();
+}
+// With a mouse the crosshair is drawn here, over the frame, where the pointer
+// is now: drawn into the frame by the server it trailed the pointer by a round
+// trip and more. It copies scene.draw_crosshair - a ring broken at the compass
+// points, ticks through the gaps, a dot, a ring kicking out on each shot - at
+// the size the server would draw it. A hand's crosshair stays in the frame:
+// only the server knows where its filtered aim lands.
+const RECOIL = 180; // ms, scene.RECOIL
+let firedAt = -Infinity,
+  crosshairFrame = 0;
+function redrawCrosshair() {
+  crosshairFrame ||= requestAnimationFrame(drawCrosshair);
+}
+function drawCrosshair() {
+  crosshairFrame = 0;
+  const overlay = $("crosshair"),
+    area = overlay.getBoundingClientRect(),
+    ratio = devicePixelRatio;
+  const [width, height] = [area.width, area.height].map((side) =>
+    Math.round(side * ratio),
+  );
+  if (overlay.width !== width || overlay.height !== height)
+    [overlay.width, overlay.height] = [width, height];
+  const context = overlay.getContext("2d");
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, width, height);
+  const aiming =
+    active &&
+    selectedControl === "mouse" &&
+    currentState === "playing" &&
+    !$("game-image").hidden &&
+    !(selectedMap === "sniper" && (scoped || keys.has("Shift")));
+  $("stage").classList.toggle("aiming", aiming);
+  if (!aiming) return;
+  const box = frameBox();
+  // Centred on a pixel, as OpenCV centres its shapes.
+  const x = Math.floor((box.left - area.left + pointer.x * box.width) * ratio),
+    y = Math.floor((box.top - area.top + pointer.y * box.height) * ratio);
+  context.setTransform(1, 0, 0, 1, 0.5, 0.5);
+  // The server's 0.75 on a 960-wide frame, grown with the frame as shown.
+  const scale =
+    0.75 * Math.max((box.width * ratio) / 960, (box.height * ratio) / 900);
+  const size = (value) => Math.max(1, Math.round(value * scale));
+  // OpenCV's anti-aliased stroke of thickness t comes out about 2t - 0.5
+  // pixels wide (1.35 for t = 1), and a filled dot half a pixel wider.
+  const stroke = (thickness) =>
+    thickness === 1 ? 1.35 : 2 * thickness - 0.55;
+  const weight = stroke(size(2)),
+    radius = Math.round(20 * scale),
+    ring = (r, from, to) => {
+      context.beginPath();
+      context.arc(x, y, r, (from * Math.PI) / 180, (to * Math.PI) / 180);
+      context.stroke();
+    };
+  context.strokeStyle = context.fillStyle = "rgb(130, 230, 120)"; // scene.ARMED
+  context.lineCap = "round";
+  context.lineWidth = weight;
+  for (const start of [10, 100, 190, 280]) ring(radius, start, start + 70);
+  context.beginPath();
+  context.arc(x, y, size(2) + 0.5, 0, 2 * Math.PI);
+  context.fill();
+  for (const [dx, dy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    const at = (reach) => [x + dx * reach * scale, y + dy * reach * scale];
+    for (const [from, lineWidth] of [
+      [9, stroke(size(1))],
+      [25, weight],
+    ]) {
+      context.lineWidth = lineWidth;
+      context.beginPath();
+      context.moveTo(...at(from));
+      context.lineTo(...at(30));
+      context.stroke();
+    }
+  }
+  const kick = (performance.now() - firedAt) / RECOIL;
+  if (kick < 1) {
+    context.globalAlpha = 1 - kick;
+    context.lineWidth = weight;
+    ring(Math.round((20 + 34 * kick) * scale), 0, 360);
+    context.globalAlpha = 1;
+    redrawCrosshair();
+  }
+}
+new ResizeObserver(redrawCrosshair).observe($("stage"));
 $("game-image").addEventListener("pointermove", point);
 $("game-image").addEventListener("pointerdown", (event) => {
   point(event);
   if (event.button === 2) scoped = true;
   else if (selectedControl === "mouse") {
-    fire = true;
-    wake?.(); // the shot goes out now, not with the next display frame
+    // The shot lands where the click was, even if the pointer moves on
+    // before the frame carrying it goes out - which is at once.
+    fire = { ...pointer };
+    if (currentState === "playing" && performance.now() - firedAt >= 120)
+      firedAt = performance.now();
+    wake?.();
   }
   event.preventDefault();
 });
 $("stage").addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("pointerup", () => {
   scoped = false;
+  redrawCrosshair();
 });
 window.addEventListener("pointercancel", () => {
   scoped = false;
+  redrawCrosshair();
 });
 window.addEventListener("keydown", (event) => {
   if (!active || ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName))
@@ -734,16 +848,19 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
   keys.add(key);
   if (event.repeat) return;
+  redrawCrosshair(); // Shift scopes the rifle, which hides the crosshair
   if (key === "p" || key === "Escape")
     queueAction(currentState === "paused" ? "resume" : "pause");
 });
-window.addEventListener("keyup", (event) =>
-  keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key),
-);
+window.addEventListener("keyup", (event) => {
+  keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key);
+  redrawCrosshair();
+});
 function blur() {
   keys.clear();
   scoped = false;
   fire = false;
+  redrawCrosshair();
   if (active && !["paused", "over"].includes(currentState))
     queueAction("pause");
 }

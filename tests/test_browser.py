@@ -576,6 +576,27 @@ def test_everything_drawn_grows_with_the_frame(monkeypatch):
     assert sizes == [browser.CROSSHAIR, 2 * browser.CROSSHAIR]
 
 
+def test_the_mouse_crosshair_is_left_to_the_page(monkeypatch):
+    # Drawn into the frame, it trailed the pointer by a round trip and more;
+    # the page draws it where the pointer is. The shot still lands here.
+    drawn = []
+    monkeypatch.setattr(
+        browser.scene, "draw_crosshair", lambda *args, **kwargs: drawn.append(args)
+    )
+    session = BrowserSession({"map": "western"})
+    session.tick({"x": 0.5, "y": 0.5}, session.last_tick + 0.05)
+    session.tick({"x": 0.3, "y": 0.6, "fire": True}, session.last_tick + 0.05)
+    assert not drawn and session.round.shots == 1
+    impact = session.round.impacts[-1]
+    assert (impact.x, impact.y) == (0.3 * session.width, 0.6 * session.height)
+    # A hand's crosshair is still drawn by the server: it shows the filtered aim.
+    session, stream = camera_session(monkeypatch, map="western")
+    warm_up(session)
+    stream.current = frame_of(make_hand())
+    session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert len(drawn) == 1
+
+
 def test_a_new_round_takes_the_stages_new_size():
     # A round is laid out for one size: a resize mid-round waits for the next.
     session = BrowserSession({"viewSize": [960, 540], "duration": 15})
