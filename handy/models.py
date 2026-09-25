@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 import tempfile
 import urllib.request
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 
 BASE_URL = "https://storage.googleapis.com/mediapipe-models"
@@ -67,9 +67,21 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+#: How much of a download is read between two progress reports, in bytes.
+CHUNK_BYTES = 1 << 16
+
+
 def ensure_model(name: str = DEFAULT_BUNDLE,
-                 destination: Path | None = None) -> Path:
-    """Return the local path to a model bundle, downloading it once."""
+                 destination: Path | None = None,
+                 progress: Callable[[int, int | None], None] | None = None) -> Path:
+    """Return the local path to a model bundle, downloading it once.
+
+    ``progress``, if given, is called as the download arrives with the bytes
+    received so far and the total the server promised (None if it promised
+    none), so a first run can show how far along it is instead of a spinner.
+    It is not called for a bundle already in the cache, and must not raise:
+    whatever it raises ends the download.
+    """
     if name not in BUNDLES:
         raise KeyError(f"unknown model {name!r}; try one of {', '.join(BUNDLES)}")
     label = name.replace("_", " ")
@@ -94,7 +106,12 @@ def ensure_model(name: str = DEFAULT_BUNDLE,
         with os.fdopen(handle, "wb") as file, urllib.request.urlopen(
                 BUNDLES[name], timeout=DOWNLOAD_TIMEOUT) as response:
             expected = _content_length(response)
-            shutil.copyfileobj(response, file)
+            received = 0
+            for block in iter(lambda: response.read(CHUNK_BYTES), b""):
+                file.write(block)
+                received += len(block)
+                if progress is not None:
+                    progress(received, expected)
         size = staged.stat().st_size
         if (size < MIN_BUNDLE_BYTES or (expected is not None and size != expected)
                 or not zipfile.is_zipfile(staged)):
