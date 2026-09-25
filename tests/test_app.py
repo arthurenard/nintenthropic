@@ -1297,10 +1297,9 @@ def chooser(monkeypatch, *, key=NOTHING, aim=None, click=None, count=1):
 
 
 def card_centre(index: int) -> tuple[int, int]:
-    from handy import maps, scene
+    from handy import app, maps
 
-    layout = layout_for(WIDTH, HEIGHT)
-    card = scene.map_cards(layout.window, len(maps.MAPS), layout.scale)[index]
+    card = app.chooser_cards(layout_for(WIDTH, HEIGHT), len(maps.MAPS))[index]
     return card.x + card.width // 2, card.y + card.height // 2
 
 
@@ -2157,6 +2156,25 @@ SIZES = ((1280, 720), (1512, 945), (2560, 1440))
 
 def overlaps(a, b) -> bool:
     return a.x < b.right and b.x < a.right and a.y < b.bottom and b.y < a.bottom
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_no_chooser_card_runs_under_the_camera_or_the_quit_button(width, height):
+    """The first card's art used to sit under the camera preview."""
+    from handy import app
+
+    layout = layout_for(width, height)
+    cards = app.chooser_cards(layout, len(maps.MAPS))
+    assert len(cards) == len(maps.MAPS)
+    for card in cards:
+        assert not overlaps(card, layout.inset)
+        assert not overlaps(card, layout.quit_button.rect)
+        assert card.x >= 0 and card.right <= width and card.bottom <= height
+    for left, right in zip(cards, cards[1:]):
+        assert left.right < right.x
+    # The grid stands on the margins the camera and QUIT stand on.
+    assert cards[0].x == layout.inset.x
+    assert cards[-1].right == layout.quit_button.rect.right
 
 
 def chrome_view(chosen, layout, **fields):

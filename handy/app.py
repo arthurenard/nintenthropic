@@ -834,7 +834,7 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
                controller: AimController, rig: Rig, scheme,
                scores: HighScores) -> tuple[str, Map | None]:
     """The map chooser. Shoot a card to play it."""
-    cards = scene.map_cards(layout.window, len(maps.MAPS), layout.scale)
+    cards = chooser_cards(layout, len(maps.MAPS))
     mouse = Mouse()
     cv2.setMouseCallback(WINDOW_TITLE, mouse.on_event)
     recoil = Recoil(kick=0.0)
@@ -852,28 +852,9 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
             entries.append((chosen.title, chosen.blurb,
                             f"best {best}" if best else "not yet played",
                             chosen.draw_emblem))
-        scale = layout.scale
         aimed = _card_under(cards, crosshair)
-        scene.draw_map_select(canvas, cards, tuple(entries), aimed, scale)
-        states = camera_states(rig, hands)
-        scene.draw_camera_insets(canvas, images, hands, layout.inset, states,
-                                 scheme.draw, scale)
-        summary, color = scene.camera_summary(states)
-        scene.draw_text(canvas, summary,
-                        (layout.inset.right + round(28 * scale),
-                         layout.inset.y + round(24 * scale)), color, scale=0.55 * scale)
-        scene.draw_text(canvas, f"controls: {scheme.title.lower()}",
-                        (layout.inset.right + round(28 * scale),
-                         layout.inset.y + round(48 * scale)),
-                        scene.MUTED, scale=0.5 * scale)
-        scene.draw_button(canvas, layout.quit_button, highlighted=(
-            crosshair is not None and layout.quit_button.contains(*crosshair)),
-            scale=scale)
-        scene.draw_footer(
-            canvas, "shoot a card to play   |   q quit   c recalibrate", scale)
-        if crosshair is not None:
-            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed, since_shot=None,
-                                 scale=scale)
+        draw_chooser(canvas, layout, cards, tuple(entries), aimed, images, hands,
+                     camera_states(rig, hands), scheme.draw, crosshair, aim.armed)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if aim.fired and crosshair is not None:
@@ -895,6 +876,44 @@ def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layou
             return "recalibrate", None
         if key in (ord(str(index + 1)) for index in range(len(maps.MAPS))):
             return "play", maps.MAPS[int(chr(key)) - 1]
+
+
+def chooser_cards(layout: Layout, count: int) -> tuple[Rect, ...]:
+    """Where the chooser's cards sit: in the play area's rows, clear of the
+    camera (see ``scene.chooser_area``).
+
+    Drawing, shooting and clicking all read this, so a card is hit exactly
+    where it is drawn.
+    """
+    return scene.map_cards(layout.window, count, layout.scale)
+
+
+CHOOSER_HINT = (f"shoot a card to play   |   1-{len(maps.MAPS)} choose   q quit   "
+                "c recalibrate")
+
+
+def draw_chooser(canvas: np.ndarray, layout: Layout, cards: tuple, entries: tuple,
+                 aimed: int | None, images: list, hands: list,
+                 states: tuple[str, ...], draw, crosshair: tuple[int, int] | None,
+                 armed: bool) -> None:
+    """One frame of the chooser: the cards, the camera in its corner, QUIT."""
+    scale = layout.scale
+    scene.draw_map_select(canvas, cards, entries, aimed, scale)
+    scene.draw_camera_insets(canvas, images, hands, layout.inset, states, draw, scale)
+    # The cameras are only talked about when something is worth saying:
+    # "1 camera" beside a working preview read as debug output.
+    note = scene.camera_note(states)
+    if note is not None:
+        scene.draw_tag(canvas, note[0], (layout.inset.x,
+                                         layout.inset.bottom + round(26 * scale)),
+                       note[1], scale)
+    scene.draw_button(canvas, layout.quit_button, highlighted=(
+        crosshair is not None and layout.quit_button.contains(*crosshair)),
+        scale=scale)
+    scene.draw_footer(canvas, CHOOSER_HINT, scale)
+    if crosshair is not None:
+        scene.draw_crosshair(canvas, *crosshair, armed=armed, since_shot=None,
+                             scale=scale)
 
 
 def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:

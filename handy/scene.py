@@ -1123,97 +1123,60 @@ def draw_shot_calibration(canvas, session, images, frames, draw, scale=1.0):
 
 # --- choosing a map ---------------------------------------------------------
 
-#: Cards per row on the chooser. More than this and they become illegible.
-CARDS_PER_ROW = 3
+#: Cards in one row on the chooser. The game has four maps, and four across
+#: reads as a line-up; more than this and the cards grow too narrow for a title.
+CARDS_PER_ROW = 4
 
 
-def map_cards(window: Rect, count: int, scale: float = 1.0) -> tuple[Rect, ...]:
+def chooser_area(window: Rect, scale: float = 1.0) -> Rect:
+    """Where the chooser's cards may go: the band the game plays in.
+
+    The rows ``app.layout_for`` gives the play area - below the camera in the
+    top-left corner, above the footer - so the cards never run under the
+    camera. Across, it reaches the margin the camera and QUIT stand on, so the
+    grid lines up with both.
+    """
+    def unit(value: float) -> int:
+        return max(1, round(value * scale))
+
+    top = window.y + unit(16) + window.height // 4 + unit(28)
+    bottom = window.bottom - unit(56)
+    return Rect(window.x + unit(16), top, max(1, window.width - 2 * unit(16)),
+                max(1, bottom - top))
+
+
+def map_cards(window: Rect, count: int, scale: float = 1.0,
+              area: Rect | None = None) -> tuple[Rect, ...]:
     """Where the cards sit. Drawing and shooting both read this.
 
-    Up to three across in one row; beyond that a grid, every card the same
-    size, rows centred - so five cards are two rows of three and two, not a
-    strip of slivers.
+    Up to four across in one row, filling ``area`` (by default
+    :func:`chooser_area`); beyond that two rows, every card the same size and
+    a short last row centred under the first. No slot is ever left empty to
+    be filled with a placeholder: a grid with holes in it looks unfinished.
     """
-    margin, gap = round(90 * scale), round(24 * scale)
-    columns = min(count, CARDS_PER_ROW)
+    area = area or chooser_area(window, scale)
+    gap = round(20 * scale)
+    columns = count if count <= CARDS_PER_ROW else (count + 1) // 2
+    columns = max(1, columns)
     rows = (count + columns - 1) // columns
     # A card is never zero-sized: everything downstream slices the canvas with
     # these, and an empty slice is a silent no-op rather than an obvious error.
-    width = max(1, (window.width - 2 * margin - gap * (columns - 1)) // columns)
-
-    top = window.y + int(window.height * (0.26 if rows == 1 else 0.20))
-    bottom_room = window.height - top - round(70 * scale)
-    height = max(1, min(int(window.height * 0.52),
-                        (bottom_room - gap * (rows - 1)) // rows)
-                 if rows > 1 else int(window.height * 0.52))
-
-    # Every row keeps the grid's columns, a short last row included: the
-    # chooser fills its empty slots with a "more ground" tile so the grid
-    # closes, instead of centring an orphaned pair beneath a row of three.
-    row_width = columns * width + (columns - 1) * gap
-    left = window.x + (window.width - row_width) // 2
+    width = max(1, (area.width - gap * (columns - 1)) // columns)
+    height = max(1, (area.height - gap * (rows - 1)) // rows)
+    # On a squarish window the cards would turn into ribbons: keep them no
+    # taller than a playing card and centre the grid in the room left.
+    height = min(height, max(1, int(width * 1.6)))
+    grid_height = rows * height + (rows - 1) * gap
+    top = area.y + (area.height - grid_height) // 2
     cards = []
-    for index in range(count):
-        row, column = divmod(index, columns)
-        cards.append(Rect(left + column * (width + gap), top + row * (height + gap),
-                          width, height))
+    for row in range(rows):
+        in_row = min(columns, count - row * columns)
+        row_width = in_row * width + (in_row - 1) * gap
+        left = area.x + (area.width - row_width) // 2
+        for column in range(in_row):
+            cards.append(Rect(left + column * (width + gap), top + row * (height + gap),
+                              width, height))
     return tuple(cards)
-
-
-def empty_slots(cards: tuple) -> tuple[Rect, ...]:
-    """The grid positions ``map_cards`` left unfilled on its last row."""
-    if len(cards) <= CARDS_PER_ROW:
-        return ()
-    columns = CARDS_PER_ROW
-    rows = (len(cards) + columns - 1) // columns
-    first, second = cards[0], cards[1]
-    pitch_x = second.x - first.x
-    pitch_y = cards[columns].y - first.y
-    return tuple(Rect(first.x + column * pitch_x, first.y + row * pitch_y,
-                      first.width, first.height)
-                 for index in range(len(cards), rows * columns)
-                 for row, column in (divmod(index, columns),))
-
-
-def draw_empty_slot(canvas: np.ndarray, rect: Rect, scale: float = 1.0) -> None:
-    """A quiet placeholder tile: more ground is coming, this is where it goes."""
-    radius = _px(CORNER, scale)
-    shade_panel(canvas, rect, radius, (34, 32, 30), (27, 25, 24), None)
-    # A dashed hairline, drawn as short segments around the rounded outline.
-    poly = _rounded(rect.x, rect.y, rect.right, rect.bottom, radius)
-    dash = _px(9, scale)
-    for index in range(0, len(poly) - 1, 2):
-        if (index // 2) % 2 == 0:
-            a, b = poly[index], poly[(index + 1) % len(poly)]
-            cv2.line(canvas, tuple(int(v) for v in a), tuple(int(v) for v in b),
-                     (58, 55, 52), 1, cv2.LINE_AA)
-    step = max(1, dash)
-    for y in range(rect.y + radius, rect.bottom - radius, step * 2):
-        cv2.line(canvas, (rect.x, y), (rect.x, min(y + step, rect.bottom - radius)),
-                 (58, 55, 52), 1, cv2.LINE_AA)
-        cv2.line(canvas, (rect.right, y), (rect.right, min(y + step, rect.bottom - radius)),
-                 (58, 55, 52), 1, cv2.LINE_AA)
-    for x in range(rect.x + radius, rect.right - radius, step * 2):
-        cv2.line(canvas, (x, rect.y), (min(x + step, rect.right - radius), rect.y),
-                 (58, 55, 52), 1, cv2.LINE_AA)
-        cv2.line(canvas, (x, rect.bottom), (min(x + step, rect.right - radius), rect.bottom),
-                 (58, 55, 52), 1, cv2.LINE_AA)
-    # A faint reticle in the middle, the game's own mark, and a line beneath.
-    cx, cy = rect.x + rect.width // 2, rect.y + rect.height // 2 - _px(14, scale)
-    r = _px(22, scale)
-    for start in (10, 100, 190, 280):
-        cv2.ellipse(canvas, (cx, cy), (r, r), 0, start, start + 70, (70, 66, 62),
-                    _px(2, scale), cv2.LINE_AA)
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        cv2.line(canvas, (cx + dx * (r - _px(8, scale)), cy + dy * (r - _px(8, scale))),
-                 (cx + dx * (r + _px(10, scale)), cy + dy * (r + _px(10, scale))),
-                 (70, 66, 62), 1, cv2.LINE_AA)
-    cv2.circle(canvas, (cx, cy), _px(2, scale), (70, 66, 62), -1, cv2.LINE_AA)
-    label = "MORE GROUND SOON"
-    label_scale = 0.5 * scale
-    draw_text(canvas, label, (cx - text_width(label, label_scale, 1, False) // 2,
-                              cy + r + _px(34, scale)), (96, 92, 88),
-              scale=label_scale, thickness=1, outline=False)
 
 
 def _wrapped(text: str, scale: float, width: int, thickness: int = 1,
@@ -1339,11 +1302,12 @@ def _thumbnail_mask(width: int, height: int, radius: int,
 def draw_map_card(canvas: np.ndarray, rect: Rect, title: str, blurb: str,
                   best: str, emblem, aimed: bool, scale: float = 1.0) -> None:
     radius = _px(CORNER, scale)
-    # The art takes just over half the card, unless the card is short (two rows
-    # of them), when the body keeps the room the text needs and the art gives.
+    # The art takes about half the card, never taller than it is wide, unless
+    # the card is short (two rows of them), when the body keeps the room the
+    # text needs and the art gives.
     body_needed = _px(150, scale)
     art_height = int(max(rect.height * 0.38,
-                         min(rect.height * 0.52, rect.height - body_needed)))
+                         min(rect.height * 0.5, rect.height - body_needed, rect.width * 0.8)))
     panel = _thumbnail(emblem, title, rect.width, art_height)
     mask = _thumbnail_mask(rect.width, art_height, radius)
     cv2.copyTo(panel, mask, canvas[rect.y:rect.y + art_height, rect.x:rect.right])
@@ -1364,20 +1328,29 @@ def draw_map_card(canvas: np.ndarray, rect: Rect, title: str, blurb: str,
     # size the halo would be thicker than the strokes it is meant to set off.
     blurb_scale = 0.5 * scale
     compact = body.height / scale < 165  # two rows of cards: tighter leading
-    title_at, first, step = (36, 62, 20) if compact else (40, 70, 22)
+    title_at, first, step = (36, 62, 20) if compact else (42, 74, 22)
+    # The title is set as large as the card allows, and never runs off it.
+    title_scale = 0.85 * scale
+    while (title_scale > 0.5 * scale
+           and text_width(title, title_scale, 2, False) > body.width - 2 * pad):
+        title_scale *= 0.95
     draw_text(canvas, title, (body.x + pad, body.y + round(title_at * scale)), INK,
-              scale=0.85 * scale, thickness=2, outline=False)
+              scale=title_scale, thickness=2, outline=False)
     room = int((body.height / scale - first - 38) // step) + 1  # lines above the foot
-    lines = _wrapped(blurb, blurb_scale, body.width - 2 * pad)[:max(1, min(3, room))]
+    lines = _wrapped(blurb, blurb_scale, body.width - 2 * pad)
+    if len(lines) > max(1, min(5, room)):
+        # Cut at a word, and say so, rather than stop mid-thought.
+        lines = lines[:max(1, min(5, room))]
+        lines[-1] = _fitted(lines[-1] + " ...", blurb_scale, body.width - 2 * pad)
     for index, line in enumerate(lines):
         draw_text(canvas, line,
                   (body.x + pad, body.y + round((first + index * step) * scale)), MUTED,
                   scale=blurb_scale, thickness=1, outline=False)
     cv2.circle(canvas, (body.x + pad + _px(3, scale), body.bottom - round(21 * scale)),
                _px(3, scale), ACCENT, -1, cv2.LINE_AA)
-    draw_text(canvas, _fitted(best, 0.55 * scale, body.width - 2 * pad - _px(14, scale)),
-              (body.x + pad + _px(14, scale), body.bottom - round(16 * scale)),
-              MUTED, scale=0.55 * scale, thickness=1, outline=False)
+    draw_caption(canvas, _fitted(best, 0.55 * scale, body.width - 2 * pad - _px(14, scale)),
+                 (body.x + pad + _px(14, scale), body.bottom - round(16 * scale)),
+                 MUTED, 0.5 * scale)
 
     if aimed:
         glow_stroke(canvas, rect, ARMED, radius, _px(3, scale))
@@ -1392,22 +1365,23 @@ def draw_card_select(canvas: np.ndarray, cards: tuple, entries: tuple,
     """A row of cards to choose between, one of them possibly picked out."""
     draw_backdrop(canvas)
     height, width = canvas.shape[:2]
-    # The title treatment: a small wordmark, the title between two accent
-    # rules, and the hint beneath. The rules stop short of the card margins.
+    # The title treatment: the title between two short accent rules and the
+    # hint beneath, centred in the band above the cards - the band the camera
+    # sits at the left of, so the rules stop well short of it.
     cards_top = min((rect.y for rect in cards), default=height // 4)
-    # Below the corner buttons, above the cards, and no lower than a sixth down.
-    title_y = max(_px(98, scale), min(height // 6, cards_top - _px(78, scale)))
+    band_top, band_bottom = _px(16, scale), cards_top - _px(28, scale)
+    title_y = max(_px(40, scale), (band_top + band_bottom) // 2 - _px(4, scale))
     title_scale = 0.9 * scale
-    span = round(width * 0.62)
-    accent_rule(canvas, title_y - _px(9, scale), (width - span) // 2, (width + span) // 2,
-                EDGE, 1, gap=text_width(title, title_scale) + _px(48, scale))
+    title_w = text_width(title, title_scale)
+    span = min(title_w + _px(220, scale), width - 2 * (width // 4 + _px(64, scale)))
+    if span > title_w + _px(80, scale):
+        accent_rule(canvas, title_y - _px(9, scale), (width - span) // 2,
+                    (width + span) // 2, EDGE, 1, gap=title_w + _px(48, scale))
     _centred_text(canvas, title, title_y, INK, title_scale)
-    _centred_text(canvas, hint, min(title_y + round(34 * scale), cards_top - _px(14, scale)),
+    _centred_text(canvas, hint, min(title_y + round(36 * scale), cards_top - _px(14, scale)),
                   ARMED, 0.6 * scale)
     for index, (rect, entry) in enumerate(zip(cards, entries)):
         draw_map_card(canvas, rect, *entry, aimed=index == aimed, scale=scale)
-    for slot in empty_slots(cards):
-        draw_empty_slot(canvas, slot, scale)
     draw_logo(canvas, scale)
 
 

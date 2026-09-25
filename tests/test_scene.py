@@ -313,38 +313,36 @@ def test_five_cards_keep_their_text_inside_the_card(canvas):
     entries = tuple((f"MAP {i}", blurb, "not yet played", scene.draw_backdrop)
                     for i in range(5))
     scene.draw_map_select(canvas, cards, entries, aimed=None)
+    gap = cards[3].y - cards[0].bottom
     for card in cards:
-        below = canvas[card.bottom + 4:card.bottom + 30, card.x:card.right]
-        assert below.max() < 100, "text ran out of the bottom of a card"
+        below = canvas[card.bottom + 3:card.bottom + gap - 3, card.x:card.right]
+        assert below.size and below.max() < 100, "text ran out of the bottom of a card"
 
 
-# --- the grid closes, figures are set cleanly, the map sits behind the card --
+# --- the grid is balanced, figures are set cleanly, the map sits behind the card
 
-def test_five_cards_leave_one_slot_that_closes_the_grid():
-    from handy.game import Rect
-
-    cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 5)
-    slots = scene.empty_slots(cards)
-    assert len(slots) == 1
-    slot = slots[0]
-    assert slot.y == cards[3].y and slot.x > cards[4].right
-    assert slot.right <= WIDTH and slot.width == cards[0].width
-    assert scene.empty_slots(scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 3)) == ()
-
-
-def test_the_chooser_draws_the_placeholder_tile(canvas):
+def test_the_four_maps_stand_in_one_row_of_equal_cards():
+    """Four maps in a grid of three left two "more ground soon" placeholders,
+    which made the game look unfinished."""
     from handy import maps
     from handy.game import Rect
 
     cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), len(maps.MAPS))
-    entries = tuple((m.title, m.blurb, "best 1", m.draw_emblem) for m in maps.MAPS)
-    scene.draw_map_select(canvas, cards, entries, aimed=None)
-    slots = scene.empty_slots(cards)
-    if not slots:
-        pytest.skip("the grid is full: every slot holds a map")
-    slot = slots[0]
-    inside = canvas[slot.y + 5:slot.bottom - 5, slot.x + 5:slot.right - 5]
-    assert inside.any() and inside.max() < 140, "a quiet tile, not a card"
+    assert len({card.y for card in cards}) == 1
+    assert len({(card.width, card.height) for card in cards}) == 1
+    for left, right in zip(cards, cards[1:]):
+        assert left.right < right.x
+
+
+def test_a_short_last_row_is_centred_not_padded_with_placeholders():
+    from handy.game import Rect
+
+    cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 5)
+    first, second = cards[:3], cards[3:]
+    assert len({card.y for card in first}) == 1 and len({card.y for card in second}) == 1
+    middle = (first[0].x + first[-1].right) / 2
+    assert abs((second[0].x + second[-1].right) / 2 - middle) <= 1
+    assert not hasattr(scene, "empty_slots")
 
 
 def test_figures_draw_where_they_are_put(canvas):
