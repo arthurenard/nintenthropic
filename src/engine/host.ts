@@ -1,0 +1,212 @@
+/**
+ * The game host: one WebGL renderer for the life of the page, the animation
+ * loop, pause and resume, sizing at the device's pixel ratio, and dynamic
+ * resolution. Games are handed the renderer and the loop's clock; they never
+ * own either, so switching games never costs a new WebGL context.
+ */
+import { SRGBColorSpace, WebGLRenderer } from "three";
+import { Assets } from "./assets";
+import { DynamicResolution } from "./dynamicResolution";
+import { INITIAL_SCALE, gpuName, guessTier } from "./tier";
+import type { Aim, Game, Quality } from "./types";
+
+/** The longest step a game is ever asked to take, in seconds: after a hitch
+ * the world skips a beat instead of lurching forward. */
+export const MAX_DT = 0.1;
+/** Past 2x, extra pixels cost far more than the eye can see. */
+export const MAX_PIXEL_RATIO = 2;
+
+export class WebGLUnavailable extends Error {
+  constructor() {
+    super("WebGL is unavailable");
+    this.name = "WebGLUnavailable";
+  }
+}
+
+/** An aim that does nothing: no hand, no shot. */
+export const IDLE_AIM: Aim = {
+  x: 0.5,
+  y: 0.5,
+  tracking: false,
+  armed: false,
+  fired: false,
+  travel: 0,
+  offscreen: false,
+  capturedAt: 0,
+};
+
+export interface FrameInfo {
+  now: number;
+  dt: number;
+  aim: Aim;
+}
+
+/** Recent frame timings, for the debug overlay and the performance report. */
+export class FrameStats {
+  private readonly intervals: number[] = [];
+  private readonly work: number[] = [];
+
+  record(interval: number, work: number): void {
+    if (interval > 250) return; // a hitch, not a frame
+    this.intervals.push(interval);
+    this.work.push(work);
+    if (this.intervals.length > 600) {
+      this.intervals.shift();
+      this.work.shift();
+    }
+  }
+
+  reset(): void {
+    this.intervals.length = 0;
+    this.work.length = 0;
+  }
+
+  summary(): { frames: number; interval: Percentiles; work: Percentiles } {
+    return { frames: this.intervals.length, interval: percentiles(this.intervals), work: percentiles(this.work) };
+  }
+}
+
+export interface Percentiles {
+  mean: number;
+  p50: number;
+  p95: number;
+  max: number;
+}
+
+export function percentiles(values: readonly number[]): Percentiles {
+  if (!values.length) return { mean: 0, p50: 0, p95: 0, max: 0 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+  return { mean: sorted.reduce((a, b) => a + b, 0) / sorted.length, p50: at(0.5), p95: at(0.95), max: sorted[sorted.length - 1]! };
+}
+
+export class EngineHost {
+  readonly renderer: WebGLRenderer;
+  readonly quality: Quality;
+  readonly assets = new Assets();
+  readonly stats = new FrameStats();
+  /** The aim to hand the game each frame; the app decides what it is. */
+  aim: (now: number) => Aim = () => IDLE_AIM;
+  /** After the game has drawn: the page's own overlay (the crosshair). */
+  onFrame: ((frame: FrameInfo) => void) | null = null;
+  /** The GPU gave up its context (a driver reset, too many tabs). */
+  onContextLost: (() => void) | null = null;
+
+  private game: Game | null = null;
+  private running = false;
+  private handle = 0;
+  private last = 0;
+  private readonly resolution: DynamicResolution;
+  private readonly observer: ResizeObserver;
+  private size = { width: 0, height: 0, ratio: 1 };
+
+  constructor(readonly canvas: HTMLCanvasElement) {
+    try {
+      this.renderer = new WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: false,
+        stencil: false,
+        powerPreference: "high-performance",
+      });
+    } catch {
+      throw new WebGLUnavailable();
+    }
+    // Colour management: the page is sRGB. Tone mapping is the game's call.
+    this.renderer.outputColorSpace = SRGBColorSpace;
+    const tier = guessTier(gpuName(this.renderer.getContext()), navigator.hardwareConcurrency || 4);
+    this.resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier] });
+    this.quality = { scale: this.resolution.scale, tier };
+    this.observer = new ResizeObserver(() => this.resize());
+    this.observer.observe(canvas);
+    canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      this.stop();
+      this.onContextLost?.();
+    });
+  }
+
+  get gpu(): string {
+    return gpuName(this.renderer.getContext());
+  }
+
+  /** The game to run; null clears the stage. */
+  setGame(game: Game | null): void {
+    this.game = game;
+    this.resolution.reset(INITIAL_SCALE[this.quality.tier]);
+    this.quality.scale = this.resolution.scale;
+    this.stats.reset();
+    this.resize(true);
+  }
+
+  /** Starts the loop (it runs until stopped or paused). */
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    this.last = performance.now();
+    this.handle = requestAnimationFrame(this.tick);
+  }
+
+  /** Stops the loop; the last frame stays on the canvas. */
+  stop(): void {
+    this.running = false;
+    cancelAnimationFrame(this.handle);
+  }
+
+  get isRunning(): boolean {
+    return this.running;
+  }
+
+  /** Pauses the game and the loop: a paused world costs nothing. */
+  pause(): void {
+    if (!this.running) return;
+    this.stop();
+    this.game?.pause();
+  }
+
+  resume(): void {
+    if (this.running) return;
+    this.game?.resume();
+    this.resolution.reset();
+    this.start();
+  }
+
+  /** Draws one frame now, outside the loop (after a resize while paused). */
+  renderOnce(): void {
+    this.game?.render();
+  }
+
+  private readonly tick = (now: number): void => {
+    if (!this.running) return;
+    this.handle = requestAnimationFrame(this.tick);
+    const interval = now - this.last;
+    this.last = now;
+    const dt = Math.min(Math.max(interval / 1000, 0), MAX_DT);
+    const began = performance.now();
+    const aim = this.aim(now);
+    if (this.game) {
+      this.game.update(dt, now, aim);
+      this.game.render();
+    }
+    this.onFrame?.({ now, dt, aim });
+    this.stats.record(interval, performance.now() - began);
+    if (this.resolution.sample(interval)) {
+      this.quality.scale = this.resolution.scale;
+      this.resize(true);
+    }
+  };
+
+  /** Sizes the drawing buffer to the canvas at the device's pixel ratio. */
+  resize(force = false): void {
+    const width = this.canvas.clientWidth;
+    const height = this.canvas.clientHeight;
+    if (!width || !height) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO) * this.quality.scale;
+    if (!force && width === this.size.width && height === this.size.height && ratio === this.size.ratio) return;
+    this.size = { width, height, ratio };
+    this.renderer.setPixelRatio(ratio);
+    this.renderer.setSize(width, height, false);
+    this.game?.resize(width, height, ratio);
+    if (!this.running) this.renderOnce();
+  }
+}
