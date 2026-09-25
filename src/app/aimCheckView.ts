@@ -110,6 +110,7 @@ export class AimCheckView {
     if (this.check.done && this.check.mapping) {
       this.finished = true;
       stage.light(null);
+      $("game").dataset.phase = "ready";
       const score = this.check.measure.score ?? 1;
       this.readyMoment(score);
       const mapping = this.check.mapping;

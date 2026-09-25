@@ -279,21 +279,39 @@ export class App {
         }
       }
       const gamePart = progress.part("game", hand && !this.tracker && !this.options.scripted ? 10 : 1);
-      game = await tagged("game", this.entry.create());
-      const context = this.context(host, control);
-      work.push(tagged("game", this.options.fail === "game" ? Promise.reject(new DownloadError("game", 404)) : game.load(context, gamePart)));
-      await Promise.all(work);
+      const loaded = tagged(
+        "game",
+        (async () => {
+          const created = await this.entry.create();
+          game = created;
+          if (this.options.fail === "game") throw new DownloadError("game", 404);
+          await created.load(this.context(host, control), gamePart);
+          return created;
+        })(),
+      );
+      work.push(loaded);
+      try {
+        await Promise.all(work);
+      } catch (error) {
+        // Whatever is still loading is let finish, then put away: disposing
+        // a game under its own load would leave that load failing on its own.
+        void loaded.then(
+          (done) => done.dispose(),
+          () => game?.dispose(),
+        );
+        throw error;
+      }
+      const ready = await loaded;
       if (stale()) {
-        game.dispose();
+        ready.dispose();
         return;
       }
       loading.close();
       if (hand && !this.options.scripted) prefs.downloaded = true;
-      this.begin(game, control, adjust);
+      this.begin(ready, control, adjust);
     } catch (error) {
       loading?.close();
       if (stale()) return;
-      game?.dispose();
       this.fail(error);
     } finally {
       if (run === this.generation) this.busy = false;
@@ -653,12 +671,17 @@ export class App {
     if (!session || document.body.dataset.view !== "game" || session.phase === "over") return;
     // Space presses a focused button, as it always does.
     if (key === " " && target?.tagName === "BUTTON") return;
-    if (key === "p" || key === " " || key === "Escape") {
-      if (event.repeat) return;
+    if (event.repeat) return;
+    if (key === "Escape") {
+      // On the pause sheet Esc is the sheet's own cancel, which resumes.
+      if (!session.paused) {
+        event.preventDefault();
+        this.pause();
+      }
+    } else if (key === "p" || key === " ") {
       event.preventDefault();
-      if (session.paused) {
-        if (key !== "Escape") this.resume(); // Esc on the sheet is its own cancel
-      } else this.pause();
+      if (session.paused) this.resume();
+      else this.pause();
     }
   }
 

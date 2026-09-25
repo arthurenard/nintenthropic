@@ -6,13 +6,15 @@ import type { HandPose } from "../src/input/synthetic";
 const env: Record<string, string | undefined> =
   (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 
-/** Where screenshots go: HANDY_SHOTS, or the test's own output folder. */
-export async function shot(page: Page, info: TestInfo, name: string): Promise<void> {
-  const size = `${info.project.name}`;
+/**
+ * A picture of the page, in HANDY_SHOTS (or the test's own output folder),
+ * under the project's size. By default it waits for entrance animations (450
+ * ms springs) to settle; `settle` 0 catches a moment as it happens.
+ */
+export async function shot(page: Page, info: TestInfo, name: string, settle = 550): Promise<void> {
   const folder = env.HANDY_SHOTS ?? info.outputDir;
-  // Let entrance animations (450 ms springs) settle before the picture.
-  await page.waitForTimeout(550);
-  await page.screenshot({ path: `${folder}/${size}/${name}.png` });
+  if (settle) await page.waitForTimeout(settle);
+  await page.screenshot({ path: `${folder}/${info.project.name}/${name}.png` });
 }
 
 /** A returning visitor: the welcome has been seen. */
@@ -58,14 +60,20 @@ export function fingertipFor(x: number, y: number): [number, number] {
   return [0.3 + 0.4 * x + 0.03 * y, 0.26 + 0.38 * y - 0.02 * x];
 }
 
+/** The scripted hand aiming at a point of the view: the whole hand moves
+ * with the fingertip, as a real one does, so its picture looks like a hand. */
+export function handAt(x: number, y: number, thumbDegrees = 18): HandPose {
+  const indexTip = fingertipFor(x, y);
+  return { thumbDegrees, indexTip, wrist: [indexTip[0] + 0.03, indexTip[1] + 0.3], scale: 0.9 };
+}
+
 /** One shot with the scripted hand: aim with the thumb up, fold it, raise it again. */
 export async function shoot(page: Page, x: number, y: number): Promise<void> {
-  const indexTip = fingertipFor(x, y);
-  await pose(page, { thumbDegrees: 18, indexTip });
+  await pose(page, handAt(x, y));
   await page.waitForTimeout(420);
-  await pose(page, { thumbDegrees: 72, indexTip });
+  await pose(page, handAt(x, y, 72));
   await page.waitForTimeout(160);
-  await pose(page, { thumbDegrees: 18, indexTip });
+  await pose(page, handAt(x, y));
 }
 
 /** Plays the aim check through with the scripted hand until it hands over to the game. */

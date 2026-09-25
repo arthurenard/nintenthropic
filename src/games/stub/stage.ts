@@ -6,15 +6,18 @@
  */
 import {
   AdditiveBlending,
+  CanvasTexture,
   CircleGeometry,
   Color,
   ConeGeometry,
-  CylinderGeometry,
   Group,
+  LatheGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Raycaster,
+  Sprite,
+  SpriteMaterial,
   Vector2,
   Vector3,
   type PerspectiveCamera,
@@ -35,7 +38,34 @@ const LAYOUT: [number, number, number][] = [
   [0.5, 0.78, 4.5],
   [0.84, 0.76, 4.5],
 ];
-const BOTTLE_RADIUS = 0.11;
+const BOTTLE_RADIUS = 0.1;
+/** A bottle's profile, turned on a lathe: base, body, shoulder, neck, lip. */
+const PROFILE = [
+  [0, 0],
+  [0.09, 0],
+  [0.1, 0.02],
+  [0.1, 0.26],
+  [0.085, 0.32],
+  [0.04, 0.38],
+  [0.032, 0.5],
+  [0.038, 0.52],
+  [0.03, 0.54],
+  [0, 0.54],
+].map(([x, y]) => new Vector2(x, y));
+
+/** A soft round glow, drawn once: bright in the middle, gone at the edge. */
+function glowTexture(): CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const context = canvas.getContext("2d")!;
+  const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(255, 240, 200, 1)");
+  gradient.addColorStop(0.35, "rgba(255, 220, 150, 0.45)");
+  gradient.addColorStop(1, "rgba(255, 200, 120, 0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 128, 128);
+  return new CanvasTexture(canvas);
+}
 const glass = (tint: string) =>
   new MeshStandardMaterial({ color: tint, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.88 });
 
@@ -43,7 +73,7 @@ interface Bottle {
   id: string;
   group: Group;
   body: Mesh;
-  glow: Mesh;
+  glow: Sprite;
   lit: boolean;
   broken: boolean;
   place: [number, number, number];
@@ -72,19 +102,17 @@ export class BottleStage implements CalibrationStage {
     private readonly camera: PerspectiveCamera,
     private readonly reducedMotion: boolean,
   ) {
+    const halo = glowTexture();
     LAYOUT.forEach((place, index) => {
       const group = new Group();
-      const tint = ["#3f8f4a", "#7a4a1f", "#4b7fa8"][index % 3]!;
-      const body = new Mesh(new CylinderGeometry(BOTTLE_RADIUS, BOTTLE_RADIUS, 0.36, 20), glass(tint));
-      body.position.y = 0.18;
-      const neck = new Mesh(new ConeGeometry(BOTTLE_RADIUS, 0.22, 20), glass(tint));
-      neck.position.y = 0.47;
-      const glow = new Mesh(
-        new CircleGeometry(0.42, 40),
-        new MeshBasicMaterial({ color: "#ffe9b0", transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }),
+      const tint = ["#3f8f4a", "#8a5a2b", "#4b7fa8"][index % 3]!;
+      const body = new Mesh(new LatheGeometry(PROFILE, 24), glass(tint));
+      const glow = new Sprite(
+        new SpriteMaterial({ map: halo, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }),
       );
-      glow.position.set(0, 0.28, -0.05);
-      group.add(glow, body, neck);
+      glow.scale.setScalar(0.9);
+      glow.position.set(0, 0.28, -0.06);
+      group.add(glow, body);
       this.bottles.push({ id: `bottle.${index + 1}`, group, body, glow, lit: false, broken: false, place });
       this.root.add(group);
     });
@@ -193,10 +221,9 @@ export class BottleStage implements CalibrationStage {
 
   update(dt: number, now: number): void {
     for (const bottle of this.bottles) {
-      const glow = bottle.glow.material as MeshBasicMaterial;
-      const target = bottle.lit ? 0.55 + (this.reducedMotion ? 0 : 0.2 * Math.sin(now / 180)) : 0;
+      const glow = bottle.glow.material;
+      const target = bottle.lit ? 0.75 + (this.reducedMotion ? 0 : 0.2 * Math.sin(now / 180)) : 0;
       glow.opacity += (target - glow.opacity) * Math.min(1, dt * 10);
-      bottle.glow.lookAt(this.camera.position);
     }
     if (this.clearing > 0) {
       // The check is over: the bottles sink away for the game.

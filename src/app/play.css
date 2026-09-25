@@ -44,11 +44,20 @@
     transform 450ms var(--spring);
 }
 .game:not([data-phase="play"]) .play-only,
-.game:not([data-phase="check"]) .check-only,
-.game[data-ready="false"] .hud-pause {
+.game:not([data-phase="check"]):not([data-phase="ready"]) .check-only,
+.game[data-ready="false"] .hud-pause,
+.game[data-phase="over"] .hud-pause {
   opacity: 0;
   visibility: hidden;
   transition: none;
+}
+/* The ready moment says it all: the check's own chrome steps back for it. */
+.game[data-phase="ready"] .check-only {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 250ms var(--ease),
+    visibility 0s linear 250ms;
 }
 
 /* --- the score panel ------------------------------------------------------------ */
