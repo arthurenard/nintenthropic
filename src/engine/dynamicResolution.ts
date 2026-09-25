@@ -79,7 +79,12 @@ export class DynamicResolution {
     }
     this.window.push(interval);
     if (this.window.length < WINDOW) return false;
-    const average = this.window.reduce((a, b) => a + b, 0) / this.window.length;
+    // The window's median, not its mean: a GPU that cannot keep up misses
+    // most of its slots, while one hitch - a tab switch, garbage collection,
+    // the tracker compiling a shader - is one frame and says nothing about
+    // the resolution.
+    const sorted = [...this.window].sort((a, b) => a - b);
+    const average = (sorted[(WINDOW >> 1) - 1]! + sorted[WINDOW >> 1]!) / 2;
     this.window = [];
 
     if (average > this.target * SLOW && this.scale > this.min) {

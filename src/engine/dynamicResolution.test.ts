@@ -57,6 +57,14 @@ describe("dynamic resolution", () => {
     expect(resolution.scale).toBe(1);
   });
 
+  it("is not pushed down by the odd long frame", () => {
+    // A 100 ms frame now and then - garbage collection, a shader compiling -
+    // while every other frame makes its slot.
+    const resolution = new DynamicResolution();
+    for (let i = 0; i < 60 * 30; i++) resolution.sample(i % 20 === 0 ? 100 : VSYNC);
+    expect(resolution.scale).toBe(1);
+  });
+
   it("starts where the tier guess says", () => {
     expect(new DynamicResolution({ initial: 0.75 }).scale).toBe(0.75);
     expect(new DynamicResolution({ initial: 0.1 }).scale).toBe(0.6);

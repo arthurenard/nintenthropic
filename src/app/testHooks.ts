@@ -8,6 +8,7 @@
  *   ?fail=<trouble>   simulate camera-denied, camera-busy, camera-missing,
  *                     webgl, model or game, to see each error sheet
  *   ?tracker=page     track on the page's thread instead of a worker
+ *   ?delegate=cpu     track on the CPU instead of the GPU
  */
 import type { HudSink } from "../engine/types";
 import type { HandPose } from "../input/synthetic";
@@ -20,6 +21,7 @@ export function testOptions(params: URLSearchParams): AppOptions {
     scripted: params.get("input") === "script" ? new ScriptedHands() : null,
     fail: params.get("fail"),
     trackerWhere: tracker === "page" || tracker === "worker" ? tracker : "auto",
+    trackerDelegate: params.get("delegate")?.toUpperCase() === "CPU" ? "CPU" : "GPU",
   };
 }
 
@@ -30,6 +32,8 @@ export interface HandyTest {
   internals(): App["internals"];
   /** The HUD, to stage its moments for screenshots. */
   hud(): HudSink;
+  /** Starts the timing figures afresh. */
+  resetStats(): void;
 }
 
 declare global {
@@ -46,5 +50,6 @@ export function installTestHooks(app: App, options: AppOptions): void {
     },
     internals: () => app.internals,
     hud: () => app.hud,
+    resetStats: () => app.resetStats(),
   };
 }

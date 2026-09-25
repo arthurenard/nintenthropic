@@ -9,6 +9,7 @@ import { DownloadError, Progress, siteUrl } from "../engine/fetch";
 import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
 import type { EngineHost } from "../engine/host";
 import { seededRandom } from "../engine/random";
+import { Samples } from "../engine/stats";
 import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
 import { COMING_SOON, GAMES } from "../games/index";
 import { HandInput } from "../input/handInput";
@@ -36,6 +37,8 @@ export interface AppOptions {
   fail?: string | null;
   /** Where the hand tracker runs: a worker unless told otherwise. */
   trackerWhere?: "auto" | "worker" | "page";
+  /** Which delegate the tracker tries first. */
+  trackerDelegate?: "GPU" | "CPU";
 }
 
 type Phase = "loading" | "check" | "play" | "over";
@@ -99,6 +102,9 @@ export class App {
   private muted = prefs.muted;
   private readonly entry: GameEntry = GAMES[0]!;
   private readonly motion = matchMedia("(prefers-reduced-motion: reduce)");
+  /** Camera capture to crosshair drawn, ms: for the performance report. */
+  private readonly latency = new Samples(600);
+  private lastDrawnCapture = 0;
 
   constructor(private readonly options: AppOptions = {}) {
     this.settings = { duration: 60, reducedMotion: this.motion.matches, unlocks: prefs.unlocks };
@@ -272,7 +278,7 @@ export class App {
               this.options.fail === "model"
                 ? Promise.reject(new ModelError())
                 : import("../tracking/tracker")
-                    .then(({ loadTracker }) => loadTracker({ wasm, model }, { where: this.options.trackerWhere ?? "auto" }))
+                    .then(({ loadTracker }) => loadTracker({ wasm, model }, { where: this.options.trackerWhere ?? "auto", prefer: this.options.trackerDelegate ?? "GPU" }))
                     .then((tracker) => {
                       if (stale()) tracker.dispose();
                       else this.tracker = tracker;
@@ -491,6 +497,14 @@ export class App {
       this.crosshair.visible = session.check.showsCrosshair;
     }
     this.crosshair.draw(aim, now);
+    // How long a camera frame takes to reach the crosshair: from its capture
+    // to the moment the crosshair is drawn from it (the screen shows that
+    // frame at the next vsync). Measured on the clock, not the frame's own
+    // timestamp, which is taken before a frame's work begins.
+    if (aim.tracking && aim.capturedAt !== this.lastDrawnCapture) {
+      this.lastDrawnCapture = aim.capturedAt;
+      if (aim.capturedAt > 0) this.latency.push(performance.now() - aim.capturedAt);
+    }
     // A hand lost in play is said at once, and stays said until it is back.
     if (session.phase === "play" && session.control === "hand") {
       if (!aim.tracking) session.lostSince ??= now;
@@ -728,9 +742,17 @@ export class App {
       checkDone: session?.check?.done ?? false,
       tracker: this.tracker ? { where: this.tracker.where, delegate: this.tracker.delegate, stats: this.tracker.stats() } : null,
       frames: this.host?.stats.summary() ?? null,
+      latency: this.latency.summary(),
       quality: this.host ? { ...this.host.quality, gpu: this.host.gpu } : null,
       unlocks: [...this.settings.unlocks],
     };
+  }
+
+  /** Starts the timing figures afresh, for a measurement window. */
+  resetStats(): void {
+    this.host?.stats.reset();
+    this.tracker?.resetStats();
+    this.latency.clear();
   }
 
   /** The current session's pieces, for the tests' own measurements. */
