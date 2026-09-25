@@ -100,6 +100,10 @@ export interface AudioBus {
   /** Named global treatments, 0..1: "hurt" muffles and adds a heartbeat. */
   setFilter(name: "hurt" | "slowmo", amount: number): void;
   readonly muted: boolean;
+  /** Mute or unmute everything (the page's mute button and M); remembered by the page. Optional: a bus without it is muted by recreating it. */
+  setMuted?(muted: boolean): void;
+  /** Called when the page pauses or hides (true) and resumes (false), so loops and the ambience can fall silent. Optional. */
+  suspend?(suspended: boolean): void;
 }
 
 export interface LoadedAsset {
@@ -139,6 +143,8 @@ export interface GameContext {
   random: () => number;
   /** The player's local time, for time-of-day secrets. */
   clock: () => Date;
+  /** How the player aims, so hints can say it in their terms ("Point off the screen to reload" / "Right-click or press R to reload"). Optional; absent means the hand. */
+  input?: InputKind;
 }
 
 /** A target in the aim check, in viewport fractions. */
@@ -170,7 +176,12 @@ export interface Game {
   load(ctx: GameContext, onProgress: (fraction: number) => void): Promise<void>;
   /** Begin play (after the aim check). */
   start(): void;
-  /** Advance the world. `dt` in seconds (clamped by the host), `now` in ms. */
+  /**
+   * Advance the world. `dt` in seconds (clamped by the host), `now` in ms.
+   * Called every animation frame from the end of load() on, so the world is
+   * alive behind the aim check; until start() the shots belong to the check,
+   * and the aim passed in never has `fired` set.
+   */
   update(dt: number, now: number, aim: Aim): void;
   render(): void;
   resize(width: number, height: number, pixelRatio: number): void;
@@ -183,6 +194,8 @@ export interface GameEntry {
   id: string;
   title: string;
   blurb: string;
+  /** Two or three sentences for the featured game on the landing. Optional; the blurb stands in. */
+  about?: string;
   /** A poster image under public/. */
   poster: string;
   create(): Promise<Game>;
