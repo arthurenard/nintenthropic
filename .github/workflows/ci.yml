@@ -66,6 +66,50 @@ jobs:
       - name: Test
         run: uv run pytest -q -p no:cacheprovider
 
+  web:
+    name: Web app (types, unit, build, end to end)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+
+      # Google Chrome comes installed on GitHub's Ubuntu runners, and the tests
+      # drive it (channel "chrome"), headless and with --mute-audio. The runner
+      # has no GPU and no camera: WebGL falls back to SwiftShader, the hand
+      # tracker to its CPU delegate, and the camera is Chrome's fake one
+      # playing a still picture of a hand.
+      - name: End to end
+        run: npx playwright test
+
+      - name: Keep the report, traces and screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
   wheel:
     name: Build the wheel and start it
     runs-on: ubuntu-24.04
