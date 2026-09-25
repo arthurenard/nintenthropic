@@ -48,7 +48,7 @@ def streams(monkeypatch):
         opened.append(FakeStream())
         return opened[-1]
 
-    monkeypatch.setattr(browser, "ensure_model", lambda _name: "unused")
+    monkeypatch.setattr(browser, "ensure_model", lambda _name, progress=None: "unused")
     monkeypatch.setattr(
         browser.schemes,
         "for_map",
@@ -257,7 +257,7 @@ def slow_models(monkeypatch):
     """Model loads that block, as a first-run download does, until released."""
     loading, release = threading.Event(), threading.Event()
 
-    def download(_name):
+    def download(_name, progress=None):
         loading.set()
         assert release.wait(10)
         return "unused"
@@ -449,7 +449,7 @@ def test_a_short_window_does_not_end_the_game(server):
 def test_a_failed_model_download_is_reported_not_mistaken_for_a_closed_tab(
     server, monkeypatch, capsys, failure
 ):
-    def download(_name):
+    def download(_name, progress=None):
         raise failure("the model server stopped answering")
 
     monkeypatch.setattr(browser, "ensure_model", download)
@@ -515,3 +515,175 @@ def test_the_page_itself_and_links_to_it_are_allowed(server):
     # A form on another site may navigate here, but never post.
     form = {**link, "Origin": "http://evil.example"}
     assert call(server, "POST", "/api/start", {}, headers=form)[0] == 403
+
+
+# --- returning players, first runs, art and sound ----------------------------------
+
+
+def test_a_returning_player_starts_straight_into_the_game(server):
+    from handy.calibration import default_rig
+
+    checked = {
+        **default_rig(schemes.PISTOL, 1)[0].to_dict(),
+        "aim_fitted": True,
+        "fit_error": 0.01,
+    }
+    data = start(
+        server, control="pistol", calibration={"cameras": [checked]}, useSavedAim=True
+    )
+    assert data["state"] == "playing" and "step" not in data
+    assert data["forgetSavedSetup"] is False
+    status, data, _ = call(
+        server, "POST", "/api/action", {"id": data["id"], "action": "calibrate"}
+    )
+    assert status == 200 and data["state"] == "calibration"
+
+
+def test_progress_is_idle_until_a_start_is_loading(server, slow_models):
+    loading, release = slow_models
+    status, data, response = call(server, "GET", "/api/progress")
+    assert status == 200 and data == {"loading": False, "fraction": None}
+    assert response.getheader("Cache-Control") == "no-store"
+    thread, answers = start_in_background(server, control="pistol")
+    assert loading.wait(5)
+    assert call(server, "GET", "/api/progress")[1]["loading"] is True
+    release.set()
+    thread.join(5)
+    assert answers[0][0] == 200
+    assert call(server, "GET", "/api/progress")[1]["loading"] is False
+
+
+def test_a_first_run_download_reports_how_far_it_has_got(server, monkeypatch):
+    halfway, release = threading.Event(), threading.Event()
+
+    def download(_name, progress=None):
+        progress(4_000_000, 8_000_000)
+        halfway.set()
+        assert release.wait(10)
+        progress(8_000_000, 8_000_000)
+        return "unused"
+
+    monkeypatch.setattr(browser, "ensure_model", download)
+    monkeypatch.setattr(browser, "cached", lambda _name: False)
+    thread, answers = start_in_background(server, control="pistol")
+    assert halfway.wait(5)
+    assert call(server, "GET", "/api/progress")[1] == {"loading": True, "fraction": 0.5}
+    release.set()
+    thread.join(5)
+    assert answers[0][0] == 200
+
+
+@pytest.fixture
+def sounds(server):
+    """A small sound set, built before the test rather than in the background."""
+    bank = browser.SoundBank(names=("shot", "hit_0"), takes=2)
+    bank.build()
+    server.sounds = bank
+    return bank
+
+
+def test_the_sound_set_is_listed_and_served_as_wav(server, sounds):
+    status, manifest, response = call(server, "GET", "/audio/manifest.json")
+    assert status == 200 and manifest == {"ready": True, "cues": {"shot": 2, "hit_0": 2}}
+    status, wav, response = call(server, "GET", "/audio/shot/1.wav")
+    assert status == 200 and wav[:4] == b"RIFF" and wav[8:12] == b"WAVE"
+    assert response.getheader("Content-Type") == "audio/wav"
+    assert response.getheader("X-Content-Type-Options") == "nosniff"
+    assert response.getheader("Cross-Origin-Resource-Policy") == "same-origin"
+    assert wav == sounds.get("shot", 1)
+
+
+def test_sounds_still_being_built_are_listed_as_they_arrive(server):
+    bank = browser.SoundBank(names=("shot", "miss"), takes=2)
+    server.sounds = bank
+    assert call(server, "GET", "/audio/manifest.json")[1] == {"ready": False, "cues": {}}
+    assert call(server, "GET", "/audio/shot/0.wav")[0] == 503
+    bank.files["shot", 0] = b"RIFF"
+    bank.files["shot", 1] = b"RIFF"
+    bank.files["miss", 1] = b"RIFF"  # take 0 is not there yet: not listed
+    assert call(server, "GET", "/audio/manifest.json")[1]["cues"] == {"shot": 2}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/audio/kazoo/0.wav",
+        "/audio/shot/2.wav",  # past the takes the set keeps
+        "/audio/shot/-1.wav",
+        "/audio/shot/0",
+        "/audio/shot/0.mp3",
+        "/audio/shot/%C2%B2.wav",  # a superscript two, which str.isdigit allows
+        "/audio/shot/%30.wav",  # a zero, but the path is never decoded
+        "/audio/shot",
+        "/audio/../pyproject.toml",
+        "/audio/shot/../../pyproject.toml",
+    ],
+)
+def test_unknown_sounds_are_not_found(server, sounds, path):
+    assert call(server, "GET", path)[0] == 404
+
+
+def test_without_a_sound_set_there_is_nothing_to_hear(server):
+    assert server.sounds is None
+    assert call(server, "GET", "/audio/manifest.json")[0] == 404
+    assert call(server, "GET", "/audio/shot/0.wav")[0] == 404
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors"},
+        {"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "audio"},
+        {"Origin": "http://evil.example"},
+        {"Host": "evil.example"},
+    ],
+)
+def test_other_sites_cannot_read_the_new_routes(server, sounds, labels):
+    for path in (
+        "/api/progress",
+        "/audio/manifest.json",
+        "/audio/shot/0.wav",
+        "/art/western?w=720&h=405",
+    ):
+        assert call(server, "GET", path, headers=labels)[0] == 403, path
+
+
+def test_every_element_and_icon_the_script_names_is_in_the_page(server):
+    """The script finds its elements by id; a renamed one fails only in play."""
+    import re
+
+    script = call(server, "GET", "/app.js")[1].decode()
+    page = call(server, "GET", "/")[1].decode()
+    present = set(re.findall(r'id="([\w-]+)"', page))
+    named = {
+        *re.findall(r'\$\("([\w-]+)"\)', script),
+        *re.findall(r'getElementById\("([\w-]+)"\)', script),
+        *re.findall(r'setText\("([\w-]+)"', script),
+    }
+    assert named and named <= present, named - present
+    icons = {*re.findall(r'icon\("([\w-]+)"\)', script), *re.findall(r'icon: "([\w-]+)"', script)}
+    assert icons and {f"i-{name}" for name in icons} <= present
+
+
+def test_art_is_drawn_at_the_size_asked_for_within_limits(server, monkeypatch):
+    # Drawn blank: the sizes are under test here, and the largest real one
+    # takes long enough on a busy machine to time the request out.
+    monkeypatch.setattr(
+        browser, "art", lambda key, w, h: browser.jpeg(np.zeros((h, w, 3), np.uint8))
+    )
+
+    def size(path):
+        status, raw, response = call(server, "GET", path)
+        assert status == 200 and response.getheader("Content-Type") == "image/jpeg"
+        image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        return image.shape[1], image.shape[0]
+
+    assert size("/art/orbit") == (360, 200)
+    assert size("/art/orbit?w=720&h=405") == (720, 405)
+    assert size("/art/range?w=320&h=180") == (320, 180)
+    (low_w, low_h), (high_w, high_h) = browser.ART_SIZES
+    assert size("/art/orbit?w=99999&h=99999") == (high_w, high_h)
+    assert size("/art/orbit?w=1&h=-5") == (low_w, low_h)
+    for query in ("w=abc", "h=1e9", "w=7.5"):
+        assert call(server, "GET", f"/art/orbit?{query}")[0] == 400
+    assert call(server, "GET", "/art/kart?w=720&h=405")[0] == 404

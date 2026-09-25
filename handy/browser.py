@@ -16,19 +16,23 @@ import sys
 import threading
 import time
 import webbrowser
+import zipfile
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import cv2
 import numpy as np
 
-from . import maps, scene, schemes
+from . import audio, maps, scene, schemes
 from .aiming import Aim, AimController, EyeScope
 from .calibration import Rig, default_rig
-from .shot_calibration import ShotCalibration
+from .maps import orbit, zombies
+from .maps.archery import RINGS
+from .shot_calibration import REQUIRED_HITS, ShotCalibration
 from .game import Rect, RoundOptions
-from .models import ensure_model
+from .models import cache_dir, ensure_model
 from .recognition import Frame, HAND_CONNECTIONS
 
 WEB_ROOT = Path(__file__).with_name("web")
@@ -82,11 +86,42 @@ def stage_size(size):
     return min(round(height * aspect), MAX_PIXELS // height), height
 
 
-def jpeg(image):
-    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 82])
+def jpeg(image, quality=82):
+    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
     if not ok:
         raise ValueError("Could not encode the game frame")
     return encoded.tobytes()
+
+
+#: The sizes a map's art may be asked for, in pixels: (width, height) at least,
+#: then at most. A poster on a Retina screen wants a few hundred; the share card
+#: a little over a thousand. Beyond that, each request is seconds of drawing.
+ART_SIZES = ((160, 90), (1600, 900))
+
+
+@lru_cache(maxsize=32)
+def art(key, width=360, height=200):
+    """A map's card art as JPEG bytes, drawn once for each size asked for.
+
+    The largest take a third of a second to draw, and the page asks for the
+    same few sizes every time it opens.
+    """
+    chosen = maps.by_key(key)
+    canvas = np.zeros((height, width, 3), np.uint8)
+    chosen.draw_emblem(canvas)
+    return jpeg(canvas, 88)
+
+
+def art_size(query):
+    """The (width, height) a ``?w=&h=`` query asks for, clamped to ART_SIZES."""
+    fields = parse_qs(query)
+    (low_w, low_h), (high_w, high_h) = ART_SIZES
+    try:
+        width = int(fields.get("w", ["360"])[0])
+        height = int(fields.get("h", ["200"])[0])
+    except ValueError as error:
+        raise ValueError("Art sizes are whole numbers of pixels") from error
+    return min(max(width, low_w), high_w), min(max(height, low_h), high_h)
 
 
 #: The frame exchange's format, both ways: a four-byte big-endian length, that
@@ -152,22 +187,194 @@ def saved_rig(saved):
     return rig
 
 
+def cached(name):
+    """Whether a model bundle is already on disk, as ``ensure_model`` judges it.
+
+    Asked before loading, so the progress a first run shows is shared between
+    the downloads that will actually happen, not the ones that will not.
+    """
+    path = cache_dir() / f"{name}.task"
+    return path.exists() and zipfile.is_zipfile(path)
+
+
+#: Shots the warm-up learns from before it checks the aim.
+LEARNING_SHOTS = 3
+
+
+def setup_words(setup, event):
+    """What the warm-up says now: a short instruction and the line under it.
+
+    Worded here rather than taken from ``ShotCalibration.message``, which the
+    desktop draws in its own voice and layout. ``event`` is what the last shot
+    did (see ``BrowserSession._setup_event``), or None before the first.
+    """
+    left = REQUIRED_HITS - len(setup.hits)
+    if setup.complete:
+        return "Aim set.", "Here we go."
+    if event == "raise":
+        return "Raise your thumb first.", "Then aim, and fold it to fire."
+    if event == "retry":
+        return "Try that one again.", "Point right at the lit target."
+    if event == "undo":
+        return "Shot undone.", "Point at the lit target and fire again."
+    if setup.testing:
+        if event == "hit":
+            return ("Nice." if left > 1 else "One more."), (
+                f"{left} centre hits to go." if left > 1 else "Hit the centre to start."
+            )
+        if event == "miss":
+            return "Just off the centre.", "Try this one again."
+        if event == "adjusted":
+            return "Aim adjusted.", "Now hit five centres."
+        if event == "learned":
+            return "Got it.", "Now hit five centres to start your game."
+        if setup.hits:
+            return f"{left} to go.", "Aim for the centre."
+        return "Hit five centres.", "Aim for the gold. Then your game starts."
+    if event == "relearn":
+        return "Let’s tune your aim.", "Shoot the lit target."
+    shots = len(setup.samples)
+    if shots == 0:
+        return "Shoot the lit target.", "Point at it, then fold your thumb to fire."
+    if shots == 1:
+        return "Now the next one.", "Your crosshair appears after this shot."
+    return "One more.", "Then you’ll check your aim."
+
+
+def title_case(words):
+    """'PANE HELD' as a player reads it: 'Pane Held'."""
+    return " ".join(word.capitalize() for word in words.split())
+
+
+def readouts(chosen, round_, now):
+    """The few numbers a map's round lives by, for the page's score panel.
+
+    Each is a label and a value; a meter also has a ``max``, and one that
+    should worry the player a ``tone``. Read from what each round exposes -
+    the desktop draws the same numbers in its own HUD. A value a round does
+    not have (another version of a map, say) is left out rather than failing
+    the frame.
+    """
+    found = []
+
+    def add(label, value, **extra):
+        if value is not None:
+            extra = {name: v for name, v in extra.items() if v is not None}
+            found.append({"label": label, "value": value, **extra})
+
+    def read(name, *args):
+        attribute = getattr(round_, name, None)
+        try:
+            return attribute(*args) if callable(attribute) else attribute
+        except (TypeError, ValueError, ArithmeticError):
+            return None
+
+    if chosen.key == "zombies":
+        health = read("health")
+        if health is not None:
+            full = getattr(zombies, "FULL_HEALTH", 100)
+            low = getattr(zombies, "LOW_HEALTH", full / 3)
+            add("Health", health, max=full, tone="danger" if health <= low else None)
+        add("Wave", read("wave", now))
+        add("Down", read("kills"))
+    elif chosen.key == "orbit":
+        pane = read("integrity")
+        if pane is not None:
+            full = getattr(orbit, "FULL_INTEGRITY", 100)
+            low = getattr(orbit, "ALARM_INTEGRITY", full / 3)
+            add("Pane", pane, max=full, tone="danger" if pane <= low else None)
+        add("Cleared", read("cleared"))
+    elif chosen.key == "sniper":
+        wind = read("wind")
+        if wind is not None:
+            arrow = "→" if wind > 0.05 else "←" if wind < -0.05 else ""
+            add("Wind", f"{abs(wind):.1f} m/s {arrow}".strip())
+        add("Stage", read("stage", now))
+        add("Hostiles", read("remaining_hostiles"))
+    elif chosen.key == "western":
+        add("Bandits", read("bandits_down"))
+        add("Bottles", read("bottles_broken"))
+        folk = read("townsfolk_hit")
+        add("Townsfolk", folk, tone="danger" if folk else None)
+    return found
+
+
+#: The one stat of each map's own on the results card, after the shared three.
+RESULT_STAT = {
+    "zombies": ("Down", "kills"),
+    "western": ("Bandits", "bandits_down"),
+    "orbit": ("Cleared", "cleared"),
+    "sniper": ("Down", "kills"),
+}
+
+
+def results(chosen, round_):
+    """The results card's outcome and its three or four stats."""
+    summary = round_.summary()
+    stats = [
+        {"label": "Accuracy", "value": f"{summary.accuracy:.0%}"},
+        {"label": "Best Streak", "value": str(summary.best_streak)},
+        {"label": title_case(summary.perfect_label), "value": str(summary.perfect)},
+    ]
+    label, name = RESULT_STAT.get(chosen.key, (None, None))
+    value = getattr(round_, name, None) if name else None
+    if isinstance(value, int):
+        stats.append({"label": label, "value": f"{value:,}"})
+    return {
+        "outcome": title_case(summary.outcome) if summary.outcome else "Time’s Up",
+        "won": summary.won,
+        "lost": bool(summary.outcome) and not summary.won,
+        "hits": summary.hits,
+        "shots": summary.shots,
+        "stats": stats,
+    }
+
+
+class CueRecorder:
+    """Stands in for the desktop's ``Sounds`` when a map voices a hit.
+
+    Each map says how its hits sound by calling its sound set (``Map.play_hit``);
+    handed this instead, the call writes down the name the page plays it by.
+    """
+
+    def __init__(self, cues):
+        self.cues = cues
+
+    def hit(self, ring):
+        self.cues.append(f"hit_{min(max(ring, 0), RINGS - 1)}")
+
+    def flesh(self, headshot):
+        self.cues.append("flesh_head" if headshot else "flesh_body")
+
+    def play_named(self, name):
+        self.cues.append(name)
+
+    def groan(self):
+        self.cues.append("groan")
+
+    def hurt(self):
+        self.cues.append("hurt")
+
+
 class BrowserSession:
-    def __init__(self, config):
+    def __init__(self, config, progress=None):
         view = config.get("viewSize")
         # The size the stage last asked for, and the size frames are drawn at:
         # they differ while a round laid out for the old size plays on.
         self.view = stage_size((WIDTH, HEIGHT) if view is None else view)
         self.width, self.height = self.view
-        self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
+        try:
+            self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
+        except KeyError as error:
+            raise ValueError("Choose one of the four games.") from error
         if self.map.key not in maps.keys():
-            raise ValueError("Choose a game from the arcade")
+            raise ValueError("Choose one of the four games.")
         self.control = config.get("control", "mouse")
         if self.control not in ("mouse", *schemes.keys()):
-            raise ValueError("Choose a control supported by this map")
+            raise ValueError("Play with your hand or your mouse; that control isn’t supported.")
         enemy = config.get("enemy", "zombies")
         if enemy not in ("zombies", "robots"):
-            raise ValueError("Unknown enemy")
+            raise ValueError("Choose zombies or robots.")
         duration = number(config.get("duration", 60), 15, 300)
         self.options = RoundOptions(
             Rect(0, 0, self.width, self.height),
@@ -194,14 +401,21 @@ class BrowserSession:
         self.frame = Frame()
         self.last_camera_at = float("-inf")
         self.id = secrets.token_urlsafe(18)
+        # What the warm-up's last shot did, and a count the page watches to
+        # celebrate each good hit once.
+        self.setup_event = None
+        self.moment = {"kind": None, "id": 0}
+        self.setup_seen = None
         # Models are loaded only after the player explicitly chooses a camera mode.
         if self.control != "mouse":
             self.scheme = schemes.for_map(self.map.key)
             self.rig = default_rig(self.scheme, 1)
             saved = config.get("calibration")
+            loaded = False
             if saved:
                 try:
                     self.rig = saved_rig(saved)
+                    loaded = True
                 except (LookupError, ValueError, TypeError, ArithmeticError) as error:
                     # An older version's format, or a damaged value. Refusing to
                     # start would refuse every start after it too, since the page
@@ -214,10 +428,44 @@ class BrowserSession:
                     )
                     self.forget_saved = True
             self._controller()
-            self.stream = self.scheme.open_stream(
-                *(ensure_model(m) for m in self.scheme.models)
-            )
-            self.begin_calibration()
+            self.stream = self.scheme.open_stream(*self._models(progress))
+            # A returning player whose aim was set up and checked on this camera
+            # goes straight into the game when the page asks for it; Adjust Aim
+            # is one click away if the camera or the chair has moved since. An
+            # aim that was never fitted, or that the fit would have refused,
+            # goes through the warm-up as before.
+            if (
+                config.get("useSavedAim") is True
+                and loaded
+                and self.rig[0].aim_fitted
+                and self.rig[0].usable
+            ):
+                self._play()
+            else:
+                self.begin_calibration()
+
+    def _models(self, progress):
+        """Each model the scheme needs, downloading what is missing.
+
+        ``progress`` hears how far the downloads have got, 0 to 1 across all
+        of them, or None while that cannot be told.
+        """
+        missing = [name for name in self.scheme.models if not cached(name)]
+        paths = []
+        for name in self.scheme.models:
+            report = None
+            if progress is not None and name in missing:
+                done = missing.index(name)
+
+                def report(received, total, done=done):
+                    progress(
+                        (done + min(received / total, 1.0)) / len(missing)
+                        if total
+                        else None
+                    )
+
+            paths.append(ensure_model(name, progress=report))
+        return paths
 
     def close(self):
         if self.stream:
@@ -261,11 +509,48 @@ class BrowserSession:
 
     def begin_calibration(self):
         if self.scheme is None:
-            raise ValueError("This control does not need aiming calibration")
-        self.calibration = ShotCalibration(self.scheme, previous=self.rig)
+            raise ValueError("Aim setup is for playing with your hand.")
+        self._setup(ShotCalibration(self.scheme, previous=self.rig))
         self.state = "calibration"
+
+    def _setup(self, calibration, event=None):
+        """Start the warm-up afresh, or say what it did outside a shot."""
+        self.calibration = calibration
         self.saved_rig = None
-        self.notice = self.calibration.message
+        self._note(event)
+
+    def _note(self, event):
+        self.setup_event = event
+        self.setup_seen = self._setup_snapshot()
+        if event:
+            self.moment = {"kind": event, "id": self.moment["id"] + 1}
+        self.notice = " ".join(setup_words(self.calibration, event))
+
+    def _setup_snapshot(self):
+        s = self.calibration
+        return (s.shot_count, len(s.samples), len(s.hits), s.testing, s.message)
+
+    def _setup_event(self, before, after):
+        """What changed in the warm-up between two frames: a shot, and its fate.
+
+        ``hit`` a centre hit; ``learned`` the shot that fitted the aim; ``shot``
+        any other learning shot; ``retry`` a learning shot the fit refused;
+        ``adjusted`` a missed check that refitted the aim, ``miss`` one that
+        could not, ``relearn`` one that sent the warm-up back to learning;
+        ``raise`` a pull with no aim before it. None when nothing happened.
+        """
+        shots, samples, hits, testing, message = before
+        if after[2] > hits:
+            return "hit"
+        if after[0] == shots:
+            return "raise" if after[4] != message else None
+        if testing:
+            if not after[3]:
+                return "relearn"
+            return "adjusted" if after[1] > samples else "miss"
+        if after[1] <= samples:
+            return "retry"
+        return "learned" if after[3] else "shot"
 
     def _play(self):
         """A fresh round of the chosen map, on whatever aim setup settled on."""
@@ -287,10 +572,14 @@ class BrowserSession:
         # already happened or no longer applies. Answer with where the game is:
         # an error would end the session in the page.
         calibrating = self.state == "calibration"
+        warming_up = calibrating or (
+            self.state == "paused" and self.resume_state == "calibration"
+        )
         if (
             (name == "calibrate" and calibrating)
             or (name in ("undo", "reset", "finish") and not calibrating)
             or (name == "play" and self.state != "over")
+            or (name == "restart" and warming_up)
         ):
             return self.info()
         if name == "calibrate":
@@ -299,19 +588,19 @@ class BrowserSession:
             s = self.calibration
             if name == "undo":
                 s.undo()
-                self.notice = s.message
+                self._note("undo")
             elif name == "reset":
-                self.calibration = ShotCalibration(self.scheme)
-                self.saved_rig = None
-                self.notice = self.calibration.message
+                self._setup(ShotCalibration(self.scheme))
             else:
                 # Five verified hits: the warm-up is over and the game starts.
                 if not s.complete:
-                    raise ValueError("Land five accurate hits first")
+                    raise ValueError("Hit five centres first.")
                 self.rig = s.rig
                 self.saved_rig = {"cameras": [self.rig[0].to_dict()]}
                 self._play()
-        elif name == "play":
+        elif name in ("play", "restart"):
+            # Play starts the next round once one is over; restart abandons
+            # the one being played, paused or not.
             self._play()
         elif name == "pause":
             if self.state in ("playing", "calibration"):
@@ -340,15 +629,24 @@ class BrowserSession:
             self.state == "paused" and self.resume_state == "calibration"
         ):
             s = self.calibration
+            title, detail = setup_words(s, self.setup_event)
             data["step"] = {
                 "shots": s.shot_count,
                 "learningShots": len(s.samples),
+                "learnTotal": LEARNING_SHOTS,
                 "complete": s.complete,
                 "ready": s.ready,
                 "preview": s.preview,
                 "testing": s.testing,
                 "hits": len(s.hits),
+                "total": REQUIRED_HITS,
                 "armed": s.aim.armed,
+                # Where the lit face hangs, 0..1 of the stage, for the page's
+                # celebration of a hit on it.
+                "target": list(s.target),
+                "title": title,
+                "detail": detail,
+                "moment": self.moment,
             }
         data.update(
             score=self.round.score,
@@ -356,7 +654,10 @@ class BrowserSession:
             health=getattr(self.round, "health", None),
             accuracy=round(self.round.accuracy * 100),
             result=self.round.result_line(),
+            readouts=readouts(self.map, self.round, self.clock),
         )
+        if self.state == "over":
+            data["summary"] = results(self.map, self.round)
         return data
 
     def tick(self, data, wall_time=None, camera=None):
@@ -432,9 +733,16 @@ class BrowserSession:
         if self.state == "calibration":
             s = self.calibration
             s.viewport = (self.width, self.height)
-            if s.update([frame], now):
-                cues.append("hit" if s.last_hit else "shot")
-            self.notice = s.message
+            s.update([frame], now)
+            seen = self._setup_snapshot()
+            if seen != self.setup_seen:
+                event = self._setup_event(self.setup_seen, seen)
+                if event:
+                    self._note(event)
+                    cues.append("shot")
+                    if event == "hit":
+                        cues.append("hit_0")  # the gold rings: a small celebration
+                self.setup_seen = seen
             scene.draw_calibration_range(self.canvas, s, now)
             if s.preview and s.aim.position:
                 scene.draw_crosshair(
@@ -467,7 +775,15 @@ class BrowserSession:
             ):
                 impact = self.round.shoot(*crosshair, now)
                 self.last_shot = now
-                cues.append("hit" if impact.is_hit else "shot")
+                # The desktop's sounds for a shot (app.play): the pistol, then
+                # the hit as the map voices it, or the miss.
+                cues.append("shot")
+                if not impact.is_hit:
+                    cues.append("miss")
+                elif self.map.key == "zombies" and self.options.enemy == "robots":
+                    cues.append("debris_hit")
+                else:
+                    self.map.play_hit(CueRecorder(cues), impact)
             self.map.draw_world(self.canvas, self.round, now)
             # The page draws the mouse's crosshair itself, where the pointer is
             # now rather than where it was a round trip ago. A hand's is drawn
@@ -482,11 +798,20 @@ class BrowserSession:
                     pull=aim.travel,
                     fire_at=self.scheme.fire_above,
                 )
+            cues.extend(self.round.take_cues())
             if self.round.is_over(now):
                 self.state = "over"
-            cues.extend(self.round.take_cues())
+                cues.append("round_over")
+        armed = None
+        if self.state == "calibration":
+            armed = self.calibration.aim.armed
+        elif aim is not None:
+            armed = aim.armed
         result = self.info()
         result.update(
+            # The hand's trigger: the page clicks when it re-arms, as the
+            # desktop does, and shows it during the warm-up.
+            armed=armed,
             tracking=tracking,
             hands=[list(hand.landmarks) for hand in getattr(frame, "hands", ())],
             scopeTracked=(
@@ -500,13 +825,70 @@ class BrowserSession:
         return result
 
 
+class SoundBank:
+    """The game's sound set as WAV files, for the page to play.
+
+    Synthesised once, on a thread of its own, from the same builders as the
+    desktop's: a second or two of DSP the first page load must not wait for.
+    One take of every sound comes first, so the whole set can be heard early;
+    the other takes follow.
+    """
+
+    TAKES = 3
+
+    def __init__(self, names=None, takes=TAKES, rings=RINGS):
+        self.names = tuple(audio.cue_names(rings) if names is None else names)
+        self.takes = takes
+        self.rings = rings
+        self.files = {}  # (name, take) -> WAV bytes
+        self.done = False
+
+    def start(self):
+        threading.Thread(
+            target=self.build, daemon=True, name="synthesise-browser-sounds"
+        ).start()
+        return self
+
+    def build(self):
+        for take in range(self.takes):
+            for name in self.names:
+                try:
+                    wave = audio.render_cue(name, take, self.rings)
+                except Exception as error:
+                    # A sound that will not build is a quieter game, not a
+                    # broken one; say so where a developer will see it.
+                    print(f"Could not build sound {name!r}: {error!r}", file=sys.stderr)
+                    continue
+                self.files[name, take] = audio.wav_bytes(wave)
+                time.sleep(0)  # let a frame in: this thread is not in a hurry
+        self.done = True
+
+    def manifest(self):
+        """Which takes of which sounds are ready: {"ready", "cues": {name: n}}.
+
+        ``n`` counts the takes from the first without a gap, so the page can
+        ask for takes 0 to n - 1 of each.
+        """
+        cues = {}
+        for name in self.names:
+            count = 0
+            while (name, count) in self.files:
+                count += 1
+            if count:
+                cues[name] = count
+        return {"ready": self.done, "cues": cues}
+
+    def get(self, name, take):
+        return self.files.get((name, take))
+
+
 class BrowserServer(ThreadingHTTPServer):
     daemon_threads = True
     # Ctrl+C must not wait for handler threads: one may hold a keep-alive
     # connection open for the page's next frame, or be loading a model.
     block_on_close = False
 
-    def __init__(self, address, idle_timeout=IDLE_TIMEOUT):
+    def __init__(self, address, idle_timeout=IDLE_TIMEOUT, sounds=None):
         self.token = secrets.token_urlsafe(32)
         self.session = None
         # Guards ``session`` and everything done to it. Held for one frame at a
@@ -516,19 +898,40 @@ class BrowserServer(ThreadingHTTPServer):
         self.idle_timeout = idle_timeout
         self.seen = 0.0  # when a request last reached the open session
         self.expired = None  # the id of the last session closed for silence
+        #: The sound set the page plays, as WAV files (a SoundBank), if any.
+        self.sounds = sounds
+        # Starts still building, and how far the downloads for the newest have
+        # got (0 to 1, or None while that cannot be told), for /api/progress.
+        self.loading = 0
+        self.fraction = None
+        self.counting = threading.Lock()  # guards ``loading``, never held long
         super().__init__(address, Handler)
+
+    def progress(self):
+        """How far the game being opened has got, for a page waiting on it."""
+        return {"loading": self.loading > 0, "fraction": self.fraction}
+
+    def _progressed(self, fraction):
+        self.fraction = fraction
 
     def start(self, config):
         """Open a new game in place of any other, and describe it."""
         # Built outside the lock: loading the models - on first use, downloading
         # them - takes seconds, and every other request would wait behind it:
         # another tab's frames, a closing tab's stop, and Ctrl+C.
-        session = BrowserSession(config)
+        with self.counting:
+            self.loading += 1
+            self.fraction = None
+        try:
+            session = BrowserSession(config, progress=self._progressed)
+        finally:
+            with self.counting:
+                self.loading -= 1
         with self.lock:
             if self.closed:
                 # Ctrl+C arrived while the models loaded; nothing would close it.
                 session.close()
-                raise ValueError("Handy is shutting down")
+                raise ValueError("Handy is closing.")
             previous, self.session = self.session, session
             self.seen = time.monotonic()
         # Unreachable now, and no frame can be using it: frames hold the lock.
@@ -545,11 +948,12 @@ class BrowserServer(ThreadingHTTPServer):
             if session is None or data.get("id") != session.id:
                 if self.expired is not None and data.get("id") == self.expired:
                     raise ValueError(
-                        "This game closed after a minute with no contact from its tab. "
-                        "Return to the arcade."
+                        "This game closed after a minute away. "
+                        "Choose a game to start again."
                     )
                 raise ValueError(
-                    "This game was closed or opened in another tab. Return to the arcade."
+                    "This game ended, or moved to another tab. "
+                    "Choose a game to play here."
                 )
             self.seen = time.monotonic()
             if path == "/api/frame":
@@ -668,10 +1072,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if not self.valid_host() or not self.same_origin():
-            self.respond(403, {"error": "Use the local Handy address"})
+            self.respond(403, {"error": "Open Handy at the address in your terminal."})
             return
-        path = urlsplit(self.path).path
-        if path == "/api/config":
+        address = urlsplit(self.path)
+        path = address.path
+        if path == "/api/progress":
+            self.respond(200, self.server.progress())
+        elif path == "/audio/manifest.json":
+            sounds = self.server.sounds
+            if sounds is None:
+                self.respond(404, {"error": "Not found"})
+            else:
+                self.respond(200, sounds.manifest())
+        elif path.startswith("/audio/"):
+            self.sound(path.removeprefix("/audio/"))
+        elif path == "/api/config":
             self.respond(
                 200,
                 {
@@ -688,13 +1103,18 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         elif path.startswith("/art/"):
+            key = path.removeprefix("/art/")
             try:
-                chosen = maps.by_key(path.removeprefix("/art/"))
-                art = np.zeros((200, 360, 3), np.uint8)
-                chosen.draw_emblem(art)
-                self.send(200, jpeg(art), "image/jpeg")
+                maps.by_key(key)
             except KeyError:
                 self.respond(404, {"error": "Unknown map"})
+                return
+            try:
+                size = art_size(address.query)
+            except ValueError as error:
+                self.respond(400, {"error": str(error)})
+                return
+            self.send(200, art(key, *size), "image/jpeg")
         elif path in ("/", "/app.js", "/capture.js", "/style.css"):
             name = "index.html" if path == "/" else path[1:]
             mime = {
@@ -707,6 +1127,27 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.respond(404, {"error": "Not found"})
 
+    def sound(self, rest):
+        """One take of one sound: ``<name>/<take>.wav``."""
+        sounds = self.server.sounds
+        name, _, file = rest.partition("/")
+        take = file.removesuffix(".wav")
+        if (
+            sounds is None
+            or name not in sounds.names
+            or not file.endswith(".wav")
+            or not (take.isascii() and take.isdigit())
+            or not int(take) < sounds.takes
+        ):
+            self.respond(404, {"error": "Not found"})
+            return
+        wave = sounds.get(name, int(take))
+        if wave is None:
+            # Asked for before it was built: the manifest never lists these.
+            self.respond(503, {"error": "Still building the sound set"})
+            return
+        self.send(200, wave, "audio/wav")
+
     def do_POST(self):
         # Compared as bytes: a header carrying non-ASCII would make the string
         # comparison raise instead of simply failing.
@@ -718,14 +1159,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.token.encode(),
             )
         ):
-            self.respond(403, {"error": "Reload Handy to reconnect"})
+            self.respond(403, {"error": "Reload the page to reconnect."})
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             size = 0
         if not 0 < size <= MAX_BODY:
-            self.respond(400, {"error": "Request is too large or empty"})
+            self.respond(400, {"error": "That request was empty, or too large."})
             return
         # Read outside the try below, as the answer is written outside it: only
         # these two touch the tab's connection, and its failures are handle()'s.
@@ -749,8 +1190,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(
                 500,
                 {
-                    "error": "The game could not complete this action. "
-                    "Check the terminal, or return to the arcade and try mouse controls."
+                    "error": "Handy ran into a problem. The terminal it runs in "
+                    "says what happened. You can still play with your mouse."
                 },
             )
             return
@@ -776,6 +1217,9 @@ def main(argv=None):
         server = BrowserServer(("127.0.0.1", args.port))
     except OSError as error:
         parser.exit(1, f"Could not start Handy: {error}. Try --port 8766.\n")
+    # Built while the page loads and the player chooses; the page asks for
+    # the files once a game starts, and plays whatever is ready by then.
+    server.sounds = SoundBank().start()
     url = f"http://127.0.0.1:{args.port}"
     print(
         f"Handy is ready: {url}\nKeep this terminal open. Ctrl+C stops the game.",

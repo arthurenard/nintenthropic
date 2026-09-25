@@ -2,235 +2,321 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#101412" />
-    <title>Handy — The webcam arcade</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#000000" />
+    <title>Handy</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8'/%3E%3Cg transform='translate(4 4)' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.2 8.4V4.6a1.45 1.45 0 0 1 2.9 0v3.8M11.1 8.4h8.4a1.6 1.6 0 0 1 0 3.2h-6.4M13.1 11.6h.7a1.5 1.5 0 0 1 0 3h-.9M12.9 14.6a1.4 1.4 0 0 1 0 2.8h-1.1M8.2 8.4H7a2.6 2.6 0 0 0-2.6 2.6v5a3.8 3.8 0 0 0 3.8 3.8h1.6a2.6 2.6 0 0 0 2-1'/%3E%3C/g%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
-  <body>
-    <header class="site-header">
-      <a class="wordmark" href="/" aria-label="Handy home"
-        ><span class="logo">✳</span> handy<span class="dot">.</span></a
-      ><span class="edition"
-        >THE WEBCAM ARCADE <span>/</span> LOCAL EDITION</span
-      ><span class="local"><i></i> On your computer</span>
-    </header>
-    <main>
-      <div id="lobby">
-        <section class="intro">
-          <div>
-            <p class="eyebrow">HANDS UP. GAME ON.</p>
-            <h1>Your hands.<br />A whole <em>arcade.</em></h1>
-            <p class="lede">
-              Four worlds, one finger pistol. Pick a game, choose your
-              controls,<br class="desktop" />
-              and make yourself at home.
-            </p>
-          </div>
-          <div class="intro-note">
-            <span>01 — 04</span>
-            <p>No controller?<br />You already have two.</p>
-            <small>Mouse and touch are available too.</small>
-          </div>
-        </section>
-        <div class="section-label">
-          <h2><span>01</span> Choose your game</h2>
-          <p>Choose your game. Target Range gets your aim ready.</p>
-        </div>
-        <div id="maps" class="map-grid" aria-label="Games"></div>
-        <section class="setup-panel">
-          <div class="setup-title">
-            <h2><span>02</span> Make it yours</h2>
-            <p id="selected-name">Target Range</p>
-          </div>
-          <div class="setup-body">
-            <div class="control-heading">
-              <h3>How do you want to play?</h3>
-              <span>Mouse or hand controls</span>
-            </div>
-            <div id="controls" class="control-grid"></div>
-            <div class="options">
-              <label id="enemy-option" hidden
-                >Opponent<select id="enemy">
-                  <option value="zombies">Zombies</option>
-                  <option value="robots">Humanoid robots</option>
-                </select></label
-              ><label
-                >Round length<select id="duration">
-                  <option value="60">60 seconds</option>
-                  <option value="120">2 minutes</option>
-                  <option value="180">3 minutes</option>
-                </select></label
-              >
-              <p id="setup-hint">
-                No camera. No calibration. Jump straight in.
-              </p>
-              <button id="start" class="primary">
-                Let's play <span>↗</span>
-              </button>
-            </div>
-          </div>
-        </section>
-        <details class="guide">
-          <summary>How do the controls work?</summary>
-          <div class="guide-content">
-            <p>
-              <strong>Hand controls for shooting:</strong> point your index
-              finger to aim and fold your thumb to fire. On Overwatch Ridge,
-              your eyes are also tracked: close one eye to look down the scope.
-              Shoot a few targets to set your aim. Thumb gestures and the eye
-              scope need no calibration.
-            </p>
-            <p>
-              <strong>Target Range warm-up:</strong> learn your aim by shooting,
-              then land five accurate hits to start your selected game
-              automatically. Mouse and touch remain available as an alternative.
-            </p>
-          </div>
-        </details>
-        <footer>
-          <span>Built for a little everyday play.</span
-          ><span
-            >Camera frames stay on this computer.
-            <a href="#" id="privacy">How it works ↗</a></span
-          >
-        </footer>
+  <body data-view="home">
+    <!-- First run: what Handy is, the gesture, one button. -->
+    <div id="welcome" class="view welcome" hidden>
+      <div class="welcome-inner">
+        <p class="wordmark" aria-hidden="true">
+          <svg class="wordmark-icon" viewBox="0 0 24 24"><use href="#i-hand" /></svg>Handy
+        </p>
+        <h1 class="large-title" id="welcome-title">Welcome to Handy.</h1>
+        <p class="body secondary">
+          An arcade you play with a finger pistol. No controller, just your
+          hand and your camera.
+        </p>
+        <figure class="gesture" aria-labelledby="gesture-caption">
+          <svg class="gesture-art" viewBox="0 0 360 180" aria-hidden="true">
+            <defs>
+              <linearGradient id="g-sleeve" gradientUnits="userSpaceOnUse" x1="12" y1="0" x2="92" y2="0">
+                <stop offset="0" stop-color="#fff" stop-opacity="0" />
+                <stop offset="1" stop-color="#fff" stop-opacity="1" />
+              </linearGradient>
+            </defs>
+            <g class="g-recoil">
+              <path class="g-arm" d="M12 114 L96 106 M12 160 L94 158" />
+              <rect class="g-shape" x="84" y="84" width="84" height="76" rx="24" />
+              <rect class="g-shape" x="146" y="112" width="34" height="16" rx="8" />
+              <rect class="g-shape" x="146" y="128" width="32" height="16" rx="8" />
+              <rect class="g-shape" x="144" y="144" width="28" height="15" rx="7.5" />
+              <rect class="g-shape" x="134" y="84" width="130" height="26" rx="13" />
+              <g class="g-thumb">
+                <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
+              </g>
+              <!-- Folded, for a cross-fade when motion is reduced. -->
+              <g class="g-thumb-folded" transform="rotate(80 122 92)">
+                <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
+              </g>
+              <g class="g-flash">
+                <path class="g-line" d="M274 97 L290 97 M272 86 L284 77 M272 108 L284 117" />
+              </g>
+            </g>
+            <g class="g-target">
+              <circle class="g-ring" cx="324" cy="97" r="24" />
+              <circle class="g-ring" cx="324" cy="97" r="14" />
+              <circle class="g-bull" cx="324" cy="97" r="5.5" />
+              <circle class="g-pulse" cx="324" cy="97" r="24" />
+            </g>
+          </svg>
+          <figcaption id="gesture-caption">
+            <ol class="gesture-steps">
+              <li class="step-point">Point</li>
+              <li class="step-fold">Fold your thumb</li>
+              <li class="step-fire">Fire</li>
+            </ol>
+          </figcaption>
+        </figure>
+        <button id="get-started" class="button primary large">Get Started</button>
+        <p class="footnote tertiary">Your camera picture stays on this computer.</p>
       </div>
-      <section id="game" hidden aria-label="Game session">
-        <div class="game-heading">
-          <button id="back" class="quiet">← Arcade</button>
-          <div>
-            <p class="eyebrow" id="game-category">NOW PLAYING</p>
-            <h1 id="game-title" tabindex="-1">Target Range</h1>
-          </div>
-          <div class="game-actions">
-            <button id="sound" class="quiet" aria-pressed="false">
-              Sound on</button
-            ><button id="fullscreen" class="quiet">Full screen ↗</button>
-          </div>
+    </div>
+
+    <!-- The arcade. -->
+    <div id="home" class="view home" hidden>
+      <header class="nav">
+        <p class="wordmark">
+          <svg class="wordmark-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg>Handy
+        </p>
+        <div class="nav-actions">
+          <button id="about" class="button plain small">Privacy</button>
+          <button id="mute" class="icon-button" aria-pressed="false" aria-label="Mute">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" /></svg>
+          </button>
         </div>
-        <div class="play-layout">
-          <div class="game-main">
-            <div class="hud">
-              <span>Score <strong id="score">0</strong></span
-              ><span id="health-wrap" hidden
-                >Health <strong id="health">100</strong></span
-              ><span>Accuracy <strong id="accuracy">0%</strong></span
-              ><span class="time">Time <strong id="time">60</strong></span>
-            </div>
-            <div class="stage" id="stage">
-              <canvas
-                id="game-image"
-                width="960"
-                height="540"
-                role="img"
-                aria-label="Game view"
-              ></canvas>
-              <canvas id="crosshair" aria-hidden="true"></canvas>
-              <div id="stage-overlay" class="stage-overlay" hidden>
-                <h2 id="overlay-title">Paused</h2>
-                <p id="overlay-copy"></p>
-                <button class="primary" id="overlay-action">Resume</button>
-              </div>
-            </div>
-            <div class="play-footer">
-              <p id="play-instructions">Move to aim · Click to fire</p>
-              <button id="pause" class="quiet">Pause <kbd>P</kbd></button>
-            </div>
+      </header>
+      <main class="home-main">
+        <section class="feature" aria-labelledby="feature-title">
+          <div class="feature-art" aria-hidden="true">
+            <img id="feature-art" alt="" />
           </div>
-          <aside class="coach">
-            <div class="coach-head">
-              <span class="eyebrow">YOUR CONTROLS</span
-              ><strong id="active-control">Mouse & touch</strong>
+          <div class="feature-text">
+            <h1 class="large-title" id="feature-title">Dead of Night</h1>
+            <p class="body secondary" id="feature-about"></p>
+            <div class="feature-actions">
+              <button id="play" class="button primary large">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-play" /></svg>Play
+              </button>
+              <button id="adjust" class="button secondary large" hidden>Adjust Aim</button>
             </div>
-            <div id="camera-preview" hidden>
-              <div class="camera-feed">
-                <video id="camera" autoplay playsinline muted></video>
-                <canvas
-                  id="hand-graph"
-                  width="640"
-                  height="480"
-                  aria-label="Tracked hand skeleton"
-                ></canvas>
-              </div>
-              <div class="tracking">
-                <i id="tracking-light"></i
-                ><span id="tracking-label">Looking for you…</span>
-              </div>
-            </div>
-            <div id="calibration-coach" hidden>
-              <div class="aim-instructions">
-                <p class="eyebrow" id="step-count">0 SHOTS RECORDED</p>
-                <h2 id="step-title">Point. Fold your thumb. Shoot.</h2>
-                <p id="step-detail">
-                  Aim naturally at the lit target. Your crosshair appears after
-                  two shots.
-                </p>
-                <strong id="trigger-status" role="status"
-                  >Show your hand to the camera</strong
-                >
-              </div>
-              <div class="aim-actions">
-                <button id="undo-shot" class="quiet">Undo shot</button>
-                <button id="reset-aim" class="quiet">Start over</button>
-                <label class="hit-progress"
-                  >Accurate hits
-                  <progress
-                    id="aim-hits"
-                    max="5"
-                    value="0"
-                    aria-label="Five accurate hits to start"
-                  ></progress>
+            <div class="feature-settings">
+              <p class="subhead secondary start-control">
+                <span id="control-label" class="control-label"></span>
+                <button id="switch-control" class="link">Use Mouse or Trackpad</button>
+              </p>
+              <div class="start-options">
+                <label class="popup">
+                  <span class="visually-hidden">Round length</span>
+                  <select id="duration">
+                    <option value="60">1 Minute</option>
+                    <option value="120">2 Minutes</option>
+                    <option value="180">3 Minutes</option>
+                  </select>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron" /></svg>
+                </label>
+                <label class="popup" id="enemy-option">
+                  <span class="visually-hidden">Opponent</span>
+                  <select id="enemy">
+                    <option value="zombies">Zombies</option>
+                    <option value="robots">Robots</option>
+                  </select>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron" /></svg>
                 </label>
               </div>
             </div>
-            <p id="scope-note" hidden>
-              Your eyes are also tracked on this map. Hold an eye closed to look
-              down the scope; open it to zoom out. Scoped hand movement is four
-              times slower. Aim and shoot with your hand. No eye calibration
-              needed.
-            </p>
-            <p id="notice" role="status"></p>
-            <div id="calibration-tools" hidden>
-              <button id="recalibrate" class="quiet">Adjust aim</button>
-              <small
-                >Aim is saved for this camera. Thumb gestures work without
-                calibration.</small
-              >
-            </div>
-            <div id="mouse-coach">
-              <div class="coach-icon">⌖</div>
-              <h2>You're all set.</h2>
-              <p id="mouse-help">
-                Move your mouse to aim. Click a target to fire. On a
-                touchscreen, tap the target.
-              </p>
-              <small
-                >You can change controls from the arcade at any time.</small
-              >
-            </div>
-          </aside>
+          </div>
+        </section>
+        <section class="games" aria-labelledby="games-label">
+          <h2 id="games-label" class="visually-hidden">Choose a Game</h2>
+          <div id="maps" class="posters" role="radiogroup" aria-labelledby="games-label"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- A game: the world full-bleed, chrome in the corners. -->
+    <section id="game" class="view game" hidden aria-label="Game" data-mode="play" tabindex="-1">
+      <div class="stage" id="stage">
+        <canvas id="game-image" width="960" height="540" role="img" aria-label="Game"></canvas>
+        <canvas id="crosshair" aria-hidden="true"></canvas>
+        <div id="bursts" class="bursts" aria-hidden="true"></div>
+
+        <div class="hud-score glass play-only" id="hud-score">
+          <p class="score num"><span class="visually-hidden">Score </span><span id="score">0</span></p>
+          <dl class="readouts" id="readouts"></dl>
         </div>
-      </section>
-      <div id="error" class="error" role="alert" hidden>
-        <span id="error-message"></span
-        ><button id="dismiss-error" aria-label="Dismiss error">×</button>
+        <p class="hud-clock glass num play-only" id="clock-box" role="timer" aria-label="Time left">
+          <span id="clock">1:00</span>
+        </p>
+
+        <div class="setup-progress glass setup-only" id="setup-progress">
+          <span class="eyebrow">Aim Setup</span>
+          <span class="headline" id="setup-phase">Learn Your Aim</span>
+          <span class="dots" id="setup-dots" aria-hidden="true"></span>
+          <span class="visually-hidden" id="setup-count"></span>
+        </div>
+
+        <button class="hud-pause glass icon-button" id="pause" aria-label="Pause" title="Pause (P)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause" /></svg>
+        </button>
+
+        <div class="setup-card glass setup-only" id="setup-card">
+          <div class="setup-words" aria-live="polite">
+            <p class="title3" id="setup-title">Shoot the lit target.</p>
+            <p class="subhead secondary" id="setup-detail">Point at it, then fold your thumb to fire.</p>
+          </div>
+          <div class="setup-row">
+            <p class="trigger footnote" id="trigger"><i></i><span>Show your hand</span></p>
+            <div class="setup-actions">
+              <button class="button quiet small" id="undo">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-undo" /></svg>Undo
+              </button>
+              <button class="button quiet small" id="start-over">Start Over</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pip" id="pip" hidden>
+          <video id="camera" autoplay playsinline muted></video>
+          <canvas id="hand-graph" aria-hidden="true"></canvas>
+        </div>
+
+        <p class="hint glass" id="hint" role="status" hidden></p>
+        <div class="aim-set glass" id="aim-set" hidden>
+          <span class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg></span>
+          <span class="title3">Aim Set</span>
+        </div>
       </div>
-    </main>
-    <dialog id="privacy-dialog">
-      <h2>Your camera stays local.</h2>
-      <p>
-        This browser interface talks to the Handy Python process running on this
-        computer. Camera frames are processed in memory on your Mac, never
-        uploaded to a cloud service or saved.
+    </section>
+
+    <!-- Sheets. -->
+    <dialog id="prime" class="sheet alert" aria-labelledby="prime-title">
+      <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
+      <h2 class="title2" id="prime-title">Use Your Camera</h2>
+      <p class="body secondary">
+        Handy needs your camera to see your hand. The picture stays on this computer.
       </p>
-      <p>
-        Camera modes may download MediaPipe models on first use. Mouse and touch
-        modes work without a camera or model download. Keep the local server
-        running while you play.
-      </p>
-      <button id="close-privacy" class="primary">Got it</button>
+      <div class="sheet-actions">
+        <button class="button primary wide" id="prime-continue">Continue</button>
+        <button class="button plain wide" id="prime-mouse">Use Mouse or Trackpad</button>
+      </div>
     </dialog>
+
+    <dialog id="loading" class="sheet loading" aria-labelledby="loading-title">
+      <h2 class="title3" id="loading-title">Getting ready…</h2>
+      <div class="progress" id="loading-bar" role="progressbar" aria-labelledby="loading-title" aria-valuemin="0" aria-valuemax="100" hidden>
+        <span></span>
+      </div>
+      <p class="footnote secondary" id="loading-note" hidden>This happens once.</p>
+      <button class="button plain small" id="loading-cancel">Cancel</button>
+    </dialog>
+
+    <dialog id="alert" class="sheet alert" aria-labelledby="alert-title" aria-describedby="alert-body">
+      <span class="alert-icon" id="alert-icon"></span>
+      <h2 class="title2" id="alert-title"></h2>
+      <p class="body secondary" id="alert-body"></p>
+      <div class="sheet-actions">
+        <button class="button primary wide" id="alert-primary"></button>
+        <button class="button plain wide" id="alert-secondary"></button>
+      </div>
+    </dialog>
+
+    <dialog id="pause-sheet" class="sheet menu" aria-labelledby="pause-title">
+      <div class="sheet-head">
+        <h2 class="title2" id="pause-title">Paused</h2>
+        <div class="sheet-tools">
+          <button class="icon-button" id="sheet-mute" aria-pressed="false" aria-label="Mute">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" /></svg>
+          </button>
+          <button class="icon-button" id="fullscreen" aria-label="Full Screen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-expand" /></svg>
+          </button>
+        </div>
+      </div>
+      <div class="menu-list">
+        <button class="button primary wide" id="resume">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-play" /></svg>Resume
+        </button>
+        <button class="button secondary wide" id="restart">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Restart
+        </button>
+        <button class="button secondary wide" id="menu-start-over">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Start Over
+        </button>
+        <button class="button secondary wide" id="adjust-aim">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg>Adjust Aim
+        </button>
+        <button class="button secondary wide" id="choose-game">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>Choose a Game
+        </button>
+      </div>
+      <p class="footnote tertiary">Press P to resume.</p>
+    </dialog>
+
+    <dialog id="results" class="sheet results" aria-labelledby="results-outcome">
+      <div class="results-art"><img id="results-art" alt="" /></div>
+      <div class="results-body">
+        <p class="eyebrow" id="results-map">Dead of Night</p>
+        <h2 class="title2" id="results-outcome">Survived</h2>
+        <p class="results-score num" id="results-score">0</p>
+        <p class="new-best headline" id="new-best" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-star" /></svg>New Best
+        </p>
+        <dl class="stats" id="results-stats"></dl>
+        <div class="results-actions">
+          <button class="button primary wide" id="again">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Play Again
+          </button>
+          <div class="results-row">
+            <button class="button secondary" id="choose">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>Choose a Game
+            </button>
+            <button class="button secondary" id="share">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-share" /></svg>Share
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="privacy" class="sheet alert" aria-labelledby="privacy-title">
+      <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
+      <h2 class="title2" id="privacy-title">Your Camera Stays Here</h2>
+      <p class="body secondary">
+        Handy runs on this computer. Your camera picture goes only to the Handy
+        app in your terminal, which uses it to find your hand. It is never saved
+        or uploaded.
+      </p>
+      <p class="subhead secondary">
+        The first game with your hand downloads a small file, about 12 MB, once.
+        After that, Handy works offline.
+      </p>
+      <div class="sheet-actions">
+        <button class="button primary wide" id="privacy-done">Done</button>
+      </div>
+    </dialog>
+
+    <p class="toast glass" id="toast" role="status" hidden></p>
+    <p class="visually-hidden" id="announce" aria-live="polite"></p>
+
+    <!-- Icons, in the style of SF Symbols: 24-unit grid, 1.75 strokes. -->
+    <svg class="symbols" aria-hidden="true">
+      <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.6v12.8a1.1 1.1 0 0 0 1.66.94l10.3-6.4a1.1 1.1 0 0 0 0-1.88L9.66 4.66A1.1 1.1 0 0 0 8 5.6z" /></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" stroke="none" x="6.5" y="5" width="3.6" height="14" rx="1.3" /><rect fill="currentColor" stroke="none" x="13.9" y="5" width="3.6" height="14" rx="1.3" /></symbol>
+      <symbol id="i-restart" viewBox="0 0 24 24"><path d="M5.2 13.2A7 7 0 1 0 7.4 7" /><path d="M7.6 3.4 7.4 7l3.6.4" /></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="4.5" y="13.3" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="13.3" width="6.2" height="6.2" rx="1.6" /></symbol>
+      <symbol id="i-xmark" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></symbol>
+      <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H4z" /><path d="M14.6 9.3a3.8 3.8 0 0 1 0 5.4" /><path d="M17.2 6.8a7.4 7.4 0 0 1 0 10.4" /></symbol>
+      <symbol id="i-speaker-off" viewBox="0 0 24 24"><path d="M4 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H4z" /><path d="M15 9.5l5 5M20 9.5l-5 5" /></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><rect x="2.9" y="6.6" width="13" height="10.8" rx="2.6" /><path d="M15.9 10.4 21 7.6v8.8l-5.1-2.8" /></symbol>
+      <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8.2 8.4V4.6a1.45 1.45 0 0 1 2.9 0v3.8" /><path d="M11.1 8.4h8.4a1.6 1.6 0 0 1 0 3.2h-6.4" /><path d="M13.1 11.6h.7a1.5 1.5 0 0 1 0 3h-.9" /><path d="M12.9 14.6a1.4 1.4 0 0 1 0 2.8h-1.1" /><path d="M8.2 8.4H7a2.6 2.6 0 0 0-2.6 2.6v5a3.8 3.8 0 0 0 3.8 3.8h1.6a2.6 2.6 0 0 0 2-1" /></symbol>
+      <symbol id="i-mouse" viewBox="0 0 24 24"><path d="M6.5 3.8 18 11.2l-5 1.3 2.9 5.3-2.3 1.3-2.9-5.4-3.7 3.4z" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5.5 12.6 9.8 17l8.7-9.8" /></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3.8v10.4" /><path d="M8.4 7.2 12 3.6l3.6 3.6" /><path d="M8.6 10.2H7.2a1.9 1.9 0 0 0-1.9 1.9v6.2a1.9 1.9 0 0 0 1.9 1.9h9.6a1.9 1.9 0 0 0 1.9-1.9v-6.2a1.9 1.9 0 0 0-1.9-1.9h-1.4" /></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 6.2 5 10.2l4 4" /><path d="M5.4 10.2h8.9a4.7 4.7 0 0 1 0 9.4h-2.6" /></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14.2 4.4h5.4v5.4" /><path d="M9.8 19.6H4.4v-5.4" /><path d="M19.4 4.6 13.6 10.4" /><path d="M4.6 19.4l5.8-5.8" /></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M7.5 10l4.5 4.5 4.5-4.5" /></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.6L12 16.5l-5.1 2.7 1-5.6-4.1-4 5.7-.8z" /></symbol>
+      <symbol id="i-exclamation" viewBox="0 0 24 24"><path d="M12 5.2v9.2" stroke-width="2.2" /><circle fill="currentColor" stroke="none" cx="12" cy="18.8" r="1.45" /></symbol>
+      <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 16.4 0" /><path d="M6.8 12.7a7.3 7.3 0 0 1 10.4 0" /><path d="M9.8 15.8a3 3 0 0 1 4.4 0" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /></symbol>
+    </svg>
   </body>
 </html>

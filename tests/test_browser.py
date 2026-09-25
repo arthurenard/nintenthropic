@@ -149,7 +149,7 @@ class FakeStream:
 
 def camera_session(monkeypatch, **config):
     stream = FakeStream()
-    monkeypatch.setattr(browser, "ensure_model", lambda _name: "unused")
+    monkeypatch.setattr(browser, "ensure_model", lambda _name, progress=None: "unused")
     monkeypatch.setattr(
         browser.schemes,
         "for_map",
@@ -228,7 +228,9 @@ def test_undecodable_camera_frame_is_a_bad_request(monkeypatch):
         session.tick({}, camera=CAMERA)
 
 
-def shoot_setup_target(session, stream, point=None):
+def shoot_setup_target(session, stream, point=None, heard=None):
+    """Aim at the lit target and pull; the last frame's answer. ``heard``
+    collects the sound cues of every frame on the way."""
     from dataclasses import replace
 
     target = session.calibration.target
@@ -240,6 +242,8 @@ def shoot_setup_target(session, stream, point=None):
             timestamp_ms=stream.current.timestamp_ms + 1,
         )
         result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+        if heard is not None:
+            heard.extend(result["cues"])
     return result
 
 
@@ -366,8 +370,10 @@ def test_each_frame_is_aimed_from_its_own_reading(monkeypatch):
 
 def test_the_warmup_range_is_not_a_selectable_game():
     assert "range" not in maps.keys()
-    with pytest.raises(ValueError, match="arcade"):
+    with pytest.raises(ValueError, match="four games"):
         BrowserSession({"map": "range"})
+    with pytest.raises(ValueError, match="four games"):
+        BrowserSession({"map": "kart"})
 
 
 def test_bad_shot_can_be_retried_and_reset_discards_unaccepted_fit(monkeypatch):
@@ -375,7 +381,8 @@ def test_bad_shot_can_be_retried_and_reset_discards_unaccepted_fit(monkeypatch):
     shoot_setup_target(session, stream, (0.5, 0.5))
     result = shoot_setup_target(session, stream, (0.5, 0.5))
     assert result["step"]["learningShots"] == 1
-    assert "too similar" in result["notice"]
+    assert result["step"]["title"] == "Try that one again."
+    assert result["step"]["moment"]["kind"] == "retry"
     session.action("reset", {})
     assert not session.calibration.samples
     assert not session.calibration.preview
@@ -409,7 +416,7 @@ def test_hand_input_selects_the_maps_tracker_and_fires(map_key, monkeypatch):
     stream = FakeStream()
     fetched = []
     monkeypatch.setattr(
-        browser, "ensure_model", lambda name: fetched.append(name) or "unused"
+        browser, "ensure_model", lambda name, progress=None: fetched.append(name) or "unused"
     )
     monkeypatch.setattr(
         browser.schemes,
@@ -443,7 +450,7 @@ def test_sniper_eye_closure_scopes_but_never_shoots(monkeypatch):
 
     stream = FakeStream()
     scheme = schemes.MARKSMAN
-    monkeypatch.setattr(browser, "ensure_model", lambda name: "unused")
+    monkeypatch.setattr(browser, "ensure_model", lambda name, progress=None: "unused")
     monkeypatch.setattr(
         browser.schemes,
         "for_map",
@@ -644,3 +651,305 @@ def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):
         )
         session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     assert len(session.calibration.samples) == 1
+
+
+# --- returning players ---------------------------------------------------------
+
+#: What the page stores once a warm-up has been finished with five centre hits.
+CHECKED = stored_setup(aim_fitted=True, fit_error=0.01, gain=1.2)
+
+
+def test_a_returning_player_with_a_checked_aim_goes_straight_into_the_game(
+    monkeypatch,
+):
+    from handy.calibration import Rig
+
+    session, stream = camera_session(monkeypatch, calibration=CHECKED, useSavedAim=True)
+    assert session.state == "playing" and session.calibration is None
+    assert session.rig == Rig.from_dict(CHECKED) and not session.forget_saved
+    info = session.info()
+    assert "step" not in info and info["hasSavedAim"]
+    # The aim plays: a pull of the thumb fires at once, no warm-up in between.
+    for stamp, firing in enumerate([False] * 4 + [True] * 4, 1):
+        stream.current = Frame(
+            hands=(make_hand(thumb_degrees=70 if firing else 20),), timestamp_ms=stamp
+        )
+        session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert session.round.shots == 1
+    # Adjust Aim is one click away, and checks the saved aim rather than
+    # throwing it away.
+    info = session.action("calibrate", {})
+    assert info["state"] == "calibration" and info["step"]["testing"]
+    assert session.calibration.initial == Rig.from_dict(CHECKED)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"calibration": CHECKED},  # the page did not ask: Adjust Aim
+        {"calibration": stored_setup(fit_error=0.01), "useSavedAim": True},
+        {"calibration": stored_setup(aim_fitted=True, gain=None), "useSavedAim": True},
+        {"calibration": stored_setup(aim_fitted=True, gain=99.0), "useSavedAim": True},
+        {"calibration": {"cameras": "abc"}, "useSavedAim": True},
+        {"useSavedAim": True},  # nothing saved for this camera
+        {"calibration": CHECKED, "useSavedAim": "yes"},
+    ],
+)
+def test_an_aim_that_cannot_be_trusted_warms_up_first(config, monkeypatch):
+    session = camera_session(monkeypatch, **config)[0]
+    assert session.state == "calibration" and session.calibration is not None
+
+
+def test_mouse_players_never_warm_up_even_with_a_saved_aim(monkeypatch):
+    session = BrowserSession({"calibration": CHECKED, "useSavedAim": True})
+    assert session.state == "playing" and session.scheme is None
+    with pytest.raises(ValueError, match="hand"):
+        session.action("calibrate", {})
+
+
+# --- the pause sheet's choices ----------------------------------------------------
+
+
+@pytest.mark.parametrize("paused", [False, True])
+def test_restart_abandons_the_round_being_played(paused):
+    session = BrowserSession({"duration": 60})
+    session.tick({"fire": True}, session.last_tick + 5)
+    if paused:
+        session.action("pause", {})
+    old = session.round
+    info = session.action("restart", {})
+    assert info["state"] == "playing" and session.round is not old
+    assert session.clock == 0 and session.round.shots == 0
+
+
+def test_restart_also_starts_the_next_round_once_one_is_over():
+    session = BrowserSession({"duration": 15})
+    session.tick({}, session.last_tick)
+    session.clock = 16
+    session.tick({}, session.last_tick)
+    assert session.action("restart", {})["state"] == "playing"
+
+
+@pytest.mark.parametrize("paused", [False, True])
+def test_restart_during_the_warm_up_changes_nothing(paused, monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    shoot_setup_target(session, stream)
+    if paused:
+        session.action("pause", {})
+    info = session.action("restart", {})
+    assert info["state"] == ("paused" if paused else "calibration")
+    assert len(session.calibration.samples) == 1
+
+
+# --- what the warm-up says, and what it celebrates ---------------------------------
+
+
+def test_the_warm_up_counts_down_and_celebrates_each_centre_hit(monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    first = session.info()["step"]
+    assert first["title"] == "Shoot the lit target."
+    assert first["learnTotal"] == 3 and first["total"] == 5
+    assert 0 < first["target"][0] < 1 and 0 < first["target"][1] < 1
+    moments = []
+    for _ in range(3):
+        heard = []
+        result = shoot_setup_target(session, stream, heard=heard)
+        moments.append(result["step"]["moment"]["kind"])
+        assert heard == ["shot"]
+    assert moments == ["shot", "shot", "learned"]
+    assert result["step"]["title"] == "Got it."
+    words = []
+    for count in range(1, 5):
+        heard = []
+        step = shoot_setup_target(session, stream, heard=heard)["step"]
+        assert step["moment"]["kind"] == "hit" and step["hits"] == count
+        # Each hit is celebrated once: the gold rings sound with the shot.
+        assert heard == ["shot", "hit_0"]
+        words.append((step["title"], step["detail"]))
+    assert words == [
+        ("Nice.", "4 centre hits to go."),
+        ("Nice.", "3 centre hits to go."),
+        ("Nice.", "2 centre hits to go."),
+        ("One more.", "Hit the centre to start."),
+    ]
+    assert step["moment"]["id"] == 7
+    heard = []
+    assert shoot_setup_target(session, stream, heard=heard)["state"] == "playing"
+    assert heard[:2] == ["shot", "hit_0"]  # then the round's own opening cues
+
+
+def test_the_trigger_state_is_sent_with_every_frame(monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    stream.current = frame_of(make_hand(thumb_degrees=20))
+    for _ in range(4):
+        result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert result["armed"] is True and result["step"]["armed"] is True
+    warm_up(session)
+    result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert result["armed"] in (True, False)
+    assert BrowserSession({}).tick({}, 0.05)["armed"] is None
+
+
+def test_undo_says_so_in_the_players_words(monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    shoot_setup_target(session, stream)
+    info = session.action("undo", {})
+    assert info["step"]["title"] == "Shot undone."
+    assert "calibrat" not in info["notice"].lower()
+    info = session.action("reset", {})
+    assert info["step"]["title"] == "Shoot the lit target."
+
+
+# --- sounds, readouts and results -------------------------------------------------
+
+
+def fire_at(session, x, y):
+    """The cues of one mouse shot at (x, y), clear of the one before it."""
+    session.tick({}, session.last_tick + 0.1)
+    return session.tick(
+        {"x": x / session.width, "y": y / session.height, "fire": True},
+        session.last_tick + 0.1,
+    )["cues"]
+
+
+@pytest.mark.parametrize("enemy, sound", [("zombies", "flesh_head"), ("robots", "debris_hit")])
+def test_a_hit_sounds_as_it_does_on_the_desktop(enemy, sound):
+    session = BrowserSession({"map": "zombies", "enemy": enemy})
+    session.tick({}, session.last_tick + 0.03)
+    walker = session.round.walkers[0]
+    walker.lane = 0
+    cues = fire_at(session, *walker.figure(session.round.view, session.clock).head)
+    assert cues[:2] == ["shot", sound]
+    assert fire_at(session, 2, 2)[:2] == ["shot", "miss"]
+
+
+def test_the_maps_own_cues_reach_the_page():
+    session = BrowserSession({"map": "western"})
+    cues = session.tick({"x": 0.5, "y": 0.05, "fire": True}, session.last_tick + 0.05)[
+        "cues"
+    ]
+    assert "shot" in cues and "rifle_crack" in cues and "bell_toll" in cues
+
+
+def test_the_round_closes_with_its_sound_once():
+    session = BrowserSession({"duration": 15})
+    session.tick({}, session.last_tick)
+    session.clock = 16
+    assert "round_over" in session.tick({}, session.last_tick)["cues"]
+    assert "round_over" not in session.tick({}, session.last_tick)["cues"]
+
+
+@pytest.mark.parametrize(
+    "key, labels",
+    [
+        ("zombies", ["Health", "Wave", "Down"]),
+        ("orbit", ["Pane", "Cleared"]),
+        ("sniper", ["Wind", "Stage", "Hostiles"]),
+        ("western", ["Bandits", "Bottles", "Townsfolk"]),
+    ],
+)
+def test_each_map_sends_the_numbers_it_lives_by(key, labels):
+    session = BrowserSession({"map": key})
+    data = session.tick({}, session.last_tick + 0.05)
+    assert [r["label"] for r in data["readouts"]] == labels
+    for readout in data["readouts"]:
+        assert isinstance(readout["value"], (int, str)), readout
+        if "max" in readout:
+            assert 0 <= readout["value"] <= readout["max"]
+
+
+def test_readouts_warn_when_a_map_is_going_badly():
+    session = BrowserSession({"map": "zombies"})
+    session.tick({}, session.last_tick + 0.05)
+    health = session.info()["readouts"][0]
+    assert health == {"label": "Health", "value": 100, "max": 100}
+    session.round.health = 20
+    assert session.info()["readouts"][0]["tone"] == "danger"
+    session = BrowserSession({"map": "sniper"})
+    session.round.wind = -2.345
+    wind = session.info()["readouts"][0]
+    assert wind["value"] == "2.3 m/s ←"
+
+
+def test_a_readout_a_round_does_not_have_is_left_out():
+    from types import SimpleNamespace
+
+    # As another version of the map might: one tally renamed away.
+    older = SimpleNamespace(bandits_down=2, townsfolk_hit=0)
+    labels = [r["label"] for r in browser.readouts(maps.WESTERN, older, 0)]
+    assert labels == ["Bandits", "Townsfolk"]
+    assert browser.readouts(maps.ZOMBIES, object(), 0) == []
+
+
+@pytest.mark.parametrize(
+    "key, lost, outcome",
+    [
+        ("zombies", True, "Overrun"),
+        ("zombies", False, "Survived"),
+        ("orbit", True, "Pane Failed"),
+        ("sniper", False, "Time’s Up"),
+    ],
+)
+def test_the_results_card_names_the_outcome_and_the_stats(key, lost, outcome):
+    session = BrowserSession({"map": key, "duration": 15})
+    session.tick({}, session.last_tick)
+    if lost:
+        setattr(session.round, "health" if key == "zombies" else "integrity", 0)
+    session.clock = 16
+    data = session.tick({}, session.last_tick)
+    assert data["state"] == "over"
+    summary = data["summary"]
+    assert summary["outcome"] == outcome
+    assert summary["lost"] is lost and summary["won"] is (outcome in ("Survived",))
+    labels = [stat["label"] for stat in summary["stats"]]
+    assert labels[:2] == ["Accuracy", "Best Streak"] and 3 <= len(labels) <= 4
+    assert all(label == label.title() or "’" in label for label in labels)
+
+
+# --- first-run downloads -------------------------------------------------------------
+
+
+def test_downloads_report_progress_across_every_missing_model(monkeypatch):
+    from dataclasses import replace
+    from handy import schemes
+
+    stream = FakeStream()
+    monkeypatch.setattr(
+        browser.schemes,
+        "for_map",
+        lambda key: replace(schemes.MARKSMAN, open_stream=lambda *_args: stream),
+    )
+    monkeypatch.setattr(browser, "cached", lambda name: False)
+
+    def download(name, progress=None):
+        for received in (0, 50, 100):
+            if progress is not None:
+                progress(received, 100)
+        return "unused"
+
+    monkeypatch.setattr(browser, "ensure_model", download)
+    heard = []
+    BrowserSession({"control": "pistol", "map": "sniper"}, progress=heard.append)
+    assert heard == [0.0, 0.25, 0.5, 0.5, 0.75, 1.0]
+
+    # A bundle already on disk is not waited for: the other fills the bar.
+    monkeypatch.setattr(browser, "cached", lambda name: name == "gesture_recognizer")
+    heard.clear()
+    BrowserSession({"control": "pistol", "map": "sniper"}, progress=heard.append)
+    assert heard == [0.0, 0.5, 1.0]
+
+
+def test_a_download_of_unknown_size_reports_no_fraction(monkeypatch):
+    session_models = []
+
+    def download(name, progress=None):
+        session_models.append(name)
+        progress(10, None)
+        return "unused"
+
+    camera_session(monkeypatch)  # the fake scheme and stream
+    monkeypatch.setattr(browser, "cached", lambda name: False)
+    monkeypatch.setattr(browser, "ensure_model", download)
+    heard = []
+    BrowserSession({"control": "pistol"}, progress=heard.append)
+    assert heard == [None] and session_models == ["gesture_recognizer"]

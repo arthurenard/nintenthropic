@@ -211,3 +211,51 @@ def test_the_cached_gesture_model_is_the_pinned_one(model_path):
     """The pin is only worth something if it names what the game is tested on."""
     digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
     assert digest == models.CHECKSUMS["gesture_recognizer"]
+
+
+def test_a_download_reports_its_progress_as_it_arrives(tmp_path, monkeypatch):
+    """A first run shows how far along it is, not a spinner: every report
+    counts what has arrived so far against what the server promised."""
+    body = bundle()  # a megabyte and more: many chunks
+    pin(monkeypatch, body)
+    serve(monkeypatch, Response(body, len(body)))
+    reports = []
+    path = tmp_path / "gesture_recognizer.task"
+
+    models.ensure_model("gesture_recognizer", path, progress=lambda *r: reports.append(r))
+
+    assert len(reports) >= 5, "several reports, not one at the end"
+    received = [done for done, _ in reports]
+    assert received == sorted(received) and received[-1] == len(body)
+    assert {total for _, total in reports} == {len(body)}
+    assert path.read_bytes() == body
+
+
+def test_progress_without_a_promised_size_reports_no_total(tmp_path, monkeypatch):
+    body = bundle()
+    pin(monkeypatch, body)
+    serve(monkeypatch, Response(body))  # no Content-Length
+    reports = []
+    models.ensure_model("gesture_recognizer", tmp_path / "g.task",
+                        progress=lambda *r: reports.append(r))
+    assert reports and all(total is None for _, total in reports)
+    assert reports[-1][0] == len(body)
+
+
+def test_a_cached_bundle_reports_no_progress(tmp_path, monkeypatch):
+    path = tmp_path / "gesture_recognizer.task"
+    path.write_bytes(bundle())
+    serve(monkeypatch, None)
+    models.ensure_model("gesture_recognizer", path, progress=pytest.fail)
+
+
+def test_a_failed_download_with_progress_still_leaves_nothing_behind(tmp_path,
+                                                                    monkeypatch):
+    """Reporting progress must not change what a failure cleans up."""
+    serve(monkeypatch, Truncated(before=3 * models.CHUNK_BYTES))
+    reports = []
+    with pytest.raises(ConnectionResetError):
+        models.ensure_model("gesture_recognizer", tmp_path / "g.task",
+                            progress=lambda *r: reports.append(r))
+    assert reports and reports[-1][0] == 3 * models.CHUNK_BYTES
+    assert list(tmp_path.iterdir()) == []

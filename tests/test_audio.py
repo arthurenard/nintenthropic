@@ -1,11 +1,14 @@
+import io
+import wave as wavefile
+
 import numpy as np
 import pytest
 
 from handy.audio import (LIMITER_KNEE, NAMED_BUILDERS, SAMPLE_RATE,
                          TARGET_LOUDNESS_DB, Audio, Mixer, Sounds, cock_sound,
-                         flesh_sound, groan_sound, hit_sound, hurt_sound,
-                         loudness_db, miss_sound, round_over_sound, shot_sound,
-                         soft_knee)
+                         cue_names, flesh_sound, groan_sound, hit_sound,
+                         hurt_sound, loudness_db, miss_sound, render_cue,
+                         round_over_sound, shot_sound, soft_knee, wav_bytes)
 
 #: Every named cue a map may raise, grouped by the map that raises it.
 NAMED_CUES: dict[str, tuple[str, ...]] = {
@@ -837,3 +840,55 @@ def test_silence_skips_the_variation_as_well_as_the_playback(monkeypatch, sound_
     monkeypatch.setattr(sound_set, "audio", listening)
     sound_set.shot()
     assert varied == [1] and len(listening.played) == 1, "but played when heard"
+
+
+# --- the browser's copy of the set --------------------------------------------
+
+def test_every_cue_the_browser_can_hear_renders():
+    """The page is sent the kit and every map's cues by name; each must exist."""
+    names = cue_names(5)
+    assert len(names) == len(set(names))
+    assert {"shot", "miss", "cock", "hurt", "groan", "round_over", "flesh_head",
+            "flesh_body", *(f"hit_{ring}" for ring in range(5))} <= set(names)
+    assert set(NAMED_BUILDERS) <= set(names)
+    for name in names:
+        wave = render_cue(name, 0, rings=5)
+        assert wave.dtype == np.float32 and np.all(np.isfinite(wave)), name
+        assert 0.05 < np.max(np.abs(wave)) <= 1.0, name
+
+
+def test_every_cue_a_map_raises_can_be_heard_in_the_browser():
+    """The browser plays what the desktop plays: the same names, the same set."""
+    for cues in NAMED_CUES.values():
+        assert set(cues) <= set(cue_names(5))
+
+
+def test_a_cue_take_is_the_same_every_time_and_takes_differ():
+    assert np.array_equal(render_cue("shot", 1), render_cue("shot", 1))
+    assert not np.array_equal(render_cue("shot", 0), render_cue("shot", 1))
+    # Groan takes are different voices, not one voice re-levelled.
+    first, second = render_cue("groan", 0), render_cue("groan", 1)
+    assert abs(dominant_hz(first) - dominant_hz(second)) > 3
+
+
+def test_an_unknown_cue_is_refused():
+    with pytest.raises(KeyError):
+        render_cue("kazoo")
+
+
+def test_the_hit_rings_follow_the_desktops_pitch_order():
+    assert dominant_hz(render_cue("hit_0")) > dominant_hz(render_cue("hit_4"))
+
+
+def test_a_wave_is_exported_as_16_bit_mono_wav():
+    tone = np.sin(np.linspace(0, 200 * np.pi, SAMPLE_RATE // 10)).astype(np.float32)
+    tone[0] = 1.5  # out of range: clipped, never wrapped round to negative
+    raw = wav_bytes(tone)
+    assert raw[:4] == b"RIFF" and raw[8:12] == b"WAVE"
+    with wavefile.open(io.BytesIO(raw)) as read:
+        assert (read.getnchannels(), read.getsampwidth(), read.getframerate()) == (
+            1, 2, SAMPLE_RATE)
+        pcm = np.frombuffer(read.readframes(read.getnframes()), "<i2")
+    assert len(pcm) == len(tone)
+    assert pcm[0] == 32767
+    assert np.allclose(pcm[1:] / 32767, tone[1:], atol=1 / 32767)
