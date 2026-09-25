@@ -28,6 +28,13 @@ def test_a_first_score_is_always_a_record(tmp_path):
     assert scores.best_for(RANGE, 60) == 40
 
 
+def test_nothing_is_never_a_record(tmp_path):
+    """An empty table must not make a round with no score a "NEW BEST"."""
+    scores = table(tmp_path)
+    assert scores.record(RANGE, 60, 0) is False
+    assert scores.best == {} and not (tmp_path / "scores.json").exists()
+
+
 def test_only_a_better_score_replaces_the_record(tmp_path):
     scores = table(tmp_path)
     scores.record(RANGE, 60, 120)

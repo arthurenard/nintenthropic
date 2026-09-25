@@ -793,52 +793,93 @@ def draw_timer(canvas: np.ndarray, remaining: float | None,
 
 
 
+#: The score card's body, and the band of map art above it, in 720-tall units.
+RESULTS_WIDTH, RESULTS_BODY, RESULTS_BANNER = 760, 384, 128
+
+
+def results_card(width: int, height: int, scale: float = 1.0,
+                 banner: bool = True) -> Rect:
+    """Where the score card sits in a window this size."""
+    card_w = min(width - 2 * _px(60, scale), _px(RESULTS_WIDTH, scale))
+    card_h = _px(RESULTS_BODY + (RESULTS_BANNER if banner else 0), scale)
+    return Rect((width - card_w) // 2, (height - card_h) // 2, card_w, card_h)
+
+
+def round_length(duration: float | None) -> str:
+    """A round's length as the card names it: bests are kept per length."""
+    if duration is None:
+        return "PRACTICE"
+    return f"{int(round(duration))}-SECOND ROUND"
+
+
 def draw_results(canvas: np.ndarray, summary: Summary, best: int,
-                 is_best: bool, hint: str = "", scale: float = 1.0) -> None:
+                 is_best: bool, hint: str = "", scale: float = 1.0,
+                 title: str = "", emblem=None) -> None:
     """The end-of-round card, on the map's own art dimmed to a mood.
 
     Deliberately not drawn over a frozen frame of the range: that frame carries
     its own score and clock in the HUD, and two sets of numbers on one screen
     read as a bug however far the picture behind is dimmed. The map's card art,
     blurred and darkened, keeps the screen in the game without that problem.
+
+    Given the map's ``title`` and card art (``emblem``), the card leads with
+    them: a card that is screenshotted and passed round has to say what was
+    played, not only how well.
     """
     draw_ambient_backdrop(canvas)
     height, width = canvas.shape[:2]
 
-    card_w = min(width - 2 * _px(60, scale), _px(760, scale))
-    card_h = _px(400, scale)
-    card = Rect((width - card_w) // 2, (height - card_h) // 2, card_w, card_h)
-    _panel_shadow(canvas, card, _px(CORNER, scale), _px(18, scale))
-    _modal_panel(canvas, card, _px(CORNER, scale), scale)
+    banner = emblem is not None
+    card = results_card(width, height, scale, banner)
+    radius = _px(CORNER, scale)
+    _panel_shadow(canvas, card, radius, _px(18, scale))
+    _modal_panel(canvas, card, radius, scale)
     inner = _px(28, scale)
 
-    top = card.y + _px(58, scale)
     heading = summary.outcome or "SCORE"
     # Half the outcomes a map can name are the good ending - a night survived,
     # a pane held, a street cleaned up - so the map says which it is rather
     # than the card guessing from the fact that there is one at all.
     heading_color = (ARMED if summary.won
                      else DANGER if summary.outcome else ACCENT)
+
+    body = card.y
+    if banner:
+        body = card.y + _px(RESULTS_BANNER, scale)
+        _draw_results_banner(canvas, Rect(card.x, card.y, card.width, body - card.y),
+                             title, emblem, summary.duration, radius, scale)
+    elif title:
+        _centred_text(canvas, title, card.y + _px(40, scale), INK, 0.7 * scale)
+        body = card.y + _px(28, scale)
     # The short bright tab at the top left, the mark every panel carries.
     cv2.line(canvas, (card.x + inner, card.y), (card.x + inner + _px(46, scale), card.y),
              heading_color, _px(2, scale), cv2.LINE_AA)
+
+    top = body + _px(50, scale)
     accent_rule(canvas, top - _px(8, scale), card.x + inner, card.right - inner,
                 heading_color, 1, gap=text_width(heading, 0.75 * scale) + _px(40, scale))
     _centred_text(canvas, heading, top, heading_color, 0.75 * scale)
 
     score = str(summary.score)
-    size = _px(92, scale)
+    size = _px(84, scale)
     draw_figures(canvas, score, ((width - figures_width(score, size)) // 2,
-                                 top + _px(106, scale)), INK, size, 0.045)
+                                 top + _px(96, scale)), INK, size, 0.045)
 
-    if is_best:
+    # A record has to be a score: an unshot round that "beats" an empty
+    # table is nobody's best, whatever the caller was told.
+    if is_best and summary.score > 0:
         label, color = "NEW BEST", ARMED
     elif best:
         label, color = f"best {best}", MUTED
     else:
         label, color = "", MUTED
     if label:
-        _centred_text(canvas, label, top + _px(146, scale), color, 0.7 * scale)
+        if label == "NEW BEST":
+            _centred_text(canvas, label, top + _px(132, scale), color, 0.68 * scale)
+        else:
+            label_scale = 0.62 * scale
+            draw_caption(canvas, label, ((width - caption_width(label, label_scale)) // 2,
+                                         top + _px(132, scale)), color, label_scale)
 
     rows = (
         (f"{summary.hits}/{summary.shots}", "hits"),
@@ -846,7 +887,7 @@ def draw_results(canvas: np.ndarray, summary: Summary, best: int,
         (str(summary.best_streak), "best streak"),
         (str(summary.perfect), summary.perfect_label),
     )
-    row_top = top + _px(182, scale)
+    row_top = top + _px(154, scale)
     accent_rule(canvas, row_top, card.x + inner, card.right - inner, EDGE, 1)
     column = card.width // len(rows)
     value_size, label_scale = _px(30, scale), 0.48 * scale
@@ -854,23 +895,76 @@ def draw_results(canvas: np.ndarray, summary: Summary, best: int,
         x = card.x + column * index + column // 2
         if index:
             cv2.line(canvas, (card.x + column * index, row_top + _px(14, scale)),
-                     (card.x + column * index, row_top + _px(74, scale)), EDGE, 1,
+                     (card.x + column * index, row_top + _px(70, scale)), EDGE, 1,
                      cv2.LINE_AA)
         draw_figures(canvas, value, (x - figures_width(value, value_size) // 2,
-                                     row_top + _px(48, scale)), INK, value_size, 0.05)
+                                     row_top + _px(46, scale)), INK, value_size, 0.05)
         width_label = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX,
                                       label_scale, 1)[0][0]
-        draw_text(canvas, label, (x - width_label // 2, row_top + _px(70, scale)),
+        draw_text(canvas, label, (x - width_label // 2, row_top + _px(68, scale)),
                   MUTED, scale=label_scale, thickness=1, outline=False)
-    accent_rule(canvas, row_top + _px(88, scale), card.x + inner, card.right - inner,
+    accent_rule(canvas, row_top + _px(84, scale), card.x + inner, card.right - inner,
                 EDGE, 1)
 
-    cta = "shoot anywhere to play again"
-    cta_y = card.bottom - _px(34, scale)
-    _centred_text(canvas, cta, cta_y, ARMED, 0.68 * scale)
+    _centred_text(canvas, "shoot anywhere to play again", card.bottom - _px(50, scale),
+                  ARMED, 0.68 * scale)
+    _draw_keyed_note(canvas, "S", "saves this card as a screenshot",
+                     card.bottom - _px(18, scale), scale)
     if hint:
         draw_footer(canvas, hint, scale)
     draw_logo(canvas, scale)
+
+
+def _draw_results_banner(canvas: np.ndarray, rect: Rect, title: str, emblem,
+                         duration: float | None, radius: int, scale: float) -> None:
+    """The top of the score card: the map's own art, its name set over the foot
+    of it, and the round's length opposite."""
+    cv2.copyTo(_banner_art(emblem, title, rect.width, rect.height),
+               _thumbnail_mask(rect.width, rect.height, radius),
+               canvas[rect.y:rect.bottom, rect.x:rect.right])
+    accent_rule(canvas, rect.bottom, rect.x + 1, rect.right - 1, EDGE, 1)
+    inner = _px(28, scale)
+    baseline = rect.bottom - _px(20, scale)
+    # Set in the left of the banner, clear of art that centres its subject.
+    title_scale = 1.05 * scale
+    while title_scale > 0.5 * scale and text_width(title, title_scale) > rect.width * 0.36:
+        title_scale *= 0.94
+    draw_text(canvas, title, (rect.x + inner, baseline), INK, scale=title_scale,
+              thickness=_px(2, scale))
+    length = round_length(duration)
+    length_scale = 0.46 * scale
+    draw_caption(canvas, length,
+                 (rect.right - inner - caption_width(length, length_scale), baseline),
+                 SECONDARY, length_scale)
+
+
+@lru_cache(maxsize=8)
+def _banner_art(emblem, title: str, width: int, height: int) -> np.ndarray:
+    """The card's banner, built once: the thumbnail, its foot settled into the
+    card's plate so the name reads on it without a box of its own."""
+    art = _thumbnail(emblem, title, width, height).astype(np.float32)
+    fade = max(1, int(height * 0.7))
+    ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)[:, None, None] ** 1.4 * 0.9
+    art[-fade:] = art[-fade:] * (1 - ramp) + np.float32((46, 43, 40)) * ramp
+    return art.astype(np.uint8)
+
+
+def _draw_keyed_note(canvas: np.ndarray, key: str, note: str, baseline: int,
+                     scale: float) -> None:
+    """A key drawn as a small keycap followed by what it does, centred."""
+    text_scale = 0.46 * scale
+    cap_text = cv2.getTextSize(key, cv2.FONT_HERSHEY_SIMPLEX, text_scale, 1)[0]
+    cap = Rect(0, 0, max(cap_text[0] + _px(12, scale), _px(20, scale)), _px(20, scale))
+    gap = _px(8, scale)
+    total = cap.width + gap + text_width(note, text_scale, 1, False)
+    x = (canvas.shape[1] - total) // 2
+    cap = Rect(x, baseline - cap.height + _px(5, scale), cap.width, cap.height)
+    shade_panel(canvas, cap, _px(4, scale), (58, 55, 52), (40, 38, 36), (96, 92, 88))
+    draw_text(canvas, key, (cap.x + (cap.width - cap_text[0]) // 2,
+                            cap.y + (cap.height + cap_text[1]) // 2),
+              INK, scale=text_scale, thickness=1, outline=False)
+    draw_text(canvas, note, (cap.right + gap, baseline), MUTED, scale=text_scale,
+              thickness=1, outline=False)
 
 
 @lru_cache(maxsize=8)

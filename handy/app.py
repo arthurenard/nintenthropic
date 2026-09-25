@@ -930,9 +930,29 @@ def _card_under(cards: tuple, point: tuple[int, int] | None) -> int | None:
 RESULTS_GRACE = 1.0
 
 
+RESULTS_HINT = "r play again   b maps   c recalibrate   s screenshot   q quit"
+
+
+def draw_results_screen(canvas: np.ndarray, layout: Layout, summary: Summary,
+                        best: int, is_best: bool, chosen: Map | None,
+                        crosshair: tuple[int, int] | None, armed: bool) -> None:
+    """One frame of the score card, with the buttons and the crosshair over it."""
+    scene.draw_results(canvas, summary, best, is_best, hint=RESULTS_HINT,
+                       scale=layout.scale, title=chosen.title if chosen else "",
+                       emblem=chosen.draw_emblem if chosen else None)
+    for button in (layout.quit_button, layout.maps_button):
+        scene.draw_button(canvas, button, highlighted=(
+            crosshair is not None and button.contains(*crosshair)),
+            scale=layout.scale)
+    if crosshair is not None:
+        scene.draw_crosshair(canvas, *crosshair, armed=armed, since_shot=None,
+                             scale=layout.scale)
+
+
 def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
                  layout: Layout, controller: AimController, rig: Rig,
-                 summary: Summary, best: int, is_best: bool) -> str:
+                 summary: Summary, best: int, is_best: bool,
+                 chosen: Map | None = None) -> str:
     """Hold on the score card until the player shoots to play again, or quits.
 
     A shot counts only once the card has been up for :data:`RESULTS_GRACE`,
@@ -957,17 +977,9 @@ def show_results(eyes: Eyes, canvas: np.ndarray, settings: Settings,
         shot = aim.fired and cocked
         cocked = cocked or (settled and aim.armed)
 
-        scene.draw_results(canvas, summary, best, is_best,
-                           hint="shoot to play again   |   q quit   c recalibrate",
-                           scale=layout.scale)
-        for button in (layout.quit_button, layout.maps_button):
-            scene.draw_button(canvas, button, highlighted=(
-                crosshair is not None and button.contains(*crosshair)),
-                scale=layout.scale)
-        if crosshair is not None:
-            # Not shown armed until a shot would count.
-            scene.draw_crosshair(canvas, *crosshair, armed=aim.armed and settled,
-                                 since_shot=None, scale=layout.scale)
+        # The crosshair is not shown armed until a shot would count.
+        draw_results_screen(canvas, layout, summary, best, is_best, chosen, crosshair,
+                            aim.armed and settled)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if shot and crosshair is not None:
@@ -1336,7 +1348,7 @@ def _session(settings: Settings, layout: Layout, captures: list,
             previous_best = scores.best_for(chosen.key, summary.duration)
             is_best = scores.record(chosen.key, summary.duration, summary.score)
             choice = show_results(eyes, canvas, settings, layout, controller,
-                                  current, summary, previous_best, is_best)
+                                  current, summary, previous_best, is_best, chosen)
             if choice == "quit":
                 break
             if choice == "maps":

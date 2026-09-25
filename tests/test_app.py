@@ -2275,3 +2275,30 @@ def test_the_play_loop_brings_the_hints_back_for_a_key_it_does_not_know(monkeypa
     assert shown[0] == 1.0, "the round opens with them"
     assert shown[3] == 0.0, "then they fade"
     assert shown[4] == 1.0, "and an unknown key brings them back"
+
+
+def test_the_results_screen_names_the_map_that_was_played(monkeypatch):
+    import cv2
+
+    from handy import app, scene, schemes
+    from handy.calibration import default_rig
+    from handy.game import Summary
+
+    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
+    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    seen = []
+    monkeypatch.setattr(scene, "draw_results",
+                        lambda canvas, summary, best, is_best, **kwargs: seen.append(kwargs))
+    key_sequence(monkeypatch, [ord("q")])
+
+    summary = Summary(score=10, shots=2, hits=1, accuracy=0.5, best_streak=1,
+                      perfect=0, duration=60.0)
+    app.show_results(OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), Settings(),
+                     layout_for(WIDTH, HEIGHT),
+                     app.make_controller(Settings(), schemes.PISTOL),
+                     default_rig(schemes.PISTOL, 1), summary, 5, True, maps.ORBIT)
+
+    assert seen[0]["title"] == maps.ORBIT.title
+    assert seen[0]["emblem"] is maps.ORBIT.draw_emblem
+    assert "s screenshot" in seen[0]["hint"]

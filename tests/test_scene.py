@@ -83,8 +83,8 @@ def test_a_round_you_won_is_not_painted_in_the_colour_of_a_round_you_lost(canvas
                           perfect=1, duration=60, **fields)
         canvas[:] = 0
         scene.draw_results(canvas, summary, best=0, is_best=False)
-        card_top = (HEIGHT - scene._px(400, 1.0)) // 2
-        tab = canvas[card_top, (WIDTH - scene._px(760, 1.0)) // 2 + scene._px(28, 1.0)]
+        card = scene.results_card(WIDTH, HEIGHT, 1.0, banner=False)
+        tab = canvas[card.y, card.x + scene._px(28, 1.0)]
         return tuple(int(channel) for channel in tab)
 
     for heading in ("SURVIVED", "PANE HELD", "CLEANED UP"):
@@ -687,3 +687,68 @@ def test_the_map_chooser_draws_on_a_small_window():
         canvas = np.zeros((height, width, 3), np.uint8)
         scene.draw_map_select(canvas, cards, entries, None, scale)  # must not raise
         assert canvas.any()
+
+
+# --- the score card is worth passing round -----------------------------------
+
+def said_on_the_card(canvas, monkeypatch, summary, **options):
+    """Every string the results card sets, whichever face it is set in."""
+    said = []
+    for name in ("draw_text", "draw_caption", "_centred_text"):
+        real = getattr(scene, name)
+        monkeypatch.setattr(scene, name, lambda canvas, text, *args, _real=real, **kwargs: (
+            said.append(text), _real(canvas, text, *args, **kwargs)))
+    scene.draw_results(canvas, summary, **options)
+    return said
+
+
+def test_the_results_card_names_the_map_and_the_round(canvas, monkeypatch):
+    """A card screenshotted and shared has to say what was played."""
+    from handy import maps
+    from handy.game import Summary
+
+    summary = Summary(score=180, shots=22, hits=15, accuracy=15 / 22,
+                      best_streak=6, perfect=4, duration=60, outcome="SURVIVED",
+                      won=True)
+    said = said_on_the_card(canvas, monkeypatch, summary, best=120, is_best=False,
+                            title=maps.ZOMBIES.title, emblem=maps.ZOMBIES.draw_emblem)
+    assert maps.ZOMBIES.title in said
+    assert "60-SECOND ROUND" in said and "SURVIVED" in said
+    assert any("screenshot" in text for text in said), "S saves it: the card says so"
+
+
+def test_the_results_card_carries_the_maps_art(canvas):
+    from handy import maps
+    from handy.game import Summary
+
+    summary = Summary(score=180, shots=22, hits=15, accuracy=15 / 22,
+                      best_streak=6, perfect=4, duration=60)
+    scene.draw_results(canvas, summary, 0, False)
+    plain = canvas.copy()
+    scene.draw_results(canvas, summary, 0, False, title=maps.ORBIT.title,
+                       emblem=maps.ORBIT.draw_emblem)
+    card = scene.results_card(WIDTH, HEIGHT, 1.0)
+    banner = canvas[card.y + 4:card.y + scene._px(scene.RESULTS_BANNER, 1.0) - 4,
+                    card.x + 8:card.right - 8]
+    assert not np.array_equal(plain, canvas)
+    assert banner.std() > 12, "a picture, not a flat plate"
+
+
+@pytest.mark.parametrize("score", [0, 40])
+def test_new_best_is_never_claimed_for_nothing(canvas, monkeypatch, score):
+    """An unshot round cannot "beat" an empty table, whatever the caller says."""
+    from handy.game import Summary
+
+    summary = Summary(score=score, shots=0, hits=0, accuracy=0.0, best_streak=0,
+                      perfect=0, duration=60)
+    said = said_on_the_card(canvas, monkeypatch, summary, best=0, is_best=True)
+    assert ("NEW BEST" in said) == (score > 0)
+
+
+def test_the_results_card_fits_the_window_at_every_size():
+    for width, height in ((1280, 720), (1512, 945), (2560, 1440), (960, 540)):
+        scale = min(max(height / 720, 0.7), 2.4)
+        card = scene.results_card(width, height, scale)
+        assert card.x > 0 and card.right < width
+        # Clear of the buttons along the top and of the footer line below.
+        assert card.y > round(62 * scale) and card.bottom < height - round(40 * scale)
