@@ -1,7 +1,5 @@
 """Browser adapter regressions: existing rules, lifecycle, and input boundaries."""
 
-import base64
-
 import cv2
 import numpy as np
 import pytest
@@ -23,9 +21,7 @@ def test_every_map_runs_in_browser_without_a_camera(key, monkeypatch):
     monkeypatch.setattr(browser, "ensure_model", no_models)
     session = BrowserSession({"map": key, "control": "mouse"})
     data = session.tick({"x": 0.5, "y": 0.5, "fire": True}, session.last_tick + 0.033)
-    image = cv2.imdecode(
-        np.frombuffer(base64.b64decode(data["image"]), np.uint8), cv2.IMREAD_COLOR
-    )
+    image = cv2.imdecode(np.frombuffer(data["image"], np.uint8), cv2.IMREAD_COLOR)
     assert image.shape == (540, 960, 3)
     assert np.ptp(image) > 50
     assert data["state"] == "playing"
@@ -142,7 +138,10 @@ class FakeStream:
         return self.current
 
     def submit(self, _image):
-        pass
+        return self.current.timestamp_ms
+
+    def wait(self, _stamp, _timeout):
+        return self.current
 
     def close(self):
         self.closed = True
@@ -161,12 +160,8 @@ def camera_session(monkeypatch, **config):
     return BrowserSession({"control": "pistol", **config}), stream
 
 
-def camera_payload():
-    return {
-        "camera": base64.b64encode(
-            browser.jpeg(np.zeros((48, 64, 3), np.uint8))
-        ).decode()
-    }
+#: What the page sends as a camera frame, in miniature.
+CAMERA = browser.jpeg(np.zeros((48, 64, 3), np.uint8))
 
 
 def claiming(width, height, progressive=False):
@@ -200,9 +195,26 @@ def test_decode_bomb_is_refused_before_decoding(monkeypatch):
         pytest.fail("A frame claiming 30000x30000 pixels must never be decoded")
 
     monkeypatch.setattr(browser.cv2, "imdecode", decode)
-    bomb = base64.b64encode(claiming(30000, 30000)).decode()
     with pytest.raises(ValueError, match="1280 by 720"):
-        session.tick({"camera": bomb})
+        session.tick({}, camera=claiming(30000, 30000))
+
+
+def test_frame_messages_carry_fields_and_a_jpeg_without_base64():
+    body = browser.pack({"id": "abc", "fire": True}, CAMERA)
+    assert body[4:].startswith(b'{"id": "abc", "fire": true}')
+    assert body.endswith(CAMERA) and len(body) < len(CAMERA) + 40
+    assert browser.unpack(body) == ({"id": "abc", "fire": True}, CAMERA)
+    assert browser.unpack(browser.pack({})) == ({}, b"")
+    for bad in (b"", b"\x00\x00", b"\x00\x00\x00\x09{}", b"\x00\x00\x00\x00"):
+        with pytest.raises(ValueError):
+            browser.unpack(bad)
+
+
+def test_a_camera_frame_that_is_not_a_jpeg_is_refused(monkeypatch):
+    session, _stream = camera_session(monkeypatch)
+    ok, png = cv2.imencode(".png", np.zeros((48, 64, 3), np.uint8))
+    with pytest.raises(ValueError, match="JPEG"):
+        session.tick({}, camera=png.tobytes())
 
 
 def test_undecodable_camera_frame_is_a_bad_request(monkeypatch):
@@ -213,7 +225,7 @@ def test_undecodable_camera_frame_is_a_bad_request(monkeypatch):
 
     monkeypatch.setattr(browser.cv2, "imdecode", decode)
     with pytest.raises(ValueError, match="Invalid camera frame"):
-        session.tick(camera_payload())
+        session.tick({}, camera=CAMERA)
 
 
 def shoot_setup_target(session, stream, point=None):
@@ -227,7 +239,7 @@ def shoot_setup_target(session, stream, point=None):
             frame_of(make_hand(index_tip=point, thumb_degrees=degrees)),
             timestamp_ms=stream.current.timestamp_ms + 1,
         )
-        result = session.tick(camera_payload(), session.last_tick + 0.05)
+        result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     return result
 
 
@@ -280,7 +292,7 @@ def test_shoot_to_calibrate_waits_for_fresh_thumb_pulls(monkeypatch):
     session, stream = camera_session(monkeypatch)
     stream.current = frame_of(make_hand())
     for _ in range(20):
-        session.tick(camera_payload(), session.last_tick + 0.1)
+        session.tick({}, session.last_tick + 0.1, camera=CAMERA)
     assert session.state == "calibration"
     assert session.calibration.samples == []
     with pytest.raises(ValueError, match="five"):
@@ -323,10 +335,33 @@ def test_browser_returns_hand_skeleton_and_clears_it_on_tracking_loss(monkeypatc
     session, stream = camera_session(monkeypatch)
     hand = make_hand()
     stream.current = frame_of(hand)
-    result = session.tick(camera_payload(), session.last_tick + 0.05)
+    result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     assert result["hands"] == [list(hand.landmarks)]
     result = session.tick({}, session.last_tick + 1)
     assert result["hands"] == []
+
+
+def test_each_frame_is_aimed_from_its_own_reading(monkeypatch):
+    # MediaPipe answers a few milliseconds after a frame goes in. Reading the
+    # newest answer straight away aimed every frame from the one before it.
+    session, stream = camera_session(monkeypatch)
+    hands = [make_hand(index_tip=(0.2 + 0.1 * i, 0.5)) for i in range(4)]
+    asked = []
+
+    def submit(_image):
+        asked.append(len(asked) + 1)
+        return asked[-1]
+
+    def wait(stamp, timeout):
+        assert 0 < timeout <= 0.03  # bounded: a dropped frame is never answered
+        stream.current = Frame(hands=(hands[stamp - 1],), timestamp_ms=stamp)
+        return stream.current
+
+    monkeypatch.setattr(stream, "submit", submit)
+    monkeypatch.setattr(stream, "wait", wait)
+    for hand in hands:
+        result = session.tick({}, session.last_tick + 0.033, camera=CAMERA)
+        assert result["hands"] == [list(hand.landmarks)]
 
 
 def test_the_warmup_range_is_not_a_selectable_game():
@@ -393,7 +428,7 @@ def test_hand_input_selects_the_maps_tracker_and_fires(map_key, monkeypatch):
             )
         else:
             stream.current = Frame(hands=(hand,), timestamp_ms=stamp)
-        result = session.tick(camera_payload(), session.last_tick + 0.05)
+        result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
         assert result["tracking"]
     assert session.round.shots == 1
     session.close()
@@ -437,7 +472,7 @@ def test_sniper_eye_closure_scopes_but_never_shoots(monkeypatch):
             subjects=(Marksman(make_hand(thumb_degrees=20), make_face(blink=blink)),),
             timestamp_ms=stamp,
         )
-        result = session.tick(camera_payload(), session.last_tick + 0.05)
+        result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
         assert result["scopeTracked"]
         assert session.round.scoped is scoped
         assert session.round.shots == 0
@@ -445,7 +480,7 @@ def test_sniper_eye_closure_scopes_but_never_shoots(monkeypatch):
     stream.current = MarksmanFrame(
         subjects=(Marksman(make_hand(), None),), timestamp_ms=10
     )
-    result = session.tick(camera_payload(), session.last_tick + 0.05)
+    result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     assert result["tracking"] and not result["scopeTracked"]
     session.close()
 
@@ -468,11 +503,9 @@ def test_mouse_scope_uses_the_rifle_reticle():
 
 def test_calibration_resizes_to_stage_and_keeps_it_for_gameplay(monkeypatch):
     session, stream = camera_session(monkeypatch)
-    payload = {**camera_payload(), "viewAspect": 2.4}
-    result = session.tick(payload, session.last_tick + 0.05)
-    image = cv2.imdecode(
-        np.frombuffer(base64.b64decode(result["image"]), np.uint8), cv2.IMREAD_COLOR
-    )
+    payload = {"viewSize": [960, 400]}
+    result = session.tick(payload, session.last_tick + 0.05, camera=CAMERA)
+    image = cv2.imdecode(np.frombuffer(result["image"], np.uint8), cv2.IMREAD_COLOR)
     assert image.shape[:2] == (400, 960)
     for _ in range(8):
         shoot_setup_target(session, stream)
@@ -481,31 +514,120 @@ def test_calibration_resizes_to_stage_and_keeps_it_for_gameplay(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "aspect, size",
-    [(12, (960, 120)), (8, (960, 120)), (0.1, (225, 900)), (0, (225, 900))],
+    "view, size",
+    [
+        ([1200, 100], (960, 120)),
+        ([960, 120], (960, 120)),
+        ([90, 900], (225, 900)),
+        ([0, 900], (225, 900)),
+        ([1200, 0], (960, 120)),
+        ([0, 0], (960, 120)),
+    ],
 )
-def test_extreme_stage_shapes_are_clamped_not_refused(aspect, size, monkeypatch):
+def test_extreme_stage_shapes_are_clamped_not_refused(view, size, monkeypatch):
     # A window a few hundred pixels tall must not end the game on its first frame.
-    assert BrowserSession({"viewAspect": aspect}).width == size[0]
+    assert BrowserSession({"viewSize": view}).width == size[0]
     session, _stream = camera_session(monkeypatch)
-    session.tick({**camera_payload(), "viewAspect": aspect}, session.last_tick)
+    session.tick({"viewSize": view}, session.last_tick, camera=CAMERA)
     assert (session.width, session.height) == size
     assert session.canvas.shape[:2] == size[::-1]
+
+
+@pytest.mark.parametrize(
+    "view, size",
+    [
+        # 1440 by 900 at one device pixel per CSS pixel: shown pixel for pixel.
+        ([1408, 698], (1408, 698)),
+        ([1021, 574], (1021, 574)),
+        # A small stage never gets fewer pixels than the maps were made at.
+        ([640, 360], (960, 540)),
+        ([500, 700], (643, 900)),
+    ],
+)
+def test_frames_are_drawn_at_the_stages_own_resolution(view, size):
+    session = BrowserSession({"viewSize": view})
+    assert (session.width, session.height) == size
+    assert session.round.area.width == size[0]
+    assert session.options.scale == size[1] / 720
+
+
+@pytest.mark.parametrize("view", [[2816, 1396], [2042, 1148], [7680, 4320]])
+def test_a_retina_stage_is_drawn_within_the_pixel_budget(view):
+    width, height = browser.stage_size(view)
+    assert width * height <= browser.MAX_PIXELS
+    assert width * height > 0.99 * browser.MAX_PIXELS  # but not far short of it
+    assert width / height == pytest.approx(view[0] / view[1], rel=0.002)
+
+
+def test_everything_drawn_grows_with_the_frame(monkeypatch):
+    # The crosshair was drawn at a fixed size, so a sharper frame shrank it.
+    sizes = []
+    draw = browser.scene.draw_crosshair
+    monkeypatch.setattr(
+        browser.scene,
+        "draw_crosshair",
+        lambda *args, **kwargs: sizes.append(args[5]) or draw(*args, **kwargs),
+    )
+    for view in ([960, 540], [1920, 1080]):
+        session, stream = camera_session(monkeypatch, viewSize=view)
+        warm_up(session)
+        stream.current = frame_of(make_hand())
+        session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert sizes == [browser.CROSSHAIR, 2 * browser.CROSSHAIR]
+
+
+def test_the_mouse_crosshair_is_left_to_the_page(monkeypatch):
+    # Drawn into the frame, it trailed the pointer by a round trip and more;
+    # the page draws it where the pointer is. The shot still lands here.
+    drawn = []
+    monkeypatch.setattr(
+        browser.scene, "draw_crosshair", lambda *args, **kwargs: drawn.append(args)
+    )
+    session = BrowserSession({"map": "western"})
+    session.tick({"x": 0.5, "y": 0.5}, session.last_tick + 0.05)
+    session.tick({"x": 0.3, "y": 0.6, "fire": True}, session.last_tick + 0.05)
+    assert not drawn and session.round.shots == 1
+    impact = session.round.impacts[-1]
+    assert (impact.x, impact.y) == (0.3 * session.width, 0.6 * session.height)
+    # A hand's crosshair is still drawn by the server: it shows the filtered aim.
+    session, stream = camera_session(monkeypatch, map="western")
+    warm_up(session)
+    stream.current = frame_of(make_hand())
+    session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert len(drawn) == 1
+
+
+def test_a_new_round_takes_the_stages_new_size():
+    # A round is laid out for one size: a resize mid-round waits for the next.
+    session = BrowserSession({"viewSize": [960, 540], "duration": 15})
+    session.tick({"viewSize": [1920, 1080]}, session.last_tick + 0.05)
+    assert (session.width, session.height) == (960, 540)
+    session.clock = 16
+    session.tick({}, session.last_tick)
+    session.action("play", {})
+    assert (session.width, session.height) == (1920, 1080)
+    assert session.round.area.width == 1920 and session.canvas.shape[:2] == (1080, 1920)
+    data = session.tick({}, session.last_tick + 0.05)
+    image = cv2.imdecode(np.frombuffer(data["image"], np.uint8), cv2.IMREAD_COLOR)
+    assert image.shape[:2] == (1080, 1920)
 
 
 def test_an_unmeasured_stage_keeps_the_current_shape(monkeypatch):
     session, _stream = camera_session(monkeypatch)
     before = (session.width, session.height)
-    session.tick({**camera_payload(), "viewAspect": None}, session.last_tick)
+    session.tick({"viewSize": None}, session.last_tick, camera=CAMERA)
     assert (session.width, session.height) == before
-    assert BrowserSession({"viewAspect": None}).width == browser.WIDTH
+    assert BrowserSession({"viewSize": None}).width == browser.WIDTH
 
 
-@pytest.mark.parametrize("aspect", ["wide", float("nan"), float("inf"), -1, True])
-def test_a_stage_shape_that_is_not_a_number_is_refused(aspect, monkeypatch):
+@pytest.mark.parametrize(
+    "view",
+    ["wide", [float("nan"), 1], [float("inf"), 1], [-1, 5], [True, 1], [1], 2.0],
+)
+def test_a_stage_size_that_is_not_two_numbers_is_refused(view, monkeypatch):
     session, _stream = camera_session(monkeypatch)
     with pytest.raises(ValueError):
-        session.tick({"viewAspect": aspect}, session.last_tick)
+        session.tick({"viewSize": view}, session.last_tick)
 
 
 def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):
@@ -520,5 +642,5 @@ def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):
         stream.current = replace(
             frame_of(make_hand(70)), timestamp_ms=stream.current.timestamp_ms + 1
         )
-        session.tick(camera_payload(), session.last_tick + 0.05)
+        session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     assert len(session.calibration.samples) == 1

@@ -8,8 +8,6 @@ Run with ``python -m handy.browser`` (or ``python -m handy --browser``).
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 from dataclasses import replace
 import json
 import math
@@ -38,6 +36,11 @@ WIDTH, HEIGHT = 960, 540
 MAX_BODY = 1_500_000
 #: Seconds without a request after which the open game is presumed abandoned.
 IDLE_TIMEOUT = 60.0
+#: Seconds a camera frame waits for its own hand (and face) reading. MediaPipe
+#: answers in about 6 ms; reading without waiting aimed from the frame before,
+#: a whole camera frame late. Bounded, because a frame the recogniser drops is
+#: never answered: after this long the newest reading there is stands in.
+RESULT_WAIT = 0.025
 
 
 def number(value, low, high):
@@ -48,16 +51,35 @@ def number(value, low, high):
     return value
 
 
-def stage_size(aspect):
-    """The canvas (width, height) for a stage of this width-to-height shape.
+#: The most pixels a frame is drawn with: a 1920 by 1080 frame's worth. Drawing
+#: and encoding grow with the area - at this size 5 to 8 ms a frame on an
+#: M-series Mac, against about 2 at 960 wide - and a Retina stage would
+#: otherwise ask for four times as many.
+MAX_PIXELS = 1920 * 1080
+#: The crosshair's scale on a 960-wide frame; it grows with the frame.
+CROSSHAIR = 0.75
 
+
+def stage_size(size):
+    """The canvas (width, height) to draw a stage ``size`` device pixels big.
+
+    The stage's own shape and resolution, so the page can show each frame
+    pixel for pixel instead of stretching it: never fewer pixels than the
+    960-wide frame the maps were designed at, nor more than ``MAX_PIXELS``.
     Shapes beyond 1:4 and 8:1 are drawn at the nearest one the renderer
     supports. A short or narrow window is not a mistake to refuse: the page
-    sends its shape with every frame, and one refusal would end the game.
+    sends its size with every frame, and one refusal would end the game.
     """
-    aspect = min(max(number(aspect, 0, math.inf), 0.25), 8)
-    height = min(900, round(WIDTH / aspect))
-    return round(height * aspect), height
+    if not isinstance(size, (list, tuple)) or len(size) != 2:
+        raise ValueError("Expected a stage width and height")
+    width, height = (number(side, 0, math.inf) for side in size)
+    aspect = min(max(width / height if height else 8, 0.25), 8)
+    # The designed frame: 960 wide, or 900 tall for a stage narrower than that.
+    base = min(900, WIDTH / aspect)
+    zoom = min(width / (base * aspect), height / base)
+    zoom = max(1, min(zoom, math.sqrt(MAX_PIXELS / (base * base * aspect))))
+    height = round(base * zoom)
+    return min(round(height * aspect), MAX_PIXELS // height), height
 
 
 def jpeg(image):
@@ -65,6 +87,25 @@ def jpeg(image):
     if not ok:
         raise ValueError("Could not encode the game frame")
     return encoded.tobytes()
+
+
+#: The frame exchange's format, both ways: a four-byte big-endian length, that
+#: many bytes of JSON, then a JPEG or nothing. Base64 inside JSON made every
+#: picture a third larger and cost an encode and a decode on each side.
+FRAME_TYPE = "application/x-handy-frame"
+
+
+def pack(data, image=b""):
+    head = json.dumps(data, allow_nan=False).encode()
+    return len(head).to_bytes(4, "big") + head + image
+
+
+def unpack(body):
+    """The JSON fields of a frame message, and the JPEG after them."""
+    size = int.from_bytes(body[:4], "big")
+    if len(body) < 4 or size > len(body) - 4:
+        raise ValueError("Invalid frame")
+    return json.loads(body[4 : 4 + size]), body[4 + size :]
 
 
 #: Start-of-frame markers: every JPEG coding - baseline, progressive, lossless,
@@ -113,10 +154,11 @@ def saved_rig(saved):
 
 class BrowserSession:
     def __init__(self, config):
-        aspect = config.get("viewAspect")
-        self.width, self.height = stage_size(
-            WIDTH / HEIGHT if aspect is None else aspect
-        )
+        view = config.get("viewSize")
+        # The size the stage last asked for, and the size frames are drawn at:
+        # they differ while a round laid out for the old size plays on.
+        self.view = stage_size((WIDTH, HEIGHT) if view is None else view)
+        self.width, self.height = self.view
         self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
         if self.map.key not in maps.keys():
             raise ValueError("Choose a game from the arcade")
@@ -182,6 +224,22 @@ class BrowserSession:
             self.stream.close()
             self.stream = None
 
+    @property
+    def zoom(self):
+        """How much bigger each frame is than the 960-wide one maps were made at."""
+        return max(self.width / WIDTH, self.height / 900)
+
+    def _resize(self, size):
+        """Draw at ``size`` from now on; False if that is the size already."""
+        if size == (self.width, self.height):
+            return False
+        self.width, self.height = size
+        self.canvas = np.zeros((self.height, self.width, 3), np.uint8)
+        self.options = replace(
+            self.options, area=Rect(0, 0, *size), scale=self.height / 720
+        )
+        return True
+
     def _new_round(self):
         round_ = self.map.create(self.options)
         # The desktop rifle infers a frame including its surrounding HUD.
@@ -211,6 +269,9 @@ class BrowserSession:
 
     def _play(self):
         """A fresh round of the chosen map, on whatever aim setup settled on."""
+        # A round is laid out for one frame size, so a stage resized during
+        # one - into or out of full screen, say - is drawn sharp from the next.
+        self._resize(self.view)
         self.round = self._new_round()
         self.state = "playing"
         self.notice = ""
@@ -298,45 +359,39 @@ class BrowserSession:
         )
         return data
 
-    def tick(self, data, wall_time=None):
+    def tick(self, data, wall_time=None, camera=None):
+        """Advance the game one frame and draw it.
+
+        ``camera`` is the page's JPEG, if it sent one. The answer carries the
+        drawn frame as JPEG bytes under ``image``.
+        """
         wall = time.monotonic() if wall_time is None else wall_time
         dt = max(0, min(wall - self.last_tick, 0.1))
         self.last_tick = wall
         if self.state not in ("paused", "over"):
             self.clock += dt
         now = self.clock
-        # A stage with no size yet measures 0 by 0, which JSON sends as null.
-        aspect = data.get("viewAspect")
-        if self.state == "calibration" and aspect is not None:
-            width, height = stage_size(aspect)
-            if (width, height) != (self.width, self.height):
-                self.width, self.height = width, height
-                self.canvas = np.zeros((height, width, 3), np.uint8)
-                self.options = replace(
-                    self.options, area=Rect(0, 0, width, height), scale=height / 720
-                )
-                if self.calibration:
-                    self.calibration.hits.clear()
-        encoded = data.get("camera")
-        if self.stream and encoded:
-            try:
-                raw = base64.b64decode(encoded, validate=True)
-            except (binascii.Error, TypeError) as error:
-                raise ValueError("Invalid camera frame") from error
+        # A stage with no size yet measures 0 by 0; the page leaves it out.
+        view = data.get("viewSize")
+        if view is not None:
+            self.view = stage_size(view)
+        if self.state == "calibration" and self._resize(self.view):
+            if self.calibration:
+                self.calibration.hits.clear()
+        if self.stream and camera:
             # The UI sends 640x480 JPEGs. Reject other encodings and oversized frames.
-            if not raw.startswith(b"\xff\xd8"):
+            if not camera.startswith(b"\xff\xd8"):
                 raise ValueError("Expected a JPEG camera frame")
-            width, height = jpeg_size(raw)
+            width, height = jpeg_size(camera)
             if not (0 < width <= 1280 and 0 < height <= 720):
                 raise ValueError("Camera frame must be at most 1280 by 720")
             try:
-                image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+                image = cv2.imdecode(np.frombuffer(camera, np.uint8), cv2.IMREAD_COLOR)
             except cv2.error as error:
                 raise ValueError("Invalid camera frame") from error
             if image is None or image.shape[0] > 720 or image.shape[1] > 1280:
                 raise ValueError("Camera frame must be at most 1280 by 720")
-            self.stream.submit(image)
-            current = self.stream.latest()
+            current = self.stream.wait(self.stream.submit(image), RESULT_WAIT)
             if current.timestamp_ms != self.last_reading:
                 self.frame = current
                 self.last_reading = current.timestamp_ms
@@ -388,7 +443,7 @@ class BrowserSession:
                     s.aim.position[1] * self.height,
                     s.aim.armed,
                     None,
-                    0.75,
+                    CROSSHAIR * self.zoom,
                     pull=s.aim.travel,
                     fire_at=self.scheme.fire_above,
                 )
@@ -414,15 +469,18 @@ class BrowserSession:
                 self.last_shot = now
                 cues.append("hit" if impact.is_hit else "shot")
             self.map.draw_world(self.canvas, self.round, now)
-            if crosshair and not scoped:
+            # The page draws the mouse's crosshair itself, where the pointer is
+            # now rather than where it was a round trip ago. A hand's is drawn
+            # here: only the server knows where its filtered aim will land.
+            if crosshair and not scoped and aim:
                 scene.draw_crosshair(
                     self.canvas,
                     *crosshair,
-                    aim.armed if aim else True,
+                    aim.armed,
                     now - self.last_shot,
-                    0.75,
-                    pull=aim.travel if aim else 0,
-                    fire_at=self.scheme.fire_above if self.scheme else 0.65,
+                    CROSSHAIR * self.zoom,
+                    pull=aim.travel,
+                    fire_at=self.scheme.fire_above,
                 )
             if self.round.is_over(now):
                 self.state = "over"
@@ -437,7 +495,7 @@ class BrowserSession:
                 else None
             ),
             cues=cues,
-            image=base64.b64encode(jpeg(self.canvas)).decode(),
+            image=jpeg(self.canvas),
         )
         return result
 
@@ -478,7 +536,7 @@ class BrowserServer(ThreadingHTTPServer):
             previous.close()
         return {**session.info(), "forgetSavedSetup": session.forget_saved}
 
-    def call(self, path, data):
+    def call(self, path, data, camera=None):
         """Run one request against the open game."""
         if path not in ("/api/frame", "/api/action", "/api/stop"):
             raise ValueError("Unknown operation")
@@ -495,7 +553,7 @@ class BrowserServer(ThreadingHTTPServer):
                 )
             self.seen = time.monotonic()
             if path == "/api/frame":
-                return session.tick(data)
+                return session.tick(data, camera=camera)
             if path == "/api/action":
                 return session.action(data.get("action"), data)
             session.close()
@@ -637,11 +695,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(200, jpeg(art), "image/jpeg")
             except KeyError:
                 self.respond(404, {"error": "Unknown map"})
-        elif path in ("/", "/app.js", "/style.css"):
+        elif path in ("/", "/app.js", "/capture.js", "/style.css"):
             name = "index.html" if path == "/" else path[1:]
             mime = {
                 "index.html": "text/html",
                 "app.js": "text/javascript",
+                "capture.js": "text/javascript",
                 "style.css": "text/css",
             }[name]
             self.send(200, (WEB_ROOT / name).read_bytes(), mime + "; charset=utf-8")
@@ -672,14 +731,15 @@ class Handler(BaseHTTPRequestHandler):
         # these two touch the tab's connection, and its failures are handle()'s.
         # A model download failing the same way inside is a real error.
         body = self.rfile.read(size)
+        frame = self.path == "/api/frame"
         try:
-            data = json.loads(body)
+            data, camera = unpack(body) if frame else (json.loads(body), None)
             if not isinstance(data, dict):
                 raise ValueError("Expected a JSON object")
             if self.path == "/api/start":
                 result = self.server.start(data)
             else:
-                result = self.server.call(self.path, data)
+                result = self.server.call(self.path, data, camera)
         except (ValueError, KeyError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})
             return
@@ -694,7 +754,11 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
-        self.respond(200, result)
+        if frame:
+            image = result.pop("image")
+            self.send(200, pack(result, image), FRAME_TYPE)
+        else:
+            self.respond(200, result)
 
 
 def main(argv=None):

@@ -83,3 +83,82 @@ def test_the_face_stream_stamps_frames_that_always_increase(monkeypatch):
             stream.submit(np.zeros((8, 8, 3), np.uint8))
 
     assert all(b > a for a, b in zip(stamps, stamps[1:]))
+
+
+def test_the_face_stream_waits_for_the_frame_it_was_given(monkeypatch):
+    """The sniper's scope reads the face from the same frame the hand aims from."""
+    import threading
+    import time
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from handy import faces as faces_module
+
+    made = []
+
+    class Answering:
+        def __init__(self, options):
+            self.answer = options.result_callback
+
+        def detect_async(self, _image, timestamp_ms: int) -> None:
+            empty = SimpleNamespace(face_landmarks=[], face_blendshapes=[])
+            threading.Timer(0.05, self.answer, (empty, None, timestamp_ms)).start()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(faces_module.vision.FaceLandmarker, "create_from_options",
+                        staticmethod(lambda options: made.append(Answering(options))
+                                     or made[-1]))
+    stream = faces_module.FaceStream(Path("unused.task"))
+    stamp = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    assert stream.wait(stamp, 5).timestamp_ms == stamp
+    # Never answered: closing releases the waiter instead of leaving it blocked.
+    monkeypatch.setattr(made[0], "detect_async", lambda *_args: None)
+    silent = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    threading.Timer(0.05, stream.close).start()
+    began = time.monotonic()
+    assert stream.wait(silent, 30).timestamp_ms == stamp
+    assert time.monotonic() - began < 5
+
+
+def test_the_marksman_waits_for_hand_and_face_within_one_deadline():
+    """Both recognisers work on the frame at once: the wait is the slower of
+    the two, and never the timeout twice over."""
+    import time
+
+    from eyes import make_face
+    from hands import frame_of, make_hand
+    from handy.marksman import MarksmanStream
+
+    class Slow:
+        def __init__(self, frame, delay):
+            self.frame, self.delay, self.asked = frame, delay, []
+
+        def submit(self, _image):
+            return self.frame.timestamp_ms
+
+        def wait(self, stamp, timeout):
+            self.asked.append((stamp, timeout))
+            time.sleep(min(self.delay, max(timeout, 0)))
+            return self.frame
+
+        def latest(self):
+            return self.frame
+
+    from dataclasses import replace
+
+    stream = MarksmanStream.__new__(MarksmanStream)
+    hand, face = make_hand(), make_face()
+    stream._hands = Slow(replace(frame_of(hand), timestamp_ms=7), 0.08)
+    stream._faces = Slow(FaceFrame(faces=(face,), timestamp_ms=9), 0.5)
+    ticket = stream.submit(None)
+    assert ticket == (7, 9)
+    began = time.monotonic()
+    frame = stream.wait(ticket, 0.2)
+    assert time.monotonic() - began < 0.35
+    assert stream._hands.asked[0] == (7, 0.2)
+    face_stamp, face_timeout = stream._faces.asked[0]
+    assert face_stamp == 9 and face_timeout <= 0.2 - 0.07
+    assert frame.subjects[0].hand is hand
