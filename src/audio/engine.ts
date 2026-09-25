@@ -6,7 +6,7 @@
  *   voices ─► world bus ├─► muffle (low-pass) ─► duck ─┐
  *   reverb return ──────┘                              │
  *   voices ─► ui bus ──────────────────────────────────┼─► master (mute) ─► limiter ─► soft clip ─► speakers
- *   hurt heartbeat ─► heart bus ───────────────────────┘
+ *   heartbeat, death ─► self bus ──────────────────────┘
  *
  * A voice is one take of a cue: its source, the air's low-pass for its
  * distance, its level and pan, a send to the town's reverb, and up to five
@@ -74,7 +74,6 @@ export class WebAudioEngine implements AudioEngine {
   private readonly muffle: BiquadFilterNode;
   private readonly duck: GainNode;
   private readonly master: GainNode;
-  private readonly heartBus: GainNode;
   private readonly reverbIn: GainNode;
   private readonly reverbReturn: GainNode;
   private voices: Voice[] = [];
@@ -132,12 +131,13 @@ export class WebAudioEngine implements AudioEngine {
       sfx: ctx.createGain(),
       world: ctx.createGain(),
       ui: ctx.createGain(),
+      self: ctx.createGain(),
     };
     this.buses.sfx.connect(this.muffle);
     this.buses.world.connect(this.muffle);
     this.buses.ui.connect(this.master);
-    this.heartBus = ctx.createGain();
-    this.heartBus.connect(this.master);
+    // Inside the player's head: the heartbeat and the death are not muffled by being hurt.
+    this.buses.self.connect(this.master);
 
     // The town's reverb: a synthesised impulse, returned under the muffle so
     // being hurt dulls it too.
@@ -557,7 +557,7 @@ export class WebAudioEngine implements AudioEngine {
       src.playbackRate.value = h.beatRate;
       const g = this.ctx.createGain();
       g.gain.value = db(spec.level) * h.beatGain;
-      src.connect(g).connect(this.heartBus);
+      src.connect(g).connect(this.buses.self);
       src.onended = () => {
         src.disconnect();
         g.disconnect();

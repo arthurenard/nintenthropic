@@ -97,7 +97,12 @@ const pianoNotes: Record<string, CueSpec> = Object.fromEntries(
   ]),
 );
 
-export type BusName = "sfx" | "world" | "ui";
+/**
+ * sfx: the fight. world: the town. ui: the interface (never muffled or
+ * slowed). self: inside the player's head — the heartbeat, the death —
+ * which the hurt muffle and duck do not touch.
+ */
+export type BusName = "sfx" | "world" | "ui" | "self";
 /** Sounds are synthesised a pack at a time: "core" at start, a game's pack when it loads. */
 export type Pack = "core" | "western";
 
@@ -224,7 +229,7 @@ export const CUES: Record<string, CueSpec> = {
     priority: 2, maxInstances: 3, vary: 0.06, expect: [0.3, 0.9],
   },
   shutter_bang: {
-    recipe: shutterBang, pack: "western", bus: "world", level: -9, reverb: 0.3, echo: 0.8,
+    recipe: shutterBang, pack: "western", bus: "world", level: -7, reverb: 0.3, echo: 0.8,
     travel: true, priority: 1, maxInstances: 2, vary: 0.05, expect: [0.3, 1.1],
   },
 
@@ -244,7 +249,7 @@ export const CUES: Record<string, CueSpec> = {
 
   // --- the town ------------------------------------------------------------------
   wind: {
-    recipe: wind, pack: "western", bus: "world", level: -20, loop: true,
+    recipe: wind, pack: "western", bus: "world", level: -18, loop: true,
     priority: 0, fadeIn: 2.5, fadeOut: 2.0, vary: 0.02, expect: [6, 8],
   },
   bell_toll: {
@@ -256,7 +261,7 @@ export const CUES: Record<string, CueSpec> = {
     travel: true, priority: 1, maxInstances: 1, vary: 0.03, expect: [1.5, 3.2],
   },
   door_creak: {
-    recipe: doorCreak, pack: "western", bus: "world", level: -13, reverb: 0.25, echo: 0.2,
+    recipe: doorCreak, pack: "western", bus: "world", level: -11, reverb: 0.25, echo: 0.2,
     travel: true, priority: 0, maxInstances: 2, vary: 0.06, expect: [0.6, 1.8],
   },
   vane_spin: {
@@ -264,15 +269,15 @@ export const CUES: Record<string, CueSpec> = {
     travel: true, priority: 1, maxInstances: 1, vary: 0.03, expect: [2.5, 4.5],
   },
   water_leak: {
-    recipe: waterLeak, pack: "western", bus: "world", level: -17, loop: true, reverb: 0.15,
+    recipe: waterLeak, pack: "western", bus: "world", level: -15, loop: true, reverb: 0.15,
     priority: 0, fadeIn: 0.4, fadeOut: 1.0, vary: 0.03, expect: [2.5, 3.6],
   },
   tumbleweed_roll: {
-    recipe: tumbleweedRoll, pack: "western", bus: "world", level: -17, loop: true, reverb: 0.1,
+    recipe: tumbleweedRoll, pack: "western", bus: "world", level: -15, loop: true, reverb: 0.1,
     priority: 0, fadeIn: 0.6, fadeOut: 1.2, vary: 0.05, expect: [2, 4.5],
   },
   spurs: {
-    recipe: spurs, pack: "western", bus: "world", level: -15, reverb: 0.2,
+    recipe: spurs, pack: "western", bus: "world", level: -12, reverb: 0.2,
     travel: true, priority: 0, maxInstances: 2, vary: 0.04, expect: [1.2, 3.0],
   },
   poster_flutter: {
@@ -290,37 +295,37 @@ export const CUES: Record<string, CueSpec> = {
     travel: true, priority: 1, maxInstances: 3, vary: 0.05, takes: 4, minGap: 0.1, expect: [0.2, 1.3],
   },
   chicken_cluck: {
-    recipe: chickenCluck, pack: "western", bus: "world", level: -14, reverb: 0.15,
+    recipe: chickenCluck, pack: "western", bus: "world", level: -11, reverb: 0.15,
     travel: true, priority: 0, maxInstances: 1, vary: 0.06, expect: [0.2, 1.4],
   },
   chicken_squawk: {
-    recipe: chickenSquawk, pack: "western", bus: "world", level: -10, reverb: 0.2, echo: 0.3,
+    recipe: chickenSquawk, pack: "western", bus: "world", level: -8, reverb: 0.2, echo: 0.3,
     travel: true, priority: 1, maxInstances: 1, vary: 0.05, expect: [0.6, 1.3],
   },
   horse_neigh: {
-    recipe: horseNeigh, pack: "western", bus: "world", level: -13, reverb: 0.3, echo: 0.4,
+    recipe: horseNeigh, pack: "western", bus: "world", level: -10, reverb: 0.3, echo: 0.4,
     travel: true, priority: 0, maxInstances: 1, vary: 0.04, expect: [1.2, 2.0],
   },
   crow_caw: {
-    recipe: crowCaw, pack: "western", bus: "world", level: -16, reverb: 0.3, echo: 0.3,
+    recipe: crowCaw, pack: "western", bus: "world", level: -13, reverb: 0.3, echo: 0.3,
     travel: true, priority: 0, maxInstances: 1, vary: 0.06, expect: [0.5, 1.6],
   },
   dog_bark_distant: {
-    recipe: dogBarkDistant, pack: "western", bus: "world", level: -18, reverb: 0.2,
+    recipe: dogBarkDistant, pack: "western", bus: "world", level: -15, reverb: 0.2,
     priority: 0, maxInstances: 1, vary: 0.05, expect: [0.8, 2.2],
   },
 
   // --- the player's body -------------------------------------------------------------
   heartbeat: {
-    recipe: heartbeat, pack: "core", bus: "sfx", level: -8, loop: true, steady: true,
+    recipe: heartbeat, pack: "core", bus: "self", level: -8, loop: true, steady: true,
     priority: 3, fadeIn: 0.3, fadeOut: 0.6, vary: 0, expect: [0.7, 1.0],
   },
   heartbeat_beat: {
-    recipe: heartbeatBeat, pack: "core", bus: "sfx", level: -9, steady: true,
+    recipe: heartbeatBeat, pack: "core", bus: "self", level: -9, steady: true,
     priority: 3, vary: 0.01, expect: [0.3, 0.8],
   },
   death_player: {
-    recipe: deathPlayer, pack: "western", bus: "sfx", level: -4, reverb: 0.1, steady: true,
+    recipe: deathPlayer, pack: "western", bus: "self", level: -4, reverb: 0.1, steady: true,
     priority: 3, maxInstances: 1, vary: 0, expect: [2.5, 3.8],
   },
 
