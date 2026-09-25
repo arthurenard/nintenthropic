@@ -648,6 +648,23 @@ def test_other_sites_cannot_read_the_new_routes(server, sounds, labels):
         assert call(server, "GET", path, headers=labels)[0] == 403, path
 
 
+def test_every_element_and_icon_the_script_names_is_in_the_page(server):
+    """The script finds its elements by id; a renamed one fails only in play."""
+    import re
+
+    script = call(server, "GET", "/app.js")[1].decode()
+    page = call(server, "GET", "/")[1].decode()
+    present = set(re.findall(r'id="([\w-]+)"', page))
+    named = {
+        *re.findall(r'\$\("([\w-]+)"\)', script),
+        *re.findall(r'getElementById\("([\w-]+)"\)', script),
+        *re.findall(r'setText\("([\w-]+)"', script),
+    }
+    assert named and named <= present, named - present
+    icons = {*re.findall(r'icon\("([\w-]+)"\)', script), *re.findall(r'icon: "([\w-]+)"', script)}
+    assert icons and {f"i-{name}" for name in icons} <= present
+
+
 def test_art_is_drawn_at_the_size_asked_for_within_limits(server):
     def size(path):
         status, raw, response = call(server, "GET", path)

@@ -1016,7 +1016,15 @@ function renderSetup(step, data) {
   setText("setup-title", step.title);
   setText("setup-detail", step.detail);
   const trigger = $("trigger");
-  const state = !data.tracking ? "lost" : step.armed ? "ready" : "raise";
+  // A paused warm-up sends no camera frames: it has not lost the hand.
+  const state =
+    data.state === "paused"
+      ? trigger.dataset.state || "raise"
+      : data.tracking === false
+        ? "lost"
+        : step.armed
+          ? "ready"
+          : "raise";
   if (trigger.dataset.state !== state) {
     trigger.dataset.state = state;
     setText(
