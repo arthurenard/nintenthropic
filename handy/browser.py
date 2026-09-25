@@ -26,6 +26,7 @@ import numpy as np
 from . import maps, scene, schemes
 from .aiming import Aim, AimController, EyeScope
 from .calibration import Rig, default_rig
+from .maps import orbit, zombies
 from .shot_calibration import REQUIRED_HITS, ShotCalibration
 from .game import Rect, RoundOptions
 from .models import ensure_model
@@ -196,6 +197,95 @@ def setup_words(setup, event):
     if shots == 1:
         return "Now the next one.", "Your crosshair appears after this shot."
     return "One more.", "Then you’ll check your aim."
+
+
+def title_case(words):
+    """'PANE HELD' as a player reads it: 'Pane Held'."""
+    return " ".join(word.capitalize() for word in words.split())
+
+
+def readouts(chosen, round_, now):
+    """The few numbers a map's round lives by, for the page's score panel.
+
+    Each is a label and a value; a meter also has a ``max``, and one that
+    should worry the player a ``tone``. Read from what each round exposes -
+    the desktop draws the same numbers in its own HUD. A value a round does
+    not have (another version of a map, say) is left out rather than failing
+    the frame.
+    """
+    found = []
+
+    def add(label, value, **extra):
+        if value is not None:
+            extra = {name: v for name, v in extra.items() if v is not None}
+            found.append({"label": label, "value": value, **extra})
+
+    def read(name, *args):
+        attribute = getattr(round_, name, None)
+        try:
+            return attribute(*args) if callable(attribute) else attribute
+        except (TypeError, ValueError, ArithmeticError):
+            return None
+
+    if chosen.key == "zombies":
+        health = read("health")
+        if health is not None:
+            full = getattr(zombies, "FULL_HEALTH", 100)
+            low = getattr(zombies, "LOW_HEALTH", full / 3)
+            add("Health", health, max=full, tone="danger" if health <= low else None)
+        add("Wave", read("wave", now))
+        add("Down", read("kills"))
+    elif chosen.key == "orbit":
+        pane = read("integrity")
+        if pane is not None:
+            full = getattr(orbit, "FULL_INTEGRITY", 100)
+            low = getattr(orbit, "ALARM_INTEGRITY", full / 3)
+            add("Pane", pane, max=full, tone="danger" if pane <= low else None)
+        add("Cleared", read("cleared"))
+    elif chosen.key == "sniper":
+        wind = read("wind")
+        if wind is not None:
+            arrow = "→" if wind > 0.05 else "←" if wind < -0.05 else ""
+            add("Wind", f"{abs(wind):.1f} m/s {arrow}".strip())
+        add("Stage", read("stage", now))
+        add("Hostiles", read("remaining_hostiles"))
+    elif chosen.key == "western":
+        add("Bandits", read("bandits_down"))
+        add("Bottles", read("bottles_broken"))
+        folk = read("townsfolk_hit")
+        add("Townsfolk", folk, tone="danger" if folk else None)
+    return found
+
+
+#: The one stat of each map's own on the results card, after the shared three.
+RESULT_STAT = {
+    "zombies": ("Down", "kills"),
+    "western": ("Bandits", "bandits_down"),
+    "orbit": ("Cleared", "cleared"),
+    "sniper": ("Down", "kills"),
+}
+
+
+def results(chosen, round_):
+    """The results card's outcome and its three or four stats."""
+    summary = round_.summary()
+    stats = [
+        {"label": "Accuracy", "value": f"{summary.accuracy:.0%}"},
+        {"label": "Best Streak", "value": str(summary.best_streak)},
+        {"label": title_case(summary.perfect_label), "value": str(summary.perfect)},
+    ]
+    label, name = RESULT_STAT.get(chosen.key, (None, None))
+    value = getattr(round_, name, None) if name else None
+    if isinstance(value, int):
+        stats.append({"label": label, "value": f"{value:,}"})
+    return {
+        "outcome": title_case(summary.outcome) if summary.outcome else "Time’s Up",
+        "won": summary.won,
+        "lost": bool(summary.outcome) and not summary.won,
+        "hits": summary.hits,
+        "shots": summary.shots,
+        "stats": stats,
+    }
 
 
 class BrowserSession:
@@ -475,7 +565,10 @@ class BrowserSession:
             health=getattr(self.round, "health", None),
             accuracy=round(self.round.accuracy * 100),
             result=self.round.result_line(),
+            readouts=readouts(self.map, self.round, self.clock),
         )
+        if self.state == "over":
+            data["summary"] = results(self.map, self.round)
         return data
 
     def tick(self, data, wall_time=None, camera=None):
