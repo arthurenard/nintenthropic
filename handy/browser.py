@@ -253,9 +253,11 @@ class BrowserSession:
             self.scheme = schemes.for_map(self.map.key)
             self.rig = default_rig(self.scheme, 1)
             saved = config.get("calibration")
+            loaded = False
             if saved:
                 try:
                     self.rig = saved_rig(saved)
+                    loaded = True
                 except (LookupError, ValueError, TypeError, ArithmeticError) as error:
                     # An older version's format, or a damaged value. Refusing to
                     # start would refuse every start after it too, since the page
@@ -271,7 +273,20 @@ class BrowserSession:
             self.stream = self.scheme.open_stream(
                 *(ensure_model(m) for m in self.scheme.models)
             )
-            self.begin_calibration()
+            # A returning player whose aim was set up and checked on this camera
+            # goes straight into the game when the page asks for it; Adjust Aim
+            # is one click away if the camera or the chair has moved since. An
+            # aim that was never fitted, or that the fit would have refused,
+            # goes through the warm-up as before.
+            if (
+                config.get("useSavedAim") is True
+                and loaded
+                and self.rig[0].aim_fitted
+                and self.rig[0].usable
+            ):
+                self._play()
+            else:
+                self.begin_calibration()
 
     def close(self):
         if self.stream:
@@ -378,10 +393,14 @@ class BrowserSession:
         # already happened or no longer applies. Answer with where the game is:
         # an error would end the session in the page.
         calibrating = self.state == "calibration"
+        warming_up = calibrating or (
+            self.state == "paused" and self.resume_state == "calibration"
+        )
         if (
             (name == "calibrate" and calibrating)
             or (name in ("undo", "reset", "finish") and not calibrating)
             or (name == "play" and self.state != "over")
+            or (name == "restart" and warming_up)
         ):
             return self.info()
         if name == "calibrate":
@@ -400,7 +419,9 @@ class BrowserSession:
                 self.rig = s.rig
                 self.saved_rig = {"cameras": [self.rig[0].to_dict()]}
                 self._play()
-        elif name == "play":
+        elif name in ("play", "restart"):
+            # Play starts the next round once one is over; restart abandons
+            # the one being played, paused or not.
             self._play()
         elif name == "pause":
             if self.state in ("playing", "calibration"):

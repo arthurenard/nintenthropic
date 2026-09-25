@@ -651,6 +651,96 @@ def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):
         )
         session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     assert len(session.calibration.samples) == 1
+
+
+# --- returning players ---------------------------------------------------------
+
+#: What the page stores once a warm-up has been finished with five centre hits.
+CHECKED = stored_setup(aim_fitted=True, fit_error=0.01, gain=1.2)
+
+
+def test_a_returning_player_with_a_checked_aim_goes_straight_into_the_game(
+    monkeypatch,
+):
+    from handy.calibration import Rig
+
+    session, stream = camera_session(monkeypatch, calibration=CHECKED, useSavedAim=True)
+    assert session.state == "playing" and session.calibration is None
+    assert session.rig == Rig.from_dict(CHECKED) and not session.forget_saved
+    info = session.info()
+    assert "step" not in info and info["hasSavedAim"]
+    # The aim plays: a pull of the thumb fires at once, no warm-up in between.
+    for stamp, firing in enumerate([False] * 4 + [True] * 4, 1):
+        stream.current = Frame(
+            hands=(make_hand(thumb_degrees=70 if firing else 20),), timestamp_ms=stamp
+        )
+        session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert session.round.shots == 1
+    # Adjust Aim is one click away, and checks the saved aim rather than
+    # throwing it away.
+    info = session.action("calibrate", {})
+    assert info["state"] == "calibration" and info["step"]["testing"]
+    assert session.calibration.initial == Rig.from_dict(CHECKED)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"calibration": CHECKED},  # the page did not ask: Adjust Aim
+        {"calibration": stored_setup(fit_error=0.01), "useSavedAim": True},
+        {"calibration": stored_setup(aim_fitted=True, gain=None), "useSavedAim": True},
+        {"calibration": stored_setup(aim_fitted=True, gain=99.0), "useSavedAim": True},
+        {"calibration": {"cameras": "abc"}, "useSavedAim": True},
+        {"useSavedAim": True},  # nothing saved for this camera
+        {"calibration": CHECKED, "useSavedAim": "yes"},
+    ],
+)
+def test_an_aim_that_cannot_be_trusted_warms_up_first(config, monkeypatch):
+    session = camera_session(monkeypatch, **config)[0]
+    assert session.state == "calibration" and session.calibration is not None
+
+
+def test_mouse_players_never_warm_up_even_with_a_saved_aim(monkeypatch):
+    session = BrowserSession({"calibration": CHECKED, "useSavedAim": True})
+    assert session.state == "playing" and session.scheme is None
+    with pytest.raises(ValueError, match="hand"):
+        session.action("calibrate", {})
+
+
+# --- the pause sheet's choices ----------------------------------------------------
+
+
+@pytest.mark.parametrize("paused", [False, True])
+def test_restart_abandons_the_round_being_played(paused):
+    session = BrowserSession({"duration": 60})
+    session.tick({"fire": True}, session.last_tick + 5)
+    if paused:
+        session.action("pause", {})
+    old = session.round
+    info = session.action("restart", {})
+    assert info["state"] == "playing" and session.round is not old
+    assert session.clock == 0 and session.round.shots == 0
+
+
+def test_restart_also_starts_the_next_round_once_one_is_over():
+    session = BrowserSession({"duration": 15})
+    session.tick({}, session.last_tick)
+    session.clock = 16
+    session.tick({}, session.last_tick)
+    assert session.action("restart", {})["state"] == "playing"
+
+
+@pytest.mark.parametrize("paused", [False, True])
+def test_restart_during_the_warm_up_changes_nothing(paused, monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    shoot_setup_target(session, stream)
+    if paused:
+        session.action("pause", {})
+    info = session.action("restart", {})
+    assert info["state"] == ("paused" if paused else "calibration")
+    assert len(session.calibration.samples) == 1
+
+
 # --- what the warm-up says, and what it celebrates ---------------------------------
 
 

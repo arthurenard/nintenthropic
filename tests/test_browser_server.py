@@ -515,3 +515,27 @@ def test_the_page_itself_and_links_to_it_are_allowed(server):
     # A form on another site may navigate here, but never post.
     form = {**link, "Origin": "http://evil.example"}
     assert call(server, "POST", "/api/start", {}, headers=form)[0] == 403
+
+
+# --- returning players, first runs, art and sound ----------------------------------
+
+
+def test_a_returning_player_starts_straight_into_the_game(server):
+    from handy.calibration import default_rig
+
+    checked = {
+        **default_rig(schemes.PISTOL, 1)[0].to_dict(),
+        "aim_fitted": True,
+        "fit_error": 0.01,
+    }
+    data = start(
+        server, control="pistol", calibration={"cameras": [checked]}, useSavedAim=True
+    )
+    assert data["state"] == "playing" and "step" not in data
+    assert data["forgetSavedSetup"] is False
+    status, data, _ = call(
+        server, "POST", "/api/action", {"id": data["id"], "action": "calibrate"}
+    )
+    assert status == 200 and data["state"] == "calibration"
+
+
