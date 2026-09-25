@@ -955,3 +955,16 @@ def test_a_download_of_unknown_size_reports_no_fraction(monkeypatch):
     heard = []
     BrowserSession({"control": "pistol"}, progress=heard.append)
     assert heard == [None] and session_models == ["gesture_recognizer"]
+
+
+def test_the_art_the_page_opens_with_is_drawn_before_it_is_asked_for():
+    """The page asks for every poster the moment it opens; drawn on demand, a
+    new player first saw four empty frames."""
+    browser.art.cache_clear()
+    browser.warm_art(["western"])
+    before = browser.art.cache_info()
+    for size in browser.ART_WARM:
+        browser.art("western", *size)
+    after = browser.art.cache_info()
+    assert after.hits - before.hits == len(browser.ART_WARM)
+    assert after.misses == before.misses, "nothing left to draw on request"

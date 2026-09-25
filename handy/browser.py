@@ -111,6 +111,28 @@ def art(key, width=360, height=200):
     return jpeg(canvas, 88)
 
 
+#: The sizes the page asks for as it opens, in the order it shows them: the
+#: posters, the featured game on a plain screen and on a Retina one, then the
+#: results card and the share card.
+ART_WARM = ((720, 405), (1024, 576), (1600, 900), (1280, 720))
+
+
+def warm_art(keys=None):
+    """Draw every map's art at the sizes the page asks for, before it asks.
+
+    Drawn on first request instead, a new player's first sight of Handy was
+    four empty frames: the page asks for all the art at once, the moment it
+    opens, and each picture is a third of a second of drawing.
+    """
+    for size in ART_WARM:
+        for key in maps.keys() if keys is None else keys:
+            try:
+                art(key, *size)
+            except Exception as error:  # a missing picture is not a broken page
+                print(f"Could not draw the art for {key!r}: {error!r}",
+                      file=sys.stderr, flush=True)
+
+
 def art_size(query):
     """The (width, height) a ``?w=&h=`` query asks for, clamped to ART_SIZES."""
     fields = parse_qs(query)
@@ -1186,9 +1208,12 @@ def main(argv=None):
         server = BrowserServer(("127.0.0.1", args.port))
     except OSError as error:
         parser.exit(1, f"Could not start Handy: {error}. Try --port 8766.\n")
-    # Built while the page loads and the player chooses; the page asks for
-    # the files once a game starts, and plays whatever is ready by then.
-    server.sounds = SoundBank().start()
+    # Made while the page loads and the player chooses: the art first, since
+    # the page shows it the moment it opens, then the sound set, which the
+    # page asks for once a game starts and plays whatever is ready by then.
+    server.sounds = SoundBank()
+    threading.Thread(target=lambda: (warm_art(), server.sounds.build()), daemon=True,
+                     name="prepare-browser").start()
     url = f"http://127.0.0.1:{args.port}"
     print(
         f"Handy is ready: {url}\nKeep this terminal open. Ctrl+C stops the game.",
