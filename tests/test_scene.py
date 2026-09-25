@@ -369,12 +369,10 @@ def test_cards_stay_inside_the_window_at_every_scale():
 
 
 def test_a_long_best_line_is_trimmed_to_the_card_rather_than_overrunning():
-    from handy.rendering import text_width
-
-    long = "point your finger like a pistol, fold your thumb to fire, wink to zoom"
-    fitted = scene._fitted(long, 0.55, 220)
-    assert fitted.endswith("...") and text_width(fitted, 0.55, 1, outline=False) <= 220
-    assert scene._fitted("short", 0.55, 220) == "short"
+    long = "Best 1,240 on a sixty-second round, set on a Tuesday afternoon"
+    fitted = scene.fit(long, scene.FOOTNOTE, 220)
+    assert fitted.endswith("\u2026") and scene.measure(fitted, scene.FOOTNOTE) <= 220
+    assert scene.fit("short", scene.FOOTNOTE, 220) == "short"
 
 
 def test_five_cards_keep_their_text_inside_the_card(canvas):
@@ -1100,3 +1098,48 @@ def test_every_icon_draws_inside_its_square(name):
 def test_an_icon_nobody_drew_is_an_error_not_a_blank():
     with pytest.raises(ValueError):
         scene.draw_icon(np.zeros((10, 10, 3), np.uint8), "sparkles", (5, 5), 8, (1, 1, 1))
+
+
+def test_a_bullseye_in_setup_gets_a_small_celebration_and_a_miss_does_not():
+    """A green badge with a tick pops where the good shot landed and is gone
+    within the moment; a miss is a quiet white cross, never red."""
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import ShotCalibration
+
+    session = ShotCalibration(PISTOL)
+    session.testing, session.last_shot = True, 10.0
+    session.last_impact, session.last_hit = ((0.5, 0.5), 10.0), True
+
+    def around(now):
+        canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
+        scene.celebrate_shot(canvas, session, now)
+        return canvas[HEIGHT // 2 - 40:HEIGHT // 2 + 40, WIDTH // 2 - 40:WIDTH // 2 + 40]
+
+    def green(patch):
+        b, g, r = (patch[:, :, channel].astype(int) for channel in range(3))
+        return int(((g > r + 80) & (g > b + 80)).sum())
+
+    def red(patch):
+        b, g, r = (patch[:, :, channel].astype(int) for channel in range(3))
+        return int(((r > g + 80) & (r > b + 80)).sum())
+
+    popped = around(10.05)
+    assert green(popped) > 200
+    assert not around(10.0 + scene.SHOT_MARK + 0.01).any(), "gone within the moment"
+    session.last_hit = False
+    missed = around(10.05)
+    assert missed.any() and green(missed) == 0 and red(missed) == 0
+
+
+def test_a_shot_that_teaches_the_aim_is_acknowledged_on_its_face():
+    from handy.schemes import PISTOL
+    from handy.shot_calibration import TARGETS, ShotCalibration
+
+    session = ShotCalibration(PISTOL)
+    session.samples = [(((0.3, 0.3),), TARGETS[0])]
+    session.last_shot = 20.0
+    canvas = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
+    scene.celebrate_shot(canvas, session, 20.05)
+    x, y = round(TARGETS[0][0] * WIDTH), round(TARGETS[0][1] * HEIGHT)
+    b, g, r = (canvas[y - 30:y + 30, x - 30:x + 30, c].astype(int) for c in range(3))
+    assert ((g > r + 80) & (g > b + 80)).sum() > 200

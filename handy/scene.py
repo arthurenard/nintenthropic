@@ -2027,36 +2027,6 @@ def _chrome_layers(width: int, height: int, radius: int,
     return keep, cover, shade
 
 
-def _wrapped(text: str, scale: float, width: int, thickness: int = 1,
-             outline: bool = False) -> list[str]:
-    """Greedy word wrap against the width the text will actually be drawn at."""
-    lines: list[str] = []
-    line = ""
-    for word in text.split():
-        candidate = f"{line} {word}".strip()
-        if text_width(candidate, scale, thickness, outline) > width and line:
-            lines.append(line)
-            line = word
-        else:
-            line = candidate
-    if line:
-        lines.append(line)
-    return lines
-
-
-def _fitted(text: str, scale: float, width: int) -> str:
-    """The text, or as many of its words as fit followed by an ellipsis."""
-    if text_width(text, scale, 1, outline=False) <= width:
-        return text
-    words = text.split()
-    while words:
-        words.pop()
-        candidate = " ".join(words) + " ..."
-        if text_width(candidate, scale, 1, outline=False) <= width:
-            return candidate
-    return "..."
-
-
 @lru_cache(maxsize=8)
 def _thumbnail_mask(width: int, height: int, radius: int,
                     all_corners: bool = False) -> np.ndarray:
@@ -2130,12 +2100,62 @@ def draw_calibration_range(canvas, session, now, course=False):
         for point in setup_course(session):
             archery.hang(canvas, arena, face(point), COURSE_STRENGTH)
         archery.hang(canvas, arena, target)
-    if session.last_impact:
-        point, at = session.last_impact
-        if now - at < 0.65:
-            cv2.drawMarker(canvas, (round(point[0] * width), round(point[1] * height)),
-                           ARMED if session.last_hit else MISS, cv2.MARKER_TILTED_CROSS,
-                           _px(15, height / 720), _px(2, height / 720), cv2.LINE_AA)
+    celebrate_shot(canvas, session, now)
+
+
+#: How long a shot's mark stays on the wall in setup, and how long its pop takes.
+SHOT_MARK, SHOT_POP = 0.65, 0.12
+
+
+def celebrate_shot(canvas: np.ndarray, session, now: float) -> None:
+    """A moment's answer to the last shot in setup.
+
+    A bullseye in the check gets a small celebration: a green badge with a
+    tick that pops (1.25 to 1 in a tenth of a second) where it landed, and a
+    ring racing out of it. A shot that taught the aim gets the same badge on
+    the face it was taken at. A miss is a quiet white cross - nothing red:
+    missing in setup is how the aim gets better.
+    """
+    height, width = canvas.shape[:2]
+    scale = height / 720
+    impact = session.last_impact
+    if impact is not None and 0 <= now - impact[1] < SHOT_MARK:
+        point, at = impact
+        _draw_shot_mark(canvas, (point[0] * width, point[1] * height), now - at,
+                        session.last_hit, scale)
+    elif (session.samples and session.last_shot > 0
+          and 0 <= now - session.last_shot < SHOT_MARK
+          and (impact is None or impact[1] < session.last_shot)):
+        target = session.samples[-1][1]
+        _draw_shot_mark(canvas, (target[0] * width, target[1] * height),
+                        now - session.last_shot, True, scale)
+
+
+def _draw_shot_mark(canvas: np.ndarray, centre: tuple[float, float], age: float,
+                    good: bool, scale: float) -> None:
+    life = 1.0 - age / SHOT_MARK
+    pop = 1.25 - 0.25 * min(1.0, age / SHOT_POP)
+    reach = round(56 * scale)
+    height, width = canvas.shape[:2]
+    cx, cy = round(centre[0]), round(centre[1])
+    x0, y0 = max(cx - reach, 0), max(cy - reach, 0)
+    x1, y1 = min(cx + reach + 1, width), min(cy + reach + 1, height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    region = canvas[y0:y1, x0:x1]
+    patch = region.copy()
+    local = (cx - x0, cy - y0)
+    if good:
+        badge = round(18 * scale * pop)
+        spread = min(1.0, age / 0.4)
+        cv2.circle(patch, local, round(badge + 26 * scale * spread), TINT,
+                   max(1, round(3 * scale * (1 - spread))), cv2.LINE_AA)
+        cv2.circle(patch, local, badge, TINT, -1, cv2.LINE_AA)
+        draw_icon(patch, "checkmark", local, badge * 1.3, LABEL)
+    else:
+        cv2.circle(patch, local, round(14 * scale * pop), (0, 0, 0), -1, cv2.LINE_AA)
+        draw_icon(patch, "xmark", local, 20 * scale * pop, LABEL)
+    cv2.addWeighted(patch, life, region, 1.0 - life, 0.0, dst=region)
 
 
 def _pool_of_light(canvas: np.ndarray, centre: tuple[int, int], radius: int) -> None:
@@ -2170,18 +2190,19 @@ def setup_console(width: int, height: int, count: int, aspect: float,
     """The camera, the instruction and the progress panels along the bottom.
 
     As tall as the room under the lowest face allows, capped, so the console
-    never covers a target the player has to shoot.
+    never covers a target the player has to shoot. The camera's picture is
+    at its largest here: in setup, seeing your hand is the point.
     """
     from .maps.archery import BOSS_SCALE
     from .shot_calibration import CHECK_TARGETS, TARGET_RADIUS, TARGETS
 
-    margin, gap = _px(16, scale), _px(16, scale)
+    margin, gap = screen_margin(height, scale), _px(12, scale)
     lowest = max(y for _, y in (*TARGETS, *CHECK_TARGETS)) * height
     lowest += min(width, height) * TARGET_RADIUS * BOSS_SCALE * 1.15  # its shadow too
     bottom = height - margin
     tall = max(_px(60, scale), min(_px(170, scale), bottom - int(lowest) - gap))
     top = bottom - tall
-    slot = (tall - (count - 1) * _px(4, scale)) / max(count, 1)
+    slot = (tall - (count - 1) * _px(8, scale)) / max(count, 1)
     camera_w = max(_px(80, scale), min(int(slot * aspect), width // 4))
     camera = Rect(margin, top, camera_w, tall)
     progress_w = _px(250, scale)
@@ -2191,64 +2212,80 @@ def setup_console(width: int, height: int, count: int, aspect: float,
     return camera, instruction, progress
 
 
-def draw_shot_calibration(canvas, session, images, frames, draw, scale=1.0):
-    """Setup: the lit face on the range wall, and the console under it."""
+#: Setup's keys, as hints in the instruction panel.
+SETUP_KEYS = (("B", "Undo"), ("R", "Start over"), ("Esc", "Skip"))
+
+
+def setup_status(session) -> tuple[str, tuple[int, int, int]]:
+    """The line under the instruction: what the hand is doing right now."""
+    if not session.aim.tracking:
+        return "Show your hand to the camera", DANGER
+    if session.aim.armed:
+        return "Ready. Fold your thumb to fire.", TINT
+    return "Raise your thumb", LABEL_SECONDARY
+
+
+def draw_shot_calibration(canvas, session, images, frames, draw, scale=1.0, now=None):
+    """Setup: the lit face on the range wall, and the console under it.
+
+    ``now`` is the clock the shots were taken on, for the moment's
+    celebration of a hit; without it the wall is drawn as of the last shot.
+    """
     from .shot_calibration import REQUIRED_HITS
 
-    now = session.last_shot if session.last_shot > 0 else 0
+    if now is None:
+        now = session.last_shot if session.last_shot > 0 else 0
     draw_calibration_range(canvas, session, now, course=True)
     height, width = canvas.shape[:2]
     count = max(1, len(images))
     aspect = images[0].shape[1] / images[0].shape[0] if images else 16 / 9
     camera, instruction, progress = setup_console(width, height, count, aspect, scale)
+    radius = _px(PANEL_RADIUS, scale)
 
-    # The camera, framed as it is in every round, in its state colour.
-    for index, (slot, image) in enumerate(zip(inset_slots(camera, count), images)):
+    # The camera's picture, big: here seeing your hand is the whole point.
+    gap = _px(8, scale)
+    slot_h = (camera.height - (count - 1) * gap) // count
+    slots = inset_slots(Rect(camera.x, camera.y, camera.width, slot_h), count, gap)
+    for index, (slot, image) in enumerate(zip(slots, images)):
         state = FUSED if frames[index].subjects else NO_HAND
         draw_camera_inset(canvas, image, frames[index], slot,
-                          f"CAM {index + 1}" if count > 1 else "", state, draw, scale)
+                          f"Camera {index + 1}" if count > 1 else "", state, draw, scale)
 
     # What to do now: the largest words on the screen.
-    draw_chrome_panel(canvas, instruction, scale, tab=ACCENT)
+    draw_glass(canvas, instruction, radius, scale)
     pad = _px(20, scale)
-    draw_text(canvas, "TARGET RANGE  -  AIM SETUP",
-              (instruction.x + pad, instruction.y + _px(26, scale)), ACCENT,
-              scale=0.42 * scale, thickness=1, outline=False)
-    status_y = instruction.bottom - _px(16, scale)
-    first = instruction.y + _px(40, scale)
-    lines, text_scale, step = _fit_instruction(session.message, instruction.width - 2 * pad,
-                                               status_y - _px(26, scale) - first, scale)
-    y = first + step - _px(6, scale)
-    for line in lines:
-        draw_text(canvas, line, (instruction.x + pad, y), INK, scale=text_scale,
-                  thickness=_px(2, scale), outline=False)
-        y += step
-    status, color = (("Show your hand to the camera", DANGER) if not session.aim.tracking
-                     else ("Thumb up - ready to shoot", ARMED) if session.aim.armed
-                     else ("Raise your thumb for the next shot", ACCENT))
-    cv2.circle(canvas, (instruction.x + pad + _px(4, scale), status_y - _px(5, scale)),
-               _px(4, scale), color, -1, cv2.LINE_AA)
-    draw_text(canvas, status, (instruction.x + pad + _px(16, scale), status_y), color,
-              scale=0.5 * scale, thickness=1, outline=False)
-    keys = "b undo   r start over   esc skip"
-    keys_scale = 0.42 * scale
-    keys_w = text_width(keys, keys_scale, 1, False)
-    if keys_w + text_width(status, 0.5 * scale, 1, False) + _px(56, scale) < instruction.width:
-        draw_text(canvas, keys, (instruction.right - pad - keys_w, status_y), MUTED,
-                  scale=keys_scale, thickness=1, outline=False)
+    write(canvas, "Aim Setup", (instruction.x + pad, instruction.y + _px(26, scale)),
+          EYEBROW, LABEL_SECONDARY, scale)
+    status, color = setup_status(session)
+    status_y = instruction.bottom - _px(18, scale)
+    first = instruction.y + _px(58, scale)
+    style, lines = _fit_instruction(session.message, instruction.width - 2 * pad,
+                                    status_y - _px(28, scale) - first, scale)
+    step = _px(style.size * 1.25, scale)
+    for index, line in enumerate(lines):
+        write(canvas, line, (instruction.x + pad, first + index * step), style, LABEL, scale)
+    dot = _px(4, scale)
+    cv2.circle(canvas, (instruction.x + pad + dot,
+                        status_y - round(type_size(SUBHEAD, scale) * CAP_HEIGHT / 2)),
+               dot, color, -1, cv2.LINE_AA)
+    status_w = write(canvas, status, (instruction.x + pad + dot * 2 + _px(8, scale),
+                                      status_y), SUBHEAD, color, scale)
+    keys = fit_hints(SETUP_KEYS, instruction.width - 2 * pad - status_w - _px(48, scale),
+                     scale)
+    if len(keys) == len(SETUP_KEYS):
+        _draw_inline_hints(canvas, keys, instruction.right - pad - hints_width(keys, scale),
+                           status_y, scale)
 
     # How far there is to go.
-    step_color = ARMED if session.testing else ACCENT
-    draw_chrome_panel(canvas, progress, scale, tab=step_color)
+    draw_glass(canvas, progress, radius, scale)
     learned = LEARN_SHOTS if session.testing else min(len(session.samples), LEARN_SHOTS)
     hits = len(session.hits)
-    draw_text(canvas, "STEP 2 OF 2" if session.testing else "STEP 1 OF 2",
-              (progress.x + pad, progress.y + _px(26, scale)), step_color,
-              scale=0.42 * scale, thickness=1, outline=False)
-    headline = (f"{hits} of {REQUIRED_HITS} centre hits" if session.testing
-                else f"{learned} of {LEARN_SHOTS} shots learned")
-    draw_caption(canvas, headline, (progress.x + pad, progress.y + _px(66, scale)), INK,
-                 0.6 * scale)
+    write(canvas, "Step 2 of 2" if session.testing else "Step 1 of 2",
+          (progress.x + pad, progress.y + _px(26, scale)), EYEBROW, LABEL_SECONDARY, scale)
+    headline = (f"{hits} of {REQUIRED_HITS} bullseyes" if session.testing
+                else f"{learned} of {LEARN_SHOTS} shots")
+    write(canvas, headline, (progress.x + pad, progress.y + _px(58, scale)), TITLE_2, LABEL,
+          scale)
     _draw_setup_pips(canvas, progress, learned, hits, session.testing, REQUIRED_HITS,
                      scale)
 
@@ -2258,43 +2295,59 @@ def draw_shot_calibration(canvas, session, images, frames, draw, scale=1.0):
                        None, scale, pull=session.aim.travel, fire_at=0.5)
 
 
-def _fit_instruction(message: str, width: int, room: int,
-                     scale: float) -> tuple[list[str], float, int]:
+def _draw_inline_hints(canvas: np.ndarray, items, x: int, baseline: int,
+                       scale: float) -> None:
+    """Hints set on a panel's own line, keycaps and all, from ``x``."""
+    for key, text in items:
+        cap_w, cap_h = _keycap_width(key, scale), _px(18, scale)
+        middle = baseline - round(type_size(FOOTNOTE, scale) * CAP_HEIGHT / 2)
+        cap = Rect(x, middle - cap_h // 2, cap_w, cap_h)
+        hairline(canvas, cap, _px(5, scale), LABEL_TERTIARY)
+        write(canvas, key, (cap.x + cap_w // 2, baseline), FOOTNOTE, LABEL_SECONDARY, scale,
+              align=CENTRE)
+        x += cap_w + _px(6, scale)
+        x += write(canvas, text, (x, baseline), FOOTNOTE, LABEL_SECONDARY, scale)
+        x += _px(HINT_GAP, scale)
+
+
+def _fit_instruction(message: str, width: int, room: int, scale: float
+                     ) -> tuple[Style, list[str]]:
     """The instruction wrapped as large as it will go in the room it has."""
-    for size in (0.8, 0.72, 0.64, 0.56, 0.5):
-        text_scale, step = size * scale, _px(size * 38, scale)
-        lines = _wrapped(message, text_scale, width, _px(2, scale))
-        if len(lines) * step <= room + _px(8, scale):
-            return lines, text_scale, step
-    fits = max(1, (room + _px(8, scale)) // step)
+    for style in (TITLE_2, TITLE_3, HEADLINE):
+        lines = wrap(message, style, width, scale)
+        step = _px(style.size * 1.25, scale)
+        if len(lines) * step <= room + step:
+            return style, lines
+    fits = max(1, (room + step) // step)
     if len(lines) > fits:
         lines = lines[:fits]
-        lines[-1] = _fitted(lines[-1] + " ...", text_scale, width)
-    return lines, text_scale, step
+        lines[-1] = fit(lines[-1] + " …", style, width, scale)
+    return style, lines
 
 
 def _draw_setup_pips(canvas: np.ndarray, panel: Rect, learned: int, hits: int,
                      testing: bool, required: int, scale: float) -> None:
     """Both steps of setup as a row of pips: the shots that teach the aim, then
-    the centre hits that check it - done ones filled, the next one ringed."""
-    radius, pitch, group_gap = _px(8, scale), _px(24, scale), _px(18, scale)
+    the bullseyes that check it - done ones filled in the tint (progress), the
+    next one ringed in white, the rest a hairline."""
+    radius, pitch, group_gap = _px(7, scale), _px(22, scale), _px(18, scale)
     x = panel.x + _px(20, scale) + radius
-    y = panel.bottom - _px(46, scale)
+    y = panel.bottom - _px(44, scale)
     label_y = panel.bottom - _px(16, scale)
-    groups = ((LEARN_SHOTS, learned, not testing, ACCENT, "LEARN"),
-              (required, hits, testing, ARMED, "CHECK"))
-    for total, done, current, color, label in groups:
+    groups = ((LEARN_SHOTS, learned, not testing, "Learn"),
+              (required, hits, testing, "Check"))
+    for total, done, current, label in groups:
         start = x
         for index in range(total):
             if index < done:
-                cv2.circle(canvas, (x, y), radius, color, -1, cv2.LINE_AA)
+                cv2.circle(canvas, (x, y), radius, TINT, -1, cv2.LINE_AA)
+            elif current and index == done:
+                cv2.circle(canvas, (x, y), radius, LABEL, _px(2, scale), cv2.LINE_AA)
             else:
-                ring = color if current and index == done else EDGE
-                cv2.circle(canvas, (x, y), radius, ring, _px(2, scale), cv2.LINE_AA)
+                cv2.circle(canvas, (x, y), radius, LABEL_TERTIARY, 1, cv2.LINE_AA)
             x += pitch
-        draw_text(canvas, label, (start - radius, label_y),
-                  color if current or done else MUTED, scale=0.38 * scale, thickness=1,
-                  outline=False)
+        write(canvas, label, (start - radius, label_y), FOOTNOTE,
+              LABEL if current else LABEL_SECONDARY, scale)
         x += group_gap
 
 

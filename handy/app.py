@@ -629,7 +629,7 @@ def run_calibration(eyes: Eyes, canvas: np.ndarray, layout: Layout, scheme,
         session.viewport = (canvas.shape[1], canvas.shape[0])
         session.update(frames, time.monotonic())
         scene.draw_shot_calibration(canvas, session, images, frames, scheme.draw,
-                                    layout.scale)
+                                    layout.scale, time.monotonic())
         cv2.imshow(WINDOW_TITLE, canvas)
         key = cv2.waitKey(1) & 0xFF
         if key in (_ESCAPE, ord("q")) or window_closed():

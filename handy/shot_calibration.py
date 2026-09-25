@@ -52,9 +52,9 @@ class ShotCalibration:
         self.last_impact = None
         self.shot_count = 0
         self.message = (
-            "Saved aim loaded. Hit five target centres to start your game."
+            "Welcome back. Hit five bullseyes and your game starts."
             if self.testing
-            else "Point naturally at the lit target and fold your thumb. Your crosshair appears after two shots."
+            else "Point at the lit target. Fold your thumb to fire."
         )
         self.fitted = False
 
@@ -124,7 +124,7 @@ class ShotCalibration:
     def undo(self):
         if self.hits:
             self.hits.remove(max(self.hits))
-            self.message = "Last accuracy hit undone. Shoot this target again."
+            self.message = "Hit undone. Shoot this target again."
             return
         if self.samples:
             self.samples.pop()
@@ -133,7 +133,7 @@ class ShotCalibration:
         self.history = [deque() for _ in self.history]
         self.controller.reset_position()
         self.testing = self.ready
-        self.message = "Shot undone. Point at the target and try again."
+        self.message = "Shot undone. Aim at the target and try again."
 
     def update(self, frames, now):
         fresh = False
@@ -173,9 +173,7 @@ class ShotCalibration:
         self.last_shot = now
         self.last_hit = False
         if not any(self.history):
-            self.message = (
-                "Raise your thumb, aim, then fold it. Keep your hand in view."
-            )
+            self.message = "Raise your thumb, aim, then fold it to fire."
             return False
         # A camera with no aim from before this pull has no say in this shot.
         points = tuple(
@@ -205,10 +203,9 @@ class ShotCalibration:
                 self.hits.add(len(self.hits))
                 self.last_hit = True
                 self.history = [deque() for _ in self.history]
-                self.message = f"{len(self.hits)} / {REQUIRED_HITS} accurate hits. " + (
-                    "Aim ready. Starting your game!"
-                    if self.complete
-                    else "Hit the next target’s centre."
+                self.message = (
+                    "Your aim is set. Here we go!" if self.complete
+                    else f"Good shot. {len(self.hits)} of {REQUIRED_HITS}."
                 )
                 return True
             # A miss can refine the mapping, but progress restarts whenever the
@@ -217,33 +214,32 @@ class ShotCalibration:
             if len(self.samples) < 2:
                 self.testing = False
                 self.hits.clear()
-                self.message = "Let’s adjust the aim. Point naturally at the next target and shoot."
+                self.message = "Let’s fine-tune your aim. Point at the next target and fire."
                 return True
             if self._fit():
                 self.hits.clear()
                 self.fitted = True
                 self.controller.reset_position()
-                self.message = "Aim adjusted. Land five centre hits to check it."
+                self.message = "Aim adjusted. Hit five bullseyes to check it."
             else:
                 self.samples.pop()
-                self.message = (
-                    "Missed the centre. Raise your thumb and try this target again."
-                )
+                self.message = "Just off the bullseye. Raise your thumb and try again."
             self.history = [deque() for _ in self.history]
             return True
         self.samples.append((points, target))
         if len(self.samples) >= 2:
             if not self._fit():
                 self.samples.pop()
-                self.message = "Those aims were too similar or inconsistent. Move toward the target and retry, or undo the last shot."
+                self.message = ("Those shots were too similar. Aim right at the lit "
+                                "target, or undo the last one.")
                 return False
             self.fitted = True
             self.controller.reset_position()
         self.history = [deque() for _ in self.history]
         self.testing = self.ready
         self.message = (
-            "Aim learned. Hit five target centres to start your game automatically."
-            if self.testing
-            else "Point naturally at the next target. Your crosshair appears after two shots."
+            "Aim learned. Hit five bullseyes and your game starts." if self.testing
+            else "There’s your crosshair. One more." if self.fitted
+            else "Good. Now the next target."
         )
         return True
