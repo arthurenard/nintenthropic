@@ -387,8 +387,8 @@ async function start() {
 // Camera frames are mirrored and encoded on a worker thread where the browser
 // allows it (capture.js). On the page's own thread toBlob waits for the page to
 // fall idle, which a busy or background tab may not do for a whole second.
-// It answers in order. A game left for the arcade can still have a frame in
-// it when the next game's first one goes in, so each waits its turn.
+// The worker answers in order, and a game left for the arcade can still have
+// a frame in it when the next game's first goes in: each waits its turn.
 let encoder = null;
 const encoding = [];
 try {
@@ -437,7 +437,7 @@ async function cameraFrame() {
     captureCanvas.toBlob(resolve, "image/jpeg", 0.7),
   );
 }
-const view = $("game-image").getContext("2d", { alpha: false });
+const frameContext = $("game-image").getContext("2d", { alpha: false });
 let shown = Promise.resolve();
 function show(image, run) {
   // Decoded off the page's thread, then drawn in the order frames arrived. A
@@ -452,7 +452,7 @@ function show(image, run) {
         if (generation === run) {
           if (canvas.width !== bitmap.width || canvas.height !== bitmap.height)
             [canvas.width, canvas.height] = [bitmap.width, bitmap.height];
-          view.drawImage(bitmap, 0, 0);
+          frameContext.drawImage(bitmap, 0, 0);
           canvas.hidden = false;
         }
         bitmap.close();
@@ -748,8 +748,20 @@ function redrawCrosshair() {
 }
 function drawCrosshair() {
   crosshairFrame = 0;
-  const overlay = $("crosshair"),
-    area = overlay.getBoundingClientRect(),
+  const overlay = $("crosshair");
+  const aiming =
+    active &&
+    selectedControl === "mouse" &&
+    currentState === "playing" &&
+    !$("game-image").hidden &&
+    !(selectedMap === "sniper" && (scoped || keys.has("Shift")));
+  $("stage").classList.toggle("aiming", aiming);
+  if (!aiming) {
+    // Cleared, and its memory given back until there is a crosshair again.
+    if (overlay.width) overlay.width = overlay.height = 0;
+    return;
+  }
+  const area = overlay.getBoundingClientRect(),
     ratio = devicePixelRatio;
   const [width, height] = [area.width, area.height].map((side) =>
     Math.round(side * ratio),
@@ -759,14 +771,6 @@ function drawCrosshair() {
   const context = overlay.getContext("2d");
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, width, height);
-  const aiming =
-    active &&
-    selectedControl === "mouse" &&
-    currentState === "playing" &&
-    !$("game-image").hidden &&
-    !(selectedMap === "sniper" && (scoped || keys.has("Shift")));
-  $("stage").classList.toggle("aiming", aiming);
-  if (!aiming) return;
   const box = frameBox();
   // Centred on a pixel, as OpenCV centres its shapes.
   const x = Math.floor((box.left - area.left + pointer.x * box.width) * ratio),
