@@ -1670,18 +1670,20 @@ def paused_round(monkeypatch, keys, aims=None, frame_seconds=1.0):
         monkeypatch.setattr(cv2, name, lambda *args: None)
     monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
     frames: list[dict] = []
-    real_render, real_sheet = app.render, scene.draw_pause_sheet
+    real_render, real_subtitle = app.render, app.pause_subtitle
 
     def spy_render(canvas, view, layout):
         frames.append({"now": view.now, "remaining": view.remaining, "sheet": False})
         real_render(canvas, view, layout)
 
-    def spy_sheet(canvas, *args, **kwargs):
-        frames[-1]["sheet"] = True
-        real_sheet(canvas, *args, **kwargs)
+    # A paused frame draws only the world and the sheet, and the sheet's line
+    # ("Target Range · 0:48 left") is worked out from the round's clock.
+    def spy_subtitle(chosen, round_, now):
+        frames.append({"now": now, "remaining": round_.remaining(now), "sheet": True})
+        return real_subtitle(chosen, round_, now)
 
     monkeypatch.setattr(app, "render", spy_render)
-    monkeypatch.setattr(scene, "draw_pause_sheet", spy_sheet)
+    monkeypatch.setattr(app, "pause_subtitle", spy_subtitle)
     if aims is not None:
         aim_script = iter(aims)
         monkeypatch.setattr(app.AimController, "update",

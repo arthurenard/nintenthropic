@@ -24,8 +24,8 @@ from typing import NamedTuple
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Impact, Rect, Round, RoundOptions
-from ..scene import blend, draw_text
+from ..game import DANGER, MISS, PLAIN, Hit, Impact, Readout, Rect, Round, RoundOptions
+from ..scene import blend
 
 # --- the world --------------------------------------------------------------
 
@@ -1122,6 +1122,9 @@ class ZombieRound(Round):
 
     def wave(self, now: float) -> int:
         return int(self.elapsed(now) // WAVE_SECONDS) + 1
+
+    def readouts(self, now: float) -> tuple[Readout, ...]:
+        return readouts(self, now)
 
     def last_shot(self) -> float | None:
         return max((impact.at for impact in self.impacts), default=None)
@@ -2670,63 +2673,18 @@ def draw_world(canvas: np.ndarray, round_: ZombieRound, now: float) -> None:
 
 # --- the readouts ------------------------------------------------------------
 
-class Readout(NamedTuple):
-    """One thing this map says beside the score: a short label, its value as
-    it reads, and for a gauge how full it is and how many steps it goes down
-    in."""
-
-    label: str
-    value: str
-    level: float | None = None
-    steps: int | None = None
-
-
 def readouts(round_: ZombieRound, now: float) -> tuple[Readout, ...]:
-    """What the night stands at, for whichever panel carries it - today the
-    strip this map draws under the score, later the app's one score panel.
-
-    Health is a gauge that goes down a bite at a time; the rest are numbers
-    in the voice of the rest of the game."""
-    return (Readout("Health", str(round_.health), round_.health / FULL_HEALTH,
-                    math.ceil(FULL_HEALTH / BITE_DAMAGE)),
+    """What the night stands at, beside the score: health as a gauge notched
+    where it will stand after each bite, in red once two bites would end it,
+    then the wave and the dead."""
+    bites = math.ceil(FULL_HEALTH / BITE_DAMAGE)
+    notches = tuple((FULL_HEALTH - bite * BITE_DAMAGE) / FULL_HEALTH
+                    for bite in range(1, bites))
+    return (Readout("Health", str(round_.health), meter=round_.health / FULL_HEALTH,
+                    tone=DANGER if round_.health <= LOW_HEALTH else PLAIN,
+                    notches=notches),
             Readout("Wave", str(round_.wave(now))),
-            Readout("Down", f"{round_.kills:,}"),
-            Readout("Enemy", round_.options.enemy.title()))
-
-
-def readout_line(round_: ZombieRound, now: float) -> str:
-    """The readouts as the one line under the health gauge: "Wave 1 · 0 down"."""
-    values = {readout.label: readout.value for readout in readouts(round_, now)}
-    return f"Wave {values['Wave']} · {values['Down']} down"
-
-
-def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
-             now: float) -> None:
-    """The health gauge and the line under it, below the shared score block."""
-    x, y = origin
-    scale = min(max(canvas.shape[0] / 720.0, 0.7), 2.4)
-
-    def line(offset: float) -> int:
-        return y + round(offset * scale)
-
-    health = readouts(round_, now)[0]
-    bar = Rect(x, line(146), round(240 * scale), round(14 * scale))
-    cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (30, 28, 27), -1)
-    filled = int(bar.width * health.level)
-    if filled:
-        low = round_.health <= LOW_HEALTH
-        colour = (60, 60, 210) if low else (96, 150, 104)
-        if low:
-            colour = _mix(colour, (80, 90, 255), _heartbeat(now, 0.85))
-        cv2.rectangle(canvas, (bar.x, bar.y), (bar.x + filled, bar.bottom), colour, -1)
-    # A notch where the bar will stand after each bite, so it reads in bites
-    # left rather than in percent - however many the constants make that.
-    for bite in range(1, health.steps):
-        tx = bar.x + bar.width * (FULL_HEALTH - bite * BITE_DAMAGE) // FULL_HEALTH
-        cv2.line(canvas, (tx, bar.y), (tx, bar.bottom), (20, 20, 20), 1)
-    cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (120, 116, 110), 1)
-    draw_text(canvas, readout_line(round_, now), (x, line(182)), (168, 164, 158),
-              scale=0.6 * scale)
+            Readout("Down", f"{round_.kills:,}"))
 
 
 #: The poster's cast: (gait, metres away, where across the picture as a

@@ -51,7 +51,6 @@ ZOMBIES = Map(
           "body shots only slow them down.",
     create=zombies.ZombieRound,
     draw_world=zombies.draw_world,
-    draw_hud=zombies.draw_hud,
     footer="Head shots drop them",
     draw_emblem=zombies.draw_emblem,
     play_hit=_flesh_hit,

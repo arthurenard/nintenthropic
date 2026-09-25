@@ -110,6 +110,10 @@ class Readout:
     meter: float | None = None
     signed: bool = False
     tone: str = PLAIN
+    #: Where to notch a meter, 0 to 1: health that goes down a bite at a time
+    #: is notched where the bar will stand after each bite, so the player can
+    #: count the bites left rather than read a percentage.
+    notches: tuple[float, ...] = ()
 
 
 class GameClock:

@@ -10,8 +10,8 @@ from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FALL, FOG, MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, SETTLED,
                                 STAGGER, WAVE_SECONDS, Perspective, Walker, ZombieRound,
                                 _bloom, _draw_fallen, _environment, _fill, _fixed, _look,
-                                _skyline, draw_emblem, draw_hud, draw_stains, draw_walker,
-                                draw_world, readout_line, readouts)
+                                _skyline, draw_emblem, draw_stains, draw_walker,
+                                draw_world, readouts)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -358,43 +358,45 @@ def test_enough_bites_and_the_night_is_over():
     assert not round_.summary().won
 
 
-def test_the_health_bar_has_a_segment_for_every_bite_you_can_take():
+def test_the_health_meter_is_notched_where_each_bite_leaves_it():
+    """Six bites end the night; the meter is cut where it will stand after
+    each of the first five, so a player counts bites left, not a percentage."""
     round_ = make_round(duration=600)
-    bites, notches = 0, []
+    notches = readouts(round_, 0.0)[0].notches
+    bites = 0
     while not round_.is_lost:
-        hud = np.zeros((720, 400, 3), np.uint8)
-        draw_hud(hud, round_, (20, 0), 0.0)
-        row = hud[153, 21:260]  # through the middle of the bar, inside its frame
-        notches.append(np.flatnonzero((row == (20, 20, 20)).all(axis=1)))
-        lit = np.flatnonzero(((row != (30, 28, 27)) & (row != (20, 20, 20))).any(axis=1))
+        health = readouts(round_, 0.0)[0]
         if bites:
-            assert lit.max() + 1 in notches[0], "after a bite the bar stops on a notch"
+            assert any(abs(health.meter - notch) < 1e-9 for notch in notches), \
+                "after a bite the meter stops on a notch"
         round_.walkers.append(walker_at(0.5))
         round_.update(bites * 0.1)
         bites += 1
     assert bites == 6
-    assert len(notches[0]) + 1 == bites
+    assert len(notches) + 1 == bites
 
 
 def test_the_readouts_say_where_the_night_stands():
-    """Health as a gauge that goes down a bite at a time, and the wave and the
-    kills as one line in the game's voice - ready for whichever panel shows
-    them."""
+    """Health as a gauge that goes down a bite at a time, then the wave and
+    the dead - data for the one score panel, in the game's voice."""
     round_ = make_round(duration=600)
     round_.update(0.0)
-    assert readout_line(round_, 0.0) == "Wave 1 · 0 down"
-    health, wave, down, enemy = readouts(round_, 0.0)
-    assert (health.label, health.level, health.steps) == ("Health", 1.0, 6)
-    assert (wave.value, down.value, enemy.value) == ("1", "0", "Zombies")
+    health, wave, down = round_.readouts(0.0)
+    assert (health.label, health.value, health.meter) == ("Health", "100", 1.0)
+    assert (wave.label, wave.value, down.label, down.value) == ("Wave", "1", "Down", "0")
+    assert health.tone != "danger"
 
     round_.walkers = [walker_at(8.0)]
     round_.shoot(*round_.walkers[0].figure(VIEW, 1.0).head, 1.0)
     round_.walkers.append(walker_at(0.5))
     round_.update(WAVE_SECONDS + 1.0)
-    assert readout_line(round_, WAVE_SECONDS + 1.0) == "Wave 2 · 1 down"
-    assert readouts(round_, 0.0)[0].level == (FULL_HEALTH - BITE_DAMAGE) / FULL_HEALTH
-    assert not any(word.isupper() and len(word) > 1
-                   for word in readout_line(round_, 0.0).split()), "no shouting"
+    health, wave, down = round_.readouts(WAVE_SECONDS + 1.0)
+    assert (wave.value, down.value) == ("2", "1")
+    assert health.meter == (FULL_HEALTH - BITE_DAMAGE) / FULL_HEALTH
+    assert not any(r.label.isupper() for r in round_.readouts(0.0)), "no shouting"
+
+    round_.health = LOW_HEALTH
+    assert round_.readouts(0.0)[0].tone == "danger", "red once two bites would end it"
 
 
 def test_making_it_to_the_end_of_the_round_is_surviving():

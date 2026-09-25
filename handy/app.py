@@ -819,11 +819,10 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                 answer = pause_choice(layout, crosshair)
             if mouse.take_click():
                 answer = pause_choice(layout, (mouse.x, mouse.y))
-            render(canvas, View(map=chosen, round=round_, aim=aim, crosshair=None,
-                                cameras=images, hands=hands, now=now,
-                                last_shot=last_shot, remaining=round_.remaining(now),
-                                camera_states=states, scheme=scheme, hints=0.0,
-                                fire_at=fire_at), layout)
+            # Only the world goes under the sheet, not the round's chrome: the
+            # sheet says the map and the time left itself, and a score panel
+            # tall with a map's readouts ran under its top edge.
+            chosen.draw_world(canvas, round_, now)
             scene.draw_pause_sheet(canvas, pause_subtitle(chosen, round_, now),
                                    pause_choice(layout, crosshair), layout.scale,
                                    (wall - paused_at) / SHEET_ARRIVAL)

@@ -1350,7 +1350,7 @@ def draw_score_panel(canvas: np.ndarray, round_: Round, readouts: Sequence,
             if readout.meter is not None:
                 _draw_meter(canvas, Rect(column, top + _px(READOUT_VALUE + 9, scale),
                                          width, _px(4, scale)),
-                            readout.meter, readout.signed, tone)
+                            readout.meter, readout.signed, tone, readout.notches)
             column += width + _px(READOUT_GAP, scale)
         top += _px(READOUT_ROW + (READOUT_METER if any(r.meter is not None for r in row)
                                   else 0), scale)
@@ -1358,9 +1358,9 @@ def draw_score_panel(canvas: np.ndarray, round_: Round, readouts: Sequence,
 
 
 def _draw_meter(canvas: np.ndarray, rect: Rect, value: float, signed: bool,
-                color: tuple[int, int, int]) -> None:
+                color: tuple[int, int, int], notches: Sequence[float] = ()) -> None:
     """A capsule track with its fill: from the left, or - ``signed`` - out
-    from the middle either way."""
+    from the middle either way - cut at each of ``notches``, 0 to 1."""
     radius = max(1, rect.height // 2)
     draw_surface(canvas, rect, radius, (70, 68, 68), edge=False)
     value = min(max(value, -1.0 if signed else 0.0), 1.0)
@@ -1375,6 +1375,11 @@ def _draw_meter(canvas: np.ndarray, rect: Rect, value: float, signed: bool,
     if x1 - x0 >= 1:
         draw_surface(canvas, Rect(x0, rect.y, max(x1 - x0, rect.height), rect.height),
                      radius, color, edge=False)
+    # Cut through track and fill alike in the glass's own colour, so the
+    # notches read as gaps rather than as marks laid on top.
+    for notch in notches:
+        nx = rect.x + round(rect.width * notch)
+        cv2.line(canvas, (nx, rect.y), (nx, rect.bottom - 1), GLASS, max(1, radius // 2))
 
 
 def draw_debug_line(canvas: np.ndarray, aim: Aim, fps: float | None,
