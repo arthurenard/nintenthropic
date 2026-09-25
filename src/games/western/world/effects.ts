@@ -30,8 +30,10 @@ const GLINT: ParticleStyle = { life: [0.32, 0.36], size: [0.2, 0.05], color: hdr
 const DROPLET: ParticleStyle = { life: [0.5, 0.9], size: [0.05, 0.03], color: col("#9fc0c8"), alpha: [0.8, 0.2], gravity: 9.8, drag: 0.3, frame: 0, spin: 0, floor: 0.02 };
 const MIST: ParticleStyle = { life: [0.4, 0.8], size: [0.1, 0.45], color: col("#d6e4e6"), alpha: [0.4, 0], gravity: 0.5, drag: 2.5, frame: 1, spin: 0.5 };
 const BLOOD: ParticleStyle = { life: [0.25, 0.45], size: [0.08, 0.22], color: col("#5a0a06"), alpha: [0.7, 0], gravity: 2, drag: 3, frame: 1, spin: 1 };
-const FIRE: ParticleStyle = { life: [0.25, 0.5], size: [0.8, 2.6], color: hdr(7, 4, 1.4), color2: hdr(1.2, 0.3, 0.05), alpha: [1, 0], gravity: -2, drag: 3, frame: 1, spin: 1.5 };
-const BLAST_SMOKE: ParticleStyle = { life: [1.4, 2.6], size: [0.8, 3.4], color: col("#6d625a"), alpha: [0.6, 0], fadeIn: 0.1, gravity: -0.8, drag: 1.6, frame: 1, spin: 0.4 };
+const FIRE: ParticleStyle = { life: [0.3, 0.6], size: [0.9, 2.4], color: hdr(3.2, 1.3, 0.3), color2: hdr(0.6, 0.12, 0.02), alpha: [1, 0], gravity: -2.5, drag: 3, frame: 1, spin: 1.5 };
+const FIRE_CORE: ParticleStyle = { life: [0.08, 0.14], size: [1.6, 2.4], color: hdr(4, 2.6, 1.2), alpha: [1, 0], gravity: 0, drag: 0, frame: 0, spin: 0 };
+const BLAST_SMOKE: ParticleStyle = { life: [1.8, 3.2], size: [0.9, 3.8], color: col("#4a403a"), alpha: [0.75, 0], fadeIn: 0.12, gravity: -0.9, drag: 1.5, frame: 1, spin: 0.4 };
+const FUSE_GLOW: ParticleStyle = { life: [0.06, 0.08], size: [0.45, 0.35], color: hdr(2.4, 1.3, 0.35), alpha: [0.9, 0.3], gravity: 0, drag: 0, frame: 0, spin: 0 };
 const FUSE: ParticleStyle = { life: [0.12, 0.3], size: [0.04, 0.01], color: hdr(8, 5, 1.6), color2: hdr(2, 0.5, 0.1), alpha: [1, 0.4], gravity: 2, drag: 0.5, frame: 0, spin: 0 };
 const FEATHER: ParticleStyle = { life: [1.4, 2.4], size: [0.07, 0.06], color: col("#f4efe6"), alpha: [1, 0], gravity: 0.9, drag: 2.2, frame: 3, spin: 5, floor: 0.02 };
 const MOTE: ParticleStyle = { life: [6, 11], size: [0.02, 0.02], color: hdr(1.3, 1.1, 0.8), alpha: [0, 0.6], fadeIn: 0.5, gravity: -0.02, drag: 0.1, frame: 0, spin: 0 };
@@ -295,8 +297,17 @@ export class Effects {
     this.additive.emit(at.x, at.y, at.z, (r() - 0.5) * 1.2, r() * 1.4, (r() - 0.5) * 1.2, FUSE);
   }
 
+  /**
+   * The lit fuse as a beacon: a glow sized to stay about the same on screen
+   * at any distance, so a stick in the air can always be seen and shot.
+   */
+  fuseGlow(at: Vector3, distance: number): void {
+    this.additive.emit(at.x, at.y, at.z, 0, 0, 0, FUSE_GLOW, Math.max(0.6, distance * 0.045));
+  }
+
   explosion(at: Vector3, floorY: number): void {
     const r = this.random;
+    this.additive.emit(at.x, at.y, at.z, 0, 0, 0, FIRE_CORE, 1);
     for (let i = 0; i < 16; i++) {
       v.set(r() - 0.5, r() * 0.8, r() - 0.5).normalize().multiplyScalar(2 + r() * 5);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, FIRE, 1);
@@ -305,9 +316,9 @@ export class Effects {
       v.set(r() - 0.5, r() - 0.2, r() - 0.5).normalize().multiplyScalar(8 + r() * 12);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, SPARK, 1.3);
     }
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 20; i++) {
       v.set(r() - 0.5, r() * 0.6 + 0.2, r() - 0.5).normalize().multiplyScalar(1 + r() * 3);
-      this.alpha.emit(at.x, at.y, at.z, v.x, v.y, v.z, BLAST_SMOKE, 1);
+      this.alpha.emit(at.x, at.y + 0.3, at.z, v.x, v.y, v.z, BLAST_SMOKE, 1);
     }
     for (let i = 0; i < 20; i++) {
       v.set(r() - 0.5, r() * 0.8 + 0.3, r() - 0.5).normalize().multiplyScalar(4 + r() * 8);

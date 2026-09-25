@@ -131,7 +131,8 @@ export class Cast {
       if (!coat && r() < 0.6) outfit.push("var.vest");
       if (b.armour > 0) outfit.push("var.armour");
       rig.dress(outfit);
-      rig.arm(b.role === "rifleman" ? "rifle" : b.role === "dynamiter" ? "none" : "revolver");
+      // Dynamiters carry a revolver too, for when they have no clear throw.
+      rig.arm(b.role === "rifleman" ? "rifle" : "revolver");
       const k = 0.85 + r() * 0.25;
       rig.tint(k * (0.95 + r() * 0.1), k, k * (0.9 + r() * 0.1));
     }
@@ -278,6 +279,7 @@ export class Cast {
   hide(b: Bandit): void {
     const v = this.view(b);
     if (!v) return;
+    if (b.role === "dynamiter") v.rig.arm("revolver");
     const clip = { lean_left: "lean_left_in", lean_right: "lean_right_in", rise: "sink", step_out: "step_in" }[b.cover.emerge];
     v.rig.play(clip, 0.1, false);
   }

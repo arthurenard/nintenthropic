@@ -402,7 +402,7 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
   b.root.add(secrets, tower, piano);
 
   // --- the contract's nodes ------------------------------------------------------------------
-  b.node("camera.player", [0, 1.7, 0], { fov: 50 });
+  b.node("camera.player", [0, 1.7, 0], { fov: 45 });
   const sun = b.node("sun", [0, 30, 20]);
   sun.lookAt(sun.position.clone().sub(sunDir));
   addCovers(b);

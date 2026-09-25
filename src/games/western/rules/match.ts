@@ -478,8 +478,9 @@ export class Match implements BanditWorld {
         total += w;
         continue;
       }
-      if (d < 6 || d > 28) continue;
-      const w = c.side !== b.cover.side ? 3 : 1;
+      // A runner crosses the street, near enough to be seen and led.
+      if (d < 6 || d > 28 || c.side === b.cover.side || c.distance > 40 || b.cover.distance > 40) continue;
+      const w = 1 / (1 + Math.abs(d - 12) * 0.1);
       options.push(c);
       weights.push(w);
       total += w;
@@ -878,13 +879,14 @@ export function buildQueue(spec: WaveSpec, random: Random): QueueEntry[] {
 export function pickBossCovers(covers: readonly Cover[]): Cover[] {
   const tagged = covers.filter((c) => c.tags.includes("boss"));
   if (tagged.length >= 2) return tagged;
-  const pool = covers.filter((c) => !isHigh(c) && c.level === 0 && c.distance >= 14 && c.distance <= 42);
+  // Close enough to be the star of the wave: 14 to 32 m out.
+  const pool = covers.filter((c) => !isHigh(c) && c.level === 0 && c.distance >= 14 && c.distance <= 32);
   const source = pool.length >= 3 ? pool : covers.filter((c) => !isHigh(c));
   if (source.length <= 3) return source.slice();
   // Greedy spread: start nearest the middle of the street, add the farthest each time.
   const chosen: Cover[] = [];
   let best = source[0] as Cover;
-  for (const c of source) if (Math.abs(c.distance - 26) < Math.abs(best.distance - 26)) best = c;
+  for (const c of source) if (Math.abs(c.distance - 22) < Math.abs(best.distance - 22)) best = c;
   chosen.push(best);
   while (chosen.length < 3) {
     let far: Cover | null = null;

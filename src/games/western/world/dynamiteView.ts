@@ -17,17 +17,19 @@ export class DynamiteView {
     parent: Object3D,
     private readonly rules: readonly Dynamite[],
     private readonly fx: Effects,
+    private readonly eye: Vector3,
   ) {
     const red = new MeshStandardMaterial({ color: "#b3241a", roughness: 0.6, emissive: "#3a0804", name: "dynamite" });
     const paper = new MeshStandardMaterial({ color: "#d8cfb8", roughness: 0.9 });
-    const body = new CylinderGeometry(0.035, 0.035, 0.26, 12);
-    const fuse = new CylinderGeometry(0.004, 0.004, 0.08, 4);
+    // A touch larger than life: it is the one thing the player must spot in the air.
+    const body = new CylinderGeometry(0.05, 0.05, 0.34, 12);
+    const fuse = new CylinderGeometry(0.006, 0.006, 0.1, 4);
     for (let i = 0; i < rules.length; i++) {
       const g = new Group();
       const b = new Mesh(body, red);
       b.castShadow = true;
       const f = new Mesh(fuse, paper);
-      f.position.y = 0.17;
+      f.position.y = 0.22;
       g.add(b, f);
       g.visible = false;
       parent.add(g);
@@ -54,9 +56,10 @@ export class DynamiteView {
         g.rotation.x += (Math.PI / 2 - g.rotation.x) * Math.min(1, dt * 10);
         g.rotation.z = 0;
       }
-      tip.set(0, 0.21, 0).applyQuaternion(g.quaternion).add(g.position);
+      tip.set(0, 0.27, 0).applyQuaternion(g.quaternion).add(g.position);
       this.fx.fuse(tip);
-      if (Math.random() < 0.5) this.fx.fuse(tip);
+      this.fx.fuse(tip);
+      this.fx.fuseGlow(tip, tip.distanceTo(this.eye));
     }
   }
 }

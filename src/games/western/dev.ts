@@ -102,7 +102,7 @@ class DomHud implements HudSink {
     this.health(hurt);
   }
   health(hurt: number) {
-    this.edge.style.opacity = String(Math.min(1, hurt * 0.8));
+    this.edge.style.opacity = String(Math.min(1, hurt * 0.6));
   }
   hitMarker(x: number, y: number, kind: "hit" | "headshot" | "kill") {
     this.note("hitMarker", [x, y, kind]);

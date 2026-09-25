@@ -191,7 +191,7 @@ export class HighNoon implements Game, MatchListener {
     this.bottles = new BottleStage(town, parent, this.camera.camera, this.effects, this.sound, this.queries);
     this.calibrationProxy.target = this.bottles;
     this.newMatch();
-    this.dynamite = new DynamiteView(parent, this.match.sticks, this.effects);
+    this.dynamite = new DynamiteView(parent, this.match.sticks, this.effects, town.eye);
     this.shooter = new Shooter(this.camera.camera, this.queries, town, this.cast, {
       sticks: this.match.sticks,
       tumbleweeds: () => this.ambient.tumbleweeds(),
@@ -538,7 +538,7 @@ export class HighNoon implements Game, MatchListener {
     this.hurtDisplay = hurt > this.hurtDisplay ? hurt : this.hurtDisplay + (hurt - this.hurtDisplay) * Math.min(1, dt * 4);
     const h = this.hurtDisplay;
     this.post.set("hurt", h);
-    this.post.set("desaturate", Math.min(1, h * 0.75 + this.sepia));
+    this.post.set("desaturate", Math.min(1, h * 0.6 + this.sepia));
     if (Math.abs(h - this.hurtShown) > 0.01) {
       this.hurtShown = h;
       this.hud.health(h);

@@ -50,9 +50,11 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   vec2 d = (uv - 0.5) * aspect;
   float r = length(d) * 1.35;
   float n = noise(uv * 7.0 + time * 0.15) * 0.35 + noise(uv * 23.0 - time * 0.1) * 0.15;
-  float edge = smoothstep(1.02 - hurt * 0.55, 1.28 - hurt * 0.35, r + n * hurt);
-  vec3 blood = vec3(0.34, 0.015, 0.01);
-  c = mix(c, blood * (0.6 + 0.4 * l), edge * clamp(hurt * 1.1, 0.0, 0.9));
+  // Strongest in the corners, never over the middle of the view: the player
+  // must still see who is shooting.
+  float edge = smoothstep(1.2 - hurt * 0.38, 1.55 - hurt * 0.3, r + n * hurt * 0.8);
+  vec3 blood = vec3(0.3, 0.012, 0.008);
+  c = mix(c, blood * (0.55 + 0.45 * l), edge * clamp(hurt, 0.0, 0.75));
 
   // Death: sepia.
   vec3 sep = vec3(l * 1.07, l * 0.87, l * 0.62) + vec3(0.03, 0.015, 0.0);
