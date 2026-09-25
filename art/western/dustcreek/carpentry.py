@@ -342,6 +342,11 @@ def railing(mb, f, s0, s1, y, z0, height, mat, r, baluster=0.11, rail=0.07, spin
            mat, rand=r.random(), grain_axis=0)
     mb.box(f, (s0, y - rail / 2, z0 + 0.08), (s1, y + rail / 2, z0 + 0.14), mat, rand=r.random(),
            grain_axis=0)
+    if spindle is None or spindle < 0.005:
+        # rails only (catwalks, fences): a middle rail instead of spindles
+        mb.box(f, (s0, y - rail / 2, z0 + height * 0.5 - 0.03), (s1, y + rail / 2, z0 + height * 0.5 + 0.03),
+               mat, rand=r.random(), grain_axis=0)
+        return
     k = int((s1 - s0) / 0.14)
     for i in range(1, k):
         s = s0 + (s1 - s0) * i / k

@@ -99,7 +99,7 @@ def wood_group():
     edge = g.sub(1.0, g.smooth(g.math('MINIMUM', vn, g.sub(1.0, vn)), 0.0, 0.2))
     pv = g.add(g.add(g.mul(peeln, 0.55), g.mul(g.smooth(expo, 0.3, 0.7), 0.55)),
                g.add(g.mul(edge, 0.16), g.mul(g.sub(1.0, streak), 0.08)))
-    thr = g.sub(0.86, g.mul(I("Paint Wear"), 0.46))
+    thr = g.sub(1.05, g.mul(I("Paint Wear"), 0.6))
     peeled = g.smooth(pv, thr, g.add(thr, 0.025))
     pmask = g.mul(I("Paint Amount"), g.sub(1.0, peeled))
     pnoise = g.noise(pos, scale=3.0, detail=4.0)
@@ -401,6 +401,7 @@ def build_library():
     wood("paint_blue", paint=lin(92, 108, 124), paint_amount=1.0, wear=0.55)
     wood("paint_cream", paint=lin(214, 196, 160), paint_amount=1.0, wear=0.45)
     wood("paint_white", paint=lin(226, 220, 204), paint_amount=1.0, wear=0.55, bleach=0.5)
+    wood("church_white", paint=lin(232, 228, 214), paint_amount=1.0, wear=0.32, bleach=0.3)
     wood("paint_brown", paint=lin(104, 70, 48), paint_amount=1.0, wear=0.4)
     wood("paint_black", paint=lin(28, 26, 24), paint_amount=1.0, wear=0.35)
     wood("trim_white", paint=lin(222, 214, 196), paint_amount=1.0, wear=0.35, nails=0.0)
