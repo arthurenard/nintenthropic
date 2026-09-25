@@ -70,6 +70,16 @@ dd,
 figure {
   margin: 0;
 }
+/* No word left alone on a line: titles balance, paragraphs avoid orphans. */
+h1,
+h2,
+h3,
+.alert p {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
 button,
 select {
   font: inherit;
