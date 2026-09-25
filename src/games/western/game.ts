@@ -1,4 +1,4 @@
-import { Color, PCFSoftShadowMap, SRGBColorSpace, Vector3, type Mesh, type ToneMapping } from "three";
+import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type ToneMapping } from "three";
 import type {
   Aim,
   CalibrationStage,
@@ -155,7 +155,7 @@ export class HighNoon implements Game, MatchListener {
     const renderer = ctx.renderer;
     this.previousToneMapping = renderer.toneMapping;
     renderer.outputColorSpace = SRGBColorSpace;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.shadowMap.type = PCFShadowMap;
 
     this.assets = await loadAssets(ctx, (f) => onProgress(f * 0.9), this.noon);
     const town = this.assets.town;
@@ -794,31 +794,81 @@ export class HighNoon implements Game, MatchListener {
       },
       /** Viewport positions of what can be shot right now. */
       targets: () => this.debugTargets(),
+      /**
+       * Line rigs up in front of the camera, each holding a clip at time `t`
+       * (for looking at the animation up close). Pass an empty list to clear.
+       */
+      gallery: (clips: string[], t: number, kind: "bandit" | "boss" | "townsfolk" = "bandit", outfit?: string[]) => {
+        const pool = this.pools[kind];
+        for (const p of [this.pools.bandit, this.pools.boss, this.pools.townsfolk]) {
+          for (const r of p.rigs) if (r.inUse && r.userDataGallery) p.give(r);
+        }
+        const loops = ["idle", "hidden", "aim", "run", "peek", "panic", "head_shake", "wave", "peck", "walk"];
+        const n = clips.length;
+        clips.forEach((clip, i) => {
+          const rig = pool.take();
+          if (!rig) return;
+          rig.userDataGallery = true;
+          rig.dress(outfit ?? (kind === "townsfolk" ? ["var.coat.apron"] : ["var.hat.stetson", "var.bandana.red", "var.vest"]));
+          rig.arm(kind === "townsfolk" ? "none" : "revolver");
+          rig.root.visible = true;
+          rig.root.position.set((i - (n - 1) / 2) * 1.25, 0, -5.2);
+          rig.root.rotation.y = 0.35 * Math.sign(-(i - (n - 1) / 2));
+          rig.play(clip, 0, loops.includes(clip));
+          rig.update(0);
+          rig.mixer.setTime(t);
+        });
+      },
     };
   }
 
+  /**
+   * A point on a character a player could actually see and aim at: the chest
+   * if it is clear of cover, else the belly, the neck or the head.
+   */
+  private visiblePoint(j: import("./world/character").Joints, out: Vector3): boolean {
+    const cam = this.camera.camera.position;
+    const hit = { point: new Vector3(), normal: new Vector3(), distance: 0, object: null };
+    const dir = new Vector3();
+    for (const k of [0.7, 0.45, 0.95, -1]) {
+      if (k < 0) out.copy(j.head);
+      else out.copy(j.hips).lerp(j.neck, k);
+      const d = out.distanceTo(cam);
+      dir.copy(out).sub(cam).normalize();
+      const h = this.queries.cast(cam, dir, d + 1, hit);
+      if (!h || h.distance > d - 0.25) return true;
+    }
+    return false;
+  }
+
   private debugTargets() {
-    const out: { kind: string; id: number; role?: string; state?: string; x: number; y: number; hx?: number; hy?: number; distance: number }[] = [];
+    const out: { kind: string; id: number; role?: string; state?: string; x: number; y: number; hx?: number; hy?: number; distance: number; clear?: boolean }[] = [];
+    const cam = this.camera.camera.position;
+    const at = new Vector3();
     for (const v of this.cast.bandits) {
       if (!v.b.shootable) continue;
       const j = v.rig.updateJoints();
-      tmp.copy(j.hips).lerp(j.neck, 0.55);
-      const body = this.project(tmp);
+      const clear = this.visiblePoint(j, at);
+      const distance = at.distanceTo(cam);
+      const body = this.project(at);
       const head = this.project(j.head);
       if (!body || !head) continue;
-      out.push({ kind: "bandit", id: v.b.id, role: v.b.role, state: v.b.state, x: body.x, y: body.y, hx: head.x, hy: head.y, distance: tmp.distanceTo(this.camera.camera.position) });
+      out.push({ kind: "bandit", id: v.b.id, role: v.b.role, state: v.b.state, x: body.x, y: body.y, hx: head.x, hy: head.y, distance, clear });
     }
-    for (const s of this.match.sticks) {
-      if (!s.airborne) continue;
-      const p = this.project(tmp.set(s.position.x, s.position.y, s.position.z));
-      if (p) out.push({ kind: "dynamite", id: s.id, x: p.x, y: p.y, distance: tmp.distanceTo(this.camera.camera.position) });
+    for (const st of this.match.sticks) {
+      if (!st.airborne) continue;
+      at.set(st.position.x, st.position.y, st.position.z);
+      const distance = at.distanceTo(cam);
+      const p = this.project(at);
+      if (p) out.push({ kind: "dynamite", id: st.id, x: p.x, y: p.y, distance });
     }
     for (const v of this.cast.townsfolk) {
       if (!v.p.shootable) continue;
       const j = v.rig.updateJoints();
-      tmp.copy(j.hips).lerp(j.neck, 0.55);
-      const p = this.project(tmp);
-      if (p) out.push({ kind: "townsfolk", id: v.p.id, role: v.p.role, x: p.x, y: p.y, distance: tmp.distanceTo(this.camera.camera.position) });
+      this.visiblePoint(j, at);
+      const distance = at.distanceTo(cam);
+      const p = this.project(at);
+      if (p) out.push({ kind: "townsfolk", id: v.p.id, role: v.p.role, state: v.p.state, x: p.x, y: p.y, distance });
     }
     const s = this.assets.town.secrets;
     const secretPoints: [string, Vector3 | null][] = [

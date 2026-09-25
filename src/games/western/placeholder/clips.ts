@@ -163,10 +163,12 @@ export function humanoidClips(hipsRest: [number, number, number]): AnimationClip
   ]);
   const leanRight = mirror(LEAN_LEFT);
   // Mirroring swaps which hand holds the gun; put it back in the right.
-  leanRight["upper_arm.R"] = [-86, -30, -10];
+  // The chest is turned the other way now (−22°), so the gun arm swings back
+  // by as much to point at the player, and the left hand reaches across to it.
+  leanRight["upper_arm.R"] = [-86, 22, -10];
   leanRight["forearm.R"] = [-4, 0, 0];
-  leanRight["upper_arm.L"] = [-70, -55, 0];
-  leanRight["forearm.L"] = [-22, 0, 0];
+  leanRight["upper_arm.L"] = [-80, -4, 0];
+  leanRight["forearm.L"] = [-18, 0, 0];
   add("lean_right_out", [
     { t: 0, pose: READY },
     { t: 0.3, pose: leanRight, hips: [-0.1, -0.02, 0] },

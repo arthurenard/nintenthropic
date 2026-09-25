@@ -141,6 +141,8 @@ export class Rig {
   current: AnimationAction | null = null;
   currentName = "";
   inUse = false;
+  /** Borrowed by the dev harness's pose gallery. */
+  userDataGallery = false;
   /** Procedural: twist from a hit, kick from firing, pitch toward the target. */
   private twist = 0;
   private twistVel = 0;
@@ -414,6 +416,7 @@ export class RigPool {
   give(r: Rig): void {
     r.reset();
     r.inUse = false;
+    r.userDataGallery = false;
   }
 
   dispose(): void {

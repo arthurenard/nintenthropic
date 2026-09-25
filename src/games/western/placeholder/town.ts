@@ -169,9 +169,9 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
       material: "planks",
       awning: true,
       openings: [
-        { z: -12.5, y: WALK_TOP, w: 1.4, h: 2.5, kind: "door" },
-        { z: -9.4, y: 1.0, w: 2.0, h: 1.6, kind: "window", glass: "store_1" },
-        { z: -15.3, y: 1.0, w: 2.0, h: 1.6, kind: "window", glass: "store_2" },
+        { z: -15.1, y: WALK_TOP, w: 1.4, h: 2.5, kind: "door" },
+        { z: -9.2, y: 1.0, w: 1.9, h: 1.6, kind: "window", glass: "store_1" },
+        { z: -12.3, y: 1.0, w: 1.9, h: 1.6, kind: "window", glass: "store_2" },
       ],
       sign: { text: "GENERAL STORE", board: "#2f3a2c", ink: "#e9dcb4", y: 4.9, w: 7.4, h: 0.9 },
     },
@@ -190,9 +190,9 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
         { z: -24.8, y: WALK_TOP, w: 1.7, h: 2.6, kind: "door" },
         { z: -21, y: 0.95, w: 1.8, h: 1.6, kind: "window", glass: "saloon_piano" },
         { z: -28.6, y: 0.95, w: 1.8, h: 1.6, kind: "window", glass: "saloon_2" },
-        { z: -21, y: 4.25, w: 1.15, h: 1.75, kind: "window", shutters: true },
-        { z: -24.8, y: 4.25, w: 1.15, h: 1.75, kind: "window", shutters: true },
-        { z: -28.6, y: 4.25, w: 1.15, h: 1.75, kind: "window", shutters: true },
+        { z: -21, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
+        { z: -24.8, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
+        { z: -28.6, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
       ],
       sign: { text: "SALOON", board: "#231a14", ink: "#e8c779", y: 8.35, w: 6.4, h: 1.1 },
     },
@@ -241,9 +241,9 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
       color: "#cbb896",
       material: "stone",
       openings: [
-        { z: -11.5, y: WALK_TOP, w: 1.5, h: 2.7, kind: "door" },
-        { z: -8.9, y: 1.0, w: 1.3, h: 1.8, kind: "window", glass: "bank_1" },
-        { z: -14.1, y: 1.0, w: 1.3, h: 1.8, kind: "window", glass: "bank_2" },
+        { z: -13.9, y: WALK_TOP, w: 1.5, h: 2.7, kind: "door" },
+        { z: -8.6, y: 1.0, w: 1.3, h: 1.8, kind: "window", glass: "bank_1" },
+        { z: -11.2, y: 1.0, w: 1.3, h: 1.8, kind: "window", glass: "bank_2" },
       ],
       sign: { text: "BANK", board: "#1f2a33", ink: "#e5d29a", y: 5.75, w: 4, h: 0.75 },
     },
@@ -279,9 +279,9 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
         { z: -33, y: WALK_TOP, w: 1.5, h: 2.6, kind: "door" },
         { z: -29.5, y: 0.95, w: 1.6, h: 1.6, kind: "window", glass: "hotel_1" },
         { z: -36.5, y: 0.95, w: 1.6, h: 1.6, kind: "window", glass: "hotel_2" },
-        { z: -29.5, y: 4.25, w: 1.15, h: 1.75, kind: "window", shutters: true },
-        { z: -33, y: 4.25, w: 1.15, h: 1.75, kind: "window", shutters: true },
-        { z: -36.5, y: 4.25, w: 1.15, h: 1.75, kind: "window", shutters: true },
+        { z: -29.5, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
+        { z: -33, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
+        { z: -36.5, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
       ],
       sign: { text: "HOTEL", board: "#e2d7bd", ink: "#2d3b3a", y: 8.5, w: 5, h: 0.9 },
     },
@@ -323,8 +323,8 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
 
   // --- street furniture and covers' props ----------------------------------------------
   // General store barrels on the boardwalk.
-  barrel(b, mat, C, -6.6, WALK_TOP, -9.25);
-  barrel(b, mat, C, -7.35, WALK_TOP, -9.05);
+  barrel(b, mat, C, -6.6, WALK_TOP, -12.3);
+  barrel(b, mat, C, -7.35, WALK_TOP, -12.05);
   // Water trough (right, near).
   b.box("props", mat.boards, [5.0, 0.4, -13.5], [0.9, 0.8, 2.3], col("#6d5236"), { occlude: true, uvScale: 1 });
   waterSurface(b, [5.0, 0.72, -13.5], [0.7, 2.1]);
@@ -365,7 +365,13 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
   crate(b, mat, C, -2.3, 0, -4.4, 0.35);
   crate(b, mat, C, -2.9, 0, -4.9, 0.6);
   barrel(b, mat, C, 2.35, 0, -4.55, false, 0.42);
-  b.box("props", mat.plain, [-0.15, 0.15, -5.4], [0.7, 0.3, 0.55], col("#9c8b77"), { surface: "stone" });
+  // An old stump for the bottom-centre bottle, its cut face pale.
+  b.cylinder("props", mat.boards, [-0.15, 0.15, -5.4], 0.3, 0.3, col("#7a5a3c"), { radiusTop: 0.27, segments: 12, uvScale: 0.5 });
+  b.cylinder("props", mat.plain, [-0.15, 0.302, -5.4], 0.265, 0.004, col("#c9a77e"), { segments: 12 });
+  for (let i = 0; i < 3; i++) {
+    const a = i * 2.1 + 0.4;
+    b.box("props", mat.boards, [-0.15 + Math.cos(a) * 0.3, 0.05, -5.4 + Math.sin(a) * 0.3], [0.28, 0.08, 0.1], col("#6a4c32"), { rotY: -a });
+  }
 
   // --- the far end: the church, its bell and vane ------------------------------------------
   const secrets = buildChurch(b, mat, C, light);
@@ -673,9 +679,11 @@ function buildBuilding(b: TownBuilder, s: BuildingSpec, mat: Mats, C: Colors, gl
     const xa = side * (WALK_EDGE + 0.4);
     const bw = FACADE_X - WALK_EDGE - 0.4;
     b.box(chunk, mat.planks, [(xf + xa) / 2, 3.42, (zN + zF) / 2], [bw, 0.16, zN - zF], C.walk as Color, { occlude: true, uvScale: 1.5 });
-    b.box(chunk, mat.plain, [xa, 4.45, (zN + zF) / 2], [0.1, 0.1, zN - zF], C.trim as Color);
-    b.box(chunk, mat.plain, [xa, 3.62, (zN + zF) / 2], [0.08, 0.08, zN - zF], C.trim as Color);
-    for (let z = zN - 0.2; z > zF; z -= 0.42) b.box(chunk, mat.plain, [xa, 4.05, z], [0.05, 0.8, 0.05], C.trim as Color);
+    const rail = `${chunk}.rail`;
+    b.noCollide.add(rail);
+    b.box(rail, mat.plain, [xa, 4.45, (zN + zF) / 2], [0.1, 0.1, zN - zF], C.trim as Color);
+    b.box(rail, mat.plain, [xa, 3.62, (zN + zF) / 2], [0.08, 0.08, zN - zF], C.trim as Color);
+    for (let z = zN - 0.2; z > zF; z -= 0.42) b.box(rail, mat.plain, [xa, 4.05, z], [0.05, 0.8, 0.05], C.trim as Color);
     for (let z = zN - 0.3; z >= zF + 0.2; z -= (zN - zF - 0.5) / Math.max(1, Math.round((zN - zF) / 3.5))) {
       b.box(chunk, mat.plain, [xa, (WALK_TOP + 3.35) / 2, z], [0.16, 3.35 - WALK_TOP, 0.16], C.post as Color, { occlude: true });
     }
@@ -731,8 +739,8 @@ function wagon(b: TownBuilder, mat: Mats, C: Colors, x: number, z: number): void
   // A broken wagon: missing its near-left wheel, the bed tipped onto that corner.
   const tilt = new Euler(0.06, 0, -0.1);
   b.box("wagon", mat.planks, [x, 0.85, z], [1.6, 0.14, 3.4], wood, { rotation: tilt, occlude: true, uvScale: 1.2 });
-  for (const dx of [-0.78, 0.78]) b.box("wagon", mat.planks, [x + dx, 1.15, z], [0.08, 0.5, 3.4], wood, { rotation: tilt, uvScale: 1.2 });
-  b.box("wagon", mat.planks, [x, 1.15, z - 1.66], [1.6, 0.5, 0.08], wood, { rotation: tilt });
+  for (const dx of [-0.78, 0.78]) b.box("wagon", mat.planks, [x + dx, 1.02, z], [0.08, 0.26, 3.4], wood, { rotation: tilt, uvScale: 1.2 });
+  b.box("wagon", mat.planks, [x, 1.02, z - 1.66], [1.6, 0.26, 0.08], wood, { rotation: tilt });
   const wheel = new Color("#4c3522");
   for (const [dx, dz] of [
     [0.85, -1.2],
@@ -963,13 +971,13 @@ function addCovers(b: TownBuilder): void {
   const W = WALK_TOP;
   const covers: C[] = [
     // Left side, near to far.
-    ["store_barrels", "barrel", "rise", 0, [-6.95, W, -10.1], [-6.95, W, -10.1]],
-    ["store_door", "door", "step_out", 0, [-8.05, W, -12.5], [-9.4, W, -13.35], { townsfolk: true }],
+    ["store_barrels", "barrel", "rise", 0, [-6.95, W, -13.1], [-6.95, W, -13.1]],
+    ["store_door", "door", "step_out", 0, [-8.05, W, -15.1], [-9.4, W, -15.95], { townsfolk: true }],
     ["store_corner", "corner", "lean_left", 0, [-8.3, W, -17.75], [-9.9, W, -17.75]],
     ["saloon_door", "door", "step_out", 0, [-8.0, W, -24.8], [-9.5, W, -25.75], { duel: true }],
-    ["saloon_window_1", "window", "rise", 1, [-8.85, 3.6, -21], [-9.6, 3.6, -21.95]],
-    ["saloon_window_2", "window", "rise", 1, [-8.85, 3.6, -24.8], [-9.6, 3.6, -25.75]],
-    ["saloon_window_3", "window", "rise", 1, [-8.85, 3.6, -28.6], [-9.6, 3.6, -29.55]],
+    ["saloon_window_1", "window", "step_out", 1, [-6.72, 3.5, -21], [-9.6, 3.6, -21.95]],
+    ["saloon_window_2", "window", "step_out", 1, [-6.72, 3.5, -24.8], [-9.6, 3.6, -25.75]],
+    ["saloon_window_3", "window", "step_out", 1, [-6.72, 3.5, -28.6], [-9.6, 3.6, -29.55]],
     ["saloon_corner", "corner", "lean_left", 0, [-8.3, W, -31.75], [-9.9, W, -31.75]],
     ["barber_door", "door", "step_out", 0, [-8.0, W, -36], [-9.5, W, -36.9]],
     ["livery_hay", "crate", "rise", 0, [-5.95, 0, -44.75], [-5.95, 0, -44.75]],
@@ -978,18 +986,18 @@ function addCovers(b: TownBuilder): void {
     ["livery_corner", "corner", "lean_left", 0, [-8.25, 0, -53.9], [-9.7, 0, -53.9]],
     ["wagon_bed", "wagon", "rise", 0, [-3.7, 0, -28.95], [-3.7, 0, -28.95]],
     ["wagon_wheel", "wagon", "lean_left", 0, [-2.35, 0, -28.6], [-3.2, 0, -28.6]],
-    ["store_roof", "roof", "rise", 2, [-9.15, 4.45, -12], [-9.8, 4.45, -12.3]],
+    ["store_roof", "roof", "rise", 2, [-9.15, 4.45, -15.4], [-9.8, 4.45, -15.7]],
     ["saloon_roof", "roof", "rise", 2, [-9.15, 8.05, -26.5], [-9.8, 8.05, -26.8]],
     // Right side, near to far.
-    ["bank_door", "door", "step_out", 0, [8.05, W, -11.5], [9.5, W, -12.35]],
-    ["bank_roof", "roof", "rise", 2, [9.1, 5.55, -12.4], [9.8, 5.55, -12.7]],
+    ["bank_door", "door", "step_out", 0, [8.05, W, -13.9], [9.5, W, -14.75]],
+    ["bank_roof", "roof", "rise", 2, [9.1, 5.55, -14.6], [9.8, 5.55, -14.9]],
     ["trough", "crate", "rise", 0, [5.0, 0, -15.05], [5.0, 0, -15.05]],
     ["bank_corner", "corner", "lean_right", 0, [8.3, W, -16.75], [9.9, W, -16.75]],
     ["sheriff_door", "door", "step_out", 0, [8.05, W, -23], [9.5, W, -23.9]],
     ["sheriff_crates", "crate", "rise", 0, [6.9, W, -25.85], [6.9, W, -25.85]],
-    ["hotel_window_1", "window", "rise", 1, [8.85, 3.6, -29.5], [9.6, 3.6, -30.45], { townsfolk: true }],
-    ["hotel_window_2", "window", "rise", 1, [8.85, 3.6, -33], [9.6, 3.6, -33.95], { townsfolk: true }],
-    ["hotel_window_3", "window", "rise", 1, [8.85, 3.6, -36.5], [9.6, 3.6, -37.45]],
+    ["hotel_window_1", "window", "step_out", 1, [6.72, 3.5, -29.5], [9.6, 3.6, -30.45], { townsfolk: true }],
+    ["hotel_window_2", "window", "step_out", 1, [6.72, 3.5, -33], [9.6, 3.6, -33.95], { townsfolk: true }],
+    ["hotel_window_3", "window", "step_out", 1, [6.72, 3.5, -36.5], [9.6, 3.6, -37.45]],
     ["hotel_roof", "roof", "rise", 2, [9.15, 8.25, -31.5], [9.8, 8.25, -31.8]],
     ["undertaker_coffins", "crate", "lean_right", 0, [6.25, W, -43.55], [7.05, W, -43.55]],
     ["undertaker_door", "door", "step_out", 0, [8.05, W, -45.5], [9.5, W, -46.4], { townsfolk: true }],
@@ -1015,7 +1023,7 @@ function addCalibration(b: TownBuilder): void {
     [-8.25, 5.2 + 0.4, -15.2], // top-left: on the store's cornice
     [0.35, 7.4, -17.9], // top-centre: on the arch
     [8.3, 6.56, -15.5], // top-right: on the bank's cornice
-    [-6.3, WALK_TOP + 0.95, -11.4], // left: on a barrel on the store's porch
+    [-6.6, WALK_TOP + 0.95, -12.3], // left: on a barrel on the store's porch
     [-2.95, 1.05, -26.3], // centre: on the wagon
     [5.55, 1.08, -10.9], // right: on the hitching rail
     [-2.3, 0.35, -4.4], // bottom-left: a low crate
@@ -1023,9 +1031,6 @@ function addCalibration(b: TownBuilder): void {
     [2.35, 0.42, -4.55], // bottom-right: a keg
   ];
   for (const [i, p] of spots.entries()) b.node(`calib.${i + 1}`, p);
-  // A barrel for the left bottle to stand on.
-  const mats = { plain: unlit(null, "barrel") };
-  b.cylinder("props", mats.plain, [-6.3, WALK_TOP + 0.475, -11.4], 0.3, 0.95, new Color("#7a5634"), { occlude: true, segments: 14 });
 }
 
 /** The street and the boardwalk tops, where dynamic shadows are drawn. */

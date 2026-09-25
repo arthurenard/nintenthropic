@@ -33,6 +33,7 @@ export interface BakeLight {
 }
 
 interface Batch {
+  chunk: string;
   material: Material;
   surface: Surface;
   positions: number[];
@@ -69,6 +70,8 @@ const nm = new Matrix3();
 export class TownBuilder {
   readonly root = new Group();
   readonly occluders: Occluder[] = [];
+  /** Chunks bullets pass through (railings: thin balusters should not stop a shot). */
+  readonly noCollide = new Set<string>();
   private readonly batches = new Map<string, Batch>();
 
   constructor(readonly light: BakeLight) {
@@ -95,7 +98,7 @@ export class TownBuilder {
     const key = `${chunk}|${material.uuid}|${surface}`;
     let b = this.batches.get(key);
     if (!b) {
-      b = { material, surface, positions: [], normals: [], uvs: [], colors: [] };
+      b = { chunk, material, surface, positions: [], normals: [], uvs: [], colors: [] };
       this.batches.set(key, b);
     }
     return b;
@@ -234,6 +237,7 @@ export class TownBuilder {
       g.computeBoundingBox();
       const mesh = nameNode(new Mesh(g, b.material), `static.${i++}.${b.surface}`);
       mesh.userData["surface"] = b.surface;
+      if (this.noCollide.has(b.chunk)) mesh.userData["noCollide"] = true;
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       this.root.add(mesh);
