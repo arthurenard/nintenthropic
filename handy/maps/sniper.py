@@ -13,7 +13,8 @@ to get there, it drops on the way, and the wind pushes it sideways - all three
 in proportion to the distance. The reticle's mil marks are calibrated to that
 drop, so holding a mark high at the range the HUD reads is how you hit.
 
-Public surface: ``SniperRound``, ``draw_world``, ``draw_hud``, ``draw_emblem``.
+Public surface: ``SniperRound``, ``draw_world``, ``draw_emblem``. The round names
+its readouts (``SniperRound.readouts``) for the game's score panel.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Rect, Round
+from ..game import MISS, Hit, Readout, Rect, Round
 from ..scene import blend
 
 # --- the world --------------------------------------------------------------
@@ -757,6 +758,16 @@ class SniperRound(Round):
     @property
     def remaining_hostiles(self) -> int:
         return sum(1 for h in self.hostiles if h.dead_at is None)
+
+    def readouts(self, now: float) -> tuple[Readout, ...]:
+        """Hostiles left, the tally, the stage and the wind. The wind's meter
+        runs out from the middle the way it blows; the range and the hold are
+        read off the glass itself."""
+        return (Readout("Hostiles", str(self.remaining_hostiles)),
+                Readout("Down", str(self.kills)),
+                Readout("Stage", str(self.stage(now))),
+                Readout("Wind", f"{abs(self.wind):.1f} m/s", meter=self.wind / MAX_WIND,
+                        signed=True))
 
 
 def frame_for(area: Rect, scale: float) -> tuple[int, int]:
@@ -2024,38 +2035,6 @@ def _painters(round_: SniperRound, now: float, view: View) -> list:
     return painters
 
 
-def hud_origin(width: int, height: int, scale: float) -> tuple[int, int]:
-    """Where the app puts the score block (see ``app.layout_for``), so the
-    world can lay a panel under it before the text arrives."""
-    margin = max(1, round(16 * scale))
-    return (width // 4 + margin + max(1, round(28 * scale)), margin)
-
-
-def hud_panel(width: int, height: int, scale: float) -> tuple[int, int, int, int]:
-    """The one panel the camera feed and the whole readout sit on: from the
-    camera's corner (``app.layout_for`` puts it at the margin, a quarter of the
-    window each way) across to the end of the score block."""
-    margin = max(1, round(16 * scale))
-    pad = round(10 * scale)
-    x, y = hud_origin(width, height, scale)
-    right = x + round(330 * scale)
-    bottom = max(margin + height // 4, y + round(196 * scale)) + pad
-    return (margin - pad, margin - pad, right, bottom)
-
-
-def _hud_backing(canvas: np.ndarray, width: int, height: int, scale: float) -> None:
-    """A solid panel behind the camera and the whole readout - score, tally,
-    wind - drawn as part of the world, so the text the app lays on top sits on
-    a panel rather than on the sky, and the feed is framed by the same panel."""
-    x0, y0, x1, y1 = hud_panel(width, height, scale)
-    _panel(canvas, x0, y0, x1, y1, 0.93)
-    cv2.rectangle(canvas, (x0, y0), (x1 - 1, y1 - 1), (40, 42, 44), 1)
-    # The score block's own division from the feed: a hairline.
-    x, y = hud_origin(width, height, scale)
-    cv2.line(canvas, (x - round(16 * scale), y + round(6 * scale)),
-             (x - round(16 * scale), y1 - round(16 * scale)), (40, 42, 44), 1)
-
-
 def draw_world(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
     height, width = canvas.shape[:2]
     round_.set_frame(width, height)
@@ -2121,74 +2100,11 @@ def draw_world(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
         cv2.add(glass, _lens_dirt(width, height)[gy0:gy1, gx0:gx1], dst=glass)
         cv2.add(glass, _lens_ring(width, height)[gy0:gy1, gx0:gx1], dst=glass)
         _draw_reticle(canvas, round_, now)
-        _hud_backing(canvas, width, height, scale)
     else:
-        _hud_backing(canvas, width, height, scale)
         if round_.unscoped_since is not None:
             since = now - round_.unscoped_since
             if since < 0.25:
                 _soft_focus(canvas, 0.6 * (1.0 - since / 0.25))
-
-
-def _panel(canvas: np.ndarray, x0: int, y0: int, x1: int, y1: int, alpha: float = 0.62) -> None:
-    """A dark backing, blended only over its own rectangle."""
-    x0, y0 = max(x0, 0), max(y0, 0)
-    x1, y1 = min(x1, canvas.shape[1]), min(y1, canvas.shape[0])
-    if x1 <= x0 or y1 <= y0:
-        return
-    roi = canvas[y0:y1, x0:x1]
-    cv2.addWeighted(roi, 1.0 - alpha, roi, 0.0, 13.0 * alpha, dst=roi)
-
-
-def _wind_gauge(canvas: np.ndarray, x: int, y: int, span: int, wind: float, accent, scale: float) -> None:
-    """An arrow the length of the wind, pointing the way it blows."""
-    cv2.line(canvas, (x, y), (x + span, y), (70, 72, 74), 1, cv2.LINE_AA)
-    mid = x + span // 2
-    for k in range(-4, 5):
-        tick = 5 if k == 0 else 2
-        tx = mid + int(k * span / 8)
-        cv2.line(canvas, (tx, y - tick), (tx, y + tick), (120, 122, 124), 1)
-    reach = int(wind / MAX_WIND * span * 0.5)
-    if abs(reach) >= 2:
-        cv2.arrowedLine(canvas, (mid, y), (mid + reach, y), accent,
-                        max(2, round(2 * scale)), cv2.LINE_AA, tipLength=min(0.5, 6.0 / abs(reach)))
-
-
-def draw_hud(canvas: np.ndarray, round_: SniperRound, origin: tuple[int, int],
-             now: float) -> None:
-    """Hostiles left, the tally, the stage and the wind - in the readout's one
-    face, on the readout's one panel, scoped or not. The range and the hold
-    are read off the glass itself."""
-    x, y = origin
-    scale = round_.options.scale
-    label = (168, 172, 176)
-    value = (232, 234, 236)
-    accent = (110, 210, 250)
-    small, big = max(11, round(13 * scale)), max(14, round(18 * scale))
-
-    def at(offset: float) -> int:
-        return y + round(offset * scale)
-
-    # The panel is already under us (the world laid it); the accent bar the app
-    # draws beside the score carries on down past the tally.
-    left, right = x + round(4 * scale), x + round(330 * scale)
-    cv2.line(canvas, (left, at(112)), (left, at(190)), accent, max(1, round(2 * scale)))
-    cv2.line(canvas, (x + round(14 * scale), at(136)), (right - round(10 * scale), at(136)), (54, 56, 58), 1)
-
-    # Line one: the count, the tally, the stage - labels, then numbers.
-    tx = x + round(14 * scale)
-    tx += _label(canvas, "HOSTILES", (tx, at(160)), label, small) + round(10 * scale)
-    tx += _label(canvas, str(round_.remaining_hostiles), (tx, at(161)), value, big, 600) + round(22 * scale)
-    tx += _label(canvas, "DOWN", (tx, at(160)), label, small) + round(10 * scale)
-    _label(canvas, str(round_.kills), (tx, at(161)), value, big, 600)
-    stage = f"STAGE {round_.stage(now)}"
-    _label(canvas, stage, (right - round(10 * scale) - _label_width(stage, small), at(160)), accent, small)
-
-    # Line two: the wind gauge, with the number right-aligned after it.
-    _label(canvas, "WIND", (x + round(14 * scale), at(186)), label, small)
-    _wind_gauge(canvas, x + round(76 * scale), at(181), round(150 * scale), round_.wind, accent, scale)
-    speed = f"{abs(round_.wind):.1f} m/s"
-    _label(canvas, speed, (right - round(10 * scale) - _label_width(speed, small), at(186)), accent, small)
 
 
 def draw_emblem(panel: np.ndarray) -> None:

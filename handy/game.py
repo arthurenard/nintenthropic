@@ -87,9 +87,9 @@ class Summary:
     won: bool = False
 
 
-#: How a readout's value should be coloured: plainly, as good news, as
-#: something to watch, or as trouble.
-PLAIN, GOOD, WARNING, DANGER = "", "good", "warning", "danger"
+#: How a readout's value should be coloured: plainly, as something to
+#: watch, or as trouble. There is no green: green means the gun is ready.
+PLAIN, WARNING, DANGER = "", "warning", "danger"
 
 
 @dataclass(frozen=True)

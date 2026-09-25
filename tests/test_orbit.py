@@ -850,3 +850,31 @@ def test_a_strike_jolts_the_glass_without_greying_out_space():
     space = lift[AREA.y + 60:AREA.y + 120, AREA.x + 200:AREA.x + 400]
     assert 0 < space.mean() < 30, "felt, not a wash"
     assert not lift[AREA.y + 2:AREA.y + 10, AREA.x + 2:AREA.x + 10].any(), "the wall"
+
+
+def test_the_panes_integrity_is_a_meter_beside_the_score():
+    from handy.maps.orbit import ALARM_INTEGRITY
+
+    round_ = make_round()
+    pane, cleared = round_.readouts(0.0)
+    assert (pane.label, pane.value, pane.meter, pane.tone) == ("Pane", "100%", 1.0, "")
+    assert (cleared.label, cleared.value) == ("Cleared", "0")
+    round_.integrity = ALARM_INTEGRITY
+    assert round_.readouts(0.0)[0].tone == "danger", "red once the alarm sounds"
+
+
+def test_a_failed_pane_is_said_in_title_case_on_glass(monkeypatch):
+    from handy import scene
+    from handy.maps.orbit import draw_failure
+
+    round_ = make_round()
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, *args, **kwargs: (
+        said.append(text), real(canvas, text, *args, **kwargs))[1])
+    canvas = np.zeros((720, 1280, 3), np.uint8)
+    draw_failure(canvas, round_)
+    assert not canvas.any(), "nothing while the pane holds"
+    round_.integrity, round_.failed_at = 0, 1.0
+    draw_failure(canvas, round_)
+    assert said == ["Pane Failed"] and canvas.any()

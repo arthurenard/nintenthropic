@@ -23,7 +23,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Impact, Rect, Round
+from ..game import DANGER, MISS, PLAIN, Hit, Impact, Readout, Rect, Round
 
 # --- rules -------------------------------------------------------------------
 
@@ -138,9 +138,6 @@ TROUSERS = (70, 86, 110)
 WEED = (70, 120, 160)
 HOLE = (30, 34, 44)
 SPLINTER = (170, 196, 216)
-SLAB_TOP = (40, 38, 36)
-SLAB_BOTTOM = (24, 23, 22)
-SLAB_EDGE = (74, 70, 66)
 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 SLAB = cv2.FONT_HERSHEY_TRIPLEX
@@ -640,6 +637,14 @@ class WesternRound(Round):
     def outcome(self) -> str:
         return "CLEANED UP" if self.townsfolk_hit == 0 else ""
 
+    def readouts(self, now: float) -> tuple[Readout, ...]:
+        """The street's count beside the score: bandits and bottles down, and
+        townsfolk hit - in red once there are any, since each one costs."""
+        return (Readout("Bandits", str(self.bandits_down)),
+                Readout("Bottles", str(self.bottles_broken)),
+                Readout("Townsfolk", str(self.townsfolk_hit),
+                        tone=DANGER if self.townsfolk_hit else PLAIN))
+
     def won(self) -> bool:
         return self.townsfolk_hit == 0
 
@@ -974,35 +979,6 @@ def _cast_shadow(canvas: np.ndarray, points, base_y: float, lean: float, alpha: 
     _roi_blend(canvas, (min(xs) - 2, min(ys) - 2, max(xs) + 3, max(ys) + 3), alpha,
                lambda over, dx, dy: _poly(over, [(x + dx, y + dy) for x, y in pts], MAUVE))
 
-
-def _rounded_box(canvas, x0, y0, x1, y1, radius, color, thickness=-1):
-    r = max(1, min(radius, (x1 - x0) // 2, (y1 - y0) // 2))
-    if thickness < 0:
-        cv2.rectangle(canvas, (x0 + r, y0), (x1 - r, y1), color, -1)
-        cv2.rectangle(canvas, (x0, y0 + r), (x1, y1 - r), color, -1)
-        for cx, cy in ((x0 + r, y0 + r), (x1 - r, y0 + r), (x0 + r, y1 - r), (x1 - r, y1 - r)):
-            cv2.circle(canvas, (cx, cy), r, color, -1, cv2.LINE_AA)
-    else:
-        pts = [(x0 + r, y0), (x1 - r, y0), (x1, y0 + r), (x1, y1 - r), (x1 - r, y1), (x0 + r, y1),
-               (x0, y1 - r), (x0, y0 + r)]
-        _poly(canvas, pts, color, thickness)
-
-
-def _slab(canvas: np.ndarray, x0: int, y0: int, x1: int, y1: int) -> None:
-    """The HUD's own dark slab: a shaded rounded panel with a hairline edge."""
-    x0, y0, x1, y1 = _clip_box(canvas, x0, y0, x1, y1)
-    if x1 - x0 < 4 or y1 - y0 < 4:
-        return
-    radius = max(3, (y1 - y0) // 4)
-    mask = np.zeros((y1 - y0, x1 - x0), np.uint8)
-    _rounded_box(mask, 0, 0, x1 - x0 - 1, y1 - y0 - 1, radius, 255)
-    fill = np.empty((y1 - y0, x1 - x0, 3), np.uint8)
-    _vertical_fill(fill, 0, 0, x1 - x0, y1 - y0, SLAB_TOP, SLAB_BOTTOM)
-    cv2.copyTo(fill, mask, canvas[y0:y1, x0:x1])
-    _rounded_box(canvas, x0, y0, x1 - 1, y1 - 1, radius, SLAB_EDGE, 1)
-
-
-# --- the hour's light ----------------------------------------------------------------
 
 def _hour_t(hour: int) -> float:
     return 0.0 if HOURS <= 1 else min(1.0, max(0.0, hour / (HOURS - 1)))
@@ -2180,35 +2156,6 @@ def _shimmer(canvas: np.ndarray, backdrop: np.ndarray, street: Street, now: floa
             canvas[y:y + band] = np.roll(backdrop[y:y + band], shift, axis=1)
 
 
-def _draw_tally(canvas: np.ndarray, round_: WesternRound) -> None:
-    """The round's count, on a dark slab in the HUD band under the score; on a
-    window too short for that, docked bottom-left inside the play area."""
-    area = round_.area
-    height, width = canvas.shape[:2]
-    s = height / 720.0
-    scale = 0.5 * s
-    thick = max(1, int(round(1.4 * s)))
-    parts = ((f"BANDITS {round_.bandits_down}", SCORE_INK), (f"BOTTLES {round_.bottles_broken}", INK),
-             (f"TOWNSFOLK {round_.townsfolk_hit}", PENALTY_INK if round_.townsfolk_hit else MUTED))
-    sizes = [cv2.getTextSize(text, FONT, scale, thick)[0] for text, _ in parts]
-    gap = int(22 * s)
-    pad = int(12 * s)
-    total = sum(w for w, _ in sizes) + gap * (len(parts) - 1)
-    th = max(hh for _, hh in sizes)
-    slab_h = th + pad * 2
-    hud_x = width // 4 + int(44 * s)
-    if area.y - int(12 * s) - slab_h >= int(170 * s):
-        x0, y0 = hud_x, area.y - int(12 * s) - slab_h
-    else:
-        x0, y0 = area.x + int(8 * s), area.bottom - int(8 * s) - slab_h
-    x1, y1 = x0 + total + pad * 2, y0 + slab_h
-    _slab(canvas, x0, y0, x1, y1)
-    x = x0 + pad
-    for (text, color), (w, _) in zip(parts, sizes):
-        cv2.putText(canvas, text, (x, y0 + pad + th), FONT, scale, color, thick, cv2.LINE_AA)
-        x += w + gap
-
-
 def build_hours(round_: WesternRound, width: int, height: int) -> None:
     """Build the street at every hour this round will show, ahead of time.
 
@@ -2264,8 +2211,6 @@ def draw_world(canvas: np.ndarray, round_: WesternRound, now: float) -> None:
     boards = (street.skyline, street.awning_y + int(0.02 * area.height))
     for impact in round_.impacts:
         draw_impact(canvas, impact, now, round_.IMPACT_TTL, boards)
-
-    _draw_tally(canvas, round_)
 
 
 # --- the card -------------------------------------------------------------------------

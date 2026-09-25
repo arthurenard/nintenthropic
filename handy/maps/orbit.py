@@ -24,8 +24,9 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Impact, Rect, Round
-from ..scene import ACCENT, EDGE, draw_text, shade_panel
+from ..game import DANGER, MISS, PLAIN, Hit, Impact, Readout, Rect, Round
+from .. import scene
+from ..scene import ACCENT, draw_text
 
 # --- the world --------------------------------------------------------------
 
@@ -330,6 +331,14 @@ class OrbitRound(Round):
 
     def outcome(self) -> str:
         return "PANE FAILED" if self.is_lost else "PANE HELD"
+
+    def readouts(self, now: float) -> tuple[Readout, ...]:
+        """The pane's integrity as a meter - red once the alarm has sounded -
+        and the debris cleared."""
+        low = self.integrity <= ALARM_INTEGRITY
+        return (Readout("Pane", f"{self.integrity}%", meter=self.integrity / FULL_INTEGRITY,
+                        tone=DANGER if low else PLAIN),
+                Readout("Cleared", str(self.cleared)))
 
     def won(self) -> bool:
         return not self.is_lost
@@ -1902,38 +1911,25 @@ def _popup(canvas: np.ndarray, x: int, y: int, step: int, lines: list, alpha: fl
     cv2.addWeighted(over, alpha, roi, 1 - alpha, 0.0, dst=roi)
 
 
-def draw_readout(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
-    """Pane integrity, as a pill set into the frame's bottom rail, in the
-    same dark-and-amber dress as the HUD above."""
+def draw_failure(canvas: np.ndarray, round_: OrbitRound) -> None:
+    """The moment the pane gives, said once in the middle of the glass.
+
+    The pane's integrity itself is a readout beside the score
+    (:meth:`OrbitRound.readouts`), not a gauge set into the frame.
+    """
+    if round_.failed_at is None:
+        return
     area = round_.area
     scale = round_.options.scale
-    pill_h = max(16, int(22 * scale))
-    pill = Rect(int(area.x + area.height * 0.11 + 14 * scale), area.bottom - pill_h // 2,
-                int(250 * scale), pill_h)
-    shade_panel(canvas, pill, pill.height // 2, (40, 38, 36), (24, 23, 22), EDGE)
-    low = round_.integrity <= ALARM_INTEGRITY
-    blink = low and (now % 0.8) < 0.4
-    ink = WARN if blink else (200, 196, 190)
-    text_y = pill.y + pill.height - max(5, int(7 * scale))
-    draw_text(canvas, f"PANE {round_.integrity:3d}%", (pill.x + int(12 * scale), text_y),
-              ink, scale=0.42 * scale, thickness=1, outline=False)
-    # The bar: a thin accent line, the track dark behind it.
-    bar_x0 = pill.x + int(92 * scale)
-    bar_x1 = pill.x + int(170 * scale)
-    bar_y = pill.y + pill.height // 2
-    cv2.line(canvas, (bar_x0, bar_y), (bar_x1, bar_y), FRAME_DARK, max(2, int(4 * scale)),
-             cv2.LINE_AA)
-    filled = int((bar_x1 - bar_x0) * round_.integrity / FULL_INTEGRITY)
-    if filled:
-        cv2.line(canvas, (bar_x0, bar_y), (bar_x0 + filled, bar_y), WARN if low else ACCENT,
-                 max(2, int(4 * scale)), cv2.LINE_AA)
-    draw_text(canvas, f"{round_.cleared} CLEARED", (bar_x1 + int(12 * scale), text_y),
-              (200, 196, 190), scale=0.42 * scale, thickness=1, outline=False)
-    if round_.failed_at is not None:
-        x = int(area.x + area.width * 0.5 - 120 * scale)
-        y = int(area.y + area.height * 0.5)
-        _pill(canvas, Rect(x - 24, y - int(40 * scale), int(290 * scale), int(58 * scale)), 0.7)
-        draw_text(canvas, "PANE FAILED", (x, y), WARN, scale=1.3 * scale, thickness=3)
+    text = scene.title_case(round_.outcome())
+    height = max(1, round(64 * scale))
+    width = scene.measure(text, scene.TITLE_1, scale) + 2 * round(32 * scale)
+    capsule = Rect(area.x + (area.width - width) // 2, area.y + (area.height - height) // 2,
+                   width, height)
+    scene.draw_glass(canvas, capsule, height // 2, scale)
+    scene.write(canvas, text, (capsule.x + width // 2,
+                               scene.baseline_for(scene.TITLE_1, capsule.y, height, scale)),
+                scene.TITLE_1, scene.DANGER, scale, align=scene.CENTRE)
 
 
 def draw_world(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
@@ -1987,7 +1983,7 @@ def draw_world(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
     for impact in round_.impacts:
         draw_impact(canvas, area, impact, now, round_.IMPACT_TTL)
 
-    draw_readout(canvas, round_, now)
+    draw_failure(canvas, round_)
     if round_.aim is not None:
         draw_reticle_glow(canvas, round_.aim, round_.options.scale)
 

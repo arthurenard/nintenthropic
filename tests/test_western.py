@@ -526,14 +526,23 @@ def test_the_light_changes_over_the_round():
     assert late[sky][..., 2].mean() >= noon[sky][..., 2].mean() - 5, "and no less red"
 
 
-def test_the_tally_sits_in_the_hud_band_above_the_street():
-    round_ = make_round()
-    round_.bandits_down = 3
-    canvas = np.zeros((945, 1512, 3), np.uint8)
-    draw_world(canvas, round_, 1.0)
-    band = canvas[:AREA.y - 2, 1512 // 4:1512 // 2]
-    assert band.any(), "the count is drawn under the score, not on the fronts"
-    assert (band.max(axis=2) > 200).sum() > 50, "and lettered brightly"
+def test_the_count_is_a_readout_beside_the_score_not_a_slab_on_the_sky():
+    """The tally was a dark slab of its own in the sky; it is three readouts
+    in the score's panel now, and the world draws none of it."""
+    counted, uncounted = make_round(), make_round()
+    counted.bandits_down, counted.bottles_broken = 3, 7
+    frames = []
+    for round_ in (counted, uncounted):
+        canvas = np.zeros((945, 1512, 3), np.uint8)
+        draw_world(canvas, round_, 1.0)
+        frames.append(canvas)
+    assert np.array_equal(*frames)
+    readouts = counted.readouts(1.0)
+    assert [(r.label, r.value) for r in readouts] == [
+        ("Bandits", "3"), ("Bottles", "7"), ("Townsfolk", "0")]
+    assert readouts[2].tone == ""
+    counted.townsfolk_hit = 1
+    assert counted.readouts(1.0)[2].tone == "danger", "each one costs: said in red"
 
 
 def test_only_so_many_figures_are_out_at_once():

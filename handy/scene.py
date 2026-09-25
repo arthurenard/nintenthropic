@@ -1432,7 +1432,7 @@ READOUT_LABEL, READOUT_VALUE, READOUT_ROW, READOUT_METER = 20, 44, 58, 10
 METER_WIDTH = 72
 PANEL_RADIUS = 16
 
-TONES = {"": LABEL, "warning": WARNING, "danger": DANGER, "good": TINT}
+TONES = {"": LABEL, "warning": WARNING, "danger": DANGER}
 
 
 def hud_tally(round_: Round) -> str:

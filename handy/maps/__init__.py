@@ -88,7 +88,6 @@ SNIPER = Map(
     create=sniper.SniperRound,
     draw_world=sniper.draw_world,
     draw_emblem=sniper.draw_emblem,
-    draw_hud=sniper.draw_hud,
     footer="close an eye to scope in",
 )
 
