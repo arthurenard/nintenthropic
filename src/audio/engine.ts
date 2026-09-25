@@ -331,9 +331,10 @@ export class WebAudioEngine implements AudioEngine {
     if (typeof document !== "undefined" && document.hidden) return;
     let takes = this.library.get(cue);
     if (!takes) {
-      // Not synthesised yet. A short sound is made on the spot (a few
-      // milliseconds); a long one is fetched and played if it arrives soon.
-      if (spec.expect[1] <= 1.6 && !spec.loop) {
+      // Not synthesised yet. A shot, a hit, anything short or vital is made
+      // on the spot (5-15 ms: a frame, once, beats a missing gunshot); a
+      // long garnish is fetched and played if it arrives soon enough.
+      if (!spec.loop && (spec.expect[1] <= 2 || (spec.priority ?? 1) >= 3)) {
         const one = this.library.renderNow(cue);
         takes = one ? [one] : undefined;
       }
