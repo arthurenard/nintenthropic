@@ -17,14 +17,15 @@ import threading
 import time
 import webbrowser
 import zipfile
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import cv2
 import numpy as np
 
-from . import maps, scene, schemes
+from . import audio, maps, scene, schemes
 from .aiming import Aim, AimController, EyeScope
 from .calibration import Rig, default_rig
 from .maps import orbit, zombies
@@ -85,11 +86,42 @@ def stage_size(size):
     return min(round(height * aspect), MAX_PIXELS // height), height
 
 
-def jpeg(image):
-    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 82])
+def jpeg(image, quality=82):
+    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
     if not ok:
         raise ValueError("Could not encode the game frame")
     return encoded.tobytes()
+
+
+#: The sizes a map's art may be asked for, in pixels: (width, height) at least,
+#: then at most. A poster on a Retina screen wants a few hundred; the share card
+#: a little over a thousand. Beyond that, each request is seconds of drawing.
+ART_SIZES = ((160, 90), (1600, 900))
+
+
+@lru_cache(maxsize=32)
+def art(key, width=360, height=200):
+    """A map's card art as JPEG bytes, drawn once for each size asked for.
+
+    The largest take a third of a second to draw, and the page asks for the
+    same few sizes every time it opens.
+    """
+    chosen = maps.by_key(key)
+    canvas = np.zeros((height, width, 3), np.uint8)
+    chosen.draw_emblem(canvas)
+    return jpeg(canvas, 88)
+
+
+def art_size(query):
+    """The (width, height) a ``?w=&h=`` query asks for, clamped to ART_SIZES."""
+    fields = parse_qs(query)
+    (low_w, low_h), (high_w, high_h) = ART_SIZES
+    try:
+        width = int(fields.get("w", ["360"])[0])
+        height = int(fields.get("h", ["200"])[0])
+    except ValueError as error:
+        raise ValueError("Art sizes are whole numbers of pixels") from error
+    return min(max(width, low_w), high_w), min(max(height, low_h), high_h)
 
 
 #: The frame exchange's format, both ways: a four-byte big-endian length, that
@@ -793,13 +825,70 @@ class BrowserSession:
         return result
 
 
+class SoundBank:
+    """The game's sound set as WAV files, for the page to play.
+
+    Synthesised once, on a thread of its own, from the same builders as the
+    desktop's: a second or two of DSP the first page load must not wait for.
+    One take of every sound comes first, so the whole set can be heard early;
+    the other takes follow.
+    """
+
+    TAKES = 3
+
+    def __init__(self, names=None, takes=TAKES, rings=RINGS):
+        self.names = tuple(audio.cue_names(rings) if names is None else names)
+        self.takes = takes
+        self.rings = rings
+        self.files = {}  # (name, take) -> WAV bytes
+        self.done = False
+
+    def start(self):
+        threading.Thread(
+            target=self.build, daemon=True, name="synthesise-browser-sounds"
+        ).start()
+        return self
+
+    def build(self):
+        for take in range(self.takes):
+            for name in self.names:
+                try:
+                    wave = audio.render_cue(name, take, self.rings)
+                except Exception as error:
+                    # A sound that will not build is a quieter game, not a
+                    # broken one; say so where a developer will see it.
+                    print(f"Could not build sound {name!r}: {error!r}", file=sys.stderr)
+                    continue
+                self.files[name, take] = audio.wav_bytes(wave)
+                time.sleep(0)  # let a frame in: this thread is not in a hurry
+        self.done = True
+
+    def manifest(self):
+        """Which takes of which sounds are ready: {"ready", "cues": {name: n}}.
+
+        ``n`` counts the takes from the first without a gap, so the page can
+        ask for takes 0 to n - 1 of each.
+        """
+        cues = {}
+        for name in self.names:
+            count = 0
+            while (name, count) in self.files:
+                count += 1
+            if count:
+                cues[name] = count
+        return {"ready": self.done, "cues": cues}
+
+    def get(self, name, take):
+        return self.files.get((name, take))
+
+
 class BrowserServer(ThreadingHTTPServer):
     daemon_threads = True
     # Ctrl+C must not wait for handler threads: one may hold a keep-alive
     # connection open for the page's next frame, or be loading a model.
     block_on_close = False
 
-    def __init__(self, address, idle_timeout=IDLE_TIMEOUT):
+    def __init__(self, address, idle_timeout=IDLE_TIMEOUT, sounds=None):
         self.token = secrets.token_urlsafe(32)
         self.session = None
         # Guards ``session`` and everything done to it. Held for one frame at a
@@ -809,6 +898,8 @@ class BrowserServer(ThreadingHTTPServer):
         self.idle_timeout = idle_timeout
         self.seen = 0.0  # when a request last reached the open session
         self.expired = None  # the id of the last session closed for silence
+        #: The sound set the page plays, as WAV files (a SoundBank), if any.
+        self.sounds = sounds
         # Starts still building, and how far the downloads for the newest have
         # got (0 to 1, or None while that cannot be told), for /api/progress.
         self.loading = 0
@@ -987,6 +1078,14 @@ class Handler(BaseHTTPRequestHandler):
         path = address.path
         if path == "/api/progress":
             self.respond(200, self.server.progress())
+        elif path == "/audio/manifest.json":
+            sounds = self.server.sounds
+            if sounds is None:
+                self.respond(404, {"error": "Not found"})
+            else:
+                self.respond(200, sounds.manifest())
+        elif path.startswith("/audio/"):
+            self.sound(path.removeprefix("/audio/"))
         elif path == "/api/config":
             self.respond(
                 200,
@@ -1004,13 +1103,18 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         elif path.startswith("/art/"):
+            key = path.removeprefix("/art/")
             try:
-                chosen = maps.by_key(path.removeprefix("/art/"))
-                art = np.zeros((200, 360, 3), np.uint8)
-                chosen.draw_emblem(art)
-                self.send(200, jpeg(art), "image/jpeg")
+                maps.by_key(key)
             except KeyError:
                 self.respond(404, {"error": "Unknown map"})
+                return
+            try:
+                size = art_size(address.query)
+            except ValueError as error:
+                self.respond(400, {"error": str(error)})
+                return
+            self.send(200, art(key, *size), "image/jpeg")
         elif path in ("/", "/app.js", "/capture.js", "/style.css"):
             name = "index.html" if path == "/" else path[1:]
             mime = {
@@ -1022,6 +1126,27 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, (WEB_ROOT / name).read_bytes(), mime + "; charset=utf-8")
         else:
             self.respond(404, {"error": "Not found"})
+
+    def sound(self, rest):
+        """One take of one sound: ``<name>/<take>.wav``."""
+        sounds = self.server.sounds
+        name, _, file = rest.partition("/")
+        take = file.removesuffix(".wav")
+        if (
+            sounds is None
+            or name not in sounds.names
+            or not file.endswith(".wav")
+            or not (take.isascii() and take.isdigit())
+            or not int(take) < sounds.takes
+        ):
+            self.respond(404, {"error": "Not found"})
+            return
+        wave = sounds.get(name, int(take))
+        if wave is None:
+            # Asked for before it was built: the manifest never lists these.
+            self.respond(503, {"error": "Still building the sound set"})
+            return
+        self.send(200, wave, "audio/wav")
 
     def do_POST(self):
         # Compared as bytes: a header carrying non-ASCII would make the string
@@ -1092,6 +1217,9 @@ def main(argv=None):
         server = BrowserServer(("127.0.0.1", args.port))
     except OSError as error:
         parser.exit(1, f"Could not start Handy: {error}. Try --port 8766.\n")
+    # Built while the page loads and the player chooses; the page asks for
+    # the files once a game starts, and plays whatever is ready by then.
+    server.sounds = SoundBank().start()
     url = f"http://127.0.0.1:{args.port}"
     print(
         f"Handy is ready: {url}\nKeep this terminal open. Ctrl+C stops the game.",

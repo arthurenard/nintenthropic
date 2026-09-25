@@ -573,3 +573,93 @@ def test_a_first_run_download_reports_how_far_it_has_got(server, monkeypatch):
     assert answers[0][0] == 200
 
 
+@pytest.fixture
+def sounds(server):
+    """A small sound set, built before the test rather than in the background."""
+    bank = browser.SoundBank(names=("shot", "hit_0"), takes=2)
+    bank.build()
+    server.sounds = bank
+    return bank
+
+
+def test_the_sound_set_is_listed_and_served_as_wav(server, sounds):
+    status, manifest, response = call(server, "GET", "/audio/manifest.json")
+    assert status == 200 and manifest == {"ready": True, "cues": {"shot": 2, "hit_0": 2}}
+    status, wav, response = call(server, "GET", "/audio/shot/1.wav")
+    assert status == 200 and wav[:4] == b"RIFF" and wav[8:12] == b"WAVE"
+    assert response.getheader("Content-Type") == "audio/wav"
+    assert response.getheader("X-Content-Type-Options") == "nosniff"
+    assert response.getheader("Cross-Origin-Resource-Policy") == "same-origin"
+    assert wav == sounds.get("shot", 1)
+
+
+def test_sounds_still_being_built_are_listed_as_they_arrive(server):
+    bank = browser.SoundBank(names=("shot", "miss"), takes=2)
+    server.sounds = bank
+    assert call(server, "GET", "/audio/manifest.json")[1] == {"ready": False, "cues": {}}
+    assert call(server, "GET", "/audio/shot/0.wav")[0] == 503
+    bank.files["shot", 0] = b"RIFF"
+    bank.files["shot", 1] = b"RIFF"
+    bank.files["miss", 1] = b"RIFF"  # take 0 is not there yet: not listed
+    assert call(server, "GET", "/audio/manifest.json")[1]["cues"] == {"shot": 2}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/audio/kazoo/0.wav",
+        "/audio/shot/2.wav",  # past the takes the set keeps
+        "/audio/shot/-1.wav",
+        "/audio/shot/0",
+        "/audio/shot/0.mp3",
+        "/audio/shot/%C2%B2.wav",  # a superscript two, which str.isdigit allows
+        "/audio/shot/%30.wav",  # a zero, but the path is never decoded
+        "/audio/shot",
+        "/audio/../pyproject.toml",
+        "/audio/shot/../../pyproject.toml",
+    ],
+)
+def test_unknown_sounds_are_not_found(server, sounds, path):
+    assert call(server, "GET", path)[0] == 404
+
+
+def test_without_a_sound_set_there_is_nothing_to_hear(server):
+    assert server.sounds is None
+    assert call(server, "GET", "/audio/manifest.json")[0] == 404
+    assert call(server, "GET", "/audio/shot/0.wav")[0] == 404
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors"},
+        {"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "audio"},
+        {"Origin": "http://evil.example"},
+        {"Host": "evil.example"},
+    ],
+)
+def test_other_sites_cannot_read_the_new_routes(server, sounds, labels):
+    for path in (
+        "/api/progress",
+        "/audio/manifest.json",
+        "/audio/shot/0.wav",
+        "/art/western?w=720&h=405",
+    ):
+        assert call(server, "GET", path, headers=labels)[0] == 403, path
+
+
+def test_art_is_drawn_at_the_size_asked_for_within_limits(server):
+    def size(path):
+        status, raw, response = call(server, "GET", path)
+        assert status == 200 and response.getheader("Content-Type") == "image/jpeg"
+        image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        return image.shape[1], image.shape[0]
+
+    assert size("/art/orbit") == (360, 200)
+    assert size("/art/orbit?w=720&h=405") == (720, 405)
+    (low_w, low_h), (high_w, high_h) = browser.ART_SIZES
+    assert size("/art/orbit?w=99999&h=99999") == (high_w, high_h)
+    assert size("/art/orbit?w=1&h=-5") == (low_w, low_h)
+    for query in ("w=abc", "h=1e9", "w=7.5"):
+        assert call(server, "GET", f"/art/orbit?{query}")[0] == 400
+    assert call(server, "GET", "/art/kart?w=720&h=405")[0] == 404
