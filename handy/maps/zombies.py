@@ -1656,12 +1656,18 @@ def _fog_bank(width: int, height: int, horizon: int) -> tuple[int, np.ndarray, n
         return (noise ** 1.5 * strength * envelope[:, None]).astype(np.float32)
 
     del rng
-    plane = np.empty((rows, width, 3), np.uint8)
+    slow, fast = layer(14, 1, 0.55), layer(26, 2, 0.35)
+    # Only the rows the fog can change by half a level or more: the banks
+    # thin to nothing well inside the strip, and every row costs a blend.
+    reach = np.flatnonzero((slow + fast).max(axis=1) * 255.0 >= 0.5)
+    first, last = (int(reach[0]), int(reach[-1]) + 1) if reach.size else (0, 0)
+    slow, fast = np.ascontiguousarray(slow[first:last]), np.ascontiguousarray(fast[first:last])
+    plane = np.empty((last - first, width, 3), np.uint8)
     columns = np.arange(width, dtype=np.float32)
     moonward = np.exp(-((columns - width * 0.76) / (width * 0.3)) ** 2)
     for channel in range(3):
         plane[:, :, channel] = (FOG[channel] + 30 * moonward)[None, :].astype(np.uint8)
-    return top, layer(14, 1, 0.55), layer(26, 2, 0.35), plane
+    return top + first, slow, fast, plane
 
 
 def draw_fog(canvas: np.ndarray, view: Perspective, now: float) -> None:
@@ -1671,11 +1677,18 @@ def draw_fog(canvas: np.ndarray, view: Perspective, now: float) -> None:
     rows = slow.shape[0]
     if rows <= 0:
         return
-    alpha = np.roll(slow, int(now * 9) % width, axis=1)
-    alpha += np.roll(fast, int(now * 23) % width, axis=1)
-    np.clip(alpha, 0.0, 0.85, out=alpha)
+    # Each layer rolled round by slicing it into place, not by np.roll, which
+    # would build a copy of each only to add them together.
+    alpha = np.empty_like(slow)
+    shift = int(now * 9) % width
+    alpha[:, shift:] = slow[:, :width - shift]
+    alpha[:, :shift] = slow[:, width - shift:]
+    shift = int(now * 23) % width
+    alpha[:, shift:] += fast[:, :width - shift]
+    alpha[:, :shift] += fast[:, width - shift:]
+    np.minimum(alpha, 0.85, out=alpha)
     region = canvas[top:top + rows]
-    region[:] = cv2.blendLinear(region, plane, 1.0 - alpha, alpha)
+    cv2.blendLinear(region, plane, 1.0 - alpha, alpha, dst=region)
 
 
 @lru_cache(maxsize=4)
