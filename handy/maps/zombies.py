@@ -132,13 +132,16 @@ class Part(NamedTuple):
     #: A limb's joints as (x, y, radius) triples; an ellipse's (cx, cy, rx,
     #: ry, degrees); a polygon's outline, as an (n, 2) float32 array.
     shape: tuple | np.ndarray
-    #: Half its thickness in pixels: how far in from the edge the moon may reach.
+    #: Half its thickness: how far in from the edge the moon may reach.
     depth: float
+    #: The least detail (see :func:`_detail`) a figure must be drawn at to have
+    #: this part at all: fingers only near enough to see them.
+    lod: int = 0
 
 
-def _limb(zone: str, tone: str, *joints: tuple[float, float, float]) -> Part:
+def _limb(zone: str, tone: str, *joints: tuple[float, float, float], lod: int = 0) -> Part:
     """One piece bent at its joints, so a knee or an elbow is not a seam."""
-    return Part(zone, tone, LIMB, joints, min(joint[2] for joint in joints))
+    return Part(zone, tone, LIMB, joints, min(joint[2] for joint in joints), lod)
 
 
 def _ellipse(zone: str, tone: str, centre: tuple[float, float], rx: float, ry: float,
@@ -146,8 +149,8 @@ def _ellipse(zone: str, tone: str, centre: tuple[float, float], rx: float, ry: f
     return Part(zone, tone, ELLIPSE, (centre[0], centre[1], rx, ry, degrees), min(rx, ry))
 
 
-def _polygon(zone: str, tone: str, points: list, depth: float) -> Part:
-    return Part(zone, tone, POLYGON, np.array(points, np.float32), depth)
+def _polygon(zone: str, tone: str, points: list, depth: float, lod: int = 0) -> Part:
+    return Part(zone, tone, POLYGON, np.array(points, np.float32), depth, lod)
 
 
 class Piece(NamedTuple):
@@ -157,6 +160,8 @@ class Piece(NamedTuple):
     tone: str
     start: int
     stop: int
+    lod: int
+    depth: float
 
 
 class Mesh(NamedTuple):
@@ -171,6 +176,10 @@ class Mesh(NamedTuple):
     radius: np.ndarray  # (n,)
     depth: np.ndarray  # (n,): half the thickness of the part each point is on
     pieces: tuple[Piece, ...]
+    #: Runs of pieces filled in one call: the same colour, and not touching -
+    #: a pair of legs, of feet, of hands. Outlines filled in one call cancel
+    #: where they cross, so only ones that cannot cross are put together.
+    groups: tuple[tuple[int, ...], ...]
 
 
 @lru_cache(maxsize=8)
@@ -218,16 +227,15 @@ def _ellipse_outlines(ellipses: list[tuple], count: int) -> tuple[np.ndarray, ..
     return centre, direction, radius
 
 
-def _mesh(parts: tuple[Part, ...], detail: int) -> Mesh:
-    """All of a figure's parts as one mesh, in the order they are painted."""
-    arc = (2, 3, 4, 6)[detail]
-    rim = (8, 10, 12, 18)[detail]
+def _mesh(parts: tuple[Part, ...]) -> Mesh:
+    """All of a figure's parts as one mesh, in the order they are painted,
+    at its finest detail: a smaller figure leaves some pieces out."""
     limbs = [part.shape for part in parts if part.kind == LIMB]
     ellipses = [part.shape for part in parts if part.kind == ELLIPSE]
-    built = {LIMB: _limb_outlines(limbs, arc) if limbs else None,
-             ELLIPSE: _ellipse_outlines(ellipses, rim) if ellipses else None}
+    built = {LIMB: _limb_outlines(limbs, 5) if limbs else None,
+             ELLIPSE: _ellipse_outlines(ellipses, 14) if ellipses else None}
     counters = {LIMB: 0, ELLIPSE: 0}
-    centres, directions, radii, depths, pieces = [], [], [], [], []
+    centres, directions, radii, depths, pieces, boxes = [], [], [], [], [], []
     at = 0
     for part in parts:
         if part.kind == POLYGON:
@@ -242,27 +250,48 @@ def _mesh(parts: tuple[Part, ...], detail: int) -> Mesh:
             counters[part.kind] += 1
             centre, direction, radius = (array[index] for array in built[part.kind])
         count = len(radius)
+        edge = centre + radius[:, None] * direction
+        boxes.append((edge.min(axis=0), edge.max(axis=0)))
         centres.append(centre)
         directions.append(direction)
         radii.append(radius)
         depths.append(np.full(count, part.depth, np.float32))
-        pieces.append(Piece(part.zone, part.tone, at, at + count))
+        pieces.append(Piece(part.zone, part.tone, at, at + count, part.lod, part.depth))
         at += count
+    groups: list[list[int]] = []
+    for index, piece in enumerate(pieces):
+        if groups:
+            run = groups[-1]
+            first = pieces[run[0]]
+            if ((piece.tone, piece.zone, piece.lod, piece.depth)
+                    == (first.tone, first.zone, first.lod, first.depth)
+                    and all(_apart(boxes[index], boxes[other]) for other in run)):
+                run.append(index)
+                continue
+        groups.append([index])
     return Mesh(np.concatenate(centres).astype(np.float32),
                 np.concatenate(directions).astype(np.float32),
                 np.concatenate(radii).astype(np.float32),
-                np.concatenate(depths), tuple(pieces))
+                np.concatenate(depths), tuple(pieces), tuple(map(tuple, groups)))
+
+
+def _apart(a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray]) -> bool:
+    """Whether two boxes are clear of each other by a couple of hundredths of
+    the figure's height, room enough that no pose between two cached ones and
+    no pixel of antialiasing brings them into contact."""
+    gap = 0.02
+    return bool((a[1] + gap < b[0]).any() or (b[1] + gap < a[0]).any())
 
 
 #: How many poses a stride is cached at. Each frame is drawn between the two
 #: either side of it, so this is a cache size, not a frame rate.
-POSE_STEPS = 24
+POSE_STEPS = 16
 
 
 def _detail(height: float) -> int:
     """How much of a figure is worth drawing at this height in pixels: 0 a
-    silhouette with eyes; 1 hair, collars and cuffs; 2 torn sleeves and
-    fingers; 3 every finger and a softer fall of light."""
+    silhouette with eyes; 1 hair, collars and torn cuffs; 2 fingers; 3 every
+    finger, the thumbs, and a softer fall of light."""
     return 0 if height < 40 else 1 if height < 100 else 2 if height < 200 else 3
 
 
@@ -529,18 +558,31 @@ class Figure:
         step = (self.phase % math.tau) / math.tau * POSE_STEPS
         low = int(step)
         t = np.float32(step - low)
-        key = (self.seed, self.gait, self.robot, self.hunch, self.tilt, self.lod,
+        key = (self.seed, self.gait, self.robot, self.hunch, self.tilt,
                round(self.recoil * 8) / 8)
         a = _pose_mesh(*key, low % POSE_STEPS)
         b = _pose_mesh(*key, (low + 1) % POSE_STEPS)
         if a.pieces != b.pieces:
             b = a
+        groups = a.groups
+        if groups != b.groups:
+            # Apart in one pose and not the other: fill them one at a time.
+            groups = tuple((index,) for index in range(len(a.pieces)))
         height = np.float32(self.height)
         root = np.float32((self.x - self.lean * self.height, self.ground_y))
         centre = (a.centre + (b.centre - a.centre) * t) * height + root
         direction = a.direction + (b.direction - a.direction) * t
         radius = (a.radius + (b.radius - a.radius) * t) * height
-        return Mesh(centre, direction, radius, a.depth * height, a.pieces)
+        return Mesh(centre, direction, radius, a.depth * height, a.pieces, groups)
+
+    @cached_property
+    def groups(self) -> tuple[tuple[Piece, ...], ...]:
+        """The pieces it is drawn and shot with at its size, in the runs they
+        are filled in."""
+        lod, pieces = self.lod, self.mesh.pieces
+        runs = (tuple(pieces[index] for index in group if pieces[index].lod <= lod)
+                for group in self.mesh.groups)
+        return tuple(run for run in runs if run)
 
     @cached_property
     def outline(self) -> np.ndarray:
@@ -564,9 +606,11 @@ class Figure:
         if not (x0 <= x <= x1 and y0 <= y <= y1):
             return None
         outline, point, margin = self.outline, (float(x), float(y)), -self.margin
-        for piece in self.mesh.pieces:
-            if cv2.pointPolygonTest(outline[piece.start:piece.stop], point, True) >= margin:
-                return "body"
+        for run in self.groups:
+            for piece in run:
+                if cv2.pointPolygonTest(outline[piece.start:piece.stop], point,
+                                        True) >= margin:
+                    return "body"
         return None
 
 
@@ -612,25 +656,26 @@ def _pose(gait: str, robot: bool, hunch: float, tilt: float, seed: int, phase: f
 
 
 @lru_cache(maxsize=1024)
-def _pose_mesh(seed: int, gait: str, robot: bool, hunch: float, tilt: float, detail: int,
+def _pose_mesh(seed: int, gait: str, robot: bool, hunch: float, tilt: float,
                recoil: float, step: int) -> Mesh:
     """One walker at one step of its stride, one unit tall with its feet at
     the origin. A walker's poses are built in its first stride and reused for
-    the rest of the road; nine walkers' worth fit many times over."""
+    the rest of the road; nine walkers' worth fit many times over. Sixteen to a
+    stride is plenty: a frame is drawn between two of them, and nothing moves
+    far enough between two to bend a straight line visibly."""
     figure = _pose(gait, robot, hunch, tilt, seed, step * math.tau / POSE_STEPS, recoil,
-                   height=1.0, x=0.0, ground=0.0, detail=detail)
-    return _mesh(figure.parts, detail)
+                   height=1.0, x=0.0, ground=0.0, detail=3)
+    return _mesh(figure.parts)
 
 
 def _skull(figure: Figure, metal: bool = False) -> list[tuple[float, float]]:
     """The outline of the head in one piece, crown to chin: a cranium, cheeks
     drawn in under the bones, and a jaw that hangs - or a helmet's square chin.
     Every point of it is inside the circle a head shot is tested against."""
-    arc = 11 if figure.lod >= 2 else 7
     width = 0.8 if metal else 0.84
     points = []
-    for index in range(arc):
-        a = math.radians(-10.0 + 200.0 * index / (arc - 1))
+    for index in range(11):
+        a = math.radians(-10.0 + 20.0 * index)
         points.append((width * math.cos(a), -0.13 - 0.9 * math.sin(a)))
     if metal:
         chin = ((-0.76, 0.46), (-0.44, 0.86), (0.44, 0.86), (0.76, 0.46))
@@ -647,7 +692,7 @@ def _head_parts(figure: Figure, parts: list[Part], metal: bool = False) -> None:
     parts.append(_polygon("head", "plate" if metal else "skin", _skull(figure, metal),
                           radius * 0.7))
     look = figure.look
-    if metal or not look.hair or figure.lod < 1:
+    if metal or not look.hair:
         return
     # Over the crown, then a ragged edge back across the brow: a matted cap,
     # or hanging lank past the ears.
@@ -663,30 +708,30 @@ def _head_parts(figure: Figure, parts: list[Part], metal: bool = False) -> None:
             (-0.42, -0.52), (-0.66, -0.32), (-0.84, -0.14))
     for index, (px, py) in enumerate(edge):
         cap.append(_head_point(figure, px, py - 0.1 * _rag(figure.seed, 70 + index)))
-    parts.append(_polygon("head", "hair", cap, radius * 0.25))
+    parts.append(_polygon("head", "hair", cap, radius * 0.25, lod=1))
 
 
-def _hand_parts(figure: Figure, parts: list[Part], wrist: tuple[float, float],
-                hand: tuple[float, float], side: int, tone: str = "skin",
-                claws: bool = True) -> None:
-    """A palm hanging from the wrist, and, near enough to see them, the fingers."""
+def _hand_parts(figure: Figure, wrist: tuple[float, float], hand: tuple[float, float],
+                side: int, tone: str = "skin", claws: bool = True) -> list[list[Part]]:
+    """A palm hanging from the wrist, and the fingers, which only a near one
+    shows: as layers - the palm, then each finger in turn - so a pair of
+    hands can be laid down together."""
     height = figure.height
     dx, dy = hand
     palm = (wrist[0] + dx * height * 0.024, wrist[1] + dy * height * 0.024)
-    parts.append(_ellipse("body", tone, palm, height * 0.03, height * 0.021,
-                          math.degrees(math.atan2(dy, dx))))
-    if not claws or figure.lod < 2:
-        return
+    layers = [[_ellipse("body", tone, palm, height * 0.03, height * 0.021,
+                        math.degrees(math.atan2(dy, dx)))]]
+    if not claws:
+        return layers
     # Across the palm; the thumb is on the side towards the body.
     px, py = -dy, dx
     if px * side > 0:
         px, py = -px, -py
     base_angle = math.atan2(dy, dx)
-    fingers = ((-1.4, -24.0, 0.8), (-0.45, -8.0, 1.0), (0.5, 7.0, 0.95), (1.4, 22.0, 0.75))
-    if figure.lod < 3:
-        fingers = fingers[1:]
+    fingers = ((-1.4, -24.0, 0.8, 3), (-0.45, -8.0, 1.0, 2), (0.5, 7.0, 0.95, 2),
+               (1.4, 22.0, 0.75, 2))
     thick = height * 0.0062
-    for index, (across, spread, long) in enumerate(fingers):
+    for index, (across, spread, long, lod) in enumerate(fingers):
         a = base_angle + math.radians(spread) * -side
         # Each finger crooked at the knuckle, curling back towards the palm.
         curl = a + math.radians(18.0) * side
@@ -695,18 +740,17 @@ def _hand_parts(figure: Figure, parts: list[Part], wrist: tuple[float, float],
         reach = height * (0.024 + 0.008 * _rag(figure.seed, 80 + index + 4 * side)) * long
         knuckle = (base[0] + math.cos(a) * reach, base[1] + math.sin(a) * reach)
         tip = (knuckle[0] + math.cos(curl) * reach * 0.9, knuckle[1] + math.sin(curl) * reach * 0.9)
-        parts.append(_limb("body", tone, (*base, thick), (*knuckle, thick * 0.85),
-                           (*tip, thick * 0.6)))
-    if figure.lod >= 3:
-        a = base_angle + math.radians(55.0) * side
-        base = (palm[0] - px * height * 0.014, palm[1] - py * height * 0.014)
-        tip = (base[0] + math.cos(a) * height * 0.026, base[1] + math.sin(a) * height * 0.026)
-        parts.append(_limb("body", tone, (*base, thick * 1.15), (*tip, thick * 0.7)))
+        layers.append([_limb("body", tone, (*base, thick), (*knuckle, thick * 0.85),
+                             (*tip, thick * 0.6), lod=lod)])
+    a = base_angle + math.radians(55.0) * side
+    base = (palm[0] - px * height * 0.014, palm[1] - py * height * 0.014)
+    tip = (base[0] + math.cos(a) * height * 0.026, base[1] + math.sin(a) * height * 0.026)
+    layers.append([_limb("body", tone, (*base, thick * 1.15), (*tip, thick * 0.7), lod=3)])
+    return layers
 
 
-def _tatters(parts: list[Part], tone: str, joint: tuple[float, float],
-             direction: tuple[float, float], radius: float, height: float,
-             seed: int) -> None:
+def _tatters(tone: str, joint: tuple[float, float], direction: tuple[float, float],
+             radius: float, height: float, seed: int) -> Part:
     """A sleeve torn off at a joint: a ragged cuff hanging a little way down
     the bare arm below it."""
     dx, dy = direction
@@ -721,11 +765,12 @@ def _tatters(parts: list[Part], tone: str, joint: tuple[float, float],
         points.append((jx + px * radius * across + dx * reach,
                        jy + py * radius * across + dy * reach))
     points.append((jx - px * radius * 1.1 - dx * radius * 0.7, jy - py * radius * 1.1 - dy * radius * 0.7))
-    parts.append(_polygon("body", tone, points, radius * 0.5))
+    return _polygon("body", tone, points, radius * 0.5, lod=1)
 
 
-def _arm_parts(figure: Figure, parts: list[Part], side: int, arm: tuple) -> None:
-    """One arm: sleeve or bare, torn at the cuff, and its hand."""
+def _arm_layers(figure: Figure, side: int, arm: tuple) -> list[list[Part]]:
+    """One arm - sleeve or bare, torn at the cuff - and its hand, as layers:
+    upper arm, forearm, cuff, palm, each finger."""
     height, look = figure.height, figure.look
     shoulder, elbow, wrist, hand = arm
     sleeve_tone = "shirt" if look.clothes == "shirt" else "cloth"
@@ -735,17 +780,28 @@ def _arm_parts(figure: Figure, parts: list[Part], side: int, arm: tuple) -> None
     top = height * (0.034 if sleeve else 0.026)
     at_elbow = height * (0.025 if fore != "skin" else 0.021)
     if upper == fore:
-        parts.append(_limb("body", upper, (*shoulder, top), (*elbow, at_elbow),
-                           (*wrist, height * 0.016)))
+        layers = [[_limb("body", upper, (*shoulder, top), (*elbow, at_elbow),
+                         (*wrist, height * 0.016))], []]
     else:
-        parts.append(_limb("body", upper, (*shoulder, top), (*elbow, height * 0.026)))
-        parts.append(_limb("body", fore, (*elbow, at_elbow), (*wrist, height * 0.016)))
-    if sleeve and figure.lod >= 1:
+        layers = [[_limb("body", upper, (*shoulder, top), (*elbow, height * 0.026))],
+                  [_limb("body", fore, (*elbow, at_elbow), (*wrist, height * 0.016))]]
+    cuff = []
+    if sleeve:
         joint, radius, onward = ((wrist, height * 0.021, hand) if look.long_sleeves else
                                  (elbow, height * 0.028,
                                   (wrist[0] - elbow[0], wrist[1] - elbow[1])))
-        _tatters(parts, sleeve_tone, joint, onward, radius, height, figure.seed + side)
-    _hand_parts(figure, parts, wrist, hand, side)
+        cuff.append(_tatters(sleeve_tone, joint, onward, radius, height, figure.seed + side))
+    return layers + [cuff] + _hand_parts(figure, wrist, hand, side)
+
+
+def _side_by_side(parts: list[Part], *sides: list[list[Part]]) -> None:
+    """Lay down two sides' layers together - both upper arms, then both
+    forearms, both hands - so each pair can be filled in one call. The two
+    sides never overlap, so the order between them does not matter."""
+    for layer in range(max((len(layers) for layers in sides), default=0)):
+        for layers in sides:
+            if layer < len(layers):
+                parts.extend(layers[layer])
 
 
 def _standing_parts(figure: Figure) -> list[Part]:
@@ -767,17 +823,19 @@ def _standing_parts(figure: Figure) -> list[Part]:
         return x + lead * min(max((hips - y) / span, 0.0), 1.1)
 
     gown = look.clothes == "gown"
+    legs = []
     for side, (hip, knee, ankle, foot) in zip((-1, 1), figure.legs()):
         thigh = "cloth" if gown else "legs"
         shin = "skin" if gown or look.bare_shin == side else "legs"
         if shin == thigh:
-            parts.append(_limb("body", thigh, (*hip, height * 0.044), (*knee, height * 0.03),
-                               (*ankle, height * 0.018)))
+            layers = [[_limb("body", thigh, (*hip, height * 0.044), (*knee, height * 0.03),
+                             (*ankle, height * 0.018))], []]
         else:
-            parts.append(_limb("body", thigh, (*hip, height * 0.044), (*knee, height * 0.031)))
-            parts.append(_limb("body", shin, (*knee, height * 0.024), (*ankle, height * 0.016)))
-        parts.append(_ellipse("body", "skin" if gown else "shoe", foot[:2], height * 0.034,
-                              height * 0.019, foot[2]))
+            layers = [[_limb("body", thigh, (*hip, height * 0.044), (*knee, height * 0.031))],
+                      [_limb("body", shin, (*knee, height * 0.024), (*ankle, height * 0.016))]]
+        legs.append(layers + [[_ellipse("body", "skin" if gown else "shoe", foot[:2],
+                                        height * 0.034, height * 0.019, foot[2])]])
+    _side_by_side(parts, *legs)
 
     hx, hy = figure.head
     parts.append(_limb("body", "skin", (over(top), top + height * 0.02, height * 0.034),
@@ -788,9 +846,8 @@ def _standing_parts(figure: Figure) -> list[Part]:
     arms = list(zip((-1, 1), figure._arms))
     front = [(side, arm) for side, arm in arms
              if figure._arm_pose(side) in ("clutch", "hang") or figure.recoil > 0.3]
-    for side, arm in arms:
-        if (side, arm) not in front:
-            _arm_parts(figure, parts, side, arm)
+    _side_by_side(parts, *(_arm_layers(figure, side, arm) for side, arm in arms
+                           if (side, arm) not in front))
 
     # The torso: hunched up round the neck, one shoulder low, narrowing to the
     # waist; the hem of whatever it wears hanging in torn points, a coat's to
@@ -831,18 +888,17 @@ def _standing_parts(figure: Figure) -> list[Part]:
     ]
     parts.append(_polygon("body", "shirt" if look.clothes == "shirt" else "cloth", outline,
                           half * 0.6))
-    if look.clothes in ("jacket", "coat") and figure.lod >= 1:
+    if look.clothes in ("jacket", "coat"):
         # The shirt underneath, where the jacket hangs open.
         deep = top + height * (0.26 if look.clothes == "coat" else 0.19)
         parts.append(_polygon("body", "shirt", [
             (over(top) - half * 0.26, top - height * 0.022),
             (over(top) + half * 0.26, top - height * 0.022),
             (over(deep) + half * 0.07, deep), (over(deep) - half * 0.09, deep - height * 0.02)],
-            half * 0.15))
+            half * 0.15, lod=1))
 
     _head_parts(figure, parts)
-    for side, arm in front:
-        _arm_parts(figure, parts, side, arm)
+    _side_by_side(parts, *(_arm_layers(figure, side, arm) for side, arm in front))
     return parts
 
 
@@ -852,10 +908,11 @@ def _crawler_parts(figure: Figure) -> list[Part]:
     height, x, ground = figure.height, figure.x, figure.ground_y
     look = figure.look
     parts: list[Part] = []
-    for hip, foot in figure.trailing_legs():
-        parts.append(_limb("body", "legs", (*hip, height * 0.042), (*foot, height * 0.03)))
-        parts.append(_ellipse("body", "shoe", (foot[0], foot[1] - height * 0.012),
-                              height * 0.024, height * 0.02))
+    _side_by_side(parts, *([[_limb("body", "legs", (*hip, height * 0.042),
+                                   (*foot, height * 0.03))],
+                            [_ellipse("body", "shoe", (foot[0], foot[1] - height * 0.012),
+                                      height * 0.024, height * 0.02)]]
+                           for hip, foot in figure.trailing_legs()))
     roll = math.sin(figure.phase) * height * 0.02  # the shoulder of the reaching arm rides up
     tone = "shirt" if look.clothes == "shirt" else "cloth"
     seed = figure.seed
@@ -874,17 +931,18 @@ def _crawler_parts(figure: Figure) -> list[Part]:
              (x + height * 0.1, ground - height * 0.25),
              (x - height * 0.1, ground - height * 0.25)]
     parts.append(_polygon("body", tone, back, height * 0.08))
+    arms = []
     for side, (shoulder, elbow, wrist, hand) in zip((-1, 1), figure._arms):
-        sleeve = look.sleeves[0 if side < 0 else 1]
-        if sleeve:
-            parts.append(_limb("body", tone, (*shoulder, height * 0.034),
-                               (*elbow, height * 0.027)))
-            parts.append(_limb("body", "skin", (*elbow, height * 0.024),
-                               (*wrist, height * 0.018)))
+        if look.sleeves[0 if side < 0 else 1]:
+            layers = [[_limb("body", tone, (*shoulder, height * 0.034),
+                             (*elbow, height * 0.027))],
+                      [_limb("body", "skin", (*elbow, height * 0.024),
+                             (*wrist, height * 0.018))]]
         else:
-            parts.append(_limb("body", "skin", (*shoulder, height * 0.03),
-                               (*elbow, height * 0.024), (*wrist, height * 0.018)))
-        _hand_parts(figure, parts, wrist, hand, side)
+            layers = [[_limb("body", "skin", (*shoulder, height * 0.03),
+                             (*elbow, height * 0.024), (*wrist, height * 0.018))], []]
+        arms.append(layers + _hand_parts(figure, wrist, hand, side))
+    _side_by_side(parts, *arms)
     hx, hy = figure.head
     parts.append(_limb("body", "skin", (x, ground - height * 0.31, height * 0.032),
                        (hx, hy + figure.head_radius * 0.3, height * 0.028)))
@@ -899,12 +957,15 @@ def _robot_parts(figure: Figure) -> list[Part]:
     half = figure.half_shoulder
     top, hips = figure.shoulder_y, figure.hip_y
     parts: list[Part] = []
-    for hip, knee, ankle, foot in figure.legs():
-        parts.append(_limb("body", "frame", (*hip, height * 0.034), (*knee, height * 0.027)))
-        parts.append(_limb("body", "plate", (*knee, height * 0.036), (*ankle, height * 0.023)))
-        parts.append(_ellipse("body", "plate", (knee[0], knee[1] - height * 0.012),
-                              height * 0.028, height * 0.03))
-        parts.append(_ellipse("body", "plate", foot[:2], height * 0.036, height * 0.02, foot[2]))
+    _side_by_side(parts, *([[_limb("body", "frame", (*hip, height * 0.034),
+                                   (*knee, height * 0.027))],
+                            [_limb("body", "plate", (*knee, height * 0.036),
+                                   (*ankle, height * 0.023))],
+                            [_ellipse("body", "plate", (knee[0], knee[1] - height * 0.012),
+                                      height * 0.028, height * 0.03)],
+                            [_ellipse("body", "plate", foot[:2], height * 0.036, height * 0.02,
+                                      foot[2])]]
+                           for hip, knee, ankle, foot in figure.legs()))
     parts.append(_polygon("body", "plate", [
         (x - height * 0.09, hips - height * 0.03), (x + height * 0.09, hips - height * 0.03),
         (x + height * 0.078, hips + height * 0.045), (x, hips + height * 0.085),
@@ -927,13 +988,15 @@ def _robot_parts(figure: Figure) -> list[Part]:
         (x - half * 0.93, top + height * 0.04), (x - half * 0.64, top - height * 0.006)],
         half * 0.5))
     _head_parts(figure, parts, metal=True)
-    for side, (shoulder, elbow, wrist, hand) in arms:
-        parts.append(_ellipse("body", "frame", elbow, height * 0.023, height * 0.023))
-        parts.append(_limb("body", "plate", (*elbow, height * 0.03), (*wrist, height * 0.023)))
-        _hand_parts(figure, parts, wrist, hand, side, tone="frame", claws=False)
-        parts.append(_ellipse("body", "plate",
-                              (shoulder[0] + side * height * 0.006, shoulder[1] - height * 0.012),
-                              height * 0.052, height * 0.038, side * 18.0))
+    _side_by_side(parts, *([[_ellipse("body", "frame", elbow, height * 0.023, height * 0.023)],
+                            [_limb("body", "plate", (*elbow, height * 0.03),
+                                   (*wrist, height * 0.023))],
+                            *_hand_parts(figure, wrist, hand, side, tone="frame", claws=False),
+                            [_ellipse("body", "plate",
+                                      (shoulder[0] + side * height * 0.006,
+                                       shoulder[1] - height * 0.012),
+                                      height * 0.052, height * 0.038, side * 18.0)]]
+                           for side, (shoulder, elbow, wrist, hand) in arms))
     return parts
 
 
@@ -1697,11 +1760,12 @@ def _fixed(points: np.ndarray) -> np.ndarray:
     return np.rint(points * FIX).astype(np.int32)
 
 
-def _fill(canvas: np.ndarray, pieces: tuple[Piece, ...], fixed: np.ndarray,
+def _fill(canvas: np.ndarray, groups: tuple[tuple[Piece, ...], ...], fixed: np.ndarray,
           colours: list) -> None:
-    """Fill each piece's outline, in order, in its colour."""
-    for piece, colour in zip(pieces, colours):
-        cv2.fillPoly(canvas, [fixed[piece.start:piece.stop]], colour, cv2.LINE_AA, FIX_BITS)
+    """Fill each run of pieces, in order, in its colour: one call a run."""
+    for run, colour in zip(groups, colours):
+        cv2.fillPoly(canvas, [fixed[piece.start:piece.stop] for piece in run], colour,
+                     cv2.LINE_AA, FIX_BITS)
 
 
 # How the moon takes each tone: how much of it the side of a form turned to
@@ -1721,8 +1785,9 @@ VISOR = (255, 234, 150)  # a machine's one light, where its eyes would be
 
 @lru_cache(maxsize=512)
 def _tones(seed: int, robot: bool, haze: float, light: float) -> dict[str, tuple]:
-    """Each of one walker's colours as (rim, lit side, body), in its fog and in
-    the muzzle flash. ``haze`` and ``light`` come rounded, so there are few."""
+    """Each of one walker's colours as (rim, lit side, body, and one for a
+    part too thin to show the lit side), in its fog and in the muzzle flash.
+    ``haze`` and ``light`` come rounded, so there are few."""
     if robot:
         base = {"plate": PLATE, "frame": FRAME}
     else:
@@ -1737,7 +1802,8 @@ def _tones(seed: int, robot: bool, haze: float, light: float) -> dict[str, tuple
         rim = _mix(colour, RIM, edge)
         # The fog takes the body; the moon's edge, which is light in the fog
         # itself, it barely touches - a far one is found by its outline.
-        tones[name] = (_fogged(rim, haze * 0.35), _fogged(lit, haze), _fogged(body, haze))
+        lit, body = _fogged(lit, haze), _fogged(body, haze)
+        tones[name] = (_fogged(rim, haze * 0.35), lit, body, _mix(body, lit, 0.25))
     return tones
 
 
@@ -1778,13 +1844,19 @@ def _shadow_stamp(rx: int, ry: int, degrees: int, strength: int) -> np.ndarray:
 
 def _shade(canvas: np.ndarray, centre: tuple[float, float], rx: float, ry: float,
            degrees: float, strength: float) -> None:
-    """Darken a soft ellipse of the road: a shadow, with no edge to it."""
-    # Sizes rounded to about three percent, so the stamps are shared by the
-    # frames either side of each other.
-    step = max(1, int(rx) // 32)
-    rx, ry = max(2, int(rx) // step * step), max(1, int(round(ry)))
-    stamp = _shadow_stamp(rx, ry, int(degrees), int(strength * 50) * 2)
+    """Darken a soft ellipse of the road: a shadow, with no edge to it. Sizes
+    and strengths are rounded, so the frames either side share a stamp."""
+    stamp = _shadow_stamp(max(2, _bucket(rx)), _bucket(ry), int(degrees),
+                          int(strength * 10 + 0.5) * 10)
     _stamp(canvas, stamp, centre, cv2.multiply, 1.0 / 255.0)
+
+
+def _bucket(value: float) -> int:
+    """A size in pixels rounded to about six percent, and to the pixel below
+    sixteen."""
+    if value < 16.0:
+        return max(1, int(round(value)))
+    return int(round(1.06 ** round(math.log(value, 1.06))))
 
 
 def _stamp(canvas: np.ndarray, stamp: np.ndarray, centre: tuple[float, float], op,
@@ -1904,10 +1976,10 @@ def _dead_tones(seed: int, robot: bool, haze: float, settle: float) -> dict[str,
     fresh; then the edge goes, and the rags and the flesh soak to the colour of
     the tar, until it is a low dark shape on the road, not a drawing of a body."""
     tones = {}
-    for name, (rim, lit, body) in _tones(seed, robot, haze, 0.0).items():
+    for name, (rim, lit, body, _) in _tones(seed, robot, haze, 0.0).items():
         body = _mix(body, _fogged(TAR, haze), settle * 0.7)
         lit = _mix(lit, body, 0.3 + 0.7 * settle)
-        tones[name] = (_mix(rim, lit, 0.25 + 0.75 * settle), lit, body)
+        tones[name] = (_mix(rim, lit, 0.25 + 0.75 * settle), lit, body, _mix(body, lit, 0.25))
     return tones
 
 
@@ -1929,8 +2001,7 @@ def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
         tones = _dead_tones(figure.seed, figure.robot, haze, round(settle, 1))
     else:
         tones = _tones(figure.seed, figure.robot, haze, round(light, 1))
-    mesh, outline = figure.mesh, figure.outline
-    pieces = mesh.pieces
+    mesh, outline, groups = figure.mesh, figure.outline, figure.groups
     if fall > 0.0:
         turn, feet = _toppled(figure, fall)
 
@@ -1944,18 +2015,18 @@ def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
 
     mx, my = _moonward(canvas, view, figure)
     rim = max(1.25, height * 0.0075)
-    _fill(canvas, pieces, _fixed(edge + np.float32((mx * rim, my * rim))),
-          [tones[piece.tone][0] for piece in pieces])
+    _fill(canvas, groups, _fixed(edge + np.float32((mx * rim, my * rim))),
+          [tones[run[0].tone][0] for run in groups])
     if light > 0.0 and height > 24:
         # The muzzle flash catches the edge turned to the gun, below the
         # picture: a warm rim opposite the moon's, for the frame the shot lasts.
         gx, gy = view.area.centre_x - figure.x, view.area.bottom + height - figure.ground_y
         norm = (math.hypot(gx, gy) or 1.0) / (rim * 1.3)
         warm = _mix((40, 40, 44), FLASH, min(1.0, light) * 0.8)
-        _fill(canvas, pieces, _fixed(edge + np.float32((gx / norm, gy / norm))),
-              [warm] * len(pieces))
+        _fill(canvas, groups, _fixed(edge + np.float32((gx / norm, gy / norm))),
+              [warm] * len(groups))
     if figure.lod == 0:
-        _fill(canvas, pieces, _fixed(edge), [tones[piece.tone][2] for piece in pieces])
+        _fill(canvas, groups, _fixed(edge), [tones[run[0].tone][3] for run in groups])
     else:
         # The planes are lit from further round to the moon's side than the
         # rim is: from straight below it, both flanks of a limb would catch
@@ -1974,12 +2045,19 @@ def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
         passes.append((_fixed(place(mesh.centre + (mesh.radius - inset)[:, None]
                                     * mesh.direction)
                               + (inset * np.float32(1.35))[:, None] * away), 2))
-        for piece in pieces:
-            _, lit, body = tones[piece.tone]
+        # A part whose band of light would be under a pixel wide is filled
+        # once: the band would not show, and the fill is most of the cost.
+        band = height * 0.011
+        for run in groups:
+            _, lit, body, even = tones[run[0].tone]
+            if min(band, run[0].depth * height * 0.3) < 0.6:
+                cv2.fillPoly(canvas, [passes[0][0][piece.start:piece.stop] for piece in run],
+                             even, cv2.LINE_AA, FIX_BITS)
+                continue
             for fixed, which in passes:
                 colour = lit if which == 1 else body if which == 2 else _mix(lit, body, 0.55)
-                cv2.fillPoly(canvas, [fixed[piece.start:piece.stop]], colour, cv2.LINE_AA,
-                             FIX_BITS)
+                cv2.fillPoly(canvas, [fixed[piece.start:piece.stop] for piece in run], colour,
+                             cv2.LINE_AA, FIX_BITS)
     if fall == 0.0:
         if figure.robot:
             _draw_machine(canvas, figure, haze, light)

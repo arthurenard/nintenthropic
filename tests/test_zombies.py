@@ -69,9 +69,8 @@ def painted(walker: Walker, now: float = 0.0) -> np.ndarray:
     of its head white and the rest of it red, without the moon or the eyes."""
     canvas = np.zeros((AREA.bottom + 56, AREA.width, 3), np.uint8)
     figure = walker.figure(VIEW, now)
-    pieces = figure.mesh.pieces
-    _fill(canvas, pieces, _fixed(figure.outline),
-          [(255, 255, 255) if piece.zone == "head" else (0, 0, 255) for piece in pieces])
+    _fill(canvas, figure.groups, _fixed(figure.outline),
+          [(255, 255, 255) if run[0].zone == "head" else (0, 0, 255) for run in figure.groups])
     return canvas
 
 
@@ -166,6 +165,30 @@ def test_the_hitbox_has_no_empty_room_in_it(enemy):
                 if figure.hit_zone(x, y) == "body"]
         empty = sum(far[y, x] > figure.margin + 1.5 for x, y in body)
         assert empty <= 0.02 * len(body), (walker.gait, empty, len(body))
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_parts_filled_together_never_touch(enemy):
+    """A pair of legs or of hands is filled in one call, and outlines filled
+    together cancel where they cross - so the ones put together must never
+    meet, in any pose, staggering or not."""
+    for index, walker in enumerate(spawned(enemy, 24, 2.2)):
+        for step in range(6):
+            walker.phase = step * 1.1 + index * 0.37
+            now = STAGGER - 0.05 if step == 5 else 0.0
+            walker.staggered_until = STAGGER if step == 5 else 0.0
+            figure = walker.figure(VIEW, now)
+            outline = _fixed(figure.outline)
+            for run in figure.groups:
+                if len(run) < 2:
+                    continue
+                masks = []
+                for piece in run:
+                    mask = np.zeros((AREA.bottom + 56, AREA.width), np.uint8)
+                    cv2.fillPoly(mask, [outline[piece.start:piece.stop]], 1, cv2.LINE_8, 4)
+                    masks.append(mask)
+                total = sum(masks)
+                assert total.max() <= 1, (walker.gait, [piece.tone for piece in run])
 
 
 def test_the_moon_rims_only_the_side_it_is_on():
