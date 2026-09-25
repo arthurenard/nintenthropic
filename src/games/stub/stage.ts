@@ -34,9 +34,9 @@ const LAYOUT: [number, number, number][] = [
   [0.12, 0.5, 10],
   [0.5, 0.47, 12],
   [0.88, 0.5, 10],
-  [0.16, 0.76, 4.5],
-  [0.5, 0.78, 4.5],
-  [0.84, 0.76, 4.5],
+  [0.16, 0.72, 4.5],
+  [0.5, 0.73, 4.5],
+  [0.84, 0.72, 4.5],
 ];
 const BOTTLE_RADIUS = 0.1;
 /** A bottle's profile, turned on a lathe: base, body, shoulder, neck, lip. */

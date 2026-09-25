@@ -151,7 +151,8 @@ export class AimCheckView {
     setText("check-ring-text", score === null ? "–" : `${Math.round(score * 100)}`);
     setText("check-status", check.done ? "Ready" : score === null ? "Learning Your Aim" : `Aim ${Math.round(score * 100)}%`);
     $("play-anyway").hidden = !check.canPlayAnyway;
-    $<HTMLButtonElement>("start-over").disabled = check.shots === 0;
+    // Start Over has nothing to undo before the first shot.
+    $("start-over").hidden = check.shots === 0;
   }
 
   private renderTrigger(): void {

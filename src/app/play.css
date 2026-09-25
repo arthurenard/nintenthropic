@@ -281,10 +281,10 @@
   overflow: visible;
 }
 .arc path {
-  stroke: var(--danger);
-  stroke-width: 7;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 6px rgba(255, 69, 58, 0.7));
+  stroke: url(#arc-fade);
+  stroke-width: 4.5;
+  stroke-linecap: butt;
+  filter: drop-shadow(0 0 5px rgba(255, 69, 58, 0.6));
 }
 @keyframes arc {
   0% {
@@ -484,6 +484,11 @@
     0 0 0 2px var(--danger),
     var(--shadow);
 }
+/* The game is over: the camera has nothing more to show. */
+.game[data-phase="over"] .pip {
+  opacity: 0;
+  transition: opacity 250ms var(--ease);
+}
 .pip video {
   display: block;
   width: 100%;
@@ -552,17 +557,29 @@
   dominant-baseline: central;
   font-variant-numeric: tabular-nums;
 }
+/* The words on the left, the hand's state and the choices on the right: one
+   short card at the foot of the view, low enough to keep the targets clear. */
 .check-card {
   position: absolute;
   bottom: var(--hud);
   left: 50%;
   display: grid;
-  gap: 16px;
-  width: min(560px, calc(100% - 2 * var(--pip-w) - 4 * var(--hud)));
-  padding: 20px 20px 16px 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 20px;
+  width: min(600px, calc(100% - 2 * var(--pip-w) - 4 * var(--hud)));
+  padding: 16px 16px 16px 22px;
   border-radius: var(--r-card);
   box-shadow: var(--shadow);
   transform: translateX(-50%);
+}
+.check-side {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+.check-side .trigger {
+  white-space: nowrap;
 }
 .check-words {
   display: grid;
@@ -577,12 +594,9 @@
     transform: translateY(6px);
   }
 }
-.check-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
+.check-actions:empty,
+.check-actions:not(:has(button:not([hidden]))) {
+  display: none;
 }
 .check-actions {
   display: flex;
@@ -747,8 +761,14 @@
     height: 62px;
   }
   .check-card {
+    grid-template-columns: 1fr;
     width: calc(100% - 2 * var(--hud));
     bottom: calc(var(--hud) * 2 + var(--pip-w) * 0.75);
+  }
+  .check-side {
+    grid-auto-flow: column;
+    justify-content: space-between;
+    align-items: center;
   }
   .hint {
     max-width: calc(100% - 2 * var(--hud));
