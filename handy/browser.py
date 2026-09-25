@@ -26,7 +26,7 @@ import numpy as np
 from . import maps, scene, schemes
 from .aiming import Aim, AimController, EyeScope
 from .calibration import Rig, default_rig
-from .shot_calibration import ShotCalibration
+from .shot_calibration import REQUIRED_HITS, ShotCalibration
 from .game import Rect, RoundOptions
 from .models import ensure_model
 from .recognition import Frame, HAND_CONNECTIONS
@@ -152,6 +152,52 @@ def saved_rig(saved):
     return rig
 
 
+
+
+#: Shots the warm-up learns from before it checks the aim.
+LEARNING_SHOTS = 3
+
+
+def setup_words(setup, event):
+    """What the warm-up says now: a short instruction and the line under it.
+
+    Worded here rather than taken from ``ShotCalibration.message``, which the
+    desktop draws in its own voice and layout. ``event`` is what the last shot
+    did (see ``BrowserSession._setup_event``), or None before the first.
+    """
+    left = REQUIRED_HITS - len(setup.hits)
+    if setup.complete:
+        return "Aim set.", "Here we go."
+    if event == "raise":
+        return "Raise your thumb first.", "Then aim, and fold it to fire."
+    if event == "retry":
+        return "Try that one again.", "Point right at the lit target."
+    if event == "undo":
+        return "Shot undone.", "Point at the lit target and fire again."
+    if setup.testing:
+        if event == "hit":
+            return ("Nice." if left > 1 else "One more."), (
+                f"{left} centre hits to go." if left > 1 else "Hit the centre to start."
+            )
+        if event == "miss":
+            return "Just off the centre.", "Try this one again."
+        if event == "adjusted":
+            return "Aim adjusted.", "Five centre hits start your game."
+        if event == "learned":
+            return "Got it.", "Now hit five centres to start your game."
+        if setup.hits:
+            return f"{left} to go.", "Aim for the centre."
+        return "Hit five centres.", "Five centre hits start your game."
+    if event == "relearn":
+        return "Let’s tune your aim.", "Shoot the lit target."
+    shots = len(setup.samples)
+    if shots == 0:
+        return "Shoot the lit target.", "Point at it, then fold your thumb to fire."
+    if shots == 1:
+        return "Now the next one.", "Your crosshair appears after this shot."
+    return "One more.", "Then you’ll check your aim."
+
+
 class BrowserSession:
     def __init__(self, config):
         view = config.get("viewSize")
@@ -159,15 +205,18 @@ class BrowserSession:
         # they differ while a round laid out for the old size plays on.
         self.view = stage_size((WIDTH, HEIGHT) if view is None else view)
         self.width, self.height = self.view
-        self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
+        try:
+            self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
+        except KeyError as error:
+            raise ValueError("Choose one of the four games.") from error
         if self.map.key not in maps.keys():
-            raise ValueError("Choose a game from the arcade")
+            raise ValueError("Choose one of the four games.")
         self.control = config.get("control", "mouse")
         if self.control not in ("mouse", *schemes.keys()):
-            raise ValueError("Choose a control supported by this map")
+            raise ValueError("Play with your hand or your mouse; that control isn’t supported.")
         enemy = config.get("enemy", "zombies")
         if enemy not in ("zombies", "robots"):
-            raise ValueError("Unknown enemy")
+            raise ValueError("Choose zombies or robots.")
         duration = number(config.get("duration", 60), 15, 300)
         self.options = RoundOptions(
             Rect(0, 0, self.width, self.height),
@@ -194,6 +243,11 @@ class BrowserSession:
         self.frame = Frame()
         self.last_camera_at = float("-inf")
         self.id = secrets.token_urlsafe(18)
+        # What the warm-up's last shot did, and a count the page watches to
+        # celebrate each good hit once.
+        self.setup_event = None
+        self.moment = {"kind": None, "id": 0}
+        self.setup_seen = None
         # Models are loaded only after the player explicitly chooses a camera mode.
         if self.control != "mouse":
             self.scheme = schemes.for_map(self.map.key)
@@ -261,11 +315,48 @@ class BrowserSession:
 
     def begin_calibration(self):
         if self.scheme is None:
-            raise ValueError("This control does not need aiming calibration")
-        self.calibration = ShotCalibration(self.scheme, previous=self.rig)
+            raise ValueError("Aim setup is for playing with your hand.")
+        self._setup(ShotCalibration(self.scheme, previous=self.rig))
         self.state = "calibration"
+
+    def _setup(self, calibration, event=None):
+        """Start the warm-up afresh, or say what it did outside a shot."""
+        self.calibration = calibration
         self.saved_rig = None
-        self.notice = self.calibration.message
+        self._note(event)
+
+    def _note(self, event):
+        self.setup_event = event
+        self.setup_seen = self._setup_snapshot()
+        if event:
+            self.moment = {"kind": event, "id": self.moment["id"] + 1}
+        self.notice = " ".join(setup_words(self.calibration, event))
+
+    def _setup_snapshot(self):
+        s = self.calibration
+        return (s.shot_count, len(s.samples), len(s.hits), s.testing, s.message)
+
+    def _setup_event(self, before, after):
+        """What changed in the warm-up between two frames: a shot, and its fate.
+
+        ``hit`` a centre hit; ``learned`` the shot that fitted the aim; ``shot``
+        any other learning shot; ``retry`` a learning shot the fit refused;
+        ``adjusted`` a missed check that refitted the aim, ``miss`` one that
+        could not, ``relearn`` one that sent the warm-up back to learning;
+        ``raise`` a pull with no aim before it. None when nothing happened.
+        """
+        shots, samples, hits, testing, message = before
+        if after[2] > hits:
+            return "hit"
+        if after[0] == shots:
+            return "raise" if after[4] != message else None
+        if testing:
+            if not after[3]:
+                return "relearn"
+            return "adjusted" if after[1] > samples else "miss"
+        if after[1] <= samples:
+            return "retry"
+        return "learned" if after[3] else "shot"
 
     def _play(self):
         """A fresh round of the chosen map, on whatever aim setup settled on."""
@@ -299,15 +390,13 @@ class BrowserSession:
             s = self.calibration
             if name == "undo":
                 s.undo()
-                self.notice = s.message
+                self._note("undo")
             elif name == "reset":
-                self.calibration = ShotCalibration(self.scheme)
-                self.saved_rig = None
-                self.notice = self.calibration.message
+                self._setup(ShotCalibration(self.scheme))
             else:
                 # Five verified hits: the warm-up is over and the game starts.
                 if not s.complete:
-                    raise ValueError("Land five accurate hits first")
+                    raise ValueError("Hit five centres first.")
                 self.rig = s.rig
                 self.saved_rig = {"cameras": [self.rig[0].to_dict()]}
                 self._play()
@@ -340,15 +429,24 @@ class BrowserSession:
             self.state == "paused" and self.resume_state == "calibration"
         ):
             s = self.calibration
+            title, detail = setup_words(s, self.setup_event)
             data["step"] = {
                 "shots": s.shot_count,
                 "learningShots": len(s.samples),
+                "learnTotal": LEARNING_SHOTS,
                 "complete": s.complete,
                 "ready": s.ready,
                 "preview": s.preview,
                 "testing": s.testing,
                 "hits": len(s.hits),
+                "total": REQUIRED_HITS,
                 "armed": s.aim.armed,
+                # Where the lit face hangs, 0..1 of the stage, for the page's
+                # celebration of a hit on it.
+                "target": list(s.target),
+                "title": title,
+                "detail": detail,
+                "moment": self.moment,
             }
         data.update(
             score=self.round.score,
@@ -432,9 +530,16 @@ class BrowserSession:
         if self.state == "calibration":
             s = self.calibration
             s.viewport = (self.width, self.height)
-            if s.update([frame], now):
-                cues.append("hit" if s.last_hit else "shot")
-            self.notice = s.message
+            s.update([frame], now)
+            seen = self._setup_snapshot()
+            if seen != self.setup_seen:
+                event = self._setup_event(self.setup_seen, seen)
+                if event:
+                    self._note(event)
+                    cues.append("shot")
+                    if event == "hit":
+                        cues.append("hit_0")  # the gold rings: a small celebration
+                self.setup_seen = seen
             scene.draw_calibration_range(self.canvas, s, now)
             if s.preview and s.aim.position:
                 scene.draw_crosshair(
@@ -528,7 +633,7 @@ class BrowserServer(ThreadingHTTPServer):
             if self.closed:
                 # Ctrl+C arrived while the models loaded; nothing would close it.
                 session.close()
-                raise ValueError("Handy is shutting down")
+                raise ValueError("Handy is closing.")
             previous, self.session = self.session, session
             self.seen = time.monotonic()
         # Unreachable now, and no frame can be using it: frames hold the lock.
@@ -545,11 +650,12 @@ class BrowserServer(ThreadingHTTPServer):
             if session is None or data.get("id") != session.id:
                 if self.expired is not None and data.get("id") == self.expired:
                     raise ValueError(
-                        "This game closed after a minute with no contact from its tab. "
-                        "Return to the arcade."
+                        "This game closed after a minute away. "
+                        "Choose a game to start again."
                     )
                 raise ValueError(
-                    "This game was closed or opened in another tab. Return to the arcade."
+                    "This game ended, or moved to another tab. "
+                    "Choose a game to play here."
                 )
             self.seen = time.monotonic()
             if path == "/api/frame":
@@ -668,7 +774,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if not self.valid_host() or not self.same_origin():
-            self.respond(403, {"error": "Use the local Handy address"})
+            self.respond(403, {"error": "Open Handy at the address in your terminal."})
             return
         path = urlsplit(self.path).path
         if path == "/api/config":
@@ -718,14 +824,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.token.encode(),
             )
         ):
-            self.respond(403, {"error": "Reload Handy to reconnect"})
+            self.respond(403, {"error": "Reload the page to reconnect."})
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             size = 0
         if not 0 < size <= MAX_BODY:
-            self.respond(400, {"error": "Request is too large or empty"})
+            self.respond(400, {"error": "That request was empty, or too large."})
             return
         # Read outside the try below, as the answer is written outside it: only
         # these two touch the tab's connection, and its failures are handle()'s.
@@ -749,8 +855,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(
                 500,
                 {
-                    "error": "The game could not complete this action. "
-                    "Check the terminal, or return to the arcade and try mouse controls."
+                    "error": "Something went wrong. The terminal running Handy "
+                    "says what; you can also play with your mouse."
                 },
             )
             return

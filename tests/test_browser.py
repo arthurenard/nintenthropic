@@ -228,7 +228,9 @@ def test_undecodable_camera_frame_is_a_bad_request(monkeypatch):
         session.tick({}, camera=CAMERA)
 
 
-def shoot_setup_target(session, stream, point=None):
+def shoot_setup_target(session, stream, point=None, heard=None):
+    """Aim at the lit target and pull; the last frame's answer. ``heard``
+    collects the sound cues of every frame on the way."""
     from dataclasses import replace
 
     target = session.calibration.target
@@ -240,6 +242,8 @@ def shoot_setup_target(session, stream, point=None):
             timestamp_ms=stream.current.timestamp_ms + 1,
         )
         result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+        if heard is not None:
+            heard.extend(result["cues"])
     return result
 
 
@@ -366,8 +370,10 @@ def test_each_frame_is_aimed_from_its_own_reading(monkeypatch):
 
 def test_the_warmup_range_is_not_a_selectable_game():
     assert "range" not in maps.keys()
-    with pytest.raises(ValueError, match="arcade"):
+    with pytest.raises(ValueError, match="four games"):
         BrowserSession({"map": "range"})
+    with pytest.raises(ValueError, match="four games"):
+        BrowserSession({"map": "kart"})
 
 
 def test_bad_shot_can_be_retried_and_reset_discards_unaccepted_fit(monkeypatch):
@@ -375,7 +381,8 @@ def test_bad_shot_can_be_retried_and_reset_discards_unaccepted_fit(monkeypatch):
     shoot_setup_target(session, stream, (0.5, 0.5))
     result = shoot_setup_target(session, stream, (0.5, 0.5))
     assert result["step"]["learningShots"] == 1
-    assert "too similar" in result["notice"]
+    assert result["step"]["title"] == "Try that one again."
+    assert result["step"]["moment"]["kind"] == "retry"
     session.action("reset", {})
     assert not session.calibration.samples
     assert not session.calibration.preview
@@ -644,3 +651,50 @@ def test_pausing_setup_does_not_turn_a_folded_thumb_into_a_shot(monkeypatch):
         )
         session.tick({}, session.last_tick + 0.05, camera=CAMERA)
     assert len(session.calibration.samples) == 1
+# --- what the warm-up says, and what it celebrates ---------------------------------
+
+
+def test_the_warm_up_counts_down_and_celebrates_each_centre_hit(monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    first = session.info()["step"]
+    assert first["title"] == "Shoot the lit target."
+    assert first["learnTotal"] == 3 and first["total"] == 5
+    assert 0 < first["target"][0] < 1 and 0 < first["target"][1] < 1
+    moments = []
+    for _ in range(3):
+        heard = []
+        result = shoot_setup_target(session, stream, heard=heard)
+        moments.append(result["step"]["moment"]["kind"])
+        assert heard == ["shot"]
+    assert moments == ["shot", "shot", "learned"]
+    assert result["step"]["title"] == "Got it."
+    words = []
+    for count in range(1, 5):
+        heard = []
+        step = shoot_setup_target(session, stream, heard=heard)["step"]
+        assert step["moment"]["kind"] == "hit" and step["hits"] == count
+        # Each hit is celebrated once: the gold rings sound with the shot.
+        assert heard == ["shot", "hit_0"]
+        words.append((step["title"], step["detail"]))
+    assert words == [
+        ("Nice.", "4 centre hits to go."),
+        ("Nice.", "3 centre hits to go."),
+        ("Nice.", "2 centre hits to go."),
+        ("One more.", "Hit the centre to start."),
+    ]
+    assert step["moment"]["id"] == 7
+    heard = []
+    assert shoot_setup_target(session, stream, heard=heard)["state"] == "playing"
+    assert heard[:2] == ["shot", "hit_0"]  # then the round's own opening cues
+
+
+def test_undo_says_so_in_the_players_words(monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    shoot_setup_target(session, stream)
+    info = session.action("undo", {})
+    assert info["step"]["title"] == "Shot undone."
+    assert "calibrat" not in info["notice"].lower()
+    info = session.action("reset", {})
+    assert info["step"]["title"] == "Shoot the lit target."
+
+
