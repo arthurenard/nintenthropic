@@ -866,3 +866,18 @@ def test_setup_draws_at_every_size(width, height):
                                     [np.full((720, 1280, 3), 90, np.uint8)] * cameras,
                                     [Frame()] * cameras, lambda *args: None, height / 720)
         assert canvas.any()
+
+
+def test_figures_are_never_clipped_by_their_own_box(monkeypatch):
+    """The figures face is set at twice its size and brought down; its box was
+    measured at the smaller size, which is a few pixels short on a long line,
+    so "2 of 3 shots learned" lost the end of its last letter."""
+    if scene._FIGURES_FACE is None:
+        pytest.skip("no figures face in this OpenCV build")
+    text, size = "2 of 3 shots learned", 24
+    drawn = np.zeros((80, 600, 3), np.uint8)
+    scene.draw_figures(drawn, text, (10, 50), (255, 255, 255), size, 0.0)
+    monkeypatch.setattr(scene, "figures_width", lambda text, size: 1000)
+    roomy = np.zeros((80, 600, 3), np.uint8)
+    scene.draw_figures(roomy, text, (10, 50), (255, 255, 255), size, 0.0)
+    assert np.array_equal(drawn, roomy)

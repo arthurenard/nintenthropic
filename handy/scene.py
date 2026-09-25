@@ -268,7 +268,11 @@ def draw_figures(canvas: np.ndarray, text: str, origin: tuple[int, int],
                     max(1, round(size * bold)), cv2.LINE_AA)
         return
     x, y = origin
-    width = figures_width(text, size)
+    # The box is measured at the size the text is actually set at - twice this
+    # one - and halved: a face's width does not quite scale, and a long line
+    # measured at the smaller size came out a few pixels short, which cut the
+    # last letter off.
+    width = -(-figures_width(text, size * 2) // 2)
     pad = max(2, int(size * bold) + 2)
     x0, y0 = max(0, x - pad), max(0, y - size - pad)
     x1 = min(canvas.shape[1], x + width + pad)
