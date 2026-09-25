@@ -374,8 +374,53 @@ def logo_size(scale: float) -> tuple[int, int]:
             + _px(8, scale), glyph + _px(8, scale))
 
 
-def draw_logo(canvas: np.ndarray, scale: float = 1.0) -> None:
-    """The lockup, bottom right on every screen: glyph, wordmark, accent bar."""
+def draw_logo(canvas: np.ndarray, scale: float = 1.0, alpha: float = 1.0) -> None:
+    """The lockup, bottom right on every screen: glyph, wordmark, accent bar.
+
+    Laid from a sprite built once per size, so it can sit on every frame of a
+    round - and fade, at ``alpha`` - for the price of one small blend.
+    """
+    if alpha <= 0.0:
+        return
+    colour, keep, cover = _logo_sprite(round(scale, 4))
+    height, width = canvas.shape[:2]
+    h, w = cover.shape
+    if h > height or w > width:
+        _draw_logo_lockup(canvas, scale)
+        return
+    region = canvas[height - h:, width - w:]
+    if alpha < 1.0:
+        cover = cover * np.float32(alpha)
+        keep = np.float32(1.0) - cover
+    cv2.blendLinear(region, colour, keep, cover, dst=region)
+
+
+@lru_cache(maxsize=4)
+def _logo_sprite(scale: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The lockup as colour and coverage, for the bottom-right corner.
+
+    Drawn once over black and once over white: where the two agree the mark
+    is solid, and how far they differ is how much of the ground shows
+    through - which recovers the anti-aliased edges exactly.
+    """
+    total_w, total_h = logo_size(scale)
+    w = total_w + _px(24, scale) + 4
+    h = total_h + _px(20, scale) + _px(12, scale)
+    dark = np.zeros((h, w, 3), np.uint8)
+    light = np.full((h, w, 3), 255, np.uint8)
+    _draw_logo_lockup(dark, scale)
+    _draw_logo_lockup(light, scale)
+    showing = (light.astype(np.float32) - dark.astype(np.float32)).max(axis=2) / 255.0
+    cover = np.clip(1.0 - showing, 0.0, 1.0).astype(np.float32)
+    colour = np.clip(dark.astype(np.float32) / np.maximum(cover, 1e-3)[:, :, None], 0, 255)
+    colour = colour.astype(np.uint8)
+    keep = np.float32(1.0) - cover
+    for array in (colour, keep, cover):
+        array.flags.writeable = False  # shared by every frame from here on
+    return colour, keep, cover
+
+
+def _draw_logo_lockup(canvas: np.ndarray, scale: float = 1.0) -> None:
     height, width = canvas.shape[:2]
     glyph_h = _px(20, scale)
     image, alpha = _logo_glyph(glyph_h)
@@ -942,9 +987,31 @@ def fit_hints(segments: Sequence[Sequence[str]], width: int,
     return line()
 
 
-def draw_footer(canvas: np.ndarray, text: str, scale: float = 1.0) -> None:
-    draw_text(canvas, text, (round(24 * scale), canvas.shape[0] - round(22 * scale)),
-              MUTED, scale=FOOTER_SCALE * scale)
+def draw_footer(canvas: np.ndarray, text: str, scale: float = 1.0,
+                alpha: float = 1.0) -> None:
+    """The hint line along the bottom, faded to ``alpha`` (nothing drawn at 0).
+
+    A fading line is drawn onto a copy of its own strip and blended back, so a
+    hint on its way out costs a patch the size of the text, not a frame.
+    """
+    if not text or alpha <= 0.0:
+        return
+    origin = (round(24 * scale), canvas.shape[0] - round(22 * scale))
+    text_scale = FOOTER_SCALE * scale
+    if alpha >= 1.0:
+        draw_text(canvas, text, origin, MUTED, scale=text_scale)
+        return
+    height, width = canvas.shape[:2]
+    pad = _px(12, scale)
+    x0, y0 = max(origin[0] - pad, 0), max(origin[1] - _px(22, scale), 0)
+    x1 = min(origin[0] + text_width(text, text_scale) + pad, width)
+    y1 = min(origin[1] + _px(10, scale), height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    region = canvas[y0:y1, x0:x1]
+    patch = region.copy()
+    draw_text(patch, text, (origin[0] - x0, origin[1] - y0), MUTED, scale=text_scale)
+    cv2.addWeighted(patch, alpha, region, 1.0 - alpha, 0.0, dst=region)
 
 
 def draw_chrome_panel(canvas: np.ndarray, rect: Rect, scale: float = 1.0,

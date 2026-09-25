@@ -7,6 +7,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path
 
 import cv2
@@ -230,6 +231,7 @@ class View:
     scheme: object | None = None
     fire_at: float = 0.65  # the trigger threshold, for the crosshair's ring
     scoped: bool = False  # looking down a scope: the map draws the reticle
+    hints: float = 1.0  # how much of the hint line shows: 1 in full, 0 not at all
 
 
 def aim_pixels(aim: Aim, layout: Layout) -> tuple[int, int] | None:
@@ -276,6 +278,18 @@ def hud_panels(view: View, layout: Layout) -> tuple[Rect | None, Rect | None]:
     return score, Rect(x, y, width, height)
 
 
+@lru_cache(maxsize=16)
+def hint_line(scheme_hint: str, map_hint: str, width: int, scale: float) -> str:
+    """The footer's hints for this scheme and map, fitted to ``width``.
+
+    Cached: fitting measures every token against the width, and the answer
+    only changes with the map, the scheme or the window.
+    """
+    segments = [[scheme_hint] if scheme_hint else [], [map_hint] if map_hint else [],
+                list(CONTROL_KEYS)]
+    return scene.fit_hints(segments, width, scale)
+
+
 def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     """Compose one frame, bottom layer first. The map owns everything below the HUD."""
     view.map.draw_world(canvas, view.round, view.now)
@@ -310,11 +324,16 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     for button in (layout.quit_button, layout.maps_button):
         scene.draw_button(canvas, button, highlighted=(
             crosshair is not None and button.contains(*crosshair)), scale=scale)
-    segments = [[view.scheme.footer] if view.scheme and view.scheme.footer else [],
-                [view.map.footer] if view.map.footer else [],
-                list(CONTROL_KEYS)]
-    scene.draw_footer(canvas, scene.fit_hints(segments, layout.window.width, scale),
-                      scale)
+    # The foot of the frame: the hints while they are up, and as they fade,
+    # the mark in the corner that every other screen carries - so a
+    # screenshot of a round says whose it is. The two take turns rather than
+    # share the line: the hints need all of its width.
+    if view.hints > 0.0:
+        scheme_hint = view.scheme.footer if view.scheme and view.scheme.footer else ""
+        scene.draw_footer(canvas, hint_line(scheme_hint, view.map.footer,
+                                            layout.window.width, scale),
+                          scale, alpha=view.hints)
+    scene.draw_logo(canvas, scale, alpha=1.0 - view.hints)
 
     describe = getattr(view.scheme, "describe_subject", None) if view.scheme else None
     if view.debug and describe is not None and view.hands and view.hands[0].subjects:
@@ -658,6 +677,36 @@ class FreshAim:
         return self._aim
 
 
+class Hints:
+    """When the hint line is on screen during a round.
+
+    It used to run along the foot of every frame of every round - a line of
+    keys over the very picture the player is looking at. Now it opens the
+    round, fades, and comes back only when it might help: a key the round does
+    not know, or the hand gone from view.
+    """
+
+    #: Seconds of hints at the start of a round, before they fade.
+    OPENING = 6.0
+    #: After a key that does nothing, long enough to read the keys that do.
+    NUDGE = 4.0
+    #: After the hand comes back into view, a moment before they go again.
+    LINGER = 1.5
+    #: The fade itself.
+    FADE = 0.8
+
+    def __init__(self, now: float) -> None:
+        self._until = now + self.OPENING
+
+    def show(self, now: float, seconds: float) -> None:
+        """Keep the hints up for at least ``seconds`` more."""
+        self._until = max(self._until, now + seconds)
+
+    def alpha(self, now: float) -> float:
+        """How much of the line to draw: 1 while up, easing to 0 over the fade."""
+        return min(max((self._until - now) / self.FADE, 0.0), 1.0)
+
+
 def crosshair_for(aim: Aim, layout: Layout, recoil: Recoil,
                   now: float) -> tuple[int, int] | None:
     """The aim point after the gun has kicked, clamped to the window."""
@@ -698,12 +747,15 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
     # out of the player's sixty seconds. Once warm, this is a millisecond.
     chosen.draw_world(canvas, round_, time.monotonic())
     trigger = FreshAim(controller, rig)
+    hints = Hints(time.monotonic())
 
     while True:
         images, hands = eyes.read()
         now = time.monotonic()
         aim = trigger.update(hands, now)
         crosshair = crosshair_for(aim, layout, recoil, now)
+        if not aim.tracking:
+            hints.show(now, Hints.LINGER)  # no hand: say again how to play
 
         # Looking down the scope: the eye decides, the map moves its view to
         # follow the hand, and the shot lands where the reticle is fixed.
@@ -754,7 +806,8 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
                             remaining=round_.remaining(now),
                             camera_states=camera_states(rig, hands),
                             scheme=scheme, scoped=scoped,
-                            fire_at=trigger_thresholds(settings, scheme)[0]), layout)
+                            fire_at=trigger_thresholds(settings, scheme)[0],
+                            hints=hints.alpha(now)), layout)
         cv2.imshow(WINDOW_TITLE, canvas)
 
         if round_.is_over(now):
@@ -773,6 +826,8 @@ def play(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,
             return round_, "enemy"
         elif key == ord("s"):
             take_screenshot(canvas, settings, layout.scale)
+        elif key != 255:
+            hints.show(now, Hints.NUDGE)  # a key that does nothing: show the ones that do
 
 
 def choose_map(eyes: Eyes, canvas: np.ndarray, settings: Settings, layout: Layout,

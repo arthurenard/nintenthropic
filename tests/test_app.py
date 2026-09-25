@@ -2197,3 +2197,63 @@ def test_overwatch_ridge_gets_no_second_panel_over_its_own(layout):
 
     view = chrome_view(maps.SNIPER, layout)
     assert app.hud_panels(view, layout) == (None, None)
+
+
+def test_the_hints_open_the_round_then_fade():
+    from handy.app import Hints
+
+    hints = Hints(100.0)
+    assert hints.alpha(100.0) == 1.0
+    assert hints.alpha(100.0 + Hints.OPENING - Hints.FADE - 0.01) == 1.0
+    assert 0.0 < hints.alpha(100.0 + Hints.OPENING - Hints.FADE / 2) < 1.0
+    assert hints.alpha(100.0 + Hints.OPENING) == 0.0
+    hints.show(200.0, Hints.NUDGE)  # a key that does nothing brings them back
+    assert hints.alpha(200.0) == 1.0 and hints.alpha(200.0 + Hints.NUDGE) == 0.0
+    hints.show(300.0, Hints.LINGER)
+    hints.show(300.0, 0.1)  # a shorter call never cuts a longer one short
+    assert hints.alpha(300.0 + Hints.LINGER - Hints.FADE - 0.01) == 1.0
+
+
+def test_a_faded_hint_line_leaves_the_foot_of_the_frame_to_the_logo(layout):
+    """The keys ran along the foot of every frame of every round."""
+    from dataclasses import replace
+
+    from handy import scene
+
+    view = chrome_view(maps.WESTERN, layout, scheme=None)
+    shown, faded = (np.zeros((HEIGHT, WIDTH, 3), np.uint8) for _ in range(2))
+    render(shown, replace(view, hints=1.0), layout)
+    render(faded, replace(view, hints=0.0), layout)
+    logo_w = scene.logo_size(layout.scale)[0]
+    left = slice(20, WIDTH // 2)
+    band = slice(HEIGHT - 40, HEIGHT - 8)
+    assert not np.array_equal(shown[band, left], faded[band, left])
+    corner = faded[HEIGHT - 60:, WIDTH - logo_w - 40:]
+    assert np.any(np.all(corner == scene.ACCENT, axis=-1)), "the mark, once they fade"
+
+
+def test_the_play_loop_brings_the_hints_back_for_a_key_it_does_not_know(monkeypatch):
+    import cv2
+
+    from handy import app, schemes
+    from handy.calibration import default_rig
+
+    monkeypatch.setattr(cv2, "imshow", lambda *args: None)
+    monkeypatch.setattr(cv2, "setMouseCallback", lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    clock = iter(range(100, 10_000, 3))  # three seconds a frame: past the opening fast
+    monkeypatch.setattr(app.time, "monotonic", lambda: float(next(clock)))
+    monkeypatch.setattr(app.AimController, "update",
+                        lambda self, views, now: Aim(position=(0.5, 0.5)))
+    shown = []
+    monkeypatch.setattr(app, "render", lambda canvas, view, layout: shown.append(view.hints))
+    key_sequence(monkeypatch, [NOTHING, NOTHING, NOTHING, ord("x"), NOTHING, ord("q")])
+
+    app.play(OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
+             Settings(duration=None, recoil=0.0), layout_for(WIDTH, HEIGHT),
+             app.make_controller(Settings(), schemes.PISTOL),
+             default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE, schemes.PISTOL)
+
+    assert shown[0] == 1.0, "the round opens with them"
+    assert shown[3] == 0.0, "then they fade"
+    assert shown[4] == 1.0, "and an unknown key brings them back"
