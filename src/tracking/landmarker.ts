@@ -6,18 +6,10 @@
  */
 import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
 import { fetchBytes, siteUrl } from "../engine/fetch";
+import { ModelError } from "./errors";
+import { MODEL_BYTES, WASM_BYTES } from "./sizes";
 
-/** Rough sizes, so the loading bar can weigh the parts before they report. */
-export const WASM_BYTES = 11.8e6;
-export const MODEL_BYTES = 7.8e6;
-
-export class ModelError extends Error {
-  constructor(cause?: unknown) {
-    super("the hand model did not load");
-    this.name = "ModelError";
-    this.cause = cause;
-  }
-}
+export { ModelError };
 
 export interface LoadedLandmarker {
   landmarker: HandLandmarker;

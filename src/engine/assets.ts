@@ -1,14 +1,14 @@
 /**
- * Loads a game's glTF models and textures. Meshes may be Draco-compressed;
- * the decoder is served from draco/ (copied out of three by vite.config.ts)
- * and runs in its own workers.
+ * Loads a game's glTF models and textures. Meshes may be Draco-compressed:
+ * the glTF build of three's decoder (a third smaller than the general one),
+ * whose files Vite serves and emits from three itself, runs in two workers.
  *
  * Downloaded bytes are kept for the life of the page, and every request
  * parses them afresh: a restarted game gets its own objects (a game disposes
  * what it loaded when it ends) without waiting on the network twice.
  */
 import { SRGBColorSpace, TextureLoader, type Texture } from "three";
-import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { DRACOLoader, DRACO_GLTF_CONFIG } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { AssetLoader, LoadedAsset } from "./types";
 import { fetchBytes, siteUrl } from "./fetch";
@@ -20,7 +20,7 @@ export class Assets implements AssetLoader {
   private readonly draco: DRACOLoader;
 
   constructor() {
-    this.draco = new DRACOLoader().setDecoderPath(siteUrl("draco/")).setWorkerLimit(2);
+    this.draco = new DRACOLoader().setDecoderPath(DRACO_GLTF_CONFIG).setWorkerLimit(2);
     this.gltfLoader = new GLTFLoader().setDRACOLoader(this.draco);
   }
 

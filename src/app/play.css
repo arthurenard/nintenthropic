@@ -1,0 +1,807 @@
+/* The play screen: the world full-bleed, chrome in the corners (DESIGN.md,
+   Layout). Nothing here animates longer than half a second in play. */
+
+.stage {
+  --hud: clamp(16px, 2.2vw, 32px);
+  --pip-w: clamp(120px, 12vw, 176px);
+  --dock: 96px; /* the cylinder's corner */
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.game[data-phase="check"] .stage {
+  --pip-w: clamp(176px, 21vw, 320px);
+}
+.world,
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.world {
+  opacity: 0;
+  transition: opacity 450ms var(--ease);
+}
+.game[data-ready="true"] .world {
+  opacity: 1;
+}
+.overlay {
+  pointer-events: none;
+}
+/* The page draws the crosshair, so the system pointer steps aside. */
+.game[data-input="mouse"] .stage {
+  cursor: none;
+}
+.play-only,
+.check-only {
+  transition:
+    opacity 250ms var(--ease),
+    transform 450ms var(--spring);
+}
+.game:not([data-phase="play"]) .play-only,
+.game:not([data-phase="check"]) .check-only,
+.game[data-ready="false"] .hud-pause {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+/* --- the score panel ------------------------------------------------------------ */
+
+.hud-score {
+  position: absolute;
+  top: var(--hud);
+  left: var(--hud);
+  min-width: 168px;
+  padding: 10px 16px 12px;
+  border-radius: var(--r-small);
+  pointer-events: none;
+}
+.score {
+  font-size: 34px;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.score span {
+  display: inline-block;
+  transform-origin: left center;
+}
+.score span.pop {
+  animation: pop 120ms var(--ease);
+}
+@keyframes pop {
+  from {
+    transform: scale(1.12);
+  }
+}
+.readouts {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 16px;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.38;
+  font-variant-numeric: tabular-nums;
+}
+.readouts:empty {
+  display: none;
+}
+.readouts dt {
+  color: var(--label-2);
+}
+.readouts dd {
+  justify-self: end;
+  font-weight: 600;
+}
+.readouts .warning {
+  color: var(--warning);
+}
+.readouts .danger {
+  color: var(--danger);
+}
+.readouts .meter {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 4px;
+  margin: 2px 0 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+.readouts .meter span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--label);
+  transform-origin: left;
+  transition: transform 250ms var(--ease);
+}
+.readouts .meter.warning span {
+  background: var(--warning);
+}
+.readouts .meter.danger span {
+  background: var(--danger);
+}
+.readouts .meter.signed span {
+  position: absolute;
+  top: 0;
+  transition:
+    left 250ms var(--ease),
+    width 250ms var(--ease);
+}
+.readouts .meter.signed::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--label-2);
+}
+.readouts .meter i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(28, 28, 30, 0.9);
+}
+
+/* --- pause ----------------------------------------------------------------------- */
+
+.hud-pause {
+  position: absolute;
+  top: var(--hud);
+  right: var(--hud);
+  width: 48px;
+  height: 48px;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  border: 1px solid var(--hairline);
+}
+.hud-pause:hover {
+  background: rgba(58, 58, 60, 0.8);
+}
+
+/* --- the revolver's cylinder ------------------------------------------------------ */
+
+.cylinder {
+  position: absolute;
+  right: var(--hud);
+  bottom: var(--hud);
+  display: grid;
+  place-items: center;
+  width: var(--dock);
+  height: var(--dock);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.cylinder svg {
+  width: 76px;
+  height: 76px;
+  stroke: none;
+  overflow: visible;
+}
+.cylinder .drum {
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+  transition: transform 120ms var(--ease);
+}
+.cylinder .frame {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.5;
+}
+.cylinder .chamber {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.38);
+  stroke-width: 1.5;
+  transition:
+    fill 120ms var(--ease),
+    stroke 120ms var(--ease);
+}
+.cylinder .chamber.loaded {
+  fill: #fff;
+  stroke: #fff;
+}
+.cylinder.golden .chamber.loaded {
+  fill: var(--gold);
+  stroke: var(--gold);
+}
+.cylinder.golden .frame {
+  stroke: rgba(255, 214, 10, 0.5);
+}
+.cylinder .axle {
+  fill: rgba(255, 255, 255, 0.5);
+}
+.cylinder.empty .frame {
+  stroke: var(--danger);
+}
+.cylinder.reloading .drum {
+  animation: spin 900ms var(--spring);
+}
+@keyframes spin {
+  from {
+    transform: rotate(-720deg);
+  }
+}
+
+/* --- being hit --------------------------------------------------------------------- */
+
+/* Red creeps in from the screen's edges in proportion to how hurt the player
+   is, and recedes as they recover. */
+.hurt-edge {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 75% 70% at 50% 50%,
+    transparent 45%,
+    rgba(160, 10, 0, 0.35) 72%,
+    rgba(190, 12, 0, 0.78) 100%
+  );
+  transition: opacity 250ms var(--ease);
+}
+.arcs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.arc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(56vw, 56vh);
+  height: min(56vw, 56vh);
+  margin: calc(min(56vw, 56vh) / -2) 0 0 calc(min(56vw, 56vh) / -2);
+  animation: arc 1400ms var(--ease) forwards;
+}
+.arc svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.arc path {
+  stroke: var(--danger);
+  stroke-width: 7;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(255, 69, 58, 0.7));
+}
+@keyframes arc {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- hits, popups ----------------------------------------------------------------------- */
+
+.marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hit-marker {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  color: #fff;
+  animation:
+    marker-pop 120ms var(--ease),
+    fade-out 250ms var(--ease) 200ms forwards;
+}
+.hit-marker svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 3;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+.hit-marker.kill svg {
+  stroke-width: 3.6;
+}
+.hit-marker.headshot {
+  color: var(--gold);
+}
+@keyframes marker-pop {
+  from {
+    transform: scale(1.25);
+  }
+}
+.popup {
+  position: absolute;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  transform: translate(-50%, -50%);
+  animation: popup 600ms var(--ease) forwards;
+  font-variant-numeric: tabular-nums;
+}
+.popup.gold {
+  color: var(--gold);
+}
+.popup.danger {
+  color: var(--danger);
+}
+@keyframes popup {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%);
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -140%);
+  }
+}
+
+/* --- a wave's title card --------------------------------------------------------------------- */
+
+.banner {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 240px;
+  margin: 0;
+  padding: 16px 32px 18px;
+  border-radius: var(--r-card);
+  text-align: center;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation:
+    banner-in 450ms var(--spring) both,
+    fade-out 250ms var(--ease) 2.2s forwards;
+}
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -16px) scale(0.96);
+  }
+}
+
+/* --- hints and secrets ------------------------------------------------------------------------ */
+
+.hint {
+  position: absolute;
+  bottom: var(--hud);
+  left: 50%;
+  max-width: min(560px, calc(100% - 2 * var(--pip-w) - 4 * var(--hud)));
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition:
+    opacity 250ms var(--ease),
+    transform 250ms var(--ease);
+}
+.hint.gone {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+}
+.secret {
+  position: absolute;
+  top: var(--hud);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 20px 10px 12px;
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation:
+    secret-in 450ms var(--spring) both,
+    fade-out 250ms var(--ease) 3.2s forwards;
+}
+.secret .star {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 214, 10, 0.16);
+  color: var(--gold);
+}
+.secret .star svg {
+  width: 18px;
+  height: 18px;
+}
+.secret-text {
+  display: grid;
+}
+@keyframes secret-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+}
+
+/* --- the camera, picture-in-picture ------------------------------------------------------------- */
+
+.pip {
+  position: absolute;
+  left: var(--hud);
+  bottom: var(--hud);
+  width: var(--pip-w);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--r-small);
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    var(--shadow);
+  pointer-events: none;
+  transition:
+    width 450ms var(--spring),
+    box-shadow 250ms var(--ease);
+}
+.pip.lost {
+  box-shadow:
+    0 0 0 2px var(--danger),
+    var(--shadow);
+}
+.pip video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.pip canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- the aim check ----------------------------------------------------------------------------------- */
+
+.check-meter {
+  position: absolute;
+  top: var(--hud);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 22px 8px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.check-meter-text {
+  display: grid;
+  line-height: 1.2;
+}
+.ring {
+  display: block;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  overflow: visible;
+}
+.ring .track {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 4;
+}
+.ring .fill {
+  stroke: #fff;
+  stroke-width: 4;
+  transition:
+    stroke-dashoffset 450ms var(--spring),
+    stroke 250ms var(--ease);
+}
+.ring.ready .fill {
+  stroke: var(--tint);
+}
+.ring .goal {
+  stroke: var(--tint);
+  stroke-width: 2;
+}
+.ring text {
+  fill: #fff;
+  stroke: none;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-variant-numeric: tabular-nums;
+}
+.check-card {
+  position: absolute;
+  bottom: var(--hud);
+  left: 50%;
+  display: grid;
+  gap: 16px;
+  width: min(560px, calc(100% - 2 * var(--pip-w) - 4 * var(--hud)));
+  padding: 20px 20px 16px 24px;
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+}
+.check-words {
+  display: grid;
+  gap: 4px;
+}
+.check-words.fresh {
+  animation: words-in 450ms var(--spring);
+}
+@keyframes words-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.check-actions {
+  display: flex;
+  gap: 8px;
+}
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--label-2);
+}
+.trigger i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--label-3);
+  transition:
+    background-color 120ms var(--ease),
+    box-shadow 120ms var(--ease);
+}
+.trigger[data-state="ready"] {
+  color: var(--label);
+}
+.trigger[data-state="ready"] i {
+  background: var(--tint);
+  box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.22);
+}
+.trigger[data-state="lost"] i {
+  background: var(--danger);
+}
+/* A good shot, celebrated where the target hung. */
+.bursts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.burst {
+  position: absolute;
+  border: 3px solid var(--tint);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+  animation: burst 500ms var(--spring) forwards;
+}
+.burst-check {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--tint);
+  color: #000;
+  transform: translate(-50%, -50%);
+  animation: burst-check 600ms var(--ease) forwards;
+}
+.burst-check svg {
+  width: 60%;
+  height: 60%;
+  stroke-width: 2.8;
+}
+@keyframes burst {
+  15% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.8);
+  }
+}
+@keyframes burst-check {
+  from {
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+/* "Aim 97% — you're ready": the moment the check ends. */
+.ready {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 260px;
+  margin: 0;
+  padding: 28px 40px 26px;
+  border-radius: var(--r-sheet);
+  text-align: center;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation:
+    ready-in 450ms var(--spring) both,
+    ready-out 250ms var(--ease) 1.45s forwards;
+}
+.ready .ring {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 8px;
+}
+.ready .ring .track,
+.ready .ring .fill {
+  stroke-width: 5;
+}
+.ready .ring .fill {
+  animation: ring-close 600ms var(--spring) both;
+}
+.ready .ring .check {
+  stroke: var(--tint);
+  stroke-width: 5;
+  animation: check-draw 350ms var(--ease) 250ms both;
+}
+@keyframes ring-close {
+  from {
+    stroke-dashoffset: var(--from, 20);
+  }
+}
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 40;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ready-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.88);
+  }
+}
+@keyframes ready-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+}
+
+/* --- narrower windows ------------------------------------------------------------------------------------ */
+
+@media (max-width: 760px) {
+  .stage {
+    --pip-w: clamp(96px, 26vw, 140px);
+    --dock: 80px;
+  }
+  .game[data-phase="check"] .stage {
+    --pip-w: clamp(120px, 32vw, 176px);
+  }
+  .cylinder svg {
+    width: 62px;
+    height: 62px;
+  }
+  .check-card {
+    width: calc(100% - 2 * var(--hud));
+    bottom: calc(var(--hud) * 2 + var(--pip-w) * 0.75);
+  }
+  .hint {
+    max-width: calc(100% - 2 * var(--hud));
+    bottom: calc(var(--hud) * 2 + var(--dock));
+  }
+  .hud-score {
+    min-width: 140px;
+  }
+  .score {
+    font-size: 28px;
+  }
+}
+
+/* --- reduced motion: cross-fade instead of move -------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .check-words.fresh,
+  .score span.pop,
+  .burst,
+  .banner,
+  .secret,
+  .ready {
+    animation-name: fade-in !important;
+    animation-timing-function: var(--ease) !important;
+  }
+  .banner {
+    animation:
+      fade-in 250ms var(--ease) both,
+      fade-out 250ms var(--ease) 2.2s forwards !important;
+  }
+  .secret {
+    animation:
+      fade-in 250ms var(--ease) both,
+      fade-out 250ms var(--ease) 3.2s forwards !important;
+  }
+  .ready {
+    animation:
+      fade-in 250ms var(--ease) both,
+      fade-out 250ms var(--ease) 1.45s forwards !important;
+  }
+  .burst-check {
+    animation: fade-out 600ms var(--ease) forwards !important;
+  }
+  .hit-marker {
+    animation: fade-out 250ms var(--ease) 200ms forwards !important;
+  }
+  .popup {
+    animation: popup-fade 600ms var(--ease) forwards !important;
+  }
+  .cylinder.reloading .drum {
+    animation: none !important;
+  }
+  .ready .ring .fill,
+  .ready .ring .check {
+    animation: none !important;
+  }
+}
+@keyframes popup-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  15%,
+  70% {
+    opacity: 1;
+  }
+}

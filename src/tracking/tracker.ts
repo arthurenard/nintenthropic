@@ -18,7 +18,9 @@
 import type { HandLandmarker } from "@mediapipe/tasks-vision";
 import { fetchBytes, siteUrl } from "../engine/fetch";
 import { Samples, type Percentiles } from "../engine/stats";
-import { MODEL_BYTES, ModelError, WASM_BYTES, loadHandLandmarker, type LandmarkerProgress } from "./landmarker";
+import { ModelError } from "./errors";
+import type { LandmarkerProgress } from "./landmarker";
+import { MODEL_BYTES, WASM_BYTES } from "./sizes";
 import type { FromWorker, ToWorker } from "./protocol";
 import type { HandFrame, HandSource, Landmark } from "./types";
 
@@ -304,6 +306,8 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
       console.warn("Hand tracking in a worker is unavailable; tracking on the page.", error);
     }
   }
+  // Only here is MediaPipe needed on the page itself.
+  const { loadHandLandmarker } = await import("./landmarker");
   const { landmarker, delegate } = await loadHandLandmarker(progress, prefer);
   return new PageTracker(landmarker, delegate);
 }

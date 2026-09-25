@@ -1,0 +1,607 @@
+/* The screens: first run, the arcade, and the sheets around a game. */
+
+/* --- first run ------------------------------------------------------------------ */
+
+.welcome {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--margin);
+}
+.welcome-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 640px;
+  text-align: center;
+}
+.welcome-inner .wordmark {
+  margin-bottom: 8px;
+  color: var(--label-2);
+}
+.welcome-inner > .body {
+  max-width: 480px;
+}
+.welcome .button {
+  margin-top: 8px;
+}
+.gesture {
+  width: min(520px, 100%);
+  margin: 16px 0;
+}
+.gesture-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.g-shape {
+  fill: #000;
+  stroke: #fff;
+  stroke-width: 3.2;
+}
+.g-line {
+  stroke: #fff;
+  stroke-width: 3.2;
+}
+.g-arm {
+  stroke: url(#g-sleeve);
+  stroke-width: 3.2;
+}
+.g-ring {
+  stroke: var(--label-3);
+  stroke-width: 3;
+}
+.g-bull {
+  fill: var(--label-3);
+  stroke: none;
+}
+.g-pulse {
+  stroke: var(--tint);
+  stroke-width: 3;
+  opacity: 0;
+}
+.g-thumb,
+.g-recoil,
+.g-flash,
+.g-pulse {
+  transform-box: fill-box;
+}
+.g-thumb {
+  transform-origin: 50% 88%;
+  animation: g-thumb 2.8s var(--ease) infinite;
+}
+.g-thumb-folded {
+  display: none; /* drawn only for the cross-fade of reduced motion */
+}
+.g-recoil {
+  transform-origin: 20% 60%;
+  animation: g-recoil 2.8s var(--ease) infinite;
+}
+.g-flash {
+  transform-origin: 0% 50%;
+  opacity: 0;
+  animation: g-flash 2.8s var(--ease) infinite;
+}
+.g-bull {
+  animation: g-bull 2.8s var(--ease) infinite;
+}
+.g-pulse {
+  transform-origin: 50% 50%;
+  animation: g-pulse 2.8s var(--spring) infinite;
+}
+@keyframes g-thumb {
+  0%,
+  32% {
+    transform: rotate(0deg);
+  }
+  42%,
+  58% {
+    transform: rotate(80deg);
+  }
+  74%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes g-recoil {
+  0%,
+  42% {
+    transform: rotate(0deg);
+  }
+  45% {
+    transform: rotate(-5deg);
+  }
+  54%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes g-flash {
+  0%,
+  42% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  44% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  52%,
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+@keyframes g-bull {
+  0%,
+  44% {
+    fill: var(--label-3);
+  }
+  46%,
+  78% {
+    fill: var(--tint);
+  }
+  90%,
+  100% {
+    fill: var(--label-3);
+  }
+}
+@keyframes g-pulse {
+  0%,
+  44% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  46% {
+    opacity: 1;
+    transform: scale(0.7);
+  }
+  66%,
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+.gesture-steps {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 600;
+}
+.gesture-steps li {
+  color: var(--label-3);
+  animation: 2.8s var(--ease) infinite;
+}
+.step-point {
+  animation-name: step-point !important;
+}
+.step-fold {
+  animation-name: step-fold !important;
+}
+.step-fire {
+  animation-name: step-fire !important;
+}
+@keyframes step-point {
+  0%,
+  30%,
+  86%,
+  100% {
+    color: var(--label);
+  }
+  34%,
+  82% {
+    color: var(--label-3);
+  }
+}
+@keyframes step-fold {
+  0%,
+  32%,
+  46%,
+  100% {
+    color: var(--label-3);
+  }
+  35%,
+  43% {
+    color: var(--label);
+  }
+}
+@keyframes step-fire {
+  0%,
+  43%,
+  80%,
+  100% {
+    color: var(--label-3);
+  }
+  45%,
+  76% {
+    color: var(--tint);
+  }
+}
+
+/* --- the arcade --------------------------------------------------------------------- */
+
+.home {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 var(--margin);
+}
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 40px;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 var(--margin) var(--margin);
+}
+/* The game you can play, large: its art beside its name and the Play button. */
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(340px, 1fr);
+  align-items: center;
+  gap: 48px;
+}
+.feature-art {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-height: calc(100dvh - 360px);
+  min-height: 240px;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    var(--shadow);
+  /* Golden hour on Main Street, until the town's own picture arrives: the
+     game's light, not a picture pretending to be the game. */
+  background:
+    radial-gradient(120% 90% at 62% 108%, rgba(255, 196, 120, 0.95) 0%, rgba(233, 150, 84, 0.55) 34%, transparent 62%),
+    linear-gradient(180deg, #213349 0%, #50506a 46%, #b9795a 78%, #6c4630 100%);
+}
+.feature-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 450ms var(--ease);
+}
+.feature-art img.loaded {
+  opacity: 1;
+}
+.feature-text {
+  /* Above the art's shadow, which a positioned box would otherwise paint
+     over the Play button beside it. */
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  gap: 16px;
+}
+.feature-text .body {
+  max-width: 34em;
+}
+.feature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+.feature-actions .button.primary {
+  min-width: 148px;
+}
+.start-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 8px;
+}
+.control-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.control-label svg {
+  width: 18px;
+  height: 18px;
+}
+/* The rest of the arcade: named, quiet, and honest that it is not here yet. */
+.soon-label {
+  margin-bottom: 16px;
+}
+.soon {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0;
+  list-style: none;
+}
+.soon li {
+  display: grid;
+  gap: 4px;
+  padding: 20px 24px 22px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--hairline);
+}
+.soon .title3 {
+  color: var(--label-2);
+}
+.soon .subhead {
+  color: var(--label-3);
+}
+
+/* --- a game ---------------------------------------------------------------------------- */
+
+body[data-view="game"] {
+  overflow: hidden;
+}
+.game {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  animation: none;
+}
+.game:focus,
+.game:focus-visible {
+  outline: none;
+}
+
+/* --- loading ------------------------------------------------------------------------------- */
+
+.loading {
+  width: min(360px, calc(100vw - 2 * var(--margin)));
+  padding: 24px;
+  text-align: center;
+}
+.loading[open] {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--tint);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 250ms var(--ease);
+}
+
+/* --- the pause sheet --------------------------------------------------------------------------- */
+
+.menu[open] {
+  display: grid;
+  gap: 16px;
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sheet-tools {
+  display: flex;
+  gap: 8px;
+}
+.menu-list {
+  display: grid;
+  gap: 8px;
+}
+.menu-list .button {
+  min-height: 52px;
+  justify-content: flex-start;
+  padding: 0 20px;
+}
+.menu-list .button svg {
+  margin-left: 0;
+  margin-right: 4px;
+}
+.menu > .footnote {
+  text-align: center;
+}
+
+/* --- results -------------------------------------------------------------------------------------- */
+
+.results {
+  width: min(440px, calc(100vw - 2 * var(--margin)));
+  padding: 0;
+}
+.results-art {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 55%, transparent);
+  mask-image: linear-gradient(#000 55%, transparent);
+  background:
+    radial-gradient(120% 90% at 62% 108%, rgba(255, 196, 120, 0.95) 0%, rgba(233, 150, 84, 0.55) 34%, transparent 62%),
+    linear-gradient(180deg, #213349 0%, #50506a 46%, #b9795a 78%, #6c4630 100%);
+}
+.results-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.results-body {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-top: -40px;
+  padding: 0 24px 24px;
+  text-align: center;
+}
+.outcome-won {
+  color: var(--tint);
+}
+.outcome-lost {
+  color: var(--danger);
+}
+.results-score {
+  margin-top: 8px;
+  font-size: 56px;
+  line-height: 1.07;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.new-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+}
+.new-best svg {
+  width: 18px;
+  height: 18px;
+}
+.new-best.pop {
+  animation: best-in 450ms var(--spring) both;
+}
+@keyframes best-in {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+.stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  width: 100%;
+  margin: 16px 0 4px;
+  padding: 16px 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  font-variant-numeric: tabular-nums;
+}
+.stats div {
+  display: grid;
+  gap: 2px;
+}
+.stats div + div {
+  border-left: 1px solid var(--hairline);
+}
+.stats dd {
+  font-size: 17px;
+  font-weight: 600;
+}
+.stats dt {
+  order: 2;
+  font-size: 13px;
+  color: var(--label-2);
+}
+.results-secrets {
+  margin-bottom: 4px;
+}
+.results-actions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.results-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.results-row .button {
+  padding: 0 12px;
+}
+
+/* --- narrower windows ------------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .feature {
+    grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr);
+    gap: 32px;
+  }
+  .feature .large-title {
+    font-size: 44px;
+  }
+}
+@media (max-width: 860px) {
+  .feature {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .feature-art {
+    max-height: none;
+  }
+  .large-title,
+  .feature .large-title {
+    font-size: 40px;
+  }
+  .soon {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .soon li {
+    padding: 16px 20px;
+  }
+}
+
+/* --- reduced motion ------------------------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .new-best.pop {
+    animation-name: fade-in !important;
+  }
+  .g-thumb,
+  .g-recoil,
+  .g-flash,
+  .g-pulse,
+  .g-bull,
+  .gesture-steps li {
+    animation: none !important;
+  }
+  .g-thumb {
+    animation: g-fade 2.8s var(--ease) infinite alternate !important;
+  }
+  .gesture-art .g-thumb-folded {
+    display: inline;
+    animation: g-fade 2.8s var(--ease) infinite alternate-reverse !important;
+  }
+  .gesture-steps li {
+    color: var(--label);
+  }
+}
+@keyframes g-fade {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  60%,
+  100% {
+    opacity: 0;
+  }
+}

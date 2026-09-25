@@ -7,12 +7,14 @@ import { defineConfig, type Plugin } from "vite";
 
 /**
  * Runtime files that come from npm packages but have to be served as plain
- * files: MediaPipe's WebAssembly (the tracker loads it by URL, with its own
- * loader script) and three's Draco decoder (DRACOLoader starts it in a worker
- * from a URL). They are copied from node_modules into public/ whenever Vite
- * starts, so dev and build serve exactly the installed versions and nothing
- * vendored is committed (public/mediapipe and public/draco ignore their
- * contents).
+ * files: MediaPipe's WebAssembly, which the tracker loads by URL with its own
+ * loader script. They are copied from node_modules into public/ whenever Vite
+ * starts, so dev and build serve exactly the installed version and nothing
+ * vendored is committed (public/mediapipe ignores its contents).
+ *
+ * Three's Draco decoder needs no copy: since r186 DRACOLoader names its
+ * decoder files with `new URL(..., import.meta.url)`, which Vite serves from
+ * node_modules in dev and emits, hashed, into the build.
  */
 const VENDOR = [
   {
@@ -29,12 +31,6 @@ const VENDOR = [
       "vision_wasm_nosimd_internal.js",
       "vision_wasm_nosimd_internal.wasm",
     ],
-  },
-  {
-    from: "node_modules/three/examples/jsm/libs/draco/gltf",
-    to: "public/draco",
-    // The glTF-only decoder: a third smaller than the general one.
-    files: ["draco_decoder.js", "draco_decoder.wasm", "draco_wasm_wrapper.js"],
   },
 ];
 

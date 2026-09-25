@@ -6,6 +6,7 @@
  */
 import { SRGBColorSpace, WebGLRenderer } from "three";
 import { Assets } from "./assets";
+import { IDLE_AIM, WebGLUnavailable, type FrameInfo } from "./common";
 import { DynamicResolution } from "./dynamicResolution";
 import { Samples, type Percentiles } from "./stats";
 import { INITIAL_SCALE, gpuName, guessTier } from "./tier";
@@ -17,30 +18,7 @@ export const MAX_DT = 0.1;
 /** Past 2x, extra pixels cost far more than the eye can see. */
 export const MAX_PIXEL_RATIO = 2;
 
-export class WebGLUnavailable extends Error {
-  constructor() {
-    super("WebGL is unavailable");
-    this.name = "WebGLUnavailable";
-  }
-}
-
-/** An aim that does nothing: no hand, no shot. */
-export const IDLE_AIM: Aim = {
-  x: 0.5,
-  y: 0.5,
-  tracking: false,
-  armed: false,
-  fired: false,
-  travel: 0,
-  offscreen: false,
-  capturedAt: 0,
-};
-
-export interface FrameInfo {
-  now: number;
-  dt: number;
-  aim: Aim;
-}
+export { IDLE_AIM, WebGLUnavailable, type FrameInfo };
 
 /** Recent frame timings, for the debug overlay and the performance report. */
 export class FrameStats {
