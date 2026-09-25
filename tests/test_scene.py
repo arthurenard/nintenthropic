@@ -1169,3 +1169,59 @@ def test_a_popup_pops_rises_and_is_gone_in_six_hundred_milliseconds():
     box = scene.draw_popup(canvas, "+30", (200, 150), 0.1)
     changed = np.argwhere((canvas != 128).any(axis=2))
     assert box is not None and changed[:, 0].min() >= box.y and changed[:, 1].min() >= box.x
+
+
+@pytest.mark.parametrize("scale", [0.7, 1.0, 1.3125, 2.0])
+def test_everything_on_the_score_panel_is_set_inside_it(scale, monkeypatch):
+    """Every line on the panel - a big score, a long tally, a map's readouts -
+    stays inside its padding, however the readouts had to wrap."""
+    from handy.game import Readout, Rect, Round, RoundOptions
+
+    round_ = Round(RoundOptions(area=Rect(0, 0, 800, 400)))
+    round_.score, round_.shots, round_.hits = 128_450, 312, 287
+    readouts = (Readout("Hostiles", "12"), Readout("Down", "40"), Readout("Stage", "3"),
+                Readout("Wind", "7.4 m/s", meter=-0.9, signed=True),
+                Readout("Townsfolk", "2", tone="danger"))
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, origin, style, *a, **k: (
+        said.append((text, origin, style)), real(canvas, text, origin, style, *a, **k))[1])
+    canvas = np.zeros((round(720 * scale), round(1280 * scale), 3), np.uint8)
+    room = round(330 * scale)
+    panel = scene.draw_score_panel(canvas, round_, readouts, (round(200 * scale), 20), room,
+                                   scale)
+    assert panel.width <= room
+    pad = scene.PANEL_PAD * scale
+    for text, (x, y), style in said:
+        assert x >= panel.x + pad - 1, text
+        assert x + scene.measure(text, style, scale) <= panel.right - pad + 1, text
+        assert panel.y < y - scene.type_size(style, scale) * scene.CAP_HEIGHT
+        assert y < panel.bottom, text
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_everything_on_the_results_card_is_set_inside_it(width, height, monkeypatch):
+    from handy import maps
+    from handy.game import Summary
+
+    scale = height / 720
+    summary = Summary(score=128_450, shots=312, hits=287, accuracy=287 / 312,
+                      best_streak=104, perfect=96, duration=60, perfect_label="bullseyes",
+                      outcome="PANE HELD", won=True)
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, origin, style, color,
+                        scale_=1.0, align="left", *a, **k: (
+        said.append((text, origin, style, align)),
+        real(canvas, text, origin, style, color, scale_, align, *a, **k))[1])
+    canvas = np.zeros((height, width, 3), np.uint8)
+    card = scene.draw_results(canvas, summary, 90_000, True, scale, maps.ORBIT.title,
+                              maps.ORBIT.draw_emblem)
+    columns = (card.width - 2 * 28 * scale) / 4
+    for text, (x, y), style, align in said:
+        wide = scene.measure(text, style, scale)
+        left = x - (wide / 2 if align == scene.CENTRE else 0)
+        assert card.x < left and left + wide < card.right, text
+        assert card.y < y < card.bottom, text
+        if style in (scene.TITLE_3, scene.FOOTNOTE):  # the stats: inside their column
+            assert wide < columns, text
