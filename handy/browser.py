@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 import webbrowser
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -30,7 +31,7 @@ from .maps import orbit, zombies
 from .maps.archery import RINGS
 from .shot_calibration import REQUIRED_HITS, ShotCalibration
 from .game import Rect, RoundOptions
-from .models import ensure_model
+from .models import cache_dir, ensure_model
 from .recognition import Frame, HAND_CONNECTIONS
 
 WEB_ROOT = Path(__file__).with_name("web")
@@ -154,6 +155,14 @@ def saved_rig(saved):
     return rig
 
 
+def cached(name):
+    """Whether a model bundle is already on disk, as ``ensure_model`` judges it.
+
+    Asked before loading, so the progress a first run shows is shared between
+    the downloads that will actually happen, not the ones that will not.
+    """
+    path = cache_dir() / f"{name}.task"
+    return path.exists() and zipfile.is_zipfile(path)
 
 
 #: Shots the warm-up learns from before it checks the aim.
@@ -316,7 +325,7 @@ class CueRecorder:
 
 
 class BrowserSession:
-    def __init__(self, config):
+    def __init__(self, config, progress=None):
         view = config.get("viewSize")
         # The size the stage last asked for, and the size frames are drawn at:
         # they differ while a round laid out for the old size plays on.
@@ -387,9 +396,7 @@ class BrowserSession:
                     )
                     self.forget_saved = True
             self._controller()
-            self.stream = self.scheme.open_stream(
-                *(ensure_model(m) for m in self.scheme.models)
-            )
+            self.stream = self.scheme.open_stream(*self._models(progress))
             # A returning player whose aim was set up and checked on this camera
             # goes straight into the game when the page asks for it; Adjust Aim
             # is one click away if the camera or the chair has moved since. An
@@ -404,6 +411,29 @@ class BrowserSession:
                 self._play()
             else:
                 self.begin_calibration()
+
+    def _models(self, progress):
+        """Each model the scheme needs, downloading what is missing.
+
+        ``progress`` hears how far the downloads have got, 0 to 1 across all
+        of them, or None while that cannot be told.
+        """
+        missing = [name for name in self.scheme.models if not cached(name)]
+        paths = []
+        for name in self.scheme.models:
+            report = None
+            if progress is not None and name in missing:
+                done = missing.index(name)
+
+                def report(received, total, done=done):
+                    progress(
+                        (done + min(received / total, 1.0)) / len(missing)
+                        if total
+                        else None
+                    )
+
+            paths.append(ensure_model(name, progress=report))
+        return paths
 
     def close(self):
         if self.stream:
@@ -779,14 +809,33 @@ class BrowserServer(ThreadingHTTPServer):
         self.idle_timeout = idle_timeout
         self.seen = 0.0  # when a request last reached the open session
         self.expired = None  # the id of the last session closed for silence
+        # Starts still building, and how far the downloads for the newest have
+        # got (0 to 1, or None while that cannot be told), for /api/progress.
+        self.loading = 0
+        self.fraction = None
+        self.counting = threading.Lock()  # guards ``loading``, never held long
         super().__init__(address, Handler)
+
+    def progress(self):
+        """How far the game being opened has got, for a page waiting on it."""
+        return {"loading": self.loading > 0, "fraction": self.fraction}
+
+    def _progressed(self, fraction):
+        self.fraction = fraction
 
     def start(self, config):
         """Open a new game in place of any other, and describe it."""
         # Built outside the lock: loading the models - on first use, downloading
         # them - takes seconds, and every other request would wait behind it:
         # another tab's frames, a closing tab's stop, and Ctrl+C.
-        session = BrowserSession(config)
+        with self.counting:
+            self.loading += 1
+            self.fraction = None
+        try:
+            session = BrowserSession(config, progress=self._progressed)
+        finally:
+            with self.counting:
+                self.loading -= 1
         with self.lock:
             if self.closed:
                 # Ctrl+C arrived while the models loaded; nothing would close it.
@@ -934,8 +983,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.valid_host() or not self.same_origin():
             self.respond(403, {"error": "Open Handy at the address in your terminal."})
             return
-        path = urlsplit(self.path).path
-        if path == "/api/config":
+        address = urlsplit(self.path)
+        path = address.path
+        if path == "/api/progress":
+            self.respond(200, self.server.progress())
+        elif path == "/api/config":
             self.respond(
                 200,
                 {

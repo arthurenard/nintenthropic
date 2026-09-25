@@ -149,7 +149,7 @@ class FakeStream:
 
 def camera_session(monkeypatch, **config):
     stream = FakeStream()
-    monkeypatch.setattr(browser, "ensure_model", lambda _name: "unused")
+    monkeypatch.setattr(browser, "ensure_model", lambda _name, progress=None: "unused")
     monkeypatch.setattr(
         browser.schemes,
         "for_map",
@@ -416,7 +416,7 @@ def test_hand_input_selects_the_maps_tracker_and_fires(map_key, monkeypatch):
     stream = FakeStream()
     fetched = []
     monkeypatch.setattr(
-        browser, "ensure_model", lambda name: fetched.append(name) or "unused"
+        browser, "ensure_model", lambda name, progress=None: fetched.append(name) or "unused"
     )
     monkeypatch.setattr(
         browser.schemes,
@@ -450,7 +450,7 @@ def test_sniper_eye_closure_scopes_but_never_shoots(monkeypatch):
 
     stream = FakeStream()
     scheme = schemes.MARKSMAN
-    monkeypatch.setattr(browser, "ensure_model", lambda name: "unused")
+    monkeypatch.setattr(browser, "ensure_model", lambda name, progress=None: "unused")
     monkeypatch.setattr(
         browser.schemes,
         "for_map",
@@ -906,3 +906,50 @@ def test_the_results_card_names_the_outcome_and_the_stats(key, lost, outcome):
     assert all(label == label.title() or "’" in label for label in labels)
 
 
+# --- first-run downloads -------------------------------------------------------------
+
+
+def test_downloads_report_progress_across_every_missing_model(monkeypatch):
+    from dataclasses import replace
+    from handy import schemes
+
+    stream = FakeStream()
+    monkeypatch.setattr(
+        browser.schemes,
+        "for_map",
+        lambda key: replace(schemes.MARKSMAN, open_stream=lambda *_args: stream),
+    )
+    monkeypatch.setattr(browser, "cached", lambda name: False)
+
+    def download(name, progress=None):
+        for received in (0, 50, 100):
+            if progress is not None:
+                progress(received, 100)
+        return "unused"
+
+    monkeypatch.setattr(browser, "ensure_model", download)
+    heard = []
+    BrowserSession({"control": "pistol", "map": "sniper"}, progress=heard.append)
+    assert heard == [0.0, 0.25, 0.5, 0.5, 0.75, 1.0]
+
+    # A bundle already on disk is not waited for: the other fills the bar.
+    monkeypatch.setattr(browser, "cached", lambda name: name == "gesture_recognizer")
+    heard.clear()
+    BrowserSession({"control": "pistol", "map": "sniper"}, progress=heard.append)
+    assert heard == [0.0, 0.5, 1.0]
+
+
+def test_a_download_of_unknown_size_reports_no_fraction(monkeypatch):
+    session_models = []
+
+    def download(name, progress=None):
+        session_models.append(name)
+        progress(10, None)
+        return "unused"
+
+    camera_session(monkeypatch)  # the fake scheme and stream
+    monkeypatch.setattr(browser, "cached", lambda name: False)
+    monkeypatch.setattr(browser, "ensure_model", download)
+    heard = []
+    BrowserSession({"control": "pistol"}, progress=heard.append)
+    assert heard == [None] and session_models == ["gesture_recognizer"]

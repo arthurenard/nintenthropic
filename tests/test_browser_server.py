@@ -48,7 +48,7 @@ def streams(monkeypatch):
         opened.append(FakeStream())
         return opened[-1]
 
-    monkeypatch.setattr(browser, "ensure_model", lambda _name: "unused")
+    monkeypatch.setattr(browser, "ensure_model", lambda _name, progress=None: "unused")
     monkeypatch.setattr(
         browser.schemes,
         "for_map",
@@ -257,7 +257,7 @@ def slow_models(monkeypatch):
     """Model loads that block, as a first-run download does, until released."""
     loading, release = threading.Event(), threading.Event()
 
-    def download(_name):
+    def download(_name, progress=None):
         loading.set()
         assert release.wait(10)
         return "unused"
@@ -449,7 +449,7 @@ def test_a_short_window_does_not_end_the_game(server):
 def test_a_failed_model_download_is_reported_not_mistaken_for_a_closed_tab(
     server, monkeypatch, capsys, failure
 ):
-    def download(_name):
+    def download(_name, progress=None):
         raise failure("the model server stopped answering")
 
     monkeypatch.setattr(browser, "ensure_model", download)
@@ -537,5 +537,39 @@ def test_a_returning_player_starts_straight_into_the_game(server):
         server, "POST", "/api/action", {"id": data["id"], "action": "calibrate"}
     )
     assert status == 200 and data["state"] == "calibration"
+
+
+def test_progress_is_idle_until_a_start_is_loading(server, slow_models):
+    loading, release = slow_models
+    status, data, response = call(server, "GET", "/api/progress")
+    assert status == 200 and data == {"loading": False, "fraction": None}
+    assert response.getheader("Cache-Control") == "no-store"
+    thread, answers = start_in_background(server, control="pistol")
+    assert loading.wait(5)
+    assert call(server, "GET", "/api/progress")[1]["loading"] is True
+    release.set()
+    thread.join(5)
+    assert answers[0][0] == 200
+    assert call(server, "GET", "/api/progress")[1]["loading"] is False
+
+
+def test_a_first_run_download_reports_how_far_it_has_got(server, monkeypatch):
+    halfway, release = threading.Event(), threading.Event()
+
+    def download(_name, progress=None):
+        progress(4_000_000, 8_000_000)
+        halfway.set()
+        assert release.wait(10)
+        progress(8_000_000, 8_000_000)
+        return "unused"
+
+    monkeypatch.setattr(browser, "ensure_model", download)
+    monkeypatch.setattr(browser, "cached", lambda _name: False)
+    thread, answers = start_in_background(server, control="pistol")
+    assert halfway.wait(5)
+    assert call(server, "GET", "/api/progress")[1] == {"loading": True, "fraction": 0.5}
+    release.set()
+    thread.join(5)
+    assert answers[0][0] == 200
 
 
