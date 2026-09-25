@@ -6,7 +6,7 @@
  */
 import { AimCheck, type ShotEvent } from "../calibration/aimCheck";
 import { READY_SCORE } from "../calibration/score";
-import type { CalibrationStage } from "../engine/types";
+import type { AudioBus, CalibrationStage } from "../engine/types";
 import { DEFAULT_MAPPING } from "../input/aim";
 import type { HandInput, HandReading } from "../input/handInput";
 import type { Matrix } from "../input/homography";
@@ -18,6 +18,8 @@ export const READY_MOMENT = 1500;
 
 export interface AimCheckViewOptions {
   stage: CalibrationStage;
+  /** For the check's own sounds: a glassy ting per good shot, a flourish at the end. */
+  audio: AudioBus;
   input: HandInput;
   saved: Matrix | null;
   viewport: () => { width: number; height: number };
@@ -34,6 +36,8 @@ export class AimCheckView {
   private version = 0;
   private reading: HandReading | null = null;
   private finished = false;
+  /** Good shots in a row, for the rising ting. */
+  private run = 0;
   private readonly cleanups: (() => void)[] = [];
 
   constructor(private readonly options: AimCheckViewOptions) {
@@ -103,8 +107,12 @@ export class AimCheckView {
     if (event.outcome === "hit") {
       stage.hit(event.target.id);
       this.celebrate(event.target.x, event.target.y, event.target.radius);
+      // Each good shot in a row rings a whole tone higher, up to an octave.
+      this.run = Math.min(this.run + 1, 7);
+      this.options.audio.play("calib_hit", { rate: 2 ** ((2 * (this.run - 1)) / 12) });
     } else if (event.outcome === "miss" && event.landed) {
       stage.miss(event.target.id, event.landed[0], event.landed[1]);
+      this.run = 0;
     }
     this.render(true);
     if (this.check.done && this.check.mapping) {
@@ -113,6 +121,7 @@ export class AimCheckView {
       $("game").dataset.phase = "ready";
       const score = this.check.measure.score ?? 1;
       this.readyMoment(score);
+      this.options.audio.play("calib_done", { delay: 0.12 });
       const mapping = this.check.mapping;
       window.setTimeout(() => this.options.onDone(mapping, score), this.options.reducedMotion() ? 900 : READY_MOMENT);
     }
@@ -120,6 +129,7 @@ export class AimCheckView {
 
   private startOver(): void {
     if (this.finished) return;
+    this.run = 0;
     this.check = this.fresh(null);
     this.render(true);
     announce("Starting over. Shoot the lit target.");

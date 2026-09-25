@@ -3,13 +3,13 @@
  * question, getting ready with real progress, the aim check in the game's own
  * world, play, pause, results - with calm words for anything that goes wrong.
  */
-import { NullAudioBus, createAudioBus } from "../audio/index";
+import { NullAudioBus, createAudioBus, type AudioEngine } from "../audio/index";
 import { browserStore, loadAim, saveAim, type CameraIdentity } from "../calibration/storage";
 import { DownloadError, Progress, siteUrl } from "../engine/fetch";
 import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
 import type { EngineHost } from "../engine/host";
 import { seededRandom } from "../engine/random";
-import type { Aim, AudioBus, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
+import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
 import { COMING_SOON, GAMES } from "../games/index";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
@@ -88,8 +88,8 @@ export class App {
   private readonly pip = new Pip();
   private readonly settings: Settings;
   private host: EngineHost | null = null;
-  private audio: AudioBus = new NullAudioBus();
-  private audioStarted = false;
+  private audio: AudioEngine = new NullAudioBus(prefs.muted);
+  private audioReady: Promise<void> | null = null;
   private tracker: Tracker | null = null;
   private camera: Camera | null = null;
   private session: Session | null = null;
@@ -167,23 +167,26 @@ export class App {
 
   // --- sound ---------------------------------------------------------------------------
 
-  /** Browsers start audio only after a gesture: the first Play is one. */
-  private async wakeAudio(): Promise<void> {
-    if (this.audioStarted) return;
-    this.audioStarted = true;
-    try {
-      this.audio = await createAudioBus({ muted: this.muted });
-    } catch (error) {
-      console.warn("Sound is unavailable.", error);
-      this.audio = new NullAudioBus();
-    }
-    this.audio.setMuted?.(this.muted);
+  /**
+   * Browsers start audio only after a gesture, so the sound engine is made on
+   * the page's first click or key press (and at the latest on Play). Made
+   * once; the interface's sounds start synthesising at once, off the page.
+   */
+  private wakeAudio(): Promise<void> {
+    this.audioReady ??= createAudioBus({ muted: this.muted }).then(
+      (audio) => {
+        this.audio = audio;
+        audio.setMuted(this.muted);
+      },
+      (error: unknown) => console.warn("Sound is unavailable.", error),
+    );
+    return this.audioReady;
   }
 
   private setMuted(muted: boolean): void {
     this.muted = muted;
     prefs.muted = muted;
-    this.audio.setMuted?.(muted);
+    this.audio.setMuted(muted);
     for (const id of ["mute", "sheet-mute"]) {
       $(id).setAttribute("aria-pressed", String(muted));
       $(id).setAttribute("aria-label", muted ? "Unmute" : "Mute");
@@ -441,6 +444,7 @@ export class App {
       session.phase = "check";
       session.check = new AimCheckView({
         stage: game.calibration,
+        audio: this.audio,
         input: hand,
         saved,
         viewport,
@@ -511,7 +515,6 @@ export class App {
     session.paused = true;
     this.host?.pause();
     this.stopTracking();
-    this.audio.suspend?.(true);
     this.crosshair.clear();
     $("adjust-aim").hidden = session.control !== "hand";
     setText("pause-title", "Paused");
@@ -528,7 +531,6 @@ export class App {
     // Nothing held from before the pause: no stale fold fires on return.
     session.input.reset();
     this.startTracking();
-    this.audio.suspend?.(false);
     this.host?.resume();
     $("game").focus();
   }
@@ -583,7 +585,6 @@ export class App {
       this.host.setGame(null);
     }
     this.stopTracking();
-    this.audio.suspend?.(false);
     this.crosshair.visible = false;
     this.crosshair.clear();
     this.pip.hide();
@@ -599,6 +600,20 @@ export class App {
   // --- the page's own controls -------------------------------------------------------------
 
   private wire(): void {
+    // The first gesture on the page makes the sound engine; every button
+    // after it answers with the interface's soft tap, or a rising pair of
+    // notes for the ones that set something going.
+    for (const type of ["pointerdown", "keydown"] as const) {
+      window.addEventListener(type, () => void this.wakeAudio(), { capture: true, once: true });
+    }
+    document.addEventListener(
+      "click",
+      (event) => {
+        const button = (event.target as Element | null)?.closest?.("button");
+        if (button && !button.disabled) this.audio.play(button.dataset.sound === "confirm" ? "ui_confirm" : "ui_tap");
+      },
+      true,
+    );
     $("get-started").onclick = () => {
       prefs.welcomed = true;
       this.showView("home");
@@ -693,7 +708,7 @@ export class App {
     this.settings.unlocks.add("golden");
     prefs.unlocks = this.settings.unlocks;
     toast("Golden Revolver unlocked for this visit.", { icon: "star", tone: "gold" });
-    this.audio.play("ui.unlock");
+    this.audio.play("ui_confirm");
   }
 
   // --- for the tests and the performance report -----------------------------------------------

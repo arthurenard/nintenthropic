@@ -100,10 +100,6 @@ export interface AudioBus {
   /** Named global treatments, 0..1: "hurt" muffles and adds a heartbeat. */
   setFilter(name: "hurt" | "slowmo", amount: number): void;
   readonly muted: boolean;
-  /** Mute or unmute everything (the page's mute button and M); remembered by the page. Optional: a bus without it is muted by recreating it. */
-  setMuted?(muted: boolean): void;
-  /** Called when the page pauses or hides (true) and resumes (false), so loops and the ambience can fall silent. Optional. */
-  suspend?(suspended: boolean): void;
 }
 
 export interface LoadedAsset {

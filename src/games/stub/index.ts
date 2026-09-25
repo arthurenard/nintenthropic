@@ -25,6 +25,7 @@ import {
   type Scene,
 } from "three";
 import type { Aim, Game, GameContext, GameStats, InputKind } from "../../engine/types";
+import { loadSoundPack } from "../../audio/index";
 import { BottleStage } from "./stage";
 import { bellPost, buildWorld } from "./world";
 
@@ -94,6 +95,7 @@ class Range implements Game {
   private secrets = 0;
   private kick = 0;
   private hinted = { empty: false, reload: false };
+  private stopWind: (() => void) | null = null;
 
   constructor(options: StubOptions) {
     this.id = options.id ?? "range";
@@ -109,13 +111,15 @@ class Range implements Game {
     const bell = bellPost();
     this.bell = bell.bell;
     scene.add(bell.group);
-    this.calibration = new BottleStage(scene, this.camera, ctx.settings.reducedMotion);
+    this.calibration = new BottleStage(scene, this.camera, ctx.settings.reducedMotion, ctx.audio);
     ctx.renderer.toneMapping = ACESFilmicToneMapping;
     ctx.renderer.toneMappingExposure = 1.05;
-    // Nothing to download: compile the materials so the first frame is smooth.
-    onProgress(0.5);
+    // Nothing to download: synthesise the sounds and compile the materials,
+    // so the first frame is smooth and the first shot is heard.
+    await loadSoundPack(ctx.audio, "western", (fraction) => onProgress(0.8 * fraction));
     await ctx.renderer.compileAsync(scene, this.camera);
     onProgress(1);
+    this.stopWind = ctx.audio.loop("wind", { volume: 0.6 });
   }
 
   start(): void {
@@ -132,6 +136,7 @@ class Range implements Game {
     this.toSpawn = 2 + this.wave * 2;
     this.nextSpawn = this.time + 1.6;
     this.ctx.hud.banner(`Wave ${this.wave}`, this.wave === 1 ? "Hit the plates before they fire." : undefined);
+    this.ctx.audio.play("wave_start");
     this.readouts();
   }
 
@@ -173,7 +178,7 @@ class Range implements Game {
     if (aim.offscreen && !this.wasOffscreen && this.ammo < CAPACITY && this.reloading <= 0) {
       this.reloading = RELOAD;
       this.ctx.hud.ammo(this.ammo, CAPACITY, true);
-      this.ctx.audio.play("reload");
+      this.ctx.audio.play("reload_spin");
       this.ctx.hud.hint(null);
     }
     this.wasOffscreen = aim.offscreen;
@@ -202,6 +207,7 @@ class Range implements Game {
       else {
         this.breather = 3;
         this.ctx.hud.popup(0.5, 0.42, "Wave Clear", "gold");
+        this.ctx.audio.play("wave_clear");
       }
     }
 
@@ -209,6 +215,7 @@ class Range implements Game {
     if (this.hurt > 0 && this.time - this.lastHit > REGEN_DELAY) {
       this.hurt = Math.max(0, this.hurt - REGEN_RATE * dt);
       this.ctx.hud.health(this.hurt);
+      this.ctx.audio.setFilter("hurt", this.hurt);
     }
   }
 
@@ -251,15 +258,17 @@ class Range implements Game {
     this.lastHit = this.time;
     this.streak = 0;
     this.readouts();
+    this.ctx.audio.play("bandit_shot", { pan: Math.sin(direction), distance: Math.hypot(plate.x, plate.z) });
     this.ctx.hud.damage(direction, this.hurt);
-    this.ctx.audio.play("hurt");
+    this.ctx.audio.play("player_hurt");
+    this.ctx.audio.setFilter("hurt", this.hurt);
     if (this.hurt >= 0.999) this.finish(false);
   }
 
   private shoot(aim: Aim): void {
     if (this.reloading > 0) return;
     if (this.ammo <= 0) {
-      this.ctx.audio.play("dry_fire");
+      this.ctx.audio.play("revolver_dry");
       if (!this.hinted.empty) {
         this.hinted.empty = true;
         this.ctx.hud.hint(RELOAD_HINT[this.ctx.input ?? "hand"]);
@@ -270,7 +279,7 @@ class Range implements Game {
     this.shots++;
     this.kick = 1;
     this.ctx.hud.ammo(this.ammo, CAPACITY, false);
-    this.ctx.audio.play("shot", { pan: aim.x * 2 - 1 });
+    this.ctx.audio.play("revolver_shot", { pan: (aim.x * 2 - 1) * 0.3 });
     this.ray.setFromCamera(new Vector2(aim.x * 2 - 1, 1 - aim.y * 2), this.camera);
     const live = this.plates.filter((p) => p.state !== "down");
     const hit = this.ray.intersectObjects<Object3D>([...live.map((p) => p.face), this.bell], false)[0];
@@ -284,6 +293,7 @@ class Range implements Game {
       if (!this.secrets) {
         this.secrets = 1;
         this.ctx.hud.secret("The Bell", 1, 1);
+        this.ctx.audio.play("secret_found", { delay: 0.4 });
       }
       return;
     }
@@ -302,7 +312,9 @@ class Range implements Game {
     this.ctx.hud.hitMarker(aim.x, aim.y, bullseye ? "headshot" : "kill");
     const label = quick ? "Quick Draw" : bullseye ? "Bullseye" : "";
     this.ctx.hud.popup(aim.x, aim.y - 0.05, `+${points.toLocaleString("en-US")}${label ? ` ${label}` : ""}`, bullseye || quick ? "gold" : "");
-    this.ctx.audio.play(bullseye ? "headshot_ping" : "ricochet");
+    this.ctx.audio.play("hit_metal", { pan: aim.x * 2 - 1, distance: Math.hypot(plate.x, plate.z) });
+    if (quick) this.ctx.audio.play("quick_draw", { delay: 0.08 });
+    else if (this.streak > 1 && this.streak <= 4) this.ctx.audio.play("streak_up", { delay: 0.08 });
     this.lower(plate);
     this.readouts();
   }
@@ -325,6 +337,9 @@ class Range implements Game {
       secretsTotal: 1,
     };
     this.ctx.hud.hint(null);
+    this.ctx.audio.setFilter("hurt", 0);
+    this.ctx.audio.play("game_over");
+    this.stopWind?.();
     this.ctx.hud.gameOver(stats);
   }
 
@@ -345,7 +360,9 @@ class Range implements Game {
   resume(): void {}
 
   dispose(): void {
-    this.scene.traverse((object) => dispose(object));
+    this.stopWind?.();
+    this.ctx?.audio.setFilter("hurt", 0);
+    this.scene?.traverse((object) => dispose(object));
     this.scene.clear();
   }
 }

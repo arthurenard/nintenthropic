@@ -23,7 +23,7 @@ import {
   type PerspectiveCamera,
   type Scene,
 } from "three";
-import type { CalibrationStage, CalibrationTarget } from "../../engine/types";
+import type { AudioBus, CalibrationStage, CalibrationTarget } from "../../engine/types";
 import { post } from "./world";
 
 /** Where the bottles sit in the view, in viewport fractions, and how far away. */
@@ -101,6 +101,7 @@ export class BottleStage implements CalibrationStage {
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     private readonly reducedMotion: boolean,
+    private readonly audio: AudioBus,
   ) {
     const halo = glowTexture();
     LAYOUT.forEach((place, index) => {
@@ -172,6 +173,8 @@ export class BottleStage implements CalibrationStage {
     bottle.lit = false;
     bottle.group.visible = false;
     const centre = bottle.group.localToWorld(new Vector3(0, 0.28, 0));
+    this.audio.play("revolver_shot", { pan: 0 });
+    this.audio.play("bottle_break", { pan: Math.max(-1, Math.min(1, centre.x / 6)), distance: centre.length() });
     const material = bottle.body.material as MeshStandardMaterial;
     const shards = this.reducedMotion ? 6 : 16;
     for (let i = 0; i < shards; i++) {
@@ -204,6 +207,8 @@ export class BottleStage implements CalibrationStage {
     const direction = this.ray.ray.direction;
     const distance = direction.y < -0.02 ? Math.min(40, this.camera.position.y / -direction.y) : 25;
     const point = this.ray.ray.origin.clone().addScaledVector(direction, distance);
+    this.audio.play("revolver_shot", { pan: 0 });
+    this.audio.play("hit_dirt", { pan: Math.max(-1, Math.min(1, point.x / 8)), distance });
     const puff = new Mesh(
       new CircleGeometry(0.35, 24),
       new MeshBasicMaterial({ color: new Color("#d8b48a"), transparent: true, opacity: 0.8, depthWrite: false }),
