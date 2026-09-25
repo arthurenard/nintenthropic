@@ -1190,8 +1190,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(
                 500,
                 {
-                    "error": "Something went wrong. The terminal running Handy "
-                    "says what; you can also play with your mouse."
+                    "error": "Handy ran into a problem. The terminal it runs in "
+                    "says what happened. You can still play with your mouse."
                 },
             )
             return
