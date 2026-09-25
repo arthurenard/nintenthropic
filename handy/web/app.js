@@ -281,6 +281,7 @@ async function start() {
       $("camera").srcObject = media;
       await $("camera").play();
       if (stale()) return;
+      watchCamera(run);
       media.getVideoTracks()[0].addEventListener("ended", () => {
         if (active) {
           showError(
@@ -563,10 +564,64 @@ function queueAction(action, extra = {}) {
   pendingAction = { action, ...extra };
   keys.clear();
   fire = false;
+  wake?.();
+}
+// Frames go out one at a time, each as soon as the answer to the last is in
+// and there is something new to send: with a camera, the next frame it
+// presents; otherwise the next display frame, about 30 a second.
+const FRAME_INTERVAL = 1000 / 30;
+let cameraFrames = 0, // frames the camera has presented since it opened
+  cameraSeen = -Infinity, // when it last presented one
+  wake = null, // sends the next frame now, if the loop is waiting
+  onCamera = null;
+function watchCamera(run) {
+  const video = $("camera");
+  if (!video.requestVideoFrameCallback) return;
+  const presented = () => {
+    if (generation !== run || !media) return;
+    cameraFrames++;
+    cameraSeen = performance.now();
+    onCamera?.();
+    video.requestVideoFrameCallback(presented);
+  };
+  video.requestVideoFrameCallback(presented);
+}
+function nextTurn(sentAt, sentFrame) {
+  const paused = currentState === "paused";
+  // A camera the browser has not shown a frame from lately - one without
+  // requestVideoFrameCallback, or not on screen - is read with the display.
+  const camera = !paused && performance.now() - cameraSeen < 250;
+  if (pendingAction || (camera && cameraFrames !== sentFrame))
+    return Promise.resolve();
+  return new Promise((resolve) => {
+    let frame = 0;
+    const done = () => {
+      wake = onCamera = null;
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      resolve();
+    };
+    const due = () => {
+      if (performance.now() - sentAt >= FRAME_INTERVAL - 4) done();
+      else frame = requestAnimationFrame(due);
+    };
+    // A paused game only has to keep its session open. The timer also stands
+    // in for a background tab, which runs no display frames, and for a camera
+    // that stalls.
+    const timer = setTimeout(done, paused ? 200 : 250);
+    wake = done;
+    if (camera) onCamera = done;
+    else if (!paused) frame = requestAnimationFrame(due);
+  });
 }
 async function loop(run) {
+  let sentAt = -Infinity,
+    sentFrame = -1;
   while (active && generation === run) {
-    const started = performance.now();
+    await nextTurn(sentAt, sentFrame);
+    if (!active || generation !== run) return;
+    sentAt = performance.now();
+    sentFrame = cameraFrames;
     if (pendingAction) {
       const action = pendingAction;
       pendingAction = null;
@@ -617,9 +672,6 @@ async function loop(run) {
       $("overlay-action").textContent = "Back to arcade";
       return;
     }
-    await new Promise((resolve) =>
-      setTimeout(resolve, Math.max(0, 33 - (performance.now() - started))),
-    );
   }
 }
 async function back() {
@@ -657,7 +709,10 @@ $("game-image").addEventListener("pointermove", point);
 $("game-image").addEventListener("pointerdown", (event) => {
   point(event);
   if (event.button === 2) scoped = true;
-  else if (selectedControl === "mouse") fire = true;
+  else if (selectedControl === "mouse") {
+    fire = true;
+    wake?.(); // the shot goes out now, not with the next display frame
+  }
   event.preventDefault();
 });
 $("stage").addEventListener("contextmenu", (event) => event.preventDefault());
