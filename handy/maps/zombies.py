@@ -2244,19 +2244,27 @@ def draw_robot(canvas: np.ndarray, walker: Walker, view: Perspective,
     draw_walker(canvas, walker, view, now, light)
 
 
+def _settles(walker: Walker | None, at: float) -> float:
+    """When a kill stops changing and can be painted into the road: a pool
+    once it has spread and dried, a body once it has soaked into the tar, a
+    machine's wreck as soon as it lands."""
+    return at + FALL + (0.0 if walker is not None and walker.robot else SETTLED)
+
+
 def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0,
-                after: float = -math.inf) -> None:
+                settled: bool = True) -> None:
     """What is left where they fell: what ran out of them, and the bodies.
 
     A pool spreads fast for a few seconds after the fall, then creeps out
     across the asphalt and dries towards black, and each body soaks slowly to
     the colour of the tar, so the road at the end of the round reads as the
-    battlefield it was. Only the kills since ``after`` are drawn: the game
-    paints older ones, which have stopped changing, into the road itself.
+    battlefield it was. With ``settled`` false, only the ones still changing
+    are drawn: the game paints the rest into the road itself.
     """
-    stains = [stain for stain in round_.stains if stain[3] > after]
+    stains = [stain for stain in round_.stains
+              if settled or _settles(None, stain[3]) > now]
     bodies = [(walker, at, headshot) for walker, at, headshot in round_.fallen
-              if at > after and now - at >= FALL]
+              if now - at >= FALL and (settled or _settles(walker, at) > now)]
     if stains:
         _draw_pools(canvas, stains, now)
     view = round_.view
@@ -2329,7 +2337,8 @@ def _draw_fallen(canvas: np.ndarray, view: Perspective, walker: Walker, at: floa
                    detail=min(_detail(struck.height), 1) if down else -1)
     if figure.height < 5:
         return
-    settle = min(1.0, (age - FALL) / SETTLED) if down else 0.0
+    # A body soaks into the road; a machine's wreck is as it fell.
+    settle = min(1.0, (age - FALL) / SETTLED) if down and not walker.robot else 0.0
     _draw_figure(canvas, figure, view, light, fall=fall, settle=settle,
                  eyes=0.0 if headshot else 1.0 - fall)
     if headshot and down and figure.height > 30 and settle < 1.0:
@@ -2359,20 +2368,18 @@ def _road(round_: ZombieRound, now: float, width: int, height: int) -> np.ndarra
     area = round_.area
     backdrop = _environment((area.x, area.y, area.width, area.height), width, height,
                             round_.options.seed or 0, round_.skyline)
-    settled = now - FALL - SETTLED
     road = round_.road
-    if road is None or road[0] is not backdrop or settled < road[2]:
+    if road is None or road[0] is not backdrop or now < road[2]:
         road = (backdrop, backdrop.copy(), -math.inf)
     _, image, done = road
-    if settled > done:
-        pools = [stain for stain in round_.stains if done < stain[3] <= settled]
+    if now > done:
+        pools = [stain for stain in round_.stains if done < _settles(None, stain[3]) <= now]
         if pools:
             _draw_pools(image, pools, math.inf)
-        bodies = [body for body in round_.fallen
-                  if done < body[1] <= settled]
+        bodies = [body for body in round_.fallen if done < _settles(*body[:2]) <= now]
         for walker, at, headshot in sorted(bodies, key=lambda body: -body[0].distance):
-            _draw_fallen(image, round_.view, walker, at, headshot, at + FALL + SETTLED)
-        road = (backdrop, image, settled)
+            _draw_fallen(image, round_.view, walker, at, headshot, _settles(walker, at))
+        road = (backdrop, image, now)
     round_.road = road
     return image
 
@@ -2597,7 +2604,7 @@ def draw_world(canvas: np.ndarray, round_: ZombieRound, now: float) -> None:
     height, width = canvas.shape[:2]
     canvas[:] = _road(round_, now, width, height)
     robots = round_.options.enemy == "robots"
-    draw_stains(canvas, round_, now, after=now - FALL - SETTLED)
+    draw_stains(canvas, round_, now, settled=False)
     draw_enemy = draw_robot if robots else draw_walker
 
     last_shot = round_.last_shot()

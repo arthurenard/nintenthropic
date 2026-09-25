@@ -733,10 +733,10 @@ def test_the_settled_dead_become_part_of_the_road():
         canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
         draw_world(canvas, round_, later)
         frames.append(canvas)
-    assert round_.road is not None and round_.road[2] >= 2.0, "all three are in the road"
+    assert round_.road is not None and round_.road[2] == later, "all three are in the road"
     assert np.array_equal(frames[0], frames[1]) and np.array_equal(frames[1], frames[2])
     blank = np.zeros_like(frames[0])
-    draw_stains(blank, round_, later, after=later - SETTLED)
+    draw_stains(blank, round_, later, settled=False)
     assert not blank.any(), "and none of them is drawn again each frame"
 
 
@@ -748,6 +748,10 @@ def test_a_machine_goes_over_and_lies_there_without_bleeding():
     draw_stains(canvas, round_, 3.0)
     rows = np.flatnonzero(canvas.max(axis=(1, 2)) > 8)
     assert rows.size and figure.ground_y - rows.min() < figure.height * 0.4, "a wreck, lying"
+    # Nothing about a wreck changes once it is down: it is road from then on.
+    blank = np.zeros_like(canvas)
+    draw_stains(blank, round_, 1.0 + FALL + 0.01, settled=False)
+    assert not blank.any()
 
 
 # --- round four: finish ------------------------------------------------------
