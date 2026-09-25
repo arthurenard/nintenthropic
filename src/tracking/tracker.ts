@@ -86,7 +86,7 @@ abstract class BaseTracker implements Tracker {
   stop(): void {
     this.running = false;
     const video = this.video;
-    if (video && "cancelVideoFrameCallback" in video) video.cancelVideoFrameCallback(this.handle);
+    if (typeof video?.cancelVideoFrameCallback === "function") video.cancelVideoFrameCallback(this.handle);
     cancelAnimationFrame(this.handle);
   }
 
@@ -139,7 +139,7 @@ abstract class BaseTracker implements Tracker {
   private schedule(): void {
     const video = this.video;
     if (!this.running || !video) return;
-    if ("requestVideoFrameCallback" in video) {
+    if (typeof video.requestVideoFrameCallback === "function") {
       this.handle = video.requestVideoFrameCallback((now, metadata) => {
         this.schedule();
         // captureTime is when the camera took the picture, on this page's
