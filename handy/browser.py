@@ -52,9 +52,9 @@ def number(value, low, high):
 
 
 #: The most pixels a frame is drawn with: a 1920 by 1080 frame's worth. Drawing
-#: and encoding grow with the area - at this size about 5 to 7 ms for the
-#: busiest map on an M-series Mac, against 2 to 3 at 960 wide - and a Retina
-#: stage would otherwise ask for four times as many.
+#: and encoding grow with the area - at this size 5 to 8 ms a frame on an
+#: M-series Mac, against about 2 at 960 wide - and a Retina stage would
+#: otherwise ask for four times as many.
 MAX_PIXELS = 1920 * 1080
 #: The crosshair's scale on a 960-wide frame; it grows with the frame.
 CROSSHAIR = 0.75
