@@ -114,6 +114,10 @@ FRAME_LIT = (112, 108, 102)
 FRAME_DARK = (22, 21, 20)
 CRACK = (246, 240, 232)
 CRACK_SOFT = (160, 140, 118)
+#: How long the whole pane lifts when struck, and how far towards white at
+#: first: a jolt you feel, not a haze that greys space out.
+STRIKE_FLASH = 0.25
+STRIKE_LIFT = 0.09
 SUIT = (226, 224, 218)
 SUIT_SHADE = (150, 146, 140)
 SUIT_DARK = (72, 70, 66)
@@ -1962,6 +1966,19 @@ def draw_world(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
         else:
             draw_fragment(canvas, thing, sun)
 
+    # A strike jolts the glass: a brief, faint lift of the pane, under the
+    # crack's own bright flash at the point of impact. It used to be a third
+    # of the way to white across the frame's whole rectangle - corners of the
+    # cabin wall included - for a third of a second, and strikes come often:
+    # space spent much of a round as a grey haze. Laid before the wall goes
+    # back, so the frame keeps its colour.
+    if round_.struck_at is not None:
+        flash = 1.0 - min((now - round_.struck_at) / STRIKE_FLASH, 1.0)
+        if flash > 0:
+            pane = canvas[area.y:area.bottom, area.x:area.right]
+            lift = STRIKE_LIFT * flash
+            cv2.addWeighted(pane, 1 - lift, pane, 0.0, 255.0 * lift, dst=pane)
+
     # Anything that went past the pane's depth is drawn over by the frame:
     # re-lay the wall so big near fragments do not spill into the cabin.
     _relay_wall(canvas, backdrop, area)
@@ -1970,12 +1987,6 @@ def draw_world(canvas: np.ndarray, round_: OrbitRound, now: float) -> None:
     for impact in round_.impacts:
         draw_impact(canvas, area, impact, now, round_.IMPACT_TTL)
 
-    if round_.struck_at is not None:
-        flash = 1.0 - min((now - round_.struck_at) / 0.35, 1.0)
-        if flash > 0:
-            pane = canvas[area.y:area.bottom, area.x:area.right]
-            cv2.addWeighted(pane, 1 - 0.35 * flash, np.full_like(pane, 255), 0.35 * flash,
-                            0.0, dst=pane)
     draw_readout(canvas, round_, now)
     if round_.aim is not None:
         draw_reticle_glow(canvas, round_.aim, round_.options.scale)
