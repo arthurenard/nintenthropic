@@ -7,6 +7,7 @@
 import { SRGBColorSpace, WebGLRenderer } from "three";
 import { Assets } from "./assets";
 import { DynamicResolution } from "./dynamicResolution";
+import { Samples, type Percentiles } from "./stats";
 import { INITIAL_SCALE, gpuName, guessTier } from "./tier";
 import type { Aim, Game, Quality } from "./types";
 
@@ -43,41 +44,23 @@ export interface FrameInfo {
 
 /** Recent frame timings, for the debug overlay and the performance report. */
 export class FrameStats {
-  private readonly intervals: number[] = [];
-  private readonly work: number[] = [];
+  readonly interval = new Samples();
+  readonly work = new Samples();
 
   record(interval: number, work: number): void {
     if (interval > 250) return; // a hitch, not a frame
-    this.intervals.push(interval);
+    this.interval.push(interval);
     this.work.push(work);
-    if (this.intervals.length > 600) {
-      this.intervals.shift();
-      this.work.shift();
-    }
   }
 
   reset(): void {
-    this.intervals.length = 0;
-    this.work.length = 0;
+    this.interval.clear();
+    this.work.clear();
   }
 
   summary(): { frames: number; interval: Percentiles; work: Percentiles } {
-    return { frames: this.intervals.length, interval: percentiles(this.intervals), work: percentiles(this.work) };
+    return { frames: this.interval.count, interval: this.interval.summary(), work: this.work.summary() };
   }
-}
-
-export interface Percentiles {
-  mean: number;
-  p50: number;
-  p95: number;
-  max: number;
-}
-
-export function percentiles(values: readonly number[]): Percentiles {
-  if (!values.length) return { mean: 0, p50: 0, p95: 0, max: 0 };
-  const sorted = [...values].sort((a, b) => a - b);
-  const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
-  return { mean: sorted.reduce((a, b) => a + b, 0) / sorted.length, p50: at(0.5), p95: at(0.95), max: sorted[sorted.length - 1]! };
 }
 
 export class EngineHost {
