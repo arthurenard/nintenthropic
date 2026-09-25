@@ -342,3 +342,31 @@ def test_scope_freshness_accounts_for_separate_model_startup_times():
         _started=10.5, latest=lambda: FaceFrame(faces=(face,), timestamp_ms=500)
     )
     assert stream.latest().subjects[0].face == face
+
+
+#: Words a player never reads: aim setup is "aim setup", the hand is "your hand".
+ENGINEERING = ("calibrat", "rig", "track", "fused", "landmark", "session", "centre hit",
+               "accurate hit", "naturally")
+
+
+def test_setup_talks_to_the_player_in_short_plain_sentences():
+    """Every message a whole run of setup shows: short, second person, and
+    none of the engineering words."""
+    session = ShotCalibration(PISTOL)
+    said = [session.message]
+    now, stamp = 0.0, 0
+    for _ in range(12):
+        now, stamp = feed_shot(session, now, stamp)
+        said.append(session.message)
+        if session.complete:
+            break
+    session.undo()
+    said.append(session.message)
+    said.append(ShotCalibration(PISTOL, previous=session.rig).message)
+    assert session.complete or len(session.hits) >= 4
+    for message in dict.fromkeys(said):
+        assert len(message) <= 64, message
+        assert not any(word in message.lower() for word in ENGINEERING), message
+    assert said[0] == "Point at the lit target. Fold your thumb to fire."
+    assert "There’s your crosshair. One more." in said
+    assert said[-1].startswith("Welcome back")

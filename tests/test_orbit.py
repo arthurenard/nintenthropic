@@ -516,9 +516,10 @@ def test_debris_comes_in_three_sizes():
 
 
 def test_score_popups_stay_on_the_glass_and_clear_of_the_reticle():
+    from handy import scene
     from handy.maps.orbit import _pane_inner, _popup_origin
     inner = _pane_inner(AREA)
-    lines = [("+160", 0.6), ("CLEARED", 0.5)]
+    lines = [("+160", scene.TITLE_2), ("Cleared", scene.SUBHEAD)]
     for corner in ((inner.x + 2, inner.y + 2), (inner.right - 2, inner.y + 2),
                    (inner.x + 2, inner.bottom - 2), (inner.right - 2, inner.bottom - 2),
                    (AREA.centre_x, AREA.y + AREA.height // 2)):
@@ -802,26 +803,34 @@ def test_the_round_remembers_where_you_aim_and_draws_a_glow_under_the_reticle():
     assert (frame[far] == bare[far]).all(), "and nowhere else"
 
 
-def test_score_popups_rise_and_fade_on_one_kind_of_pill():
+def test_score_popups_pop_rise_and_are_gone_in_six_hundred_milliseconds():
+    """A score popup lands big, rises and fades within 0.6 s, with no box
+    behind it: the words in white over a soft shadow, the label under them."""
+    from handy import scene
     from handy.game import Impact
-    from handy.maps.orbit import _popup_origin, draw_impact
+    from handy.maps.orbit import draw_impact
     centre = (AREA.centre_x, AREA.y + AREA.height // 2)
     frames = {}
-    for age in (0.1, 0.5, 1.0):
+    for age in (0.03, 0.2, 0.45, scene.POPUP_LIFE + 0.01):
         frame = canvas()
         draw_impact(frame, AREA, Impact(x=centre[0], y=centre[1], score=73, at=0.0, ring=1,
                                         label="SPLIT"), age, 1.1)
         frames[age] = frame
-    # The label has a pill: a dark box with ink in it, somewhere off the hit.
-    x, y, step = _popup_origin(AREA, centre, 0, [("+73", 0.6), ("SPLIT", 0.5)])
-    box = frames[0.1][y - 20:y + step + 6, x - 9:x + 60]
-    assert (box.max(axis=2) < 40).sum() > 200, "dark pill"
-    assert (box[..., 2] > 180).any(), "yellow ink"
-    # Later it sits higher and fainter.
-    x2, y2, _ = _popup_origin(AREA, centre, int(46 * (1 - 1.0 / 1.1)),
-                              [("+73", 0.6), ("SPLIT", 0.5)])
-    assert y2 < y
-    assert frames[1.0].sum() < frames[0.5].sum() < frames[0.1].sum()
+    away = (slice(None), slice(centre[0] + 60, None)) if centre[0] < AREA.centre_x + 1 \
+        else (slice(None), slice(None, centre[0] - 60))
+
+    def white(frame):
+        region = frame[away]
+        return int((region.min(axis=2) > 230).sum())
+
+    def ink_top(frame):
+        rows = np.nonzero(frame[away].min(axis=2) > 230)[0]
+        return rows.min()
+
+    assert white(frames[0.03]) > 40, "white words"
+    assert ink_top(frames[0.2]) < ink_top(frames[0.03]), "rising"
+    assert white(frames[0.45]) < white(frames[0.2]), "fading"
+    assert white(frames[scene.POPUP_LIFE + 0.01]) == 0, "gone"
 
 
 def test_cracks_are_webs_not_scribbles():
@@ -850,3 +859,31 @@ def test_a_strike_jolts_the_glass_without_greying_out_space():
     space = lift[AREA.y + 60:AREA.y + 120, AREA.x + 200:AREA.x + 400]
     assert 0 < space.mean() < 30, "felt, not a wash"
     assert not lift[AREA.y + 2:AREA.y + 10, AREA.x + 2:AREA.x + 10].any(), "the wall"
+
+
+def test_the_panes_integrity_is_a_meter_beside_the_score():
+    from handy.maps.orbit import ALARM_INTEGRITY
+
+    round_ = make_round()
+    pane, cleared = round_.readouts(0.0)
+    assert (pane.label, pane.value, pane.meter, pane.tone) == ("Pane", "100%", 1.0, "")
+    assert (cleared.label, cleared.value) == ("Cleared", "0")
+    round_.integrity = ALARM_INTEGRITY
+    assert round_.readouts(0.0)[0].tone == "danger", "red once the alarm sounds"
+
+
+def test_a_failed_pane_is_said_in_title_case_on_glass(monkeypatch):
+    from handy import scene
+    from handy.maps.orbit import draw_failure
+
+    round_ = make_round()
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, *args, **kwargs: (
+        said.append(text), real(canvas, text, *args, **kwargs))[1])
+    canvas = np.zeros((720, 1280, 3), np.uint8)
+    draw_failure(canvas, round_)
+    assert not canvas.any(), "nothing while the pane holds"
+    round_.integrity, round_.failed_at = 0, 1.0
+    draw_failure(canvas, round_)
+    assert said == ["Pane Failed"] and canvas.any()

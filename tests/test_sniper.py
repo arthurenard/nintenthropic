@@ -7,8 +7,8 @@ from handy.game import Rect, RoundOptions
 from handy.maps.sniper import (DUST_SECONDS, ELEVATION, MAX_FALLEN, MUZZLE_VELOCITY,
                                SCOPE_CENTRE_Y, SCOPE_RADIUS, SCOPE_ZOOM, SENTRY_POSTS,
                                ZERO_RANGE, Hostile, SniperRound, Valley, View,
-                               bullet_drop, draw_emblem, draw_hud, draw_world,
-                               flight_time, frame_for, hud_origin, mils, wind_drift)
+                               bullet_drop, draw_emblem, draw_world,
+                               flight_time, frame_for, mils, wind_drift)
 
 AREA = Rect(24, 240, 1232, 424)  # a 1280x720 window's play area
 FRAME = frame_for(AREA, 1.0)
@@ -348,7 +348,6 @@ def test_draw_world_runs_at_every_stage(scoped):
         if tick % 21 == 0:
             round_.shoot(*(round_.scoped_shot if scoped else (320, 230)), now)
         draw_world(canvas, round_, now)
-        draw_hud(canvas, round_, (160, 16), now)
     assert canvas.any()
     if scoped:
         assert not canvas[2, 2].any()  # black outside the glass
@@ -374,16 +373,28 @@ def test_the_valley_stops_keeping_bodies_after_a_while():
     assert round_.fallen[-1].dead_at > round_.fallen[0].dead_at, "the oldest go"
 
 
-def test_the_world_lays_a_panel_under_the_score_block():
+def test_the_world_is_all_valley_up_to_the_corner():
+    """The world used to lay a dark panel under the camera and the readout -
+    over the sky, and in the browser, under nothing at all. The readouts are
+    the game's to lay out now, on glass beside the score."""
     round_ = make_round()
     canvas = np.zeros((720, 1280, 3), np.uint8)
     round_.look((0.5, 0.5), False)
     draw_world(canvas, round_, 1.0)
-    x, y = hud_origin(1280, 720, 1.0)
-    assert (x, y) == (320 + 16 + 28, 16)
-    panel = canvas[y + 40, x + 40].astype(int).sum()
-    sky = canvas[y + 40, x + 600].astype(int).sum()
-    assert panel < sky * 0.6
+    corner, sky = canvas[60, 400].astype(int).sum(), canvas[60, 1000].astype(int).sum()
+    assert corner > sky * 0.6
+
+
+def test_the_readouts_name_the_hostiles_the_tally_the_stage_and_the_wind():
+    round_ = make_round()
+    round_.update(0.0)
+    round_.wind = -3.0
+    readouts = {readout.label: readout for readout in round_.readouts(1.0)}
+    assert list(readouts) == ["Hostiles", "Down", "Stage", "Wind"]
+    assert readouts["Hostiles"].value == str(round_.remaining_hostiles)
+    assert readouts["Down"].value == "0" and readouts["Stage"].value == "1"
+    wind = readouts["Wind"]
+    assert wind.value == "3.0 m/s" and wind.signed and wind.meter < 0
 
 
 def test_the_wind_lifts_dust_and_drifts_the_clouds():
@@ -461,27 +472,6 @@ def test_a_kill_leaves_a_collapsed_figure_and_dust():
     assert figure.fallen_for == pytest.approx(2.0)
     alive = Hostile("sentry", 0.0, post=sentry.post).figure(View.wide(*FRAME), 2.5, VALLEY)
     assert figure.height < alive.height * 0.5  # lying down, not standing
-
-
-def test_the_hud_panel_holds_the_camera_and_the_score_block():
-    from handy.maps.sniper import hud_panel
-    x0, y0, x1, y1 = hud_panel(1280, 720, 1.0)
-    margin = 16
-    assert x0 < margin and y0 < margin            # the camera's corner is inside
-    assert y1 > margin + 720 // 4                 # and so is its bottom edge
-    hx, hy = hud_origin(1280, 720, 1.0)
-    assert x0 < hx < x1 and y0 < hy < y1
-
-
-def test_the_panel_is_solid_in_both_modes():
-    for scoped in (False, True):
-        round_ = make_round()
-        canvas = np.zeros((720, 1280, 3), np.uint8)
-        round_.look((0.5, 0.5), scoped)
-        round_.update(0.0)
-        draw_world(canvas, round_, 1.0)
-        x, y = hud_origin(1280, 720, 1.0)
-        assert canvas[y + 40, x + 40].max() < 40
 
 
 def test_the_readout_sits_on_a_dark_band_at_the_foot_of_the_glass():

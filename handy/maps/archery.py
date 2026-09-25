@@ -18,6 +18,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
+from .. import scene
 from ..game import MISS, Hit, Impact, Round
 
 #: Points per ring, from the bullseye outwards.
@@ -33,16 +34,13 @@ RING_COLORS = (
     (238, 238, 238),  # white
 )
 
-HIT = (120, 230, 130)
+HIT = (235, 245, 250)  # a hit bursts white: green is kept for the gun
 GOLD = (90, 225, 255)
-MISS_MARK = (120, 120, 190)
+MISS_MARK = (170, 170, 176)  # and a miss is quiet, not red
 
 FADE_IN = 0.25
 FADE_OUT = 0.7
 IMPACT_FLASH = 0.35
-#: The score popup rises and fades over this long.
-POPUP_LIFE = 0.65
-POPUP_RISE = 30
 
 #: How long a struck face stays up with the arrow in it, and how long it fades.
 STRUCK_HOLD = 0.9
@@ -1019,44 +1017,17 @@ def draw_impact(canvas: np.ndarray, impact: Impact, now: float,
         cv2.addWeighted(overlay, 1.0 - burst, roi, burst, 0.0, dst=roi)
 
     if impact.is_hit:
-        popup = min(1.0, age / min(ttl, POPUP_LIFE))
-        # Hold at full strength, then go quickly: the colour stays clean
-        # rather than spending its life half-mixed with the wall.
-        fade = 1.0 if popup < 0.7 else max(0.0, 1.0 - (popup - 0.7) / 0.3)
-        if fade <= 0.0:
-            return
-        bullseye = impact.ring == 0
-        # It lands big and settles: a quick scale-in, then a slow drift up.
-        settle = min(1.0, popup / 0.18)
-        scale = (1.0 if bullseye else 0.82) * (1.35 - 0.35 * settle) * (1.0 - 0.12 * (1 - fade))
-        text = f"+{impact.score}"
-        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)
-        rise = (0.35 * lift + POPUP_RISE) * popup ** 0.7
+        # The score over the face it was scored on, above the boss's rim so it
+        # never sits on the rings: gold for the gold, white otherwise.
+        scale = canvas.shape[0] / 720.0
         if anchor is not None:
-            ax, ay = int(anchor[0]), int(anchor[1])
-            gap = max(6, int(0.18 * lift))
-            top = ay - lift * BOSS_SCALE - gap
-            x = ax - tw // 2
-            y = int(top - 0.35 * rise)
+            x = anchor[0]
+            y = anchor[1] - lift * BOSS_SCALE - max(6, int(0.18 * lift))
         else:
-            x = centre[0] - tw // 2
-            y = int(centre[1] - 0.35 * lift - th - rise)
-        y = max(th + 4, y)  # never off the top of the hall
-        x = max(2, min(canvas.shape[1] - tw - 2, x))
-        roi, ox, oy = _roi(canvas, x + tw // 2, int(y - th / 2), tw // 2 + th + 14)
-        if roi.size == 0:
-            return
-        overlay = roi.copy()
-        colour = GOLD if bullseye else HIT
-        # A soft drop shadow, then a dark outline, then the figure.
-        cv2.putText(overlay, text, (x - ox + 3, y - oy + 4), cv2.FONT_HERSHEY_SIMPLEX,
-                    scale, (8, 8, 8), 6, cv2.LINE_AA)
-        cv2.addWeighted(overlay, 0.5, roi, 0.5, 0.0, dst=overlay)
-        cv2.putText(overlay, text, (x - ox, y - oy), cv2.FONT_HERSHEY_SIMPLEX, scale,
-                    (12, 12, 12), 5, cv2.LINE_AA)
-        cv2.putText(overlay, text, (x - ox, y - oy), cv2.FONT_HERSHEY_SIMPLEX, scale,
-                    colour, 2, cv2.LINE_AA)
-        cv2.addWeighted(overlay, fade, roi, 1.0 - fade, 0.0, dst=roi)
+            x, y = centre[0], centre[1] - 0.35 * lift
+        y = max(y, scene.type_size(scene.TITLE_2, scale) * 1.3)  # never off the top
+        scene.draw_popup(canvas, f"+{impact.score}", (x, y), age, scale,
+                         scene.GOLD if impact.ring == 0 else scene.LABEL)
     else:
         roi, ox, oy = _roi(canvas, centre[0], centre[1], 14)
         if roi.size == 0:

@@ -259,3 +259,63 @@ def test_the_weather_on_main_street_waits_for_its_cue_on_any_clock():
     weed = first_seen(maps.WESTERN, LATE, 4.0, lambda round_: bool(round_.tumbleweeds))
     assert devil == pytest.approx(2.0, abs=0.04)
     assert weed == pytest.approx(1.0, abs=0.04)
+
+
+# --- pausing -----------------------------------------------------------------
+
+def test_the_round_clock_stops_while_the_game_is_paused():
+    from handy.game import GameClock
+
+    clock, round_ = GameClock(), make_round(duration=60)
+    round_.update(clock.now(100.0))
+    assert round_.remaining(clock.now(110.0)) == pytest.approx(50.0)
+    clock.pause(110.0)
+    assert clock.paused
+    for wall in (111.0, 300.0, 5000.0):  # the sheet stays up as long as it likes
+        round_.update(clock.now(wall))
+        assert round_.remaining(clock.now(wall)) == pytest.approx(50.0)
+        assert not round_.is_over(clock.now(wall))
+    clock.resume(5000.0)
+    assert not clock.paused
+    assert round_.remaining(clock.now(5005.0)) == pytest.approx(45.0)
+
+
+def test_pausing_twice_or_resuming_twice_changes_nothing():
+    from handy.game import GameClock
+
+    clock = GameClock()
+    clock.pause(10.0)
+    clock.pause(20.0)  # already paused: the first moment stands
+    clock.resume(30.0)
+    clock.resume(40.0)  # not paused: nothing more to take out
+    assert clock.now(50.0) == pytest.approx(30.0)
+
+
+@pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda chosen: chosen.key)
+def test_the_world_waits_while_the_game_is_paused(chosen):
+    """Holding the displayed seconds is not a pause: what the map scheduled -
+    spawns, expiries, walkers on the road - has to wait too."""
+    from handy.game import GameClock
+
+    def after(pause: float):
+        clock = GameClock()
+        round_ = chosen.create(RoundOptions(area=MAP_AREA, seed=3, duration=60.0))
+        wall = 1000.0
+        for frame in range(8 * 30):
+            wall = 1000.0 + frame / 30 + (pause if frame > 4 * 30 else 0.0)
+            if frame == 4 * 30:
+                clock.pause(wall)
+            elif frame == 4 * 30 + 1:
+                clock.resume(wall)
+            round_.update(clock.now(wall))
+        return census(round_), round_.remaining(clock.now(wall))
+
+    assert after(600.0) == after(0.0)
+
+
+def test_a_map_says_nothing_beside_the_score_unless_it_has_something_to_say():
+    from handy.game import Readout
+
+    assert make_round().readouts(0.0) == ()
+    readout = Readout("Wind", "0.2 m/s", meter=-0.3, signed=True)
+    assert readout.tone == "" and readout.signed

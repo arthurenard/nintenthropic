@@ -17,9 +17,14 @@ def layout():
     return layout_for(WIDTH, HEIGHT)
 
 
-def test_camera_inset_is_a_quarter_of_the_window_in_the_top_left(layout):
-    assert (layout.inset.width, layout.inset.height) == (WIDTH // 4, HEIGHT // 4)
-    assert layout.inset.x < WIDTH // 8 and layout.inset.y < HEIGHT // 8
+def test_the_camera_is_a_small_picture_in_picture_in_the_top_left(layout):
+    """Like FaceTime's: small in play, where the world matters more."""
+    from handy import app
+
+    assert layout.inset.x == layout.inset.y == layout.margin == 24
+    assert layout.inset.height == app.PIP_HEIGHT
+    assert layout.inset.width / layout.inset.height == pytest.approx(16 / 9, abs=0.02)
+    assert layout.inset.width < WIDTH // 6
 
 
 def test_play_area_sits_below_the_inset_and_inside_the_window(layout):
@@ -28,11 +33,16 @@ def test_play_area_sits_below_the_inset_and_inside_the_window(layout):
     assert layout.play_area.width > 0 and layout.play_area.height > 0
 
 
-def test_the_maps_button_sits_beside_quit_without_overlapping_it(layout):
-    quit_rect, maps_rect = layout.quit_button.rect, layout.maps_button.rect
-    assert maps_rect.right < quit_rect.x
-    assert maps_rect.y == quit_rect.y
-    assert not layout.quit_button.contains(maps_rect.x + 5, maps_rect.y + 5)
+def test_one_pause_control_sits_in_the_top_right_corner(layout):
+    """Chrome lives in the corners: score top-left, clock top-centre, Pause
+    top-right - one control, big enough to shoot."""
+    from handy import scene
+
+    rect = layout.pause_button.rect
+    assert rect.right == WIDTH - layout.margin and rect.y == layout.margin
+    assert rect.width == rect.height >= scene.SHOOTABLE
+    assert rect.bottom < layout.play_area.y
+    assert layout.pause_button.icon == "pause"
 
 
 def test_quit_button_is_in_the_top_right_and_clear_of_the_inset(layout):
@@ -49,9 +59,11 @@ def test_aim_spans_the_whole_window_so_the_quit_button_is_shootable(layout):
 
     corner = aim_pixels(Aim(position=(1.0, 0.0)), layout)
     # The top-right corner of the window is inside no button, but sweeping in
-    # from it reaches QUIT, so the crosshair can get there.
-    assert corner[0] > layout.quit_button.rect.x
-    assert layout.quit_button.contains(corner[0] - 20, layout.quit_button.rect.y + 20)
+    # from it reaches Pause (and on the chooser, Quit), so the crosshair can
+    # get there.
+    for button in (layout.pause_button, layout.quit_button):
+        assert corner[0] > button.rect.x
+        assert button.contains(corner[0] - layout.margin - 10, button.rect.y + 20)
 
 
 def test_no_hand_means_no_crosshair(layout):
@@ -149,7 +161,7 @@ def test_the_footer_names_the_scheme_the_map_and_the_keys(layout):
         settings = Settings(seed=1)
         render(canvas, View(map=maps.ZOMBIES,
                             round=new_round(settings, layout, maps.ZOMBIES),
-                            aim=Aim(), crosshair=None,
+                            aim=Aim(position=(0.5, 0.6)), crosshair=None,
                             cameras=[np.zeros((720, 1280, 3), np.uint8)],
                             hands=[empty[scheme.key]], now=0.0, scheme=scheme),
                layout)
@@ -157,6 +169,16 @@ def test_the_footer_names_the_scheme_the_map_and_the_keys(layout):
 
     assert not np.array_equal(canvases["pistol"], canvases["marksman"])
     assert CONTROL_KEYS and maps.ZOMBIES.footer, "both still have their say"
+
+
+def test_the_round_hints_fit_the_window_and_end_with_the_pause_key(layout):
+    from handy import app, scene
+
+    for width in (1280, 960, 640):
+        items = app.hint_items("Point at a target. Fold your thumb to fire.",
+                               "Head shots drop them", width, 1.0)
+        assert scene.hints_width(items, 1.0) <= width - 2 * layout.margin
+    assert app.hint_items("", "", 1280, 1.0)[0] == ("P", "Pause")
 
 
 def test_maps_are_looked_up_by_key():
@@ -525,7 +547,7 @@ def test_the_map_chooser_draws_the_cards(monkeypatch, layout):
 
     assert reason == "quit" and picked is None
     assert drawn, "the cards were never drawn"
-    _, cards, entries, _aimed, _scale = drawn[0]
+    _, cards, entries, *_rest = drawn[0]
     assert len(cards) == len(entries) == len(maps.MAPS)
 
 
@@ -557,13 +579,36 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
                    default_rig(schemes.PISTOL, 1), schemes.PISTOL, scores)
 
     best = {title: line for title, _blurb, line, _art in drawn[0]}
-    assert best[maps.ZOMBIES.title] == "best 120"
-    assert best[maps.SNIPER.title] == "best 340"
+    assert best[maps.ZOMBIES.title] == "Best 120"
+    assert best[maps.SNIPER.title] == "Best 340"
+    assert best[maps.WESTERN.title] == "Not played yet"
 
 
-def test_every_button_answers_a_shot_in_play(monkeypatch):
-    """QUIT and MAPS both mean something when shot mid-game."""
-    from handy import app, maps, schemes
+def test_the_card_under_the_crosshair_rises_over_a_quarter_second():
+    from handy import app
+
+    lifts = [0.0, 0.0, 1.0]
+    lifts = app.ease_lifts(lifts, 0, app.CARD_LIFT / 2)
+    assert lifts == [0.5, 0.0, 0.5], "one rising, the one it left settling"
+    lifts = app.ease_lifts(lifts, 0, app.CARD_LIFT)
+    assert lifts == [1.0, 0.0, 0.0]
+    assert app.best_line(1240) == "Best 1,240"
+
+
+def centre_of(button) -> tuple[float, float]:
+    """``button``'s middle, as the fraction of the window an aim gives."""
+    rect = button.rect
+    return ((rect.x + rect.width // 2) / (WIDTH - 1),
+            (rect.y + rect.height // 2) / (HEIGHT - 1))
+
+
+@pytest.mark.parametrize("choice,expected", [
+    (1, "again"), (2, "maps"), (3, "quit"),
+])
+def test_every_choice_on_the_pause_sheet_answers_a_shot(monkeypatch, choice, expected):
+    """Shooting Pause brings the sheet up; each of its choices means something
+    when shot - after the trigger has come up again, as every shot needs."""
+    from handy import app, maps, schemes, scene
     from handy.aiming import Aim
     from handy.calibration import default_rig
     import cv2
@@ -574,22 +619,20 @@ def test_every_button_answers_a_shot_in_play(monkeypatch):
     monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
 
     layout = layout_for(WIDTH, HEIGHT)
-    for button, expected in ((layout.quit_button, "quit"),
-                             (layout.maps_button, "maps")):
-        centre = (button.rect.x + button.rect.width // 2,
-                  button.rect.y + button.rect.height // 2)
-        aim = Aim(position=(centre[0] / (WIDTH - 1), centre[1] / (HEIGHT - 1)),
-                  armed=False, fired=True)
-        monkeypatch.setattr(app.AimController, "update",
-                            lambda self, views, now, _aim=aim: _aim)
+    _, buttons = scene.pause_sheet(WIDTH, HEIGHT, layout.scale)
+    script = iter([Aim(position=centre_of(layout.pause_button), fired=True),
+                   Aim(position=centre_of(buttons[choice]), armed=True),
+                   Aim(position=centre_of(buttons[choice]), fired=True)])
+    monkeypatch.setattr(app.AimController, "update",
+                        lambda self, views, now: next(script, Aim()))
 
-        _, reason = app.play(
-            OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
-            Settings(recoil=0.0), layout,
-            app.make_controller(Settings(), schemes.PISTOL),
-            default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE,
-            schemes.PISTOL)
-        assert reason == expected, f"shooting {button.label} should mean {expected}"
+    _, reason = app.play(
+        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8),
+        Settings(recoil=0.0), layout,
+        app.make_controller(Settings(), schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE,
+        schemes.PISTOL)
+    assert reason == expected, f"shooting {buttons[choice].label} should mean {expected}"
 
 
 # --- choosing how to aim, at launch -----------------------------------------
@@ -718,17 +761,22 @@ def test_the_interface_grows_with_the_screen():
     assert large.quit_button.rect.width > small.quit_button.rect.width * 1.5
     assert large.quit_button.rect.height > small.quit_button.rect.height * 1.5
     for layout, width in ((small, 1280), (large, 3024)):
-        assert layout.maps_button.rect.x > layout.inset.right, "no overlap"
+        assert layout.pause_button.rect.x > layout.inset.right, "no overlap"
         assert layout.quit_button.rect.right <= width
 
 
 def test_the_buttons_never_overlap_each_other_at_any_size():
+    from handy import scene
+
     for width, height in ((1280, 720), (1440, 900), (1512, 982), (1920, 1080),
                           (2560, 1440), (3024, 1964)):
         layout = layout_for(width, height)
-        maps_, quit_ = layout.maps_button.rect, layout.quit_button.rect
-        assert maps_.right < quit_.x, f"{width}x{height}"
-        assert quit_.right <= width and layout.play_area.bottom <= height
+        clock = scene.clock_pill(width, 48.0, layout.scale, layout.margin)
+        for button in (layout.pause_button, layout.quit_button):
+            assert clock.right < button.rect.x, f"{width}x{height}"
+            assert button.rect.right <= width and button.rect.x > layout.inset.right
+            assert button.rect.height >= scene.SHOOTABLE * layout.scale - 1
+        assert layout.play_area.bottom <= height
 
 
 def test_a_rejected_fit_is_announced_on_screen(monkeypatch, tmp_path, model_path):
@@ -757,8 +805,8 @@ def test_a_rejected_fit_is_announced_on_screen(monkeypatch, tmp_path, model_path
 
     assert notices, "the player was never told"
     joined = " ".join(notices[0])
-    assert "DID NOT FULLY SUCCEED" in joined
-    assert "AIM" in joined and "TRIGGER" not in joined
+    assert notices[0][0] == "Aim Setup Didn\u2019t Finish"
+    assert "aim" in joined and "trigger" not in joined.lower()
 
 
 def test_custom_hand_model_can_be_used_with_the_automatic_eye_scope(monkeypatch):
@@ -814,7 +862,7 @@ def test_a_recalibration_that_fell_back_on_the_old_map_is_announced(monkeypatch,
                          calibration_path=tmp_path / "calibration.json"))
 
     assert notices, "the player was never told"
-    assert "AIM: could not fit camera 1" in notices[0]
+    assert "Your camera couldn\u2019t be set up, so your aim is approximate." in notices[0]
     assert "DEFAULTS" in app.describe(Rig((stale,))), "and the terminal agrees"
 
 
@@ -845,7 +893,8 @@ def test_backing_out_of_setup_says_the_game_is_on_defaults(monkeypatch, tmp_path
 
     assert notices, "backing out was silent"
     joined = " ".join(notices[0])
-    assert "SKIPPED" in joined and "defaults" in joined and "c" in joined
+    assert notices[0][0] == "Aim Setup Skipped"
+    assert "approximate" in joined and "Press C" in joined
 
 
 def test_the_results_screen_sits_on_the_art_of_the_map_just_played(monkeypatch,
@@ -1141,10 +1190,20 @@ def test_the_results_screen_saves_a_screenshot_on_s(monkeypatch, tmp_path):
                      app.make_controller(Settings(), schemes.PISTOL),
                      default_rig(schemes.PISTOL, 1), summary, 5, True)
 
-    assert list(tmp_path.glob("*.png")), "s saved nothing"
+    saved = list(tmp_path.glob("*.png"))
+    assert saved, "s saved nothing"
+    import cv2
+    image = cv2.imread(str(saved[0]))
+    assert image.shape[0] < HEIGHT and image.shape[1] < WIDTH, (
+        "the card as it is shared, not the whole screen with its crosshair")
 
 
-def on_the_card(monkeypatch, trigger, keys=(NOTHING,)):
+#: Eight seconds of the card with nothing pressed, then q: a card that never
+#: answers ends its test instead of hanging it.
+EIGHT_SECONDS_THEN_QUIT = (NOTHING,) * 240 + (113,)
+
+
+def on_the_card(monkeypatch, trigger, keys=EIGHT_SECONDS_THEN_QUIT):
     """Run the real score card at thirty frames a second of a synthetic clock.
 
     ``trigger(t)`` is the aim ``t`` seconds after the card appeared. Returns
@@ -1193,23 +1252,33 @@ def pull_at(position, fire_at: float):
     return trigger
 
 
-@pytest.mark.parametrize("button,expected", [
-    ("quit_button", "quit"), ("maps_button", "maps"),
-])
-def test_every_button_answers_a_shot_on_the_results_screen(monkeypatch, button,
-                                                           expected):
-    layout = layout_for(WIDTH, HEIGHT)
-    rect = getattr(layout, button).rect
-    centre = ((rect.x + rect.width // 2) / (WIDTH - 1),
-              (rect.y + rect.height // 2) / (HEIGHT - 1))
+def card_choice(index: int) -> tuple[float, float]:
+    """The middle of one of the score card's choices, as an aim reads it (the
+    card these tests show carries no map, so no banner)."""
+    from handy import scene
 
-    assert on_the_card(monkeypatch, pull_at(centre, 1.5))[0] == expected
+    return centre_of(scene.results_buttons(WIDTH, HEIGHT, 1.0, banner=False)[index])
 
 
-def test_shooting_the_world_on_the_results_screen_plays_again(monkeypatch):
-    """Anywhere that is not a button means "again" - the README's promise."""
-    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), 1.5))
-    assert choice == "again" and after >= 1.5
+@pytest.mark.parametrize("index,expected", [(0, "again"), (1, "maps")])
+def test_every_choice_on_the_card_answers_a_shot(monkeypatch, index, expected):
+    assert on_the_card(monkeypatch, pull_at(card_choice(index), 1.5))[0] == expected
+
+
+def test_shooting_the_card_anywhere_but_a_choice_does_nothing(monkeypatch):
+    """The card is not a target: a stray shot used to play again, and a
+    player reading their score lost it to a twitch of the thumb."""
+    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.2), 1.5))
+    assert choice == "quit" and after > 3.0
+
+
+def test_shooting_save_keeps_the_card_up_and_saves_it(monkeypatch, tmp_path):
+    from handy import app
+
+    saved = []
+    monkeypatch.setattr(app, "save_card", lambda *args: saved.append(args) or tmp_path)
+    choice, _ = on_the_card(monkeypatch, pull_at(card_choice(2), 1.5))
+    assert choice == "quit" and len(saved) == 1
 
 
 def test_a_player_still_shooting_at_time_up_gets_to_see_the_score(monkeypatch):
@@ -1236,18 +1305,20 @@ def test_a_shot_on_the_card_needs_a_trigger_cocked_after_it_appeared(monkeypatch
     cocked again, on the card, before a pull counts."""
     from handy.aiming import Aim
 
+    PLAY_AGAIN = card_choice(0)
+
     def fire_recock_fire(t):
         if t < 0.3:
-            return Aim(position=(0.5, 0.6), armed=True)
+            return Aim(position=PLAY_AGAIN, armed=True)
         if t < 0.34:
-            return Aim(position=(0.5, 0.6), fired=True)  # ignored: too soon
+            return Aim(position=PLAY_AGAIN, fired=True)  # ignored: too soon
         if t < 1.6:
-            return Aim(position=(0.5, 0.6))  # thumb held down past the grace
+            return Aim(position=PLAY_AGAIN)  # thumb held down past the grace
         if t < 1.8:
-            return Aim(position=(0.5, 0.6), armed=True)  # cocked on the card
+            return Aim(position=PLAY_AGAIN, armed=True)  # cocked on the card
         if t < 1.84:
-            return Aim(position=(0.5, 0.6), fired=True)
-        return Aim(position=(0.5, 0.6))
+            return Aim(position=PLAY_AGAIN, fired=True)
+        return Aim(position=PLAY_AGAIN)
 
     choice, after = on_the_card(monkeypatch, fire_recock_fire)
     assert choice == "again" and after >= 1.8
@@ -1258,7 +1329,8 @@ def test_a_player_who_waits_needs_only_one_pull(monkeypatch):
     counts at once; nobody has to fire twice."""
     from handy import app
 
-    choice, after = on_the_card(monkeypatch, pull_at((0.5, 0.6), app.RESULTS_GRACE + 0.2))
+    choice, after = on_the_card(monkeypatch, pull_at(card_choice(0),
+                                                     app.RESULTS_GRACE + 0.2))
     assert choice == "again" and after < app.RESULTS_GRACE + 0.3
 
 
@@ -1576,6 +1648,116 @@ def test_every_key_in_a_round_means_something(monkeypatch, key, expected):
     assert reason == expected
 
 
+def paused_round(monkeypatch, keys, aims=None, frame_seconds=1.0):
+    """Play the range on a clock that moves ``frame_seconds`` a frame, the keys
+    pressed one a frame, and record what each frame showed: the round time
+    the world was drawn at, the clock on screen, and whether the sheet was up."""
+    import cv2
+
+    from handy import app, maps, schemes, scene
+    from handy.calibration import default_rig
+
+    clock = {"now": 1000.0}
+    script = iter(keys)
+
+    def next_frame(*_args):
+        clock["now"] += frame_seconds
+        return next(script, ord("q"))
+
+    monkeypatch.setattr(app.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(cv2, "waitKey", next_frame)
+    for name in ("imshow", "setMouseCallback"):
+        monkeypatch.setattr(cv2, name, lambda *args: None)
+    monkeypatch.setattr(cv2, "getWindowProperty", lambda *args: 1.0)
+    frames: list[dict] = []
+    real_render, real_sheet = app.render, scene.draw_pause_sheet
+
+    def spy_render(canvas, view, layout):
+        frames.append({"now": view.now, "remaining": view.remaining, "sheet": False})
+        real_render(canvas, view, layout)
+
+    def spy_sheet(canvas, *args, **kwargs):
+        frames[-1]["sheet"] = True
+        real_sheet(canvas, *args, **kwargs)
+
+    monkeypatch.setattr(app, "render", spy_render)
+    monkeypatch.setattr(scene, "draw_pause_sheet", spy_sheet)
+    if aims is not None:
+        aim_script = iter(aims)
+        monkeypatch.setattr(app.AimController, "update",
+                            lambda self, views, now: next(aim_script, Aim()))
+    settings = Settings(duration=60.0, seed=1, recoil=0.0)
+    round_, reason = app.play(
+        OneFrameEyes(), np.zeros((HEIGHT, WIDTH, 3), np.uint8), settings,
+        layout_for(WIDTH, HEIGHT), app.make_controller(settings, schemes.PISTOL),
+        default_rig(schemes.PISTOL, 1), SpySounds(), maps.RANGE, schemes.PISTOL)
+    return round_, reason, frames
+
+
+@pytest.mark.parametrize("key", [ord("p"), 27], ids=["p", "esc"])
+def test_p_or_esc_pauses_the_round_and_stops_its_clock(monkeypatch, key):
+    """The sheet comes up, the clock on it stops, and the world holds still
+    behind it until the same key puts it away."""
+    keys = [NOTHING, key] + [NOTHING] * 5 + [key, NOTHING, ord("q")]
+    _, reason, frames = paused_round(monkeypatch, keys)
+    assert reason == "quit"
+    sheet = [frame for frame in frames if frame["sheet"]]
+    assert len(sheet) == 6, "up from the frame after the key until it is pressed again"
+    assert len({frame["now"] for frame in sheet}) == 1, "the world held still"
+    assert len({frame["remaining"] for frame in sheet}) == 1, "and so did the clock"
+    assert frames[-1]["remaining"] == pytest.approx(frames[0]["remaining"] - 3.0), (
+        "only the frames played came off the clock, not the ones paused")
+
+
+def test_q_still_quits_from_the_pause_sheet(monkeypatch):
+    _, reason, frames = paused_round(monkeypatch, [ord("p"), NOTHING, ord("q")])
+    assert reason == "quit" and frames[-1]["sheet"]
+
+
+def test_a_shot_at_the_world_behind_the_sheet_goes_nowhere(monkeypatch):
+    """With the sheet up, the gun is for its buttons: a shot anywhere else is
+    not a shot at the paused world."""
+    world = (0.5, 0.95)  # below the sheet, over the range
+    aims = [Aim(position=world, armed=True), Aim(position=world, armed=True),
+            Aim(position=world, fired=True), Aim(position=world)]
+    round_, reason, frames = paused_round(monkeypatch,
+                                          [ord("p"), NOTHING, NOTHING, NOTHING, ord("q")],
+                                          aims=aims)
+    assert reason == "quit" and round_.shots == 0
+
+
+def test_resume_on_the_sheet_goes_back_to_the_round(monkeypatch):
+    from handy import scene
+
+    _, buttons = scene.pause_sheet(WIDTH, HEIGHT, 1.0)
+    resume = centre_of(buttons[0])
+    aims = [Aim(), Aim(position=resume, armed=True), Aim(position=resume, fired=True)]
+    _, reason, frames = paused_round(monkeypatch,
+                                     [ord("p"), NOTHING, NOTHING, NOTHING, ord("q")],
+                                     aims=aims)
+    assert reason == "quit"
+    assert [frame["sheet"] for frame in frames] == [False, True, True, False, False]
+
+
+@pytest.mark.parametrize("width,height", ((1280, 720), (1512, 945), (2560, 1440)))
+def test_the_pause_sheets_choices_are_big_enough_to_shoot(width, height):
+    from handy import scene
+
+    layout = layout_for(width, height)
+    sheet, buttons = scene.pause_sheet(width, height, layout.scale)
+    assert [button.label for button in buttons] == ["Resume", "Restart", "Choose a Game",
+                                                    "Quit"]
+    assert sheet.x >= 0 and sheet.right <= width and sheet.y >= 0 and sheet.bottom <= height
+    for button in buttons:
+        assert button.rect.height >= scene.SHOOTABLE * layout.scale - 1
+        assert sheet.x < button.rect.x and button.rect.right < sheet.right
+        assert sheet.y < button.rect.y and button.rect.bottom < sheet.bottom
+        label = scene.measure(button.label, scene.HEADLINE, layout.scale)
+        assert label + 2 * scene.type_size(scene.HEADLINE, layout.scale) < button.rect.width
+    for upper, lower in zip(buttons, buttons[1:]):
+        assert upper.rect.bottom < lower.rect.y
+
+
 def test_s_saves_a_screenshot_without_ending_the_round(monkeypatch, tmp_path):
     _, reason = play_once(monkeypatch, keys=[ord("s"), ord("q")],
                           settings=Settings(screenshot_dir=tmp_path, seed=1))
@@ -1599,7 +1781,7 @@ def test_a_screenshot_that_cannot_be_written_is_said_and_the_round_goes_on(
                           settings=Settings(screenshot_dir=blocker / "shots", seed=1))
 
     assert reason == "quit", "the round carried on after the failed save"
-    assert notices and "SCREENSHOT NOT SAVED" in notices[0]
+    assert notices and "Screenshot Not Saved" in notices[0]
     assert "Saved" not in capsys.readouterr().out
 
 
@@ -1700,8 +1882,8 @@ def test_a_slow_first_frame_does_not_come_out_of_the_round(monkeypatch):
         maps.RANGE.draw_world(canvas, round_, now)
 
     shown: list[float] = []
-    monkeypatch.setattr(scene, "draw_timer",
-                        lambda canvas, remaining, scale=1.0: shown.append(remaining))
+    monkeypatch.setattr(scene, "draw_clock",
+                        lambda canvas, remaining, scale=1.0, top=0: shown.append(remaining))
     play_once(monkeypatch, keys=[NOTHING, NOTHING, NOTHING, ord("q")],
               chosen=replace(maps.RANGE, draw_world=cold_then_warm),
               settings=Settings(duration=60.0, seed=1, recoil=0.0))
@@ -1889,7 +2071,7 @@ def test_a_camera_lost_mid_game_is_said_on_screen_and_handed_back(monkeypatch,
                              skip_calibration=True, model_path=model_path,
                              calibration_path=tmp_path / "calibration.json"))
 
-    assert notices and notices[-1][0] == "CAMERA LOST"
+    assert notices and notices[-1][0] == "Camera Disconnected"
     assert opened and all(capture.released for capture in opened)
 
 
@@ -2071,7 +2253,7 @@ def test_a_map_whose_model_cannot_be_had_is_refused_on_screen(monkeypatch,
                         np.zeros((540, 960, 3), np.uint8), RigBook(),
                         HighScores(tmp_path / "scores.json")) is None
 
-    assert notices and notices[0][0] == "MAP UNAVAILABLE"
+    assert notices and notices[0][0].endswith("Isn\u2019t Ready")
     assert next(answers, "drained") == "drained", "the chooser came back"
 
 
@@ -2177,6 +2359,25 @@ def test_no_chooser_card_runs_under_the_camera_or_the_quit_button(width, height)
     assert cards[-1].right == layout.quit_button.rect.right
 
 
+@pytest.mark.parametrize("width,height", SIZES)
+def test_the_chooser_title_and_cards_keep_clear_of_the_corners(width, height):
+    """The title sits between the picture and Quit; the cards below them, above
+    the hints; everything shootable at least as big as a finger pistol needs."""
+    from handy import app, scene
+
+    layout = layout_for(width, height)
+    title = scene.measure(scene.CHOOSER_TITLE, scene.TITLE_1, layout.scale)
+    assert layout.inset.right < (width - title) // 2
+    assert (width + title) // 2 < layout.quit_button.rect.x
+    cards = app.chooser_cards(layout, len(maps.MAPS))
+    footer = scene.footer_baseline(height, layout.scale) - scene.type_size(
+        scene.FOOTNOTE, layout.scale) * 2
+    for card in cards:
+        assert card.y > layout.inset.bottom and card.bottom < footer
+        assert card.height >= scene.SHOOTABLE * layout.scale
+    assert layout.quit_button.rect.height >= scene.SHOOTABLE * layout.scale - 1
+
+
 def chrome_view(chosen, layout, **fields):
     settings = Settings(seed=1)
     round_ = new_round(settings, layout, chosen)
@@ -2189,32 +2390,24 @@ def chrome_view(chosen, layout, **fields):
 
 @pytest.mark.parametrize("width,height", SIZES)
 @pytest.mark.parametrize("chosen", maps.MAPS, ids=lambda m: m.key)
-def test_the_score_panel_stops_short_of_the_clock_and_the_buttons(chosen, width, height):
-    """The old backing was a slab most of the way across the top of the map."""
+def test_the_corner_chrome_keeps_to_the_corners(chosen, width, height):
+    """Score top-left beside the picture, clock top-centre, Pause top-right:
+    none of it overlapping, all of it above the targets."""
     from handy import app, scene
 
     layout = layout_for(width, height)
-    view = chrome_view(chosen, layout)
-    panel, readout = app.hud_panels(view, layout)
-    if chosen.key in app.OWN_HUD_PANEL:
-        assert (panel, readout) == (None, None), "one panel, the map's own"
-        return
-    clock = scene.timer_left(width, view.remaining, layout.scale)
-    assert layout.inset.right < panel.x and panel.right < clock
-    assert panel.y == layout.inset.y
-    if readout is not None:
-        assert readout.y > panel.bottom and readout.bottom <= layout.inset.bottom
-        assert readout.right < layout.maps_button.rect.x
-        assert readout.bottom < layout.play_area.y
-
-
-def test_overwatch_ridge_gets_no_second_panel_over_its_own(layout):
-    """Its world lays one panel under the camera and the readout; the app's
-    backing on top of it was a double panel with a seam."""
-    from handy import app
-
-    view = chrome_view(maps.SNIPER, layout)
-    assert app.hud_panels(view, layout) == (None, None)
+    for remaining in (48.0, 600.0, None):
+        view = chrome_view(chosen, layout, remaining=remaining)
+        panel, strip = app.hud_panels(view, layout)
+        clock = scene.clock_pill(width, remaining, layout.scale, layout.margin)
+        assert layout.inset.right < panel.x and panel.right < clock.x
+        assert panel.y == layout.inset.y == clock.y == layout.pause_button.rect.y
+        assert clock.right < layout.pause_button.rect.x
+        assert abs(clock.x + clock.width / 2 - width / 2) <= 1
+        for rect in (panel, strip):
+            if rect is not None:
+                assert rect.bottom < layout.play_area.y
+                assert not overlaps(rect, layout.inset)
 
 
 def test_the_hints_open_the_round_then_fade():
@@ -2232,22 +2425,19 @@ def test_the_hints_open_the_round_then_fade():
     assert hints.alpha(300.0 + Hints.LINGER - Hints.FADE - 0.01) == 1.0
 
 
-def test_a_faded_hint_line_leaves_the_foot_of_the_frame_to_the_logo(layout):
-    """The keys ran along the foot of every frame of every round."""
+def test_a_faded_hint_line_gives_the_foot_of_the_frame_back_to_the_world(layout):
+    """The keys ran along the foot of every frame of every round; now they
+    come and go, and once gone nothing of the interface is left down there."""
     from dataclasses import replace
 
-    from handy import scene
-
     view = chrome_view(maps.WESTERN, layout, scheme=None)
-    shown, faded = (np.zeros((HEIGHT, WIDTH, 3), np.uint8) for _ in range(2))
+    shown, faded, world = (np.zeros((HEIGHT, WIDTH, 3), np.uint8) for _ in range(3))
     render(shown, replace(view, hints=1.0), layout)
     render(faded, replace(view, hints=0.0), layout)
-    logo_w = scene.logo_size(layout.scale)[0]
-    left = slice(20, WIDTH // 2)
-    band = slice(HEIGHT - 40, HEIGHT - 8)
-    assert not np.array_equal(shown[band, left], faded[band, left])
-    corner = faded[HEIGHT - 60:, WIDTH - logo_w - 40:]
-    assert np.any(np.all(corner == scene.ACCENT, axis=-1)), "the mark, once they fade"
+    maps.WESTERN.draw_world(world, view.round, view.now)
+    band = slice(HEIGHT - 80, HEIGHT)
+    assert not np.array_equal(shown[band], faded[band])
+    assert np.array_equal(faded[band], world[band])
 
 
 def test_the_play_loop_brings_the_hints_back_for_a_key_it_does_not_know(monkeypatch):
@@ -2301,4 +2491,22 @@ def test_the_results_screen_names_the_map_that_was_played(monkeypatch):
 
     assert seen[0]["title"] == maps.ORBIT.title
     assert seen[0]["emblem"] is maps.ORBIT.draw_emblem
-    assert "s screenshot" in seen[0]["hint"]
+    assert seen[0]["elapsed"] >= 0.0, "so the card can arrive and count up"
+
+
+def test_every_map_and_scheme_speaks_in_the_design_languages_voice():
+    """Names in Title Case, hints in sentence case, no engineering words - and
+    the one key only Dead of Night answers to, said while playing it."""
+    from handy import app, scene, schemes
+
+    for chosen in (*maps.MAPS, maps.RANGE):
+        assert chosen.title == scene.title_case(chosen.title), chosen.title
+        for scheme in schemes.SCHEMES:
+            items = app.hint_items(scheme.footer, chosen.footer, 2560, 1.0, chosen.key)
+            for _key, text in items:
+                assert text[:1].isupper(), text
+                assert not any(word in text.lower() for word in (
+                    "calibrat", "track", "fused", "landmark", "session", "enemy")), text
+    zombies = app.hint_items(schemes.PISTOL.footer, maps.ZOMBIES.footer, 2560, 1.0,
+                             maps.ZOMBIES.key)
+    assert ("N", "Switch opponent") in zombies

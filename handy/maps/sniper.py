@@ -13,7 +13,8 @@ to get there, it drops on the way, and the wind pushes it sideways - all three
 in proportion to the distance. The reticle's mil marks are calibrated to that
 drop, so holding a mark high at the range the HUD reads is how you hit.
 
-Public surface: ``SniperRound``, ``draw_world``, ``draw_hud``, ``draw_emblem``.
+Public surface: ``SniperRound``, ``draw_world``, ``draw_emblem``. The round names
+its readouts (``SniperRound.readouts``) for the game's score panel.
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Rect, Round
+from ..game import MISS, Hit, Readout, Rect, Round
+from .. import scene
 from ..scene import blend
 
 # --- the world --------------------------------------------------------------
@@ -105,7 +107,6 @@ WINDOW = (170, 190, 200)
 TRACER = (150, 230, 255)
 DUST = (140, 176, 204)
 BLOOD = (36, 30, 150)
-SCORE_INK = (140, 220, 235)
 RETICLE = (12, 12, 14)
 INFO = (210, 224, 232)
 
@@ -757,6 +758,16 @@ class SniperRound(Round):
     @property
     def remaining_hostiles(self) -> int:
         return sum(1 for h in self.hostiles if h.dead_at is None)
+
+    def readouts(self, now: float) -> tuple[Readout, ...]:
+        """Hostiles left, the tally, the stage and the wind. The wind's meter
+        runs out from the middle the way it blows; the range and the hold are
+        read off the glass itself."""
+        return (Readout("Hostiles", str(self.remaining_hostiles)),
+                Readout("Down", str(self.kills)),
+                Readout("Stage", str(self.stage(now))),
+                Readout("Wind", f"{abs(self.wind):.1f} m/s", meter=self.wind / MAX_WIND,
+                        signed=True))
 
 
 def frame_for(area: Rect, scale: float) -> tuple[int, int]:
@@ -1435,61 +1446,15 @@ def _chromatic_fringe(canvas: np.ndarray, anchor: tuple[int, int] | None = None,
 
 # --- drawing the moving things ------------------------------------------------
 
-_FACE = cv2.FontFace("uni") if hasattr(cv2, "FontFace") else None
-
-
-def _mono_face():
-    """A monospace face for the glass readout, if the system has one."""
-    if not hasattr(cv2, "FontFace"):
-        return None
-    for path in ("/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/SFNSMono.ttf",
-                 "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"):
-        try:
-            face = cv2.FontFace(path)
-            cv2.getTextSize((0, 0), "0", (0, 0), face, 12)
-            return face
-        except cv2.error:
-            continue
-    return None
-
-
-_MONO = _mono_face()
-
-
-def _mono_width(text: str, size: int) -> int:
-    if _MONO is None:
-        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 26, 1)[0][0]
-    return cv2.getTextSize((0, 0), text, (0, 0), _MONO, size)[2]
-
-
-def _mono(canvas: np.ndarray, text: str, origin: tuple[int, int], colour, size: int,
-          weight: int = 400) -> int:
-    origin = (int(origin[0]), int(origin[1]))
-    if _MONO is None:
-        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, size / 26, colour,
-                    2 if weight >= 600 else 1, cv2.LINE_AA)
-    else:
-        cv2.putText(canvas, text, origin, colour, _MONO, size, weight)
-    return _mono_width(text, size)
-
-
-def _label_width(text: str, size: int) -> int:
-    if _FACE is None:
-        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 26, 1)[0][0]
-    return cv2.getTextSize((0, 0), text, (0, 0), _FACE, size)[2]
+def _label_width(text: str, size: int, weight: int = 0) -> int:
+    return scene.measure(text, scene.Style(size, weight or 400))
 
 
 def _label(canvas: np.ndarray, text: str, origin: tuple[int, int], colour,
            size: int, weight: int = 0) -> int:
-    """Text in the interface's own face, ``size`` pixels tall, baseline left.
-    One font for the whole readout, numerals included. Returns the width."""
-    origin = (int(origin[0]), int(origin[1]))
-    if _FACE is None:
-        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, size / 26, colour,
-                    2 if weight >= 600 else 1, cv2.LINE_AA)
-    else:
-        cv2.putText(canvas, text, origin, colour, _FACE, size, weight)
-    return _label_width(text, size)
+    """Text in the interface's face - the system face, figures tabular -
+    ``size`` pixels tall, baseline left. Returns the width."""
+    return scene.write(canvas, text, origin, scene.Style(size, weight or 400), colour)
 
 
 def _soft_blob(canvas: np.ndarray, cx: float, cy: float, rx: float, ry: float,
@@ -1810,13 +1775,14 @@ def _draw_tag(canvas: np.ndarray, figure: Figure, now: float, scale: float) -> N
             cv2.line(canvas, (cx_, cy_), (cx_, int(cy_ - sy_ * gap)), pass_colour, thick, cv2.LINE_AA)
     label = f"{figure.distance:.0f} m"
     size = max(11, round(12.5 * scale))
-    tw = _label_width(label, size)
-    pad = max(3, round(3.5 * scale))
-    tx, ty = int(x + reach + 5 * scale), int(y - reach + size * 0.5)
-    box = (tx - pad, ty - size - pad + 2, tx + tw + pad, ty + pad)
-    cv2.rectangle(canvas, box[:2], box[2:], TAG_DARK, -1)
-    cv2.line(canvas, (box[0], box[1]), (box[0], box[3]), col, max(1, round(2 * scale)))
-    _label(canvas, label, (tx + 1, ty), col, size, 600)
+    tw = _label_width(label, size, 600)
+    pad = max(4, round(6 * scale))
+    tall = round(size * 1.35)
+    tx, ty = int(x + reach + 6 * scale), int(y - reach + size * 0.5)
+    capsule = Rect(tx - pad, ty - round(size * 0.7) - (tall - round(size * 0.7)) // 2,
+                   tw + 2 * pad, tall)
+    scene.draw_surface(canvas, capsule, tall // 2, TAG_DARK, edge=False)
+    _label(canvas, label, (tx, ty), col, size, 600)
 
 
 def _draw_glass_mark(canvas: np.ndarray, figure: Figure, now: float, scale: float) -> None:
@@ -1868,17 +1834,17 @@ def _draw_shot(canvas: np.ndarray, shot: Shot, view: View, now: float, ttl: floa
     else:
         radius = max(2, int(metres_px * 0.35 * (1.0 + (1.0 - life))))
         _soft_blob(canvas, sx, sy, radius, radius, BLOOD, 0.7 * life ** 0.5)
-    if shot.zone is not None and age < 1.6:
-        lift = int((14 + 26 * age) * scale)
-        x_text = centre[0] + int(12 * scale)
-        size = max(12, round(15 * scale))
+    if shot.zone is not None:
+        # What the shot did, over where it landed: a head shot in gold, the
+        # rest in white, gone in 600 ms (see ``scene.draw_popup``).
+        perfect = shot.zone == "head"
+        top = centre[1] - round(16 * scale)
+        scene.draw_popup(canvas, f"+{shot.points}", (centre[0], top), age, scale,
+                         scene.GOLD if perfect else scene.LABEL)
         if shot.label:
-            _label(canvas, shot.label, (x_text + 1, centre[1] - lift + 1), TAG_DARK, size, 700)
-            _label(canvas, shot.label, (x_text, centre[1] - lift), BLOOD if not shot.hit_vehicle else DUST,
-                   size, 700)
-            lift += int(20 * scale)
-        _label(canvas, f"+{shot.points}", (x_text + 1, centre[1] - lift + 1), TAG_DARK, size, 700)
-        _label(canvas, f"+{shot.points}", (x_text, centre[1] - lift), SCORE_INK, size, 700)
+            scene.draw_popup(canvas, scene.title_case(shot.label),
+                             (centre[0], top + round(22 * scale)), age, scale,
+                             scene.GOLD if perfect else scene.LABEL_SECONDARY, scene.SUBHEAD)
 
 
 def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
@@ -1925,8 +1891,8 @@ def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
                max(10, round(11 * scale)), 600)
 
     # The readout: range, hold and wind on a dark band across the foot of the
-    # glass, in a light monospace face, so it reads against anything the
-    # scope happens to be looking at.
+    # glass, in the system face with tabular figures, so it reads against
+    # anything the scope happens to be looking at and holds still as it changes.
     distance, hostile = round_.range_under_reticle(now)
     size = max(12, round(14 * scale))
     big = size + round(9 * scale)
@@ -1935,11 +1901,11 @@ def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
     if math.isfinite(distance):
         hold = mils(bullet_drop(distance), distance)
         drift = mils(wind_drift(distance, round_.wind), distance)
-        arrow = ">" if drift > 0 else "<"
+        arrow = "\u2192" if drift > 0 else "\u2190"
         left = f"{distance:.0f} m"
-        lines = (f"HOLD {hold:.1f}", f"WIND {abs(drift):.1f} {arrow}")
+        lines = (f"Hold {hold:.1f}", f"Wind {abs(drift):.1f} {arrow}")
     else:
-        left, lines = "--- m", ("SKY", "")
+        left, lines = "\u2013 m", ("Sky", "")
     # The range, large, left of centre; the hold and the wind stacked to the
     # right of it, the column divided by a hairline.
     row = int(radius * 0.115)
@@ -1947,11 +1913,11 @@ def _draw_reticle(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
     y2 = y1 + row
     ty = (y1 + y2) // 2 + big // 2 - round(3 * scale)
     gap = int(14 * scale)
-    x_left = cx - gap - _mono_width(left, big)
+    x_left = cx - gap - _label_width(left, big, 600)
     x_right = cx + gap
-    _mono(canvas, left, (x_left, ty), INFO, big, 600)
-    _mono(canvas, lines[0], (x_right, y1), INFO, size, 400)
-    _mono(canvas, lines[1], (x_right, y2), _lerp(INFO, (0, 0, 0), 0.2), size, 400)
+    _label(canvas, left, (x_left, ty), INFO, big, 600)
+    _label(canvas, lines[0], (x_right, y1), INFO, size, 400)
+    _label(canvas, lines[1], (x_right, y2), _lerp(INFO, (0, 0, 0), 0.2), size, 400)
     cv2.line(canvas, (cx, y1 - size), (cx, y2 + round(3 * scale)), (80, 84, 88), 1, cv2.LINE_AA)
     if hostile is not None:
         # On target: the lock light beside the range.
@@ -2024,38 +1990,6 @@ def _painters(round_: SniperRound, now: float, view: View) -> list:
     return painters
 
 
-def hud_origin(width: int, height: int, scale: float) -> tuple[int, int]:
-    """Where the app puts the score block (see ``app.layout_for``), so the
-    world can lay a panel under it before the text arrives."""
-    margin = max(1, round(16 * scale))
-    return (width // 4 + margin + max(1, round(28 * scale)), margin)
-
-
-def hud_panel(width: int, height: int, scale: float) -> tuple[int, int, int, int]:
-    """The one panel the camera feed and the whole readout sit on: from the
-    camera's corner (``app.layout_for`` puts it at the margin, a quarter of the
-    window each way) across to the end of the score block."""
-    margin = max(1, round(16 * scale))
-    pad = round(10 * scale)
-    x, y = hud_origin(width, height, scale)
-    right = x + round(330 * scale)
-    bottom = max(margin + height // 4, y + round(196 * scale)) + pad
-    return (margin - pad, margin - pad, right, bottom)
-
-
-def _hud_backing(canvas: np.ndarray, width: int, height: int, scale: float) -> None:
-    """A solid panel behind the camera and the whole readout - score, tally,
-    wind - drawn as part of the world, so the text the app lays on top sits on
-    a panel rather than on the sky, and the feed is framed by the same panel."""
-    x0, y0, x1, y1 = hud_panel(width, height, scale)
-    _panel(canvas, x0, y0, x1, y1, 0.93)
-    cv2.rectangle(canvas, (x0, y0), (x1 - 1, y1 - 1), (40, 42, 44), 1)
-    # The score block's own division from the feed: a hairline.
-    x, y = hud_origin(width, height, scale)
-    cv2.line(canvas, (x - round(16 * scale), y + round(6 * scale)),
-             (x - round(16 * scale), y1 - round(16 * scale)), (40, 42, 44), 1)
-
-
 def draw_world(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
     height, width = canvas.shape[:2]
     round_.set_frame(width, height)
@@ -2121,74 +2055,11 @@ def draw_world(canvas: np.ndarray, round_: SniperRound, now: float) -> None:
         cv2.add(glass, _lens_dirt(width, height)[gy0:gy1, gx0:gx1], dst=glass)
         cv2.add(glass, _lens_ring(width, height)[gy0:gy1, gx0:gx1], dst=glass)
         _draw_reticle(canvas, round_, now)
-        _hud_backing(canvas, width, height, scale)
     else:
-        _hud_backing(canvas, width, height, scale)
         if round_.unscoped_since is not None:
             since = now - round_.unscoped_since
             if since < 0.25:
                 _soft_focus(canvas, 0.6 * (1.0 - since / 0.25))
-
-
-def _panel(canvas: np.ndarray, x0: int, y0: int, x1: int, y1: int, alpha: float = 0.62) -> None:
-    """A dark backing, blended only over its own rectangle."""
-    x0, y0 = max(x0, 0), max(y0, 0)
-    x1, y1 = min(x1, canvas.shape[1]), min(y1, canvas.shape[0])
-    if x1 <= x0 or y1 <= y0:
-        return
-    roi = canvas[y0:y1, x0:x1]
-    cv2.addWeighted(roi, 1.0 - alpha, roi, 0.0, 13.0 * alpha, dst=roi)
-
-
-def _wind_gauge(canvas: np.ndarray, x: int, y: int, span: int, wind: float, accent, scale: float) -> None:
-    """An arrow the length of the wind, pointing the way it blows."""
-    cv2.line(canvas, (x, y), (x + span, y), (70, 72, 74), 1, cv2.LINE_AA)
-    mid = x + span // 2
-    for k in range(-4, 5):
-        tick = 5 if k == 0 else 2
-        tx = mid + int(k * span / 8)
-        cv2.line(canvas, (tx, y - tick), (tx, y + tick), (120, 122, 124), 1)
-    reach = int(wind / MAX_WIND * span * 0.5)
-    if abs(reach) >= 2:
-        cv2.arrowedLine(canvas, (mid, y), (mid + reach, y), accent,
-                        max(2, round(2 * scale)), cv2.LINE_AA, tipLength=min(0.5, 6.0 / abs(reach)))
-
-
-def draw_hud(canvas: np.ndarray, round_: SniperRound, origin: tuple[int, int],
-             now: float) -> None:
-    """Hostiles left, the tally, the stage and the wind - in the readout's one
-    face, on the readout's one panel, scoped or not. The range and the hold
-    are read off the glass itself."""
-    x, y = origin
-    scale = round_.options.scale
-    label = (168, 172, 176)
-    value = (232, 234, 236)
-    accent = (110, 210, 250)
-    small, big = max(11, round(13 * scale)), max(14, round(18 * scale))
-
-    def at(offset: float) -> int:
-        return y + round(offset * scale)
-
-    # The panel is already under us (the world laid it); the accent bar the app
-    # draws beside the score carries on down past the tally.
-    left, right = x + round(4 * scale), x + round(330 * scale)
-    cv2.line(canvas, (left, at(112)), (left, at(190)), accent, max(1, round(2 * scale)))
-    cv2.line(canvas, (x + round(14 * scale), at(136)), (right - round(10 * scale), at(136)), (54, 56, 58), 1)
-
-    # Line one: the count, the tally, the stage - labels, then numbers.
-    tx = x + round(14 * scale)
-    tx += _label(canvas, "HOSTILES", (tx, at(160)), label, small) + round(10 * scale)
-    tx += _label(canvas, str(round_.remaining_hostiles), (tx, at(161)), value, big, 600) + round(22 * scale)
-    tx += _label(canvas, "DOWN", (tx, at(160)), label, small) + round(10 * scale)
-    _label(canvas, str(round_.kills), (tx, at(161)), value, big, 600)
-    stage = f"STAGE {round_.stage(now)}"
-    _label(canvas, stage, (right - round(10 * scale) - _label_width(stage, small), at(160)), accent, small)
-
-    # Line two: the wind gauge, with the number right-aligned after it.
-    _label(canvas, "WIND", (x + round(14 * scale), at(186)), label, small)
-    _wind_gauge(canvas, x + round(76 * scale), at(181), round(150 * scale), round_.wind, accent, scale)
-    speed = f"{abs(round_.wind):.1f} m/s"
-    _label(canvas, speed, (right - round(10 * scale) - _label_width(speed, small), at(186)), accent, small)
 
 
 def draw_emblem(panel: np.ndarray) -> None:

@@ -87,6 +87,66 @@ class Summary:
     won: bool = False
 
 
+#: How a readout's value should be coloured: plainly, as something to
+#: watch, or as trouble. There is no green: green means the gun is ready.
+PLAIN, WARNING, DANGER = "", "warning", "danger"
+
+
+@dataclass(frozen=True)
+class Readout:
+    """One small labelled value a map keeps on screen beside the score.
+
+    A map says what matters in its round - bandits down, the pane's
+    integrity, the wind - and the game lays every readout in the one score
+    panel, in one type and one material, rather than each map drawing a
+    panel of its own over its world. Being data, not drawing, the same list
+    can be sent to a page that draws its own interface.
+    """
+
+    label: str  # a word or two, sentence case: "Bandits", "Wind"
+    value: str  # already formatted: "3", "86%", "0.2 m/s"
+    #: A bar under the value - health, integrity - from 0 to 1, or from -1
+    #: to 1 drawn out from the middle when ``signed`` (wind from either side).
+    meter: float | None = None
+    signed: bool = False
+    tone: str = PLAIN
+
+
+class GameClock:
+    """The round's time: the wall clock with every paused stretch taken out.
+
+    A round and its map read the clock they are handed - to start it, to
+    spawn, to move, to expire - so pausing has to stop that clock itself.
+    Holding the displayed seconds would leave the world running underneath:
+    targets expiring, walkers arriving, all while the sheet is up. Handed
+    ``now(wall)`` instead of the wall time, everything the round does waits
+    for the player to come back.
+    """
+
+    def __init__(self) -> None:
+        self.paused_at: float | None = None
+        self.lost = 0.0  # seconds spent paused, all told
+
+    @property
+    def paused(self) -> bool:
+        return self.paused_at is not None
+
+    def now(self, wall: float) -> float:
+        """What the round's clock reads at wall time ``wall``."""
+        if self.paused_at is not None:
+            return self.paused_at - self.lost
+        return wall - self.lost
+
+    def pause(self, wall: float) -> None:
+        if self.paused_at is None:
+            self.paused_at = wall
+
+    def resume(self, wall: float) -> None:
+        if self.paused_at is not None:
+            self.lost += max(0.0, wall - self.paused_at)
+            self.paused_at = None
+
+
 @dataclass(frozen=True)
 class RoundOptions:
     """The knobs a round is built with. Each map reads what it needs."""
@@ -248,6 +308,11 @@ class Round:
         """Sound cues raised since the last call, e.g. ``"groan"``."""
         cues, self.cues = self.cues, []
         return cues
+
+    def readouts(self, now: float) -> tuple[Readout, ...]:
+        """What this map keeps on screen beside the score, in the order it
+        should be read: see :class:`Readout`. Most maps need nothing."""
+        return ()
 
     def look(self, position: tuple[float, float] | None, scoped: bool) -> None:
         """Where the player is aiming this frame, 0..1 of the window, and whether
