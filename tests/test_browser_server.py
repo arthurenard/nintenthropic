@@ -665,7 +665,13 @@ def test_every_element_and_icon_the_script_names_is_in_the_page(server):
     assert icons and {f"i-{name}" for name in icons} <= present
 
 
-def test_art_is_drawn_at_the_size_asked_for_within_limits(server):
+def test_art_is_drawn_at_the_size_asked_for_within_limits(server, monkeypatch):
+    # Drawn blank: the sizes are under test here, and the largest real one
+    # takes long enough on a busy machine to time the request out.
+    monkeypatch.setattr(
+        browser, "art", lambda key, w, h: browser.jpeg(np.zeros((h, w, 3), np.uint8))
+    )
+
     def size(path):
         status, raw, response = call(server, "GET", path)
         assert status == 200 and response.getheader("Content-Type") == "image/jpeg"
@@ -674,6 +680,7 @@ def test_art_is_drawn_at_the_size_asked_for_within_limits(server):
 
     assert size("/art/orbit") == (360, 200)
     assert size("/art/orbit?w=720&h=405") == (720, 405)
+    assert size("/art/range?w=320&h=180") == (320, 180)
     (low_w, low_h), (high_w, high_h) = browser.ART_SIZES
     assert size("/art/orbit?w=99999&h=99999") == (high_w, high_h)
     assert size("/art/orbit?w=1&h=-5") == (low_w, low_h)
