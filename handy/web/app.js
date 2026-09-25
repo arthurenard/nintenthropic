@@ -387,15 +387,17 @@ async function start() {
 // Camera frames are mirrored and encoded on a worker thread where the browser
 // allows it (capture.js). On the page's own thread toBlob waits for the page to
 // fall idle, which a busy or background tab may not do for a whole second.
-let encoder = null,
-  encoded = null;
+// It answers in order. A game left for the arcade can still have a frame in
+// it when the next game's first one goes in, so each waits its turn.
+let encoder = null;
+const encoding = [];
 try {
   if (window.OffscreenCanvas) {
     encoder = new Worker("/capture.js");
-    encoder.onmessage = ({ data }) => encoded?.(data);
+    encoder.onmessage = ({ data }) => encoding.shift()?.(data);
     encoder.onerror = () => {
       encoder = null;
-      encoded?.(null);
+      encoding.splice(0).forEach((resolve) => resolve(null));
     };
   }
 } catch {
@@ -415,9 +417,13 @@ async function cameraFrame() {
     Math.round((video.videoHeight - height) / 2),
   ];
   if (encoder) {
-    const frame = await createImageBitmap(video, x, y, width, height);
+    // A camera that has just stopped has no frame to give: send none.
+    const frame = await createImageBitmap(video, x, y, width, height).catch(
+      () => null,
+    );
+    if (!frame) return null;
     return new Promise((resolve) => {
-      encoded = resolve;
+      encoding.push(resolve);
       encoder.postMessage(frame, [frame]);
     });
   }
