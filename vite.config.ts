@@ -18,9 +18,12 @@ const VENDOR = [
   {
     from: "node_modules/@mediapipe/tasks-vision/wasm",
     to: "public/mediapipe",
-    // The SIMD build every current browser runs, and the plain one for the
-    // few that cannot; the tracker picks between them at run time.
+    // The ES-module build, which the tracker's worker loads (a module worker
+    // cannot run the classic loader script), and the classic SIMD and plain
+    // builds for tracking on the page itself where workers cannot do it.
     files: [
+      "vision_wasm_module_internal.js",
+      "vision_wasm_module_internal.wasm",
       "vision_wasm_internal.js",
       "vision_wasm_internal.wasm",
       "vision_wasm_nosimd_internal.js",
@@ -70,6 +73,8 @@ export default defineConfig({
   base: "./",
   plugins: [vendorFiles()],
   build: { target: "es2022", sourcemap: true, assetsInlineLimit: 0 },
+  // The tracking worker is an ES module: it loads MediaPipe's module build.
+  worker: { format: "es" },
   server: { host: "127.0.0.1", port: 5173 },
   preview: { host: "127.0.0.1", port: 4173 },
   test: { environment: "node", include: ["src/**/*.test.ts"] },

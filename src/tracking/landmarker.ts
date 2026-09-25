@@ -40,7 +40,10 @@ const OPTIONS = {
   minTrackingConfidence: 0.5,
 };
 
-export async function loadHandLandmarker(progress: LandmarkerProgress): Promise<LoadedLandmarker> {
+export async function loadHandLandmarker(
+  progress: LandmarkerProgress,
+  prefer: "GPU" | "CPU" = "GPU",
+): Promise<LoadedLandmarker> {
   let binaryUrl: string | null = null;
   try {
     const simd = await FilesetResolver.isSimdSupported();
@@ -58,6 +61,7 @@ export async function loadHandLandmarker(progress: LandmarkerProgress): Promise<
         ...OPTIONS,
         baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate },
       });
+    if (prefer === "CPU") return { landmarker: await create("CPU"), delegate: "CPU" };
     try {
       return { landmarker: await create("GPU"), delegate: "GPU" };
     } catch (gpuError) {

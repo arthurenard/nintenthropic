@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- The tracker as the game runs it, served by the dev server only: a still
+     picture of a hand played as a 30 fps video, read frame by frame by the
+     tracker (?where=worker or ?where=page, ?delegate=CPU), while a busy
+     animation loop measures what the tracking costs the page's frames. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <base href="/" />
+    <title>Tracker timing</title>
+  </head>
+  <body style="margin: 0; background: #000">
+    <canvas id="frame" width="480" height="720"></canvas>
+    <video id="video" muted playsinline></video>
+    <script type="module">
+      import { loadTracker } from "/src/tracking/tracker.ts";
+      const params = new URLSearchParams(location.search);
+      const report = (window.smoke = { error: null });
+      try {
+        const image = new Image();
+        image.src = "/tests/data/thumbs_down.jpg";
+        await image.decode();
+        const canvas = document.getElementById("frame");
+        const context = canvas.getContext("2d");
+        const video = document.getElementById("video");
+        video.srcObject = canvas.captureStream(30);
+        let tick = 0;
+        const paint = () => {
+          context.drawImage(image, 0, 0, 480, 720);
+          context.fillStyle = tick++ % 2 ? "#000" : "#010101";
+          context.fillRect(0, 0, 1, 1);
+        };
+        paint();
+        await video.play();
+        const tracker = await loadTracker(
+          { wasm: () => {}, model: () => {} },
+          { where: params.get("where") ?? "auto", prefer: params.get("delegate") === "CPU" ? "CPU" : "GPU" },
+        );
+        if (params.get("carrier") === "bitmap") tracker.carrier = "bitmap";
+        report.where = tracker.where;
+        report.delegate = tracker.delegate;
+        let hands = 0;
+        tracker.subscribe((frame) => (hands += frame.landmarks ? 1 : 0));
+        tracker.start(video);
+        // Let the first frames compile their shaders, then measure.
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        tracker.resetStats();
+        const intervals = [];
+        let last = performance.now();
+        await new Promise((resolve) => {
+          const frame = (now) => {
+            intervals.push(now - last);
+            last = now;
+            paint();
+            if (intervals.length < 300) requestAnimationFrame(frame);
+            else resolve();
+          };
+          requestAnimationFrame(frame);
+        });
+        const sorted = [...intervals].sort((a, b) => a - b);
+        report.frames = { p50: sorted[150], p95: sorted[285], max: sorted[299], over20: intervals.filter((v) => v > 20).length };
+        report.tracker = tracker.stats();
+        report.hands = hands;
+        tracker.dispose();
+      } catch (error) {
+        report.error = String(error?.stack || error);
+      }
+      report.done = true;
+    </script>
+  </body>
+</html>
