@@ -483,8 +483,11 @@ def test_a_walker_too_small_to_see_is_skipped_without_error():
     assert canvas.any()
 
 
-def test_the_card_art_draws():
-    panel = np.zeros((220, 360, 3), np.uint8)
+@pytest.mark.parametrize("size", [(276, 348), (210, 620), (400, 1100), (36, 64)])
+def test_the_card_art_draws(size):
+    """At a chooser card's shape, a score card's wide banner, and the thumbnail
+    the menus blur behind them."""
+    panel = np.zeros((*size, 3), np.uint8)
     draw_emblem(panel)
     assert panel.any()
 

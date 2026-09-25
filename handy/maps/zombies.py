@@ -24,7 +24,7 @@ from typing import NamedTuple
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Impact, Rect, Round
+from ..game import MISS, Hit, Impact, Rect, Round, RoundOptions
 from ..scene import blend, draw_text
 
 # --- the world --------------------------------------------------------------
@@ -2561,51 +2561,66 @@ def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
               scale=0.6 * scale)
 
 
+#: The poster's cast: (gait, metres away, where across the picture as a
+#: fraction of its width, seed, hunch, tilt, phase). Placed by where they
+#: land in the picture rather than by lane, so the card and the wide score
+#: card frame them alike.
+POSTER = (("shamble", 15.0, 0.62, 71, 0.4, 10.0, 2.0),
+          ("limp", 12.5, 0.36, 58, -0.5, -14.0, 4.4),
+          ("shamble", 8.5, 0.53, 23, 0.7, 8.0, 5.3),
+          ("lurch", 5.6, 0.25, 40, 0.5, -18.0, 0.9),
+          ("crawl", 4.4, 0.47, 90, 0.0, 12.0, 2.6))
+POSTER_HERO = ("shamble", 1.75, 0.7, 44, 0.35, -14.0, 1.1)
+
+
 def draw_emblem(panel: np.ndarray) -> None:
-    """The card art, from the same renderer as the game: the nearest of them
-    almost on you, lit warm by your own shot, the crosshair on its skull, and
-    what has already fallen on the road between you."""
+    """The map's poster, for its card and its score card, from the same
+    renderer as the game: the nearest of them close enough to touch, moonlit
+    down one side, your sights on its skull; the rest coming up the road out
+    of the fog behind it; and one already down on the tar between you."""
     height, width = panel.shape[:2]
-    area = Rect(0, 0, width, height)
-    view = Perspective.for_area(area, horizon_fraction=0.40)
-    panel[:] = _environment((0, 0, width, height), width, height, 7,
-                            _skyline(area, 7))
-    round_ = ZombieRound.__new__(ZombieRound)
-    round_.stains = []
-    round_.fallen = []
-    round_.view = view
-    for distance, lane, seed, age in ((5.2, 1.6, 31, 20.0), (3.4, -1.5, 12, 6.0)):
-        figure = Walker(lane=lane, distance=distance, speed=0.7, phase=0.0, sway=0.0,
-                        build=1.0, seed=seed).figure(view, 0.0)
-        round_.stains.append((figure.x, figure.ground_y, figure.height * 0.18,
-                              -age, seed))
-    draw_stains(panel, round_, 0.0)
-    far = [Walker(lane=lane, distance=distance, speed=0.7, phase=distance, sway=0.2,
-                  build=1.0, gait=gait, seed=int(distance * 7), hunch=hunch)
-           for distance, lane, gait, hunch in ((12.0, -2.4, "shamble", 0.2),
-                                               (7.5, 2.4, "limp", -0.4),
-                                               (5.0, -1.3, "lurch", 0.6))]
-    for walker in far:
-        draw_walker(panel, walker, view, 0.0)
+    # The horizon a little lower than in play: more sky, and the moon in it.
+    top = int(height * 0.17)
+    area = Rect(0, top, width, height - top)
+    round_ = ZombieRound(RoundOptions(area=area, seed=7))
+    view = round_.view
+    panel[:] = _environment((area.x, area.y, area.width, area.height), width, height, 7,
+                            round_.skyline)
+
+    def cast(gait: str, distance: float, across: float, seed: int, hunch: float,
+             tilt: float, phase: float) -> Walker:
+        lane = (across * width - area.centre_x) * distance / view.focal
+        return Walker(lane=lane, distance=distance, speed=0.7, phase=phase, sway=0.0,
+                      build=1.0, hunch=hunch, tilt=tilt, gait=gait, seed=seed)
+
+    # One already down, a few seconds ago: still wet, the moon still on it.
+    fallen = cast("shamble", 3.6, 0.3, 12, 0.2, 10.0, 0.0)
+    round_.walkers = [fallen]
+    round_._kill(fallen, 0.0, headshot=True)
+    draw_stains(panel, round_, 3.0)
+    crowd = sorted((cast(*member) for member in POSTER), key=lambda w: -w.distance)
+    for walker in crowd:
+        if walker.distance > 9.0:
+            draw_walker(panel, walker, view, 0.0)
     draw_fog(panel, view, 3.0)
-    near = Walker(lane=0.5, distance=2.15, speed=0.7, phase=1.2, sway=0.0, build=1.0,
-                  gait="lurch", seed=44, hunch=0.3, tilt=-12.0)
-    draw_walker(panel, near, view, 0.0, light=0.5)
-    draw_rain(panel, area, 1.0, drops=40, view=view)
-    glow = _muzzle_glow(width, height)
-    cv2.addWeighted(panel, 1.0, glow, 0.4, 0.0, dst=panel)
-    draw_muzzle_burst(panel, area, 0.0)
-    # The crosshair, on the skull of the one that is about to reach you: a
-    # quiet green ring with a warm core, so it reads against the HUD's green.
-    figure = near.figure(view, 0.0)
-    centre = (int(figure.head[0]), int(figure.head[1]))
-    radius = max(6, int(figure.head_radius * 1.6))
-    green = (110, 190, 120)
-    cv2.circle(panel, centre, radius, (10, 30, 14), 4, cv2.LINE_AA)
-    cv2.circle(panel, centre, radius, green, 2, cv2.LINE_AA)
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        cv2.line(panel, (centre[0] + dx * radius // 2, centre[1] + dy * radius // 2),
-                 (centre[0] + dx * (radius + radius // 2), centre[1] + dy * (radius + radius // 2)),
-                 green, 2, cv2.LINE_AA)
-    cv2.circle(panel, centre, 3, (10, 20, 30), -1, cv2.LINE_AA)
-    cv2.circle(panel, centre, 2, SCORE_INK, -1, cv2.LINE_AA)
+    for walker in crowd:
+        if walker.distance <= 9.0:
+            draw_walker(panel, walker, view, 0.0)
+    hero = cast(*POSTER_HERO)
+    draw_walker(panel, hero, view, 0.0)
+    draw_rain(panel, Rect(0, 0, width, height), 1.0, drops=max(30, width // 9), view=view)
+
+    # Your sights on its skull: a thin ring and four ticks in the tint that
+    # means your gun is ready.
+    figure = hero.figure(view, 0.0)
+    centre = figure.head
+    radius = max(6.0, figure.head_radius * 1.45)
+    weight = max(1, int(round(height / 300)))
+    for colour, thick in (((12, 24, 14), weight + 2), ((88, 209, 48), weight)):
+        cv2.circle(panel, (_fix(centre[0]), _fix(centre[1])), _fix(radius), colour, thick,
+                   cv2.LINE_AA, FIX_BITS)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            cv2.line(panel, (_fix(centre[0] + dx * radius * 0.55),
+                             _fix(centre[1] + dy * radius * 0.55)),
+                     (_fix(centre[0] + dx * radius * 1.3), _fix(centre[1] + dy * radius * 1.3)),
+                     colour, thick, cv2.LINE_AA, FIX_BITS)
