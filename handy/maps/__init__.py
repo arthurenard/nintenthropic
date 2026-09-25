@@ -31,7 +31,6 @@ class Map:
     footer: str
     draw_emblem: Callable[[np.ndarray], None]
     play_hit: Callable[..., None] = _ring_hit
-    draw_hud: Callable[[np.ndarray, Round, tuple[int, int], float], None] | None = None
 
 
 RANGE = Map(

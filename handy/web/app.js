@@ -962,11 +962,18 @@ function renderReadouts(list = []) {
       const value = document.createElement("dd");
       box.append(label, value);
       let meter = null;
-      if (readout.max) {
+      if (readout.meter != null) {
         meter = document.createElement("div");
-        meter.className = "meter";
+        meter.className = readout.signed ? "meter signed" : "meter";
         meter.setAttribute("aria-hidden", "true");
         meter.append(document.createElement("span"));
+        // Health goes down a bite at a time: cut the bar where each bite
+        // leaves it, so the bites left can be counted at a glance.
+        for (const notch of readout.notches || []) {
+          const cut = document.createElement("i");
+          cut.style.left = `${notch * 100}%`;
+          meter.append(cut);
+        }
         box.append(meter);
       }
       return { label: readout.label, value, meter };
@@ -982,10 +989,19 @@ function renderReadouts(list = []) {
     row.value.classList.toggle("danger", danger);
     if (row.meter) {
       row.meter.classList.toggle("danger", danger);
-      const share = Math.max(0, Math.min(1, readout.value / readout.max));
-      const transform = `scaleX(${share})`;
-      if (row.meter.firstElementChild.style.transform !== transform)
-        row.meter.firstElementChild.style.transform = transform;
+      const fill = row.meter.firstElementChild;
+      if (readout.signed) {
+        // Out from the middle, whichever way it points: the wind.
+        const share = Math.max(-1, Math.min(1, readout.meter));
+        const left = `${50 + Math.min(0, share) * 50}%`,
+          width = `${Math.abs(share) * 50}%`;
+        if (fill.style.left !== left) fill.style.left = left;
+        if (fill.style.width !== width) fill.style.width = width;
+      } else {
+        const share = Math.max(0, Math.min(1, readout.meter));
+        const transform = `scaleX(${share})`;
+        if (fill.style.transform !== transform) fill.style.transform = transform;
+      }
     }
   });
 }

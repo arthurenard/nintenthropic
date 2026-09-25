@@ -252,14 +252,6 @@ def aim_pixels(aim: Aim, layout: Layout) -> tuple[int, int] | None:
             round(aim.position[1] * (layout.window.height - 1)))
 
 
-#: Where a map's own drawn readout starts, in 720-tall units below the origin
-#: it is handed, and the size of the glass strip laid under it: for a map
-#: that still draws its HUD itself (``Map.draw_hud``) rather than naming its
-#: readouts (``Round.readouts``), which sit in the score panel instead.
-READOUT_FIRST = 146
-READOUT_SIZE = (268, 60)
-
-
 def hud_room(view: View, layout: Layout) -> int:
     """How wide the score panel may grow: to a little short of the clock."""
     scale = layout.scale
@@ -267,17 +259,12 @@ def hud_room(view: View, layout: Layout) -> int:
     return max(1, clock.x - round(16 * scale) - layout.hud[0])
 
 
-def hud_panels(view: View, layout: Layout) -> tuple[Rect, Rect | None]:
-    """The score panel, with the map's readouts in it, and - for a map that
-    draws its own - the strip under it that its drawing sits on."""
-    scale = layout.scale
+def hud_panel(view: View, layout: Layout) -> Rect:
+    """The score panel, with the map's readouts in it."""
     readouts = view.round.readouts(view.now)
     panel, _ = scene.score_panel(view.round, readouts, layout.hud, hud_room(view, layout),
-                                 scale)
-    if readouts or view.map.draw_hud is None:
-        return panel, None
-    width, height = (round(value * scale) for value in READOUT_SIZE)
-    return panel, Rect(panel.x, panel.bottom + round(8 * scale), width, height)
+                                 layout.scale)
+    return panel
 
 
 #: The keys a round answers to beyond the sheet's own choices, as hints.
@@ -322,14 +309,6 @@ def render(canvas: np.ndarray, view: View, layout: Layout) -> None:
     readouts = view.round.readouts(view.now)
     scene.draw_score_panel(canvas, view.round, readouts, layout.hud,
                            hud_room(view, layout), scale, view.now)
-    if not readouts and view.map.draw_hud is not None:
-        # A map that draws its own readout gets glass of its own under the
-        # score, and its drawing lined up with the text above it.
-        _, strip = hud_panels(view, layout)
-        scene.draw_glass(canvas, strip, round(scene.PANEL_RADIUS * scale), scale)
-        view.map.draw_hud(canvas, view.round,
-                          (strip.x + round(14 * scale),
-                           strip.y + round((14 - READOUT_FIRST) * scale)), view.now)
     scene.draw_clock(canvas, view.remaining, scale, layout.margin)
     crosshair = view.crosshair
     scene.draw_button(canvas, layout.pause_button, highlighted=(

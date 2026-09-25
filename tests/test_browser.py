@@ -844,41 +844,43 @@ def test_the_round_closes_with_its_sound_once():
     [
         ("zombies", ["Health", "Wave", "Down"]),
         ("orbit", ["Pane", "Cleared"]),
-        ("sniper", ["Wind", "Stage", "Hostiles"]),
+        ("sniper", ["Hostiles", "Down", "Stage", "Wind"]),
         ("western", ["Bandits", "Bottles", "Townsfolk"]),
     ],
 )
 def test_each_map_sends_the_numbers_it_lives_by(key, labels):
+    """The page shows what the desktop's score panel shows: each round's own
+    readouts, with meters from 0 to 1, or -1 to 1 when signed."""
     session = BrowserSession({"map": key})
     data = session.tick({}, session.last_tick + 0.05)
     assert [r["label"] for r in data["readouts"]] == labels
     for readout in data["readouts"]:
-        assert isinstance(readout["value"], (int, str)), readout
-        if "max" in readout:
-            assert 0 <= readout["value"] <= readout["max"]
+        assert isinstance(readout["value"], str), readout
+        if "meter" in readout:
+            low = -1 if readout.get("signed") else 0
+            assert low <= readout["meter"] <= 1
 
 
-def test_readouts_warn_when_a_map_is_going_badly():
+def test_readouts_carry_meters_notches_and_warnings():
     session = BrowserSession({"map": "zombies"})
     session.tick({}, session.last_tick + 0.05)
     health = session.info()["readouts"][0]
-    assert health == {"label": "Health", "value": 100, "max": 100}
+    assert (health["label"], health["value"], health["meter"]) == ("Health", "100", 1.0)
+    assert len(health["notches"]) == 5, "cut where each of the first five bites leaves it"
+    assert "tone" not in health
     session.round.health = 20
     assert session.info()["readouts"][0]["tone"] == "danger"
     session = BrowserSession({"map": "sniper"})
     session.round.wind = -2.345
-    wind = session.info()["readouts"][0]
-    assert wind["value"] == "2.3 m/s ←"
+    wind = session.info()["readouts"][-1]
+    assert wind["value"].startswith("2.3 m/s") and wind["signed"] and wind["meter"] < 0
 
 
-def test_a_readout_a_round_does_not_have_is_left_out():
+def test_a_round_that_names_no_readouts_sends_none():
     from types import SimpleNamespace
 
-    # As another version of the map might: one tally renamed away.
-    older = SimpleNamespace(bandits_down=2, townsfolk_hit=0)
-    labels = [r["label"] for r in browser.readouts(maps.WESTERN, older, 0)]
-    assert labels == ["Bandits", "Townsfolk"]
-    assert browser.readouts(maps.ZOMBIES, object(), 0) == []
+    assert browser.readouts(SimpleNamespace(), 0) == []
+    assert browser.readouts(SimpleNamespace(readouts=lambda now: ()), 0) == []
 
 
 @pytest.mark.parametrize(

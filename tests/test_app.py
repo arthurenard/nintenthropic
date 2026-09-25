@@ -1654,7 +1654,7 @@ def paused_round(monkeypatch, keys, aims=None, frame_seconds=1.0):
     the world was drawn at, the clock on screen, and whether the sheet was up."""
     import cv2
 
-    from handy import app, maps, schemes, scene
+    from handy import app, maps, schemes
     from handy.calibration import default_rig
 
     clock = {"now": 1000.0}
@@ -2400,16 +2400,14 @@ def test_the_corner_chrome_keeps_to_the_corners(chosen, width, height):
     layout = layout_for(width, height)
     for remaining in (48.0, 600.0, None):
         view = chrome_view(chosen, layout, remaining=remaining)
-        panel, strip = app.hud_panels(view, layout)
+        panel = app.hud_panel(view, layout)
         clock = scene.clock_pill(width, remaining, layout.scale, layout.margin)
         assert layout.inset.right < panel.x and panel.right < clock.x
         assert panel.y == layout.inset.y == clock.y == layout.pause_button.rect.y
         assert clock.right < layout.pause_button.rect.x
         assert abs(clock.x + clock.width / 2 - width / 2) <= 1
-        for rect in (panel, strip):
-            if rect is not None:
-                assert rect.bottom < layout.play_area.y
-                assert not overlaps(rect, layout.inset)
+        assert panel.bottom < layout.play_area.y
+        assert not overlaps(panel, layout.inset)
 
 
 def test_the_hints_open_the_round_then_fade():

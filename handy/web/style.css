@@ -954,6 +954,33 @@ body[data-view="game"] {
 .readouts .meter.danger span {
   background: var(--danger);
 }
+.readouts .meter {
+  position: relative;
+}
+.readouts .meter.signed span {
+  position: absolute;
+  top: 0;
+  transition:
+    left 250ms var(--ease),
+    width 250ms var(--ease);
+}
+.readouts .meter.signed::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--label-secondary, rgba(235, 235, 245, 0.62));
+}
+.readouts .meter i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(28, 28, 30, 0.9);
+}
 .hud-clock {
   position: absolute;
   top: var(--hud);
