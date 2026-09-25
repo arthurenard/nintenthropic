@@ -129,6 +129,8 @@ export interface CueSpec {
   /** Loops: fade in and out (s). */
   fadeIn?: number;
   fadeOut?: number;
+  /** Not slowed by slow motion: sounds made to accompany it (the death, its boom, the stingers). */
+  steady?: boolean;
   /** A mastering trim in dB, for the rare sound that must sit off the common loudness. */
   trim?: number;
   /** Duration a take must fall in (s), checked by the tests. */
@@ -310,15 +312,15 @@ export const CUES: Record<string, CueSpec> = {
 
   // --- the player's body -------------------------------------------------------------
   heartbeat: {
-    recipe: heartbeat, pack: "core", bus: "sfx", level: -8, loop: true,
+    recipe: heartbeat, pack: "core", bus: "sfx", level: -8, loop: true, steady: true,
     priority: 3, fadeIn: 0.3, fadeOut: 0.6, vary: 0, expect: [0.7, 1.0],
   },
   heartbeat_beat: {
-    recipe: heartbeatBeat, pack: "core", bus: "sfx", level: -8,
+    recipe: heartbeatBeat, pack: "core", bus: "sfx", level: -9, steady: true,
     priority: 3, vary: 0.01, expect: [0.3, 0.8],
   },
   death_player: {
-    recipe: deathPlayer, pack: "western", bus: "sfx", level: -4, reverb: 0.1,
+    recipe: deathPlayer, pack: "western", bus: "sfx", level: -4, reverb: 0.1, steady: true,
     priority: 3, maxInstances: 1, vary: 0, expect: [2.5, 3.8],
   },
 
@@ -329,19 +331,19 @@ export const CUES: Record<string, CueSpec> = {
     priority: 1, maxInstances: 1, vary: 0, expect: [5, 9],
   },
   wave_start: {
-    recipe: waveStart, pack: "western", bus: "sfx", level: -7, reverb: 0.1,
+    recipe: waveStart, pack: "western", bus: "sfx", steady: true, level: -7, reverb: 0.1,
     priority: 2, maxInstances: 1, vary: 0, expect: [2.5, 5.5],
   },
   wave_clear: {
-    recipe: waveClear, pack: "western", bus: "sfx", level: -9, reverb: 0.1,
+    recipe: waveClear, pack: "western", bus: "sfx", steady: true, level: -9, reverb: 0.1,
     priority: 2, maxInstances: 1, vary: 0, expect: [1.2, 4],
   },
   boss_intro: {
-    recipe: bossIntro, pack: "western", bus: "sfx", level: -7, reverb: 0.1,
+    recipe: bossIntro, pack: "western", bus: "sfx", steady: true, level: -7, reverb: 0.1,
     priority: 2, maxInstances: 1, vary: 0, expect: [3.5, 7.5],
   },
   duel_whistle: {
-    recipe: duelWhistle, pack: "western", bus: "sfx", level: -8, reverb: 0.1,
+    recipe: duelWhistle, pack: "western", bus: "sfx", steady: true, level: -8, reverb: 0.1,
     priority: 2, maxInstances: 1, vary: 0, expect: [4, 8.5],
   },
   quick_draw: {
@@ -366,7 +368,7 @@ export const CUES: Record<string, CueSpec> = {
   },
   /** Internal: the boom under setFilter("slowmo"). */
   slowmo_boom: {
-    recipe: slowmoBoom, pack: "core", bus: "sfx", level: -6,
+    recipe: slowmoBoom, pack: "core", bus: "sfx", level: -6, steady: true,
     priority: 3, maxInstances: 1, vary: 0, expect: [1.5, 3.5],
   },
 
