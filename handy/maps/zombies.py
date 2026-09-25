@@ -59,8 +59,6 @@ ASPHALT = (38, 34, 31)  # wet tar, blue-grey under the moon
 ROAD_LINE = (150, 148, 138)
 POST = (11, 11, 12)
 TREE = (9, 9, 10)
-RAGS = (22, 20, 22)  # what is left of the clothes: near-black, a touch cold
-SKIN = (58, 60, 66)  # dead flesh: a dark core, only a shade paler than the rags
 MOONLIGHT = (206, 198, 184)
 RIM = (240, 228, 200)  # the cold edge the moon puts on skull and shoulders
 EYESHINE = (200, 240, 224)
@@ -983,9 +981,15 @@ class ZombieRound(Round):
     """Hold the road until dawn. They do not stop coming."""
 
     walkers: list[Walker] = field(default_factory=list, init=False)
-    #: Where each one fell: x, y, size, when, and which way it landed.
+    #: Where each one bled: x, y, size, when, and which way it landed.
     stains: list[tuple[float, float, float, float, int]] = field(
         default_factory=list, init=False)
+    #: Every one put down - the walker as it was, when, and whether it was a
+    #: head shot - so it can fall, and then lie where it fell.
+    fallen: list[tuple[Walker, float, bool]] = field(default_factory=list, init=False)
+    #: The backdrop with the settled dead painted into it, kept between frames:
+    #: (the backdrop it was painted on, the road, the time it is painted up to).
+    road: tuple | None = field(default=None, init=False, repr=False)
     health: int = field(default=FULL_HEALTH, init=False)
     kills: int = field(default=0, init=False)
     bitten_at: float | None = field(default=None, init=False)
@@ -1062,7 +1066,7 @@ class ZombieRound(Round):
         # Further away is worth more: it is a harder shot and buys more time.
         bonus = 1.0 + min(struck.distance / 22.0, 1.0)
         if zone == "head":
-            self._kill(struck, now)
+            self._kill(struck, now, headshot=True)
             return Hit(points=int(HEADSHOT_POINTS * bonus), ring=0,
                        label="HEADSHOT", perfect=True)
 
@@ -1073,14 +1077,20 @@ class ZombieRound(Round):
             return Hit(points=int(KILL_POINTS * bonus), ring=1, label="DOWN")
         return Hit(points=WOUND_POINTS, ring=2)
 
-    def _kill(self, walker: Walker, now: float) -> None:
+    def _kill(self, walker: Walker, now: float, headshot: bool = False) -> None:
         self.walkers.remove(walker)
         self.kills += 1
+        self.fallen.append((walker, now, headshot))
+        del self.fallen[:-STAIN_LIMIT]
         if self.options.enemy == "robots":
-            return
+            return  # a machine leaves a wreck on the road, but no blood
         figure = walker.figure(self.view, now)
-        self.stains.append((figure.x, figure.ground_y, figure.height * 0.18, now,
-                            walker.seed))
+        # The pool spreads under where the body comes to rest: across the road
+        # from its feet, the way it fell - but a crawler just drops flat.
+        rests = figure.x
+        if walker.gait != "crawl":
+            rests += _fall_side(walker.seed) * figure.height * 0.42
+        self.stains.append((rests, figure.ground_y, figure.height * 0.18, now, walker.seed))
         del self.stains[:-STAIN_LIMIT]
 
     def _spawn(self, wave: int) -> Walker:
@@ -1722,7 +1732,7 @@ def _tones(seed: int, robot: bool, haze: float, light: float) -> dict[str, tuple
     tones = {}
     for name, colour in base.items():
         sheen, edge = _SHEEN[name]
-        body = _mix(colour, FLASH, light * (0.3 if name == "skin" else 0.16))
+        body = _mix(colour, FLASH, light * (0.2 if name == "skin" else 0.1))
         lit = _mix(body, MOON_TINT, sheen)
         rim = _mix(colour, RIM, edge)
         # The fog takes the body; the moon's edge, which is light in the fog
@@ -1840,46 +1850,112 @@ def _eye_points(figure: Figure) -> tuple[tuple[float, float], tuple[float, float
     return _head_point(figure, -0.36, 0.08), _head_point(figure, 0.36, 0.08)
 
 
-def _cast_shadow(canvas: np.ndarray, figure: Figure) -> None:
+def _cast_shadow(canvas: np.ndarray, figure: Figure, edge: np.ndarray,
+                 fall: float = 0.0) -> None:
     """Its shadow: thrown long down the road and away from the moon, and a
-    tight dark patch where it touches the road, so it stands on it."""
+    tight dark patch where it touches the road, so it stands on it. Going
+    over, the long shadow shortens and the patch spreads under the body."""
     height, fade = figure.height, 1.0 - figure.fog * 0.6
     crawl = figure.gait == "crawl"
-    reach = height * (0.28 if crawl else 0.5)
-    _shade(canvas, (figure.x - reach * 0.42, figure.ground_y + reach * 0.12),
-           reach * 0.52, height * 0.05, -17.0, 0.5 * fade)
-    _shade(canvas, (figure.x, figure.ground_y - height * (0.02 if crawl else 0.0)),
-           height * (0.24 if crawl else 0.15), height * 0.03, 0.0, 0.75 * fade)
+    if fall < 1.0:
+        reach = height * (0.28 if crawl else 0.5) * (1.0 - fall)
+        _shade(canvas, (figure.x - reach * 0.42, figure.ground_y + reach * 0.12),
+               max(2.0, reach * 0.52), height * 0.05, -17.0, 0.5 * fade)
+    if fall > 0.0:
+        low, high = edge.min(axis=0), edge.max(axis=0)
+        _shade(canvas, ((low[0] + high[0]) * 0.5, figure.ground_y),
+               (high[0] - low[0]) * 0.55, height * 0.035, 0.0, 0.7 * fade * fall)
+    if fall < 1.0:
+        _shade(canvas, (figure.x, figure.ground_y - height * (0.02 if crawl else 0.0)),
+               height * (0.24 if crawl else 0.15), height * 0.03, 0.0,
+               0.75 * fade * (1.0 - fall))
+
+
+#: Seconds one takes to hit the road once it is put down.
+FALL = 0.4
+#: Seconds after a kill that its pool has stopped spreading and its body has
+#: soaked to the colour of the tar: from then on it is part of the road.
+SETTLED = 12.0
+TAR = (24, 22, 20)  # what the rags and the flesh soak to, lying on the road
+
+
+def _fall_side(seed: int) -> int:
+    """Which way this one falls, and lies: to its left or its right."""
+    return 1 if _rag(seed, 20) < 0.5 else -1
+
+
+def _toppled(figure: Figure, fall: float) -> tuple[np.ndarray, np.ndarray]:
+    """How far over it has gone, ``fall`` from 0 upright to 1 flat on the road,
+    as a transform about its feet: turned sideways and flattened into the
+    angle you see the road at. Gravity: slow to start, fast at the end. A
+    crawler has nowhere to fall to, and only drops flat."""
+    eased = fall * fall
+    side = _fall_side(figure.seed)
+    turn = math.radians((12.0 if figure.gait == "crawl" else 86.0) * side * eased)
+    flat = 1.0 - (0.45 if figure.gait == "crawl" else 0.58) * eased
+    cos, sin = math.cos(turn), math.sin(turn)
+    transform = np.float32(((cos, -sin), (sin * flat, cos * flat)))
+    return transform, np.float32((figure.x - figure.lean * figure.height, figure.ground_y))
+
+
+@lru_cache(maxsize=256)
+def _dead_tones(seed: int, robot: bool, haze: float, settle: float) -> dict[str, tuple]:
+    """A body's colours as it lies: the moon still on its upper edge while it is
+    fresh; then the edge goes, and the rags and the flesh soak to the colour of
+    the tar, until it is a low dark shape on the road, not a drawing of a body."""
+    tones = {}
+    for name, (rim, lit, body) in _tones(seed, robot, haze, 0.0).items():
+        body = _mix(body, _fogged(TAR, haze), settle * 0.7)
+        lit = _mix(lit, body, 0.3 + 0.7 * settle)
+        tones[name] = (_mix(rim, lit, 0.25 + 0.75 * settle), lit, body)
+    return tones
 
 
 def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
-                 light: float) -> None:
+                 light: float, fall: float = 0.0, settle: float = 0.0,
+                 eyes: float = 1.0) -> None:
     """The whole silhouette first, nudged towards the moon in its rim colour,
     so a thin cold edge shows only on the side the moon is on; then part by
     part, back to front, each in its lit colour and again drawn in and nudged
     away from the moon in its own dark body colour, so every limb and the
-    skull are rounded by a band of moonlight down one side."""
+    skull are rounded by a band of moonlight down one side.
+
+    ``fall`` topples it towards the road; ``settle`` soaks a body that has
+    lain there a while into the tar; ``eyes`` is how much light is left in
+    them."""
     height = figure.height
     haze = round(figure.fog * 0.8, 2)
-    tones = _tones(figure.seed, figure.robot, haze, round(light, 1))
+    if settle > 0.0:
+        tones = _dead_tones(figure.seed, figure.robot, haze, round(settle, 1))
+    else:
+        tones = _tones(figure.seed, figure.robot, haze, round(light, 1))
     mesh, outline = figure.mesh, figure.outline
     pieces = mesh.pieces
-    _cast_shadow(canvas, figure)
+    if fall > 0.0:
+        turn, feet = _toppled(figure, fall)
+
+        def place(points: np.ndarray) -> np.ndarray:
+            return (points - feet) @ turn.T + feet
+    else:
+        def place(points: np.ndarray) -> np.ndarray:
+            return points
+    edge = place(outline)
+    _cast_shadow(canvas, figure, edge, fall)
 
     mx, my = _moonward(canvas, view, figure)
     rim = max(1.25, height * 0.0075)
-    _fill(canvas, pieces, _fixed(outline + np.float32((mx * rim, my * rim))),
+    _fill(canvas, pieces, _fixed(edge + np.float32((mx * rim, my * rim))),
           [tones[piece.tone][0] for piece in pieces])
     if light > 0.0 and height > 24:
         # The muzzle flash catches the edge turned to the gun, below the
         # picture: a warm rim opposite the moon's, for the frame the shot lasts.
         gx, gy = view.area.centre_x - figure.x, view.area.bottom + height - figure.ground_y
         norm = (math.hypot(gx, gy) or 1.0) / (rim * 1.3)
-        warm = _mix((40, 40, 44), FLASH, min(1.0, light))
-        _fill(canvas, pieces, _fixed(outline + np.float32((gx / norm, gy / norm))),
+        warm = _mix((40, 40, 44), FLASH, min(1.0, light) * 0.8)
+        _fill(canvas, pieces, _fixed(edge + np.float32((gx / norm, gy / norm))),
               [warm] * len(pieces))
     if figure.lod == 0:
-        _fill(canvas, pieces, _fixed(outline), [tones[piece.tone][2] for piece in pieces])
+        _fill(canvas, pieces, _fixed(edge), [tones[piece.tone][2] for piece in pieces])
     else:
         # The planes are lit from further round to the moon's side than the
         # rim is: from straight below it, both flanks of a limb would catch
@@ -1888,13 +1964,15 @@ def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
         norm = math.hypot(lx, ly)
         away = np.float32((-lx / norm, -ly / norm))
         inset = np.minimum(np.float32(height * 0.011), mesh.depth * np.float32(0.3))
-        passes = [(_fixed(outline), 1)]
+        passes = [(_fixed(edge), 1)]
         if figure.lod >= 3:
             # Near enough to see the step: soften it with one between.
             soft = inset * np.float32(0.55)
-            passes.append((_fixed(mesh.centre + (mesh.radius - soft)[:, None] * mesh.direction
+            passes.append((_fixed(place(mesh.centre + (mesh.radius - soft)[:, None]
+                                        * mesh.direction)
                                   + (inset * np.float32(0.8))[:, None] * away), None))
-        passes.append((_fixed(mesh.centre + (mesh.radius - inset)[:, None] * mesh.direction
+        passes.append((_fixed(place(mesh.centre + (mesh.radius - inset)[:, None]
+                                    * mesh.direction)
                               + (inset * np.float32(1.35))[:, None] * away), 2))
         for piece in pieces:
             _, lit, body = tones[piece.tone]
@@ -1902,10 +1980,16 @@ def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
                 colour = lit if which == 1 else body if which == 2 else _mix(lit, body, 0.55)
                 cv2.fillPoly(canvas, [fixed[piece.start:piece.stop]], colour, cv2.LINE_AA,
                              FIX_BITS)
-    if figure.robot:
-        _draw_machine(canvas, figure, haze, light)
-    else:
-        _draw_face(canvas, figure, haze, light)
+    if fall == 0.0:
+        if figure.robot:
+            _draw_machine(canvas, figure, haze, light)
+        else:
+            _draw_face(canvas, figure, haze, light)
+    elif eyes > 0.0 and not figure.robot:
+        # Going over, the light in its eyes goes out.
+        shine = _mix(EYESHINE, FLASH, light * 0.6)
+        for eye in place(np.float32(_eye_points(figure))):
+            _glow(canvas, eye, max(1.2, figure.head_radius * 0.3), shine, 0.5 * eyes)
 
 
 def _draw_face(canvas: np.ndarray, figure: Figure, haze: float, light: float) -> None:
@@ -2002,19 +2086,31 @@ def draw_robot(canvas: np.ndarray, walker: Walker, view: Perspective,
     draw_walker(canvas, walker, view, now, light)
 
 
-def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0) -> None:
-    """What is left where they fell: the body, and what ran out of it.
+def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0,
+                after: float = -math.inf) -> None:
+    """What is left where they fell: what ran out of them, and the bodies.
 
-    The pool spreads for a few seconds after the fall, then keeps creeping out
-    across the asphalt and drying to black for the rest of the night, so the
-    road at the end of the round reads as the battlefield it was.
+    A pool spreads fast for a few seconds after the fall, then creeps out
+    across the asphalt and dries towards black, and each body soaks slowly to
+    the colour of the tar, so the road at the end of the round reads as the
+    battlefield it was. Only the kills since ``after`` are drawn: the game
+    paints older ones, which have stopped changing, into the road itself.
     """
-    if not round_.stains:
-        return
+    stains = [stain for stain in round_.stains if stain[3] > after]
+    bodies = [(walker, at, headshot) for walker, at, headshot in round_.fallen
+              if at > after and now - at >= FALL]
+    if stains:
+        _draw_pools(canvas, stains, now)
+    view = round_.view
+    for walker, at, headshot in sorted(bodies, key=lambda body: -body[0].distance):
+        _draw_fallen(canvas, view, walker, at, headshot, now)
+
+
+def _draw_pools(canvas: np.ndarray, stains: list, now: float) -> None:
     height, width = canvas.shape[:2]
-    xs = [int(x) for x, *_ in round_.stains]
-    ys = [int(y) for _, y, *_ in round_.stains]
-    rs = [int(r * 3.4) + 3 for _, _, r, *_ in round_.stains]
+    xs = [int(x) for x, *_ in stains]
+    ys = [int(y) for _, y, *_ in stains]
+    rs = [int(r * 3.4) + 3 for _, _, r, *_ in stains]
     x0 = max(0, min(x - r for x, r in zip(xs, rs)))
     x1 = min(width, max(x + r for x, r in zip(xs, rs)))
     y0 = max(0, min(y - r for y, r in zip(ys, rs)))
@@ -2024,14 +2120,16 @@ def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0) -> No
     patch = canvas[y0:y1, x0:x1]
     overlay = patch.copy()
     gloss = []
-    for x, y, radius, at, seed in round_.stains:
-        age = max(0.0, now - at)
-        spread = min(1.0, 0.35 + age / 3.0) + 0.4 * min(1.0, age / 45.0)
-        dry = min(1.0, age / 40.0)
+    for x, y, radius, at, seed in stains:
+        age = min(now - at - FALL, SETTLED)
+        if age < 0.0:
+            continue  # it has not landed yet
+        spread = min(1.0, 0.35 + age / 3.0) + 0.4 * age / SETTLED
+        dry = age / SETTLED
         colour = _mix(_mix(BLOOD_FRESH, BLOOD, min(1.0, age / 6.0)), STAIN, dry)
-        if age > 14.0:
+        if age > SETTLED * 0.6:
             # An old pool is a dark wet patch, no redder than the tar around it.
-            colour = _mix(colour, (26, 22, 24), 0.4)
+            colour = _mix(colour, (26, 22, 24), 0.4 * min(1.0, (age - SETTLED * 0.6) / 2.0))
         cx, cy = int(x) - x0, int(y) - y0
         # The pool is flat on the road, so it is foreshortened like the road.
         main = (max(1, int(radius * 1.7 * spread)), max(1, int(radius * 0.38 * spread)))
@@ -2053,73 +2151,73 @@ def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0) -> No
         # The moon on the wet of it: a sheen on the moon side of the pool.
         _alpha_ellipse(patch, centre, axes, GLOSS, alpha)
 
-    # The bodies lie where they dropped, across the road, flattened by the
-    # angle you see the road at: a full walker's length, lying down. A fresh
-    # kill has the moon on its upper edge and its blood still bright; as the
-    # minutes pass the rim goes, the rags soak to the colour of the tar, and
-    # what is left is a low dark shape on the road, not a drawing of a body.
-    for x, y, radius, at, seed in sorted(round_.stains, key=lambda stain: stain[1]):
-        if radius < 2.5:
-            continue
-        fresh = max(0.0, 1.0 - max(0.0, now - at) / 14.0)
-        settle = 1.0 - fresh
-        side = 1 if _rag(seed, 20) < 0.5 else -1
-        cx, cy = int(x), int(y - radius * 0.1)
-        tilt = side * (4 + 10 * _rag(seed, 21))
-        slope = math.tan(math.radians(tilt))
-        face_up = _rag(seed, 27) < 0.5
-        thick = max(1, int(radius * 0.13))
-        lift = max(1, int(radius * 0.06))
-        cloth = _mix(RAGS, (24, 22, 20), settle * 0.7)
-        flesh = _mix(SKIN, (40, 38, 36), settle * 0.75)
-        rim = _mix(cloth, RIM, 0.7 * fresh)
-        rim_skin = _mix(flesh, RIM, 0.65 * fresh)
 
-        def along(t: float, drop: float = 0.0, cx=cx, cy=cy, side=side,
-                  radius=radius, slope=slope) -> tuple[int, int]:
-            """A point ``t`` body-radii towards the head, ``drop`` radii down."""
-            return int(cx + side * radius * t), int(cy + side * radius * t * slope
-                                                    + radius * drop)
 
-        torso = (max(1, int(radius * 1.25)), max(1, int(radius * 0.42)))
-        head = along(1.55, 0.02)
-        head_r = max(1, int(radius * 0.36))
-        legs = [(along(-1.1, -0.02), along(-2.6 - 0.4 * _rag(seed, 22 + leg),
-                                           (0.22 - 0.5 * leg) * (0.6 + _rag(seed, 24 + leg))))
-                for leg in range(2)]
-        arms = [(along(0.6, -0.1), along(0.9 + 0.6 * _rag(seed, 26), 0.55)),
-                (along(0.3, -0.15), along(1.4 + 0.5 * _rag(seed, 28), -0.35))]
-        passes = [(cloth, flesh, 0)]
-        if fresh > 0.05:
-            passes.insert(0, (rim, rim_skin, -lift))
-        for pass_cloth, pass_skin, shift in passes:
-            for start, end in legs:
-                cv2.line(canvas, (start[0], start[1] + shift), (end[0], end[1] + shift),
-                         pass_cloth, thick, cv2.LINE_AA)
-            cv2.ellipse(canvas, (cx, cy + shift), torso, tilt, 0, 360, pass_cloth, -1,
-                        cv2.LINE_AA)
-            for index, (start, end) in enumerate(arms):
-                sleeve = pass_cloth if index == 0 else pass_skin
-                cv2.line(canvas, (start[0], start[1] + shift), (end[0], end[1] + shift),
-                         sleeve, max(1, int(thick * 0.8)), cv2.LINE_AA)
-                cv2.circle(canvas, (end[0], end[1] + shift), max(1, int(thick * 0.6)),
-                           pass_skin, -1, cv2.LINE_AA)
-            cv2.ellipse(canvas, (head[0], head[1] + shift),
-                        (head_r, max(1, int(head_r * 0.85))), tilt, 0, 360, pass_skin, -1,
-                        cv2.LINE_AA)
-        if head_r > 3 and face_up:
-            # The mouth still open; the head-shot, a dark hole above the eye.
-            cv2.circle(canvas, (head[0] + side * head_r // 3, head[1] - head_r // 4),
-                       max(1, head_r // 4), STAIN, -1, cv2.LINE_AA)
-        if radius > 6 and fresh > 0.0:
-            # The exit wound's spray, short and dark, thrown past the head;
-            # it dries into the road with the rest.
-            spray_colour = _mix(STAIN, BLOOD_FRESH, fresh)
-            for index in range(4):
-                spray = along(1.9 + 1.2 * _rag(seed, 30 + index),
-                              (_rag(seed, 34 + index) - 0.5) * 0.8)
-                cv2.circle(canvas, spray, max(1, int(radius * 0.08)), spray_colour, -1,
-                           cv2.LINE_AA)
+def _draw_fallen(canvas: np.ndarray, view: Perspective, walker: Walker, at: float,
+                 headshot: bool, now: float, light: float = 0.0) -> None:
+    """One that has been put down: going over, and then lying where it fell.
+
+    It keeps the pose it had when the shot landed, arms flung up as it goes,
+    and falls about its feet. The light in its eyes fades as it falls - or
+    goes out at once, for a head shot."""
+    age = max(0.0, now - at)
+    fall = min(1.0, age / FALL)
+    struck = walker.figure(view, at)
+    down = fall >= 1.0
+    figure = _pose(walker.gait, walker.robot, walker.hunch, walker.tilt, walker.seed,
+                   walker.phase, max(struck.recoil, 1.0 if down else fall),
+                   height=struck.height, x=view.screen_x(walker.lane, walker.distance),
+                   ground=struck.ground_y, fog=struck.fog,
+                   # Lying still, no one sees its fingers.
+                   detail=min(_detail(struck.height), 1) if down else -1)
+    if figure.height < 5:
+        return
+    settle = min(1.0, (age - FALL) / SETTLED) if down else 0.0
+    _draw_figure(canvas, figure, view, light, fall=fall, settle=settle,
+                 eyes=0.0 if headshot else 1.0 - fall)
+    if headshot and down and figure.height > 30 and settle < 1.0:
+        # The exit wound's spray, thrown past the head along the road; it
+        # dries into the road with the rest.
+        turn, feet = _toppled(figure, 1.0)
+        head = (np.float32(figure.head) - feet) @ turn.T + feet
+        side = _fall_side(walker.seed)
+        colour = _mix(BLOOD_FRESH, STAIN, min(1.0, age / 4.0))
+        for index in range(5):
+            reach = figure.head_radius * (1.6 + 2.2 * _rag(walker.seed, 30 + index))
+            spot = (head[0] + side * reach,
+                    head[1] + (_rag(walker.seed, 34 + index) - 0.5) * figure.head_radius)
+            cv2.circle(canvas, (_fix(spot[0]), _fix(spot[1])),
+                       _fix(max(0.8, figure.head_radius * 0.16)), colour, -1, cv2.LINE_AA,
+                       FIX_BITS)
+
+
+def _road(round_: ZombieRound, now: float, width: int, height: int) -> np.ndarray:
+    """The backdrop, with every kill that has settled painted into the road.
+
+    A pool that has stopped spreading and a body soaked to the colour of the
+    tar no longer change, so they are painted once, into a copy of the
+    backdrop, instead of every frame: the road carries a whole night of them
+    for the cost of copying it. Painted up to a time, and started again if
+    asked for an earlier one."""
+    area = round_.area
+    backdrop = _environment((area.x, area.y, area.width, area.height), width, height,
+                            round_.options.seed or 0, round_.skyline)
+    road = round_.road
+    if road is None or road[0] is not backdrop or now < road[2]:
+        road = (backdrop, backdrop.copy(), -math.inf)
+    _, image, done = road
+    settled = now - FALL - SETTLED
+    if settled > done:
+        pools = [stain for stain in round_.stains if done < stain[3] <= settled]
+        if pools:
+            _draw_pools(image, pools, math.inf)
+        bodies = [body for body in round_.fallen
+                  if done < body[1] <= settled]
+        for walker, at, headshot in sorted(bodies, key=lambda body: -body[0].distance):
+            _draw_fallen(image, round_.view, walker, at, headshot, at + FALL + SETTLED)
+        road = (backdrop, image, settled)
+    round_.road = road
+    return image
 
 
 def _depth_scale(view: Perspective, y: float) -> float:
@@ -2159,18 +2257,53 @@ def draw_impact(canvas: np.ndarray, impact: Impact, now: float, ttl: float,
                        life * 0.4)
         return
 
+    head = impact.ring == 0
     if age < IMPACT_FLASH:
         spray = age / IMPACT_FLASH
-        for index in range(9):
-            angle = index * math.tau / 9 + impact.at
-            reach = (6 + 40 * spray) * (0.5 + 0.5 * math.sin(angle * 3)) * depth
+        # A head shot throws twice as much, twice as far.
+        specks = 16 if head else 9
+        throw = 70 if head else 40
+        for index in range(specks):
+            angle = index * math.tau / specks + impact.at
+            reach = (6 + throw * spray) * (0.5 + 0.5 * math.sin(angle * 3)) * depth
             speck = (int(centre[0] + math.cos(angle) * reach),
                      int(centre[1] + math.sin(angle) * reach * 0.7 + 30 * spray * spray * depth))
             cv2.circle(canvas, speck, max(1, int((2 * (1 - spray) + 1) * depth)), BLOOD, -1,
                        cv2.LINE_AA)
+    if head and age < 0.12:
+        # And the skull flashes pale as the round goes through: there and gone.
+        scale = max(0.5, canvas.shape[0] / 720.0)
+        _glow(canvas, centre, 9 * depth * scale, MOONLIGHT, 0.9 * (1.0 - age / 0.12))
     size = 5 * life * depth * max(0.5, (canvas.shape[0] / 720.0))
     _alpha_ellipse(canvas, centre, (max(1, int(size)), max(1, int(size * 0.9))), BLOOD,
                    life * 0.8)
+
+
+def draw_sparks(canvas: np.ndarray, impact: Impact, now: float,
+                view: Perspective | None = None) -> None:
+    """A round off armour: sparks thrown out in streaks, white-hot at the start
+    and cooling to orange as they fly and drop, over in a third of a second -
+    and a head shot throws twice as many off the helmet."""
+    age = now - impact.at
+    if not impact.is_hit or not 0.0 <= age < 0.3:
+        return
+    life = age / 0.3
+    depth = _depth_scale(view, impact.y) if view is not None else 1.0
+    scale = max(0.5, canvas.shape[0] / 720.0) * depth
+    if age < 0.08:
+        _glow(canvas, (impact.x, impact.y), 7 * scale, (170, 230, 255), 1.0 - age / 0.08)
+    count = 14 if impact.ring == 0 else 8
+    colour = _mix((230, 250, 255), (40, 150, 255), life)
+    for index in range(count):
+        angle = index * math.tau / count + _rag(int(impact.at * 1000), index) * 0.6
+        speed = (50 + 70 * _rag(int(impact.at * 1000), index + 20)) * scale
+        head = speed * life
+        tail = max(0.0, head - 14 * scale * (1.0 - life * 0.5))
+        drop = 40 * scale * life * life
+        start = (impact.x + math.cos(angle) * tail, impact.y + math.sin(angle) * tail + drop * 0.6)
+        end = (impact.x + math.cos(angle) * head, impact.y + math.sin(angle) * head + drop)
+        cv2.line(canvas, (_fix(start[0]), _fix(start[1])), (_fix(end[0]), _fix(end[1])), colour,
+                 max(1, int(round(1.6 * scale * (1.0 - life * 0.5)))), cv2.LINE_AA, FIX_BITS)
 
 
 def draw_popups(canvas: np.ndarray, impacts: list, now: float, ttl: float,
@@ -2197,7 +2330,7 @@ def draw_popups(canvas: np.ndarray, impacts: list, now: float, ttl: float,
         fade = min(1.0, life * 2.2)  # solid for most of its life, then gone
         lift = int(canvas.shape[0] * 0.02 * (1 - life))
         points = f"+{impact.score}"
-        tag = impact.label or ""
+        tag = (impact.label or "").title()  # the voice's Title Case: "Headshot"
         (points_w, points_h), _ = cv2.getTextSize(points, font, scale, thickness)
         tag_scale = scale * 0.62
         tag_w = cv2.getTextSize(tag, font, tag_scale, thickness)[0][0] if tag else 0
@@ -2302,43 +2435,44 @@ def draw_footer_strip(canvas: np.ndarray, area: Rect) -> None:
 def draw_world(canvas: np.ndarray, round_: ZombieRound, now: float) -> None:
     area = round_.area
     height, width = canvas.shape[:2]
-    canvas[:] = _environment(
-        (area.x, area.y, area.width, area.height), width, height,
-        round_.options.seed or 0, round_.skyline)
+    canvas[:] = _road(round_, now, width, height)
     robots = round_.options.enemy == "robots"
-    if not robots:
-        draw_stains(canvas, round_, now)
+    draw_stains(canvas, round_, now, after=now - FALL - SETTLED)
     draw_enemy = draw_robot if robots else draw_walker
 
     last_shot = round_.last_shot()
     flash = (last_shot is not None and 0.0 <= now - last_shot < MUZZLE_FLASH)
 
     # Painter's algorithm: the far ones first, so the near ones stand in front,
-    # with the fog rolling between the far ones and the near ones.
-    ordered = sorted(round_.walkers, key=lambda w: -w.distance)
+    # with the fog rolling between the far ones and the near ones. The ones
+    # going over are in among them, where they were standing.
+    falling = [(walker, at, headshot) for walker, at, headshot in round_.fallen
+               if 0.0 <= now - at < FALL]
+    ordered = sorted([(walker, None) for walker in round_.walkers] + [
+        (walker, (at, headshot)) for walker, at, headshot in falling],
+        key=lambda entry: -entry[0].distance)
+
     def lit(walker: Walker) -> float:
         if not flash:
             return 0.0
         return max(0.0, 1.0 - (walker.distance / 13.0) ** 2)
 
-    for walker in ordered:
+    def draw(walker: Walker, fell: tuple | None) -> None:
+        if fell is None:
+            draw_enemy(canvas, walker, round_.view, now, lit(walker))
+        else:
+            _draw_fallen(canvas, round_.view, walker, fell[0], fell[1], now, lit(walker))
+
+    for walker, fell in ordered:
         if walker.distance > 9.0:
-            draw_enemy(canvas, walker, round_.view, now, lit(walker))
+            draw(walker, fell)
     draw_fog(canvas, round_.view, now)
-    for walker in ordered:
+    for walker, fell in ordered:
         if walker.distance <= 9.0:
-            draw_enemy(canvas, walker, round_.view, now, lit(walker))
+            draw(walker, fell)
     for impact in round_.impacts:
         if robots:
-            age = now - impact.at
-            if impact.is_hit and age < .3:
-                for i in range(8):
-                    angle = i * math.tau / 8
-                    length = (8 + age * 70) * round_.options.scale
-                    start = (int(impact.x), int(impact.y))
-                    end = (int(impact.x + math.cos(angle) * length),
-                           int(impact.y + math.sin(angle) * length))
-                    cv2.line(canvas, start, end, (100, 230, 255), 2, cv2.LINE_AA)
+            draw_sparks(canvas, impact, now, round_.view)
         else:
             draw_impact(canvas, impact, now, round_.IMPACT_TTL, round_.view)
 
@@ -2407,6 +2541,8 @@ def draw_emblem(panel: np.ndarray) -> None:
                             _skyline(area, 7))
     round_ = ZombieRound.__new__(ZombieRound)
     round_.stains = []
+    round_.fallen = []
+    round_.view = view
     for distance, lane, seed, age in ((5.2, 1.6, 31, 20.0), (3.4, -1.5, 12, 6.0)):
         figure = Walker(lane=lane, distance=distance, speed=0.7, phase=0.0, sway=0.0,
                         build=1.0, seed=seed).figure(view, 0.0)

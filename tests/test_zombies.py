@@ -7,10 +7,11 @@ import pytest
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, LOW_HEALTH, MAX_WALKERS,
-                                MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, STAGGER,
-                                WAVE_SECONDS, Perspective, Walker, ZombieRound, _bloom,
-                                _environment, _fill, _fixed, _look, _skyline, draw_emblem,
-                                draw_hud, draw_walker, draw_world)
+                                FALL, MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, SETTLED,
+                                STAGGER, WAVE_SECONDS, Perspective, Walker, ZombieRound,
+                                _bloom, _draw_fallen, _environment, _fill, _fixed, _look,
+                                _skyline, draw_emblem, draw_hud, draw_stains, draw_walker,
+                                draw_world)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -617,17 +618,77 @@ def test_a_walker_has_a_dark_core_and_a_moonlit_edge():
     assert band[:, :, 0].max() > 150, "a cold, bright rim on the moon side"
 
 
-def test_the_dead_are_drawn_to_the_size_of_the_living():
-    from handy.maps.zombies import draw_stains
+def killed(distance: float = 5.0, at: float = 0.0, **options) -> tuple[ZombieRound, Walker]:
+    """A round with one of them just put down by a head shot."""
+    round_ = make_round(duration=600, **options)
+    walker = walker_at(distance, robot=options.get("enemy") == "robots")
+    round_.walkers = [walker]
+    round_.shoot(*walker.figure(VIEW, at).head, at)
+    return round_, walker
 
-    round_ = make_round()
-    figure = walker_at(5.0).figure(VIEW, 0.0)
-    round_.stains = [(figure.x, figure.ground_y, figure.height * 0.18, 0.0, 5)]
+
+def test_the_dead_are_drawn_to_the_size_of_the_living():
+    round_, walker = killed(5.0)
+    figure = walker.figure(VIEW, 0.0)
+    round_.stains = []  # the body alone, without its pool
     canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
     draw_stains(canvas, round_, 30.0)
     lit = np.argwhere(canvas.any(axis=2))
     width = lit[:, 1].max() - lit[:, 1].min()
-    assert width > figure.height * 0.6, "a body lying down is as long as one standing"
+    tall = lit[:, 0].max() - lit[:, 0].min()
+    assert width > figure.height * 0.8, "a body lying down is as long as one standing"
+    assert tall < figure.height * 0.4, "and lies low across the road"
+
+
+def test_a_kill_goes_over_before_it_lies_still():
+    """Put down, it falls - still partly upright a moment later - and within
+    half a second lies flat on the road, where it stays."""
+    round_, walker = killed(4.0, at=1.0)
+    figure = walker.figure(VIEW, 1.0)
+
+    def standing(now: float) -> float:
+        canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+        _draw_fallen(canvas, VIEW, walker, 1.0, True, now)
+        rows = np.flatnonzero(canvas.max(axis=(1, 2)) > 8)
+        return (figure.ground_y - rows.min()) / figure.height
+
+    assert FALL <= 0.5, "feedback in play is short"
+    assert standing(1.0 + FALL * 0.3) > 0.6, "still going over"
+    assert standing(1.0 + FALL + 0.05) < 0.4, "then flat"
+    assert standing(1.0 + FALL + 5.0) < 0.4, "and it stays down"
+
+
+def test_the_settled_dead_become_part_of_the_road():
+    """A kill that has stopped changing is painted into the road once, and the
+    road looks exactly as it would drawn from scratch."""
+    round_ = make_round(duration=600)
+    for index in range(3):
+        walker = walker_at(5.0 + index, lane=index - 1.0)
+        round_.walkers = [walker]
+        round_.shoot(*walker.figure(VIEW, float(index)).head, float(index))
+    later = 2.0 + SETTLED + 5.0
+    frames = []
+    for fresh in (True, False, True):
+        if fresh:
+            round_.road = None
+        canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+        draw_world(canvas, round_, later)
+        frames.append(canvas)
+    assert round_.road is not None and round_.road[2] >= 2.0, "all three are in the road"
+    assert np.array_equal(frames[0], frames[1]) and np.array_equal(frames[1], frames[2])
+    blank = np.zeros_like(frames[0])
+    draw_stains(blank, round_, later, after=later - SETTLED)
+    assert not blank.any(), "and none of them is drawn again each frame"
+
+
+def test_a_machine_goes_over_and_lies_there_without_bleeding():
+    round_, walker = killed(4.0, at=1.0, enemy="robots")
+    assert not round_.stains, "no blood from a machine"
+    figure = walker.figure(VIEW, 1.0)
+    canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+    draw_stains(canvas, round_, 3.0)
+    rows = np.flatnonzero(canvas.max(axis=(1, 2)) > 8)
+    assert rows.size and figure.ground_y - rows.min() < figure.height * 0.4, "a wreck, lying"
 
 
 # --- round four: finish ------------------------------------------------------
@@ -680,14 +741,10 @@ def test_score_popups_land_big_and_settle():
 
 
 def test_old_bodies_sink_into_the_road_and_fresh_ones_keep_their_blood():
-    from handy.maps.zombies import draw_stains
-
-    round_ = make_round()
-    figure = walker_at(5.0).figure(VIEW, 0.0)
-    round_.stains = [(figure.x, figure.ground_y, figure.height * 0.18, 0.0, 5)]
+    round_, _ = killed(5.0)
     fresh = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
     old = fresh.copy()
-    draw_stains(fresh, round_, 0.5)
+    draw_stains(fresh, round_, FALL + 0.1)
     draw_stains(old, round_, 60.0)
     assert fresh.max() > old.max() + 40, "the moon's rim goes as it settles"
     red_fresh = (fresh[:, :, 2].astype(int) - fresh[:, :, 0]) > 30
