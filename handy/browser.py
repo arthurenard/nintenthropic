@@ -8,8 +8,6 @@ Run with ``python -m handy.browser`` (or ``python -m handy --browser``).
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 from dataclasses import replace
 import json
 import math
@@ -70,6 +68,25 @@ def jpeg(image):
     if not ok:
         raise ValueError("Could not encode the game frame")
     return encoded.tobytes()
+
+
+#: The frame exchange's format, both ways: a four-byte big-endian length, that
+#: many bytes of JSON, then a JPEG or nothing. Base64 inside JSON made every
+#: picture a third larger and cost an encode and a decode on each side.
+FRAME_TYPE = "application/x-handy-frame"
+
+
+def pack(data, image=b""):
+    head = json.dumps(data, allow_nan=False).encode()
+    return len(head).to_bytes(4, "big") + head + image
+
+
+def unpack(body):
+    """The JSON fields of a frame message, and the JPEG after them."""
+    size = int.from_bytes(body[:4], "big")
+    if len(body) < 4 or size > len(body) - 4:
+        raise ValueError("Invalid frame")
+    return json.loads(body[4 : 4 + size]), body[4 + size :]
 
 
 #: Start-of-frame markers: every JPEG coding - baseline, progressive, lossless,
@@ -303,7 +320,12 @@ class BrowserSession:
         )
         return data
 
-    def tick(self, data, wall_time=None):
+    def tick(self, data, wall_time=None, camera=None):
+        """Advance the game one frame and draw it.
+
+        ``camera`` is the page's JPEG, if it sent one. The answer carries the
+        drawn frame as JPEG bytes under ``image``.
+        """
         wall = time.monotonic() if wall_time is None else wall_time
         dt = max(0, min(wall - self.last_tick, 0.1))
         self.last_tick = wall
@@ -322,20 +344,15 @@ class BrowserSession:
                 )
                 if self.calibration:
                     self.calibration.hits.clear()
-        encoded = data.get("camera")
-        if self.stream and encoded:
-            try:
-                raw = base64.b64decode(encoded, validate=True)
-            except (binascii.Error, TypeError) as error:
-                raise ValueError("Invalid camera frame") from error
+        if self.stream and camera:
             # The UI sends 640x480 JPEGs. Reject other encodings and oversized frames.
-            if not raw.startswith(b"\xff\xd8"):
+            if not camera.startswith(b"\xff\xd8"):
                 raise ValueError("Expected a JPEG camera frame")
-            width, height = jpeg_size(raw)
+            width, height = jpeg_size(camera)
             if not (0 < width <= 1280 and 0 < height <= 720):
                 raise ValueError("Camera frame must be at most 1280 by 720")
             try:
-                image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+                image = cv2.imdecode(np.frombuffer(camera, np.uint8), cv2.IMREAD_COLOR)
             except cv2.error as error:
                 raise ValueError("Invalid camera frame") from error
             if image is None or image.shape[0] > 720 or image.shape[1] > 1280:
@@ -441,7 +458,7 @@ class BrowserSession:
                 else None
             ),
             cues=cues,
-            image=base64.b64encode(jpeg(self.canvas)).decode(),
+            image=jpeg(self.canvas),
         )
         return result
 
@@ -482,7 +499,7 @@ class BrowserServer(ThreadingHTTPServer):
             previous.close()
         return {**session.info(), "forgetSavedSetup": session.forget_saved}
 
-    def call(self, path, data):
+    def call(self, path, data, camera=None):
         """Run one request against the open game."""
         if path not in ("/api/frame", "/api/action", "/api/stop"):
             raise ValueError("Unknown operation")
@@ -499,7 +516,7 @@ class BrowserServer(ThreadingHTTPServer):
                 )
             self.seen = time.monotonic()
             if path == "/api/frame":
-                return session.tick(data)
+                return session.tick(data, camera=camera)
             if path == "/api/action":
                 return session.action(data.get("action"), data)
             session.close()
@@ -641,11 +658,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(200, jpeg(art), "image/jpeg")
             except KeyError:
                 self.respond(404, {"error": "Unknown map"})
-        elif path in ("/", "/app.js", "/style.css"):
+        elif path in ("/", "/app.js", "/capture.js", "/style.css"):
             name = "index.html" if path == "/" else path[1:]
             mime = {
                 "index.html": "text/html",
                 "app.js": "text/javascript",
+                "capture.js": "text/javascript",
                 "style.css": "text/css",
             }[name]
             self.send(200, (WEB_ROOT / name).read_bytes(), mime + "; charset=utf-8")
@@ -676,14 +694,15 @@ class Handler(BaseHTTPRequestHandler):
         # these two touch the tab's connection, and its failures are handle()'s.
         # A model download failing the same way inside is a real error.
         body = self.rfile.read(size)
+        frame = self.path == "/api/frame"
         try:
-            data = json.loads(body)
+            data, camera = unpack(body) if frame else (json.loads(body), None)
             if not isinstance(data, dict):
                 raise ValueError("Expected a JSON object")
             if self.path == "/api/start":
                 result = self.server.start(data)
             else:
-                result = self.server.call(self.path, data)
+                result = self.server.call(self.path, data, camera)
         except (ValueError, KeyError, TypeError, OverflowError) as error:
             self.respond(400, {"error": str(error)})
             return
@@ -698,7 +717,11 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
-        self.respond(200, result)
+        if frame:
+            image = result.pop("image")
+            self.send(200, pack(result, image), FRAME_TYPE)
+        else:
+            self.respond(200, result)
 
 
 def main(argv=None):

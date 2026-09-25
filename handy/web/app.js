@@ -96,15 +96,42 @@ function selectedMode() {
       }
     : mode;
 }
+// A frame travels as a four-byte length, that much JSON, then a JPEG or
+// nothing: both ways, so no picture is ever base64 text on either side.
+const FRAME_TYPE = "application/x-handy-frame";
+function packFrame(fields, camera) {
+  const head = new TextEncoder().encode(JSON.stringify(fields));
+  const length = new Uint8Array(4);
+  new DataView(length.buffer).setUint32(0, head.length);
+  return new Blob(camera ? [length, head, camera] : [length, head]);
+}
+function unpackFrame(bytes) {
+  const length = new DataView(bytes).getUint32(0);
+  const data = JSON.parse(
+    new TextDecoder().decode(new Uint8Array(bytes, 4, length)),
+  );
+  data.image = new Blob([new Uint8Array(bytes, 4 + length)], {
+    type: "image/jpeg",
+  });
+  return data;
+}
 async function request(path, body) {
+  // A Blob is a packed frame, answered with one; anything else is JSON.
+  const frame = body instanceof Blob;
   let response, data;
   try {
     response = await fetch(path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Handy-Token": token },
-      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": frame ? FRAME_TYPE : "application/json",
+        "X-Handy-Token": token,
+      },
+      body: frame ? body : JSON.stringify(body),
     });
-    data = await response.json();
+    data =
+      frame && response.ok
+        ? unpackFrame(await response.arrayBuffer())
+        : await response.json();
   } catch {
     // No answer, or not Handy's: the browser's own wording ("Failed to fetch",
     // "Unexpected token") would mean nothing to the player.
@@ -353,7 +380,24 @@ async function start() {
     if (!$("lobby").hidden) focusStart();
   }
 }
-function cameraFrame() {
+// Camera frames are mirrored and encoded on a worker thread where the browser
+// allows it (capture.js). On the page's own thread toBlob waits for the page to
+// fall idle, which a busy or background tab may not do for a whole second.
+let encoder = null,
+  encoded = null;
+try {
+  if (window.OffscreenCanvas) {
+    encoder = new Worker("/capture.js");
+    encoder.onmessage = ({ data }) => encoded?.(data);
+    encoder.onerror = () => {
+      encoder = null;
+      encoded?.(null);
+    };
+  }
+} catch {
+  encoder = null;
+}
+async function cameraFrame() {
   const video = $("camera");
   if (!media || video.readyState < 2 || !video.videoWidth) return null;
   // Send the centred 4:3 view the preview shows (object-fit: cover), cropped
@@ -361,24 +405,50 @@ function cameraFrame() {
   // angles and the eye-openness ratios the scope reads, and misplaces the
   // skeleton drawn over the preview.
   const scale = Math.min(video.videoWidth / 640, video.videoHeight / 480);
-  const [width, height] = [640 * scale, 480 * scale];
+  const [width, height] = [Math.round(640 * scale), Math.round(480 * scale)];
+  const [x, y] = [
+    Math.round((video.videoWidth - width) / 2),
+    Math.round((video.videoHeight - height) / 2),
+  ];
+  if (encoder) {
+    const frame = await createImageBitmap(video, x, y, width, height);
+    return new Promise((resolve) => {
+      encoded = resolve;
+      encoder.postMessage(frame, [frame]);
+    });
+  }
   // Mirror exactly once, matching the preview and the native control conventions.
   captureContext.save();
   captureContext.translate(640, 0);
   captureContext.scale(-1, 1);
-  captureContext.drawImage(
-    video,
-    (video.videoWidth - width) / 2,
-    (video.videoHeight - height) / 2,
-    width,
-    height,
-    0,
-    0,
-    640,
-    480,
-  );
+  captureContext.drawImage(video, x, y, width, height, 0, 0, 640, 480);
   captureContext.restore();
-  return captureCanvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+  return new Promise((resolve) =>
+    captureCanvas.toBlob(resolve, "image/jpeg", 0.7),
+  );
+}
+const view = $("game-image").getContext("2d", { alpha: false });
+let shown = Promise.resolve();
+function show(image, run) {
+  // Decoded off the page's thread, then drawn in the order frames arrived. A
+  // data: URL per frame had the page parse base64 and swap an image's source,
+  // which could flash while the new one loaded.
+  const decoded = createImageBitmap(image);
+  shown = shown
+    .then(() => decoded)
+    .then(
+      (bitmap) => {
+        const canvas = $("game-image");
+        if (generation === run) {
+          if (canvas.width !== bitmap.width || canvas.height !== bitmap.height)
+            [canvas.width, canvas.height] = [bitmap.width, bitmap.height];
+          view.drawImage(bitmap, 0, 0);
+          canvas.hidden = false;
+        }
+        bitmap.close();
+      },
+      () => {}, // a frame that will not decode is skipped, not fatal
+    );
 }
 function setText(id, text) {
   // Most of what renderState writes repeats every frame. Rewriting it anyway
@@ -515,19 +585,24 @@ async function loop(run) {
       }
     }
     try {
+      const camera = currentState === "paused" ? null : await cameraFrame();
       const shot = fire;
       fire = false;
-      const data = await request("/api/frame", {
-        viewAspect: stageAspect(),
-        id: session.id,
-        ...pointer,
-        fire: shot,
-        scope: scoped || keys.has("Shift"),
-        camera: currentState === "paused" ? null : cameraFrame(),
-      });
+      const data = await request(
+        "/api/frame",
+        packFrame(
+          {
+            viewAspect: stageAspect(),
+            id: session.id,
+            ...pointer,
+            fire: shot,
+            scope: scoped || keys.has("Shift"),
+          },
+          camera,
+        ),
+      );
       if (generation !== run || !active) return;
-      $("game-image").src = "data:image/jpeg;base64," + data.image;
-      $("game-image").hidden = false;
+      show(data.image, run);
       renderState(data);
       sound(data.cues);
     } catch (error) {

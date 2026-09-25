@@ -483,7 +483,7 @@ footer a {
   aspect-ratio: 16/9;
   touch-action: none;
 }
-.stage img {
+#game-image {
   display: block;
   width: 100%;
   height: 100%;
@@ -896,7 +896,7 @@ dialog .primary {
   border-radius: 10px;
   overflow: hidden;
 }
-.immersive .stage img {
+.immersive #game-image {
   object-fit: fill;
 }
 .immersive .hud {
