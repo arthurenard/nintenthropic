@@ -27,6 +27,7 @@ from . import maps, scene, schemes
 from .aiming import Aim, AimController, EyeScope
 from .calibration import Rig, default_rig
 from .maps import orbit, zombies
+from .maps.archery import RINGS
 from .shot_calibration import REQUIRED_HITS, ShotCalibration
 from .game import Rect, RoundOptions
 from .models import ensure_model
@@ -286,6 +287,32 @@ def results(chosen, round_):
         "shots": summary.shots,
         "stats": stats,
     }
+
+
+class CueRecorder:
+    """Stands in for the desktop's ``Sounds`` when a map voices a hit.
+
+    Each map says how its hits sound by calling its sound set (``Map.play_hit``);
+    handed this instead, the call writes down the name the page plays it by.
+    """
+
+    def __init__(self, cues):
+        self.cues = cues
+
+    def hit(self, ring):
+        self.cues.append(f"hit_{min(max(ring, 0), RINGS - 1)}")
+
+    def flesh(self, headshot):
+        self.cues.append("flesh_head" if headshot else "flesh_body")
+
+    def play_named(self, name):
+        self.cues.append(name)
+
+    def groan(self):
+        self.cues.append("groan")
+
+    def hurt(self):
+        self.cues.append("hurt")
 
 
 class BrowserSession:
@@ -686,7 +713,15 @@ class BrowserSession:
             ):
                 impact = self.round.shoot(*crosshair, now)
                 self.last_shot = now
-                cues.append("hit" if impact.is_hit else "shot")
+                # The desktop's sounds for a shot (app.play): the pistol, then
+                # the hit as the map voices it, or the miss.
+                cues.append("shot")
+                if not impact.is_hit:
+                    cues.append("miss")
+                elif self.map.key == "zombies" and self.options.enemy == "robots":
+                    cues.append("debris_hit")
+                else:
+                    self.map.play_hit(CueRecorder(cues), impact)
             self.map.draw_world(self.canvas, self.round, now)
             # The page draws the mouse's crosshair itself, where the pointer is
             # now rather than where it was a round trip ago. A hand's is drawn
@@ -701,11 +736,20 @@ class BrowserSession:
                     pull=aim.travel,
                     fire_at=self.scheme.fire_above,
                 )
+            cues.extend(self.round.take_cues())
             if self.round.is_over(now):
                 self.state = "over"
-            cues.extend(self.round.take_cues())
+                cues.append("round_over")
+        armed = None
+        if self.state == "calibration":
+            armed = self.calibration.aim.armed
+        elif aim is not None:
+            armed = aim.armed
         result = self.info()
         result.update(
+            # The hand's trigger: the page clicks when it re-arms, as the
+            # desktop does, and shows it during the warm-up.
+            armed=armed,
             tracking=tracking,
             hands=[list(hand.landmarks) for hand in getattr(frame, "hands", ())],
             scopeTracked=(

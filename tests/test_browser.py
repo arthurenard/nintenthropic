@@ -778,6 +778,18 @@ def test_the_warm_up_counts_down_and_celebrates_each_centre_hit(monkeypatch):
     assert heard[:2] == ["shot", "hit_0"]  # then the round's own opening cues
 
 
+def test_the_trigger_state_is_sent_with_every_frame(monkeypatch):
+    session, stream = camera_session(monkeypatch)
+    stream.current = frame_of(make_hand(thumb_degrees=20))
+    for _ in range(4):
+        result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert result["armed"] is True and result["step"]["armed"] is True
+    warm_up(session)
+    result = session.tick({}, session.last_tick + 0.05, camera=CAMERA)
+    assert result["armed"] in (True, False)
+    assert BrowserSession({}).tick({}, 0.05)["armed"] is None
+
+
 def test_undo_says_so_in_the_players_words(monkeypatch):
     session, stream = camera_session(monkeypatch)
     shoot_setup_target(session, stream)
@@ -786,6 +798,45 @@ def test_undo_says_so_in_the_players_words(monkeypatch):
     assert "calibrat" not in info["notice"].lower()
     info = session.action("reset", {})
     assert info["step"]["title"] == "Shoot the lit target."
+
+
+# --- sounds, readouts and results -------------------------------------------------
+
+
+def fire_at(session, x, y):
+    """The cues of one mouse shot at (x, y), clear of the one before it."""
+    session.tick({}, session.last_tick + 0.1)
+    return session.tick(
+        {"x": x / session.width, "y": y / session.height, "fire": True},
+        session.last_tick + 0.1,
+    )["cues"]
+
+
+@pytest.mark.parametrize("enemy, sound", [("zombies", "flesh_head"), ("robots", "debris_hit")])
+def test_a_hit_sounds_as_it_does_on_the_desktop(enemy, sound):
+    session = BrowserSession({"map": "zombies", "enemy": enemy})
+    session.tick({}, session.last_tick + 0.03)
+    walker = session.round.walkers[0]
+    walker.lane = 0
+    cues = fire_at(session, *walker.figure(session.round.view, session.clock).head)
+    assert cues[:2] == ["shot", sound]
+    assert fire_at(session, 2, 2)[:2] == ["shot", "miss"]
+
+
+def test_the_maps_own_cues_reach_the_page():
+    session = BrowserSession({"map": "western"})
+    cues = session.tick({"x": 0.5, "y": 0.05, "fire": True}, session.last_tick + 0.05)[
+        "cues"
+    ]
+    assert "shot" in cues and "rifle_crack" in cues and "bell_toll" in cues
+
+
+def test_the_round_closes_with_its_sound_once():
+    session = BrowserSession({"duration": 15})
+    session.tick({}, session.last_tick)
+    session.clock = 16
+    assert "round_over" in session.tick({}, session.last_tick)["cues"]
+    assert "round_over" not in session.tick({}, session.last_tick)["cues"]
 
 
 @pytest.mark.parametrize(
