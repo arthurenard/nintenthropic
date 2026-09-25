@@ -1,0 +1,5 @@
+# Build products: regenerate with build_town.py
+build/
+*.blend
+*.blend1
+__pycache__/
