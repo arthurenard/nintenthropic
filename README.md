@@ -215,7 +215,7 @@ page; the remaining flags configure the desktop app.
 uv sync                          # .venv, with Handy installed in editable mode
 uv run pytest
 uv run ruff check handy tests
-node --check handy/web/app.js
+for f in handy/web/*.js; do node --check "$f"; done
 uv build                         # sdist and wheel, into dist/
 ```
 

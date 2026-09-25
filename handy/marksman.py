@@ -7,6 +7,7 @@ behind the same interface a single stream presents.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -48,9 +49,21 @@ class MarksmanStream:
             self._hands.close()
             raise
 
-    def submit(self, bgr_frame: np.ndarray) -> None:
-        self._hands.submit(bgr_frame)
-        self._faces.submit(bgr_frame)
+    def submit(self, bgr_frame: np.ndarray) -> tuple[int, int]:
+        """Queue a frame for both; returns what :meth:`wait` needs to find it."""
+        return self._hands.submit(bgr_frame), self._faces.submit(bgr_frame)
+
+    def wait(self, stamps: tuple[int, int], timeout: float) -> MarksmanFrame:
+        """Both answers to the frame :meth:`submit` returned ``stamps`` for,
+        waiting up to ``timeout`` seconds in all; :meth:`latest` after that.
+
+        The two recognisers run side by side, so waiting on the hand and then
+        the face costs the slower of the two, not their sum.
+        """
+        deadline = time.monotonic() + timeout
+        self._hands.wait(stamps[0], timeout)
+        self._faces.wait(stamps[1], deadline - time.monotonic())
+        return self.latest()
 
     def latest(self) -> MarksmanFrame:
         hands = self._hands.latest()

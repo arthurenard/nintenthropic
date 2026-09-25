@@ -5,7 +5,6 @@ start instantly and offline; everything between the socket and the session is
 the code the page talks to.
 """
 
-import base64
 import http.client
 import json
 import socket
@@ -30,7 +29,10 @@ class FakeStream:
         return Frame()
 
     def submit(self, _image):
-        pass
+        return 0
+
+    def wait(self, _stamp, _timeout):
+        return Frame()
 
     def close(self):
         self.closed = True
@@ -92,6 +94,19 @@ def call(server, method, path, body=None, headers=None, token=True, connection=N
             connection.close()
 
 
+def frame(server, fields, camera=b"", connection=None, headers=None):
+    """One frame exchange; returns (status, fields or the error, JPEG bytes)."""
+    headers = {"Content-Type": browser.FRAME_TYPE, **(headers or {})}
+    body = browser.pack(fields, camera)
+    status, raw, response = call(
+        server, "POST", "/api/frame", body, headers, connection=connection
+    )
+    if status != 200:
+        return status, raw, None
+    assert response.getheader("Content-Type") == browser.FRAME_TYPE
+    return (status, *browser.unpack(raw))
+
+
 def start(server, **config):
     status, data, _ = call(server, "POST", "/api/start", config)
     assert status == 200, data
@@ -107,6 +122,10 @@ def test_pages_and_art_are_served_with_their_types(server):
     assert response.getheader("Content-Type") == "image/jpeg"
     status, config, _ = call(server, "GET", "/api/config")
     assert status == 200 and config["token"] == server.token
+    # The camera encoder runs as a worker, which only a same-origin script can be.
+    status, script, response = call(server, "GET", "/capture.js")
+    assert status == 200 and b"convertToBlob" in script
+    assert response.getheader("Content-Type") == "text/javascript; charset=utf-8"
 
 
 @pytest.mark.parametrize(
@@ -156,17 +175,14 @@ def test_frames_share_one_kept_alive_connection(server):
     session = start(server)
     connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
     try:
-        call(server, "POST", "/api/frame", {"id": session["id"]}, connection=connection)
+        frame(server, {"id": session["id"]}, connection=connection)
         local = connection.sock.getsockname()
         for _ in range(3):
-            status, data, _ = call(
-                server,
-                "POST",
-                "/api/frame",
-                {"id": session["id"]},
-                connection=connection,
+            status, data, image = frame(
+                server, {"id": session["id"]}, connection=connection
             )
-            assert status == 200 and data["image"]
+            assert status == 200 and data["state"] == "playing"
+            assert image.startswith(b"\xff\xd8") and "image" not in data
             assert connection.sock.getsockname() == local
     finally:
         connection.close()
@@ -190,9 +206,9 @@ def test_a_tab_leaving_mid_request_is_not_an_error(server, monkeypatch, capsys):
     errors = []
     tick = browser.BrowserSession.tick
 
-    def slow_tick(self, data, wall_time=None):
+    def slow_tick(self, data, wall_time=None, camera=None):
         time.sleep(0.1)  # long enough for the client below to be gone
-        return tick(self, data, wall_time)
+        return tick(self, data, wall_time, camera)
 
     finish = browser.Handler.finish
 
@@ -205,7 +221,7 @@ def test_a_tab_leaving_mid_request_is_not_an_error(server, monkeypatch, capsys):
     monkeypatch.setattr(browser.BrowserSession, "tick", slow_tick)
     monkeypatch.setattr(browser.Handler, "finish", finished)
     monkeypatch.setattr(server, "handle_error", lambda *args: errors.append(args))
-    body = json.dumps({"id": session["id"]}).encode()
+    body = browser.pack({"id": session["id"]})
     with socket.create_connection(("127.0.0.1", server.server_port)) as dropped:
         # Reset rather than close, as a closing tab or a reload does.
         dropped.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
@@ -227,11 +243,11 @@ def test_unexpected_failures_answer_500_and_are_reported_on_stderr(
 ):
     session = start(server)
 
-    def broken(*_args):
+    def broken(*_args, **_kwargs):
         raise RuntimeError("renderer fell over")
 
     monkeypatch.setattr(browser.BrowserSession, "tick", broken)
-    status, data, _ = call(server, "POST", "/api/frame", {"id": session["id"]})
+    status, data, _ = frame(server, {"id": session["id"]})
     assert status == 500 and "terminal" in data["error"]
     assert "renderer fell over" in capsys.readouterr().err
 
@@ -268,7 +284,7 @@ def test_a_slow_start_does_not_hold_up_the_open_game(server, slow_models, stream
     assert loading.wait(5)
     began = time.monotonic()
     for _ in range(3):
-        status, _, _ = call(server, "POST", "/api/frame", {"id": playing["id"]})
+        status, _, _ = frame(server, {"id": playing["id"]})
         assert status == 200
     assert time.monotonic() - began < 2
     release.set()
@@ -277,7 +293,7 @@ def test_a_slow_start_does_not_hold_up_the_open_game(server, slow_models, stream
     assert status == 200 and loaded["state"] == "calibration"
     # The newer start replaced the game that kept running meanwhile.
     assert server.session.id == loaded["id"]
-    assert call(server, "POST", "/api/frame", {"id": playing["id"]})[0] == 400
+    assert frame(server, {"id": playing["id"]})[0] == 400
     assert not streams[0].closed
 
 
@@ -305,7 +321,7 @@ def test_a_game_its_tab_abandoned_is_closed(server, streams):
     assert server.session is not None and not streams[0].closed
     server.close_idle(later + 1)
     assert server.session is None and streams[0].closed
-    status, data, _ = call(server, "POST", "/api/frame", {"id": session["id"]})
+    status, data, _ = frame(server, {"id": session["id"]})
     assert status == 400 and "a minute" in data["error"]
 
 
@@ -316,7 +332,7 @@ def test_a_paused_game_that_keeps_polling_stays_open(server):
     began = time.monotonic()
     while time.monotonic() - began < 1.5:
         # A paused tab keeps asking for frames, only without a camera image.
-        status, data, _ = call(server, "POST", "/api/frame", {"id": session["id"]})
+        status, data, _ = frame(server, {"id": session["id"]})
         assert status == 200 and data["state"] == "paused"
         time.sleep(0.05)
     # Once it stops polling, the server's own loop closes it.
@@ -331,11 +347,67 @@ def test_a_decode_bomb_is_refused(server):
     raw = bytearray(cv2.imencode(".jpg", np.zeros((48, 64, 3), np.uint8))[1])
     at = raw.find(b"\xff\xc0")
     raw[at + 5 : at + 9] = (30000).to_bytes(2, "big") * 2  # 30000 x 30000
-    bomb = base64.b64encode(bytes(raw)).decode()
-    status, data, _ = call(
-        server, "POST", "/api/frame", {"id": session["id"], "camera": bomb}
-    )
+    status, data, _ = frame(server, {"id": session["id"]}, bytes(raw))
     assert status == 400 and "1280 by 720" in data["error"]
+
+
+def test_a_camera_frame_travels_as_bytes_to_the_recogniser(server, streams):
+    session = start(server, control="pistol")
+    seen = []
+    streams[0].submit = lambda image: seen.append(image.shape) or 0
+    camera = browser.jpeg(np.zeros((48, 64, 3), np.uint8))
+    status, data, image = frame(server, {"id": session["id"]}, camera)
+    assert status == 200 and seen == [(48, 64, 3)]
+    drawn = cv2.imdecode(np.frombuffer(image, np.uint8), cv2.IMREAD_COLOR)
+    assert drawn.shape[:2] == (server.session.height, server.session.width)
+    # The fields are JSON, so the camera can never arrive as one of them.
+    status, _, _ = frame(server, {"id": session["id"], "camera": "AAAA"})
+    assert status == 200 and len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"\x00\x00",  # shorter than its own length
+        b"\x00\x00\x00\x09{}",  # claims more JSON than there is
+        b"\xff\xff\xff\xff{}",
+        b"\x00\x00\x00\x02[]",
+        b"\x00\x00\x00\x02{}",  # no game named
+        b'{"id": "x"}',  # the JSON the frame exchange used to take
+    ],
+)
+def test_malformed_frame_messages_are_refused(server, body):
+    start(server)
+    status, data, response = call(
+        server, "POST", "/api/frame", body, {"Content-Type": browser.FRAME_TYPE}
+    )
+    assert status == 400 and data["error"]
+    assert response.getheader("Connection") == "close"
+
+
+@pytest.mark.parametrize(
+    "headers, token",
+    [
+        ({}, False),
+        ({"Host": "evil.example"}, True),
+        ({"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"}, True),
+        ({"Origin": "http://evil.example"}, True),
+        ({"Content-Length": str(browser.MAX_BODY + 1)}, True),
+    ],
+)
+def test_the_frame_exchange_keeps_every_check(server, headers, token):
+    session = start(server)
+    body = browser.pack({"id": session["id"], "fire": True})
+    status, _, _ = call(
+        server,
+        "POST",
+        "/api/frame",
+        body,
+        {"Content-Type": browser.FRAME_TYPE, **headers},
+        token=token,
+    )
+    assert status in (400, 403)
+    assert server.session.round.shots == 0
 
 
 def test_an_unusable_saved_setup_is_replaced_and_forgotten(server, capsys):
@@ -366,12 +438,10 @@ def test_stale_actions_are_answered_not_refused(server):
 
 def test_a_short_window_does_not_end_the_game(server):
     # A stage 1200 by 100 pixels: every warm-up frame used to be refused.
-    assert start(server, viewAspect=20)["state"] == "playing"
-    session = start(server, control="pistol", viewAspect=12)
-    for aspect in (12, 0.1, None):
-        status, data, _ = call(
-            server, "POST", "/api/frame", {"id": session["id"], "viewAspect": aspect}
-        )
+    assert start(server, viewSize=[2000, 100])["state"] == "playing"
+    session = start(server, control="pistol", viewSize=[1200, 100])
+    for view in ([1200, 100], [90, 900], None):
+        status, data, _ = frame(server, {"id": session["id"], "viewSize": view})
         assert status == 200 and data["state"] == "calibration"
 
 

@@ -483,13 +483,24 @@ footer a {
   aspect-ratio: 16/9;
   touch-action: none;
 }
-.stage img {
+#game-image {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
   cursor: crosshair;
   user-select: none;
+}
+/* The mouse's crosshair, drawn by the page where the pointer is. */
+#crosshair {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.aiming #game-image {
+  cursor: none;
 }
 .stage-overlay {
   position: absolute;
@@ -896,7 +907,7 @@ dialog .primary {
   border-radius: 10px;
   overflow: hidden;
 }
-.immersive .stage img {
+.immersive #game-image {
   object-fit: fill;
 }
 .immersive .hud {

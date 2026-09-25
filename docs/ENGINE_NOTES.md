@@ -558,7 +558,7 @@ every frame, and the round clock blends only its own pill, not the whole frame.
 ```bash
 uv run pytest
 uv run ruff check handy tests
-node --check handy/web/app.js
+for f in handy/web/*.js; do node --check "$f"; done
 ```
 
 `tests/data/portrait.jpg` and `tests/data/thumbs_down.jpg` are MediaPipe's own

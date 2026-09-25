@@ -7,10 +7,11 @@ import pytest
 from handy.game import Rect, RoundOptions
 from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 FULL_HEALTH, LOW_HEALTH, MAX_WALKERS,
-                                MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, WAVE_SECONDS,
-                                Perspective, Walker, ZombieRound, _bloom,
-                                _environment, _paint, _skyline, draw_emblem,
-                                draw_hud, draw_robot, draw_world)
+                                FALL, FOG, MOONLIGHT, MUZZLE_FLASH, NEAR_PLANE, SETTLED,
+                                STAGGER, WAVE_SECONDS, Perspective, Walker, ZombieRound,
+                                _bloom, _draw_fallen, _environment, _fill, _fixed, _look,
+                                _skyline, draw_emblem, draw_hud, draw_stains, draw_walker,
+                                draw_world, readout_line, readouts)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -63,62 +64,178 @@ def test_the_silhouette_and_the_hitbox_are_the_same_measurements():
     assert figure.hit_zone(figure.x + figure.height, figure.hip_y) is None
 
 
-def painted(walker: Walker, robots: bool) -> np.ndarray:
-    """The walker as the game paints it, alone on black - its rags red and its
-    skin white, or a robot in its own colours - without rim, shade or eyes."""
+def painted(walker: Walker, now: float = 0.0) -> np.ndarray:
+    """The walker's parts as the game fills them, alone on black: every piece
+    of its head white and the rest of it red, without the moon or the eyes."""
     canvas = np.zeros((AREA.bottom + 56, AREA.width, 3), np.uint8)
-    if robots:
-        draw_robot(canvas, walker, VIEW, 0.0)
-    else:
-        _paint(canvas, walker.figure(VIEW, 0.0), (0, 0, 255), (255, 255, 255),
-               grow=0.0, shift=(0.0, 0.0))
+    figure = walker.figure(VIEW, now)
+    _fill(canvas, figure.groups, _fixed(figure.outline),
+          [(255, 255, 255) if run[0].zone == "head" else (0, 0, 255) for run in figure.groups])
     return canvas
 
 
-def drawn_skull(canvas: np.ndarray, head_radius: float, robots: bool) -> tuple[float, float]:
-    """The middle of the skull as painted: the topmost solid blob of skin once
-    everything thinner than a head - the neck, the arms, the hands - is opened
-    away. A robot's head is all one colour with the rest of it."""
-    skin = canvas.max(axis=2) > 60 if robots else canvas.min(axis=2) > 127
-    size = int(head_radius * 1.2) | 1
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
-    solid = cv2.morphologyEx(skin.astype(np.uint8), cv2.MORPH_OPEN, kernel)
-    count, _, stats, centroids = cv2.connectedComponentsWithStats(solid)
-    top = min(range(1, count), key=lambda index: stats[index, cv2.CC_STAT_TOP])
-    return tuple(centroids[top])
+def drawn(walker: Walker, now: float = 0.0) -> np.ndarray:
+    """Which pixels the game paints the walker over - the moon's rim, the
+    shading, the face and the eyes included. Drawn once on black and once on
+    white, a pixel of the figure differs from both; its shadow, which only
+    darkens, and the glow of its eyes, which only adds light, do not."""
+    on = []
+    for ground in (0, 255):
+        canvas = np.full((AREA.bottom + 56, AREA.width, 3), ground, np.uint8)
+        draw_walker(canvas, walker, VIEW, now)
+        on.append(canvas)
+    return (on[0].max(axis=2) > 8) & (on[1].min(axis=2) < 247)
+
+
+def spawned(enemy: str, count: int, distance: float, seed: int = 3):
+    """Walkers as the spawner makes them, every gait and build, stood in the road."""
+    round_ = make_round(seed=seed, enemy=enemy)
+    for index in range(count):
+        walker = round_._spawn(wave=1 + index % 5)
+        walker.distance, walker.lane = distance, 0.0
+        yield walker
+
+
+def unhittable(walker: Walker, now: float = 0.0, samples: int = 1500) -> tuple[int, int]:
+    """How many of (a fair sample of) the pixels drawn for it a shot misses."""
+    figure = walker.figure(VIEW, now)
+    ys, xs = np.nonzero(drawn(walker, now))
+    pick = np.random.default_rng(0).permutation(len(xs))[:samples]
+    missed = sum(figure.hit_zone(float(xs[i]), float(ys[i])) is None for i in pick)
+    return missed, len(pick)
 
 
 @pytest.mark.parametrize("enemy", ["zombies", "robots"])
 def test_a_shot_at_the_middle_of_the_drawn_skull_is_a_headshot(enemy):
     """However far forward it leans - and a lurcher leans a long way - the head
     that is tested is the head that was painted."""
-    robots = enemy == "robots"
-    round_ = make_round(seed=3, enemy=enemy)
     gaits = set()
-    for index in range(120):
-        walker = round_._spawn(wave=1 + index % 5)
-        walker.distance, walker.lane = 4.0, 0.0
+    for walker in spawned(enemy, 60, 4.0):
         figure = walker.figure(VIEW, 0.0)
-        skull = drawn_skull(painted(walker, robots), figure.head_radius, robots)
-        assert figure.hit_zone(*skull) == "head", (walker.gait, walker.hunch)
+        ys, xs = np.nonzero(painted(walker).min(axis=2) > 127)
+        assert figure.hit_zone(xs.mean(), ys.mean()) == "head", (walker.gait, walker.hunch)
         gaits.add(walker.gait)
-    assert gaits == ({"shamble"} if robots else set(GAITS))
+    assert gaits == ({"shamble"} if enemy == "robots" else set(GAITS))
 
 
 @pytest.mark.parametrize("enemy", ["zombies", "robots"])
-def test_every_part_of_the_drawn_figure_can_be_hit(enemy):
-    """The reaching hands most of all: they are drawn well outside the body."""
-    robots = enemy == "robots"
-    round_ = make_round(seed=3, enemy=enemy)
-    for index in range(40):
-        walker = round_._spawn(wave=1 + index % 5)
-        walker.distance, walker.lane = 6.0, 0.0
+def test_every_pixel_of_the_drawn_skull_is_a_head_shot(enemy):
+    """Crown, jaw and hair: nothing painted as head scores as body."""
+    for walker in spawned(enemy, 30, 3.0):
         figure = walker.figure(VIEW, 0.0)
-        ys, xs = np.nonzero(painted(walker, robots).max(axis=2) > 60)
-        missed = [(x, y) for x, y in zip(xs, ys) if figure.hit_zone(x, y) is None]
-        assert len(missed) <= 0.04 * len(xs), (walker.gait, len(missed), len(xs))
-        for *_, (hx, hy) in () if robots else figure.arms():
-            assert figure.hit_zone(hx, hy) is not None, walker.gait
+        ys, xs = np.nonzero(painted(walker).min(axis=2) > 127)
+        body = sum(figure.hit_zone(float(x), float(y)) != "head" for x, y in zip(xs, ys))
+        assert body <= 0.005 * len(xs), (walker.gait, body, len(xs))
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+@pytest.mark.parametrize("distance", [2.2, 6.0, 13.0])
+def test_every_part_of_the_drawn_figure_can_be_hit(enemy, distance):
+    """The moonlit edge, the reaching hands, the fingers, the torn hem: what is
+    drawn is what can be shot, near and far."""
+    for walker in spawned(enemy, 10 if distance < 3 else 24, distance):
+        missed, total = unhittable(walker)
+        assert missed <= 0.02 * total, (walker.gait, missed, total)
+        figure = walker.figure(VIEW, 0.0)
+        for *_, wrist in figure.arms():
+            assert figure.hit_zone(*wrist) is not None, walker.gait
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_a_staggering_one_is_hit_where_it_is_drawn(enemy):
+    """Thrown aside by a body shot, arms flung up: the hitbox goes with it."""
+    for walker in spawned(enemy, 12, 3.5):
+        walker.staggered_until = STAGGER - 0.06  # hit a few hundredths ago
+        missed, total = unhittable(walker, now=0.0)
+        assert missed <= 0.02 * total, (walker.gait, missed, total)
+        assert walker.figure(VIEW, 0.0).recoil > 0.5
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_the_hitbox_has_no_empty_room_in_it(enemy):
+    """The body can be hit where it is drawn, not in the air around it: every
+    point that counts as a body shot is within a hair of something painted.
+    (The head keeps its fixed, generous circle - that is the game.)"""
+    for walker in spawned(enemy, 16, 4.0):
+        figure = walker.figure(VIEW, 0.0)
+        mask = drawn(walker).astype(np.uint8)
+        far = cv2.distanceTransform(1 - mask, cv2.DIST_L2, 3)
+        x0, y0, x1, y1 = (int(v) for v in figure.bounds)
+        body = [(x, y) for y in range(y0, y1, 3) for x in range(x0, x1, 3)
+                if figure.hit_zone(x, y) == "body"]
+        empty = sum(far[y, x] > figure.margin + 1.5 for x, y in body)
+        assert empty <= 0.02 * len(body), (walker.gait, empty, len(body))
+
+
+@pytest.mark.parametrize("enemy", ["zombies", "robots"])
+def test_parts_filled_together_never_touch(enemy):
+    """A pair of legs or of hands is filled in one call, and outlines filled
+    together cancel where they cross - so the ones put together must never
+    meet, in any pose, staggering or not."""
+    for index, walker in enumerate(spawned(enemy, 12, 2.2)):
+        for step in range(6):
+            walker.phase = step * 1.1 + index * 0.37
+            now = STAGGER - 0.05 if step == 5 else 0.0
+            walker.staggered_until = STAGGER if step == 5 else 0.0
+            figure = walker.figure(VIEW, now)
+            x0, y0, x1, y1 = (int(v) for v in figure.bounds)
+            # In the figure's own box, at the fixed-point scale it is drawn at.
+            outline = _fixed(figure.outline - np.float32((x0, y0)))
+            for run in figure.groups:
+                if len(run) < 2:
+                    continue
+                total = np.zeros((y1 - y0 + 2, x1 - x0 + 2), np.uint8)
+                for piece in run:
+                    mask = np.zeros_like(total)
+                    cv2.fillPoly(mask, [outline[piece.start:piece.stop]], 1, cv2.LINE_8, 4)
+                    total += mask
+                assert total.max() <= 1, (walker.gait, [piece.tone for piece in run])
+
+
+def test_the_moon_rims_only_the_side_it_is_on():
+    """A cold edge down the side towards the moon, up and to the right, and
+    none down the far side: lit, not outlined like a sticker."""
+    walker = walker_at(3.0, lane=-1.0)
+    canvas = np.full((AREA.bottom + 56, AREA.width, 3), 40, np.uint8)
+    draw_walker(canvas, walker, VIEW, 0.0)
+    mask = drawn(walker)
+    figure = walker.figure(VIEW, 0.0)
+    near, far = [], []
+    for y in range(int(figure.head[1]), int(figure.ground_y - figure.height * 0.1), 3):
+        columns = np.flatnonzero(mask[y])
+        if len(columns) < 6:
+            continue
+        brightness = canvas[y].max(axis=1)
+        far.append(int(brightness[columns[:2]].max()))
+        near.append(int(brightness[columns[-2:]].max()))
+    assert np.median(near) > 150, "a bright rim down the side towards the moon"
+    assert np.percentile(far, 95) < 110, "and no bright edge down the far side"
+
+
+def test_each_one_is_dressed_by_its_seed_alone():
+    """The same seed, the same rags, every time; and a crowd of them is not one
+    mannequin over and over: builds, clothes, sleeves and hair all vary."""
+    assert _look(1234) == _look(1234)
+    looks = [_look(seed) for seed in range(80)]
+    assert {look.clothes for look in looks} == {"shirt", "jacket", "coat", "gown"}
+    assert len({round(look.width, 2) for look in looks}) > 15
+    assert any(not all(look.sleeves) for look in looks), "some have lost a sleeve"
+    assert {look.hair for look in looks} == {0, 1, 2}
+    assert len({look.cloth for look in looks}) >= 4
+
+
+def test_the_same_night_draws_the_same_way_twice():
+    """A --seed replays a night to the pixel: nothing in how they look is
+    left to chance, or to the world's own generator."""
+    frames = []
+    for _ in range(2):
+        round_ = make_round(density=3, seed=9)
+        for tick in range(30):
+            round_.update(tick * 0.25)
+        canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+        draw_world(canvas, round_, 7.5)
+        frames.append(canvas)
+    assert round_.walkers and np.array_equal(*frames)
 
 
 def test_the_head_sits_above_the_shoulders_and_is_the_smaller_target():
@@ -136,6 +253,17 @@ def test_a_walker_far_enough_away_is_a_much_harder_shot():
 def test_the_fog_swallows_the_distant_ones():
     assert walker_at(3.0).figure(VIEW, 0.0).fog == 0.0
     assert walker_at(30.0).figure(VIEW, 0.0).fog > 0.7
+
+    def chest(distance: float) -> np.ndarray:
+        walker = walker_at(distance)
+        canvas = np.zeros((AREA.bottom + 56, AREA.width, 3), np.uint8)
+        draw_walker(canvas, walker, VIEW, 0.0)
+        figure = walker.figure(VIEW, 0.0)
+        return canvas[int((figure.shoulder_y + figure.hip_y) / 2), int(figure.x)].astype(int)
+
+    fog = np.array(FOG)
+    assert np.abs(chest(25.0) - fog).sum() < np.abs(chest(3.0) - fog).sum() / 2, \
+        "a far one is painted most of the way into the fog"
 
 
 # --- shooting them ---------------------------------------------------------
@@ -246,6 +374,27 @@ def test_the_health_bar_has_a_segment_for_every_bite_you_can_take():
         bites += 1
     assert bites == 6
     assert len(notches[0]) + 1 == bites
+
+
+def test_the_readouts_say_where_the_night_stands():
+    """Health as a gauge that goes down a bite at a time, and the wave and the
+    kills as one line in the game's voice - ready for whichever panel shows
+    them."""
+    round_ = make_round(duration=600)
+    round_.update(0.0)
+    assert readout_line(round_, 0.0) == "Wave 1 · 0 down"
+    health, wave, down, enemy = readouts(round_, 0.0)
+    assert (health.label, health.level, health.steps) == ("Health", 1.0, 6)
+    assert (wave.value, down.value, enemy.value) == ("1", "0", "Zombies")
+
+    round_.walkers = [walker_at(8.0)]
+    round_.shoot(*round_.walkers[0].figure(VIEW, 1.0).head, 1.0)
+    round_.walkers.append(walker_at(0.5))
+    round_.update(WAVE_SECONDS + 1.0)
+    assert readout_line(round_, WAVE_SECONDS + 1.0) == "Wave 2 · 1 down"
+    assert readouts(round_, 0.0)[0].level == (FULL_HEALTH - BITE_DAMAGE) / FULL_HEALTH
+    assert not any(word.isupper() and len(word) > 1
+                   for word in readout_line(round_, 0.0).split()), "no shouting"
 
 
 def test_making_it_to_the_end_of_the_round_is_surviving():
@@ -369,8 +518,11 @@ def test_a_walker_too_small_to_see_is_skipped_without_error():
     assert canvas.any()
 
 
-def test_the_card_art_draws():
-    panel = np.zeros((220, 360, 3), np.uint8)
+@pytest.mark.parametrize("size", [(276, 348), (210, 620), (400, 1100), (36, 64)])
+def test_the_card_art_draws(size):
+    """At a chooser card's shape, a score card's wide banner, and the thumbnail
+    the menus blur behind them."""
+    panel = np.zeros((*size, 3), np.uint8)
     draw_emblem(panel)
     assert panel.any()
 
@@ -382,7 +534,12 @@ def test_every_gait_keeps_its_head_above_its_feet_and_inside_its_hitbox():
         figure = walker_at(6.0, gait=gait, seed=3).figure(VIEW, 0.0)
         assert figure.head[1] < figure.ground_y
         assert figure.hit_zone(*figure.head) == "head", gait
-        assert figure.hit_zone(figure.x, figure.ground_y - 2) == "body", gait
+        # What it stands on: its feet, or a crawler's hands on the road.
+        planted = ([leg[3][:2] for leg in figure.legs()] if gait != "crawl"
+                   else [arm[2] for arm in figure.arms()])
+        for point in planted:
+            assert point[1] > figure.ground_y - figure.height * 0.1, gait
+            assert figure.hit_zone(*point) == "body", gait
 
 
 def test_a_crawler_is_the_low_target():
@@ -520,17 +677,81 @@ def test_a_walker_has_a_dark_core_and_a_moonlit_edge():
     assert band[:, :, 0].max() > 150, "a cold, bright rim on the moon side"
 
 
-def test_the_dead_are_drawn_to_the_size_of_the_living():
-    from handy.maps.zombies import draw_stains
+def killed(distance: float = 5.0, at: float = 0.0, **options) -> tuple[ZombieRound, Walker]:
+    """A round with one of them just put down by a head shot."""
+    round_ = make_round(duration=600, **options)
+    walker = walker_at(distance, robot=options.get("enemy") == "robots")
+    round_.walkers = [walker]
+    round_.shoot(*walker.figure(VIEW, at).head, at)
+    return round_, walker
 
-    round_ = make_round()
-    figure = walker_at(5.0).figure(VIEW, 0.0)
-    round_.stains = [(figure.x, figure.ground_y, figure.height * 0.18, 0.0, 5)]
+
+def test_the_dead_are_drawn_to_the_size_of_the_living():
+    round_, walker = killed(5.0)
+    figure = walker.figure(VIEW, 0.0)
+    round_.stains = []  # the body alone, without its pool
     canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
     draw_stains(canvas, round_, 30.0)
     lit = np.argwhere(canvas.any(axis=2))
     width = lit[:, 1].max() - lit[:, 1].min()
-    assert width > figure.height * 0.6, "a body lying down is as long as one standing"
+    tall = lit[:, 0].max() - lit[:, 0].min()
+    assert width > figure.height * 0.8, "a body lying down is as long as one standing"
+    assert tall < figure.height * 0.4, "and lies low across the road"
+
+
+def test_a_kill_goes_over_before_it_lies_still():
+    """Put down, it falls - still partly upright a moment later - and within
+    half a second lies flat on the road, where it stays."""
+    round_, walker = killed(4.0, at=1.0)
+    figure = walker.figure(VIEW, 1.0)
+
+    def standing(now: float) -> float:
+        canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+        _draw_fallen(canvas, VIEW, walker, 1.0, True, now)
+        rows = np.flatnonzero(canvas.max(axis=(1, 2)) > 8)
+        return (figure.ground_y - rows.min()) / figure.height
+
+    assert FALL <= 0.5, "feedback in play is short"
+    assert standing(1.0 + FALL * 0.3) > 0.6, "still going over"
+    assert standing(1.0 + FALL + 0.05) < 0.4, "then flat"
+    assert standing(1.0 + FALL + 5.0) < 0.4, "and it stays down"
+
+
+def test_the_settled_dead_become_part_of_the_road():
+    """A kill that has stopped changing is painted into the road once, and the
+    road looks exactly as it would drawn from scratch."""
+    round_ = make_round(duration=600)
+    for index in range(3):
+        walker = walker_at(5.0 + index, lane=index - 1.0)
+        round_.walkers = [walker]
+        round_.shoot(*walker.figure(VIEW, float(index)).head, float(index))
+    later = 2.0 + SETTLED + 5.0
+    frames = []
+    for fresh in (True, False, True):
+        if fresh:
+            round_.road = None
+        canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+        draw_world(canvas, round_, later)
+        frames.append(canvas)
+    assert round_.road is not None and round_.road[2] == later, "all three are in the road"
+    assert np.array_equal(frames[0], frames[1]) and np.array_equal(frames[1], frames[2])
+    blank = np.zeros_like(frames[0])
+    draw_stains(blank, round_, later, settled=False)
+    assert not blank.any(), "and none of them is drawn again each frame"
+
+
+def test_a_machine_goes_over_and_lies_there_without_bleeding():
+    round_, walker = killed(4.0, at=1.0, enemy="robots")
+    assert not round_.stains, "no blood from a machine"
+    figure = walker.figure(VIEW, 1.0)
+    canvas = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
+    draw_stains(canvas, round_, 3.0)
+    rows = np.flatnonzero(canvas.max(axis=(1, 2)) > 8)
+    assert rows.size and figure.ground_y - rows.min() < figure.height * 0.4, "a wreck, lying"
+    # Nothing about a wreck changes once it is down: it is road from then on.
+    blank = np.zeros_like(canvas)
+    draw_stains(blank, round_, 1.0 + FALL + 0.01, settled=False)
+    assert not blank.any()
 
 
 # --- round four: finish ------------------------------------------------------
@@ -583,14 +804,10 @@ def test_score_popups_land_big_and_settle():
 
 
 def test_old_bodies_sink_into_the_road_and_fresh_ones_keep_their_blood():
-    from handy.maps.zombies import draw_stains
-
-    round_ = make_round()
-    figure = walker_at(5.0).figure(VIEW, 0.0)
-    round_.stains = [(figure.x, figure.ground_y, figure.height * 0.18, 0.0, 5)]
+    round_, _ = killed(5.0)
     fresh = np.zeros((AREA.bottom + 56, AREA.width + 48, 3), np.uint8)
     old = fresh.copy()
-    draw_stains(fresh, round_, 0.5)
+    draw_stains(fresh, round_, FALL + 0.1)
     draw_stains(old, round_, 60.0)
     assert fresh.max() > old.max() + 40, "the moon's rim goes as it settles"
     red_fresh = (fresh[:, :, 2].astype(int) - fresh[:, :, 0]) > 30

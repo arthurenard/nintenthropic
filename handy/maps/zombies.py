@@ -9,19 +9,22 @@ shot is tested against, so what you see is exactly what you can hit.
 The road, the treeline and the moon are painted once per window size into a
 cached backdrop; each frame copies that and draws only what moves - the fog
 rolling along the horizon, the rain, the walkers, what is left of the ones that
-fell - so the whole picture stays well inside the per-frame budget.
+fell. The walkers' outlines are cached as well, a couple of dozen poses to a
+stride, so a frame only blends two of them and fills them in, and the whole
+picture stays well inside the per-frame budget.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import cached_property, lru_cache
+from typing import NamedTuple
 
 import cv2
 import numpy as np
 
-from ..game import MISS, Hit, Impact, Rect, Round
+from ..game import MISS, Hit, Impact, Rect, Round, RoundOptions
 from ..scene import blend, draw_text
 
 # --- the world --------------------------------------------------------------
@@ -56,11 +59,8 @@ ASPHALT = (38, 34, 31)  # wet tar, blue-grey under the moon
 ROAD_LINE = (150, 148, 138)
 POST = (11, 11, 12)
 TREE = (9, 9, 10)
-RAGS = (22, 20, 22)  # what is left of the clothes: near-black, a touch cold
-SHADE = (8, 7, 8)  # the side of a walker away from the moon
-SKIN = (58, 60, 66)  # dead flesh: a dark core, only a shade paler than the rags
 MOONLIGHT = (206, 198, 184)
-RIM = (236, 214, 150)  # the cold cyan edge the moon puts on skull and shoulders
+RIM = (240, 228, 200)  # the cold edge the moon puts on skull and shoulders
 EYESHINE = (200, 240, 224)
 FLASH = (70, 140, 236)  # the muzzle: warm, the only warm light on the road
 FLASH_GLOW = (40, 90, 200)
@@ -107,12 +107,297 @@ class Perspective:
         return int(self.screen_x(lane, distance)), int(self.ground_y(distance))
 
 
+# --- the figures ---------------------------------------------------------------
+
+#: Seconds a body shot knocks one of them off its stride.
+STAGGER = 0.45
+
+# The three kinds of solid a figure is built from.
+LIMB, ELLIPSE, POLYGON = 0, 1, 2
+
+
+class Part(NamedTuple):
+    """One solid piece of a figure, as it is built: in units of its height,
+    for the cached poses (see :class:`Mesh`).
+
+    A limb - tapering through its joints - for a leg, an arm or a finger; an
+    ellipse for a palm or a foot; a polygon for a skull, a torso or a ragged
+    coat. The same outlines are painted and shot at, so a part that is drawn
+    can be hit, and a shot that finds nothing drawn finds nothing.
+    """
+
+    zone: str  # "head" or "body"
+    tone: str  # which of the walker's colours it is painted in
+    kind: int
+    #: A limb's joints as (x, y, radius) triples; an ellipse's (cx, cy, rx,
+    #: ry, degrees); a polygon's outline, as an (n, 2) float32 array.
+    shape: tuple | np.ndarray
+    #: Half its thickness: how far in from the edge the moon may reach.
+    depth: float
+    #: The least detail (see :func:`_detail`) a figure must be drawn at to have
+    #: this part at all: fingers only near enough to see them.
+    lod: int = 0
+
+
+def _limb(zone: str, tone: str, *joints: tuple[float, float, float], lod: int = 0) -> Part:
+    """One piece bent at its joints, so a knee or an elbow is not a seam."""
+    return Part(zone, tone, LIMB, joints, min(joint[2] for joint in joints), lod)
+
+
+def _ellipse(zone: str, tone: str, centre: tuple[float, float], rx: float, ry: float,
+             degrees: float = 0.0, lod: int = 0) -> Part:
+    return Part(zone, tone, ELLIPSE, (centre[0], centre[1], rx, ry, degrees), min(rx, ry), lod)
+
+
+def _polygon(zone: str, tone: str, points: list, depth: float, lod: int = 0) -> Part:
+    return Part(zone, tone, POLYGON, np.array(points, np.float32), depth, lod)
+
+
+class Piece(NamedTuple):
+    """Where one part's outline lies in its figure's mesh."""
+
+    zone: str
+    tone: str
+    start: int
+    stop: int
+    lod: int
+    depth: float
+
+
+class Mesh(NamedTuple):
+    """Every part's outline, end to end, each point written as a centre, a
+    direction and a distance along it: a limb's points stand off its joints,
+    a skull's off its middle. The part pulled in by ``inset`` pixels is then
+    ``centre + (radius - inset) * direction`` - a few sums over the whole
+    figure at once, however many parts it has."""
+
+    #: Each point's centre (x, y), direction (x, y) and distance, side by side
+    #: in one array, so blending two poses is one sum rather than three.
+    packed: np.ndarray  # (n, 5)
+    depth: np.ndarray  # (n,): half the thickness of the part each point is on
+    pieces: tuple[Piece, ...]
+    #: Runs of pieces filled in one call: the same colour, and not touching -
+    #: a pair of legs, of feet, of hands. Outlines filled in one call cancel
+    #: where they cross, so only ones that cannot cross are put together.
+    groups: tuple[tuple[int, ...], ...]
+
+    @property
+    def centre(self) -> np.ndarray:
+        return self.packed[:, :2]
+
+    @property
+    def direction(self) -> np.ndarray:
+        return self.packed[:, 2:4]
+
+    @property
+    def radius(self) -> np.ndarray:
+        return self.packed[:, 4]
+
+
+@lru_cache(maxsize=8)
+def _arc(count: int) -> tuple[np.ndarray, np.ndarray]:
+    """``count`` steps round half a circle, ends left out."""
+    angles = np.linspace(0.0, math.pi, count + 2, dtype=np.float32)[1:-1]
+    return np.cos(angles)[None, :, None], np.sin(angles)[None, :, None]
+
+
+def _limb_outlines(limbs: list[tuple], arc: int) -> tuple[np.ndarray, ...]:
+    """Every limb's outline at once: down one side of its joints, round the
+    far end, back up the other side and round the near end. A bent joint is
+    mitred, so an elbow comes to a bony point rather than a seam."""
+    joints = np.array([limb if len(limb) == 3 else
+                       (limb[0], tuple((a + b) / 2 for a, b in zip(*limb)), limb[1])
+                       for limb in limbs], np.float32)
+    points, radii = joints[:, :, :2], joints[:, :, 2]
+    along = points[:, 1:] - points[:, :-1]
+    along /= np.maximum(np.linalg.norm(along, axis=2, keepdims=True), 1e-6)
+    normal = np.stack((-along[..., 1], along[..., 0]), axis=2)
+    bend = (normal[:, 0] + normal[:, 1]) / np.maximum(
+        1.0 + (normal[:, 0] * normal[:, 1]).sum(axis=1, keepdims=True), 0.78)
+    sides = np.stack((normal[:, 0], bend, normal[:, 1]), axis=1)
+    cos, sin = _arc(arc)
+    far = cos * normal[:, 1][:, None] + sin * along[:, 1][:, None]
+    near = -cos * normal[:, 0][:, None] - sin * along[:, 0][:, None]
+    centre = np.concatenate((points, np.repeat(points[:, 2:], arc, axis=1), points[:, ::-1],
+                             np.repeat(points[:, :1], arc, axis=1)), axis=1)
+    direction = np.concatenate((sides, far, -sides[:, ::-1], near), axis=1)
+    radius = np.concatenate((radii, np.repeat(radii[:, 2:], arc, axis=1), radii[:, ::-1],
+                             np.repeat(radii[:, :1], arc, axis=1)), axis=1)
+    return centre, direction, radius
+
+
+def _ellipse_outlines(ellipses: list[tuple], count: int) -> tuple[np.ndarray, ...]:
+    shapes = np.array(ellipses, np.float32)
+    t = np.linspace(0.0, math.tau, count, endpoint=False, dtype=np.float32)
+    across, down = shapes[:, 2:3] * np.cos(t), shapes[:, 3:4] * np.sin(t)
+    angle = np.radians(shapes[:, 4:5])
+    wx = across * np.cos(angle) - down * np.sin(angle)
+    wy = across * np.sin(angle) + down * np.cos(angle)
+    radius = np.maximum(np.hypot(wx, wy), 1e-6)
+    direction = np.stack((wx / radius, wy / radius), axis=2)
+    centre = np.broadcast_to(shapes[:, None, :2], direction.shape)
+    return centre, direction, radius
+
+
+def _mesh(parts: tuple[Part, ...]) -> Mesh:
+    """All of a figure's parts as one mesh, in the order they are painted,
+    at its finest detail: a smaller figure leaves some pieces out."""
+    limbs = [part.shape for part in parts if part.kind == LIMB]
+    ellipses = [part.shape for part in parts if part.kind == ELLIPSE]
+    built = {LIMB: _limb_outlines(limbs, 5) if limbs else None,
+             ELLIPSE: _ellipse_outlines(ellipses, 14) if ellipses else None}
+    counters = {LIMB: 0, ELLIPSE: 0}
+    centres, directions, radii, depths, pieces, boxes = [], [], [], [], [], []
+    at = 0
+    for part in parts:
+        if part.kind == POLYGON:
+            points = part.shape
+            middle = (points.min(axis=0) + points.max(axis=0)) * 0.5
+            offset = points - middle
+            radius = np.maximum(np.hypot(offset[:, 0], offset[:, 1]), 1e-6)
+            centre = np.broadcast_to(middle, points.shape)
+            direction = offset / radius[:, None]
+        else:
+            index = counters[part.kind]
+            counters[part.kind] += 1
+            centre, direction, radius = (array[index] for array in built[part.kind])
+        count = len(radius)
+        edge = centre + radius[:, None] * direction
+        boxes.append((edge.min(axis=0), edge.max(axis=0)))
+        centres.append(centre)
+        directions.append(direction)
+        radii.append(radius)
+        depths.append(np.full(count, part.depth, np.float32))
+        pieces.append(Piece(part.zone, part.tone, at, at + count, part.lod, part.depth))
+        at += count
+    groups: list[list[int]] = []
+    for index, piece in enumerate(pieces):
+        if groups:
+            run = groups[-1]
+            first = pieces[run[0]]
+            if ((piece.tone, piece.zone, piece.lod, piece.depth)
+                    == (first.tone, first.zone, first.lod, first.depth)
+                    and all(_apart(boxes[index], boxes[other]) for other in run)):
+                run.append(index)
+                continue
+        groups.append([index])
+    packed = np.concatenate((np.concatenate(centres), np.concatenate(directions),
+                             np.concatenate(radii)[:, None]), axis=1).astype(np.float32)
+    return Mesh(packed, np.concatenate(depths), tuple(pieces), tuple(map(tuple, groups)))
+
+
+def _apart(a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray]) -> bool:
+    """Whether two boxes are clear of each other by a couple of hundredths of
+    the figure's height, room enough that no pose between two cached ones and
+    no pixel of antialiasing brings them into contact."""
+    gap = 0.02
+    return bool((a[1] + gap < b[0]).any() or (b[1] + gap < a[0]).any())
+
+
+_RUNS: dict[tuple[int, int], tuple] = {}
+
+
+def _runs(groups: tuple[tuple[int, ...], ...], pieces: tuple[Piece, ...],
+          lod: int) -> tuple[tuple[Piece, ...], ...]:
+    """The runs of pieces a figure at detail ``lod`` is filled in. The same few
+    cached poses come round frame after frame, so the answer is kept against
+    the very runs asked about - held, so they cannot be mistaken for others."""
+    key = (id(groups), lod)
+    known = _RUNS.get(key)
+    if known is not None and known[0] is groups:
+        return known[1]
+    runs = tuple(run for run in (tuple(pieces[index] for index in group
+                                       if pieces[index].lod <= lod) for group in groups)
+                 if run)
+    if len(_RUNS) > 4096:
+        _RUNS.clear()
+    _RUNS[key] = (groups, runs)
+    return runs
+
+
+#: How many poses a stride is cached at. Each frame is drawn between the two
+#: either side of it, so this is a cache size, not a frame rate.
+POSE_STEPS = 16
+
+
+def _detail(height: float) -> int:
+    """How much of a figure is worth drawing at this height in pixels: 0 a
+    silhouette with eyes; 1 hair, collars and torn cuffs; 2 fingers; 3 every
+    finger, the thumbs, and a softer fall of light."""
+    return 0 if height < 40 else 1 if height < 100 else 2 if height < 200 else 3
+
+
+# What they wear, BGR, before the moon and the fog get to it. Dark and cold,
+# so the eyes and the moonlit edges carry the picture; the flesh a shade paler
+# than the rags so the skull is always the thing that reads as a head.
+SKINS = ((44, 50, 47), (50, 52, 51), (40, 46, 51), (34, 39, 40))
+COATS = ((18, 16, 15), (25, 19, 16), (16, 21, 20), (15, 19, 26), (27, 27, 27))
+SHIRTS = ((30, 32, 33), (33, 27, 23), (24, 28, 32), (36, 38, 35))
+TROUSERS = ((13, 12, 12), (28, 20, 17), (18, 23, 26), (17, 16, 16))
+HAIRS = ((10, 10, 12), (24, 25, 26), (11, 13, 18))
+GOWN = (38, 41, 37)  # the hospital gown some of them walked out in
+
+
+class Look(NamedTuple):
+    """How one of them is built and what it is wearing: fixed by its seed, so
+    the same one looks the same all the way up the road, and on it after."""
+
+    width: float  # narrow to broad, across the shoulders and the hips
+    clothes: str  # "shirt", "jacket", "coat" or "gown"
+    sleeves: tuple[bool, bool]  # left, right: a sleeve left, or a bare arm
+    long_sleeves: bool
+    bare_shin: int  # the trouser leg torn off below the knee: -1, 1, or 0
+    hair: int  # 0 bald, 1 a matted cap, 2 long and lank
+    jaw: float  # how far the jaw hangs open, 0..1
+    shoulders: float  # how much higher the left shoulder sits, in heights
+    knees: float  # knock-kneed below zero, bow-legged above
+    arms: int  # a shambler's reach: both arms, one of them, or one raised
+    lead_arm: int  # the side that reaches, or raises
+    stiff: int  # the side of the limper's dragging leg
+    skin: tuple[int, int, int]
+    cloth: tuple[int, int, int]
+    shirt: tuple[int, int, int]
+    legs: tuple[int, int, int]
+    hair_tone: tuple[int, int, int]
+
+
+@lru_cache(maxsize=512)
+def _look(seed: int) -> Look:
+    def pick(options: tuple, index: int):
+        return options[int(_rag(seed, index) * len(options)) % len(options)]
+
+    roll = _rag(seed, 40)
+    clothes = ("coat" if roll < 0.3 else "jacket" if roll < 0.55 else "shirt" if roll < 0.87
+               else "gown")
+    gown = clothes == "gown"
+    return Look(
+        width=0.9 + 0.22 * _rag(seed, 41),
+        clothes=clothes,
+        sleeves=(not gown and _rag(seed, 5) >= 0.3, not gown and _rag(seed, 6) >= 0.3),
+        long_sleeves=_rag(seed, 42) < 0.5,
+        bare_shin=0 if _rag(seed, 14) >= 0.4 else (1 if _rag(seed, 43) < 0.5 else -1),
+        hair=min(2, int(_rag(seed, 13) * 3)),
+        jaw=_rag(seed, 12),
+        shoulders=(_rag(seed, 44) - 0.5) * 0.06,
+        knees=(_rag(seed, 45) - 0.5) * 0.024,
+        arms=min(2, int(_rag(seed, 46) * 3)),
+        lead_arm=1 if _rag(seed, 52) < 0.5 else -1,
+        stiff=1 if _rag(seed, 9) < 0.5 else -1,
+        skin=pick(SKINS, 47),
+        cloth=GOWN if gown else pick(COATS, 48),
+        shirt=pick(SHIRTS, 49),
+        legs=pick(TROUSERS, 50),
+        hair_tone=pick(HAIRS, 51),
+    )
+
+
 @dataclass(frozen=True)
 class Figure:
     """Where every part of a walker is on screen, this frame.
 
-    Drawing and hit-testing both read this, so the silhouette and the hitbox can
-    never drift apart.
+    Drawing and hit-testing both read the outlines in :attr:`mesh`, at the
+    detail in :attr:`groups`, so the silhouette and the hitbox can never drift
+    apart.
     """
 
     x: float
@@ -135,45 +420,145 @@ class Figure:
     lead: float = 0.0
     #: A machine, not one of them: it stands straight and keeps its hands in.
     robot: bool = False
+    #: How hard the last body shot is still knocking it back, 0..1.
+    recoil: float = 0.0
+    #: How much detail it is built with; below zero, as much as its size merits.
+    detail: int = -1
 
     @property
-    def hand_radius(self) -> float:
-        return self.height * (0.04 if self.gait == "crawl" else 0.042)
+    def look(self) -> Look:
+        return _look(self.seed)
+
+    @property
+    def lod(self) -> int:
+        return self.detail if self.detail >= 0 else _detail(self.height)
+
+    @property
+    def margin(self) -> float:
+        """How far outside a part a shot still lands on it, in pixels. The
+        moon's rim is painted just outside the silhouette on the side towards
+        it, softened by a pixel of antialiasing, and every pixel that is
+        painted is one that can be hit."""
+        return max(2.5, self.height * 0.012)
+
+    def shoulder_at(self, side: int) -> float:
+        """The screen row of one shoulder. They are never level: one sits
+        higher for good, and the pair rock against the hips with the stride."""
+        if self.robot or self.gait == "crawl":
+            return self.shoulder_y
+        rock = math.sin(self.phase) * 0.012
+        return self.shoulder_y + self.height * side * (rock - self.look.shoulders)
 
     def arms(self) -> tuple[tuple[tuple[float, float], ...], ...]:
-        """Shoulder, elbow and hand of each arm, on screen: reaching, hanging,
-        or one clutched to a wound, by gait. The hands reach well outside the
-        body, so the hit test reads them from here as the drawing does."""
+        """Shoulder, elbow and wrist of each arm, on screen: reaching, hanging,
+        raised or clutched to a wound, by gait and by build."""
+        return tuple(arm[:3] for arm in self._arms)
+
+    def _arm_pose(self, side: int) -> str:
+        if self.robot or self.gait == "lurch":
+            return "hang"
+        look = self.look
+        if self.gait == "limp":
+            return "clutch" if side == -look.stiff else "reach"
+        if look.arms == 0:
+            return "reach"
+        if look.arms == 1:
+            return "reach" if side == look.lead_arm else "hang"
+        return "raised" if side == look.lead_arm else "reach"
+
+    @cached_property
+    def _arms(self) -> tuple:
+        """Each arm's shoulder, elbow and wrist, and the way its hand hangs."""
         height, x = self.height, self.x
         arms = []
         if self.gait == "crawl":
-            # Planted ahead, one always further than the other.
+            # Planted ahead, one always further than the other, elbows up.
             pull = math.sin(self.phase)
             for side in (-1, 1):
                 ahead = 0.05 * pull * side
                 arms.append(((x + side * height * 0.13, self.ground_y - height * 0.32),
                              (x + side * height * (0.22 + ahead * 0.4),
                               self.ground_y - height * 0.16),
-                             (x + side * height * (0.24 + ahead), self.ground_y - height * 0.03)))
+                             (x + side * height * (0.24 + ahead), self.ground_y - height * 0.05),
+                             (side * 0.55, 0.85)))
             return tuple(arms)
-        half = self.half_shoulder
-        stiff = 1 if _rag(self.seed, 9) < 0.5 else -1  # which leg the limper drags
+        half = self.half_shoulder * self.look.width
         for side in (-1, 1):
-            reach = math.sin(self.phase + side * 1.7) * height * 0.045
-            shoulder = (x + self.lead + side * half * 0.9, self.shoulder_y + height * 0.03)
-            if self.gait == "lurch":
-                elbow = (shoulder[0] + side * height * 0.035 + reach * 0.5,
-                         shoulder[1] + height * 0.17)
-                hand = (elbow[0] + side * height * 0.015 + reach, elbow[1] + height * 0.16)
-            elif self.gait == "limp" and side == -stiff:
-                elbow = (shoulder[0] + side * height * 0.08, shoulder[1] + height * 0.13)
-                hand = (x + side * height * 0.02, self.hip_y - height * 0.02)
+            swing = math.sin(self.phase + side * 1.7)
+            sx = x + self.lead + side * half * 0.84
+            sy = self.shoulder_at(side) + height * (0.03 if self.robot else 0.06)
+            pose = self._arm_pose(side)
+            if pose == "reach":
+                # Reaching for you, out and forward: from here the forearm is
+                # short, and the hand hangs from the wrist.
+                elbow = (sx + side * height * (0.085 + 0.01 * swing),
+                         sy + height * (0.11 + 0.015 * swing))
+                wrist = (sx + side * height * (0.145 + 0.015 * swing),
+                         sy + height * (0.125 + 0.045 * swing))
+                hand = (side * 0.3, 1.0)
+            elif pose == "raised":
+                # Held up at the height of your face, the hand hanging limp.
+                elbow = (sx + side * height * 0.1, sy + height * (0.02 + 0.015 * swing))
+                wrist = (sx + side * height * 0.15, sy - height * (0.06 + 0.025 * swing))
+                hand = (side * 0.25, 1.0)
+            elif pose == "clutch":
+                # Holding the wound it died of.
+                elbow = (sx + side * height * 0.075, sy + height * 0.135)
+                wrist = (x + self.lead * 0.25 + side * height * 0.045,
+                         self.hip_y - height * 0.035)
+                hand = (-side, 0.35)
             else:
-                elbow = (shoulder[0] + side * height * 0.11,
-                         shoulder[1] + height * 0.15 + reach)
-                hand = (x + side * half * 1.9, self.shoulder_y + height * 0.33 + reach)
-            arms.append((shoulder, elbow, hand))
+                # Hanging, heavy, swinging with the stride; a machine's straighter.
+                stiff = 0.35 if self.robot else 1.0
+                elbow = (sx + side * height * (0.03 + 0.01 * swing * stiff),
+                         sy + height * 0.17)
+                wrist = (elbow[0] + side * height * 0.012 + height * 0.03 * swing * stiff,
+                         elbow[1] + height * 0.16)
+                hand = (wrist[0] - elbow[0], wrist[1] - elbow[1])
+            if self.recoil > 0.0:
+                # Knocked back by the shot: the arms fly up and out.
+                k = self.recoil
+                elbow = (elbow[0] + (sx + side * height * 0.115 - elbow[0]) * k,
+                         elbow[1] + (sy - elbow[1]) * k)
+                wrist = (wrist[0] + (sx + side * height * 0.16 - wrist[0]) * k,
+                         wrist[1] + (sy - height * 0.085 - wrist[1]) * k)
+                hand = (hand[0] + (side * 0.3 - hand[0]) * k, hand[1] + (-1.0 - hand[1]) * k)
+            norm = math.hypot(*hand) or 1.0
+            arms.append(((sx, sy), elbow, wrist, (hand[0] / norm, hand[1] / norm)))
         return tuple(arms)
+
+    def legs(self) -> tuple[tuple[tuple[float, ...], ...], ...]:
+        """Each standing leg's hip, knee and ankle, and its foot as (x, y,
+        degrees). From in front, a stride is a foot lifting and swinging
+        through while the weight rides over the other."""
+        height, x, ground = self.height, self.x, self.ground_y
+        look = self.look
+        lurch = self.gait == "lurch"
+        width = 1.0 if self.robot else look.width
+        stance = (0.062 if lurch else 0.046) * width
+        step = math.sin(self.phase)
+        legs = []
+        for side in (-1, 1):
+            hip = (x + side * height * 0.05 * width, self.hip_y + height * 0.02)
+            if self.gait == "limp" and side == look.stiff:
+                # The bad leg stays straight and trails, toe scraping the road.
+                ankle = (x + side * height * (stance + 0.018), ground - height * 0.03)
+                knee = ((hip[0] + ankle[0]) / 2 + side * height * 0.004,
+                        (hip[1] + ankle[1]) / 2)
+                foot = (ankle[0] + side * height * 0.008, ground - height * 0.012, side * 30.0)
+            else:
+                lift = max(0.0, -step * side)  # this foot is off the road, swinging through
+                rise = lift * height * (0.035 if self.robot else 0.075 if lurch
+                                        else 0.07 if self.gait == "limp" else 0.055)
+                bend = 0.0 if self.robot else 0.012 + look.knees + 0.018 * lift + (
+                    0.012 if lurch else 0.0)
+                ankle = (x + side * height * (stance + 0.012 * lift), ground - height * 0.042 - rise)
+                knee = (x + side * height * (0.056 * width + bend),
+                        ground - height * 0.27 - rise * 0.55)
+                foot = (ankle[0] + side * height * 0.006, ankle[1] + height * 0.026,
+                        side * 12.0)
+            legs.append((hip, knee, ankle, foot))
+        return tuple(legs)
 
     def trailing_legs(self) -> tuple[tuple[tuple[float, float], ...], ...]:
         """A crawler's hip and foot on each side. They trail up the road behind
@@ -185,43 +570,473 @@ class Figure:
                        ground - height * (0.55 + 0.03 * _rag(self.seed, 3 + side))))
                      for side in (-1, 1))
 
-    def centre_at(self, y: float) -> float:
-        """The middle of the body at screen row ``y``: over the feet up to the
-        hips, then leaning out with the shoulders the way the torso is drawn."""
-        if y >= self.hip_y:
-            return self.x
-        rise = (self.hip_y - y) / max(self.hip_y - self.shoulder_y, 1e-6)
-        return self.x + self.lead * min(rise, 1.0)
+    @cached_property
+    def parts(self) -> tuple[Part, ...]:
+        """Every solid piece of it, in the order they are painted, back to front."""
+        if self.robot:
+            return tuple(_robot_parts(self))
+        if self.gait == "crawl":
+            return tuple(_crawler_parts(self))
+        return tuple(_standing_parts(self))
+
+    @cached_property
+    def mesh(self) -> Mesh:
+        """Its outlines in pixels, this frame: the walker's cached poses either
+        side of this moment of its stride, blended, scaled to its height and
+        stood where it is. Painted and shot at alike.
+
+        A shot's knock-back moves only the arms, and moves them in a straight
+        line, so it is a blend too: between each pose as it walks and the
+        same pose with its arms flung up."""
+        step = (self.phase % math.tau) / math.tau * POSE_STEPS
+        low = int(step)
+        t = np.float32(step - low)
+        key = (self.seed, self.gait, self.robot, self.hunch, self.tilt)
+        poses = [(_pose_mesh(*key, 0.0, low % POSE_STEPS),
+                  _pose_mesh(*key, 0.0, (low + 1) % POSE_STEPS))]
+        if self.recoil > 0.0:
+            poses.append((_pose_mesh(*key, 1.0, low % POSE_STEPS),
+                          _pose_mesh(*key, 1.0, (low + 1) % POSE_STEPS)))
+        first = poses[0][0]
+        if any(len(mesh.packed) != len(first.packed) for pair in poses for mesh in pair):
+            poses = [(first, first)]
+        groups = first.groups
+        if any(mesh.groups is not groups and mesh.groups != groups
+               for pair in poses for mesh in pair):
+            # Apart in one pose and not the other: fill them one at a time.
+            groups = tuple((index,) for index in range(len(first.pieces)))
+        blended = [a.packed + (b.packed - a.packed) * t for a, b in poses]
+        packed = blended[0]
+        if len(blended) > 1:
+            packed += (blended[1] - packed) * np.float32(self.recoil)
+        height = np.float32(self.height)
+        packed[:, :2] *= height
+        packed[:, :2] += np.float32((self.x - self.lean * self.height, self.ground_y))
+        packed[:, 4] *= height
+        return Mesh(packed, first.depth * height, first.pieces, groups)
+
+    @cached_property
+    def groups(self) -> tuple[tuple[Piece, ...], ...]:
+        """The pieces it is drawn and shot with at its size, in the runs they
+        are filled in."""
+        return _runs(self.mesh.groups, self.mesh.pieces, self.lod)
+
+    @cached_property
+    def outline(self) -> np.ndarray:
+        """Every point of every part's edge, in pixels."""
+        mesh = self.mesh
+        return mesh.centre + mesh.radius[:, None] * mesh.direction
+
+    @cached_property
+    def bounds(self) -> tuple[float, float, float, float]:
+        """The box every part fits in, margin included: x0, y0, x1, y1."""
+        low, high = self.outline.min(axis=0), self.outline.max(axis=0)
+        pad = self.margin + 1.0
+        return (float(low[0]) - pad, float(low[1]) - pad, float(high[0]) + pad,
+                float(high[1]) + pad)
 
     def hit_zone(self, x: float, y: float) -> str | None:
         """"head", "body", or None. The head is small and worth the trouble."""
         if math.hypot(x - self.head[0], y - self.head[1]) <= self.head_radius * 1.2:
             return "head"
-        # The body box leans with the shoulders and is widened for the arms
-        # where they leave the body.
-        if (abs(x - self.centre_at(y)) <= self.half_shoulder * 1.45
-                and self.shoulder_y - self.head_radius <= y <= self.ground_y):
-            return "body"
-        if self.robot:
-            return None  # its arms hang inside the box
-        # And the arms reaching out past it, forearm and hand, and a crawler's
-        # legs trailing up behind it.
-        reach = self.hand_radius * 1.2
-        limbs = [(a, b) for shoulder, elbow, hand in self.arms()
-                 for a, b in ((shoulder, elbow), (elbow, hand))]
-        if self.gait == "crawl":
-            limbs += self.trailing_legs()
-        if any(_to_segment(x, y, a, b) <= reach for a, b in limbs):
-            return "body"
+        x0, y0, x1, y1 = self.bounds
+        if not (x0 <= x <= x1 and y0 <= y <= y1):
+            return None
+        outline, point, margin = self.outline, (float(x), float(y)), -self.margin
+        for run in self.groups:
+            for piece in run:
+                if cv2.pointPolygonTest(outline[piece.start:piece.stop], point,
+                                        True) >= margin:
+                    return "body"
         return None
 
 
-def _to_segment(x: float, y: float, a: tuple[float, float], b: tuple[float, float]) -> float:
-    """How far the point is from the line segment ``a``-``b``."""
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    span = dx * dx + dy * dy
-    t = 0.0 if span == 0.0 else min(max(((x - a[0]) * dx + (y - a[1]) * dy) / span, 0.0), 1.0)
-    return math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
+def _pose(gait: str, robot: bool, hunch: float, tilt: float, seed: int, phase: float,
+          recoil: float, height: float, x: float, ground: float, fog: float = 0.0,
+          detail: int = -1) -> Figure:
+    """One of them at one moment of its stride, ``height`` pixels tall with its
+    feet at (``x``, ``ground``)."""
+    lurch = math.sin(phase) * (0.06 if gait == "lurch" else 0.035)
+    # Knocked off balance by the last round: thrown aside at once, and
+    # finding its feet again over the rest of the stagger.
+    lurch += 0.09 * recoil
+    x += lurch * height
+    common = dict(x=x, ground_y=ground, height=height, lean=lurch, fog=fog, hunch=hunch,
+                  tilt=tilt, phase=phase, gait=gait, seed=seed, robot=robot, recoil=recoil,
+                  detail=detail)
+    if gait == "crawl":
+        # On its hands, dragging itself up the road: low, wide, head first.
+        return Figure(head=(x + lurch * height * 0.3, ground - height * 0.23),
+                      head_radius=height * 0.074, shoulder_y=ground - height * 0.36,
+                      hip_y=ground - height * 0.44, half_shoulder=height * 0.20, **common)
+    drop = 0.0
+    if gait == "limp":
+        drop = abs(math.sin(phase * 0.5)) * 0.035  # the bad leg gives
+    elif gait == "lurch":
+        drop = 0.045  # bent forward, head thrust out
+    # The shoulders lead the hips by the hunch, and a lurcher's lead further
+    # still. Folded into the head here rather than added when it is drawn,
+    # or a shot at the middle of a lurcher's skull scores nothing.
+    lead = 0.0
+    if not robot:
+        lead = hunch * height * 0.085 + (height * 0.07 if gait == "lurch" else 0.0)
+    return Figure(
+        head=(x + lead + lurch * height * 0.6 + (height * 0.06 if gait == "lurch" else 0.0),
+              ground - height * (0.905 - drop)),
+        head_radius=height * 0.076,
+        shoulder_y=ground - height * (0.79 - drop),
+        hip_y=ground - height * 0.47,
+        half_shoulder=height * 0.15,
+        lead=lead,
+        **common,
+    )
+
+
+@lru_cache(maxsize=1024)
+def _pose_mesh(seed: int, gait: str, robot: bool, hunch: float, tilt: float,
+               recoil: float, step: int) -> Mesh:
+    """One walker at one step of its stride, one unit tall with its feet at
+    the origin. A walker's poses are built in its first stride and reused for
+    the rest of the road; nine walkers' worth fit many times over. Sixteen to a
+    stride is plenty: a frame is drawn between two of them, and nothing moves
+    far enough between two to bend a straight line visibly."""
+    figure = _pose(gait, robot, hunch, tilt, seed, step * math.tau / POSE_STEPS, recoil,
+                   height=1.0, x=0.0, ground=0.0, detail=3)
+    return _mesh(figure.parts)
+
+
+def _skull(figure: Figure, metal: bool = False) -> list[tuple[float, float]]:
+    """The outline of the head in one piece, crown to chin: a cranium, cheeks
+    drawn in under the bones, and a jaw that hangs - or a helmet's square chin.
+    Every point of it is inside the circle a head shot is tested against."""
+    width = 0.8 if metal else 0.84
+    points = []
+    for index in range(11):
+        a = math.radians(-10.0 + 20.0 * index)
+        points.append((width * math.cos(a), -0.13 - 0.9 * math.sin(a)))
+    if metal:
+        chin = ((-0.76, 0.46), (-0.44, 0.86), (0.44, 0.86), (0.76, 0.46))
+    else:
+        drop = 0.15 * figure.look.jaw  # the further it hangs, the longer the face
+        chin = ((-0.78, 0.14), (-0.6, 0.38), (-0.6, 0.6 + drop * 0.4), (-0.26, 0.92 + drop),
+                (0.26, 0.92 + drop), (0.6, 0.6 + drop * 0.4), (0.6, 0.38), (0.78, 0.14))
+    return [_head_point(figure, px, py) for px, py in points + list(chin)]
+
+
+def _head_parts(figure: Figure, parts: list[Part], metal: bool = False) -> None:
+    """The skull, and what hair is left on it."""
+    radius = figure.head_radius
+    parts.append(_polygon("head", "plate" if metal else "skin", _skull(figure, metal),
+                          radius * 0.7))
+    look = figure.look
+    if metal or not look.hair:
+        return
+    # Over the crown, then a ragged edge back across the brow: a matted cap,
+    # or hanging lank past the ears.
+    lank = look.hair == 2
+    start = -0.16 if lank else 0.03
+    cap = []
+    for index in range(9):
+        a = math.pi * (start + (1.0 - 2.0 * start) * index / 8)
+        cap.append(_head_point(figure, -math.cos(a) * 0.9, -0.13 - math.sin(a) * 0.96))
+    edge = ((0.84, 0.34), (0.68, -0.14), (0.42, -0.38), (0.12, -0.5), (-0.2, -0.42),
+            (-0.5, -0.4), (-0.7, -0.12), (-0.84, 0.34)) if lank else (
+            (0.84, -0.14), (0.6, -0.44), (0.34, -0.32), (0.1, -0.54), (-0.16, -0.4),
+            (-0.42, -0.52), (-0.66, -0.32), (-0.84, -0.14))
+    for index, (px, py) in enumerate(edge):
+        cap.append(_head_point(figure, px, py - 0.1 * _rag(figure.seed, 70 + index)))
+    parts.append(_polygon("head", "hair", cap, radius * 0.25, lod=1))
+
+
+def _hand_parts(figure: Figure, wrist: tuple[float, float], hand: tuple[float, float],
+                side: int, tone: str = "skin", claws: bool = True) -> list[list[Part]]:
+    """A palm hanging from the wrist, and the fingers, which only a near one
+    shows: as layers - the palm, then each finger in turn - so a pair of
+    hands can be laid down together."""
+    height = figure.height
+    dx, dy = hand
+    palm = (wrist[0] + dx * height * 0.024, wrist[1] + dy * height * 0.024)
+    layers = [[_ellipse("body", tone, palm, height * 0.03, height * 0.021,
+                        math.degrees(math.atan2(dy, dx)))]]
+    if not claws:
+        return layers
+    # Across the palm; the thumb is on the side towards the body.
+    px, py = -dy, dx
+    if px * side > 0:
+        px, py = -px, -py
+    base_angle = math.atan2(dy, dx)
+    fingers = ((-1.4, -24.0, 0.8, 3), (-0.45, -8.0, 1.0, 2), (0.5, 7.0, 0.95, 2),
+               (1.4, 22.0, 0.75, 2))
+    thick = height * 0.0062
+    for index, (across, spread, long, lod) in enumerate(fingers):
+        a = base_angle + math.radians(spread) * -side
+        # Each finger crooked at the knuckle, curling back towards the palm.
+        curl = a + math.radians(18.0) * side
+        base = (palm[0] + dx * height * 0.016 + px * height * 0.0085 * across,
+                palm[1] + dy * height * 0.016 + py * height * 0.0085 * across)
+        reach = height * (0.024 + 0.008 * _rag(figure.seed, 80 + index + 4 * side)) * long
+        knuckle = (base[0] + math.cos(a) * reach, base[1] + math.sin(a) * reach)
+        tip = (knuckle[0] + math.cos(curl) * reach * 0.9, knuckle[1] + math.sin(curl) * reach * 0.9)
+        layers.append([_limb("body", tone, (*base, thick), (*knuckle, thick * 0.85),
+                             (*tip, thick * 0.6), lod=lod)])
+    a = base_angle + math.radians(55.0) * side
+    base = (palm[0] - px * height * 0.014, palm[1] - py * height * 0.014)
+    tip = (base[0] + math.cos(a) * height * 0.026, base[1] + math.sin(a) * height * 0.026)
+    layers.append([_limb("body", tone, (*base, thick * 1.15), (*tip, thick * 0.7), lod=3)])
+    return layers
+
+
+def _tatters(tone: str, joint: tuple[float, float], direction: tuple[float, float],
+             radius: float, height: float, seed: int) -> Part:
+    """A sleeve torn off at a joint: a ragged cuff hanging a little way down
+    the bare arm below it."""
+    dx, dy = direction
+    norm = math.hypot(dx, dy) or 1.0
+    dx, dy = dx / norm, dy / norm
+    px, py = -dy, dx
+    jx, jy = joint
+    points = [(jx + px * radius * 1.1 - dx * radius * 0.7, jy + py * radius * 1.1 - dy * radius * 0.7)]
+    for index, (across, down) in enumerate(((0.95, 0.6), (0.5, 1.2), (0.12, 0.35),
+                                            (-0.3, 1.0), (-0.78, 0.45))):
+        reach = height * 0.028 * down * (0.55 + 0.9 * _rag(seed, 90 + index))
+        points.append((jx + px * radius * across + dx * reach,
+                       jy + py * radius * across + dy * reach))
+    points.append((jx - px * radius * 1.1 - dx * radius * 0.7, jy - py * radius * 1.1 - dy * radius * 0.7))
+    return _polygon("body", tone, points, radius * 0.5, lod=1)
+
+
+def _arm_layers(figure: Figure, side: int, arm: tuple) -> list[list[Part]]:
+    """One arm - sleeve or bare, torn at the cuff - and its hand, as layers:
+    upper arm, forearm, cuff, palm, each finger."""
+    height, look = figure.height, figure.look
+    shoulder, elbow, wrist, hand = arm
+    sleeve_tone = "shirt" if look.clothes == "shirt" else "cloth"
+    sleeve = look.sleeves[0 if side < 0 else 1]
+    upper = sleeve_tone if sleeve else "skin"
+    fore = sleeve_tone if sleeve and look.long_sleeves else "skin"
+    top = height * (0.034 if sleeve else 0.026)
+    at_elbow = height * (0.025 if fore != "skin" else 0.021)
+    if upper == fore:
+        layers = [[_limb("body", upper, (*shoulder, top), (*elbow, at_elbow),
+                         (*wrist, height * 0.016))], []]
+    else:
+        layers = [[_limb("body", upper, (*shoulder, top), (*elbow, height * 0.026))],
+                  [_limb("body", fore, (*elbow, at_elbow), (*wrist, height * 0.016))]]
+    cuff = []
+    if sleeve:
+        joint, radius, onward = ((wrist, height * 0.021, hand) if look.long_sleeves else
+                                 (elbow, height * 0.028,
+                                  (wrist[0] - elbow[0], wrist[1] - elbow[1])))
+        cuff.append(_tatters(sleeve_tone, joint, onward, radius, height, figure.seed + side))
+    return layers + [cuff] + _hand_parts(figure, wrist, hand, side)
+
+
+def _side_by_side(parts: list[Part], *sides: list[list[Part]]) -> None:
+    """Lay down two sides' layers together - both upper arms, then both
+    forearms, both hands - so each pair can be filled in one call. The two
+    sides never overlap, so the order between them does not matter."""
+    for layer in range(max((len(layers) for layers in sides), default=0)):
+        for layers in sides:
+            if layer < len(layers):
+                parts.extend(layers[layer])
+
+
+def _standing_parts(figure: Figure) -> list[Part]:
+    """One of them on its feet: legs, a torso that leans with its shoulders
+    and narrows to the waist, clothes torn at the hem and the sleeve, the
+    skull, and the arms and hands."""
+    height, x, ground = figure.height, figure.x, figure.ground_y
+    look = figure.look
+    seed = figure.seed
+    half = figure.half_shoulder * look.width
+    top, hips = figure.shoulder_y, figure.hip_y
+    left, right = figure.shoulder_at(-1), figure.shoulder_at(1)
+    span = max(hips - min(left, right), 1e-6)
+    lead = figure.lead
+    parts: list[Part] = []
+
+    def over(y: float) -> float:
+        """The middle of the body at row ``y``: leaning out with the shoulders."""
+        return x + lead * min(max((hips - y) / span, 0.0), 1.1)
+
+    gown = look.clothes == "gown"
+    legs = []
+    for side, (hip, knee, ankle, foot) in zip((-1, 1), figure.legs()):
+        thigh = "cloth" if gown else "legs"
+        shin = "skin" if gown or look.bare_shin == side else "legs"
+        if shin == thigh:
+            layers = [[_limb("body", thigh, (*hip, height * 0.044), (*knee, height * 0.03),
+                             (*ankle, height * 0.018))], []]
+        else:
+            layers = [[_limb("body", thigh, (*hip, height * 0.044), (*knee, height * 0.031))],
+                      [_limb("body", shin, (*knee, height * 0.024), (*ankle, height * 0.016))]]
+        legs.append(layers + [[_ellipse("body", "skin" if gown else "shoe", foot[:2],
+                                        height * 0.034, height * 0.019, foot[2])]])
+    _side_by_side(parts, *legs)
+
+    hx, hy = figure.head
+    parts.append(_limb("body", "skin", (over(top), top + height * 0.02, height * 0.034),
+                       (hx, hy + figure.head_radius * 0.45, height * 0.029)))
+
+    # Arms that stay clear of the body hang behind it, so the shoulder is the
+    # torso's own; one that crosses the body is drawn over it.
+    arms = list(zip((-1, 1), figure._arms))
+    front = [(side, arm) for side, arm in arms
+             if figure._arm_pose(side) in ("clutch", "hang")]
+    _side_by_side(parts, *(_arm_layers(figure, side, arm) for side, arm in arms
+                           if (side, arm) not in front))
+
+    # The torso: hunched up round the neck, one shoulder low, narrowing to the
+    # waist; the hem of whatever it wears hanging in torn points, a coat's to
+    # the knee and split up the middle.
+    long = look.clothes in ("coat", "gown")
+    hem = ground - height * 0.3 if long else hips + height * 0.035
+    flare = 0.84 if long else 0.74
+    outline = [
+        (over(top) - half * 0.2, top - height * 0.044),
+        (over(top) + half * 0.2, top - height * 0.044),
+        (over(right) + half * 0.48, right - height * 0.024),
+        (over(right) + half * 0.86, right + height * 0.018),
+        (over(right) + half * 1.0, right + height * 0.062),
+        (over(right + height * 0.13) + half * 0.9, right + height * 0.13),
+        (over(ground - height * 0.6) + half * 0.7, ground - height * 0.6),
+        (x + half * 0.74, hips),
+    ]
+    hem_points = 9
+    for index in range(hem_points + 1):
+        t = (index + 0.4 * (_rag(seed, 75 + index) - 0.5) * (0 < index < hem_points)) / hem_points
+        px = x + half * flare * (1.0 - 2.0 * t)
+        torn = _rag(seed, 60 + index)
+        ragged = height * (0.005 + (0.07 if torn > 0.8 else 0.035) * torn) * (index % 2)
+        if look.clothes == "coat" and index == hem_points // 2 + 1:
+            # The split up the front of a long coat, to the crotch.
+            outline += [(x + half * 0.12, hem + ragged * 0.3),
+                        (x + half * 0.03, ground - height * 0.44),
+                        (x - half * 0.03, ground - height * 0.44),
+                        (x - half * 0.12, hem + height * 0.02)]
+        outline.append((px, hem + ragged))
+    outline += [
+        (x - half * 0.74, hips),
+        (over(ground - height * 0.6) - half * 0.7, ground - height * 0.6),
+        (over(left + height * 0.13) - half * 0.9, left + height * 0.13),
+        (over(left) - half * 1.0, left + height * 0.062),
+        (over(left) - half * 0.86, left + height * 0.018),
+        (over(left) - half * 0.48, left - height * 0.024),
+    ]
+    parts.append(_polygon("body", "shirt" if look.clothes == "shirt" else "cloth", outline,
+                          half * 0.6))
+    if look.clothes in ("jacket", "coat"):
+        # The shirt underneath, where the jacket hangs open.
+        deep = top + height * (0.26 if look.clothes == "coat" else 0.19)
+        parts.append(_polygon("body", "shirt", [
+            (over(top) - half * 0.26, top - height * 0.022),
+            (over(top) + half * 0.26, top - height * 0.022),
+            (over(deep) + half * 0.07, deep), (over(deep) - half * 0.09, deep - height * 0.02)],
+            half * 0.15, lod=1))
+
+    _head_parts(figure, parts)
+    _side_by_side(parts, *(_arm_layers(figure, side, arm) for side, arm in front))
+    return parts
+
+
+def _crawler_parts(figure: Figure) -> list[Part]:
+    """Dragging itself up the road on its hands: legs trailing up the picture
+    behind it, the back humped between the shoulders, the head low and up."""
+    height, x, ground = figure.height, figure.x, figure.ground_y
+    look = figure.look
+    parts: list[Part] = []
+    _side_by_side(parts, *([[_limb("body", "legs", (*hip, height * 0.042),
+                                   (*foot, height * 0.03))],
+                            [_ellipse("body", "shoe", (foot[0], foot[1] - height * 0.012),
+                                      height * 0.024, height * 0.02)]]
+                           for hip, foot in figure.trailing_legs()))
+    roll = math.sin(figure.phase) * height * 0.02  # the shoulder of the reaching arm rides up
+    tone = "shirt" if look.clothes == "shirt" else "cloth"
+    seed = figure.seed
+    back = [(x - height * 0.17, ground - height * 0.3),
+            (x - height * 0.15, ground - height * 0.37 + roll),
+            (x - height * 0.07, ground - height * 0.4),
+            (x - height * 0.085, ground - height * 0.46)]
+    for index in range(5):  # the shirt ridden up, ragged at the waist
+        t = index / 4
+        back.append((x + height * 0.085 * (2 * t - 1),
+                     ground - height * (0.47 + 0.035 * _rag(seed, 60 + index) * (index % 2))))
+    back += [(x + height * 0.085, ground - height * 0.46),
+             (x + height * 0.07, ground - height * 0.4),
+             (x + height * 0.15, ground - height * 0.37 - roll),
+             (x + height * 0.17, ground - height * 0.3),
+             (x + height * 0.1, ground - height * 0.25),
+             (x - height * 0.1, ground - height * 0.25)]
+    parts.append(_polygon("body", tone, back, height * 0.08))
+    arms = []
+    for side, (shoulder, elbow, wrist, hand) in zip((-1, 1), figure._arms):
+        if look.sleeves[0 if side < 0 else 1]:
+            layers = [[_limb("body", tone, (*shoulder, height * 0.034),
+                             (*elbow, height * 0.027))],
+                      [_limb("body", "skin", (*elbow, height * 0.024),
+                             (*wrist, height * 0.018))]]
+        else:
+            layers = [[_limb("body", "skin", (*shoulder, height * 0.03),
+                             (*elbow, height * 0.024), (*wrist, height * 0.018))], []]
+        arms.append(layers + _hand_parts(figure, wrist, hand, side))
+    _side_by_side(parts, *arms)
+    hx, hy = figure.head
+    parts.append(_limb("body", "skin", (x, ground - height * 0.31, height * 0.032),
+                       (hx, hy + figure.head_radius * 0.3, height * 0.028)))
+    _head_parts(figure, parts)
+    return parts
+
+
+def _robot_parts(figure: Figure) -> list[Part]:
+    """An armoured humanoid: plated shins, chest and helmet over a dark frame,
+    the joints showing between the plates."""
+    height, x = figure.height, figure.x
+    half = figure.half_shoulder
+    top, hips = figure.shoulder_y, figure.hip_y
+    parts: list[Part] = []
+    _side_by_side(parts, *([[_limb("body", "frame", (*hip, height * 0.034),
+                                   (*knee, height * 0.027))],
+                            [_limb("body", "plate", (*knee, height * 0.036),
+                                   (*ankle, height * 0.023))],
+                            [_ellipse("body", "plate", (knee[0], knee[1] - height * 0.012),
+                                      height * 0.028, height * 0.03, lod=2)],
+                            [_ellipse("body", "plate", foot[:2], height * 0.036, height * 0.02,
+                                      foot[2])]]
+                           for hip, knee, ankle, foot in figure.legs()))
+    parts.append(_polygon("body", "plate", [
+        (x - height * 0.09, hips - height * 0.03), (x + height * 0.09, hips - height * 0.03),
+        (x + height * 0.078, hips + height * 0.045), (x, hips + height * 0.085),
+        (x - height * 0.078, hips + height * 0.045)], height * 0.04))
+    parts.append(_limb("body", "frame", (x, hips - height * 0.01, height * 0.05),
+                       (x, top + height * 0.2, height * 0.056)))
+    hx, hy = figure.head
+    parts.append(_limb("body", "frame", (x, top, height * 0.022),
+                       (hx, hy + figure.head_radius * 0.5, height * 0.02)))
+    arms = list(zip((-1, 1), figure._arms))
+    for _, (shoulder, elbow, *_) in arms:
+        parts.append(_limb("body", "frame", (*shoulder, height * 0.024),
+                           (*elbow, height * 0.021)))
+    parts.append(_polygon("body", "plate", [
+        (x - half * 0.22, top - height * 0.022), (x + half * 0.22, top - height * 0.022),
+        (x + half * 0.64, top - height * 0.006), (x + half * 0.93, top + height * 0.04),
+        (x + half * 0.82, top + height * 0.14), (x + half * 0.5, top + height * 0.235),
+        (x + half * 0.18, top + height * 0.275), (x - half * 0.18, top + height * 0.275),
+        (x - half * 0.5, top + height * 0.235), (x - half * 0.82, top + height * 0.14),
+        (x - half * 0.93, top + height * 0.04), (x - half * 0.64, top - height * 0.006)],
+        half * 0.5))
+    _head_parts(figure, parts, metal=True)
+    # The joints showing between the plates, once it is near enough to see them.
+    _side_by_side(parts, *([[_ellipse("body", "frame", elbow, height * 0.023, height * 0.023,
+                                      lod=2)],
+                            [_limb("body", "plate", (*elbow, height * 0.03),
+                                   (*wrist, height * 0.023))],
+                            *_hand_parts(figure, wrist, hand, side, tone="frame", claws=False),
+                            [_ellipse("body", "plate",
+                                      (shoulder[0] + side * height * 0.006,
+                                       shoulder[1] - height * 0.012),
+                                      height * 0.052, height * 0.038, side * 18.0)]]
+                           for side, (shoulder, elbow, wrist, hand) in arms))
+    return parts
 
 
 @dataclass
@@ -252,62 +1067,15 @@ class Walker:
         self.lane -= self.lane * 0.14 * dt
 
     def figure(self, view: Perspective, now: float) -> Figure:
-        height = view.height_px(self.distance) * self.build
-        ground_y = view.ground_y(self.distance)
-        fog = min(max((self.distance - 5.0) / 26.0, 0.0), 0.86)
-        lurch = math.sin(self.phase) * 0.035
-        if self.gait == "lurch":
-            lurch = math.sin(self.phase) * 0.06
-        if now < self.staggered_until:
-            lurch += 0.09  # knocked off balance by the last round
-        x = view.screen_x(self.lane, self.distance) + lurch * height
-
-        if self.gait == "crawl":
-            # On its hands, dragging itself up the road: low, wide, head first.
-            return Figure(
-                x=x, ground_y=ground_y, height=height, lean=lurch, fog=fog,
-                hunch=self.hunch, tilt=self.tilt,
-                head=(x + lurch * height * 0.3, ground_y - height * 0.23),
-                head_radius=height * 0.074,
-                shoulder_y=ground_y - height * 0.36,
-                hip_y=ground_y - height * 0.44,
-                half_shoulder=height * 0.20,
-                phase=self.phase, gait=self.gait, seed=self.seed, robot=self.robot)
-
-        drop = 0.0
-        if self.gait == "limp":
-            drop = abs(math.sin(self.phase * 0.5)) * 0.035  # the bad leg gives
-        elif self.gait == "lurch":
-            drop = 0.045  # bent forward, head thrust out
-        # The shoulders lead the hips by the hunch, and a lurcher's lead further
-        # still. Folded into the head here rather than added when it is drawn,
-        # or a shot at the middle of a lurcher's skull scores nothing.
-        lead = 0.0
-        if not self.robot:
-            lead = self.hunch * height * 0.085 + (height * 0.07 if self.gait == "lurch"
-                                                  else 0.0)
-        head_radius = height * 0.076
-        return Figure(
-            x=x,
-            ground_y=ground_y,
-            height=height,
-            lean=lurch,
-            fog=fog,
-            hunch=self.hunch,
-            tilt=self.tilt,
-            head=(x + lead + lurch * height * 0.6 + (height * 0.06 if self.gait == "lurch"
-                                                      else 0.0),
-                  ground_y - height * (0.905 - drop)),
-            head_radius=head_radius,
-            shoulder_y=ground_y - height * (0.79 - drop),
-            hip_y=ground_y - height * 0.47,
-            half_shoulder=height * 0.15,
-            phase=self.phase,
-            gait=self.gait,
-            seed=self.seed,
-            lead=lead,
-            robot=self.robot,
-        )
+        since = now - (self.staggered_until - STAGGER)
+        recoil = 0.0
+        if self.staggered_until > 0.0 and 0.0 <= since < STAGGER:
+            recoil = min(1.0, since / 0.05) * (1.0 - since / STAGGER) ** 2
+        return _pose(self.gait, self.robot, self.hunch, self.tilt, self.seed, self.phase,
+                     recoil, height=view.height_px(self.distance) * self.build,
+                     x=view.screen_x(self.lane, self.distance),
+                     ground=view.ground_y(self.distance),
+                     fog=min(max((self.distance - 5.0) / 26.0, 0.0), 0.86))
 
 
 @dataclass
@@ -315,9 +1083,15 @@ class ZombieRound(Round):
     """Hold the road until dawn. They do not stop coming."""
 
     walkers: list[Walker] = field(default_factory=list, init=False)
-    #: Where each one fell: x, y, size, when, and which way it landed.
+    #: Where each one bled: x, y, size, when, and which way it landed.
     stains: list[tuple[float, float, float, float, int]] = field(
         default_factory=list, init=False)
+    #: Every one put down - the walker as it was, when, and whether it was a
+    #: head shot - so it can fall, and then lie where it fell.
+    fallen: list[tuple[Walker, float, bool]] = field(default_factory=list, init=False)
+    #: The backdrop with the settled dead painted into it, kept between frames:
+    #: (the backdrop it was painted on, the road, the time it is painted up to).
+    road: tuple | None = field(default=None, init=False, repr=False, compare=False)
     health: int = field(default=FULL_HEALTH, init=False)
     kills: int = field(default=0, init=False)
     bitten_at: float | None = field(default=None, init=False)
@@ -394,25 +1168,31 @@ class ZombieRound(Round):
         # Further away is worth more: it is a harder shot and buys more time.
         bonus = 1.0 + min(struck.distance / 22.0, 1.0)
         if zone == "head":
-            self._kill(struck, now)
+            self._kill(struck, now, headshot=True)
             return Hit(points=int(HEADSHOT_POINTS * bonus), ring=0,
                        label="HEADSHOT", perfect=True)
 
         struck.health -= 1
-        struck.staggered_until = now + 0.45
+        struck.staggered_until = now + STAGGER
         if struck.health <= 0:
             self._kill(struck, now)
             return Hit(points=int(KILL_POINTS * bonus), ring=1, label="DOWN")
         return Hit(points=WOUND_POINTS, ring=2)
 
-    def _kill(self, walker: Walker, now: float) -> None:
+    def _kill(self, walker: Walker, now: float, headshot: bool = False) -> None:
         self.walkers.remove(walker)
         self.kills += 1
+        self.fallen.append((walker, now, headshot))
+        del self.fallen[:-STAIN_LIMIT]
         if self.options.enemy == "robots":
-            return
+            return  # a machine leaves a wreck on the road, but no blood
         figure = walker.figure(self.view, now)
-        self.stains.append((figure.x, figure.ground_y, figure.height * 0.18, now,
-                            walker.seed))
+        # The pool spreads under where the body comes to rest: across the road
+        # from its feet, the way it fell - but a crawler just drops flat.
+        rests = figure.x
+        if walker.gait != "crawl":
+            rests += _fall_side(walker.seed) * figure.height * 0.42
+        self.stains.append((rests, figure.ground_y, figure.height * 0.18, now, walker.seed))
         del self.stains[:-STAIN_LIMIT]
 
     def _spawn(self, wave: int) -> Walker:
@@ -771,7 +1551,7 @@ def _environment(area: tuple, width: int, height: int, seed: int,
                         + np.float32(FOG) * cloud[:, :, None]).astype(np.uint8)
 
     # Moon: a hard disc inside a bloom the haze carries a long way.
-    moon = (int(width * 0.76), int(horizon - height * 0.17))
+    moon = _moon_centre(width, height, horizon)
     # The radii double as blur sigmas, and a GaussianBlur of sigma 0 with no
     # kernel size to fall back on is an assertion failure, not a no-op. On the
     # chooser card this environment is drawn a couple of dozen pixels tall, and
@@ -915,12 +1695,18 @@ def _fog_bank(width: int, height: int, horizon: int) -> tuple[int, np.ndarray, n
         return (noise ** 1.5 * strength * envelope[:, None]).astype(np.float32)
 
     del rng
-    plane = np.empty((rows, width, 3), np.uint8)
+    slow, fast = layer(14, 1, 0.55), layer(26, 2, 0.35)
+    # Only the rows the fog can change by half a level or more: the banks
+    # thin to nothing well inside the strip, and every row costs a blend.
+    reach = np.flatnonzero((slow + fast).max(axis=1) * 255.0 >= 0.5)
+    first, last = (int(reach[0]), int(reach[-1]) + 1) if reach.size else (0, 0)
+    slow, fast = np.ascontiguousarray(slow[first:last]), np.ascontiguousarray(fast[first:last])
+    plane = np.empty((last - first, width, 3), np.uint8)
     columns = np.arange(width, dtype=np.float32)
     moonward = np.exp(-((columns - width * 0.76) / (width * 0.3)) ** 2)
     for channel in range(3):
         plane[:, :, channel] = (FOG[channel] + 30 * moonward)[None, :].astype(np.uint8)
-    return top, layer(14, 1, 0.55), layer(26, 2, 0.35), plane
+    return top + first, slow, fast, plane
 
 
 def draw_fog(canvas: np.ndarray, view: Perspective, now: float) -> None:
@@ -930,11 +1716,18 @@ def draw_fog(canvas: np.ndarray, view: Perspective, now: float) -> None:
     rows = slow.shape[0]
     if rows <= 0:
         return
-    alpha = np.roll(slow, int(now * 9) % width, axis=1)
-    alpha += np.roll(fast, int(now * 23) % width, axis=1)
-    np.clip(alpha, 0.0, 0.85, out=alpha)
+    # Each layer rolled round by slicing it into place, not by np.roll, which
+    # would build a copy of each only to add them together.
+    alpha = np.empty_like(slow)
+    shift = int(now * 9) % width
+    alpha[:, shift:] = slow[:, :width - shift]
+    alpha[:, :shift] = slow[:, width - shift:]
+    shift = int(now * 23) % width
+    alpha[:, shift:] += fast[:, :width - shift]
+    alpha[:, :shift] += fast[:, width - shift:]
+    np.minimum(alpha, 0.85, out=alpha)
     region = canvas[top:top + rows]
-    region[:] = cv2.blendLinear(region, plane, 1.0 - alpha, alpha)
+    cv2.blendLinear(region, plane, 1.0 - alpha, alpha, dst=region)
 
 
 @lru_cache(maxsize=4)
@@ -1003,155 +1796,181 @@ def _rag(seed: int, index: int) -> float:
     return value - math.floor(value)
 
 
-def _paint(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
-           shift: tuple[float, float]) -> None:
-    """Lay down the whole figure: rags in ``cloth``, head and hands in ``skin``.
+#: Figures are painted with four bits of sub-pixel precision, so a small one in
+#: the fog glides instead of hopping a pixel at a time, and a moonlit edge can
+#: be a pixel and a half wide.
+FIX_BITS = 4
+FIX = 1 << FIX_BITS
 
-    Called three times: fattened and nudged towards the moon for the rim,
-    nudged away from it for the shaded side, and at true size for the body.
-    Painting the rim as an outline rather than a stroke inside the silhouette
-    keeps it off the chest, where it read as a stripe of light down the front.
-    """
-    if figure.gait == "crawl":
-        _paint_crawler(canvas, figure, cloth, skin, grow, shift)
+
+def _fix(value: float) -> int:
+    return int(round(value * FIX))
+
+
+def _fixed(points: np.ndarray) -> np.ndarray:
+    """Outline points in pixels, as the fixed-point integers OpenCV draws with."""
+    return np.rint(points * FIX).astype(np.int32)
+
+
+def _fill(canvas: np.ndarray, groups: tuple[tuple[Piece, ...], ...], fixed: np.ndarray,
+          colours: list) -> None:
+    """Fill each run of pieces, in order, in its colour: one call a run."""
+    for run, colour in zip(groups, colours):
+        cv2.fillPoly(canvas, [fixed[piece.start:piece.stop] for piece in run], colour,
+                     cv2.LINE_AA, FIX_BITS)
+
+
+# How the moon takes each tone: how much of it the side of a form turned to
+# the moon picks up, and how bright its very edge goes. Wet skin and machined
+# plate shine; wool and denim barely do.
+_SHEEN = {"skin": (0.25, 0.92), "cloth": (0.17, 0.74), "shirt": (0.2, 0.78),
+          "legs": (0.14, 0.7), "shoe": (0.1, 0.55), "hair": (0.12, 0.62),
+          "plate": (0.3, 0.96), "frame": (0.12, 0.66)}
+MOON_TINT = (214, 206, 192)  # the moon's cold white on the side of a form turned to it
+SHOE = (14, 14, 16)
+SOCKET = (11, 10, 12)  # eye sockets, a mouth: the darkest things on the road
+PLATE = (50, 47, 44)  # the machines: gunmetal plates over a near-black frame
+FRAME = (27, 26, 26)
+SEAM = (20, 19, 19)
+VISOR = (255, 234, 150)  # a machine's one light, where its eyes would be
+
+
+@lru_cache(maxsize=512)
+def _tones(seed: int, robot: bool, haze: float, light: float) -> dict[str, tuple]:
+    """Each of one walker's colours as (rim, lit side, body, and one for a
+    part too thin to show the lit side), in its fog and in the muzzle flash.
+    ``haze`` and ``light`` come rounded, so there are few."""
+    if robot:
+        base = {"plate": PLATE, "frame": FRAME}
+    else:
+        look = _look(seed)
+        base = {"skin": look.skin, "cloth": look.cloth, "shirt": look.shirt,
+                "legs": look.legs, "shoe": SHOE, "hair": look.hair_tone}
+    tones = {}
+    for name, colour in base.items():
+        sheen, edge = _SHEEN[name]
+        body = _mix(colour, FLASH, light * (0.2 if name == "skin" else 0.1))
+        lit = _mix(body, MOON_TINT, sheen)
+        rim = _mix(colour, RIM, edge)
+        # The fog takes the body; the moon's edge, which is light in the fog
+        # itself, it barely touches - a far one is found by its outline.
+        lit, body = _fogged(lit, haze), _fogged(body, haze)
+        tones[name] = (_fogged(rim, haze * 0.35), lit, body, _mix(body, lit, 0.25))
+    return tones
+
+
+def _moon_centre(width: int, height: int, horizon: float) -> tuple[int, int]:
+    """Where the moon hangs in the backdrop: the light everything is lit by."""
+    return int(width * 0.76), int(int(horizon) - height * 0.17)
+
+
+def _moonward(canvas: np.ndarray, view: Perspective, figure: Figure) -> tuple[float, float]:
+    """The way to the moon on screen from this figure's chest: the side its rim
+    is on. Never quite straight up, so one under the moon still has an edge
+    down its side."""
+    height, width = canvas.shape[:2]
+    mx, my = _moon_centre(width, height, view.horizon)
+    dx, dy = mx - figure.x, my - (figure.shoulder_y + figure.hip_y) * 0.5
+    norm = math.hypot(dx, dy) or 1.0
+    dx, dy = dx / norm, dy / norm
+    if abs(dx) < 0.45:
+        dx = math.copysign(0.45, dx or 1.0)
+        dy = -math.sqrt(1.0 - dx * dx)
+    return dx, dy
+
+
+@lru_cache(maxsize=256)
+def _shadow_stamp(rx: int, ry: int, degrees: int, strength: int) -> np.ndarray:
+    """A soft ellipse of shade as a multiplier: 255 leaves the road as it is,
+    less darkens it. ``strength`` is in percent."""
+    angle = math.radians(degrees)
+    pad = max(2, int(ry * 1.2))
+    half_w = int(math.hypot(rx * math.cos(angle), ry * math.sin(angle))) + pad
+    half_h = int(math.hypot(rx * math.sin(angle), ry * math.cos(angle))) + pad
+    mask = np.zeros((2 * half_h + 1, 2 * half_w + 1), np.float32)
+    cv2.ellipse(mask, (half_w, half_h), (rx, ry), degrees, 0, 360, 1.0, -1, cv2.LINE_AA)
+    mask = cv2.GaussianBlur(mask, (0, 0), max(0.7, ry * 0.45))
+    keep = np.clip(255.0 - mask * strength * 2.55, 0, 255).astype(np.uint8)
+    return cv2.merge((keep, keep, keep))
+
+
+@lru_cache(maxsize=256)
+def _standing_shadow(height: int, fade: int, crawl: bool) -> tuple[np.ndarray, tuple]:
+    """The long shadow and the contact patch of one standing ``height`` pixels
+    tall, as one multiplier, and where its middle sits from the feet. ``fade``
+    is in tenths: how much the fog has left of them."""
+    reach = height * (0.28 if crawl else 0.5)
+    shades = (((-reach * 0.42, reach * 0.12), max(2.0, reach * 0.52), height * 0.05, -17.0,
+               0.05 * fade),
+              ((0.0, -height * (0.02 if crawl else 0.0)), height * (0.24 if crawl else 0.15),
+               height * 0.03, 0.0, 0.075 * fade))
+    pad = max(3.0, height * 0.06)
+    x0 = min(c[0] - rx for c, rx, *_ in shades) - pad
+    x1 = max(c[0] + rx for c, rx, *_ in shades) + pad
+    y0 = min(c[1] - rx * 0.35 - ry for c, rx, ry, *_ in shades) - pad
+    y1 = max(c[1] + rx * 0.35 + ry for c, rx, ry, *_ in shades) + pad
+    size = (int(math.ceil(y1 - y0)) | 1, int(math.ceil(x1 - x0)) | 1)
+    keep = np.ones(size, np.float32)
+    for (cx, cy), rx, ry, degrees, strength in shades:
+        mask = np.zeros(size, np.float32)
+        cv2.ellipse(mask, (int(round(cx - x0)), int(round(cy - y0))),
+                    (max(1, int(round(rx))), max(1, int(round(ry)))), degrees, 0, 360, 1.0, -1,
+                    cv2.LINE_AA)
+        keep *= 1.0 - cv2.GaussianBlur(mask, (0, 0), max(0.7, ry * 0.45)) * strength
+    keep = np.clip(keep * 255.0, 0, 255).astype(np.uint8)
+    middle = (x0 + (size[1] // 2), y0 + (size[0] // 2))
+    return cv2.merge((keep, keep, keep)), middle
+
+
+def _shade(canvas: np.ndarray, centre: tuple[float, float], rx: float, ry: float,
+           degrees: float, strength: float) -> None:
+    """Darken a soft ellipse of the road: a shadow, with no edge to it. Sizes
+    and strengths are rounded, so the frames either side share a stamp."""
+    stamp = _shadow_stamp(max(2, _bucket(rx)), _bucket(ry), int(degrees),
+                          int(strength * 10 + 0.5) * 10)
+    _stamp(canvas, stamp, centre, cv2.multiply, 1.0 / 255.0)
+
+
+def _bucket(value: float) -> int:
+    """A size in pixels rounded to about six percent, and to the pixel below
+    sixteen."""
+    if value < 16.0:
+        return max(1, int(round(value)))
+    return int(round(1.06 ** round(math.log(value, 1.06))))
+
+
+def _stamp(canvas: np.ndarray, stamp: np.ndarray, centre: tuple[float, float], op,
+           scale: float = 1.0) -> None:
+    """Apply ``stamp`` centred on ``centre`` with ``op`` (add or multiply),
+    cut to the canvas."""
+    height, width = canvas.shape[:2]
+    sh, sw = stamp.shape[:2]
+    x0, y0 = int(round(centre[0])) - sw // 2, int(round(centre[1])) - sh // 2
+    cx0, cy0 = max(0, x0), max(0, y0)
+    cx1, cy1 = min(width, x0 + sw), min(height, y0 + sh)
+    if cx1 <= cx0 or cy1 <= cy0:
         return
-
-    height = figure.height
-    dx, dy = shift
-    x, ground = figure.x + dx, figure.ground_y + dy
-    gait = figure.gait
-    lead = figure.lead
-    limb = max(1, int(height * 0.058 + grow))
-    half = figure.half_shoulder
-    shoulder_y, hip_y = figure.shoulder_y + dy, figure.hip_y + dy
-    seed = figure.seed
-    stiff = 1 if _rag(seed, 9) < 0.5 else -1  # which leg the limper drags
-    bare = _rag(seed, 14) < 0.4  # trousers torn off below one knee
-
-    # Legs: a dragging gait, knees never quite straightening.
-    stride = math.sin(figure.phase) * height * (0.11 if gait == "lurch" else 0.085)
-    stance = 0.065 if gait == "lurch" else 0.045
-    for side in (-1, 1):
-        swing = stride * side
-        hip = (int(x + side * height * stance), int(hip_y))
-        shin = skin if (bare and side == stiff) else cloth
-        if gait == "limp" and side == stiff:
-            # The bad leg stays straight and trails, toe scraping the road.
-            foot = (int(x + side * height * 0.04 + swing * 0.35 - side * height * 0.035),
-                    int(ground - height * 0.012))
-            cv2.line(canvas, hip, foot, shin, max(1, int(limb * 0.9)), cv2.LINE_AA)
-            cv2.ellipse(canvas, foot, (max(1, int(height * 0.05 + grow)),
-                                       max(1, int(height * 0.014 + grow))),
-                        0, 0, 360, cloth, -1, cv2.LINE_AA)
-            continue
-        knee = (int(hip[0] + side * height * 0.02 + swing * 0.6),
-                int(hip_y + (ground - hip_y) * 0.55))
-        foot = (int(x + side * height * (stance + 0.01) + swing), int(ground))
-        cv2.line(canvas, hip, knee, cloth, limb, cv2.LINE_AA)
-        cv2.line(canvas, knee, foot, shin, max(1, int(limb * 0.85)), cv2.LINE_AA)
-        cv2.ellipse(canvas, foot, (max(1, int(height * 0.045 + grow)),
-                                   max(1, int(height * 0.018 + grow))),
-                    0, 0, 360, cloth, -1, cv2.LINE_AA)
-
-    # Torso, in whatever is left of its clothes: the hem hangs in torn points,
-    # and some of them are still in a coat that reaches the knee.
-    coat = _rag(seed, 0) < 0.45
-    hem = hip_y + (height * 0.14 if coat else height * 0.02)
-    droop = (height * 0.028 if gait == "lurch" else 0.0)
-    torso = [
-        (x + lead - half - grow, shoulder_y + height * 0.035 + droop),
-        (x + lead - half * 0.55, shoulder_y - height * 0.012 - grow + droop),
-        (x + lead + half * 0.55, shoulder_y - height * 0.012 - grow),
-        (x + lead + half + grow, shoulder_y + height * 0.035),
-        (x + half * 0.7 + grow, hip_y)]
-    points = 5
-    for index in range(points + 1):
-        t = index / points
-        torso.append((x + half * 0.72 - half * 1.44 * t + grow * (1 - 2 * t),
-                      hem + height * 0.06 * _rag(seed, 1 + index) * (index % 2)))
-    torso.append((x - half * 0.7 - grow, hip_y))
-    cv2.fillPoly(canvas, [np.array(torso, np.int32)], cloth, cv2.LINE_AA)
-    if _rag(seed, 15) < 0.5 and height > 40:
-        # The shirt torn open: a wedge of chest showing through.
-        tear = np.array([
-            (x + lead - half * 0.3, shoulder_y + height * 0.06),
-            (x + lead + half * 0.35, shoulder_y + height * 0.05),
-            (x + half * 0.1, hip_y - height * 0.05 * _rag(seed, 16))], np.int32)
-        cv2.fillPoly(canvas, [tear], skin, cv2.LINE_AA)
-
-    # Arms, where the figure says they are: the hit test reads the same joints.
-    for side, joints in zip((-1, 1), figure.arms()):
-        shoulder, elbow, hand = ((int(jx + dx), int(jy + dy)) for jx, jy in joints)
-        sleeve = _rag(seed, 5 + side) < 0.55  # a sleeve left, or a bare arm
-        cv2.line(canvas, shoulder, elbow, cloth if sleeve else skin, limb, cv2.LINE_AA)
-        cv2.line(canvas, elbow, hand, skin, max(1, int(limb * 0.9)), cv2.LINE_AA)
-        cv2.circle(canvas, hand, max(1, int(figure.hand_radius + grow)), skin, -1,
-                   cv2.LINE_AA)
-        # A torn sleeve hanging off the elbow.
-        flap = height * (0.04 + 0.06 * _rag(seed, 7 + side))
-        if flap > 2 and sleeve:
-            cv2.fillPoly(canvas, [np.array([
-                (elbow[0] - limb, elbow[1] - limb),
-                (elbow[0] + limb, elbow[1] - limb),
-                (elbow[0] + side * limb * 0.5, elbow[1] + flap)], np.int32)],
-                cloth, cv2.LINE_AA)
-
-    head = (int(figure.head[0] + dx), int(figure.head[1] + dy))
-    radius = max(1, int(figure.head_radius + grow))
-    cv2.line(canvas, (int(x + lead), int(shoulder_y)), head, skin,
-             max(1, int(limb * 0.95)), cv2.LINE_AA)
-    cv2.ellipse(canvas, head, (radius, max(1, int(figure.head_radius * 1.15 + grow))),
-                figure.tilt, 0, 360, skin, -1, cv2.LINE_AA)
-    if _rag(seed, 12) < 0.35 and radius > 3:
-        # A jaw hanging open.
-        angle = math.radians(figure.tilt)
-        jaw = (int(head[0] - math.sin(angle) * radius * 1.1 + math.cos(angle) * radius * 0.45),
-               int(head[1] + math.cos(angle) * radius * 1.1 + math.sin(angle) * radius * 0.45))
-        cv2.circle(canvas, jaw, max(1, int(radius * 0.45)), skin, -1, cv2.LINE_AA)
-    if radius > 4 and _rag(seed, 13) < 0.6:
-        # What hair it has left, matted down on one side.
-        angle = math.radians(figure.tilt)
-        hair = (int(head[0] - math.sin(angle) * radius * 0.35),
-                int(head[1] - math.cos(angle) * radius * 0.45))
-        cv2.ellipse(canvas, hair, (radius, max(1, int(radius * 0.7))), figure.tilt,
-                    200, 340, cloth, -1, cv2.LINE_AA)
+    patch = canvas[cy0:cy1, cx0:cx1]
+    piece = stamp[cy0 - y0:cy1 - y0, cx0 - x0:cx1 - x0]
+    if scale == 1.0:
+        op(patch, piece, dst=patch)
+    else:
+        op(patch, piece, dst=patch, scale=scale)
 
 
-def _paint_crawler(canvas: np.ndarray, figure: Figure, cloth, skin, grow: float,
-                   shift: tuple[float, float]) -> None:
-    """Dragging itself towards you on its elbows, legs trailing up the road."""
-    height = figure.height
-    dx, dy = shift
-    x, ground = figure.x + dx, figure.ground_y + dy
-    limb = max(1, int(height * 0.045 + grow))
+@lru_cache(maxsize=128)
+def _glow_stamp(radius: int, colour: tuple[int, int, int]) -> np.ndarray:
+    """A soft point of light, to be added to the picture."""
+    reach = radius * 3
+    ys, xs = np.mgrid[-reach:reach + 1, -reach:reach + 1].astype(np.float32)
+    fall = np.exp(-(xs * xs + ys * ys) / (2.0 * radius * radius))
+    return (fall[:, :, None] * np.float32(colour)).astype(np.uint8)
 
-    # Legs trail behind, which from here means up the picture and foreshortened.
-    for joints in figure.trailing_legs():
-        hip, foot = ((int(jx + dx), int(jy + dy)) for jx, jy in joints)
-        cv2.line(canvas, hip, foot, cloth, limb, cv2.LINE_AA)
 
-    torso = np.array([
-        (x - height * 0.15 - grow, ground - height * 0.30),
-        (x - height * 0.09, ground - height * 0.46 - grow),
-        (x + height * 0.09, ground - height * 0.46 - grow),
-        (x + height * 0.15 + grow, ground - height * 0.30),
-        (x + height * 0.1, ground - height * 0.24 + grow),
-        (x - height * 0.1, ground - height * 0.24 + grow)], np.int32)
-    cv2.fillPoly(canvas, [torso], cloth, cv2.LINE_AA)
-
-    # Arms planted ahead, one always further than the other.
-    for joints in figure.arms():
-        shoulder, elbow, hand = ((int(jx + dx), int(jy + dy)) for jx, jy in joints)
-        cv2.line(canvas, shoulder, elbow, cloth, limb, cv2.LINE_AA)
-        cv2.line(canvas, elbow, hand, skin, limb, cv2.LINE_AA)
-        cv2.circle(canvas, hand, max(1, int(figure.hand_radius + grow)), skin, -1,
-                   cv2.LINE_AA)
-
-    head = (int(figure.head[0] + dx), int(figure.head[1] + dy))
-    radius = max(1, int(figure.head_radius + grow))
-    cv2.line(canvas, (int(x), int(ground - height * 0.32)), head, skin, limb, cv2.LINE_AA)
-    cv2.ellipse(canvas, head, (radius, max(1, int(radius * 0.9))), figure.tilt, 0, 360,
-                skin, -1, cv2.LINE_AA)
+def _glow(canvas: np.ndarray, centre: tuple[float, float], radius: float, colour,
+          strength: float) -> None:
+    tint = tuple(int(c * strength) for c in colour)
+    _stamp(canvas, _glow_stamp(max(1, int(round(radius))), tint), centre, cv2.add)
 
 
 def _alpha_ellipse(canvas: np.ndarray, centre: tuple[int, int], axes: tuple[int, int],
@@ -1170,106 +1989,295 @@ def _alpha_ellipse(canvas: np.ndarray, centre: tuple[int, int], axes: tuple[int,
     cv2.addWeighted(overlay, min(alpha, 1.0), patch, 1.0 - min(alpha, 1.0), 0.0, dst=patch)
 
 
-def _eye_points(figure: Figure) -> tuple[tuple[int, int], tuple[int, int]]:
-    angle = math.radians(figure.tilt)
-    eyes = []
-    for side in (-0.4, 0.4):
-        eyes.append((int(figure.head[0] + math.cos(angle) * figure.head_radius * side
-                         - math.sin(angle) * figure.head_radius * 0.1),
-                     int(figure.head[1] + math.sin(angle) * figure.head_radius * side
-                         + math.cos(angle) * figure.head_radius * 0.1)))
-    return eyes[0], eyes[1]
+def _head_point(figure: Figure, px: float, py: float) -> tuple[float, float]:
+    """A point on the face, in head radii from the middle of the skull, turned
+    with the head."""
+    angle = math.radians(figure.tilt * (0.3 if figure.robot else 1.0))
+    cos, sin = math.cos(angle), math.sin(angle)
+    radius, (hx, hy) = figure.head_radius, figure.head
+    return hx + (px * cos - py * sin) * radius, hy + (px * sin + py * cos) * radius
+
+
+def _eye_points(figure: Figure) -> tuple[tuple[float, float], tuple[float, float]]:
+    return _head_point(figure, -0.36, 0.08), _head_point(figure, 0.36, 0.08)
+
+
+def _cast_shadow(canvas: np.ndarray, figure: Figure, edge: np.ndarray,
+                 fall: float = 0.0) -> None:
+    """Its shadow: thrown long down the road and away from the moon, and a
+    tight dark patch where it touches the road, so it stands on it. Going
+    over, the long shadow shortens and the patch spreads under the body."""
+    height, fade = figure.height, 1.0 - figure.fog * 0.6
+    crawl = figure.gait == "crawl"
+    if fall == 0.0:
+        # On its feet, both at once, from one stamp for its size.
+        stamp, (dx, dy) = _standing_shadow(_bucket(height), int(fade * 10 + 0.5), crawl)
+        _stamp(canvas, stamp, (figure.x + dx, figure.ground_y + dy), cv2.multiply, 1.0 / 255.0)
+        return
+    if fall < 1.0:
+        reach = height * (0.28 if crawl else 0.5) * (1.0 - fall)
+        _shade(canvas, (figure.x - reach * 0.42, figure.ground_y + reach * 0.12),
+               max(2.0, reach * 0.52), height * 0.05, -17.0, 0.5 * fade)
+    if fall > 0.0:
+        low, high = edge.min(axis=0), edge.max(axis=0)
+        _shade(canvas, ((low[0] + high[0]) * 0.5, figure.ground_y),
+               (high[0] - low[0]) * 0.55, height * 0.035, 0.0, 0.7 * fade * fall)
+    if fall < 1.0:
+        _shade(canvas, (figure.x, figure.ground_y - height * (0.02 if crawl else 0.0)),
+               height * (0.24 if crawl else 0.15), height * 0.03, 0.0,
+               0.75 * fade * (1.0 - fall))
+
+
+#: Seconds one takes to hit the road once it is put down.
+FALL = 0.4
+#: Seconds after a kill that its pool has stopped spreading and its body has
+#: soaked to the colour of the tar: from then on it is part of the road.
+SETTLED = 12.0
+TAR = (24, 22, 20)  # what the rags and the flesh soak to, lying on the road
+
+
+def _fall_side(seed: int) -> int:
+    """Which way this one falls, and lies: to its left or its right."""
+    return 1 if _rag(seed, 20) < 0.5 else -1
+
+
+def _toppled(figure: Figure, fall: float) -> tuple[np.ndarray, np.ndarray]:
+    """How far over it has gone, ``fall`` from 0 upright to 1 flat on the road,
+    as a transform about its feet: turned sideways and flattened into the
+    angle you see the road at. Gravity: slow to start, fast at the end. A
+    crawler has nowhere to fall to, and only drops flat."""
+    eased = fall * fall
+    side = _fall_side(figure.seed)
+    turn = math.radians((12.0 if figure.gait == "crawl" else 86.0) * side * eased)
+    flat = 1.0 - (0.45 if figure.gait == "crawl" else 0.58) * eased
+    cos, sin = math.cos(turn), math.sin(turn)
+    transform = np.float32(((cos, -sin), (sin * flat, cos * flat)))
+    return transform, np.float32((figure.x - figure.lean * figure.height, figure.ground_y))
+
+
+@lru_cache(maxsize=256)
+def _dead_tones(seed: int, robot: bool, haze: float, settle: float) -> dict[str, tuple]:
+    """A body's colours as it lies: the moon still on its upper edge while it is
+    fresh; then the edge goes, and the rags and the flesh soak to the colour of
+    the tar, until it is a low dark shape on the road, not a drawing of a body."""
+    tones = {}
+    for name, (rim, lit, body, _) in _tones(seed, robot, haze, 0.0).items():
+        body = _mix(body, _fogged(TAR, haze), settle * 0.7)
+        lit = _mix(lit, body, 0.3 + 0.7 * settle)
+        tones[name] = (_mix(rim, lit, 0.25 + 0.75 * settle), lit, body, _mix(body, lit, 0.25))
+    return tones
+
+
+def _draw_figure(canvas: np.ndarray, figure: Figure, view: Perspective,
+                 light: float, fall: float = 0.0, settle: float = 0.0,
+                 eyes: float = 1.0) -> None:
+    """The whole silhouette first, nudged towards the moon in its rim colour,
+    so a thin cold edge shows only on the side the moon is on; then part by
+    part, back to front, each in its lit colour and again drawn in and nudged
+    away from the moon in its own dark body colour, so every limb and the
+    skull are rounded by a band of moonlight down one side.
+
+    ``fall`` topples it towards the road; ``settle`` soaks a body that has
+    lain there a while into the tar; ``eyes`` is how much light is left in
+    them."""
+    height = figure.height
+    haze = round(figure.fog * 0.8, 2)
+    if settle > 0.0:
+        tones = _dead_tones(figure.seed, figure.robot, haze, round(settle, 1))
+    else:
+        tones = _tones(figure.seed, figure.robot, haze, round(light, 1))
+    mesh, outline, groups = figure.mesh, figure.outline, figure.groups
+    if fall > 0.0:
+        turn, feet = _toppled(figure, fall)
+
+        def place(points: np.ndarray) -> np.ndarray:
+            return (points - feet) @ turn.T + feet
+    else:
+        def place(points: np.ndarray) -> np.ndarray:
+            return points
+    edge = place(outline)
+    _cast_shadow(canvas, figure, edge, fall)
+
+    mx, my = _moonward(canvas, view, figure)
+    rim = max(1.25, height * 0.0075)
+    _fill(canvas, groups, _fixed(edge + np.float32((mx * rim, my * rim))),
+          [tones[run[0].tone][0] for run in groups])
+    if light > 0.0 and height > 24:
+        # The muzzle flash catches the edge turned to the gun, below the
+        # picture: a warm rim opposite the moon's, for the frame the shot lasts.
+        gx, gy = view.area.centre_x - figure.x, view.area.bottom + height - figure.ground_y
+        norm = (math.hypot(gx, gy) or 1.0) / (rim * 1.3)
+        warm = _mix((40, 40, 44), FLASH, min(1.0, light) * 0.8)
+        _fill(canvas, groups, _fixed(edge + np.float32((gx / norm, gy / norm))),
+              [warm] * len(groups))
+    if figure.lod == 0:
+        _fill(canvas, groups, _fixed(edge), [tones[run[0].tone][3] for run in groups])
+    else:
+        # The planes are lit from further round to the moon's side than the
+        # rim is: from straight below it, both flanks of a limb would catch
+        # the same light and every limb would read as outlined.
+        lx, ly = mx + math.copysign(0.7, mx), my
+        norm = math.hypot(lx, ly)
+        away = np.float32((-lx / norm, -ly / norm))
+        inset = np.minimum(np.float32(height * 0.011), mesh.depth * np.float32(0.3))
+        passes = [(_fixed(edge), 1)]
+        if figure.lod >= 3:
+            # Near enough to see the step: soften it with one between.
+            soft = inset * np.float32(0.55)
+            passes.append((_fixed(place(mesh.centre + (mesh.radius - soft)[:, None]
+                                        * mesh.direction)
+                                  + (inset * np.float32(0.8))[:, None] * away), None))
+        passes.append((_fixed(place(mesh.centre + (mesh.radius - inset)[:, None]
+                                    * mesh.direction)
+                              + (inset * np.float32(1.35))[:, None] * away), 2))
+        # A part whose band of light would be under a pixel wide is filled
+        # once: the band would not show, and the fill is most of the cost.
+        band = height * 0.011
+        for run in groups:
+            _, lit, body, even = tones[run[0].tone]
+            if min(band, run[0].depth * height * 0.3) < 0.6:
+                cv2.fillPoly(canvas, [passes[0][0][piece.start:piece.stop] for piece in run],
+                             even, cv2.LINE_AA, FIX_BITS)
+                continue
+            for fixed, which in passes:
+                colour = lit if which == 1 else body if which == 2 else _mix(lit, body, 0.55)
+                cv2.fillPoly(canvas, [fixed[piece.start:piece.stop] for piece in run], colour,
+                             cv2.LINE_AA, FIX_BITS)
+    if fall == 0.0:
+        if figure.robot:
+            _draw_machine(canvas, figure, haze)
+        else:
+            _draw_face(canvas, figure, haze, light)
+    elif eyes > 0.0 and not figure.robot:
+        # Going over, the light in its eyes goes out.
+        shine = _mix(EYESHINE, FLASH, light * 0.6)
+        for eye in place(np.float32(_eye_points(figure))):
+            _glow(canvas, eye, max(1.2, figure.head_radius * 0.3), shine, 0.5 * eyes)
+
+
+def _draw_face(canvas: np.ndarray, figure: Figure, haze: float, light: float) -> None:
+    """Sunken sockets, the hole of a nose, a mouth hanging open - and in the
+    sockets the eyes, catching the moon at any distance, which is how you find
+    them in the fog."""
+    radius = figure.head_radius
+    dark = _fogged(SOCKET, haze)
+    left, right = _eye_points(figure)
+    degrees = figure.tilt
+    if radius >= 4.5:
+        for eye, slant in ((left, -14.0), (right, 14.0)):
+            cv2.ellipse(canvas, (_fix(eye[0]), _fix(eye[1])),
+                        (_fix(radius * 0.3), _fix(radius * 0.21)), degrees + slant, 0, 360, dark,
+                        -1, cv2.LINE_AA, FIX_BITS)
+    if radius >= 8:
+        opened = 0.3 * figure.look.jaw
+        shapes = [((0.0, 0.26), (-0.1, 0.42), (0.0, 0.38), (0.1, 0.42))]
+        if figure.look.jaw > 0.3:
+            shapes.append(((-0.22, 0.56), (0.02, 0.53), (0.22, 0.58), (0.15, 0.66 + opened),
+                           (-0.02, 0.74 + opened), (-0.2, 0.66 + opened)))
+        for shape in shapes:
+            points = np.array([_head_point(figure, px, py) for px, py in shape], np.float32)
+            cv2.fillPoly(canvas, [np.rint(points * FIX).astype(np.int32)], dark, cv2.LINE_AA,
+                         FIX_BITS)
+    shine = _mix(EYESHINE, FLASH, light * 0.6)
+    if figure.height < 14:
+        # Too small for two: one soft pale point where its face is.
+        mid = ((left[0] + right[0]) / 2, (left[1] + right[1]) / 2)
+        _glow(canvas, mid, 1.6, shine, 0.55)
+        cv2.line(canvas, (int(left[0]), int(left[1])), (int(right[0]), int(right[1])), shine,
+                 1, cv2.LINE_AA)
+        return
+    for eye in (left, right):
+        _glow(canvas, eye, max(1.2, radius * 0.3), shine, 0.5)
+        cv2.circle(canvas, (_fix(eye[0]), _fix(eye[1])), _fix(max(0.8, radius * 0.11)), shine,
+                   -1, cv2.LINE_AA, FIX_BITS)
+
+
+def _draw_machine(canvas: np.ndarray, figure: Figure, haze: float) -> None:
+    """A machine's face is one lit visor; its chest carries a second light,
+    and the seams between its plates show once it is near enough."""
+    height, x = figure.height, figure.x
+    visor = _fogged(VISOR, haze * 0.4)
+    seam = _fogged(SEAM, haze)
+    top = figure.shoulder_y
+    thin = max(1, int(height * 0.004))
+    if height >= 60:
+        half = figure.half_shoulder
+        lines = (((x, top + height * 0.0), (x, top + height * 0.27)),
+                 ((x - half * 0.8, top + height * 0.13), (x - half * 0.1, top + height * 0.17)),
+                 ((x + half * 0.8, top + height * 0.13), (x + half * 0.1, top + height * 0.17)),
+                 ((x - height * 0.045, top + height * 0.3), (x + height * 0.045, top + height * 0.3)),
+                 ((x - height * 0.048, top + height * 0.34), (x + height * 0.048, top + height * 0.34)))
+        for _, knee, ankle, _ in figure.legs():
+            mid = ((knee[0] + ankle[0]) / 2, (knee[1] + ankle[1]) / 2)
+            lines += (((mid[0], mid[1] - height * 0.05), (mid[0], mid[1] + height * 0.06)),)
+        cv2.polylines(canvas, list(_fixed(np.array(lines, np.float32))), False, seam, thin,
+                      cv2.LINE_AA, FIX_BITS)
+    band = np.array([_head_point(figure, px, py) for px, py in (
+        (-0.66, -0.12), (0.66, -0.12), (0.6, 0.1), (-0.6, 0.1))], np.float32)
+    cv2.fillPoly(canvas, [np.rint(band * FIX).astype(np.int32)], _mix(visor, SEAM, 0.35),
+                 cv2.LINE_AA, FIX_BITS)
+    slit = np.array([_head_point(figure, px, py) for px, py in (
+        (-0.58, -0.05), (0.58, -0.05), (0.54, 0.04), (-0.54, 0.04))], np.float32)
+    cv2.fillPoly(canvas, [np.rint(slit * FIX).astype(np.int32)], visor, cv2.LINE_AA, FIX_BITS)
+    radius = figure.head_radius
+    _glow(canvas, _head_point(figure, 0.0, 0.0), max(1.2, radius * 0.5), visor, 0.5)
+    core = (x, top + height * 0.075)
+    _glow(canvas, core, max(1.2, height * 0.02), visor, 0.5)
+    cv2.circle(canvas, (_fix(core[0]), _fix(core[1])), _fix(max(0.8, height * 0.011)), visor,
+               -1, cv2.LINE_AA, FIX_BITS)
 
 
 def draw_walker(canvas: np.ndarray, walker: Walker, view: Perspective,
                 now: float, light: float = 0.0) -> None:
-    """One of them, moonlit from up and to the right, its shadow thrown down the road.
-
-    Three passes of the same silhouette: a pale rim nudged towards the moon, a
-    black shade nudged away from it, and the body on top. ``light`` is how much
-    of the muzzle flash reaches it this frame: lit from the front, the whole
-    figure lifts warm for an instant.
-    """
+    """One of them - or one of the machines - moonlit from behind and up to
+    the right, its shadow thrown down the road towards you. ``light`` is how
+    much of the muzzle flash reaches it this frame."""
     figure = walker.figure(view, now)
     if figure.height < 5:
         return
-    haze = figure.fog * 0.5
-    cloth = _fogged(RAGS, haze)
-    skin = _fogged(SKIN, haze)
-    if light > 0.0:
-        cloth = _mix(cloth, FLASH, light * 0.28)
-        skin = _mix(skin, FLASH, light * 0.45)
-
-    # The shadow: long, down and to the left, away from the moon, and a tight
-    # dark contact patch under the feet so it stands on the road.
-    length = figure.height * (0.28 if figure.gait == "crawl" else 0.5)
-    ground_fade = 1.0 - figure.fog * 0.6
-    _alpha_ellipse(canvas, (int(figure.x - length * 0.42), int(figure.ground_y + length * 0.13)),
-                   (max(2, int(length * 0.5)), max(1, int(figure.height * 0.05))),
-                   (4, 4, 5), 0.5 * ground_fade, angle=-17.0)
-    _alpha_ellipse(canvas, (int(figure.x), int(figure.ground_y + figure.height * 0.005)),
-                   (max(2, int(figure.height * 0.17)), max(1, int(figure.height * 0.04))),
-                   (3, 3, 4), 0.45 * ground_fade)
-    _alpha_ellipse(canvas, (int(figure.x), int(figure.ground_y)),
-                   (max(2, int(figure.height * 0.11)), max(1, int(figure.height * 0.022))),
-                   (2, 2, 3), 0.75 * ground_fade)
-
-    nudge = max(1.2, figure.height * 0.014)
-    # The moon's rim, from the moment it is on the road: a small figure in the
-    # fog is the one that needs an edge most, so the rim barely fades with the
-    # haze and is never thinner than a pixel and a half.
-    strength = 0.7 + 0.3 * (1.0 - figure.fog)
-    rim = _fogged(_mix(RAGS, RIM, strength), haze * 0.3)
-    _paint(canvas, figure, rim, rim, grow=max(1.0, figure.height * 0.006),
-           shift=(nudge, -nudge * 0.8))
-    if light > 0.0 and figure.height > 24:
-        # The muzzle flash catches the near, low edge of it: a warm rim opposite
-        # the moon's, for the one frame the shot lasts.
-        warm = _mix(cloth, FLASH, min(1.0, light * 0.9))
-        _paint(canvas, figure, warm, warm, grow=max(1.0, figure.height * 0.003),
-               shift=(-nudge * 0.8, nudge * 0.9))
-    if figure.height > 40:
-        shade = _fogged(SHADE, haze)
-        _paint(canvas, figure, shade, shade, grow=0.0, shift=(-nudge * 0.7, nudge * 0.5))
-    _paint(canvas, figure, cloth, skin, grow=0.0, shift=(0.0, 0.0))
-    if figure.height > 60:
-        # A wet-skin highlight on the skull, moon side.
-        head = (int(figure.head[0] + nudge * 1.2), int(figure.head[1] - nudge * 1.4))
-        gleam = _fogged(_mix(skin, RIM, 0.55), haze)
-        _alpha_ellipse(canvas, head, (max(1, int(figure.head_radius * 0.45)),
-                                      max(1, int(figure.head_radius * 0.3))),
-                       gleam, 0.5, angle=figure.tilt - 35.0)
-
-    # The eyes: catching the moon at any distance, which is how you find them.
-    # A soft glow around each, at every size, so even a far one has a pair of
-    # pale points where its face is.
-    shine = _mix(EYESHINE, FLASH, light * 0.6)
-    left, right = _eye_points(figure)
-    radius = max(1, int(figure.head_radius * 0.14))
-    if figure.height < 14:
-        mid = ((left[0] + right[0]) // 2, (left[1] + right[1]) // 2)
-        _alpha_ellipse(canvas, mid, (3, 2), shine, 0.35)
-        cv2.line(canvas, left, right, shine, 1, cv2.LINE_AA)
-    else:
-        for eye in (left, right):
-            _alpha_ellipse(canvas, eye, (radius * 4 + 1, radius * 3 + 1), shine, 0.16)
-            _alpha_ellipse(canvas, eye, (radius * 2 + 1, radius * 2), shine, 0.3)
-            cv2.circle(canvas, eye, radius, shine, -1, cv2.LINE_AA)
+    _draw_figure(canvas, figure, view, light)
 
 
-def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0) -> None:
-    """What is left where they fell: the body, and what ran out of it.
+def draw_robot(canvas: np.ndarray, walker: Walker, view: Perspective,
+               now: float, light: float = 0.0) -> None:
+    """One of the machines: the same figure, the same moon, in plate and a lit
+    visor instead of rags and eyes."""
+    draw_walker(canvas, walker, view, now, light)
 
-    The pool spreads for a few seconds after the fall, then keeps creeping out
-    across the asphalt and drying to black for the rest of the night, so the
-    road at the end of the round reads as the battlefield it was.
+
+def _settles(walker: Walker | None, at: float) -> float:
+    """When a kill stops changing and can be painted into the road: a pool
+    once it has spread and dried, a body once it has soaked into the tar, a
+    machine's wreck as soon as it lands."""
+    return at + FALL + (0.0 if walker is not None and walker.robot else SETTLED)
+
+
+def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0,
+                settled: bool = True) -> None:
+    """What is left where they fell: what ran out of them, and the bodies.
+
+    A pool spreads fast for a few seconds after the fall, then creeps out
+    across the asphalt and dries towards black, and each body soaks slowly to
+    the colour of the tar, so the road at the end of the round reads as the
+    battlefield it was. With ``settled`` false, only the ones still changing
+    are drawn: the game paints the rest into the road itself.
     """
-    if not round_.stains:
-        return
+    stains = [stain for stain in round_.stains
+              if settled or _settles(None, stain[3]) > now]
+    bodies = [(walker, at, headshot) for walker, at, headshot in round_.fallen
+              if now - at >= FALL and (settled or _settles(walker, at) > now)]
+    if stains:
+        _draw_pools(canvas, stains, now)
+    view = round_.view
+    for walker, at, headshot in sorted(bodies, key=lambda body: -body[0].distance):
+        _draw_fallen(canvas, view, walker, at, headshot, now)
+
+
+def _draw_pools(canvas: np.ndarray, stains: list, now: float) -> None:
     height, width = canvas.shape[:2]
-    xs = [int(x) for x, *_ in round_.stains]
-    ys = [int(y) for _, y, *_ in round_.stains]
-    rs = [int(r * 3.4) + 3 for _, _, r, *_ in round_.stains]
+    xs = [int(x) for x, *_ in stains]
+    ys = [int(y) for _, y, *_ in stains]
+    rs = [int(r * 3.4) + 3 for _, _, r, *_ in stains]
     x0 = max(0, min(x - r for x, r in zip(xs, rs)))
     x1 = min(width, max(x + r for x, r in zip(xs, rs)))
     y0 = max(0, min(y - r for y, r in zip(ys, rs)))
@@ -1279,14 +2287,16 @@ def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0) -> No
     patch = canvas[y0:y1, x0:x1]
     overlay = patch.copy()
     gloss = []
-    for x, y, radius, at, seed in round_.stains:
-        age = max(0.0, now - at)
-        spread = min(1.0, 0.35 + age / 3.0) + 0.4 * min(1.0, age / 45.0)
-        dry = min(1.0, age / 40.0)
+    for x, y, radius, at, seed in stains:
+        age = min(now - at - FALL, SETTLED)
+        if age < 0.0:
+            continue  # it has not landed yet
+        spread = min(1.0, 0.35 + age / 3.0) + 0.4 * age / SETTLED
+        dry = age / SETTLED
         colour = _mix(_mix(BLOOD_FRESH, BLOOD, min(1.0, age / 6.0)), STAIN, dry)
-        if age > 14.0:
+        if age > SETTLED * 0.6:
             # An old pool is a dark wet patch, no redder than the tar around it.
-            colour = _mix(colour, (26, 22, 24), 0.4)
+            colour = _mix(colour, (26, 22, 24), 0.4 * min(1.0, (age - SETTLED * 0.6) / 2.0))
         cx, cy = int(x) - x0, int(y) - y0
         # The pool is flat on the road, so it is foreshortened like the road.
         main = (max(1, int(radius * 1.7 * spread)), max(1, int(radius * 0.38 * spread)))
@@ -1308,73 +2318,71 @@ def draw_stains(canvas: np.ndarray, round_: ZombieRound, now: float = 0.0) -> No
         # The moon on the wet of it: a sheen on the moon side of the pool.
         _alpha_ellipse(patch, centre, axes, GLOSS, alpha)
 
-    # The bodies lie where they dropped, across the road, flattened by the
-    # angle you see the road at: a full walker's length, lying down. A fresh
-    # kill has the moon on its upper edge and its blood still bright; as the
-    # minutes pass the rim goes, the rags soak to the colour of the tar, and
-    # what is left is a low dark shape on the road, not a drawing of a body.
-    for x, y, radius, at, seed in sorted(round_.stains, key=lambda stain: stain[1]):
-        if radius < 2.5:
-            continue
-        fresh = max(0.0, 1.0 - max(0.0, now - at) / 14.0)
-        settle = 1.0 - fresh
-        side = 1 if _rag(seed, 20) < 0.5 else -1
-        cx, cy = int(x), int(y - radius * 0.1)
-        tilt = side * (4 + 10 * _rag(seed, 21))
-        slope = math.tan(math.radians(tilt))
-        face_up = _rag(seed, 27) < 0.5
-        thick = max(1, int(radius * 0.13))
-        lift = max(1, int(radius * 0.06))
-        cloth = _mix(RAGS, (24, 22, 20), settle * 0.7)
-        flesh = _mix(SKIN, (40, 38, 36), settle * 0.75)
-        rim = _mix(cloth, RIM, 0.7 * fresh)
-        rim_skin = _mix(flesh, RIM, 0.65 * fresh)
 
-        def along(t: float, drop: float = 0.0, cx=cx, cy=cy, side=side,
-                  radius=radius, slope=slope) -> tuple[int, int]:
-            """A point ``t`` body-radii towards the head, ``drop`` radii down."""
-            return int(cx + side * radius * t), int(cy + side * radius * t * slope
-                                                    + radius * drop)
+def _draw_fallen(canvas: np.ndarray, view: Perspective, walker: Walker, at: float,
+                 headshot: bool, now: float, light: float = 0.0) -> None:
+    """One that has been put down: going over, and then lying where it fell.
 
-        torso = (max(1, int(radius * 1.25)), max(1, int(radius * 0.42)))
-        head = along(1.55, 0.02)
-        head_r = max(1, int(radius * 0.36))
-        legs = [(along(-1.1, -0.02), along(-2.6 - 0.4 * _rag(seed, 22 + leg),
-                                           (0.22 - 0.5 * leg) * (0.6 + _rag(seed, 24 + leg))))
-                for leg in range(2)]
-        arms = [(along(0.6, -0.1), along(0.9 + 0.6 * _rag(seed, 26), 0.55)),
-                (along(0.3, -0.15), along(1.4 + 0.5 * _rag(seed, 28), -0.35))]
-        passes = [(cloth, flesh, 0)]
-        if fresh > 0.05:
-            passes.insert(0, (rim, rim_skin, -lift))
-        for pass_cloth, pass_skin, shift in passes:
-            for start, end in legs:
-                cv2.line(canvas, (start[0], start[1] + shift), (end[0], end[1] + shift),
-                         pass_cloth, thick, cv2.LINE_AA)
-            cv2.ellipse(canvas, (cx, cy + shift), torso, tilt, 0, 360, pass_cloth, -1,
-                        cv2.LINE_AA)
-            for index, (start, end) in enumerate(arms):
-                sleeve = pass_cloth if index == 0 else pass_skin
-                cv2.line(canvas, (start[0], start[1] + shift), (end[0], end[1] + shift),
-                         sleeve, max(1, int(thick * 0.8)), cv2.LINE_AA)
-                cv2.circle(canvas, (end[0], end[1] + shift), max(1, int(thick * 0.6)),
-                           pass_skin, -1, cv2.LINE_AA)
-            cv2.ellipse(canvas, (head[0], head[1] + shift),
-                        (head_r, max(1, int(head_r * 0.85))), tilt, 0, 360, pass_skin, -1,
-                        cv2.LINE_AA)
-        if head_r > 3 and face_up:
-            # The mouth still open; the head-shot, a dark hole above the eye.
-            cv2.circle(canvas, (head[0] + side * head_r // 3, head[1] - head_r // 4),
-                       max(1, head_r // 4), STAIN, -1, cv2.LINE_AA)
-        if radius > 6 and fresh > 0.0:
-            # The exit wound's spray, short and dark, thrown past the head;
-            # it dries into the road with the rest.
-            spray_colour = _mix(STAIN, BLOOD_FRESH, fresh)
-            for index in range(4):
-                spray = along(1.9 + 1.2 * _rag(seed, 30 + index),
-                              (_rag(seed, 34 + index) - 0.5) * 0.8)
-                cv2.circle(canvas, spray, max(1, int(radius * 0.08)), spray_colour, -1,
-                           cv2.LINE_AA)
+    It keeps the pose it had when the shot landed, arms flung up as it goes,
+    and falls about its feet. The light in its eyes fades as it falls - or
+    goes out at once, for a head shot."""
+    age = max(0.0, now - at)
+    fall = min(1.0, age / FALL)
+    struck = walker.figure(view, at)
+    down = fall >= 1.0
+    figure = _pose(walker.gait, walker.robot, walker.hunch, walker.tilt, walker.seed,
+                   walker.phase, max(struck.recoil, 1.0 if down else fall),
+                   height=struck.height, x=view.screen_x(walker.lane, walker.distance),
+                   ground=struck.ground_y, fog=struck.fog,
+                   # Lying still, no one sees its fingers.
+                   detail=min(_detail(struck.height), 1) if down else -1)
+    if figure.height < 5:
+        return
+    # A body soaks into the road; a machine's wreck is as it fell.
+    settle = min(1.0, (age - FALL) / SETTLED) if down and not walker.robot else 0.0
+    _draw_figure(canvas, figure, view, light, fall=fall, settle=settle,
+                 eyes=0.0 if headshot else 1.0 - fall)
+    if headshot and down and figure.height > 30 and settle < 1.0:
+        # The exit wound's spray, thrown past the head along the road; it
+        # dries into the road with the rest.
+        turn, feet = _toppled(figure, 1.0)
+        head = (np.float32(figure.head) - feet) @ turn.T + feet
+        side = _fall_side(walker.seed)
+        colour = _mix(BLOOD_FRESH, STAIN, min(1.0, age / 4.0))
+        for index in range(5):
+            reach = figure.head_radius * (1.6 + 2.2 * _rag(walker.seed, 30 + index))
+            spot = (head[0] + side * reach,
+                    head[1] + (_rag(walker.seed, 34 + index) - 0.5) * figure.head_radius)
+            cv2.circle(canvas, (_fix(spot[0]), _fix(spot[1])),
+                       _fix(max(0.8, figure.head_radius * 0.16)), colour, -1, cv2.LINE_AA,
+                       FIX_BITS)
+
+
+def _road(round_: ZombieRound, now: float, width: int, height: int) -> np.ndarray:
+    """The backdrop, with every kill that has settled painted into the road.
+
+    A pool that has stopped spreading and a body soaked to the colour of the
+    tar no longer change, so they are painted once, into a copy of the
+    backdrop, instead of every frame: the road carries a whole night of them
+    for the cost of copying it. Painted up to a time, and started again if
+    asked for an earlier one."""
+    area = round_.area
+    backdrop = _environment((area.x, area.y, area.width, area.height), width, height,
+                            round_.options.seed or 0, round_.skyline)
+    road = round_.road
+    if road is None or road[0] is not backdrop or now < road[2]:
+        road = (backdrop, backdrop.copy(), -math.inf)
+    _, image, done = road
+    if now > done:
+        pools = [stain for stain in round_.stains if done < _settles(None, stain[3]) <= now]
+        if pools:
+            _draw_pools(image, pools, math.inf)
+        bodies = [body for body in round_.fallen if done < _settles(*body[:2]) <= now]
+        for walker, at, headshot in sorted(bodies, key=lambda body: -body[0].distance):
+            _draw_fallen(image, round_.view, walker, at, headshot, _settles(walker, at))
+        road = (backdrop, image, now)
+    round_.road = road
+    return image
 
 
 def _depth_scale(view: Perspective, y: float) -> float:
@@ -1414,18 +2422,53 @@ def draw_impact(canvas: np.ndarray, impact: Impact, now: float, ttl: float,
                        life * 0.4)
         return
 
+    head = impact.ring == 0
     if age < IMPACT_FLASH:
         spray = age / IMPACT_FLASH
-        for index in range(9):
-            angle = index * math.tau / 9 + impact.at
-            reach = (6 + 40 * spray) * (0.5 + 0.5 * math.sin(angle * 3)) * depth
+        # A head shot throws twice as much, twice as far.
+        specks = 16 if head else 9
+        throw = 70 if head else 40
+        for index in range(specks):
+            angle = index * math.tau / specks + impact.at
+            reach = (6 + throw * spray) * (0.5 + 0.5 * math.sin(angle * 3)) * depth
             speck = (int(centre[0] + math.cos(angle) * reach),
                      int(centre[1] + math.sin(angle) * reach * 0.7 + 30 * spray * spray * depth))
             cv2.circle(canvas, speck, max(1, int((2 * (1 - spray) + 1) * depth)), BLOOD, -1,
                        cv2.LINE_AA)
+    if head and age < 0.12:
+        # And the skull flashes pale as the round goes through: there and gone.
+        scale = max(0.5, canvas.shape[0] / 720.0)
+        _glow(canvas, centre, 9 * depth * scale, MOONLIGHT, 0.9 * (1.0 - age / 0.12))
     size = 5 * life * depth * max(0.5, (canvas.shape[0] / 720.0))
     _alpha_ellipse(canvas, centre, (max(1, int(size)), max(1, int(size * 0.9))), BLOOD,
                    life * 0.8)
+
+
+def draw_sparks(canvas: np.ndarray, impact: Impact, now: float,
+                view: Perspective | None = None) -> None:
+    """A round off armour: sparks thrown out in streaks, white-hot at the start
+    and cooling to orange as they fly and drop, over in a third of a second -
+    and a head shot throws twice as many off the helmet."""
+    age = now - impact.at
+    if not impact.is_hit or not 0.0 <= age < 0.3:
+        return
+    life = age / 0.3
+    depth = _depth_scale(view, impact.y) if view is not None else 1.0
+    scale = max(0.5, canvas.shape[0] / 720.0) * depth
+    if age < 0.08:
+        _glow(canvas, (impact.x, impact.y), 7 * scale, (170, 230, 255), 1.0 - age / 0.08)
+    count = 14 if impact.ring == 0 else 8
+    colour = _mix((230, 250, 255), (40, 150, 255), life)
+    for index in range(count):
+        angle = index * math.tau / count + _rag(int(impact.at * 1000), index) * 0.6
+        speed = (50 + 70 * _rag(int(impact.at * 1000), index + 20)) * scale
+        head = speed * life
+        tail = max(0.0, head - 14 * scale * (1.0 - life * 0.5))
+        drop = 40 * scale * life * life
+        start = (impact.x + math.cos(angle) * tail, impact.y + math.sin(angle) * tail + drop * 0.6)
+        end = (impact.x + math.cos(angle) * head, impact.y + math.sin(angle) * head + drop)
+        cv2.line(canvas, (_fix(start[0]), _fix(start[1])), (_fix(end[0]), _fix(end[1])), colour,
+                 max(1, int(round(1.6 * scale * (1.0 - life * 0.5)))), cv2.LINE_AA, FIX_BITS)
 
 
 def draw_popups(canvas: np.ndarray, impacts: list, now: float, ttl: float,
@@ -1452,7 +2495,7 @@ def draw_popups(canvas: np.ndarray, impacts: list, now: float, ttl: float,
         fade = min(1.0, life * 2.2)  # solid for most of its life, then gone
         lift = int(canvas.shape[0] * 0.02 * (1 - life))
         points = f"+{impact.score}"
-        tag = impact.label or ""
+        tag = (impact.label or "").title()  # the voice's Title Case: "Headshot"
         (points_w, points_h), _ = cv2.getTextSize(points, font, scale, thickness)
         tag_scale = scale * 0.62
         tag_w = cv2.getTextSize(tag, font, tag_scale, thickness)[0][0] if tag else 0
@@ -1495,7 +2538,8 @@ def draw_rain(canvas: np.ndarray, area: Rect, now: float, drops: int = 110,
     if span <= 0 or width <= 0:
         return
     horizon = view.horizon if view is not None else top + 0.3 * span
-    mask = np.zeros((span, width), np.uint8)
+    # The light, drawn grey straight into three channels, to be added on.
+    mask = np.zeros((span, width, 3), np.uint8)
     for index in range(drops):
         layer = index % 3
         speed = (420, 640, 900)[layer]
@@ -1507,7 +2551,8 @@ def draw_rain(canvas: np.ndarray, area: Rect, now: float, drops: int = 110,
             continue  # the foreground layer falls in front of the road only
         length = int((4 + 6 * layer) + (10 + 14 * layer) * depth)
         tone = int(22 + 58 * (0.25 + 0.35 * layer) * (0.3 + 0.7 * depth))
-        cv2.line(mask, (x, y), (x - 1 - 2 * layer, y + length), tone, 1, cv2.LINE_AA)
+        cv2.line(mask, (x, y), (x - 1 - 2 * layer, y + length), (tone, tone, tone), 1,
+                 cv2.LINE_AA)
     # The bright few: close enough to catch the moon, two pixels wide.
     for index in range(max(4, drops // 14)):
         x = int((_rag(index + 900, 1) * 1.1 - 0.05) * width + now * -70) % (width + 40)
@@ -1515,12 +2560,12 @@ def draw_rain(canvas: np.ndarray, area: Rect, now: float, drops: int = 110,
         if y + top < horizon + span * 0.2:
             continue
         length = int(16 + 18 * _rag(index + 900, 3))
-        cv2.line(mask, (x, y), (x - 3, y + length), 46, 2, cv2.LINE_AA)
-        cv2.line(mask, (x, y), (x - 3, y + length), 96, 1, cv2.LINE_AA)
+        cv2.line(mask, (x, y), (x - 3, y + length), (46, 46, 46), 2, cv2.LINE_AA)
+        cv2.line(mask, (x, y), (x - 3, y + length), (96, 96, 96), 1, cv2.LINE_AA)
     if view is not None:
         _draw_ripples(mask, view, now, max(6, drops // 8), top)
     region = canvas[top:bottom]
-    cv2.add(region, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), dst=region)
+    cv2.add(region, mask, dst=region)
 
 
 def _draw_ripples(mask: np.ndarray, view: Perspective, now: float, count: int,
@@ -1540,7 +2585,8 @@ def _draw_ripples(mask: np.ndarray, view: Perspective, now: float, count: int,
         reach = view.height_px(distance, 0.05 + 0.11 * phase)
         axes = (max(1, int(reach)), max(1, int(reach * 0.28)))
         fade = (1.0 - phase) * (1.0 - min(distance / 22.0, 0.8))
-        cv2.ellipse(mask, (ground[0], y), axes, 0, 0, 360, int(70 * fade), 1, cv2.LINE_AA)
+        tone = int(70 * fade)
+        cv2.ellipse(mask, (ground[0], y), axes, 0, 0, 360, (tone, tone, tone), 1, cv2.LINE_AA)
 
 
 def draw_footer_strip(canvas: np.ndarray, area: Rect) -> None:
@@ -1554,87 +2600,47 @@ def draw_footer_strip(canvas: np.ndarray, area: Rect) -> None:
     cv2.line(canvas, (0, top), (width, top), (30, 30, 34), 1)
 
 
-def draw_robot(canvas: np.ndarray, walker: Walker, view: Perspective,
-               now: float, light: float = 0.0) -> None:
-    """Armoured humanoid, using the very same figure as the hit test."""
-    f = walker.figure(view, now)
-    h, x = f.height, f.x
-    metal = _fogged((130, 119, 105), f.fog)
-    edge = _fogged((233, 216, 170), f.fog)
-    dark = _fogged((41, 37, 32), f.fog)
-    cyan = _fogged((250, 229, 64), f.fog)
-
-    def limb(a, b, thickness):
-        a, b = tuple(map(int, a)), tuple(map(int, b))
-        cv2.line(canvas, a, b, dark, max(2, int(h * thickness + 3)), cv2.LINE_AA)
-        cv2.line(canvas, a, b, metal, max(1, int(h * thickness)), cv2.LINE_AA)
-        cv2.circle(canvas, a, max(2, int(h * .026)), edge, -1, cv2.LINE_AA)
-
-    stride = math.sin(f.phase) * h * .045
-    for sign in (-1, 1):
-        hip = (x + sign * h * .055, f.hip_y)
-        knee = (x + sign * h * .07, f.hip_y + h * .19)
-        foot = (x + sign * h * .09 + sign * stride, f.ground_y)
-        limb(hip, knee, .065)
-        limb(knee, foot, .055)
-        shoulder = (x + sign * f.half_shoulder * .85, f.shoulder_y)
-        elbow = (x + sign * f.half_shoulder * 1.15, f.shoulder_y + h * .14)
-        limb(shoulder, elbow, .05)
-        limb(elbow, (x + sign * f.half_shoulder, f.hip_y + h * .06), .04)
-    body = np.array([(x - f.half_shoulder, f.shoulder_y),
-                     (x + f.half_shoulder, f.shoulder_y),
-                     (x + h * .07, f.hip_y), (x - h * .07, f.hip_y)], np.int32)
-    cv2.fillConvexPoly(canvas, body, metal, cv2.LINE_AA)
-    cv2.polylines(canvas, [body], True, edge, max(1, int(h * .008)), cv2.LINE_AA)
-    hx, hy = map(int, f.head)
-    r = max(2, int(f.head_radius * .83))
-    cv2.rectangle(canvas, (hx-r, hy-r), (hx+r, hy+r), metal, -1)
-    cv2.rectangle(canvas, (hx-r, hy-r), (hx+r, hy+r), edge, 1)
-    cv2.line(canvas, (hx-r+1, hy), (hx+r-1, hy), cyan, max(1, r//3))
-    cv2.circle(canvas, (int(x), int(f.shoulder_y + h * .075)),
-               max(2, int(h * .025)), cyan, -1, cv2.LINE_AA)
-
-
 def draw_world(canvas: np.ndarray, round_: ZombieRound, now: float) -> None:
     area = round_.area
     height, width = canvas.shape[:2]
-    canvas[:] = _environment(
-        (area.x, area.y, area.width, area.height), width, height,
-        round_.options.seed or 0, round_.skyline)
+    canvas[:] = _road(round_, now, width, height)
     robots = round_.options.enemy == "robots"
-    if not robots:
-        draw_stains(canvas, round_, now)
+    draw_stains(canvas, round_, now, settled=False)
     draw_enemy = draw_robot if robots else draw_walker
 
     last_shot = round_.last_shot()
     flash = (last_shot is not None and 0.0 <= now - last_shot < MUZZLE_FLASH)
 
     # Painter's algorithm: the far ones first, so the near ones stand in front,
-    # with the fog rolling between the far ones and the near ones.
-    ordered = sorted(round_.walkers, key=lambda w: -w.distance)
+    # with the fog rolling between the far ones and the near ones. The ones
+    # going over are in among them, where they were standing.
+    falling = [(walker, at, headshot) for walker, at, headshot in round_.fallen
+               if 0.0 <= now - at < FALL]
+    ordered = sorted([(walker, None) for walker in round_.walkers] + [
+        (walker, (at, headshot)) for walker, at, headshot in falling],
+        key=lambda entry: -entry[0].distance)
+
     def lit(walker: Walker) -> float:
         if not flash:
             return 0.0
         return max(0.0, 1.0 - (walker.distance / 13.0) ** 2)
 
-    for walker in ordered:
+    def draw(walker: Walker, fell: tuple | None) -> None:
+        if fell is None:
+            draw_enemy(canvas, walker, round_.view, now, lit(walker))
+        else:
+            _draw_fallen(canvas, round_.view, walker, fell[0], fell[1], now, lit(walker))
+
+    for walker, fell in ordered:
         if walker.distance > 9.0:
-            draw_enemy(canvas, walker, round_.view, now, lit(walker))
+            draw(walker, fell)
     draw_fog(canvas, round_.view, now)
-    for walker in ordered:
+    for walker, fell in ordered:
         if walker.distance <= 9.0:
-            draw_enemy(canvas, walker, round_.view, now, lit(walker))
+            draw(walker, fell)
     for impact in round_.impacts:
         if robots:
-            age = now - impact.at
-            if impact.is_hit and age < .3:
-                for i in range(8):
-                    angle = i * math.tau / 8
-                    length = (8 + age * 70) * round_.options.scale
-                    start = (int(impact.x), int(impact.y))
-                    end = (int(impact.x + math.cos(angle) * length),
-                           int(impact.y + math.sin(angle) * length))
-                    cv2.line(canvas, start, end, (100, 230, 255), 2, cv2.LINE_AA)
+            draw_sparks(canvas, impact, now, round_.view)
         else:
             draw_impact(canvas, impact, now, round_.IMPACT_TTL, round_.view)
 
@@ -1660,22 +2666,53 @@ def draw_world(canvas: np.ndarray, round_: ZombieRound, now: float) -> None:
         cv2.addWeighted(canvas, 1.0 - 0.35 * red, _vignette(width, height), red, 0.0,
                         dst=canvas)
     draw_footer_strip(canvas, area)
-    draw_text(canvas, f"ENEMY: {round_.options.enemy.upper()}",
-              (area.x + 18, area.bottom - 12), MOONLIGHT, scale=.45 * round_.options.scale)
+
+
+# --- the readouts ------------------------------------------------------------
+
+class Readout(NamedTuple):
+    """One thing this map says beside the score: a short label, its value as
+    it reads, and for a gauge how full it is and how many steps it goes down
+    in."""
+
+    label: str
+    value: str
+    level: float | None = None
+    steps: int | None = None
+
+
+def readouts(round_: ZombieRound, now: float) -> tuple[Readout, ...]:
+    """What the night stands at, for whichever panel carries it - today the
+    strip this map draws under the score, later the app's one score panel.
+
+    Health is a gauge that goes down a bite at a time; the rest are numbers
+    in the voice of the rest of the game."""
+    return (Readout("Health", str(round_.health), round_.health / FULL_HEALTH,
+                    math.ceil(FULL_HEALTH / BITE_DAMAGE)),
+            Readout("Wave", str(round_.wave(now))),
+            Readout("Down", f"{round_.kills:,}"),
+            Readout("Enemy", round_.options.enemy.title()))
+
+
+def readout_line(round_: ZombieRound, now: float) -> str:
+    """The readouts as the one line under the health gauge: "Wave 1 · 0 down"."""
+    values = {readout.label: readout.value for readout in readouts(round_, now)}
+    return f"Wave {values['Wave']} · {values['Down']} down"
 
 
 def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
              now: float) -> None:
-    """Health, wave and kill count, under the shared score block."""
+    """The health gauge and the line under it, below the shared score block."""
     x, y = origin
     scale = min(max(canvas.shape[0] / 720.0, 0.7), 2.4)
 
     def line(offset: float) -> int:
         return y + round(offset * scale)
 
+    health = readouts(round_, now)[0]
     bar = Rect(x, line(146), round(240 * scale), round(14 * scale))
     cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (30, 28, 27), -1)
-    filled = int(bar.width * round_.health / FULL_HEALTH)
+    filled = int(bar.width * health.level)
     if filled:
         low = round_.health <= LOW_HEALTH
         colour = (60, 60, 210) if low else (96, 150, 104)
@@ -1684,57 +2721,74 @@ def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
         cv2.rectangle(canvas, (bar.x, bar.y), (bar.x + filled, bar.bottom), colour, -1)
     # A notch where the bar will stand after each bite, so it reads in bites
     # left rather than in percent - however many the constants make that.
-    for bite in range(1, math.ceil(FULL_HEALTH / BITE_DAMAGE)):
+    for bite in range(1, health.steps):
         tx = bar.x + bar.width * (FULL_HEALTH - bite * BITE_DAMAGE) // FULL_HEALTH
         cv2.line(canvas, (tx, bar.y), (tx, bar.bottom), (20, 20, 20), 1)
     cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (120, 116, 110), 1)
-    draw_text(canvas, f"WAVE {round_.wave(now)}   {round_.kills} down",
-              (x, line(182)), (168, 164, 158), scale=0.6 * scale)
+    draw_text(canvas, readout_line(round_, now), (x, line(182)), (168, 164, 158),
+              scale=0.6 * scale)
+
+
+#: The poster's cast: (gait, metres away, where across the picture as a
+#: fraction of its width, seed, hunch, tilt, phase). Placed by where they
+#: land in the picture rather than by lane, so the card and the wide score
+#: card frame them alike.
+POSTER = (("shamble", 15.0, 0.62, 71, 0.4, 10.0, 2.0),
+          ("limp", 12.5, 0.36, 58, -0.5, -14.0, 4.4),
+          ("shamble", 8.5, 0.53, 23, 0.7, 8.0, 5.3),
+          ("lurch", 5.6, 0.25, 40, 0.5, -18.0, 0.9),
+          ("crawl", 4.4, 0.47, 90, 0.0, 12.0, 2.6))
+POSTER_HERO = ("shamble", 1.75, 0.7, 44, 0.35, -14.0, 1.1)
 
 
 def draw_emblem(panel: np.ndarray) -> None:
-    """The card art, from the same renderer as the game: the nearest of them
-    almost on you, lit warm by your own shot, the crosshair on its skull, and
-    what has already fallen on the road between you."""
+    """The map's poster, for its card and its score card, from the same
+    renderer as the game: the nearest of them close enough to touch, moonlit
+    down one side, your sights on its skull; the rest coming up the road out
+    of the fog behind it; and one already down on the tar between you."""
     height, width = panel.shape[:2]
-    area = Rect(0, 0, width, height)
-    view = Perspective.for_area(area, horizon_fraction=0.40)
-    panel[:] = _environment((0, 0, width, height), width, height, 7,
-                            _skyline(area, 7))
-    round_ = ZombieRound.__new__(ZombieRound)
-    round_.stains = []
-    for distance, lane, seed, age in ((5.2, 1.6, 31, 20.0), (3.4, -1.5, 12, 6.0)):
-        figure = Walker(lane=lane, distance=distance, speed=0.7, phase=0.0, sway=0.0,
-                        build=1.0, seed=seed).figure(view, 0.0)
-        round_.stains.append((figure.x, figure.ground_y, figure.height * 0.18,
-                              -age, seed))
-    draw_stains(panel, round_, 0.0)
-    far = [Walker(lane=lane, distance=distance, speed=0.7, phase=distance, sway=0.2,
-                  build=1.0, gait=gait, seed=int(distance * 7), hunch=hunch)
-           for distance, lane, gait, hunch in ((12.0, -2.4, "shamble", 0.2),
-                                               (7.5, 2.4, "limp", -0.4),
-                                               (5.0, -1.3, "lurch", 0.6))]
-    for walker in far:
-        draw_walker(panel, walker, view, 0.0)
+    # The horizon a little lower than in play: more sky, and the moon in it.
+    top = int(height * 0.17)
+    area = Rect(0, top, width, height - top)
+    round_ = ZombieRound(RoundOptions(area=area, seed=7))
+    view = round_.view
+    panel[:] = _environment((area.x, area.y, area.width, area.height), width, height, 7,
+                            round_.skyline)
+
+    def cast(gait: str, distance: float, across: float, seed: int, hunch: float,
+             tilt: float, phase: float) -> Walker:
+        lane = (across * width - area.centre_x) * distance / view.focal
+        return Walker(lane=lane, distance=distance, speed=0.7, phase=phase, sway=0.0,
+                      build=1.0, hunch=hunch, tilt=tilt, gait=gait, seed=seed)
+
+    # One already down, a few seconds ago: still wet, the moon still on it.
+    fallen = cast("shamble", 3.6, 0.3, 12, 0.2, 10.0, 0.0)
+    round_.walkers = [fallen]
+    round_._kill(fallen, 0.0, headshot=True)
+    draw_stains(panel, round_, 3.0)
+    crowd = sorted((cast(*member) for member in POSTER), key=lambda w: -w.distance)
+    for walker in crowd:
+        if walker.distance > 9.0:
+            draw_walker(panel, walker, view, 0.0)
     draw_fog(panel, view, 3.0)
-    near = Walker(lane=0.5, distance=2.15, speed=0.7, phase=1.2, sway=0.0, build=1.0,
-                  gait="lurch", seed=44, hunch=0.3, tilt=-12.0)
-    draw_walker(panel, near, view, 0.0, light=0.5)
-    draw_rain(panel, area, 1.0, drops=40, view=view)
-    glow = _muzzle_glow(width, height)
-    cv2.addWeighted(panel, 1.0, glow, 0.4, 0.0, dst=panel)
-    draw_muzzle_burst(panel, area, 0.0)
-    # The crosshair, on the skull of the one that is about to reach you: a
-    # quiet green ring with a warm core, so it reads against the HUD's green.
-    figure = near.figure(view, 0.0)
-    centre = (int(figure.head[0]), int(figure.head[1]))
-    radius = max(6, int(figure.head_radius * 1.6))
-    green = (110, 190, 120)
-    cv2.circle(panel, centre, radius, (10, 30, 14), 4, cv2.LINE_AA)
-    cv2.circle(panel, centre, radius, green, 2, cv2.LINE_AA)
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        cv2.line(panel, (centre[0] + dx * radius // 2, centre[1] + dy * radius // 2),
-                 (centre[0] + dx * (radius + radius // 2), centre[1] + dy * (radius + radius // 2)),
-                 green, 2, cv2.LINE_AA)
-    cv2.circle(panel, centre, 3, (10, 20, 30), -1, cv2.LINE_AA)
-    cv2.circle(panel, centre, 2, SCORE_INK, -1, cv2.LINE_AA)
+    for walker in crowd:
+        if walker.distance <= 9.0:
+            draw_walker(panel, walker, view, 0.0)
+    hero = cast(*POSTER_HERO)
+    draw_walker(panel, hero, view, 0.0)
+    draw_rain(panel, Rect(0, 0, width, height), 1.0, drops=max(30, width // 9), view=view)
+
+    # Your sights on its skull: a thin ring and four ticks in the tint that
+    # means your gun is ready.
+    figure = hero.figure(view, 0.0)
+    centre = figure.head
+    radius = max(6.0, figure.head_radius * 1.45)
+    weight = max(1, int(round(height / 300)))
+    for colour, thick in (((12, 24, 14), weight + 2), ((88, 209, 48), weight)):
+        cv2.circle(panel, (_fix(centre[0]), _fix(centre[1])), _fix(radius), colour, thick,
+                   cv2.LINE_AA, FIX_BITS)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            cv2.line(panel, (_fix(centre[0] + dx * radius * 0.55),
+                             _fix(centre[1] + dy * radius * 0.55)),
+                     (_fix(centre[0] + dx * radius * 1.3), _fix(centre[1] + dy * radius * 1.3)),
+                     colour, thick, cv2.LINE_AA, FIX_BITS)

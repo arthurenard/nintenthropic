@@ -96,15 +96,42 @@ function selectedMode() {
       }
     : mode;
 }
+// A frame travels as a four-byte length, that much JSON, then a JPEG or
+// nothing: both ways, so no picture is ever base64 text on either side.
+const FRAME_TYPE = "application/x-handy-frame";
+function packFrame(fields, camera) {
+  const head = new TextEncoder().encode(JSON.stringify(fields));
+  const length = new Uint8Array(4);
+  new DataView(length.buffer).setUint32(0, head.length);
+  return new Blob(camera ? [length, head, camera] : [length, head]);
+}
+function unpackFrame(bytes) {
+  const length = new DataView(bytes).getUint32(0);
+  const data = JSON.parse(
+    new TextDecoder().decode(new Uint8Array(bytes, 4, length)),
+  );
+  data.image = new Blob([new Uint8Array(bytes, 4 + length)], {
+    type: "image/jpeg",
+  });
+  return data;
+}
 async function request(path, body) {
+  // A Blob is a packed frame, answered with one; anything else is JSON.
+  const frame = body instanceof Blob;
   let response, data;
   try {
     response = await fetch(path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Handy-Token": token },
-      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": frame ? FRAME_TYPE : "application/json",
+        "X-Handy-Token": token,
+      },
+      body: frame ? body : JSON.stringify(body),
     });
-    data = await response.json();
+    data =
+      frame && response.ok
+        ? unpackFrame(await response.arrayBuffer())
+        : await response.json();
   } catch {
     // No answer, or not Handy's: the browser's own wording ("Failed to fetch",
     // "Unexpected token") would mean nothing to the player.
@@ -204,12 +231,16 @@ function drawHandGraph(hands) {
     });
   }
 }
-function stageAspect() {
-  // A stage with no size yet measures 0 by 0. Leave its shape out rather than
-  // send NaN, which JSON turns into null; the server keeps the current shape.
-  const rect = $("stage").getBoundingClientRect();
-  const aspect = rect.width / rect.height;
-  return Number.isFinite(aspect) && aspect > 0 ? aspect : undefined;
+function stageSize() {
+  // In device pixels, so the server draws the game at the resolution it is
+  // shown at rather than one the browser stretches. A stage with no size yet
+  // measures 0 by 0: leave it out, and the server keeps the current size.
+  // Measured inside the stage's border, where the frame is shown.
+  const stage = $("stage");
+  const size = [stage.clientWidth, stage.clientHeight].map((side) =>
+    Math.round(side * devicePixelRatio),
+  );
+  return size[0] > 0 && size[1] > 0 ? size : undefined;
 }
 function stopCamera() {
   if (media) media.getTracks().forEach((track) => track.stop());
@@ -254,6 +285,7 @@ async function start() {
       $("camera").srcObject = media;
       await $("camera").play();
       if (stale()) return;
+      watchCamera(run);
       media.getVideoTracks()[0].addEventListener("ended", () => {
         if (active) {
           showError(
@@ -307,7 +339,7 @@ async function start() {
     // The Start button went with the lobby: move focus to what replaced it.
     $("game-title").focus();
     const created = await request("/api/start", {
-      viewAspect: stageAspect(),
+      viewSize: stageSize(),
       map: selectedMap,
       control: selectedControl,
       enemy: $("enemy").value,
@@ -353,7 +385,26 @@ async function start() {
     if (!$("lobby").hidden) focusStart();
   }
 }
-function cameraFrame() {
+// Camera frames are mirrored and encoded on a worker thread where the browser
+// allows it (capture.js). On the page's own thread toBlob waits for the page to
+// fall idle, which a busy or background tab may not do for a whole second.
+// The worker answers in order, and a game left for the arcade can still have
+// a frame in it when the next game's first goes in: each waits its turn.
+let encoder = null;
+const encoding = [];
+try {
+  if (window.OffscreenCanvas) {
+    encoder = new Worker("/capture.js");
+    encoder.onmessage = ({ data }) => encoding.shift()?.(data);
+    encoder.onerror = () => {
+      encoder = null;
+      encoding.splice(0).forEach((resolve) => resolve(null));
+    };
+  }
+} catch {
+  encoder = null;
+}
+async function cameraFrame() {
   const video = $("camera");
   if (!media || video.readyState < 2 || !video.videoWidth) return null;
   // Send the centred 4:3 view the preview shows (object-fit: cover), cropped
@@ -361,24 +412,54 @@ function cameraFrame() {
   // angles and the eye-openness ratios the scope reads, and misplaces the
   // skeleton drawn over the preview.
   const scale = Math.min(video.videoWidth / 640, video.videoHeight / 480);
-  const [width, height] = [640 * scale, 480 * scale];
+  const [width, height] = [Math.round(640 * scale), Math.round(480 * scale)];
+  const [x, y] = [
+    Math.round((video.videoWidth - width) / 2),
+    Math.round((video.videoHeight - height) / 2),
+  ];
+  if (encoder) {
+    // A camera that has just stopped has no frame to give: send none.
+    const frame = await createImageBitmap(video, x, y, width, height).catch(
+      () => null,
+    );
+    if (!frame) return null;
+    return new Promise((resolve) => {
+      encoding.push(resolve);
+      encoder.postMessage(frame, [frame]);
+    });
+  }
   // Mirror exactly once, matching the preview and the native control conventions.
   captureContext.save();
   captureContext.translate(640, 0);
   captureContext.scale(-1, 1);
-  captureContext.drawImage(
-    video,
-    (video.videoWidth - width) / 2,
-    (video.videoHeight - height) / 2,
-    width,
-    height,
-    0,
-    0,
-    640,
-    480,
-  );
+  captureContext.drawImage(video, x, y, width, height, 0, 0, 640, 480);
   captureContext.restore();
-  return captureCanvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+  return new Promise((resolve) =>
+    captureCanvas.toBlob(resolve, "image/jpeg", 0.7),
+  );
+}
+const frameContext = $("game-image").getContext("2d", { alpha: false });
+let shown = Promise.resolve();
+function show(image, run) {
+  // Decoded off the page's thread, then drawn in the order frames arrived. A
+  // data: URL per frame had the page parse base64 and swap an image's source,
+  // which could flash while the new one loaded.
+  const decoded = createImageBitmap(image);
+  shown = shown
+    .then(() => decoded)
+    .then(
+      (bitmap) => {
+        const canvas = $("game-image");
+        if (generation === run) {
+          if (canvas.width !== bitmap.width || canvas.height !== bitmap.height)
+            [canvas.width, canvas.height] = [bitmap.width, bitmap.height];
+          frameContext.drawImage(bitmap, 0, 0);
+          canvas.hidden = false;
+        }
+        bitmap.close();
+      },
+      () => {}, // a frame that will not decode is skipped, not fatal
+    );
 }
 function setText(id, text) {
   // Most of what renderState writes repeats every frame. Rewriting it anyway
@@ -487,16 +568,71 @@ function renderState(data) {
         storage.set(key, data.score);
     }
   }
+  redrawCrosshair(); // shown only while a round is being played
 }
 function queueAction(action, extra = {}) {
   if (!active || pendingAction) return;
   pendingAction = { action, ...extra };
   keys.clear();
   fire = false;
+  wake?.();
+}
+// Frames go out one at a time, each as soon as the answer to the last is in
+// and there is something new to send: with a camera, the next frame it
+// presents; otherwise the next display frame, about 30 a second.
+const FRAME_INTERVAL = 1000 / 30;
+let cameraFrames = 0, // frames the camera has presented since it opened
+  cameraSeen = -Infinity, // when it last presented one
+  wake = null, // sends the next frame now, if the loop is waiting
+  onCamera = null;
+function watchCamera(run) {
+  const video = $("camera");
+  if (!video.requestVideoFrameCallback) return;
+  const presented = () => {
+    if (generation !== run || !media) return;
+    cameraFrames++;
+    cameraSeen = performance.now();
+    onCamera?.();
+    video.requestVideoFrameCallback(presented);
+  };
+  video.requestVideoFrameCallback(presented);
+}
+function nextTurn(sentAt, sentFrame) {
+  const paused = currentState === "paused";
+  // A camera the browser has not shown a frame from lately - one without
+  // requestVideoFrameCallback, or not on screen - is read with the display.
+  const camera = !paused && performance.now() - cameraSeen < 250;
+  if (pendingAction || (camera && cameraFrames !== sentFrame))
+    return Promise.resolve();
+  return new Promise((resolve) => {
+    let frame = 0;
+    const done = () => {
+      wake = onCamera = null;
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      resolve();
+    };
+    const due = () => {
+      if (performance.now() - sentAt >= FRAME_INTERVAL - 4) done();
+      else frame = requestAnimationFrame(due);
+    };
+    // A paused game only has to keep its session open. The timer also stands
+    // in for a background tab, which runs no display frames, and for a camera
+    // that stalls.
+    const timer = setTimeout(done, paused ? 200 : 250);
+    wake = done;
+    if (camera) onCamera = done;
+    else if (!paused) frame = requestAnimationFrame(due);
+  });
 }
 async function loop(run) {
+  let sentAt = -Infinity,
+    sentFrame = -1;
   while (active && generation === run) {
-    const started = performance.now();
+    await nextTurn(sentAt, sentFrame);
+    if (!active || generation !== run) return;
+    sentAt = performance.now();
+    sentFrame = cameraFrames;
     if (pendingAction) {
       const action = pendingAction;
       pendingAction = null;
@@ -515,19 +651,24 @@ async function loop(run) {
       }
     }
     try {
+      const camera = currentState === "paused" ? null : await cameraFrame();
       const shot = fire;
       fire = false;
-      const data = await request("/api/frame", {
-        viewAspect: stageAspect(),
-        id: session.id,
-        ...pointer,
-        fire: shot,
-        scope: scoped || keys.has("Shift"),
-        camera: currentState === "paused" ? null : cameraFrame(),
-      });
+      const data = await request(
+        "/api/frame",
+        packFrame(
+          {
+            viewSize: stageSize(),
+            id: session.id,
+            ...(shot || pointer),
+            fire: !!shot,
+            scope: scoped || keys.has("Shift"),
+          },
+          camera,
+        ),
+      );
       if (generation !== run || !active) return;
-      $("game-image").src = "data:image/jpeg;base64," + data.image;
-      $("game-image").hidden = false;
+      show(data.image, run);
       renderState(data);
       sound(data.cues);
     } catch (error) {
@@ -542,9 +683,6 @@ async function loop(run) {
       $("overlay-action").textContent = "Back to arcade";
       return;
     }
-    await new Promise((resolve) =>
-      setTimeout(resolve, Math.max(0, 33 - (performance.now() - started))),
-    );
   }
 }
 async function back() {
@@ -571,26 +709,146 @@ async function back() {
   focusStart();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
-function point(event) {
-  const rect = $("game-image").getBoundingClientRect();
-  pointer = {
-    x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
-    y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+function frameBox() {
+  // Where the frame shows within its element. object-fit can letterbox one
+  // of another shape: a round keeps its size when the stage is resized.
+  const canvas = $("game-image"),
+    rect = canvas.getBoundingClientRect();
+  if (getComputedStyle(canvas).objectFit !== "contain") return rect;
+  const scale = Math.min(
+    rect.width / canvas.width,
+    rect.height / canvas.height,
+  );
+  const [width, height] = [canvas.width * scale, canvas.height * scale];
+  return {
+    left: rect.left + (rect.width - width) / 2,
+    top: rect.top + (rect.height - height) / 2,
+    width,
+    height,
   };
 }
+function point(event) {
+  const box = frameBox();
+  pointer = {
+    x: Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)),
+    y: Math.max(0, Math.min(1, (event.clientY - box.top) / box.height)),
+  };
+  redrawCrosshair();
+}
+// With a mouse the crosshair is drawn here, over the frame, where the pointer
+// is now: drawn into the frame by the server it trailed the pointer by a round
+// trip and more. It copies scene.draw_crosshair - a ring broken at the compass
+// points, ticks through the gaps, a dot, a ring kicking out on each shot - at
+// the size the server would draw it. A hand's crosshair stays in the frame:
+// only the server knows where its filtered aim lands.
+const RECOIL = 180; // ms, scene.RECOIL
+let firedAt = -Infinity,
+  crosshairFrame = 0;
+function redrawCrosshair() {
+  crosshairFrame ||= requestAnimationFrame(drawCrosshair);
+}
+function drawCrosshair() {
+  crosshairFrame = 0;
+  const overlay = $("crosshair");
+  const aiming =
+    active &&
+    selectedControl === "mouse" &&
+    currentState === "playing" &&
+    !$("game-image").hidden &&
+    !(selectedMap === "sniper" && (scoped || keys.has("Shift")));
+  $("stage").classList.toggle("aiming", aiming);
+  if (!aiming) {
+    // Cleared, and its memory given back until there is a crosshair again.
+    if (overlay.width) overlay.width = overlay.height = 0;
+    return;
+  }
+  const area = overlay.getBoundingClientRect(),
+    ratio = devicePixelRatio;
+  const [width, height] = [area.width, area.height].map((side) =>
+    Math.round(side * ratio),
+  );
+  if (overlay.width !== width || overlay.height !== height)
+    [overlay.width, overlay.height] = [width, height];
+  const context = overlay.getContext("2d");
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, width, height);
+  const box = frameBox();
+  // Centred on a pixel, as OpenCV centres its shapes.
+  const x = Math.floor((box.left - area.left + pointer.x * box.width) * ratio),
+    y = Math.floor((box.top - area.top + pointer.y * box.height) * ratio);
+  context.setTransform(1, 0, 0, 1, 0.5, 0.5);
+  // The server's 0.75 on a 960-wide frame, grown with the frame as shown.
+  const scale =
+    0.75 * Math.max((box.width * ratio) / 960, (box.height * ratio) / 900);
+  const size = (value) => Math.max(1, Math.round(value * scale));
+  // OpenCV's anti-aliased stroke of thickness t comes out about 2t - 0.5
+  // pixels wide (1.35 for t = 1), and a filled dot half a pixel wider.
+  const stroke = (thickness) =>
+    thickness === 1 ? 1.35 : 2 * thickness - 0.55;
+  const weight = stroke(size(2)),
+    radius = Math.round(20 * scale),
+    ring = (r, from, to) => {
+      context.beginPath();
+      context.arc(x, y, r, (from * Math.PI) / 180, (to * Math.PI) / 180);
+      context.stroke();
+    };
+  context.strokeStyle = context.fillStyle = "rgb(130, 230, 120)"; // scene.ARMED
+  context.lineCap = "round";
+  context.lineWidth = weight;
+  for (const start of [10, 100, 190, 280]) ring(radius, start, start + 70);
+  context.beginPath();
+  context.arc(x, y, size(2) + 0.5, 0, 2 * Math.PI);
+  context.fill();
+  for (const [dx, dy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    const at = (reach) => [x + dx * reach * scale, y + dy * reach * scale];
+    for (const [from, lineWidth] of [
+      [9, stroke(size(1))],
+      [25, weight],
+    ]) {
+      context.lineWidth = lineWidth;
+      context.beginPath();
+      context.moveTo(...at(from));
+      context.lineTo(...at(30));
+      context.stroke();
+    }
+  }
+  const kick = (performance.now() - firedAt) / RECOIL;
+  if (kick < 1) {
+    context.globalAlpha = 1 - kick;
+    context.lineWidth = weight;
+    ring(Math.round((20 + 34 * kick) * scale), 0, 360);
+    context.globalAlpha = 1;
+    redrawCrosshair();
+  }
+}
+new ResizeObserver(redrawCrosshair).observe($("stage"));
 $("game-image").addEventListener("pointermove", point);
 $("game-image").addEventListener("pointerdown", (event) => {
   point(event);
   if (event.button === 2) scoped = true;
-  else if (selectedControl === "mouse") fire = true;
+  else if (selectedControl === "mouse") {
+    // The shot lands where the click was, even if the pointer moves on
+    // before the frame carrying it goes out - which is at once.
+    fire = { ...pointer };
+    if (currentState === "playing" && performance.now() - firedAt >= 120)
+      firedAt = performance.now();
+    wake?.();
+  }
   event.preventDefault();
 });
 $("stage").addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("pointerup", () => {
   scoped = false;
+  redrawCrosshair();
 });
 window.addEventListener("pointercancel", () => {
   scoped = false;
+  redrawCrosshair();
 });
 window.addEventListener("keydown", (event) => {
   if (!active || ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName))
@@ -601,16 +859,19 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
   keys.add(key);
   if (event.repeat) return;
+  redrawCrosshair(); // Shift scopes the rifle, which hides the crosshair
   if (key === "p" || key === "Escape")
     queueAction(currentState === "paused" ? "resume" : "pause");
 });
-window.addEventListener("keyup", (event) =>
-  keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key),
-);
+window.addEventListener("keyup", (event) => {
+  keys.delete(event.key.length === 1 ? event.key.toLowerCase() : event.key);
+  redrawCrosshair();
+});
 function blur() {
   keys.clear();
   scoped = false;
   fire = false;
+  redrawCrosshair();
   if (active && !["paused", "over"].includes(currentState))
     queueAction("pause");
 }
