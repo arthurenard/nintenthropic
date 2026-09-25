@@ -251,15 +251,17 @@ export function waterLeak(t: Take): Mono {
     stream[i]! *= (0.35 + 0.65 * f * Math.sqrt(f)) * (0.85 + 0.15 * slow[i]!);
   }
   const bed = loopify(stream, length);
-  // Drops and bubbles as events, wrapped round the loop.
+  // Drops and bubbles as events, wrapped round the loop. None starts in the
+  // loop's first few milliseconds (the wrap carries them past the end
+  // instead): an onset exactly on the seam is indistinguishable from a click.
   const events = new Float32Array(length + t.n(0.3));
   const drops = Math.round(seconds * r.range(22, 30));
   for (let k = 0; k < drops; k++) {
-    const at = r.range(0, seconds);
+    const at = r.range(0.008, seconds + 0.008);
     t.put(events, bubble(t, r.range(700, 2600) * t.p, r.range(0.005, 0.014), r.range(1.3, 1.9)), at, r.range(0.1, 0.35));
   }
   for (let k = 0; k < Math.round(seconds * 7); k++) {
-    const at = r.range(0, seconds);
+    const at = r.range(0.008, seconds + 0.008);
     t.put(events, burst(t, 0.04, 90, 600, 0.001, 0.008, 2), at, r.range(0.15, 0.3));
   }
   const ev = wrap(events, length);
@@ -396,7 +398,7 @@ export function dynamiteFuse(t: Take): Mono {
   const bed = loopify(bedRaw, length);
   const sparks = new Float32Array(length + t.n(0.05));
   for (let k = 0; k < Math.round(seconds * r.range(35, 50)); k++) {
-    t.put(sparks, click(t.sr, r, r.range(0.0006, 0.002), 2500, 16000), r.range(0, seconds), r.range(0.15, 0.7) ** 2 * 1.4);
+    t.put(sparks, click(t.sr, r, r.range(0.0006, 0.002), 2500, 16000), r.range(0.008, seconds + 0.008), r.range(0.15, 0.7) ** 2 * 1.4);
   }
   const ev = wrap(sparks, length);
   const out = new Float32Array(length);

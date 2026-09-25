@@ -9,12 +9,18 @@ import { addMode, click } from "../dsp/sources";
 import type { Take } from "../dsp/take";
 import { midiHz } from "./music";
 
-/** A tuned bar (a marimba's 1 : 3.93 : 9.2), struck softly. */
+/**
+ * A tuned bar (a marimba's 1 : 3.93 : 9.2), struck softly. Each take strikes
+ * it a little differently — a few cents off, its overtones a little louder
+ * or softer, caught at another point of their cycle — so a menu tapped ten
+ * times does not sound like one sample ten times.
+ */
 function bar(out: Mono, t: Take, at: number, midi: number, gain: number, tau: number): void {
-  const f = midiHz(midi);
-  addMode(out, t.sr, at, f, gain, tau, 0);
-  addMode(out, t.sr, at, f * 3.93, gain * 0.18, tau * 0.25, 0);
-  addMode(out, t.sr, at, f * 9.2, gain * 0.04, tau * 0.08, 0);
+  const r = t.rng;
+  const f = midiHz(midi) * Math.pow(2, r.range(-4, 4) / 1200);
+  addMode(out, t.sr, at, f, gain, tau, r.range(-0.4, 0.4));
+  addMode(out, t.sr, at, f * 3.93, t.g(gain * 0.18, 3), tau * 0.25, r.range(0, 6.28));
+  addMode(out, t.sr, at, f * 9.2, t.g(gain * 0.04, 3), tau * 0.08, r.range(0, 6.28));
 }
 
 /** A tap: a small rounded tick, barely pitched. */
@@ -38,10 +44,11 @@ export function uiConfirm(t: Take): Mono {
 /** An aim-check shot registered: a glassy *ting* over the bottle breaking. Exact pitch, so a game may step it up by rate. */
 export function calibHit(t: Take): Mono {
   const out = t.canvas(0.4);
-  const f = midiHz(88);
-  addMode(out, t.sr, 0, f, 0.6, t.d(0.12), 0);
-  addMode(out, t.sr, 0, f * 2.76, 0.18, t.d(0.04), 0);
-  addMode(out, t.sr, 0, f * 1.003, 0.3, t.d(0.1), 0);
+  const r = t.rng;
+  const f = midiHz(88) * Math.pow(2, r.range(-4, 4) / 1200);
+  addMode(out, t.sr, 0, f, 0.6, t.d(0.12), r.range(-0.4, 0.4));
+  addMode(out, t.sr, 0, f * 2.76, t.g(0.18, 3), t.d(0.04), r.range(0, 6.28));
+  addMode(out, t.sr, 0, f * r.range(1.002, 1.005), t.g(0.3, 2), t.d(0.1), r.range(0, 6.28));
   t.put(out, click(t.sr, t.rng, 0.0015, 2500, 12000), 0, 0.1);
   return out;
 }
