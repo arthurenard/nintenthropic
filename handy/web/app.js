@@ -235,8 +235,9 @@ function stageSize() {
   // In device pixels, so the server draws the game at the resolution it is
   // shown at rather than one the browser stretches. A stage with no size yet
   // measures 0 by 0: leave it out, and the server keeps the current size.
-  const rect = $("stage").getBoundingClientRect();
-  const size = [rect.width, rect.height].map((side) =>
+  // Measured inside the stage's border, where the frame is shown.
+  const stage = $("stage");
+  const size = [stage.clientWidth, stage.clientHeight].map((side) =>
     Math.round(side * devicePixelRatio),
   );
   return size[0] > 0 && size[1] > 0 ? size : undefined;
