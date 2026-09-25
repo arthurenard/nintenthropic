@@ -130,19 +130,30 @@ def test_the_chooser_draws_every_map_and_marks_the_one_you_are_aiming_at(canvas)
     assert not np.array_equal(idle, canvas), "the aimed card is picked out"
 
 
-def test_every_maps_blurb_fits_inside_its_card(canvas):
-    """Wrapping has to measure what is actually drawn, halo and all."""
+@pytest.mark.parametrize("width,height", ((1280, 720), (1512, 945), (2560, 1440)))
+def test_every_maps_name_and_blurb_fit_inside_its_card(width, height, monkeypatch):
+    """Nothing is cut short on the real cards: every name whole, every blurb
+    whole, and every line inside the card's padding."""
     from handy import maps
     from handy.game import Rect
-    from handy.rendering import text_width
 
-    cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), len(maps.MAPS))
+    scale = height / 720
+    canvas = np.zeros((height, width, 3), np.uint8)
+    cards = scene.map_cards(Rect(0, 0, width, height), len(maps.MAPS), scale)
+    said = []
+    real = scene.write
+    monkeypatch.setattr(scene, "write", lambda canvas, text, origin, style, *a, **k: (
+        said.append((text, origin[0], style)), real(canvas, text, origin, style,
+                                                    *a, **k))[1])
     for card, chosen in zip(cards, maps.MAPS):
-        limit = card.width - 36
-        lines = scene._wrapped(chosen.blurb, 0.5, limit)
-        assert lines, f"{chosen.key} has no blurb"
-        for line in lines:
-            assert text_width(line, 0.5, 1, outline=False) <= limit, line
+        said.clear()
+        scene.draw_map_card(canvas, card, chosen.title, chosen.blurb, "Best 1,240",
+                            chosen.draw_emblem, 0.0, scale)
+        texts = [text for text, _, _ in said]
+        assert texts[0] == scene.title_case(chosen.title)
+        assert " ".join(texts[1:-1]) == chosen.blurb, "the whole blurb, not cut"
+        for text, x, style in said:
+            assert x + scene.measure(text, style, scale) <= card.right - 20 * scale + 1
 
 
 def test_text_measurement_accounts_for_the_halo():
@@ -159,7 +170,7 @@ def test_a_long_blurb_is_wrapped_rather_than_running_off_the_card(canvas):
     cards = scene.map_cards(Rect(0, 0, WIDTH, HEIGHT), 2)
     entries = (("A MAP", " ".join(["blurb"] * 60), "best 0", scene.draw_backdrop),
                ("ANOTHER", "short", "", scene.draw_backdrop))
-    scene.draw_map_select(canvas, cards, entries, aimed=0)
+    scene.draw_map_select(canvas, cards, entries, aimed=None)
 
     # The gutter between the cards must stay empty: no text has run off the edge.
     gutter = canvas[cards[0].y:cards[0].bottom, cards[0].right + 3:cards[1].x - 3]
@@ -454,15 +465,18 @@ def test_thumbnails_are_built_once_per_size():
 
     def emblem(panel):
         calls.append(panel.shape)
-        panel[:] = 120
+        panel[:] = np.random.default_rng(0).integers(60, 200, panel.shape)
 
     scene._thumbnail.cache_clear()
     a = scene._thumbnail(emblem, "A", 300, 100)
     b = scene._thumbnail(emblem, "A", 300, 100)
     assert a is b and len(calls) == 1
     assert a.shape == (100, 300, 3)
-    # The treatment: lit along the top edge, shadowed at the foot.
-    assert a[2, 150].mean() > a[50, 150].mean() > a[-1, 150].mean()
+    # The treatment: the foot settles towards the card's own surface, so the
+    # name under it reads as part of the same card.
+    surface = float(np.mean(scene.SURFACE))
+    middle, foot = a[45:55, 100:200].mean(), a[-1, 100:200].mean()
+    assert abs(foot - surface) < abs(middle - surface) / 2
 
 
 def test_the_button_under_the_crosshair_is_ringed_never_coloured(canvas):
@@ -502,15 +516,19 @@ def test_results_headline_names_the_score(canvas, monkeypatch):
     assert "SCORE" in seen and "TIME" not in seen
 
 
-def test_the_logo_lockup_sits_bottom_right_on_every_menu(canvas):
+def test_the_wordmark_sits_bottom_right_on_every_menu(canvas, monkeypatch):
     from handy.game import Rect
 
+    said = said_by(monkeypatch)
     scene.draw_logo(canvas, 1.0)
-    width, height = logo_w, logo_h = scene.logo_size(1.0)
+    assert said == ["Handy"]
+    logo_w, logo_h = scene.logo_size(1.0)
     corner = canvas[canvas.shape[0] - 60:, canvas.shape[1] - logo_w - 40:]
-    assert np.any(np.all(corner == scene.ACCENT, axis=-1)), "no accent bar"
-    assert np.any(np.all(corner == scene.INK, axis=-1)), "no wordmark"
-    assert logo_w > 0 and logo_h > 0 and width == logo_w and height == logo_h
+    assert np.any(np.all(corner == scene.LABEL_SECONDARY, axis=-1)), "the mark itself"
+    ink = corner[corner.max(axis=2) > 0]
+    assert (np.abs(ink.astype(int) - ink.mean(axis=1, keepdims=True)) < 8).all(), (
+        "no colour in the mark: no accent bar, no amber muzzle")
+    assert canvas[:canvas.shape[0] - 60].max() == 0 and logo_h > 0
     # And it is part of the chooser, the results card and the notice.
     from handy.game import Summary
     cards = scene.map_cards(Rect(0, 0, canvas.shape[1], canvas.shape[0]), 2)
@@ -524,7 +542,7 @@ def test_the_logo_lockup_sits_bottom_right_on_every_menu(canvas):
         canvas[:] = 0
         draw()
         corner = canvas[canvas.shape[0] - 60:, canvas.shape[1] - logo_w - 40:]
-        assert np.any(np.all(corner == scene.ACCENT, axis=-1))
+        assert np.any(np.all(corner == scene.LABEL_SECONDARY, axis=-1))
 
 
 def test_the_camera_inset_is_framed_in_its_state_colour(canvas, camera):

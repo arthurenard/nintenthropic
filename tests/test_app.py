@@ -547,7 +547,7 @@ def test_the_map_chooser_draws_the_cards(monkeypatch, layout):
 
     assert reason == "quit" and picked is None
     assert drawn, "the cards were never drawn"
-    _, cards, entries, _aimed, _scale = drawn[0]
+    _, cards, entries, *_rest = drawn[0]
     assert len(cards) == len(entries) == len(maps.MAPS)
 
 
@@ -579,8 +579,20 @@ def test_the_chooser_reads_each_maps_best_from_the_bucket_it_is_written_to(
                    default_rig(schemes.PISTOL, 1), schemes.PISTOL, scores)
 
     best = {title: line for title, _blurb, line, _art in drawn[0]}
-    assert best[maps.ZOMBIES.title] == "best 120"
-    assert best[maps.SNIPER.title] == "best 340"
+    assert best[maps.ZOMBIES.title] == "Best 120"
+    assert best[maps.SNIPER.title] == "Best 340"
+    assert best[maps.WESTERN.title] == "Not played yet"
+
+
+def test_the_card_under_the_crosshair_rises_over_a_quarter_second():
+    from handy import app
+
+    lifts = [0.0, 0.0, 1.0]
+    lifts = app.ease_lifts(lifts, 0, app.CARD_LIFT / 2)
+    assert lifts == [0.5, 0.0, 0.5], "one rising, the one it left settling"
+    lifts = app.ease_lifts(lifts, 0, app.CARD_LIFT)
+    assert lifts == [1.0, 0.0, 0.0]
+    assert app.best_line(1240) == "Best 1,240"
 
 
 def centre_of(button) -> tuple[float, float]:
@@ -2321,6 +2333,25 @@ def test_no_chooser_card_runs_under_the_camera_or_the_quit_button(width, height)
     # The grid stands on the margins the camera and QUIT stand on.
     assert cards[0].x == layout.inset.x
     assert cards[-1].right == layout.quit_button.rect.right
+
+
+@pytest.mark.parametrize("width,height", SIZES)
+def test_the_chooser_title_and_cards_keep_clear_of_the_corners(width, height):
+    """The title sits between the picture and Quit; the cards below them, above
+    the hints; everything shootable at least as big as a finger pistol needs."""
+    from handy import app, scene
+
+    layout = layout_for(width, height)
+    title = scene.measure(scene.CHOOSER_TITLE, scene.TITLE_1, layout.scale)
+    assert layout.inset.right < (width - title) // 2
+    assert (width + title) // 2 < layout.quit_button.rect.x
+    cards = app.chooser_cards(layout, len(maps.MAPS))
+    footer = scene.footer_baseline(height, layout.scale) - scene.type_size(
+        scene.FOOTNOTE, layout.scale) * 2
+    for card in cards:
+        assert card.y > layout.inset.bottom and card.bottom < footer
+        assert card.height >= scene.SHOOTABLE * layout.scale
+    assert layout.quit_button.rect.height >= scene.SHOOTABLE * layout.scale - 1
 
 
 def chrome_view(chosen, layout, **fields):

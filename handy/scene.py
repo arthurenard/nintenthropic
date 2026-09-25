@@ -763,26 +763,10 @@ def _vignette(width: int, height: int, floor: float = 0.55) -> np.ndarray:
     return (1.0 - (1.0 - floor) * np.clip(d, 0, 1) ** 2)[:, :, None]
 
 
-@lru_cache(maxsize=6)
-def _backdrop_image(width: int, height: int) -> np.ndarray:
-    """The grid, vignetted towards the corners. Built once per window size."""
-    image = np.empty((height, width, 3), np.uint8)
-    image[:] = (BACKDROP[0] + 6, BACKDROP[1] + 6, BACKDROP[2] + 6)
-    for x in range(0, width, 64):
-        cv2.line(image, (x, 0), (x, height), GRID, 1)
-    for y in range(0, height, 64):
-        cv2.line(image, (0, y), (width, y), GRID, 1)
-    for x in range(0, width, 64 * 4):
-        cv2.line(image, (x, 0), (x, height), (46, 44, 42), 1)
-    for y in range(0, height, 64 * 4):
-        cv2.line(image, (0, y), (width, y), (46, 44, 42), 1)
-    return (image.astype(np.float32) * _vignette(width, height)).astype(np.uint8)
-
-
 def draw_backdrop(canvas: np.ndarray) -> None:
-    """The neutral grid used by the range and by every menu screen."""
-    height, width = canvas.shape[:2]
-    canvas[:] = _backdrop_image(width, height)
+    """The window behind every menu: black, the way the design language has it.
+    The cards and the sheets bring the light."""
+    canvas[:] = BACKGROUND
 
 
 # --- the ambient backdrop: the map in play, dimmed, behind the card ---------
@@ -792,7 +776,7 @@ def draw_backdrop(canvas: np.ndarray) -> None:
 # was played in instead: the art is blown up, blurred, dimmed and vignetted
 # until it is a mood rather than a picture. The app sets the art when a map is
 # picked and clears it on the way out, so the chooser - which belongs to no map
-# - keeps the plain grid.
+# - keeps the plain black.
 
 _ambient_art = None  # the emblem callable of the map in play, or None
 
@@ -800,7 +784,7 @@ _ambient_art = None  # the emblem callable of the map in play, or None
 def set_ambient_art(emblem) -> None:
     """Tell the menus which map is in play, so its art can sit behind them.
 
-    ``None`` puts the plain grid back. Called by :mod:`handy.app`; a module
+    ``None`` puts the plain black back. Called by :mod:`handy.app`; a module
     global because the drawing functions are deliberately stateless otherwise
     and take no map argument.
     """
@@ -816,13 +800,9 @@ def _ambient_image(emblem, width: int, height: int) -> np.ndarray:
     panel = cv2.GaussianBlur(panel, (0, 0), max(1.0, small_w * 0.006))
     image = cv2.resize(panel, (width, height), interpolation=cv2.INTER_CUBIC)
     image = cv2.GaussianBlur(image, (0, 0), max(2.0, width * 0.004))
-    # Dim towards the backdrop, keeping a little of the art's colour.
-    dimmed = image.astype(np.float32) * 0.38 + np.array(BACKDROP, np.float32) * 0.5
-    dimmed = dimmed * _vignette(width, height, 0.35)
-    # The grid shows faintly through, so the screen is still recognisably
-    # the same family as every other menu.
-    grid = _backdrop_image(width, height).astype(np.float32)
-    return np.clip(dimmed * 0.8 + grid * 0.3, 0, 255).astype(np.uint8)
+    # Dimmed most of the way to black, keeping a little of the art's colour.
+    dimmed = image.astype(np.float32) * 0.34 * _vignette(width, height, 0.3)
+    return np.clip(dimmed, 0, 255).astype(np.uint8)
 
 
 def ambient_backdrop_for(emblem, width: int, height: int) -> np.ndarray:
@@ -835,7 +815,7 @@ def ambient_backdrop_for(emblem, width: int, height: int) -> np.ndarray:
 
 
 def draw_ambient_backdrop(canvas: np.ndarray) -> None:
-    """The map in play as a dim, blurred backdrop; the plain grid if none is."""
+    """The map in play as a dim, blurred backdrop; plain black if none is."""
     if _ambient_art is None:
         draw_backdrop(canvas)
         return
@@ -921,16 +901,36 @@ def _centred_text(canvas: np.ndarray, text: str, y: int,
     draw_text(canvas, text, ((canvas.shape[1] - width) // 2, y), color, scale=scale)
 
 
-# --- the logo ---------------------------------------------------------------
+# --- the wordmark ------------------------------------------------------------
 #
-# One lockup on every screen, in the same corner: the finger-pistol glyph, the
-# wordmark, and the accent bar beneath. The game's identity, not just a face.
+# One mark on every menu, in the same corner: the finger-pistol glyph and the
+# name, set in the system face, in a quiet white. No rule under it, no colour
+# in it - the game's worlds bring the colour.
+
+#: The screen's margins in 720-tall units, and the wider ones of a large
+#: window (``LARGE_WINDOW`` pixels tall and up).
+MARGIN, LARGE_MARGIN, LARGE_WINDOW = 24, 32, 1200
+
+
+def screen_margin(height: int, scale: float = 1.0) -> int:
+    """The margin every screen keeps to, in pixels."""
+    return _px(LARGE_MARGIN if height >= LARGE_WINDOW else MARGIN, scale)
+
+
+def footer_baseline(height: int, scale: float = 1.0) -> int:
+    """The baseline the menus' hints and the wordmark share at the foot."""
+    return height - screen_margin(height, scale) - _px(12, scale)
+
+
+WORDMARK = "Handy"
+
 
 @lru_cache(maxsize=8)
-def _logo_glyph(size: int) -> tuple[np.ndarray, np.ndarray]:
-    """The finger-pistol glyph, ``size`` pixels tall, as (BGR, alpha) at 2x
-    then brought down, so the small silhouette keeps clean edges."""
-    big = size * 2
+def _logo_glyph(size: int) -> np.ndarray:
+    """The finger-pistol glyph, ``size`` pixels tall, as coverage: drawn at
+    four times the size and brought down, so the small silhouette keeps
+    clean edges."""
+    big = size * 4
     w, h = int(big * 1.6), big
     u = big * 0.36
     cx, cy = int(w * 0.66), int(h * 0.56)
@@ -945,106 +945,45 @@ def _logo_glyph(size: int) -> tuple[np.ndarray, np.ndarray]:
              255, max(2, int(u * 0.38)), cv2.LINE_AA)
     cv2.line(mask, (cx + int(u * 0.3), cy + int(u * 0.2)), (w + 4, cy + int(u * 0.4)),
              255, max(2, int(u * 0.6)), cv2.LINE_AA)
-    image = np.zeros((h, w, 3), np.uint8)
-    image[:] = INK
-    # The muzzle dot, in the accent: the one touch of colour in the mark.
-    spark = np.zeros((h, w), np.uint8)
-    cv2.circle(spark, (cx - int(u * 1.95), cy - int(u * 0.1)), int(u * 0.22), 255, -1,
-               cv2.LINE_AA)
-    image[spark > 0] = ACCENT
-    alpha = cv2.max(mask, spark)
-    small = (size * 160 // 100, size)
-    return (cv2.resize(image, small, interpolation=cv2.INTER_AREA),
-            cv2.resize(alpha, small, interpolation=cv2.INTER_AREA))
-
-
-def _paste(canvas: np.ndarray, image: np.ndarray, alpha: np.ndarray,
-           x: int, y: int) -> None:
-    h, w = alpha.shape
-    x0, y0 = max(x, 0), max(y, 0)
-    x1, y1 = min(x + w, canvas.shape[1]), min(y + h, canvas.shape[0])
-    if x1 <= x0 or y1 <= y0:
-        return
-    region = canvas[y0:y1, x0:x1]
-    a = alpha[y0 - y:y1 - y, x0 - x:x1 - x].astype(np.float32)[:, :, None] / 255.0
-    src = image[y0 - y:y1 - y, x0 - x:x1 - x]
-    region[:] = (region * (1 - a) + src * a).astype(np.uint8)
+    return cv2.resize(mask, (size * 160 // 100, size), interpolation=cv2.INTER_AREA)
 
 
 def logo_size(scale: float) -> tuple[int, int]:
-    """Width and height of the lockup, for anything laying out around it."""
-    glyph = _px(20, scale)
-    return (int(glyph * 1.6) + _px(10, scale) + text_width("HANDY", 0.75 * scale, 2, False)
-            + _px(8, scale), glyph + _px(8, scale))
+    """Width and height of the wordmark, for anything laying out around it."""
+    glyph = _px(16, scale)
+    return (glyph * 160 // 100 + _px(8, scale) + measure(WORDMARK, TITLE_3, scale),
+            _px(22, scale))
 
 
-def draw_logo(canvas: np.ndarray, scale: float = 1.0, alpha: float = 1.0) -> None:
-    """The lockup, bottom right on every screen: glyph, wordmark, accent bar.
-
-    Laid from a sprite built once per size, so it can sit on every frame of a
-    round - and fade, at ``alpha`` - for the price of one small blend.
-    """
+def draw_logo(canvas: np.ndarray, scale: float = 1.0, alpha: float = 1.0,
+              color: tuple[int, int, int] = LABEL_SECONDARY,
+              corner: tuple[int, int] | None = None) -> None:
+    """The wordmark, by default bottom right on the footer's baseline;
+    ``corner`` puts its bottom-right corner somewhere else."""
     if alpha <= 0.0:
         return
-    colour, keep, cover = _logo_sprite(round(scale, 4))
     height, width = canvas.shape[:2]
-    h, w = cover.shape
-    if h > height or w > width:
-        _draw_logo_lockup(canvas, scale)
-        return
-    region = canvas[height - h:, width - w:]
-    if alpha < 1.0:
-        cover = cover * np.float32(alpha)
-        keep = np.float32(1.0) - cover
-    cv2.blendLinear(region, colour, keep, cover, dst=region)
-
-
-@lru_cache(maxsize=4)
-def _logo_sprite(scale: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The lockup as colour and coverage, for the bottom-right corner.
-
-    Drawn once over black and once over white: where the two agree the mark
-    is solid, and how far they differ is how much of the ground shows
-    through - which recovers the anti-aliased edges exactly.
-    """
-    total_w, total_h = logo_size(scale)
-    w = total_w + _px(24, scale) + 4
-    h = total_h + _px(20, scale) + _px(12, scale)
-    dark = np.zeros((h, w, 3), np.uint8)
-    light = np.full((h, w, 3), 255, np.uint8)
-    _draw_logo_lockup(dark, scale)
-    _draw_logo_lockup(light, scale)
-    showing = (light.astype(np.float32) - dark.astype(np.float32)).max(axis=2) / 255.0
-    cover = np.clip(1.0 - showing, 0.0, 1.0).astype(np.float32)
-    colour = np.clip(dark.astype(np.float32) / np.maximum(cover, 1e-3)[:, :, None], 0, 255)
-    colour = colour.astype(np.uint8)
-    keep = np.float32(1.0) - cover
-    for array in (colour, keep, cover):
-        array.flags.writeable = False  # shared by every frame from here on
-    return colour, keep, cover
-
-
-def _draw_logo_lockup(canvas: np.ndarray, scale: float = 1.0) -> None:
-    height, width = canvas.shape[:2]
-    glyph_h = _px(20, scale)
-    image, alpha = _logo_glyph(glyph_h)
-    total_w, _ = logo_size(scale)
-    x = width - _px(24, scale) - total_w
-    # Baseline shared with the footer; the whole mark stays inside the band
-    # the choosers leave beneath their cards.
-    baseline = height - _px(20, scale)
-    _paste(canvas, image, alpha, x, baseline - glyph_h + _px(2, scale))
-    text_x = x + alpha.shape[1] + _px(10, scale)
-    # The wordmark, tracked a little, then the accent bar under it.
-    text_scale = 0.75 * scale
-    cursor = text_x
-    for letter in "HANDY":
-        draw_text(canvas, letter, (cursor, baseline), INK, scale=text_scale,
-                  thickness=2, outline=False)
-        cursor += text_width(letter, text_scale, 2, False) + _px(2, scale)
-    cv2.line(canvas, (text_x, baseline + _px(7, scale)),
-             (cursor - _px(2, scale), baseline + _px(7, scale)), ACCENT, _px(2, scale),
-             cv2.LINE_AA)
+    margin = screen_margin(height, scale)
+    logo_w, logo_h = logo_size(scale)
+    if corner is None:
+        baseline = footer_baseline(height, scale)
+        right = width - margin
+    else:
+        right, baseline = corner
+    x = right - logo_w
+    glyph = _logo_glyph(_px(16, scale))
+    gy = baseline - glyph.shape[0] + _px(1, scale)
+    x0, y0 = max(x, 0), max(gy, 0)
+    x1, y1 = min(x + glyph.shape[1], width), min(gy + glyph.shape[0], height)
+    if x1 > x0 and y1 > y0:
+        region = canvas[y0:y1, x0:x1]
+        cover = glyph[y0 - gy:y1 - gy, x0 - x:x1 - x].astype(np.float32) * np.float32(
+            alpha / 255.0)
+        ink = np.empty_like(region)
+        ink[:] = color
+        cv2.blendLinear(region, ink, 1.0 - cover, cover, dst=region)
+    write_faded(canvas, WORDMARK, (x + glyph.shape[1] + _px(8, scale), baseline), TITLE_3,
+                color, scale, alpha)
 
 
 #: The crosshair at rest: white, a little quieter than a label, so the green of
@@ -1654,15 +1593,17 @@ def draw_hints(canvas: np.ndarray, items: Sequence[tuple[str, str]], scale: floa
     if not items or alpha <= 0.0:
         return
     height, width = canvas.shape[:2]
-    margin = _px(24, scale)
+    margin = screen_margin(height, scale)
     text_w = hints_width(items, scale)
     if capsule:
         pill_h = _px(40, scale)
         pill = Rect((width - text_w) // 2 - _px(20, scale), height - margin - pill_h,
                     text_w + 2 * _px(20, scale), pill_h)
     else:
-        pill = Rect(margin - _px(4, scale), height - margin - _px(28, scale),
-                    text_w + _px(8, scale), _px(32, scale))
+        pill_h = _px(32, scale)
+        top = footer_baseline(height, scale) - round(
+            (pill_h + type_size(FOOTNOTE, scale) * CAP_HEIGHT) / 2)
+        pill = Rect(margin - _px(4, scale), top, text_w + _px(8, scale), pill_h)
     x0, y0 = max(pill.x - 2, 0), max(pill.y - 2, 0)
     x1, y1 = min(pill.right + 2, width), min(pill.bottom + 2, height)
     if x1 <= x0 or y1 <= y0:
@@ -2086,6 +2027,46 @@ def _chrome_layers(width: int, height: int, radius: int,
     return keep, cover, shade
 
 
+def _wrapped(text: str, scale: float, width: int, thickness: int = 1,
+             outline: bool = False) -> list[str]:
+    """Greedy word wrap against the width the text will actually be drawn at."""
+    lines: list[str] = []
+    line = ""
+    for word in text.split():
+        candidate = f"{line} {word}".strip()
+        if text_width(candidate, scale, thickness, outline) > width and line:
+            lines.append(line)
+            line = word
+        else:
+            line = candidate
+    if line:
+        lines.append(line)
+    return lines
+
+
+def _fitted(text: str, scale: float, width: int) -> str:
+    """The text, or as many of its words as fit followed by an ellipsis."""
+    if text_width(text, scale, 1, outline=False) <= width:
+        return text
+    words = text.split()
+    while words:
+        words.pop()
+        candidate = " ".join(words) + " ..."
+        if text_width(candidate, scale, 1, outline=False) <= width:
+            return candidate
+    return "..."
+
+
+@lru_cache(maxsize=8)
+def _thumbnail_mask(width: int, height: int, radius: int,
+                    all_corners: bool = False) -> np.ndarray:
+    """Rounded top corners for the art; the body squares off its foot."""
+    mask = np.zeros((height, width), np.uint8)
+    cv2.fillPoly(mask, [_rounded(0, 0, width, height if all_corners else height + radius,
+                                 radius)], 255)
+    return mask
+
+
 # --- calibration ------------------------------------------------------------
 #
 # Setup is the first thing a new player sees, so it is composed like a screen
@@ -2323,21 +2304,24 @@ def _draw_setup_pips(canvas: np.ndarray, panel: Rect, learned: int, hits: int,
 #: reads as a line-up; more than this and the cards grow too narrow for a title.
 CARDS_PER_ROW = 4
 
+#: A card's corners, the gap between cards, and the room kept at the foot of
+#: the screen for the hints and the wordmark, in 720-tall units.
+CARD_RADIUS, CARD_GAP, FOOTER_BAND = 22, 20, 48
 
-def chooser_area(window: Rect, scale: float = 1.0, margin: int | None = None) -> Rect:
-    """Where the chooser's cards may go: the band the game plays in.
+#: The camera's picture on the chooser, in 720-tall units (see app.PIP_HEIGHT).
+CHOOSER_PICTURE = 96
 
-    The rows ``app.layout_for`` gives the play area - below the camera in the
-    top-left corner, above the footer - so the cards never run under the
-    camera. Across, it reaches the margin the camera and QUIT stand on, so the
-    grid lines up with both.
-    """
-    def unit(value: float) -> int:
-        return max(1, round(value * scale))
 
-    margin = unit(16) if margin is None else margin
-    top = window.y + unit(16) + window.height // 4 + unit(28)
-    bottom = window.bottom - unit(56)
+def chooser_area(window: Rect, scale: float = 1.0, margin: int | None = None,
+                 top: int | None = None) -> Rect:
+    """Where the chooser's cards may go: under the row the camera's picture,
+    the title and Quit share, above the hints, and across to the margins the
+    picture and Quit stand on, so the grid lines up with both."""
+    margin = screen_margin(window.height, scale) if margin is None else margin
+    if top is None:
+        top = window.y + margin + _px(CHOOSER_PICTURE, scale)
+    top += _px(36, scale)
+    bottom = window.bottom - margin - _px(FOOTER_BAND, scale)
     return Rect(window.x + margin, top, max(1, window.width - 2 * margin),
                 max(1, bottom - top))
 
@@ -2352,7 +2336,7 @@ def map_cards(window: Rect, count: int, scale: float = 1.0,
     be filled with a placeholder: a grid with holes in it looks unfinished.
     """
     area = area or chooser_area(window, scale)
-    gap = round(20 * scale)
+    gap = _px(CARD_GAP, scale)
     columns = count if count <= CARDS_PER_ROW else (count + 1) // 2
     columns = max(1, columns)
     rows = (count + columns - 1) // columns
@@ -2380,37 +2364,6 @@ def map_cards(window: Rect, count: int, scale: float = 1.0,
         for left in lefts:
             cards.append(Rect(left, top + row * (height + gap), width, height))
     return tuple(cards)
-
-
-def _wrapped(text: str, scale: float, width: int, thickness: int = 1,
-             outline: bool = False) -> list[str]:
-    """Greedy word wrap against the width the text will actually be drawn at."""
-    lines: list[str] = []
-    line = ""
-    for word in text.split():
-        candidate = f"{line} {word}".strip()
-        if text_width(candidate, scale, thickness, outline) > width and line:
-            lines.append(line)
-            line = word
-        else:
-            line = candidate
-    if line:
-        lines.append(line)
-    return lines
-
-
-
-def _fitted(text: str, scale: float, width: int) -> str:
-    """The text, or as many of its words as fit followed by an ellipsis."""
-    if text_width(text, scale, 1, outline=False) <= width:
-        return text
-    words = text.split()
-    while words:
-        words.pop()
-        candidate = " ".join(words) + " ..."
-        if text_width(candidate, scale, 1, outline=False) <= width:
-            return candidate
-    return "..."
 
 
 # Chooser thumbnails are establishing shots: no burnt-in titles, no gameplay
@@ -2453,12 +2406,12 @@ def _normalised(panel: np.ndarray) -> np.ndarray:
     gain = min(228.0 / max(high - low, 1.0), 1.8)
     image = (panel.astype(np.float32) - low) * gain + 10.0
     # Anything the art bakes in bright green - a reticle, a hit marker - is
-    # retinted to the muted accent, so on the chooser green means one thing:
-    # the card you are aiming at.
+    # turned white: green means one thing in this game, a gun that is ready,
+    # and a card is not a gun.
     b, g, r = image[:, :, 0], image[:, :, 1], image[:, :, 2]
     green = np.clip((g - np.maximum(r, b) - 30.0) / 60.0, 0, 1)[:, :, None]
-    amber = np.array((70, 140, 205), np.float32) * (g / 255.0)[:, :, None]
-    image = image * (1 - green) + amber * green
+    white = (g * 0.92)[:, :, None]
+    image = image * (1 - green) + white * green
     blurred = cv2.GaussianBlur(image, (0, 0), max(1.0, panel.shape[1] * 0.003))
     image = image + (image - blurred) * 0.6
     return np.clip(image, 0, 255).astype(np.uint8)
@@ -2467,8 +2420,8 @@ def _normalised(panel: np.ndarray) -> np.ndarray:
 @lru_cache(maxsize=16)
 def _thumbnail(emblem, title: str, width: int, height: int) -> np.ndarray:
     """A map's card art, framed clean and given the one thumbnail treatment:
-    a vignette, a light band at the top edge and a shadow at the foot, so the
-    flat map crops sit in their cards the way the rendered scheme art does."""
+    a vignette, and the foot settled towards the card's surface so the name
+    below reads as part of the same card."""
     del title  # the frame is chosen by the art's source, not its caption
     panel = _normalised(_clean_frame(emblem, width, height)).astype(np.float32)
 
@@ -2478,118 +2431,115 @@ def _thumbnail(emblem, title: str, width: int, height: int) -> np.ndarray:
     d2 = xs[None, :] ** 2 * 0.55 + ys[:, None] ** 2
     vignette = 1.0 - 0.38 * np.clip(d2 - 0.35, 0, 1.5) / 1.5
     panel *= vignette[:, :, None]
-    # A soft light band at the top edge, as if lit from above the card, and
-    # the foot darkened so the picture settles into the body below it.
-    band = max(2, int(height * 0.22))
-    lift = np.linspace(0.16, 0.0, band, dtype=np.float32)[:, None, None]
-    panel[:band] += (np.array((255, 250, 240), np.float32) - panel[:band]) * lift
-    fade = max(1, height // 4)
-    ramp = np.linspace(1.0, 0.55, fade, dtype=np.float32)[:, None, None]
-    panel[-fade:] *= ramp
+    fade = max(1, height // 3)
+    ramp = np.linspace(0.0, 0.7, fade, dtype=np.float32)[:, None, None] ** 1.6
+    panel[-fade:] = panel[-fade:] * (1 - ramp) + np.float32(SURFACE) * ramp
     panel = np.clip(panel, 0, 255).astype(np.uint8)
-    # A hairline of light along the very top: the card's edge catching it.
-    cv2.line(panel, (0, 0), (width, 0), (120, 112, 104), 1, cv2.LINE_AA)
+    panel.flags.writeable = False
     return panel
 
 
-@lru_cache(maxsize=8)
-def _thumbnail_mask(width: int, height: int, radius: int,
-                    all_corners: bool = False) -> np.ndarray:
-    """Rounded top corners for the art; the body squares off its foot."""
-    mask = np.zeros((height, width), np.uint8)
-    cv2.fillPoly(mask, [_rounded(0, 0, width, height if all_corners else height + radius,
-                                 radius)], 255)
-    return mask
+@lru_cache(maxsize=16)
+def _card_face(emblem, title: str, width: int, height: int, art_height: int
+               ) -> np.ndarray:
+    """A card without its words: the art over the surface, built once."""
+    face = np.empty((height, width, 3), np.uint8)
+    face[:] = SURFACE
+    face[:art_height] = _thumbnail(emblem, title, width, art_height)
+    face.flags.writeable = False
+    return face
+
+
+def card_art_height(rect: Rect, scale: float = 1.0) -> int:
+    """How much of a card its art takes: over half, never taller than it is
+    wide, and never so much that the words below lose their room."""
+    return int(max(rect.height * 0.38, min(rect.height * 0.58, rect.width * 0.95,
+                                           rect.height - _px(150, scale))))
 
 
 def draw_map_card(canvas: np.ndarray, rect: Rect, title: str, blurb: str,
-                  best: str, emblem, aimed: bool, scale: float = 1.0) -> None:
-    radius = _px(CORNER, scale)
-    # The art takes about half the card, never taller than it is wide, unless
-    # the card is short (two rows of them), when the body keeps the room the
-    # text needs and the art gives.
-    body_needed = _px(150, scale)
-    art_height = int(max(rect.height * 0.38,
-                         min(rect.height * 0.5, rect.height - body_needed, rect.width * 0.8)))
-    panel = _thumbnail(emblem, title, rect.width, art_height)
-    mask = _thumbnail_mask(rect.width, art_height, radius)
-    cv2.copyTo(panel, mask, canvas[rect.y:rect.y + art_height, rect.x:rect.right])
+                  best: str, emblem, lift: float = 0.0, scale: float = 1.0) -> None:
+    """One game's card: its art, its name, a line or two about it, the best.
 
-    body = Rect(rect.x, rect.y + art_height, rect.width, rect.height - art_height)
-    body_poly = _rounded(body.x, body.y - radius, body.right, body.bottom, radius)
-    body_poly[:, 1] = np.maximum(body_poly[:, 1], body.y)  # square top, round foot
-    _shade_poly(canvas, body_poly, PANEL, PANEL_DEEP)
+    ``lift`` (0 to 1) is how far along the card is to being the one the
+    crosshair is on: it rises a little on a soft shadow, and a white ring
+    stands just off it.
+    """
+    radius = _px(CARD_RADIUS, scale)
+    rect = Rect(rect.x, rect.y - round(lift * _px(6, scale)), rect.width, rect.height)
+    if lift > 0.0:
+        _panel_shadow(canvas, rect, radius, _px(10 + 10 * lift, scale))
+    art_height = card_art_height(rect, scale)
+    height, width = canvas.shape[:2]
+    face = _card_face(emblem, title, rect.width, rect.height, art_height)
+    _composite(canvas, rect, face[max(0, -rect.y):max(0, min(rect.height, height - rect.y)),
+                                  max(0, -rect.x):max(0, min(rect.width, width - rect.x))],
+               radius)
 
-    # The accent rule between art and body, with a short bright tab at the left
-    # that lines up with the text margin below it.
-    pad = round(18 * scale)
-    accent_rule(canvas, body.y, body.x + 1, body.right - 1, EDGE, 1)
-    cv2.line(canvas, (body.x + pad, body.y), (body.x + pad + _px(46, scale), body.y),
-             ARMED if aimed else ACCENT, _px(2, scale), cv2.LINE_AA)
-
-    # The card body is a flat panel, so this text needs no halo - and at this
-    # size the halo would be thicker than the strokes it is meant to set off.
-    blurb_scale = 0.5 * scale
-    compact = body.height / scale < 165  # two rows of cards: tighter leading
-    title_at, first, step = (36, 62, 20) if compact else (42, 74, 22)
-    # The title is set as large as the card allows, and never runs off it.
-    title_scale = 0.85 * scale
-    while (title_scale > 0.5 * scale
-           and text_width(title, title_scale, 2, False) > body.width - 2 * pad):
-        title_scale *= 0.95
-    draw_text(canvas, title, (body.x + pad, body.y + round(title_at * scale)), INK,
-              scale=title_scale, thickness=2, outline=False)
-    room = int((body.height / scale - first - 38) // step) + 1  # lines above the foot
-    lines = _wrapped(blurb, blurb_scale, body.width - 2 * pad)
-    if len(lines) > max(1, min(5, room)):
+    pad = _px(20, scale)
+    inner = rect.width - 2 * pad
+    x = rect.x + pad
+    name = title_case(title)
+    style = TITLE_2
+    if measure(name, style, scale) > inner:
+        style = TITLE_3
+    write(canvas, fit(name, style, inner, scale), (x, rect.y + art_height + _px(34, scale)),
+          style, LABEL, scale)
+    best_at = rect.bottom - _px(20, scale)
+    first = rect.y + art_height + _px(60, scale)
+    step = _px(20, scale)
+    room = max(1, (best_at - _px(24, scale) - first) // step + 1)
+    lines = wrap(blurb, SUBHEAD, inner, scale)
+    if len(lines) > room:
         # Cut at a word, and say so, rather than stop mid-thought.
-        lines = lines[:max(1, min(5, room))]
-        lines[-1] = _fitted(lines[-1] + " ...", blurb_scale, body.width - 2 * pad)
+        lines = lines[:room]
+        lines[-1] = fit(lines[-1] + " …", SUBHEAD, inner, scale)
     for index, line in enumerate(lines):
-        draw_text(canvas, line,
-                  (body.x + pad, body.y + round((first + index * step) * scale)), MUTED,
-                  scale=blurb_scale, thickness=1, outline=False)
-    cv2.circle(canvas, (body.x + pad + _px(3, scale), body.bottom - round(21 * scale)),
-               _px(3, scale), ACCENT, -1, cv2.LINE_AA)
-    draw_caption(canvas, _fitted(best, 0.55 * scale, body.width - 2 * pad - _px(14, scale)),
-                 (body.x + pad + _px(14, scale), body.bottom - round(16 * scale)),
-                 MUTED, 0.5 * scale)
+        write(canvas, line, (x, first + index * step), SUBHEAD, LABEL_SECONDARY, scale)
+    write(canvas, fit(best, FOOTNOTE, inner, scale), (x, best_at), FOOTNOTE,
+          LABEL_TERTIARY, scale)
 
-    if aimed:
-        glow_stroke(canvas, rect, ARMED, radius, _px(3, scale))
-    else:
-        stroke_rounded(canvas, rect, EDGE, radius, _px(1, scale))
-
+    if lift > 0.0:
+        ring = _px(5, scale)
+        tone = tuple(int(c * lift) for c in LABEL)
+        hairline(canvas, Rect(rect.x - ring, rect.y - ring, rect.width + 2 * ring,
+                              rect.height + 2 * ring), radius + ring, tone, _px(2, scale))
+    hairline(canvas, rect, radius, hairline_over(SURFACE))
 
 
 def draw_card_select(canvas: np.ndarray, cards: tuple, entries: tuple,
-                     aimed: int | None, title: str, hint: str,
-                     scale: float = 1.0) -> None:
-    """A row of cards to choose between, one of them possibly picked out."""
+                     aimed: int | None, title: str, subtitle: str,
+                     scale: float = 1.0, lifts: Sequence[float] | None = None,
+                     top: int | None = None) -> None:
+    """A row of cards to choose between, the one aimed at lifted.
+
+    ``lifts`` says how far each card has risen (the app eases them); without
+    it the aimed card is simply up. The title and the line under it are
+    centred in the row above the cards, from ``top``.
+    """
     draw_backdrop(canvas)
     height, width = canvas.shape[:2]
-    # The title treatment: the title between two short accent rules and the
-    # hint beneath, centred in the band above the cards - the band the camera
-    # sits at the left of, so the rules stop well short of it.
-    cards_top = min((rect.y for rect in cards), default=height // 4)
-    band_top, band_bottom = _px(16, scale), cards_top - _px(28, scale)
-    title_y = max(_px(40, scale), (band_top + band_bottom) // 2 - _px(4, scale))
-    title_scale = 0.9 * scale
-    title_w = text_width(title, title_scale)
-    span = min(title_w + _px(220, scale), width - 2 * (width // 4 + _px(64, scale)))
-    if span > title_w + _px(80, scale):
-        accent_rule(canvas, title_y - _px(9, scale), (width - span) // 2,
-                    (width + span) // 2, EDGE, 1, gap=title_w + _px(48, scale))
-    _centred_text(canvas, title, title_y, INK, title_scale)
-    _centred_text(canvas, hint, min(title_y + round(36 * scale), cards_top - _px(14, scale)),
-                  ARMED, 0.6 * scale)
+    margin = screen_margin(height, scale)
+    top = margin if top is None else top
+    band = _px(CHOOSER_PICTURE, scale)
+    write(canvas, title, (width // 2, top + band // 2 + _px(2, scale)), TITLE_1, LABEL,
+          scale, align=CENTRE)
+    write(canvas, subtitle, (width // 2, top + band // 2 + _px(28, scale)), SUBHEAD,
+          LABEL_SECONDARY, scale, align=CENTRE)
     for index, (rect, entry) in enumerate(zip(cards, entries)):
-        draw_map_card(canvas, rect, *entry, aimed=index == aimed, scale=scale)
+        lift = (lifts[index] if lifts is not None and index < len(lifts)
+                else float(index == aimed))
+        draw_map_card(canvas, rect, *entry, lift=lift, scale=scale)
     draw_logo(canvas, scale)
 
 
+CHOOSER_TITLE = "Choose a Game"
+CHOOSER_SUBTITLE = "Point at a game and fire."
+
+
 def draw_map_select(canvas: np.ndarray, cards: tuple, entries: tuple,
-                    aimed: int | None, scale: float = 1.0) -> None:
+                    aimed: int | None, scale: float = 1.0,
+                    lifts: Sequence[float] | None = None, top: int | None = None) -> None:
     """The map chooser: shoot the one you want to play."""
-    draw_card_select(canvas, cards, entries, aimed,
-                     "CHOOSE YOUR GROUND", "shoot a card to play it", scale)
+    draw_card_select(canvas, cards, entries, aimed, CHOOSER_TITLE, CHOOSER_SUBTITLE,
+                     scale, lifts, top)
