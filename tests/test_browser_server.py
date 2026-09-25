@@ -438,10 +438,10 @@ def test_stale_actions_are_answered_not_refused(server):
 
 def test_a_short_window_does_not_end_the_game(server):
     # A stage 1200 by 100 pixels: every warm-up frame used to be refused.
-    assert start(server, viewAspect=20)["state"] == "playing"
-    session = start(server, control="pistol", viewAspect=12)
-    for aspect in (12, 0.1, None):
-        status, data, _ = frame(server, {"id": session["id"], "viewAspect": aspect})
+    assert start(server, viewSize=[2000, 100])["state"] == "playing"
+    session = start(server, control="pistol", viewSize=[1200, 100])
+    for view in ([1200, 100], [90, 900], None):
+        status, data, _ = frame(server, {"id": session["id"], "viewSize": view})
         assert status == 200 and data["state"] == "calibration"
 
 

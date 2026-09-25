@@ -51,16 +51,35 @@ def number(value, low, high):
     return value
 
 
-def stage_size(aspect):
-    """The canvas (width, height) for a stage of this width-to-height shape.
+#: The most pixels a frame is drawn with: a 1920 by 1080 frame's worth. Drawing
+#: and encoding grow with the area - at this size about 5 to 7 ms for the
+#: busiest map on an M-series Mac, against 2 to 3 at 960 wide - and a Retina
+#: stage would otherwise ask for four times as many.
+MAX_PIXELS = 1920 * 1080
+#: The crosshair's scale on a 960-wide frame; it grows with the frame.
+CROSSHAIR = 0.75
 
+
+def stage_size(size):
+    """The canvas (width, height) to draw a stage ``size`` device pixels big.
+
+    The stage's own shape and resolution, so the page can show each frame
+    pixel for pixel instead of stretching it: never fewer pixels than the
+    960-wide frame the maps were designed at, nor more than ``MAX_PIXELS``.
     Shapes beyond 1:4 and 8:1 are drawn at the nearest one the renderer
     supports. A short or narrow window is not a mistake to refuse: the page
-    sends its shape with every frame, and one refusal would end the game.
+    sends its size with every frame, and one refusal would end the game.
     """
-    aspect = min(max(number(aspect, 0, math.inf), 0.25), 8)
-    height = min(900, round(WIDTH / aspect))
-    return round(height * aspect), height
+    if not isinstance(size, (list, tuple)) or len(size) != 2:
+        raise ValueError("Expected a stage width and height")
+    width, height = (number(side, 0, math.inf) for side in size)
+    aspect = min(max(width / height if height else 8, 0.25), 8)
+    # The designed frame: 960 wide, or 900 tall for a stage narrower than that.
+    base = min(900, WIDTH / aspect)
+    zoom = min(width / (base * aspect), height / base)
+    zoom = max(1, min(zoom, math.sqrt(MAX_PIXELS / (base * base * aspect))))
+    height = round(base * zoom)
+    return min(round(height * aspect), MAX_PIXELS // height), height
 
 
 def jpeg(image):
@@ -135,10 +154,11 @@ def saved_rig(saved):
 
 class BrowserSession:
     def __init__(self, config):
-        aspect = config.get("viewAspect")
-        self.width, self.height = stage_size(
-            WIDTH / HEIGHT if aspect is None else aspect
-        )
+        view = config.get("viewSize")
+        # The size the stage last asked for, and the size frames are drawn at:
+        # they differ while a round laid out for the old size plays on.
+        self.view = stage_size((WIDTH, HEIGHT) if view is None else view)
+        self.width, self.height = self.view
         self.map = maps.by_key(config.get("map", maps.DEFAULT.key))
         if self.map.key not in maps.keys():
             raise ValueError("Choose a game from the arcade")
@@ -204,6 +224,22 @@ class BrowserSession:
             self.stream.close()
             self.stream = None
 
+    @property
+    def zoom(self):
+        """How much bigger each frame is than the 960-wide one maps were made at."""
+        return max(self.width / WIDTH, self.height / 900)
+
+    def _resize(self, size):
+        """Draw at ``size`` from now on; False if that is the size already."""
+        if size == (self.width, self.height):
+            return False
+        self.width, self.height = size
+        self.canvas = np.zeros((self.height, self.width, 3), np.uint8)
+        self.options = replace(
+            self.options, area=Rect(0, 0, *size), scale=self.height / 720
+        )
+        return True
+
     def _new_round(self):
         round_ = self.map.create(self.options)
         # The desktop rifle infers a frame including its surrounding HUD.
@@ -233,6 +269,9 @@ class BrowserSession:
 
     def _play(self):
         """A fresh round of the chosen map, on whatever aim setup settled on."""
+        # A round is laid out for one frame size, so a stage resized during
+        # one - into or out of full screen, say - is drawn sharp from the next.
+        self._resize(self.view)
         self.round = self._new_round()
         self.state = "playing"
         self.notice = ""
@@ -332,18 +371,13 @@ class BrowserSession:
         if self.state not in ("paused", "over"):
             self.clock += dt
         now = self.clock
-        # A stage with no size yet measures 0 by 0, which JSON sends as null.
-        aspect = data.get("viewAspect")
-        if self.state == "calibration" and aspect is not None:
-            width, height = stage_size(aspect)
-            if (width, height) != (self.width, self.height):
-                self.width, self.height = width, height
-                self.canvas = np.zeros((height, width, 3), np.uint8)
-                self.options = replace(
-                    self.options, area=Rect(0, 0, width, height), scale=height / 720
-                )
-                if self.calibration:
-                    self.calibration.hits.clear()
+        # A stage with no size yet measures 0 by 0; the page leaves it out.
+        view = data.get("viewSize")
+        if view is not None:
+            self.view = stage_size(view)
+        if self.state == "calibration" and self._resize(self.view):
+            if self.calibration:
+                self.calibration.hits.clear()
         if self.stream and camera:
             # The UI sends 640x480 JPEGs. Reject other encodings and oversized frames.
             if not camera.startswith(b"\xff\xd8"):
@@ -409,7 +443,7 @@ class BrowserSession:
                     s.aim.position[1] * self.height,
                     s.aim.armed,
                     None,
-                    0.75,
+                    CROSSHAIR * self.zoom,
                     pull=s.aim.travel,
                     fire_at=self.scheme.fire_above,
                 )
@@ -441,7 +475,7 @@ class BrowserSession:
                     *crosshair,
                     aim.armed if aim else True,
                     now - self.last_shot,
-                    0.75,
+                    CROSSHAIR * self.zoom,
                     pull=aim.travel if aim else 0,
                     fire_at=self.scheme.fire_above if self.scheme else 0.65,
                 )

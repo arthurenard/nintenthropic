@@ -231,12 +231,15 @@ function drawHandGraph(hands) {
     });
   }
 }
-function stageAspect() {
-  // A stage with no size yet measures 0 by 0. Leave its shape out rather than
-  // send NaN, which JSON turns into null; the server keeps the current shape.
+function stageSize() {
+  // In device pixels, so the server draws the game at the resolution it is
+  // shown at rather than one the browser stretches. A stage with no size yet
+  // measures 0 by 0: leave it out, and the server keeps the current size.
   const rect = $("stage").getBoundingClientRect();
-  const aspect = rect.width / rect.height;
-  return Number.isFinite(aspect) && aspect > 0 ? aspect : undefined;
+  const size = [rect.width, rect.height].map((side) =>
+    Math.round(side * devicePixelRatio),
+  );
+  return size[0] > 0 && size[1] > 0 ? size : undefined;
 }
 function stopCamera() {
   if (media) media.getTracks().forEach((track) => track.stop());
@@ -335,7 +338,7 @@ async function start() {
     // The Start button went with the lobby: move focus to what replaced it.
     $("game-title").focus();
     const created = await request("/api/start", {
-      viewAspect: stageAspect(),
+      viewSize: stageSize(),
       map: selectedMap,
       control: selectedControl,
       enemy: $("enemy").value,
@@ -647,7 +650,7 @@ async function loop(run) {
         "/api/frame",
         packFrame(
           {
-            viewAspect: stageAspect(),
+            viewSize: stageSize(),
             id: session.id,
             ...pointer,
             fire: shot,
