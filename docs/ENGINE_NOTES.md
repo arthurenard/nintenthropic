@@ -578,11 +578,22 @@ signature between the entry point and the camera is the real one.
 MediaPipe is pinned to the 0.10 line: version 1.x aborts on macOS with
 `Check failed: service_ Service is unavailable` when its Metal path initialises.
 
-The project is not installed into the virtualenv (`package = false`); it is
-imported from the checkout. That was first adopted because the project lived in
-an iCloud-synced Desktop, which marks files under a dot-directory as hidden —
-and CPython skips a hidden `.pth` file, so an editable install broke minutes
-after a successful `uv sync`. Keep the checkout out of iCloud-synced folders.
+Handy is an ordinary package built with hatchling. `uv sync` installs it into
+`.venv` in editable mode, which is what gives `uv run handy` its command; the
+tests still import the checkout itself (`pythonpath = ["."]`), and
+`uv run python -m handy` works from the checkout root as before. `uv build`
+makes the wheel, and the wheel carries everything the game reads at run time:
+the browser page in `handy/web/` is served from the installed package, and
+nothing else is loaded from beside the code. The version is written in both
+`pyproject.toml` and `handy/__init__.py`; `tests/test_packaging.py` keeps the
+two equal and checks that the console script names a function that exists.
+
+Keep the checkout out of iCloud-synced folders such as the Desktop. iCloud marks
+files under a dot-directory as hidden, CPython skips a hidden `.pth` file, and
+so the editable install stops working minutes after a successful `uv sync`:
+`uv run handy` no longer finds the package, while `uv run python -m handy` from
+the checkout root carries on. That is why the project was once not installed at
+all (`package = false`), back when it lived on an iCloud Desktop.
 
 ## Notes
 

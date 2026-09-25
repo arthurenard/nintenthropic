@@ -7,18 +7,27 @@ requires-python = ">=3.10,<3.14"
 dependencies = [
     # MediaPipe 1.x aborts on macOS (Metal graph service unavailable), so stay on 0.10.
     "mediapipe==0.10.35",
+    "numpy",
     "opencv-python>=4.10",
 ]
 
+[project.scripts]
+handy = "handy.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Everything under handy/ that .gitignore does not exclude - the browser page in
+# handy/web included, which is served straight from the installed package.
+packages = ["handy"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/handy", "/tests", "/docs", "/README.md"]
+
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.6"]
-
-[tool.uv]
-# Dependencies only: the app is imported straight from this directory. Installing
-# it (even editable) would rely on a .pth file inside .venv, and iCloud Drive
-# flags everything under a dot-directory in a synced folder (such as the
-# Desktop) as hidden -- which CPython then skips, silently breaking the import.
-package = false
 
 [tool.ruff]
 line-length = 88
@@ -34,4 +43,5 @@ ignore = ["E501", "B905"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The suite imports the checkout itself, never a copy installed elsewhere.
 pythonpath = ["."]
