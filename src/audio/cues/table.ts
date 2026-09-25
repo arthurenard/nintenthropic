@@ -70,6 +70,32 @@ import {
   heartbeatBeat,
   horseNeigh,
 } from "./creatures";
+import {
+  bossIntro,
+  duelWhistle,
+  gameOver,
+  goldenUnlock,
+  pianoNote,
+  pianoTune,
+  quickDraw,
+  secretFound,
+  slowmoBoom,
+  streakUp,
+  waveClear,
+  waveStart,
+} from "./music";
+import { calibDone, calibHit, uiConfirm, uiTap } from "./ui";
+
+/** piano_note_1 … piano_note_8: G major pentatonic, G4 to B5 (see PIANO_SCALE). */
+const pianoNotes: Record<string, CueSpec> = Object.fromEntries(
+  [1, 2, 3, 4, 5, 6, 7, 8].map((k) => [
+    `piano_note_${k}`,
+    {
+      recipe: pianoNote(k), pack: "western", bus: "world", level: -10, reverb: 0.25,
+      priority: 1, maxInstances: 6, vary: 0, expect: [1.0, 2.2],
+    } satisfies CueSpec,
+  ]),
+);
 
 export type BusName = "sfx" | "world" | "ui";
 /** Sounds are synthesised a pack at a time: "core" at start, a game's pack when it loads. */
@@ -294,6 +320,72 @@ export const CUES: Record<string, CueSpec> = {
   death_player: {
     recipe: deathPlayer, pack: "western", bus: "sfx", level: -4, reverb: 0.1,
     priority: 3, maxInstances: 1, vary: 0, expect: [2.5, 3.8],
+  },
+
+  // --- music: the saloon piano and the stingers (pitch exact: vary 0) ------------------
+  ...pianoNotes,
+  piano_tune: {
+    recipe: pianoTune, pack: "western", bus: "world", level: -10, reverb: 0.25,
+    priority: 1, maxInstances: 1, vary: 0, expect: [5, 9],
+  },
+  wave_start: {
+    recipe: waveStart, pack: "western", bus: "sfx", level: -7, reverb: 0.1,
+    priority: 2, maxInstances: 1, vary: 0, expect: [2.5, 5.5],
+  },
+  wave_clear: {
+    recipe: waveClear, pack: "western", bus: "sfx", level: -9, reverb: 0.1,
+    priority: 2, maxInstances: 1, vary: 0, expect: [1.2, 4],
+  },
+  boss_intro: {
+    recipe: bossIntro, pack: "western", bus: "sfx", level: -7, reverb: 0.1,
+    priority: 2, maxInstances: 1, vary: 0, expect: [3.5, 7.5],
+  },
+  duel_whistle: {
+    recipe: duelWhistle, pack: "western", bus: "sfx", level: -8, reverb: 0.1,
+    priority: 2, maxInstances: 1, vary: 0, expect: [4, 8.5],
+  },
+  quick_draw: {
+    recipe: quickDraw, pack: "western", bus: "ui", level: -11,
+    priority: 2, maxInstances: 2, vary: 0, expect: [0.5, 1.2],
+  },
+  streak_up: {
+    recipe: streakUp, pack: "western", bus: "ui", level: -13,
+    priority: 2, maxInstances: 2, vary: 0, minGap: 0.05, expect: [0.3, 0.9],
+  },
+  secret_found: {
+    recipe: secretFound, pack: "western", bus: "ui", level: -10,
+    priority: 2, maxInstances: 1, vary: 0, expect: [1.2, 2.6],
+  },
+  golden_unlock: {
+    recipe: goldenUnlock, pack: "western", bus: "ui", level: -9,
+    priority: 2, maxInstances: 1, vary: 0, expect: [1.5, 4],
+  },
+  game_over: {
+    recipe: gameOver, pack: "western", bus: "ui", level: -9,
+    priority: 3, maxInstances: 1, vary: 0, expect: [2.5, 6],
+  },
+  /** Internal: the boom under setFilter("slowmo"). */
+  slowmo_boom: {
+    recipe: slowmoBoom, pack: "core", bus: "sfx", level: -6,
+    priority: 3, maxInstances: 1, vary: 0, expect: [1.5, 3.5],
+  },
+
+  // --- the interface: soft and short -----------------------------------------------------
+  ui_tap: {
+    recipe: uiTap, pack: "core", bus: "ui", level: -20,
+    priority: 1, maxInstances: 2, vary: 0.02, minGap: 0.03, expect: [0.03, 0.15],
+  },
+  ui_confirm: {
+    recipe: uiConfirm, pack: "core", bus: "ui", level: -17,
+    priority: 1, maxInstances: 2, vary: 0, minGap: 0.05, expect: [0.2, 0.6],
+  },
+  calib_hit: {
+    recipe: calibHit, pack: "core", bus: "ui", level: -16,
+    priority: 2, maxInstances: 3, vary: 0, minGap: 0.03, expect: [0.2, 0.6],
+  },
+  calib_done: {
+    recipe: calibDone, pack: "core", bus: "ui", level: -14,
+    priority: 2, maxInstances: 1, vary: 0, expect: [0.6, 1.6],
   },
 };
 

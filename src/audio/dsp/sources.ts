@@ -51,11 +51,16 @@ export function chirp(n: number, sr: number, f0: number, f1: number, curve = 1, 
   const out = new Float32Array(n);
   let ph = phase;
   const ratio = f1 / f0;
+  let w = 0;
   for (let i = 0; i < n; i++) {
-    const u = Math.pow(i / Math.max(1, n - 1), curve);
-    const f = f0 * Math.pow(ratio, u);
+    // The glide is re-aimed every 16 samples: two powers per sample were a
+    // real share of every boom and thump in the library.
+    if ((i & 15) === 0) {
+      const u = Math.pow(i / Math.max(1, n - 1), curve);
+      w = (2 * Math.PI * f0 * Math.pow(ratio, u)) / sr;
+    }
     out[i] = Math.sin(ph);
-    ph += (2 * Math.PI * f) / sr;
+    ph += w;
   }
   return out;
 }
@@ -169,6 +174,11 @@ export interface StringOptions {
   excitation?: Mono;
   /** Low-pass of the default noise excitation, Hz: the felt of a hammer, the flesh of a finger. */
   hardness?: number;
+  /**
+   * Strike with a smooth pulse this many seconds wide (a felt hammer)
+   * instead of a period of noise (a pick or a finger). Narrower is harder.
+   */
+  pulse?: number;
   /** Stop after this many seconds (a damper), with a short release. */
   length?: number;
   /** Seconds of the damped release after ``length``. */
@@ -212,6 +222,15 @@ export function addString(out: Mono, sr: number, rng: Rng, at: number, freq: num
   const line = new Float32Array(N);
   if (o.excitation) {
     for (let i = 0; i < N; i++) line[i] = o.excitation[i % o.excitation.length]!;
+  } else if (o.pulse) {
+    // A raised-cosine bump (the felt's contact), with a trace of noise for
+    // the texture of the strike.
+    const w = Math.min(N - 1, Math.max(2, o.pulse * sr));
+    const c = N / 2;
+    for (let i = 0; i < N; i++) {
+      const x = (i - c) / w;
+      line[i] = (Math.abs(x) < 1 ? 0.5 + 0.5 * Math.cos(Math.PI * x) : 0) + 0.06 * (2 * rng.next() - 1);
+    }
   } else {
     for (let i = 0; i < N; i++) line[i] = 2 * rng.next() - 1;
     const hard = o.hardness ?? 6000;
@@ -332,6 +351,42 @@ export function formants(src: Mono, sr: number, list: Formant[]): Mono {
   for (const f of list) {
     const band = svf(Float32Array.from(src), sr, "bp", f.freq, f.q, 32);
     for (let i = 0; i < out.length; i++) out[i]! += f.amp * band[i]!;
+  }
+  return out;
+}
+
+/** PolyBLEP: the correction that removes a sawtooth's aliasing at each wrap. */
+function polyBlep(ph: number, dt: number): number {
+  if (ph < dt) {
+    const x = ph / dt;
+    return x + x - x * x - 1;
+  }
+  if (ph > 1 - dt) {
+    const x = (ph - 1) / dt;
+    return x * x + x + x + 1;
+  }
+  return 0;
+}
+
+/**
+ * A band-limited sawtooth (``width`` 0) or pulse (``width`` 0..1, the
+ * difference of two saws) following a frequency track: the buzz of a reed.
+ */
+export function saw(n: number, sr: number, freq: Float32Array | number, width = 0, phase = 0): Mono {
+  const out = new Float32Array(n);
+  let ph = phase;
+  for (let i = 0; i < n; i++) {
+    const f = typeof freq === "number" ? freq : freq[i]!;
+    const dt = f / sr;
+    let v = 2 * ph - 1 - polyBlep(ph, dt);
+    if (width > 0) {
+      let p2 = ph + width;
+      if (p2 >= 1) p2 -= 1;
+      v -= 2 * p2 - 1 - polyBlep(p2, dt);
+    }
+    out[i] = v;
+    ph += dt;
+    if (ph >= 1) ph -= 1;
   }
   return out;
 }

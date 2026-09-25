@@ -52,35 +52,44 @@ export function room(input: Mono, sr: number, rng: Rng, o: RoomOptions): [Mono, 
     const ratio = hiGain / loGain;
     return (1 - ratio) / (1 + ratio);
   });
-  const lpState = new Float64Array(8);
-  const outs = new Float64Array(8);
-  const signs = [1, -1, 1, -1, 1, 1, -1, -1];
+  // The eight lines are unrolled into locals: this loop runs for every
+  // sample of every stinger, and arrays of arrays indexed per line cost
+  // several times more than the arithmetic itself.
+  const [d0, d1, d2, d3, d4, d5, d6, d7] = lines as [Mono, Mono, Mono, Mono, Mono, Mono, Mono, Mono];
+  const [n0, n1, n2, n3, n4, n5, n6, n7] = lens as [number, number, number, number, number, number, number, number];
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = gains as [number, number, number, number, number, number, number, number];
+  const [a0, a1, a2, a3, a4, a5, a6, a7] = lpA as [number, number, number, number, number, number, number, number];
+  let i0 = 0, i1 = 0, i2 = 0, i3 = 0, i4 = 0, i5 = 0, i6 = 0, i7 = 0;
+  let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0, s7 = 0;
+  const wet = 0.5 * mix;
+  const inLen = input.length;
   for (let i = 0; i < n; i++) {
-    const x = i >= pre && i - pre < input.length ? input[i - pre]! : 0;
-    let sum = 0;
-    for (let k = 0; k < 8; k++) {
-      const v = lines[k]![idx[k]!]!;
-      const a = lpA[k]!;
-      lpState[k] = (1 - a) * v * gains[k]! + a * lpState[k]!;
-      outs[k] = lpState[k]!;
-      sum += outs[k]!;
-    }
-    // Householder: y = x - (2/N) * sum(x)
-    const h = (2 / 8) * sum;
-    let l = 0;
-    let r = 0;
-    for (let k = 0; k < 8; k++) {
-      const fed = outs[k]! - h + x * 0.35;
-      const line = lines[k]!;
-      line[idx[k]!] = fed;
-      idx[k] = idx[k]! + 1 === line.length ? 0 : idx[k]! + 1;
-      if (k % 2 === 0) l += signs[k]! * outs[k]!;
-      else r += signs[k]! * outs[k]!;
-    }
-    const dry = i < input.length ? input[i]! : 0;
-    left[i] = dry + mix * l * 0.5;
-    right[i] = dry + mix * r * 0.5;
+    const x = i >= pre && i - pre < inLen ? 0.35 * input[i - pre]! : 0;
+    s0 = (1 - a0) * g0 * d0[i0]! + a0 * s0;
+    s1 = (1 - a1) * g1 * d1[i1]! + a1 * s1;
+    s2 = (1 - a2) * g2 * d2[i2]! + a2 * s2;
+    s3 = (1 - a3) * g3 * d3[i3]! + a3 * s3;
+    s4 = (1 - a4) * g4 * d4[i4]! + a4 * s4;
+    s5 = (1 - a5) * g5 * d5[i5]! + a5 * s5;
+    s6 = (1 - a6) * g6 * d6[i6]! + a6 * s6;
+    s7 = (1 - a7) * g7 * d7[i7]! + a7 * s7;
+    // Householder: every line gets its own output minus a quarter of the sum.
+    const h = 0.25 * (s0 + s1 + s2 + s3 + s4 + s5 + s6 + s7) - x;
+    d0[i0] = s0 - h; d1[i1] = s1 - h; d2[i2] = s2 - h; d3[i3] = s3 - h;
+    d4[i4] = s4 - h; d5[i5] = s5 - h; d6[i6] = s6 - h; d7[i7] = s7 - h;
+    if (++i0 === n0) i0 = 0;
+    if (++i1 === n1) i1 = 0;
+    if (++i2 === n2) i2 = 0;
+    if (++i3 === n3) i3 = 0;
+    if (++i4 === n4) i4 = 0;
+    if (++i5 === n5) i5 = 0;
+    if (++i6 === n6) i6 = 0;
+    if (++i7 === n7) i7 = 0;
+    const dry = i < inLen ? input[i]! : 0;
+    left[i] = dry + wet * (s0 - s2 + s4 - s6);
+    right[i] = dry + wet * (s1 - s3 + s5 - s7);
   }
+  void idx;
   return [left, right];
 }
 
