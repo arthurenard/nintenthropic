@@ -142,7 +142,10 @@ class FakeStream:
         return self.current
 
     def submit(self, _image):
-        pass
+        return self.current.timestamp_ms
+
+    def wait(self, _stamp, _timeout):
+        return self.current
 
     def close(self):
         self.closed = True
@@ -327,6 +330,29 @@ def test_browser_returns_hand_skeleton_and_clears_it_on_tracking_loss(monkeypatc
     assert result["hands"] == [list(hand.landmarks)]
     result = session.tick({}, session.last_tick + 1)
     assert result["hands"] == []
+
+
+def test_each_frame_is_aimed_from_its_own_reading(monkeypatch):
+    # MediaPipe answers a few milliseconds after a frame goes in. Reading the
+    # newest answer straight away aimed every frame from the one before it.
+    session, stream = camera_session(monkeypatch)
+    hands = [make_hand(index_tip=(0.2 + 0.1 * i, 0.5)) for i in range(4)]
+    asked = []
+
+    def submit(_image):
+        asked.append(len(asked) + 1)
+        return asked[-1]
+
+    def wait(stamp, timeout):
+        assert 0 < timeout <= 0.03  # bounded: a dropped frame is never answered
+        stream.current = Frame(hands=(hands[stamp - 1],), timestamp_ms=stamp)
+        return stream.current
+
+    monkeypatch.setattr(stream, "submit", submit)
+    monkeypatch.setattr(stream, "wait", wait)
+    for hand in hands:
+        result = session.tick(camera_payload(), session.last_tick + 0.033)
+        assert result["hands"] == [list(hand.landmarks)]
 
 
 def test_the_warmup_range_is_not_a_selectable_game():

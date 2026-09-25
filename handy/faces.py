@@ -16,6 +16,8 @@ import mediapipe as mp
 import numpy as np
 from mediapipe.tasks.python import BaseOptions, vision
 
+from .recognition import Results
+
 Point = tuple[float, float]
 
 
@@ -76,21 +78,24 @@ class FaceStream:
     """Recognises a face in a live video stream, the same shape as GestureStream."""
 
     def __init__(self, model_path: Path) -> None:
-        self._latest = FaceFrame()
+        self._results = Results(FaceFrame())
         self._started = time.perf_counter()
         self._clock = -1
         self._landmarker = vision.FaceLandmarker.create_from_options(
             _options(model_path, vision.RunningMode.LIVE_STREAM, self._on_result))
 
     def _on_result(self, result, _image, timestamp_ms: int) -> None:
-        self._latest = _to_frame(result, timestamp_ms)
+        self._results.put(_to_frame(result, timestamp_ms))
 
-    def submit(self, bgr_frame: np.ndarray) -> None:
+    def submit(self, bgr_frame: np.ndarray) -> int:
+        """Queue a frame; returns the stamp its answer will carry, for :meth:`wait`."""
         import cv2
 
         rgb = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        self._landmarker.detect_async(image, self._next_timestamp())
+        stamp = self._next_timestamp()
+        self._landmarker.detect_async(image, stamp)
+        return stamp
 
     def _next_timestamp(self) -> int:
         """A millisecond stamp that never repeats; see GestureStream._next_timestamp."""
@@ -99,9 +104,14 @@ class FaceStream:
         return self._clock
 
     def latest(self) -> FaceFrame:
-        return self._latest
+        return self._results.latest()
+
+    def wait(self, stamp: int, timeout: float) -> FaceFrame:
+        """See GestureStream.wait."""
+        return self._results.wait(stamp, timeout)
 
     def close(self) -> None:
+        self._results.close()  # as in GestureStream.close
         self._landmarker.close()
 
     def __enter__(self) -> "FaceStream":

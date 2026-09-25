@@ -38,6 +38,11 @@ WIDTH, HEIGHT = 960, 540
 MAX_BODY = 1_500_000
 #: Seconds without a request after which the open game is presumed abandoned.
 IDLE_TIMEOUT = 60.0
+#: Seconds a camera frame waits for its own hand (and face) reading. MediaPipe
+#: answers in about 6 ms; reading without waiting aimed from the frame before,
+#: a whole camera frame late. Bounded, because a frame the recogniser drops is
+#: never answered: after this long the newest reading there is stands in.
+RESULT_WAIT = 0.025
 
 
 def number(value, low, high):
@@ -335,8 +340,7 @@ class BrowserSession:
                 raise ValueError("Invalid camera frame") from error
             if image is None or image.shape[0] > 720 or image.shape[1] > 1280:
                 raise ValueError("Camera frame must be at most 1280 by 720")
-            self.stream.submit(image)
-            current = self.stream.latest()
+            current = self.stream.wait(self.stream.submit(image), RESULT_WAIT)
             if current.timestamp_ms != self.last_reading:
                 self.frame = current
                 self.last_reading = current.timestamp_ms

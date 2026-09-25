@@ -30,7 +30,10 @@ class FakeStream:
         return Frame()
 
     def submit(self, _image):
-        pass
+        return 0
+
+    def wait(self, _stamp, _timeout):
+        return Frame()
 
     def close(self):
         self.closed = True

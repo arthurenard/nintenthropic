@@ -87,3 +87,105 @@ def test_a_frame_after_a_long_pause_keeps_the_wall_clock(monkeypatch):
         stream.submit(np.zeros((8, 8, 3), np.uint8))
 
     assert stamps == [0, 1, 2000]
+
+
+class _Answering:
+    """A stand-in live-stream recogniser that answers only when told to."""
+
+    def __init__(self, options):
+        self.answer = options.result_callback
+        self.stamps: list[int] = []
+
+    def recognize_async(self, _image, timestamp_ms: int) -> None:
+        self.stamps.append(timestamp_ms)
+
+    def reply(self, timestamp_ms: int) -> None:
+        from types import SimpleNamespace
+
+        empty = SimpleNamespace(hand_landmarks=[], handedness=[], gestures=[])
+        self.answer(empty, None, timestamp_ms)
+
+    def close(self) -> None:
+        pass
+
+
+def _answering_stream(monkeypatch):
+    from handy import recognition
+
+    made = []
+    monkeypatch.setattr(recognition.vision.GestureRecognizer, "create_from_options",
+                        staticmethod(lambda options: made.append(_Answering(options))
+                                     or made[-1]))
+    return recognition.GestureStream(Path("unused.task")), made
+
+
+def test_waiting_returns_the_submitted_frames_own_answer(monkeypatch):
+    """Reading right after submitting got the previous frame's answer, so the
+    crosshair ran a whole camera frame behind the hand."""
+    import threading
+    import time
+
+    import numpy as np
+
+    stream, (recognizer,) = _answering_stream(monkeypatch)
+    first = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    recognizer.reply(first)
+    second = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    assert recognizer.stamps == [first, second] and second > first
+    assert stream.latest().timestamp_ms == first  # not answered yet
+    threading.Timer(0.05, recognizer.reply, (second,)).start()
+    began = time.monotonic()
+    assert stream.wait(second, 5).timestamp_ms == second
+    assert time.monotonic() - began < 2, "returns on the answer, not the timeout"
+    stream.close()
+
+
+def test_a_frame_never_answered_costs_only_the_timeout(monkeypatch):
+    """MediaPipe drops frames when it is busy, and never answers those."""
+    import time
+
+    import numpy as np
+
+    stream, (recognizer,) = _answering_stream(monkeypatch)
+    answered = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    recognizer.reply(answered)
+    dropped = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    began = time.monotonic()
+    frame = stream.wait(dropped, 0.05)
+    assert 0.04 < time.monotonic() - began < 1
+    assert frame.timestamp_ms == answered  # the newest reading stands in
+    stream.close()
+
+
+def test_a_later_answer_satisfies_a_wait_for_an_earlier_frame(monkeypatch):
+    import numpy as np
+
+    stream, (recognizer,) = _answering_stream(monkeypatch)
+    early = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    late = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    recognizer.reply(late)  # the early one was dropped
+    assert stream.wait(early, 5).timestamp_ms == late
+
+
+def test_closing_releases_a_waiter_at_once(monkeypatch):
+    """A game closed mid-frame - by another tab, or Ctrl+C - must not leave the
+    frame waiting out its timeout, or hang if the timeout were long."""
+    import threading
+    import time
+
+    import numpy as np
+
+    stream, _ = _answering_stream(monkeypatch)
+    stamp = stream.submit(np.zeros((8, 8, 3), np.uint8))
+    returned = []
+    waiter = threading.Thread(target=lambda: returned.append(stream.wait(stamp, 30)))
+    waiter.start()
+    time.sleep(0.05)
+    began = time.monotonic()
+    stream.close()
+    waiter.join(5)
+    assert not waiter.is_alive() and time.monotonic() - began < 2
+    assert returned == [stream.latest()]
+    began = time.monotonic()
+    stream.wait(stamp + 1, 30)  # and a wait after closing does not block
+    assert time.monotonic() - began < 2
