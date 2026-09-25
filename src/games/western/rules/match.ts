@@ -202,6 +202,13 @@ export class Match implements BanditWorld {
     return this.phase === "dead";
   }
 
+  /** Bandits of this wave still to be put down: those in play and those waiting their turn. */
+  get remaining(): number {
+    let n = this.queue.length;
+    for (const b of this.bandits) if (b.alive) n++;
+    return n;
+  }
+
   update(dt: number, offscreen: boolean): void {
     this.time += dt;
     this.phaseT += dt;
