@@ -11,7 +11,7 @@ from handy.maps.zombies import (BITE_DAMAGE, BODY_HEALTH, CONTACT_DISTANCE,
                                 STAGGER, WAVE_SECONDS, Perspective, Walker, ZombieRound,
                                 _bloom, _draw_fallen, _environment, _fill, _fixed, _look,
                                 _skyline, draw_emblem, draw_hud, draw_stains, draw_walker,
-                                draw_world)
+                                draw_world, readout_line, readouts)
 
 AREA = Rect(0, 224, 1232, 440)
 VIEW = Perspective.for_area(AREA)
@@ -339,6 +339,27 @@ def test_the_health_bar_has_a_segment_for_every_bite_you_can_take():
         bites += 1
     assert bites == 6
     assert len(notches[0]) + 1 == bites
+
+
+def test_the_readouts_say_where_the_night_stands():
+    """Health as a gauge that goes down a bite at a time, and the wave and the
+    kills as one line in the game's voice - ready for whichever panel shows
+    them."""
+    round_ = make_round(duration=600)
+    round_.update(0.0)
+    assert readout_line(round_, 0.0) == "Wave 1 · 0 down"
+    health, wave, down, enemy = readouts(round_, 0.0)
+    assert (health.label, health.level, health.steps) == ("Health", 1.0, 6)
+    assert (wave.value, down.value, enemy.value) == ("1", "0", "Zombies")
+
+    round_.walkers = [walker_at(8.0)]
+    round_.shoot(*round_.walkers[0].figure(VIEW, 1.0).head, 1.0)
+    round_.walkers.append(walker_at(0.5))
+    round_.update(WAVE_SECONDS + 1.0)
+    assert readout_line(round_, WAVE_SECONDS + 1.0) == "Wave 2 · 1 down"
+    assert readouts(round_, 0.0)[0].level == (FULL_HEALTH - BITE_DAMAGE) / FULL_HEALTH
+    assert not any(word.isupper() and len(word) > 1
+                   for word in readout_line(round_, 0.0).split()), "no shouting"
 
 
 def test_making_it_to_the_end_of_the_round_is_surviving():

@@ -2498,22 +2498,53 @@ def draw_world(canvas: np.ndarray, round_: ZombieRound, now: float) -> None:
         cv2.addWeighted(canvas, 1.0 - 0.35 * red, _vignette(width, height), red, 0.0,
                         dst=canvas)
     draw_footer_strip(canvas, area)
-    draw_text(canvas, f"ENEMY: {round_.options.enemy.upper()}",
-              (area.x + 18, area.bottom - 12), MOONLIGHT, scale=.45 * round_.options.scale)
+
+
+# --- the readouts ------------------------------------------------------------
+
+class Readout(NamedTuple):
+    """One thing this map says beside the score: a short label, its value as
+    it reads, and for a gauge how full it is and how many steps it goes down
+    in."""
+
+    label: str
+    value: str
+    level: float | None = None
+    steps: int | None = None
+
+
+def readouts(round_: ZombieRound, now: float) -> tuple[Readout, ...]:
+    """What the night stands at, for whichever panel carries it - today the
+    strip this map draws under the score, later the app's one score panel.
+
+    Health is a gauge that goes down a bite at a time; the rest are numbers
+    in the voice of the rest of the game."""
+    return (Readout("Health", str(round_.health), round_.health / FULL_HEALTH,
+                    math.ceil(FULL_HEALTH / BITE_DAMAGE)),
+            Readout("Wave", str(round_.wave(now))),
+            Readout("Down", f"{round_.kills:,}"),
+            Readout("Enemy", round_.options.enemy.title()))
+
+
+def readout_line(round_: ZombieRound, now: float) -> str:
+    """The readouts as the one line under the health gauge: "Wave 1 · 0 down"."""
+    values = {readout.label: readout.value for readout in readouts(round_, now)}
+    return f"Wave {values['Wave']} · {values['Down']} down"
 
 
 def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
              now: float) -> None:
-    """Health, wave and kill count, under the shared score block."""
+    """The health gauge and the line under it, below the shared score block."""
     x, y = origin
     scale = min(max(canvas.shape[0] / 720.0, 0.7), 2.4)
 
     def line(offset: float) -> int:
         return y + round(offset * scale)
 
+    health = readouts(round_, now)[0]
     bar = Rect(x, line(146), round(240 * scale), round(14 * scale))
     cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (30, 28, 27), -1)
-    filled = int(bar.width * round_.health / FULL_HEALTH)
+    filled = int(bar.width * health.level)
     if filled:
         low = round_.health <= LOW_HEALTH
         colour = (60, 60, 210) if low else (96, 150, 104)
@@ -2522,12 +2553,12 @@ def draw_hud(canvas: np.ndarray, round_: ZombieRound, origin: tuple[int, int],
         cv2.rectangle(canvas, (bar.x, bar.y), (bar.x + filled, bar.bottom), colour, -1)
     # A notch where the bar will stand after each bite, so it reads in bites
     # left rather than in percent - however many the constants make that.
-    for bite in range(1, math.ceil(FULL_HEALTH / BITE_DAMAGE)):
+    for bite in range(1, health.steps):
         tx = bar.x + bar.width * (FULL_HEALTH - bite * BITE_DAMAGE) // FULL_HEALTH
         cv2.line(canvas, (tx, bar.y), (tx, bar.bottom), (20, 20, 20), 1)
     cv2.rectangle(canvas, (bar.x, bar.y), (bar.right, bar.bottom), (120, 116, 110), 1)
-    draw_text(canvas, f"WAVE {round_.wave(now)}   {round_.kills} down",
-              (x, line(182)), (168, 164, 158), scale=0.6 * scale)
+    draw_text(canvas, readout_line(round_, now), (x, line(182)), (168, 164, 158),
+              scale=0.6 * scale)
 
 
 def draw_emblem(panel: np.ndarray) -> None:
