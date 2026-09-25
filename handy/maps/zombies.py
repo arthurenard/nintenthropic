@@ -551,26 +551,39 @@ class Figure:
     def mesh(self) -> Mesh:
         """Its outlines in pixels, this frame: the walker's cached poses either
         side of this moment of its stride, blended, scaled to its height and
-        stood where it is. Painted and shot at alike."""
+        stood where it is. Painted and shot at alike.
+
+        A shot's knock-back moves only the arms, and moves them in a straight
+        line, so it is a blend too: between each pose as it walks and the
+        same pose with its arms flung up."""
         step = (self.phase % math.tau) / math.tau * POSE_STEPS
         low = int(step)
         t = np.float32(step - low)
-        key = (self.seed, self.gait, self.robot, self.hunch, self.tilt,
-               round(self.recoil * 8) / 8)
-        a = _pose_mesh(*key, low % POSE_STEPS)
-        b = _pose_mesh(*key, (low + 1) % POSE_STEPS)
-        if a.pieces != b.pieces:
-            b = a
-        groups = a.groups
-        if groups != b.groups:
+        key = (self.seed, self.gait, self.robot, self.hunch, self.tilt)
+        poses = [(_pose_mesh(*key, 0.0, low % POSE_STEPS),
+                  _pose_mesh(*key, 0.0, (low + 1) % POSE_STEPS))]
+        if self.recoil > 0.0:
+            poses.append((_pose_mesh(*key, 1.0, low % POSE_STEPS),
+                          _pose_mesh(*key, 1.0, (low + 1) % POSE_STEPS)))
+        first = poses[0][0]
+        if any(mesh.pieces != first.pieces for pair in poses for mesh in pair):
+            poses = [(first, first)]
+        groups = first.groups
+        if any(mesh.groups != groups for pair in poses for mesh in pair):
             # Apart in one pose and not the other: fill them one at a time.
-            groups = tuple((index,) for index in range(len(a.pieces)))
+            groups = tuple((index,) for index in range(len(first.pieces)))
+
+        def blend(field: str) -> np.ndarray:
+            walking = [getattr(a, field) + (getattr(b, field) - getattr(a, field)) * t
+                       for a, b in poses]
+            if len(walking) == 1:
+                return walking[0]
+            return walking[0] + (walking[1] - walking[0]) * np.float32(self.recoil)
+
         height = np.float32(self.height)
         root = np.float32((self.x - self.lean * self.height, self.ground_y))
-        centre = (a.centre + (b.centre - a.centre) * t) * height + root
-        direction = a.direction + (b.direction - a.direction) * t
-        radius = (a.radius + (b.radius - a.radius) * t) * height
-        return Mesh(centre, direction, radius, a.depth * height, a.pieces, groups)
+        return Mesh(blend("centre") * height + root, blend("direction"),
+                    blend("radius") * height, first.depth * height, first.pieces, groups)
 
     @cached_property
     def groups(self) -> tuple[tuple[Piece, ...], ...]:
@@ -842,7 +855,7 @@ def _standing_parts(figure: Figure) -> list[Part]:
     # torso's own; one that crosses the body is drawn over it.
     arms = list(zip((-1, 1), figure._arms))
     front = [(side, arm) for side, arm in arms
-             if figure._arm_pose(side) in ("clutch", "hang") or figure.recoil > 0.3]
+             if figure._arm_pose(side) in ("clutch", "hang")]
     _side_by_side(parts, *(_arm_layers(figure, side, arm) for side, arm in arms
                            if (side, arm) not in front))
 
@@ -2132,14 +2145,11 @@ def _draw_machine(canvas: np.ndarray, figure: Figure, haze: float, light: float)
                  ((x + half * 0.8, top + height * 0.13), (x + half * 0.1, top + height * 0.17)),
                  ((x - height * 0.045, top + height * 0.3), (x + height * 0.045, top + height * 0.3)),
                  ((x - height * 0.048, top + height * 0.34), (x + height * 0.048, top + height * 0.34)))
-        for a, b in lines:
-            cv2.line(canvas, (_fix(a[0]), _fix(a[1])), (_fix(b[0]), _fix(b[1])), seam, thin,
-                     cv2.LINE_AA, FIX_BITS)
         for _, knee, ankle, _ in figure.legs():
             mid = ((knee[0] + ankle[0]) / 2, (knee[1] + ankle[1]) / 2)
-            cv2.line(canvas, (_fix(mid[0]), _fix(mid[1] - height * 0.05)),
-                     (_fix(mid[0]), _fix(mid[1] + height * 0.06)), seam, thin, cv2.LINE_AA,
-                     FIX_BITS)
+            lines += (((mid[0], mid[1] - height * 0.05), (mid[0], mid[1] + height * 0.06)),)
+        cv2.polylines(canvas, list(_fixed(np.array(lines, np.float32))), False, seam, thin,
+                      cv2.LINE_AA, FIX_BITS)
     band = np.array([_head_point(figure, px, py) for px, py in (
         (-0.66, -0.12), (0.66, -0.12), (0.6, 0.1), (-0.6, 0.1))], np.float32)
     cv2.fillPoly(canvas, [np.rint(band * FIX).astype(np.int32)], _mix(visor, SEAM, 0.35),
