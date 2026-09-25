@@ -881,3 +881,151 @@ def test_figures_are_never_clipped_by_their_own_box(monkeypatch):
     roomy = np.zeros((80, 600, 3), np.uint8)
     scene.draw_figures(roomy, text, (10, 50), (255, 255, 255), size, 0.0)
     assert np.array_equal(drawn, roomy)
+
+
+# --- type ----------------------------------------------------------------------
+
+def test_the_type_scale_grows_with_the_window():
+    assert scene.type_size(scene.TITLE_1, 1.0) == 30
+    assert scene.type_size(scene.LARGE_TITLE, 2.0) == 88
+    assert scene.type_size(scene.FOOTNOTE, 1.3125) == 16
+
+
+@pytest.mark.parametrize("style", [scene.LARGE_TITLE, scene.TITLE_1, scene.TITLE_3,
+                                   scene.BODY, scene.FOOTNOTE, scene.EYEBROW],
+                         ids=lambda style: f"{style.size:g}")
+@pytest.mark.parametrize("text", ["Choose a Game", "1,240", "0:48", "Play Again"])
+def test_text_is_set_inside_the_box_it_measures(style, text):
+    """A box measured at the wrong size cut the last letter off a line."""
+    canvas = np.zeros((200, 900, 3), np.uint8)
+    width = scene.write(canvas, text, (20, 140), style, (255, 255, 255), 1.5)
+    assert width == scene.measure(text, style, 1.5)
+    columns = np.flatnonzero(canvas.max(axis=(0, 2)) > 40)
+    rows = np.flatnonzero(canvas.max(axis=(1, 2)) > 40)
+    assert columns.min() >= 20 - 1 and columns.max() <= 20 + width + 1
+    assert columns.max() >= 20 + width - scene.type_size(style, 1.5) * 0.3, "ink to the end"
+    size = scene.type_size(style, 1.5)
+    assert rows.min() >= 140 - size * 1.05 and rows.max() <= 140 + size * scene.DESCENT + 2
+
+
+def test_figures_are_tabular_so_a_changing_number_holds_still():
+    for style in (scene.TITLE_1, scene.TITLE_3, scene.FOOTNOTE):
+        assert scene.measure("0:11", style) == scene.measure("0:48", style)
+        assert scene.measure("1,111", style) == scene.measure("8,888", style)
+    # And the digits stand in the same cells, so the colon does not move.
+    one, eight = (np.zeros((80, 300, 3), np.uint8) for _ in range(2))
+    scene.write(one, "0:11", (10, 60), scene.TITLE_1, (255, 255, 255))
+    scene.write(eight, "0:18", (10, 60), scene.TITLE_1, (255, 255, 255))
+    colon = slice(10 + scene._digit_cell(30, 700), 10 + scene._digit_cell(30, 700) +
+                  scene._advance(":", 30, 700))
+    assert np.array_equal(one[:, colon], eight[:, colon])
+
+
+def test_text_right_and_centre_aligned_ends_where_it_is_told():
+    canvas = np.zeros((80, 400, 3), np.uint8)
+    scene.write(canvas, "Pause", (300, 60), scene.HEADLINE, (255, 255, 255),
+                align=scene.RIGHT)
+    assert np.flatnonzero(canvas.max(axis=(0, 2)))[-1] <= 301
+    canvas[:] = 0
+    scene.write(canvas, "Pause", (200, 60), scene.HEADLINE, (255, 255, 255),
+                align=scene.CENTRE)
+    ink = np.flatnonzero(canvas.max(axis=(0, 2)))
+    assert abs((ink[0] + ink[-1]) / 2 - 200) <= 2
+
+
+def test_the_type_falls_back_when_the_system_face_is_not_there(monkeypatch):
+    """Linux, Windows and CI have no SF Pro: OpenCV's own sans stands in."""
+    caches = (scene._font_source, scene._face, scene._advance, scene._digit_cell,
+              scene._measure)
+    monkeypatch.setattr(scene, "SYSTEM_FONT", "/nowhere/SFNS.ttf")
+    for cache in caches:
+        cache.cache_clear()
+    try:
+        assert scene._font_source() in (scene.FALLBACK_FONT, None)
+        canvas = np.zeros((80, 400, 3), np.uint8)
+        width = scene.write(canvas, "Resume 0:48", (10, 60), scene.HEADLINE,
+                            (255, 255, 255))
+        assert width > 0 and canvas.any()
+    finally:
+        monkeypatch.undo()
+        for cache in caches:
+            cache.cache_clear()
+
+
+def test_wrapped_lines_fit_the_width_they_were_wrapped_to():
+    text = "Your camera stopped sending pictures. Reconnect it, then start Handy again."
+    for width in (160, 240, 400):
+        for line in scene.wrap(text, scene.BODY, width):
+            assert scene.measure(line, scene.BODY) <= width or " " not in line
+    assert scene.fit(text, scene.BODY, 200).endswith("…")
+    assert scene.measure(scene.fit(text, scene.BODY, 200), scene.BODY) <= 200
+
+
+def test_names_kept_in_capitals_read_in_title_case():
+    assert scene.title_case("DEAD OF NIGHT") == "Dead of Night"
+    assert scene.title_case("PANE FAILED") == "Pane Failed"
+    assert scene.title_case("OF A KIND") == "Of a Kind"
+    assert scene.title_case("60-SECOND ROUND") == "60-Second Round"
+
+
+def test_numbers_read_the_way_the_design_language_writes_them():
+    assert scene.grouped(1240) == "1,240" and scene.grouped(7) == "7"
+    assert scene.clock_text(48.9) == "0:48" and scene.clock_text(65) == "1:05"
+    assert scene.clock_text(-1) == "0:00"
+
+
+# --- glass -----------------------------------------------------------------------
+
+@pytest.mark.parametrize("ground", [0, 128, 255])
+def test_glass_stays_dark_enough_to_read_on_and_leaves_the_rest_alone(ground):
+    """Over the brightest sky and the darkest road, white text on glass reads."""
+    from handy.game import Rect
+
+    canvas = np.full((300, 500, 3), ground, np.uint8)
+    scene.draw_glass(canvas, Rect(50, 40, 300, 120), 16)
+    inside = canvas[100, 200]
+    assert inside.max() <= scene.GLASS_CEILING + 2, "bright glass washes text out"
+    assert inside.min() >= 18, "glass is never a hole in the world"
+    assert (canvas[250, 450] == ground).all() and (canvas[20, 20] == ground).all()
+    # The corners are rounded, not square.
+    assert (canvas[41, 51] != inside).any()
+
+
+def test_glass_blurs_what_is_behind_it():
+    from handy.game import Rect
+
+    canvas = np.zeros((200, 400, 3), np.uint8)
+    canvas[:, ::6] = 255  # hard stripes: detail that must not show through
+    scene.draw_glass(canvas, Rect(40, 40, 300, 120), 16)
+    assert float(canvas[60:140, 80:300].std()) < 6
+
+
+def test_glass_is_cheap_enough_for_every_frame():
+    import time
+
+    from handy.game import Rect
+
+    canvas = np.random.default_rng(1).integers(0, 255, (945, 1512, 3), np.uint8)
+    rect = Rect(300, 30, 340, 130)
+    times = []
+    for _ in range(40):
+        frame = canvas.copy()
+        start = time.perf_counter()
+        scene.draw_glass(frame, rect, 21, 1.3125)
+        times.append(time.perf_counter() - start)
+    assert sorted(times)[len(times) // 2] < 0.001
+
+
+@pytest.mark.parametrize("name", ["pause", "play", "restart", "grid", "xmark",
+                                  "checkmark", "share", "camera", "hand"])
+def test_every_icon_draws_inside_its_square(name):
+    canvas = np.zeros((100, 100, 3), np.uint8)
+    scene.draw_icon(canvas, name, (50, 50), 48, (255, 255, 255))
+    ink = np.argwhere(canvas.max(axis=2) > 0)
+    assert len(ink) > 40
+    assert ink.min() >= 50 - 26 and ink.max() <= 50 + 26
+
+
+def test_an_icon_nobody_drew_is_an_error_not_a_blank():
+    with pytest.raises(ValueError):
+        scene.draw_icon(np.zeros((10, 10, 3), np.uint8), "sparkles", (5, 5), 8, (1, 1, 1))

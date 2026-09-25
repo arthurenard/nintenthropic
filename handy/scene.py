@@ -1,7 +1,15 @@
-"""Everything the player sees: range, targets, crosshair, HUD and buttons."""
+"""Everything the player sees: range, targets, crosshair, HUD and buttons.
+
+Drawn to the design language in ``docs/DESIGN.md``: the system face on a
+fixed type scale, a monochrome interface with one tint, glass over the world,
+and chrome pushed to the corners.
+"""
 
 from __future__ import annotations
 
+import math
+import os
+import struct
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -14,6 +22,28 @@ from .aiming import Aim
 from .game import Rect, Round, Summary
 from .recognition import Frame
 from .rendering import draw_hands, draw_text, text_width
+
+# --- colour ------------------------------------------------------------------
+#
+# The design language's tokens, in OpenCV's BGR. Colour comes from the game
+# worlds; the interface is monochrome plus one tint, and the tint means one
+# thing: your gun is ready.
+
+BACKGROUND = (0, 0, 0)
+SURFACE = (30, 28, 28)  # #1C1C1E: cards, sheets
+SURFACE_RAISED = (46, 44, 44)  # #2C2C2E: controls on a surface
+GLASS = (30, 28, 28)  # the glass tint, laid over the blurred world
+GLASS_OPACITY = 0.72
+HAIRLINE = 0.10  # how much white the one-pixel edge of glass and cards adds
+LABEL = (255, 255, 255)
+# The translucent labels, flattened over the surface they sit on: OpenCV lays
+# text opaque, and every panel they go on is the surface or darker glass.
+LABEL_SECONDARY = (163, 156, 156)  # rgba(235, 235, 245, 0.62)
+LABEL_TERTIARY = (99, 94, 94)  # rgba(235, 235, 245, 0.32)
+TINT = (88, 209, 48)  # #30D158: ready, progress, success
+DANGER = (58, 69, 255)  # #FF453A
+WARNING = (10, 159, 255)  # #FF9F0A
+GOLD = (10, 214, 255)  # #FFD60A: new best, perfect hits
 
 # Colours are BGR.
 BACKDROP = (28, 26, 24)
@@ -45,6 +75,566 @@ CHROME_OPACITY = 0.85
 
 def _px(value: float, scale: float, floor: int = 1) -> int:
     return max(floor, round(value * scale))
+
+
+# --- type --------------------------------------------------------------------
+#
+# The system face, on the design language's type scale. On a Mac that is SF
+# Pro, read from the system at runtime - never copied into the repository -
+# and set through OpenCV's FreeType renderer, which takes a variable font's
+# axes: weight, and the optical size that makes small text SF Pro Text (looser,
+# sturdier) and large text SF Pro Display (tighter). Elsewhere OpenCV's own
+# sans stands in, and a build without FontFace falls back to the Hershey sans.
+#
+# OpenCV applies no OpenType features, so figures come out proportional - a
+# "1" narrower than a "0" - and a score or clock that changes every frame would
+# jitter. Tabular figures are made here instead: every digit is set centred in
+# a cell as wide as the widest one.
+
+SYSTEM_FONT = "/System/Library/Fonts/SFNS.ttf"
+FALLBACK_FONT = "sans"
+
+
+@dataclass(frozen=True)
+class Style:
+    """One step of the type scale: size in 720-tall units, weight 400-700."""
+
+    size: float
+    weight: int
+    tracking: float = 0.0  # extra space between letters, in ems
+    caps: bool = False
+
+
+LARGE_TITLE = Style(44, 700)
+TITLE_1 = Style(30, 700)
+TITLE_2 = Style(24, 600)
+TITLE_3 = Style(20, 600)
+HEADLINE = Style(16, 600)
+BODY = Style(16, 400)
+SUBHEAD = Style(14, 400)
+FOOTNOTE = Style(12, 400)
+EYEBROW = Style(11, 600, tracking=0.06, caps=True)
+
+#: How tall capitals stand, as a share of the size text is set at: what
+#: centring a line in a box needs, since OpenCV places text by its baseline.
+CAP_HEIGHT = 0.705
+#: How far descenders and commas reach below the baseline, likewise.
+DESCENT = 0.24
+
+#: Below this many pixels text is set at SF Pro Text's optical size; at and
+#: above it, Display's - where Apple switches between the two.
+_TEXT_OPTICAL_BELOW = 20
+
+
+def _axis(name: str) -> int:
+    return struct.unpack(">i", name.encode())[0]
+
+
+@lru_cache(maxsize=1)
+def _font_source() -> str | None:
+    """The face to set type in: SF Pro when the system has it, else OpenCV's
+    own sans, or None on an OpenCV built without FreeType faces."""
+    if not hasattr(cv2, "FontFace"):
+        return None
+    if os.path.exists(SYSTEM_FONT):
+        try:
+            cv2.FontFace(SYSTEM_FONT)
+            return SYSTEM_FONT
+        except cv2.error:
+            pass
+    return FALLBACK_FONT
+
+
+@lru_cache(maxsize=8)
+def _face(optical: int, weight: int):
+    """One instance of the face, built once.
+
+    Each costs the font file's worth of memory, so they are few: Display at
+    every weight comes from one face (``putText``'s own weight argument picks
+    the weight and resets the rest of the axes to Display's defaults), and
+    only small text, at Text's optical size, needs an instance per weight.
+    """
+    face = cv2.FontFace(_font_source())
+    if optical:
+        ok, current = face.getInstance()
+        axes = dict(zip(current[::2].tolist(), current[1::2].tolist())) if ok else {}
+        if _axis("opsz") in axes:
+            axes[_axis("opsz")] = optical << 16
+            axes[_axis("wght")] = weight << 16
+            face.setInstance([value for pair in axes.items() for value in pair])
+    return face
+
+
+def _setting(size: int, weight: int) -> tuple[object, int]:
+    """The face and the weight argument that set text ``size`` pixels tall."""
+    if size < _TEXT_OPTICAL_BELOW and _font_source() == SYSTEM_FONT:
+        return _face(17, weight), 0  # the instance carries the weight
+    return _face(0, 0), weight
+
+
+def type_size(style: Style, scale: float = 1.0) -> int:
+    """The pixel size ``style`` is set at on a window of this ``scale``."""
+    return max(6, round(style.size * scale))
+
+
+def _hershey(size: int) -> tuple[float, int]:
+    return size / 30.0, 1
+
+
+@lru_cache(maxsize=2048)
+def _advance(text: str, size: int, weight: int) -> int:
+    """How far the pen moves setting ``text``: its width for layout."""
+    if not text:
+        return 0
+    if _font_source() is None:
+        font_scale, thickness = _hershey(size)
+        return cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+                               2 if weight >= 600 else thickness)[0][0]
+    face, argument = _setting(size, weight)
+    return cv2.getTextSize((0, 0), text, (0, 0), face, size, argument)[2]
+
+
+@lru_cache(maxsize=64)
+def _digit_cell(size: int, weight: int) -> int:
+    """The tabular figure's width: the widest digit's."""
+    return max(_advance(digit, size, weight) for digit in "0123456789")
+
+
+def _runs(text: str, tabular: bool) -> list[tuple[str, bool]]:
+    """``text`` cut into runs set normally and single digits set tabular."""
+    if not tabular:
+        return [(text, False)]
+    runs: list[tuple[str, bool]] = []
+    plain = ""
+    for char in text:
+        if char.isdigit():
+            if plain:
+                runs.append((plain, False))
+                plain = ""
+            runs.append((char, True))
+        else:
+            plain += char
+    if plain:
+        runs.append((plain, False))
+    return runs
+
+
+def _cased(text: str, style: Style) -> str:
+    return text.upper() if style.caps else text
+
+
+@lru_cache(maxsize=4096)
+def _measure(text: str, size: int, weight: int, tracking: float,
+             tabular: bool) -> int:
+    if tracking:
+        spacing = round(tracking * size)
+        return sum(_advance(char, size, weight) for char in text) + spacing * max(
+            0, len(text) - 1)
+    cell = _digit_cell(size, weight) if tabular else 0
+    return sum(cell if digit else _advance(run, size, weight)
+               for run, digit in _runs(text, tabular))
+
+
+def measure(text: str, style: Style, scale: float = 1.0, tabular: bool = True) -> int:
+    """How wide ``text`` is set in ``style``: exactly what :func:`write` fills.
+
+    Measured at the size it is drawn at, never scaled from another - a face's
+    widths do not scale exactly, and a box measured at the wrong size cut
+    the last letter off a line.
+    """
+    return _measure(_cased(text, style), type_size(style, scale), style.weight,
+                    style.tracking, tabular)
+
+
+LEFT, CENTRE, RIGHT = "left", "centre", "right"
+
+
+def write(canvas: np.ndarray, text: str, origin: tuple[float, float], style: Style,
+          color: tuple[int, int, int], scale: float = 1.0, align: str = LEFT,
+          tabular: bool = True) -> int:
+    """Set ``text`` with its baseline at ``origin``; returns its width.
+
+    ``align`` says which end (or the middle) of the line ``origin`` names.
+    Figures are tabular unless told otherwise, so numbers that change hold
+    their width.
+    """
+    text = _cased(text, style)
+    if not text:
+        return 0
+    size = type_size(style, scale)
+    width = _measure(text, size, style.weight, style.tracking, tabular)
+    x = int(round(origin[0]))
+    y = int(round(origin[1]))
+    if align == CENTRE:
+        x -= width // 2
+    elif align == RIGHT:
+        x -= width
+    color = tuple(int(c) for c in color)
+    if style.tracking:
+        spacing = round(style.tracking * size)
+        for char in text:
+            _put(canvas, char, (x, y), color, size, style.weight)
+            x += _advance(char, size, style.weight) + spacing
+        return width
+    cell = _digit_cell(size, style.weight) if tabular else 0
+    for run, digit in _runs(text, tabular):
+        if digit:
+            inset = (cell - _advance(run, size, style.weight)) // 2
+            _put(canvas, run, (x + inset, y), color, size, style.weight)
+            x += cell
+        else:
+            _put(canvas, run, (x, y), color, size, style.weight)
+            x += _advance(run, size, style.weight)
+    return width
+
+
+def _put(canvas: np.ndarray, text: str, origin: tuple[int, int],
+         color: tuple[int, int, int], size: int, weight: int) -> None:
+    if _font_source() is None:
+        font_scale, thickness = _hershey(size)
+        cv2.putText(canvas, text, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color,
+                    2 if weight >= 600 else thickness, cv2.LINE_AA)
+        return
+    face, argument = _setting(size, weight)
+    cv2.putText(canvas, text, origin, color, face, size, argument)
+
+
+def write_faded(canvas: np.ndarray, text: str, origin: tuple[float, float],
+                style: Style, color: tuple[int, int, int], scale: float = 1.0,
+                alpha: float = 1.0, align: str = LEFT, tabular: bool = True) -> int:
+    """:func:`write` at ``alpha``, blended over only the line's own box."""
+    if alpha >= 1.0:
+        return write(canvas, text, origin, style, color, scale, align, tabular)
+    width = measure(text, style, scale, tabular)
+    if alpha <= 0.0 or not text:
+        return width
+    size = type_size(style, scale)
+    x = round(origin[0]) - (width // 2 if align == CENTRE else width if align == RIGHT
+                            else 0)
+    pad = max(2, size // 4)
+    height, full = canvas.shape[:2]
+    x0, y0 = max(x - pad, 0), max(round(origin[1]) - size - pad, 0)
+    x1 = min(x + width + pad, full)
+    y1 = min(round(origin[1]) + round(size * DESCENT) + pad, height)
+    if x1 <= x0 or y1 <= y0:
+        return width
+    region = canvas[y0:y1, x0:x1]
+    patch = region.copy()
+    write(patch, text, (x - x0, round(origin[1]) - y0), style, color, scale, LEFT, tabular)
+    cv2.addWeighted(patch, alpha, region, 1.0 - alpha, 0.0, dst=region)
+    return width
+
+
+def baseline_for(style: Style, top: float, height: float, scale: float = 1.0) -> int:
+    """The baseline that centres a line of capitals in ``height`` from ``top``."""
+    return round(top + (height + type_size(style, scale) * CAP_HEIGHT) / 2)
+
+
+def wrap(text: str, style: Style, width: int, scale: float = 1.0) -> list[str]:
+    """Greedy word wrap, measured in the style it will be set in."""
+    lines: list[str] = []
+    line = ""
+    for word in text.split():
+        candidate = f"{line} {word}".strip()
+        if line and measure(candidate, style, scale) > width:
+            lines.append(line)
+            line = word
+        else:
+            line = candidate
+    if line:
+        lines.append(line)
+    return lines
+
+
+def fit(text: str, style: Style, width: int, scale: float = 1.0) -> str:
+    """``text``, or as many of its words as fit followed by an ellipsis."""
+    if measure(text, style, scale) <= width:
+        return text
+    words = text.split()
+    while words:
+        words.pop()
+        candidate = " ".join(words) + "…"
+        if words and measure(candidate, style, scale) <= width:
+            return candidate
+    return "…"
+
+
+_SMALL_WORDS = frozenset({"a", "an", "and", "at", "by", "for", "in", "of", "on", "or",
+                          "the", "to"})
+
+
+def title_case(text: str) -> str:
+    """Title Case for a name kept in capitals ("DEAD OF NIGHT", "PANE FAILED").
+
+    Maps and rounds keep their names and outcomes as data; this is how they
+    read on screen: "Dead of Night", "Pane Failed".
+    """
+    words = text.split()
+    out = []
+    for index, word in enumerate(words):
+        lower = word.lower()
+        if 0 < index < len(words) - 1 and lower in _SMALL_WORDS:
+            out.append(lower)
+        else:
+            out.append("-".join(part[:1].upper() + part[1:] for part in lower.split("-")))
+    return " ".join(out)
+
+
+def grouped(number: int) -> str:
+    """A score as the design language writes it: thousands grouped, 1,240."""
+    return f"{number:,}"
+
+
+def clock_text(seconds: float) -> str:
+    """Seconds as a clock reads them: 0:48, 1:05."""
+    whole = max(0, int(seconds))
+    return f"{whole // 60}:{whole % 60:02d}"
+
+
+# --- materials ---------------------------------------------------------------
+#
+# Glass is what every panel over the game world is made of: the world behind
+# it blurred at a quarter of its resolution, tinted towards the surface, and
+# edged with a one-pixel hairline. The blur is the whole trick - text on it
+# reads over the brightest sky and the darkest road, because what shows
+# through is only colour, never detail - and at a quarter resolution it costs
+# a few hundredths of a millisecond for a panel.
+
+#: How soft the world behind glass is, in 720-tall units of blur.
+GLASS_BLUR = 18
+
+#: The brightest glass may get, on a 0-255 scale: over a noon sky the tint
+#: alone leaves the glass pale enough to wash out secondary text, so bright
+#: glass is brought down to this - keeping its hue - the way a vibrant
+#: material holds its contrast.
+GLASS_CEILING = 84.0
+
+
+def _outline(x: float, y: float, width: float, height: float, radius: float,
+             inset: float = 0.0) -> np.ndarray:
+    """A rounded rectangle's outline in sixteenths of a pixel, for OpenCV's
+    sub-pixel drawing: corners that are true arcs, not stair-steps.
+
+    The edge runs along pixel boundaries - ``x`` to ``x + width`` - and
+    ``inset`` brings it in, so a one-pixel line can sit wholly inside.
+    """
+    x0, y0 = x + inset - 0.5, y + inset - 0.5
+    x1, y1 = x + width - inset - 0.5, y + height - inset - 0.5
+    r = max(0.0, min(radius - inset, (x1 - x0) / 2, (y1 - y0) / 2))
+    points = []
+    for cx, cy, start in ((x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0),
+                          (x0 + r, y1 - r, 90), (x0 + r, y0 + r, 180)):
+        steps = max(2, int(r / 2) + 2)
+        for k in range(steps + 1):
+            angle = math.radians(start + 90 * k / steps)
+            points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+    return np.round(np.array(points) * _ONE).astype(np.int32)
+
+
+@lru_cache(maxsize=64)
+def _shape_weights(width: int, height: int, radius: int
+                   ) -> tuple[np.ndarray, np.ndarray]:
+    """A rounded rectangle as blend weights - how much of the world shows
+    through, how much of the panel covers it - anti-aliased at the edge and
+    built once per size."""
+    mask = np.zeros((height, width), np.uint8)
+    cv2.fillPoly(mask, [_outline(0, 0, width, height, radius)], 255, cv2.LINE_AA, _SHIFT)
+    cover = mask.astype(np.float32) / 255.0
+    keep = 1.0 - cover
+    for array in (keep, cover):
+        array.flags.writeable = False  # shared by every frame from here on
+    return keep, cover
+
+
+def _composite(canvas: np.ndarray, rect: Rect, layer: np.ndarray, radius: int) -> None:
+    """Lay ``layer`` (the size of ``rect``, clipped as ``rect`` is) into
+    ``rect`` on ``canvas`` with rounded, anti-aliased corners."""
+    height, width = canvas.shape[:2]
+    x0, y0 = max(rect.x, 0), max(rect.y, 0)
+    x1, y1 = min(rect.right, width), min(rect.bottom, height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    keep, cover = _shape_weights(rect.width, rect.height, radius)
+    # Only the four corners are blended: everywhere else the panel covers
+    # the world outright, and a straight copy costs a fraction of a blend.
+    reach = min(radius + 1, rect.width // 2, rect.height // 2)
+    corners = []
+    for cx0, cy0 in ((0, 0), (rect.width - reach, 0), (0, rect.height - reach),
+                     (rect.width - reach, rect.height - reach)):
+        ax0, ay0 = max(cx0, x0 - rect.x), max(cy0, y0 - rect.y)
+        ax1, ay1 = min(cx0 + reach, x1 - rect.x), min(cy0 + reach, y1 - rect.y)
+        if ax1 <= ax0 or ay1 <= ay0:
+            continue
+        world = canvas[rect.y + ay0:rect.y + ay1, rect.x + ax0:rect.x + ax1]
+        mine = layer[ay0 - (y0 - rect.y):ay1 - (y0 - rect.y),
+                     ax0 - (x0 - rect.x):ax1 - (x0 - rect.x)]
+        corners.append((world, cv2.blendLinear(world, mine, keep[ay0:ay1, ax0:ax1],
+                                               cover[ay0:ay1, ax0:ax1])))
+    canvas[y0:y1, x0:x1] = layer
+    for world, blended in corners:
+        world[:] = blended
+
+
+def hairline(canvas: np.ndarray, rect: Rect, radius: int,
+             color: tuple[int, int, int], weight: int = 1) -> None:
+    """The one-pixel edge of glass or a card, laid just inside its shape."""
+    cv2.polylines(canvas, [_outline(rect.x, rect.y, rect.width, rect.height, radius,
+                                    weight / 2)], True, color, weight, cv2.LINE_AA, _SHIFT)
+
+
+def _frosted(region: np.ndarray, scale: float, opacity: float,
+             tint: tuple[int, int, int]) -> np.ndarray:
+    """The glass for ``region``: blurred at a quarter size, saturated a little
+    - as the web's ``saturate(180%)`` does - tinted, and held under
+    :data:`GLASS_CEILING`.
+
+    Halved twice with ``pyrDown`` and blurred with two box passes, which
+    together come close to a Gaussian: OpenCV's own Gaussian costs several
+    times as much on an image this small, all of it overhead.
+    """
+    height, width = region.shape[:2]
+    small = region
+    for _ in range(2):
+        if small.shape[0] >= 4 and small.shape[1] >= 4:
+            small = cv2.pyrDown(small)
+    box = max(3, int(GLASS_BLUR * scale / 4) | 1)
+    for _ in range(2):
+        small = cv2.blur(small, (box, box), borderType=cv2.BORDER_REPLICATE)
+    grey = cv2.cvtColor(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+    small = cv2.addWeighted(small, 1.8, grey, -0.8, 0.0)
+    tinted = np.empty_like(small)
+    tinted[:] = tint
+    glass = cv2.addWeighted(small, 1.0 - opacity, tinted, opacity, 0.0).astype(np.float32)
+    brightest = glass.max(axis=2, keepdims=True)
+    glass *= np.minimum(1.0, GLASS_CEILING / np.maximum(brightest, 1.0))
+    return cv2.resize(glass.astype(np.uint8), (width, height),
+                      interpolation=cv2.INTER_LINEAR)
+
+
+def hairline_over(color) -> tuple[int, int, int]:
+    """The hairline on something this colour: ten per cent of the way to white."""
+    return tuple(int(c + (255 - c) * HAIRLINE) for c in color)
+
+
+def draw_glass(canvas: np.ndarray, rect: Rect, radius: int, scale: float = 1.0,
+               opacity: float = GLASS_OPACITY, tint: tuple[int, int, int] = GLASS,
+               edge: bool = True) -> None:
+    """A glass panel over whatever is on ``canvas`` inside ``rect``."""
+    height, width = canvas.shape[:2]
+    x0, y0 = max(rect.x, 0), max(rect.y, 0)
+    x1, y1 = min(rect.right, width), min(rect.bottom, height)
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return
+    glass = _frosted(canvas[y0:y1, x0:x1], scale, opacity, tint)
+    _composite(canvas, rect, glass, radius)
+    if edge:
+        sample = glass[glass.shape[0] // 2, min(2, glass.shape[1] - 1)]
+        hairline(canvas, rect, radius, hairline_over(sample))
+
+
+def draw_surface(canvas: np.ndarray, rect: Rect, radius: int,
+                 color: tuple[int, int, int] = SURFACE, edge: bool = True) -> None:
+    """An opaque rounded plate - a card, a control on a card - with its hairline."""
+    height, width = canvas.shape[:2]
+    x0, y0 = max(rect.x, 0), max(rect.y, 0)
+    x1, y1 = min(rect.right, width), min(rect.bottom, height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    plate = np.empty((y1 - y0, x1 - x0, 3), np.uint8)
+    plate[:] = color
+    _composite(canvas, rect, plate, radius)
+    if edge:
+        hairline(canvas, rect, radius, hairline_over(color))
+
+
+def dim(canvas: np.ndarray, amount: float) -> None:
+    """Darken the whole frame, as the world is under a sheet."""
+    if amount > 0.0:
+        cv2.convertScaleAbs(canvas, dst=canvas, alpha=1.0 - amount, beta=0)
+
+
+def ease_out(t: float) -> float:
+    """The arriving curve for sheets and cards: quick, then settling."""
+    t = min(max(t, 0.0), 1.0)
+    return 1.0 - (1.0 - t) ** 3
+
+
+# --- icons -------------------------------------------------------------------
+#
+# Line icons in the manner of SF Symbols: drawn on a 24-unit grid with 1.75
+# unit strokes, round caps and joins; filled only for the active state.
+# Coordinates go to OpenCV with four bits of sub-pixel precision, so a small
+# icon keeps its geometry instead of snapping to whole pixels.
+
+_SHIFT = 4
+_ONE = 1 << _SHIFT
+
+
+def _icon_point(centre: tuple[float, float], size: float, x: float, y: float
+                ) -> tuple[int, int]:
+    unit = size / 24.0
+    return (int(round((centre[0] + (x - 12) * unit) * _ONE)),
+            int(round((centre[1] + (y - 12) * unit) * _ONE)))
+
+
+def draw_icon(canvas: np.ndarray, name: str, centre: tuple[float, float], size: float,
+              color: tuple[int, int, int]) -> None:
+    """Draw icon ``name`` ``size`` pixels square, centred on ``centre``."""
+    unit = size / 24.0
+    weight = max(1, round(1.75 * unit))
+
+    def point(x: float, y: float) -> tuple[int, int]:
+        return _icon_point(centre, size, x, y)
+
+    def line(*points: tuple[float, float]) -> None:
+        cv2.polylines(canvas, [np.array([point(*p) for p in points], np.int32)], False,
+                      color, weight, cv2.LINE_AA, _SHIFT)
+
+    def fill(*points: tuple[float, float]) -> None:
+        cv2.fillPoly(canvas, [np.array([point(*p) for p in points], np.int32)], color,
+                     cv2.LINE_AA, _SHIFT)
+
+    if name == "pause":
+        for x in (8.5, 15.5):
+            fill((x - 2, 5.5), (x + 2, 5.5), (x + 2, 18.5), (x - 2, 18.5))
+    elif name == "play":
+        fill((7.5, 4.5), (19.5, 12), (7.5, 19.5))
+    elif name == "xmark":
+        line((6, 6), (18, 18))
+        line((18, 6), (6, 18))
+    elif name == "checkmark":
+        line((5, 12.5), (10, 17.5), (19, 6.5))
+    elif name == "restart":
+        # Most of a circle, running round to an arrowhead at the top left.
+        arc = [(12 + 7.5 * math.cos(math.radians(a)), 12.5 + 7.5 * math.sin(math.radians(a)))
+               for a in range(-50, 226, 12)]
+        line(*arc)
+        (x0, y0), (x1, y1) = arc[-2], arc[-1]
+        length = math.hypot(x1 - x0, y1 - y0)
+        dx, dy = (x1 - x0) / length, (y1 - y0) / length
+        barbs = []
+        for turn in (0.7, -0.7):
+            cos, sin = math.cos(turn), math.sin(turn)
+            barbs.append((x1 - 4.5 * (dx * cos - dy * sin), y1 - 4.5 * (dx * sin + dy * cos)))
+        line(barbs[0], (x1, y1), barbs[1])
+    elif name == "grid":
+        for x, y in ((4.5, 4.5), (13.5, 4.5), (4.5, 13.5), (13.5, 13.5)):
+            line((x, y), (x + 6, y), (x + 6, y + 6), (x, y + 6), (x, y))
+    elif name == "share":
+        line((8, 9.5), (5.5, 9.5), (5.5, 20), (18.5, 20), (18.5, 9.5), (16, 9.5))
+        line((12, 3.5), (12, 14.5))
+        line((8.5, 7), (12, 3.5), (15.5, 7))
+    elif name == "camera":
+        line((3, 7.5), (15, 7.5), (15, 17.5), (3, 17.5), (3, 7.5))
+        line((15, 11), (21, 7.5), (21, 17.5), (15, 14))
+    elif name == "hand":
+        # A raised open hand: four fingers, a thumb, the palm under them.
+        for x, top in ((7.5, 7), (10.5, 4.5), (13.5, 5), (16.5, 7.5)):
+            line((x, 13), (x, top))
+        line((7.5, 13), (7.5, 16), (9.5, 20), (15.5, 20), (17.5, 16.5), (16.5, 11))
+        line((7.5, 14.5), (5, 11.5))
+    else:
+        raise ValueError(f"no icon called {name!r}")
 
 
 def _rounded(x0: int, y0: int, x1: int, y1: int, radius: int) -> np.ndarray:
