@@ -89,9 +89,11 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   The landmarker runs in a **worker** with its own WebGL context (GPU delegate,
   CPU fallback): the page hands it each frame as a zero-copy `VideoFrame` and
   reads back 21 points, so tracking costs the render loop about 0.1 ms a
-  frame instead of the 20-40 ms of inference. A frame that arrives while the
-  last is still being read is skipped, never queued. Browsers that cannot run
-  it in a worker track on the page.
+  frame instead of the inference itself (11-15 ms on an idle M4 Max, 20-60 ms
+  on a busy or ordinary machine, where on the page it halved the frame rate).
+  The hop costs about 5 ms of latency. A frame that arrives while the last is
+  still being read is skipped, never queued. Browsers that cannot run it in a
+  worker track on the page.
 - Input turns a HandFrame into an **Aim** once per new frame (never twice for
   the same frame), and the engine reads the latest Aim every animation frame.
   The crosshair may be extrapolated forward by the measured tracking delay
