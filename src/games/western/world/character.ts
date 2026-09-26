@@ -96,6 +96,18 @@ const tmpQ = new Quaternion();
 const tmpV = new Vector3();
 const tmpV2 = new Vector3();
 const UP = new Vector3(0, 1, 0);
+const LEFT = new Vector3();
+const UPW = new Vector3();
+const bendAxis = new Vector3();
+const bendQ = new Quaternion();
+const boneQ = new Quaternion();
+
+/** Rotate a bone by `angle` about a world-space axis, whatever its own frame. */
+function bend(bone: Object3D, worldAxis: Vector3, angle: number): void {
+  bone.getWorldQuaternion(boneQ);
+  bendAxis.copy(worldAxis).applyQuaternion(boneQ.invert());
+  bone.quaternion.multiply(bendQ.setFromAxisAngle(bendAxis, angle));
+}
 
 /** The joints a shot is tested against, in world space, refreshed on demand. */
 export class Joints {
@@ -314,7 +326,18 @@ export class Rig {
     this.aimWeight += (this.aimWeightTarget - this.aimWeight) * Math.min(1, dt * 8);
     const chest = this.bones.get("chest");
     const spine = this.bones.get("spine");
-    if (chest && this.aimWeight > 0.01) {
+    const arm = this.bones.get("upper_arm.R");
+    const aiming = chest && this.aimWeight > 0.01;
+    const twisting = Math.abs(this.twist) > 1e-4;
+    const kicking = this.recoil > 0.01;
+    if (!aiming && !twisting && !kicking) return;
+    // Bends are made about the character's own axes (its left, and up), carried
+    // into each bone's frame: a Blender bone points along its local +Y with
+    // whatever roll the rigger gave it, so its local X is not "the side".
+    this.root.getWorldQuaternion(tmpQ);
+    LEFT.set(1, 0, 0).applyQuaternion(tmpQ);
+    UPW.set(0, 1, 0).applyQuaternion(tmpQ);
+    if (aiming && chest) {
       // Pitch the chest toward the target, measured in the rig's own frame.
       this.root.updateMatrixWorld();
       tmpV.copy(this.aimTarget);
@@ -322,16 +345,18 @@ export class Rig {
       const chestY = 1.35;
       const horiz = Math.hypot(tmpV.x, tmpV.z);
       const pitch = Math.atan2(tmpV.y - chestY, Math.max(0.5, horiz));
-      chest.rotateX(-pitch * this.aimWeight * 0.85);
+      bend(chest, LEFT, -pitch * this.aimWeight * 0.85);
     }
-    if (Math.abs(this.twist) > 1e-4) {
-      spine?.rotateY(this.twist * 0.4);
-      chest?.rotateY(this.twist * 0.8);
-      chest?.rotateX(-Math.abs(this.twist) * 0.35);
+    if (twisting) {
+      if (spine) bend(spine, UPW, this.twist * 0.4);
+      if (chest) {
+        bend(chest, UPW, this.twist * 0.8);
+        bend(chest, LEFT, -Math.abs(this.twist) * 0.35);
+      }
     }
-    if (this.recoil > 0.01) {
-      this.bones.get("upper_arm.R")?.rotateX(-this.recoil * 0.25);
-      chest?.rotateX(-this.recoil * 0.05);
+    if (kicking) {
+      if (arm) bend(arm, LEFT, -this.recoil * 0.25);
+      if (chest) bend(chest, LEFT, -this.recoil * 0.05);
     }
   }
 

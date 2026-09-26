@@ -97,7 +97,7 @@ export function readTown(root: Group): TownLayout {
     camNode.traverse((o) => {
       if (!cam && (o as PerspectiveCamera).isPerspectiveCamera) cam = o as PerspectiveCamera;
     });
-    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "yfov");
+    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "fov_deg") ?? extraNumber(camNode, "yfov");
     if (extra !== undefined) fov = extra;
     else if (cam) fov = (cam as PerspectiveCamera).fov;
   }

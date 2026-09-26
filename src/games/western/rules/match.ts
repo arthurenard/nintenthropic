@@ -531,7 +531,7 @@ export class Match implements BanditWorld {
     const high = isHigh(c);
     switch (role) {
       case "rifleman":
-        return this.hasHighCovers ? high : c.level >= 1;
+        return this.hasHighCovers ? high || (c.kind === "roof" && c.level >= 1) : c.level >= 1;
       case "boss":
         return this.bossCovers.includes(c);
       case "runner":
@@ -840,8 +840,12 @@ export class Match implements BanditWorld {
 
 // --- helpers ----------------------------------------------------------------------
 
+/**
+ * A rifleman's perch: a roof edge or the bell tower, up high. A first-floor
+ * "roof" (a balcony rail, a porch roof) is not: any gunman may use it.
+ */
 export function isHigh(c: Cover): boolean {
-  return c.kind === "roof" || c.kind === "tower" || c.level >= 2;
+  return c.kind === "tower" || c.level >= 2;
 }
 
 function weightedPick<T>(options: T[], weights: number[], total: number, random: Random): T | null {
