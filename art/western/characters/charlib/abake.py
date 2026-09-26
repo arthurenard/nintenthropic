@@ -129,7 +129,7 @@ class Atlas:
         self.dbgN = np.zeros((size, size, 3), np.float32)
 
     def bake(self, ob, field, paint, ao_field=None, snap=True, snap_iters=5, clamp=0.012,
-             grad_eps=2.5e-4, ao_strength=1.0, to_local=None):
+             grad_eps=2.5e-4, ao_strength=1.0, to_local=None, to_world_dir=None, to_world=None):
         """field/paint take world points unless `to_local` maps world -> the part's frame.
         paint(P) -> (albedo linear (n,3), rough (n,), metal (n,))."""
         pix, P, N, T, B = raster(ob, self.size)
@@ -138,15 +138,16 @@ class Atlas:
         if snap:
             Q = S.project_to_surface(field, Q, iters=snap_iters, clamp=clamp)
         g = S.gradient(field, Q, grad_eps)
-        # gradients are in the part frame; parts are only translated, so no rotation back
         n_hi = g / np.maximum(np.linalg.norm(g, axis=1), 1e-9)[:, None]
+        if to_world_dir is not None:
+            n_hi = to_world_dir(n_hi)   # part frame -> world (rotations/mirrors only)
         bad = ~np.isfinite(n_hi).all(1) | ((n_hi * N).sum(1) < -0.2)
         n_hi[bad] = N[bad]
         ts = np.stack([(n_hi * T).sum(1), (n_hi * B).sum(1), (n_hi * N).sum(1)], 1)
         ts /= np.maximum(np.linalg.norm(ts, axis=1), 1e-9)[:, None]
         alb, rough, metal = paint(Q)
         if ao_field is not None:
-            Pw = P + (Q - tl(P))  # the snapped point back in world space
+            Pw = to_world(Q) if to_world is not None else P + (Q - tl(P))
             ao = sdf_ao(ao_field, Pw, n_hi, strength=ao_strength)
         else:
             ao = np.ones(len(P))
@@ -209,13 +210,13 @@ class WorldUnion:
     every part's field, translated into place, combined by a hard min."""
 
     def __init__(self, parts):
-        self.parts = [(f, np.asarray(o, np.float32)) for f, o in parts]
+        self.parts = [(f, np.asarray(o, np.float32), None if M is None else np.asarray(M, np.float32)) for f, o, M in parts]
 
     def __call__(self, P):
         P = np.asarray(P, np.float32)
         d = np.full(len(P), 1.0, np.float32)
-        for f, o in self.parts:
-            Q = P - o
+        for f, o, M in self.parts:
+            Q = P - o if M is None else (P - o) @ M
             # evaluate a part only near its box; farther away its box distance
             # is a safe stand-in (some fields are only distance-like up close)
             m = np.all((Q >= f.lo - 0.01) & (Q <= f.hi + 0.01), axis=1)
@@ -241,12 +242,29 @@ def bake_character(jobs, size, name, log=print):
     B.normalise_density(obs, [j.get("weight", 1.0) for j in jobs])
     B.pack(obs, 0.004)
     log(f"  uv packed {len(obs)} meshes in {time.time() - t:.1f}s")
-    aof = WorldUnion([(j["ao_field"], j["origin"]) for j in jobs if j.get("ao_field") is not None])
+    groups = {}
+    for j in jobs:
+        if j.get("ao_field") is not None:
+            groups.setdefault(j.get("ao_group", "body"), []).append((j["ao_field"], j["origin"], j.get("M")))
     at = Atlas(size)
     for j in jobs:
         t = time.time()
+        # a variant is shadowed by the body and by itself, the body only by itself
+        g = j.get("ao_group", "body")
+        parts = groups.get("body", []) + (groups.get(g, []) if g != "body" else [])
+        if j.get("ao_self_only"):
+            parts = groups.get(g, [])
+        aof = WorldUnion(parts)
         o = np.asarray(j["origin"], np.float32)
-        n = at.bake(j["ob"], j["field"], j["paint"], ao_field=aof, to_local=lambda X, o=o: X - o,
+        M = j.get("M")
+        if M is None:
+            tl, tw, twd = (lambda X, o=o: X - o), (lambda Q, o=o: Q + o), None
+        else:
+            M = np.asarray(M, np.float32)
+            tl = lambda X, o=o, M=M: (X - o) @ M
+            tw = lambda Q, o=o, M=M: Q @ M.T + o
+            twd = lambda n, M=M: n @ M.T
+        n = at.bake(j["ob"], j["field"], j["paint"], ao_field=aof, to_local=tl, to_world=tw, to_world_dir=twd,
                     ao_strength=j.get("ao_strength", 1.0), snap=j.get("snap", True))
         log(f"  baked {j['ob'].name}: {n} texels in {time.time() - t:.1f}s")
     at.dilate()

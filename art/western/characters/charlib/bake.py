@@ -35,8 +35,9 @@ def setup_cycles(samples=8):
 def _edit(objs, fn):
     """Run fn() in edit mode over several meshes at once (multi-object editing)."""
     bpy.ops.object.mode_set(mode="OBJECT") if bpy.context.object and bpy.context.object.mode != "OBJECT" else None
-    for o in bpy.context.view_layer.objects:
-        o.select_set(False)
+    for o in bpy.context.scene.objects:
+        if o is not None:
+            o.select_set(False)
     for o in objs:
         o.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]

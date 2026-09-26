@@ -17,6 +17,7 @@ def clear_scene():
             coll.remove(item)
     for c in list(bpy.data.collections):
         bpy.data.collections.remove(c)
+    bpy.context.view_layer.update()
 
 
 def collection(name, parent=None):
@@ -146,8 +147,9 @@ def join(objs, name):
 
 
 def set_active(ob):
-    for o in bpy.context.view_layer.objects:
-        o.select_set(False)
+    for o in bpy.context.scene.objects:
+        if o is not None:
+            o.select_set(False)
     bpy.context.view_layer.objects.active = ob
     ob.select_set(True)
 

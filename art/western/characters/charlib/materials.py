@@ -132,7 +132,7 @@ def preview_material(m):
     route(m, "normal")
 
 
-def final_material(name, albedo, normal, orm, double_sided=False):
+def final_material(name, albedo, normal, orm, double_sided=True):
     """The glTF material: base colour, normal map and an ORM texture
     (R occlusion, G roughness, B metalness) - the layout glTF and three.js expect."""
     m = bpy.data.materials.new(name)
