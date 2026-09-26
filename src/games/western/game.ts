@@ -42,6 +42,8 @@ export interface HighNoonOptions {
   immortal?: boolean;
   /** Force High Noon for real on or off, whatever the clock says. */
   noon?: boolean;
+  /** Load the art from this folder instead of assets/western/ (the harness's asset tests). */
+  assetBase?: string;
 }
 
 const RELOAD_HINT = "Point off the screen to reload.";
@@ -183,6 +185,7 @@ export class HighNoon implements Game, MatchListener {
         report();
       },
       this.noon,
+      this.options.assetBase ?? null,
     );
     const town = this.assets.town;
     this.stage = new Stage(renderer, town, this.assets.sky, this.assets.fog, this.noon);

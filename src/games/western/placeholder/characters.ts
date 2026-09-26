@@ -455,7 +455,8 @@ export function buildChickenAsset(): LoadedAsset {
     s.part(new SphereGeometry(0.07, 10, 6), side > 0 ? "wing.L" : "wing.R", "#e8e1d4", [side * 0.1, 0.27, -0.01], [0, 0, 0], [0.35, 0.7, 1.1]);
   }
   s.part(new SphereGeometry(0.06, 10, 6), "tail", "#ebe4d7", [0, 0.33, -0.13], [-0.6, 0, 0], [0.5, 1.2, 0.8]);
-  rig.armature.add(skinned(rig, "body", s.build(), cloth(0.9)));
+  // Not "body": that is the root bone's name, and a clip binding by name must find the bone.
+  rig.armature.add(skinned(rig, "chicken.mesh", s.build(), cloth(0.9)));
   return { scene: root, animations: chickenClips([0, 0.24, 0]) };
 }
 

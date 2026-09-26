@@ -36,7 +36,11 @@ export interface HighNoonAssets {
   real: Record<AssetName, boolean>;
 }
 
+/** Where "assets/western/…" lives: the app's base, or (dev harness only) another folder. */
+let assetBase: string | null = null;
+
 function url(path: string): string {
+  if (assetBase) return `${assetBase}${path.replace(/^assets\/western\//, "")}`;
   const base = (import.meta.env?.BASE_URL as string | undefined) ?? "/";
   return `${base}${path}`;
 }
@@ -82,7 +86,14 @@ function horizonColour(texture: Texture): Color | null {
   return new Color().setRGB(r / n / 255, gg / n / 255, b / n / 255, SRGBColorSpace);
 }
 
-export async function loadAssets(ctx: GameContext, onProgress: (fraction: number) => void, noon: boolean): Promise<HighNoonAssets> {
+export async function loadAssets(
+  ctx: GameContext,
+  onProgress: (fraction: number) => void,
+  noon: boolean,
+  /** A folder holding town.glb, sky.webp and the characters, instead of public/assets/western/. */
+  base: string | null = null,
+): Promise<HighNoonAssets> {
+  assetBase = base;
   const real: Record<AssetName, boolean> = { town: false, sky: false, skyNoon: false, bandit: false, boss: false, townsfolk: false, chicken: false };
   const names = Object.keys(ASSET_PATHS) as AssetName[];
   const present = await Promise.all(names.map((n) => exists(url(ASSET_PATHS[n]))));

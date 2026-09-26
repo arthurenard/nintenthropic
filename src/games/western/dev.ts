@@ -261,6 +261,7 @@ async function main() {
     startWave: num("wave", 1),
     immortal: params.get("god") === "1",
     ...(noonParam === null ? {} : { noon: noonParam === "1" }),
+    ...(params.has("assetBase") ? { assetBase: params.get("assetBase") as string } : {}),
   });
   await game.load(ctx, (f) => ($("load").textContent = `Getting ready… ${Math.round(f * 100)}%`));
   $("load").remove();
