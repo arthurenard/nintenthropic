@@ -590,3 +590,102 @@ def extra_materials(lib):
     """Prop materials other modules also use; created before any building."""
     _barber_material(lib)
     _milk_glass(lib)
+
+
+# ---------------------------------------------------------------------------
+# Near cover in the street: what a gunfight needs between 10 and 25 m, and
+# what a real main street has lying about anyway.
+
+# (name, centre, heading deg) — contract.py reads these to place covers
+NEAR_COVER = {
+    'pump': ((-4.4, 10.6, 0.0), 8.0),
+    'freight': ((4.4, 12.6, 0.0), -12.0),
+    'cart': ((-5.2, 16.2, 0.0), 35.0),
+    'barrels_r': ((4.7, 23.2, 0.0), 0.0),
+}
+
+
+def pump(mb, metal, f, r):
+    """A town pump on a plank platform with its trough and two barrels."""
+    mb.box(f, (-0.9, -0.6, 0.0), (0.9, 0.6, 0.12), 'wood_grey', grain_axis=0)
+    # cast-iron pump: column, head, spout, handle
+    metal.cylinder(f, (-0.55, 0.0, 0.12), 0.08, 1.05, 'iron_black', segments=10)
+    metal.cylinder(f, (-0.55, 0.0, 1.17), 0.1, 0.14, 'iron_black', segments=10)
+    metal.board(f, (-0.55, 0.0, 1.0), (-0.2, 0.0, 0.92), 0.06, 0.06, 'iron_black', up=(0, 0, 1))
+    metal.board(f, (-0.6, 0.0, 1.28), (-1.05, 0.0, 1.55), 0.04, 0.03, 'iron_black', up=(0, 1, 0))
+    trough(mb, f.sub((0.35, 0.0, 0.12), rot_z=math.pi / 2), r, L=1.1, W=0.55, H=0.5)
+    barrel(mb, metal, f.sub((0.2, 0.95, 0.0), rot_z=0.4), r)
+    barrel(mb, metal, f.sub((0.78, 0.8, 0.0), rot_z=1.9), r)
+    barrel(mb, metal, f.sub((-0.3, 1.05, 0.0), rot_z=2.9), r)
+    bucket = f.sub((-0.2, -0.35, 0.12), rot_z=0.7)
+    barrel(mb, metal, bucket, r, h=0.3, rad=0.14)
+
+
+def freight(mb, metal, cloth, f, r):
+    """Freight stacked off a wagon: crates three high, sacks, a keg."""
+    crate(mb, f.sub((0.0, 0.0, 0.0), rot_z=0.05), r, sx=1.0, sy=0.75, sz=0.62)
+    crate(mb, f.sub((0.05, 0.02, 0.62), rot_z=-0.08), r, sx=0.9, sy=0.7, sz=0.58)
+    crate(mb, f.sub((-0.02, 0.0, 1.2), rot_z=0.15), r, sx=0.7, sy=0.6, sz=0.45)
+    crate(mb, f.sub((1.0, 0.1, 0.0), rot_z=0.2), r, sx=0.8, sy=0.7, sz=0.62)
+    crate(mb, f.sub((0.95, 0.12, 0.62), rot_z=0.05), r, sx=0.7, sy=0.6, sz=0.5)
+    sack(cloth, f.sub((-0.75, -0.2, 0.0), rot_z=1.1), r)
+    sack(cloth, f.sub((-0.7, 0.35, 0.0), rot_z=2.4), r)
+    barrel(mb, metal, f.sub((1.75, 0.3, 0.0), rot_z=0.2), r, h=0.72, rad=0.25)
+
+
+def hand_cart(mb, metal, f, r):
+    """A two-wheeled hand cart tipped onto its handles."""
+    tf = f.sub((0.0, 0.0, 0.62)).sub(rot_y=math.radians(-14))
+    L, W = 1.7, 1.05
+    for k in range(6):
+        y0 = -W / 2 + k * W / 6
+        mb.box(tf, (-L / 2, y0 + 0.004, 0.0), (L / 2, y0 + W / 6 - 0.004, 0.035), 'wood_raw', grain_axis=0)
+    for side in (-1, 1):
+        for k in range(3):
+            z0 = 0.035 + k * 0.17
+            y0 = side * W / 2 - (0.03 if side > 0 else 0.0)
+            mb.box(tf, (-L / 2, y0, z0), (L / 2, y0 + 0.03, z0 + 0.16), 'paint_red', grain_axis=0)
+    for k in range(3):
+        mb.box(tf, (L / 2 - 0.03, -W / 2, 0.035 + k * 0.17), (L / 2, W / 2, 0.035 + k * 0.17 + 0.16), 'paint_red',
+               grain_axis=1)
+    # handles down to the dirt
+    for side in (-1, 1):
+        mb.board(tf, (-L / 2, side * 0.42, 0.0), (-L / 2 - 1.1, side * 0.42, -0.35), 0.06, 0.05, 'wood_dark',
+                 up=(0, 0, 1))
+    for side in (-1, 1):
+        wheel(mb, metal, f.sub((0.15, side * (W / 2 + 0.12), 0.62)), r, radius=0.62)
+    metal.box(f, (0.1, -W / 2 - 0.12, 0.58), (0.2, W / 2 + 0.12, 0.66), 'iron')
+    sack(mb, f.sub((0.2, 0.0, 0.7), rot_z=0.3), r)
+
+
+def near_cover(lib, col):
+    r = rng("nearcover")
+    out = []
+    groups = {}
+
+    def G(name):
+        if name not in groups:
+            groups[name] = (MeshBuilder(f"props.near_{name}.wood"), MeshBuilder(f"props.near_{name}.metal"),
+                            MeshBuilder(f"props.near_{name}.cloth"))
+        return groups[name]
+    from .landscape import ground_z
+    for key, ((x, y, _), ang) in NEAR_COVER.items():
+        grp = 'left_near' if x < 0 else 'right_near'
+        wd, mt, cl = G(grp)
+        f = Frame((x, y, ground_z(x, y) - 0.02), math.radians(ang))
+        if key == 'pump':
+            pump(wd, mt, f, r)
+        elif key == 'freight':
+            freight(wd, mt, cl, f, r)
+        elif key == 'cart':
+            hand_cart(wd, mt, f, r)
+        elif key == 'barrels_r':
+            for (dx, dy, rz, hh) in ((0.0, 0.0, 0.2, 0.88), (0.6, 0.15, 1.3, 0.88), (0.3, 0.55, 2.2, 0.88),
+                                     (0.95, 0.65, 0.6, 0.72)):
+                barrel(wd, mt, f.sub((dx, dy, 0.0), rot_z=rz), r, h=hh, rad=0.29 if hh > 0.8 else 0.25)
+    for gname, (wd, mt, cl) in groups.items():
+        for mb, surf in ((wd, 'wood'), (mt, 'metal'), (cl, 'cloth')):
+            ob = mb.build(col, lib, surface=surf, group=gname)
+            if ob:
+                out.append(ob)
+    return out

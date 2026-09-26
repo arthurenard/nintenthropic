@@ -11,7 +11,7 @@ from . import core, materials, lighting, signs
 
 EYE = 1.7
 PITCH_DEG = -1.0
-VFOV_DEG = 50.0
+VFOV_DEG = 45.0
 
 
 class Context:
@@ -61,6 +61,7 @@ def stage_scene(ctx):
     for b in blds.values():
         b.emit(c_bld, lib)
     props.build_street(lib, c_props, blds)
+    props.near_cover(lib, c_props)
     from . import clutter
     clutter.materials(lib)
     clutter.build(lib, c_props)
@@ -69,6 +70,22 @@ def stage_scene(ctx):
     from . import sky
     sky.build_far(core.collection("farworld", root))
     contract.build(lib, c_contract, blds, lm)
+    # where dynamic shadows may fall besides the street: boardwalk and
+    # balcony tops (export.py turns these into part of ground.shadow)
+    import json
+    from . import buildings as Bm
+    quads = []
+    for b in blds.values():
+        if b.walk:
+            P = Bm.WALK_DEPTH
+            quads.append([list(b.F.p(s, y, Bm.DECK_Z + 0.012)) for (s, y) in
+                          ((-b.W / 2, -P), (b.W / 2, -P), (b.W / 2, 0.0), (-b.W / 2, 0.0))])
+    sal, ho = blds['saloon'], blds['hotel']
+    quads.append([list(sal.F.p(s, y, 4.01 + 0.012)) for (s, y) in
+                  ((-sal.W / 2, -Bm.WALK_DEPTH), (sal.W / 2, -Bm.WALK_DEPTH), (sal.W / 2, 0.0), (-sal.W / 2, 0.0))])
+    quads.append([list(ho.F.p(s, y, 4.05 + 0.012)) for (s, y) in
+                  ((-ho.W / 2 + 0.3, -1.1), (ho.W / 2 - 0.3, -1.1), (ho.W / 2 - 0.3, 0.0), (-ho.W / 2 + 0.3, 0.0))])
+    scene["shadow_quads"] = json.dumps(quads)
     print(f"scene built in {time.time() - t:.1f}s: {len(bpy.data.objects)} objects, "
           f"{sum(len(o.data.polygons) for o in bpy.data.objects if o.type == 'MESH')} faces")
     bpy.ops.wm.save_as_mainfile(filepath=ctx.blend, compress=True)
@@ -105,6 +122,14 @@ def stage_sky(ctx):
         sky.render_sky(ctx, scene, 1024, 512, 24)
     else:
         sky.render_sky(ctx, scene)
+    # High noon, for the 12:00 secret: the same far world under a sun
+    # nearly overhead (the game swaps it in as background and environment)
+    open_blend(ctx.blend)
+    scene = bpy.context.scene
+    if ctx.quick:
+        sky.render_sky(ctx, scene, 1024, 512, 24, name="sky_noon", noon=True)
+    else:
+        sky.render_sky(ctx, scene, 2048, 1024, 64, name="sky_noon", noon=True)
 
 
 def stage_review(ctx):

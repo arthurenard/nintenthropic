@@ -120,6 +120,17 @@ def read_exr_layers(path):
     return out
 
 
+def display_hex(rgb, scene):
+    """One scene-linear colour through the view transform, as '#rrggbb'."""
+    import tempfile
+    tmp = os.path.join(tempfile.gettempdir() if not bpy.app.tempdir else bpy.app.tempdir, "__hex.png")
+    save_display(np.array(rgb, dtype=np.float32).reshape(1, 1, 3) * np.ones((4, 4, 1), np.float32), tmp, scene)
+    img = bpy.data.images.load(tmp)
+    px = list(img.pixels[:4])
+    bpy.data.images.remove(img)
+    return "#%02x%02x%02x" % tuple(int(round(max(0, min(1, c)) * 255)) for c in px[:3])
+
+
 def save_display(rgb, path, scene, fmt='PNG', quality=90, flip=True):
     """Write linear RGB through the scene's view transform (AgX), exactly as
     a render would be saved."""

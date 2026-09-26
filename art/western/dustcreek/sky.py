@@ -215,7 +215,27 @@ def build_far(col):
     return objs
 
 
-def render_sky(ctx, scene, w=4096, h=2048, samples=96):
+def set_sun(scene, elevation_deg, azimuth_deg):
+    """Point every Sky Texture (world and far-world materials) and the sun
+    lamp at a new sun."""
+    import math as _m
+    from mathutils import Vector as _V
+    trees = [scene.world.node_tree] + [m.node_tree for m in bpy.data.materials if m.node_tree]
+    for t in trees:
+        for n in t.nodes:
+            if n.type == 'TEX_SKY':
+                n.sun_elevation = _m.radians(elevation_deg)
+                n.sun_rotation = _m.radians(180.0 - azimuth_deg)
+    lamp = bpy.data.objects.get("SunLamp")
+    if lamp is not None:
+        az, el = _m.radians(azimuth_deg), _m.radians(elevation_deg)
+        v = _V((_m.sin(az) * _m.cos(el), -_m.cos(az) * _m.cos(el), _m.sin(el)))
+        lamp.rotation_euler = v.to_track_quat('Z', 'Y').to_euler()
+        if elevation_deg > 45:
+            lamp.data.color = (1.0, 0.95, 0.88)
+
+
+def render_sky(ctx, scene, w=4096, h=2048, samples=96, name="sky", noon=False):
     """Render the equirectangular sky from the player's eye with only the
     far world visible, in the Three.js equirect convention (u=0.25 looks
     down the street, u=0.5 is +X; top row is up)."""
@@ -244,6 +264,8 @@ def render_sky(ctx, scene, w=4096, h=2048, samples=96):
     old_cam = scene.camera
     scene.camera = cam
     import json
+    if noon:
+        set_sun(scene, 78.0, lighting.SUN_AZ_DEG)
     far = [o for o in scene.objects if any(c.name == 'farworld' for c in o.users_collection)]
     for o in far:
         o.hide_render = True
@@ -267,12 +289,13 @@ def render_sky(ctx, scene, w=4096, h=2048, samples=96):
     c0 = int((0.25 - 30 / 360) * sp.width)
     c1 = int((0.25 + 30 / 360) * sp.width)
     horizon = pa[r0:r1 + 1, c0:c1].reshape(-1, 3).mean(0)
-    json.dump({"horizon": [float(v) for v in horizon]}, open(os.path.join(ctx.build, "sky_horizon.json"), "w"))
+    if not noon:
+        json.dump({"horizon": [float(v) for v in horizon]}, open(os.path.join(ctx.build, "sky_horizon.json"), "w"))
     print("horizon colour", horizon)
     for o in far:
         o.hide_render = False
     pipeline.render_settings(scene, w, h, samples)
-    exr = os.path.join(ctx.build, "sky.exr")
+    exr = os.path.join(ctx.build, f"{name}.exr")
     s = scene.render.image_settings
     if hasattr(s, 'media_type'):
         s.media_type = 'IMAGE'
@@ -285,7 +308,7 @@ def render_sky(ctx, scene, w=4096, h=2048, samples=96):
     spec = inp.spec()
     arr = np.asarray(inp.read_image(0, 0, 0, 3, oiio.FLOAT)).reshape(spec.height, spec.width, 3)
     inp.close()
-    webp = os.path.join(ctx.assets, "sky.webp")
+    webp = os.path.join(ctx.assets, f"{name}.webp")
     post.save_display(post.grade(arr), webp, scene, fmt='WEBP', quality=88)
     scene.camera = old_cam
     bpy.data.objects.remove(cam)

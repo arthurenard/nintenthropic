@@ -46,10 +46,60 @@ def render(scene, path, w, h, samples, fog=True):
     print("wrote", path, flush=True)
 
 
+def figures(scene):
+    """Stand a plain 1.8 m figure (dark coat, pale hat band) on every
+    exposed cover point: the readability check the gameplay team asked for."""
+    import bmesh
+    from .nodes import new_material
+    m, g = new_material("figure")
+    g.output(g.principled((0.05, 0.035, 0.03), rough=0.7))
+    hat, gh = new_material("figure_hat")
+    gh.output(gh.principled((0.35, 0.25, 0.16), rough=0.8))
+    col = bpy.data.collections.new("figures")
+    scene.collection.children.link(col)
+    for ob in list(scene.objects):
+        if not ob.name.startswith('cover.') or ob.name.endswith('.hidden'):
+            continue
+        p = ob.location
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=0.2, radius2=0.24, depth=1.45)
+        for v in bm.verts:
+            v.co.z += 0.725
+        me = bpy.data.meshes.new("fig")
+        bm.to_mesh(me)
+        bm.free()
+        me.materials.append(m)
+        body = bpy.data.objects.new("fig", me)
+        body.location = p
+        col.objects.link(body)
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=0.12)
+        me = bpy.data.meshes.new("head")
+        bm.to_mesh(me)
+        bm.free()
+        me.materials.append(m)
+        head = bpy.data.objects.new("head", me)
+        head.location = p + Vector((0, 0, 1.6))
+        col.objects.link(head)
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=0.26, radius2=0.26, depth=0.03)
+        me = bpy.data.meshes.new("brim")
+        bm.to_mesh(me)
+        bm.free()
+        me.materials.append(hat)
+        brim = bpy.data.objects.new("brim", me)
+        brim.location = p + Vector((0, 0, 1.7))
+        col.objects.link(brim)
+
+
 def render_all(ctx):
     scene = bpy.context.scene
     cam = bpy.data.objects["camera.player"]
     scene.camera = cam
+    if ctx.preview == 'figures':
+        figures(scene)
+        render(scene, os.path.join(ctx.review_dir, "figures_1600x1000.png"), 1600, 1000, 48 if not ctx.quick else 16)
+        return
     s = 24 if ctx.quick else 160
     out = ctx.review_dir
     views = [('player_1600x1000', 1600, 1000), ('player_1920x800', 1920, 800)]

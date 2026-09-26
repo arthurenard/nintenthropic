@@ -44,8 +44,9 @@ QUALITY = 2.2        # texels per screen pixel we aim for (1440p headroom + supe
 MARGIN_PX = 6
 
 # projective ground mapping (camera space tangents)
-TX = 1.16            # half-width in tan units: a hair beyond 21:9 at 50 deg vertical
-TY0, TY1 = -0.53, 0.13
+TX = 2.37 * math.tan(math.radians(pipeline.VFOV_DEG / 2)) * 1.06   # a hair beyond 21:9
+TY0 = -math.tan(math.radians(pipeline.VFOV_DEG / 2)) * 1.12 - 0.02
+TY1 = 0.13
 
 
 def cam_basis():

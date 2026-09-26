@@ -11,6 +11,7 @@ import os
 
 import bpy
 import numpy as np
+from mathutils import Vector
 
 from . import pipeline, bake, core
 from .nodes import new_material
@@ -120,6 +121,14 @@ def shadow_plane(street):
     bmesh.ops.delete(bm, geom=kill, context='FACES')
     for v in bm.verts:
         v.co.z += 0.012
+    # boardwalk and balcony tops, recorded by the scene stage
+    import json
+    inv = street.matrix_world.inverted()
+    for q in json.loads(bpy.context.scene.get("shadow_quads", "[]")):
+        vs = [bm.verts.new(inv @ Vector(p)) for p in q]
+        f = bm.faces.new(vs)
+        if f.normal.z < 0:
+            f.normal_flip()
     me = bpy.data.meshes.new("ground.shadow")
     bm.to_mesh(me)
     bm.free()
@@ -183,6 +192,21 @@ def stage(ctx):
         for k in ('building', 'group', 'animatable'):
             if k in ob.keys() and not ob.name.startswith(('cover.', 'calib.')):
                 del ob[k]
+    from . import post
+    fog_lin = post.grade(post.fog_color()[None, :])[0]
+    hexcol = post.display_hex(fog_lin, scene)
+    probe = np.array([[0.0, 45.0, 1.0]])
+    tau = float(post.optical_depth(probe)[0])
+    k_exp2 = math.sqrt(tau) / 45.0
+    scene["fog_color"] = hexcol
+    scene["fog_density"] = round(k_exp2, 5)
+    scene["fog_baked"] = True
+    scene["fog_note"] = ("town textures already carry the haze (distance + height dust, see art/western/"
+                         "dustcreek/post.py); fog_density is a THREE.FogExp2 density matching it at ~45 m for "
+                         "dynamic objects. Set material.fog = false on the town's unlit materials to avoid "
+                         "hazing the town twice.")
+    scene["colors"] = "baked textures are display-referred (AgX, Medium High Contrast): render them with no tone mapping"
+    print("fog extras:", hexcol, scene["fog_density"])
     out = os.path.join(ctx.assets, "town.glb")
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.export_scene.gltf(

@@ -184,8 +184,6 @@ def build_covers(col, blds, lm, bvh):
                   lf.p(la['door']['s'] - 2.4, 1.5, 0.0)))
     specs.append(('livery.loft', 'window', 'step_out', 1, lf.p(la['loft']['s'], -0.08, 6.0),
                   lf.p(la['loft']['s'] - 1.3, 1.2, 6.0)))
-    behind('livery.hay', 'crate', lf.p(-2.3, -1.6, 0.0), dist=0.85)
-    corner('livery.corner', (-11.3, 54.4, 0.0), (-10.1, 53.9, 0.0), 'lean_left')
     # the broken wagon and the saloon's trough
     (wx, wy, _), wa = P.WAGON
     c, sn_ = math.cos(math.radians(wa)), math.sin(math.radians(wa))
@@ -207,6 +205,30 @@ def build_covers(col, blds, lm, bvh):
     ut = blds['undertaker']
     door_cover('undertaker.door', ut, 'door')
     behind('street.crates_right', 'crate', Vector((5.9, 33.0, 0.0)), dist=0.8)
+    # ---- near street cover (10-25 m, where bandits read best) ------------
+    from .landscape import ground_z
+
+    def local(key, lx_, ly_):
+        (cx, cy, _), ang = P.NEAR_COVER[key]
+        a = math.radians(ang)
+        x = cx + lx_ * math.cos(a) - ly_ * math.sin(a)
+        y = cy + lx_ * math.sin(a) + ly_ * math.cos(a)
+        return Vector((x, y, ground_z(x, y)))
+    behind('street.pump', 'barrel', local('pump', 0.5, 0.88), dist=0.6)
+    behind('street.cart', 'wagon', local('cart', 0.1, 0.0), dist=1.15)
+    behind('street.barrels_right', 'barrel', local('barrels_r', 0.45, 0.35), dist=0.62)
+    stack = local('freight', 0.0, 0.0)
+    d = Vector((stack.x, stack.y, 0)).normalized()
+    toward_centre = Vector((-d.y, d.x, 0)) if d.x > 0 else Vector((d.y, -d.x, 0))
+    fh = stack + d * 0.95
+    fe = fh + toward_centre * 0.85
+    fh.z = ground_z(fh.x, fh.y)
+    fe.z = ground_z(fe.x, fe.y)
+    corner('street.freight', fh, fe, 'lean_right', kind='crate')
+    # the high-noon duel: a bandit walks out from the freight to mid-street
+    duel = Vector((0.4, 12.5, 0.0))
+    duel.z = ground_z(duel.x, duel.y)
+    specs.append(('street.duel', 'corner', 'step_out', 0, duel, fh.copy()))
     # ---- far end --------------------------------------------------------
     ca = church_anchors['tower']
     fl = ca['floor']
@@ -214,12 +236,20 @@ def build_covers(col, blds, lm, bvh):
     behind('street.far_barrels', 'barrel', Vector((4.4, 50.5, 0.0)), dist=0.8)
     corner('blacksmith', (13.2, 48.4, 0.0), (9.2, 48.4, 0.0), 'lean_right')
 
+    # gameplay flags the game reads: Black Jack's three covers, spots where an
+    # innocent looks natural, and the duel spot
+    FLAGS = {
+        'street.wagon': {'boss': True}, 'saloon.balcony_near': {'boss': True}, 'sheriff.door': {'boss': True},
+        'saloon.door': {'townsfolk': True}, 'barber.door': {'townsfolk': True},
+        'hotel.window_up_2': {'townsfolk': True}, 'undertaker.door': {'townsfolk': True},
+        'street.duel': {'duel': True},
+    }
     objs = []
     report = []
     for cid, kind, emerge, level, ex, hd in specs:
         rot = face_player(ex)
         e = empty(f"cover.{cid}", ex, col, rot=rot, size=0.4, display='SINGLE_ARROW',
-                  kind=kind, emerge=emerge, level=level, facing='+Z')
+                  kind=kind, emerge=emerge, level=level, facing='+Z', **FLAGS.get(cid, {}))
         h = empty(f"cover.{cid}.hidden", hd, col, rot=rot, size=0.3, display='PLAIN_AXES',
                   kind=kind, emerge=emerge, level=level, cover=cid)
         objs += [e, h]
@@ -234,10 +264,15 @@ def build_covers(col, blds, lm, bvh):
         body = [ex + up * zz + side * dx for zz in hts for dx in (-0.16, 0.0, 0.16)]
         nvis = sum(seen(bvh, q) for q in body)
         vis_chest = vis_head = nvis >= 4
-        crouch = [hd + up * zz + side * dx for zz in (0.3, 0.6, 0.85) for dx in (-0.15, 0.0, 0.15)]
+        # a man hunkered behind a barrel is lower than one behind a wall
+        chts = (0.3, 0.55, 0.78) if kind == 'barrel' else (0.3, 0.6, 0.85)
+        crouch = [hd + up * zz + side * dx for zz in chts for dx in (-0.15, 0.0, 0.15)]
         hid = sum(seen(bvh, c) for c in crouch) <= 1
         vp = [viewport(ex + up * 1.2, a) for a in (4 / 3, 16 / 9, 21 / 9)]
+        if cid == 'street.duel':
+            hid = True     # the duel spot is out in the open by design; its 'hidden' is the freight
         report.append(dict(id=cid, kind=kind, emerge=emerge, level=level, exposed_visible=vis_chest and vis_head,
+                           flags=list(FLAGS.get(cid, {}).keys()),
                            hidden_hidden=hid, vp_4_3=[round(vp[0][0], 3), round(vp[0][1], 3)],
                            in_4_3=0 <= vp[0][0] <= 1 and 0 <= vp[0][1] <= 1,
                            dist=round((ex - EYE).length, 1),
@@ -264,10 +299,20 @@ def build_calib(col, lib, blds, lm, grp_builders):
     spots = {}
     sal = blds['saloon']
     ho = blds['hotel']
-    # 1 top-left: on the saloon gallery roof's fascia at its near corner
-    spots[1] = sal.F.p(sal.s_near(0.015), -2.62, 7.13)
-    # 3 top-right: on the hotel's cornice ledge, near corner
-    spots[3] = ho.F.p(ho.s_near(0.02), -0.16, ho.front_h - 0.25 + 0.08)
+    def along(fn, lo, hi, vx, aspect=4 / 3):
+        # the point on a ledge (parameterised 0..1) whose viewport x is vx
+        best = None
+        for i in range(401):
+            t = lo + (hi - lo) * i / 400
+            p = fn(t)
+            err = abs(viewport(p + Vector((0, 0, 0.15)), aspect)[0] - vx)
+            if best is None or err < best[0]:
+                best = (err, p)
+        return best[1]
+    # 1 top-left: on the saloon gallery roof's fascia
+    spots[1] = along(lambda t: sal.F.p(sal.s_near(t), -2.62, 7.13), 0.0, 0.5, 0.17)
+    # 3 top-right: on the top of the HOTEL sign's frame
+    spots[3] = along(lambda t: ho.F.p(3.5 * (1 - 2 * t) * ho.near * -1 * -1, -0.13, 9.36), 0.0, 1.0, 0.83)
     # 2 top-centre: on the church belfry's balustrade rail
     ca = lm['church'][3]['tower']['rail']
     spots[2] = ca + Vector((0.35, -0.05, 0.05))
@@ -384,7 +429,20 @@ def build(lib, col, blds, lm):
     cover_objs, cover_report = build_covers(col, blds, lm, bvh)
     build_paths(col)
     build_sun(col)
-    out = dict(covers=cover_report, calib=calib_report)
+    piano = bpy.data.objects.get('secret.piano')
+    piano_report = {}
+    if piano is not None:
+        mw = piano.matrix_world
+        pts = [mw @ Vector(p) for p in ((0, 0.4, 1.0), (0, 0.4, 0.8), (-0.5, 0.4, 1.1), (0.5, 0.4, 1.1), (0, 0.1, 0.75))]
+        hits = []
+        for p in pts:
+            d = p - EYE
+            dist = d.length
+            h = bvh.ray_cast(EYE, d / dist, dist + 0.5)
+            hits.append(POLY_OWNER[h[2]] if h[0] is not None else None)
+        piano_report = dict(rays=len(pts), hit_piano=sum(1 for h in hits if h == 'secret.piano'), hits=hits)
+        print("PIANO sightline:", piano_report)
+    out = dict(covers=cover_report, calib=calib_report, piano=piano_report)
     path = os.path.join(bpy.path.abspath("//") or ".", "contract_report.json")
     try:
         from . import signs
