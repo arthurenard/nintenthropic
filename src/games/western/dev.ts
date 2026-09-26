@@ -8,7 +8,13 @@
  *
  * Query parameters: ?seed=N, ?wave=N, ?noon=1|0, ?golden=1, ?god=1,
  * ?quality=low|medium|high, ?skipcalib=1, ?manual=1 (no rAF loop; drive it
- * from window.__handy), ?w=&h=&dpr= (a fixed canvas size, for benchmarks).
+ * from window.__handy), ?w=&h=&dpr= (a fixed canvas size, for benchmarks),
+ * ?assetBase=/some/folder/ (load town.glb, sky.webp and the characters from
+ * there instead of public/assets/western/, to try an export in progress).
+ *
+ * window.__handy: game (with game.debug: targets(), match(), gallery()...),
+ * hud (with .log of every HudSink call), mouse (aimAt, fire, reloadGesture),
+ * advance(seconds), bench(frames), pause(), play().
  */
 import { SRGBColorSpace, TextureLoader, WebGLRenderer } from "three";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";

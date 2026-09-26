@@ -379,7 +379,9 @@ export class Cast {
       v.fallFrom.set(p0.x, p0.y, p0.z);
       v.fallVel.set((landX - p0.x) / T, vy, (landZ - p0.z) / T);
       v.landY = landY;
-      rig.play("death_fall", 0.08, false, 1.25 / T);
+      // Stretch the clip so its body meets the ground as the fall lands (the
+      // impact sits about four fifths of the way through a fall clip).
+      rig.play("death_fall", 0.08, false, (rig.duration("death_fall") * 0.78) / T);
     } else {
       rig.play(choice.clip, 0.08, false);
       v.thudIn = choice.clip === "death_slump" ? 0.55 : 0.85;

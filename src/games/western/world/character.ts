@@ -230,6 +230,11 @@ export class Rig {
     return this.clips.has(clip);
   }
 
+  /** Length in seconds of the clip that would play for `name` (after fallbacks). */
+  duration(name: string): number {
+    return this.resolve(name)?.duration ?? 1;
+  }
+
   private resolve(name: string): AnimationClip | null {
     const direct = this.clips.get(name);
     if (direct) return direct;
