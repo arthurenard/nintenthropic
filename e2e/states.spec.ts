@@ -116,6 +116,34 @@ test("the aim check and play", async ({ page }, info) => {
   await shot(page, info, "15-results");
 });
 
+test("an aim that will not settle is offered Play Anyway, with one tip", async ({ page }, info) => {
+  await skipWelcome(page);
+  await page.goto("/?input=script");
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
+  // A hand that never goes quite where the player looks: every shot lands
+  // somewhere else near the target.
+  const wander: [number, number][] = [
+    [0.09, -0.07],
+    [-0.1, 0.06],
+    [0.07, 0.08],
+    [-0.06, -0.09],
+    [0.1, 0.02],
+    [-0.08, 0.07],
+  ];
+  for (let shotIndex = 0; shotIndex < 12; shotIndex++) {
+    const lit = (await snapshot(page)).lit!;
+    const [dx, dy] = wander[shotIndex % wander.length]!;
+    await shoot(page, lit.x + dx, lit.y + dy);
+    await page.waitForTimeout(150);
+  }
+  await expect(page.getByRole("button", { name: "Play Anyway" })).toBeVisible();
+  expect((await snapshot(page)).checkDone).toBe(false);
+  await shot(page, info, "10b-aim-check-play-anyway");
+  await page.getByRole("button", { name: "Play Anyway" }).click();
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 5_000 }).toBe("play");
+});
+
 const TROUBLES: [string, string][] = [
   ["camera-denied", "Camera Is Off"],
   ["camera-busy", "Camera Is Busy"],
