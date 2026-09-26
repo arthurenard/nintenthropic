@@ -117,7 +117,9 @@ export function findStand(queries: Pick<TownQueries, "cast" | "groundAt">, eye: 
   const dir = wanted.clone().sub(eye).normalize();
   const yaw = Math.atan2(dir.x, -dir.z);
   const pitch = Math.asin(dir.y);
-  const step = (0.1 * Math.PI) / 180;
+  // A fifth of a degree: finer than a bottle is tall at any distance in the
+  // street (0.3 m at 60 m is 0.29°), and few enough rays to search in a blink.
+  const step = (0.2 * Math.PI) / 180;
   const reach = (reachDeg * Math.PI) / 180;
   const ray = new Vector3();
   const up = new Vector3(0, 1, 0);

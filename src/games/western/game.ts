@@ -1,4 +1,4 @@
-import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type ToneMapping } from "three";
+import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type Texture, type ToneMapping } from "three";
 import type {
   Aim,
   CalibrationStage,
@@ -68,6 +68,14 @@ interface Scheduled {
 
 const tmp = new Vector3();
 const tmp2 = new Vector3();
+
+/**
+ * A moment for the page between the long steps of getting ready, so the
+ * loading bar keeps moving instead of freezing for a second at the end.
+ */
+function breathe(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 /**
  * Before load() the aim check has nothing to show; afterwards this forwards
@@ -213,6 +221,7 @@ export class HighNoon implements Game, MatchListener {
     this.camera.reducedMotion = ctx.settings.reducedMotion;
     this.camera.still = true;
     this.sound = new Sound(ctx.audio, this.camera.camera);
+    await breathe();
     this.queries = new TownQueries(town);
     // Only covers the player can actually see a man in (see coverCheck.ts).
     const moved = shiftCovers(town.covers, this.queries, town.eye);
@@ -228,7 +237,9 @@ export class HighNoon implements Game, MatchListener {
     // which he comes out without gliding through a wall.
     const clear = unblockCovers(covers.kept, this.queries, town.eye);
     if (clear.moved.length) console.info(`High Noon: covers stepped clear of a post: ${clear.moved.join(", ")}.`);
+    await breathe();
     const ready = readySpots(clear.covers, this.queries, town.eye);
+    await breathe();
     // Which way a man shot up high goes over, and whether there is room to
     // fall at all (on a deep balcony he goes down on its boards instead).
     const falls = fallPaths(ready, this.queries, town.eye);
@@ -236,6 +247,7 @@ export class HighNoon implements Game, MatchListener {
       const f = falls.get(c.id);
       return f ? { ...c, ledge: f.ledge } : c;
     });
+    await breathe();
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
 
@@ -250,6 +262,7 @@ export class HighNoon implements Game, MatchListener {
       townsfolk: new RigPool(townsT, 4, parent),
       chicken: new RigPool(chickenT, 1, parent),
     };
+    await breathe();
     this.secretsWorld = new SecretsWorld(town, this.effects, this.sound, this.queries, parent);
     this.sights = this.framingSights();
     const toSun = this.stage.sunDirection.clone().negate();
@@ -283,6 +296,7 @@ export class HighNoon implements Game, MatchListener {
     this.post.set("noon", this.noon ? 1 : 0);
     this.tier = ctx.quality.tier;
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
+    await breathe();
     await this.warmUp();
     this.tuneEcho();
     await sounds;
@@ -334,10 +348,29 @@ export class HighNoon implements Game, MatchListener {
       }
     });
     try {
+      // The textures first, a few at a time between breaths: uploaded all in
+      // the first frame below they froze the page (and its progress bar) for
+      // a quarter of a second.
+      const textures = new Set<Texture>();
+      scene.traverse((o) => {
+        const m = (o as Mesh).material;
+        for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
+          for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) textures.add(v as Texture);
+        }
+      });
+      let since = performance.now();
+      for (const t of textures) {
+        r.initTexture(t);
+        if (performance.now() - since > 40) {
+          await breathe();
+          since = performance.now();
+        }
+      }
       if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
       else (r as { compile: (s: unknown, c: unknown) => void }).compile(scene, this.camera.camera);
       // One real frame with everything shown: the shadow pass's depth
       // shaders and the post chain only compile when they are drawn.
+      await breathe();
       this.post.render(0);
     } catch {
       // Compilation is an optimisation; the first frames will do it otherwise.
