@@ -68,6 +68,11 @@ export interface HudSink {
   ammo(left: number, capacity: number, reloading: boolean): void;
   /** The cylinder's finish: gold for the Golden Revolver. Optional; the page also reads Settings.unlocks. */
   revolverFinish?(finish: "steel" | "gold"): void;
+  /**
+   * The player has fallen: the gun is gone, so the page hides the crosshair
+   * until the results. Optional; a game without a death never calls it.
+   */
+  playerDown?(): void;
   /** Damage taken: the direction it came from in radians (0 = straight ahead, + = right), and how hurt the player now is, 0..1. */
   damage(direction: number, hurt: number): void;
   /** How hurt the player is as it recovers, 0..1 (drives the screen's red edge). */

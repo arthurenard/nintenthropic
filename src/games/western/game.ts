@@ -961,6 +961,7 @@ export class HighNoon implements Game, MatchListener {
 
   playerDeath(): void {
     this.phase = "dying";
+    this.hud.playerDown?.();
     this.deathT = 0;
     this.sound.play("death_player");
     this.sound.filter("slowmo", 1);

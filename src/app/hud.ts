@@ -26,6 +26,7 @@ interface Row {
 export class Hud implements HudSink {
   /** Called once when the game ends, with its stats. */
   onGameOver: ((stats: GameStats) => void) | null = null;
+  onPlayerDown: (() => void) | null = null;
 
   private lastScore = 0;
   private rows: Row[] = [];
@@ -235,6 +236,10 @@ export class Hud implements HudSink {
       hint.hidden = false;
       requestAnimationFrame(() => hint.classList.remove("gone"));
     }
+  }
+
+  playerDown(): void {
+    this.onPlayerDown?.();
   }
 
   gameOver(stats: GameStats): void {

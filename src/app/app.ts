@@ -131,6 +131,12 @@ export class App {
     this.motion.addEventListener("change", () => (this.settings.reducedMotion = this.motion.matches));
     this.hud = new Hud(() => this.settings.reducedMotion);
     this.hud.onGameOver = (stats) => this.gameOver(stats);
+    // A fallen player has no gun: a crosshair over the death scene read as
+    // one still to be fired.
+    this.hud.onPlayerDown = () => {
+      this.crosshair.visible = false;
+      this.crosshair.clear();
+    };
     this.control = options.scripted ? "hand" : touchOnly() && prefs.control === "mouse" ? "touch" : prefs.control;
     this.wire();
   }

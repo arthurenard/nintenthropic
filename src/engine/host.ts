@@ -78,7 +78,8 @@ export class EngineHost {
     }
     // Colour management: the page is sRGB. Tone mapping is the game's call.
     this.renderer.outputColorSpace = SRGBColorSpace;
-    const tier = guessTier(gpuName(this.renderer.getContext()), navigator.hardwareConcurrency || 4);
+    this.gpu = gpuName(this.renderer.getContext());
+    const tier = guessTier(this.gpu, navigator.hardwareConcurrency || 4);
     this.resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier] });
     this.quality = { scale: this.resolution.scale, tier };
     this.observer = new ResizeObserver(() => this.resize());
@@ -90,9 +91,8 @@ export class EngineHost {
     });
   }
 
-  get gpu(): string {
-    return gpuName(this.renderer.getContext());
-  }
+  /** The GPU's name, read once: it cannot change under a live context, and asking the driver is not free. */
+  readonly gpu: string;
 
   /** The game to run; null clears the stage. */
   setGame(game: Game | null): void {
