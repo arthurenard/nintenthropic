@@ -26,10 +26,10 @@ def group_for(x, y):
     return 'right_near' if y < 25 else 'right_far'
 
 
-def rock(mb, p, size, r, mat='stone_rock', flat=0.6):
+def rock(mb, p, size, r, mat='stone_rock', flat=0.6, subdiv=1):
     """An irregular stone: a jittered icosahedron squashed into the dirt."""
     bm = bmesh.new()
-    bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0)
+    bmesh.ops.create_icosphere(bm, subdivisions=subdiv, radius=1.0)
     ph = Vector((r.uniform(0, 50), r.uniform(0, 50), r.uniform(0, 50)))
     sx, sy = r.uniform(0.8, 1.3), r.uniform(0.7, 1.2)
     for v in bm.verts:
@@ -101,6 +101,18 @@ def materials(lib):
     g.output(g.principled(col, rough=0.9, normal=g.bump(n, strength=0.4, distance=0.01)))
     m["surface"] = 'stone'
     lib["stone_rock"] = m
+    # a weathered sandstone boulder: darker, rounded, lichen-dull
+    m, g = new_material("stone_boulder")
+    pos = g.geo('Position')
+    n = g.noise(pos, scale=6.0, detail=10.0, rough=0.65)
+    n2 = g.noise(pos, scale=1.5, detail=4.0)
+    col = g.ramp(g.add(g.mul(n, 0.5), g.mul(n2, 0.5)), [(0.3, lin(96, 70, 54)), (0.55, lin(132, 100, 76)),
+                                                       (0.75, lin(150, 120, 94))])
+    top = g.smooth(g.separate(g.geo('Normal'))[2], 0.7, 0.98)
+    col = g.mix(g.mul(top, 0.18), col, g.rgb(lin(150, 128, 104)))
+    g.output(g.principled(col, rough=0.93, normal=g.bump(n, strength=0.6, distance=0.02)))
+    m["surface"] = 'stone'
+    lib["stone_boulder"] = m
     m, g = new_material("dung")
     pos = g.geo('Position')
     n = g.noise(pos, scale=40.0, detail=6.0)

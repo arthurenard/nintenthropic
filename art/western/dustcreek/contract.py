@@ -346,7 +346,7 @@ def build_calib(col, lib, blds, lm, grp_builders):
     z8 = ground_z(p8.x, p8.y)
     p8 = point_for_viewport(0.5, 0.78, 0.2 + z8)
     n0 = len(wd_l.verts)
-    CL.rock(wd_l, Vector((p8.x, p8.y, 0.0)), 0.34, r, mat='stone_rock', flat=0.62)
+    CL.rock(wd_l, Vector((p8.x, p8.y, 0.0)), 0.3, r, mat='stone_boulder', flat=0.72, subdiv=2)
     top8 = max(v.z for v in wd_l.verts[n0:])
     spots[8] = Vector((p8.x, p8.y, top8 - 0.01))
     # 9 bottom-right: a small crate that fell off the freight wagon
