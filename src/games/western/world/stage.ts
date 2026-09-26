@@ -57,6 +57,10 @@ export class Stage {
     scene.fog = new FogExp2(fog, noon ? density * 0.75 : density);
 
     scene.add(town.root);
+    // A town whose bake already carries the haze says so; fogging its baked
+    // colour again would bury the far end twice over. Its glass is not baked,
+    // and the characters are not either, so the scene's fog stays for them.
+    const hazeBaked = town.root.userData["fog_baked"] === true;
     town.root.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh) return;
@@ -64,8 +68,8 @@ export class Stage {
       m.receiveShadow = false;
       const mats = Array.isArray(m.material) ? m.material : [m.material];
       for (const mat of mats) {
-        // The bake is the final word on the town's colour; fog still applies.
-        (mat as MeshBasicMaterial).fog = true;
+        // The bake is the final word on the town's colour.
+        (mat as MeshBasicMaterial).fog = !(hazeBaked && (mat as MeshBasicMaterial).isMeshBasicMaterial);
         // Three.js draws a transparent double-sided material twice, flipping its
         // side each time, which re-resolves its shader every frame per pane of
         // glass. One pass looks the same for thin panes and costs nothing.
