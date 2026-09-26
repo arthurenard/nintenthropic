@@ -28,7 +28,9 @@ def log(*a):
 def hat_job(kind, name, coll=None, tris=520):
     if kind == "bonnet":
         f = OF.bonnet_field()
-        ob = C.decimated(name, f, (-0.12, -0.14, -0.21), (0.12, 0.15, 0.14), 0.0016, tris, coll, M=np.eye(3), o=HD.HEAD_ORIGIN, symmetry=True)
+        # no symmetric collapse here: it is the one mesh that came out of it
+        # with broken corner-edge indices (Blender 5.1)
+        ob = C.decimated(name, f, (-0.12, -0.14, -0.21), (0.12, 0.15, 0.14), 0.0016, tris, coll, M=np.eye(3), o=HD.HEAD_ORIGIN, symmetry=False)
         return dict(ob=ob, field=f, paint=OF.bonnet_paint, origin=HD.HEAD_ORIGIN, weight=0.6, ao_field=f, ao_group=name, smart_uv=True,
                     skin=("rigid", "head"))
     M, o = OF.hat_frame(6.0 if kind != "top" else 3.0)
@@ -187,6 +189,12 @@ def finish(mesh_name, jobs, socket, material):
             mw = o.matrix_world.copy()
             o.parent = socket
             o.matrix_world = mw
+            # bake the offset into the vertices so the prop node sits at the
+            # socket with an identity transform: its geometry is then in the
+            # socket's frame (barrel along glTF -Z), and the game can re-parent
+            # or drop a gun without undoing a hidden offset
+            o.data.transform(o.matrix_basis)
+            o.matrix_basis = Matrix.Identity(4)
     return base
 
 
@@ -225,6 +233,11 @@ def bake_clips(rig, clips, log=log):
 
 def export(path, extras=None):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # last line of defence against broken topology (see bl.decimate): a mesh
+    # the game loads must also open and render in Blender
+    for o in bpy.context.scene.objects:
+        if o.type == "MESH" and o.data.validate():
+            log(f"  repaired topology of {o.name}")
     if extras:
         for k, v in extras.items():
             bpy.context.scene[k] = v

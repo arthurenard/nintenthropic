@@ -40,6 +40,9 @@ def _edit(objs, fn):
             o.select_set(False)
     for o in objs:
         o.select_set(True)
+        # entering edit mode builds a BMesh from the corner/edge arrays and
+        # crashes (SIGBUS) on a bad index; see bl.decimate
+        o.data.validate()
     bpy.context.view_layer.objects.active = objs[0]
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")

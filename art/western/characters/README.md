@@ -24,9 +24,12 @@ strips and in-game-distance shots from a scene saved with `--blend`.
   The same joints in every file, so every clip plays on every person (the
   game lends the gang's clips to the townsfolk).
 - `socket.gun` is an empty on `hand.R` at the centre of the fist. The props
-  `gun.revolver`, `gun.rifle`, `prop.dynamite` are its children: the barrel
-  runs along the socket's local **−Z** (glTF), the top of the gun along +Y.
-  Toggle their visibility; they follow the hand.
+  `gun.revolver`, `gun.rifle`, `prop.dynamite` are its children with identity
+  transforms (their geometry is in the socket's frame): the barrel runs along
+  the socket's local **−Z** (glTF), the top of the gun along +Y. In the last
+  frame of `aim` and of every emerge clip the socket's −Z points along world
+  +Z, at the player (checked in three.js). Toggle their visibility; they
+  follow the hand.
 - Clips are **in place**: no root motion. The hips move (a crouch, a fall),
   the origin does not. Sampled at 30 fps.
 - No node or mesh is named like a bone.

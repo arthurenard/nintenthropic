@@ -107,6 +107,10 @@ def decimate(ob, target_tris, symmetry=True):
         m.symmetry_axis = "X"
         m.use_collapse_triangulate = True
         apply_modifiers(ob)
+    # Blender 5.1's collapse can (rarely, not reproducibly) leave garbage
+    # corner-edge indices; the glTF export does not read them but the viewport
+    # and EEVEE crash on them (SIGBUS), so rebuild them here, before any UVs
+    ob.data.validate()
     return ob
 
 

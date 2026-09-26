@@ -35,6 +35,8 @@ os.makedirs(OUT, exist_ok=True)
 sc = bpy.context.scene
 rig = next(o for o in sc.objects if o.type == "ARMATURE")
 meshes = [o for o in sc.objects if o.type == "MESH"]
+for o in meshes:
+    o.data.validate()      # scenes saved before bl.decimate validated could crash EEVEE
 
 
 def dress(names):
