@@ -3,7 +3,7 @@
  * question, getting ready with real progress, the aim check in the game's own
  * world, play, pause, results - with calm words for anything that goes wrong.
  */
-import { NullAudioBus, createAudioBus, type AudioEngine } from "../audio/index";
+import type { AudioEngine } from "../audio/index";
 import { browserStore, loadAim, saveAim, type CameraIdentity } from "../calibration/storage";
 import { DownloadError, Progress, siteUrl } from "../engine/fetch";
 import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
@@ -73,6 +73,22 @@ const tagged = <T>(part: Stage["part"], promise: Promise<T>): Promise<T> =>
     throw new Stage(part, error);
   });
 
+/** Silence, until the sound engine arrives with the first gesture. */
+function silence(muted: boolean): Pick<AudioEngine, "play" | "loop" | "setFilter" | "setMuted" | "muted"> {
+  let quiet = muted;
+  return {
+    get muted() {
+      return quiet;
+    },
+    play() {},
+    loop: () => () => {},
+    setFilter() {},
+    setMuted(value: boolean) {
+      quiet = value;
+    },
+  };
+}
+
 const touchOnly = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
 
 /** Is any aim saved in this browser? (Which camera it is for is known only once one opens.) */
@@ -91,7 +107,7 @@ export class App {
   private readonly pip = new Pip();
   private readonly settings: Settings;
   private host: EngineHost | null = null;
-  private audio: AudioEngine = new NullAudioBus(prefs.muted);
+  private audio: Pick<AudioEngine, "play" | "loop" | "setFilter" | "setMuted" | "muted"> = silence(prefs.muted);
   private audioReady: Promise<void> | null = null;
   private tracker: Tracker | null = null;
   private camera: Camera | null = null;
@@ -177,9 +193,10 @@ export class App {
    * Browsers start audio only after a gesture, so the sound engine is made on
    * the page's first click or key press (and at the latest on Play). Made
    * once; the interface's sounds start synthesising at once, off the page.
+   * Its code is fetched then too: the first screen does not wait for it.
    */
   private wakeAudio(): Promise<void> {
-    this.audioReady ??= createAudioBus({ muted: this.muted }).then(
+    this.audioReady ??= import("../audio/index").then(({ createAudioBus }) => createAudioBus({ muted: this.muted })).then(
       (audio) => {
         this.audio = audio;
         audio.setMuted(this.muted);
