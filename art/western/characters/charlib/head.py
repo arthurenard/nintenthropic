@@ -143,7 +143,7 @@ def skull(p, low=False):
         lips.append(S.RoundCone((s_ * 0.004, -0.0937, -0.0718), (s_ * 0.0205 * mw, -0.0885, -0.0668), 0.0058 * lf, 0.0017))
     tubercle = S.Sphere((0, -0.0990, -0.0610), 0.0022 * lf)
     head = S.Union([head, tubercle] + lips, k=0.008)
-    slit = S.Ellipsoid((0, -0.1025, -0.0656), (0.0232 * mw, 0.0120, 0.0009))
+    slit = S.Ellipsoid((0, -0.1025, -0.0656), (0.0232 * mw, 0.0075, 0.0007))
     corners = [S.Sphere((s * 0.0232 * mw, -0.0880, -0.0660), 0.0014) for s in (1, -1)]
     if not low:
         head = S.Subtract(head, S.Union([slit] + corners, k=0.004), k=0.0025)
@@ -567,11 +567,11 @@ def make(name, p, look, coll=None, tris=1900):
     def paint_ear(Pt):
         c, r = T.head_paint(Pt, p, look, is_ear=True)
         return c, r, np.zeros(len(Pt))
-    jobs = [dict(ob=lo, field=detailed, paint=paint, origin=HEAD_ORIGIN, weight=2.6, ao_field=field)]
+    jobs = [dict(ob=lo, field=detailed, paint=paint, origin=HEAD_ORIGIN, weight=3.4, ao_field=field)]
     for side, tag in ((1, "L"), (-1, "R")):
         e = ear_sdf(p, side)
         Ve, Qe = PG.mesh_sdf(e, e.lo, e.hi, 0.0008, blur=1.0)
         elo = bl.mesh_from_arrays(f"{name}.ear.{tag}", Ve + HEAD_ORIGIN, Qe, coll)
         bl.decimate(elo, 130, symmetry=False)
-        jobs.append(dict(ob=elo, field=e, paint=paint_ear, origin=HEAD_ORIGIN, weight=1.6, ao_field=e, smart_uv=True))
+        jobs.append(dict(ob=elo, field=e, paint=paint_ear, origin=HEAD_ORIGIN, weight=1.4, ao_field=e, smart_uv=True, uv_angle=80))
     return jobs

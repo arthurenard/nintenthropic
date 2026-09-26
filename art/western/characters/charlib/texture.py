@@ -102,7 +102,7 @@ def head_paint(V, p, look, is_ear=False):
     ax = np.abs(x)
     skin = SKIN[look.get("skin", "tanned")]
     col = np.tile(skin, (n, 1))
-    rough = np.full(n, 0.52)
+    rough = np.full(n, 0.60)
     # mottling: broad blotches of redder and sallower skin
     m1 = fbm(V, 60, 4, seed=3)
     m2 = fbm(V, 220, 3, seed=5)
@@ -134,8 +134,8 @@ def head_paint(V, p, look, is_ear=False):
     for s in (1, -1):
         nos = np.exp(-(((x - s * 0.0072) / 0.0045) ** 2 + ((z + 0.0425) / 0.003) ** 2)) * smoothstep(-0.098, -0.104, y)
         col *= (1 - 0.75 * np.clip(nos, 0, 1))[:, None]
-    mline = np.exp(-(((z + 0.0656) / 0.0012) ** 2)) * (1 - smoothstep(0.019, 0.025, ax)) * smoothstep(-0.090, -0.098, y)
-    col *= (1 - 0.8 * np.clip(mline, 0, 1))[:, None]
+    mline = np.exp(-(((z + 0.0656) / 0.0009) ** 2)) * (1 - smoothstep(0.018, 0.024, ax)) * smoothstep(-0.090, -0.098, y)
+    col *= (1 - 0.55 * np.clip(mline, 0, 1))[:, None]
     # stubble / beard: blue-grey shadow of shaved growth, dotted
     beard = H.beard_field(V, p)
     stub = look.get("stubble", 0.5) + p["beard"]

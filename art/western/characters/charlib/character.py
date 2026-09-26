@@ -67,7 +67,7 @@ def trouser_folds(bp):
             q = P - kn
             r = np.linalg.norm(q, axis=1)
             behind = smoothstep(-0.01, 0.03, q[:, 1])
-            d += 0.0026 * np.exp(-(r / 0.07) ** 2) * (0.3 + 0.7 * behind) * np.sin(q[:, 2] * 2 * np.pi / (0.022 + 0.012 * value_noise(P, 20, seed=18)) + 5 * value_noise(P, 40, seed=8))
+            d += 0.0014 * np.exp(-(r / 0.065) ** 2) * (0.3 + 0.7 * behind) * np.sin(q[:, 2] * 2 * np.pi / (0.022 + 0.012 * value_noise(P, 20, seed=18)) + 5 * value_noise(P, 40, seed=8)) ** 2
             # bunching above the boot tops
             top = bp["boot_top"]
             b = smoothstep(top - 0.01, top + 0.02, z) * (1 - smoothstep(top + 0.09, top + 0.13, z)) * (np.abs(P[:, 0] - kn[0]) < 0.12)
@@ -219,7 +219,7 @@ def base_body(spec, coll=None, log=print):
         tr = R.to_blender(rt, "trousers", coll)
         jobs.append(dict(ob=tr, field=S.Displace(trf, trouser_folds(bp), 0.006),
                          paint=trouser_paint(spec["trouser_color"], chaps=spec.get("chaps")),
-                         origin=np.zeros(3), weight=0.9, ao_field=trf))
+                         origin=np.zeros(3), weight=0.7, ao_field=trf))
         log(f"  garments: shirt {bl.tri_count(shirt)} tris, trousers {bl.tri_count(tr)} tris")
     else:
         df = G.dress_field()
@@ -244,7 +244,7 @@ def base_body(spec, coll=None, log=print):
             back = smoothstep(0.004, 0.012, P[:, 0])
             col *= (1 - 0.08 * back)[:, None]
             return col, r, m
-        jobs.append(dict(ob=ob, field=hf, paint=hpaint, origin=o, M=M, weight=1.5, ao_field=hf, smart_uv=True))
+        jobs.append(dict(ob=ob, field=hf, paint=hpaint, origin=o, M=M, weight=1.3, ao_field=hf, smart_uv=True, uv_angle=75))
     if outfit == "dress":
         return jobs
     # footwear
@@ -258,7 +258,7 @@ def base_body(spec, coll=None, log=print):
         ztop = (0.165 if shoes else bp["boot_top"]) + 0.06
         ob = decimated(f"boot.{side}", bf, (x0 - 0.08, -0.23, -0.01), (x0 + 0.08, 0.14, ztop), 0.0016, spec.get("boot_tris", 420 if not shoes else 320), coll)
         jobs.append(dict(ob=ob, field=bf, paint=boot_paint(spec.get("boot_color", (0.16, 0.095, 0.055)), shine=0.5 if shoes else 0.0),
-                         origin=np.zeros(3), weight=0.8, ao_field=bf, smart_uv=True))
+                         origin=np.zeros(3), weight=0.6, ao_field=bf, smart_uv=True, uv_angle=80))
     if spec.get("belt", True):
         tb = GR.trouser_belt()
         ob = decimated("belt", tb, (-0.2, -0.16, 1.0), (0.2, 0.16, 1.1), 0.0015, 260, coll)
@@ -269,7 +269,7 @@ def base_body(spec, coll=None, log=print):
             mc, mr, mm = PT.metal(P, (0.55, 0.45, 0.25), 0.35)
             col[bk], r[bk], m[bk] = mc[bk], mr[bk], mm[bk]
             return col, r, m
-        jobs.append(dict(ob=ob, field=tb, paint=belt_paint, origin=np.zeros(3), weight=0.8, ao_field=tb, smart_uv=True))
+        jobs.append(dict(ob=ob, field=tb, paint=belt_paint, origin=np.zeros(3), weight=0.6, ao_field=tb, smart_uv=True, uv_angle=80))
     gb = spec.get("gunbelt", "single")
     if gb:
         band, hol, gun = GR.gunbelt(bp)
@@ -287,7 +287,7 @@ def base_body(spec, coll=None, log=print):
             mc, mr, mm = PT.metal(P, (0.5, 0.5, 0.5), 0.4)
             col[bk], r[bk], m[bk] = mc[bk], mr[bk], mm[bk]
             return col, r, m
-        jobs.append(dict(ob=ob, field=band, paint=gb_paint, origin=np.zeros(3), weight=0.8, ao_field=band, smart_uv=True))
+        jobs.append(dict(ob=ob, field=band, paint=gb_paint, origin=np.zeros(3), weight=0.6, ao_field=band, smart_uv=True, uv_angle=80))
         sides = [1, -1] if gb == "twin" else [1]
         for sx in sides:
             both = S.Union([hol, gun], k=0.002)
@@ -314,7 +314,7 @@ def base_body(spec, coll=None, log=print):
                 col[grip], r[grip], m[grip] = wc[grip], wr_[grip], wm[grip]
                 col[fr], r[fr], m[fr] = mc[fr], mr[fr], mm[fr]
                 return col, r, m
-            jobs.append(dict(ob=ob, field=both, paint=hol_paint, origin=np.zeros(3), weight=1.0, ao_field=both, smart_uv=True))
+            jobs.append(dict(ob=ob, field=both, paint=hol_paint, origin=np.zeros(3), weight=0.6, ao_field=both, smart_uv=True, uv_angle=80))
     return jobs
 
 

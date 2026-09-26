@@ -265,8 +265,8 @@ def build_vest(bp, field, M=24):
     def skip(i, j):
         z = zs[i]
         # the V: front columns open from the chest up, wider toward the neck
-        k = int(round(np.interp(z, [1.20, 1.30, 1.40, 1.47], [0, 1, 2, 3])))
-        if z >= 1.20 and (j >= M - k or j < k):
+        k = int(round(np.interp(z, [1.30, 1.38, 1.44, 1.48], [0, 1, 2, 3])))
+        if z >= 1.30 and (j >= M - k or j < k):
             return True
         return False
     out = build_torso_with_arms(rm, bp, M, 12, zs, [], None, "vest", skip=skip, arms=False, inflate=0.010, armpit=6)
@@ -320,11 +320,14 @@ def build_coat(bp, field, hem_z=0.36, M=24, arm_n=12, flare=1.0, vent=True, loos
     h = M // 2
 
     def skip(i, j):
-        z = zs[i]
-        if z < 1.40 and (j == M - 1):
-            return True                  # open front
-        if z < 1.24 and (j == M - 2 or j == 0):
-            return True                  # wider below the chest
+        z = 0.5 * (zs[i] + zs[i + 1]) if i + 1 < len(zs) else zs[i]
+        # the open front: closed at the collar, lapels opening into a V down
+        # to the chest, then the two fronts hanging a hand's width apart
+        c = j + 0.5
+        d = min(c, M - c)
+        w = float(np.interp(z, [0.3, 0.9, 1.24, 1.36, 1.45], [2.5, 2.0, 2.0, 1.0, 0.0]))
+        if d < w:
+            return True
         if vent and z < 0.74 and j == h - 1:
             return True                  # back vent
         return False
