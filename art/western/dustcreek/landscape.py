@@ -171,6 +171,19 @@ def street_ground(lib, col, dense=True):
     return ob
 
 
+def ground_z(x, y):
+    """Street surface height at (x, y) (same field as the dense mesh, minus
+    the sub-centimetre prints), for placing stones, grass and props."""
+    X = np.array([[float(x)]])
+    Y = np.array([[float(y)]])
+    H, _, _ = height_field(X, Y, None)
+    ex = np.clip((STREET_X[1] - np.abs(X)) / 3.0, 0, 1)
+    ey = np.clip(np.minimum(Y - STREET_Y[0], STREET_Y[1] - Y) / 3.0, 0, 1)
+    if not (STREET_X[0] <= x <= STREET_X[1] and STREET_Y[0] <= y <= STREET_Y[1]):
+        return 0.0
+    return float((H * ex * ey)[0, 0])
+
+
 def grid_object(name, X, Y, H, col, attrs=None):
     ny, nx = X.shape
     verts = np.stack([X.ravel(), Y.ravel(), H.ravel()], axis=1).astype(np.float32)
@@ -252,7 +265,12 @@ def dirt_material(lib):
     mid = g.noise(pos, scale=0.9, detail=6.0, rough=0.6)
     fine = g.noise(pos, scale=18.0, detail=4.0, rough=0.6)
     col = g.ramp(g.add(g.mul(big, 0.6), g.mul(mid, 0.4)), [
-        (0.30, lin(146, 120, 98)), (0.5, lin(168, 142, 116)), (0.72, lin(186, 164, 138))])
+        (0.30, lin(140, 114, 92)), (0.5, lin(166, 140, 114)), (0.72, lin(188, 166, 140))])
+    # metre-scale patches: packed, slightly redder earth vs pale loose dust
+    patch = g.noise(xy, scale=0.35, detail=4.0, rough=0.55)
+    col = g.mix(g.smooth(patch, 0.38, 0.62), g.hsv(col, s=1.18, v=0.86), g.hsv(col, s=0.8, v=1.08))
+    grain = g.noise(pos, scale=70.0, detail=2.0)
+    col = g.mix(g.mul(grain, 0.18), col, g.hsv(col, v=0.8))
     # compacted tracks: a little darker, smoother
     col = g.mix(g.mul(rut, 0.45), col, g.hsv(col, v=0.8, s=1.05))
 
@@ -275,10 +293,11 @@ def dirt_material(lib):
                        g.math('POWER', g.math('DIVIDE', g.add(v, half_l * 0.8), notch_l), 2.0))
             shape = g.mul(shape, g.smooth(nt, 0.7, 1.3))
         keep = g.math('LESS_THAN', cg, keep_fac)
-        rim = g.mul(g.mul(g.smooth(e, 0.85, 1.05), g.sub(1.0, g.smooth(e, 1.05, 1.6))), keep)
-        return g.mul(shape, keep), rim
+        age = g.madd(cb, 0.8, 0.2)       # old prints are half filled with dust
+        rim = g.mul(g.mul(g.mul(g.smooth(e, 0.85, 1.05), g.sub(1.0, g.smooth(e, 1.05, 1.6))), keep), age)
+        return g.mul(g.mul(shape, keep), age), rim
 
-    hoof, hrim = prints(2.6, g.madd(lane, 0.5, 0.04), 0.055, 0.062, 0.024, 0.034, 0.6, 0.0)
+    hoof, hrim = prints(2.6, g.madd(lane, 0.32, 0.02), 0.055, 0.062, 0.026, 0.036, 0.6, 0.0)
     walk = g.mul(g.smooth(g.math('ABSOLUTE', x), 4.8, 6.2), g.sub(1.0, g.smooth(g.math('ABSOLUTE', x), 7.3, 7.6)))
     boot, brim = prints(3.2, g.mul(walk, 0.35), 0.045, 0.13, 0.0, 0.0, 1.2, 3.7)
     pr = g.math('MAXIMUM', hoof, boot)
@@ -295,8 +314,8 @@ def dirt_material(lib):
     col = g.mix(g.mul(pebble, 0.9), col, pc)
     # dry crust cracks away from the tracks
     crk = g.voronoi(pos, scale=3.5, feature='DISTANCE_TO_EDGE', out='Distance')
-    crack = g.mul(g.sub(1.0, g.smooth(crk, 0.0, 0.02)), g.mul(g.sub(1.0, rut), g.smooth(mid, 0.52, 0.66)))
-    col = g.mix(g.mul(crack, 0.3), col, g.hsv(col, v=0.72))
+    crack = g.mul(g.sub(1.0, g.smooth(crk, 0.0, 0.012)), g.mul(g.sub(1.0, rut), g.smooth(mid, 0.58, 0.7)))
+    col = g.mix(g.mul(crack, 0.2), col, g.hsv(col, v=0.78))
     col = g.mix(g.mul(fine, 0.25), col, g.hsv(col, v=0.85))
     h = g.add(g.add(g.mul(fine, 0.25), g.mul(pebble, 0.6)), g.add(g.mul(crack, -0.3), g.sub(g.mul(rim, 0.15), pr)))
     nrm = g.bump(h, strength=0.55, distance=0.01)
@@ -314,7 +333,7 @@ def desert_material(lib):
     mid = g.noise(pos, scale=0.2, detail=6.0, rough=0.6)
     fine = g.noise(pos, scale=6.0, detail=4.0)
     col = g.ramp(g.add(g.mul(big, 0.55), g.mul(mid, 0.45)), [
-        (0.3, lin(160, 118, 82)), (0.55, lin(186, 146, 104)), (0.75, lin(170, 138, 100))])
+        (0.3, lin(156, 122, 92)), (0.55, lin(180, 148, 112)), (0.75, lin(166, 138, 106))])
     # scrub: sparse dark grey-green dots
     scr = g.voronoi(pos, scale=0.9, feature='F1', out='Distance')
     scrcol = g.voronoi(pos, scale=0.9, feature='F1', out='Color')

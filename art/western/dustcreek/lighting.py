@@ -19,7 +19,7 @@ SUN_AZ_DEG = 30.0
 SUN_EL_DEG = 10.5
 SUN_ANGLE_DEG = 0.9          # a little wider than the true 0.53: haze near the horizon
 SUN_COLOR = (1.0, 0.64, 0.40)
-SUN_STRENGTH = 6.0           # W/m^2 in Blender's units; paired with SKY_STRENGTH
+SUN_STRENGTH = 6.8           # W/m^2 in Blender's units; paired with SKY_STRENGTH
 SKY_STRENGTH = 0.03
 # Blender 5 splits the Nishita sky into SINGLE_SCATTERING (the classic model)
 # and MULTIPLE_SCATTERING (Nishita with multiple scattering, far better at a

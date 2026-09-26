@@ -286,23 +286,31 @@ def build_calib(col, lib, blds, lm, grp_builders):
     P.crate(wd_l, Frame((p5.x, p5.y, 0.0), 0.2), r, sx=0.8, sy=0.6, sz=0.6)
     P.crate(wd_l, Frame((p5.x + 0.05, p5.y + 0.02, 0.6), -0.15), r, sx=0.55, sy=0.45, sz=0.3)
     spots[5] = Vector((p5.x, p5.y, 0.9))
-    # 7 bottom-left: barrel beside a crate, near the player
-    p7 = point_for_viewport(0.17, 0.8, 0.88)
-    P.barrel(wd_l, mt_l, Frame((p7.x, p7.y, 0.0), 0.4), r)
-    P.crate(wd_l, Frame((p7.x - 0.75, p7.y + 0.35, 0.0), 0.5), r, sx=0.7, sy=0.55, sz=0.55)
-    spots[7] = Vector((p7.x, p7.y, 0.88))
-    # 8 bottom-centre: a plank across two short stumps (the shooting line)
-    p8 = point_for_viewport(0.5, 0.8, 0.5)
-    pf = Frame((p8.x, p8.y, 0.0), 0.08)
-    for dx in (-0.55, 0.55):
-        wd_l.cylinder(pf, (dx, 0, 0), 0.16, 0.44, 'wood_grey', segments=10)
-    wd_l.box(pf, (-0.85, -0.12, 0.44), (0.85, 0.12, 0.49), 'wood_raw', grain_axis=0)
-    spots[8] = Vector((p8.x, p8.y, 0.49))
-    # 9 bottom-right: a stack of crates
-    p9 = point_for_viewport(0.83, 0.8, 1.0)
-    P.crate(wd_r, Frame((p9.x, p9.y, 0.0), -0.3), r, sx=0.75, sy=0.6, sz=0.55)
-    P.crate(wd_r, Frame((p9.x + 0.03, p9.y + 0.02, 0.55), -0.1), r, sx=0.6, sy=0.5, sz=0.45)
-    spots[9] = Vector((p9.x, p9.y, 1.0))
+    from .landscape import ground_z
+    from . import clutter as CL
+    # 7 bottom-left: an upturned water bucket someone left in the street
+    h7 = 0.32
+    p7 = point_for_viewport(0.17, 0.76, h7)
+    z7 = ground_z(p7.x, p7.y)
+    p7 = point_for_viewport(0.17, 0.76, h7 + z7)
+    bf = Frame((p7.x, p7.y, z7 - 0.01), 0.3)
+    P.barrel(wd_l, mt_l, bf, r, h=h7, rad=0.15)
+    spots[7] = Vector((p7.x, p7.y, z7 - 0.01 + h7 - 0.025))   # on the inset lid
+    # 8 bottom-centre: a flat slab of sandstone
+    p8 = point_for_viewport(0.5, 0.78, 0.2)
+    z8 = ground_z(p8.x, p8.y)
+    p8 = point_for_viewport(0.5, 0.78, 0.2 + z8)
+    n0 = len(wd_l.verts)
+    CL.rock(wd_l, Vector((p8.x, p8.y, 0.0)), 0.34, r, mat='stone_rock', flat=0.62)
+    top8 = max(v.z for v in wd_l.verts[n0:])
+    spots[8] = Vector((p8.x, p8.y, top8 - 0.01))
+    # 9 bottom-right: a small crate that fell off the freight wagon
+    h9 = 0.42
+    p9 = point_for_viewport(0.83, 0.76, h9)
+    z9 = ground_z(p9.x, p9.y)
+    p9 = point_for_viewport(0.83, 0.76, h9 + z9)
+    P.crate(wd_r, Frame((p9.x, p9.y, z9 - 0.01), -0.35), r, sx=0.55, sy=0.42, sz=h9 + 0.01, mat='wood_raw')
+    spots[9] = Vector((p9.x, p9.y, z9 + h9))
     objs = []
     report = []
     for n, vx, vy in CALIB_TARGETS:

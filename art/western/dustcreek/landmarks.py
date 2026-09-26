@@ -97,9 +97,9 @@ def livery(lib, col):
     # stall dutch door: lower half closed, upper open with the horse
     wood.box(F, (stall.s0, -0.02, 0.05), (stall.s1, 0.02, 1.25), 'wood_grey', grain_axis=2)
     wood.box(F, (stall.s0 - 0.05, -0.08, 1.2), (stall.s1 + 0.05, 0.04, 1.27), 'wood_grey', grain_axis=0)
-    uf = F.sub((stall.s0, 0.0, 1.27)).sub(rot_z=math.radians(-105))
+    uf = F.sub((stall.s1, 0.0, 1.27)).sub(rot_z=math.radians(105))
     for k in range(4):
-        wood.box(uf, (k * 0.285, -0.02, 0), ((k + 1) * 0.285 - 0.01, 0.02, 0.95), 'wood_grey', grain_axis=2)
+        wood.box(uf, (-(k + 1) * 0.285 + 0.01, -0.02, 0), (-k * 0.285, 0.02, 0.95), 'wood_grey', grain_axis=2)
     # loft door swung out, hay showing, hoist beam with pulley and rope
     lf = F.sub((loft.s1, -0.02, loft.z)).sub(rot_z=math.radians(115))
     for k in range(5):
@@ -151,7 +151,7 @@ def livery(lib, col):
     P.hay_pile(hay_mb, F.sub((3.4, -0.9, 0.0)), r, rad=0.8, h=0.5)
     P.wheel(wood, metal, F.sub((5.6, -0.25, 0.62)).sub(rot_x=-0.15), r, radius=0.62)
     P.trough(wood, F.sub((-5.0, -1.6, 0.0), rot_z=0.0), r, L=1.8)
-    horse = P.horse_head(col, lib, F.sub((stall.s + 0.05, 0.25, 1.62), rot_z=math.radians(-18)), group='left_far')
+    horse = P.horse_head(col, lib, F.sub((stall.s + 0.05, -0.02, 1.8), rot_z=math.radians(-24)), group="left_far")
     objs = [horse]
     for mb, surf in ((wood, 'wood'), (metal, 'metal'), (inner, 'wood'), (hay_mb, 'cloth')):
         ob = mb.build(col, lib, surface=surf, group='left_far', building='livery')
@@ -648,7 +648,7 @@ def build(lib, col):
     out['far'] = far_end(lib, col)
     import numpy as np
     from .landscape import terrain_height
-    wx, wy = -52.0, 214.0
+    wx, wy = -27.0, 210.0      # in the gap left of the church, on the ridge
     wz = float(terrain_height(np.array([[wx]]), np.array([[wy]]))[0, 0])
     out['windmill'] = windmill(lib, col, wx, wy, wz)
     return out

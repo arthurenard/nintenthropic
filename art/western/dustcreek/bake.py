@@ -455,23 +455,25 @@ def denoise(arr, albedo=None):
     bpy.data.images.remove(img)
     if alb is not None:
         bpy.data.images.remove(alb)
+    bpy.data.scenes.remove(sc)
     return res
 
 
 def bake_group(ctx, scene, group, objs, size):
     q = ctx.quick
-    s_irr = 48 if q else 512
-    s_gl = 16 if q else 192
+    s_irr = 48 if q else 256
+    s_gl = 16 if q else 96
     alb = bake_pass(scene, objs, size, 'DIFFUSE_COLOR', 4 if q else 16, f"{group}_albedo")
     irr = bake_pass(scene, objs, size, 'IRRADIANCE', s_irr, f"{group}_irr")
     irr = denoise(irr)
     gl = bake_pass(scene, objs, size, 'GLOSSY', s_gl, f"{group}_gloss")
     gl = denoise(gl, albedo=None)
-    ao = bake_pass(scene, objs, size, 'AO', 8 if q else 64, f"{group}_ao")
+    ao = bake_pass(scene, objs, size, 'AO', 8 if q else 32, f"{group}_ao")
     pos = bake_pass(scene, objs, size, 'POSITION', 1, f"{group}_pos")
     rgb = alb * irr * (0.65 + 0.35 * np.clip(ao, 0, 1)) + np.clip(gl, 0, None)
     valid = np.linalg.norm(pos, axis=-1) > 1e-3
     rgb = post.apply_fog(rgb, pos, valid)
+    rgb = post.grade(rgb)
     np.save(os.path.join(ctx.build, f"atlas_{group}_linear.npy"), rgb.astype(np.float16))
     png = os.path.join(ctx.build, f"atlas_{group}.png")
     post.save_display(rgb, png, scene, fmt='PNG', flip=False)

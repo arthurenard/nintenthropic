@@ -19,10 +19,44 @@ import bpy
 import numpy as np
 
 EYE = np.array([0.0, 0.0, 1.7])
-SIGMA = 1.0 / 2400.0         # clear-air extinction per metre (distance haze)
-SIGMA_H = 0.0026             # dust extinction per metre at the ground
+SIGMA = 1.0 / 1600.0         # clear-air extinction per metre (distance haze)
+SIGMA_H = 0.005              # dust extinction per metre at the ground
 H_SCALE = 6.0                # dust scale height (m)
-FOG_COLOR = np.array([0.30, 0.235, 0.165])   # scene-linear, sunlit dust (see calibrate_fog)
+FOG_COLOR = np.array([0.30, 0.235, 0.165])   # replaced by the sky stage's measurement (fog_color())
+_fog_cache = None
+
+
+def fog_color():
+    """In-scattered colour: the sky's own horizon colour straight ahead
+    (measured by the sky stage), warmed a little by sunlit dust."""
+    global _fog_cache
+    if _fog_cache is not None:
+        return _fog_cache
+    import json
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(here, "build", "sky_horizon.json")
+    col = FOG_COLOR
+    if os.path.exists(path):
+        h = np.array(json.load(open(path))["horizon"])
+        lum = float(h @ [0.2126, 0.7152, 0.0722])
+        dust = np.array([1.0, 0.8, 0.6])
+        dust = dust * lum / float(dust @ [0.2126, 0.7152, 0.0722])
+        col = 0.65 * h + 0.35 * dust
+    _fog_cache = col
+    return col
+
+
+SHADOW_TINT = np.array([0.9, 0.99, 1.1])       # dusty teal in the shade
+LIGHT_TINT = np.array([1.06, 1.0, 0.92])        # amber where the sun lands
+
+
+def grade(rgb):
+    """The look, in scene-linear before the view transform: shadows lean
+    teal, sunlit values lean amber. Same function for renders, bakes, sky."""
+    L = rgb @ np.array([0.2126, 0.7152, 0.0722])
+    t = np.clip((np.log2(np.maximum(L, 1e-5)) + 5.0) / 3.5, 0.0, 1.0)[..., None]   # ~0.03 .. 0.35
+    t = t * t * (3 - 2 * t)
+    return rgb * (SHADOW_TINT * (1 - t) + LIGHT_TINT * t)
 
 
 def optical_depth(P):
@@ -40,7 +74,7 @@ def optical_depth(P):
 def apply_fog(rgb, P, valid=None):
     """rgb, P: (..., 3) arrays (linear radiance, world position)."""
     T = np.exp(-optical_depth(P))[..., None]
-    out = rgb * T + FOG_COLOR * (1.0 - T)
+    out = rgb * T + fog_color() * (1.0 - T)
     if valid is not None:
         out = np.where(valid[..., None], out, rgb)
     return out
@@ -129,6 +163,7 @@ def render_with_fog(scene, path_png, exr_path=None, fog=True, fmt='PNG', quality
         pos = L['pos']
         valid = np.linalg.norm(pos, axis=-1) > 1e-3
         rgb = apply_fog(rgb, pos, valid)
+    rgb = grade(rgb)
     save_display(rgb, path_png, scene, fmt=fmt, quality=quality)
     if exr_path is None:
         os.remove(exr)

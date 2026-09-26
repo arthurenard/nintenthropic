@@ -41,6 +41,9 @@ def sign_panel(mb, f, s0, z0, s1, z1, mat, y=-0.06, thick=0.035, edge='trim_dark
 
 def make_sign(lib, key, w, h, draw, bg, fill, shadow=None, accent=None, wear=0.45, bleach=0.5, px=260,
               **kw):
+    # the board paint weathers; the lettering is what the town reads, so
+    # signs peel far less than the walls around them
+    wear = min(wear, 0.62) * 0.55
     ms = S.MaskScene(key, w, h, px_per_m=px)
     draw(ms, w, h)
     img = ms.render()

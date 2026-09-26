@@ -217,22 +217,41 @@ def sheriff(b, lib, col):
     sign_panel(b.wood, F, -2.7, 4.55, 2.7, 5.5, sm, y=-0.08, frame=0.05, frame_mat='trim_dark')
     blade_sign(b.wood, lib, 'jail_blade', 8.2, 9.7, 17.35, 2.3, 2.85, "JAIL", bg=DARK, fill=CREAM, size=0.36,
                chain_to=3.2)
-    # wanted board between door and window
-    wb_s = b.s_near(0.54)
-    bw_, bh_ = 1.5, 1.25
-    wf = F.sub((wb_s, -0.06, 1.05))
-    b.wood.box(wf, (-bw_ / 2, -0.03, 0), (bw_ / 2, 0.0, bh_), 'wood_dark', grain_axis=0)
-    for (a1, b1, c1, d1) in ((-bw_ / 2 - 0.05, bw_ / 2 + 0.05, -0.05, 0.0), (-bw_ / 2 - 0.05, bw_ / 2 + 0.05, bh_, bh_ + 0.05),
-                             (-bw_ / 2 - 0.05, -bw_ / 2, 0, bh_), (bw_ / 2, bw_ / 2 + 0.05, 0, bh_)):
-        b.wood.box(wf, (a1, -0.05, c1), (b1, 0.0, d1), 'trim_dark', grain_axis=0 if b1 - a1 > d1 - c1 else 2)
-    for i, (nm, amt, px, pz, rot) in enumerate((("BLACK JACK CARVER", "$2,000", 0.42, 0.66, 0.05),
-                                                 ("ELI 'DUSTY' CARVER", "$500", -0.42, 0.12, -0.06),
-                                                 ("THE WICHITA KID", "$750", 0.44, 0.08, 0.03))):
+    # The wanted board: a sandwich board on the boardwalk, turned to face
+    # down the street so the player reads it (a board flat on the facade
+    # would be seen edge-on from the middle of the street).
+    from .landscape import ground_z
+    ax, ay = 6.0, 17.2       # clear of the porch posts in the player's line of sight
+    face = math.atan2(-ax, ay)      # rotation whose -Y looks at the player
+    af = Frame((ax, ay, ground_z(ax, ay) - 0.02), face)
+    bw_, bh_ = 0.95, 1.5
+    lean = math.radians(13)
+    front = af.sub((0, 0, 0)).sub(rot_x=-lean)       # front board leans back (+Y) from its foot
+    back = af.sub((0, 0.7, 0)).sub(rot_x=lean)
+    for fr, mat in ((front, 'wood_dark'), (back, 'wood_raw')):
+        b.wood.box(fr, (-bw_ / 2, 0.0, 0.0), (bw_ / 2, 0.035, bh_), mat, grain_axis=2)
+        for (a1, b1, c1, d1) in ((-bw_ / 2 - 0.04, bw_ / 2 + 0.04, bh_ - 0.06, bh_ + 0.03),
+                                 (-bw_ / 2 - 0.04, -bw_ / 2 + 0.03, 0.0, bh_), (bw_ / 2 - 0.03, bw_ / 2 + 0.04, 0.0, bh_)):
+            b.wood.box(fr, (a1, -0.025, c1), (b1, 0.0, d1), 'trim_dark', grain_axis=0 if b1 - a1 > d1 - c1 else 2)
+    sm = make_sign(lib, 'wanted_header', 0.9, 0.16, text_line("WANTED", face='clarendon', size=0.12, spacing=1.2),
+                   bg=lin(34, 28, 24), fill=CREAM, wear=0.35)
+    sign_panel(b.wood, front, -0.45, bh_ - 0.2, 0.45, bh_ - 0.04, sm, y=-0.026, thick=0.01)
+    img, (pw, ph) = S.generic_wanted(0, "BLACK JACK CARVER", "$2,000")
+    pm = S.paper_material("poster0", img, age=0.75)
+    lib[pm.name] = pm
+    pf = front.sub((0.2, -0.03, 0.12)).sub(rot_y=0.05)
+    sc = 0.78
+    b.wood.add_face([pf.p(-pw * sc / 2, 0, 0), pf.p(pw * sc / 2, 0, 0), pf.p(pw * sc / 2, 0, ph * sc),
+                     pf.p(-pw * sc / 2, 0, ph * sc)], pm.name, 0.2,
+                    grain=[(0, 0), (pw, 0), (pw, ph), (0, ph)], local=[(0, 0), (1, 0), (1, 1), (0, 1)])
+    # two more on the facade by the door, for texture
+    for i, (nm, amt, fr_, pz, rot) in enumerate((("ELI 'DUSTY' CARVER", "$500", 0.5, 1.25, -0.05),
+                                                  ("THE WICHITA KID", "$750", 0.58, 1.2, 0.04)), 1):
         img, (pw, ph) = S.generic_wanted(i, nm, amt)
         pm = S.paper_material(f"poster{i}", img, age=0.7 + 0.1 * i)
         lib[pm.name] = pm
-        sc = 0.85
-        pf = wf.sub((px, -0.035, pz)).sub(rot_y=rot)
+        pf = F.sub((b.s_near(fr_), -0.035, B.DECK_Z + pz)).sub(rot_y=rot)
+        sc = 0.8
         b.wood.add_face([pf.p(-pw * sc / 2, 0, 0), pf.p(pw * sc / 2, 0, 0), pf.p(pw * sc / 2, 0, ph * sc),
                          pf.p(-pw * sc / 2, 0, ph * sc)], pm.name, 0.2,
                         grain=[(0, 0), (pw, 0), (pw, ph), (0, ph)], local=[(0, 0), (1, 0), (1, 1), (0, 1)])
@@ -242,18 +261,18 @@ def sheriff(b, lib, col):
     lib[pm.name] = pm
     mb = MeshBuilder("secret.poster")
     lf = Frame()
-    pts = [(-pw / 2, 0, -ph), (pw / 2, 0, -ph), (pw / 2, -0.004, -ph / 2), (-pw / 2, -0.004, -ph / 2)]
+    pts = [(-pw / 2, 0, -ph), (pw / 2, 0, -ph), (pw / 2, -0.006, -ph / 2), (-pw / 2, -0.006, -ph / 2)]
     mb.add_face([lf.p(*p) for p in pts], pm.name, 0.2, grain=[(0, 0), (pw, 0), (pw, ph / 2), (0, ph / 2)],
                 local=[(0, 0), (1, 0), (1, 0.5), (0, 0.5)])
-    pts = [(-pw / 2, -0.004, -ph / 2), (pw / 2, -0.004, -ph / 2), (pw / 2, 0, 0), (-pw / 2, 0, 0)]
+    pts = [(-pw / 2, -0.006, -ph / 2), (pw / 2, -0.006, -ph / 2), (pw / 2, 0, 0), (-pw / 2, 0, 0)]
     mb.add_face([lf.p(*p) for p in pts], pm.name, 0.2, grain=[(0, ph / 2), (pw, ph / 2), (pw, ph), (0, ph)],
                 local=[(0, 0.5), (1, 0.5), (1, 1), (0, 1)])
     mb.cylinder(lf.sub((0, -0.006, -0.03)).sub(rot_x=math.pi / 2), (0, 0, 0), 0.009, 0.012, 'iron', segments=6)
     pob = mb.build(col, lib, surface='cloth', group='right_near')
-    pob.matrix_world = wf.sub((-0.12, -0.045, 1.2)).sub(rot_y=-0.03).m
+    pob.matrix_world = front.sub((-0.17, -0.03, bh_ - 0.24)).sub(rot_y=-0.04).m
     tag(pob, pivot='top_nail', text="WANTED - THE HAND - $5,000")
     b.extra_objects.append(pob)
-    b.anchors['wanted_board'] = dict(center=wf.p(0, -0.05, bh_ / 2))
+    b.anchors['wanted_board'] = dict(center=front.p(0, -0.05, bh_ / 2))
     # a desk and a cell's bars inside
     it = b.interior
     it.box(F.sub((b.s_near(0.3), 2.5, B.DECK_Z)), (-0.7, 0, 0), (0.7, 0.8, 0.78), 'wood_dark', grain_axis=0)

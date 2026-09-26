@@ -61,6 +61,9 @@ def stage_scene(ctx):
     for b in blds.values():
         b.emit(c_bld, lib)
     props.build_street(lib, c_props, blds)
+    from . import clutter
+    clutter.materials(lib)
+    clutter.build(lib, c_props)
     lm = landmarks.build(lib, c_bld)
     landscape.build(lib, c_land)
     from . import sky
@@ -108,6 +111,22 @@ def stage_review(ctx):
     from . import review
     open_blend(ctx.blend)
     review.render_all(ctx)
+
+
+def stage_poster(ctx):
+    """poster.webp: the town from the player's eye at 1600x900 for the
+    landing page — same camera, light, haze and grade as the game."""
+    from . import post
+    open_blend(ctx.blend)
+    scene = bpy.context.scene
+    scene.camera = bpy.data.objects["camera.player"]
+    render_settings(scene, 1600, 900, 32 if ctx.quick else 384)
+    scene.cycles.adaptive_threshold = 0.008
+    cam = scene.camera.data
+    cam.clip_end = 1.0e6
+    out = os.path.join(ctx.assets, "poster.webp")
+    post.render_with_fog(scene, out, fmt='WEBP', quality=90)
+    print("poster", out, os.path.getsize(out) // 1024, "KB")
 
 
 def stage_export(ctx):

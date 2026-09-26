@@ -121,6 +121,13 @@ def wood_group():
     col = g.mix(halo, col, g.rgb(lin(92, 52, 30)))
     col = g.mix(nail, col, g.rgb(lin(28, 20, 16)))
 
+    # Rain streaks: dark runs down vertical faces (and over the paint).
+    px, py, pz = g.separate(pos)
+    nzv = g.math('ABSOLUTE', g.separate(nrm)[2])
+    vert = g.sub(1.0, g.smooth(nzv, 0.3, 0.6))
+    rs = g.noise(g.combine(g.mul(px, 7.0), g.mul(py, 7.0), g.mul(pz, 0.35)), scale=1.0, detail=5.0, rough=0.6)
+    rain = g.mul(g.mul(g.smooth(rs, 0.54, 0.8), vert), 0.45)
+    col = g.mix(rain, col, g.hsv(col, s=0.8, v=0.7))
     # Dust: drifted against the bottom of walls and settled on ledges.
     z = g.separate(pos)[2]
     dn = g.noise(pos, scale=2.5, detail=6.0, rough=0.6)
@@ -149,6 +156,8 @@ def metal_group():
         ("Metallic", 'NodeSocketFloat', 0.7),
         ("Scale", 'NodeSocketFloat', 1.0),
         ("Dirt", 'NodeSocketFloat', 0.5),
+        ("Rust A", 'NodeSocketColor', lin(56, 32, 20)),
+        ("Rust B", 'NodeSocketColor', lin(110, 62, 36)),
     ], [("BSDF", 'NodeSocketShader', None)])
     I = lambda n: g.out(gin, n)
     pos = g.vmul(g.geo('Position'), g.combine(I("Scale"), I("Scale"), I("Scale")))
@@ -158,8 +167,7 @@ def metal_group():
     mv = g.madd(runs, 0.25, rn)
     thr = g.sub(0.72, g.mul(I("Rust"), 0.42))
     mask = g.smooth(mv, thr, g.add(thr, 0.08))
-    rc = g.ramp(g.noise(pos, scale=9.0, detail=5.0), [
-        (0.3, lin(62, 30, 16)), (0.55, lin(120, 58, 26)), (0.75, lin(150, 82, 40))])
+    rc = g.mix(g.smooth(g.noise(pos, scale=9.0, detail=5.0), 0.3, 0.75), I("Rust A"), I("Rust B"))
     basec = g.mix(g.noise(pos, scale=6.0, detail=3.0), I("Base"), g.hsv(I("Base"), v=1.35))
     col = g.mix(mask, basec, rc)
     dust = g.mul(g.smooth(g.separate(g.geo('Normal'))[2], 0.5, 0.95), I("Dirt"))
@@ -188,7 +196,7 @@ def stone_group():
     u, v, _ = g.separate(g.uv('grain'))
     pos = g.geo('Position')
     vec = g.combine(u, v, 0.0)
-    br = g.new('ShaderNodeTexBrick', offset=0.5)
+    br = g.new('ShaderNodeTexBrick', offset=0.5, squash=0.72, squash_frequency=2)
     g.set_in(br, 'Vector', vec)
     g.set_in(br, 'Color1', I("A"))
     g.set_in(br, 'Color2', I("B"))
@@ -247,10 +255,13 @@ def wood(name, light=None, dark=None, bleach=0.55, paint=None, paint_amount=0.0,
 
 
 def metal(name, base=lin(70, 68, 66), rust=0.6, rough=0.55, metallic=0.7, scale=1.0, dirt=0.5,
-          surface='metal'):
+          surface='metal', patina=None):
     m, g = new_material(name)
     n = group_node(g, bpy.data.node_groups["DC_Metal"], {
         "Base": base, "Rust": rust, "Rough": rough, "Metallic": metallic, "Scale": scale, "Dirt": dirt})
+    if patina is not None:
+        g.set_in(n, "Rust A", patina[0])
+        g.set_in(n, "Rust B", patina[1])
     g.output(g.out(n, "BSDF"))
     m["surface"] = surface
     _LIB[name] = m
@@ -352,7 +363,7 @@ def horse_material():
     x, y, z = g.separate(pos)
     hair = g.noise(g.combine(g.mul(x, 60), g.mul(y, 60), g.mul(z, 8)), scale=2.0, detail=4.0)
     blotch = g.noise(pos, scale=4.0, detail=4.0)
-    col = g.ramp(g.madd(hair, 0.3, g.mul(blotch, 0.7)), [(0.3, lin(58, 32, 20)), (0.7, lin(110, 64, 38))])
+    col = g.ramp(g.madd(hair, 0.3, g.mul(blotch, 0.7)), [(0.3, lin(104, 56, 30)), (0.7, lin(150, 86, 48))])
     bsdf = g.principled(col, rough=0.55, sheen=0.6, normal=g.bump(hair, strength=0.2, distance=0.002))
     g.output(bsdf)
     m["surface"] = 'cloth'
@@ -392,8 +403,8 @@ def build_library():
     wood("wood_floor", bleach=0.75, light=lin(150, 132, 112), dark=lin(84, 70, 58), dirt=1.0,
          dirt_height=0.8, nails=1.0)
     wood("wood_post", bleach=0.7, dirt=1.0, dirt_height=0.7, nails=0.0)
-    wood("wood_crate", bleach=0.35, light=lin(168, 136, 98), dark=lin(110, 82, 58), dirt=0.8, nails=1.0)
-    wood("wood_barrel", bleach=0.3, light=lin(132, 98, 66), dark=lin(76, 54, 38), dirt=0.8, nails=0.0)
+    wood("wood_crate", bleach=0.5, light=lin(158, 134, 106), dark=lin(100, 80, 62), dirt=0.9, nails=1.0)
+    wood("wood_barrel", bleach=0.45, light=lin(126, 100, 76), dark=lin(70, 54, 42), dirt=0.9, nails=0.0)
     # Painted timber: the town's palette. Faded, peeling, never saturated.
     wood("paint_red", paint=lin(128, 42, 30), paint_amount=1.0, wear=0.55)
     wood("paint_ochre", paint=lin(186, 140, 70), paint_amount=1.0, wear=0.5)
@@ -415,13 +426,15 @@ def build_library():
     metal("tin_roof", base=lin(120, 118, 114), rust=0.55, rough=0.45, metallic=0.6, scale=0.5, dirt=0.3)
     metal("iron", base=lin(46, 44, 42), rust=0.45, rough=0.6, metallic=0.5)
     metal("iron_rusty", base=lin(56, 52, 48), rust=0.85, rough=0.7, metallic=0.4)
-    metal("bronze", base=lin(150, 104, 56), rust=0.25, rough=0.35, metallic=0.9, scale=2.0, dirt=0.2)
+    metal("bronze", base=lin(150, 104, 56), rust=0.4, rough=0.35, metallic=0.9, scale=2.0, dirt=0.2,
+          patina=(lin(58, 70, 56), lin(96, 128, 104)))
     metal("brass", base=lin(170, 132, 70), rust=0.15, rough=0.3, metallic=0.9, scale=2.0, dirt=0.2)
-    stone("stone_sand")
+    stone("stone_sand", a=lin(186, 150, 114), b=lin(138, 102, 76), mortar=lin(172, 150, 124))
     stone("stone_rubble", a=lin(150, 130, 110), b=lin(120, 102, 86), mortar=lin(170, 150, 126),
           bw=0.45, bh=0.28)
     stone("brick", a=lin(150, 72, 50), b=lin(124, 58, 40), mortar=lin(180, 160, 136), bw=0.23, bh=0.075)
     cloth("canvas", lin(196, 178, 146))
+    cloth("burlap", lin(150, 122, 88), fade=0.3)
     cloth("canvas_stripe", lin(200, 186, 156), stripe=lin(132, 56, 42), stripe_w=0.22)
     cloth("canvas_green", lin(92, 108, 88), stripe=lin(190, 176, 146), stripe_w=0.18)
     cloth("curtain_red", lin(110, 30, 26), fade=0.25)

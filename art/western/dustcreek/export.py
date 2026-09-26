@@ -148,7 +148,10 @@ def stage(ctx):
         img.name = f"town_{g}"
         img.colorspace_settings.name = 'sRGB'
         mats[g] = unlit_material(f"baked.{g}", img, extension='EXTEND' if g == 'ground' else 'REPEAT')
-    # remove what the game does not get
+    # remove what the game does not get (helper scenes, far world, lamps)
+    for sc in list(bpy.data.scenes):
+        if sc != scene:
+            bpy.data.scenes.remove(sc)
     for ob in list(scene.objects):
         if ob.get('export', 1) == 0 or ob.type == 'LIGHT' or ob.name in ('review_cam',):
             bpy.data.objects.remove(ob)

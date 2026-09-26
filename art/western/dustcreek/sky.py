@@ -26,7 +26,7 @@ from .nodes import new_material, G
 from .materials import lin
 from . import lighting
 
-HAZE_L = 9000.0      # metres: far haze length for mesas and desert floor
+HAZE_L = 20000.0     # metres: far haze length for mesas and desert floor
 CLOUD_Z = 5200.0
 
 
@@ -65,13 +65,20 @@ def mesa_material():
     pos = g.geo('Position')
     x, y, z = g.separate(pos)
     strata = g.noise(g.combine(g.mul(x, 0.002), g.mul(y, 0.002), g.mul(z, 0.08)), scale=1.0, detail=4.0)
-    bands = g.wave(g.combine(0, 0, z), scale=0.02, dist=2.0, direction='Z', detail=2.0)
-    col = g.ramp(g.add(g.mul(strata, 0.6), g.mul(bands, 0.4)), [
-        (0.25, lin(150, 74, 44)), (0.5, lin(188, 100, 60)), (0.7, lin(206, 132, 84)), (0.85, lin(170, 96, 64))])
+    bands = g.wave(g.combine(g.mul(x, 0.0004), g.mul(y, 0.0004), z), scale=0.02, dist=6.0, direction='Z', detail=4.0)
+    col = g.ramp(g.add(g.mul(strata, 0.75), g.mul(bands, 0.25)), [
+        (0.25, lin(118, 62, 38)), (0.5, lin(158, 86, 50)), (0.7, lin(184, 112, 70)), (0.85, lin(148, 88, 56))])
+    # erosion gullies: dark vertical streaks down the cliffs
+    gul = g.noise(g.combine(g.mul(x, 0.03), g.mul(y, 0.03), g.mul(z, 0.002)), scale=1.0, detail=6.0, rough=0.6)
+    col = g.mix(g.mul(g.smooth(gul, 0.5, 0.75), 0.6), col, g.hsv(col, v=0.55))
+    # caprock: a paler, harder layer at the top edge
+    top = g.smooth(g.separate(g.geo('Normal'))[2], 0.6, 0.9)
+    col = g.mix(g.mul(top, 0.7), col, g.rgb(lin(176, 136, 100)))
     # talus and scrub near the base
     base = g.sub(1.0, g.smooth(z, 20.0, 160.0))
-    col = g.mix(g.mul(base, 0.6), col, g.rgb(lin(160, 112, 80)))
-    nrm = g.bump(g.noise(pos, scale=0.02, detail=8.0, rough=0.6), strength=0.6, distance=4.0)
+    col = g.mix(g.mul(base, 0.6), col, g.rgb(lin(150, 110, 82)))
+    hgt = g.add(g.mul(g.noise(pos, scale=0.02, detail=8.0, rough=0.6), 0.6), g.mul(gul, 0.8))
+    nrm = g.bump(hgt, strength=0.8, distance=12.0)
     surf = g.principled(col, rough=0.95, normal=nrm, spec=0.2)
     g.output(_haze_mix(g, surf))
     return m
@@ -116,20 +123,24 @@ def cloud_material():
     return m
 
 
-def _mesa_mesh(bm, cx, cy, R, H, r, sides=56):
+def _mesa_mesh(bm, cx, cy, R, H, r, sides=96):
     """A flat-topped butte: talus skirt, near-vertical banded cliffs, a
     slightly eroded cap. Outline radius varies by angle (1D noise)."""
     ph = r.uniform(0, 100)
     def rad(a, k=1.0):
         return R * k * (1 + 0.22 * mnoise.noise(Vector((math.cos(a) * 1.3 + ph, math.sin(a) * 1.3, 0.0))) +
                         0.08 * mnoise.noise(Vector((math.cos(a) * 4 + ph, math.sin(a) * 4, 1.0))))
-    levels = [(0.0, 1.55), (0.12, 1.22), (0.26, 1.04), (0.32, 1.0), (0.93, 0.97), (1.0, 0.93)]
+    levels = [(0.0, 1.55), (0.12, 1.22), (0.26, 1.04), (0.32, 1.0), (0.55, 0.985), (0.8, 0.975), (0.93, 0.965),
+              (1.0, 0.92)]
     rings = []
+    # buttresses and gullies: fine angular noise that runs the whole cliff
+    gph = r.uniform(0, 100)
     for (t, k) in levels:
         ring = []
         for i in range(sides):
             a = 2 * math.pi * i / sides
-            rr = rad(a, k) * (1 + 0.02 * r.uniform(-1, 1))
+            gully = 0.05 * mnoise.noise(Vector((math.cos(a) * 9 + gph, math.sin(a) * 9, t * 2.0)))
+            rr = rad(a, k) * (1 + gully + 0.015 * r.uniform(-1, 1))
             ring.append(bm.verts.new((cx + math.cos(a) * rr, cy + math.sin(a) * rr, t * H * (1 + 0.03 * r.uniform(-1, 1)))))
         rings.append(ring)
     for k in range(len(rings) - 1):
@@ -148,10 +159,16 @@ def build_far(col):
     objs = []
     bm = bmesh.new()
     # (azimuth deg from +Y toward +X, distance m, radius m, height m)
-    for az, dist, R, H in ((-38, 7200, 900, 420), (-24, 11500, 1500, 520), (-9, 16000, 1300, 380),
-                           (14, 9800, 700, 610), (22, 8400, 380, 470), (33, 13000, 2100, 540),
+    # (azimuth deg from +Y toward +X, distance m, radius m, height m). The
+    # street frames only ~10 degrees either side of the church, so the
+    # mesas that matter stand there; the rest ring the horizon for the
+    # environment light and wide screens.
+    for az, dist, R, H in ((-9.0, 6400, 380, 340), (-12.5, 7200, 160, 290), (-15.5, 9800, 1100, 470),
+                           (6.8, 7600, 300, 410), (9.0, 8200, 120, 330), (12.5, 11800, 1300, 520),
+                           (1.5, 17000, 2200, 420), (-5.5, 13500, 600, 300), (-24, 11500, 1500, 520),
+                           (-38, 7200, 900, 420), (22, 8400, 380, 470), (33, 13000, 2100, 540),
                            (52, 6800, 600, 300), (-60, 9000, 1800, 350), (75, 12000, 2500, 450),
-                           (-85, 14000, 2200, 400), (4, 21000, 2600, 460)):
+                           (-85, 14000, 2200, 400), (140, 15000, 3000, 380), (-150, 12000, 2400, 420)):
         a = math.radians(az)
         _mesa_mesh(bm, math.sin(a) * dist, math.cos(a) * dist, R, H, r)
     me = bpy.data.meshes.new("far.mesas")
@@ -226,6 +243,34 @@ def render_sky(ctx, scene, w=4096, h=2048, samples=96):
     scene.collection.objects.link(cam)
     old_cam = scene.camera
     scene.camera = cam
+    import json
+    far = [o for o in scene.objects if any(c.name == 'farworld' for c in o.users_collection)]
+    for o in far:
+        o.hide_render = True
+    pipeline.render_settings(scene, 512, 256, 16)
+    probe = os.path.join(ctx.build, "sky_probe.exr")
+    s = scene.render.image_settings
+    if hasattr(s, 'media_type'):
+        s.media_type = 'IMAGE'
+    s.file_format = 'OPEN_EXR'
+    s.color_depth = '32'
+    scene.render.filepath = probe
+    bpy.ops.render.render(write_still=True)
+    import OpenImageIO as oiio
+    inp = oiio.ImageInput.open(probe)
+    sp = inp.spec()
+    pa = np.asarray(inp.read_image(0, 0, 0, 3, oiio.FLOAT)).reshape(sp.height, sp.width, 3)
+    inp.close()
+    # rows for elevation 0.5..2 deg, columns for +-30 deg around straight ahead (u=0.25)
+    r0 = int((0.5 - 2.0 / 180) * sp.height)
+    r1 = int((0.5 - 0.5 / 180) * sp.height)
+    c0 = int((0.25 - 30 / 360) * sp.width)
+    c1 = int((0.25 + 30 / 360) * sp.width)
+    horizon = pa[r0:r1 + 1, c0:c1].reshape(-1, 3).mean(0)
+    json.dump({"horizon": [float(v) for v in horizon]}, open(os.path.join(ctx.build, "sky_horizon.json"), "w"))
+    print("horizon colour", horizon)
+    for o in far:
+        o.hide_render = False
     pipeline.render_settings(scene, w, h, samples)
     exr = os.path.join(ctx.build, "sky.exr")
     s = scene.render.image_settings
@@ -241,7 +286,7 @@ def render_sky(ctx, scene, w=4096, h=2048, samples=96):
     arr = np.asarray(inp.read_image(0, 0, 0, 3, oiio.FLOAT)).reshape(spec.height, spec.width, 3)
     inp.close()
     webp = os.path.join(ctx.assets, "sky.webp")
-    post.save_display(arr, webp, scene, fmt='WEBP', quality=88)
+    post.save_display(post.grade(arr), webp, scene, fmt='WEBP', quality=88)
     scene.camera = old_cam
     bpy.data.objects.remove(cam)
     for ob in hidden:

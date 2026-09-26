@@ -94,17 +94,22 @@ def crate(mb, f, r, sx=0.7, sy=0.55, sz=0.55, mat='wood_crate', slats=3):
 def sack(mb, f, r, rad=0.26, h=0.45):
     """A grain sack: a lumpy squashed sphere."""
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=rad)
+    bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=9, radius=rad)
     for v in bm.verts:
         z = v.co.z
-        v.co.z = (z + rad) / (2 * rad) * h
-        sq = 1.0 + 0.25 * (1 - v.co.z / h) - 0.15 * (v.co.z / h) ** 2
-        v.co.x *= sq * (1 + r.uniform(-0.05, 0.05))
-        v.co.y *= sq * 0.85 * (1 + r.uniform(-0.05, 0.05))
-        if v.co.z > h * 0.85:
-            v.co.x *= 0.5
-            v.co.y *= 0.5
-    mb.add_bmesh(f, bm, 'canvas', rand=r.random())
+        t = (z + rad) / (2 * rad)
+        v.co.z = t * h
+        # a slumped sack: fat, flat-bottomed, pinched into a tied neck
+        sq = 1.15 * (1.0 - 0.35 * max(0.0, t - 0.6) / 0.4) + 0.12 * math.sin(t * 3.1)
+        if t < 0.08:
+            v.co.z = 0.0
+        v.co.x *= sq * 1.25 * (1 + r.uniform(-0.06, 0.06))
+        v.co.y *= sq * 0.8 * (1 + r.uniform(-0.06, 0.06))
+        if t > 0.86:
+            v.co.x *= 0.35
+            v.co.y *= 0.35
+            v.co.z = h * (0.86 + (t - 0.86) * 0.8)
+    mb.add_bmesh(f, bm, 'burlap', rand=r.random())
     bm.free()
 
 
@@ -337,29 +342,57 @@ def barber_pole(mb, metal, f, r, h=1.5):
 
 
 def horse_head(col, lib, f, name="prop.horse", group='left_far'):
-    """A horse looking out over a stall's half door. Built as a skin-modifier
-    armature of the skull, neck and muzzle, subdivided, then applied."""
+    """A horse looking out over a stall's half door.
+
+    Lofted from cross-sections the way a horse's head is built: a straight
+    forehead line from the poll to the nose, the deep round jaw plate at the
+    back, the long narrowing face, a slight bulge at the nostrils; the neck
+    runs back and down into the dark stall. Subdivided, then applied."""
     bm = bmesh.new()
-    # spine of the head: from inside the stall (neck) out to the muzzle
-    pts = [(0.0, 0.55, -0.35, 0.2), (0.0, 0.35, -0.12, 0.2), (0.0, 0.12, 0.08, 0.17),
-           (0.0, -0.05, 0.14, 0.13), (0.0, -0.22, 0.06, 0.11), (0.0, -0.38, -0.06, 0.1),
-           (0.0, -0.5, -0.16, 0.095), (0.0, -0.57, -0.22, 0.09)]
-    vs = [bm.verts.new((x, y, z)) for (x, y, z, _) in pts]
-    for a, b in zip(vs[:-1], vs[1:]):
-        bm.edges.new((a, b))
+    seg = 14
+
+    def ring(center, w, h, squareness=2.6, tilt=0.0):
+        vs = []
+        for i in range(seg):
+            a = 2 * math.pi * i / seg
+            c, s = math.cos(a), math.sin(a)
+            # superellipse: flatter sides, like a real skull
+            x = (abs(c) ** (2 / squareness)) * (1 if c >= 0 else -1) * w / 2
+            z = (abs(s) ** (2 / squareness)) * (1 if s >= 0 else -1) * h / 2
+            vs.append(bm.verts.new(Vector(center) + Vector((x, 0, z))))
+        return vs
+
+    # head: axis along -Y (out of the stall), top line at z = 0
+    L = 0.6
+    secs = [(0.0, 0.14, 0.14), (0.06, 0.2, 0.26), (0.18, 0.22, 0.36), (0.32, 0.2, 0.34), (0.48, 0.17, 0.25),
+            (0.66, 0.15, 0.2), (0.84, 0.16, 0.2), (0.95, 0.14, 0.17), (1.0, 0.07, 0.09)]
+    head_rings = [ring((0.0, -t * L, -h / 2 - (0.01 if t > 0.9 else 0.0)), w, h) for (t, w, h) in secs]
+    # neck: from behind the jaw, back into the stall and down
+    neck_secs = [((0.0, 0.05, -0.2), 0.2, 0.36), ((0.0, 0.3, -0.42), 0.26, 0.5), ((0.0, 0.62, -0.72), 0.3, 0.6)]
+    neck_rings = [ring(c, w, h) for (c, w, h) in neck_secs]
+
+    def bridge(a, b):
+        for i in range(seg):
+            j = (i + 1) % seg
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    for a, b in zip(head_rings[:-1], head_rings[1:]):
+        bridge(a, b)
+    bm.faces.new(list(reversed(head_rings[-1])))
+    for a, b in zip(neck_rings[:-1], neck_rings[1:]):
+        bridge(b, a)
+    bm.faces.new(list(reversed(head_rings[0])))
+    bm.faces.new(neck_rings[-1])
+    bm.faces.new(list(reversed(neck_rings[0])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
     ob = bpy.data.objects.new(name, me)
     col.objects.link(ob)
-    sk = ob.modifiers.new("skin", 'SKIN')
-    for i, (_, _, _, rad) in enumerate(pts):
-        sv = me.skin_vertices[0].data[i]
-        # heads are taller than they are wide
-        sv.radius = (rad * 0.75, rad * 1.15)
-    me.skin_vertices[0].data[0].use_root = True
     ob.modifiers.new("sub", 'SUBSURF').levels = 2
-    ob.matrix_world = f.m
+    # nose down about 40 degrees, as a horse holds it looking over a door
+    pitch = Matrix.Rotation(math.radians(38), 4, 'X')
+    ob.matrix_world = f.m @ pitch
     bpy.context.view_layer.update()
     dg = bpy.context.evaluated_depsgraph_get()
     me2 = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
@@ -367,24 +400,32 @@ def horse_head(col, lib, f, name="prop.horse", group='left_far'):
     ob.data = me2
     bpy.data.meshes.remove(me)
     me2.materials.append(lib['horse'])
-    # ears, eyes, mane strands, halter: small extra meshes joined in
     extra = MeshBuilder(name + ".x")
-    lf = Frame(matrix=f.m)
+    lf = Frame(matrix=f.m @ pitch)
     for sx in (-1, 1):
-        extra.cylinder(lf.sub((sx * 0.07, 0.1, 0.24), rot_y=sx * 0.25, rot_x=-0.3), (0, 0, 0), 0.04, 0.16, 'horse',
-                       segments=6, radius_top=0.005)
-        # eyes, set on the sides of the skull
+        # ears: pointed, pricked forward
+        extra.cylinder(lf.sub((sx * 0.055, 0.02, 0.0), rot_y=sx * 0.2, rot_x=0.35), (0, 0, 0), 0.035, 0.15, 'horse',
+                       segments=6, radius_top=0.004)
+        # eyes, set on the sides of the skull a third of the way down
         bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.025)
-        extra.add_bmesh(lf.sub((sx * 0.1, -0.1, 0.1)), bm, 'piano_black')
+        bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.022)
+        extra.add_bmesh(lf.sub((sx * 0.105, -0.17, -0.07)), bm, 'piano_black')
         bm.free()
-        # halter straps
-        extra.board(lf, (sx * 0.1, -0.3, 0.04), (sx * 0.11, -0.28, -0.12), 0.03, 0.01, 'leather', up=(0, 1, 0))
-    extra.board(lf, (-0.11, -0.3, 0.02), (0.11, -0.3, 0.02), 0.03, 0.01, 'leather', up=(0, 0, 1))
-    for k in range(7):
-        y = 0.12 + k * 0.07
-        extra.board(lf, (0.0, y, 0.17 - k * 0.04), (0.0, y + 0.06, -0.05 - k * 0.04), 0.05, 0.03, 'paint_black',
+        # nostrils
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=6, v_segments=4, radius=0.018)
+        extra.add_bmesh(lf.sub((sx * 0.045, -0.585, -0.1)), bm, 'piano_black')
+        bm.free()
+        # halter cheek straps
+        extra.board(lf, (sx * 0.1, -0.27, 0.0), (sx * 0.1, -0.3, -0.2), 0.03, 0.01, 'leather', up=(0, 1, 0))
+    extra.board(lf, (-0.1, -0.44, -0.02), (0.1, -0.44, -0.02), 0.03, 0.01, 'leather', up=(0, 0, 1))
+    extra.board(lf, (-0.08, -0.44, -0.2), (0.08, -0.44, -0.2), 0.03, 0.01, 'leather', up=(0, 0, 1))
+    # forelock and mane
+    for k in range(9):
+        y = 0.04 + k * 0.08
+        extra.board(lf, (0.0, y, 0.02 - k * 0.07), (0.0, y + 0.05, -0.16 - k * 0.07), 0.06, 0.035, 'paint_black',
                     up=(1, 0, 0))
+    extra.board(lf, (0.0, -0.02, 0.03), (0.0, -0.1, -0.1), 0.07, 0.02, 'paint_black', up=(1, 0, 0))
     xo = extra.build(col, lib)
     ob.select_set(True)
     xo.select_set(True)
@@ -393,6 +434,7 @@ def horse_head(col, lib, f, name="prop.horse", group='left_far'):
     smooth(ob, 60)
     tag(ob, surface='cloth', group=group)
     return ob
+
 
 
 def piano(col, lib, f, name="secret.piano", group='left_mid'):

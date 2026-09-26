@@ -28,7 +28,7 @@ def glass_material(lib):
     streak = g.noise(g.vmul(pos, (30.0, 30.0, 1.5)), scale=2.0, detail=3.0)
     dust = g.mul(g.add(g.add(g.mul(corner, 0.35), g.mul(bottom, 0.3)), g.mul(g.smooth(n, 0.45, 0.8), 0.35)),
                  g.madd(streak, 0.5, 0.6), clamp=True)
-    dust = g.mul(dust, 0.75)
+    dust = g.mul(dust, 0.4)
     fres = g.node('ShaderNodeFresnel', inputs={'IOR': 1.52}, out=0)
     transp = g.node('ShaderNodeBsdfTransparent', inputs={'Color': lin(214, 220, 206)}, out=0)
     gloss = g.node('ShaderNodeBsdfGlossy', inputs={'Color': (1, 1, 1), 'Roughness': 0.04}, out=0)

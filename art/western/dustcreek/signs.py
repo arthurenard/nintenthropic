@@ -442,11 +442,20 @@ def generic_wanted(i, name, amount):
     # a blank portrait frame (faces are not our business; the gang's are the game's)
     ms.rect(0.09, 0.18, W - 0.09, H - 0.19, ch='B')
     ms.rect(0.09, 0.18, W - 0.09, H - 0.19, ch='R', line=0.004)
-    # suggest a hat and shoulders silhouette in the frame
+    # a man in a hat: shoulders, neck, head, brim, crown (a woodcut, faceless)
     cx = W / 2
-    ms.fill([(cx - 0.11, 0.18), (cx - 0.09, 0.26), (cx - 0.045, 0.29), (cx - 0.04, 0.34),
-             (cx - 0.07, 0.36), (cx - 0.09, 0.365), (cx, 0.38), (cx + 0.09, 0.365), (cx + 0.07, 0.36),
-             (cx + 0.04, 0.34), (cx + 0.045, 0.29), (cx + 0.09, 0.26), (cx + 0.11, 0.18)], ch='R')
+    b0 = 0.18
+    ms.fill([(cx - 0.12, b0), (cx - 0.115, b0 + 0.05), (cx - 0.08, b0 + 0.085), (cx - 0.03, b0 + 0.1),
+             (cx + 0.03, b0 + 0.1), (cx + 0.08, b0 + 0.085), (cx + 0.115, b0 + 0.05), (cx + 0.12, b0)], ch='R',
+            smooth=False)
+    ms.fill([(cx - 0.022, b0 + 0.095), (cx - 0.02, b0 + 0.125), (cx + 0.02, b0 + 0.125), (cx + 0.022, b0 + 0.095)],
+            ch='R', smooth=False)
+    ms.fill([(cx + 0.045 * math.cos(t), b0 + 0.165 + 0.055 * math.sin(t)) for t in
+             [i * math.pi / 8 for i in range(16)]], ch='R')
+    ms.fill([(cx - 0.1, b0 + 0.2), (cx - 0.06, b0 + 0.213), (cx + 0.06, b0 + 0.213), (cx + 0.1, b0 + 0.2),
+             (cx + 0.07, b0 + 0.222), (cx - 0.07, b0 + 0.222)], ch='R')
+    ms.fill([(cx - 0.05, b0 + 0.215), (cx - 0.045, b0 + 0.27), (cx - 0.01, b0 + 0.262), (cx + 0.01, b0 + 0.262),
+             (cx + 0.045, b0 + 0.27), (cx + 0.05, b0 + 0.215)], ch='R')
     ms.text(amount, W / 2, 0.08, 0.05, face='clarendon', jitter=0.3, ch='G')
     ms.text("REWARD", W / 2, 0.04, 0.02, face='typewriter', jitter=0.1)
     return ms.render(), (W, H)
