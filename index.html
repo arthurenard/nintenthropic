@@ -117,7 +117,6 @@
         <div class="arcs" id="arcs" aria-hidden="true"></div>
         <div class="bursts" id="bursts" aria-hidden="true"></div>
         <div class="marks" id="marks" aria-hidden="true"></div>
-        <canvas class="overlay" id="crosshair" aria-hidden="true"></canvas>
 
         <div class="hud-score glass play-only" id="hud-score">
           <p class="score num"><span class="visually-hidden">Score </span><span id="score">0</span></p>
@@ -167,6 +166,8 @@
 
         <p class="hint glass" id="hint" role="status" hidden></p>
         <div id="moments"></div>
+        <!-- Last, so the crosshair is never hidden behind the corners' chrome. -->
+        <canvas class="overlay" id="crosshair" aria-hidden="true"></canvas>
       </div>
     </section>
 

@@ -58,21 +58,27 @@ export function makeHand(pose: HandPose = {}): Landmark[] {
   // The index knuckle, placed to give the requested reach exactly.
   landmarks[5] = point(landmarks[4].x + reach * span, landmarks[4].y);
   landmarks[8] = point(indexTip[0], indexTip[1]);
-  // The rest, for looks only.
+  // The rest, for looks only: the thumb's joints between its base and tip,
+  // the index finger reaching for its tip, and the other three knuckles in a
+  // row beside the middle one with their fingers curled into the palm.
   landmarks[1] = mix(landmarks[0], landmarks[2], 0.5);
+  landmarks[1] = point(landmarks[1].x + side[0] * span * 0.12, landmarks[1].y + side[1] * span * 0.12);
   landmarks[3] = mix(landmarks[2], landmarks[4], 0.55);
   landmarks[6] = mix(landmarks[5], landmarks[8], 0.4);
   landmarks[7] = mix(landmarks[5], landmarks[8], 0.72);
-  for (const [base, across] of [
-    [9, 0],
-    [13, 0.28],
-    [17, 0.52],
+  const palm = at(0.55, 0.1);
+  for (const [base, along, across] of [
+    [9, 1, 0],
+    [13, 0.95, -0.28],
+    [17, 0.84, -0.52],
   ] as const) {
-    const knuckle = base === 9 ? landmarks[9] : at(0.92 - across * 0.25, across);
+    const knuckle = base === 9 ? landmarks[9] : at(along, across);
     landmarks[base] = knuckle;
-    landmarks[base + 1] = at(0.78 - across * 0.2, across + 0.08);
-    landmarks[base + 2] = at(0.55 - across * 0.15, across + 0.1);
-    landmarks[base + 3] = at(0.5 - across * 0.12, across + 0.02);
+    const bent = point(knuckle.x + (palm.x - knuckle.x) * 0.35, knuckle.y + (palm.y - knuckle.y) * 0.35);
+    const middle = point(bent.x + side[0] * span * 0.12, bent.y + side[1] * span * 0.12);
+    landmarks[base + 1] = middle;
+    landmarks[base + 2] = mix(middle, palm, 0.55);
+    landmarks[base + 3] = mix(middle, palm, 0.85);
   }
   return landmarks;
 }

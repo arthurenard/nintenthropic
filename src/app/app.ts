@@ -529,6 +529,10 @@ export class App {
     this.host?.pause();
     this.stopTracking();
     this.crosshair.clear();
+    // A paused game is not looking for the hand: nothing asks for it.
+    this.hud.pageHint(null);
+    session.lostSince = null;
+    this.pip.calm();
     $("adjust-aim").hidden = session.control !== "hand";
     setText("pause-title", "Paused");
     openSheet("pause-sheet");

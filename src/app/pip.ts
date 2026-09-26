@@ -41,6 +41,12 @@ export class Pip {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
+  /** No longer ringing for a lost hand (while paused, nothing is looking for it). */
+  calm(): void {
+    this.lostSince = null;
+    this.box.classList.remove("lost");
+  }
+
   /** Draws the hand from one camera frame, and marks a hand lost for a moment. */
   draw(frame: HandFrame, now: number): void {
     if (this.box.hidden) return;
