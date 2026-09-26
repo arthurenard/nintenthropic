@@ -181,7 +181,7 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
       zNear: -18.5,
       zFar: -31,
       height: 8,
-      front: 9.2,
+      front: 8.7,
       depth: 12,
       color: "#8f4d3b",
       material: "planks",
@@ -194,7 +194,7 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
         { z: -24.8, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
         { z: -28.6, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
       ],
-      sign: { text: "SALOON", board: "#231a14", ink: "#e8c779", y: 8.35, w: 6.4, h: 1.1 },
+      sign: { text: "SALOON", board: "#231a14", ink: "#e8c779", y: 7.3, w: 6.4, h: 1.0 },
     },
     {
       id: "barber",
@@ -270,7 +270,7 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
       zNear: -27,
       zFar: -39,
       height: 8.2,
-      front: 9.2,
+      front: 8.8,
       depth: 11,
       color: "#6f8683",
       material: "planks",
@@ -283,7 +283,7 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
         { z: -33, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
         { z: -36.5, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
       ],
-      sign: { text: "HOTEL", board: "#e2d7bd", ink: "#2d3b3a", y: 8.5, w: 5, h: 0.9 },
+      sign: { text: "HOTEL", board: "#e2d7bd", ink: "#2d3b3a", y: 7.35, w: 5, h: 0.85 },
     },
     {
       id: "undertaker",
@@ -316,10 +316,15 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
   for (const spec of buildings) buildBuilding(b, spec, mat, C, glassMaterial);
 
   // --- the arch over the street: "DUST CREEK" ------------------------------------------
-  for (const x of [-6.45, 6.45]) b.box("arch", mat.boards, [x, 3.7, -18], [0.35, 7.4, 0.35], C.darkWood, { occlude: true });
-  b.box("arch", mat.planks, [0, 6.95, -18], [13.4, 0.75, 0.3], C.darkWood, { occlude: true });
-  b.box("arch", mat.plain, [0, 7.36, -18], [13.6, 0.08, 0.4], C.post);
-  addSign(b.root, "sign.arch", signTexture("DUST CREEK", "#3a2a1c", "#e8cf94", 1024, 128), [0, 6.95, -17.83], 6.2, 0.62, 0, 1.0);
+  // Posts out on the boardwalks and the beam up high, so the arch hides no
+  // cover: from the eye, a post at the kerb stood right in front of the
+  // sheriff's door, and a lower beam across the saloon's roof edge.
+  for (const x of [-7.25, 7.25]) b.box("arch", mat.boards, [x, 4.2, -18], [0.35, 8.4, 0.35], C.darkWood, { occlude: true });
+  b.box("arch", mat.planks, [0, 8.1, -18], [14.9, 0.62, 0.3], C.darkWood, { occlude: true });
+  b.box("arch", mat.plain, [0, 8.45, -18], [15.1, 0.08, 0.4], C.post);
+  addSign(b.root, "sign.arch", signTexture("DUST CREEK", "#3a2a1c", "#e8cf94", 1024, 128), [0, 8.1, -17.83], 6.2, 0.55, 0, 1.0);
+  // A rope under the beam for the aim check's top-centre bottle to hang from.
+  b.box("arch", mat.plain, [0.35, 7.62, -17.9], [0.018, 0.38, 0.018], C.hoop as Color, { surface: "cloth" });
 
   // --- street furniture and covers' props ----------------------------------------------
   // General store barrels on the boardwalk.
@@ -997,12 +1002,11 @@ function addCovers(b: TownBuilder): void {
     ["barber_door", "door", "step_out", 0, [-8.0, W, -36], [-9.5, W, -36.9]],
     ["livery_hay", "crate", "rise", 0, [-5.95, 0, -44.75], [-5.95, 0, -44.75]],
     ["livery_door", "door", "step_out", 0, [-8.0, W, -47], [-9.6, W, -48.3]],
-    ["livery_loft", "window", "rise", 1, [-8.9, 3.6, -47], [-9.6, 3.6, -47.95]],
     ["livery_corner", "corner", "lean_left", 0, [-8.25, 0, -53.9], [-9.7, 0, -53.9]],
     ["wagon_bed", "wagon", "rise", 0, [-3.7, 0, -28.95], [-3.7, 0, -28.95]],
     ["wagon_wheel", "wagon", "lean_left", 0, [-2.35, 0, -28.6], [-3.2, 0, -28.6]],
-    ["store_roof", "roof", "rise", 2, [-9.15, 4.45, -15.4], [-9.8, 4.45, -15.7]],
-    ["saloon_roof", "roof", "rise", 2, [-9.15, 8.05, -26.5], [-9.8, 8.05, -26.8]],
+    ["store_roof", "roof", "rise", 2, [-8.92, 4.45, -15.4], [-9.8, 4.45, -15.7]],
+    ["saloon_roof", "roof", "rise", 2, [-8.95, 8.05, -26.5], [-9.8, 8.05, -26.8]],
     // Right side, near to far.
     ["bank_door", "door", "step_out", 0, [8.05, W, -13.9], [9.5, W, -14.75]],
     ["bank_roof", "roof", "rise", 2, [9.1, 5.55, -14.6], [9.8, 5.55, -14.9]],
@@ -1013,7 +1017,7 @@ function addCovers(b: TownBuilder): void {
     ["hotel_window_1", "window", "step_out", 1, [6.72, 3.5, -29.5], [9.6, 3.6, -30.45], { townsfolk: true }],
     ["hotel_window_2", "window", "step_out", 1, [6.72, 3.5, -33], [9.6, 3.6, -33.95], { townsfolk: true }],
     ["hotel_window_3", "window", "step_out", 1, [6.72, 3.5, -36.5], [9.6, 3.6, -37.45]],
-    ["hotel_roof", "roof", "rise", 2, [9.15, 8.25, -31.5], [9.8, 8.25, -31.8]],
+    ["hotel_roof", "roof", "rise", 2, [8.95, 8.25, -31.5], [9.8, 8.25, -31.8]],
     ["undertaker_coffins", "crate", "lean_right", 0, [6.25, W, -43.55], [7.05, W, -43.55]],
     ["undertaker_door", "door", "step_out", 0, [8.05, W, -45.5], [9.5, W, -46.4], { townsfolk: true }],
     ["undertaker_corner", "corner", "lean_right", 0, [8.25, 0, -49.8], [9.7, 0, -49.8]],
@@ -1036,7 +1040,7 @@ function addCalibration(b: TownBuilder): void {
   // corners, edges and centre, each standing on something.
   const spots: [number, number, number][] = [
     [-8.25, 5.2 + 0.4, -15.2], // top-left: on the store's cornice
-    [0.35, 7.4, -17.9], // top-centre: on the arch
+    [0.35, 6.95, -17.9], // top-centre: hanging from the arch
     [8.3, 6.56, -15.5], // top-right: on the bank's cornice
     [-6.6, WALK_TOP + 0.95, -12.3], // left: on a barrel on the store's porch
     [-2.95, 1.05, -26.3], // centre: on the wagon

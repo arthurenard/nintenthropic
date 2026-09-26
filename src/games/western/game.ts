@@ -23,6 +23,7 @@ import { Ambient } from "./world/ambient";
 import { loadAssets, type HighNoonAssets } from "./world/assets";
 import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
+import { checkCovers, type CoverReport } from "./world/coverCheck";
 import { RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
 import { Effects } from "./world/effects";
@@ -143,6 +144,7 @@ export class HighNoon implements Game, MatchListener {
   /** Which way the view tips at death: away from the last shot that hit. */
   private hurtSide = 1;
   private readonly schedule: Scheduled[] = [];
+  private coverReport: CoverReport | null = null;
   private readonly shotPoint = new Vector3();
   private shotX = 0.5;
   private shotY = 0.5;
@@ -195,6 +197,13 @@ export class HighNoon implements Game, MatchListener {
     this.camera.still = true;
     this.sound = new Sound(ctx.audio, this.camera.camera);
     this.queries = new TownQueries(town);
+    // Only covers the player can actually see a man in (see coverCheck.ts).
+    const covers = checkCovers(town.covers, this.queries, town.eye);
+    if (covers.moved.length || covers.dropped.length) {
+      console.info(`High Noon: covers moved into view: ${covers.moved.join(", ") || "none"}; left out, not visible from the eye: ${covers.dropped.join(", ") || "none"}.`);
+    }
+    this.coverReport = covers;
+    town.covers = covers.kept;
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
 
@@ -873,6 +882,7 @@ export class HighNoon implements Game, MatchListener {
       match: () => this.match,
       camera: () => this.camera.camera,
       real: () => this.assets?.real,
+      covers: () => ({ used: this.assets.town.covers.map((c) => c.id), moved: this.coverReport?.moved, dropped: this.coverReport?.dropped }),
       setImmortal: (on: boolean) => {
         this.match.health.immortal = on;
       },
