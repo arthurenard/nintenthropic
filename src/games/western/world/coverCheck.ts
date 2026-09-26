@@ -31,6 +31,38 @@ export function coverVisible(queries: TownQueries, eye: Vector3, feet: { x: numb
   return false;
 }
 
+/**
+ * The game's own adjustments to covers the town placed, by id, in world
+ * metres. The saloon's roof edge perch sat right under the score panel in
+ * the play framing's top-left corner, the one spot that kept the view from
+ * closing in further; a few steps further along the same roof edge he is
+ * clear of it (and still on the roof: the floor is checked).
+ */
+export const COVER_SHIFTS: Readonly<Record<string, { dx: number; dz: number }>> = {
+  "saloon.roof": { dx: 0, dz: -2.6 },
+};
+
+/** Apply COVER_SHIFTS (or `shifts`) where the same floor carries the moved spot. */
+export function shiftCovers(
+  covers: readonly Cover[],
+  queries: TownQueries,
+  eye: Vector3,
+  shifts: Readonly<Record<string, { dx: number; dz: number }>> = COVER_SHIFTS,
+): { covers: Cover[]; shifted: string[] } {
+  const shifted: string[] = [];
+  const out = covers.map((c) => {
+    const s = shifts[c.id];
+    if (!s) return c;
+    const exposed = { x: c.exposed.x + s.dx, y: c.exposed.y, z: c.exposed.z + s.dz };
+    const hidden = { x: c.hidden.x + s.dx, y: c.hidden.y, z: c.hidden.z + s.dz };
+    const floor = queries.groundAt(exposed.x, exposed.z, exposed.y + 1);
+    if (Math.abs(floor - exposed.y) > 0.3) return c;
+    shifted.push(c.id);
+    return { ...c, exposed, hidden, distance: Math.hypot(exposed.x - eye.x, exposed.z - eye.z) };
+  });
+  return { covers: out, shifted };
+}
+
 export interface CoverReport {
   kept: Cover[];
   moved: string[];

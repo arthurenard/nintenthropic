@@ -1,13 +1,16 @@
 import { Euler, PerspectiveCamera, Quaternion, Vector3 } from "three";
+import type { Framing } from "./framing";
 
 const e = new Euler(0, 0, 0, "YXZ");
 const q = new Quaternion();
 
 /**
- * The player's eye: placed by the town's `camera.player`, with the life a
- * held pose has — a slow breath, a kick when the revolver fires that settles
- * in a quarter second, a flinch when hit, a shake when dynamite goes off,
- * and, at the end, the slow tip into the dust.
+ * The player's eye: placed by the town's `camera.player`, framed by the game
+ * (a field of view and a pitch from that same eye, eased from one to the
+ * next — see framing.ts), with the life a held pose has — a slow breath, a
+ * kick when the revolver fires that settles in a quarter second, a flinch
+ * when hit, a shake when dynamite goes off, and, at the end, the slow tip
+ * into the dust.
  */
 export class PlayerCamera {
   readonly camera: PerspectiveCamera;
@@ -21,6 +24,11 @@ export class PlayerCamera {
   private shake = 0;
   private death = 0;
   private deathSide = 1;
+  private readonly framing: Framing;
+  private readonly framingFrom: Framing;
+  private readonly framingTo: Framing;
+  private framingT = 1;
+  private framingDur = 0;
   /** No breathing or kick: during the aim check the bottles must hold still. */
   still = false;
   reducedMotion = false;
@@ -29,7 +37,48 @@ export class PlayerCamera {
     this.camera = new PerspectiveCamera(fov, 16 / 10, 0.1, 400);
     this.basePos.copy(position);
     this.baseQuat.copy(quaternion);
+    this.framing = { fov, pitch: 0 };
+    this.framingFrom = { fov, pitch: 0 };
+    this.framingTo = { fov, pitch: 0 };
     this.apply();
+  }
+
+  /**
+   * Frame the view this way, easing over `seconds` (0: at once). A new
+   * framing mid-ease starts from wherever the view is now.
+   */
+  setFraming(to: Framing, seconds: number): void {
+    const same = Math.abs(to.fov - this.framingTo.fov) < 1e-4 && Math.abs(to.pitch - this.framingTo.pitch) < 1e-6;
+    if (same && (seconds > 0 || this.framingT >= 1)) {
+      if (seconds <= 0) this.finishFraming();
+      return;
+    }
+    this.framingFrom.fov = this.framing.fov;
+    this.framingFrom.pitch = this.framing.pitch;
+    this.framingTo.fov = to.fov;
+    this.framingTo.pitch = to.pitch;
+    this.framingDur = Math.max(0, seconds);
+    this.framingT = 0;
+    if (this.framingDur === 0) this.finishFraming();
+  }
+
+  private finishFraming(): void {
+    this.framingT = 1;
+    this.framing.fov = this.framingTo.fov;
+    this.framing.pitch = this.framingTo.pitch;
+    this.applyFov();
+    this.apply();
+  }
+
+  /** Where the framing is heading (or is). */
+  get framingTarget(): Readonly<Framing> {
+    return this.framingTo;
+  }
+
+  private applyFov(): void {
+    if (Math.abs(this.camera.fov - this.framing.fov) < 1e-5) return;
+    this.camera.fov = this.framing.fov;
+    this.camera.updateProjectionMatrix();
   }
 
   setAspect(aspect: number): void {
@@ -65,6 +114,15 @@ export class PlayerCamera {
 
   update(dt: number): void {
     this.t += dt;
+    if (this.framingT < 1) {
+      this.framingT = Math.min(1, this.framingT + dt / Math.max(1e-3, this.framingDur));
+      // Ease in and out, like a camera operator's hands on the zoom ring.
+      const k = this.framingT;
+      const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      this.framing.fov = this.framingFrom.fov + (this.framingTo.fov - this.framingFrom.fov) * e;
+      this.framing.pitch = this.framingFrom.pitch + (this.framingTo.pitch - this.framingFrom.pitch) * e;
+      this.applyFov();
+    }
     // Recoil and flinch settle exponentially: ~250 ms to rest.
     const settle = Math.exp(-dt / 0.07);
     this.recoilPitch *= settle;
@@ -80,7 +138,7 @@ export class PlayerCamera {
     const cam = this.camera;
     const breathe = this.still || this.reducedMotion ? 0 : 1;
     const t = this.t;
-    let pitch = this.recoilPitch + breathe * (Math.sin(t * 1.45) * 0.0022 + Math.sin(t * 0.61) * 0.0012);
+    let pitch = this.framing.pitch + this.recoilPitch + breathe * (Math.sin(t * 1.45) * 0.0022 + Math.sin(t * 0.61) * 0.0012);
     let yaw = this.recoilYaw + this.flinchYaw + breathe * (Math.sin(t * 0.83 + 1.3) * 0.0016);
     let roll = this.flinchRoll;
     let dy = breathe * Math.sin(t * 1.45) * 0.006;
