@@ -82,7 +82,7 @@ test("the aim check and play", async ({ page }, info) => {
     `(() => {
       const hud = window.handyTest.hud();
       hud.score(12450);
-      hud.readouts([{ label: "Wave", value: "3 of 5" }, { label: "Streak", value: "×3" }]);
+      hud.readouts([{ label: "Wave", value: "3" }, { label: "Gang", value: "5", meter: 0.6 }, { label: "Streak", value: "×3", meter: 0.67 }]);
       hud.ammo(3, 6, false);
       hud.banner("Wave 3", "Runners cross the street.");
       hud.hitMarker(0.55, 0.45, "headshot");
