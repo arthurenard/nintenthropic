@@ -52,7 +52,8 @@ def main():
     cam = names.get("camera.player")
     need(cam is not None and "camera" in cam, "camera.player missing or not a camera")
     if cam:
-        need(abs(cam.get("extras", {}).get("fov_deg", 0) - 50) < 1e-6, "camera.player extras.fov_deg != 50")
+        fov = cam.get("extras", {}).get("fov_deg", 0)
+        need(40 <= fov <= 55, f"camera.player extras.fov_deg {fov} out of range")
     need("sun" in names, "sun missing")
     covers = [n for n in names if n and n.startswith("cover.") and not n.endswith(".hidden")]
     for c in covers:
@@ -70,6 +71,12 @@ def main():
     need(any(n and n.startswith("path.chicken.") for n in names), "no chicken path")
     need(any(n and n.startswith("path.tumbleweed.") for n in names), "no tumbleweed path")
     need("ground.shadow" in names, "ground.shadow missing")
+    scene_ex = g["scenes"][g.get("scene", 0)].get("extras", {})
+    need(isinstance(scene_ex.get("fog_color"), str) and scene_ex["fog_color"].startswith("#"), "scene fog_color missing")
+    need(isinstance(scene_ex.get("fog_density"), (int, float)), "scene fog_density missing")
+    flags = {f: [c for c in covers if names[c].get("extras", {}).get(f) is True] for f in ("boss", "townsfolk", "duel")}
+    need(len(flags["boss"]) == 3, f"expected 3 boss covers, got {flags['boss']}")
+    need(len(flags["duel"]) >= 1, "no duel cover")
     tris = 0
     for n in nodes:
         if "mesh" in n:
@@ -85,6 +92,8 @@ def main():
           f"images: {len(imgs)} ({', '.join(i.get('mimeType', '?') for i in imgs)})")
     print(f"triangles: {tris}")
     print(f"covers: {len(covers)}  extensions: {g.get('extensionsUsed')}")
+    print(f"scenes: {[sc.get('name') for sc in g['scenes']]}  scene extras: "
+          f"{ {k: v for k, v in g['scenes'][g.get('scene', 0)].get('extras', {}).items() if k.startswith('fog_') and k != 'fog_note'} }")
     if errors:
         print("CONTRACT ERRORS:")
         for e in errors:

@@ -233,6 +233,13 @@ def set_sun(scene, elevation_deg, azimuth_deg):
         lamp.rotation_euler = v.to_track_quat('Z', 'Y').to_euler()
         if elevation_deg > 45:
             lamp.data.color = (1.0, 0.95, 0.88)
+    if elevation_deg > 45:
+        # a high sun lights thin cloud white, not peach
+        m = bpy.data.materials.get("far_clouds")
+        if m is not None:
+            for n in m.node_tree.nodes:
+                if n.type == 'RGB' and abs(n.outputs[0].default_value[1] - 0.72) < 0.01:
+                    n.outputs[0].default_value = (1.0, 0.97, 0.93, 1.0)
 
 
 def render_sky(ctx, scene, w=4096, h=2048, samples=96, name="sky", noon=False):
