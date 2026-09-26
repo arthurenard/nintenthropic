@@ -58,6 +58,11 @@ const tmp = new Vector3();
 const tmp2 = new Vector3();
 const tmpM = new Matrix4();
 
+/** States in which nothing darkens him (not a tell, not stepping out of a doorway). */
+function tellFree(state: string): boolean {
+  return state !== "tell" && state !== "emerging" && state !== "hiding";
+}
+
 const HATS = ["var.hat.stetson", "var.hat.bowler", "var.hat.flat"];
 const COATS = ["var.coat.duster", "var.coat.jacket", null];
 const BANDANAS = ["var.bandana.red", "var.bandana.black", null];
@@ -222,7 +227,8 @@ export class Cast {
     v.rig.uniforms.uShade.value = 1;
     v.rig.root.visible = true;
     const clip = { lean_left: "lean_left_out", lean_right: "lean_right_out", rise: "rise", step_out: "step_out" }[b.cover.emerge];
-    v.rig.play(clip, 0.1, false);
+    // The clip takes as long as he does: it ends as he arrives, not before.
+    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
     if (b.role === "boss" && !v.introduced) {
       v.introduced = true;
       this.sound.play("boss_intro");
@@ -298,7 +304,8 @@ export class Cast {
     if (!v) return;
     if (b.role === "dynamiter") v.rig.arm("revolver");
     const clip = { lean_left: "lean_left_in", lean_right: "lean_right_in", rise: "sink", step_out: "step_in" }[b.cover.emerge];
-    v.rig.play(clip, 0.1, false);
+    // The clip takes as long as he does: it ends as he arrives, not before.
+    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
   }
 
   run(b: Bandit): void {
@@ -639,6 +646,12 @@ export class Cast {
       rig.uniforms.uShade.value = 0.12;
     } else if (b.alive && v.tellSilhouette > 0) {
       v.tellSilhouette = 0;
+      rig.uniforms.uShade.value = 1;
+    } else if (b.alive && (b.cover.kind === "door" || b.cover.kind === "window") && (b.state === "emerging" || b.state === "hiding")) {
+      // Out of the room's shade into the street's light, and back.
+      const k = Math.min(1, b.exposure / 0.7);
+      rig.uniforms.uShade.value = 0.4 + 0.6 * k * k * (3 - 2 * k);
+    } else if (b.alive && tellFree(b.state)) {
       rig.uniforms.uShade.value = 1;
     }
     // The gun comes up toward you while aiming.

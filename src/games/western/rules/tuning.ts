@@ -40,6 +40,12 @@ export const STREAK_MAX_MULTIPLIER = 4;
 /** How long each way of coming out of cover takes, and going back. */
 export const EMERGE_TIME = { lean_left: 0.3, lean_right: 0.3, rise: 0.4, step_out: 0.5 } as const;
 export const HIDE_TIME = { lean_left: 0.25, lean_right: 0.25, rise: 0.35, step_out: 0.45 } as const;
+/**
+ * Coming out takes at least as long as walking out at this pace (metres per
+ * second) from the cover's ready spot: across a gallery to its rail, or out
+ * of a deep doorway, a man walks; he does not glide.
+ */
+export const WALK_OUT_SPEED = 2.4;
 /** The give-away before a bandit shows himself: a shadow, a creak, dust. */
 export const TELL_TIME: readonly [number, number] = [0.45, 0.8];
 /** Time spent out of sight between appearances. */

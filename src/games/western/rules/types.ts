@@ -17,6 +17,14 @@ export interface Cover {
   exposed: V3;
   /** Feet position while waiting out of sight. */
   hidden: V3;
+  /**
+   * Where he stands, just out of sight, to come out: the corner's edge, the
+   * doorway's threshold, just inside a window. Coming out and going back
+   * move him between here and `exposed` (while the clip leans, rises or
+   * steps); the way between `hidden` and here is walked unseen. Worked out
+   * by the game from the town; without it, `hidden`.
+   */
+  ready?: V3;
   /** Metres from the player's eye (horizontal). */
   distance: number;
   /** −1 left of the street, +1 right, 0 across the far end. */

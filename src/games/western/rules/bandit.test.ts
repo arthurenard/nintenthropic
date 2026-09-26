@@ -14,6 +14,7 @@ import {
   HIDE_TIME,
   LIGHT_TIME,
   THROW_RELEASE,
+  WALK_OUT_SPEED,
 } from "./tuning";
 import type { Cover } from "./types";
 import { waveSpec, type WaveSpec } from "./waves";
@@ -104,6 +105,63 @@ function at(w: FakeWorld, e: string): number {
 const covers = testCovers();
 const byId = (id: string) => covers.find((c) => c.id === id) as Cover;
 
+describe("coming out from the cover's ready spot", () => {
+  // A corner: he waits 2 m round it, comes out from its edge.
+  const corner: Cover = {
+    ...byId("store_corner"),
+    hidden: { x: -10.4, y: 0, z: -17 },
+    ready: { x: -8.8, y: 0, z: -17 },
+    exposed: { x: -8.4, y: 0, z: -17 },
+  };
+
+  it("moves between the ready spot and the exposed one, never gliding from where he waited", () => {
+    const w = new FakeWorld(1);
+    const b = new Bandit(1, "gunman", corner);
+    b.spawn(0.1);
+    const xs: number[] = [];
+    for (let i = 0; i < 600 && b.state !== "aiming"; i++) {
+      w.time += DT;
+      b.step(DT, w);
+      if (b.state === "emerging") xs.push(b.pos.x);
+    }
+    expect(xs.length).toBeGreaterThan(3);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-8.8 - 1e-9);
+    expect(b.pos.x).toBeCloseTo(-8.4);
+    // Going back he stops at the edge, and only then is he back where he waits.
+    const back: number[] = [];
+    for (let i = 0; i < 1200 && b.state !== "hidden"; i++) {
+      w.time += DT;
+      b.step(DT, w);
+      if (b.state === "hiding") back.push(b.pos.x);
+    }
+    expect(Math.min(...back)).toBeGreaterThanOrEqual(-8.8 - 1e-9);
+    expect(b.pos.x).toBeCloseTo(-10.4);
+  });
+
+  it("walks, not glides, across a gallery: a long way out takes longer", () => {
+    const gallery: Cover = { ...corner, emerge: "step_out", ready: { x: -10.2, y: 0, z: -17 }, exposed: { x: -8.4, y: 0, z: -17 } };
+    const w = new FakeWorld(1);
+    const b = new Bandit(3, "gunman", gallery);
+    b.spawn(0.05);
+    for (let i = 0; i < 600 && b.state !== "emerging"; i++) {
+      w.time += DT;
+      b.step(DT, w);
+    }
+    expect(b.dur).toBeCloseTo(1.8 / WALK_OUT_SPEED);
+    expect(b.dur).toBeGreaterThan(EMERGE_TIME.step_out);
+  });
+
+  it("runs into a cover as far as its ready spot", () => {
+    const w = new FakeWorld(3);
+    w.run = corner;
+    const b = new Bandit(2, "runner", byId("bank_corner"));
+    b.spawn(0.05);
+    stepFor(b, w, 0.1);
+    expect(b.state).toBe("running");
+    expect(b.path[4]).toEqual(corner.ready);
+  });
+});
+
 describe("the bandit state machine", () => {
   it("hides, tells, emerges, aims with a glint, fires and hides again, on time", () => {
     const w = new FakeWorld(1);
@@ -164,7 +222,9 @@ describe("the bandit state machine", () => {
       stepFor(b, w, 12);
       const hides = w.log.filter((x) => x.e === "hide").map((x) => x.t);
       const tells = w.log.filter((x) => x.e === "tell").map((x) => x.t);
-      const hidden = (tells[1] as number) - ((hides[0] as number) + HIDE_TIME.step_out);
+      const c = byId("store_door");
+      const hideTime = Math.max(HIDE_TIME.step_out, Math.hypot(c.hidden.x - c.exposed.x, c.hidden.z - c.exposed.z) / WALK_OUT_SPEED);
+      const hidden = (tells[1] as number) - ((hides[0] as number) + hideTime);
       expect(hidden).toBeGreaterThanOrEqual(HIDDEN_WAIT[0] - 2 * DT);
       expect(hidden).toBeLessThanOrEqual(HIDDEN_WAIT[1] + 2 * DT);
     }

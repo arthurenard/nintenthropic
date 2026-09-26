@@ -8,7 +8,7 @@ import type {
   HudSink,
   Readout,
 } from "../../engine/types";
-import type { Bandit } from "./rules/bandit";
+import { Bandit as BanditClass, type Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import { loadSoundPack } from "../../audio/index";
@@ -23,7 +23,7 @@ import { Ambient } from "./world/ambient";
 import { loadAssets, type HighNoonAssets } from "./world/assets";
 import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
-import { checkCovers, COVER_SHIFTS, shiftCovers, type CoverReport } from "./world/coverCheck";
+import { checkCovers, COVER_SHIFTS, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
 import { RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
 import { Effects } from "./world/effects";
@@ -218,7 +218,11 @@ export class HighNoon implements Game, MatchListener {
       console.info(`High Noon: covers moved into view: ${covers.moved.join(", ") || "none"}; left out, not visible from the eye: ${covers.dropped.join(", ") || "none"}.`);
     }
     this.coverReport = covers;
-    town.covers = covers.kept;
+    // No post in front of the middle of a man; and every cover's edge, from
+    // which he comes out without gliding through a wall.
+    const clear = unblockCovers(covers.kept, this.queries, town.eye);
+    if (clear.moved.length) console.info(`High Noon: covers stepped clear of a post: ${clear.moved.join(", ")}.`);
+    town.covers = readySpots(clear.covers, this.queries, town.eye);
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
 
@@ -986,6 +990,24 @@ export class HighNoon implements Game, MatchListener {
       covers: () => ({ used: this.assets.town.covers.map((c) => c.id), moved: this.coverReport?.moved, dropped: this.coverReport?.dropped }),
       /** The aim check's and play's framings for this window, and the lens now. */
       framing: () => ({ ...this.framings, fov: this.camera.camera.fov }),
+      /**
+       * Send one bandit out at a cover now, in the real machinery (tell,
+       * emerge, aim, fire, hide), whatever the wave's director would choose:
+       * for looking at every cover's clips in place. Returns his id.
+       */
+      stage: (id: string, role: "gunman" | "rifleman" | "dynamiter" | "boss" = "gunman", wait = 0.2) => {
+        const c = this.assets.town.covers.find((x) => x.id === id);
+        if (!c) return -1;
+        const m = this.match as unknown as { bandits: Bandit[]; nextId: number; occupant: Map<string, unknown> };
+        const b = new BanditClass(m.nextId++, role, c);
+        b.health = role === "boss" ? 3 : 1;
+        b.forced = true;
+        m.occupant.set(c.id, b);
+        m.bandits.push(b);
+        this.cast.spawn(b);
+        b.spawn(wait);
+        return b.id;
+      },
       /** Jump the view to a framing at once ("check" or "play"). */
       setFraming: (which: "check" | "play") => {
         if (this.framings) this.camera.setFraming(this.framings[which], 0);
@@ -1015,6 +1037,9 @@ export class HighNoon implements Game, MatchListener {
         rig.play(clip, 0, false);
         rig.update(0);
         rig.mixer.setTime(t);
+        // Lit as in play: is the sun on him here?
+        const chest = new Vector3(p.x, p.y + 1.3, p.z);
+        rig.uniforms.uSunVis.value = this.queries.sunReaches(chest, this.stage.sunDirection.clone().negate()) ? 1 : 0.12;
         return true;
       },
       setImmortal: (on: boolean) => {

@@ -23,6 +23,7 @@ import {
   THROW_TIME,
   BOSS_AIM_FACTOR,
   RIFLE_AIM_FACTOR,
+  WALK_OUT_SPEED,
 } from "./tuning";
 import type { BanditState, Cover, DeathChoice, Role } from "./types";
 import type { WaveSpec } from "./waves";
@@ -166,7 +167,7 @@ export class Bandit {
       case "emerging": {
         const p = Math.min(1, this.t / this.dur);
         this.exposure = p;
-        lerp(this.pos, this.cover.hidden, this.cover.exposed, smooth(p));
+        lerp(this.pos, this.cover.ready ?? this.cover.hidden, this.cover.exposed, smooth(p));
         if (p >= 1) this.outOfCover(w);
         break;
       }
@@ -211,7 +212,7 @@ export class Bandit {
       case "hiding": {
         const p = Math.min(1, this.t / this.dur);
         this.exposure = 1 - p;
-        lerp(this.pos, this.cover.exposed, this.cover.hidden, smooth(p));
+        lerp(this.pos, this.cover.exposed, this.cover.ready ?? this.cover.hidden, smooth(p));
         if (p >= 1) this.becomeHidden(w);
         break;
       }
@@ -271,7 +272,9 @@ export class Bandit {
   }
 
   private startEmerge(w: BanditWorld): void {
-    this.enter("emerging", EMERGE_TIME[this.cover.emerge]);
+    this.enter("emerging", Math.max(EMERGE_TIME[this.cover.emerge], this.walkOut() / WALK_OUT_SPEED));
+    // Seen from this frame on: from the edge of his cover, not from where he waited.
+    copy(this.pos, this.cover.ready ?? this.cover.hidden);
     this.visible = true;
     this.exposure = 0;
     this.emergedAt = w.time;
@@ -299,8 +302,13 @@ export class Bandit {
     w.events.banditAim(this);
   }
 
+  /** How far he is seen to walk coming out: from the cover's ready spot to its exposed one. */
+  private walkOut(): number {
+    return horizontalDistance(this.cover.ready ?? this.cover.hidden, this.cover.exposed);
+  }
+
   startHide(w: BanditWorld): void {
-    this.enter("hiding", HIDE_TIME[this.cover.emerge]);
+    this.enter("hiding", Math.max(HIDE_TIME[this.cover.emerge], this.walkOut() / WALK_OUT_SPEED));
     w.events.banditHide(this);
   }
 
@@ -338,7 +346,8 @@ export class Bandit {
     mid.y = 0;
     mid.z = (start.z + to.exposed.z) * 0.5;
     copy(p[3] as V3, to.exposed);
-    copy(p[4] as V3, to.hidden);
+    // Into the cover as far as he can be seen going; the rest is out of sight.
+    copy(p[4] as V3, to.ready ?? to.hidden);
     let length = 0;
     for (let i = 1; i < PATH_POINTS; i++) length += distance3(p[i - 1] as V3, p[i] as V3);
     this.pathLength = Math.max(0.1, length);
