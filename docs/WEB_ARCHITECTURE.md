@@ -106,8 +106,13 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   make a *synthetic offscreen moment*: `Aim.offscreen` is true for 250 ms with
   the crosshair where it is. Games need no key handling of their own for it.
 - **Until `start()`** the host still runs the game's `update` and `render` every
-  frame (the world is alive behind the aim check), but the aim it passes never
-  has `fired` set: the check's shots belong to the check.
+  frame (the world is alive behind the aim check). The check's shots belong to
+  the check: the platform judges each one and tells the stage `hit` or `miss`;
+  the game sees `aim.fired` too, and answers it only with the gun's sound and
+  smoke. The stage plays the check's sounds (a bottle's ting on `hit`, the
+  closing flourish on `done`), and the platform calls `done()` once, with the
+  "you're ready" moment, a moment before `start()`; after a game begun without
+  a check (the mouse) `start()` alone clears the stage.
 
 ## The contract: `src/engine/types.ts`
 
@@ -129,7 +134,8 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   featured game's longer line.
 - `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
   the desktop), wave titles, ammo, damage direction, hit markers, secrets, and
-  the end of the game (`GameOver` with stats).
+  the end of the game (`GameOver` with stats); `revolverFinish` (optional)
+  turns the cylinder gold for the Golden Revolver.
 - `AudioBus` — `play(cue, { volume, pan, rate, delay })`, `loop(cue)`,
   `setFilter("hurt", amount)`, `mute`.
 - `CalibrationStage` — `targets()` returns the game's aim-check targets as

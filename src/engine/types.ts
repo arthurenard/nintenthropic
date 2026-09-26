@@ -66,6 +66,8 @@ export interface HudSink {
   banner(title: string, subtitle?: string): void;
   /** Rounds left and the cylinder's size, for the revolver HUD. */
   ammo(left: number, capacity: number, reloading: boolean): void;
+  /** The cylinder's finish: gold for the Golden Revolver. Optional; the page also reads Settings.unlocks. */
+  revolverFinish?(finish: "steel" | "gold"): void;
   /** Damage taken: the direction it came from in radians (0 = straight ahead, + = right), and how hurt the player now is, 0..1. */
   damage(direction: number, hurt: number): void;
   /** How hurt the player is as it recovers, 0..1 (drives the screen's red edge). */
@@ -175,8 +177,9 @@ export interface Game {
   /**
    * Advance the world. `dt` in seconds (clamped by the host), `now` in ms.
    * Called every animation frame from the end of load() on, so the world is
-   * alive behind the aim check; until start() the shots belong to the check,
-   * and the aim passed in never has `fired` set.
+   * alive behind the aim check. Until start() the shots belong to the check:
+   * the platform judges them (and tells the stage hit or miss), and a game
+   * may answer `aim.fired` only with the gun's sound and smoke, never score.
    */
   update(dt: number, now: number, aim: Aim): void;
   render(): void;

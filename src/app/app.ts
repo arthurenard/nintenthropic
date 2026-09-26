@@ -450,7 +450,6 @@ export class App {
       session.phase = "check";
       session.check = new AimCheckView({
         stage: game.calibration,
-        audio: this.audio,
         input: hand,
         saved,
         viewport,
@@ -461,8 +460,9 @@ export class App {
         },
         onPlayAnyway: (mapping) => this.play(session, mapping),
       });
-      // The check's shots belong to the check: the game sees the aim, never the trigger.
-      host.aim = (now) => ({ ...hand!.sample(now), fired: false });
+      // The check judges its shots; the game sees them too, to answer with
+      // the gun's sound and smoke (it scores nothing before start()).
+      host.aim = (now) => hand!.sample(now);
       announce(`${this.entry.title}. Aim setup. Shoot the lit target: point at it, then fold your thumb to fire.`);
     } else {
       host.aim = (now) => input.sample(now);
@@ -480,7 +480,6 @@ export class App {
     if (mapping && session.hand) session.hand.setMapping(mapping);
     session.phase = "play";
     $("game").dataset.phase = "play";
-    session.game.calibration.done();
     session.game.start();
     this.host!.aim = (now) => session.input.sample(now);
     this.crosshair.visible = true;

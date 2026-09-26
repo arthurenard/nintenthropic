@@ -147,6 +147,10 @@ export class Hud implements HudSink {
     cylinder.setAttribute("aria-label", reloading ? "Reloading" : `${left} of ${capacity} rounds`);
   }
 
+  revolverFinish(finish: "steel" | "gold"): void {
+    $("cylinder").classList.toggle("golden", finish === "gold");
+  }
+
   damage(direction: number, hurt: number): void {
     // An arc on a ring round the middle of the view, pointing where the shot
     // came from: straight ahead at the top, to the right on the right.

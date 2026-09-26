@@ -124,7 +124,7 @@ class Range implements Game {
 
   start(): void {
     this.started = true;
-    this.calibration.done();
+    this.calibration.clear();
     this.ctx.hud.score(0);
     this.ctx.hud.ammo(this.ammo, CAPACITY, false);
     this.ctx.hud.health(0);
@@ -172,7 +172,12 @@ class Range implements Game {
     this.calibration.update(dt, now);
     this.kick = Math.max(0, this.kick - dt * 6);
     this.camera.rotation.x = (this.ctx.settings.reducedMotion ? 0 : this.kick * 0.02) - 0.015;
-    if (!this.started || this.over) return;
+    // Before start() the shots are the aim check's: answer with the gun alone.
+    if (!this.started) {
+      if (aim.fired && !aim.offscreen) this.ctx.audio.play("revolver_shot", { pan: (aim.x * 2 - 1) * 0.3 });
+      return;
+    }
+    if (this.over) return;
 
     // Reloading: pointing off the screen, as the arcade guns did.
     if (aim.offscreen && !this.wasOffscreen && this.ammo < CAPACITY && this.reloading <= 0) {

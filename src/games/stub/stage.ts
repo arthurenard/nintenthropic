@@ -96,6 +96,8 @@ export class BottleStage implements CalibrationStage {
   private height = 1;
   private readonly ray = new Raycaster();
   private clearing = 0;
+  /** Good shots in a row, for the rising ting. */
+  private run = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -173,8 +175,10 @@ export class BottleStage implements CalibrationStage {
     bottle.lit = false;
     bottle.group.visible = false;
     const centre = bottle.group.localToWorld(new Vector3(0, 0.28, 0));
-    this.audio.play("revolver_shot", { pan: 0 });
     this.audio.play("bottle_break", { pan: Math.max(-1, Math.min(1, centre.x / 6)), distance: centre.length() });
+    // Each good shot in a row rings a whole tone higher, up to an octave.
+    this.run = Math.min(this.run + 1, 7);
+    this.audio.play("calib_hit", { rate: 2 ** ((2 * (this.run - 1)) / 12) });
     const material = bottle.body.material as MeshStandardMaterial;
     const shards = this.reducedMotion ? 6 : 16;
     for (let i = 0; i < shards; i++) {
@@ -207,7 +211,7 @@ export class BottleStage implements CalibrationStage {
     const direction = this.ray.ray.direction;
     const distance = direction.y < -0.02 ? Math.min(40, this.camera.position.y / -direction.y) : 25;
     const point = this.ray.ray.origin.clone().addScaledVector(direction, distance);
-    this.audio.play("revolver_shot", { pan: 0 });
+    this.run = 0;
     this.audio.play("hit_dirt", { pan: Math.max(-1, Math.min(1, point.x / 8)), distance });
     const puff = new Mesh(
       new CircleGeometry(0.35, 24),
@@ -219,7 +223,16 @@ export class BottleStage implements CalibrationStage {
     this.particles.push({ mesh: puff, velocity: new Vector3(0, 0.5, 0), spin: new Vector3(), life: 0.7, age: 0, grow: 1.6 });
   }
 
+  /** The check is over: the bottles sink away, to the check's closing flourish. */
   done(): void {
+    if (this.clearing) return;
+    this.audio.play("calib_done");
+    this.clear();
+  }
+
+  /** Clears the stage without a word: for a game begun without an aim check (the mouse). */
+  clear(): void {
+    if (this.clearing) return;
     this.clearing = 1;
     for (const bottle of this.bottles) bottle.lit = false;
   }
