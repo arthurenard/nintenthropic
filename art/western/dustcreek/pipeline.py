@@ -110,6 +110,11 @@ def stage_review(ctx):
     review.render_all(ctx)
 
 
+def stage_export(ctx):
+    from . import export
+    export.stage(ctx)
+
+
 def stage_bake(ctx):
     from . import bake
     bake.stage(ctx)

@@ -86,7 +86,6 @@ def light_street(src):
     col = src.users_collection[0]
     ob = grid_object("ground.street.light", X, Y, H, col)
     me = ob.data
-    me.shade_flat()
     bake.projective_uv(ob)
     for k, v in src.items():
         ob[k] = v
@@ -110,6 +109,32 @@ def light_street(src):
     return ob
 
 
+def shadow_plane(street):
+    """`ground.shadow`: the street's own surface lifted 1 cm, where the game
+    draws the shadows of dynamic things (a flat plane would float above the
+    ruts and offset every shadow along the low sun)."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(street.data)
+    kill = [f for f in bm.faces if not all(abs(v.co.x) <= 7.8 and -2.0 <= v.co.y <= 64.0 for v in f.verts)]
+    bmesh.ops.delete(bm, geom=kill, context='FACES')
+    for v in bm.verts:
+        v.co.z += 0.012
+    me = bpy.data.meshes.new("ground.shadow")
+    bm.to_mesh(me)
+    bm.free()
+    for uv in list(me.uv_layers):
+        me.uv_layers.remove(uv)
+    ob = bpy.data.objects.new("ground.shadow", me)
+    street.users_collection[0].objects.link(ob)
+    ob.matrix_world = street.matrix_world
+    me.materials.append(shadow_catcher_material())
+    ob['surface'] = 'dirt'
+    ob['role'] = 'shadow_catcher'
+    me['surface'] = 'dirt'
+    return ob
+
+
 def stage(ctx):
     pipeline.open_blend(ctx.baked_blend)
     scene = bpy.context.scene
@@ -129,7 +154,8 @@ def stage(ctx):
             bpy.data.objects.remove(ob)
     street = bpy.data.objects.get('ground.street')
     if street is not None:
-        light_street(street)
+        street = light_street(street)
+        shadow_plane(street)
     glass_m = glass_export_material()
     for ob in list(scene.objects):
         if ob.type != 'MESH':
