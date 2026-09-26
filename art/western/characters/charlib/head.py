@@ -314,9 +314,24 @@ def beard_field(Pt, p):
     return np.clip(m, 0, 1)
 
 
+BUN = (np.array([0.0, 0.094, 0.032]), 0.030)
+
+
+def bun_mask(Pt, p):
+    if p["hair"] != "bun":
+        return np.zeros(len(Pt))
+    c, r = BUN
+    d = np.linalg.norm(Pt - c, axis=1) - r
+    return smoothstep(0.006, 0.0, d)
+
+
 def head_sdf(p, low=False):
     """Skull plus hair/brow/moustache/beard volumes as a small outward displacement."""
     base = skull(p, low)
+    if p["hair"] == "bun":
+        # hair gathered into a knot at the back of the head
+        c, r = BUN
+        base = S.Union([base, S.Ellipsoid(c, (r * 1.15, r * 0.85, r)), S.Ellipsoid(c + np.array([0, -0.012, 0.018]), (0.030, 0.018, 0.012))], k=0.012)
     bw = p["brows"]
     beard = p["beard"]
 

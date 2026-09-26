@@ -69,14 +69,21 @@ def ease(kind, u):
 # ------------------------------------------------------------------ rig
 
 class Rig:
-    """Rest data of the shared skeleton, FK and IK in armature space."""
+    """Rest data of a skeleton (the shared humanoid by default, or any bone
+    table - the chicken's), FK and IK in armature space."""
 
-    def __init__(self):
-        self.parent = {b: p for b, p in BONES}
-        self.head = {b: Vector(JOINTS[b][0]) for b, _ in BONES}
-        self.tail = {b: Vector(JOINTS[b][1]) for b, _ in BONES}
-        self.B = {b: Matrix(bone_frame(b).tolist()) for b, _ in BONES}   # rest orientation (3x3)
-        self.order = [b for b, _ in BONES]
+    def __init__(self, bones=None, joints=None, frames=None):
+        bones = bones or BONES
+        self.parent = {b: p for b, p in bones}
+        if joints is None:
+            self.head = {b: Vector(JOINTS[b][0]) for b, _ in bones}
+            self.tail = {b: Vector(JOINTS[b][1]) for b, _ in bones}
+            self.B = {b: Matrix(bone_frame(b).tolist()) for b, _ in bones}   # rest orientation (3x3)
+        else:
+            self.head = {b: Vector(joints[b][0]) for b, _ in bones}
+            self.tail = {b: Vector(joints[b][1]) for b, _ in bones}
+            self.B = {b: Matrix(frames[b].tolist()) for b, _ in bones}
+        self.order = [b for b, _ in bones]
 
     def fk(self, R, hips_offset=Vector()):
         """R: bone -> 3x3 armature-axes rotation (relative to parent). Returns
@@ -183,8 +190,9 @@ class Clip:
     'pole.hand.L', ... and 'rot.hand.R' / 'rot.foot.L' (Euler triple of the end
     bone's world orientation relative to rest). Keys: (time, value, ease)."""
 
-    def __init__(self, name, duration, loop=False):
+    def __init__(self, name, duration, loop=False, rig=None):
         self.name, self.duration, self.loop = name, duration, loop
+        self.rig = rig
         self.ch = {}
         self.lag = {}          # channel -> seconds of delay (overlapping action)
         self.layers = []       # callables (t, pose) -> None, added after sampling
@@ -197,7 +205,7 @@ class Clip:
 
     def pose(self, t, pose, ease_="inout", only=None):
         """Key a whole pose dict at time t (arms re-expressed in the chest frame)."""
-        pose = chestify(RIG, pose)
+        pose = chestify(self.rig or RIG, pose)
         for k, v in pose.items():
             if only and k not in only:
                 continue
@@ -231,7 +239,9 @@ def chestify(rig, pose):
     is posed by rotation (FK) - so any two poses can be interpolated, the arm
     blending from rotations to IK by the `ikw.hand.*` weight."""
     pose = dict(pose)
-    R = {b: E(*pose[b]) for b in BODY_BONES if b in pose}
+    if "chest" not in rig.parent:
+        return pose
+    R = {b: E(*pose[b]) for b in rig.order if b in pose}
     G, pos = rig.fk(R, Vector(pose.get("root", (0, 0, 0))))
     Gc, pc = G["chest"], pos["chest"]
     Gci = Gc.inverted()
@@ -262,11 +272,11 @@ def chestify(rig, pose):
 def solve(rig, pose):
     """Pose dict -> (bone -> local quaternion, hips location in bone space)."""
     R = {}
-    for b in BODY_BONES:
+    for b in rig.order:
         if b in pose:
             x, y, z = pose[b]
             R[b] = E(x, y, z)
-    off = Vector(pose.get("root", (0, 0, 0)))     # hips translation (the body's centre of mass)
+    off = Vector(pose.get("root", (0, 0, 0)))     # root bone translation (the body's centre of mass)
     G, pos = rig.fk(R, off)
     for side in ("L", "R"):
         if f"ik.foot.{side}" in pose:
@@ -302,9 +312,9 @@ def solve(rig, pose):
             qb = Rik[b].to_quaternion()
             R[b] = qa.slerp(qb, min(w, 1.0)).to_matrix()
         G, pos = rig.fk(R, off)
-    q = {b: rig.local_quat(b, R.get(b, Matrix.Identity(3))) for b in BODY_BONES}
-    # hips translation lives in the hips bone's own rest frame
-    loc = rig.B["hips"].inverted() @ off
+    q = {b: rig.local_quat(b, R.get(b, Matrix.Identity(3))) for b in rig.order}
+    # the root's translation lives in its own rest frame
+    loc = rig.B[rig.order[0]].inverted() @ off
     return q, loc, G, pos
 
 
@@ -329,8 +339,9 @@ def bake_clip(rig, clip, arm_ob, fps=FPS):
             pb.rotation_mode = "QUATERNION"
             pb.rotation_quaternion = qq
             pb.keyframe_insert("rotation_quaternion", frame=f + 1, group=b)
-        pbs["hips"].location = loc
-        pbs["hips"].keyframe_insert("location", frame=f + 1, group="hips")
+        root = rig.order[0]
+        pbs[root].location = loc
+        pbs[root].keyframe_insert("location", frame=f + 1, group=root)
     fix_quat_continuity(act)
     for fc in _fcurves(act):
         for kp in fc.keyframe_points:

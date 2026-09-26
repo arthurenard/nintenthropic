@@ -83,10 +83,25 @@ def trouser_folds(bp):
 
 # ------------------------------------------------------------------ paints
 
-def shirt_paint(color, pattern=None, seed=0):
+def shirt_paint(color, pattern=None, seed=0, garters=False, cravat=False):
     def paint(P):
         col, r, m = PT.fabric(P, color, "cotton", dust_amt=0.18, fade=0.3, seed=seed, grime=0.3)
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        if garters:
+            # sleeve garters: a band round each upper arm
+            from .skeleton import JOINTS
+            for tag in ("L", "R"):
+                sh = np.array(JOINTS[f"upper_arm.{tag}"][0])
+                el = np.array(JOINTS[f"forearm.{tag}"][0])
+                dd = (el - sh) / np.linalg.norm(el - sh)
+                s_ = (P - sh) @ dd
+                rad = np.linalg.norm((P - sh) - np.outer(s_, dd), axis=1)
+                g = (np.abs(s_ - 0.17) < 0.013) & (rad < 0.09)
+                col[g] = srgb(0.45, 0.12, 0.10)
+        if cravat:
+            cv = (z > 1.47) & (y < -0.02) & (np.abs(x) < 0.05)
+            col[cv] = srgb(0.03, 0.03, 0.03)
+            r[cv] = 0.4
         if pattern == "stripe":
             s = smoothstep(0.35, 0.5, np.abs(np.sin(x * 2 * np.pi / 0.012 + 0.2 * np.sin(z * 20))))
             col *= (0.82 + 0.18 * s)[:, None]
@@ -121,10 +136,22 @@ def shirt_paint(color, pattern=None, seed=0):
     return paint
 
 
-def trouser_paint(color, seed=0):
+def trouser_paint(color, seed=0, chaps=None):
     def paint(P):
         col, r, m = PT.fabric(P, color, "wool", dust_amt=0.55, fade=0.15, seed=seed + 10)
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        if chaps is not None:
+            # leather chaps over the front and sides of the legs, open at the seat
+            lc, lr, lm = PT.leather(P, chaps, 0.45, 0.6, seed=seed + 12)
+            front = (y < 0.03) | (np.abs(x) > 0.12)
+            ch = front & (z < 0.99)
+            col[ch], r[ch], m[ch] = lc[ch], lr[ch], lm[ch]
+            # a row of conchos down the outer seam
+            ax = np.abs(x)
+            con = ch & (ax > 0.14) & (np.abs(((z - 0.45) % 0.12) - 0.06) < 0.008) & (np.abs(y) < 0.03)
+            col[con] = srgb(0.72, 0.72, 0.70)
+            m[con] = 1.0
+            r[con] = 0.3
         from .skeleton import JOINTS
         for tag in ("L", "R"):
             kn = np.array(JOINTS[f"shin.{tag}"][0])
@@ -141,9 +168,9 @@ def trouser_paint(color, seed=0):
     return paint
 
 
-def boot_paint(color=(0.16, 0.095, 0.055), seed=0):
+def boot_paint(color=(0.16, 0.095, 0.055), seed=0, shine=0.0):
     def paint(P):
-        col, r, m = PT.leather(P, color, dust_amt=0.3, wear=0.45, seed=seed + 20)
+        col, r, m = PT.leather(P, color, dust_amt=0.3, wear=0.45 * (1 - shine), seed=seed + 20, shine=shine)
         z = P[:, 2]
         sole = z < 0.016
         col[sole] = col[sole] * 0.45
@@ -169,24 +196,38 @@ def boot_paint(color=(0.16, 0.095, 0.055), seed=0):
 # ------------------------------------------------------------------ the base body
 
 def base_body(spec, coll=None, log=print):
-    """Head, hands, shirt, trousers, boots, belts and holster of one person."""
+    """Head, hands, clothes, footwear, belts and holsters of one person.
+
+    spec keys: head, look, body (see body.P), outfit ('cowboy' | 'dress'),
+    shirt_color, shirt_pattern, trouser_color, chaps (colour or None),
+    footwear ('riding' | 'shoes'), boot_color, belt, gunbelt (None | 'single'
+    | 'twin'), pose_R, pose_L, garters, cravat, dress_color."""
     jobs = []
     hp, look, bp = spec["head"], spec["look"], spec["body"]
-    # head
     for j in HD.make("head", hp, look, coll, tris=spec.get("head_tris", 1900)):
         jobs.append(j)
-    # shirt and trousers
-    shf = BD.shirt(bp)
-    rm = G.build_shirt(bp, shf)
-    shirt = R.to_blender(rm, "shirt", coll)
-    jobs.append(dict(ob=shirt, field=S.Displace(shf, sleeve_folds(bp), 0.006), paint=shirt_paint(spec["shirt_color"], spec.get("shirt_pattern")),
-                     origin=np.zeros(3), weight=1.0, ao_field=shf))
-    trf = BD.trousers(bp)
-    rt = G.build_trousers(bp, trf)
-    tr = R.to_blender(rt, "trousers", coll)
-    jobs.append(dict(ob=tr, field=S.Displace(trf, trouser_folds(bp), 0.006), paint=trouser_paint(spec["trouser_color"]),
-                     origin=np.zeros(3), weight=0.9, ao_field=trf))
-    log(f"  garments: shirt {bl.tri_count(shirt)} tris, trousers {bl.tri_count(tr)} tris")
+    outfit = spec.get("outfit", "cowboy")
+    if outfit == "cowboy":
+        shf = BD.shirt(bp)
+        rm = G.build_shirt(bp, shf)
+        shirt = R.to_blender(rm, "shirt", coll)
+        jobs.append(dict(ob=shirt, field=S.Displace(shf, sleeve_folds(bp), 0.006),
+                         paint=shirt_paint(spec["shirt_color"], spec.get("shirt_pattern"), garters=spec.get("garters"), cravat=spec.get("cravat")),
+                         origin=np.zeros(3), weight=1.0, ao_field=shf))
+        trf = BD.trousers(bp)
+        rt = G.build_trousers(bp, trf)
+        tr = R.to_blender(rt, "trousers", coll)
+        jobs.append(dict(ob=tr, field=S.Displace(trf, trouser_folds(bp), 0.006),
+                         paint=trouser_paint(spec["trouser_color"], chaps=spec.get("chaps")),
+                         origin=np.zeros(3), weight=0.9, ao_field=trf))
+        log(f"  garments: shirt {bl.tri_count(shirt)} tris, trousers {bl.tri_count(tr)} tris")
+    else:
+        df = G.dress_field()
+        rm = G.build_dress(df)
+        dr = R.to_blender(rm, "dress", coll)
+        jobs.append(dict(ob=dr, field=S.Displace(df, G.dress_folds, 0.007), paint=dress_paint(spec["dress_color"]),
+                         origin=np.zeros(3), weight=1.0, ao_field=df, skin=("coat", 0.02)))
+        log(f"  garments: dress {bl.tri_count(dr)} tris")
     # hands
     tone = look.get("skin", "tanned")
     for side, pose in (("R", spec.get("pose_R", "grip")), ("L", spec.get("pose_L", "relaxed"))):
@@ -196,38 +237,47 @@ def base_body(spec, coll=None, log=print):
 
         def hpaint(P, nails=nails, M=M, o=o):
             Pw = P @ M.T + o
-            col, r, m = PT.skin(Pw, tone, seed=3, dirt=0.4)
+            col, r, m = PT.skin(Pw, tone, seed=3, dirt=look.get("grime", 0.3) + 0.1)
             nm = HN.nail_mask(P, nails)
             col = col * (1 - 0.6 * nm[:, None]) + srgb(0.72, 0.55, 0.50) * 0.6 * nm[:, None]
             r = r - 0.2 * nm
-            # knuckles and the back of the hand: redder, sun-browned
             back = smoothstep(0.004, 0.012, P[:, 0])
             col *= (1 - 0.08 * back)[:, None]
             return col, r, m
         jobs.append(dict(ob=ob, field=hf, paint=hpaint, origin=o, M=M, weight=1.5, ao_field=hf, smart_uv=True))
-    # boots
+    if outfit == "dress":
+        return jobs
+    # footwear
+    shoes = spec.get("footwear", "riding") == "shoes"
     for side in ("L", "R"):
-        bf, top = GR.boot_sdf(side, top=bp["boot_top"] + 0.005)
+        if shoes:
+            bf, top = GR.boot_sdf(side, top=0.165, heel=0.026, shaft_r=0.047, spur=False)
+        else:
+            bf, top = GR.boot_sdf(side, top=bp["boot_top"] + 0.005, spur=spec.get("spurs", True))
         x0 = 0.105 if side == "L" else -0.105
-        ob = decimated(f"boot.{side}", bf, (x0 - 0.08, -0.23, -0.01), (x0 + 0.08, 0.14, bp["boot_top"] + 0.06), 0.0016, spec.get("boot_tris", 420), coll)
-        jobs.append(dict(ob=ob, field=bf, paint=boot_paint(spec.get("boot_color", (0.20, 0.12, 0.07))), origin=np.zeros(3), weight=0.8, ao_field=bf, smart_uv=True))
-    # belts, holster and the spare revolver in it
-    tb = GR.trouser_belt()
-    ob = decimated("belt", tb, (-0.2, -0.16, 1.0), (0.2, 0.16, 1.1), 0.0015, 260, coll)
+        ztop = (0.165 if shoes else bp["boot_top"]) + 0.06
+        ob = decimated(f"boot.{side}", bf, (x0 - 0.08, -0.23, -0.01), (x0 + 0.08, 0.14, ztop), 0.0016, spec.get("boot_tris", 420 if not shoes else 320), coll)
+        jobs.append(dict(ob=ob, field=bf, paint=boot_paint(spec.get("boot_color", (0.16, 0.095, 0.055)), shine=0.5 if shoes else 0.0),
+                         origin=np.zeros(3), weight=0.8, ao_field=bf, smart_uv=True))
+    if spec.get("belt", True):
+        tb = GR.trouser_belt()
+        ob = decimated("belt", tb, (-0.2, -0.16, 1.0), (0.2, 0.16, 1.1), 0.0015, 260, coll)
 
-    def belt_paint(P, tb=tb):
-        col, r, m = PT.leather(P, (0.16, 0.10, 0.06), 0.2, 0.5, seed=31)
-        bk = (P[:, 1] < -0.118) & (np.abs(P[:, 0]) < 0.027)
-        mc, mr, mm = PT.metal(P, (0.55, 0.45, 0.25), 0.35)
-        col[bk], r[bk], m[bk] = mc[bk], mr[bk], mm[bk]
-        return col, r, m
-    jobs.append(dict(ob=ob, field=tb, paint=belt_paint, origin=np.zeros(3), weight=0.8, ao_field=tb, smart_uv=True))
-    if spec.get("gunbelt", True):
+        def belt_paint(P, tb=tb):
+            col, r, m = PT.leather(P, (0.16, 0.10, 0.06), 0.2, 0.5, seed=31)
+            bk = (P[:, 1] < -0.118) & (np.abs(P[:, 0]) < 0.027)
+            mc, mr, mm = PT.metal(P, (0.55, 0.45, 0.25), 0.35)
+            col[bk], r[bk], m[bk] = mc[bk], mr[bk], mm[bk]
+            return col, r, m
+        jobs.append(dict(ob=ob, field=tb, paint=belt_paint, origin=np.zeros(3), weight=0.8, ao_field=tb, smart_uv=True))
+    gb = spec.get("gunbelt", "single")
+    if gb:
         band, hol, gun = GR.gunbelt(bp)
         ob = decimated("gunbelt", band, (-0.23, -0.18, 0.88), (0.23, 0.18, 1.05), 0.0016, 420, coll)
+        leather = spec.get("gunbelt_color", (0.24, 0.15, 0.08))
 
-        def gb_paint(P):
-            col, r, m = PT.leather(P, (0.24, 0.15, 0.08), 0.3, 0.5, seed=33)
+        def gb_paint(P, leather=leather):
+            col, r, m = PT.leather(P, leather, 0.3, 0.5, seed=33)
             th = np.arctan2(P[:, 0], -(P[:, 1] - 0.010))
             zc = 0.975 + 0.010 * np.cos(th) + 0.022 * np.sin(th)
             cart = (np.abs(P[:, 2] - zc) < 0.017) & (np.abs(th) > 0.9) & (np.cos(th * 34) > 0.2)
@@ -238,18 +288,56 @@ def base_body(spec, coll=None, log=print):
             col[bk], r[bk], m[bk] = mc[bk], mr[bk], mm[bk]
             return col, r, m
         jobs.append(dict(ob=ob, field=band, paint=gb_paint, origin=np.zeros(3), weight=0.8, ao_field=band, smart_uv=True))
-        both = S.Union([hol, gun], k=0.002)
-        ob = decimated("holster", both, (-0.24, -0.08, 0.72), (-0.13, 0.10, 1.06), 0.0012, 360, coll)
+        sides = [1, -1] if gb == "twin" else [1]
+        for sx in sides:
+            both = S.Union([hol, gun], k=0.002)
+            if sx < 0:
+                both = mirrored(both)
+            nm = "holster" if sx > 0 else "holster.2"
+            lo = (-0.24, -0.08, 0.72) if sx > 0 else (0.13, -0.08, 0.72)
+            hi = (-0.13, 0.10, 1.06) if sx > 0 else (0.24, 0.10, 1.06)
+            ob = decimated(nm, both, lo, hi, 0.0012, 360, coll)
+            fancy = spec.get("fancy_guns", False)
 
-        def hol_paint(P, gun=gun):
-            col, r, m = PT.leather(P, (0.36, 0.22, 0.11), 0.35, 0.6, seed=35)
-            g = gun(P) < 0.0015
-            wc, wr_, wm = PT.wood(P, (0.24, 0.13, 0.07), axis=(0, 0.5, 1))
-            mc, mr, mm = PT.metal(P, (0.16, 0.17, 0.19), 0.4)
-            grip = g & (P[:, 2] > 0.99)
-            fr = g & ~grip
-            col[grip], r[grip], m[grip] = wc[grip], wr_[grip], wm[grip]
-            col[fr], r[fr], m[fr] = mc[fr], mr[fr], mm[fr]
-            return col, r, m
-        jobs.append(dict(ob=ob, field=both, paint=hol_paint, origin=np.zeros(3), weight=1.0, ao_field=both, smart_uv=True))
+            def hol_paint(P, gun=gun, sx=sx, leather=spec.get("holster_color", (0.36, 0.22, 0.11)), fancy=fancy):
+                Q = P * np.array([sx, 1, 1])
+                col, r, m = PT.leather(P, leather, 0.35, 0.6, seed=35)
+                g = gun(Q.astype(np.float32)) < 0.0015
+                if fancy:
+                    wc, wr_, wm = np.tile(srgb(0.86, 0.82, 0.72), (len(P), 1)), np.full(len(P), 0.35), np.zeros(len(P))
+                    mc, mr, mm = PT.metal(P, (0.72, 0.72, 0.70), 0.25)
+                else:
+                    wc, wr_, wm = PT.wood(P, (0.24, 0.13, 0.07), axis=(0, 0.5, 1))
+                    mc, mr, mm = PT.metal(P, (0.16, 0.17, 0.19), 0.4)
+                grip = g & (P[:, 2] > 0.99)
+                fr = g & ~grip
+                col[grip], r[grip], m[grip] = wc[grip], wr_[grip], wm[grip]
+                col[fr], r[fr], m[fr] = mc[fr], mr[fr], mm[fr]
+                return col, r, m
+            jobs.append(dict(ob=ob, field=both, paint=hol_paint, origin=np.zeros(3), weight=1.0, ao_field=both, smart_uv=True))
     return jobs
+
+
+def mirrored(node):
+    """A field mirrored across x = 0."""
+    lo, hi = np.asarray(node.lo), np.asarray(node.hi)
+    return S.Fn(lambda P: node((P * np.array([-1, 1, 1], np.float32)).astype(np.float32)),
+                np.array([-hi[0], lo[1], lo[2]]), np.array([-lo[0], hi[1], hi[2]]))
+
+
+def dress_paint(color, seed=0):
+    def paint(P):
+        c, r, m = PT.fabric(P, color, "cotton", dust_amt=0.25, fade=0.2, seed=seed + 60)
+        x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        # a darker sash at the waist and lace at the collar and cuffs
+        sash = np.abs(z - 1.085) < 0.022
+        c[sash] = c[sash] * 0.6
+        lace = (z > 1.53) | (np.abs(z - 0.87) < 0.0)
+        c[lace] = srgb(0.88, 0.85, 0.78)
+        # a column of small buttons up the bodice
+        btn = (y < -0.06) & (np.abs(x) < 0.005) & (np.abs(((z - 1.10) % 0.045) - 0.022) < 0.005) & (z > 1.1) & (z < 1.52)
+        c[btn] = srgb(0.30, 0.25, 0.22)
+        # the hem is dusty
+        c = c * (1 - 0.3 * smoothstep(0.25, 0.02, z)[:, None]) + PT.DUST * 0.3 * smoothstep(0.25, 0.02, z)[:, None]
+        return c, r, m
+    return paint

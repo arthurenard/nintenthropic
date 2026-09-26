@@ -32,15 +32,16 @@ def heat_weights(proxy, rig):
     bpy.context.view_layer.objects.active = rig
     with bpy.context.temp_override(active_object=rig, selected_editable_objects=[proxy, rig], selected_objects=[proxy, rig]):
         bpy.ops.object.parent_set(type="ARMATURE_AUTO")
-    missing = [b for b in BONE_NAMES if b not in proxy.vertex_groups]
+    missing = [b.name for b in rig.data.bones if b.name not in proxy.vertex_groups]
     return missing
 
 
-def weight_matrix(ob):
-    """(n_verts, n_bones) weights in BONE_NAMES order."""
+def weight_matrix(ob, names=None):
+    """(n_verts, n_bones) weights in `names` order (the humanoid's by default)."""
+    names = names or BONE_NAMES
     n = len(ob.data.vertices)
-    W = np.zeros((n, len(BONE_NAMES)), np.float32)
-    gi = {g.index: BONE_NAMES.index(g.name) for g in ob.vertex_groups if g.name in BONE_NAMES}
+    W = np.zeros((n, len(names)), np.float32)
+    gi = {g.index: names.index(g.name) for g in ob.vertex_groups if g.name in names}
     for v in ob.data.vertices:
         for g in v.groups:
             if g.group in gi:
@@ -48,15 +49,16 @@ def weight_matrix(ob):
     return W
 
 
-def transfer(proxy, targets, rig, max_inf=4, smooth=0, override=None):
+def transfer(proxy, targets, rig, max_inf=4, smooth=0, override=None, names=None):
     """Give each target the proxy's weights at its nearest proxy surface point."""
-    Wp = weight_matrix(proxy)
+    names = names or BONE_NAMES
+    Wp = weight_matrix(proxy, names)
     Vp = bl.verts_np(proxy)
     polys = [tuple(p.vertices) for p in proxy.data.polygons]
     bvh = BVHTree.FromPolygons([tuple(v) for v in Vp], polys)
     for ob in targets:
         V = bl.verts_np(ob, world=True)
-        W = np.zeros((len(V), len(BONE_NAMES)), np.float32)
+        W = np.zeros((len(V), len(names)), np.float32)
         for i, v in enumerate(V):
             loc, nrm, fi, dist = bvh.find_nearest(v)
             if fi is None:
@@ -67,24 +69,54 @@ def transfer(proxy, targets, rig, max_inf=4, smooth=0, override=None):
             d = np.linalg.norm(P - np.array(loc), axis=1) + 1e-6
             w = 1.0 / d
             W[i] = (w[:, None] * Wp[list(pv)]).sum(0) / w.sum()
+        # anything bone heat could not reach (a spread fingertip that was an
+        # island in the proxy) falls back to the nearest bone
+        W = nearest_bone_fill(rig, V, W, names)
         if override is not None:
             W = override(ob, V, W)
-        apply_weights(ob, W, rig, max_inf)
+        apply_weights(ob, W, rig, max_inf, names)
 
 
-def apply_weights(ob, W, rig, max_inf=4):
+def nearest_bone_fill(rig, V, W, names, thresh=0.6):
+    s = W.sum(1)
+    weak = s < thresh
+    if not weak.any():
+        return W
+    M = np.array(rig.matrix_world, np.float64)
+    segs = []
+    for b in names:
+        bb = rig.data.bones[b]
+        h = (M @ np.append(np.array(bb.head_local), 1))[:3]
+        t = (M @ np.append(np.array(bb.tail_local), 1))[:3]
+        segs.append((h, t))
+    P = V[weak].astype(np.float64)
+    D = np.zeros((len(P), len(names)))
+    for j, (h, t) in enumerate(segs):
+        d = t - h
+        u = np.clip(((P - h) @ d) / max(d @ d, 1e-12), 0, 1)
+        D[:, j] = np.linalg.norm(P - (h + u[:, None] * d), axis=1)
+    near = np.argmin(D, axis=1)
+    W = W.copy()
+    fill = np.zeros((len(P), len(names)), np.float32)
+    fill[np.arange(len(P)), near] = 1.0
+    W[weak] = W[weak] + (thresh - s[weak])[:, None] * fill / thresh
+    return W
+
+
+def apply_weights(ob, W, rig, max_inf=4, names=None):
     """Keep the strongest `max_inf` influences, normalise, write vertex groups,
     parent to the rig with an Armature modifier."""
+    names = names or BONE_NAMES
     W = W.copy()
     if max_inf < W.shape[1]:
         idx = np.argsort(-W, axis=1)[:, max_inf:]
         np.put_along_axis(W, idx, 0.0, axis=1)
     s = W.sum(1)
     empty = s < 1e-6
-    W[empty, BONE_NAMES.index("hips")] = 1.0
+    W[empty, 0] = 1.0          # the root bone
     W /= W.sum(1, keepdims=True)
     ob.vertex_groups.clear()
-    groups = [ob.vertex_groups.new(name=b) for b in BONE_NAMES]
+    groups = [ob.vertex_groups.new(name=b) for b in names]
     for j, g in enumerate(groups):
         nz = np.nonzero(W[:, j] > 1e-4)[0]
         for i in nz:

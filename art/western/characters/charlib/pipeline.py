@@ -26,6 +26,11 @@ def log(*a):
 # ------------------------------------------------------------------ variant builders (jobs)
 
 def hat_job(kind, name, coll=None, tris=520):
+    if kind == "bonnet":
+        f = OF.bonnet_field()
+        ob = C.decimated(name, f, (-0.12, -0.14, -0.21), (0.12, 0.15, 0.14), 0.0016, tris, coll, M=np.eye(3), o=HD.HEAD_ORIGIN, symmetry=True)
+        return dict(ob=ob, field=f, paint=OF.bonnet_paint, origin=HD.HEAD_ORIGIN, weight=0.6, ao_field=f, ao_group=name, smart_uv=True,
+                    skin=("rigid", "head"))
     f, band_h, col, band_col, mat = OF.hat_field(kind)
     M, o = OF.hat_frame(6.0 if kind != "top" else 3.0)
     ob = C.decimated(name, f, (-0.26, -0.28, -0.10), (0.26, 0.28, 0.21 if kind == "top" else 0.15), 0.0022, tris, coll, M=M, o=o, symmetry=False)
@@ -134,7 +139,7 @@ def coat_override(hem_z):
 
 # ------------------------------------------------------------------ assemble and export
 
-def proxy_weights(jobs, rig, coll=None, proxy_res=0.008):
+def proxy_weights(jobs, rig, coll=None, proxy_res=0.0055):
     """Bone heat on a closed proxy of one person (the union of their body parts)."""
     aof = AB.WorldUnion([(j["ao_field"], j["origin"], j.get("M")) for j in jobs if j.get("ao_group", "body") == "body"])
     proxy = SKN.make_proxy(aof, (-0.8, -0.4, -0.02), (0.8, 0.4, 1.85), proxy_res, coll)

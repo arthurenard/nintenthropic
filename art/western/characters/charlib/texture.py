@@ -149,6 +149,7 @@ def head_paint(V, p, look, is_ear=False):
     # hair on the scalp: strands flowing back from the hairline
     ht = H.hair_thickness(V, p)
     hmask = np.maximum(smoothstep(0.0003, 0.0022, ht), 0.9 * H.sideburn_mask(V, p) * (0.6 + 0.4 * value_noise(V, 1800, seed=27)))
+    hmask = np.maximum(hmask, H.bun_mask(V, p))
     az = np.degrees(np.arctan2(x, -(y - 0.005)))
     strand = value_noise(np.stack([az * 0.25, z * 12, y * 4], 1), 1.0, seed=21)
     strand2 = value_noise(np.stack([az * 1.2, z * 40, y * 10], 1), 1.0, seed=23)

@@ -94,6 +94,31 @@ def hat_field(kind):
     raise ValueError(kind)
 
 
+def bonnet_field():
+    """A cotton bonnet in the head's own frame: a hood over the crown and the
+    bun, open round the face with a stiffened brim, ribbons tied under the chin."""
+    hood = S.Shell(S.Ellipsoid((0, 0.022, 0.026), (0.090, 0.112, 0.100)), 0.0035)
+    n = np.array([0.0, -0.88, 0.47])
+    n /= np.linalg.norm(n)
+    opening = S.Plane((0, -0.040, 0.010), n, (-0.2, -0.2, -0.2), (0.2, 0.2, 0.2))
+    nape = S.Plane((0, 0.0, -0.055), (0, 0, -1), (-0.2, -0.2, -0.2), (0.2, 0.2, 0.2))
+    hood = S.Intersect(S.Intersect(hood, opening, k=0.004), nape, k=0.004)
+    R = np.stack([np.array([1.0, 0, 0]), np.cross(n, [1.0, 0, 0]), n], 1)
+    brim = S.Torus((0, -0.052, 0.020), 0.094, 0.011, R)
+    brim = S.Intersect(brim, S.Plane((0, 0.0, -0.035), (0, 0, -1), (-0.2, -0.2, -0.2), (0.2, 0.2, 0.2)), k=0.004)
+    ribbons = [S.RoundCone((s * 0.080, -0.030, -0.030), (s * 0.014, -0.070, -0.125), 0.005, 0.004) for s in (1, -1)]
+    bow = [S.Ellipsoid((s * 0.016, -0.074, -0.128), (0.016, 0.006, 0.009)) for s in (1, -1)]
+    tails = [S.RoundCone((s * 0.006, -0.076, -0.13), (s * 0.014, -0.078, -0.19), 0.004, 0.003) for s in (1, -1)]
+    return S.Union([hood, brim] + ribbons + bow + tails, k=0.004)
+
+
+def bonnet_paint(P):
+    c, r, m = PT.fabric(P + 7.0, (0.86, 0.82, 0.72), "cotton", dust_amt=0.0, fade=0.1, seed=131)
+    rib = (P[:, 2] < -0.035)
+    c[rib] = srgb(0.46, 0.22, 0.26)
+    return c, r, m
+
+
 def hat_frame(tilt=5.0):
     """(M, o) of the hat frame in world space: seated on the head, tipped forward."""
     R = np.array(S.rot_x(tilt), float)      # columns: hat axes in world (tipped forward)
