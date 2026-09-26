@@ -233,7 +233,7 @@ export class SecretsWorld {
     if (s.doorRight) s.doorRight.rotation.y = (this.doorSign[1] as number) * this.doorsOpen * 1.35;
     // Leaks: a steady stream, droplets arcing out, a puddle that grows.
     if (this.leaks.length) {
-      this.leakCarry += dt * 70;
+      this.leakCarry += dt * 110;
       while (this.leakCarry >= 1) {
         this.leakCarry -= 1;
         const l = this.leaks[Math.floor(Math.random() * this.leaks.length)] as Leak;
@@ -273,5 +273,5 @@ export class SecretsWorld {
   }
 }
 
-const LEAK_STYLE: ParticleStyle = { life: [0.6, 0.9], size: [0.06, 0.1], color: new Color("#a8c4cc"), alpha: [0.75, 0.3], gravity: 9.8, drag: 0.1, frame: 0, spin: 0, floor: 0.02 };
+const LEAK_STYLE: ParticleStyle = { life: [0.6, 0.9], size: [0.14, 0.22], color: new Color("#d2e6ec"), alpha: [0.85, 0.35], gravity: 9.8, drag: 0.1, frame: 0, spin: 0, floor: 0.02 };
 const SPLASH_STYLE: ParticleStyle = { life: [0.3, 0.6], size: [0.12, 0.35], color: new Color("#cfdfe2"), alpha: [0.35, 0], gravity: 1, drag: 2, frame: 1, spin: 0.5 };

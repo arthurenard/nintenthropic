@@ -144,7 +144,8 @@ export class Ambient {
     if (!w || w.active) return;
     w.active = true;
     w.giant = giant;
-    w.s = 0;
+    // The giant starts at the mouth of the alley, so it is seen as it is announced.
+    w.s = giant ? Math.max(0, (this.lengths[0] ?? 0) - 1.2) : 0;
     w.speed = giant ? 2.6 : 3.2 + this.random() * 2.2;
     w.radius = giant ? 1.15 : 0.36 + this.random() * 0.08;
     w.mesh.scale.setScalar(w.radius / 0.36);

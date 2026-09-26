@@ -23,6 +23,8 @@ const DUST: ParticleStyle = { life: [0.7, 1.3], size: [0.12, 0.55], color: col("
 const DUST_PALE: ParticleStyle = { ...DUST, color: col("#d9c3a2") };
 const GRIT: ParticleStyle = { life: [0.4, 0.8], size: [0.03, 0.02], color: col("#7a5c40"), alpha: [1, 0.6], gravity: 9.8, drag: 0.4, frame: 0, spin: 0, floor: 0.01 };
 const SMOKE: ParticleStyle = { life: [0.9, 1.6], size: [0.08, 0.6], color: col("#bdb3a6"), alpha: [0.35, 0], fadeIn: 0.1, gravity: -0.35, drag: 1.8, frame: 1, spin: 0.6 };
+// The player's own puff, a metre in front of the eye: faint, or it would hide the target.
+const PUFF: ParticleStyle = { life: [0.6, 1.0], size: [0.02, 0.16], color: col("#cfc6ba"), alpha: [0.16, 0], fadeIn: 0.15, gravity: -0.2, drag: 2, frame: 1, spin: 0.8 };
 const FLASH: ParticleStyle = { life: [0.05, 0.075], size: [0.55, 0.35], color: hdr(6, 3.6, 1.5), color2: hdr(3, 1.2, 0.3), alpha: [1, 0.2], gravity: 0, drag: 0, frame: 2, spin: 0 };
 const FLASH_CORE: ParticleStyle = { life: [0.04, 0.06], size: [0.3, 0.2], color: hdr(9, 8, 6), alpha: [1, 0.5], gravity: 0, drag: 0, frame: 0, spin: 0 };
 const SPARK: ParticleStyle = { life: [0.15, 0.4], size: [0.05, 0.02], color: hdr(6, 4, 1.8), color2: hdr(2, 0.6, 0.1), alpha: [1, 0.5], gravity: 6, drag: 1.2, frame: 0, spin: 0 };
@@ -278,7 +280,7 @@ export class Effects {
   playerPuff(at: Vector3, golden: boolean): void {
     const r = this.random;
     for (let i = 0; i < 3; i++) {
-      this.alpha.emit(at.x, at.y, at.z, (r() - 0.5) * 0.15, 0.08 + r() * 0.1, (r() - 0.5) * 0.15, SMOKE, 0.35, golden ? tint.setRGB(0.95, 0.85, 0.6) : undefined);
+      this.alpha.emit(at.x, at.y, at.z, (r() - 0.5) * 0.15, 0.08 + r() * 0.1, (r() - 0.5) * 0.15, PUFF, 1, golden ? tint.setRGB(0.95, 0.85, 0.6) : undefined);
     }
     if (golden) {
       for (let i = 0; i < 6; i++) {

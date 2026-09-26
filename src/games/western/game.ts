@@ -375,7 +375,7 @@ export class HighNoon implements Game, MatchListener {
     const cam = this.camera.camera;
     tmp.set(x * 2 - 1, -(y * 2 - 1), 0.5).unproject(cam).sub(cam.position).normalize();
     tmp2.copy(cam.position).addScaledVector(tmp, 1.3);
-    tmp2.y -= 0.12;
+    tmp2.y -= 0.04;
     this.effects.playerPuff(tmp2, this.golden);
   }
 
@@ -870,28 +870,37 @@ export class HighNoon implements Game, MatchListener {
       const p = this.project(at);
       if (p) out.push({ kind: "townsfolk", id: v.p.id, role: v.p.role, state: v.p.state, x: p.x, y: p.y, distance });
     }
+    // Is the straight line from the eye to `at` clear of the town (within `slack` metres)?
+    const clearTo = (at: Vector3, slack: number) => {
+      const d = at.distanceTo(cam);
+      const dir = new Vector3().copy(at).sub(cam).normalize();
+      const h = this.queries.cast(cam, dir, d + 1, { point: new Vector3(), normal: new Vector3(), distance: 0, object: null });
+      return !h || h.distance > d - slack;
+    };
+    const onScreen = (p: { x: number; y: number }) => p.x > 0.02 && p.x < 0.98 && p.y > 0.02 && p.y < 0.98;
     const s = this.assets.town.secrets;
     const secretPoints: [string, Vector3 | null][] = [
       ["bell", this.secretsWorld.bellCenter()],
       ["vane", this.secretsWorld.vaneCenter()],
       ["water_tower", s.waterTower ? s.waterTower.getWorldPosition(new Vector3()) : null],
-      ["piano", s.piano ? s.piano.getWorldPosition(new Vector3()).add(new Vector3(0.3, 0.8, 0)) : null],
+      // The piano's keyboard, on the near side, where the slanted view through the window reaches.
+      ["piano", s.piano ? s.piano.getWorldPosition(new Vector3()).add(new Vector3(0.34, 0.8, 0.35)) : null],
       ["poster", s.poster ? s.poster.getWorldPosition(new Vector3()) : null],
     ];
-    for (const [kind, at] of secretPoints) {
-      if (!at) continue;
-      const p = this.project(at);
-      if (p) out.push({ kind: `secret.${kind}`, id: 0, x: p.x, y: p.y, distance: at.distanceTo(this.camera.camera.position) });
+    for (const [kind, point] of secretPoints) {
+      if (!point) continue;
+      const p = this.project(point);
+      if (p) out.push({ kind: `secret.${kind}`, id: 0, x: p.x, y: p.y, distance: point.distanceTo(cam), clear: onScreen(p) });
     }
     this.ambient.tumbleweeds().forEach((w, i) => {
       if (!w.active) return;
       const p = this.project(w.center);
-      if (p) out.push({ kind: "tumbleweed", id: i, x: p.x, y: p.y, distance: w.center.distanceTo(this.camera.camera.position) });
+      if (p) out.push({ kind: "tumbleweed", id: i, x: p.x, y: p.y, distance: w.center.distanceTo(cam), clear: onScreen(p) && clearTo(w.center, 0.6) });
     });
     const c = this.ambient.chickenCenterOrNull();
     if (c) {
       const p = this.project(c);
-      if (p) out.push({ kind: "chicken", id: 0, x: p.x, y: p.y, distance: c.distanceTo(this.camera.camera.position) });
+      if (p) out.push({ kind: "chicken", id: 0, x: p.x, y: p.y, distance: c.distanceTo(cam), clear: onScreen(p) && clearTo(c, 0.4) });
     }
     return out;
   }

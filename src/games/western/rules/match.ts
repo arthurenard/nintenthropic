@@ -285,8 +285,8 @@ export class Match implements BanditWorld {
     const cover = pickDuelCover(this.covers);
     const b = new Bandit(this.nextId++, "duelist", cover);
     const from = cover.exposed;
-    // Ten paces out into the street, toward its middle and a little toward you.
-    const to: V3 = { x: from.x * 0.12, y: 0, z: Math.min(-9, from.z + 2.5) };
+    // Ten paces out to the middle of the street, about fifteen metres from you.
+    const to: V3 = { x: from.x * 0.06, y: 0, z: Math.max(from.z + 2.5, Math.min(-13, from.z + 9.5)) };
     b.startDuel(from, to);
     this.bandits.push(b);
     this.duelist = b;

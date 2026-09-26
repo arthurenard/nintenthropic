@@ -188,7 +188,7 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
       balcony: true,
       openings: [
         { z: -24.8, y: WALK_TOP, w: 1.7, h: 2.6, kind: "door" },
-        { z: -21, y: 0.95, w: 1.8, h: 1.6, kind: "window", glass: "saloon_piano" },
+        { z: -21, y: 0.95, w: 2.2, h: 1.6, kind: "window", glass: "saloon_piano" },
         { z: -28.6, y: 0.95, w: 1.8, h: 1.6, kind: "window", glass: "saloon_2" },
         { z: -21, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
         { z: -24.8, y: 3.6, w: 1.1, h: 2.3, kind: "door", shutters: true },
@@ -421,11 +421,14 @@ export function buildPlaceholderTown(options: PlaceholderOptions = {}): Group {
   }
   for (const [i, p] of (
     [
-      [16, 0, -10],
-      [6, 0, -16.5],
-      [-1, 0, -22],
-      [-8, 0, -26.5],
-      [-18, 0, -32],
+      // Out of the alley between the bank and the sheriff's, across the
+      // street, and away down the alley beside the saloon.
+      [15, 0, -16.75],
+      [8.2, 0, -16.75],
+      [2, 0, -21.5],
+      [-5, 0, -28],
+      [-8.4, 0, -31.75],
+      [-17, 0, -31.75],
     ] as [number, number, number][]
   ).entries()) {
     b.node(`path.tumbleweed.${i + 1}`, p);
@@ -616,13 +619,23 @@ function buildBuilding(b: TownBuilder, s: BuildingSpec, mat: Mats, C: Colors, gl
     const floor = o.kind === "door" ? o.y : o.y > 3 ? 3.6 : WALK_TOP;
     const ceil = Math.min(s.height - 0.1, floor + 3.0);
     const depth = 2.5;
-    const zA = Math.min(zN - 0.25, o.z + o.w / 2 + 1.3);
-    const zB = Math.max(zF + 0.25, o.z - o.w / 2 - 1.3);
+    let zA = Math.min(zN - 0.25, o.z + o.w / 2 + 1.3);
+    let zB = Math.max(zF + 0.25, o.z - o.w / 2 - 1.3);
+    // Rooms on the same floor share the wall halfway between their openings.
+    for (const other of s.openings) {
+      if (other === o) continue;
+      const otherFloor = other.kind === "door" ? other.y : other.y > 3 ? 3.6 : WALK_TOP;
+      if (Math.abs(otherFloor - floor) > 0.5) continue;
+      if (other.z > o.z) zA = Math.min(zA, (o.z + o.w / 2 + other.z - other.w / 2) / 2);
+      else zB = Math.max(zB, (o.z - o.w / 2 + other.z + other.w / 2) / 2);
+    }
     const xr0 = xf + side * t;
     const xr1 = xr0 + side * depth;
     const rx = (xr0 + xr1) / 2;
-    const dark = C.interior as Color;
-    const o2: PartOptions = { sunShade: 0.05, dim: 0.55, surface: "wood" };
+    // The saloon is lamp-lit inside (and the piano must read through its window); other rooms are dark.
+    const lit = s.id === "saloon" && floor < 1;
+    const dark = lit ? new Color("#6b4128") : (C.interior as Color);
+    const o2: PartOptions = { sunShade: 0.05, dim: lit ? 1.2 : 0.55, surface: "wood" };
     b.box(chunk, mat.planks, [xr1 + side * 0.05, (floor + ceil) / 2, (zA + zB) / 2], [0.1, ceil - floor, zA - zB], dark, o2);
     b.box(chunk, mat.planks, [rx, floor - 0.05, (zA + zB) / 2], [depth, 0.1, zA - zB], dark, o2);
     b.box(chunk, mat.plain, [rx, ceil + 0.05, (zA + zB) / 2], [depth, 0.1, zA - zB], dark, { ...o2, dim: 0.4 });
@@ -953,10 +966,12 @@ function buildPiano(light: BakeLight): Group {
   // its keys facing the street; readable through the glass under a lamp.
   const sub = new TownBuilder(light);
   const wood = unlit(null, "piano");
-  const x = -10.75;
-  const z = -21;
+  // From the street the window is seen at a slant, so the piano stands just
+  // inside it and toward the far side, where that slanted view reaches.
+  const x = -9.2;
+  const z = -21.95;
   const y = WALK_TOP;
-  const lamp: PartOptions = { dim: 0.9, sunShade: 0.35, surface: "wood" };
+  const lamp: PartOptions = { dim: 1.9, sunShade: 0.3, surface: "wood" };
   sub.box("piano", wood, [x, y + 0.65, z], [0.55, 1.3, 1.5], new Color("#3b2016"), lamp);
   sub.box("piano", wood, [x + 0.34, y + 0.78, z], [0.2, 0.05, 1.3], new Color("#efe8d8"), lamp);
   for (let i = 0; i < 9; i++) sub.box("piano", wood, [x + 0.3, y + 0.815, z - 0.58 + i * 0.145], [0.1, 0.03, 0.05], new Color("#161210"), lamp);
@@ -982,7 +997,7 @@ function addCovers(b: TownBuilder): void {
     ["barber_door", "door", "step_out", 0, [-8.0, W, -36], [-9.5, W, -36.9]],
     ["livery_hay", "crate", "rise", 0, [-5.95, 0, -44.75], [-5.95, 0, -44.75]],
     ["livery_door", "door", "step_out", 0, [-8.0, W, -47], [-9.6, W, -48.3]],
-    ["livery_loft", "window", "rise", 1, [-8.9, 3.9, -47], [-9.6, 3.9, -47.95]],
+    ["livery_loft", "window", "rise", 1, [-8.9, 3.6, -47], [-9.6, 3.6, -47.95]],
     ["livery_corner", "corner", "lean_left", 0, [-8.25, 0, -53.9], [-9.7, 0, -53.9]],
     ["wagon_bed", "wagon", "rise", 0, [-3.7, 0, -28.95], [-3.7, 0, -28.95]],
     ["wagon_wheel", "wagon", "lean_left", 0, [-2.35, 0, -28.6], [-3.2, 0, -28.6]],
