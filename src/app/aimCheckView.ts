@@ -81,7 +81,9 @@ export class AimCheckView {
     if (this.finished) return;
     const { width, height } = this.options.viewport();
     this.check.setViewport(width, height);
+    const offered = this.check.canPlayAnyway;
     this.check.setTargets(this.options.stage.targets());
+    if (this.check.canPlayAnyway !== offered) this.render(true);
     const lit = this.check.lit?.id ?? null;
     if (lit !== this.lit) {
       this.lit = lit;

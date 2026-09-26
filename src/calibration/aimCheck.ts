@@ -147,6 +147,13 @@ export class AimCheck {
     if (!this.plan.length) this.plan = this.openingOrder();
     if (!this.lit || !targets.some((t) => t.id === this.lit!.id)) this.lit = this.next();
     else this.lit = targets.find((t) => t.id === this.lit!.id)!;
+    // A stage whose targets stay broken can run out before the check is
+    // done: never leave the player with nothing to shoot and no way on.
+    if (!targets.length && this.shots > 0 && !this.done && !this.canPlayAnyway) {
+      this.canPlayAnyway = true;
+      this.tip = tipFor(this.stats);
+      this.words = { title: "That’s every target.", detail: this.tip };
+    }
   }
 
   setViewport(width: number, height: number): void {

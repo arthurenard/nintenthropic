@@ -260,6 +260,20 @@ describe("a first aim check", () => {
   });
 });
 
+describe("a stage that runs out of targets", () => {
+  it("offers Play Anyway rather than leave nothing to shoot", () => {
+    const player = new Player();
+    player.shoot({ noise: 0.03 });
+    player.shoot({ noise: 0.03 });
+    expect(player.check.canPlayAnyway).toBe(false);
+    player.check.setTargets([]); // every bottle broken
+    expect(player.check.lit).toBeNull();
+    expect(player.check.canPlayAnyway).toBe(true);
+    expect(player.check.words.title).toBe("That’s every target.");
+    expect(player.check.words.detail).toBe(player.check.tip);
+  });
+});
+
 describe("a returning player", () => {
   it("finishes in three shots when the saved aim still fits", () => {
     const player = new Player(trueMap());
