@@ -69,7 +69,7 @@ on the shared armature, with their own atlas:
 | barber | `var.coat.apron` | a balding man with a waxed handlebar, striped shirt with sleeve garters, white apron |
 | bartender | `var.coat.apron` + `var.vest` | the same man in a burgundy vest |
 | woman | `var.coat.dress` + `var.hat.bonnet` | a young woman, auburn hair in a bun, lavender dress with a bustle |
-| undertaker | `var.coat.black` + `var.hat.top` | a gaunt old man with grey mutton chops, black frock coat, cravat |
+| undertaker | `var.coat.black` + `var.hat.top` | a gaunt old man with grey mutton chops, black frock coat over a black waistcoat, cravat |
 | preacher | `var.coat.black` | the same man, bareheaded |
 
 `var.hat.straw` is there too (unused by the game so far). To make the
@@ -111,6 +111,18 @@ while aiming, and every hide clip starts on it.
 | `death_slump` | 1.0 | folds forward over a sill or barrel; settles at **0.55 s** |
 | `death_fall` | 1.3 | lurch, flail, lands face down at **78%** of the clip — the game stretches the clip to its fall time |
 | `aim_rifle`, `fire_rifle` | 1.0 loop, 0.5 | extra: a shouldered rifle, left hand on the forend |
+
+## Budgets (triangles, as three.js counts them)
+
+| File | Size | Meshes |
+| --- | --- | --- |
+| bandit.glb | 858 KB | `char.bandit` 7,246; hats 754-806; bandanas 420; `var.vest` 384; `var.coat.duster` 1,430; `var.coat.jacket` 1,200; `var.armour` 360; `gun.revolver` 680, `gun.rifle` 520, `prop.dynamite` 218 |
+| boss.glb | 821 KB | `char.boss` 7,989; `var.hat.stetson` 806; `var.coat.duster` 1,430; the same props |
+| townsfolk.glb | ~960 KB | `var.coat.apron` 6,497, `var.coat.dress` 4,703, `var.coat.black` 7,756; `var.vest` 384; `var.hat.bonnet` 600, `var.hat.straw` 806, `var.hat.top` 806 |
+| chicken.glb | 140 KB | `char.chicken` 2,600 (a 512² atlas) |
+
+A dressed bandit (hat, bandana, duster, revolver) is about 10.6k triangles,
+the boss dressed about 10.9k. Every person has one 1024² atlas.
 
 ## How it is made
 

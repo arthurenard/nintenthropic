@@ -468,4 +468,8 @@ def build_apron(field, top=1.07, bottom=0.46, n_u=14):
     for k in range(len(rings) - 1):
         rm.bridge(rings[k], rings[k + 1], zs[k], zs[k + 1], "apron", closed=False, ua=ua)
     R.snap_and_relax(rm, field, iters=0)
+    # the apron is a thin shell and its rings land on the inner face, where
+    # the field's gradient points back at the body: orient it the old way,
+    # away from the body's axis
+    rm.field = None
     return rm
