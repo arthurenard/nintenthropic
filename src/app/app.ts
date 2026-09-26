@@ -526,14 +526,15 @@ export class App {
       session.check.frame();
       this.crosshair.visible = session.check.showsCrosshair;
     }
-    this.crosshair.draw(aim, now);
-    // The corners' chrome steps aside for what the player is aiming at.
     const stage = $("stage");
     const [width, height] = [stage.clientWidth, stage.clientHeight];
+    const lit = session.check && !session.check.done ? session.check.check.lit : null;
+    const target = lit ? { x: lit.x * width, y: lit.y * height, r: lit.radius * Math.min(width, height) } : null;
+    this.crosshair.draw(aim, now, target);
+    // The corners' chrome steps aside for what the player is aiming at.
     const spots: Spot[] = [];
     if (this.crosshair.visible && aim.tracking && !aim.offscreen) spots.push({ x: aim.x * width, y: aim.y * height, r: 28 });
-    const lit = session.check?.check.lit;
-    if (lit && !session.check?.done) spots.push({ x: lit.x * width, y: lit.y * height, r: lit.radius * Math.min(width, height) });
+    if (target) spots.push(target);
     this.yielding.update(spots);
     // How long a camera frame takes to reach the crosshair: from its capture
     // to the moment the crosshair is drawn from it (the screen shows that

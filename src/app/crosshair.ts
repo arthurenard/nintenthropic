@@ -5,6 +5,9 @@
  * desktop's: a ring broken at the compass points, ticks through the gaps and
  * a dot, green while the gun is cocked; the ring tightens as the thumb folds
  * and kicks out on each shot.
+ *
+ * In the aim check the same canvas rings the target to shoot, softly
+ * breathing, so it is plain which one is lit however the game lights it.
  */
 import type { Aim } from "../engine/types";
 
@@ -17,7 +20,7 @@ export class Crosshair {
   private ratio = 1;
   private width = 0;
   private height = 0;
-  private dirty: [number, number, number, number] | null = null;
+  private dirty: [number, number, number, number][] = [];
   private firedAt = Number.NEGATIVE_INFINITY;
   /** Shown at all: off while there is no aim to show (no map yet, paused). */
   visible = false;
@@ -38,21 +41,22 @@ export class Crosshair {
     if (this.canvas.width !== this.width || this.canvas.height !== this.height) {
       this.canvas.width = this.width;
       this.canvas.height = this.height;
-      this.dirty = null;
+      this.dirty = [];
     }
   }
 
   clear(): void {
-    if (this.dirty) {
-      const [x, y, w, h] = this.dirty;
-      this.context.clearRect(x, y, w, h);
-      this.dirty = null;
-    }
+    for (const [x, y, w, h] of this.dirty) this.context.clearRect(x, y, w, h);
+    this.dirty = [];
   }
 
-  /** Draws the crosshair at `aim` for the frame at `now`. */
-  draw(aim: Aim, now: number): void {
+  /**
+   * Draws the frame at `now`: the lit target's ring (in CSS pixels of the
+   * stage, if there is one to shoot), then the crosshair at `aim` over it.
+   */
+  draw(aim: Aim, now: number, target: { x: number; y: number; r: number } | null = null): void {
     this.clear();
+    if (target && this.width) this.ring(target, now);
     if (aim.fired) this.firedAt = now;
     if (!this.visible || !aim.tracking || aim.offscreen || !this.width) return;
     const context = this.context;
@@ -69,7 +73,7 @@ export class Crosshair {
     // With reduced motion the ring does not kick out; the recoil itself stays.
     const kick = this.reducedMotion() ? 1 : (now - this.firedAt) / KICK;
     const extent = Math.ceil(Math.max(reach, kick < 1 ? (20 + 34 * kick) * unit : 0) + 8 * this.ratio);
-    this.dirty = [x - extent, y - extent, extent * 2, extent * 2];
+    this.dirty.push([x - extent, y - extent, extent * 2, extent * 2]);
 
     const colour = aim.armed ? TINT : "rgba(255, 255, 255, 0.72)";
     context.save();
@@ -111,6 +115,27 @@ export class Crosshair {
       context.arc(x, y, (20 + 34 * kick) * unit, 0, Math.PI * 2);
       context.stroke();
     }
+    context.restore();
+  }
+
+  /** A soft white ring round the target to shoot, breathing gently. */
+  private ring(target: { x: number; y: number; r: number }, now: number): void {
+    const context = this.context;
+    const ratio = this.ratio;
+    const breath = this.reducedMotion() ? 1 : 1 + 0.07 * Math.sin(now / 320);
+    const radius = Math.max(18, target.r * 1.45) * breath * ratio;
+    const x = target.x * ratio;
+    const y = target.y * ratio;
+    const extent = Math.ceil(radius + 14 * ratio);
+    this.dirty.push([x - extent, y - extent, extent * 2, extent * 2]);
+    context.save();
+    context.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    context.lineWidth = 2 * ratio;
+    context.shadowColor = "rgba(255, 255, 255, 0.55)";
+    context.shadowBlur = 10 * ratio;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.stroke();
     context.restore();
   }
 }
