@@ -705,6 +705,9 @@ export class Cast {
     const rig = v.rig;
     rig.root.position.set(p.pos.x, p.pos.y, p.pos.z);
     this.faceToward(rig, p.pos.x, p.pos.z, dt);
+    // Out of the room's shade into the light at the door, as the gang is.
+    const k = Math.min(1, p.exposure / 0.7);
+    rig.uniforms.uShade.value = p.state === "peeking" || p.state === "leaving" ? 0.4 + 0.6 * k * k * (3 - 2 * k) : 1;
     if (p.role === "preacher") {
       rig.play("head_shake", 0.2, true, 1, false);
     } else if (p.shot) {

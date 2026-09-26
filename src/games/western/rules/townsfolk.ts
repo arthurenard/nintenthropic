@@ -83,6 +83,8 @@ export class Townsperson {
       case "hidden":
         if (this.t >= this.dur) {
           this.enter("peeking", TOWNSFOLK_PEEK);
+          // Seen from the threshold on, as a bandit is (see Cover.ready).
+          copy(this.pos, this.cover.ready ?? this.cover.hidden);
           this.visible = true;
           events.townsfolkAppear(this);
         }
@@ -90,7 +92,7 @@ export class Townsperson {
       case "peeking": {
         const p = Math.min(1, this.t / this.dur);
         this.exposure = p;
-        lerp(this.pos, this.cover.hidden, this.cover.exposed, smooth(p));
+        lerp(this.pos, this.cover.ready ?? this.cover.hidden, this.cover.exposed, smooth(p));
         if (p >= 1) this.enter("out", this.stay);
         break;
       }
@@ -109,8 +111,9 @@ export class Townsperson {
       case "leaving": {
         const p = Math.min(1, this.t / this.dur);
         this.exposure = 1 - p;
-        lerp(this.pos, this.cover.exposed, this.cover.hidden, smooth(p));
+        lerp(this.pos, this.cover.exposed, this.cover.ready ?? this.cover.hidden, smooth(p));
         if (p >= 1) {
+          copy(this.pos, this.cover.hidden);
           this.visible = false;
           this.state = "gone";
           events.townsfolkGone(this);
