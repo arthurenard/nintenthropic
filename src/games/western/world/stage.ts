@@ -18,6 +18,9 @@ import {
 import type { Quality } from "../../../engine/types";
 import type { TownLayout } from "./town";
 
+/** Straight down, a touch off vertical so shadows still have a side. */
+export const NOON_SUN = new Vector3(-0.08, -1, -0.12).normalize();
+
 /**
  * The scene High Noon draws: the baked town (unlit — its light is in its
  * textures), the sky as background and, through PMREM, as the environment
@@ -50,7 +53,8 @@ export class Stage {
     pmrem.dispose();
     scene.environment = this.envTarget.texture;
     scene.environmentIntensity = noon ? 0.95 : 0.8;
-    scene.fog = new FogExp2(fog, noon ? 0.0065 : 0.0085);
+    const density = typeof town.root.userData["fog_density"] === "number" ? (town.root.userData["fog_density"] as number) : 0.0085;
+    scene.fog = new FogExp2(fog, noon ? density * 0.75 : density);
 
     scene.add(town.root);
     town.root.traverse((o) => {
@@ -87,7 +91,9 @@ export class Stage {
 
     // The sun, matched to the bake: warm, and bright enough that a lit
     // albedo reads like the baked facades (three's Lambert divides by π).
-    this.sunDirection = town.sunDirection.clone().normalize();
+    // At High Noon the sun stands overhead, whatever the bake's sun says: the
+    // moving things drop their shadows straight down under them.
+    this.sunDirection = noon ? NOON_SUN.clone() : town.sunDirection.clone().normalize();
     this.sun.color.set(noon ? new Color(1, 0.96, 0.88) : new Color(1, 0.72, 0.46));
     this.sun.intensity = noon ? 1.55 * Math.PI : 1.75 * Math.PI;
     const target = new Vector3(0, 0, -28).add(town.eye.clone().setY(0));

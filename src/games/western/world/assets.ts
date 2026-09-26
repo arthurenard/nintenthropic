@@ -3,6 +3,7 @@ import type { GameContext, LoadedAsset } from "../../../engine/types";
 import { buildBanditAsset, buildBossAsset, buildChickenAsset, buildTownsfolkAsset } from "../placeholder/characters";
 import { buildPlaceholderTown } from "../placeholder/town";
 import { buildSky } from "./sky";
+import { NOON_SUN } from "./stage";
 import { readTown, type TownLayout } from "./town";
 
 /**
@@ -13,6 +14,8 @@ import { readTown, type TownLayout } from "./town";
 export const ASSET_PATHS = {
   town: "assets/western/town.glb",
   sky: "assets/western/sky.webp",
+  /** Optional: the sky at noon, for High Noon for real. Without it a noon sky is painted in code. */
+  skyNoon: "assets/western/sky_noon.webp",
   bandit: "assets/western/bandit.glb",
   boss: "assets/western/boss.glb",
   townsfolk: "assets/western/townsfolk.glb",
@@ -80,13 +83,13 @@ function horizonColour(texture: Texture): Color | null {
 }
 
 export async function loadAssets(ctx: GameContext, onProgress: (fraction: number) => void, noon: boolean): Promise<HighNoonAssets> {
-  const real: Record<AssetName, boolean> = { town: false, sky: false, bandit: false, boss: false, townsfolk: false, chicken: false };
+  const real: Record<AssetName, boolean> = { town: false, sky: false, skyNoon: false, bandit: false, boss: false, townsfolk: false, chicken: false };
   const names = Object.keys(ASSET_PATHS) as AssetName[];
   const present = await Promise.all(names.map((n) => exists(url(ASSET_PATHS[n]))));
   names.forEach((n, i) => (real[n] = present[i] as boolean));
 
-  const weights: Record<AssetName, number> = { town: 0.55, sky: 0.1, bandit: 0.1, boss: 0.08, townsfolk: 0.1, chicken: 0.07 };
-  const done: Record<AssetName, number> = { town: 0, sky: 0, bandit: 0, boss: 0, townsfolk: 0, chicken: 0 };
+  const weights: Record<AssetName, number> = { town: 0.55, sky: 0.1, skyNoon: 0, bandit: 0.1, boss: 0.08, townsfolk: 0.1, chicken: 0.07 };
+  const done: Record<AssetName, number> = { town: 0, sky: 0, skyNoon: 0, bandit: 0, boss: 0, townsfolk: 0, chicken: 0 };
   const report = () => onProgress(Math.min(0.99, names.reduce((s, n) => s + weights[n] * done[n], 0)));
   const loadGltf = async (name: AssetName, fallback: () => LoadedAsset): Promise<LoadedAsset> => {
     if (real[name]) {
@@ -120,20 +123,22 @@ export async function loadAssets(ctx: GameContext, onProgress: (fraction: number
 
   let sky: Texture | null = null;
   let fog: Color | null = null;
-  if (real.sky) {
+  // The golden-hour sky.webp is wrong at noon: use sky_noon.webp, or paint one.
+  const skyName: AssetName = noon ? "skyNoon" : "sky";
+  if (real[skyName]) {
     try {
-      sky = await ctx.assets.texture(url(ASSET_PATHS.sky));
+      sky = await ctx.assets.texture(url(ASSET_PATHS[skyName]));
       sky.mapping = EquirectangularReflectionMapping;
       sky.colorSpace = SRGBColorSpace;
       fog = horizonColour(sky);
     } catch (err) {
-      console.warn("High Noon: sky.webp would not load; using the placeholder.", err);
-      real.sky = false;
+      console.warn(`High Noon: ${ASSET_PATHS[skyName]} would not load; using the placeholder.`, err);
+      real[skyName] = false;
       sky = null;
     }
   }
   if (!sky) {
-    const built = buildSky(town.sunDirection, noon);
+    const built = buildSky(noon ? NOON_SUN : town.sunDirection, noon);
     sky = built.texture;
     fog = built.fog;
   }
