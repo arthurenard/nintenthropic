@@ -288,9 +288,18 @@ export class Match implements BanditWorld {
     this.townsfolkTimes = [];
     const cover = pickDuelCover(this.covers);
     const b = new Bandit(this.nextId++, "duelist", cover);
-    const from = cover.exposed;
-    // Ten paces out to the middle of the street, about fifteen metres from you.
-    const to: V3 = { x: from.x * 0.06, y: 0, z: Math.max(from.z + 2.5, Math.min(-13, from.z + 9.5)) };
+    let from: V3;
+    let to: V3;
+    if (isDuelMark(cover)) {
+      // The town's mark in the street: he walks out to it from his cover
+      // (the freight crates), ten paces, and turns to face you there.
+      from = cover.ready ?? cover.hidden;
+      to = cover.exposed;
+    } else {
+      // Ten paces out from a door to the middle of the street, about fifteen metres from you.
+      from = cover.exposed;
+      to = { x: from.x * 0.06, y: 0, z: Math.max(from.z + 2.5, Math.min(-13, from.z + 9.5)) };
+    }
     b.startDuel(from, to);
     this.bandits.push(b);
     this.duelist = b;

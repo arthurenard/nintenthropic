@@ -396,6 +396,30 @@ describe("secrets through the match", () => {
     expect((death?.args[2] as { labels: string[] }).labels).toContain("Quick Draw");
     expect(m.phase).toBe("combat");
   });
+
+  it("the duelist walks out from his cover to the town's mark in the street", () => {
+    const mark: Cover = {
+      id: "street.duel",
+      kind: "corner",
+      emerge: "step_out",
+      level: 0,
+      exposed: { x: 0.4, y: 0, z: -12.5 },
+      hidden: { x: 4.7, y: 0, z: -13.5 },
+      distance: 12.5,
+      side: 0,
+      tags: ["duel"],
+    };
+    const rec = new Recorder();
+    const m = new Match({ random: mulberry32(4), covers: [...testCovers(), mark], listener: rec });
+    m.start({ duel: true });
+    const d = m.bandits[0] as Bandit;
+    expect(d.cover.id).toBe("street.duel");
+    expect(d.pos).toEqual(mark.hidden);
+    run(m, 7);
+    expect(d.state).toBe("standoff");
+    expect(d.pos.x).toBeCloseTo(0.4);
+    expect(d.pos.z).toBeCloseTo(-12.5);
+  });
 });
 
 describe("where the gang fights from", () => {

@@ -144,7 +144,14 @@ export class Cast {
       rig.tint(k * (0.95 + r() * 0.1), k, k * (0.9 + r() * 0.1));
     }
     // The duelist strolls out (a slowed run); everyone else starts in cover.
-    if (b.state === "walking") rig.play("run", 0, true, 0.42);
+    if (b.state === "walking") {
+      // The gang has no walk of its own yet: the run, slowed toward the pace
+      // he really covers the ground at (the run's feet travel at ~4 m/s), so
+      // his feet slide as little as a run slowed this far allows.
+      const speed = b.pathLength / Math.max(0.1, b.dur);
+      if (rig.has("walk")) rig.play("walk", 0, true);
+      else rig.play("run", 0, true, Math.min(0.6, Math.max(0.3, speed / 4)));
+    }
     else rig.play("hidden", 0);
     rig.root.position.set(b.pos.x, b.pos.y, b.pos.z);
     this.face(rig, b.pos.x, b.pos.z);
