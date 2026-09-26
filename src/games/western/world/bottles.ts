@@ -26,6 +26,8 @@ interface Bottle {
   readonly center: Vector3;
   height: number;
   alive: boolean;
+  /** Not visible from the eye: never offered as a target. */
+  hidden: boolean;
   /** Fading out at the end of the check, 1 → 0. */
   fade: number;
   target: CalibrationTarget;
@@ -132,9 +134,20 @@ export class BottleStage implements CalibrationStage {
         center: base.clone().add(new Vector3(0, 0.15 * scale, 0)),
         height: 0.305 * scale,
         alive: true,
+        hidden: false,
         fade: 1,
         target: { id, x: 0.5, y: 0.5, radius: 0.035 },
       };
+      // A bottle the player cannot see is no target: it is left out (and said so).
+      const seen = b.center.distanceTo(town.eye);
+      const to = b.center.clone().sub(town.eye).normalize();
+      const hit = queries.cast(town.eye.clone(), to, seen + 0.5, { point: new Vector3(), normal: new Vector3(), distance: 0, object: null });
+      if (hit && hit.distance < seen - 0.25) {
+        console.info(`High Noon: calib.${i + 1} is hidden from the eye; its bottle is left out of the aim check.`);
+        g.visible = false;
+        b.alive = false;
+        b.hidden = true;
+      }
       this.bottles.push(b);
     });
   }
@@ -227,6 +240,7 @@ export class BottleStage implements CalibrationStage {
     this.active = true;
     this.hits = 0;
     for (const b of this.bottles) {
+      if (b.hidden) continue;
       b.alive = true;
       b.fade = 1;
       b.group.visible = true;
