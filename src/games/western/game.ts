@@ -26,6 +26,7 @@ import { Cast } from "./world/cast";
 import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
 import { RIM, RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
+import { reloadHint } from "./hints";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "./world/framing";
 import { PlayerCamera } from "./world/playerCamera";
@@ -48,7 +49,6 @@ export interface HighNoonOptions {
   assetBase?: string;
 }
 
-const RELOAD_HINT = "Point off the screen to reload.";
 /** How long the view takes to close in on the street when a round begins. */
 const FRAMING_EASE = 1.4;
 const HIT_SOUND: Record<Surface, string> = {
@@ -402,7 +402,7 @@ export class HighNoon implements Game, MatchListener {
     this.hud.health(0);
     this.match.start({ wave, duel: this.noon && wave === 1 });
     this.ambient.running = true;
-    this.showHint(RELOAD_HINT, 5);
+    this.showHint(reloadHint(this.ctx.input), 5);
     if (this.golden) {
       const hud = this.hud as HudSink & { revolverFinish?: (finish: "steel" | "gold") => void };
       hud.revolverFinish?.("gold");
@@ -596,7 +596,7 @@ export class HighNoon implements Game, MatchListener {
     const result = this.match.trigger();
     if (result === "dry") {
       this.sound.play("revolver_dry");
-      this.showHint(RELOAD_HINT, 0);
+      this.showHint(reloadHint(this.ctx.input), 0);
       return;
     }
     if (result !== "fired") return;
@@ -958,7 +958,7 @@ export class HighNoon implements Game, MatchListener {
     if (started) {
       this.sound.play("reload_spin");
       this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, true);
-      if (this.hintText === RELOAD_HINT) this.clearHint();
+      if (this.hintText === reloadHint(this.ctx.input)) this.clearHint();
     } else {
       this.sound.play("revolver_cock");
       this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, false);
