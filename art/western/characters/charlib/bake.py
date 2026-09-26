@@ -124,10 +124,43 @@ def _target_material(low, img):
     low.data.materials.append(m)
 
 
-def bake(pairs, img, kind, extrusion=0.006, max_dist=0.02, samples=4, extra_visible=()):
-    """pairs: [(low, [highs...])]. kind: albedo|rough|metal|normal|ao."""
+SENTINEL = (1.0, 0.0, 1.0, 1.0)
+
+
+def make_cage(low, field_world=None, dist=0.012):
+    """An inflated copy of a game mesh for baking: rays start on the cage and
+    travel toward the game mesh. Inflating along the sculpt's own (smooth)
+    field gradient keeps rays sane where the game mesh's vertex normals are
+    not - a thin nose bridge, a jaw corner."""
+    from . import sdf as S
+    cage = low.copy()
+    cage.data = low.data.copy()
+    cage.name = low.name + ".cage"
+    for c in low.users_collection:
+        c.objects.link(cage)
+    V = bl.verts_np(cage)
+    if field_world is not None:
+        g = S.gradient(field_world, V, 1e-3)
+        n = g / np.maximum(np.linalg.norm(g, axis=1), 1e-9)[:, None]
+    else:
+        n = np.array([v.normal[:] for v in cage.data.vertices], np.float32)
+    bl.set_verts(cage, V + n * dist)
+    cage.hide_render = True
+    return cage
+
+
+def bake(pairs, img, kind, extrusion=0.006, max_dist=0.02, samples=4, cages=None):
+    """pairs: [(low, [highs...])]. kind: albedo|rough|metal|normal|ao.
+
+    The image should start filled with SENTINEL so that texels no ray reached
+    can be found and filled afterwards (fill_holes)."""
     sc = bpy.context.scene
     sc.cycles.samples = samples
+    lows = [l for l, _ in pairs]
+    # the game meshes must not shadow the sculpts they are baked from
+    for l in lows:
+        l.visible_camera = l.visible_diffuse = l.visible_glossy = False
+        l.visible_transmission = l.visible_volume_scatter = l.visible_shadow = False
     for low, highs in pairs:
         for h in highs:
             for ms in h.data.materials:
@@ -142,9 +175,39 @@ def bake(pairs, img, kind, extrusion=0.006, max_dist=0.02, samples=4, extra_visi
         low.select_set(True)
         bpy.context.view_layer.objects.active = low
         btype = {"albedo": "EMIT", "rough": "EMIT", "metal": "EMIT", "normal": "NORMAL", "ao": "AO"}[kind]
-        bpy.ops.object.bake(type=btype, use_selected_to_active=True, cage_extrusion=extrusion,
+        cage = (cages or {}).get(low.name)
+        kw = dict(use_cage=True, cage_object=cage.name) if cage else dict(use_cage=False)
+        bpy.ops.object.bake(type=btype, use_selected_to_active=True, cage_extrusion=extrusion, **kw,
                             max_ray_distance=max_dist, margin=4, use_clear=False,
                             normal_space="TANGENT", target="IMAGE_TEXTURES")
+    for l in lows:
+        l.visible_camera = l.visible_diffuse = l.visible_glossy = True
+        l.visible_transmission = l.visible_volume_scatter = l.visible_shadow = True
+    return img
+
+
+def fill_holes(img, iters=64):
+    """Grow baked texels into the ones no ray reached (sentinel magenta): small
+    misses inside islands, and everything between islands, so mipmaps never
+    bleed the sentinel. Each pass averages the known 4-neighbours."""
+    a = image_np(img)
+    miss = (a[..., 0] > 0.99) & (a[..., 1] < 0.01) & (a[..., 2] > 0.99)
+    a[miss] = 0.0
+    known = ~miss
+    for _ in range(iters):
+        if known.all():
+            break
+        acc = np.zeros_like(a)
+        cnt = np.zeros(known.shape, np.float32)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            k = np.roll(known, (dy, dx), (0, 1))
+            acc += np.roll(a, (dy, dx), (0, 1)) * k[..., None]
+            cnt += k
+        grow = (~known) & (cnt > 0)
+        a[grow] = acc[grow] / cnt[grow][:, None]
+        known = known | grow
+    a[..., 3] = 1.0
+    img.pixels.foreach_set(a.ravel())
     return img
 
 

@@ -153,10 +153,10 @@ def skull(p, low=False):
     bridge = S.RoundCone((0, -0.0905, 0.006), (0, -0.1105 - 0.004 * (nb - 1) - 0.005 * (nl - 1), -0.020 - 0.003 * (nl - 1)), 0.0058 * nw, 0.0076 * nw)
     hump = S.Sphere((0, -0.1005 - 0.004 * (nb - 1), -0.010), 0.0062 * nw * (0.9 + 0.2 * (nb - 1)))
     tip = S.Sphere(nose_tip, 0.0094 * nt)
-    alae = [S.Ellipsoid((s * 0.0135 * nw, -0.1000, -0.0360), (0.0082 * nw, 0.0095, 0.0072)) for s in (1, -1)]
+    alae = [S.Ellipsoid((s * 0.0122 * nw, -0.0990, -0.0352), (0.0070 * nw, 0.0090, 0.0060)) for s in (1, -1)]
     colum = S.Ellipsoid((0, -0.1070, -0.0395), (0.0042, 0.0085, 0.0040))
-    nose = S.Union([bridge, hump, tip, colum] + alae, k=0.006)
-    head = S.Union([head, nose], k=0.007)
+    nose = S.Union([bridge, hump, tip, colum] + alae, k=0.007)
+    head = S.Union([head, nose], k=0.009)
     nostrils = S.Union([S.Ellipsoid((s * 0.0072 * nw, -0.1055, -0.0425), (0.0036 * nw, 0.0056, 0.0021)) for s in (1, -1)])
     if not low:
         head = S.Subtract(head, nostrils, k=0.0015)
@@ -219,8 +219,11 @@ def sideburn_mask(Pt, p):
     """Hair in front of the ear, down to the ear lobe (longer for mutton chops)."""
     x, y, z = np.abs(Pt[:, 0]), Pt[:, 1], Pt[:, 2]
     bottom = -0.012 - 0.045 * p["sideburns"]
-    m = smoothstep(0.052, 0.060, x) * smoothstep(-0.020, -0.012, y) * smoothstep(0.004, -0.002, y)
-    m *= smoothstep(bottom - 0.006, bottom + 0.004, z) * smoothstep(0.045, 0.035, z)
+    # a strip in front of the ear that narrows toward its lower end
+    u = np.clip((z - bottom) / (0.05 - bottom), 0, 1)
+    front = -0.013 - 0.009 * u
+    m = smoothstep(0.050, 0.058, x) * smoothstep(front - 0.003, front + 0.003, y) * smoothstep(0.004, -0.001, y)
+    m *= smoothstep(bottom - 0.004, bottom + 0.006, z)
     if p["sideburns"] > 0:
         # chops widen forward over the cheek
         m = np.maximum(m, smoothstep(0.045, 0.058, x) * smoothstep(-0.050, -0.035, y) * smoothstep(0.012, 0.0, y)
@@ -285,11 +288,11 @@ def moustache_field(Pt, p):
     else:                      # chevron
         top, bot, wid, droop = -0.0465, -0.060, 0.026, 0.5
     b = bot - droop * ax * ax + (0.0 if kind != "handlebar" else 0.35 * np.maximum(ax - 0.022, 0))
-    tt = top - 0.12 * np.maximum(ax - 0.012, 0)
+    # the top follows the nostrils and falls away toward the corners of the mouth
+    tt = top - 7.0 * ax * ax - 0.10 * np.maximum(ax - 0.010, 0)
     h = np.clip((tt - z) / np.maximum(tt - b, 1e-3), 0, 1)
-    prof = np.clip(np.sin(np.pi * h), 0, 1) ** 0.55
-    wid_eff = wid if kind != "handlebar" else wid
-    side = 1 - smoothstep(wid_eff - 0.009, wid_eff, ax)
+    prof = np.clip(np.sin(np.pi * h), 0, 1) ** 0.6 * (0.55 + 0.45 * h)   # fuller at the lower edge
+    side = np.clip(1 - (ax / wid) ** 2, 0, 1) ** 0.4
     m = prof * side * front
     if kind == "horseshoe":
         leg = smoothstep(0.022, 0.026, ax) * (1 - smoothstep(0.031, 0.035, ax)) * smoothstep(-0.105, -0.095, z) * (1 - smoothstep(-0.060, -0.050, z))
@@ -346,7 +349,7 @@ def ear_sdf(p, side=1):
     def f(Pt):
         q = Pt - C
         a, b, c = q @ u, q @ v, q @ n
-        bn = np.clip(b / Hh, -1.5, 1.5)
+        bn = b / Hh
         w = W * (1.0 - 0.32 * np.clip(-bn, 0, 1) ** 1.6) * (1.0 + 0.08 * np.clip(bn, 0, 1))
         e = np.sqrt((a / w) ** 2 + bn ** 2)
         outline = (e - 1.0) * w
@@ -440,38 +443,120 @@ def relax_rows(V, nc, nrows, field, iters=3):
     return V
 
 
-def make(name, p, look, coll=None, res=0.0011, n_az=36, n_el=24):
-    """Build a head in Blender: the sculpt (painted, for baking) and the game
-    meshes (radial grid head + two ears). Returns dict(high, low, pairs)."""
-    from . import bl, polygonize as PG, texture as T, materials as MT
+def skin_detail(field, p):
+    """Fine relief for the texture bake: skin grain, and with age the forehead
+    lines and crow's feet. Too small for geometry, just right for a normal map."""
+    from . import texture as T
+    age = p["age"]
+
+    def f(Pt):
+        x, y, z = Pt[:, 0], Pt[:, 1], Pt[:, 2]
+        grain = (T.value_noise(Pt, 520, seed=61) - 0.5) * 0.00010 + (T.value_noise(Pt, 1400, seed=63) - 0.5) * 0.00004
+        fore = T.smoothstep(0.030, 0.040, z) * (1 - T.smoothstep(0.062, 0.074, z)) * T.smoothstep(-0.07, -0.085, y) * (1 - T.smoothstep(0.035, 0.05, np.abs(x)))
+        lines = np.sin(z * 2 * np.pi / 0.0085 + 3.0 * T.value_noise(Pt, 60, seed=65)) ** 8
+        crow = 0.0
+        for s_ in (1, -1):
+            c = np.array([s_ * 0.047, -0.070, 0.002])
+            q = Pt - c
+            r = np.sqrt(q[:, 0] ** 2 + q[:, 2] ** 2)
+            ang = np.arctan2(q[:, 2], np.abs(q[:, 0]))
+            m = T.smoothstep(0.004, 0.008, r) * (1 - T.smoothstep(0.014, 0.022, r)) * T.smoothstep(0.0, 0.004, q[:, 0] * s_)
+            crow = crow + m * np.sin(ang * 9.0) ** 12
+        wr = age * (0.00030 * fore * lines + 0.00022 * crow)
+        return (grain + wr).astype(np.float32)
+    return S.Displace(field, f, 0.0006)
+
+
+_AZ_W = ([-180, -120, -70, -25, 0, 25, 70, 120, 180], [0.45, 0.6, 1.0, 1.3, 1.4, 1.3, 1.0, 0.6, 0.45])
+_EL_W = ([-84, -60, -35, 0, 25, 45, 90], [0.55, 0.9, 1.2, 1.3, 1.0, 0.45, 0.35])
+
+
+def _cdf(knots, weights, lo, hi):
+    x = np.linspace(lo, hi, 4001)
+    w = np.interp(x, knots, weights)
+    c = np.concatenate([[0], np.cumsum(0.5 * (w[1:] + w[:-1]) * np.diff(x))])
+    return x, c / c[-1]
+
+
+def head_uv(ob, face_scale=2.2):
+    """Unwrap a head as two islands - the face, and the scalp with the neck -
+    split along the hairline, the ears and under the jaw, with the scalp also
+    cut down the back of the head. Angle-based flattening never folds (a
+    radial projection does, around the lids, nose and jaw), and the face island
+    is then enlarged so it gets most of the texels."""
+    import bmesh
+    from . import bl, bake as B
+    me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    cls = {}
+    side = {}
+    for f in bm.faces:
+        c = np.array(f.calc_center_median()) - HEAD_ORIGIN
+        q = c - np.array([0, 0.005, 0.0])
+        az = math.degrees(math.atan2(abs(q[0]), -q[1]))
+        el = math.degrees(math.atan2(q[2], math.hypot(q[0], q[1])))
+        cls[f.index] = 1 if (az < 68 and -56 < el < 38) else 0
+        side[f.index] = c[0] > 0
+        f.select = True
+    back = lambda f: (np.array(f.calc_center_median()) - HEAD_ORIGIN)[1] > -0.035
+    for e in bm.edges:
+        lf = e.link_faces
+        e.seam = False
+        if len(lf) == 2:
+            a, b = lf
+            if cls[a.index] != cls[b.index]:
+                e.seam = True
+            elif cls[a.index] == 0 and side[a.index] != side[b.index] and back(a) and back(b):
+                e.seam = True
+    bm.to_mesh(me)
+    bm.free()
+    if not me.uv_layers:
+        me.uv_layers.new(name="UVMap")
+    B._edit([ob], lambda: bpy_unwrap())
+    uv = bl.get_uv(ob)
+    fl = np.zeros(len(me.loops), bool)
+    for p in me.polygons:
+        if cls[p.index]:
+            fl[p.loop_start:p.loop_start + p.loop_total] = True
+    c = uv[fl].mean(0)
+    uv[fl] = (uv[fl] - c) * face_scale + c
+    bl.set_uv(ob, uv)
+
+
+def bpy_unwrap():
+    import bpy
+    bpy.ops.uv.unwrap(method="ANGLE_BASED", fill_holes=True, margin=0.02)
+
+
+def make(name, p, look, coll=None, tris=1900):
+    """Build a head's game meshes (radial-grid head + two decimated ears) and
+    return bake jobs: (mesh, field, paint, local->world offset, uv weight)."""
+    from . import bl, polygonize as PG, texture as T
     field = head_sdf(p)
     if look.get("scar"):
         base = field
         field = S.Displace(base, lambda Pt: -T.scar_displacement(Pt, look).astype(np.float32), 0.001)
-    V, Q = PG.mesh_sdf(field, (-0.11, -0.15, -0.215), (0.11, 0.13, 0.14), res, blur=1.2)
-    col, rough = T.head_paint(V, p, look)
-    hi = bl.mesh_from_arrays(name + ".hi", V + HEAD_ORIGIN, Q, coll)
-    bl.set_color_attr(hi, "col", np.concatenate([col, np.ones((len(col), 1), np.float32)], 1))
-    bl.set_attr(hi, "rough", rough)
-    skin_mat = MT.source_material(name + ".src", "skin")
-    hi.data.materials.append(skin_mat)
-    lowf = head_sdf(p, low=True)
-    Vl, faces, uvs = low_head_grid(lowf, n_az, n_el)
-    Vl = relax_rows(Vl, n_az, len(Vl) // n_az, lowf, iters=2)
-    lo = bl.mesh_from_arrays(name, Vl + HEAD_ORIGIN, faces, coll)
-    bl.set_uv(lo, np.array([uv for f in uvs for uv in f], np.float32))
-    highs, lows, pairs = [hi], [lo], [(lo, [hi])]
+    detailed = skin_detail(field, p)
+    # game mesh: the sculpt decimated (it keeps lids, nostrils, lips and the jaw
+    # line where they matter), with UVs from the face-weighted radial map
+    Vd, Qd = PG.mesh_sdf(field, (-0.11, -0.15, -0.205), (0.11, 0.13, 0.14), 0.0016, blur=1.2)
+    lo = bl.mesh_from_arrays(name, Vd + HEAD_ORIGIN, Qd, coll)
+    bl.decimate(lo, tris, symmetry=True)
+    head_uv(lo)
+
+    def paint(Pt):
+        c, r = T.head_paint(Pt, p, look)
+        return c, r, np.zeros(len(Pt))
+
+    def paint_ear(Pt):
+        c, r = T.head_paint(Pt, p, look, is_ear=True)
+        return c, r, np.zeros(len(Pt))
+    jobs = [dict(ob=lo, field=detailed, paint=paint, origin=HEAD_ORIGIN, weight=2.6, ao_field=field)]
     for side, tag in ((1, "L"), (-1, "R")):
         e = ear_sdf(p, side)
-        Ve, Qe = PG.mesh_sdf(e, e.lo, e.hi, res * 0.7, blur=1.0)
-        ce, re = T.head_paint(Ve, p, look)
-        ehi = bl.mesh_from_arrays(f"{name}.ear.{tag}.hi", Ve + HEAD_ORIGIN, Qe, coll)
-        bl.set_color_attr(ehi, "col", np.concatenate([ce, np.ones((len(ce), 1), np.float32)], 1))
-        bl.set_attr(ehi, "rough", re)
-        ehi.data.materials.append(skin_mat)
+        Ve, Qe = PG.mesh_sdf(e, e.lo, e.hi, 0.0008, blur=1.0)
         elo = bl.mesh_from_arrays(f"{name}.ear.{tag}", Ve + HEAD_ORIGIN, Qe, coll)
         bl.decimate(elo, 130, symmetry=False)
-        highs.append(ehi)
-        lows.append(elo)
-        pairs.append((elo, [ehi]))
-    return dict(high=highs, low=lows, pairs=pairs)
+        jobs.append(dict(ob=elo, field=e, paint=paint_ear, origin=HEAD_ORIGIN, weight=1.6, ao_field=e, smart_uv=True))
+    return jobs

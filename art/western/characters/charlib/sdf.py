@@ -59,9 +59,32 @@ class Node:
     lo = None
     hi = None
     label = 0
+    ctx = 0.0          # largest blend radius of any operation enclosing this node
 
     def __call__(self, P):
+        if not getattr(self, "_prepared", False):
+            self.prepare(0.0)
         return self.eval(np.asarray(P, dtype=F))
+
+    def prepare(self, ctx):
+        """Tell every node how far an enclosing smooth operation reaches, so a
+        union only culls children that could not have blended with anything.
+        (Culling with only the node's own radius leaves hairline steps in the
+        field exactly on box faces - invisible in a mesh, glaring in a normal map.)"""
+        self.ctx = max(self.ctx, ctx)
+        self._prepared = True
+        for c in self._kids():
+            c.prepare(self.ctx + self._reach())
+
+    def _kids(self):
+        return [getattr(self, a) for a in ("a", "b", "child") if isinstance(getattr(self, a, None), Node)] + \
+            list(getattr(self, "children", []))
+
+    def _reach(self):
+        return float(getattr(self, "k", 0.0))
+
+    def _pad(self):
+        return 2.0 * max(float(getattr(self, "k", 0.0)), self.ctx) + 0.003
 
     def eval(self, P):
         raise NotImplementedError
@@ -108,13 +131,16 @@ class Union(Node):
     def _eval(self, P, want_label):
         d = np.full(len(P), 1e3, F)
         lab = np.zeros(len(P), np.int16) if want_label else None
-        pad = self.k + 0.002
+        # a culled child must be one that could not have blended with anything:
+        # on a fillet the running distance is itself up to ~k, and enclosing
+        # operations blend over their own radius (ctx), hence ~2 max(k, ctx)
+        pad = self._pad()
         for c in self.children:
             m = _inside(P, c.lo - pad, c.hi + pad)
             idx = np.nonzero(m)[0]
             out = np.nonzero(~m)[0]
             if len(out):
-                d[out] = np.minimum(d[out], c.bbox_dist(P[out]) + pad * 0.5)
+                d[out] = np.minimum(d[out], c.bbox_dist(P[out]))
             if len(idx) == 0:
                 continue
             if want_label:
@@ -143,7 +169,7 @@ class Subtract(Node):
         self.label = a.label
 
     def _b(self, P):
-        pad = self.k + 0.002
+        pad = self._pad()
         m = _inside(P, self.b.lo - pad, self.b.hi + pad)
         db = np.full(len(P), 1e3, F)
         idx = np.nonzero(m)[0]
@@ -177,7 +203,11 @@ class Intersect(Node):
 class Displace(Node):
     """Adds a small analytic displacement (wrinkles, folds, seams). `amp` bounds |f|."""
 
+    def _reach(self):
+        return self.amp
+
     def __init__(self, child, fn, amp):
+        self.amp = float(amp)
         self.child, self.fn = child, fn
         self.lo, self.hi = child.lo - amp, child.hi + amp
         self.label = child.label
@@ -193,6 +223,9 @@ class Displace(Node):
 class Shell(Node):
     """Hollow version of a shape: |d| - t (for brims, cloth panels)."""
 
+    def _reach(self):
+        return self.t
+
     def __init__(self, child, t):
         self.child, self.t = child, float(t)
         self.lo, self.hi = child.lo - t, child.hi + t
@@ -203,6 +236,9 @@ class Shell(Node):
 
 
 class Offset(Node):
+    def _reach(self):
+        return abs(self.r)
+
     def __init__(self, child, r):
         self.child, self.r = child, float(r)
         self.lo, self.hi = child.lo - max(r, 0), child.hi + max(r, 0)

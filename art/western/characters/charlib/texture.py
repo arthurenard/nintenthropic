@@ -90,7 +90,7 @@ IRIS = {
 }
 
 
-def head_paint(V, p, look):
+def head_paint(V, p, look, is_ear=False):
     """Colour (linear RGB) and roughness for every high-poly head vertex.
 
     V is in head-local coordinates. `look` holds skin, hair, iris names plus
@@ -111,7 +111,7 @@ def head_paint(V, p, look):
     # flush on cheeks, nose, ears and lips; sun on the nose ridge and forehead
     cheek = np.exp(-(((ax - 0.040) / 0.018) ** 2 + ((y + 0.072) / 0.02) ** 2 + ((z + 0.020) / 0.02) ** 2))
     nose = np.exp(-((ax / 0.013) ** 2 + ((z + 0.020) / 0.016) ** 2)) * smoothstep(-0.098, -0.112, y)
-    ears = smoothstep(0.066, 0.075, ax) * smoothstep(-0.05, 0.03, z) * (1 - smoothstep(0.03, 0.05, z)) * smoothstep(-0.01, 0.01, y)
+    ears = np.full(n, 0.6) if is_ear else np.zeros(n)   # ears are thin and flush red against the light
     flush = np.clip(0.55 * cheek + 0.55 * nose + 0.5 * ears, 0, 1) * (0.6 + 0.6 * m2) * look.get("flush", 1.0)
     col = col * (1 - 0.35 * flush[:, None]) + red * (0.35 * flush[:, None])
     # a paler forehead where the hat brim shades it every day
@@ -148,7 +148,7 @@ def head_paint(V, p, look):
     col = col * (1 - 0.42 * shade[:, None]) + stub_c * 0.42 * shade[:, None]
     # hair on the scalp: strands flowing back from the hairline
     ht = H.hair_thickness(V, p)
-    hmask = smoothstep(0.0003, 0.0022, ht)
+    hmask = np.maximum(smoothstep(0.0003, 0.0022, ht), 0.9 * H.sideburn_mask(V, p) * (0.6 + 0.4 * value_noise(V, 1800, seed=27)))
     az = np.degrees(np.arctan2(x, -(y - 0.005)))
     strand = value_noise(np.stack([az * 0.25, z * 12, y * 4], 1), 1.0, seed=21)
     strand2 = value_noise(np.stack([az * 1.2, z * 40, y * 10], 1), 1.0, seed=23)
@@ -173,7 +173,7 @@ def head_paint(V, p, look):
     for e in (eL, eR):
         q = V - e
         d = np.linalg.norm(q, axis=1)
-        on = smoothstep(0.0137, 0.0126, d) * smoothstep(-0.002, -0.006, q[:, 1])
+        on = smoothstep(0.0129, 0.01235, d) * smoothstep(-0.002, -0.006, q[:, 1])
         fwd = np.array([0.08 * np.sign(e[0]), -1.0, 0.0])
         fwd /= np.linalg.norm(fwd)
         ang = np.degrees(np.arccos(np.clip((q @ fwd) / np.maximum(d, 1e-6), -1, 1)))
