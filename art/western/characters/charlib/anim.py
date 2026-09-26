@@ -277,7 +277,14 @@ def solve(rig, pose):
                 end_rot = E(*pose[f"rot.foot.{side}"])
             else:
                 end_rot = Matrix.Identity(3)      # foot keeps its rest (flat) orientation
-            two_bone_ik(rig, R, G, pos, f"thigh.{side}", f"shin.{side}", f"foot.{side}", tgt, pole, end_rot)
+            w = float(pose.get(f"ikw.foot.{side}", (1.0,))[0])
+            if w <= 1e-4:
+                continue
+            Rik = dict(R)
+            two_bone_ik(rig, Rik, G, pos, f"thigh.{side}", f"shin.{side}", f"foot.{side}", tgt, pole, end_rot)
+            for b in (f"thigh.{side}", f"shin.{side}", f"foot.{side}"):
+                qa = R.get(b, Matrix.Identity(3)).to_quaternion()
+                R[b] = qa.slerp(Rik[b].to_quaternion(), min(w, 1.0)).to_matrix()
             G, pos = rig.fk(R, off)
     for side in ("L", "R"):
         w = float(pose.get(f"ikw.hand.{side}", (0,))[0])
