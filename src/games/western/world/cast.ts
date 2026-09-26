@@ -2,6 +2,7 @@ import { Matrix4, Mesh, Object3D, Quaternion, SkinnedMesh, Vector3, type Materia
 import type { Bandit } from "../rules/bandit";
 import type { HitPart } from "../rules/types";
 import type { Townsperson } from "../rules/townsfolk";
+import type { FallPath } from "./coverCheck";
 import type { Effects } from "./effects";
 import type { Rig, RigPool } from "./character";
 import type { TownQueries } from "./queries";
@@ -82,6 +83,8 @@ export class Cast {
   private time = 0;
   private frame = 0;
   golden = false;
+  /** For each cover up high, which way a man shot there goes over (set at load). */
+  falls: ReadonlyMap<string, FallPath> = new Map();
 
   constructor(
     private readonly pools: { bandit: RigPool; boss: RigPool; townsfolk: RigPool },
@@ -387,16 +390,31 @@ export class Cast {
     this.sound.at(part === "head" ? "hit_headshot" : part === "blast" ? "body_fall" : "hit_flesh", at ?? b.pos, 1);
     this.sound.at("bandit_death", b.pos, 0.9, 0.9 + this.random() * 0.25, 0.05);
     if (choice.fall) {
-      // Out of the window (or off the roof), toward the street.
+      // Out of the window (or off the roof), over the nearest drop toward
+      // the street (worked out at load), clear of whatever floor he stood on
+      // - over a gallery's rail, not through its boards - and a little
+      // further, as a man thrown by a shot.
       const p0 = b.pos;
-      tmp.set(this.eye.x - p0.x, 0, this.eye.z - p0.z).normalize();
-      const push = b.cover.kind === "window" ? 2.6 : 1.8;
+      const path = this.falls.get(b.cover.id);
+      if (path) tmp.copy(path.dir);
+      else tmp.set(this.eye.x - p0.x, 0, this.eye.z - p0.z).normalize();
+      const edge = path ? path.ledge : 0.5;
+      // A rail or a roof's edge ahead of him: up and over it first. He is
+      // back down to the floor's height after 2 vy / g, and must be past
+      // its edge by then.
+      const vy = edge > 0.2 ? 2.4 : 1.2;
+      const above = (2 * vy) / 9.81;
+      let push = Math.max(1.0, edge + 0.7);
+      let landY = this.queries.groundAt(p0.x + tmp.x * push, p0.z + tmp.z * push, p0.y - 0.35);
+      let T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * Math.max(0.5, p0.y - landY))) / 9.81;
+      const fastEnough = ((edge + 0.35) / above) * T;
+      if (push < fastEnough) {
+        push = Math.min(6, fastEnough);
+        landY = this.queries.groundAt(p0.x + tmp.x * push, p0.z + tmp.z * push, p0.y - 0.35);
+        T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * Math.max(0.5, p0.y - landY))) / 9.81;
+      }
       const landX = p0.x + tmp.x * push;
       const landZ = p0.z + tmp.z * push;
-      const landY = this.queries.groundAt(landX, landZ, p0.y - 0.35);
-      const h = Math.max(0.5, p0.y - landY);
-      const vy = 1.2;
-      const T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * h)) / 9.81;
       v.falling = true;
       v.fallT = 0;
       v.fallDur = T;

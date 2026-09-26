@@ -237,6 +237,73 @@ export function readySpots(covers: readonly Cover[], queries: TownQueries, eye: 
   return covers.map((c) => ({ ...c, ready: readySpot(c, queries, eye) }));
 }
 
+export interface FallPath {
+  /** Which way he goes over (level, unit). */
+  dir: Vector3;
+  /** How much floor lies that way before the drop, metres. */
+  ledge: number;
+}
+
+/**
+ * For every cover up high, which way a man shot there goes over and how far
+ * that is: toward the nearest drop that faces the street (over a gallery's
+ * rail, off a roof's gutter, out of a loft), the player's way breaking ties.
+ * Worked out once at load: a death must not stop to cast rays.
+ */
+export function fallPaths(covers: readonly Cover[], queries: TownQueries, eye: Vector3): Map<string, FallPath> {
+  const out = new Map<string, FallPath>();
+  const d = new Vector3();
+  for (const c of covers) {
+    if (c.level < 1) continue;
+    const p = c.exposed;
+    const tx = eye.x - p.x;
+    const tz = eye.z - p.z;
+    const tl = Math.hypot(tx, tz) || 1;
+    let best: FallPath | null = null;
+    let bestScore = Infinity;
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2;
+      d.set(Math.cos(a), 0, Math.sin(a));
+      const facing = (d.x * tx + d.z * tz) / tl;
+      if (facing < 0.2) continue;
+      // Not into a wall: over a rail, yes, so the way is looked at above one;
+      // and never back in through the window he came out of.
+      from.set(p.x, p.y + 1.6, p.z);
+      if (queries.cast(from, d, 1.2, hit)) continue;
+      const r = c.ready;
+      if (c.kind === "window" && r) {
+        const ox = p.x - r.x;
+        const oz = p.z - r.z;
+        const ol = Math.hypot(ox, oz);
+        if (ol > 0.1 && (d.x * ox + d.z * oz) / ol < 0.3) continue;
+      }
+      // The nearest drop; of two as near, the one more the player's way. No
+      // need to look further than would beat the best so far.
+      const ledge = floorEdge(queries, p, d, Math.min(4, bestScore + 0.3));
+      const score = ledge - facing * 0.3;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { dir: d.clone(), ledge };
+      }
+    }
+    if (best) out.set(c.id, best);
+  }
+  return out;
+}
+
+/**
+ * How far from `p` (his feet), heading `dir` (level, unit), the floor he
+ * stands on runs out: the edge of a balcony, a gallery, a roof; `far` if it
+ * goes on further than that.
+ */
+export function floorEdge(queries: TownQueries, p: P3, dir: Vector3, far = 4): number {
+  for (let d = 0; d <= far; d += 0.1) {
+    const y = queries.groundAt(p.x + dir.x * d, p.z + dir.z * d, p.y + 0.5);
+    if (y < p.y - 0.5) return d;
+  }
+  return far;
+}
+
 /**
  * From `from` (out of sight) toward `to`, the last place a standing man is
  * still wholly unseen: he walks that far unseen (out through a doorway and

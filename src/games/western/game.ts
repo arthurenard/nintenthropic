@@ -23,7 +23,7 @@ import { Ambient } from "./world/ambient";
 import { loadAssets, type HighNoonAssets } from "./world/assets";
 import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
-import { checkCovers, COVER_SHIFTS, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
+import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
 import { RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
 import { Effects } from "./world/effects";
@@ -222,7 +222,14 @@ export class HighNoon implements Game, MatchListener {
     // which he comes out without gliding through a wall.
     const clear = unblockCovers(covers.kept, this.queries, town.eye);
     if (clear.moved.length) console.info(`High Noon: covers stepped clear of a post: ${clear.moved.join(", ")}.`);
-    town.covers = readySpots(clear.covers, this.queries, town.eye);
+    const ready = readySpots(clear.covers, this.queries, town.eye);
+    // Which way a man shot up high goes over, and whether there is room to
+    // fall at all (on a deep balcony he goes down on its boards instead).
+    const falls = fallPaths(ready, this.queries, town.eye);
+    town.covers = ready.map((c) => {
+      const f = falls.get(c.id);
+      return f ? { ...c, ledge: f.ledge } : c;
+    });
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
 
@@ -244,6 +251,7 @@ export class HighNoon implements Game, MatchListener {
       popup: (at, text, tone) => this.popupAt(at, text, tone),
       bellSwing: () => this.secretsWorld.bellHit(1),
     });
+    this.cast.falls = falls;
     this.ambient = new Ambient(town, parent, this.pools.chicken, this.effects, this.sound, this.visualRandom, ctx.quality);
     this.bottles = new BottleStage(town, parent, this.camera.camera, this.effects, this.sound, this.queries);
     this.calibrationProxy.target = this.bottles;

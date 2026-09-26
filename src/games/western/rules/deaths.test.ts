@@ -31,5 +31,14 @@ describe("chooseDeath", () => {
 
   it("drops men from windows, roofs and the tower into the street", () => {
     for (const kind of ["window", "roof", "tower"] as const) expect(chooseDeath(cover(kind, "rise", 1), "body", "aiming", r).fall).toBe(true);
+    expect(chooseDeath({ ...cover("roof", "rise", 1), ledge: 0.3 }, "body", "aiming", r).fall).toBe(true);
+  });
+
+  it("lets a man on a deep balcony go down on it, not fly off it", () => {
+    const balcony = { ...cover("window", "lean_right", 1), ledge: 2 };
+    for (let i = 0; i < 10; i++) {
+      // Forward onto the boards: the wall is at his back.
+      expect(chooseDeath(balcony, i % 2 ? "head" : "body", "aiming", r)).toEqual({ clip: "death_forward", fall: false });
+    }
   });
 });

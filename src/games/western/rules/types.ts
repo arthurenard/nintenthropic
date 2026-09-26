@@ -25,6 +25,13 @@ export interface Cover {
    * by the game from the town; without it, `hidden`.
    */
   ready?: V3;
+  /**
+   * For a cover up high: how much floor lies in front of him, toward the
+   * street, before the drop (a gallery's rail is right there; the hotel's
+   * balcony runs two metres out). A man shot where it is deep goes down on
+   * it rather than off it. Measured by the game; without it, none.
+   */
+  ledge?: number;
   /** Metres from the player's eye (horizontal). */
   distance: number;
   /** −1 left of the street, +1 right, 0 across the far end. */
