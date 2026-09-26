@@ -1,0 +1,4 @@
+# Copied from node_modules/@mediapipe/tasks-vision/wasm by vite.config.ts at dev
+# and build time, so the served copy always matches the installed package.
+*
+!.gitignore

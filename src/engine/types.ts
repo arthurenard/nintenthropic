@@ -66,6 +66,8 @@ export interface HudSink {
   banner(title: string, subtitle?: string): void;
   /** Rounds left and the cylinder's size, for the revolver HUD. */
   ammo(left: number, capacity: number, reloading: boolean): void;
+  /** The cylinder's finish: gold for the Golden Revolver. Optional; the page also reads Settings.unlocks. */
+  revolverFinish?(finish: "steel" | "gold"): void;
   /** Damage taken: the direction it came from in radians (0 = straight ahead, + = right), and how hurt the player now is, 0..1. */
   damage(direction: number, hurt: number): void;
   /** How hurt the player is as it recovers, 0..1 (drives the screen's red edge). */
@@ -100,6 +102,12 @@ export interface AudioBus {
   /** Named global treatments, 0..1: "hurt" muffles and adds a heartbeat. */
   setFilter(name: "hurt" | "slowmo", amount: number): void;
   readonly muted: boolean;
+  /**
+   * The street the listener stands in, in metres (to the facades left and
+   * right, the building behind, the far end), for the echoes. Optional: a
+   * game passes what it knows; the sound engine keeps its defaults for the rest.
+   */
+  setSpace?(space: { left?: number; right?: number; behind?: number; depth?: number; facade?: number; back?: number; far?: number }): void;
 }
 
 export interface LoadedAsset {
@@ -139,6 +147,8 @@ export interface GameContext {
   random: () => number;
   /** The player's local time, for time-of-day secrets. */
   clock: () => Date;
+  /** How the player aims, so hints can say it in their terms ("Point off the screen to reload" / "Right-click or press R to reload"). Optional; absent means the hand. */
+  input?: InputKind;
 }
 
 /** A target in the aim check, in viewport fractions. */
@@ -152,6 +162,12 @@ export interface CalibrationTarget {
 
 /** The game's own aim-check targets: bottles on the fence in High Noon. */
 export interface CalibrationStage {
+  /**
+   * An aim check is starting: stand every target up (again, for Play Again
+   * on the same game). Optional; the platform calls it, when present, before
+   * it first asks for targets().
+   */
+  begin?(): void;
   /** Where the targets are in the current view. */
   targets(): CalibrationTarget[];
   /** Show one target as the one to shoot now. */
@@ -170,7 +186,13 @@ export interface Game {
   load(ctx: GameContext, onProgress: (fraction: number) => void): Promise<void>;
   /** Begin play (after the aim check). */
   start(): void;
-  /** Advance the world. `dt` in seconds (clamped by the host), `now` in ms. */
+  /**
+   * Advance the world. `dt` in seconds (clamped by the host), `now` in ms.
+   * Called every animation frame from the end of load() on, so the world is
+   * alive behind the aim check. Until start() the shots belong to the check:
+   * the platform judges them (and tells the stage hit or miss), and a game
+   * may answer `aim.fired` only with the gun's sound and smoke, never score.
+   */
   update(dt: number, now: number, aim: Aim): void;
   render(): void;
   resize(width: number, height: number, pixelRatio: number): void;
@@ -183,6 +205,8 @@ export interface GameEntry {
   id: string;
   title: string;
   blurb: string;
+  /** Two or three sentences for the featured game on the landing. Optional; the blurb stands in. */
+  about?: string;
   /** A poster image under public/. */
   poster: string;
   create(): Promise<Game>;

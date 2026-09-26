@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- A bare page for the tracker alone, served by the dev server only: loads the
+     hand landmarker from the site's own files and reads a still picture drawn
+     the size of a webcam frame, so a change to MediaPipe or the model can be
+     checked - and timed - without the whole app. ?delegate=CPU to compare. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The site's files are resolved from its root, as they are for index.html. -->
+    <base href="/" />
+    <title>Tracker smoke test</title>
+  </head>
+  <body>
+    <canvas id="frame" width="480" height="720"></canvas>
+    <script type="module">
+      import { loadHandLandmarker } from "/src/tracking/landmarker.ts";
+      const report = (window.smoke = { progress: 0, error: null, result: null });
+      try {
+        const prefer = new URLSearchParams(location.search).get("delegate") === "CPU" ? "CPU" : "GPU";
+        const image = new Image();
+        image.src = "/tests/data/thumbs_down.jpg";
+        await image.decode();
+        const canvas = document.getElementById("frame");
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#223";
+        context.fillRect(0, 0, 480, 720);
+        context.drawImage(image, 0, 0, 480, 720);
+        const began = performance.now();
+        const { landmarker, delegate } = await loadHandLandmarker(
+          { wasm: () => report.progress++, model: () => report.progress++ },
+          prefer,
+        );
+        report.loadMs = performance.now() - began;
+        report.delegate = delegate;
+        const times = [];
+        let result;
+        for (let i = 0; i < 60; i++) {
+          // A new frame each time, as a camera gives: nudge one pixel.
+          context.fillStyle = i % 2 ? "#223" : "#224";
+          context.fillRect(0, 0, 1, 1);
+          const t = performance.now();
+          result = landmarker.detectForVideo(canvas, 1000 + i * 33);
+          times.push(performance.now() - t);
+        }
+        report.times = times;
+        report.result = {
+          hands: result.landmarks.length,
+          handedness: result.handedness[0]?.[0]?.categoryName,
+          tip: result.landmarks[0]?.[8],
+        };
+      } catch (error) {
+        report.error = String(error?.stack || error);
+      }
+      report.done = true;
+    </script>
+  </body>
+</html>
