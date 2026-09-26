@@ -85,10 +85,15 @@ def hand_sdf(pose="relaxed", scale=1.0, female=0.0, forearm_len=0.19, sleeve="ro
     hypo = S.Ellipsoid((-0.007, 0.046, -0.027), (0.010, 0.032, 0.010))
     heel = S.Ellipsoid((-0.004, 0.012, -0.003), (0.015, 0.018, 0.030))
     parts += [palm, thenar, hypo, heel]
-    # forearm: flattened, widening toward the elbow
+    # forearm: flattened, widening toward the elbow. Under a sleeve that runs
+    # to the wrist only its end shows, so keep it short and slim there: the
+    # full forearm is wider than a cuff and pokes through the cloth
+    top = 1.0
+    if sleeve == "full":
+        forearm_len, top = min(forearm_len, 0.14), 0.82
     fa = S.Tube([(0, -forearm_len, 0), (0, -0.12, 0), (0, -0.05, 0), (0, 0.0, 0), (0, 0.012, 0)],
-                [0.037 * fs, 0.035 * fs, 0.027 * fs, 0.020 * fs, 0.019 * fs],
-                [0.047 * fs, 0.045 * fs, 0.037 * fs, 0.030 * fs, 0.031 * fs], side=(1, 0, 0))
+                [0.037 * fs * top, 0.035 * fs * top, 0.027 * fs, 0.020 * fs, 0.019 * fs],
+                [0.047 * fs * top, 0.045 * fs * top, 0.037 * fs, 0.030 * fs, 0.031 * fs], side=(1, 0, 0))
     parts.append(fa)
     # wrist bones: the ulnar head's bump
     parts.append(S.Sphere((0.006, -0.012, -0.024), 0.0075))

@@ -231,7 +231,8 @@ def base_body(spec, coll=None, log=print):
     # hands
     tone = look.get("skin", "tanned")
     for side, pose in (("R", spec.get("pose_R", "grip")), ("L", spec.get("pose_L", "relaxed"))):
-        hf, nails = HN.hand_sdf(pose, female=bp["female"])
+        full = outfit == "dress" or bp.get("sleeves") == "full"
+        hf, nails = HN.hand_sdf(pose, female=bp["female"], sleeve="full" if full else "rolled")
         M, o = HN.world_xform(side)
         ob = decimated(f"hand.{side}", hf, (-0.07, -0.21, -0.07), (0.06, 0.20, 0.08), 0.0009, spec.get("hand_tris", 520), coll, M=M, o=o)
 

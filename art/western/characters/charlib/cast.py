@@ -178,6 +178,11 @@ def build_townsfolk(path, size=1024):
     # the undertaker (and, hatless, the preacher)
     LOG("townsfolk: the undertaker")
     jobs = C.base_body(UNDERTAKER, None, log=LOG)
+    # a black waistcoat under the frock coat: without it the open front shows
+    # a big white shirt bib, which reads as a hole at a distance
+    waist = PL.vest_job(UNDERTAKER["body"], (0.03, 0.028, 0.028), "waistcoat", None, seed=12)
+    waist["ao_group"] = "body"
+    jobs.append(waist)
     coat = PL.coat_job(UNDERTAKER["body"], (0.035, 0.032, 0.032), "frockcoat", hem_z=0.55, flare=0.6, seed=11, kind="wool")
     coat["ao_group"] = "body"
     jobs.append(coat)

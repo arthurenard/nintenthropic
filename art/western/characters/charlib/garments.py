@@ -386,11 +386,16 @@ def dress_field():
     for tag in ("L", "R"):
         sh, el, wr = arm_path(tag)
         s = 1 if tag == "L" else -1
-        parts.append(S.Ellipsoid(sh + np.array([s * 0.004, 0.0, 0.014]), (0.070, 0.068, 0.070)))
-        parts.append(S.RoundCone(sh - (el - sh) * 0.08, el, 0.062, 0.046))
-        parts.append(S.RoundCone(el, wr - (wr - el) * 0.04, 0.046, 0.036))
+        # a set-in sleeve with a slight cap: a puff standing above the
+        # shoulder line cannot be followed by the armhole ring and leaves a
+        # step on the shoulder
+        parts.append(S.Ellipsoid(sh, (0.058, 0.057, 0.052)))
+        parts.append(S.RoundCone(sh - (el - sh) * 0.08, el, 0.060, 0.047))
+        # the forearm and cuff stay wide enough to swallow the hand mesh's
+        # (elliptical, 0.042 deep) forearm, which otherwise pokes through
+        parts.append(S.RoundCone(el, wr - (wr - el) * 0.04, 0.047, 0.043))
         d = (wr - el) / np.linalg.norm(wr - el)
-        parts.append(S.Cylinder(wr - d * 0.04, 0.040, 0.02, _frame_z(d), rad=0.005))
+        parts.append(S.Cylinder(wr - d * 0.04, 0.046, 0.02, _frame_z(d), rad=0.005))
     bodice = S.Union(parts, k=0.03)
     zs = [t[0] for t in DRESS_SKIRT][::-1]
     prof = _table_profile(DRESS_SKIRT)
@@ -414,8 +419,8 @@ def build_dress(field, M=28, arm_n=12):
     skirt_z = [0.02, 0.14, 0.30, 0.46, 0.62, 0.78, 0.92, 1.02]
     top_z = [1.080, 1.140, 1.200, 1.255, 1.300, 1.350, 1.405, 1.462, 1.500, 1.530, 1.552]
     zs = skirt_z + top_z
-    arm_rings = [(0.045, 0.074), (0.100, 0.070), (0.160, 0.060), (0.215, 0.052), (0.262, 0.049),
-                 (0.292, 0.048), (0.318, 0.047), (0.36, 0.045), (0.42, 0.043), (0.48, 0.040), (0.525, 0.040)]
+    arm_rings = [(0.045, 0.067), (0.100, 0.064), (0.160, 0.058), (0.215, 0.052), (0.262, 0.049),
+                 (0.292, 0.048), (0.318, 0.047), (0.36, 0.047), (0.42, 0.046), (0.48, 0.046), (0.525, 0.046)]
     armpit = len(skirt_z) + 5
     out = build_torso_with_arms(rm, None, M, arm_n, zs, arm_rings, "full", "", inflate=0.0,
                                 profile=dress_profile(), armpit=armpit, root_r=0.084)
