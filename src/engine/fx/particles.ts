@@ -28,12 +28,14 @@ export interface ParticleStyle {
   gravity: number;
   /** Fraction of velocity lost per second. */
   drag: number;
-  /** Atlas cell: 0 dot, 1 smoke, 2 star, 3 streak. */
+  /** Atlas cell: 0 dot, 1 smoke, 2 star, 3 streak, 4 flare line. */
   frame: number;
   /** Radians per second, random sign. */
   spin: number;
   /** Stop at this height (droplets and grit land and fade). */
   floor?: number;
+  /** Start at this angle (radians; 0 lays a streak level) instead of a random one. */
+  angle?: number;
 }
 
 const VERTEX = /* glsl */ `
@@ -113,7 +115,11 @@ export class ParticleSystem {
   private readonly vectors: Float32Array[];
   private readonly scalars: Float32Array[];
 
-  constructor(capacity: number, atlas: Texture, additive: boolean) {
+  /**
+   * `onTop` draws over everything, untested against depth: for what happens
+   * in the lens rather than in the world (a flare), which no wall can cut.
+   */
+  constructor(capacity: number, atlas: Texture, additive: boolean, onTop = false) {
     this.capacity = capacity;
     this.pos = new Float32Array(capacity * 3);
     this.vel = new Float32Array(capacity * 3);
@@ -151,11 +157,12 @@ export class ParticleSystem {
       depthWrite: false,
       blending: additive ? AdditiveBlending : NormalBlending,
       fog: true,
+      depthTest: !onTop,
     });
     this.material.uniforms["uMap"]!.value = atlas;
     this.points = new Points(g, this.material);
     this.points.frustumCulled = false;
-    this.points.renderOrder = additive ? 3 : 2;
+    this.points.renderOrder = onTop ? 4 : additive ? 3 : 2;
   }
 
   setRandom(random: () => number): void {
@@ -203,7 +210,8 @@ export class ParticleSystem {
     this.gravity[i] = s.gravity;
     this.drag[i] = s.drag;
     this.floor[i] = s.floor ?? -1e9;
-    this.params[i3 + 1] = r() * Math.PI * 2;
+    const turn = r() * Math.PI * 2;
+    this.params[i3 + 1] = s.angle ?? turn;
     this.params[i3 + 2] = s.frame;
   }
 

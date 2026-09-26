@@ -238,12 +238,30 @@ export class Cast {
     if (v.lean === 0 || b.role === "duelist") v.rig.play("aim", 0.18, true, 1, false);
   }
 
+  /**
+   * The telegraph, 0.4 s before he fires: the sun flashes off the top of his
+   * barrel (a streak the same size on screen at any range), and his hammer
+   * clicks back, heard from his side of the street even when far off.
+   */
   glint(b: Bandit): void {
     const v = this.view(b);
-    if (!v?.rig.socket) return;
-    v.rig.socket.getWorldPosition(tmp);
+    const socket = v?.rig.socket;
+    if (!socket) return;
+    socket.updateWorldMatrix(true, false);
+    socket.getWorldPosition(tmp);
+    // Along the barrel (the socket's −Z) to the cylinder's top strap, a rifle
+    // further out to its receiver, and a hand toward the eye so the flash
+    // is not buried in the fist that holds it.
+    tmp2.set(0, 0, -1).transformDirection(socket.matrixWorld);
+    tmp.addScaledVector(tmp2, b.role === "rifleman" ? 0.3 : 0.1);
+    tmp.y += 0.04;
+    tmp2.copy(this.eye).sub(tmp).normalize();
+    tmp.addScaledVector(tmp2, 0.25);
     const d = tmp.distanceTo(this.eye);
-    this.fx.glint(tmp, Math.max(0.12, d * 0.028));
+    this.fx.sunGlint(tmp, d);
+    const click = this.sound.place(b.pos, { volume: 0.5, rate: 1.1 + this.random() * 0.1 });
+    click.distance = Math.min(click.distance ?? 0, 9);
+    this.sound.play("revolver_cock", click);
   }
 
   fire(b: Bandit, hit: boolean): void {
