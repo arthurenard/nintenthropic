@@ -361,6 +361,15 @@ export class Effects {
     this.alpha.clear();
   }
 
+  /** Everything, bullet holes and debris included (a new game). */
+  clearAll(): void {
+    this.clearTransient();
+    this.shards.clear();
+    this.splinters.clear();
+    this.chips.clear();
+    this.decals.clear();
+  }
+
   dispose(): void {
     this.additive.dispose();
     this.alpha.dispose();

@@ -63,13 +63,20 @@ interface Scheduled {
 const tmp = new Vector3();
 const tmp2 = new Vector3();
 
-/** Before load() the aim check has nothing to show; afterwards this forwards to the bottles. */
+/**
+ * Before load() the aim check has nothing to show; afterwards this forwards
+ * to the bottles. If the host runs the aim check again on this instance after
+ * a game (Play Again), the first call puts the town back for it.
+ */
 class CalibrationProxy implements CalibrationStage {
   target: BottleStage | null = null;
+  onUse: () => void = () => {};
   targets(): CalibrationTarget[] {
+    this.onUse();
     return this.target ? this.target.targets() : [];
   }
   light(id: string | null): void {
+    this.onUse();
     this.target?.light(id);
   }
   hit(id: string): void {
@@ -208,10 +215,13 @@ export class HighNoon implements Game, MatchListener {
     this.ambient = new Ambient(town, parent, this.pools.chicken, this.effects, this.sound, this.visualRandom, ctx.quality);
     this.bottles = new BottleStage(town, parent, this.camera.camera, this.effects, this.sound, this.queries);
     this.calibrationProxy.target = this.bottles;
+    this.calibrationProxy.onUse = () => {
+      if (this.phase === "over" || this.phase === "dying") this.rearm();
+    };
     this.newMatch();
-    this.dynamite = new DynamiteView(parent, this.match.sticks, this.effects, town.eye);
+    this.dynamite = new DynamiteView(parent, () => this.match.sticks, this.effects, town.eye);
     this.shooter = new Shooter(this.camera.camera, this.queries, town, this.cast, {
-      sticks: this.match.sticks,
+      sticks: () => this.match.sticks,
       tumbleweeds: () => this.ambient.tumbleweeds(),
       chicken: () => this.ambient.chickenCenterOrNull(),
       bellCenter: () => this.secretsWorld.bellCenter(),
@@ -283,15 +293,42 @@ export class HighNoon implements Game, MatchListener {
     for (const s of shown) s.o.visible = s.visible;
   }
 
+  /**
+   * Back to the state after load, for another game on this instance: a fresh
+   * match, the street swept (bodies, holes, the secrets' mischief), the
+   * bottles standing again, the picture and the sound unmuffled.
+   */
+  private rearm(): void {
+    this.cast.reset();
+    this.ambient.reset();
+    this.effects.clearAll();
+    this.secretsWorld.reset();
+    this.newMatch();
+    this.bottles.reset();
+    this.schedule.length = 0;
+    this.camera.still = true;
+    this.camera.setDeath(0, 1);
+    // Apply it now: the aim check is about to project the bottles through it.
+    this.camera.update(0);
+    this.timeScale = 1;
+    this.sepia = 0;
+    this.deathT = 0;
+    this.tombstone = false;
+    this.hurtDisplay = 0;
+    this.post.set("sepia", 0);
+    this.post.set("hurt", 0);
+    this.post.set("desaturate", 0);
+    this.post.set("exposure", 1);
+    this.sound.filter("slowmo", 0);
+    this.sound.filter("hurt", 0);
+    this.clearHint();
+    this.phase = "calibration";
+  }
+
   start(): void {
     if (this.phase === "loading") return;
-    if (this.phase !== "calibration") {
-      // Play Again on the same instance: a fresh match in the same town.
-      this.cast.reset();
-      this.ambient.reset();
-      this.newMatch();
-      this.bottles.reset();
-    }
+    // Play Again straight into play, without an aim check in between.
+    if (this.phase !== "calibration") this.rearm();
     this.bottles.done();
     this.bottles.active = false;
     this.camera.still = false;

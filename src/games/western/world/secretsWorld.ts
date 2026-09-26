@@ -5,7 +5,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   Vector3,
-  type Object3D,
+  Object3D,
 } from "three";
 import type { ParticleStyle } from "../../../engine/fx/particles";
 import type { Cover } from "../rules/types";
@@ -55,6 +55,7 @@ export class SecretsWorld {
   private readonly vaneC = new Vector3();
   private readonly puddleMat = new MeshBasicMaterial({ color: "#2f2a24", transparent: true, opacity: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
   private readonly puddleGeo = new CircleGeometry(1, 24);
+  private readonly posterHome = new Object3D();
 
   constructor(
     private readonly town: TownLayout,
@@ -78,6 +79,26 @@ export class SecretsWorld {
       const zAfter = -off.x * Math.sin(1) + off.z * Math.cos(1);
       this.doorSign.push(zAfter > off.z ? 1 : -1);
     }
+    if (s.poster) {
+      this.posterHome.position.copy(s.poster.position);
+      this.posterHome.quaternion.copy(s.poster.quaternion);
+    }
+  }
+
+  /** The poster back on its board, the leaks plugged, the doors shut (a new game). */
+  reset(): void {
+    const poster = this.town.secrets.poster;
+    if (poster) {
+      poster.position.copy(this.posterHome.position);
+      poster.quaternion.copy(this.posterHome.quaternion);
+    }
+    this.posterFalling = false;
+    for (const l of this.leaks) l.puddle.removeFromParent();
+    this.leaks.length = 0;
+    this.sound.stopLoop("water_leak");
+    this.doorsTarget = 0;
+    this.doorsTimer = 0;
+    this.bellVel = 0;
   }
 
   bellCenter(): Vector3 | null {

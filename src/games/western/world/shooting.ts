@@ -46,7 +46,7 @@ export interface ShotResult {
 }
 
 export interface ShootableWorld {
-  sticks: readonly Dynamite[];
+  sticks(): readonly Dynamite[];
   tumbleweeds(): readonly { active: boolean; center: Vector3; radius: number }[];
   chicken(): Vector3 | null;
   bellCenter(): Vector3 | null;
@@ -246,7 +246,7 @@ export class Shooter {
     }
 
     const aDyn = Math.atan(this.tanFor(ASSIST.dynamite));
-    for (const s of this.world.sticks) {
+    for (const s of this.world.sticks()) {
       if (!s.airborne) continue;
       tmp.set(s.position.x, s.position.y, s.position.z);
       probePoint(o, d, tmp, probe);

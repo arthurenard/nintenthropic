@@ -15,7 +15,8 @@ export class DynamiteView {
 
   constructor(
     parent: Object3D,
-    private readonly rules: readonly Dynamite[],
+    /** The current match's sticks (a new match brings new ones). */
+    private readonly rules: () => readonly Dynamite[],
     private readonly fx: Effects,
     private readonly eye: Vector3,
   ) {
@@ -24,7 +25,7 @@ export class DynamiteView {
     // A touch larger than life: it is the one thing the player must spot in the air.
     const body = new CylinderGeometry(0.05, 0.05, 0.34, 12);
     const fuse = new CylinderGeometry(0.006, 0.006, 0.1, 4);
-    for (let i = 0; i < rules.length; i++) {
+    for (let i = 0; i < rules().length; i++) {
       const g = new Group();
       const b = new Mesh(body, red);
       b.castShadow = true;
@@ -39,8 +40,9 @@ export class DynamiteView {
   }
 
   update(dt: number): void {
-    for (let i = 0; i < this.rules.length; i++) {
-      const s = this.rules[i] as Dynamite;
+    const sticks = this.rules();
+    for (let i = 0; i < sticks.length; i++) {
+      const s = sticks[i] as Dynamite;
       const g = this.sticks[s.id] as Group;
       if (s.state === "exploded") {
         g.visible = false;
