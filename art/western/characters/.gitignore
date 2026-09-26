@@ -1,0 +1,5 @@
+# build products: the scripts are the source of truth
+*.blend
+*.blend1
+_cache/
+__pycache__/
