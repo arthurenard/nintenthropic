@@ -57,6 +57,22 @@
 .game[data-ready="true"] .curtain {
   opacity: 0;
 }
+/* A panel with the aim behind it fades almost away (see yielding.ts). */
+#pip,
+#check-card,
+#check-meter,
+#hud-score,
+#cylinder,
+#hint {
+  transition:
+    opacity 250ms var(--ease),
+    width 450ms var(--spring),
+    box-shadow 250ms var(--ease),
+    transform 250ms var(--ease);
+}
+.stage .yield {
+  opacity: 0.18;
+}
 /* The page draws the crosshair, so the system pointer steps aside. */
 .game[data-input="mouse"] .stage {
   cursor: none;

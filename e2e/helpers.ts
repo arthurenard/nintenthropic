@@ -38,6 +38,7 @@ export type Snapshot = {
   score: number | null;
   shots: number;
   checkDone: boolean;
+  lastCheck: { score: number | null; shots: number; ended: "ready" | "anyway" } | null;
   tracker: { where: string; delegate: string; stats: { frames: number; framesWithHand: number; inference: { p50: number; p95: number }; delay: { p50: number; p95: number }; pageCost: { p50: number } } } | null;
   frames: { frames: number; interval: { mean: number; p50: number; p95: number }; work: { mean: number; p50: number; p95: number } } | null;
   quality: { scale: number; tier: string; gpu: string } | null;

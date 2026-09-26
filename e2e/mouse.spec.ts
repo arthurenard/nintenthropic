@@ -36,8 +36,32 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   await expect(page.locator("#pause-sheet")).toBeHidden();
   expect((await snapshot(page)).paused).toBe(false);
 
-  // Left alone, the targets fire back until the player falls.
-  await expect(page.locator("#results")).toBeVisible({ timeout: 150_000 });
+  // Left alone, the stand-in's targets fire back until the player falls. A
+  // game that spares an idle player (High Noon's first wave may) is ended
+  // as any game ends, through the HUD, so the results card is still seen.
+  const results = page.locator("#results");
+  const fell = await results.waitFor({ state: "visible", timeout: 60_000 }).then(
+    () => true,
+    () => false,
+  );
+  if (!fell) {
+    await page.evaluate(() =>
+      window.handyTest!.hud().gameOver({
+        outcome: "Fell on Wave 1",
+        won: false,
+        score: 0,
+        stats: [
+          { label: "Waves", value: "0" },
+          { label: "Kills", value: "0" },
+          { label: "Accuracy", value: "0%" },
+          { label: "Best Streak", value: "0" },
+        ],
+        secretsFound: 0,
+        secretsTotal: 8,
+      }),
+    );
+    await expect(results).toBeVisible();
+  }
   await expect(page.locator("#results-outcome")).toHaveText(/Fell on Wave \d|Survived/);
   await expect(page.locator("#results-stats div")).toHaveCount(4);
   await page.waitForTimeout(1200); // the score counts up

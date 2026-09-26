@@ -26,6 +26,7 @@ import { Crosshair } from "./crosshair";
 import { Hud } from "./hud";
 import { watchKonami } from "./konami";
 import { Pip } from "./pip";
+import { Yielding, type Spot } from "./yielding";
 import { prefs } from "./prefs";
 import { shareResult, showResults, type Result } from "./results";
 import { LoadingSheet, closeSheet, closeSheets, openSheet, showTrouble, type Fix, type Trouble } from "./sheets";
@@ -105,6 +106,9 @@ export class App {
   readonly hud: Hud;
   private readonly crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"), () => this.settings.reducedMotion);
   private readonly pip = new Pip();
+  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "hint"]);
+  /** How the last aim check ended, for the tests. */
+  private lastCheck: { score: number | null; shots: number; ended: "ready" | "anyway" } | null = null;
   private readonly settings: Settings;
   private host: EngineHost | null = null;
   private audio: Pick<AudioEngine, "play" | "loop" | "setFilter" | "setMuted" | "muted"> = silence(prefs.muted);
@@ -476,11 +480,16 @@ export class App {
         saved,
         viewport,
         reducedMotion: () => this.settings.reducedMotion,
-        onDone: (mapping) => {
+        onDone: (mapping, score) => {
+          this.lastCheck = { score, shots: session.check?.check.shots ?? 0, ended: "ready" };
           if (!saveAim(browserStore(), camera!, mapping)) toast("This window can’t save your aim. It works until you close it.");
           this.play(session, mapping);
         },
-        onPlayAnyway: (mapping) => this.play(session, mapping),
+        onPlayAnyway: (mapping) => {
+          const check = session.check?.check;
+          this.lastCheck = { score: check?.measure.score ?? null, shots: check?.shots ?? 0, ended: "anyway" };
+          this.play(session, mapping);
+        },
       });
       // The check judges its shots; the game sees them too, to answer with
       // the gun's sound and smoke (it scores nothing before start()).
@@ -518,6 +527,14 @@ export class App {
       this.crosshair.visible = session.check.showsCrosshair;
     }
     this.crosshair.draw(aim, now);
+    // The corners' chrome steps aside for what the player is aiming at.
+    const stage = $("stage");
+    const [width, height] = [stage.clientWidth, stage.clientHeight];
+    const spots: Spot[] = [];
+    if (this.crosshair.visible && aim.tracking && !aim.offscreen) spots.push({ x: aim.x * width, y: aim.y * height, r: 28 });
+    const lit = session.check?.check.lit;
+    if (lit && !session.check?.done) spots.push({ x: lit.x * width, y: lit.y * height, r: lit.radius * Math.min(width, height) });
+    this.yielding.update(spots);
     // How long a camera frame takes to reach the crosshair: from its capture
     // to the moment the crosshair is drawn from it (the screen shows that
     // frame at the next vsync). Measured on the clock, not the frame's own
@@ -627,6 +644,7 @@ export class App {
     this.crosshair.visible = false;
     this.crosshair.clear();
     this.pip.hide();
+    this.yielding.reset();
     this.hud.reset(this.settings.unlocks.has("golden"));
     closeSheets();
   }
@@ -765,6 +783,7 @@ export class App {
       score: check?.measure.score ?? null,
       shots: check?.shots ?? 0,
       checkDone: session?.check?.done ?? false,
+      lastCheck: this.lastCheck,
       tracker: this.tracker ? { where: this.tracker.where, delegate: this.tracker.delegate, stats: this.tracker.stats() } : null,
       frames: this.host?.stats.summary() ?? null,
       latency: this.latency.summary(),
