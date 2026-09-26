@@ -60,6 +60,7 @@ def store(b, lib, col):
                 it.box(sf, (x, 0.05, z + 0.03), (x + w, 0.35, z + 0.03 + hgt), mat, grain_axis=2)
                 x += w + b.r.uniform(0.0, 0.05)
     it.box(b.F.sub((0, 2.2, B.DECK_Z)), (-2.5, 0, 0), (2.5, 0.6, 0.95), 'wood_dark', grain_axis=0)
+    hanging_lamp(b, b.F.p(0.0, 2.0, B.DECK_Z + 2.9), col, energy=60.0)
 
 
 def saloon(b, lib, col):
@@ -124,11 +125,13 @@ def saloon(b, lib, col):
     eye = Vector((0.0, 0.0, 1.7))
     c = a['center']
     d = (c - eye).normalized()
-    t = (abs(c.x) + 1.9) / abs(d.x)
+    t = (abs(c.x) + 1.35) / abs(d.x)
     ppos = eye + d * t
     ang = math.atan2(-d.x, d.y)   # keyboard (local -Y) turned back toward the street
     pf = Frame((ppos.x, ppos.y, B.DECK_Z), ang + math.radians(15))
     piano = PR.piano(col, lib, pf)
+    hanging_lamp(b, pf.p(0.0, -0.3, 2.3), col, energy=260.0)
+    hanging_lamp(b, F.p(Wd / 2 - 1.8, 3.5, B.DECK_Z + 2.6), col, energy=70.0)
     b.extra_objects.append(piano)
     # the room: bar and back bar with bottles, tables and chairs
     it = b.interior
@@ -176,6 +179,7 @@ def barber(b, lib, col):
     it = b.interior
     cf = b.F.sub((b.s_near(0.55), 2.2, B.DECK_Z))
     PR.chair(it, cf, b.r, mat='leather')
+    hanging_lamp(b, b.F.p(b.s_near(0.5), 1.8, B.DECK_Z + 2.6), col, energy=45.0)
 
 
 def bank(b, lib, col):
@@ -217,29 +221,28 @@ def sheriff(b, lib, col):
     sign_panel(b.wood, F, -2.7, 4.55, 2.7, 5.5, sm, y=-0.08, frame=0.05, frame_mat='trim_dark')
     blade_sign(b.wood, lib, 'jail_blade', 8.2, 9.7, 17.35, 2.3, 2.85, "JAIL", bg=DARK, fill=CREAM, size=0.36,
                chain_to=3.2)
-    # The wanted board: a sandwich board on the boardwalk, turned to face
-    # down the street so the player reads it (a board flat on the facade
-    # would be seen edge-on from the middle of the street).
-    from .landscape import ground_z
-    ax, ay = 6.0, 17.2       # clear of the porch posts in the player's line of sight
-    face = math.atan2(-ax, ay)      # rotation whose -Y looks at the player
-    af = Frame((ax, ay, ground_z(ax, ay) - 0.02), face)
-    bw_, bh_ = 0.95, 1.5
-    lean = math.radians(13)
-    front = af.sub((0, 0, 0)).sub(rot_x=-lean)       # front board leans back (+Y) from its foot
-    back = af.sub((0, 0.7, 0)).sub(rot_x=lean)
-    for fr, mat in ((front, 'wood_dark'), (back, 'wood_raw')):
-        b.wood.box(fr, (-bw_ / 2, 0.0, 0.0), (bw_ / 2, 0.035, bh_), mat, grain_axis=2)
-        for (a1, b1, c1, d1) in ((-bw_ / 2 - 0.04, bw_ / 2 + 0.04, bh_ - 0.06, bh_ + 0.03),
-                                 (-bw_ / 2 - 0.04, -bw_ / 2 + 0.03, 0.0, bh_), (bw_ / 2 - 0.03, bw_ / 2 + 0.04, 0.0, bh_)):
-            b.wood.box(fr, (a1, -0.025, c1), (b1, 0.0, d1), 'trim_dark', grain_axis=0 if b1 - a1 > d1 - c1 else 2)
-    sm = make_sign(lib, 'wanted_header', 0.9, 0.16, text_line("WANTED", face='clarendon', size=0.12, spacing=1.2),
+    # The wanted board: nailed across the sheriff's first porch post, facing
+    # straight down the street, so the player reads it (a board flat on the
+    # facade is seen edge-on from mid-street, and the door was moved to the
+    # far side so the board screens nothing a bandit uses).
+    P_ = B.WALK_DEPTH
+    post = F.p(b.W / 2 - 0.12, -P_ + 0.12, B.DECK_Z)
+    bw_, bh_ = 1.25, 1.3
+    front = Frame((post.x + 0.5, post.y - 0.09, B.DECK_Z + 0.95))
+    b.wood.box(front, (-bw_ / 2, 0.0, 0.0), (bw_ / 2, 0.03, bh_), 'wood_dark', grain_axis=0)
+    for (a1, b1, c1, d1) in ((-bw_ / 2 - 0.04, bw_ / 2 + 0.04, bh_ - 0.02, bh_ + 0.05),
+                             (-bw_ / 2 - 0.04, bw_ / 2 + 0.04, -0.05, 0.02),
+                             (-bw_ / 2 - 0.04, -bw_ / 2 + 0.03, 0.0, bh_), (bw_ / 2 - 0.03, bw_ / 2 + 0.04, 0.0, bh_)):
+        b.wood.box(front, (a1, -0.02, c1), (b1, 0.0, d1), 'trim_dark', grain_axis=0 if b1 - a1 > d1 - c1 else 2)
+    # a leg at the far end, down to the boardwalk
+    b.wood.box(front, (bw_ / 2 - 0.12, 0.03, -0.95), (bw_ / 2 - 0.04, 0.1, bh_), 'wood_post', grain_axis=2)
+    sm = make_sign(lib, 'wanted_header', 1.1, 0.17, text_line("WANTED", face='clarendon', size=0.13, spacing=1.25),
                    bg=lin(34, 28, 24), fill=CREAM, wear=0.35)
-    sign_panel(b.wood, front, -0.45, bh_ - 0.2, 0.45, bh_ - 0.04, sm, y=-0.026, thick=0.01)
+    sign_panel(b.wood, front, -0.55, bh_ - 0.21, 0.55, bh_ - 0.04, sm, y=-0.021, thick=0.01)
     img, (pw, ph) = S.generic_wanted(0, "BLACK JACK CARVER", "$2,000")
     pm = S.paper_material("poster0", img, age=0.75)
     lib[pm.name] = pm
-    pf = front.sub((0.2, -0.03, 0.12)).sub(rot_y=0.05)
+    pf = front.sub((0.3, -0.024, 0.2)).sub(rot_y=0.04)
     sc = 0.78
     b.wood.add_face([pf.p(-pw * sc / 2, 0, 0), pf.p(pw * sc / 2, 0, 0), pf.p(pw * sc / 2, 0, ph * sc),
                      pf.p(-pw * sc / 2, 0, ph * sc)], pm.name, 0.2,
@@ -269,7 +272,7 @@ def sheriff(b, lib, col):
                 local=[(0, 0.5), (1, 0.5), (1, 1), (0, 1)])
     mb.cylinder(lf.sub((0, -0.006, -0.03)).sub(rot_x=math.pi / 2), (0, 0, 0), 0.009, 0.012, 'iron', segments=6)
     pob = mb.build(col, lib, surface='cloth', group='right_near')
-    pob.matrix_world = front.sub((-0.17, -0.03, bh_ - 0.24)).sub(rot_y=-0.04).m
+    pob.matrix_world = front.sub((-0.26, -0.024, bh_ - 0.25)).sub(rot_y=-0.03).m
     tag(pob, pivot='top_nail', text="WANTED - THE HAND - $5,000")
     b.extra_objects.append(pob)
     b.anchors['wanted_board'] = dict(center=front.p(0, -0.05, bh_ / 2))
@@ -327,6 +330,7 @@ def hotel(b, lib, col):
     # stairs and a lobby desk inside
     it = b.interior
     it.box(F.sub((b.s_near(0.5), 3.0, B.DECK_Z)), (-1.2, 0, 0), (1.2, 0.6, 1.05), 'piano_wood', grain_axis=0)
+    hanging_lamp(b, F.p(b.s_near(0.5), 2.0, B.DECK_Z + 2.6), col, energy=60.0)
 
 
 def undertaker(b, lib, col):
@@ -341,7 +345,42 @@ def undertaker(b, lib, col):
     sign_panel(b.wood, b.F, o.s - 1.0, 3.35, o.s + 1.0, 3.69, sm, y=-0.07)
 
 
+def lamp_material(lib):
+    from .nodes import new_material
+    if "lamp_glow" in lib:
+        return
+    m, g = new_material("lamp_glow")
+    em = g.node('ShaderNodeEmission', inputs={'Color': (1.0, 0.62, 0.3), 'Strength': 9.0}, out=0)
+    g.output(em)
+    m["surface"] = 'glass'
+    lib["lamp_glow"] = m
+
+
+def hanging_lamp(b, p, col, energy=70.0):
+    """An oil lamp hung from the ceiling, already lit at sundown: a brass
+    font, a glowing chimney, a tin shade — and a warm point light that the
+    bake carries into the room, so windows glow a little from the street."""
+    import bpy
+    lamp_material(b._lib)
+    f = Frame((p.x, p.y, p.z))
+    b.metal.cylinder(f, (0, 0, 0.0), 0.07, 0.08, 'brass', segments=10)
+    b.metal.cylinder(f, (0, 0, 0.08), 0.035, 0.16, 'lamp_glow', segments=10)
+    b.metal.cylinder(f, (0, 0, 0.22), 0.2, 0.08, 'iron_black', segments=12, radius_top=0.05)
+    top = b.eave if b.storeys == 1 else B.DECK_Z + 3.55
+    b.metal.cylinder(f, (0, 0, 0.3), 0.006, max(0.05, top - p.z - 0.3), 'iron_black', segments=4)
+    ld = bpy.data.lights.new(f"lamp_{b.key}", 'POINT')
+    ld.energy = energy
+    ld.color = (1.0, 0.62, 0.32)
+    ld.shadow_soft_size = 0.06
+    lo = bpy.data.objects.new(f"lamp_{b.key}", ld)
+    lo.location = (p.x, p.y, p.z + 0.12)
+    col.objects.link(lo)
+
+
 def decorate(blds, lib, col):
+    for b in blds.values():
+        b._lib = lib
+    lamp_material(lib)
     store(blds['store'], lib, col)
     saloon(blds['saloon'], lib, col)
     barber(blds['barber'], lib, col)

@@ -403,7 +403,8 @@ def build_library():
     wood("wood_floor", bleach=0.75, light=lin(150, 132, 112), dark=lin(84, 70, 58), dirt=1.0,
          dirt_height=0.8, nails=1.0)
     wood("wood_post", bleach=0.7, dirt=1.0, dirt_height=0.7, nails=0.0)
-    wood("wood_crate", bleach=0.5, light=lin(158, 134, 106), dark=lin(100, 80, 62), dirt=0.9, nails=1.0)
+    wood("wood_crate", bleach=0.6, light=lin(136, 118, 96), dark=lin(86, 70, 56), dirt=1.0, dirt_height=0.5,
+         nails=1.0)
     wood("wood_barrel", bleach=0.45, light=lin(126, 100, 76), dark=lin(70, 54, 42), dirt=0.9, nails=0.0)
     # Painted timber: the town's palette. Faded, peeling, never saturated.
     wood("paint_red", paint=lin(128, 42, 30), paint_amount=1.0, wear=0.55)

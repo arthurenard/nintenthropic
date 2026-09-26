@@ -101,7 +101,7 @@ def build_buildings(lib, col):
     saloon = B.Building('saloon', L, 18.0, 13.0, 18.0, 'left_mid', eave=7.7, front_h=9.3,
                         front_top=lambda s: 9.3 + max(0.0, 1.1 * (1 - abs(s) / 3.2)), storeys=2, siding='clap',
                         wall_mat='paint_red', side_mat='wood_grey', side_siding='rough', trim_mat='trim_white',
-                        porch_h=3.7, porch_roof=False)
+                        porch_h=3.7, porch_roof=False, wall_inside='paint_cream')
     sn = saloon.s_near
     saloon.window(sn(0.17), 0.95, 1.8, 2.1, cols=2, rows=4, gid='saloon_piano', anchor='win_piano')
     saloon.door(sn(0.5), w=1.7, h=2.6, style='batwing', anchor='door', transom=True, mat='paint_brown',
@@ -144,9 +144,9 @@ def build_buildings(lib, col):
                          wall_mat='wood_grey', side_mat='wood_grey', side_siding='rough', trim_mat='trim_dark',
                          porch_h=3.2)
     sn = sheriff.s_near
-    sheriff.door(sn(0.3), w=1.0, h=2.2, style='panel', open_deg=70, anchor='door', mat='paint_brown',
+    sheriff.door(sn(0.7), w=1.0, h=2.2, style='panel', open_deg=70, anchor='door', mat='paint_brown',
                  hinge='left')
-    sheriff.window(sn(0.75), 1.0, 1.1, 1.5, cols=2, rows=3, gid='sheriff_1', anchor='win', bars=True,
+    sheriff.window(sn(0.3), 1.0, 1.1, 1.5, cols=2, rows=3, gid='sheriff_1', anchor='win', bars=True,
                    sash_mat='trim_dark')
     out['sheriff'] = sheriff
 

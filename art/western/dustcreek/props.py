@@ -509,7 +509,6 @@ def build_street(lib, col, blds):
     hitching_rail(wd, W.sub((walkL + 0.9, 26.5, 0.0), rot_z=math.pi / 2), r, length=3.0)
     trough(wd, W.sub((walkL + 0.4, 23.8, 0.0), rot_z=math.pi / 2), r)
     barrel(wd, mt, W.sub((-9.5, 30.3, DECK), rot_z=0.2), r)
-    chair(wd, W.sub((-9.5, 19.2, DECK), rot_z=-math.pi / 2 + 0.3), r)
 
     # --- left: wagon (broken, mid-left in the street) -------------------
     wd, mt, cl = G('left_far')
@@ -522,7 +521,7 @@ def build_street(lib, col, blds):
     crate(wd, W.sub((9.3, 23.0, DECK), rot_z=0.1), r)
     crate(wd, W.sub((9.2, 23.75, DECK), rot_z=-0.08), r, sx=0.6, sy=0.6, sz=0.6)
     crate(wd, W.sub((9.28, 23.35, DECK + 0.55), rot_z=0.25), r, sx=0.55, sy=0.45, sz=0.45)
-    bench(wd, W.sub((9.62, 21.1, DECK), rot_z=-math.pi / 2), r, L=1.4)
+    bench(wd, W.sub((9.62, 20.4, DECK), rot_z=-math.pi / 2), r, L=1.3)
     hitching_rail(wd, W.sub((walkR - 0.9, 18.2, 0.0), rot_z=math.pi / 2), r, length=3.0)
     trough(wd, W.sub((walkR - 0.4, 12.5, 0.0), rot_z=math.pi / 2), r, L=1.8)
     barrel(wd, mt, W.sub((9.4, 16.2, DECK), rot_z=1.1), r)
@@ -598,7 +597,7 @@ def extra_materials(lib):
 
 # (name, centre, heading deg) — contract.py reads these to place covers
 NEAR_COVER = {
-    'pump': ((-4.4, 10.6, 0.0), 8.0),
+    'pump': ((-3.5, 10.6, 0.0), 8.0),
     'freight': ((4.4, 12.6, 0.0), -12.0),
     'cart': ((-5.2, 16.2, 0.0), 35.0),
     'barrels_r': ((4.7, 23.2, 0.0), 0.0),

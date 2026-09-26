@@ -471,7 +471,8 @@ def bake_group(ctx, scene, group, objs, size):
     gl = denoise(gl, albedo=None)
     ao = bake_pass(scene, objs, size, 'AO', 8 if q else 32, f"{group}_ao")
     pos = bake_pass(scene, objs, size, 'POSITION', 1, f"{group}_pos")
-    rgb = alb * irr * (0.65 + 0.35 * np.clip(ao, 0, 1)) + np.clip(gl, 0, None)
+    em = bake_pass(scene, objs, size, 'EMIT', 1, f"{group}_emit")
+    rgb = alb * irr * (0.65 + 0.35 * np.clip(ao, 0, 1)) + np.clip(gl, 0, None) + np.clip(em, 0, None)
     valid = np.linalg.norm(pos, axis=-1) > 1e-3
     rgb = post.apply_fog(rgb, pos, valid)
     rgb = post.grade(rgb)

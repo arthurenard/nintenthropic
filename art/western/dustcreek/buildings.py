@@ -28,7 +28,7 @@ class Building:
                  front_top=None, storeys=1, siding='clap', wall_mat='paint_ochre', side_mat=None,
                  side_siding=None, trim_mat='trim_white', roof='tin', roof_pitch=18.0, porch=True,
                  porch_h=3.3, porch_roof=True, setback=0.0, cornice=True, floor_z=DECK_Z,
-                 walk=True, lean=0.0):
+                 walk=True, lean=0.0, wall_inside='wood_interior'):
         self.key, self.side, self.W, self.D = key, side, width, depth
         self.group = group
         self.eave, self.front_h = eave, front_h
@@ -42,6 +42,7 @@ class Building:
         self.cornice = cornice
         self.floor_z = floor_z
         self.walk = walk
+        self.wall_inside = wall_inside
         yc = y0 + width / 2
         x = -(STREET_HALF + setback) if side == 'L' else (STREET_HALF + setback)
         rot = math.radians(90 if side == 'L' else -90) + lean
@@ -391,9 +392,9 @@ class Building:
             mb.quad(F, [(s0, y0, z0 + 0.001), (s0, y1, z0 + 0.001), (s1, y1, z0 + 0.001), (s1, y0, z0 + 0.001)],
                     'wood_interior')
             mb.quad(F, [(s0, y0, z1), (s1, y0, z1), (s1, y1, z1), (s0, y1, z1)], 'wood_dark')
-            mb.quad(F, [(s0, y1, z0), (s0, y1, z1), (s1, y1, z1), (s1, y1, z0)], 'wood_interior')
-            mb.quad(F, [(s0, y0, z0), (s0, y0, z1), (s0, y1, z1), (s0, y1, z0)], 'wood_interior')
-            mb.quad(F, [(s1, y0, z0), (s1, y1, z0), (s1, y1, z1), (s1, y0, z1)], 'wood_interior')
+            mb.quad(F, [(s0, y1, z0), (s0, y1, z1), (s1, y1, z1), (s1, y1, z0)], self.wall_inside)
+            mb.quad(F, [(s0, y0, z0), (s0, y0, z1), (s0, y1, z1), (s0, y1, z0)], self.wall_inside)
+            mb.quad(F, [(s1, y0, z0), (s1, y1, z0), (s1, y1, z1), (s1, y0, z1)], self.wall_inside)
 
     # -- output ---------------------------------------------------------------
     def emit(self, col, lib):
