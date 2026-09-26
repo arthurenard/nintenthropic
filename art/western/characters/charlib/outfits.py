@@ -59,39 +59,117 @@ def crown(a, b, h, taper=0.9, top="round", crease=0.0, pinch=0.0, dent_back=0.0,
     c = S.Union([body, cap], k=0.01)
     c = S.Intersect(c, S.Plane((0, 0, h), (0, 0, 1), (-1, -1, -1), (1, 1, 1)), k=0.008)
     if crease:
-        c = S.Subtract(c, S.Ellipsoid((0, 0.004, h + 0.004), (0.012, b * 0.8, crease)), k=0.012)
+        # the cattleman crease: a broad groove front to back, deeper at the front
+        c = S.Subtract(c, S.Ellipsoid((0, 0.006, h + 0.006), (0.021, b * 0.82, crease)), k=0.014)
     if pinch:
+        # the two front pinches where a hand takes the hat off
         for s in (1, -1):
-            c = S.Subtract(c, S.Ellipsoid((s * a * 0.95, -b * 0.55, h * 0.72), (0.016, 0.03, 0.035)), k=0.012 * pinch)
+            c = S.Subtract(c, S.Ellipsoid((s * a * 0.98, -b * 0.52, h * 0.74), (0.020, 0.034, 0.042), S.rot_z(s * 25)), k=0.012 * pinch)
     if dent_back:
         c = S.Subtract(c, S.Ellipsoid((0, b * 1.02, h * 0.8), (0.03, 0.018, 0.03)), k=0.01)
     return c
 
 
+HATS = {
+    # crown height, crown top taper, top style, crease depth, pinch, brim width, curl, dip, roll, back_up, flare
+    "stetson": dict(h=0.106, taper=0.86, top="round", crease=0.022, pinch=1.0, w=0.080, curl=0.030, dip=0.012, roll=0.0, back=0.010,
+                    col=(0.23, 0.17, 0.12), band=(0.10, 0.07, 0.05), mat="felt", band_h=0.022),
+    "boss": dict(h=0.116, taper=0.82, top="round", crease=0.028, pinch=1.4, w=0.086, curl=0.036, dip=0.016, roll=0.0, back=0.012,
+                 col=(0.055, 0.05, 0.05), band=(0.62, 0.62, 0.62), mat="felt", band_h=0.024),
+    "bowler": dict(h=0.098, taper=1.0, top="dome", crease=0.0, pinch=0.0, w=0.040, curl=0.020, dip=0.004, roll=0.004, back=0.0,
+                   col=(0.09, 0.085, 0.08), band=(0.05, 0.05, 0.05), mat="felt", band_h=0.016),
+    "flat": dict(h=0.084, taper=0.95, top="flat", crease=0.0, pinch=0.0, w=0.082, curl=0.004, dip=0.003, roll=0.0, back=0.0,
+                 col=(0.13, 0.11, 0.095), band=(0.06, 0.05, 0.045), mat="felt", band_h=0.020),
+    "top": dict(h=0.180, taper=1.06, top="flat", crease=0.0, pinch=0.0, w=0.046, curl=0.024, dip=0.006, roll=0.0, back=0.0,
+                col=(0.035, 0.033, 0.033), band=(0.02, 0.02, 0.02), mat="silk", band_h=0.03),
+    "straw": dict(h=0.078, taper=0.95, top="flat", crease=0.0, pinch=0.0, w=0.090, curl=0.006, dip=0.008, roll=0.0, back=0.0,
+                  col=(0.72, 0.60, 0.38), band=(0.25, 0.10, 0.07), mat="straw", band_h=0.018),
+}
+HAT_A, HAT_B = 0.081, 0.101
+
+
 def hat_field(kind):
     """(field in hat frame, band height, colour, band colour, material kind)."""
-    A, B = 0.081, 0.101
-    if kind == "stetson":
-        f = S.Union([crown(A, B, 0.118, 0.9, "round", crease=0.024, pinch=1.0),
-                     brim(A - 0.004, B - 0.004, 0.076, curl=0.032, dip=0.012, back_up=0.01)], k=0.006)
-        return f, 0.022, (0.23, 0.17, 0.12), (0.10, 0.07, 0.05), "felt"
-    if kind == "boss":
-        f = S.Union([crown(A, B, 0.128, 0.86, "round", crease=0.03, pinch=1.4, dent_back=1),
-                     brim(A - 0.004, B - 0.004, 0.084, curl=0.038, dip=0.016, back_up=0.012)], k=0.006)
-        return f, 0.024, (0.055, 0.05, 0.05), (0.62, 0.62, 0.62), "felt"
-    if kind == "bowler":
-        f = S.Union([crown(A, B, 0.105, 1.0, "dome"), brim(A - 0.004, B - 0.004, 0.042, curl=0.022, dip=0.006, roll=0.006)], k=0.004)
-        return f, 0.018, (0.09, 0.085, 0.08), (0.05, 0.05, 0.05), "felt"
-    if kind == "flat":
-        f = S.Union([crown(A, B, 0.088, 0.96, "flat"), brim(A - 0.004, B - 0.004, 0.080, curl=0.004, dip=0.004)], k=0.005)
-        return f, 0.020, (0.13, 0.11, 0.095), (0.06, 0.05, 0.045), "felt"
-    if kind == "top":
-        f = S.Union([crown(A, B, 0.185, 1.0, "flat", flare=1.06), brim(A - 0.004, B - 0.004, 0.046, curl=0.024, dip=0.006)], k=0.004)
-        return f, 0.03, (0.035, 0.033, 0.033), (0.02, 0.02, 0.02), "silk"
-    if kind == "straw":
-        f = S.Union([crown(A, B, 0.080, 0.95, "flat"), brim(A - 0.004, B - 0.004, 0.090, curl=0.006, dip=0.008, droop=0.006)], k=0.005)
-        return f, 0.018, (0.72, 0.60, 0.38), (0.25, 0.10, 0.07), "straw"
-    raise ValueError(kind)
+    k = HATS[kind]
+    A, B = HAT_A, HAT_B
+    c = crown(A, B, k["h"], min(k["taper"], 1.0), k["top"], crease=k["crease"], pinch=k["pinch"],
+              dent_back=1 if kind == "boss" else 0, flare=k["taper"] if k["taper"] > 1 else 1.0)
+    b = brim(A - 0.004, B - 0.004, k["w"], curl=k["curl"], dip=k["dip"], roll=k["roll"], back_up=k["back"])
+    f = S.Union([c, b], k=0.006)
+    return f, k["band_h"], k["col"], k["band"], k["mat"]
+
+
+def hat_mesh(kind, name, coll=None, n=26):
+    """A clean game mesh for a hat, built as rings and snapped onto its field:
+    the crown from inside the band to the top, then the brim - top face out
+    to a rolled edge and bottom face back in - so a thin brim never tears the
+    way a decimated one does, and a dome stays round."""
+    from . import rings as R, bl
+    k = HATS[kind]
+    f, *_ = hat_field(kind)
+    A, B = HAT_A, HAT_B
+    rm = R.RingMesh()
+    th = 2 * np.pi * np.arange(n) / n
+
+    def ring(a, b, z, relax=0.0):
+        pts = np.stack([a * np.sin(th), -b * np.cos(th), np.full(n, z)], 1)
+        return rm.ring(pts, relax=relax)
+    h = k["h"]
+    crown_z = [-0.012, 0.0, 0.25 * h, 0.55 * h, 0.8 * h, 0.95 * h]
+    if k["top"] == "dome":
+        crown_z = [-0.012, 0.0, 0.2 * h, 0.45 * h, 0.65 * h, 0.82 * h, 0.94 * h]
+    rings = []
+    for z in crown_z:
+        t = np.clip(z / h, 0, 1)
+        sc = 1 + (k["taper"] - 1) * t
+        if k["top"] == "dome":
+            sc = np.sqrt(max(1 - max(t - 0.3, 0) ** 2 / 0.7 ** 2, 0.05))
+        rings.append(ring(A * sc + 0.002, B * sc + 0.002, z, 0.3))
+    # rings across the top so a crease or a dent has somewhere to live
+    if k["top"] != "dome":
+        for sc_ in (0.72, 0.42):
+            rings.append(ring(A * k["taper"] * sc_, B * k["taper"] * sc_, h + 0.004, 0.3))
+    top = rm.add((0, 0, h + 0.004), relax=0.3)
+    # brim: top face outward, a rolled edge, the underside back in
+    w = k["w"]
+    brim_top = []
+    for u in (0.3, 0.65, 1.0):
+        a, b = A - 0.004 + w * u, B - 0.004 + w * u
+        e = u
+        zz = k["curl"] * e * e * np.sin(th) ** 2 - k["dip"] * e * e * np.clip(np.cos(th), 0, 1) ** 2 + k["back"] * e * e * np.clip(-np.cos(th), 0, 1) ** 2 + k["roll"] * e ** 8
+        pts = np.stack([a * np.sin(th), -b * np.cos(th), zz + 0.003], 1)
+        brim_top.append(rm.ring(pts))
+    edge = rm.ring(np.array([rm.V[i] for i in brim_top[-1]]) * np.array([1.012, 1.012, 1.0]) - np.array([0, 0, 0.003]))
+    brim_bot = []
+    for u in (1.0, 0.55, 0.12):
+        a, b = A - 0.004 + w * u, B - 0.004 + w * u
+        e = u
+        zz = k["curl"] * e * e * np.sin(th) ** 2 - k["dip"] * e * e * np.clip(np.cos(th), 0, 1) ** 2 + k["back"] * e * e * np.clip(-np.cos(th), 0, 1) ** 2 + k["roll"] * e ** 8
+        pts = np.stack([a * np.sin(th), -b * np.cos(th), zz - 0.003], 1)
+        brim_bot.append(rm.ring(pts))
+    ua = np.linspace(0, 1, n + 1)
+    seq = [rings[0]] * 0
+    # crown faces (outward)
+    for i in range(len(rings) - 1):
+        rm.bridge(rings[i + 1], rings[i], i + 1, i, "crown", ua=ua)
+    for j in range(n):
+        j2 = (j + 1) % n
+        rm.face((rings[-1][j], rings[-1][j2], top), [(ua[j], 9), (ua[j + 1], 9), (ua[j] + 0.5 / n, 10)], "crown")
+    # brim: from the crown's band ring outward on top, round the edge, back underneath
+    chain = [rings[1]] + brim_top + [edge] + brim_bot + [rings[0]]
+    for i in range(len(chain) - 1):
+        rm.bridge(chain[i], chain[i + 1], i, i + 1, "brim", ua=ua)
+    V = np.array(rm.V, np.float32)
+    V = S.project_to_surface(f, V, iters=8, clamp=0.006)
+    rm.V = list(V.astype(np.float64))
+    ob = R.to_blender(rm, name, coll)
+    return ob, f
+
+
+def hat_mesh_orient(ob):
+    """Crown and brim faces must point out of the felt: flip any face whose
+    normal points into the field."""
+    return ob
 
 
 def bonnet_field():
@@ -179,9 +257,9 @@ def bandana_field(p):
         hem = -0.195 + 0.075 * smoothstep(0.0, 1.2, th) + 0.02 * smoothstep(1.5, 3.1, th)
         return np.maximum(z - top, hem - z).astype(np.float32)
     band = S.Intersect(cloth, S.Fn(edges, (-0.2, -0.2, -0.3), (0.2, 0.2, 0.1)), k=0.003)
-    knot = S.Union([S.Ellipsoid((0, 0.100, -0.045), (0.016, 0.014, 0.012)),
-                    S.RoundCone((0.004, 0.106, -0.05), (0.018, 0.118, -0.11), 0.008, 0.004),
-                    S.RoundCone((-0.004, 0.106, -0.05), (-0.014, 0.114, -0.105), 0.007, 0.004)], k=0.006)
+    knot = S.Union([S.Ellipsoid((0, 0.098, -0.045), (0.016, 0.013, 0.012)),
+                    S.RoundCone((0.004, 0.100, -0.052), (0.016, 0.084, -0.110), 0.008, 0.004),
+                    S.RoundCone((-0.004, 0.100, -0.052), (-0.013, 0.082, -0.104), 0.007, 0.004)], k=0.006)
     b = S.Union([band, knot], k=0.008)
 
     def folds(P):
@@ -197,9 +275,9 @@ def bandana_paint(color, pattern=True):
     def paint(P):
         c, r, m = PT.fabric(P + 5.0, color, "cotton", dust_amt=0.0, fade=0.2, seed=82)
         if pattern:
-            # a faded paisley-ish scatter
-            dots = smoothstep(0.72, 0.8, value_noise(P, 260, seed=83))
-            c = c * (1 - 0.45 * dots[:, None]) + srgb(0.85, 0.80, 0.70) * 0.45 * dots[:, None]
+            # a faded print: small pale motifs, washed into the cloth
+            dots = smoothstep(0.80, 0.86, value_noise(P, 420, seed=83)) * (0.6 + 0.4 * value_noise(P, 60, seed=84))
+            c = c * (1 - 0.22 * dots[:, None]) + (c * 0.5 + srgb(0.80, 0.74, 0.62) * 0.5) * 0.22 * dots[:, None]
         # damp and darker round the mouth
         breath = np.exp(-((P[:, 0] / 0.03) ** 2 + ((P[:, 2] + 0.066) / 0.025) ** 2))
         c *= (1 - 0.2 * breath)[:, None]

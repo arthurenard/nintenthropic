@@ -31,25 +31,27 @@ def hat_job(kind, name, coll=None, tris=520):
         ob = C.decimated(name, f, (-0.12, -0.14, -0.21), (0.12, 0.15, 0.14), 0.0016, tris, coll, M=np.eye(3), o=HD.HEAD_ORIGIN, symmetry=True)
         return dict(ob=ob, field=f, paint=OF.bonnet_paint, origin=HD.HEAD_ORIGIN, weight=0.6, ao_field=f, ao_group=name, smart_uv=True,
                     skin=("rigid", "head"))
-    f, band_h, col, band_col, mat = OF.hat_field(kind)
     M, o = OF.hat_frame(6.0 if kind != "top" else 3.0)
-    ob = C.decimated(name, f, (-0.26, -0.28, -0.10), (0.26, 0.28, 0.21 if kind == "top" else 0.15), 0.0022, tris, coll, M=M, o=o, symmetry=False)
-    return dict(ob=ob, field=f, paint=OF.hat_paint(kind), origin=o, M=M, weight=0.55, ao_field=f, ao_group=name, smart_uv=True,
-                skin=("rigid", "head"))
+    ob, f = OF.hat_mesh(kind, name, coll)
+    # the mesh was built in the hat's frame: place it on the head
+    V = bl.verts_np(ob)
+    bl.set_verts(ob, V @ np.asarray(M, np.float32).T + np.asarray(o, np.float32))
+    return dict(ob=ob, field=f, paint=OF.hat_paint(kind), origin=o, M=M, weight=0.42, ao_field=f, ao_group=name, smart_uv=True,
+                uv_angle=80, skin=("rigid", "head"))
 
 
 def bandana_job(p, color, name, coll=None, tris=420, pattern=True):
     f = OF.bandana_field(p)
     ob = C.decimated(name, f, (-0.11, -0.16, -0.22), (0.11, 0.14, 0.03), 0.0018, tris, coll, M=np.eye(3), o=HD.HEAD_ORIGIN, symmetry=True)
-    return dict(ob=ob, field=f, paint=OF.bandana_paint(color, pattern), origin=HD.HEAD_ORIGIN, weight=0.7, ao_field=f, ao_group=name,
-                smart_uv=True, skin=("transfer",))
+    return dict(ob=ob, field=f, paint=OF.bandana_paint(color, pattern), origin=HD.HEAD_ORIGIN, weight=0.55, ao_field=f, ao_group=name,
+                smart_uv=True, uv_angle=80, skin=("transfer",))
 
 
 def armour_job(name="var.armour", coll=None):
     f = OF.armour_field()
     ob = C.decimated(name, f, (-0.2, -0.16, 1.1), (0.2, 0.05, 1.5), 0.0018, 360, coll, symmetry=True)
-    return dict(ob=ob, field=f, paint=OF.armour_paint, origin=np.zeros(3), weight=0.6, ao_field=f, ao_group=name, smart_uv=True,
-                skin=("rigid", "chest"))
+    return dict(ob=ob, field=f, paint=OF.armour_paint, origin=np.zeros(3), weight=0.4, ao_field=f, ao_group=name, smart_uv=True,
+                uv_angle=80, skin=("rigid", "chest"))
 
 
 def vest_job(bp, color, name="var.vest", coll=None, seed=0):
@@ -72,7 +74,7 @@ def vest_job(bp, color, name="var.vest", coll=None, seed=0):
         c[ch] = C.srgb(0.62, 0.50, 0.25)
         m[ch] = 1.0
         return c, r, m
-    return dict(ob=ob, field=f, paint=paint, origin=np.zeros(3), weight=0.6, ao_field=f, ao_group=name, skin=("transfer",))
+    return dict(ob=ob, field=f, paint=paint, origin=np.zeros(3), weight=0.5, ao_field=f, ao_group=name, skin=("transfer",))
 
 
 def coat_job(bp, color, name, hem_z=0.36, flare=1.0, coll=None, seed=0, kind="canvas"):
@@ -94,20 +96,20 @@ def coat_job(bp, color, name, hem_z=0.36, flare=1.0, coll=None, seed=0, kind="ca
         edge = np.exp(-((P[:, 0] / 0.05) ** 2)) * (P[:, 1] < -0.05)
         c *= (1 - 0.15 * edge)[:, None]
         return c, r, m
-    return dict(ob=ob, field=ff, paint=paint, origin=np.zeros(3), weight=0.55, ao_field=f, ao_group=name, skin=("coat", hem_z))
+    return dict(ob=ob, field=ff, paint=paint, origin=np.zeros(3), weight=0.38, ao_field=f, ao_group=name, skin=("coat", hem_z))
 
 
 def prop_job(kind, name, socket_M, coll=None):
     field, paint, box, tris = {
-        "revolver": (OF.revolver_field(), OF.revolver_paint, ((-0.03, -0.06, -0.08), (0.03, 0.19, 0.07)), 420),
+        "revolver": (OF.revolver_field(), OF.revolver_paint, ((-0.03, -0.06, -0.08), (0.03, 0.19, 0.07)), 680),
         "rifle": (OF.rifle_field(), OF.rifle_paint, ((-0.04, -0.36, -0.12), (0.04, 0.62, 0.08)), 520),
         "dynamite": (OF.dynamite_field(), OF.dynamite_paint, ((-0.05, -0.05, -0.10), (0.05, 0.05, 0.20)), 220),
     }[kind]
     Msock = np.array(socket_M, float)
     M, o = Msock[:3, :3], Msock[:3, 3]
-    ob = C.decimated(name, field, box[0], box[1], 0.0011 if kind != "rifle" else 0.0016, tris, coll, M=M, o=o)
-    return dict(ob=ob, field=field, paint=paint, origin=o, M=M, weight=0.7 if kind == "revolver" else 0.5, ao_field=field,
-                ao_group=name, ao_self_only=True, smart_uv=True, skin=("prop",))
+    ob = C.decimated(name, field, box[0], box[1], 0.0008 if kind != "rifle" else 0.0014, tris, coll, M=M, o=o)
+    return dict(ob=ob, field=field, paint=paint, origin=o, M=M, weight=0.6 if kind == "revolver" else 0.35, ao_field=field,
+                ao_group=name, ao_self_only=True, smart_uv=True, uv_angle=75, skin=("prop",))
 
 
 # ------------------------------------------------------------------ skinning
