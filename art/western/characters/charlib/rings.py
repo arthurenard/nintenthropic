@@ -114,6 +114,7 @@ def unwrap_angles(a):
 def snap_and_relax(rm, field, iters=24, lam=0.5, snap_iters=3, clamp=0.01):
     """Snap every unpinned vertex onto the field, then relax the free ones
     tangentially (Laplacian in the surface's tangent plane) and snap again."""
+    rm.field = field            # to_blender orients the faces by it
     V = np.array(rm.V, np.float32)
     w = np.array(rm.relax_w, np.float32)
     pin = np.array(rm.pinned, bool)
@@ -163,8 +164,55 @@ def to_blender(rm, name, coll=None):
     uv /= max(uv.max(), 1e-6)
     bl.set_uv(ob, uv)
     bl.recalc_normals(ob)
-    orient_outward(ob)
+    if getattr(rm, "field", None) is not None:
+        orient_by_field(ob, rm.field)
+    else:
+        orient_outward(ob)
     return ob
+
+
+def orient_by_field(ob, field):
+    """Point every face out of the garment's field. recalc_face_normals only
+    agrees within a manifold patch, and the armhole seams are not manifold,
+    so a whole sleeve could come out wound inward (dark in three.js, whose
+    double-sided shading then lights its inside). Each patch reachable across
+    two-face edges votes, area-weighted, with the field's gradient."""
+    import bmesh
+    from . import sdf as S
+    me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.faces.ensure_lookup_table()
+    faces = bm.faces
+    C = np.array([f.calc_center_median() for f in faces], np.float32)
+    N = np.array([f.normal for f in faces], np.float32)
+    A = np.array([f.calc_area() for f in faces], np.float32)
+    agree = (N * S.gradient(field, C)).sum(1) * A
+    region = np.full(len(faces), -1)
+    flip = []
+    for f in faces:
+        if region[f.index] >= 0:
+            continue
+        k = f.index
+        region[k] = k
+        stack, members = [f], [k]
+        while stack:
+            g = stack.pop()
+            for e in g.edges:
+                if len(e.link_faces) != 2:
+                    continue
+                for h in e.link_faces:
+                    if region[h.index] < 0:
+                        region[h.index] = k
+                        members.append(h.index)
+                        stack.append(h)
+        if agree[members].sum() < 0:
+            flip += members
+    if flip:
+        bmesh.ops.reverse_faces(bm, faces=[faces[i] for i in flip])
+        bm.to_mesh(me)
+        me.update()
+    bm.free()
 
 
 def orient_outward(ob):

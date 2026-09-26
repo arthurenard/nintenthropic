@@ -109,7 +109,16 @@ def build_torso_with_arms(rm, bp, M, arm_n, zs, arm_rings, sleeve, prefix, skip=
         rings = [loop]
         p0, d0 = point_on_arm(tag, 0.0)
         e1, e2 = R.limb_frame(d0, (0, 0, 1))
-        ang, sgn = R.ring_angles([rm.V[k] for k in loop], p0, d0, e1, e2)
+        lp = np.array([rm.V[k] for k in loop])
+        ang, sgn = R.ring_angles(lp, p0, d0, e1, e2)
+        # the winding is only well defined if the hole goes round the arm's
+        # root; a bodice's armhole can sit below and inside the shoulder joint
+        # (the dress), and then the sign flips on one side and the sleeve is
+        # bridged on inside out. Measured round the hole's own centre it
+        # cannot be wrong.
+        ang_c, sgn_c = R.ring_angles(lp, lp.mean(0), d0, e1, e2)
+        if sgn_c != sgn:
+            ang, sgn = ang_c, sgn_c
         # re-seat the armhole loop around the root of the arm (a tilted oval
         # from the shoulder top down into the armpit) so the first sleeve
         # quads are not twisted between a vertical hole and a slanted arm
