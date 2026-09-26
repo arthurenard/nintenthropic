@@ -4,9 +4,6 @@
  */
 import type { Game, GameEntry } from "../engine/types";
 
-/** What High Noon's module says while it is still a stub. */
-const NOT_BUILT = "High Noon is not built yet";
-
 export const HIGH_NOON: GameEntry = {
   id: "high-noon",
   title: "High Noon",
@@ -16,16 +13,7 @@ export const HIGH_NOON: GameEntry = {
   poster: "assets/western/poster.webp",
   async create(): Promise<Game> {
     const { createGame } = await import("./western/index");
-    try {
-      return await createGame();
-    } catch (error) {
-      // Until High Noon is merged its module is a stub that throws; the
-      // stand-in range keeps the whole app playable end to end meanwhile.
-      // Any other failure is a real one and is reported as such.
-      if (!(error instanceof Error) || error.message !== NOT_BUILT) throw error;
-      const { createStubGame } = await import("./stub/index");
-      return createStubGame({ id: "high-noon", title: "High Noon" });
-    }
+    return createGame();
   },
 };
 

@@ -102,6 +102,12 @@ export interface AudioBus {
   /** Named global treatments, 0..1: "hurt" muffles and adds a heartbeat. */
   setFilter(name: "hurt" | "slowmo", amount: number): void;
   readonly muted: boolean;
+  /**
+   * The street the listener stands in, in metres (to the facades left and
+   * right, the building behind, the far end), for the echoes. Optional: a
+   * game passes what it knows; the sound engine keeps its defaults for the rest.
+   */
+  setSpace?(space: { left?: number; right?: number; behind?: number; depth?: number; facade?: number; back?: number; far?: number }): void;
 }
 
 export interface LoadedAsset {
@@ -156,6 +162,12 @@ export interface CalibrationTarget {
 
 /** The game's own aim-check targets: bottles on the fence in High Noon. */
 export interface CalibrationStage {
+  /**
+   * An aim check is starting: stand every target up (again, for Play Again
+   * on the same game). Optional; the platform calls it, when present, before
+   * it first asks for targets().
+   */
+  begin?(): void;
   /** Where the targets are in the current view. */
   targets(): CalibrationTarget[];
   /** Show one target as the one to shoot now. */

@@ -7,11 +7,12 @@
  * gets there two ways:
  *   - naturally: a mouse that leaves the stage is off the screen until it
  *     comes back (the crosshair stays at the last point it was seen);
- *   - on purpose: right-click, or R, makes a synthetic offscreen moment -
+ *   - on purpose: right-click makes a synthetic offscreen moment -
  *     Aim.offscreen is true for RELOAD_MOMENT ms with the crosshair where it
  *     is, as if the player had flicked off the screen and back. With touch, a
  *     two-finger tap does the same.
- * Games need no key handling of their own for it.
+ * The keyboard is the game's own: High Noon reloads on R itself, so the
+ * pointer does not turn R into a second reload.
  */
 import type { Aim, InputKind, InputSource } from "../engine/types";
 
@@ -123,11 +124,6 @@ export class MouseInput extends PointerInput {
       if (event.pointerType !== "touch") this.outside = false;
     });
     this.listen(stage, "contextmenu", (event) => event.preventDefault());
-    this.listen(window, "keydown", (event) => {
-      if ((event.key === "r" || event.key === "R") && !event.repeat && !event.metaKey && !event.ctrlKey) {
-        this.reload(event.timeStamp);
-      }
-    });
   }
 }
 

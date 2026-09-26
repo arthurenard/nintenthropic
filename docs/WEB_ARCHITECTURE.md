@@ -102,9 +102,18 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   (the hand moves with the fold), then the crosshair kicks up with the recoil
   and settles in about 250 ms.
 - **Reloading with a pointer.** A mouse that leaves the stage is off the screen
-  until it returns; right-click or R, and a two-finger tap on a touch screen,
-  make a *synthetic offscreen moment*: `Aim.offscreen` is true for 250 ms with
-  the crosshair where it is. Games need no key handling of their own for it.
+  until it returns; right-click, and a two-finger tap on a touch screen, make a
+  *synthetic offscreen moment*: `Aim.offscreen` is true for 250 ms with the
+  crosshair where it is. The keyboard is the game's own (High Noon reloads on
+  R itself), so the pointer does not turn R into a second reload.
+- **Rendering.** The host's renderer has no canvas anti-aliasing (the games
+  anti-alias in their own post-processing) and outputs sRGB; tone mapping is
+  the game's. The HUD's red screen edge stays light, since the game draws its
+  own blood in the corners; the damage arcs are the page's.
+- **Rounds.** `CalibrationStage.begin()` (optional) stands the targets up for
+  an aim check; the platform calls it before each check, and once more if the
+  targets run out mid-check. A game whose stage has it plays Play Again,
+  Restart and Adjust Aim on the same instance; any other is made afresh.
 - **Until `start()`** the host still runs the game's `update` and `render` every
   frame (the world is alive behind the aim check). The check's shots belong to
   the check: the platform judges each one and tells the stage `hit` or `miss`;
@@ -132,6 +141,8 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   reload" to a mouse player).
 - `GameEntry` — the landing's card for a game; `about` (optional) is the
   featured game's longer line.
+- Optional members a game may use: `AudioBus.setSpace(space)` (the street's
+  walls, for the echoes), `CalibrationStage.begin()` (above).
 - `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
   the desktop), wave titles, ammo, damage direction, hit markers, secrets, and
   the end of the game (`GameOver` with stats); `revolverFinish` (optional)

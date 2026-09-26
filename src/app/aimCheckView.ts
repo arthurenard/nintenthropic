@@ -40,9 +40,13 @@ export class AimCheckView {
   private version = 0;
   private reading: HandReading | null = null;
   private finished = false;
+  /** The stage has been asked to stand its targets up again since they ran out. */
+  private restood = false;
   private readonly cleanups: (() => void)[] = [];
 
   constructor(private readonly options: AimCheckViewOptions) {
+    // Every target stands, whatever the last round left broken.
+    options.stage.begin?.();
     this.check = this.fresh(options.saved);
     options.input.onReading = (reading) => this.observe(reading);
     const startOver = $("start-over");
@@ -82,7 +86,16 @@ export class AimCheckView {
     const { width, height } = this.options.viewport();
     this.check.setViewport(width, height);
     const offered = this.check.canPlayAnyway;
-    this.check.setTargets(this.options.stage.targets());
+    let targets = this.options.stage.targets();
+    // Every target broken before the aim is proven: a stage that can stand
+    // them up again does so once, and the check carries on.
+    if (!targets.length && this.check.shots > 0 && !this.restood && this.options.stage.begin) {
+      this.restood = true;
+      this.options.stage.begin();
+      targets = this.options.stage.targets();
+    }
+    if (targets.length) this.restood = false;
+    this.check.setTargets(targets);
     if (this.check.canPlayAnyway !== offered) this.render(true);
     const lit = this.check.lit?.id ?? null;
     if (lit !== this.lit) {
@@ -131,6 +144,7 @@ export class AimCheckView {
 
   private startOver(): void {
     if (this.finished) return;
+    this.options.stage.begin?.();
     this.check = this.fresh(null);
     this.render(true);
     announce("Starting over. Shoot the lit target.");

@@ -65,7 +65,10 @@ export class EngineHost {
     try {
       this.renderer = new WebGLRenderer({
         canvas,
-        antialias: true,
+        // The games anti-alias in their own post-processing (MSAA on the
+        // scene target), so the canvas itself needs none: it would only be
+        // a second multisampled buffer the size of the screen.
+        antialias: false,
         alpha: false,
         stencil: false,
         powerPreference: "high-performance",

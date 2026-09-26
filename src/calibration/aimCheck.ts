@@ -10,7 +10,7 @@
 import type { CalibrationTarget } from "../engine/types";
 import type { Point } from "../input/filter";
 import { apply, fitAffine, fitScaled, gain, type Matrix } from "../input/homography";
-import { AIM_RADIUS, measure, type Measure, type Vector } from "./score";
+import { AIM_RADIUS, READY_SCORE, measure, type Measure, type Vector } from "./score";
 import { GAIN_LIMIT } from "./storage";
 
 /** Only this many of the latest shots are fitted: the hand drifts, and the
@@ -151,8 +151,13 @@ export class AimCheck {
     // done: never leave the player with nothing to shoot and no way on.
     if (!targets.length && this.shots > 0 && !this.done && !this.canPlayAnyway) {
       this.canPlayAnyway = true;
-      this.tip = tipFor(this.stats);
-      this.words = { title: "That’s every target.", detail: this.tip };
+      // An aim already scoring well only ran out of targets to prove it on:
+      // say so, rather than give a tip it does not need.
+      const good = (this.measure.score ?? 0) >= READY_SCORE;
+      this.tip = good ? null : tipFor(this.stats);
+      this.words = good
+        ? { title: "Your aim looks good.", detail: "Play on, or Start Over to check again." }
+        : { title: "That’s every target.", detail: this.tip! };
     }
   }
 

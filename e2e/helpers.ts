@@ -77,12 +77,20 @@ export async function shoot(page: Page, x: number, y: number): Promise<void> {
   await pose(page, handAt(x, y));
 }
 
-/** Plays the aim check through with the scripted hand until it hands over to the game. */
+/**
+ * Plays the aim check through with the scripted hand until it hands over to
+ * the game. A narrow window can show a game fewer targets than a first check
+ * needs; if they run out, the player plays on with the aim they have.
+ */
 export async function passAimCheck(page: Page, onShot?: (shot: number) => Promise<void>): Promise<number> {
   let shots = 0;
   for (; shots < 14; shots++) {
     const state = await snapshot(page);
     if (state.checkDone || state.phase === "play") break;
+    if (!state.lit && (await page.getByRole("button", { name: "Play Anyway" }).isVisible())) {
+      await page.getByRole("button", { name: "Play Anyway" }).click();
+      break;
+    }
     expect(state.lit, "a target is lit to shoot").not.toBeNull();
     await shoot(page, state.lit!.x, state.lit!.y);
     await page.waitForTimeout(120);

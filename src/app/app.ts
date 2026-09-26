@@ -471,18 +471,29 @@ export class App {
     this.session = session;
     host.setGame(game);
     host.onFrame = ({ now, aim }) => this.frame(session, now, aim);
+    this.round(session, adjust);
+    host.start();
+    requestAnimationFrame(() => ($("game").dataset.ready = "true"));
+  }
+
+  /** A round of the session's game: the aim check first with the hand, then play. */
+  private round(session: Session, adjust: boolean): void {
+    const host = this.host!;
+    const hand = session.hand;
+    const camera = session.camera;
     if (hand && camera) {
+      const stage = $("stage");
       const saved = adjust ? null : loadAim(browserStore(), camera);
       session.phase = "check";
       session.check = new AimCheckView({
-        stage: game.calibration,
+        stage: session.game.calibration,
         input: hand,
         saved,
-        viewport,
+        viewport: () => ({ width: stage.clientWidth, height: stage.clientHeight }),
         reducedMotion: () => this.settings.reducedMotion,
         onDone: (mapping, score) => {
           this.lastCheck = { score, shots: session.check?.check.shots ?? 0, ended: "ready" };
-          if (!saveAim(browserStore(), camera!, mapping)) toast("This window can’t save your aim. It works until you close it.");
+          if (!saveAim(browserStore(), camera, mapping)) toast("This window can’t save your aim. It works until you close it.");
           this.play(session, mapping);
         },
         onPlayAnyway: (mapping) => {
@@ -493,15 +504,13 @@ export class App {
       });
       // The check judges its shots; the game sees them too, to answer with
       // the gun's sound and smoke (it scores nothing before start()).
-      host.aim = (now) => hand!.sample(now);
-      announce(`${this.entry.title}. Aim setup. Shoot the lit target: point at it, then fold your thumb to fire.`);
+      host.aim = (now) => hand.sample(now);
+      announce(`${session.entry.title}. Aim setup. Shoot the lit target: point at it, then fold your thumb to fire.`);
     } else {
-      host.aim = (now) => input.sample(now);
+      host.aim = (now) => session.input.sample(now);
       this.play(session, null);
     }
     $("game").dataset.phase = session.phase;
-    host.start();
-    requestAnimationFrame(() => ($("game").dataset.ready = "true"));
   }
 
   private play(session: Session, mapping: Matrix | null): void {
@@ -609,8 +618,40 @@ export class App {
 
   /** A new game of the same kind: through the aim check again, as every game is. */
   restart(adjust = false): void {
+    const session = this.session;
+    // A game whose stage can stand its targets up again (begin) plays its
+    // next round on the same instance: no reload, no second wait. Any other
+    // is made afresh.
+    if (session && this.host && typeof session.game.calibration.begin === "function") {
+      this.again(session, adjust);
+      return;
+    }
     this.endSession();
     void this.start({ adjust });
+  }
+
+  /** The next round on the same game: Play Again, Restart, Adjust Aim. */
+  private again(session: Session, adjust: boolean): void {
+    closeSheets();
+    session.check?.dispose();
+    session.check = null;
+    session.result = null;
+    session.lostSince = null;
+    session.input.reset();
+    this.hud.reset(this.settings.unlocks.has("golden"));
+    this.crosshair.visible = false;
+    this.crosshair.clear();
+    if (session.hand) this.pip.show(!this.options.scripted);
+    // With the mouse there is no check to call begin(): the game hears of
+    // its new round from begin() all the same, then start().
+    if (!session.hand) session.game.calibration.begin?.();
+    this.round(session, adjust);
+    this.startTracking();
+    if (session.paused) {
+      session.paused = false;
+      this.host!.resume();
+    }
+    $("game").focus();
   }
 
   /** Back to the arcade. */

@@ -66,10 +66,12 @@ test("the aim check and play", async ({ page }, info) => {
   await passAimCheck(page, async (n) => {
     if (n === 2) await shot(page, info, "09-aim-check-crosshair");
     if (n === 4) await shot(page, info, "10-aim-check-measuring");
+    // The ready moment lasts a second and a half: caught as it arrives.
+    if (await page.locator(".ready-moment").isVisible()) await shot(page, info, "11-ready", 250);
   });
-  await expect(page.locator(".ready-moment")).toBeVisible();
-  await page.waitForTimeout(250);
-  await shot(page, info, "11-ready", 0);
+  // A narrow window may show fewer targets than a first check needs; then
+  // it ends with Play Anyway instead of the ready moment.
+  await expect.poll(async () => (await snapshot(page)).lastCheck?.ended ?? null, { timeout: 5_000 }).not.toBeNull();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 5_000 }).toBe("play");
   await pose(page, handAt(0.55, 0.45));
   await page.waitForTimeout(2600); // the first wave's card comes and goes
@@ -132,7 +134,8 @@ test("an aim that will not settle is offered Play Anyway, with one tip", async (
     [-0.08, 0.07],
   ];
   for (let shotIndex = 0; shotIndex < 12; shotIndex++) {
-    const lit = (await snapshot(page)).lit!;
+    const lit = (await snapshot(page)).lit;
+    if (!lit) break; // every target broken: Play Anyway is already offered
     const [dx, dy] = wander[shotIndex % wander.length]!;
     await shoot(page, lit.x + dx, lit.y + dy);
     await page.waitForTimeout(150);

@@ -286,18 +286,19 @@
 
 /* --- being hit --------------------------------------------------------------------- */
 
-/* Red creeps in from the screen's edges in proportion to how hurt the player
-   is, and recedes as they recover. */
+/* A thin red edge, in proportion to how hurt the player is, receding as they
+   recover. Kept light: the game draws its own blood in the corners, and the
+   two must not stack into a red screen. */
 .hurt-edge {
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0;
   background: radial-gradient(
-    ellipse 75% 70% at 50% 50%,
-    transparent 45%,
-    rgba(160, 10, 0, 0.35) 72%,
-    rgba(190, 12, 0, 0.78) 100%
+    ellipse 85% 80% at 50% 50%,
+    transparent 70%,
+    rgba(190, 12, 0, 0.14) 88%,
+    rgba(200, 16, 0, 0.32) 100%
   );
   transition: opacity 250ms var(--ease);
 }

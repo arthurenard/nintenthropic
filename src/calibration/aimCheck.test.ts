@@ -272,6 +272,17 @@ describe("a stage that runs out of targets", () => {
     expect(player.check.words.title).toBe("That’s every target.");
     expect(player.check.words.detail).toBe(player.check.tip);
   });
+
+  it("says a good aim is good when it only ran out of targets to prove it on", () => {
+    const player = new Player();
+    for (let i = 0; i < 5; i++) player.shoot(); // two to learn, one to fit, two scored
+    expect(player.check.done).toBe(false);
+    expect(player.check.measure.score!).toBeGreaterThanOrEqual(READY_SCORE);
+    player.check.setTargets([]);
+    expect(player.check.canPlayAnyway).toBe(true);
+    expect(player.check.tip).toBeNull();
+    expect(player.check.words.title).toBe("Your aim looks good.");
+  });
 });
 
 describe("a returning player", () => {
