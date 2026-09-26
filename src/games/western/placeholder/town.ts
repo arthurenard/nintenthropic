@@ -469,7 +469,6 @@ function bakeGround(b: TownBuilder, material: Material, dirt: Color, desert: Col
   const up = new Vector3(0, 1, 0);
   const jitter = [new Vector3(0.03, 0.02, 0), new Vector3(-0.03, -0.015, 0.02), new Vector3(0, 0.03, -0.03)];
   const albedo = new Color();
-  const baked = new Color();
   const p = new Vector3();
   const s = new Vector3();
   const verts: number[] = [];
@@ -778,7 +777,6 @@ function buildChurch(b: TownBuilder, mat: Mats, C: Colors, light: BakeLight): Gr
   const white = C.church as Color;
   const roof = C.churchRoof as Color;
   const zF = -60;
-  const zB = -72;
   b.box("church", mat.boards, [-3.55, 3.5, zF - 6], [5.1, 7, 12], white, { occlude: true, uvScale: 1.6 });
   b.box("church", mat.boards, [3.55, 3.5, zF - 6], [5.1, 7, 12], white, { occlude: true, uvScale: 1.6 });
   // Above the doors.

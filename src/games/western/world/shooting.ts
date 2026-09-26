@@ -104,7 +104,7 @@ export class Shooter {
   constructor(
     private readonly camera: PerspectiveCamera,
     private readonly queries: TownQueries,
-    private readonly town: TownLayout,
+    town: TownLayout,
     private readonly cast: Cast,
     private readonly world: ShootableWorld,
   ) {

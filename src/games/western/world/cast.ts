@@ -57,7 +57,6 @@ export interface TownsView {
 const tmp = new Vector3();
 const tmp2 = new Vector3();
 const tmpM = new Matrix4();
-const tmpQ = new Quaternion();
 
 const HATS = ["var.hat.stetson", "var.hat.bowler", "var.hat.flat"];
 const COATS = ["var.coat.duster", "var.coat.jacket", null];

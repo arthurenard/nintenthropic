@@ -146,8 +146,6 @@ export class HighNoon implements Game, MatchListener {
   private readonly schedule: Scheduled[] = [];
   private coverReport: CoverReport | null = null;
   private readonly shotPoint = new Vector3();
-  private shotX = 0.5;
-  private shotY = 0.5;
   private shotKilled = false;
   private visualRandom = mulberry32(7);
   private previousToneMapping: ToneMapping | null = null;
@@ -492,8 +490,6 @@ export class HighNoon implements Game, MatchListener {
     this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, false);
     const res = this.shooter.shoot(x, y);
     this.shotPoint.copy(res.point);
-    this.shotX = x;
-    this.shotY = y;
     this.shotKilled = false;
     for (const pane of res.panes) this.shatter(pane);
     this.match.resolveShot(res.target);

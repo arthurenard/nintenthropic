@@ -1,5 +1,4 @@
 import {
-  AnimationClip,
   Bone,
   BoxGeometry,
   BufferAttribute,
@@ -60,8 +59,6 @@ const HUMANOID: BoneDef[] = [
   ["shin.R", "thigh.R", [0, -0.43, 0]],
   ["foot.R", "shin.R", [0, -0.42, 0]],
 ];
-
-export const HUMANOID_BONES = HUMANOID.map((b) => b[0]);
 
 interface Rig {
   armature: Object3D;
@@ -458,8 +455,4 @@ export function buildChickenAsset(): LoadedAsset {
   // Not "body": that is the root bone's name, and a clip binding by name must find the bone.
   rig.armature.add(skinned(rig, "chicken.mesh", s.build(), cloth(0.9)));
   return { scene: root, animations: chickenClips([0, 0.24, 0]) };
-}
-
-export function isPlaceholderClip(c: AnimationClip): boolean {
-  return c.userData?.["placeholder"] === true;
 }
