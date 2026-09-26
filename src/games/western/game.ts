@@ -985,9 +985,18 @@ export class HighNoon implements Game, MatchListener {
     else if (count > 1 && count < 5) this.popupAt(this.shotPoint, `Tumbleweed ×${count}`, "");
   }
 
-  secretFound(_id: SecretId, name: string, found: number, total: number): void {
-    this.hud.secret(name, found, total);
-    this.sound.play("secret_found", { delay: 0.3 });
+  secretFound(id: SecretId, name: string, found: number, total: number): void {
+    const announce = () => {
+      if (this.phase !== "playing") return;
+      this.hud.secret(name, found, total);
+      this.sound.play("secret_found", { delay: 0.3 });
+    };
+    // The page's toast arrives at the top of the view, over the weather
+    // vane: its show (the spin, then the creak round to point at you) plays
+    // first, and the toast after it. (The rules announce the find before the
+    // shot has set the vane spinning: its length is read a frame later.)
+    if (id === "vane") this.later(0, () => this.later(this.secretsWorld.vaneShowLeft() + 0.2, announce));
+    else announce();
   }
 
   // --- for the dev harness ----------------------------------------------------------------------

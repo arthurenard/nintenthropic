@@ -137,8 +137,8 @@ export function checkFraming(townFov: number, aspect: number): Framing {
  * Where the page's chrome sits in play, in CSS pixels, as src/app/play.css
  * lays it out: the score panel top left, Pause top right, the revolver's
  * cylinder bottom right, the camera's picture-in-picture bottom left (with the
- * hand only), and the hint pill along the bottom. A little is added round each,
- * so a hat brim does not tuck under a panel's edge either.
+ * hand only), and the hint pill along the bottom. A little is added round
+ * each, so a hat brim does not tuck under a panel's edge either.
  */
 export function chromeKeepOut(width: number, height: number, hand: boolean): Rect[] {
   const w = Math.max(1, width);
