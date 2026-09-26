@@ -273,7 +273,11 @@ export class Effects {
       this.scatter(dir, 0.5, v).multiplyScalar(0.4 + r() * 0.6);
       this.alpha.emit(t2.x, t2.y, t2.z, v.x, v.y + 0.1, v.z, SMOKE, scale * 0.8);
     }
-    this.lights.flash(at, golden ? tint.setRGB(1, 0.8, 0.35) : tint.setRGB(1, 0.72, 0.4), 45 * scale, 7, 0.09);
+    // The light sits a stride out in front of the barrel: at the muzzle itself
+    // it would blow the shooter out to white; out here it lights his front,
+    // his neighbours and the boards under him for a blink.
+    t2.copy(at).addScaledVector(dir, 0.7);
+    this.lights.flash(t2, golden ? tint.setRGB(1, 0.8, 0.35) : tint.setRGB(1, 0.72, 0.4), 5 * scale, 6, 0.09);
   }
 
   /** The player's own shot: a faint puff drifting at the crosshair (no gun on screen). */
