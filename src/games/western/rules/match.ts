@@ -26,6 +26,7 @@ import {
   MIN_SHOT_GAP,
   QUICK_DRAW_WINDOW,
   RIFLE_DAMAGE_FACTOR,
+  THROW_HAND,
   WAVE_INTRO,
 } from "./tuning";
 import type { Cover, HitPart, Role } from "./types";
@@ -287,9 +288,18 @@ export class Match implements BanditWorld {
     this.townsfolkTimes = [];
     const cover = pickDuelCover(this.covers);
     const b = new Bandit(this.nextId++, "duelist", cover);
-    const from = cover.exposed;
-    // Ten paces out to the middle of the street, about fifteen metres from you.
-    const to: V3 = { x: from.x * 0.06, y: 0, z: Math.max(from.z + 2.5, Math.min(-13, from.z + 9.5)) };
+    let from: V3;
+    let to: V3;
+    if (isDuelMark(cover)) {
+      // The town's mark in the street: he walks out to it from his cover
+      // (the freight crates), ten paces, and turns to face you there.
+      from = cover.ready ?? cover.hidden;
+      to = cover.exposed;
+    } else {
+      // Ten paces out from a door to the middle of the street, about fifteen metres from you.
+      from = cover.exposed;
+      to = { x: from.x * 0.06, y: 0, z: Math.max(from.z + 2.5, Math.min(-13, from.z + 9.5)) };
+    }
     b.startDuel(from, to);
     this.bandits.push(b);
     this.duelist = b;
@@ -425,7 +435,7 @@ export class Match implements BanditWorld {
   throwDynamite(b: Bandit): void {
     const stick = this.freeStick();
     if (!stick) return;
-    const start: V3 = { x: b.pos.x, y: b.pos.y + 1.9, z: b.pos.z };
+    const start = throwHand(b.pos, this.eye);
     const target: V3 = {
       x: this.eye.x + range(this.random, -1.6, 1.6),
       y: 0.05,
@@ -473,7 +483,7 @@ export class Match implements BanditWorld {
     const weights: number[] = [];
     const inStreet = b.role === "gunman" && b.state !== "hidden";
     for (const c of this.covers) {
-      if (c === b.cover || c.level !== 0 || isHigh(c) || !this.isFree(c) || this.bodies.has(c.id)) continue;
+      if (c === b.cover || c.level !== 0 || isHigh(c) || isDuelMark(c) || !this.isFree(c) || this.bodies.has(c.id)) continue;
       const d = horizontalDistance(b.pos, c.exposed);
       if (inStreet) {
         if (d > 22) continue;
@@ -534,6 +544,10 @@ export class Match implements BanditWorld {
 
   private allowed(role: Role, c: Cover): boolean {
     const high = isHigh(c);
+    // The duel's mark is out in the open in the middle of the street, its
+    // "hidden" spot the freight crates metres away: only the duelist walks
+    // out to it. Anyone else sent there would slide across the street.
+    if (isDuelMark(c)) return false;
     switch (role) {
       case "rifleman":
         return this.hasHighCovers ? high || (c.kind === "roof" && c.level >= 1) : c.level >= 1;
@@ -542,9 +556,9 @@ export class Match implements BanditWorld {
       case "runner":
         return !high && c.level === 0;
       case "dynamiter":
-        return !high && c.distance <= DYNAMITE_RANGE;
+        return !high && c.distance <= Math.min(DYNAMITE_RANGE, this.spec.reach);
       default:
-        return !high && (this.spec.coverTier === 2 || c.distance <= 42);
+        return !high && c.distance <= this.spec.reach;
     }
   }
 
@@ -853,6 +867,26 @@ export function isHigh(c: Cover): boolean {
   return c.kind === "tower" || c.level >= 2;
 }
 
+/** Where a man standing at `feet` and facing `eye` holds a stick as he lets it go. */
+export function throwHand(feet: V3, eye: V3): V3 {
+  const fx = eye.x - feet.x;
+  const fz = eye.z - feet.z;
+  const len = Math.hypot(fx, fz) || 1;
+  const ux = fx / len;
+  const uz = fz / len;
+  // Facing (ux, uz), his left is (uz, −ux).
+  return {
+    x: feet.x + ux * THROW_HAND.forward + uz * THROW_HAND.left,
+    y: feet.y + THROW_HAND.up,
+    z: feet.z + uz * THROW_HAND.forward - ux * THROW_HAND.left,
+  };
+}
+
+/** The High Noon duel's mark in the street (tagged `duel` by the town): the duelist's alone. */
+export function isDuelMark(c: Cover): boolean {
+  return c.tags.includes("duel");
+}
+
 function weightedPick<T>(options: T[], weights: number[], total: number, random: Random): T | null {
   if (options.length === 0 || total <= 0) return null;
   let r = random() * total;
@@ -889,7 +923,7 @@ export function pickBossCovers(covers: readonly Cover[]): Cover[] {
   const tagged = covers.filter((c) => c.tags.includes("boss"));
   if (tagged.length >= 2) return tagged;
   // Close enough to be the star of the wave: 14 to 32 m out.
-  const pool = covers.filter((c) => !isHigh(c) && c.level === 0 && c.distance >= 14 && c.distance <= 32);
+  const pool = covers.filter((c) => !isHigh(c) && !isDuelMark(c) && c.level === 0 && c.distance >= 14 && c.distance <= 32);
   const source = pool.length >= 3 ? pool : covers.filter((c) => !isHigh(c));
   if (source.length <= 3) return source.slice();
   // Greedy spread: start nearest the middle of the street, add the farthest each time.

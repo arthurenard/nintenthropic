@@ -2,6 +2,7 @@ import { Matrix4, Mesh, Object3D, Quaternion, SkinnedMesh, Vector3, type Materia
 import type { Bandit } from "../rules/bandit";
 import type { HitPart } from "../rules/types";
 import type { Townsperson } from "../rules/townsfolk";
+import type { FallPath } from "./coverCheck";
 import type { Effects } from "./effects";
 import type { Rig, RigPool } from "./character";
 import type { TownQueries } from "./queries";
@@ -58,6 +59,11 @@ const tmp = new Vector3();
 const tmp2 = new Vector3();
 const tmpM = new Matrix4();
 
+/** States in which nothing darkens him (not a tell, not stepping out of a doorway). */
+function tellFree(state: string): boolean {
+  return state !== "tell" && state !== "emerging" && state !== "hiding";
+}
+
 const HATS = ["var.hat.stetson", "var.hat.bowler", "var.hat.flat"];
 const COATS = ["var.coat.duster", "var.coat.jacket", null];
 const BANDANAS = ["var.bandana.red", "var.bandana.black", null];
@@ -77,6 +83,8 @@ export class Cast {
   private time = 0;
   private frame = 0;
   golden = false;
+  /** For each cover up high, which way a man shot there goes over (set at load). */
+  falls: ReadonlyMap<string, FallPath> = new Map();
 
   constructor(
     private readonly pools: { bandit: RigPool; boss: RigPool; townsfolk: RigPool },
@@ -136,7 +144,14 @@ export class Cast {
       rig.tint(k * (0.95 + r() * 0.1), k, k * (0.9 + r() * 0.1));
     }
     // The duelist strolls out (a slowed run); everyone else starts in cover.
-    if (b.state === "walking") rig.play("run", 0, true, 0.42);
+    if (b.state === "walking") {
+      // The gang has no walk of its own yet: the run, slowed toward the pace
+      // he really covers the ground at (the run's feet travel at ~4 m/s), so
+      // his feet slide as little as a run slowed this far allows.
+      const speed = b.pathLength / Math.max(0.1, b.dur);
+      if (rig.has("walk")) rig.play("walk", 0, true);
+      else rig.play("run", 0, true, Math.min(0.6, Math.max(0.3, speed / 4)));
+    }
     else rig.play("hidden", 0);
     rig.root.position.set(b.pos.x, b.pos.y, b.pos.z);
     this.face(rig, b.pos.x, b.pos.z);
@@ -222,7 +237,8 @@ export class Cast {
     v.rig.uniforms.uShade.value = 1;
     v.rig.root.visible = true;
     const clip = { lean_left: "lean_left_out", lean_right: "lean_right_out", rise: "rise", step_out: "step_out" }[b.cover.emerge];
-    v.rig.play(clip, 0.1, false);
+    // The clip takes as long as he does: it ends as he arrives, not before.
+    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
     if (b.role === "boss" && !v.introduced) {
       v.introduced = true;
       this.sound.play("boss_intro");
@@ -238,12 +254,30 @@ export class Cast {
     if (v.lean === 0 || b.role === "duelist") v.rig.play("aim", 0.18, true, 1, false);
   }
 
+  /**
+   * The telegraph, 0.4 s before he fires: the sun flashes off the top of his
+   * barrel (a streak the same size on screen at any range), and his hammer
+   * clicks back, heard from his side of the street even when far off.
+   */
   glint(b: Bandit): void {
     const v = this.view(b);
-    if (!v?.rig.socket) return;
-    v.rig.socket.getWorldPosition(tmp);
+    const socket = v?.rig.socket;
+    if (!socket) return;
+    socket.updateWorldMatrix(true, false);
+    socket.getWorldPosition(tmp);
+    // Along the barrel (the socket's −Z) to the cylinder's top strap, a rifle
+    // further out to its receiver, and a hand toward the eye so the flash
+    // is not buried in the fist that holds it.
+    tmp2.set(0, 0, -1).transformDirection(socket.matrixWorld);
+    tmp.addScaledVector(tmp2, b.role === "rifleman" ? 0.3 : 0.1);
+    tmp.y += 0.04;
+    tmp2.copy(this.eye).sub(tmp).normalize();
+    tmp.addScaledVector(tmp2, 0.25);
     const d = tmp.distanceTo(this.eye);
-    this.fx.glint(tmp, Math.max(0.12, d * 0.028));
+    this.fx.sunGlint(tmp, d);
+    const click = this.sound.place(b.pos, { volume: 0.5, rate: 1.1 + this.random() * 0.1 });
+    click.distance = Math.min(click.distance ?? 0, 9);
+    this.sound.play("revolver_cock", click);
   }
 
   fire(b: Bandit, hit: boolean): void {
@@ -280,7 +314,8 @@ export class Cast {
     if (!v) return;
     if (b.role === "dynamiter") v.rig.arm("revolver");
     const clip = { lean_left: "lean_left_in", lean_right: "lean_right_in", rise: "sink", step_out: "step_in" }[b.cover.emerge];
-    v.rig.play(clip, 0.1, false);
+    // The clip takes as long as he does: it ends as he arrives, not before.
+    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
   }
 
   run(b: Bandit): void {
@@ -362,16 +397,31 @@ export class Cast {
     this.sound.at(part === "head" ? "hit_headshot" : part === "blast" ? "body_fall" : "hit_flesh", at ?? b.pos, 1);
     this.sound.at("bandit_death", b.pos, 0.9, 0.9 + this.random() * 0.25, 0.05);
     if (choice.fall) {
-      // Out of the window (or off the roof), toward the street.
+      // Out of the window (or off the roof), over the nearest drop toward
+      // the street (worked out at load), clear of whatever floor he stood on
+      // - over a gallery's rail, not through its boards - and a little
+      // further, as a man thrown by a shot.
       const p0 = b.pos;
-      tmp.set(this.eye.x - p0.x, 0, this.eye.z - p0.z).normalize();
-      const push = b.cover.kind === "window" ? 2.6 : 1.8;
+      const path = this.falls.get(b.cover.id);
+      if (path) tmp.copy(path.dir);
+      else tmp.set(this.eye.x - p0.x, 0, this.eye.z - p0.z).normalize();
+      const edge = path ? path.ledge : 0.5;
+      // A rail or a roof's edge ahead of him: up and over it first. He is
+      // back down to the floor's height after 2 vy / g, and must be past
+      // its edge by then.
+      const vy = edge > 0.2 ? 2.4 : 1.2;
+      const above = (2 * vy) / 9.81;
+      let push = Math.max(1.0, edge + 0.7);
+      let landY = this.queries.groundAt(p0.x + tmp.x * push, p0.z + tmp.z * push, p0.y - 0.35);
+      let T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * Math.max(0.5, p0.y - landY))) / 9.81;
+      const fastEnough = ((edge + 0.35) / above) * T;
+      if (push < fastEnough) {
+        push = Math.min(6, fastEnough);
+        landY = this.queries.groundAt(p0.x + tmp.x * push, p0.z + tmp.z * push, p0.y - 0.35);
+        T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * Math.max(0.5, p0.y - landY))) / 9.81;
+      }
       const landX = p0.x + tmp.x * push;
       const landZ = p0.z + tmp.z * push;
-      const landY = this.queries.groundAt(landX, landZ, p0.y - 0.35);
-      const h = Math.max(0.5, p0.y - landY);
-      const vy = 1.2;
-      const T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * h)) / 9.81;
       v.falling = true;
       v.fallT = 0;
       v.fallDur = T;
@@ -622,6 +672,12 @@ export class Cast {
     } else if (b.alive && v.tellSilhouette > 0) {
       v.tellSilhouette = 0;
       rig.uniforms.uShade.value = 1;
+    } else if (b.alive && (b.cover.kind === "door" || b.cover.kind === "window") && (b.state === "emerging" || b.state === "hiding")) {
+      // Out of the room's shade into the street's light, and back.
+      const k = Math.min(1, b.exposure / 0.7);
+      rig.uniforms.uShade.value = 0.4 + 0.6 * k * k * (3 - 2 * k);
+    } else if (b.alive && tellFree(b.state)) {
+      rig.uniforms.uShade.value = 1;
     }
     // The gun comes up toward you while aiming.
     const aiming = b.state === "aiming" || b.state === "firing";
@@ -656,6 +712,9 @@ export class Cast {
     const rig = v.rig;
     rig.root.position.set(p.pos.x, p.pos.y, p.pos.z);
     this.faceToward(rig, p.pos.x, p.pos.z, dt);
+    // Out of the room's shade into the light at the door, as the gang is.
+    const k = Math.min(1, p.exposure / 0.7);
+    rig.uniforms.uShade.value = p.state === "peeking" || p.state === "leaving" ? 0.4 + 0.6 * k * k * (3 - 2 * k) : 1;
     if (p.role === "preacher") {
       rig.play("head_shake", 0.2, true, 1, false);
     } else if (p.shot) {

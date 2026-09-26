@@ -150,6 +150,13 @@ export class SecretsWorld {
     };
   }
 
+  /** Seconds until the vane has spun down and come round to point at you (0 when still). */
+  vaneShowLeft(): number {
+    if (this.vaneSettling) return (1 - this.vaneT) * 1.6;
+    if (this.vaneVel <= 1.6) return 0;
+    return Math.log(this.vaneVel / 1.6) / 0.55 + 1.6;
+  }
+
   vaneHit(): void {
     this.vaneVel += 22 + Math.random() * 6;
     this.vaneSettling = false;

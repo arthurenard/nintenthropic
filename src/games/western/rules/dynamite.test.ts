@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { arcPoint, Dynamite, flightTimeFor, solveArc } from "./dynamite";
-import { GRAVITY } from "./tuning";
+import { throwHand } from "./match";
+import { GRAVITY, THROW_HAND } from "./tuning";
 
 describe("dynamite arcs", () => {
   it("leaves the hand and lands on the target at the flight time", () => {
@@ -15,6 +16,19 @@ describe("dynamite arcs", () => {
     expect(p.x).toBeCloseTo(b.x);
     expect(p.y).toBeCloseTo(b.y);
     expect(p.z).toBeCloseTo(b.z);
+  });
+
+  it("leaves from the thrower's hand: up at chest height, out in front, to his left", () => {
+    const feet = { x: -2, y: 0, z: -22 };
+    const eye = { x: 0, y: 1.7, z: 0 };
+    const hand = throwHand(feet, eye);
+    expect(hand.y).toBeCloseTo(THROW_HAND.up);
+    const toward = Math.hypot(eye.x - feet.x, eye.z - feet.z);
+    const handToward = Math.hypot(eye.x - hand.x, eye.z - hand.z);
+    // Nearer the player than his feet by about the forward reach.
+    expect(toward - handToward).toBeCloseTo(THROW_HAND.forward, 1);
+    // Facing the player (down +z), his left is the player's right: +x.
+    expect(hand.x).toBeGreaterThan(feet.x + 0.3);
   });
 
   it("rises before it falls (it is lobbed, not thrown flat)", () => {

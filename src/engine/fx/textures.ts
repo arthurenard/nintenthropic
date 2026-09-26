@@ -2,11 +2,12 @@ import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, 
 
 /**
  * Sprite art for effects, painted into canvases at load (no image files):
- * an atlas of four cells for the particle system, and a bullet hole for
+ * an atlas of five cells for the particle system, and a bullet hole for
  * decals. Cells: 0 soft dot, 1 smoke puff, 2 four-point star (flash, glint,
- * spark), 3 streak (feather, droplet, splinter at a distance).
+ * spark), 3 streak (feather, droplet, splinter at a distance), 4 a lens
+ * flare's hair-thin line (the sun glinting off a gun).
  */
-export const ATLAS_CELLS = 4;
+export const ATLAS_CELLS = 5;
 
 function seeded(seed: number) {
   let a = seed >>> 0;
@@ -88,6 +89,26 @@ export function particleAtlas(): Texture {
     g.fillStyle = grad;
     g.fillRect(x0, 0, cell, cell);
     g.restore();
+  }
+  // 4: a lens flare's line: hair-thin across the cell, brightest at the middle
+  // and dying away toward the ends, with a faint halo round it.
+  {
+    const x0 = cell * 4;
+    const img = g.createImageData(cell, cell);
+    for (let y = 0; y < cell; y++) {
+      for (let x = 0; x < cell; x++) {
+        const u = (x + 0.5) / cell - 0.5;
+        const v = (y + 0.5) / cell - 0.5;
+        const along = Math.max(0, 1 - Math.abs(u) * 2);
+        const line = Math.exp(-((v / 0.012) ** 2)) * along ** 1.6;
+        const halo = Math.exp(-((v / 0.05) ** 2)) * along ** 3 * 0.25;
+        const a = Math.min(1, line + halo);
+        const i = (y * cell + x) * 4;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+        img.data[i + 3] = Math.round(a * 255);
+      }
+    }
+    g.putImageData(img, x0, 0);
   }
   const t = new CanvasTexture(c);
   t.colorSpace = SRGBColorSpace;

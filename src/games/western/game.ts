@@ -1,4 +1,4 @@
-import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type ToneMapping } from "three";
+import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type Texture, type ToneMapping } from "three";
 import type {
   Aim,
   CalibrationStage,
@@ -8,7 +8,7 @@ import type {
   HudSink,
   Readout,
 } from "../../engine/types";
-import type { Bandit } from "./rules/bandit";
+import { Bandit as BanditClass, type Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import { loadSoundPack } from "../../audio/index";
@@ -23,10 +23,12 @@ import { Ambient } from "./world/ambient";
 import { loadAssets, type HighNoonAssets } from "./world/assets";
 import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
-import { checkCovers, type CoverReport } from "./world/coverCheck";
-import { RigPool, templateFrom } from "./world/character";
+import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
+import { RIM, RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
+import { reloadHint } from "./hints";
 import { Effects } from "./world/effects";
+import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "./world/framing";
 import { PlayerCamera } from "./world/playerCamera";
 import { PostFX } from "./world/post";
 import { TownQueries } from "./world/queries";
@@ -47,7 +49,8 @@ export interface HighNoonOptions {
   assetBase?: string;
 }
 
-const RELOAD_HINT = "Point off the screen to reload.";
+/** How long the view takes to close in on the street when a round begins. */
+const FRAMING_EASE = 1.4;
 const HIT_SOUND: Record<Surface, string> = {
   wood: "hit_wood",
   dirt: "hit_dirt",
@@ -65,6 +68,14 @@ interface Scheduled {
 
 const tmp = new Vector3();
 const tmp2 = new Vector3();
+
+/**
+ * A moment for the page between the long steps of getting ready, so the
+ * loading bar keeps moving instead of freezing for a second at the end.
+ */
+function breathe(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 /**
  * Before load() the aim check has nothing to show; afterwards this forwards
@@ -154,6 +165,13 @@ export class HighNoon implements Game, MatchListener {
   private shotKilled = false;
   private visualRandom = mulberry32(7);
   private previousToneMapping: ToneMapping | null = null;
+  /** What the play framing must show, in the town camera's space (see framing.ts). */
+  private sights: Sight[] = [];
+  private framings: { check: Framing; play: Framing } | null = null;
+  /** The window size the framings were fitted to. */
+  private framed: { width: number; height: number } | null = null;
+  private bufferHeight = 720;
+  private shownFov = 0;
   private readonly onKey = (e: KeyboardEvent) => {
     if ((e.key === "r" || e.key === "R") && !e.repeat) this.reloadKey = true;
   };
@@ -194,19 +212,42 @@ export class HighNoon implements Game, MatchListener {
     );
     const town = this.assets.town;
     this.stage = new Stage(renderer, town, this.assets.sky, this.assets.fog, this.noon);
+    // The street's rim light, to the hour: the white glare of noon, or the
+    // golden hour's warm sky and dust.
+    if (this.noon) RIM.color.value.setRGB(0.85, 0.85, 0.82);
+    else RIM.color.value.setRGB(0.95, 0.8, 0.64);
     this.stage.setQuality(ctx.quality);
     this.camera = new PlayerCamera(town.eye, town.eyeQuaternion, town.fov);
     this.camera.reducedMotion = ctx.settings.reducedMotion;
     this.camera.still = true;
     this.sound = new Sound(ctx.audio, this.camera.camera);
+    await breathe();
     this.queries = new TownQueries(town);
     // Only covers the player can actually see a man in (see coverCheck.ts).
-    const covers = checkCovers(town.covers, this.queries, town.eye);
+    const moved = shiftCovers(town.covers, this.queries, town.eye);
+    const covers = checkCovers(moved.covers, this.queries, town.eye);
+    if (moved.shifted.length < Object.keys(COVER_SHIFTS).length) {
+      console.info(`High Noon: some of the game's cover shifts no longer land on a floor and were not made (made: ${moved.shifted.join(", ") || "none"}).`);
+    }
     if (covers.moved.length || covers.dropped.length) {
       console.info(`High Noon: covers moved into view: ${covers.moved.join(", ") || "none"}; left out, not visible from the eye: ${covers.dropped.join(", ") || "none"}.`);
     }
     this.coverReport = covers;
-    town.covers = covers.kept;
+    // No post in front of the middle of a man; and every cover's edge, from
+    // which he comes out without gliding through a wall.
+    const clear = unblockCovers(covers.kept, this.queries, town.eye);
+    if (clear.moved.length) console.info(`High Noon: covers stepped clear of a post: ${clear.moved.join(", ")}.`);
+    await breathe();
+    const ready = readySpots(clear.covers, this.queries, town.eye);
+    await breathe();
+    // Which way a man shot up high goes over, and whether there is room to
+    // fall at all (on a deep balcony he goes down on its boards instead).
+    const falls = fallPaths(ready, this.queries, town.eye);
+    town.covers = ready.map((c) => {
+      const f = falls.get(c.id);
+      return f ? { ...c, ledge: f.ledge } : c;
+    });
+    await breathe();
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
 
@@ -221,12 +262,15 @@ export class HighNoon implements Game, MatchListener {
       townsfolk: new RigPool(townsT, 4, parent),
       chicken: new RigPool(chickenT, 1, parent),
     };
+    await breathe();
     this.secretsWorld = new SecretsWorld(town, this.effects, this.sound, this.queries, parent);
+    this.sights = this.framingSights();
     const toSun = this.stage.sunDirection.clone().negate();
     this.cast = new Cast(this.pools, parent, this.effects, this.sound, this.queries, town.eye, toSun, this.visualRandom, {
       popup: (at, text, tone) => this.popupAt(at, text, tone),
       bellSwing: () => this.secretsWorld.bellHit(1),
     });
+    this.cast.falls = falls;
     this.ambient = new Ambient(town, parent, this.pools.chicken, this.effects, this.sound, this.visualRandom, ctx.quality);
     this.bottles = new BottleStage(town, parent, this.camera.camera, this.effects, this.sound, this.queries);
     this.calibrationProxy.target = this.bottles;
@@ -252,6 +296,7 @@ export class HighNoon implements Game, MatchListener {
     this.post.set("noon", this.noon ? 1 : 0);
     this.tier = ctx.quality.tier;
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
+    await breathe();
     await this.warmUp();
     this.tuneEcho();
     await sounds;
@@ -303,10 +348,29 @@ export class HighNoon implements Game, MatchListener {
       }
     });
     try {
+      // The textures first, a few at a time between breaths: uploaded all in
+      // the first frame below they froze the page (and its progress bar) for
+      // a quarter of a second.
+      const textures = new Set<Texture>();
+      scene.traverse((o) => {
+        const m = (o as Mesh).material;
+        for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
+          for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) textures.add(v as Texture);
+        }
+      });
+      let since = performance.now();
+      for (const t of textures) {
+        r.initTexture(t);
+        if (performance.now() - since > 40) {
+          await breathe();
+          since = performance.now();
+        }
+      }
       if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
       else (r as { compile: (s: unknown, c: unknown) => void }).compile(scene, this.camera.camera);
       // One real frame with everything shown: the shadow pass's depth
       // shaders and the post chain only compile when they are drawn.
+      await breathe();
       this.post.render(0);
     } catch {
       // Compilation is an optimisation; the first frames will do it otherwise.
@@ -329,6 +393,7 @@ export class HighNoon implements Game, MatchListener {
     this.schedule.length = 0;
     this.camera.still = true;
     this.camera.setDeath(0, 1);
+    if (this.framings) this.camera.setFraming(this.framings.check, 0);
     // Apply it now: the aim check is about to project the bottles through it.
     this.camera.update(0);
     this.timeScale = 1;
@@ -354,6 +419,8 @@ export class HighNoon implements Game, MatchListener {
     this.bottles.active = false;
     this.camera.still = false;
     this.camera.setDeath(0, 1);
+    // The warm-up over, the view closes in on the street as the gang rides in.
+    if (this.framings) this.camera.setFraming(this.framings.play, this.ctx.settings.reducedMotion ? 0 : FRAMING_EASE);
     this.phase = "playing";
     this.time = 0;
     this.timeScale = 1;
@@ -370,7 +437,7 @@ export class HighNoon implements Game, MatchListener {
     this.hud.health(0);
     this.match.start({ wave, duel: this.noon && wave === 1 });
     this.ambient.running = true;
-    this.showHint(RELOAD_HINT, 5);
+    this.showHint(reloadHint(this.ctx.input), 5);
     if (this.golden) {
       const hud = this.hud as HudSink & { revolverFinish?: (finish: "steel" | "gold") => void };
       hud.revolverFinish?.("gold");
@@ -425,6 +492,12 @@ export class HighNoon implements Game, MatchListener {
     this.bottles.update(wdt);
     this.effects.update(wdt);
     this.camera.update(realDt);
+    const fov = this.camera.camera.fov;
+    if (fov !== this.shownFov) {
+      // Particles are sized in metres through the lens: they follow the zoom.
+      this.shownFov = fov;
+      this.effects.setScale(this.bufferHeight, fov);
+    }
     this.flash *= Math.exp(-realDt / 0.12);
     this.post.set("flash", this.flash);
     this.post.set("time", this.time);
@@ -439,7 +512,83 @@ export class HighNoon implements Game, MatchListener {
     if (!this.post) return;
     this.camera.setAspect(width / Math.max(1, height));
     this.post.setSize(width, height);
-    this.effects.setScale(height * pixelRatio, this.camera.camera.fov);
+    this.bufferHeight = height * pixelRatio;
+    this.frame(width, height);
+    this.effects.setScale(this.bufferHeight, this.camera.camera.fov);
+    this.shownFov = this.camera.camera.fov;
+  }
+
+  /**
+   * The two framings for this window's shape: the town's own for the aim
+   * check, and the tightest one that shows the whole fight for play. A
+   * resize jumps straight to the one in force.
+   */
+  private frame(width: number, height: number): void {
+    // The host resizes on a change of pixel ratio too (dynamic resolution):
+    // the same window, the same framing, and the view easing in is left be.
+    if (this.framed && this.framed.width === width && this.framed.height === height) return;
+    this.framed = { width, height };
+    const aspect = width / Math.max(1, height);
+    const townFov = this.assets.town.fov;
+    const check = checkFraming(townFov, aspect);
+    const play = fitFraming(this.sights, aspect, {
+      minFov: 22,
+      maxFov: Math.max(townFov, check.fov),
+      // Up to a few degrees above the art's own pitch: the street's horizon
+      // settles a little below the middle, and no more sky than that.
+      minPitch: (-1 * Math.PI) / 180,
+      maxPitch: (6 * Math.PI) / 180,
+      preferPitch: (4 * Math.PI) / 180,
+      slack: 1,
+      marginX: 0.02,
+      marginY: 0.02,
+      keepOut: chromeKeepOut(width, height, (this.ctx.input ?? "hand") === "hand"),
+    });
+    this.framings = { check, play };
+    const inPlay = this.phase === "playing" || this.phase === "dying" || this.phase === "over";
+    this.camera.setFraming(inPlay ? play : check, 0);
+  }
+
+  /**
+   * Every place the fight happens, as points the play framing must show: the
+   * head and chest of a man at each cover (clear of the chrome, arms and lean
+   * included), his knees at street level, and the secrets (on screen, if not
+   * necessarily clear).
+   */
+  private framingSights(): Sight[] {
+    const town = this.assets.town;
+    const eye = town.eye;
+    const toCamera = town.eyeQuaternion.clone().invert();
+    const out: Sight[] = [];
+    const v = new Vector3();
+    const add = (x: number, y: number, z: number, clear: boolean, margin?: number) => {
+      v.set(x, y, z).sub(eye).applyQuaternion(toCamera);
+      out.push(margin === undefined ? { x: v.x, y: v.y, z: v.z, clear } : { x: v.x, y: v.y, z: v.z, clear, margin });
+    };
+    for (const c of town.covers) {
+      const e = c.exposed;
+      const dx = eye.x - e.x;
+      const dz = eye.z - e.z;
+      const len = Math.hypot(dx, dz) || 1;
+      // Across his shoulders, as the player sees him.
+      const sx = -dz / len;
+      const sz = dx / len;
+      for (const s of [-1, 1]) {
+        add(e.x + sx * 0.3 * s, e.y + 1.95, e.z + sz * 0.3 * s, true);
+        add(e.x + sx * 0.45 * s, e.y + 1.3, e.z + sz * 0.45 * s, true);
+      }
+      if (c.level === 0) add(e.x, e.y + 0.5, e.z, false);
+    }
+    const s = town.secrets;
+    const secrets = [
+      this.secretsWorld.bellCenter(),
+      this.secretsWorld.vaneCenter(),
+      s.waterTower?.getWorldPosition(new Vector3()) ?? null,
+      s.poster?.getWorldPosition(new Vector3()) ?? null,
+    ];
+    // A secret only has to be in the picture: its centre may sit near an edge.
+    for (const p of secrets) if (p) add(p.x, p.y, p.z, false, 0.005);
+    return out;
   }
 
   pause(): void {
@@ -486,7 +635,7 @@ export class HighNoon implements Game, MatchListener {
     const result = this.match.trigger();
     if (result === "dry") {
       this.sound.play("revolver_dry");
-      this.showHint(RELOAD_HINT, 0);
+      this.showHint(reloadHint(this.ctx.input), 0);
       return;
     }
     if (result !== "fired") return;
@@ -848,7 +997,7 @@ export class HighNoon implements Game, MatchListener {
     if (started) {
       this.sound.play("reload_spin");
       this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, true);
-      if (this.hintText === RELOAD_HINT) this.clearHint();
+      if (this.hintText === reloadHint(this.ctx.input)) this.clearHint();
     } else {
       this.sound.play("revolver_cock");
       this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, false);
@@ -875,9 +1024,18 @@ export class HighNoon implements Game, MatchListener {
     else if (count > 1 && count < 5) this.popupAt(this.shotPoint, `Tumbleweed ×${count}`, "");
   }
 
-  secretFound(_id: SecretId, name: string, found: number, total: number): void {
-    this.hud.secret(name, found, total);
-    this.sound.play("secret_found", { delay: 0.3 });
+  secretFound(id: SecretId, name: string, found: number, total: number): void {
+    const announce = () => {
+      if (this.phase !== "playing") return;
+      this.hud.secret(name, found, total);
+      this.sound.play("secret_found", { delay: 0.3 });
+    };
+    // The page's toast arrives at the top of the view, over the weather
+    // vane: its show (the spin, then the creak round to point at you) plays
+    // first, and the toast after it. (The rules announce the find before the
+    // shot has set the vane spinning: its length is read a frame later.)
+    if (id === "vane") this.later(0, () => this.later(this.secretsWorld.vaneShowLeft() + 0.2, announce));
+    else announce();
   }
 
   // --- for the dev harness ----------------------------------------------------------------------
@@ -890,6 +1048,60 @@ export class HighNoon implements Game, MatchListener {
       camera: () => this.camera.camera,
       real: () => this.assets?.real,
       covers: () => ({ used: this.assets.town.covers.map((c) => c.id), moved: this.coverReport?.moved, dropped: this.coverReport?.dropped }),
+      /** The aim check's and play's framings for this window, and the lens now. */
+      framing: () => ({ ...this.framings, fov: this.camera.camera.fov }),
+      /**
+       * Send one bandit out at a cover now, in the real machinery (tell,
+       * emerge, aim, fire, hide), whatever the wave's director would choose:
+       * for looking at every cover's clips in place. Returns his id.
+       */
+      stage: (id: string, role: "gunman" | "rifleman" | "dynamiter" | "boss" = "gunman", wait = 0.2) => {
+        const c = this.assets.town.covers.find((x) => x.id === id);
+        if (!c) return -1;
+        const m = this.match as unknown as { bandits: Bandit[]; nextId: number; occupant: Map<string, unknown> };
+        const b = new BanditClass(m.nextId++, role, c);
+        b.health = role === "boss" ? 3 : 1;
+        b.forced = true;
+        m.occupant.set(c.id, b);
+        m.bandits.push(b);
+        this.cast.spawn(b);
+        b.spawn(wait);
+        return b.id;
+      },
+      /** Jump the view to a framing at once ("check" or "play"). */
+      setFraming: (which: "check" | "play") => {
+        if (this.framings) this.camera.setFraming(this.framings[which], 0);
+      },
+      /**
+       * Stand a gang member at a cover (its exposed or hidden spot, facing the
+       * eye as in play) holding a clip at time `t`, for checking every cover's
+       * clips in place. Returns false for an unknown cover. `null` clears them.
+       */
+      atCover: (id: string | null, clip = "aim", t = 0, where: "exposed" | "hidden" = "exposed", kind: "bandit" | "boss" | "townsfolk" = "bandit", outfit?: string[]) => {
+        const pool = this.pools[kind];
+        if (id === null) {
+          for (const p of [this.pools.bandit, this.pools.boss, this.pools.townsfolk]) for (const r of p.rigs) if (r.inUse && r.userDataGallery) p.give(r);
+          return true;
+        }
+        const c = this.assets.town.covers.find((x) => x.id === id);
+        const rig = c ? pool.take() : null;
+        if (!c || !rig) return false;
+        rig.userDataGallery = true;
+        rig.dress(outfit ?? (kind === "townsfolk" ? ["var.coat.apron"] : kind === "boss" ? ["var.hat.stetson", "var.coat.duster"] : ["var.hat.stetson", "var.bandana.red", "var.vest"]));
+        rig.arm(kind === "townsfolk" ? "none" : "revolver");
+        rig.root.visible = true;
+        const p = where === "exposed" ? c.exposed : c.hidden;
+        rig.root.position.set(p.x, p.y, p.z);
+        const eye = this.assets.town.eye;
+        rig.root.rotation.y = Math.atan2(eye.x - p.x, eye.z - p.z);
+        rig.play(clip, 0, false);
+        rig.update(0);
+        rig.mixer.setTime(t);
+        // Lit as in play: is the sun on him here?
+        const chest = new Vector3(p.x, p.y + 1.3, p.z);
+        rig.uniforms.uSunVis.value = this.queries.sunReaches(chest, this.stage.sunDirection.clone().negate()) ? 1 : 0.12;
+        return true;
+      },
       setImmortal: (on: boolean) => {
         this.match.health.immortal = on;
       },
