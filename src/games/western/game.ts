@@ -127,6 +127,7 @@ export class HighNoon implements Game, MatchListener {
   private hintUntil = -1;
   private hintText: string | null = null;
   private golden = false;
+  private tier: GameContext["quality"]["tier"] = "high";
   private noon = false;
   private reloadKey = false;
   private tombstone = false;
@@ -218,6 +219,7 @@ export class HighNoon implements Game, MatchListener {
     });
     this.post = new PostFX(renderer, this.stage.scene, this.camera.camera, ctx.quality);
     this.post.set("noon", this.noon ? 1 : 0);
+    this.tier = ctx.quality.tier;
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
     await this.warmUp();
     this.tuneEcho();
@@ -272,6 +274,9 @@ export class HighNoon implements Game, MatchListener {
     try {
       if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
       else (r as { compile: (s: unknown, c: unknown) => void }).compile(scene, this.camera.camera);
+      // One real frame with everything shown: the shadow pass's depth
+      // shaders and the post chain only compile when they are drawn.
+      this.post.render(0);
     } catch {
       // Compilation is an optimisation; the first frames will do it otherwise.
     }
@@ -320,6 +325,12 @@ export class HighNoon implements Game, MatchListener {
   update(dt: number, _now: number, aim: Aim): void {
     if (this.phase === "loading" || this.paused) return;
     this.lastDt = dt;
+    // The host may change the tier mid-game (its dynamic resolution gave up).
+    if (this.ctx.quality.tier !== this.tier) {
+      this.tier = this.ctx.quality.tier;
+      this.stage.setQuality(this.ctx.quality);
+      this.post.setQuality(this.ctx.quality);
+    }
     const scale = this.timeScale;
     const wdt = dt * scale;
     this.time += wdt;

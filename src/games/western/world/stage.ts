@@ -2,6 +2,7 @@ import {
   Box3,
   Color,
   DirectionalLight,
+  DoubleSide,
   FogExp2,
   Group,
   Material,
@@ -61,6 +62,10 @@ export class Stage {
       for (const mat of mats) {
         // The bake is the final word on the town's colour; fog still applies.
         (mat as MeshBasicMaterial).fog = true;
+        // Three.js draws a transparent double-sided material twice, flipping its
+        // side each time, which re-resolves its shader every frame per pane of
+        // glass. One pass looks the same for thin panes and costs nothing.
+        if (mat.transparent && mat.side === DoubleSide) mat.forceSinglePass = true;
       }
     });
 
