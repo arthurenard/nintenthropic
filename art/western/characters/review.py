@@ -30,6 +30,7 @@ TAG = arg("--tag", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 NF = int(arg("--frames", "6"))
 DRESS = [d.split("+") if d else [] for d in arg("--dress", "").split(",")] if arg("--dress") else None
 PROP = arg("--prop", "gun.revolver")
+ONLY = arg("--clips", "").split(",") if arg("--clips") else None   # strips: just these clips
 os.makedirs(OUT, exist_ok=True)
 sc = bpy.context.scene
 rig = next(o for o in sc.objects if o.type == "ARMATURE")
@@ -216,22 +217,28 @@ if "strips" in WHAT:
     world(0.9)
     sun(40, 150, 3.5)
     ground()
-    c = camera(45)
+    c = camera(60)
     dress(dressings[0])
     for name in actions():
+        if ONLY and name not in ONLY:
+            continue
         act = bpy.data.actions[name]
+        PROP = "prop.dynamite" if name == "throw" else ("gun.rifle" if "rifle" in name else arg("--prop", "gun.revolver"))
+        dress(dressings[0])
         f0, f1 = act.frame_range
         frames = sorted(set(int(round(f0 + i * (f1 - f0) / (NF - 1))) for i in range(NF)))
         for f in frames:
             set_clip(name, f)
-            dist = H * 3.2
+            # close enough that the frame is mostly figure; a death needs room
+            # for the body lying along the view axis
+            dist = H * (2.7 if name.startswith("death") else 2.3)
             az = math.radians(30)
-            look(c, (math.sin(az) * dist, -math.cos(az) * dist, H * 0.75), (0, 0.2 if name.startswith("death") else 0, H * 0.45))
+            look(c, (math.sin(az) * dist, -math.cos(az) * dist, H * 0.7), (0, 0.2 if name.startswith("death") else 0, H * 0.47))
             render(os.path.join(OUT, f"{TAG}_clip_{name}_{f:03d}.png"), 360, 480, 16)
 
 if "distance" in WHAT:
     world(0.7, (0.45, 0.55, 0.70))
-    sun(16, 180, 4.5)                  # low, warm, from behind the camera
+    sun(16, 12, 4.5)                   # low, warm, from behind the camera (a little to its left)
     ground(200)
     c = camera(35)                     # about a 54 degree vertical view on a 16:9 frame
     for di, d in enumerate(dressings):
