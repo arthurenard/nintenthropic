@@ -160,6 +160,8 @@ export class HighNoon implements Game, MatchListener {
   /** What the play framing must show, in the town camera's space (see framing.ts). */
   private sights: Sight[] = [];
   private framings: { check: Framing; play: Framing } | null = null;
+  /** The window size the framings were fitted to. */
+  private framed: { width: number; height: number } | null = null;
   private bufferHeight = 720;
   private shownFov = 0;
   private readonly onKey = (e: KeyboardEvent) => {
@@ -489,6 +491,10 @@ export class HighNoon implements Game, MatchListener {
    * resize jumps straight to the one in force.
    */
   private frame(width: number, height: number): void {
+    // The host resizes on a change of pixel ratio too (dynamic resolution):
+    // the same window, the same framing, and the view easing in is left be.
+    if (this.framed && this.framed.width === width && this.framed.height === height) return;
+    this.framed = { width, height };
     const aspect = width / Math.max(1, height);
     const townFov = this.assets.town.fov;
     const check = checkFraming(townFov, aspect);
