@@ -38,6 +38,12 @@ Dust Creek.
 
 - A first-person view from standing eye height (1.7 m) with a gentle breathing
   sway. The crosshair is where the shot goes.
+- **Framing:** the aim check looks through the town's own wide lens (every
+  bottle in view); as a round begins the view closes in on the street, from
+  the same eye, to the tightest lens and slight upward tilt that still show
+  every cover's man clear of the page's corner chrome, fitted to the window's
+  shape (about 34° tall at 16:10, 27–32° at 21:9), so a man at 30 m stands
+  over 90 px tall at 1440 × 900.
 - **Revolver:** six rounds. A six-chamber cylinder in the HUD shows what's left.
   **Reload by pointing off the screen** (the arcade classic — the crosshair leaves
   the view for a moment) or by pressing R; it takes 0.9 s with a cylinder spin.
