@@ -74,6 +74,11 @@ const tmp2 = new Vector3();
 class CalibrationProxy implements CalibrationStage {
   target: BottleStage | null = null;
   onUse: () => void = () => {};
+  onBegin: () => void = () => {};
+  /** The host calls this before every aim check, and again if the bottles run out. */
+  begin(): void {
+    this.onBegin();
+  }
   targets(): CalibrationTarget[] {
     this.onUse();
     return this.target ? this.target.targets() : [];
@@ -227,6 +232,12 @@ export class HighNoon implements Game, MatchListener {
     this.calibrationProxy.target = this.bottles;
     this.calibrationProxy.onUse = () => {
       if (this.phase === "over" || this.phase === "dying") this.rearm();
+    };
+    // After a game (Play Again, Adjust Aim) the whole street is put back; in
+    // the middle of a check that ran out of bottles, only the bottles are.
+    this.calibrationProxy.onBegin = () => {
+      if (this.phase === "calibration") this.bottles.reset();
+      else if (this.phase !== "loading") this.rearm();
     };
     this.newMatch();
     this.dynamite = new DynamiteView(parent, () => this.match.sticks, this.effects, town.eye);

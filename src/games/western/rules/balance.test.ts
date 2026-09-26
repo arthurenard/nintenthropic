@@ -95,3 +95,20 @@ describe("difficulty", () => {
     expect(median).toBeLessThan(10);
   });
 });
+
+describe("an idle player", () => {
+  it("is overrun in the end, however forgiving the first wave", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const match = new Match({ random: mulberry32(seed), covers: testCovers(), listener: new Recorder() });
+      match.start();
+      let t = 0;
+      const dt = 1 / 30;
+      while (match.phase !== "dead" && t < 240) {
+        match.update(dt, false);
+        t += dt;
+      }
+      expect(match.phase, `seed ${seed}`).toBe("dead");
+      expect(match.wave, "never shooting, the first wave never clears").toBe(1);
+    }
+  });
+});

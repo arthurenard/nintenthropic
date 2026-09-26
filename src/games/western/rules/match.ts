@@ -17,6 +17,9 @@ import {
   DYNAMITE_DROP_FUSE,
   DYNAMITE_PLAYER_RADIUS,
   DYNAMITE_RANGE,
+  BOLD_AFTER,
+  BOLD_MAX,
+  BOLD_RATE,
   HIT_GRACE,
   HIT_GRACE_FACTOR,
   INTERMISSION,
@@ -401,7 +404,9 @@ export class Match implements BanditWorld {
     if (b.role === "duelist") p = 0.85;
     else if (b.role !== "rifleman") p *= Math.min(1, Math.max(0.45, 1.15 - d / 70));
     if (b.role === "boss") p *= 1.1;
+    if (this.phase === "combat") p *= Math.min(BOLD_MAX, 1 + Math.max(0, this.phaseT - BOLD_AFTER) * BOLD_RATE);
     if (this.health.sinceHit < HIT_GRACE) p *= HIT_GRACE_FACTOR;
+    p = Math.min(p, 0.95);
     const hit = this.random() < p;
     const damage = Math.round(spec.damage * (b.role === "rifleman" ? RIFLE_DAMAGE_FACTOR : 1));
     for (const person of this.townsfolk) person.bulletsFly(this.time);

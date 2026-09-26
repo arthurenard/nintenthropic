@@ -77,6 +77,8 @@ export class BottleStage implements CalibrationStage {
   private glintTimer = 0;
   private time = 0;
   active = true;
+  /** This check has been ended (done) and not begun again. */
+  private finished = false;
 
   constructor(
     private readonly town: TownLayout,
@@ -227,6 +229,10 @@ export class BottleStage implements CalibrationStage {
   }
 
   done(): void {
+    // The host ends the check, and play starting ends it again: the bottles
+    // fade and the chime sounds once per check, not once per call.
+    if (this.finished) return;
+    this.finished = true;
     this.lit = null;
     for (const b of this.bottles) {
       b.glass.emissive.setScalar(0);
@@ -238,6 +244,7 @@ export class BottleStage implements CalibrationStage {
   /** Stand every bottle back up (a new aim check). */
   reset(): void {
     this.active = true;
+    this.finished = false;
     this.hits = 0;
     for (const b of this.bottles) {
       if (b.hidden) continue;

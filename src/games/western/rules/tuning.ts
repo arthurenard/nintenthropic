@@ -55,6 +55,15 @@ export const MIN_SHOT_GAP = 0.45;
  */
 export const HIT_GRACE = 0.6;
 export const HIT_GRACE_FACTOR = 0.55;
+/**
+ * The longer a wave drags on, the bolder the gang. Past BOLD_AFTER seconds of
+ * fighting their hit chance climbs by BOLD_RATE per second, up to BOLD_MAX
+ * times its wave's figure: regeneration keeps a player alive through a fair
+ * fight, but one who stops shooting is overrun rather than kept alive for ever.
+ */
+export const BOLD_AFTER = 25;
+export const BOLD_RATE = 0.04;
+export const BOLD_MAX = 2.2;
 /** Relocating while hidden, metres per second behind the facades. */
 export const RELOCATE_SPEED = 3.5;
 export const RELOCATE_CHANCE = 0.4;
