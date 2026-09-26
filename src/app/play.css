@@ -33,6 +33,30 @@
 .overlay {
   pointer-events: none;
 }
+/* While the game gets ready, its poster waits behind the loading sheet,
+   dimmed, and lifts as the world fades in. */
+.curtain {
+  position: absolute;
+  inset: 0;
+  background: var(--poster-fallback);
+  transition: opacity 450ms var(--ease);
+  pointer-events: none;
+}
+.curtain img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.curtain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* Light: the loading sheet's own backdrop dims it further. */
+  background: rgba(0, 0, 0, 0.2);
+}
+.game[data-ready="true"] .curtain {
+  opacity: 0;
+}
 /* The page draws the crosshair, so the system pointer steps aside. */
 .game[data-input="mouse"] .stage {
   cursor: none;

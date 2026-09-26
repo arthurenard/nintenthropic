@@ -411,6 +411,11 @@ export class App {
     view.dataset.input = control;
     view.setAttribute("aria-label", this.entry.title);
     $("world").setAttribute("aria-label", this.entry.title);
+    const curtain = $<HTMLImageElement>("curtain-art");
+    if (!curtain.getAttribute("src")) {
+      curtain.onerror = () => (curtain.hidden = true); // the placeholder's light stays
+      curtain.src = siteUrl(this.entry.poster);
+    }
     this.hud.reset(this.settings.unlocks.has("golden"));
     this.crosshair.visible = false;
     this.crosshair.clear();
