@@ -19,7 +19,10 @@ export function chooseDeath(
     return { clip: "death_fall", fall: true };
   }
   if (part === "blast") return { clip: "death_back", fall: false };
-  if (cover.kind === "barrel" || cover.kind === "crate" || cover.kind === "wagon") {
+  // Slumping over it needs him behind it: a man who rose over a barrel,
+  // crate or wagon. One who leans out round its end stands beside it, with
+  // nothing to fold over, and goes down like a man at a corner.
+  if ((cover.kind === "barrel" || cover.kind === "crate" || cover.kind === "wagon") && cover.emerge === "rise") {
     // Only once he has risen over it; still half-crouched, he falls back.
     return { clip: state === "emerging" || state === "hiding" ? "death_back" : "death_slump", fall: false };
   }
