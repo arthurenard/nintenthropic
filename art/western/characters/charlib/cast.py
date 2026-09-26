@@ -18,7 +18,7 @@ BANDIT = dict(
     head=HD.P(moustache="chevron", beard=0.35, age=0.35, hair="short", jaw=1.06, nose_bridge=1.12, brow=1.1, cheekbone=1.08, fat=0.2),
     look=dict(skin="tanned", hair="dark", iris="hazel", stubble=0.8, grime=0.4, hatline=True),
     body=BD.P(),
-    shirt_color=(0.55, 0.47, 0.36), shirt_pattern=None,
+    shirt_color=(0.40, 0.45, 0.52), shirt_pattern=None,     # faded chambray: reads against sunlit planks
     trouser_color=(0.24, 0.21, 0.18),
     boot_color=(0.15, 0.09, 0.05),
     pose_R="grip", pose_L="relaxed",
@@ -38,7 +38,7 @@ def build_bandit(path, size=1024, quick=False):
     jobs.append(PL.bandana_job(spec["head"], (0.55, 0.10, 0.07), "var.bandana.red", coll))
     jobs.append(PL.bandana_job(spec["head"], (0.075, 0.07, 0.065), "var.bandana.black", coll, pattern=False))
     jobs.append(PL.vest_job(spec["body"], (0.16, 0.12, 0.09), "var.vest", coll))
-    jobs.append(PL.coat_job(spec["body"], (0.30, 0.25, 0.19), "var.coat.duster", hem_z=0.36, coll=coll, seed=1, kind="canvas"))
+    jobs.append(PL.coat_job(spec["body"], (0.23, 0.19, 0.15), "var.coat.duster", hem_z=0.36, coll=coll, seed=1, kind="canvas"))
     jobs.append(PL.coat_job(spec["body"], (0.20, 0.19, 0.18), "var.coat.jacket", hem_z=0.84, coll=coll, seed=2, kind="wool"))
     jobs.append(PL.armour_job("var.armour", coll))
     sock = HN.grip_socket_matrix()

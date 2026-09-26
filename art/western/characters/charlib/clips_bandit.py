@@ -48,9 +48,9 @@ IDLE = P({"ik.foot.L": (0.105, -0.02, 0.102), "rot.foot.L": (0, 0, 9), "pole.foo
 # crouched behind cover, gun up by the shoulder, looking up at the lip of it
 CROUCH = P({"ik.foot.L": (0.165, -0.03, 0.102), "rot.foot.L": (0, 0, 14), "pole.foot.L": (0.45, -1, 0),
             "ik.foot.R": (-0.140, 0.07, 0.102), "rot.foot.R": (0, 0, -12), "pole.foot.R": (-0.45, -1, 0)},
-           root=(0.0, 0.09, -0.43), hips=(22, 0, 0), spine=(18, 0, 0), chest=(12, 0, 2), neck=(-22, 0, 0), head=(-10, 0, 0),
+           root=(0.0, 0.20, -0.545), hips=(30, 0, 0), spine=(22, 0, 0), chest=(14, 0, 2), neck=(-16, 0, 0), head=(-12, 0, 0),
            shoulder__R=(0, 0, 8), ikc__hand__R=(-0.13, -0.17, 1.30), rotc__hand__R=UP_ROT, pole__hand__R=(-0.4, 0.5, -0.8),
-           ik__hand__L=(0.17, -0.24, 0.56), rot__hand__L=(-40, 0, 10), pole__hand__L=(0.5, 0.3, -0.5))
+           ik__hand__L=(0.19, -0.30, 0.46), rot__hand__L=(-40, 0, 10), pole__hand__L=(0.5, 0.3, -0.5))
 
 # half-hidden behind a corner on his right: torso and head displaced to his
 # right, gun up and ready - the start of lean_left_out
@@ -178,7 +178,7 @@ def rise():
     c = Clip("rise", 0.40)
     c.pose(0.0, CROUCH)
     dip = dict(CROUCH)
-    dip.update({"root": (0.0, 0.095, -0.45), "spine": (21, 0, 0)})
+    dip.update({"root": (0.0, 0.205, -0.565), "spine": (25, 0, 0)})
     c.pose(0.05, dip, "inout")
     mid = dict(AIM)
     mid.update({"root": (0.0, 0.03, -0.09), "spine": (8, 0, 4), "chest": (2, -2, 8), "head": (0, 3, -12)})
@@ -195,7 +195,7 @@ def sink():
     c = Clip("sink", 0.34)
     c.pose(0.0, AIM)
     drop = dict(CROUCH)
-    drop.update({"root": (0.0, 0.085, -0.46)})
+    drop.update({"root": (0.0, 0.195, -0.575)})
     c.pose(0.24, drop, "in2")
     c.pose(0.34, CROUCH, "out")
     c.lag.update({"head": -0.02})
@@ -326,12 +326,23 @@ def run():
     # pelvis yaw follows the forward leg, chest counters, head stays level
     for ph, s in ((0.0, 1), (0.5, -1), (1.0, 1)):
         c.key(ph * T, "inout", hips=(8, 0, -9 * s), spine=(10, 0, 4 * s), chest=(7, 0, 9 * s), neck=(-8, 0, -3 * s), head=(-6, 0, -2 * s))
-        # arms pump against the legs: left arm forward when the right leg is
-        # arms tucked to the sides (lowered 40 degrees from the A-pose), pumping
-        c.key(ph * T, "inout", upper_arm__L=(40 * s - 8, 40, -6), forearm__L=(-80 + 18 * s, 0, 0), hand__L=(0, 6, 0),
-              shoulder__L=(0, 0, 5 * s), ikw__hand__L=(0, 0, 0),
-              upper_arm__R=(-40 * s - 14, -40, 6), forearm__R=(-92 - 14 * s, 0, 0), hand__R=(-25, 0, 0),
-              shoulder__R=(0, 0, 5 * s), ikw__hand__R=(0, 0, 0))
+        # arms pump fore and aft close to the body (wrist targets in the chest's
+        # frame, so they ride the torso's counter-rotation); the right hand
+        # carries the revolver muzzle-up. The arm opposite the forward leg
+        # swings forward: at phase 0 the left leg leads, so the right arm does.
+        # (the chest pitches ~25 degrees into the run, which carries these
+        # forward and down: the leading fist ends up at chest height)
+        fwd_r, back_r = (-0.18, -0.36, 1.47), (-0.25, 0.12, 1.03)
+        fwd_l, back_l = (0.17, -0.34, 1.45), (0.24, 0.13, 1.00)
+        r = fwd_r if s > 0 else back_r
+        l = back_l if s > 0 else fwd_l
+        c.key(ph * T, "inout", ikc__hand__R=r, ikc__hand__L=l,
+              rotc__hand__R=hand_rot("R", (0.0, -0.45, 0.89), (0.0, 0.89, 0.45)),
+              ikw__hand__R=(1, 0, 0), ikw__hand__L=(1, 0, 0),
+              pole__hand__R=(-0.45, 0.85, -0.25), pole__hand__L=(0.45, 0.85, -0.25),
+              shoulder__L=(0, 0, 5 * s), shoulder__R=(0, 0, 5 * s),
+              upper_arm__L=(0, 0, 0), forearm__L=(0, 0, 0), hand__L=(-10, 6, 0),
+              upper_arm__R=(0, 0, 0), forearm__R=(0, 0, 0), hand__R=(0, 0, 0))
     return c
 
 
