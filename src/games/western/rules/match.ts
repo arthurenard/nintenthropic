@@ -26,6 +26,7 @@ import {
   MIN_SHOT_GAP,
   QUICK_DRAW_WINDOW,
   RIFLE_DAMAGE_FACTOR,
+  THROW_HAND,
   WAVE_INTRO,
 } from "./tuning";
 import type { Cover, HitPart, Role } from "./types";
@@ -425,7 +426,7 @@ export class Match implements BanditWorld {
   throwDynamite(b: Bandit): void {
     const stick = this.freeStick();
     if (!stick) return;
-    const start: V3 = { x: b.pos.x, y: b.pos.y + 1.9, z: b.pos.z };
+    const start = throwHand(b.pos, this.eye);
     const target: V3 = {
       x: this.eye.x + range(this.random, -1.6, 1.6),
       y: 0.05,
@@ -855,6 +856,21 @@ export class Match implements BanditWorld {
  */
 export function isHigh(c: Cover): boolean {
   return c.kind === "tower" || c.level >= 2;
+}
+
+/** Where a man standing at `feet` and facing `eye` holds a stick as he lets it go. */
+export function throwHand(feet: V3, eye: V3): V3 {
+  const fx = eye.x - feet.x;
+  const fz = eye.z - feet.z;
+  const len = Math.hypot(fx, fz) || 1;
+  const ux = fx / len;
+  const uz = fz / len;
+  // Facing (ux, uz), his left is (uz, −ux).
+  return {
+    x: feet.x + ux * THROW_HAND.forward + uz * THROW_HAND.left,
+    y: feet.y + THROW_HAND.up,
+    z: feet.z + uz * THROW_HAND.forward - ux * THROW_HAND.left,
+  };
 }
 
 /** The High Noon duel's mark in the street (tagged `duel` by the town): the duelist's alone. */

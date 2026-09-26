@@ -95,6 +95,13 @@ export const LIGHT_TIME = 0.7;
 export const THROW_TIME = 0.5;
 /** When, in the throw, the stick leaves the hand. */
 export const THROW_RELEASE = 0.3;
+/**
+ * Where the stick is at that moment: the throw clip's hand, in metres from
+ * his feet - up, toward the player (he faces you), and to his own left
+ * (measured on bandit.glb in three.js). The stick flies from there, so it
+ * leaves his hand rather than appearing over his head.
+ */
+export const THROW_HAND = { up: 1.39, forward: 0.49, left: 0.45 } as const;
 export const DYNAMITE_RANGE = 38;
 /** Seconds between landing and the bang: a bounce, a roll, a fizz. */
 export const DYNAMITE_GROUND_FUSE = 0.55;
