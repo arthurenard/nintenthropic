@@ -11,6 +11,8 @@ import type {
 import type { Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
 import { Match, type MatchListener, type Results } from "./rules/match";
+import { loadSoundPack } from "../../audio/index";
+import type { StreetSpace } from "../../audio/routing";
 import { mulberry32 } from "./rules/rng";
 import type { Award, WaveBonuses } from "./rules/scoring";
 import { isHighNoon, type SecretId } from "./rules/secrets";
@@ -157,7 +159,23 @@ export class HighNoon implements Game, MatchListener {
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.shadowMap.type = PCFShadowMap;
 
-    this.assets = await loadAssets(ctx, (f) => onProgress(f * 0.9), this.noon);
+    // The sound pack synthesises (in a worker) while the art loads; both
+    // report into one bar, and neither leaves work for the first frames.
+    let artDone = 0;
+    let soundDone = 0;
+    const report = () => onProgress(Math.min(0.97, artDone * 0.7 + soundDone * 0.25));
+    const sounds = loadSoundPack(ctx.audio, "western", (f) => {
+      soundDone = f;
+      report();
+    }).catch((err) => console.warn("High Noon: the sound pack did not load", err));
+    this.assets = await loadAssets(
+      ctx,
+      (f) => {
+        artDone = f;
+        report();
+      },
+      this.noon,
+    );
     const town = this.assets.town;
     this.stage = new Stage(renderer, town, this.assets.sky, this.assets.fog, this.noon);
     this.stage.setQuality(ctx.quality);
@@ -168,7 +186,6 @@ export class HighNoon implements Game, MatchListener {
     this.queries = new TownQueries(town);
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
-    onProgress(0.92);
 
     const banditT = templateFrom("bandit", this.assets.bandit);
     const bossT = templateFrom("boss", this.assets.boss, this.assets.bandit.animations);
@@ -203,10 +220,27 @@ export class HighNoon implements Game, MatchListener {
     this.post.set("noon", this.noon ? 1 : 0);
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
     await this.warmUp();
+    this.tuneEcho();
+    await sounds;
     window.addEventListener("keydown", this.onKey);
     this.sound.loop("wind", "wind", { volume: 0.35 });
     this.phase = "calibration";
     onProgress(1);
+  }
+
+  /**
+   * Tell the audio engine how wide and deep this street really is, so its
+   * slap-back echoes come off the town's actual facades.
+   */
+  private tuneEcho(): void {
+    const engine = this.ctx.audio as { setSpace?: (space: Partial<StreetSpace>) => void };
+    if (typeof engine.setSpace !== "function") return;
+    const eye = this.assets.town.eye;
+    const hit = { point: new Vector3(), normal: new Vector3(), distance: 0, object: null };
+    // The side walls are measured a dozen metres down the street, where the facades begin.
+    const from = eye.clone().add(new Vector3(0, 0, -12));
+    const reach = (o: Vector3, x: number, z: number, fallback: number) => this.queries.cast(o, new Vector3(x, 0, z), 200, hit)?.distance ?? fallback;
+    engine.setSpace({ left: reach(from, -1, 0, 6), right: reach(from, 1, 0, 7), behind: reach(eye, 0, 1, 11), depth: reach(eye, 0, -1, 62) });
   }
 
   private newMatch(): void {
@@ -547,8 +581,7 @@ export class HighNoon implements Game, MatchListener {
       this.hurtFilter = h;
       this.sound.filter("hurt", h);
     }
-    if (h > 0.35 && this.phase === "playing") this.sound.loop("heartbeat", "heartbeat", { volume: Math.min(1, h + 0.2) });
-    else if (h < 0.2 || this.phase !== "playing") this.sound.stopLoop("heartbeat");
+    // (The heartbeat comes with the "hurt" filter: the audio engine races it with the damage.)
   }
 
   private updateDeath(dt: number): void {
@@ -610,7 +643,6 @@ export class HighNoon implements Game, MatchListener {
     this.later(0.6, () => this.secretsWorld.bellHit(0.8));
     this.later(1.2, () => this.ambient.spawnTumbleweed(giant));
     this.hurtDisplay = 0;
-    this.sound.stopLoop("heartbeat");
   }
 
   banditSpawn(b: Bandit): void {
@@ -715,7 +747,6 @@ export class HighNoon implements Game, MatchListener {
     this.phase = "dying";
     this.deathT = 0;
     this.sound.play("death_player");
-    this.sound.stopLoop("heartbeat");
     this.sound.filter("slowmo", 1);
     this.clearHint();
     this.ambient.running = false;
@@ -736,7 +767,9 @@ export class HighNoon implements Game, MatchListener {
   }
 
   streakUp(multiplier: number): void {
-    this.sound.play("streak_up", { rate: 0.9 + multiplier * 0.08 });
+    // Up a major triad as the multiplier climbs: x2 root, x3 third, x4 fifth.
+    const semitones = multiplier >= 4 ? 7 : multiplier === 3 ? 4 : 0;
+    this.sound.play("streak_up", { rate: Math.pow(2, semitones / 12) });
     this.pushReadouts(true);
   }
 

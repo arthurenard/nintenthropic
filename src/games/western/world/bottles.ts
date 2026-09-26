@@ -71,6 +71,7 @@ export class BottleStage implements CalibrationStage {
   private readonly bottles: Bottle[] = [];
   private readonly targetList: CalibrationTarget[] = [];
   private lit: string | null = null;
+  private hits = 0;
   private glintTimer = 0;
   private time = 0;
   active = true;
@@ -186,7 +187,10 @@ export class BottleStage implements CalibrationStage {
     this.fx.glass(b.center, tmp, b.color, 22, floor);
     this.fx.liquid(b.center, b.liquid);
     this.sound.at("bottle_break", b.center, 1);
-    this.sound.play("calib_hit", { volume: 0.8 });
+    // Each good hit a step up the pentatonic scale: the warm-up plays a little tune.
+    const steps = [0, 2, 4, 7, 9, 12, 14, 16, 19];
+    this.sound.play("calib_hit", { volume: 0.8, rate: Math.pow(2, (steps[Math.min(steps.length - 1, this.hits)] as number) / 12) });
+    this.hits++;
   }
 
   miss(id: string, x: number, y: number): void {
@@ -221,6 +225,7 @@ export class BottleStage implements CalibrationStage {
   /** Stand every bottle back up (a new aim check). */
   reset(): void {
     this.active = true;
+    this.hits = 0;
     for (const b of this.bottles) {
       b.alive = true;
       b.fade = 1;
