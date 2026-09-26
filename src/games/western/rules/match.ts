@@ -473,7 +473,7 @@ export class Match implements BanditWorld {
     const weights: number[] = [];
     const inStreet = b.role === "gunman" && b.state !== "hidden";
     for (const c of this.covers) {
-      if (c === b.cover || c.level !== 0 || isHigh(c) || !this.isFree(c) || this.bodies.has(c.id)) continue;
+      if (c === b.cover || c.level !== 0 || isHigh(c) || isDuelMark(c) || !this.isFree(c) || this.bodies.has(c.id)) continue;
       const d = horizontalDistance(b.pos, c.exposed);
       if (inStreet) {
         if (d > 22) continue;
@@ -534,6 +534,10 @@ export class Match implements BanditWorld {
 
   private allowed(role: Role, c: Cover): boolean {
     const high = isHigh(c);
+    // The duel's mark is out in the open in the middle of the street, its
+    // "hidden" spot the freight crates metres away: only the duelist walks
+    // out to it. Anyone else sent there would slide across the street.
+    if (isDuelMark(c)) return false;
     switch (role) {
       case "rifleman":
         return this.hasHighCovers ? high || (c.kind === "roof" && c.level >= 1) : c.level >= 1;
@@ -542,9 +546,9 @@ export class Match implements BanditWorld {
       case "runner":
         return !high && c.level === 0;
       case "dynamiter":
-        return !high && c.distance <= DYNAMITE_RANGE;
+        return !high && c.distance <= Math.min(DYNAMITE_RANGE, this.spec.reach);
       default:
-        return !high && (this.spec.coverTier === 2 || c.distance <= 42);
+        return !high && c.distance <= this.spec.reach;
     }
   }
 
@@ -853,6 +857,11 @@ export function isHigh(c: Cover): boolean {
   return c.kind === "tower" || c.level >= 2;
 }
 
+/** The High Noon duel's mark in the street (tagged `duel` by the town): the duelist's alone. */
+export function isDuelMark(c: Cover): boolean {
+  return c.tags.includes("duel");
+}
+
 function weightedPick<T>(options: T[], weights: number[], total: number, random: Random): T | null {
   if (options.length === 0 || total <= 0) return null;
   let r = random() * total;
@@ -889,7 +898,7 @@ export function pickBossCovers(covers: readonly Cover[]): Cover[] {
   const tagged = covers.filter((c) => c.tags.includes("boss"));
   if (tagged.length >= 2) return tagged;
   // Close enough to be the star of the wave: 14 to 32 m out.
-  const pool = covers.filter((c) => !isHigh(c) && c.level === 0 && c.distance >= 14 && c.distance <= 32);
+  const pool = covers.filter((c) => !isHigh(c) && !isDuelMark(c) && c.level === 0 && c.distance >= 14 && c.distance <= 32);
   const source = pool.length >= 3 ? pool : covers.filter((c) => !isHigh(c));
   if (source.length <= 3) return source.slice();
   // Greedy spread: start nearest the middle of the street, add the farthest each time.

@@ -32,8 +32,12 @@ export interface WaveSpec {
   maxActive: number;
   /** Bandits out of cover and threatening you at once. */
   maxAiming: number;
-  /** 1: only the nearer street-level and first-floor covers; 2: all of them. */
-  coverTier: 1 | 2;
+  /**
+   * How far down the street (metres) the gunmen and dynamiters may fight
+   * from. The first waves keep them near, where a man reads clearly and the
+   * town can be learned a stretch at a time; "more covers in play" after.
+   */
+  reach: number;
   /** Chance of a second shot before ducking back. */
   secondShot: number;
   /** Chance a bandit gives himself away before coming out. */
@@ -68,6 +72,13 @@ function banditsFor(wave: number): number {
   if (wave === 5) return 8;
   const regular = 2 * wave; // 12, 14, 16 ...
   return isBossWave(wave) ? regular - 2 : regular;
+}
+
+/** Wave 1 within 30 m, wave 2 within 40 m, then the whole street. */
+export function reachFor(wave: number): number {
+  if (wave <= 1) return 30;
+  if (wave === 2) return 40;
+  return Number.POSITIVE_INFINITY;
 }
 
 function subtitleFor(wave: number): string {
@@ -111,7 +122,7 @@ export function waveSpec(wave: number): WaveSpec {
     damage: damageFor(w),
     maxActive: w === 1 ? 2 : w <= 3 ? 3 : w <= 5 ? 4 : Math.min(7, 5 + Math.floor((w - 6) / 2)),
     maxAiming: w === 1 ? 1 : w <= 5 ? 2 : w <= 8 ? 3 : 4,
-    coverTier: w === 1 ? 1 : 2,
+    reach: reachFor(w),
     secondShot: w <= 3 ? 0 : Math.min(0.5, 0.1 * (w - 3)),
     tellChance: w <= 2 ? 1 : Math.max(0.5, 1 - 0.1 * (w - 2)),
     townsfolk: w === 1 || w === 2 || boss ? 1 : Math.min(3, 2 + Math.floor((w - 3) / 4)),

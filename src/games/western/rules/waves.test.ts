@@ -59,9 +59,10 @@ describe("the wave table", () => {
     }
   });
 
-  it("uses fewer covers on wave 1 so the town can be learned", () => {
-    expect(waveSpec(1).coverTier).toBe(1);
-    expect(waveSpec(2).coverTier).toBe(2);
+  it("keeps the first waves near, so the town can be learned a stretch at a time", () => {
+    expect(waveSpec(1).reach).toBe(30);
+    expect(waveSpec(2).reach).toBe(40);
+    expect(waveSpec(3).reach).toBe(Number.POSITIVE_INFINITY);
     expect(waveSpec(1).maxAiming).toBe(1);
   });
 });
