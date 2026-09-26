@@ -1,5 +1,5 @@
 /**
- * The fake camera's picture: tests/data/thumbs_down.jpg as a Y4M video, the
+ * The fake camera's picture: e2e/fixtures/hand.jpg as a Y4M video, the
  * format Chrome's --use-file-for-fake-video-capture reads. The JPEG is
  * decoded by Chrome itself (no image library needed), converted to the
  * camera's I420 colour format here, and written once to a cache under
@@ -20,7 +20,7 @@ interface Files {
 
 export const ROOT = new URL("..", import.meta.url).pathname;
 export const FIXTURE = `${ROOT}node_modules/.cache/handy-e2e/hand.y4m`;
-const SOURCE = `${ROOT}tests/data/thumbs_down.jpg`;
+const SOURCE = `${ROOT}e2e/fixtures/hand.jpg`;
 /** The picture's own shape, rounded to even sides for 4:2:0. */
 const WIDTH = 480;
 const HEIGHT = 720;

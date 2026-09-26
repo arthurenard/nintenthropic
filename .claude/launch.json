@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "handy-browser",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "-m", "handy", "--browser", "--no-open", "--port", "8765"],
-      "port": 8765
+      "name": "handy-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
     }
   ]
 }

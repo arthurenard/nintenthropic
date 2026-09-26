@@ -12,10 +12,9 @@ Apple had made it. That means three things, in this order.
   decorate for their own sake.
 
 When in doubt, remove it. A line, a label, a colour or an animation that does
-not carry meaning is noise. Both surfaces — the browser page (`handy/web/`) and
-the desktop window drawn with OpenCV (`handy/scene.py`, `handy/app.py`, the
-maps' HUDs) — follow this document, so a player moving between them sees one
-product.
+not carry meaning is noise. Everything a player sees — the page's HTML
+interface (`src/app/`, `src/ui/`) and what each game draws in its 3D world
+(`src/games/`) — follows this document, so every screen reads as one product.
 
 ## Voice
 
@@ -39,27 +38,22 @@ product.
 
 The system face. On Apple devices that is SF Pro; elsewhere the platform's own.
 
-- **Browser:** `font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
-  "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, system-ui,
-  sans-serif;` with `font-variant-numeric: tabular-nums` on every number.
-  Headlines tighten tracking (−0.02em at 34 px and up, −0.01em at 22–28 px).
-- **Desktop:** SF Pro loaded at runtime from `/System/Library/Fonts/SFNS.ttf`
-  through `cv2.FontFace` (weights via `putText`'s weight argument: 400 regular,
-  500 medium, 600 semibold, 700 bold), falling back to OpenCV's built-in sans
-  when that file is not there. The font is read from the system, never copied
-  into the repository.
+`font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro
+Display", "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;` with
+`font-variant-numeric: tabular-nums` on every number. Headlines tighten tracking
+(−0.02em at 34 px and up, −0.01em at 22–28 px). No web fonts are downloaded.
 
-| Style | Size (web px / desktop units at 720p) | Weight | Use |
+| Style | Size (px) | Weight | Use |
 | --- | --- | --- | --- |
-| Large Title | 56 / 44 | Bold | The one hero line on a screen; the final score |
-| Title 1 | 34 / 30 | Bold | Screen titles, the round score in the HUD |
-| Title 2 | 28 / 24 | Semibold | Map names on cards, results headline |
-| Title 3 | 22 / 20 | Semibold | Panel titles, the round clock |
-| Headline | 17 / 16 | Semibold | Buttons, emphasis |
-| Body | 17 / 16 | Regular | Instructions, descriptions |
-| Subhead | 15 / 14 | Regular | Secondary lines |
-| Footnote | 13 / 12 | Regular | Hints, captions |
-| Eyebrow | 12 / 11 | Semibold, +0.06em, caps | The two-word label above a title |
+| Large Title | 56 | Bold | The one hero line on a screen; the final score |
+| Title 1 | 34 | Bold | Screen titles, the round score in the HUD |
+| Title 2 | 28 | Semibold | Game names, results headline |
+| Title 3 | 22 | Semibold | Panel titles, the round clock |
+| Headline | 17 | Semibold | Buttons, emphasis |
+| Body | 17 | Regular | Instructions, descriptions |
+| Subhead | 15 | Regular | Secondary lines |
+| Footnote | 13 | Regular | Hints, captions |
+| Eyebrow | 12 | Semibold, +0.06em, caps | The two-word label above a title |
 
 Desktop sizes are multiplied by the layout's scale like everything else. A
 screen uses at most three of these styles at once.
@@ -89,20 +83,15 @@ Primary buttons are white pills with black labels (the way Apple Arcade's Play
 button is); the tint is for state, not for decoration. No decorative coloured
 rules, tabs or stripes on panels.
 
-In OpenCV these are BGR: tint `(88, 209, 48)`, danger `(58, 69, 255)`, warning
-`(10, 159, 255)`, gold `(10, 214, 255)`, surface `(30, 28, 28)`.
-
 ## Materials and shape
 
-- **Glass** over the world: the region behind it blurred (web:
-  `backdrop-filter: saturate(180%) blur(24px)`; desktop: a blur of that region
-  at quarter resolution, then the glass tint) with a hairline edge. It must stay
-  legible over the brightest sky and the darkest road.
+- **Glass** over the world: the region behind it blurred
+  (`backdrop-filter: saturate(180%) blur(24px)`) with a hairline edge. It must
+  stay legible over the brightest sky and the darkest road.
 - **Corner radii** (continuous where the platform allows): 10 controls,
   16 small panels, 22 cards, 28 sheets. Buttons are full pills.
-- **Hit targets** are at least 44 pt on the web. On the desktop, anything you
-  shoot with your finger is at least 64 units at 720p, because a hand is less
-  precise than a mouse.
+- **Hit targets** are at least 44 px for a pointer. Anything you shoot with a
+  finger pistol is bigger still, because a hand is less precise than a mouse.
 - **Shadows** only lift sheets and modals above the world: large radius, low
   opacity, no hard edges.
 - **Spacing** on an 8-point grid (4 for tight pairs). Screen margins 24 at
@@ -119,8 +108,7 @@ In OpenCV these are BGR: tint `(88, 209, 48)`, danger `(58, 69, 255)`, warning
   hand matters, and shrinks in play, where the world matters. The hand skeleton
   on it is drawn in white with soft round joints, not in debug colours.
 - **Menus are sheets.** Pausing brings a glass sheet over a dimmed world with a
-  few large choices (Resume, Restart, Choose a Game, Quit). On the desktop each
-  is shootable and big enough to hit with a finger pistol.
+  few large choices (Resume, Restart, Adjust Aim, Choose a Game).
 - **Hints** appear when they help (a round's first seconds, a lost hand, an
   unknown key) and fade away when they stop helping.
 
@@ -139,14 +127,14 @@ In OpenCV these are BGR: tint `(88, 209, 48)`, danger `(58, 69, 255)`, warning
 
 Line icons in the style of SF Symbols: 1.75 px strokes (scaled), round caps and
 joins, drawn on a 24-unit grid, filled variants only for the active state.
-Inline SVG on the web; drawn with anti-aliased OpenCV strokes on the desktop.
+Inline SVG.
 Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off,
 camera, hand, checkmark, share.
 
 ## Sound
 
-Every meaningful event has a sound, and the same event sounds the same in the
-browser and the desktop app (both play the synthesised set from `audio.py`).
+Every meaningful event has a sound, synthesised in code at load
+(`src/audio/`): no audio files are shipped.
 Interface sounds are soft and short; game sounds carry the weight. Mute is one
 click and remembered.
 

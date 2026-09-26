@@ -18,7 +18,7 @@
       try {
         const prefer = new URLSearchParams(location.search).get("delegate") === "CPU" ? "CPU" : "GPU";
         const image = new Image();
-        image.src = "/tests/data/thumbs_down.jpg";
+        image.src = "/e2e/fixtures/hand.jpg";
         await image.decode();
         const canvas = document.getElementById("frame");
         const context = canvas.getContext("2d");
