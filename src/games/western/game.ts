@@ -24,7 +24,7 @@ import { loadAssets, type HighNoonAssets } from "./world/assets";
 import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
 import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
-import { RigPool, templateFrom } from "./world/character";
+import { RIM, RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "./world/framing";
@@ -202,6 +202,10 @@ export class HighNoon implements Game, MatchListener {
     );
     const town = this.assets.town;
     this.stage = new Stage(renderer, town, this.assets.sky, this.assets.fog, this.noon);
+    // The street's rim light, to the hour: the white glare of noon, or the
+    // golden hour's warm sky and dust.
+    if (this.noon) RIM.color.value.setRGB(0.85, 0.85, 0.82);
+    else RIM.color.value.setRGB(0.95, 0.8, 0.64);
     this.stage.setQuality(ctx.quality);
     this.camera = new PlayerCamera(town.eye, town.eyeQuaternion, town.fov);
     this.camera.reducedMotion = ctx.settings.reducedMotion;

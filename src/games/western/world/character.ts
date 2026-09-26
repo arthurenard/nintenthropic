@@ -69,23 +69,49 @@ export function templateFrom(kind: CharacterKind, asset: LoadedAsset, extraClips
 const PATCH_KEY = "highnoon-rig";
 
 /**
+ * The light that rims every figure in the street: the bright sky and the
+ * sunlit dust all round a man catching the edges of his hat, shoulders and
+ * sleeves as they turn away from you. It is what keeps a figure in the
+ * shade from sinking into the shaded facade behind him, and one in the sun
+ * from dissolving into the sunlit boards: a soft falloff at the silhouette,
+ * coloured by his own clothes, stronger where the edge faces up at the sky.
+ * The game sets its colour to the hour (warm at golden hour, whiter at noon).
+ */
+export const RIM = { color: { value: new Color(0.95, 0.8, 0.64) } };
+
+/**
  * Each rig's materials get two uniforms: how much sun reaches it (the town
  * is baked, so the town's shadows cannot fall on characters in the usual way —
  * a ray toward the sun decides instead), and an overall shade (a tell seen
- * as a dark shape moving in an unlit room). Patched once, one shader program
- * for every rig.
+ * as a dark shape moving in an unlit room); and the street's rim light
+ * (RIM). Patched once, one shader program for every rig.
  */
 function patchMaterial(m: Material, uniforms: { uSunVis: { value: number }; uShade: { value: number } }): void {
   m.onBeforeCompile = (shader) => {
     shader.uniforms["uSunVis"] = uniforms.uSunVis;
     shader.uniforms["uShade"] = uniforms.uShade;
+    shader.uniforms["uRim"] = RIM.color;
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float uSunVis;\nuniform float uShade;")
+      .replace("#include <common>", "#include <common>\nuniform float uSunVis;\nuniform float uShade;\nuniform vec3 uRim;")
       .replace(
         "getDirectionalLightInfo( directionalLight, directLight );",
         "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= uSunVis;",
       )
-      .replace("#include <opaque_fragment>", "outgoingLight *= uShade;\n#include <opaque_fragment>");
+      .replace(
+        "#include <opaque_fragment>",
+        [
+          "{",
+          "\tfloat facing = saturate( dot( geometryNormal, geometryViewDir ) );",
+          "\tfloat rim = pow( 1.0 - facing, 3.0 ) * ( 0.55 + 0.45 * geometryNormal.y );",
+          "\t#ifdef USE_AOMAP",
+          "\trim *= ambientOcclusion;",
+          "\t#endif",
+          "\toutgoingLight += material.diffuseColor * uRim * rim;",
+          "}",
+          "outgoingLight *= uShade;",
+          "#include <opaque_fragment>",
+        ].join("\n"),
+      );
   };
   m.customProgramCacheKey = () => PATCH_KEY;
 }
