@@ -87,7 +87,7 @@ function anySavedAim(): boolean {
 
 export class App {
   readonly hud: Hud;
-  private readonly crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"));
+  private readonly crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"), () => this.settings.reducedMotion);
   private readonly pip = new Pip();
   private readonly settings: Settings;
   private host: EngineHost | null = null;

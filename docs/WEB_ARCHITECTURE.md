@@ -53,13 +53,18 @@ src/
     western/          High Noon
 public/
   models/             MediaPipe .task bundles
-  mediapipe/          tasks-vision WebAssembly files (copied from node_modules at build)
-  draco/              Draco decoder (copied from three at build)
+  mediapipe/          tasks-vision WebAssembly files (copied from node_modules
+                      whenever Vite starts; not committed)
   assets/western/     town.glb, sky.webp, characters, props (exported by art/)
 art/
   western/            Blender build scripts: `blender -b -P art/western/build_town.py`
 e2e/                  Playwright tests and fixtures
 ```
+
+Three's Draco decoder needs no copy under `public/`: since r186 `DRACOLoader`
+names its decoder files with `new URL(..., import.meta.url)`, which Vite serves
+from `node_modules` in dev and emits, hashed, into the build. The asset loader
+uses its glTF-only build.
 
 The Python engine (`handy/`, `tests/`, `pyproject.toml`) is retired once the web
 version ships; it stays in git history under the tag `python-final`.
@@ -81,12 +86,28 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
 
 - Tracking runs on every **new camera frame** (`requestVideoFrameCallback`), in
   VIDEO running mode, and publishes the newest HandFrame with its capture time.
+  The landmarker runs in a **worker** with its own WebGL context (GPU delegate,
+  CPU fallback): the page hands it each frame as a zero-copy `VideoFrame` and
+  reads back 21 points, so tracking costs the render loop about 0.1 ms a
+  frame instead of the 20-40 ms of inference. A frame that arrives while the
+  last is still being read is skipped, never queued. Browsers that cannot run
+  it in a worker track on the page.
 - Input turns a HandFrame into an **Aim** once per new frame (never twice for
   the same frame), and the engine reads the latest Aim every animation frame.
   The crosshair may be extrapolated forward by the measured tracking delay
   using the filter's velocity, clamped to 60 ms.
 - The crosshair is drawn by the page (a 2D overlay at device resolution), not
   inside the 3D scene, so it is always crisp and never waits for a render.
+- A shot's `Aim` carries the position from just before the thumb began to fold
+  (the hand moves with the fold), then the crosshair kicks up with the recoil
+  and settles in about 250 ms.
+- **Reloading with a pointer.** A mouse that leaves the stage is off the screen
+  until it returns; right-click or R, and a two-finger tap on a touch screen,
+  make a *synthetic offscreen moment*: `Aim.offscreen` is true for 250 ms with
+  the crosshair where it is. Games need no key handling of their own for it.
+- **Until `start()`** the host still runs the game's `update` and `render` every
+  frame (the world is alive behind the aim check), but the aim it passes never
+  has `fired` set: the check's shots belong to the check.
 
 ## The contract: `src/engine/types.ts`
 
@@ -101,7 +122,11 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   `render()`, `resize(w, h, dpr)`, `pause()`, `resume()`, `dispose()`, plus
   `calibration: CalibrationStage` (the game's own targets for the aim check).
 - `GameContext` — the renderer and canvas, `audio: AudioBus`, `hud: HudSink`,
-  `assets: AssetLoader`, settings, a seeded random source, and `quality`.
+  `assets: AssetLoader`, settings, a seeded random source, `quality`, and
+  `input` (optional: how the player aims, so hints can say "right-click to
+  reload" to a mouse player).
+- `GameEntry` — the landing's card for a game; `about` (optional) is the
+  featured game's longer line.
 - `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
   the desktop), wave titles, ammo, damage direction, hit markers, secrets, and
   the end of the game (`GameOver` with stats).
@@ -134,8 +159,15 @@ three shots.
 - **The score.** `aim = 1 − exp(−R² / 2σ²)`: the probability that a shot lands
   within `R` of where you aim, with `R` = 3.5% of the smaller viewport side (a
   bandit's torso at mid-street). Shown live as a ring filling to 95%.
+- **Only full maps are scored.** The two-shot map of scale and offset is there
+  to put a crosshair on screen; it cannot know how the camera is turned, so its
+  miss on the third shot is shown but not scored - it would be the camera's
+  error, not the player's, and hold a rotated camera back six shots. A first
+  check therefore takes at least six shots (two to learn, one to fit, three to
+  prove); a returning player's three.
 - **Done** when `aim ≥ 95%` over at least three predictive errors and the bias
-  is under `R / 2`. A saved fit starts measuring from the first shot. After 12
+  is under `R / 2`. The map that earned the score is the one saved and played
+  on. A saved fit starts measuring from the first shot. After 12
   shots below 95%, offer **Play Anyway** with one specific tip (light, framing,
   distance) — never trap the player.
 - **Stored** per camera (`deviceId`) and video size in `localStorage`, with a
@@ -216,6 +248,11 @@ the environment light for dynamic objects.
   score), game rules (waves, health regeneration, scoring, bandit state
   machines), HUD formatting, storage. The Python tests are the reference for
   anything ported.
+- **Test builds** (`vite build --mode e2e`; never production) add hooks:
+  `?input=script` swaps the camera and tracker for a scripted hand that drives
+  the real aim pipeline, and `?fail=camera-denied|camera-busy|camera-missing|
+  camera-insecure|model|game|webgl` shows each error. `e2e/smoke.html` and
+  `e2e/tracker.html` load and time the tracker alone on the dev server.
 - **End to end (Playwright, installed Chrome, `--mute-audio`):** landing →
   camera priming → aim check → High Noon → pause → results, with a fake camera
   (`--use-file-for-fake-video-capture`) showing a hand; and the whole flow with

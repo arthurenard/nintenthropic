@@ -22,7 +22,10 @@ export class Crosshair {
   /** Shown at all: off while there is no aim to show (no map yet, paused). */
   visible = false;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly reducedMotion: () => boolean = () => false,
+  ) {
     this.context = canvas.getContext("2d", { alpha: true })!;
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
@@ -63,7 +66,8 @@ export class Crosshair {
     const thin = Math.max(1, 1.1 * unit);
     const radius = 20 * unit * (1 - 0.18 * Math.min(1, Math.max(0, aim.travel)));
     const reach = 30 * unit;
-    const kick = (now - this.firedAt) / KICK;
+    // With reduced motion the ring does not kick out; the recoil itself stays.
+    const kick = this.reducedMotion() ? 1 : (now - this.firedAt) / KICK;
     const extent = Math.ceil(Math.max(reach, kick < 1 ? (20 + 34 * kick) * unit : 0) + 8 * this.ratio);
     this.dirty = [x - extent, y - extent, extent * 2, extent * 2];
 
