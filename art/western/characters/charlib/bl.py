@@ -94,16 +94,20 @@ def apply_modifiers(ob):
 
 
 def decimate(ob, target_tris, symmetry=True):
-    tris = tri_count(ob)
-    if tris <= target_tris:
-        return ob
-    m = ob.modifiers.new("dec", "DECIMATE")
-    m.decimate_type = "COLLAPSE"
-    m.ratio = target_tris / tris
-    m.use_symmetry = symmetry
-    m.symmetry_axis = "X"
-    m.use_collapse_triangulate = True
-    return apply_modifiers(ob)
+    """Collapse-decimate to about target_tris (a pass can stall on thin
+    features such as a rolled brim, so go again until it gets there)."""
+    for _ in range(4):
+        tris = tri_count(ob)
+        if tris <= target_tris * 1.05:
+            break
+        m = ob.modifiers.new("dec", "DECIMATE")
+        m.decimate_type = "COLLAPSE"
+        m.ratio = target_tris / tris
+        m.use_symmetry = symmetry
+        m.symmetry_axis = "X"
+        m.use_collapse_triangulate = True
+        apply_modifiers(ob)
+    return ob
 
 
 def subdivide(ob, levels):

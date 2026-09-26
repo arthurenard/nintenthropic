@@ -26,8 +26,8 @@ FINGERS = {
 POSES = {
     # flexion (MCP, PIP, DIP) per finger in degrees, thumb (spread, MCP, IP)
     "grip": dict(index=(38, 62, 26), middle=(82, 95, 45), ring=(86, 97, 45), pinky=(90, 95, 42), thumb=(55, 35, 25), open=0.0),
-    "relaxed": dict(index=(18, 28, 14), middle=(24, 34, 16), ring=(28, 38, 18), pinky=(32, 40, 20), thumb=(30, 12, 10), open=0.3),
-    "open": dict(index=(6, 10, 6), middle=(8, 12, 6), ring=(10, 14, 8), pinky=(12, 16, 8), thumb=(40, 8, 6), open=1.0),
+    "relaxed": dict(index=(22, 38, 18), middle=(28, 44, 20), ring=(32, 48, 22), pinky=(36, 50, 24), thumb=(10, 18, 14), open=0.3),
+    "open": dict(index=(8, 14, 8), middle=(10, 16, 8), ring=(12, 18, 10), pinky=(14, 20, 10), thumb=(22, 10, 8), open=1.0),
 }
 
 
@@ -54,19 +54,23 @@ def finger_chain(name, pose):
 
 
 def thumb_chain(pose):
+    """The thumb: its metacarpal buried in the ball of the thumb, the two
+    visible joints lying along the index finger (a relaxed thumb reaches
+    about the middle of the index's first joint), `spread` swinging it
+    palmward for a grip."""
     sp, f1, f2 = POSES[pose]["thumb"]
-    cmc = np.array([-0.006, 0.020, 0.022])
-    # the thumb leaves the palm heading distal, radial and palmar; `spread` swings it across the palm
-    d0 = np.array([-0.30, 0.72, 0.62])
-    d0 = _rot((0, 1, 0), -sp * 0.6) @ d0
+    cmc = np.array([-0.008, 0.016, 0.017])
+    d0 = np.array([-0.18, 0.82, 0.54])
+    d0 = _rot((0, 1, 0), -sp * 0.5) @ d0
     d0 /= np.linalg.norm(d0)
-    p1 = cmc + d0 * 0.046
-    axis = np.cross(d0, np.array([-1.0, 0, 0]))
+    p1 = cmc + d0 * 0.040
+    # flex toward the palm and the index finger
+    axis = np.cross(d0, np.array([-0.6, 0.0, -0.8]))
     axis /= np.linalg.norm(axis)
     d1 = _rot(axis, f1) @ d0
-    p2 = p1 + d1 * 0.031
+    p2 = p1 + d1 * 0.029
     d2 = _rot(axis, f1 + f2) @ d0
-    p3 = p2 + d2 * 0.026
+    p3 = p2 + d2 * 0.024
     return [cmc, p1, p2, p3]
 
 
