@@ -6,7 +6,10 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="An arcade you play with a finger pistol in front of your camera. Right in your browser." />
+    <meta name="apple-mobile-web-app-title" content="Handy" />
     <title>Handy</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8'/%3E%3Cg transform='translate(4 4)' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.2 8.4V4.6a1.45 1.45 0 0 1 2.9 0v3.8M11.1 8.4h8.4a1.6 1.6 0 0 1 0 3.2h-6.4M13.1 11.6h.7a1.5 1.5 0 0 1 0 3h-.9M12.9 14.6a1.4 1.4 0 0 1 0 2.8h-1.1M8.2 8.4H7a2.6 2.6 0 0 0-2.6 2.6v5a3.8 3.8 0 0 0 3.8 3.8h1.6a2.6 2.6 0 0 0 2-1'/%3E%3C/g%3E%3C/svg%3E"
@@ -82,6 +85,9 @@
               <use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" />
             </svg>
           </button>
+          <button id="settings-open" class="icon-button" aria-label="Settings" title="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-gear" /></svg>
+          </button>
         </div>
       </header>
       <main class="home-main">
@@ -100,6 +106,7 @@
               <span id="control-label" class="control-label"></span>
               <button id="switch-control" class="link">Use Mouse or Trackpad</button>
             </p>
+            <p class="subhead secondary home-best num" id="home-best" hidden></p>
           </div>
         </section>
         <section aria-labelledby="soon-label">
@@ -234,6 +241,9 @@
         <button class="button secondary wide" id="adjust-aim">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg>Adjust Aim
         </button>
+        <button class="button secondary wide" id="pause-settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-gear" /></svg>Settings
+        </button>
         <button class="button secondary wide" id="choose-game">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>Choose a Game
         </button>
@@ -246,10 +256,16 @@
       <div class="results-body">
         <p class="eyebrow" id="results-game">High Noon</p>
         <h2 class="title2" id="results-outcome">Survived</h2>
+        <p class="subhead secondary results-note" id="results-note" hidden></p>
         <p class="results-score num" id="results-score">0</p>
         <p class="new-best headline" id="new-best" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-star" /></svg>New Best
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-star" /></svg>New Best<span
+            class="new-best-margin num"
+            id="new-best-margin"
+            hidden
+          ></span>
         </p>
+        <p class="footnote secondary results-best num" id="results-best" hidden></p>
         <dl class="stats" id="results-stats"></dl>
         <p class="footnote secondary results-secrets num" id="results-secrets" hidden></p>
         <div class="results-actions">
@@ -283,7 +299,152 @@
       </div>
     </dialog>
 
-    <p class="toast glass" id="toast" role="status" hidden></p>
+    <!-- Settings: grouped rows, as in the system's own. -->
+    <dialog id="settings" class="sheet settings" aria-labelledby="settings-title">
+      <header class="settings-head">
+        <h2 class="title2" id="settings-title">Settings</h2>
+        <button class="button primary small" id="settings-done">Done</button>
+      </header>
+      <div class="settings-body" id="settings-body">
+        <section class="group" aria-labelledby="group-game">
+          <h3 class="group-title" id="group-game">Game</h3>
+          <div class="rows">
+            <div class="row">
+              <span class="row-label" id="label-difficulty">Difficulty</span>
+              <div
+                class="segmented"
+                role="radiogroup"
+                id="pick-difficulty"
+                aria-labelledby="label-difficulty"
+                aria-describedby="foot-difficulty"
+              >
+                <button type="button" role="radio" data-value="relaxed">Relaxed</button>
+                <button type="button" role="radio" data-value="standard">Standard</button>
+              </div>
+            </div>
+          </div>
+          <p class="group-foot" id="foot-difficulty"></p>
+        </section>
+
+        <section class="group" aria-labelledby="group-sound">
+          <h3 class="group-title" id="group-sound">Sound</h3>
+          <div class="rows">
+            <div class="row volume-row">
+              <svg class="volume-end" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-speaker-min" /></svg>
+              <input type="range" class="slider" id="volume" min="0" max="100" step="1" value="100" aria-label="Volume" />
+              <svg class="volume-end" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-speaker" /></svg>
+            </div>
+          </div>
+          <p class="group-foot">Press M to mute at any time.</p>
+        </section>
+
+        <section class="group" aria-labelledby="group-aim">
+          <h3 class="group-title" id="group-aim">Aim</h3>
+          <div class="rows">
+            <div class="row">
+              <span class="row-label" id="label-crosshair">Crosshair</span>
+              <div class="segmented" role="radiogroup" id="pick-crosshair" aria-labelledby="label-crosshair">
+                <button type="button" role="radio" data-value="standard">Standard</button>
+                <button type="button" role="radio" data-value="large">Large</button>
+              </div>
+            </div>
+            <div class="row">
+              <label class="row-label" for="switch-contrast">High Contrast</label>
+              <button type="button" class="switch" role="switch" id="switch-contrast" aria-checked="false"></button>
+            </div>
+            <div class="row">
+              <span class="row-label" id="label-steadiness">Aim Steadiness</span>
+              <div
+                class="segmented"
+                role="radiogroup"
+                id="pick-steadiness"
+                aria-labelledby="label-steadiness"
+                aria-describedby="foot-aim"
+              >
+                <button type="button" role="radio" data-value="responsive">Responsive</button>
+                <button type="button" role="radio" data-value="balanced">Balanced</button>
+                <button type="button" role="radio" data-value="steady">Steady</button>
+              </div>
+            </div>
+            <div class="row" id="camera-row" hidden>
+              <label class="row-label" for="camera-choice">Camera</label>
+              <span class="menu-select">
+                <select id="camera-choice"></select>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-updown" /></svg>
+              </span>
+            </div>
+            <div class="row">
+              <label class="row-label" for="switch-preview">Show Camera in Play</label>
+              <button type="button" class="switch" role="switch" id="switch-preview" aria-checked="true"></button>
+            </div>
+            <button type="button" class="row row-action" id="forget-aim">Forget Saved Aim</button>
+          </div>
+          <p class="group-foot" id="foot-aim"></p>
+        </section>
+
+        <section class="group" aria-labelledby="group-access">
+          <h3 class="group-title" id="group-access">Accessibility</h3>
+          <div class="rows">
+            <div class="row">
+              <label class="row-label" for="switch-motion">Reduce Motion</label>
+              <button type="button" class="switch" role="switch" id="switch-motion" aria-checked="false"></button>
+            </div>
+            <div class="row">
+              <label class="row-label" for="switch-flashing">Reduce Flashing</label>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                id="switch-flashing"
+                aria-checked="false"
+                aria-describedby="foot-access"
+              ></button>
+            </div>
+          </div>
+          <p class="group-foot" id="foot-access">Reduce Flashing softens muzzle flashes and explosions.</p>
+        </section>
+
+        <section class="group" aria-labelledby="group-about">
+          <h3 class="group-title" id="group-about">About</h3>
+          <div class="rows">
+            <div class="row">
+              <span class="row-label">Version</span>
+              <span class="row-value num" id="version"></span>
+            </div>
+            <button type="button" class="row row-action" id="settings-privacy">
+              Privacy<svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            </button>
+            <button type="button" class="row row-action" id="copy-info" aria-describedby="foot-about">
+              Copy System Info
+            </button>
+          </div>
+          <p class="group-foot" id="foot-about">
+            For a bug report: your browser, graphics and timings. Never your camera picture.
+          </p>
+        </section>
+
+        <section class="group" aria-label="Reset">
+          <div class="rows">
+            <button type="button" class="row row-action danger" id="reset">Reset Handy</button>
+          </div>
+        </section>
+      </div>
+      <p class="visually-hidden" id="settings-status" aria-live="polite"></p>
+    </dialog>
+
+    <dialog id="confirm" class="sheet alert" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+      <span class="alert-icon danger"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg></span>
+      <h2 class="title2" id="confirm-title">Reset Handy?</h2>
+      <p class="body secondary" id="confirm-body">
+        This clears your records, saved aim and settings on this computer, and starts Handy afresh.
+      </p>
+      <div class="sheet-actions">
+        <button class="button destructive wide" id="confirm-reset">Reset</button>
+        <button class="button plain wide" id="confirm-cancel">Cancel</button>
+      </div>
+    </dialog>
+
+    <p class="toast glass" id="toast" role="status" popover="manual" hidden></p>
     <p class="visually-hidden" id="announce" aria-live="polite"></p>
 
     <!-- Icons, in the style of SF Symbols: 24-unit grid, 1.75 strokes. -->
@@ -303,6 +464,7 @@
       <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="4.5" y="13.3" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="13.3" width="6.2" height="6.2" rx="1.6" /></symbol>
       <symbol id="i-xmark" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></symbol>
       <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H4z" /><path d="M14.6 9.3a3.8 3.8 0 0 1 0 5.4" /><path d="M17.2 6.8a7.4 7.4 0 0 1 0 10.4" /></symbol>
+      <symbol id="i-speaker-min" viewBox="0 0 24 24"><path d="M6.5 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H6.5z" /></symbol>
       <symbol id="i-speaker-off" viewBox="0 0 24 24"><path d="M4 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H4z" /><path d="M15 9.5l5 5M20 9.5l-5 5" /></symbol>
       <symbol id="i-camera" viewBox="0 0 24 24"><rect x="2.9" y="6.6" width="13" height="10.8" rx="2.6" /><path d="M15.9 10.4 21 7.6v8.8l-5.1-2.8" /></symbol>
       <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8.2 8.4V4.6a1.45 1.45 0 0 1 2.9 0v3.8" /><path d="M11.1 8.4h8.4a1.6 1.6 0 0 1 0 3.2h-6.4" /><path d="M13.1 11.6h.7a1.5 1.5 0 0 1 0 3h-.9" /><path d="M12.9 14.6a1.4 1.4 0 0 1 0 2.8h-1.1" /><path d="M8.2 8.4H7a2.6 2.6 0 0 0-2.6 2.6v5a3.8 3.8 0 0 0 3.8 3.8h1.6a2.6 2.6 0 0 0 2-1" /></symbol>
@@ -314,6 +476,9 @@
       <symbol id="i-exclamation" viewBox="0 0 24 24"><path d="M12 5.2v9.2" stroke-width="2.2" /><circle fill="currentColor" stroke="none" cx="12" cy="18.8" r="1.45" /></symbol>
       <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 16.4 0" /><path d="M6.8 12.7a7.3 7.3 0 0 1 10.4 0" /><path d="M9.8 15.8a3 3 0 0 1 4.4 0" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /></symbol>
       <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3.6 19.4 7.8v8.4L12 20.4 4.6 16.2V7.8z" /><path d="M4.8 8 12 12.1 19.2 8" /><path d="M12 12.1v8.1" /></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M10.35 5.4L10.67 3.1A9 9 0 0 1 13.33 3.1L13.65 5.4A6.8 6.8 0 0 1 15.5 6.17L17.35 4.77A9 9 0 0 1 19.23 6.65L17.83 8.5A6.8 6.8 0 0 1 18.6 10.35L20.9 10.67A9 9 0 0 1 20.9 13.33L18.6 13.65A6.8 6.8 0 0 1 17.83 15.5L19.23 17.35A9 9 0 0 1 17.35 19.23L15.5 17.83A6.8 6.8 0 0 1 13.65 18.6L13.33 20.9A9 9 0 0 1 10.67 20.9L10.35 18.6A6.8 6.8 0 0 1 8.5 17.83L6.65 19.23A9 9 0 0 1 4.77 17.35L6.17 15.5A6.8 6.8 0 0 1 5.4 13.65L3.1 13.33A9 9 0 0 1 3.1 10.67L5.4 10.35A6.8 6.8 0 0 1 6.17 8.5L4.77 6.65A9 9 0 0 1 6.65 4.77L8.5 6.17A6.8 6.8 0 0 1 10.35 5.4Z" /><circle cx="12" cy="12" r="2.9" /></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.5 5.8 15.7 12l-6.2 6.2" /></symbol>
+      <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
       <symbol id="i-hitmark" viewBox="0 0 24 24"><path d="M4.5 4.5l4.2 4.2M19.5 4.5l-4.2 4.2M4.5 19.5l4.2-4.2M19.5 19.5l-4.2-4.2" /></symbol>
     </svg>
     <script type="module" src="/src/main.ts"></script>

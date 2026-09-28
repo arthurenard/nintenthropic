@@ -192,6 +192,33 @@ three shots.
 - **Stored** per camera (`deviceId`) and video size in `localStorage`, with a
   version number; anything unreadable is discarded and the check starts fresh.
 
+## What the browser keeps
+
+Everything is a convenience in `localStorage` (the Golden Revolver in
+`sessionStorage`, for the visit): versioned keys under `handy.`, JSON, every
+read checked and every write allowed to fail, so a window that stores nothing
+plays the same without remembering (`src/app/prefs.ts`).
+
+- `handy.settings.v1` — the Settings sheet: volume, difficulty, crosshair,
+  Aim Steadiness, Show Camera in Play, Reduce Motion (absent: follow the
+  system), Reduce Flashing. The app puts them into effect: `settings` for the
+  game (`difficulty` is held for a round in play and changes when the next
+  begins), `AudioEngine.setVolume` (apart from mute), `Crosshair.style`,
+  `AimController.steadiness` for every new hand input (and `setSteadiness` on
+  the one in play), `Pip.showInPlay`, `<html data-reduce-motion>`.
+- `handy.best.v2.<game>.<relaxed|standard>.<hand|pointer>` —
+  `{ score, outcome, at }`, written the moment a round ends.
+- `handy.tips-seen.v1` — `Settings.tipsSeen`, a set that writes itself through
+  on every `add`.
+- `handy.aim.v1.<camera>.<size>` — saved aims (above);
+  `handy.camera.v1` / `handy.camera-choice.v1` — the camera used last, and the
+  one chosen in Settings, which is asked for exactly and gives way to any other
+  if it has gone.
+- `handy.welcomed.v1`, `handy.muted.v1`, `handy.control.v1`,
+  `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
+
+Reset Handy removes every `handy.` key from both storages.
+
 ## Asset contract: High Noon
 
 All glTF is Y-up, metres. The player stands at the origin, eyes at 1.7 m,

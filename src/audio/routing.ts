@@ -32,6 +32,17 @@ export function airCutoff(distance: number): number {
   return Math.min(20000, Math.max(1500, 20000 * Math.exp(-distance / 35)));
 }
 
+/**
+ * The master level for the volume slider's position, 0..1. The ear hears
+ * level logarithmically, so a straight line from silence to full would put
+ * nearly all the change in the slider's first quarter; squaring it spreads
+ * the change evenly along the travel (half way is about -12 dB).
+ */
+export function volumeGain(volume: number): number {
+  if (!(volume > 0)) return 0;
+  return Math.min(1, volume) ** 2;
+}
+
 /** Seconds for sound to travel ``distance`` metres. */
 export function travelTime(distance: number): number {
   return distance > 0 ? distance / SPEED_OF_SOUND : 0;

@@ -332,6 +332,10 @@
   width: 18px;
   height: 18px;
 }
+/* The best to beat, with this control and difficulty: close under it. */
+.home-best {
+  margin-top: -8px;
+}
 /* The rest of the arcade: named, quiet, and honest that it is not here yet. */
 .soon-label {
   margin-bottom: 16px;
@@ -478,13 +482,29 @@ body[data-view="game"] {
 }
 .new-best {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 0 6px;
   color: var(--gold);
 }
 .new-best svg {
   width: 18px;
   height: 18px;
+}
+/* By how much: beside the words, quieter. */
+.new-best-margin {
+  margin-left: 2px;
+  font-size: 15px;
+  font-weight: 400;
+}
+.results-note {
+  max-width: 30em;
+  margin-top: 2px;
+  text-wrap: balance;
+}
+.results-best {
+  animation: fade-in 250ms var(--ease);
 }
 .new-best.pop {
   animation: best-in 450ms var(--spring) both;
@@ -558,6 +578,9 @@ body[data-view="game"] {
   }
   .feature-art {
     max-height: none;
+    /* The picture's own shape sets its height: a floor would push it
+       wider than a phone. */
+    min-height: 0;
   }
   .large-title,
   .feature .large-title {
@@ -572,9 +595,9 @@ body[data-view="game"] {
   }
 }
 
-/* --- reduced motion ------------------------------------------------------------------------------------ */
+/* --- reduced motion (the system's or the player's: see base.css) ------------------------------------------ */
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-reduce-motion] {
   .new-best.pop {
     animation-name: fade-in !important;
   }

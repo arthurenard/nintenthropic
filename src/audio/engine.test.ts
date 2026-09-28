@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CUES } from "./cues/table";
 import { MAX_VOICES, WebAudioEngine } from "./engine";
 import { NullAudioBus, createAudioBus, loadSoundPack } from "./index";
-import { SPEED_OF_SOUND, hurtMix } from "./routing";
+import { SPEED_OF_SOUND, hurtMix, volumeGain } from "./routing";
 
 class Param {
   constructor(public value = 0) {}
@@ -219,5 +219,50 @@ describe("the public entry", () => {
 
   it("keeps NullAudioBus muted by default, as the stub was", () => {
     expect(new NullAudioBus().muted).toBe(true);
+  });
+
+  it("gives even the silent bus a volume, held to the range", () => {
+    const bus = new NullAudioBus(false);
+    expect(bus.volume).toBe(1);
+    bus.setVolume(0.4);
+    expect(bus.volume).toBe(0.4);
+    bus.setVolume(7);
+    expect(bus.volume).toBe(1);
+    bus.setVolume(Number.NaN);
+    expect(bus.volume).toBe(0);
+  });
+});
+
+describe("the master volume", () => {
+  const master = (e: WebAudioEngine) => (e as unknown as { master: { gain: { value: number } } }).master.gain.value;
+
+  it("starts where the player left it", () => {
+    const ctx = new FakeContext();
+    const e = new WebAudioEngine(ctx as unknown as AudioContext, { muted: false, volume: 0.5, workers: 0 });
+    expect(e.volume).toBe(0.5);
+    expect(master(e)).toBeCloseTo(0.9 * volumeGain(0.5), 9);
+    expect(master(engine().e)).toBeCloseTo(0.9, 9);
+  });
+
+  it("follows the slider", () => {
+    const { e } = engine();
+    e.setVolume(0.25);
+    expect(e.volume).toBe(0.25);
+    expect(master(e)).toBeCloseTo(0.9 * volumeGain(0.25), 9);
+    e.setVolume(0);
+    expect(master(e)).toBe(0);
+    e.setVolume(2);
+    expect(e.volume).toBe(1);
+    expect(master(e)).toBeCloseTo(0.9, 9);
+  });
+
+  it("is apart from mute: muted stays silent, and unmuting comes back at the volume chosen", () => {
+    const { e } = engine();
+    e.setMuted(true);
+    e.setVolume(0.6);
+    expect(master(e)).toBe(0);
+    expect(e.muted).toBe(true);
+    e.setMuted(false);
+    expect(master(e)).toBeCloseTo(0.9 * volumeGain(0.6), 9);
   });
 });

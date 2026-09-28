@@ -45,14 +45,35 @@ export class OneEuroFilter {
   private readonly value = new LowPass();
   private readonly speed = new LowPass();
   private lastTime: number | null = null;
+  private _minCutoff = 1.2;
+  private _beta = 0.8;
 
   constructor(
-    readonly minCutoff = 1.2,
-    readonly beta = 0.8,
+    minCutoff = 1.2,
+    beta = 0.8,
     readonly derivativeCutoff = 1.0,
   ) {
-    if (!(minCutoff > 0) || !(derivativeCutoff > 0)) throw new RangeError("cutoffs must be positive");
+    if (!(derivativeCutoff > 0)) throw new RangeError("cutoffs must be positive");
+    this.tune(minCutoff, beta);
+  }
+
+  get minCutoff(): number {
+    return this._minCutoff;
+  }
+
+  get beta(): number {
+    return this._beta;
+  }
+
+  /**
+   * New settings from the next sample on, keeping what the filter has seen:
+   * the player changing their Aim Steadiness mid-game sees no jump.
+   */
+  tune(minCutoff: number, beta: number): void {
+    if (!(minCutoff > 0)) throw new RangeError("cutoffs must be positive");
     if (!(beta >= 0)) throw new RangeError("beta must not be negative");
+    this._minCutoff = minCutoff;
+    this._beta = beta;
   }
 
   filter(sample: number, timestamp: number): number {
@@ -145,6 +166,19 @@ export class PointFilter {
 
   filter(point: Point, timestamp: number): [number, number] {
     return [this.x.filter(point[0], timestamp), this.y.filter(point[1], timestamp)];
+  }
+
+  tune(minCutoff: number, beta: number): void {
+    this.x.tune(minCutoff, beta);
+    this.y.tune(minCutoff, beta);
+  }
+
+  get minCutoff(): number {
+    return this.x.minCutoff;
+  }
+
+  get beta(): number {
+    return this.x.beta;
   }
 
   reset(): void {
