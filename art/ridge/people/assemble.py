@@ -89,10 +89,10 @@ def skin_all(jobs, rig, proxy):
         elif sk[0] == "override":
             SKN.transfer(proxy, [j["ob"]], rig, override=sk[1])
         elif sk[0] == "points":
-            transfer_at(proxy, j["ob"], rig, sk[1])
+            transfer_at(proxy, j["ob"], rig, sk[1], override=sk[2] if len(sk) > 2 else None)
 
 
-def transfer_at(proxy, ob, rig, points, names=None):
+def transfer_at(proxy, ob, rig, points, names=None, override=None):
     """charlib.skin.transfer, but each vertex takes the proxy's weights at
     its own given point (a ghillie strip: the point where it is sewn on)."""
     from mathutils.bvhtree import BVHTree
@@ -118,6 +118,8 @@ def transfer_at(proxy, ob, rig, points, names=None):
         W[i] = (w[:, None] * Wp[pv]).sum(0) / w.sum()
         cache[key] = W[i]
     W = SKN.nearest_bone_fill(rig, pts, W, names)
+    if override is not None:
+        W = override(ob, pts, W)
     SKN.apply_weights(ob, W, rig, 4, names)
 
 

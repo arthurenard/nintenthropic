@@ -27,7 +27,10 @@ TORSO = P(FEET, root=(0.015, 0.0, -0.01), hips=(0, -2, 3), spine=(1, 1, -2), che
 ARM_R = {"upper_arm.R": (-6, -38, -2), "forearm.R": (-16, 0, 0), "hand.R": (0, -6, 0), "ikw.hand.R": (0, 0, 0)}
 
 
-def staff_hand(p=(0.232, -0.100, 0.930), tilt=0.0):
+POLE_L = (0.9, 0.7, -0.15)      # the staff arm's elbow out and back: less twist in the shoulder
+
+
+def staff_hand(p=(0.244, -0.100, 0.930), tilt=0.0):
     """The left fist round a vertical staff at p (the rod through the fist,
     knuckles forward, palm to the thigh); `tilt` leans the rod forward (deg)."""
     a = math.radians(tilt)
@@ -36,7 +39,7 @@ def staff_hand(p=(0.232, -0.100, 0.930), tilt=0.0):
     return K.hand_for("L", K.T_of(np.stack([np.cross(Y, Z), Y, Z], 1), p))
 
 
-STAND = P(TORSO, ARM_R, staff_hand(), {"pole.hand.L": (0.6, 0.6, -0.4)})
+STAND = P(TORSO, ARM_R, staff_hand(), {"pole.hand.L": POLE_L})
 STAND_CARRY_L = K.chest_carry(STAND)
 
 
@@ -73,7 +76,7 @@ def walk():
         sw = math.cos(a)                     # right arm forward when the left leg leads
         c.key(t, "linear", upper_arm__R=(-6 - 20 * sw, -36, -2), forearm__R=(-18 - 14 * max(sw, 0), 0, 0), hand__R=(0, -6, 0),
               ikw__hand__R=(0, 0, 0))
-        ch = K.chest_carry(P(TORSO, staff_hand((0.232, -0.100 + 0.07 * sw, 0.935), tilt=-8 * sw), {"pole.hand.L": (0.6, 0.6, -0.4)}))
+        ch = K.chest_carry(P(TORSO, staff_hand((0.244, -0.100 + 0.07 * sw, 0.935), tilt=-8 * sw), {"pole.hand.L": POLE_L}))
         c.key(t, "linear", **{k.replace(".", "__"): v for k, v in ch.items() if k.endswith(".L")})
     return c
 
@@ -109,7 +112,7 @@ def wave():
     """A big friendly wave, the right arm up, the hand swinging from the
     elbow; weight on one leg. 1.2 s loop."""
     c = Clip("wave", 1.2, loop=True)
-    base = P(TORSO, staff_hand(), {"pole.hand.L": (0.6, 0.6, -0.4)}, root=(0.012, 0.0, -0.012), hips=(0, -2, 0), spine=(0, -3, 0),
+    base = P(TORSO, staff_hand(), {"pole.hand.L": POLE_L}, root=(0.012, 0.0, -0.012), hips=(0, -2, 0), spine=(0, -3, 0),
              chest=(0, -3, 0), neck=(2, 0, 0), head=(4, 4, 0), shoulder__R=(0, 12, 0), pole__hand__R=(-0.8, 0.3, -0.4))
     a = dict(base)
     a.update({"ik.hand.R": (-0.44, -0.12, 1.76), "rot.hand.R": hand_rot("R", (-0.4, 0.0, 0.9), (0.9, 0.0, 0.4))})

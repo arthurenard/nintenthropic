@@ -114,7 +114,7 @@ def variant_jobs(spec, tf, wf, quick=False):
     jobs.append(PA.ring_job(W.cap_rings(cf), "var.cap.officer", cf, W.cap_paint(), weight=0.9, skin=("rigid", "head"),
                             ao_group="var.cap.officer", origin=HD.HEAD_ORIGIN, smart_uv=True, uv_angle=66))
     # the officer's greatcoat: over the tunic and its webbing, to below the knee
-    jobs.append(greatcoat_job(bp))
+    jobs.append(greatcoat_job(bp, tf, wf))
     # the pack
     pf = W.pack_field()
     jobs.append(PA.sculpt_job("var.pack", pf, W.pack_paint(), (-0.2, 0.09, 1.02), (0.2, 0.34, 1.52), 0.0025, 900,
@@ -122,15 +122,18 @@ def variant_jobs(spec, tf, wf, quick=False):
     return jobs
 
 
-def greatcoat_job(bp, hem=0.50, loose=0.027):
+def greatcoat_job(bp, tf, wf, hem=0.50, loose=0.027):
     """A double-breasted greatcoat to below the knee, belted, its collar
     turned down wide over the tunic's, the skirt parting a little at the hem."""
     cf = W.tunic_field(bp, hem, loose, belt=0.004)
-    cf = S.Union([cf, holster_field()], k=0.004)
+    # over the webbing too (the officer keeps the grunt's belt on under it):
+    # the webbing's shell filled by the tunic, so the coat's rings snap to its
+    # outside and not to the inner face of an offset belt
+    cf = S.Union([cf, S.Offset(S.Union([tf, W.webbing_bulk(tf)], k=0.01), 0.021), holster_field()], k=0.02)
 
     def front_open(z):
         return float(np.interp(z, [0.45, 0.58, 0.66], [0.9, 0.4, 0.0]))
-    rm = W.build_tunic(bp, cf, hem, loose=loose, sleeve_loose=0.019, neck_open=1.4, front_open=front_open, belt=0.004,
+    rm = W.build_tunic(bp, cf, hem, loose=loose, sleeve_loose=0.019, neck_open=0.8, front_open=front_open, belt=0.004,
                        collar_grow=0.034)
     j = PA.ring_job(rm, "var.coat.officer", S.Displace(cf, W.tunic_details(bp, hem, pockets=False), 0.006), W.greatcoat_paint(), weight=0.55,
                     skin=("coat", hem), ao_group="var.coat.officer")

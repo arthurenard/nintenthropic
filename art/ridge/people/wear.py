@@ -77,8 +77,11 @@ def build_tunic(bp, field, hem_z=0.84, M=24, arm_n=12, loose=0.008, sleeve_loose
     greatcoat's skirt."""
     rm = R.RingMesh()
     skirt_z = [z for z in (0.36, 0.44, 0.52, 0.60, 0.68, 0.76, 0.84, 0.91) if z >= hem_z - 1e-6]
-    zs = skirt_z + list(G.TORSO_Z)
-    arm0 = len(skirt_z) + G.ARMPIT
+    # one more ring at the belt, so a coat over a belt (or cinched by one)
+    # follows it instead of cutting a chord through it
+    torso_z = sorted(list(G.TORSO_Z) + [1.015])
+    zs = skirt_z + torso_z
+    arm0 = len(skirt_z) + torso_z.index(G.TORSO_Z[G.ARMPIT])
     h = M // 2
 
     def skip(i, j):
@@ -103,6 +106,12 @@ def build_tunic(bp, field, hem_z=0.84, M=24, arm_n=12, loose=0.008, sleeve_loose
         for idx in out["T"][i]:
             rm.relax_w[idx] = 0.0
     R.snap_and_relax(rm, field)
+    # the relaxation evens the quads out but can leave a ring short of a bulge
+    # it has to cover (a greatcoat over a webbing belt): a last, firm snap
+    V = np.array(rm.V, np.float32)
+    free = ~np.array(rm.pinned, bool)
+    V[free] = S.project_to_surface(field, V[free], iters=12, clamp=0.02)
+    rm.V = list(V.astype(np.float64))
     G.collar(rm, out["T"][-1], M, "collar", grow=(0.016 + ex) if collar_grow is None else collar_grow, height=1.15)
     return rm
 
@@ -321,11 +330,7 @@ def webbing_field(tunic):
     parts = []
     # the tunic's girth under the belt (its widest over the belt's width),
     # then a band just outside it
-    zz = (BELT_Z - 0.024, BELT_Z, BELT_Z + 0.024)
-    rx = max(radius_at(tunic, z, 0, 1) for z in zz) + 0.006
-    fr = max(radius_at(tunic, z, 1, -1) for z in zz)
-    bk = max(radius_at(tunic, z, 1, 1) for z in zz)
-    ry, cy = 0.5 * (fr + bk) + 0.006, 0.5 * (bk - fr)
+    rx, ry, cy = belt_ellipse(tunic)
     band = _belt_band(BELT_Z, BELT_Z + 0.008, 0.050, 0.006, rx, ry, cy)
     parts.append(band)
     parts.append(S.Box((0, cy - ry - 0.004, BELT_Z), (0.030, 0.004, 0.027), None, rad=0.003))   # buckle plate
@@ -354,6 +359,24 @@ def webbing_field(tunic):
     parts.append(S.Box(bott + np.array([0.012, -0.012, 0.070]), (0.010, 0.014, 0.020), S.rot_z(-35), rad=0.003))
     hardware = S.Union(parts, k=0.004)
     return S.Union([hardware, straps_field(specs)], k=0.004), pouch_c, hardware, specs
+
+
+def belt_ellipse(tunic):
+    """(rx, ry, cy) of the waist belt: just outside the tunic's girth under
+    it (its widest over the belt's width)."""
+    zz = (BELT_Z - 0.024, BELT_Z, BELT_Z + 0.024)
+    rx = max(radius_at(tunic, z, 0, 1) for z in zz) + 0.006
+    fr = max(radius_at(tunic, z, 1, -1) for z in zz)
+    bk = max(radius_at(tunic, z, 1, 1) for z in zz)
+    return rx, 0.5 * (fr + bk) + 0.006, 0.5 * (bk - fr)
+
+
+def webbing_bulk(tunic):
+    """A solid stand-in for everything on the belt (band, pouches, bottle):
+    what a coat worn over it has to clear."""
+    rx, ry, cy = belt_ellipse(tunic)
+    return S.Tube([(0, cy + 0.010, 0.95), (0, cy + 0.004, 1.00), (0, cy, 1.05), (0, cy, 1.095)],
+                  [rx + 0.010, rx + 0.014, rx + 0.012, rx + 0.004], [ry + 0.035, ry + 0.058, ry + 0.058, ry + 0.030])
 
 
 def brace_specs(tunic):

@@ -41,11 +41,8 @@ def suit_field(spec, tf, wf):
     def f(P):
         d = swollen(P).astype(np.float64)
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
-        # the face opening in the hood (head-local ellipse in front of the face)
-        q = P - HD.HEAD_ORIGIN
-        face = np.sqrt((q[:, 0] / 0.060) ** 2 + ((q[:, 2] + 0.030) / 0.080) ** 2) - 1.0
-        face = np.maximum(face * 0.06, -(q[:, 1] + 0.035))
-        d = np.maximum(d, -face)
+        # the hood is closed over the face: a scrim veil he sees through (a
+        # pale face in a dark hood is the one thing a spotter would find)
         # open at the wrists and above the boots
         for s in (1, -1):
             from charlib.skeleton import JOINTS
@@ -157,19 +154,35 @@ def strand_paint_fn(centres):
     return paint
 
 
+def hood_override(ob, V, W):
+    """The hood rides the head: a man prone behind a scope holds his neck
+    bent right back, and a hood weighted like a collar would let the head
+    push through it. Above the collar the suit's weights blend to the head."""
+    from charlib.skeleton import BONE_NAMES
+    ih, ine = BONE_NAMES.index("head"), BONE_NAMES.index("neck")
+    col = np.clip((0.15 - np.abs(V[:, 0])) / 0.05, 0, 1)        # the head's column, not the shoulders
+    t = np.clip((V[:, 2] - 1.54) / 0.08, 0, 1) * col
+    u = np.clip((V[:, 2] - 1.47) / 0.07, 0, 1) * (1 - t) * col
+    Wn = np.zeros_like(W)
+    Wn[:, ih] = t
+    Wn[:, ine] = u
+    k = np.clip(t + u, 0, 1)[:, None]
+    return W * (1 - k) + Wn
+
+
 def ghillie_jobs(spec, tf, wf, quick=False, seed=7):
     rng = np.random.default_rng(seed)
     sf = suit_field(spec, tf, wf)
     res = 0.012          # the suit is lumpy anyway and decimated hard; its union field is slow to sample
     suit = C.decimated("var.ghillie", sf, sf.lo, sf.hi, res, 2600, None, symmetry=False)
     jobs = [dict(ob=suit, field=sf, paint=suit_paint, origin=np.zeros(3), weight=0.22, ao_field=sf, ao_group="var.ghillie",
-                 smart_uv=True, uv_angle=66, skin=("transfer",))]
+                 smart_uv=True, uv_angle=66, skin=("override", hood_override))]
     V, Fc, UV, roots, sid = strands(sf, suit, rng)
     ob = bl.mesh_from_arrays("var.ghillie.strips", V, Fc)
     bl.set_uv(ob, np.array([u for f in UV for u in f], np.float32))
     nst = sid.max() + 1
     centres = np.array([V[sid == k].mean(0) for k in range(nst)], np.float32)
     jobs.append(dict(ob=ob, field=sf, paint=strand_paint_fn(centres), origin=np.zeros(3), weight=0.35, ao_field=sf,
-                     ao_group="var.ghillie", smart_uv=True, uv_angle=80, snap=False, flat=True, skin=("points", roots),
+                     ao_group="var.ghillie", smart_uv=True, uv_angle=80, snap=False, flat=True, skin=("points", roots, hood_override),
                      join_into="var.ghillie"))
     return jobs

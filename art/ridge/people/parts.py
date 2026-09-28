@@ -40,11 +40,15 @@ def filled_head(p, fill=1.0):
     if fill <= 0:
         return f
     j = p["jaw"]
+    # `fill` sinks the volumes in rather than thinning them (a thin
+    # ellipsoid would stand out of the cheek as a ridge)
+    sink = 0.014 * (1.0 - min(fill, 1.0))
+    grow = max(fill - 1.0, 0.0)
     fills = []
     for sx in (1, -1):
-        fills.append(S.Ellipsoid((sx * 0.049 * j, -0.010, -0.058), (0.020 * fill, 0.034, 0.036), S.rot_x(-12)))
-        fills.append(S.Ellipsoid((sx * 0.034 * j, -0.040, -0.078), (0.020 * fill, 0.028, 0.026)))
-    fills.append(S.Ellipsoid((0, -0.050, -0.094), (0.030 * j, 0.024 * fill, 0.018)))
+        fills.append(S.Ellipsoid((sx * (0.049 * j - sink), -0.010, -0.058), (0.020 * (1 + grow), 0.034, 0.036), S.rot_x(-12)))
+        fills.append(S.Ellipsoid((sx * (0.034 * j - sink * 0.8), -0.040 + sink * 0.6, -0.078), (0.020 * (1 + grow), 0.028, 0.026)))
+    fills.append(S.Ellipsoid((0, -0.050 + sink, -0.094), (0.030 * j, 0.024, 0.018)))
     return S.Union([f, S.Union(fills, k=0.02)], k=0.015)
 
 
