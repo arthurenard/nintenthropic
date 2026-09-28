@@ -81,7 +81,8 @@ Colour comes from the game worlds; the interface is monochrome plus one tint.
 Green means *your gun is ready* everywhere and nothing else competes with it.
 Primary buttons are white pills with black labels (the way Apple Arcade's Play
 button is); the tint is for state, not for decoration. No decorative coloured
-rules, tabs or stripes on panels.
+rules, tabs or stripes on panels. For the same reason the controls in Settings
+are neutral: white for *on* and for the choice made, never green (see Settings).
 
 ## Materials and shape
 
@@ -108,7 +109,7 @@ rules, tabs or stripes on panels.
   hand matters, and shrinks in play, where the world matters. The hand skeleton
   on it is drawn in white with soft round joints, not in debug colours.
 - **Menus are sheets.** Pausing brings a glass sheet over a dimmed world with a
-  few large choices (Resume, Restart, Adjust Aim, Choose a Game).
+  few large choices (Resume, Restart, Adjust Aim, Settings, Choose a Game).
 - **Hints** appear when they help (a round's first seconds, a lost hand, an
   unknown key) and fade away when they stop helping.
 
@@ -122,6 +123,9 @@ rules, tabs or stripes on panels.
 - Numbers that change a lot (the final score) count up; numbers that change
   every frame (the clock) never animate.
 - Respect `prefers-reduced-motion`: cross-fade instead of move, no count-ups.
+  The player's own Reduce Motion (Settings) wins over the system's either way;
+  the page marks `<html data-reduce-motion>` for both, and every reduced-motion
+  rule hangs off that one attribute.
 
 ## Iconography
 
@@ -129,7 +133,8 @@ Line icons in the style of SF Symbols: 1.75 px strokes (scaled), round caps and
 joins, drawn on a 24-unit grid, filled variants only for the active state.
 Inline SVG.
 Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off,
-camera, hand, checkmark, share.
+camera, hand, checkmark, share, gear (settings), chevrons (a row that leads on,
+a menu).
 
 ## Sound
 
@@ -154,10 +159,46 @@ click and remembered.
 
 ## Results
 
-A card worth sharing: the map's art as its header, the map's name, the outcome
-in a word or two, the score large, three or four stats, *New Best* in gold only
-when it is true, and two choices (Play Again, Choose a Game) plus Share — a PNG
-of the card, branded Handy, saved or passed to the system share sheet.
+A card worth sharing: the map's art as its header, the map's name (and
+"Relaxed" beside it when it was), the outcome in a word or two with the game's
+one line under it when it has one (what felled you, or the thing to watch
+next time), the score large, three or four stats, *New Best* in gold only when
+it is true, with how far it beat the last one beside it, and otherwise,
+quietly, the best to beat. Then two choices (Play Again, Choose a Game) plus
+Share — a PNG of the card, branded Handy, saved or passed to the system share
+sheet.
+
+Records are kept apart for each game, difficulty and control: the hand and a
+pointer never share one (a mouse is far easier to aim). The arcade shows the
+best to beat for the control and difficulty chosen, in one quiet line under
+Play, and nothing before there is one.
+
+## Settings
+
+One sheet, from the arcade's gear and from the pause sheet, laid out the way
+the system's own settings are.
+
+- **Grouped rows.** Rows sit in rounded groups (16) on the sheet's glass, with a
+  hairline between them that starts where their words do, an eyebrow over each
+  group, and a footnote under it when something needs saying (secondary, 13).
+  Row names are Title Case at 17; values are secondary.
+- **One control per kind of choice.** Two or three options: a segmented control,
+  which is a radio group (one tab stop; the arrow keys choose, as with radio
+  buttons). On or off: a switch. A level: a slider with a speaker at each end.
+  One of a list (cameras): a menu showing the current one, only when there is
+  more than one. Each reaches 44 px however small it looks.
+- **Neutral, not green.** A switch that is on is a white track with a black
+  knob; the chosen segment is a white thumb with black words — the same white
+  as the primary buttons, and a grey track or fill when off.
+  Green would read as *your gun is ready*.
+- **At once, and kept.** A change takes effect as it is made and is remembered;
+  there is no Save. What cannot change mid-round (the difficulty, the camera)
+  waits for the next, and the footnote says so when the sheet is over a paused
+  game.
+- **Destructive rows** are red words that ask first, in an alert that says what
+  will be lost, with Cancel focused.
+- In a narrow window the sheet rises from the bottom at full height and scrolls,
+  and each segmented choice goes under its name, as wide as the row.
 
 ## Checklist for any change
 
@@ -168,4 +209,5 @@ of the card, branded Handy, saved or passed to the system share sheet.
 - Is it legible over the brightest and darkest parts of every map?
 - Does it still look right at 1280×720, 1512×945 (a MacBook in fullscreen),
   2560×1440, and in a narrow browser window?
-- Does it respect reduced motion, keyboard use and screen readers (web)?
+- Does it respect reduced motion (the system's and the player's), keyboard use
+  and screen readers (web)?
