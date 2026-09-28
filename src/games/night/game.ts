@@ -870,8 +870,9 @@ export class DeadOfNight implements Game, MatchListener {
       return;
     }
     if (award && caught.length) {
-      tmp2.set(d.pos.x, d.pos.y + 2.4, d.pos.z);
-      this.later(0.25, () => this.popupAt(tmp2, this.awardText(award), "gold"));
+      // Its own copy: the shared scratch vector will have moved on in a quarter second.
+      const at = new Vector3(d.pos.x, d.pos.y + 2.4, d.pos.z);
+      this.later(0.25, () => this.popupAt(at, this.awardText(award), "gold"));
     }
   }
 
