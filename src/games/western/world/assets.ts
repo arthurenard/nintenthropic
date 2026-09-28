@@ -1,20 +1,20 @@
 import { Color, EquirectangularReflectionMapping, SRGBColorSpace, type Group, type Texture } from "three";
+import { DownloadError } from "../../../engine/fetch";
 import type { GameContext, LoadedAsset } from "../../../engine/types";
-import { buildBanditAsset, buildBossAsset, buildChickenAsset, buildTownsfolkAsset } from "../placeholder/characters";
-import { buildPlaceholderTown } from "../placeholder/town";
-import { buildSky } from "./sky";
 import { NOON_SUN } from "./stage";
 import { readTown, type TownLayout } from "./town";
 
 /**
- * Where High Noon's art lives. Swapping a placeholder for the real thing is
- * dropping the file at this path: nothing else changes, because the
- * placeholders are built to the same node names, extras, bones and clips.
+ * Where High Noon's art lives. Every file is required: in production one
+ * that does not load fails the game's load (a DownloadError, which the page
+ * shows as "Couldn’t Load the Game" with Try Again). In development and
+ * tests a missing file is stood in for by a placeholder built in code to the
+ * same node names, extras, bones and clips (see placeholders()).
  */
 export const ASSET_PATHS = {
   town: "assets/western/town.glb",
   sky: "assets/western/sky.webp",
-  /** Optional: the sky at noon, for High Noon for real. Without it a noon sky is painted in code. */
+  /** The sky at noon, for High Noon for real. */
   skyNoon: "assets/western/sky_noon.webp",
   bandit: "assets/western/bandit.glb",
   boss: "assets/western/boss.glb",
@@ -32,8 +32,28 @@ export interface HighNoonAssets {
   boss: LoadedAsset;
   townsfolk: LoadedAsset;
   chicken: LoadedAsset;
-  /** Which assets came from files (the rest are placeholders). */
+  /** Which assets came from files (the rest are placeholders; never in production). */
   real: Record<AssetName, boolean>;
+}
+
+/** The procedural stand-ins for the art (src/games/western/placeholder/). */
+export type Placeholders = typeof import("../placeholder/index");
+
+/**
+ * The stand-ins, outside production only. A toy town is not a graceful way
+ * to fail in front of a player, and the few thousand lines that build it
+ * have no place in the download: in a production build this is `null` and
+ * the import is removed along with the branch that makes it.
+ */
+export function placeholders(): Promise<Placeholders> | null {
+  return import.meta.env.MODE !== "production" ? import("../placeholder/index") : null;
+}
+
+/** A file that would not load, as the page expects to hear of it. */
+function failed(href: string, err: unknown): DownloadError {
+  if (err instanceof DownloadError) return err;
+  console.warn(`High Noon: ${href} would not load.`, err);
+  return new DownloadError(href, null);
 }
 
 /** Where "assets/western/…" lives: the app's base, or (dev harness only) another folder. */
@@ -92,20 +112,28 @@ export async function loadAssets(
   noon: boolean,
   /** A folder holding town.glb, sky.webp and the characters, instead of public/assets/western/. */
   base: string | null = null,
+  /** The stand-ins for missing files (by default placeholders()); never any in production. */
+  standIns?: Placeholders | null,
 ): Promise<HighNoonAssets> {
   assetBase = base;
-  const real: Record<AssetName, boolean> = { town: false, sky: false, skyNoon: false, bandit: false, boss: false, townsfolk: false, chicken: false };
+  // Settled at build time in production, so every stand-in path below goes with it.
+  const kit = import.meta.env.MODE === "production" ? null : standIns === undefined ? await placeholders() : standIns;
   const names = Object.keys(ASSET_PATHS) as AssetName[];
-  const present = await Promise.all(names.map((n) => exists(url(ASSET_PATHS[n]))));
-  names.forEach((n, i) => (real[n] = present[i] as boolean));
+  const real: Record<AssetName, boolean> = { town: true, sky: true, skyNoon: true, bandit: true, boss: true, townsfolk: true, chicken: true };
+  if (kit) {
+    // With stand-ins to hand, only the files that are really there are fetched.
+    const present = await Promise.all(names.map((n) => exists(url(ASSET_PATHS[n]))));
+    names.forEach((n, i) => (real[n] = present[i] as boolean));
+  }
 
   const weights: Record<AssetName, number> = { town: 0.55, sky: 0.1, skyNoon: 0, bandit: 0.1, boss: 0.08, townsfolk: 0.1, chicken: 0.07 };
   const done: Record<AssetName, number> = { town: 0, sky: 0, skyNoon: 0, bandit: 0, boss: 0, townsfolk: 0, chicken: 0 };
   const report = () => onProgress(Math.min(0.99, names.reduce((s, n) => s + weights[n] * done[n], 0)));
-  const loadGltf = async (name: AssetName, fallback: () => LoadedAsset): Promise<LoadedAsset> => {
+  const loadGltf = async (name: "town" | "bandit" | "boss" | "townsfolk" | "chicken"): Promise<LoadedAsset> => {
+    const href = url(ASSET_PATHS[name]);
     if (real[name]) {
       try {
-        const asset = await ctx.assets.gltf(url(ASSET_PATHS[name]), (f) => {
+        const asset = await ctx.assets.gltf(href, (f) => {
           done[name] = f;
           report();
         });
@@ -113,43 +141,48 @@ export async function loadAssets(
         report();
         return asset;
       } catch (err) {
+        if (!kit) throw failed(href, err);
         console.warn(`High Noon: ${ASSET_PATHS[name]} would not load; using the placeholder.`, err);
         real[name] = false;
       }
     }
-    const asset = fallback();
+    if (!kit) throw new DownloadError(href, null);
+    const asset = kit.standIn(name, noon);
     done[name] = 1;
     report();
     return asset;
   };
 
   const [townAsset, bandit, boss, townsfolk, chicken] = await Promise.all([
-    loadGltf("town", () => ({ scene: buildPlaceholderTown({ noon }), animations: [] })),
-    loadGltf("bandit", buildBanditAsset),
-    loadGltf("boss", buildBossAsset),
-    loadGltf("townsfolk", buildTownsfolkAsset),
-    loadGltf("chicken", buildChickenAsset),
+    loadGltf("town"),
+    loadGltf("bandit"),
+    loadGltf("boss"),
+    loadGltf("townsfolk"),
+    loadGltf("chicken"),
   ]);
   const town = readTown(townAsset.scene as Group);
 
   let sky: Texture | null = null;
   let fog: Color | null = null;
-  // The golden-hour sky.webp is wrong at noon: use sky_noon.webp, or paint one.
+  // The golden-hour sky.webp is wrong at noon: sky_noon.webp is the one then.
   const skyName: AssetName = noon ? "skyNoon" : "sky";
+  const skyHref = url(ASSET_PATHS[skyName]);
   if (real[skyName]) {
     try {
-      sky = await ctx.assets.texture(url(ASSET_PATHS[skyName]));
+      sky = await ctx.assets.texture(skyHref);
       sky.mapping = EquirectangularReflectionMapping;
       sky.colorSpace = SRGBColorSpace;
       fog = horizonColour(sky);
     } catch (err) {
+      if (!kit) throw failed(skyHref, err);
       console.warn(`High Noon: ${ASSET_PATHS[skyName]} would not load; using the placeholder.`, err);
       real[skyName] = false;
       sky = null;
     }
   }
   if (!sky) {
-    const built = buildSky(noon ? NOON_SUN : town.sunDirection, noon);
+    if (!kit) throw new DownloadError(skyHref, null);
+    const built = kit.buildSky(noon ? NOON_SUN : town.sunDirection, noon);
     sky = built.texture;
     fog = built.fog;
   }

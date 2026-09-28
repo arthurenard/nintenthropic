@@ -9,10 +9,8 @@ import {
   EMERGE_TIME,
   FALL_DEATH_TIME,
   FIRE_RECOVER,
-  GLINT_LEAD,
   HIDDEN_WAIT,
   HIDE_TIME,
-  LIGHT_TIME,
   RELOCATE_CHANCE,
   RELOCATE_SPEED,
   RUN_CHANCE,
@@ -24,6 +22,7 @@ import {
   BOSS_AIM_FACTOR,
   RIFLE_AIM_FACTOR,
   WALK_OUT_SPEED,
+  type DifficultyTuning,
 } from "./tuning";
 import type { BanditState, Cover, DeathChoice, Role } from "./types";
 import type { WaveSpec } from "./waves";
@@ -33,6 +32,8 @@ export interface BanditWorld {
   readonly time: number;
   readonly spec: WaveSpec;
   readonly random: Random;
+  /** How the difficulty bends the gang's timing (aim, glint, fuse). */
+  readonly tuning: DifficultyTuning;
   /** Ask to come out and threaten the player; the director keeps this to a few at once. */
   acquireSlot(b: Bandit): boolean;
   releaseSlot(b: Bandit): void;
@@ -172,7 +173,7 @@ export class Bandit {
         break;
       }
       case "aiming":
-        if (!this.glinted && this.t >= this.dur - GLINT_LEAD) {
+        if (!this.glinted && this.t >= this.dur - w.tuning.glintLead) {
           this.glinted = true;
           w.events.banditGlint(this);
         }
@@ -228,11 +229,11 @@ export class Bandit {
       case "standoff":
         if (this.t >= this.dur) {
           this.emergedAt = w.time;
-          this.aimDur = DUEL_DRAW;
+          this.aimDur = DUEL_DRAW * w.tuning.aimFactor;
           this.glinted = false;
           this.shots = 0;
           this.maxShots = 1;
-          this.enter("aiming", DUEL_DRAW);
+          this.enter("aiming", this.aimDur);
           w.events.duelBell(this);
         }
         break;
@@ -288,12 +289,12 @@ export class Bandit {
     this.exposure = 1;
     if (this.role === "dynamiter" && w.canThrow(this)) {
       this.lit = true;
-      this.enter("lighting", LIGHT_TIME);
+      this.enter("lighting", w.tuning.lightTime);
       w.events.banditLight(this);
       return;
     }
     const spec = w.spec;
-    let aim = spec.aimTime;
+    let aim = spec.aimTime * w.tuning.aimFactor;
     if (this.role === "rifleman") aim *= RIFLE_AIM_FACTOR;
     if (this.role === "boss") aim *= BOSS_AIM_FACTOR;
     this.aimDur = aim;

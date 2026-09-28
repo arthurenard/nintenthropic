@@ -15,6 +15,8 @@ import {
   LIGHT_TIME,
   THROW_RELEASE,
   WALK_OUT_SPEED,
+  DIFFICULTY,
+  type DifficultyTuning,
 } from "./tuning";
 import type { Cover } from "./types";
 import { waveSpec, type WaveSpec } from "./waves";
@@ -32,7 +34,10 @@ class FakeWorld implements BanditWorld {
   relocate: Cover | null = null;
   run: Cover | null = null;
   canThrowFlag = true;
-  constructor(wave: number) {
+  constructor(
+    wave: number,
+    readonly tuning: DifficultyTuning = DIFFICULTY.standard,
+  ) {
     this.spec = { ...waveSpec(wave), tellChance: 1, secondShot: 0 };
     const note = (e: string) => () => this.log.push({ t: this.time, e });
     this.events = {
@@ -321,5 +326,37 @@ describe("the bandit state machine", () => {
     stepFor(b, w, 3);
     expect(b.state).toBe("dead");
     expect(w.log.filter((x) => x.e === "dead").length).toBe(1);
+  });
+});
+
+describe("the gang on Relaxed", () => {
+  const relaxed = DIFFICULTY.relaxed;
+
+  it("aims half as long again, and glints earlier before the shot", () => {
+    const w = new FakeWorld(1, relaxed);
+    const b = new Bandit(1, "gunman", byId("saloon_door"));
+    b.spawn(0.5);
+    stepFor(b, w, 8);
+    const aim = at(w, "emerge") + EMERGE_TIME.step_out;
+    expect(at(w, "fire") - aim).toBeCloseTo(1.4 * relaxed.aimFactor, 1);
+    expect(at(w, "fire") - at(w, "glint")).toBeCloseTo(relaxed.glintLead, 1);
+    expect(relaxed.glintLead).toBeGreaterThan(GLINT_LEAD);
+  });
+
+  it("gives a dynamiter longer to light his fuse", () => {
+    const w = new FakeWorld(4, relaxed);
+    const b = new Bandit(1, "dynamiter", byId("wagon"));
+    b.spawn(0.1);
+    stepFor(b, w, 5);
+    expect(at(w, "throw") - at(w, "light")).toBeCloseTo(relaxed.lightTime + THROW_RELEASE, 1);
+    expect(relaxed.lightTime).toBeGreaterThan(LIGHT_TIME);
+  });
+
+  it("takes longer to draw in the duel", () => {
+    const w = new FakeWorld(1, relaxed);
+    const b = new Bandit(1, "duelist", byId("saloon_door"));
+    b.startDuel({ x: -8.6, y: 0, z: -24 }, { x: -1, y: 0, z: -21.5 });
+    stepFor(b, w, DUEL_PACES * DUEL_PACE_TIME + DUEL_STANDOFF + DUEL_DRAW * relaxed.aimFactor + 0.2);
+    expect(at(w, "fire") - at(w, "bell")).toBeCloseTo(DUEL_DRAW * relaxed.aimFactor, 1);
   });
 });

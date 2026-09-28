@@ -1,5 +1,11 @@
 import { HEALTH_MAX, REGEN_DELAY, REGEN_RATE } from "./tuning";
 
+/** How health comes back: after how long without a hit, and how fast. */
+export interface Regeneration {
+  regenDelay: number;
+  regenRate: number;
+}
+
 /**
  * The player's hidden health, Call of Duty style: nothing on screen says a
  * number; the picture itself (red edges, drained colour, a heartbeat) tells
@@ -12,6 +18,8 @@ export class PlayerHealth {
   dead = false;
   /** When true (the dev harness's god mode), hits hurt but never kill. */
   immortal = false;
+
+  constructor(private readonly regen: Regeneration = { regenDelay: REGEN_DELAY, regenRate: REGEN_RATE }) {}
 
   /** 0 when unhurt, 1 at death's door. What the screen's effects follow. */
   get hurt(): number {
@@ -37,11 +45,12 @@ export class PlayerHealth {
   update(dt: number): void {
     if (this.dead) return;
     this.sinceHit += dt;
-    if (this.sinceHit >= REGEN_DELAY && this.value < HEALTH_MAX) {
+    const { regenDelay, regenRate } = this.regen;
+    if (this.sinceHit >= regenDelay && this.value < HEALTH_MAX) {
       // Only the part of this frame that falls after the delay regenerates, so
-      // the refill starts exactly 3.5 s after the hit at any frame rate.
-      const regenTime = Math.min(dt, this.sinceHit - REGEN_DELAY);
-      this.value = Math.min(HEALTH_MAX, this.value + REGEN_RATE * regenTime);
+      // the refill starts exactly the delay after the hit at any frame rate.
+      const regenTime = Math.min(dt, this.sinceHit - regenDelay);
+      this.value = Math.min(HEALTH_MAX, this.value + regenRate * regenTime);
     }
   }
 
