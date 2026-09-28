@@ -16,7 +16,7 @@
  * Browsers that cannot run it in a worker run it on the page.
  */
 import type { HandLandmarker } from "@mediapipe/tasks-vision";
-import { fetchBytes, siteUrl } from "../engine/fetch";
+import { DownloadError, fetchBytes, siteUrl } from "../engine/fetch";
 import { Samples, type Percentiles } from "../engine/stats";
 import { ModelError } from "./errors";
 import type { LandmarkerProgress } from "./landmarker";
@@ -44,6 +44,13 @@ export interface Tracker extends HandSource {
   start(video: HTMLVideoElement): void;
   stop(): void;
   readonly isRunning: boolean;
+  /**
+   * When the camera last delivered a frame, on the performance.now() clock
+   * (0 before the first). Counted as the frame arrives, before it is read,
+   * so a slow first read (the GPU compiling its shaders) is not taken for a
+   * camera that has stopped.
+   */
+  readonly frameAt: number;
   stats(): TrackerStats;
   resetStats(): void;
   dispose(): void;
@@ -55,6 +62,7 @@ abstract class BaseTracker implements Tracker {
   abstract readonly where: "worker" | "page";
   protected video: HTMLVideoElement | null = null;
   protected running = false;
+  frameAt = 0;
   private handle = 0;
   private lastMediaTime = -1;
   private lastTimestamp = -1;
@@ -144,6 +152,7 @@ abstract class BaseTracker implements Tracker {
     if (typeof video.requestVideoFrameCallback === "function") {
       this.handle = video.requestVideoFrameCallback((now, metadata) => {
         this.schedule();
+        this.frameAt = performance.now();
         // captureTime is when the camera took the picture, on this page's
         // clock; not every browser gives it, and the frame's arrival is the
         // next best.
@@ -156,6 +165,7 @@ abstract class BaseTracker implements Tracker {
         this.schedule();
         if (this.running && video.currentTime !== this.lastMediaTime) {
           this.lastMediaTime = video.currentTime;
+          this.frameAt = performance.now();
           this.read(video, now);
         }
       });
@@ -262,13 +272,15 @@ export interface TrackerOptions {
   prefer?: "GPU" | "CPU";
   /** Where to run the landmarker; "auto" picks a worker where the browser can. */
   where?: "auto" | "worker" | "page";
+  /** How many hands to look for: 1 in the game (see input/trust.ts); 2 only to measure. */
+  hands?: number;
 }
 
 function workerSupported(): boolean {
   return typeof Worker !== "undefined" && typeof VideoFrame !== "undefined" && typeof OffscreenCanvas !== "undefined";
 }
 
-async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU"): Promise<WorkerTracker> {
+async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number): Promise<WorkerTracker> {
   const [wasm, model] = await Promise.all([
     fetchBytes(siteUrl("mediapipe/vision_wasm_module_internal.wasm"), progress.wasm, WASM_BYTES),
     fetchBytes(siteUrl("models/hand_landmarker.task"), progress.model, MODEL_BYTES),
@@ -284,7 +296,7 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU"):
     worker.addEventListener("message", listen);
     worker.addEventListener("error", (event) => reject(new Error(event.message || "the tracking worker failed")), { once: true });
   });
-  const init: ToWorker = { type: "init", loader: siteUrl("mediapipe/vision_wasm_module_internal.js"), wasm, model, prefer };
+  const init: ToWorker = { type: "init", loader: siteUrl("mediapipe/vision_wasm_module_internal.js"), wasm, model, prefer, hands };
   worker.postMessage(init, [wasm, model]);
   try {
     return new WorkerTracker(worker, await ready);
@@ -298,16 +310,19 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU"):
 export async function loadTracker(progress: LandmarkerProgress, options: TrackerOptions = {}): Promise<Tracker> {
   const prefer = options.prefer ?? "GPU";
   const where = options.where ?? "auto";
+  const hands = options.hands ?? 1;
   if (where !== "page" && workerSupported()) {
     try {
-      return await startWorker(progress, prefer);
+      return await startWorker(progress, prefer, hands);
     } catch (error) {
-      if (where === "worker") throw new ModelError(error);
+      // A download that failed would fail again on the page (the same
+      // files): only a worker that could not run is worth the page's try.
+      if (where === "worker" || error instanceof DownloadError) throw new ModelError(error);
       console.warn("Hand tracking in a worker is unavailable; tracking on the page.", error);
     }
   }
   // Only here is MediaPipe needed on the page itself.
   const { loadHandLandmarker } = await import("./landmarker");
-  const { landmarker, delegate } = await loadHandLandmarker(progress, prefer);
+  const { landmarker, delegate } = await loadHandLandmarker(progress, prefer, hands);
   return new PageTracker(landmarker, delegate);
 }

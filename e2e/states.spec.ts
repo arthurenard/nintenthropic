@@ -96,15 +96,28 @@ test("the aim check and play", async ({ page }, info) => {
   await shot(page, info, "12-play-hud", 0);
   await shoot(page, 0.5, 0.5);
   await pose(page, null);
-  await page.waitForTimeout(1200); // a hand gone for a moment is said
+  // A hand gone for a moment is said; gone for longer, the round waits for it.
   await expect(page.locator("#hint")).toHaveText("Show your hand to the camera.");
-  await shot(page, info, "13-play-hand-lost");
+  await shot(page, info, "13-play-hand-lost", 250);
+  await expect.poll(async () => (await snapshot(page)).hold, { timeout: 5_000 }).toBe("lost");
+  await shot(page, info, "13b-play-hand-held");
   await pose(page, handAt(0.5, 0.5));
+  await expect.poll(async () => (await snapshot(page)).hold, { timeout: 5_000 }).toBe("count");
+  await shot(page, info, "13c-play-count-in", 200);
+  await expect.poll(async () => (await snapshot(page)).held, { timeout: 5_000 }).toBe(false);
   await page.keyboard.press("p");
   await expect(page.locator("#pause-sheet")).toBeVisible();
   await shot(page, info, "14-paused");
   await page.keyboard.press("Escape");
   await expect(page.locator("#pause-sheet")).toBeHidden();
+  await expect.poll(async () => (await snapshot(page)).held, { timeout: 5_000 }).toBe(false);
+  // The camera stops sending pictures: the round waits under the fixes.
+  await page.evaluate(() => window.handyTest!.stall(true));
+  await expect(page.locator("#alert")).toBeVisible({ timeout: 10_000 });
+  await shot(page, info, "14b-camera-stalled");
+  await page.evaluate(() => window.handyTest!.stall(false));
+  await page.getByRole("button", { name: "Try Again" }).click();
+  await expect.poll(async () => (await snapshot(page)).held, { timeout: 10_000 }).toBe(false);
   await stage(
     page,
     `window.handyTest.hud().gameOver({

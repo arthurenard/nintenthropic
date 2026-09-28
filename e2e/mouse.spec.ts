@@ -64,6 +64,8 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   }
   await expect(page.locator("#results-outcome")).toHaveText(/Fell on Wave \d|Survived/);
   await expect(page.locator("#results-stats div")).toHaveCount(4);
+  // Folding a thumb to play again is for hand players only.
+  await expect(page.locator("#results-fire")).toBeHidden();
   await page.waitForTimeout(1200); // the score counts up
   await shot(page, info, "mouse-04-results");
 

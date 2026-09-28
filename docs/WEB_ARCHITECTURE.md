@@ -108,6 +108,33 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   *synthetic offscreen moment*: `Aim.offscreen` is true for 250 ms with the
   crosshair where it is. The keyboard is the game's own (High Noon reloads on
   R itself), so the pointer does not turn R into a second reload.
+- **Reloading with the hand.** Pointing past the view's edge is off the
+  screen; so is a hand the camera lost as it left the picture across an edge
+  (pointing past the view, or its fingertip at the picture's own edge), for
+  up to 1.2 s after it goes. A hand that vanished mid-view is only lost, and a
+  camera frame older than 400 ms is no hand at all.
+- **When the hand goes.** In play, a hand gone for 1.5 s (longer than any
+  reload's swing) holds the round: the world stops as for a pause while the
+  camera goes on looking, under a "Show Your Hand" card. Seen steadily again
+  for half a second, the player is counted back in 3-2-1. Resuming from the
+  pause sheet with the hand goes through the same wait and count. Never in
+  the aim check, the fall or the results (`src/app/handWatch.ts`).
+- **When the camera goes.** A camera that ends, or runs without a new frame
+  for 3 s, mid-game freezes the round under a sheet: Try Again (the same
+  camera keeps the round and its aim; another starts afresh with its aim
+  check), Use Mouse or Trackpad (the same round goes on with the pointer), or
+  Choose a Game.
+- **Another hand.** The landmarker follows one hand. A hand that turns up
+  more than a quarter of the picture from where the player's just was moves
+  no aim and fires nothing until it has stayed 0.3 s (`src/input/trust.ts`,
+  which also records why two hands were not tracked instead).
+- **The results.** With the hand, the camera goes on reading under the
+  results card, and a deliberate shot - the thumb raised after the card came,
+  then folded once it has settled (1.2 s) - plays again; the camera rests
+  after a minute. Two seconds after the card arrives the world stops drawing
+  (the last frame stays under it) until the next round.
+- **Downloads** give up after 20 s without a byte (`fetchBytes`); with the
+  browser offline the trouble says so.
 - **Rendering.** The host's renderer has no canvas anti-aliasing (the games
   anti-alias in their own post-processing) and outputs sRGB; tone mapping is
   the game's. The HUD's red screen edge stays light, since the game draws its

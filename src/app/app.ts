@@ -22,10 +22,11 @@ import { CameraError, cameraPermission, chooseCamera, chosenCamera, openCamera, 
 import { ModelError } from "../tracking/errors";
 import type { Tracker } from "../tracking/tracker";
 import type { HandSource } from "../tracking/types";
-import { $, announce, element, icon, setText, toast } from "../ui/dom";
+import { $, announce, element, icon, replay, setText, toast } from "../ui/dom";
 import { formatScore } from "../ui/format";
 import { AimCheckView } from "./aimCheckView";
 import { Crosshair } from "./crosshair";
+import { FireToPlay, HandWatch, type HandWatchEvent } from "./handWatch";
 import { Hud } from "./hud";
 import { watchKonami } from "./konami";
 import { Pip } from "./pip";
@@ -64,17 +65,41 @@ type Phase = "loading" | "check" | "play" | "over";
 interface Session {
   entry: GameEntry;
   game: Game;
+  /** What the game was given; its `input` follows a switch to the mouse mid-round. */
+  context: GameContext;
   control: InputKind;
   input: InputSource & { reset(): void };
   hand: HandInput | null;
   check: AimCheckView | null;
   phase: Phase;
   paused: boolean;
+  /** The round frozen while it waits for the hand (see handWatch.ts). */
+  held: boolean;
+  /** The round frozen under a camera trouble's sheet. */
+  troubled: boolean;
+  /** The player has fallen: the death plays out untouched, hand or no hand. */
+  down: boolean;
+  /** The results have been up a while: the world stopped drawing under them. */
+  idle: boolean;
+  watch: HandWatch;
+  /** When a camera frame last reached the page, performance.now() ms. */
+  frameAt: number;
   camera: CameraIdentity | null;
   unsubscribe: () => void;
   lostSince: number | null;
   result: Result | null;
+  /** Play Again with a fold of the thumb, while the results are up. */
+  fire: FireToPlay | null;
+  /** Timers that belong to this round's results, cleared when it moves on. */
+  timers: number[];
 }
+
+/** No new camera frame for this long, with the camera running, is a camera that has stopped, ms. */
+const CAMERA_STALL = 3000;
+/** How long after the results arrive the world stops drawing under them, ms. */
+const RESULTS_SETTLE = 2000;
+/** How long the results listen for a fold of the thumb before the camera rests, ms. */
+const FIRE_LISTENS = 60_000;
 
 /** Tags a failure with the part of getting ready it came from. */
 class Stage extends Error {
@@ -145,6 +170,10 @@ export class App {
   /** Camera capture to crosshair drawn, ms: for the performance report. */
   private readonly latency = new Samples(600);
   private lastDrawnCapture = 0;
+  /** Frames are being read from the camera (or the script). */
+  private tracking = false;
+  /** The small loop that watches for the hand while the world is held. */
+  private holdLoop = 0;
 
   constructor(private readonly options: AppOptions = {}) {
     this.settings = {
@@ -164,6 +193,9 @@ export class App {
     this.hud.onPlayerDown = () => {
       this.crosshair.visible = false;
       this.crosshair.clear();
+      // The death plays out as it is: no waiting for a hand that has nothing left to do.
+      if (this.session) this.session.down = true;
+      this.hud.pageHint(null);
     };
     this.control = options.scripted ? "hand" : touchOnly() && prefs.control === "mouse" ? "touch" : prefs.control;
     this.settingsSheet = new SettingsSheet(this.settingsHost());
@@ -360,13 +392,14 @@ export class App {
         }
       }
       const gamePart = progress.part("game", hand && !this.tracker && !this.options.scripted ? 10 : 1);
+      const context = this.context(host, control);
       const loaded = tagged(
         "game",
         (async () => {
           const created = await this.entry.create();
           game = created;
           if (this.options.fail === "game") throw new DownloadError("game", 404);
-          await created.load(this.context(host, control), gamePart);
+          await created.load(context, gamePart);
           return created;
         })(),
       );
@@ -389,7 +422,7 @@ export class App {
       }
       loading.close();
       if (hand && !this.options.scripted) prefs.downloaded = true;
-      this.begin(ready, control, adjust);
+      this.begin(ready, context, adjust);
     } catch (error) {
       loading?.close();
       if (stale()) return;
@@ -409,11 +442,21 @@ export class App {
     camera.stream.getVideoTracks()[0]?.addEventListener("ended", () => {
       if (this.camera !== camera) return;
       this.camera = null;
-      if (this.session && this.session.phase !== "over") {
-        this.endSession();
-        this.trouble("stopped");
-      }
+      this.cameraEnded();
     });
+  }
+
+  /**
+   * The camera went (unplugged, or taken by the system) during a game. The
+   * round is not lost with it: it freezes under a sheet that offers the
+   * camera again, the mouse, or the arcade. On the results there is nothing
+   * to freeze, only a fold of the thumb that can no longer be seen.
+   */
+  private cameraEnded(): void {
+    const session = this.session;
+    if (!session || session.control !== "hand") return;
+    if (session.phase === "over") this.stopListening(session, true);
+    else if (session.phase === "check" || session.phase === "play") this.cameraTrouble(session, "stopped");
   }
 
   private context(host: EngineHost, control: InputKind): GameContext {
@@ -439,11 +482,16 @@ export class App {
     this.showView("home");
     if (cause instanceof WebGLUnavailable) this.trouble("webgl");
     else if (cause instanceof CameraError) this.trouble(cause.trouble);
-    else if (part === "tracker" || cause instanceof ModelError) this.trouble("model");
+    // Anything else that failed with the browser offline was a download (a
+    // file, or a piece of the page's own code): say so, it is the one fix
+    // that matters. The mouse helps only if it was the hand's download.
+    else if (navigator.onLine === false) {
+      this.trouble("offline", { secondary: part === "tracker" ? "Use Mouse or Trackpad" : "Choose a Game" });
+    } else if (part === "tracker" || cause instanceof ModelError) this.trouble("model");
     else this.trouble("game");
   }
 
-  private trouble(kind: Trouble): void {
+  private trouble(kind: Trouble, choices?: { secondary?: Fix | null; tertiary?: Fix | null }): void {
     const fixes: Record<Fix, () => void> = {
       "Try Again": () => void this.start(),
       "Use Mouse or Trackpad": () => {
@@ -454,7 +502,7 @@ export class App {
       "Choose a Game": () => this.back(),
       Reload: () => location.reload(),
     };
-    showTrouble(kind, fixes);
+    showTrouble(kind, fixes, choices);
   }
 
   // --- a game's life ---------------------------------------------------------------------
@@ -483,24 +531,22 @@ export class App {
     return this.options.scripted ?? this.tracker!;
   }
 
-  private begin(game: Game, control: InputKind, adjust: boolean): void {
+  /** Which camera is playing: its aim is saved and found by this. */
+  private cameraIdentity(): CameraIdentity | null {
+    if (this.options.scripted) return { deviceId: this.options.scripted.deviceId, width: 1280, height: 720 };
+    return this.camera ? { deviceId: this.camera.deviceId, width: this.camera.width, height: this.camera.height } : null;
+  }
+
+  private begin(game: Game, context: GameContext, adjust: boolean): void {
     const host = this.host!;
+    const control = context.input ?? "hand";
     const stage = $("stage");
     const viewport = () => ({ width: stage.clientWidth, height: stage.clientHeight });
     let input: InputSource & { reset(): void };
     let hand: HandInput | null = null;
-    let unsubscribe = () => {};
-    let camera: CameraIdentity | null = null;
     if (control === "hand") {
-      const source = this.handSource();
-      hand = new HandInput(source, viewport);
+      hand = new HandInput(this.handSource(), viewport);
       input = hand;
-      unsubscribe = source.subscribe((frame) => this.pip.draw(frame, performance.now()));
-      this.startTracking();
-      this.pip.show(!this.options.scripted);
-      camera = this.camera
-        ? { deviceId: this.camera.deviceId, width: this.camera.width, height: this.camera.height }
-        : { deviceId: "script", width: 1280, height: 720 };
     } else {
       input = control === "touch" ? new TouchInput(stage) : new MouseInput(stage);
       this.pip.hide();
@@ -508,18 +554,36 @@ export class App {
     const session: Session = {
       entry: this.entry,
       game,
+      context,
       control,
       input,
       hand,
       check: null,
       phase: "loading",
       paused: false,
-      camera,
-      unsubscribe,
+      held: false,
+      troubled: false,
+      down: false,
+      idle: false,
+      watch: new HandWatch(performance.now()),
+      frameAt: performance.now(),
+      camera: hand ? this.cameraIdentity() : null,
+      unsubscribe: () => {},
       lostSince: null,
       result: null,
+      fire: null,
+      timers: [],
     };
+    if (hand) {
+      const source = this.handSource();
+      session.unsubscribe = source.subscribe((frame) => {
+        session.frameAt = performance.now();
+        this.pip.draw(frame, session.frameAt);
+      });
+      this.pip.show(!this.options.scripted);
+    }
     this.session = session;
+    if (hand) this.startTracking();
     host.setGame(game);
     host.onFrame = ({ now, aim }) => this.frame(session, now, aim);
     this.round(session, adjust);
@@ -565,19 +629,25 @@ export class App {
   }
 
   private play(session: Session, mapping: Matrix | null): void {
-    if (this.session !== session) return;
+    // Once: the check's ready moment may end after the round already began
+    // (the player switched to the mouse under it).
+    if (this.session !== session || session.phase === "play") return;
     session.check?.dispose();
     session.check = null;
     if (mapping && session.hand) session.hand.setMapping(mapping);
     session.phase = "play";
     $("game").dataset.phase = "play";
     session.game.start();
+    session.watch.watch(performance.now());
     this.host!.aim = (now) => session.input.sample(now);
     this.crosshair.visible = true;
-    if (session.control !== "hand") {
-      this.hud.hint(session.control === "touch" ? "Tap to fire." : "Click to fire.");
-      window.setTimeout(() => this.session === session && this.hud.hint(null), 3500);
-    }
+    if (session.control !== "hand") this.pointerHint(session);
+  }
+
+  /** How a pointer fires, said for the first seconds with it. */
+  private pointerHint(session: Session): void {
+    this.hud.hint(session.control === "touch" ? "Tap to fire." : "Click to fire.");
+    window.setTimeout(() => this.session === session && this.hud.hint(null), 3500);
   }
 
   /** Every animation frame, after the game has drawn. */
@@ -604,28 +674,254 @@ export class App {
       this.lastDrawnCapture = aim.capturedAt;
       if (aim.capturedAt > 0) this.latency.push(performance.now() - aim.capturedAt);
     }
-    // A hand lost in play is said at once, and stays said until it is back.
-    if (session.phase === "play" && session.control === "hand") {
-      if (!aim.tracking) session.lostSince ??= now;
+    if (this.cameraStopped(session, now)) return;
+    if (session.phase === "play" && session.control === "hand" && !session.down) {
+      // A hand lost in play is said after a moment - unless it left the
+      // picture across an edge, which is the reload - and a hand gone for
+      // longer holds the round until it is back (see handWatch.ts).
+      if (!aim.tracking && !aim.offscreen) session.lostSince ??= now;
       else session.lostSince = null;
       this.hud.pageHint(session.lostSince !== null && now - session.lostSince > 600 ? "Show your hand to the camera." : null);
+      const event = session.watch.update(now, aim.tracking);
+      if (event) this.onWatch(session, event);
     }
+  }
+
+  // --- the round held for the hand -------------------------------------------------------
+
+  /** What the hand watch decided: hold the round, ask for the hand, count, carry on. */
+  private onWatch(session: Session, event: HandWatchEvent): void {
+    switch (event.type) {
+      case "hold":
+        this.hold(session);
+        this.showHold("lost");
+        announce("Show your hand to carry on. The round waits for you.");
+        break;
+      case "ask":
+        this.showHold("lost");
+        announce("Show your hand to carry on.");
+        break;
+      case "count":
+        this.showHold("count", event.beat);
+        if (event.beat === 3) announce("Get ready.");
+        break;
+      case "go":
+        this.release(session);
+        break;
+    }
+  }
+
+  /**
+   * Freezes the round - the world stops, as for a pause - while the camera
+   * goes on looking for the hand. The corners' chrome stays, the preview
+   * grows so the player can see themselves, and a small loop watches for the
+   * hand, since the world's own loop is stopped.
+   */
+  private hold(session: Session): void {
+    session.held = true;
+    session.lostSince = null;
+    this.host?.pause();
+    this.crosshair.visible = false;
+    this.crosshair.clear();
+    this.hud.pageHint(null);
+    this.yielding.reset();
+    if (!this.holdLoop) this.holdLoop = requestAnimationFrame(this.holdTick);
+  }
+
+  private readonly holdTick = (now: number): void => {
+    const session = this.session;
+    if (!session || !session.held || session.paused || session.troubled) {
+      this.holdLoop = 0;
+      return;
+    }
+    this.holdLoop = requestAnimationFrame(this.holdTick);
+    if (this.cameraStopped(session, now)) return;
+    const event = session.watch.update(now, session.input.sample(now).tracking);
+    if (event) this.onWatch(session, event);
+  };
+
+  /** The hand is back and the count is done: the round carries on. */
+  private release(session: Session): void {
+    session.held = false;
+    this.showHold(null);
+    // Nothing held from before: no stale fold fires as the world starts.
+    session.input.reset();
+    this.crosshair.visible = !session.down;
+    this.host?.resume();
+  }
+
+  /** The hold on screen: nothing, the dimmed world alone, the card asking for the hand, or a beat of the count. */
+  private showHold(state: "wait" | "lost" | "count" | null, beat = 0): void {
+    const game = $("game");
+    if (state) game.dataset.hold = state;
+    else delete game.dataset.hold;
+    if (state === "count") {
+      const numeral = $("hold-beat");
+      setText(numeral, String(beat));
+      numeral.className = "";
+      replay(numeral, this.settings.reducedMotion ? "beat-calm" : "beat");
+    }
+  }
+
+  private stopHold(session: Session): void {
+    session.held = false;
+    cancelAnimationFrame(this.holdLoop);
+    this.holdLoop = 0;
+    this.showHold(null);
+  }
+
+  // --- the camera stopping mid-game ----------------------------------------------------------
+
+  /** When a camera frame last arrived: counted by the tracker as frames arrive, before it reads them. */
+  private lastCameraFrame(session: Session): number {
+    return Math.max(session.frameAt, this.options.scripted ? 0 : (this.tracker?.frameAt ?? 0));
+  }
+
+  /**
+   * A hand game whose camera is gone, or running but silent for three
+   * seconds (asleep, covered by the system, a driver that gave up), cannot
+   * be played: said at once, with the round frozen. Returns whether it was.
+   */
+  private cameraStopped(session: Session, now: number): boolean {
+    if (session.control !== "hand" || session.troubled || session.paused) return false;
+    if (session.phase !== "check" && session.phase !== "play") return false;
+    if (!this.options.scripted && !this.camera) {
+      this.cameraTrouble(session, "stopped");
+      return true;
+    }
+    if (this.tracking && now - this.lastCameraFrame(session) > CAMERA_STALL) {
+      this.cameraTrouble(session, "stalled");
+      return true;
+    }
+    return false;
+  }
+
+  /** The round frozen under the camera's trouble, with the fixes that keep it. */
+  private cameraTrouble(session: Session, kind: Trouble): void {
+    this.stopHold(session);
+    session.troubled = true;
+    session.paused = false; // the sheet replaces the pause menu, if it was up
+    this.host?.pause();
+    this.stopTracking();
+    this.crosshair.visible = false;
+    this.crosshair.clear();
+    this.hud.pageHint(null);
+    this.pip.calm();
+    this.showHold("wait");
+    const fixes: Record<Fix, () => void> = {
+      "Try Again": () => void this.reopenCamera(session),
+      "Use Mouse or Trackpad": () => this.continueWithPointer(session),
+      "Choose a Game": () => this.back(),
+      Reload: () => location.reload(),
+    };
+    // The sheet is a dialog: opening it says its title and words to a screen reader.
+    showTrouble(kind, fixes, { secondary: "Use Mouse or Trackpad", tertiary: "Choose a Game" });
+  }
+
+  /**
+   * Try Again, mid-game: the camera once more. The same camera keeps the
+   * round and its aim - back through the wait for the hand and the count;
+   * another camera needs its own aim, so the round starts afresh with the
+   * aim check.
+   */
+  private async reopenCamera(session: Session): Promise<void> {
+    if (this.session !== session) return;
+    const before = session.camera;
+    this.releaseCamera();
+    try {
+      if (!this.options.scripted) await this.openCamera();
+    } catch (error) {
+      if (this.session !== session) return;
+      console.warn("The camera could not be opened again.", error);
+      this.cameraTrouble(session, error instanceof CameraError ? error.trouble : "busy");
+      return;
+    }
+    if (this.session !== session) return;
+    session.troubled = false;
+    const now = this.cameraIdentity();
+    if (before && now && (now.deviceId !== before.deviceId || now.width !== before.width || now.height !== before.height)) {
+      session.camera = now;
+      this.again(session, false);
+      return;
+    }
+    this.startTracking();
+    if (session.phase === "play" && !session.down) {
+      this.hold(session);
+      session.watch.hold(performance.now());
+      this.showHold("wait");
+    } else {
+      this.showHold(null);
+      this.crosshair.visible = session.phase === "play" && !session.down;
+      this.host?.resume();
+    }
+    $("game").focus();
+  }
+
+  /**
+   * Use Mouse or Trackpad, mid-game: the same round goes on with the
+   * pointer. The camera is put away, the preview goes, and the game's hints
+   * now speak of clicks. An aim check still running has nothing left to
+   * check: the round begins.
+   */
+  private continueWithPointer(session: Session): void {
+    if (this.session !== session) return;
+    const control: InputKind = touchOnly() ? "touch" : "mouse";
+    this.setControl(control);
+    this.stopTracking();
+    this.releaseCamera();
+    session.unsubscribe();
+    session.unsubscribe = () => {};
+    session.check?.dispose();
+    session.input.dispose();
+    const stage = $("stage");
+    session.input = control === "touch" ? new TouchInput(stage) : new MouseInput(stage);
+    session.hand = null;
+    session.camera = null;
+    session.control = control;
+    session.context.input = control;
+    session.troubled = false;
+    session.lostSince = null;
+    this.pip.hide();
+    this.showHold(null);
+    $("game").dataset.input = control;
+    if (session.phase === "check") {
+      // The stage is cleared once: a check already done has cleared it.
+      if (!session.check?.done) {
+        session.game.calibration.light(null);
+        session.game.calibration.done();
+      }
+      this.play(session, null);
+    } else {
+      this.crosshair.visible = !session.down;
+      this.pointerHint(session);
+    }
+    this.host!.aim = (now) => session.input.sample(now);
+    this.host?.resume();
+    $("game").focus();
   }
 
   private startTracking(): void {
     if (this.options.scripted) this.options.scripted.start();
     else if (this.tracker && this.camera) this.tracker.start(this.camera.video);
+    else return;
+    this.tracking = true;
+    // The camera gets its full grace from now to show a frame.
+    if (this.session) this.session.frameAt = performance.now();
   }
 
   private stopTracking(): void {
+    this.tracking = false;
     if (this.options.scripted) this.options.scripted.stop();
     else this.tracker?.stop();
   }
 
   pause(): void {
     const session = this.session;
-    if (!session || session.paused || session.phase === "over" || session.phase === "loading") return;
+    if (!session || session.paused || session.troubled || session.phase === "over" || session.phase === "loading") return;
     session.paused = true;
+    // Paused while waiting for the hand: the menu takes the hold's place,
+    // and Resume brings the wait back.
+    this.stopHold(session);
     this.host?.pause();
     this.stopTracking();
     this.crosshair.clear();
@@ -648,23 +944,87 @@ export class App {
     // Nothing held from before the pause: no stale fold fires on return.
     session.input.reset();
     this.startTracking();
-    this.host?.resume();
     $("game").focus();
+    // With the hand, play does not drop the player straight back into the
+    // fight: it waits to see the hand, and counts them in. The mouse is
+    // where it was, and the aim check and the fall have nothing to wait for.
+    if (session.control === "hand" && session.phase === "play" && !session.down) {
+      this.hold(session);
+      session.watch.hold(performance.now());
+      this.showHold("wait");
+      return;
+    }
+    this.host?.resume();
   }
 
   private gameOver(stats: GameStats): void {
     const session = this.session;
     if (!session || session.phase === "over") return;
+    this.stopHold(session);
     session.phase = "over";
     $("game").dataset.phase = "over";
     this.crosshair.visible = false;
     this.hud.pageHint(null);
-    this.stopTracking();
+    // With the hand, the camera goes on reading under the results, so a fold
+    // of the thumb can play again.
+    if (session.control !== "hand") this.stopTracking();
     // The world plays out its last moment before the card arrives.
-    window.setTimeout(() => {
-      if (this.session !== session) return;
+    this.later(session, this.settings.reducedMotion ? 400 : 1200, () => {
       session.result = showResults(session.entry, stats, this.settings.reducedMotion);
-    }, this.settings.reducedMotion ? 400 : 1200);
+      this.listenForFire(session);
+      // Once the world has played out under the card, it stops drawing:
+      // the last frame stays, and nothing is spent on a view no one plays.
+      this.later(session, RESULTS_SETTLE, () => {
+        this.host?.stop();
+        session.idle = true;
+      });
+    });
+  }
+
+  /** A timer for this round's results, dropped if the round moves on first. */
+  private later(session: Session, ms: number, run: () => void): void {
+    const timer = window.setTimeout(() => {
+      session.timers = session.timers.filter((t) => t !== timer);
+      if (this.session === session && session.phase === "over") run();
+    }, ms);
+    session.timers.push(timer);
+  }
+
+  /**
+   * Play Again with the hand: while the results are up, a deliberate fold
+   * of the thumb presses it (see FireToPlay). The card says so, only to a
+   * hand player; after a minute of no one playing the camera rests.
+   */
+  private listenForFire(session: Session): void {
+    const hand = session.hand;
+    const line = $("results-fire");
+    if (!hand || !this.tracking) {
+      line.hidden = true;
+      return;
+    }
+    line.hidden = false;
+    const fire = new FireToPlay(performance.now());
+    session.fire = fire;
+    hand.onReading = (reading) => {
+      const shot = fire.observe(performance.now(), {
+        seen: reading.position !== null,
+        armed: reading.armed,
+        travel: reading.travel,
+        fired: reading.fired,
+      });
+      if (!shot || session.fire !== fire || !$<HTMLDialogElement>("results").open) return;
+      this.stopListening(session, false);
+      $("again").click();
+    };
+    this.later(session, FIRE_LISTENS, () => this.stopListening(session, true));
+  }
+
+  /** The results stop listening for a fold; `rest` puts the camera to rest too. */
+  private stopListening(session: Session, rest: boolean): void {
+    session.fire = null;
+    if (session.hand) session.hand.onReading = null;
+    $("results-fire").hidden = true;
+    if (rest) this.stopTracking();
   }
 
   /** A new game of the same kind: through the aim check again, as every game is. */
@@ -684,10 +1044,17 @@ export class App {
   /** The next round on the same game: Play Again, Restart, Adjust Aim. */
   private again(session: Session, adjust: boolean): void {
     closeSheets();
+    this.stopHold(session);
+    for (const timer of session.timers.splice(0)) window.clearTimeout(timer);
+    this.stopListening(session, false);
     session.check?.dispose();
     session.check = null;
     session.result = null;
     session.lostSince = null;
+    session.troubled = false;
+    session.down = false;
+    session.idle = false;
+    session.phase = "loading";
     session.input.reset();
     this.hud.reset(this.settings.unlocks.has("golden"));
     this.crosshair.visible = false;
@@ -698,10 +1065,10 @@ export class App {
     if (!session.hand) session.game.calibration.begin?.();
     this.round(session, adjust);
     this.startTracking();
-    if (session.paused) {
-      session.paused = false;
-      this.host!.resume();
-    }
+    // Whatever stopped the world - the pause menu, the camera's trouble, the
+    // results left a while - it runs again for the new round.
+    session.paused = false;
+    this.host!.resume();
     $("game").focus();
   }
 
@@ -722,6 +1089,9 @@ export class App {
     const session = this.session;
     this.session = null;
     if (session) {
+      this.stopHold(session);
+      for (const timer of session.timers.splice(0)) window.clearTimeout(timer);
+      this.stopListening(session, false);
       session.check?.dispose();
       session.unsubscribe();
       session.input.dispose();
@@ -815,6 +1185,11 @@ export class App {
       this.resume();
     });
     $("results").addEventListener("cancel", (event) => event.preventDefault());
+    // A camera's trouble mid-game holds the round: it stays until the player chooses.
+    $("alert").addEventListener("cancel", (event) => {
+      if (this.session?.troubled) event.preventDefault();
+    });
+    $("hold-menu").onclick = () => this.pause();
     $("loading").addEventListener("cancel", (event) => {
       event.preventDefault();
       this.back();
@@ -842,7 +1217,7 @@ export class App {
       return;
     }
     const session = this.session;
-    if (!session || document.body.dataset.view !== "game" || session.phase === "over") return;
+    if (!session || document.body.dataset.view !== "game" || session.phase === "over" || session.troubled) return;
     // Space presses a focused button, as it always does.
     if (key === " " && target?.tagName === "BUTTON") return;
     if (event.repeat) return;
@@ -998,6 +1373,13 @@ export class App {
       view: document.body.dataset.view,
       phase: session?.phase ?? null,
       paused: session?.paused ?? false,
+      held: session?.held ?? false,
+      troubled: session?.troubled ?? false,
+      idle: session?.idle ?? false,
+      hold: $("game").dataset.hold ?? null,
+      running: this.host?.isRunning ?? false,
+      tracking: this.tracking,
+      input: session?.control ?? null,
       control: this.control,
       lit: check?.lit ?? null,
       score: check?.measure.score ?? null,
@@ -1025,6 +1407,13 @@ export class App {
     this.host?.stats.reset();
     this.tracker?.resetStats();
     this.latency.clear();
+  }
+
+  /** As if the camera had been unplugged mid-game (dev and test builds). */
+  unplugCamera(): void {
+    if (this.options.scripted) this.options.scripted.stop();
+    else this.releaseCamera();
+    this.cameraEnded();
   }
 
   /** The current session's pieces, for the tests' own measurements. */

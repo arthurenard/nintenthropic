@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- The tracker as the game runs it, served by the dev server only: a still
      picture of a hand played as a 30 fps video, read frame by frame by the
-     tracker (?where=worker or ?where=page, ?delegate=CPU), while a busy
+     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2), while a busy
      animation loop measures what the tracking costs the page's frames. -->
 <html lang="en">
   <head>
@@ -34,7 +34,11 @@
         await video.play();
         const tracker = await loadTracker(
           { wasm: () => {}, model: () => {} },
-          { where: params.get("where") ?? "auto", prefer: params.get("delegate") === "CPU" ? "CPU" : "GPU" },
+          {
+            where: params.get("where") ?? "auto",
+            prefer: params.get("delegate") === "CPU" ? "CPU" : "GPU",
+            hands: Number(params.get("hands") ?? 1),
+          },
         );
         if (params.get("carrier") === "bitmap") tracker.carrier = "bitmap";
         report.where = tracker.where;

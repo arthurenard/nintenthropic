@@ -24,8 +24,8 @@ export class Assets implements AssetLoader {
     this.gltfLoader = new GLTFLoader().setDRACOLoader(this.draco);
   }
 
-  async gltf(url: string, onProgress?: (fraction: number) => void): Promise<LoadedAsset> {
-    const href = siteUrl(url);
+  /** A file's bytes, downloaded once for the life of the page (with fetchBytes' progress and stall watch). */
+  private download(href: string, onProgress?: (fraction: number) => void): Promise<ArrayBuffer> {
     let pending = this.bytes.get(href);
     if (!pending) {
       pending = fetchBytes(href, onProgress);
@@ -33,18 +33,35 @@ export class Assets implements AssetLoader {
       // A failed download is not remembered: Try Again really tries again.
       pending.catch(() => this.bytes.delete(href));
     }
-    const data = await pending;
+    return pending;
+  }
+
+  async gltf(url: string, onProgress?: (fraction: number) => void): Promise<LoadedAsset> {
+    const href = siteUrl(url);
+    const data = await this.download(href, onProgress);
     onProgress?.(1);
     const base = href.slice(0, href.lastIndexOf("/") + 1);
     const gltf = await this.gltfLoader.parseAsync(data, base);
     return { scene: gltf.scene, animations: gltf.animations };
   }
 
-  /** A colour texture (sRGB), such as a sky. */
+  /**
+   * A colour texture (sRGB), such as a sky. Its bytes come through
+   * fetchBytes like every other download, so a stalled one gives up rather
+   * than hold the loading bar forever; the image is then decoded from them.
+   */
   async texture(url: string): Promise<Texture> {
-    const texture = await this.textureLoader.loadAsync(siteUrl(url));
-    texture.colorSpace = SRGBColorSpace;
-    return texture;
+    const href = siteUrl(url);
+    const data = await this.download(href);
+    const type = /\.webp$/i.test(href) ? "image/webp" : /\.png$/i.test(href) ? "image/png" : /\.jpe?g$/i.test(href) ? "image/jpeg" : "";
+    const local = URL.createObjectURL(new Blob([data], type ? { type } : {}));
+    try {
+      const texture = await this.textureLoader.loadAsync(local);
+      texture.colorSpace = SRGBColorSpace;
+      return texture;
+    } finally {
+      URL.revokeObjectURL(local);
+    }
   }
 
   dispose(): void {

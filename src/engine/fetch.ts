@@ -8,11 +8,27 @@ export class DownloadError extends Error {
   constructor(
     readonly url: string,
     readonly status: number | null,
+    /** Nothing arrived for STALL_AFTER, and the download was given up. */
+    readonly stalled = false,
   ) {
-    super(status === null ? `Couldn’t download ${url}` : `Couldn’t download ${url} (${status})`);
+    super(
+      stalled
+        ? `Couldn’t download ${url} (nothing arrived for ${STALL_AFTER / 1000} s)`
+        : status === null
+          ? `Couldn’t download ${url}`
+          : `Couldn’t download ${url} (${status})`,
+    );
     this.name = "DownloadError";
   }
 }
+
+/**
+ * A download that receives nothing for this long has stalled, ms. A
+ * connection that goes quiet mid-file (a captive portal, a dropped Wi-Fi, a
+ * server that stops answering) otherwise leaves "Getting ready… 45%" on the
+ * screen for good. Slow is fine: any bytes at all start the wait again.
+ */
+export const STALL_AFTER = 20_000;
 
 /** Resolves a path relative to where the site is served (it may live under a
  * sub-path, as on GitHub Pages). */
@@ -23,45 +39,83 @@ export function siteUrl(path: string): string {
 /**
  * The whole file, calling `onProgress` with 0..1 as it arrives. Without a
  * Content-Length (a compressed response), `expected` - a size known ahead -
- * stands in, so the bar still moves.
+ * stands in, so the bar still moves. Gives up with a DownloadError once
+ * nothing has arrived for `stallAfter` ms.
  */
 export async function fetchBytes(
   url: string,
   onProgress?: (fraction: number) => void,
   expected = 0,
+  stallAfter = STALL_AFTER,
 ): Promise<ArrayBuffer> {
-  let response: Response;
+  const abort = new AbortController();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let stalled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // The watch starts before the request (a server that never answers) and
+  // starts again with every piece that arrives.
+  const watch = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      stalled = true;
+      abort.abort();
+      // A stream the abort does not reach (not every body is tied to the
+      // request's signal) is cancelled too, so the read below returns.
+      reader?.cancel().catch(() => {});
+    }, stallAfter);
+  };
+  const failed = () => new DownloadError(url, null, stalled);
+  watch();
   try {
-    response = await fetch(url);
-  } catch {
-    throw new DownloadError(url, null);
-  }
-  if (!response.ok) throw new DownloadError(url, response.status);
-  const length = Number(response.headers.get("Content-Length")) || expected;
-  if (!response.body || !onProgress) {
-    const bytes = await response.arrayBuffer();
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: abort.signal });
+    } catch {
+      throw failed();
+    }
+    if (!response.ok) throw new DownloadError(url, response.status);
+    const length = Number(response.headers.get("Content-Length")) || expected;
+    if (!response.body) {
+      let bytes: ArrayBuffer;
+      try {
+        bytes = await response.arrayBuffer();
+      } catch {
+        throw failed();
+      }
+      onProgress?.(1);
+      return bytes;
+    }
+    const stream = response.body.getReader();
+    reader = stream;
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    onProgress?.(0);
+    for (;;) {
+      let part: ReadableStreamReadResult<Uint8Array>;
+      try {
+        part = await stream.read();
+      } catch {
+        throw failed();
+      }
+      // A cancelled stream ends as if it were done: it is not.
+      if (stalled) throw failed();
+      if (part.done) break;
+      watch();
+      chunks.push(part.value);
+      received += part.value.byteLength;
+      if (length > 0) onProgress?.(Math.min(0.999, received / length));
+    }
+    const bytes = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
     onProgress?.(1);
-    return bytes;
+    return bytes.buffer;
+  } finally {
+    clearTimeout(timer);
   }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  onProgress(0);
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    received += value.byteLength;
-    if (length > 0) onProgress(Math.min(0.999, received / length));
-  }
-  const bytes = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  onProgress(1);
-  return bytes.buffer;
 }
 
 /**

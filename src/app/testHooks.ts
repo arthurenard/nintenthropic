@@ -34,6 +34,12 @@ export interface HandyTest {
   hud(): HudSink;
   /** Starts the timing figures afresh. */
   resetStats(): void;
+  /** The scripted camera stops sending pictures (true) or sends them again (false). */
+  stall(stalled: boolean): void;
+  /** The scripted camera becomes another camera (another device id) from its next opening. */
+  device(id: string): void;
+  /** As if the camera had been unplugged. */
+  unplug(): void;
 }
 
 declare global {
@@ -51,5 +57,12 @@ export function installTestHooks(app: App, options: AppOptions): void {
     internals: () => app.internals,
     hud: () => app.hud,
     resetStats: () => app.resetStats(),
+    stall(stalled) {
+      if (options.scripted) options.scripted.stalled = stalled;
+    },
+    device(id) {
+      if (options.scripted) options.scripted.deviceId = id;
+    },
+    unplug: () => app.unplugCamera(),
   };
 }

@@ -77,6 +77,13 @@ export interface CheckStats {
   edgeShots: number;
 }
 
+/** A palm span under this, in fractions of the picture, is a hand too far from the camera to read well. */
+export const FAR_SPAN = 0.07;
+/** A palm span over this is a hand too close to it. */
+export const NEAR_SPAN = 0.34;
+/** A fingertip this close to the picture's edge, in fractions of it, is about to leave it. */
+export const EDGE = 0.06;
+
 /**
  * One specific tip for a player whose aim will not reach 95% - light, framing
  * or distance - picked from what the camera actually saw, or steadiness when
@@ -89,10 +96,77 @@ export function tipFor(stats: CheckStats): string {
   }
   if (stats.spans.length >= 10) {
     const span = median(stats.spans);
-    if (span < 0.07) return "Move a little closer to your camera.";
-    if (span > 0.34) return "Sit back a little from your camera.";
+    if (span < FAR_SPAN) return "Move a little closer to your camera.";
+    if (span > NEAR_SPAN) return "Sit back a little from your camera.";
   }
   return "Keep your finger still as your thumb folds.";
+}
+
+/** What the camera says about the hand's framing right now: too far, too near, at the edge, or fine. */
+export type Framing = "closer" | "back" | "edge" | null;
+
+/** The framing of one camera frame, by the same lines as tipFor. Keeping the hand in the picture comes first. */
+export function framingOf(pointer: Point | null, span: number | undefined): Framing {
+  if (!pointer) return null;
+  if (pointer[0] < EDGE || pointer[0] > 1 - EDGE || pointer[1] < EDGE || pointer[1] > 1 - EDGE) return "edge";
+  if (span === undefined) return null;
+  if (span < FAR_SPAN) return "closer";
+  if (span > NEAR_SPAN) return "back";
+  return null;
+}
+
+/**
+ * Framing help that does not flicker: a problem is shown once it has lasted
+ * `show` ms, and goes once it has been gone for `hide` ms, so a hand resting
+ * on a line neither blinks the words nor keeps them from ever appearing. A
+ * frame the tracker dropped says nothing either way (a far hand drops more
+ * of them); a hand gone for longer starts afresh.
+ */
+export class FramingHelp {
+  private shown: Framing = null;
+  private candidate: Framing = null;
+  private since = 0;
+  private clearSince: number | null = null;
+  private lastSeen = Number.NEGATIVE_INFINITY;
+
+  constructor(
+    private readonly show = 1000,
+    private readonly hide = 500,
+  ) {}
+
+  /** One camera frame at `now` ms (`pointer` null without a hand); returns the help to show. */
+  update(pointer: Point | null, span: number | undefined, now: number): Framing {
+    if (!pointer) {
+      if (now - this.lastSeen > this.hide) this.reset();
+      return this.shown;
+    }
+    this.lastSeen = now;
+    const seen = framingOf(pointer, span);
+    if (seen !== this.candidate) {
+      this.candidate = seen;
+      this.since = now;
+    }
+    if (seen && seen !== this.shown && now - this.since >= this.show) {
+      this.shown = seen;
+      this.clearSince = null;
+    } else if (this.shown && seen !== this.shown) {
+      this.clearSince ??= now;
+      if (now - this.clearSince >= this.hide) {
+        this.shown = null;
+        this.clearSince = null;
+      }
+    } else if (seen === this.shown) {
+      this.clearSince = null;
+    }
+    return this.shown;
+  }
+
+  /** The hand is gone: whatever it was doing, it is not doing it now. */
+  reset(): void {
+    this.shown = null;
+    this.candidate = null;
+    this.clearSince = null;
+  }
 }
 
 export interface AimCheckOptions {
@@ -203,7 +277,7 @@ export class AimCheck {
     const error: Vector | null = landed
       ? [((landed[0] - target.x) * width) / side, ((landed[1] - target.y) * height) / side]
       : null;
-    if (pointer[0] < 0.06 || pointer[0] > 0.94 || pointer[1] < 0.06 || pointer[1] > 0.94) this.stats.edgeShots++;
+    if (framingOf(pointer, undefined) === "edge") this.stats.edgeShots++;
 
     // Only a full map's predictions are scored. The two-shot map of scale and
     // offset is there to put a crosshair on screen; it cannot know how the

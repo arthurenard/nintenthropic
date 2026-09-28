@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
 import type { HandFrame, HandSource } from "../tracking/types";
-import { HandInput, MAX_PREDICTION } from "./handInput";
+import { EXIT_MOMENT, HandInput, MAX_PREDICTION, STALE_FRAME } from "./handInput";
+import { TRUST_AFTER } from "./trust";
 import { boxMapping } from "./homography";
 import { asCameraSees, makeHand, type HandPose } from "./synthetic";
 
@@ -92,6 +93,119 @@ describe("the hand as an input", () => {
     expect(lost.tracking).toBe(false);
     expect(lost.armed).toBe(true);
     expect(lost.fired).toBe(false);
+  });
+
+  it("stops tracking when the camera stops sending frames", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    const held = input.sample(t + STALE_FRAME - 50);
+    expect(held.tracking).toBe(true);
+    // The camera went quiet: its last frame is not a hand.
+    const stale = input.sample(t + STALE_FRAME + 50);
+    expect(stale.tracking).toBe(false);
+    expect(stale.fired).toBe(false);
+    expect(stale.offscreen).toBe(false); // lost mid-view is not a reload
+    expect(stale.x).toBeCloseTo(held.x, 5);
+    // A new frame brings it back.
+    camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 600));
+    expect(input.sample(t + 5).tracking).toBe(true);
+  });
+
+  it("counts a hand swung out of the picture as pointing off the screen, for a moment", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    // The swing: across the view and past its right edge, then gone.
+    for (const x of [0.6, 0.7, 0.8, 0.86, 0.9]) camera.show({ thumbDegrees: 20, indexTip: [x, 0.5] }, (t += 33));
+    const leftAt = t;
+    camera.show(null, (t += 33));
+    const gone = input.sample(t + 5);
+    expect(gone.tracking).toBe(false);
+    expect(gone.offscreen).toBe(true);
+    while (t < leftAt + EXIT_MOMENT - 100) camera.show(null, (t += 33));
+    expect(input.sample(t).offscreen).toBe(true);
+    // Out for longer than a reload's swing: simply lost.
+    while (t < leftAt + EXIT_MOMENT + 100) camera.show(null, (t += 33));
+    expect(input.sample(t).offscreen).toBe(false);
+    expect(input.sample(t).tracking).toBe(false);
+  });
+
+  it("counts a swing too fast for the filter to follow as leaving", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    // One frame far past the edge, then gone: the smoothed aim has not got there yet.
+    camera.show({ thumbDegrees: 20, indexTip: [0.9, 0.5] }, (t += 33));
+    camera.show(null, (t += 33));
+    expect(input.sample(t + 5).offscreen).toBe(true);
+  });
+
+  it("counts a fingertip lost at the picture's edge as leaving, even aiming inside the view", () => {
+    const camera = new FakeCamera();
+    // The whole picture stretched over the view: its edge is the view's edge.
+    const input = new HandInput(camera, () => VIEW, boxMapping([0, 0], [1, 1]));
+    input.compensate = false;
+    let t = 0;
+    for (let i = 0; i < 12; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.975] }, (t += 33));
+    expect(input.sample(t).offscreen).toBe(false); // still inside the view's margin
+    camera.show(null, (t += 33));
+    expect(input.sample(t + 5).offscreen).toBe(true);
+  });
+
+  it("does not call a hand that vanished mid-view off the screen", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    camera.show(null, (t += 33));
+    const lost = input.sample(t + 5);
+    expect(lost.tracking).toBe(false);
+    expect(lost.offscreen).toBe(false);
+  });
+
+  it("does not let another hand take the aim, or fire, until it has stayed", () => {
+    const { camera, input } = setup();
+    const mine = { thumbDegrees: 20, indexTip: [0.4, 0.45] as const, wrist: [0.42, 0.72] as const };
+    // Someone else's, across the picture, with the thumb down as it comes in.
+    const theirs = { thumbDegrees: 75, indexTip: [0.75, 0.3] as const, wrist: [0.77, 0.57] as const };
+    let t = 0;
+    for (let i = 0; i < 12; i++) camera.show(mine, (t += 33));
+    const before = input.sample(t);
+    expect(before.tracking).toBe(true);
+    expect(before.armed).toBe(true);
+    const arrived = t + 33;
+    while (t < arrived + TRUST_AFTER - 40) {
+      camera.show(theirs, (t += 33));
+      const aim = input.sample(t);
+      expect(aim.fired).toBe(false);
+      expect(aim.tracking).toBe(false);
+      expect(aim.x).toBeCloseTo(before.x, 5);
+    }
+    // It stayed: followed from now on, from where it is, but not cocked
+    // until its thumb has been up.
+    for (let i = 0; i < 4; i++) camera.show(theirs, (t += 33));
+    const adopted = input.sample(t);
+    expect(adopted.tracking).toBe(true);
+    expect(adopted.fired).toBe(false);
+    expect(adopted.armed).toBe(false);
+    expect(adopted.x).toBeGreaterThan(0.8);
+  });
+
+  it("stays on the player's hand when the tracker flickers to another", () => {
+    const { camera, input } = setup();
+    const mine = { thumbDegrees: 20, indexTip: [0.4, 0.45] as const, wrist: [0.42, 0.72] as const };
+    const theirs = { thumbDegrees: 75, indexTip: [0.8, 0.3] as const, wrist: [0.82, 0.57] as const };
+    let t = 0;
+    for (let i = 0; i < 12; i++) camera.show(mine, (t += 33));
+    const x = input.sample(t).x;
+    let fired = 0;
+    for (let i = 0; i < 30; i++) {
+      camera.show(i % 3 === 1 ? theirs : mine, (t += 33));
+      const aim = input.sample(t);
+      if (aim.fired) fired++;
+      if (aim.tracking) expect(Math.abs(aim.x - x)).toBeLessThan(0.02);
+    }
+    expect(fired).toBe(0);
   });
 
   it("kicks the crosshair up after a shot, and settles within a quarter second", () => {
