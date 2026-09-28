@@ -125,7 +125,7 @@ export const OVERWATCH_RIDGE: GameEntry = {
   title: "Overwatch Ridge",
   blurb: "A long valley and a rifle. Close one eye to scope.",
   about: "First light over a long valley, and a rifle with five rounds. Close one eye to look through the scope, and make every shot count.",
-  poster: "assets/overwatch-ridge/poster.webp",
+  poster: "assets/ridge/poster.webp",
   // Dawn haze down a valley.
   backdrop: {
     sky: [
@@ -148,6 +148,12 @@ export const OVERWATCH_RIDGE: GameEntry = {
     },
   },
   uses: { scope: true, eye: true },
+  // A valley lit at run time from one eye: it holds any shape from a tall laptop to an ultrawide.
+  stage: { minAspect: 1.1 },
+  async create(): Promise<Game> {
+    const { createGame } = await import("./ridge/index");
+    return createGame();
+  },
 };
 
 /** Every game, playable or Coming Soon, in the arcade's order. */

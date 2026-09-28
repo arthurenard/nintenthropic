@@ -117,12 +117,14 @@ test("Shift and the right mouse button scope, held or toggled, and the right but
   expect(errors).toEqual([]);
 });
 
-test("a game without a scope: no Scope settings, and the right button reloads as before", async ({ page }) => {
+test("a game without a scope: the right button reloads as before (the Scope settings are Overwatch Ridge's)", async ({ page }) => {
   await skipWelcome(page, { "handy.control.v1": "mouse" });
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#settings")).toBeVisible();
-  await expect(page.locator("#scope-group")).toBeHidden();
+  // Overwatch Ridge can be played, and it has a scope (and reads the eye).
+  await expect(page.locator("#scope-group")).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Close One Eye to Scope" })).toBeVisible();
   await page.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");

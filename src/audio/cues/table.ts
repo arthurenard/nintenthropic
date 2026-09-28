@@ -87,6 +87,7 @@ import {
 import { calibDone, calibHit, uiConfirm, uiTap } from "./ui";
 import { NIGHT_CUES } from "./night";
 import { ORBIT_CUES } from "./orbit";
+import { RIDGE_CUES } from "./ridge";
 
 /** piano_note_1 … piano_note_8: G major pentatonic, G4 to B5 (see PIANO_SCALE). */
 const pianoNotes: Record<string, CueSpec> = Object.fromEntries(
@@ -106,7 +107,7 @@ const pianoNotes: Record<string, CueSpec> = Object.fromEntries(
  */
 export type BusName = "sfx" | "world" | "ui" | "self";
 /** Sounds are synthesised a pack at a time: "core" at start, a game's pack when it loads. */
-export type Pack = "core" | "western" | "night" | "orbit";
+export type Pack = "core" | "western" | "night" | "orbit" | "ridge";
 
 export interface CueSpec {
   recipe: Recipe;
@@ -400,6 +401,7 @@ export const CUES: Record<string, CueSpec> = {
 
   // --- Orbital Decay (./orbit.ts) -------------------------------------------------------
   ...ORBIT_CUES,
+  ...RIDGE_CUES,
 };
 
 export const CUE_NAMES: readonly string[] = Object.keys(CUES);
