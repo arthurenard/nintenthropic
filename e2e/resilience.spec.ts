@@ -64,6 +64,26 @@ test("a hand gone in play holds the round, and a 3-2-1 brings it back", async ({
   expect(errors).toEqual([]);
 });
 
+test("with the camera hidden in play, the preview shows through the whole wait for the hand", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.addInitScript(() => localStorage.setItem("handy.settings.v1", JSON.stringify({ cameraInPlay: false })));
+  await playWithHand(page);
+  const pip = page.locator("#pip");
+  await expect(pip).toBeHidden();
+  await pose(page, null);
+  await expect.poll(async () => (await state(page)).hold, { timeout: 5_000 }).toBe("lost");
+  await expect(pip).toBeVisible();
+  // Found again: no longer lost, and still shown through the count.
+  await pose(page, handAt(0.5, 0.5));
+  await expect.poll(async () => (await state(page)).hold, { timeout: 5_000 }).toBe("count");
+  await expect(pip).not.toHaveClass(/lost/);
+  await expect(pip).toBeVisible();
+  // Play on: it steps aside again.
+  await expect.poll(async () => (await state(page)).held, { timeout: 5_000 }).toBe(false);
+  await expect(pip).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 test("swinging the hand out of the picture reloads without holding the round", async ({ page }) => {
   const errors = watchErrors(page);
   await playWithHand(page);
