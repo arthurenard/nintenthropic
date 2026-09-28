@@ -66,6 +66,24 @@ const MOTE: ParticleStyle = { life: [6, 11], size: [0.02, 0.02], color: hdr(1.3,
 const GOLD_FLASH = hdr(7, 4.6, 1.0);
 const GOLD_SPARK: ParticleStyle = { ...SPARK, color: hdr(6, 4.2, 0.8), color2: hdr(3, 1.6, 0.1), life: [0.2, 0.5] };
 
+// Reduced flashing: the flashes at a fifth of their brightness, fading in
+// and held a little longer, so they glow rather than strobe. (The glint is
+// not among them: it is small, a single steady flare, and the warning a
+// player needs most.)
+const SOFT = 0.2;
+const soft = (c: Color) => c.clone().multiplyScalar(SOFT);
+const FLASH_SOFT: ParticleStyle = { ...FLASH, life: [0.16, 0.22], color: soft(FLASH.color), color2: soft(FLASH.color2 as Color), alpha: [0.8, 0], fadeIn: 0.4 };
+const FLASH_CORE_SOFT: ParticleStyle = { ...FLASH_CORE, life: [0.14, 0.2], color: soft(FLASH_CORE.color), alpha: [0.8, 0], fadeIn: 0.4 };
+const GOLD_FLASH_SOFT = soft(GOLD_FLASH);
+const SPARK_SOFT: ParticleStyle = { ...SPARK, color: soft(SPARK.color), color2: soft(SPARK.color2 as Color) };
+// The fireball fills much of the view when it lands at your feet, and its
+// light is not rolled off by the grade's shoulder as a white-hot one is: it
+// is dimmed further, to a smouldering glow in the smoke.
+const FIRE_SOFT: ParticleStyle = { ...FIRE, color: FIRE.color.clone().multiplyScalar(0.08), color2: (FIRE.color2 as Color).clone().multiplyScalar(0.08), fadeIn: 0.35 };
+const FIRE_CORE_SOFT: ParticleStyle = { ...FIRE_CORE, life: [0.3, 0.4], color: FIRE_CORE.color.clone().multiplyScalar(0.08), alpha: [0.8, 0], fadeIn: 0.5 };
+/** A flashing light, reduced: a fifth as bright, fading three times as long. */
+const SOFT_LIGHT_TIME = 3;
+
 const SHARDS: DebrisStyle = { life: [2.5, 4], scale: [0.5, 1.4], gravity: 9.8, bounce: 0.3, spin: 18, drag: 0.2 };
 const SPLINTERS: DebrisStyle = { life: [2, 3.5], scale: [0.6, 1.3], gravity: 9.8, bounce: 0.25, spin: 20, drag: 0.4 };
 const CHIPS: DebrisStyle = { life: [1.5, 2.5], scale: [0.4, 0.9], gravity: 9.8, bounce: 0.35, spin: 14, drag: 0.3 };
@@ -103,6 +121,8 @@ export class Effects {
   readonly lights: LightPool;
   private random: () => number = Math.random;
   private readonly glassColor = col("#b9d0d6");
+  /** Settings.reducedFlashing, set by the game every frame: flashes glow instead. */
+  reducedFlashing = false;
 
   constructor(root: Group, quality: Quality) {
     const atlas = particleAtlas();
@@ -182,7 +202,7 @@ export class Effects {
           this.scatter(normal, 1.0, v).multiplyScalar(3 + r() * 5);
           this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, SPARK);
         }
-        this.additive.emit(at.x, at.y, at.z, 0, 0, 0, FLASH_CORE, 0.4);
+        this.additive.emit(at.x, at.y, at.z, 0, 0, 0, this.reducedFlashing ? FLASH_CORE_SOFT : FLASH_CORE, 0.4);
         if (hole) this.decals.add(at, normal, 0.05, r() * 6.28, tint.setRGB(1.6, 1.5, 1.4));
         break;
       case "glass":
@@ -296,12 +316,14 @@ export class Effects {
   /** A gun going off at `at`, pointing along `dir`. */
   muzzle(at: Vector3, dir: Vector3, golden: boolean, scale = 1): void {
     const r = this.random;
+    const reduced = this.reducedFlashing;
     t2.copy(at).addScaledVector(dir, 0.12 * scale);
-    this.additive.emit(t2.x, t2.y, t2.z, dir.x * 2, dir.y * 2, dir.z * 2, FLASH, scale, golden ? GOLD_FLASH : undefined);
-    this.additive.emit(at.x, at.y, at.z, 0, 0, 0, FLASH_CORE, scale);
+    const gold = golden ? (reduced ? GOLD_FLASH_SOFT : GOLD_FLASH) : undefined;
+    this.additive.emit(t2.x, t2.y, t2.z, dir.x * 2, dir.y * 2, dir.z * 2, reduced ? FLASH_SOFT : FLASH, scale, gold);
+    this.additive.emit(at.x, at.y, at.z, 0, 0, 0, reduced ? FLASH_CORE_SOFT : FLASH_CORE, scale);
     for (let i = 0; i < 5; i++) {
       this.scatter(dir, 0.35, v).multiplyScalar(4 + r() * 6);
-      this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, golden ? GOLD_SPARK : SPARK, 0.7);
+      this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, reduced ? SPARK_SOFT : golden ? GOLD_SPARK : SPARK, 0.7);
     }
     for (let i = 0; i < 3; i++) {
       this.scatter(dir, 0.5, v).multiplyScalar(0.4 + r() * 0.6);
@@ -311,7 +333,18 @@ export class Effects {
     // it would blow the shooter out to white; out here it lights his front,
     // his neighbours and the boards under him for a blink.
     t2.copy(at).addScaledVector(dir, 0.7);
-    this.lights.flash(t2, golden ? tint.setRGB(1, 0.8, 0.35) : tint.setRGB(1, 0.72, 0.4), 5 * scale, 6, 0.09);
+    this.flashLight(t2, golden ? tint.setRGB(1, 0.8, 0.35) : tint.setRGB(1, 0.72, 0.4), 5 * scale, 6, 0.09);
+  }
+
+  /**
+   * A light that flashes on for a moment (a muzzle, a blast, the Golden
+   * Revolver's shot). With reduced flashing it is a fifth as bright and
+   * fades three times as long. (The baked town takes no light: these fall
+   * on the people, the glass and the debris, not on the whole picture.)
+   */
+  flashLight(at: Vector3, color: Color, intensity: number, distance: number, duration: number): void {
+    if (this.reducedFlashing) this.lights.flash(at, color, intensity * SOFT, distance, duration * SOFT_LIGHT_TIME);
+    else this.lights.flash(at, color, intensity, distance, duration);
   }
 
   /** The player's own shot: a faint puff drifting at the crosshair (no gun on screen). */
@@ -366,14 +399,15 @@ export class Effects {
 
   explosion(at: Vector3, floorY: number): void {
     const r = this.random;
-    this.additive.emit(at.x, at.y, at.z, 0, 0, 0, FIRE_CORE, 1);
+    const reduced = this.reducedFlashing;
+    this.additive.emit(at.x, at.y, at.z, 0, 0, 0, reduced ? FIRE_CORE_SOFT : FIRE_CORE, 1);
     for (let i = 0; i < 16; i++) {
       v.set(r() - 0.5, r() * 0.8, r() - 0.5).normalize().multiplyScalar(2 + r() * 5);
-      this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, FIRE, 1);
+      this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, reduced ? FIRE_SOFT : FIRE, 1);
     }
     for (let i = 0; i < 26; i++) {
       v.set(r() - 0.5, r() - 0.2, r() - 0.5).normalize().multiplyScalar(8 + r() * 12);
-      this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, SPARK, 1.3);
+      this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, reduced ? SPARK_SOFT : SPARK, 1.3);
     }
     for (let i = 0; i < 20; i++) {
       v.set(r() - 0.5, r() * 0.6 + 0.2, r() - 0.5).normalize().multiplyScalar(1 + r() * 3);
@@ -384,7 +418,7 @@ export class Effects {
       tint.setRGB(0.35 + r() * 0.2, 0.28, 0.2);
       this.chips.emit(at.x, at.y, at.z, v.x, v.y, v.z, floorY, CHIPS, tint);
     }
-    this.lights.flash(at, tint.setRGB(1, 0.62, 0.3), 220, 18, 0.35);
+    this.flashLight(at, tint.setRGB(1, 0.62, 0.3), 220, 18, 0.35);
   }
 
   feathers(at: Vector3, count: number): void {
