@@ -9,8 +9,10 @@ import { FIXTURE } from "./e2e/fixture";
  *
  * The site under test is a build in "e2e" mode - the production build plus
  * the test hooks (?input=script, ?fail=...) - served by vite preview.
+ * HANDY_E2E_PORT moves it, so two checkouts can test side by side without
+ * one reusing the other's server.
  */
-const PORT = 4174;
+const PORT = Number(process.env.HANDY_E2E_PORT) || 4174;
 const OUT = "node_modules/.cache/handy-e2e/dist";
 
 export default defineConfig({

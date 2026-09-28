@@ -14,6 +14,21 @@ import type { Matrix } from "./homography";
 export const OFFSCREEN_MARGIN = 0.04;
 /** Extrapolation never looks further ahead than this, in ms. */
 export const MAX_PREDICTION = 60;
+/**
+ * A camera frame older than this is not a hand, in ms. A camera that stops
+ * delivering frames (unplugged, asleep, taken by another app) leaves its last
+ * frame behind; without this the crosshair would stand there, "tracking", and
+ * the game would never know the hand had gone.
+ */
+export const STALE_FRAME = 400;
+/**
+ * How long a hand that left the picture across an edge still counts as
+ * pointing off the screen, in ms: swinging the hand away is High Noon's
+ * reload, and the camera loses the hand the moment it leaves the picture.
+ */
+export const EXIT_MOMENT = 1200;
+/** A fingertip this close to the picture's edge, in fractions of it, is on its way out. */
+export const EXIT_EDGE = 0.04;
 /** A fold under this is still aiming; past it the hand moves with the shot. */
 const STILL_AIMING = 0.35;
 /** How long the aim from before a fold is trusted as the shot's aim, in ms. */
@@ -52,6 +67,8 @@ export class HandInput implements InputSource {
   private firedPending = false;
   private shotAt: [number, number] | null = null;
   private held: { at: number; position: [number, number] } | null = null;
+  /** When the hand was last seen, and whether it was then on its way out of the picture. */
+  private seen: { at: number; leaving: boolean } | null = null;
 
   constructor(
     private readonly source: HandSource,
@@ -79,6 +96,7 @@ export class HandInput implements InputSource {
     this.firedPending = false;
     this.offscreen = false;
     this.held = null;
+    this.seen = null;
   }
 
   private onFrame(frame: HandFrame): void {
@@ -99,6 +117,11 @@ export class HandInput implements InputSource {
       // The aim just before the thumb began to fold: where the shot goes,
       // since the hand moves with the fold.
       if (reading.armed && reading.travel < STILL_AIMING) this.held = { at: frame.capturedAt, position: at };
+      // Leaving: pointing past the view's edge, or the fingertip at the
+      // picture's own edge (the hand is about to be cut off by it).
+      const tip = reading.pointer;
+      const edge = tip ? Math.min(tip[0], 1 - tip[0], tip[1], 1 - tip[1]) : 1;
+      this.seen = { at: frame.capturedAt, leaving: this.offscreen || edge < EXIT_EDGE };
     } else {
       this.vx.reset();
       this.vy.reset();
@@ -126,7 +149,12 @@ export class HandInput implements InputSource {
     const reading = this.reading;
     const fired = this.firedPending;
     this.firedPending = false;
-    if (!reading?.unclamped) {
+    if (!reading?.unclamped || now - this.capturedAt > STALE_FRAME) {
+      // A hand last seen leaving the picture across an edge was swung off
+      // the screen, and says so for a moment; one that simply vanished
+      // mid-view (or a camera gone quiet) is only lost.
+      const seen = this.seen;
+      const gone = seen ? now - seen.at : Number.POSITIVE_INFINITY;
       return {
         x: this.last[0],
         y: this.last[1],
@@ -134,7 +162,7 @@ export class HandInput implements InputSource {
         armed: reading?.armed ?? false,
         fired: false,
         travel: 0,
-        offscreen: false,
+        offscreen: seen !== null && seen.leaving && gone <= EXIT_MOMENT,
         capturedAt: this.capturedAt,
       };
     }
