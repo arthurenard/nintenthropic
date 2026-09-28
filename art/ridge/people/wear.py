@@ -375,8 +375,10 @@ def webbing_bulk(tunic):
     """A solid stand-in for everything on the belt (band, pouches, bottle):
     what a coat worn over it has to clear."""
     rx, ry, cy = belt_ellipse(tunic)
-    return S.Tube([(0, cy + 0.010, 0.95), (0, cy + 0.004, 1.00), (0, cy, 1.05), (0, cy, 1.095)],
+    ring = S.Tube([(0, cy + 0.010, 0.95), (0, cy + 0.004, 1.00), (0, cy, 1.05), (0, cy, 1.095)],
                   [rx + 0.010, rx + 0.014, rx + 0.012, rx + 0.004], [ry + 0.035, ry + 0.058, ry + 0.058, ry + 0.030])
+    bottle = S.Ellipsoid((-0.150, 0.080, 0.920), (0.055, 0.070, 0.105), S.rot_z(-35))
+    return S.Union([ring, bottle], k=0.03)
 
 
 def brace_specs(tunic):
@@ -613,10 +615,12 @@ def cap_field():
         crown = np.maximum((rc - 1.0) * 0.12, np.abs(z - zc) - 0.013 * np.sqrt(np.clip(1.15 - rc ** 2, 0.05, 1.2)))
         cr = S.smin(band, crown, 0.02)
         # visor: a thin plate from the band's front edge, pitched down
-        rv = np.sqrt((x / (A + 0.034)) ** 2 + (y / (B + 0.060)) ** 2)
-        front = -y > 0.02
-        vz = zb + 0.001 - 0.36 * np.maximum(rv - 0.94, 0) * 0.12
-        vis = np.maximum(np.abs(z - vz) - 0.0018, np.maximum(rv - 1.0, 0.93 - rv) * 0.1)
+        rv = np.sqrt((x / (A + 0.029)) ** 2 + (y / (B + 0.054)) ** 2)
+        rb = np.sqrt((x / (A + 0.004)) ** 2 + (y / (B + 0.004)) ** 2)
+        front = -y > 0.03
+        dout = np.maximum(rb - 1.0, 0.0) * 0.105            # metres out from the band
+        vz = zb + 0.0015 - 0.56 * dout                      # pitched down ~30 degrees
+        vis = np.maximum(np.abs(z - vz) - 0.0018, np.maximum(rv - 1.0, 1.0 - rb) * 0.1)
         vis = np.where(front, vis, 1.0)
         return np.minimum(cr, vis).astype(np.float32)
     return S.Fn(f, (-0.14, -0.20, -0.02), (0.14, 0.16, 0.16))
@@ -648,7 +652,8 @@ def cap_rings(field, n=36):
     m = 13
     ph = np.linspace(-1.2, 1.2, m)
     chain = []
-    for (w, dz) in ((0.0, 0.0015), (0.030, -0.009), (0.058, -0.019), (0.058, -0.022), (0.030, -0.012), (0.0, -0.0015)):
+    ph = np.linspace(-1.0, 1.0, m)       # the peak covers the brow, not the temples
+    for (w, dz) in ((0.0, 0.0015), (0.026, -0.012), (0.050, -0.028), (0.050, -0.032), (0.026, -0.016), (0.0, -0.0015)):
         a, b = A + 0.004 + w * 0.5, B + 0.004 + w
         chain.append(rm.ring(np.stack([a * np.sin(ph), 0.006 - b * np.cos(ph), np.full(m, zb + dz)], 1)))
     uv = np.linspace(0, 1, m)
@@ -680,8 +685,8 @@ def cap_paint(color=OLIVE_DARK):
         # chin cord across the band's front, and a plain oval cockade
         cord = band & (y < -0.05) & (np.abs(z - (zb + 0.006)) < 0.0035)
         c[cord] = srgb(0.20, 0.18, 0.12)
-        cock = (np.hypot(x / 0.012, (z - (zb + 0.050 + 0.02)) / 0.010) < 1.0) & (y < -0.08)
-        c[cock] = srgb(0.40, 0.36, 0.27)
+        cock = (np.hypot(x / 0.008, (z - (zb + 0.050 + 0.02)) / 0.007) < 1.0) & (y < -0.08)
+        c[cock] = srgb(0.30, 0.28, 0.22)
         m[cock] = 1.0
         r[cock] = 0.35
         return np.clip(c, 0, 1), r, m
