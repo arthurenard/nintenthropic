@@ -42,12 +42,11 @@ TMP = os.path.join(OUT, "_tmp")
 os.makedirs(TMP, exist_ok=True)
 
 sc = bpy.context.scene
-ANIMALS = [o for o in sc.objects if o.type == "ARMATURE" and o.name in ("cow", "sheep", "goat", "eagle", "dog")]
-if ONLY:
-    ANIMALS = [a for a in ANIMALS if a.name in ONLY]
-MESH = {a.name: next(o for o in sc.objects if o.type == "MESH" and o.parent == a) for a in ANIMALS}
+ALL = [o for o in sc.objects if o.type == "ARMATURE" and o.name in ("cow", "sheep", "goat", "eagle", "dog")]
+ANIMALS = [a for a in ALL if not ONLY or a.name in ONLY]
+MESH = {a.name: next(o for o in sc.objects if o.type == "MESH" and o.parent == a) for a in ALL}
 SIZE = {"cow": 1.5, "sheep": 0.9, "goat": 0.95, "eagle": 0.8, "dog": 0.8}
-for a in ANIMALS:
+for a in ALL:
     ad = a.animation_data_create()
     for tr in ad.nla_tracks:
         tr.mute = True
@@ -213,7 +212,7 @@ def sheet(paths, cols, out, pad=4, bg=0.12):
 
 
 def show_only(names):
-    for a in ANIMALS:
+    for a in ALL:
         vis = a.name in names
         MESH[a.name].hide_render = not vis
         a.hide_render = not vis

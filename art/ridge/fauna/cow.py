@@ -547,8 +547,9 @@ def clip_idle(body):
 
 def clip_look_up(body):
     """1.8 s, from grazing: the head stops chewing, comes up and settles
-    looking straight ahead (+Z in glTF) and 14 degrees up - at a player 60 m
-    above a cow 250 m away. The last frame holds (the game clamps it)."""
+    looking straight ahead (+Z in glTF), the face tipped 24 degrees higher
+    than when standing - up at a player on the ridge 60 m above. The last
+    frame holds (the game clamps it)."""
     T = 1.8
     c = L.Clip("cow.look_up", T, False)
     g = rest(body, **graze_pose(body, 0.0, 0.0))

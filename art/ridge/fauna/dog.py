@@ -96,8 +96,7 @@ class Sculpt:
     def leg(s, front):
         x = lambda v: s * v
         if front:
-            parts = [S.RoundCone((x(0.09), -0.225, 0.33), (x(0.085), -0.27, 0.11), 0.036, 0.025),
-                     S.Ellipsoid((x(0.09), -0.195, 0.22), (0.02, 0.035, 0.09), S.rot_x(10)),      # feathering
+            parts = [S.RoundCone((x(0.09), -0.225, 0.33), (x(0.085), -0.27, 0.11), 0.037, 0.025),
                      S.RoundCone((x(0.085), -0.27, 0.10), (x(0.085), -0.29, 0.035), 0.025, 0.027)]
         else:
             parts = [S.RoundCone((x(0.098), 0.16, 0.33), (x(0.085), 0.355, 0.165), 0.048, 0.022),
@@ -143,7 +142,7 @@ class Sculpt:
     def detail(self, P, fur):
         P = np.asarray(P, np.float64)
         fl = self.flow(P)
-        d = fur * 0.0018 * (flow_noise(P, fl, 20.0, 160.0, seed=73) - 0.5)
+        d = fur * 0.0010 * (flow_noise(P, fl, 12.0, 160.0, seed=73) - 0.5)
         hx, hs, hh = HEAD.local(P)
         fh = np.tile(-HEAD.S, (len(P), 1))
         d += (1 - fur) * 0.0005 * (flow_noise(P, fh, 25.0, 200.0, seed=74) - 0.5)

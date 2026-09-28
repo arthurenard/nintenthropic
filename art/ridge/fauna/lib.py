@@ -473,6 +473,9 @@ def bake_clip(body, clip, arm_ob):
     """Sample a clip at 30 fps, run its post passes, key it into an action."""
     rig = body.rig
     n = int(round(clip.duration * FPS))
+    # a loop whose length is not whole frames would not close (its last
+    # frame would not be its first): refuse it rather than hitch every cycle
+    assert not clip.loop or abs(clip.duration * FPS - n) < 1e-6, f"{clip.name}: {clip.duration} s is not whole frames"
     sols = [body.solve(clip.sample(f / FPS)) for f in range(n + 1)]
     for p in clip.post:
         p(body, sols, clip)

@@ -11,7 +11,9 @@ scripts in this folder, in Blender, from nothing.
 ```
 
 or the `animals` stage of `art/ridge/build.py`. A full build takes about
-__BUILD__ on an M-series Mac (the cow is the slowest). `--only` writes a partial
+10-12 minutes alone on an M-series Mac, about 20 with other bakes running
+(the cow is the slowest: her atlas is the biggest bake). Deterministic: every
+noise is seeded. `--only` writes a partial
 file to `art/ridge/build/fauna/` instead (it never overwrites the real one);
 `--blend` saves the scene for the review renders:
 
@@ -57,15 +59,15 @@ the player on top of a clip, rotate `neck.2` and `head` after the mixer update.
 | `cow.idle` | 6.0 | yes | standing, chewing the cud, looking about, ears and tail busy |
 | `cow.graze` | 8.0 | yes | head down, tearing grass, chewing; a fore hoof steps forward (2.9 s) and back (6.2 s), a hind hoof stamps (4.7 s); tail swishes |
 | `cow.walk` | 1.2 | yes | **0.9 m/s**, lateral-sequence walk, head nodding twice a cycle |
-| `cow.look_up` | 1.8 | no | from `cow.graze`: the head comes up and **ends looking straight along +Z, raised 14 deg** (at a player 60 m up and 250 m away); hold the last frame. For "every cow turns to look at you", turn each cow's root toward the player while this plays |
+| `cow.look_up` | 1.8 | no | from `cow.graze`: the head comes up and **ends looking straight along +Z, the face tipped 24 deg higher than when standing** (up at a player on the ridge), ears forward; hold the last frame. For "every cow turns to look at you", turn each cow's root toward the player while this plays (the scope sees every cow's face, bell glinting) |
 | `sheep.idle` | 5.0 | yes | standing, chewing, looking about |
 | `sheep.graze` | 6.0 | yes | quick nibbles, a step forward and back, tail wags |
 | `sheep.walk` | 0.8 | yes | **0.7 m/s** |
-| `sheep.run` | 0.46 | yes | **2.6 m/s**, a bounding trot (to flee a shot) |
+| `sheep.run` | 0.47 | yes | **2.6 m/s**, a bounding trot (to flee a shot) |
 | `goat.stand` | 6.0 | yes | alert on the ledge: head snapping round and holding, ears turning, tail flicks |
 | `goat.bleat` | 1.6 | no | head up and forward, jaw open and trembling 0.34-1.0 s; ends in the `goat.stand` pose |
 | `goat.hop` | 1.9 | no | the jump to a higher ledge - see below; ends in the `goat.stand` pose |
-| `goat.walk` | 0.75 | yes | **0.8 m/s** (spare) |
+| `goat.walk` | 0.73 | yes | **0.8 m/s** (spare) |
 | `dog.idle` | 5.0 | yes | standing, panting, tail wagging, looking about |
 | `dog.walk` | 0.7 | yes | **1.0 m/s** |
 | `dog.run` | 0.4 | yes | **4.5 m/s** rotary gallop, ears flying |
@@ -103,7 +105,10 @@ Bones: `body` (root, at the hips) - `neck` - `head`; `body` - `tail`; `body` -
 The mesh holds two sets of wings: the **spread** wings (on `wing.*`) and
 sculpted **folded** wings (on `fold.*`). The set not in use is scaled to 0.001
 in every clip (it collapses inside the body), so nothing is needed from the
-game - just don't override bone scales.
+game - just don't override bone scales, and always play a clip (the bind pose
+shows both sets). When crossfading from a perched clip to a flying one, cut
+rather than fade the scales (a fade shows both sets half-size for a moment);
+`eagle.land` does its own swap.
 
 | Clip | s | Loop | Notes |
 | --- | --- | --- | --- |
@@ -125,9 +130,17 @@ the scope), held to the end. Face the root toward the player before landing.
 
 | Animal | Triangles | Atlas |
 | --- | --- | --- |
-__TRIS__
+| cow | 5,945 (body 4,800, horns 220, strap 560, bell 365) | 1024^2 |
+| sheep | 3,920 (horns 320) | 512^2 |
+| goat | 4,540 (horns 340) | 512^2 |
+| eagle | 7,997 (body 3,800 with a dense head, spread wings 2 x 1,300, folded wings 2 x 800) | 1024^2 |
+| dog | 4,195 | 512^2 |
 
-File: __SIZE__.
+File: 1.9 MB (Draco meshes, WebP textures).
+
+Seen through the 6x scope a cow at 250 m is about 60 px tall, a goat at 600 m
+about 15 px, a sheep at 700 m about 10 px; the eagle landed 2.5 m away fills
+the glass from its crown to its belly.
 
 ## How it is made
 

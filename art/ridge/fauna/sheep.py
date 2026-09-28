@@ -290,7 +290,7 @@ def skeleton():
 # ------------------------------------------------------------------ clips
 
 WALK_SPEED, WALK_T = 0.7, 0.8
-RUN_SPEED, RUN_T = 2.6, 0.46
+RUN_SPEED, RUN_T = 2.6, 14 / 30       # a loop must be whole frames long
 
 
 def graze_pose(reach=0.0, sweep=0.0):
@@ -353,7 +353,7 @@ def clip_walk(body):
 
 
 def clip_run(body):
-    """2.6 m/s bounding trot (0.46 s cycle, 1.2 m stride): diagonal pairs,
+    """2.6 m/s bounding trot (0.47 s cycle, 1.2 m stride): diagonal pairs,
     a float between them, head up, the fleece bouncing."""
     T, v = RUN_T, RUN_SPEED
     c = L.Clip("sheep.run", T, True)

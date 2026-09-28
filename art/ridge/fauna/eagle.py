@@ -183,9 +183,11 @@ class Sculpt:
             start = H.p(0, 0.030, 0.004)
             out = nrm(H.X * s * 0.88 + H.S * 0.47)
             surf = march_out(skullf, start, out)
-            self.eyes.append(surf - out * 0.0045)
-            b = surf + H.H * 0.0105 - H.X * s * 0.0008 + H.S * 0.002
-            brows.append(S.Ellipsoid(b, (0.0115, 0.028, 0.0072), H.R @ S.rot_y(16 * s)))
+            e = surf - out * 0.0045
+            self.eyes.append(e)
+            b = e + H.H * 0.0102 + out * 0.0035 - H.S * 0.002
+            # tilted down toward the bill: a frown, not a worried look
+            brows.append(S.Ellipsoid(b, (0.0125, 0.030, 0.0046), H.R @ S.rot_y(-16 * s)))
         eyes = [S.Sphere(e, 0.0093) for e in self.eyes]
         head = S.Union([skullf, cere] + brows, k=0.008)
         head = S.Union([head] + eyes, k=0.0025)
@@ -252,7 +254,7 @@ class Sculpt:
         fv = vv - iv
         tip = 1.0 - 0.45 * (2 * fv - 1) ** 2
         edge = tip - fu
-        h = np.where(edge > 0, fu / np.maximum(tip, 1e-3), 0.0)
+        h = np.clip(fu / np.maximum(tip, 1e-3), 0, 1) * smoothstep(0.0, 0.12, edge)
         rnd = (np.sin(iu * 12.9898 + iv * 78.233 + seed) * 43758.5453) % 1.0
         return h, edge, fv, rnd
 
@@ -317,12 +319,12 @@ class Sculpt:
         bc = mix(np.tile(srgb(0.46, 0.48, 0.52), (n, 1)), np.tile(srgb(0.08, 0.08, 0.09), (n, 1)), tipness)
         c[bill] = bc[bill]
         r[bill] = 0.28
-        ce = (hx / 0.0175) ** 2 + ((hs - 0.054) / 0.0145) ** 2 + ((hh - 0.004) / 0.0165) ** 2
-        cere = smoothstep(1.25, 1.0, ce) * reg["head"] * (~bill)
+        ce = (hx / 0.0155) ** 2 + ((hs - 0.056) / 0.0125) ** 2 + ((hh - 0.004) / 0.014) ** 2
+        cere = smoothstep(1.25, 1.0, ce) * smoothstep(-0.006, -0.002, hh) * reg["head"] * (~bill)
         gline = np.abs(hh + 0.0085 + 0.08 * (hs - 0.05))
-        gape = smoothstep(0.0024, 0.0012, gline) * smoothstep(0.034, 0.04, hs) * smoothstep(0.058, 0.05, hs) * reg["head"] * (~bill)
+        gape = smoothstep(0.0018, 0.0008, gline) * smoothstep(0.040, 0.044, hs) * smoothstep(0.055, 0.050, hs) * reg["head"] * (~bill)
         yellow = srgb(0.93, 0.74, 0.26) * (0.9 + 0.15 * value_noise(P, 800, seed=83)[:, None])
-        yl = np.clip(np.maximum(cere, gape), 0, 1)
+        yl = np.clip(np.maximum(cere, 0.0 * gape), 0, 1)
         c = mix(c, yellow, yl)
         r = r * (1 - yl) + 0.45 * yl
         # eyes: hazel-gold iris, dark ring, pupil looking forward, wet
@@ -495,7 +497,7 @@ def fly(bd, **kw):
     p.update({"neck": (-4.0, 0, 0), "head": (12.0, 0, 0)})
     for sd, s in SIDES:
         leg = sd.lower()
-        p[f"ik.{leg}"] = (s * 0.04, 0.21, 0.285)
+        p[f"ik.{leg}"] = (s * 0.035, 0.22, 0.30)
         p[f"rot.{leg}"] = (150.0, 0, 0)
     for k, v in kw.items():
         p[k.replace("__", ".")] = v
@@ -695,7 +697,7 @@ def build(quick=False, size=1024):
             jobs.append(dict(ob=w, field=sp, paint=sc.wing_paint(s), relief=sc.wing_relief(s), weight=0.6, uv_angle=66,
                              skin=("spread", s)))
             f = L.sculpt_mesh(f"eagle.fold.{sd}", fo, fo.lo - 0.01, fo.hi + 0.01, 0.005 if quick else 0.003,
-                              300 if quick else 550, symmetry=False, blur=0.6)
+                              300 if quick else 800, symmetry=False, blur=0.6)
             jobs.append(dict(ob=f, field=fo, paint=sc.wing_paint(s, True), relief=sc.wing_relief(s, True), weight=0.8,
                              skin=f"fold.{sd}"))
     with L.stage("eagle: atlas"):

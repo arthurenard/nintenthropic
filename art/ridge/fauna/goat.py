@@ -431,11 +431,11 @@ def clip_hop(body):
     return c
 
 
-WALK_SPEED, WALK_T = 0.8, 0.75
+WALK_SPEED, WALK_T = 0.8, 22 / 30      # a loop must be whole frames long
 
 
 def clip_walk(body):
-    """0.8 m/s lateral-sequence walk (0.75 s cycle, 0.6 m stride), head high."""
+    """0.8 m/s lateral-sequence walk (0.73 s cycle, 0.59 m stride), head high."""
     T, v = WALK_T, WALK_SPEED
     c = L.Clip("goat.walk", T, True)
     p = stand_pose(body)
