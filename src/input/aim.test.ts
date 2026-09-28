@@ -2,7 +2,7 @@
 // tests/test_shot_calibration.py: one camera, the same poses, the same numbers.
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
-import { AimController, Recoil, type AimOptions, type AimReading } from "./aim";
+import { AimController, Recoil, STEADINESS, type AimOptions, type AimReading, type Steadiness } from "./aim";
 import { angleBetween, palmSpan, thumbAngle, thumbExtension, thumbPull } from "./hand";
 import { boxMapping, type Matrix } from "./homography";
 import { asCameraSees, makeHand, type HandPose } from "./synthetic";
@@ -340,5 +340,58 @@ describe("recoil", () => {
       recoil.offset(shot * 0.5);
     }
     expect(recoil.shots.length).toBeLessThan(10);
+  });
+});
+
+describe("Aim Steadiness", () => {
+  it("is today's filter when Balanced, exactly", () => {
+    expect(STEADINESS.balanced).toEqual({ minCutoff: 1.2, beta: 0.8 });
+    expect(AimController.steadiness).toBe("balanced");
+    expect(new AimController().smoothing).toEqual({ minCutoff: 1.2, beta: 0.8 });
+  });
+
+  it("holds a trembling hand steadier when Steady, and less so when Responsive", () => {
+    expect(STEADINESS.steady.minCutoff).toBeLessThan(STEADINESS.balanced.minCutoff);
+    expect(STEADINESS.responsive.minCutoff).toBeGreaterThan(STEADINESS.balanced.minCutoff);
+    const noise = gaussian(seededRandom(7));
+    const tremble = Array.from({ length: 90 }, () => noise(0, 0.004));
+    const spread = (steadiness: Steadiness) => {
+      const control = new AimController({ mapping: PROFILE });
+      control.setSteadiness(steadiness);
+      const xs: number[] = [];
+      tremble.forEach((dx, i) => {
+        const reading = control.update(seen({ thumbDegrees: 10, indexTip: [0.5 + dx, 0.45] }), i / 30);
+        if (i > 30 && reading.position) xs.push(reading.position[0]);
+      });
+      const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+      return Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
+    };
+    expect(spread("steady")).toBeLessThan(spread("balanced"));
+    expect(spread("balanced")).toBeLessThan(spread("responsive"));
+  });
+
+  it("changes mid-game without a jump", () => {
+    const control = new AimController({ mapping: PROFILE });
+    let last: [number, number] | null = null;
+    for (let i = 0; i < 20; i++) last = control.update(seen({ thumbDegrees: 10, indexTip: [0.4, 0.45] }), i / 30).position;
+    control.setSteadiness("steady");
+    expect(control.smoothing).toEqual(STEADINESS.steady);
+    // The hand moves on: the next reading starts from where the crosshair was,
+    // not from the raw fingertip, as a filter started afresh would.
+    const moved = seen({ thumbDegrees: 10, indexTip: [0.6, 0.45] });
+    const next = control.update(moved, 20 / 30).position!;
+    const raw = controller().update(moved, 0).position!;
+    expect(Math.abs(next[0] - last![0])).toBeLessThan(Math.abs(raw[0] - last![0]) / 2);
+  });
+
+  it("starts every new controller at the player's choice", () => {
+    try {
+      AimController.steadiness = "responsive";
+      expect(new AimController().smoothing).toEqual(STEADINESS.responsive);
+      // A controller given its own smoothing keeps it.
+      expect(new AimController({ minCutoff: 3, beta: 0 }).smoothing).toEqual({ minCutoff: 3, beta: 0 });
+    } finally {
+      AimController.steadiness = "balanced";
+    }
   });
 });

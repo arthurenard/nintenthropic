@@ -2,6 +2,7 @@
 import "./ui/base.css";
 import "./app/screens.css";
 import "./app/play.css";
+import "./app/settings.css";
 import { App, type AppOptions } from "./app/app";
 
 async function main(): Promise<void> {

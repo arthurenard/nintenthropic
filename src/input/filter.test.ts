@@ -157,3 +157,25 @@ describe("the velocity of a filtered signal", () => {
     expect(velocity.value).toBe(0);
   });
 });
+
+describe("retuning a filter", () => {
+  it("takes new settings and keeps what it has seen", () => {
+    const filter = new PointFilter();
+    expect([filter.minCutoff, filter.beta]).toEqual([1.2, 0.8]);
+    for (let step = 0; step < 10; step++) filter.filter([0.2, 0.2], step / 30);
+    filter.tune(0.6, 0.5);
+    expect([filter.minCutoff, filter.beta]).toEqual([0.6, 0.5]);
+    // Not started afresh: a jump is smoothed, not passed straight through.
+    const [x] = filter.filter([0.8, 0.2], 10 / 30);
+    expect(x).toBeGreaterThan(0.2);
+    expect(x).toBeLessThan(0.5);
+  });
+
+  it("refuses settings that make no sense", () => {
+    const filter = new OneEuroFilter();
+    expect(() => filter.tune(0, 0.8)).toThrow(RangeError);
+    expect(() => filter.tune(1, -1)).toThrow(RangeError);
+    expect(() => new OneEuroFilter(-1)).toThrow(RangeError);
+    expect([filter.minCutoff, filter.beta]).toEqual([1.2, 0.8]);
+  });
+});

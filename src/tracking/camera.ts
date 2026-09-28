@@ -29,7 +29,8 @@ export function classifyCameraError(error: unknown): CameraTrouble {
 
 const REMEMBERED = "handy.camera.v1";
 
-function remembered(): string | null {
+/** The camera that opened last time, if this window kept it. */
+export function remembered(): string | null {
   try {
     return localStorage.getItem(REMEMBERED);
   } catch {
@@ -42,6 +43,28 @@ function remember(deviceId: string): void {
     localStorage.setItem(REMEMBERED, deviceId);
   } catch {
     // A window that cannot store anything asks for the default camera next time.
+  }
+}
+
+/** The camera the player chose in Settings: asked for by name, ahead of the one used last. */
+const CHOSEN = "handy.camera-choice.v1";
+
+export function chosenCamera(): string | null {
+  try {
+    const id: unknown = JSON.parse(localStorage.getItem(CHOSEN) ?? "null");
+    return typeof id === "string" && id ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps the player's choice of camera (null: the one used last) for the next time one opens. */
+export function chooseCamera(deviceId: string | null): void {
+  try {
+    if (deviceId) localStorage.setItem(CHOSEN, JSON.stringify(deviceId));
+    else localStorage.removeItem(CHOSEN);
+  } catch {
+    // Not kept: the camera used last opens, as before.
   }
 }
 
@@ -64,24 +87,34 @@ export interface Camera {
 }
 
 /**
- * Opens the user-facing camera at 1280x720 if it offers it, preferring the one
- * used last, and plays it into `video` (muted, inline, never shown full size).
+ * Opens the user-facing camera at 1280x720 if it offers it - the one chosen
+ * in Settings, else preferring the one used last - and plays it into `video`
+ * (muted, inline, never shown full size).
  */
 export async function openCamera(video: HTMLVideoElement): Promise<Camera> {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new CameraError("insecure");
   const last = remembered();
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
+  const chosen = chosenCamera();
+  const request = (deviceId?: ConstrainDOMString) =>
+    navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
         width: { ideal: 1280 },
         height: { ideal: 720 },
         frameRate: { ideal: 60 },
         facingMode: "user",
-        ...(last ? { deviceId: { ideal: last } } : {}),
+        ...(deviceId ? { deviceId } : {}),
       },
     });
+  let stream: MediaStream;
+  try {
+    try {
+      stream = await request(chosen ? { exact: chosen } : last ? { ideal: last } : undefined);
+    } catch (error) {
+      // The chosen camera has gone: the one used last, or any, will do.
+      if (!chosen || classifyCameraError(error) !== "missing") throw error;
+      stream = await request(last && last !== chosen ? { ideal: last } : undefined);
+    }
   } catch (error) {
     throw new CameraError(classifyCameraError(error), error);
   }

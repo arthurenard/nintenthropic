@@ -17,6 +17,7 @@ import {
   travelTime,
   variedRate,
   voiceLevel,
+  volumeGain,
 } from "./routing";
 import { townImpulse } from "./impulse";
 
@@ -264,5 +265,28 @@ describe("the town's reverb", () => {
       return s;
     };
     expect(energy(0.6, 0.8)).toBeLessThan(energy(0.05, 0.25) * 0.05);
+  });
+});
+
+describe("the volume slider", () => {
+  it("runs from silence to full", () => {
+    expect(volumeGain(0)).toBe(0);
+    expect(volumeGain(1)).toBe(1);
+  });
+
+  it("spreads the change evenly to the ear: half way is about -12 dB", () => {
+    expect(20 * Math.log10(volumeGain(0.5))).toBeCloseTo(-12, 0);
+    let last = 0;
+    for (let step = 1; step <= 10; step++) {
+      const gain = volumeGain(step / 10);
+      expect(gain).toBeGreaterThan(last);
+      last = gain;
+    }
+  });
+
+  it("holds anything out of range to the range", () => {
+    expect(volumeGain(-0.5)).toBe(0);
+    expect(volumeGain(Number.NaN)).toBe(0);
+    expect(volumeGain(4)).toBe(1);
   });
 });

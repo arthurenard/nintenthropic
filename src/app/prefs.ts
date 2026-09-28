@@ -1,9 +1,12 @@
 /**
  * What the page remembers between visits. Everything kept is a convenience:
  * a window that cannot store anything plays just the same, only without
- * remembering.
+ * remembering. Every key is versioned and holds JSON; every read is checked,
+ * and anything that does not look right is read as the default.
  */
-import type { InputKind } from "../engine/types";
+import type { Difficulty, InputKind } from "../engine/types";
+import { STEADINESS, type Steadiness } from "../input/aim";
+import type { CrosshairStyle } from "./crosshair";
 
 const KEYS = {
   welcomed: "handy.welcomed.v1",
@@ -11,9 +14,15 @@ const KEYS = {
   control: "handy.control.v1",
   cameraOpened: "handy.camera-opened.v1",
   downloaded: "handy.downloaded.v1",
-  best: (game: string) => `handy.best.v1.${game}`,
   unlocks: "handy.unlocks.v1",
+  settings: "handy.settings.v1",
+  tipsSeen: "handy.tips-seen.v1",
 };
+
+/** Everything Handy keeps starts with this, in both storages. */
+const PREFIX = "handy.";
+/** A saved aim, one per camera and video size (see calibration/storage.ts). */
+const AIM_PREFIX = "handy.aim.";
 
 function read<T>(storage: Storage | undefined, key: string): T | null {
   try {
@@ -26,14 +35,15 @@ function read<T>(storage: Storage | undefined, key: string): T | null {
 
 function write(storage: Storage | undefined, key: string, value: unknown): boolean {
   try {
-    storage?.setItem(key, JSON.stringify(value));
+    if (!storage) return false;
+    storage.setItem(key, JSON.stringify(value));
     return true;
   } catch {
     return false;
   }
 }
 
-const local = (): Storage | undefined => {
+export const local = (): Storage | undefined => {
   try {
     return localStorage;
   } catch {
@@ -93,11 +103,201 @@ export const prefs = {
   },
 };
 
-export function readBest(game: string): number | null {
-  const best = read<number>(local(), KEYS.best(game));
-  return typeof best === "number" && Number.isFinite(best) ? best : null;
+// --- the Settings sheet's choices ----------------------------------------------------------
+
+export interface Preferences {
+  /** The master volume, 0..1 as the slider sets it; mute is apart from it. */
+  volume: number;
+  difficulty: Difficulty;
+  crosshair: CrosshairStyle;
+  steadiness: Steadiness;
+  /** The camera's picture in the corner during play (the aim setup always shows it). */
+  cameraInPlay: boolean;
+  /** The player's choice, or null to follow the system's reduced-motion setting. */
+  reduceMotion: boolean | null;
+  reduceFlashing: boolean;
 }
 
-export function writeBest(game: string, score: number): void {
-  write(local(), KEYS.best(game), score);
+export const DEFAULT_PREFERENCES: Readonly<Preferences> = Object.freeze({
+  volume: 1,
+  difficulty: "standard",
+  crosshair: Object.freeze({ size: "standard", highContrast: false }),
+  steadiness: "balanced",
+  cameraInPlay: true,
+  reduceMotion: null,
+  reduceFlashing: false,
+});
+
+const DIFFICULTIES: readonly Difficulty[] = ["relaxed", "standard"];
+const SIZES: readonly CrosshairStyle["size"][] = ["standard", "large"];
+const STEADINESSES = Object.keys(STEADINESS) as Steadiness[];
+
+function oneOf<T>(value: unknown, options: readonly T[], fallback: T): T {
+  return options.includes(value as T) ? (value as T) : fallback;
+}
+const flag = (value: unknown, fallback: boolean): boolean => (typeof value === "boolean" ? value : fallback);
+
+/** The player's settings, each one checked on its own: one bad value costs only itself. */
+export function loadPreferences(storage: Storage | undefined = local()): Preferences {
+  const saved = read<Record<string, unknown>>(storage, KEYS.settings);
+  const raw = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  const defaults = DEFAULT_PREFERENCES;
+  const crosshair = raw.crosshair && typeof raw.crosshair === "object" ? (raw.crosshair as Record<string, unknown>) : {};
+  const volume = raw.volume;
+  return {
+    volume: typeof volume === "number" && Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : defaults.volume,
+    difficulty: oneOf(raw.difficulty, DIFFICULTIES, defaults.difficulty),
+    crosshair: {
+      size: oneOf(crosshair.size, SIZES, defaults.crosshair.size),
+      highContrast: flag(crosshair.highContrast, defaults.crosshair.highContrast),
+    },
+    steadiness: oneOf(raw.steadiness, STEADINESSES, defaults.steadiness),
+    cameraInPlay: flag(raw.cameraInPlay, defaults.cameraInPlay),
+    reduceMotion: typeof raw.reduceMotion === "boolean" ? raw.reduceMotion : defaults.reduceMotion,
+    reduceFlashing: flag(raw.reduceFlashing, defaults.reduceFlashing),
+  };
+}
+
+/** Keeps the settings for next time; false if this window cannot store anything. */
+export function savePreferences(value: Preferences, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.settings, value);
+}
+
+// --- one-time tips ------------------------------------------------------------------------------
+
+/**
+ * A set of strings that keeps itself: every change is written through at
+ * once, so nothing is lost if the tab closes. The one-time tips a player has
+ * seen live in one (Settings.tipsSeen), which the game adds to.
+ */
+export class PersistentSet extends Set<string> {
+  private readonly key: string;
+  private readonly storage: () => Storage | undefined;
+
+  constructor(key: string, storage: () => Storage | undefined = local) {
+    super();
+    this.key = key;
+    this.storage = storage;
+    const saved = read<unknown>(storage(), key);
+    if (Array.isArray(saved)) for (const item of saved) if (typeof item === "string") super.add(item);
+  }
+
+  override add(value: string): this {
+    if (this.has(value)) return this;
+    super.add(value);
+    this.save();
+    return this;
+  }
+
+  override delete(value: string): boolean {
+    const had = super.delete(value);
+    if (had) this.save();
+    return had;
+  }
+
+  override clear(): void {
+    super.clear();
+    this.save();
+  }
+
+  /** Forgets what is in memory only (the storage was cleared as a whole). */
+  forgetInMemory(): void {
+    super.clear();
+  }
+
+  private save(): void {
+    write(this.storage(), this.key, [...this]);
+  }
+}
+
+export const tipsSeen = (storage: () => Storage | undefined = local): PersistentSet => new PersistentSet(KEYS.tipsSeen, storage);
+
+// --- personal records -------------------------------------------------------------------------
+
+/** Records are kept apart for the hand and for a pointer, which is far easier to aim. */
+export type ControlClass = "hand" | "pointer";
+
+export const controlClass = (kind: InputKind): ControlClass => (kind === "hand" ? "hand" : "pointer");
+
+/** A personal best: the score, how the round ended, and when (ms since 1970). */
+export interface Best {
+  score: number;
+  outcome: string;
+  at: number;
+}
+
+export function bestKey(game: string, difficulty: Difficulty, control: ControlClass): string {
+  return `handy.best.v2.${game}.${difficulty}.${control}`;
+}
+
+export function readBest(game: string, difficulty: Difficulty, control: ControlClass, storage: Storage | undefined = local()): Best | null {
+  const saved = read<Partial<Best>>(storage, bestKey(game, difficulty, control));
+  if (!saved || typeof saved !== "object") return null;
+  const { score, outcome, at } = saved;
+  if (typeof score !== "number" || !Number.isFinite(score) || score < 0) return null;
+  return {
+    score,
+    outcome: typeof outcome === "string" ? outcome : "",
+    at: typeof at === "number" && Number.isFinite(at) ? at : 0,
+  };
+}
+
+export function writeBest(game: string, difficulty: Difficulty, control: ControlClass, best: Best, storage: Storage | undefined = local()): boolean {
+  return write(storage, bestKey(game, difficulty, control), best);
+}
+
+/** A round weighed against the best before it. */
+export interface Verdict {
+  /** This round is the new best. */
+  best: boolean;
+  /** The best before this round, if there was one. */
+  previous: Best | null;
+}
+
+/** A score is a new best when it scores at all and beats the one before, if any. */
+export function judge(score: number, previous: Best | null): Verdict {
+  return { best: score > 0 && (previous === null || score > previous.score), previous };
+}
+
+// --- forgetting ------------------------------------------------------------------------------------
+
+function keysOf(storage: Storage | undefined, prefix: string): string[] {
+  const keys: string[] = [];
+  try {
+    if (!storage) return keys;
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+  } catch {
+    // no storage: nothing kept
+  }
+  return keys;
+}
+
+function remove(storage: Storage | undefined, keys: string[]): void {
+  for (const key of keys) {
+    try {
+      storage?.removeItem(key);
+    } catch {
+      // nothing to do: it could not have been kept either
+    }
+  }
+}
+
+/** Is any aim saved in this browser? (Which camera it is for is known only once one opens.) */
+export function hasSavedAim(storage: Storage | undefined = local()): boolean {
+  return keysOf(storage, AIM_PREFIX).length > 0;
+}
+
+/** Forgets every saved aim, for every camera; says how many there were. */
+export function forgetSavedAims(storage: Storage | undefined = local()): number {
+  const keys = keysOf(storage, AIM_PREFIX);
+  remove(storage, keys);
+  return keys.length;
+}
+
+/** Forgets everything Handy keeps in this browser: aims, records, settings, tips, the lot. */
+export function forgetEverything(storages: (Storage | undefined)[] = [local(), session()]): void {
+  for (const storage of storages) remove(storage, keysOf(storage, PREFIX));
 }

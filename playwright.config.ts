@@ -9,10 +9,12 @@ import { FIXTURE } from "./e2e/fixture";
  *
  * The site under test is a build in "e2e" mode - the production build plus
  * the test hooks (?input=script, ?fail=...) - served by vite preview.
- * HANDY_E2E_PORT moves it, so two checkouts can test side by side without
- * one reusing the other's server.
  */
-const PORT = Number(process.env.HANDY_E2E_PORT) || 4174;
+/** The environment, without depending on Node's type definitions. */
+const env: Record<string, string | undefined> =
+  (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+/** HANDY_E2E_PORT lets two checkouts run their tests side by side, each on its own build. */
+const PORT = Number(env.HANDY_E2E_PORT) || 4174;
 const OUT = "node_modules/.cache/handy-e2e/dist";
 
 export default defineConfig({
@@ -21,8 +23,8 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  retries: env.CI ? 1 : 0,
+  reporter: env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL: `http://127.0.0.1:${PORT}/`,
@@ -43,7 +45,7 @@ export default defineConfig({
   projects: [
     {
       name: "flows",
-      testMatch: /(mouse|camera|scripted|resilience)\.spec\.ts/,
+      testMatch: /(mouse|camera|scripted|settings|resilience)\.spec\.ts/,
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
     {
@@ -65,7 +67,7 @@ export default defineConfig({
   webServer: {
     command: `npx vite build --mode e2e --outDir ${OUT} --emptyOutDir && npx vite preview --outDir ${OUT} --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}/`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !env.CI,
     timeout: 240_000,
   },
 });
