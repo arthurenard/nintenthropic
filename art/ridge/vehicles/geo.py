@@ -249,9 +249,11 @@ class Builder:
         for k in range(na):
             th = a0 + (a1 - a0) * k / segs
             rings.append([(x, r * math.cos(th), r * math.sin(th)) for x, r in profile])
-        # rings run around the axis; profile points along each ring
+        # rings run around the axis; profile points along each ring. A point
+        # on the axis (r = 0) is one shared pole vertex so it shades smooth.
         npf = len(profile)
         verts = [Vector(p) for ring in rings for p in ring]
+        pole = {j: j for j in range(npf) if profile[j][1] < 1e-7}
         sprof = arclen([(x, r) for x, r in profile])
         rmax = max(r for _, r in profile)
         # Orientation: the face normal is the left-hand normal of the profile's
@@ -262,6 +264,7 @@ class Builder:
             k2 = (k + 1) % na if full else k + 1
             for j in range(npf - 1):
                 f = [k * npf + j, k2 * npf + j, k2 * npf + j + 1, k * npf + j + 1]
+                f = [pole[i % npf] if (i % npf) in pole else i for i in f]
                 u0 = (a1 - a0) * k / segs * rmax
                 u1 = (a1 - a0) * (k + 1) / segs * rmax
                 uv = [(u0, sprof[j]), (u1, sprof[j]), (u1, sprof[j + 1]), (u0, sprof[j + 1])]

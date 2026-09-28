@@ -250,8 +250,10 @@ def occluders(v, proto, col):
 def bake_vehicle(v, parts, proto, work, quick=False, log=print):
     size = v.atlas // (4 if quick else 1)
     col = bpy.context.scene.collection
-    items = [(ob, d, 'smart') for ob, _, d in parts] + [(proto, 1.25, 'grain')]
-    margin = 0.004 if size >= 2048 else 0.007
+    # every part keeps the builder's own metre UVs (clean strips for sweeps,
+    # lofts and revolves; one island per box face), scaled and packed here
+    items = [(ob, d, 'grain') for ob, _, d in parts] + [(proto, 1.25, 'grain')]
+    margin = 0.0025 if size >= 2048 else 0.004
     unwrap_atlas(items, margin, log)
     setup_cycles(16)
     wset = bpy.context.scene.world or bpy.data.worlds.new("bake")

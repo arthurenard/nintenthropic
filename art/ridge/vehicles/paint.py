@@ -38,10 +38,10 @@ def lin(r, g, b):
     return (c(r), c(g), c(b))
 
 
-OD = lin(72, 76, 46)            # olive drab, as painted
-OD_DARK = lin(58, 62, 38)
-OD_LIGHT = lin(84, 87, 56)
-OD_FADED = lin(108, 107, 82)    # sun-bleached on the tops
+OD = lin(66, 68, 42)            # olive drab, as painted (lusterless, brownish)
+OD_DARK = lin(52, 55, 34)
+OD_LIGHT = lin(76, 78, 50)
+OD_FADED = lin(94, 94, 70)      # sun-bleached on the tops
 DUST = lin(150, 139, 116)
 MUD_DRY = lin(118, 103, 82)
 MUD_WET = lin(66, 55, 42)
@@ -49,15 +49,15 @@ STEEL = lin(62, 60, 57)
 RUST = lin(104, 58, 32)
 RUST_DARK = lin(70, 42, 26)
 GRIME = lin(40, 38, 29)
-CANVAS = lin(112, 106, 74)
-CANVAS_BLEACH = lin(146, 139, 108)
+CANVAS = lin(98, 99, 66)
+CANVAS_BLEACH = lin(128, 127, 96)
 RUBBER = lin(24, 24, 23)
 
 
 class Ctx:
     """Per-material handles on position, normal and the vehicle's layout."""
 
-    def __init__(self, g, v, local=False):
+    def __init__(self, g, v, spin=False):
         self.g = g
         self.v = v
         self.P = g.geo('Position')
@@ -70,7 +70,9 @@ class Ctx:
         self.yf = g.mul(self.py, -1.0)                 # authoring Y after recentring
         self.ya = g.sub(self.yf, shift)                # authoring Y as modelled
         self.z = self.pz
-        self.up = g.smooth(self.nz, 0.35, 0.95)
+        # a wheel spins: nothing on it may depend on which way is up
+        self.up = g.value(0.0) if spin else g.smooth(self.nz, 0.35, 0.95)
+        self.spin = spin
         self._edge = {}
         self._cav = {}
 
@@ -106,71 +108,89 @@ class Ctx:
 # layers
 
 def dust_mud(c, col, rough, h, dust_k=1.0, mud_k=1.0, mud_top=None):
-    """Dust on upward faces, low on the body and in corners; mud thrown up the
-    lower body, strongest just behind each wheel."""
+    """Dust on upward faces, low on the body and in corners; mud dense along
+    the bottom edges, breaking up into splatter higher up, fanned out behind
+    each wheel, with a few runs down the vertical faces."""
     g = c.g
     v = c.v
     mud_top = mud_top if mud_top is not None else v.mud_top
     n1 = g.noise(c.P, scale=2.0, detail=6.0, rough=0.62)
     n2 = g.noise(c.P, scale=13.0, detail=4.0, rough=0.55)
     cav = c.cavity(0.25)
-    low = g.smooth(c.z, mud_top + 0.6, 0.05)
-    dv = g.add(g.add(g.mul(c.up, 0.62), g.mul(low, 0.30)), g.mul(cav, 0.35))
-    dv = g.add(dv, g.add(g.mul(g.sub(n1, 0.5), 0.7), g.mul(g.sub(n2, 0.5), 0.25)))
-    dust = g.mul(g.smooth(dv, 0.38, 0.95), dust_k, clamp=True)
-    col = g.mix(g.mul(dust, 0.8), col, DUST)
+    low = g.smooth(c.z, mud_top + 0.5, 0.05)
+    dv = g.add(g.add(g.mul(c.up, 0.45), g.mul(low, 0.30)), g.mul(cav, 0.45))
+    dv = g.add(dv, g.add(g.mul(g.sub(n1, 0.5), 0.7), g.mul(g.sub(n2, 0.5), 0.3)))
+    dust = g.mul(g.smooth(dv, 0.40, 0.95), dust_k, clamp=True)
+    col = g.mix(g.mul(dust, 0.7), col, DUST)
+    # a thin film everywhere: nothing out here is clean
+    col = g.mix(0.12 * dust_k, col, DUST)
     rough = g.mixf(dust, rough, 0.95)
     h = g.add(h, g.mul(dust, 0.00008))
     if mud_k <= 0:
         return col, rough, h
-    # mud: a rising edge broken by splash noise, plus the spray off each wheel
-    wob = g.mul(g.sub(g.noise(g.vmul(c.P, (1.0, 1.0, 2.5)), scale=3.0, detail=5.0), 0.5), 0.35)
-    lowm = g.smooth(g.add(c.z, wob), mud_top, 0.02)
+    grad = g.smooth(c.z, mud_top, 0.03)
     spray = None
     for (yw, zw, r) in v.mud:
         dy = g.sub(c.yf, yw)
         dz = g.sub(c.z, zw)
         d = g.math('SQRT', g.add(g.mul(dy, dy), g.mul(dz, dz)))
-        ring = g.smooth(d, r + 0.85, r + 0.04)
-        behind = g.madd(g.smooth(g.mul(dy, -1.0), -0.15, 0.7), 0.9, 0.45)
+        ring = g.smooth(d, r + 0.75, r + 0.03)
+        behind = g.madd(g.smooth(g.mul(dy, -1.0), -0.2, 0.6), 0.8, 0.35)
         s = g.mul(ring, behind, clamp=True)
         spray = s if spray is None else g.math('MAXIMUM', spray, s)
-    splat = g.noise(c.P, scale=16.0, detail=12.0, rough=0.68, dist=0.25)
-    drops = g.sub(1.0, g.smooth(g.voronoi(c.P, scale=38.0, feature='F1'), 0.06, 0.16))
-    mv = g.add(g.mul(lowm, 0.75), g.mul(spray, 0.55))
-    mv = g.add(mv, g.mul(g.sub(splat, 0.5), 0.9))
-    mv = g.add(mv, g.mul(g.mul(drops, g.smooth(g.add(g.mul(lowm, 0.6), spray), 0.15, 0.6)), 0.35))
-    mud = g.mul(g.smooth(mv, 0.52, 0.60), mud_k, clamp=True)
-    thick = g.mul(g.smooth(mv, 0.66, 0.95), mud_k, clamp=True)
+    src = g.math('MAXIMUM', g.mul(grad, 1.0), g.mul(spray, 0.85))
+    fine = g.noise(c.P, scale=48.0, detail=10.0, rough=0.72)
+    med = g.noise(g.vmul(c.P, (1.0, 1.0, 1.8)), scale=8.0, detail=6.0, rough=0.6)
+    cover = g.add(g.mul(src, 1.15), g.add(g.mul(g.sub(med, 0.5), 0.55), g.mul(g.sub(fine, 0.5), 0.75)))
+    mud = g.smooth(cover, 0.70, 0.74)
+    # droplets thrown above the mud line
+    vor = g.voronoi(c.P, scale=75.0, feature='F1')
+    vsz = g.noise(c.P, scale=30.0, detail=2.0)
+    drops = g.sub(1.0, g.smooth(vor, g.mul(vsz, 0.10), g.add(g.mul(vsz, 0.10), 0.03)))
+    drops = g.mul(drops, g.smooth(g.add(src, g.mul(g.sub(med, 0.5), 0.4)), 0.25, 0.6))
+    # runs: rain washing the mud down the vertical faces
+    vert = g.sub(1.0, g.math('ABSOLUTE', c.nz))
+    runs = g.noise(c.vec(40.0, 40.0, 2.0), scale=1.0, detail=3.0)
+    runs = g.mul(g.mul(g.smooth(runs, 0.6, 0.72), vert), g.smooth(src, 0.15, 0.5))
+    mud = g.math('MAXIMUM', mud, g.math('MAXIMUM', drops, g.mul(runs, 0.6)))
+    mud = g.mul(mud, mud_k, clamp=True)
+    thick = g.mul(g.smooth(cover, 0.85, 1.1), mud_k, clamp=True)
     mc = g.mix(thick, MUD_DRY, MUD_WET)
-    mc = g.mix(g.mul(n2, 0.4), mc, g.hsv(mc, v=1.25))
+    mc = g.mix(g.mul(n2, 0.5), mc, g.hsv(mc, v=1.2))
     col = g.mix(mud, col, mc)
-    rough = g.mixf(mud, rough, g.mixf(thick, 0.93, 0.78))
-    h = g.add(h, g.add(g.mul(mud, 0.0005), g.mul(thick, g.mul(splat, 0.0012))))
+    rough = g.mixf(mud, rough, g.mixf(thick, 0.93, 0.8))
+    h = g.add(h, g.add(g.mul(mud, 0.0005), g.mul(thick, g.mul(fine, 0.0012))))
     return col, rough, h
 
 
-def chips(c, col, rough, metal, h, amount=1.0, radius=0.012, low_dots=1.0):
-    """Paint chipped off the edges to dark steel (rusting in places), and stone
-    chips scattered low on the body."""
+def chips(c, col, rough, metal, h, amount=1.0, radius=0.035, low_dots=1.0):
+    """Paint worn off the edges people and branches touch, down to dark steel
+    rusting in places, in a ragged band a few centimetres wide; stone chips
+    scattered low on the body."""
     g = c.g
-    e = c.edge(radius)
-    cn = g.noise(c.P, scale=42.0, detail=8.0, rough=0.66)
-    cn2 = g.noise(c.P, scale=6.0, detail=3.0)
-    cv = g.add(g.mul(e, 1.25 * amount), g.add(g.mul(g.sub(cn, 0.5), 0.9), g.mul(g.sub(cn2, 0.5), 0.45)))
-    chip = g.smooth(cv, 0.74, 0.77)
+    # convex edges only: inside corners collect grime, they do not chip
+    e = g.mul(c.edge(radius, 0.004, 0.10), g.sub(1.0, g.smooth(c.cavity(0.06), 0.12, 0.45)))
+    cn = g.noise(c.P, scale=38.0, detail=10.0, rough=0.7)
+    cn2 = g.noise(c.P, scale=5.0, detail=3.0)
+    cv = g.add(g.mul(e, 0.95 * amount), g.add(g.mul(g.sub(cn, 0.5), 1.0), g.mul(g.sub(cn2, 0.5), 0.5)))
+    chip = g.smooth(cv, 0.55, 0.58)
     vor = g.voronoi(c.P, scale=55.0, feature='F1')
     dotm = g.mul(g.smooth(c.z, 1.0, 0.25), g.smooth(g.noise(c.P, scale=4.0, detail=2.0), 0.48, 0.66))
     dots = g.mul(g.sub(1.0, g.smooth(vor, 0.035, 0.07)), g.mul(dotm, low_dots))
     chip = g.math('MAXIMUM', chip, dots)
-    rim = g.mul(g.sub(g.smooth(cv, 0.66, 0.74), chip), 1.0, clamp=True)
-    rustm = g.smooth(g.noise(c.P, scale=22.0, detail=4.0), 0.42, 0.62)
+    rim = g.mul(g.sub(g.smooth(cv, 0.47, 0.55), chip), 1.0, clamp=True)
+    rustm = g.smooth(g.noise(c.P, scale=22.0, detail=4.0), 0.40, 0.60)
     cc = g.mix(rustm, STEEL, g.mix(g.noise(c.P, scale=90.0, detail=2.0), RUST, RUST_DARK))
-    col = g.mix(g.mul(rim, 0.45), col, GRIME)
+    col = g.mix(g.mul(rim, 0.35), col, GRIME)
     col = g.mix(chip, col, cc)
-    rough = g.mixf(chip, rough, g.mixf(rustm, 0.42, 0.88))
-    metal = g.mixf(chip, metal, g.mixf(rustm, 0.85, 0.0))
-    h = g.sub(h, g.mul(chip, 0.00025))
+    rough = g.mixf(chip, rough, g.mixf(rustm, 0.45, 0.88))
+    metal = g.mixf(chip, metal, g.mixf(rustm, 0.8, 0.0))
+    h = g.sub(h, g.mul(chip, 0.0003))
+    # rust weeping from the chips down the vertical faces
+    vert = g.sub(1.0, g.math('ABSOLUTE', c.nz))
+    wn = g.noise(c.vec(60.0, 60.0, 3.0), scale=1.0, detail=3.0)
+    weep = g.mul(g.mul(g.smooth(wn, 0.62, 0.75), vert), g.mul(g.smooth(e, 0.05, 0.4), rustm))
+    col = g.mix(g.mul(weep, 0.45), col, RUST_DARK)
     return col, rough, metal, h
 
 
@@ -183,7 +203,7 @@ def olive(c, tone=1.0):
     base = g.mix(g.mul(g.sub(fine, 0.5), 0.5), base, g.hsv(base, v=1.15))
     r = c.rand
     base = g.hsv(base, h=g.madd(r, 0.024, 0.488), s=g.madd(r, 0.22, 0.88), v=g.madd(r, 0.16, 0.92 * tone))
-    base = g.mix(g.mul(c.up, 0.5), base, OD_FADED)
+    base = g.mix(g.mul(c.up, 0.4), base, OD_FADED)
     # grime settled in the corners, rain streaks down the vertical faces
     cav = c.cavity(0.18)
     base = g.mix(g.mul(g.smooth(cav, 0.08, 0.55), 0.6), base, GRIME)
@@ -191,7 +211,7 @@ def olive(c, tone=1.0):
     vert = g.sub(1.0, g.math('ABSOLUTE', c.nz))
     streak = g.mul(g.mul(g.smooth(st, 0.56, 0.78), vert), 0.42)
     base = g.mix(streak, base, lin(52, 50, 38))
-    rough = g.madd(fine, 0.12, 0.64)
+    rough = g.madd(fine, 0.1, 0.76)
     return base, rough
 
 
@@ -215,8 +235,8 @@ def details(c, col, rough, h):
     lou = None
     if c.v.name == "truck":
         side = (ax, 0.90, 1.2)
-        seams += [seam_line(c, c.ya, 1.405, c.z, 0.95, 2.24, side), seam_line(c, c.ya, 0.38, c.z, 0.95, 2.24, side),
-                  seam_line(c, c.z, 0.955, c.ya, 0.38, 1.405, side)]
+        seams += [seam_line(c, c.ya, 1.405, c.z, 0.90, 2.31, side), seam_line(c, c.ya, 0.38, c.z, 0.90, 2.31, side),
+                  seam_line(c, c.z, 0.905, c.ya, 0.38, 1.405, side)]
         seams += [seam_line(c, c.z, 1.12, c.ya, 1.6, 2.97, (ax, 0.44, 0.5))]
         # bonnet louvres: pressed slots in the side panels
         u = g.math('FRACT', g.mul(g.sub(c.ya, 1.80), 1 / 0.055))
@@ -254,7 +274,7 @@ def m_paint(c, interior=False, chassis=False):
     metal = g.value(0.0)
     h = g.value(0.0)
     col, rough, h = details(c, col, rough, h) if not (interior or chassis) else (col, rough, h)
-    col, rough, metal, h = chips(c, col, rough, metal, h, amount=0.7 if interior else 1.0,
+    col, rough, metal, h = chips(c, col, rough, metal, h, amount=0.75 if interior else 1.0,
                                  low_dots=0.0 if interior else 1.0)
     if interior:
         # boots have worn the floor to bare steel
@@ -340,7 +360,7 @@ def m_canvas(c, inside=False):
         col = g.hsv(col, s=0.9, v=0.7)
         n = g.noise(c.P, scale=40.0, detail=4.0)
         return col, g.value(0.92), g.value(0.0), g.mul(n, 0.0002), 0.01
-    col = g.mix(g.mul(c.up, 0.55), col, CANVAS_BLEACH)
+    col = g.mix(g.mul(c.up, 0.5), col, CANVAS_BLEACH)
     # water: dark runs down the sides from the roof, tide marks near the hem
     st = g.noise(c.vec(9.0, 9.0, 0.6), scale=1.0, detail=5.0, rough=0.62)
     vert = g.sub(1.0, g.math('ABSOLUTE', c.nz))
@@ -448,9 +468,11 @@ def m_tyre(c):
     dn = g.noise(c.P, scale=12.0, detail=8.0, rough=0.65)
     dirtg = g.mul(groove, g.smooth(dn, 0.25, 0.5))
     col = g.mix(dirtg, col, g.mix(dn, MUD_WET, MUD_DRY))
-    swd = g.mul(sw, g.add(0.25, g.mul(g.smooth(r, rim + 0.05, R - 0.02), 0.5)))
-    swd = g.mul(swd, g.smooth(g.add(dn, g.mul(g.noise(c.P, scale=3.0), 0.5)), 0.35, 0.85))
-    col = g.mix(g.mul(swd, 0.75), col, lin(104, 96, 80))
+    # dust clings near the shoulder and the bead, in patches; the rubber shows between
+    band_d = g.math('MAXIMUM', g.smooth(r, R - 0.10, R - 0.03), g.smooth(r, rim + 0.06, rim + 0.01))
+    swd = g.mul(sw, g.add(0.15, g.mul(band_d, 0.6)))
+    swd = g.mul(swd, g.smooth(g.add(dn, g.mul(g.sub(g.noise(c.P, scale=4.0), 0.5), 0.6)), 0.45, 0.8))
+    col = g.mix(g.mul(swd, 0.7), col, lin(98, 91, 78))
     splash = g.mul(g.mul(sw, g.smooth(r, R - 0.09, R - 0.03)), g.smooth(dn, 0.45, 0.6))
     col = g.mix(g.mul(splash, 0.8), col, MUD_DRY)
     rough = g.mixf(g.add(dirtg, swd), 0.86, 0.95)
@@ -482,7 +504,7 @@ def m_rim(c, back=False):
         nut = g.sub(1.0, g.smooth(d, nr * 0.8, nr * 1.05))
         washer = g.sub(1.0, g.smooth(d, nr * 1.15, nr * 1.4))
         col = g.mix(washer, col, g.mix(g.noise(c.P, scale=80.0), RUST_DARK, STEEL))
-        col = g.mix(nut, col, g.mix(g.noise(c.P, scale=50.0), lin(48, 46, 42), RUST))
+        col = g.mix(nut, col, g.mix(g.smooth(g.noise(c.P, scale=50.0), 0.45, 0.7), lin(46, 45, 41), RUST_DARK))
         rough = g.mixf(washer, rough, 0.7)
         metal = g.mixf(nut, metal, 0.5)
         h = g.add(h, g.add(g.mul(nut, 0.008), g.mul(washer, 0.002)))
@@ -495,7 +517,7 @@ def m_rim(c, back=False):
             hole = g.sub(1.0, g.smooth(dh, 0.028, 0.034))
             col = g.mix(hole, col, lin(10, 10, 9))
             h = g.sub(h, g.mul(hole, 0.006))
-    col, rough, metal, h = chips(c, col, rough, metal, h, amount=0.9, radius=0.006, low_dots=0.0)
+    col, rough, metal, h = chips(c, col, rough, metal, h, amount=0.8, radius=0.02, low_dots=0.0)
     # dirt: radial, worst in the well by the tyre
     dn = g.noise(c.P, scale=14.0, detail=8.0, rough=0.65)
     wellm = g.smooth(r, rim * 0.62, rim * 0.98)
@@ -568,7 +590,7 @@ def build_material(m, v, kind):
     nt = m.node_tree
     nt.nodes.clear()
     g = G(nt)
-    c = Ctx(g, v)
+    c = Ctx(g, v, spin=kind in ("tyre", "rim", "rim_back"))
     col, rough, metal, h, bev = fn(c, **kw)
     nb = c.bevel_normal(bev)
     nrm = g.bump(h, strength=1.0, distance=1.0, normal=nb)

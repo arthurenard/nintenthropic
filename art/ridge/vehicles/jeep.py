@@ -225,7 +225,7 @@ def fenders(v):
     top, the rear sweeping down to the tub by the entry."""
     col = bpy.context.scene.collection
     fb = Builder("tmp.fender", "jeep", pre=None)
-    P = [(1.56, 0.58), (1.555, 0.78), (1.44, 0.82), (0.66, 0.82), (0.52, 0.70), (0.46, 0.46)]
+    P = [(1.56, 0.58), (1.555, 0.78), (1.44, 0.82), (0.74, 0.82), (0.60, 0.70), (0.565, 0.47)]
     path = fillet(P, [0, 0.10, 0.10, 0.10, 0.10, 0], segs=3, closed=False)
     N = polyline_normals(path, outward_sign=-1.0)
     sec = [(0.43, -0.03), (0.44, 0.0), (0.76, 0.0), (0.79, -0.015), (0.795, -0.05)]
@@ -302,14 +302,14 @@ def top_and_cushions(v):
               bevel=0.025)
     c.box((-0.37, -1.31, FLOOR + 0.18), (0.37, -0.94, FLOOR + 0.33), "seat", bevel=0.03)
     c.box((-0.37, -1.33, FLOOR + 0.36), (0.37, -1.27, 0.84), "seat", bevel=0.02)
-    # folded top: bows and canvas bundled across the rear
-    path = [(x, TUB_BACK + 0.14, BELT + 0.05) for x in (-0.62, -0.3, 0.0, 0.3, 0.62)]
-    sec = [(0.075 * math.cos(2 * math.pi * k / 8), 0.045 * math.sin(2 * math.pi * k / 8)) for k in range(8)]
-    c.sweep(path, sec, "canvas", up=(0, 1, 0), caps=True, rand=0.9)
-    for x in (-0.40, 0.40):
-        c.sweep([(x, TUB_BACK + 0.26, BELT + 0.02), (x, TUB_BACK + 0.28, BELT + 0.09), (x, TUB_BACK + 0.16, BELT + 0.15),
-                 (x, TUB_BACK + 0.04, BELT + 0.09), (x, TUB_BACK + 0.06, BELT + 0.02)],
-                [(-0.02, -0.002), (0.02, -0.002), (0.02, 0.002), (-0.02, 0.002)], "rope", up=(1, 0, 0))
+    # the top, folded down: canvas bundled over the folded bows on the rear deck,
+    # strapped at two points
+    c.box((-0.60, TUB_BACK + 0.04, BELT - 0.01), (0.60, TUB_BACK + 0.30, BELT + 0.12), "canvas", bevel=0.05,
+          segs=2, rand=0.9)
+    for x in (-0.62, 0.62):
+        c.box((x - 0.012, TUB_BACK + 0.08, BELT - 0.02), (x + 0.012, TUB_BACK + 0.26, BELT + 0.16), "steel")
+    for x in (-0.36, 0.36):
+        c.box((x - 0.022, TUB_BACK + 0.035, BELT - 0.012), (x + 0.022, TUB_BACK + 0.305, BELT + 0.125), "rope")
 
 
 def wheels_and_sockets(v):

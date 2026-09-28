@@ -26,7 +26,13 @@ YF, YR1, YR2 = 2.35, -1.29, -2.41          # front axle, rear bogie axles
 XF, XRD, DUAL = 0.80, 0.86, 0.125          # front wheel plane, rear dual centre, half dual spacing
 CAB_W = 0.95                               # half width of the cab
 CAB_BACK, CAB_FRONT = 0.30, 1.60
-FLOOR = 1.00                               # cab floor (seat.driver's height)
+CAB_BOT, ROOF = 0.88, 2.40                 # the cab's lower edge and roof
+WS_TOP_Y = 1.445                           # the windshield leans back 7 degrees
+RAKE = math.atan2(1.53 - WS_TOP_Y, ROOF - 1.72)
+WS_Z0, WS_Z1 = 0.05, 0.60                  # windshield opening, along the glass from its base (1.72)
+DW_Z0, DW_Z1 = 1.74, 2.25                  # door windows
+RW_Z0, RW_Z1 = 1.88, 2.17                  # rear window
+FLOOR = 0.95                               # cab floor (seat.driver's height), on the frame rails
 BED_FLOOR = 1.15                           # the contract's bed floor height
 BED_Y0, BED_Y1 = -0.02, -3.40              # bed front, bed rear edge
 BED_W = 1.11                               # half width of the bed (outer)
@@ -124,7 +130,7 @@ def leaf_spring(b, x, y0, y1, z, camber, m, width=0.065, n=9):
 
 def cab_profile():
     """The cab's side outline (Y, Z), counter-clockwise seen from +X."""
-    P = [(CAB_BACK, 0.92), (CAB_FRONT, 0.92), (CAB_FRONT, 1.66), (1.53, 1.72), (1.455, 2.32), (CAB_BACK, 2.32)]
+    P = [(CAB_BACK, CAB_BOT), (CAB_FRONT, CAB_BOT), (CAB_FRONT, 1.66), (1.53, 1.72), (WS_TOP_Y, ROOF), (CAB_BACK, ROOF)]
     return fillet(P, [0, 0, 0.03, 0.02, 0.09, 0.13], segs=3)
 
 
@@ -145,12 +151,12 @@ def cab(v):
     # round the edges where the sides meet the roof, the back and the front
     edges = [e for e in bm.edges
              if len(e.link_faces) == 2 and any(abs(f.normal.x) > 0.9 for f in e.link_faces)
-             and not all(abs(vv.co.z - 0.92) < 1e-4 for vv in e.verts)]
+             and not all(abs(vv.co.z - CAB_BOT) < 1e-4 for vv in e.verts)]
     bmesh.ops.bevel(bm, geom=edges, offset=0.075, offset_type='OFFSET', segments=3, profile=0.5,
                     affect='EDGES', clamp_overlap=True)
     bm.normal_update()
     # open the bottom (the floor is a separate plate at FLOOR)
-    bottom = [f for f in bm.faces if f.normal.z < -0.9 and all(abs(vv.co.z - 0.92) < 1e-3 for vv in f.verts)]
+    bottom = [f for f in bm.faces if f.normal.z < -0.9 and all(abs(vv.co.z - CAB_BOT) < 1e-3 for vv in f.verts)]
     bmesh.ops.delete(bm, geom=bottom, context='FACES_ONLY')
     tmp = Builder("tmp.cab", "truck", pre=None)
     tmp.add_bmesh(bm, "paint", rand=0.31)
@@ -160,18 +166,18 @@ def cab(v):
     shell.data.materials.append(bpy.data.materials.get("truck.paint_in") or bpy.data.materials.new("truck.paint_in"))
     solidify(shell, 0.03, offset=-1.0, inner_mat=1)
     cutters = []
-    rake = math.degrees(math.atan2(0.075, 0.60))
+    rake = math.degrees(RAKE)
     for sx in (-1, 1):
         c = Builder("tmp.cut", "truck", pre=None)
         x0, x1 = (0.035, 0.86) if sx > 0 else (-0.86, -0.035)
-        c.box((x0, -0.25, 0.05), (x1, 0.25, 0.52), "paint", M=T(0, 1.53, 1.72) @ R('X', rake), bevel=0.035, segs=3)
+        c.box((x0, -0.25, WS_Z0), (x1, 0.25, WS_Z1), "paint", M=T(0, 1.53, 1.72) @ R('X', rake), bevel=0.035, segs=3)
         cutters.append(c.build(col))
         c = Builder("tmp.cut", "truck", pre=None)
         x0, x1 = (0.80, 1.20) if sx > 0 else (-1.20, -0.80)
-        c.box((x0, 0.66, 1.72), (x1, 1.30, 2.16), "paint", bevel=0.04, segs=3)
+        c.box((x0, 0.66, DW_Z0), (x1, 1.30, DW_Z1), "paint", bevel=0.04, segs=3)
         cutters.append(c.build(col))
     c = Builder("tmp.cut", "truck", pre=None)
-    c.box((-0.36, 0.10, 1.84), (0.36, 0.50, 2.10), "paint", bevel=0.035, segs=3)
+    c.box((-0.36, 0.10, RW_Z0), (0.36, 0.50, RW_Z1), "paint", bevel=0.035, segs=3)
     cutters.append(c.build(col))
     boolean(shell, cutters)
     b = v.b("body")
@@ -194,7 +200,7 @@ def cab(v):
         b.box((-0.062, -0.016, -0.092), (0.062, -0.012, 0.092), "mirror", M=Mh)
     for x in (-0.46, 0.44):
         # wipers hang from the header (vacuum wipers of the period), in front of the glass
-        Mw = T(x, 1.464, 2.25) @ R('X', rake) @ R('Y', 14 if x < 0 else -14)
+        Mw = T(x, 1.53 - 0.62 * math.tan(RAKE), 1.72 + 0.62) @ R('X', rake) @ R('Y', 14 if x < 0 else -14)
         b.box((-0.006, 0.004, -0.36), (0.006, 0.016, 0.0), "black", M=Mw)
         b.box((-0.03, 0.0, -0.02), (0.03, 0.03, 0.03), "black", M=Mw)
 
@@ -506,15 +512,11 @@ def canvas(v):
     me = ob.data
     bpy.data.objects.remove(ob)
     bpy.data.meshes.remove(me)
-    # the rear curtain rolled up under the roof, with its two straps
+    # the rear curtain rolled up under the roof
     yb = BED_Y1 - 0.06
     roll = [(x, yb, z - 0.10) for x, z in canvas_profile(inset=0.0) if z > 2.45]
     sec = [(0.075 * math.cos(2 * math.pi * k / 8), 0.075 * math.sin(2 * math.pi * k / 8)) for k in range(8)]
     c.sweep(roll, sec, "canvas", up=(0, 1, 0), caps=True, rand=0.9)
-    for x in (-0.55, 0.55):
-        zt = 2.62
-        strap = [(x, yb + 0.01, zt + 0.12), (x, yb - 0.085, zt), (x, yb - 0.02, zt - 0.14), (x, yb + 0.03, zt - 0.10)]
-        c.sweep(strap, [(-0.022, -0.002), (0.022, -0.002), (0.022, 0.002), (-0.022, 0.002)], "rope", up=(1, 0, 0))
     # lashing ropes: from each tie point on the hem down to a hook on the bed side
     for ri in range(2, len(ys) - 1, 2):
         y = ys[ri]
@@ -533,16 +535,15 @@ def glass(v):
     window, a centimetre inside the openings. Each pane has its own 0..1 UVs
     (the game can place a crack texture by hit point)."""
     g = v.glass
-    rake = math.atan2(0.075, 0.60)
-    M = T(0, 1.53, 1.72) @ Matrix.Rotation(rake, 4, 'X') @ T(0, -0.015, 0)
+    M = T(0, 1.53, 1.72) @ Matrix.Rotation(RAKE, 4, 'X') @ T(0, -0.015, 0)
     for sx in (-1, 1):
         x0, x1 = (0.035, 0.86) if sx > 0 else (-0.86, -0.035)
-        pane(g, [(x0, 0.05), (x1, 0.05), (x1, 0.52), (x0, 0.52)], 0.035,
+        pane(g, [(x0, WS_Z0), (x1, WS_Z0), (x1, WS_Z1), (x0, WS_Z1)], 0.035,
              lambda u, w: M @ Vector((u, 0.0, w)), flip=True)
         xo = sx * (CAB_W - 0.015)
-        pane(g, [(0.66, 1.72), (1.30, 1.72), (1.30, 2.16), (0.66, 2.16)], 0.04,
+        pane(g, [(0.66, DW_Z0), (1.30, DW_Z0), (1.30, DW_Z1), (0.66, DW_Z1)], 0.04,
              lambda u, w, xo=xo: Vector((xo, u, w)), flip=sx < 0)
-    pane(g, [(-0.36, 1.84), (0.36, 1.84), (0.36, 2.10), (-0.36, 2.10)], 0.035,
+    pane(g, [(-0.36, RW_Z0), (0.36, RW_Z0), (0.36, RW_Z1), (-0.36, RW_Z1)], 0.035,
          lambda u, w: Vector((u, CAB_BACK + 0.015, w)), flip=False)
 
 
