@@ -38,7 +38,12 @@ VARIANTS = {
     "larch": [("a", 24.0, 21, {"gold": 0.22}), ("b", 19.0, 22, {"gold": 0.6})],
     "pine": [("a", 12.0, 31, {})],
     "birch": [("a", 15.0, 41, {}), ("b", 11.0, 42, {"lean": 0.08})],
+    # riverside and hedgerow shrubs: grey alder and willow, hazel, a low
+    # juniper-and-alpenrose clump
+    "bush": [("a", 4.2, 51, {"spread": 1.1, "tone": "alder"}), ("b", 3.4, 52, {"spread": 0.8, "tone": "willow"}),
+             ("c", 2.6, 53, {"spread": 1.3, "tone": "hazel"}), ("d", 1.3, 54, {"spread": 1.6, "tone": "juniper"})],
 }
+ASPECT = {"bush": 1.0}                 # card height / width (2 for the trees)
 
 
 def log(*a):
@@ -96,21 +101,22 @@ def needle_spray(w=128, h=512, seed=0, color=(40, 62, 34), tip=(70, 96, 50), den
     return img
 
 
-def leaf_cluster(w=256, h=256, seed=0, gold=0.4):
-    """A spray of small birch leaves on thin twigs (RGBA)."""
+def leaf_cluster(w=256, h=256, seed=0, gold=0.4, green=(98, 124, 46), size=1.0, narrow=1.0, n=70):
+    """A spray of small leaves on thin twigs (RGBA): birch by default; alder,
+    willow (narrow, silvery), hazel (broad) by the arguments."""
     rng = np.random.default_rng(seed)
     img = np.zeros((h, w, 4), np.float32)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    for i in range(70):
+    for i in range(n):
         cx, cy = rng.uniform(20, w - 20), rng.uniform(20, h - 20)
         a = rng.uniform(0, 2 * np.pi)
-        L, W_ = rng.uniform(9, 15), rng.uniform(6, 9)
+        L, W_ = rng.uniform(9, 15) * size, rng.uniform(6, 9) * size / narrow
         u = (xx - cx) * math.cos(a) + (yy - cy) * math.sin(a)
         v = -(xx - cx) * math.sin(a) + (yy - cy) * math.cos(a)
         m = ((u / L) ** 2 + (v / W_) ** 2) < 1.0
         m &= ~(((u / L) ** 2 + (v / W_) ** 2 < 1.0) & (u > L * 0.85))
         g = rng.uniform()
-        c = srgb(98, 124, 46) if g > gold else srgb(214, 178, 52)
+        c = srgb(*green) if g > gold else srgb(214, 178, 52)
         c = c * rng.uniform(0.75, 1.15)
         shade = (0.8 + 0.2 * (v / W_))[m]
         img[m, :3] = c * shade[:, None]
@@ -350,7 +356,38 @@ def birch(H, rng, lean=0.0):
     return g
 
 
-BUILDERS = {"fir": spruce, "larch": larch, "pine": pine, "birch": birch}
+def shrub(H, rng, spread=1.0, tone="alder"):
+    """A shrub: several stems from one stool, arching out, twigs along them
+    carrying leaf sprays - a rounded mass as wide as it is tall. The
+    juniper is a low dense cushion."""
+    g = Geo()
+    R = H * 0.55 * spread
+    stems = int(rng.integers(6, 11)) if tone != "juniper" else 14
+    leaf_s = 0.55 if tone != "juniper" else 0.4
+    for k in range(stems):
+        a = rng.uniform(0, 2 * np.pi)
+        tilt = rng.uniform(0.35, 0.9) if tone != "juniper" else rng.uniform(1.2, 2.2)
+        d0 = np.array([math.cos(a) * tilt, math.sin(a) * tilt, 1.0])
+        L_ = H * rng.uniform(0.75, 1.15) * (1.2 if tone == "juniper" else 1.0)
+        pts = curve(np.array([rng.normal(0, 0.12), rng.normal(0, 0.12), 0.0]), d0 / np.linalg.norm(d0), L_, 6,
+                    droop=0.35 if tone == "willow" else 0.2, rng=rng, wiggle=0.25)
+        tube(g, pts, np.linspace(0.05, 0.01, len(pts)) * (H / 3.5 + 0.3), "bark", 5)
+        for i in range(1, len(pts)):
+            for m in range(4):
+                c = pts[i] + rng.normal(0, 0.28 * spread, 3) * np.array([1, 1, 0.8])
+                ang = rng.uniform(0, 2 * np.pi)
+                s_ = rng.uniform(0.7, 1.1) * leaf_s * (H / 3.5 + 0.5)
+                ax = np.array([math.cos(ang), math.sin(ang), rng.normal(0, 0.4)])
+                ax /= np.linalg.norm(ax)
+                up = np.array([0, 0, 1.0])
+                sd = np.cross(ax, up)
+                sd /= np.linalg.norm(sd) + 1e-9
+                V = [c - sd * s_ / 2 - up * s_ / 2, c + sd * s_ / 2 - up * s_ / 2, c + sd * s_ / 2 + up * s_ / 2, c - sd * s_ / 2 + up * s_ / 2]
+                g.add(V, [(0, 1, 2), (0, 2, 3)], [(0, 0), (1, 0), (1, 1), (0, 1)], "leaves")
+    return g
+
+
+BUILDERS = {"fir": spruce, "larch": larch, "pine": pine, "birch": birch, "bush": shrub}
 
 
 # ---------------------------------------------------------------------------
@@ -437,12 +474,21 @@ def species_materials(mats, species, extra, seed):
             f"tex_needles_larch_{seed}"))
     if species == "birch":
         m["leaves"] = foliage_material(f"leaves_{seed}", _image_from(leaf_cluster(seed=seed + 4, gold=0.45), f"tex_leaves_{seed}"))
+    if species == "bush":
+        kw = {"alder": dict(green=(62, 84, 40), gold=0.12, size=1.2, n=80),
+              "willow": dict(green=(106, 124, 88), gold=0.18, size=1.1, narrow=3.0, n=110),
+              "hazel": dict(green=(88, 110, 44), gold=0.35, size=1.5, n=55),
+              "juniper": dict(green=(46, 66, 44), gold=0.02, size=0.6, narrow=2.5, n=160)}[extra.get("tone", "alder")]
+        m["leaves"] = foliage_material(f"leaves_{seed}", _image_from(leaf_cluster(seed=seed + 4, **kw), f"tex_leaves_{seed}"))
     return m
 
 
 def build_tree(species, variant, H, seed, extra, col, mats):
     rng = np.random.default_rng(seed)
-    kw = {k: v for k, v in extra.items() if k in ("crown_base", "young", "gold", "lean")}
+    kw = {k: v for k, v in extra.items() if k in ("crown_base", "young", "gold", "lean", "spread", "tone")}
+    if species != "bush":
+        kw.pop("spread", None)
+        kw.pop("tone", None)
     if species != "larch":
         kw.pop("gold", None)
     if species != "birch":
@@ -470,13 +516,20 @@ def _per_vertex_uv(V, F, UV):
 # ---------------------------------------------------------------------------
 # impostors
 
-def render_impostors(out_dir, quick=False):
-    """Render every variant from the side into its species atlas."""
+def render_impostors(out_dir, quick=False, only=None):
+    """Render every variant from the side into its species atlas (`only`:
+    just these species, merged into the existing impostors.json)."""
+    import json
     t0 = time.time()
     os.makedirs(out_dir, exist_ok=True)
     px_w, px_h = (IMP_W // 2, IMP_H // 2) if quick else (IMP_W, IMP_H)
     info = {}
+    jp = os.path.join(out_dir, "impostors.json")
+    if only and os.path.exists(jp):
+        info = json.load(open(jp))
     for species, variants in VARIANTS.items():
+        if only and species not in only:
+            continue
         tiles_alb, tiles_nrm, dims = [], [], []
         for variant, H, seed, extra in variants:
             sc = S.reset_scene("tree")
@@ -486,10 +539,11 @@ def render_impostors(out_dir, quick=False):
             V = np.array([v.co[:] for v in ob.data.vertices])
             w = 2 * max(np.abs(V[:, 0]).max(), np.abs(V[:, 1]).max()) * 1.04
             hgt = V[:, 2].max() * 1.02
-            # frame: the card is w wide, hgt tall; keep the 1:2 aspect
-            fw = max(w, hgt / 2)
-            fh = fw * 2
-            alb, nrm = _render_side(sc, fw, fh, px_w, px_h)
+            # frame: the card is w wide, hgt tall; keep the species' aspect
+            asp = ASPECT.get(species, 2.0)
+            fw = max(w, hgt / asp)
+            fh = fw * asp
+            alb, nrm = _render_side(sc, fw, fh, px_w, int(px_w * asp))
             tiles_alb.append(alb)
             tiles_nrm.append(nrm)
             dims.append(dict(variant=variant, height_m=float(fh), width_m=float(fw), tree_height_m=float(V[:, 2].max()),
@@ -500,8 +554,7 @@ def render_impostors(out_dir, quick=False):
         write_img(os.path.join(out_dir, f"{species}_albedo.png"), atlas_a)
         write_img(os.path.join(out_dir, f"{species}_normal.png"), atlas_n)
         info[species] = dict(variants=dims, atlas=[atlas_a.shape[1], atlas_a.shape[0]], cells=len(dims))
-    import json
-    json.dump(info, open(os.path.join(out_dir, "impostors.json"), "w"), indent=1)
+    json.dump(info, open(jp, "w"), indent=1)
     return info
 
 

@@ -52,25 +52,105 @@ def _ribbon(curve, s0, s1, step, half_fn, z_fn, n_across=4):
     return V, np.array(F), UV
 
 
-def build_river(col):
+RIFFLES = (230.0, 470.0, 880.0, 1120.0, 1380.0, 1640.0, 1900.0)
+
+
+def river_rocks(riv=None):
+    """Boulders in the riffles, the water breaking white round them:
+    (x, y, z_water, size, s, lateral) each; lateral > 0 left of the flow."""
+    riv = riv or L.river()
+    rng = np.random.default_rng(5151)
+    sb = riv.nearest(np.array([L.BRIDGE_C[0]]), np.array([L.BRIDGE_C[1]]))[1][0]
+    step = riv.s[1] - riv.s[0]
+    out = []
+    for sr in RIFFLES:
+        if abs(sr - sb) < 80.0:
+            continue
+        for k in range(int(rng.integers(4, 9))):
+            s_ = sr + rng.uniform(-9.0, 9.0)
+            side = 1.0 if rng.uniform() < 0.5 else -1.0
+            hw = riv.at(s_, 'wl' if side > 0 else 'wr')
+            lat = side * rng.uniform(0.05, 0.85) * hw
+            n = riv.nrm[min(int(s_ / step), len(riv.nrm) - 1)]
+            p = riv.at(s_) + n * lat
+            out.append((float(p[0]), float(p[1]), float(riv.at(s_, 'z')), float(rng.uniform(0.35, 1.1)), float(s_), float(lat)))
+    return out
+
+
+def build_river(col, rocks=()):
+    """The water's surface between its two edges (wider under the bars and
+    banks, which hide the overlap), finer where the scope reaches it.
+    COLOR_0: r foam (the outlet, riffles, the wakes of the rocks), g depth
+    (0 at the edges, 1 in the deepest water)."""
     riv = L.river()
-    # stop where the terrain mesh stops (the sky's far world carries it on)
     rr = np.hypot(riv.xy[:, 0], riv.xy[:, 1])
     s1 = riv.s[np.argmax(rr > M.R_MAX - 200)] if (rr > M.R_MAX - 200).any() else riv.length
-    step_fn = lambda s: 2.0
-    V, F, UV = _ribbon(riv, 0.0, s1, 3.0, lambda s: riv.at(s, 'w') / 2 + 1.5, lambda s, q, u: riv.at(s, 'z'), n_across=6)
-    # foam: the outlet's white water and a few riffles; depth across
-    u = UV[:, 0]
+    s_near = min(2200.0, s1)
+    ss = np.concatenate([np.arange(0.0, s_near, 1.5), np.arange(s_near, s1, 4.0), [s1]])
+    step = riv.s[1] - riv.s[0]
+    na = 12
+    V, UV, D = [], [], []
+    for s_ in ss:
+        p = riv.at(s_)
+        n = riv.nrm[min(int(s_ / step), len(riv.nrm) - 1)]
+        wl, wr, bl, br = (float(riv.at(s_, k)) for k in ('wl', 'wr', 'bl', 'br'))
+        left, right = wl + 1.2 + 0.4 * bl, wr + 1.2 + 0.4 * br
+        zw = float(riv.at(s_, 'z'))
+        for k in range(na + 1):
+            u = k / na
+            lat = -right + u * (left + right)
+            q = p + n * lat
+            V.append((q[0], q[1], zw))
+            UV.append((u, s_))
+            e = lat / wl if lat > 0 else -lat / wr
+            D.append((lat, np.clip(1 - e * e, 0, 1) ** 0.35))
+    V = np.array(V)
+    UV = np.array(UV)
+    D = np.array(D)
+    F = []
+    m = na + 1
+    for i in range(len(ss) - 1):
+        for k in range(na):
+            a = i * m + k
+            F += [(a, a + 1, a + m + 1), (a, a + m + 1, a + m)]
+    F = np.array(F)
     s = UV[:, 1]
+    lat = D[:, 0]
+    depth = D[:, 1]
+    from . import noise as N
     foam = np.clip(1 - s / 70.0, 0, 1) ** 1.5
-    for sr in (420.0, 980.0, 1650.0, 2600.0):
-        foam = np.maximum(foam, 0.5 * np.exp(-((s - sr) / 18.0) ** 2))
-    depth = np.sin(np.pi * np.clip(u, 0, 1)) ** 0.7
+    for sr in RIFFLES:
+        foam = np.maximum(foam, 0.3 * np.exp(-((s - sr) / 12.0) ** 2) *
+                          (0.5 + 0.5 * N.fbm(lat / 2.0, s / 3.0, 5152, 2)))
+    for (_, _, _, size, s_r, lat_r) in rocks:
+        ds = s - s_r
+        dl = lat - lat_r
+        ring = np.exp(-(dl * dl + ds * ds) / (1.4 * size) ** 2)
+        wake = (ds > 0) * np.exp(-np.maximum(ds, 0) / (7.0 * size)) * np.exp(-(dl / (0.7 * size + 0.1 * np.maximum(ds, 0))) ** 2)
+        foam = np.maximum(foam, 0.95 * ring + 0.55 * wake)
+    foam = np.clip(foam, 0, 1)
     ob = S.mesh_object("water.river", V, F, col, uvs={"UVMap": UV}, smooth=True, surface="water",
                        note="the river's surface: uv.u across (0..1), uv.v metres downstream; COLOR_0 r foam, g depth")
     me = ob.data
     ca = me.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
-    ca.data.foreach_set("color", np.stack([foam, depth, np.zeros_like(u), np.ones_like(u)], 1).astype(np.float32).ravel())
+    ca.data.foreach_set("color", np.stack([foam, depth, np.zeros_like(foam), np.ones_like(foam)], 1).astype(np.float32).ravel())
+    return ob
+
+
+def build_river_rocks(col, rocks):
+    """The riffles' boulders, one mesh (the rock tile times COLOR_0)."""
+    import bpy
+    from .crags import boulder_mesh
+    obs = []
+    for i, (x, y, zw, size, _, _) in enumerate(rocks):
+        obs.append(boulder_mesh(col, f"_rr{i}", (x, y, zw - 0.3 * size), size, seed=700 + i, detail=1))
+    if not obs:
+        return None
+    with bpy.context.temp_override(active_object=obs[0], selected_editable_objects=obs, selected_objects=obs):
+        bpy.ops.object.join()
+    ob = obs[0]
+    ob.name = ob.data.name = "rocks.river"
+    S.tag(ob, surface="rock", material_key="rock_vc", note="boulders in the riffles; the water's foam rings them")
     return ob
 
 
@@ -149,13 +229,24 @@ def build_roads(ter, col):
 
 def water_material(name="water"):
     """Review material: a clear mountain river reflecting the sky, ripples
-    along the flow. (The game gives the river its own shader.)"""
+    along the flow; the bed showing through where it is shallow (COLOR_0.g),
+    white water where COLOR_0.r says (broken up by noise). The game gives
+    the river its own shader built on the same inputs."""
     from .scene import new_material
     m, g = new_material(name)
     uv = g.uv('UVMap')
     u, v, _ = g.separate(uv)
+    vc = g.new('ShaderNodeVertexColor')
+    vc.layer_name = "Col"
+    foam_v, depth_v, _ = g.sep_rgb(vc.outputs['Color'])
     rip = g.noise(g.combine(g.mul(u, 6.0), g.mul(v, 0.25), 0.0), scale=1.0, detail=6.0, rough=0.6)
-    nrm = g.bump(rip, strength=0.25, distance=0.05)
-    b = g.principled((0.012, 0.018, 0.016), rough=0.04, spec=0.6, normal=nrm)
+    brk = g.noise(g.combine(g.mul(u, 30.0), g.mul(v, 1.2), 0.0), scale=1.0, detail=4.0, rough=0.7)
+    foam = g.math('MULTIPLY', foam_v, g.math('POWER', brk, 1.6))
+    foam = g.math('MINIMUM', g.mul(foam, 2.2), 1.0)
+    nrm = g.bump(g.add(rip, g.mul(foam, 0.6)), strength=0.25, distance=0.05)
+    shallow = g.mix(g.math('POWER', depth_v, 0.6), (0.075, 0.072, 0.050), (0.010, 0.016, 0.015))
+    col = g.mix(foam, shallow, (0.75, 0.78, 0.80))
+    rough = g.add(g.mul(foam, 0.55), 0.04)
+    b = g.principled(col, rough=rough, spec=0.6, normal=nrm)
     g.output(b)
     return m

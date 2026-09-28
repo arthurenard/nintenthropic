@@ -43,11 +43,19 @@ def write_textures(ctx, out_dir):
     t = time.time()
     os.makedirs(out_dir, exist_ok=True)
     files = {}
-    for name, q in (("color", 88), ("normal", 90), ("splat0", 90), ("splat1", 90), ("light", 90)):
+    # data maps lossless: lossy WebP is YUV 4:2:0, which bleeds one channel's
+    # weight into its neighbours' (the splat maps would no longer sum to 1)
+    for name, q in (("color", 88), ("normal", 90), ("splat0", None), ("splat1", None), ("light", None)):
         src = os.path.join(ctx.maps, f"{name}.png")
         if not os.path.exists(src):
             continue
         a = read_img(src)
+        if a.ndim == 3 and a.shape[2] == 4:
+            # WebP encoders throw away the colour under a fully transparent
+            # texel (the splat maps' fourth weight is their alpha): keep every
+            # alpha at least 1/255 so the RGB weights survive
+            a = a.copy()
+            a[..., 3] = np.maximum(a[..., 3], 1.0 / 255.0)
         write_img(os.path.join(out_dir, f"{name}.webp"), a, quality=q)
         files[name] = f"terrain/{name}.webp"
     tdir = os.path.join(ctx.build, "tiles")
@@ -92,12 +100,15 @@ def impostor_export_material(species, imp_dir):
     card-space normal map; alpha-tested at 0.4, double-sided."""
     a = read_img(os.path.join(imp_dir, f"{species}_albedo.png"))
     n = read_img(os.path.join(imp_dir, f"{species}_normal.png"))
-    ao = np.clip(n[..., 3:4], 0, 1) ** 0.6
+    # AO is 0 where the render saw nothing: keep the bled colour there
+    ao = np.where(a[..., 3:4] > 0.05, np.clip(n[..., 3:4], 0, 1) ** 0.6, 1.0)
     lin = np.where(a[..., :3] <= 0.04045, a[..., :3] / 12.92, ((a[..., :3] + 0.055) / 1.055) ** 2.4) * ao
     enc = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
     path_a = os.path.join(imp_dir, f"_export_{species}_albedo.png")
     path_n = os.path.join(imp_dir, f"_export_{species}_normal.png")
-    write_img(path_a, np.concatenate([enc, a[..., 3:4]], -1))
+    # alpha never quite 0: the WebP encoder would drop the colours bled into
+    # the transparent border, and the mips would fringe the trees in black
+    write_img(path_a, np.concatenate([enc, np.maximum(a[..., 3:4], 1.0 / 255.0)], -1))
     write_img(path_n, n[..., :3])
     m = bpy.data.materials.new(f"impostor.{species}")
     m.use_nodes = True
@@ -174,9 +185,11 @@ def scene_extras(sc, files, tiles):
         haze_sigma_per_m=post.SIGMA_HAZE, haze_color_linear=[round(v, 4) for v in post.HAZE_COLOR],
         mist_sigma0_per_m=post.MIST_SIGMA0, mist_z0_m_gltf_y=post.MIST_Z0, mist_scale_height_m=post.MIST_H,
         mist_color_linear=[round(v, 4) for v in post.MIST_COLOR], air_shade=post.AIR_SHADE,
+        grade_white_balance=[round(v, 3) for v in post.GRADE_WB],
         note="haze: T = exp(-d * haze_sigma); mist: optical depth of sigma0 * exp(-(y - z0) / H) integrated along "
              "the eye ray (closed form, see valley/post.py), scaled by light.a at the ground point; both in-scatter colours "
-             "times mix(air_shade, 1, sunlit at the ground point); colours at the review renders' exposure"))
+             "times mix(air_shade, 1, sunlit at the ground point); then the whole frame (sky too) times grade_white_balance "
+             "before tone mapping; colours at the review renders' exposure"))
     sc["lighting"] = json.dumps(dict(sun_elevation_deg=L.SUN_ELEV, sun_elevation_range_deg=list(L.SUN_ELEV_RANGE),
                                      sun_bearing_deg=L.SUN_BEARING, sun_color=list(S.SUN_COLOR),
                                      sun_to_sky_ratio=4.0,
@@ -253,7 +266,8 @@ def stage(ctx):
                            "ln(r1 / r0)  (glTF x, z; image rows top-down)")
     S.empty("terrain.splat", (0, 0, 0), bpy.data.collections["contract"], parent=troot, size=1.0,
             files=files, mapping=json.dumps(mapping),
-            splat0="r grass, g rock, b scree, a snow", splat1="r dirt, g forest floor, b gravel, a alpine turf",
+            splat0="r grass, g rock, b scree, a snow", splat1="r dirt, g forest floor, b gravel, a alpine turf (and hay)",
+            splat_alpha_floor="alpha is stored >= 1/255 so the WebP keeps the RGB under it: read a < 2/255 as 0",
             normal="world-space normal in glTF axes, rgb = n * 0.5 + 0.5",
             light="r sky visibility (AO), g sun horizon angle: deg = g * 40 - 10 (lit when the sun is above it), "
                   "b canopy/building shadow at the design sun (1 lit), a valley-mist density factor (1 on the river, ~0.3 far)",

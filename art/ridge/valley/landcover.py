@@ -140,8 +140,14 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
     n1 = N.fbm(x, y, SEED + 1, octaves=4, scale=1 / 260.0)
     n2 = N.fbm(x, y, SEED + 2, octaves=4, scale=1 / 70.0)
     n3 = N.fbm(x, y, SEED + 3, octaves=3, scale=1 / 900.0)
-    dr, _ = _dist_curve(F.riv, x, y, 90.0)
-    rw = 9.0
+    # the river: distance from its centre, from its water's edge on this
+    # side (de_w), the gravel bar's width and the undercut there
+    dr, rs, rside = F.riv.nearest(x, y, max_dist=90.0)
+    near_r = np.isfinite(dr)
+    dr = np.where(near_r, dr, 1e9)
+    hw, rbar, rund = L.river_edges(F.riv, rs, np.where(rside >= 0, 1, -1))
+    de_w = np.where(near_r, dr - hw, 1e9)
+    zriver = F.riv.at(rs, 'z')
     droad, _ = _dist_curve(F.rd, x, y, 30.0)
     dlane = np.full(n, 1e9)
     for c in F.lanes:
@@ -167,7 +173,7 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
     forest *= 1 - ours
     # riverside trees: a ribbon of alder/birch along the banks (placed by the
     # forest stage as 'birch'); here the ground there stays grass
-    forest *= smoothstep(25.0, 45.0, dr)
+    forest *= smoothstep(14.0, 34.0, de_w - rbar)
     # keep the forest off roads, lanes, sites
     forest *= smoothstep(8.0, 16.0, droad) * smoothstep(5.0, 10.0, dlane)
     sites = np.zeros(n)
@@ -176,8 +182,25 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
         sites = np.maximum(sites, smoothstep(rad, rad * 0.6, np.hypot(x - c[0], y - c[1])))
     forest *= 1 - sites
     forest = np.clip(forest, 0, 1)
+    # the fields of the floor (fields.py): where the ground is flat, low over
+    # the river, open, and not the player's own slope
+    from . import fields as FD
+    fq = FD.parcels().query(x, y)
+    # (the fields stop 10 m short of a house, the farm and the checkpoint;
+    # on the player's side they stop below the plates' slope)
+    houses = np.full(n, 1e9)
+    for h in F.plan:
+        houses = np.minimum(houses, np.hypot(x - h['c'][0], y - h['c'][1]) - 0.6 * max(h['w'], h['d']))
+    yards = np.zeros(n)
+    for c, rad in ((L.FARM_C, 34.0), (L.CHECKPOINT_C, 24.0), (L.ALP_C, 60.0), (L.DAM_CREST_C, 110.0)):
+        yards = np.maximum(yards, smoothstep(rad, rad * 0.7, np.hypot(x - c[0], y - c[1])))
+    plates = smoothstep(300.0, 270.0, r) * smoothstep(40.0, 32.0, np.abs(th))
+    fieldness = (fq["in"] * smoothstep(14.0, 8.0, slope) * smoothstep(34.0, 18.0, z - zriver) * (1 - forest) *
+                 smoothstep(5.0, 10.0, droad) * smoothstep(3.0, 7.0, dlane) * smoothstep(6.0, 12.0, houses) *
+                 (1 - yards) * (1 - plates))
     if need_forest_only:
-        return dict(forest=forest, alt=alt, slope=slope, treeline=treeline, dr=dr, droad=droad, z=z)
+        return dict(forest=forest, alt=alt, slope=slope, treeline=treeline, dr=dr, droad=droad, z=z,
+                    de=de_w - rbar, fields=fq, fieldness=fieldness)
     # ---- rock, scree, snow
     # below the treeline the forest and turf hold anything gentler than ~45
     # degrees: rock is the crags; above it, anything that sheds its turf
@@ -200,6 +223,8 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
     # ---- dirt: tracks, banks, farmyards, cow paths
     # the roads and lanes are their own meshes: only a trodden verge shows
     dirt = np.maximum(smoothstep(1.2, 0.2, droad - 3.2), smoothstep(1.0, 0.2, dlane - 1.7)) * 0.55
+    # the undercut bank on the outside of a bend: a scarp of bare earth
+    dirt = np.maximum(dirt, smoothstep(0.2, 0.6, rund) * smoothstep(-0.3, 0.3, de_w) * smoothstep(2.4, 1.2, de_w) * 0.85)
     # cow paths: faint, broken terracettes along the contours of the pastures
     cp = np.abs(np.sin((z + 6.0 * N.fbm(x, y, SEED + 5, 2, scale=1 / 30.0)) * 2 * math.pi / 3.1))
     cowpaths = smoothstep(0.965, 0.995, cp) * smoothstep(0.1, 0.5, N.fbm(x, y, SEED + 6, 3, scale=1 / 18.0))
@@ -209,8 +234,13 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
         dirt = np.maximum(dirt, smoothstep(rad, rad * 0.5, np.hypot(x - c[0], y - c[1])) * (0.6 + 0.3 * n2))
     # ---- gravel: the river's bars and banks, fans at the gullies' mouths
     # the channel's bed (under the water) and the bars on the inside of bends
-    gravel = smoothstep(rw + 1.5, rw - 1.0, dr) * 0.9
-    gravel = np.maximum(gravel, smoothstep(rw + 6.0, rw, dr) * smoothstep(0.1, 0.5, n2) * 0.6)
+    # the bed under the water and a stony margin along it; the bars on the
+    # insides of bends (layout.river_edges), lumpy with sand and weed
+    gravel = smoothstep(1.2, -0.5, de_w) * 0.9
+    gravel = np.maximum(gravel, smoothstep(2.0, 0.0, de_w) * smoothstep(-0.1, 0.4, n2) * 0.55 * (1 - rund))
+    barw = np.maximum(rbar, 1e-3)
+    on_bar = smoothstep(-0.5, 0.5, de_w) * smoothstep(barw + 0.5, barw * 0.7, de_w) * smoothstep(0.5, 2.0, rbar)
+    gravel = np.maximum(gravel, on_bar * (0.8 + 0.2 * N.fbm(x, y, SEED + 8, 2, scale=1 / 4.0)))
     # fans of washed gravel where the far slope's gullies reach the floor
     gravel = np.maximum(gravel, smoothstep(6.5, 8.0, flow) * smoothstep(22.0, 10.0, slope) * smoothstep(60.0, 8.0, alt)
                         * smoothstep(450.0, 650.0, r) * 0.6)
@@ -225,6 +255,15 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
         W[i] = m
         for j in (0, 5, 7):
             W[j] *= 1 - m
+    # the fields: hay and fresh stubble take the tawny turf's tile, the cows'
+    # paths the dirt's
+    fc_, hayw, pathw = FD.colour(fq, x, y, np.zeros((3, n)), fieldness)
+    grazed = plates * smoothstep(16.0, 9.0, slope) * smoothstep(30.0, 14.0, z - zriver) * smoothstep(5.0, 9.0, droad) * (1 - yards)
+    _, gpath = FD.pasture(x, y, np.zeros((3, n)), grazed)
+    pathw = np.maximum(pathw, gpath)
+    W[7] = np.maximum(W[7], hayw)
+    W[0] *= 1 - hayw
+    dirt = np.maximum(dirt, pathw)
     W[6] = gravel
     W[4] = dirt
     for j in (0, 1, 2, 5, 7):
@@ -235,4 +274,5 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
     s = W.sum(0)
     W /= np.maximum(s, 1e-6)
     return W, dict(slope=slope, alt=alt, flow=flow, curv=curv, fcurv=fcurv, n1=n1, n2=n2, n3=n3, dr=dr,
-                   droad=droad, treeline=treeline, forest=forest, z=z, nrm=nrm, snow=snow, rock=rock)
+                   droad=droad, treeline=treeline, forest=forest, z=z, nrm=nrm, snow=snow, rock=rock,
+                   de_w=de_w, rbar=rbar, rund=rund, fields=fq, fieldness=fieldness, dlane=dlane, grazed=grazed)

@@ -87,7 +87,22 @@ def compose_color(W, info, x, y):
              smoothstep(3.0, 9.0, slope) * smoothstep(10.0, 22.0, alt) * smoothstep(40.0, 70.0, r))
     berry = smoothstep(0.1, 0.5, N.fbm(x, y, 8812, octaves=2, scale=1 / 20.0))
     sh = np.array([0.020, 0.030, 0.013])[:, None] * (1 - berry) + np.array([0.060, 0.024, 0.012])[:, None] * berry
+    shrub = shrub * (1 - info['fieldness'])
     g = g * (1 - 0.85 * shrub) + sh * 0.85 * shrub
+    # the fields of the floor, each in its state (fields.py)
+    from . import fields as FD
+    g, _, _ = FD.colour(info['fields'], x, y, g, info['fieldness'])
+    # the floor below the player (the plates' range) is grazed, unfenced
+    g, _ = FD.pasture(x, y, g, info['grazed'])
+    # the river's margin: lush and dark, rushes, butterbur, the grass flattened
+    # by the last flood; bare, washed stones where a bar begins
+    de = info['de_w'] - info['rbar']
+    rip = smoothstep(9.0, 1.0, de) * smoothstep(-1.0, 0.5, de) * (0.7 + 0.3 * smoothstep(-0.2, 0.3, N.fbm(x, y, 8813, 3, scale=1 / 5.0)))
+    g = g * (1 - 0.45 * rip) + np.array([0.034, 0.050, 0.020])[:, None] * 0.45 * rip
+    # the road's verges: dust on the first metre, then a band of uncut grass
+    dv = info['droad'] - 3.0
+    verge = smoothstep(0.0, 0.8, dv) * smoothstep(3.5, 1.5, dv)
+    g = g * (1 - 0.25 * verge) + g * np.array([0.85, 0.95, 0.9])[:, None] * 0.25 * verge
     col['grass'] = g
     # rock: grey limestone with warm and cool bands (strata dip gently),
     # dark water and lichen streaks down the faces, pale fresh scars
@@ -101,6 +116,9 @@ def compose_color(W, info, x, y):
     # turf and moss on the treads of the bedding (where the rock flattens)
     ledge = smoothstep(0.35, 0.8, N.fbm(x, y, 8809, octaves=3, scale=1 / 12.0)) * smoothstep(48.0, 30.0, slope)
     rk = rk * (1 - 0.5 * ledge) + np.array([0.10, 0.09, 0.045])[:, None] * 0.5 * ledge
+    # below the treeline the crags are darker: damp, mossy, black lichen
+    low = smoothstep(info['treeline'], info['treeline'] - 160.0, alt)
+    rk = rk * (1 - 0.32 * low) * (1 + np.array([-0.04, 0.02, -0.02])[:, None] * low)
     col['rock'] = rk
     col['scree'] = np.array(LC.MEAN['scree'])[:, None] * (1 + 0.12 * n2 + 0.08 * fine)
     sn = np.array(LC.MEAN['snow'])[:, None] * (1 - 0.06 * smoothstep(0.0, 1.0, n2)) * (1 - 0.04 * fine)
@@ -123,7 +141,10 @@ def compose_color(W, info, x, y):
     for i, m in enumerate(LC.MATERIALS):
         out += W[i] * col[m]
     # distant haze is the shader's, but a gentle damp darkening near water
-    out *= (1 - 0.15 * smoothstep(20.0, 8.0, info['dr']))
+    out *= (1 - 0.15 * smoothstep(8.0, 0.0, info['de_w']))
+    # the gravel of a bar: pale and dry on its crest, dark where it is wet
+    wet = smoothstep(1.0, 0.0, info['de_w'])
+    out *= (1 - 0.3 * wet * W[6])
     return out
 
 

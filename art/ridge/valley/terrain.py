@@ -196,7 +196,8 @@ def great_cliff(x, y, u, bearing):
     cb, cr = L.bearing_range(np.array([c[0], c[1], 0]))
     r = np.hypot(x, y)
     lat = smoothstep(7.5, 3.0, np.abs(bearing - cb + 1.5 * N.fbm(r * 0.01, bearing * 0.1, SEED + 92, 2)))
-    edge = cr + 40.0 * N.fbm(bearing * 0.8, 0.0, SEED + 91, 3)
+    # the wall's line wanders in broad buttresses and bays, not in flutes
+    edge = cr + 34.0 * N.fbm(bearing * 0.4, 0.0, SEED + 91, 2) + 5.0 * N.fbm(bearing * 1.6, 1.7, SEED + 93, 2)
     t = (r - edge) / 9.0
     env = np.exp(-((r - edge) / 240.0) ** 2)
     step = np.tanh(t) * 85.0 * lat * env
