@@ -41,6 +41,9 @@ BETA_M_E = F32(4.40e-3)
 BETA_O = np.array([0.650e-3, 1.881e-3, 0.085e-3], F32)
 G_MIE = 0.8
 CLOUD_H = 6.0                # cloud layer altitude (km)
+AIRGLOW_H = 95.0             # km
+AIRGLOW_SIGMA = 5.0          # km: the layer's half-thickness
+AIRGLOW_COLOR = np.array([0.30, 1.0, 0.42], F32) * F32(2.0e-5)
 CLOUD_RELIEF = 10.0          # exaggerated cloud-top relief (km) for the shading normal
 SUN_E = F32(20.0)            # sun irradiance at the top of the atmosphere
 SUN_COLOR = np.array([1.0, 0.985, 0.96], F32)
@@ -175,7 +178,7 @@ def detail_at(maps, u, v, lat, scale=1.0):
 
 DETAIL_REP = (48.0, 192.0)        # tiles per unit of v (and twice that in u)
 DETAIL_TEXELS_KM = math.pi * R / (DETAIL_REP[0] * 1024)
-CLOUDLET_H = 1.2                   # km: the relief of a cloudlet at full cover
+CLOUDLET_H = 2.2                   # km: the relief of a cloudlet at full cover (exaggerated)
 
 
 def detail_uv(u, v, lat, rep):
@@ -183,19 +186,21 @@ def detail_uv(u, v, lat, rep):
     return (u * rep * 2 * cl) % 1.0, (v * rep) % 1.0
 
 
-def cloud_cover(maps, u, v, lat, use_detail=True):
+def cloud_cover(maps, u, v, lat, use_detail=True, with_d=False):
     """The cloud layer's opacity at (u, v): the map's cover, broken into
-    cloudlets by the detail texture (two scales plus the fibrous channel)."""
+    cloudlets by the detail texture (two scales plus the fibrous channel).
+    with_d also returns the detail value (for the cloud-top relief)."""
     a = N.sample(maps.clouds, u, v)
     if not use_detail or maps.detail is None:
-        return a
+        return (a, np.full_like(a, 0.5)) if with_d else a
     u1, v1 = detail_uv(u, v, lat, DETAIL_REP[0])
     u2, v2 = detail_uv(u, v, lat, DETAIL_REP[1])
     d1 = N.sample(maps.det_r, u1, v1)
     d2 = N.sample(maps.det_r, u2, v2)
     fb = N.sample(maps.det_b, u1, v1)
     d = np.clip(0.75 * d1 + 0.25 * fb + (d2 - 0.5) * 0.35, 0, 1)
-    return sharpen_clouds(a, d)
+    s = sharpen_clouds(a, d)
+    return (s, d) if with_d else s
 
 
 def sharpen_clouds(alpha, d, soft=0.14):
@@ -208,7 +213,7 @@ def sharpen_clouds(alpha, d, soft=0.14):
     lo = 1.0 - alpha - soft
     t = np.clip((d - lo) / (2 * soft), 0, 1)
     a = t * t * (3 - 2 * t)
-    return np.clip(np.maximum(a * np.minimum(alpha * 1.6, 1.0), alpha * 0.08), 0, 1).astype(F32)
+    return np.clip(np.maximum(a * np.minimum(alpha * 1.25, 1.0) ** 0.7, alpha * 0.08), 0, 1).astype(F32)
 
 
 # ---------------------------------------------------------------------------
@@ -219,11 +224,12 @@ class Settings:
     exposure = 1.0
     night_gain = 0.6
     star_gain = 1.0
-    ocean_rough = 0.22
+    ocean_rough = 0.13
     clouds_on = True
     detail = True
     sun_disc = True
-    multi = 0.35             # multiple-scattering strength
+    multi = 0.55             # multiple-scattering strength
+    airglow = 1.0            # the green oxygen airglow at ~95 km (night limb)
 
 
 def render_rays(O, D, sun, maps, st=None, chunk=65536):
@@ -289,6 +295,19 @@ def _render_chunk(O, D, sun, maps, st):
         tau = tau + ext * ds
     Tview = np.exp(-tau)
     L = L_in * SUN_E * SUN_COLOR
+    # airglow: a thin emitting shell ~95 km up, integrated analytically at
+    # the ray's two crossings (a tangent path through it is what shows)
+    if st.airglow > 0:
+        rg = R + AIRGLOW_H
+        hitg_, t0g, t1g = _sphere(O, D, rg)
+        glow = np.zeros(n, F32)
+        mu_min = math.sqrt(2 * AIRGLOW_SIGMA / rg)
+        for tc in (t0g, t1g):
+            ok = hitg_ & (tc > 0) & (tc < t_end + 1e-3)
+            xg = O + D * tc[:, None]
+            mu = np.abs(np.sum(D * xg, 1)) / rg
+            glow += np.where(ok, AIRGLOW_SIGMA * math.sqrt(math.pi) / np.maximum(mu, mu_min), 0.0).astype(F32)
+        L += glow[:, None] * (AIRGLOW_COLOR * st.airglow)
     # ---------------- the surface ----------------
     gi = np.nonzero(hit_g)[0]
     if gi.size:
@@ -302,7 +321,11 @@ def _render_chunk(O, D, sun, maps, st):
         nig = N.sample(maps.night, u, v)
         det = detail_at(maps, u, v, lat) if (st.detail and maps.detail is not None) else None
         if det is not None:
-            alb = alb * (0.82 + 0.36 * det[:, 1:2]) ** (1 - wat[:, None])
+            # terrain below the map's pixel: two scales of the detail's G
+            u2, v2 = detail_uv(u, v, lat, DETAIL_REP[1])
+            g2 = N.sample(maps.det_g, u2, v2)
+            k_ = (0.6 + 0.8 * det[:, 1]) * (0.85 + 0.3 * g2)
+            alb = alb * k_[:, None] ** (1 - wat[:, None])
         # relief normal from the height map
         nrm = ng
         if maps.height is not None:
@@ -359,6 +382,10 @@ def _render_chunk(O, D, sun, maps, st):
         Lg = Lg + wat[:, None] * (0.02 + 0.98 * (1 - ndv) ** 5)[:, None] * SUN_E * np.array([0.02, 0.035, 0.07], F32) * np.clip(mu_g + 0.1, 0, 1)[:, None]
         # city lights in the dark
         dark = N.smoothstep(0.06, -0.08, mu_g)
+        if det is not None:
+            u3, v3 = detail_uv(u, v, lat, DETAIL_REP[1] * 2)
+            sp = N.sample(maps.det_r, u3, v3)
+            nig = nig * (0.35 + 1.7 * sp ** 2)[:, None]
         Ln = nig * (st.night_gain * dark)[:, None]
         Lsurf = Lg + Ln
         # ---------------- clouds ----------------
@@ -386,9 +413,13 @@ def _render_chunk(O, D, sun, maps, st):
                 # the detail texture's own scale
                 dv = 1.0 / (DETAIL_REP[0] * 1024)
                 du = dv / (2 * np.maximum(np.cos(latc), 0.2))
-                hf = lambda a_: CLOUDLET_H * a_ ** 1.5
-                kx = kx + (hf(cloud_cover(maps, uc + du, vc, latc)) - hf(cloud_cover(maps, uc - du, vc, latc))) / (2 * DETAIL_TEXELS_KM)
-                ky = ky - (hf(cloud_cover(maps, uc, vc + dv, latc)) - hf(cloud_cover(maps, uc, vc - dv, latc))) / (2 * DETAIL_TEXELS_KM)
+                # heights: the cover itself, domed by the detail so even an
+                # overcast deck has lumpy, sunlit and shadowed tops
+                def hf(uu, vv):
+                    a_, d_ = cloud_cover(maps, uu, vv, latc, with_d=True)
+                    return CLOUDLET_H * a_ ** 1.5 * (0.45 + 0.55 * d_)
+                kx = kx + (hf(uc + du, vc) - hf(uc - du, vc)) / (2 * DETAIL_TEXELS_KM)
+                ky = ky - (hf(uc, vc + dv) - hf(uc, vc - dv)) / (2 * DETAIL_TEXELS_KM)
             ncl = nc - east * kx[:, None] + north * ky[:, None]
             ncl /= np.linalg.norm(ncl, axis=1, keepdims=True)
             mu_c = np.sum(nc * sun, 1)

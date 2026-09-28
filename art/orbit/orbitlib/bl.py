@@ -134,6 +134,9 @@ class Geo:
 
     def verts(self, pts, M=None):
         base = len(self.V)
+        # a mirrored frame (determinant < 0) reverses every face's winding:
+        # remember it so face() can put the winding (and the normal) back
+        self._flip = M is not None and M.to_3x3().determinant() < 0
         if M is None:
             self.V.extend(Vector(p) for p in pts)
         else:
@@ -141,6 +144,11 @@ class Geo:
         return base
 
     def face(self, idx, mat, uv=None, rand=None, smooth=False):
+        idx = list(idx)
+        if getattr(self, '_flip', False):
+            idx = idx[::-1]
+            if uv is not None:
+                uv = list(uv)[::-1]
         self.F.append(tuple(idx))
         self.FM.append(self._slot(mat))
         self.FR.append(self._r.random() if rand is None else rand)
@@ -298,7 +306,9 @@ class Geo:
         bm = bmesh.new()
         vs = [bm.verts.new((x, y, 0.0)) for x, y in outline]
         f = bm.faces.new(vs)
-        ext = bmesh.ops.extrude_face_region(bm, geom=[f])
+        # keep the original face: without use_keep_orig the extrusion
+        # moves it, and the plate is an open shell missing one side
+        ext = bmesh.ops.extrude_face_region(bm, geom=[f] + list(f.edges) + list(f.verts), use_keep_orig=True)
         for v in [e for e in ext['geom'] if isinstance(e, bmesh.types.BMVert)]:
             v.co.z += thick
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
@@ -416,6 +426,42 @@ def box_uv(pts, k, size):
     if size[a] < size[b]:
         a, b = b, a
     return [(p[a], p[b]) for p in pts]
+
+
+def orient_normals(ob, eye=None):
+    """Closed parts: normals outward. Open parts (a label, a panel, a pane)
+    have no outside: with an eye given they are turned to face it, which is
+    what a bake from that eye and back-face culling both need."""
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.faces.ensure_lookup_table()
+    seen = set()
+    mw = ob.matrix_world
+    eye_l = mw.inverted() @ Vector(eye) if eye is not None else None
+    for f0 in bm.faces:
+        if f0.index in seen:
+            continue
+        comp = []
+        stack = [f0]
+        seen.add(f0.index)
+        while stack:
+            f = stack.pop()
+            comp.append(f)
+            for e in f.edges:
+                for g in e.link_faces:
+                    if g.index not in seen:
+                        seen.add(g.index)
+                        stack.append(g)
+        closed = all(len(e.link_faces) == 2 for f in comp for e in f.edges)
+        if closed:
+            bmesh.ops.recalc_face_normals(bm, faces=comp)
+        elif eye_l is not None:
+            for f in comp:
+                if f.normal.dot(eye_l - f.calc_center_median()) < 0:
+                    f.normal_flip()
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
 
 
 def apply_all(ob):

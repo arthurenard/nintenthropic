@@ -20,7 +20,11 @@ from mathutils import Matrix, Vector
 from . import pipeline, render, world, bl, imgio
 
 W, H = 1600, 900
-SUN_NDC = (-0.64, 0.43)        # where the sun rises on screen
+SUN_NDC = (-0.60, 0.60)        # where the sun rises on screen: ~8 degrees above the limb
+# the poster's own planet: over a lit continent, heading into the dawn, so
+# the night ground below carries its cities while the sun clears the limb
+POSTER_SUBPOINT = (84.0, 28.0)
+POSTER_HEADING = 250.0
 
 
 def bloom(rgb, threshold=1.0, strength=0.12, clamp=30.0):
@@ -77,7 +81,7 @@ def fragment(sc, sun, cam_pos):
     ob = debris.to_object(bm, "poster.fragment", mats, col)
     bm.free()
     ob.scale = (0.8, 0.8, 0.8)
-    pos = Vector(world.view_point(-0.26, 0.5, 9.0))
+    pos = Vector(world.view_point(-0.06, 0.13, 6.5))
     to_eye = (Vector(cam_pos) - pos).normalized()
     n = (Vector(sun) + to_eye).normalized()
     # the plate's +Z is its face; tilt it a hair off the perfect mirror so
@@ -119,8 +123,9 @@ def stage(ctx):
     lamp.data.color = (1.0, 0.78, 0.55)
     lamp.data.energy = 14.0
     maps = pipeline.load_maps(ctx)
-    sky = pipeline.Sky(sun_world=np.array(sun), star_gain=0.25, night_gain=0.9)
-    env = pipeline.render_env(ctx, "env_poster.exr", sky, W=1024, maps=maps, samples=32)
+    sky = pipeline.Sky(sun_world=np.array(sun), star_gain=0.25, night_gain=5.0)
+    prot = world.planet_rotation(POSTER_SUBPOINT, POSTER_HEADING)
+    env = pipeline.render_env(ctx, "env_poster.exr", sky, W=1024, maps=maps, samples=32, rot=prot)
     render.world_env(sc, env, name="PosterEnv")
     fragment(sc, sun, cam.matrix_world.translation)
     q = ctx.quick
@@ -129,7 +134,7 @@ def stage(ctx):
     exr = ctx.path("__poster_fg.exr")
     fg, a = render.render_fg(sc, exr)
     w, h = fg.shape[1], fg.shape[0]
-    bg = render.planet_background(ctx, cam, w, h, sky, maps=maps, samples=24 if q else 64)
+    bg = render.planet_background(ctx, cam, w, h, sky, maps=maps, samples=24 if q else 64, rot=prot)
     rgb = render.composite(fg, a, bg)
     ex = 2 ** (render.EXPOSURE + 1.2)
     # the sun's glare where it stands on screen (only if it shows)

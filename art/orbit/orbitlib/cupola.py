@@ -138,6 +138,24 @@ def build(lib, col):
         c0, c1, c2, c3 = c                      # top-left, top-right, bottom-right, bottom-left
         for strip in ([TL, TR, c1, c0], [c1, TR, BR, c2], [c3, c2, BR, BL], [TL, c0, c3, BL]):
             shell.sheet(Mf, strip, SHELL, 'alu_dark', side_mat='alu_frame')
+    # the forging's machined pockets on the top plate: raised webs between
+    # shallow recesses, the look of a part milled from one billet
+    for j in range(6):
+        a, b = top[j], top[(j + 1) % 6]
+        mid = (a + b) / 2
+        for t in (0.25, 0.75):
+            p_out = a.lerp(b, t)
+            d = Vector((p_out.x, 0, p_out.z)).normalized()
+            p_in = d * (R_CW + 0.105) + AX * A_TOP
+            L = (p_out - p_in).length
+            side = AX.cross(d).normalized()
+            M = bl.frame(p_in, side, d, -AX)
+            shell.box(M, (0.018, L - 0.02, 0.012), 'alu_frame', center=(0, L / 2, 0.006), bevel=0.003)
+        # a rim along the hexagon edge
+        e = (b - a).normalized()
+        inward = Vector((-mid.x, 0, -mid.z)).normalized()
+        M = bl.frame(a, e, inward, -AX)
+        shell.box(M, ((b - a).length, 0.022, 0.012), 'alu_frame', center=((b - a).length / 2, 0.035, 0.006), bevel=0.003)
     ob = shell.build(col, lib, smooth_angle=30)
     ob.matrix_world = P
     bl.tag(ob, surface='metal', part='shell')

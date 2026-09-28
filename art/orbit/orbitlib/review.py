@@ -78,6 +78,25 @@ OVERVIEWS = {
 }
 
 
+def closeups(ctx, maps):
+    """Details from (near) the eye with longer lenses, over the planet."""
+    q = ctx.quick
+    shots = [
+        ('close_laptop', (0.0, 0.05, 0.0), world.view_point(0.78, -0.72, 1.0), 42.0),
+        ('close_frame', (0.0, 0.0, 0.0), world.view_point(-0.55, 0.42, 1.0), 55.0),
+        ('close_float', (0.0, 0.0, 0.0), world.view_point(-0.62, -0.1, 1.0), 45.0),
+        ('close_hand', (0.0, 0.0, 0.0), world.view_point(0.12, -0.02, 1.0), 130.0),
+        ('close_capsule', (0.0, 0.0, 0.0), world.view_point(-0.35, -0.55, 1.0), 85.0),
+        ('close_turret', (0.0, 0.0, 0.0), world.view_point(0.3, -0.82, 1.0), 60.0),
+        ('close_truss', (0.0, 0.0, 0.0), world.view_point(-0.2, 0.86, 1.0), 90.0),
+    ]
+    for name, loc, tgt, lens in shots:
+        if ctx.preview not in (None, 'close', name):
+            continue
+        cam = free_camera("review_cam", loc, Vector(tuple(float(c) for c in tgt)), lens)
+        render_view(ctx, name, cam, 1200 if not q else 800, 800 if not q else 534, 24 if q else 192, maps=maps)
+
+
 def overviews(ctx, maps):
     q = ctx.quick
     for name, (loc, tgt, lens) in OVERVIEWS.items():
@@ -108,42 +127,112 @@ def explode(group, amount):
         c.location = c.location + d.normalized() * amount
 
 
+def fit_camera(name, objs, direction, lens=50.0, aspect=16 / 9, margin=1.12):
+    """A camera looking along `direction` that frames every vertex of the
+    objects (world bounding boxes)."""
+    bpy.context.view_layer.update()
+    pts = []
+    for o in objs:
+        if o.type != 'MESH' or o.hide_render:
+            continue
+        pts.extend(o.matrix_world @ Vector(c) for c in o.bound_box)
+    if not pts:
+        return free_camera(name, (0, -5, 2), (0, 0, 0), lens)
+    lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    tgt = (lo + hi) / 2
+    d = Vector(direction).normalized()
+    tx = 18.0 / lens / margin
+    ty = tx / aspect
+    right = d.cross(Vector((0, 0, 1))).normalized()
+    up = right.cross(d)
+    dist = 0.1
+    for p in pts:
+        v = p - tgt
+        x, y, z = v.dot(right), v.dot(up), v.dot(d)
+        dist = max(dist, abs(x) / tx - z, abs(y) / ty - z)
+    return free_camera(name, tgt - d * dist, tgt, lens)
+
+
 def debris(ctx):
     sc = asset_scene(ctx, ctx.asset("debris.glb"), sun=Vector((-0.6, -0.5, 0.62)).normalized())
     q = ctx.quick
-    # the file has every whole at the origin: lay them out on a grid, each
-    # one's pieces set behind it and pulled apart
-    rows_of = {'shrapnel': 0, 'chunk': 1, 'slab': 2, 'shard': 3, 'foil': 4}
-    for o in list(sc.objects):
-        if o.parent is not None:
-            continue
-        parts = o.name.split('.')
-        if len(parts) < 2 or parts[0] not in rows_of or not parts[1].isdigit():
-            continue
-        slot = Vector(((int(parts[1]) - 1) * 2.6, rows_of[parts[0]] * 3.2, 0.0))
-        o.location = o.location + slot
-        if o.name.endswith('.pieces'):
-            size = max(0.3, max((c.dimensions.length for c in o.children), default=0.3))
-            o.location = o.location + Vector((0, 1.35, 0.0))
-            explode(o, 0.12 * size + 0.06)
-    rows = {'shrapnel': (0, 6, 0.55), 'chunk': (1, 4, 1.2), 'slab': (2, 3, 2.4), 'shard': (3, 4, 2.0), 'foil': (4, 3, 0.9)}
+    kinds = ('shrapnel', 'chunk', 'slab', 'shard', 'foil')
     roots = [o for o in sc.objects if o.parent is None and o.type in ('MESH', 'EMPTY')]
-    for kind, (row, n, span) in rows.items():
+
+    def meshes(o):
+        return [x for x in [o] + list(o.children_recursive) if x.type == 'MESH']
+    for kind in kinds:
         if ctx.preview not in (None, 'debris', f'debris_{kind}'):
             continue
-        # show this kind only (and its pieces)
+        mine = [o for o in roots if o.name.split('.')[0] == kind]
+        wholes = sorted([o for o in mine if not o.name.endswith('.pieces')], key=lambda o: o.name)
+        size = max(max(m.dimensions) for o in wholes for m in meshes(o))
+        step = size * 1.35
         for o in roots:
-            vis = o.name.split('.')[0] == kind
+            vis = o in mine
             for x in [o] + list(o.children_recursive):
                 x.hide_render = not vis
-        width = (n - 1) * 2.6 + span * 2
-        tgt = Vector(((n - 1) * 2.6 / 2, row * 3.2 + 0.55, 0.0))
-        dist = width / (2 * math.tan(math.radians(20))) + span
-        cam = free_camera("review_cam", tgt + Vector((0.0, -dist * 0.85, dist * 0.52)), tgt, 50.0)
+        # wholes in a row; each one's pieces pulled apart behind it
+        for i, o in enumerate(wholes):
+            o.location = Vector((i * step, 0.0, 0.0))
+            g = bpy.data.objects.get(o.name + '.pieces')
+            if g is not None:
+                g.location = Vector((i * step, size * 1.5, 0.0))
+                explode(g, 0.12 * size + 0.03)
+        cam = fit_camera("review_cam", [m for o in mine for m in meshes(o)], (0.15, 1.0, -0.62), 50.0)
         render_view(ctx, f"debris_{kind}", cam, 1600 if not q else 960, 900 if not q else 540, 16 if q else 160, planet=False)
+        for o in mine:
+            o.location = Vector((0, 0, 0))
+            for x in [o] + list(o.children_recursive):
+                x.hide_render = True
     for o in roots:
         for x in [o] + list(o.children_recursive):
             x.hide_render = False
+
+
+def player_debris(ctx, maps):
+    """The real test: the debris field in the player's view, fragments at
+    12-90 m tumbling in the baked sun, over the planet."""
+    import random
+    pipeline.open_blend(pipeline.scene_blend(ctx))
+    sc = bpy.context.scene
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=ctx.asset("debris.glb"))
+    new = [o for o in bpy.data.objects if o not in before]
+    lib = [o for o in new if o.parent is None and not o.name.endswith('.pieces') and o.name.split('.')[0] in
+           ('shrapnel', 'chunk', 'slab', 'shard', 'foil')]
+    for o in new:
+        o.hide_render = True
+    # the station's shadows fall across the field in Cycles; the game lights
+    # debris without them, so leave them out of this check
+    for o in bpy.data.collections['station'].all_objects:
+        o.visible_shadow = False
+    rnd = random.Random(7)
+    col = bpy.data.collections.new("field")
+    sc.collection.children.link(col)
+    picks = [('shrapnel', 12, 14, 26), ('chunk', 8, 18, 45), ('slab', 3, 30, 70), ('shard', 3, 25, 60), ('foil', 2, 20, 45)]
+    for kind, n, d0, d1 in picks:
+        pool = [o for o in lib if o.name.startswith(kind + '.')]
+        for k in range(n):
+            src = rnd.choice(pool)
+            d = rnd.uniform(d0, d1)
+            sx, sy = rnd.uniform(-0.85, 0.85), rnd.uniform(-0.7, 0.75)
+            pos = Vector(tuple(float(c) for c in world.view_point(sx, sy, d)))
+            dup = src.copy()
+            col.objects.link(dup)
+            dup.hide_render = False
+            dup.location = pos
+            dup.rotation_mode = 'XYZ'
+            dup.rotation_euler = (rnd.uniform(0, 6.3), rnd.uniform(0, 6.3), rnd.uniform(0, 6.3))
+            for ch in src.children:
+                c2 = ch.copy()
+                col.objects.link(c2)
+                c2.parent = dup
+                c2.hide_render = False
+    cam = bpy.data.objects['camera.player']
+    q = ctx.quick
+    render_view(ctx, 'player_debris', cam, 1600 if not q else 960, 900 if not q else 540, 24 if q else 256, maps=maps)
 
 
 SHOTS = {
@@ -201,10 +290,12 @@ def asset_shots(ctx, fname):
             fore = bpy.data.objects.get('astronaut.forearm.R')
             hand = bpy.data.objects.get('astronaut.hand.R')
             if arm and fore and hand:
-                arm.rotation_mode = fore.rotation_mode = hand.rotation_mode = 'XYZ'
-                arm.rotation_euler = (math.radians(-60), math.radians(20), 0)
-                fore.rotation_euler = (math.radians(-40), 0, 0)
-                hand.rotation_euler = (0, 0, math.radians(180))
+                # the documented recipe: raise the arm forward about its
+                # hinge (local X), a little bend at the elbow, then turn the
+                # hand half a turn about the limb (Blender local Y = glTF Z)
+                arm.matrix_basis = arm.matrix_basis @ Matrix.Rotation(math.radians(75), 4, 'X')
+                fore.matrix_basis = fore.matrix_basis @ Matrix.Rotation(math.radians(20), 4, 'X')
+                hand.matrix_basis = hand.matrix_basis @ Matrix.Rotation(math.radians(180), 4, 'Y')
         cam = free_camera("review_cam", loc, tgt, lens)
         render_view(ctx, name, cam, 1280 if not q else 960, 960 if not q else 720, 24 if q else 192, planet=False)
         if setup == 'breakup':
@@ -223,7 +314,8 @@ PLANET_VIEWS = {
     'planet_day': (55.0, -30.0, 'player', 0.0, 0.0, 0.0),
     'planet_glint': (24.0, -4.0, 'player', 0.0, 0.0, 0.0),
     'planet_terminator': (-2.0, 20.0, 'player', 1.8, 0.1, 0.6),
-    'planet_night': (-40.0, 180.0, 'player', 4.2, 0.6, 1.0),
+    'planet_night': (-40.0, 180.0, 'player', 4.2, 0.6, 2.0, (80.0, 30.0), 30.0),
+    'planet_night_hi': (-40.0, 180.0, 'player', 4.2, 0.6, 2.0, (-112.0, 43.5), 0.0),
     'planet_limb_tele': (6.0, 35.0, (21.0, -4.0, 18.0), 0.6, 0.0, 0.3),
 }
 
@@ -235,7 +327,9 @@ def planet_views(ctx, maps):
     sc = bpy.context.scene
     sc.view_settings.view_transform = render.VIEW_TRANSFORM
     sc.view_settings.look = render.LOOK
-    for name, (el, az, camdef, ex, stars, night) in PLANET_VIEWS.items():
+    for name, spec in PLANET_VIEWS.items():
+        el, az, camdef, ex, stars, night = spec[:6]
+        rot = world.planet_rotation(spec[6], spec[7]) if len(spec) > 6 else None
         if ctx.preview not in (None, 'planet', name):
             continue
         t = time.time()
@@ -253,7 +347,6 @@ def planet_views(ctx, maps):
         else:
             dep, roll, vfov = camdef
             # a telephoto on the limb from the eye
-            fwd = fh * math.cos(math.radians(-dep + 20.3)) - up * 0.0
             d = fh * math.cos(math.radians(dep)) - up * math.sin(math.radians(dep))
             rgt = np.cross(d, up)
             rgt /= np.linalg.norm(rgt)
@@ -262,7 +355,7 @@ def planet_views(ctx, maps):
             r2 = rgt * math.cos(rl) + cup * math.sin(rl)
             u2 = -rgt * math.sin(rl) + cup * math.cos(rl)
             D = PR.perspective_rays(w, h, vfov, np.stack([r2, u2, -d], 1))
-        L, _ = pipeline.render_planet_view(maps, D.astype(np.float64), sky, samples=32 if q else 64)
+        L, _ = pipeline.render_planet_view(maps, D.astype(np.float64), sky, samples=32 if q else 64, rot=rot)
         rgb = L.reshape(h, w, 3) * (2 ** ex)
         from .poster import bloom
         rgb = bloom(rgb * 2 ** render.EXPOSURE, threshold=0.9) / 2 ** render.EXPOSURE
@@ -276,7 +369,7 @@ def calib_overlay(ctx):
     """The player's view with the nine running lights ringed: are they
     spread over the screen, and all seen through glass?"""
     import OpenImageIO as oiio
-    src = _out(ctx, 'player_1600x900')
+    src = _out(ctx, 'player_quick' if ctx.quick else 'player_1600x900')
     if not os.path.exists(src):
         return
     img = np.asarray(oiio.ImageInput.open(src).read_image(0, 0, 0, 3, oiio.UINT8)).copy()
@@ -352,10 +445,14 @@ def render_all(ctx):
         calib_overlay(ctx)
     if pv is None or pv.startswith('planet'):
         planet_views(ctx, maps)
+    if pv is None or pv.startswith('close'):
+        closeups(ctx, maps)
     if pv is None or pv.startswith('overview') or pv in OVERVIEWS:
         overviews(ctx, maps)
     if pv in (None, 'exported'):
         exported_player(ctx, maps)
+    if pv in (None, 'player_debris') and os.path.exists(ctx.asset("debris.glb")):
+        player_debris(ctx, maps)
     if (pv is None or pv.startswith('debris')) and os.path.exists(ctx.asset("debris.glb")):
         debris(ctx)
     for fname in ('drone.glb', 'derelict.glb', 'extras.glb'):

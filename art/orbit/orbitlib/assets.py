@@ -385,6 +385,6 @@ def stage_debris(ctx):
     bpy.data.materials.remove(cut)
     out = ctx.asset("debris.glb")
     sc["note"] = "debris library: wholes laid out on a grid; see art/orbit/README.md (Debris)"
-    export.gltf_export(out, tangents=True, quality=86)
+    export.gltf_export(out, tangents=False, quality=86, pos_bits=14, uv_bits=12)
     bpy.ops.wm.save_as_mainfile(filepath=ctx.path("debris.blend"), compress=True)
     log(f"  debris done in {time.time() - t:.1f}s")

@@ -447,8 +447,17 @@ def exterior_materials():
     pbr('solar_cell', solar)
 
     def solar_back(g):
+        # the back of a roll-out blanket: amber Kapton with the cells'
+        # grid showing through and a satin sheen
+        uv = uvtex(g)
+        u, v, _ = g.separate(uv)
+        gu = g.smooth(g.math('ABSOLUTE', g.sub(g.math('FRACT', g.mul(u, 1 / 0.08)), 0.5)), 0.46, 0.49)
+        gv = g.smooth(g.math('ABSOLUTE', g.sub(g.math('FRACT', g.mul(v, 1 / 0.08)), 0.5)), 0.46, 0.49)
+        grid = g.math('MAXIMUM', gu, gv)
         n = g.noise(obj(g), scale=30.0, detail=3.0)
-        return dict(color=g.rgb(lin(200, 190, 160)), rough=0.5, metal=0.0, height=n, bump=0.1, bump_dist=0.001)
+        base = g.mix(grid, g.rgb(lin(168, 104, 44)), g.rgb(lin(120, 72, 30)))
+        base = g.mix(g.mul(g.smooth(n, 0.4, 0.8), 0.4), base, g.rgb(lin(190, 128, 60)))
+        return dict(color=base, rough=g.add(0.3, g.mul(n, 0.1)), metal=0.35, height=g.add(grid, n), bump=0.15, bump_dist=0.001)
     pbr('solar_back', solar_back)
 
     def radiator(g):
@@ -551,18 +560,22 @@ def extras_materials():
 
 def debris_materials():
     def torn_alu(g):
+        # bare aluminium torn in a collision: bright where fresh, machining
+        # marks, heat-tinted toward the torn edges (straw, bronze, purple,
+        # blue) and sooted at the very edge
         pt = g.node('ShaderNodeNewGeometry', out='Pointiness')
-        edge = g.smooth(pt, 0.52, 0.62)
-        n = g.noise(obj(g), scale=9.0, detail=6.0)
-        burn = g.clamp01(g.add(g.mul(edge, 0.9), g.mul(g.smooth(n, 0.55, 0.8), 0.6)))
+        edge = g.smooth(pt, 0.52, 0.64)
+        n = g.noise(obj(g), scale=7.0, detail=6.0)
+        n2 = g.noise(obj(g), scale=31.0, detail=4.0)
+        burn = g.clamp01(g.add(g.mul(edge, 0.85), g.mul(g.smooth(n, 0.5, 0.82), g.add(0.35, g.mul(rand(g), 0.5)))))
+        burn = g.clamp01(g.add(burn, g.mul(g.sub(n2, 0.5), 0.15)))
         mk = machining(g, 500.0)
-        base = g.mix(g.mul(rand(g), 0.6), g.rgb(lin(178, 180, 184)), g.rgb(lin(150, 150, 154)))
-        heat = g.mix(g.smooth(n, 0.3, 0.7), g.rgb(lin(120, 90, 70)), g.rgb(lin(90, 70, 90)))       # heat tint
-        base = g.mix(g.mul(burn, 0.5), base, heat)
-        base = g.mix(g.mul(g.smooth(burn, 0.6, 1.0), 0.9), base, g.rgb(lin(24, 20, 18)))           # soot
-        rough = g.add(0.2, g.mul(burn, 0.6))
-        metal = g.sub(1.0, g.mul(g.smooth(burn, 0.6, 1.0), 0.8))
-        return dict(color=base, rough=rough, metal=metal, height=g.add(mk, g.mul(n, 2.0)), bump=0.1, bump_dist=0.001)
+        tint = g.ramp(burn, [(0.0, lin(186, 188, 192)), (0.30, lin(176, 176, 178)), (0.42, lin(200, 172, 110)),
+                             (0.52, lin(160, 104, 66)), (0.62, lin(112, 72, 124)), (0.72, lin(72, 92, 150)),
+                             (0.84, lin(46, 42, 42)), (1.0, lin(20, 18, 17))])
+        rough = g.add(0.16, g.mul(burn, 0.55))
+        metal = g.sub(1.0, g.mul(g.smooth(burn, 0.78, 0.95), 0.85))
+        return dict(color=tint, rough=rough, metal=metal, height=g.add(mk, g.mul(n2, 1.5)), bump=0.12, bump_dist=0.001)
     pbr('torn_alu', torn_alu)
 
     def torn_white(g):

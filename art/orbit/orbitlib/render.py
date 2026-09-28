@@ -210,11 +210,11 @@ def render_fg(scene, path_exr):
     return read_exr_rgba(path_exr)
 
 
-def planet_background(ctx, cam, w, h, sky, maps=None, samples=48, exposure=1.0):
+def planet_background(ctx, cam, w, h, sky, maps=None, samples=48, exposure=1.0, rot=None):
     from . import pipeline
     maps = maps or pipeline.load_maps(ctx)
     D, _ = camera_rays(cam, w, h)
-    L, _ = pipeline.render_planet_view(maps, D.astype(np.float64), sky, samples=samples, exposure=exposure)
+    L, _ = pipeline.render_planet_view(maps, D.astype(np.float64), sky, samples=samples, exposure=exposure, rot=rot)
     return L.reshape(h, w, 3)
 
 

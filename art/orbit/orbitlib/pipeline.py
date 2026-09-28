@@ -118,13 +118,14 @@ class Sky:
         self.night_gain = night_gain
 
 
-def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposure=1.0):
+def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposure=1.0, rot=None):
     """Radiance of the planet, its atmosphere and the stars along world rays
     from the eye. Returns (N, 3) linear radiance (sun irradiance 20)."""
     from . import planetrender as PR, world
-    Mt = world.planet_rotation().T
+    rot = world.planet_rotation() if rot is None else rot
+    Mt = rot.T
     D = (rays_world.astype(np.float64) @ Mt.T).astype(F32)
-    O = world.eye_in_planet_km().astype(F32)
+    O = world.eye_in_planet_km(rot).astype(F32)
     sun_p = (Mt @ sky.sun_world).astype(F32)
     st = PR.Settings()
     st.samples = samples
@@ -136,7 +137,7 @@ def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposur
     return L, cov
 
 
-def render_env(ctx, name, sky, W=2048, maps=None, samples=40):
+def render_env(ctx, name, sky, W=2048, maps=None, samples=40, rot=None):
     """The planet as the station sees it, as a world environment (equirect,
     this build's convention: see planetrender.equirect_rays) for lighting:
     earthshine from below, black space above. No sun disc: in Blender the
@@ -145,7 +146,7 @@ def render_env(ctx, name, sky, W=2048, maps=None, samples=40):
     maps = maps or load_maps(ctx)
     t = time.time()
     D = PR.equirect_rays(W, W // 2)
-    L, _ = render_planet_view(maps, D, sky, samples=samples, sun_disc=False)
+    L, _ = render_planet_view(maps, D, sky, samples=samples, sun_disc=False, rot=rot)
     env = np.minimum(L.reshape(W // 2, W, 3), 60.0)
     path = ctx.path(name)
     imgio.write_exr(path, env)

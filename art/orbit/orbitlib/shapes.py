@@ -36,7 +36,8 @@ def sheet(outline, thick, subdiv_len=0.02, mats=(0, 1, 2)):
     bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=cuts, use_grid_fill=True)
     for fc in bm.faces:
         fc.material_index = mats[1]
-    ext = bmesh.ops.extrude_face_region(bm, geom=bm.faces[:])
+    # keep the originals as the bottom (see bl.Geo.sheet)
+    ext = bmesh.ops.extrude_face_region(bm, geom=bm.faces[:] + bm.edges[:] + bm.verts[:], use_keep_orig=True)
     top = [e for e in ext['geom'] if isinstance(e, bmesh.types.BMFace)]
     for v in [e for e in ext['geom'] if isinstance(e, bmesh.types.BMVert)]:
         v.co.z += thick

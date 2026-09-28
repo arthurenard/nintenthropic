@@ -94,10 +94,16 @@ def astronaut(lib, col):
     bm.free()
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=0.195)
-    kill = [f for f in bm.faces if f.calc_center_median().y > -0.03 or f.calc_center_median().z < -0.11]
+    kill = [f for f in bm.faces
+            if f.calc_center_median().y > -0.085 or not (-0.11 < f.calc_center_median().z < 0.1)
+            or abs(f.calc_center_median().x) > 0.15]
     bmesh.ops.delete(bm, geom=kill, context='FACES')
     g.add_bmesh(bm, Matrix.Translation((0, 0.01, 1.8)), 'visor_gold', smooth=True)
     bm.free()
+    # the visor assembly's white brow and side guards
+    g.lathe(Matrix.Translation((0, 0.01, 1.8)) @ Matrix.Rotation(math.radians(90), 4, 'X'),
+            [(0.197, -0.02), (0.205, -0.02), (0.205, 0.02), (0.197, 0.02)], 'white_paint', seg=32,
+            a0=math.radians(200), a1=math.radians(340), closed=False)
     for s in (-1, 1):
         g.box(I, (0.06, 0.08, 0.06), 'white_paint', center=(s * 0.19, -0.02, 1.9), bevel=0.01)
         g.cyl(I, (s * 0.19, -0.06, 1.9), (s * 0.19, -0.075, 1.9), 0.022, 'window_dark', seg=12)
@@ -108,32 +114,50 @@ def astronaut(lib, col):
     body = g.build(col, lib, smooth_angle=45)
     body.parent = root
     bl.tag(body, surface='cloth')
-    # right arm: shoulder -> elbow -> wrist, each part its own pivot
+    # right arm: shoulder -> elbow -> wrist. Each part's node is aligned
+    # with its limb: local -Z (glTF) runs down the limb toward the hand,
+    # local X is the hinge, local +Y (glTF) faces forward in the rest pose.
+    # Raise the arm forward (rotate arm.R about its local X by +90 degrees
+    # in glTF) and the thumb points up; turn the hand 180 degrees about its
+    # local Z for the thumbs-down.
     shR, elR, wrR = Vector((-0.34, 0.0, 1.5)), Vector((-0.43, -0.12, 1.22)), Vector((-0.41, -0.25, 1.02))
+    fwd_hint = Vector((0, -1, 0))
+
+    def limb_matrix(p, d):
+        return bl.look_matrix(p, d, fwd_hint)
+
+    Ma = limb_matrix(shR, elR - shR)
+    La = (elR - shR).length
     ga = Geo("astronaut.arm.R")
-    capsule(ga, Vector((0, 0, 0)), elR - shR, 0.085, 'suit')
-    ring(ga, (elR - shR) * 0.1, elR - shR, 0.086, 'alu_bare')
+    capsule(ga, Vector((0, 0, 0)), Vector((0, La, 0)), 0.085, 'suit')
+    ring(ga, Vector((0, La * 0.1, 0)), Vector((0, 1, 0)), 0.086, 'alu_bare')
     aob = ga.build(col, lib, smooth_angle=45)
-    aob.location = shR
     aob.parent = root
-    bl.tag(aob, surface='cloth', note="pivot at the shoulder")
+    aob.matrix_world = Ma
+    bl.tag(aob, surface='cloth', note="pivot at the shoulder; -Z (glTF) down the arm, hinge on local X")
+    Mf = limb_matrix(elR, wrR - elR)
+    Lf = (wrR - elR).length
     gf = Geo("astronaut.forearm.R")
-    capsule(gf, Vector((0, 0, 0)), wrR - elR, 0.075, 'suit')
-    ring(gf, (wrR - elR) * 0.88, elR - wrR, 0.076, 'alu_bare')
+    capsule(gf, Vector((0, 0, 0)), Vector((0, Lf, 0)), 0.075, 'suit')
+    ring(gf, Vector((0, Lf * 0.88, 0)), Vector((0, 1, 0)), 0.076, 'alu_bare')
     fob = gf.build(col, lib, smooth_angle=45)
     fob.parent = aob
-    fob.location = elR - shR
-    bl.tag(fob, surface='cloth', note="pivot at the elbow")
+    fob.matrix_world = Mf
+    bl.tag(fob, surface='cloth', note="pivot at the elbow; -Z (glTF) down the forearm, hinge on local X")
+    # the glove: a fist (palm, curled fingers, knuckles) with the thumb
+    # along local +Z (Blender) = +Y (glTF), forward in the rest pose
     gh = Geo("astronaut.hand.R")
-    fwd = (wrR - elR).normalized()
-    Mh = bl.look_matrix(Vector((0, 0, 0)), fwd, (0, -1, 0.3))
-    gh.box(Mh, (0.09, 0.11, 0.075), 'suit', center=(0, 0.065, 0), bevel=0.03)
-    gh.box(Mh, (0.095, 0.02, 0.08), 'alu_bare', center=(0, 0.005, 0), bevel=0.005)
-    # the thumb, up along the hand's local +Z (Blender) = glTF +Y
-    gh.cyl(Mh, (0.0, 0.07, 0.035), (0.0, 0.07, 0.085), 0.017, 'suit', seg=12)
+    I = Matrix.Identity(4)
+    gh.box(I, (0.095, 0.035, 0.09), 'alu_bare', center=(0, 0.01, 0), bevel=0.008)          # wrist disconnect
+    gh.box(I, (0.09, 0.075, 0.085), 'suit', center=(0, 0.065, 0.0), bevel=0.028)           # palm
+    for k in range(4):
+        x = -0.033 + k * 0.022
+        capsule(gh, Vector((x, 0.1, 0.02)), Vector((x, 0.115, -0.02)), 0.0125, 'suit', seg=10)
+    capsule(gh, Vector((0.047, 0.07, 0.02)), Vector((0.047, 0.08, 0.075)), 0.015, 'suit', seg=10)   # thumb, up
+    gh.box(I, (0.092, 0.02, 0.06), 'black_paint', center=(0, 0.06, -0.035), bevel=0.006)   # palm grip pad
     hob = gh.build(col, lib, smooth_angle=45)
     hob.parent = fob
-    hob.location = wrR - elR
+    hob.matrix_world = limb_matrix(wrR, wrR - elR)
     bl.tag(hob, surface='cloth', note="pivot at the wrist; thumb along local +Y (glTF)")
     return root
 

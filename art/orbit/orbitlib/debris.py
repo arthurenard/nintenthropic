@@ -33,7 +33,7 @@ from .bl import rng
 DENSITY = {'alu': 2700.0 * 0.35, 'box': 600.0, 'panel': 180.0, 'solar': 60.0, 'core': 3000.0}
 
 
-def to_object(bm, name, mats, col, uv_scale=1.0):
+def to_object(bm, name, mats, col, uv_scale=1.0, faceted=None):
     """bmesh -> object with slots `mats` (names from materials.LIB), a box-
     projected 'tex' UV in metres and a per-object 'rand'."""
     from . import materials as MT
@@ -51,11 +51,18 @@ def to_object(bm, name, mats, col, uv_scale=1.0):
     r = rng(name).random()
     at = me.attributes.new("rand", 'FLOAT', 'FACE')
     at.data.foreach_set("value", [r] * len(me.polygons))
-    me.shade_smooth()
-    try:
-        me.set_sharp_from_angle(angle=math.radians(38))
-    except AttributeError:
-        pass
+    # crumpled metal is drawn faceted: each facet catches the sun on its
+    # own and flashes as the piece tumbles
+    if faceted is None:
+        faceted = name.split('.')[0] in ('shrapnel', 'slab', 'shard', 'poster')
+    if faceted:
+        me.shade_flat()
+    else:
+        me.shade_smooth()
+        try:
+            me.set_sharp_from_angle(angle=math.radians(38))
+        except AttributeError:
+            pass
     ob = bpy.data.objects.new(name, me)
     col.objects.link(ob)
     return ob
@@ -66,7 +73,7 @@ def to_object(bm, name, mats, col, uv_scale=1.0):
 
 def shrapnel_skin(r):
     out = shapes.torn_outline(0.11, 0.075, r, n=26, jag=0.3)
-    bm = shapes.sheet(out, 0.003, 0.01, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.003, 0.014, mats=(0, 1, 2))
     shapes.crumple(bm, 0.012, 14.0, r.uniform(0, 9), along=(0, 0, 1))
     shapes.fold(bm, (0.02, 0, 0), (0.3, 1, 0), (1, -0.3, 0), math.radians(r.uniform(35, 70)))
     shapes.crumple(bm, 0.004, 40.0, r.uniform(0, 9))
@@ -152,27 +159,48 @@ SHRAPNEL = [shrapnel_skin, shrapnel_bracket, shrapnel_tube, shrapnel_sandwich, s
 # Chunks
 
 def chunk_box(r):
-    bm = shapes.box_bm((0.55, 0.4, 0.3), (6, 6, 6))
+    """An avionics box torn off its bus: dented, a corner caved in, fins on
+    one side, a connector, and a gold blanket still wrapped round half of
+    it, torn along a ragged line and peeling back."""
+    bm = shapes.box_bm((0.55, 0.4, 0.3), (8, 8, 8))
     for _ in range(3):
         c = Vector((r.uniform(-0.27, 0.27), r.uniform(-0.2, 0.2), r.uniform(-0.15, 0.15)))
         shapes.dent(bm, c, r.uniform(0.08, 0.16), r.uniform(0.02, 0.05), -c)
+    shapes.dent(bm, (0.27, 0.2, 0.15), 0.16, 0.07, (-1, -1, -1))
     shapes.crumple(bm, 0.006, 8.0, r.uniform(0, 9))
     for f in bm.faces:
         f.material_index = 0
-        n = f.normal
-        # a torn blanket over the top and one side
-        c = f.calc_center_median()
-        if (n.z > 0.5 or n.x > 0.5) and (c.x + c.y * 0.6 + 0.1 * math.sin(c.y * 40)) < 0.12:
-            f.material_index = 1
-    # heat-sink fins on the -x face
+    # the blanket: a crumpled shell a little outside the box, cut off along
+    # a noisy plane so it covers one end and peels at the tear
+    wrap = shapes.box_bm((0.575, 0.425, 0.325), (10, 10, 10))
+    from mathutils import noise as mn
+    ph = r.uniform(0, 9)
+    kill = [f for f in wrap.faces
+            if f.calc_center_median().x + 0.06 * mn.noise(f.calc_center_median() * 9 + Vector((ph, 0, 0))) > 0.03]
+    bmesh.ops.delete(wrap, geom=kill, context='FACES')
+    shapes.crumple(wrap, 0.012, 14.0, r.uniform(0, 9))
+    # peel: the torn edge lifts away from the box
+    for v in wrap.verts:
+        k = max(0.0, (v.co.x + 0.05) / 0.08)
+        v.co += Vector((0.0, v.co.y, v.co.z)).normalized() * (0.03 * min(k, 1.0) ** 2)
+    bmesh.ops.solidify(wrap, geom=wrap.faces[:], thickness=0.003)
+    for f in wrap.faces:
+        f.material_index = 1
+    me = bpy.data.meshes.new("__wrap")
+    wrap.to_mesh(me)
+    wrap.free()
+    bm.from_mesh(me)
+    bpy.data.meshes.remove(me)
+    # heat-sink fins on the -x face, a connector, a torn cable
     g = bl.Geo("__fins")
     for i in range(6):
         y = -0.15 + i * 0.06
         g.box(Matrix.Identity(4), (0.05, 0.006, 0.24), 'alu_bare', center=(-0.3, y, 0.0))
     g.box(Matrix.Identity(4), (0.06, 0.05, 0.03), 'black_paint', center=(0.1, 0.21, 0.08))
     g.cyl(Matrix.Identity(4), (0.1, 0.23, 0.08), (0.1, 0.30, 0.08), 0.012, 'steel', seg=10)
-    _merge_geo(bm, g, {'white_paint': 0, 'mli_gold': 1, 'alu_bare': 2, 'black_paint': 3, 'steel': 4})
-    return bm, ['white_paint', 'mli_gold', 'alu_bare', 'black_paint', 'steel']
+    g.tube(Matrix.Identity(4), [(0.1, 0.30, 0.08), (0.14, 0.36, 0.1), (0.2, 0.38, 0.06), (0.24, 0.43, 0.09)], 0.006, 'black_paint', seg=6)
+    _merge_geo(bm, g, {'torn_white': 0, 'mli_gold': 1, 'alu_bare': 2, 'black_paint': 3, 'steel': 4})
+    return bm, ['torn_white', 'mli_gold', 'alu_bare', 'black_paint', 'steel']
 
 
 def chunk_pipe(r):
@@ -192,7 +220,7 @@ def chunk_pipe(r):
         g.cyl(Matrix.Identity(4), (math.cos(a) * 0.17, math.sin(a) * 0.17, -0.352), (math.cos(a) * 0.17, math.sin(a) * 0.17, -0.31), 0.01, 'steel', seg=6)
     g.box(Matrix.Identity(4), (0.12, 0.12, 0.12), 'white_paint', center=(0.16, 0, -0.12), bevel=0.01)
     _merge_geo(bm, g, {'white_paint': 0, 'alu_bare': 1, 'steel': 2})
-    return bm, ['white_paint', 'alu_bare', 'steel']
+    return bm, ['torn_white', 'alu_bare', 'steel']
 
 
 def chunk_node(r):
@@ -208,7 +236,7 @@ def chunk_node(r):
     bm = bmesh.new()
     _merge_geo(bm, g, {'white_paint': 0, 'burnt': 1, 'label_yellow': 2})
     shapes.crumple(bm, 0.006, 7.0, r.uniform(0, 9))
-    return bm, ['white_paint', 'burnt', 'label_yellow']
+    return bm, ['torn_white', 'burnt', 'label_yellow']
 
 
 def chunk_wheel(r):
@@ -237,7 +265,7 @@ CHUNKS = [chunk_box, chunk_pipe, chunk_node, chunk_wheel]
 
 def slab_isogrid(r):
     out = shapes.torn_outline(0.95, 0.52, r, n=34, jag=0.16, spikes=0.3)
-    bm = shapes.sheet(out, 0.004, 0.04, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.004, 0.08, mats=(0, 1, 2))
     # the ribs: a triangle grid on the inner face (-z)
     g = bl.Geo("__iso")
     I = Matrix.Identity(4)
@@ -265,12 +293,12 @@ def slab_isogrid(r):
         v.co.z -= (v.co.x ** 2) / (2 * 2.6)
     shapes.fold(bm, (0.5, 0.2, 0), (0.6, -1, 0), (1, 0.6, 0), math.radians(r.uniform(30, 55)))
     shapes.crumple(bm, 0.02, 2.5, r.uniform(0, 9), along=(0, 0, 1))
-    return bm, ['white_paint', 'torn_alu', 'burnt']
+    return bm, ['torn_white', 'torn_alu', 'burnt']
 
 
 def slab_sandwich(r):
     out = shapes.torn_outline(0.9, 0.55, r, n=30, jag=0.14, spikes=0.25)
-    bm = shapes.sheet(out, 0.03, 0.05, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.03, 0.09, mats=(0, 1, 2))
     shapes.tear_hole(bm, (r.uniform(-0.3, 0.3), r.uniform(-0.15, 0.15), 0), 0.18, r)
     # line the hole: bridge its top and bottom rims with honeycomb walls
     rim = [e for e in bm.edges if e.is_boundary]
@@ -280,12 +308,12 @@ def slab_sandwich(r):
             f.material_index = 2
     shapes.fold(bm, (-0.55, 0, 0), (0.2, 1, 0), (-1, 0.2, 0), math.radians(r.uniform(-40, -20)))
     shapes.crumple(bm, 0.015, 3.0, r.uniform(0, 9), along=(0, 0, 1))
-    return bm, ['white_paint', 'composite', 'honeycomb']
+    return bm, ['torn_white', 'composite', 'honeycomb']
 
 
 def slab_radiator(r):
     out = shapes.torn_outline(1.0, 0.46, r, n=30, jag=0.12, spikes=0.3)
-    bm = shapes.sheet(out, 0.02, 0.05, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.02, 0.09, mats=(0, 1, 2))
     shapes.fold(bm, (0.1, 0, 0), (0, 1, 0), (1, 0, 0), math.radians(r.uniform(12, 22)))
     shapes.crumple(bm, 0.012, 3.5, r.uniform(0, 9), along=(0, 0, 1))
     return bm, ['radiator', 'alu_bare', 'burnt']
@@ -299,7 +327,7 @@ SLABS = [slab_isogrid, slab_sandwich, slab_radiator]
 
 def shard(r):
     out = shapes.torn_outline(r.uniform(0.5, 0.7), r.uniform(0.35, 0.5), r, n=9, jag=0.25, spikes=0.5)
-    bm = shapes.sheet(out, 0.01, 0.08, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.01, 0.11, mats=(0, 1, 2))
     shapes.crumple(bm, 0.02, 1.8, r.uniform(0, 9), along=(0, 0, 1))
     return bm, ['solar_cell', 'solar_back', 'burnt']
 

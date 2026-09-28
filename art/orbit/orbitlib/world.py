@@ -25,7 +25,7 @@ LIMB_ABOVE_CENTRE_DEG = 11.0
 HORIZON_ROLL_DEG = -4.0    # the limb rises a little toward the left
 # Which part of the planet is under the station in the baked lighting and
 # the review renders (the game turns the planet as it likes).
-SUBPOINT = (-146.0, 12.0)  # lon, lat (deg) under the station
+SUBPOINT = (-150.0, 14.0)  # lon, lat (deg) under the station: open ocean under cumulus fields
 HEADING_DEG = 60.0         # the view's heading over the ground (from north)
 
 # The baked sun: up on the left and ahead, so the debris is side- and
@@ -103,15 +103,16 @@ def station_up():
     return -nadir()
 
 
-def planet_rotation():
+def planet_rotation(subpoint=None, heading=None):
     """Rotation taking planet-frame vectors (+Z north, lon 0 on +X) to
-    world: the local vertical at SUBPOINT becomes the station's up, and the
-    heading there points along the view's horizontal direction."""
-    lon, lat = map(math.radians, SUBPOINT)
+    world: the local vertical at the subpoint becomes the station's up, and
+    the heading there points along the view's horizontal direction."""
+    lon, lat = map(math.radians, subpoint or SUBPOINT)
+    HEADING = HEADING_DEG if heading is None else heading
     up_p = vec(math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat))
     east_p = vec(-math.sin(lon), math.cos(lon), 0.0)
     north_p = np.cross(up_p, east_p)
-    h = math.radians(HEADING_DEG)
+    h = math.radians(HEADING)
     fwd_p = north_p * math.cos(h) + east_p * math.sin(h)
     side_p = np.cross(fwd_p, up_p)
     up_w = station_up()
@@ -136,14 +137,14 @@ def sun_dir():
     return s / np.linalg.norm(s)
 
 
-def to_planet(v_world):
+def to_planet(v_world, rot=None):
     """World direction -> planet-frame direction."""
-    return planet_rotation().T @ np.asarray(v_world, np.float64)
+    return (planet_rotation() if rot is None else rot).T @ np.asarray(v_world, np.float64)
 
 
-def eye_in_planet_km():
+def eye_in_planet_km(rot=None):
     """The eye's position in the planet frame (km)."""
-    return to_planet(-planet_center_km())
+    return to_planet(-planet_center_km(), rot)
 
 
 ASPECT = 16 / 9

@@ -13,16 +13,18 @@ textures, no imagery, no HDRIs.
 python3 art/orbit/check_orbit.py        # proves the contract, the budgets, the sizes
 ```
 
-| Stage | Writes | Time (M4 Max, GPU) |
+| Stage | Writes | Time (M4 Max, GPU, shared machine) |
 | --- | --- | --- |
-| `planet` | `planet/{albedo,clouds,night,water,height,detail}.webp` | ~2.5 min |
-| `stars` | `stars.webp` | 15 s |
-| `env` | `build/env_day.exr` (the planet seen from the eye: light for bakes and reviews) | ~30 s |
-| `cupola` | models the cupola and the station (`build/orbit_scene.blend`), bakes the cupola's light, writes `cupola.glb` | see below |
-| `station` | bakes the station's PBR atlas from the eye's point of view, writes `station.glb` | |
-| `debris`, `drone`, `derelict`, `extras` | each model, bake and export their file | |
-| `poster` | `poster.webp` (and `build/review/poster.png`) | |
-| `review` | the review set in `build/review/` (not committed) | |
+| `planet` | `planet/{albedo,clouds,night,water,height,detail}.webp` | 2.5–5 min (numpy) |
+| `stars` | `stars.webp` | 25 s |
+| `env` | `build/env_day.exr` (the planet seen from the eye: light for bakes and reviews) | 20 s |
+| `cupola` | models the cupola and the station (`build/orbit_scene.blend`), bakes the cupola's light, writes `cupola.glb` | 5 min |
+| `station` | bakes the station's PBR atlas from the eye's point of view, writes `station.glb` | 1.5 min |
+| `debris`, `drone`, `derelict`, `extras` | each model, bake and export their file | 10–30 s each |
+| `poster` | `poster.webp` (and `build/review/poster.png`) | 1 min |
+| `review` | the review set in `build/review/` (not committed) | ~10 min |
+
+Every stage but `review` takes about 15 minutes together; with no stage named, all of them run, the review included.
 
 `--quick` runs everything small and fast for iteration. Stages after
 `cupola` reopen the saved `.blend` files in `art/orbit/build/` (gitignored),
@@ -211,7 +213,8 @@ Overcast stays overcast and clear stays clear; partial cover becomes
 distinct cloudlets. Treat `1.2 km × a'^1.5` as a height field for the
 cloud-top normal (the lumps catch the sun and shade their far sides), and
 use `a'` for the cloud shadows too. Modulate land albedo by
-`0.82 + 0.36 × G(uv1)`.
+`0.82 + 0.36 × G(uv1)`, and (optionally) break the city lights into
+streets and blocks with `night × (0.35 + 1.7 × R(uv3)²)`, uv3 at 384 repeats.
 
 ## `stars.webp`
 
@@ -274,9 +277,14 @@ break-up: `derelict.pieces` (sibling group with the root's transform) holds
 
 - `astronaut` (stands on the origin, faces glTF +Z) → `astronaut.body`,
   and the right arm as a chain of pivots: `astronaut.arm.R` (shoulder) →
-  `astronaut.forearm.R` (elbow) → `astronaut.hand.R` (wrist). The glove's
-  thumb points along the hand's local +Y (glTF): turn the hand 180° about
-  its local Z for a thumbs-down (see the review's `extras_thumbsdown`).
+  `astronaut.forearm.R` (elbow) → `astronaut.hand.R` (wrist). Each part's
+  node is aligned with its limb: local −Z runs down the limb toward the
+  hand, local X is the hinge, local +Y faces forward in the rest pose (the
+  glove's thumb points along the hand's +Y). **Thumbs-down:** rotate
+  `arm.R` about its local X by about +75–90° (the arm swings forward and the
+  thumb comes up), bend `forearm.R` a little the same way, then turn
+  `hand.R` 180° about its local Z. The review's `extras_thumbsdown` does
+  exactly this.
 - `toolbag` → `toolbag.bag` (hide it to burst) and `toolbag.tool.1` … `4`
   (wrench, pistol-grip tool, socket bar, spring clamp) inside it.
 - `duck` — a 12 cm rubber duck, faces glTF +Z.

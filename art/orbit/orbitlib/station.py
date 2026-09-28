@@ -327,32 +327,40 @@ def capsule(lib, col, nose_port, axis, up):
 
 
 def turret(lib, col, base, aim):
-    """The point-defence laser: a gimballed turret on a short boom, a
-    finned housing and a lens barrel. Returns the body and the muzzle."""
+    """The point-defence laser: a white gimballed head on a short strut, a
+    stepped lens barrel with a dark aperture, a slim finned radiator along
+    its back and a small blanket patch. Returns the body and the muzzle."""
     g = Geo("station.turret")
     I = Matrix.Identity(4)
     base, aim = V(base), V(aim).normalized()
     up = Vector((0, 0, 1))
-    # boom from below
-    foot = base - up * 2.6 - aim * 1.2
-    g.cyl(I, foot, base - up * 0.5, 0.16, 'white_paint', seg=16)
-    g.cyl(I, base - up * 0.55, base - up * 0.3, 0.42, 'alu_bare', seg=24)
-    # yoke
     side = aim.cross(up).normalized()
     upv = side.cross(aim).normalized()
-    g.box(bl.frame(base - up * 0.2, side, aim, up), (0.9, 0.5, 0.2), 'white_paint', bevel=0.03)
-    for s in (-1, 1):
-        g.box(bl.frame(base + side * (0.42 * s), side, aim, up), (0.1, 0.4, 0.55), 'white_paint', center=(0, 0, 0.1), bevel=0.02)
-    # housing with fins
-    Mh = bl.frame(base + up * 0.15, side, aim, upv)
-    g.box(Mh, (0.7, 0.9, 0.5), 'alu_darkext', bevel=0.05)
-    for k in range(7):
-        g.box(Mh, (0.02, 0.8, 0.12), 'alu_bare', center=(-0.3 + k * 0.1, -0.05, 0.3))
-    g.box(Mh, (0.72, 0.4, 0.52), 'mli_gold', center=(0, -0.3, 0))
-    # barrel and lens
-    muzzle = base + up * 0.15 + aim * 1.25
-    g.cyl(I, base + up * 0.15 + aim * 0.4, muzzle - aim * 0.1, 0.13, 'white_paint', seg=24)
-    g.cyl(I, muzzle - aim * 0.1, muzzle, 0.17, 'alu_bare', seg=24, cap_mat='window_dark')
+    # strut from the station's belly and the azimuth ring
+    foot = base - up * 2.8 - aim * 1.0
+    g.cyl(I, foot, base - up * 0.62, 0.14, 'white_paint', seg=16)
+    g.cyl(I, base - up * 0.66, base - up * 0.5, 0.38, 'alu_bare', seg=32)
+    g.cyl(I, base - up * 0.5, base - up * 0.44, 0.34, 'black_paint', seg=32)
+    g.cyl(I, base - up * 0.44, base - up * 0.3, 0.3, 'white_paint', seg=32)
+    # the yoke: two arms and the elevation axle
+    for s_ in (-1, 1):
+        g.box(bl.frame(base + side * (0.34 * s_) - up * 0.12, side, aim, up), (0.08, 0.3, 0.42), 'white_paint', bevel=0.025)
+    g.cyl(I, base - side * 0.4, base + side * 0.4, 0.07, 'alu_bare', seg=16)
+    # the head: a rounded white housing on the axle
+    Mh = bl.frame(base, side, aim, upv)
+    g.box(Mh, (0.52, 0.72, 0.4), 'white_paint', center=(0, 0.05, 0.02), bevel=0.09)
+    g.box(Mh, (0.53, 0.2, 0.3), 'mli_silver', center=(0, -0.22, 0.02), bevel=0.02)
+    # radiator fins along its back
+    for k in range(9):
+        g.box(Mh, (0.012, 0.42, 0.1), 'white_paint', center=(-0.2 + k * 0.05, 0.02, 0.26))
+    # stepped barrel, a lens ring, a dark aperture
+    muzzle = base + aim * 1.05 + upv * 0.02
+    g.cyl(I, base + aim * 0.38 + upv * 0.02, base + aim * 0.72 + upv * 0.02, 0.15, 'white_paint', seg=32)
+    g.cyl(I, base + aim * 0.72 + upv * 0.02, muzzle - aim * 0.06, 0.12, 'alu_bare', seg=32)
+    g.cyl(I, muzzle - aim * 0.06, muzzle, 0.135, 'black_paint', seg=32, cap_mat='window_dark')
+    # a star tracker and a little label
+    g.box(Mh, (0.12, 0.14, 0.12), 'alu_darkext', center=(0.2, -0.05, 0.26), bevel=0.015)
+    g.box(Mh, (0.2, 0.004, 0.06), 'label_yellow', center=(-0.08, 0.41, -0.05))
     ob = g.build(col, lib)
     bl.tag(ob, surface='metal')
     return ob, muzzle
@@ -432,18 +440,23 @@ def build(lib, col, c_con):
         objs[f'array_{name}'] = g.build(col, lib, smooth_angle=40)
     # ---------------- radiator on the right --------------------------------
     g = Geo("station.radiator")
+    # hung so its tip (with calib.6) lands mid-right on screen
     rroot = t_mid + X * 20.0 - truss_up * 1.4
-    r_along = (-Z * 0.8 + Y * 0.55 + X * 0.1).normalized()
+    r_tip = vp(0.70, 0.0, 30.0)
+    r_len = (r_tip - rroot).length
+    r_along = (r_tip - rroot).normalized()
     # edge-on to the sun: its normal is perpendicular to the sun direction
     rn = r_along.cross(sun).normalized()
-    radiator(g, rroot, r_along, rn, length=16.0, width=3.2, panels=7)
+    radiator(g, rroot, r_along, rn, length=r_len, width=3.2, panels=max(5, int(r_len / 2.3)))
     objs['radiator'] = g.build(col, lib)
     # and its twin on the left (radiators hang in pairs)
     g = Geo("station.radiator.left")
     rrootL = t_mid - X * 21.0 - truss_up * 1.4
-    r_alongL = (-Z * 0.8 + Y * 0.55 - X * 0.1).normalized()
+    r_tipL = vp(-0.70, 0.02, 30.0)
+    r_lenL = (r_tipL - rrootL).length
+    r_alongL = (r_tipL - rrootL).normalized()
     rnL = r_alongL.cross(sun).normalized()
-    radiator(g, rrootL, r_alongL, rnL, length=16.0, width=3.2, panels=7)
+    radiator(g, rrootL, r_alongL, rnL, length=r_lenL, width=3.2, panels=max(5, int(r_lenL / 2.3)))
     objs['radiator_left'] = g.build(col, lib)
     # ---------------- robotic arm -----------------------------------------
     g = Geo("station.arm")
@@ -451,7 +464,7 @@ def build(lib, col, c_con):
     # the arm reaches in from the right: its hand pokes into the centre
     # window, the way Canadarm2 hangs in so many cupola photographs
     elbow = vp(0.95, 0.42, 15.0)
-    wrist = vp(0.24, 0.04, 11.5)
+    wrist = vp(0.13, -0.03, 11.5)
     wpos, wax = arm(g, aroot, elbow, wrist, truss_up)
     objs['arm'] = g.build(col, lib, smooth_angle=40)
     objs['hand'] = arm_hand(lib, col, wpos, wax)
@@ -496,12 +509,12 @@ def build(lib, col, c_con):
         ('1', t_mid - X * 14.0 - Y * 1.5 - truss_up * 1.2, 'red'),     # top-left, truss
         ('2', t_mid + X * 3.2 - Y * 1.5 - truss_up * 1.2, 'white'),     # top-centre, truss
         ('3', t_mid + X * 15.0 - Y * 1.5 - truss_up * 1.2, 'green'),    # top-right, truss
-        ('4', rrootL + r_alongL * 15.6, 'red'),    # left, the left radiator's tip
+        ('4', r_tipL + r_alongL * 0.1, 'red'),     # left, the left radiator's tip
         ('5', wpos + wax * 0.0 + Vector((0, 0, 0.42)), 'white'),  # centre, on the arm's wrist
-        ('6', rroot + r_along * 15.6, 'green'),    # right, radiator tip
-        ('7', m_end + mod_axis * 1.5 + mod_axis * 7.35, 'red'),   # bottom-left, capsule trunk
-        ('8', t_base - Z * 0.35 + X * 0.55, 'white'),            # bottom-centre, turret yoke
-        ('9', pc + Z * 0.2 - X * 3.3, 'green'),   # bottom-right, platform
+        ('6', r_tip + r_along * 0.1, 'green'),     # right, the right radiator's tip
+        ('7', m_end - mod_axis * 3.0 + Z * 2.2, 'red'),            # bottom-left, on top of the module
+        ('8', t_base - Z * 0.47 + X * 0.41, 'white'),            # bottom-centre, the turret's ring
+        ('9', pc + X * 1.3 + Z * 0.95, 'green'),   # bottom-right, on the platform
     ]
     calib = {}
     for name, p, kind in lights:

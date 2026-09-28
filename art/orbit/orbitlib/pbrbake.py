@@ -20,7 +20,7 @@ import numpy as np
 
 from dustcreek.nodes import new_material
 
-from . import atlas, materials, imgio
+from . import atlas, materials, imgio, bl
 
 F32 = np.float32
 
@@ -112,12 +112,13 @@ def triangulate_ngons(ob):
     bm.free()
 
 
-def bake(ctx, name, objs, size, density, ao_distance=0.5, samples=None, quick=False):
+def bake(ctx, name, objs, size, density, ao_distance=0.5, samples=None, quick=False, eye=None):
     """Bake the objects' procedural materials into one PBR atlas and give
     them the final material. Returns the final material."""
     t0 = time.time()
     for ob in objs:
         triangulate_ngons(ob)
+        bl.orient_normals(ob, eye=eye)
     sc = bpy.context.scene
     sc.render.engine = 'CYCLES'
     sc.cycles.device = 'GPU'
@@ -191,7 +192,9 @@ def bake(ctx, name, objs, size, density, ao_distance=0.5, samples=None, quick=Fa
         im.name = f"{name}_{key}"
         im.colorspace_settings.name = 'sRGB' if key == 'albedo' else 'Non-Color'
         imgs[key] = im
-    fm = final_material(f"{name}.pbr", imgs['albedo'], imgs['orm'], imgs['normal'])
+    # double-sided: thin plates (a label, a blanket's edge) must not vanish
+    # from behind under three.js's back-face culling
+    fm = final_material(f"{name}.pbr", imgs['albedo'], imgs['orm'], imgs['normal'], double_sided=True)
     for ob in objs:
         me = ob.data
         new_slots = []

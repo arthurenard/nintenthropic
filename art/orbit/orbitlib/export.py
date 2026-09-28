@@ -62,15 +62,15 @@ def strip(ob, keep_uv):
         me.color_attributes.remove(c)
 
 
-def gltf_export(path, tangents=False, quality=88, draco=True, animations=False, selection=None):
+def gltf_export(path, tangents=False, quality=88, draco=True, animations=False, selection=None, pos_bits=16, uv_bits=14):
     kw = dict(filepath=path, export_format='GLB', use_visible=False, use_renderable=False,
               export_extras=True, export_cameras=True, export_lights=False, export_yup=True, export_apply=True,
               export_texcoords=True, export_normals=True, export_tangents=tangents, export_materials='EXPORT',
               export_vertex_color='NONE', export_attributes=False,
               export_image_format='WEBP', export_image_quality=quality, export_image_add_webp=False,
               export_draco_mesh_compression_enable=draco, export_draco_mesh_compression_level=7,
-              export_draco_position_quantization=16, export_draco_normal_quantization=10,
-              export_draco_texcoord_quantization=14, export_draco_generic_quantization=12,
+              export_draco_position_quantization=pos_bits, export_draco_normal_quantization=10,
+              export_draco_texcoord_quantization=uv_bits, export_draco_generic_quantization=12,
               export_animations=animations, export_skins=False, export_morph=False, export_unused_images=False,
               export_copyright=COPYRIGHT)
     if selection is not None:
@@ -123,8 +123,8 @@ def station(ctx):
     # the cupola is not part of this file, but it shades nothing out here
     for o in bpy.data.collections['cupola'].all_objects:
         o.hide_render = True
-    pbrbake.bake(ctx, "station", objs, size, dens, ao_distance=1.5, quick=ctx.quick,
-                 samples=dict(color=4, rough=4, metal=4, normal=8, ao=96))
+    pbrbake.bake(ctx, "station", objs, size, dens, ao_distance=1.5, quick=ctx.quick, eye=(0.0, 0.0, 0.0),
+                 samples=dict(color=8, rough=16, metal=16, normal=48, ao=96))
     for o in objs:
         pbrbake.merge_duplicate_slots(o)
         strip(o, 'bake')

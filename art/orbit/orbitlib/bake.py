@@ -20,7 +20,7 @@ import time
 import bpy
 import numpy as np
 
-from . import atlas, pipeline, render, world, imgio
+from . import atlas, pipeline, render, world, imgio, bl
 
 ATLAS = (4096, 4096)
 QUALITY = 1.15          # texels per screen pixel on a 1440 px tall screen
@@ -56,6 +56,9 @@ def stage(ctx):
         del static[k]
     static['surface'] = 'metal'
     targets = [static] + floats
+    # normals the right way before baking: rays leave from the lit side
+    for o in targets:
+        bl.orient_normals(o, eye=(0.0, 0.0, 0.0))
     print(f"  joined in {time.time() - t:.1f}s", flush=True)
     size = ATLAS if not ctx.quick else (1024, 1024)
     occl = [o for o in bpy.context.scene.objects if o.type == 'MESH' and not o.name.startswith('pane.')]
