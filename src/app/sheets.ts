@@ -141,6 +141,9 @@ export function showTrouble(
 ): void {
   closeSheets();
   const sheet = TROUBLES[kind];
+  // Raised over the arcade (a game that could not start), Choose a Game
+  // would only close the sheet on the arcade it is already over: it says so.
+  const atHome = document.body.dataset.view === "home";
   const badge = $("alert-icon");
   badge.replaceChildren(icon(sheet.icon));
   badge.classList.add("danger");
@@ -154,7 +157,7 @@ export function showTrouble(
     const button = $<HTMLButtonElement>(id);
     button.hidden = !label;
     if (!label) continue;
-    setText(button, label);
+    setText(button, atHome && label === "Choose a Game" ? "Not Now" : label);
     button.onclick = () => {
       closeSheet("alert");
       fixes[label]();

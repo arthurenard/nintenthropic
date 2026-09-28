@@ -73,3 +73,25 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   await expect(page.locator("#home")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("a tall window plays in a band the town can fill, and a short one keeps its chrome small", async ({ page }) => {
+  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
+  // Never taller than 1.1 : 1, centred, with the night above and below.
+  const band = (await page.locator("#stage").boundingBox())!;
+  expect(band.width).toBeCloseTo(420, 0);
+  expect(band.height).toBeCloseTo(420 / 1.1, 0);
+  expect(band.y + band.height / 2).toBeCloseTo(430, 0);
+  // A click lands where it is inside the band, as anywhere.
+  await page.mouse.click(210, band.y + band.height / 2);
+  await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "5 of 6 rounds");
+
+  // A phone on its side: the score panel shrinks to the corner it has.
+  await page.setViewportSize({ width: 667, height: 375 });
+  await expect.poll(async () => (await page.locator("#stage").boundingBox())!.height).toBeCloseTo(375, 0);
+  const panel = (await page.locator("#hud-score").boundingBox())!;
+  expect(panel.height).toBeLessThan(375 * 0.36);
+});

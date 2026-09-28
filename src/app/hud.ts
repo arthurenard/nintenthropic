@@ -37,6 +37,8 @@ export class Hud implements HudSink {
   private hurt = 0;
   private gameHint: string | null = null;
   private ownHint: string | null = null;
+  /** The round is over: the results own the screen, and a game's late hint waits for the next round. */
+  private over = false;
 
   constructor(private readonly reducedMotion: () => boolean) {}
 
@@ -55,6 +57,7 @@ export class Hud implements HudSink {
     this.health(0);
     this.gameHint = null;
     this.ownHint = null;
+    this.over = false;
     $("hint").hidden = true;
   }
 
@@ -205,6 +208,7 @@ export class Hud implements HudSink {
   }
 
   hint(text: string | null): void {
+    if (this.over) return;
     this.gameHint = text;
     this.showHint();
   }
@@ -244,6 +248,7 @@ export class Hud implements HudSink {
 
   gameOver(stats: GameStats): void {
     this.hint(null);
+    this.over = true;
     this.onGameOver?.(stats);
   }
 

@@ -18,6 +18,8 @@ interface LoopEntry {
 export class Sound {
   private readonly loops = new Map<string, LoopEntry>();
   private paused = false;
+  /** How hurt the player is, as last set: restored on resume. */
+  private hurt = 0;
 
   constructor(
     private readonly bus: AudioBus,
@@ -74,15 +76,23 @@ export class Sound {
       e.stop?.();
       e.stop = null;
     }
+    // Being hurt brings a heartbeat and a muffle with it; a paused game is
+    // not being hurt, so neither carries on over the pause menu.
+    this.bus.setFilter("hurt", 0);
   }
 
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
     for (const e of this.loops.values()) e.stop = this.bus.loop(e.cue, e.options);
+    this.bus.setFilter("hurt", this.hurt);
   }
 
   filter(name: "hurt" | "slowmo", amount: number): void {
+    if (name === "hurt") {
+      this.hurt = amount;
+      if (this.paused) return; // taken up again on resume
+    }
     this.bus.setFilter(name, amount);
   }
 

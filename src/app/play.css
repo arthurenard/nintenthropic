@@ -7,6 +7,15 @@
   --dock: 96px; /* the cylinder's corner */
   position: absolute;
   inset: 0;
+  /* Never taller than a little wider than square. A world drawn from one
+     fixed eye (High Noon's town is baked through its camera) streaks below
+     the frame the art was made for once the view is taller than this - the
+     aim setup's wide lens first - and a sliver of a street is no way to
+     play: in a tall window, a phone held upright, the stage sits in a band
+     across the middle with the night above and below it. */
+  --min-aspect: 1.1;
+  height: min(100%, calc(100vw / var(--min-aspect)));
+  margin-block: auto;
   overflow: hidden;
   touch-action: none;
   user-select: none;
@@ -1028,5 +1037,108 @@
   15%,
   70% {
     opacity: 1;
+  }
+}
+
+/* A phone held upright plays in a band; turning it gives the whole screen. */
+.turn-hint {
+  position: absolute;
+  inset: auto 0 max(24px, env(safe-area-inset-bottom));
+  margin: 0;
+  padding: 0 var(--margin, 24px);
+  text-align: center;
+  display: none;
+}
+@media (max-aspect-ratio: 11/10) and (orientation: portrait) and (pointer: coarse) {
+  .game[data-phase="play"] .turn-hint,
+  .game[data-phase="check"] .turn-hint {
+    display: block;
+  }
+}
+
+/* A short stage - a phone on its side, or the band of one held upright:
+   the chrome shrinks to what the corners can spare, and the hint drops back
+   to the foot of the view between the preview and the cylinder, where it
+   covers ground rather than the street the gang comes out on. */
+@media (max-height: 520px), (max-width: 572px) and (orientation: portrait) {
+  .stage {
+    --hud: 12px;
+    --dock: 64px;
+    --pip-w: clamp(88px, 18vw, 120px);
+  }
+  .game[data-phase="check"] .stage,
+  .game[data-hold] .stage {
+    --pip-w: clamp(104px, 22vw, 150px);
+  }
+  .hud-score {
+    min-width: 116px;
+    padding: 6px 12px 8px;
+  }
+  .score {
+    font-size: 22px;
+  }
+  .readouts {
+    gap: 0 12px;
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .hud-pause {
+    width: 40px;
+    height: 40px;
+  }
+  .cylinder svg {
+    width: 50px;
+    height: 50px;
+  }
+  .hint {
+    bottom: var(--hud);
+    max-width: calc(100% - 2 * max(var(--pip-w), var(--dock)) - 4 * var(--hud));
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+  .banner {
+    top: 14%;
+    min-width: 0;
+    padding: 10px 24px 12px;
+  }
+  .banner .title1 {
+    font-size: 28px;
+  }
+}
+
+/* The aim setup on a short stage: its card sits at the foot of the view
+   beside the preview, in one line where it can, so the bottles and the lit
+   target above it stay in sight. */
+@media (max-height: 520px), (max-width: 572px) and (orientation: portrait) {
+  .check-card {
+    left: calc(2 * var(--hud) + var(--pip-w));
+    right: var(--hud);
+    bottom: var(--hud);
+    width: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    padding: 10px 12px 10px 16px;
+    border-radius: var(--r-small);
+    transform: none;
+  }
+  .check-side {
+    grid-auto-flow: row;
+    justify-items: end;
+  }
+  .check-words .title3 {
+    font-size: 17px;
+  }
+  .check-words .subhead {
+    font-size: 13px;
+  }
+  .check-meter {
+    gap: 8px;
+    width: max-content;
+    padding: 4px 16px 4px 4px;
+  }
+  .check-meter .ring {
+    width: 32px;
+    height: 32px;
   }
 }

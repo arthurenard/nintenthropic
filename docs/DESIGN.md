@@ -112,6 +112,13 @@ are neutral: white for *on* and for the choice made, never green (see Settings).
   few large choices (Resume, Restart, Adjust Aim, Settings, Choose a Game).
 - **Hints** appear when they help (a round's first seconds, a lost hand, an
   unknown key) and fade away when they stop helping.
+- **Tall and short windows.** The stage is never taller than 1.1 : 1: in a
+  tall window (a phone held upright) the world plays in a band across the
+  middle, with black above and below, and on a touch screen a footnote
+  suggests turning it sideways. A short stage (under 520 px, a phone on its
+  side) shrinks the chrome to what its corners can spare: a smaller score
+  panel, pause button and cylinder, and the hint at the foot of the view
+  rather than over the street.
 
 ## Motion
 

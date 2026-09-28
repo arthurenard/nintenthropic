@@ -40,7 +40,9 @@ npm run dev
 Then open http://127.0.0.1:5173.
 
 **How to aim.** Hold your hand like a pistol; the crosshair follows your index
-fingertip. Fold your thumb down to fire, raise it to cock again.
+fingertip. Fold your thumb down to fire, raise it to cock again. If your
+hand leaves the camera's view mid-round, the round waits for it and counts you
+back in; after a fall, fold your thumb on the results to play again.
 
 **Before every game, a quick aim check.** You warm up on bottles along the
 street. It ends by itself as soon as 95% of your shots would land where you
@@ -116,7 +118,9 @@ the site on GitHub Pages (enable it under Settings → Pages → GitHub Actions)
 
 The design language is in [docs/DESIGN.md](docs/DESIGN.md), the architecture
 and its contracts in [docs/WEB_ARCHITECTURE.md](docs/WEB_ARCHITECTURE.md), and
-High Noon's design in [docs/HIGH_NOON.md](docs/HIGH_NOON.md).
+High Noon's design in [docs/HIGH_NOON.md](docs/HIGH_NOON.md). The answer to
+the September 2026 product review, item by item, is in
+[docs/REVIEW_RESPONSE.md](docs/REVIEW_RESPONSE.md).
 
 Handy began as a Python desktop app; that version is kept in git under the tag
 `python-final`.
