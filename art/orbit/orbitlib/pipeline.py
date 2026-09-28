@@ -152,3 +152,73 @@ def stage_env(ctx):
     env = np.minimum(env, 60.0)
     imgio.write_exr(ctx.path("env_day.exr"), env)
     log(f"  env_day.exr {W}x{W // 2} in {time.time() - t:.1f}s, mean {env.mean():.3f}")
+
+
+# ---------------------------------------------------------------------------
+# The station scene: cupola + station exterior, shared by the cupola bake,
+# the station bake, the review and the poster
+
+def scene_blend(ctx):
+    return ctx.path("orbit_scene.blend")
+
+
+def build_scene(ctx):
+    import bpy
+    from . import bl, materials, cupola, render
+    t = time.time()
+    sc = bl.reset_scene("Orbit")
+    bl.setup_gpu(sc)
+    materials.interior_materials()
+    materials.exterior_materials()
+    lib = materials.LIB
+    root = bl.collection("Orbit")
+    c_cup = bl.collection("cupola", root)
+    c_st = bl.collection("station", root)
+    c_con = bl.collection("contract", root)
+    c_light = bl.collection("lighting", root)
+    cam = render.player_camera(c_con)
+    sc.camera = cam
+    render.sun_lamp(c_light)
+    env = ctx.path("env_day.exr")
+    if os.path.exists(env):
+        render.world_env(sc, env)
+    cup = cupola.build(lib, c_cup)
+    try:
+        from . import station
+    except ImportError:
+        station = None
+    if station is not None:
+        station.build(lib, c_st, c_con)
+    log(f"  scene built in {time.time() - t:.1f}s: {len(bpy.data.objects)} objects, "
+        f"{bl.tri_count(bpy.data.objects):,} triangles")
+    bpy.ops.wm.save_as_mainfile(filepath=scene_blend(ctx), compress=True)
+    return cup
+
+
+def open_blend(path):
+    import bpy
+    from . import bl
+    bpy.ops.wm.open_mainfile(filepath=path)
+    bl.setup_gpu()
+
+
+def stage_cupola(ctx):
+    only = ctx.only or ["build", "bake", "export"]
+    if "build" in only:
+        build_scene(ctx)
+    if "bake" in only:
+        from . import bake
+        bake.stage(ctx)
+    if "export" in only:
+        from . import export
+        export.cupola(ctx)
+
+
+def stage_station(ctx):
+    from . import export
+    export.station(ctx)
+
+
+def stage_review(ctx):
+    from . import review
+    review.render_all(ctx)

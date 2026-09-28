@@ -28,12 +28,12 @@ HORIZON_ROLL_DEG = -4.0    # the limb rises a little toward the left
 SUBPOINT = (-146.0, 12.0)  # lon, lat (deg) under the station
 HEADING_DEG = 60.0         # the view's heading over the ground (from north)
 
-# The baked sun: high on the left and a little behind the player, so the
-# debris is side-lit (facets flash as they turn), the station's white
-# blankets rake in hard light, and sunlight falls through the left-hand
-# windows onto the right of the frame inside.
-SUN_ELEV_DEG = 38.0        # above the station's horizontal
-SUN_AZ_DEG = -104.0        # from the view direction, + to the right
+# The baked sun: high on the left, a touch ahead of square to the view, so
+# the debris is side-lit (facets flash as they turn), the station's white
+# blankets rake in hard light, and sunlight streams in through the left and
+# upper-left windows onto the right of the frame inside.
+SUN_ELEV_DEG = 34.0        # above the station's horizontal
+SUN_AZ_DEG = -80.0         # from the view direction, + to the right
 SUN_COLOR = (1.0, 0.985, 0.96)
 SUN_ANGLE_DEG = 0.53
 
@@ -144,6 +144,32 @@ def to_planet(v_world):
 def eye_in_planet_km():
     """The eye's position in the planet frame (km)."""
     return to_planet(-planet_center_km())
+
+
+ASPECT = 16 / 9
+
+
+def view_dir(sx, sy, aspect=ASPECT):
+    """World direction through the player's screen at NDC (sx, sy), each
+    in -1..1 (x right, y up) for a screen of the given aspect."""
+    t = math.tan(math.radians(VFOV_DEG) / 2)
+    R = camera_rotation()
+    d = R[:, 0] * (sx * t * aspect) + R[:, 1] * (sy * t) - R[:, 2]
+    return d / np.linalg.norm(d)
+
+
+def view_point(sx, sy, dist, aspect=ASPECT):
+    """The point `dist` metres from the eye along the ray through (sx, sy)."""
+    return view_dir(sx, sy, aspect) * dist
+
+
+def to_ndc(p, aspect=ASPECT):
+    """World point -> player's screen NDC (x, y) and depth along the view."""
+    R = camera_rotation()
+    v = np.asarray(p, np.float64)
+    z = -(v @ R[:, 2])
+    t = math.tan(math.radians(VFOV_DEG) / 2)
+    return (v @ R[:, 0]) / (z * t * aspect), (v @ R[:, 1]) / (z * t), z
 
 
 def gltf(v):
