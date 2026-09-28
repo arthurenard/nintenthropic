@@ -41,7 +41,7 @@ from dustcreek import bake as DB      # read-only reuse: projective UVs, island 
 
 ATLAS = {
     'ground': (4096, 2048),
-    'near': (2048, 2048),
+    'near': (4096, 4096),       # the barricade, the pump, the truck: 1-8 m from the eye
     'station': (2048, 2048),
     'west': (2048, 2048),
     'east': (2048, 2048),
@@ -321,10 +321,10 @@ def stage(ctx):
         DB.unwrap_group(scene, objs, bvh, ATLAS[g])
         print(f"  unwrap {g} in {time.time() - t:.1f}s")
     for g, objs in groups.items():
-        if ctx.preview and g != ctx.preview:
+        if ctx.preview and g not in ctx.preview.split(','):
             continue
         print(f"BAKE {g}: {len(objs)} objects", flush=True)
         bake_group(ctx, scene, g, objs, ATLAS[g])
-    if not ctx.preview or ctx.preview == 'corn':
+    if not ctx.preview or 'corn' in ctx.preview.split(','):
         bake_corn(ctx, scene)
     bpy.ops.wm.save_as_mainfile(filepath=ctx.baked_blend, compress=True)
