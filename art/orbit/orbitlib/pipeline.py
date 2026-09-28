@@ -118,7 +118,7 @@ class Sky:
         self.night_gain = night_gain
 
 
-def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposure=1.0, rot=None):
+def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposure=1.0, rot=None, pix_angle=None):
     """Radiance of the planet, its atmosphere and the stars along world rays
     from the eye. Returns (N, 3) linear radiance (sun irradiance 20)."""
     from . import planetrender as PR, world
@@ -133,6 +133,8 @@ def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposur
     st.night_gain = sky.night_gain
     st.sun_disc = sun_disc
     st.exposure = exposure
+    if pix_angle is not None:
+        st.pix_angle = pix_angle
     L, cov = PR.render_rays(O, D, sun_p, maps, st)
     return L, cov
 
@@ -146,7 +148,7 @@ def render_env(ctx, name, sky, W=2048, maps=None, samples=40, rot=None):
     maps = maps or load_maps(ctx)
     t = time.time()
     D = PR.equirect_rays(W, W // 2)
-    L, _ = render_planet_view(maps, D, sky, samples=samples, sun_disc=False, rot=rot)
+    L, _ = render_planet_view(maps, D, sky, samples=samples, sun_disc=False, rot=rot, pix_angle=2 * math.pi / W)
     env = np.minimum(L.reshape(W // 2, W, 3), 60.0)
     path = ctx.path(name)
     imgio.write_exr(path, env)

@@ -214,7 +214,9 @@ def planet_background(ctx, cam, w, h, sky, maps=None, samples=48, exposure=1.0, 
     from . import pipeline
     maps = maps or pipeline.load_maps(ctx)
     D, _ = camera_rays(cam, w, h)
-    L, _ = pipeline.render_planet_view(maps, D.astype(np.float64), sky, samples=samples, exposure=exposure, rot=rot)
+    pix = 2 * math.tan(cam.data.angle_y / 2) / h if cam.data.sensor_fit == 'VERTICAL' else 2 * math.tan(cam.data.angle_x / 2) / w
+    L, _ = pipeline.render_planet_view(maps, D.astype(np.float64), sky, samples=samples, exposure=exposure, rot=rot,
+                                       pix_angle=pix)
     return L.reshape(h, w, 3)
 
 

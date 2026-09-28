@@ -35,6 +35,7 @@ import zlib
 import numpy as np
 
 from . import noise as N
+from . import hero
 
 F32 = np.float32
 SEED = 1961
@@ -168,6 +169,13 @@ class Planet:
             c = unit(lo, la)
             ang = np.arccos(np.clip(Q @ c, -1, 1))
             L += F32(w) * np.exp(-(ang / math.radians(rad)) ** 2).astype(F32)
+        # the subcontinent under the first look (see hero.py): placed on a
+        # lightly warped sphere, since the heavy warp above would carry it
+        # off the view
+        Qh = N.tangent_warp(P2, wf.vec(P2, 2.2, 4), 0.10)
+        for lo, la, rad, w in hero.MASSES:
+            ang = np.arccos(np.clip(Qh @ unit(lo, la), -1, 1))
+            L += F32(w) * np.exp(-(ang / math.radians(rad)) ** 2).astype(F32)
         L = np.minimum(L, 1.25)
         f = self.field("cont")
         M = f.fbm(Q, 1.7, 5)
@@ -183,6 +191,7 @@ class Planet:
         self.sea = float(np.quantile(c[::4, ::4], 0.70))
         self.c = (c - F32(self.sea)).astype(F32)
         self.land = (self.c > 0).astype(F32)
+        hero.coast(self)
         self.say(f"continents: land {self.land.mean() * 100:.1f}%")
 
     def relief(self):
@@ -221,6 +230,7 @@ class Planet:
         self.elev = np.where(c > 0, elev, np.minimum(depth, -0.01)).astype(F32)
         self.ridges = ridges.astype(F32)
         self.collide = (np.clip(collide, 0, 1) * cont).astype(F32)
+        hero.mountains(self)
         self.say(f"relief: land max {self.elev.max():.1f} km, ocean min {self.elev.min():.1f} km")
 
     def islands(self):
@@ -330,6 +340,8 @@ class Planet:
         self.T4 = T.astype(F32)
         self.P4mm = np.maximum(P, 20).astype(F32)
         self.near_sea4 = near_sea.astype(F32)
+        hero.climate(self)
+        P = self.P4mm
         L = land > 0.5
         self.say(f"climate: land T {T[L].min():.0f}..{T[L].max():.0f} C, P {np.percentile(P[L], 10):.0f}/"
                  f"{np.median(P[L]):.0f}/{np.percentile(P[L], 90):.0f} mm")
@@ -432,6 +444,7 @@ class Planet:
                 np.maximum.at(big, (yi, xi), 1.0)
         self.river = np.clip(riv, 0, 1).astype(F32) * self.land
         self.bigriver = big * self.land
+        hero.river(self)
         self.say(f"rivers: {len(cells)} reaches")
 
     # ======================================================================
@@ -557,13 +570,18 @@ class Planet:
         leads = N.smoothstep(0.7, 0.9, fo.ridged(self.P, 50.0, 3))
         oc = lerp(oc, srgb((212, 220, 232)) * (1 - 0.18 * leads[..., None]), seaice[..., None])
         self.seaice = (seaice * (1 - land)).astype(F32)
-        col = lerp(col, oc, (1 - land)[..., None])
+        # land and sea meet over a pixel, not on a staircase: the blend
+        # follows the continent field's own zero crossing
+        gc = np.sqrt(np.gradient(self.c, axis=0) ** 2 + np.gradient(self.c, axis=1) ** 2) + 1e-6
+        land_aa = np.clip(0.5 + self.c / gc, 0, 1)
+        col = lerp(col, oc, (1 - land_aa)[..., None])
         col = np.where(fresh[..., None], srgb((12, 26, 40)), col)
         self.ice = np.maximum(icef * land, self.seaice).astype(F32)
         self.albedo = np.clip(col, 0, 1).astype(F32)
         self.T = T.astype(F32)
         self.Pmm = P.astype(F32)
         self.desert = desert[..., 0].astype(F32)
+        hero.surface(self)
         self.say("surface colour")
 
     def _slope(self, elev):
@@ -582,8 +600,14 @@ class Planet:
         w = np.maximum(edge, self.lake)
         w = np.maximum(w, np.clip(self.bigriver * 0.7, 0, 1))
         self.water = np.clip(w - self.seaice * 0.95, 0, 1).astype(F32)
-        h = np.clip(self.elev / 6.0, 0, 1) ** 0.6
-        self.height = (h * (1 - self.water)).astype(F32)
+        if hasattr(self, 'hero_river'):
+            self.water = np.maximum(self.water, self.hero_river * 0.8)
+        # relief: zero at the shore, with no one-pixel steps at coasts and
+        # rivers (a renderer takes normals from its slopes)
+        gc = np.sqrt(np.gradient(self.c, axis=0) ** 2 + np.gradient(self.c, axis=1) ** 2) + 1e-6
+        land_aa = np.clip(0.5 + self.c / gc, 0, 1)
+        h = np.clip(np.maximum(self.elev, 0) / 6.0, 0, 1) ** 0.8 * land_aa
+        self.height = N.blur(h.astype(F32), 1, 1)
         self.say("water, height")
 
     # ======================================================================
@@ -595,12 +619,19 @@ class Planet:
         rng = self.rng("weather")
         sys_ = []
         for hemi in (1, -1):
-            n = 6
-            lons = (np.arange(n) + rng.uniform(0.2, 0.8, n)) / n * 2 * math.pi - math.pi
+            # lows at irregular spacing, of every size and age: young ones
+            # with a long trailing front, old occluded ones a spiral alone
+            lons = []
+            while len(lons) < 5:
+                lo = rng.uniform(-math.pi, math.pi)
+                if all(abs((lo - o + math.pi) % (2 * math.pi) - math.pi) > math.radians(45) for o in lons):
+                    lons.append(lo)
             for lo in lons:
-                la = hemi * math.radians(rng.uniform(42, 60))
-                sys_.append(dict(lon=float(lo), lat=la, r=math.radians(rng.uniform(6.5, 10)), spin=hemi,
-                                 kind='low', A=rng.uniform(0.3, 0.45), age=rng.uniform(0, 1)))
+                la = hemi * math.radians(rng.uniform(40, 62))
+                age = rng.uniform(0, 1)
+                sys_.append(dict(lon=float(lo), lat=la, r=math.radians(rng.uniform(5.5, 11)), spin=hemi,
+                                 kind='low', A=rng.uniform(0.3, 0.45), age=age, tilt=rng.uniform(-0.45, 0.35),
+                                 flen=rng.uniform(1.0, 2.3), occluded=age > 0.72))
             # subtropical highs over the oceans, turning the other way
             for lo in rng.uniform(-math.pi, math.pi, 4):
                 la = hemi * math.radians(rng.uniform(26, 34))
@@ -720,155 +751,15 @@ class Planet:
         hemi = 1 if s['lat'] > 0 else -1
         x = (P @ e) / r
         y = (P @ n) / r * hemi
+        t = s.get('tilt', 0.0)
+        if t:
+            x, y = x * math.cos(t) - y * math.sin(t), x * math.sin(t) + y * math.cos(t)
         ok = (P @ c) > math.cos(span)
         return y0, y1, x, y, ok
 
-    def _cyclone_cover(self, cover, wtype, f):
-        """Mid-latitude lows: a bright frontal shield poleward and east of
-        the centre, a comma head wrapping round it, a dry slot biting in
-        from the south-west, and the cold front trailing away equatorward
-        and west as a long curved band. Behind the front, cold air over the
-        sea breaks into cellular cumulus."""
-        for s in self.systems:
-            if s['kind'] != 'low':
-                continue
-            y0, y1, x, y, ok = self._low_frame(s, 5.0)
-            wob = f.fbm(self.P[y0:y1], 14.0, 4, first=20)
-            rr = np.sqrt(x * x + y * y)
-            th = np.arctan2(y, x)                          # 0 east, +pi/2 poleward
-            shield = np.exp(-(((x - 0.9) / 1.5) ** 2 + ((y - 0.45) / 1.0) ** 2)) * 1.0
-            # comma head: wraps from the east over the pole side to the west
-            head_ang = N.smoothstep(-0.3, 0.2, th) * N.smoothstep(3.6, 2.6, np.where(th < -1.5, th + 2 * math.pi, th))
-            head = head_ang * np.exp(-((rr - 0.75) / 0.45) ** 2)
-            # dry slot: a spiral lane from the south-west into the centre
-            slot_th = th + np.log(np.maximum(rr, 0.05)) * 1.3
-            slot = np.exp(-((np.angle(np.exp(1j * (slot_th + 2.2)))) / 0.45) ** 2) * N.smoothstep(2.2, 0.8, rr) * N.smoothstep(0.1, 0.3, rr)
-            # cold front: sample the curve and take the distance to it
-            sgrid = np.linspace(0, 3.4, 40)
-            bend = 0.28 * math.sin(s['age'] * 6.0)
-            fx = 0.35 - 0.55 * sgrid + 0.10 * sgrid ** 2 + bend * np.sin(sgrid * 1.4)
-            fy = -0.35 - 1.0 * sgrid
-            d2 = np.full(x.shape, 99.0, F32)
-            along = np.zeros(x.shape, F32)
-            for k in range(sgrid.size):
-                dd = (x - fx[k]) ** 2 + (y - fy[k]) ** 2
-                m = dd < d2
-                d2 = np.where(m, dd, d2)
-                along = np.where(m, sgrid[k], along)
-            width = 0.22 + 0.12 * wob + 0.06 * (along / 3.4)
-            front = np.exp(-d2 / np.maximum(width, 0.06) ** 2) * N.smoothstep(3.4, 2.2 - 0.6 * s['age'], along)
-            front *= N.smoothstep(-0.45, 0.1, f.fbm(self.P[y0:y1], 6.0, 3, first=33))
-            # which side of the front: behind (west) is the cold sector
-            fxa = 0.35 - 0.55 * along + 0.10 * along ** 2 + bend * np.sin(along * 1.4)
-            behind = N.smoothstep(0.0, -0.4, x - fxa) * N.smoothstep(-4.0, -0.5, y) * N.smoothstep(3.5, 1.0, rr)
-            warm_sector = N.smoothstep(0.0, 0.5, x - fxa) * N.smoothstep(0.2, -0.6, y) * N.smoothstep(3.5, 1.5, rr)
-            strat = np.clip(np.maximum.reduce([shield, head, front]) * 1.1, 0, 1)
-            c_new = np.maximum(cover[y0:y1], 0.2 + 0.78 * strat)
-            c_new = c_new * (1 - 0.85 * slot)
-            c_new = np.where(behind > 0.05, np.maximum(c_new * (1 - behind * 0.2), 0.45 * behind), c_new)
-            c_new = c_new * (1 - 0.35 * warm_sector * (1 - front))
-            c_new = np.where(ok, c_new, cover[y0:y1])
-            cover[y0:y1] = c_new
-            wtype['strat'][y0:y1] = np.where(ok, np.maximum(wtype['strat'][y0:y1], strat), wtype['strat'][y0:y1])
-            wtype['cell'][y0:y1] = np.where(ok, np.maximum(wtype['cell'][y0:y1], behind * (1 - self.land[y0:y1])), wtype['cell'][y0:y1])
-
     def clouds_map(self):
-        H, W = self.H, self.W
-        lat = self.LAT
-        dlat = np.degrees(np.abs(lat))
-        slat = np.degrees(lat)
-        land = self.land
-        f = self.field("clouds", 10)
-        Q = self.Q
-        # --- how cloudy (0..1) --------------------------------------------
-        itcz = 5.0 + 4.0 * np.sin(self.LON * 2 + 0.7)
-        cover = (0.28 * gauss(slat, itcz, 9.0)
-                 + 0.38 * gauss(dlat, 57, 12)
-                 + 0.28 * N.smoothstep(62, 80, dlat)
-                 + 0.30)
-        cover *= 1 - 0.55 * gauss(dlat, 24, 8)
-        logP = np.log10(np.maximum(self.Pmm, 10))
-        cover = np.where(land > 0, cover * (0.3 + 0.8 * N.smoothstep(2.2, 3.2, logP)), cover)
-        cover += 0.12 * f.fbm(self.P, 2.0, 4, first=25)
-        # stratocumulus decks over the cool eastern oceans of the subtropics
-        land4 = self.down4(self.land)
-        east_land = self._upwind(land4, self.LAT4, [300, 900, 1600], [1, 1, 0.7], np.full_like(land4, -1.0))
-        deck = self.up(east_land) * gauss(dlat, 22, 10) * (1 - land)
-        deck = N.smoothstep(0.15, 0.6, deck)
-        cover = np.maximum(cover, 0.2 + 0.72 * deck)
-        cover += 0.2 * N.smoothstep(1.5, 3.5, self.elev) * land
-        for s in self.systems:
-            if s['kind'] == 'high':
-                c = unit(math.degrees(s['lon']), math.degrees(s['lat']))
-                d = np.arccos(np.clip(self.P @ c, -1, 1))
-                cover -= 0.22 * np.exp(-(d / (s['r'] * 0.9)) ** 2)
-        wtype = {k: np.zeros((H, W), F32) for k in ('strat', 'cell', 'cu', 'cb')}
-        wtype['strat'] = np.maximum(wtype['strat'], deck * 0.5)
-        wtype['cell'] = np.maximum(wtype['cell'], deck * 0.7)
-        self._cyclone_cover(cover, wtype, f)
-        # thunderstorm clusters: the ITCZ and wet tropical land
-        cb = self._convection_cover(f)
-        cover = np.maximum(cover, cb * 0.85)
-        wtype['cb'] = cb
-        # trade cumulus: scattered small cumulus over warm seas
-        wtype['cu'] = gauss(slat, itcz * 0.5, 22) * (1 - land) * (1 - deck) + 0.5 * land * N.smoothstep(2.6, 3.1, logP) * N.smoothstep(12, 22, self.T)
-        cover = np.clip(cover, 0, 1).astype(F32)
-        self.cover = cover
-        self.say("clouds: coverage")
-        # --- textures, all carried by the flow ----------------------------
-        Pw = N.tangent_warp(Q, f.vec(Q, 10.0, 3), 0.01)
-        # low octaves ride the full trace; fine ones only part of it, so the
-        # small structure is carried along without being drawn into threads
-        Qh = Pw
-        base = self._uniform(f.fbm(Pw, 3.5, 9, gain=0.56))
-        strat_t = self._uniform(f.fbm(Pw, 4.0, 8, gain=0.5, first=3))
-        cu_t = self._uniform(f.billow(Pw, 26.0, 5, first=5) * 0.6 + 0.4 * f.fbm(Pw, 12.0, 5, first=9))
-        fine = f.fbm(Qh, 140.0, 3, first=14)
-        # cells at ~40 km, open (rings) and closed (blobs)
-        Pc = N.tangent_warp(self.P2, f.vec(self.P2, 25.0, 3), 0.006)
-        F1, F2 = N.worley(Pc, 110.0, 17)
-        closed = self.up(N.smoothstep(0.02, 0.35, (F2 - F1)).astype(F32))
-        openc = self.up(np.exp(-((F2 - F1) / 0.12) ** 2).astype(F32))
-        self.say("clouds: textures")
-
-        def thr(t, c, soft):
-            return N.smoothstep(1 - c - soft, 1 - c + soft, t)
-
-        d_gen = thr(base + 0.05 * fine, cover, 0.06)
-        d_str = thr(strat_t, np.minimum(cover * 1.08, 1), 0.10) * (0.88 + 0.12 * base)
-        # cells: closed where it is cloudy, open (rings) where it is less so
-        d_cell = thr(base * 0.75 + 0.25 * closed, cover, 0.07)
-        d_cell = np.clip(d_cell * (0.75 + 0.35 * base), 0, 1)
-        d_cu = thr(cu_t, cover * 0.8, 0.07) * 0.85
-        d_cb = thr(base * 0.5 + 0.5 * cu_t, cover, 0.12)
-        w = wtype
-        wg = np.ones((H, W), F32) * 0.6
-        tot = wg + w['strat'] + w['cell'] + w['cu'] + w['cb'] * 1.5
-        dens = (wg * d_gen + w['strat'] * d_str + w['cell'] * d_cell + w['cu'] * d_cu + w['cb'] * 1.5 * d_cb) / tot
-        # hurricanes on top
-        for s in self.systems:
-            if s['kind'] == 'tropical':
-                dens = np.maximum(dens, self._hurricane(s, f))
-        # a deck is never uniformly thick: opacity inside the cloud wanders
-        # between ~0.7 and 1 (the renderer turns that into lumpy relief), a
-        # little more in the convective and cellular regions
-        thick = self._uniform(f.fbm(Pw, 22.0, 6, gain=0.6, first=44))
-        lumpy = np.clip(0.3 + 0.4 * (w['cb'] + w['cell'] + w['cu']), 0.3, 0.7)
-        dens = dens * (1 - lumpy * 0.45 * (1 - thick) * N.smoothstep(0.5, 0.95, dens))
-        # popcorn cumulus: small scattered clouds in the clear gaps over warm
-        # sea and wet land, the texture of a fair-weather day from orbit
-        pop_t = f.billow(Pw, 70.0, 3, first=50) + 0.35 * f.fbm(Pw, 25.0, 3, first=53)
-        fair = N.smoothstep(12, 24, self.T) * (1 - N.smoothstep(0.55, 0.9, cover)) * (0.35 + 0.65 * (1 - self.desert))
-        pops = N.smoothstep(0.62, 0.78, pop_t) * fair * 0.7
-        dens = 1 - (1 - dens) * (1 - pops)
-        # cirrus: thin fibrous veils in the jets and blown off the storms
-        cir = f.ridged(Pw * np.array([1, 1, 2.2], F32), 9.0, 5, sharp=3.0, first=30)
-        cirrus = N.smoothstep(0.6, 0.92, cir) * (0.4 * gauss(dlat, 42, 10) + 0.35 * gauss(slat, itcz, 8) + 0.3 * w['cb']) \
-            * N.smoothstep(-0.1, 0.35, f.fbm(self.P, 3.0, 3, first=7))
-        clouds = 1 - (1 - dens) * (1 - cirrus * 0.3)
-        clouds *= 1 - 0.4 * N.smoothstep(2.5, 4.0, self.elev)
-        self.clouds = np.clip(clouds, 0, 1).astype(F32)
-        self.say(f"clouds: mean opacity {self.clouds.mean():.2f}, cover {cover.mean():.2f}")
+        from . import clouds
+        self.clouds = clouds.build(self)
 
     def _hurricane(self, s, f):
         """An eye, an eyewall, a central dense overcast and spiral bands."""
@@ -888,130 +779,122 @@ class Planet:
         out[y0:y1] = np.where(ok, np.clip(v, 0, 1), 0)
         return out
 
-    def _convection_cover(self, f):
-        """Thunderstorm clusters along the ITCZ and over wet tropical land,
-        as coverage: bumps of 100-500 km that merge into a broken band."""
-        rng = self.rng("convection")
-        H, W = self.H, self.W
-        n = 260
-        lon = rng.uniform(-math.pi, math.pi, n)
-        la = np.radians(rng.normal(6, 9, n))
-        blob = np.zeros((H, W), F32)
-        Pcv = N.tangent_warp(self.P, f.vec(self.P, 18.0, 3), 0.014)
-        keep = []
-        for lo, lt in zip(lon, la):
-            u = (lo + math.pi) / (2 * math.pi)
-            v = (math.pi / 2 - lt) / math.pi
-            yi = min(self.H4 - 1, int(v * self.H4))
-            xi = min(self.W4 - 1, int(u * self.W4))
-            if self.P4mm[yi, xi] > 1300 or rng.random() < 0.3:
-                keep.append((lo, lt))
-                s = math.radians(rng.uniform(0.8, 2.6))
-                self._bump(blob, lo, lt, s, rng.uniform(0.6, 1.1), P=Pcv)
-        # the storm for the night-side secret: a strong cluster over land
-        best = None
-        for lo, lt in keep:
-            u = (lo + math.pi) / (2 * math.pi)
-            v = (math.pi / 2 - lt) / math.pi
-            yi, xi = min(self.H - 1, int(v * self.H)), min(self.W - 1, int(u * self.W))
-            if self.land[yi, xi] > 0 and (best is None or abs(lt) < abs(best[1])):
-                best = (lo, lt)
-        if best is None and keep:
-            best = keep[0]
-        if best:
-            self._bump(blob, best[0], best[1], math.radians(2.0), 1.2)
-            self.meta['storm'] = (round(math.degrees(best[0]), 2), round(math.degrees(best[1]), 2))
-        return N.smoothstep(0.25, 0.9, blob + 0.25 * f.fbm(self.Q, 12.0, 4, first=2)).astype(F32)
-
     # ======================================================================
-    # 7. Night lights
+    # 7. Night lights: points, filaments and a few metropolises
 
     def night_lights(self):
+        """City lights as they look from orbit: points and short strings of
+        points (towns and the roads between them) with dark country between,
+        dense clusters where people crowd onto coasts and rivers, and a
+        dozen metropolises that burn white-hot. Each settlement is drawn as a
+        point (its light split over the four nearest pixels, no blur); only
+        the big cities spread, and only as far as their suburbs go. The
+        renderer breaks every lit pixel into sub-pixel points (see
+        planetrender.city_points)."""
         H, W = self.H, self.W
         rng = self.rng("cities")
         T4, P4 = self.T4, self.P4mm
         land4 = self.down4(self.land)
         elev4 = np.maximum(self.down4(self.elev), 0)
         ice4 = self.down4(self.ice)
-        river4 = np.clip(N.blur(self.down4(self.river) * 4, 1, 1), 0, 1)
+        riv_all = np.maximum(self.river, getattr(self, 'hero_river', 0) * 1.0)
+        river4 = np.clip(N.blur(self.down4(riv_all) * 4, 1, 1), 0, 1)
         ns = self.near_sea4
         coast4 = N.smoothstep(0.03, 0.3, ns) * (0.4 + 0.6 * N.smoothstep(0.95, 0.55, ns))
         f = self.field("people")
         clim = N.smoothstep(-3, 7, T4) * N.smoothstep(33, 25, T4)
         wet = N.smoothstep(2.3, 2.8, np.log10(P4))
-        water = np.clip(wet * 0.8 + river4 * 1.2 + coast4 * 0.8, 0, 1)
+        water = np.clip(wet * 0.7 + river4 * 1.4 + coast4 * 0.8, 0, 1)
         flat = N.smoothstep(2.4, 0.5, elev4)
-        jungle = 1 - 0.6 * N.smoothstep(3.25, 3.5, np.log10(P4)) * N.smoothstep(20, 25, T4)
-        hab = clim * water * flat * jungle * (0.2 + 1.6 * coast4 + 1.4 * river4)
+        jungle = 1 - 0.7 * N.smoothstep(3.25, 3.5, np.log10(P4)) * N.smoothstep(20, 25, T4)
+        hab = clim * water * flat * jungle * (0.15 + 1.6 * coast4 + 1.8 * river4)
         hab *= (land4 > 0.5) * (1 - ice4)
-        dev = 0.08 + 0.92 * N.smoothstep(-0.3, 0.4, f.fbm(self.P4, 1.5, 4)) ** 1.3
-        # clustered: people gather where it is best, the countryside between
-        # stays dark (the night side reads as cities, not as a glowing carpet)
-        dens = ((hab * dev) ** 1.6).astype(np.float64)
-        dens /= dens.sum()
-        n = int(60000)
-        flat_idx = rng.choice(dens.size, size=n, p=dens.ravel())
-        ys, xs = np.divmod(flat_idx, self.W4)
+        dev = 0.06 + 0.94 * N.smoothstep(-0.3, 0.4, f.fbm(self.P4, 1.5, 4)) ** 1.3
+        dens = np.maximum(hab * dev, 0).astype(np.float64) ** 1.8
+        dens = dens.ravel() / dens.sum()
+        # --- towns ---
+        n = 24000
+        idx = rng.choice(dens.size, size=n, p=dens)
+        ys, xs = np.divmod(idx, self.W4)
         lon = (xs + rng.uniform(0, 1, n)) / self.W4 * 2 * math.pi - math.pi
         lat = math.pi / 2 - (ys + rng.uniform(0, 1, n)) / self.H4 * math.pi
-        # population (thousands): Zipf; big cities pulled to coasts and rivers
-        pop = 5.0 * (1 - rng.random(n)) ** (-1 / 1.1)
-        pull = 0.4 + 0.6 * np.clip(coast4[ys, xs] + river4[ys, xs], 0, 1)
-        pop = np.minimum(pop * pull, 28000.0)
-        # modern (white LED) or old (sodium) lighting, by region
+        pop = np.minimum(8.0 * (1 - rng.random(n)) ** (-1 / 1.25), 3000.0)       # thousands
         modern = np.clip(0.5 + 0.8 * f.fbm(self.P4, 2.5, 3, first=5)[ys, xs] + rng.normal(0, 0.2, n), 0, 1)
-        towns = [lon, lat, pop, modern]
-        # suburbs: big cities spill out in spokes along their roads
-        bigi = np.nonzero(pop > 400)[0]
-        sub = []
-        for i in bigi:
-            k = int(min(24, 4 + pop[i] / 400))
+        pts = [np.stack([lon, lat, pop, modern], 1)]
+        # --- metropolises: the dozen best sites, far apart ---
+        score = (hab * dev * (0.3 + coast4 + river4)).ravel()
+        order = np.argsort(-score)
+        metros = []
+        for i in order[:4000]:
+            y, x = divmod(i, self.W4)
+            lo = (x + 0.5) / self.W4 * 2 * math.pi - math.pi
+            la = math.pi / 2 - (y + 0.5) / self.H4 * math.pi
+            c = unit(math.degrees(lo), math.degrees(la))
+            if all(math.acos(min(1.0, float(c @ unit(math.degrees(a), math.degrees(b))))) > 900 / R_KM for a, b, _ in metros):
+                metros.append((lo, la, rng.uniform(8000, 30000)))
+            if len(metros) >= 14:
+                break
+        self.meta['metros'] = [(round(math.degrees(a), 2), round(math.degrees(b), 2)) for a, b, _ in metros]
+        for lo, la, mp in metros:
+            k = 90
             ang = rng.uniform(0, 2 * math.pi, k)
-            dist = np.abs(rng.normal(0, 1, k)) * (6 + 4 * (pop[i] / 100) ** 0.4) / R_KM
-            sub.append(np.stack([lon[i] + dist * np.cos(ang) / max(math.cos(lat[i]), 0.1),
-                                 lat[i] + dist * np.sin(ang),
-                                 pop[i] * rng.uniform(0.02, 0.08, k),
-                                 np.full(k, modern[i])], 1))
-        sub = np.concatenate(sub, 0) if sub else np.zeros((0, 4))
-        # roads between the larger towns: lights strung along them
-        roads = self._roads(lon, lat, pop, modern, rng)
-        allp = np.concatenate([np.stack(towns, 1), sub, roads], 0)
+            dist = np.abs(rng.normal(0, 1, k)) * 28 / R_KM
+            sub_lon = lo + dist * np.cos(ang) / max(math.cos(la), 0.1)
+            sub_lat = la + dist * np.sin(ang)
+            pts.append(np.stack([sub_lon, sub_lat, mp * rng.uniform(0.004, 0.02, k), np.full(k, 0.8)], 1))
+            # spokes: highways radiating out, towns along them
+            for sp in range(int(rng.integers(5, 9))):
+                a = rng.uniform(0, 2 * math.pi)
+                L = rng.uniform(120, 320) / R_KM
+                t = np.linspace(0.08, 1, 40)
+                wob = rng.normal(0, 0.03, t.size).cumsum() * 0.2
+                slon = lo + (np.cos(a + wob) * L * t) / max(math.cos(la), 0.1)
+                slat = la + np.sin(a + wob) * L * t
+                pp = np.where(rng.random(t.size) < 0.25, rng.uniform(15, 120, t.size), 1.2)
+                pts.append(np.stack([slon, slat, pp, np.full(t.size, 0.7)], 1))
+        # --- highways between the bigger towns ---
+        pts.append(self._roads(lon, lat, pop, modern, rng))
+        allp = np.concatenate(pts, 0)
+        # nothing on the sea (spokes can overshoot a coast) but the fleets below
+        u = (allp[:, 0] + math.pi) / (2 * math.pi)
+        v = (math.pi / 2 - allp[:, 1]) / math.pi
+        on_land = self.land[np.clip((v * H).astype(int), 0, H - 1), (u * W).astype(int) % W] > 0
+        allp = allp[on_land]
         self.meta['settlements'] = int(allp.shape[0])
         img = self._splat_lights(allp)
+        for lo, la, mp in metros:
+            # the downtown glow: a hot core a couple of pixels across
+            self._bump(img, lo, la, 9.0 / R_KM, np.array([1.0, 0.9, 0.72], F32) * (mp / 8000.0) * 1.6)
         # fishing fleets: specks at sea over cool shelves
         depth = -np.minimum(self.elev, 0)
         dl = np.degrees(np.abs(self.LAT))
         shelfsea = (depth > 0.05) & (depth < 0.35) & (dl > 25) & (dl < 50)
         yy, xx = np.nonzero(shelfsea[::5, ::5])
         pick = rng.random(yy.size) < 0.05
-        fleet = np.zeros((H, W, 3), F32)
-        fleet[yy[pick] * 5, xx[pick] * 5] = np.array([0.8, 0.85, 0.9], F32) * 0.25
+        img[yy[pick] * 5, xx[pick] * 5] += np.array([0.8, 0.85, 0.9], F32) * 0.3
         # gas flares in one dry basin: isolated orange points
         dry = (self.Pmm < 200) & (self.land > 0) & (self.T > 12)
         yy, xx = np.nonzero(dry[::11, ::11])
-        flares = np.zeros((H, W, 3), F32)
         if yy.size:
             k = rng.integers(yy.size)
             cy, cx = yy[k] * 11, xx[k] * 11
             for _ in range(30):
                 y = int(np.clip(cy + rng.normal(0, 12), 0, H - 1))
                 x = int(cx + rng.normal(0, 16)) % W
-                flares[y, x] = np.array([1.0, 0.45, 0.12], F32) * rng.uniform(0.3, 0.7)
-        img = img * (1 - self.ice[..., None]) + fleet + flares
+                img[y, x] += np.array([1.0, 0.45, 0.12], F32) * rng.uniform(0.3, 0.7)
+        img *= (1 - 0.95 * self.ice[..., None] * self.land[..., None])
         self._hi(img)
-        img = 1 - np.exp(-img * 1.6)
+        img = 1 - np.exp(-img * 1.3)
         self.night = np.clip(img, 0, 1).astype(F32)
-        self.say(f"night lights: {self.meta['settlements']} lights")
+        self.say(f"night lights: {self.meta['settlements']} lights, {len(metros)} metropolises")
 
     def _roads(self, lon, lat, pop, modern, rng):
-        """Highways: each of the bigger towns joins its nearest neighbours
-        (if they are within reach over land); little towns and a dim line
-        of lights follow each road."""
-        sel = np.nonzero(pop > 60)[0]
+        """Highways: each bigger town joins its nearest neighbours over land;
+        a faint unbroken line of light (1 pixel) with towns strung along."""
+        sel = np.nonzero(pop > 40)[0]
         C = np.stack([np.cos(lat[sel]) * np.cos(lon[sel]), np.cos(lat[sel]) * np.sin(lon[sel]), np.sin(lat[sel])], -1)
         pts = []
-        maxang = 480.0 / R_KM
-        # neighbours via a coarse spatial hash on the sphere
+        maxang = 420.0 / R_KM
         cell = 3.0 / 180 * math.pi
         keys = {}
         la_i = np.floor((lat[sel] + math.pi / 2) / cell).astype(int)
@@ -1023,65 +906,53 @@ class Planet:
         for k in range(len(sel)):
             a, b = la_i[k], lo_i[k]
             cand = []
-            for da in (-2, -1, 0, 1, 2):
-                for db in (-2, -1, 0, 1, 2):
+            for da in (-1, 0, 1):
+                for db in (-1, 0, 1):
                     cand.extend(keys.get((a + da, (b + db) % nlo), []))
             cand = np.array([j for j in cand if j != k])
             if cand.size == 0:
                 continue
             dots = C[cand] @ C[k]
-            best = cand[np.argsort(-dots)[:3]]
-            for j in best:
-                e = (min(k, j), max(k, j))
-                edges.add(e)
+            for j in cand[np.argsort(-dots)[:2]]:
+                edges.add((min(k, j), max(k, j)))
         land = self.land
         for (a, b) in edges:
             A, B = C[a], C[b]
             ang = math.acos(min(1.0, max(-1.0, float(A @ B))))
             if ang > maxang or ang < 1e-4:
                 continue
-            mid = (A + B)
-            mid /= np.linalg.norm(mid)
-            u, v = N.dir_to_uv(mid[None].astype(F32))
-            if land[min(self.H - 1, int(v[0] * self.H)), int(u[0] * self.W) % self.W] < 0.5:
-                continue
-            nstep = max(2, int(ang * R_KM / 3.0))
+            nstep = max(2, int(ang * R_KM / 2.5))
             t = np.linspace(0, 1, nstep)[1:-1]
             s = math.sin(ang)
             P = (np.sin((1 - t) * ang)[:, None] * A + np.sin(t * ang)[:, None] * B) / s
-            P += rng.normal(0, 0.0006, P.shape)
+            P += np.cumsum(rng.normal(0, 0.00025, P.shape), 0)
             P /= np.linalg.norm(P, axis=1, keepdims=True)
             plon = np.arctan2(P[:, 1], P[:, 0])
             plat = np.arcsin(np.clip(P[:, 2], -1, 1))
-            # the road itself: a faint glow; towns along it every ~30 km
-            pp = np.full(t.size, 0.25)
-            town = rng.random(t.size) < 0.1
-            pp[town] = rng.uniform(4, 30, town.sum())
+            pp = np.full(t.size, 0.9)
+            town = rng.random(t.size) < 0.06
+            pp[town] = rng.uniform(3, 25, town.sum())
             md = np.full(t.size, (modern[sel[a]] + modern[sel[b]]) / 2)
             pts.append(np.stack([plon, plat, pp, md], 1))
         self.meta['roads'] = len(pts)
         return np.concatenate(pts, 0) if pts else np.zeros((0, 4))
 
     def _splat_lights(self, pts):
-        """Draw settlements: light flux in proportion to population, spread
-        over a radius that grows with it, in sodium orange or LED white.
-        Points are binned by their radius in pixels and each bin is splatted
-        then blurred once (fast, and equirect-aware)."""
+        """Each settlement as a point: its light split bilinearly over the
+        four nearest pixels, nothing spread further - except cities over
+        ~300k people, which spread as far as their built-up area reaches."""
         H, W = self.H, self.W
         lon, lat, pop, modern = pts[:, 0], pts[:, 1], pts[:, 2], pts[:, 3]
-        r_km = 2.6 * (pop / 100.0) ** 0.42
-        r_px = r_km / self.km_px
         sodium = np.array([1.0, 0.56, 0.20], F32)
         led = np.array([0.86, 0.88, 0.84], F32)
         col = sodium[None] * (1 - modern[:, None] * 0.75) + led[None] * modern[:, None] * 0.75
-        # flux in units of one full-resolution pixel's brightness: a pixel
-        # of a coarser map averages the same light over more ground
-        flux = (pop / 1000.0) * 6.0 * (W / 4096.0) ** 2
+        flux = (pop / 1000.0) * 7.0 * (W / 4096.0) ** 2
         img = np.zeros((H, W, 3), F32)
-        bins = [(0, 0.9, 1, 1), (0.9, 1.8, 1, 3), (1.8, 3.5, 2, 3), (3.5, 7, 4, 3), (7, 1e9, 7, 3)]
         x = (lon + math.pi) / (2 * math.pi) * W - 0.5
         y = (math.pi / 2 - lat) / math.pi * H - 0.5
-        for lo_, hi_, rad, passes in bins:
+        r_km = 2.4 * (pop / 100.0) ** 0.42
+        r_px = r_km / self.km_px
+        for lo_, hi_, rad in ((0, 1.2, 0), (1.2, 2.5, 1), (2.5, 1e9, 2)):
             m = (r_px >= lo_) & (r_px < hi_)
             if not m.any():
                 continue
@@ -1091,15 +962,13 @@ class Planet:
             y0 = np.floor(ym).astype(np.int64)
             fx, fy = xm - x0, ym - y0
             val = (flux[m][:, None] * col[m]).astype(F32)
-            # the blur spreads a unit of flux over ~ (2 sigma)^2 pixels;
-            # scale so a pixel-sized town keeps its brightness
             for (dx, dy, w) in ((0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)), (0, 1, (1 - fx) * fy), (1, 1, fx * fy)):
                 yy = np.clip(y0 + dy, 0, H - 1)
                 xx = (x0 + dx) % W
                 for ch in range(3):
                     np.add.at(layer[..., ch], (yy, xx), (val[:, ch] * w).astype(F32))
-            if rad > 1 or passes > 1:
-                layer = N.blur(layer, rad, passes)
+            if rad:
+                layer = N.blur(layer, rad, 2)
             img += layer
         return img
 
@@ -1129,7 +998,7 @@ class Planet:
         for (dx, dy) in pts:
             lo = lo0 + (dx - cx) / math.cos(la0)
             la = la0 + (dy - h / 2)
-            self._bump(light, lo, la, 3.2 / R_KM + 0.4 * self.km_px / R_KM, np.array([1.0, 0.62, 0.3], F32) * 0.16)
+            self._bump(light, lo, la, 3.2 / R_KM + 0.4 * self.km_px / R_KM, np.array([1.0, 0.62, 0.3], F32) * 0.22)
         img += light
         self.meta['hi'] = (lon0, lat0)
 
@@ -1157,13 +1026,28 @@ class Planet:
                 a *= gain
             return out / t
 
-        # clouds: cauliflower lumps (billows) over a softer fBm, then
-        # rank-transformed to a uniform histogram, so a renderer that keeps
-        # detail > 1 - coverage gets exactly that coverage in crisp cloudlets
-        billow = fbm(8, 6, 101, 0.55, absval=True)
-        cloud = self._uniform(0.55 * fbm(6, 7, 41) + 0.8 * billow)
-        terrain = np.clip(0.5 + 0.65 * fbm(5, 8, 61, 0.55), 0, 1)
-        fib = self._uniform(fbm(3, 6, 131, 0.55, fy=12))
+        # clouds: cumulus as it organises - puffs (~1.5-3 km) clustered in
+        # cells (~12 km) - built as domes over periodic Worley cells, with
+        # cauliflower billows on top, then rank-transformed to a uniform
+        # histogram: a renderer that keeps detail > 1 - coverage gets that
+        # coverage as crisp cloudlets, and low coverage keeps only the
+        # tallest puffs at the heart of each cell
+        cell = worley_periodic(Xw, Yw, 34, 201)
+        puff = worley_periodic((Xw * 1.0) % 1.0, Yw, 150, 203)
+        tiny = worley_periodic(Xw, Yw, 420, 207)
+        billow = fbm(24, 4, 101, 0.55, absval=True)
+        cells = 1.0 - np.clip(cell / 0.75, 0, 1) ** 1.4          # 1 at a cell's heart, 0 at its rim
+        puffs = 1.0 - np.clip(puff / 0.8, 0, 1) ** 2.0
+        grains = 1.0 - np.clip(tiny / 0.8, 0, 1) ** 2.0
+        cloud = self._uniform(0.55 * cells + 0.30 * puffs + 0.08 * grains + 0.22 * billow + 0.12 * fbm(4, 4, 41))
+        # terrain: eroded fBm with a directional grain (dune ridges, strike
+        # ridges, field boundaries all run in lines)
+        grain = periodic_noise2(Xw, Yw, 40, 71, fy=160)
+        terrain = np.clip(0.5 + 0.6 * fbm(5, 8, 61, 0.55) + 0.12 * grain, 0, 1)
+        # rolls and fibres: parallel streets of cloud broken into puffs, and
+        # cirrus fibres, running east-west (with the prevailing flow)
+        rolls = 0.5 + 0.5 * np.sin(Yw * 2 * math.pi * 90 + 2.5 * fbm(6, 3, 141))
+        fib = self._uniform(0.6 * fbm(3, 6, 131, 0.55, fy=12) + 0.4 * rolls * (0.4 + 0.6 * puffs))
         self.detail_rgb = np.stack([cloud, terrain, fib], -1).astype(F32)
         self.say("detail texture")
 
@@ -1183,6 +1067,28 @@ class Planet:
         self.night_lights()
         self.detail(1024 if self.W >= 2048 else 512)
         return self
+
+
+def worley_periodic(X, Y, n, seed):
+    """F1 distance (in cell units) to jittered points on an n x n grid that
+    wraps: tiles on the unit square."""
+    rng = np.random.default_rng(seed)
+    jit = rng.uniform(0.1, 0.9, (n, n, 2)).astype(F32)
+    x = X * n
+    y = Y * n
+    ix = np.floor(x).astype(np.int64)
+    iy = np.floor(y).astype(np.int64)
+    fx = (x - ix).astype(F32)
+    fy = (y - iy).astype(F32)
+    best = np.full(X.shape, 9.0, F32)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            cx = (ix + dx) % n
+            cy = (iy + dy) % n
+            px = dx + jit[cy, cx, 0] - fx
+            py = dy + jit[cy, cx, 1] - fy
+            best = np.minimum(best, np.sqrt(px * px + py * py))
+    return best
 
 
 def periodic_noise2(X, Y, fx, seed, fy=None):
