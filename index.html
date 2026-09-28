@@ -91,35 +91,35 @@
         </div>
       </header>
       <main class="home-main">
-        <section class="feature" aria-labelledby="feature-title">
-          <div class="feature-art" aria-hidden="true"><img id="feature-art" alt="" decoding="async" /></div>
-          <div class="feature-text">
+        <!-- The game chosen below, large: its art beside its name and the Play button. -->
+        <section class="feature" id="feature" aria-labelledby="feature-title">
+          <div class="feature-art" id="feature-frame" aria-hidden="true"><img id="feature-art" alt="" decoding="async" /></div>
+          <div class="feature-text" id="feature-text">
             <h1 class="large-title" id="feature-title">High Noon</h1>
             <p class="body secondary" id="feature-about"></p>
-            <div class="feature-actions">
+            <div class="feature-actions" id="feature-actions">
               <button id="play" class="button primary large" data-sound="confirm">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-play" /></svg>Play
               </button>
               <button id="adjust" class="button secondary large" hidden>Adjust Aim</button>
             </div>
-            <p class="subhead secondary start-control">
+            <p class="subhead secondary start-control" id="start-control">
               <span id="control-label" class="control-label"></span>
               <button id="switch-control" class="link">Use Mouse or Trackpad</button>
             </p>
             <p class="subhead secondary home-best num" id="home-best" hidden></p>
+            <p class="coming-soon subhead" id="feature-soon" hidden>Coming Soon</p>
           </div>
         </section>
-        <section aria-labelledby="soon-label">
-          <h2 class="eyebrow soon-label" id="soon-label">Coming Soon</h2>
-          <ul class="soon" id="soon"></ul>
-        </section>
+        <!-- Every game in the arcade: one tab stop, the arrow keys choose. -->
+        <div class="shelf" id="shelf" role="radiogroup" aria-label="Games"></div>
       </main>
     </div>
 
     <!-- A game: the world full-bleed, chrome in the corners. -->
     <section id="game" class="view game" hidden aria-label="Game" data-phase="loading" data-ready="false" tabindex="-1">
       <div class="stage" id="stage">
-        <div class="curtain" aria-hidden="true"><img id="curtain-art" alt="" /></div>
+        <div class="curtain" id="curtain" aria-hidden="true"><img id="curtain-art" alt="" /></div>
         <canvas class="world" id="world" role="img" aria-label="Game"></canvas>
         <div class="hurt-edge" id="hurt-edge" aria-hidden="true"></div>
         <div class="arcs" id="arcs" aria-hidden="true"></div>

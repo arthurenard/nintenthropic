@@ -1,11 +1,10 @@
 /* The screens: first run, the arcade, and the sheets around a game. */
 
 :root {
-  /* Golden hour on Main Street: High Noon's light, standing in for its
-     poster until the town's own picture arrives - not a picture pretending
-     to be the game. */
-  --poster-fallback: radial-gradient(120% 90% at 62% 108%, rgba(255, 196, 120, 0.95) 0%, rgba(233, 150, 84, 0.55) 34%, transparent 62%),
-    linear-gradient(180deg, #213349 0%, #50506a 46%, #b9795a 78%, #6c4630 100%);
+  /* Where a game's poster goes, its light stands in until the picture
+     arrives (GameEntry.backdrop, set on each box by the page) - not a
+     picture pretending to be the game. This dusk is for a box not yet told. */
+  --poster-fallback: linear-gradient(180deg, #15171d 0%, #23262f 60%, #1a1b20 100%);
 }
 
 /* --- first run ------------------------------------------------------------------ */
@@ -254,34 +253,44 @@
   gap: 8px;
 }
 .home-main {
+  --home-max: 1600px;
+  /* The content's width, the row of games' height (its cards' pictures and
+     names), and what that leaves the hero: its picture's greatest height,
+     and its share of the width beside the words. */
+  --content: calc(min(100vw, var(--home-max)) - 2 * var(--margin));
+  --shelf: calc((var(--content) - 3 * 16px) / 4 * 9 / 16 + 48px);
+  --hero-height: calc(100dvh - 64px - var(--shelf) - 40px - var(--margin) - 32px);
+  --hero-share: 0.63;
   display: flex;
   flex: 1;
   flex-direction: column;
   justify-content: center;
   gap: 40px;
   width: 100%;
-  max-width: 1600px;
+  max-width: var(--home-max);
   margin: 0 auto;
   padding: 0 var(--margin) var(--margin);
 }
-/* The game you can play, large: its art beside its name and the Play button. */
+/* The game chosen below, large: its art beside its name and the Play button. */
 .feature {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(340px, 1fr);
+  grid-template-columns: auto minmax(340px, 1fr);
   align-items: center;
   gap: 48px;
 }
+/* As wide as its share, unless the window is too short for that: then as
+   wide as the height it has, and the words take the rest of the row. */
 .feature-art {
   position: relative;
+  width: clamp(427px, calc(var(--hero-height) * 16 / 9), calc((var(--content) - 48px) * var(--hero-share)));
   aspect-ratio: 16 / 9;
-  max-height: calc(100dvh - 360px);
-  min-height: 240px;
   overflow: hidden;
   border-radius: var(--r-card);
   box-shadow:
     0 0 0 1px var(--hairline),
     var(--shadow);
   background: var(--poster-fallback);
+  transition: background 450ms var(--ease);
 }
 .feature-art img {
   position: absolute;
@@ -303,6 +312,16 @@
   display: grid;
   align-content: center;
   gap: 16px;
+}
+/* Another game chosen: its words arrive as its picture does. */
+.feature-text.fresh {
+  animation: words-rise 450ms var(--spring);
+}
+@keyframes words-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 .feature-text .body {
   max-width: 34em;
@@ -336,29 +355,104 @@
 .home-best {
   margin-top: -8px;
 }
-/* The rest of the arcade: named, quiet, and honest that it is not here yet. */
-.soon-label {
-  margin-bottom: 16px;
-}
-.soon {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  padding: 0;
-  list-style: none;
-}
-.soon li {
-  display: grid;
-  gap: 4px;
-  padding: 20px 24px 22px;
-  border-radius: var(--r-card);
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--hairline);
-}
-.soon .title3 {
+/* A game still to come, where Play would be: said plainly, not a button. */
+.coming-soon {
+  justify-self: start;
+  margin-top: 8px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--fill);
   color: var(--label-2);
+  font-weight: 600;
 }
-.soon .subhead {
+
+/* --- the row of games -------------------------------------------------------------- */
+
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.game-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.game-card:focus-visible {
+  outline: none;
+}
+.game-card-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--r-small);
+  background: var(--poster-fallback);
+  box-shadow: 0 0 0 1px var(--hairline);
+  transition:
+    box-shadow 250ms var(--ease),
+    transform 250ms var(--ease),
+    filter 250ms var(--ease);
+}
+.game-card-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 450ms var(--ease);
+}
+.game-card-art img.loaded {
+  opacity: 1;
+}
+/* The ones not chosen sit back a little... */
+.game-card[aria-checked="false"] .game-card-art {
+  filter: brightness(0.72) saturate(0.9);
+}
+.game-card[aria-checked="false"]:hover .game-card-art {
+  filter: none;
+}
+/* ...and the chosen one is ringed in white: the page's colour for a choice made. */
+.game-card[aria-checked="true"] {
+  color: var(--label);
+}
+.game-card[aria-checked="true"] .game-card-art {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 6px var(--label);
+}
+/* With the keyboard, the card in hand lifts toward you. */
+.game-card:focus-visible .game-card-art {
+  transform: scale(1.03);
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 6px var(--label),
+    var(--shadow);
+}
+.game-card:active .game-card-art {
+  transform: scale(0.98);
+}
+.game-card-words {
+  display: grid;
+  gap: 2px;
+  padding: 0 4px;
+}
+.game-card-title {
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.game-card-soon {
+  font-size: 13px;
+  line-height: 1.38;
   color: var(--label-3);
 }
 
@@ -562,44 +656,75 @@ body[data-view="game"] {
 
 /* --- narrower windows ------------------------------------------------------------------------------- */
 
+/* A large display: more room for the pictures. */
+@media (min-width: 2200px) {
+  .home-main {
+    --home-max: 1880px;
+  }
+}
 @media (max-width: 1100px) {
+  .home-main {
+    --hero-share: 0.565;
+  }
   .feature {
-    grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr);
+    grid-template-columns: auto minmax(300px, 1fr);
     gap: 32px;
   }
   .feature .large-title {
     font-size: 44px;
   }
 }
+/* A short window: the hero's words tighten so the row still fits below. */
+@media (max-height: 760px) and (min-width: 861px) {
+  .home-main {
+    gap: 32px;
+  }
+  .feature-text {
+    gap: 12px;
+  }
+  .feature .large-title {
+    font-size: 44px;
+  }
+  .feature-text .body {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+}
 @media (max-width: 860px) {
+  .home-main {
+    justify-content: flex-start;
+    gap: 32px;
+    padding-top: 8px;
+  }
   .feature {
     grid-template-columns: 1fr;
     gap: 24px;
   }
   .feature-art {
-    max-height: none;
-    /* The picture's own shape sets its height: a floor would push it
-       wider than a phone. */
-    min-height: 0;
+    /* The picture's own shape sets its height: the row's width sets its width. */
+    width: 100%;
   }
   .large-title,
   .feature .large-title {
     font-size: 40px;
   }
-  .soon {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-  .soon li {
-    padding: 16px 20px;
+  /* Two by two: every game in sight at once, none behind a scroll. */
+  .shelf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 12px;
   }
 }
 
 /* --- reduced motion (the system's or the player's: see base.css) ------------------------------------------ */
 
 :root[data-reduce-motion] {
-  .new-best.pop {
+  .new-best.pop,
+  .feature-text.fresh {
     animation-name: fade-in !important;
+  }
+  .game-card:focus-visible .game-card-art,
+  .game-card:active .game-card-art {
+    transform: none;
   }
   .g-thumb,
   .g-recoil,

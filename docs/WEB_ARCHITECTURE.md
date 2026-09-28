@@ -173,8 +173,13 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   `assets: AssetLoader`, settings, a seeded random source, `quality`, and
   `input` (optional: how the player aims, so hints can say "right-click to
   reload" to a mouse player).
-- `GameEntry` — the landing's card for a game; `about` (optional) is the
-  featured game's longer line.
+- `GameEntry` — a game in the arcade (`src/games/index.ts`): `id`, `title`,
+  `blurb`, `about` (the hero's two or three sentences), `poster` (16:9, under
+  `public/`), `backdrop` (the game's light, drawn where the poster would be
+  until it exists: a sky's colour stops and a glow), `uses` (what it asks of
+  the platform: `scope`, `eye`), `stage` (`minAspect`, `maxAspect`: the
+  stage's shape its art can hold; 1.1 and unlimited if unset), and `create`,
+  absent while the game is Coming Soon.
 - Optional members a game may use: `AudioBus.setSpace(space)` (the street's
   walls, for the echoes), `CalibrationStage.begin()` (above).
 - `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
@@ -295,7 +300,10 @@ three shots.
   on. A saved fit starts measuring from the first shot. After 12
   shots below 95%, offer **Play Anyway** with one specific tip (light, framing,
   distance) — never trap the player.
-- **Stored** per camera (`deviceId`) and video size in `localStorage`, with a
+- **Stored** per camera (`deviceId`), video size and game in `localStorage`,
+  and as the camera's latest: a game with no aim of its own yet starts from
+  the latest (any game's), measured from its first shot, so a player set up
+  once is ready in three shots in every game. With a
   version number; anything unreadable is discarded and the check starts fresh.
 
 ## What the browser keeps
@@ -316,10 +324,13 @@ plays the same without remembering (`src/app/prefs.ts`).
   `{ score, outcome, at }`, written the moment a round ends.
 - `handy.tips-seen.v1` — `Settings.tipsSeen`, a set that writes itself through
   on every `add`.
-- `handy.aim.v1.<camera>.<size>` — saved aims (above);
+- `handy.aim.v1.<camera>.<size>.<game>` and `handy.aim.v1.<camera>.<size>`
+  — saved aims, a game's own and the camera's latest (above);
   `handy.camera.v1` / `handy.camera-choice.v1` — the camera used last, and the
   one chosen in Settings, which is asked for exactly and gives way to any other
   if it has gone.
+- `handy.game.v1` — the game chosen in the arcade (the address's
+  `#<game>` or `?game=<game>` wins over it).
 - `handy.welcomed.v1`, `handy.muted.v1`, `handy.control.v1`,
   `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
 

@@ -234,13 +234,68 @@ export interface Game {
   dispose(): void;
 }
 
+/**
+ * A game's light as a picture - a sky graded from top to bottom, and a glow
+ * (the sun low at golden hour, a lamp in the fog, a planet's limb) - which the
+ * page shows wherever the game's poster would be until the poster loads, or
+ * for good while there is none. Colours are CSS colours.
+ */
+export interface Backdrop {
+  /** Colour stops down the picture: [colour, 0 (top) .. 1 (bottom)]. */
+  sky: readonly (readonly [string, number])[];
+  /**
+   * An elliptical glow: its centre (fractions of the picture, may lie
+   * outside it), its radii (fractions of the picture's width and height),
+   * and its colour stops from the centre out: [colour, 0..1 of the radius].
+   */
+  glow?: { x: number; y: number; width: number; height: number; stops: readonly (readonly [string, number])[] };
+}
+
+/** What a game asks of the platform beyond the hand's aim and fold (or the pointer's). */
+export interface GameUses {
+  /**
+   * The player may look through a scope: Aim.scope follows Shift or the
+   * right mouse button (which then scopes rather than reloads), or an
+   * on-screen Scope button on a touch screen, held or toggled as Settings says.
+   */
+  scope?: boolean;
+  /**
+   * With the hand, closing one eye scopes too: the face landmarker loads
+   * and runs on the same camera frames, for this game only. Needs `scope`.
+   */
+  eye?: boolean;
+}
+
+/** The stage's shape a game's art can hold. */
+export interface StageShape {
+  /**
+   * The stage is never taller than 1 : minAspect: in a taller window (a
+   * phone held upright) the world plays in a band across the middle. A
+   * world drawn from one fixed eye (High Noon's baked town) streaks below
+   * the frame its art was made for past its own figure. 1.1 if unset.
+   */
+  minAspect?: number;
+  /**
+   * The stage is never wider than maxAspect : 1: in a wider window it
+   * plays in a column with black at the sides. Unlimited if unset.
+   */
+  maxAspect?: number;
+}
+
 export interface GameEntry {
   id: string;
   title: string;
   blurb: string;
-  /** Two or three sentences for the featured game on the landing. Optional; the blurb stands in. */
+  /** Two or three sentences for the arcade's hero. Optional; the blurb stands in. */
   about?: string;
-  /** A poster image under public/. */
+  /** A poster image under public/ (16:9); until it exists, the backdrop stands in. */
   poster: string;
-  create(): Promise<Game>;
+  /** The game's light, shown where the poster would be until it loads. Optional; a neutral dusk stands in. */
+  backdrop?: Backdrop;
+  /** What the game asks of the platform (a scope, the eye). */
+  uses?: GameUses;
+  /** The stage's shape its art can hold. */
+  stage?: StageShape;
+  /** Makes the game. Absent while it is Coming Soon: the arcade shows it, and it cannot be played. */
+  create?(): Promise<Game>;
 }

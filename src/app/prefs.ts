@@ -17,6 +17,7 @@ const KEYS = {
   unlocks: "handy.unlocks.v1",
   settings: "handy.settings.v1",
   tipsSeen: "handy.tips-seen.v1",
+  game: "handy.game.v1",
 };
 
 /** Everything Handy keeps starts with this, in both storages. */
@@ -92,6 +93,14 @@ export const prefs = {
   },
   set downloaded(value: boolean) {
     write(local(), KEYS.downloaded, value);
+  },
+  /** The game chosen in the arcade last, by id (it may since have left the arcade: the caller checks). */
+  get game(): string | null {
+    const id = read<string>(local(), KEYS.game);
+    return typeof id === "string" ? id : null;
+  },
+  set game(value: string | null) {
+    write(local(), KEYS.game, value);
   },
   /** Unlocks last for the visit (the Golden Revolver is "for the session"). */
   get unlocks(): Set<string> {

@@ -112,9 +112,12 @@ are neutral: white for *on* and for the choice made, never green (see Settings).
   few large choices (Resume, Restart, Adjust Aim, Settings, Choose a Game).
 - **Hints** appear when they help (a round's first seconds, a lost hand, an
   unknown key) and fade away when they stop helping.
-- **Tall and short windows.** The stage is never taller than 1.1 : 1: in a
-  tall window (a phone held upright) the world plays in a band across the
-  middle, with black above and below, and on a touch screen a footnote
+- **Tall and short windows.** The stage is never taller than its game's art
+  allows - 1.1 : 1 unless the game says otherwise (`GameEntry.stage`), and a
+  game may also set how wide it may go: in a tall window (a phone held
+  upright) the world plays in a band across the middle, with black above and
+  below (and in a window wider than a game allows, in a column with black at
+  the sides), and on a touch screen a footnote
   suggests turning it sideways. A short stage (under 520 px, a phone on its
   side) shrinks the chrome to what its corners can spare: a smaller score
   panel, pause button and cylinder, and the hint at the foot of the view
@@ -149,6 +152,35 @@ Every meaningful event has a sound, synthesised in code at load
 (`src/audio/`): no audio files are shipped.
 Interface sounds are soft and short; game sounds carry the weight. Mute is one
 click and remembered.
+
+## The arcade
+
+The home screen is the arcade: the chosen game large, and every game in a
+row beneath it.
+
+- **The hero** is the chosen game: its poster (rounded 22, lifted by the
+  shadow) beside its name (Large Title), two or three sentences about it,
+  Play and Adjust Aim, how you are playing (Finger Pistol, or the mouse),
+  and, quietly, your best in this game. When the window is short the picture
+  gives way to the row before the words do.
+- **The row** holds every game's poster as a card (16:9, rounded 16) with its
+  name under it. The chosen card is ringed in white, the page's colour for a
+  choice made, and the others sit back a little until the pointer is on
+  them. It is a radio group: one tab stop, the arrow keys choose (Home and
+  End go to the ends), a click chooses. With the keyboard the card in hand
+  lifts toward you. In a narrow window the row goes two by two, every game
+  in sight.
+- **Coming Soon** games are in the row too, named and never faked: "Coming
+  Soon" under the name, and in the hero, where Play would be, a quiet
+  label rather than a button.
+- **Posters.** Until a game's poster exists (it is rendered in Blender), its
+  light stands in where the picture would be: a sky and a glow in the game's
+  own colours (golden hour, moonlit fog, a planet's limb, dawn over a
+  valley), never a picture pretending to be the game (`GameEntry.backdrop`).
+- **Remembered, and shareable.** The chosen game is remembered, and is the
+  page's address (`#dead-of-night`): a link opens the arcade on that game.
+  Choose a Game, from the pause sheet or the results, comes back to the
+  arcade with the game just played chosen.
 
 ## First run
 
