@@ -124,3 +124,31 @@ def stage_materials(ctx):
     from . import tiles
     only = ctx.preview.split(",") if ctx.preview else None
     tiles.build_all(os.path.join(ctx.build, "tiles"), quick=ctx.quick, only=only)
+
+
+def stage_impostors(ctx):
+    """Render the trees' impostor atlases (part of the forest stage)."""
+    from . import trees
+    trees.render_impostors(os.path.join(ctx.build, "impostors"), quick=ctx.quick)
+
+
+def stage_forest(ctx):
+    """Impostor atlases (trees.py), then where every tree stands (forest.py);
+    the review meshes go into the blend."""
+    from . import trees, forest as FO, landcover as LC
+    t = time.time()
+    imp = os.path.join(ctx.build, "impostors")
+    if not os.path.exists(os.path.join(imp, "impostors.json")) or not os.environ.get("RIDGE_REUSE_IMPOSTORS"):
+        trees.render_impostors(imp, quick=ctx.quick)
+    log(f"impostors {time.time() - t:.0f}s")
+    ter = load_terrain(ctx)
+    F = LC.Fields(ter)
+    inst = FO.place(ter, F, quick=ctx.quick)
+    FO.save(os.path.join(ctx.build, "forest.npz"), inst)
+    sc = open_blend(ctx)
+    col = S.collection("forest_review", bpy.data.collections["Valley"])
+    for o in list(col.objects):
+        bpy.data.objects.remove(o)
+    FO.build_review_objects(inst, imp, col)
+    save_blend(ctx)
+    log(f"forest stage {time.time() - t:.0f}s")

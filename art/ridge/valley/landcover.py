@@ -159,11 +159,12 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
     forest *= 1 - track
     # the valley floor is farmland; the player's own hillside is pasture
     forest *= 1 - floor_zone
-    near_side = smoothstep(700.0, 450.0, r) * smoothstep(-0.2, 0.2, np.cos(np.arctan2(x, y) * 0 + 0))
-    # our hillside: pasture with a few copses (the flanks keep their woods)
+    # the player's own slope is open pasture - the aim check's plates and the
+    # sightlines to the road and the checkpoint cross it - with woods only on
+    # its flanks, framing the view
     th = np.degrees(np.arctan2(x, y))
-    ours = (r < 420) * smoothstep(-30.0, 10.0, -np.abs(th) + 30.0)
-    forest *= 1 - 0.85 * ours * (1 - smoothstep(0.35, 0.5, n2))
+    ours = smoothstep(520.0, 440.0, r) * smoothstep(40.0, 32.0, np.abs(th))
+    forest *= 1 - ours
     # riverside trees: a ribbon of alder/birch along the banks (placed by the
     # forest stage as 'birch'); here the ground there stays grass
     forest *= smoothstep(25.0, 45.0, dr)
