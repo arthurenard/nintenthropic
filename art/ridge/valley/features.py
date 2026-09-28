@@ -285,7 +285,11 @@ def apply(g, quick=False):
     bench(g, X, Y, sw, z_of=lambda s, zl: _smooth_profile(sw, g, s), margin=18.0, camber=0.03)
     dam_gorge(g, X, Y)
     dm = L.dam_road()
-    bench(g, X, Y, dm, margin=20.0, camber=0.0, cut_tan=3.0)
+    # the crest is the dam itself: no bench (and no fill slope burying the
+    # dam's face) until the road leaves the arch
+    ends = [L.dam_arc_point(t) for t in (-L.DAM_THETA, L.DAM_THETA)]
+    s_arc = max(float(dm.nearest(np.array([e[0]]), np.array([e[1]]))[1][0]) for e in ends) + 4.0
+    bench(g, X, Y, dm, margin=20.0, camber=0.0, cut_tan=3.0, skip=lambda s: s < s_arc)
     log(f"lanes, gorge {time.time() - t:.1f}s")
     # pads: checkpoint, farmyard, alp, village
     pad(g, X, Y, L.CHECKPOINT_C, 16.0, 34.0, math.atan2(*_road_dir(rd, L.CHECKPOINT_C)), z=None, margin=5.0)

@@ -53,9 +53,9 @@ TILE_M = 4.0          # the rock tile's size (tiles.json)
 WALLS = {
     # the box sampled round each wall, in a frame whose u runs away from the
     # eye and v across; voxel = the mesh's edge length
-    "rock.cliff": dict(c=L.CLIFF_C, u=(-150.0, 150.0), v=235.0, voxel=1.5, bed=(3.5, 11.0), cell=13.0,
+    "rock.cliff": dict(c=L.CLIFF_C, u=(-150.0, 340.0), v=280.0, voxel=1.6, bed=(3.5, 11.0), cell=13.0,
                        block=0.8, soft=0.6, notch=0.9, joint=1.3, jw=1.1, gully=1.6, rough=0.35, proud=3.5,
-                       steep=(50.0, 60.0), band=32.0, tris=65000, seed=11),
+                       steep=(50.0, 60.0), tris=110000, seed=11),
     "rock.crag": dict(c=L.GOAT_CRAG_C, u=(-75.0, 115.0), v=75.0, voxel=1.25, bed=(2.2, 6.5), cell=7.0,
                       block=0.6, soft=0.45, notch=0.6, joint=0.8, jw=0.7, gully=0.9, rough=0.25, proud=2.3,
                       steep=(48.0, 60.0), tris=30000, seed=12),
@@ -155,10 +155,13 @@ def steep_weight(ter, fr, prm, gs):
     slope = np.degrees(np.arctan(np.hypot(gu, gv)))
     w = smoothstep(prm['steep'][0], prm['steep'][1], slope)
     if prm.get('band'):
-        # only the wall itself, not the steep mountainside above it: a band
-        # round the steepest line of each column across the box
-        uf = N.blur(u[np.argmax(N.blur(slope, 4.0), axis=0)][None, :].astype(float), 6.0)[0]
-        w *= smoothstep(prm['band'], prm['band'] - 12.0, np.abs(UU - uf[None, :]))
+        # only the wall itself, not the steep mountainside above it: the
+        # terrain's own mask of the cliff's face (terrain.great_cliff), a
+        # little dilated
+        from .terrain import great_cliff
+        _, face = great_cliff(X, Y, None, np.degrees(np.arctan2(X, Y)))
+        face = N.blur(face, 2.0 / gs * 1.5)
+        w *= smoothstep(0.02, 0.15, face)
     k = max(1, int(round(2.5 / gs)))
     for _ in range(k):
         w = np.maximum.reduce([w, np.roll(w, 1, 0), np.roll(w, -1, 0), np.roll(w, 1, 1), np.roll(w, -1, 1)])
@@ -329,7 +332,7 @@ def build_wall(ter, name, prm, col):
     det, aux = rock.displacement(V[:, 0], V[:, 1], V[:, 2])
     det = np.maximum(det, -(prm['proud'] - 0.8))
     w = smooth_on_mesh(w, F, 2)
-    D = w * (prm['proud'] + det) - (1 - w) * 1.2
+    D = w * (prm['proud'] + det) - (1 - w) * 2.5
     P = V + n * D[:, None]
     nd = vertex_normals(P, F)
     R0 = float(np.linalg.norm(prm['c']))
@@ -431,6 +434,18 @@ def bake_ao(obs, samples=64, distance=18.0):
             c[:, :3] *= occ
             me.color_attributes["Col"].data.foreach_set("color", c.ravel())
             me.color_attributes.remove(me.color_attributes["AO"])
+            # faces the sky never sees are under the terrain: where the
+            # terrain's coarser mesh lets them poke out they would be black
+            # slivers - drop them
+            import bmesh
+            bm = bmesh.new()
+            bm.from_mesh(me)
+            bm.verts.ensure_lookup_table()
+            dark = [f for f in bm.faces if all(a[v.index, 0] < 0.08 for v in f.verts)]
+            bmesh.ops.delete(bm, geom=dark, context='FACES')
+            bm.to_mesh(me)
+            bm.free()
+            log(f"{ob.name}: {len(dark):,} buried faces dropped")
             col = me.color_attributes["Col"]
             me.color_attributes.active_color = col
             me.color_attributes.render_color_index = list(me.color_attributes).index(col)
