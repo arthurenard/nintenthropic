@@ -8,6 +8,7 @@ import { AimController, Recoil, type AimReading } from "./aim";
 import { Velocity } from "./filter";
 import { palmSpan } from "./hand";
 import { apply, type Matrix } from "./homography";
+import { HandTrust } from "./trust";
 
 /** How far past an edge the crosshair must go to count as off the screen, in
  * viewport fractions; it counts as back once within half of that. */
@@ -69,6 +70,8 @@ export class HandInput implements InputSource {
   private held: { at: number; position: [number, number] } | null = null;
   /** When the hand was last seen, and whether it was then on its way out of the picture. */
   private seen: { at: number; leaving: boolean } | null = null;
+  /** Keeps the aim on the player's hand when another comes into the picture. */
+  private readonly trust = new HandTrust();
 
   constructor(
     private readonly source: HandSource,
@@ -97,11 +100,22 @@ export class HandInput implements InputSource {
     this.offscreen = false;
     this.held = null;
     this.seen = null;
+    this.trust.reset();
   }
 
   private onFrame(frame: HandFrame): void {
     const time = frame.capturedAt / 1000;
-    const reading = this.controller.update(frame.landmarks, time);
+    // A hand that turns up far from the player's (someone else's, most
+    // likely) is no hand until it has stayed a moment: it moves no aim and
+    // fires nothing. One that stays is followed from scratch - its aim not
+    // slid over from the last hand's, its thumb raised before it can fire.
+    const judged = this.trust.judge(frame.landmarks, frame.capturedAt);
+    const hand = judged === "trusted" || judged === "adopted" ? frame.landmarks : null;
+    if (judged === "adopted") {
+      this.controller.reset();
+      this.held = null;
+    }
+    const reading = this.controller.update(hand, time);
     this.reading = reading;
     this.capturedAt = frame.capturedAt;
     const at = reading.unclamped;
@@ -138,7 +152,7 @@ export class HandInput implements InputSource {
     this.onReading?.({
       ...reading,
       frame,
-      span: frame.landmarks ? palmSpan(frame.landmarks) : undefined,
+      span: hand ? palmSpan(hand) : undefined,
     });
   }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
 import type { HandFrame, HandSource } from "../tracking/types";
 import { EXIT_MOMENT, HandInput, MAX_PREDICTION, STALE_FRAME } from "./handInput";
+import { TRUST_AFTER } from "./trust";
 import { boxMapping } from "./homography";
 import { asCameraSees, makeHand, type HandPose } from "./synthetic";
 
@@ -160,6 +161,51 @@ describe("the hand as an input", () => {
     const lost = input.sample(t + 5);
     expect(lost.tracking).toBe(false);
     expect(lost.offscreen).toBe(false);
+  });
+
+  it("does not let another hand take the aim, or fire, until it has stayed", () => {
+    const { camera, input } = setup();
+    const mine = { thumbDegrees: 20, indexTip: [0.4, 0.45] as const, wrist: [0.42, 0.72] as const };
+    // Someone else's, across the picture, with the thumb down as it comes in.
+    const theirs = { thumbDegrees: 75, indexTip: [0.75, 0.3] as const, wrist: [0.77, 0.57] as const };
+    let t = 0;
+    for (let i = 0; i < 12; i++) camera.show(mine, (t += 33));
+    const before = input.sample(t);
+    expect(before.tracking).toBe(true);
+    expect(before.armed).toBe(true);
+    const arrived = t + 33;
+    while (t < arrived + TRUST_AFTER - 40) {
+      camera.show(theirs, (t += 33));
+      const aim = input.sample(t);
+      expect(aim.fired).toBe(false);
+      expect(aim.tracking).toBe(false);
+      expect(aim.x).toBeCloseTo(before.x, 5);
+    }
+    // It stayed: followed from now on, from where it is, but not cocked
+    // until its thumb has been up.
+    for (let i = 0; i < 4; i++) camera.show(theirs, (t += 33));
+    const adopted = input.sample(t);
+    expect(adopted.tracking).toBe(true);
+    expect(adopted.fired).toBe(false);
+    expect(adopted.armed).toBe(false);
+    expect(adopted.x).toBeGreaterThan(0.8);
+  });
+
+  it("stays on the player's hand when the tracker flickers to another", () => {
+    const { camera, input } = setup();
+    const mine = { thumbDegrees: 20, indexTip: [0.4, 0.45] as const, wrist: [0.42, 0.72] as const };
+    const theirs = { thumbDegrees: 75, indexTip: [0.8, 0.3] as const, wrist: [0.82, 0.57] as const };
+    let t = 0;
+    for (let i = 0; i < 12; i++) camera.show(mine, (t += 33));
+    const x = input.sample(t).x;
+    let fired = 0;
+    for (let i = 0; i < 30; i++) {
+      camera.show(i % 3 === 1 ? theirs : mine, (t += 33));
+      const aim = input.sample(t);
+      if (aim.fired) fired++;
+      if (aim.tracking) expect(Math.abs(aim.x - x)).toBeLessThan(0.02);
+    }
+    expect(fired).toBe(0);
   });
 
   it("kicks the crosshair up after a shot, and settles within a quarter second", () => {

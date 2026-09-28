@@ -22,11 +22,8 @@ export interface LandmarkerProgress {
   model: (fraction: number) => void;
 }
 
-/** One hand, deliberately: the game aims with a single hand, and a second
- * costs time and can hand the crosshair to someone walking past. */
 const OPTIONS = {
   runningMode: "VIDEO" as const,
-  numHands: 1,
   minHandDetectionConfidence: 0.5,
   minHandPresenceConfidence: 0.5,
   minTrackingConfidence: 0.5,
@@ -35,6 +32,12 @@ const OPTIONS = {
 export async function loadHandLandmarker(
   progress: LandmarkerProgress,
   prefer: "GPU" | "CPU" = "GPU",
+  /**
+   * How many hands to look for. One, deliberately: the game aims with a
+   * single hand, and a second costs time (measured in input/trust.ts, which
+   * keeps a passer-by's hand from taking the aim). Two only to measure.
+   */
+  hands = 1,
 ): Promise<LoadedLandmarker> {
   let binaryUrl: string | null = null;
   try {
@@ -51,6 +54,7 @@ export async function loadHandLandmarker(
     const create = (delegate: "GPU" | "CPU") =>
       HandLandmarker.createFromOptions(fileset, {
         ...OPTIONS,
+        numHands: hands,
         baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate },
       });
     if (prefer === "CPU") return { landmarker: await create("CPU"), delegate: "CPU" };

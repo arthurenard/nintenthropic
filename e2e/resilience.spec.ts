@@ -4,7 +4,7 @@
 // played again with a fold of the thumb, the idle world at rest, and a window
 // resized mid-round with the aim still true.
 import { expect, test, type Page } from "@playwright/test";
-import { gameDebug, handAt, playWithHand, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { gameDebug, handAt, moveTo, playWithHand, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
 
 const state = (page: Page) => snapshot(page);
 
@@ -82,6 +82,38 @@ test("swinging the hand out of the picture reloads without holding the round", a
   await pose(page, handAt(0.5, 0.5));
   await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "6 of 6 rounds", { timeout: 5_000 });
   expect((await state(page)).held).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("another hand coming into the picture neither takes the aim nor fires", async ({ page }) => {
+  const errors = watchErrors(page);
+  await playWithHand(page);
+  await moveTo(page, 0.3, 0.55);
+  await page.waitForTimeout(500);
+  // Someone else's hand across the picture, thumb down, for a moment: staged
+  // in the page so the moment is short however busy the machine.
+  const seen = await page.evaluate(
+    async ({ theirs, mine }) => {
+      const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+      const host = window.handyTest!.internals().host!;
+      const before = host.aim(performance.now());
+      window.handyTest!.pose(theirs);
+      await sleep(150);
+      const during = host.aim(performance.now());
+      window.handyTest!.pose(mine);
+      await sleep(250);
+      return { before, during, after: host.aim(performance.now()) };
+    },
+    { theirs: handAt(0.97, 0.2, 72), mine: handAt(0.3, 0.55) },
+  );
+  expect(seen.before.tracking).toBe(true);
+  expect(seen.during.fired || seen.after.fired).toBe(false);
+  expect(seen.during.x).toBeCloseTo(seen.before.x, 2);
+  expect(seen.during.y).toBeCloseTo(seen.before.y, 2);
+  expect(seen.after.tracking).toBe(true);
+  expect(seen.after.x).toBeCloseTo(0.3, 1);
+  await page.waitForTimeout(300);
+  await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "6 of 6 rounds");
   expect(errors).toEqual([]);
 });
 

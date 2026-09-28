@@ -9,6 +9,8 @@ export type ToWorker =
       wasm: ArrayBuffer;
       model: ArrayBuffer;
       prefer: "GPU" | "CPU";
+      /** How many hands the landmarker looks for: 1 in the game (see input/trust.ts); 2 only to measure. */
+      hands?: number;
     }
   | {
       type: "frame";

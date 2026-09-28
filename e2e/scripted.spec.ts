@@ -3,7 +3,7 @@
 // whole aim check to 95% and into play; then, as a returning player, through
 // the check again in three shots.
 import { expect, test } from "@playwright/test";
-import { handAt, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { handAt, moveTo, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
 
 test("a scripted hand passes the aim check at 95% and plays", async ({ page }, info) => {
   const errors: string[] = [];
@@ -42,9 +42,9 @@ test("a scripted hand passes the aim check at 95% and plays", async ({ page }, i
   await shoot(page, 0.5, 0.6);
   await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "5 of 6 rounds");
   // And pointing off the screen reloads it.
-  await pose(page, handAt(1.35, 0.5));
+  await moveTo(page, 1.35, 0.5);
   await page.waitForTimeout(500);
-  await pose(page, handAt(0.5, 0.5));
+  await moveTo(page, 0.5, 0.5);
   await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "6 of 6 rounds", { timeout: 5_000 });
   await shot(page, info, "script-04-play");
 

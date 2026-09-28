@@ -21,9 +21,9 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
   const create = (delegate: "GPU" | "CPU") =>
     HandLandmarker.createFromOptions(fileset, {
       runningMode: "VIDEO",
-      // One hand, deliberately: a second costs time and can hand the
-      // crosshair to someone walking past.
-      numHands: 1,
+      // One hand, deliberately: a second costs time (measured in
+      // input/trust.ts, which keeps a passer-by's hand from taking the aim).
+      numHands: message.hands ?? 1,
       minHandDetectionConfidence: 0.5,
       minHandPresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,

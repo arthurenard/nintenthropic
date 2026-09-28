@@ -63,7 +63,38 @@ export function snapshot(page: Page): Promise<Snapshot> {
 }
 
 export function pose(page: Page, value: HandPose | null): Promise<void> {
+  if (value?.indexTip) aimedAt.set(page, aimOf(value.indexTip));
+  else aimedAt.delete(page);
   return page.evaluate((p) => window.handyTest!.pose(p), value);
+}
+
+/** The point of the view a fingertip aims at: fingertipFor, the other way. */
+function aimOf([tipX, tipY]: readonly [number, number]): [number, number] {
+  const [a, b] = [tipX - 0.3, tipY - 0.26];
+  const det = 0.4 * 0.38 + 0.03 * 0.02;
+  return [(a * 0.38 - 0.03 * b) / det, (0.4 * b + 0.02 * a) / det];
+}
+
+/** Where each page's scripted hand last aimed, in view fractions, for moving it on from there. */
+const aimedAt = new WeakMap<Page, [number, number]>();
+
+/**
+ * Moves the scripted hand to aim at a point of the view the way a hand
+ * moves - through the space between, a frame or two apart - rather than
+ * teleporting there, which the page rightly takes for someone else's hand.
+ */
+export async function moveTo(page: Page, x: number, y: number): Promise<void> {
+  const from = aimedAt.get(page);
+  if (from) {
+    const steps = Math.ceil(Math.hypot(x - from[0], y - from[1]) / 0.3);
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      await page.evaluate((p) => window.handyTest!.pose(p), handAt(from[0] + (x - from[0]) * t, from[1] + (y - from[1]) * t));
+      await page.waitForTimeout(30);
+    }
+  }
+  await page.evaluate((p) => window.handyTest!.pose(p), handAt(x, y));
+  aimedAt.set(page, [x, y]);
 }
 
 /**
@@ -84,7 +115,7 @@ export function handAt(x: number, y: number, thumbDegrees = 18): HandPose {
 
 /** One shot with the scripted hand: aim with the thumb up, fold it, raise it again. */
 export async function shoot(page: Page, x: number, y: number): Promise<void> {
-  await pose(page, handAt(x, y));
+  await moveTo(page, x, y);
   await page.waitForTimeout(420);
   await pose(page, handAt(x, y, 72));
   await page.waitForTimeout(160);

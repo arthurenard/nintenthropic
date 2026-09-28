@@ -272,13 +272,15 @@ export interface TrackerOptions {
   prefer?: "GPU" | "CPU";
   /** Where to run the landmarker; "auto" picks a worker where the browser can. */
   where?: "auto" | "worker" | "page";
+  /** How many hands to look for: 1 in the game (see input/trust.ts); 2 only to measure. */
+  hands?: number;
 }
 
 function workerSupported(): boolean {
   return typeof Worker !== "undefined" && typeof VideoFrame !== "undefined" && typeof OffscreenCanvas !== "undefined";
 }
 
-async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU"): Promise<WorkerTracker> {
+async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number): Promise<WorkerTracker> {
   const [wasm, model] = await Promise.all([
     fetchBytes(siteUrl("mediapipe/vision_wasm_module_internal.wasm"), progress.wasm, WASM_BYTES),
     fetchBytes(siteUrl("models/hand_landmarker.task"), progress.model, MODEL_BYTES),
@@ -294,7 +296,7 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU"):
     worker.addEventListener("message", listen);
     worker.addEventListener("error", (event) => reject(new Error(event.message || "the tracking worker failed")), { once: true });
   });
-  const init: ToWorker = { type: "init", loader: siteUrl("mediapipe/vision_wasm_module_internal.js"), wasm, model, prefer };
+  const init: ToWorker = { type: "init", loader: siteUrl("mediapipe/vision_wasm_module_internal.js"), wasm, model, prefer, hands };
   worker.postMessage(init, [wasm, model]);
   try {
     return new WorkerTracker(worker, await ready);
@@ -308,9 +310,10 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU"):
 export async function loadTracker(progress: LandmarkerProgress, options: TrackerOptions = {}): Promise<Tracker> {
   const prefer = options.prefer ?? "GPU";
   const where = options.where ?? "auto";
+  const hands = options.hands ?? 1;
   if (where !== "page" && workerSupported()) {
     try {
-      return await startWorker(progress, prefer);
+      return await startWorker(progress, prefer, hands);
     } catch (error) {
       // A download that failed would fail again on the page (the same
       // files): only a worker that could not run is worth the page's try.
@@ -320,6 +323,6 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
   }
   // Only here is MediaPipe needed on the page itself.
   const { loadHandLandmarker } = await import("./landmarker");
-  const { landmarker, delegate } = await loadHandLandmarker(progress, prefer);
+  const { landmarker, delegate } = await loadHandLandmarker(progress, prefer, hands);
   return new PageTracker(landmarker, delegate);
 }
