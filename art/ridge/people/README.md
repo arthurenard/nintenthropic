@@ -12,7 +12,9 @@ weights, keyed clips with IK). Nothing is downloaded.
 ```
 
 writes `public/assets/ridge/{soldier,civilian}.glb` (Draco meshes, WebP
-textures); the top-level `art/ridge/build.py` stage `characters` calls
+textures) - about 4-5 min for the soldier and 13 min for the civilians on an
+idle M-series Mac (2-3 times that with other bakes running). The
+top-level `art/ridge/build.py` stage `characters` calls
 `people.build.build(ASSETS, quick=...)`. `--blend DIR` also saves each scene
 (git-ignored) for the review; `--quick` bakes 512 atlases (iteration only).
 `--clips-only [--clips a,b]` reopens the saved scenes and re-bakes just the
@@ -178,6 +180,18 @@ on it, pointing +Z.
 The left hand in the standing clips is a fist round a vertical staff at the
 thigh - where the shepherd's crook lives; on the others it reads as a
 relaxed hand.
+
+## Budgets (triangles as three.js counts them)
+
+| File | Size | Meshes |
+| --- | --- | --- |
+| soldier.glb | ~1.5 MB | `char.soldier` 8,262; `var.helmet` 1,558, `var.cap.officer` 660, `var.coat.officer` 1,494, `var.ghillie` 8,240 (suit and strips), `var.pack` 900; `gun.rifle` 1,100, `gun.rifle.scoped` 1,400, `gun.mg` 1,500, `gun.rifle.slung` 1,150, `prop.binoculars` 520, `prop.cigarette` 60 |
+| civilian.glb | ~1.5 MB | `var.person.farmer` 7,754, `var.person.cyclist` 7,116, `var.person.shepherd` 8,277, `var.person.child` 6,472; the bicycle 8,114 (frame 4,200, wheels 1,492 each with spokes, chainset 700, pedals 238) |
+
+Dressed: a rifleman with helmet, pack and rifle 11.8k; the gunner with
+helmet, pack and machine gun 12.2k; the counter-sniper in the ghillie with
+the scoped rifle 17.9k (the heaviest); the officer ~10.9k; the cyclist on
+her bicycle 15.2k.
 
 ## Where this goes beyond or departs from the contract
 

@@ -371,16 +371,6 @@ def belt_ellipse(tunic):
     return rx, 0.5 * (fr + bk) + 0.006, 0.5 * (bk - fr)
 
 
-def webbing_bulk(tunic):
-    """A solid stand-in for everything on the belt (band, pouches, bottle):
-    what a coat worn over it has to clear."""
-    rx, ry, cy = belt_ellipse(tunic)
-    ring = S.Tube([(0, cy + 0.010, 0.95), (0, cy + 0.004, 1.00), (0, cy, 1.05), (0, cy, 1.095)],
-                  [rx + 0.010, rx + 0.014, rx + 0.012, rx + 0.004], [ry + 0.035, ry + 0.058, ry + 0.058, ry + 0.030])
-    bottle = S.Ellipsoid((-0.150, 0.080, 0.920), (0.055, 0.070, 0.105), S.rot_z(-35))
-    return S.Union([ring, bottle], k=0.03)
-
-
 def brace_specs(tunic):
     """The braces as (centre line, half width, half thickness): from the
     outer pouches up over the shoulders to a ring between the shoulder

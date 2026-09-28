@@ -129,7 +129,10 @@ def greatcoat_job(bp, tf, wf, hem=0.50, loose=0.027):
     # over the webbing too (the officer keeps the grunt's belt on under it):
     # the webbing's shell filled by the tunic, so the coat's rings snap to its
     # outside and not to the inner face of an offset belt
-    cf = S.Union([cf, S.Offset(S.Union([tf, W.webbing_bulk(tf)], k=0.01), 0.021), holster_field()], k=0.02)
+    # (a smooth swell round the waist, not a union with the webbing: a ring
+    # snapping onto a union can slide onto its caps and tear the coat open)
+    swell = lambda P: (-(0.05 + 0.03 * np.clip(-P[:, 1] / 0.15, 0, 1)) * np.exp(-((P[:, 2] - 1.02) / 0.075) ** 2)).astype(np.float32)
+    cf = S.Union([S.Displace(cf, swell, 0.081), holster_field()], k=0.02)
 
     def front_open(z):
         return float(np.interp(z, [0.45, 0.58, 0.66], [0.9, 0.4, 0.0]))
@@ -144,7 +147,7 @@ def greatcoat_job(bp, tf, wf, hem=0.50, loose=0.027):
 
 def holster_field():
     """A small closed pistol holster on the greatcoat's belt, his left hip."""
-    c = np.array([0.175, -0.07, 0.975])
+    c = np.array([0.262, -0.07, 0.975])      # on the swollen greatcoat's belt
     body = S.Box(c, (0.016, 0.055, 0.050), S.rot_x(-25) @ S.rot_z(-20), rad=0.012)
     flap = S.Box(c + np.array([0.0, -0.01, 0.045]), (0.018, 0.045, 0.014), S.rot_x(-25) @ S.rot_z(-20), rad=0.008)
     return S.Union([body, flap], k=0.004)
