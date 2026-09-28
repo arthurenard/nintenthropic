@@ -945,9 +945,11 @@ class Planet:
         hab = clim * water * flat * jungle * (0.2 + 1.6 * coast4 + 1.4 * river4)
         hab *= (land4 > 0.5) * (1 - ice4)
         dev = 0.08 + 0.92 * N.smoothstep(-0.3, 0.4, f.fbm(self.P4, 1.5, 4)) ** 1.3
-        dens = (hab * dev).astype(np.float64)
+        # clustered: people gather where it is best, the countryside between
+        # stays dark (the night side reads as cities, not as a glowing carpet)
+        dens = ((hab * dev) ** 1.6).astype(np.float64)
         dens /= dens.sum()
-        n = int(140000)
+        n = int(60000)
         flat_idx = rng.choice(dens.size, size=n, p=dens.ravel())
         ys, xs = np.divmod(flat_idx, self.W4)
         lon = (xs + rng.uniform(0, 1, n)) / self.W4 * 2 * math.pi - math.pi

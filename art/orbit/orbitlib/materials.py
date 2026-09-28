@@ -209,10 +209,10 @@ def interior_materials():
         # worn to bare metal where hands and feet go
         sc = scuffs(g, 5.0, 1.0)
         n = g.noise(obj(g), scale=220.0, detail=2.0)
-        worn = g.clamp01(g.mul(g.sub(sc, 0.22), 2.5))
-        base = g.mix(worn, g.rgb(lin(168, 170, 172)), g.rgb(lin(190, 192, 196)))
-        return dict(color=g.hsv(base, v=g.add(0.96, g.mul(sc, 0.2))), rough=g.add(0.5, g.mul(sc, 0.1)),
-                    metal=g.mul(worn, 0.9), height=g.add(g.mul(n, 0.5), g.mul(sc, 0.3)), bump=0.06, bump_dist=0.0005)
+        worn = g.clamp01(g.mul(g.sub(sc, 0.34), 2.0))
+        base = g.mix(worn, g.rgb(lin(168, 170, 172)), g.rgb(lin(186, 188, 192)))
+        return dict(color=g.hsv(base, v=g.add(0.97, g.mul(sc, 0.12))), rough=g.add(0.5, g.mul(sc, 0.08)),
+                    metal=g.mul(worn, 0.5), height=g.add(g.mul(n, 0.5), g.mul(sc, 0.3)), bump=0.06, bump_dist=0.0005)
     pbr('alu_dark', alu_dark)
 
     def steel(g):
@@ -455,9 +455,9 @@ def exterior_materials():
         gv = g.smooth(g.math('ABSOLUTE', g.sub(g.math('FRACT', g.mul(v, 1 / 0.08)), 0.5)), 0.46, 0.49)
         grid = g.math('MAXIMUM', gu, gv)
         n = g.noise(obj(g), scale=30.0, detail=3.0)
-        base = g.mix(grid, g.rgb(lin(168, 104, 44)), g.rgb(lin(120, 72, 30)))
-        base = g.mix(g.mul(g.smooth(n, 0.4, 0.8), 0.4), base, g.rgb(lin(190, 128, 60)))
-        return dict(color=base, rough=g.add(0.3, g.mul(n, 0.1)), metal=0.35, height=g.add(grid, n), bump=0.15, bump_dist=0.001)
+        base = g.mix(grid, g.rgb(lin(196, 138, 62)), g.rgb(lin(214, 204, 180)))
+        base = g.mix(g.mul(g.smooth(n, 0.4, 0.8), 0.35), base, g.rgb(lin(214, 160, 84)))
+        return dict(color=base, rough=g.add(0.28, g.mul(n, 0.1)), metal=0.45, height=g.add(grid, n), bump=0.15, bump_dist=0.001)
     pbr('solar_back', solar_back)
 
     def radiator(g):

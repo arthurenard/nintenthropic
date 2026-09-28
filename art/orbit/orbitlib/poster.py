@@ -20,11 +20,11 @@ from mathutils import Matrix, Vector
 from . import pipeline, render, world, bl, imgio
 
 W, H = 1600, 900
-SUN_NDC = (-0.60, 0.60)        # where the sun rises on screen: ~8 degrees above the limb
-# the poster's own planet: over a lit continent, heading into the dawn, so
-# the night ground below carries its cities while the sun clears the limb
-POSTER_SUBPOINT = (84.0, 28.0)
-POSTER_HEADING = 250.0
+SUN_NDC = (0.03, 0.37)         # the sun just clearing the limb, inside the round window
+# the poster's own planet: over the night side of a coast lined with
+# cities, flying north-east into the dawn
+POSTER_SUBPOINT = (-126.0, 34.0)
+POSTER_HEADING = 45.0
 
 
 def bloom(rgb, threshold=1.0, strength=0.12, clamp=30.0):
@@ -67,37 +67,47 @@ def _box(a, r):
 
 
 def fragment(sc, sun, cam_pos):
-    """Bring a torn slab from the debris build into the scene, a few metres
-    out, oriented so its face mirrors the sun into the eye."""
-    from . import materials, debris, shapes
+    """The fragments that catch the sun: a solar-wing shard in the upper
+    left window turned to mirror the sun into the eye (a blue-white flash),
+    a gold-foil piece in the right window whose crinkles glint along its
+    sunward rim, and a few scraps."""
+    from . import materials, debris
     from .bl import rng
     # the opened scene has the station's materials; add the debris ones
     materials.LIB.clear()
     materials.LIB.update({m.name: m for m in bpy.data.materials})
     materials.debris_materials()
-    r = rng("poster-fragment")
-    bm, mats = debris.shard(rng("shard0"))
     col = bl.collection("poster")
-    ob = debris.to_object(bm, "poster.fragment", mats, col)
+    eye = Vector(cam_pos)
+    bm, mats = debris.shard(rng("shard0"))
+    ob = debris.to_object(bm, "poster.shard", mats, col)
     bm.free()
-    ob.scale = (0.8, 0.8, 0.8)
-    pos = Vector(world.view_point(-0.06, 0.13, 6.5))
-    to_eye = (Vector(cam_pos) - pos).normalized()
-    n = (Vector(sun) + to_eye).normalized()
-    # the plate's +Z is its face; tilt it a hair off the perfect mirror so
-    # the glint lands on its edge region rather than filling it
-    q = n.to_track_quat('Z', 'Y')
+    ob.scale = (0.9, 0.9, 0.9)
+    pos = Vector(world.view_point(-0.42, 0.34, 7.0))
+    n = (Vector(sun) + (eye - pos).normalized()).normalized()
     ob.rotation_mode = 'QUATERNION'
-    ob.rotation_quaternion = q @ Matrix.Rotation(math.radians(4), 4, 'X').to_quaternion()
+    ob.rotation_quaternion = n.to_track_quat('Z', 'Y') @ Matrix.Rotation(math.radians(1.5), 4, 'X').to_quaternion()
     ob.location = pos
-    # a few scraps trailing it
-    for i, fn in enumerate((debris.shrapnel_skin, debris.shrapnel_splinter, debris.shrapnel_bracket)):
+    for part, fn in (('core', debris.foil_core), ('wrap', debris.foil_wrap)):
+        bm, mats = fn(rng("foil0"), 0)
+        f = debris.to_object(bm, f"poster.foil.{part}", mats, col)
+        bm.free()
+        f.location = Vector(world.view_point(0.64, 0.16, 4.2))
+        f.rotation_euler = (0.4, 2.2, 0.9)
+        f.scale = (1.3, 1.3, 1.3)
+    rr = rng("poster-scraps")
+    for i, fn in enumerate((debris.shrapnel_skin, debris.shrapnel_splinter, debris.shrapnel_bracket, debris.shrapnel_tube)):
         bm, mats = fn(rng(f"poster-scrap{i}"))
         s = debris.to_object(bm, f"poster.scrap.{i}", mats, col)
         bm.free()
-        s.location = Vector(world.view_point(-0.1 + 0.18 * i, 0.55 - 0.09 * i, 9.0 + 3 * i))
-        s.rotation_euler = (r.uniform(0, 6), r.uniform(0, 6), r.uniform(0, 6))
-        s.scale = (1.4, 1.4, 1.4)
+        s.location = Vector(world.view_point(-0.62 + 0.4 * i, 0.05 - 0.18 * (i % 2), 9.0 + 3 * i))
+        s.rotation_euler = (rr.uniform(0, 6), rr.uniform(0, 6), rr.uniform(0, 6))
+        s.scale = (1.6, 1.6, 1.6)
+    # the arm's hand would sit in the middle of the round window: out of the shot
+    for name in ('station.arm', 'secret.arm.hand', 'station.light.5'):
+        o = bpy.data.objects.get(name)
+        if o:
+            o.hide_render = True
     return ob
 
 
@@ -123,7 +133,7 @@ def stage(ctx):
     lamp.data.color = (1.0, 0.78, 0.55)
     lamp.data.energy = 14.0
     maps = pipeline.load_maps(ctx)
-    sky = pipeline.Sky(sun_world=np.array(sun), star_gain=0.25, night_gain=5.0)
+    sky = pipeline.Sky(sun_world=np.array(sun), star_gain=0.35, night_gain=2.0)
     prot = world.planet_rotation(POSTER_SUBPOINT, POSTER_HEADING)
     env = pipeline.render_env(ctx, "env_poster.exr", sky, W=1024, maps=maps, samples=32, rot=prot)
     render.world_env(sc, env, name="PosterEnv")
@@ -140,7 +150,7 @@ def stage(ctx):
     # the sun's glare where it stands on screen (only if it shows)
     sx = (SUN_NDC[0] * 0.5 + 0.5) * w
     sy = (0.5 - SUN_NDC[1] * 0.5) * h
-    rgb = rgb + glare((h, w), (sx, sy), (1.0, 0.8, 0.6), 2.2 / ex) * a_free(a, sx, sy)
+    rgb = rgb + glare((h, w), (sx, sy), (1.0, 0.8, 0.6), 3.5 / ex) * a_free(a, sx, sy)
     rgb = bloom(rgb * ex, threshold=0.9) / ex
     out_png = os.path.join(ctx.review_dir, "poster.png")
     render.save_display(rgb, out_png, sc)

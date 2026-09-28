@@ -28,12 +28,15 @@ HORIZON_ROLL_DEG = -4.0    # the limb rises a little toward the left
 SUBPOINT = (-150.0, 14.0)  # lon, lat (deg) under the station: open ocean under cumulus fields
 HEADING_DEG = 60.0         # the view's heading over the ground (from north)
 
-# The baked sun: up on the left and ahead, so the debris is side- and
-# front-lit (facets flash as they turn), the station's white blankets rake
-# in hard light, the ocean's glint shows in the left window, and sunlight
-# streams in through the left-hand windows onto the right of the frame.
-SUN_ELEV_DEG = 30.0        # above the station's horizontal
-SUN_AZ_DEG = -62.0         # from the view direction, + to the right
+# The baked sun: up on the left and a little behind the player. Every
+# tumbling fragment is then side-lit - half in sun, half in shadow, facets
+# flashing as they turn - which is what makes it readable and shootable;
+# the solar wings turn their cells toward the player; the white blankets
+# rake in hard light; and sunlight streams in through the left-hand windows
+# onto the right of the frame. (With the sun ahead, the player would see
+# the dark side of everything.)
+SUN_ELEV_DEG = 32.0        # above the station's horizontal
+SUN_AZ_DEG = -100.0        # from the view direction, + to the right
 SUN_COLOR = (1.0, 0.985, 0.96)
 SUN_ANGLE_DEG = 0.53
 

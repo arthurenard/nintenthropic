@@ -266,27 +266,37 @@ CHUNKS = [chunk_box, chunk_pipe, chunk_node, chunk_wheel]
 def slab_isogrid(r):
     out = shapes.torn_outline(0.95, 0.52, r, n=34, jag=0.16, spikes=0.3)
     bm = shapes.sheet(out, 0.004, 0.08, mats=(0, 1, 2))
-    # the ribs: a triangle grid on the inner face (-z)
+    # the ribs: a triangle grid on the inner face (-z), clipped to the torn
+    # outline (a few cm inside it) and built of short segments so they bend
+    # with the skin when it is curved, folded and crumpled
     g = bl.Geo("__iso")
-    I = Matrix.Identity(4)
     s = 0.16
+    shrunk = [(x * 0.94, y * 0.92) for x, y in out]
+
+    def inside(px, py):
+        c = False
+        n_ = len(shrunk)
+        for i in range(n_):
+            x0, y0 = shrunk[i]
+            x1, y1 = shrunk[(i + 1) % n_]
+            if (y0 > py) != (y1 > py) and px < (x1 - x0) * (py - y0) / (y1 - y0 + 1e-12) + x0:
+                c = not c
+        return c
+    seg = 0.06
     for k in range(-8, 9):
         for ang in (0, 60, 120):
             a = math.radians(ang)
-            d = Vector((math.cos(a), math.sin(a), 0))
-            n = Vector((-d.y, d.x, 0))
-            c = n * (k * s * 0.866)
-            p0, p1 = c - d * 1.0, c + d * 1.0
-            # clip to the plate's rough ellipse
-            pts = []
-            for t in [i / 40 for i in range(41)]:
-                p = p0.lerp(p1, t)
-                if (p.x / 0.85) ** 2 + (p.y / 0.45) ** 2 < 1:
-                    pts.append(p)
-            if len(pts) > 2:
-                M = bl.frame(pts[0], (pts[-1] - pts[0]).normalized(), n, Vector((0, 0, 1)))
-                L = (pts[-1] - pts[0]).length
-                g.box(M, (L, 0.004, 0.03), 'torn_alu', center=(L / 2, 0, -0.015))
+            dv = Vector((math.cos(a), math.sin(a), 0))
+            nv = Vector((-dv.y, dv.x, 0))
+            c = nv * (k * s * 0.866)
+            t = -1.2
+            while t < 1.2:
+                p = c + dv * t
+                q = c + dv * (t + seg)
+                if inside(p.x, p.y) and inside(q.x, q.y):
+                    M = bl.frame(p, dv, nv, Vector((0, 0, 1)))
+                    g.box(M, (seg, 0.004, 0.03), 'torn_alu', center=(seg / 2, 0, -0.015))
+                t += seg
     _merge_geo(bm, g, {'white_paint': 0, 'torn_alu': 1, 'burnt': 2})
     # curve it like a cylinder skin, fold a corner, dent
     for v in bm.verts:
