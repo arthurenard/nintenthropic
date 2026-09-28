@@ -24,8 +24,8 @@ from .common import EYE, setup_gpu, DN
 
 # (dressing, clip, frame, x, y, yaw deg)
 CAST = [
-    (["char.walker", "var.outfit.suit", "var.hair.balding", "eyes"], "walk.shamble", 9, -1.15, 7.4, 8),
-    (["char.walker", "var.outfit.farmer", "var.hair.short", "eyes"], "walk.limp", 21, 1.35, 12.8, -12),
+    (["char.walker", "var.outfit.farmer", "var.hair.short", "eyes"], "walk.shamble", 9, -0.95, 6.2, 8),
+    (["char.walker", "var.outfit.suit", "var.hair.balding", "eyes"], "walk.limp", 21, 1.35, 12.8, -12),
     (["char.walker", "var.outfit.waitress", "var.hair.long", "eyes"], "walk.lurch", 5, -2.6, 17.5, 14),
     (["var.runner", "eyes"], "run", 7, 0.9, 23.5, -4),
     (["char.walker", "var.outfit.hunter", "var.hair.greasy", "eyes"], "walk.drag", 14, 3.1, 27.0, -20),
@@ -67,8 +67,10 @@ def fog_volume(col):
     m, g = DN.new_material("poster_fog")
     pos = g.geo('Position')
     x, y, z = g.separate(pos)
-    base = post.FOG_DENSITY * 1.35
-    dens = g.madd(g.math('EXPONENT', g.mul(z, -1.0 / post.GROUND_FOG_H)), post.GROUND_FOG * 2.6, base)
+    # thinner than the game's fog: a volume scatters the lamps' light back at
+    # the eye as well as dimming, and at the game's density the road washes out
+    base = post.FOG_DENSITY * 0.9
+    dens = g.madd(g.math('EXPONENT', g.mul(z, -1.0 / post.GROUND_FOG_H)), post.GROUND_FOG * 2.0, base)
     n = g.noise(g.vmul(pos, (0.08, 0.05, 0.25)), scale=1.0, detail=3.0)
     dens = g.mul(dens, g.madd(n, 0.9, 0.55))
     vol = g.node('ShaderNodeVolumePrincipled', inputs={'Color': (0.78, 0.84, 0.92), 'Density': dens, 'Anisotropy': 0.45}, out=0)
@@ -111,7 +113,7 @@ def render_cast(ctx):
         cam = review.play_camera(scene)
         scene.camera = cam
         ld = bpy.data.lights.new("review_beam", 'SPOT')
-        ld.energy = 2600.0
+        ld.energy = 3600.0
         ld.color = (1.0, 0.94, 0.82)
         ld.spot_size = math.radians(17.0)
         ld.spot_blend = 0.35
@@ -145,34 +147,45 @@ def render(ctx):
                     nd.inputs["Emission Strength"].default_value = 14.0
     # each figure frozen at its own moment of its clip: evaluate, then let the
     # pose stand without the action
-    for rig, frame in figures:
+    from mathutils import Quaternion
+    for i, (rig, frame) in enumerate(figures):
         rig.animation_data.action = bpy.data.actions.get(rig["poster_action"])
         scene.frame_set(frame)
         bpy.context.view_layer.update()
         rig.animation_data.action = None
         for tr in list(rig.animation_data.nla_tracks):
             rig.animation_data.nla_tracks.remove(tr)
+        if i == 0:
+            # the nearest lifts its face into the beam: the eyes catch it
+            pb = rig.pose.bones.get("head")
+            if pb is not None:
+                pb.rotation_mode = 'QUATERNION'
+                pb.rotation_quaternion = pb.rotation_quaternion @ Quaternion((1, 0, 0), math.radians(-22))
+            nk = rig.pose.bones.get("neck")
+            if nk is not None:
+                nk.rotation_mode = 'QUATERNION'
+                nk.rotation_quaternion = nk.rotation_quaternion @ Quaternion((1, 0, 0), math.radians(-8))
     # the camera: the player's eye, a longer lens, pitched up a touch
     cd = bpy.data.cameras.new("poster_cam")
     cd.sensor_fit = 'VERTICAL'
-    cd.angle_y = math.radians(33.0)
+    cd.angle_y = math.radians(29.0)
     cd.clip_start = 0.1
     cd.clip_end = 1.0e5
     cam = bpy.data.objects.new("poster_cam", cd)
-    cam.location = (0.35, 0.0, EYE.z)
-    cam.rotation_euler = (math.radians(90.0 + 1.5), 0.0, math.radians(-4.0))
+    cam.location = (0.0, 0.0, EYE.z)
+    cam.rotation_euler = (math.radians(90.0 + 1.5), 0.0, math.radians(-3.0))
     col.objects.link(cam)
     scene.camera = cam
     # the flashlight, held under the rifle's barrel, on the nearest of them
     ld = bpy.data.lights.new("poster_beam", 'SPOT')
-    ld.energy = 2600.0
+    ld.energy = 3600.0
     ld.color = (1.0, 0.94, 0.82)
     ld.spot_size = math.radians(17.0)
     ld.spot_blend = 0.35
     ld.shadow_soft_size = 0.015
     beam = bpy.data.objects.new("poster_beam", ld)
     beam.location = (0.55, 0.4, 1.45)
-    tgt = Vector((CAST[0][3] + 0.2, CAST[0][4] + 3.0, 1.15))
+    tgt = Vector((CAST[0][3] + 0.1, CAST[0][4], 1.3))          # on the nearest one's chest
     beam.rotation_euler = (tgt - beam.location).to_track_quat('-Z', 'Y').to_euler()
     col.objects.link(beam)
     fog_volume(col)

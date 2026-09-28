@@ -111,12 +111,13 @@ EYE_RAD = 0.0086
 
 def cat_field():
     J = JOINTS
-    ribs = S.Ellipsoid((0, -0.07, 0.19), (0.044, 0.075, 0.056), S.rot_x(-4))
-    waist = S.Ellipsoid((0, 0.02, 0.188), (0.038, 0.07, 0.046))
-    haunch = S.Ellipsoid((0, 0.095, 0.188), (0.044, 0.062, 0.054), S.rot_x(10))
+    # a cat is deep-chested and its coat fills out the neck: no greyhound
+    ribs = S.Ellipsoid((0, -0.068, 0.188), (0.050, 0.080, 0.062), S.rot_x(-4))
+    waist = S.Ellipsoid((0, 0.02, 0.186), (0.043, 0.072, 0.050))
+    haunch = S.Ellipsoid((0, 0.092, 0.184), (0.051, 0.066, 0.058), S.rot_x(10))
     body = S.Union([ribs, waist, haunch], k=0.035)
-    neck = S.RoundCone((0, -0.11, 0.21), (0, -0.168, 0.27), 0.033, 0.027)
-    skull = S.Ellipsoid((0, -0.196, 0.297), (0.040, 0.042, 0.036))
+    neck = S.RoundCone((0, -0.11, 0.212), (0, -0.165, 0.272), 0.041, 0.035)
+    skull = S.Ellipsoid((0, -0.196, 0.297), (0.042, 0.043, 0.037))
     cheeks = S.Union([S.Ellipsoid((s * 0.024, -0.216, 0.286), (0.021, 0.022, 0.019)) for s in (1, -1)], k=0.01)
     muzzle = S.Ellipsoid((0, -0.232, 0.280), (0.016, 0.013, 0.012))
     pads = S.Union([S.Sphere((s * 0.0075, -0.241, 0.279), 0.0078) for s in (1, -1)], k=0.005)
@@ -140,18 +141,18 @@ def cat_field():
         t = "L" if s > 0 else "R"
         sh, el = J[f"upper_arm.{t}"]
         wr = J[f"forearm.{t}"][1]
-        legs += [S.RoundCone(J[f"shoulder.{t}"][0] + np.array([0, 0.0, -0.01]), sh, 0.024, 0.02),
-                 S.RoundCone(sh, el, 0.019, 0.0125), S.RoundCone(el, wr, 0.0115, 0.0088),
+        legs += [S.RoundCone(J[f"shoulder.{t}"][0] + np.array([0, 0.0, -0.01]), sh, 0.027, 0.022),
+                 S.RoundCone(sh, el, 0.021, 0.014), S.RoundCone(el, wr, 0.0128, 0.0095),
                  S.Ellipsoid(wr + np.array([0, -0.013, -0.015]), (0.0125, 0.017, 0.0085))]
         hp, kn = J[f"thigh.{t}"]
         hk = J[f"shin.{t}"][1]
         ft = J[f"foot.{t}"][1]
-        legs += [S.RoundCone(hp + np.array([0, 0.005, 0.01]), kn, 0.030, 0.016), S.RoundCone(kn, hk, 0.0125, 0.008),
+        legs += [S.RoundCone(hp + np.array([0, 0.005, 0.01]), kn, 0.035, 0.018), S.RoundCone(kn, hk, 0.014, 0.009),
                  S.RoundCone(hk, ft, 0.0078, 0.0085), S.Ellipsoid(ft + np.array([0, -0.015, 0.0]), (0.0125, 0.019, 0.0085))]
     tail = []
     pts = [J[f"tail.{i}"][0] for i in range(1, 5)] + [J["tail.4"][1]]
     for i in range(4):
-        tail.append(S.RoundCone(pts[i], pts[i + 1], 0.0125 - 0.0012 * i, 0.0113 - 0.0012 * i))
+        tail.append(S.RoundCone(pts[i], pts[i + 1], 0.0135 - 0.0013 * i, 0.0122 - 0.0013 * i))
     tail.append(S.Sphere(pts[-1], 0.0068))
     f = S.Union([body, neck, head] + legs + tail, k=0.014)
 
@@ -159,7 +160,7 @@ def cat_field():
         # short coat lying back along the body: streaks stretched along y
         n1 = value_noise(P * np.array([1400.0, 260.0, 1400.0]), 1.0, seed=3)
         n2 = value_noise(P * np.array([600.0, 120.0, 600.0]), 1.0, seed=4)
-        return (-0.00035 * n1 - 0.0003 * n2).astype(np.float32)
+        return (-0.00016 * n1 - 0.00018 * n2).astype(np.float32)
     return f, S.Displace(f, fur, 0.0008)
 
 
@@ -317,9 +318,12 @@ def sit():
     the tail tip flicks."""
     T = 4.0
     c = Clip("sit", T, loop=True)
-    s = pose(root=(0, 0.02, -0.09), hips=(-58, 0, 0), spine=(-4, 0, 0), chest=(-8, 0, 0), neck=(10, 0, 0), head=(38, 0, 0),
-             ik__foot__L=(0.055, 0.02, 0.05), ik__foot__R=(-0.055, 0.02, 0.05), rot__foot__L=(-70, 0, 0), rot__foot__R=(-70, 0, 0),
-             pole__foot__L=(0.2, -1, 0.4), pole__foot__R=(-0.2, -1, 0.4),
+    # the pelvis tips back onto the haunches, the spine rises to ~45 degrees,
+    # the hind legs fold flat: hock on the ground under the haunch, the long
+    # foot lying forward, the knee tucked beside the ribs
+    s = pose(root=(0, 0.02, -0.10), hips=(-46, 0, 0), spine=(-6, 0, 0), chest=(-8, 0, 0), neck=(18, 0, 0), head=(30, 0, 0),
+             ik__foot__L=(0.056, 0.10, 0.014), ik__foot__R=(-0.056, 0.10, 0.014), rot__foot__L=(-80, 0, 0), rot__foot__R=(-80, 0, 0),
+             pole__foot__L=(0.3, -1, 0.3), pole__foot__R=(-0.3, -1, 0.3),
              fik__L=(0.040, -0.08, 0.025), fik__R=(-0.040, -0.08, 0.025),
              tail__1=(-35, 0, 35), tail__2=(-10, 0, 45), tail__3=(0, 0, 45), tail__4=(0, 0, 35))
     look_l = dict(s)

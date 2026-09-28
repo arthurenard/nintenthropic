@@ -136,7 +136,9 @@ def skull(p):
     head = S.Subtract(head, nlf, k=0.004 + 0.003 * age)
     # the orbits: the charlib hollow, then the dead's deeper one under the brow
     eL, eR = eyes_local()
-    sockets = S.Union([S.Ellipsoid(e + np.array([0, -0.0125, 0.0022]), (0.0185, 0.0120, 0.0125)) for e in (eL, eR)])
+    # (the living's orbits are shallower: no ledge of brow over the eye)
+    so = 0.74 if d.get("living") else 1.0
+    sockets = S.Union([S.Ellipsoid(e + np.array([0, -0.0125, 0.0022]), (0.0185 * so, 0.0120 * so, 0.0125 * so)) for e in (eL, eR)])
     head = S.Subtract(head, sockets, k=0.007)
     sk = d["sunken"]
     if sk > 0:

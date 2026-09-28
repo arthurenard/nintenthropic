@@ -88,8 +88,36 @@ def from_head(name, head_ob, head_field, p_hair, extra=None, coll=None, extra_tr
     keep = {f.index for f in bm.faces if sum(t[v.index] > 0.0006 for v in f.verts) >= 2}
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.index not in keep], context='FACES')
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    # the head gave its scalp few triangles (they went to the face): split
+    # each in four so the cap can round the skull and its hairline can curve
+    bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=1, use_grid_fill=True)
+    bmesh.ops.triangulate(bm, faces=list(bm.faces))
+    bm.verts.ensure_lookup_table()
     Vk = np.array([v.co[:] for v in bm.verts], np.float32) - H.HEAD_ORIGIN
+    Vk = S.project_to_surface(head_field, Vk, iters=3, clamp=0.004)
+    # the hairline: the cap's border follows the triangles it was cut from,
+    # a sawtooth; walk the border loop smooth along the scalp (a few passes
+    # of averaging with its border neighbours, put back on the skin), and
+    # let the cap thin to nothing there so it grows out of the scalp
+    border = np.array([v.is_boundary for v in bm.verts], bool)
+    nb = [[e.other_vert(v).index for e in v.link_edges if e.is_boundary] for v in bm.verts]
+    for _ in range(6):
+        V2 = Vk.copy()
+        for i in np.nonzero(border)[0]:
+            if len(nb[i]) == 2:
+                V2[i] = 0.5 * Vk[i] + 0.25 * (Vk[nb[i][0]] + Vk[nb[i][1]])
+        Vk = V2
+        Vk[border] = S.project_to_surface(head_field, Vk[border], iters=3, clamp=0.004)
+    # one ring in from the border, relax too (the sawtooth's inner teeth)
+    ring = np.zeros(len(Vk), bool)
+    for i in np.nonzero(border)[0]:
+        for e in bm.verts[i].link_edges:
+            j = e.other_vert(bm.verts[i]).index
+            if not border[j]:
+                ring[j] = True
     tk = np.maximum(HD.hair_thickness(Vk, p_hair), MIN_T)
+    tk[border] = 0.0006          # (not less: depth precision at 40 m in the game)
+    tk[ring] = np.minimum(tk[ring], 0.5 * (tk[ring] + 0.0006) + 0.0004)
     gk = S.gradient(head_field, Vk)
     nk = gk / np.maximum(np.linalg.norm(gk, axis=1), 1e-9)[:, None]
     for v, p_ in zip(bm.verts, Vk + nk * tk[:, None] + H.HEAD_ORIGIN):

@@ -130,7 +130,9 @@ def paint(tex):
     limb = np.exp(-((th - 30.5) / 2.2) ** 2)
     col = col * (1 - 0.45 * limb[..., None])
     col = col * (1 - 0.85 * smoothstep(80, 110, th)[..., None])     # behind the lids: dark
-    shine = smoothstep(29, 18, th) * (0.75 + 0.25 * smoothstep(11, 0, th))
+    # the iris and pupil shine full, the sclera about half: the whole of the
+    # visible eye lights, so the glint covers every pixel the eye does
+    shine = np.maximum(smoothstep(29, 18, th) * (0.75 + 0.25 * smoothstep(11, 0, th)), 0.45 * smoothstep(80, 60, th))
     em = np.asarray(SHINE)[None, None, :] * shine[..., None]
     rough = np.full((tex, tex), 0.12)
     return col, em, rough
@@ -175,3 +177,71 @@ def material(tex=128, name="eyes"):
     m["eyeshine"] = {"drive": "emissiveIntensity", "dark": 0.0, "lit": 3.0,
                      "note": "0 until the flashlight's beam falls on the eyes; scale with the beam's intensity there"}
     return m
+
+
+# ---------------------------------------------------------------------------
+# The living's eyes: the same eyeballs in the same sockets, baked into the
+# person's own atlas (no shine: the living's eyes do not light up in the beam)
+
+IRIS = {"green": (0.34, 0.46, 0.30), "blue": (0.32, 0.46, 0.62), "brown": (0.34, 0.22, 0.12), "grey": (0.46, 0.50, 0.52)}
+
+
+def living_job(name, iris="brown", coll=None):
+    """A bake job (charlib.abake) for two living eyeballs: the mesh, a sphere
+    field to bake onto, and a paint of sclera, iris and pupil by the angle
+    from each eye's gaze. Rigid on the head."""
+    from .common import S
+    eL, eR = eyes_local()
+    V, F = [], []
+    gazes = []
+    for e, sgn in ((eL, 1), (eR, -1)):
+        gaze = np.array((0.06 * sgn, -1.0, -0.02))
+        gaze /= np.linalg.norm(gaze)
+        gazes.append((np.asarray(e), gaze))
+        v, f, _uv = eyeball(np.asarray(e) + HEAD_ORIGIN, gaze)
+        base = len(V)
+        V += v
+        F += [tuple(base + i for i in face) for face in f]
+    ob = bl.mesh_from_arrays(name, np.array(V, np.float32), F, coll)
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    for fc in bm.faces:
+        cen = fc.calc_center_median()
+        eye = Vector(np.asarray(eL) + HEAD_ORIGIN) if cen.x > 0 else Vector(np.asarray(eR) + HEAD_ORIGIN)
+        if fc.normal.dot(cen - eye) < 0:
+            fc.normal_flip()
+    bm.to_mesh(ob.data)
+    bm.free()
+    parts = []
+    for e, gaze in gazes:
+        c = e + gaze * CORNEA_OFF
+        parts += [S.Sphere(tuple(e), BALL_R), S.Sphere(tuple(c), CORNEA_R)]
+    field = S.Union(parts, k=0.0015)
+    ic = srgb(*IRIS.get(iris, IRIS["brown"]))
+
+    def paint(P):
+        n = len(P)
+        col = np.zeros((n, 3), np.float32)
+        th = np.full(n, 180.0)
+        for e, gaze in gazes:
+            side = (P[:, 0] > 0) == (e[0] > 0)
+            q = P[side] - e
+            cosang = (q @ gaze) / np.maximum(np.linalg.norm(q, axis=1), 1e-9)
+            th[side] = np.degrees(np.arccos(np.clip(cosang, -1, 1)))
+        ph = np.arctan2(P[:, 2], P[:, 0])
+        streak = value_noise(np.stack([ph * 8, th * 0.3, np.zeros(n)], 1), 1.0, seed=17)
+        sclera = srgb(0.86, 0.83, 0.78) * (0.92 + 0.08 * streak[:, None])
+        vein = smoothstep(0.93, 0.99, value_noise(P * 900, 1.0, seed=19)) * smoothstep(40, 80, th)
+        sclera = sclera * (1 - 0.3 * vein[:, None]) + srgb(0.7, 0.3, 0.28) * 0.3 * vein[:, None]
+        iris_c = ic[None, :] * (0.7 + 0.5 * streak[:, None])
+        col[:] = sclera
+        irm = th < 30
+        col[irm] = iris_c[irm]
+        col[th < 11] = srgb(0.02, 0.02, 0.025)
+        limb = np.exp(-((th - 30.5) / 2.2) ** 2)
+        col *= (1 - 0.5 * limb)[:, None]
+        col *= (1 - 0.85 * smoothstep(80, 110, th))[:, None]
+        return np.clip(col, 0, 1), np.full(n, 0.08, np.float32), np.zeros(n, np.float32)
+    return dict(ob=ob, field=field, paint=paint, origin=HEAD_ORIGIN, weight=0.25, ao_field=field, smart_uv=True, uv_angle=80,
+                skin=("rigid", "head"))

@@ -88,10 +88,16 @@ the streetlight reaches (once with the lamp, once without), and
 
 Fog is **not** baked (`extras.fog_baked = false`): the game draws it. The
 scene's extras hold the fog that the review renders used:
-`fog_color` (the sky's own horizon, measured from `sky.webp`),
-`fog_density` (FogExp2 on view depth, 0.0182) and `fog_ground`
-(an extra ground-hugging layer: extinction 0.012/m with 2.2 m scale height,
-for the knee-deep mist over the fields — optional).
+`fog_color` (`#2b3542`, the sky's own horizon measured from `sky.webp`, so
+the far road melts into the sky), `fog_density` (FogExp2 on view depth,
+0.0182: 60% visibility at 40 m, 30% at 60 m, gone by ~110 m) and
+`fog_ground` (an extra ground-hugging layer: extinction 0.012/m with 2.2 m
+scale height, for the knee-deep mist over the fields — optional). The sky
+must not take the fog (`fog: false`): the moon painted in `sky.webp` has to
+stay visible to be shot. `moon.disc` is the **hit target** for it — a disc
+380 m out exactly over the painted moon, 15% larger than it (`extras`:
+`radius_m`, `distance_m`); it need not be drawn (hide it, keep it for the
+ray cast; or put the camera's far plane past 400 m and draw it unfogged).
 
 ### The corn
 
@@ -109,9 +115,12 @@ three.js decodes them: `tools/draco_check.cjs`.)
   `light.motel.<n>` the rooms with candles; `light.booth` (added) the phone
   booth's panel. Each carries `extras.color` and `extras.flicker` where it
   applies.
-- `moon` (empty, −Z = moonlight) and `moon.disc` (a real disc 380 m away at
+- `moon` (empty, −Z = moonlight; `extras` direction, colour, strength for
+  lighting the characters) and `moon.disc` (the target, 380 m away at
   azimuth −24°, 14° up — low over the fields to the front-left, so it is in
   the play view and shootable; the contract left the moon's place open).
+  The moon backlights the road: the dead come at you rim-lit, faces in
+  shadow until the beam finds them.
 - `spawn.bus` / `spawn.fence` are the **end** points of their clips
   (`climb_out`, `vault` finish with the root at the node's origin; the clips
   start 0.55 m back and 0.42 m up in the bus door, and 1.1 m back on the
@@ -152,7 +161,14 @@ three.js decodes them: `tools/draco_check.cjs`.)
   The game drives the material's `emissiveIntensity`: **0 in the dark**, up to
   **~3** in the beam's centre, falling off with the angle between the beam and
   the line to the eyes (`extras.eyeshine` on the material). The eyes are
-  rigid on `head`. The cat's are green, the same scheme.
+  rigid on `head`. The cat's are green, the same scheme. The shine covers
+  the iris fully and the white at half, so the whole visible eye lights.
+  **Beyond ~15 m an eye is smaller than a pixel** (2.4 cm; at 25 m about one
+  pixel of a 1080p frame): the emissive alone averages away there. For the
+  tell to work in the fog, add a small additive glow sprite at each eye
+  when lit (the `eyes` mesh's two halves give the positions; keep the sprite
+  ≥ 2–3 px, colour ≈ `#ccff8c` dead, `#8cff59` the cat) and fade it with
+  the same intensity. The review renders show the mesh alone.
 - **Clip meta** (`extras.clips` on the scene): per clip, `loop`, `speed_mps`
   (ground speed of the walk cycles: shamble 0.85, limp 0.7, drag 0.6, lurch
   1.1, run 3.5, crawl 0.5), and moments: `claw.strike` (seconds),
@@ -193,4 +209,22 @@ that reads each subimage by index. The western file is untouched.
 
 ## Timings
 
-(filled in from the final builds)
+On this Mac (Apple silicon, Metal, `-t 4`, while two other agents baked):
+
+| step | time |
+|---|---|
+| road `scene` | 11 s |
+| road `sky` (4096×2048, 64 spp) | 17 s |
+| road `bake` (7 groups + corn, 512/160 spp) | 28 min |
+| road `export` | 13 s |
+| road `glbreview` | 1 min |
+| road `review` (full) | ~4 min |
+| road `bake --preview near,corn` (rebake one group) | 12 min |
+| road `--quick` end to end | ~5 min |
+
+## Texture memory
+
+`road.glb` is 7.5 MB on disk, but its atlases unpack to about 0.5 GB of
+RGBA8 with mipmaps (the 4096² near group and the 4096×2048 ground are 0.26 GB
+of that). On a low tier the game can halve the atlases at load (draw them into
+a half-size canvas) — the night hides it well beyond the barricade.

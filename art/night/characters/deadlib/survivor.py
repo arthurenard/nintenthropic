@@ -22,7 +22,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-from .common import S, SK, BD, HN, HD, C, PT, G, R, bl, srgb, smoothstep, value_noise, fbm, JOINTS, log
+from .common import S, SK, BD, HN, HD, C, PT, PG, G, R, bl, srgb, smoothstep, value_noise, fbm, JOINTS, log
 from . import outfits as O, assemble
 from . import meshfix as MF
 
@@ -37,16 +37,20 @@ def left_grip_matrix():
     return out
 
 
-def living_head(name, p, look, tris=4200):
-    """charlib.head.make for the living (eyes in the sculpt, High Noon's
-    paint), with the crash-safe decimation and more triangles."""
-    from .common import PG, T
-    field = HD.head_sdf(p)
+LIVING = dict(sunken=0.0, gaunt=0.0, mouth=0.0, swollen=0.0, teeth=0.0, fresh=1.0, living=True)
+
+
+def living_head(name, p, look, hair_style=None, iris="brown", tris=5400):
+    """The living head: the same sculpt as the dead's (heads.py - High Noon's
+    head with thicker lids, open sockets and separate eyeballs) with nothing
+    of the grave in it, High Noon's living skin paint, hair grown from the
+    head mesh (hair.py), and eyeballs baked into the person's atlas."""
+    from .common import T
+    from . import heads as H, hair as HR, eyes as EY
+    field = H.head_sdf(p)
     detailed = HD.skin_detail(field, p)
-    Vd, Qd = PG.mesh_sdf(field, (-0.11, -0.15, -0.215), (0.11, 0.13, 0.14), 0.0014, blur=1.0)
-    lo = bl.mesh_from_arrays(name, Vd + HD.HEAD_ORIGIN, Qd, None)
-    MF.decimate(lo, tris, symmetry=True)
-    HD.head_uv(lo, face_scale=2.3)
+    lo = H.head_mesh(name, field, tris)
+    HD.head_uv(lo, face_scale=2.4)
 
     def paint(Pt):
         c, r = T.head_paint(Pt, p, look)
@@ -55,13 +59,16 @@ def living_head(name, p, look, tris=4200):
     def paint_ear(Pt):
         c, r = T.head_paint(Pt, p, look, is_ear=True)
         return c, r, np.zeros(len(Pt))
-    jobs = [dict(ob=lo, field=detailed, paint=paint, origin=HD.HEAD_ORIGIN, weight=3.2, ao_field=field)]
+    jobs = [dict(ob=lo, field=detailed, paint=paint, origin=H.HEAD_ORIGIN, weight=3.4, ao_field=field)]
     for side, tag in ((1, "L"), (-1, "R")):
         e = HD.ear_sdf(p, side)
         Ve, Qe = PG.mesh_sdf(e, e.lo, e.hi, 0.0008, blur=1.0)
-        elo = bl.mesh_from_arrays(f"{name}.ear.{tag}", Ve + HD.HEAD_ORIGIN, Qe, None)
+        elo = bl.mesh_from_arrays(f"{name}.ear.{tag}", Ve + H.HEAD_ORIGIN, Qe, None)
         MF.decimate(elo, 160, symmetry=False)
-        jobs.append(dict(ob=elo, field=e, paint=paint_ear, origin=HD.HEAD_ORIGIN, weight=1.1, ao_field=e, smart_uv=True, uv_angle=80))
+        jobs.append(dict(ob=elo, field=e, paint=paint_ear, origin=H.HEAD_ORIGIN, weight=1.1, ao_field=e, smart_uv=True, uv_angle=80))
+    if hair_style:
+        jobs.append(HR.job(f"{name}.hair", lo, p, hair_style, None, seed=7))
+    jobs.append(EY.living_job(f"{name}.eyes", iris))
     return jobs
 
 
@@ -83,10 +90,16 @@ def living_hands(prefix, tone, female=0.0, sleeve="full", tris=700):
 
 
 def daughter():
-    p = HD.P(sex=1.0, age=0.2, hair="bun", hair_len=1.2, brows=0.8, lips=1.05, fat=0.4, nose_len=0.92, nose_w=0.86, jaw=0.9,
-             chin=0.92, cheekbone=1.05, eye_open=1.1, neck=0.9)
+    from . import heads as H
+    # (the scalp is painted with the same hair the cap is grown from, so the
+    # cap's edge sits on hair-coloured skin)
+    p = H.P(sex=1.0, age=0.15, hair="slick", hair_len=1.15, hairline=0.0, brows=0.3, brow=0.3, lips=1.2, fat=0.75, nose_len=0.8,
+            nose_w=0.76, nose_tip=0.82, nose_bridge=0.7, jaw=0.82, chin=0.86, cheekbone=0.85, eye_open=1.0, neck=0.84, width=0.95,
+            dead=LIVING)
     look = dict(skin="fair", hair="auburn", iris="green", stubble=0.0, grime=0.15, hatline=False, flush=1.2)
-    jobs = living_head("daughter.head", p, look)
+    # auburn, drawn back off the face into the ponytail
+    jobs = living_head("daughter.head", p, look, hair_style=(dict(hair="slick", hair_len=1.15, hairline=0.0), None, (0.38, 0.21, 0.12), 0.0, 0.2),
+                       iris="green")
     # a ponytail instead of the bun: a tapering hank from the crown down the back
     pony = S.Union([S.RoundCone((0.0, 0.085, 0.045), (0.0, 0.118, -0.05), 0.022, 0.018),
                     S.RoundCone((0.0, 0.118, -0.05), (0.004, 0.105, -0.17), 0.018, 0.006),
@@ -140,11 +153,14 @@ def daughter():
 
 
 def owner():
-    p = HD.P(age=0.85, fat=0.35, hair="short", hair_len=0.7, hairline=0.85, moustache="walrus", brows=1.3, nose_tip=1.15, nose_len=1.08,
-             jaw=0.95, eye_open=0.85, neck=0.95)
+    from . import heads as H
+    p = H.P(age=0.85, fat=0.35, hair="short", hair_len=0.7, hairline=0.85, moustache="walrus", brows=1.1, nose_tip=1.12, nose_len=1.04,
+            jaw=0.95, eye_open=0.8, neck=0.95, dead=LIVING)
     look = dict(skin="fair", hair="white", moustache_color="grey", iris="blue", stubble=0.2, grime=0.15, hatline=False, flush=1.5,
                 grey=0.8)
-    jobs = living_head("owner.head", p, look)
+    # a white horseshoe round a bald crown
+    jobs = living_head("owner.head", p, look, hair_style=(dict(hair="short", hair_len=0.7, hairline=0.85), None, (0.74, 0.72, 0.70), 0.2, 0.0),
+                       iris="blue")
     jobs += living_hands("owner", "fair")
     bp = BD.P(sleeves="full", chest=0.96, belly=0.55, shoulders=0.95, arms=0.92, legs=0.95, boot_top=0.12, shirt_loose=1.04)
 
