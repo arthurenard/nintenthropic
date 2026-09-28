@@ -7,7 +7,7 @@ import { AimController } from "../input/aim";
 import { apply, type Matrix } from "../input/homography";
 import { palmSpan } from "../input/hand";
 import { asCameraSees, makeHand } from "../input/synthetic";
-import { AimCheck, PLAY_ANYWAY_AFTER, tipFor, type ShotEvent } from "./aimCheck";
+import { AimCheck, EDGE, FAR_SPAN, FramingHelp, NEAR_SPAN, PLAY_ANYWAY_AFTER, framingOf, tipFor, type ShotEvent } from "./aimCheck";
 import { AIM_RADIUS, READY_SCORE, aimScore, measure, spread } from "./score";
 import { aimKey, loadAim, saveAim, type CameraIdentity, type KeyValueStore } from "./storage";
 
@@ -318,6 +318,53 @@ describe("the tip", () => {
     expect(tipFor({ ...base, spans: Array(20).fill(0.05) })).toMatch(/closer/);
     expect(tipFor({ ...base, spans: Array(20).fill(0.4) })).toMatch(/Sit back/);
     expect(tipFor(base)).toMatch(/still/);
+  });
+});
+
+describe("live framing help", () => {
+  it("reads the hand's distance and the picture's edge by the tip's own lines", () => {
+    expect(framingOf([0.5, 0.5], 0.15)).toBeNull();
+    expect(framingOf([0.5, 0.5], FAR_SPAN - 0.01)).toBe("closer");
+    expect(framingOf([0.5, 0.5], NEAR_SPAN + 0.01)).toBe("back");
+    expect(framingOf([EDGE / 2, 0.5], 0.15)).toBe("edge");
+    expect(framingOf([0.5, 1 - EDGE / 2], 0.02)).toBe("edge"); // the edge comes first
+    expect(framingOf(null, 0.02)).toBeNull();
+  });
+
+  it("shows help only once it has lasted a second, and keeps it through a flicker", () => {
+    const help = new FramingHelp();
+    const far = (t: number) => help.update([0.5, 0.5], 0.05, t);
+    const fine = (t: number) => help.update([0.5, 0.5], 0.15, t);
+    let t = 0;
+    for (; t < 900; t += 33) expect(far(t)).toBeNull();
+    for (; t < 1200; t += 33) far(t);
+    expect(far(t)).toBe("closer");
+    // One good frame in the middle does not blink it away...
+    expect(fine((t += 33))).toBe("closer");
+    expect(far((t += 33))).toBe("closer");
+    // ...but half a second of good framing does.
+    const from = t;
+    while (t < from + 600) fine((t += 33));
+    expect(fine(t)).toBeNull();
+  });
+
+  it("is not set back by frames the tracker drops, but starts afresh once the hand has gone", () => {
+    const help = new FramingHelp();
+    let t = 0;
+    // A far hand, one frame in four lost: help still arrives after a second.
+    for (let i = 0; t < 1100; i++, t += 33) help.update(i % 4 ? [0.5, 0.5] : null, 0.05, t);
+    expect(help.update([0.5, 0.5], 0.05, t)).toBe("closer");
+    // Gone a while: nothing carried over.
+    for (const end = t + 700; t < end; t += 33) help.update(null, undefined, t);
+    expect(help.update([0.5, 0.5], 0.05, t)).toBeNull();
+  });
+
+  it("never shows a problem that comes and goes faster than a second", () => {
+    const help = new FramingHelp();
+    for (let t = 0; t < 5000; t += 33) {
+      const span = Math.floor(t / 400) % 2 ? 0.05 : 0.15;
+      expect(help.update([0.5, 0.5], span, t)).toBeNull();
+    }
   });
 });
 

@@ -670,6 +670,17 @@
 .trigger[data-state="lost"] i {
   background: var(--danger);
 }
+/* Framing help - closer, back, in the picture: attention without alarm. */
+.trigger[data-state="closer"],
+.trigger[data-state="back"],
+.trigger[data-state="edge"] {
+  color: var(--label);
+}
+.trigger[data-state="closer"] i,
+.trigger[data-state="back"] i,
+.trigger[data-state="edge"] i {
+  background: var(--warning);
+}
 /* A good shot, celebrated where the target hung. */
 .bursts {
   position: absolute;

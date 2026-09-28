@@ -4,7 +4,7 @@
  * filling toward 95%, celebrates each good shot where it landed, and ends on
  * the moment "Aim 97% - you're ready" before the game begins.
  */
-import { AimCheck, type ShotEvent } from "../calibration/aimCheck";
+import { AimCheck, FramingHelp, type Framing, type ShotEvent } from "../calibration/aimCheck";
 import { READY_SCORE } from "../calibration/score";
 import type { CalibrationStage } from "../engine/types";
 import { DEFAULT_MAPPING } from "../input/aim";
@@ -39,6 +39,9 @@ export class AimCheckView {
   private lit: string | null = null;
   private version = 0;
   private reading: HandReading | null = null;
+  /** Live framing help for the pill, from what the camera sees (held a second, so it never flickers). */
+  private readonly framing = new FramingHelp();
+  private help: Framing = null;
   private finished = false;
   /** The stage has been asked to stand its targets up again since they ran out. */
   private restood = false;
@@ -107,6 +110,7 @@ export class AimCheckView {
 
   private observe(reading: HandReading): void {
     this.reading = reading;
+    this.help = this.framing.update(reading.position ? reading.pointer : null, reading.span, reading.frame.capturedAt);
     if (this.finished) return;
     const event = this.check.observe(
       { pointer: reading.pointer, armed: reading.armed, travel: reading.travel, fired: reading.fired, span: reading.span },
@@ -181,13 +185,27 @@ export class AimCheckView {
     $("start-over").hidden = check.shots === 0;
   }
 
+  /**
+   * The pill: whether the hand is seen and the gun cocked - or, when the
+   * camera has seen a framing problem for a second, what to do about it.
+   */
   private renderTrigger(): void {
     const reading = this.reading;
-    const state = !reading || !reading.position ? "lost" : reading.armed ? "ready" : "raise";
+    const state = !reading || !reading.position ? "lost" : this.help ?? (reading.armed ? "ready" : "raise");
     const trigger = $("trigger");
     if (trigger.dataset.state === state) return;
     trigger.dataset.state = state;
-    setText(trigger.lastElementChild!, { lost: "Show your hand", ready: "Ready to fire", raise: "Raise your thumb" }[state]);
+    setText(
+      trigger.lastElementChild!,
+      {
+        lost: "Show your hand",
+        ready: "Ready to fire",
+        raise: "Raise your thumb",
+        closer: "Come a little closer",
+        back: "Move back a little",
+        edge: "Keep your hand in the picture",
+      }[state],
+    );
   }
 
   /** A good shot, celebrated where the target hung. */

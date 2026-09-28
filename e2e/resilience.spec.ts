@@ -278,6 +278,34 @@ test("the results: a fold of the thumb plays again, and the world rests", async 
   expect(errors).toEqual([]);
 });
 
+test("the aim check says how to frame the hand, once it has seen a problem for a moment", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  await skipWelcome(page);
+  await page.goto("/?input=script");
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect.poll(async () => (await state(page)).phase, { timeout: 60_000 }).toBe("check");
+  const trigger = page.locator("#trigger");
+  await pose(page, handAt(0.5, 0.5));
+  await expect(trigger).toHaveAttribute("data-state", "ready");
+  // Far from the camera: a small hand in the picture.
+  await pose(page, { thumbDegrees: 18, indexTip: [0.5, 0.5], wrist: [0.51, 0.58], scale: 0.3 });
+  await page.waitForTimeout(500);
+  await expect(trigger).not.toHaveAttribute("data-state", "closer"); // not at once: it would flicker
+  await expect(trigger).toHaveAttribute("data-state", "closer", { timeout: 5_000 });
+  await expect(trigger).toHaveText("Come a little closer");
+  await shot(page, info, "check-help-closer", 300);
+  // Too near.
+  await pose(page, { thumbDegrees: 18, indexTip: [0.5, 0.35], wrist: [0.52, 0.95], scale: 1.8 });
+  await expect(trigger).toHaveText("Move back a little", { timeout: 5_000 });
+  // At the picture's edge.
+  await pose(page, { thumbDegrees: 18, indexTip: [0.975, 0.45], wrist: [0.95, 0.75], scale: 0.9 });
+  await expect(trigger).toHaveText("Keep your hand in the picture", { timeout: 5_000 });
+  // Framed well again: the help goes.
+  await pose(page, handAt(0.5, 0.5));
+  await expect(trigger).toHaveAttribute("data-state", "ready", { timeout: 5_000 });
+  expect(errors).toEqual([]);
+});
+
 test("getting ready offline says so, with the fix", async ({ page, context }, info) => {
   await skipWelcome(page, { "handy.camera-opened.v1": true });
   await page.goto("/");
