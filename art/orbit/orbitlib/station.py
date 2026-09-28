@@ -181,22 +181,48 @@ def arm(g_boom, root, elbow, wrist, up):
 
 
 def arm_hand(lib, col, wrist, ax):
-    """The end effector (secret.arm.hand): a wrist roll joint and the
-    snare cylinder, its own object pivoting at the wrist so it can wave."""
+    """The end effector (secret.arm.hand): the wrist roll joint in its
+    blanket with bolted collars, the latching end effector's white drum
+    with its ribs, the snare's open end with three wires inside, a camera
+    and a light on a bracket, a data/power cable looped to the drum. Its
+    own object, pivoting at the wrist so it can wave."""
     g = Geo("secret.arm.hand")
     I = Matrix.Identity(4)
     o = Vector((0, 0, 0))
     a = V(ax)
     side = a.orthogonal().normalized()
-    g.cyl(I, o, o + a * 0.4, 0.3, 'beta_cloth', seg=24)
-    g.cyl(I, o + a * 0.4, o + a * 0.46, 0.33, 'alu_bare', seg=24)
-    g.cyl(I, o + a * 0.46, o + a * 1.2, 0.26, 'white_paint', seg=24)
-    g.cyl(I, o + a * 1.2, o + a * 1.3, 0.27, 'black_paint', seg=24, caps=(True, False))
-    # snare: open end with three wires inside
-    g.cyl(I, o + a * 1.3, o + a * 1.32, 0.27, 'alu_bare', seg=24, caps=(False, False))
-    # camera and light on the side
-    g.box(bl.frame(o + a * 0.8 + side * 0.3, a, side, a.cross(side)), (0.28, 0.12, 0.16), 'alu_darkext', bevel=0.02)
-    g.cyl(I, o + a * 0.9 + side * 0.36, o + a * 1.0 + side * 0.36, 0.05, 'window_dark', seg=12)
+    up = a.cross(side)
+    # wrist roll joint
+    g.cyl(I, o, o + a * 0.38, 0.3, 'beta_cloth', seg=32)
+    for t in (0.02, 0.36):
+        g.cyl(I, o + a * t, o + a * (t + 0.04), 0.315, 'alu_bare', seg=32)
+        for k in range(12):
+            ang = 2 * math.pi * k / 12
+            d = side * math.cos(ang) + up * math.sin(ang)
+            g.bolt(I, o + a * (t + 0.02) + d * 0.315, d, 'steel', head=0.012, height=0.008, washer=False)
+    # the drum: white, ribbed, with a grapple ring
+    g.cyl(I, o + a * 0.42, o + a * 1.22, 0.26, 'white_paint', seg=32)
+    for t in (0.55, 0.75, 0.95, 1.15):
+        g.cyl(I, o + a * t, o + a * (t + 0.03), 0.268, 'alu_bare', seg=32, caps=(False, False))
+    g.box(bl.frame(o + a * 0.7 + up * 0.25, a, side, up), (0.5, 0.18, 0.04), 'label_yellow', center=(0, 0, 0.0))
+    # the snare's open end: a black rim and the wires inside
+    g.cyl(I, o + a * 1.22, o + a * 1.3, 0.27, 'black_paint', seg=32, caps=(True, False))
+    g.lathe(bl.frame(o + a * 1.3, side, up, a), [(0.2, 0.0), (0.27, 0.0), (0.27, 0.02), (0.2, 0.02)], 'alu_bare', seg=32)
+    for k in range(3):
+        ang = 2 * math.pi * k / 3
+        p0 = o + a * 1.29 + (side * math.cos(ang) + up * math.sin(ang)) * 0.2
+        p1 = o + a * 1.29 + (side * math.cos(ang + 2.1) + up * math.sin(ang + 2.1)) * 0.2
+        g.cyl(I, p0, p1, 0.008, 'steel', seg=6)
+    # camera and light on a bracket, a lens that catches the sun
+    br = o + a * 0.85 + side * 0.28
+    g.box(bl.frame(br, a, side, up), (0.1, 0.06, 0.06), 'alu_bare', center=(0, -0.02, 0), bevel=0.01)
+    g.box(bl.frame(br + side * 0.06, a, side, up), (0.3, 0.13, 0.17), 'white_paint', bevel=0.02)
+    g.cyl(I, br + side * 0.06 + a * 0.15, br + side * 0.06 + a * 0.2, 0.05, 'black_paint', seg=16, cap_mat='window_dark')
+    g.box(bl.frame(br + side * 0.06 + up * 0.12, a, side, up), (0.14, 0.1, 0.07), 'white_paint', bevel=0.015)
+    g.cyl(I, br + side * 0.06 + up * 0.12 + a * 0.07, br + side * 0.06 + up * 0.12 + a * 0.09, 0.035, 'nav_white', seg=12)
+    # a cable loop from the joint to the drum
+    g.tube(I, [o + a * 0.3 + up * 0.3, o + a * 0.45 + up * 0.38, o + a * 0.62 + up * 0.3, o + a * 0.7 + up * 0.27], 0.02,
+           'cable_black', seg=8)
     ob = g.build(col, lib)
     ob.location = V(wrist)
     bl.tag(ob, surface='metal', secret='arm', pivot='wrist', wave_axis=[round(float(c), 4) for c in world.gltf(a)])
@@ -297,6 +323,31 @@ def capsule(lib, col, nose_port, axis, up):
             continue
         t = ax.cross(n).normalized()
         g.box(bl.frame(p + nn * 0.01, t, nn.cross(t), nn), (0.36, 0.26, 0.02), 'window_dark', bevel=0.006)
+    # the nose cone, hinged open and standing clear of the port
+    hinge = port + ax * 0.62 + u * 0.95
+    g.lathe(bl.frame(hinge + u * 0.55 - ax * 0.05, v, u, (u * 0.9 + ax * 0.45).normalized()),
+            [(0.0, 0.32), (0.45, 0.26), (0.72, 0.12), (0.8, 0.0), (0.76, -0.04), (0.0, -0.02)], 'capsule_white', seg=40)
+    g.box(bl.frame(hinge, v, u, ax), (0.3, 0.12, 0.12), 'alu_bare', bevel=0.02)
+    # a black band and a hatch outline on the cone
+    g.lathe(M, [(1.53, 2.36), (1.555, 2.42), (1.57, 2.5), (1.545, 2.44)], 'black_paint', seg=64)
+    hatch_n = (u * math.cos(2.4) + v * math.sin(2.4))
+    ta = (1.85 - 1.55) / (3.7 - 2.4)                   # the cone's slope
+    hz = (hatch_n - ax * ta).normalized()
+    hy = (ax + hatch_n * ta).normalized()
+    hp = port + ax * 2.9 + hatch_n * (1.55 + 0.5 * ta + 0.008)
+    Mh = bl.frame(hp, hy.cross(hz).normalized(), hy, hz)
+    g.box(Mh, (0.9, 0.7, 0.012), 'alu_bare', center=(0, 0, 0.0), bevel=0.004)
+    g.box(Mh, (0.84, 0.64, 0.014), 'capsule_white', center=(0, 0, 0.001), bevel=0.004)
+    g.box(Mh, (0.12, 0.05, 0.03), 'black_paint', center=(0.3, 0.0, 0.02), bevel=0.008)
+    # the docking lights and a target
+    for k in range(4):
+        a_ = math.pi / 4 + k * math.pi / 2
+        n_ = u * math.cos(a_) + v * math.sin(a_)
+        g.cyl(Matrix.Identity(4), port + ax * 0.62 + n_ * 0.98, port + ax * 0.66 + n_ * 0.98, 0.03, 'nav_white', seg=10)
+    # body-mounted radiator stripes on the trunk
+    for k in range(6):
+        a0 = k * math.pi / 3 + 0.2
+        g.lathe(M, [(1.87, 4.6), (1.87, 7.0)], 'radiator', seg=3, a0=a0, a1=a0 + 0.35, closed=False)
     body = g.build(col, lib, smooth_angle=35)
     bl.tag(body, surface='metal')
     # the secret window (its own node) and its shade, rolled up at the top
@@ -433,7 +484,9 @@ def build(lib, col, c_con):
         g = Geo(f"station.array.{name}")
         root = t_mid + X * side_x
         along = (Y * 1.0 - Z * 0.12 + X * (0.30 if side_x < 0 else -0.30)).normalized()
-        normal = (sun - along * sun.dot(along)).normalized()
+        to_cam = (-root).normalized()
+        tgt = (sun * 0.45 + to_cam * 0.55).normalized()
+        normal = (tgt - along * tgt.dot(along)).normalized()
         for off in ((-6.0, 6.0) if side_x > 0 else (-6.0, 6.0)):
             solar_wing(g, root + X * off + along * 1.0, along, normal, length=34.0)
         g.box(bl.frame(root, X, Y, Z), (4.0, 3.0, 3.0), 'beta_cloth', bevel=0.2)
