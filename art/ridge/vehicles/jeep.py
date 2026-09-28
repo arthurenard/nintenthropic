@@ -41,7 +41,7 @@ def model():
     windshield(v)
     top_and_cushions(v)
     wheels_and_sockets(v)
-    v.mud_top, v.floor = 0.62, FLOOR
+    v.mud_top, v.floor = 0.55, FLOOR
     v.hem, v.shoulder, v.bows = BELT, 9.0, []
     v.recentre()
     v.info = dict(kind="jeep", wheelbase=round(YF - YR, 3), wheel_radius=RT, length=round(v.length, 3))
@@ -132,6 +132,21 @@ def tub(v):
     pts = [(0.40, YR + ra * math.cos(math.pi * k / 8), RT + ra * math.sin(math.pi * k / 8)) for k in range(9)]
     b.add(pts, [list(range(9))[::-1]], "paint_in")
     b.mirror_x(s)
+    # pioneer tools on the left flank, under the entry: a shovel and an axe
+    x = -(TUB_W + 0.012)
+    b.box((x - 0.012, -0.40, 0.50), (x, 0.30, 0.525), "wood", rand=0.3)          # shovel handle
+    b.box((x - 0.016, 0.30, 0.46), (x, 0.52, 0.57), "steel", rand=0.3)           # shovel blade
+    b.box((x - 0.012, -0.95, 0.46), (x, -0.45, 0.48), "wood", rand=0.6)          # axe handle
+    b.box((x - 0.02, -1.00, 0.44), (x, -0.93, 0.56), "steel", rand=0.6)          # axe head
+    for y in (-0.25, 0.20, -0.70):
+        b.box((x - 0.02, y - 0.02, 0.44), (x + 0.005, y + 0.02, 0.59), "black")  # straps
+    # the officer's radio: a whip antenna on the right rear, its mount and base
+    ax_, ay_ = TUB_W - 0.06, TUB_BACK + 0.10
+    b.box((ax_ - 0.05, ay_ - 0.05, BELT - 0.08), (ax_ + 0.05, ay_ + 0.05, BELT + 0.02), "steel")
+    b.cyl((ax_, ay_, BELT + 0.02), (ax_, ay_, BELT + 0.14), 0.022, 8, "black")
+    whip = [(ax_ + 0.02 * (k / 8) ** 2, ay_ - 0.10 * (k / 8) ** 2, BELT + 0.14 + 2.1 * k / 8) for k in range(9)]
+    b.sweep(whip, [(0.004 * math.cos(2 * math.pi * k / 4), 0.004 * math.sin(2 * math.pi * k / 4)) for k in range(4)],
+            "steel", up=(0, 1, 0), scales=[1.4 - 0.8 * k / 8 for k in range(9)])
     # grab handles on the rear sides and a step under the entry
     for sx in (-1, 1):
         x = sx * (TUB_W + 0.02)

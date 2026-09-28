@@ -46,8 +46,8 @@ DUST = lin(150, 139, 116)
 MUD_DRY = lin(118, 103, 82)
 MUD_WET = lin(66, 55, 42)
 STEEL = lin(62, 60, 57)
-RUST = lin(104, 58, 32)
-RUST_DARK = lin(70, 42, 26)
+RUST = lin(94, 60, 38)           # brown, not orange: old rust under dust
+RUST_DARK = lin(62, 44, 30)
 GRIME = lin(40, 38, 29)
 CANVAS = lin(98, 99, 66)
 CANVAS_BLEACH = lin(128, 127, 96)
@@ -128,7 +128,7 @@ def dust_mud(c, col, rough, h, dust_k=1.0, mud_k=1.0, mud_top=None):
     h = g.add(h, g.mul(dust, 0.00008))
     if mud_k <= 0:
         return col, rough, h
-    grad = g.smooth(c.z, mud_top, 0.03)
+    grad = g.smooth(c.z, mud_top, mud_top - 0.55)
     spray = None
     for (yw, zw, r) in v.mud:
         dy = g.sub(c.yf, yw)
@@ -141,8 +141,10 @@ def dust_mud(c, col, rough, h, dust_k=1.0, mud_k=1.0, mud_top=None):
     src = g.math('MAXIMUM', g.mul(grad, 1.0), g.mul(spray, 0.85))
     fine = g.noise(c.P, scale=48.0, detail=10.0, rough=0.72)
     med = g.noise(g.vmul(c.P, (1.0, 1.0, 1.8)), scale=8.0, detail=6.0, rough=0.6)
-    cover = g.add(g.mul(src, 1.15), g.add(g.mul(g.sub(med, 0.5), 0.55), g.mul(g.sub(fine, 0.5), 0.75)))
-    mud = g.smooth(cover, 0.70, 0.74)
+    # fine splatter carries the edge; the mid-scale noise only breaks the line
+    # (too much of it reads as camouflage blotches, not mud)
+    cover = g.add(g.mul(src, 1.15), g.add(g.mul(g.sub(med, 0.5), 0.32), g.mul(g.sub(fine, 0.5), 0.9)))
+    mud = g.smooth(cover, 0.64, 0.68)
     # droplets thrown above the mud line
     vor = g.voronoi(c.P, scale=75.0, feature='F1')
     vsz = g.noise(c.P, scale=30.0, detail=2.0)
@@ -163,17 +165,18 @@ def dust_mud(c, col, rough, h, dust_k=1.0, mud_k=1.0, mud_top=None):
     return col, rough, h
 
 
-def chips(c, col, rough, metal, h, amount=1.0, radius=0.035, low_dots=1.0):
+def chips(c, col, rough, metal, h, amount=1.0, radius=0.05, low_dots=1.0):
     """Paint worn off the edges people and branches touch, down to dark steel
     rusting in places, in a ragged band a few centimetres wide; stone chips
     scattered low on the body."""
     g = c.g
     # convex edges only: inside corners collect grime, they do not chip
-    e = g.mul(c.edge(radius, 0.004, 0.10), g.sub(1.0, g.smooth(c.cavity(0.06), 0.12, 0.45)))
+    # (the upper threshold lets rounded corners wear less than sharp edges)
+    e = g.mul(c.edge(radius, 0.002, 0.075), g.sub(1.0, g.smooth(c.cavity(0.06), 0.12, 0.45)))
     cn = g.noise(c.P, scale=38.0, detail=10.0, rough=0.7)
     cn2 = g.noise(c.P, scale=5.0, detail=3.0)
-    cv = g.add(g.mul(e, 0.95 * amount), g.add(g.mul(g.sub(cn, 0.5), 1.0), g.mul(g.sub(cn2, 0.5), 0.5)))
-    chip = g.smooth(cv, 0.55, 0.58)
+    cv = g.add(g.mul(e, 0.80 * amount), g.add(g.mul(g.sub(cn, 0.5), 1.1), g.mul(g.sub(cn2, 0.5), 0.6)))
+    chip = g.smooth(cv, 0.52, 0.55)
     vor = g.voronoi(c.P, scale=55.0, feature='F1')
     dotm = g.mul(g.smooth(c.z, 1.0, 0.25), g.smooth(g.noise(c.P, scale=4.0, detail=2.0), 0.48, 0.66))
     dots = g.mul(g.sub(1.0, g.smooth(vor, 0.035, 0.07)), g.mul(dotm, low_dots))
@@ -190,7 +193,7 @@ def chips(c, col, rough, metal, h, amount=1.0, radius=0.035, low_dots=1.0):
     vert = g.sub(1.0, g.math('ABSOLUTE', c.nz))
     wn = g.noise(c.vec(60.0, 60.0, 3.0), scale=1.0, detail=3.0)
     weep = g.mul(g.mul(g.smooth(wn, 0.62, 0.75), vert), g.mul(g.smooth(e, 0.05, 0.4), rustm))
-    col = g.mix(g.mul(weep, 0.45), col, RUST_DARK)
+    col = g.mix(g.mul(weep, 0.25), col, RUST_DARK)
     return col, rough, metal, h
 
 
@@ -202,7 +205,7 @@ def olive(c, tone=1.0):
     base = g.mix(g.smooth(mott, 0.3, 0.7), OD_DARK, OD_LIGHT)
     base = g.mix(g.mul(g.sub(fine, 0.5), 0.5), base, g.hsv(base, v=1.15))
     r = c.rand
-    base = g.hsv(base, h=g.madd(r, 0.024, 0.488), s=g.madd(r, 0.22, 0.88), v=g.madd(r, 0.16, 0.92 * tone))
+    base = g.hsv(base, h=g.madd(r, 0.03, 0.485), s=g.madd(r, 0.3, 0.84), v=g.madd(r, 0.26, 0.87 * tone))
     base = g.mix(g.mul(c.up, 0.4), base, OD_FADED)
     # grime settled in the corners, rain streaks down the vertical faces
     cav = c.cavity(0.18)
@@ -227,6 +230,79 @@ def seam_line(c, coord, c0, along, lo, hi, band=None, w=0.0025):
     return m
 
 
+# a plain painted number on the bonnet sides (no insignia): text, where
+# (ya0, ya1, z0, z1) in the authoring frame, and |x| beyond which it is painted
+NUMBERS = {"truck": ("4-27", (2.33, 2.92, 1.27, 1.45), 0.46),
+           "jeep": ("12", (1.02, 1.30, 0.80, 0.92), 0.42)}
+STENCIL_WHITE = lin(158, 154, 134)
+
+
+def stencil_image(text, w=512, h=160):
+    """Rasterise text in Blender's built-in font into a mask image (numpy,
+    2x2 supersampled): the number is painted from it, nothing is downloaded."""
+    import numpy as np
+    name = f"stencil.{text}"
+    img = bpy.data.images.get(name)
+    if img:
+        return img
+    cu = bpy.data.curves.new("stencil", 'FONT')
+    cu.body = text
+    cu.align_x = 'CENTER'
+    cu.align_y = 'CENTER'
+    ob = bpy.data.objects.new("stencil", cu)
+    bpy.context.scene.collection.objects.link(ob)
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+    bpy.data.objects.remove(ob)
+    bpy.data.curves.remove(cu)
+    V = np.array([v.co[:2] for v in me.vertices], np.float64)
+    me.calc_loop_triangles()
+    T = np.array([t.vertices[:] for t in me.loop_triangles], np.int64)
+    bpy.data.meshes.remove(me)
+    lo, hi = V.min(0), V.max(0)
+    s = min(w * 0.94 / (hi[0] - lo[0]), h * 0.90 / (hi[1] - lo[1]))
+    P = (V - (lo + hi) / 2) * s + np.array([w / 2, h / 2])
+    ss = 2
+    mask = np.zeros((h * ss, w * ss), np.float32)
+    P = P * ss
+    for a, b, c2 in P[T]:
+        x0, y0 = np.floor(np.minimum(np.minimum(a, b), c2)).astype(int)
+        x1, y1 = np.ceil(np.maximum(np.maximum(a, b), c2)).astype(int)
+        xs, ys = np.meshgrid(np.arange(max(x0, 0), min(x1, w * ss - 1) + 1) + 0.5,
+                             np.arange(max(y0, 0), min(y1, h * ss - 1) + 1) + 0.5)
+        d = (b[1] - c2[1]) * (a[0] - c2[0]) + (c2[0] - b[0]) * (a[1] - c2[1])
+        if abs(d) < 1e-12:
+            continue
+        w0 = ((b[1] - c2[1]) * (xs - c2[0]) + (c2[0] - b[0]) * (ys - c2[1])) / d
+        w1 = ((c2[1] - a[1]) * (xs - c2[0]) + (a[0] - c2[0]) * (ys - c2[1])) / d
+        inside = (w0 >= 0) & (w1 >= 0) & (w0 + w1 <= 1)
+        mask[ys[inside].astype(int), xs[inside].astype(int)] = 1.0
+    mask = mask.reshape(h, ss, w, ss).mean((1, 3))
+    img = bpy.data.images.new(name, w, h, alpha=False)
+    img.colorspace_settings.name = 'Non-Color'
+    rgba = np.stack([mask, mask, mask, np.ones_like(mask)], 2)
+    img.pixels.foreach_set(rgba.ravel())
+    img.pack()
+    return img
+
+
+def number(c, col):
+    g = c.g
+    text, (y0, y1, z0, z1), xmin = NUMBERS[c.v.name]
+    img = stencil_image(text)
+    # read left to right from either side: forward is to the right on the
+    # vehicle's right flank and to the left on its left flank
+    right = g.smooth(c.xa, -0.01, 0.01)
+    u = g.mixf(right, g.mul(g.sub(y1, c.ya), 1 / (y1 - y0)), g.mul(g.sub(c.ya, y0), 1 / (y1 - y0)))
+    v = g.mul(g.sub(c.z, z0), 1 / (z1 - z0))
+    m = g.image(img, g.combine(u, v, 0.0), out='Color', extension='CLIP')
+    m, _, _ = g.sep_rgb(m)
+    side = g.mul(g.smooth(g.math('ABSOLUTE', c.xa), xmin - 0.01, xmin + 0.005),
+                 g.smooth(g.math('ABSOLUTE', c.nx), 0.6, 0.85))
+    wear = g.smooth(g.noise(c.P, scale=70.0, detail=6.0, rough=0.7), 0.28, 0.42)
+    return g.mix(g.mul(g.mul(m, side), g.mul(wear, 0.92)), col, STENCIL_WHITE)
+
+
 def details(c, col, rough, h):
     """Panel seams and louvres pressed into the steel (per vehicle)."""
     g = c.g
@@ -238,22 +314,31 @@ def details(c, col, rough, h):
         seams += [seam_line(c, c.ya, 1.405, c.z, 0.90, 2.31, side), seam_line(c, c.ya, 0.38, c.z, 0.90, 2.31, side),
                   seam_line(c, c.z, 0.905, c.ya, 0.38, 1.405, side)]
         seams += [seam_line(c, c.z, 1.12, c.ya, 1.6, 2.97, (ax, 0.44, 0.5))]
-        # bonnet louvres: pressed slots in the side panels
-        u = g.math('FRACT', g.mul(g.sub(c.ya, 1.80), 1 / 0.055))
+        # bonnet louvres: pressed slots in the side panels, behind the number
+        u = g.math('FRACT', g.mul(g.sub(c.ya, 1.74), 1 / 0.055))
         inz = g.mul(g.smooth(c.z, 1.23, 1.25), g.smooth(c.z, 1.49, 1.47))
-        iny = g.mul(g.smooth(c.ya, 1.79, 1.81), g.smooth(c.ya, 2.56, 2.54))
+        iny = g.mul(g.smooth(c.ya, 1.73, 1.75), g.smooth(c.ya, 2.24, 2.22))
         lou = g.mul(g.mul(inz, iny), g.smooth(ax, 0.44, 0.46))
+        # diamond tread plate on the running boards
+        da = g.math('FRACT', g.mul(g.add(c.ya, c.xa), 1 / 0.032))
+        db = g.math('FRACT', g.mul(g.sub(c.ya, c.xa), 1 / 0.032))
+        dd = g.math('SQRT', g.add(g.mul(g.mul(g.sub(da, 0.5), g.sub(da, 0.5)), 5.0), g.mul(g.sub(db, 0.5), g.sub(db, 0.5))))
+        dots = g.sub(1.0, g.smooth(dd, 0.16, 0.24))
+        board = g.mul(g.mul(g.smooth(c.nz, 0.8, 0.95), g.mul(g.smooth(c.z, 0.80, 0.81), g.smooth(c.z, 0.835, 0.825))),
+                      g.mul(g.smooth(ax, 0.69, 0.71), g.smooth(c.ya, 0.29, 0.31)))
+        h = g.add(h, g.mul(g.mul(dots, board), 0.0015))
     else:
         side = (ax, 0.60, 0.7)
         seams += [seam_line(c, c.ya, -0.95, c.z, 0.44, 0.86, side), seam_line(c, c.z, 0.62, c.ya, -1.36, -0.95, side)]
         seams += [seam_line(c, c.xa, 0.0, c.ya, 0.6, 1.45, (c.z, 0.95, 1.0))]
-        u = g.math('FRACT', g.mul(g.sub(c.ya, 0.72), 1 / 0.045))
+        u = g.math('FRACT', g.mul(g.sub(c.ya, 0.62), 1 / 0.045))
         inz = g.mul(g.smooth(c.z, 0.82, 0.84), g.smooth(c.z, 0.93, 0.91))
-        iny = g.mul(g.smooth(c.ya, 0.71, 0.73), g.smooth(c.ya, 1.10, 1.08))
+        iny = g.mul(g.smooth(c.ya, 0.61, 0.63), g.smooth(c.ya, 0.98, 0.96))
         lou = g.mul(g.mul(inz, iny), g.smooth(ax, 0.41, 0.43))
     s = seams[0]
     for m in seams[1:]:
         s = g.math('MAXIMUM', s, m)
+    col = number(c, col)
     col = g.mix(g.mul(s, 0.7), col, GRIME)
     h = g.sub(h, g.mul(s, 0.0012))
     if lou is not None:
@@ -274,7 +359,7 @@ def m_paint(c, interior=False, chassis=False):
     metal = g.value(0.0)
     h = g.value(0.0)
     col, rough, h = details(c, col, rough, h) if not (interior or chassis) else (col, rough, h)
-    col, rough, metal, h = chips(c, col, rough, metal, h, amount=0.75 if interior else 1.0,
+    col, rough, metal, h = chips(c, col, rough, metal, h, amount=0.5 if interior else 1.0,
                                  low_dots=0.0 if interior else 1.0)
     if interior:
         # boots have worn the floor to bare steel
@@ -552,11 +637,12 @@ def m_radiator(c):
 def m_lens(c):
     g = c.g
     n = g.noise(c.P, scale=25.0, detail=4.0)
-    col = g.mix(g.mul(n, 0.4), g.rgb(lin(150, 154, 156)), g.rgb(lin(122, 124, 120)))
+    # glass over a silvered reflector: mid grey, glossy, a little metallic
+    col = g.mix(g.mul(n, 0.4), g.rgb(lin(96, 100, 102)), g.rgb(lin(80, 82, 80)))
     dust = g.smooth(g.add(g.mul(c.up, 0.5), g.mul(g.sub(n, 0.5), 1.0)), 0.3, 0.8)
     col = g.mix(g.mul(dust, 0.5), col, DUST)
-    rough = g.mixf(dust, 0.08, 0.6)
-    return col, rough, g.mixf(dust, 0.7, 0.0), g.mul(n, 0.0001), 0.003
+    rough = g.mixf(dust, 0.1, 0.6)
+    return col, rough, g.mixf(dust, 0.35, 0.0), g.mul(n, 0.0001), 0.003
 
 
 # which recipe each material name uses; the value is (fn, kwargs)

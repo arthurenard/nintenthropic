@@ -67,7 +67,10 @@ def export_all(made, out_dir, work, col, log=print):
             if a.name == "rand":
                 me.attributes.remove(a)
         me.materials.clear()
-        me.materials.append(glass_material(f"{v.name}.glass"))
+        old = bpy.data.materials.get(f"{v.name}.glass")      # the builder's placeholder
+        if old is not None and old.users == 0:
+            bpy.data.materials.remove(old)
+        me.materials.append(glass_material(f"{v.name}_glass"))
         log(f"{v.name}: {assemble.triangles(root)} triangles in the node tree")
         roots.append(root)
     for o in bpy.context.view_layer.objects:
