@@ -1,0 +1,5 @@
+# Build products: regenerate with build_road.py / characters/build.py
+build/
+*.blend
+*.blend1
+__pycache__/

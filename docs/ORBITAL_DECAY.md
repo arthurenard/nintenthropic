@@ -265,3 +265,35 @@ downloaded.
 ### `public/assets/orbit/poster.webp`
 
 The cupola's windows, the planet at sunrise, a fragment glinting in the sun.
+
+### As delivered by the art pass (details in `art/orbit/README.md`)
+
+Nothing above is renamed or dropped; these are the conventions the
+contract left open, and a few additions.
+
+- **Frame and light.** Vertical field of view 62° (`camera.player` extras
+  `fov_deg`), pitch 20°, altitude 420 km, the limb about 11° above the view's
+  centre with a 4° roll. A node **`planet`** (in `cupola.glb` and
+  `station.glb`) sits at the planet's centre with its axes (glTF +Y north,
+  +X longitude 0): a `SphereGeometry` child with default UVs shows the maps
+  right; its extras carry the radius, altitude, cloud height, the "HI"
+  (lon −112°, lat 47°), the storm and the hurricanes. Sun irradiance 20,
+  exposure −3.2 stops, AgX: the baked cupola is display colour (draw it
+  unlit, not tone-mapped).
+- **Panes.** 1 upper-left, 2 upper-right, 3 right, 4 lower-right,
+  5 lower-left, 6 left (clockwise from the upper-left), 0 the centre.
+  UVs planar with square texels, (0.5, 0.5) at the pane's centre.
+- **Planet.** `height.webp` is delivered, and an optional tileable
+  `planet/detail.webp` breaks the clouds into crisp cloudlets below the
+  maps' ~10 km a pixel (recipe in the README).
+- **Debris.** Wholes at the origin (origin at the centre of mass, extras
+  `kind`, `mass_kg`, `size_m`). Pieces live in a sibling group
+  `chunk.<n>.pieces` (likewise `slab.<n>.pieces`, `foil.<n>.pieces`) whose
+  transform is the whole's: clone it onto the whole to reassemble.
+  `foil.<n>` is a group of `foil.<n>.wrap` (hide to strip) and
+  `foil.<n>.core`.
+- **Added nodes.** `drone.work.<pane>` (where the drone hovers to mend
+  each pane), `secret.capsule.shade`, `derelict.pieces`, `toolbag.bag` and
+  `toolbag.tool.<n>`, the astronaut's arm chain (`astronaut.arm.R` →
+  `astronaut.forearm.R` → `astronaut.hand.R`), the drone's `arm.shoulder` →
+  `arm.elbow` → `weld.tip`.

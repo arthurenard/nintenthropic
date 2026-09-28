@@ -32,11 +32,14 @@ test("choosing a game: click, keyboard, remembered, in the address", async ({ pa
   await page.keyboard.press("ArrowRight");
   await expect(card(page, "Orbital Decay")).toBeFocused();
   await expect(page.locator("#feature-title")).toHaveText("Orbital Decay");
-  // A game still to come is named and described, and cannot be played.
-  await expect(page.locator("#feature-soon")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await page.keyboard.press("End");
   await expect(page.locator("#feature-title")).toHaveText("Overwatch Ridge");
+  // Every game can be played now: none is Coming Soon. (A game still to come - named,
+  // described, never playable - is covered by src/app/arcade.test.ts's entries without create.)
+  await expect(page.locator("#feature-soon")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  for (const name of ["High Noon", "Dead of Night", "Orbital Decay", "Overwatch Ridge"]) await expect(card(page, name)).not.toContainText("Coming Soon");
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("#feature-title")).toHaveText("High Noon");
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();

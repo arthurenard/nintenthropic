@@ -45,9 +45,15 @@ const FALLBACKS: Readonly<Record<string, readonly string[]>> = {
   fire: ["aim"],
   hit_body: ["idle"],
   wound_kneel: ["crouch", "death_crumple"],
-  death_back: ["death_forward", "death_crumple"],
-  death_forward: ["death_back", "death_crumple"],
-  death_crumple: ["death_forward", "death_back"],
+  wounded: ["wound_kneel", "crouch"],
+  // The civilians' one death, and the soldier's special ones (art/ridge/people).
+  death_back: ["death_forward", "death_crumple", "death"],
+  death_forward: ["death_back", "death_crumple", "death"],
+  death_crumple: ["death_forward", "death_back", "death"],
+  drive_death: ["death_crumple"],
+  prone_death: ["death_forward", "death_crumple"],
+  prone_fire: ["prone_aim", "fire"],
+  stare: ["land", "stand"],
   dismount: ["run", "walk"],
   drive: ["idle"],
   cycle: ["idle"],
@@ -93,12 +99,13 @@ function clipFor(a: Actor): { clip: string; loop: boolean; speed: number } {
     case "cycle":
       return { clip: "cycle", loop: true, speed: Math.max(0.5, walkSpeed / 4.5) };
     case "fire":
-      return { clip: "fire", loop: false, speed: 1 };
+      return { clip: a.role === "sniper" ? "prone_fire" : "fire", loop: false, speed: 1 };
     case "wound":
-      return { clip: "wound_kneel", loop: false, speed: 1 };
+      // Down on a knee, then holding there, hurt.
+      return a.activityT > 0.9 ? { clip: "wounded", loop: true, speed: 1 } : { clip: "wound_kneel", loop: false, speed: 1 };
     case "dying":
     case "dead":
-      return { clip: a.seat === "driver" ? "death_crumple" : a.deathClip, loop: false, speed: 1 };
+      return { clip: a.seat === "driver" ? "drive_death" : a.role === "sniper" ? "prone_death" : a.deathClip, loop: false, speed: 1 };
     case "dismount":
       return { clip: "dismount", loop: false, speed: 1 };
     case "graze":
@@ -112,7 +119,7 @@ function clipFor(a: Actor): { clip: string; loop: boolean; speed: number } {
     case "land":
       return { clip: act, loop: false, speed: 1 };
     case "perched":
-      return { clip: "land", loop: false, speed: 1 };
+      return { clip: "stare", loop: true, speed: 1 };
     default:
       return { clip: "idle", loop: true, speed: 1 };
   }
@@ -126,12 +133,12 @@ function dress(rig: Rig, a: Actor): void {
   };
   switch (role) {
     case "officer":
-      rig.dress(["var.cap.officer"]);
+      rig.dress(["var.cap.officer", "var.coat.officer"]);
       props(a.activity === "binoculars" ? ["prop.binoculars"] : []);
       break;
     case "sniper":
       rig.dress(["var.ghillie"]);
-      props(["gun.rifle"]);
+      props(rig.props.has("gun.rifle.scoped") ? ["gun.rifle.scoped"] : ["gun.rifle"]);
       break;
     case "gunner":
       rig.dress(["var.helmet"]);
@@ -162,10 +169,10 @@ function dress(rig: Rig, a: Actor): void {
       const pack = role === "patrol" || role === "trooper";
       if (a.activity === "smoke") {
         rig.dress(["var.helmet", "var.sling", ...(pack ? ["var.pack"] : [])]);
-        props(["prop.cigarette"]);
+        props(["prop.cigarette", "gun.rifle.slung"]);
       } else if (a.activity === "binoculars") {
         rig.dress(["var.helmet", "var.sling", ...(pack ? ["var.pack"] : [])]);
-        props(["prop.binoculars"]);
+        props(["prop.binoculars", "gun.rifle.slung"]);
       } else {
         rig.dress(["var.helmet", ...(pack ? ["var.pack"] : [])]);
         props(role === "mortar" ? [] : ["gun.rifle"]);
@@ -488,7 +495,9 @@ export class Cast implements MovingWorld {
       if (a.role === "goat" && a.activity === "hop") {
         // The leap: an arc from this ledge up to the next (the rules move it there when it lands).
         const k = Math.min(1, a.activityT / 1.2);
-        rig.root.position.set(a.pos.x + (a.home.x - a.pos.x) * k, a.pos.y + (a.home.y - a.pos.y) * k + Math.sin(Math.PI * k) * 3.5, a.pos.z + (a.home.z - a.pos.z) * k);
+        // The arc scaled to the gap: half its width high (the real crag's ledges are a short hop apart).
+        const gap = Math.hypot(a.home.x - a.pos.x, a.home.z - a.pos.z);
+        rig.root.position.set(a.pos.x + (a.home.x - a.pos.x) * k, a.pos.y + (a.home.y - a.pos.y) * k + Math.sin(Math.PI * k) * Math.min(3.5, Math.max(0.6, gap * 0.5)), a.pos.z + (a.home.z - a.pos.z) * k);
       }
       if (dt > 0) turnRig(rig, a.heading, dt);
       else rig.root.rotation.y = a.heading;
@@ -499,7 +508,8 @@ export class Cast implements MovingWorld {
     const want = clipFor(a);
     if (want.clip !== view.clip || a.activity !== view.activity) {
       const restart = a.activity !== view.activity || want.clip !== view.clip;
-      rig.play(want.clip, view.clip ? 0.25 : 0, want.loop, want.speed, restart);
+      // The eagle's wing sets swap by bone scale: its clips are cut, never cross-faded (art/ridge/fauna).
+      rig.play(want.clip, view.clip && a.role !== "eagle" ? 0.25 : 0, want.loop, want.speed, restart);
       view.clip = want.clip;
       view.activity = a.activity;
     } else if (rig.current && want.loop) {
@@ -648,6 +658,10 @@ export class Cast implements MovingWorld {
 
   /** Where a rifle's muzzle or a lens is on someone, facing the ridge. */
   lensOf(id: number, out: Vector3): Vector3 | null {
+    // The scoped rifle's own lens, where the art marks it.
+    const v = this.views.get(id);
+    const glint = v ? findNode(v.rig.model, "socket.glint") : null;
+    if (glint && (v?.rig.props.get("gun.rifle.scoped")?.visible ?? false)) return glint.getWorldPosition(out);
     const head = this.headOf(id, out);
     if (!head) return null;
     const toEye = tmp.copy(this.eye).sub(head).normalize();
