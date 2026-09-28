@@ -225,7 +225,7 @@ UV.u across the road, UV.v along it in tile lengths.
   - haze: transmittance `exp(−d·1/14000)` toward `(0.36, 0.46, 0.62)` linear;
   - mist: extinction `(1/650)·exp(−(y + 60)/22)` integrated along the eye
     ray (closed form in `valley/post.py`), scaled by `light.a` at the
-    ground point, toward `(0.30, 0.37, 0.46)`;
+    ground point, toward `(0.31, 0.35, 0.40)`;
   - both in-scatter colours × `mix(0.35, 1, sunlit)`, sunlit being the
     ground point's sun test from the light map: air in the ridge's shadow
     scatters far less light, and without this the shaded floor goes milky.

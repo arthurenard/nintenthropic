@@ -82,9 +82,9 @@ def compose_color(W, info, x, y):
     g = g * (1 - 0.35 * wet) + np.array([0.035, 0.05, 0.025])[:, None] * 0.35 * wet
     # shrubs on the pastures' slopes: alpenrose and juniper in dark clumps,
     # bilberry going red - the texture a hillside of grass shows at a distance
-    clump = smoothstep(0.0, 0.45, N.fbm(x, y, 8810, octaves=2, scale=1 / 70.0))
-    shrub = (smoothstep(0.35, 0.75, N.fbm(x, y, 8811, octaves=4, scale=1 / 6.0)) * clump *
-             smoothstep(8.0, 16.0, slope) * (1 - floor) * smoothstep(40.0, 70.0, r))
+    clump = smoothstep(-0.2, 0.35, N.fbm(x, y, 8810, octaves=2, scale=1 / 70.0))
+    shrub = (smoothstep(0.25, 0.7, N.fbm(x, y, 8811, octaves=4, scale=1 / 6.0)) * clump *
+             smoothstep(3.0, 9.0, slope) * smoothstep(10.0, 22.0, alt) * smoothstep(40.0, 70.0, r))
     berry = smoothstep(0.1, 0.5, N.fbm(x, y, 8812, octaves=2, scale=1 / 20.0))
     sh = np.array([0.020, 0.030, 0.013])[:, None] * (1 - berry) + np.array([0.060, 0.024, 0.012])[:, None] * berry
     g = g * (1 - 0.85 * shrub) + sh * 0.85 * shrub

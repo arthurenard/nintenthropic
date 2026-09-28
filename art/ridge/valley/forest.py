@@ -165,6 +165,23 @@ def sight_targets():
     return np.array(pts)
 
 
+def sight_targets_abs():
+    """Targets at absolute heights, where the terrain is not the surface: the
+    dam's downstream face (its crest to 10 m above its toe) and the tunnel's
+    portal."""
+    pts = []
+    zt, zb = L.DAM_CREST_Z, L.DAM_BASE_Z
+    for th in np.linspace(-L.DAM_THETA, L.DAM_THETA, 13):
+        for f in (0.0, 0.3, 0.6, 0.85):
+            z = zt - f * (zt - zb)
+            thick = 3.5 + 9.5 * ((zt - z) / (zt - zb + 4.0)) ** 1.6
+            p = L.dam_arc_point(th, thick + 0.5)
+            pts.append((p[0], p[1], z))
+    for dz in (1.0, 4.0, 8.0):
+        pts.append((L.TUNNEL[0], L.TUNNEL[1], L.TUNNEL[2] + dz))
+    return np.array(pts)
+
+
 _TER = None
 
 
@@ -174,6 +191,9 @@ def sightline_clear(x, y, zb, h, half_w):
     and between its base and its top as seen from the eye."""
     tg = sight_targets()
     tz = _TER.height(tg[:, 0], tg[:, 1]) + tg[:, 2]
+    ta = sight_targets_abs()
+    tg = np.vstack([tg, ta])
+    tz = np.concatenate([tz, ta[:, 2]])
     tb = np.arctan2(tg[:, 0], tg[:, 1])
     tr = np.hypot(tg[:, 0], tg[:, 1])
     te = np.arctan2(tz, tr)

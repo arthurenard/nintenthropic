@@ -32,7 +32,7 @@ MATERIALS = ["grass", "rock", "scree", "snow", "dirt", "forest", "gravel", "alpi
 # these and the tiles are normalised to them (the shader multiplies the
 # colour map by tile / mean)
 MEAN = {
-    "grass": (0.110, 0.130, 0.040),
+    "grass": (0.115, 0.128, 0.034),
     "rock": (0.165, 0.162, 0.158),
     "scree": (0.180, 0.172, 0.160),
     "snow": (0.78, 0.80, 0.83),
