@@ -336,7 +336,7 @@ def crook_field():
 
 
 def crook_paint(P):
-    c, r, m = PT.wood(P, (0.32, 0.20, 0.10), axis=(0, 0, 1), seed=481, rough=0.5)
+    c, r, m = PT.wood(P * 0.4, (0.32, 0.20, 0.10), axis=(0, 0, 1), seed=481, rough=0.5)
     grip = np.abs(P[:, 2]) < 0.06
     c[grip] *= 0.7
     iron = P[:, 2] < -0.91

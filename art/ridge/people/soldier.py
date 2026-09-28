@@ -156,18 +156,18 @@ def kit_jobs(sockets_M):
         return dict(ob=ob, field=field, paint=paint, origin=o, M=M, weight=weight, ao_field=field, ao_group=name, ao_self_only=True,
                     smart_uv=True, uv_angle=70, skin=("prop",), socket=socket)
     jobs.append(prop("gun.rifle", AR.rifle_field(), AR.rifle_paint(), (-0.06, AR.BUTT_Y - 0.02, -0.12), (0.06, AR.MUZZLE_Y + 0.02, 0.08),
-                     0.0012, 1100, Mg, "socket.gun", 0.55))
+                     0.0012, 1100, Mg, "socket.gun", 0.9))
     jobs.append(prop("gun.rifle.scoped", AR.rifle_field(True), AR.rifle_paint(True), (-0.06, AR.BUTT_Y - 0.02, -0.12), (0.06, AR.MUZZLE_Y + 0.02, 0.13),
-                     0.0012, 1400, Mg, "socket.gun", 0.55))
+                     0.0012, 1400, Mg, "socket.gun", 0.9))
     jobs.append(prop("gun.mg", AR.mg_field(), AR.mg_paint, (-0.13, -0.42, -0.28), (0.13, AR.MG_MUZZLE_Y + 0.02, 0.36),
-                     0.0015, 1500, Mg, "socket.gun", 0.5))
+                     0.0015, 1500, Mg, "socket.gun", 0.8))
     bf = AR.binoculars_field()
-    jobs.append(prop("prop.binoculars", bf, AR.binoculars_paint, bf.lo, bf.hi, 0.0010, 520, Mg, "socket.gun", 0.5))
+    jobs.append(prop("prop.binoculars", bf, AR.binoculars_paint, bf.lo, bf.hi, 0.0010, 520, Mg, "socket.gun", 0.7))
     cg = AR.cigarette_field()
     jobs.append(prop("prop.cigarette", cg, AR.cigarette_paint, cg.lo - 0.005, cg.hi + 0.005, 0.0006, 60, Ml, "socket.hand.L", 0.3))
     sf = AR.slung_field()
     ob = C.decimated("gun.rifle.slung", sf, sf.lo, sf.hi, 0.0013, 1150, None)
-    jobs.append(dict(ob=ob, field=sf, paint=AR.slung_paint(), origin=np.zeros(3), weight=0.4, ao_field=sf, ao_group="gun.rifle.slung",
+    jobs.append(dict(ob=ob, field=sf, paint=AR.slung_paint(), origin=np.zeros(3), weight=0.5, ao_field=sf, ao_group="gun.rifle.slung",
                      smart_uv=True, uv_angle=70, skin=("prop",), socket="socket.back"))
     return jobs
 

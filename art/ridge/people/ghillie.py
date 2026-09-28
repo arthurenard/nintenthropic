@@ -162,14 +162,14 @@ def ghillie_jobs(spec, tf, wf, quick=False, seed=7):
     sf = suit_field(spec, tf, wf)
     res = 0.012          # the suit is lumpy anyway and decimated hard; its union field is slow to sample
     suit = C.decimated("var.ghillie", sf, sf.lo, sf.hi, res, 2600, None, symmetry=False)
-    jobs = [dict(ob=suit, field=sf, paint=suit_paint, origin=np.zeros(3), weight=0.35, ao_field=sf, ao_group="var.ghillie",
+    jobs = [dict(ob=suit, field=sf, paint=suit_paint, origin=np.zeros(3), weight=0.22, ao_field=sf, ao_group="var.ghillie",
                  smart_uv=True, uv_angle=66, skin=("transfer",))]
     V, Fc, UV, roots, sid = strands(sf, suit, rng)
     ob = bl.mesh_from_arrays("var.ghillie.strips", V, Fc)
     bl.set_uv(ob, np.array([u for f in UV for u in f], np.float32))
     nst = sid.max() + 1
     centres = np.array([V[sid == k].mean(0) for k in range(nst)], np.float32)
-    jobs.append(dict(ob=ob, field=sf, paint=strand_paint_fn(centres), origin=np.zeros(3), weight=0.55, ao_field=sf,
+    jobs.append(dict(ob=ob, field=sf, paint=strand_paint_fn(centres), origin=np.zeros(3), weight=0.35, ao_field=sf,
                      ao_group="var.ghillie", smart_uv=True, uv_angle=80, snap=False, flat=True, skin=("points", roots),
                      join_into="var.ghillie"))
     return jobs

@@ -102,7 +102,8 @@ def rifle_paint(scoped=False):
         wood &= ~((y < -0.345))                       # butt plate
         wood &= ~((np.abs(y - 0.036) < 0.024) & (z < 0.02) & (z > -0.02) & (np.abs(x) < 0.006))
         wood &= ~((np.abs(y - 0.45) < 0.008) | (np.abs(y - 0.635) < 0.008))
-        wc, wr, wm = PT.wood(P, WOOD, axis=(0, 1, 0.12), seed=202, rough=0.45)
+        # a coarser grain than charlib's (its rings alias on a rifle's few texels)
+        wc, wr, wm = PT.wood(P * 0.35, WOOD, axis=(0, 1, 0.12), seed=202, rough=0.45)
         # handling: darker and smoother where hands go, dents on the butt
         grip = np.exp(-((y - 0.0) / 0.05) ** 2) + np.exp(-((y - 0.33) / 0.08) ** 2)
         wc *= (1 - 0.25 * np.clip(grip, 0, 1))[:, None]
@@ -187,7 +188,7 @@ def mg_paint(P):
     grip = (y < 0.03) & (y > -0.05) & (z < 0.02)
     guard = (y > 0.235) & (y < 0.425) & (z < bz - 0.012)
     wood = stock | grip | guard
-    wc, wr, wm = PT.wood(P, (0.18, 0.10, 0.05), axis=(0, 1, 0.1), seed=212, rough=0.5)
+    wc, wr, wm = PT.wood(P * 0.35, (0.18, 0.10, 0.05), axis=(0, 1, 0.1), seed=212, rough=0.5)
     c[wood], r[wood], m[wood] = wc[wood], wr[wood], wm[wood]
     # the finned jacket and the muzzle heat-browned
     hot = (np.abs(y - 0.48) < 0.06) | (y > 0.79)
