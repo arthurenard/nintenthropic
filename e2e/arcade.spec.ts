@@ -16,13 +16,13 @@ test("choosing a game: click, keyboard, remembered, in the address", async ({ pa
   await expect(card(page, "High Noon")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("radio")).toHaveCount(4);
 
-  // A game still to come is named and described, and cannot be played.
+  // Choosing another game that can be played offers Play for it.
   await card(page, "Dead of Night").click();
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
   await expect(card(page, "Dead of Night")).toHaveAttribute("aria-checked", "true");
   await expect(card(page, "High Noon")).toHaveAttribute("aria-checked", "false");
-  await expect(page.locator("#feature-soon")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeHidden();
+  await expect(page.locator("#feature-soon")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   expect(new URL(page.url()).hash).toBe("#dead-of-night");
 
   // One tab stop: the chosen card; the arrows choose, wrapping round.
@@ -32,6 +32,9 @@ test("choosing a game: click, keyboard, remembered, in the address", async ({ pa
   await page.keyboard.press("ArrowRight");
   await expect(card(page, "Orbital Decay")).toBeFocused();
   await expect(page.locator("#feature-title")).toHaveText("Orbital Decay");
+  // A game still to come is named and described, and cannot be played.
+  await expect(page.locator("#feature-soon")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeHidden();
   await page.keyboard.press("End");
   await expect(page.locator("#feature-title")).toHaveText("Overwatch Ridge");
   await page.keyboard.press("ArrowRight");

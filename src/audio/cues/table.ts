@@ -85,6 +85,7 @@ import {
   waveStart,
 } from "./music";
 import { calibDone, calibHit, uiConfirm, uiTap } from "./ui";
+import { NIGHT_CUES } from "./night";
 
 /** piano_note_1 … piano_note_8: G major pentatonic, G4 to B5 (see PIANO_SCALE). */
 const pianoNotes: Record<string, CueSpec> = Object.fromEntries(
@@ -104,7 +105,7 @@ const pianoNotes: Record<string, CueSpec> = Object.fromEntries(
  */
 export type BusName = "sfx" | "world" | "ui" | "self";
 /** Sounds are synthesised a pack at a time: "core" at start, a game's pack when it loads. */
-export type Pack = "core" | "western";
+export type Pack = "core" | "western" | "night";
 
 export interface CueSpec {
   recipe: Recipe;
@@ -394,6 +395,7 @@ export const CUES: Record<string, CueSpec> = {
     recipe: calibDone, pack: "core", bus: "ui", level: -14,
     priority: 2, maxInstances: 1, vary: 0, expect: [0.6, 1.6],
   },
+  ...NIGHT_CUES,
 };
 
 export const CUE_NAMES: readonly string[] = Object.keys(CUES);
