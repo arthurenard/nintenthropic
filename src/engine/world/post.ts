@@ -9,7 +9,8 @@
  *
  * Each game chooses its effects (PostOptions): the ones it leaves out are
  * compiled out, not merely set to zero. High Noon's chain is the default
- * set plus its golden-hour grade.
+ * set plus its golden-hour grade; a game may merge effects of its own into
+ * the same pass (Dead of Night's beam in the fog).
  */
 import { BlendFunction, BloomEffect, Effect, EffectComposer, EffectPass, RenderPass } from "postprocessing";
 import { HalfFloatType, NoToneMapping, Uniform, Vector2, type Camera, type Scene, type WebGLRenderer } from "three";
@@ -58,6 +59,13 @@ export interface PostOptions {
   flash?: { color?: RGB } | false;
   /** How much the corners darken, 0 for none. Default 0.22. */
   vignette?: number;
+  /**
+   * The game's own effects, merged into the chain after bloom and before the
+   * grade: Dead of Night's flashlight beam in the fog, which reads the
+   * scene's depth. Called once for each chain (the full one and the low
+   * tier's), so each gets instances of its own: share their uniforms.
+   */
+  effects?: () => Effect[];
 }
 
 /** The grade pass's own uniforms, besides the game's. */
@@ -231,9 +239,10 @@ export class PostFX {
     });
     this.composer.addPass(new RenderPass(scene, camera));
     this.grades = [new GradeEffect(options), new GradeEffect(options)];
+    const own = () => options.effects?.() ?? [];
     if (options.bloom === false) {
       this.bloom = null;
-      this.full = new EffectPass(camera, this.grades[0]);
+      this.full = new EffectPass(camera, ...own(), this.grades[0]);
     } else {
       const b = { ...BLOOM, ...options.bloom };
       this.bloom = new BloomEffect({
@@ -244,9 +253,9 @@ export class PostFX {
         radius: b.radius,
         levels: b.levels,
       });
-      this.full = new EffectPass(camera, this.bloom, this.grades[0]);
+      this.full = new EffectPass(camera, this.bloom, ...own(), this.grades[0]);
     }
-    this.lite = new EffectPass(camera, this.grades[1]);
+    this.lite = new EffectPass(camera, ...own(), this.grades[1]);
     this.composer.addPass(this.full);
     this.composer.addPass(this.lite);
     this.full.renderToScreen = true;
