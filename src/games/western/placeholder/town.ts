@@ -16,8 +16,8 @@ import {
   type Material,
   type Texture,
 } from "three";
-import { mulberry32 } from "../rules/rng";
-import { nameNode } from "../world/names";
+import { mulberry32 } from "../../../engine/rules/rng";
+import { nameNode } from "../../../engine/world/names";
 import { TownBuilder, unlit, type BakeLight, type PartOptions } from "./builder";
 import {
   boardsTexture,

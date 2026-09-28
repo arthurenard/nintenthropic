@@ -4,13 +4,23 @@ import type { Framing } from "./framing";
 const e = new Euler(0, 0, 0, "YXZ");
 const q = new Quaternion();
 
+export interface PlayerCameraOptions {
+  /** Clipping planes, metres. */
+  near?: number;
+  far?: number;
+  /** The ground under the player, where the view comes to rest at the end. */
+  groundY?: number;
+}
+
 /**
- * The player's eye: placed by the town's `camera.player`, framed by the game
- * (a field of view and a pitch from that same eye, eased from one to the
- * next — see framing.ts), with the life a held pose has — a slow breath, a
- * kick when the revolver fires that settles in a quarter second, a flinch
- * when hit, a shake when dynamite goes off, and, at the end, the slow tip
- * into the dust.
+ * The player's eye in a first-person game where the player stands still:
+ * placed where the world's art puts it (High Noon's `camera.player`), framed
+ * by the game (a field of view and a pitch from that same eye, eased from
+ * one to the next — see framing.ts), with the life a held pose has — a slow
+ * breath, a kick when the gun fires that settles in a quarter second, a
+ * flinch when hit, a shake when something goes off, and, at the end, the
+ * slow tip into the dust. Reduced motion keeps the kick and flinch small
+ * and the breath still; `still` holds it for an aim check.
  */
 export class PlayerCamera {
   readonly camera: PerspectiveCamera;
@@ -29,12 +39,15 @@ export class PlayerCamera {
   private readonly framingTo: Framing;
   private framingT = 1;
   private framingDur = 0;
+  /** Where the eye comes to rest when the player falls: a hand's breadth above the ground. */
+  private readonly lying: number;
   /** No breathing or kick: during the aim check the bottles must hold still. */
   still = false;
   reducedMotion = false;
 
-  constructor(position: Vector3, quaternion: Quaternion, fov: number) {
-    this.camera = new PerspectiveCamera(fov, 16 / 10, 0.1, 400);
+  constructor(position: Vector3, quaternion: Quaternion, fov: number, options: PlayerCameraOptions = {}) {
+    this.camera = new PerspectiveCamera(fov, 16 / 10, options.near ?? 0.1, options.far ?? 400);
+    this.lying = (options.groundY ?? 0) + 0.28;
     this.basePos.copy(position);
     this.baseQuat.copy(quaternion);
     this.framing = { fov, pitch: 0 };
@@ -86,7 +99,7 @@ export class PlayerCamera {
     this.camera.updateProjectionMatrix();
   }
 
-  /** The revolver fires: the view kicks up and a hair sideways. */
+  /** The gun fires: the view kicks up and a hair sideways. */
   kick(random: () => number): void {
     if (this.still) return;
     const k = this.reducedMotion ? 0.4 : 1;
@@ -150,7 +163,7 @@ export class PlayerCamera {
       // The legs go first: a drop, then the view rolls over into the dust.
       const d = this.death;
       const fall = d * d * (3 - 2 * d);
-      dy -= fall * (this.basePos.y - 0.28);
+      dy -= fall * (this.basePos.y - this.lying);
       roll += this.deathSide * fall * 1.25;
       pitch += Math.sin(d * Math.PI) * -0.18 + fall * 0.06;
     }

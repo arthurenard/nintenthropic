@@ -21,6 +21,7 @@ export const IDLE_AIM: Aim = {
   travel: 0,
   offscreen: false,
   capturedAt: 0,
+  scope: false,
 };
 
 export interface FrameInfo {

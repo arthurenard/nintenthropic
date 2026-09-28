@@ -91,35 +91,35 @@
         </div>
       </header>
       <main class="home-main">
-        <section class="feature" aria-labelledby="feature-title">
-          <div class="feature-art" aria-hidden="true"><img id="feature-art" alt="" decoding="async" /></div>
-          <div class="feature-text">
+        <!-- The game chosen below, large: its art beside its name and the Play button. -->
+        <section class="feature" id="feature" aria-labelledby="feature-title">
+          <div class="feature-art" id="feature-frame" aria-hidden="true"><img id="feature-art" alt="" decoding="async" /></div>
+          <div class="feature-text" id="feature-text">
             <h1 class="large-title" id="feature-title">High Noon</h1>
             <p class="body secondary" id="feature-about"></p>
-            <div class="feature-actions">
+            <div class="feature-actions" id="feature-actions">
               <button id="play" class="button primary large" data-sound="confirm">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-play" /></svg>Play
               </button>
               <button id="adjust" class="button secondary large" hidden>Adjust Aim</button>
             </div>
-            <p class="subhead secondary start-control">
+            <p class="subhead secondary start-control" id="start-control">
               <span id="control-label" class="control-label"></span>
               <button id="switch-control" class="link">Use Mouse or Trackpad</button>
             </p>
             <p class="subhead secondary home-best num" id="home-best" hidden></p>
+            <p class="coming-soon subhead" id="feature-soon" hidden>Coming Soon</p>
           </div>
         </section>
-        <section aria-labelledby="soon-label">
-          <h2 class="eyebrow soon-label" id="soon-label">Coming Soon</h2>
-          <ul class="soon" id="soon"></ul>
-        </section>
+        <!-- Every game in the arcade: one tab stop, the arrow keys choose. -->
+        <div class="shelf" id="shelf" role="radiogroup" aria-label="Games"></div>
       </main>
     </div>
 
     <!-- A game: the world full-bleed, chrome in the corners. -->
     <section id="game" class="view game" hidden aria-label="Game" data-phase="loading" data-ready="false" tabindex="-1">
       <div class="stage" id="stage">
-        <div class="curtain" aria-hidden="true"><img id="curtain-art" alt="" /></div>
+        <div class="curtain" id="curtain" aria-hidden="true"><img id="curtain-art" alt="" /></div>
         <canvas class="world" id="world" role="img" aria-label="Game"></canvas>
         <div class="hurt-edge" id="hurt-edge" aria-hidden="true"></div>
         <div class="arcs" id="arcs" aria-hidden="true"></div>
@@ -132,11 +132,27 @@
           <p class="score num"><span class="visually-hidden">Score </span><span id="score">0</span></p>
           <dl class="readouts" id="readouts"></dl>
         </div>
+        <!-- The weapon's corner: a revolver's cylinder, a rifle's magazine, or a laser's heat. -->
         <div class="cylinder glass play-only" id="cylinder" role="img" aria-label="6 of 6 rounds">
           <svg viewBox="-40 -40 80 80" aria-hidden="true">
             <g class="drum" id="drum"></g>
           </svg>
         </div>
+        <div class="magazine glass play-only" id="magazine" role="img" aria-label="" hidden>
+          <svg id="magazine-art" aria-hidden="true"></svg>
+        </div>
+        <div class="heat glass play-only" id="heat" role="img" aria-label="" hidden>
+          <svg viewBox="-40 -40 80 80" aria-hidden="true">
+            <circle class="heat-track" r="31" />
+            <circle class="heat-level" id="heat-level" r="31" transform="rotate(-90)" pathLength="100" />
+          </svg>
+          <span class="heat-value num" id="heat-value" aria-hidden="true">0</span>
+        </div>
+        <p class="clock glass num play-only" id="clock" role="timer" hidden></p>
+        <!-- A touch screen's scope, in a game with one: held or toggled (Settings). -->
+        <button class="scope-button icon-button glass play-only" id="scope-button" aria-label="Scope" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scope" /></svg>
+        </button>
 
         <div class="check-meter glass check-only" id="check-meter">
           <svg class="ring" id="check-ring" viewBox="0 0 44 44" aria-hidden="true">
@@ -196,7 +212,7 @@
     <dialog id="prime" class="sheet alert" aria-labelledby="prime-title">
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="prime-title">Use Your Camera</h2>
-      <p class="body secondary">Handy needs your camera to see your hand. The picture stays on this computer.</p>
+      <p class="body secondary" id="prime-body">Handy needs your camera to see your hand. The picture stays on this computer.</p>
       <div class="sheet-actions">
         <button class="button primary wide" id="prime-continue" data-sound="confirm">Continue</button>
         <button class="button plain wide" id="prime-mouse">Use Mouse or Trackpad</button>
@@ -306,6 +322,10 @@
         Handy runs in your browser. Your camera picture is read on this computer to find your hand, and it is never
         saved or uploaded.
       </p>
+      <p class="subhead secondary" id="privacy-eye">
+        In Overwatch Ridge it also reads whether one of your eyes is closed, for the scope. Only that, and only in
+        that game. Nothing leaves this computer.
+      </p>
       <p class="subhead secondary">
         The first game with your hand downloads about 20 MB, once. After that, your browser keeps it.
       </p>
@@ -383,6 +403,37 @@
             </div>
           </div>
           <p class="group-foot" id="foot-aim"></p>
+        </section>
+
+        <section class="group" aria-labelledby="group-scope" id="scope-group" hidden>
+          <h3 class="group-title" id="group-scope">Scope</h3>
+          <div class="rows">
+            <div class="row">
+              <label class="row-label" for="switch-eye-scope">Close One Eye to Scope</label>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                id="switch-eye-scope"
+                aria-checked="true"
+                aria-describedby="foot-scope"
+              ></button>
+            </div>
+            <div class="row">
+              <span class="row-label" id="label-scope-button">Scope Button</span>
+              <div
+                class="segmented"
+                role="radiogroup"
+                id="pick-scope-button"
+                aria-labelledby="label-scope-button"
+                aria-describedby="foot-scope"
+              >
+                <button type="button" role="radio" data-value="hold">Hold</button>
+                <button type="button" role="radio" data-value="toggle">Toggle</button>
+              </div>
+            </div>
+          </div>
+          <p class="group-foot" id="foot-scope"></p>
         </section>
 
         <section class="group" aria-labelledby="group-camera">
@@ -502,6 +553,7 @@
       <symbol id="i-gear" viewBox="0 0 24 24"><path d="M10.35 5.4L10.67 3.1A9 9 0 0 1 13.33 3.1L13.65 5.4A6.8 6.8 0 0 1 15.5 6.17L17.35 4.77A9 9 0 0 1 19.23 6.65L17.83 8.5A6.8 6.8 0 0 1 18.6 10.35L20.9 10.67A9 9 0 0 1 20.9 13.33L18.6 13.65A6.8 6.8 0 0 1 17.83 15.5L19.23 17.35A9 9 0 0 1 17.35 19.23L15.5 17.83A6.8 6.8 0 0 1 13.65 18.6L13.33 20.9A9 9 0 0 1 10.67 20.9L10.35 18.6A6.8 6.8 0 0 1 8.5 17.83L6.65 19.23A9 9 0 0 1 4.77 17.35L6.17 15.5A6.8 6.8 0 0 1 5.4 13.65L3.1 13.33A9 9 0 0 1 3.1 10.67L5.4 10.35A6.8 6.8 0 0 1 6.17 8.5L4.77 6.65A9 9 0 0 1 6.65 4.77L8.5 6.17A6.8 6.8 0 0 1 10.35 5.4Z" /><circle cx="12" cy="12" r="2.9" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.5 5.8 15.7 12l-6.2 6.2" /></symbol>
       <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
+      <symbol id="i-scope" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" /><path d="M12 2.8v4.4M12 16.8v4.4M2.8 12h4.4M16.8 12h4.4" /><circle fill="currentColor" stroke="none" cx="12" cy="12" r="1.3" /></symbol>
       <symbol id="i-hitmark" viewBox="0 0 24 24"><path d="M4.5 4.5l4.2 4.2M19.5 4.5l-4.2 4.2M4.5 19.5l4.2-4.2M19.5 19.5l-4.2-4.2" /></symbol>
     </svg>
     <script type="module" src="/src/main.ts"></script>

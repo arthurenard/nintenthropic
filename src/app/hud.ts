@@ -1,13 +1,14 @@
 /**
  * The HTML glass HUD a game talks to through HudSink: the score panel in the
- * top-left corner, the revolver's cylinder in the bottom-right, and the
- * moments in between - a wave's title card, hit markers, popups, damage from
- * a direction and the red edge that recedes as the player recovers, hints, a
- * secret found. The world owns the centre; nothing stays there.
+ * top-left corner, the weapon in the bottom-right (a revolver's cylinder, a
+ * rifle's magazine, a laser's heat), a timed round's clock at the top, and
+ * the moments in between - a wave's title card, hit markers, popups, damage
+ * from a direction and the red edge that recedes as the player recovers,
+ * hints, a secret found. The world owns the centre; nothing stays there.
  */
-import type { GameStats, HudSink, Readout } from "../engine/types";
+import type { AmmoStyle, GameStats, HudSink, Readout } from "../engine/types";
 import { $, announce, element, icon, replay, setText } from "../ui/dom";
-import { formatScore } from "../ui/format";
+import { formatScore, formatTime } from "../ui/format";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -27,12 +28,18 @@ export class Hud implements HudSink {
   /** Called once when the game ends, with its stats. */
   onGameOver: ((stats: GameStats) => void) | null = null;
   onPlayerDown: (() => void) | null = null;
+  /** The game hides the page's crosshair (its own reticle is up) or brings it back. */
+  onCrosshair: ((style: "default" | "none") => void) | null = null;
 
   private lastScore = 0;
   private rows: Row[] = [];
   private capacity = 0;
   private turned = 0;
   private left = 0;
+  /** The magazine as drawn: its capacity, and its rounds and chamber. */
+  private magazine: { capacity: number; rounds: SVGElement[]; chamber: SVGElement } | null = null;
+  private heatShown = -1;
+  private clockShown = "";
   private hintTimer = 0;
   private hurt = 0;
   private gameHint: string | null = null;
@@ -51,8 +58,15 @@ export class Hud implements HudSink {
     this.capacity = 0;
     this.turned = 0;
     this.left = 0;
-    $("cylinder").classList.toggle("golden", golden);
-    $("cylinder").hidden = true;
+    this.magazine = null;
+    this.heatShown = -1;
+    this.clockShown = "";
+    for (const id of ["cylinder", "magazine", "heat"]) {
+      $(id).classList.toggle("golden", golden);
+      $(id).hidden = true;
+    }
+    this.clock(null);
+    this.onCrosshair?.("default");
     for (const id of ["arcs", "marks", "moments", "bursts"]) $(id).replaceChildren();
     this.health(0);
     this.gameHint = null;
@@ -121,9 +135,20 @@ export class Hud implements HudSink {
     announce(subtitle ? `${title}. ${subtitle}` : title);
   }
 
-  ammo(left: number, capacity: number, reloading: boolean): void {
-    const cylinder = $("cylinder");
-    cylinder.hidden = false;
+  /** Shows one of the weapon's corners and hides the others. */
+  private dock(which: "cylinder" | "magazine" | "heat"): HTMLElement {
+    for (const id of ["cylinder", "magazine", "heat"] as const) if (id !== which) $(id).hidden = true;
+    const node = $(which);
+    node.hidden = false;
+    return node;
+  }
+
+  ammo(left: number, capacity: number, reloading: boolean, style?: AmmoStyle): void {
+    if (style?.kind === "magazine") {
+      this.rifle(left, capacity, reloading, style);
+      return;
+    }
+    const cylinder = this.dock("cylinder");
     const drum = $("drum");
     if (capacity !== this.capacity) {
       // Chambers round the axle, the next to fire at the top.
@@ -151,8 +176,99 @@ export class Hud implements HudSink {
     cylinder.setAttribute("aria-label", reloading ? "Reloading" : `${left} of ${capacity} rounds`);
   }
 
-  revolverFinish(finish: "steel" | "gold"): void {
-    $("cylinder").classList.toggle("golden", finish === "gold");
+  /**
+   * A rifle's rounds: the magazine's in a row, and the one in the chamber
+   * apart at its end, in the breech. Spent rounds stay as outlines, so how
+   * many the magazine holds is always in sight.
+   */
+  private rifle(left: number, capacity: number, reloading: boolean, style: AmmoStyle): void {
+    const dock = this.dock("magazine");
+    const action = style.action ?? "ready";
+    // Unsaid, a round is in the chamber whenever one is left and the action is closed on it.
+    const chambered = left > 0 && (style.chambered ?? action === "ready") ? 1 : 0;
+    const inMagazine = Math.max(0, Math.min(capacity - 1, left - chambered));
+    if (!this.magazine || this.magazine.capacity !== capacity) this.magazine = this.drawMagazine(capacity);
+    const { rounds, chamber } = this.magazine;
+    // The magazine feeds from the end nearest the chamber.
+    rounds.forEach((round, i) => round.classList.toggle("loaded", i >= rounds.length - inMagazine));
+    const wasChambered = chamber.classList.contains("loaded");
+    chamber.classList.toggle("loaded", chambered > 0);
+    if (chambered > 0 && !wasChambered && !reloading) replay(chamber, "fed");
+    dock.dataset.action = action;
+    dock.classList.toggle("empty", left === 0 && !reloading);
+    if (reloading && !dock.classList.contains("reloading")) replay(dock, "reloading");
+    if (!reloading) dock.classList.remove("reloading");
+    dock.setAttribute(
+      "aria-label",
+      reloading ? "Reloading" : `${left} of ${capacity} rounds${action === "cycling" ? ", working the action" : action === "open" ? ", action open" : ""}`,
+    );
+  }
+
+  /** The magazine's rounds and its breech, sized to how many it holds. */
+  private drawMagazine(capacity: number): { capacity: number; rounds: SVGElement[]; chamber: SVGElement } {
+    // A round 6 wide every 11, a breech 16 wide 10 past the last, and a
+    // stroke's width to spare on each side.
+    const pitch = 11;
+    const inMagazine = Math.max(0, capacity - 1);
+    const last = inMagazine > 0 ? (inMagazine - 1) * pitch + 6 : -10;
+    const breechX = last + 10;
+    const width = breechX + 16 + 2;
+    const art = $("magazine-art") as unknown as SVGSVGElement;
+    art.setAttribute("viewBox", `-1 0 ${width} 40`);
+    art.style.width = `${width}px`;
+    art.replaceChildren();
+    const rounds: SVGElement[] = [];
+    for (let i = 0; i < inMagazine; i++) {
+      const round = svg("rect", { class: "round", x: i * pitch, y: 9, width: 6, height: 22, rx: 3 });
+      art.append(round);
+      rounds.push(round);
+    }
+    art.append(svg("rect", { class: "breech", x: breechX, y: 3, width: 16, height: 34, rx: 8 }));
+    const chamber = svg("rect", { class: "round chamber", x: breechX + 4, y: 8, width: 8, height: 24, rx: 4 });
+    art.append(chamber);
+    return { capacity, rounds, chamber };
+  }
+
+  heat(level: number, venting: boolean): void {
+    const dock = this.dock("heat");
+    const share = Math.max(0, Math.min(1, level));
+    const percent = Math.round(share * 100);
+    const ring = $("heat-level");
+    ring.style.strokeDasharray = `${share * 100} 100`;
+    // Stone cold: no dot of a round cap at the top.
+    ring.style.opacity = share > 0.004 ? "1" : "0";
+    dock.classList.toggle("warm", !venting && share >= 0.75);
+    dock.classList.toggle("venting", venting);
+    if (percent !== this.heatShown) {
+      this.heatShown = percent;
+      setText("heat-value", String(percent));
+    }
+    dock.setAttribute("aria-label", venting ? `Overheated, cooling: ${percent}%` : `Heat ${percent}%`);
+  }
+
+  weaponFinish(finish: "steel" | "gold"): void {
+    for (const id of ["cylinder", "magazine", "heat"]) $(id).classList.toggle("golden", finish === "gold");
+  }
+
+  crosshair(style: "default" | "none"): void {
+    this.onCrosshair?.(style);
+  }
+
+  clock(seconds: number | null, tone: "" | "warning" = ""): void {
+    const node = $("clock");
+    if (seconds === null) {
+      node.hidden = true;
+      delete $("game").dataset.clock;
+      return;
+    }
+    const text = formatTime(seconds);
+    if (text !== this.clockShown) {
+      this.clockShown = text;
+      setText(node, text);
+    }
+    node.classList.toggle("warning", tone === "warning");
+    node.hidden = false;
+    $("game").dataset.clock = "";
   }
 
   damage(direction: number, hurt: number): void {

@@ -1,4 +1,4 @@
-import type { V3 } from "./raymath";
+import type { V3 } from "../../../engine/rules/raymath";
 
 export type CoverKind = "window" | "door" | "barrel" | "crate" | "wagon" | "corner" | "roof" | "tower";
 export type Emerge = "lean_left" | "lean_right" | "rise" | "step_out";

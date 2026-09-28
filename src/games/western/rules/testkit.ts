@@ -7,7 +7,7 @@ import type { Difficulty } from "../../../engine/types";
 import type { Bandit } from "./bandit";
 import type { Dynamite } from "./dynamite";
 import { Match, type MatchListener } from "./match";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import type { Award, WaveBonuses } from "./scoring";
 import type { SecretId } from "./secrets";
 import type { Townsperson } from "./townsfolk";

@@ -21,10 +21,39 @@ export interface HandFrame {
   sequence: number;
 }
 
+/**
+ * What the face landmarker saw of the eyes in one camera frame: its
+ * blendshapes' eyeBlinkLeft and eyeBlinkRight, 0 (open) to 1 (shut), as the
+ * camera sees them (the player's left eye is the camera's right).
+ */
+export interface FaceReading {
+  blinkLeft: number;
+  blinkRight: number;
+}
+
+/**
+ * The face in one camera frame, for a game that reads the eye (Overwatch
+ * Ridge's scope). Published after the frame's HandFrame, so the aim never
+ * waits for the face; on every camera frame the face is read on (every
+ * frame, or every other: see tracker.ts).
+ */
+export interface FaceFrame {
+  /** The eyes, or null when no face was found. */
+  eyes: FaceReading | null;
+  /** When the camera captured the frame, on the performance.now() clock, in ms. */
+  capturedAt: number;
+}
+
 /** Anything that publishes HandFrames: the camera tracker, or a script in tests. */
 export interface HandSource {
   /** Called with every new frame; returns a function that stops listening. */
   subscribe(listener: (frame: HandFrame) => void): () => void;
   /** The newest frame, if there has been one. */
   latest(): HandFrame | null;
+  /**
+   * Called with the face on every frame it is read on, while the face is
+   * being read (see Tracker.readFace). Optional: a source that cannot read
+   * faces has none.
+   */
+  subscribeFace?(listener: (face: FaceFrame) => void): () => void;
 }

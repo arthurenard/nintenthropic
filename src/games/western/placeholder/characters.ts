@@ -22,7 +22,7 @@ import {
   type Material,
 } from "three";
 import type { LoadedAsset } from "../../../engine/types";
-import { nameNode } from "../world/names";
+import { nameNode } from "../../../engine/world/names";
 import { chickenClips, humanoidClips, townsfolkClips } from "./clips";
 
 /**

@@ -13,7 +13,7 @@ import {
 import type { CalibrationStage, CalibrationTarget } from "../../../engine/types";
 import type { Effects } from "./effects";
 import type { RayHit, TownQueries } from "./queries";
-import type { Sound } from "./sound";
+import type { Sound } from "../../../engine/world/sound";
 import { surfaceOf, type TownLayout } from "./town";
 
 interface Bottle {

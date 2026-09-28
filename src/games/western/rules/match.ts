@@ -3,10 +3,10 @@ import { chooseDeath } from "./deaths";
 import type { Difficulty } from "../../../engine/types";
 import { Dynamite, flightTimeFor } from "./dynamite";
 import { felledNote, type Felled } from "./felled";
-import { damageDirection, PlayerHealth } from "./health";
-import type { V3 } from "./raymath";
+import { damageDirection, PlayerHealth } from "../../../engine/rules/health";
+import type { V3 } from "../../../engine/rules/raymath";
 import { Revolver, type TriggerResult } from "./revolver";
-import { range, shuffle, type Random } from "./rng";
+import { range, shuffle, type Random } from "../../../engine/rules/rng";
 import { Scorer, type Award, type WaveBonuses } from "./scoring";
 import { SECRET_NAMES, SECRETS_TOTAL, SecretTracker, type SecretId } from "./secrets";
 import { roleForCover, Townsperson, type TownsfolkEvents } from "./townsfolk";
@@ -20,6 +20,7 @@ import {
   DYNAMITE_PLAYER_RADIUS,
   DYNAMITE_RANGE,
   DIFFICULTY,
+  HEALTH_MAX,
   HIT_GRACE,
   HIT_GRACE_FACTOR,
   INTERMISSION,
@@ -176,7 +177,7 @@ export class Match implements BanditWorld {
     this.baseline = DIFFICULTY[this.difficulty];
     this.tuning = { ...this.baseline };
     // The live numbers: the player's regeneration wears with the rest.
-    this.health = new PlayerHealth(this.tuning);
+    this.health = new PlayerHealth(this.tuning, HEALTH_MAX);
     for (let i = 0; i < STICKS; i++) {
       const d = new Dynamite(i);
       d.state = "exploded";

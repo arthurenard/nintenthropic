@@ -5,26 +5,28 @@
  */
 import type { AudioEngine } from "../audio/index";
 import { browserStore, loadAim, saveAim, type CameraIdentity } from "../calibration/storage";
-import { DownloadError, Progress, siteUrl } from "../engine/fetch";
+import { DownloadError, Progress } from "../engine/fetch";
 import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
 import type { EngineHost } from "../engine/host";
 import { seededRandom } from "../engine/random";
 import { Samples } from "../engine/stats";
 import { gpuName } from "../engine/tier";
 import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
-import { COMING_SOON, GAMES } from "../games/index";
+import { ARCADE, gameById, playable, playableGames } from "../games/index";
 import { AimController } from "../input/aim";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
 import { MouseInput, TouchInput } from "../input/pointer";
+import { EyeScope, FACE_EVERY, ScopeControl, scopeKeys } from "../input/scope";
 import type { ScriptedHands } from "../input/script";
 import { CameraError, cameraPermission, chooseCamera, chosenCamera, openCamera, remembered, type Camera, type CameraTrouble } from "../tracking/camera";
 import { ModelError } from "../tracking/errors";
 import type { Tracker } from "../tracking/tracker";
 import type { HandSource } from "../tracking/types";
-import { $, announce, element, icon, replay, setText, toast } from "../ui/dom";
+import { $, announce, icon, replay, setText, toast } from "../ui/dom";
 import { formatScore } from "../ui/format";
 import { AimCheckView } from "./aimCheckView";
+import { hashId, initialGame, posterInto, Shelf } from "./arcade";
 import { Crosshair } from "./crosshair";
 import { FireToPlay, HandWatch, type HandWatchEvent } from "./handWatch";
 import { Hud } from "./hud";
@@ -33,17 +35,21 @@ import { Pip } from "./pip";
 import { Yielding, type Spot } from "./yielding";
 import {
   DEFAULT_PREFERENCES,
+  DEFAULT_SCOPE,
   controlClass,
   forgetEverything,
   forgetSavedAims,
   hasSavedAim,
   loadPreferences,
+  loadScopePreferences,
   prefs,
   readBest,
   savePreferences,
+  saveScopePreferences,
   tipsSeen,
   type PersistentSet,
   type Preferences,
+  type ScopePreferences,
 } from "./prefs";
 import { difficultyLabel, recordRound, shareResult, showResults, type Result } from "./results";
 import { SettingsSheet, VERSION, type SettingsHost, type SystemFacts } from "./settings";
@@ -92,6 +98,10 @@ interface Session {
   fire: FireToPlay | null;
   /** Timers that belong to this round's results, cleared when it moves on. */
   timers: number[];
+  /** The scope, in a game that has one (GameEntry.uses.scope). */
+  scope: ScopeControl | null;
+  /** Stops Shift scoping, when the session ends. */
+  stopScopeKeys: () => void;
 }
 
 /** No new camera frame for this long, with the camera running, is a camera that has stopped, ms. */
@@ -147,13 +157,15 @@ export class App {
   readonly hud: Hud;
   private readonly crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"), () => this.settings.reducedMotion);
   private readonly pip = new Pip();
-  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "hint"]);
+  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "magazine", "heat", "clock", "hint"]);
   /** How the last aim check ended, for the tests. */
   private lastCheck: { score: number | null; shots: number; ended: "ready" | "anyway" } | null = null;
   private readonly settings: Settings;
   /** The player's choices in Settings, as saved; `settings` is what the game reads. */
   private readonly preferences: Preferences = loadPreferences();
   private readonly tips: PersistentSet = tipsSeen();
+  /** How the player scopes, in the games with a scope (Settings' Scope group). */
+  private readonly scopePrefs: ScopePreferences = loadScopePreferences();
   private readonly settingsSheet: SettingsSheet;
   private host: EngineHost | null = null;
   private audio: Sound = silence(prefs.muted);
@@ -165,7 +177,9 @@ export class App {
   private generation = 0;
   private busy = false;
   private muted = prefs.muted;
-  private readonly entry: GameEntry = GAMES[0]!;
+  /** The game chosen in the arcade: the hero, and the one Play plays. */
+  private selected: GameEntry;
+  private readonly shelf: Shelf;
   private readonly motion = matchMedia("(prefers-reduced-motion: reduce)");
   /** Camera capture to crosshair drawn, ms: for the performance report. */
   private readonly latency = new Samples(600);
@@ -183,11 +197,17 @@ export class App {
       difficulty: this.preferences.difficulty,
       unlocks: prefs.unlocks,
       tipsSeen: this.tips,
+      scope: { eye: false, button: this.scopePrefs.button },
     };
     // Reduce Motion follows the system until the player chooses for themselves.
     this.motion.addEventListener("change", () => this.applyMotion());
     this.hud = new Hud(() => this.settings.reducedMotion);
     this.hud.onGameOver = (stats) => this.roundOver(stats);
+    // A game's own reticle (a scope's picture) in place of the page's crosshair.
+    this.hud.onCrosshair = (style) => {
+      this.crosshair.hiddenByGame = style === "none";
+      if (style === "none") this.crosshair.clear();
+    };
     // A fallen player has no gun: a crosshair over the death scene read as
     // one still to be fired.
     this.hud.onPlayerDown = () => {
@@ -198,6 +218,8 @@ export class App {
       this.hud.pageHint(null);
     };
     this.control = options.scripted ? "hand" : touchOnly() && prefs.control === "mouse" ? "touch" : prefs.control;
+    this.selected = initialGame(ARCADE, { hash: location.hash, search: location.search, remembered: prefs.game })!;
+    this.shelf = new Shelf($("shelf"), ARCADE, (game, how) => this.choose(game, how));
     this.settingsSheet = new SettingsSheet(this.settingsHost());
     this.applyPreferences();
     this.wire();
@@ -224,25 +246,17 @@ export class App {
   }
 
   private renderHome(): void {
-    const entry = this.entry;
+    this.sayWhoReadsTheEye();
+    const entry = this.selected;
+    this.shelf.show(entry);
     setText("feature-title", entry.title);
     setText("feature-about", entry.about ?? entry.blurb);
-    const art = $<HTMLImageElement>("feature-art");
-    if (!art.getAttribute("src")) {
-      art.onload = () => art.classList.add("loaded");
-      art.onerror = () => (art.hidden = true); // the golden-hour placeholder stays
-      art.src = siteUrl(entry.poster);
-    }
-    const soon = $("soon");
-    if (!soon.children.length) {
-      soon.append(
-        ...COMING_SOON.map((game) => {
-          const item = element("li");
-          item.append(element("span", "title3", game.title), element("span", "subhead", game.blurb));
-          return item;
-        }),
-      );
-    }
+    // The game's poster; its light stands in until it loads, or while there is none.
+    posterInto($("feature-frame"), $<HTMLImageElement>("feature-art"), entry);
+    // A game still to come is named and described, and cannot be played.
+    const open = playable(entry);
+    for (const id of ["feature-actions", "start-control"]) $(id).hidden = !open;
+    $("feature-soon").hidden = open;
     const label = $("control-label");
     const hand = this.control === "hand";
     label.replaceChildren(icon(hand ? "hand" : "mouse"), hand ? "Finger Pistol" : this.control === "touch" ? "Touch" : "Mouse or Trackpad");
@@ -254,15 +268,44 @@ export class App {
     this.renderBest();
   }
 
+  /** The privacy sheet names the games that read an eye (for the scope), and says nothing of it when none does. */
+  private sayWhoReadsTheEye(): void {
+    const names = ARCADE.filter((game) => game.uses?.eye).map((game) => game.title);
+    const line = $("privacy-eye");
+    line.hidden = names.length === 0;
+    if (!names.length) return;
+    const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+    setText(line, `In ${list} it also reads whether one of your eyes is closed, for the scope. Only that, and only in ${names.length > 1 ? "those games" : "that game"}. Nothing leaves this computer.`);
+  }
+
   /** The best to beat with this control at this difficulty, under the Play button; nothing before there is one. */
   private renderBest(): void {
     const difficulty = this.preferences.difficulty;
-    const best = readBest(this.entry.id, difficulty, controlClass(this.control));
+    const best = playable(this.selected) ? readBest(this.selected.id, difficulty, controlClass(this.control)) : null;
     const line = $("home-best");
     line.hidden = !best;
     if (!best) return;
     const level = difficultyLabel(difficulty);
     setText(line, `${level ? `Your best on ${level}` : "Your best"}: ${formatScore(best.score)}${best.outcome ? ` · ${best.outcome}` : ""}`);
+  }
+
+  /**
+   * A game chosen in the row: it becomes the hero, is remembered, and is the
+   * page's address (#dead-of-night), so the link passes the game on. In a
+   * narrow window, where the hero is above the row, a click brings it into view.
+   */
+  private choose(game: GameEntry, how: "click" | "key" | "link" = "click"): void {
+    const changed = game !== this.selected;
+    this.selected = game;
+    prefs.game = game.id;
+    if (location.hash !== `#${game.id}`) history.replaceState(history.state, "", `#${game.id}`);
+    if (changed) {
+      replay($("feature-text"), "fresh");
+      this.renderHome();
+    }
+    if (how === "click" && $("feature").getBoundingClientRect().top < 0) {
+      $("feature").scrollIntoView({ behavior: this.settings.reducedMotion ? "auto" : "smooth", block: "start" });
+    }
   }
 
   private setControl(control: InputKind): void {
@@ -306,7 +349,7 @@ export class App {
   // --- starting a game -----------------------------------------------------------------
 
   /** Before the browser asks for the camera, say why. Resolves the control to use, or null to stay. */
-  private async cameraReady(): Promise<InputKind | null> {
+  private async cameraReady(eye: boolean): Promise<InputKind | null> {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       this.trouble("insecure");
       return null;
@@ -317,6 +360,12 @@ export class App {
       return null;
     }
     if (permission === "granted" || prefs.cameraOpened) return "hand";
+    setText(
+      "prime-body",
+      eye
+        ? "Handy needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
+        : "Handy needs your camera to see your hand. The picture stays on this computer.",
+    );
     return new Promise((resolve) => {
       const sheet = openSheet("prime");
       const done = (value: InputKind | null) => {
@@ -346,7 +395,8 @@ export class App {
   }
 
   async start({ adjust = false }: { adjust?: boolean } = {}): Promise<void> {
-    if (this.busy) return;
+    const entry = this.selected;
+    if (this.busy || !playable(entry)) return;
     this.busy = true;
     this.renderHome();
     const run = ++this.generation;
@@ -356,7 +406,7 @@ export class App {
     try {
       await this.wakeAudio();
       if (this.control === "hand" && !this.options.scripted && !this.camera) {
-        const control = await this.cameraReady();
+        const control = await this.cameraReady(this.readsEye(entry, "hand"));
         if (control === null || stale()) return;
         if (control !== "hand") this.setControl(control);
       }
@@ -364,8 +414,10 @@ export class App {
       if (stale()) return;
       const control = this.control;
       const hand = control === "hand";
-      this.openGameView(control);
-      const firstTime = hand && !this.options.scripted && !this.tracker && !prefs.downloaded;
+      this.openGameView(entry, control);
+      // The face landmarker, the first time a game that reads the eye is played with the hand.
+      const eye = this.readsEye(entry, control) && !this.options.scripted;
+      const firstTime = hand && !this.options.scripted && ((!this.tracker && !prefs.downloaded) || (eye && !this.tracker?.hasFace));
       loading = new LoadingSheet(firstTime);
       const sheet = loading;
       const progress = new Progress((fraction) => sheet.set(fraction));
@@ -376,19 +428,28 @@ export class App {
         if (!this.tracker) {
           const wasm = progress.part("wasm", 12);
           const model = progress.part("model", 8);
+          const face = eye ? progress.part("face", 4) : undefined;
           work.push(
             tagged(
               "tracker",
               this.options.fail === "model"
                 ? Promise.reject(new ModelError())
                 : import("../tracking/tracker")
-                    .then(({ loadTracker }) => loadTracker({ wasm, model }, { where: this.options.trackerWhere ?? "auto", prefer: this.options.trackerDelegate ?? "GPU" }))
+                    .then(({ loadTracker }) =>
+                      loadTracker(
+                        { wasm, model, ...(face ? { face } : {}) },
+                        { where: this.options.trackerWhere ?? "auto", prefer: this.options.trackerDelegate ?? "GPU", face: eye },
+                      ),
+                    )
                     .then((tracker) => {
                       if (stale()) tracker.dispose();
                       else this.tracker = tracker;
                     }),
             ),
           );
+        } else if (eye && !this.tracker.hasFace) {
+          // The eye is a help, not a need: a face that will not load leaves Shift to scope.
+          work.push(this.tracker.addFace(progress.part("face", 4)).catch((error: unknown) => console.warn("The face landmarker did not load.", error)));
         }
       }
       const gamePart = progress.part("game", hand && !this.tracker && !this.options.scripted ? 10 : 1);
@@ -396,7 +457,7 @@ export class App {
       const loaded = tagged(
         "game",
         (async () => {
-          const created = await this.entry.create();
+          const created = await entry.create();
           game = created;
           if (this.options.fail === "game") throw new DownloadError("game", 404);
           await created.load(context, gamePart);
@@ -422,7 +483,7 @@ export class App {
       }
       loading.close();
       if (hand && !this.options.scripted) prefs.downloaded = true;
-      this.begin(ready, context, adjust);
+      this.begin(entry, ready, context, adjust);
     } catch (error) {
       loading?.close();
       if (stale()) return;
@@ -507,18 +568,21 @@ export class App {
 
   // --- a game's life ---------------------------------------------------------------------
 
-  private openGameView(control: InputKind): void {
+  private openGameView(entry: GameEntry, control: InputKind): void {
     const view = $("game");
     view.dataset.phase = "loading";
     view.dataset.ready = "false";
     view.dataset.input = control;
-    view.setAttribute("aria-label", this.entry.title);
-    $("world").setAttribute("aria-label", this.entry.title);
-    const curtain = $<HTMLImageElement>("curtain-art");
-    if (!curtain.getAttribute("src")) {
-      curtain.onerror = () => (curtain.hidden = true); // the placeholder's light stays
-      curtain.src = siteUrl(this.entry.poster);
-    }
+    view.dataset.game = entry.id;
+    view.setAttribute("aria-label", entry.title);
+    $("world").setAttribute("aria-label", entry.title);
+    // The stage's shape the game's art can hold: never taller than 1 : min, never wider than max : 1.
+    const stage = $("stage");
+    stage.style.setProperty("--min-aspect", String(entry.stage?.minAspect ?? 1.1));
+    if (entry.stage?.maxAspect) stage.style.setProperty("--max-aspect", String(entry.stage.maxAspect));
+    else stage.style.removeProperty("--max-aspect");
+    // While the game gets ready, its poster (or its light) waits behind the loading sheet.
+    posterInto($("curtain"), $<HTMLImageElement>("curtain-art"), entry);
     this.hud.reset(this.settings.unlocks.has("golden"));
     this.crosshair.visible = false;
     this.crosshair.clear();
@@ -537,22 +601,30 @@ export class App {
     return this.camera ? { deviceId: this.camera.deviceId, width: this.camera.width, height: this.camera.height } : null;
   }
 
-  private begin(game: Game, context: GameContext, adjust: boolean): void {
+  private begin(entry: GameEntry, game: Game, context: GameContext, adjust: boolean): void {
     const host = this.host!;
     const control = context.input ?? "hand";
     const stage = $("stage");
     const viewport = () => ({ width: stage.clientWidth, height: stage.clientHeight });
     let input: InputSource & { reset(): void };
     let hand: HandInput | null = null;
+    // The scope, in a game with one: Shift, the right button or the Scope
+    // button, and - with the hand, in a game that reads it - the eye.
+    const uses = entry.uses ?? {};
+    const scope = uses.scope ? new ScopeControl(this.scopePrefs.button, control === "hand" && uses.eye ? new EyeScope() : null) : null;
+    if (scope) {
+      scope.useEye = this.scopePrefs.eye;
+      scope.onChange = () => $("scope-button").setAttribute("aria-pressed", String(scope.buttons));
+    }
     if (control === "hand") {
-      hand = new HandInput(this.handSource(), viewport);
+      hand = new HandInput(this.handSource(), viewport, undefined, scope);
       input = hand;
     } else {
-      input = control === "touch" ? new TouchInput(stage) : new MouseInput(stage);
+      input = control === "touch" ? new TouchInput(stage, scope) : new MouseInput(stage, scope);
       this.pip.hide();
     }
     const session: Session = {
-      entry: this.entry,
+      entry,
       game,
       context,
       control,
@@ -573,6 +645,8 @@ export class App {
       result: null,
       fire: null,
       timers: [],
+      scope,
+      stopScopeKeys: scope ? scopeKeys(scope) : () => {},
     };
     if (hand) {
       const source = this.handSource();
@@ -583,6 +657,7 @@ export class App {
       this.pip.show(!this.options.scripted);
     }
     this.session = session;
+    this.scopeFor(session);
     if (hand) this.startTracking();
     host.setGame(game);
     host.onFrame = ({ now, aim }) => this.frame(session, now, aim);
@@ -598,7 +673,7 @@ export class App {
     const camera = session.camera;
     if (hand && camera) {
       const stage = $("stage");
-      const saved = adjust ? null : loadAim(browserStore(), camera);
+      const saved = adjust ? null : loadAim(browserStore(), camera, session.entry.id);
       session.phase = "check";
       session.check = new AimCheckView({
         stage: session.game.calibration,
@@ -608,7 +683,7 @@ export class App {
         reducedMotion: () => this.settings.reducedMotion,
         onDone: (mapping, score) => {
           this.lastCheck = { score, shots: session.check?.check.shots ?? 0, ended: "ready" };
-          if (!saveAim(browserStore(), camera, mapping)) toast("This window can’t save your aim. It works until you close it.");
+          if (!saveAim(browserStore(), camera, mapping, Date.now(), session.entry.id)) toast("This window can’t save your aim. It works until you close it.");
           this.play(session, mapping);
         },
         onPlayAnyway: (mapping) => {
@@ -874,11 +949,13 @@ export class App {
     session.check?.dispose();
     session.input.dispose();
     const stage = $("stage");
-    session.input = control === "touch" ? new TouchInput(stage) : new MouseInput(stage);
+    session.scope?.reset();
+    session.input = control === "touch" ? new TouchInput(stage, session.scope) : new MouseInput(stage, session.scope);
     session.hand = null;
     session.camera = null;
     session.control = control;
     session.context.input = control;
+    this.scopeFor(session);
     session.troubled = false;
     session.lostSince = null;
     this.pip.hide();
@@ -913,6 +990,43 @@ export class App {
     this.tracking = false;
     if (this.options.scripted) this.options.scripted.stop();
     else this.tracker?.stop();
+  }
+
+  /** Does this game read the eye when played this way, as the player has it set? */
+  private readsEye(entry: GameEntry, control: InputKind): boolean {
+    return control === "hand" && entry.uses?.scope === true && entry.uses.eye === true && this.scopePrefs.eye;
+  }
+
+  /** Reads the face on every `every`th camera frame, or not at all (0). */
+  private readFaces(every: number): void {
+    if (this.options.scripted) this.options.scripted.readFace(every);
+    else this.tracker?.readFace(every);
+  }
+
+  /**
+   * The session's scope as the player has it set now: held or toggled, the
+   * eye read or not (and the face with it), the Scope button on a touch
+   * screen, and what the game is told.
+   */
+  private scopeFor(session: Session): void {
+    const scope = session.scope;
+    const eye = scope !== null && scope.eye !== null && session.control === "hand" && this.scopePrefs.eye;
+    if (scope) {
+      scope.mode = this.scopePrefs.button;
+      scope.useEye = eye;
+    }
+    this.settings.scope = { eye, button: this.scopePrefs.button };
+    if (eye && !this.options.scripted && this.tracker && !this.tracker.hasFace) {
+      // Turned on mid-game: the face comes quietly, and is read once it is here.
+      this.tracker.addFace(() => {}).then(
+        () => this.session === session && this.scopeFor(session),
+        (error: unknown) => console.warn("The face landmarker did not load.", error),
+      );
+    }
+    this.readFaces(eye ? FACE_EVERY : 0);
+    const button = $("scope-button");
+    button.hidden = !(scope && session.control === "touch");
+    button.setAttribute("aria-pressed", String(scope?.buttons ?? false));
   }
 
   pause(): void {
@@ -1072,10 +1186,11 @@ export class App {
     $("game").focus();
   }
 
-  /** Back to the arcade. */
+  /** Back to the arcade, on the game just played. */
   back(): void {
     this.generation++;
     this.busy = false;
+    if (this.session) this.choose(this.session.entry, "link");
     this.endSession();
     this.releaseCamera();
     closeSheets();
@@ -1093,6 +1208,7 @@ export class App {
       for (const timer of session.timers.splice(0)) window.clearTimeout(timer);
       this.stopListening(session, false);
       session.check?.dispose();
+      session.stopScopeKeys();
       session.unsubscribe();
       session.input.dispose();
       session.game.dispose();
@@ -1104,7 +1220,10 @@ export class App {
       this.host.setGame(null);
     }
     this.stopTracking();
+    this.readFaces(0);
+    $("scope-button").hidden = true;
     this.crosshair.visible = false;
+    this.crosshair.hiddenByGame = false;
     this.crosshair.clear();
     this.pip.hide();
     this.yielding.reset();
@@ -1190,12 +1309,39 @@ export class App {
       if (this.session?.troubled) event.preventDefault();
     });
     $("hold-menu").onclick = () => this.pause();
+    // The touch screen's Scope button: held (or tapped, to toggle) with a thumb while the other hand aims.
+    const scopeButton = $("scope-button");
+    scopeButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      this.session?.scope?.press("touch");
+      // Held as the thumb slides off it, until the thumb lifts.
+      try {
+        scopeButton.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer the browser no longer knows: nothing to hold on to.
+      }
+    });
+    for (const type of ["pointerup", "pointercancel"] as const) {
+      scopeButton.addEventListener(type, () => this.session?.scope?.release("touch"));
+    }
+    scopeButton.addEventListener("contextmenu", (event) => event.preventDefault());
+    // From the keyboard it can only be pressed, not held: once, as a toggle does.
+    scopeButton.addEventListener("click", (event) => {
+      if (event.detail !== 0) return;
+      this.session?.scope?.press("touch");
+      this.session?.scope?.release("touch");
+    });
     $("loading").addEventListener("cancel", (event) => {
       event.preventDefault();
       this.back();
     });
 
     window.addEventListener("keydown", (event) => this.key(event));
+    // A link to a game followed on the page (or the address edited): the arcade turns to it.
+    window.addEventListener("hashchange", () => {
+      const game = gameById(hashId(location.hash));
+      if (game && game !== this.selected && document.body.dataset.view !== "game") this.choose(game, "link");
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) this.pause();
     });
@@ -1290,8 +1436,17 @@ export class App {
   private settingsHost(): SettingsHost {
     return {
       preferences: this.preferences,
+      scope: this.scopePrefs,
+      scopeGames: () => playableGames().filter((game) => game.uses?.scope),
+      touch: () => touchOnly(),
       systemReducesMotion: () => this.motion.matches,
-      changed: () => {
+      changed: (key) => {
+        if (key === "scope") {
+          saveScopePreferences(this.scopePrefs);
+          if (this.session) this.scopeFor(this.session);
+          else this.settings.scope = { eye: false, button: this.scopePrefs.button };
+          return;
+        }
         savePreferences(this.preferences);
         this.applyPreferences();
         if (document.body.dataset.view === "home") this.renderHome();
@@ -1320,6 +1475,7 @@ export class App {
     closeSheets();
     this.releaseCamera();
     Object.assign(this.preferences, { ...DEFAULT_PREFERENCES, crosshair: { ...DEFAULT_PREFERENCES.crosshair } });
+    Object.assign(this.scopePrefs, DEFAULT_SCOPE);
     this.tips.forgetInMemory();
     this.settings.unlocks.clear();
     this.control = "hand";
@@ -1399,6 +1555,12 @@ export class App {
       preferences: { ...this.preferences, crosshair: { ...this.preferences.crosshair } },
       smoothing: this.session?.hand?.controller.smoothing ?? null,
       showCameraInPlay: this.pip.showInPlay,
+      game: this.session?.entry.id ?? this.selected.id,
+      scope: session?.scope
+        ? { active: session.scope.active(performance.now()), buttons: session.scope.buttons, eye: session.scope.useEye, mode: session.scope.mode }
+        : null,
+      scopePreferences: { ...this.scopePrefs },
+      crosshairHidden: this.crosshair.hiddenByGame,
     };
   }
 

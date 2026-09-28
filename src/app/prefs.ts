@@ -17,6 +17,8 @@ const KEYS = {
   unlocks: "handy.unlocks.v1",
   settings: "handy.settings.v1",
   tipsSeen: "handy.tips-seen.v1",
+  game: "handy.game.v1",
+  scope: "handy.scope.v1",
 };
 
 /** Everything Handy keeps starts with this, in both storages. */
@@ -93,6 +95,14 @@ export const prefs = {
   set downloaded(value: boolean) {
     write(local(), KEYS.downloaded, value);
   },
+  /** The game chosen in the arcade last, by id (it may since have left the arcade: the caller checks). */
+  get game(): string | null {
+    const id = read<string>(local(), KEYS.game);
+    return typeof id === "string" ? id : null;
+  },
+  set game(value: string | null) {
+    write(local(), KEYS.game, value);
+  },
   /** Unlocks last for the visit (the Golden Revolver is "for the session"). */
   get unlocks(): Set<string> {
     const saved = read<string[]>(session(), KEYS.unlocks);
@@ -161,6 +171,32 @@ export function loadPreferences(storage: Storage | undefined = local()): Prefere
 /** Keeps the settings for next time; false if this window cannot store anything. */
 export function savePreferences(value: Preferences, storage: Storage | undefined = local()): boolean {
   return write(storage, KEYS.settings, value);
+}
+
+// --- the scope's choices ---------------------------------------------------------------------
+
+/**
+ * How the player looks through a scope, in the games that have one (the
+ * Settings sheet's Scope group, shown only while such a game exists): kept
+ * apart from the rest, as they belong to those games alone.
+ */
+export interface ScopePreferences {
+  /** Close One Eye to Scope: with the hand, in a game that reads the eye. */
+  eye: boolean;
+  /** Shift, the right mouse button and the touch screen's Scope button: held, or pressed once to scope and again to stop. */
+  button: "hold" | "toggle";
+}
+
+export const DEFAULT_SCOPE: Readonly<ScopePreferences> = Object.freeze({ eye: true, button: "hold" });
+
+export function loadScopePreferences(storage: Storage | undefined = local()): ScopePreferences {
+  const saved = read<Record<string, unknown>>(storage, KEYS.scope);
+  const raw = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  return { eye: flag(raw.eye, DEFAULT_SCOPE.eye), button: oneOf(raw.button, ["hold", "toggle"] as const, DEFAULT_SCOPE.button) };
+}
+
+export function saveScopePreferences(value: ScopePreferences, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.scope, value);
 }
 
 // --- one-time tips ------------------------------------------------------------------------------

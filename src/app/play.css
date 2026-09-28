@@ -7,15 +7,18 @@
   --dock: 96px; /* the cylinder's corner */
   position: absolute;
   inset: 0;
-  /* Never taller than a little wider than square. A world drawn from one
-     fixed eye (High Noon's town is baked through its camera) streaks below
-     the frame the art was made for once the view is taller than this - the
-     aim setup's wide lens first - and a sliver of a street is no way to
-     play: in a tall window, a phone held upright, the stage sits in a band
-     across the middle with the night above and below it. */
+  /* Never taller than 1 : --min-aspect (1.1 unless the game's entry says,
+     GameEntry.stage). A world drawn from one fixed eye (High Noon's town is
+     baked through its camera) streaks below the frame the art was made for
+     once the view is taller than its art allows - the aim setup's wide lens
+     first - and a sliver of a street is no way to play: in a tall window, a
+     phone held upright, the stage sits in a band across the middle with the
+     night above and below it. A game may also ask for a --max-aspect: in a
+     wider window it plays in a column, with the night at the sides. */
   --min-aspect: 1.1;
   height: min(100%, calc(100vw / var(--min-aspect)));
-  margin-block: auto;
+  width: min(100%, calc(100vh * var(--max-aspect, 1000)));
+  margin: auto;
   overflow: hidden;
   touch-action: none;
   user-select: none;
@@ -72,6 +75,10 @@
 #check-meter,
 #hud-score,
 #cylinder,
+#magazine,
+#heat,
+#clock,
+#scope-button,
 #hint {
   transition:
     opacity 250ms var(--ease),
@@ -291,6 +298,191 @@
   from {
     transform: rotate(-720deg);
   }
+}
+
+/* --- a rifle's magazine -------------------------------------------------------------- */
+
+/* The rounds in a row, the one in the chamber apart at the end in the
+   breech: white for a round, an outline for a spent one, as the cylinder's. */
+.magazine {
+  position: absolute;
+  right: var(--hud);
+  bottom: var(--hud);
+  display: grid;
+  place-items: center;
+  height: var(--mag-h, 64px);
+  padding: 0 18px;
+  border-radius: var(--r-small);
+  pointer-events: none;
+}
+.magazine svg {
+  display: block;
+  height: 40px;
+  stroke: none;
+  overflow: visible;
+}
+.magazine .round {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.38);
+  stroke-width: 1.5;
+  transition:
+    fill 120ms var(--ease),
+    stroke 120ms var(--ease);
+}
+.magazine .round.loaded {
+  fill: #fff;
+  stroke: #fff;
+}
+.magazine.golden .round.loaded {
+  fill: var(--gold);
+  stroke: var(--gold);
+}
+.magazine .breech {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.5;
+  transition: stroke 120ms var(--ease);
+}
+.magazine.golden .breech {
+  stroke: rgba(255, 214, 10, 0.5);
+}
+/* A round fed into the chamber slides home. */
+.magazine .chamber.fed {
+  animation: fed 180ms var(--ease);
+}
+@keyframes fed {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+/* The bolt (or lever) being worked: the breech stands open a moment, and cannot fire. */
+.magazine[data-action="cycling"] .breech {
+  stroke: #fff;
+  stroke-dasharray: 5 4;
+  animation: cycling 450ms var(--ease) infinite alternate;
+}
+@keyframes cycling {
+  to {
+    stroke-dashoffset: 9;
+  }
+}
+/* The bolt back on an empty chamber. */
+.magazine[data-action="open"] .breech {
+  stroke-dasharray: 5 4;
+}
+.magazine.empty .breech {
+  stroke: var(--danger);
+}
+.magazine.reloading .round {
+  transition-duration: 250ms;
+}
+
+/* --- a laser's heat ----------------------------------------------------------------------- */
+
+/* A ring that fills clockwise from the top with each shot and drains as it
+   cools: white, orange near the top, red while it vents and cannot fire. */
+.heat {
+  position: absolute;
+  right: var(--hud);
+  bottom: var(--hud);
+  display: grid;
+  place-items: center;
+  width: var(--dock);
+  height: var(--dock);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.heat svg {
+  grid-area: 1 / 1;
+  width: 76px;
+  height: 76px;
+  overflow: visible;
+}
+.heat-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 6;
+}
+.heat-level {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 0 100;
+  transition:
+    stroke-dasharray 120ms var(--ease),
+    stroke 250ms var(--ease);
+}
+.heat.golden .heat-level {
+  stroke: var(--gold);
+}
+.heat.warm .heat-level {
+  stroke: var(--warning);
+  filter: drop-shadow(0 0 4px rgba(255, 159, 10, 0.7));
+}
+.heat.venting .heat-level {
+  stroke: var(--danger);
+  filter: drop-shadow(0 0 4px rgba(255, 69, 58, 0.6));
+}
+.heat-value {
+  grid-area: 1 / 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+}
+.heat.venting .heat-value {
+  color: var(--danger);
+}
+
+/* --- a timed round's clock ------------------------------------------------------------------ */
+
+.clock {
+  position: absolute;
+  top: var(--hud);
+  left: 50%;
+  min-width: 88px;
+  margin: 0;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.clock.warning {
+  color: var(--warning);
+}
+/* A secret found arrives under the clock, not over it. */
+.game[data-clock] .secret {
+  top: calc(var(--hud) + 56px);
+}
+
+/* --- the touch screen's scope -------------------------------------------------------------------- */
+
+/* In the corner the camera's picture would have, which a touch screen does
+   not show: large enough for a thumb to rest on. */
+.scope-button {
+  position: absolute;
+  left: var(--hud);
+  bottom: var(--hud);
+  width: 64px;
+  height: 64px;
+  background: var(--glass);
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+.scope-button svg {
+  width: 28px;
+  height: 28px;
+}
+.scope-button[aria-pressed="true"] {
+  background: #fff;
+  color: #000;
 }
 
 /* --- being hit --------------------------------------------------------------------- */
@@ -952,7 +1144,8 @@
   .game[data-hold] .stage {
     --pip-w: clamp(120px, 32vw, 176px);
   }
-  .cylinder svg {
+  .cylinder svg,
+  .heat svg {
     width: 62px;
     height: 62px;
   }
@@ -1087,9 +1280,29 @@
     width: 40px;
     height: 40px;
   }
-  .cylinder svg {
+  .cylinder svg,
+  .heat svg {
     width: 50px;
     height: 50px;
+  }
+  .magazine {
+    --mag-h: 48px;
+    padding: 0 12px;
+  }
+  .magazine svg {
+    height: 30px;
+  }
+  .heat-value {
+    font-size: 13px;
+  }
+  .clock {
+    min-width: 64px;
+    padding: 4px 12px;
+    font-size: 17px;
+  }
+  .scope-button {
+    width: 52px;
+    height: 52px;
   }
   .hint {
     bottom: var(--hud);

@@ -1,0 +1,33 @@
+/* The dev harness (src/dev/harness.ts): the page's own chrome from
+   index.html and src/app, plus the little the harness says for itself. */
+
+body {
+  overflow: hidden;
+}
+/* No fade-in: a harness is looked at, and photographed, at once. */
+.game[data-ready="true"] .world {
+  transition: none;
+}
+/* A fixed stage (?w=&h=), for benchmarks: in the top-left corner. */
+.stage.harness-fixed {
+  inset: 0 auto auto 0;
+  margin: 0;
+}
+.harness-load {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+/* The harness's short aim check: how many of its hits are done. */
+.harness-check {
+  position: absolute;
+  top: var(--hud);
+  left: 50%;
+  margin: 0;
+  padding: 10px 18px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}

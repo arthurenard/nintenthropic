@@ -4,10 +4,11 @@
  * is fetched from anyone else's server). Both downloads report real progress
  * for the loading bar, and the browser caches them after the first time.
  */
-import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
+import { FilesetResolver, HandLandmarker, type FaceLandmarker } from "@mediapipe/tasks-vision";
 import { fetchBytes, siteUrl } from "../engine/fetch";
 import { ModelError } from "./errors";
-import { MODEL_BYTES, WASM_BYTES } from "./sizes";
+import { createFaceLandmarker } from "./face";
+import { FACE_MODEL_BYTES, MODEL_BYTES, WASM_BYTES } from "./sizes";
 
 export { ModelError };
 
@@ -20,6 +21,8 @@ export interface LoadedLandmarker {
 export interface LandmarkerProgress {
   wasm: (fraction: number) => void;
   model: (fraction: number) => void;
+  /** The face model's download, when it comes too. */
+  face?: (fraction: number) => void;
 }
 
 const OPTIONS = {
@@ -28,6 +31,22 @@ const OPTIONS = {
   minHandPresenceConfidence: 0.5,
   minTrackingConfidence: 0.5,
 };
+
+/**
+ * The face landmarker on the page (where a worker cannot run it), for a game
+ * that reads the eye: its model from models/, with progress.
+ */
+export async function loadFaceOnPage(progress: (fraction: number) => void, prefer: "GPU" | "CPU" = "GPU"): Promise<{ landmarker: FaceLandmarker; delegate: "GPU" | "CPU" }> {
+  try {
+    const simd = await FilesetResolver.isSimdSupported();
+    const name = simd ? "vision_wasm_internal" : "vision_wasm_nosimd_internal";
+    const model = await fetchBytes(siteUrl("models/face_landmarker.task"), progress, FACE_MODEL_BYTES);
+    const fileset = { wasmLoaderPath: siteUrl(`mediapipe/${name}.js`), wasmBinaryPath: siteUrl(`mediapipe/${name}.wasm`) };
+    return await createFaceLandmarker(fileset, model, prefer);
+  } catch (error) {
+    throw new ModelError(error);
+  }
+}
 
 export async function loadHandLandmarker(
   progress: LandmarkerProgress,

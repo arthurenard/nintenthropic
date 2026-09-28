@@ -22,6 +22,13 @@ export interface Aim {
   travel: number;
   /** The crosshair is outside the view (the reload gesture in High Noon). */
   offscreen: boolean;
+  /**
+   * The player asks to look through a scope: one eye closed (with the hand,
+   * in a game that reads the eye), Shift or the right mouse button, or the
+   * touch screen's Scope button - held, or toggled, as Settings says. Always
+   * false in a game whose entry does not use a scope (GameEntry.uses).
+   */
+  scope: boolean;
   /** When the camera frame (or pointer event) this aim comes from was captured, ms. */
   capturedAt: number;
 }
@@ -65,15 +72,60 @@ export interface GameStats {
 }
 
 /** How a game talks to the page's HTML interface. */
+/** How a rifle's rounds are shown (HudSink.ammo): the magazine, and the one in the chamber. */
+export interface AmmoStyle {
+  /** A revolver's cylinder (the default) or a rifle's magazine. */
+  kind: "cylinder" | "magazine";
+  /**
+   * Magazine: a round is in the chamber, ready to fire (it is one of `left`).
+   * Unset: one is whenever any round is left and the action is ready.
+   */
+  chambered?: boolean;
+  /**
+   * Magazine: the action - "ready" (closed on a round), "cycling" (the bolt
+   * or lever being worked after a shot: it cannot fire), or "open" (the bolt
+   * back on an empty chamber). "ready" if unset.
+   */
+  action?: "ready" | "cycling" | "open";
+}
+
 export interface HudSink {
   score(value: number): void;
   readouts(list: Readout[]): void;
   /** A title card: "Wave 3", with an optional line under it. */
   banner(title: string, subtitle?: string): void;
-  /** Rounds left and the cylinder's size, for the revolver HUD. */
-  ammo(left: number, capacity: number, reloading: boolean): void;
-  /** The cylinder's finish: gold for the Golden Revolver. Optional; the page also reads Settings.unlocks. */
-  revolverFinish?(finish: "steel" | "gold"): void;
+  /**
+   * Rounds left and how many the gun holds, in the weapon's corner: a
+   * revolver's cylinder (the default), or a rifle's magazine (`style`).
+   * `reloading` spins the cylinder, or empties the magazine to refill it.
+   */
+  ammo(left: number, capacity: number, reloading: boolean, style?: AmmoStyle): void;
+  /**
+   * A gun that heats rather than empties (Orbital Decay's laser), in the
+   * weapon's corner instead of rounds: `level` 0 (cold) to 1 (too hot to
+   * fire), warning as it nears the top; `venting` while it is overheated and
+   * cannot fire, cooling. Optional.
+   */
+  heat?(level: number, venting: boolean): void;
+  /**
+   * The weapon's finish in the corner: gold for the golden weapon every
+   * game gives a player who has unlocked it (Settings.unlocks has "golden":
+   * High Noon's Golden Revolver). Optional; the page also reads the unlock
+   * when a round begins.
+   */
+  weaponFinish?(finish: "steel" | "gold"): void;
+  /**
+   * The page's crosshair: "none" while the game draws its own reticle (a
+   * scope's picture), "default" to bring it back. Every round begins with
+   * the default. Optional.
+   */
+  crosshair?(style: "default" | "none"): void;
+  /**
+   * A timed round's clock, top centre (0:48), or null to take it away.
+   * `tone` "warning" for the last seconds. Optional; a game without a clock
+   * never calls it.
+   */
+  clock?(seconds: number | null, tone?: "" | "warning"): void;
   /**
    * The player has fallen: the gun is gone, so the page hides the crosshair
    * until the results. Optional; a game without a death never calls it.
@@ -150,7 +202,10 @@ export interface Settings {
   reducedFlashing: boolean;
   /** Read by a game at start(): a change takes effect from the next round. */
   difficulty: Difficulty;
-  /** Konami code and friends. */
+  /**
+   * Konami code and friends, for the visit. "golden": a golden weapon in
+   * every game (High Noon's Golden Revolver; HudSink.weaponFinish).
+   */
   unlocks: Set<string>;
   /**
    * The one-time tips this player has already been shown, by id. A game
@@ -159,6 +214,13 @@ export interface Settings {
    * so a tip is never shown twice.
    */
   tipsSeen: Set<string>;
+  /**
+   * How the player scopes, for a game with a scope to say it in their terms
+   * ("Close one eye to look through the scope." / "Hold Shift to scope."):
+   * whether closing an eye scopes (with the hand, in a game that reads the
+   * eye), and whether the buttons are held or toggled.
+   */
+  scope: { eye: boolean; button: "hold" | "toggle" };
 }
 
 export interface Quality {
@@ -234,13 +296,68 @@ export interface Game {
   dispose(): void;
 }
 
+/**
+ * A game's light as a picture - a sky graded from top to bottom, and a glow
+ * (the sun low at golden hour, a lamp in the fog, a planet's limb) - which the
+ * page shows wherever the game's poster would be until the poster loads, or
+ * for good while there is none. Colours are CSS colours.
+ */
+export interface Backdrop {
+  /** Colour stops down the picture: [colour, 0 (top) .. 1 (bottom)]. */
+  sky: readonly (readonly [string, number])[];
+  /**
+   * An elliptical glow: its centre (fractions of the picture, may lie
+   * outside it), its radii (fractions of the picture's width and height),
+   * and its colour stops from the centre out: [colour, 0..1 of the radius].
+   */
+  glow?: { x: number; y: number; width: number; height: number; stops: readonly (readonly [string, number])[] };
+}
+
+/** What a game asks of the platform beyond the hand's aim and fold (or the pointer's). */
+export interface GameUses {
+  /**
+   * The player may look through a scope: Aim.scope follows Shift or the
+   * right mouse button (which then scopes rather than reloads), or an
+   * on-screen Scope button on a touch screen, held or toggled as Settings says.
+   */
+  scope?: boolean;
+  /**
+   * With the hand, closing one eye scopes too: the face landmarker loads
+   * and runs on the same camera frames, for this game only. Needs `scope`.
+   */
+  eye?: boolean;
+}
+
+/** The stage's shape a game's art can hold. */
+export interface StageShape {
+  /**
+   * The stage is never taller than 1 : minAspect: in a taller window (a
+   * phone held upright) the world plays in a band across the middle. A
+   * world drawn from one fixed eye (High Noon's baked town) streaks below
+   * the frame its art was made for past its own figure. 1.1 if unset.
+   */
+  minAspect?: number;
+  /**
+   * The stage is never wider than maxAspect : 1: in a wider window it
+   * plays in a column with black at the sides. Unlimited if unset.
+   */
+  maxAspect?: number;
+}
+
 export interface GameEntry {
   id: string;
   title: string;
   blurb: string;
-  /** Two or three sentences for the featured game on the landing. Optional; the blurb stands in. */
+  /** Two or three sentences for the arcade's hero. Optional; the blurb stands in. */
   about?: string;
-  /** A poster image under public/. */
+  /** A poster image under public/ (16:9); until it exists, the backdrop stands in. */
   poster: string;
-  create(): Promise<Game>;
+  /** The game's light, shown where the poster would be until it loads. Optional; a neutral dusk stands in. */
+  backdrop?: Backdrop;
+  /** What the game asks of the platform (a scope, the eye). */
+  uses?: GameUses;
+  /** The stage's shape its art can hold. */
+  stage?: StageShape;
+  /** Makes the game. Absent while it is Coming Soon: the arcade shows it, and it cannot be played. */
+  create?(): Promise<Game>;
 }

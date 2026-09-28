@@ -5,10 +5,8 @@ import {
   DoubleSide,
   FogExp2,
   Group,
-  Material,
   Mesh,
   MeshBasicMaterial,
-  PMREMGenerator,
   Scene,
   ShadowMaterial,
   Vector3,
@@ -16,6 +14,8 @@ import {
   type WebGLRenderer,
 } from "three";
 import type { Quality } from "../../../engine/types";
+import { disposeTree, fitShadowCamera, shadowMapSize } from "../../../engine/world/scene";
+import { SkyLight } from "../../../engine/world/sky";
 import type { TownLayout } from "./town";
 
 /** Straight down, a touch off vertical so shadows still have a side. */
@@ -35,7 +35,7 @@ export class Stage {
   readonly dynamic = new Group();
   readonly fxRoot = new Group();
   readonly sunDirection: Vector3;
-  private readonly envTarget: ReturnType<PMREMGenerator["fromEquirectangular"]>;
+  private readonly sky: SkyLight;
   private readonly shadowMaterial: ShadowMaterial;
   private shadowSize = 0;
 
@@ -47,12 +47,7 @@ export class Stage {
     noon: boolean,
   ) {
     const scene = this.scene;
-    scene.background = sky;
-    const pmrem = new PMREMGenerator(renderer);
-    this.envTarget = pmrem.fromEquirectangular(sky);
-    pmrem.dispose();
-    scene.environment = this.envTarget.texture;
-    scene.environmentIntensity = noon ? 0.95 : 0.8;
+    this.sky = new SkyLight(renderer, scene, sky, noon ? 0.95 : 0.8);
     const density = typeof town.root.userData["fog_density"] === "number" ? (town.root.userData["fog_density"] as number) : 0.0085;
     scene.fog = new FogExp2(fog, noon ? density * 0.75 : density);
 
@@ -111,7 +106,6 @@ export class Stage {
 
   /** Shadows only where they matter: the street the player looks down. */
   private fitShadowCamera(town: TownLayout): void {
-    const cam = this.sun.shadow.camera;
     const street = new Box3(new Vector3(-10, 0, -64), new Vector3(10, 12, 4));
     if (town.groundShadow.length) {
       const b = new Box3();
@@ -119,34 +113,13 @@ export class Stage {
       street.copy(b);
       street.max.y = Math.max(street.max.y, 12);
     }
-    this.sun.updateMatrixWorld(true);
-    this.sun.target.updateMatrixWorld(true);
-    cam.position.copy(this.sun.position);
-    cam.lookAt(this.sun.target.position);
-    cam.updateMatrixWorld(true);
-    const inv = cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
-    const corner = new Vector3();
-    const lo = new Vector3(Infinity, Infinity, Infinity);
-    const hi = new Vector3(-Infinity, -Infinity, -Infinity);
-    for (let i = 0; i < 8; i++) {
-      corner.set(i & 1 ? street.max.x : street.min.x, i & 2 ? street.max.y : street.min.y, i & 4 ? street.max.z : street.min.z);
-      corner.applyMatrix4(inv);
-      lo.min(corner);
-      hi.max(corner);
-    }
-    cam.left = lo.x - 1;
-    cam.right = hi.x + 1;
-    cam.bottom = lo.y - 1;
-    cam.top = hi.y + 1;
-    cam.near = Math.max(0.5, -hi.z - 20);
-    cam.far = -lo.z + 20;
-    cam.updateProjectionMatrix();
+    fitShadowCamera(this.sun, street);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
   }
 
   setQuality(q: Quality): void {
-    const size = q.tier === "high" ? 2048 : q.tier === "medium" ? 1024 : 0;
+    const size = shadowMapSize(q.tier);
     if (size === this.shadowSize) return;
     this.shadowSize = size;
     this.renderer.shadowMap.enabled = size > 0;
@@ -161,18 +134,9 @@ export class Stage {
   }
 
   dispose(): void {
-    this.envTarget.dispose();
+    this.sky.dispose();
     this.shadowMaterial.dispose();
-    this.scene.traverse((o) => {
-      const m = o as Mesh;
-      if (!m.isMesh) return;
-      m.geometry?.dispose();
-      const mats = Array.isArray(m.material) ? m.material : [m.material];
-      for (const mat of mats as Material[]) {
-        for (const v of Object.values(mat)) if ((v as Texture)?.isTexture) (v as Texture).dispose();
-        mat.dispose();
-      }
-    });
+    disposeTree(this.scene);
     this.sun.shadow.map?.dispose();
   }
 }

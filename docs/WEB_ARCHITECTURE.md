@@ -45,12 +45,18 @@ src/
   ui/                 design-language components and styles (from DESIGN.md)
   engine/             the game host: renderer, loop, dynamic resolution, asset loading
     types.ts          THE CONTRACT between app, input, audio and games (below)
-  tracking/           camera + MediaPipe → HandFrame
+    world/            what every realistic 3D game shares (see "Building a game")
+    rules/            pure rules every game shares: health, streak, hints, rng...
+    fx/               particles, decals, debris, lights, their textures
+  dev/                the dev harness every game's dev.html runs in
+  tracking/           camera + MediaPipe → HandFrame (and the eyes, for a scope)
   input/              HandFrame → Aim (filter, trigger, calibrated map); mouse / touch
   calibration/        the aim check that runs before every game
   audio/              the audio engine and the synthesised sound library
   games/
+    index.ts          the games, as the arcade shows them
     western/          High Noon
+    range/            the Test Range (dev and test builds only: ?range=1)
 public/
   models/             MediaPipe .task bundles
   mediapipe/          tasks-vision WebAssembly files (copied from node_modules
@@ -113,6 +119,26 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   (pointing past the view, or its fingertip at the picture's own edge), for
   up to 1.2 s after it goes. A hand that vanished mid-view is only lost, and a
   camera frame older than 400 ms is no hand at all.
+- **The scope** (a game whose entry says `uses: { scope: true }`: Overwatch
+  Ridge). `Aim.scope` follows Shift, the right mouse button (which in such a
+  game scopes instead of reloading; a left click while it is held still
+  fires) and, on a touch screen, the page's Scope button in the bottom-left
+  corner - held, or toggled, as Settings says (Scope Button: Hold | Toggle).
+  With the hand, in a game that also says `eye: true`, closing one eye
+  scopes too (Close One Eye to Scope, on by default): the face landmarker
+  (`public/models/face_landmarker.task`, 3.7 MB, loaded with the loading bar
+  the first time such a game is played) runs in the tracking worker on the
+  same camera frames as the hand, after it, and sends back only the two
+  eyes' blink scores (`src/tracking/face.ts`). It scopes when the larger of
+  the two is above 0.55 for 180 ms, lets go below 0.30, and waits 200 ms
+  for a face it lost, so a blink never scopes (`src/input/scope.ts`). The
+  face is read on every other camera frame: measured with
+  `e2e/tracker.html?face=N` on an M4 Max under load, it costs 8-10 ms of the
+  worker's time a read (p95 10-14 ms) and none of the page's; on every frame
+  the worker was busy 20 ms a frame and skipped up to a third of the
+  camera's frames, on every other it skips none more than the hand alone.
+  No other game ever loads or runs it. A game draws its own reticle while
+  scoped and hides the page's crosshair with `HudSink.crosshair("none")`.
 - **When the hand goes.** In play, a hand gone for 1.5 s (longer than any
   reload's swing) holds the round: the world stops as for a pause while the
   camera goes on looking, under a "Show Your Hand" card. Seen steadily again
@@ -159,7 +185,8 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
 - `Aim` — `{ x, y }` in viewport fractions (0,0 top-left), `tracking`, `armed`,
   `fired` (true on exactly one update per shot), `travel` (0–1 thumb fold),
   `offscreen` (true while the crosshair is outside the view — High Noon's
-  reload gesture).
+  reload gesture), `scope` (the player asks to look through a scope; always
+  false in a game whose entry does not use one: see "The scope" below).
 - `InputSource` — `sample(now) → Aim`, `kind: "hand" | "mouse" | "touch"`.
 - `Game` — `load(ctx, onProgress)`, `start()`, `update(dt, now, aim)`,
   `render()`, `resize(w, h, dpr)`, `pause()`, `resume()`, `dispose()`, plus
@@ -167,20 +194,141 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
 - `GameContext` — the renderer and canvas, `audio: AudioBus`, `hud: HudSink`,
   `assets: AssetLoader`, settings, a seeded random source, `quality`, and
   `input` (optional: how the player aims, so hints can say "right-click to
-  reload" to a mouse player).
-- `GameEntry` — the landing's card for a game; `about` (optional) is the
-  featured game's longer line.
+  reload" to a mouse player). `Settings.scope` says how the player scopes
+  (`eye`: closing an eye does, now; `button`: hold or toggle), for a game's
+  hints; `Settings.unlocks` holding "golden" means a golden weapon in every
+  game (High Noon's Golden Revolver).
+- `GameEntry` — a game in the arcade (`src/games/index.ts`): `id`, `title`,
+  `blurb`, `about` (the hero's two or three sentences), `poster` (16:9, under
+  `public/`), `backdrop` (the game's light, drawn where the poster would be
+  until it exists: a sky's colour stops and a glow), `uses` (what it asks of
+  the platform: `scope`, `eye`), `stage` (`minAspect`, `maxAspect`: the
+  stage's shape its art can hold; 1.1 and unlimited if unset), and `create`,
+  absent while the game is Coming Soon.
 - Optional members a game may use: `AudioBus.setSpace(space)` (the street's
   walls, for the echoes), `CalibrationStage.begin()` (above).
 - `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
-  the desktop), wave titles, ammo, damage direction, hit markers, secrets, and
-  the end of the game (`GameOver` with stats); `revolverFinish` (optional)
-  turns the cylinder gold for the Golden Revolver.
+  the desktop: a wave, integrity, wind), wave titles, damage direction, hit
+  markers, secrets, and the end of the game (`GameOver` with stats), and its
+  weapon in the bottom-right corner: `ammo(left, capacity, reloading, style)`
+  draws a revolver's cylinder (the default) or, with `{ kind: "magazine",
+  chambered, action }`, a rifle's rounds in a row with the chambered one apart
+  in its breech (`action` "ready", "cycling" while the bolt or lever is
+  worked, "open" with the bolt back); `heat(level, venting)` (optional) a
+  laser's heat as a ring that fills with each shot, orange near the top, red
+  while it vents and cannot fire. `weaponFinish("gold")` (optional) gilds
+  whichever it is; `crosshair("none" | "default")` (optional) hides the
+  page's crosshair while the game draws its own reticle; `clock(seconds,
+  tone)` (optional) shows a timed round's clock at the top (0:48), `null` to
+  take it away.
 - `AudioBus` — `play(cue, { volume, pan, rate, delay })`, `loop(cue)`,
   `setFilter("hurt", amount)`, `mute`.
 - `CalibrationStage` — `targets()` returns the game's aim-check targets as
   viewport positions and radii; `light(id)`, `hit(id)`, `miss(id)`, `done()`
   let the game show and break them (bottles in High Noon).
+
+## Building a game
+
+A game is a folder, `src/games/<id>/`, whose `index.ts` exports a
+`createGame(): Promise<Game>` that imports the rest on demand, and an entry
+in `src/games/index.ts` (below). High Noon (`src/games/western/`) is the
+worked example of everything here, and the Test Range (`src/games/range/`,
+dev and test builds only) the smallest: an aim check, a clock, each weapon
+style and a scope in a few hundred lines. What High Noon learned that every
+realistic 3D game needs lives in the engine; use it rather than growing your
+own, and keep in your folder only what is truly your game's.
+
+### A new game, step by step
+
+1. **Its entry** in `src/games/index.ts` is already there for the coming
+   games: fill in `about`, point `poster` at your 16:9 poster under
+   `public/assets/<folder>/` (until it exists your `backdrop` stands in, so
+   tune it to your game's light), set `uses` (`scope`, `eye`) and `stage`
+   (the shape your art holds), and add `create` when it can be played - the
+   arcade then offers Play instead of Coming Soon.
+2. **Its aim check** is its own `CalibrationStage`: targets spread over the
+   corners, edges and centre of the view, in your world.
+3. **Its HUD** goes through `HudSink`: `score`, `readouts` (one small panel:
+   wave, integrity, wind), `ammo` with your weapon's style or `heat`,
+   `clock` for a timed round, `crosshair("none")` while you draw a reticle,
+   `weaponFinish("gold")` when `Settings.unlocks` has "golden". Keep your
+   targets clear of the chrome: `chromeKeepOut(w, h, hand, { panel, dock:
+   WEAPON_DOCK.magazine, scopeButton })`.
+4. **Its words**: tips through `HintLine` with ids prefixed by your game
+   (`night.headshot`), hints in the player's terms (`GameContext.input`,
+   `Settings.scope`), and DESIGN.md's voice.
+5. **Its sounds** are cues in `src/audio/cues/` in a pack of its own (its
+   name added to `Pack` in `cues/table.ts`), synthesised while the game
+   loads with `loadSoundPack(ctx.audio, "<pack>")`.
+6. **Its harness**: `dev.html` and `dev.ts` (below), and its art loaded
+   through `Art`, with placeholders for development only.
+7. Records, saved aims and one-time tips are kept per game by the page:
+   nothing to do.
+
+### `src/engine/world/`: the 3D world
+
+| Module | What it gives you |
+| --- | --- |
+| `post.ts` | `PostFX(renderer, scene, camera, quality, options)`: the scene into a 4×/2×/0 MSAA half-float target by tier (the anti-aliasing), bloom on what is brighter than the world (off on low), and one grade pass: exposure, a highlight shoulder, your own colour grade (`grade: { glsl, uniforms }`, a `vec3 grade(vec3 c, float l)`), and the player's state - `desaturate`, `hurt` (a colour creeping in from the corners), `sepia`, `flash` (a colour added to the picture), a vignette. Leave out what you do not want (`hurt: false`, `bloom: false`...): it is compiled out. `set(name, value)` for every uniform, yours included. It turns the renderer's tone mapping off: the grade is the tone map. |
+| `flash.ts` | `ScreenFlash`: the whole picture's flash for a blast close by, which jumps and fades on Standard and swells and ebbs at a tenth of the brightness with Reduce Flashing. Feed `update(dt)` to `post.set("flash", ...)`. |
+| `character.ts` | Skinned glTF characters: `templateFrom(kind, asset, borrowedClips, { fallbacks, rim })` once per file, a `RigPool` of rigs made at load (never mid-game), and each `Rig` plays clips with crossfades (`play(name, fade, loop, timeScale)`, falling back through your table, then `idle`), `dress([...var names])`, `worn("var.hat.")`, `hold("gun.rifle" | null)`, `socket("socket.gun")`, `tint()`, `setOpacity()`, and procedural layers over the clips: `aimAt(point, weight)` pitches the chest, `hitReact(side, strength)` twists it, `kick()` recoils the arm. `lighting.key` (how much of the directional light reaches it: a baked world decides by a ray) and `lighting.shade`, and a rim light shared by a template (`rimLight(colour)`). `updateJoints()` gives the world positions a shot is tested against. `turnRig`/`headingTo` turn one the short way round. |
+| `tumblers.ts` | Things knocked loose that tumble to rest (a hat, a dropped gun) without a physics engine; a thing taken from a rig goes back home with `restore`. |
+| `names.ts` | The asset contract's dotted names (`cover.saloon_door`, `shoulder.L`): three.js strips the dots, `contractName(o)` gives them back; `findNode`, `nodesWithPrefix`, `extraString`, `extraNumber`, and `nameNode` for placeholders built in code. |
+| `playerCamera.ts` | `PlayerCamera(eye, orientation, fov, { near, far, groundY })`: a standing first-person eye with a slow breath, a kick when the gun fires (`kick`), a flinch when hit (`flinch(direction, amount)`), a shake (`rumble`), the slow fall at death (`setDeath(progress, side)`), framings eased from one to the next (`setFraming(framing, seconds)`), `still` for the aim check and `reducedMotion`. |
+| `framing.ts` | Fitting a lens to a fixed eye: `fitFraming(sights, aspect, options)` finds the tightest field of view and pitch that show every point the fight happens at (`Sight`s, in the art camera's space), targets clear of the page's chrome (`chromeKeepOut(width, height, hand, { panel, dock })`, with `WEAPON_DOCK` for each weapon's corner); `checkFraming` widens the art's own lens for a narrow window. Pure maths, tested without a renderer. |
+| `sound.ts` | `Sound(bus, camera)`: cues placed in the world (`at(cue, position)` works out pan and distance from the camera), named loops that survive a pause (stopped on `pause`, started again on `resume`), and the `hurt` filter held over a pause (a paused game is not being hurt). |
+| `sky.ts` | `SkyLight(renderer, scene, texture, intensity)`: an equirectangular sky as the background and, through PMREM, the environment light; `asSky(texture)`; `horizonColour(texture)` for the fog to meet the sky without a seam. |
+| `scene.ts` | `fitShadowCamera(sun, box)` spends the shadow map on the part of the world that matters; `shadowMapSize(tier)`; `disposeTree(root)`. |
+| `queries.ts` | `SceneryQueries(solids, moving)`: rays against the scenery fast enough to ask dozens of times a frame (a `TriangleGrid` of 2 m columns): `cast` (where a bullet lands), `groundAt` (under a falling body), `lightReaches` (is the sun on him). |
+| `art.ts` | `Art(ctx, files, options, onProgress)`: a game's glTF and textures through the engine's protected download, weighted into one progress bar. Every file is required: in production one that does not load fails the load with a `DownloadError` ("Couldn’t Load the Game", Try Again). In development and tests a missing file may be stood in for by a placeholder built in code, which your game imports behind `import.meta.env.MODE !== "production"` (so a production build drops it) and hands to `gltf(name, standIn)` / `texture(name, standIn)`; `probe()` first asks which files are really there. |
+
+`src/engine/fx/` holds the particle system, decals, debris, the pooled
+lights and their textures; High Noon's `world/effects.ts` shows how a game
+builds its own presets (dust, sparks, a muzzle flash, a reduced-flashing
+variant of each) on them.
+
+### `src/engine/rules/`: pure rules
+
+| Module | What it gives you |
+| --- | --- |
+| `health.ts` | `PlayerHealth(regeneration, max)`: hidden health that comes back after a delay at a rate (read every frame, so a difficulty can ease them), `hurt` 0..1 for the picture's effects, `immortal` for a harness's god mode; `damageDirection(eye, yaw, from)` for `HudSink.damage`. |
+| `streak.ts` | `Streak(step, maxMultiplier)`: consecutive hits build a multiplier a step at a time; what breaks it is your call. |
+| `hints.ts` | `HintLine(tipsSeen, learnedByDoing)`: the hint line's one urgent need, a brief word, and one-time tips queued one at a time for four seconds, never twice (`Settings.tipsSeen`, ids prefixed with your game's name). Read `text` every frame and pass it to `hud.hint` when it changes. |
+| `hammer.ts` | `Hammer`: the frames on which the re-arm's soft click should sound as the thumb comes back up after a shot, and never when it should not. |
+| `rng.ts` | `range`, `chance`, `pick`, `shuffle` over `GameContext.random`, and `mulberry32` for a replayable `?seed=`: route every decision through the seeded source and a seed replays a round exactly. |
+| `raymath.ts` | Ray against sphere and capsule (a head, a torso, a limb) with an honest angular tolerance: aim assist that is not a magnet. |
+
+### What stays yours
+
+High Noon keeps in its folder what only it needs, and so should every game:
+its rules (the gang, waves, dynamite, secrets, what felled you), its world
+(the town's layout and covers, the bottles of its aim check, the ambience,
+its effects' recipes, what a shot can hit), its colour grade
+(`western/world/grade.ts`), its tips' words, its clip fallbacks and rim
+light (`western/world/rigs.ts`), its revolver, and its placeholders.
+
+### The dev harness
+
+Every game gets `src/games/<id>/dev.html` (a page with one script) and a
+`dev.ts` of a few lines:
+
+```ts
+import { runHarness } from "../../dev/harness";
+import { MY_GAME } from "../index";
+import { createMyGame } from "./index";
+void runHarness({ entry: MY_GAME, tips: ALL_TIPS, create: (p) => createMyGame({ startWave: p.wave, assetBase: p.assetBase }) });
+```
+
+It runs the game alone in the page's real chrome (the HUD, the crosshair,
+the results card, from index.html and `src/app`), with the mouse as the gun
+and the silent `NullAudioBus`, after a short aim check on the game's own
+targets. Query parameters: `?seed=`, `?wave=`, `?difficulty=relaxed`,
+`?flashing=reduced`, `?tips=seen`, `?assetBase=/folder/`, `?god=1`,
+`?golden=1`, `?quality=`, `?input=mouse|touch|hand`, `?skipcalib=1`,
+`?manual=1` (drive it from `window.__handy`: `advance(seconds)`,
+`bench(frames)`, `mouse.aimAt/fire/reloadGesture`, and `hud.log` of every
+HudSink call), `?w=&h=&dpr=`; a game reads its own from `HarnessParams`
+(High Noon's `?noon=1`).
 
 ## The aim check: calibrate before every game, finish at 95%
 
@@ -216,7 +364,10 @@ three shots.
   on. A saved fit starts measuring from the first shot. After 12
   shots below 95%, offer **Play Anyway** with one specific tip (light, framing,
   distance) — never trap the player.
-- **Stored** per camera (`deviceId`) and video size in `localStorage`, with a
+- **Stored** per camera (`deviceId`), video size and game in `localStorage`,
+  and as the camera's latest: a game with no aim of its own yet starts from
+  the latest (any game's), measured from its first shot, so a player set up
+  once is ready in three shots in every game. With a
   version number; anything unreadable is discarded and the check starts fresh.
 
 ## What the browser keeps
@@ -237,10 +388,15 @@ plays the same without remembering (`src/app/prefs.ts`).
   `{ score, outcome, at }`, written the moment a round ends.
 - `handy.tips-seen.v1` — `Settings.tipsSeen`, a set that writes itself through
   on every `add`.
-- `handy.aim.v1.<camera>.<size>` — saved aims (above);
+- `handy.aim.v1.<camera>.<size>.<game>` and `handy.aim.v1.<camera>.<size>`
+  — saved aims, a game's own and the camera's latest (above);
   `handy.camera.v1` / `handy.camera-choice.v1` — the camera used last, and the
   one chosen in Settings, which is asked for exactly and gives way to any other
   if it has gone.
+- `handy.scope.v1` — the Scope group of Settings: `{ eye, button }`, shown
+  only while a game with a scope can be played.
+- `handy.game.v1` — the game chosen in the arcade (the address's
+  `#<game>` or `?game=<game>` wins over it).
 - `handy.welcomed.v1`, `handy.muted.v1`, `handy.control.v1`,
   `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
 
@@ -311,6 +467,7 @@ the environment light for dynamic objects.
 | Frame time, MacBook (M-series), 1440p | ≤ 8 ms render + tracking in parallel → 60 fps |
 | Frame time, integrated GPU laptop | 30+ fps via dynamic resolution (0.6×–1× DPR) |
 | Hand tracking per camera frame | ≤ 12 ms (GPU delegate) |
+| Face (a game that reads the eye) | ≤ 12 ms a read, every other camera frame, in the worker |
 | Camera frame → crosshair on screen | ≤ 50 ms |
 | First screen interactive | ≤ 2 s |
 | High Noon download | ≤ 25 MB including the tracking model, cached after |
@@ -324,8 +481,12 @@ the environment light for dynamic objects.
 - **Test builds** (`vite build --mode e2e`; never production) add hooks:
   `?input=script` swaps the camera and tracker for a scripted hand that drives
   the real aim pipeline, and `?fail=camera-denied|camera-busy|camera-missing|
-  camera-insecure|model|game|webgl` shows each error. `e2e/smoke.html` and
-  `e2e/tracker.html` load and time the tracker alone on the dev server.
+  camera-insecure|model|game|webgl` shows each error, and `?range=1` adds
+  the Test Range to the arcade (`src/games/range/`: a timed game with a
+  scope, `?weapon=cylinder|magazine|heat`), whose scripted eyes the tests set
+  with `handyTest.eyes()`. `e2e/smoke.html` and `e2e/tracker.html` (with
+  `?face=N` for the face on every Nth frame) load and time the tracker alone
+  on the dev server.
 - **End to end (Playwright, installed Chrome, `--mute-audio`):** landing →
   camera priming → aim check → High Noon → pause → results, with a fake camera
   (`--use-file-for-fake-video-capture`) showing a hand; and the whole flow with

@@ -9,13 +9,20 @@
  *                     webgl, model or game, to see each error sheet
  *   ?tracker=page     track on the page's thread instead of a worker
  *   ?delegate=cpu     track on the CPU instead of the GPU
+ *   ?range=1          the Test Range in the arcade (src/games/range/): a
+ *                     timed game with a scope, and ?weapon=cylinder|magazine|heat
  */
 import type { HudSink } from "../engine/types";
+import { ARCADE } from "../games/index";
+import { TEST_RANGE } from "../games/range/index";
 import type { HandPose } from "../input/synthetic";
 import { ScriptedHands } from "../input/script";
+import type { FaceReading } from "../tracking/types";
 import type { App, AppOptions } from "./app";
 
 export function testOptions(params: URLSearchParams): AppOptions {
+  // The Test Range joins the arcade before the page first draws it.
+  if (params.get("range") === "1" && !ARCADE.includes(TEST_RANGE)) ARCADE.push(TEST_RANGE);
   const tracker = params.get("tracker");
   return {
     scripted: params.get("input") === "script" ? new ScriptedHands() : null,
@@ -29,6 +36,11 @@ export interface HandyTest {
   snapshot: App["snapshot"];
   /** Shows the scripted hand in this pose (null: no hand). */
   pose(pose: HandPose | null): void;
+  /**
+   * The scripted face's eyes, 0 (open) to 1 (shut) as the face landmarker
+   * scores them (null: no face in view), for a game that reads the eye.
+   */
+  eyes(eyes: FaceReading | null): void;
   internals(): App["internals"];
   /** The HUD, to stage its moments for screenshots. */
   hud(): HudSink;
@@ -53,6 +65,9 @@ export function installTestHooks(app: App, options: AppOptions): void {
     snapshot: () => app.snapshot(),
     pose(pose) {
       if (options.scripted) options.scripted.pose = pose;
+    },
+    eyes(eyes) {
+      if (options.scripted) options.scripted.eyes = eyes;
     },
     internals: () => app.internals,
     hud: () => app.hud,

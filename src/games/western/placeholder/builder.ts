@@ -16,7 +16,7 @@ import {
   type Material,
 } from "three";
 import type { Surface } from "../world/town";
-import { nameNode } from "../world/names";
+import { nameNode } from "../../../engine/world/names";
 
 /** An axis-aligned box that casts a baked shadow on the ground. */
 export interface Occluder {

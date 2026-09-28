@@ -1,26 +1,13 @@
-import { Matrix4, Mesh, Object3D, Quaternion, SkinnedMesh, Vector3, type Material } from "three";
+import { Matrix4, Mesh, SkinnedMesh, Vector3, type Material, type Object3D } from "three";
 import type { Bandit } from "../rules/bandit";
 import type { HitPart } from "../rules/types";
 import type { Townsperson } from "../rules/townsfolk";
 import type { FallPath } from "./coverCheck";
 import type { Effects } from "./effects";
-import type { Rig, RigPool } from "./character";
+import { headingTo, turnRig, type Rig, type RigPool } from "../../../engine/world/character";
+import { Tumblers, type Tumbler } from "../../../engine/world/tumblers";
 import type { TownQueries } from "./queries";
-import type { Sound } from "./sound";
-
-/** A thing tumbling through the air to rest: a hat shot off, a dropped gun. */
-class Tumbler {
-  object: Object3D | null = null;
-  readonly vel = new Vector3();
-  readonly spin = new Vector3();
-  floor = 0;
-  resting = false;
-  active = false;
-  /** Where it came from, to put it back. */
-  home: Object3D | null = null;
-  readonly homePos = new Vector3();
-  readonly homeQuat = new Quaternion();
-}
+import type { Sound } from "../../../engine/world/sound";
 
 export interface BanditView {
   b: Bandit;
@@ -78,7 +65,8 @@ const BANDANAS = ["var.bandana.red", "var.bandana.black", null];
 export class Cast {
   readonly bandits: BanditView[] = [];
   readonly townsfolk: TownsView[] = [];
-  private readonly tumblers: Tumbler[] = [];
+  /** Hats shot off and guns dropped, tumbling to rest. */
+  private readonly tumblers = new Tumblers(8);
   private readonly hatMeshes: Mesh[] = [];
   private time = 0;
   private frame = 0;
@@ -97,7 +85,6 @@ export class Cast {
     private readonly random: () => number,
     private readonly hooks: { popup(at: Vector3, text: string, tone?: "" | "gold" | "danger"): void; bellSwing(): void },
   ) {
-    for (let i = 0; i < 8; i++) this.tumblers.push(new Tumbler());
     for (let i = 0; i < 4; i++) {
       const m = new Mesh();
       m.visible = false;
@@ -127,7 +114,7 @@ export class Cast {
     const r = this.random;
     if (boss) {
       rig.dress(["var.hat.stetson", "var.coat.duster"]);
-      rig.arm("revolver");
+      rig.hold("gun.revolver");
     } else {
       const outfit: string[] = [];
       outfit.push(HATS[Math.floor(r() * HATS.length)] as string);
@@ -139,7 +126,7 @@ export class Cast {
       if (b.armour > 0) outfit.push("var.armour");
       rig.dress(outfit);
       // Dynamiters carry a revolver too, for when they have no clear throw.
-      rig.arm(b.role === "rifleman" ? "rifle" : "revolver");
+      rig.hold(b.role === "rifleman" ? "gun.rifle" : "gun.revolver");
       const k = 0.85 + r() * 0.25;
       rig.tint(k * (0.95 + r() * 0.1), k, k * (0.9 + r() * 0.1));
     }
@@ -234,7 +221,7 @@ export class Cast {
     const v = this.view(b);
     if (!v) return;
     v.tellSilhouette = 0;
-    v.rig.uniforms.uShade.value = 1;
+    v.rig.lighting.shade.value = 1;
     v.rig.root.visible = true;
     const clip = { lean_left: "lean_left_out", lean_right: "lean_right_out", rise: "rise", step_out: "step_out" }[b.cover.emerge];
     // The clip takes as long as he does: it ends as he arrives, not before.
@@ -262,7 +249,7 @@ export class Cast {
    */
   glint(b: Bandit, lead: number): void {
     const v = this.view(b);
-    const socket = v?.rig.socket;
+    const socket = v?.rig.socket("socket.gun");
     if (!socket) return;
     socket.updateWorldMatrix(true, false);
     socket.getWorldPosition(tmp);
@@ -287,7 +274,7 @@ export class Cast {
     const rig = v.rig;
     rig.kick();
     if (v.lean === 0 || b.role === "duelist") rig.play("fire", 0.05, false);
-    const muzzle = rig.socket;
+    const muzzle = rig.socket("socket.gun");
     if (muzzle) {
       muzzle.getWorldPosition(tmp);
       tmp2.copy(this.eye).sub(tmp).normalize();
@@ -313,7 +300,7 @@ export class Cast {
   hide(b: Bandit): void {
     const v = this.view(b);
     if (!v) return;
-    if (b.role === "dynamiter") v.rig.arm("revolver");
+    if (b.role === "dynamiter") v.rig.hold("gun.revolver");
     const clip = { lean_left: "lean_left_in", lean_right: "lean_right_in", rise: "sink", step_out: "step_in" }[b.cover.emerge];
     // The clip takes as long as he does: it ends as he arrives, not before.
     v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
@@ -330,7 +317,7 @@ export class Cast {
   light(b: Bandit): void {
     const v = this.view(b);
     if (!v) return;
-    v.rig.arm("dynamite");
+    v.rig.hold("prop.dynamite");
     v.rig.play("idle", 0.15);
     this.sound.loopAt(`fuse.b${b.id}`, "dynamite_fuse", b.pos, 0.7);
   }
@@ -339,7 +326,7 @@ export class Cast {
   released(b: Bandit, stickId: number): void {
     const v = this.view(b);
     if (!v) return;
-    v.rig.arm("none");
+    v.rig.hold(null);
     this.sound.stopLoop(`fuse.b${b.id}`);
     this.sound.loopAt(`fuse.s${stickId}`, "dynamite_fuse", b.pos, 0.8);
     this.sound.at("dynamite_throw", b.pos);
@@ -388,7 +375,7 @@ export class Cast {
     const rig = v.rig;
     const choice = b.death ?? { clip: "death_back", fall: false };
     rig.aimAt(null, 0);
-    rig.uniforms.uShade.value = 1;
+    rig.lighting.shade.value = 1;
     v.tellSilhouette = 0;
     if (at) {
       tmp2.copy(at).sub(this.eye).normalize();
@@ -455,7 +442,7 @@ export class Cast {
   // --- hats and guns --------------------------------------------------------------
 
   private hatOff(rig: Rig, at: Vector3 | null): void {
-    const hat = rig.hat;
+    const hat = rig.worn("var.hat.");
     if (!hat || !hat.visible) return;
     const mesh = this.hatMeshes.find((m) => !m.visible) ?? (this.hatMeshes[0] as Mesh);
     const source = hat as Mesh;
@@ -487,7 +474,9 @@ export class Cast {
 
   private dropGun(v: BanditView): void {
     const rig = v.rig;
-    const gun = rig.rifle?.visible ? rig.rifle : rig.revolver?.visible ? rig.revolver : null;
+    const rifle = rig.prop("gun.rifle");
+    const revolver = rig.prop("gun.revolver");
+    const gun = rifle?.visible ? rifle : revolver?.visible ? revolver : null;
     if (!gun || !gun.parent) return;
     const t = this.tumbler();
     t.home = gun.parent;
@@ -502,53 +491,7 @@ export class Cast {
   }
 
   private tumbler(): Tumbler {
-    for (const t of this.tumblers) if (!t.active) return this.claim(t);
-    // All busy: reclaim the first (it has long come to rest).
-    const t = this.tumblers[0] as Tumbler;
-    this.restore(t);
-    return this.claim(t);
-  }
-
-  private claim(t: Tumbler): Tumbler {
-    t.active = true;
-    t.resting = false;
-    return t;
-  }
-
-  private restore(t: Tumbler): void {
-    if (t.object && t.home) {
-      t.home.add(t.object);
-      t.object.position.copy(t.homePos);
-      t.object.quaternion.copy(t.homeQuat);
-    } else if (t.object) {
-      t.object.visible = false;
-    }
-    t.object = null;
-    t.home = null;
-    t.active = false;
-  }
-
-  private updateTumblers(dt: number): void {
-    for (const t of this.tumblers) {
-      if (!t.active || t.resting || !t.object) continue;
-      const o = t.object;
-      t.vel.y -= 9.81 * dt;
-      o.position.addScaledVector(t.vel, dt);
-      o.rotation.x += t.spin.x * dt;
-      o.rotation.y += t.spin.y * dt;
-      o.rotation.z += t.spin.z * dt;
-      if (o.position.y <= t.floor) {
-        o.position.y = t.floor;
-        if (Math.abs(t.vel.y) > 1.2) {
-          t.vel.y *= -0.3;
-          t.vel.x *= 0.5;
-          t.vel.z *= 0.5;
-          t.spin.multiplyScalar(0.4);
-        } else {
-          t.resting = true;
-        }
-      }
-    }
+    return this.tumblers.take();
   }
 
   // --- townsfolk --------------------------------------------------------------------
@@ -565,7 +508,7 @@ export class Cast {
       preacher: ["var.coat.black"],
     };
     rig.dress(outfit[p.role] ?? []);
-    rig.arm("none");
+    rig.hold(null);
     rig.root.position.set(p.pos.x, p.pos.y, p.pos.z);
     this.face(rig, p.pos.x, p.pos.z);
     rig.root.visible = true;
@@ -606,7 +549,7 @@ export class Cast {
       }
     }
     for (const v of this.townsfolk) this.updateTowns(v, dt);
-    this.updateTumblers(dt);
+    this.tumblers.update(dt);
   }
 
   /** Returns true when the view is finished with (faded out). */
@@ -669,23 +612,24 @@ export class Cast {
         c.hidden.y,
         c.hidden.z + (c.exposed.z - c.hidden.z) * 0.9 * s,
       );
-      rig.uniforms.uShade.value = 0.12;
+      rig.lighting.shade.value = 0.12;
     } else if (b.alive && v.tellSilhouette > 0) {
       v.tellSilhouette = 0;
-      rig.uniforms.uShade.value = 1;
+      rig.lighting.shade.value = 1;
     } else if (b.alive && (b.cover.kind === "door" || b.cover.kind === "window") && (b.state === "emerging" || b.state === "hiding")) {
       // Out of the room's shade into the street's light, and back.
       const k = Math.min(1, b.exposure / 0.7);
-      rig.uniforms.uShade.value = 0.4 + 0.6 * k * k * (3 - 2 * k);
+      rig.lighting.shade.value = 0.4 + 0.6 * k * k * (3 - 2 * k);
     } else if (b.alive && tellFree(b.state)) {
-      rig.uniforms.uShade.value = 1;
+      rig.lighting.shade.value = 1;
     }
     // The gun comes up toward you while aiming.
     const aiming = b.state === "aiming" || b.state === "firing";
     rig.aimAt(this.eye, aiming ? 1 : 0);
     // Fuse sparks while a stick is lit in his hand.
-    if (b.lit && rig.dynamite?.visible) {
-      rig.dynamite.getWorldPosition(tmp);
+    const dynamite = rig.prop("prop.dynamite");
+    if (b.lit && dynamite?.visible) {
+      dynamite.getWorldPosition(tmp);
       tmp.y -= 0.12;
       this.fx.fuse(tmp);
     }
@@ -696,7 +640,7 @@ export class Cast {
       tmp.y += 1.3;
       v.sunVis = this.queries.sunReaches(tmp, this.toSun) ? 1 : 0.12;
     }
-    const sv = rig.uniforms.uSunVis;
+    const sv = rig.lighting.key;
     sv.value += (v.sunVis - sv.value) * Math.min(1, dt * 6);
     if (rig.root.visible) rig.update(dt);
     // Fading away.
@@ -715,7 +659,7 @@ export class Cast {
     this.faceToward(rig, p.pos.x, p.pos.z, dt);
     // Out of the room's shade into the light at the door, as the gang is.
     const k = Math.min(1, p.exposure / 0.7);
-    rig.uniforms.uShade.value = p.state === "peeking" || p.state === "leaving" ? 0.4 + 0.6 * k * k * (3 - 2 * k) : 1;
+    rig.lighting.shade.value = p.state === "peeking" || p.state === "leaving" ? 0.4 + 0.6 * k * k * (3 - 2 * k) : 1;
     if (p.role === "preacher") {
       rig.play("head_shake", 0.2, true, 1, false);
     } else if (p.shot) {
@@ -733,33 +677,26 @@ export class Cast {
       tmp.y += 1.3;
       v.sunVis = this.queries.sunReaches(tmp, this.toSun) ? 1 : 0.12;
     }
-    const sv = rig.uniforms.uSunVis;
+    const sv = rig.lighting.key;
     sv.value += (v.sunVis - sv.value) * Math.min(1, dt * 6);
     rig.update(dt);
   }
 
   private face(rig: Rig, x: number, z: number): void {
-    rig.root.rotation.y = Math.atan2(this.eye.x - x, this.eye.z - z);
+    rig.root.rotation.y = headingTo(x, z, this.eye);
   }
 
   private faceToward(rig: Rig, x: number, z: number, dt: number): void {
-    this.turnTo(rig, Math.atan2(this.eye.x - x, this.eye.z - z), dt);
+    turnRig(rig, headingTo(x, z, this.eye), dt);
   }
 
   private faceDir(rig: Rig, dx: number, dz: number, dt: number): void {
-    this.turnTo(rig, Math.atan2(dx, dz), dt);
-  }
-
-  private turnTo(rig: Rig, target: number, dt: number): void {
-    let d = target - rig.root.rotation.y;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    rig.root.rotation.y += d * Math.min(1, dt * 12);
+    turnRig(rig, Math.atan2(dx, dz), dt);
   }
 
   private releaseRig(rig: Rig, pool: RigPool, gun: Tumbler | null = null): void {
     // The dropped gun goes back in the hand for the rig's next outing.
-    if (gun && gun.object && gun.home === rig.socket) this.restore(gun);
+    if (gun && gun.object && gun.home === rig.socket("socket.gun")) this.tumblers.restore(gun);
     pool.give(rig);
   }
 
@@ -774,7 +711,7 @@ export class Cast {
     for (const v of this.townsfolk) this.releaseRig(v.rig, this.pools.townsfolk);
     this.bandits.length = 0;
     this.townsfolk.length = 0;
-    for (const t of this.tumblers) if (t.active) this.restore(t);
+    this.tumblers.reset();
     for (const m of this.hatMeshes) m.visible = false;
   }
 }

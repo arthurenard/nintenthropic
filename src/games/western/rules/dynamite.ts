@@ -1,4 +1,4 @@
-import type { V3 } from "./raymath";
+import type { V3 } from "../../../engine/rules/raymath";
 import { DYNAMITE_GROUND_FUSE, DYNAMITE_MAX_FLIGHT, GRAVITY } from "./tuning";
 import type { Cover } from "./types";
 

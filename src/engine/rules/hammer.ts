@@ -1,13 +1,14 @@
 /**
  * The re-arm, heard. With a finger pistol, raising the thumb again after a
- * shot is cocking the hammer, and until now only the crosshair turning green
- * said so. This decides the frames on which a soft hammer click should sound:
- * the thumb coming up after a fold, in play, with a round under the hammer.
+ * shot is cocking the hammer (High Noon's revolver; a rifle's bolt or lever
+ * is the same moment), and otherwise only the crosshair turning green says
+ * so. This decides the frames on which a soft click should sound: the thumb
+ * coming up after a fold, in play, with a round ready to fire.
  *
- * Not while reloading (the cylinder is out), not on an empty cylinder (the
- * next fold is the dry click, which says it all), not for a hand found again
+ * Not while reloading (the cylinder is out), not on an empty gun (the next
+ * fold is the dry click, which says it all), not for a hand found again
  * after being lost (nothing was folded), and never closer together than
- * HAMMER_MIN_GAP, whatever the tracking does.
+ * HAMMER_MIN_GAP, whatever the tracking does. A game plays its own sound.
  */
 export const HAMMER_MIN_GAP = 0.25;
 

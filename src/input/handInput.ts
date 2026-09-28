@@ -8,6 +8,7 @@ import { AimController, Recoil, type AimReading } from "./aim";
 import { Velocity } from "./filter";
 import { palmSpan } from "./hand";
 import { apply, type Matrix } from "./homography";
+import type { ScopeControl } from "./scope";
 import { HandTrust } from "./trust";
 
 /** How far past an edge the crosshair must go to count as off the screen, in
@@ -56,6 +57,7 @@ export class HandInput implements InputSource {
   onReading: ((reading: HandReading) => void) | null = null;
 
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeFace: () => void = () => {};
   private readonly vx = new Velocity();
   private readonly vy = new Velocity();
   // A short kick, settling in about 250 ms, as High Noon's revolver asks:
@@ -77,9 +79,16 @@ export class HandInput implements InputSource {
     private readonly source: HandSource,
     private readonly viewport: () => Viewport,
     mapping?: Matrix,
+    /**
+     * The scope, in a game that has one: Shift, and - when it reads the
+     * eye - the face on the same frames, closing one eye (scope.ts).
+     */
+    private readonly scope: ScopeControl | null = null,
   ) {
     this.controller = new AimController({ mapping });
     this.unsubscribe = source.subscribe((frame) => this.onFrame(frame));
+    const eye = scope?.eye;
+    if (eye && source.subscribeFace) this.unsubscribeFace = source.subscribeFace((face) => eye.read(face.eyes, face.capturedAt));
   }
 
   /** The aim learned by the aim check (or saved from before). */
@@ -101,6 +110,7 @@ export class HandInput implements InputSource {
     this.held = null;
     this.seen = null;
     this.trust.reset();
+    this.scope?.reset();
   }
 
   private onFrame(frame: HandFrame): void {
@@ -181,6 +191,7 @@ export class HandInput implements InputSource {
         travel: 0,
         offscreen: seen !== null && seen.leaving && gone <= EXIT_MOMENT,
         capturedAt: this.capturedAt,
+        scope: this.scope?.active(now) ?? false,
       };
     }
     const ahead = this.compensate ? Math.min(Math.max(now - this.capturedAt, 0), MAX_PREDICTION) / 1000 : 0;
@@ -203,11 +214,13 @@ export class HandInput implements InputSource {
       travel: reading.travel,
       offscreen: this.offscreen,
       capturedAt: this.capturedAt,
+      scope: this.scope?.active(now) ?? false,
     };
   }
 
   dispose(): void {
     this.unsubscribe();
+    this.unsubscribeFace();
     this.onReading = null;
   }
 }

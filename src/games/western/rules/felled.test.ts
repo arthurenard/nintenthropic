@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { advice, felledBy, felledNote, LATE_PRESSURE, placeOf, type Felled } from "./felled";
 import { Match } from "./match";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import { playUntilDeath, Recorder, standIdle, testCovers } from "./testkit";
 import type { Cover, CoverKind } from "./types";
 

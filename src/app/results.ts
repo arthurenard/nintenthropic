@@ -9,8 +9,10 @@
  */
 import type { Difficulty, GameEntry, GameStats } from "../engine/types";
 import { siteUrl } from "../engine/fetch";
+import { paintBackdrop } from "../ui/backdrop";
 import { $, announce, element, setText, toast } from "../ui/dom";
 import { formatScore, shareFileName } from "../ui/format";
+import { posterInto } from "./arcade";
 import { judge, readBest, writeBest, type Best, type ControlClass, type Verdict } from "./prefs";
 
 /** How a round was played: what its record is kept under. */
@@ -53,9 +55,7 @@ export function showResults(game: GameEntry, stats: GameStats, reducedMotion: bo
   const previous = judged?.verdict.previous ?? null;
 
   const art = $<HTMLImageElement>("results-art");
-  art.hidden = false;
-  art.onerror = () => (art.hidden = true);
-  art.src = siteUrl(game.poster);
+  posterInto(art.parentElement!, art, game);
   const level = round && difficultyLabel(round.difficulty);
   setText("results-game", level ? `${game.title} · ${level}` : game.title);
   const outcome = $("results-outcome");
@@ -180,20 +180,8 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
     const width = Math.min(art.naturalWidth, 840 / scale);
     context.drawImage(art, (art.naturalWidth - width) / 2, 0, width, art.naturalHeight, 360, 0, 840, 630);
   } else {
-    // Golden hour, as on the landing, until the town's picture exists.
-    const sky = context.createLinearGradient(0, 0, 0, 630);
-    sky.addColorStop(0, "#213349");
-    sky.addColorStop(0.46, "#50506a");
-    sky.addColorStop(0.78, "#b9795a");
-    sky.addColorStop(1, "#6c4630");
-    context.fillStyle = sky;
-    context.fillRect(360, 0, 840, 630);
-    const sun = context.createRadialGradient(880, 690, 0, 880, 690, 520);
-    sun.addColorStop(0, "rgba(255, 196, 120, 0.95)");
-    sun.addColorStop(0.55, "rgba(233, 150, 84, 0.45)");
-    sun.addColorStop(1, "rgba(233, 150, 84, 0)");
-    context.fillStyle = sun;
-    context.fillRect(360, 0, 840, 630);
+    // The game's light, as on the arcade, until its picture exists.
+    paintBackdrop(context, result.game.backdrop, 360, 0, 840, 630);
   }
   const fade = context.createLinearGradient(360, 0, 820, 0);
   fade.addColorStop(0, "rgba(0,0,0,1)");

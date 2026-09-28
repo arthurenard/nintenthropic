@@ -1,9 +1,13 @@
 /**
  * Where a learned aim is kept: in the browser, per camera and per video size,
- * because the hand's sweep in the picture depends on both. Everything kept is
- * a convenience - a window that cannot store anything plays just the same,
- * only without remembering - and anything unreadable is thrown away so the
- * aim check starts fresh rather than trusting it.
+ * because the hand's sweep in the picture depends on both - and per game,
+ * since each game checks the aim in its own world, on a stage of its own
+ * shape. A game with no aim of its own yet starts from the camera's latest
+ * (any game's), measured from the first shot like any saved aim, so a
+ * player who has set up once is ready in three shots everywhere. Everything
+ * kept is a convenience - a window that cannot store anything plays just the
+ * same, only without remembering - and anything unreadable is thrown away so
+ * the aim check starts fresh rather than trusting it.
  */
 import { definedOver, gain, isMatrix, type Matrix } from "../input/homography";
 
@@ -27,8 +31,10 @@ export interface CameraIdentity {
   height: number;
 }
 
-export function aimKey(camera: CameraIdentity): string {
-  return `handy.aim.v${AIM_VERSION}.${camera.deviceId || "default"}.${camera.width}x${camera.height}`;
+/** The key an aim is kept under: the camera's latest, or one game's own. */
+export function aimKey(camera: CameraIdentity, game?: string): string {
+  const key = `handy.aim.v${AIM_VERSION}.${camera.deviceId || "default"}.${camera.width}x${camera.height}`;
+  return game ? `${key}.${game}` : key;
 }
 
 interface SavedAim {
@@ -51,10 +57,16 @@ export function usableMap(matrix: Matrix): boolean {
   return corners.every((corner) => gain(matrix, corner) <= GAIN_LIMIT);
 }
 
-/** The aim saved for this camera, or null. */
-export function loadAim(store: KeyValueStore | null, camera: CameraIdentity): Matrix | null {
+/**
+ * The aim saved for this camera in this game, else the camera's latest from
+ * any game (or, without a game, the camera's latest); null for none.
+ */
+export function loadAim(store: KeyValueStore | null, camera: CameraIdentity, game?: string): Matrix | null {
+  return (game ? readAim(store, aimKey(camera, game)) : null) ?? readAim(store, aimKey(camera));
+}
+
+function readAim(store: KeyValueStore | null, key: string): Matrix | null {
   if (!store) return null;
-  const key = aimKey(camera);
   let raw: string | null = null;
   try {
     raw = store.getItem(key);
@@ -70,25 +82,29 @@ export function loadAim(store: KeyValueStore | null, camera: CameraIdentity): Ma
   } catch {
     // Not JSON: fall through and forget it.
   }
-  forget(store, camera);
+  forget(store, key);
   return null;
 }
 
-/** Keeps the aim for next time; false if this window cannot store anything. */
-export function saveAim(store: KeyValueStore | null, camera: CameraIdentity, matrix: Matrix, now = Date.now()): boolean {
+/**
+ * Keeps the aim for next time, as this game's own (with a game) and as the
+ * camera's latest; false if this window cannot store anything.
+ */
+export function saveAim(store: KeyValueStore | null, camera: CameraIdentity, matrix: Matrix, now = Date.now(), game?: string): boolean {
   if (!store) return false;
-  const saved: SavedAim = { version: AIM_VERSION, matrix: [...matrix], savedAt: now };
+  const saved = JSON.stringify({ version: AIM_VERSION, matrix: [...matrix], savedAt: now } satisfies SavedAim);
   try {
-    store.setItem(aimKey(camera), JSON.stringify(saved));
+    if (game) store.setItem(aimKey(camera, game), saved);
+    store.setItem(aimKey(camera), saved);
     return true;
   } catch {
     return false;
   }
 }
 
-export function forget(store: KeyValueStore | null, camera: CameraIdentity): void {
+function forget(store: KeyValueStore | null, key: string): void {
   try {
-    store?.removeItem(aimKey(camera));
+    store?.removeItem(key);
   } catch {
     // Without storage there is nothing saved to forget.
   }

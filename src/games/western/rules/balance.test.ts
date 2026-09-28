@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Bandit } from "./bandit";
 import { Match } from "./match";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import { Recorder, testCovers } from "./testkit";
 
 /**

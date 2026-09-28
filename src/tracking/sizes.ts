@@ -2,3 +2,5 @@
  * parts before they report their own lengths. */
 export const WASM_BYTES = 11.8e6;
 export const MODEL_BYTES = 7.8e6;
+/** The face landmarker's model, for a game that reads the eye. */
+export const FACE_MODEL_BYTES = 3.76e6;
