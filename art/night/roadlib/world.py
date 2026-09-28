@@ -75,7 +75,12 @@ def sky_tree(nt, for_sky_image=False):
     zen = g.rgb((0.0055, 0.0085, 0.018))
     hor = g.rgb((0.042, 0.052, 0.072))
     band = g.math('EXPONENT', g.mul(g.math('MAXIMUM', dz, 0.0), -7.0))
-    col = g.mix(band, zen, hor)
+    # what the eye sees: a taller glow of fog-lit air, so that a pine 100 m
+    # out, fogged to the fog's own colour, stands against sky of about that
+    # colour rather than as a pale ghost on the dark (the dome that lights
+    # the scene keeps the lower band)
+    band_v = g.math('EXPONENT', g.mul(g.math('MAXIMUM', dz, 0.0), -3.6))
+    col = g.mix(band_v, zen, hor)
     # corona: a wide soft glow and a tight bright ring round the moon
     wide = g.math('EXPONENT', g.mul(ang, -3.2))
     tight = g.math('EXPONENT', g.mul(ang, -22.0))

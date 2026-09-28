@@ -34,10 +34,15 @@ $B -b --factory-startup -t 4 -P art/night/build_road.py -- bake export  # rerun 
 $B -b --factory-startup -t 4 -P art/night/characters/build.py
 $B -b --factory-startup -t 4 -P art/night/characters/build.py -- --only walker --quick
 
-# the character review set (turnarounds, faces, hands, clip sheets, 10/25/40 m shots)
-$B -b --factory-startup -t 4 -P art/night/characters/review.py -- walker
-# a single head, fast: sculpt, game mesh, bake, four close renders
+# the character review set (turnarounds, faces, hands, clip sheets, 10/25/40 m shots, lineup)
+$B -b --factory-startup -t 4 art/night/build/characters/walker.blend -P art/night/characters/review.py \
+   [-- --what turn,faces,strips,distance,lineup --clips claw,lunge --quick]
+# a single head, fast: sculpt, game mesh, bake, close renders (walker|runner|bloater|crawler)
 $B -b --factory-startup -t 4 -P art/night/characters/headtest.py -- walker
+
+# the road seen as the game shows it: road.glb imported back (lit, fog, beam),
+# and the built dead standing on it at 10, 25 and 40 m in the flashlight
+$B -b --factory-startup -t 4 -P art/night/build_road.py -- glbreview castreview
 
 # prove the contract (plain Python, no Blender) and Draco-decode with three.js
 python3 art/night/check_night.py
@@ -88,7 +93,7 @@ the streetlight reaches (once with the lamp, once without), and
 
 Fog is **not** baked (`extras.fog_baked = false`): the game draws it. The
 scene's extras hold the fog that the review renders used:
-`fog_color` (`#2b3542`, the sky's own horizon measured from `sky.webp`, so
+`fog_color` (`#2d3744`, the sky's own horizon measured from `sky.webp`, so
 the far road melts into the sky), `fog_density` (FogExp2 on view depth,
 0.0182: 60% visibility at 40 m, 30% at 60 m, gone by ~110 m) and
 `fog_ground` (an extra ground-hugging layer: extinction 0.012/m with 2.2 m
@@ -156,8 +161,8 @@ three.js decodes them: `tools/draco_check.cjs`.)
   and `char.crawler` are whole people: show one of them + `eyes`, hide
   `char.walker`.
 - **Eyeshine**: `eyes` is a separate mesh with material `eyes` whose
-  `emissiveTexture` is the shine (iris and pupil, sickly green-gold; the
-  sclera does not shine), `emissiveFactor` 1, emission strength baked as 1.
+  `emissiveTexture` is the shine (a sickly green-gold), `emissiveFactor` 1,
+  emission strength baked as 1.
   The game drives the material's `emissiveIntensity`: **0 in the dark**, up to
   **~3** in the beam's centre, falling off with the angle between the beam and
   the line to the eyes (`extras.eyeshine` on the material). The eyes are
@@ -174,6 +179,11 @@ three.js decodes them: `tools/draco_check.cjs`.)
   1.1, run 3.5, crawl 0.5), and moments: `claw.strike` (seconds),
   `lunge.strike`, `stagger.root_back` (metres pushed back), the deaths'
   `thud`, `bloat_burst.burst`, `swing.impact`, `mask_off.mask_free`.
+- The dead walk **face first**: in the idle and the walk cycles the neck
+  juts forward and the head tips back on it, so the face (and the eyes) come
+  up toward a player at 1.7 m rather than hanging at the road.
+- The survivors are living: their eyes are baked into `var.person.*`'s own
+  atlas and do not shine; warm skin, clean colours, the lantern's flame.
 - **The Mechanic** is 1.15× a walker: the scale is on the armature's root
   object, so clips shared with the walker play as is.
 - `var.mask` is rigid on `head` and a separate mesh: hide it and spawn a
@@ -221,6 +231,16 @@ On this Mac (Apple silicon, Metal, `-t 4`, while two other agents baked):
 | road `review` (full) | ~4 min |
 | road `bake --preview near,corn` (rebake one group) | 12 min |
 | road `--quick` end to end | ~5 min |
+| `poster` (1600×900, 640 spp, volumetric fog) | 4 min |
+| `castreview` (4 shots) | 1.5 min |
+| `walker.glb` (13 people, 2048 atlas, 17 clips) | 31 min (`--quick`: 17 min) |
+| `mechanic.glb` | 11 min |
+| `survivor.glb` | 11 min |
+| `cat.glb` | 1.5 min |
+| character review set (`review.py`, per file) | 10–25 min |
+
+The character builds are CPU-bound (numpy signed-distance sculpts, the atlas
+bake is analytic, not Cycles); the road is GPU-bound.
 
 ## Texture memory
 
