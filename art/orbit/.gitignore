@@ -1,0 +1,5 @@
+# Build products: regenerate with build_orbit.py
+build/
+*.blend
+*.blend1
+__pycache__/
