@@ -33,6 +33,20 @@ export type Snapshot = {
   view: string;
   phase: string | null;
   paused: boolean;
+  /** The round frozen, waiting for the hand. */
+  held: boolean;
+  /** The round frozen under a camera trouble's sheet. */
+  troubled: boolean;
+  /** The world stopped drawing under the results. */
+  idle: boolean;
+  /** What the hold shows: "wait", "lost", "count", or null. */
+  hold: string | null;
+  /** The world's loop is running. */
+  running: boolean;
+  /** Frames are being read from the camera (or the script). */
+  tracking: boolean;
+  /** How the current game is played, which may change mid-round. */
+  input: string | null;
   control: string;
   lit: { id: string; x: number; y: number; radius: number } | null;
   score: number | null;
@@ -75,6 +89,22 @@ export async function shoot(page: Page, x: number, y: number): Promise<void> {
   await pose(page, handAt(x, y, 72));
   await page.waitForTimeout(160);
   await pose(page, handAt(x, y));
+}
+
+/** A game with the scripted hand, through the aim check and into play, the hand held up mid-view. */
+export async function playWithHand(page: Page, url = "/?input=script"): Promise<void> {
+  await skipWelcome(page);
+  await page.goto(url);
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
+  await passAimCheck(page);
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 10_000 }).toBe("play");
+  await pose(page, handAt(0.5, 0.5));
+}
+
+/** The game's own view, for the tests that need to know where things are (dev and test builds). */
+export function gameDebug(page: Page, script: string): Promise<unknown> {
+  return page.evaluate(`(() => { const debug = window.handyTest.internals().session.game.debug; return ${script}; })()`);
 }
 
 /**

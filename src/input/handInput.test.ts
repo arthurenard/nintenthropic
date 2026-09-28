@@ -130,6 +130,16 @@ describe("the hand as an input", () => {
     expect(input.sample(t).tracking).toBe(false);
   });
 
+  it("counts a swing too fast for the filter to follow as leaving", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    // One frame far past the edge, then gone: the smoothed aim has not got there yet.
+    camera.show({ thumbDegrees: 20, indexTip: [0.9, 0.5] }, (t += 33));
+    camera.show(null, (t += 33));
+    expect(input.sample(t + 5).offscreen).toBe(true);
+  });
+
   it("counts a fingertip lost at the picture's edge as leaving, even aiming inside the view", () => {
     const camera = new FakeCamera();
     // The whole picture stretched over the view: its edge is the view's edge.

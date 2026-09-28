@@ -7,7 +7,7 @@ import type { HandFrame, HandSource } from "../tracking/types";
 import { AimController, Recoil, type AimReading } from "./aim";
 import { Velocity } from "./filter";
 import { palmSpan } from "./hand";
-import type { Matrix } from "./homography";
+import { apply, type Matrix } from "./homography";
 
 /** How far past an edge the crosshair must go to count as off the screen, in
  * viewport fractions; it counts as back once within half of that. */
@@ -117,11 +117,14 @@ export class HandInput implements InputSource {
       // The aim just before the thumb began to fold: where the shot goes,
       // since the hand moves with the fold.
       if (reading.armed && reading.travel < STILL_AIMING) this.held = { at: frame.capturedAt, position: at };
-      // Leaving: pointing past the view's edge, or the fingertip at the
-      // picture's own edge (the hand is about to be cut off by it).
+      // Leaving: pointing past the view's edge - by the filtered aim, or the
+      // raw one, which a fast swing takes there a frame or two sooner - or
+      // the fingertip at the picture's own edge, about to be cut off by it.
       const tip = reading.pointer;
+      const raw = tip ? apply(this.controller.currentMapping, tip) : null;
+      const rawBeyond = raw ? Math.max(-raw[0], raw[0] - 1, -raw[1], raw[1] - 1) : 0;
       const edge = tip ? Math.min(tip[0], 1 - tip[0], tip[1], 1 - tip[1]) : 1;
-      this.seen = { at: frame.capturedAt, leaving: this.offscreen || edge < EXIT_EDGE };
+      this.seen = { at: frame.capturedAt, leaving: this.offscreen || rawBeyond > OFFSCREEN_MARGIN || edge < EXIT_EDGE };
     } else {
       this.vx.reset();
       this.vy.reset();

@@ -118,6 +118,8 @@
         <div class="arcs" id="arcs" aria-hidden="true"></div>
         <div class="bursts" id="bursts" aria-hidden="true"></div>
         <div class="marks" id="marks" aria-hidden="true"></div>
+        <!-- The world held for the hand: dimmed under the chrome, which stays clear. -->
+        <div class="hold-dim" aria-hidden="true"></div>
 
         <div class="hud-score glass play-only" id="hud-score">
           <p class="score num"><span class="visually-hidden">Score </span><span id="score">0</span></p>
@@ -167,6 +169,16 @@
 
         <p class="hint glass" id="hint" role="status" hidden></p>
         <div id="moments"></div>
+        <!-- The round waiting for the hand, and the count that brings it back. -->
+        <div class="hold" id="hold">
+          <section class="hold-card glass" id="hold-card" aria-labelledby="hold-title">
+            <span class="alert-icon danger"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg></span>
+            <h2 class="title2" id="hold-title">Show Your Hand</h2>
+            <p class="subhead secondary">The round waits until your camera sees it.</p>
+            <button class="button quiet small" id="hold-menu">Pause Menu</button>
+          </section>
+          <p class="hold-count glass num" id="hold-count" aria-hidden="true"><span id="hold-beat">3</span></p>
+        </div>
         <!-- Last, so the crosshair is never hidden behind the corners' chrome. -->
         <canvas class="overlay" id="crosshair" aria-hidden="true"></canvas>
       </div>
@@ -207,6 +219,7 @@
       <div class="sheet-actions">
         <button class="button primary wide" id="alert-primary"></button>
         <button class="button plain wide" id="alert-secondary"></button>
+        <button class="button plain wide" id="alert-tertiary" hidden></button>
       </div>
     </dialog>
 
@@ -256,6 +269,7 @@
           <button class="button primary wide" id="again" data-sound="confirm">
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Play Again
           </button>
+          <p class="footnote tertiary results-fire" id="results-fire" hidden>Or fold your thumb to play again.</p>
           <div class="results-row">
             <button class="button secondary" id="choose">
               <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid" /></svg>Choose a Game

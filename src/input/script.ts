@@ -10,6 +10,10 @@ import { asCameraSees, makeHand, type HandPose } from "./synthetic";
 export class ScriptedHands implements HandSource {
   /** The pose to show; null for no hand in view. */
   pose: HandPose | null = null;
+  /** Which camera it plays: a test changes it to be a different camera. */
+  deviceId = "script";
+  /** A camera that has stopped sending pictures: running, but publishing nothing. */
+  stalled = false;
   private readonly listeners = new Set<(frame: HandFrame) => void>();
   private newest: HandFrame | null = null;
   private sequence = 0;
@@ -40,6 +44,7 @@ export class ScriptedHands implements HandSource {
   }
 
   publish(): void {
+    if (this.stalled) return;
     const pose = this.pose;
     const frame: HandFrame = {
       landmarks: pose ? asCameraSees(makeHand(pose)) : null,

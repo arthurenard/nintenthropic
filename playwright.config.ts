@@ -43,7 +43,7 @@ export default defineConfig({
   projects: [
     {
       name: "flows",
-      testMatch: /(mouse|camera|scripted)\.spec\.ts/,
+      testMatch: /(mouse|camera|scripted|resilience)\.spec\.ts/,
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
     {

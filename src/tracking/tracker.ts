@@ -44,6 +44,13 @@ export interface Tracker extends HandSource {
   start(video: HTMLVideoElement): void;
   stop(): void;
   readonly isRunning: boolean;
+  /**
+   * When the camera last delivered a frame, on the performance.now() clock
+   * (0 before the first). Counted as the frame arrives, before it is read,
+   * so a slow first read (the GPU compiling its shaders) is not taken for a
+   * camera that has stopped.
+   */
+  readonly frameAt: number;
   stats(): TrackerStats;
   resetStats(): void;
   dispose(): void;
@@ -55,6 +62,7 @@ abstract class BaseTracker implements Tracker {
   abstract readonly where: "worker" | "page";
   protected video: HTMLVideoElement | null = null;
   protected running = false;
+  frameAt = 0;
   private handle = 0;
   private lastMediaTime = -1;
   private lastTimestamp = -1;
@@ -144,6 +152,7 @@ abstract class BaseTracker implements Tracker {
     if (typeof video.requestVideoFrameCallback === "function") {
       this.handle = video.requestVideoFrameCallback((now, metadata) => {
         this.schedule();
+        this.frameAt = performance.now();
         // captureTime is when the camera took the picture, on this page's
         // clock; not every browser gives it, and the frame's arrival is the
         // next best.
@@ -156,6 +165,7 @@ abstract class BaseTracker implements Tracker {
         this.schedule();
         if (this.running && video.currentTime !== this.lastMediaTime) {
           this.lastMediaTime = video.currentTime;
+          this.frameAt = performance.now();
           this.read(video, now);
         }
       });

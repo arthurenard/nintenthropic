@@ -787,6 +787,122 @@
   }
 }
 
+/* --- the round held for the hand ---------------------------------------------------------------------------- */
+
+/* The world waits, dimmed, under the chrome: the score, the cylinder and the
+   camera preview stay clear, and the preview grows as in the aim check so the
+   player can see where their hand is. */
+.hold-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms var(--ease);
+}
+.game[data-hold] .hold-dim {
+  opacity: 1;
+}
+.game[data-hold] .stage {
+  --pip-w: clamp(176px, 21vw, 320px);
+}
+/* The card says what matters now: the round's own hints step back. */
+.game[data-hold] .hint {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 250ms var(--ease),
+    visibility 0s linear 250ms;
+}
+.hold {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.hold > * {
+  grid-area: 1 / 1;
+}
+.hold-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(360px, calc(100% - 2 * var(--hud)));
+  padding: 28px 24px 20px;
+  border-radius: var(--r-card);
+  text-align: center;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.96);
+  transition:
+    opacity 250ms var(--ease),
+    transform 250ms var(--ease),
+    visibility 0s linear 250ms;
+}
+.hold-card .alert-icon {
+  margin-bottom: 4px;
+}
+.hold-card .button {
+  margin-top: 12px;
+  pointer-events: auto;
+}
+.game[data-hold="lost"] .hold-card {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 250ms var(--ease),
+    transform 450ms var(--spring),
+    visibility 0s;
+}
+/* 3, 2, 1: one numeral at a time in a glass disc, each arriving as the last goes. */
+.hold-count {
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  margin: 0;
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.9);
+  transition:
+    opacity 250ms var(--ease),
+    transform 250ms var(--ease),
+    visibility 0s linear 250ms;
+}
+.game[data-hold="count"] .hold-count {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 250ms var(--ease),
+    transform 450ms var(--spring),
+    visibility 0s;
+}
+.hold-count span {
+  display: block;
+}
+.hold-count .beat {
+  animation: beat 450ms var(--spring) both;
+}
+.hold-count .beat-calm {
+  animation: fade-in 250ms var(--ease) both;
+}
+@keyframes beat {
+  from {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
 /* --- narrower windows ------------------------------------------------------------------------------------ */
 
 @media (max-width: 760px) {
@@ -794,7 +910,8 @@
     --pip-w: clamp(96px, 26vw, 140px);
     --dock: 80px;
   }
-  .game[data-phase="check"] .stage {
+  .game[data-phase="check"] .stage,
+  .game[data-hold] .stage {
     --pip-w: clamp(120px, 32vw, 176px);
   }
   .cylinder svg {
@@ -865,6 +982,13 @@
   .ready-moment .ring .fill,
   .ready-moment .ring .check {
     animation: none !important;
+  }
+  .hold-card,
+  .hold-count {
+    transform: none !important;
+  }
+  .hold-count .beat {
+    animation: fade-in 250ms var(--ease) both !important;
   }
 }
 @keyframes popup-fade {

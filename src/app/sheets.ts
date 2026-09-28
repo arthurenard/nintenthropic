@@ -26,6 +26,7 @@ export type Trouble =
   | "missing"
   | "insecure"
   | "stopped"
+  | "stalled"
   | "webgl"
   | "model"
   | "game"
@@ -40,6 +41,7 @@ interface TroubleSheet {
   body: string;
   primary: Fix;
   secondary?: Fix;
+  tertiary?: Fix;
 }
 
 export const TROUBLES: Record<Trouble, TroubleSheet> = {
@@ -71,12 +73,22 @@ export const TROUBLES: Record<Trouble, TroubleSheet> = {
     primary: "Use Mouse or Trackpad",
     secondary: "Choose a Game",
   },
+  // The camera going mid-game: the round waits, frozen, under the sheet.
   stopped: {
     icon: "camera",
     title: "Camera Stopped",
     body: "Your camera disconnected. Reconnect it, then Try Again.",
     primary: "Try Again",
-    secondary: "Choose a Game",
+    secondary: "Use Mouse or Trackpad",
+    tertiary: "Choose a Game",
+  },
+  stalled: {
+    icon: "camera",
+    title: "Camera Stopped",
+    body: "Your camera stopped sending a picture. Check it, then Try Again.",
+    primary: "Try Again",
+    secondary: "Use Mouse or Trackpad",
+    tertiary: "Choose a Game",
   },
   webgl: {
     icon: "cube",
@@ -107,7 +119,16 @@ export const TROUBLES: Record<Trouble, TroubleSheet> = {
   },
 };
 
-export function showTrouble(kind: Trouble, fixes: Record<Fix, () => void>): void {
+/**
+ * Shows a trouble's sheet. `choices` replaces its second and third fixes
+ * where the moment calls for others (the camera failing again mid-game
+ * offers the mouse and the arcade, not a new game).
+ */
+export function showTrouble(
+  kind: Trouble,
+  fixes: Record<Fix, () => void>,
+  choices: { secondary?: Fix | null; tertiary?: Fix | null } = {},
+): void {
   closeSheets();
   const sheet = TROUBLES[kind];
   const badge = $("alert-icon");
@@ -117,7 +138,8 @@ export function showTrouble(kind: Trouble, fixes: Record<Fix, () => void>): void
   setText("alert-body", sheet.body);
   for (const [id, label] of [
     ["alert-primary", sheet.primary],
-    ["alert-secondary", sheet.secondary],
+    ["alert-secondary", choices.secondary === undefined ? sheet.secondary : choices.secondary],
+    ["alert-tertiary", choices.tertiary === undefined ? sheet.tertiary : choices.tertiary],
   ] as const) {
     const button = $<HTMLButtonElement>(id);
     button.hidden = !label;
