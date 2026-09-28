@@ -467,8 +467,9 @@ export class HighNoon implements Game, MatchListener {
   update(dt: number, _now: number, aim: Aim): void {
     if (this.phase === "loading" || this.paused) return;
     this.lastDt = dt;
-    // Read every frame: turned on in the pause menu, it holds from Resume.
+    // Read every frame: changed in the pause menu's Settings, they hold from Resume.
     this.effects.reducedFlashing = this.ctx.settings.reducedFlashing;
+    this.camera.reducedMotion = this.ctx.settings.reducedMotion;
     // The host may change the tier mid-game (its dynamic resolution gave up).
     if (this.ctx.quality.tier !== this.tier) {
       this.tier = this.ctx.quality.tier;
