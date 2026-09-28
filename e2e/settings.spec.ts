@@ -369,8 +369,10 @@ test("the settings sheet in a narrow window is a full-height sheet", async ({ pa
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await shot(page, info, "settings-08-narrow-arcade");
   await page.getByRole("button", { name: "Settings" }).click();
+  // Measured once the sheet has finished rising, not part way.
+  await page.locator("#settings").evaluate((sheet) => Promise.all(sheet.getAnimations({ subtree: true }).map((a) => a.finished)));
   const box = (await page.locator("#settings").boundingBox())!;
-  expect(box.width).toBe(390);
+  expect(box.width).toBeCloseTo(390, 0);
   expect(box.y + box.height).toBeCloseTo(844, 0);
   expect(box.height).toBeGreaterThan(800);
   await shot(page, info, "settings-09-narrow-sheet");

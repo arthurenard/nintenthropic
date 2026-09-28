@@ -42,6 +42,7 @@ export interface SettingsHost {
 }
 
 const AIM_FOOT = "Steady holds a shaky hand still. Responsive follows quick moves closely.";
+const CAMERA_FOOT = "Your aim is saved for each camera.";
 
 /** Where the sheet was opened: from the arcade, or over a paused game. */
 export type SettingsContext = "home" | "pause";
@@ -210,6 +211,7 @@ export class SettingsSheet {
       `Relaxed is slower and gentler, with records of its own.${inGame ? " A change applies when the next round begins." : ""}`,
     );
     setText("foot-aim", AIM_FOOT);
+    setText("foot-camera", CAMERA_FOOT);
     this.say("");
     void this.listCameras();
     navigator.mediaDevices?.addEventListener?.("devicechange", this.onDevices);
@@ -264,7 +266,7 @@ export class SettingsSheet {
     }
     row.hidden = cameras.length < 2;
     // Over a game, the camera in use stays until the next one.
-    setText("foot-aim", `${AIM_FOOT}${this.context === "pause" && !row.hidden ? " A new camera takes over from your next game." : ""}`);
+    setText("foot-camera", `${CAMERA_FOOT}${this.context === "pause" && !row.hidden ? " A new camera takes over from your next game." : ""}`);
     if (row.hidden) return;
     const current = this.host.currentCamera();
     const chosen = cameras.some((camera) => camera.deviceId === current) ? current : cameras[0]!.deviceId;
