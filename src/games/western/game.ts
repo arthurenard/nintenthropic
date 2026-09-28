@@ -14,7 +14,7 @@ import { felledBy } from "./rules/felled";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import { loadSoundPack } from "../../audio/index";
 import type { StreetSpace } from "../../audio/routing";
-import { mulberry32 } from "./rules/rng";
+import { mulberry32 } from "../../engine/rules/rng";
 import type { Award, WaveBonuses } from "./rules/scoring";
 import { isHighNoon, type SecretId } from "./rules/secrets";
 import type { Townsperson } from "./rules/townsfolk";
@@ -25,20 +25,22 @@ import { loadAssets, type HighNoonAssets } from "./world/assets";
 import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
 import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
-import { RIM, RigPool, templateFrom } from "./world/character";
+import { RigPool } from "../../engine/world/character";
+import { highNoonTemplate, streetRim } from "./world/rigs";
 import { DynamiteView } from "./world/dynamiteView";
-import { Hammer } from "./hammer";
+import { Hammer } from "../../engine/rules/hammer";
 import { innocentWord, reloadHint } from "./hints";
 import { HintLine, tipText, type TipId } from "./tips";
 import { Effects } from "./world/effects";
-import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "./world/framing";
-import { PlayerCamera } from "./world/playerCamera";
-import { ScreenFlash } from "./world/flash";
-import { PostFX } from "./world/post";
+import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "../../engine/world/framing";
+import { PlayerCamera } from "../../engine/world/playerCamera";
+import { ScreenFlash } from "../../engine/world/flash";
+import { PostFX } from "../../engine/world/post";
+import { GOLDEN_HOUR } from "./world/grade";
 import { TownQueries } from "./world/queries";
 import { SecretsWorld } from "./world/secretsWorld";
 import { Shooter } from "./world/shooting";
-import { Sound } from "./world/sound";
+import { Sound } from "../../engine/world/sound";
 import { Stage } from "./world/stage";
 import type { Surface } from "./world/town";
 
@@ -219,10 +221,6 @@ export class HighNoon implements Game, MatchListener {
     );
     const town = this.assets.town;
     this.stage = new Stage(renderer, town, this.assets.sky, this.assets.fog, this.noon);
-    // The street's rim light, to the hour: the white glare of noon, or the
-    // golden hour's warm sky and dust.
-    if (this.noon) RIM.color.value.setRGB(0.85, 0.85, 0.82);
-    else RIM.color.value.setRGB(0.95, 0.8, 0.64);
     this.stage.setQuality(ctx.quality);
     this.camera = new PlayerCamera(town.eye, town.eyeQuaternion, town.fov);
     this.camera.reducedMotion = ctx.settings.reducedMotion;
@@ -258,10 +256,13 @@ export class HighNoon implements Game, MatchListener {
     this.effects = new Effects(this.stage.fxRoot, ctx.quality);
     this.effects.setRandom(this.visualRandom);
 
-    const banditT = templateFrom("bandit", this.assets.bandit);
-    const bossT = templateFrom("boss", this.assets.boss, this.assets.bandit.animations);
-    const townsT = templateFrom("townsfolk", this.assets.townsfolk, this.assets.bandit.animations);
-    const chickenT = templateFrom("chicken", this.assets.chicken);
+    // The street's rim light, to the hour: the white glare of noon, or the
+    // golden hour's warm sky and dust.
+    const rim = streetRim(this.noon);
+    const banditT = highNoonTemplate("bandit", this.assets.bandit, rim);
+    const bossT = highNoonTemplate("boss", this.assets.boss, rim, this.assets.bandit.animations);
+    const townsT = highNoonTemplate("townsfolk", this.assets.townsfolk, rim, this.assets.bandit.animations);
+    const chickenT = highNoonTemplate("chicken", this.assets.chicken, rim);
     const parent = this.stage.dynamic;
     this.pools = {
       bandit: new RigPool(banditT, 12, parent),
@@ -299,7 +300,7 @@ export class HighNoon implements Game, MatchListener {
       bellCenter: () => this.secretsWorld.bellCenter(),
       vaneCenter: () => this.secretsWorld.vaneCenter(),
     });
-    this.post = new PostFX(renderer, this.stage.scene, this.camera.camera, ctx.quality);
+    this.post = new PostFX(renderer, this.stage.scene, this.camera.camera, ctx.quality, { grade: GOLDEN_HOUR });
     this.post.set("noon", this.noon ? 1 : 0);
     this.tier = ctx.quality.tier;
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
@@ -976,7 +977,7 @@ export class HighNoon implements Game, MatchListener {
     this.sound.stopLoop(`fuse.b${b.id}`);
     this.sound.loopAt(`fuse.s${stick.id}`, "dynamite_fuse", b.pos, 0.8);
     const v = this.cast.view(b);
-    v?.rig.arm("none");
+    v?.rig.hold(null);
   }
 
   dynamiteShot(stick: Dynamite, award: Award): void {
@@ -1146,7 +1147,7 @@ export class HighNoon implements Game, MatchListener {
         if (!c || !rig) return false;
         rig.userDataGallery = true;
         rig.dress(outfit ?? (kind === "townsfolk" ? ["var.coat.apron"] : kind === "boss" ? ["var.hat.stetson", "var.coat.duster"] : ["var.hat.stetson", "var.bandana.red", "var.vest"]));
-        rig.arm(kind === "townsfolk" ? "none" : "revolver");
+        rig.hold(kind === "townsfolk" ? null : "gun.revolver");
         rig.root.visible = true;
         const p = where === "exposed" ? c.exposed : c.hidden;
         rig.root.position.set(p.x, p.y, p.z);
@@ -1157,7 +1158,7 @@ export class HighNoon implements Game, MatchListener {
         rig.mixer.setTime(t);
         // Lit as in play: is the sun on him here?
         const chest = new Vector3(p.x, p.y + 1.3, p.z);
-        rig.uniforms.uSunVis.value = this.queries.sunReaches(chest, this.stage.sunDirection.clone().negate()) ? 1 : 0.12;
+        rig.lighting.key.value = this.queries.sunReaches(chest, this.stage.sunDirection.clone().negate()) ? 1 : 0.12;
         return true;
       },
       setImmortal: (on: boolean) => {
@@ -1181,7 +1182,7 @@ export class HighNoon implements Game, MatchListener {
           if (!rig) return;
           rig.userDataGallery = true;
           rig.dress(outfit ?? (kind === "townsfolk" ? ["var.coat.apron"] : ["var.hat.stetson", "var.bandana.red", "var.vest"]));
-          rig.arm(kind === "townsfolk" ? "none" : "revolver");
+          rig.hold(kind === "townsfolk" ? null : "gun.revolver");
           rig.root.visible = true;
           rig.root.position.set((i - (n - 1) / 2) * 1.25, 0, -5.2);
           rig.root.rotation.y = 0.35 * Math.sign(-(i - (n - 1) / 2));
@@ -1197,7 +1198,7 @@ export class HighNoon implements Game, MatchListener {
    * A point on a character a player could actually see and aim at: the chest
    * if it is clear of cover, else the belly, the neck or the head.
    */
-  private visiblePoint(j: import("./world/character").Joints, out: Vector3): boolean {
+  private visiblePoint(j: import("../../engine/world/character").Joints, out: Vector3): boolean {
     const cam = this.camera.camera.position;
     const hit = { point: new Vector3(), normal: new Vector3(), distance: 0, object: null };
     const dir = new Vector3();

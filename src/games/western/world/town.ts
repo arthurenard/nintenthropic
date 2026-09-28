@@ -8,7 +8,7 @@ import {
   type Group,
 } from "three";
 import type { Cover, CoverKind, Emerge } from "../rules/types";
-import { contractName, extraNumber, extraString, findNode, nodesWithPrefix } from "./names";
+import { contractName, extraNumber, extraString, findNode, nodesWithPrefix } from "../../../engine/world/names";
 
 export type Surface = "wood" | "dirt" | "glass" | "metal" | "stone" | "cloth" | "water";
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Bandit } from "./bandit";
 import type { Cover } from "./types";
 import { buildQueue, Match, pickBossCovers, type StartOptions } from "./match";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import { Recorder, testCovers } from "./testkit";
 import { INTERMISSION, WAVE_INTRO } from "./tuning";
 import { waveSpec } from "./waves";

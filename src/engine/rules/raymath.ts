@@ -1,12 +1,14 @@
 /**
- * Ray tests against the simple shapes bandits are made of for shooting: a
- * sphere for the head and capsules for the torso and limbs.
+ * Ray tests against the simple shapes a character is made of for shooting: a
+ * sphere for the head and capsules for the torso and limbs (High Noon's
+ * bandits; anyone built on the shared humanoid armature).
  *
  * Each test reports how close the ray came (`miss`, metres from the shape's
  * core) and how far along the ray that was (`t`). A finger is not a mouse, so
  * the caller can then accept near misses within an angular tolerance — aim
  * assist that is honest about distance rather than a magnet.
  */
+/** A point or direction in the world, metres: a three.js Vector3 is one. */
 export interface V3 {
   x: number;
   y: number;

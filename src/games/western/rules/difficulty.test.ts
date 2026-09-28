@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { flightTimeFor } from "./dynamite";
-import { PlayerHealth } from "./health";
+import { PlayerHealth } from "../../../engine/rules/health";
 import { Match } from "./match";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import { playUntilDeath, Recorder, standIdle, testCovers, type Skill } from "./testkit";
 import {
   BOLD_AFTER,

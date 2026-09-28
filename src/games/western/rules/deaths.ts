@@ -1,4 +1,4 @@
-import type { Random } from "./rng";
+import type { Random } from "../../../engine/rules/rng";
 import type { BanditState, Cover, DeathChoice, HitPart } from "./types";
 
 /** More floor than this in front of a man up high, and he falls on it, not off it. */

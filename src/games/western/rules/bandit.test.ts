@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Bandit, type BanditEvents, type BanditWorld } from "./bandit";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import { testCovers } from "./testkit";
 import {
   DUEL_DRAW,

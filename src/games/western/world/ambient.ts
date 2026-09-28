@@ -14,8 +14,8 @@ import {
 } from "three";
 import type { Quality } from "../../../engine/types";
 import type { Effects } from "./effects";
-import type { Rig, RigPool } from "./character";
-import type { Sound } from "./sound";
+import type { Rig, RigPool } from "../../../engine/world/character";
+import type { Sound } from "../../../engine/world/sound";
 import type { TownLayout } from "./town";
 
 interface Weed {

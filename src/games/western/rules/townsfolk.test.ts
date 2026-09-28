@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import { roleForCover, Townsperson, type TownsfolkEvents } from "./townsfolk";
 import type { Cover } from "./types";
 

@@ -1,9 +1,10 @@
 /**
- * Small helpers over the game's seeded random source.
+ * Small helpers over a game's seeded random source.
  *
- * Every decision the gang makes goes through the `() => number` the host puts
- * in GameContext.random, so a seed replays a whole gunfight exactly — which is
- * what makes the rules testable and a reported bug reproducible.
+ * Every decision a game's rules make should go through the `() => number` the
+ * host puts in GameContext.random, so a seed replays a whole round exactly —
+ * which is what makes the rules testable and a reported bug reproducible
+ * (High Noon's gang decides everything this way).
  */
 export type Random = () => number;
 
@@ -37,8 +38,9 @@ export function shuffle<T>(random: Random, list: T[]): T[] {
 }
 
 /**
- * A tiny, fast, well-mixed PRNG for the dev harness and tests. The app brings
- * its own seeded source; this one only exists so a `?seed=` can be replayed.
+ * A tiny, fast, well-mixed PRNG for the dev harness and tests (the same
+ * mulberry32 as engine/random.ts). The app brings its own seeded source; this
+ * one only exists so a `?seed=` can be replayed.
  */
 export function mulberry32(seed: number): Random {
   let a = seed >>> 0;

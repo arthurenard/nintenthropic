@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Raycaster, Vector3 } from "three";
 import { TownQueries } from "./queries";
 import type { TownLayout } from "./town";
-import { mulberry32 } from "../rules/rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 
 /** A jumble of a town: a huge ground, boxes of all sizes, a tilted board, and one secret. */
 function town(hideOne = false) {

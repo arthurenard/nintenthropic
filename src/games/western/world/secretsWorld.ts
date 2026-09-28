@@ -11,7 +11,7 @@ import type { ParticleStyle } from "../../../engine/fx/particles";
 import type { Cover } from "../rules/types";
 import type { Effects } from "./effects";
 import type { TownQueries } from "./queries";
-import type { Sound } from "./sound";
+import type { Sound } from "../../../engine/world/sound";
 import type { TownLayout } from "./town";
 
 interface Leak {

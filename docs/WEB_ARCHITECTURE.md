@@ -45,11 +45,16 @@ src/
   ui/                 design-language components and styles (from DESIGN.md)
   engine/             the game host: renderer, loop, dynamic resolution, asset loading
     types.ts          THE CONTRACT between app, input, audio and games (below)
+    world/            what every realistic 3D game shares (see "Building a game")
+    rules/            pure rules every game shares: health, streak, hints, rng...
+    fx/               particles, decals, debris, lights, their textures
+  dev/                the dev harness every game's dev.html runs in
   tracking/           camera + MediaPipe → HandFrame
   input/              HandFrame → Aim (filter, trigger, calibrated map); mouse / touch
   calibration/        the aim check that runs before every game
   audio/              the audio engine and the synthesised sound library
   games/
+    index.ts          the games, as the arcade shows them
     western/          High Noon
 public/
   models/             MediaPipe .task bundles
@@ -181,6 +186,80 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
 - `CalibrationStage` — `targets()` returns the game's aim-check targets as
   viewport positions and radii; `light(id)`, `hit(id)`, `miss(id)`, `done()`
   let the game show and break them (bottles in High Noon).
+
+## Building a game
+
+A game is a folder, `src/games/<id>/`, whose `index.ts` exports a
+`createGame(): Promise<Game>` that imports the rest on demand, and an entry
+in `src/games/index.ts` (below). High Noon (`src/games/western/`) is the
+worked example of everything here. What High Noon learned that every
+realistic 3D game needs lives in the engine; use it rather than growing your
+own, and keep in your folder only what is truly your game's.
+
+### `src/engine/world/`: the 3D world
+
+| Module | What it gives you |
+| --- | --- |
+| `post.ts` | `PostFX(renderer, scene, camera, quality, options)`: the scene into a 4×/2×/0 MSAA half-float target by tier (the anti-aliasing), bloom on what is brighter than the world (off on low), and one grade pass: exposure, a highlight shoulder, your own colour grade (`grade: { glsl, uniforms }`, a `vec3 grade(vec3 c, float l)`), and the player's state - `desaturate`, `hurt` (a colour creeping in from the corners), `sepia`, `flash` (a colour added to the picture), a vignette. Leave out what you do not want (`hurt: false`, `bloom: false`...): it is compiled out. `set(name, value)` for every uniform, yours included. It turns the renderer's tone mapping off: the grade is the tone map. |
+| `flash.ts` | `ScreenFlash`: the whole picture's flash for a blast close by, which jumps and fades on Standard and swells and ebbs at a tenth of the brightness with Reduce Flashing. Feed `update(dt)` to `post.set("flash", ...)`. |
+| `character.ts` | Skinned glTF characters: `templateFrom(kind, asset, borrowedClips, { fallbacks, rim })` once per file, a `RigPool` of rigs made at load (never mid-game), and each `Rig` plays clips with crossfades (`play(name, fade, loop, timeScale)`, falling back through your table, then `idle`), `dress([...var names])`, `worn("var.hat.")`, `hold("gun.rifle" | null)`, `socket("socket.gun")`, `tint()`, `setOpacity()`, and procedural layers over the clips: `aimAt(point, weight)` pitches the chest, `hitReact(side, strength)` twists it, `kick()` recoils the arm. `lighting.key` (how much of the directional light reaches it: a baked world decides by a ray) and `lighting.shade`, and a rim light shared by a template (`rimLight(colour)`). `updateJoints()` gives the world positions a shot is tested against. `turnRig`/`headingTo` turn one the short way round. |
+| `tumblers.ts` | Things knocked loose that tumble to rest (a hat, a dropped gun) without a physics engine; a thing taken from a rig goes back home with `restore`. |
+| `names.ts` | The asset contract's dotted names (`cover.saloon_door`, `shoulder.L`): three.js strips the dots, `contractName(o)` gives them back; `findNode`, `nodesWithPrefix`, `extraString`, `extraNumber`, and `nameNode` for placeholders built in code. |
+| `playerCamera.ts` | `PlayerCamera(eye, orientation, fov, { near, far, groundY })`: a standing first-person eye with a slow breath, a kick when the gun fires (`kick`), a flinch when hit (`flinch(direction, amount)`), a shake (`rumble`), the slow fall at death (`setDeath(progress, side)`), framings eased from one to the next (`setFraming(framing, seconds)`), `still` for the aim check and `reducedMotion`. |
+| `framing.ts` | Fitting a lens to a fixed eye: `fitFraming(sights, aspect, options)` finds the tightest field of view and pitch that show every point the fight happens at (`Sight`s, in the art camera's space), targets clear of the page's chrome (`chromeKeepOut(width, height, hand, { panel, dock })`, with `WEAPON_DOCK` for each weapon's corner); `checkFraming` widens the art's own lens for a narrow window. Pure maths, tested without a renderer. |
+| `sound.ts` | `Sound(bus, camera)`: cues placed in the world (`at(cue, position)` works out pan and distance from the camera), named loops that survive a pause (stopped on `pause`, started again on `resume`), and the `hurt` filter held over a pause (a paused game is not being hurt). |
+| `sky.ts` | `SkyLight(renderer, scene, texture, intensity)`: an equirectangular sky as the background and, through PMREM, the environment light; `asSky(texture)`; `horizonColour(texture)` for the fog to meet the sky without a seam. |
+| `scene.ts` | `fitShadowCamera(sun, box)` spends the shadow map on the part of the world that matters; `shadowMapSize(tier)`; `disposeTree(root)`. |
+| `queries.ts` | `SceneryQueries(solids, moving)`: rays against the scenery fast enough to ask dozens of times a frame (a `TriangleGrid` of 2 m columns): `cast` (where a bullet lands), `groundAt` (under a falling body), `lightReaches` (is the sun on him). |
+| `art.ts` | `Art(ctx, files, options, onProgress)`: a game's glTF and textures through the engine's protected download, weighted into one progress bar. Every file is required: in production one that does not load fails the load with a `DownloadError` ("Couldn’t Load the Game", Try Again). In development and tests a missing file may be stood in for by a placeholder built in code, which your game imports behind `import.meta.env.MODE !== "production"` (so a production build drops it) and hands to `gltf(name, standIn)` / `texture(name, standIn)`; `probe()` first asks which files are really there. |
+
+`src/engine/fx/` holds the particle system, decals, debris, the pooled
+lights and their textures; High Noon's `world/effects.ts` shows how a game
+builds its own presets (dust, sparks, a muzzle flash, a reduced-flashing
+variant of each) on them.
+
+### `src/engine/rules/`: pure rules
+
+| Module | What it gives you |
+| --- | --- |
+| `health.ts` | `PlayerHealth(regeneration, max)`: hidden health that comes back after a delay at a rate (read every frame, so a difficulty can ease them), `hurt` 0..1 for the picture's effects, `immortal` for a harness's god mode; `damageDirection(eye, yaw, from)` for `HudSink.damage`. |
+| `streak.ts` | `Streak(step, maxMultiplier)`: consecutive hits build a multiplier a step at a time; what breaks it is your call. |
+| `hints.ts` | `HintLine(tipsSeen, learnedByDoing)`: the hint line's one urgent need, a brief word, and one-time tips queued one at a time for four seconds, never twice (`Settings.tipsSeen`, ids prefixed with your game's name). Read `text` every frame and pass it to `hud.hint` when it changes. |
+| `hammer.ts` | `Hammer`: the frames on which the re-arm's soft click should sound as the thumb comes back up after a shot, and never when it should not. |
+| `rng.ts` | `range`, `chance`, `pick`, `shuffle` over `GameContext.random`, and `mulberry32` for a replayable `?seed=`: route every decision through the seeded source and a seed replays a round exactly. |
+| `raymath.ts` | Ray against sphere and capsule (a head, a torso, a limb) with an honest angular tolerance: aim assist that is not a magnet. |
+
+### What stays yours
+
+High Noon keeps in its folder what only it needs, and so should every game:
+its rules (the gang, waves, dynamite, secrets, what felled you), its world
+(the town's layout and covers, the bottles of its aim check, the ambience,
+its effects' recipes, what a shot can hit), its colour grade
+(`western/world/grade.ts`), its tips' words, its clip fallbacks and rim
+light (`western/world/rigs.ts`), its revolver, and its placeholders.
+
+### The dev harness
+
+Every game gets `src/games/<id>/dev.html` (a page with one script) and a
+`dev.ts` of a few lines:
+
+```ts
+import { runHarness } from "../../dev/harness";
+import { MY_GAME } from "../index";
+import { createMyGame } from "./index";
+void runHarness({ entry: MY_GAME, tips: ALL_TIPS, create: (p) => createMyGame({ startWave: p.wave, assetBase: p.assetBase }) });
+```
+
+It runs the game alone in the page's real chrome (the HUD, the crosshair,
+the results card, from index.html and `src/app`), with the mouse as the gun
+and the silent `NullAudioBus`, after a short aim check on the game's own
+targets. Query parameters: `?seed=`, `?wave=`, `?difficulty=relaxed`,
+`?flashing=reduced`, `?tips=seen`, `?assetBase=/folder/`, `?god=1`,
+`?golden=1`, `?quality=`, `?input=mouse|touch|hand`, `?skipcalib=1`,
+`?manual=1` (drive it from `window.__handy`: `advance(seconds)`,
+`bench(frames)`, `mouse.aimAt/fire/reloadGesture`, and `hud.log` of every
+HudSink call), `?w=&h=&dpr=`; a game reads its own from `HarnessParams`
+(High Noon's `?noon=1`).
 
 ## The aim check: calibrate before every game, finish at 95%
 

@@ -1,5 +1,5 @@
-import type { V3 } from "./raymath";
-import { chance, range, type Random } from "./rng";
+import type { V3 } from "../../../engine/rules/raymath";
+import { chance, range, type Random } from "../../../engine/rules/rng";
 import {
   DEATH_TIME,
   DUEL_DRAW,

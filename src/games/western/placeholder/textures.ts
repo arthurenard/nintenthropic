@@ -1,5 +1,5 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type Texture } from "three";
-import { mulberry32 } from "../rules/rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 
 /**
  * Detail textures for the placeholder town, painted into canvases at load:

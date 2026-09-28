@@ -1,6 +1,6 @@
 import { PerspectiveCamera } from "three";
 import { describe, expect, it } from "vitest";
-import type { AudioBus } from "../../../engine/types";
+import type { AudioBus } from "../types";
 import { Sound } from "./sound";
 
 /** A bus that only remembers what it was told. */

@@ -1,3 +1,4 @@
+import { Streak } from "../../../engine/rules/streak";
 import {
   ACCURACY_BONUS_MAX,
   BOSS_BOUNTY,
@@ -47,8 +48,8 @@ export interface WaveBonuses {
  */
 export class Scorer {
   score = 0;
-  streak = 0;
-  bestStreak = 0;
+  /** Consecutive hits: ×2 at three, ×3 at six, ×4 at nine. */
+  private readonly run = new Streak(STREAK_STEP, STREAK_MAX_MULTIPLIER);
   shots = 0;
   hits = 0;
   kills = 0;
@@ -61,7 +62,15 @@ export class Scorer {
   private waveInnocentHit = false;
 
   get multiplier(): number {
-    return Math.min(STREAK_MAX_MULTIPLIER, 1 + Math.floor(this.streak / STREAK_STEP));
+    return this.run.multiplier;
+  }
+
+  get streak(): number {
+    return this.run.count;
+  }
+
+  get bestStreak(): number {
+    return this.run.best;
   }
 
   get accuracy(): number {
@@ -73,15 +82,12 @@ export class Scorer {
     this.shots++;
     this.waveShots++;
     if (!hit) {
-      this.streak = 0;
+      this.run.break();
       return false;
     }
-    const before = this.multiplier;
     this.hits++;
     this.waveHits++;
-    this.streak++;
-    this.bestStreak = Math.max(this.bestStreak, this.streak);
-    return this.multiplier > before;
+    return this.run.hit();
   }
 
   kill(facts: KillFacts): Award {
@@ -123,7 +129,7 @@ export class Scorer {
   innocent(): Award {
     this.townsfolkHit++;
     this.waveInnocentHit = true;
-    this.streak = 0;
+    this.run.break();
     const lost = Math.min(this.score, TOWNSFOLK_PENALTY);
     this.score -= lost;
     return { points: -TOWNSFOLK_PENALTY, labels: ["Townsperson"], multiplier: 1 };

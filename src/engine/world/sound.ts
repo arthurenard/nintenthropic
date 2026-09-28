@@ -1,5 +1,5 @@
 import { Vector3, type PerspectiveCamera } from "three";
-import type { AudioBus, CueOptions } from "../../../engine/types";
+import type { AudioBus, CueOptions } from "../types";
 import type { V3 } from "../rules/raymath";
 
 const local = new Vector3();

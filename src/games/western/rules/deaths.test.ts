@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chooseDeath } from "./deaths";
-import { mulberry32 } from "./rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 import type { Cover, CoverKind, Emerge } from "./types";
 
 function cover(kind: CoverKind, emerge: Emerge, level: 0 | 1 | 2 = 0): Cover {

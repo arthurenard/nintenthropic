@@ -2,12 +2,12 @@ import { Box3, Mesh, Object3D, Raycaster, Vector2, Vector3, type Intersection, t
 import type { Bandit } from "../rules/bandit";
 import type { Dynamite } from "../rules/dynamite";
 import type { ShotTarget } from "../rules/match";
-import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../rules/raymath";
+import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../../../engine/rules/raymath";
 import type { SecretId } from "../rules/secrets";
 import type { Townsperson } from "../rules/townsfolk";
 import type { HitPart } from "../rules/types";
 import type { Cast } from "./cast";
-import { contractName } from "./names";
+import { contractName } from "../../../engine/world/names";
 import type { TownQueries, RayHit } from "./queries";
 import { surfaceOf, type Surface, type TownLayout } from "./town";
 

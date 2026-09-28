@@ -1,3 +1,19 @@
+/**
+ * Skinned glTF characters at run time: one template per file, cloned into a
+ * fixed pool of rigs at load (nothing is cloned mid-game), each with its own
+ * mixer and materials, playing the file's clips with crossfades, dressed from
+ * its variation meshes, holding one of its props, and bent by a few
+ * procedural layers on top of the clips (a pitch toward what it aims at, a
+ * twist when hit, a kick when it fires).
+ *
+ * The asset contract (docs/WEB_ARCHITECTURE.md, "Characters") is shared by
+ * every game: a humanoid armature with the bones `hips`, `spine`, `chest`,
+ * `neck`, `head`, `upper_arm.L/R`, `forearm.L/R`, `hand.L/R`, `thigh.L/R`,
+ * `shin.L/R`, `foot.L/R`; variation meshes `var.<part>.<name>`; props
+ * `gun.<name>` and `prop.<name>`; empties `socket.<name>` where things are
+ * held or fired from; clips in place. A non-humanoid (High Noon's chicken)
+ * plays its clips all the same; the humanoid layers simply find no bones.
+ */
 import {
   AnimationMixer,
   Color,
@@ -16,86 +32,86 @@ import {
   type Material,
 } from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import type { LoadedAsset } from "../../../engine/types";
+import type { LoadedAsset } from "../types";
 import { contractName } from "./names";
 
-export type CharacterKind = "bandit" | "boss" | "townsfolk" | "chicken";
+/**
+ * The light that rims every figure: the bright sky (or a moon, or a station's
+ * lamps) catching the edges of a figure as they turn away from the eye. It
+ * keeps a figure in shade from sinking into the shaded wall behind it, and
+ * one in the light from dissolving into a lit one: a soft falloff at the
+ * silhouette, coloured by the figure's own clothes, stronger where the edge
+ * faces up. One uniform shared by every rig that should match; a game sets
+ * its colour to its light (black for none).
+ */
+export interface RimLight {
+  value: Color;
+}
+
+export function rimLight(color: Color = new Color(0, 0, 0)): RimLight {
+  return { value: color };
+}
 
 export interface CharacterTemplate {
-  kind: CharacterKind;
+  /** The game's name for the kind ("bandit", "zombie"). */
+  kind: string;
   scene: Object3D;
   clips: Map<string, AnimationClip>;
+  /** When the file lacks a clip, what to play instead, in order; "idle" after those. */
+  fallbacks: Readonly<Record<string, readonly string[]>>;
+  rim: RimLight;
 }
 
-/** When a file lacks a clip, what to play instead. */
-const FALLBACK: Record<string, string[]> = {
-  hidden: ["idle"],
-  sink: ["hidden", "idle"],
-  rise: ["aim", "idle"],
-  step_out: ["aim", "idle"],
-  step_in: ["idle"],
-  lean_left_out: ["aim"],
-  lean_right_out: ["aim"],
-  lean_left_in: ["idle"],
-  lean_right_in: ["idle"],
-  aim: ["idle"],
-  fire: ["aim", "idle"],
-  run: ["idle"],
-  throw: ["fire", "aim"],
-  hit_body: ["idle"],
-  hit_head: ["hit_body", "idle"],
-  death_back: ["death_forward", "idle"],
-  death_forward: ["death_back", "idle"],
-  death_fall: ["death_forward", "death_back"],
-  death_slump: ["death_forward", "death_back"],
-  peek: ["idle"],
-  hands_up: ["idle"],
-  panic: ["hands_up", "idle"],
-  head_shake: ["idle"],
-  wave: ["idle"],
-  walk: ["run", "idle"],
-  peck: ["idle", "walk"],
-  flutter: ["run", "walk"],
-};
+export interface TemplateOptions {
+  fallbacks?: Readonly<Record<string, readonly string[]>>;
+  rim?: RimLight;
+}
 
-export function templateFrom(kind: CharacterKind, asset: LoadedAsset, extraClips: AnimationClip[] = []): CharacterTemplate {
+/** A rim that adds nothing, for templates that ask for none. */
+const NO_RIM: RimLight = rimLight();
+
+/**
+ * A template from a loaded file. `extraClips` are borrowed from another file
+ * on the same armature (High Noon's townsfolk borrow the gang's hit
+ * reactions and falls); the file's own clips win over them.
+ */
+export function templateFrom(kind: string, asset: LoadedAsset, extraClips: readonly AnimationClip[] = [], options: TemplateOptions = {}): CharacterTemplate {
   const clips = new Map<string, AnimationClip>();
-  // Shared armature: townsfolk borrow the gang's hit reactions and falls.
   for (const c of extraClips) clips.set(c.name, c);
   for (const c of asset.animations) clips.set(c.name, c);
-  return { kind, scene: asset.scene, clips };
+  return { kind, scene: asset.scene, clips, fallbacks: options.fallbacks ?? {}, rim: options.rim ?? NO_RIM };
 }
 
-const PATCH_KEY = "highnoon-rig";
+/** Every rig's materials compile to one shader program. */
+const PATCH_KEY = "handy-rig";
+
+/** What each rig's shader reads besides the scene's lights. */
+export interface RigLighting {
+  /**
+   * How much of the directional (key) light reaches it, 0..1. A world whose
+   * lighting is baked cannot cast its own shadows onto characters in the
+   * usual way: the game decides instead (High Noon casts a ray toward the
+   * sun) and eases this toward the answer.
+   */
+  key: { value: number };
+  /** An overall shade, 0..1: a figure seen as a dark shape moving in an unlit room. */
+  shade: { value: number };
+}
 
 /**
- * The light that rims every figure in the street: the bright sky and the
- * sunlit dust all round a man catching the edges of his hat, shoulders and
- * sleeves as they turn away from you. It is what keeps a figure in the
- * shade from sinking into the shaded facade behind him, and one in the sun
- * from dissolving into the sunlit boards: a soft falloff at the silhouette,
- * coloured by his own clothes, stronger where the edge faces up at the sky.
- * The game sets its colour to the hour (warm at golden hour, whiter at noon).
+ * Each rig's materials get the key light's reach and the shade, and the
+ * template's rim light. Patched once, one shader program for every rig.
  */
-export const RIM = { color: { value: new Color(0.95, 0.8, 0.64) } };
-
-/**
- * Each rig's materials get two uniforms: how much sun reaches it (the town
- * is baked, so the town's shadows cannot fall on characters in the usual way —
- * a ray toward the sun decides instead), and an overall shade (a tell seen
- * as a dark shape moving in an unlit room); and the street's rim light
- * (RIM). Patched once, one shader program for every rig.
- */
-function patchMaterial(m: Material, uniforms: { uSunVis: { value: number }; uShade: { value: number } }): void {
+function patchMaterial(m: Material, lighting: RigLighting, rim: RimLight): void {
   m.onBeforeCompile = (shader) => {
-    shader.uniforms["uSunVis"] = uniforms.uSunVis;
-    shader.uniforms["uShade"] = uniforms.uShade;
-    shader.uniforms["uRim"] = RIM.color;
+    shader.uniforms["uKeyLight"] = lighting.key;
+    shader.uniforms["uShade"] = lighting.shade;
+    shader.uniforms["uRim"] = rim;
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float uSunVis;\nuniform float uShade;\nuniform vec3 uRim;")
+      .replace("#include <common>", "#include <common>\nuniform float uKeyLight;\nuniform float uShade;\nuniform vec3 uRim;")
       .replace(
         "getDirectionalLightInfo( directionalLight, directLight );",
-        "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= uSunVis;",
+        "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= uKeyLight;",
       )
       .replace(
         "#include <opaque_fragment>",
@@ -154,6 +170,9 @@ export class Joints {
   readonly footR = new Vector3();
 }
 
+/** Is this node a prop a character holds (the contract's `gun.*` and `prop.*`)? */
+const isProp = (name: string) => name.startsWith("gun.") || name.startsWith("prop.");
+
 /**
  * One character on stage: a clone of a template with its own mixer,
  * materials and procedural layers (aim, hit twist, recoil) on top of the
@@ -163,23 +182,25 @@ export class Rig {
   readonly root = new Group();
   readonly model: Object3D;
   readonly mixer: AnimationMixer;
-  readonly kind: CharacterKind;
+  readonly kind: string;
   readonly bones = new Map<string, Object3D>();
+  /** Variation meshes, by full name (`var.hat.stetson`). */
   readonly vars = new Map<string, Object3D>();
-  readonly socket: Object3D | null;
-  readonly revolver: Object3D | null;
-  readonly rifle: Object3D | null;
-  readonly dynamite: Object3D | null;
+  /** Props, by full name (`gun.revolver`, `prop.dynamite`). */
+  readonly props = new Map<string, Object3D>();
+  /** Sockets, by full name (`socket.gun`). */
+  readonly sockets = new Map<string, Object3D>();
   readonly joints = new Joints();
-  readonly uniforms = { uSunVis: { value: 1 }, uShade: { value: 1 } };
+  readonly lighting: RigLighting = { key: { value: 1 }, shade: { value: 1 } };
   private readonly materials: MeshStandardMaterial[] = [];
   private readonly baseColors: number[] = [];
   private readonly actions = new Map<string, AnimationAction>();
   private readonly clips: Map<string, AnimationClip>;
+  private readonly fallbacks: Readonly<Record<string, readonly string[]>>;
   current: AnimationAction | null = null;
   currentName = "";
   inUse = false;
-  /** Borrowed by the dev harness's pose gallery. */
+  /** Borrowed by a dev harness's pose gallery. */
   userDataGallery = false;
   /** Procedural: twist from a hit, kick from firing, pitch toward the target. */
   private twist = 0;
@@ -188,8 +209,9 @@ export class Rig {
   aimWeight = 0;
   private aimWeightTarget = 0;
   readonly aimTarget = new Vector3();
+  /** How high the chest is above the feet, metres: where the aim pitches from. */
+  chestHeight = 1.35;
   opacity = 1;
-  private hatOn: Object3D | null = null;
   /**
    * The bones the procedural layers bend, and their pose before bending. A
    * clip that has no track for one of them would otherwise leave last
@@ -201,6 +223,7 @@ export class Rig {
   constructor(template: CharacterTemplate) {
     this.kind = template.kind;
     this.clips = template.clips;
+    this.fallbacks = template.fallbacks;
     this.model = cloneSkinned(template.scene);
     this.root.add(this.model);
     this.mixer = new AnimationMixer(this.model);
@@ -208,6 +231,8 @@ export class Rig {
       const name = contractName(o);
       if ((o as { isBone?: boolean }).isBone) this.bones.set(name, o);
       if (name.startsWith("var.")) this.vars.set(name, o);
+      if (isProp(name) && !this.props.has(name)) this.props.set(name, o);
+      if (name.startsWith("socket.") && !this.sockets.has(name)) this.sockets.set(name, o);
       const mesh = o as Mesh;
       if (mesh.isMesh) {
         mesh.castShadow = true;
@@ -218,7 +243,7 @@ export class Rig {
           const c = m.clone() as MeshStandardMaterial;
           c.transparent = true;
           c.depthWrite = true;
-          patchMaterial(c, this.uniforms);
+          patchMaterial(c, this.lighting, template.rim);
           this.materials.push(c);
           this.baseColors.push(c.color ? c.color.getHex() : 0xffffff);
           return c;
@@ -226,10 +251,6 @@ export class Rig {
         mesh.material = Array.isArray(mesh.material) ? cloned : (cloned[0] as Material);
       }
     });
-    this.socket = this.findByName("socket.gun");
-    this.revolver = this.findByName("gun.revolver");
-    this.rifle = this.findByName("gun.rifle");
-    this.dynamite = this.findByName("prop.dynamite");
     for (const name of ["spine", "chest", "upper_arm.R"]) {
       const b = this.bones.get(name);
       if (b) {
@@ -240,16 +261,18 @@ export class Rig {
     this.root.visible = false;
   }
 
-  private findByName(name: string): Object3D | null {
-    let found: Object3D | null = null;
-    this.model.traverse((o) => {
-      if (!found && contractName(o) === name) found = o;
-    });
-    return found;
-  }
-
   bone(name: string): Object3D | undefined {
     return this.bones.get(name);
+  }
+
+  /** A prop by its full name (`gun.rifle`), or null if the file has none. */
+  prop(name: string): Object3D | null {
+    return this.props.get(name) ?? null;
+  }
+
+  /** A socket by its full name (`socket.gun`), or null. */
+  socket(name: string): Object3D | null {
+    return this.sockets.get(name) ?? null;
   }
 
   has(clip: string): boolean {
@@ -264,7 +287,7 @@ export class Rig {
   private resolve(name: string): AnimationClip | null {
     const direct = this.clips.get(name);
     if (direct) return direct;
-    for (const alt of FALLBACK[name] ?? []) {
+    for (const alt of this.fallbacks[name] ?? []) {
       const c = this.clips.get(alt);
       if (c) return c;
     }
@@ -296,23 +319,18 @@ export class Rig {
 
   /** Show exactly these variation meshes (by full name); hide the rest. */
   dress(names: readonly string[]): void {
-    this.hatOn = null;
-    for (const [name, o] of this.vars) {
-      const on = names.includes(name);
-      o.visible = on;
-      if (on && name.startsWith("var.hat.")) this.hatOn = o;
-    }
+    for (const [name, o] of this.vars) o.visible = names.includes(name);
   }
 
-  get hat(): Object3D | null {
-    return this.hatOn;
+  /** The variation now worn whose name starts with `prefix` (`var.hat.`), if any. */
+  worn(prefix: string): Object3D | null {
+    for (const [name, o] of this.vars) if (o.visible && name.startsWith(prefix)) return o;
+    return null;
   }
 
-  /** Which prop is in the hand. */
-  arm(prop: "revolver" | "rifle" | "dynamite" | "none"): void {
-    if (this.revolver) this.revolver.visible = prop === "revolver";
-    if (this.rifle) this.rifle.visible = prop === "rifle";
-    if (this.dynamite) this.dynamite.visible = prop === "dynamite";
+  /** Hold this prop (by full name) and none of the others; null for empty hands. */
+  hold(name: string | null): void {
+    for (const [prop, o] of this.props) o.visible = prop === name;
   }
 
   /** A per-rig tint over the clothes, for variety in a crowd. */
@@ -336,10 +354,12 @@ export class Rig {
     this.aimWeightTarget = weight;
   }
 
+  /** Hit from one side (-1 left, +1 right, as the rig faces): a twist that springs back. */
   hitReact(side: number, strength: number): void {
     this.twistVel += side * 9 * strength;
   }
 
+  /** It fires: the arm and chest kick. */
   kick(): void {
     this.recoil = 1;
   }
@@ -373,9 +393,8 @@ export class Rig {
       this.root.updateMatrixWorld();
       tmpV.copy(this.aimTarget);
       this.root.worldToLocal(tmpV);
-      const chestY = 1.35;
       const horiz = Math.hypot(tmpV.x, tmpV.z);
-      const pitch = Math.atan2(tmpV.y - chestY, Math.max(0.5, horiz));
+      const pitch = Math.atan2(tmpV.y - this.chestHeight, Math.max(0.5, horiz));
       bend(chest, LEFT, -pitch * this.aimWeight * 0.85);
     }
     if (twisting) {
@@ -430,8 +449,8 @@ export class Rig {
     this.currentName = "";
     this.twist = this.twistVel = this.recoil = 0;
     this.aimWeight = this.aimWeightTarget = 0;
-    this.uniforms.uSunVis.value = 1;
-    this.uniforms.uShade.value = 1;
+    this.lighting.key.value = 1;
+    this.lighting.shade.value = 1;
     this.setOpacity(1);
     this.root.visible = false;
     this.root.position.set(0, 0, 0);
@@ -478,4 +497,20 @@ export class RigPool {
   dispose(): void {
     for (const r of this.rigs) r.dispose();
   }
+}
+
+/**
+ * Turn a rig about the vertical toward a heading (radians, 0 facing +Z),
+ * the short way round, easing over about a twelfth of a second.
+ */
+export function turnRig(rig: Rig, heading: number, dt: number): void {
+  let d = heading - rig.root.rotation.y;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  rig.root.rotation.y += d * Math.min(1, dt * 12);
+}
+
+/** The heading (radians about the vertical) from (x, z) toward a point. */
+export function headingTo(x: number, z: number, target: { x: number; z: number }): number {
+  return Math.atan2(target.x - x, target.z - z);
 }

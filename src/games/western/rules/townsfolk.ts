@@ -1,6 +1,6 @@
-import type { V3 } from "./raymath";
+import type { V3 } from "../../../engine/rules/raymath";
 import { copy, lerp, smooth } from "./bandit";
-import { range, type Random } from "./rng";
+import { range, type Random } from "../../../engine/rules/rng";
 import { HANDS_UP_TIME, TOWNSFOLK_OUT, TOWNSFOLK_PEEK } from "./tuning";
 import type { Cover, TownsfolkRole, TownsfolkState } from "./types";
 

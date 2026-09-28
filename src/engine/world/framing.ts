@@ -1,17 +1,17 @@
 /**
- * How the player's eye frames Dust Creek.
+ * How the player's eye frames a world seen from one fixed point.
  *
- * The town's own camera (`camera.player`, 45° tall) is the art's composition:
- * the whole street with room for the aim check's bottles in its corners. It is
- * the right picture for the warm-up, but in the fight it leaves a man at 30 m
- * sixty pixels tall at 1440 × 900 and the lower third of the screen to empty
- * dirt. So the game plays through a tighter lens: from the same eye (the
- * street and terrain are baked with projection UVs from exactly there, so
- * turning and zooming is safe and moving is not), the narrowest field of view
- * and the slight upward pitch that still show every place a bandit fights
- * from, clear of the page's corner chrome, at whatever shape the window is.
+ * A world's own camera is the art's composition: High Noon's `camera.player`
+ * (45° tall) shows the whole street with room for the aim check's bottles in
+ * its corners. It is the right picture for the warm-up, but in the fight it
+ * leaves a man at 30 m sixty pixels tall at 1440 × 900 and the lower third of
+ * the screen to empty dirt. So the game plays through a tighter lens: from
+ * the same eye (a world baked with projection UVs from exactly there can be
+ * turned and zoomed safely, never moved), the narrowest field of view and the
+ * slight pitch that still show every place the fight happens ("sights"),
+ * clear of the page's corner chrome, at whatever shape the window is.
  *
- * Pure math, in the town camera's space (x right, y up, looking down −z), so
+ * Pure math, in the art camera's space (x right, y up, looking down −z), so
  * it can be tested without a renderer.
  */
 
@@ -124,35 +124,62 @@ export function fitFraming(points: readonly Sight[], aspect: number, o: FitOptio
 
 /**
  * The warm-up's framing: the art's own camera, widened only when the window
- * is narrower than 4:3, so the bottles at its sides never leave the screen.
+ * is narrower than 4:3, so the targets at its sides (High Noon's bottles)
+ * never leave the screen.
  */
-export function checkFraming(townFov: number, aspect: number): Framing {
+export function checkFraming(artFov: number, aspect: number): Framing {
   const narrowest = 4 / 3;
-  if (aspect >= narrowest) return { fov: townFov, pitch: 0 };
-  const tan = (Math.tan((townFov * RAD) / 2) * narrowest) / Math.max(0.2, aspect);
+  if (aspect >= narrowest) return { fov: artFov, pitch: 0 };
+  const tan = (Math.tan((artFov * RAD) / 2) * narrowest) / Math.max(0.2, aspect);
   return { fov: (2 * Math.atan(tan)) / RAD, pitch: 0 };
 }
 
+/** A panel's size in CSS pixels. */
+export interface Size {
+  width: number;
+  height: number;
+}
+
+export interface ChromeOptions {
+  /** The score panel with the game's readouts: High Noon's three (wave, gang, streak) make about 168 × 154. */
+  panel?: Size;
+  /** The weapon's dock in the bottom-right corner (see WEAPON_DOCK): the revolver's cylinder is 96 × 96. */
+  dock?: Size;
+}
+
+/**
+ * The weapon dock's size for each way of showing the ammunition
+ * (HudSink.ammo's style, HudSink.heat), as src/app/play.css lays them out on
+ * a stage taller than 520 px.
+ */
+export const WEAPON_DOCK: Readonly<Record<"cylinder" | "magazine" | "heat", Size>> = {
+  cylinder: { width: 96, height: 96 },
+  magazine: { width: 96, height: 96 },
+  heat: { width: 96, height: 96 },
+};
+
 /**
  * Where the page's chrome sits in play, in CSS pixels, as src/app/play.css
- * lays it out: the score panel top left, Pause top right, the revolver's
- * cylinder bottom right, the camera's picture-in-picture bottom left (with the
- * hand only), and the hint pill along the bottom. A little is added round
- * each, so a hat brim does not tuck under a panel's edge either.
+ * lays it out: the score panel top left, Pause top right, the weapon's dock
+ * bottom right, the camera's picture-in-picture bottom left (with the hand
+ * only), and the hint pill along the bottom. A little is added round each,
+ * so a hat brim does not tuck under a panel's edge either.
  */
-export function chromeKeepOut(width: number, height: number, hand: boolean): Rect[] {
+export function chromeKeepOut(width: number, height: number, hand: boolean, options: ChromeOptions = {}): Rect[] {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
   const hud = Math.min(32, Math.max(16, 0.022 * w));
   const pad = 10;
+  const panel = options.panel ?? { width: 168, height: 154 };
+  const dock = options.dock ?? WEAPON_DOCK.cylinder;
   const px = (x0: number, y0: number, x1: number, y1: number): Rect => ({ x0: x0 / w, y0: y0 / h, x1: x1 / w, y1: y1 / h });
   const rects: Rect[] = [
-    // Score, wave, gang and streak: about 168 × 154.
-    px(0, 0, hud + 168 + pad, hud + 154 + pad),
+    // The score and the game's readouts.
+    px(0, 0, hud + panel.width + pad, hud + panel.height + pad),
     // Pause.
     px(w - hud - 48 - pad, 0, w, hud + 48 + pad),
-    // The cylinder's dock.
-    px(w - hud - 96 - pad, h - hud - 96 - pad, w, h),
+    // The weapon's dock.
+    px(w - hud - dock.width - pad, h - hud - dock.height - pad, w, h),
     // The hint, across the bottom middle.
     px(w / 2 - 290, h - hud - 44 - pad, w / 2 + 290, h),
   ];

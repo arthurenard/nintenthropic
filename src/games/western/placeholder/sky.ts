@@ -1,5 +1,5 @@
 import { CanvasTexture, Color, EquirectangularReflectionMapping, LinearFilter, SRGBColorSpace, Vector3, type Texture } from "three";
-import { mulberry32 } from "../rules/rng";
+import { mulberry32 } from "../../../engine/rules/rng";
 
 /**
  * The placeholder for sky.webp: an equirectangular golden-hour sky painted
