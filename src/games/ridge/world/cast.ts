@@ -82,11 +82,12 @@ function clipFor(a: Actor): { clip: string; loop: boolean; speed: number } {
     case "binoculars":
       return { clip: "look_binoculars", loop: true, speed: 1 };
     case "walk":
-      return { clip: "walk", loop: true, speed: Math.max(0.5, walkSpeed / 1.4) };
+      // The art's gaits: walk 1.30 m/s, patrol 1.05, run 3.60 (art/ridge/people), so nothing skates.
+      return { clip: "walk", loop: true, speed: Math.max(0.5, walkSpeed / 1.3) };
     case "patrol_walk":
-      return { clip: "patrol_walk", loop: true, speed: Math.max(0.5, walkSpeed / 1.1) };
+      return { clip: "patrol_walk", loop: true, speed: Math.max(0.5, walkSpeed / 1.05) };
     case "run":
-      return { clip: "run", loop: true, speed: Math.max(0.7, walkSpeed / 4) };
+      return { clip: "run", loop: true, speed: Math.max(0.7, walkSpeed / 3.6) };
     case "crouch":
     case "prone":
     case "prone_aim":
@@ -97,7 +98,7 @@ function clipFor(a: Actor): { clip: string; loop: boolean; speed: number } {
     case "duck":
       return { clip: act, loop: true, speed: 1 };
     case "cycle":
-      return { clip: "cycle", loop: true, speed: Math.max(0.5, walkSpeed / 4.5) };
+      return { clip: "cycle", loop: true, speed: Math.max(0.5, walkSpeed / 4.58) };
     case "fire":
       return { clip: a.role === "sniper" ? "prone_fire" : "fire", loop: false, speed: 1 };
     case "wound":
