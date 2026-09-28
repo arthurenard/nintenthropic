@@ -80,6 +80,14 @@ def compose_color(W, info, x, y):
     g = g * (1 + 0.16 * mot[None]) * (1 + np.array([0.06, 0.0, -0.10])[:, None] * N.fbm(x, y, 8807, octaves=3, scale=1 / 23.0))
     wet = smoothstep(0.2, 0.9, info['fcurv']) * smoothstep(0.1, 0.5, N.fbm(x, y, 8808, octaves=3, scale=1 / 6.0))
     g = g * (1 - 0.35 * wet) + np.array([0.035, 0.05, 0.025])[:, None] * 0.35 * wet
+    # shrubs on the pastures' slopes: alpenrose and juniper in dark clumps,
+    # bilberry going red - the texture a hillside of grass shows at a distance
+    clump = smoothstep(0.0, 0.45, N.fbm(x, y, 8810, octaves=2, scale=1 / 70.0))
+    shrub = (smoothstep(0.35, 0.75, N.fbm(x, y, 8811, octaves=4, scale=1 / 6.0)) * clump *
+             smoothstep(8.0, 16.0, slope) * (1 - floor) * smoothstep(40.0, 70.0, r))
+    berry = smoothstep(0.1, 0.5, N.fbm(x, y, 8812, octaves=2, scale=1 / 20.0))
+    sh = np.array([0.020, 0.030, 0.013])[:, None] * (1 - berry) + np.array([0.060, 0.024, 0.012])[:, None] * berry
+    g = g * (1 - 0.85 * shrub) + sh * 0.85 * shrub
     col['grass'] = g
     # rock: grey limestone with warm and cool bands (strata dip gently),
     # dark water and lichen streaks down the faces, pale fresh scars
@@ -125,11 +133,13 @@ def detail_normal(x, y, z, nrm, W, texel):
     normal, scaled so it survives at the texel's size."""
     e = texel * 0.5
     rockw = W[1] + W[2] * 0.6 + W[3] * 0.3
-    amp = 0.9 * rockw + 0.25 * (1 - rockw)
+    # turf gets only gentle swells: anything finer than a few texels turns
+    # into the texel grid under the scope (the tiles carry the fine relief)
+    amp = 0.9 * rockw + 0.12 * (1 - rockw)
 
     def h(px, py):
         return (N.ridged(px / 9.0, py / 9.0, 9101, octaves=4, gain=0.5) * 3.0 * rockw +
-                N.fbm(px, py, 9102, octaves=3, scale=1 / 5.0) * 0.6)
+                N.fbm(px, py, 9102, octaves=2, scale=1 / 9.0) * 0.8)
     hx = (h(x + e, y) - h(x - e, y)) / (2 * e)
     hy = (h(x, y + e) - h(x, y - e)) / (2 * e)
     k = amp * np.clip(2.0 / np.maximum(texel, 0.5), 0.15, 1.0)

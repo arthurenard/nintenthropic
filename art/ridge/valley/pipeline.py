@@ -215,6 +215,14 @@ def stage_contract(ctx):
         if o.name not in keep:
             bpy.data.objects.remove(o)
     binfo = json.loads(sc.get("buildings_info", "{}"))
+    # the rock walls first: the goat's ledges are on the crag
+    from . import crags
+    rcol = S.collection("rocks", bpy.data.collections["Valley"])
+    for o in list(rcol.objects):
+        bpy.data.objects.remove(o)
+    walls = crags.build(ter, rcol)
+    bmats.assign(walls, os.path.join(ctx.build, "tiles"))
+    crags.finish(walls, samples=32 if ctx.quick else 96)
     C.build(ter, col, binfo)
     from . import foreground
     fcol = S.collection("foreground", bpy.data.collections["Valley"])
@@ -253,13 +261,28 @@ def stage_sky(ctx):
         sky.render(ctx, ter, 4096, 2048, 128)
 
 
+def refresh_terrain_material(ctx):
+    """The terrain's review material from the current tiles and maps (the
+    terrain stage runs before the materials stage makes the tiles)."""
+    from . import ground as GR
+    objs = [o for o in bpy.data.objects if o.name.startswith("terrain.") and o.type == 'MESH']
+    old = bpy.data.materials.get("terrain_review")
+    if old is not None:
+        old.name = "terrain_review.old"
+    GR.assign(objs, GR.review_material(ctx.maps, os.path.join(ctx.build, "tiles")))
+    if old is not None and old.users == 0:
+        bpy.data.materials.remove(old)
+
+
 def stage_review(ctx):
     from . import review
     open_blend(ctx)
+    refresh_terrain_material(ctx)
     review.render_all(ctx)
 
 
 def stage_poster(ctx):
     from . import poster
     open_blend(ctx)
+    refresh_terrain_material(ctx)
     poster.render(ctx)

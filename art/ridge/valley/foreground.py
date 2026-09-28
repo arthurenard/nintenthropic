@@ -102,7 +102,7 @@ def build(ter, col, plates=None):
     rng = np.random.default_rng(611)
     objs = []
     # the rifle's rest: a lichened block of gneiss just in front of the eye
-    rock = rock_mesh(col, "foreground.rock", (0.03, 0.95, -0.72), 0.32, seed=17, surface="rock",
+    rock = rock_mesh(col, "foreground.rock", (0.03, 0.95, -0.72), 0.32, seed=17, surface="rock", detail=5,
                      note="the rock the rifle rests on; its top is ~0.45 m under the eye")
     rock.scale = (1.3, 0.8, 0.8)
     objs.append(rock)
@@ -123,14 +123,14 @@ def build(ter, col, plates=None):
         p = L.polar(b, r)[:2]
         size = rng.uniform(0.5, 2.6) * (1.6 if rng.uniform() < 0.15 else 1.0)
         z = float(_z(ter, p[0], p[1]))
-        rocks.append(rock_mesh(col, f"_rock{k}", (p[0], p[1], z - size * 0.35), size, seed=100 + k))
+        rocks.append(rock_mesh(col, f"_rock{k}", (p[0], p[1], z - size * 0.2), size, seed=100 + k))
     # join them into one object
     import bpy
     with bpy.context.temp_override(active_object=rocks[0], selected_editable_objects=rocks, selected_objects=rocks):
         bpy.ops.object.join()
     rocks[0].name = "rocks.slope"
     rocks[0].data.name = "rocks.slope"
-    S.tag(rocks[0], surface="rock", material_key="rock")
+    S.tag(rocks[0], surface="rock", material_key="rock_vc")
     objs.append(rocks[0])
     # the range's stands: a post and a crossbar for each plate
     from . import kit as K

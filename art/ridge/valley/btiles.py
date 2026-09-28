@@ -132,7 +132,7 @@ def scene_plaster(S_, rng):
     def col(x, y, z):
         u, v = x / S_, y / S_
         base = srgb(214, 206, 188)[None] * (0.9 + 0.12 * pnoise(u * 6, v * 6, 6, 114))[:, None]
-        grime = np.clip(pnoise(u * 12, v * 1.0, 12, 115) * 2.0, 0, 1)
+        grime = np.clip(pnoise(u * 12, v * 1.0, 12, 115, period_y=1) * 2.0, 0, 1)
         c = base * (1 - 0.3 * grime[:, None])
         fall = np.clip(pnoise(u * 3, v * 3, 3, 111) * 3 - 1.5, 0, 1)[:, None]
         return c * (1 - fall) + srgb(118, 112, 102)[None] * fall
@@ -158,7 +158,7 @@ def scene_boards(S_, rng):
         XX, YY = np.meshgrid(np.linspace(x + 0.006, x + w - 0.006, 5), np.linspace(0, S_, res + 1))
         tone = rng.uniform(0.8, 1.15)
         seed = int(rng.integers(1000))
-        grain = np.sin(XX * 260 + 12 * pnoise(XX / S_ * 20, YY / S_ * 2, 20, seed)) * 0.5 + 0.5
+        grain = np.sin(XX * 260 + 12 * pnoise(XX / S_ * 20, YY / S_ * 2, 20, seed, period_y=2)) * 0.5 + 0.5
         ZZ = 0.003 * grain + rng.uniform(-0.004, 0.004) + 0.004 * np.sin((XX - x) / w * np.pi)
         V = np.stack([XX.ravel(), YY.ravel(), ZZ.ravel()], 1)
         idx = np.arange(V.shape[0]).reshape(res + 1, 5)
@@ -246,8 +246,8 @@ def scene_concrete(S_, rng):
     def col(x, y, z):
         u, v = x / S_, y / S_
         base = srgb(158, 154, 146)[None] * (0.9 + 0.1 * pnoise(u * 8, v * 8, 8, 132))[:, None]
-        streak = np.clip(pnoise(u * 16, v * 0.8, 16, 133) * 2.0 - 0.2, 0, 1)[:, None]
-        rust = np.clip(pnoise(u * 20, v * 1.5, 20, 134) * 3.0 - 1.8, 0, 1)[:, None]
+        streak = np.clip(pnoise(u * 16, v * 1.0, 16, 133, period_y=1) * 2.0 - 0.2, 0, 1)[:, None]
+        rust = np.clip(pnoise(u * 20, v * 2.0, 20, 134, period_y=2) * 3.0 - 1.8, 0, 1)[:, None]
         c = base * (1 - 0.35 * streak)
         return c * (1 - rust * 0.5) + srgb(130, 80, 44)[None] * rust * 0.5
     heightfield_mesh(p, S_, 384, h, col, lambda x, y, z: np.full(len(x), 0.9))
@@ -337,11 +337,11 @@ def scene_timber(S_, rng):
     p = Parts()
 
     def g_(u, v):
-        return np.sin(u * 2 * np.pi * 14 + 4 * pnoise(u * 3, v * 1, 3, 161))
+        return np.sin(u * 2 * np.pi * 14 + 4 * pnoise(u * 3, v * 1, 3, 161, period_y=1))
 
     def h(x, y):
         u, v = x / S_, y / S_
-        return 0.002 * g_(u, v) - 0.004 * (np.abs(pnoise(u * 20, v * 2, 20, 162)) < 0.03)
+        return 0.002 * g_(u, v) - 0.004 * (np.abs(pnoise(u * 20, v * 2, 20, 162, period_y=2)) < 0.03)
 
     def col(x, y, z):
         u, v = x / S_, y / S_

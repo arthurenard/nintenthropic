@@ -379,7 +379,10 @@ class Terrain:
             slope = np.degrees(np.arctan(np.hypot(gx, gy)))
             alt = c.v - L.FLOOR_Z
             X, Y = c.coords()
-            m = smoothstep(26.0, 40.0, slope) * smoothstep(80.0, 260.0, alt) * smoothstep(300.0, 900.0, np.hypot(X, Y))
+            # below the treeline only the crags (the forest holds anything
+            # gentler than ~45 degrees); above it every slope that sheds its turf
+            steep = np.maximum(smoothstep(38.0, 48.0, slope), smoothstep(26.0, 40.0, slope) * smoothstep(280.0, 420.0, alt))
+            m = steep * smoothstep(80.0, 160.0, alt) * smoothstep(300.0, 900.0, np.hypot(X, Y))
             self._rock = Grid(c.x0, c.y0, c.dx, c.nx, c.ny, N.blur(m, 1.5))
         return self._rock
 
@@ -469,28 +472,6 @@ def build_coarse(quick=False):
 
 
 EYE_GROUND = -0.35      # the spur's grass under the prone player's eye
-
-
-def rock_detail(g):
-    """Structure the eroded mountains lack at the 10-60 m scale, where the
-    scope looks at them from 1-3 km: on steep ground, bedding - treads and
-    risers every 10-20 m whose spacing and dip wander - and sharper ribs
-    between the gullies. Only where it is steep and high (rock, not
-    pasture)."""
-    X, Y = g.coords()
-    z = g.v
-    gy, gx = np.gradient(z, g.dx)
-    slope = np.degrees(np.arctan(np.hypot(gx, gy)))
-    alt = z - L.FLOOR_Z
-    m = smoothstep(28.0, 42.0, slope) * smoothstep(120.0, 320.0, alt) * smoothstep(250.0, 900.0, np.hypot(X, Y))
-    q = 14.0 + 6.0 * N.fbm(X, Y, SEED + 41, octaves=2, scale=1 / 900.0)
-    dip = 0.06 * X + 0.03 * Y                    # the strata dip gently across the range
-    t = (z + dip * 0.02 + 5.0 * N.fbm(X, Y, SEED + 42, octaves=3, scale=1 / 300.0)) / q
-    fr = t - np.floor(t)
-    tread = (smoothstep(0.55, 0.95, fr) - fr) * q * 0.55      # flattens the tread, steepens the riser
-    ribs = (N.ridged(X / 60.0, Y / 60.0, SEED + 43, octaves=3, gain=0.5, sharp=2.5) - 0.45) * 9.0
-    g.v = z + m * (tread + ribs)
-    return g
 
 
 def spur_fix(g):

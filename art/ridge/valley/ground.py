@@ -155,6 +155,24 @@ def review_material(maps_dir, tiles_dir=None, name="terrain_review"):
         g.set_in(detail, 'A_Color', alb)
         g.set_in(detail, 'B_Color', tuple(max(c, 1e-3) for c in mean))
         dcol = g.out(detail, 'Result_Color')
+        if not box:
+            # anti-tiling: the tile again at 2.618x its size, turned 37 degrees,
+            # modulating the first - the two periods never line up, so the
+            # 3 m grid a meadow shows through the scope goes away
+            rot = g.new('ShaderNodeVectorRotate', rotation_type='Z_AXIS')
+            rot.inputs['Angle'].default_value = math.radians(37.0)
+            g.links.new(pos, rot.inputs['Vector'])
+            v2 = g.vmath('MULTIPLY_ADD', rot.outputs['Vector'], (1.0 / (size * 2.618),) * 3)
+            v2.node.inputs[2].default_value = (0.37, 0.61, 0.0)
+            n2 = g.new('ShaderNodeTexImage', interpolation='Linear', extension='REPEAT')
+            n2.image = _img(os.path.join(tiles_dir, f"{mat}_albedo.png"), 'sRGB', f"tile_{mat}_albedo")
+            g.links.new(v2, n2.inputs['Vector'])
+            d2 = g.node('ShaderNodeMix', inputs={'Factor_Float': 1.0}, out=None, data_type='RGBA', blend_type='DIVIDE')
+            g.set_in(d2, 'A_Color', n2.outputs['Color'])
+            g.set_in(d2, 'B_Color', tuple(max(c, 1e-3) for c in mean))
+            half = g.vmath('MULTIPLY_ADD', g.out(d2, 'Result_Color'), (0.5, 0.5, 0.5))
+            half.node.inputs[2].default_value = (0.5, 0.5, 0.5)
+            dcol = g.vmath('MULTIPLY', dcol, half)
         wc = g.vmath('SCALE', dcol, None)
         g.links.new(w, wc.node.inputs['Scale'])
         # tile normal: tangent space with world X/Y as tangent/bitangent (a

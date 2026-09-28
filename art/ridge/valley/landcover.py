@@ -32,7 +32,7 @@ MATERIALS = ["grass", "rock", "scree", "snow", "dirt", "forest", "gravel", "alpi
 # these and the tiles are normalised to them (the shader multiplies the
 # colour map by tile / mean)
 MEAN = {
-    "grass": (0.105, 0.135, 0.050),
+    "grass": (0.110, 0.130, 0.040),
     "rock": (0.165, 0.162, 0.158),
     "scree": (0.180, 0.172, 0.160),
     "snow": (0.78, 0.80, 0.83),
@@ -179,7 +179,9 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
     if need_forest_only:
         return dict(forest=forest, alt=alt, slope=slope, treeline=treeline, dr=dr, droad=droad, z=z)
     # ---- rock, scree, snow
-    rock = smoothstep(33.0, 45.0, slope + 6.0 * n2) * smoothstep(8.0, 20.0, alt)
+    # below the treeline the forest and turf hold anything gentler than ~45
+    # degrees: rock is the crags; above it, anything that sheds its turf
+    rock = smoothstep(40.0, 50.0, slope + 5.0 * n2) * smoothstep(8.0, 20.0, alt)
     rock = np.maximum(rock, smoothstep(26.0, 36.0, slope) * smoothstep(treeline + 40, treeline + 160, alt) * 0.9)
     # scree: moderate slopes below and among rock, where debris collects (concave)
     scree = (smoothstep(18.0, 28.0, slope) * smoothstep(40.0, 33.0, slope) *

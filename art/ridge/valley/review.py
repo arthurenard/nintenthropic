@@ -116,23 +116,23 @@ def render_all(ctx):
     sc = bpy.context.scene
     S.apply_lighting(sc)
     q = ctx.quick
-    only = ctx.preview
+    only = ctx.preview.split(",") if ctx.preview else None
     os.makedirs(ctx.review_dir, exist_ok=True)
     cam = bpy.data.objects["camera.player"]
     for nm, w, h in (("wide", 1920, 1080), ("wide_21x9", 2520, 1080)):
-        if only and only not in nm:
+        if only and not any(o in nm for o in only):
             continue
         S.render_settings(sc, w // (2 if q else 1), h // (2 if q else 1), 32 if q else 256)
         sc.camera = cam
         post.render_with_fog(sc, os.path.join(ctx.review_dir, f"valley_{nm}.png"))
         log("wrote", nm)
     for nm, tgt, zoom in views():
-        if only and only not in nm:
+        if only and not any(o in nm for o in only):
             continue
         c = scope_cam(nm, tgt, zoom)
         S.render_settings(sc, 1280 if q else 2560, 720 if q else 1440, 24 if q else 160)
         sc.camera = c
-        post.render_with_fog(sc, os.path.join(ctx.review_dir, f"valley_{nm}.png"))
+        post.render_with_fog(sc, os.path.join(ctx.review_dir, f"valley_{nm}.png"), adapt=True)
         log("wrote", nm)
     if only and "people" not in only:
         return
@@ -164,5 +164,5 @@ def people(ctx):
         c = scope_cam(f"people_{label}", (p[0] + 1.2, p[1], p[2] + 1.2), 6.0)
         S.render_settings(sc, 1280 if q else 2560, 720 if q else 1440, 24 if q else 128)
         sc.camera = c
-        post.render_with_fog(sc, os.path.join(ctx.review_dir, f"valley_people_{label}.png"))
+        post.render_with_fog(sc, os.path.join(ctx.review_dir, f"valley_people_{label}.png"), adapt=True)
         log("wrote", label)

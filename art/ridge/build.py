@@ -11,9 +11,9 @@ stage can be rerun alone once the ones before it have run):
     forest      the tree models, their impostors, and where every tree stands
     buildings   farm, checkpoint and watchtower, bridge, village and chapel, dam
     water       river, reservoir, mist and road meshes
-    contract    the named nodes: paths, posts, nests, plates, secrets, animals
+    contract    the rock walls; the named nodes: paths, posts, nests, plates, secrets, animals
     sky         public/assets/ridge/sky.webp
-    bake        light: terrain AO + sun horizon, building AO atlases
+    bake        the terrain's light map: sky visibility, sun horizon, canopy shadow, mist
     export      public/assets/ridge/valley.glb (+ terrain textures)
     review      review renders into art/ridge/build/review/
     poster      public/assets/ridge/poster.webp

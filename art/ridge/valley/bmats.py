@@ -66,8 +66,10 @@ def material(key, tiles_dir):
         m.use_backface_culling = False
         _CACHE[key] = m
         return m
-    name = tile_name(key)
-    m = bpy.data.materials.new(f"m.{name}")
+    # "<tile>_vc": the tile's albedo multiplied by the vertex colours (COLOR_0)
+    vc = key.endswith("_vc")
+    name = tile_name(key[:-3] if vc else key)
+    m = bpy.data.materials.new(f"m.{tile_name(key)}")
     m.use_nodes = True
     nt = m.node_tree
     nt.nodes.clear()
@@ -85,7 +87,18 @@ def material(key, tiles_dir):
         nt.links.new(uv.outputs[0], n.inputs['Vector'])
         return n
     a = tex("albedo", 'sRGB')
-    nt.links.new(a.outputs['Color'], b.inputs['Base Color'])
+    if vc:
+        ca = nt.nodes.new('ShaderNodeVertexColor')
+        ca.layer_name = "Col"
+        mix = nt.nodes.new('ShaderNodeMix')
+        mix.data_type = 'RGBA'
+        mix.blend_type = 'MULTIPLY'
+        mix.inputs['Factor'].default_value = 1.0
+        nt.links.new(a.outputs['Color'], mix.inputs[6])
+        nt.links.new(ca.outputs['Color'], mix.inputs[7])
+        nt.links.new(mix.outputs[2], b.inputs['Base Color'])
+    else:
+        nt.links.new(a.outputs['Color'], b.inputs['Base Color'])
     h = tex("hra", 'Non-Color')
     sep = nt.nodes.new('ShaderNodeSeparateColor')
     nt.links.new(h.outputs['Color'], sep.inputs[0])

@@ -335,10 +335,13 @@ def secrets(ter, col, binfo):
     c = L.GOAT_CRAG_C
     u = c / np.linalg.norm(c)
     v = np.array([u[1], -u[0]])
-    ledges = []
-    for (al, ac) in ((-14.0, 9.0), (-8.0, -11.0), (-2.0, 4.0), (6.0, -4.0)):
-        p = c + u * al + v * ac
-        ledges.append(_pt(ter, p))
+    import json
+    ledges = [tuple(p) for p in json.loads(bpy.context.scene.get("goat_ledges", "[]"))]
+    if len(ledges) < 4:            # no crag mesh (or too few ledges found): the heightfield's
+        ledges = []
+        for (al, ac) in ((-14.0, 9.0), (-8.0, -11.0), (-2.0, 4.0), (6.0, -4.0)):
+            p = c + u * al + v * ac
+            ledges.append(_pt(ter, p))
     for i, p in enumerate(sorted(ledges, key=lambda q: q[2])):
         facing(col, f"secret.goat.{i + 1}", p, toward_eye(np.array(p[:2])), note="a ledge on the crag for the goat")
     # the bell in the chapel's belfry: its own object, pivot at the yoke
@@ -410,32 +413,10 @@ def yeti_mesh(col, p, e):
     return ob
 
 
-def rock_mesh(col, name, p, size, seed=0, surface="rock", **extras):
-    """A boulder: a noisy icosphere, flattened a little, box-UV'd for the
-    rock tile."""
-    import bmesh
-    rng = np.random.default_rng(seed)
-    bm = bmesh.new()
-    bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1.0)
-    ph = rng.uniform(0, 50, 3)
-    for v in bm.verts:
-        c = v.co
-        n = (math.sin(c.x * 2.3 + ph[0]) * math.sin(c.y * 2.9 + ph[1]) * math.sin(c.z * 2.1 + ph[2]) * 0.22 +
-             math.sin(c.x * 6.1 + ph[1]) * math.sin(c.y * 5.3 + ph[2]) * 0.06)
-        v.co = Vector((c.x * size * (1 + n), c.y * size * 0.85 * (1 + n), c.z * size * 0.7 * (1 + n)))
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    uv = me.uv_layers.new(name="UVMap")
-    for poly in me.polygons:
-        nrm = poly.normal
-        ax = max(range(3), key=lambda i: abs(nrm[i]))
-        ua, va = [(1, 2), (0, 2), (0, 1)][ax]
-        for li in poly.loop_indices:
-            co = me.vertices[me.loops[li].vertex_index].co
-            uv.data[li].uv = (co[ua] / 4.0, co[va] / 4.0)
-    ob = bpy.data.objects.new(name, me)
-    col.objects.link(ob)
-    ob.location = p
-    S.tag(ob, surface=surface, material_key="rock", **extras)
+def rock_mesh(col, name, p, size, seed=0, surface="rock", detail=2, **extras):
+    """A boulder (crags.boulder_mesh): angular, lichened, vertex-coloured
+    over the rock tile."""
+    from .crags import boulder_mesh
+    ob = boulder_mesh(col, name, p, size, seed=seed, detail=detail)
+    S.tag(ob, surface=surface, material_key="rock_vc", **extras)
     return ob

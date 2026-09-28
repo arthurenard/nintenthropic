@@ -58,13 +58,15 @@ def srgb(*c):
 # ---------------------------------------------------------------------------
 # periodic noise (numpy) for tile heightfields
 
-def pnoise(x, y, period, seed, octaves=5, gain=0.5):
-    """fBm that tiles with `period` (in lattice units of the first octave):
-    each octave samples a periodic Perlin lattice."""
+def pnoise(x, y, period, seed, octaves=5, gain=0.5, period_y=None):
+    """fBm that tiles with `period` (in lattice units of the first octave;
+    `period_y` for y when the noise is stretched): each octave samples a
+    periodic Perlin lattice."""
     out = np.zeros_like(x)
     amp, norm, f = 1.0, 0.0, 1
+    py = period if period_y is None else period_y
     for o in range(octaves):
-        p = period * f
+        p = (period * f, py * f)
         out += amp * _periodic_perlin(x * f, y * f, p, seed + o * 31)
         norm += amp
         amp *= gain
@@ -74,8 +76,8 @@ def pnoise(x, y, period, seed, octaves=5, gain=0.5):
 
 def _periodic_perlin(x, y, period, seed):
     r = np.random.default_rng(seed)
-    P = int(period)
-    ang = r.uniform(0, 2 * np.pi, (P, P))
+    P, Q = (int(period[0]), int(period[1])) if isinstance(period, tuple) else (int(period), int(period))
+    ang = r.uniform(0, 2 * np.pi, (max(P, Q), max(P, Q)))
     gx, gy = np.cos(ang), np.sin(ang)
     xi = np.floor(x).astype(np.int64)
     yi = np.floor(y).astype(np.int64)
@@ -83,7 +85,7 @@ def _periodic_perlin(x, y, period, seed):
 
     def g(ix, iy, dx, dy):
         ix %= P
-        iy %= P
+        iy %= Q
         return gx[iy, ix] * dx + gy[iy, ix] * dy
     u = xf * xf * xf * (xf * (xf * 6 - 15) + 10)
     v = yf * yf * yf * (yf * (yf * 6 - 15) + 10)
@@ -438,60 +440,89 @@ def scene_scree(S_, rng):
     return p, 0.25
 
 
+def pvoronoi_seed(x, y, period, seed):
+    """Periodic Voronoi: F1, F2 (lattice units), the nearest cell's index and
+    the offset from its seed (for facets that tilt about their own seed)."""
+    r = np.random.default_rng(seed)
+    P = int(period)
+    jit = r.uniform(0, 1, (P, P, 2))
+    xi = np.floor(x).astype(np.int64)
+    yi = np.floor(y).astype(np.int64)
+    f1 = np.full(x.shape, 9.0)
+    f2 = np.full(x.shape, 9.0)
+    idx = np.zeros(x.shape, np.int64)
+    ox = np.zeros(x.shape)
+    oy = np.zeros(x.shape)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            cx, cy = xi + dx, yi + dy
+            j = jit[cy % P, cx % P]
+            px = cx + j[..., 0]
+            py = cy + j[..., 1]
+            d = np.hypot(px - x, py - y)
+            closer = d < f1
+            f2 = np.where(closer, f1, np.minimum(f2, d))
+            idx = np.where(closer, (cy % P) * P + (cx % P), idx)
+            ox = np.where(closer, x - px, ox)
+            oy = np.where(closer, y - py, oy)
+            f1 = np.minimum(f1, d)
+    return f1, f2, idx, ox, oy
+
+
 def scene_rock(S_, rng):
-    """Bedded limestone seen square on (the tile's +Y is up the face when the
-    shader projects it on a cliff): beds of uneven thickness, near-vertical
-    joints that break each bed into blocks standing a little proud or sunk,
-    knobbly solution relief and pitting, a weathered grey skin with dark
-    water streaks down it, lichen (grey-green, black, a little orange)."""
+    """Weathered rock seen square on: the face broken along joints at two
+    scales into facets - planes at different tilts meeting in sharp creases,
+    the look of cleaved limestone and gneiss - open cracks between the big
+    blocks, knobs and pits, a grey weathering skin with lichen (grey-green,
+    black, a little orange). No bedding: a straight line repeated every
+    4 m reads as a grid through the scope; the cliffs' meshes and the
+    terrain carry their beds at their own scale."""
     p = Parts()
-    period_beds = 7
-    period_j = 5
+    P1, P2 = 5, 13
+
+    def hsh(i, k):
+        return (np.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1.0
 
     def fields(x, y):
         u, v = x / S_, y / S_
-        # beds of uneven thickness: a gently warped staircase (monotone)
-        bed_f = v * period_beds + 0.45 * pnoise(u * 2, v * 2, 2, 82) + 0.3 * np.sin(v * 2 * np.pi * 2)
-        bed = np.floor(bed_f)
-        in_bed = bed_f - bed
-        hsh = (np.sin(bed * 12.9898) * 43758.5453) % 1.0
-        # joints: 2 to 7 per bed across the tile (an integer, so it tiles), leaning
-        nj = 2 + np.floor(hsh * 6)
-        ju = (u + 0.06 * (in_bed - 0.5) * (hsh - 0.5) + hsh) * nj + 0.3 * pnoise(u * 4, v * 4, 4, 83)
-        jid = np.floor(ju)
-        in_j = ju - jid
-        return u, v, bed, in_bed, jid, in_j
+        wu = u + 0.025 * pnoise(u * 4, v * 4, 4, 81)
+        wv = v + 0.025 * pnoise(u * 4, v * 4, 4, 82)
+        A = pvoronoi_seed(wu * P1, wv * P1, P1, 83)
+        B = pvoronoi_seed(wu * P2, wv * P2, P2, 84)
+        return u, v, A, B
 
     def h(x, y):
-        u, v, bed, in_bed, jid, in_j = fields(x, y)
-        block = ((np.sin(bed * 78.233 + jid * 12.9898) * 43758.5453) % 1.0) - 0.5
-        edge_b = np.minimum(in_bed, 1 - in_bed)
-        edge_j = np.minimum(in_j, 1 - in_j)
-        # joints die out where a noise says so; bedding planes are continuous
-        jlive = np.clip(pnoise(u * 6, v * 6, 6, 92) * 3 + 0.6, 0, 1)
-        crack = np.exp(-(edge_b / 0.03) ** 2) + jlive * np.exp(-(edge_j / 0.022) ** 2)
-        sharp = np.clip(np.minimum(edge_b / 0.03, edge_j / 0.02 + (1 - jlive)), 0, 1)
-        knob = pnoise(u * 10, v * 10, 10, 84) * 0.6 + pnoise(u * 36, v * 36, 36, 85) * 0.3
-        spall = np.clip(pnoise(u * 5, v * 5, 5, 93) * 3 - 1.0, 0, 1)        # flakes broken off the face
-        return (0.06 * block * sharp + 0.03 * knob - 0.04 * np.clip(crack, 0, 1) - 0.025 * spall)
+        u, v, A, B = fields(x, y)
+        f1, f2, i1, ox, oy = A
+        g1, g2, j1, qx, qy = B
+        L1, L2 = S_ / P1, S_ / P2                     # lattice units in metres
+        # facets: planes tilted up to ~20 degrees about their seeds
+        big = 0.05 * (hsh(i1, 1) - 0.5) + 0.7 * ((hsh(i1, 2) - 0.5) * ox + (hsh(i1, 3) - 0.5) * oy) * L1
+        small = 0.5 * ((hsh(j1, 5) - 0.5) * qx + (hsh(j1, 6) - 0.5) * qy) * L2
+        # only some of the joints are open cracks, and they pinch out
+        live = np.clip(pnoise(u * 5, v * 5, 5, 91) * 2.5 + 0.3, 0, 1)
+        wid = 0.035 + 0.03 * np.clip(pnoise(u * 9, v * 9, 9, 92) + 0.5, 0, 1)
+        crack = -0.06 * live * np.exp(-((f2 - f1) / wid) ** 2)
+        knob = 0.014 * pnoise(u * 20, v * 20, 20, 85) + 0.03 * pnoise(u * 3, v * 3, 3, 93)
+        pits = -0.008 * np.clip(pnoise(u * 48, v * 48, 48, 86, octaves=2) * 3 - 1.2, 0, 1)
+        return big + small + crack + knob + pits
 
     def col(x, y, z):
-        u, v, bed, in_bed, jid, in_j = fields(x, y)
-        tone = 0.92 + 0.08 * (((np.sin(bed * 3.7 + 1.3) * 43758.5453) % 1.0) - 0.5) + 0.14 * pnoise(u * 5, v * 5, 5, 86)
-        base = srgb(160, 156, 146)[None] * tone[:, None]
-        streak = np.clip(pnoise(u * 9, v * 0.8, 9, 87) * 2.2 - 0.3, 0, 1) * np.clip(pnoise(u * 3, v * 3, 3, 88) + 0.6, 0, 1)
-        c = base * (1 - 0.55 * streak[:, None])
-        lg = np.clip(pnoise(u * 16, v * 16, 16, 89) * 2.5 - 0.7, 0, 1)[:, None]
-        lb = np.clip(pnoise(u * 28, v * 28, 28, 90) * 2.8 - 1.1, 0, 1)[:, None]
-        lo = np.clip(pnoise(u * 34, v * 34, 34, 91) * 3.0 - 1.7, 0, 1)[:, None]
-        c = c * (1 - lg) + srgb(126, 134, 108)[None] * lg
-        c = c * (1 - lb) + srgb(46, 44, 40)[None] * lb
-        c = c * (1 - lo) + srgb(176, 114, 46)[None] * lo
-        edge_b = np.minimum(in_bed, 1 - in_bed)
-        edge_j = np.minimum(in_j, 1 - in_j)
-        jlive = np.clip(pnoise(u * 6, v * 6, 6, 92) * 3 + 0.6, 0, 1)
-        crack = np.clip(np.exp(-(edge_b / 0.03) ** 2) + jlive * np.exp(-(edge_j / 0.022) ** 2), 0, 1)[:, None]
-        return c * (1 - 0.5 * crack)
+        u, v, A, B = fields(x, y)
+        f1, f2, i1, ox, oy = A
+        g1, g2, j1, qx, qy = B
+        tone = 0.88 + 0.22 * hsh(i1, 7) + 0.06 * (hsh(j1, 8) - 0.5) + 0.16 * pnoise(u * 4, v * 4, 4, 87)
+        warm = hsh(i1, 9) - 0.5
+        base = srgb(150, 148, 142)[None] * tone[:, None] * (1 + 0.06 * warm[:, None] * np.array([1.0, 0.2, -1.0]))
+        lg = np.clip(pnoise(u * 4, v * 4, 4, 88) * 2.2 - 0.3, 0, 1)[:, None] * 0.7
+        lb = np.clip(pnoise(u * 14, v * 14, 14, 89) * 2.6 - 1.0, 0, 1)[:, None] * 0.85
+        lo = np.clip(pnoise(u * 18, v * 18, 18, 90) * 3.0 - 1.8, 0, 1)[:, None]
+        c = base * (1 - lg) + srgb(122, 128, 108)[None] * lg
+        c = c * (1 - lb) + srgb(56, 54, 50)[None] * lb
+        c = c * (1 - lo) + srgb(170, 112, 50)[None] * lo
+        live = np.clip(pnoise(u * 5, v * 5, 5, 91) * 2.5 + 0.3, 0, 1)
+        crack = (live * np.exp(-((f2 - f1) / 0.07) ** 2))[:, None]
+        return c * (1 - 0.6 * crack)
     heightfield_mesh(p, S_, 512, h, col, lambda x, y, z: np.full(len(x), 0.82))
     return p, 0.3
 
@@ -503,7 +534,7 @@ def scene_snow(S_, rng):
 
     def h(x, y):
         u, v = x / S_, y / S_
-        rip = np.sin((u * 0.8 + v) * 2 * np.pi * 11 + 3 * pnoise(u * 3, v * 3, 3, 71)) * 0.004
+        rip = np.sin((u + v) * 2 * np.pi * 11 + 3 * pnoise(u * 3, v * 3, 3, 71)) * 0.004
         return 0.05 * pnoise(u * 3, v * 3, 3, 72) + 0.012 * pnoise(u * 10, v * 10, 10, 73) + rip
     heightfield_mesh(p, S_, 384, h, lambda x, y, z: np.tile(srgb(236, 240, 246), (len(x), 1)),
                      lambda x, y, z: 0.35 + 0.35 * np.clip(pnoise(x / S_ * 8, y / S_ * 8, 8, 74) + 0.5, 0, 1))

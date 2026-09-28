@@ -173,9 +173,10 @@ def scene_extras(sc, files, tiles):
     sc["fog"] = json.dumps(dict(
         haze_sigma_per_m=post.SIGMA_HAZE, haze_color_linear=[round(v, 4) for v in post.HAZE_COLOR],
         mist_sigma0_per_m=post.MIST_SIGMA0, mist_z0_m_gltf_y=post.MIST_Z0, mist_scale_height_m=post.MIST_H,
-        mist_color_linear=[round(v, 4) for v in post.MIST_COLOR],
+        mist_color_linear=[round(v, 4) for v in post.MIST_COLOR], air_shade=post.AIR_SHADE,
         note="haze: T = exp(-d * haze_sigma); mist: optical depth of sigma0 * exp(-(y - z0) / H) integrated along "
-             "the eye ray (closed form, see valley/post.py); colours at the review renders' exposure"))
+             "the eye ray (closed form, see valley/post.py), scaled by light.a at the ground point; both in-scatter colours "
+             "times mix(air_shade, 1, sunlit at the ground point); colours at the review renders' exposure"))
     sc["lighting"] = json.dumps(dict(sun_elevation_deg=L.SUN_ELEV, sun_elevation_range_deg=list(L.SUN_ELEV_RANGE),
                                      sun_bearing_deg=L.SUN_BEARING, sun_color=list(S.SUN_COLOR),
                                      sun_to_sky_ratio=4.0,
@@ -255,7 +256,7 @@ def stage(ctx):
             splat0="r grass, g rock, b scree, a snow", splat1="r dirt, g forest floor, b gravel, a alpine turf",
             normal="world-space normal in glTF axes, rgb = n * 0.5 + 0.5",
             light="r sky visibility (AO), g sun horizon angle: deg = g * 40 - 10 (lit when the sun is above it), "
-                  "b canopy/building shadow at the design sun (1 lit)",
+                  "b canopy/building shadow at the design sun (1 lit), a valley-mist density factor (1 on the river, ~0.3 far)",
             tiles=json.dumps(tiles), materials=json.dumps(LC.MATERIALS),
             shader="albedo = color * mix(1, sum_i w_i * tile_i / mean_i, detail(distance)); w_i = splat_i * (hra_i.r + 0.25)^k; "
                    "tiles at world XZ / size_m (triplanar for rock, scree)")
