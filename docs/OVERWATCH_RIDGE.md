@@ -261,8 +261,12 @@ call (documented in `art/ridge/README.md`):
   targets 140–260 m out cannot spread further), each plate's `extras.vp`
   giving its screen position; extra nodes the game may use: `rock.cliff` and
   `rock.crag` (rock walls as meshes over the terrain), `rocks.slope`,
-  `foreground.rock`, `foreground.grass`, `range.*`, `mist.river.*`, `road.*`,
-  `tunnel`, `eagle.land`.
+  `rocks.field`, `rocks.river`, `fields.*` (fences, dry-stone walls, hay),
+  `road.posts.*`, `forest.bush.*` (shrubs), `dam.face`, `foreground.rock`,
+  `foreground.grass`, `range.*`, `mist.river.*`, `road.*`, `tunnel`,
+  `eagle.land`. The splat and light maps are lossless WebP whose alpha is
+  data (unassociated), floored at 1/255 so the encoder keeps the RGB under
+  it; the buildings' baked AO is glTF's occlusion texture on TEXCOORD_1.
 
 ### `public/assets/ridge/sky.webp`
 
@@ -293,4 +297,7 @@ and environment light.
 ### `public/assets/ridge/poster.webp`
 
 The valley at dawn through the scope's edge — the chapel, the bridge, mist on
-the river, the peaks lit gold.
+the river, the peaks lit gold. As built: the scope (leaning in to 20× so the
+figures read) on an officer glassing the ridge at the checkpoint, the
+reticle on his chest, a sentry smoking beside him; the lit Punta Serra and
+the valley soft beyond the tube's rim.

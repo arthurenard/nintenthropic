@@ -60,7 +60,12 @@ class Parcels:
 
     # -- coordinates --------------------------------------------------------
     def warp(self, de, s, side):
-        return 9.0 * N.fbm(de / 70.0, s / 400.0 + side * 3.1, SEED + 1, 2)
+        """How the boundaries across the floor bend and lean: a wander, and a
+        lean that changes slowly along the river (so the strips are not
+        all square to it)."""
+        de = np.asarray(de, float)
+        lean = 0.18 * np.minimum(de, 250.0) * N.fbm(np.asarray(s, float) / 350.0, np.full(np.shape(s), side * 7.7), SEED + 2, 2)
+        return 9.0 * N.fbm(de / 70.0, s / 400.0 + side * 3.1, SEED + 1, 2) + lean
 
     def row_split(self, side, i):
         return BANK + 50.0 + 75.0 * _hash(side, i, 1.0)
@@ -151,7 +156,7 @@ class Parcels:
                 kind = EDGES[int(np.searchsorted(P_EDGE, _hash(sd, i, 5.0)))]
                 de = np.arange(BANK, MAX_DE, step)
                 s = np.full_like(de, cuts[i])
-                for _ in range(2):                 # invert the warp
+                for _ in range(5):                 # invert the warp
                     s = cuts[i] - self.warp(de, s, sd)
                 # stop where the offsets from the river crowd together (inside
                 # a bend the fields' lines would cross)
@@ -167,7 +172,7 @@ class Parcels:
                 de0 = self.row_split(sd, i)
                 sw = np.arange(cuts[i], cuts[i + 1], step)
                 s = sw.copy()
-                for _ in range(2):
+                for _ in range(5):
                     s = sw - self.warp(np.full_like(sw, de0), s, sd)
                 pp, pm = self.point(s + 2.0, np.full_like(s, de0), sd), self.point(s - 2.0, np.full_like(s, de0), sd)
                 if (np.linalg.norm(pp - pm, axis=1) / 4.0 < 0.45).any():

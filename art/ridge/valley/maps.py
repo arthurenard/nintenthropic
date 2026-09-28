@@ -116,6 +116,9 @@ def compose_color(W, info, x, y):
     # turf and moss on the treads of the bedding (where the rock flattens)
     ledge = smoothstep(0.35, 0.8, N.fbm(x, y, 8809, octaves=3, scale=1 / 12.0)) * smoothstep(48.0, 30.0, slope)
     rk = rk * (1 - 0.5 * ledge) + np.array([0.10, 0.09, 0.045])[:, None] * 0.5 * ledge
+    # below the treeline the crags are darker: damp, mossy, black lichen
+    low = smoothstep(info['treeline'], info['treeline'] - 160.0, alt)
+    rk = rk * (1 - 0.32 * low) * (1 + np.array([-0.04, 0.02, -0.02])[:, None] * low)
     col['rock'] = rk
     col['scree'] = np.array(LC.MEAN['scree'])[:, None] * (1 + 0.12 * n2 + 0.08 * fine)
     sn = np.array(LC.MEAN['snow'])[:, None] * (1 - 0.06 * smoothstep(0.0, 1.0, n2)) * (1 - 0.04 * fine)
