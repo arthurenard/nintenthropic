@@ -299,38 +299,33 @@ def plates(ter, col):
     top of the frame is the far side and the sky), the plate takes the
     highest screen position that still lands in range - so the top row sits
     as high as the near side allows."""
-    aspect = 4.0 / 3.0
-    targets = [(1, 0.17, 0.2), (2, 0.5, 0.2), (3, 0.83, 0.2), (4, 0.17, 0.5), (5, 0.5, 0.5), (6, 0.83, 0.5),
-               (7, 0.17, 0.8), (8, 0.5, 0.8), (9, 0.83, 0.8)]
-    placed = {}
-    for n, vx, vy in targets:
-        best = None
-        for vy2 in np.arange(vy, 0.97, 0.01):
-            d = view_dir(vx, vy2, aspect)
-            t = _hit(ter, d)
-            if t is None:
-                continue
-            q = d * t
-            r = math.hypot(q[0], q[1])
-            if 120.0 <= r <= 250.0:
-                best = (vy2, q)
-                break
-            if r < 120.0:
-                break
-        if best is None:
-            continue
-        placed[n] = best
+    # Seen from the ridge, the ground within 250 m fills only the lower part
+    # of the frame (the valley floor is 60 m under the eye), so the plates
+    # stand on a 3 x 3 of bearings x ranges instead: they span the full width
+    # and the lower ~40% of the view - where every target the game offers is.
+    from . import mesh as M
+    rows_def = [(255.0, 2.4), (195.0, 1.25), (135.0, 1.25)]      # (range, plate centre above ground)
+    cols = [-24.0, 0.0, 24.0]
     rows = {}
-    for n, (vy2, q) in placed.items():
-        g = np.array([q[0], q[1]])
-        z = _z(ter, g)
-        c = (float(q[0]), float(q[1]), z + 1.25)       # the plate's centre on its stand
-        e = toward_eye(g)
-        vp = {nm: [round(v, 3) for v in viewport(c, a)] for nm, a in (('4:3', 4 / 3), ('16:9', 16 / 9), ('21:9', 21 / 9))}
-        facing(col, f"calib.{n}", c, (e[0], e[1], 0), plate_radius_m=0.3, stand="a post with a crossbar, plate hanging",
-               distance_m=round(float(np.linalg.norm(c)), 1), vp_4_3=vp['4:3'], vp_16_9=vp['16:9'], vp_21_9=vp['21:9'])
-        rows[n] = (c, vp)
-        log(f"  calib.{n}: {np.linalg.norm(c):5.0f} m  4:3 {vp['4:3']}  16:9 {vp['16:9']}")
+    n = 0
+    for (rng_, post) in rows_def:
+        for b in cols:
+            n += 1
+            r = rng_
+            while r > 100:
+                g = L.polar(b, r)[:2]
+                c = np.array([g[0], g[1], _z(ter, g) + post])
+                if M.visible_mask(ter, c[None], margin=0.3)[0]:
+                    break
+                r -= 8.0
+            e = toward_eye(g)
+            vp = {nm: [round(float(v), 3) for v in viewport(c, a)] for nm, a in (('4:3', 4 / 3), ('16:9', 16 / 9), ('21:9', 21 / 9))}
+            facing(col, f"calib.{n}", tuple(float(v) for v in c), (e[0], e[1], 0), plate_radius_m=0.3,
+                   stand_height_m=post, distance_m=round(float(np.linalg.norm(c)), 1),
+                   vp_4_3=vp['4:3'], vp_16_9=vp['16:9'], vp_21_9=vp['21:9'],
+                   note="the plate's centre: a steel disc 0.6 m across hanging from a post and crossbar")
+            rows[n] = (c, vp)
+            log(f"  calib.{n}: {np.linalg.norm(c):5.0f} m  4:3 {vp['4:3']}  16:9 {vp['16:9']}")
     return rows
 
 

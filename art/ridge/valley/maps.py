@@ -74,16 +74,25 @@ def compose_color(W, info, x, y):
     g = g * (1 + floor * fields * 0.045 * np.sign(stripe) * smoothstep(0.2, 0.6, np.abs(stripe)))
     hay = floor * (1 - fields) * smoothstep(0.1, 0.5, n2)          # some fields already cut: paler, straw-tinted
     g = g * (1 - 0.3 * hay) + np.array([0.20, 0.18, 0.09])[:, None] * 0.3 * hay
+    # the mottle a pasture shows from a few hundred metres: lusher and drier
+    # patches, rushes in the wet hollows, trodden ground round the gates
+    mot = N.fbm(x, y, 8806, octaves=4, scale=1 / 9.0)
+    g = g * (1 + 0.16 * mot[None]) * (1 + np.array([0.06, 0.0, -0.10])[:, None] * N.fbm(x, y, 8807, octaves=3, scale=1 / 23.0))
+    wet = smoothstep(0.2, 0.9, info['fcurv']) * smoothstep(0.1, 0.5, N.fbm(x, y, 8808, octaves=3, scale=1 / 6.0))
+    g = g * (1 - 0.35 * wet) + np.array([0.035, 0.05, 0.025])[:, None] * 0.35 * wet
     col['grass'] = g
     # rock: grey limestone with warm and cool bands (strata dip gently),
     # dark water and lichen streaks down the faces, pale fresh scars
     band = np.sin((z + 0.08 * x - 0.05 * y) * 2 * math.pi / 23.0 + 2.5 * n1)
-    rk = np.array(LC.MEAN['rock'])[:, None] * (1 + 0.14 * band + 0.18 * n2)
+    rk = np.array(LC.MEAN['rock'])[:, None] * (1 + 0.22 * band + 0.22 * n2 + 0.12 * fine)
     rk = rk * (1 + np.array([0.06, 0.0, -0.08])[:, None] * n3)
     streak = smoothstep(0.3, 0.8, N.fbm(x * 0.35, y * 0.35 + z * 1.5, 8803, octaves=4, scale=1 / 18.0))
-    rk = rk * (1 - 0.45 * streak * smoothstep(30.0, 50.0, slope))
+    rk = rk * (1 - 0.6 * streak * smoothstep(28.0, 48.0, slope))
     scar = smoothstep(0.6, 0.8, N.fbm(x, y, 8804, octaves=3, scale=1 / 40.0)) * smoothstep(40.0, 55.0, slope)
     rk = rk * (1 - 0.3 * scar) + np.array([0.36, 0.34, 0.31])[:, None] * 0.3 * scar
+    # turf and moss on the treads of the bedding (where the rock flattens)
+    ledge = smoothstep(0.35, 0.8, N.fbm(x, y, 8809, octaves=3, scale=1 / 12.0)) * smoothstep(48.0, 30.0, slope)
+    rk = rk * (1 - 0.5 * ledge) + np.array([0.10, 0.09, 0.045])[:, None] * 0.5 * ledge
     col['rock'] = rk
     col['scree'] = np.array(LC.MEAN['scree'])[:, None] * (1 + 0.12 * n2 + 0.08 * fine)
     sn = np.array(LC.MEAN['snow'])[:, None] * (1 - 0.06 * smoothstep(0.0, 1.0, n2)) * (1 - 0.04 * fine)

@@ -216,10 +216,50 @@ def stage_contract(ctx):
             bpy.data.objects.remove(o)
     binfo = json.loads(sc.get("buildings_info", "{}"))
     C.build(ter, col, binfo)
-    bmats.assign([o for o in col.objects if o.type == 'MESH'], os.path.join(ctx.build, "tiles"))
+    from . import foreground
+    fcol = S.collection("foreground", bpy.data.collections["Valley"])
+    for o in list(fcol.objects):
+        bpy.data.objects.remove(o)
+    foreground.build(ter, fcol)
+    tiles = os.path.join(ctx.build, "tiles")
+    bmats.assign([o for o in col.objects if o.type == 'MESH'] + list(fcol.objects), tiles)
     save_blend(ctx)
 
 
 def stage_export(ctx):
     from . import export
     export.stage(ctx)
+
+
+def stage_bake(ctx):
+    """The terrain's light map (valley/lightmap.py)."""
+    from . import lightmap, forest as FO
+    from .imgio import read
+    ter = load_terrain(ctx)
+    inst = FO.load(os.path.join(ctx.build, "forest.npz"))
+    c = read(os.path.join(ctx.maps, "color.png"))
+    lightmap.bake(ter, inst, ctx.maps, c.shape[1], c.shape[0], quick=ctx.quick)
+
+
+def stage_sky(ctx):
+    """public/assets/ridge/sky.webp (valley/sky.py). The blend is not saved:
+    the far world lives only in the sky."""
+    from . import sky
+    ter = load_terrain(ctx)
+    open_blend(ctx)
+    if ctx.quick:
+        sky.render(ctx, ter, 2048, 1024, 24)
+    else:
+        sky.render(ctx, ter, 4096, 2048, 128)
+
+
+def stage_review(ctx):
+    from . import review
+    open_blend(ctx)
+    review.render_all(ctx)
+
+
+def stage_poster(ctx):
+    from . import poster
+    open_blend(ctx)
+    poster.render(ctx)

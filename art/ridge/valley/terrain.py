@@ -61,7 +61,7 @@ def near_profile(u, s):
     # toward the dam the near side is the gorge's wall: up to ~90 m more,
     # gained within the first 300 m (not a multiplier: far from the river
     # that would raise whole mountains)
-    gorge = 90.0 * smoothstep(0.0, 300.0, u) * smoothstep(700.0, 150.0, s)
+    gorge = 35.0 * smoothstep(0.0, 300.0, u) * smoothstep(700.0, 150.0, s)
     return base + gorge
 
 
@@ -368,19 +368,56 @@ class Terrain:
         self.coarse = coarse
         self.fine = fine
         self.info = info or {}
+        self._rock = None
 
-    def height(self, x, y, cubic=True):
+    def rock_mask(self):
+        """Where the mountains are rock (steep and high), on the coarse grid,
+        softened: the analytic detail below only lives there."""
+        if self._rock is None:
+            c = self.coarse
+            gy, gx = np.gradient(N.blur(c.v, 1.0), c.dx)
+            slope = np.degrees(np.arctan(np.hypot(gx, gy)))
+            alt = c.v - L.FLOOR_Z
+            X, Y = c.coords()
+            m = smoothstep(26.0, 40.0, slope) * smoothstep(80.0, 260.0, alt) * smoothstep(300.0, 900.0, np.hypot(X, Y))
+            self._rock = Grid(c.x0, c.y0, c.dx, c.nx, c.ny, N.blur(m, 1.5))
+        return self._rock
+
+    def height(self, x, y, cubic=True, detail=True):
         x = np.asarray(x, float)
         y = np.asarray(y, float)
         zc = self.coarse.sample(x, y, cubic=cubic)
-        if self.fine is None:
+        if self.fine is not None:
+            f = self.fine
+            zf = f.sample(x, y, cubic=False)
+            # blend over the last 60 m inside the fine grid's edges
+            m = np.minimum.reduce([x - f.x0, f.x1 - x, y - f.y0, f.y1 - y])
+            w = smoothstep(0.0, 60.0, m)
+            zc = zc + (zf - zc) * w
+        if not detail:
             return zc
-        f = self.fine
-        zf = f.sample(x, y, cubic=False)
-        # blend over the last 60 m inside the fine grid's edges
-        m = np.minimum.reduce([x - f.x0, f.x1 - x, y - f.y0, f.y1 - y])
-        w = smoothstep(0.0, 60.0, m)
-        return zc + (zf - zc) * w
+        return zc + self.rock_detail(x, y, zc)
+
+    def rock_detail(self, x, y, z):
+        """Rock at the scale the scope reads it from 1-3 km, below the 8 m
+        grid: bedding (treads and risers every 9-16 m whose spacing and dip
+        wander, so cliffs break into ledges that hold turf and snow),
+        knobbly ribs, and fine roughness. Analytic, so every mesh, map and
+        normal that asks the height gets it at its own resolution."""
+        m = self.rock_mask().sample(x, y)
+        out = np.zeros(np.shape(x))
+        sel = m > 0.02
+        if not sel.any():
+            return out
+        xs, ys, zs, ms = x[sel], y[sel], z[sel], m[sel]
+        q = 12.0 + 4.0 * N.fbm(xs, ys, SEED + 51, octaves=2, scale=1 / 700.0)
+        t = (zs + 0.012 * xs - 0.008 * ys + 4.0 * N.fbm(xs, ys, SEED + 52, octaves=3, scale=1 / 260.0)) / q
+        fr = t - np.floor(t)
+        tread = (smoothstep(0.5, 0.95, fr) - fr) * q * 0.7
+        ribs = (N.ridged(xs / 34.0, ys / 34.0, SEED + 53, octaves=4, gain=0.5, sharp=2.2) - 0.42) * 7.0
+        rough = N.fbm(xs, ys, SEED + 54, octaves=3, scale=1 / 7.0) * 1.2
+        out[sel] = ms * (tread + ribs + rough)
+        return out
 
     def save(self, path):
         extra = {k: v for k, v in self.info.items() if isinstance(v, np.ndarray)}
@@ -432,6 +469,28 @@ def build_coarse(quick=False):
 
 
 EYE_GROUND = -0.35      # the spur's grass under the prone player's eye
+
+
+def rock_detail(g):
+    """Structure the eroded mountains lack at the 10-60 m scale, where the
+    scope looks at them from 1-3 km: on steep ground, bedding - treads and
+    risers every 10-20 m whose spacing and dip wander - and sharper ribs
+    between the gullies. Only where it is steep and high (rock, not
+    pasture)."""
+    X, Y = g.coords()
+    z = g.v
+    gy, gx = np.gradient(z, g.dx)
+    slope = np.degrees(np.arctan(np.hypot(gx, gy)))
+    alt = z - L.FLOOR_Z
+    m = smoothstep(28.0, 42.0, slope) * smoothstep(120.0, 320.0, alt) * smoothstep(250.0, 900.0, np.hypot(X, Y))
+    q = 14.0 + 6.0 * N.fbm(X, Y, SEED + 41, octaves=2, scale=1 / 900.0)
+    dip = 0.06 * X + 0.03 * Y                    # the strata dip gently across the range
+    t = (z + dip * 0.02 + 5.0 * N.fbm(X, Y, SEED + 42, octaves=3, scale=1 / 300.0)) / q
+    fr = t - np.floor(t)
+    tread = (smoothstep(0.55, 0.95, fr) - fr) * q * 0.55      # flattens the tread, steepens the riser
+    ribs = (N.ridged(X / 60.0, Y / 60.0, SEED + 43, octaves=3, gain=0.5, sharp=2.5) - 0.45) * 9.0
+    g.v = z + m * (tread + ribs)
+    return g
 
 
 def spur_fix(g):

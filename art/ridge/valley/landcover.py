@@ -33,7 +33,7 @@ MATERIALS = ["grass", "rock", "scree", "snow", "dirt", "forest", "gravel", "alpi
 # colour map by tile / mean)
 MEAN = {
     "grass": (0.105, 0.135, 0.050),
-    "rock": (0.135, 0.128, 0.118),
+    "rock": (0.165, 0.162, 0.158),
     "scree": (0.180, 0.172, 0.160),
     "snow": (0.78, 0.80, 0.83),
     "dirt": (0.135, 0.100, 0.070),
@@ -188,8 +188,8 @@ def evaluate(F, x, y, z=None, nrm=None, need_forest_only=False):
                        smoothstep(treeline - 150, treeline, alt) * 0.8)
     # snow: an old-snow line and the first snow on the peaks; NE faces (toward
     # the player) hold it; gullies hold it lower; steep rock sheds it
-    snowline = 700.0 + 60.0 * n3 - 90.0 * smoothstep(0.1, 0.6, curv) - 60.0 * smoothstep(5.5, 7.0, flow)
-    snow = smoothstep(snowline - 40, snowline + 60, alt) * smoothstep(52.0, 38.0, slope + 8 * n2)
+    snowline = 700.0 + 60.0 * n3 - 110.0 * smoothstep(0.1, 0.6, curv) - 80.0 * smoothstep(5.5, 7.0, flow)
+    snow = smoothstep(snowline - 15, snowline + 25, alt) * smoothstep(46.0, 36.0, slope + 6 * n2)
     dust = smoothstep(820.0, 1000.0, alt + 60 * n1) * 0.55         # a dusting that clings even to steep rock
     snow = np.clip(np.maximum(snow, dust * smoothstep(70.0, 50.0, slope)), 0, 1)
     # ---- grass and alpine turf

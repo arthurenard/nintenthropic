@@ -41,7 +41,13 @@ def log(*a):
 
 
 def spacing(r):
-    return np.clip(r / 170.0, 1.2, 40.0) if np.ndim(r) else min(max(r / 170.0, 1.2), 40.0)
+    """Vertex spacing by range: 1.2 m where the targets are, then in
+    proportion to range - finer on the far slope's rock band (0.8-3.5 km),
+    where the scope reads cliffs and ledges."""
+    r = np.asarray(r, float)
+    k = np.where((r > 800.0) & (r < 3600.0), 215.0, 170.0)
+    out = np.clip(r / k, 1.2, 40.0)
+    return out if out.ndim else float(out)
 
 
 def logpolar_uv(x, y):

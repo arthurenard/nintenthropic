@@ -31,8 +31,13 @@ def tile_name(key):
 
 
 def material(key, tiles_dir):
-    if key in _CACHE and _CACHE[key].name in bpy.data.materials:
-        return _CACHE[key]
+    if key in _CACHE:
+        try:
+            if _CACHE[key].name in bpy.data.materials:
+                return _CACHE[key]
+        except ReferenceError:        # a blend was reopened since: the material is gone
+            pass
+        del _CACHE[key]
     if key in PLAIN:
         col, rough, metal, alpha = PLAIN[key]
         m = bpy.data.materials.new(f"m.{key}")
@@ -47,6 +52,18 @@ def material(key, tiles_dir):
                 m.surface_render_method = 'BLENDED'
             except AttributeError:
                 pass
+        _CACHE[key] = m
+        return m
+    if key == "grass_blades":
+        m = bpy.data.materials.new("m.grass_blades")
+        m.use_nodes = True
+        nt = m.node_tree
+        b = nt.nodes["Principled BSDF"]
+        a = nt.nodes.new('ShaderNodeVertexColor')
+        a.layer_name = "Col"
+        nt.links.new(a.outputs['Color'], b.inputs['Base Color'])
+        b.inputs['Roughness'].default_value = 0.7
+        m.use_backface_culling = False
         _CACHE[key] = m
         return m
     name = tile_name(key)

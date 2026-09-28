@@ -20,7 +20,7 @@ import numpy as np
 
 SIGMA_HAZE = 1.0 / 14000.0
 HAZE_COLOR = np.array([0.36, 0.46, 0.62])        # scene-linear, at the review renders' exposure
-MIST_SIGMA0 = 1.0 / 900.0
+MIST_SIGMA0 = 1.0 / 650.0          # on the river; the light map's alpha thins it away from it
 MIST_Z0 = -60.0
 MIST_H = 22.0
 MIST_COLOR = np.array([0.30, 0.37, 0.46])
@@ -41,8 +41,24 @@ def optical_depth(P, eye=(0.0, 0.0, 0.0)):
     return d * SIGMA_HAZE, mist * MIST_SIGMA0
 
 
+def river_mist(x, y):
+    """How much of the valley's mist lies over a ground point: all of it on
+    the river, a third of it 300 m away (the light map's alpha stores this
+    for the game)."""
+    from . import layout as L
+    riv = L.river(step=4.0)
+    d, _, _ = riv.nearest(np.asarray(x, float), np.asarray(y, float), max_dist=500.0)
+    d = np.where(np.isfinite(d), d, 1e9)
+    return 0.3 + 0.7 * np.exp(-(d / 150.0) ** 2)
+
+
 def apply(rgb, P, valid, scale=1.0):
     th, tm = optical_depth(P)
+    shape = P.shape[:-1]
+    f = np.ones(shape)
+    if valid.any():
+        f[valid] = river_mist(P[..., 0][valid], P[..., 1][valid])
+    tm = tm * f
     Th = np.exp(-th)[..., None]
     Tm = np.exp(-tm)[..., None]
     out = rgb * Tm + MIST_COLOR * scale * (1 - Tm)
