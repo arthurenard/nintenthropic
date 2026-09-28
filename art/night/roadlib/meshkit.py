@@ -42,36 +42,44 @@ def _grid_faces(mb, P, mat, rand, closed_u=True, closed_v=False, uv=None, local=
             mb.add_face([tuple(p) for p in pts], mat, rand, g, g)
 
 
-def pillow(mb, f, L, W, H, mat, rand, r, seg_u=10, seg_v=6, squash=0.0, ears=0.05, lump=0.012):
-    """A filled sack: a superellipsoid, flat under its own weight, the tied
-    end pinched into ears, lumpy. Frame f: centre of the bag, X along it."""
+def pillow(mb, f, L, W, H, mat, rand, r, seg_u=10, seg_v=6, squash=0.0, ears=0.05, lump=0.012, sag=0.0, tie=True):
+    """A filled sack lying on its side: a flattened superellipsoid, the tied
+    end (+X) gathered into a pinched neck with a folded ear, the other end
+    rounded, the top slumped between whatever holds it up, lumpy with the
+    sand inside. Frame f: centre of the bag, X along it."""
     nu, nv = seg_u, seg_v
     ph1, ph2 = r.uniform(0, 10), r.uniform(0, 10)
     P = np.zeros((nv + 1, nu, 3))
-    lim = math.radians(78)
+    lim = math.radians(80)
     for i in range(nv + 1):
-        th = -lim + 2 * lim * i / nv                     # bottom .. top (the poles are capped)
+        th = -lim + 2 * lim * i / nv
         ct, st = math.cos(th), math.sin(th)
         for j in range(nu):
             ph = 2 * math.pi * j / nu
             cp, sp = math.cos(ph), math.sin(ph)
-            e1, e2 = 0.35, 0.55                          # squareness along the bag, across
+            e1, e2 = 0.45, 0.6
             x = math.copysign(abs(ct) ** e2 * abs(cp) ** e1, cp)
             y = math.copysign(abs(ct) ** e2 * abs(sp) ** e1, sp)
-            z = math.copysign(abs(st) ** 0.7, st)
-            # flatter bottom, a domed top, squashed by the bags above
-            zz = z * (0.85 if z < 0 else 1.0) * (1.0 - squash)
-            # pinch the ends toward the tie
-            pinch = 1.0 - 0.35 * max(0.0, abs(x) - 0.7) / 0.3
-            yy, zz = y * pinch, zz * pinch
-            if x > 0.92:
-                x += ears * (1 - abs(z))
-            n = (math.sin(3.1 * x + ph1) * math.sin(2.3 * y + ph2) + 0.5 * math.sin(7.0 * x + 5.0 * y + ph1))
-            s = 1.0 + lump * n / max(min(L, W, H), 1e-3) * 2
-            P[i, j] = (x * L / 2 * s, yy * W / 2 * s, zz * H / 2 * s)
+            z = math.copysign(abs(st) ** 0.85, st)
+            zz = z * (0.8 if z < 0 else 1.0) * (1.0 - squash)
+            # the tied end narrows to a gathered neck; the other end is just round
+            if tie and x > 0.55:
+                k = (x - 0.55) / 0.45
+                pinch = 1.0 - 0.55 * k * k
+                y *= pinch
+                zz *= pinch * (1.0 - 0.3 * k)
+                x += ears * k * k * (1 - abs(z))
+            elif x < -0.75:
+                y *= 1.0 - 0.25 * (-x - 0.75) / 0.25
+            # slumped: the top sags in the middle, the sides bulge
+            zz -= sag * (1 - x * x) * max(z, 0.0)
+            y *= 1.0 + 0.06 * (1 - abs(z)) * (1 - x * x)
+            n = (math.sin(3.1 * x + ph1) * math.sin(2.3 * y + ph2) + 0.5 * math.sin(7.0 * x + 5.0 * y + ph1)
+                 + 0.3 * math.sin(13.0 * x - 9.0 * y + ph2))
+            s_ = 1.0 + lump * n / max(min(L, W, H), 1e-3) * 2
+            P[i, j] = (x * L / 2 * s_, y * W / 2 * s_, zz * H / 2 * s_)
     W_ = np.array([tuple(f.p(*p)) for p in P.reshape(-1, 3)]).reshape(P.shape)
     _grid_faces(mb, W_, mat, rand, closed_u=True, closed_v=False)
-    # flat-ish caps top and bottom (the sack's broad faces)
     mb.add_face([tuple(p) for p in W_[0][::-1]], mat, rand)
     mb.add_face([tuple(p) for p in W_[-1]], mat, rand)
 

@@ -193,11 +193,13 @@ def streetlight(lib, col, lights):
     hd = Vector((d.x, d.y, 0.0)).normalized()
     ang = math.atan2(hd.y, hd.x) - math.pi / 2
     hf = Frame((hx, hy, hz), ang)
-    K.lathe(mb, hf.sub((0, -0.1, 0.1), rot_x=-math.pi / 2),
-            [(0.0, -0.05), (0.13, -0.02), (0.2, 0.1), (0.22, 0.35), (0.19, 0.55), (0.12, 0.66), (0.0, 0.68)], 'galvanized', seg=14)
+    # the housing: a flat-bottomed shell tapering to the arm; the refractor
+    # bowl hangs underneath it and glows
+    mb.box(hf, (-0.2, -0.36, 0.02), (0.2, 0.30, 0.11), 'galvanized', taper=(0.35, 0.1))
+    mb.box(hf, (-0.08, 0.30, 0.03), (0.08, 0.48, 0.1), 'galvanized')
     lens = MeshBuilder("streetlight.lens")
-    K.lathe(lens, hf.sub((0, 0.18, 0.07), rot_x=math.pi), [(0.0, 0.1), (0.15, 0.07), (0.19, 0.0)], 'sodium_lens', seg=14,
-            cap_top=False)
+    K.lathe(lens, hf.sub((0, -0.04, 0.02), rot_x=math.pi), [(0.0, 0.1), (0.1, 0.085), (0.16, 0.05), (0.18, 0.0)], 'sodium_lens',
+            seg=16, cap_top=False)
     K.emit(mb, col, lib, 'station', 'metal', smooth_angle=40)
     lo_ = K.emit(lens, col, lib, 'station', 'glass', smooth_angle=60)
     lo_.visible_shadow = False
@@ -208,7 +210,7 @@ def streetlight(lib, col, lights):
     ld.spot_blend = 0.55
     ld.shadow_soft_size = 0.12
     lo = bpy.data.objects.new("streetlight", ld)
-    lo.location = (hx, hy + 0.18, hz - 0.1)       # just under the refractor (the head would shadow it)
+    lo.location = hf.p(0.0, -0.04, -0.1)          # just under the refractor bowl (the housing would shadow it)
     lo.rotation_euler = (0.0, 0.0, 0.0)          # spot shines down -Z
     lo.visible_camera = False
     lights.objects.link(lo)
@@ -407,7 +409,7 @@ def tufts(lib, col, quick=False):
     import numpy as np
     r = rng("tufts")
     mbs = {}
-    n_try = 2500 if quick else 9000
+    n_try = 2000 if quick else 6000
     placed = 0
     for i in range(n_try):
         side = r.choice((-1, 1))
@@ -437,7 +439,7 @@ def tufts(lib, col, quick=False):
         h = r.uniform(0.25, 0.7) * (0.5 if hard > 0.5 else 1.0)
         dry = r.random() < 0.55
         mat = 'dry_grass' if dry else 'green_grass'
-        nb = r.randint(5, 9)
+        nb = r.randint(4, 7)
         rnd = r.random()
         for k in range(nb):
             a_ = r.uniform(0, 2 * math.pi)

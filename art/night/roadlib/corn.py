@@ -165,14 +165,14 @@ def spots():
             depth_e = x1 - x                   # metres in from the road edge
             y = y0 + 0.15
             while y < y1 - 0.1:
-                y += r.uniform(0.24, 0.38)
+                y += r.uniform(0.27, 0.42)
                 depth_s = y - y0 if north else 99.0
-                if depth_e < 5.0 or (north and depth_s < 4.0 and x > -46.0):
-                    det = 2 if (depth_e < 3.2 or depth_s < 2.4) else 1
+                if depth_e < 3.8 or (north and depth_s < 3.0 and x > -42.0):
+                    det = 2 if (depth_e < 2.4 or depth_s < 1.6) else 1
                     if math.hypot(x, y) > 38:
                         det = min(det, 1)
-                elif depth_e < 9.0 or (north and depth_s < 7.0 and x > -46.0):
-                    if r.random() < 0.55:
+                elif depth_e < 7.0 or (north and depth_s < 5.5 and x > -42.0):
+                    if r.random() < 0.6:
                         continue
                     det = 0
                 else:

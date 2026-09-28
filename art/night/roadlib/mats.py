@@ -183,7 +183,10 @@ def burlap(name, color=lin(104, 84, 56)):
     col = g.mix(g.add(g.mul(mid, 0.6), g.mul(slub, 0.4)), g.hsv(g.rgb(color), v=0.75), g.hsv(g.rgb(color), v=1.15))
     col = g.mix(g.mul(g.add(weave, 0.5), 0.25), col, g.hsv(col, v=0.75))
     r = g.attr('rand')
-    col = g.hsv(col, h=g.madd(r, 0.03, 0.485), v=g.madd(r, 0.3, 0.85))
+    col = g.hsv(col, h=g.madd(r, 0.04, 0.48), s=g.madd(r, 0.3, 0.85), v=g.madd(r, 0.5, 0.75))
+    # printed stencil and stitched seams read at arm's length
+    seam_u = g.sub(1.0, g.smooth(g.math('ABSOLUTE', g.sub(g.math('FRACT', g.mul(g.add(x, y), 1.6)), 0.5)), 0.47, 0.5))
+    col = g.mix(g.mul(seam_u, 0.15), col, g.hsv(col, v=0.7))
     mud = g.mul(g.sub(1.0, g.smooth(z, 0.05, 0.55)), g.madd(mid, 0.8, 0.2))
     col = g.mix(g.mul(mud, 0.8), col, g.rgb(lin(46, 36, 26)))
     seam = g.sub(1.0, g.smooth(g.math('ABSOLUTE', g.sub(v, 0.5)), 0.44, 0.5))
@@ -309,8 +312,8 @@ def build_library():
     concrete("silo_concrete", lin(140, 136, 126), dirt=0.9, blocks=(0.76, 0.30))
     concrete("brick_red", lin(110, 50, 38), blocks=(0.21, 0.07))
 
-    burlap("sandbag")
-    burlap("sandbag_pale", lin(132, 112, 80))
+    burlap("sandbag", lin(96, 80, 58))
+    burlap("sandbag_pale", lin(146, 128, 94))
     glass_dark("glass_dark")
     glass_dark("glass_dirty", tint=(0.08, 0.085, 0.08), rough=0.12, dirt=1.0)
     simple("tar_roof", lin(28, 27, 26), rough=0.8, surface='asphalt', noise=0.3, scale=4.0)

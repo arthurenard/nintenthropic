@@ -142,7 +142,7 @@ def pump_island(lib, col):
 # ---------------------------------------------------------------------------
 # Sandbags
 
-BAG_L, BAG_W, BAG_H = 0.56, 0.32, 0.15
+BAG_L, BAG_W, BAG_H = 0.58, 0.34, 0.125
 
 
 def bag_wall(mb, x0, x1, y0, y1, z0, layers, r, lean=0.015, ragged_top=True, keep_xs=()):
@@ -152,7 +152,7 @@ def bag_wall(mb, x0, x1, y0, y1, z0, layers, r, lean=0.015, ragged_top=True, kee
     depth = y1 - y0
     rows = max(1, int(round(depth / BAG_W)))
     for k in range(layers):
-        z = z0 + k * (BAG_H * 0.86) + BAG_H * 0.43
+        z = z0 + k * (BAG_H * 0.9) + BAG_H * 0.45
         off = (BAG_L * 0.5) * (k % 2)
         n = int(math.ceil((x1 - x0 + off) / (BAG_L * 0.97))) + 1
         for row in range(rows):
@@ -169,12 +169,13 @@ def bag_wall(mb, x0, x1, y0, y1, z0, layers, r, lean=0.015, ragged_top=True, kee
                     xc = x0 + L_ / 2 - 0.02
                 if xc + L_ / 2 > x1:
                     xc = x1 - L_ / 2 + 0.02
-                sq = 0.18 * (layers - 1 - k) / max(layers - 1, 1) + r.uniform(0.0, 0.06)
-                f = Frame((xc, yc + r.uniform(-0.02, 0.02), z + r.uniform(-0.01, 0.01)),
-                          r.uniform(-0.06, 0.06) + (math.pi if r.random() < 0.5 else 0.0)).sub(
-                    (0, 0, 0), rot_x=r.uniform(-0.05, 0.05), rot_y=r.uniform(-0.06, 0.06))
-                K.pillow(mb, f, L_, BAG_W * r.uniform(0.95, 1.05), BAG_H * (1.12 - sq), 'sandbag', r.random(), r,
-                         seg_u=10, seg_v=5, squash=0.0, lump=0.01)
+                sq = 0.16 * (layers - 1 - k) / max(layers - 1, 1) + r.uniform(0.0, 0.06)
+                f = Frame((xc, yc + r.uniform(-0.03, 0.03), z + r.uniform(-0.012, 0.012)),
+                          r.uniform(-0.09, 0.09) + (math.pi if r.random() < 0.5 else 0.0)).sub(
+                    (0, 0, 0), rot_x=r.uniform(-0.07, 0.07), rot_y=r.uniform(-0.08, 0.08))
+                mat = 'sandbag_pale' if r.random() < 0.22 else 'sandbag'
+                K.pillow(mb, f, L_, BAG_W * r.uniform(0.92, 1.06), BAG_H * (1.12 - sq), mat, r.random(), r,
+                         seg_u=12, seg_v=6, squash=0.0, lump=0.014, sag=r.uniform(0.05, 0.25) if top else r.uniform(0.0, 0.1))
                 count += 1
     return count
 
@@ -186,10 +187,10 @@ def sandbags(lib, col):
     n = 0
     from .contract import bag_jar_xs
     jars = bag_jar_xs()
-    n += bag_wall(mb, -4.95, L.PUMP_ISLAND[0] - 0.02, y0, y1, 0.0, 7, r, keep_xs=jars)
+    n += bag_wall(mb, -4.95, L.PUMP_ISLAND[0] - 0.02, y0, y1, 0.0, 8, r, keep_xs=jars)
     # a low course on the island between the pump and the drum
     n += bag_wall(mb, L.PUMP[0] + 0.32, L.BIN[0] - 0.31, 2.62, 3.30, 0.16, 2, r, ragged_top=False)
-    n += bag_wall(mb, L.PUMP_ISLAND[1] + 0.02, 6.35, y0 + 0.05, y1 + 0.05, 0.0, 7, r)
+    n += bag_wall(mb, L.PUMP_ISLAND[1] + 0.02, 6.35, y0 + 0.05, y1 + 0.05, 0.0, 8, r)
     # a few loose bags slumped against the foot of the wall, player side
     for i in range(6):
         x = r.uniform(-3.9, 5.8)
@@ -606,6 +607,39 @@ def pole_sign(lib, col, lights):
     return c
 
 
+def dress_bag_top(lib, col):
+    """What the defender left on the wall's top, on the left, out of the
+    sightlines: an ammo can with its lid up, a box of rifle cartridges, a
+    thermos on its side. Seated by casting down onto the bags themselves."""
+    from mathutils.bvhtree import BVHTree
+    bags = bpy.data.objects.get("bags.wall")
+    if bags is None:
+        return
+    bvh = BVHTree.FromObject(bags, bpy.context.evaluated_depsgraph_get())
+    yc = sum(L.BARRICADE_Y) / 2 - 0.08
+
+    def seat(x, y):
+        hit = bvh.ray_cast(Vector((x, y, 3.0)), Vector((0, 0, -1)), 5.0)
+        return hit[0].z if hit[0] is not None else L.BAG_TOP
+    mb = MeshBuilder("bags.props")
+    x = -3.35
+    f = Frame((x, yc, seat(x, yc) - 0.01), 0.25)
+    mb.box(f, (-0.14, -0.08, 0.0), (0.14, 0.08, 0.18), 'drum_blue')
+    lid = f.sub((0, 0.08, 0.18), rot_x=math.radians(-110))
+    mb.box(lid, (-0.145, 0.0, 0.0), (0.145, 0.165, 0.02), 'drum_blue')
+    mb.box(f, (-0.02, -0.085, 0.14), (0.02, -0.08, 0.17), 'chrome')
+    x = -2.75
+    f = Frame((x, yc - 0.02, seat(x, yc) - 0.01), -0.4)
+    mb.box(f, (-0.07, -0.045, 0.0), (0.07, 0.045, 0.055), 'cardboard')
+    for k in range(5):
+        cf = f.sub((-0.05 + k * 0.025, 0.07 + 0.01 * (k % 2), 0.012), rot_y=math.pi / 2)
+        mb.cylinder(cf, (0, 0, 0), 0.0055, 0.065, 'chrome', segments=6)
+    x = -2.3
+    f = Frame((x, yc, seat(x, yc) + 0.03), 1.1)
+    mb.cylinder(f.sub((0, 0, 0), rot_y=math.pi / 2), (0, 0, -0.14), 0.04, 0.28, 'stop_red', segments=12)
+    K.emit(mb, col, lib, 'near', 'metal', smooth_angle=40)
+
+
 INFO = {}
 
 
@@ -613,6 +647,8 @@ def build(lib, col, lights):
     canopy(lib, col)
     pump_island(lib, col)
     sandbags(lib, col)
+    bpy.context.view_layer.update()
+    dress_bag_top(lib, col)
     INFO.update(truck(lib, col))
     diner(lib, col, lights)
     INFO["neon_centre"] = pole_sign(lib, col, lights)

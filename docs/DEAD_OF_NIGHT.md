@@ -228,24 +228,32 @@ western scripts).
   occlusion — no fog: the game draws fog) and `albedo`. The game's material
   shows `lit` and adds `albedo × spotlight(position, normal)` for the beam.
   How the second texture travels in glTF is the art's choice, documented in
-  `art/night/README.md` (e.g. the emissive slot, or `extras` naming a WebP
-  beside the GLB).
+  `art/night/README.md`: each baked group's material `night.<group>` carries
+  `lit` as its `emissiveTexture` and `albedo` as its `baseColorTexture`
+  (roughness in `metallicRoughnessTexture` G); the corn carries them as
+  vertex colours (`COLOR_0` = lit, `_ALBEDO`, plus `_SWAY`).
 - **The streetlight flickers**: its baked contribution must be separable — a
   single-channel `flicker` mask (where the streetlight's light falls) the game
-  multiplies by the flicker, or a separate baked layer.
+  multiplies by the flicker, or a separate baked layer. *(As built: the
+  `occlusionTexture` red channel of each baked material — the streetlight's
+  share of `lit`, not AO — and `_FLICKER` on the corn;
+  `colour = lit × (1 − flicker × (1 − streetlight)) + albedo × beam`.)*
 - **Named nodes:** `camera.player`; `moon` (an empty whose −Z is the moonlight
   direction, for the characters); `light.street` (the lamp head), `light.neon`,
   `light.motel.<n>`; `lane.road.<n>`, `lane.corn.<n>`, `lane.trees.<n>`
   (ordered waypoints each lane walks, from the fog to the barricade);
   `spawn.bus`, `spawn.booth`, `spawn.fence` (surprise spawns with an exit path
-  `spawn.<id>.path.<n>`); `barricade.<n>` (where the dead stand when they reach
+  `spawn.<id>.path.<n>`; `spawn.bus` and `spawn.fence` sit where their clips
+  `climb_out` and `vault` *end*, the clips starting behind them); `barricade.<n>` (where the dead stand when they reach
   you, spread along the barricade); `calib.1-9` (the mason jars);
   `secret.sign.<letter>` (each neon letter separately: `G`, `A1`, `S1`, `amp`,
   `E`, `A2`, `T`, `S2`), `secret.scarecrow` (with a `secret.scarecrow.head`
   pivot), `secret.booth.light`, `secret.phone.motel`, `secret.drivein.lamp`,
   `secret.drivein.screen` (a plane the game can put a video texture or shader
   on), `secret.radio`, `secret.cat.spot.<n>`, `secret.duck`; `moon.disc` (the
-  moon, far away, shootable); `ground.shadow`; `corn` (the corn as separate
+  moon, far away, shootable — as built low over the fields front-left,
+  azimuth −24°, 14° up, inside the play view); `light.booth` (added: the phone
+  booth's panel); `ground.shadow`; `corn` (the corn as separate
   instanced/card geometry the game can sway, with the paths ahead of each corn
   lane).
 - **Surfaces** in extras as High Noon's: `asphalt`, `dirt`, `wood`, `metal`,
@@ -284,6 +292,10 @@ the background and the characters' environment light.
   flame the game can light; clips `run`, `run_lantern`, `duck`, `wave`.
 - `cat.glb`: a black cat — `sit`, `hiss`, `leap`, `walk`.
 - **Budget:** 10–18k triangles and one 1024² atlas set per character file.
+  *(As built: `walker.glb` has one 2048² set — it carries thirteen people's
+  skin and clothes, the base, six outfits, four hair, runner, bloater,
+  crawler; the eyes of every file have their own small texture so the game can
+  drive their shine; the Mechanic's 1.15× size is on the armature object.)*
 
 ### `public/assets/night/poster.webp`
 

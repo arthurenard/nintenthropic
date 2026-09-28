@@ -19,12 +19,14 @@ from .meshkit import MeshBuilder, Frame
 from .ground import ground_z
 
 
-def pine(mb, x, y, h, r, seg=12):
+def pine(mb, x, y, h, r, seg=10):
     z = ground_z(x, y) - 0.2
     lean = (r.uniform(-0.02, 0.02), r.uniform(-0.02, 0.02))
     f = Frame((x, y, z), r.uniform(0, 6.28)).sub((0, 0, 0), rot_x=lean[0], rot_y=lean[1])
     mb.cylinder(f, (0, 0, 0), 0.02 * h + 0.08, h * 0.97, 'bark', segments=7, radius_top=0.03)
-    tiers = int(6 + h / 3.5)
+    d = math.hypot(x, y)
+    tiers = int(5 + h / (3.5 if d < 90 else 5.5))
+    seg = seg if d < 90 else 7
     base_z = h * r.uniform(0.18, 0.32)
     ph = r.uniform(0, 100)
     for t in range(tiers):
@@ -116,9 +118,9 @@ def build(lib, col, quick=False):
         (21.0, 70.0, 48.5, 70.0, 70, 3.2, (13, 21)),
         (9.5, 21.0, 52.0, 110.0, 40, 3.4, (12, 20)),
         (36.0, 120.0, 20.0, 48.0, 45, 4.5, (14, 22)),
-        (20.0, 140.0, 70.0, 220.0, 90, 6.0, (14, 24)),
-        (-140.0, -48.0, 88.0, 230.0, 70, 6.5, (14, 22)),
-        (-60.0, 60.0, 230.0, 380.0, 70, 8.0, (15, 24)),
+        (20.0, 140.0, 70.0, 220.0, 60, 7.0, (14, 24)),
+        (-140.0, -48.0, 88.0, 230.0, 50, 7.5, (14, 22)),
+        (-60.0, 60.0, 230.0, 380.0, 50, 9.0, (15, 24)),
     ]
     if quick:
         areas = [(a[0], a[1], a[2], a[3], a[4] // 3, a[5] * 1.5, a[6]) for a in areas]

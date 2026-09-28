@@ -184,10 +184,13 @@ def build_spawns(col):
     path_nodes(col, "spawn.booth.path", pts, r, width=1.0)
     # over the fence, 16 m out on the left (the pickup hides anything nearer)
     fy = L.FENCE_SPAWN_Y
-    fp = Vector((L.FENCE_X - 0.55, fy, ground_z(L.FENCE_X - 0.55, fy)))
+    # like spawn.bus, the node is where the clip ENDS (vault's root finishes
+    # at its origin): the landing on the road side; the clip starts 1.1 m
+    # back, on the field side, so the dead come over the rails from the corn
+    fp = Vector((L.FENCE_X + 0.55, fy, ground_z(L.FENCE_X + 0.55, fy)))
     empty("spawn.fence", fp, col, rot=facing(Vector((1, -0.15, 0))), size=0.5, display='SINGLE_ARROW', clip='vault',
-          note="vault starts here facing the fence (east) and lands 1.1 m on, on the road side")
-    pts = [(L.FENCE_X + 0.6, fy - 0.2), (-4.4, 11.5), (-2.9, 7.5), (-2.6, 4.3)]
+          note="vault ends here on the road side, facing east; it starts 1.1 m back on the field side of the fence")
+    pts = [(L.FENCE_X + 1.3, fy - 0.3), (-4.4, 11.5), (-2.9, 7.5), (-2.6, 4.3)]
     path_nodes(col, "spawn.fence.path", pts, r, width=1.0)
 
 
