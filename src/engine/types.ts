@@ -52,6 +52,18 @@ export interface Readout {
   /** Where to notch the meter, 0..1. */
   notches?: number[];
   tone?: "" | "warning" | "danger";
+  /**
+   * Several small parts in place of one meter, each 0..1 with a tone of its
+   * own (Orbital Decay's seven panes). A part at 0 is drawn as an outline.
+   * Optional: a readout shows a meter or segments, not both.
+   */
+  segments?: { value: number; tone?: "" | "warning" | "danger" }[];
+  /**
+   * How the segments sit: side by side ("row", the default), or the first
+   * in the middle and the rest round it, clockwise from just left of the
+   * top ("ring": a cupola's windows in miniature).
+   */
+  segmentLayout?: "row" | "ring";
 }
 
 export interface GameStats {

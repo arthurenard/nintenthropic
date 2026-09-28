@@ -22,6 +22,53 @@ interface Row {
   label: string;
   value: HTMLElement;
   meter: HTMLElement | null;
+  /** A readout's parts (Readout.segments), and the shape they were drawn for. */
+  segments: SVGElement[] | null;
+  shape: string;
+}
+
+/** What a readout's segments look like, so a change of count or layout redraws them. */
+function segmentShape(r: Readout): string {
+  return r.segments ? `${r.segmentLayout ?? "row"}:${r.segments.length}` : "";
+}
+
+/**
+ * A readout's segments as an SVG: small rounded bars in a row, or a ring of
+ * them round a middle disc (the first segment), clockwise from just left
+ * of the top - a cupola's windows in miniature.
+ */
+function drawSegments(r: Readout): { svg: SVGSVGElement; parts: SVGElement[] } {
+  const count = r.segments?.length ?? 0;
+  const parts: SVGElement[] = [];
+  if ((r.segmentLayout ?? "row") === "ring") {
+    const s = svg("svg", { class: "segments ring", viewBox: "-30 -30 60 60", "aria-hidden": "true" });
+    const middle = svg("circle", { class: "seg", cx: 0, cy: 0, r: 8.6 });
+    s.append(middle);
+    parts.push(middle);
+    const around = Math.max(1, count - 1);
+    const step = (Math.PI * 2) / around;
+    const gap = 0.07;
+    const [r1, r2] = [11.6, 27.5];
+    for (let k = 0; k < around; k++) {
+      // Clockwise (on screen) from just left of the top.
+      const centre = Math.PI / 2 + step / 2 - k * step;
+      const a0 = centre - step / 2 + gap;
+      const a1 = centre + step / 2 - gap;
+      const at = (rad: number, a: number) => `${(rad * Math.cos(a)).toFixed(2)},${(-rad * Math.sin(a)).toFixed(2)}`;
+      const poly = svg("polygon", { class: "seg", points: [at(r1 + 0.8, a0 + 0.05), at(r2, a0), at(r2, a1), at(r1 + 0.8, a1 - 0.05)].join(" ") });
+      s.append(poly);
+      parts.push(poly);
+    }
+    return { svg: s, parts };
+  }
+  const width = count * 13 - 3;
+  const s = svg("svg", { class: "segments row", viewBox: `0 0 ${Math.max(1, width)} 14`, "aria-hidden": "true" });
+  for (let k = 0; k < count; k++) {
+    const bar = svg("rect", { class: "seg", x: k * 13, y: 0, width: 10, height: 14, rx: 3 });
+    s.append(bar);
+    parts.push(bar);
+  }
+  return { svg: s, parts };
 }
 
 export class Hud implements HudSink {
@@ -86,13 +133,18 @@ export class Hud implements HudSink {
 
   readouts(list: Readout[]): void {
     const box = $("readouts");
-    if (this.rows.length !== list.length || this.rows.some((row, i) => row.label !== list[i]!.label)) {
+    if (this.rows.length !== list.length || this.rows.some((row, i) => row.label !== list[i]!.label || row.shape !== segmentShape(list[i]!))) {
       box.replaceChildren();
       this.rows = list.map((readout) => {
         const label = element("dt", "", readout.label);
         const value = element("dd");
         box.append(label, value);
         let meter: HTMLElement | null = null;
+        if (readout.segments) {
+          const drawn = drawSegments(readout);
+          box.append(drawn.svg);
+          return { label: readout.label, value, meter, segments: drawn.parts, shape: segmentShape(readout) };
+        }
         if (readout.meter !== undefined) {
           meter = element("div", readout.signed ? "meter signed" : "meter");
           meter.setAttribute("aria-hidden", "true");
@@ -106,13 +158,24 @@ export class Hud implements HudSink {
           }
           box.append(meter);
         }
-        return { label: readout.label, value, meter };
+        return { label: readout.label, value, meter, segments: null, shape: "" };
       });
     }
     list.forEach((readout, i) => {
       const row = this.rows[i]!;
       setText(row.value, readout.value);
       row.value.className = readout.tone ?? "";
+      if (row.segments && readout.segments) {
+        // Each part as full as its value, in its tone; an outline when gone.
+        readout.segments.forEach((part, k) => {
+          const node = row.segments![k];
+          if (!node) return;
+          const v = Math.max(0, Math.min(1, part.value));
+          node.setAttribute("class", `seg${part.tone ? ` ${part.tone}` : ""}${v <= 0 ? " gone" : ""}`);
+          node.style.fillOpacity = v <= 0 ? "0" : String(0.28 + 0.72 * v);
+        });
+        return;
+      }
       if (!row.meter || readout.meter === undefined) return;
       row.meter.className = `meter${readout.signed ? " signed" : ""}${readout.tone ? ` ${readout.tone}` : ""}`;
       const fill = row.meter.firstElementChild as HTMLElement;
