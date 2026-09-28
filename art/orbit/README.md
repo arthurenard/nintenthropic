@@ -13,18 +13,31 @@ textures, no imagery, no HDRIs.
 python3 art/orbit/check_orbit.py        # proves the contract, the budgets, the sizes
 ```
 
-| Stage | Writes | Time (M4 Max, GPU, shared machine) |
+| Stage | Writes | Time (M4 Max, GPU, machine shared with other bakes) |
 | --- | --- | --- |
-| `planet` | `planet/{albedo,clouds,night,water,height,detail}.webp` | 2.5–5 min (numpy) |
-| `stars` | `stars.webp` | 25 s |
-| `env` | `build/env_day.exr` (the planet seen from the eye: light for bakes and reviews) | 20 s |
-| `cupola` | models the cupola and the station (`build/orbit_scene.blend`), bakes the cupola's light, writes `cupola.glb` | 5 min |
-| `station` | bakes the station's PBR atlas from the eye's point of view, writes `station.glb` | 1.5 min |
-| `debris`, `drone`, `derelict`, `extras` | each model, bake and export their file | 10–30 s each |
+| `planet` | `planet/{albedo,clouds,night,water,height,detail}.webp` | 4–6 min (numpy) |
+| `stars` | `stars.webp` | 15 s |
+| `env` | `build/env_day.exr` (the planet seen from the eye: light for bakes and reviews) | 15 s |
+| `cupola` | models the cupola and the station (`build/orbit_scene.blend`), bakes the cupola's light, writes `cupola.glb` | 3.5 min |
+| `station` | bakes the station's PBR atlas from the eye's point of view, writes `station.glb` | 1 min |
+| `debris`, `drone`, `derelict`, `extras` | each model, bake and export their file | 10–25 s each |
 | `poster` | `poster.webp` (and `build/review/poster.png`) | 1 min |
-| `review` | the review set in `build/review/` (not committed) | ~10 min |
+| `review` | the review set in `build/review/` (not committed) | ~20 min |
 
-Every stage but `review` takes about 15 minutes together; with no stage named, all of them run, the review included.
+Every stage but `review` runs in about 12 minutes (measured: 691 s); with
+no stage named, all of them run, the review included.
+
+| File | Size | Budget | Triangles |
+| --- | --- | --- | --- |
+| `cupola.glb` | 0.73 MB | 6 MB | 32,498 |
+| `station.glb` | 2.03 MB | 10 MB | 70,038 |
+| `debris.glb` | 2.07 MB | 3 MB | 71,978 (wholes and pieces) |
+| `drone.glb` | 0.17 MB | 3 MB | 2,584 |
+| `derelict.glb` | 1.08 MB | 3 MB | 12,404 |
+| `extras.glb` | 1.04 MB | 3 MB | 12,306 |
+| `planet/*.webp` | 1.8 MB together (clouds 1.1 MB) | – | – |
+| `stars.webp` | 135 KB | – | – |
+| `poster.webp` | 111 KB | – | – |
 
 `--quick` runs everything small and fast for iteration. Stages after
 `cupola` reopen the saved `.blend` files in `art/orbit/build/` (gitignored),
@@ -177,7 +190,9 @@ them, with fishing fleets and gas flares.
 Metadata (also in the `planet` node's extras): the **"HI"** of town lights
 (secret 8) is centred at **lon −112°, lat 47°** (letters ~130 km tall);
 the **storm** for secret 6 (a big thunderstorm cluster over land) at the
-`storm_lonlat` extras; the three hurricanes at `hurricanes_lonlat`.
+`storm_lonlat` extras; the three hurricanes at `hurricanes_lonlat` (lon, lat
+pairs, flattened). The node's position is the planet's centre in metres
+(about 6,790 km from the eye), its rotation the planet's axes.
 
 ### Rendering the planet
 

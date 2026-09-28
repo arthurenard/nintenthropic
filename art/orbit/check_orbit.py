@@ -9,6 +9,7 @@ prints sizes and triangle counts. Exits non-zero on any contract error.
 """
 
 import json
+import math
 import os
 import re
 import struct
@@ -116,6 +117,34 @@ def check_surfaces(r, name, g, names):
             r.need(s in SURFACES, f"{name}: mesh node {n.get('name')} has surface {s!r}")
 
 
+def rotate(q, v):
+    """Rotate vector v by the glTF quaternion q = (x, y, z, w)."""
+    x, y, z, w = q
+    vx, vy, vz = v
+    # t = 2 q.xyz x v ; v' = v + w t + q.xyz x t
+    tx, ty, tz = 2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx)
+    return (vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx))
+
+
+def check_frames(r, name, names):
+    """The camera looks along -Z pitched down ~20 degrees; the sun node's
+    -Z agrees with its sun_toward extras (pointing away from the sun)."""
+    cam = names.get("camera.player")
+    if cam is not None:
+        fwd = rotate(cam.get("rotation", [0, 0, 0, 1]), (0, 0, -1))
+        pitch = math.degrees(math.asin(max(-1.0, min(1.0, fwd[1]))))
+        r.need(abs(fwd[0]) < 1e-3 and -30 < pitch < -10, f"{name}: camera.player looks along {fwd} (pitch {pitch:.1f})")
+        r.say(f"  camera: forward ({fwd[0]:+.3f}, {fwd[1]:+.3f}, {fwd[2]:+.3f}), pitch {pitch:.1f} deg")
+    sun = names.get("sun")
+    if sun is not None:
+        down = rotate(sun.get("rotation", [0, 0, 0, 1]), (0, 0, -1))
+        tow = extras(sun).get("sun_toward")
+        if r.need(isinstance(tow, list) and len(tow) == 3, f"{name}: sun has no sun_toward extras"):
+            dot = -sum(a * b for a, b in zip(down, tow))
+            r.need(dot > 0.999, f"{name}: sun -Z {down} disagrees with sun_toward {tow}")
+            r.say(f"  sun: light travels ({down[0]:+.3f}, {down[1]:+.3f}, {down[2]:+.3f})")
+
+
 def check_cupola(r, d):
     p = os.path.join(d, "cupola.glb")
     if not r.need(os.path.exists(p), "cupola.glb missing"):
@@ -128,6 +157,7 @@ def check_cupola(r, d):
         fov = extras(cam).get("fov_deg")
         r.need(isinstance(fov, (int, float)) and 40 <= fov <= 80, f"cupola: camera.player fov_deg {fov}")
     r.need("sun" in names, "cupola: sun missing")
+    check_frames(r, "cupola", names)
     r.need("hud.anchor" in names, "cupola: hud.anchor missing")
     r.need("planet" in names, "cupola: planet node missing (planet placement)")
     panes = {"pane.center": 0, **{f"pane.{i}": i for i in range(1, 7)}}
@@ -157,6 +187,7 @@ def check_station(r, d):
     names = glb_summary(r, "station.glb", g, size)
     for nm in ("emitter", "drone.dock", "secret.arm.hand", "secret.capsule.window", "sun", "planet"):
         r.need(nm in names, f"station: {nm} missing")
+    check_frames(r, "station", names)
     for i in range(1, 10):
         r.need(f"calib.{i}" in names, f"station: calib.{i} missing")
     for prefix, least in (("drone.path.", 2), ("astronaut.path.", 2), ("secret.duck.path.", 2), ("spawn.", 4)):

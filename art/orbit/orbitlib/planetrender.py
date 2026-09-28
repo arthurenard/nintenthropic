@@ -203,6 +203,15 @@ def cloud_cover(maps, u, v, lat, use_detail=True, with_d=False):
     return (s, d) if with_d else s
 
 
+def city_points(maps, nig, u, v, lat):
+    """City lights below the map's pixel: modulated by the detail texture at
+    ~0.05 km a texel (384 repeats), which breaks the glow into a mottle of
+    streets and blocks without changing its average much."""
+    u3, v3 = detail_uv(u, v, lat, DETAIL_REP[1] * 2)
+    sp = N.sample(maps.det_r, u3, v3)
+    return nig * (0.35 + 1.7 * sp ** 2)[:, None]
+
+
 def sharpen_clouds(alpha, d, soft=0.14):
     """Sub-pixel cloud structure. The map's opacity is read as coverage:
     keep the detail texture's values above 1 - coverage, with a soft edge.
@@ -383,9 +392,7 @@ def _render_chunk(O, D, sun, maps, st):
         # city lights in the dark
         dark = N.smoothstep(0.06, -0.08, mu_g)
         if det is not None:
-            u3, v3 = detail_uv(u, v, lat, DETAIL_REP[1] * 2)
-            sp = N.sample(maps.det_r, u3, v3)
-            nig = nig * (0.35 + 1.7 * sp ** 2)[:, None]
+            nig = city_points(maps, nig, u, v, lat)
         Ln = nig * (st.night_gain * dark)[:, None]
         Lsurf = Lg + Ln
         # ---------------- clouds ----------------
