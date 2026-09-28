@@ -1,4 +1,4 @@
-import { Box3, Euler, Mesh, Quaternion, ShaderMaterial, Vector3, type Material, type Object3D } from "three";
+import { Box3, Euler, Mesh, Quaternion, ShaderMaterial, Vector3, type Material, type MeshStandardMaterial, type Object3D } from "three";
 import { turnRig, type Rig, type RigPool } from "../../../engine/world/character";
 import type { Sound } from "../../../engine/world/sound";
 import { EAT_OUT, SIGN_LETTERS, type SignLetter } from "../rules/secrets";
@@ -6,7 +6,7 @@ import type { Effects } from "./effects";
 import type { Eyeshine } from "./eyes";
 import type { Flashlight } from "./flashlight";
 import type { RoadLayout } from "./road";
-import { eyeFrame, type EyeFrame } from "./rigs";
+import { eyeFrame, eyesMaterial, shineEyes, type EyeFrame } from "./rigs";
 import type { Stage } from "./stage";
 
 const tmp = new Vector3();
@@ -81,6 +81,7 @@ export class SecretsWorld {
   // The cat.
   private readonly cat: Rig | null;
   private readonly catEyes: EyeFrame | null;
+  private readonly catEyesMat: MeshStandardMaterial | null;
   private catSpot = 0;
   private catState: "sit" | "hiss" | "leap" = "sit";
   private catT = 0;
@@ -108,6 +109,8 @@ export class SecretsWorld {
     if (s.radio) new Box3().setFromObject(s.radio).getCenter(this.radioAt);
     this.cat = catPool.take();
     this.catEyes = this.cat ? eyeFrame(this.cat.model) : null;
+    this.catEyesMat = this.cat ? eyesMaterial(this.cat) : null;
+    if (this.catEyesMat) shineEyes(this.catEyesMat, 0);
     if (this.cat) {
       this.cat.root.visible = true;
       this.cat.play("sit", 0, true);
@@ -348,6 +351,7 @@ export class SecretsWorld {
     }
     this.catShine += (target - this.catShine) * Math.min(1, dt * 14);
     if (this.catShine > 0.02) this.eyeshine.add(left, right, this.catShine);
+    if (this.catEyesMat) shineEyes(this.catEyesMat, this.catShine);
   }
 
   /** Everything back as it was (a new night). */

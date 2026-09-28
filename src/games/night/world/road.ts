@@ -52,6 +52,8 @@ export interface RoadLayout {
   /** Meshes a bullet stops at (everything solid; the corn and glass are not). */
   solids: Mesh[];
   bounds: Box3;
+  /** What the export divided the streetlight's masks by to fit them in 8 bits (the scene's `flicker_scale`). */
+  flickerScale: number;
 }
 
 export function surfaceOf(o: Object3D): Surface {
@@ -204,6 +206,7 @@ export function readRoad(root: Group): RoadLayout {
     corn,
     solids,
     bounds: new Box3().setFromObject(root),
+    flickerScale: extraNumber(root, "flicker_scale") ?? 1,
   };
 }
 

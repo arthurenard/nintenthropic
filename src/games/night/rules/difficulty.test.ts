@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PlayerHealth } from "../../../engine/rules/health";
 import { Dead, offsetPath } from "./dead";
-import { makeMatch, playUntilDeath, SLOWEST, standIdle, STEADY, WILD, type Skill } from "./testkit";
+import { makeMatch, placeholderRoad, playUntilDeath, shippedRoad, SLOWEST, standIdle, STEADY, WILD, type Skill } from "./testkit";
 import { ATTACKS, BLOATER_BURST_DAMAGE, DIFFICULTY, MASK_HITS, REGEN_DELAY, REGEN_RATE, WAVE_INTRO } from "./tuning";
 
 const standard = DIFFICULTY.standard;
@@ -106,14 +106,16 @@ describe("a match on Relaxed", () => {
 });
 
 /**
- * The same simulated players as balance.test.ts (see testkit.ts), over both
- * difficulties and the same seeds: Relaxed should carry each of them
- * further, and still end every night in the end.
+ * The same simulated players as balance.test.ts (see testkit.ts), on the
+ * same shipped road, over both difficulties and the same seeds: Relaxed
+ * should carry each of them further, and still end every night in the end.
  */
+const road = (await shippedRoad()) ?? placeholderRoad();
+
 describe("difficulty balance", { timeout: 180_000 }, () => {
   const seeds = Array.from({ length: 16 }, (_, i) => i + 1);
   const medianWave = (skill: Skill, difficulty: "standard" | "relaxed") => {
-    const waves = seeds.map((s) => playUntilDeath(s, skill, { difficulty, maxTime: 4800 }).wave).sort((a, b) => a - b);
+    const waves = seeds.map((s) => playUntilDeath(s, skill, { difficulty, maxTime: 4800, road }).wave).sort((a, b) => a - b);
     return { waves, median: waves[Math.floor(waves.length / 2)] as number };
   };
 
@@ -145,7 +147,7 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
   });
 
   it("overruns an idle player on both, in the first wave, a little later on Relaxed", () => {
-    const idle = (difficulty: "standard" | "relaxed") => [1, 2, 3, 4, 5, 6].map((seed) => standIdle(seed, difficulty, 300));
+    const idle = (difficulty: "standard" | "relaxed") => [1, 2, 3, 4, 5, 6].map((seed) => standIdle(seed, difficulty, 300, road));
     const s = idle("standard");
     const r = idle("relaxed");
     for (const x of [...s, ...r]) {

@@ -51,18 +51,43 @@ export const CLIP_FALLBACKS: Readonly<Record<string, readonly string[]>> = {
 /**
  * The ground speed each gait was made for (metres per second): the game
  * plays a clip at the pace the rules walk it at, divided by this, so the
- * feet do not slide. The contract's clips are made for these.
+ * feet do not slide. The art's clips are made for these; a file says so
+ * itself in its scene's extras (clipSpeeds), which win.
  */
 export const CLIP_SPEED: Readonly<Record<string, number>> = {
-  "walk.shamble": 1.0,
-  "walk.limp": 0.85,
-  "walk.drag": 0.75,
+  "walk.shamble": 0.85,
+  "walk.limp": 0.7,
+  "walk.drag": 0.6,
   "walk.lurch": 1.1,
   run: 3.5,
-  crawl: 0.45,
-  run_lantern: 4.2,
+  crawl: 0.5,
+  run_lantern: 4.4,
   walk: 0.6,
 };
+
+/**
+ * The ground speeds a character file's clips were made for: its scene's
+ * `extras.clips.<clip>.speed_mps` over CLIP_SPEED, times the file's
+ * `extras.scale` (the Mechanic is 1.15 times a walker, on the same clips:
+ * a longer stride covers more ground).
+ */
+export function clipSpeeds(asset: LoadedAsset): Record<string, number> {
+  const out: Record<string, number> = { ...CLIP_SPEED };
+  const extras = asset.scene.userData as { clips?: Record<string, { speed_mps?: unknown }>; scale?: unknown };
+  for (const [clip, meta] of Object.entries(extras.clips ?? {})) {
+    if (typeof meta?.speed_mps === "number" && meta.speed_mps > 0) out[clip] = meta.speed_mps;
+  }
+  const scale = typeof extras.scale === "number" && extras.scale > 0 ? extras.scale : 1;
+  for (const clip of Object.keys(out)) out[clip] = (out[clip] as number) * scale;
+  return out;
+}
+
+/** Seconds into `bloat_burst` where the belly goes: the file says (`extras.clips.bloat_burst.burst_s`), or 1.32. */
+export function burstMoment(asset: LoadedAsset): number {
+  const clips = asset.scene.userData["clips"] as Record<string, { burst_s?: unknown }> | undefined;
+  const at = clips?.["bloat_burst"]?.burst_s;
+  return typeof at === "number" && at > 0 ? at : 1.32;
+}
 
 /**
  * The night catching the edges of a figure: the fog's pale glow behind one
@@ -89,26 +114,33 @@ export function bodies(rig: Rig): Map<string, Object3D> {
 export const OUTFITS = ["var.outfit.farmer", "var.outfit.trucker", "var.outfit.waitress", "var.outfit.hunter", "var.outfit.mechanic_small", "var.outfit.suit"] as const;
 
 /**
- * Dress a rig as one of the dead. A file may carry a body per kind
- * (`char.crawler`, `char.bloater`: they come in their own rags) or a
- * variant over the walker's body (`var.crawler`, `var.bloater`); either
- * works. Walkers and runners wear one of the six outfits.
+ * Dress a rig as one of the dead. A file may carry a whole person per kind
+ * (`char.runner`, `char.bloater`, `char.crawler`: each in its own clothes
+ * and hair, worn as they are) or a variant over the walker's body
+ * (`var.crawler`, `var.bloater`); either works. A walker (and one of the
+ * others made from the walker's body) wears one of the six outfits and,
+ * mostly, one of the hair pieces - under the trucker's and the hunter's
+ * caps only short hair, or none. Runners come in packs late in the night:
+ * half of them are the runner, half a walker's body dressed as a walker,
+ * so a pack is not one man four times.
  */
 export function dressDead(rig: Rig, kind: DeadKind, random: () => number): void {
   const all = bodies(rig);
-  const own = all.get(`char.${kind}`);
+  const own = kind === "walker" || (kind === "runner" && all.has("char.walker") && random() < 0.5) ? undefined : all.get(`char.${kind}`);
   const body = own ?? all.get("char.walker") ?? null;
   for (const [, o] of all) o.visible = o === body;
   const vars: string[] = [];
-  const hair = [...rig.vars.keys()].filter((n) => n.startsWith("var.hair."));
-  if (hair.length && random() < 0.8) vars.push(hair[Math.floor(random() * hair.length)] as string);
-  if (!own && rig.vars.has(`var.${kind}`)) vars.push(`var.${kind}`);
-  if (kind === "walker" || kind === "runner" || (!own && kind !== "bloater")) {
-    const outfits = OUTFITS.filter((o) => rig.vars.has(o));
-    if (outfits.length) vars.push(outfits[Math.floor(random() * outfits.length)] as string);
+  if (kind === "mechanic") {
+    if (rig.vars.has("var.mask")) vars.push("var.mask");
+  } else if (!own) {
+    if (rig.vars.has(`var.${kind}`)) vars.push(`var.${kind}`);
+    const outfits = kind === "bloater" ? [] : OUTFITS.filter((o) => rig.vars.has(o));
+    const outfit = outfits.length ? (outfits[Math.floor(random() * outfits.length)] as string) : null;
+    if (outfit) vars.push(outfit);
+    const capped = outfit === "var.outfit.trucker" || outfit === "var.outfit.hunter";
+    const hair = [...rig.vars.keys()].filter((n) => n.startsWith("var.hair.") && (!capped || n === "var.hair.short"));
+    if (hair.length && random() < 0.8) vars.push(hair[Math.floor(random() * hair.length)] as string);
   }
-  if (kind === "runner" && rig.vars.has("var.runner")) vars.push("var.runner");
-  if (kind === "mechanic" && rig.vars.has("var.mask")) vars.push("var.mask");
   rig.dress(vars);
   // The bloater's belly shows until it bursts.
   const belly = find(rig.model, "belly");
@@ -176,6 +208,31 @@ export function eyesMaterial(rig: Rig): MeshStandardMaterial | null {
   if (!eyes || !eyes.isMesh) return null;
   const mat = (Array.isArray(eyes.material) ? eyes.material[0] : eyes.material) as Material | undefined;
   return (mat as MeshStandardMaterial | undefined)?.emissive ? (mat as MeshStandardMaterial) : null;
+}
+
+/** The shine's colour, for eyes that do not paint their own. */
+const SHINE = new Color(0.55, 0.75, 0.38);
+
+/**
+ * The eyes themselves, shining back: up close they are more than a point.
+ * The art paints the shine in the eyes' emissive map (sickly green-gold
+ * over the iris) and leaves its strength to the game: 0 in the dark, about
+ * 3 in the beam's centre. Eyes without such a map (the placeholders') glow
+ * in the shine's own colour instead.
+ */
+export function shineEyes(mat: MeshStandardMaterial, shine: number): void {
+  if (mat.emissiveMap) {
+    mat.emissive.setRGB(1, 1, 1);
+    mat.emissiveIntensity = Math.min(3, shine * 2.5);
+  } else {
+    mat.emissive.copy(SHINE).multiplyScalar(shine * 1.4);
+  }
+}
+
+/** The eyes at rest: dark. */
+export function darkEyes(mat: MeshStandardMaterial | null): MeshStandardMaterial | null {
+  if (mat) shineEyes(mat, 0);
+  return mat;
 }
 
 /** Every material a rig draws with, for the night's fog. */

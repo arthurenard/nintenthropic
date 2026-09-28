@@ -122,7 +122,10 @@ export class Ambient {
     this.shown = this.reducedFlashing ? this.shown + (Math.max(0.35, this.on) - this.shown) * Math.min(1, dt / 0.35) : this.on;
     this.u.uStreetOn.value = this.shown;
     this.street.intensity = this.streetPower * this.shown;
-    if (this.lampGlow) (this.lampGlow.uniforms["uGlow"] as { value: number }).value = 0.08 + 0.92 * this.shown;
+    if (this.lampGlow) {
+      const full = typeof this.lampGlow.userData["glow"] === "number" ? (this.lampGlow.userData["glow"] as number) : 1;
+      (this.lampGlow.uniforms["uGlow"] as { value: number }).value = full * (0.04 + 0.96 * this.shown);
+    }
   }
 
   reset(): void {

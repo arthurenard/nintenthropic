@@ -12,8 +12,17 @@ import type { Effects } from "./effects";
 import type { Eyeshine } from "./eyes";
 import type { Flashlight } from "./flashlight";
 import type { RoadQueries } from "./queries";
-import { CLIP_SPEED, dressDead, eyeFrame, eyesMaterial, find, type EyeFrame } from "./rigs";
+import { CLIP_SPEED, darkEyes, dressDead, eyeFrame, eyesMaterial, find, shineEyes, type EyeFrame } from "./rigs";
 import type { NightUniforms } from "./shading";
+
+/** The ground speeds each file's clips were made for (rigs.ts, clipSpeeds), and when the bloater's burst comes in its clip. */
+export interface ClipSpeeds {
+  walker: Readonly<Record<string, number>>;
+  mechanic: Readonly<Record<string, number>>;
+  survivor: Readonly<Record<string, number>>;
+  /** Seconds into `bloat_burst` where the belly goes (the file's `extras.clips.bloat_burst.burst_s`). */
+  burstAt?: number;
+}
 
 export interface DeadView {
   d: Dead;
@@ -50,7 +59,6 @@ const tmp2 = new Vector3();
 const left = new Vector3();
 const right = new Vector3();
 const tmpM = new Matrix4();
-const SHINE = new Color(0.55, 0.75, 0.38);
 
 /** Hooks back into the game for what the cast notices. */
 export interface CastHooks {
@@ -84,6 +92,8 @@ export class Cast {
   private time = 0;
   /** The fog's reach now (metres), for when one "leaves the fog". */
   sight = 70;
+  /** How long a bloater at the barricade swells before it bursts, now (the difficulty's, worn by a long wave). */
+  private burstWarning = 0.8;
 
   constructor(
     private readonly pools: { walker: RigPool; mechanic: RigPool; survivor: RigPool },
@@ -98,6 +108,7 @@ export class Cast {
     private readonly u: NightUniforms,
     private readonly random: () => number,
     private readonly hooks: CastHooks,
+    private readonly speeds: ClipSpeeds = { walker: CLIP_SPEED, mechanic: CLIP_SPEED, survivor: CLIP_SPEED },
   ) {
     for (const pool of [pools.walker, pools.mechanic]) {
       const first = pool.rigs[0];
@@ -140,7 +151,7 @@ export class Cast {
       rig,
       pool,
       eyes: this.eyeFrames.get(pool) ?? eyeFrame(rig.model),
-      eyesMat: eyesMaterial(rig),
+      eyesMat: darkEyes(eyesMaterial(rig)),
       lastState: "",
       shine: 0,
       fade: -1,
@@ -203,7 +214,9 @@ export class Cast {
         break;
       }
       case "swelling":
-        rig.play("idle", 0.2, true, 2.2);
+        // Its own clip swells it and doubles it over as it bursts: timed so
+        // the burst lands when the rules burst it.
+        this.playBurst(v, this.burstWarning);
         break;
       default:
         break;
@@ -298,16 +311,25 @@ export class Cast {
     const rig = v.rig;
     rig.aimAt(null, 0);
     v.shine = 0;
-    if (v.eyesMat) v.eyesMat.emissive.setRGB(0, 0, 0);
+    if (v.eyesMat) shineEyes(v.eyesMat, 0);
     if (at) {
       tmp2.copy(at).sub(this.eye).normalize();
       this.fx.spray(at, tmp2, cause === "head");
       rig.hitReact(Math.sign(at.x - rig.root.position.x) || 1, 1.3);
       this.sound.at(cause === "head" ? "night_headshot" : "night_hit", at, 1);
     }
+    if (d.kind === "bloater") {
+      // Shot, caught in another's burst, or bursting on the barricade: it
+      // doubles over as its belly goes, under the cloud. (At the barricade
+      // its clip has been running since it began to swell.)
+      if (!(cause === "burst" && rig.current?.getClip().name === "bloat_burst")) this.playBurst(v, 0.04);
+      v.deathPlayed = true;
+      v.thudIn = 1.1;
+      this.sound.at("night_dead_fall", d.pos, 0.8, 0.9 + this.random() * 0.2, 0.05);
+      return;
+    }
     let clip: string;
     if (d.kind === "crawler") clip = "death.low";
-    else if (cause === "burst") clip = "bloat_burst";
     else if (cause === "chain") clip = "death_crumple";
     else if (cause === "head") clip = this.random() < 0.75 ? "death_back" : "death_crumple";
     else clip = this.random() < 0.5 ? "death_forward" : "death_crumple";
@@ -315,6 +337,21 @@ export class Cast {
     v.deathPlayed = true;
     v.thudIn = 0.8;
     this.sound.at("night_dead_fall", d.pos, 0.8, 0.9 + this.random() * 0.2, 0.05);
+  }
+
+  /**
+   * The bloater's `bloat_burst`, started so the moment its belly goes lands
+   * `inSeconds` from now: slowed to fit a long swell, or begun part way
+   * into a short one (or a shot, which bursts it at once).
+   */
+  private playBurst(v: DeadView, inSeconds: number): void {
+    const rig = v.rig;
+    rig.play("bloat_burst", 0.1, false);
+    const action = rig.current;
+    if (!action || action.getClip().name !== "bloat_burst") return;
+    const at = this.speeds.burstAt ?? 1.32;
+    if (inSeconds >= at) action.timeScale = at / inSeconds;
+    else action.time = at - inSeconds;
   }
 
   /** A bloater bursts: its belly goes, and the cloud with it. */
@@ -347,7 +384,7 @@ export class Cast {
     rig.root.position.set(s.pos.x, s.pos.y, s.pos.z);
     rig.root.rotation.y = Math.atan2(s.heading.x, s.heading.z);
     rig.root.visible = true;
-    rig.play("run_lantern", 0, true, s.speed / (CLIP_SPEED["run_lantern"] ?? 4.2));
+    rig.play("run_lantern", 0, true, s.speed / (this.speeds.survivor["run_lantern"] ?? 4.4));
     const flameNode = find(rig.model, "lantern.flame") as Mesh | null;
     const flame = flameNode && flameNode.isMesh ? ((Array.isArray(flameNode.material) ? flameNode.material[0] : flameNode.material) as MeshStandardMaterial) : null;
     this.survivors.push({ s, rig, flame, stumbled: false });
@@ -376,6 +413,7 @@ export class Cast {
 
   update(dt: number, time: number, match: Match): void {
     this.time = time;
+    this.burstWarning = match.tuning.burstWarning;
     let pushes = 0;
     const push = this.u.uPush.value;
     for (const p of push) p.z = 0;
@@ -415,12 +453,13 @@ export class Cast {
         const clip = this.gaitOf(v);
         const pace = d.speed * match.paceFor(d);
         // (The Mechanic's roar, when he first comes out of the fog, plays at its own pace.)
-        if (rig.current && rig.currentName === clip) rig.current.timeScale = pace / (CLIP_SPEED[clip] ?? 1);
+        const made = (v.pool === this.pools.mechanic ? this.speeds.mechanic : this.speeds.walker)[clip] ?? 1;
+        if (rig.current && rig.currentName === clip) rig.current.timeScale = pace / made;
       }
       if (d.state === "swelling") {
-        // Swelling to burst: a shudder.
+        // Swelling to burst: a shudder over the clip.
         v.swell += dt;
-        rig.hitReact(Math.sin(v.swell * 30) > 0 ? 1 : -1, 0.05 + v.swell * 0.05);
+        rig.hitReact(Math.sin(v.swell * 30) > 0 ? 1 : -1, 0.03 + v.swell * 0.03);
       }
       this.sounds(v, dt);
     }
@@ -471,7 +510,7 @@ export class Cast {
     }
     v.shine += (target - v.shine) * Math.min(1, dt * 16);
     if (v.shine > 0.01 && d.alive) this.eyeshine.add(left, right, v.shine);
-    if (v.eyesMat) v.eyesMat.emissive.copy(SHINE).multiplyScalar(v.shine * 1.4);
+    if (v.eyesMat) shineEyes(v.eyesMat, v.shine);
   }
 
   /** A groan as one leaves the fog, and now and then after; feet dragging near; the corn's rustle. */
@@ -520,7 +559,7 @@ export class Cast {
       turnRig(v.rig, Math.atan2(s.heading.x, s.heading.z), dt);
       if (v.stumbled && s.state === "running") {
         v.stumbled = false;
-        v.rig.play("run_lantern", 0.2, true, s.speed / (CLIP_SPEED["run_lantern"] ?? 4.2));
+        v.rig.play("run_lantern", 0.2, true, s.speed / (this.speeds.survivor["run_lantern"] ?? 4.4));
       }
       v.rig.update(dt);
       lit = v;

@@ -1,5 +1,6 @@
 import {
   BackSide,
+  BufferAttribute,
   Box3,
   CanvasTexture,
   Color,
@@ -32,8 +33,14 @@ import { bakedMaterial, nightUniforms, type NightUniforms } from "./shading";
 export const SODIUM = new Color(1.0, 0.56, 0.23);
 export const NEON = new Color(1.0, 0.16, 0.24);
 
-/** How strong the streetlight's baked light is where its `flicker` mask is 1 (the bake's own units). */
-const STREET_TINT = SODIUM.clone().multiplyScalar(1.0);
+/**
+ * The streetlight's baked light where its `flicker` mask reads 1: sodium,
+ * times the scale the export divided the masks by to fit them in 8 bits
+ * (road.glb's scene extras, `flicker_scale`; 1 for the placeholder).
+ */
+function streetTint(road: RoadLayout): Color {
+  return SODIUM.clone().multiplyScalar(road.flickerScale);
+}
 
 /**
  * The scene Dead of Night draws: the baked road in its night material
@@ -79,7 +86,7 @@ export class Stage {
     const scene = this.scene;
     this.sky = new SkyLight(renderer, scene, sky, 0.32);
     this.u.uFogColor.value.copy(fog);
-    this.u.uStreetTint.value.copy(STREET_TINT);
+    this.u.uStreetTint.value.copy(streetTint(road));
     // three's own fog, for the particles (everything else draws the night's own).
     scene.fog = new FogExp2(fog, 0.016);
     scene.add(road.root);
@@ -178,18 +185,42 @@ export class Stage {
       if (!mesh.isMesh || shadow.has(mesh)) return;
       const name = contractName(mesh);
       const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as MeshBasicMaterial;
-      if (!src || src.userData["bake"] === "sky" || name === "moon.disc") return;
+      if (!src || src.userData["bake"] === "sky") return;
+      if (name === "moon.disc") {
+        // The real moon is painted in the sky; its disc is only the target
+        // over it (a little larger), never drawn. The placeholder's is its
+        // own moon, marked as the sky's.
+        src.colorWrite = false;
+        src.depthWrite = false;
+        return;
+      }
       mesh.castShadow = false;
       mesh.receiveShadow = false;
+      if (src.userData["bake"] === "vertex") vertexLayers(mesh);
       const letter = name.startsWith("secret.sign.") ? (name.slice("secret.sign.".length) as SignLetter) : null;
       const own = letter !== null || name === "street.lamp";
       const corn = cornMeshes.has(mesh);
       const key = `${src.uuid}|${corn}`;
       let m = own ? undefined : cache.get(key);
+      if (!m && name === "street.lamp") {
+        // The lamp's lens: its own sodium glow, whatever its bake holds
+        // (the lens is where the light comes from, and the one part a bake
+        // cannot show brighter than white), dimmed as the lamp stutters.
+        m = bakedMaterial(u, { lit: flatTexture("#ffd6a0"), glow: LENS_GLOW, side: DoubleSide });
+        m.userData["glow"] = LENS_GLOW;
+      }
       if (!m) {
         const glow = typeof src.userData["glow"] === "number" ? (src.userData["glow"] as number) : /neon|lamp|bulb|candle|glow/i.test(`${src.name} ${name}`) && src.userData["bake"] !== "vertex" ? 2.2 : 1;
         if (src.userData["bake"] === "vertex") {
-          m = bakedMaterial(u, { lit: "vertex", detail: src.map ?? null, sway: corn, side: corn ? DoubleSide : FrontSide, glow, transparent: src.transparent });
+          m = bakedMaterial(u, {
+            lit: "vertex",
+            detail: src.map ?? null,
+            sway: corn,
+            swayWeights: mesh.geometry.hasAttribute("sway"),
+            side: corn ? DoubleSide : FrontSide,
+            glow,
+            transparent: src.transparent,
+          });
           if (src.transparent) (m.uniforms["uOpacity"] as { value: number }).value = src.opacity;
         } else {
           const albedoName = src.userData["albedo"] ?? mesh.userData["albedo"];
@@ -246,6 +277,52 @@ export class Stage {
     disposeTree(this.scene);
     this.moon.shadow.map?.dispose();
   }
+}
+
+/**
+ * A vertex-baked mesh's layers under the names the night's material reads.
+ * glTF gives custom attributes an underscore (`_ALBEDO`, `_FLICKER`,
+ * `_SWAY`, which three.js lowercases); the placeholder uses the bare names.
+ */
+export function vertexLayers(mesh: Mesh): void {
+  const g = mesh.geometry;
+  for (const [from, to] of [
+    ["_albedo", "albedo"],
+    ["_flicker", "street"],
+    ["_sway", "sway"],
+  ] as const) {
+    const a = g.getAttribute(from);
+    if (a && !g.hasAttribute(to)) {
+      g.setAttribute(to, a);
+      g.deleteAttribute(from);
+    }
+  }
+  // A layer the file leaves out reads as none: no albedo lit by the beam is better than garbage.
+  const n = g.getAttribute("position")?.count ?? 0;
+  if (!g.hasAttribute("albedo")) g.setAttribute("albedo", new BufferAttribute(new Float32Array(n * 3).fill(0.2), 3));
+  if (!g.hasAttribute("street")) g.setAttribute("street", new BufferAttribute(new Float32Array(n), 1));
+}
+
+/** How much brighter than white the streetlight's lens burns: enough to bloom. */
+const LENS_GLOW = 2.4;
+
+const flats = new Map<string, Texture>();
+/** A texture of one colour. */
+function flatTexture(colour: string): Texture {
+  let t = flats.get(colour);
+  if (!t) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 2;
+    const g = c.getContext("2d");
+    if (g) {
+      g.fillStyle = colour;
+      g.fillRect(0, 0, 2, 2);
+    }
+    t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    flats.set(colour, t);
+  }
+  return t;
 }
 
 let white: Texture | null = null;

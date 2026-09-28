@@ -26,7 +26,7 @@ import { Flashlight } from "./world/flashlight";
 import { NIGHT } from "./world/grade";
 import { JarStage } from "./world/jars";
 import { RoadQueries } from "./world/queries";
-import { nightRim, nightTemplate, rigMaterials } from "./world/rigs";
+import { burstMoment, clipSpeeds, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
 import type { Surface } from "./world/road";
 import { SecretsWorld } from "./world/secretsWorld";
 import { withNightFog } from "./world/shading";
@@ -254,6 +254,7 @@ export class DeadOfNight implements Game, MatchListener {
         eyesInFog: () => this.offerTip("night.eyes"),
         mechanicSeen: (d) => this.mechanicSeen(d),
       },
+      { walker: clipSpeeds(this.assets.walker), mechanic: clipSpeeds(this.assets.mechanic), survivor: clipSpeeds(this.assets.survivor), burstAt: burstMoment(this.assets.walker) },
     );
     this.jars = new JarStage(road, parent, this.camera.camera, this.effects, this.sound, this.queries, road.eye);
     for (const m of this.jars.materials) withNightFog(m, u, "jar");
@@ -1023,7 +1024,7 @@ export class DeadOfNight implements Game, MatchListener {
         this.match.health.hit(amount);
         this.playerHit(amount, 0, this.match.health.hurt, this.match.dead[0] as Dead);
       },
-      /** Send one of the dead now, on a lane, `along` metres down it. Returns its id. */
+      /** Send one of the dead now, on a lane, `along` metres down it (or, negative, that far short of its end). Returns its id. */
       send: (kind: DeadKind = "walker", lane: LaneId = "road", along = 0) => {
         const l = this.match.plan.lanes.find((x) => x.id === lane) ?? this.match.plan.lanes[0];
         if (!l) return -1;
@@ -1031,7 +1032,7 @@ export class DeadOfNight implements Game, MatchListener {
         const d = new DeadClass(m.nextId++, kind, l, offsetPath(l, 0), kind === "runner" ? 3.5 : kind === "crawler" ? 0.45 : kind === "bloater" ? 0.6 : kind === "mechanic" ? 0.9 : 1, "walk.shamble");
         if (kind === "mechanic") d.mask = this.match.tuning.maskHits;
         d.spawn(this.match);
-        if (along > 0) d.placeAt(along);
+        if (along !== 0) d.placeAt(along > 0 ? along : d.pathLength + along);
         this.match.dead.push(d);
         this.cast.spawn(d);
         return d.id;

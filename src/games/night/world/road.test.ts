@@ -143,7 +143,7 @@ describe("what the eye can see", () => {
     // The cat never perches where a shot meant for it would find another secret first.
     const cats = road.secrets.catSpots;
     for (const c of cats) {
-      for (const p of spots.slice(0, spots.length - cats.length)) expect(c.distanceTo(p), `cat at ${c.toArray().join(", ")}`).toBeGreaterThan(1.2);
+      for (const { at } of spots.slice(0, spots.length - cats.length)) expect(c.distanceTo(at), `cat at ${c.toArray().join(", ")}`).toBeGreaterThan(1.2);
     }
     for (const [w, h] of [[1280, 1066], [1280, 800], [1280, 720], [2560, 1440], [2560, 1080]] as const) {
       for (const hand of [true, false]) {
@@ -153,7 +153,9 @@ describe("what the eye can see", () => {
         cam.position.copy(road.eye);
         cam.quaternion.copy(road.eyeQuaternion).multiply(new Quaternion().setFromEuler(new Euler(play.pitch, 0, 0, "YXZ")));
         cam.updateMatrixWorld(true);
-        for (const p of spots) {
+        for (const { at: p, minAspect } of spots) {
+          // The radio only from about 3:2 (sights.ts, RADIO_ASPECT).
+          if (minAspect !== undefined && w / h < minAspect) continue;
           const at = onScreen(cam, p);
           const where = `${w}x${h} ${hand ? "hand" : "mouse"} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})`;
           expect(at.x, where).toBeGreaterThan(0.01);

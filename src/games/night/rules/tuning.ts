@@ -36,6 +36,15 @@ export const RELOAD_LEVER = 0.2;
 
 // --- the dead -------------------------------------------------------------------
 
+/**
+ * The farthest out (metres on the ground from the eye) one of the dead
+ * sets off. Route 9's lanes run on 75-110 m into the fog, but a walk that
+ * starts out there is only waiting. At this reach they set off behind the
+ * burned bus, deep in the corn and off the right of the view, where
+ * nobody sees them appear; the balance tests are tuned to it.
+ */
+export const LANE_REACH = 62;
+
 /** Walking pace, metres per second, before difficulty and the waves: a walker's own is drawn from this range. */
 export const WALKER_SPEED: readonly [number, number] = [0.8, 1.2];
 /** Each walker's gait keeps its pace within the walker range; these nudge it (a limp is slower than a lurch). */

@@ -356,8 +356,14 @@ export class Shooter {
       res.distance = road.distance;
       res.scenery = true;
       res.surface = road.object ? surfaceOf(road.object) : "dirt";
-      // "Shoot near it": a bullet in the crates, the drum or the roof beside the cat sends it on too.
-      res.target = cat && road.point.distanceTo(cat) < 1.3 ? { kind: "secret", shot: { secret: "cat" } } : { kind: "scenery" };
+      // "Shoot near it": a bullet into the post, the sign or the car it sits
+      // on (a shot at a cat on a roof meets the roof's edge first) sends it on too.
+      let nearCat = false;
+      if (cat) {
+        probePoint(o, d, cat, probe);
+        nearCat = road.point.distanceTo(cat) < 1.3 || (probe.miss < CAT_NEAR && probe.t - road.distance < 3);
+      }
+      res.target = nearCat ? { kind: "secret", shot: { secret: "cat" } } : { kind: "scenery" };
       return res;
     }
     res.target = { kind: "none" };
