@@ -33,7 +33,8 @@ def fine_noise(g, X, Y, calm):
     slope = np.hypot(gx, gy) * (1 - calm)
     a = N.fbm(X, Y, SEED + 1, octaves=4, scale=1 / 22.0) * 0.30
     b = N.fbm(X, Y, SEED + 2, octaves=3, scale=1 / 6.0) * 0.10
-    c = N.ridged(X / 40.0, Y / 40.0, SEED + 3, octaves=4, gain=0.5) * 1.6 * smoothstep(0.35, 0.9, slope)
+    wx, wy = N.warp(X, Y, SEED + 4, 25.0, 1 / 60.0)
+    c = (N.ridged(wx / 55.0, wy / 55.0, SEED + 3, octaves=3, gain=0.45) - 0.35) * 1.0 * smoothstep(0.35, 0.9, slope)
     g.v = z + (a + b) * (1 + 1.5 * smoothstep(0.2, 0.6, slope)) + c
 
 

@@ -74,10 +74,16 @@ def crest_at(bearing):
 # ---------------------------------------------------------------------------
 # Macro shape
 
-def macro(x, y, ax=None, far=None):
+def macro(x, y, ax=None, far=None, blur_cells=None):
     """The designed big shape (no noise), vectorised over arrays. Distances
     are to the valley's axis (the head valley, the reservoir, the river), so
-    both sides' profiles follow the valley round its bends."""
+    both sides' profiles follow the valley round its bends.
+
+    The distance is continuous everywhere, but the nearest point's
+    attributes (the floor's half-width, the water level) jump across the
+    medial axis of a bend - on the far side between the river's two arms,
+    on the near side right along the player's spur. On a grid (`blur_cells`)
+    those attributes are blurred so the land has no seam."""
     if ax is None:
         ax = L.valley_axis()
     d, s, side = ax.nearest(x, y)
@@ -88,6 +94,14 @@ def macro(x, y, ax=None, far=None):
         near = ~far
     zw = ax.at(s, 'z')
     W = np.where(near, ax.at(s, 'wn'), ax.at(s, 'wf'))
+    if blur_cells:
+        # blur each side's attributes separately (the two sides differ by design)
+        for arr in (zw, W):
+            for side_mask in (near, ~near):
+                m = side_mask.astype(float)
+                num = N.blur(np.where(side_mask, arr, 0.0), blur_cells)
+                den = N.blur(m, blur_cells)
+                arr[side_mask] = (num / np.maximum(den, 1e-6))[side_mask]
     u = d - W
     s_dam = s - _dam_s(ax)
     # the floor: a little above the water, rising gently away from it
@@ -238,9 +252,9 @@ def relief(x, y, info, z):
     return h * up * np.where(near, 0.7, 1.0) * smoothstep(220.0, 600.0, r)
 
 
-def erode(g, mask, dep_mask=None, droplets=1_200_000, steps=64, batch=40_000, seed=SEED, radius=1,
+def erode(g, mask, dep_mask=None, droplets=1_200_000, steps=64, batch=40_000, seed=SEED, radius=2,
           inertia=0.05, capacity=4.0, deposition=0.3, erosion=0.3, evaporation=0.012, gravity=4.0,
-          min_slope=0.01, max_change=0.004, max_vel=6.0):
+          min_slope=0.01, max_change=0.008, max_vel=6.0):
     """Particle hydraulic erosion (after Hans Theobald Beyer, 2015), with a
     batch of droplets stepping at once.
 
@@ -390,7 +404,7 @@ def build_coarse(quick=False):
     X, Y = g.coords()
     ax = L.valley_axis(step=4.0)
     far = far_side_mask(g, ax)
-    z, info = macro(X, Y, ax, far)
+    z, info = macro(X, Y, ax, far, blur_cells=8.0)
     log(f"macro shape {time.time() - t:.1f}s")
     far = ~info['near']
     z += peaks(X, Y) * far

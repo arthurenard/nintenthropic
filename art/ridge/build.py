@@ -76,7 +76,7 @@ def main():
     for st in stages:
         ts = time.time()
         print(f"\n=== stage {st} ===", flush=True)
-        if st in VALLEY_STAGES:
+        if st in VALLEY_STAGES or st in ("look",):
             from valley import pipeline
             ctx = pipeline.Context(build=BUILD, assets=ASSETS, **opts)
             getattr(pipeline, f"stage_{st}")(ctx)
