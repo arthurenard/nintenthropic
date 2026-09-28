@@ -4,7 +4,7 @@
 // played again with a fold of the thumb, the idle world at rest, and a window
 // resized mid-round with the aim still true.
 import { expect, test, type Page } from "@playwright/test";
-import { gameDebug, handAt, playWithHand, pose, shoot, shot, snapshot } from "./helpers";
+import { gameDebug, handAt, playWithHand, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
 
 const state = (page: Page) => snapshot(page);
 
@@ -244,6 +244,20 @@ test("the results: a fold of the thumb plays again, and the world rests", async 
   await expect(page.locator("#results")).toBeHidden();
   expect((await state(page)).running).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test("getting ready offline says so, with the fix", async ({ page, context }, info) => {
+  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await page.goto("/");
+  await expect(page.locator("#home")).toBeVisible();
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect(page.locator("#alert")).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator("#alert-title")).toHaveText("You’re Offline");
+  await expect(page.locator("#alert-body")).toHaveText("Connect to the internet, then Try Again.");
+  await expect(page.getByRole("button", { name: "Try Again" })).toBeVisible();
+  await shot(page, info, "offline-01");
+  await context.setOffline(false);
 });
 
 test("a paused game and resting results cost no frames", async ({ page }) => {

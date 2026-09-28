@@ -16,7 +16,7 @@
  * Browsers that cannot run it in a worker run it on the page.
  */
 import type { HandLandmarker } from "@mediapipe/tasks-vision";
-import { fetchBytes, siteUrl } from "../engine/fetch";
+import { DownloadError, fetchBytes, siteUrl } from "../engine/fetch";
 import { Samples, type Percentiles } from "../engine/stats";
 import { ModelError } from "./errors";
 import type { LandmarkerProgress } from "./landmarker";
@@ -312,7 +312,9 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
     try {
       return await startWorker(progress, prefer);
     } catch (error) {
-      if (where === "worker") throw new ModelError(error);
+      // A download that failed would fail again on the page (the same
+      // files): only a worker that could not run is worth the page's try.
+      if (where === "worker" || error instanceof DownloadError) throw new ModelError(error);
       console.warn("Hand tracking in a worker is unavailable; tracking on the page.", error);
     }
   }

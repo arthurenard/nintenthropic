@@ -30,6 +30,7 @@ export type Trouble =
   | "webgl"
   | "model"
   | "game"
+  | "offline"
   | "context";
 
 /** The fixes a trouble can offer, by their button's label. */
@@ -107,6 +108,15 @@ export const TROUBLES: Record<Trouble, TroubleSheet> = {
     icon: "wifi",
     title: "Couldn’t Load the Game",
     body: "Part of the game didn’t arrive. Check your internet connection, then Try Again.",
+    primary: "Try Again",
+    secondary: "Choose a Game",
+  },
+  // A download that failed with the browser offline. The mouse helps only
+  // when it was the hand's download: the page offers it then (see App.fail).
+  offline: {
+    icon: "wifi-off",
+    title: "You’re Offline",
+    body: "Connect to the internet, then Try Again.",
     primary: "Try Again",
     secondary: "Choose a Game",
   },

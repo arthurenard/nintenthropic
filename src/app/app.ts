@@ -444,7 +444,12 @@ export class App {
     this.showView("home");
     if (cause instanceof WebGLUnavailable) this.trouble("webgl");
     else if (cause instanceof CameraError) this.trouble(cause.trouble);
-    else if (part === "tracker" || cause instanceof ModelError) this.trouble("model");
+    // Anything else that failed with the browser offline was a download (a
+    // file, or a piece of the page's own code): say so, it is the one fix
+    // that matters. The mouse helps only if it was the hand's download.
+    else if (navigator.onLine === false) {
+      this.trouble("offline", { secondary: part === "tracker" ? "Use Mouse or Trackpad" : "Choose a Game" });
+    } else if (part === "tracker" || cause instanceof ModelError) this.trouble("model");
     else this.trouble("game");
   }
 
