@@ -412,10 +412,8 @@ def build_dam(ter, col):
         for j in range(nz):
             a, b = thetas[i], thetas[i + 1]
             z0, z1 = zs[j], zs[j + 1]
-            # downstream face (the one the player sees)
-            q = [pt(b, R + thick(z0), z0), pt(a, R + thick(z0), z0), pt(a, R + thick(z1), z1), pt(b, R + thick(z1), z1)]
             u0, u1 = a * R / ts, b * R / ts
-            kit.face(q, "concrete", uv=[(u1, z0 / ts), (u0, z0 / ts), (u0, z1 / ts), (u1, z1 / ts)])
+            # the upstream face (the downstream one, the player's, is dam.face)
             q = [pt(a, R, z0), pt(b, R, z0), pt(b, R, z1), pt(a, R, z1)]
             kit.face(q, "concrete", uv=[(u0, z0 / ts), (u1, z0 / ts), (u1, z1 / ts), (u0, z1 / ts)])
     # the crest: road deck, parapet walls, railings, lamps
@@ -477,7 +475,49 @@ def build_dam(ter, col):
     info = dict(crest_z=zt, lamps=[list(p) for p in lamps], siren=list(siren_pos), tunnel=list(map(float, tp)),
                 tunnel_heading=tang, valve_house=vh.tolist(), outlet=out.tolist(),
                 crest_left=list(pt(-th_half + 0.05, R + 1.75, zt)), crest_right=list(pt(th_half - 0.05, R + 1.75, zt)))
-    return kit.build(col, SURFACES) + siren_objs, info
+    face = _dam_face(col, pt, th_half, R, thick, zb, zt, ts)
+    return kit.build(col, SURFACES) + siren_objs + [face], info
+
+
+def _dam_face(col, pt, th_half, R, thick, zb, zt, ts):
+    """The downstream face as its own finer mesh, weathered in COLOR_0 (the
+    concrete tile times it): pours in lifts of 1.5 m and blocks of 15 m each a
+    shade apart, black seepage streaks hanging from the crest's drains, damp
+    patches, white lime bleeding from the lift joints, moss at the toe."""
+    from . import scene as S
+    from . import noise as N
+    from .noise import smoothstep
+    nt, nz = 120, 44
+    th = np.linspace(-th_half, th_half, nt + 1)
+    zs = np.linspace(zb, zt, nz + 1)
+    TH, ZZ = np.meshgrid(th, zs)
+    V = np.array([pt(a, R + thick(z), z) for a, z in zip(TH.ravel(), ZZ.ravel())])
+    s_ = TH.ravel() * R
+    z = ZZ.ravel()
+    idx = np.arange(len(V)).reshape(nz + 1, nt + 1)
+    a_, b_, c_, d_ = idx[:-1, 1:], idx[:-1, :-1], idx[1:, :-1], idx[1:, 1:]
+    F = np.concatenate([np.stack([a_, b_, c_], -1).reshape(-1, 3), np.stack([a_, c_, d_], -1).reshape(-1, 3)])
+    UV = np.stack([s_ / ts, z / ts], -1)
+
+    def hsh(k, m):
+        return (np.sin(k * 12.9898 + m * 78.233) * 43758.5453) % 1.0
+    lift = np.floor((z - zb) / 1.5)
+    block = np.floor((s_ + 500.0) / 15.0)
+    tone = 0.74 + 0.08 * hsh(lift, 1.0) + 0.08 * hsh(block, 2.0)
+    depth = zt - z
+    reach = 10.0 + 22.0 * (0.5 + 0.5 * N.fbm(s_ / 7.0, np.full_like(s_, 3.3), 3301, 2))
+    streak = smoothstep(0.05, 0.55, N.fbm(s_ / 1.6, z / 35.0, 3302, 3)) * np.exp(-depth / reach)
+    damp = smoothstep(0.0, 0.6, N.fbm(s_ / 18.0, z / 12.0, 3303, 3)) * 0.22
+    col_ = tone[:, None] * (1 - 0.55 * streak - damp)[:, None] * np.array([1.0, 1.0, 1.02])
+    lime = smoothstep(0.45, 0.8, N.fbm(s_ / 2.5, z / 8.0, 3304, 3)) * (np.abs(((z - zb) / 1.5) % 1.0 - 0.5) > 0.3)
+    col_ = col_ * (1 + 0.25 * lime)[:, None]
+    moss = smoothstep(zb + 10.0, zb + 1.0, z) * (0.6 + 0.4 * N.fbm(s_ / 3.0, z / 3.0, 3305, 2))
+    col_ = col_ * (1 - 0.5 * moss)[:, None] + np.array([0.20, 0.24, 0.12]) * (0.5 * moss)[:, None]
+    ob = S.mesh_object("dam.face", V, F, col, uvs={"UVMap": UV}, smooth=True, surface=SURFACES.get("concrete", "stone"),
+                       material_key="concrete_vc", note="the dam's downstream face; COLOR_0 weathers the concrete tile")
+    ca = ob.data.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
+    ca.data.foreach_set("color", np.hstack([np.clip(col_, 0.02, 1.2), np.ones((len(V), 1))]).astype(np.float32).ravel())
+    return ob
 
 
 # ---------------------------------------------------------------------------
