@@ -68,7 +68,8 @@ export class Foreground {
   private readonly aimYaw = { v: 0 };
   private readonly aimPitch = { v: 0 };
 
-  constructor(atmosphere: AtmosphereUniforms) {
+  /** `blades`: draw the out-of-focus grass (false when the art made its own); the fall's grass is always there. */
+  constructor(atmosphere: AtmosphereUniforms, blades = true) {
     this.root.name = "foreground";
     const kinds: [string, "blade" | "flower", number][] = [
       ["#5c7440", "blade", 26],
@@ -83,7 +84,7 @@ export class Foreground {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
-    for (const [color, kind, n] of kinds) {
+    for (const [color, kind, n] of blades ? kinds : []) {
       const mat = new MeshBasicMaterial({ map: bladeTexture(kind, color), transparent: true, depthWrite: false, side: DoubleSide, name: "blade" });
       mat.color.setScalar(0.62);
       for (let i = 0; i < n; i++) {

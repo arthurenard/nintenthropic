@@ -36,6 +36,13 @@ import { SCOPE_IN_TIME, SCOPE_OUT_TIME, SCOPE_PAN_GAIN, SCOPE_POWER, SWAY_MOVING
 const GLASS = 0.46;
 
 const RAD = Math.PI / 180;
+// Scratch vectors for apply(), once a frame: nothing allocated per frame.
+const Y_UP = new Vector3(0, 1, 0);
+const V_DIR = new Vector3();
+const V_RIGHT = new Vector3();
+const V_UP = new Vector3();
+const V_WIDE = new Vector3();
+const V_TARGET = new Vector3();
 
 /** The eye's own field of view the scope magnifies, degrees. */
 export const EYE_FOV = 40;
@@ -349,12 +356,12 @@ export class Scope {
       }
       // Without the scope, only the rifle's kick moves the view (the breath is the scope's).
       if (Math.abs(this.jolt) + Math.abs(this.joltSide) > 0.01) {
-        const d = new Vector3(0, 0, -1).applyQuaternion(wide.quaternion);
-        const right = new Vector3().crossVectors(d, new Vector3(0, 1, 0)).normalize();
-        const up = new Vector3().crossVectors(right, d).normalize();
+        const d = V_DIR.set(0, 0, -1).applyQuaternion(wide.quaternion);
+        const right = V_RIGHT.crossVectors(d, Y_UP).normalize();
+        const up = V_UP.crossVectors(right, d).normalize();
         d.addScaledVector(right, this.joltSide * 0.001).addScaledVector(up, this.jolt * 0.001).normalize();
         camera.up.set(0, 1, 0);
-        camera.lookAt(new Vector3().copy(camera.position).add(d));
+        camera.lookAt(V_TARGET.copy(camera.position).add(d));
         camera.updateMatrixWorld(true);
       }
       return;
@@ -364,18 +371,17 @@ export class Scope {
     const tanWide = Math.tan((wideFov * RAD) / 2);
     const tanScoped = Math.tan((EYE_FOV * RAD) / 2) / SCOPE_POWER;
     const fov = (2 * Math.atan(tanWide + (tanScoped - tanWide) * e)) / RAD;
-    const dir = new Vector3(this.look.x * 2 - 1, 1 - this.look.y * 2, 0.5).unproject(wide).sub(wide.position).normalize();
+    const dir = V_DIR.set(this.look.x * 2 - 1, 1 - this.look.y * 2, 0.5).unproject(wide).sub(wide.position).normalize();
     // The sway, the jolt and the bolt's shake, in milliradians, about the scope's own axes.
-    const right = new Vector3().crossVectors(dir, new Vector3(0, 1, 0)).normalize();
-    const up = new Vector3().crossVectors(right, dir).normalize();
+    const right = V_RIGHT.crossVectors(dir, Y_UP).normalize();
+    const up = V_UP.crossVectors(right, dir).normalize();
     const shake = this.shake * Math.sin(this.t * 43);
     const sx = (this.sway.x + this.joltSide + shake * 0.4) * 0.001 * e;
     const sy = (this.sway.y + this.jolt + shake) * 0.001 * e;
     dir.addScaledVector(right, sx).addScaledVector(up, sy).normalize();
     // Blend from the wide view's own direction as the scope comes in.
-    const wideDir = new Vector3(0, 0, -1).applyQuaternion(wide.quaternion);
-    const blended = wideDir.lerp(dir, e).normalize();
-    const target = new Vector3().copy(camera.position).add(blended);
+    const blended = V_WIDE.set(0, 0, -1).applyQuaternion(wide.quaternion).lerp(dir, e).normalize();
+    const target = V_TARGET.copy(camera.position).add(blended);
     camera.up.set(0, 1, 0);
     camera.lookAt(target);
     camera.fov = fov;

@@ -62,25 +62,32 @@ varying vec3 vWorld;
 varying vec3 vNormalW;
 ${ATMOSPHERE_GLSL}
 
-vec4 tile(int layer, vec2 p, float dist) {
+// Every sample takes its gradients from the pixel's own (dx, dy), so a layer
+// can be skipped where the splat does not use it - most of the valley uses
+// two or three of the six - without upsetting the mipmaps at the edges.
+vec4 tile(int layer, vec2 p, vec2 dx, vec2 dy, float dist) {
   float i = float(layer);
-  vec4 n = texture(uTiles, vec3(p / uNear[layer], i));
-  vec4 f = texture(uTiles, vec3(p / uFar[layer] + 0.37, i));
-  // Near, the fine texture with the broad one under it; far, mostly the broad one.
+  float sn = 1.0 / uNear[layer];
+  float sf = 1.0 / uFar[layer];
+  vec4 f = textureGrad(uTiles, vec3(p * sf + 0.37, i), dx * sf, dy * sf);
+  // Near, the fine texture with the broad one under it; far, only the broad one.
   float k = smoothstep(60.0, 420.0, dist);
+  if (k > 0.999) return f;
+  vec4 n = textureGrad(uTiles, vec3(p * sn, i), dx * sn, dy * sn);
   vec4 c = mix(n * mix(vec4(1.0), f * 1.9, 0.35), f, k);
   c.a = mix(n.a, f.a, k);
   return c;
 }
 
-/** Rock on a cliff: three projections, weighted by which way the face looks. */
-vec4 triplanar(int layer, vec3 p, vec3 n, float dist) {
+/** Rock on a cliff: three projections, weighted by which way the face looks (a faint one is skipped). */
+vec4 triplanar(int layer, vec3 p, vec3 n, vec3 dx, vec3 dy, float dist) {
   vec3 w = pow(abs(n), vec3(4.0));
   w /= (w.x + w.y + w.z);
-  vec4 x = tile(layer, p.zy, dist);
-  vec4 y = tile(layer, p.xz, dist);
-  vec4 z = tile(layer, p.xy, dist);
-  return x * w.x + y * w.y + z * w.z;
+  vec4 c = vec4(0.0);
+  if (w.x > 0.02) c += tile(layer, p.zy, dx.zy, dy.zy, dist) * w.x;
+  if (w.y > 0.02) c += tile(layer, p.xz, dx.xz, dy.xz, dist) * w.y;
+  if (w.z > 0.02) c += tile(layer, p.xy, dx.xy, dy.xy, dist) * w.z;
+  return c / max(w.x * step(0.02, w.x) + w.y * step(0.02, w.y) + w.z * step(0.02, w.z), 1e-4);
 }
 
 void splat(vec3 wp, out vec4 a, out vec2 b) {
@@ -116,12 +123,22 @@ void main() {
   // A broad wash of variation over everything, so no two slopes are alike.
   float macro = atmoNoise(wp.xz * 0.011) * 0.6 + atmoNoise(wp.xz * 0.043) * 0.4;
 
-  vec4 grass = tile(0, wp.xz, dist);
-  vec4 rock = triplanar(1, wp, n, dist);
-  vec4 scree = tile(2, wp.xz, dist);
-  vec4 snow = tile(3, wp.xz, dist);
-  vec4 dirt = tile(4, wp.xz, dist);
-  vec4 road = tile(5, wp.xz, dist);
+  vec3 dpx = dFdx(wp);
+  vec3 dpy = dFdy(wp);
+  // Only the layers the splat uses here.
+  const float USED = 0.003;
+  vec4 grass = vec4(0.0);
+  vec4 rock = vec4(0.0);
+  vec4 scree = vec4(0.0);
+  vec4 snow = vec4(0.0);
+  vec4 dirt = vec4(0.0);
+  vec4 road = vec4(0.0);
+  if (wa.r > USED) grass = tile(0, wp.xz, dpx.xz, dpy.xz, dist);
+  if (wa.g > USED) rock = triplanar(1, wp, n, dpx, dpy, dist);
+  if (wa.b > USED) scree = tile(2, wp.xz, dpx.xz, dpy.xz, dist);
+  if (wa.a > USED) snow = tile(3, wp.xz, dpx.xz, dpy.xz, dist);
+  if (wb.r > USED) dirt = tile(4, wp.xz, dpx.xz, dpy.xz, dist);
+  if (wb.g > USED) road = tile(5, wp.xz, dpx.xz, dpy.xz, dist);
   // Height-sharpened blend: the taller texture wins where two meet.
   float w[6];
   w[0] = wa.r * (grass.a + 0.35);
@@ -163,8 +180,6 @@ void main() {
 
   // A bump from the blended height (screen-space derivatives: no tangents needed).
   float h = c.a;
-  vec3 dpx = dFdx(wp);
-  vec3 dpy = dFdy(wp);
   float dhx = dFdx(h);
   float dhy = dFdy(h);
   vec3 r1 = cross(dpy, n);

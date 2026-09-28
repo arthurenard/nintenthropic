@@ -252,6 +252,8 @@ export class Cast implements MovingWorld {
   /** The sun's elevation now, and its direction on the ground, for who is in the light. */
   sunElevation = 0.1;
   readonly sunFlat = new Vector3(-0.5, 0, 0.85).normalize();
+  /** The ground's horizon toward the sun from a point (radians), if the stage knows better than the height grid. */
+  horizonAt: ((x: number, y: number, z: number) => number) | null = null;
   private time = 0;
 
   constructor(
@@ -513,7 +515,7 @@ export class Cast implements MovingWorld {
     if (view.sunCheck <= 0) {
       view.sunCheck = 0.5 + (a.id % 7) * 0.05;
       const p = rig.root.position;
-      const horizon = this.heightfield.horizon(p.x, p.y + 1.3, p.z, this.sunFlat.x, this.sunFlat.z);
+      const horizon = this.horizonAt ? this.horizonAt(p.x, p.y + 1.3, p.z) : this.heightfield.horizon(p.x, p.y + 1.3, p.z, this.sunFlat.x, this.sunFlat.z);
       const lit = Math.min(1, Math.max(0, (this.sunElevation - horizon) / 0.02 + 0.5));
       (rig as Rig & { sunTarget?: number }).sunTarget = lit;
     }

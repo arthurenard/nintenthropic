@@ -6,11 +6,13 @@
  * contract (src/games/ridge/placeholder/), which a production build drops
  * entirely. The loading itself is the engine's (engine/world/art.ts).
  */
-import type { Group, Texture } from "three";
+import { NoColorSpace, Texture, type Group, type Mesh, type MeshStandardMaterial } from "three";
+import { fetchBytes, siteUrl } from "../../../engine/fetch";
 import type { GameContext, LoadedAsset } from "../../../engine/types";
 import { Art, type ArtFile } from "../../../engine/world/art";
 import { asSky } from "../../../engine/world/sky";
-import { readValley, type ValleyLayout } from "./valley";
+import { tileArray, type TerrainArtInputs } from "./terrainArt";
+import { readValley, type TerrainArtSpec, type ValleyLayout } from "./valley";
 
 export const ASSET_PATHS = {
   valley: "assets/ridge/valley.glb",
@@ -35,6 +37,8 @@ const FILES: Record<AssetName, ArtFile> = {
 
 export interface RidgeAssets {
   valley: ValleyLayout;
+  /** The real valley's terrain maps and tiles (null on the placeholder, which paints its own). */
+  terrainArt: TerrainArtInputs | null;
   sky: Texture;
   soldier: LoadedAsset;
   civilian: LoadedAsset;
@@ -59,5 +63,45 @@ export async function loadAssets(ctx: GameContext, onProgress: (fraction: number
   const [valleyAsset, soldier, civilian, vehicles, animals] = await Promise.all([model("valley"), model("soldier"), model("civilian"), model("vehicles"), model("animals")]);
   const sky = asSky(await art.texture("sky", kit ? () => kit.standInSky() : null));
   const valley = readValley(valleyAsset.scene as Group);
-  return { valley, sky, soldier, civilian, vehicles, animals, real: art.real };
+  const terrainArt = art.real.valley && valley.terrainArt ? await loadTerrainArt(ctx, art.url("valley"), valley.terrainArt, valley.terrainMeshes[0] ?? null) : null;
+  return { valley, terrainArt, sky, soldier, civilian, vehicles, animals, real: art.real };
+}
+
+/**
+ * The real terrain's maps (beside valley.glb, as `terrain.splat` names
+ * them) and its eight tiles, stacked into three texture arrays. The macro
+ * colour map is the one the glTF's own terrain material already loaded.
+ */
+async function loadTerrainArt(ctx: GameContext, valleyUrl: string, spec: TerrainArtSpec, chunk: Mesh | null): Promise<TerrainArtInputs> {
+  void ctx;
+  const dir = valleyUrl.slice(0, valleyUrl.lastIndexOf("/") + 1);
+  // Data, not pictures: decoded exactly as stored - no premultiplying by alpha (a splat's
+  // alpha is a weight, zero across most of the valley), no colour conversion - and, like
+  // every glTF texture, not flipped (the UVs count rows from the top).
+  const bitmap = async (key: string): Promise<ImageBitmap> => {
+    const file = spec.files[key];
+    if (!file) throw new Error(`Overwatch Ridge: terrain.splat names no "${key}"`);
+    const bytes = await fetchBytes(siteUrl(`${dir}${file}`));
+    return createImageBitmap(new Blob([bytes], { type: "image/webp" }), { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+  };
+  const tex = async (key: string): Promise<Texture> => {
+    const t = new Texture(await bitmap(key));
+    t.flipY = false;
+    t.colorSpace = NoColorSpace;
+    t.needsUpdate = true;
+    return t;
+  };
+  const own = (chunk?.material as MeshStandardMaterial | undefined)?.map ?? null;
+  const images = (kind: string) => Promise.all(spec.tiles.map((t) => bitmap(`tile_${t.name}_${kind}`)));
+  const [color, normal, splat0, splat1, light, albedo, normals, hra] = await Promise.all([
+    own ? Promise.resolve(own) : tex("color"),
+    tex("normal"),
+    tex("splat0"),
+    tex("splat1"),
+    tex("light"),
+    images("albedo"),
+    images("normal"),
+    images("hra"),
+  ]);
+  return { spec, color, normal, splat0, splat1, light, albedo: tileArray(albedo), normals: tileArray(normals), hra: tileArray(hra) };
 }

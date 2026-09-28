@@ -9,7 +9,7 @@
  * whole terrain (the far slopes, the peaks, the mountains behind the ridge
  * that shade the valley at dawn). Bilinear between samples.
  */
-import { Box3, type BufferAttribute, type Mesh, Vector3 } from "three";
+import { Box3, type BufferAttribute, type Mesh, type Object3D, Vector3 } from "three";
 
 export class Grid {
   readonly heights: Float32Array;
@@ -135,36 +135,44 @@ export class Heightfield {
   ) {}
 
   /**
-   * The grids for a terrain mesh: `fineBox` (x0, z0, x1, z1) is where the
-   * fine grid goes (clipped to the mesh), at `fineCell` metres.
+   * The grids for a terrain: one mesh, or a group of chunks (the real
+   * valley's thirty). `fineBox` (x0, z0, x1, z1) is where the fine grid goes
+   * (clipped to the terrain), at `fineCell` metres.
    */
-  static fromMesh(mesh: Mesh, fineBox: readonly [number, number, number, number], fineCell = 2, coarseCell = 12): Heightfield {
-    mesh.updateMatrixWorld(true);
-    const box = new Box3().setFromObject(mesh);
+  static fromMesh(terrain: Object3D, fineBox: readonly [number, number, number, number], fineCell = 2, coarseCell = 12): Heightfield {
+    terrain.updateMatrixWorld(true);
+    const meshes: Mesh[] = [];
+    terrain.traverse((o) => {
+      if ((o as Mesh).isMesh) meshes.push(o as Mesh);
+    });
+    const box = new Box3();
+    for (const m of meshes) box.expandByObject(m);
     const fx0 = Math.max(box.min.x, fineBox[0]);
     const fz0 = Math.max(box.min.z, fineBox[1]);
     const fx1 = Math.min(box.max.x, fineBox[2]);
     const fz1 = Math.min(box.max.z, fineBox[3]);
     const fine = new Grid(fx0, fz0, fineCell, Math.max(2, Math.floor((fx1 - fx0) / fineCell) + 1), Math.max(2, Math.floor((fz1 - fz0) / fineCell) + 1));
     const coarse = new Grid(box.min.x, box.min.z, coarseCell, Math.max(2, Math.floor((box.max.x - box.min.x) / coarseCell) + 1), Math.max(2, Math.floor((box.max.z - box.min.z) / coarseCell) + 1));
-    const g = mesh.geometry;
-    const pos = g.getAttribute("position") as BufferAttribute;
-    const world = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      TMP.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
-      world[i * 3] = TMP.x;
-      world[i * 3 + 1] = TMP.y;
-      world[i * 3 + 2] = TMP.z;
-    }
-    const index = g.index;
-    const tris = index ? index.count / 3 : pos.count / 3;
-    for (let t = 0; t < tris; t++) {
-      const a = index ? index.getX(t * 3) : t * 3;
-      const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;
-      const c = index ? index.getX(t * 3 + 2) : t * 3 + 2;
-      const args = [world[a * 3]!, world[a * 3 + 1]!, world[a * 3 + 2]!, world[b * 3]!, world[b * 3 + 1]!, world[b * 3 + 2]!, world[c * 3]!, world[c * 3 + 1]!, world[c * 3 + 2]!] as const;
-      coarse.raster(...args);
-      fine.raster(...args);
+    for (const mesh of meshes) {
+      const g = mesh.geometry;
+      const pos = g.getAttribute("position") as BufferAttribute;
+      const world = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        TMP.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+        world[i * 3] = TMP.x;
+        world[i * 3 + 1] = TMP.y;
+        world[i * 3 + 2] = TMP.z;
+      }
+      const index = g.index;
+      const tris = index ? index.count / 3 : pos.count / 3;
+      for (let t = 0; t < tris; t++) {
+        const a = index ? index.getX(t * 3) : t * 3;
+        const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;
+        const c = index ? index.getX(t * 3 + 2) : t * 3 + 2;
+        const args = [world[a * 3]!, world[a * 3 + 1]!, world[a * 3 + 2]!, world[b * 3]!, world[b * 3 + 1]!, world[b * 3 + 2]!, world[c * 3]!, world[c * 3 + 1]!, world[c * 3 + 2]!] as const;
+        coarse.raster(...args);
+        fine.raster(...args);
+      }
     }
     fine.fillGaps();
     coarse.fillGaps();

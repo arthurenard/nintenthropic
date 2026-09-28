@@ -19,7 +19,7 @@
  * to use it (`patchStandard`); the terrain, the water and the forest have
  * their own shaders and include it directly.
  */
-import { Color, DataTexture, LinearFilter, RepeatWrapping, RGBAFormat, SRGBColorSpace, UnsignedByteType, Vector2, Vector3, Vector4, type Material, type Texture } from "three";
+import { Color, DataTexture, LinearFilter, RepeatWrapping, RGBAFormat, ShaderChunk, SRGBColorSpace, UnsignedByteType, Vector2, Vector3, Vector4, type Material, type Texture } from "three";
 
 /** The uniforms every valley material shares: one object, updated once a frame. */
 export interface AtmosphereUniforms {
@@ -33,6 +33,11 @@ export interface AtmosphereUniforms {
   uWindDrift: { value: Vector2 };
   uLight: { value: Texture | null };
   uLightBounds: { value: Vector4 };
+  /** The real valley's light map (log-polar from the eye), when there is one: it knows the ridge behind the eye. */
+  uArtLight: { value: Texture | null };
+  /** Its layout: theta0, theta1 (radians), r0, r1 (metres). */
+  uArtMap: { value: Vector4 };
+  uUseArtLight: { value: number };
   uSunDir: { value: Vector3 };
   uSunColor: { value: Color };
   uSunElev: { value: number };
@@ -55,6 +60,9 @@ export function atmosphereUniforms(): AtmosphereUniforms {
     uWindDrift: { value: new Vector2() },
     uLight: { value: null },
     uLightBounds: { value: new Vector4(0, 0, 1, 1) },
+    uArtLight: { value: null },
+    uArtMap: { value: new Vector4(-1.0821, 1.0821, 30, 6000) },
+    uUseArtLight: { value: 0 },
     uSunDir: { value: new Vector3(-0.5, 0.1, 0.85).normalize() },
     uSunColor: { value: new Color(3.1, 1.95, 1.15) },
     uSunElev: { value: 0.1 },
@@ -123,6 +131,9 @@ uniform float uMistFalloff;
 uniform vec2 uWindDrift;
 uniform sampler2D uLight;
 uniform vec4 uLightBounds;
+uniform sampler2D uArtLight;
+uniform vec4 uArtMap;
+uniform float uUseArtLight;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform float uSunElev;
@@ -139,17 +150,40 @@ float atmoNoise(vec2 p) {
   return mix(mix(atmoHash(i), atmoHash(i + vec2(1.0, 0.0)), f.x), mix(atmoHash(i + vec2(0.0, 1.0)), atmoHash(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
-/** The light map at a point: r the horizon's angle toward the sun (radians, + above level), g the sky's reach (ambient occlusion). */
-vec2 atmoLight(vec3 wp) {
+/** Where a point falls in the real valley's log-polar maps (art/ridge/README.md). */
+vec2 atmoArtUv(vec3 wp) {
+  float theta = atan(wp.x, -wp.z);
+  float r = clamp(length(wp.xz), uArtMap.z, uArtMap.w);
+  return vec2(clamp((theta - uArtMap.x) / (uArtMap.y - uArtMap.x), 0.0005, 0.9995), 1.0 - log(r / uArtMap.z) / log(uArtMap.w / uArtMap.z));
+}
+
+/**
+ * The light map at a point: x the horizon's angle toward the sun (radians,
+ * + above level), y the sky's reach (ambient occlusion), z the canopy's and
+ * buildings' shadow at the design sun (1 lit). The real valley's own map
+ * when there is one (it knows the ridge behind the eye), else the one the
+ * game rendered from the placeholder's ground.
+ */
+vec3 atmoLight3(vec3 wp) {
+  if (uUseArtLight > 0.5) {
+    vec4 l = texture(uArtLight, atmoArtUv(wp));
+    return vec3(radians(l.g * 40.0 - 10.0), l.r, l.b);
+  }
   vec2 uv = (wp.xz - uLightBounds.xy) / (uLightBounds.zw - uLightBounds.xy);
   vec4 l = texture2D(uLight, clamp(uv, 0.001, 0.999));
-  return l.rg;
+  return vec3(l.rg, 1.0);
+}
+
+vec2 atmoLight(vec3 wp) {
+  return atmoLight3(wp).xy;
 }
 
 /** How much of the sun reaches a point lifted this many metres above the ground's horizon there: 0 in the shadow, 1 in the sun. */
 float atmoSun(vec3 wp, float lift) {
-  float horizon = atmoLight(wp).r - lift * 0.0004;
+  vec3 l = atmoLight3(wp);
+  float horizon = l.x - lift * 0.0004;
   // A soft edge: the sun's disc and the hills' trees make a penumbra of a degree or so.
+  // (The map's baked canopy and building shadows are the ground's: the terrain reads them itself.)
   return smoothstep(horizon - 0.012, horizon + 0.012, uSunElev);
 }
 
@@ -160,8 +194,14 @@ vec3 atmoAmbient(vec3 n, float ao) {
   return mix(uBounce, sky, smoothstep(0.0, 0.6, up)) * ao;
 }
 
-/** The air between the eye and a point: aerial perspective and the mist. */
-vec3 atmoAir(vec3 col, vec3 wp) {
+/**
+ * The air between the eye and a point: aerial perspective and the mist.
+ * \`shade\` scales the light the air scatters toward the eye (air in the
+ * ridge's shadow scatters far less: 0.35 there, 1 in the sun); \`mistScale\`
+ * the mist's thickness at the point (the real valley's light map knows
+ * where it lies: 1 on the river, a third far from it).
+ */
+vec3 atmoAirK(vec3 col, vec3 wp, float shade, float mistScale) {
   vec3 v = wp - cameraPosition;
   float d = max(length(v), 0.001);
   vec3 dir = v / d;
@@ -170,7 +210,7 @@ vec3 atmoAir(vec3 col, vec3 wp) {
   // Near, the haze is the blue of distance; far off it becomes the sky's own horizon.
   vec3 haze = mix(uHazeBlue, horizon, smoothstep(300.0, 4500.0, d));
   vec3 ext = exp(-d * uHazeDensity * vec3(0.62, 0.86, 1.3));
-  col = col * ext + haze * (1.0 - ext);
+  col = col * ext + haze * shade * (1.0 - ext);
   // The mist: denser low down, its thickness integrated along the ray.
   float k = uMistFalloff;
   float h0 = max(cameraPosition.y - uMistBase, 0.0);
@@ -180,13 +220,18 @@ vec3 atmoAir(vec3 col, vec3 wp) {
   // Patchy, and drifting with the wind.
   vec2 q = wp.xz * 0.006 + uWindDrift;
   float patchy = 0.45 + 0.9 * atmoNoise(q) * atmoNoise(q * 2.3 + 7.0);
-  float mist = 1.0 - exp(-uMistDensity * avg * d * patchy);
-  col = mix(col, uMistColor, clamp(mist, 0.0, 0.85));
+  float mist = 1.0 - exp(-uMistDensity * avg * d * patchy * mistScale);
+  col = mix(col, uMistColor * shade, clamp(mist, 0.0, 0.85));
   return col;
+}
+
+/** The air for anything but the ground: its shade from the light map at the point. */
+vec3 atmoAir(vec3 col, vec3 wp) {
+  return atmoAirK(col, wp, mix(0.35, 1.0, atmoSun(wp, 2.0)), 1.0);
 }
 `;
 
-const PATCH_KEY = "ridge-atmo";
+const PATCH_KEY = "ridge-atmo-4";
 
 /**
  * Patch a standard material to the valley's air: the aerial perspective and
@@ -220,12 +265,36 @@ export function patchStandard(material: Material, uniforms: AtmosphereUniforms, 
         ].join("\n"),
       );
     let frag = shader.fragmentShader.replace("#include <common>", `#include <common>\nvarying vec3 vAtmoWorld;\n${ATMOSPHERE_GLSL}`);
-    if (sunFromMap) {
+    // The lights chunk is still an #include here: it is expanded (and the sun's line patched)
+    // now. A rig's sun is its key light's reach, which the game sets from the light map (the
+    // engine's rig patch declares uKeyLight but, looking for the line before the include is
+    // expanded, never applies it).
+    const keyed = !sunFromMap && frag.includes("uniform float uKeyLight;");
+    if (sunFromMap || keyed) {
       frag = frag.replace(
-        "getDirectionalLightInfo( directionalLight, directLight );",
-        "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= atmoSun( vAtmoWorld, 2.0 );",
+        "#include <lights_fragment_begin>",
+        ShaderChunk.lights_fragment_begin.replace(
+          "getDirectionalLightInfo( directionalLight, directLight );",
+          `getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= ${sunFromMap ? "atmoSun( vAtmoWorld, 2.0 )" : "uKeyLight"};`,
+        ),
       );
     }
+    // The sky's light is the sky the point can see: the light map's sky visibility, and in the
+    // ridge's shadow not the bright low sky toward the sun either (the ridge hides it).
+    frag = frag.replace(
+      "#include <lights_fragment_maps>",
+      [
+        "#include <lights_fragment_maps>",
+        "{",
+        "  float atmoOcc = atmoLight3( vAtmoWorld ).y * mix( 0.5, 1.0, atmoSun( vAtmoWorld, 2.0 ) );",
+        "  iblIrradiance *= atmoOcc;",
+        "  irradiance *= atmoOcc;",
+        "  #if defined( RE_IndirectSpecular )",
+        "  radiance *= atmoOcc;",
+        "  #endif",
+        "}",
+      ].join("\n"),
+    );
     frag = frag.replace("#include <fog_fragment>", "gl_FragColor.rgb = atmoAir( gl_FragColor.rgb, vAtmoWorld );");
     shader.fragmentShader = frag;
   };

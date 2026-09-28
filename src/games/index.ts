@@ -53,7 +53,7 @@ export const DEAD_OF_NIGHT: GameEntry = {
   title: "Dead of Night",
   blurb: "They come out of the fog. Aim for the head.",
   about: "Midnight on a country road, and something is walking out of the fog. They come slowly, then all at once. Aim for the head, and hold the road until morning.",
-  poster: "assets/dead-of-night/poster.webp",
+  poster: "assets/night/poster.webp",
   // Moonlight in the fog over a dark road.
   backdrop: {
     sky: [
@@ -74,6 +74,12 @@ export const DEAD_OF_NIGHT: GameEntry = {
         ["rgba(150, 170, 192, 0)", 1],
       ],
     },
+  },
+  // The road seen from one fixed eye, the barricade across its whole width.
+  stage: { minAspect: 1.2 },
+  async create(): Promise<Game> {
+    const { createGame } = await import("./night/index");
+    return createGame();
   },
 };
 

@@ -45,6 +45,36 @@ export function surfaceOf(o: Object3D | null): Surface {
   return "stone";
 }
 
+/** The great wall the echo comes back from: a hit within its rectangle, facing the eye. */
+export interface CliffFace {
+  centre: Vector3;
+  halfWidth: number;
+  halfHeight: number;
+}
+
+/**
+ * What the real valley's terrain shader reads, from `terrain.splat`'s
+ * extras (art/ridge/README.md): the maps and tiles by file, each tile's size
+ * and mean albedo, and how the maps are laid out.
+ */
+export interface TerrainArtSpec {
+  files: Record<string, string>;
+  tiles: { name: string; size: number; mean: [number, number, number]; triplanar: boolean }[];
+  mapping: { theta0: number; theta1: number; r0: number; r1: number };
+}
+
+/** The light and the air the art was rendered in (valley.glb's scene extras), for the game to match. */
+export interface ValleyLight {
+  sunColor: [number, number, number];
+  sunToSky: number;
+  hazeSigma: number;
+  hazeColor: [number, number, number];
+  mistSigma: number;
+  mistBase: number;
+  mistScaleHeight: number;
+  mistColor: [number, number, number];
+}
+
 export interface ValleySecrets {
   bell: Object3D | null;
   siren: Object3D | null;
@@ -66,8 +96,13 @@ export interface ValleyLayout {
   /** The direction sunlight travels (the `sun` node's −Z). */
   sunDirection: Vector3;
   plan: Plan;
-  terrain: Mesh | null;
+  /** The ground: one mesh (the placeholder) or a group of chunks (the real valley). */
+  terrain: Object3D | null;
+  terrainMeshes: Mesh[];
+  /** The placeholder's splat and tiles, or null. */
   terrainInputs: TerrainInputs | null;
+  /** The real valley's terrain maps and tiles as its extras name them, or null. */
+  terrainArt: TerrainArtSpec | null;
   river: Mesh | null;
   reservoir: Mesh | null;
   forest: InstancedMesh[];
@@ -78,6 +113,13 @@ export interface ValleyLayout {
   secrets: ValleySecrets;
   /** The checkpoint's flag, flown by the wind. */
   flag: Mesh | null;
+  /** Mist lying on the river (`mist.river.<n>`), for a drifting mist shader. */
+  mist: Mesh[];
+  /** The art's own grass right under the scope, if it made some. */
+  foregroundGrass: Mesh | null;
+  cliffFace: CliffFace | null;
+  /** The art's light and air, or null (the placeholder is lit by the game's own values). */
+  light: ValleyLight | null;
 }
 
 const w = (o: Object3D) => o.getWorldPosition(new Vector3());
@@ -94,16 +136,88 @@ function pathFrom(root: Object3D, prefix: string): V3[] {
 
 /** How a post is named in the note, from its extras or its id. */
 function placeOf(id: string, kind: string, node: Object3D): string {
-  const extra = extraString(node, "place");
-  if (extra) return extra;
+  const extra = node.userData["place"];
+  if (typeof extra === "string") return extra;
   if (kind === "tower") return "on the watchtower";
   if (kind === "gunner") return "at the checkpoint";
   if (kind === "mortar") return "behind the village";
+  if (/tunnel/.test(id)) return "at the tunnel";
   if (/dam/.test(id)) return "on the dam";
   if (/bridge/.test(id)) return "at the bridge";
   if (/village|chapel/.test(id)) return "in the village";
   if (/farm/.test(id)) return "at the farm";
   return "at the checkpoint";
+}
+
+/** How a counter-sniper's nest is named in the note, from its extras. */
+function nestPlace(node: Object3D, nearBell: boolean): string {
+  const extra = node.userData["place"];
+  if (typeof extra === "string") return extra;
+  const note = String(node.userData["note"] ?? "").toLowerCase();
+  if (nearBell || /chapel|belfry|tower/.test(note)) return "in the chapel tower";
+  if (/alp|barn/.test(note)) return "in the rocks above the alp";
+  if (/crag|ledge/.test(note)) return "on the far ledge";
+  return "on the far slope";
+}
+
+/** An extras value that may be a JSON string (Blender exports nested extras as strings). */
+function extraJson<T>(o: Object3D | null, key: string): T | null {
+  const v = o?.userData[key];
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "string") return v as T;
+  try {
+    return JSON.parse(v) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** The scene's lighting and fog extras (on the glTF scene, which three.js hands over as the root). */
+function valleyLight(root: Object3D): ValleyLight | null {
+  const lighting = extraJson<{ sun_color?: [number, number, number]; sun_to_sky_ratio?: number }>(root, "lighting");
+  const fog = extraJson<{
+    haze_sigma_per_m?: number;
+    haze_color_linear?: [number, number, number];
+    mist_sigma0_per_m?: number;
+    mist_z0_m_gltf_y?: number;
+    mist_scale_height_m?: number;
+    mist_color_linear?: [number, number, number];
+  }>(root, "fog");
+  if (!lighting && !fog) return null;
+  return {
+    sunColor: lighting?.sun_color ?? [1, 0.5, 0.26],
+    sunToSky: lighting?.sun_to_sky_ratio ?? 4,
+    hazeSigma: fog?.haze_sigma_per_m ?? 1 / 14000,
+    hazeColor: fog?.haze_color_linear ?? [0.36, 0.46, 0.62],
+    mistSigma: fog?.mist_sigma0_per_m ?? 1 / 650,
+    mistBase: fog?.mist_z0_m_gltf_y ?? -60,
+    mistScaleHeight: fog?.mist_scale_height_m ?? 22,
+    mistColor: fog?.mist_color_linear ?? [0.31, 0.35, 0.4],
+  };
+}
+
+/** The real terrain's shader inputs, from `terrain.splat`'s extras. */
+function terrainArtSpec(root: Object3D): TerrainArtSpec | null {
+  const node = findNode(root, "terrain.splat");
+  if (!node) return null;
+  const files = extraJson<Record<string, string>>(node, "files");
+  const tiles = extraJson<Record<string, { size_m: number; mean_linear: [number, number, number]; projection: string }>>(node, "tiles");
+  const order = extraJson<string[]>(node, "materials") ?? ["grass", "rock", "scree", "snow", "dirt", "forest", "gravel", "alpine"];
+  const mapping = extraJson<{ theta0_deg: number; theta1_deg: number; r0_m: number; r1_m: number }>(node, "mapping");
+  if (!files || !tiles) return null;
+  return {
+    files,
+    tiles: order.map((name) => {
+      const t = tiles[name];
+      return { name, size: t?.size_m ?? 3, mean: t?.mean_linear ?? [0.2, 0.2, 0.2], triplanar: t?.projection === "triplanar" };
+    }),
+    mapping: {
+      theta0: ((mapping?.theta0_deg ?? -62) * Math.PI) / 180,
+      theta1: ((mapping?.theta1_deg ?? 62) * Math.PI) / 180,
+      r0: mapping?.r0_m ?? 30,
+      r1: mapping?.r1_m ?? 6000,
+    },
+  };
 }
 
 /** The heading a node faces (its +Z turned about Y). */
@@ -125,7 +239,7 @@ export function readValley(root: Group): ValleyLayout {
     camNode.traverse((o) => {
       if (!cam && (o as PerspectiveCamera).isPerspectiveCamera) cam = o as PerspectiveCamera;
     });
-    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "yfov");
+    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "fov_deg") ?? extraNumber(camNode, "yfov");
     if (extra !== undefined) fov = extra;
     else if (cam) fov = (cam as PerspectiveCamera).fov;
   }
@@ -153,7 +267,8 @@ export function readValley(root: Group): ValleyLayout {
     });
     const at = asV3(w(exposed ?? node));
     const back = hidden ? asV3(w(hidden)) : { x: at.x, y: at.y - 0.8, z: at.z };
-    const place = extraString(node, "place") ?? (w(node).distanceTo(findNode(root, "secret.bell") ? w(findNode(root, "secret.bell")!) : new Vector3(1e9, 0, 0)) < 12 ? "in the chapel tower" : "on the far ledge");
+    const bellNode = findNode(root, "secret.bell");
+    const place = nestPlace(node, bellNode !== null && w(node).distanceTo(w(bellNode)) < 12);
     nests.push({ id: key, exposed: at, hidden: back, heading: Math.atan2(eye.x - at.x, eye.z - at.z), place });
   }
 
@@ -168,7 +283,22 @@ export function readValley(root: Group): ValleyLayout {
   const cows = pathFrom(root, "animals.cows.");
   const farmPost = posts.find((p) => /farm/.test(p.id));
   const farm = farmPost?.at ?? cows[0] ?? { x: -120, y: -60, z: -210 };
-  const eagleRockNode = findNode(root, "eagle.rock");
+  const eagleRockNode = findNode(root, "eagle.land") ?? findNode(root, "eagle.rock");
+  // Mortar teams, if the art placed none: dug in behind the village and beyond the bridge,
+  // on the ground a little further from the ridge than the posts they are named by.
+  if (!posts.some((p) => p.kind === "mortar")) {
+    const village = posts.find((p) => /village/.test(p.id));
+    const bridgeFar = posts.find((p) => /bridge_far|bridge\.far/.test(p.id));
+    for (const [from, id, place] of [
+      [village, "mortar.village", "behind the village"],
+      [bridgeFar, "mortar.bridge", "beyond the bridge"],
+    ] as const) {
+      if (!from) continue;
+      const d = Math.hypot(from.at.x - eye.x, from.at.z - eye.z) || 1;
+      const at = { x: from.at.x + ((from.at.x - eye.x) / d) * 45, y: from.at.y, z: from.at.z + ((from.at.z - eye.z) / d) * 45 };
+      posts.push({ id, kind: "mortar", at, heading: Math.atan2(eye.x - at.x, eye.z - at.z), place });
+    }
+  }
   const plan: Plan = {
     eye: asV3(eye),
     posts,
@@ -193,7 +323,11 @@ export function readValley(root: Group): ValleyLayout {
   };
 
   // The terrain and what paints it.
-  const terrain = (findNode(root, "terrain") as Mesh | null) ?? null;
+  const terrain = findNode(root, "terrain");
+  const terrainMeshes: Mesh[] = [];
+  terrain?.traverse((o) => {
+    if ((o as Mesh).isMesh) terrainMeshes.push(o as Mesh);
+  });
   let terrainInputs: TerrainInputs | null = null;
   const ph = terrain?.userData["placeholder"] as
     | { splat: { maps: [Texture, Texture]; bounds: [number, number, number, number] }; coarse: { maps: [Texture, Texture]; bounds: [number, number, number, number] }; tiles: DataArrayTexture }
@@ -207,7 +341,17 @@ export function readValley(root: Group): ValleyLayout {
     };
   }
 
+  const terrainArt = ph ? null : terrainArtSpec(root);
+
   const river = (findNode(root, "water.river") as Mesh | null) ?? null;
+  const mist: Mesh[] = [];
+  for (const [, node] of nodesWithPrefix(root, "mist.")) if ((node as Mesh).isMesh) mist.push(node as Mesh);
+  const foregroundGrass = (findNode(root, "foreground.grass") as Mesh | null) ?? null;
+  const cliffNode = findNode(root, "secret.cliff");
+  const cliffFace: CliffFace | null =
+    cliffNode && extraNumber(cliffNode, "half_width_m") !== undefined
+      ? { centre: w(cliffNode), halfWidth: extraNumber(cliffNode, "half_width_m") ?? 150, halfHeight: extraNumber(cliffNode, "half_height_m") ?? 80 }
+      : null;
   const reservoir = (findNode(root, "water.reservoir") as Mesh | null) ?? null;
   const forest: InstancedMesh[] = [];
   for (const [, node] of nodesWithPrefix(root, "forest.")) {
@@ -239,7 +383,7 @@ export function readValley(root: Group): ValleyLayout {
   root.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh || (o as InstancedMesh).isInstancedMesh) return;
-    if (m === terrain) return;
+    if (terrainMeshes.includes(m) || mist.includes(m) || m === foregroundGrass) return;
     if (m === river || m === reservoir) {
       water.push(m);
       return;
@@ -259,7 +403,9 @@ export function readValley(root: Group): ValleyLayout {
     sunDirection,
     plan,
     terrain,
+    terrainMeshes,
     terrainInputs,
+    terrainArt,
     river,
     reservoir,
     forest,
@@ -268,5 +414,9 @@ export function readValley(root: Group): ValleyLayout {
     plates,
     secrets,
     flag,
+    mist,
+    foregroundGrass,
+    cliffFace,
+    light: valleyLight(root),
   };
 }

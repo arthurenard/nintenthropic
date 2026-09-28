@@ -507,7 +507,7 @@ export function buildPlaceholderValley(): Group {
   plan.sheep.forEach((p, i) => root.add(marker(`animals.sheep.${i}`, p)));
   plan.goatLedges.forEach((p, i) => root.add(marker(`secret.goat.${i}`, p)));
   root.add(marker("bridge.cross", plan.bridge));
-  root.add(marker("eagle.rock", plan.eagleRock));
+  root.add(marker("eagle.land", plan.eagleRock));
   for (const post of plan.posts) {
     const o = marker(`post.${post.id}`, post.at, { kind: post.kind, place: post.place });
     o.rotation.y = post.heading;

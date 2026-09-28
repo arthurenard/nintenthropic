@@ -82,7 +82,8 @@ export class SecretsWorld {
   }
 
   bellCentre(out: Vector3): Vector3 | null {
-    return this.s.bell ? this.s.bell.getWorldPosition(out).add(tmp.set(0, -0.6, 0)) : null;
+    // The bell's shoulder, just under the yoke it hangs from: the part the belfry's sill never hides.
+    return this.s.bell ? this.s.bell.getWorldPosition(out).add(tmp.set(0, -0.25, 0)) : null;
   }
 
   /** The loudspeaker: a long wail up the valley. Returns when it is heard. */
@@ -201,6 +202,15 @@ export class SecretsWorld {
 
   /** Points of the secrets to aim at, for the harness. */
   points(): Record<string, Vector3 | null> {
+    const top = (o: Object3D | null) => {
+      if (!o) return null;
+      o.updateMatrixWorld(true);
+      const box = new Box3().setFromObject(o);
+      if (box.isEmpty()) return o.getWorldPosition(new Vector3());
+      const c = box.getCenter(new Vector3());
+      c.y = box.max.y - Math.min(0.5, (box.max.y - box.min.y) * 0.2);
+      return c;
+    };
     // The middle of what can be seen of it (a cliff's skin sits at the origin, its shape in the world).
     const w = (o: Object3D | null) => {
       if (!o) return null;
@@ -212,7 +222,8 @@ export class SecretsWorld {
       bell: this.bellCentre(new Vector3()),
       siren: w(this.s.siren),
       wedge: w(this.s.wedge),
-      yetiRock: w(this.s.yetiRock),
+      // The top of the yeti's rock: it stands on a far snowfield whose nearer ridge hides its foot.
+      yetiRock: top(this.s.yetiRock),
       cliff: w(this.s.cliff),
     };
   }

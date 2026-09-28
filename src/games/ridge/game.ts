@@ -63,6 +63,9 @@ interface Scheduled {
 
 const tmp = new Vector3();
 const tmp2 = new Vector3();
+const TRAIL_POINT = new Vector3();
+/** How much the eye opens up for a scoped view in the shade: at most two stops (art/ridge/README.md). */
+const SCOPE_ADAPT = 3.2;
 
 /** A moment for the page between the long steps of getting ready, so the bar keeps moving. */
 function breathe(): Promise<void> {
@@ -203,7 +206,7 @@ export class OverwatchRidge implements Game, MissionListener {
     );
     await breathe();
     const valley = this.assets.valley;
-    this.stage = new Stage(renderer, valley, this.assets.sky);
+    this.stage = new Stage(renderer, valley, this.assets.sky, this.assets.terrainArt);
     await breathe();
     const ground = this.stage.heightfield.height(valley.eye.x, valley.eye.z);
     this.camera = new PlayerCamera(valley.eye, valley.eyeQuaternion, valley.fov, { near: 0.25, far: 16000, groundY: ground });
@@ -216,14 +219,15 @@ export class OverwatchRidge implements Game, MissionListener {
     this.cast = new Cast(this.assets, this.stage.dynamic, this.stage.heightfield, this.stage.atmosphere, valley.eye, valley.secrets.duck);
     this.cast.assist = (ctx.input ?? "hand") === "hand" ? HAND_ASSIST : 0;
     this.cast.sunFlat.set(this.stage.toSun.x, 0, this.stage.toSun.z).normalize();
+    this.cast.horizonAt = (x, y, z) => this.stage.horizonAt(x, y, z);
     await breathe();
     this.shooter = new Shooter(this.stage.heightfield, this.stage.queries, (o) => this.secretOf(o), this.visual);
-    this.plates = new PlateStage(valley.plates, this.stage.fxRoot, () => this.wide, this.effects, this.sound, this.stage.heightfield, () => ({ width: this.width, height: this.height }));
+    this.plates = new PlateStage(valley.plates, this.stage.fxRoot, () => this.wide, this.effects, this.sound, this.stage.heightfield, () => ({ width: this.width, height: this.height }), this.stage.atmosphere);
     this.proxy.target = this.plates;
     this.proxy.onBegin = () => {
       if (this.phase === "over" || this.phase === "dying" || this.phase === "failing") this.rearm();
     };
-    this.foreground = new Foreground(this.stage.atmosphere);
+    this.foreground = new Foreground(this.stage.atmosphere, valley.foregroundGrass === null);
     this.foreground.golden = this.golden;
     this.scope.gold = this.golden;
     // The grass lies just ahead of the eye, turned the way it looks (about Y only).
@@ -232,7 +236,8 @@ export class OverwatchRidge implements Game, MissionListener {
     this.stage.scene.add(this.foreground.root);
     const bell = valley.secrets.bell ? valley.secrets.bell.getWorldPosition(new Vector3()) : null;
     const riverLine = valley.plan.duck.length ? valley.plan.duck : valley.plan.road;
-    this.ambient = new Ambient(this.stage.fxRoot, this.stage.atmosphere, riverLine, this.sound, valley.flag, bell);
+    // The art's own mist ribbons lie on the real river; the placeholder's banks only stand in for them.
+    this.ambient = new Ambient(this.stage.fxRoot, this.stage.atmosphere, valley.mist.length ? [] : riverLine, this.sound, valley.flag, bell);
     this.secrets = new SecretsWorld(valley.secrets, this.effects, this.sound, this.stage.heightfield, valley.plan.cheese, valley.eye);
     this.post = new PostFX(renderer, this.stage.scene, this.camera.camera, ctx.quality, {
       grade: DAWN,
@@ -307,7 +312,7 @@ export class OverwatchRidge implements Game, MissionListener {
     this.flash.reset();
     this.post.set("hurt", 0);
     this.post.set("desaturate", 0);
-    this.post.set("exposure", 1);
+    this.dim = 1;
     this.sound.filter("slowmo", 0);
     this.sound.filter("hurt", 0);
     this.hints.setQuiet(true);
@@ -450,6 +455,11 @@ export class OverwatchRidge implements Game, MissionListener {
       this.effects.setScale(this.bufferHeight, cam.fov);
     }
     this.post.set("scoped", this.scope.zoom);
+    // The eye adapts through the glass: the targets lie in the ridge's shadow, so the scope on
+    // the shade brightens toward mid-grey, by up to two stops, over about half a second.
+    const adaptTo = 1 + (SCOPE_ADAPT - 1) * (1 - this.aimLit) * this.scope.zoom;
+    this.scopeGain += (adaptTo - this.scopeGain) * Math.min(1, dt / 0.35);
+    this.post.set("exposure", this.scopeGain * this.dim);
 
     this.cast.sunElevation = this.stage.atmosphere.uSunElev.value;
     // The duck bobs on its river; the rest of the valley's people as the rules have them.
@@ -668,6 +678,10 @@ export class OverwatchRidge implements Game, MissionListener {
 
   /** A round arrived: the picture and the sound where it landed, and the rules told. */
   private landed(f: Flight, where: Landing3D): void {
+    // The real valley marks its great wall as a rectangle (secret.cliff's extras), not a mesh:
+    // a round into the rock or the ground inside it is the echo's.
+    const face = this.assets.valley.cliffFace;
+    if (face && where.kind === "scenery" && this.onCliffFace(where.point)) where = { ...where, kind: "secret", secret: "echo" };
     const at = where.point;
     // The last few landings, for the harness and the tests.
     this.landings.push({ kind: where.kind, surface: where.surface, id: where.id, part: where.part, point: at.toArray(), range: Math.round(where.range) });
@@ -723,6 +737,20 @@ export class OverwatchRidge implements Game, MissionListener {
       default:
         return { kind: "scenery" };
     }
+  }
+
+  /** Whether a point lies on the great wall's face (within its extras' rectangle, facing the eye). */
+  private onCliffFace(p: Vector3): boolean {
+    const face = this.assets.valley.cliffFace;
+    if (!face) return false;
+    const eye = this.assets.valley.eye;
+    // Across: along the wall, square to the line from the eye; up: height.
+    const toFace = tmp2.copy(face.centre).sub(eye).setY(0).normalize();
+    const dx = p.x - face.centre.x;
+    const dz = p.z - face.centre.z;
+    const across = Math.abs(dx * -toFace.z + dz * toFace.x);
+    const depth = Math.abs(dx * toFace.x + dz * toFace.z);
+    return across <= face.halfWidth && Math.abs(p.y - face.centre.y) <= face.halfHeight && depth <= face.halfWidth;
   }
 
   /** Which secret an object of the valley is, if any. */
@@ -819,7 +847,7 @@ export class OverwatchRidge implements Game, MissionListener {
    */
   private updateTrails(): void {
     const strength = this.scope.zoom > 0.5 ? 1 : 0.45;
-    const p = new Vector3();
+    const p = TRAIL_POINT;
     for (const [tag, t] of this.trails) {
       const f = t.flight;
       const to = Math.min(f.done ? f.stopAt : rangeAt(f.t), f.stopAt);
@@ -890,6 +918,14 @@ export class OverwatchRidge implements Game, MissionListener {
       const cam = this.camera.camera;
       const dir = this.scope.showing ? tmp.set(0, 0, -1).applyQuaternion(cam.quaternion) : tmp.set(this.scope.look.x * 2 - 1, 1 - this.scope.look.y * 2, 0.5).unproject(this.wide).sub(this.wide.position).normalize();
       this.range = this.rangeAlong(cam.position, dir.clone());
+      // Is the sun on what the reticle rests on? (For the eye's adaptation through the glass.)
+      if (this.range !== null) {
+        const p = tmp2.copy(dir).multiplyScalar(this.range).add(cam.position);
+        const horizon = this.stage.horizonAt(p.x, p.y + 1, p.z);
+        this.aimLit = Math.min(1, Math.max(0, (this.stage.atmosphere.uSunElev.value - horizon) / 0.02 + 0.5));
+      } else {
+        this.aimLit = 1;
+      }
     }
     const w = m.wind.speed;
     const windValue = `${Math.abs(w) < 0.05 ? "" : w > 0 ? "→ " : "← "}${Math.abs(w).toFixed(1)} m/s`;
@@ -954,7 +990,7 @@ export class OverwatchRidge implements Game, MissionListener {
       this.scope.update(0, false, { x: 0.5, y: 0.5, tracking: false });
     }
     if (t > 1.2) this.scope.cracked = false;
-    this.post.set("exposure", 1 - Math.min(0.25, t * 0.08));
+    this.dim = 1 - Math.min(0.25, t * 0.08);
     const fall = this.ctx.settings.reducedMotion ? 0 : Math.min(1, Math.max(0, t - 0.6) / 2.2);
     this.camera.setDeath(fall, this.hurtSide);
     this.foreground.fall(fall);
@@ -975,6 +1011,12 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   private cardShown = false;
+  /** Whether the sun is on what the reticle rests on (0 in the shade, 1 in the sun). */
+  private aimLit = 1;
+  /** The eye's adaptation through the scope, as an exposure. */
+  private scopeGain = 1;
+  /** The fall's dimming. */
+  private dim = 1;
   /** How far the fallen view has tipped down into the grass (0-1). */
   private fallTilt = 0;
 

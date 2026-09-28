@@ -5,10 +5,11 @@
  * get there, and the clang takes longer to come back - and it swings on its
  * crossbar; a miss throws up dust beside it.
  */
-import { DoubleSide, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type Object3D, type PerspectiveCamera } from "three";
+import { CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, RingGeometry, Vector3, type Object3D, type PerspectiveCamera } from "three";
 import type { CalibrationStage, CalibrationTarget } from "../../../engine/types";
 import type { Sound } from "../../../engine/world/sound";
 import { timeOfFlight } from "../rules/ballistics";
+import { patchStandard, type AtmosphereUniforms } from "./atmosphere";
 import type { Effects } from "./effects";
 import type { Heightfield } from "./heightfield";
 
@@ -37,24 +38,52 @@ export class PlateStage implements CalibrationStage {
   active = true;
 
   constructor(
-    pivots: Object3D[],
+    nodes: Object3D[],
     parent: Object3D,
     private readonly camera: () => PerspectiveCamera,
     private readonly effects: Effects,
     private readonly sound: Sound,
     private readonly heightfield: Heightfield,
     private readonly view: () => { width: number; height: number },
+    atmosphere: AtmosphereUniforms | null = null,
   ) {
-    const paint = new MeshBasicMaterial({ color: "#f4f2ec", side: DoubleSide, transparent: true, opacity: 0.95, depthWrite: false, name: "paint" });
-    pivots.forEach((pivot, i) => {
-      pivot.updateMatrixWorld(true);
-      // The plate's face is a metre below its pivot (its crossbar).
-      const centre = pivot.localToWorld(new Vector3(0, -0.95, 0));
-      const ring = new Mesh(new RingGeometry(1.05, 1.45, 40), paint);
+    // The lit plate's circle is the aim check's affordance: drawn over whatever stands in front of it.
+    const paint = new MeshBasicMaterial({ color: "#f4f2ec", side: DoubleSide, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false, name: "paint" });
+    const steel = new MeshStandardMaterial({ color: "#56585a", metalness: 0.25, roughness: 0.6, name: "plate.steel" });
+    // In the valley's light and air like everything else on the range.
+    if (atmosphere) patchStandard(steel, atmosphere, true);
+    nodes.forEach((node, i) => {
+      node.updateMatrixWorld(true);
+      let pivot = node;
+      let centre: Vector3;
+      let hasPlate = false;
+      node.traverse((o) => {
+        if ((o as Mesh).isMesh) hasPlate = true;
+      });
+      if (hasPlate) {
+        // The placeholder's node is the pivot; the plate hangs a metre below it on its crossbar.
+        centre = node.localToWorld(new Vector3(0, -0.95, 0));
+      } else {
+        // The art's node is the plate's centre (art/ridge/README.md): the game hangs the steel
+        // disc there, from a pivot a little above it, so it can swing.
+        centre = node.getWorldPosition(new Vector3());
+        const r = typeof node.userData["plate_radius_m"] === "number" ? (node.userData["plate_radius_m"] as number) : 0.3;
+        pivot = new Group();
+        pivot.position.copy(centre).add(new Vector3(0, r + 0.12, 0));
+        pivot.rotation.y = Math.atan2(-centre.x, -centre.z);
+        const disc = new Mesh(new CylinderGeometry(r, r, 0.025, 28), steel);
+        disc.rotation.x = Math.PI / 2;
+        disc.position.y = -(r + 0.12);
+        disc.name = "calib.plate";
+        disc.userData["surface"] = "metal";
+        pivot.add(disc);
+        parent.add(pivot);
+      }
+      const ring = new Mesh(new RingGeometry(0.72, 1, 40), paint);
       ring.position.copy(centre);
       ring.lookAt(0, 0, 0);
       ring.visible = false;
-      ring.renderOrder = 2;
+      ring.renderOrder = 10;
       parent.add(ring);
       this.plates.push({ id: `plate.${i + 1}`, pivot, centre, ring, swing: 0, spin: 0, pending: [], target: { id: `plate.${i + 1}`, x: 0.5, y: 0.5, radius: 0.04 } });
     });
@@ -75,6 +104,8 @@ export class PlateStage implements CalibrationStage {
       const d = p.centre.distanceTo(cam.position);
       const px = (1.45 / d / Math.tan((cam.fov * Math.PI) / 360)) * (height / 2);
       p.target.radius = Math.max(0.034, Math.min(0.06, px / side));
+      // The painted circle is drawn the size of the zone a shot must land in.
+      p.ring.scale.setScalar(((p.target.radius * side) / (height / 2)) * Math.tan((cam.fov * Math.PI) / 360) * d);
       if (tmp.z < 1 && p.target.x > 0 && p.target.x < 1 && p.target.y > 0 && p.target.y < 1) out.push(p.target);
     }
     return out;

@@ -1641,7 +1641,8 @@ export class Mission {
           const rock = this.plan.eagleRock;
           const d = dist(a.pos, rock);
           if (a.activity === "glide" || a.activity === "flap") {
-            this.walkTo(a, rock, Math.max(4, Math.min(24, d * 0.6)));
+            // A stoop: fast from far off, braking into the rock.
+            this.walkTo(a, rock, Math.max(4, Math.min(55, d * 0.8)));
             if (d < 3) a.act("land");
           } else if (a.activity === "land") {
             this.walkTo(a, rock, 2.5);
