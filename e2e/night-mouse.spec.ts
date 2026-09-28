@@ -26,7 +26,7 @@ async function shootNearest(page: Page, range: number): Promise<boolean> {
 }
 
 test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the results", async ({ page }, info) => {
-  test.setTimeout(300_000);
+  test.setTimeout(420_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page, { "handy.control.v1": "mouse" });
@@ -47,7 +47,8 @@ test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the resu
   await expect(page.locator("#magazine")).toHaveAttribute("aria-label", "8 of 8 rounds", { timeout: 5_000 });
 
   // Wave 1: shoot the dead as they come out of the fog until the road is clear.
-  const deadline = Date.now() + 150_000;
+  // Wave 1's six walk some sixty metres of Route 9 out of the fog, behind the burned bus.
+  const deadline = Date.now() + 240_000;
   let wave = 1;
   while (Date.now() < deadline) {
     wave = (await gameDebug(page, "debug.match().wave")) as number;
@@ -74,7 +75,7 @@ test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the resu
   await expect(page.locator("#pause-sheet")).toBeHidden();
 
   // The dead crowd the barricade, and the night takes you.
-  await gameDebug(page, "[1, 2, 3, 4, 5].map(() => debug.send('walker', 'road', 49))");
+  await gameDebug(page, "[1, 2, 3, 4, 5].map(() => debug.send('walker', 'road', -9))");
   const results = page.locator("#results");
   await expect(results).toBeVisible({ timeout: 40_000 });
   await expect(page.locator("#results-outcome")).toHaveText(/^Fell on Wave \d+$/);

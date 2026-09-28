@@ -395,3 +395,40 @@ export function offsetPath(lane: Lane, offset: number): V3[] {
   return out;
 }
 
+
+/**
+ * A lane out of the fog, begun no farther than `reach` metres (on the
+ * ground) from the eye: the art may run a lane from far down the road, but
+ * past the fog's edge the walk is only waiting. Cut where the lane first
+ * comes within reach; the corn's cover shortens by what was cut. A lane
+ * that starts within reach is left as it is.
+ */
+export function withinReach(lane: Lane, eye: V3, reach: number): Lane {
+  const pts = lane.points;
+  const first = pts[0];
+  if (!first || horizontalDistance(first, eye) <= reach) return lane;
+  let cut = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1] as V3;
+    const b = pts[i] as V3;
+    const seg = horizontalDistance(a, b);
+    if (horizontalDistance(b, eye) > reach) {
+      cut += seg;
+      continue;
+    }
+    // Where the segment a → b crosses the circle of `reach` round the eye.
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const fx = a.x - eye.x;
+    const fz = a.z - eye.z;
+    const qa = dx * dx + dz * dz;
+    const qb = 2 * (fx * dx + fz * dz);
+    const qc = fx * fx + fz * fz - reach * reach;
+    const disc = Math.max(0, qb * qb - 4 * qa * qc);
+    const k = qa > 1e-9 ? Math.min(1, Math.max(0, (-qb - Math.sqrt(disc)) / (2 * qa))) : 0;
+    const start: V3 = { x: a.x + dx * k, y: a.y + (b.y - a.y) * k, z: a.z + dz * k };
+    cut += seg * k;
+    return { ...lane, points: [start, ...pts.slice(i)], cover: Math.max(0, lane.cover - cut) };
+  }
+  return lane;
+}

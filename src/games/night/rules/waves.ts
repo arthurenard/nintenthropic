@@ -104,7 +104,7 @@ export function waveSpec(wave: number): WaveSpec {
     lanes,
     maxActive: w === 1 ? 4 : w === 2 ? 6 : w === 3 ? 7 : w <= 5 ? 8 : Math.min(22, 9 + (w - 6)),
     gap: w === 1 ? [2.6, 4.4] : w <= 3 ? [2, 3.6] : w <= 6 ? [1.6, 3] : [Math.max(0.45, 1.4 - 0.1 * (w - 6)), Math.max(1, 2.6 - 0.15 * (w - 6))],
-    pace: w <= 4 ? 1 : Math.min(1.5, 1 + 0.04 * (w - 4)),
+    pace: w <= 4 ? 1 : Math.min(1.7, 1 + 0.045 * (w - 4)),
     fog: fogFor(w),
     survivors: w < 3 ? 0 : w <= 5 ? 1 : 2,
     subtitle: subtitleFor(w),

@@ -165,6 +165,9 @@ uniform vec4 uPush[8];
 uniform float uWind;
 uniform float uFogTime;
 #endif
+#ifdef SWAY_WEIGHTS
+attribute float sway;
+#endif
 void main() {
   vUv = uv;
   vec4 world = modelMatrix * vec4(position, 1.0);
@@ -174,8 +177,13 @@ void main() {
 #ifdef SWAY
   // The corn bends with the wind, more toward its tips, and away from the
   // dead pushing through it: the tell of one coming.
+#ifdef SWAY_WEIGHTS
+  // The art's own weight: 0 at the ground, 1 at the tassel.
+  float bend = sway * sway;
+#else
   float h = clamp(world.y / 2.4, 0.0, 1.0);
   float bend = h * h;
+#endif
   float gust = sin(uFogTime * 1.3 + world.x * 0.21 + world.z * 0.17) * 0.6 + sin(uFogTime * 2.9 + world.x * 0.9 - world.z * 0.4) * 0.25;
   vec2 lean = vec2(0.09, 0.05) * gust * uWind;
   for (int i = 0; i < 8; i++) {
@@ -289,6 +297,8 @@ export interface BakedOptions {
   side?: Side;
   /** The corn: it sways with the wind and away from the dead. */
   sway?: boolean;
+  /** The corn carries its own sway weights (a `sway` attribute, 0 at the ground … 1 at the tassel). */
+  swayWeights?: boolean;
   instanced?: boolean;
 }
 
@@ -319,6 +329,7 @@ export function bakedMaterial(u: NightUniforms, o: BakedOptions): ShaderMaterial
   }
   if (o.alphaTest) defines["ALPHA_TEST"] = "";
   if (o.sway) defines["SWAY"] = "";
+  if (o.sway && o.swayWeights) defines["SWAY_WEIGHTS"] = "";
   const m = new ShaderMaterial({
     uniforms,
     defines,

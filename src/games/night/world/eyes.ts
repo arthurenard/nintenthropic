@@ -8,6 +8,7 @@ const PAIRS = 40;
 const VERTEX = /* glsl */ `
 attribute float aShine;
 uniform float uScale;
+uniform float uMinSize;
 uniform float uFogDensity;
 varying float vShine;
 void main() {
@@ -16,7 +17,7 @@ void main() {
   float d = -mv.z;
   // The eye itself is a few millimetres; its shine is a point of light a
   // few pixels across at any distance, a little larger up close.
-  gl_PointSize = clamp(uScale * 0.03 / max(d, 0.5), 4.0, 14.0);
+  gl_PointSize = clamp(uScale * 0.03 / max(d, 0.5), uMinSize, uMinSize * 2.8);
   // It pierces the fog far better than a body does: a bright point in a
   // pale haze. (Under a third of the fog's density, and the square law's.)
   float t = uFogDensity * d * 0.3;
@@ -67,6 +68,7 @@ export class Eyeshine {
     g.setDrawRange(0, 0);
     const uniforms: Record<string, IUniform> = {
       uScale: { value: 800 },
+      uMinSize: { value: 5 },
       uFogDensity: u.uFogDensity,
       uColor: { value: new Color(3.2, 4.3, 2.3) },
     };
@@ -86,6 +88,8 @@ export class Eyeshine {
   /** Pixels per metre at a metre: the drawing buffer's height over the view's extent. */
   setScale(bufferHeight: number, fov: number): void {
     this.material.uniforms["uScale"]!.value = bufferHeight / (2 * Math.tan((fov * Math.PI) / 360));
+    // Never smaller than about half a percent of the picture's height: five pixels at 1080p, ten on a 4K screen.
+    this.material.uniforms["uMinSize"]!.value = Math.max(3, bufferHeight / 216);
   }
 
   /** Start a frame's eyes. */

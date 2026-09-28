@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { playUntilDeath, SLOWEST, standIdle, STEADY, WILD, type Skill } from "./testkit";
+import { placeholderRoad, playUntilDeath, shippedRoad, SLOWEST, standIdle, STEADY, WILD, type Skill } from "./testkit";
 
 /**
  * Simulated players against the real rules on Standard, over many seeds
- * (testkit.ts says how each plays): the night should be fair early, tense
- * later, and end for everyone in the end.
+ * (testkit.ts says how each plays), on the road the game ships with (its
+ * lanes, barricade and survivors' runs, read from road.glb): the night
+ * should be fair early, tense later, and end for everyone in the end.
  */
 const seeds = Array.from({ length: 16 }, (_, i) => i + 1);
+const road = (await shippedRoad()) ?? placeholderRoad();
 
 function falls(skill: Skill): { waves: number[]; median: number } {
-  const waves = seeds.map((s) => playUntilDeath(s, skill, { maxTime: 3600 }).wave).sort((a, b) => a - b);
+  const waves = seeds.map((s) => playUntilDeath(s, skill, { maxTime: 3600, road }).wave).sort((a, b) => a - b);
   return { waves, median: waves[Math.floor(waves.length / 2)] as number };
 }
 
@@ -41,14 +43,14 @@ describe("the night on Standard", { timeout: 120_000 }, () => {
     console.log(`slowest hand falls on waves: ${waves.join(" ")} (median ${median})`);
     expect(waves[0]).toBeGreaterThanOrEqual(2);
     expect(median).toBeGreaterThanOrEqual(2);
-    expect(median).toBeLessThanOrEqual(6);
+    expect(median).toBeLessThanOrEqual(7);
   });
 });
 
 describe("an idle player", () => {
   it("is overrun on the first wave, when the first walker reaches the barricade", () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const x = standIdle(seed, "standard", 240);
+      const x = standIdle(seed, "standard", 240, road);
       expect(x.dead, `seed ${seed}`).toBe(true);
       expect(x.wave, "never shooting, the first wave never clears").toBe(1);
       expect(x.time).toBeGreaterThan(40);

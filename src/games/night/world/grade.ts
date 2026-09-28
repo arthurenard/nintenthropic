@@ -14,8 +14,9 @@ float nightGrain(vec2 p, float t) {
   return fract(sin(dot(p + fract(t * 0.61) * 71.3, vec2(12.9898, 78.233))) * 43758.5453);
 }
 vec3 grade(vec3 c, float l) {
-  // Moonlight is blue: the shadows cool, the lights keep their warmth.
-  vec3 cool = vec3(0.86, 0.95, 1.14);
+  // Moonlight is blue: the shadows cool a touch more, the lights keep their
+  // warmth. (The road's bake is graded already: only a touch.)
+  vec3 cool = vec3(0.94, 0.98, 1.05);
   vec3 keep = vec3(1.0, 0.99, 0.97);
   c *= mix(cool, keep, smoothstep(0.08, 0.55, l));
   // A lifted, blue-black floor: the night is dark, never a black hole.

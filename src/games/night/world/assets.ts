@@ -1,4 +1,4 @@
-import { Color, Mesh, NoColorSpace, SRGBColorSpace, Vector3, type Group, type Material, type Texture } from "three";
+import { Color, Mesh, NoColorSpace, SRGBColorSpace, Vector3, type Group, type Material, type MeshBasicMaterial, type Texture } from "three";
 import type { GameContext, LoadedAsset } from "../../../engine/types";
 import { Art, type ArtFile } from "../../../engine/world/art";
 import { findNode } from "../../../engine/world/names";
@@ -111,6 +111,10 @@ export async function loadAssets(
     }),
   );
 
+  // A low-tier GPU gets the road's atlases at half size: they unpack to
+  // half a gigabyte, and the night hides the difference past the barricade.
+  if (ctx.quality?.tier === "low") halveRoadTextures(road.root, maps);
+
   // The sky, and the haze to match it: a placeholder's comes with it, a real one is sampled.
   const placeholder: { fog?: Color } = {};
   const disc = findNode(road.root, "moon.disc");
@@ -132,4 +136,35 @@ export async function loadAssets(
   art.finish("sky");
 
   return { road, sky, fog: fog ?? new Color("#343e4b"), walker, mechanic, survivor, cat, maps, real: art.real };
+}
+
+/** The road's big textures (its lit maps and the layers beside them), redrawn at half their size. */
+function halveRoadTextures(root: Group, maps: ReadonlyMap<string, Texture>): void {
+  const textures = new Set<Texture>(maps.values());
+  root.traverse((o) => {
+    const m = (o as Mesh).material;
+    for (const mat of (Array.isArray(m) ? m : m ? [m] : []) as MeshBasicMaterial[]) if (mat.map) textures.add(mat.map);
+  });
+  // Textures may share one picture: halve each picture once.
+  const halved = new Map<unknown, HTMLCanvasElement>();
+  for (const t of textures) {
+    const image = t.image as { width?: number; height?: number; close?: () => void } | null;
+    const w = image?.width ?? 0;
+    const h = image?.height ?? 0;
+    if (!image || (w < 2048 && h < 2048)) continue;
+    let canvas = halved.get(image);
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, w >> 1);
+      canvas.height = Math.max(1, h >> 1);
+      const g = canvas.getContext("2d");
+      if (!g) continue;
+      g.drawImage(image as CanvasImageSource, 0, 0, canvas.width, canvas.height);
+      halved.set(image, canvas);
+    }
+    t.image = canvas;
+    t.needsUpdate = true;
+  }
+  // The full-size pictures are no longer needed.
+  for (const image of halved.keys()) (image as { close?: () => void }).close?.();
 }

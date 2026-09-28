@@ -2,7 +2,7 @@ import { damageDirection, PlayerHealth } from "../../../engine/rules/health";
 import type { V3 } from "../../../engine/rules/raymath";
 import { pick, range, shuffle, type Random } from "../../../engine/rules/rng";
 import type { Difficulty } from "../../../engine/types";
-import { Dead, horizontalDistance, offsetPath, paceOf, type DeadEvents, type DeadWorld } from "./dead";
+import { Dead, horizontalDistance, offsetPath, paceOf, withinReach, type DeadEvents, type DeadWorld } from "./dead";
 import { felledNote, type Felled } from "./felled";
 import { Rifle, type TriggerResult } from "./rifle";
 import { Scorer, type Award, type WaveBonuses } from "./scoring";
@@ -15,6 +15,7 @@ import {
   DIFFICULTY,
   GAIT_PACE,
   HEALTH_MAX,
+  LANE_REACH,
   MECHANIC_AURA,
   WALKER_SPEED,
   WAVE_INTRO,
@@ -160,8 +161,10 @@ export class Match implements DeadWorld {
 
   constructor(options: MatchOptions) {
     this.random = options.random;
-    this.plan = options.plan;
     this.eye = options.plan.eye ?? { x: 0, y: 1.7, z: 0 };
+    // The lanes out of the fog start within reach: the surprises are near already.
+    const eye = this.eye;
+    this.plan = { ...options.plan, lanes: options.plan.lanes.map((l) => (SURPRISES.includes(l.id) ? l : withinReach(l, eye, LANE_REACH))) };
     this.yaw = options.yaw ?? 0;
     this.difficulty = options.difficulty ?? "standard";
     this.baseline = DIFFICULTY[this.difficulty];
@@ -170,7 +173,7 @@ export class Match implements DeadWorld {
     this.health = new PlayerHealth(this.tuning, HEALTH_MAX);
     this.listener = options.listener;
     this.survivorPaths = options.survivorPaths ?? [];
-    for (const lane of options.plan.lanes) if (lane.points.length >= 2) this.lanes.set(lane.id, lane);
+    for (const lane of this.plan.lanes) if (lane.points.length >= 2) this.lanes.set(lane.id, lane);
     const l = this.listener;
     this.events = {
       deadEmerged: (d) => l.deadEmerged(d),

@@ -3,6 +3,7 @@
  * out (lanes, barricade, survivors' runs), a listener that records
  * everything the match says, and simulated players.
  */
+import { Matrix4, Quaternion, Vector3 } from "three";
 import type { V3 } from "../../../engine/rules/raymath";
 import { mulberry32 } from "../../../engine/rules/rng";
 import type { Difficulty } from "../../../engine/types";
@@ -32,6 +33,94 @@ export function testPlan(): RoadPlan {
 
 export function testSurvivorPaths(): V3[][] {
   return SURVIVOR_PATHS.map((path) => path.map(v));
+}
+
+/** A road to play a match on: its plan and the survivors' runs. */
+export interface Road {
+  plan: RoadPlan;
+  survivorPaths: V3[][];
+}
+
+/** The placeholder's road. */
+export function placeholderRoad(): Road {
+  return { plan: testPlan(), survivorPaths: testSurvivorPaths() };
+}
+
+/** Node's file reading, imported at run time so the type check needs no Node types. */
+interface Files {
+  existsSync(path: URL): boolean;
+  readFileSync(path: URL): Uint8Array;
+}
+
+interface GltfNode {
+  name?: string;
+  children?: number[];
+  translation?: [number, number, number];
+  rotation?: [number, number, number, number];
+  scale?: [number, number, number];
+  extras?: Record<string, unknown>;
+}
+
+/**
+ * Route 9 as the shipped art lays it out: the contract's nodes read from
+ * public/assets/night/road.glb's JSON (its geometry is not needed), so the
+ * balance is measured on the road the game is played on. Null when the
+ * file is not there.
+ */
+export async function shippedRoad(): Promise<Road | null> {
+  const fs = (await import("node:fs" as string)) as Files;
+  const url = new URL("../../../../public/assets/night/road.glb", import.meta.url);
+  if (!fs.existsSync(url)) return null;
+  const bytes = fs.readFileSync(url);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const length = view.getUint32(12, true);
+  const doc = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + length))) as { nodes: GltfNode[]; scenes: { nodes: number[] }[] };
+  // Every node's place in the world, down its parents.
+  const at = new Map<string, { pos: V3; extras: Record<string, unknown> }>();
+  const walk = (i: number, parent: Matrix4) => {
+    const n = doc.nodes[i] as GltfNode;
+    const local = new Matrix4().compose(
+      new Vector3(...(n.translation ?? [0, 0, 0])),
+      new Quaternion(...(n.rotation ?? [0, 0, 0, 1])),
+      new Vector3(...(n.scale ?? [1, 1, 1])),
+    );
+    const m = new Matrix4().multiplyMatrices(parent, local);
+    const p = new Vector3().setFromMatrixPosition(m);
+    if (n.name) at.set(n.name, { pos: { x: p.x, y: p.y, z: p.z }, extras: n.extras ?? {} });
+    for (const c of n.children ?? []) walk(c, m);
+  };
+  for (const r of doc.scenes[0]?.nodes ?? []) walk(r, new Matrix4());
+  const numbered = (prefix: string) =>
+    [...at.entries()]
+      .filter(([name]) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)))
+      .sort((a, b) => Number(a[0].slice(prefix.length)) - Number(b[0].slice(prefix.length)))
+      .map(([, node]) => node);
+  const lengthTo = (pts: readonly V3[], upTo: number) => {
+    let s = 0;
+    for (let i = 1; i <= Math.min(upTo, pts.length - 1); i++) s += horizontalDistance(pts[i - 1] as V3, pts[i] as V3);
+    return s;
+  };
+  const lanes: Lane[] = [];
+  for (const id of ["road", "corn", "trees"] as const) {
+    const nodes = numbered(`lane.${id}.`);
+    if (nodes.length < 2) continue;
+    const points = nodes.map((n) => n.pos);
+    const spread = Number(nodes[0]?.extras["spread"] ?? 1);
+    // The corn's cover: to the waypoint where the lane steps out of it.
+    const until = nodes[0]?.extras["corn_until"];
+    lanes.push({ id, points, spread, cover: id === "corn" && typeof until === "number" ? lengthTo(points, until) : 0 });
+  }
+  for (const id of ["bus", "booth", "fence"] as const) {
+    const from = at.get(`spawn.${id}`);
+    const path = numbered(`spawn.${id}.path.`);
+    if (!from || path.length < 1) continue;
+    lanes.push({ id, points: [from.pos, ...path.map((n) => n.pos)], spread: Number(from.extras["spread"] ?? 0.4), cover: 0 });
+  }
+  const slots = numbered("barricade.").map((n, index) => ({ index, pos: n.pos }));
+  const survivorPaths: V3[][] = [];
+  for (let k = 1; at.has(`path.survivor.${k}.1`); k++) survivorPaths.push(numbered(`path.survivor.${k}.`).map((n) => n.pos));
+  const eye = at.get("camera.player")?.pos ?? { x: 0, y: 1.7, z: 0 };
+  return { plan: { lanes, slots, eye }, survivorPaths };
 }
 
 export interface Recorded {
@@ -95,12 +184,13 @@ export class Recorder implements MatchListener {
   secretFound(id: SecretId, name: string, found: number, total: number) { this.note("secretFound", id, name, found, total); }
 }
 
-export function makeMatch(seed = 1, options: { difficulty?: Difficulty; start?: StartOptions; survivors?: boolean } = {}): { m: Match; rec: Recorder } {
+export function makeMatch(seed = 1, options: { difficulty?: Difficulty; start?: StartOptions; survivors?: boolean; road?: Road } = {}): { m: Match; rec: Recorder } {
   const rec = new Recorder();
+  const road = options.road ?? placeholderRoad();
   const m = new Match({
     random: mulberry32(seed),
-    plan: testPlan(),
-    survivorPaths: options.survivors === false ? [] : testSurvivorPaths(),
+    plan: road.plan,
+    survivorPaths: options.survivors === false ? [] : road.survivorPaths,
     listener: rec,
     difficulty: options.difficulty ?? "standard",
   });
@@ -153,11 +243,11 @@ function timeToReach(m: Match, d: Dead): number {
 export function playUntilDeath(
   seed: number,
   skill: Skill,
-  options: { difficulty?: Difficulty; maxWave?: number; maxTime?: number } = {},
+  options: { difficulty?: Difficulty; maxWave?: number; maxTime?: number; road?: Road } = {},
 ): { wave: number; time: number; match: Match; listener: Recorder } {
   const maxWave = options.maxWave ?? 25;
   const maxTime = options.maxTime ?? 2400;
-  const { m, rec } = makeMatch(seed, { difficulty: options.difficulty ?? "standard" });
+  const { m, rec } = makeMatch(seed, { difficulty: options.difficulty ?? "standard", ...(options.road ? { road: options.road } : {}) });
   const player = mulberry32(seed * 7919 + 1);
   const seen = new Map<number, number>();
   let cooldown = 0;
@@ -226,8 +316,8 @@ export function playUntilDeath(
 }
 
 /** A player who never fires, left standing for up to `maxTime` seconds. */
-export function standIdle(seed: number, difficulty: Difficulty, maxTime: number): { dead: boolean; wave: number; time: number; match: Match } {
-  const { m } = makeMatch(seed, { difficulty });
+export function standIdle(seed: number, difficulty: Difficulty, maxTime: number, road?: Road): { dead: boolean; wave: number; time: number; match: Match } {
+  const { m } = makeMatch(seed, { difficulty, ...(road ? { road } : {}) });
   let t = 0;
   const dt = 1 / 30;
   while (m.phase !== "dead" && t < maxTime) {
