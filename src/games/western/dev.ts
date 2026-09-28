@@ -10,7 +10,8 @@
  * ?quality=low|medium|high, ?skipcalib=1, ?manual=1 (no rAF loop; drive it
  * from window.__handy), ?w=&h=&dpr= (a fixed canvas size, for benchmarks),
  * ?assetBase=/some/folder/ (load town.glb, sky.webp and the characters from
- * there instead of public/assets/western/, to try an export in progress).
+ * there instead of public/assets/western/, to try an export in progress),
+ * ?difficulty=relaxed, ?flashing=reduced.
  *
  * window.__handy: game (with game.debug: targets(), match(), gallery()...),
  * hud (with .log of every HudSink call), mouse (aimAt, fire, reloadGesture),
@@ -257,7 +258,14 @@ async function main() {
     audio: new NullAudioBus(),
     hud,
     assets: assetLoader(),
-    settings: { duration: 60, reducedMotion: false, reducedFlashing: false, difficulty: "standard", unlocks, tipsSeen: new Set() },
+    settings: {
+      duration: 60,
+      reducedMotion: false,
+      reducedFlashing: params.get("flashing") === "reduced",
+      difficulty: params.get("difficulty") === "relaxed" ? "relaxed" : "standard",
+      unlocks,
+      tipsSeen: new Set(),
+    },
     quality,
     random: mulberry32(seed),
     clock: () => new Date(),

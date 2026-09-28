@@ -329,6 +329,7 @@ export class HighNoon implements Game, MatchListener {
       listener: this,
       eye: { x: town.eye.x, y: town.eye.y, z: town.eye.z },
       yaw: this.camera.yaw,
+      difficulty: this.ctx.settings.difficulty,
     });
     this.match.health.immortal = this.options.immortal === true;
   }
@@ -415,6 +416,9 @@ export class HighNoon implements Game, MatchListener {
     if (this.phase === "loading") return;
     // Play Again straight into play, without an aim check in between.
     if (this.phase !== "calibration") this.rearm();
+    // A fresh match either way: the difficulty is read here, so a change
+    // made since the last round (or during the aim check) takes effect now.
+    else this.newMatch();
     this.bottles.done();
     this.bottles.active = false;
     this.camera.still = false;
@@ -874,7 +878,7 @@ export class HighNoon implements Game, MatchListener {
     this.cast.aim(b);
   }
   banditGlint(b: Bandit): void {
-    this.cast.glint(b);
+    this.cast.glint(b, this.match.tuning.glintLead);
   }
   banditFire(b: Bandit, hit: boolean, _damage: number): void {
     this.cast.fire(b, hit);

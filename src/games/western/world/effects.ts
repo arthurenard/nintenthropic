@@ -37,6 +37,22 @@ const GLINT: ParticleStyle = { life: [0.32, 0.36], size: [0.2, 0.05], color: hdr
 const SUN_CORE: ParticleStyle = { life: [0.42, 0.46], size: [0.016, 0.007], color: hdr(9, 8.2, 6.5), alpha: [1, 0], fadeIn: 0.1, gravity: 0, drag: 0, frame: 0, spin: 0 };
 const SUN_STREAK: ParticleStyle = { life: [0.46, 0.5], size: [0.16, 0.2], color: hdr(7, 5.4, 2.8), color2: hdr(3.5, 2.1, 0.8), alpha: [1, 0], fadeIn: 0.12, gravity: 0, drag: 0, frame: 4, spin: 0, angle: 0 };
 const SUN_RAY: ParticleStyle = { ...SUN_STREAK, size: [0.07, 0.085], alpha: [0.85, 0], angle: Math.PI / 2 };
+/** The glint above lasts through GLINT_LEAD (0.4 s) to the shot. */
+const SUN_LEAD = 0.4;
+
+/**
+ * The glint's three parts for a glint `lead` seconds before the shot (a
+ * Relaxed gang's glint comes earlier): the same flare, held longer, with the
+ * same quick rise.
+ */
+function sunStyles(lead: number): readonly [ParticleStyle, ParticleStyle, ParticleStyle] {
+  const longer = (s: ParticleStyle): ParticleStyle => {
+    const extra = lead - SUN_LEAD;
+    const mid = (s.life[0] + s.life[1]) / 2;
+    return { ...s, life: [s.life[0] + extra, s.life[1] + extra], fadeIn: ((s.fadeIn ?? 0) * mid) / (mid + extra) };
+  };
+  return lead === SUN_LEAD ? [SUN_STREAK, SUN_RAY, SUN_CORE] : [longer(SUN_STREAK), longer(SUN_RAY), longer(SUN_CORE)];
+}
 const DROPLET: ParticleStyle = { life: [0.5, 0.9], size: [0.05, 0.03], color: col("#9fc0c8"), alpha: [0.8, 0.2], gravity: 9.8, drag: 0.3, frame: 0, spin: 0, floor: 0.02 };
 const MIST: ParticleStyle = { life: [0.4, 0.8], size: [0.1, 0.45], color: col("#d6e4e6"), alpha: [0.4, 0], gravity: 0.5, drag: 2.5, frame: 1, spin: 0.5 };
 const BLOOD: ParticleStyle = { life: [0.25, 0.45], size: [0.08, 0.22], color: col("#5a0a06"), alpha: [0.7, 0], gravity: 2, drag: 3, frame: 1, spin: 1 };
@@ -318,15 +334,22 @@ export class Effects {
 
   /**
    * The aim's telegraph: the low sun flashing off a levelled barrel `distance`
-   * metres from the eye, the same size on screen at any range.
+   * metres from the eye, the same size on screen at any range, held for the
+   * `lead` seconds until the shot.
    */
-  sunGlint(at: Vector3, distance: number): void {
+  sunGlint(at: Vector3, distance: number, lead = SUN_LEAD): void {
     const k = Math.max(1, distance) * this.viewSpan;
+    // Held to the nearest 50 ms: a handful of styles, made once each.
+    const key = Math.round(lead * 20) / 20;
+    let styles = this.sunCache.get(key);
+    if (!styles) {
+      styles = sunStyles(key);
+      this.sunCache.set(key, styles);
+    }
     // In the lens, not the world: no window frame or post cuts a streak short.
-    this.lens.emit(at.x, at.y, at.z, 0, 0, 0, SUN_STREAK, k);
-    this.lens.emit(at.x, at.y, at.z, 0, 0, 0, SUN_RAY, k);
-    this.lens.emit(at.x, at.y, at.z, 0, 0, 0, SUN_CORE, k);
+    for (const s of styles) this.lens.emit(at.x, at.y, at.z, 0, 0, 0, s, k);
   }
+  private readonly sunCache = new Map<number, readonly [ParticleStyle, ParticleStyle, ParticleStyle]>();
 
   fuse(at: Vector3): void {
     const r = this.random;

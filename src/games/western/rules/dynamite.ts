@@ -1,5 +1,5 @@
 import type { V3 } from "./raymath";
-import { DYNAMITE_GROUND_FUSE, GRAVITY } from "./tuning";
+import { DYNAMITE_GROUND_FUSE, DYNAMITE_MAX_FLIGHT, GRAVITY } from "./tuning";
 
 export type DynamiteState = "flying" | "landed" | "dropped" | "exploded";
 
@@ -97,7 +97,11 @@ export function arcPoint(a: V3, v: V3, t: number, out: V3): V3 {
   return out;
 }
 
-/** Flight time for a throw over `distance` metres: long enough to see and shoot it. */
-export function flightTimeFor(distance: number): number {
-  return Math.min(2.2, Math.max(1.3, distance / 14));
+/**
+ * Flight time for a throw over `distance` metres: long enough to see and
+ * shoot it. `factor` (the difficulty's) lengthens it, up to the highest lob
+ * the picture shows.
+ */
+export function flightTimeFor(distance: number, factor = 1): number {
+  return Math.min(DYNAMITE_MAX_FLIGHT, Math.min(2.2, Math.max(1.3, distance / 14)) * factor);
 }
