@@ -9,11 +9,11 @@
  * The sheet only shows and edits the player's Preferences; the app puts
  * them into effect (SettingsHost.changed).
  */
-import type { Difficulty } from "../engine/types";
+import type { Difficulty, GameEntry } from "../engine/types";
 import type { Steadiness } from "../input/aim";
 import { $, setText, toast } from "../ui/dom";
 import type { CrosshairStyle } from "./crosshair";
-import type { Preferences } from "./prefs";
+import type { Preferences, ScopePreferences } from "./prefs";
 import { closeSheet, openSheet } from "./sheets";
 
 declare const __HANDY_VERSION__: string;
@@ -24,10 +24,16 @@ export const VERSION: string = typeof __HANDY_VERSION__ === "string" ? __HANDY_V
 export interface SettingsHost {
   /** The player's settings; the sheet edits them in place, then calls changed(). */
   readonly preferences: Preferences;
+  /** How the player scopes, in the games with a scope; edited in place like the rest. */
+  readonly scope: ScopePreferences;
+  /** The games that can be played with a scope: the Scope group shows only while there is one. */
+  scopeGames(): readonly GameEntry[];
+  /** A touch screen, with no Shift or right button: its scope is the Scope button. */
+  touch(): boolean;
   /** What the system asks for, which Reduce Motion follows until the player chooses. */
   systemReducesMotion(): boolean;
   /** A preference was changed on the sheet: save it and put it into effect. */
-  changed(key: keyof Preferences): void;
+  changed(key: keyof Preferences | "scope"): void;
   /** The interface's tap, at the volume just chosen. */
   audition(): void;
   /** The camera that will open next: the player's choice, or the one in use or used last. */
@@ -43,6 +49,21 @@ export interface SettingsHost {
 
 const AIM_FOOT = "Steady holds a shaky hand still. Responsive follows quick moves closely.";
 const CAMERA_FOOT = "Your aim is saved for each camera.";
+
+/**
+ * The Scope group's footnote: how to scope, as the player has it set, in
+ * their terms (the Scope button on a touch screen).
+ */
+export function scopeFoot(scope: ScopePreferences, touch: boolean, eye: boolean): string {
+  const button = touch ? "the Scope button" : "Shift or the right mouse button";
+  const withEye = eye && scope.eye;
+  if (scope.button === "hold") {
+    return withEye ? `Close one eye for a moment, or hold ${button}, to look through the scope.` : `Hold ${button} to look through the scope.`;
+  }
+  return withEye
+    ? `Close one eye for a moment to look through the scope, or press ${button}: once to look, again to stop.`
+    : `Press ${button} once to look through the scope, and again to stop.`;
+}
 
 /** Where the sheet was opened: from the arcade, or over a paused game. */
 export type SettingsContext = "home" | "pause";
@@ -123,6 +144,8 @@ export class SettingsSheet {
   private readonly cameraInPlay: Switch;
   private readonly reduceMotion: Switch;
   private readonly reduceFlashing: Switch;
+  private readonly eyeScope: Switch;
+  private readonly scopeButton: Segmented<ScopePreferences["button"]>;
   private readonly volume = $<HTMLInputElement>("volume");
   private readonly camera = $<HTMLSelectElement>("camera-choice");
   private context: SettingsContext = "home";
@@ -130,7 +153,7 @@ export class SettingsSheet {
 
   constructor(private readonly host: SettingsHost) {
     const prefs = host.preferences;
-    const change = (key: keyof Preferences) => host.changed(key);
+    const change = (key: keyof Preferences | "scope") => host.changed(key);
     this.difficulty = new Segmented($("pick-difficulty"), (value) => {
       prefs.difficulty = value;
       change("difficulty");
@@ -158,6 +181,16 @@ export class SettingsSheet {
     this.reduceFlashing = new Switch($("switch-flashing"), (on) => {
       prefs.reduceFlashing = on;
       change("reduceFlashing");
+    });
+    this.eyeScope = new Switch($("switch-eye-scope"), (on) => {
+      host.scope.eye = on;
+      this.showScopeFoot();
+      change("scope");
+    });
+    this.scopeButton = new Segmented($("pick-scope-button"), (value) => {
+      host.scope.button = value;
+      this.showScopeFoot();
+      change("scope");
     });
     this.volume.addEventListener("input", () => {
       prefs.volume = Number(this.volume.value) / 100;
@@ -237,9 +270,29 @@ export class SettingsSheet {
     this.cameraInPlay.on = prefs.cameraInPlay;
     this.reduceMotion.on = prefs.reduceMotion ?? this.host.systemReducesMotion();
     this.reduceFlashing.on = prefs.reduceFlashing;
+    this.renderScope();
     this.volume.value = String(Math.round(prefs.volume * 100));
     this.showVolume();
     this.showForget();
+  }
+
+  /**
+   * The Scope group, only while a game with a scope can be played; its eye
+   * row only while one of those reads the eye.
+   */
+  private renderScope(): void {
+    const games = this.host.scopeGames();
+    $("scope-group").hidden = games.length === 0;
+    const eyeRow = $("switch-eye-scope").closest(".row") as HTMLElement;
+    eyeRow.hidden = !games.some((game) => game.uses?.eye);
+    this.eyeScope.on = this.host.scope.eye;
+    this.scopeButton.value = this.host.scope.button;
+    this.showScopeFoot();
+  }
+
+  private showScopeFoot(): void {
+    const eye = this.host.scopeGames().some((game) => game.uses?.eye);
+    setText("foot-scope", scopeFoot(this.host.scope, this.host.touch(), eye));
   }
 
   private showVolume(): void {

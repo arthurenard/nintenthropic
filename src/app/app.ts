@@ -12,11 +12,12 @@ import { seededRandom } from "../engine/random";
 import { Samples } from "../engine/stats";
 import { gpuName } from "../engine/tier";
 import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
-import { ARCADE, gameById, playable } from "../games/index";
+import { ARCADE, gameById, playable, playableGames } from "../games/index";
 import { AimController } from "../input/aim";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
 import { MouseInput, TouchInput } from "../input/pointer";
+import { EyeScope, FACE_EVERY, ScopeControl, scopeKeys } from "../input/scope";
 import type { ScriptedHands } from "../input/script";
 import { CameraError, cameraPermission, chooseCamera, chosenCamera, openCamera, remembered, type Camera, type CameraTrouble } from "../tracking/camera";
 import { ModelError } from "../tracking/errors";
@@ -34,17 +35,21 @@ import { Pip } from "./pip";
 import { Yielding, type Spot } from "./yielding";
 import {
   DEFAULT_PREFERENCES,
+  DEFAULT_SCOPE,
   controlClass,
   forgetEverything,
   forgetSavedAims,
   hasSavedAim,
   loadPreferences,
+  loadScopePreferences,
   prefs,
   readBest,
   savePreferences,
+  saveScopePreferences,
   tipsSeen,
   type PersistentSet,
   type Preferences,
+  type ScopePreferences,
 } from "./prefs";
 import { difficultyLabel, recordRound, shareResult, showResults, type Result } from "./results";
 import { SettingsSheet, VERSION, type SettingsHost, type SystemFacts } from "./settings";
@@ -93,6 +98,10 @@ interface Session {
   fire: FireToPlay | null;
   /** Timers that belong to this round's results, cleared when it moves on. */
   timers: number[];
+  /** The scope, in a game that has one (GameEntry.uses.scope). */
+  scope: ScopeControl | null;
+  /** Stops Shift scoping, when the session ends. */
+  stopScopeKeys: () => void;
 }
 
 /** No new camera frame for this long, with the camera running, is a camera that has stopped, ms. */
@@ -148,13 +157,15 @@ export class App {
   readonly hud: Hud;
   private readonly crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"), () => this.settings.reducedMotion);
   private readonly pip = new Pip();
-  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "hint"]);
+  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "magazine", "heat", "clock", "hint"]);
   /** How the last aim check ended, for the tests. */
   private lastCheck: { score: number | null; shots: number; ended: "ready" | "anyway" } | null = null;
   private readonly settings: Settings;
   /** The player's choices in Settings, as saved; `settings` is what the game reads. */
   private readonly preferences: Preferences = loadPreferences();
   private readonly tips: PersistentSet = tipsSeen();
+  /** How the player scopes, in the games with a scope (Settings' Scope group). */
+  private readonly scopePrefs: ScopePreferences = loadScopePreferences();
   private readonly settingsSheet: SettingsSheet;
   private host: EngineHost | null = null;
   private audio: Sound = silence(prefs.muted);
@@ -186,11 +197,17 @@ export class App {
       difficulty: this.preferences.difficulty,
       unlocks: prefs.unlocks,
       tipsSeen: this.tips,
+      scope: { eye: false, button: this.scopePrefs.button },
     };
     // Reduce Motion follows the system until the player chooses for themselves.
     this.motion.addEventListener("change", () => this.applyMotion());
     this.hud = new Hud(() => this.settings.reducedMotion);
     this.hud.onGameOver = (stats) => this.roundOver(stats);
+    // A game's own reticle (a scope's picture) in place of the page's crosshair.
+    this.hud.onCrosshair = (style) => {
+      this.crosshair.hiddenByGame = style === "none";
+      if (style === "none") this.crosshair.clear();
+    };
     // A fallen player has no gun: a crosshair over the death scene read as
     // one still to be fired.
     this.hud.onPlayerDown = () => {
@@ -229,6 +246,7 @@ export class App {
   }
 
   private renderHome(): void {
+    this.sayWhoReadsTheEye();
     const entry = this.selected;
     this.shelf.show(entry);
     setText("feature-title", entry.title);
@@ -248,6 +266,16 @@ export class App {
     $<HTMLButtonElement>("play").disabled = this.busy;
     this.syncDifficulty();
     this.renderBest();
+  }
+
+  /** The privacy sheet names the games that read an eye (for the scope), and says nothing of it when none does. */
+  private sayWhoReadsTheEye(): void {
+    const names = ARCADE.filter((game) => game.uses?.eye).map((game) => game.title);
+    const line = $("privacy-eye");
+    line.hidden = names.length === 0;
+    if (!names.length) return;
+    const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+    setText(line, `In ${list} it also reads whether one of your eyes is closed, for the scope. Only that, and only in ${names.length > 1 ? "those games" : "that game"}. Nothing leaves this computer.`);
   }
 
   /** The best to beat with this control at this difficulty, under the Play button; nothing before there is one. */
@@ -321,7 +349,7 @@ export class App {
   // --- starting a game -----------------------------------------------------------------
 
   /** Before the browser asks for the camera, say why. Resolves the control to use, or null to stay. */
-  private async cameraReady(): Promise<InputKind | null> {
+  private async cameraReady(eye: boolean): Promise<InputKind | null> {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       this.trouble("insecure");
       return null;
@@ -332,6 +360,12 @@ export class App {
       return null;
     }
     if (permission === "granted" || prefs.cameraOpened) return "hand";
+    setText(
+      "prime-body",
+      eye
+        ? "Handy needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
+        : "Handy needs your camera to see your hand. The picture stays on this computer.",
+    );
     return new Promise((resolve) => {
       const sheet = openSheet("prime");
       const done = (value: InputKind | null) => {
@@ -372,7 +406,7 @@ export class App {
     try {
       await this.wakeAudio();
       if (this.control === "hand" && !this.options.scripted && !this.camera) {
-        const control = await this.cameraReady();
+        const control = await this.cameraReady(this.readsEye(entry, "hand"));
         if (control === null || stale()) return;
         if (control !== "hand") this.setControl(control);
       }
@@ -381,7 +415,9 @@ export class App {
       const control = this.control;
       const hand = control === "hand";
       this.openGameView(entry, control);
-      const firstTime = hand && !this.options.scripted && !this.tracker && !prefs.downloaded;
+      // The face landmarker, the first time a game that reads the eye is played with the hand.
+      const eye = this.readsEye(entry, control) && !this.options.scripted;
+      const firstTime = hand && !this.options.scripted && ((!this.tracker && !prefs.downloaded) || (eye && !this.tracker?.hasFace));
       loading = new LoadingSheet(firstTime);
       const sheet = loading;
       const progress = new Progress((fraction) => sheet.set(fraction));
@@ -392,19 +428,28 @@ export class App {
         if (!this.tracker) {
           const wasm = progress.part("wasm", 12);
           const model = progress.part("model", 8);
+          const face = eye ? progress.part("face", 4) : undefined;
           work.push(
             tagged(
               "tracker",
               this.options.fail === "model"
                 ? Promise.reject(new ModelError())
                 : import("../tracking/tracker")
-                    .then(({ loadTracker }) => loadTracker({ wasm, model }, { where: this.options.trackerWhere ?? "auto", prefer: this.options.trackerDelegate ?? "GPU" }))
+                    .then(({ loadTracker }) =>
+                      loadTracker(
+                        { wasm, model, ...(face ? { face } : {}) },
+                        { where: this.options.trackerWhere ?? "auto", prefer: this.options.trackerDelegate ?? "GPU", face: eye },
+                      ),
+                    )
                     .then((tracker) => {
                       if (stale()) tracker.dispose();
                       else this.tracker = tracker;
                     }),
             ),
           );
+        } else if (eye && !this.tracker.hasFace) {
+          // The eye is a help, not a need: a face that will not load leaves Shift to scope.
+          work.push(this.tracker.addFace(progress.part("face", 4)).catch((error: unknown) => console.warn("The face landmarker did not load.", error)));
         }
       }
       const gamePart = progress.part("game", hand && !this.tracker && !this.options.scripted ? 10 : 1);
@@ -563,11 +608,19 @@ export class App {
     const viewport = () => ({ width: stage.clientWidth, height: stage.clientHeight });
     let input: InputSource & { reset(): void };
     let hand: HandInput | null = null;
+    // The scope, in a game with one: Shift, the right button or the Scope
+    // button, and - with the hand, in a game that reads it - the eye.
+    const uses = entry.uses ?? {};
+    const scope = uses.scope ? new ScopeControl(this.scopePrefs.button, control === "hand" && uses.eye ? new EyeScope() : null) : null;
+    if (scope) {
+      scope.useEye = this.scopePrefs.eye;
+      scope.onChange = () => $("scope-button").setAttribute("aria-pressed", String(scope.buttons));
+    }
     if (control === "hand") {
-      hand = new HandInput(this.handSource(), viewport);
+      hand = new HandInput(this.handSource(), viewport, undefined, scope);
       input = hand;
     } else {
-      input = control === "touch" ? new TouchInput(stage) : new MouseInput(stage);
+      input = control === "touch" ? new TouchInput(stage, scope) : new MouseInput(stage, scope);
       this.pip.hide();
     }
     const session: Session = {
@@ -592,6 +645,8 @@ export class App {
       result: null,
       fire: null,
       timers: [],
+      scope,
+      stopScopeKeys: scope ? scopeKeys(scope) : () => {},
     };
     if (hand) {
       const source = this.handSource();
@@ -602,6 +657,7 @@ export class App {
       this.pip.show(!this.options.scripted);
     }
     this.session = session;
+    this.scopeFor(session);
     if (hand) this.startTracking();
     host.setGame(game);
     host.onFrame = ({ now, aim }) => this.frame(session, now, aim);
@@ -893,11 +949,13 @@ export class App {
     session.check?.dispose();
     session.input.dispose();
     const stage = $("stage");
-    session.input = control === "touch" ? new TouchInput(stage) : new MouseInput(stage);
+    session.scope?.reset();
+    session.input = control === "touch" ? new TouchInput(stage, session.scope) : new MouseInput(stage, session.scope);
     session.hand = null;
     session.camera = null;
     session.control = control;
     session.context.input = control;
+    this.scopeFor(session);
     session.troubled = false;
     session.lostSince = null;
     this.pip.hide();
@@ -932,6 +990,43 @@ export class App {
     this.tracking = false;
     if (this.options.scripted) this.options.scripted.stop();
     else this.tracker?.stop();
+  }
+
+  /** Does this game read the eye when played this way, as the player has it set? */
+  private readsEye(entry: GameEntry, control: InputKind): boolean {
+    return control === "hand" && entry.uses?.scope === true && entry.uses.eye === true && this.scopePrefs.eye;
+  }
+
+  /** Reads the face on every `every`th camera frame, or not at all (0). */
+  private readFaces(every: number): void {
+    if (this.options.scripted) this.options.scripted.readFace(every);
+    else this.tracker?.readFace(every);
+  }
+
+  /**
+   * The session's scope as the player has it set now: held or toggled, the
+   * eye read or not (and the face with it), the Scope button on a touch
+   * screen, and what the game is told.
+   */
+  private scopeFor(session: Session): void {
+    const scope = session.scope;
+    const eye = scope !== null && scope.eye !== null && session.control === "hand" && this.scopePrefs.eye;
+    if (scope) {
+      scope.mode = this.scopePrefs.button;
+      scope.useEye = eye;
+    }
+    this.settings.scope = { eye, button: this.scopePrefs.button };
+    if (eye && !this.options.scripted && this.tracker && !this.tracker.hasFace) {
+      // Turned on mid-game: the face comes quietly, and is read once it is here.
+      this.tracker.addFace(() => {}).then(
+        () => this.session === session && this.scopeFor(session),
+        (error: unknown) => console.warn("The face landmarker did not load.", error),
+      );
+    }
+    this.readFaces(eye ? FACE_EVERY : 0);
+    const button = $("scope-button");
+    button.hidden = !(scope && session.control === "touch");
+    button.setAttribute("aria-pressed", String(scope?.buttons ?? false));
   }
 
   pause(): void {
@@ -1113,6 +1208,7 @@ export class App {
       for (const timer of session.timers.splice(0)) window.clearTimeout(timer);
       this.stopListening(session, false);
       session.check?.dispose();
+      session.stopScopeKeys();
       session.unsubscribe();
       session.input.dispose();
       session.game.dispose();
@@ -1124,7 +1220,10 @@ export class App {
       this.host.setGame(null);
     }
     this.stopTracking();
+    this.readFaces(0);
+    $("scope-button").hidden = true;
     this.crosshair.visible = false;
+    this.crosshair.hiddenByGame = false;
     this.crosshair.clear();
     this.pip.hide();
     this.yielding.reset();
@@ -1210,6 +1309,28 @@ export class App {
       if (this.session?.troubled) event.preventDefault();
     });
     $("hold-menu").onclick = () => this.pause();
+    // The touch screen's Scope button: held (or tapped, to toggle) with a thumb while the other hand aims.
+    const scopeButton = $("scope-button");
+    scopeButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      this.session?.scope?.press("touch");
+      // Held as the thumb slides off it, until the thumb lifts.
+      try {
+        scopeButton.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer the browser no longer knows: nothing to hold on to.
+      }
+    });
+    for (const type of ["pointerup", "pointercancel"] as const) {
+      scopeButton.addEventListener(type, () => this.session?.scope?.release("touch"));
+    }
+    scopeButton.addEventListener("contextmenu", (event) => event.preventDefault());
+    // From the keyboard it can only be pressed, not held: once, as a toggle does.
+    scopeButton.addEventListener("click", (event) => {
+      if (event.detail !== 0) return;
+      this.session?.scope?.press("touch");
+      this.session?.scope?.release("touch");
+    });
     $("loading").addEventListener("cancel", (event) => {
       event.preventDefault();
       this.back();
@@ -1315,8 +1436,17 @@ export class App {
   private settingsHost(): SettingsHost {
     return {
       preferences: this.preferences,
+      scope: this.scopePrefs,
+      scopeGames: () => playableGames().filter((game) => game.uses?.scope),
+      touch: () => touchOnly(),
       systemReducesMotion: () => this.motion.matches,
-      changed: () => {
+      changed: (key) => {
+        if (key === "scope") {
+          saveScopePreferences(this.scopePrefs);
+          if (this.session) this.scopeFor(this.session);
+          else this.settings.scope = { eye: false, button: this.scopePrefs.button };
+          return;
+        }
         savePreferences(this.preferences);
         this.applyPreferences();
         if (document.body.dataset.view === "home") this.renderHome();
@@ -1345,6 +1475,7 @@ export class App {
     closeSheets();
     this.releaseCamera();
     Object.assign(this.preferences, { ...DEFAULT_PREFERENCES, crosshair: { ...DEFAULT_PREFERENCES.crosshair } });
+    Object.assign(this.scopePrefs, DEFAULT_SCOPE);
     this.tips.forgetInMemory();
     this.settings.unlocks.clear();
     this.control = "hand";
@@ -1424,6 +1555,12 @@ export class App {
       preferences: { ...this.preferences, crosshair: { ...this.preferences.crosshair } },
       smoothing: this.session?.hand?.controller.smoothing ?? null,
       showCameraInPlay: this.pip.showInPlay,
+      game: this.session?.entry.id ?? this.selected.id,
+      scope: session?.scope
+        ? { active: session.scope.active(performance.now()), buttons: session.scope.buttons, eye: session.scope.useEye, mode: session.scope.mode }
+        : null,
+      scopePreferences: { ...this.scopePrefs },
+      crosshairHidden: this.crosshair.hiddenByGame,
     };
   }
 

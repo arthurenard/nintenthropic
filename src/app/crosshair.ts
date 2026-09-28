@@ -61,6 +61,8 @@ export class Crosshair {
   private firedAt = Number.NEGATIVE_INFINITY;
   /** Shown at all: off while there is no aim to show (no map yet, paused). */
   visible = false;
+  /** The game draws its own reticle for now (a scope's picture): HudSink.crosshair("none"). */
+  hiddenByGame = false;
   /** The player's choice of size and contrast. */
   style: CrosshairStyle = { size: "standard", highContrast: false };
 
@@ -97,7 +99,7 @@ export class Crosshair {
     this.clear();
     if (target && this.width) this.ring(target, now);
     if (aim.fired) this.firedAt = now;
-    if (!this.visible || !aim.tracking || aim.offscreen || !this.width) return;
+    if (!this.visible || this.hiddenByGame || !aim.tracking || aim.offscreen || !this.width) return;
     const context = this.context;
     const { unit, weight, thin, outline } = crosshairMetrics(this.width / this.ratio, this.height / this.ratio, this.ratio, this.style);
     const x = Math.round(aim.x * this.width);

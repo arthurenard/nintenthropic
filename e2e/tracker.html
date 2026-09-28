@@ -1,8 +1,10 @@
 <!doctype html>
 <!-- The tracker as the game runs it, served by the dev server only: a still
      picture of a hand played as a 30 fps video, read frame by frame by the
-     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2), while a busy
-     animation loop measures what the tracking costs the page's frames. -->
+     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, and
+     ?face=N to read the face too on every Nth frame, as a game that reads the
+     eye does), while a busy animation loop measures what the tracking costs
+     the page's frames. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -38,13 +40,17 @@
             where: params.get("where") ?? "auto",
             prefer: params.get("delegate") === "CPU" ? "CPU" : "GPU",
             hands: Number(params.get("hands") ?? 1),
+            face: Number(params.get("face") ?? 0) > 0,
           },
         );
+        tracker.readFace(Number(params.get("face") ?? 0));
         if (params.get("carrier") === "bitmap") tracker.carrier = "bitmap";
         report.where = tracker.where;
         report.delegate = tracker.delegate;
         let hands = 0;
         tracker.subscribe((frame) => (hands += frame.landmarks ? 1 : 0));
+        let faces = 0;
+        tracker.subscribeFace((face) => (faces += face.eyes ? 1 : 0));
         tracker.start(video);
         // Let the first frames compile their shaders, then measure.
         await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -65,6 +71,7 @@
         report.frames = { p50: sorted[150], p95: sorted[285], max: sorted[299], over20: intervals.filter((v) => v > 20).length };
         report.tracker = tracker.stats();
         report.hands = hands;
+        report.faces = faces;
         tracker.dispose();
       } catch (error) {
         report.error = String(error?.stack || error);

@@ -457,8 +457,7 @@ export class HighNoon implements Game, MatchListener {
     // How to reload, at the start of every game until they have done it.
     this.offerTip("western.reload");
     if (this.golden) {
-      const hud = this.hud as HudSink & { revolverFinish?: (finish: "steel" | "gold") => void };
-      hud.revolverFinish?.("gold");
+      this.hud.weaponFinish?.("gold");
       this.sound.play("golden_unlock", { volume: 0.8, delay: 0.4 });
       this.later(1.0, () => this.hud.popup(0.5, 0.62, "Golden Revolver", "gold"));
     }

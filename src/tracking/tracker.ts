@@ -14,15 +14,40 @@
  * points. If a frame is still being read when the next arrives, the new one
  * waits for nothing: it is skipped, so the aim is never built on a backlog.
  * Browsers that cannot run it in a worker run it on the page.
+ *
+ * The eye. For a game that reads it (GameEntry.uses.eye: Overwatch Ridge's
+ * scope, when one eye closes) the face landmarker loads too - on first use,
+ * with the loading bar - and reads the same frames after the hand, on every
+ * frame or every other (readFace). Its result is sent after the hand's, so
+ * the aim never waits for the eye; nothing but the two eyes' blink scores
+ * comes back. Every other game never runs it. What it costs, measured with
+ * e2e/tracker.html (?face=N) in the tracking worker on the GPU delegate, on
+ * an M4 Max busy with other work (load average about 8), 30 fps camera,
+ * three runs of 150 frames, a picture in which the face landmarker finds no
+ * face - so its detector runs on every read, the dearer case:
+ *
+ *   hand alone             hand 9.1-10.5 ms p50 (p95 10.4-18.2), capture to
+ *                          HandFrame 24-26 ms p50, 5-7 frames skipped
+ *   + face, every frame    face 8.0-10.3 ms p50 (p95 11.9-13.6); the hand's
+ *                          delay unchanged (its result goes first), but the
+ *                          worker busy 20 ms a frame: 8-45 frames skipped,
+ *                          and in one run the page's frames hitched (p95 50 ms)
+ *   + face, every other    face 8.8-9.2 ms p50 (p95 10.1-11.4); skips and
+ *                          the page's frames as with the hand alone
+ *
+ * So the face is read on every other frame (input/scope.ts, FACE_EVERY): 15 readings a
+ * second at 30 fps, which EyeScope's 180 ms hold sees two or three of; about
+ * 4.5 ms of the worker's time per camera frame, none of the page's.
  */
-import type { HandLandmarker } from "@mediapipe/tasks-vision";
+import type { FaceLandmarker, HandLandmarker } from "@mediapipe/tasks-vision";
 import { DownloadError, fetchBytes, siteUrl } from "../engine/fetch";
 import { Samples, type Percentiles } from "../engine/stats";
 import { ModelError } from "./errors";
+import { eyesFrom } from "./eyes";
 import type { LandmarkerProgress } from "./landmarker";
-import { MODEL_BYTES, WASM_BYTES } from "./sizes";
+import { FACE_MODEL_BYTES, MODEL_BYTES, WASM_BYTES } from "./sizes";
 import type { FromWorker, ToWorker } from "./protocol";
-import type { HandFrame, HandSource, Landmark } from "./types";
+import type { FaceFrame, FaceReading, HandFrame, HandSource, Landmark } from "./types";
 
 export interface TrackerStats {
   frames: number;
@@ -35,6 +60,8 @@ export interface TrackerStats {
   delay: Percentiles;
   /** Time the page's own thread spent per camera frame, ms. */
   pageCost: Percentiles;
+  /** The face, while it is read: frames it was read on, how many had a face, and the time in its landmarker, ms. */
+  face: { frames: number; found: number; inference: Percentiles } | null;
 }
 
 export interface Tracker extends HandSource {
@@ -54,6 +81,17 @@ export interface Tracker extends HandSource {
   stats(): TrackerStats;
   resetStats(): void;
   dispose(): void;
+  /** The face landmarker is loaded (for a game that reads the eye). */
+  readonly hasFace: boolean;
+  /** Downloads and starts the face landmarker, reporting the model's progress. */
+  addFace(progress: (fraction: number) => void): Promise<void>;
+  /**
+   * Read the face on every `every`th camera frame (1: every frame, 2: every
+   * other), or not at all (0, the default: only a game that reads the eye
+   * asks for it).
+   */
+  readFace(every: number): void;
+  subscribeFace(listener: (face: FaceFrame) => void): () => void;
 }
 
 /** What the two trackers share: the frame clock, the listeners, the numbers. */
@@ -75,10 +113,43 @@ abstract class BaseTracker implements Tracker {
   protected frames = 0;
   protected framesWithHand = 0;
   protected skipped = 0;
+  private readonly faceListeners = new Set<(face: FaceFrame) => void>();
+  /** Read the face on every this-many camera frames; 0 not at all. */
+  protected faceEvery = 0;
+  /** Camera frames read, for the face's cadence. */
+  private reads = 0;
+  protected readonly faceInference = new Samples(300);
+  protected faceFrames = 0;
+  protected facesFound = 0;
+  abstract readonly hasFace: boolean;
+  abstract addFace(progress: (fraction: number) => void): Promise<void>;
 
   subscribe(listener: (frame: HandFrame) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  subscribeFace(listener: (face: FaceFrame) => void): () => void {
+    this.faceListeners.add(listener);
+    return () => this.faceListeners.delete(listener);
+  }
+
+  readFace(every: number): void {
+    this.faceEvery = Math.max(0, Math.floor(every));
+  }
+
+  /** Is the face to be read on the frame being read now? Counts the frame. */
+  protected faceDue(): boolean {
+    this.reads++;
+    return this.hasFace && this.faceEvery > 0 && this.reads % this.faceEvery === 0;
+  }
+
+  protected publishFace(eyes: FaceReading | null, capturedAt: number, inference: number): void {
+    this.faceFrames++;
+    if (eyes) this.facesFound++;
+    this.faceInference.push(inference);
+    const face: FaceFrame = { eyes, capturedAt };
+    for (const listener of this.faceListeners) listener(face);
   }
 
   latest(): HandFrame | null {
@@ -112,6 +183,7 @@ abstract class BaseTracker implements Tracker {
       inference: this.inference.summary(),
       delay: this.delay.summary(),
       pageCost: this.pageCost.summary(),
+      face: this.faceFrames > 0 ? { frames: this.faceFrames, found: this.facesFound, inference: this.faceInference.summary() } : null,
     };
   }
 
@@ -122,11 +194,15 @@ abstract class BaseTracker implements Tracker {
     this.frames = 0;
     this.framesWithHand = 0;
     this.skipped = 0;
+    this.faceInference.clear();
+    this.faceFrames = 0;
+    this.facesFound = 0;
   }
 
   dispose(): void {
     this.stop();
     this.listeners.clear();
+    this.faceListeners.clear();
   }
 
   /** The landmarker insists on strictly increasing timestamps. */
@@ -181,15 +257,46 @@ class WorkerTracker extends BaseTracker {
   constructor(
     private readonly worker: Worker,
     readonly delegate: "GPU" | "CPU",
+    public hasFace: boolean,
   ) {
     super();
     worker.addEventListener("message", (event: MessageEvent<FromWorker>) => {
       const message = event.data;
-      if (message.type !== "result") return;
-      this.busy = false;
-      this.inference.push(message.inference);
-      if (this.running) this.publish(message.landmarks, message.handedness, message.capturedAt);
+      if (message.type === "result") {
+        // With a face to follow, the worker is busy until it comes.
+        if (!message.face) this.busy = false;
+        this.inference.push(message.inference);
+        if (this.running) this.publish(message.landmarks, message.handedness, message.capturedAt);
+      } else if (message.type === "face-result") {
+        this.busy = false;
+        if (this.running) this.publishFace(message.eyes, message.capturedAt, message.inference);
+      }
     });
+  }
+
+  /** The face on its way, so asking twice loads it once. */
+  private adding: Promise<void> | null = null;
+
+  addFace(progress: (fraction: number) => void): Promise<void> {
+    if (this.hasFace) return Promise.resolve();
+    this.adding ??= this.loadFace(progress).finally(() => (this.adding = null));
+    return this.adding;
+  }
+
+  private async loadFace(progress: (fraction: number) => void): Promise<void> {
+    const model = await fetchBytes(siteUrl("models/face_landmarker.task"), progress, FACE_MODEL_BYTES);
+    await new Promise<void>((resolve, reject) => {
+      const listen = (event: MessageEvent<FromWorker>) => {
+        if (event.data.type === "face-ready") resolve();
+        else if (event.data.type === "face-failed") reject(new ModelError(event.data.message));
+        else return;
+        this.worker.removeEventListener("message", listen);
+      };
+      this.worker.addEventListener("message", listen);
+      const message: ToWorker = { type: "face", model };
+      this.worker.postMessage(message, [model]);
+    });
+    this.hasFace = true;
   }
 
   /** How frames travel to the worker: a VideoFrame (zero-copy) or an ImageBitmap. */
@@ -202,6 +309,7 @@ class WorkerTracker extends BaseTracker {
     }
     const began = performance.now();
     this.busy = true;
+    const face = this.faceDue();
     const send = (image: VideoFrame | ImageBitmap) => {
       const message: ToWorker = {
         type: "frame",
@@ -209,6 +317,7 @@ class WorkerTracker extends BaseTracker {
         timestamp: this.timestampFor(capturedAt),
         capturedAt,
         sequence: this.frames,
+        face,
       };
       this.worker.postMessage(message, [image]);
     };
@@ -233,6 +342,10 @@ class WorkerTracker extends BaseTracker {
 /** The landmarker on the page's own thread, where a worker cannot run it. */
 class PageTracker extends BaseTracker {
   readonly where = "page" as const;
+  /** The frame's timestamp, which the face is read at too. */
+  private lastStamp = 0;
+
+  private face: FaceLandmarker | null = null;
 
   constructor(
     private readonly landmarker: HandLandmarker,
@@ -241,12 +354,30 @@ class PageTracker extends BaseTracker {
     super();
   }
 
+  get hasFace(): boolean {
+    return this.face !== null;
+  }
+
+  private adding: Promise<void> | null = null;
+
+  addFace(progress: (fraction: number) => void): Promise<void> {
+    if (this.face) return Promise.resolve();
+    this.adding ??= import("./landmarker")
+      .then(({ loadFaceOnPage }) => loadFaceOnPage(progress, this.delegate))
+      .then(({ landmarker }) => {
+        this.face = landmarker;
+      })
+      .finally(() => (this.adding = null));
+    return this.adding;
+  }
+
   protected read(video: HTMLVideoElement, capturedAt: number): void {
     const began = performance.now();
     let landmarks: Landmark[] | null = null;
     let handedness: HandFrame["handedness"] = null;
     try {
-      const result = this.landmarker.detectForVideo(video, this.timestampFor(capturedAt));
+      this.lastStamp = this.timestampFor(capturedAt);
+      const result = this.landmarker.detectForVideo(video, this.lastStamp);
       const hand = result.landmarks[0];
       if (hand && hand.length >= 21) {
         landmarks = hand.map(({ x, y, z }) => ({ x, y, z }));
@@ -258,13 +389,27 @@ class PageTracker extends BaseTracker {
     }
     const spent = performance.now() - began;
     this.inference.push(spent);
-    this.pageCost.push(spent);
     this.publish(landmarks, handedness, capturedAt);
+    let cost = spent;
+    if (this.faceDue() && this.face) {
+      const faceBegan = performance.now();
+      let eyes: FaceReading | null = null;
+      try {
+        eyes = eyesFrom(this.face.detectForVideo(video, this.lastStamp));
+      } catch (error) {
+        console.warn("A camera frame's face could not be read.", error);
+      }
+      const faceSpent = performance.now() - faceBegan;
+      cost += faceSpent;
+      this.publishFace(eyes, capturedAt, faceSpent);
+    }
+    this.pageCost.push(cost);
   }
 
   override dispose(): void {
     super.dispose();
     this.landmarker.close();
+    this.face?.close();
   }
 }
 
@@ -274,21 +419,25 @@ export interface TrackerOptions {
   where?: "auto" | "worker" | "page";
   /** How many hands to look for: 1 in the game (see input/trust.ts); 2 only to measure. */
   hands?: number;
+  /** Load the face landmarker too (a game that reads the eye is the first to be played). */
+  face?: boolean;
 }
 
 function workerSupported(): boolean {
   return typeof Worker !== "undefined" && typeof VideoFrame !== "undefined" && typeof OffscreenCanvas !== "undefined";
 }
 
-async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number): Promise<WorkerTracker> {
-  const [wasm, model] = await Promise.all([
-    fetchBytes(siteUrl("mediapipe/vision_wasm_module_internal.wasm"), progress.wasm, WASM_BYTES),
+async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number, withFace: boolean): Promise<WorkerTracker> {
+  const binary = siteUrl("mediapipe/vision_wasm_module_internal.wasm");
+  const [wasm, model, face] = await Promise.all([
+    fetchBytes(binary, progress.wasm, WASM_BYTES),
     fetchBytes(siteUrl("models/hand_landmarker.task"), progress.model, MODEL_BYTES),
+    withFace ? fetchBytes(siteUrl("models/face_landmarker.task"), progress.face, FACE_MODEL_BYTES) : Promise.resolve(null),
   ]);
   const worker = new Worker(new URL("./inference.worker.ts", import.meta.url), { type: "module", name: "hand-tracking" });
-  const ready = new Promise<"GPU" | "CPU">((resolve, reject) => {
+  const ready = new Promise<{ delegate: "GPU" | "CPU"; face: boolean }>((resolve, reject) => {
     const listen = (event: MessageEvent<FromWorker>) => {
-      if (event.data.type === "ready") resolve(event.data.delegate);
+      if (event.data.type === "ready") resolve(event.data);
       else if (event.data.type === "failed") reject(new Error(event.data.message));
       else return;
       worker.removeEventListener("message", listen);
@@ -296,10 +445,20 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
     worker.addEventListener("message", listen);
     worker.addEventListener("error", (event) => reject(new Error(event.message || "the tracking worker failed")), { once: true });
   });
-  const init: ToWorker = { type: "init", loader: siteUrl("mediapipe/vision_wasm_module_internal.js"), wasm, model, prefer, hands };
-  worker.postMessage(init, [wasm, model]);
+  const init: ToWorker = {
+    type: "init",
+    loader: siteUrl("mediapipe/vision_wasm_module_internal.js"),
+    wasm,
+    binary,
+    model,
+    prefer,
+    hands,
+    ...(face ? { face } : {}),
+  };
+  worker.postMessage(init, face ? [wasm, model, face] : [wasm, model]);
   try {
-    return new WorkerTracker(worker, await ready);
+    const started = await ready;
+    return new WorkerTracker(worker, started.delegate, started.face);
   } catch (error) {
     worker.terminate();
     throw error;
@@ -313,7 +472,7 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
   const hands = options.hands ?? 1;
   if (where !== "page" && workerSupported()) {
     try {
-      return await startWorker(progress, prefer, hands);
+      return await startWorker(progress, prefer, hands, options.face === true);
     } catch (error) {
       // A download that failed would fail again on the page (the same
       // files): only a worker that could not run is worth the page's try.
@@ -324,5 +483,7 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
   // Only here is MediaPipe needed on the page itself.
   const { loadHandLandmarker } = await import("./landmarker");
   const { landmarker, delegate } = await loadHandLandmarker(progress, prefer, hands);
-  return new PageTracker(landmarker, delegate);
+  const tracker = new PageTracker(landmarker, delegate);
+  if (options.face) await tracker.addFace(progress.face ?? (() => {}));
+  return tracker;
 }

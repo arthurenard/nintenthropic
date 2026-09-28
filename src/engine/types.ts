@@ -22,6 +22,13 @@ export interface Aim {
   travel: number;
   /** The crosshair is outside the view (the reload gesture in High Noon). */
   offscreen: boolean;
+  /**
+   * The player asks to look through a scope: one eye closed (with the hand,
+   * in a game that reads the eye), Shift or the right mouse button, or the
+   * touch screen's Scope button - held, or toggled, as Settings says. Always
+   * false in a game whose entry does not use a scope (GameEntry.uses).
+   */
+  scope: boolean;
   /** When the camera frame (or pointer event) this aim comes from was captured, ms. */
   capturedAt: number;
 }
@@ -65,15 +72,60 @@ export interface GameStats {
 }
 
 /** How a game talks to the page's HTML interface. */
+/** How a rifle's rounds are shown (HudSink.ammo): the magazine, and the one in the chamber. */
+export interface AmmoStyle {
+  /** A revolver's cylinder (the default) or a rifle's magazine. */
+  kind: "cylinder" | "magazine";
+  /**
+   * Magazine: a round is in the chamber, ready to fire (it is one of `left`).
+   * Unset: one is whenever any round is left and the action is ready.
+   */
+  chambered?: boolean;
+  /**
+   * Magazine: the action - "ready" (closed on a round), "cycling" (the bolt
+   * or lever being worked after a shot: it cannot fire), or "open" (the bolt
+   * back on an empty chamber). "ready" if unset.
+   */
+  action?: "ready" | "cycling" | "open";
+}
+
 export interface HudSink {
   score(value: number): void;
   readouts(list: Readout[]): void;
   /** A title card: "Wave 3", with an optional line under it. */
   banner(title: string, subtitle?: string): void;
-  /** Rounds left and the cylinder's size, for the revolver HUD. */
-  ammo(left: number, capacity: number, reloading: boolean): void;
-  /** The cylinder's finish: gold for the Golden Revolver. Optional; the page also reads Settings.unlocks. */
-  revolverFinish?(finish: "steel" | "gold"): void;
+  /**
+   * Rounds left and how many the gun holds, in the weapon's corner: a
+   * revolver's cylinder (the default), or a rifle's magazine (`style`).
+   * `reloading` spins the cylinder, or empties the magazine to refill it.
+   */
+  ammo(left: number, capacity: number, reloading: boolean, style?: AmmoStyle): void;
+  /**
+   * A gun that heats rather than empties (Orbital Decay's laser), in the
+   * weapon's corner instead of rounds: `level` 0 (cold) to 1 (too hot to
+   * fire), warning as it nears the top; `venting` while it is overheated and
+   * cannot fire, cooling. Optional.
+   */
+  heat?(level: number, venting: boolean): void;
+  /**
+   * The weapon's finish in the corner: gold for the golden weapon every
+   * game gives a player who has unlocked it (Settings.unlocks has "golden":
+   * High Noon's Golden Revolver). Optional; the page also reads the unlock
+   * when a round begins.
+   */
+  weaponFinish?(finish: "steel" | "gold"): void;
+  /**
+   * The page's crosshair: "none" while the game draws its own reticle (a
+   * scope's picture), "default" to bring it back. Every round begins with
+   * the default. Optional.
+   */
+  crosshair?(style: "default" | "none"): void;
+  /**
+   * A timed round's clock, top centre (0:48), or null to take it away.
+   * `tone` "warning" for the last seconds. Optional; a game without a clock
+   * never calls it.
+   */
+  clock?(seconds: number | null, tone?: "" | "warning"): void;
   /**
    * The player has fallen: the gun is gone, so the page hides the crosshair
    * until the results. Optional; a game without a death never calls it.
@@ -150,7 +202,10 @@ export interface Settings {
   reducedFlashing: boolean;
   /** Read by a game at start(): a change takes effect from the next round. */
   difficulty: Difficulty;
-  /** Konami code and friends. */
+  /**
+   * Konami code and friends, for the visit. "golden": a golden weapon in
+   * every game (High Noon's Golden Revolver; HudSink.weaponFinish).
+   */
   unlocks: Set<string>;
   /**
    * The one-time tips this player has already been shown, by id. A game
@@ -159,6 +214,13 @@ export interface Settings {
    * so a tip is never shown twice.
    */
   tipsSeen: Set<string>;
+  /**
+   * How the player scopes, for a game with a scope to say it in their terms
+   * ("Close one eye to look through the scope." / "Hold Shift to scope."):
+   * whether closing an eye scopes (with the hand, in a game that reads the
+   * eye), and whether the buttons are held or toggled.
+   */
+  scope: { eye: boolean; button: "hold" | "toggle" };
 }
 
 export interface Quality {

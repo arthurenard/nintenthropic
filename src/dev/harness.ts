@@ -24,7 +24,7 @@
  * (High Noon's ?noon=1) from HarnessParams.
  *
  * window.__handy: game (with its own `debug`, if it has one), hud (with .log
- * of every HudSink call), mouse (aimAt, fire, reloadGesture, scope),
+ * of every HudSink call), mouse (aimAt, fire, reloadGesture, scoping),
  * advance(seconds), bench(frames), pause(), play(), finishCalib().
  */
 import { WebGLRenderer } from "three";
@@ -42,6 +42,7 @@ import { IDLE_AIM } from "../engine/common";
 import { mulberry32 } from "../engine/rules/rng";
 import type { Aim, AssetLoader, CalibrationTarget, Difficulty, Game, GameContext, GameEntry, HudSink, InputKind, Quality } from "../engine/types";
 import { MouseInput } from "../input/pointer";
+import { ScopeControl, scopeKeys } from "../input/scope";
 import { $ } from "../ui/dom";
 
 /** The harness's query parameters, as a game's dev.ts reads them. */
@@ -138,6 +139,12 @@ class HarnessMouse extends MouseInput {
     this.reload(this.lastNow);
   }
 
+  /** Look through the scope, or stop (a game with one): as the right button held. */
+  scoping(on: boolean): void {
+    if (on) this.scope?.press("mouse");
+    else this.scope?.release("mouse");
+  }
+
   override sample(now: number): Aim {
     this.lastNow = now;
     return super.sample(now);
@@ -209,7 +216,10 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
   const hudImpl = new Hud(reducedMotion);
   const hud = loggingHud(hudImpl);
   const crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"), reducedMotion);
-  const mouse = new HarnessMouse(stage);
+  // The scope, in a game with one: Shift or the right button, held.
+  const scope = entry.uses?.scope ? new ScopeControl("hold") : null;
+  if (scope) scopeKeys(scope);
+  const mouse = new HarnessMouse(stage, scope);
   const quality: Quality = { scale: 1, tier: (params.query.get("quality") as Quality["tier"]) || "high" };
   const unlocks = new Set<string>();
   if (params.flag("golden")) unlocks.add("golden");
@@ -228,6 +238,7 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
       difficulty: params.difficulty,
       unlocks,
       tipsSeen: new Set(params.query.get("tips") === "seen" ? (options.tips ?? []) : []),
+      scope: { eye: false, button: "hold" },
     },
     quality,
     random: mulberry32(params.seed),
@@ -249,6 +260,10 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
     crosshair.visible = false;
     $("game").dataset.phase = "over";
     showResults(entry, stats, false);
+  };
+  hudImpl.onCrosshair = (style) => {
+    crosshair.hiddenByGame = style === "none";
+    if (style === "none") crosshair.clear();
   };
   hudImpl.onPlayerDown = () => {
     crosshair.visible = false;

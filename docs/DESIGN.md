@@ -104,6 +104,23 @@ are neutral: white for *on* and for the choice made, never green (see Settings).
   score top-left, clock top-centre, one Pause control top-right. Nothing else
   stays on screen. Map-specific readouts (health, wave, wind, integrity) sit in
   one small glass panel with the score, not in panels of their own.
+- **The weapon's corner** (bottom right) says what the gun has left, in one
+  glass shape and the same language whatever the gun: white for what is
+  ready, an outline for what is spent, red when it cannot fire. A revolver
+  is its cylinder of chambers; a rifle is its rounds in a row with the one in
+  the chamber apart in its breech, the breech dashed while the bolt or lever
+  is worked and red when it is empty; a laser is a ring that fills with its
+  heat, a number in tabular figures inside, orange near the top and red while
+  it vents. The golden weapon turns what is ready gold, in every game.
+- **The clock** of a timed round sits top centre in a glass pill, Title 3 in
+  tabular figures, orange for its last seconds; it never animates.
+- **The scope.** A game with a scope draws its own reticle while the player
+  looks through it, and the page's crosshair steps aside. Closing one eye
+  scopes (with the hand), and so do Shift and the right mouse button, held or
+  toggled as Settings says. On a touch screen a Scope button - a glass
+  circle, 64 px, the scope's symbol - sits in the bottom-left corner, which
+  the camera's picture would take with the hand, and turns white while
+  pressed (or toggled on).
 - **The camera preview** is a small rounded picture-in-picture, like FaceTime's,
   in a corner that the map keeps clear. It grows during setup, where seeing your
   hand matters, and shrinks in play, where the world matters. The hand skeleton
@@ -143,7 +160,7 @@ Line icons in the style of SF Symbols: 1.75 px strokes (scaled), round caps and
 joins, drawn on a 24-unit grid, filled variants only for the active state.
 Inline SVG.
 Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off,
-camera, hand, checkmark, share, gear (settings), chevrons (a row that leads on,
+camera, hand, checkmark, share, gear (settings), scope, chevrons (a row that leads on,
 a menu).
 
 ## Sound
@@ -234,6 +251,9 @@ the system's own settings are.
   there is no Save. What cannot change mid-round (the difficulty, the camera)
   waits for the next, and the footnote says so when the sheet is over a paused
   game.
+- **A game's own group** shows only while such a game can be played: Scope
+  (Close One Eye to Scope, a switch, on; Scope Button, Hold | Toggle), with a
+  footnote that says how to scope in the player's terms.
 - **Destructive rows** are red words that ask first, in an alert that says what
   will be lost, with Cancel focused.
 - In a narrow window the sheet rises from the bottom at full height and scrolls,

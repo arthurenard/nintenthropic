@@ -11,10 +11,17 @@ const env: Record<string, string | undefined> =
  * under the project's size. By default it waits for entrance animations (450
  * ms springs) to settle; `settle` 0 catches a moment as it happens.
  */
-export async function shot(page: Page, info: TestInfo, name: string, settle = 550): Promise<void> {
+export async function shot(
+  page: Page,
+  info: TestInfo,
+  name: string,
+  settle = 550,
+  /** Only this part of the page (CSS pixels), for a close-up. */
+  clip?: { x: number; y: number; width: number; height: number },
+): Promise<void> {
   const folder = env.HANDY_SHOTS ?? info.outputDir;
   if (settle) await page.waitForTimeout(settle);
-  await page.screenshot({ path: `${folder}/${info.project.name}/${name}.png` });
+  await page.screenshot({ path: `${folder}/${info.project.name}/${name}.png`, ...(clip ? { clip } : {}) });
 }
 
 /** A returning visitor: the welcome has been seen. */

@@ -2,9 +2,11 @@
  * A hand that follows a script instead of a camera: for tests only. The page
  * swaps it in for the camera and the tracker with `?input=script` in dev and
  * test builds (never in production), and everything after it - the filter,
- * the trigger, the aim check, the game - runs for real.
+ * the trigger, the aim check, the game - runs for real. It scripts the eyes
+ * too, for a game that reads them (the scope): what the face landmarker
+ * would have said of them, frame by frame.
  */
-import type { HandFrame, HandSource } from "../tracking/types";
+import type { FaceFrame, FaceReading, HandFrame, HandSource } from "../tracking/types";
 import { asCameraSees, makeHand, type HandPose } from "./synthetic";
 
 export class ScriptedHands implements HandSource {
@@ -14,7 +16,12 @@ export class ScriptedHands implements HandSource {
   deviceId = "script";
   /** A camera that has stopped sending pictures: running, but publishing nothing. */
   stalled = false;
+  /** The eyes' blink scores to show, or null for no face in view. */
+  eyes: FaceReading | null = { blinkLeft: 0.05, blinkRight: 0.05 };
+  /** Read the face on every this-many frames, as the tracker does; 0 not at all. */
+  private faceEvery = 0;
   private readonly listeners = new Set<(frame: HandFrame) => void>();
+  private readonly faceListeners = new Set<(face: FaceFrame) => void>();
   private newest: HandFrame | null = null;
   private sequence = 0;
   private timer = 0;
@@ -26,6 +33,16 @@ export class ScriptedHands implements HandSource {
 
   latest(): HandFrame | null {
     return this.newest;
+  }
+
+  subscribeFace(listener: (face: FaceFrame) => void): () => void {
+    this.faceListeners.add(listener);
+    return () => this.faceListeners.delete(listener);
+  }
+
+  /** As Tracker.readFace: the face on every `every`th frame, or none (0). */
+  readFace(every: number): void {
+    this.faceEvery = Math.max(0, Math.floor(every));
   }
 
   /** Publishes a frame at the rate of an ordinary webcam. */
@@ -54,5 +71,9 @@ export class ScriptedHands implements HandSource {
     };
     this.newest = frame;
     for (const listener of this.listeners) listener(frame);
+    if (this.faceEvery > 0 && this.sequence % this.faceEvery === 0) {
+      const face: FaceFrame = { eyes: this.eyes ? { ...this.eyes } : null, capturedAt: frame.capturedAt };
+      for (const listener of this.faceListeners) listener(face);
+    }
   }
 }

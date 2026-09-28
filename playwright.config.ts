@@ -45,7 +45,7 @@ export default defineConfig({
   projects: [
     {
       name: "flows",
-      testMatch: /(arcade|mouse|camera|scripted|settings|resilience)\.spec\.ts/,
+      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience)\.spec\.ts/,
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
     {

@@ -145,6 +145,8 @@ export interface ChromeOptions {
   panel?: Size;
   /** The weapon's dock in the bottom-right corner (see WEAPON_DOCK): the revolver's cylinder is 96 × 96. */
   dock?: Size;
+  /** The touch screen's Scope button, bottom left, in a game with a scope played by touch. */
+  scopeButton?: boolean;
 }
 
 /**
@@ -154,7 +156,8 @@ export interface ChromeOptions {
  */
 export const WEAPON_DOCK: Readonly<Record<"cylinder" | "magazine" | "heat", Size>> = {
   cylinder: { width: 96, height: 96 },
-  magazine: { width: 96, height: 96 },
+  // Eight rounds (seven in the magazine and one in the chamber); fewer are narrower.
+  magazine: { width: 136, height: 64 },
   heat: { width: 96, height: 96 },
 };
 
@@ -187,5 +190,6 @@ export function chromeKeepOut(width: number, height: number, hand: boolean, opti
     const pip = Math.min(176, Math.max(120, 0.12 * w));
     rects.push(px(0, h - hud - pip * 0.75 - pad, hud + pip + pad, h));
   }
+  if (options.scopeButton) rects.push(px(0, h - hud - 64 - pad, hud + 64 + pad, h));
   return rects;
 }

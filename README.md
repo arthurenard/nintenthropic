@@ -23,12 +23,15 @@ Black Jack Carver himself.
 - **Eight secrets** hide in Dust Creek. Try the bell.
 
 More games — Dead of Night, Orbital Decay and Overwatch Ridge — are on their
-way.
+way, and already in the arcade's row as Coming Soon. In Overwatch Ridge you
+will close one eye to look through the scope (or hold Shift, or the right
+mouse button).
 
 ## Play
 
 Handy is a website: open it in a current browser on a computer with a webcam,
-choose **Play**, and allow the camera.
+choose a game in the arcade's row, choose **Play**, and allow the camera. A
+link to a game (`…/#high-noon`) opens the arcade on it.
 
 To run it on your own machine:
 
@@ -64,7 +67,7 @@ held, which camera to use, whether the camera's picture stays in the corner in
 play, and Reduce Motion and Reduce Flashing. Everything is remembered in your
 browser; Forget Saved Aim and Reset Handy clear it.
 
-**Records.** Your best score is kept for each difficulty, and apart for your
+**Records.** Your best score is kept for each game and difficulty, and apart for your
 hand and for a mouse or touch screen (which is far easier to aim). The arcade
 shows the one to beat under Play; the results say when you beat it, and by how
 much.
@@ -76,8 +79,11 @@ Dock / Add to Home Screen); it opens full screen.
 
 Hand tracking is Google's MediaPipe, running inside your browser in
 WebAssembly. The camera picture is read in memory, frame by frame, and never
-stored or sent anywhere. Handy has no server and no analytics; the only files
-it downloads are its own.
+stored or sent anywhere. In Overwatch Ridge, the one game with a scope, the
+camera also reads whether one of your eyes is closed (you close one to look
+through the scope); only the two eyes' blink scores are kept, only in that
+game, and they never leave the device either. Handy has no server and no
+analytics; the only files it downloads are its own.
 
 ## Requirements
 
