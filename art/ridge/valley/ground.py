@@ -94,25 +94,90 @@ def _img(path, colorspace='sRGB', name=None):
     return img
 
 
-def review_material(maps_dir, tiles=None, name="terrain_review"):
+def review_material(maps_dir, tiles_dir=None, name="terrain_review"):
     """Cycles version of the game's terrain shader (see README):
-        albedo = color_map * mix(1, sum_i splat_i * tile_i / mean_i, detail)
-        normal = world normal map, bent by the tiles' normals
-    `tiles`: {material: (albedo image, normal image, mean rgb)} or None."""
+        w_i     = splat_i * (0.25 + height_i)          height-weighted blend, normalised
+        albedo  = color_map * sum_i w_i * tile_i / mean_i
+        normal  = the world normal map, bent by sum_i w_i * tile normal_i
+        rough   = sum_i w_i * rough_i
+    Tiles are projected on world XY at their own size; rock is box-projected
+    (triplanar) so cliffs are not smeared."""
+    import json
+    from . import landcover as LC
     m, g = new_material(name)
     uv = g.uv('logpolar')
     col = g.image(_img(os.path.join(maps_dir, "color.png"), 'sRGB', "terrain_color"), uv, extension='EXTEND')
     nimg = g.image(_img(os.path.join(maps_dir, "normal.png"), 'Non-Color', "terrain_normal"), uv, extension='EXTEND')
-    # decode the glTF-axes world normal into Blender's axes: (x, y, z)_b = (x, -z, y)_gltf
     nv = g.vmath('MULTIPLY_ADD', nimg, (2.0, 2.0, 2.0))
     nv.node.inputs[2].default_value = (-1.0, -1.0, -1.0)
     gx, gy, gz = g.separate(nv)
-    nb = g.vmath('NORMALIZE', g.combine(gx, g.mul(gz, -1.0), gy))
-    albedo = col
-    if tiles:
-        pass   # the tiles' detail is added once the materials stage has made them
-    bsdf = g.principled(albedo, rough=0.92, spec=0.25, normal=nb)
-    g.output(bsdf)
+    nmacro = g.vmath('NORMALIZE', g.combine(gx, g.mul(gz, -1.0), gy))
+    if not tiles_dir or not os.path.exists(os.path.join(tiles_dir, "tiles.json")):
+        g.output(g.principled(col, rough=0.92, spec=0.25, normal=nmacro))
+        return m
+    info = json.load(open(os.path.join(tiles_dir, "tiles.json")))
+    splat = []
+    for k in (0, 1):
+        n = g.new('ShaderNodeTexImage', interpolation='Linear', extension='EXTEND')
+        img = _img(os.path.join(maps_dir, f"splat{k}.png"), 'Non-Color', f"terrain_splat{k}")
+        img.alpha_mode = 'CHANNEL_PACKED'
+        n.image = img
+        g.links.new(uv, n.inputs['Vector'])
+        r_, g_, b_ = g.sep_rgb(n.outputs['Color'])
+        splat += [r_, g_, b_, n.outputs['Alpha']]
+    pos = g.texco('Object')
+    geo_n = g.geo('Normal')
+    wsum = None
+    acc_c = None
+    acc_n = None
+    acc_r = None
+    for i, mat in enumerate(LC.MATERIALS):
+        t = info[mat]
+        size = t['size_m']
+        vec = g.vmath('SCALE', pos, None)
+        vec.node.inputs['Scale'].default_value = 1.0 / size
+        box = mat in ('rock', 'scree')
+        def tex(kind, cs):
+            n = g.new('ShaderNodeTexImage', interpolation='Linear', extension='REPEAT')
+            n.image = _img(os.path.join(tiles_dir, f"{mat}_{kind}.png"), cs, f"tile_{mat}_{kind}")
+            if box:
+                n.projection = 'BOX'
+                n.projection_blend = 0.25
+            g.links.new(vec, n.inputs['Vector'])
+            return n.outputs['Color']
+        alb = tex('albedo', 'sRGB')
+        hra = tex('hra', 'Non-Color')
+        tn = tex('normal', 'Non-Color')
+        h_, r_, a_ = g.sep_rgb(hra)
+        w = g.mul(splat[i], g.add(h_, 0.25))
+        mean = t['mean_linear']
+        detail = g.node('ShaderNodeMix', inputs={'Factor_Float': 1.0}, out=None, data_type='RGBA', blend_type='DIVIDE')
+        g.set_in(detail, 'A_Color', alb)
+        g.set_in(detail, 'B_Color', tuple(max(c, 1e-3) for c in mean))
+        dcol = g.out(detail, 'Result_Color')
+        wc = g.vmath('SCALE', dcol, None)
+        g.links.new(w, wc.node.inputs['Scale'])
+        # tile normal: tangent space with world X/Y as tangent/bitangent (a
+        # top-down projection), bent onto the geometric normal; its offset from
+        # the geometric normal is what we add to the macro normal
+        nm = g.node('ShaderNodeNormalMap', inputs={'Color': tn, 'Strength': 1.0}, space='TANGENT', uv_map='tiles')
+        delta = g.vmath('SUBTRACT', nm, geo_n)
+        wn = g.vmath('SCALE', delta, None)
+        g.links.new(w, wn.node.inputs['Scale'])
+        wr = g.mul(w, r_)
+        wsum = w if wsum is None else g.add(wsum, w)
+        acc_c = wc if acc_c is None else g.vadd(acc_c, wc)
+        acc_n = wn if acc_n is None else g.vadd(acc_n, wn)
+        acc_r = wr if acc_r is None else g.add(acc_r, wr)
+    inv = g.math('DIVIDE', 1.0, g.math('MAXIMUM', wsum, 1e-4))
+    detail = g.vmath('SCALE', acc_c, None)
+    g.links.new(inv, detail.node.inputs['Scale'])
+    albedo = g.mix(1.0, col, detail, blend='MULTIPLY')
+    dn = g.vmath('SCALE', acc_n, None)
+    g.links.new(inv, dn.node.inputs['Scale'])
+    normal = g.vmath('NORMALIZE', g.vadd(nmacro, dn))
+    rough = g.mul(acc_r, inv)
+    g.output(g.principled(albedo, rough=rough, spec=0.3, normal=normal))
     return m
 
 

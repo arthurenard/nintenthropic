@@ -79,19 +79,48 @@ def stage_terrain(ctx):
     S.sun_node(c_contract)
     troot, objs = GR.build_objects(ter, c_ground, cull=True)
     GR.shadow_caster(ter, c_hidden)
-    mat = GR.review_material(ctx.maps)
+    mat = GR.review_material(ctx.maps, os.path.join(ctx.build, "tiles"))
     GR.assign(objs, mat)
     save_blend(ctx)
     log(f"terrain stage {time.time() - t:.0f}s")
 
 
+def scope_camera(name, target, zoom=6.0):
+    """A camera at the eye aimed at `target` (x, y, z) with the scope's field
+    of view (the wide view's divided by the zoom)."""
+    from mathutils import Vector
+    cd = bpy.data.cameras.new(name)
+    cd.sensor_fit = 'VERTICAL'
+    cd.angle_y = math.radians(L.VFOV_DEG / zoom)
+    cd.clip_start = 0.5
+    cd.clip_end = 20000.0
+    cam = bpy.data.objects.new(name, cd)
+    bpy.context.scene.collection.objects.link(cam)
+    cam.location = (0, 0, 0)
+    cam.rotation_euler = Vector(target).to_track_quat('-Z', 'Y').to_euler()
+    return cam
+
+
 def stage_look(ctx):
-    """A quick Cycles look from the player's eye (development)."""
+    """Quick Cycles looks from the player's eye (development)."""
     sc = open_blend(ctx)
-    S.render_settings(sc, 1280 if ctx.quick else 1920, 720 if ctx.quick else 1080, 32 if ctx.quick else 128)
-    sc.camera = bpy.data.objects["camera.player"]
-    sc.render.filepath = os.path.join(ctx.review_dir, "look_wide.png")
-    s = sc.render.image_settings
-    s.file_format = 'PNG'
-    bpy.ops.render.render(write_still=True)
-    log("wrote", sc.render.filepath)
+    views = [("look_wide", bpy.data.objects["camera.player"], 1280 if ctx.quick else 1920)]
+    for nm, p in (("look_scope_bridge", (*L.BRIDGE_C, -57.0)), ("look_scope_village", (*L.CHAPEL_C, -48.0)),
+                  ("look_scope_farm", (*L.FARM_C, -52.0))):
+        views.append((nm, scope_camera(nm, p), 960 if ctx.quick else 1920))
+    for nm, cam, w in views:
+        if ctx.preview and ctx.preview not in nm:
+            continue
+        S.render_settings(sc, w, int(w * 9 / 16), 24 if ctx.quick else 96)
+        sc.camera = cam
+        sc.render.filepath = os.path.join(ctx.review_dir, nm + ".png")
+        sc.render.image_settings.file_format = 'PNG'
+        bpy.ops.render.render(write_still=True)
+        log("wrote", sc.render.filepath)
+
+
+def stage_materials(ctx):
+    """The tileable ground materials (valley/tiles.py), rendered in Cycles."""
+    from . import tiles
+    only = ctx.preview.split(",") if ctx.preview else None
+    tiles.build_all(os.path.join(ctx.build, "tiles"), quick=ctx.quick, only=only)
