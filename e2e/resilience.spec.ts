@@ -342,6 +342,59 @@ test("a paused game and resting results cost no frames", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+/** The sizes the design must hold at (DESIGN.md, Checklist). */
+const SIZES = [
+  { name: "1280x720", width: 1280, height: 720 },
+  { name: "1512x945", width: 1512, height: 945 },
+  { name: "2560x1440", width: 2560, height: 1440 },
+  { name: "narrow-420x860", width: 420, height: 860 },
+];
+
+test("every new state, at every size", async ({ page }, info) => {
+  test.setTimeout(420_000);
+  const errors = watchErrors(page);
+  await playWithHand(page);
+  await gameDebug(page, "debug.setImmortal(true)");
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await page.waitForTimeout(500);
+    await pose(page, null);
+    await expect.poll(async () => (await state(page)).hold, { timeout: 5_000 }).toBe("lost");
+    await shot(page, info, `sizes-${size.name}-1-hand-lost`);
+    await pose(page, handAt(0.5, 0.5));
+    await expect.poll(async () => (await state(page)).hold, { timeout: 5_000 }).toBe("count");
+    await shot(page, info, `sizes-${size.name}-2-count`, 150);
+    await expect.poll(async () => (await state(page)).held, { timeout: 5_000 }).toBe(false);
+    await page.evaluate(() => window.handyTest!.stall(true));
+    await expect(page.locator("#alert")).toBeVisible({ timeout: 10_000 });
+    await shot(page, info, `sizes-${size.name}-3-camera-stopped`);
+    await page.evaluate(() => window.handyTest!.stall(false));
+    await page.getByRole("button", { name: "Try Again" }).click();
+    await expect.poll(async () => (await state(page)).held, { timeout: 10_000 }).toBe(false);
+  }
+  await page.evaluate(() =>
+    window.handyTest!.hud().gameOver({
+      outcome: "Fell on Wave 3",
+      won: false,
+      score: 8120,
+      stats: [
+        { label: "Waves", value: "2" },
+        { label: "Kills", value: "19" },
+        { label: "Accuracy", value: "68%" },
+        { label: "Best Streak", value: "7" },
+      ],
+      secretsFound: 2,
+      secretsTotal: 8,
+    }),
+  );
+  await expect(page.locator("#results-fire")).toBeVisible();
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    await shot(page, info, `sizes-${size.name}-4-results`, 1300);
+  }
+  expect(errors).toEqual([]);
+});
+
 test("a window resized mid-round keeps the crosshair where the shots land", async ({ page }, info) => {
   const errors = watchErrors(page);
   // Reduced motion: the view neither breathes nor eases, so a spot stays put.
