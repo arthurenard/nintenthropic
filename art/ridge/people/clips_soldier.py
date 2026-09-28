@@ -321,8 +321,10 @@ def run():
 
 CROUCH_TORSO = P({"ik.foot.L": (0.13, -0.24, 0.102), "rot.foot.L": (0, 0, 4), "pole.foot.L": (0.25, -1, 0.3),
                   "ik.foot.R": (-0.14, 0.26, 0.17), "rot.foot.R": (38, 0, -14), "pole.foot.R": (-0.2, -1, -0.8)},
-                 root=(0.0, 0.07, -0.43), hips=(22, 0, -8), spine=(14, 0, -3), chest=(6, 0, -3), neck=(-14, 0, 6), head=(-14, 0, 5))
-READY_T = K.rifle_T((-0.145, -0.225, 1.105), (0.36, -0.86, -0.36), (-0.2, -0.2, 1.0))
+                 root=(0.0, 0.07, -0.43), hips=(22, 0, -8), spine=(14, 0, -3), chest=(6, 0, -3), neck=(-22, 0, 6), head=(-20, 0, 5))
+# the rifle at the ready in front of the crouched man (world, for his torso):
+# muzzle forward and a little down, clear of the ground
+READY_T = K.rifle_T((-0.150, -0.300, 0.760), (0.30, -0.93, -0.12), (-0.15, 0.0, 1.0))
 POLES_READY = {"pole.hand.R": (-0.7, 0.6, -0.2), "pole.hand.L": (0.6, 0.1, -0.7)}
 
 
@@ -330,12 +332,12 @@ def crouch():
     """Down on his heels behind cover, the left foot forward, rifle at the
     ready, head up and turning; breathing hard. 3 s loop."""
     c = Clip("crouch", 3.0, loop=True)
-    carry = K.chest_carry(P(IDLE_TORSO, K.rifle_held(READY_T, (0.0, 0.29, 0.036), palm=0.7), POLES_READY))
+    carry = K.chest_carry(P(CROUCH_TORSO, K.rifle_held(READY_T, (0.0, 0.29, 0.036), palm=0.7), POLES_READY))
     base = P(CROUCH_TORSO, carry, POLES_READY)
     a = dict(base)
-    a.update({"head": (-14, 0, 18), "neck": (-14, 0, 8)})
+    a.update({"head": (-20, 0, 18), "neck": (-22, 0, 8)})
     b = dict(base)
-    b.update({"head": (-12, 0, -14), "neck": (-13, 0, -6), "root": (0.006, 0.07, -0.425)})
+    b.update({"head": (-18, 0, -14), "neck": (-21, 0, -6), "root": (0.006, 0.07, -0.425)})
     c.pose(0.0, a)
     c.pose(0.5, a, "inout")
     c.pose(1.5, b, "inout")
@@ -838,21 +840,50 @@ def drive_death():
     j.update({"spine": (-6, 0, 0), "chest": (-8, 0, 0), "head": (-10, 0, 0)})
     j.update(rim_hands(0.0))
     c.pose(0.06, j, "snap")
-    slump = P(drive_pose(), LIMP, {"ikw.hand.R": (0, 0, 0)}, spine=(24, -8, 0), chest=(22, -6, 0), neck=(20, 0, 10), head=(18, -10, 16),
+    slump = P(drive_pose(), LIMP, {"ikw.hand.R": (0, 0, 0)}, spine=(12, -14, 0), chest=(10, -10, 0), neck=(18, -6, 10), head=(20, -18, 16),
               upper_arm__L=(-30, 40, 0), forearm__L=(-50, 0, 0), hand__L=(0, 0, 0),
               upper_arm__R=(-35, -50, 0), forearm__R=(-40, 0, 0), hand__R=(0, 0, 0))
     for k in ("ik.hand.L", "rot.hand.L", "ik.hand.R", "rot.hand.R"):
         slump.pop(k, None)
     c.pose(0.6, slump, "in2")
     s2 = dict(slump)
-    s2.update({"spine": (28, -12, 0), "chest": (24, -10, 0), "head": (22, -16, 20)})
+    s2.update({"spine": (14, -18, 0), "chest": (12, -14, 0), "head": (24, -24, 20)})
     c.pose(0.9, s2, "out")
     c.pose(1.3, s2, "inout")
     c.lag.update({"head": 0.05})
     return c
 
 
+def burst(name, base_pose, T0, forend, palm, n=4, T=0.6, lift=2.5, back=0.014):
+    """A machine gun's burst: n short kicks a loop, the gun shuddering in the
+    shoulder, never quite settling (loop it while the gun fires)."""
+    c = Clip(name, T, loop=True)
+    base = dict(base_pose)
+    for i in range(n):
+        t0 = T * i / n
+        kT = rifle_kick(T0, lift * (1.0 + 0.3 * math.sin(i * 2.1)), back)
+        kick = dict(base)
+        kick.update(K.rifle_held(kT, forend, palm=palm))
+        c.pose(t0, base, "inout")
+        c.pose(t0 + 0.035, kick, "snap")
+    c.pose(T, base, "inout")
+    c.layers += [breathe(0.4, T)]
+    return c
+
+
+def fire_burst():
+    """*extra* - standing machine gunner's burst (gun.mg): four rounds a
+    0.6 s loop."""
+    return burst("fire_burst", AIM, AIM_T, K.FOREND, 0.35)
+
+
+def prone_fire_burst():
+    """*extra* - the burst from prone, the gun on its bipod."""
+    return burst("prone_fire_burst", PRONE_AIM, PRONE_T, PRONE_FOREND, 0.3, lift=1.5, back=0.010)
+
+
 CLIPS = {
+    "fire_burst": fire_burst, "prone_fire_burst": prone_fire_burst,
     "idle": idle, "idle_smoke": idle_smoke, "look_binoculars": look_binoculars,
     "walk": walk, "patrol_walk": patrol_walk, "run": run, "crouch": crouch,
     "prone": prone, "prone_aim": prone_aim, "prone_fire": prone_fire, "prone_death": prone_death,

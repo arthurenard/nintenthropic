@@ -257,8 +257,13 @@ def binoculars_paint(P):
 
 # ------------------------------------------------------------------ the cigarette (socket.hand.L)
 
-CIG_A = np.array([0.012, 0.070, 0.030])      # pinched between thumb and index, in the left fist's grip frame
-CIG_B = np.array([0.030, 0.128, 0.052])
+# pinched between the thumb and the side of the index at the top of the left
+# fist (socket.hand.L's frame), the lit end cupped toward the palm, the other
+# end (CIG_B) standing out of the fist - it is the end put to the lips
+_CIG_P = np.array([0.0, 0.020, 0.040])
+_CIG_D = np.array([0.15, 0.55, 0.82]) / np.linalg.norm([0.15, 0.55, 0.82])
+CIG_A = _CIG_P - 0.020 * _CIG_D
+CIG_B = _CIG_P + 0.060 * _CIG_D
 
 
 def cigarette_field():
@@ -270,9 +275,9 @@ def cigarette_paint(P):
     t = ((P - CIG_A) @ (CIG_B - CIG_A)) / float((CIG_B - CIG_A) @ (CIG_B - CIG_A))
     col = np.tile(srgb(0.86, 0.84, 0.78), (n, 1))
     r = np.full(n, 0.8)
-    ash = t > 0.93
+    ash = t < 0.07              # the lit end is A, cupped toward the palm
     col[ash] = srgb(0.35, 0.33, 0.32)
-    ember = t > 0.985
+    ember = t < 0.015
     col[ember] = srgb(0.9, 0.25, 0.05)
     return col, r, np.zeros(n)
 

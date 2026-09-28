@@ -266,12 +266,17 @@ if "turn" in WHAT:
         else:
             rest()
         names = []
+        prone = clip.startswith("prone")
         for vn, az in (("front", 0), ("q34", 35), ("side", 90), ("back", 180)):
             a = math.radians(az)
             dist = H * 2.2
-            look(c, (math.sin(a) * dist, -math.cos(a) * dist, H * 0.6), (0, 0, H * 0.5))
-            names.append(render(os.path.join(OUT, f"{TAG}_turn{di}_{vn}.png"), 600, 900, 32))
-        sheet(names, os.path.join(OUT, f"{TAG}_turn{di}.png"), 4)
+            if prone:
+                look(c, (math.sin(a) * 4.2, -math.cos(a) * 4.2 + 0.25, 1.6), (0, 0.25, 0.2))
+                names.append(render(os.path.join(OUT, f"{TAG}_turn{di}_{vn}.png"), 900, 600, 32))
+            else:
+                look(c, (math.sin(a) * dist, -math.cos(a) * dist, H * 0.6), (0, 0, H * 0.5))
+                names.append(render(os.path.join(OUT, f"{TAG}_turn{di}_{vn}.png"), 600, 900, 32))
+        sheet(names, os.path.join(OUT, f"{TAG}_turn{di}.png"), 2 if prone else 4)
         for p in names:
             os.remove(p)
 
@@ -422,6 +427,8 @@ if "distance" in WHAT:
         prig.animation_data_create()
         prig.animation_data.action = dst.actions[0] if dst.actions else None
     pd = arg("--pair-dress", "").split("+")
+    if others and "var.person.child" in pd:
+        prig.scale = (0.64, 0.64, 0.64)          # the child's extras.scale
     clip = arg("--dist-clip", "idle")
     base = lambda n: n.rsplit(".", 1)[0] if n[-4:-3] == "." and n[-3:].isdigit() else n
     for di, d in enumerate(DRESS):

@@ -79,9 +79,12 @@ def body_jobs(spec, quick=False):
     jobs.append(PA.ring_job(rt, "trousers", S.Displace(trf, C.trouser_folds(bp), 0.006), W.trouser_paint(W.OLIVE), weight=0.7, part="trousers"))
     jobs[-1]["ao_field"] = trf
     jobs += PA.boot_jobs(lambda side: W.combat_boot_sdf(side, top=bp["boot_top"] + 0.004), W.combat_boot_paint(), tris=420)
-    wf, _ = W.webbing_field(tf)
-    jobs.append(PA.sculpt_job("webbing", wf, W.webbing_paint(), (-0.25, -0.20, 0.82), (0.25, 0.22, 1.56), 0.0018, 1100,
+    wf, _, hw, specs = W.webbing_field(tf)
+    jobs.append(PA.sculpt_job("webbing", hw, W.webbing_paint(), (-0.25, -0.20, 0.82), (0.25, 0.22, 1.30), 0.0016, 1300,
                               weight=0.7, part="webbing"))
+    sf = W.straps_field(specs)
+    jobs.append(dict(ob=W.strap_ribbons("braces", specs), field=sf, paint=W.webbing_paint(), origin=np.zeros(3), weight=0.7,
+                     ao_field=sf, smart_uv=True, uv_angle=70))
     return jobs, tf, wf
 
 

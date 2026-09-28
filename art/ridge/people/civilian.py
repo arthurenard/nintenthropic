@@ -94,16 +94,16 @@ def farmer_jobs():
 
 
 CYCLIST = dict(
-    head=HD.P(sex=1.0, age=0.22, hair="bun", hair_len=1.2, brows=0.7, lips=1.0, fat=0.4, nose_len=0.92, nose_w=0.85, jaw=0.92, chin=0.92,
-              cheekbone=1.06, eye_open=1.08, neck=0.92),
+    head=HD.P(sex=1.0, age=0.18, hair="bun", hair_len=1.2, brows=0.6, lips=1.15, fat=0.45, nose_len=0.88, nose_w=0.82, jaw=0.84, chin=0.86,
+              cheekbone=1.1, eye_open=1.1, neck=0.88, brow=0.8),
     look=dict(skin="fair", hair="brown", iris="brown", stubble=0.0, grime=0.08, hatline=False, flush=1.2),
-    body=BD.P(female=1.0, sleeves="full", chest=0.95, shoulders=0.93, arms=0.88, legs=0.92, hips=1.04, boot_top=0.16))
+    body=BD.P(female=1.0, sleeves="full", chest=0.98, shoulders=1.03, arms=0.92, legs=0.92, hips=1.04, boot_top=0.16))
 
 
 def cyclist_jobs():
     sp = CYCLIST
     bp = sp["body"]
-    jobs = PA.head_jobs("head", sp["head"], sp["look"], fill=0.6)
+    jobs = PA.head_jobs("head", sp["head"], sp["look"], fill=0.3)
     jobs += PA.hand_jobs({"R": "hold", "L": "hold"}, tone="fair", grime=0.05, sleeve="full", female=1.0, tris=480)
     jj, tf = jacket_jobs(bp, WC.RED, 0.90, 0.010, pockets=False, bust=True, belt=0.008,
                          paint=W.tunic_paint(WC.RED, hem_z=0.90, pockets=False, buttons=True, dust=0.15))
@@ -169,7 +169,7 @@ CHILD = dict(
     head=HD.P(age=0.0, fat=1.0, jaw=0.80, chin=0.84, nose_len=0.74, nose_w=0.9, nose_bridge=0.7, nose_tip=1.1, brow=0.5, cheekbone=0.8,
               lips=0.92, mouth_w=0.9, eye_open=1.18, hair="short", hair_len=1.2, hairline=0.0, brows=0.8, neck=0.80, width=1.04),
     look=dict(skin="fair", hair="blond", iris="blue", stubble=0.0, grime=0.2, hatline=False, flush=1.5),
-    body=BD.P(chest=0.86, shoulders=0.88, arms=0.86, legs=0.84, hips=0.88, sleeves="full", boot_top=0.60, shirt_loose=0.98))
+    body=BD.P(chest=0.92, shoulders=1.0, arms=0.90, legs=0.84, hips=0.88, sleeves="full", boot_top=0.60, shirt_loose=0.98))
 CHILD_HEAD = 1.30                                            # his head against the adult's
 CHILD_HEAD_ORIGIN = HD.HEAD_ORIGIN + np.array([0.0, 0.004, -0.028])
 
@@ -177,7 +177,7 @@ CHILD_HEAD_ORIGIN = HD.HEAD_ORIGIN + np.array([0.0, 0.004, -0.028])
 def child_jobs():
     sp = CHILD
     bp = sp["body"]
-    jobs = PA.head_jobs("head", sp["head"], sp["look"], scale=CHILD_HEAD, origin=CHILD_HEAD_ORIGIN, weight=3.0, fill=1.25)
+    jobs = PA.head_jobs("head", sp["head"], sp["look"], scale=CHILD_HEAD, origin=CHILD_HEAD_ORIGIN, weight=3.0, fill=0.8)
     jobs += PA.hand_jobs({"R": "open", "L": "relaxed"}, tone="fair", grime=0.4, sleeve="full", thin=0.55, tris=440)
     jj, tf = jacket_jobs(bp, WC.YELLOW, 0.86, 0.008, name="jumper", pockets=False, belt=0.0, paint=WC.knit_jumper_paint())
     jobs += jj

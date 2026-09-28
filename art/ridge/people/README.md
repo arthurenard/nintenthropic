@@ -91,6 +91,8 @@ the man's texel density for props most soldiers never show.
 | `prone_death` | 1.0 | no | as prone_aim | *extra* - shot where he lies; still at 0.55 s |
 | `aim` | 2.0 | yes | `gun.rifle` / `gun.mg` | standing, bladed, sights on the right eye |
 | `fire` | 0.6 | no | as aim | the kick and the settle, ends on `aim` |
+| `fire_burst` | 0.6 | yes | `gun.mg` | *extra* - a machine-gun burst standing (behind sandbags): four rounds a loop |
+| `prone_fire_burst` | 0.6 | yes | `gun.mg` | *extra* - the burst from prone, on the bipod |
 | `hit_body` | 0.6 | no | as aim | from and to `aim` |
 | `wound_kneel` | 1.4 | no | `gun.rifle` | from `idle`: the hit, the right knee hits the ground at **0.50 s**, bent over, left hand clamped to the wound, rifle grounded; hold the last frame |
 | `wounded` | 2.0 | yes | `gun.rifle` | *extra* - `wound_kneel`'s last frame, breathing hard |
@@ -103,12 +105,15 @@ the man's texel density for props most soldiers never show.
 | `drive_death` | 1.3 | no | none | *extra* - shot at the wheel, slumps over it; still at 0.9 s |
 
 Prone: he lies along +Z with his head toward it. The pelvis is **0.62 m
-behind the origin** (glTF z = -0.62), the elbows planted just ahead of and
-behind it (z 0.07-0.08), the boots 1.3-1.46 m behind; the eye 0.34 m up at
-z = +0.08; the muzzle **0.29 m up, 0.92 m ahead** (gun.mg's 1.0 m) and the
-`socket.glint` lens 0.34 m up, 0.51 m ahead. The machine gun's bipod feet
-rest on the ground at z 0.87. Put the root where he lies (a tower's floor,
-a ledge), not at the muzzle.
+behind the origin** (glTF z = -0.62), both elbows planted on the ground 7-8
+cm ahead of the origin, the boots 1.3-1.46 m behind it; the eye 0.34 m up
+at z = +0.08; the muzzle **0.29 m up, 0.92 m ahead** (gun.mg's 1.0 m) and
+the `socket.glint` lens 0.34 m up, 0.51 m ahead. The machine gun's bipod
+feet rest on the ground 0.87 m ahead. Put the root where he lies (a
+tower's floor, a ledge) with 1 m clear ahead of it for the barrel.
+
+The machine gun fires bursts with `fire_burst` (standing) and
+`prone_fire_burst`: four kicks per 0.6 s loop, played while the gun fires.
 
 Standing `aim`: the muzzle is 1.47 m up, 1.14 m ahead; with `gun.mg` its
 bipod feet hang 1.17 m up, 1.08 m ahead - a sandbag wall about that high
@@ -173,6 +178,23 @@ on it, pointing +Z.
 The left hand in the standing clips is a fist round a vertical staff at the
 thigh - where the shepherd's crook lives; on the others it reads as a
 relaxed hand.
+
+## Where this goes beyond or departs from the contract
+
+- **Extra nodes**: `gun.rifle.scoped` + `socket.glint` (asked for),
+  `gun.rifle.slung` on a new `socket.back`, `socket.hand.L`, `var.coat.officer`.
+- **Extra clips**: soldier `wounded`, `death_kneel` (the second hit while
+  kneeling), `prone_fire`, `prone_death`, `drive_death`, `fire_burst`,
+  `prone_fire_burst`; civilian `run`, `death`. The contract's clips are all
+  there under their names.
+- **Two atlases in soldier.glb** (`soldier`, `soldier_kit`), each 1024²; the
+  civilians have one per person.
+- **The bicycle is bones on the civilian rig** (not deform bones, not in any
+  weights), so its channels ride in the same `cycle` animation; every other
+  clip keys them at rest.
+- **The child** is the adult rig at `extras.scale` 0.64 (as proposed).
+- `idle`, the deaths and `wound_kneel` start from `idle`'s pose (a sentry's
+  rifle at the low ready), not `aim`: crossfade ~0.1 s from whatever plays.
 
 ## How it is made
 

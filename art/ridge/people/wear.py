@@ -18,10 +18,10 @@ from charlib import sdf as S, rings as R, garments as G, body as BD, head as HD,
 from charlib.texture import srgb, smoothstep, value_noise, fbm
 from charlib.skeleton import JOINTS
 
-OLIVE = (0.155, 0.180, 0.115)        # the uniform: a dark field green
+OLIVE = (0.200, 0.228, 0.145)        # the uniform: a dark field green (still green, not black, in the dawn light)
 OLIVE_DARK = (0.105, 0.118, 0.085)   # the officer's greatcoat, darker and greyer
 WEBBING = (0.33, 0.33, 0.22)         # pale olive-khaki canvas webbing
-HELMET = (0.135, 0.160, 0.105)       # painted steel
+HELMET = (0.175, 0.200, 0.130)       # painted steel
 LEATHER_BLACK = (0.045, 0.040, 0.035)
 
 
@@ -344,22 +344,79 @@ def webbing_field(tunic):
             # the lid, a hair proud of the box
             parts.append(S.Box(c + np.array([0, 0, 0.036]) + (Rz @ np.array([0, -0.003, 0])), (0.028, 0.0195, 0.012), Rz, rad=0.005))
             pouch_c.append(c)
-    # braces: from the outer pouches up over the shoulders to a ring between
-    # the shoulder blades, one strap down the back to the belt
-    for s in (1, -1):
-        path = [(s * 0.098, -0.15, BELT_Z + 0.07), (s * 0.100, -0.15, 1.18), (s * 0.104, -0.13, 1.32), (s * 0.108, -0.09, 1.43),
-                (s * 0.110, 0.00, 1.485), (s * 0.100, 0.08, 1.44), (s * 0.075, 0.12, 1.36), (s * 0.030, 0.13, 1.285), (0.0, 0.13, 1.26)]
-        p = surface_path(tunic, path, 0.0035)
-        parts.append(S.Tube(p, [0.020] * len(p), [0.0032] * len(p), side=(1, 0, 0), cap=True))
-    back = surface_path(tunic, [(0.0, 0.13, 1.27), (0.0, 0.135, 1.16), (0.0, 0.135, BELT_Z + 0.03)], 0.0035)
-    parts.append(S.Tube(back, [0.022] * 3, [0.0032] * 3, side=(1, 0, 0)))
-    parts.append(S.Torus(back[0] + np.array([0, 0.004, 0]), 0.016, 0.0035, S.rot_x(90)))
+    # the brace ring between the shoulder blades
+    specs = brace_specs(tunic)
+    parts.append(S.Torus(specs[-1][0][0] + np.array([0, 0.004, 0]), 0.016, 0.0035, S.rot_x(90)))
     # the water bottle in its cover, on the right hip
     bott = np.array([-0.150, 0.080, 0.925])
     parts.append(S.Ellipsoid(bott, (0.032, 0.050, 0.075), S.rot_z(-35)))
     parts.append(S.Cylinder(bott + np.array([0.0, 0.0, 0.080]), 0.012, 0.012, None, rad=0.003))
     parts.append(S.Box(bott + np.array([0.012, -0.012, 0.070]), (0.010, 0.014, 0.020), S.rot_z(-35), rad=0.003))
-    return S.Union(parts, k=0.004), pouch_c
+    hardware = S.Union(parts, k=0.004)
+    return S.Union([hardware, straps_field(specs)], k=0.004), pouch_c, hardware, specs
+
+
+def brace_specs(tunic):
+    """The braces as (centre line, half width, half thickness): from the
+    outer pouches up over the shoulders to a ring between the shoulder
+    blades, one strap down the back to the belt."""
+    specs = []
+    for s in (1, -1):
+        path = [(s * 0.098, -0.15, BELT_Z + 0.07), (s * 0.100, -0.15, 1.18), (s * 0.104, -0.13, 1.32), (s * 0.108, -0.09, 1.43),
+                (s * 0.110, 0.00, 1.485), (s * 0.100, 0.08, 1.44), (s * 0.075, 0.12, 1.36), (s * 0.030, 0.13, 1.285), (0.0, 0.13, 1.26)]
+        specs.append((surface_path(tunic, densify(path, 0.03), 0.004), 0.020, 0.0035))
+    back = surface_path(tunic, densify([(0.0, 0.13, 1.27), (0.0, 0.135, 1.16), (0.0, 0.135, BELT_Z + 0.03)], 0.03), 0.004)
+    specs.append((back, 0.022, 0.0035))
+    return specs
+
+
+def densify(pts, step):
+    """A polyline resampled so no segment is longer than `step`."""
+    pts = np.asarray(pts, float)
+    out = [pts[0]]
+    for a, b in zip(pts[:-1], pts[1:]):
+        k = max(1, int(np.ceil(np.linalg.norm(b - a) / step)))
+        for i in range(1, k + 1):
+            out.append(a + (b - a) * i / k)
+    return np.array(out)
+
+
+def straps_field(specs):
+    return S.Union([S.Tube(p, [w] * len(p), [t] * len(p), side=(1, 0, 0)) for p, w, t in specs], k=0.002)
+
+
+def strap_ribbons(name, specs, side=(1.0, 0.0, 0.0)):
+    """Straps as clean ribbons of flattened hexagonal section along their
+    centre lines (a decimated thin plate tears at its edges): the same frame
+    as charlib's Tube, so the bake snaps each texel onto its own strap."""
+    from charlib import bl
+    V, F = [], []
+    ang = np.radians([0, 50, 130, 180, 230, 310])
+    for pts, w, th in specs:
+        pts = np.asarray(pts, float)
+        n = len(pts)
+        base = len(V)
+        for i in range(n):
+            t = pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]
+            t /= np.linalg.norm(t)
+            x = np.asarray(side) - (np.asarray(side) @ t) * t
+            x /= np.linalg.norm(x)
+            y = np.cross(t, x)
+            for a in ang:
+                V.append(pts[i] + x * w * np.cos(a) + y * th * np.sin(a))
+        m = len(ang)
+        for i in range(n - 1):
+            for k in range(m):
+                k2 = (k + 1) % m
+                F.append((base + i * m + k, base + i * m + k2, base + (i + 1) * m + k2, base + (i + 1) * m + k))
+        # end caps as triangle fans (the tangent-space bake takes tris and quads only)
+        e0, e1 = base, base + (n - 1) * m
+        for k in range(1, m - 1):
+            F.append((e0, e0 + k + 1, e0 + k))
+            F.append((e1, e1 + k, e1 + k + 1))
+    ob = bl.mesh_from_arrays(name, np.array(V, np.float32), F)
+    bl.recalc_normals(ob)
+    return ob
 
 
 def _belt_band(z_front, z_back, width, thick, rx, ry, cy):
