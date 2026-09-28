@@ -147,8 +147,14 @@ def stage_forest(ctx):
     from . import trees, forest as FO, landcover as LC
     t = time.time()
     imp = os.path.join(ctx.build, "impostors")
-    if not os.path.exists(os.path.join(imp, "impostors.json")) or not os.environ.get("RIDGE_REUSE_IMPOSTORS"):
+    jp = os.path.join(imp, "impostors.json")
+    if not os.path.exists(jp) or not os.environ.get("RIDGE_REUSE_IMPOSTORS"):
         trees.render_impostors(imp, quick=ctx.quick)
+    else:
+        import json
+        missing = [sp for sp in trees.VARIANTS if sp not in json.load(open(jp))]
+        if missing:
+            trees.render_impostors(imp, quick=ctx.quick, only=missing)
     log(f"impostors {time.time() - t:.0f}s")
     ter = load_terrain(ctx)
     F = LC.Fields(ter)
@@ -181,6 +187,9 @@ def stage_buildings(ctx):
         info[name] = i
         log(f"  {name}: {len(o)} objects, {sum(len(x.data.polygons) for x in o if x.type == 'MESH'):,} faces")
     bmats.assign(objs, os.path.join(ctx.build, "tiles"))
+    # ambient occlusion into an atlas per object (occlusion texture, UV1)
+    from . import bake_ao
+    bake_ao.bake(objs, samples=16 if ctx.quick else 96)
     import json
     sc["buildings_info"] = json.dumps(B.jsonable(info))
     save_blend(ctx)
@@ -199,7 +208,11 @@ def stage_water(ctx):
         for o in list(c.objects):
             bpy.data.objects.remove(o)
     wm = W.water_material()
-    river = W.build_river(col)
+    rocks = W.river_rocks()
+    river = W.build_river(col, rocks)
+    rr = W.build_river_rocks(col, rocks)
+    if rr is not None:
+        bmats.assign([rr], os.path.join(ctx.build, "tiles"))
     res = W.build_reservoir(ter, col)
     for o in (river, res):
         o.data.materials.append(wm)
@@ -209,6 +222,20 @@ def stage_water(ctx):
     bmats.assign(roads, os.path.join(ctx.build, "tiles"))
     save_blend(ctx)
     log("water and roads built")
+
+
+def stage_detail(ctx):
+    """Fences, dry-stone walls, haycocks and hay racks, field boulders and
+    cairns, the road's verge posts (valley/detail.py)."""
+    from . import detail as D, bmats
+    ter = load_terrain(ctx)
+    open_blend(ctx)
+    col = S.collection("detail", bpy.data.collections["Valley"])
+    for o in list(col.objects):
+        bpy.data.objects.remove(o)
+    objs = D.build(ter, col)
+    bmats.assign(objs, os.path.join(ctx.build, "tiles"))
+    save_blend(ctx)
 
 
 def stage_contract(ctx):

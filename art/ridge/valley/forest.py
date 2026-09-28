@@ -66,6 +66,8 @@ def place(ter, F, quick=False):
     alt = np.zeros(n)
     slope = np.zeros(n)
     dr = np.zeros(n)
+    de = np.zeros(n)
+    fld = np.zeros(n)
     droad = np.zeros(n)
     z = np.zeros(n)
     tl = np.zeros(n)
@@ -74,22 +76,24 @@ def place(ter, F, quick=False):
         d = LC.evaluate(F, x[a:b], y[a:b], need_forest_only=True)
         dens[a:b], alt[a:b], slope[a:b] = d['forest'], d['alt'], d['slope']
         dr[a:b], droad[a:b], z[a:b], tl[a:b] = d['dr'], d['droad'], d['z'], d['treeline']
+        de[a:b] = d['de']
+        fld[a:b] = d['fieldness']
     r = np.hypot(x, y)
     u = rng.uniform(0, 1, n)
     forest = u < np.clip(dens * 1.15, 0, 1) ** 1.2
     # solitary trees in the pastures and meadows, and birches by the river
     th = np.degrees(np.arctan2(x, y))
     open_slope = (r < 480) & (np.abs(th) < 36)
-    meadow = (~forest) & (u < 0.02) & (slope < 30) & (alt < tl - 30) & (droad > 12) & (dr > 14) & ~open_slope
+    meadow = (~forest) & (u < np.where(fld > 0.5, 0.004, 0.02)) & (slope < 30) & (alt < tl - 30) & (droad > 12) & (dr > 14) & ~open_slope
     clump = smoothstep(0.15, 0.55, N.fbm(x, y, SEED + 7, octaves=3, scale=1 / 90.0))
-    river = (~forest) & (dr > 11) & (dr < 28) & (u < 0.16 * clump) & (droad > 8) & (alt < 30)
+    river = (~forest) & (de > 3) & (de < 20) & (u < 0.10 * clump) & (droad > 8) & (alt < 30)
     keep = forest | meadow | river
     # nothing on the valley floor's sites, the roads, the river
     for c, rad in ((L.FARM_C, 34.0), (L.CHECKPOINT_C, 30.0), (L.DAM_CREST_C, 90.0)):
         keep &= np.hypot(x - c[0], y - c[1]) > rad
     for h in L.village_plan():
         keep &= np.hypot(x - h['c'][0], y - h['c'][1]) > 0.6 * max(h['w'], h['d']) + 3.0
-    keep &= (dr > 10) & (droad > 5.5)
+    keep &= (de > 2.5) & (droad > 5.5)
     # the player's own crest stays open: no tree within 60 m, none in the
     # sightlines straight down the slope to the road
     keep &= r > 60
@@ -107,6 +111,14 @@ def place(ter, F, quick=False):
     species[m2] = "pine"
     m3 = (species == "fir") & (rs < p_birch + p_pine + p_larch)
     species[m3] = "larch"
+    # shrubs: along the river's banks, in the hedgerows, juniper on the slopes
+    bx, by, bv = bushes(ter, F, rng)
+    x, y = np.concatenate([x, bx]), np.concatenate([y, by])
+    alt = np.concatenate([alt, np.zeros(len(bx))])
+    dens = np.concatenate([dens, np.zeros(len(bx))])
+    tl = np.concatenate([tl, np.full(len(bx), 400.0)])
+    species = np.concatenate([species, np.full(len(bx), "bush", object)])
+    n = len(x)
     # variants
     rv = rng.uniform(0, 1, n)
     variant = np.full(n, "a", object)
@@ -116,13 +128,15 @@ def place(ter, F, quick=False):
     variant[fir & ((rv > 0.8) | (edge & (rv > 0.55)))] = "c"
     variant[(species == "larch") & (rv < 0.5)] = "b"
     variant[(species == "birch") & (rv < 0.45)] = "b"
+    variant[species == "bush"] = bv
     scale = rng.uniform(0.78, 1.14, n) * (1 - 0.3 * smoothstep(tl - 80, tl + 20, alt))
     mirror = rng.uniform(0, 1, n) < 0.5
     zb = ter.height(x, y) - SINK
     # drop the trees the eye can never see (behind ridges, over the crest):
     # a point at 40% of the tree's height, hidden by more than 2 m of ground
     t1 = time.time()
-    hgt = np.where(species == "fir", 24.0, np.where(species == "larch", 21.0, 13.0)) * scale
+    scale = np.where(species == "bush", rng.uniform(0.7, 1.2, n), scale)
+    hgt = np.where(species == "fir", 24.0, np.where(species == "larch", 21.0, np.where(species == "bush", 3.0, 13.0))) * scale
     P = np.stack([x, y, zb + 0.4 * hgt], 1)
     vis = np.ones(n, bool)
     far = np.hypot(x, y) > 150
@@ -134,17 +148,79 @@ def place(ter, F, quick=False):
     # keep every line of sight the game needs clear: no tree may stand in
     # front of the road, the sites, the dam's crest and the tunnel
     t1 = time.time()
-    clear = sightline_clear(x, y, zb, hgt * 1.0, np.where(species == "birch", 4.0, np.where(species == "fir", 5.5, 5.0)) * scale)
+    clear = sightline_clear(x, y, zb, hgt * 1.0, np.where(species == "birch", 4.0, np.where(species == "fir", 5.5,
+                            np.where(species == "bush", 2.0, 5.0))) * scale)
     log(f"sightlines: {np.count_nonzero(~clear):,} trees removed ({time.time() - t1:.0f}s)")
     x, y, zb, species, variant, scale, mirror = x[clear], y[clear], zb[clear], species[clear], variant[clear], scale[clear], mirror[clear]
     n = len(x)
     yaw = -np.arctan2(x, y)           # the card faces the eye
     counts = {}
-    for sp in ("fir", "larch", "pine", "birch"):
+    for sp in ("fir", "larch", "pine", "birch", "bush"):
         counts[sp] = int(np.count_nonzero(species == sp))
     log(f"{n:,} trees {counts} ({time.time() - t0:.0f}s)")
     return dict(x=x, y=y, z=zb, species=species.astype(str), variant=variant.astype(str), scale=scale,
                 mirror=mirror, yaw=yaw)
+
+
+def bushes(ter, F, rng):
+    """Shrub positions and variants: alder and willow in clumps along both
+    banks of the river, hazel and alder in the hedgerows (the "hedge"
+    boundaries of fields.py), juniper cushions on the open slopes."""
+    from . import fields as FD
+    riv = L.river(step=2.0)
+    X, Y, V = [], [], []
+    # the banks: every 2.5 m each side, kept where a slow noise says clump
+    s = np.arange(40.0, min(riv.length, 4200.0), 2.5)
+    sb = riv.nearest(np.array([L.BRIDGE_C[0]]), np.array([L.BRIDGE_C[1]]))[1][0]
+    step = riv.s[1] - riv.s[0]
+    idx = np.clip((s / step).astype(int), 0, len(riv.nrm) - 1)
+    for sd in (-1, 1):
+        hw, bar, und = L.river_edges(riv, s, np.full(len(s), sd))
+        clump = N.fbm(s / 45.0, np.full(len(s), 1.3 * sd), SEED + 11, 3)
+        keep = (rng.uniform(0, 1, len(s)) < smoothstep(-0.05, 0.35, clump) * 0.85) & (np.abs(s - sb) > 45)
+        de = rng.uniform(0.8, 7.5, len(s)) + 1.5 * und
+        off = sd * (hw + bar + de)
+        p = riv.xy[idx] + riv.nrm[idx] * off[:, None]
+        X.append(p[keep, 0])
+        Y.append(p[keep, 1])
+        V.append(np.where(rng.uniform(0, 1, keep.sum()) < 0.5, "a", np.where(rng.uniform(0, 1, keep.sum()) < 0.75, "b", "c")))
+    # hedgerows
+    P = FD.parcels()
+    hx, hy = [], []
+    for kind, sd, pl in P.boundaries(step=2.2):
+        if kind != "hedge":
+            continue
+        j = rng.normal(0, 0.5, pl.shape)
+        hx.append(pl[:, 0] + j[:, 0])
+        hy.append(pl[:, 1] + j[:, 1])
+    if hx:
+        hx, hy = np.concatenate(hx), np.concatenate(hy)
+        d = LC.evaluate(F, hx, hy, need_forest_only=True)
+        ok = (d['fieldness'] > 0.3) & (d['droad'] > 6) & (d['de'] > 4) & (rng.uniform(0, 1, len(hx)) < 0.85)
+        X.append(hx[ok])
+        Y.append(hy[ok])
+        V.append(np.where(rng.uniform(0, 1, ok.sum()) < 0.6, "c", "a"))
+    # juniper and alpenrose cushions on the open slopes round the pastures
+    jx = rng.uniform(-1500, 1200, 30000)
+    jy = rng.uniform(80, 1800, 30000)
+    d = LC.evaluate(F, jx, jy, need_forest_only=True)
+    r = np.hypot(jx, jy)
+    ok = ((d['forest'] < 0.2) & (d['slope'] > 14) & (d['slope'] < 38) & (d['alt'] > 15) & (d['alt'] < 380) &
+          (d['droad'] > 8) & (r > 120) & (rng.uniform(0, 1, len(jx)) < 0.35 * smoothstep(-0.1, 0.3, N.fbm(jx, jy, SEED + 12, 2, scale=1 / 60.0))))
+    X.append(jx[ok])
+    Y.append(jy[ok])
+    V.append(np.full(ok.sum(), "d"))
+    x, y, v = np.concatenate(X), np.concatenate(Y), np.concatenate(V).astype(object)
+    # off the roads, the sites and the village's houses
+    rd = L.road()
+    dd, _, _ = rd.nearest(x, y, max_dist=12.0)
+    keep = ~(np.isfinite(dd) & (dd < 5.5))
+    for c, rad in ((L.FARM_C, 30.0), (L.CHECKPOINT_C, 26.0), (L.BRIDGE_C, 28.0)):
+        keep &= np.hypot(x - c[0], y - c[1]) > rad
+    for h in L.village_plan():
+        keep &= np.hypot(x - h['c'][0], y - h['c'][1]) > 0.6 * max(h['w'], h['d']) + 3.0
+    log(f"shrubs: {keep.sum():,} (banks, hedges, junipers)")
+    return x[keep], y[keep], v[keep]
 
 
 def sight_targets():
@@ -272,7 +348,7 @@ def build_review_objects(inst, imp_dir, col):
     """One merged mesh per species (every card of every instance), for renders."""
     meta = json.load(open(os.path.join(imp_dir, "impostors.json")))
     objs = []
-    for sp in ("fir", "larch", "pine", "birch"):
+    for sp in ("fir", "larch", "pine", "birch", "bush"):
         sel = inst['species'] == sp
         if not sel.any():
             continue

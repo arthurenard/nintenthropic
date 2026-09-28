@@ -20,10 +20,14 @@ import numpy as np
 
 SIGMA_HAZE = 1.0 / 14000.0
 HAZE_COLOR = np.array([0.36, 0.46, 0.62])        # scene-linear, at the review renders' exposure
-MIST_SIGMA0 = 1.0 / 650.0          # on the river; the light map's alpha thins it away from it
+MIST_SIGMA0 = 1.0 / 810.0          # on the river; the light map's alpha thins it away from it
 MIST_Z0 = -60.0
 MIST_H = 22.0
-MIST_COLOR = np.array([0.31, 0.35, 0.40])
+MIST_COLOR = np.array([0.30, 0.32, 0.35])
+# the grade: a white balance for the shade the valley lies in (a camera set
+# to "shade"), applied to the whole frame after the fog - without it the
+# sky-lit meadows go teal
+GRADE_WB = np.array([1.10, 1.0, 0.84])
 AIR_SHADE = 0.35                   # air in the ridge's shadow scatters this much of the sunlit air's light
 MAPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build", "maps")
 _LIGHT = {}
@@ -101,7 +105,7 @@ def apply(rgb, P, valid, scale=1.0):
     Tm = np.exp(-tm)[..., None]
     out = rgb * Tm + MIST_COLOR * scale * air[..., None] * (1 - Tm)
     out = out * Th + HAZE_COLOR * scale * air[..., None] * (1 - Th)
-    return np.where(valid[..., None], out, rgb)
+    return np.where(valid[..., None], out, rgb) * GRADE_WB
 
 
 def adapted_exposure(rgb, base, lift=2.0, key=0.16):

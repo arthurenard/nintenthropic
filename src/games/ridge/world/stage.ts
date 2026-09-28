@@ -171,6 +171,27 @@ export class Stage {
       this.treeCount = forest.count;
     }
 
+    // A baked AO map that reads black would leave a building unlit in the shade: skip it (and say so).
+    const checked = new Map<unknown, boolean>();
+    valley.root.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as (Material & { aoMap?: Texture | null })[]) {
+        const ao = mat.aoMap;
+        if (!ao) continue;
+        let black = checked.get(ao);
+        if (black === undefined) {
+          black = aoIsBlack(ao);
+          checked.set(ao, black);
+          if (black) console.warn(`Overwatch Ridge: ${mat.name}'s AO map is black in its red channel; lit without it.`);
+        }
+        if (black) {
+          mat.aoMap = null;
+          mat.needsUpdate = true;
+        }
+      }
+    });
+
     // Everything else in the valley: the same light and air.
     valley.root.traverse((o) => {
       const m = o as Mesh;
@@ -239,6 +260,26 @@ export class Stage {
     for (const m of this.forestMaterials) m.dispose();
     disposeTree(this.scene);
   }
+}
+
+/** Whether an AO texture's red channel (the one glTF reads) is all but black, sampled small. */
+function aoIsBlack(t: Texture): boolean {
+  const image = t.image as CanvasImageSource | undefined;
+  if (!image) return false;
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 16;
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  if (!g) return false;
+  try {
+    g.drawImage(image, 0, 0, 16, 16);
+  } catch {
+    return false;
+  }
+  const d = g.getImageData(0, 0, 16, 16).data;
+  let sum = 0;
+  for (let i = 0; i < d.length; i += 4) sum += d[i] as number;
+  return sum / (d.length / 4) < 8;
 }
 
 interface HorizonCopy {

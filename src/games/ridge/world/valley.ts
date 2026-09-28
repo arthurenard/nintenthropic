@@ -73,6 +73,8 @@ export interface ValleyLight {
   mistBase: number;
   mistScaleHeight: number;
   mistColor: [number, number, number];
+  /** The whole frame's white balance for the shade the valley lies in, before tone mapping. */
+  whiteBalance: [number, number, number];
 }
 
 export interface ValleySecrets {
@@ -182,6 +184,7 @@ function valleyLight(root: Object3D): ValleyLight | null {
     mist_z0_m_gltf_y?: number;
     mist_scale_height_m?: number;
     mist_color_linear?: [number, number, number];
+    grade_white_balance?: [number, number, number];
   }>(root, "fog");
   if (!lighting && !fog) return null;
   return {
@@ -193,6 +196,7 @@ function valleyLight(root: Object3D): ValleyLight | null {
     mistBase: fog?.mist_z0_m_gltf_y ?? -60,
     mistScaleHeight: fog?.mist_scale_height_m ?? 22,
     mistColor: fog?.mist_color_linear ?? [0.31, 0.35, 0.4],
+    whiteBalance: fog?.grade_white_balance ?? [1, 1, 1],
   };
 }
 

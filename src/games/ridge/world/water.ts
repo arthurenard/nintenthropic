@@ -33,6 +33,7 @@ uniform vec3 uShallow;
 uniform float uFlow;
 uniform float uBanks;
 uniform float uAlong;
+uniform float uData;
 varying vec3 vWorld;
 varying vec2 vUv;
 varying vec2 vData;
@@ -60,7 +61,8 @@ void main() {
   float dist = length(wp - cameraPosition);
   // The river runs along its UV's v; the reservoir barely moves.
   vec2 p = vec2(vUv.x * 7.0, vUv.y * uAlong - uTime * uFlow);
-  vec2 g = ripple(p, uTime) * mix(0.1, 0.03, smoothstep(100.0, 900.0, dist));
+  // (The art's river is calmer: its riffles are in its foam, not in a choppy surface.)
+  vec2 g = ripple(p, uTime) * mix(0.1, 0.03, smoothstep(100.0, 900.0, dist)) * (uData > 0.5 ? 0.35 : 1.0);
   vec3 n = normalize(vec3(g.x, 1.0, g.y));
   vec3 view = normalize(cameraPosition - wp);
   float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, view), 0.0), 5.0);
@@ -69,9 +71,13 @@ void main() {
   vec3 sky = skyAt(normalize(r));
   vec2 light = atmoLight(wp);
   float sun = smoothstep(light.r - 0.012, light.r + 0.012, uSunElev);
-  vec3 body = mix(uShallow, uDeep, 0.25 + 0.5 * vData.y) * (atmoAmbient(vec3(0.0, 1.0, 0.0), light.g) + uSunColor * sun * 0.35);
+  vec3 tint = uData > 0.5
+    // The art's river: its gravel bed showing in the shallows, near black where it is deep.
+    ? mix(vec3(0.075, 0.072, 0.05), vec3(0.010, 0.016, 0.015), pow(clamp(vData.y, 0.0, 1.0), 0.6)) * 3.0
+    : mix(uShallow, uDeep, 0.25 + 0.5 * vData.y);
+  vec3 body = tint * (atmoAmbient(vec3(0.0, 1.0, 0.0), light.g) + uSunColor * sun * 0.35);
   // The sky it shows is dimmed by the valley's shade on the water (the far bank's dark trees stand in it too).
-  vec3 col = mix(body, sky * 0.4, fres * 0.7);
+  vec3 col = mix(body, sky * (uData > 0.5 ? 0.28 : 0.4), fres * 0.7);
   // White water over the stones at the banks, where the river is shallow and quick.
   float edge = uBanks * (1.0 - smoothstep(0.0, 0.2, min(vUv.x, 1.0 - vUv.x)));
   float churn = atmoNoise(vec2(vUv.x * 18.0, vUv.y * uAlong * 1.5 - uTime * uFlow * 3.0));
@@ -100,6 +106,7 @@ export function waterMaterial(sky: Texture, atmosphere: AtmosphereUniforms, kind
       uFlow: { value: kind === "river" ? 0.9 : 0.05 },
       uBanks: { value: kind === "river" && !data ? 1 : 0 },
       uAlong: { value: data ? 0.35 : 4 },
+      uData: { value: data ? 1 : 0 },
     },
     vertexColors: data,
     vertexShader: VERT,

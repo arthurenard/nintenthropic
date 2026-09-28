@@ -85,37 +85,43 @@ def goat_crag(g, X, Y):
 
 
 def river_channel(g, X, Y, riv):
-    """The channel: a bed ~2 m under the water, banks a metre or two high,
-    lower and gravelly on the inside of bends; and the floodplain never
-    lower than the bank top near the river, so no water can leak onto it."""
-    d, s, side = riv.nearest(X, Y, max_dist=60.0)
-    m = np.isfinite(d) & (d < 60)
+    """The channel, its two banks drawn separately (layout._river_shape):
+    a bed ~1.5-2 m under the water, deepest toward the outside of a bend;
+    on the inside a gravel bar rising gently out of the water; on the
+    outside an undercut earth scarp; elsewhere a grassy bank a metre or two
+    high. The floodplain is never lower than the bank top near the river,
+    so no water can leak onto it."""
+    d, s, side = riv.nearest(X, Y, max_dist=70.0)
+    m = np.isfinite(d) & (d < 70)
     if not m.any():
         return
-    zw = riv.at(s[m], 'z')
-    w = riv.at(s[m], 'w')
-    dd = d[m]
-    half = w / 2
-    # curvature: which bank is the inside of the bend (gravel bar, low bank)
-    step = max(riv.s[1] - riv.s[0], 1e-6)
-    k = max(int(20.0 / step), 1)
-    i = np.clip((s[m] / step).astype(int), k, len(riv.tan) - 1 - k)
-    t0, t1 = riv.tan[i - k], riv.tan[i + k]
-    curv = t0[:, 0] * t1[:, 1] - t0[:, 1] * t1[:, 0]
-    inside = np.clip(-np.sign(curv) * side[m] * np.abs(curv) * 6.0, 0, 1)
+    sm, dd = s[m], d[m]
+    zw = riv.at(sm, 'z')
+    hw, bar, und = L.river_edges(riv, sm, side[m])
+    w = riv.at(sm, 'w')
     nz = N.fbm(X[m], Y[m], SEED + 21, octaves=3, scale=1 / 35.0)
-    bank_h = (1.05 + 0.45 * nz) * (1 - 0.75 * inside)
-    depth = 1.1 + 0.03 * w
-    bed = zw - 0.35 - (depth - 0.35) * np.clip(1 - (dd / half) ** 2, 0, 1) ** 0.6
-    bank_w = 3.5 + 8.0 * inside
-    tb = np.clip((dd - half) / bank_w, 0, 1)
-    bank = zw - 0.35 + (bank_h + 0.35) * (tb * tb * (3 - 2 * tb))
-    target = np.where(dd < half, bed, bank)
+    depth = (1.1 + 0.03 * w) * (1 + 0.35 * und)
+    u = dd / np.maximum(hw, 1.0)
+    bed = zw - 0.3 - (depth - 0.3) * np.clip(1 - u * u, 0, 1) ** 0.6
+    # the bar: from the water's edge out over `bar` metres, from 15 cm under
+    # the water to 45 cm over it, lumpy
+    tb = np.clip((dd - hw) / np.maximum(bar, 0.5), 0, 1)
+    bar_z = zw - 0.15 + 0.6 * tb + 0.12 * nz
+    # the bank beyond (the bar's end or the water's edge): steep where the
+    # river undercuts it, gentle and low where it lays down a bar
+    has_bar = np.clip(bar / 3.0, 0, 1)
+    bank_h = (1.05 + 0.45 * nz) * (1 - 0.6 * has_bar) + 0.5 * und
+    bank_w = 3.5 * (1 - 0.8 * und) + 2.0 * has_bar
+    edge = hw + bar
+    tk = np.clip((dd - edge) / np.maximum(bank_w, 0.4), 0, 1)
+    start = np.where(bar > 0.5, zw + 0.45, zw - 0.3)
+    bank = start + (zw + bank_h - start) * (tk * tk * (3 - 2 * tk))
+    target = np.where(dd < hw, bed, np.where(dd < edge, np.maximum(bar_z, bed), bank))
     z = g.v[m]
     # inside the channel: carve; on the banks: carve down to the bank or
     # fill up to it, fading back to the land over 30 m
-    fade = smoothstep(half + bank_w + 25.0, half + bank_w, dd)
-    new = np.where(dd < half + bank_w, target, z + (np.maximum(z, zw + bank_h) - z) * fade)
+    fade = smoothstep(edge + bank_w + 25.0, edge + bank_w, dd)
+    new = np.where(dd < edge + bank_w, target, z + (np.maximum(z, zw + bank_h) - z) * fade)
     g.v[m] = new
 
 
@@ -279,7 +285,11 @@ def apply(g, quick=False):
     bench(g, X, Y, sw, z_of=lambda s, zl: _smooth_profile(sw, g, s), margin=18.0, camber=0.03)
     dam_gorge(g, X, Y)
     dm = L.dam_road()
-    bench(g, X, Y, dm, margin=20.0, camber=0.0, cut_tan=3.0)
+    # the crest is the dam itself: no bench (and no fill slope burying the
+    # dam's face) until the road leaves the arch
+    ends = [L.dam_arc_point(t) for t in (-L.DAM_THETA, L.DAM_THETA)]
+    s_arc = max(float(dm.nearest(np.array([e[0]]), np.array([e[1]]))[1][0]) for e in ends) + 4.0
+    bench(g, X, Y, dm, margin=20.0, camber=0.0, cut_tan=3.0, skip=lambda s: s < s_arc)
     log(f"lanes, gorge {time.time() - t:.1f}s")
     # pads: checkpoint, farmyard, alp, village
     pad(g, X, Y, L.CHECKPOINT_C, 16.0, 34.0, math.atan2(*_road_dir(rd, L.CHECKPOINT_C)), z=None, margin=5.0)

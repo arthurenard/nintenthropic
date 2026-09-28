@@ -197,24 +197,9 @@ void main() {
   float splat[8];
   splat[0] = s0.r; splat[1] = s0.g; splat[2] = s0.b; splat[3] = s0.a;
   splat[4] = s1.r; splat[5] = s1.g; splat[6] = s1.b; splat[7] = s1.a;
-  // The weights should sum to one. Where a map lost its colour channels under a zero alpha
-  // (a WebP encoder's habit), the missing share is given out as the ground's own look says:
-  // rock where it is steep, snow where the colour is white, grass where it is green, alpine
-  // turf and dirt where it is brown.
-  float total = s0.r + s0.g + s0.b + s0.a + s1.r + s1.g + s1.b + s1.a;
-  float missing = clamp(1.0 - total, 0.0, 1.0);
-  if (missing > 0.01) {
-    float lum = dot(macro, vec3(0.2126, 0.7152, 0.0722));
-    float steep = 1.0 - smoothstep(0.55, 0.78, mapN.y);
-    float white = smoothstep(0.3, 0.55, lum) * (1.0 - steep * 0.5);
-    float rest = max(0.0, 1.0 - steep - white);
-    float green = smoothstep(-0.005, 0.02, macro.g - macro.r);
-    splat[1] += missing * steep;
-    splat[3] += missing * white;
-    splat[0] += missing * rest * green;
-    splat[7] += missing * rest * (1.0 - green) * 0.7;
-    splat[4] += missing * rest * (1.0 - green) * 0.3;
-  }
+  // The alphas are floored at 1/255 so the encoder keeps the colour under them: below 2/255 is none.
+  if (splat[3] < 2.0 / 255.0) splat[3] = 0.0;
+  if (splat[7] < 2.0 / 255.0) splat[7] = 0.0;
 
   // The tiles, near enough to matter: height-weighted, each relative to its own mean.
   float near = 1.0 - smoothstep(700.0, 1000.0, dist);

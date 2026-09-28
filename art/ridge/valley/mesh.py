@@ -105,8 +105,18 @@ def constraint_lines():
         return [np.array(left), np.array(right)]
     for curve in (L.road(), L.farm_lane(), L.switchbacks(), L.dam_road()):
         lines += edges_of(curve)
+    # the river: its two water edges (they differ: bars, undercuts)
     riv = L.river()
-    lines += edges_of(riv, min(riv.length, 7000.0))
+    step = max(riv.s[1] - riv.s[0], 1e-6)
+    left, right = [], []
+    s = 0.0
+    while s <= min(riv.length, 7000.0):
+        p = riv.at(s)
+        n = riv.nrm[min(int(s / step), len(riv.nrm) - 1)]
+        left.append(p + n * riv.at(s, 'wl'))
+        right.append(p - n * riv.at(s, 'wr'))
+        s += spacing(np.linalg.norm(p)) * 0.9
+    lines += [np.array(left), np.array(right)]
     return lines
 
 

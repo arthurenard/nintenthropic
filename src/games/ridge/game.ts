@@ -246,6 +246,11 @@ export class OverwatchRidge implements Game, MissionListener {
       hurt: { color: [0.32, 0.015, 0.01] },
       vignette: 0.26,
     });
+    // The white balance the art was graded with (1 on the placeholder).
+    const wb = valley.light?.whiteBalance ?? [1, 1, 1];
+    this.post.set("wbR", wb[0]);
+    this.post.set("wbG", wb[1]);
+    this.post.set("wbB", wb[2]);
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
     this.newMission();
     await breathe();

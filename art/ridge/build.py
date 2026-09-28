@@ -10,7 +10,8 @@ stage can be rerun alone once the ones before it have run):
     materials   the tileable PBR ground materials and the building trims
     forest      the tree models, their impostors, and where every tree stands
     buildings   farm, checkpoint and watchtower, bridge, village and chapel, dam
-    water       river, reservoir, mist and road meshes
+    water       river (and the rocks in its riffles), reservoir, mist and road meshes
+    detail      fences, dry-stone walls, haycocks, hay racks, field boulders, verge posts
     contract    the rock walls; the named nodes: paths, posts, nests, plates, secrets, animals
     sky         public/assets/ridge/sky.webp
     bake        the terrain's light map: sky visibility, sun horizon, canopy shadow, mist
@@ -46,7 +47,8 @@ import bpy  # noqa: E402
 BUILD = os.path.join(HERE, "build")
 ASSETS = os.path.join(REPO, "public", "assets", "ridge")
 
-VALLEY_STAGES = ["terrain", "materials", "forest", "buildings", "water", "contract", "sky", "bake", "export", "review", "poster"]
+VALLEY_STAGES = ["terrain", "materials", "forest", "buildings", "water", "detail", "contract", "sky", "bake", "export", "review",
+                 "poster"]
 OTHER_STAGES = ["characters", "vehicles", "animals"]
 
 

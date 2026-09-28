@@ -231,7 +231,7 @@ vec3 atmoAir(vec3 col, vec3 wp) {
 }
 `;
 
-const PATCH_KEY = "ridge-atmo-4";
+const PATCH_KEY = "ridge-atmo-5";
 
 /**
  * Patch a standard material to the valley's air: the aerial perspective and
@@ -286,7 +286,12 @@ export function patchStandard(material: Material, uniforms: AtmosphereUniforms, 
       [
         "#include <lights_fragment_maps>",
         "{",
+        // A material with its own baked AO (the art's buildings) already knows its occlusion.
+        "  #ifdef USE_AOMAP",
+        "  float atmoOcc = mix( 0.7, 1.0, atmoSun( vAtmoWorld, 2.0 ) );",
+        "  #else",
         "  float atmoOcc = atmoLight3( vAtmoWorld ).y * mix( 0.5, 1.0, atmoSun( vAtmoWorld, 2.0 ) );",
+        "  #endif",
         "  iblIrradiance *= atmoOcc;",
         "  irradiance *= atmoOcc;",
         "  #if defined( RE_IndirectSpecular )",

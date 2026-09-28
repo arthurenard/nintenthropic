@@ -10,6 +10,8 @@ import type { GradeOptions } from "../../../engine/world/post";
 export const DAWN: GradeOptions = {
   glsl: /* glsl */ `
 vec3 grade(vec3 c, float l) {
+  // The art's white balance for the shade (the sky's light reads teal without it).
+  c *= vec3(wbR, wbG, wbB);
   // A soft filmic toe and shoulder (the shoulder already rolled the highlights).
   c = c / (1.0 + 0.18 * c);
   c = pow(max(c, 0.0), vec3(0.96));
@@ -24,5 +26,5 @@ vec3 grade(vec3 c, float l) {
   return max(c, 0.0);
 }
 `,
-  uniforms: { scoped: 0 },
+  uniforms: { scoped: 0, wbR: 1, wbG: 1, wbB: 1 },
 };
