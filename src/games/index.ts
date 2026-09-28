@@ -88,7 +88,7 @@ export const ORBITAL_DECAY: GameEntry = {
   title: "Orbital Decay",
   blurb: "Shoot the debris before it hits the glass.",
   about: "A station at the edge of a debris field, and you at its only window. Break up everything that tumbles toward the glass, before the glass gives way.",
-  poster: "assets/orbital-decay/poster.webp",
+  poster: "assets/orbit/poster.webp",
   // A planet's lit limb, curving under black space.
   backdrop: {
     sky: [
@@ -110,6 +110,13 @@ export const ORBITAL_DECAY: GameEntry = {
         ["rgba(40, 90, 170, 0)", 1],
       ],
     },
+  },
+  // The cupola is drawn from one eye and composed for 16:9: it holds from
+  // a little squarer than 16:10 to an ultrawide.
+  stage: { minAspect: 1.25, maxAspect: 2.4 },
+  async create(): Promise<Game> {
+    const { createGame } = await import("./orbit/index");
+    return createGame();
   },
 };
 

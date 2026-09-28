@@ -217,6 +217,39 @@
   margin-left: -1px;
   background: rgba(28, 28, 30, 0.9);
 }
+/* A readout in parts (Readout.segments): a row of small bars, or a ring of
+   them round a middle one. Each as full as its value, in its tone; an
+   outline in the danger red when it is gone. */
+.readouts .segments {
+  grid-column: 1 / -1;
+  display: block;
+  margin: 3px 0 6px;
+}
+.readouts .segments.ring {
+  width: 56px;
+  height: 56px;
+}
+.readouts .segments.row {
+  height: 12px;
+}
+.readouts .seg {
+  fill: var(--label);
+  stroke: none;
+  transition:
+    fill-opacity 250ms var(--ease),
+    fill 250ms var(--ease);
+}
+.readouts .seg.warning {
+  fill: var(--warning);
+}
+.readouts .seg.danger {
+  fill: var(--danger);
+}
+.readouts .seg.gone {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 1.4;
+}
 
 /* --- pause ----------------------------------------------------------------------- */
 
@@ -1275,6 +1308,10 @@
     margin-top: 2px;
     font-size: 12px;
     line-height: 1.3;
+  }
+  .readouts .segments.ring {
+    width: 40px;
+    height: 40px;
   }
   .hud-pause {
     width: 40px;
