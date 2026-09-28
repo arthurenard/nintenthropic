@@ -23,9 +23,13 @@ from dustcreek.nodes import new_material, new_group, group_node, G  # noqa: E402
 from dustcreek.core import facing_matrix, axis_matrix  # noqa: E402,F401
 
 # dawn light: the sun just up behind the player's left shoulder
-SUN_COLOR = (1.0, 0.60, 0.36)
-SUN_STRENGTH = 3.6
-SKY_STRENGTH = 0.55
+# The low sun must dominate the sky ~4:1 on the faces it reaches, or the
+# peaks never glow and the valley's shade never reads blue (measured on the
+# review renders: at 1:1 the valley looks overcast).
+SUN_COLOR = (1.0, 0.50, 0.26)
+SUN_STRENGTH = 28.0
+SKY_STRENGTH = 0.45
+EXPOSURE = -0.45
 SKY_TYPE = 'MULTIPLE_SCATTERING'
 VIEW_TRANSFORM = 'AgX'
 LOOK = 'AgX - Medium High Contrast'
@@ -206,4 +210,23 @@ def render_settings(scene, w, h, samples, denoise=True):
     scene.render.resolution_percentage = 100
     scene.view_settings.view_transform = VIEW_TRANSFORM
     scene.view_settings.look = LOOK
+    scene.view_settings.exposure = EXPOSURE
     scene.render.film_transparent = False
+
+
+def apply_lighting(scene, elev=None):
+    """Bring the saved scene's sun and sky to the current constants (stages
+    after `terrain` reopen a blend made with whatever they were then)."""
+    import bpy
+    lamp = bpy.data.objects.get("SunLamp")
+    if lamp is not None:
+        lamp.data.energy = SUN_STRENGTH
+        lamp.data.color = SUN_COLOR
+        lamp.rotation_euler = sun_dir(elev).to_track_quat('Z', 'Y').to_euler()
+    if scene.world is not None:
+        for n in scene.world.node_tree.nodes:
+            if n.type == 'BACKGROUND':
+                n.inputs['Strength'].default_value = SKY_STRENGTH
+            if n.type == 'TEX_SKY':
+                n.sun_elevation = math.radians(L.SUN_ELEV if elev is None else elev)
+                n.sun_rotation = sky_rotation()

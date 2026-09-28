@@ -53,6 +53,8 @@ def candidates(spacing=SPACING, rmax=5200.0):
 
 
 def place(ter, F, quick=False):
+    global _TER
+    _TER = ter
     t0 = time.time()
     x, y = candidates()
     rng = np.random.default_rng(SEED + 1)
@@ -79,7 +81,8 @@ def place(ter, F, quick=False):
     th = np.degrees(np.arctan2(x, y))
     open_slope = (r < 480) & (np.abs(th) < 36)
     meadow = (~forest) & (u < 0.02) & (slope < 30) & (alt < tl - 30) & (droad > 12) & (dr > 14) & ~open_slope
-    river = (~forest) & (dr > 11) & (dr < 30) & (u < 0.30) & (droad > 8) & (alt < 30)
+    clump = smoothstep(0.15, 0.55, N.fbm(x, y, SEED + 7, octaves=3, scale=1 / 90.0))
+    river = (~forest) & (dr > 11) & (dr < 28) & (u < 0.16 * clump) & (droad > 8) & (alt < 30)
     keep = forest | meadow | river
     # nothing on the valley floor's sites, the roads, the river
     for c, rad in ((L.FARM_C, 34.0), (L.CHECKPOINT_C, 30.0), (L.DAM_CREST_C, 90.0)):
@@ -126,6 +129,14 @@ def place(ter, F, quick=False):
     vis[far] = M.visible_mask(ter, P[far], margin=2.0)
     log(f"visibility: {np.count_nonzero(~vis):,} of {n:,} hidden ({time.time() - t1:.0f}s)")
     x, y, zb, species, variant, scale, mirror = x[vis], y[vis], zb[vis], species[vis], variant[vis], scale[vis], mirror[vis]
+    hgt = hgt[vis]
+    n = len(x)
+    # keep every line of sight the game needs clear: no tree may stand in
+    # front of the road, the sites, the dam's crest and the tunnel
+    t1 = time.time()
+    clear = sightline_clear(x, y, zb, hgt * 1.0, np.where(species == "birch", 4.0, np.where(species == "fir", 5.5, 5.0)) * scale)
+    log(f"sightlines: {np.count_nonzero(~clear):,} trees removed ({time.time() - t1:.0f}s)")
+    x, y, zb, species, variant, scale, mirror = x[clear], y[clear], zb[clear], species[clear], variant[clear], scale[clear], mirror[clear]
     n = len(x)
     yaw = -np.arctan2(x, y)           # the card faces the eye
     counts = {}
@@ -134,6 +145,56 @@ def place(ter, F, quick=False):
     log(f"{n:,} trees {counts} ({time.time() - t0:.0f}s)")
     return dict(x=x, y=y, z=zb, species=species.astype(str), variant=variant.astype(str), scale=scale,
                 mirror=mirror, yaw=yaw)
+
+
+def sight_targets():
+    """Points the player must be able to see: the road every 8 m (1.5 m up),
+    the lanes, the sites, the dam's crest road and the tunnel's mouth."""
+    pts = []
+    for curve, step, up in ((L.road(), 8.0, 1.6), (L.dam_road(), 6.0, 1.6), (L.farm_lane(), 10.0, 1.2),
+                            (L.switchbacks(), 12.0, 1.4)):
+        for s_ in np.arange(0, curve.length, step):
+            p = curve.at(s_)
+            pts.append((p[0], p[1], up))
+    for c, rad in ((L.FARM_C, 20.0), (L.CHECKPOINT_C, 16.0), (L.CHAPEL_C, 14.0), (L.VILLAGE_C, 40.0),
+                   (L.BRIDGE_C, 22.0), (L.DAM_CREST_C, 70.0), (L.ALP_C, 20.0), (L.GOAT_CRAG_C, 30.0)):
+        for a in np.linspace(0, 2 * np.pi, 9)[:-1]:
+            for rr in (0.0, rad * 0.5, rad):
+                pts.append((c[0] + rr * np.cos(a), c[1] + rr * np.sin(a), 2.0))
+    pts.append((L.TUNNEL[0], L.TUNNEL[1], 3.0))
+    return np.array(pts)
+
+
+_TER = None
+
+
+def sightline_clear(x, y, zb, h, half_w):
+    """True for trees that hide none of the sight targets: a tree hides a
+    target when the target lies behind it, within its card's angular width
+    and between its base and its top as seen from the eye."""
+    tg = sight_targets()
+    tz = _TER.height(tg[:, 0], tg[:, 1]) + tg[:, 2]
+    tb = np.arctan2(tg[:, 0], tg[:, 1])
+    tr = np.hypot(tg[:, 0], tg[:, 1])
+    te = np.arctan2(tz, tr)
+    r = np.hypot(x, y)
+    b = np.arctan2(x, y)
+    e0 = np.arctan2(zb, r)
+    e1 = np.arctan2(zb + h, r)
+    aw = half_w / r
+    ok = np.ones(len(x), bool)
+    order = np.argsort(tb)
+    tbs, trs, tes = tb[order], tr[order], te[order]
+    for i in range(len(x)):
+        lo = np.searchsorted(tbs, b[i] - aw[i])
+        hi = np.searchsorted(tbs, b[i] + aw[i])
+        if hi <= lo:
+            continue
+        sl = slice(lo, hi)
+        hit = (trs[sl] > r[i] + 5.0) & (tes[sl] > e0[i]) & (tes[sl] < e1[i])
+        if hit.any():
+            ok[i] = False
+    return ok
 
 
 def save(path, inst):

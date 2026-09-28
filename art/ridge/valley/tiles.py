@@ -538,14 +538,18 @@ def _material():
 
 
 def render_tile(name, out_dir, quick=False, seed=0):
+    from . import btiles
     t0 = time.time()
-    size_m, px = SPEC[name]
+    size_m, px = SPEC[name] if name in SPEC else btiles.BUILD_SPEC[name]
     if quick:
         px = min(px, 512)
-    rng = np.random.default_rng(1000 + seed + hash(name) % 997)
+    # a stable seed per material (Python's hash() of a str changes between runs)
+    rng = np.random.default_rng(1000 + seed + sum(ord(c) * (i + 1) for i, c in enumerate(name)))
     sc = S.reset_scene("tile")
     S.setup_gpu(sc)
-    parts, margin = SCENES[name](size_m, rng)
+    scenes = dict(SCENES)
+    scenes.update(btiles.BUILD_SCENES)
+    parts, margin = scenes[name](size_m, rng)
     V, F, C, R = parts.wrapped(size_m, margin)
     ob = S.mesh_object("tile", V, F, sc.collection, smooth=False)
     me = ob.data
@@ -654,7 +658,8 @@ def build_all(out_dir, quick=False, only=None):
     path = os.path.join(out_dir, "tiles.json")
     if os.path.exists(path):
         info = json.load(open(path))
-    for name in SPEC:
+    from . import btiles
+    for name in list(SPEC) + list(btiles.BUILD_SPEC):
         if only and name not in only:
             continue
         info[name] = render_tile(name, out_dir, quick)

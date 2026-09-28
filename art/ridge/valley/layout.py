@@ -313,7 +313,7 @@ def _road():
     ax = bridge_axis()
     half = BRIDGE_LEN / 2
     pts = _pb(ROAD_NEAR) + [BRIDGE_C - ax * half, BRIDGE_C, BRIDGE_C + ax * half] + _pb(ROAD_FAR)
-    pts.append(DAM_CREST_C - DAM_AXIS * (DAM_HALF + 6.0))
+    pts.append(dam_road().at(0.0) - DAM_AXIS * 6.0)
     z = ROAD_NEAR_Z + [BRIDGE_END_Z, BRIDGE_DECK_Z, BRIDGE_END_Z] + ROAD_FAR_Z + [DAM_CREST_Z]
     w = [5.2] * len(ROAD_NEAR) + [4.4] * 3 + [5.0] * (len(ROAD_FAR) + 1)
     return pts, z, w
@@ -325,12 +325,32 @@ def road():
 
 
 # the dam road: across the crest to the tunnel
+def dam_arc_point(theta, radial=1.75):
+    """A point on the arch dam's crest: theta (radians) from the crest's
+    middle, positive toward the right (near-bank) end; `radial` metres out
+    from the upstream face (the crest road's centre is 1.75 m out)."""
+    cc = DAM_CREST_C + DAM_UP * DAM_ARCH_R
+    b = -DAM_UP
+    c_, s_ = math.cos(theta), math.sin(theta)
+    d = np.array([b[0] * c_ - b[1] * s_, b[0] * s_ + b[1] * c_])
+    return cc + d * (DAM_ARCH_R + radial)
+
+
+DAM_THETA = math.asin(DAM_HALF / DAM_ARCH_R)    # the crest road's ends
+
+
 def dam_road():
-    a = DAM_CREST_C - DAM_AXIS * (DAM_HALF + 6.0)
-    b = DAM_CREST_C + DAM_AXIS * (DAM_HALF + 6.0)
-    pts = [a, DAM_CREST_C - DAM_AXIS * DAM_HALF * 0.5, DAM_CREST_C, DAM_CREST_C + DAM_AXIS * DAM_HALF * 0.5, b,
-           TUNNEL[:2]]
-    return Curve(pts, step=1.0, z=[DAM_CREST_Z] * 5 + [TUNNEL[2]], w=[5.0] * 6)
+    """The crest road along the arch, from its far-bank (left) end to the
+    right end, then on into the tunnel."""
+    ths = np.linspace(-DAM_THETA, DAM_THETA, 9)
+    # which way is 'right' (toward the near bank / the tunnel)?
+    if np.dot(dam_arc_point(ths[-1]) - dam_arc_point(ths[0]), DAM_AXIS) < 0:
+        ths = ths[::-1]
+    pts = [dam_arc_point(t) for t in ths]
+    end = pts[-1]
+    pts.append(end + (TUNNEL[:2] - end) * 0.5)
+    pts.append(TUNNEL[:2])
+    return Curve(pts, step=1.0, z=[DAM_CREST_Z] * 10 + [TUNNEL[2]], w=[5.0] * 11)
 
 
 # the switchbacks from the top of the village up to the alp on the far slope

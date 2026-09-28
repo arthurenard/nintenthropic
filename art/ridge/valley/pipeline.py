@@ -104,19 +104,20 @@ def scope_camera(name, target, zoom=6.0):
 def stage_look(ctx):
     """Quick Cycles looks from the player's eye (development)."""
     sc = open_blend(ctx)
+    S.apply_lighting(sc)
     views = [("look_wide", bpy.data.objects["camera.player"], 1280 if ctx.quick else 1920)]
     for nm, p in (("look_scope_bridge", (*L.BRIDGE_C, -57.0)), ("look_scope_village", (*L.CHAPEL_C, -48.0)),
-                  ("look_scope_farm", (*L.FARM_C, -52.0))):
+                  ("look_scope_farm", (*L.FARM_C, -52.0)), ("look_scope_checkpoint", (*L.CHECKPOINT_C, -56.0)),
+                  ("look_scope_dam", (*L.DAM_CREST_C, -22.0))):
         views.append((nm, scope_camera(nm, p), 960 if ctx.quick else 1920))
     for nm, cam, w in views:
         if ctx.preview and ctx.preview not in nm:
             continue
         S.render_settings(sc, w, int(w * 9 / 16), 24 if ctx.quick else 96)
         sc.camera = cam
-        sc.render.filepath = os.path.join(ctx.review_dir, nm + ".png")
-        sc.render.image_settings.file_format = 'PNG'
-        bpy.ops.render.render(write_still=True)
-        log("wrote", sc.render.filepath)
+        from . import post
+        post.render_with_fog(sc, os.path.join(ctx.review_dir, nm + ".png"))
+        log("wrote", nm)
 
 
 def stage_materials(ctx):
@@ -152,3 +153,73 @@ def stage_forest(ctx):
     FO.build_review_objects(inst, imp, col)
     save_blend(ctx)
     log(f"forest stage {time.time() - t:.0f}s")
+
+
+def stage_buildings(ctx):
+    """The village and chapel, the farm, the checkpoint, the bridge, the dam."""
+    from . import buildings as B, bmats
+    t = time.time()
+    ter = load_terrain(ctx)
+    sc = open_blend(ctx)
+    root = bpy.data.collections["Valley"]
+    col = S.collection("buildings", root)
+    for o in list(col.objects):
+        bpy.data.objects.remove(o)
+    objs = []
+    info = {}
+    for name, fn in B._sites():
+        o, i = fn(ter, col)
+        objs += o
+        info[name] = i
+        log(f"  {name}: {len(o)} objects, {sum(len(x.data.polygons) for x in o if x.type == 'MESH'):,} faces")
+    bmats.assign(objs, os.path.join(ctx.build, "tiles"))
+    import json
+    sc["buildings_info"] = json.dumps(B.jsonable(info))
+    save_blend(ctx)
+    log(f"buildings stage {time.time() - t:.0f}s")
+
+
+def stage_water(ctx):
+    """River, reservoir, mist ribbons, and the roads' surfaces."""
+    from . import water as W, bmats
+    ter = load_terrain(ctx)
+    sc = open_blend(ctx)
+    root = bpy.data.collections["Valley"]
+    col = S.collection("water", root)
+    rcol = S.collection("roads", root)
+    for c in (col, rcol):
+        for o in list(c.objects):
+            bpy.data.objects.remove(o)
+    wm = W.water_material()
+    river = W.build_river(col)
+    res = W.build_reservoir(ter, col)
+    for o in (river, res):
+        o.data.materials.append(wm)
+    for o in W.build_mist(col):
+        o.hide_render = True            # the renders' mist is the post pass (post.py)
+    roads = W.build_roads(ter, rcol)
+    bmats.assign(roads, os.path.join(ctx.build, "tiles"))
+    save_blend(ctx)
+    log("water and roads built")
+
+
+def stage_contract(ctx):
+    """The contract's named nodes (valley/contract.py)."""
+    from . import contract as C, bmats
+    import json
+    ter = load_terrain(ctx)
+    sc = open_blend(ctx)
+    col = bpy.data.collections["contract"]
+    keep = ("camera.player", "sun")
+    for o in list(col.objects):
+        if o.name not in keep:
+            bpy.data.objects.remove(o)
+    binfo = json.loads(sc.get("buildings_info", "{}"))
+    C.build(ter, col, binfo)
+    bmats.assign([o for o in col.objects if o.type == 'MESH'], os.path.join(ctx.build, "tiles"))
+    save_blend(ctx)
+
+
+def stage_export(ctx):
+    from . import export
+    export.stage(ctx)

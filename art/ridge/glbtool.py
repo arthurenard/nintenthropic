@@ -144,6 +144,52 @@ class GLB:
         self.json.setdefault("accessors", []).append(acc)
         return len(self.json["accessors"]) - 1
 
+    def add_accessor_packed(self, rows, typ, ctype, normalized=True):
+        """Integer components packed with each element padded to 4 bytes
+        (glTF's alignment rule); rows: list of tuples of ints."""
+        fmt = {5120: "b", 5121: "B", 5122: "h", 5123: "H"}[ctype]
+        size = COMPONENT_SIZE[ctype]
+        n = TYPE_COUNT[typ]
+        elem = size * n
+        stride = (elem + 3) // 4 * 4
+        pad = stride - elem
+        buf = bytearray()
+        for r in rows:
+            buf += struct.pack(f"<{n}{fmt}", *r)
+            buf += b"\0" * pad
+        bv = self._append(bytes(buf))
+        if stride != elem:
+            self.json["bufferViews"][bv]["byteStride"] = stride
+        acc = {"bufferView": bv, "componentType": ctype, "count": len(rows), "type": typ, "normalized": normalized}
+        self.json.setdefault("accessors", []).append(acc)
+        return len(self.json["accessors"]) - 1
+
+    def add_instancing_packed(self, node_index, translations, yaws, scales, scale_max):
+        """Instances that only turn about the vertical and scale uniformly,
+        packed small: TRANSLATION float32, ROTATION normalized int16 (a
+        quaternion about +Y), SCALE normalized uint8 x scale_max (the holder
+        node's mesh must be authored at scale_max times... no: the SCALE
+        accessor is normalized to [0, 1], so the mesh is authored at size
+        scale_max and the instance scale is s / scale_max)."""
+        import math
+        flat = [float(c) for v in translations for c in v]
+        attrs = {"TRANSLATION": self.add_accessor_f32(flat, "VEC3", minmax=True)}
+        rot = []
+        for y in yaws:
+            s, c = math.sin(y / 2), math.cos(y / 2)
+            rot.append((0, int(round(s * 32767)), 0, int(round(c * 32767))))
+        attrs["ROTATION"] = self.add_accessor_packed(rot, "VEC4", 5122)
+        sc = []
+        for s in scales:
+            q = max(0, min(255, int(round(s / scale_max * 255))))
+            sc.append((q, q, q))
+        attrs["SCALE"] = self.add_accessor_packed(sc, "VEC3", 5121)
+        node = self.nodes[node_index]
+        node.setdefault("extensions", {})["EXT_mesh_gpu_instancing"] = {"attributes": attrs}
+        used = self.json.setdefault("extensionsUsed", [])
+        if "EXT_mesh_gpu_instancing" not in used:
+            used.append("EXT_mesh_gpu_instancing")
+
     def add_instancing(self, node_index, translations, rotations, scales):
         """EXT_mesh_gpu_instancing on a node that already holds a mesh.
         translations: [(x,y,z)] glTF space; rotations: [(x,y,z,w)]; scales: [(x,y,z)]."""

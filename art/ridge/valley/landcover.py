@@ -33,8 +33,8 @@ MATERIALS = ["grass", "rock", "scree", "snow", "dirt", "forest", "gravel", "alpi
 # colour map by tile / mean)
 MEAN = {
     "grass": (0.105, 0.135, 0.050),
-    "rock": (0.205, 0.195, 0.180),
-    "scree": (0.230, 0.220, 0.200),
+    "rock": (0.135, 0.128, 0.118),
+    "scree": (0.180, 0.172, 0.160),
     "snow": (0.78, 0.80, 0.83),
     "dirt": (0.135, 0.100, 0.070),
     "forest": (0.055, 0.058, 0.035),
