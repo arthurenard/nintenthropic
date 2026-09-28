@@ -11,7 +11,12 @@ Stages (default: all):
               map (R: streetlight flicker mask, G: roughness, B: 0)
     export    write public/assets/night/road.glb
     review    render the review set into --review-dir
-    poster    render public/assets/night/poster.webp
+    poster    render public/assets/night/poster.webp (needs walker.glb)
+Extra stages (not in the default run):
+    glbreview   import road.glb back and render it as the game would
+                (lit, lit + fog, the flashlight on albedo)
+    castreview  the dead from walker.glb standing on Route 9 at 10, 25 and
+                40 m in the flashlight, the game's fog, from the player's eye
 
 Options:
     --quick           low samples and a lighter ground (iteration)

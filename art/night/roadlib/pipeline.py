@@ -112,6 +112,11 @@ def stage_poster(ctx):
     poster.render(ctx)
 
 
+def stage_castreview(ctx):
+    from . import poster
+    poster.render_cast(ctx)
+
+
 def stage_glbreview(ctx):
     from . import glbcheck
     glbcheck.run(ctx)

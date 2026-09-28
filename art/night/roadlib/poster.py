@@ -78,6 +78,56 @@ def fog_volume(col):
     return ob
 
 
+def render_cast(ctx):
+    """Review: the dead on Route 9 at the game's distances. The player's eye
+    and play lens, the flashlight on one figure at 10, 25 and 40 m (and one
+    shot with all three and the beam on the far one), the game's fog added
+    in post (reviews' fog, not the poster's volume), the eyes at the game's
+    shine for a beam on them (emissiveIntensity 3)."""
+    from . import review
+    shots = [
+        ("road_dead_10m", [(["char.walker", "var.outfit.farmer", "var.hair.short", "eyes"], "walk.shamble", 9, -0.5, 10.0, 6)], 0),
+        ("road_dead_25m", [(["char.walker", "var.outfit.waitress", "var.hair.long", "eyes"], "walk.lurch", 5, 0.8, 25.0, -8)], 0),
+        ("road_dead_40m", [(["char.walker", "var.outfit.hunter", "var.hair.balding", "eyes"], "walk.drag", 14, -1.2, 40.0, 10)], 0),
+        ("road_dead_all", [(["char.walker", "var.outfit.farmer", "var.hair.short", "eyes"], "walk.shamble", 9, -0.5, 10.0, 6),
+                           (["char.walker", "var.outfit.waitress", "var.hair.long", "eyes"], "walk.lurch", 5, 0.8, 25.0, -8),
+                           (["char.walker", "var.outfit.hunter", "var.hair.balding", "eyes"], "walk.drag", 14, -1.2, 40.0, 10)], 2),
+    ]
+    walker = os.path.join(ctx.assets, "walker.glb")
+    for name, cast, lit in shots:
+        pipeline.open_blend(ctx.blend)
+        scene = bpy.context.scene
+        setup_gpu(scene)
+        figs = [import_figure(walker, *c) for c in cast]
+        for mm in [mm for mm in bpy.data.materials if mm.name.startswith("eyes")]:
+            for nd in mm.node_tree.nodes:
+                if nd.type == 'BSDF_PRINCIPLED':
+                    nd.inputs["Emission Strength"].default_value = 3.0
+        for rig, frame in figs:
+            rig.animation_data.action = bpy.data.actions.get(rig["poster_action"])
+            scene.frame_set(frame)
+            bpy.context.view_layer.update()
+            rig.animation_data.action = None
+        cam = review.play_camera(scene)
+        scene.camera = cam
+        ld = bpy.data.lights.new("review_beam", 'SPOT')
+        ld.energy = 2600.0
+        ld.color = (1.0, 0.94, 0.82)
+        ld.spot_size = math.radians(17.0)
+        ld.spot_blend = 0.35
+        ld.shadow_soft_size = 0.015
+        beam = bpy.data.objects.new("review_beam", ld)
+        beam.location = (0.25, 0.3, 1.45)
+        _, _, _, x, y, _ = cast[lit]
+        beam.rotation_euler = (Vector((x, y, 1.2)) - beam.location).to_track_quat('-Z', 'Y').to_euler()
+        scene.collection.objects.link(beam)
+        pipeline.render_settings(scene, 1600, 900, 48 if ctx.quick else 160)
+        if ctx.quick:
+            scene.render.resolution_percentage = 60
+        post.render(scene, os.path.join(ctx.review_dir, name + ".png"), fog=True)
+        print("cast review", name, flush=True)
+
+
 def render(ctx):
     pipeline.open_blend(ctx.blend)
     scene = bpy.context.scene
