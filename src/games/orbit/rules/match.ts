@@ -24,6 +24,7 @@ import {
   CREW_SEAL,
   CURVE_ACCEL,
   DERELICT_DEPTH,
+  DERELICT_SWAY,
   DERELICT_TURN,
   DIFFICULTY,
   DRONE_FROM_PASS,
@@ -465,20 +466,25 @@ export class Match {
   sendDerelict(): Fragment {
     const spec = KINDS.derelict;
     const lanes = this.layout.lanes;
-    // The lane nearest the middle of the view (of those the player can see
-    // most of, if the layout says), pushed out to its depth.
-    const clear = this.layout.clear;
-    const seen = clear ? lanes.filter((_, i) => (clear[i] ?? 1) >= 0.6) : lanes;
-    const pool = seen.length > 0 ? seen : lanes;
-    let best = pool[0] as V3;
-    for (const l of pool) if (dot(normalize(l), this.forward) > dot(normalize(best), this.forward)) best = l;
-    const from = scale(normalize(best), DERELICT_DEPTH);
+    // The lane the player can see most of the way in (if the layout says:
+    // the boss must not hide behind the arm or a window frame), and of those
+    // the nearest the middle of the view, pushed out to its depth.
+    const clear = this.layout.clearWide ?? this.layout.clear;
+    const score = (i: number) => (clear ? (clear[i] ?? 1) : 1) - 0.8 * Math.acos(Math.min(1, dot(normalize(lanes[i] as V3), this.forward)));
+    let bestAt = 0;
+    for (let i = 1; i < lanes.length; i++) if (score(i) > score(bestAt)) bestAt = i;
+    const best = lanes[bestAt] as V3;
+    const from = this.layout.derelictFrom ?? scale(normalize(best), DERELICT_DEPTH);
     const pane = paneById(this.layout, 0) ?? this.pickPane(from);
     const to = pane.center;
     const speed = range(this.random, spec.speed[0], spec.speed[1]) * this.tuning.speedFactor;
     const straight = sub(to, from);
     const duration = length(straight) / speed;
-    const motion = arcTo(from, to, this.time, duration, this.bend(straight));
+    // A long, slow flight: bent as the others are, it would wander tens of
+    // metres off its line (behind the station). Held to a gentle arc.
+    const bend = this.bend(straight);
+    const most = (8 * DERELICT_SWAY) / (duration * duration);
+    const motion = arcTo(from, to, this.time, duration, length(bend) > most ? scale(bend, most / length(bend)) : bend);
     const dir = normalize(straight);
     const axis = normalize(cross(dir, v3(0, 1, 0)));
     const tumble: Tumble = { axis, rate: (Math.PI * 2) / DERELICT_TURN, phase: this.random() * Math.PI * 2, face: normalize(cross(axis, dir)) };

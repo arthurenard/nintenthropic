@@ -408,8 +408,10 @@ void main() {
   float dhx = dFdx(hCloud);
   float dhy = dFdy(hCloud);
   // The stars as a cube (made from the art's equirect at load): no pole to
-  // smear them round. The cube keeps three's equirect handedness.
-  vec3 stars = texture(tStars, vec3(d.x, d.y, -d.z)).rgb;
+  // smear them round. The art lays them out in the world's frame with
+  // three's equirect mapping, which the cube keeps: looked up by the world
+  // direction, the Milky Way rises where the art composed it.
+  vec3 stars = texture(tStars, D).rgb;
 
   if (hitG) {
     float shadow = 1.0 - 0.85 * shade;

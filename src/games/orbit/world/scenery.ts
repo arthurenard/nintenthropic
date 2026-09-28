@@ -112,28 +112,55 @@ function convexHull(points: { x: number; y: number }[]): { x: number; y: number 
 
 /**
  * How much of each lane's way in the player can see: points along the line
- * from the lane to the cupola, each checked against the station from the
- * eye (hidden if the station is nearer). The last few metres, through the
- * glass, always show.
+ * from the lane to the cupola, each checked from the eye against what is in
+ * the way - the station, and the cupola's own frame between the windows
+ * (not its glass). The last few metres always show. With a `radius`, a
+ * point counts only if a thing that big would show whole there (its middle
+ * and four edges): for the Derelict.
  */
-export function laneClearance(station: Object3D, eye: Vector3, lanes: readonly V3[], target: Vector3, samples = 10): number[] {
-  station.updateMatrixWorld(true);
+export function laneClearance(occluders: readonly Object3D[], eye: Vector3, lanes: readonly V3[], target: Vector3, samples = 10, radius = 0): number[] {
+  const meshes: Object3D[] = [];
+  for (const root of occluders) {
+    root.updateMatrixWorld(true);
+    root.traverse((o) => {
+      if ((o as Mesh).isMesh) meshes.push(o);
+    });
+  }
   const ray = new Raycaster();
   const dir = new Vector3();
   const p = new Vector3();
+  const q = new Vector3();
+  const side = new Vector3();
+  const up = new Vector3();
+  const open = (at: Vector3): boolean => {
+    const d = at.distanceTo(eye);
+    dir.subVectors(at, eye).normalize();
+    ray.set(eye, dir);
+    ray.far = d - 0.5;
+    return ray.intersectObjects(meshes, false).length === 0;
+  };
   return lanes.map((lane) => {
     const from = new Vector3(lane.x, lane.y, lane.z);
     let seen = 0;
     let counted = 0;
     for (let i = 0; i < samples; i++) {
       p.lerpVectors(from, target, (i + 0.5) / samples);
-      const d = p.distanceTo(eye);
-      if (d < 4) continue;
+      if (p.distanceTo(eye) < 4) continue;
       counted++;
-      dir.subVectors(p, eye).normalize();
-      ray.set(eye, dir);
-      ray.far = d - 0.5;
-      if (ray.intersectObject(station, true).length === 0) seen++;
+      let whole = open(p);
+      if (whole && radius > 0) {
+        dir.subVectors(p, eye).normalize();
+        side.crossVectors(dir, Math.abs(dir.y) < 0.9 ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0)).normalize();
+        up.crossVectors(side, dir);
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          q.copy(p).addScaledVector(side, a * radius).addScaledVector(up, b * radius);
+          if (!open(q)) {
+            whole = false;
+            break;
+          }
+        }
+      }
+      if (whole) seen++;
     }
     return counted > 0 ? seen / counted : 1;
   });

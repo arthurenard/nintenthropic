@@ -41,6 +41,10 @@ export interface Layout {
    * Unknown (every lane clear) when absent.
    */
   clear?: number[];
+  /** The same for something as big as the Derelict (it must show whole). */
+  clearWide?: number[];
+  /** Where the Derelict sets out from, if the world has found a better place than a lane. */
+  derelictFrom?: V3;
   /** Spots on the cupola's metal between the windows, where a fragment rings the hull. */
   frame: V3[];
 }

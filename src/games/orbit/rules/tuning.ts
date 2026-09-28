@@ -88,6 +88,8 @@ export const DERELICT_TURN = 7;
 export const TANK_FACING = 0.18;
 /** How far out it comes from. */
 export const DERELICT_DEPTH = 118;
+/** How far (m) the Derelict's arc may bow from its straight line, at most. */
+export const DERELICT_SWAY = 5;
 /** Panes it takes if it arrives: the one it strikes and a neighbour. */
 export const DERELICT_PANES = 2;
 

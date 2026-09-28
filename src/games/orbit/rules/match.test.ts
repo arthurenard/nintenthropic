@@ -218,6 +218,25 @@ describe("a fragment", () => {
 });
 
 describe("the Derelict", () => {
+  it("comes in on a gentle arc, never far off its line", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { match } = staged(seed);
+      const d = match.sendDerelict();
+      const a = d.position(d.born);
+      const b = match.layout.panes[0]!.center;
+      const line = sub(b, a);
+      const len = length(line);
+      let worst = 0;
+      for (let t = d.born; t < d.born + 30; t += 0.25) {
+        const p = sub(d.position(t), a);
+        const along = (p.x * line.x + p.y * line.y + p.z * line.z) / len;
+        if (along > len) break;
+        worst = Math.max(worst, Math.sqrt(Math.max(0, length(p) ** 2 - along * along)));
+      }
+      expect(worst, `seed ${seed}`).toBeLessThanOrEqual(5.5);
+    }
+  });
+
   it("shrugs off shots on its body, and breaks up after three on its tank", () => {
     const { match, listener } = staged(8);
     const d = match.sendDerelict();

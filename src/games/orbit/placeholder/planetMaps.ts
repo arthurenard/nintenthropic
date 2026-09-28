@@ -371,7 +371,10 @@ vec3 stars(vec3 d, float cells, float seed, float density) {
   return tint * bright * k;
 }
 void main() {
+  // Laid out as the art's stars.webp is: the world's frame, three's equirect
+  // mapping (u = atan2(z, x) / 2pi + 0.5), unlike the planet's maps.
   vec3 d = dirOfUv(vUv);
+  d.z = -d.z;
   vec3 c = stars(d, 150.0, 1.0, 0.3) + stars(d, 80.0, 3.0, 0.4);
   // The Milky Way: a band along a great circle, clumpy and dusty, thick with faint stars.
   vec3 pole = normalize(vec3(0.35, 0.55, -0.76));

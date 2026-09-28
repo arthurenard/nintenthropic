@@ -1,20 +1,23 @@
-import { Matrix3, Matrix4, Mesh, Quaternion, SRGBColorSpace, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
+import { Matrix3, Matrix4, Mesh, Quaternion, Raycaster, SRGBColorSpace, Vector2, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
 import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
 import { ScreenFlash } from "../../engine/world/flash";
 import { checkFraming } from "../../engine/world/framing";
+import { contractName } from "../../engine/world/names";
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
 import type { Fragment } from "./rules/debris";
 import { breachCause, type Breach } from "./rules/felled";
+import { tankShows } from "./rules/debris";
 import { Match, type MatchListener } from "./rules/match";
 import type { Mark } from "./rules/panes";
 import type { PassSpec } from "./rules/passes";
 import type { Award, PassBonuses } from "./rules/scoring";
 import { ASTRONAUT_PASS, DUCK_PASS, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
-import { ALARM_BELOW, BREATHER, INTEGRITY_MAX, KINDS } from "./rules/tuning";
+import { ALARM_BELOW, BREATHER, DERELICT_DEPTH, INTEGRITY_MAX, KINDS } from "./rules/tuning";
+import { normalize, scale, type V3 } from "./rules/vec";
 import { HintLine, tipText, ventHint, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type OrbitAssets } from "./world/assets";
@@ -30,6 +33,7 @@ import { BREATHER_GROUND_RATE, GROUND_RATE, MOON_RADIUS, moonAt, RISE_START, SET
 import { ProximityRings, type RingShown } from "./world/rings";
 import { RunningLights } from "./world/runningLights";
 import { laneClearance, readScenery, type Scenery } from "./world/scenery";
+import { Floats } from "./world/floats";
 import { SecretsWorld } from "./world/secretsWorld";
 import { ASSIST, Shooter, type SkyTargets } from "./world/shooter";
 import { Stage } from "./world/stage";
@@ -126,6 +130,7 @@ export class OrbitalDecay implements Game, MatchListener {
   private secrets!: SecretsWorld;
   private shooter!: Shooter;
   private ambient!: Ambient;
+  private floats!: Floats;
   private post!: PostFX;
   private match!: Match;
 
@@ -205,7 +210,18 @@ export class OrbitalDecay implements Game, MatchListener {
     // Which lanes the station hides, so the director sends most down the open ones.
     const layout = this.scenery.layout;
     const toward = this.scenery.eye.clone().add(new Vector3(layout.forward.x, layout.forward.y, layout.forward.z).multiplyScalar(1.5));
-    layout.clear = laneClearance(this.assets.station, this.scenery.eye, layout.lanes, toward);
+    // The cupola's frame counts as in the way; its glass does not.
+    const glass = new Set<Object3D>(this.scenery.panes.values());
+    const frame: Object3D[] = [];
+    this.assets.cupola.traverse((o) => {
+      if ((o as Mesh).isMesh && !glass.has(o)) frame.push(o);
+    });
+    const inTheWay = [this.assets.station, ...frame];
+    layout.clear = laneClearance(inTheWay, this.scenery.eye, layout.lanes, toward, 16);
+    const centre = this.scenery.layout.panes.find((p) => p.id === 0)?.center;
+    const pane0 = centre ? new Vector3(centre.x, centre.y, centre.z) : toward;
+    layout.clearWide = laneClearance(inTheWay, this.scenery.eye, layout.lanes.map((l) => scale(normalize(l), DERELICT_DEPTH)), pane0, 16, 3);
+    layout.derelictFrom = this.derelictStart(inTheWay, pane0);
     await breathe();
     this.stage = new Stage(renderer, this.scenery, this.assets.maps);
     this.stage.setQuality(ctx.quality);
@@ -238,6 +254,8 @@ export class OrbitalDecay implements Game, MatchListener {
     );
     this.shooter = new Shooter(this.camera.camera, this.debris, this.scenery.station);
     this.ambient = new Ambient(this.sound, this.visualRandom);
+    this.floats = new Floats(this.scenery.floats, this.visualRandom);
+    this.floats.reducedMotion = ctx.settings.reducedMotion;
     // Everything lit at run time through the one tone curve.
     for (const root of [...this.debris.materials().map(() => null)]) void root;
     for (const v of Object.values(library)) for (const variant of v) {
@@ -318,6 +336,35 @@ export class OrbitalDecay implements Game, MatchListener {
     const reach = along > 0.05 ? (1.1 - n.dot(tmp.copy(eye).sub(p.center))) / along : pos.distanceTo(eye) + 1.5;
     const spot = eye.clone().addScaledVector(dir, Math.min(6, Math.max(2.5, reach)));
     return { pos: spot, facing: p.center.clone().sub(spot).normalize() };
+  }
+
+  /**
+   * Where the Derelict sets out: seen through the centre window, where the
+   * whole satellite shows all the way in - clear of the arm, the station
+   * and the window's frame - as near the middle as that allows. It comes
+   * almost straight at the eye, so it stays near where it starts on screen.
+   */
+  private derelictStart(inTheWay: Object3D[], to: Vector3): V3 | undefined {
+    const t = Math.tan((this.scenery.fov * Math.PI) / 360);
+    const spots: { at: Vector3; off: number }[] = [];
+    for (let sx = -0.3; sx <= 0.301; sx += 0.1) {
+      for (let sy = -0.4; sy <= 0.301; sy += 0.1) {
+        const d = new Vector3(sx * t * (16 / 9), sy * t, -1).normalize().applyQuaternion(this.scenery.eyeQuaternion);
+        spots.push({ at: this.scenery.eye.clone().addScaledVector(d, DERELICT_DEPTH), off: Math.hypot(sx, sy) });
+      }
+    }
+    const clear = laneClearance(inTheWay, this.scenery.eye, spots.map((s) => s.at), to, 12, 3);
+    let best = -1;
+    let bestScore = -Infinity;
+    spots.forEach((s, i) => {
+      const score = (clear[i] as number) - 0.4 * s.off;
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    });
+    const at = spots[best]?.at;
+    return at ? { x: at.x, y: at.y, z: at.z } : undefined;
   }
 
   /** Where the art wrote its "HI" of town lights, in the planet's frame. */
@@ -456,6 +503,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.rings.clear();
     this.droneView.reset();
     this.secrets.reset();
+    this.floats.reset();
     this.lights.reset();
     this.newMatch();
     this.schedule.length = 0;
@@ -616,6 +664,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.lights.update(dt);
     this.effects.update(dt);
     this.ambient.update(dt);
+    this.floats.update(dt);
     // The eye: afloat, a few centimetres of slow drift, no breath.
     this.camera.update(dt);
     if (!this.ctx.settings.reducedMotion) {
@@ -625,8 +674,8 @@ export class OrbitalDecay implements Game, MatchListener {
       this.camera.camera.updateMatrixWorld(true);
     }
     this.stage.follow(this.camera.camera.position);
-    // Half a beam's width: about three device pixels at any distance.
-    this.beams.update(dt, this.camera.camera.position, (3 / Math.max(1, this.bufferHeight)) * 2 * Math.tan((this.camera.camera.fov * Math.PI) / 360));
+    // Half a beam's width: about four device pixels at any distance.
+    this.beams.update(dt, this.camera.camera.position, (4 / Math.max(1, this.bufferHeight)) * 2 * Math.tan((this.camera.camera.fov * Math.PI) / 360));
     this.post.set("flash", this.flash.update(dt));
   }
 
@@ -1028,6 +1077,7 @@ export class OrbitalDecay implements Game, MatchListener {
     const point = this.match.glass.marks.filter((m) => m.pane === pane).at(-1)?.point;
     const at = point ? new Vector3(point.x, point.y, point.z) : (p?.center.clone() ?? new Vector3(0, 0, -1.5));
     this.glass.fail(pane, at);
+    this.floats.decompress(at);
     if (p) this.effects.burst(p.center, p.normal, 0.4);
     this.sound.play("orbit_decompress");
     this.camera.rumble(this.ctx.settings.reducedMotion ? 0.4 : 1.6);
@@ -1159,11 +1209,18 @@ export class OrbitalDecay implements Game, MatchListener {
         this.groundAngle = (degrees * Math.PI) / 180;
         this.applySky(0, true);
       },
+      /** What the eye sees along a viewport point: the art's meshes in the way, nearest first. */
+      pick: (x: number, y: number) => {
+        const ray = new Raycaster();
+        ray.setFromCamera(new Vector2(x * 2 - 1, 1 - y * 2), this.camera.camera);
+        return ray.intersectObjects([this.assets.cupola, this.assets.station], true).slice(0, 4).map((h) => ({ name: contractName(h.object), distance: +h.distance.toFixed(2) }));
+      },
       /** Where the Derelict's fuel tank is on screen, if one is flying. */
       tank: () => {
         const d = this.match.fragments.find((f) => f.kind === "derelict" && f.flying);
         const at = d ? this.debris.tankAt(d.id, new Vector3()) : null;
-        return at ? this.project(at) : null;
+        const p = at ? this.project(at) : null;
+        return p && d ? { ...p, shows: tankShows(d, this.match.time, this.match.layout.eye) } : null;
       },
       /** Bring on a secret's walk-on now (the spacewalker, the duck, the tool bag, the Moon). */
       walkOn: (id: "astronaut" | "duck" | "toolbag" | "moon") => {

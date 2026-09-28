@@ -15,11 +15,19 @@ const tmp = new Vector3();
 const tmp2 = new Vector3();
 const q = new Quaternion();
 const FORWARD = new Vector3(0, 0, 1);
+const HINGE = new Vector3(1, 0, 0);
+/** The welder arm reaching out to the glass (radians at the shoulder and the elbow, on their hinges). */
+const REACH = { shoulder: -0.7, elbow: 0.9 };
 
 export class DroneView {
   readonly root: Object3D;
   private readonly thrusters: Object3D[] = [];
   private tip: Object3D | null = null;
+  private shoulder: Object3D | null = null;
+  private elbow: Object3D | null = null;
+  private readonly armRest: Quaternion[] = [];
+  /** How far the welder arm is out: 0 folded .. 1 reaching to the glass. */
+  private reach = 0;
   private readonly lights: Object3D[] = [];
   private readonly from = new Vector3();
   private readonly to = new Vector3();
@@ -54,10 +62,21 @@ export class DroneView {
       const n = contractName(o);
       if (/^thruster\.\d+$/.test(n)) this.thrusters.push(o);
       if (n === "weld.tip") this.tip = o;
+      if (n === "arm.shoulder") this.shoulder = o;
+      if (n === "arm.elbow") this.elbow = o;
       if (n === "light.nav") this.lights.push(...o.children);
     });
     this.root.position.copy(this.dockPos);
     this.root.quaternion.copy(this.dockQuat);
+    this.armRest.push(this.shoulder?.quaternion.clone() ?? new Quaternion(), this.elbow?.quaternion.clone() ?? new Quaternion());
+  }
+
+  /** The welder arm: out while mending, folded otherwise. */
+  private moveArm(dt: number, out: boolean): void {
+    this.reach += ((out ? 1 : 0) - this.reach) * (1 - Math.exp(-dt * 3));
+    const e = this.reach * this.reach * (3 - 2 * this.reach);
+    if (this.shoulder) this.shoulder.quaternion.copy(this.armRest[0] as Quaternion).multiply(q.setFromAxisAngle(HINGE, REACH.shoulder * e));
+    if (this.elbow) this.elbow.quaternion.copy(this.armRest[1] as Quaternion).multiply(q.setFromAxisAngle(HINGE, REACH.elbow * e));
   }
 
   /** Where an errand's end is. */
@@ -93,6 +112,7 @@ export class DroneView {
     }
     this.welding = null;
     this.weldLight = Math.max(0, this.weldLight - dt * 6);
+    this.moveArm(dt, drone.state === "setting" || drone.state === "mending");
     switch (drone.state) {
       case "docked":
         this.root.position.lerp(this.dockPos, 1 - Math.exp(-dt * 3));
@@ -177,5 +197,7 @@ export class DroneView {
     this.root.quaternion.copy(this.dockQuat);
     this.lastState = "";
     this.welding = null;
+    this.reach = 0;
+    this.moveArm(0, false);
   }
 }
