@@ -89,7 +89,9 @@ describe("the flashlight", () => {
     expect(u.uBeamPos.value.equals(v.uBeamPos.value)).toBe(true);
     expect(u.uBeamDir.value.equals(v.uBeamDir.value)).toBe(true);
     expect(u.uBeamShape.value.equals(v.uBeamShape.value)).toBe(true);
-    expect(f.spot.decay).toBe(BEAM.decay);
+    // The dead catch it with a gentler falloff than the road: never a harsher one.
+    expect(f.spot.decay).toBe(BEAM.figureDecay);
+    expect(BEAM.figureDecay).toBeLessThanOrEqual(BEAM.decay);
     expect(f.spot.angle).toBe(BEAM.angle);
   });
 

@@ -25,7 +25,14 @@ export const BEAM = {
    * your own lamp is back-scatter, which fog does weakly: a glow in the
    * wisps, never a wall of light hiding what is in it.
    */
-  volume: 0.22,
+  volume: 0.2,
+  /**
+   * On the dead (and the survivors, the cat) the beam falls off a little
+   * more gently than on the road: one of them at 20 m stands out of the haze
+   * the beam makes in front of it, while one at the barricade is lit no
+   * harder than before.
+   */
+  figureDecay: 0.55,
   color: new Color(1.0, 0.93, 0.8),
   /** The golden rifle's golden beam. */
   golden: new Color(1.0, 0.78, 0.38),
@@ -49,13 +56,13 @@ export interface Aimable {
  * points from the lamp at whatever the crosshair is on (so its centre lands
  * where the shot would), easing after the hand with a little weight, kicked
  * up by each shot and settling in a quarter second. One SpotLight lights the
- * characters; the same numbers go to the baked road's material and to the
+ * characters; the same cone goes to the baked road's material and to the
  * beam's volume in the fog, so all three agree. At the fall it leaves the
  * hand: it drops, bounces and rolls on the asphalt, its beam swinging
  * across the canopy, and comes to rest pointing along the ground.
  */
 export class Flashlight {
-  readonly spot = new SpotLight(0xffffff, 0, BEAM.range, BEAM.angle, BEAM.penumbra, BEAM.decay);
+  readonly spot = new SpotLight(0xffffff, 0, BEAM.range, BEAM.angle, BEAM.penumbra, BEAM.figureDecay);
   readonly position = new Vector3();
   readonly direction = new Vector3(0, 0, -1);
   /** Where the beam is being pointed (the aim's point in the world), before easing. */

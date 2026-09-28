@@ -175,7 +175,11 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
         vec3 p = uCamPos + d * t;
         vec3 l = p - uBeamPos;
         float dist = length(l);
+        // The fog shows the beam's hot core, not its whole soft spill: a
+        // shaft through the air, where a lit disc the size of the cone
+        // would wash out everything in it.
         float spot = smoothstep(uBeamShape.x, uBeamShape.y, dot(l, uBeamDir) / max(dist, 1e-4));
+        spot *= spot;
         float fall = 1.0 / pow(max(dist, 1.2), uBeamShape.z);
         float ft = uFogDensity * t;
         // Right round the lamp, under the canopy, the air is clear: the beam
@@ -183,7 +187,9 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
         float clear = smoothstep(2.5, 12.0, dist);
         sum += spot * fall * clear * beamFog(p) * exp(-2.0 * ft * ft);
       }
-      color += uBeamGlow * (sum * step * uFogDensity);
+      // Thicker fog scatters more, but less than in proportion: late in the
+      // night the shaft gets denser without becoming a wall.
+      color += uBeamGlow * (sum * step * sqrt(uFogDensity * 0.0155));
     }
   }
   outputColor = vec4(color, inputColor.a);

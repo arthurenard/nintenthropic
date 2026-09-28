@@ -16,10 +16,10 @@ void main() {
   float d = -mv.z;
   // The eye itself is a few millimetres; its shine is a point of light a
   // few pixels across at any distance, a little larger up close.
-  gl_PointSize = clamp(uScale * 0.03 / max(d, 0.5), 3.5, 14.0);
+  gl_PointSize = clamp(uScale * 0.03 / max(d, 0.5), 4.0, 14.0);
   // It pierces the fog far better than a body does: a bright point in a
-  // pale haze. (A third of the fog's density, and the square law's.)
-  float t = uFogDensity * d * 0.36;
+  // pale haze. (Under a third of the fog's density, and the square law's.)
+  float t = uFogDensity * d * 0.3;
   vShine = aShine * exp(-t * t);
 }
 `;
@@ -68,7 +68,7 @@ export class Eyeshine {
     const uniforms: Record<string, IUniform> = {
       uScale: { value: 800 },
       uFogDensity: u.uFogDensity,
-      uColor: { value: new Color(2.4, 3.2, 1.7) },
+      uColor: { value: new Color(3.2, 4.3, 2.3) },
     };
     this.material = new ShaderMaterial({
       uniforms,

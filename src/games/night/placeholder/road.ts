@@ -46,7 +46,8 @@ import { asphaltTexture, burlapTexture, canPaint, concreteTexture, dirtTexture, 
 /** The streetlight's lamp head, over the crossroads. */
 export const STREET_LAMP: P = [3.6, 7.4, -24];
 export const NEON: P = [-5.7, 5.3, -19.2];
-const MOON_TOWARD = new Vector3(-0.393, 0.259, -0.882).normalize();
+/** Low over the corn, 21° left of the road: clear of the score's corner at any window size. */
+const MOON_TOWARD = new Vector3(-0.346, 0.259, -0.902).normalize();
 /** The moon's light comes from higher than its disc sits: it lights the road, not the horizon. */
 const MOON_LIGHT = new Vector3(0.38, -0.68, 0.63).normalize();
 

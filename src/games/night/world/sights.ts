@@ -1,4 +1,4 @@
-import { Box3, Vector3, type Object3D } from "three";
+import { Box3, Sphere, Vector3, type Object3D } from "three";
 import { chromeKeepOut, fitFraming, WEAPON_DOCK, type Framing, type Sight } from "../../../engine/world/framing";
 import type { RoadLayout } from "./road";
 
@@ -44,6 +44,16 @@ export function playSights(road: RoadLayout): Sight[] {
   }
   for (const path of road.survivorPaths) for (const p of path) add(p.x, p.y + 1.6, p.z, false);
   for (const p of secretSpots(road)) add(p.x, p.y, p.z, false, 0.01);
+  // The whole of the moon's disc, not only its middle: a moon cut by the
+  // edge of a wide window does not look like something to shoot.
+  const disc = road.secrets.moonDisc;
+  if (disc) {
+    disc.updateWorldMatrix(true, true);
+    const sphere = new Box3().setFromObject(disc).getBoundingSphere(new Sphere());
+    v.copy(sphere.center).sub(eye).applyQuaternion(toCamera);
+    const r = sphere.radius * 0.75;
+    for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]] as const) out.push({ x: v.x + dx, y: v.y + dy, z: v.z, clear: false, margin: 0.01 });
+  }
   return out;
 }
 
