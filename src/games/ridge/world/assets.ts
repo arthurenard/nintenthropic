@@ -1,0 +1,63 @@
+/**
+ * Where Overwatch Ridge's art lives, and loading it. Every file is required:
+ * in production one that does not load fails the game's load (the page's
+ * "Couldn’t Load the Game" with Try Again). In development and tests a
+ * missing file is stood in for by a placeholder built in code to the same
+ * contract (src/games/ridge/placeholder/), which a production build drops
+ * entirely. The loading itself is the engine's (engine/world/art.ts).
+ */
+import type { Group, Texture } from "three";
+import type { GameContext, LoadedAsset } from "../../../engine/types";
+import { Art, type ArtFile } from "../../../engine/world/art";
+import { asSky } from "../../../engine/world/sky";
+import { readValley, type ValleyLayout } from "./valley";
+
+export const ASSET_PATHS = {
+  valley: "assets/ridge/valley.glb",
+  sky: "assets/ridge/sky.webp",
+  soldier: "assets/ridge/soldier.glb",
+  civilian: "assets/ridge/civilian.glb",
+  vehicles: "assets/ridge/vehicles.glb",
+  animals: "assets/ridge/animals.glb",
+} as const;
+
+export type AssetName = keyof typeof ASSET_PATHS;
+
+/** Each file's share of the loading bar, roughly its size. */
+const FILES: Record<AssetName, ArtFile> = {
+  valley: { path: ASSET_PATHS.valley, kind: "gltf", weight: 0.62 },
+  sky: { path: ASSET_PATHS.sky, kind: "texture", weight: 0.06 },
+  soldier: { path: ASSET_PATHS.soldier, kind: "gltf", weight: 0.1 },
+  civilian: { path: ASSET_PATHS.civilian, kind: "gltf", weight: 0.08 },
+  vehicles: { path: ASSET_PATHS.vehicles, kind: "gltf", weight: 0.08 },
+  animals: { path: ASSET_PATHS.animals, kind: "gltf", weight: 0.06 },
+};
+
+export interface RidgeAssets {
+  valley: ValleyLayout;
+  sky: Texture;
+  soldier: LoadedAsset;
+  civilian: LoadedAsset;
+  vehicles: LoadedAsset;
+  animals: LoadedAsset;
+  /** Which came from files (the rest are placeholders; never in production). */
+  real: Record<AssetName, boolean>;
+}
+
+export type Placeholders = typeof import("../placeholder/index");
+
+/** The stand-ins, outside production only: in a production build this is null and the import is gone. */
+export function placeholders(): Promise<Placeholders> | null {
+  return import.meta.env.MODE !== "production" ? import("../placeholder/index") : null;
+}
+
+export async function loadAssets(ctx: GameContext, onProgress: (fraction: number) => void, base: string | null = null): Promise<RidgeAssets> {
+  const kit = import.meta.env.MODE === "production" ? null : await placeholders();
+  const art = new Art(ctx, FILES, { label: "Overwatch Ridge", base, root: "assets/ridge/", standIns: kit !== null }, onProgress);
+  await art.probe();
+  const model = (name: "valley" | "soldier" | "civilian" | "vehicles" | "animals") => art.gltf(name, kit ? () => kit.standIn(name) : null);
+  const [valleyAsset, soldier, civilian, vehicles, animals] = await Promise.all([model("valley"), model("soldier"), model("civilian"), model("vehicles"), model("animals")]);
+  const sky = asSky(await art.texture("sky", kit ? () => kit.standInSky() : null));
+  const valley = readValley(valleyAsset.scene as Group);
+  return { valley, sky, soldier, civilian, vehicles, animals, real: art.real };
+}
