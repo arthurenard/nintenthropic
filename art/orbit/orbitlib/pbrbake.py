@@ -97,10 +97,27 @@ def const_emissive(src):
     return m
 
 
+def triangulate_ngons(ob):
+    """Split faces of five or more sides: tangent space (MikkTSpace) is only
+    defined on triangles and quads, and the baked normal map must agree
+    with the tangents the game computes."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    ng = [f for f in bm.faces if len(f.verts) > 4]
+    if ng:
+        bmesh.ops.triangulate(bm, faces=ng, quad_method='BEAUTY', ngon_method='BEAUTY')
+        bm.to_mesh(ob.data)
+        ob.data.update()
+    bm.free()
+
+
 def bake(ctx, name, objs, size, density, ao_distance=0.5, samples=None, quick=False):
     """Bake the objects' procedural materials into one PBR atlas and give
     them the final material. Returns the final material."""
     t0 = time.time()
+    for ob in objs:
+        triangulate_ngons(ob)
     sc = bpy.context.scene
     sc.render.engine = 'CYCLES'
     sc.cycles.device = 'GPU'
@@ -114,6 +131,28 @@ def bake(ctx, name, objs, size, density, ao_distance=0.5, samples=None, quick=Fa
         slot = ob.material_slots[f.material_index] if f.material_index < len(ob.material_slots) else None
         return not is_emissive(slot.material if slot else None)
     frac = atlas.unwrap(objs, size, density, uv_name='bake', angle=58.0, faces_filter=keep_face)
+    # bake on one joined copy: Cycles bakes selected objects one at a time,
+    # each with its own scene sync, which costs far more than the samples
+    bpy.ops.object.select_all(action='DESELECT')
+    dups = []
+    for ob in objs:
+        d = ob.copy()
+        d.data = ob.data.copy()
+        for c in ob.users_collection:
+            c.objects.link(d)
+        dups.append(d)
+    for ob in objs:
+        ob.hide_render = True
+    bpy.context.view_layer.update()
+    for d in dups:
+        d.select_set(True)
+    bpy.context.view_layer.objects.active = dups[0]
+    if len(dups) > 1:
+        bpy.ops.object.join()
+    joined = bpy.context.view_layer.objects.active
+    joined.hide_render = False
+    real_objs = objs
+    objs = [joined]
     s = samples or {}
     materials.route_all('color')
     alb = atlas.bake_pass(objs, size, 'EMIT', 1 if quick else s.get('color', 4))
@@ -129,6 +168,10 @@ def bake(ctx, name, objs, size, density, ao_distance=0.5, samples=None, quick=Fa
     # the position pass reads zero on faces at the world origin; the drone
     # and friends are built there, so also trust any texel with colour
     valid |= alb.max(-1) > 1e-5
+    bpy.data.objects.remove(joined)
+    objs = real_objs
+    for ob in objs:
+        ob.hide_render = False
     alb = atlas.fill_empty(alb, valid)
     orm = np.stack([np.clip(ao, 0, 1), np.clip(rough, 0.02, 1), np.clip(metal, 0, 1)], -1)
     orm = atlas.fill_empty(orm, valid)

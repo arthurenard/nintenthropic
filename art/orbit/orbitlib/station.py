@@ -7,11 +7,10 @@ placed by where it lands on the player's screen (NDC x, y in -1..1 on a
 
     the main truss        across the top, above the limb, 18 m out
     two solar wings       from the truss ends, reaching forward, cells to the sun
-    the radiator          hanging down on the right, edge-on to the sun
+    two radiators         hanging down left and right, edge-on to the sun
     the robotic arm       from the truss, its hand in the right window
     a module + capsule    lower left, the capsule docked at its nose
     the laser turret      below the cupola, lower right of centre
-    a sensor mast         a thin boom whose beacon sits near the centre
     a stowage platform    lower right, ORU boxes under blankets
 
 Materials: white beta-cloth blankets, gold and silver MLI, bare and painted
@@ -439,6 +438,13 @@ def build(lib, col, c_con):
     rn = r_along.cross(sun).normalized()
     radiator(g, rroot, r_along, rn, length=16.0, width=3.2, panels=7)
     objs['radiator'] = g.build(col, lib)
+    # and its twin on the left (radiators hang in pairs)
+    g = Geo("station.radiator.left")
+    rrootL = t_mid - X * 21.0 - truss_up * 1.4
+    r_alongL = (-Z * 0.8 + Y * 0.55 - X * 0.1).normalized()
+    rnL = r_alongL.cross(sun).normalized()
+    radiator(g, rrootL, r_alongL, rnL, length=16.0, width=3.2, panels=7)
+    objs['radiator_left'] = g.build(col, lib)
     # ---------------- robotic arm -----------------------------------------
     g = Geo("station.arm")
     aroot = t_mid + X * 7.0 - truss_up * 1.3 - Y * 0.6
@@ -490,7 +496,7 @@ def build(lib, col, c_con):
         ('1', t_mid - X * 14.0 - Y * 1.5 - truss_up * 1.2, 'red'),     # top-left, truss
         ('2', t_mid + X * 3.2 - Y * 1.5 - truss_up * 1.2, 'white'),     # top-centre, truss
         ('3', t_mid + X * 15.0 - Y * 1.5 - truss_up * 1.2, 'green'),    # top-right, truss
-        ('4', vp(-0.86, 0.05, 30.0), 'red'),      # left, array root area
+        ('4', rrootL + r_alongL * 15.6, 'red'),    # left, the left radiator's tip
         ('5', wpos + wax * 0.0 + Vector((0, 0, 0.42)), 'white'),  # centre, on the arm's wrist
         ('6', rroot + r_along * 15.6, 'green'),    # right, radiator tip
         ('7', m_end + mod_axis * 1.5 + mod_axis * 7.35, 'red'),   # bottom-left, capsule trunk

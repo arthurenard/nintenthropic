@@ -202,19 +202,29 @@ def check_debris(r, d):
         kinds[k] = found
         r.need(len(found) >= 2, f"debris: only {len(found)} {k}.<n> variants")
         for i, nm in found.items():
-            r.need("mesh" in names[nm], f"debris: {nm} has no mesh")
+            if k != "foil":
+                r.need("mesh" in names[nm], f"debris: {nm} has no mesh")
             ex = extras(names[nm])
             r.need(ex.get("kind") == k, f"debris: {nm} extras.kind {ex.get('kind')!r}")
+            r.need(isinstance(ex.get("mass_kg"), (int, float)), f"debris: {nm} has no mass_kg")
+
+    def children(nm):
+        return {g["nodes"][c].get("name") for c in names[nm].get("children", [])}
     for i, nm in kinds.get("foil", {}).items():
-        r.need(f"{nm}.core" in names, f"debris: {nm}.core missing")
+        kids = children(nm)
+        r.need(f"{nm}.core" in kids and f"{nm}.wrap" in kids, f"debris: {nm} needs children {nm}.wrap and {nm}.core")
     for k in ("chunk", "slab"):
         for i, nm in kinds.get(k, {}).items():
+            grp = nm + ".pieces"
+            if not r.need(grp in names, f"debris: {grp} missing"):
+                continue
             pieces = numbered(names, nm + ".piece.")
             r.need(len(pieces) >= 2, f"debris: {nm} has {len(pieces)} pieces (needs 2+)")
-            node_idx = {n.get("name"): j for j, n in enumerate(g["nodes"])}
-            kids = set(names[nm].get("children", []))
+            kids = children(grp)
             for m, pn in pieces.items():
-                r.need(node_idx[pn] in kids, f"debris: {pn} is not a child of {nm}")
+                r.need(pn in kids, f"debris: {pn} is not in {grp}")
+            wt, gt = names[nm].get("translation", [0, 0, 0]), names[grp].get("translation", [0, 0, 0])
+            r.need(max(abs(a - b) for a, b in zip(wt, gt)) < 1e-3, f"debris: {grp} is not at {nm}'s position")
     r.say("  " + ", ".join(f"{k} {len(v)}" for k, v in kinds.items()))
     check_surfaces(r, "debris.glb", g, names)
 

@@ -109,25 +109,35 @@ def build(lib, col):
 
     # ---------------- the forging: top plate and six facets ----------------
     shell = Geo("cupola.shell")
-    # top plate: hexagon with the centre window's hole, SHELL thick (outward = +y)
+    # The forging is built as separate plates - six sectors round the centre
+    # window, four strips round each side window - rather than plates with
+    # holes: each becomes its own compact UV island, so the baked atlas has
+    # no empty window-shaped holes in it.
     top = hexagon(R_TOP, A_TOP)
-    circle = [(R_CW * math.cos(2 * math.pi * i / 64), R_CW * math.sin(2 * math.pi * i / 64)) for i in range(64)]
     # plate lies in x-z plane; the sheet builder extrudes along its local +Z,
     # so map local (X, Y, Z) -> cupola (x, z, y)
     Mt = Matrix(((1, 0, 0, 0), (0, 0, 1, A_TOP), (0, 1, 0, 0), (0, 0, 0, 1)))
-    shell.sheet(Mt, [(p.x, p.z) for p in top], SHELL, 'alu_dark', holes=[circle[::-1]], side_mat='alu_frame')
+    for j in range(6):
+        a0 = math.atan2(top[j].z, top[j].x)
+        a1 = math.atan2(top[(j + 1) % 6].z, top[(j + 1) % 6].x)
+        if a1 < a0:
+            a1 += 2 * math.pi
+        arc = [(R_CW * math.cos(a1 - (a1 - a0) * i / 12), R_CW * math.sin(a1 - (a1 - a0) * i / 12)) for i in range(13)]
+        sector = [(top[j].x, top[j].z), (top[(j + 1) % 6].x, top[(j + 1) % 6].z)] + arc
+        shell.sheet(Mt, sector, SHELL, 'alu_dark', side_mat='alu_frame')
     for k in range(6):
         F = facet(k)
-        # facet plate in its own 2D frame: X = lateral, Y = slant (m)
+        # facet plates in its own 2D frame: X = lateral, Y = slant (m)
         Mf = bl.frame(F['T'], F['lat'], F['s'], -F['n'])
         L = F['L']
-        outline = [(-F['half'](0), 0), (F['half'](0), 0), (F['half'](1), L), (-F['half'](1), L)]
-        wc = window_corners(F)
-        hole = []
-        for p in wc:
+        TL, TR, BR, BL = (-F['half'](0), 0), (F['half'](0), 0), (F['half'](1), L), (-F['half'](1), L)
+        c = []
+        for p in window_corners(F):
             q = p - F['T']
-            hole.append((q.dot(F['lat']), q.dot(F['s'])))
-        shell.sheet(Mf, outline, SHELL, 'alu_dark', holes=[hole[::-1]], side_mat='alu_frame')
+            c.append((q.dot(F['lat']), q.dot(F['s'])))
+        c0, c1, c2, c3 = c                      # top-left, top-right, bottom-right, bottom-left
+        for strip in ([TL, TR, c1, c0], [c1, TR, BR, c2], [c3, c2, BR, BL], [TL, c0, c3, BL]):
+            shell.sheet(Mf, strip, SHELL, 'alu_dark', side_mat='alu_frame')
     ob = shell.build(col, lib, smooth_angle=30)
     ob.matrix_world = P
     bl.tag(ob, surface='metal', part='shell')
@@ -311,6 +321,31 @@ def build(lib, col):
 
 
 # ---------------------------------------------------------------------------
+
+def node_room(lib, col):
+    """The node module behind the player: never seen (it is behind the
+    camera) and never exported, but it is what lights the faces of the
+    frame that look back at the eye - its white walls and LED panels bounce
+    light up into the cupola, as they do on the real station."""
+    P = pitch_matrix()
+    g = Geo("room.node")
+    R = 2.25
+    # a cylinder across the view (axis along x), its wall tangent to the
+    # cupola's base ring
+    cy = A_BASE - 0.02 - R
+    M = bl.frame((-3.5, cy, 0.0), Vector((0, 1, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)))
+    seg = 24
+    ang0 = math.radians(18)          # leave the port for the cupola open
+    for i in range(seg):
+        a0 = ang0 + (2 * math.pi - 2 * ang0) * i / seg
+        a1 = ang0 + (2 * math.pi - 2 * ang0) * (i + 1) / seg
+        mat = 'led_room' if i in (5, 17) else 'paint_panel'
+        g.lathe(M, [(R, 0.0), (R, 7.0)], mat, seg=1, a0=a0, a1=a1, closed=False)
+    ob = g.build(col, lib)
+    ob.matrix_world = P
+    bl.tag(ob, export=0, part='room')
+    return ob
+
 
 def side_pane(lib, col, P, F, n):
     """A side window's glass: a flat trapezoid in the reveal, its own mesh

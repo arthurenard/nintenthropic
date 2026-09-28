@@ -136,22 +136,25 @@ def render_planet_view(maps, rays_world, sky, samples=48, sun_disc=True, exposur
     return L, cov
 
 
-def stage_env(ctx):
+def render_env(ctx, name, sky, W=2048, maps=None, samples=40):
     """The planet as the station sees it, as a world environment (equirect,
-    this build's convention: see planetrender.equirect_rays) for lighting the
-    cupola bake and the review renders: earthshine from below, black space
-    above, the sun as a lamp."""
+    this build's convention: see planetrender.equirect_rays) for lighting:
+    earthshine from below, black space above. No sun disc: in Blender the
+    sun is a lamp."""
     from . import planetrender as PR
-    maps = load_maps(ctx)
-    W = 1024 if ctx.quick else 2048
+    maps = maps or load_maps(ctx)
     t = time.time()
     D = PR.equirect_rays(W, W // 2)
-    L, _ = render_planet_view(maps, D, Sky(star_gain=0.0), samples=24 if ctx.quick else 40, sun_disc=False)
-    # no sun disc in the environment: the sun is a lamp in Blender
-    env = L.reshape(W // 2, W, 3)
-    env = np.minimum(env, 60.0)
-    imgio.write_exr(ctx.path("env_day.exr"), env)
-    log(f"  env_day.exr {W}x{W // 2} in {time.time() - t:.1f}s, mean {env.mean():.3f}")
+    L, _ = render_planet_view(maps, D, sky, samples=samples, sun_disc=False)
+    env = np.minimum(L.reshape(W // 2, W, 3), 60.0)
+    path = ctx.path(name)
+    imgio.write_exr(path, env)
+    log(f"  {name} {W}x{W // 2} in {time.time() - t:.1f}s, mean {env.mean():.3f}")
+    return path
+
+
+def stage_env(ctx):
+    render_env(ctx, "env_day.exr", Sky(star_gain=0.0), W=1024 if ctx.quick else 2048, samples=24 if ctx.quick else 40)
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +186,7 @@ def build_scene(ctx):
     if os.path.exists(env):
         render.world_env(sc, env)
     cup = cupola.build(lib, c_cup)
+    cupola.node_room(lib, bl.collection("room", root))
     try:
         from . import station
     except ImportError:
@@ -217,6 +221,31 @@ def stage_cupola(ctx):
 def stage_station(ctx):
     from . import export
     export.station(ctx)
+
+
+def stage_debris(ctx):
+    from . import assets
+    assets.stage_debris(ctx)
+
+
+def stage_drone(ctx):
+    from . import assets
+    assets.stage_drone(ctx)
+
+
+def stage_derelict(ctx):
+    from . import assets
+    assets.stage_derelict(ctx)
+
+
+def stage_extras(ctx):
+    from . import assets
+    assets.stage_extras(ctx)
+
+
+def stage_poster(ctx):
+    from . import poster
+    poster.stage(ctx)
 
 
 def stage_review(ctx):

@@ -849,6 +849,18 @@ class Planet:
         for s in self.systems:
             if s['kind'] == 'tropical':
                 dens = np.maximum(dens, self._hurricane(s, f))
+        # a deck is never uniformly thick: opacity inside the cloud wanders
+        # between ~0.7 and 1 (the renderer turns that into lumpy relief), a
+        # little more in the convective and cellular regions
+        thick = self._uniform(f.fbm(Pw, 22.0, 6, gain=0.6, first=44))
+        lumpy = np.clip(0.3 + 0.4 * (w['cb'] + w['cell'] + w['cu']), 0.3, 0.7)
+        dens = dens * (1 - lumpy * 0.45 * (1 - thick) * N.smoothstep(0.5, 0.95, dens))
+        # popcorn cumulus: small scattered clouds in the clear gaps over warm
+        # sea and wet land, the texture of a fair-weather day from orbit
+        pop_t = f.billow(Pw, 70.0, 3, first=50) + 0.35 * f.fbm(Pw, 25.0, 3, first=53)
+        fair = N.smoothstep(12, 24, self.T) * (1 - N.smoothstep(0.55, 0.9, cover)) * (0.35 + 0.65 * (1 - self.desert))
+        pops = N.smoothstep(0.62, 0.78, pop_t) * fair * 0.7
+        dens = 1 - (1 - dens) * (1 - pops)
         # cirrus: thin fibrous veils in the jets and blown off the storms
         cir = f.ridged(Pw * np.array([1, 1, 2.2], F32), 9.0, 5, sharp=3.0, first=30)
         cirrus = N.smoothstep(0.6, 0.92, cir) * (0.4 * gauss(dlat, 42, 10) + 0.35 * gauss(slat, itcz, 8) + 0.3 * w['cb']) \
@@ -1125,7 +1137,8 @@ class Planet:
     def detail(self, size=1024):
         """R: cumulus and cellular cloud detail, G: terrain detail (eroded
         ridges and valleys), B: fibrous cloud detail (streets, cirrus).
-        Tiles on the unit square."""
+        Tiles on the unit square. R and B have uniform histograms (see
+        planetrender.sharpen_clouds)."""
         x = (np.arange(size, dtype=F32) + 0.5) / size
         X, Y = np.meshgrid(x, x)
         wx = sum(0.5 ** i * periodic_noise2(X, Y, 4 * 2 ** i, 11 + i) for i in range(4)) * 0.04
@@ -1142,10 +1155,13 @@ class Planet:
                 a *= gain
             return out / t
 
+        # clouds: cauliflower lumps (billows) over a softer fBm, then
+        # rank-transformed to a uniform histogram, so a renderer that keeps
+        # detail > 1 - coverage gets exactly that coverage in crisp cloudlets
         billow = fbm(8, 6, 101, 0.55, absval=True)
-        cloud = np.clip(0.5 + 0.55 * fbm(6, 7, 41) + 0.7 * (billow - 0.3), 0, 1)
+        cloud = self._uniform(0.55 * fbm(6, 7, 41) + 0.8 * billow)
         terrain = np.clip(0.5 + 0.65 * fbm(5, 8, 61, 0.55), 0, 1)
-        fib = np.clip(0.5 + 0.7 * fbm(3, 6, 131, 0.55, fy=12), 0, 1)
+        fib = self._uniform(fbm(3, 6, 131, 0.55, fy=12))
         self.detail_rgb = np.stack([cloud, terrain, fib], -1).astype(F32)
         self.say("detail texture")
 

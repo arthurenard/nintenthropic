@@ -62,6 +62,9 @@ class Maps:
         self.water = water.astype(F32)
         self.height = None if height is None else height.astype(F32)
         self.detail = detail
+        self.det_r = None if detail is None else np.ascontiguousarray(detail[..., 0])
+        self.det_g = None if detail is None else np.ascontiguousarray(detail[..., 1])
+        self.det_b = None if detail is None else np.ascontiguousarray(detail[..., 2])
         self.stars = stars
 
     @classmethod
@@ -170,14 +173,42 @@ def detail_at(maps, u, v, lat, scale=1.0):
     return out
 
 
-def sharpen_clouds(alpha, d):
-    """Sub-pixel cloud structure: partial coverage becomes crisp broken
-    cloud; overcast and clear stay as they are."""
+DETAIL_REP = (48.0, 192.0)        # tiles per unit of v (and twice that in u)
+DETAIL_TEXELS_KM = math.pi * R / (DETAIL_REP[0] * 1024)
+CLOUDLET_H = 1.2                   # km: the relief of a cloudlet at full cover
+
+
+def detail_uv(u, v, lat, rep):
+    cl = np.maximum(np.cos(lat), 0.2)
+    return (u * rep * 2 * cl) % 1.0, (v * rep) % 1.0
+
+
+def cloud_cover(maps, u, v, lat, use_detail=True):
+    """The cloud layer's opacity at (u, v): the map's cover, broken into
+    cloudlets by the detail texture (two scales plus the fibrous channel)."""
+    a = N.sample(maps.clouds, u, v)
+    if not use_detail or maps.detail is None:
+        return a
+    u1, v1 = detail_uv(u, v, lat, DETAIL_REP[0])
+    u2, v2 = detail_uv(u, v, lat, DETAIL_REP[1])
+    d1 = N.sample(maps.det_r, u1, v1)
+    d2 = N.sample(maps.det_r, u2, v2)
+    fb = N.sample(maps.det_b, u1, v1)
+    d = np.clip(0.75 * d1 + 0.25 * fb + (d2 - 0.5) * 0.35, 0, 1)
+    return sharpen_clouds(a, d)
+
+
+def sharpen_clouds(alpha, d, soft=0.14):
+    """Sub-pixel cloud structure. The map's opacity is read as coverage:
+    keep the detail texture's values above 1 - coverage, with a soft edge.
+    Partial cover becomes distinct, crisp cloudlets in the right amount;
+    overcast stays overcast and clear stays clear."""
     if d is None:
         return alpha
-    k = 1.6
-    a = alpha + (d - 0.5) * k * alpha * (1 - alpha) * 2.0
-    return np.clip(a, 0, 1).astype(F32)
+    lo = 1.0 - alpha - soft
+    t = np.clip((d - lo) / (2 * soft), 0, 1)
+    a = t * t * (3 - 2 * t)
+    return np.clip(np.maximum(a * np.minimum(alpha * 1.6, 1.0), alpha * 0.08), 0, 1).astype(F32)
 
 
 # ---------------------------------------------------------------------------
@@ -300,9 +331,7 @@ def _render_chunk(O, D, sun, maps, st):
             spn = sp / np.maximum(np.linalg.norm(sp, axis=1, keepdims=True), 1e-6)
             xs = ng * (R + CLOUD_H) + spn * (CLOUD_H * np.minimum(tan_z, 40))[:, None]
             us, vs = uv_of(xs)
-            cs = N.sample(maps.clouds, us, vs)
-            if det is not None:
-                cs = sharpen_clouds(cs, N.sample(maps.detail, (us * 96 * 2 * np.maximum(np.cos(lat), 0.2)) % 1, (vs * 96) % 1)[:, 0])
+            cs = cloud_cover(maps, us, vs, lat, det is not None)
             shadow = 1 - 0.85 * cs
         direct = SUN_E * SUN_COLOR * Tsun_g * (np.maximum(mu_n, 0) * shadow)[:, None]
         sky = SUN_E * np.array([0.07, 0.10, 0.16], F32) * np.clip(mu_g + 0.15, 0, 1.15)[:, None] ** 1.5 * (0.6 + 0.4 * shadow[:, None])
@@ -339,12 +368,9 @@ def _render_chunk(O, D, sun, maps, st):
             xc = O + Dg * tc[:, None]
             nc = xc / np.linalg.norm(xc, axis=1, keepdims=True)
             uc, vc = N.dir_to_uv(nc)
-            ca = N.sample(maps.clouds, uc, vc)
             latc = np.arcsin(np.clip(nc[:, 2], -1, 1))
-            dc = None
-            if det is not None:
-                dc = detail_at(maps, uc, vc, latc)
-                ca = sharpen_clouds(ca, dc[:, 0] * 0.7 + dc[:, 2] * 0.3)
+            use_d = det is not None
+            ca = cloud_cover(maps, uc, vc, latc, use_d)
             # relief normal from the cloud field's gradient (thick = high)
             eps = 0.6 / maps.clouds.shape[1]
             cu = N.sample(maps.clouds, uc + eps, vc)
@@ -355,16 +381,21 @@ def _render_chunk(O, D, sun, maps, st):
             # full opacity: slope = relief * d(alpha)/d(km)
             kx = CLOUD_RELIEF * (cu - N.sample(maps.clouds, uc - eps, vc)) / (2 * eps * 2 * math.pi * R * np.maximum(np.cos(latc), 0.1))
             ky = -CLOUD_RELIEF * (cv - N.sample(maps.clouds, uc, vc - eps)) / (2 * eps * math.pi * R)
-            if dc is not None:
-                kx = kx + (dc[:, 0] - 0.5) * 0.5
-                ky = ky + (dc[:, 2] - 0.5) * 0.5
+            if use_d:
+                # cloudlet relief: the sharpened cover as a height field at
+                # the detail texture's own scale
+                dv = 1.0 / (DETAIL_REP[0] * 1024)
+                du = dv / (2 * np.maximum(np.cos(latc), 0.2))
+                hf = lambda a_: CLOUDLET_H * a_ ** 1.5
+                kx = kx + (hf(cloud_cover(maps, uc + du, vc, latc)) - hf(cloud_cover(maps, uc - du, vc, latc))) / (2 * DETAIL_TEXELS_KM)
+                ky = ky - (hf(cloud_cover(maps, uc, vc + dv, latc)) - hf(cloud_cover(maps, uc, vc - dv, latc))) / (2 * DETAIL_TEXELS_KM)
             ncl = nc - east * kx[:, None] + north * ky[:, None]
             ncl /= np.linalg.norm(ncl, axis=1, keepdims=True)
             mu_c = np.sum(nc * sun, 1)
             mu_cl = np.sum(ncl * sun, 1)
             Tsun_c = T(np.full_like(mu_c, CLOUD_H), mu_c)
-            wrap = np.clip((mu_cl + 0.35) / 1.35, 0, 1)
-            thick = 0.55 + 0.45 * ca
+            wrap = np.clip((mu_cl + 0.25) / 1.25, 0, 1) ** 1.3
+            thick = 0.6 + 0.4 * ca
             Lc = F32(0.92 / math.pi) * SUN_E * SUN_COLOR * Tsun_c * (wrap * thick)[:, None]
             Lc = Lc + F32(0.92 / math.pi) * SUN_E * np.array([0.08, 0.11, 0.16], F32) * np.clip(mu_c + 0.15, 0, 1.15)[:, None]
             # forward scattering through thin cloud edges toward the sun

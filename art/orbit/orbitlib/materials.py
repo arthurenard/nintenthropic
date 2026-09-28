@@ -284,6 +284,10 @@ def interior_materials():
         return dict(color=g.rgb((0.9, 0.92, 0.95)), rough=0.3, metal=0.0, emit=g.rgb((0.86, 0.93, 1.0)), estr=220.0)
     pbr('led', led, emissive=True)
 
+    def led_room(g):
+        return dict(color=g.rgb((0.9, 0.92, 0.95)), rough=0.3, metal=0.0, emit=g.rgb((0.86, 0.93, 1.0)), estr=45.0)
+    pbr('led_room', led_room, emissive=True)
+
     def led_amber(g):
         return dict(color=g.rgb((0.9, 0.6, 0.2)), rough=0.3, metal=0.0, emit=g.rgb((1.0, 0.55, 0.12)), estr=12.0)
     pbr('led_amber', led_amber, emissive=True)
@@ -321,7 +325,8 @@ def thin_glass(name):
     (a single refracting face would act as a prism), a Fresnel reflection,
     and it lets the sun through to the frame (no caustics needed)."""
     m, g = new_material(name)
-    fres = g.node('ShaderNodeFresnel', inputs={'IOR': 1.47}, out=0)
+    # anti-reflection coated: a quarter of bare glass's reflection
+    fres = g.mul(g.node('ShaderNodeFresnel', inputs={'IOR': 1.47}, out=0), 0.3)
     tr = g.node('ShaderNodeBsdfTransparent', inputs={'Color': (0.96, 0.975, 0.98)}, out=0)
     gl = g.node('ShaderNodeBsdfGlossy', inputs={'Color': (1, 1, 1), 'Roughness': 0.015}, out=0)
     sh = g.node('ShaderNodeMixShader', inputs={0: fres, 1: tr, 2: gl}, out=0)
@@ -499,6 +504,50 @@ def exterior_materials():
 
 # ---------------------------------------------------------------------------
 # Debris
+
+def extras_materials():
+    def weld_blue(g):
+        return dict(color=g.rgb((0.3, 0.6, 1.0)), rough=0.2, metal=0.0, emit=g.rgb((0.35, 0.65, 1.0)), estr=18.0)
+    pbr('weld_blue', weld_blue, emissive=True)
+
+    def suit(g):
+        # the spacesuit's outer layer: white Ortho-fabric, soft seams, a
+        # little grubby at the knees and gloves
+        w = weave(g, 0.0012)
+        n = g.noise(obj(g), scale=6.0, detail=5.0)
+        n2 = g.noise(obj(g), scale=60.0, detail=3.0)
+        base = g.mix(g.smooth(n, 0.55, 0.85), g.rgb(lin(226, 224, 216)), g.rgb(lin(196, 192, 180)))
+        return dict(color=base, rough=0.78, metal=0.0, height=g.add(g.mul(w, 0.3), g.add(n2, g.mul(n, 1.5))), bump=0.3,
+                    bump_dist=0.003, spec=0.35)
+    pbr('suit', suit)
+
+    def suit_red(g):
+        n = g.noise(obj(g), scale=60.0, detail=3.0)
+        return dict(color=g.rgb(lin(170, 30, 26)), rough=0.8, metal=0.0, height=n, bump=0.2, bump_dist=0.002)
+    pbr('suit_red', suit_red)
+
+    def visor_gold(g):
+        n = g.noise(obj(g), scale=30.0, detail=2.0)
+        return dict(color=g.rgb(lin(250, 196, 100)), rough=g.add(0.03, g.mul(n, 0.03)), metal=1.0)
+    pbr('visor_gold', visor_gold)
+
+    def duck_yellow(g):
+        n = g.noise(obj(g), scale=40.0, detail=2.0)
+        return dict(color=g.rgb(lin(252, 206, 20)), rough=g.add(0.32, g.mul(n, 0.08)), metal=0.0, height=n, bump=0.03,
+                    bump_dist=0.001, coat=0.3)
+    pbr('duck_yellow', duck_yellow)
+
+    def duck_orange(g):
+        return dict(color=g.rgb(lin(240, 110, 20)), rough=0.35, metal=0.0, coat=0.3)
+    pbr('duck_orange', duck_orange)
+
+    def bag(g):
+        w = weave(g, 0.0018)
+        n = g.noise(obj(g), scale=9.0, detail=5.0)
+        base = g.mix(g.smooth(n, 0.5, 0.85), g.rgb(lin(222, 220, 212)), g.rgb(lin(190, 186, 172)))
+        return dict(color=base, rough=0.85, metal=0.0, height=g.add(w, g.mul(n, 1.2)), bump=0.35, bump_dist=0.003, spec=0.3)
+    pbr('bag', bag)
+
 
 def debris_materials():
     def torn_alu(g):

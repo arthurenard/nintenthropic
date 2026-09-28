@@ -28,12 +28,12 @@ HORIZON_ROLL_DEG = -4.0    # the limb rises a little toward the left
 SUBPOINT = (-146.0, 12.0)  # lon, lat (deg) under the station
 HEADING_DEG = 60.0         # the view's heading over the ground (from north)
 
-# The baked sun: high on the left, a touch ahead of square to the view, so
-# the debris is side-lit (facets flash as they turn), the station's white
-# blankets rake in hard light, and sunlight streams in through the left and
-# upper-left windows onto the right of the frame inside.
-SUN_ELEV_DEG = 34.0        # above the station's horizontal
-SUN_AZ_DEG = -80.0         # from the view direction, + to the right
+# The baked sun: up on the left and ahead, so the debris is side- and
+# front-lit (facets flash as they turn), the station's white blankets rake
+# in hard light, the ocean's glint shows in the left window, and sunlight
+# streams in through the left-hand windows onto the right of the frame.
+SUN_ELEV_DEG = 30.0        # above the station's horizontal
+SUN_AZ_DEG = -62.0         # from the view direction, + to the right
 SUN_COLOR = (1.0, 0.985, 0.96)
 SUN_ANGLE_DEG = 0.53
 
