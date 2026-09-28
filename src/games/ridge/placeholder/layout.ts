@@ -441,7 +441,9 @@ export const YETI_ROCK: XZ = [572, -1759];
 /** The eagle's circuit high over the valley, and the rock by your scope where it lands. */
 export const EAGLE_CENTRE: XYZ = [-30, 80, -430];
 export const EAGLE_RADIUS = 130;
-export const EAGLE_ROCK: XYZ = [0.9, 1.15, -4.4];
+// Just over the brink, low on the left of the view: a boulder the eagle lands
+// on a couple of metres from the scope, below the aim check's plates.
+export const EAGLE_ROCK: XYZ = [-1.3, 1.35, -2.5];
 
 /**
  * The aim check's nine steel plates, on the soldiers' range on the near

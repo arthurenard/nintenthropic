@@ -93,7 +93,8 @@ const PAINTERS: Record<(typeof TERRAIN_LAYERS)[number], Painter> = {
   rock: (u, v) => {
     const n = tfbm(u, v, 4, 5, 11);
     const c = tcells(u, v, 6, 12);
-    const crack = Math.max(0, 1 - c * 5.5);
+    // Small, soft pits rather than bold spots: magnified six times they would read as rain.
+    const crack = Math.max(0, 1 - c * 8) * 0.5;
     const lichen = Math.max(0, tfbm(u, v, 12, 3, 13) - 0.6) * 2.2;
     const strata = Math.sin((v + n * 0.18) * Math.PI * 14) * 0.5 + 0.5;
     const base = mix(118, 158, n) - strata * 10;

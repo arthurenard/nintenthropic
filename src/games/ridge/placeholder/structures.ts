@@ -55,6 +55,7 @@ import {
   RIVER_LEVEL,
   ROAD,
   SANDBAGS,
+  terrainHeight,
   TOWER,
   TOWER_HEIGHT,
   TUNNEL,
@@ -579,11 +580,18 @@ function rocks(root: Object3D, b: Batch, M: Materials, ground: Ground): void {
   };
   // The eagle's rock, right in front of the scope, and the rifle's rest.
   // The eagle's rock stands on the slope just below the brink: its top is where the eagle perches.
+  // Its top is exactly the plan's perch (the true ground plus the height),
+  // its foot sunk into the mesh's ground, whichever is lower on the steep slope.
   const [ex, ey, ez] = EAGLE_ROCK;
-  const eg = ground(ex, ez);
-  const eagleRock = new Mesh(boulder(0.7, 2), M.mat("rock"));
-  eagleRock.scale.set(0.9, ey / 0.49, 0.9);
-  eagleRock.position.set(ex, eg + ey * 0.02, ez);
+  const top = terrainHeight(ex, ez) + ey;
+  const foot = Math.min(ground(ex, ez), terrainHeight(ex, ez)) - 0.3;
+  const rockShape = boulder(0.7, 2);
+  rockShape.computeBoundingBox();
+  const shapeBox = rockShape.boundingBox!;
+  const eagleRock = new Mesh(rockShape, M.mat("rock"));
+  const sy = (top - foot) / (shapeBox.max.y - shapeBox.min.y);
+  eagleRock.scale.set(0.75, sy, 0.8);
+  eagleRock.position.set(ex, foot - shapeBox.min.y * sy, ez);
   eagleRock.name = "rock.eagle";
   root.add(eagleRock);
   // The rifle's rest at the brink, low at the bottom of the view.

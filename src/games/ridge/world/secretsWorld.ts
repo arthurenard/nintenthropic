@@ -43,15 +43,18 @@ export class SecretsWorld {
     // The yeti's footprints: a line of dents in the snow leading away over the snowfield.
     if (s.yeti) {
       const base = s.yeti.getWorldPosition(new Vector3());
-      const away = new Vector3(base.x, 0, base.z).normalize().multiplyScalar(-1);
-      for (let i = 0; i < 18; i++) {
-        const side = i % 2 === 0 ? 0.35 : -0.35;
-        const p = new Vector3(base.x - away.x * i * 1.3 + -away.z * side, 0, base.z - away.z * i * 1.3 + away.x * side);
+      // Across the snowfield and up, away from the ridge: a line seen from the side reads at any range.
+      const away = new Vector3(base.x, 0, base.z).normalize();
+      const step = new Vector3(-away.z, 0, away.x).multiplyScalar(0.8).addScaledVector(away, 0.6).normalize();
+      for (let i = 0; i < 24; i++) {
+        const side = i % 2 === 0 ? 0.5 : -0.5;
+        const p = new Vector3(base.x + step.x * (i + 2) * 1.8 - step.z * side, 0, base.z + step.z * (i + 2) * 1.8 + step.x * side);
         p.y = heightfield.height(p.x, p.z) + 0.05;
         this.printSpots.push(p);
       }
-      const mat = new MeshBasicMaterial({ color: "#7d8aa3", transparent: true, opacity: 0.75, depthWrite: false, name: "footprints" });
-      const geo = new CircleGeometry(0.28, 10);
+      const mat = new MeshBasicMaterial({ color: "#56627c", transparent: true, opacity: 0.85, depthWrite: false, name: "footprints" });
+      // A yeti's feet, big enough to read through the scope at almost two kilometres.
+      const geo = new CircleGeometry(0.5, 10);
       geo.rotateX(-Math.PI / 2);
       geo.scale(1, 1, 1.6);
       this.prints = new InstancedMesh(geo, mat, this.printSpots.length);

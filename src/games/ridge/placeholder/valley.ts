@@ -418,6 +418,7 @@ function forest(grid: TerrainGrid): { fir: InstancedMesh; larch: InstancedMesh }
     if (Math.hypot(x - FARM[0] + 10, z - FARM[1] + 20) < 70) return;
     if (Math.abs(x - 402) < 160 && z < -690 && z > -1500) return; // the gorge and its reservoir
     if (Math.hypot(x - TUNNEL[0], z - TUNNEL[2]) < 40) return;
+    if (Math.hypot(x - YETI_ROCK[0], (z - YETI_ROCK[1]) * 1.4) < 170) return; // the yeti's snowfield, open to the scope
     if (Math.abs(x) < 130 && z > -300 && z < -140) return; // the soldiers' range
     if (noise(x * 0.37 + jitter, z * 0.37, 93) > want) return;
     const s = 0.6 + noise(x * 1.3, z * 1.3, 95) * 0.85;

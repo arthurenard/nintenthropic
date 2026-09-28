@@ -240,7 +240,8 @@ export class Effects {
   /** A little smoke at the muzzle of the player's own rifle (seen unscoped). */
   puff(at: Vector3, golden: boolean): void {
     const r = this.random;
-    for (let i = 0; i < 3; i++) this.alpha.emit(at.x, at.y, at.z, (r() - 0.5) * 0.2, 0.15 + r() * 0.1, -0.2 - r() * 0.3, SMOKE, 0.25, golden ? col("#e6d29a") : undefined);
+    // A faint wisp low at the edge of the view: the barrel is under the eye, not in it.
+    for (let i = 0; i < 2; i++) this.alpha.emit(at.x, at.y, at.z, (r() - 0.5) * 0.2, 0.1 + r() * 0.08, -0.2 - r() * 0.3, SMOKE, 0.14, golden ? col("#e6d29a") : undefined);
   }
 
   clearAll(): void {

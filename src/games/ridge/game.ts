@@ -606,7 +606,8 @@ export class OverwatchRidge implements Game, MissionListener {
     this.sound.play("ridge_rifle_shot", { volume: 0.9 });
     this.scope.kick(this.visual);
     this.foreground.fire();
-    this.effects.puff(this.foreground.muzzle(tmp), this.golden);
+    // No smoke: the aim check's view is drawn in close on the plates, and a
+    // puff at the muzzle would fill it.
   }
 
   private fire(aim: Aim): void {
@@ -1283,6 +1284,8 @@ export class OverwatchRidge implements Game, MissionListener {
       still: (on: boolean) => {
         this.stillDebug = on;
       },
+      /** A round from the counter-sniper's ledge, now (the fall and the results, for the tests). */
+      hurt: (damage: number) => this.mission.debugHit(damage),
       setImmortal: (on: boolean) => {
         this.mission.health.immortal = on;
       },
@@ -1294,6 +1297,8 @@ export class OverwatchRidge implements Game, MissionListener {
        * drop, the wind and his walking worked out.
        */
       aimFor: (id: number, part: "head" | "chest" = "chest") => this.aimFor(id, part),
+      /** Where to point the wide view to put a round on a world point (the hold worked out). */
+      aimPoint: (x: number, y: number, z: number) => this.aimAtPoint(new Vector3(x, y, z)),
       /** Where the last rounds landed, oldest first. */
       landings: () => this.landings.slice(),
       /** Where someone's chest and head are in the world now. */
@@ -1331,7 +1336,7 @@ export class OverwatchRidge implements Game, MissionListener {
     const out: { id: number; role: string; side: string; activity: string; x: number; y: number; hx: number; hy: number; distance: number }[] = [];
     for (const a of this.mission.actors) {
       if (!a.shootable) continue;
-      const chest = this.cast.chestOf(a.id, new Vector3()) ?? new Vector3(a.pos.x, a.pos.y + 1, a.pos.z);
+      const chest = this.cast.chestOf(a.id, new Vector3()) ?? new Vector3(a.pos.x, a.pos.y + (a.role === "duck" ? 0.12 : 1), a.pos.z);
       const head = this.cast.headOf(a.id, new Vector3()) ?? chest.clone();
       const c = chest.clone().project(this.wide);
       const h = head.clone().project(this.wide);
@@ -1344,7 +1349,7 @@ export class OverwatchRidge implements Game, MissionListener {
   private aimFor(id: number, part: "head" | "chest"): { x: number; y: number; distance: number } | null {
     const a = this.mission.actors.find((x) => x.id === id);
     if (!a) return null;
-    const spot = (part === "head" ? this.cast.headOf(id, new Vector3()) : this.cast.chestOf(id, new Vector3())) ?? new Vector3(a.pos.x, a.pos.y + 1.3, a.pos.z);
+    const spot = (part === "head" ? this.cast.headOf(id, new Vector3()) : this.cast.chestOf(id, new Vector3())) ?? new Vector3(a.pos.x, a.pos.y + (a.role === "duck" ? 0.12 : 1.3), a.pos.z);
     return this.aimAtPoint(spot, a.vel);
   }
 

@@ -14,6 +14,7 @@ import {
   Mesh,
   Object3D,
   Raycaster,
+  Sphere,
   SphereGeometry,
   MeshStandardMaterial,
   Vector3,
@@ -243,6 +244,7 @@ export class Cast implements MovingWorld {
   private readonly vehicleTemplates = new Map<string, Object3D>();
   private readonly raycaster = new Raycaster();
   private readonly duckMesh: Mesh;
+  private readonly duckRadius: number;
   /** The duck's actor id, once it is in the river. */
   private duckId = -1;
   /** Radians of aim assist on a hostile's body (a finger is not a mouse); 0 for a pointer. */
@@ -285,17 +287,20 @@ export class Cast implements MovingWorld {
     if (duck && (duck as Mesh).isMesh) {
       this.duckMesh = duck as Mesh;
     } else {
-      const body = new Mesh(new SphereGeometry(0.13, 12, 8), new MeshStandardMaterial({ color: "#ffd21a", roughness: 0.45, name: "duck" }));
+      // A giant one, a metre long: through the scope at six hundred metres it is a yellow speck.
+      const body = new Mesh(new SphereGeometry(0.4, 14, 10), new MeshStandardMaterial({ color: "#ffd21a", roughness: 0.45, name: "duck" }));
       body.scale.set(1, 0.75, 1.25);
-      const head = new Mesh(new SphereGeometry(0.08, 10, 8), body.material);
-      head.position.set(0, 0.12, 0.09);
-      const beak = new Mesh(new SphereGeometry(0.035, 8, 6), new MeshStandardMaterial({ color: "#f07a1a", roughness: 0.5 }));
+      const head = new Mesh(new SphereGeometry(0.24, 12, 8), body.material);
+      head.position.set(0, 0.36, 0.27);
+      const beak = new Mesh(new SphereGeometry(0.1, 8, 6), new MeshStandardMaterial({ color: "#f07a1a", roughness: 0.5 }));
       beak.scale.set(1, 0.5, 1.4);
-      beak.position.set(0, 0.11, 0.17);
+      beak.position.set(0, 0.33, 0.5);
       body.add(head, beak);
       this.duckMesh = body;
     }
     this.duckMesh.visible = false;
+    // How close a round must pass to hit it: most of its size, whoever made it.
+    this.duckRadius = Math.max(0.12, new Box3().setFromObject(this.duckMesh).getBoundingSphere(new Sphere()).radius * 0.75);
     this.duckMesh.traverse((o) => {
       const m = o as Mesh;
       if (m.isMesh) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) patchStandard(mat, atmosphere, true);
@@ -431,7 +436,7 @@ export class Cast implements MovingWorld {
   /** Put the duck where the rules have it. */
   placeDuck(a: Actor, bob: number): void {
     const d = this.duckMesh;
-    d.position.set(a.pos.x, a.pos.y + 0.05 + Math.sin(this.time * 2.3) * 0.03 + bob, a.pos.z);
+    d.position.set(a.pos.x, a.pos.y + 0.12 + Math.sin(this.time * 2.3) * 0.04 + bob, a.pos.z);
     d.rotation.y = a.heading + Math.sin(this.time * 0.7) * 0.4;
     d.rotation.z = Math.sin(this.time * 1.7) * 0.12 + bob * 1.5;
   }
@@ -485,7 +490,8 @@ export class Cast implements MovingWorld {
       }
       if (dt > 0) turnRig(rig, a.heading, dt);
       else rig.root.rotation.y = a.heading;
-      if (flying) rig.root.rotation.z = Math.sin(this.time * 0.9 + a.id) * 0.25;
+      // Banking on the wind in flight; level on its rock.
+      if (flying) rig.root.rotation.z = a.activity === "glide" || a.activity === "flap" ? Math.sin(this.time * 0.9 + a.id) * 0.25 : 0;
     }
     // What: the clip for his activity.
     const want = clipFor(a);
@@ -549,7 +555,7 @@ export class Cast implements MovingWorld {
       probePoint(a, dir, this.duckMesh.position, probe);
       if (probe.t >= 0 && probe.t <= len) {
         near(this.duckId, probe.miss);
-        if (probe.miss < 0.2) consider(probe.t, { kind: "duck", id: this.duckId, part: "body", surface: "water" });
+        if (probe.miss < this.duckRadius) consider(probe.t, { kind: "duck", id: this.duckId, part: "body", surface: "water" });
       }
     }
     // The vehicles: the engine block first (under the bonnet), then the glass, then the body.

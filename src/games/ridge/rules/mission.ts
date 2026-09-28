@@ -1717,6 +1717,13 @@ export class Mission {
     this.found("eagle");
   }
 
+  /** For the harness and the tests: a round from the far ledge's nest reaches the ridge now. */
+  debugHit(damage: number): void {
+    const nest = this.plan.nests[this.plan.nests.length - 1];
+    if (!nest) return;
+    this.hurt(damage, nest.exposed, "sniper", nest.place);
+  }
+
   /** The siren's wail: every cow in the pasture turns to look up at the ridge. */
   cowsLook(seconds: number): void {
     for (const a of this.actors) {
