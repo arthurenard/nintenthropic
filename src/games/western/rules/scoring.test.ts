@@ -54,6 +54,12 @@ describe("scoring", () => {
     expect(s.score).toBe(0);
   });
 
+  it("names the penalty in words, for a popup that reads without its colour", () => {
+    const award = new Scorer().innocent();
+    expect(award.points).toBe(-200);
+    expect(award.labels).toEqual(["Townsperson"]);
+  });
+
   it("adds accuracy, Untouchable and Clean Hands at the end of a wave", () => {
     const s = new Scorer();
     s.shot(true);

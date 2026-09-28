@@ -10,6 +10,7 @@ import type {
 } from "../../engine/types";
 import { Bandit as BanditClass, type Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
+import { felledBy } from "./rules/felled";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import { loadSoundPack } from "../../audio/index";
 import type { StreetSpace } from "../../audio/routing";
@@ -26,10 +27,13 @@ import { Cast } from "./world/cast";
 import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
 import { RIM, RigPool, templateFrom } from "./world/character";
 import { DynamiteView } from "./world/dynamiteView";
-import { reloadHint } from "./hints";
+import { Hammer } from "./hammer";
+import { innocentWord, reloadHint } from "./hints";
+import { HintLine, tipText, type TipId } from "./tips";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "./world/framing";
 import { PlayerCamera } from "./world/playerCamera";
+import { ScreenFlash } from "./world/flash";
 import { PostFX } from "./world/post";
 import { TownQueries } from "./world/queries";
 import { SecretsWorld } from "./world/secretsWorld";
@@ -145,13 +149,16 @@ export class HighNoon implements Game, MatchListener {
   private timeScale = 1;
   private deathT = 0;
   private sepia = 0;
-  private flash = 0;
+  private readonly flash = new ScreenFlash();
   private hurtShown = -1;
   private hurtDisplay = 0;
   private hurtFilter = -1;
   private readoutKey = "";
-  private hintUntil = -1;
-  private hintText: string | null = null;
+  /** The hint line: the reload when it is needed, a word after a mistake, one-time tips. */
+  private hints = new HintLine(new Set());
+  /** What the HUD's hint shows now, as last told. */
+  private hintShown: string | null = null;
+  private readonly hammer = new Hammer();
   private golden = false;
   private tier: GameContext["quality"]["tier"] = "high";
   private noon = false;
@@ -402,13 +409,15 @@ export class HighNoon implements Game, MatchListener {
     this.deathT = 0;
     this.tombstone = false;
     this.hurtDisplay = 0;
+    this.flash.reset();
     this.post.set("sepia", 0);
     this.post.set("hurt", 0);
     this.post.set("desaturate", 0);
     this.post.set("exposure", 1);
     this.sound.filter("slowmo", 0);
     this.sound.filter("hurt", 0);
-    this.clearHint();
+    this.hints.setQuiet(true);
+    this.syncHint();
     this.phase = "calibration";
   }
 
@@ -441,7 +450,11 @@ export class HighNoon implements Game, MatchListener {
     this.hud.health(0);
     this.match.start({ wave, duel: this.noon && wave === 1 });
     this.ambient.running = true;
-    this.showHint(reloadHint(this.ctx.input), 5);
+    // The tips this player has seen, as the page keeps them now.
+    this.hints = new HintLine(this.ctx.settings.tipsSeen);
+    this.hints.setQuiet(false);
+    // How to reload, at the start of every game until they have done it.
+    this.offerTip("western.reload");
     if (this.golden) {
       const hud = this.hud as HudSink & { revolverFinish?: (finish: "steel" | "gold") => void };
       hud.revolverFinish?.("gold");
@@ -454,6 +467,8 @@ export class HighNoon implements Game, MatchListener {
   update(dt: number, _now: number, aim: Aim): void {
     if (this.phase === "loading" || this.paused) return;
     this.lastDt = dt;
+    // Read every frame: turned on in the pause menu, it holds from Resume.
+    this.effects.reducedFlashing = this.ctx.settings.reducedFlashing;
     // The host may change the tier mid-game (its dynamic resolution gave up).
     if (this.ctx.quality.tier !== this.tier) {
       this.tier = this.ctx.quality.tier;
@@ -481,11 +496,25 @@ export class HighNoon implements Game, MatchListener {
       this.reloadKey = false;
     }
     this.match.update(wdt, aim.offscreen);
+    this.cockHammer(dt, aim);
     this.updateWorld(wdt, dt, true);
     this.updateHurt(dt);
     if (this.phase === "playing") this.pushReadouts(false);
     if (this.phase === "dying" || this.phase === "over") this.updateDeath(dt);
-    if (this.hintUntil > 0 && this.time > this.hintUntil) this.clearHint();
+    this.hints.update(dt);
+    this.syncHint();
+  }
+
+  /**
+   * With the hand, the thumb coming back up after a shot cocks the hammer:
+   * a soft click, lighter than a bandit's, from the player's own gun.
+   */
+  private cockHammer(dt: number, aim: Aim): void {
+    const r = this.match.revolver;
+    const live = this.phase === "playing" && (this.ctx.input ?? "hand") === "hand";
+    if (this.hammer.update(dt, { armed: aim.armed, fired: aim.fired, live, reloading: r.reloading, rounds: r.rounds })) {
+      this.sound.play("revolver_cock", { volume: 0.3, rate: 1.25 });
+    }
   }
 
   private updateWorld(wdt: number, realDt: number, playing: boolean): void {
@@ -502,8 +531,7 @@ export class HighNoon implements Game, MatchListener {
       this.shownFov = fov;
       this.effects.setScale(this.bufferHeight, fov);
     }
-    this.flash *= Math.exp(-realDt / 0.12);
-    this.post.set("flash", this.flash);
+    this.post.set("flash", this.flash.update(realDt));
     this.post.set("time", this.time);
   }
 
@@ -639,7 +667,9 @@ export class HighNoon implements Game, MatchListener {
     const result = this.match.trigger();
     if (result === "dry") {
       this.sound.play("revolver_dry");
-      this.showHint(reloadHint(this.ctx.input), 0);
+      // A state, not a lesson: every time the cylinder is found empty.
+      this.hints.setNeed(reloadHint(this.ctx.input));
+      this.syncHint();
       return;
     }
     if (result !== "fired") return;
@@ -649,7 +679,7 @@ export class HighNoon implements Game, MatchListener {
     if (this.golden) {
       tmp.set(x * 2 - 1, -(y * 2 - 1), 0.5).unproject(this.camera.camera).sub(this.camera.camera.position).normalize();
       tmp2.copy(this.camera.camera.position).addScaledVector(tmp, 0.9);
-      this.effects.lights.flash(tmp2, GOLD_LIGHT, 18, 5, 0.08);
+      this.effects.flashLight(tmp2, GOLD_LIGHT, 18, 5, 0.08);
     }
     this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, false);
     const res = this.shooter.shoot(x, y);
@@ -759,16 +789,19 @@ export class HighNoon implements Game, MatchListener {
     return `${sign}${Math.abs(award.points).toLocaleString("en-US")}${label}`;
   }
 
-  private showHint(text: string, seconds: number): void {
-    if (this.hintText !== text) this.hud.hint(text);
-    this.hintText = text;
-    this.hintUntil = seconds > 0 ? this.time + seconds : -1;
+  /** A one-time tip's moment has come (see tips.ts): shown if this player has not had it. */
+  private offerTip(id: TipId): void {
+    if (this.phase !== "playing") return;
+    this.hints.offer(id, tipText(id, this.ctx.input));
+    this.syncHint();
   }
 
-  private clearHint(): void {
-    if (this.hintText !== null) this.hud.hint(null);
-    this.hintText = null;
-    this.hintUntil = -1;
+  /** Tell the HUD what the hint line shows, when it changes. */
+  private syncHint(): void {
+    const text = this.hints.text;
+    if (text === this.hintShown) return;
+    this.hintShown = text;
+    this.hud.hint(text);
   }
 
   private pushReadouts(force: boolean): void {
@@ -789,7 +822,11 @@ export class HighNoon implements Game, MatchListener {
   private updateHurt(dt: number): void {
     const hurt = this.match.health.hurt;
     // The picture reacts at once to a hit and recovers with the regeneration.
-    this.hurtDisplay = hurt > this.hurtDisplay ? hurt : this.hurtDisplay + (hurt - this.hurtDisplay) * Math.min(1, dt * 4);
+    // With reduced flashing the red and the grey close in over a quarter of a
+    // second instead, so a hit never darkens the whole view in one frame.
+    const shown = this.hurtDisplay;
+    if (hurt <= shown) this.hurtDisplay = shown + (hurt - shown) * Math.min(1, dt * 4);
+    else this.hurtDisplay = this.effects.reducedFlashing ? shown + (hurt - shown) * Math.min(1, dt * 10) : hurt;
     const h = this.hurtDisplay;
     this.post.set("hurt", h);
     this.post.set("desaturate", Math.min(1, h * 0.6 + this.sepia));
@@ -814,7 +851,9 @@ export class HighNoon implements Game, MatchListener {
     this.camera.setDeath(this.ctx.settings.reducedMotion ? 0 : Math.min(1, t / 2.4), this.hurtSide);
     if (t > 2.0 && !this.tombstone) {
       this.tombstone = true;
-      this.hud.banner("Here lies a fast hand.", `Fell on Wave ${this.match.wave}.`);
+      // "Fell on Wave 4 to a rifleman on the saloon roof."
+      const f = this.match.felled;
+      this.hud.banner("Here lies a fast hand.", f ? `Fell on Wave ${this.match.wave} to ${felledBy(f)}.` : `Fell on Wave ${this.match.wave}.`);
     }
     if (t > 5.2 && this.phase === "dying") {
       this.phase = "over";
@@ -856,7 +895,10 @@ export class HighNoon implements Game, MatchListener {
     if (b.untouchable > 0) lines.push([`+${b.untouchable} Untouchable`, "gold"]);
     if (b.cleanHands > 0) lines.push([`+${b.cleanHands} Clean Hands`, ""]);
     lines.forEach(([text, tone], i) => this.later(0.35 + i * 0.45, () => this.hud.popup(0.5, 0.56 + i * 0.05, text, tone)));
-    this.clearHint();
+    // The wave is won: the line clears for the title card (a tip still showing finishes).
+    this.hints.setNeed(null);
+    this.hints.clearWord();
+    this.syncHint();
   }
 
   intermission(_next: number, giant: boolean): void {
@@ -879,6 +921,7 @@ export class HighNoon implements Game, MatchListener {
   }
   banditGlint(b: Bandit): void {
     this.cast.glint(b, this.match.tuning.glintLead);
+    this.offerTip("western.glint");
   }
   banditFire(b: Bandit, hit: boolean, _damage: number): void {
     this.cast.fire(b, hit);
@@ -895,6 +938,7 @@ export class HighNoon implements Game, MatchListener {
   }
   banditThrow(b: Bandit, stick: Dynamite): void {
     this.cast.released(b, stick.id);
+    this.offerTip("western.dynamite");
   }
   banditPace(b: Bandit, pace: number): void {
     this.cast.pace(b, pace);
@@ -947,7 +991,7 @@ export class HighNoon implements Game, MatchListener {
     this.sound.at("dynamite_explode", tmp, 1);
     const d = tmp.distanceTo(this.camera.camera.position);
     this.camera.rumble(Math.min(1.4, 6 / (2 + d)));
-    if (d < 12) this.flash = Math.max(this.flash, 0.35 * (1 - d / 12));
+    if (d < 12) this.flash.kick(0.35 * (1 - d / 12), this.effects.reducedFlashing);
     if (tmp.y - floor < 0.6) {
       tmp2.set(0, 1, 0);
       tmp.y = floor + 0.01;
@@ -969,12 +1013,14 @@ export class HighNoon implements Game, MatchListener {
     this.deathT = 0;
     this.sound.play("death_player");
     this.sound.filter("slowmo", 1);
-    this.clearHint();
+    this.hints.setQuiet(true);
+    this.syncHint();
     this.ambient.running = false;
   }
 
   townsfolkAppear(p: Townsperson): void {
     this.cast.townsAppear(p);
+    this.offerTip("western.townsfolk");
   }
   townsfolkHide(_p: Townsperson): void {}
   townsfolkGone(p: Townsperson): void {
@@ -982,9 +1028,12 @@ export class HighNoon implements Game, MatchListener {
   }
 
   townsfolkShot(p: Townsperson, award: Award): void {
+    // Said in words, not only in red and a sound: "−200 Townsperson" where
+    // they stood, and a calm word on the line about who it was.
     tmp2.set(p.pos.x, p.pos.y + 2.05, p.pos.z);
     this.popupAt(tmp2, this.awardText(award), "danger");
-    this.showHint("Mind the townsfolk.", 2.5);
+    this.hints.say(innocentWord(p.role), 2);
+    this.syncHint();
   }
 
   streakUp(multiplier: number): void {
@@ -1002,7 +1051,10 @@ export class HighNoon implements Game, MatchListener {
     if (started) {
       this.sound.play("reload_spin");
       this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, true);
-      if (this.hintText === reloadHint(this.ctx.input)) this.clearHint();
+      this.hints.setNeed(null);
+      // Reloaded by themselves: the start of the next game need not say how.
+      if (this.phase === "playing") this.hints.learned("western.reload");
+      this.syncHint();
     } else {
       this.sound.play("revolver_cock");
       this.hud.ammo(this.match.revolver.rounds, this.match.revolver.capacity, false);

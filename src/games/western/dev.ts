@@ -11,7 +11,8 @@
  * from window.__handy), ?w=&h=&dpr= (a fixed canvas size, for benchmarks),
  * ?assetBase=/some/folder/ (load town.glb, sky.webp and the characters from
  * there instead of public/assets/western/, to try an export in progress),
- * ?difficulty=relaxed, ?flashing=reduced.
+ * ?difficulty=relaxed, ?flashing=reduced, ?tips=seen (as if every one-time
+ * tip had been shown already).
  *
  * window.__handy: game (with game.debug: targets(), match(), gallery()...),
  * hud (with .log of every HudSink call), mouse (aimAt, fire, reloadGesture),
@@ -25,6 +26,7 @@ import type { Aim, AssetLoader, CalibrationTarget, GameContext, GameStats, HudSi
 import type { HighNoon } from "./game";
 import { createHighNoon } from "./index";
 import { mulberry32 } from "./rules/rng";
+import { ALL_TIPS } from "./tips";
 
 const params = new URLSearchParams(location.search);
 const num = (k: string, d: number) => (params.has(k) ? Number(params.get(k)) : d);
@@ -147,7 +149,8 @@ class DomHud implements HudSink {
   gameOver(stats: GameStats) {
     this.note("gameOver", [stats]);
     const r = $("results");
-    r.innerHTML = `<div class="k">High Noon</div><div class="o">${stats.outcome}</div><div class="sc num">${stats.score.toLocaleString("en-US")}</div>
+    const note = stats.note ? `<div class="note">${stats.note}</div>` : "";
+    r.innerHTML = `<div class="k">High Noon</div><div class="o">${stats.outcome}</div>${note}<div class="sc num">${stats.score.toLocaleString("en-US")}</div>
       <div class="grid">${stats.stats.map((s) => `<div><div class="v num">${s.value}</div><div class="k">${s.label}</div></div>`).join("")}</div>
       <div class="secrets num">Secrets ${stats.secretsFound} / ${stats.secretsTotal}</div>`;
     r.classList.add("on");
@@ -264,7 +267,7 @@ async function main() {
       reducedFlashing: params.get("flashing") === "reduced",
       difficulty: params.get("difficulty") === "relaxed" ? "relaxed" : "standard",
       unlocks,
-      tipsSeen: new Set(),
+      tipsSeen: new Set(params.get("tips") === "seen" ? ALL_TIPS : []),
     },
     quality,
     random: mulberry32(seed),
