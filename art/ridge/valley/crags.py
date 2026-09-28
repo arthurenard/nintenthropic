@@ -430,7 +430,7 @@ def bake_ao(obs, samples=64, distance=18.0):
 def goat_ledges(crag, n=4):
     """Places on the crag's face a goat could stand, the eye can see and a
     goat could hop between: up-facing, flat for a metre, on the side toward
-    the player, spread up the face."""
+    the player, climbing the face one hop at a time."""
     sc = bpy.context.scene
     dg = bpy.context.evaluated_depsgraph_get()
     me = crag.data
@@ -460,15 +460,34 @@ def goat_ledges(crag, n=4):
         if not hit:
             seen.append(i)
     seen = np.array(sorted(seen, key=lambda i: h[i]), np.int64)
-    picks = []
-    if len(seen):
-        for q in np.linspace(0.12, 0.92, n):
-            order = np.argsort(np.abs(h[seen] - np.quantile(h[seen], q)))
-            for j in order:
-                p = P[seen[j]]
-                if all(np.linalg.norm(p - r) > 6.0 for r in picks):
-                    picks.append(p + np.array([0, 0, 0.03]))
-                    break
+    # a chain up the face, each ledge one goat's hop from the last (the
+    # clip's arc is 1.6 m across and 1.5 m up, and stretches ~25%; allow a
+    # little more and let the game scale the arc to the real offset)
+    Ps = P[seen]
+
+    def chain(start, across, up):
+        out = [start]
+        while len(out) < n:
+            d = Ps - Ps[out[-1]]
+            dh = np.hypot(d[:, 0], d[:, 1])
+            ok = (d[:, 2] >= up[0]) & (d[:, 2] <= up[1]) & (dh >= across[0]) & (dh <= across[1])
+            ok[out] = False
+            if not ok.any():
+                return out
+            cost = np.abs(dh - 1.62) + np.abs(d[:, 2] - 1.5)
+            out.append(int(np.argmin(np.where(ok, cost, np.inf))))
+        return out
+    best = []
+    for across, up in (((0.9, 2.6), (0.8, 2.2)), ((0.8, 3.5), (0.6, 3.0)), ((0.6, 5.0), (0.4, 4.0))):
+        for k in range(int(len(seen) * 0.15), len(seen)):
+            c = chain(k, across, up)
+            if len(c) > len(best):
+                best = c
+            if len(best) == n:
+                break
+        if len(best) == n:
+            break
+    picks = [Ps[i] + np.array([0, 0, 0.03]) for i in best]
     log(f"goat ledges: {len(picks)} of {n} ({len(seen)} visible of {len(cand)} candidates)")
     return [tuple(float(a) for a in p) for p in picks]
 

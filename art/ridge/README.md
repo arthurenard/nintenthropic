@@ -15,13 +15,13 @@ larch and stone pine, a limestone wall, snowfields and the peaks.
 
 | File (`public/assets/ridge/`) | What | Size | Budget |
 | --- | --- | --- | --- |
-| `valley.glb` + `terrain/*.webp` | terrain, forest, sites, water, roads, rocks, contract nodes | SIZE_VALLEY | ≤ 30 MB |
-| `sky.webp` | the dawn sky and the far world, equirectangular 4096×2048 | SIZE_SKY | — |
-| `soldier.glb` | the infantryman, variants, weapons, 23 clips | SIZE_SOLDIER | 10–18k tris dressed |
-| `civilian.glb` | farmer, cyclist + bicycle, shepherd, child | SIZE_CIVILIAN | 10–18k tris dressed |
-| `vehicles.glb` | truck, jeep | SIZE_VEHICLES | — |
-| `animals.glb` | cow, sheep, goat, eagle, dog | SIZE_ANIMALS | — |
-| `poster.webp` | the valley through the scope, 1600×900 | SIZE_POSTER | — |
+| `valley.glb` + `terrain/*.webp` | terrain, forest, sites, water, roads, rocks, contract nodes | 9.3 MB + 7.0 MB = 16.3 MB | ≤ 30 MB |
+| `sky.webp` | the dawn sky and the far world, equirectangular 4096×2048 | 0.10 MB | — |
+| `soldier.glb` | the infantryman, variants, weapons, 23 clips | 1.5 MB | 10–18k tris dressed |
+| `civilian.glb` | farmer, cyclist + bicycle, shepherd, child | 1.5 MB | 10–18k tris dressed |
+| `vehicles.glb` | truck, jeep | 1.6 MB | — |
+| `animals.glb` | cow, sheep, goat, eagle, dog | 1.9 MB | — |
+| `poster.webp` | the valley through the scope, 1600×900 | 0.12 MB | — |
 
 ## Building
 
@@ -36,20 +36,22 @@ so one can be rerun once those before it have run):
 
 | Stage | Does | Full build |
 | --- | --- | --- |
-| `terrain` | heightfield (macro shape, peaks, the cliff, relief, hydraulic erosion, the designed features), the terrain mesh, the log-polar colour/normal/splat maps | T_TERRAIN |
-| `materials` | the tileable ground and building materials (Cycles micro-scenes) | T_MATERIALS |
-| `forest` | tree models → impostor atlases; where every tree stands | T_FOREST |
-| `buildings` | village and chapel, farm, checkpoint and watchtower, bridge, dam, alp | T_BUILDINGS |
-| `water` | river, reservoir, mist ribbons, roads | T_WATER |
-| `contract` | the rock walls (`rock.cliff`, `rock.crag`), the named nodes, the foreground | T_CONTRACT |
-| `sky` | `sky.webp` | T_SKY |
-| `bake` | the terrain's light map | T_BAKE |
-| `export` | `valley.glb` + `terrain/*.webp` | T_EXPORT |
-| `review` | review renders into `art/ridge/build/review/` | T_REVIEW |
-| `poster` | `poster.webp` | T_POSTER |
+| `terrain` | heightfield (macro shape, peaks, the cliff, relief, hydraulic erosion, the designed features), the terrain mesh, the log-polar colour/normal/splat maps | 6 min (3 min reusing the heightfield) |
+| `materials` | the tileable ground and building materials (Cycles micro-scenes) | 2 min |
+| `forest` | tree models → impostor atlases; where every tree stands | 3 min (10 s reusing the atlases) |
+| `buildings` | village and chapel, farm, checkpoint and watchtower, bridge, dam, alp | 3 s |
+| `water` | river, reservoir, mist ribbons, roads | 4 s |
+| `contract` | the rock walls (`rock.cliff`, `rock.crag`), the named nodes, the foreground | 13 s |
+| `sky` | `sky.webp` | 1 min |
+| `bake` | the terrain's light map | 2 min |
+| `export` | `valley.glb` + `terrain/*.webp` | 1–1.5 min |
+| `review` | review renders into `art/ridge/build/review/` | 15 min |
+| `poster` | `poster.webp` | 3.5 min |
 | `characters`, `vehicles`, `animals` | `soldier.glb` + `civilian.glb`, `vehicles.glb`, `animals.glb` | see their READMEs |
 
-With no stage named, all of them run. `--quick` halves every resolution and
+All the valley stages take about 35 minutes on an M-series Mac (shared with
+other bakes); `characters` 5–15 min, `vehicles` a few minutes, `animals`
+10–18 min. With no stage named, all of them run. `--quick` halves every resolution and
 cuts samples for iteration. `RIDGE_REUSE_TERRAIN=1` skips the erosion
 simulation when `build/terrain.npz` exists; `RIDGE_REUSE_IMPOSTORS=1` skips
 re-rendering the tree atlases. Output is deterministic (every random draw is
@@ -99,7 +101,7 @@ v = 1 - ln(clamp(hypot(x, z), 30, 6000) / 30) / ln(6000 / 30)
 
 TEXCOORD_0 of every chunk holds exactly this (the formula and constants are
 also in `terrain.splat.extras.mapping`), so the shader can use the attribute
-or recompute it from the world position. Maps (`terrain/`, WebP, SIZE_MAPS):
+or recompute it from the world position. Maps (`terrain/`, WebP, 2048×4096):
 
 | File | Channels |
 | --- | --- |
@@ -171,7 +173,7 @@ boulders (`rocks.slope`, `foreground.rock`, `secret.yeti.rock`).
 
 ## The forest
 
-About TREES_TOTAL trees of four species (spruce in three variants, larch in
+About 102,000 trees of four species (spruce in three variants, larch in
 two, stone pine, birch in two), placed from the land cover's forest density
 and cleared from every sightline to a target. Each tree is an **impostor
 card** (a quad with an alpha-tested atlas rendered from a detailed 3D model:
@@ -255,16 +257,54 @@ the same):
    60 m up a 50° view the rows fall at 0.71–0.87 of the screen's height, not
    spread over it. Each carries `extras.vp` (its 4:3 and 16:9 viewport
    position).
-4. **Extra nodes** the game can use or ignore: `rock.cliff`, `rock.crag`,
+4. **The goat's ledges** `secret.goat.1-4` climb the crag one hop apart
+   (1.6–1.9 m across, 0.9–1.1 m up, each visible from the eye), close to
+   `goat.hop`'s arc (1.62 m across, 1.5 m up): scale the arc to the real
+   offset between consecutive ledges.
+5. **Extra nodes** the game can use or ignore: `rock.cliff`, `rock.crag`,
    `rocks.slope`, `foreground.rock` (the rifle's rest) and
    `foreground.grass` (vertex-coloured blades; uv.v 0 root → 1 tip for
    swaying), `range.*` (the plates' posts), `mist.river.*`, `road.*`,
-   `eagle.land`, `tunnel`.
-5. **Animals' clips** are named `<animal>.<clip>` (`cow.graze`) because one
+   `eagle.land`, `tunnel`, `dam.face` (the dam's weathered downstream face,
+   concrete tile × COLOR_0).
+6. **Animals' clips** are named `<animal>.<clip>` (`cow.graze`) because one
    file holds five animals; see `fauna/README.md`.
-6. **Vehicles** carry extras for the drive (`wheelbase`, `wheel_radius`,
+7. **Vehicles** carry extras for the drive (`wheelbase`, `wheel_radius`,
    `length`) and `dismount.<n>` / `bed.seat.<n>` / `seat.rear.<n>` nodes;
    see `vehicles/README.md`.
+
+## People, vehicles, animals at a glance
+
+The full node, bone and clip tables are in the three READMEs; what the game
+most needs to get right:
+
+- **Soldier** (8.3k body; 10.9–17.9k dressed): walk 1.30 m/s, patrol_walk
+  1.05, run 3.60 (move the root at these speeds, nothing skates). Deaths land
+  at 0.70–0.88 s; `wound_kneel` kneels at 0.50 s, then loop `wounded`. Prone:
+  pelvis 0.62 m behind the root, muzzle 0.29 m up and 0.92 m ahead.
+  `gun.rifle.scoped` has `socket.glint` on its lens (the counter-sniper's
+  flash). Extra clips: `prone_fire`, `prone_death`, `wounded`,
+  `death_kneel`, `drive_death`, `fire_burst`, `prone_fire_burst`.
+- **Civilians** (6.5–8.3k each): show one `var.person.*`; the child carries
+  `extras.scale = 0.64` (scale the rig and his speeds). The bicycle is bones
+  on the cyclist's rig, animated inside `cycle` (4.58 m/s).
+- **Vehicles**: `wheel.<n>` roll about local X (`+= distance / radius`),
+  the front pair steer about local Y (Euler order `'YXZ'`); `dismount.<n>`
+  and `bed.seat.<n>` place the troops; `fx.exhaust`, `fx.steam` for effects.
+- **Animals**: clips `<animal>.<clip>`, root extras give each clip's speed;
+  the goat's hop and the eagle's landing are root motion the game drives
+  (formulas in `fauna/README.md`); the eagle's wing sets swap by bone scale,
+  so always play a clip on it and cut, never cross-fade, between perched and
+  flying clips.
+
+## Performance
+
+`valley.glb` draws ~970k triangles with every tree instance: terrain 458k,
+tree cards 204k (102k instances of 16 meshes), rock walls 95k, foreground
+grass 59k, buildings and the rest ~150k — 16 instanced draw calls for the
+whole forest, 33 materials. The terrain shader is the cost to watch: 8 materials × 3
+tiles (+1 anti-tiling sample each) + 5 maps; drop the tiles past ~1 km and
+the anti-tiling past ~500 m if the frame time needs it.
 
 ## Review renders
 
