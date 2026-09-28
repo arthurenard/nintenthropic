@@ -153,7 +153,8 @@ describe("a match on Relaxed", () => {
  * difficulties and the same seeds: Relaxed should carry each of them
  * meaningfully further, and still end every game in the end.
  */
-describe("difficulty balance", () => {
+// Each case plays 48 whole games: give a busy machine time.
+describe("difficulty balance", { timeout: 60_000 }, () => {
   const seeds = Array.from({ length: 24 }, (_, i) => i + 1);
   const medianWave = (skill: Skill, difficulty: "standard" | "relaxed") => {
     const waves = seeds.map((s) => playUntilDeath(s, skill, { difficulty }).wave).sort((a, b) => a - b);

@@ -1,5 +1,6 @@
 import type { V3 } from "./raymath";
 import { DYNAMITE_GROUND_FUSE, DYNAMITE_MAX_FLIGHT, GRAVITY } from "./tuning";
+import type { Cover } from "./types";
 
 export type DynamiteState = "flying" | "landed" | "dropped" | "exploded";
 
@@ -21,6 +22,8 @@ export class Dynamite {
   fuse = DYNAMITE_GROUND_FUSE;
   /** Which bandit threw it, for the blast's credits and his own demise. */
   throwerId = -1;
+  /** Where he threw it from, for saying what felled the player. */
+  thrownFrom: Cover | null = null;
   constructor(readonly id: number) {}
 
   /** Launch from `start` to land on `target` after `flightTime` seconds. */

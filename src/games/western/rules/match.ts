@@ -1,8 +1,9 @@
 import { Bandit, horizontalDistance, type BanditEvents, type BanditWorld } from "./bandit";
 import { chooseDeath } from "./deaths";
-import { Dynamite, flightTimeFor } from "./dynamite";
-import { damageDirection, PlayerHealth } from "./health";
 import type { Difficulty } from "../../../engine/types";
+import { Dynamite, flightTimeFor } from "./dynamite";
+import { felledNote, type Felled } from "./felled";
+import { damageDirection, PlayerHealth } from "./health";
 import type { V3 } from "./raymath";
 import { Revolver, type TriggerResult } from "./revolver";
 import { range, shuffle, type Random } from "./rng";
@@ -98,6 +99,8 @@ export interface Results {
   won: boolean;
   score: number;
   stats: { label: string; value: string }[];
+  /** What felled the player, and what would help next time. */
+  note?: string;
   secretsFound: number;
   secretsTotal: number;
 }
@@ -478,7 +481,7 @@ export class Match implements BanditWorld {
     const damage = Math.round(spec.damage * t.damageFactor * (b.role === "rifleman" ? RIFLE_DAMAGE_FACTOR : 1));
     for (const person of this.townsfolk) person.bulletsFly(this.time);
     this.listener.banditFire(b, hit, damage);
-    if (hit) this.damagePlayer(damage, b.pos, "bullet");
+    if (hit) this.damagePlayer(damage, b.pos, "bullet", b.role, b.cover);
   }
 
   canThrow(b: Bandit): boolean {
@@ -499,6 +502,7 @@ export class Match implements BanditWorld {
       z: this.eye.z - range(this.random, 3.2, 5),
     };
     stick.throwerId = b.id;
+    stick.thrownFrom = b.cover;
     stick.launch(start, target, flightTimeFor(horizontalDistance(start, target), this.tuning.flightFactor));
     this.listener.banditThrow(b, stick);
   }
@@ -664,19 +668,23 @@ export class Match implements BanditWorld {
     const py = at.y;
     if (px * px + py * py + pz * pz <= DYNAMITE_PLAYER_RADIUS * DYNAMITE_PLAYER_RADIUS) {
       const damage = Math.max(DYNAMITE_DAMAGE, Math.round(this.spec.damage * 1.5));
-      this.damagePlayer(Math.round(damage * this.tuning.damageFactor), at, "dynamite");
+      this.damagePlayer(Math.round(damage * this.tuning.damageFactor), at, "dynamite", "dynamiter", stick.thrownFrom);
     }
   }
 
   // --- the player ---------------------------------------------------------------
 
-  private damagePlayer(amount: number, from: V3, source: "bullet" | "dynamite"): void {
+  /** What landed the hit that felled the player; null while they stand. */
+  felled: Felled | null = null;
+
+  private damagePlayer(amount: number, from: V3, source: "bullet" | "dynamite", role: Role, cover: Cover | null): void {
     if (this.phase === "dead") return;
     this.scorer.damaged();
     const direction = damageDirection(this.eye, this.yaw, from);
     const died = this.health.hit(amount);
     this.listener.playerHit(amount, direction, this.health.hurt, source);
     if (died) {
+      this.felled = { source, role, cover, pressure: this.pressure() };
       this.phase = "dead";
       this.phaseT = 0;
       for (const b of this.bandits) this.releaseSlot(b);
@@ -822,6 +830,7 @@ export class Match implements BanditWorld {
       const stick = this.freeStick();
       if (stick) {
         stick.throwerId = b.id;
+        stick.thrownFrom = b.cover;
         stick.drop({ x: b.pos.x, y: b.pos.y + 0.1, z: b.pos.z }, DYNAMITE_DROP_FUSE);
         this.listener.dynamiteDropped(stick, b);
       }
@@ -909,6 +918,7 @@ export class Match implements BanditWorld {
         { label: "Accuracy", value: `${Math.round(s.accuracy * 100)}%` },
         { label: "Best Streak", value: String(s.bestStreak) },
       ],
+      ...(this.felled ? { note: felledNote(this.felled) } : {}),
       secretsFound: this.secrets.count,
       secretsTotal: SECRETS_TOTAL,
     };
