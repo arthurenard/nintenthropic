@@ -142,11 +142,72 @@ def clip_rates(g):
     return out
 
 
+def _decode_rgba(data):
+    """Pixels of an image file as RGBA bytes, or None without Pillow (the
+    checker otherwise needs nothing but Python)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    import io
+    im = Image.open(io.BytesIO(data)).convert("RGBA")
+    return im.width, im.height, im.tobytes()
+
+
+def transparent_colour(r, name, data):
+    """WebP (and some PNG) encoders throw away the colour under a fully
+    transparent texel. The splat maps keep a weight there, the impostors
+    their bled border: no texel may have alpha 0 (the exporter floors it at
+    1/255). Returns the decoded pixels (or None without Pillow)."""
+    px = _decode_rgba(data)
+    if px is None:
+        r.warn(False, f"{name}: Pillow missing, transparent texels not checked")
+        return None
+    w, h, b = px
+    idx = range(3, len(b), 4 * 97)            # a sparse sample: pure Python
+    a0 = sum(1 for i in idx if b[i] == 0)
+    r.need(a0 == 0, f"{name}: {a0}/{len(idx)} sampled texels have alpha 0 (their colour is lost in WebP)")
+    # and the colour under a nearly transparent texel is still there (not
+    # zeroed, not divided by the alpha on the way out)
+    low = [i for i in idx if b[i] < 8]
+    if len(low) > 20:
+        mean = sum(b[i - 3] + b[i - 2] + b[i - 1] for i in low) / (3 * len(low))
+        r.need(mean > 3, f"{name}: the colour under its transparent texels is black (mean {mean:.1f})")
+    return px
+
+
+def splat_weights(r, p0, p1):
+    """The eight weights of splat0 + splat1 sum to 1 at every texel: if the
+    colour under a transparent texel were lost, they would not."""
+    if p0 is None or p1 is None or len(p0[2]) != len(p1[2]):
+        return
+    b0, b1 = p0[2], p1[2]
+    bad = cnt = 0
+    for i in range(0, len(b0), 4 * 97):
+        ssum = b0[i] + b0[i + 1] + b0[i + 2] + b0[i + 3] + b1[i] + b1[i + 1] + b1[i + 2] + b1[i + 3]
+        cnt += 1
+        bad += not (215 <= ssum <= 300)
+    r.info(f"splat weights: {cnt - bad}/{cnt} sampled texels sum to 1 +- 0.15")
+    r.need(bad <= cnt * 0.01, f"splat maps: {bad}/{cnt} sampled texels' eight weights do not sum to ~1")
+
+
 def textures_report(r, g, max_side=None):
     for name, w, h, fmt, size in glb_images(g):
         r.info(f"image {name}: {w}x{h} {fmt} {size / 1024:.0f} KB")
         if max_side and w and h:
             r.need(max(w, h) <= max_side, f"image {name} {w}x{h} exceeds {max_side}px")
+    # every embedded image with an alpha channel keeps its colour under it
+    for im in g.json.get("images", []):
+        if "bufferView" not in im:
+            continue
+        bv = g.json["bufferViews"][im["bufferView"]]
+        off = bv.get("byteOffset", 0)
+        data = bytes(g.bin[off: off + bv["byteLength"]])
+        px = _decode_rgba(data)
+        if px is None:
+            continue
+        if any(px[2][i] < 255 for i in range(3, len(px[2]), 4 * 131)):
+            transparent_colour(r, f"image {im.get('name')}", data)
 
 
 def skinned_meshes(g):
@@ -226,14 +287,18 @@ def check_valley(path):
     ex = by.get("terrain.splat", {}).get("extras", {})
     files = ex.get("files", {})
     r.need(bool(files), "terrain.splat extras.files missing")
+    decoded = {}
     for key, rel in sorted(files.items()):
         fp = os.path.join(tex_dir, rel)
         if r.need(os.path.exists(fp), f"terrain texture {key}: {rel} missing"):
+            if key in ("splat0", "splat1", "light"):
+                decoded[key] = transparent_colour(r, f"terrain/{key}", open(fp, "rb").read())
             with open(fp, "rb") as f:
                 w, h, fmt = image_size(f.read(64))
             sz = os.path.getsize(fp)
             tex_total += sz
             r.info(f"texture {key:16s} {rel:34s} {w}x{h} {fmt} {sz / 1024:.0f} KB")
+    splat_weights(r, decoded.get("splat0"), decoded.get("splat1"))
     for w in ("water.river", "water.reservoir"):
         n = by.get(w)
         if r.need(n is not None, f"{w} missing"):

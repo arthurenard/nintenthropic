@@ -568,6 +568,22 @@ def _material():
     return m
 
 
+# how much of the broad (> 1/10 tile) variation each ground tile loses
+HIGHPASS = {"grass": 0.8, "alpine": 0.7, "dirt": 0.6, "forest": 0.7, "gravel": 0.4, "scree": 0.4, "snow": 0.6}
+
+
+def _wrap_blur(a, sigma):
+    """Gaussian blur of an (h, w, c) image that wraps at the edges (FFT)."""
+    h, w = a.shape[:2]
+    fy = np.fft.fftfreq(h)[:, None]
+    fx = np.fft.fftfreq(w)[None, :]
+    g = np.exp(-2 * (np.pi * sigma) ** 2 * (fx * fx + fy * fy))
+    out = np.empty_like(a)
+    for c in range(a.shape[2]):
+        out[..., c] = np.real(np.fft.ifft2(np.fft.fft2(a[..., c]) * g))
+    return out
+
+
 def render_tile(name, out_dir, quick=False, seed=0):
     from . import btiles
     t0 = time.time()
@@ -634,6 +650,18 @@ def render_tile(name, out_dir, quick=False, seed=0):
     rough = L['rough'][..., 0] if L['rough'].ndim == 3 else L['rough']
     hgt = (pos[..., 2] - zmin) / max(zmax - zmin, 1e-6)
     nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=-1, keepdims=True), 1e-6)
+    k = HIGHPASS.get(name, 0.0)
+    if k > 0:
+        # the ground tiles keep only what is finer than a tenth of the tile:
+        # anything broader repeats as a grid through the scope (the colour map
+        # carries the broad variation). Wrapped blur, so the tile still tiles
+        sig = px / 10.0
+        mean = alb.reshape(-1, 3).mean(0)
+        alb = np.clip(alb - k * (_wrap_blur(alb, sig) - mean), 0, 1)
+        nlf = _wrap_blur(nrm, sig)
+        nrm = nrm - k * (nlf - np.array([0.0, 0.0, 1.0]))
+        nrm = nrm / np.maximum(np.linalg.norm(nrm, axis=-1, keepdims=True), 1e-6)
+        hgt = np.clip(hgt - k * (_wrap_blur(hgt[..., None], sig)[..., 0] - hgt.mean()), 0, 1)
     lin = alb.copy()
     enc = np.where(alb <= 0.0031308, alb * 12.92, 1.055 * np.power(np.clip(alb, 0, 1), 1 / 2.4) - 0.055)
     write_img(os.path.join(out_dir, f"{name}_albedo.png"), enc)

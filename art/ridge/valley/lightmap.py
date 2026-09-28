@@ -92,7 +92,7 @@ def rasterize_canopy(inst, cell=CELL, bounds=None):
     ny = int((y1 - y0) / cell) + 1
     G = np.zeros((ny, nx), np.float32)
     h = np.where(inst['species'] == 'fir', np.where(inst['variant'] == 'c', 11.0, 25.0),
-                 np.where(inst['species'] == 'larch', 22.0, np.where(inst['species'] == 'pine', 13.0, 13.0))) * inst['scale']
+                 np.where(inst['species'] == 'larch', 22.0, np.where(inst['species'] == 'bush', 3.0, 13.0))) * inst['scale']
     rc = np.where(inst['species'] == 'fir', 0.2, np.where(inst['species'] == 'larch', 0.24, 0.3)) * h
     ci = ((inst['x'] - x0) / cell).astype(int)
     cj = ((inst['y'] - y0) / cell).astype(int)

@@ -231,7 +231,76 @@ RIVER_WF = [14, 20, 35, 70, 130, 190, 230, 250, 250, 245, 230, 215, 200, 190, 17
 
 
 def river(step=1.0):
-    return Curve(RIVER_PTS, step=step, z=RIVER_Z, w=RIVER_W)
+    c = Curve(RIVER_PTS, step=step, z=RIVER_Z, w=RIVER_W)
+    # down-valley, past the bend, the river wanders across its floor in
+    # meanders a couple of hundred metres long (the plan's points only give
+    # its course)
+    from . import noise as N
+    ramp = np.clip((c.s - 950.0) / 350.0, 0, 1) ** 2
+    off = 24.0 * N.fbm(c.s / 230.0, np.full_like(c.s, 0.73), 7704, 3) * ramp
+    # never toward the near-bank road closer than 34 m (the road's plan
+    # points: road() itself needs the river for the bridge's axis)
+    R = np.array(_pb(ROAD_NEAR))
+    best = np.full(len(c.s), np.inf)
+    toward = np.zeros(len(c.s))
+    for a, b in zip(R[:-1], R[1:]):
+        ab = b - a
+        t = np.clip(((c.xy - a) @ ab) / max(ab @ ab, 1e-9), 0, 1)
+        q = a + t[:, None] * ab
+        d = np.linalg.norm(q - c.xy, axis=1)
+        better = d < best
+        best = np.where(better, d, best)
+        toward = np.where(better, np.sign(((q - c.xy) * c.nrm).sum(1)), toward)
+    room = np.maximum(best - 34.0, 0.0)
+    off = np.where(np.sign(off) == toward, np.clip(off, -room, room), off)
+    c.xy = c.xy + c.nrm * off[:, None]
+    t = np.gradient(c.xy, axis=0)
+    c.tan = t / np.maximum(np.linalg.norm(t, axis=1), 1e-9)[:, None]
+    c.nrm = np.stack([-c.tan[:, 1], c.tan[:, 0]], 1)
+    _river_shape(c)
+    return c
+
+
+def _river_shape(c):
+    """A river, not a canal: the water's two edges drawn separately.
+
+        wl, wr   half-widths of the water, left and right of the flow: the
+                 width breathes +-25% along the river, and on the inside of
+                 a bend the water pulls back from a gravel bar
+        bl, br   the bar's width beyond the water's edge (0 on straights)
+        ul, ur   0..1, how much the outside of a bend cuts under its bank
+                 (a steep earth scarp, the deep water beside it)
+
+    Held steady by the bridge (its arches were built for the channel) and at
+    the dam's outlet."""
+    from . import noise as N
+    s = c.s
+    half = c.values['w'] / 2
+    ds = max(s[1] - s[0], 1e-6)
+    sb = c.nearest(np.array([BRIDGE_C[0]]), np.array([BRIDGE_C[1]]))[1][0]
+    calm = np.minimum(np.clip((np.abs(s - sb) - 30.0) / 50.0, 0, 1), np.clip((s - 40.0) / 60.0, 0, 1))
+    breathe = 1 + 0.25 * N.fbm(s / 140.0, np.full_like(s, 0.37), 7703, 3) * calm
+    k = max(int(30.0 / ds), 1)
+    i = np.arange(len(s))
+    t0, t1 = c.tan[np.clip(i - k, 0, len(s) - 1)], c.tan[np.clip(i + k, 0, len(s) - 1)]
+    curv = t0[:, 0] * t1[:, 1] - t0[:, 1] * t1[:, 0]           # > 0: the river turns left
+    left_in = np.clip(curv * 3.5, 0, 1) * calm
+    right_in = np.clip(-curv * 3.5, 0, 1) * calm
+    h = half * breathe
+    c.values['wl'] = h * (1 - 0.36 * left_in)
+    c.values['wr'] = h * (1 - 0.36 * right_in)
+    c.values['bl'] = h * 0.36 * left_in + 7.0 * left_in
+    c.values['br'] = h * 0.36 * right_in + 7.0 * right_in
+    c.values['ul'] = right_in
+    c.values['ur'] = left_in
+
+
+def river_edges(riv, s, side):
+    """(water half-width, bar width, undercut) on the given side of the
+    river at arc positions s (side > 0: left of the flow)."""
+    left = np.asarray(side) > 0
+    pick = lambda a, b: np.where(left, riv.at(s, a), riv.at(s, b))
+    return pick('wl', 'wr'), pick('bl', 'br'), pick('ul', 'ur')
 
 
 # the stone bridge: centre, and its axis across the river

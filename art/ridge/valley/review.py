@@ -57,6 +57,10 @@ def views():
     add("scope_tunnel", tuple(L.TUNNEL))
     add("scope_farm", (L.FARM_C[0], L.FARM_C[1], -50.0))
     add("scope_village", (L.VILLAGE_C[0], L.VILLAGE_C[1], -50.0))
+    riv = L.river()
+    for nm, s_ in (("scope_river", 880.0), ("scope_river_far", 1380.0)):
+        p = riv.at(s_)
+        add(nm, (float(p[0]), float(p[1]), float(riv.at(s_, 'z'))))
     g = node_pos("secret.goat.2")
     add("scope_goat_crag", g)
     c = node_pos("secret.cliff")

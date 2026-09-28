@@ -54,10 +54,10 @@ WALLS = {
     # the box sampled round each wall, in a frame whose u runs away from the
     # eye and v across; voxel = the mesh's edge length
     "rock.cliff": dict(c=L.CLIFF_C, u=(-150.0, 150.0), v=235.0, voxel=1.5, bed=(3.5, 11.0), cell=13.0,
-                       block=2.0, soft=1.0, notch=0.9, joint=1.5, jw=1.2, gully=3.0, rough=0.4, proud=4.5,
+                       block=0.8, soft=0.6, notch=0.9, joint=1.3, jw=1.1, gully=1.6, rough=0.35, proud=3.5,
                        steep=(50.0, 60.0), band=32.0, tris=65000, seed=11),
     "rock.crag": dict(c=L.GOAT_CRAG_C, u=(-75.0, 115.0), v=75.0, voxel=1.25, bed=(2.2, 6.5), cell=7.0,
-                      block=1.2, soft=0.6, notch=0.6, joint=0.9, jw=0.8, gully=1.6, rough=0.28, proud=2.8,
+                      block=0.6, soft=0.45, notch=0.6, joint=0.8, jw=0.7, gully=0.9, rough=0.25, proud=2.3,
                       steep=(48.0, 60.0), tris=30000, seed=12),
 }
 
@@ -251,13 +251,14 @@ class Rock:
         # blocks: planes standing out by different amounts, each tilted a
         # little about its own seed (sideways and up the face) - facets
         zc = (self.bounds[k] + 0.5 * t)
-        tilt = (0.35 * (_hash(bid, 1.0, s, 6.0) - 0.5) * ox + 0.35 * (_hash(bid, 2.0, s, 6.0) - 0.5) * oy +
-                0.25 * (_hash(bid, 3.0, s, 6.0) - 0.5) * (z - zc))
+        tilt = (0.2 * (_hash(bid, 1.0, s, 6.0) - 0.5) * ox + 0.2 * (_hash(bid, 2.0, s, 6.0) - 0.5) * oy +
+                0.12 * (_hash(bid, 3.0, s, 6.0) - 0.5) * (z - zc))
         blk = (bid - 0.5) * 2.0 * p['block'] * 0.7 + tilt
         jw = p['jw'] * (0.6 + 0.8 * _hash(grp, 9.0, s))
         joint = -p['joint'] * np.exp(-((d2 - d1) * 0.5 / jw) ** 2)
-        gul = p['gully'] * (0.6 * N.fbm(x, y, s + 20, 4, scale=1 / 45.0) +
-                            1.2 * (N.ridged(x, y, s + 21, 3, scale=1 / 60.0, sharp=2.5) - 0.3))
+        # broad buttresses and shallow gullies, not organ pipes
+        gul = p['gully'] * (0.9 * N.fbm(x, y, s + 20, 4, scale=1 / 60.0) +
+                            0.5 * (N.ridged(x, y, s + 21, 3, scale=1 / 80.0, sharp=1.5) - 0.3))
         rough = p['rough'] * N.fbm(x + 0.7 * z, y - 0.5 * z, s + 22, 4, scale=1 / 3.5)
         det = bed + notch + blk + joint + gul + rough
         return det, dict(k=k, f=f, hk=hk, bid=bid, joint=joint, notch=notch)
@@ -269,6 +270,11 @@ class Rock:
                         [0.64, 0.60, 0.50], [0.72, 0.71, 0.68], [0.58, 0.55, 0.52]])
         tone = pal[(_hash(aux['k'], 2.0, s, 7.0) * len(pal)).astype(int)]
         tone = tone * (0.9 + 0.2 * aux['bid'])[:, None]
+        # a second and third scale of weathering over the tile: patches a few
+        # metres across and the vertices' own jitter, so the 4 m tile never
+        # shows its repeat
+        tone = tone * (1 + 0.14 * N.fbm(x + 0.5 * z, y - 0.3 * z, s + 36, 3, scale=1 / 7.0))[:, None]
+        tone = tone * (1 + 0.07 * (_hash(x, y, z, 9.0) - 0.5))[:, None]
         lat = np.arctan2(x, y) * R0
         # black streaks where water runs down from the ledges; faint ones everywhere
         sx = N.fbm(lat / 2.5, z / 40.0, s + 30, 3)
@@ -328,12 +334,13 @@ def build_wall(ter, name, prm, col):
     nd = vertex_normals(P, F)
     R0 = float(np.linalg.norm(prm['c']))
     C = rock.colour(V[:, 0], V[:, 1], V[:, 2], smooth_on_mesh(nd[:, 2], F, 1), aux, R0)
+    block_of = aux['bid'] * 977.0 + aux['k']
     ob = S.mesh_object(name, P, F, col, smooth=True, surface="rock", material_key="rock_vc",
                        note="a rock wall of its own over the terrain's (the heightfield cannot hold it); "
                             "COLOR_0 multiplies the rock tile (bed tones, streaks, turf, baked AO)")
     ca = ob.data.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
     ca.data.foreach_set("color", np.hstack([C, np.ones((len(C), 1))]).astype(np.float32).ravel())
-    _box_uv(ob.data, P, F, fr)
+    _box_uv(ob.data, P, F, fr, block_of)
     if len(F) > prm['tris']:
         # collapse the flat stretches (the colours and UVs are interpolated)
         md = ob.modifiers.new("decimate", 'DECIMATE')
@@ -359,7 +366,7 @@ def _grid_sample(A, u0, v0, gs, uu, vv):
     return ((A[iu, iv] * (1 - tu) + A[iu + 1, iv] * tu) * (1 - tv) + (A[iu, iv + 1] * (1 - tu) + A[iu + 1, iv + 1] * tu) * tv)
 
 
-def _box_uv(me, P, F, fr):
+def _box_uv(me, P, F, fr, block=None):
     """Tile UVs (4 m) projected three ways by each face's normal: across the
     wall (arc along the bearing, height), along it (range, height), or from
     above for ledges - each face picks the one it faces most."""
@@ -378,7 +385,13 @@ def _box_uv(me, P, F, fr):
     rng_ = np.hypot(Q[..., 0], Q[..., 1])
     Uv = np.where(mode[:, None] == 0, arc, np.where(mode[:, None] == 1, rng_, Q[..., 0]))
     Vv = np.where(mode[:, None] == 2, Q[..., 1], Q[..., 2])
-    uv = np.stack([Uv, Vv], -1).reshape(-1, 2) / TILE_M
+    uv = np.stack([Uv, Vv], -1) / TILE_M
+    if block is not None:
+        # every block of rock starts the tile somewhere else (the joints hide
+        # the seams): the tile's repeat is gone
+        b = block[F[:, 0]]
+        uv = uv + np.stack([_hash(b, 1.0, 3.0), _hash(b, 2.0, 3.0)], -1)[:, None, :] * 4.0
+    uv = uv.reshape(-1, 2)
     layer = me.uv_layers.new(name="UVMap")
     layer.data.foreach_set("uv", uv.astype(np.float32).ravel())
 

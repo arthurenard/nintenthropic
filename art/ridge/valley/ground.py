@@ -195,7 +195,10 @@ def review_material(maps_dir, tiles_dir=None, name="terrain_review"):
     g.links.new(inv, dn.node.inputs['Scale'])
     normal = g.vmath('NORMALIZE', g.vadd(nmacro, dn))
     rough = g.mul(acc_r, inv)
-    g.output(g.principled(albedo, rough=rough, spec=0.3, normal=normal))
+    # dew and grass blades scatter; they do not mirror the blue sky at a
+    # grazing angle (which turned the shaded meadows teal)
+    rough = g.math('MAXIMUM', rough, 0.88)
+    g.output(g.principled(albedo, rough=rough, spec=0.15, normal=normal))
     return m
 
 

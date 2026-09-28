@@ -1,6 +1,12 @@
 """Image files from numpy, in Blender's Python (OpenImageIO) or system Python
 (Pillow): the terrain stages run in both. Arrays are (H, W, C) floats in
-0..1, top row first."""
+0..1, top row first.
+
+A fourth channel is data (a splat weight, the mist, an alpha), never a
+premultiplying alpha: OpenImageIO is told so both ways
+(oiio:UnassociatedAlpha), or it divides the colour by it on writing and
+multiplies on reading - invisible in a round trip through OpenImageIO, but
+what a browser reads from the file is ruined."""
 
 import numpy as np
 
@@ -23,6 +29,8 @@ def write(path, arr, bits=8, quality=None):
     if oiio is not None:
         fmt = oiio.UINT16 if bits == 16 else oiio.UINT8
         spec = oiio.ImageSpec(w, h, c, fmt)
+        if c == 4:
+            spec.attribute("oiio:UnassociatedAlpha", 1)
         if path.lower().endswith(".webp"):
             if quality is None:
                 spec.attribute("compression", "lossless")
@@ -57,7 +65,9 @@ def read(path):
     """(H, W, C) float32 in 0..1, top row first."""
     oiio = _oiio()
     if oiio is not None:
-        inp = oiio.ImageInput.open(path)
+        cfg = oiio.ImageSpec()
+        cfg.attribute("oiio:UnassociatedAlpha", 1)
+        inp = oiio.ImageInput.open(path, cfg)
         spec = inp.spec()
         data = np.asarray(inp.read_image(0, 0, 0, spec.nchannels, oiio.FLOAT)).reshape(spec.height, spec.width, spec.nchannels)
         inp.close()
