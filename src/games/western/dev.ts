@@ -257,7 +257,7 @@ async function main() {
     audio: new NullAudioBus(),
     hud,
     assets: assetLoader(),
-    settings: { duration: 60, reducedMotion: false, unlocks },
+    settings: { duration: 60, reducedMotion: false, reducedFlashing: false, difficulty: "standard", unlocks, tipsSeen: new Set() },
     quality,
     random: mulberry32(seed),
     clock: () => new Date(),

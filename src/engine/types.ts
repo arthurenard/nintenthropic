@@ -54,6 +54,12 @@ export interface GameStats {
   score: number;
   /** Three or four headline numbers for the results card. */
   stats: { label: string; value: string }[];
+  /**
+   * One short sentence under the outcome, optional: what felled the player,
+   * or the one thing that would help most next time ("A rifleman on the bank
+   * roof. Riflemen glint for longer - watch the rooftops.").
+   */
+  note?: string;
   secretsFound: number;
   secretsTotal: number;
 }
@@ -125,12 +131,34 @@ export interface AssetLoader {
   texture(url: string): Promise<import("three").Texture>;
 }
 
+/**
+ * How hard a game plays. Relaxed is for a first evening, a younger player or a
+ * tired arm: slower, gentler opponents. Records are kept apart for each.
+ */
+export type Difficulty = "relaxed" | "standard";
+
 export interface Settings {
   /** Round length for timed games; High Noon ignores it (it runs until you fall). */
   duration: number;
+  /** The player's choice, or the system's reduced-motion setting until they make one. */
   reducedMotion: boolean;
+  /**
+   * Flashes toned right down, for players sensitive to them: muzzle flashes,
+   * the screen's flash on a shot, explosions. Nothing in play should still
+   * change the whole picture's brightness sharply.
+   */
+  reducedFlashing: boolean;
+  /** Read by a game at start(): a change takes effect from the next round. */
+  difficulty: Difficulty;
   /** Konami code and friends. */
   unlocks: Set<string>;
+  /**
+   * The one-time tips this player has already been shown, by id. A game
+   * shows a tip the first time its moment comes (the first townsperson, the
+   * first glint) and adds the id here; the page keeps the set between visits,
+   * so a tip is never shown twice.
+   */
+  tipsSeen: Set<string>;
 }
 
 export interface Quality {

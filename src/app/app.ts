@@ -127,7 +127,14 @@ export class App {
   private lastDrawnCapture = 0;
 
   constructor(private readonly options: AppOptions = {}) {
-    this.settings = { duration: 60, reducedMotion: this.motion.matches, unlocks: prefs.unlocks };
+    this.settings = {
+      duration: 60,
+      reducedMotion: this.motion.matches,
+      reducedFlashing: false,
+      difficulty: "standard",
+      unlocks: prefs.unlocks,
+      tipsSeen: new Set(),
+    };
     this.motion.addEventListener("change", () => (this.settings.reducedMotion = this.motion.matches));
     this.hud = new Hud(() => this.settings.reducedMotion);
     this.hud.onGameOver = (stats) => this.gameOver(stats);
