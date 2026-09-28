@@ -252,6 +252,17 @@ call (documented in `art/ridge/README.md`):
   `metal`, `glass`, `water`, `cloth` — for the impact effects.
 - **Budget:** ≤ 30 MB with textures (this is the big one; WebP, Draco, KTX2 if
   the pipeline supports it cleanly). Loaded behind the real-progress bar.
+- **As built** (`art/ridge/README.md` has the shader's inputs): every terrain
+  map — colour, normal, splat, and the light map too — shares one log-polar
+  UV laid out from the eye (TEXCOORD_0), not a second UV; the forest is
+  camera-facing impostor cards instanced with `EXT_mesh_gpu_instancing`
+  (`forest.fir` is the spruce), with no 3D LODs since the eye never moves;
+  the plates' rows fall at 0.71–0.87 of the screen's height (from 60 m up,
+  targets 140–260 m out cannot spread further), each plate's `extras.vp`
+  giving its screen position; extra nodes the game may use: `rock.cliff` and
+  `rock.crag` (rock walls as meshes over the terrain), `rocks.slope`,
+  `foreground.rock`, `foreground.grass`, `range.*`, `mist.river.*`, `road.*`,
+  `tunnel`, `eagle.land`.
 
 ### `public/assets/ridge/sky.webp`
 
@@ -273,7 +284,10 @@ and environment light.
 - `vehicles.glb`: `truck` (canvas back, `wheel.<n>` pivots, `cab.glass`,
   `engine` (the shootable block), `seat.driver`), `jeep` (same parts).
 - `animals.glb`: `cow` (graze, walk, look_up), `sheep`, `goat` (stand, hop,
-  bleat), `eagle` (glide, flap, land), `dog`.
+  bleat), `eagle` (glide, flap, land), `dog`. As built, one file holds all
+  five, so clips are named `<animal>.<clip>` (`cow.graze`).
+- Vehicles, as built, carry extras for driving them (`wheelbase`,
+  `wheel_radius`, `length`) and `dismount.<n>`, `bed.seat.<n>`, `seat.rear.<n>` nodes; see `art/ridge/vehicles/README.md`.
 - **Budget:** 10–18k triangles per person, 1024² atlases.
 
 ### `public/assets/ridge/poster.webp`

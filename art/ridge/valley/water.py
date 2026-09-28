@@ -1,0 +1,161 @@
+"""The river, the reservoir, the mist over the river, and the roads.
+
+water.river      a ribbon on the river's surface from the dam's outlet down-
+                 valley: UV.u across (0..1 bank to bank), UV.v along the flow
+                 in metres (downstream = +v); COLOR_0.r foam / white water,
+                 .g depth (0 at the banks, 1 mid-stream). It runs 1.5 m under
+                 the banks so the shoreline is where the ground meets it.
+water.reservoir  the lake behind the dam at RESERVOIR_Z, clipped to where the
+                 ground is below it.
+mist.river       optional: soft ribbons 3-14 m over the river (UV.u across,
+                 UV.v along; COLOR_0.a fades them at the edges) for the
+                 game's mist shader.
+road.*           the road, the farm lane, the switchbacks and the dam road
+                 beyond the crest as ribbons 4 cm over the carved ground:
+                 UV.u across the road (the road tile spans its width), UV.v
+                 along in tile lengths.
+"""
+
+import math
+
+import numpy as np
+
+from . import layout as L
+from . import mesh as M
+from . import scene as S
+
+
+def _ribbon(curve, s0, s1, step, half_fn, z_fn, n_across=4):
+    ss = np.arange(s0, s1, step)
+    if ss[-1] < s1:
+        ss = np.append(ss, s1)
+    V, UV = [], []
+    ds = max(curve.s[1] - curve.s[0], 1e-6)
+    for s in ss:
+        p = curve.at(s)
+        t = curve.tan[min(int(s / ds), len(curve.tan) - 1)]
+        n = np.array([-t[1], t[0]])
+        h = half_fn(s)
+        for k in range(n_across + 1):
+            u = k / n_across
+            q = p + n * (u * 2 - 1) * h
+            V.append((q[0], q[1], z_fn(s, q, u)))
+            UV.append((u, s))
+    V = np.array(V)
+    UV = np.array(UV)
+    F = []
+    m = n_across + 1
+    for i in range(len(ss) - 1):
+        for k in range(n_across):
+            a = i * m + k
+            F += [(a, a + 1, a + m + 1), (a, a + m + 1, a + m)]
+    return V, np.array(F), UV
+
+
+def build_river(col):
+    riv = L.river()
+    # stop where the terrain mesh stops (the sky's far world carries it on)
+    rr = np.hypot(riv.xy[:, 0], riv.xy[:, 1])
+    s1 = riv.s[np.argmax(rr > M.R_MAX - 200)] if (rr > M.R_MAX - 200).any() else riv.length
+    step_fn = lambda s: 2.0
+    V, F, UV = _ribbon(riv, 0.0, s1, 3.0, lambda s: riv.at(s, 'w') / 2 + 1.5, lambda s, q, u: riv.at(s, 'z'), n_across=6)
+    # foam: the outlet's white water and a few riffles; depth across
+    u = UV[:, 0]
+    s = UV[:, 1]
+    foam = np.clip(1 - s / 70.0, 0, 1) ** 1.5
+    for sr in (420.0, 980.0, 1650.0, 2600.0):
+        foam = np.maximum(foam, 0.5 * np.exp(-((s - sr) / 18.0) ** 2))
+    depth = np.sin(np.pi * np.clip(u, 0, 1)) ** 0.7
+    ob = S.mesh_object("water.river", V, F, col, uvs={"UVMap": UV}, smooth=True, surface="water",
+                       note="the river's surface: uv.u across (0..1), uv.v metres downstream; COLOR_0 r foam, g depth")
+    me = ob.data
+    ca = me.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
+    ca.data.foreach_set("color", np.stack([foam, depth, np.zeros_like(u), np.ones_like(u)], 1).astype(np.float32).ravel())
+    return ob
+
+
+def build_reservoir(ter, col):
+    res = L.reservoir()
+    pts = res.xy
+    lo = pts.min(0) - 420
+    hi = pts.max(0) + 420
+    step = 10.0
+    xs = np.arange(lo[0], hi[0], step)
+    ys = np.arange(lo[1], hi[1], step)
+    X, Y = np.meshgrid(xs, ys)
+    Z = ter.height(X, Y)
+    # upstream of the dam's crest only
+    up = (X - L.DAM_CREST_C[0]) * L.DAM_UP[0] + (Y - L.DAM_CREST_C[1]) * L.DAM_UP[1]
+    wet = (Z < L.RESERVOIR_Z + 1.0) & (up > 2.0)
+    ny, nx = X.shape
+    idx = np.arange(nx * ny).reshape(ny, nx)
+    q = np.stack([idx[:-1, :-1].ravel(), idx[:-1, 1:].ravel(), idx[1:, 1:].ravel(), idx[1:, :-1].ravel()], 1)
+    w = wet.ravel()
+    keep = w[q].any(1)
+    q = q[keep]
+    used = np.unique(q)
+    rm = np.full(nx * ny, -1)
+    rm[used] = np.arange(len(used))
+    V = np.stack([X.ravel()[used], Y.ravel()[used], np.full(len(used), L.RESERVOIR_Z)], 1)
+    F = rm[q]
+    UV = V[:, :2] / 50.0
+    UV -= np.floor(UV.min(0))
+    return S.mesh_object("water.reservoir", V, F, col, uvs={"UVMap": UV}, smooth=True, surface="water",
+                         note="the lake behind the dam, flat at RESERVOIR_Z")
+
+
+def build_mist(col):
+    riv = L.river()
+    rr = np.hypot(riv.xy[:, 0], riv.xy[:, 1])
+    s1 = riv.s[np.argmax(rr > 3500)]
+    objs = []
+    for k, (hgt, half, ph) in enumerate(((3.0, 45.0, 0.0), (7.5, 70.0, 1.7), (13.0, 110.0, 3.1))):
+        V, F, UV = _ribbon(riv, 20.0, s1, 12.0, lambda s: half * (1 + 0.25 * math.sin(s / 140.0 + ph)),
+                           lambda s, q, u: riv.at(s, 'z') + hgt, n_across=6)
+        ob = S.mesh_object(f"mist.river.{k + 1}", V, F, col, uvs={"UVMap": UV}, smooth=True, surface="water", export=1,
+                           height_m=hgt, note="optional mist layer: fade by COLOR_0.a, scroll noise along uv.v")
+        a = np.sin(np.pi * UV[:, 0]) ** 1.5
+        ca = ob.data.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
+        ca.data.foreach_set("color", np.stack([np.ones_like(a), np.ones_like(a), np.ones_like(a), a], 1).astype(np.float32).ravel())
+        objs.append(ob)
+    return objs
+
+
+def build_roads(ter, col):
+    objs = []
+    rd = L.road()
+    bs = rd.nearest(np.array([L.BRIDGE_C[0]]), np.array([L.BRIDGE_C[1]]))[1][0]
+    half = L.BRIDGE_LEN / 2
+
+    def zf(s, q, u):
+        return float(ter.height(np.array([q[0]]), np.array([q[1]]))[0]) + 0.04
+    parts = [("road.main.1", rd, 0.0, bs - half + 1.0), ("road.main.2", rd, bs + half - 1.0, rd.length),
+             ("road.lane", L.farm_lane(), 0.0, None), ("road.switchbacks", L.switchbacks(), 0.0, None)]
+    dm = L.dam_road()
+    # the dam road beyond the crest, into the tunnel (the crest itself is the dam's deck)
+    e = L.dam_arc_point(L.DAM_THETA if np.dot(L.dam_arc_point(L.DAM_THETA) - L.DAM_CREST_C, L.DAM_AXIS) > 0 else -L.DAM_THETA)
+    s_end = dm.nearest(np.array([e[0]]), np.array([e[1]]))[1][0] + 2.0
+    parts.append(("road.dam", dm, s_end, dm.length))
+    for name, curve, s0, s1 in parts:
+        s1 = curve.length if s1 is None else s1
+        w = lambda s, c=curve: c.at(s, 'w') / 2 + 0.25
+        V, F, UV = _ribbon(curve, s0, s1, 2.0, w, zf, n_across=4)
+        UV[:, 1] = UV[:, 1] / 5.0
+        UV[:, 1] -= math.floor(UV[:, 1].min())
+        ob = S.mesh_object(name, V, F, col, uvs={"UVMap": UV}, smooth=True, surface="dirt", material_key="road")
+        objs.append(ob)
+    return objs
+
+
+def water_material(name="water"):
+    """Review material: a clear mountain river reflecting the sky, ripples
+    along the flow. (The game gives the river its own shader.)"""
+    from .scene import new_material
+    m, g = new_material(name)
+    uv = g.uv('UVMap')
+    u, v, _ = g.separate(uv)
+    rip = g.noise(g.combine(g.mul(u, 6.0), g.mul(v, 0.25), 0.0), scale=1.0, detail=6.0, rough=0.6)
+    nrm = g.bump(rip, strength=0.25, distance=0.05)
+    b = g.principled((0.012, 0.018, 0.016), rough=0.04, spec=0.6, normal=nrm)
+    g.output(b)
+    return m
