@@ -55,6 +55,99 @@ def webp_size(path):
     raise ValueError(f"{path}: unknown WebP chunk {kind}")
 
 
+def webp_alpha(data):
+    """True if a WebP (bytes) carries an alpha channel (read from its
+    header: the VP8X ALPHA flag, or the VP8L alpha_is_used bit)."""
+    if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        return None
+    kind = data[12:16]
+    if kind == b"VP8X":
+        return bool(data[20] & 0x10)
+    if kind == b"VP8L":
+        bits = struct.unpack_from("<I", data, 21)[0]
+        return bool((bits >> 28) & 1)
+    return False
+
+
+def glb_images(g, blob):
+    """(name, bytes, role) for every image in a GLB. role: 'color' for base
+    colour with alpha allowed (alphaMode MASK or BLEND), 'color' for any
+    other base colour or emissive map, 'data' for normal, ORM/occlusion and
+    anything else (whose every channel must survive encoding)."""
+    roles = {}
+    for m in g.get("materials", []):
+        pbr = m.get("pbrMetallicRoughness", {})
+        blend = m.get("alphaMode", "OPAQUE") in ("MASK", "BLEND")
+        for key, tex in (("baseColorTexture", pbr.get("baseColorTexture")), ("emissiveTexture", m.get("emissiveTexture"))):
+            if tex:
+                src = g["textures"][tex["index"]]
+                src = src.get("source", src.get("extensions", {}).get("EXT_texture_webp", {}).get("source"))
+                roles.setdefault(src, "color_alpha" if (blend and key == "baseColorTexture") else "color")
+        for key in ("normalTexture", "occlusionTexture"):
+            if m.get(key):
+                src = g["textures"][m[key]["index"]]
+                roles[src.get("source", src.get("extensions", {}).get("EXT_texture_webp", {}).get("source"))] = "data"
+        if pbr.get("metallicRoughnessTexture"):
+            src = g["textures"][pbr["metallicRoughnessTexture"]["index"]]
+            roles[src.get("source", src.get("extensions", {}).get("EXT_texture_webp", {}).get("source"))] = "data"
+    out = []
+    for i, im in enumerate(g.get("images", [])):
+        if "bufferView" not in im:
+            continue
+        bv = g["bufferViews"][im["bufferView"]]
+        o = bv.get("byteOffset", 0)
+        out.append((im.get("name", f"image{i}"), blob[o:o + bv["byteLength"]], roles.get(i, "data")))
+    return out
+
+
+def check_webp_alpha(r, d):
+    """WebP drops the colour of fully transparent pixels unless told to keep
+    it ('exact'). So: every texture that stores data must have no alpha at
+    all; only colour cut-outs (alphaMode MASK/BLEND) may, and where PIL is
+    available their colour under zero alpha must not be dark (it bleeds
+    into the edge when filtered)."""
+    import glob
+    items = []
+    for p in sorted(glob.glob(os.path.join(d, "**", "*.webp"), recursive=True)):
+        with open(p, "rb") as f:
+            items.append((os.path.relpath(p, d), f.read(), "data"))
+    for p in sorted(glob.glob(os.path.join(d, "*.glb"))):
+        with open(p, "rb") as f:
+            data = f.read()
+        off, js, blob = 12, None, b""
+        while off < len(data):
+            clen, ctype = struct.unpack_from("<I4s", data, off)
+            if ctype == b"JSON":
+                js = json.loads(data[off + 8: off + 8 + clen])
+            elif ctype == b"BIN\x00":
+                blob = data[off + 8: off + 8 + clen]
+            off += 8 + clen
+        for name, b, role in glb_images(js, blob):
+            items.append((f"{os.path.basename(p)}:{name}", b, role))
+    n_alpha = 0
+    for name, b, role in items:
+        a = webp_alpha(b)
+        if a is None:
+            continue
+        if a:
+            n_alpha += 1
+            r.need(role == "color_alpha", f"{name}: has an alpha channel but is used as {role} (data could be lost under zero alpha)")
+            try:
+                import io
+                from PIL import Image
+                import numpy as _np
+                im = Image.open(io.BytesIO(b)).convert("RGBA")
+                px = _np.asarray(im).astype(float)
+                zero = px[..., 3] == 0
+                edge = zero & (_np.roll(~zero, 1, 0) | _np.roll(~zero, -1, 0) | _np.roll(~zero, 1, 1) | _np.roll(~zero, -1, 1))
+                if edge.any():
+                    lum = px[..., :3][edge].mean()
+                    r.need(lum > 100, f"{name}: colour under the transparent edge is dark ({lum:.0f}/255): it will fringe")
+            except ImportError:
+                pass
+    r.say(f"webp: {len(items)} images checked, {n_alpha} with alpha (colour cut-outs only)")
+
+
 class Report:
     def __init__(self):
         self.errors = []
@@ -306,7 +399,8 @@ def check_poster(r, d):
 def main():
     d = sys.argv[1] if len(sys.argv) > 1 else DEFAULT
     r = Report()
-    for fn in (check_cupola, check_station, check_planet, check_debris, check_drone, check_derelict, check_extras, check_poster):
+    for fn in (check_cupola, check_station, check_planet, check_debris, check_drone, check_derelict, check_extras, check_poster,
+               check_webp_alpha):
         try:
             fn(r, d)
         except Exception as e:           # a malformed file is a contract error, not a crash

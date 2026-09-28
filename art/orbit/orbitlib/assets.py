@@ -261,7 +261,10 @@ def compose_sticker(ctx, art_path, size=512):
         edge = e2
     out = np.zeros((size, size, 4), np.float32)
     white = np.array([0.95, 0.95, 0.93], np.float32)
-    out[..., :3] = np.where(grown[..., None], white, 0)
+    # the colour under the transparent area is the border's white, so the
+    # cut edge never picks up a dark fringe when filtered (and WebP may
+    # drop the colour of fully transparent pixels anyway)
+    out[..., :3] = white
     out[..., :3] = np.where((grown & ~edge)[..., None], np.array([0.7, 0.7, 0.7], np.float32), out[..., :3])
     out[..., :3] = out[..., :3] * (1 - al[..., None]) + rgb * al[..., None]
     out[..., 3] = grown.astype(np.float32)
