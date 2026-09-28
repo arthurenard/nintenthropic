@@ -9,7 +9,9 @@ is generated here and by High Noon's character library (art/western/
 characters/charlib, imported read-only); nothing is downloaded. With --blend
 the finished scene of each file is saved too (a build product, git-ignored)
 for review.py. --quick bakes 512 atlases on a coarser weight proxy (for
-iteration only: never commit a quick build).
+iteration only: never commit a quick build). --clips-only [--clips a,b]
+reopens the scenes saved with --blend (default art/ridge/build/people) and
+re-bakes just the clips, then exports again - seconds instead of minutes.
 """
 import os
 import sys

@@ -160,7 +160,7 @@ def strand_paint_fn(centres):
 def ghillie_jobs(spec, tf, wf, quick=False, seed=7):
     rng = np.random.default_rng(seed)
     sf = suit_field(spec, tf, wf)
-    res = 0.011 if quick else 0.008
+    res = 0.012          # the suit is lumpy anyway and decimated hard; its union field is slow to sample
     suit = C.decimated("var.ghillie", sf, sf.lo, sf.hi, res, 2600, None, symmetry=False)
     jobs = [dict(ob=suit, field=sf, paint=suit_paint, origin=np.zeros(3), weight=0.35, ao_field=sf, ao_group="var.ghillie",
                  smart_uv=True, uv_angle=66, skin=("transfer",))]

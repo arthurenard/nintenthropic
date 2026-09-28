@@ -127,7 +127,7 @@ def greatcoat_job(bp, hem=0.50, loose=0.027):
 
     def front_open(z):
         return float(np.interp(z, [0.45, 0.58, 0.66], [0.9, 0.4, 0.0]))
-    rm = W.build_tunic(bp, cf, hem, loose=loose, sleeve_loose=0.019, neck_open=2.2, front_open=front_open, belt=0.004,
+    rm = W.build_tunic(bp, cf, hem, loose=loose, sleeve_loose=0.019, neck_open=1.4, front_open=front_open, belt=0.004,
                        collar_grow=0.034)
     j = PA.ring_job(rm, "var.coat.officer", S.Displace(cf, W.tunic_details(bp, hem, pockets=False), 0.006), W.greatcoat_paint(), weight=0.55,
                     skin=("coat", hem), ao_group="var.coat.officer")

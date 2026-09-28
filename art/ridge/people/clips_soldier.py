@@ -413,8 +413,8 @@ def hit_body():
 PRONE_Y = 0.62
 PRONE_LEGS = {"ik.foot.L": (0.17, PRONE_Y + 0.84, 0.085), "rot.foot.L": (90, 35, 0), "pole.foot.L": (0.3, 0, -1),
               "ik.foot.R": (-0.27, PRONE_Y + 0.68, 0.085), "rot.foot.R": (90, -45, 0), "pole.foot.R": (-1, 0, -0.3)}
-POLES_PRONE = {"pole.hand.R": (-0.5, -1.0, 0.1), "pole.hand.L": (0.5, -1.0, 0.1)}
-PRONE_FOREND = (0.0, 0.20, 0.036)
+POLES_PRONE = {"pole.hand.R": (-0.5, -1.0, 0.1), "pole.hand.L": (0.2, -1.0, -0.2)}
+PRONE_FOREND = (0.0, 0.075, 0.036)     # the left hand just ahead of the magazine: its elbow can plant
 
 
 def prone_torso(lift=0.0, yaw=6.0, look=0.0, breath=0.0):

@@ -96,8 +96,8 @@ def run():
         c.key(t, "linear", root=(0.01 * math.sin(2 * math.pi * ph + 1.6), -0.02, z), hips=(12, 0, yaw), spine=(10, 0, -yaw * 0.5),
               chest=(6, 0, -yaw * 0.6), neck=(-10, 0, yaw * 0.4), head=(-6, 0, yaw * 0.3))
         sw = math.cos(2 * math.pi * ph)
-        c.key(t, "linear", upper_arm__R=(-10 - 45 * sw, -18, 0), forearm__R=(-80 + 10 * sw, 0, 0), hand__R=(0, 0, 0),
-              upper_arm__L=(-10 + 45 * sw, 18, 0), forearm__L=(-80 - 10 * sw, 0, 0), hand__L=(0, 0, 0),
+        c.key(t, "linear", upper_arm__R=(-8 - 40 * sw, -40, 0), forearm__R=(-75 + 10 * sw, 0, 0), hand__R=(0, 0, 0),
+              upper_arm__L=(-8 + 40 * sw, 40, 0), forearm__L=(-75 - 10 * sw, 0, 0), hand__L=(0, 0, 0),
               ikw__hand__R=(0, 0, 0), ikw__hand__L=(0, 0, 0))
     return c
 
@@ -124,23 +124,38 @@ def wave():
     return c
 
 
-COVER_R = hand_rot("R", (0.7, 0.3, 0.3), (0.0, -0.3, 1.0))
-COVER_L = hand_rot("L", (-0.7, 0.3, 0.3), (0.0, -0.3, 1.0))
+def hands_on_head(pose):
+    """Both hands clamped over the back of the head, elbows forward round
+    the face - wherever the torso has put the head."""
+    from charlib import head as HD
+    G, pos = K.torso_fk(pose)
+    hr = K.rot(G, "head")
+    ch = {}
+    for side, sx in (("L", 1.0), ("R", -1.0)):
+        p = K.at(G, pos, "head", HD.HEAD_ORIGIN + np.array([sx * 0.050, 0.055, 0.070]))
+        knuckles = hr @ np.array([-sx * 0.55, 0.35, 0.45])
+        back = hr @ np.array([sx * 0.35, 0.45, 0.8])
+        ch.update(K.hand_at(side, p, knuckles, back))
+        ch[f"pole.hand.{side}"] = (sx * 0.6, -0.8, -0.2)
+    return ch
+
+
+def cower(root, hips, spine, chest, neck, head, feet):
+    pose = P(feet, root=root, hips=hips, spine=spine, chest=chest, neck=neck, head=head)
+    pose.update(hands_on_head(pose))
+    return pose
+
+
+PANIC_FEET = {"ik.foot.L": (0.13, -0.02, 0.102), "rot.foot.L": (0, 0, 14), "pole.foot.L": (0.4, -1, 0),
+              "ik.foot.R": (-0.12, 0.04, 0.102), "rot.foot.R": (0, 0, -12), "pole.foot.R": (-0.4, -1, 0)}
 
 
 def panic():
-    """Shots in the valley: knees bent, arms over the head, looking wildly
-    this way and that, jittering on the spot. 1.0 s loop."""
+    """Shots in the valley: knees bent, hunched, hands clamped over the head,
+    looking wildly this way and that, jittering on the spot. 1.0 s loop."""
     c = Clip("panic", 1.0, loop=True)
-    feet = {"ik.foot.L": (0.13, -0.02, 0.102), "rot.foot.L": (0, 0, 14), "pole.foot.L": (0.4, -1, 0),
-            "ik.foot.R": (-0.12, 0.04, 0.102), "rot.foot.R": (0, 0, -12), "pole.foot.R": (-0.4, -1, 0)}
-    base = P(feet, root=(0.0, 0.05, -0.20), hips=(18, 0, 0), spine=(18, 0, 0), chest=(14, 0, 0), neck=(6, 0, 0), head=(6, 0, 0),
-             ik__hand__L=(0.10, -0.05, 1.62), rot__hand__L=COVER_L, pole__hand__L=(0.8, -0.3, 0.2),
-             ik__hand__R=(-0.10, -0.05, 1.62), rot__hand__R=COVER_R, pole__hand__R=(-0.8, -0.3, 0.2))
-    a = dict(base)
-    a.update({"head": (2, 0, 24), "neck": (4, 0, 10), "root": (0.015, 0.05, -0.21)})
-    b = dict(base)
-    b.update({"head": (2, 0, -24), "neck": (4, 0, -10), "root": (-0.015, 0.05, -0.19)})
+    a = cower((0.015, 0.04, -0.17), (10, 0, 4), (12, 0, 4), (10, 0, 6), (6, 0, 8), (4, 0, 14), PANIC_FEET)
+    b = cower((-0.015, 0.04, -0.15), (10, 0, -4), (12, 0, -4), (10, 0, -6), (6, 0, -8), (4, 0, -14), PANIC_FEET)
     c.pose(0.0, a)
     c.pose(0.18, a, "inout")
     c.pose(0.5, b, "inout")
@@ -150,11 +165,9 @@ def panic():
     return c
 
 
-DUCKED = P({"ik.foot.L": (0.14, -0.10, 0.102), "rot.foot.L": (0, 0, 12), "pole.foot.L": (0.5, -1, 0.2),
-            "ik.foot.R": (-0.14, 0.12, 0.15), "rot.foot.R": (45, 0, -12), "pole.foot.R": (-0.5, -1, -0.3)},
-           root=(0.0, 0.12, -0.56), hips=(34, 0, 0), spine=(24, 0, 0), chest=(18, 0, 0), neck=(16, 0, 0), head=(12, 0, 0),
-           ik__hand__L=(0.10, -0.24, 1.02), rot__hand__L=COVER_L, pole__hand__L=(0.8, -0.3, -0.2),
-           ik__hand__R=(-0.10, -0.24, 1.02), rot__hand__R=COVER_R, pole__hand__R=(-0.8, -0.3, -0.2))
+DUCK_FEET = {"ik.foot.L": (0.14, -0.10, 0.102), "rot.foot.L": (0, 0, 12), "pole.foot.L": (0.5, -1, 0.2),
+             "ik.foot.R": (-0.14, 0.12, 0.15), "rot.foot.R": (45, 0, -12), "pole.foot.R": (-0.5, -1, -0.3)}
+DUCKED = cower((0.0, 0.10, -0.53), (26, 0, 0), (18, 0, 0), (12, 0, 0), (12, 0, 0), (10, 0, 0), DUCK_FEET)
 
 
 def duck():
@@ -166,8 +179,7 @@ def duck():
     flinch.update({"root": (0.0, 0.02, -0.06), "spine": (6, 0, 0), "chest": (8, 0, 0), "neck": (-10, 0, 0), "head": (-8, 0, 0),
                    "upper_arm.R": (-30, -30, -20), "forearm.R": (-70, 0, 0)})
     c.pose(0.08, flinch, "snap")
-    over = dict(DUCKED)
-    over.update({"root": (0.0, 0.12, -0.60)})
+    over = cower((0.0, 0.10, -0.57), (28, 0, 0), (18, 0, 0), (12, 0, 0), (12, 0, 0), (10, 0, 0), DUCK_FEET)
     c.pose(0.45, over, "in2")
     c.pose(0.8, DUCKED, "out")
     c.lag.update({"head": 0.03})

@@ -610,7 +610,7 @@ def cap_paint(color=OLIVE_DARK):
 
 # ------------------------------------------------------------------ the pack
 
-PACK_C = np.array([0.0, 0.200, 1.225])
+PACK_C = np.array([0.0, 0.186, 1.225])
 
 
 def pack_field():

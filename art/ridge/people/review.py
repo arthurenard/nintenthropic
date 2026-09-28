@@ -397,7 +397,7 @@ if "strips" in WHAT:
 
 if "distance" in WHAT:
     # the scope: 45 degrees / 6 vertical on 2560x1440
-    world(0.55, (0.36, 0.48, 0.66), haze=float(arg("--haze", "0.00012")))
+    world(0.55, (0.36, 0.48, 0.66), haze=float(arg("--haze", "0")))
     valley_ground()
     c = camera(35)
     c.data.sensor_fit = "VERTICAL"
@@ -434,15 +434,19 @@ if "distance" in WHAT:
         for light in ("lit", "shade"):
             if light == "lit":
                 sun(6.0, 180 + 35, 5.0, (1.0, 0.72, 0.48), angle=0.6)
-                world(0.55, (0.36, 0.48, 0.66), haze=float(arg("--haze", "0.00012")))
+                world(0.55, (0.36, 0.48, 0.66), haze=float(arg("--haze", "0")))
             else:
                 sun(6.0, 180 + 35, 0.0)
-                world(0.75, (0.36, 0.48, 0.66), haze=float(arg("--haze", "0.00012")))
+                world(0.75, (0.36, 0.48, 0.66), haze=float(arg("--haze", "0")))
             for D in (250, 400, 600):
                 look(c, (0, -D, 60.0), (1.1, 0, 1.0))
                 p = render(os.path.join(OUT, f"{TAG}_dist{di}_{light}_{D}m.png"), 2560, 1440, 32)
-                # a 1:1 crop round the figures, blown up 4x (nearest), to judge the pixels
+                # aerial perspective: the air between the ridge and the figures
+                # (applied to the image - an EEVEE world volume renders black here)
                 a = load_png(p)
+                Tr = math.exp(-math.hypot(D, 60.0) / float(arg("--haze-m", "2600")))
+                a[..., :3] = a[..., :3] * Tr + np.array([0.60, 0.66, 0.75]) * (1 - Tr)
+                save_png(a, p)
                 h, w = a.shape[:2]
                 cw, ch = 160, 90
                 crop = a[h // 2 - ch // 2:h // 2 + ch // 2, w // 2 - cw // 2:w // 2 + cw // 2]
