@@ -85,6 +85,14 @@ def stage_terrain(ctx):
     log(f"terrain stage {time.time() - t:.0f}s")
 
 
+def stage_maps(ctx):
+    """Dev: only the terrain's colour/normal/splat maps again (the meshes do
+    not depend on them); follow with export/review."""
+    from . import terrain as T, landcover as LC, maps as MP
+    ter = T.Terrain.load(ctx.terrain_npz)
+    MP.build(ter, LC.Fields(ter), ctx.maps, quick=ctx.quick)
+
+
 def scope_camera(name, target, zoom=6.0):
     """A camera at the eye aimed at `target` (x, y, z) with the scope's field
     of view (the wide view's divided by the zoom)."""
