@@ -255,11 +255,12 @@ export class Cast {
   }
 
   /**
-   * The telegraph, 0.4 s before he fires: the sun flashes off the top of his
-   * barrel (a streak the same size on screen at any range), and his hammer
-   * clicks back, heard from his side of the street even when far off.
+   * The telegraph, `lead` seconds before he fires (0.4 s on Standard): the
+   * sun flashes off the top of his barrel (a streak the same size on screen
+   * at any range), and his hammer clicks back, heard from his side of the
+   * street even when far off.
    */
-  glint(b: Bandit): void {
+  glint(b: Bandit, lead: number): void {
     const v = this.view(b);
     const socket = v?.rig.socket;
     if (!socket) return;
@@ -274,7 +275,7 @@ export class Cast {
     tmp2.copy(this.eye).sub(tmp).normalize();
     tmp.addScaledVector(tmp2, 0.25);
     const d = tmp.distanceTo(this.eye);
-    this.fx.sunGlint(tmp, d);
+    this.fx.sunGlint(tmp, d, lead);
     const click = this.sound.place(b.pos, { volume: 0.5, rate: 1.1 + this.random() * 0.1 });
     click.distance = Math.min(click.distance ?? 0, 9);
     this.sound.play("revolver_cock", click);

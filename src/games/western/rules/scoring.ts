@@ -126,7 +126,7 @@ export class Scorer {
     this.streak = 0;
     const lost = Math.min(this.score, TOWNSFOLK_PENALTY);
     this.score -= lost;
-    return { points: -TOWNSFOLK_PENALTY, labels: ["Innocent"], multiplier: 1 };
+    return { points: -TOWNSFOLK_PENALTY, labels: ["Townsperson"], multiplier: 1 };
   }
 
   damaged(): void {

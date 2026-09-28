@@ -47,7 +47,11 @@ Dust Creek.
 - **Revolver:** six rounds. A six-chamber cylinder in the HUD shows what's left.
   **Reload by pointing off the screen** (the arcade classic — the crosshair leaves
   the view for a moment) or by pressing R; it takes 0.9 s with a cylinder spin.
-  Firing on empty clicks and shows the reload hint.
+  Firing on empty clicks and shows the reload hint, every time.
+- **The hammer:** with the hand, raising the thumb again after a shot cocks the
+  hammer, and a soft click says so — lighter than a bandit's, and never while
+  reloading, on an empty cylinder (the dry click says it), for a hand found
+  again after being lost, or closer together than a quarter second.
 - **Recoil:** a short kick of the view and crosshair, settling in 250 ms.
 
 ## Health: regenerating, like Call of Duty
@@ -60,8 +64,9 @@ Dust Creek.
 - **Regeneration:** after 3.5 s without being hit, health refills at 40 per
   second; the effects fade with it.
 - **Death:** at zero. Time slows, the picture fades to sepia and the view tips
-  to the dust. A tombstone card: "Here lies a fast hand. Fell on Wave 4." Then
-  the results card.
+  to the dust. A tombstone card names what did it: "Here lies a fast hand.
+  Fell on Wave 4 to a rifleman on the saloon roof." Then the results card.
+- These are Standard's numbers; Relaxed is gentler (see Difficulty).
 
 ## The Carver gang: how bandits behave
 
@@ -105,6 +110,11 @@ hotel balcony, the bartender at the saloon doors, the undertaker measuring the
 street. Shooting one costs 200 points and the wave's **Clean Hands** bonus.
 They are visibly different: no guns, pale clothes, hands up when bullets fly.
 
+A townsperson shot is said in words, so it reads without the sound and
+without the red: "−200 Townsperson" rises where they stood, in the danger
+tone, and the hint line says calmly who it was — "That was the barber." — for
+two seconds. They flinch and go back inside; nothing more is shown.
+
 ## Waves
 
 | Wave | Bandits | New |
@@ -128,7 +138,117 @@ across, and the next wave begins. There is no clock: you last until you fall.
 - End of wave: accuracy bonus, **Untouchable** (no damage taken) +500, **Clean
   Hands** (no townsfolk hit) +250.
 - The results card: waves survived, kills, headshots, accuracy, best streak,
-  score, New Best, secrets found.
+  score, New Best, secrets found — and under the outcome, one or two short
+  sentences on what felled you and the one thing that would help most next
+  time (see below).
+
+## What felled you
+
+The rules remember the hit that ended the game: a bullet or dynamite, who
+fired or threw it, from which cover, and how far the wave's pressure had
+climbed. The results' note says it the way you would point it out, then
+matches the advice to it:
+
+| What did it | The note |
+| --- | --- |
+| A rifleman | "A rifleman on the saloon roof. Riflemen aim longer from up high, so there’s time to look up." |
+| Dynamite | "Dynamite from behind the wagon. Shoot it in the air, before it lands." |
+| Black Jack | "Black Jack Carver at the livery door. One shot to the head brings him down." |
+| Any other bandit | "A bandit behind the wagon. Watch for the glint: it means he’s about to fire." |
+| A bullet late in a long wave (the pressure past half way) | "A bandit at the hotel door. The longer a wave lasts, the bolder they get." |
+
+Covers are named as places ("the saloon balcony", "the livery door", "a hotel
+window", "the church tower"): the real town's one by one, any other by its
+kind and building. The tombstone uses the same words: "Fell on Wave 4 to a
+rifleman on the saloon roof."
+
+## Difficulty
+
+Two, chosen on the page and read when a round starts (a change applies from
+the next one): **Standard**, the game as designed and every number above, and
+**Relaxed**, for a first evening, a younger player or a tired arm. Relaxed is
+the same town, the same waves and gang and the same scoring; only the gang's
+nerve and the player's resilience change. Every number lives in one table,
+`DIFFICULTY` in `rules/tuning.ts`.
+
+| | Standard | Relaxed |
+| --- | --- | --- |
+| Aim time | 1.4 s on wave 1, falling to 0.7 s | half as long again: 2.1 s to 1.05 s |
+| Glint before the shot | 0.4 s | 0.6 s, a generous warning |
+| Chance a shot finds you | the wave's figure | ×0.7 |
+| Damage | 34 a hit early on: three quick hits to fall | ×0.75: 26, four quick hits to fall |
+| Health comes back | 3.5 s after a hit, 40 a second | 2.5 s after, 50 a second |
+| Late-wave pressure | from 25 s of fighting, hit chance +4% a second, up to ×2.2 | from 40 s, +2.5% a second, up to ×2.2 |
+| Dynamite's fuse | lit in 0.7 s; 1.3–2.2 s in the air | lit in 1.1 s; ×1.2 in the air (never above 2.4 s, or the lob leaves the picture) |
+
+It must still be a fight you can lose. On Relaxed the late-wave pressure also
+wears the allowances away: as it climbs from nothing to its height, the aim,
+the glint, the hit chance, the damage, the health's return and the fuse ease
+from Relaxed's numbers to Standard's. A player who keeps shooting rarely feels
+it; one who stops is overrun, as on Standard, only later.
+
+The balance tests play the same simulated players over both, 24 games each
+(`rules/difficulty.test.ts`; Standard's own tests in `rules/balance.test.ts`
+are untouched and still pass unchanged):
+
+| Simulated player | Standard: falls on wave (median) | Relaxed |
+| --- | --- | --- |
+| Steady hand (0.65 s to shoot, 80% hits) | 5–10 (8) | 9–26 (15); 22 of 24 still fall by wave 25 |
+| Slow, wild hand (1.0 s, 55%) | 3–6 (5) | 7–10 (9) |
+| Slowest hand (1.3 s, 45%) | 2–5 (4) | 4–10 (7) |
+| Never shoots | overrun on wave 1 after 44–96 s | overrun on wave 1 after 86–129 s |
+
+## Learning as you play
+
+High Noon teaches itself a lesson at a time, at the moment it matters, on the
+hint line at the foot of the view. Each tip shows once ever (the page keeps
+`Settings.tipsSeen`), for four seconds; tips whose moments come together wait
+their turn, never two at once, never over the reload hint while it is needed,
+and never during the aim check.
+
+| Tip | When | Words |
+| --- | --- | --- |
+| `western.reload` | the start of every game, until you have reloaded by yourself once | "Point off the screen to reload." (or the mouse's or touch screen's way) |
+| `western.glint` | the first glint of a bandit about to fire | "A glint means he’s about to fire." |
+| `western.townsfolk` | the first townsperson to appear | "Hold your fire. Townsfolk aren’t with the gang." |
+| `western.dynamite` | the first stick thrown | "Shoot the dynamite before it lands." |
+
+The empty-cylinder reload hint is not a tip but a state: it shows whenever
+you fire on empty, until you reload. A brief word after a mistake ("That was
+the barber.") shows over a tip, which then finishes.
+
+## Reduced flashing
+
+With `Settings.reducedFlashing` on (read every frame, so the pause menu's
+switch holds from Resume), nothing in play changes the whole picture's
+brightness sharply:
+
+- The screen's white flash for a blast close by is a tenth as strong, and
+  swells and ebbs over a few tenths of a second instead of jumping.
+- Muzzle flashes, the spark of a bullet on metal, the fireball and its sparks
+  drop to a fifth of their brightness or less and fade in.
+- Every flashing light (muzzle, blast, the Golden Revolver's shot) is a fifth
+  as bright and fades three times as slowly. The baked town takes no light:
+  these fall on the people, the glass and the debris.
+- The red and grey of being hit close in over a quarter of a second rather
+  than in one frame.
+
+Measured through the dev harness on wave 4, a stick landing at your feet
+brightens the picture by under a fifth of what it does otherwise, and no
+frame is more than 0.015 brighter than the last (0.25 otherwise). The
+bandits' glint is unchanged: it is small, a single steady flare rather than a
+flicker, and the warning a player needs most.
+
+## The art, and nothing in its place
+
+The town, the gang, the townsfolk, the chicken and the two skies are files
+under `public/assets/western/`, and every one is required: in production a
+file that does not load fails the game's load with a `DownloadError`, and the
+page says "Couldn’t Load the Game" with Try Again. The procedural stand-ins in
+`src/games/western/placeholder/` (a whole toy Dust Creek, built to the same
+node names, bones and clips) are for development and tests only: they arrive
+through a dynamic import that a production build removes, with every path
+that uses them.
 
 ## Secrets (easter eggs)
 

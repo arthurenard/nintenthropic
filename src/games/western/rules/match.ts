@@ -1,6 +1,8 @@
 import { Bandit, horizontalDistance, type BanditEvents, type BanditWorld } from "./bandit";
 import { chooseDeath } from "./deaths";
+import type { Difficulty } from "../../../engine/types";
 import { Dynamite, flightTimeFor } from "./dynamite";
+import { felledNote, type Felled } from "./felled";
 import { damageDirection, PlayerHealth } from "./health";
 import type { V3 } from "./raymath";
 import { Revolver, type TriggerResult } from "./revolver";
@@ -17,9 +19,7 @@ import {
   DYNAMITE_DROP_FUSE,
   DYNAMITE_PLAYER_RADIUS,
   DYNAMITE_RANGE,
-  BOLD_AFTER,
-  BOLD_MAX,
-  BOLD_RATE,
+  DIFFICULTY,
   HIT_GRACE,
   HIT_GRACE_FACTOR,
   INTERMISSION,
@@ -28,6 +28,7 @@ import {
   RIFLE_DAMAGE_FACTOR,
   THROW_HAND,
   WAVE_INTRO,
+  type DifficultyTuning,
 } from "./tuning";
 import type { Cover, HitPart, Role } from "./types";
 import { waveSpec, type WaveSpec } from "./waves";
@@ -83,6 +84,8 @@ export interface MatchOptions {
   /** The player's eye; the player looks down −Z from here. */
   eye?: V3;
   yaw?: number;
+  /** How hard the gang plays; Standard if not said. */
+  difficulty?: Difficulty;
 }
 
 export interface StartOptions {
@@ -96,6 +99,8 @@ export interface Results {
   won: boolean;
   score: number;
   stats: { label: string; value: string }[];
+  /** What felled the player, and what would help next time. */
+  note?: string;
   secretsFound: number;
   secretsTotal: number;
 }
@@ -120,6 +125,14 @@ export class Match implements BanditWorld {
   readonly events: BanditEvents;
   readonly eye: V3;
   readonly yaw: number;
+  readonly difficulty: Difficulty;
+  /** The difficulty's own numbers, as the table has them. */
+  readonly baseline: Readonly<DifficultyTuning>;
+  /**
+   * The numbers in force right now: the baseline, worn toward Standard's
+   * as a wave drags on (see wear()). On Standard they never change.
+   */
+  readonly tuning: DifficultyTuning;
 
   time = 0;
   phase: Phase = "ready";
@@ -127,7 +140,7 @@ export class Match implements BanditWorld {
   wave = 0;
   spec: WaveSpec = waveSpec(1);
 
-  readonly health = new PlayerHealth();
+  readonly health: PlayerHealth;
   readonly revolver = new Revolver();
   readonly scorer = new Scorer();
   readonly secrets = new SecretTracker();
@@ -159,6 +172,11 @@ export class Match implements BanditWorld {
     this.listener = options.listener;
     this.eye = options.eye ?? { x: 0, y: 1.7, z: 0 };
     this.yaw = options.yaw ?? 0;
+    this.difficulty = options.difficulty ?? "standard";
+    this.baseline = DIFFICULTY[this.difficulty];
+    this.tuning = { ...this.baseline };
+    // The live numbers: the player's regeneration wears with the rest.
+    this.health = new PlayerHealth(this.tuning);
     for (let i = 0; i < STICKS; i++) {
       const d = new Dynamite(i);
       d.state = "exploded";
@@ -218,6 +236,7 @@ export class Match implements BanditWorld {
     this.phaseT += dt;
     const reload = this.revolver.update(dt, offscreen && this.phase !== "dead");
     if (reload) this.listener.reload(reload === "started");
+    this.wear();
     this.health.update(dt);
 
     switch (this.phase) {
@@ -406,22 +425,63 @@ export class Match implements BanditWorld {
     return this.phase !== "dead" && this.time - this.lastShotTime >= MIN_SHOT_GAP;
   }
 
+  /**
+   * How bold the gang has grown in this wave's fighting, as a multiplier on
+   * its hit chance: 1 until the difficulty's boldAfter seconds, then
+   * climbing by boldRate a second to its boldMax.
+   */
+  boldness(): number {
+    if (this.phase !== "combat") return 1;
+    const t = this.baseline;
+    return Math.min(t.boldMax, 1 + Math.max(0, this.phaseT - t.boldAfter) * t.boldRate);
+  }
+
+  /** The late-wave pressure as a fraction: 0 (none yet) to 1 (the gang at its boldest). */
+  pressure(): number {
+    const max = this.baseline.boldMax;
+    return max > 1 ? (this.boldness() - 1) / (max - 1) : 0;
+  }
+
+  /**
+   * An easier difficulty's allowances wear off under the pressure: by the
+   * time the gang is at its boldest it aims, hits and hurts as it does on
+   * Standard, and health comes back no sooner. Without that, a Relaxed
+   * player who stopped shooting would be kept alive for ever. On Standard
+   * the baseline is Standard's own, and nothing moves.
+   */
+  private wear(): void {
+    const k = this.pressure();
+    const from = this.baseline;
+    const to = DIFFICULTY.standard;
+    const t = this.tuning;
+    t.aimFactor = from.aimFactor + (to.aimFactor - from.aimFactor) * k;
+    t.glintLead = from.glintLead + (to.glintLead - from.glintLead) * k;
+    t.hitFactor = from.hitFactor + (to.hitFactor - from.hitFactor) * k;
+    t.damageFactor = from.damageFactor + (to.damageFactor - from.damageFactor) * k;
+    t.regenDelay = from.regenDelay + (to.regenDelay - from.regenDelay) * k;
+    t.regenRate = from.regenRate + (to.regenRate - from.regenRate) * k;
+    t.lightTime = from.lightTime + (to.lightTime - from.lightTime) * k;
+    t.flightFactor = from.flightFactor + (to.flightFactor - from.flightFactor) * k;
+  }
+
   fire(b: Bandit): void {
     this.lastShotTime = this.time;
     const spec = this.spec;
+    const t = this.tuning;
     const d = horizontalDistance(b.pos, this.eye);
     let p = spec.hitChance;
     if (b.role === "duelist") p = 0.85;
     else if (b.role !== "rifleman") p *= Math.min(1, Math.max(0.45, 1.15 - d / 70));
     if (b.role === "boss") p *= 1.1;
-    if (this.phase === "combat") p *= Math.min(BOLD_MAX, 1 + Math.max(0, this.phaseT - BOLD_AFTER) * BOLD_RATE);
+    p *= t.hitFactor;
+    p *= this.boldness();
     if (this.health.sinceHit < HIT_GRACE) p *= HIT_GRACE_FACTOR;
     p = Math.min(p, 0.95);
     const hit = this.random() < p;
-    const damage = Math.round(spec.damage * (b.role === "rifleman" ? RIFLE_DAMAGE_FACTOR : 1));
+    const damage = Math.round(spec.damage * t.damageFactor * (b.role === "rifleman" ? RIFLE_DAMAGE_FACTOR : 1));
     for (const person of this.townsfolk) person.bulletsFly(this.time);
     this.listener.banditFire(b, hit, damage);
-    if (hit) this.damagePlayer(damage, b.pos, "bullet");
+    if (hit) this.damagePlayer(damage, b.pos, "bullet", b.role, b.cover);
   }
 
   canThrow(b: Bandit): boolean {
@@ -442,7 +502,8 @@ export class Match implements BanditWorld {
       z: this.eye.z - range(this.random, 3.2, 5),
     };
     stick.throwerId = b.id;
-    stick.launch(start, target, flightTimeFor(horizontalDistance(start, target)));
+    stick.thrownFrom = b.cover;
+    stick.launch(start, target, flightTimeFor(horizontalDistance(start, target), this.tuning.flightFactor));
     this.listener.banditThrow(b, stick);
   }
 
@@ -606,19 +667,24 @@ export class Match implements BanditWorld {
     const pz = at.z - this.eye.z;
     const py = at.y;
     if (px * px + py * py + pz * pz <= DYNAMITE_PLAYER_RADIUS * DYNAMITE_PLAYER_RADIUS) {
-      this.damagePlayer(Math.max(DYNAMITE_DAMAGE, Math.round(this.spec.damage * 1.5)), at, "dynamite");
+      const damage = Math.max(DYNAMITE_DAMAGE, Math.round(this.spec.damage * 1.5));
+      this.damagePlayer(Math.round(damage * this.tuning.damageFactor), at, "dynamite", "dynamiter", stick.thrownFrom);
     }
   }
 
   // --- the player ---------------------------------------------------------------
 
-  private damagePlayer(amount: number, from: V3, source: "bullet" | "dynamite"): void {
+  /** What landed the hit that felled the player; null while they stand. */
+  felled: Felled | null = null;
+
+  private damagePlayer(amount: number, from: V3, source: "bullet" | "dynamite", role: Role, cover: Cover | null): void {
     if (this.phase === "dead") return;
     this.scorer.damaged();
     const direction = damageDirection(this.eye, this.yaw, from);
     const died = this.health.hit(amount);
     this.listener.playerHit(amount, direction, this.health.hurt, source);
     if (died) {
+      this.felled = { source, role, cover, pressure: this.pressure() };
       this.phase = "dead";
       this.phaseT = 0;
       for (const b of this.bandits) this.releaseSlot(b);
@@ -764,6 +830,7 @@ export class Match implements BanditWorld {
       const stick = this.freeStick();
       if (stick) {
         stick.throwerId = b.id;
+        stick.thrownFrom = b.cover;
         stick.drop({ x: b.pos.x, y: b.pos.y + 0.1, z: b.pos.z }, DYNAMITE_DROP_FUSE);
         this.listener.dynamiteDropped(stick, b);
       }
@@ -851,6 +918,7 @@ export class Match implements BanditWorld {
         { label: "Accuracy", value: `${Math.round(s.accuracy * 100)}%` },
         { label: "Best Streak", value: String(s.bestStreak) },
       ],
+      ...(this.felled ? { note: felledNote(this.felled) } : {}),
       secretsFound: this.secrets.count,
       secretsTotal: SECRETS_TOTAL,
     };
