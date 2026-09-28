@@ -285,10 +285,10 @@ def turn(a):
     sheet(paths, 5, os.path.join(OUT, f"{a.name}_turn.png"))
     if a.name == "eagle":
         set_action(a, "eagle.glide", 1)
-        a.location = (0, 0, 0.3)
+        a.location = (0, 0, 4.0)
         paths = []
-        for vn, pos in (("below", (0.6, -0.8, -2.2)), ("above", (0.4, 0.6, 3.0)), ("front", (0, -3.2, 0.9))):
-            look(c, pos, (0, 0, 0.6))
+        for vn, pos in (("below", (0.6, -0.8, 1.8)), ("above", (0.4, 0.6, 7.0)), ("front", (0, -3.2, 4.6))):
+            look(c, pos, (0, 0, 4.35))
             paths.append(render(os.path.join(TMP, f"eagle_glide_{vn}.png"), 800, 640, 24))
         a.location = (0, 0, 0)
         sheet(paths, 3, os.path.join(OUT, "eagle_turn_glide.png"))
@@ -352,16 +352,33 @@ def clips(a):
         fr = sorted(set(int(round(f0 + i * (f1 - f0) / (NF - 1))) for i in range(NF)))
         paths = []
         flying = a.name == "eagle" and name in ("eagle.glide", "eagle.flap")
+        hop = a.get("hop") if name.endswith(".hop") else None
+        steps = []
+        if hop:
+            # the rock it leaves and the ledge it lands on; the root follows the game's arc
+            rock = material("rv_rock", None, 0.9, (0.9, (0.26, 0.26, 0.27), (0.46, 0.45, 0.44)), bump=0.6)
+            for nm, y0, y1, top in (("rv_step0", -0.2, 1.2, 0.0), ("rv_step1", -hop["forward"] - 0.6, -hop["forward"] + 0.45, hop["up"])):
+                o = plane(nm, 1.0, rock, (0, (y0 + y1) / 2, top))
+                o.scale = (1.4, y1 - y0, 1)
+                steps.append(o)
         for row, (az, el) in enumerate(((90, 6), (35, 22))):
             for f in fr:
                 set_action(a, name, f)
                 a.location = (0, 0, 1.2 if flying else 0)
                 r = H * (2.7 if not flying else 3.6)
-                aa, e = math.radians(az), math.radians(el)
                 tgt = Vector((0, 0.0, H * 0.45 + (1.2 if flying else 0)))
+                if hop:
+                    t = (f - f0) / 30.0
+                    u = min(max((t - hop["takeoff"]) / (hop["land"] - hop["takeoff"]), 0), 1)
+                    a.location = (0, -hop["forward"] * u, hop["up"] * u + 4 * hop["arc"] * u * (1 - u))
+                    r = H * 4.6
+                    tgt = Vector((0, -hop["forward"] / 2, hop["up"] / 2 + 0.3))
+                aa, e = math.radians(az), math.radians(el)
                 look(c, tgt + Vector((math.sin(aa) * math.cos(e), -math.cos(aa) * math.cos(e), math.sin(e))) * r, tgt)
                 paths.append(render(os.path.join(TMP, f"{name}_{row}_{f:03d}.png"), 400, 320, 16))
         a.location = (0, 0, 0)
+        for o in steps:
+            bpy.data.objects.remove(o)
         sheet(paths, len(fr), os.path.join(OUT, f"clip_{name}.png"))
 
 
@@ -401,7 +418,7 @@ def scope():
         clear()
     if "sheep" in names:
         sheep = next(a for a in ANIMALS if a.name == "sheep")
-        plane("rv_ground", 3000, grass, (0, 700, 0), (math.radians(-18), 0, 0))
+        plane("rv_ground", 3000, grass, (0, 700, 0), (math.radians(18), 0, 0))
         clones = []
         rng = np.random.default_rng(3)
         for i in range(9):
@@ -421,14 +438,14 @@ def scope():
         # a grey rock face at 600 m with a ledge; the goat stands on the ledge
         plane("rv_ground", 3000, grass)
         cliff = plane("rv_cliff", 200, rock, (0, 612, 100), (math.radians(80), 0, 0))
-        ledge = plane("rv_ledge", 6, rock, (0, 600.6, 80), (0, 0, 0))
+        ledge = plane("rv_ledge", 6, rock, (0, 606.0, 80), (0, 0, 0))
         g = clone(goat, "rv_goat")
-        g.location = (0, 600.3, 80)
+        g.location = (0, 607.4, 80)
         g.rotation_euler = (0, 0, math.radians(70))
         set_action(g, "goat.stand", 20)
         cam = Vector((0, 0, 60))
-        look(c, cam, (0, 600, 80.6))
-        sun_from(cam, (0, 600, 80), 9, -35, 4.5)
+        look(c, cam, (0, 607, 80.6))
+        sun_from(cam, (0, 607, 80), 9, -35, 4.5)
         render(os.path.join(OUT, "scope_goat_600m.png"), 2560 if not FAST else 1280, 1440 if not FAST else 720, 32)
         clear()
     if "eagle" in names:

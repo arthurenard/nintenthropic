@@ -107,7 +107,29 @@ class Sculpt:
         self.bell_pivot = self.find_pivot()
         self.bell = self.bell_field(self.bell_pivot)
         self.all = S.Union([body] + self.horns + [self.collar, self.bell])
-        self.detailed = S.Displace(body, self.detail, 0.0012)
+        # the fine relief baked into the normal map (cheap: no masks to find)
+        self.relief = (lambda Q: None, lambda P, _: self.detail(P))
+        # what the weight corrections need (quad.weights_override)
+        self.tail_root_z = 1.33
+        self.ears = [(ef, ear_frame(s)[0], 0.21) for s, ef in zip((1, -1), self.ear_f)]
+
+    def jaw_mask(self, V):
+        """The lower half of the face, below the mouth line, is the jaw's."""
+        hx, hs, hh = HEAD.local(V)
+        return smoothstep(-0.085, -0.115, hh) * smoothstep(0.1, 0.2, hs) * (hs < 0.56) * (np.abs(hx) < 0.14)
+
+    def extra_jobs(self):
+        """Horns (rigid on the head), the strap (skinned), the bell (rigid on its bone)."""
+        jobs = []
+        for side, s, h in zip("LR", (1, -1), self.horns):
+            ob = L.sculpt_mesh("cow.horn." + side, h, h.lo - 0.01, h.hi + 0.01, 0.0022, 110, symmetry=False)
+            jobs.append(dict(ob=ob, field=h, paint=self.horn_paint(s), weight=2.0, skin="head"))
+        ob = L.sculpt_mesh("cow.strap", self.collar, STRAP_C - 0.34, STRAP_C + 0.34, 0.0028, 560)
+        jobs.append(dict(ob=ob, field=self.collar, paint=self.strap_paint, weight=2.2))
+        p = self.bell_pivot
+        ob = L.sculpt_mesh("cow.bellmesh", self.bell, p - (0.1, 0.1, 0.22), p + (0.1, 0.1, 0.03), 0.002, 380)
+        jobs.append(dict(ob=ob, field=self.bell, paint=self.bell_paint, weight=2.6, skin="cow.bell"))
+        return jobs
 
     # -- parts
     @staticmethod
@@ -434,48 +456,6 @@ def skeleton(pivot):
     return L.Skeleton(Q.bones(neck2=True, extra=[("cow.bell", "neck.2")]), J)
 
 
-def weights(sc, names):
-    """Bone heat, corrected where a sculpt's parts touch but must not move
-    together: the tail hangs against the buttocks, the ears against the
-    head, the jaw under it."""
-    it = {b: i for i, b in enumerate(names)}
-    tail_i = [it["tail.1"], it["tail.2"], it["tail.3"]]
-    ear_i = [it["ear.L"], it["ear.R"]]
-
-    def override(ob, V, W):
-        V = np.asarray(V, np.float32)
-        W = W.copy()
-        dt = S.Union([sc.tail_f, sc.switch], k=0.03)(V)
-        dr = sc.rest(V)
-        is_tail = (dt < dr) & (V[:, 2] < 1.33)
-        W[np.ix_(~is_tail, tail_i)] = 0.0
-        # a tail vertex follows only the tail (the root blends into the pelvis)
-        keep = np.zeros(W.shape[1], bool)
-        keep[tail_i] = True
-        keep[it["pelvis"]] = True
-        W[np.ix_(is_tail, ~keep)] = 0.0
-        W[is_tail] += 1e-4 * np.eye(W.shape[1])[tail_i[0]]
-        for s, ef, ei in zip((1, -1), sc.ear_f, ear_i):
-            de = ef(V)
-            is_ear = (de < dr) & (s * V[:, 0] > 0.05)
-            others = np.ones(W.shape[1], bool)
-            others[[ei, it["head"]]] = False
-            W[np.ix_(is_ear, others)] = 0.0
-            W[np.ix_(~is_ear, [ei])] = 0.0
-            # the far part of the ear is all ear
-            far = is_ear & (np.abs(V[:, 0]) > 0.17)
-            W[np.ix_(far, [it["head"]])] = 0.0
-            W[far, ei] = np.maximum(W[far, ei], 1.0)
-        # the jaw: the lower half of the face below the mouth line
-        hx, hs, hh = HEAD.local(V)
-        jw = smoothstep(-0.085, -0.115, hh) * smoothstep(0.1, 0.2, hs) * (hs < 0.56) * (np.abs(hx) < 0.14)
-        hw = W[:, it["head"]] + W[:, it["jaw"]]
-        W[:, it["jaw"]] = hw * jw
-        W[:, it["head"]] = hw * (1 - jw)
-        return W
-    return override
-
-
 # ------------------------------------------------------------------ clips
 
 WALK_SPEED = 0.9     # m/s
@@ -591,38 +571,8 @@ CLIPS = [clip_idle, clip_graze, clip_walk, clip_look_up]
 # ------------------------------------------------------------------ build
 
 def build(quick=False, size=1024):
-    """Sculpt, mesh, bake, rig, weight and animate the cow. Returns her
-    armature (the glTF root `cow`) and her one skinned mesh `cow.body`."""
+    """The cow: armature `cow` (the glTF root) with one skinned mesh `cow.body`."""
     with L.stage("cow: sculpt"):
         sc = Sculpt()
-    lo, hi = (-0.62, -1.50, -0.01), (0.62, 1.12, 1.62)
-    with L.stage("cow: game meshes"):
-        body_ob = L.sculpt_mesh("cow.body", sc.body, lo, hi, 0.010 if quick else 0.0055, 2400 if quick else 4800)
-        jobs = [dict(ob=body_ob, field=sc.detailed, paint=sc.paint, weight=1.0, parts=sc.parts())]
-        for i, (s, h) in enumerate(zip((1, -1), sc.horns)):
-            ob = L.sculpt_mesh(f"cow.horn.{'LR'[i]}", h, h.lo - 0.01, h.hi + 0.01, 0.0022, 110, symmetry=False)
-            jobs.append(dict(ob=ob, field=h, paint=sc.horn_paint(s), weight=2.0, skin="head"))
-        ob = L.sculpt_mesh("cow.strap", sc.collar, STRAP_C - 0.34, STRAP_C + 0.34, 0.0028, 560)
-        jobs.append(dict(ob=ob, field=sc.collar, paint=sc.strap_paint, weight=2.2))
-        p = sc.bell_pivot
-        ob = L.sculpt_mesh("cow.bellmesh", sc.bell, p - (0.1, 0.1, 0.22), p + (0.1, 0.1, 0.03), 0.002, 380)
-        jobs.append(dict(ob=ob, field=sc.bell, paint=sc.bell_paint, weight=2.6, skin="cow.bell"))
-    with L.stage("cow: atlas"):
-        imgs, at = L.bake_atlas(jobs, 512 if quick else size, "cow", sc.all, ao_scale=2.2, ao_strength=0.9)
-    L.save_atlas_previews(imgs, L.ATLAS_DIR, "cow")
-    mat = L.material("cow", imgs)
-    skel = skeleton(sc.bell_pivot)
-    rig = skel.create("cow")
-    with L.stage("cow: weights"):
-        # the bell's bone must not take the throat's skin in bone heat
-        rig.data.bones["cow.bell"].use_deform = False
-        L.skin_jobs(jobs, rig, skel.names, sc.body, lo, hi, res=0.016 if quick else 0.011, override=weights(sc, skel.names))
-        rig.data.bones["cow.bell"].use_deform = True
-    tris = sum(L.bl.tri_count(j["ob"]) for j in jobs)
-    mesh = L.finish_mesh("cow.body", jobs, mat)
-    body = L.Body(skel, Q.LEGS)
-    with L.stage("cow: clips"):
-        acts = [L.bake_clip(body, mk(body), rig) for mk in CLIPS]
-    L.stash(rig, acts)
-    rig["speeds"] = {"cow.walk": WALK_SPEED}
-    return dict(rig=rig, mesh=mesh, tris=tris, images=imgs, clips=[a.name for a in acts])
+    return Q.build("cow", sc, skeleton(sc.bell_pivot), CLIPS, (-0.62, -1.50, -0.01), (0.62, 1.12, 1.62), 0.0055, 4800,
+                   quick=quick, size=size, ao_scale=2.2, no_heat=("cow.bell",), speeds={"cow.walk": WALK_SPEED})

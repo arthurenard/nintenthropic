@@ -162,6 +162,14 @@ def tube(pts, rx, ry, n=32, side=(1, 0, 0)):
     return SmoothTube(pts, rx, ry, n, side)
 
 
+def scaled(node, origin, k):
+    """A field scaled by k about origin (exact: distances scale too)."""
+    o = np.asarray(origin, np.float32)
+    lo = o + (np.asarray(node.lo) - o) * k
+    hi = o + (np.asarray(node.hi) - o) * k
+    return S.Fn(lambda P: node(o + (np.asarray(P, np.float32) - o) / k) * k, np.minimum(lo, hi), np.maximum(lo, hi))
+
+
 def mirror_x(node):
     """The same field reflected across x = 0 (a right ear from a left one)."""
     lo, hi = np.asarray(node.lo), np.asarray(node.hi)
@@ -674,6 +682,52 @@ def raster_border(ob, size, known, reach=1.5):
     return pix, P.astype(np.float32), N.astype(np.float32), T.astype(np.float32), B.astype(np.float32)
 
 
+def bake_job(at, ob, field, paint, relief=None, grad_eps=5e-4):
+    """Atlas.bake, faster and sliver-proof: every texel of the mesh (charlib's
+    raster plus raster_border's) is snapped onto the plain sculpt `field`; its
+    normal is the gradient of the sculpt plus that of the fine relief.
+
+    relief: (ctx(Q) -> per-texel data, h(P, data) -> displacement). The
+    expensive part of a relief (which part a point is on: wool or hair) is
+    computed once per texel by ctx; h is cheap and is what the finite
+    differences sample. Charlib bakes displaced fields as one field, which
+    costs every mask again in each of the ~40 samples a texel takes."""
+    r0 = AB.raster(ob, at.size)
+    pre = at.known.copy()
+    y0, x0 = r0[0][:, 1], r0[0][:, 0]
+    pre[y0, x0] = True
+    r1 = raster_border(ob, at.size, pre)
+    pix, P, N, T, B = r0 if r1 is None else [np.concatenate([a, b]) for a, b in zip(r0, r1)]
+    Q = S.project_to_surface(field, P, iters=5, clamp=0.012)
+    g = S.gradient(field, Q, grad_eps)
+    g /= np.maximum(np.linalg.norm(g, axis=1), 1e-9)[:, None]
+    if relief is not None:
+        ctx, h = relief
+        data = ctx(Q)
+        gr = np.empty_like(Q)
+        for i in range(3):
+            e = np.zeros(3, np.float32)
+            e[i] = grad_eps
+            gr[:, i] = (h(Q + e, data) - h(Q - e, data)) / (2 * grad_eps)
+        g = g + gr
+    n_hi = g / np.maximum(np.linalg.norm(g, axis=1), 1e-9)[:, None]
+    bad = ~np.isfinite(n_hi).all(1) | ((n_hi * N).sum(1) < -0.2)
+    n_hi[bad] = N[bad]
+    ts = np.stack([(n_hi * T).sum(1), (n_hi * B).sum(1), (n_hi * N).sum(1)], 1)
+    ts /= np.maximum(np.linalg.norm(ts, axis=1), 1e-9)[:, None]
+    alb, rough, metal = paint(Q)
+    y, x = pix[:, 1], pix[:, 0]
+    at.albedo[y, x] = alb
+    at.normal[y, x] = ts * 0.5 + 0.5
+    at.orm[y, x, 0] = 1.0
+    at.orm[y, x, 1] = rough
+    at.orm[y, x, 2] = metal
+    at.known[y, x] = True
+    at.dbgQ[y, x] = Q
+    at.dbgN[y, x] = n_hi
+    return len(r0[0]), 0 if r1 is None else len(r1[0])
+
+
 def bake_border(at, ob, field, paint, grad_eps=5e-4):
     """Bake the texels raster_border finds, exactly as Atlas.bake does its own."""
     r = raster_border(ob, at.size, at.known)
@@ -713,6 +767,9 @@ def uv_by_parts(ob, parts, angle=70):
     cuts). parts: [(name, field, weight)]."""
     import bmesh
     me = ob.data
+    # a collapse-decimated mesh can carry bad corner/edge indices (Blender 5.1):
+    # anything that builds a BMesh from it dies of SIGBUS unless it is rebuilt
+    me.validate()
     C = np.array([p.center[:] for p in me.polygons], np.float32)
     D = np.stack([f(C) for _, f, _ in parts], 1)
     lab = np.argmin(D, 1)
@@ -721,16 +778,15 @@ def uv_by_parts(ob, parts, angle=70):
         keep = lab == i
         if not keep.any():
             continue
-        o = ob.copy()
-        o.data = ob.data.copy()
-        o.name = f"{ob.name}.{pname}"
-        bpy.context.scene.collection.objects.link(o)
-        bm = bmesh.new()
-        bm.from_mesh(o.data)
-        bm.faces.ensure_lookup_table()
-        bmesh.ops.delete(bm, geom=[f for f in bm.faces if not keep[f.index]], context="FACES")
-        bm.to_mesh(o.data)
-        bm.free()
+        # the piece is built from arrays, not by copying and deleting: a
+        # clean mesh with only this part's faces
+        V = bl.verts_np(ob)
+        faces = [tuple(p.vertices) for p, k in zip(me.polygons, keep) if k]
+        used = np.unique(np.concatenate([np.asarray(f) for f in faces]))
+        remap = np.full(len(V), -1, np.int64)
+        remap[used] = np.arange(len(used))
+        o = bl.mesh_from_arrays(f"{ob.name}.{pname}", V[used], [tuple(remap[list(f)]) for f in faces])
+        o.matrix_world = ob.matrix_world
         BK.smart_uv(o, angle)
         pieces.append((o, w))
     BK.normalise_density([o for o, _ in pieces], [w for _, w in pieces])
@@ -796,9 +852,7 @@ def bake_atlas(jobs, size, name, ao_field, ao_scale=1.0, ao_strength=1.0, ground
     at = AB.Atlas(size)
     for j in jobs:
         t = time.time()
-        n = at.bake(j["ob"], j["field"], j["paint"], ao_field=None, snap=j.get("snap", True),
-                    grad_eps=j.get("grad_eps", 5e-4))
-        m = bake_border(at, j["ob"], j["field"], j["paint"], j.get("grad_eps", 5e-4))
+        n, m = bake_job(at, j["ob"], j["field"], j["paint"], j.get("relief"), j.get("grad_eps", 5e-4))
         log(f"  {name}: baked {j['ob'].name}: {n} texels + {m} on borders and slivers in {time.time() - t:.1f}s")
     t = time.time()
     big_ao(at, ao_field, ao_scale, ao_strength, ground)
