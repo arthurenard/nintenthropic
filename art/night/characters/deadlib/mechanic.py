@@ -189,11 +189,12 @@ def build(path, size=1024, quick=False):
     ey = eyes.build("eyes")
     assemble.rigid_object(ey, rig, "head")
     from . import clips_dead, clips_mech
-    clips = dict(clips_dead.CLIPS)
+    # the crawler's .low clips are the walker file's only: the Mechanic stands
+    clips = {k: v for k, v in clips_dead.CLIPS.items() if k not in clips_dead.LOW_CLIPS}
     clips.update(clips_mech.CLIPS)
     assemble.bake_clips(rig, clips)
     rig.scale = (SCALE, SCALE, SCALE)
-    meta = dict(clips_dead.META)
+    meta = {k: v for k, v in clips_dead.META.items() if k not in clips_dead.LOW_CLIPS}
     meta.update(clips_mech.META)
     size_b = assemble.export(path, extras=dict(scale=SCALE, clips=meta,
                                                dressing={"mechanic": "char.mechanic + var.mask + prop.tyre_iron + eyes"}))

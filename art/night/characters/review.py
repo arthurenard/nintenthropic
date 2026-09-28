@@ -54,14 +54,14 @@ DRESSINGS = {
         "hunter": ["char.walker", "var.outfit.hunter", "var.hair.balding", "eyes"],
         "mechanic_small": ["char.walker", "var.outfit.mechanic_small", "var.hair.short", "eyes"],
         "suit": ["char.walker", "var.outfit.suit", "var.hair.balding", "eyes"],
-        "runner": ["var.runner", "eyes"],
-        "bloater": ["var.bloater", "eyes"],
+        "runner": ["char.runner", "eyes"],
+        "bloater": ["char.bloater", "eyes"],
         "crawler": ["char.crawler", "eyes"],
     },
     "mechanic": {"mechanic": ["char.mechanic", "var.mask", "prop.tyre_iron", "eyes"],
                  "unmasked": ["char.mechanic", "prop.tyre_iron", "eyes"]},
-    "survivor": {"daughter": ["var.person.daughter", "prop.lantern", "prop.lantern.flame"],
-                 "owner": ["var.person.owner", "prop.lantern", "prop.lantern.flame"]},
+    "survivor": {"daughter": ["var.person.daughter", "prop.lantern", "lantern.flame"],
+                 "owner": ["var.person.owner", "prop.lantern", "lantern.flame"]},
     "cat": {"cat": ["char.cat", "eyes"]},
 }.get(TAG, {"all": [o.name for o in meshes]})
 if arg("--dress"):
@@ -258,7 +258,7 @@ if "faces" in WHAT and TAG != "cat":
     eyes_glow(0.0)
     seen = set()
     for name, d in dressings:
-        head = next((n for n in d if n in ("char.walker", "var.runner", "var.bloater", "char.crawler", "char.mechanic",
+        head = next((n for n in d if n in ("char.walker", "char.runner", "char.bloater", "char.crawler", "char.mechanic",
                                              "var.person.daughter", "var.person.owner")), None)
         key = head if head != "char.walker" else ("char.walker" if "char.walker" not in seen else None)
         if key is None or key in seen:
@@ -300,14 +300,14 @@ if "strips" in WHAT:
     for act in actions():
         if only and act not in only.split(","):
             continue
-        d = DRESSINGS.get("crawler", d0) if act == "crawl" else (DRESSINGS.get("bloater", d0) if act == "bloat_burst" else d0)
+        d = DRESSINGS.get("crawler", d0) if act == "crawl" or act.endswith(".low") else (DRESSINGS.get("bloater", d0) if act == "bloat_burst" else d0)
         dress(d)
         a = bpy.data.actions[act]
         f0, f1 = a.frame_range
         n = 8
         frames = sorted(set(int(round(f0 + i * (f1 - f0) / (n - 1))) for i in range(n)))
         paths = []
-        low = act in ("crawl",) or act.startswith("death") or act in ("bloat_burst",)
+        low = act in ("crawl",) or act.startswith("death") or act in ("bloat_burst",) or act.endswith(".low")
         for f in frames:
             set_clip(act, f)
             az = math.radians(55)

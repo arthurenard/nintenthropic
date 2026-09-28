@@ -3,14 +3,14 @@
     char.walker          the dead body's skin: head (neck, ears), hands
     var.outfit.<name>    what they died in (outfits.py) - show exactly one
     var.hair.<n>         hair over the bald head (hair.py) - one or none
-    var.runner           a whole person: leaner, fresher, in running clothes
-    var.bloater          a whole person: swollen, pale green, straining a torn shirt
+    char.runner           a whole person: leaner, fresher, in running clothes
+    char.bloater          a whole person: swollen, pale green, straining a torn shirt
     char.crawler         a whole person: legs gone below the knee, dragging
     eyes                 the eyeballs (their own material, for the eyeshine)
 
 Dressing (see art/night/README.md): a walker is char.walker + one
-var.outfit.* + one var.hair.* (or none) + eyes; a runner is var.runner +
-eyes; a bloater var.bloater + eyes; a crawler char.crawler + eyes. One
+var.outfit.* + one var.hair.* (or none) + eyes; a runner is char.runner +
+eyes; a bloater char.bloater + eyes; a crawler char.crawler + eyes. One
 armature, one clip library, one 2048 atlas for everything but the eyes.
 """
 
@@ -81,7 +81,7 @@ def build(path, size=2048, quick=False, only_outfits=None, clips=None):
     assemble.bake_clips(rig, clips or clips_dead.CLIPS)
     size_b = assemble.export(path, extras=dict(
         dressing={"walker": "char.walker + one var.outfit.* + one var.hair.* (or none) + eyes",
-                  "runner": "var.runner + eyes", "bloater": "var.bloater + eyes", "crawler": "char.crawler + eyes"},
+                  "runner": "char.runner + eyes", "bloater": "char.bloater + eyes", "crawler": "char.crawler + eyes"},
         clips=clips_dead.META))
     log(f"walker: wrote {path} ({size_b / 1024:.0f} KB) in {time.time() - t0:.0f}s")
     return path

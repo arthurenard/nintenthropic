@@ -73,6 +73,99 @@ def import_road(path):
     return sc
 
 
+SODIUM_GAME = (1.0, 0.56, 0.23)
+
+
+def game_materials(sc, folder):
+    """Rebuild every baked material the way the game's shader reads it
+    (src/games/night/world/shading.ts): the unlit base map is `lit`; the
+    albedo and flicker files its extras name, beside road.glb, are loaded;
+    colour = lit - albedo * SODIUM * flicker_scale * street * (1 - on)
+    + albedo lit by the scene's lights (the flashlight). `on` is the value
+    node "street_on" in each (set_street)."""
+    scale = float(sc.get("flicker_scale", 1.0))
+    n_done = 0
+    for m in list(bpy.data.materials):
+        alb_name = m.get("albedo")
+        if not alb_name or not m.use_nodes:
+            continue
+        nt = m.node_tree
+        lit_img = next((n.image for n in nt.nodes if n.type == 'TEX_IMAGE' and n.image), None)
+        if lit_img is None:
+            continue
+        nt.nodes.clear()
+        N, Lk = nt.nodes.new, nt.links.new
+        out = N('ShaderNodeOutputMaterial')
+        uv = N('ShaderNodeUVMap')
+        tl = N('ShaderNodeTexImage')
+        tl.image = lit_img
+        ta = N('ShaderNodeTexImage')
+        ta.image = bpy.data.images.load(os.path.join(folder, alb_name), check_existing=True)
+        ta.image.colorspace_settings.name = 'sRGB'
+        for t in (tl, ta):
+            Lk(uv.outputs['UV'], t.inputs['Vector'])
+        emit_col = tl.outputs['Color']
+        fl_name = m.get("flicker")
+        if fl_name:
+            tf = N('ShaderNodeTexImage')
+            tf.image = bpy.data.images.load(os.path.join(folder, fl_name), check_existing=True)
+            tf.image.colorspace_settings.name = 'Non-Color'
+            Lk(uv.outputs['UV'], tf.inputs['Vector'])
+            sep = N('ShaderNodeSeparateColor')
+            Lk(tf.outputs['Color'], sep.inputs['Color'])
+            on = N('ShaderNodeValue')
+            on.name = on.label = "street_on"
+            on.outputs[0].default_value = 1.0
+            off = N('ShaderNodeMath')
+            off.operation = 'SUBTRACT'
+            off.inputs[0].default_value = 1.0
+            Lk(on.outputs[0], off.inputs[1])
+            k = N('ShaderNodeMath')
+            k.operation = 'MULTIPLY'
+            Lk(sep.outputs['Red'], k.inputs[0])
+            Lk(off.outputs[0], k.inputs[1])
+            k2 = N('ShaderNodeMath')
+            k2.operation = 'MULTIPLY'
+            Lk(k.outputs[0], k2.inputs[0])
+            k2.inputs[1].default_value = scale
+            tint = N('ShaderNodeVectorMath')
+            tint.operation = 'MULTIPLY'
+            Lk(ta.outputs['Color'], tint.inputs[0])
+            tint.inputs[1].default_value = SODIUM_GAME
+            sub = N('ShaderNodeVectorMath')
+            sub.operation = 'SCALE'
+            Lk(tint.outputs[0], sub.inputs[0])
+            Lk(k2.outputs[0], sub.inputs['Scale'])
+            dif = N('ShaderNodeVectorMath')
+            dif.operation = 'SUBTRACT'
+            Lk(tl.outputs['Color'], dif.inputs[0])
+            Lk(sub.outputs[0], dif.inputs[1])
+            mx = N('ShaderNodeVectorMath')
+            mx.operation = 'MAXIMUM'
+            Lk(dif.outputs[0], mx.inputs[0])
+            mx.inputs[1].default_value = (0.0, 0.0, 0.0)
+            emit_col = mx.outputs[0]
+        em = N('ShaderNodeEmission')
+        Lk(emit_col, em.inputs['Color'])
+        em.inputs['Strength'].default_value = 1.0
+        df = N('ShaderNodeBsdfDiffuse')
+        Lk(ta.outputs['Color'], df.inputs['Color'])
+        add = N('ShaderNodeAddShader')
+        Lk(em.outputs[0], add.inputs[0])
+        Lk(df.outputs[0], add.inputs[1])
+        Lk(add.outputs[0], out.inputs['Surface'])
+        n_done += 1
+    print("game materials:", n_done, "flicker_scale", scale)
+
+
+def set_street(on):
+    for m in bpy.data.materials:
+        if m.use_nodes:
+            n = m.node_tree.nodes.get("street_on")
+            if n is not None:
+                n.outputs[0].default_value = on
+
+
 def flashlight(sc, target, power=260.0, cone=24.0):
     ld = bpy.data.lights.new("beam", 'SPOT')
     ld.energy = power
@@ -126,6 +219,7 @@ def render(sc, path, w, h, samples, fog_hex, density, beam=None):
 def run(ctx):
     path = os.path.join(ctx.assets, "road.glb")
     sc = import_road(path)
+    game_materials(sc, os.path.dirname(path))
     cam = next(o for o in sc.objects if o.type == 'CAMERA')
     sc.camera = cam
     fog_hex = sc.get("fog_color", "#28323e")
@@ -134,6 +228,10 @@ def run(ctx):
     out = ctx.review_dir
     render(sc, os.path.join(out, "glb_lit_nofog.png"), w, h, s, None, 0)
     render(sc, os.path.join(out, "glb_lit_fog.png"), w, h, s, fog_hex, density)
+    # the streetlight dead (the flicker's low): its share of the bake gone
+    set_street(0.0)
+    render(sc, os.path.join(out, "glb_street_off.png"), w, h, s, fog_hex, density)
+    set_street(1.0)
     flashlight(sc, (0.4, 14.0, 0.6))
     render(sc, os.path.join(out, "glb_beam_road.png"), w, h, s, fog_hex, density)
     b = bpy.data.objects["beam"]

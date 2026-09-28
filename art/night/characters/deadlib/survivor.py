@@ -9,7 +9,7 @@ not the dead: warm skin, bright eyes, clean colours, and the light they carry.
                           slacks and slippers
     socket.lantern        an empty on hand.L at the centre of the grip
       prop.lantern        a hurricane lantern hanging from its bail
-        prop.lantern.flame  its flame (own material, emissive: the game lights it
+        lantern.flame  its flame (own material, emissive: the game lights it
                             and puts a warm point light at it)
 
 Show one person and the lantern. Clips: run, run_lantern, duck, wave.
@@ -54,6 +54,15 @@ def living_head(name, p, look, hair_style=None, iris="brown", tris=5400):
 
     def paint(Pt):
         c, r = T.head_paint(Pt, p, look)
+        if look.get("lipstick"):
+            # 1950s red on the lips, a little rouge high on the cheeks
+            ax, y, z = np.abs(Pt[:, 0]), Pt[:, 1], Pt[:, 2]
+            lipd = np.exp(-((ax / 0.022) ** 2 + ((z + 0.0655) / 0.0085) ** 2)) * smoothstep(-0.088, -0.097, y)
+            lipm = smoothstep(0.35, 0.8, lipd)[:, None]
+            c = c * (1 - 0.75 * lipm) + srgb(*look["lipstick"]) * 0.75 * lipm
+            r = r - 0.15 * lipm[:, 0]
+            rouge = (np.exp(-(((ax - 0.042) / 0.016) ** 2 + ((z + 0.028) / 0.014) ** 2)) * smoothstep(-0.05, -0.07, y))[:, None]
+            c = c * (1 - 0.18 * rouge) + srgb(0.78, 0.42, 0.40) * 0.18 * rouge
         return c, r, np.zeros(len(Pt))
 
     def paint_ear(Pt):
@@ -96,7 +105,8 @@ def daughter():
     p = H.P(sex=1.0, age=0.15, hair="slick", hair_len=1.15, hairline=0.0, brows=0.3, brow=0.3, lips=1.2, fat=0.75, nose_len=0.8,
             nose_w=0.76, nose_tip=0.82, nose_bridge=0.7, jaw=0.82, chin=0.86, cheekbone=0.85, eye_open=1.0, neck=0.84, width=0.95,
             dead=LIVING)
-    look = dict(skin="fair", hair="auburn", iris="green", stubble=0.0, grime=0.15, hatline=False, flush=1.2)
+    look = dict(skin="fair", hair="auburn", iris="green", stubble=0.0, grime=0.15, hatline=False, flush=1.2,
+                lipstick=(0.60, 0.12, 0.14))
     # auburn, drawn back off the face into the ponytail
     jobs = living_head("daughter.head", p, look, hair_style=(dict(hair="slick", hair_len=1.15, hairline=0.0), None, (0.38, 0.21, 0.12), 0.0, 0.2),
                        iris="green")
@@ -220,7 +230,7 @@ def lantern(sockM):
                smart_uv=True, uv_angle=70, skin=("prop",), name="prop.lantern")
     # the flame: a small teardrop over the wick, its own emissive material
     fl = S.Union([S.Ellipsoid(P(0, 0, -0.165), (0.010, 0.010, 0.022)), S.Sphere(P(0, 0, -0.18), 0.009)], k=0.006)
-    fo = MF.decimated("prop.lantern.flame", fl, P(-0.02, -0.02, -0.2), P(0.02, 0.02, -0.13), 0.0008, 120, None)
+    fo = MF.decimated("lantern.flame", fl, P(-0.02, -0.02, -0.2), P(0.02, 0.02, -0.13), 0.0008, 120, None)
     m = bpy.data.materials.new("flame")
     m.use_nodes = True
     b = m.node_tree.nodes["Principled BSDF"]
@@ -271,7 +281,7 @@ def build(path, size=1024, quick=False):
     flame.matrix_basis = Matrix.Identity(4)
     assemble.bake_clips(rig, CS.CLIPS)
     size_b = assemble.export(path, extras=dict(clips=CS.META, dressing={
-        "daughter": "var.person.daughter + prop.lantern (+ prop.lantern.flame lit)",
-        "owner": "var.person.owner + prop.lantern (+ prop.lantern.flame lit)"}))
+        "daughter": "var.person.daughter + prop.lantern (+ lantern.flame lit)",
+        "owner": "var.person.owner + prop.lantern (+ lantern.flame lit)"}))
     log(f"survivor: wrote {path} ({size_b / 1024:.0f} KB) in {time.time() - t0:.0f}s")
     return path

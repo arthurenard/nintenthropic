@@ -618,12 +618,131 @@ def bloat_burst():
     return c
 
 
+# ---------------------------------------------------------------------------
+# The crawler's own versions (`.low`): the game plays these for a body with
+# no legs to stand on - waiting, clawing at the bags, hit, dying - all from
+# the crawl's pose on the ground, hands in armature space like the crawl's
+
+def _low_pose(**kw):
+    legs = {"ik.foot.L": (0.13, 0.52, 0.12), "rot.foot.L": (80, 0, 10), "pole.foot.L": (0.2, 0.2, -1),
+            "ik.foot.R": (-0.13, 0.55, 0.10), "rot.foot.R": (80, 0, -10), "pole.foot.R": (-0.2, 0.2, -1),
+            "ikw.foot.L": (0.0, 0, 0), "ikw.foot.R": (0.0, 0, 0)}
+    base = dict(root=CRAWL_ROOT, hips=(82, 0, 0), spine=(2, 0, 0), chest=(-6, 0, 0), neck=(-46, 0, 0), head=(-38, 0, 0),
+                thigh__L=(0, 0, 0), thigh__R=(0, 0, 0))
+    base.update({k.replace(".", "__"): v for k, v in legs.items()})
+    base.update(kw)
+    return base
+
+
+_PALM_R = None
+_PALM_L = None
+
+
+def _palms():
+    global _PALM_R, _PALM_L
+    if _PALM_R is None:
+        _PALM_R = hand_rot("R", (0.0, -0.9, -0.4), (0.0, -0.4, 0.9))
+        _PALM_L = hand_rot("L", (0.0, -0.9, -0.4), (0.0, -0.4, 0.9))
+    return _PALM_R, _PALM_L
+
+
+def _hands(c, t, R=(-0.24, -0.55, 0.06), L=(0.24, -0.52, 0.06), rotR=None, rotL=None, ease="inout"):
+    pr, pl = _palms()
+    c.key(t, ease, wik__hand__R=R, wrot__hand__R=rotR or pr, pole__hand__R=(-0.4, 0.2, 1.0),
+          wik__hand__L=L, wrot__hand__L=rotL or pl, pole__hand__L=(0.4, 0.2, 1.0))
+
+
+def idle_low():
+    """Waiting at the barricade on its belly: both hands dug in, the head up
+    and swaying toward the player, a slow heave; now and then a hand claws
+    the ground."""
+    T = 3.0
+    c = Clip("idle.low", T, loop=True)
+    for t, s in ((0.0, 1), (0.75, 0), (1.5, -1), (2.25, 0), (T, 1)):
+        c.key(t, "inout", **_low_pose(root=(0.02 * s, CRAWL_ROOT[1], CRAWL_ROOT[2] + 0.015 * (1 - abs(s))),
+                                      spine=(2, -3 * s, 2 * s), chest=(-8, -3 * s, 3 * s), neck=(-48, 3 * s, -2 * s),
+                                      head=(-36, 8 * s, -8 * s)))
+    _hands(c, 0.0)
+    _hands(c, 1.1)
+    _hands(c, 1.35, R=(-0.26, -0.62, 0.14))          # the right hand lifts, claws
+    _hands(c, 1.6, R=(-0.25, -0.50, 0.05), ease="snap")
+    _hands(c, T)
+    c.layers.append(world_hands)
+    lagged(c, head=0.12, neck=0.06)
+    return c
+
+
+def claw_low():
+    """At the barricade from the ground: it rears up on its left arm and
+    rakes at the bags with the right, twice; the strikes at 0.45 s and 1.0 s."""
+    T = 1.4
+    c = Clip("claw.low", T, loop=True)
+    pr, pl = _palms()
+    up = _low_pose(root=(0.0, CRAWL_ROOT[1] - 0.06, CRAWL_ROOT[2] + 0.16), hips=(70, 0, -4), spine=(-6, 0, -4), chest=(-14, 0, -6),
+                   neck=(-30, 0, 4), head=(-24, 4, 6))
+    c.key(0.0, "inout", **up)
+    c.key(T, "inout", **up)
+    reach_rot = hand_rot("R", (0.1, -0.95, 0.3), (0.0, 0.3, 0.95))
+    keys = ((0.0, -0.55, 0.22), (0.25, -0.72, 0.62), (0.45, -0.62, 0.18), (0.7, -0.70, 0.55),
+            (1.0, -0.60, 0.16), (1.2, -0.58, 0.30), (T, -0.55, 0.22))
+    eases = ("inout", "in2", "out", "in2", "out", "inout", "inout")
+    for (t, y, z), e in zip(keys, eases):
+        c.key(t, e, wik__hand__R=(-0.22, y, z), wrot__hand__R=reach_rot, pole__hand__R=(-0.6, 0.2, 0.6),
+              wik__hand__L=(0.20, -0.42, 0.06), wrot__hand__L=pl, pole__hand__L=(0.4, 0.2, 1.0))
+    c.layers.append(world_hands)
+    lagged(c, head=0.05, neck=0.03)
+    return c
+
+
+def hit_head_low():
+    """A round in the head as it lies there: the head snaps back and aside,
+    the chest jerks up, and it slumps back into the crawl."""
+    T = 0.7
+    c = Clip("hit_head.low", T)
+    base = _low_pose()
+    c.key(0.0, "inout", **base)
+    c.key(0.08, "snap", **_low_pose(root=(0.0, CRAWL_ROOT[1] + 0.03, CRAWL_ROOT[2] + 0.05), chest=(-16, 4, -6), neck=(-58, 6, 10),
+                                    head=(-62, 16, 20)))
+    c.key(0.3, "out", **_low_pose(root=(0.0, CRAWL_ROOT[1] + 0.02, CRAWL_ROOT[2] + 0.01), chest=(-4, 2, -2), neck=(-36, 2, 6),
+                                  head=(-24, 8, 10)))
+    c.key(T, "inout", **base)
+    _hands(c, 0.0)
+    _hands(c, 0.12, R=(-0.26, -0.50, 0.10), L=(0.26, -0.48, 0.10))
+    _hands(c, T)
+    c.layers.append(world_hands)
+    lagged(c, head=0.03, neck=0.02)
+    return c
+
+
+def death_low():
+    """Shot dead where it lies: a jolt, the arms give, and it goes flat on
+    its face, the head turned aside on the road (the thud at 0.5 s)."""
+    T = 1.2
+    c = Clip("death.low", T)
+    c.key(0.0, "inout", **_low_pose())
+    c.key(0.1, "snap", **_low_pose(root=(0.0, CRAWL_ROOT[1] + 0.04, CRAWL_ROOT[2] + 0.04), chest=(-14, 0, 0), neck=(-54, 0, 0),
+                                   head=(-44, 6, 4)))
+    flat = _low_pose(root=(0.0, CRAWL_ROOT[1] + 0.06, CRAWL_ROOT[2] - 0.13), hips=(88, 0, 6), spine=(6, 0, 4), chest=(4, 0, 6),
+                     neck=(-10, 10, 20), head=(-6, 20, 60))
+    c.key(0.5, "in2", **flat)
+    c.key(T, "out", **flat)
+    _hands(c, 0.0)
+    _hands(c, 0.3, R=(-0.30, -0.45, 0.10), L=(0.30, -0.42, 0.10))
+    _hands(c, 0.55, R=(-0.40, -0.30, 0.03), L=(0.36, -0.20, 0.03), ease="in2")
+    _hands(c, T, R=(-0.42, -0.28, 0.03), L=(0.37, -0.18, 0.03))
+    c.layers.append(world_hands)
+    lagged(c, head=0.05, neck=0.03)
+    return c
+
+
 CLIPS = {
     "idle": idle, "walk.shamble": shamble, "walk.limp": limp, "walk.drag": drag, "walk.lurch": lurch,
     "run": run, "lunge": lunge, "crawl": crawl, "claw": claw, "stagger": stagger, "hit_head": hit_head,
     "death_back": death_back, "death_forward": death_forward, "death_crumple": death_crumple,
     "climb_out": climb_out, "vault": vault, "bloat_burst": bloat_burst,
+    "idle.low": idle_low, "claw.low": claw_low, "hit_head.low": hit_head_low, "death.low": death_low,
 }
+LOW_CLIPS = ("idle.low", "claw.low", "hit_head.low", "death.low")
 
 # what the game needs to play them: speeds for the walks (the root moves at
 # this while the clip loops), and the moments things happen
@@ -642,4 +761,6 @@ META = {
     "climb_out": {"ends_at_origin": True, "starts": "0.55 m back and 0.42 m up, in the bus door"},
     "vault": {"ends_at_origin": True, "starts": "1.1 m back on the field side of the fence"},
     "bloat_burst": {"burst_s": 1.32},
+    "idle.low": {"loop": True, "for": "char.crawler"}, "claw.low": {"loop": True, "strike_s": [0.45, 1.0], "for": "char.crawler"},
+    "hit_head.low": {"for": "char.crawler"}, "death.low": {"thud_s": 0.5, "for": "char.crawler"},
 }

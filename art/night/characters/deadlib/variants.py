@@ -1,8 +1,8 @@
 """The other dead of walker.glb, each a whole person on the shared rig:
 
-    var.runner     recently dead, young and lean: a letterman jacket, jeans,
+    char.runner     recently dead, young and lean: a letterman jacket, jeans,
                    sneakers; the face still close to a face
-    var.bloater    swollen tight, pale green and marbled: a stained undershirt
+    char.bloater    swollen tight, pale green and marbled: a stained undershirt
                    ridden up over a huge belly, braces straining; puffy face
     char.crawler   an old man whose legs end below the knees - the trousers torn
                    off there, the stumps bound in dark rags (no gore) - who
@@ -24,7 +24,7 @@ HEADS = {
                dict(sunken=0.45, gaunt=0.35, mouth=0.75, fresh=0.65),
                dict(tone="fresh", grime=0.35, stubble=0.15, trickle=-1, seed=41, scratch=((-0.03, -0.09, 0.02), (-0.06, -0.06, -0.05))),
                (dict(hair="short", hair_len=1.3, hairline=0.0), None, (0.20, 0.14, 0.09), 0.0, 0.2)),
-    "bloater": (dict(age=0.6, fat=1.0, cheekbone=0.9, jaw=1.15, chin=0.9, brow=1.0, eye_open=0.5, lips=1.2, neck=1.25, width=1.04, hair="bald"),
+    "bloater": (dict(age=0.6, fat=1.0, cheekbone=0.9, jaw=1.15, chin=0.9, brow=1.0, eye_open=1.15, lips=1.2, neck=1.05, width=1.04, hair="bald"),
                 dict(sunken=0.35, gaunt=0.0, mouth=0.4, swollen=1.0, fresh=0.0),
                 dict(tone="bloat", grime=0.5, stubble=0.6, trickle=1, seed=61),
                 (dict(hair="short", hair_len=0.7, hairline=0.7), None, (0.30, 0.28, 0.24), 0.3, 0.6)),
@@ -90,7 +90,7 @@ def bloater(quick=False, coll=None):
         sh = np.array(JOINTS[f"upper_arm.{tag}"][0])
         el = np.array(JOINTS[f"forearm.{tag}"][0])
         wr = np.array(JOINTS[f"hand.{tag}"][0])
-        f = S.Union([S.RoundCone(sh, el, 0.072, 0.058), S.RoundCone(el, el + (wr - el) * 0.6, 0.058, 0.046)], k=0.02)
+        f = S.Union([S.RoundCone(sh, el, 0.060, 0.050), S.RoundCone(el, el + (wr - el) * 0.6, 0.050, 0.043)], k=0.02)
         ob = MF.decimated(f"bloater.arm.{tag}", f, np.minimum(sh, wr) - 0.1, np.maximum(sh, wr) + 0.1, 0.002, 500, coll)
 
         def ap(P, tag=tag):
@@ -105,7 +105,11 @@ def bloater(quick=False, coll=None):
     tor = BD.torso_tube(bp)
     belly = S.Ellipsoid((0.0, -0.10, 1.10), (0.20, 0.17, 0.20))
     tf = S.Union([tor, belly], k=0.08)
-    shf = S.Union([tf] + BD.arm_parts(bp, "L")[:1] + BD.arm_parts(bp, "R")[:1], k=0.04)
+    # the shoulders: rounded caps where the swollen arms go in (not the
+    # shirt's sleeve heads, which ballooned on this chest)
+    caps = [S.RoundCone(np.array(JOINTS[f"upper_arm.{t}"][0]) * np.array([0.6, 1, 1]) + np.array([0, 0, 0.01]),
+                        np.array(JOINTS[f"upper_arm.{t}"][0]), 0.066, 0.058) for t in ("L", "R")]
+    shf = S.Union([tf] + caps, k=0.04)
     ob = MF.decimated("bloater.torso", shf, (-0.36, -0.32, 0.90), (0.36, 0.25, 1.56), 0.003, 2600 if not quick else 1600, coll, symmetry=True)
 
     def undershirt(P):
@@ -191,4 +195,4 @@ def cut_below(ob, z):
 
 
 def build_all(quick=False):
-    return {"var.runner": runner(quick), "var.bloater": bloater(quick), "char.crawler": crawler(quick)}
+    return {"char.runner": runner(quick), "char.bloater": bloater(quick), "char.crawler": crawler(quick)}

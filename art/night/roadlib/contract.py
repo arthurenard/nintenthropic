@@ -87,14 +87,14 @@ def bag_jar_xs():
 POLY_OWNER = []
 
 
-def scene_bvh():
+def scene_bvh(respect_no_occlude=True):
     verts, polys = [], []
     POLY_OWNER.clear()
     dg = bpy.context.evaluated_depsgraph_get()
     for ob in bpy.context.scene.objects:
         if ob.type != 'MESH' or ob.get('export', 1) == 0 or ob.name.startswith(('ground.shadow', 'moon.disc')):
             continue
-        if ob.get('no_occlude'):
+        if respect_no_occlude and ob.get('no_occlude'):
             continue
         ev = ob.evaluated_get(dg)
         me = ev.to_mesh()
@@ -135,8 +135,9 @@ def vps(p):
     return {a: [round(c, 3) for c in viewport(p, r)] for a, r in (('4_3', 4 / 3), ('16_10', 1.6), ('16_9', 16 / 9), ('21_9', 21 / 9))}
 
 
-def path_nodes(col, prefix, pts, r, width=2.5, **extra):
-    """Ordered waypoints (from the fog to the barricade), on the ground."""
+def path_nodes(col, prefix, pts, r, width=2.5, spread=None, **extra):
+    """Ordered waypoints (from the fog to the barricade), on the ground.
+    `spread` (the game's name): how far either side of the line they walk."""
     from .ground import ground_z
     obs = []
     for i, (x, y) in enumerate(pts, 1):
@@ -145,7 +146,7 @@ def path_nodes(col, prefix, pts, r, width=2.5, **extra):
         heading = Vector((nxt[0] - x, nxt[1] - y, 0.0))
         rot = facing(heading if heading.length > 1e-3 else Vector((0, -1, 0)))
         ob = empty(f"{prefix}.{i}", (x, y, z), col, rot=rot, size=0.4, display='SINGLE_ARROW',
-                   order=i, width_m=width, **extra)
+                   order=i, width_m=width, spread=round(spread if spread is not None else width / 2, 2), **extra)
         obs.append(ob)
     return obs
 
@@ -155,49 +156,75 @@ def build_lanes(col):
     # the road: up the middle out of the fog, round the bus's east end
     road = [(-0.8, 110.0), (-0.2, 90.0), (1.4, 70.0), (4.2, 56.0), (6.6, 47.5), (4.6, 40.0), (1.8, 31.0),
             (0.6, 21.0), (0.1, 12.0), (-0.4, 6.8), (-0.5, 4.3)]
-    path_nodes(col, "lane.road", road, r, width=3.0, lane='road', speed_hint='walk')
+    path_nodes(col, "lane.road", road, r, width=3.0, spread=1.5, lane='road', speed_hint='walk')
     # the corn: out of the dark field west of the scarecrow, through the
     # broken fence, onto the road
     cornp = [(-46.0, 43.0), (-36.0, 40.5), (-26.0, 38.8), (-17.0, 37.6), (-11.0, 37.2), (-7.3, 37.2),
              (-3.6, 33.0), (-2.2, 22.0), (-1.6, 12.0), (-1.7, 4.3)]
-    path_nodes(col, "lane.corn", cornp, r, width=1.6, lane='corn', corn_until=5)
-    # the tree line: out of the pines past the motel's east end, across its
-    # lot, down the east side of the road
-    trees = [(46.0, 64.0), (37.0, 53.0), (33.0, 42.0), (26.0, 35.0), (16.0, 31.5), (8.0, 28.0), (2.8, 20.0),
-             (1.6, 11.0), (1.0, 6.5), (0.7, 4.3)]
-    path_nodes(col, "lane.trees", trees, r, width=2.2, lane='trees')
+    path_nodes(col, "lane.corn", cornp, r, width=1.6, spread=0.8, lane='corn', corn_until=5)
+    # the tree line: out of the pines east of the motel, along its front
+    # (off the right of the screen), then across the lot and down the east
+    # side of the road. Every waypoint the game frames (the second on, when
+    # nearer than 60 m) is inside the play view at any window from 1.2:1
+    trees = [(60.0, 44.0), (48.5, 37.0), (14.0, 37.0), (9.0, 26.0), (2.6, 19.5), (1.6, 11.0), (1.0, 6.5), (0.7, 4.3)]
+    path_nodes(col, "lane.trees", trees, r, width=2.2, spread=1.1, lane='trees')
 
 
 def build_spawns(col):
+    """The surprises. `spawn.bus` is the foot of the bus's door and
+    `spawn.fence` the rail: the game plays `climb_out` / `vault` while it
+    carries the dead along the first stretch of the path (0.5 m, 0.9 m),
+    and the clips carry the rest (climb_out starts 0.55 m back and 0.42 m
+    up in the doorway; vault 1.1 m back in the field), so the body steps
+    down from the door, or goes over the rail, and lands on the path."""
     from .ground import ground_z
     from . import far
     r = rng("spawns")
     bus_door, bus_out = far.bus_door()
-    ob = empty("spawn.bus", bus_door, col, rot=facing(bus_out), size=0.5, display='SINGLE_ARROW',
-               clip='climb_out', note="climb_out ends standing on the road at this node, facing out of the bus")
-    pts = [(bus_door.x + bus_out.x * 1.2, bus_door.y + bus_out.y * 1.2), (2.6, 36.0), (1.2, 26.0), (0.4, 14.0), (0.2, 4.3)]
-    path_nodes(col, "spawn.bus.path", pts, r, width=1.5)
+    empty("spawn.bus", bus_door, col, rot=facing(bus_out), size=0.5, display='SINGLE_ARROW', spread=0.3,
+          clip='climb_out', note="the foot of the bus's door, facing out; climb_out starts 0.55 m back and 0.42 m up")
+    first = bus_door + bus_out * 0.5
+    pts = [(first.x, first.y), (2.6, 36.0), (1.2, 26.0), (0.4, 14.0), (0.2, 4.3)]
+    path_nodes(col, "spawn.bus.path", pts, r, width=1.5, spread=0.3)
     # behind the phone booth (out of sight), then down past the pole sign
     bp = Vector((L.BOOTH[0] + 0.95, L.BOOTH[1] + 0.9, ground_z(L.BOOTH[0] + 0.95, L.BOOTH[1] + 0.9)))
-    empty("spawn.booth", bp, col, rot=facing(Vector((-1, -0.4, 0))), size=0.5, display='SINGLE_ARROW', clip='walk')
-    pts = [(L.BOOTH[0] - 0.6, L.BOOTH[1] - 1.6), (5.6, 16.6), (3.9, 12.0), (2.8, 7.2), (4.1, 4.2)]
-    path_nodes(col, "spawn.booth.path", pts, r, width=1.0)
+    empty("spawn.booth", bp, col, rot=facing(Vector((-1, -0.4, 0))), size=0.5, display='SINGLE_ARROW', clip='walk', spread=0.4)
+    pts = [(L.BOOTH[0] - 0.6, L.BOOTH[1] - 1.6), (5.6, 16.6), (3.9, 12.0), (2.8, 7.2), (1.3, 4.4)]
+    path_nodes(col, "spawn.booth.path", pts, r, width=1.0, spread=0.4)
     # over the fence, 16 m out on the left (the pickup hides anything nearer)
     fy = L.FENCE_SPAWN_Y
-    # like spawn.bus, the node is where the clip ENDS (vault's root finishes
-    # at its origin): the landing on the road side; the clip starts 1.1 m
-    # back, on the field side, so the dead come over the rails from the corn
-    fp = Vector((L.FENCE_X + 0.55, fy, ground_z(L.FENCE_X + 0.55, fy)))
-    empty("spawn.fence", fp, col, rot=facing(Vector((1, -0.15, 0))), size=0.5, display='SINGLE_ARROW', clip='vault',
-          note="vault ends here on the road side, facing east; it starts 1.1 m back on the field side of the fence")
-    pts = [(L.FENCE_X + 1.3, fy - 0.3), (-4.4, 11.5), (-2.9, 7.5), (-2.6, 4.3)]
-    path_nodes(col, "spawn.fence.path", pts, r, width=1.0)
+    fp = Vector((L.FENCE_X, fy, ground_z(L.FENCE_X, fy)))
+    empty("spawn.fence", fp, col, rot=facing(Vector((1, -0.15, 0))), size=0.5, display='SINGLE_ARROW', clip='vault', spread=0.3,
+          note="at the rail, facing the road; vault starts 1.1 m back in the field and the path's first stretch is 0.9 m")
+    pts = [(L.FENCE_X + 0.9, fy - 0.15), (-4.4, 11.5), (-2.9, 7.5), (-1.2, 4.4)]
+    path_nodes(col, "spawn.fence.path", pts, r, width=1.0, spread=0.3)
+
+
+# The survivors' runs (`path.survivor.<n>.<k>`): out of the corn, across the
+# road to the motel office's door (where the phone is), in view all the way
+SURVIVOR_PATHS = [
+    [(-9.0, 24.8), (-3.5, 25.2), (2.5, 27.5), (7.0, 32.0), (10.4, 38.3), (10.0, 39.7)],
+    [(-10.5, 37.2), (-7.3, 37.2), (-2.5, 36.5), (3.5, 37.3), (7.5, 37.3), (10.0, 39.7)],
+]
+
+
+def build_survivor_paths(col):
+    from .ground import ground_z
+    for n, pts in enumerate(SURVIVOR_PATHS, 1):
+        for k, (x, y) in enumerate(pts, 1):
+            nxt = pts[k] if k < len(pts) else (x, y + 1)
+            empty(f"path.survivor.{n}.{k}", (x, y, ground_z(x, y)), col, rot=facing(Vector((nxt[0] - x, nxt[1] - y, 0))),
+                  size=0.3, display='SINGLE_ARROW', order=k)
+
+
+# Where the dead stand at the barricade: five places across its middle, all
+# in view at the narrowest window the game allows (1.2:1)
+SLOTS = [(-1.5, 4.0), (-0.75, 3.97), (0.0, 3.95), (0.75, 3.97), (1.5, 4.0)]
 
 
 def build_barricade(col):
     from .ground import ground_z
-    pts = [(-3.75, 3.95), (-2.65, 3.95), (-1.55, 3.95), (-0.45, 3.95), (0.65, 3.95), (2.33, 4.15), (4.15, 4.0), (5.4, 4.0)]
-    for i, (x, y) in enumerate(pts, 1):
+    for i, (x, y) in enumerate(SLOTS, 1):
         p = Vector((x, y, ground_z(x, y)))
         empty(f"barricade.{i}", p, col, rot=toward_player(p), size=0.35, display='SINGLE_ARROW', order=i,
               clip='claw', vp=vps(p + Vector((0, 0, 1.55)))['16_9'])
@@ -277,24 +304,96 @@ def build_lights(col):
               radius_m=5.0)
 
 
-def build_cat_spots(col):
-    from . import station, roadside, motel
+SECRET_CLEARANCE = 1.2     # the game tells the cat from the other secrets by distance
+
+
+def _perch(bvh, region, max_az=24.5, z_range=(0.8, 2.6), step=0.05, flat=0.06, probe=0.08):
+    """The highest flat, visible spot in a box (x0, x1, y0, y1) within max_az
+    of the view's centre: where a cat would sit."""
+    best = None
+    x0, x1, y0, y1 = region
+    nx = int(round((x1 - x0) / step)) + 1
+    ny = int(round((y1 - y0) / step)) + 1
+    for i in range(nx):
+        for j in range(ny):
+            x, y = x0 + i * step, y0 + j * step
+            if math.degrees(math.atan2(abs(x - EYE.x), y - EYE.y)) > max_az:
+                continue
+            z = support(bvh, x, y, z_range[1] + 3.0)
+            if z is None or not (z_range[0] <= z <= z_range[1]):
+                continue
+            around = [support(bvh, x + dx, y + dy, z + 0.5) for dx, dy in ((probe, 0), (-probe, 0), (0, probe), (0, -probe))]
+            if any(a is None or abs(a - z) > flat for a in around):
+                continue
+            p = Vector((x, y, z))
+            if not seen(bvh, p + Vector((0, 0, 0.15)), slack=0.2)[0]:
+                continue
+            if best is None or z > best.z + 0.02 or (abs(z - best.z) <= 0.02 and y > best.y):
+                best = p
+    return best
+
+
+def build_cat_spots(col, bvh):
+    """The cat's perches, in the order it uses them: a fence post by the
+    corn (where it is first seen), the top of the Gas & Eats sign, the
+    wrecked car's roof, the motel's sign. (The overturned pickup lies 42
+    degrees left of the view's centre: outside the play view at 1.2:1.)
+    Each is found on the real geometry (a flat top, seen from the eye),
+    inside the play view and clear of every other secret."""
     spots = []
-    s = station.INFO.get("cat_seat")
-    if s is not None:
-        spots.append((Vector(s), 'pickup_cab'))
-    x0, x1, y0, y1, zs = L.CANOPY
-    spots.append((Vector((-1.2, y1 + 0.02, zs + 0.62)), 'canopy'))
-    b = roadside.INFO.get("booth_roof")
-    if b is not None:
-        spots.append((Vector(b) + Vector((0.2, 0.15, 0.0)), 'phone_booth'))
-    m = motel.INFO.get("sign_top")
-    if m is not None:
-        spots.append((Vector(m), 'motel_sign'))
+    for where, region, zr, probe in (("fence_post", (-7.5, -7.1, 15.8, 19.2), (0.7, 1.6), 0.03),
+                                     ("gas_sign", (3.3, 7.8, 15.3, 16.3), (6.9, 8.2), 0.035),
+                                     ("wrecked_car", (-6.2, -3.6, 29.0, 34.0), (0.9, 1.6), 0.08)):
+        p = _perch(bvh, region, z_range=zr, probe=probe)
+        if p is None:
+            print(f"WARNING: no perch found on the {where}")
+            continue
+        spots.append((p, where))
+    from . import motel
+    spots.append((Vector(motel.INFO.get("sign_top", (7.2, 34.6, 5.71))), 'motel_sign'))
+    secrets = [o for o in bpy.context.scene.objects if o.name.startswith('secret.') and not o.name.startswith('secret.cat.')]
     for i, (p, where) in enumerate(spots, 1):
+        near = min(((_centre(o) - p).length, o.name) for o in secrets) if secrets else (99.0, "")
+        if near[0] < SECRET_CLEARANCE:
+            print(f"WARNING: cat spot {where} is {near[0]:.2f} m from {near[1]}")
         empty(f"secret.cat.spot.{i}", p, col, rot=toward_player(p), size=0.12, display='SINGLE_ARROW', on=where,
               **{f"vp_{k}": v for k, v in vps(p + Vector((0, 0, 0.15))).items()})
     return spots
+
+
+def _centre(ob):
+    if ob.type == 'MESH' and len(ob.data.vertices):
+        bb = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
+        return sum(bb, Vector()) / 8
+    return ob.matrix_world.translation.copy()
+
+
+REFRESH_PREFIX = ('lane.', 'spawn.', 'barricade.', 'path.survivor.', 'secret.cat.spot.')
+
+
+def refresh(col=None):
+    """Re-place the contract's empties that carry no bake (lanes, spawns,
+    barricade places, survivors' runs, the cat's perches) in an already
+    baked scene: the export calls this, so moving a node never needs a new
+    bake. The perches are found again by casting onto the baked meshes."""
+    sc = bpy.context.scene
+    cam = bpy.data.objects.get('camera.player')
+    if col is None:
+        col = cam.users_collection[0] if cam else sc.collection
+    for ob in list(sc.objects):
+        if ob.type == 'EMPTY' and ob.name.startswith(REFRESH_PREFIX):
+            bpy.data.objects.remove(ob)
+    bpy.context.view_layer.update()
+    build_lanes(col)
+    build_spawns(col)
+    build_barricade(col)
+    build_survivor_paths(col)
+    # (the baked scene's joined meshes inherit `no_occlude` from the wires
+    # joined into them: here everything occludes)
+    bvh = scene_bvh(respect_no_occlude=False)
+    cats = build_cat_spots(col, bvh)
+    print("contract refreshed: cat perches", [(w, tuple(round(c, 2) for c in p)) for p, w in cats])
+    return cats
 
 
 def build_duck(lib, col):
@@ -330,9 +429,10 @@ def build(lib, col):
     if "phone" in motel.INFO:
         empty("secret.phone.motel", motel.INFO["phone"], col, size=0.1, display='CUBE', role='phone',
               note="the motel office's phone (a sound source; it rings back)")
-    cats = build_cat_spots(col)
+    build_survivor_paths(col)
     bpy.context.view_layer.update()
     bvh = scene_bvh()
+    cats = build_cat_spots(col, bvh)
     calib = build_calib(col, bvh)
     # sightlines to the things the player must see
     checks = {}

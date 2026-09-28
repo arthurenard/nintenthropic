@@ -178,11 +178,11 @@ Delightful, discoverable, never in the way. "Secrets 2 of 8" on the results.
    back.
 5. **The moon.** Shoot the moon three times: a wolf howls, far off. A fourth
    time: a second howl answers, much closer.
-6. **The cat.** A black cat sits on the pickup's cab. Shoot near it: it hisses
-   and relocates to the canopy, the phone booth, the motel sign. It survives
-   everything.
+6. **The cat.** A black cat sits on a fence post by the corn. Shoot near it:
+   it hisses and relocates to the top of the Gas & Eats sign, the wrecked
+   car's roof, the motel sign. It survives everything.
 7. **The radio.** Through the station window behind the counter (visible at the
-   right edge), a radio. Shoot it: it plays a few bars of a 1950s ballad
+   right edge of a wide screen; off screen below about 1.5:1), a radio. Shoot it: it plays a few bars of a 1950s ballad
    (synthesised) until the next wave.
 8. **The duck.** A yellow rubber duck bobs in a puddle by the pumps. Shoot it:
    it squeaks and spins. (Every game hides one duck. Find them all.)
@@ -228,23 +228,28 @@ western scripts).
   occlusion — no fog: the game draws fog) and `albedo`. The game's material
   shows `lit` and adds `albedo × spotlight(position, normal)` for the beam.
   How the second texture travels in glTF is the art's choice, documented in
-  `art/night/README.md`: each baked group's material `night.<group>` carries
-  `lit` as its `emissiveTexture` and `albedo` as its `baseColorTexture`
-  (roughness in `metallicRoughnessTexture` G); the corn carries them as
-  vertex colours (`COLOR_0` = lit, `_ALBEDO`, plus `_SWAY`).
+  `art/night/README.md`: each baked material `night.<group>.<surface>` is
+  unlit with `lit` as its base map, and its extras name `albedo`
+  (`road_albedo_<group>.webp`, beside road.glb), `flicker`, `surface` and
+  `glow`; the corn carries its layers per vertex (`COLOR_0` = lit,
+  `_ALBEDO`, `_FLICKER`, `_SWAY`, material extras `bake: "vertex"`).
 - **The streetlight flickers**: its baked contribution must be separable — a
   single-channel `flicker` mask (where the streetlight's light falls) the game
-  multiplies by the flicker, or a separate baked layer. *(As built: the
-  `occlusionTexture` red channel of each baked material — the streetlight's
-  share of `lit`, not AO — and `_FLICKER` on the corn;
-  `colour = lit × (1 − flicker × (1 − streetlight)) + albedo × beam`.)*
+  multiplies by the flicker, or a separate baked layer. *(As built:
+  `road_flicker_<group>.webp` named in each material's extras — the lamp's
+  light in units of `albedo × SODIUM`, ÷ the scene's `flicker_scale` — and
+  `_FLICKER` on the corn; `colour = lit − albedo × SODIUM × flicker_scale ×
+  street × (1 − on) + albedo × beam / π`.)*
 - **Named nodes:** `camera.player`; `moon` (an empty whose −Z is the moonlight
   direction, for the characters); `light.street` (the lamp head), `light.neon`,
   `light.motel.<n>`; `lane.road.<n>`, `lane.corn.<n>`, `lane.trees.<n>`
   (ordered waypoints each lane walks, from the fog to the barricade);
   `spawn.bus`, `spawn.booth`, `spawn.fence` (surprise spawns with an exit path
-  `spawn.<id>.path.<n>`; `spawn.bus` and `spawn.fence` sit where their clips
-  `climb_out` and `vault` *end*, the clips starting behind them); `barricade.<n>` (where the dead stand when they reach
+  `spawn.<id>.path.<n>`; `spawn.bus` at the foot of the bus's door and
+  `spawn.fence` at the rail, the clips carrying the body from behind them
+  onto the path's short first stretch); `path.survivor.<n>.<k>` (the
+  survivors' runs); `street.lamp` (the lamp's lens, its own mesh);
+  `spread` on each lane and spawn; `barricade.<n>` (where the dead stand when they reach
   you, spread along the barricade); `calib.1-9` (the mason jars);
   `secret.sign.<letter>` (each neon letter separately: `G`, `A1`, `S1`, `amp`,
   `E`, `A2`, `T`, `S2`), `secret.scarecrow` (with a `secret.scarecrow.head`

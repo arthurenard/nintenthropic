@@ -1,24 +1,24 @@
-"""Export road.glb: the baked layers on standard glTF materials, the corn
-with its vertex layers, the contract nodes with their extras, Draco
-geometry and WebP textures.
+"""Export road.glb: the baked layers the way the game reads them
+(src/games/night/world/stage.ts), the corn with its vertex layers, the
+contract nodes with their extras, Draco geometry and WebP textures.
 
-How the layers travel (see art/night/README.md, "Reading road.glb"):
+How the layers travel (see art/night/README.md):
 
-  every baked material (`night.<group>`) is a plain metallic-roughness
-  material, NOT unlit:
-    emissiveTexture   = lit     (emissiveFactor [1,1,1]; display-referred sRGB)
-    baseColorTexture  = albedo  (sRGB)
-    occlusionTexture  = ORM R   = the streetlight's flicker mask (not AO!)
-    metallicRoughnessTexture = the same ORM (G roughness, B metalness = 0)
+  every baked material (`night.<group>.<surface>`) is UNLIT
+  (KHR_materials_unlit): its baseColorTexture is `lit` (display-referred
+  sRGB: the night as it should look, no tone mapping), and its extras name
+  the files beside road.glb that carry the rest:
+    albedo   road_albedo_<group>.webp   the surface's own colour (sRGB), for the flashlight
+    flicker  road_flicker_<group>.webp  the streetlight's share of lit (greyscale, linear), for its flicker
+    surface  asphalt | dirt | wood | metal | glass | cloth | plant | sandbag | water
+    glow     1 (lit already carries every lamp at its baked brightness)
+  In the game's shader:  colour = lit - albedo * SODIUM * flicker_scale * street * (1 - on)
+                                  + albedo * beam(position, normal) / pi
+  with street = the flicker map's red and flicker_scale in the scene extras.
 
-So three.js's GLTFLoader builds a MeshStandardMaterial that already shows
-the night (emissive = lit, no lights needed) and lights `albedo` physically
-with whatever the game adds - the flashlight as a SpotLight, with the wet
-road's roughness. Give these materials no environment map and no ambient
-light (the ambient is baked), and read the mask from `aoMap`'s red channel.
-
-The corn meshes carry their layers per vertex: COLOR_0 = lit (an unlit
-material multiplies it), _ALBEDO, _SWAY, _FLICKER.
+The corn meshes carry their layers per vertex: COLOR_0 = lit (linear),
+_ALBEDO, _FLICKER (street, the same units), _SWAY; material extras
+`bake: "vertex"`.
 """
 
 import math
@@ -36,12 +36,14 @@ from dustcreek import bake as DB
 
 
 LAYERS = {
-    "lit": "emissiveTexture (sRGB, display-referred: show as is, no tone mapping)",
-    "albedo": "baseColorTexture (sRGB)",
-    "flicker": "occlusionTexture, red channel (the streetlight's share of lit; not ambient occlusion)",
-    "roughness": "metallicRoughnessTexture, green channel",
-    "formula": "colour = lit * (1 - flicker * (1 - streetlight)) + albedo * beam(position, normal)",
+    "lit": "baseColorTexture of the unlit material (sRGB, display-referred: show as is, no tone mapping)",
+    "albedo": "extras.albedo: a WebP beside road.glb (sRGB)",
+    "flicker": "extras.flicker: a greyscale WebP beside road.glb (linear): the streetlight's light there, in units of "
+               "albedo x SODIUM (1, 0.56, 0.23), divided by the scene's flicker_scale",
+    "formula": "colour = lit - albedo * SODIUM * flicker_scale * street * (1 - on) + albedo * beam(position, normal) / pi",
 }
+SODIUM_GAME = np.array([1.0, 0.56, 0.23], np.float32)   # the game's SODIUM (stage.ts)
+LUM = np.array([0.2126, 0.7152, 0.0722], np.float32)
 
 
 def load_image(path, name, colorspace):
@@ -51,44 +53,104 @@ def load_image(path, name, colorspace):
     return img
 
 
-def baked_material(group, lit, albedo, orm):
-    m, g = DN.new_material(f"night.{group}")
+def srgb_to_lin(v):
+    v = np.asarray(v, np.float32)
+    return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4).astype(np.float32)
+
+
+def read_rgb(path):
+    import OpenImageIO as oiio
+    inp = oiio.ImageInput.open(path)
+    sp = inp.spec()
+    a = np.asarray(inp.read_image(0, 0, 0, min(3, sp.nchannels), oiio.FLOAT)).reshape(sp.height, sp.width, -1)
+    inp.close()
+    return a
+
+
+def write_webp(path, arr, quality=86):
+    """RGB or greyscale, never alpha (a WebP drops the colour under zero
+    alpha), top row first like the atlases the glTF carries."""
+    import OpenImageIO as oiio
+    a = np.clip(np.asarray(arr, np.float32), 0, 1)
+    if a.ndim == 2:
+        a = a[..., None]
+    if a.shape[2] == 1:
+        a = np.repeat(a, 3, axis=2)      # WebP is RGB(A): a mask goes in all three
+    h, w, c = a.shape
+    spec = oiio.ImageSpec(w, h, c, oiio.UINT8)
+    spec.attribute("compression", f"webp:{quality}")
+    out = oiio.ImageOutput.create(path)
+    if out is None or not out.open(path, spec):
+        raise RuntimeError(f"cannot write {path}: {oiio.geterror()}")
+    if not out.write_image((a * 255 + 0.5).astype(np.uint8)):
+        raise RuntimeError(f"cannot write {path}: {out.geterror()}")
+    out.close()
+    return os.path.getsize(path)
+
+
+def side_layers(ctx, g):
+    """The albedo WebP (full size) and, where the streetlight reaches, the
+    flicker WebP (half size) for one group, written beside road.glb.
+    Returns (albedo file, flicker file or None, street values at their
+    99th percentile)."""
+    lit = read_rgb(os.path.join(ctx.build, f"atlas_{g}_lit.png"))[..., :3]
+    alb = read_rgb(os.path.join(ctx.build, f"atlas_{g}_albedo.png"))[..., :3]
+    orm = read_rgb(os.path.join(ctx.build, f"atlas_{g}_orm.png"))
+    albedo_name = f"road_albedo_{g}.webp"
+    write_webp(os.path.join(ctx.assets, albedo_name), alb, quality=84)
+    if g not in bake.STREET_REACH:
+        return albedo_name, None, None
+    f = orm[..., 0]
+    h, w = f.shape
+    # lit and albedo down to the mask's size (2 x 2 means)
+    def half(a):
+        H, W = a.shape[:2]
+        return a.reshape(h, H // h, w, W // w, -1).mean((1, 3))
+    lit_h, alb_h = half(lit), half(alb)
+    # the lamp's share of lit, in the game's linear space: lit decoded, minus
+    # lit without the lamp (the mask is the luminance fraction it adds)
+    d = srgb_to_lin(lit_h) - srgb_to_lin(lit_h * (1 - f[..., None]))
+    street = (d @ LUM) / np.maximum((srgb_to_lin(alb_h) * SODIUM_GAME) @ LUM, 2e-3)
+    street[f < 0.004] = 0.0
+    p99 = float(np.percentile(street[f > 0.02], 99.9)) if (f > 0.02).any() else 0.0
+    return albedo_name, street, p99
+
+
+def baked_material(group, surface, lit, extras):
+    """Unlit, `lit` as its base colour (what three.js shows as a
+    MeshBasicMaterial map); the other layers named in its extras."""
+    m, g = DN.new_material(f"night.{group}.{surface}")
     uv = g.uv('UVMap')
     ext = 'EXTEND' if group == 'ground' else 'REPEAT'
-    a = g.image(albedo, uv, out='Color', extension=ext)
     e = g.image(lit, uv, out='Color', extension=ext)
-    o = g.image(orm, uv, out='Color', extension=ext)
-    R, G_, B = g.sep_rgb(o)
-    b = g.new('ShaderNodeBsdfPrincipled')
-    g.links.new(a, b.inputs['Base Color'])
-    g.links.new(G_, b.inputs['Roughness'])
-    g.links.new(B, b.inputs['Metallic'])
-    g.links.new(e, b.inputs['Emission Color'])
-    b.inputs['Emission Strength'].default_value = 1.0
-    b.inputs['Specular IOR Level'].default_value = 0.5
-    g.output(b.outputs[0])
-    # occlusion: the exporter looks for the "glTF Material Output" group
-    from charlib import materials as CM
-    grp = CM.gltf_output_group()
-    n = g.new('ShaderNodeGroup')
-    n.node_tree = grp
-    g.links.new(R, n.inputs['Occlusion'])
-    m['layers'] = dict(LAYERS)
+    em = g.node('ShaderNodeEmission', inputs={'Color': e, 'Strength': 1.0}, out=0)
+    lp = g.node('ShaderNodeLightPath', out='Is Camera Ray')
+    tr = g.node('ShaderNodeBsdfTransparent', out=0)
+    g.output(g.node('ShaderNodeMixShader', inputs={0: lp, 1: tr, 2: em}, out=0))
+    for k, v in extras.items():
+        m[k] = v
+    m['surface'] = surface
     m['group'] = group
+    m['glow'] = 1.0
+    m['layers'] = dict(LAYERS)
     return m
 
 
 def corn_material():
     """Unlit, showing COLOR_0 (the baked lit) as is."""
     m, g = DN.new_material("night.corn")
+    m['bake'] = 'vertex'
+    m['surface'] = 'plant'
+    m['glow'] = 1.0
     c = g.node('ShaderNodeVertexColor', out='Color', layer_name="lit")
     em = g.node('ShaderNodeEmission', inputs={'Color': c, 'Strength': 1.0}, out=0)
     lp = g.node('ShaderNodeLightPath', out='Is Camera Ray')
     tr = g.node('ShaderNodeBsdfTransparent', out=0)
     mix = g.node('ShaderNodeMixShader', inputs={0: lp, 1: tr, 2: em}, out=0)
     g.output(mix)
-    m['layers'] = {"lit": "COLOR_0 (linearised display values)", "albedo": "_ALBEDO (linear)",
-                   "sway": "_SWAY (0 ground .. 1 tassel)", "flicker": "_FLICKER"}
+    m['layers'] = {"lit": "COLOR_0 (linearised display values)", "albedo": "_ALBEDO (linear): the game's `albedo`",
+                   "sway": "_SWAY (0 ground .. 1 tassel)",
+                   "flicker": "_FLICKER: the game's `street` (same units as the flicker maps: x flicker_scale)"}
     return m
 
 
@@ -126,7 +188,7 @@ def strip(ob, keep_uv='bake'):
         me.color_attributes.remove(c)
 
 
-def export_ground(col, mat, shadow_mat):
+def export_ground(col, mat_for, shadow_mat):
     """The baked ground was a dense grid; the game gets a lighter one with the
     same camera-projection UVs (so it shows the same picture), split by
     surface for impacts, and ground.shadow over where the dead walk."""
@@ -166,7 +228,7 @@ def export_ground(col, mat, shadow_mat):
         col.objects.link(o2)
         strip(o2)
         m2.materials.clear()
-        m2.materials.append(mat)
+        m2.materials.append(mat_for('ground', s))
         tag(o2, surface=s)
         m2['surface'] = s
         out.append(o2)
@@ -204,7 +266,7 @@ def export_ground(col, mat, shadow_mat):
     return out
 
 
-def prepare_corn(mat):
+def prepare_corn(mat, flicker_scale=1.0):
     for ob in [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.name.startswith('corn.')]:
         me = ob.data
         if 'lit' not in me.color_attributes:
@@ -222,8 +284,14 @@ def prepare_corn(mat):
         if 'flicker' in me.attributes:
             fl = np.empty(n, np.float32)
             me.attributes['flicker'].data.foreach_get('value', fl)
+            # the fraction of lit the lamp adds -> the game's `street` units
+            lit = np.empty(n * 4, np.float32)
+            me.color_attributes['lit'].data.foreach_get('color', lit)
+            lit = lit.reshape(-1, 4)[:, :3]
+            alb3 = alb.reshape(-1, 4)[:, :3]
+            street = ((lit * fl[:, None]) @ LUM) / np.maximum((alb3 * SODIUM_GAME) @ LUM, 2e-3)
             f = me.attributes.new('_FLICKER', 'FLOAT', 'POINT')
-            f.data.foreach_set('value', fl)
+            f.data.foreach_set('value', np.clip(street / flicker_scale, 0, 1).astype(np.float32))
             me.attributes.remove(me.attributes['flicker'])
         me.attributes.remove(me.attributes['sway'])
         me.color_attributes.remove(me.color_attributes['albedo'])
@@ -240,16 +308,64 @@ def prepare_corn(mat):
 def stage(ctx):
     pipeline.open_blend(ctx.baked_blend)
     scene = bpy.context.scene
+    # the contract's empties are placed again (they carry no bake)
+    from . import contract
+    contract.refresh()
+    # the side layers, and one flicker_scale for the whole road
+    side = {}
+    for g in bake.ATLAS:
+        for k in ('lit', 'albedo', 'orm'):
+            pth = os.path.join(ctx.build, f"atlas_{g}_{k}.png")
+            if not os.path.exists(pth):
+                raise RuntimeError(f"missing {pth}: run the bake stage")
+        side[g] = side_layers(ctx, g)
+    p99 = [v[2] for v in side.values() if v[2]]
+    flicker_scale = float(np.ceil(max(p99) * 4) / 4) if p99 else 1.0
+    for fn in os.listdir(ctx.assets):
+        if fn.startswith("road_flicker_"):
+            os.remove(os.path.join(ctx.assets, fn))
+    for g, (albedo_name, street, _) in side.items():
+        if street is not None:
+            write_webp(os.path.join(ctx.assets, f"road_flicker_{g}.webp"), street / flicker_scale, quality=90)
+    print("flicker_scale", flicker_scale, {g: round(v[2], 2) for g, v in side.items() if v[2]})
+    lits = {g: load_image(os.path.join(ctx.build, f"atlas_{g}_lit.png"), f"road_{g}_lit", 'sRGB') for g in bake.ATLAS}
     mats = {}
-    for g, size in bake.ATLAS.items():
-        paths = {k: os.path.join(ctx.build, f"atlas_{g}_{k}.png") for k in ('lit', 'albedo', 'orm')}
-        for p in paths.values():
-            if not os.path.exists(p):
-                raise RuntimeError(f"missing {p}: run the bake stage")
-        lit = load_image(paths['lit'], f"road_{g}_lit", 'sRGB')
-        alb = load_image(paths['albedo'], f"road_{g}_albedo", 'sRGB')
-        orm = load_image(paths['orm'], f"road_{g}_orm", 'Non-Color')
-        mats[g] = baked_material(g, lit, alb, orm)
+
+    def mat_for(g, surface):
+        if (g, surface) not in mats:
+            albedo_name, street, _ = side[g]
+            ex = {"albedo": albedo_name}
+            if street is not None:
+                ex["flicker"] = f"road_flicker_{g}.webp"
+            mats[(g, surface)] = baked_material(g, surface, lits[g], ex)
+        return mats[(g, surface)]
+    # the streetlight's lens: its own mesh, `street.lamp`, which the game dims as the lamp stutters
+    for ob in list(scene.objects):
+        if ob.type == 'MESH' and any(sl.material and sl.material.name.startswith('sodium_lens') for sl in ob.material_slots):
+            idx = [i for i, sl in enumerate(ob.material_slots) if sl.material and sl.material.name.startswith('sodium_lens')]
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+            lens = [f for f in bm.faces if f.material_index in idx]
+            if not lens:
+                bm.free()
+                continue
+            me2 = ob.data.copy()
+            bm2 = bmesh.new()
+            bm2.from_mesh(me2)
+            bmesh.ops.delete(bm2, geom=[f for f in bm2.faces if f.material_index not in idx], context='FACES')
+            bm2.to_mesh(me2)
+            bm2.free()
+            bmesh.ops.delete(bm, geom=lens, context='FACES')
+            bm.to_mesh(ob.data)
+            bm.free()
+            lamp = bpy.data.objects.new("street.lamp", me2)
+            lamp.matrix_world = ob.matrix_world.copy()
+            for k in ('group', 'surface'):
+                if k in ob.keys():
+                    lamp[k] = ob[k]
+            lamp['surface'] = 'glass'
+            ob.users_collection[0].objects.link(lamp)
+            print("street.lamp:", len(me2.polygons), "faces from", ob.name)
     for sc in list(bpy.data.scenes):
         if sc != scene:
             bpy.data.scenes.remove(sc)
@@ -259,10 +375,10 @@ def stage(ctx):
     col = bpy.data.collections.get("ground") or scene.collection
     old = bpy.data.objects.get('ground')
     shadow_m = shadow_material()
-    export_ground(col, mats['ground'], shadow_m)
+    export_ground(col, mat_for, shadow_m)
     if old is not None:
         bpy.data.objects.remove(old)
-    prepare_corn(corn_material())
+    prepare_corn(corn_material(), flicker_scale)
     moon_m = moon_material()
     for ob in list(scene.objects):
         if ob.type != 'MESH':
@@ -276,13 +392,14 @@ def stage(ctx):
             ob.data['surface'] = ob.get('surface', 'glass')
             continue
         g = ob.get('group')
-        if g not in mats:
+        if g not in bake.ATLAS:
             print("WARNING: no atlas group for", ob.name, g)
             continue
         strip(ob)
+        surface = ob.get('surface', 'wood')
         ob.data.materials.clear()
-        ob.data.materials.append(mats[g])
-        ob.data['surface'] = ob.get('surface', 'wood')
+        ob.data.materials.append(mat_for(g, surface))
+        ob.data['surface'] = surface
     for ob in scene.objects:
         for k in ('group', 'no_occlude', 'emissive'):
             if k in ob.keys():
@@ -296,6 +413,8 @@ def stage(ctx):
                            "note": "extra ground-hugging fog: optical depth added along the view ray, see art/night/roadlib/post.py"}
     scene["fog_baked"] = False
     scene["layers"] = dict(LAYERS)
+    scene["flicker_scale"] = flicker_scale
+    scene["flicker"] = "per material: extras.flicker names its map"
     scene["colors"] = ("lit is display-referred (AgX, Medium High Contrast, the night grade): render it with no tone "
                        "mapping; albedo is plain sRGB base colour")
     scene["beam_hint"] = {"note": "a SpotLight at the eye along the aim; ~0.4-0.8 display units on albedo 0.3 at 10 m looks "

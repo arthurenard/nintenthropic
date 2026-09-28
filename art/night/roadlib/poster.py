@@ -27,10 +27,10 @@ CAST = [
     (["char.walker", "var.outfit.farmer", "var.hair.short", "eyes"], "walk.shamble", 9, -0.95, 6.2, 8),
     (["char.walker", "var.outfit.suit", "var.hair.balding", "eyes"], "walk.limp", 21, 1.35, 12.8, -12),
     (["char.walker", "var.outfit.waitress", "var.hair.long", "eyes"], "walk.lurch", 5, -2.6, 17.5, 14),
-    (["var.runner", "eyes"], "run", 7, 0.9, 23.5, -4),
+    (["char.runner", "eyes"], "run", 7, 0.9, 23.5, -4),
     (["char.walker", "var.outfit.hunter", "var.hair.greasy", "eyes"], "walk.drag", 14, 3.1, 27.0, -20),
     (["char.walker", "var.outfit.trucker", "var.hair.short", "eyes"], "walk.shamble", 30, -0.6, 33.0, 4),
-    (["var.bloater", "eyes"], "walk.shamble", 2, -3.4, 38.0, 10),
+    (["char.bloater", "eyes"], "walk.shamble", 2, -3.4, 38.0, 10),
 ]
 
 

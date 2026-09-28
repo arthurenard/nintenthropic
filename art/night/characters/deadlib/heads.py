@@ -407,7 +407,11 @@ def make(name, p, look, coll=None, tris=6400):
     """The head's bake jobs: the game mesh (face/scalp UVs) and the ears."""
     field = head_sdf(p)
     detailed = skin_detail(field, p)
-    lo = head_mesh(name, field, tris, coll)
+    if p["dead"].get("swollen", 0) > 0:
+        # a swollen head and neck overflow the usual box (it cut them flat)
+        lo = head_mesh(name, field, tris, coll, box=((-0.16, -0.18, -0.215), (0.16, 0.17, 0.17)))
+    else:
+        lo = head_mesh(name, field, tris, coll)
     HD.head_uv(lo, face_scale=2.4)
 
     def paint(Pt):
