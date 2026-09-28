@@ -194,6 +194,27 @@ describe("a fragment", () => {
     expect(f.state).toBe("passed");
     expect(listener.count("passed")).toBe(1);
   });
+
+  it("comes most often down the lanes the station does not hide", () => {
+    const { match } = staged(8);
+    const lanes = match.layout.lanes;
+    // Half the lanes hidden behind the station.
+    match.layout.clear = lanes.map((_, i) => (i % 2 === 0 ? 0 : 1));
+    const nearest = (p: { x: number; y: number; z: number }) => {
+      let best = 0;
+      for (let i = 1; i < lanes.length; i++) if (distance(lanes[i]!, p) < distance(lanes[best]!, p)) best = i;
+      return best;
+    };
+    let hidden = 0;
+    const n = 400;
+    for (let i = 0; i < n; i++) {
+      const f = match.send("shrapnel", "miss");
+      if (nearest(f.position(f.born)) % 2 === 0) hidden++;
+    }
+    // About 5% of the weight is left on the hidden ones.
+    expect(hidden / n).toBeLessThan(0.12);
+    expect(hidden).toBeGreaterThan(0);
+  });
 });
 
 describe("the Derelict", () => {

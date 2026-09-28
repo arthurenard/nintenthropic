@@ -30,13 +30,15 @@ import {
 } from "three";
 import type { Quality } from "../../../engine/types";
 import { disposeTree, fitShadowCamera, shadowMapSize } from "../../../engine/world/scene";
-import { EXPOSURE_STOPS, horizonDip, SUN_COLOR, SUN_E, sunlightAt } from "./atmosphere";
+import { EXPOSURE_STOPS, horizonDip, NIGHT_STOPS, SUN_COLOR, SUN_E, sunlightAt } from "./atmosphere";
 import type { SkyState, SunAt } from "./orbit";
 import { PlanetSky, starsCube, type PlanetTextures } from "./planet";
 import type { Scenery } from "./scenery";
 import { Tone } from "./tone";
 
 const tmp = new Vector3();
+/** The eye's adaptation to the dark and back, seconds (its time constant). */
+const EYE_ADAPT = 0.7;
 
 export class Stage {
   readonly scene = new Scene();
@@ -75,6 +77,8 @@ export class Stage {
   private shadowSize = -1;
   private readonly stars: WebGLCubeRenderTarget;
   night = 0;
+  /** How far the eye has opened up for the night (it follows the night, not at once). */
+  private eyeNight = 0;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -178,13 +182,17 @@ export class Stage {
   }
 
   /** Where the sun is and how dark it is. */
-  setSky(state: SkyState): void {
+  /** `dt` is how long since the last (0 for "at once": a jump, a screenshot). */
+  setSky(state: SkyState, dt = 0): void {
     this.fromStation(state.sun, this.sunDirection);
     this.night = state.night;
     this.sky.uniform<Vector3>("uSun").value.copy(this.sunDirection);
     this.sky.uniform<number>("uNight").value = state.night;
-    // The eye opens up in the planet's shadow: the cities, the stars.
-    this.tone.exposure.value = Math.pow(2, EXPOSURE_STOPS + 1.1 * state.night);
+    // The eye opens up in the planet's shadow - the cities, the airglow, the
+    // stars - by as much as the art's night renders do; not at once, or
+    // sunrise would come as a flash and nightfall as a switch.
+    this.eyeNight = dt > 0 ? this.eyeNight + (state.night - this.eyeNight) * (1 - Math.exp(-dt / EYE_ADAPT)) : state.night;
+    this.tone.exposure.value = Math.pow(2, EXPOSURE_STOPS + NIGHT_STOPS * this.eyeNight);
     // Sunlight at the station, through the limb's air when the sun is low.
     const toPlanet = this.sky.toPlanet;
     const eye = tmp.copy(this.centerKm).negate().applyMatrix3(toPlanet);

@@ -35,6 +35,12 @@ export interface Layout {
   panes: PaneSpec[];
   /** Where debris lanes begin, far out in the view. */
   lanes: V3[];
+  /**
+   * How much of each lane's way in the player can see (0..1, by lane), the
+   * rest hidden behind the station; the director favours the clear ones.
+   * Unknown (every lane clear) when absent.
+   */
+  clear?: number[];
   /** Spots on the cupola's metal between the windows, where a fragment rings the hull. */
   frame: V3[];
 }

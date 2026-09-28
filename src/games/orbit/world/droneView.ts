@@ -162,6 +162,11 @@ export class DroneView {
     }
   }
 
+  /** Where the welder's tip is (or the drone, without one). */
+  tipPosition(out: Vector3): Vector3 {
+    return this.tip ? this.tip.getWorldPosition(out) : out.copy(this.root.position);
+  }
+
   /** How big it is for a shot, and where. */
   get center(): Vector3 {
     return this.root.position;

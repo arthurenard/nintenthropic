@@ -43,7 +43,6 @@ export interface SkyTargets {
 
 const ndc = new Vector2();
 const probe: RayProbe = { t: 0, miss: 0 };
-const tmp = new Vector3();
 
 export class Shooter {
   private readonly raycaster = new Raycaster();
@@ -192,7 +191,6 @@ export class Shooter {
       res.hit = "nothing";
       res.distance = 260;
     }
-    void tmp;
     return res;
   }
 }

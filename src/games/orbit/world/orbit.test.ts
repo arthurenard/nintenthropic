@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BREATHER } from "../rules/tuning";
-import { BELOW_LIMB, moonAt, MOON_TOP, nightFor, PASS_SINK, RISE_START, SET_AZIMUTH, SET_END, skyAt } from "./orbit";
+import { BELOW_LIMB, monotone, moonAt, MOON_TOP, nightFor, PASS_SINK, RISE_START, SET_AZIMUTH, SET_END, skyAt } from "./orbit";
 
 const DEG = Math.PI / 180;
 const DIP = 20.3 * DEG;
@@ -18,28 +18,60 @@ describe("the orbit's sky", () => {
     expect(late.night).toBe(0);
   });
 
+  it("starts each breather where the pass left the sun, and ends it where the next begins", () => {
+    for (const after of [10, 60, 400]) {
+      const end = skyAt({ kind: "day", t: after }, DAY, DIP).sun;
+      const start = skyAt({ kind: "breather", t: 0, after }, DAY, DIP).sun;
+      expect(start.elevation).toBeCloseTo(end.elevation, 6);
+      expect(start.azimuth).toBeCloseTo(end.azimuth, 6);
+    }
+    const last = skyAt({ kind: "breather", t: BREATHER, after: 60 }, DAY, DIP).sun;
+    expect(last.elevation).toBeCloseTo(DAY.elevation, 6);
+    expect(last.azimuth).toBeCloseTo(DAY.azimuth, 6);
+  });
+
   it("sets the sun over the limb in each breather, in view, a few seconds of night, and raises it again", () => {
     const set = skyAt({ kind: "breather", t: SET_END }, DAY, DIP);
     expect(set.sun.elevation).toBeCloseTo(-DIP - BELOW_LIMB, 6);
     expect(set.sun.azimuth).toBeCloseTo(SET_AZIMUTH, 6);
     expect(set.night).toBe(1);
     expect(skyAt({ kind: "breather", t: (SET_END + RISE_START) / 2 }, DAY, DIP).night).toBe(1);
+    // Full night for a couple of seconds at least.
+    let dark = 0;
+    for (let t = 0; t <= BREATHER; t += 0.01) if (skyAt({ kind: "breather", t }, DAY, DIP).night === 1) dark += 0.01;
+    expect(dark).toBeGreaterThan(2);
     const risen = skyAt({ kind: "breather", t: BREATHER }, DAY, DIP);
-    expect(risen.sun.elevation).toBeCloseTo(DAY.elevation, 6);
     expect(risen.night).toBe(0);
   });
 
-  it("lingers over the limb as it sets: the last few degrees take the most time", () => {
+  it("lingers at the limb as it sets and rises: the last degrees take the time, and it never bobs back", () => {
     const over = (t: number) => skyAt({ kind: "breather", t }, DAY, DIP).sun.elevation + DIP;
-    // The first half of the sunset covers far more sky than the second.
-    const first = over(0) - over(SET_END / 2);
-    const second = over(SET_END / 2) - over(SET_END);
-    expect(first).toBeGreaterThan(second * 3);
+    // More than a second within a few degrees of the limb, going down.
+    let near = 0;
+    for (let t = 0; t <= SET_END; t += 0.01) if (Math.abs(over(t)) < 3 * DEG) near += 0.01;
+    expect(near).toBeGreaterThan(1.2);
+    for (let t = 0.01; t <= SET_END; t += 0.01) expect(over(t)).toBeLessThanOrEqual(over(t - 0.01) + 1e-9);
+    for (let t = RISE_START + 0.01; t <= BREATHER; t += 0.01) expect(over(t)).toBeGreaterThanOrEqual(over(t - 0.01) - 1e-9);
     // Night comes only once the sun is below the limb.
     for (let t = 0; t <= BREATHER; t += 0.1) {
       const s = skyAt({ kind: "breather", t }, DAY, DIP);
       if (s.sun.elevation + DIP > 0) expect(s.night).toBe(0);
     }
+  });
+
+  it("draws a monotone curve through its keys", () => {
+    const keys: [number, number][] = [
+      [0, 10],
+      [1, 2],
+      [2, 1],
+      [3, 1],
+      [4, 5],
+    ];
+    for (const [t, v] of keys) expect(monotone(keys, t)).toBeCloseTo(v, 9);
+    for (let t = 0; t < 2; t += 0.01) expect(monotone(keys, t + 0.01)).toBeLessThanOrEqual(monotone(keys, t) + 1e-9);
+    for (let t = 2; t <= 3; t += 0.1) expect(monotone(keys, t)).toBeCloseTo(1, 9);
+    expect(monotone(keys, -1)).toBe(10);
+    expect(monotone(keys, 9)).toBe(5);
   });
 
   it("calls it night by the sun's height over the limb", () => {

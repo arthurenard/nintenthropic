@@ -333,10 +333,12 @@ export function buildPlaceholderStation(): Group {
   const frame = new Mesh(new TorusGeometry(0.25, 0.04, 8, 24), m.alu);
   window.add(frame);
   root.add(window);
-  const shade = new Mesh(new PlaneGeometry(0.44, 0.44), new MeshStandardMaterial({ color: "#d8d3c6", roughness: 0.9 }));
+  // Rolled up at the window's top edge, as the art has it; pulled, it is drawn down 0.24 m.
+  const shadeGeometry = new PlaneGeometry(0.44, 0.05);
+  shadeGeometry.translate(0, 0.225, 0.03);
+  const shade = new Mesh(shadeGeometry, new MeshStandardMaterial({ color: "#d8d3c6", roughness: 0.9 }));
   nameNode(shade, "secret.capsule.shade");
-  shade.position.set(0, 0.44, 0.03);
-  shade.scale.set(1, 0.02, 1);
+  shade.userData["note"] = "pull down: scale local -up from the top edge to 0.24 m";
   window.add(shade);
 
   // --- the stowage platform and the drone's cradle, lower right ------------------------------

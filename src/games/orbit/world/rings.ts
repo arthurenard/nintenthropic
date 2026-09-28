@@ -38,7 +38,8 @@ void main() {
   float w = uPx;
   // The ring: a hairline, softly glowing.
   float line = 1.0 - smoothstep(0.6 * w, 1.4 * w, abs(d - uRadius));
-  float halo = exp(-pow((d - uRadius) / (5.0 * w), 2.0)) * 0.18;
+  float off = (d - uRadius) / (5.0 * w);
+  float halo = exp(-off * off) * 0.18;
   // The arc of seconds left, clockwise from the top.
   float a = atan(p.x, p.y);
   float turn = fract(a / 6.2831853 + 1.0);
@@ -171,6 +172,7 @@ export class ProximityRings {
 
   /** Show exactly these rings this frame (in CSS pixels; drawn at the device's). */
   show(list: readonly RingShown[], dt: number): void {
+    const labels: { x0: number; x1: number; y0: number; y1: number }[] = [];
     for (let i = 0; i < this.rings.length; i++) {
       const r = this.rings[i] as Ring;
       const s = list[i];
@@ -203,8 +205,13 @@ export class ProximityRings {
       const size = 15;
       let gx = x + s.radius * 0.72 + 6;
       const gy = y - s.radius * 0.72 - 8;
+      // Two rings side by side would print their seconds over each other:
+      // the more urgent keeps its label (the list comes most urgent first).
+      const box = { x0: gx - 2, x1: gx + size * 1.6 + 2, y0: gy - size * 0.6, y1: gy + size * 0.6 };
+      const clash = labels.some((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1);
+      if (!clash) labels.push(box);
       r.glyphs.forEach((g, k) => {
-        const ch = text[k];
+        const ch = clash ? undefined : text[k];
         if (!ch) {
           g.mesh.visible = false;
           return;

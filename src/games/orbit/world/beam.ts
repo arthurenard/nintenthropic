@@ -25,8 +25,9 @@ varying vec2 vUv;
 float hash(float x) { return fract(sin(x * 91.3458 + uSeed) * 47453.5453); }
 void main() {
   float v = vUv.y;
-  float core = exp(-pow(v / 0.22, 2.0));
-  float glow = exp(-pow(v / 0.6, 2.0)) * 0.5;
+  // (v * v, not pow: pow is undefined for a negative base.)
+  float core = exp(-(v * v) / (0.22 * 0.22));
+  float glow = exp(-(v * v) / (0.6 * 0.6)) * 0.5;
   // A shimmer along it, the optics' flutter: gentle, never a dotted line.
   float u = vUv.x;
   float shimmer = 0.88 + 0.12 * sin(u * 9.0 + uSeed * 7.0) * sin(u * 4.0 - uSeed * 3.0 + uLife * 20.0);
@@ -59,7 +60,7 @@ export class LaserBeams {
   reducedFlashing = false;
   golden = false;
 
-  constructor(parent: Object3D, count = 4) {
+  constructor(parent: Object3D, count = 6) {
     for (let i = 0; i < count; i++) {
       const g = new BufferGeometry();
       const positions = new Float32Array(12);
@@ -85,18 +86,21 @@ export class LaserBeams {
     }
   }
 
-  /** A shot: from the emitter to `to`. */
-  fire(from: Vector3, to: Vector3): void {
+  /** A shot: from the emitter to `to` (or, "weld", the drone's thin blue welding beam on the glass). */
+  fire(from: Vector3, to: Vector3, kind: "shot" | "weld" = "shot"): void {
     const b = this.beams[this.next] as Beam;
     this.next = (this.next + 1) % this.beams.length;
     b.from.copy(from);
     b.to.copy(to);
-    b.duration = this.reducedFlashing ? 0.3 : 0.13;
+    b.duration = kind === "weld" ? 0.22 : this.reducedFlashing ? 0.3 : 0.13;
     b.life = b.duration;
     b.mesh.visible = true;
     const k = this.reducedFlashing ? 0.3 : 1;
     const u = b.material.uniforms;
-    if (this.golden) {
+    if (kind === "weld") {
+      (u["uCore"]!.value as Color).setRGB(1.6 * k, 2.4 * k, 3.4 * k);
+      (u["uGlow"]!.value as Color).setRGB(0.2 * k, 0.5 * k, 1.4 * k);
+    } else if (this.golden) {
       (u["uCore"]!.value as Color).setRGB(9 * k, 7.2 * k, 3 * k);
       (u["uGlow"]!.value as Color).setRGB(2.6 * k, 1.6 * k, 0.3 * k);
     } else {

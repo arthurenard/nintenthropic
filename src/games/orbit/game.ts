@@ -1,4 +1,4 @@
-import { Color, Mesh, Quaternion, SRGBColorSpace, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
+import { Matrix3, Matrix4, Mesh, Quaternion, SRGBColorSpace, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
 import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
@@ -8,7 +8,6 @@ import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
 import type { Fragment } from "./rules/debris";
-import { tankHits } from "./rules/debris";
 import { breachCause, type Breach } from "./rules/felled";
 import { Match, type MatchListener } from "./rules/match";
 import type { Mark } from "./rules/panes";
@@ -20,6 +19,7 @@ import { HintLine, tipText, ventHint, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type OrbitAssets } from "./world/assets";
 import { R as PLANET_R } from "./world/atmosphere";
+import { lightAround, nightLuminance, pickLitRegions, type LitRegion } from "./world/cities";
 import { LaserBeams } from "./world/beam";
 import { DebrisView } from "./world/debrisView";
 import { DroneView } from "./world/droneView";
@@ -29,7 +29,7 @@ import { readDerelict, readLibrary } from "./world/library";
 import { BREATHER_GROUND_RATE, GROUND_RATE, MOON_RADIUS, moonAt, RISE_START, SET_END, skyAt, type SkyMoment } from "./world/orbit";
 import { ProximityRings, type RingShown } from "./world/rings";
 import { RunningLights } from "./world/runningLights";
-import { readScenery, type Scenery } from "./world/scenery";
+import { laneClearance, readScenery, type Scenery } from "./world/scenery";
 import { SecretsWorld } from "./world/secretsWorld";
 import { ASSIST, Shooter, type SkyTargets } from "./world/shooter";
 import { Stage } from "./world/stage";
@@ -50,7 +50,17 @@ interface Scheduled {
 
 const tmp = new Vector3();
 const tmp2 = new Vector3();
-const GOLD = new Color(1, 0.8, 0.35);
+/** How far out on the screen (NDC) the drone may work: clear of the corner panel and the heat ring. */
+const DRONE_VIEW = { x: 0.8, top: 0.72, bottom: 0.7 };
+/** The other nights' countries are turned this far, so they do not stand square to the view. */
+const OTHER_NIGHT_TURN = (30 * Math.PI) / 180;
+
+/** A (longitude, latitude) in degrees as a direction in the planet's frame (three's sphere: y north, x longitude 0). */
+function lonLatDir(lon: number, lat: number): Vector3 {
+  const lo = (lon * Math.PI) / 180;
+  const la = (lat * Math.PI) / 180;
+  return new Vector3(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
+}
 
 function breathe(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -129,8 +139,6 @@ export class OrbitalDecay implements Game, MatchListener {
   /** The dev harness's hold on the sky, for screenshots of any moment. */
   private skyHeld: SkyMoment | null = null;
   private groundAngle = 0;
-  /** The planet turned once at the start, so the city lights' "HI" is in view at night. */
-  private readonly planetOffset = new Quaternion();
   private hints = new HintLine(new Set());
   private hintShown: string | null = null;
   private golden = false;
@@ -143,13 +151,22 @@ export class OrbitalDecay implements Game, MatchListener {
   private moonT = -1;
   private aurora = 0;
   private stormStarted = false;
+  private weldBeamT = 0;
   private visualRandom = mulberry32(11);
   private width = 1280;
   private height = 720;
   private bufferHeight = 720;
   private dpr = 1;
   private readonly driftPhase = new Vector3(0.3, 1.7, 2.9);
-  private readonly hiDir = new Vector3(0, 1, 0);
+  /** Where the art wrote its "HI" (the planet's frame), and where the game shows it this breather. */
+  private readonly hiSource = new Vector3(0, 1, 0);
+  private readonly hiAt = new Vector3(0, 1, 0);
+  private hiShown = false;
+  private litRegions: LitRegion[] = [];
+  private hiLight = 0;
+  /** Nights so far this game, and whether this breather's is set. */
+  private nights = 0;
+  private nightPlaced = false;
   private readonly onKey = (e: KeyboardEvent) => {
     if ((e.key === "v" || e.key === "V") && !e.repeat) this.ventKey = true;
   };
@@ -185,6 +202,11 @@ export class OrbitalDecay implements Game, MatchListener {
     );
     await breathe();
     this.scenery = readScenery(this.assets.cupola, this.assets.station);
+    // Which lanes the station hides, so the director sends most down the open ones.
+    const layout = this.scenery.layout;
+    const toward = this.scenery.eye.clone().add(new Vector3(layout.forward.x, layout.forward.y, layout.forward.z).multiplyScalar(1.5));
+    layout.clear = laneClearance(this.assets.station, this.scenery.eye, layout.lanes, toward);
+    await breathe();
     this.stage = new Stage(renderer, this.scenery, this.assets.maps);
     this.stage.setQuality(ctx.quality);
     this.camera = new PlayerCamera(this.scenery.eye, this.scenery.eyeQuaternion, this.scenery.fov, { near: 0.05, far: 2000 });
@@ -209,7 +231,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.secrets = new SecretsWorld(
       this.assets.extras,
       stage.dynamic,
-      { ...this.scenery.secrets, astronautPath: this.scenery.astronautPath, duckPath: this.scenery.duckPath, eye: this.scenery.eye },
+      { ...this.scenery.secrets, astronautPath: this.scenery.astronautPath, duckPath: this.scenery.duckPath, eye: this.scenery.eye, view: { quaternion: this.scenery.eyeQuaternion, fov: this.scenery.fov } },
       this.effects,
       stage.sky,
       this.visualRandom,
@@ -236,7 +258,14 @@ export class OrbitalDecay implements Game, MatchListener {
       if (this.phase === "calibration") this.lights.reset();
       else if (this.phase !== "loading") this.rearm();
     };
-    this.placeHi();
+    this.readHi();
+    // The night map's brightest countries, for the nights that do not show
+    // the HI, and how lit the HI's own is (the others are dimmed to it).
+    const hi = this.scenery.planet.hi ?? [-112, 47];
+    const lum = nightLuminance(renderer, this.assets.maps.night);
+    this.hiLight = lightAround(lum, 96, 48, hi[0], hi[1]);
+    const like = { light: this.hiLight, wide: lightAround(lum, 96, 48, hi[0], hi[1], 14) };
+    this.litRegions = pickLitRegions(lum, 96, 48, 3, 7, 25, [hi], like);
     this.newMatch();
     this.post = new PostFX(renderer, stage.scene, this.camera.camera, ctx.quality, {
       bloom: { threshold: 0.92, smoothing: 0.25, intensity: 0.75, radius: 0.75, levels: 7 },
@@ -256,33 +285,86 @@ export class OrbitalDecay implements Game, MatchListener {
     onProgress(1);
   }
 
-  /** Where the drone hovers to mend a pane: the art's spot, or 1.1 m outside the glass. */
+  /**
+   * Where the drone hovers to mend a pane: the art's spot (or 1.1 m outside
+   * the glass) - unless that is off the screen, as it is for the panes the
+   * frame cuts (the upper and lower ones at 16:9): then as near it as the
+   * view allows, at the view's edge and out beyond the glass, turned to the
+   * pane it mends. The player should see who is fixing the window.
+   */
   private workSpot(pane: number): { pos: Vector3; facing: Vector3 } {
     const node = this.scenery.drone.work.get(pane);
-    if (node) {
-      const pos = node.getWorldPosition(new Vector3());
-      const facing = new Vector3(0, 0, -1).applyQuaternion(node.getWorldQuaternion(new Quaternion()));
-      return { pos, facing };
-    }
     const p = this.glass.pane(pane);
-    if (!p) return { pos: new Vector3(0, 0, -3), facing: new Vector3(0, 0, 1) };
-    return { pos: p.center.clone().addScaledVector(p.normal, 1.1), facing: p.normal.clone().negate() };
+    let pos: Vector3;
+    let facing: Vector3;
+    if (node) {
+      pos = node.getWorldPosition(new Vector3());
+      facing = new Vector3(0, 0, -1).applyQuaternion(node.getWorldQuaternion(new Quaternion()));
+    } else if (p) {
+      pos = p.center.clone().addScaledVector(p.normal, 1.1);
+      facing = p.normal.clone().negate();
+    } else return { pos: new Vector3(0, 0, -3), facing: new Vector3(0, 0, 1) };
+    if (!p) return { pos, facing };
+    const cam = this.camera.camera;
+    const ndc = pos.clone().project(cam);
+    const x = Math.min(DRONE_VIEW.x, Math.max(-DRONE_VIEW.x, ndc.x));
+    const y = Math.min(DRONE_VIEW.top, Math.max(-DRONE_VIEW.bottom, ndc.y));
+    if (x === ndc.x && y === ndc.y && ndc.z < 1) return { pos, facing };
+    const eye = cam.position;
+    const dir = new Vector3(x, y, 0.5).unproject(cam).sub(eye).normalize();
+    // Along that line, out past the pane's plane by as much as the art's spot is.
+    const n = p.normal;
+    const along = n.dot(dir);
+    const reach = along > 0.05 ? (1.1 - n.dot(tmp.copy(eye).sub(p.center))) / along : pos.distanceTo(eye) + 1.5;
+    const spot = eye.clone().addScaledVector(dir, Math.min(6, Math.max(2.5, reach)));
+    return { pos: spot, facing: p.center.clone().sub(spot).normalize() };
+  }
+
+  /** Where the art wrote its "HI" of town lights, in the planet's frame. */
+  private readHi(): void {
+    const [lon, lat] = this.scenery.planet.hi ?? [-112, 47];
+    this.hiSource.copy(lonLatDir(lon, lat));
   }
 
   /**
-   * Turn the planet once, at the start, so the city lights' "HI" crosses
-   * the view on the night side: just under the limb, a little left of the
-   * middle, and drifting toward the player as the ground turns.
+   * The lights for this breather's night. The planet by day stays as the art
+   * composed it - open ocean under the station, the coast far ahead - where
+   * the night would be black. At night only lights show, so the night map
+   * is read through a turn that puts a lit region under the view instead,
+   * as the art's own night renders do: on odd nights the country round the
+   * "HI" (secret 8), the letters low in the centre window and upright as the
+   * player looks; on even nights the next of the night map's brightest
+   * countries (found at load). It is set as the breather begins, while the
+   * sun is still up and no light shows, and the lights then turn with the
+   * ground.
    */
-  private placeHi(): void {
-    const [lon, lat] = this.scenery.planet.hi ?? [-112, 47];
-    const lo = (lon * Math.PI) / 180;
-    const la = (lat * Math.PI) / 180;
-    this.hiDir.set(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
-    const target = this.groundPoint(-0.22, 0.02);
-    if (!target) return;
-    const hiWorld = this.hiDir.clone().applyQuaternion(this.scenery.planet.rotation);
-    this.planetOffset.setFromUnitVectors(hiWorld, target);
+  private placeNight(): void {
+    const other = this.litRegions[Math.floor(this.nights / 2) % Math.max(1, this.litRegions.length)];
+    const hiNight = this.nights % 2 === 0 || !other;
+    this.nights += 1;
+    const spot = this.groundPoint(hiNight ? -0.06 : 0.02, hiNight ? -0.18 : -0.08);
+    if (!spot) return;
+    const toPlanet = this.stage.planetRotation.clone().invert();
+    const at = spot.applyQuaternion(toPlanet).normalize();
+    const right = new Vector3(1, 0, 0).applyQuaternion(this.scenery.eyeQuaternion).applyQuaternion(toPlanet);
+    const east = right.addScaledVector(at, -right.dot(at)).normalize();
+    const north = new Vector3().crossVectors(at, east);
+    const src = hiNight || !other ? this.hiSource : lonLatDir(other.lon, other.lat);
+    const srcEast = new Vector3(src.z, 0, -src.x).normalize();
+    const srcNorth = new Vector3().crossVectors(src, srcEast);
+    if (!hiNight) {
+      // Turned a little, so the second country does not stand square to the view.
+      const turn = new Quaternion().setFromAxisAngle(src, OTHER_NIGHT_TURN);
+      srcEast.applyQuaternion(turn);
+      srcNorth.applyQuaternion(turn);
+    }
+    const map = new Matrix4().makeBasis(srcEast, srcNorth, src).multiply(new Matrix4().makeBasis(east, north, at).transpose());
+    this.stage.sky.uniform<Matrix3>("uNightMap").value.setFromMatrix4(map);
+    // A busier country is dimmed to the HI's, so no night is a white carpet.
+    const scale = hiNight || !other || this.hiLight <= 0 ? 1 : Math.min(1, Math.max(0.3, this.hiLight / other.light));
+    this.stage.sky.uniform<number>("uNightScale").value = scale;
+    this.hiAt.copy(at);
+    this.hiShown = hiNight;
   }
 
   /** The planet's surface point seen through the art's view at NDC (sx, sy), as a unit direction from its centre. */
@@ -383,6 +465,10 @@ export class OrbitalDecay implements Game, MatchListener {
     this.stormStarted = false;
     this.sky = { kind: "day", t: 0 };
     this.groundAngle = 0;
+    this.nights = 0;
+    this.nightPlaced = false;
+    this.hiShown = false;
+    this.stage.sky.uniform<Matrix3>("uNightMap").value.identity();
     this.flash.reset();
     this.post.set("flash", 0);
     this.post.set("exposure", 1);
@@ -470,7 +556,8 @@ export class OrbitalDecay implements Game, MatchListener {
   private skyMoment(): SkyMoment {
     if (this.skyHeld) return this.skyHeld;
     if (this.phase !== "playing" && this.phase !== "failing") return { kind: "day", t: 0 };
-    if (this.match.phase === "breather") return { kind: "breather", t: this.match.phaseT };
+    // The pass clock stands still through the breather: where the pass left the sun.
+    if (this.match.phase === "breather") return { kind: "breather", t: this.match.phaseT, after: this.passT };
     return { kind: "day", t: this.passT };
   }
 
@@ -480,7 +567,12 @@ export class OrbitalDecay implements Game, MatchListener {
     this.sky = this.skyMoment();
     this.groundAngle += dt * (breather ? BREATHER_GROUND_RATE : GROUND_RATE);
     this.applySky(dt, breather);
-    // The night side's sights: the storm while the sun is down, the aurora once earned.
+    // The night side's sights: its lights, the storm while the sun is down, the aurora once earned.
+    if (breather && !this.nightPlaced) {
+      this.nightPlaced = true;
+      this.placeNight();
+    }
+    if (!breather) this.nightPlaced = false;
     if (breather) {
       const night = this.sky.t > SET_END - 0.4 && this.sky.t < RISE_START + 0.3;
       if (night && !this.stormStarted) {
@@ -512,7 +604,15 @@ export class OrbitalDecay implements Game, MatchListener {
     this.glass.update(dt);
     this.droneView.update(this.match.drone, dt, this.scenery.eye);
     this.glass.weldLight(this.droneView.welding, this.droneView.weldLight);
-    this.secrets.update(dt, this.passT);
+    // Mending from where the player can see it: a thin blue beam to the glass now and then.
+    this.weldBeamT -= dt;
+    const mending = this.droneView.welding !== null ? this.glass.pane(this.droneView.welding) : null;
+    if (mending && this.weldBeamT <= 0) {
+      this.weldBeamT = 0.18 + this.visualRandom() * 0.2;
+      const spot = mending.center.clone().add(tmp.set(this.visualRandom() - 0.5, this.visualRandom() - 0.5, this.visualRandom() - 0.5).multiplyScalar(0.25));
+      this.beams.fire(this.droneView.tipPosition(tmp2), spot, "weld");
+    }
+    this.secrets.update(dt);
     this.lights.update(dt);
     this.effects.update(dt);
     this.ambient.update(dt);
@@ -531,12 +631,12 @@ export class OrbitalDecay implements Game, MatchListener {
   }
 
   private applySky(dt: number, changing = false): void {
-    this.stage.setGround(this.groundAngle, this.planetOffset);
+    this.stage.setGround(this.groundAngle);
     const state = skyAt(this.sky, this.stage.daySun, this.stage.dip);
-    this.stage.setSky(state);
+    this.stage.setSky(state, dt);
     this.stage.sky.uniform<number>("uTime").value = this.time;
     this.stage.sky.uniform<number>("uCloudShift").value = this.time * 0.00003;
-    this.stage.sky.uniform<Vector4>("uHi").value.setX(this.hiDir.x).setY(this.hiDir.y).setZ(this.hiDir.z);
+    this.stage.sky.uniform<Vector4>("uHi").value.setX(this.hiAt.x).setY(this.hiAt.y).setZ(this.hiAt.z);
     this.stage.refreshEnvironment(dt, changing);
   }
 
@@ -622,17 +722,8 @@ export class OrbitalDecay implements Game, MatchListener {
     const res = this.shooter.shoot(x, y, this.match.time, this.match.fragments, this.droneTarget(), this.secrets.candidates(), this.skyTargets());
     const from = this.emitterAt(new Vector3());
     this.beams.fire(from, res.point);
-    const drift = new Vector3();
-    switch (res.hit) {
-      case "station":
-        this.effects.deflect(res.point, tmp.copy(this.camera.camera.position).sub(res.point).normalize(), res.distance);
-        break;
-      case "body":
-        break;
-      default:
-        break;
-    }
-    void drift;
+    // A shot into the station's own metal glances off it.
+    if (res.hit === "station") this.effects.deflect(res.point, tmp.copy(this.camera.camera.position).sub(res.point).normalize(), res.distance);
     this.match.resolveShot(res.target);
   }
 
@@ -653,7 +744,7 @@ export class OrbitalDecay implements Game, MatchListener {
         const sunP = this.stage.sunDirection.clone().applyQuaternion(this.stage.planetRotation.clone().invert());
         const km = (a: Vector3) => Math.acos(Math.min(1, Math.max(-1, onPlanet.dot(a)))) * PLANET_R;
         const storm = this.secrets.stormOn && km(this.secrets.storm) < 220 && this.secrets.takeFlash();
-        const hi = this.stage.night > 0.5 && km(this.hiDir) < 180 && this.hiDir.dot(sunP) < 0;
+        const hi = this.stage.night > 0.5 && this.hiShown && km(this.hiAt) < 180 && this.hiAt.dot(sunP) < 0;
         return { storm, hi };
       },
     };
@@ -889,7 +980,6 @@ export class OrbitalDecay implements Game, MatchListener {
     const at = this.debris.positionOf(f.id);
     if (!at) return;
     this.effects.deflect(at, tmp.copy(this.camera.camera.position).sub(at).normalize(), at.distanceTo(this.camera.camera.position));
-    void tankHits;
   }
 
   strike(f: Fragment, mark: Mark, integrity: number): void {
@@ -1064,6 +1154,31 @@ export class OrbitalDecay implements Game, MatchListener {
         this.sky = this.skyHeld ?? this.sky;
         this.applySky(0, true);
       },
+      /** Turn the ground to this many degrees from where the art put it (as passes and breathers would). */
+      ground: (degrees: number) => {
+        this.groundAngle = (degrees * Math.PI) / 180;
+        this.applySky(0, true);
+      },
+      /** Where the Derelict's fuel tank is on screen, if one is flying. */
+      tank: () => {
+        const d = this.match.fragments.find((f) => f.kind === "derelict" && f.flying);
+        const at = d ? this.debris.tankAt(d.id, new Vector3()) : null;
+        return at ? this.project(at) : null;
+      },
+      /** Bring on a secret's walk-on now (the spacewalker, the duck, the tool bag, the Moon). */
+      walkOn: (id: "astronaut" | "duck" | "toolbag" | "moon") => {
+        if (id === "astronaut") this.secrets.startAstronaut();
+        if (id === "duck") this.secrets.startDuck();
+        if (id === "toolbag") this.secrets.startToolbag();
+        if (id === "moon") this.moonT = 200;
+      },
+      /** Find a secret as a shot at it would (its show, its toast). */
+      find: (id: SecretId) => {
+        const shot = id === "astronaut" ? { secret: id, at: true } : { secret: id };
+        this.match.resolveShot({ kind: "secret", shot } as Parameters<Match["resolveShot"]>[0]);
+      },
+      /** The night map's countries the breathers show, and the HI's light. */
+      nights: () => ({ regions: this.litRegions, hiLight: this.hiLight, shown: this.nights }),
       /** Hold the match (nothing more is sent; the pass never ends). */
       hold: (on: boolean) => {
         this.match.director = !on;
@@ -1126,4 +1241,3 @@ function raySphere(o: Vector3, d: Vector3, c: Vector3, r: number): number | null
   return t > 0 ? t : null;
 }
 
-void GOLD;

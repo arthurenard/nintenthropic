@@ -35,7 +35,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { nameNode } from "../../../engine/world/names";
-import { CUPOLA, FACET_PANE, facet, viewAxes, VIEW_FOV_DEG, VIEW_PITCH_DEG, windowCorners } from "../rules/layout";
+import { CUPOLA, FACET_PANE, facet, viewAxes, VIEW_FOV_DEG, VIEW_PITCH_DEG } from "../rules/layout";
 import { ALT_KM, planetCentre, planetRotation, R_KM, sunDirection } from "./geometry";
 import { PLACEHOLDER_HI, PLACEHOLDER_STORM } from "./planetMaps";
 
@@ -349,7 +349,6 @@ export function buildPlaceholderCupola(): Group {
     g.applyMatrix4(m.clone().multiply(new Matrix4().makeTranslation(0, 0, C.shell * 0.5)));
     g.applyMatrix4(toWorld);
     addPane(root, FACET_PANE[k] as number, g);
-    void windowCorners;
   }
 
   // --- things adrift on tethers ----------------------------------------------------

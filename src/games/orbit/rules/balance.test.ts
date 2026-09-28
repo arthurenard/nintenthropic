@@ -65,7 +65,8 @@ describe("balance on Relaxed", () => {
       // A game you can lose: everyone is breached by pass 25.
       expect(relaxed.list[relaxed.list.length - 1], name).toBeLessThanOrEqual(25);
     }
-  });
+    // 144 simulated games: about a second alone, longer beside the whole suite.
+  }, 60_000);
 });
 
 describe("an idle player", () => {

@@ -17,6 +17,8 @@ export const ASSET_PATHS = {
   clouds: "assets/orbit/planet/clouds.webp",
   night: "assets/orbit/planet/night.webp",
   water: "assets/orbit/planet/water.webp",
+  height: "assets/orbit/planet/height.webp",
+  detail: "assets/orbit/planet/detail.webp",
   stars: "assets/orbit/stars.webp",
   debris: "assets/orbit/debris.glb",
   drone: "assets/orbit/drone.glb",
@@ -34,6 +36,8 @@ const FILES: Record<AssetName, ArtFile> = {
   clouds: { path: ASSET_PATHS.clouds, kind: "texture", weight: 0.1 },
   night: { path: ASSET_PATHS.night, kind: "texture", weight: 0.05 },
   water: { path: ASSET_PATHS.water, kind: "texture", weight: 0.04 },
+  height: { path: ASSET_PATHS.height, kind: "texture", weight: 0.02 },
+  detail: { path: ASSET_PATHS.detail, kind: "texture", weight: 0.03 },
   stars: { path: ASSET_PATHS.stars, kind: "texture", weight: 0.03 },
   debris: { path: ASSET_PATHS.debris, kind: "gltf", weight: 0.08 },
   drone: { path: ASSET_PATHS.drone, kind: "gltf", weight: 0.04 },
@@ -44,7 +48,7 @@ const FILES: Record<AssetName, ArtFile> = {
 export interface OrbitAssets {
   cupola: Group;
   station: Group;
-  maps: { albedo: Texture; clouds: Texture; night: Texture; water: Texture; stars: Texture };
+  maps: { albedo: Texture; clouds: Texture; night: Texture; water: Texture; height: Texture; detail: Texture; stars: Texture };
   debris: Group;
   drone: Group;
   derelict: Group;
@@ -70,10 +74,10 @@ function asData(t: Texture): Texture {
   return t;
 }
 
-/** Wrapped round the planet in longitude, mipmapped for its foreshortened limb. */
-function asMap(t: Texture, anisotropy: number): Texture {
+/** Wrapped round the planet in longitude (a tile, both ways), mipmapped for its foreshortened limb. */
+function asMap(t: Texture, anisotropy: number, tile = false): Texture {
   t.wrapS = RepeatWrapping;
-  t.wrapT = ClampToEdgeWrapping;
+  t.wrapT = tile ? RepeatWrapping : ClampToEdgeWrapping;
   t.minFilter = LinearMipmapLinearFilter;
   t.magFilter = LinearFilter;
   t.anisotropy = anisotropy;
@@ -94,21 +98,23 @@ export async function loadAssets(
   const model = (name: "cupola" | "station" | "debris" | "drone" | "derelict" | "extras"): Promise<LoadedAsset> => art.gltf(name, kit ? () => kit.standIn(name) : null);
   const renderer = ctx.renderer;
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const map = async (name: "albedo" | "clouds" | "night" | "water" | "stars", data: boolean): Promise<Texture> => {
+  const map = async (name: "albedo" | "clouds" | "night" | "water" | "height" | "detail" | "stars", data: boolean): Promise<Texture> => {
     // Made on the GPU: one at a time, between the downloads, not all in one frame.
     const t = await art.texture(name, kit ? () => kit.standInMap(renderer, name) : null);
-    return asMap(data ? asData(t) : t, aniso);
+    return asMap(data ? asData(t) : t, aniso, name === "detail");
   };
   const [cupola, station, debris, drone, derelict, extras] = await Promise.all([model("cupola"), model("station"), model("debris"), model("drone"), model("derelict"), model("extras")]);
   const albedo = await map("albedo", false);
   const clouds = await map("clouds", true);
   const night = await map("night", false);
   const water = await map("water", true);
+  const height = await map("height", true);
+  const detail = await map("detail", true);
   const stars = await map("stars", false);
   return {
     cupola: cupola.scene,
     station: station.scene,
-    maps: { albedo, clouds, night, water, stars },
+    maps: { albedo, clouds, night, water, height, detail, stars },
     debris: debris.scene,
     drone: drone.scene,
     derelict: derelict.scene,

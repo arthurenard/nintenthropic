@@ -93,6 +93,8 @@ float fbm(vec3 p, int octaves) {
   }
   return sum;
 }
+// A square (pow is undefined for a negative base).
+float sq(float x) { return x * x; }
 float hash13(vec3 p) {
   p = fract(p * 0.1031);
   p += dot(p, p.zyx + 31.32);

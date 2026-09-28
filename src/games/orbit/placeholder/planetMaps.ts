@@ -5,10 +5,14 @@
  * an Earth-like world of our own making, with continents, shelves and
  * banks, deserts and forests by latitude, ice caps, cloud decks with
  * storm tracks and cyclones, and city lights along the coasts, one of
- * them spelling a faint "HI".
+ * them spelling a faint "HI" - its relief, and the tileable detail that
+ * breaks the maps' ~10 km texels into cloudlets, streets and slopes.
  */
 import {
   Camera,
+  DataTexture,
+  RGBAFormat,
+  UnsignedByteType,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
@@ -53,7 +57,7 @@ float latitude(vec3 p) { return asin(clamp(p.y, -1.0, 1.0)); }
 // Moisture: wet by the equator and in the storm tracks, dry in the subtropics.
 float moisture(vec3 p, float e) {
   float lat = abs(latitude(p)) * 57.2958;
-  float bands = 0.75 * exp(-pow(lat / 11.0, 2.0)) - 0.55 * exp(-pow((lat - 26.0) / 9.0, 2.0)) + 0.35 * exp(-pow((lat - 52.0) / 12.0, 2.0));
+  float bands = 0.75 * exp(-sq(lat / 11.0)) - 0.55 * exp(-sq((lat - 26.0) / 9.0)) + 0.35 * exp(-sq((lat - 52.0) / 12.0));
   float n = fbm(p * 3.0 + vec3(7.0), 5);
   // Inland is drier: far from the sea (high above it, a crude stand-in for distance).
   return clamp(0.5 + bands + 0.45 * n - 1.4 * max(0.0, e - SEA - 0.05), 0.0, 1.0);
@@ -123,7 +127,7 @@ uniform vec3 uStorm;
 // A cyclone: the domain wound round a centre.
 vec3 swirl(vec3 p, vec3 c, float radius, float turns) {
   float d = acos(clamp(dot(p, c), -1.0, 1.0));
-  float k = exp(-pow(d / radius, 2.0)) * turns;
+  float k = exp(-sq(d / radius)) * turns;
   vec3 axis = c;
   float s = sin(k);
   float co = cos(k);
@@ -142,13 +146,13 @@ void main() {
   vec3 s = vec3(q.x, q.y * 1.8, q.z);
   vec3 w = vec3(fbm(s * 2.0 + 1.3, 4), fbm(s * 2.0 + 7.1, 4), fbm(s * 2.0 - 3.3, 4));
   float n = fbm(s * 3.2 + w * 0.8, 8);
-  float bands = 0.28 * exp(-pow(lat / 7.0, 2.0)) - 0.32 * exp(-pow((alat - 24.0) / 8.0, 2.0)) + 0.26 * exp(-pow((alat - 50.0) / 11.0, 2.0)) + 0.12 * smoothstep(65.0, 85.0, alat);
+  float bands = 0.28 * exp(-sq(lat / 7.0)) - 0.32 * exp(-sq((alat - 24.0) / 8.0)) + 0.26 * exp(-sq((alat - 50.0) / 11.0)) + 0.12 * smoothstep(65.0, 85.0, alat);
   float cover = smoothstep(0.02, 0.42, n + bands + 0.05);
   // Fine structure: popcorn cumulus in the tropics, streaks in the storm tracks.
   float fine = fbm(p * 38.0 + w * 2.0, 4);
   cover = clamp(cover + 0.35 * fine * cover * (1.0 - cover) * 2.0, 0.0, 1.0);
   // A cluster of thunderstorms round the storm point, towers and all.
-  float storm = exp(-pow(acos(clamp(dot(p, uStorm), -1.0, 1.0)) / 0.05, 2.0));
+  float storm = exp(-sq(acos(clamp(dot(p, uStorm), -1.0, 1.0)) / 0.05));
   cover = max(cover, storm * smoothstep(-0.2, 0.3, fbm(p * 60.0, 3)));
   gl_FragColor = vec4(cover, cover, cover, 1.0);
 }
@@ -193,8 +197,8 @@ void main() {
   vec3 north = cross(uHi, east);
   vec2 d = vec2(dot(p - uHi, east), dot(p - uHi, north)) * 57.2958;
   if (dot(p, uHi) > 0.99) {
-    float hi = bar(d, vec2(-1.3, -0.8), vec2(-1.3, 0.8), 0.22) + bar(d, vec2(-0.3, -0.8), vec2(-0.3, 0.8), 0.22) + bar(d, vec2(-1.3, 0.0), vec2(-0.3, 0.0), 0.22) + bar(d, vec2(0.7, -0.8), vec2(0.7, 0.8), 0.22);
-    light = max(light, clamp(hi, 0.0, 1.0) * 0.8);
+    float hi = bar(d, vec2(-1.3, -0.8), vec2(-1.3, 0.8), 0.16) + bar(d, vec2(-0.3, -0.8), vec2(-0.3, 0.8), 0.16) + bar(d, vec2(-1.3, 0.0), vec2(-0.3, 0.0), 0.16) + bar(d, vec2(0.7, -0.8), vec2(0.7, 0.8), 0.16);
+    light = max(light, clamp(hi, 0.0, 1.0) * 0.5);
   }
   vec3 sodium = vec3(1.0, 0.62, 0.26);
   vec3 white = vec3(1.0, 0.86, 0.66);
@@ -216,6 +220,133 @@ void main() {
   gl_FragColor = vec4(sea, sea, sea, 1.0);
 }
 `;
+
+const HEIGHT = /* glsl */ `
+${WORLD}
+varying vec2 vUv;
+// The art's encoding: (elevation / 6 km)^0.6, 0 at sea level and on water.
+void main() {
+  float e = elevation(dirOfUv(vUv));
+  float h = pow(clamp((e - SEA) / 0.3, 0.0, 1.0), 0.6);
+  gl_FragColor = vec4(h, h, h, 1.0);
+}
+`;
+
+// The detail tile: noise that repeats across the unit square, so the planet
+// can lay it down at any scale without a seam. Each channel is flattened to a
+// uniform histogram afterwards (on the CPU), as the art's is: R cellular
+// cumulus, G eroded terrain, B fibrous cloud (streets, cirrus).
+const DETAIL = /* glsl */ `
+varying vec2 vUv;
+vec2 hash22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+// Gradient noise on a lattice that wraps every period cells.
+float pnoise(vec2 p, vec2 period, float seed) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = dot(hash22(mod(i, period) + seed) * 2.0 - 1.0, f);
+  float b = dot(hash22(mod(i + vec2(1.0, 0.0), period) + seed) * 2.0 - 1.0, f - vec2(1.0, 0.0));
+  float c = dot(hash22(mod(i + vec2(0.0, 1.0), period) + seed) * 2.0 - 1.0, f - vec2(0.0, 1.0));
+  float d = dot(hash22(mod(i + vec2(1.0, 1.0), period) + seed) * 2.0 - 1.0, f - vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float pfbm(vec2 uv, vec2 period, int octaves) {
+  float sum = 0.0;
+  float amp = 0.5;
+  for (int i = 0; i < 8; i++) {
+    if (i >= octaves) break;
+    sum += amp * pnoise(uv * period, period, float(i) * 31.7);
+    period *= 2.0;
+    amp *= 0.5;
+  }
+  return sum;
+}
+// Distance to the nearest of one jittered point per cell, wrapping.
+float pworley(vec2 uv, float period) {
+  vec2 p = uv * period;
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  float d = 9.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 g = vec2(float(x), float(y));
+      vec2 o = hash22(mod(i + g, vec2(period)) + 3.7);
+      d = min(d, length(g + o - f));
+    }
+  }
+  return d;
+}
+void main() {
+  vec2 uv = vUv;
+  // Cumulus: domed cells, clumped, with a ragged edge.
+  vec2 warp = 0.03 * vec2(pfbm(uv, vec2(8.0), 3), pfbm(uv + 0.5, vec2(8.0), 3));
+  float cells = 1.0 - pworley(fract(uv + warp), 14.0);
+  float r = cells * 0.7 + 0.25 * (1.0 - pworley(uv, 37.0)) + 0.35 * pfbm(uv, vec2(24.0), 4);
+  // Terrain: ridges and valleys (ridged noise), with a broader swell.
+  float ridged = 1.0 - abs(pfbm(uv, vec2(6.0), 6));
+  float g = ridged * ridged + 0.4 * pfbm(uv, vec2(3.0), 3);
+  // Fibres: noise drawn out along one axis.
+  float b = pfbm(uv, vec2(3.0, 40.0), 5) + 0.3 * pfbm(uv, vec2(2.0, 12.0), 3);
+  gl_FragColor = vec4(vec3(r, g, b) * 0.25 + 0.5, 1.0);
+}
+`;
+
+/**
+ * Flatten each channel of an RGBA image to a uniform histogram (the art's
+ * detail texture has one, so its values can be read as coverage).
+ */
+function equalise(pixels: Uint8Array): void {
+  const n = pixels.length / 4;
+  for (let ch = 0; ch < 3; ch++) {
+    const hist = new Float64Array(256);
+    for (let i = 0; i < n; i++) {
+      const v = pixels[i * 4 + ch] as number;
+      hist[v] = (hist[v] as number) + 1;
+    }
+    const map = new Uint8Array(256);
+    let below = 0;
+    for (let v = 0; v < 256; v++) {
+      const here = hist[v] as number;
+      map[v] = Math.round((255 * (below + here / 2)) / n);
+      below += here;
+    }
+    for (let i = 0; i < n; i++) pixels[i * 4 + ch] = map[pixels[i * 4 + ch] as number] as number;
+  }
+}
+
+function buildDetail(renderer: WebGLRenderer): Texture {
+  const size = 1024;
+  const target = new WebGLRenderTarget(size, size, { depthBuffer: false });
+  const material = new ShaderMaterial({ vertexShader: VERTEX, fragmentShader: DETAIL, depthTest: false, depthWrite: false });
+  const scene = new Scene();
+  const quad = new Mesh(new PlaneGeometry(1, 1), material);
+  quad.frustumCulled = false;
+  scene.add(quad);
+  const before = renderer.getRenderTarget();
+  renderer.setRenderTarget(target);
+  renderer.render(scene, new Camera());
+  const pixels = new Uint8Array(size * size * 4);
+  renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+  renderer.setRenderTarget(before);
+  material.dispose();
+  quad.geometry.dispose();
+  target.dispose();
+  equalise(pixels);
+  const texture = new DataTexture(pixels, size, size, RGBAFormat, UnsignedByteType);
+  texture.colorSpace = NoColorSpace;
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.generateMipmaps = true;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  texture.needsUpdate = true;
+  return texture;
+}
 
 const STARS = /* glsl */ `
 ${NOISE}
@@ -244,7 +375,7 @@ void main() {
   vec3 c = stars(d, 150.0, 1.0, 0.3) + stars(d, 80.0, 3.0, 0.4);
   // The Milky Way: a band along a great circle, clumpy and dusty, thick with faint stars.
   vec3 pole = normalize(vec3(0.35, 0.55, -0.76));
-  float band = exp(-pow(dot(d, pole) / 0.2, 2.0));
+  float band = exp(-sq(dot(d, pole) / 0.2));
   float clump = fbm(d * 6.0, 6) * 0.5 + 0.5;
   float dust = smoothstep(0.4, 0.75, fbm(d * 10.0 + 3.0, 5) * 0.5 + 0.5);
   c += vec3(0.6, 0.64, 0.74) * band * clump * 0.05 * (1.0 - 0.75 * dust);
@@ -286,7 +417,7 @@ function renderMap(renderer: WebGLRenderer, fragment: string, width: number, hei
   return texture;
 }
 
-export type PlanetMap = "albedo" | "clouds" | "night" | "water" | "stars";
+export type PlanetMap = "albedo" | "clouds" | "night" | "water" | "height" | "detail" | "stars";
 
 /** One of the placeholder's maps, at a size that keeps the loading quick. */
 export function buildPlanetMap(renderer: WebGLRenderer, name: PlanetMap): Texture {
@@ -299,6 +430,10 @@ export function buildPlanetMap(renderer: WebGLRenderer, name: PlanetMap): Textur
       return renderMap(renderer, NIGHT, 2048, 1024, true, { uHi: { value: dir(...PLACEHOLDER_HI) } });
     case "water":
       return renderMap(renderer, WATER, 1024, 512, false);
+    case "height":
+      return renderMap(renderer, HEIGHT, 2048, 1024, false);
+    case "detail":
+      return buildDetail(renderer);
     case "stars":
       return renderMap(renderer, STARS, 4096, 2048, true, { uSize: { value: [4096, 2048] } });
   }

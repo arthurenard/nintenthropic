@@ -3,17 +3,19 @@
  * repair drone (`thruster.<n>`, `light.nav`, a welder arm with `weld.tip`,
  * facing +Z); the dead satellite (`derelict.body` in gold foil, its white
  * fuel `tank` on its +Z side, `panel.1` and `panel.2`, and
- * `derelict.pieces` for the break-up); and the extras (`astronaut` with a
- * pivoting right arm, `toolbag`, `duck`, `sticker`).
+ * `derelict.pieces` for the break-up); and the extras (`astronaut` with
+ * its right arm a chain of pivots - `astronaut.arm.R`, `.forearm.R`,
+ * `.hand.R`, each with local -Z down the limb, X the hinge and +Y forward -
+ * `toolbag` with its `toolbag.bag` and `toolbag.tool.<n>`, `duck`, `sticker`).
  */
 import {
   BoxGeometry,
   CanvasTexture,
-  CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -21,6 +23,7 @@ import {
   PlaneGeometry,
   SphereGeometry,
   SRGBColorSpace,
+  TorusGeometry,
   Vector3,
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
@@ -205,26 +208,55 @@ export function buildPlaceholderExtras(): Group {
   armL.position.set(-0.36, 1.1, 0);
   armL.rotation.z = -0.2;
   astro.add(armL);
-  const shoulder = named(new Group(), "astronaut.arm.R");
+  // The right arm as the art builds it: each joint's -Z down the limb, X
+  // the hinge, +Y forward at rest (so X points to the astronaut's left).
+  const limb = (name: string, length: number, radius: number): Group => {
+    const joint = named(new Group(), name);
+    const seg = new Mesh(new CylinderGeometry(radius, radius * 0.9, length, 12), suit);
+    seg.rotation.x = Math.PI / 2;
+    seg.position.z = -length / 2;
+    joint.add(seg);
+    return joint;
+  };
+  const shoulder = limb("astronaut.arm.R", 0.36, 0.08);
   shoulder.position.set(0.34, 1.42, 0);
-  const armR = new Mesh(new CylinderGeometry(0.08, 0.07, 0.7, 12), suit);
-  armR.position.y = -0.35;
-  shoulder.add(armR);
+  shoulder.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(-1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0)));
+  const forearm = limb("astronaut.forearm.R", 0.34, 0.07);
+  forearm.position.z = -0.36;
+  shoulder.add(forearm);
+  const hand = named(new Group(), "astronaut.hand.R");
+  hand.position.z = -0.34;
   const glove = new Mesh(new SphereGeometry(0.075, 12, 10), m.dark);
-  glove.position.y = -0.72;
-  shoulder.add(glove);
+  glove.position.z = -0.05;
+  hand.add(glove);
   const thumb = named(new Mesh(new CylinderGeometry(0.02, 0.02, 0.09, 8), m.dark), "astronaut.thumb");
-  thumb.position.set(0, -0.8, 0.03);
-  shoulder.add(thumb);
+  thumb.position.set(0, 0.07, -0.05);
+  hand.add(thumb);
+  forearm.add(hand);
   astro.add(shoulder);
   root.add(astro);
   // The lost tool bag.
   const bag = named(new Group(), "toolbag");
+  const sackGroup = named(new Group(), "toolbag.bag");
   const sack = new Mesh(new RoundedBoxGeometry(0.42, 0.3, 0.26, 3, 0.07), m.beta);
-  bag.add(sack);
+  sackGroup.add(sack);
   const strap = new Mesh(new BoxGeometry(0.46, 0.04, 0.02), m.dark);
   strap.position.set(0, 0.1, 0.13);
-  bag.add(strap);
+  sackGroup.add(strap);
+  bag.add(sackGroup);
+  // What was in it: a wrench, a pistol-grip tool, a socket bar, a clamp.
+  const steel = new MeshStandardMaterial({ color: "#a9adb2", metalness: 1, roughness: 0.35 });
+  const red = new MeshStandardMaterial({ color: "#d8412f", roughness: 0.6 });
+  const tools: Object3D[] = [
+    new Mesh(new BoxGeometry(0.03, 0.22, 0.012), steel),
+    new Mesh(new BoxGeometry(0.06, 0.18, 0.05), red),
+    new Mesh(new CylinderGeometry(0.012, 0.012, 0.25, 8), steel),
+    new Mesh(new TorusGeometry(0.05, 0.018, 8, 16), red),
+  ];
+  tools.forEach((t, i) => {
+    t.position.set((i - 1.5) * 0.08, 0, 0);
+    bag.add(named(t, `toolbag.tool.${i + 1}`));
+  });
   root.add(bag);
   // The duck.
   const duck = named(new Group(), "duck");
@@ -248,6 +280,5 @@ export function buildPlaceholderExtras(): Group {
   // The sticker: a 20 cm vinyl spacewalker, facing +Z.
   const sticker = new Mesh(new PlaneGeometry(0.2, 0.2), new MeshStandardMaterial({ map: stickerArt(), transparent: true, roughness: 0.6 }));
   root.add(named(sticker, "sticker"));
-  void CircleGeometry;
   return root;
 }

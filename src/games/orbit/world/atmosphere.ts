@@ -23,13 +23,15 @@ export const SUN_E = 20;
 export const SUN_COLOR: readonly [number, number, number] = [1, 0.985, 0.96];
 /** The art's exposure: sunlit cloud comes out near white. */
 export const EXPOSURE_STOPS = -3.2;
+/** How far the eye opens up in the planet's shadow, as the art's night renders are exposed. */
+export const NIGHT_STOPS = 4.2;
 
-/** Extinction per kilometre at height h, for each colour. */
-export function extinction(h: number, out: [number, number, number] = [0, 0, 0]): [number, number, number] {
+/** Extinction per kilometre at height h, for each colour (the ozone's share scaled by `ozone`). */
+export function extinction(h: number, out: [number, number, number] = [0, 0, 0], ozone = 1): [number, number, number] {
   const hh = Math.max(0, h);
   const r = Math.exp(-hh / H_R);
   const m = Math.exp(-hh / H_M);
-  const o = Math.max(0, 1 - Math.abs(hh - 25) / 15);
+  const o = Math.max(0, 1 - Math.abs(hh - 25) / 15) * ozone;
   for (let c = 0; c < 3; c++) out[c] = (BETA_R[c] as number) * r + BETA_M_E * m + (BETA_O[c] as number) * o;
   return out;
 }
@@ -114,11 +116,16 @@ export function sunlightAt(eye: readonly [number, number, number], sun: readonly
     const x = ox + dx * t;
     const y = oy + dy * t;
     const z = oz + dz * t;
-    extinction(Math.sqrt(x * x + y * y + z * z) - R, ext);
+    // Through the full ozone band at a grazing angle this model turns the
+    // light magenta; photographs of the station at orbital sunset show it
+    // glowing orange, so the station's own light gets a third of it.
+    extinction(Math.sqrt(x * x + y * y + z * z) - R, ext, SUNLIGHT_OZONE);
     for (let k = 0; k < 3; k++) tau[k] = (tau[k] as number) + (ext[k] as number) * ds;
   }
   return [Math.exp(-(tau[0] as number)), Math.exp(-(tau[1] as number)), Math.exp(-(tau[2] as number))];
 }
+
+const SUNLIGHT_OZONE = 0.35;
 
 /** How far below the station's horizontal the limb lies, radians. */
 export function horizonDip(altitude: number): number {

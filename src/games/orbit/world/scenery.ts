@@ -8,7 +8,7 @@
  * Anything the art leaves out falls back on the cupola as designed
  * (rules/layout.ts), with a word in the console.
  */
-import { Group, Mesh, Object3D, PerspectiveCamera, Quaternion, Vector3, type BufferGeometry } from "three";
+import { Group, Mesh, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, type BufferGeometry } from "three";
 import { findNode, nodesWithPrefix, extraNumber } from "../../../engine/world/names";
 import { designLanes, designLayout, frameSpots, paneFrom, viewAxes, VIEW_FOV_DEG, type Layout, type PaneSpec } from "../rules/layout";
 import type { V3 } from "../rules/vec";
@@ -108,6 +108,35 @@ function convexHull(points: { x: number; y: number }[]): { x: number; y: number 
   lower.pop();
   upper.pop();
   return lower.concat(upper);
+}
+
+/**
+ * How much of each lane's way in the player can see: points along the line
+ * from the lane to the cupola, each checked against the station from the
+ * eye (hidden if the station is nearer). The last few metres, through the
+ * glass, always show.
+ */
+export function laneClearance(station: Object3D, eye: Vector3, lanes: readonly V3[], target: Vector3, samples = 10): number[] {
+  station.updateMatrixWorld(true);
+  const ray = new Raycaster();
+  const dir = new Vector3();
+  const p = new Vector3();
+  return lanes.map((lane) => {
+    const from = new Vector3(lane.x, lane.y, lane.z);
+    let seen = 0;
+    let counted = 0;
+    for (let i = 0; i < samples; i++) {
+      p.lerpVectors(from, target, (i + 0.5) / samples);
+      const d = p.distanceTo(eye);
+      if (d < 4) continue;
+      counted++;
+      dir.subVectors(p, eye).normalize();
+      ray.set(eye, dir);
+      ray.far = d - 0.5;
+      if (ray.intersectObject(station, true).length === 0) seen++;
+    }
+    return counted > 0 ? seen / counted : 1;
+  });
 }
 
 function lonLatExtra(o: Object3D | null, key: string): [number, number] | null {

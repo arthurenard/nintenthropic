@@ -34,10 +34,61 @@ export const RISE_START = 5.3;
 /** Where the sun sets: this far round to the left, in view, and this far below the limb at night. */
 export const SET_AZIMUTH = -34 * DEG;
 export const BELOW_LIMB = 4 * DEG;
+/**
+ * The sun's height over the limb through a breather, as (seconds, radians)
+ * keys after the first (where the pass left it) and before the last (the
+ * art's sun again): quickly down the sky, a slow second and a half through
+ * the last few degrees and over the limb - the colours are there - then
+ * below; the same, reversed, at sunrise.
+ */
+const SET_KEYS: readonly [number, number][] = [
+  [1.3, 3.5 * DEG],
+  [2.9, -0.8 * DEG],
+  [SET_END, -BELOW_LIMB],
+  [RISE_START, -BELOW_LIMB],
+  [5.8, -0.8 * DEG],
+  [7.0, 3.5 * DEG],
+];
+/** By when the sun has come round into view to set (and from when it goes back after rising). */
+const SLIDE_IN = 1.3;
+const SLIDE_OUT = 7.0;
 
 function ease(t: number): number {
   const k = Math.min(1, Math.max(0, t));
   return k * k * (3 - 2 * k);
+}
+
+/**
+ * A smooth curve through keys that never overshoots them (a monotone cubic,
+ * Fritsch-Carlson): the sun never bobs back up as it sets.
+ */
+export function monotone(keys: readonly [number, number][], t: number): number {
+  const n = keys.length;
+  const first = keys[0] as [number, number];
+  const last = keys[n - 1] as [number, number];
+  if (t <= first[0]) return first[1];
+  if (t >= last[0]) return last[1];
+  const slope = (i: number) => {
+    const a = keys[i] as [number, number];
+    const b = keys[i + 1] as [number, number];
+    return (b[1] - a[1]) / (b[0] - a[0]);
+  };
+  const tangent = (i: number) => {
+    if (i === 0) return slope(0);
+    if (i === n - 1) return slope(n - 2);
+    const s0 = slope(i - 1);
+    const s1 = slope(i);
+    return s0 * s1 <= 0 ? 0 : (2 * s0 * s1) / (s0 + s1);
+  };
+  let i = 0;
+  while (t > (keys[i + 1] as [number, number])[0]) i++;
+  const a = keys[i] as [number, number];
+  const b = keys[i + 1] as [number, number];
+  const h = b[0] - a[0];
+  const u = (t - a[0]) / h;
+  const u2 = u * u;
+  const u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * a[1] + (u3 - 2 * u2 + u) * h * tangent(i) + (-2 * u3 + 3 * u2) * b[1] + (u3 - u2) * h * tangent(i + 1);
 }
 
 /**
@@ -54,6 +105,13 @@ export interface SkyMoment {
   kind: "day" | "breather";
   /** Seconds into it. */
   t: number;
+  /** A breather: how long the pass before it lasted (where it left the sun). */
+  after?: number;
+}
+
+/** The sun in a pass, `t` seconds in: the art's, sinking a little as the terminator nears. */
+function passSun(day: SunAt, t: number): SunAt {
+  return { elevation: day.elevation - Math.min(PASS_SINK, PASS_DRIFT * Math.max(0, t)), azimuth: day.azimuth };
 }
 
 /**
@@ -62,23 +120,15 @@ export interface SkyMoment {
  */
 export function skyAt(moment: SkyMoment, day: SunAt, dip: number): SkyState {
   if (moment.kind === "day") {
-    const sun = { elevation: day.elevation - Math.min(PASS_SINK, PASS_DRIFT * moment.t), azimuth: day.azimuth };
+    const sun = passSun(day, moment.t);
     return { sun, night: nightFor(sun, dip) };
   }
   const t = Math.min(BREATHER, Math.max(0, moment.t));
-  const low = { elevation: -dip - BELOW_LIMB, azimuth: SET_AZIMUTH };
-  // Quickly down the sky, slowly over the limb (the colours are there), and below.
-  const settle = (u: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 2.5);
-  let k: number;
-  if (t <= SET_END) k = settle(t / SET_END);
-  else if (t < RISE_START) k = 1;
-  else k = settle(1 - (t - RISE_START) / (BREATHER - RISE_START));
-  // Down steeply, sliding into view as it goes; up the same way.
-  const kAz = Math.pow(k, 0.6);
-  const sun = {
-    elevation: day.elevation + (low.elevation - day.elevation) * k,
-    azimuth: day.azimuth + (low.azimuth - day.azimuth) * kAz,
-  };
+  const from = passSun(day, moment.after ?? 0);
+  const keys: [number, number][] = [[0, from.elevation + dip], ...SET_KEYS, [BREATHER, day.elevation + dip]];
+  // Round into view to set, and back to the art's place after rising.
+  const az = t < SLIDE_OUT ? from.azimuth + (SET_AZIMUTH - from.azimuth) * ease(t / SLIDE_IN) : SET_AZIMUTH + (day.azimuth - SET_AZIMUTH) * ease((t - SLIDE_OUT) / (BREATHER - SLIDE_OUT));
+  const sun = { elevation: monotone(keys, t) - dip, azimuth: az };
   return { sun, night: nightFor(sun, dip) };
 }
 

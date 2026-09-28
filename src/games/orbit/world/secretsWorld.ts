@@ -7,6 +7,7 @@
  * that say "HI". The rules decide when each is found; this makes it happen.
  */
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
@@ -27,6 +28,73 @@ import type { PlanetSky } from "./planet";
 
 const tmp = new Vector3();
 const q = new Quaternion();
+const q2 = new Quaternion();
+const X = new Vector3(1, 0, 0);
+const Z = new Vector3(0, 0, 1);
+
+/** The spacewalker floats this far below the truss's handrails on the tether (m): the truss runs along the top edge of the view. */
+const ASTRO_BELOW = 2.3;
+/** The duck is drawn to look this big at any distance (radians across), so it can be found: a 12 cm duck is a speck 60 m out. */
+const DUCK_ANGLE = 0.017;
+/**
+ * How the capsule's shade is drawn down: the art ships it rolled up at the
+ * window's top edge, and says (its extras' note) how far it pulls. It is
+ * stretched along its short side, away from the edge it hangs from, which
+ * stays put.
+ */
+interface ShadePull {
+  node: Object3D;
+  axis: 0 | 1 | 2;
+  /** The edge it hangs from (local), and the stretch that makes it the pulled length. */
+  anchor: number;
+  stretch: number;
+  restPosition: Vector3;
+  restScale: Vector3;
+}
+
+function shadePull(node: Object3D | null): ShadePull | null {
+  if (!node) return null;
+  const box = new Box3();
+  node.updateMatrixWorld(true);
+  const inverse = node.matrixWorld.clone().invert();
+  node.traverse((o) => {
+    const g = (o as Mesh).geometry;
+    if (!(o as Mesh).isMesh || !g) return;
+    g.computeBoundingBox();
+    if (g.boundingBox) box.union(g.boundingBox.clone().applyMatrix4(inverse.clone().multiply(o.matrixWorld)));
+  });
+  if (box.isEmpty()) return null;
+  const size = box.getSize(new Vector3());
+  const centre = box.getCenter(new Vector3());
+  // The short side (not its thickness): the roll's height.
+  const sides = [size.x, size.y, size.z];
+  let axis: 0 | 1 | 2 = 0;
+  let best = Infinity;
+  sides.forEach((s, i) => {
+    if (s > 0.01 && s < best) {
+      best = s;
+      axis = i as 0 | 1 | 2;
+    }
+  });
+  const note = String(node.userData["note"] ?? "");
+  const pulled = Number(/to ([\d.]+) ?m/.exec(note)?.[1] ?? 0.24);
+  // It hangs from the edge away from the window's middle (the node's origin).
+  const anchor = centre.getComponent(axis) >= 0 ? box.max.getComponent(axis) : box.min.getComponent(axis);
+  return { node, axis, anchor, stretch: Math.max(1, pulled / Math.max(0.01, best)), restPosition: node.position.clone(), restScale: node.scale.clone() };
+}
+
+/** Draw the shade down by `k` (0 rolled up .. 1 pulled). */
+function pullShade(s: ShadePull, k: number): void {
+  const f = 1 + (s.stretch - 1) * k;
+  s.node.scale.copy(s.restScale).setComponent(s.axis, s.restScale.getComponent(s.axis) * f);
+  // Keep the edge it hangs from where it was.
+  const shift = new Vector3().setComponent(s.axis, s.anchor * s.restScale.getComponent(s.axis) * (1 - f)).applyQuaternion(s.node.quaternion);
+  s.node.position.copy(s.restPosition).add(shift);
+}
+
+/** The tool bag's drift across the view, in front of all the station (its nearest arm is 11 m out): from/to as (x, y) on screen (-1..1) and metres out. */
+const BAG_FROM: [number, number, number] = [-0.95, 0.2, 8.5];
+const BAG_TO: [number, number, number] = [0.95, -0.02, 7.5];
 
 interface Tool {
   obj: Object3D;
@@ -56,12 +124,23 @@ function along(points: readonly Vector3[], u: number, out: Vector3): Vector3 {
 export class SecretsWorld {
   private readonly astronaut: Object3D | null;
   private readonly arm: Object3D | null;
+  private readonly forearm: Object3D | null;
+  private readonly hand: Object3D | null;
+  private readonly armRest: Quaternion[] = [];
+  private readonly bagSack: Object3D | null;
+  /** The tools as the art put them in the bag (or none: then made here). */
+  private readonly artTools: Object3D[] = [];
   private readonly sticker: Object3D | null;
   private readonly tether: Line;
   private readonly bag: Object3D | null;
   private readonly duck: Object3D | null;
   private readonly tools: Tool[] = [];
   private readonly astroPath: Vector3[];
+  private readonly parent: Object3D;
+  private readonly shade: ShadePull | null;
+  private readonly toolRest: { position: Vector3; quaternion: Quaternion; scale: Vector3 }[] = [];
+  /** The arm's wave: about the arm's own line (the art's wave_axis), in the hand's frame. */
+  private readonly waveAxis = new Vector3(0, 1, 0);
   private astroT = -1;
   private astroTurned = -1;
   private astroGone = false;
@@ -89,7 +168,16 @@ export class SecretsWorld {
   constructor(
     extras: Object3D,
     parent: Object3D,
-    private readonly scenery: { astronautPath: Object3D[]; duckPath: Vector3[]; armHand: Object3D | null; capsuleWindow: Object3D | null; capsuleShade: Object3D | null; eye: Vector3 },
+    private readonly scenery: {
+      astronautPath: Object3D[];
+      duckPath: Vector3[];
+      armHand: Object3D | null;
+      capsuleWindow: Object3D | null;
+      capsuleShade: Object3D | null;
+      eye: Vector3;
+      /** The view: where it looks and its vertical field of view (degrees), for the tool bag's drift. */
+      view: { quaternion: Quaternion; fov: number };
+    },
     private readonly effects: Effects,
     private readonly sky: PlanetSky,
     private readonly random: () => number,
@@ -105,10 +193,18 @@ export class SecretsWorld {
     };
     this.astronaut = take("astronaut");
     this.arm = this.astronaut ? findNode(this.astronaut, "astronaut.arm.R") : null;
+    this.forearm = this.astronaut ? findNode(this.astronaut, "astronaut.forearm.R") : null;
+    this.hand = this.astronaut ? findNode(this.astronaut, "astronaut.hand.R") : null;
+    for (const j of [this.arm, this.forearm, this.hand]) this.armRest.push(j ? j.quaternion.clone() : new Quaternion());
     this.sticker = take("sticker");
     this.bag = take("toolbag");
+    this.bagSack = this.bag ? findNode(this.bag, "toolbag.bag") : null;
+    for (let i = 1; this.bag; i++) {
+      const t = findNode(this.bag, `toolbag.tool.${i}`);
+      if (!t) break;
+      this.artTools.push(t);
+    }
     this.duck = take("duck");
-    if (this.duck) this.duck.scale.setScalar(3);
     this.astroPath = scenery.astronautPath.map((n) => n.getWorldPosition(new Vector3()));
     this.tether = new Line(new BufferGeometry().setFromPoints([new Vector3(), new Vector3()]), new LineBasicMaterial({ color: "#d8d4c8", transparent: true, opacity: 0.7 }));
     this.tether.visible = false;
@@ -131,11 +227,23 @@ export class SecretsWorld {
       () => new Mesh(new TorusGeometry(0.05, 0.02, 8, 16), new MeshStandardMaterial({ color: "#b0b4b8", roughness: 0.7 })),
       () => new Mesh(new BoxGeometry(0.08, 0.12, 0.04), grip),
     ];
-    for (let i = 0; i < 8; i++) {
+    // The art's tools fly out of the bag; without them, a handful made here.
+    for (const t of this.artTools) this.tools.push({ obj: t, vel: new Vector3(), axis: new Vector3(0, 1, 0), spin: 0 });
+    for (let i = 0; this.artTools.length === 0 && i < 8; i++) {
       const obj = (makers[i % makers.length] as () => Object3D)();
       obj.visible = false;
       parent.add(obj);
       this.tools.push({ obj, vel: new Vector3(), axis: new Vector3(0, 1, 0), spin: 0 });
+    }
+    this.parent = parent;
+    for (const t of this.artTools) this.toolRest.push({ position: t.position.clone(), quaternion: t.quaternion.clone(), scale: t.scale.clone() });
+    this.shade = shadePull(scenery.capsuleShade);
+    const hand = scenery.armHand;
+    const wave = hand?.userData["wave_axis"];
+    if (hand && Array.isArray(wave) && wave.length === 3) {
+      // Given in the file's frame: into the hand's own.
+      const world = new Vector3(Number(wave[0]), Number(wave[1]), Number(wave[2])).normalize();
+      this.waveAxis.copy(world.applyQuaternion(hand.getWorldQuaternion(new Quaternion()).invert()));
     }
     parent.parent?.updateMatrixWorld(true);
   }
@@ -160,10 +268,22 @@ export class SecretsWorld {
     if (!this.bag || this.bagDone) return;
     this.bagT = 0;
     this.bag.visible = true;
-    // Across the view, 25 m out, from the left to the right.
-    const e = this.scenery.eye;
-    this.bagFrom.set(e.x - 22, e.y + 2, e.z - 26);
-    this.bagTo.set(e.x + 22, e.y - 4, e.z - 20);
+    if (this.bagSack) this.bagSack.visible = true;
+    for (const t of this.artTools) t.visible = true;
+    // Across the view in front of the station, a dozen metres out, left to right.
+    this.viewPoint(BAG_FROM, this.bagFrom);
+    this.viewPoint(BAG_TO, this.bagTo);
+  }
+
+  /** A point in the view: (x, y) on screen, -1..1, at `d` metres. */
+  private viewPoint([x, y, d]: [number, number, number], out: Vector3): Vector3 {
+    const t = Math.tan((this.scenery.view.fov * Math.PI) / 360);
+    return out
+      .set(x * t * (16 / 9), y * t, -1)
+      .normalize()
+      .applyQuaternion(this.scenery.view.quaternion)
+      .multiplyScalar(d)
+      .add(this.scenery.eye);
   }
 
   /** The duck drifts through the debris field (pass 2). */
@@ -178,7 +298,7 @@ export class SecretsWorld {
     const out: SecretCandidate[] = [];
     if (this.astronaut?.visible && this.astroTurned < 0) out.push({ id: "astronaut", center: this.astronaut.position.clone().add(tmp.set(0, 1.1, 0)), radius: 0.9, near: 5 });
     if (this.bag?.visible && !this.bagDone) out.push({ id: "toolbag", center: this.bag.position, radius: 0.6, near: 0 });
-    if (this.duck?.visible && this.duckSpin < 0) out.push({ id: "duck", center: this.duck.position, radius: 0.9, near: 0 });
+    if (this.duck?.visible && this.duckSpin < 0) out.push({ id: "duck", center: this.duck.position, radius: 0.28 * this.duck.scale.x, near: 0 });
     const hand = this.scenery.armHand;
     if (hand) out.push({ id: "arm", center: hand.getWorldPosition(new Vector3()), radius: 0.7, near: 0 });
     const win = this.scenery.capsuleWindow;
@@ -208,12 +328,15 @@ export class SecretsWorld {
   toolbagShot(): void {
     if (!this.bag) return;
     this.bagDone = true;
-    this.bag.visible = false;
-    const c = this.bag.position;
+    const c = this.bag.position.clone();
     this.effects.split(c.clone(), new Vector3(), c.distanceTo(this.scenery.eye));
+    // The art's tools leave the bag where they were in it; the bag is gone.
+    this.bag.updateMatrixWorld(true);
+    for (const t of this.artTools) this.parent.attach(t);
+    this.bag.visible = false;
     for (const t of this.tools) {
       t.obj.visible = true;
-      t.obj.position.copy(c);
+      if (!this.artTools.includes(t.obj)) t.obj.position.copy(c);
       t.vel.set(this.random() - 0.5, this.random() - 0.5, this.random() - 0.5).normalize().multiplyScalar(0.6 + this.random() * 1.4);
       t.axis.set(this.random() - 0.5, this.random() - 0.5, this.random() - 0.5).normalize();
       t.spin = 1 + this.random() * 4;
@@ -272,15 +395,16 @@ export class SecretsWorld {
     this.flagT = 0;
   }
 
-  update(dt: number, passT: number): void {
+  update(dt: number): void {
     this.time += dt;
     // The spacewalker's drift along the truss, tether and all.
     if (this.astronaut?.visible && this.astroT >= 0) {
       if (this.astroTurned < 0) this.astroT += dt;
       const u = Math.min(1, this.astroT / 55);
       along(this.astroPath, u, this.astronaut.position);
-      this.astronaut.position.y += Math.sin(this.time * 0.7) * 0.08;
+      this.astronaut.position.y += Math.sin(this.time * 0.7) * 0.08 - ASTRO_BELOW;
       const next = along(this.astroPath, Math.min(1, u + 0.01), tmp);
+      next.y -= ASTRO_BELOW;
       if (this.astroTurned < 0) {
         this.astronaut.lookAt(next);
         this.astronaut.rotateY(Math.PI / 2);
@@ -290,12 +414,18 @@ export class SecretsWorld {
         const k = Math.min(1, this.astroTurned / 1.4);
         const face = q.setFromUnitVectors(new Vector3(0, 0, 1), this.scenery.eye.clone().sub(this.astronaut.position).setY(0).normalize());
         this.astronaut.quaternion.slerp(face, Math.min(1, dt * 2));
-        if (this.arm) this.arm.rotation.set(0, 0, 2.2 * k * k * (3 - 2 * k));
+        // The art's thumbs-down: the arm swings forward about its hinge, the
+        // forearm bends a little the same way, the hand turns over.
+        const e = k * k * (3 - 2 * k);
+        if (this.arm) this.arm.quaternion.copy(this.armRest[0] as Quaternion).multiply(q2.setFromAxisAngle(X, 1.4 * e));
+        if (this.forearm) this.forearm.quaternion.copy(this.armRest[1] as Quaternion).multiply(q2.setFromAxisAngle(X, 0.35 * e));
+        if (this.hand) this.hand.quaternion.copy(this.armRest[2] as Quaternion).multiply(q2.setFromAxisAngle(Z, Math.PI * e));
       }
       const pos = this.tether.geometry.getAttribute("position");
       pos.setXYZ(0, this.astronaut.position.x, this.astronaut.position.y + 1.0, this.astronaut.position.z);
-      const anchor = this.astroPath[0] ?? this.astronaut.position;
-      pos.setXYZ(1, anchor.x, anchor.y + 0.6, anchor.z);
+      // Clipped to the truss's handrail above.
+      const anchor = along(this.astroPath, u, tmp);
+      pos.setXYZ(1, anchor.x, anchor.y, anchor.z);
       pos.needsUpdate = true;
       if (u >= 1 && this.astroTurned < 0) {
         this.astronaut.visible = false;
@@ -326,6 +456,7 @@ export class SecretsWorld {
       } else if (this.duckT >= 0) {
         this.duckT += dt;
         along(this.scenery.duckPath, this.duckT / 40, this.duck.position);
+        this.duck.scale.setScalar(Math.max(1, (this.duck.position.distanceTo(this.scenery.eye) * DUCK_ANGLE) / 0.12));
         this.duck.rotation.set(Math.sin(this.duckT * 0.4) * 0.3, this.duckT * 0.25, Math.sin(this.duckT * 0.3) * 0.2);
         if (this.duckT > 40) this.duck.visible = false;
       }
@@ -336,17 +467,14 @@ export class SecretsWorld {
       this.handWave += dt;
       const k = this.handWave;
       const swing = k < 2.4 ? Math.sin(k * Math.PI * 2.5) * 0.45 * Math.min(1, (2.4 - k) * 2) : 0;
-      hand.quaternion.copy(this.handBase).multiply(q.setFromAxisAngle(new Vector3(0, 1, 0), swing));
+      hand.quaternion.copy(this.handBase).multiply(q.setFromAxisAngle(this.waveAxis, swing));
       if (k >= 2.4) this.handWave = -1;
     }
     // The capsule's shade, pulled down.
-    const shade = this.scenery.capsuleShade;
-    if (shade && this.shadeT >= 0) {
+    if (this.shade && this.shadeT >= 0) {
       this.shadeT += dt;
       const k = Math.min(1, this.shadeT / 0.8);
-      const e = k * k * (3 - 2 * k);
-      shade.scale.y = 0.02 + 0.98 * e;
-      shade.position.y = 0.44 - 0.44 * e;
+      pullShade(this.shade, k * k * (3 - 2 * k));
     }
     // The storm: lightning in bursts of one to three flashes.
     const lightning = this.sky.uniform<Vector4>("uLightning").value;
@@ -365,7 +493,7 @@ export class SecretsWorld {
     if (this.hiBlink >= 0) {
       this.hiBlink += dt;
       const b = this.hiBlink;
-      hi.w = (b > 0.2 && b < 0.55) || (b > 0.8 && b < 1.15) ? 6 : 0;
+      hi.w = (b > 0.2 && b < 0.55) || (b > 0.8 && b < 1.15) ? 3.5 : 0;
       if (b > 1.3) this.hiBlink = -1;
     } else hi.w = 0;
     // The flag on the Moon.
@@ -375,7 +503,6 @@ export class SecretsWorld {
       flag.value = Math.max(0, Math.sin(Math.min(1, this.flagT / 1.6) * Math.PI));
       if (this.flagT > 1.6) this.flagT = -1;
     } else flag.value = 0;
-    void passT;
   }
 
   reset(): void {
@@ -393,13 +520,19 @@ export class SecretsWorld {
     this.stopStorm();
     for (const o of [this.astronaut, this.bag, this.duck, this.sticker]) if (o) o.visible = false;
     this.tether.visible = false;
-    if (this.arm) this.arm.rotation.set(0, 0, 0);
+    [this.arm, this.forearm, this.hand].forEach((j, i) => j?.quaternion.copy(this.armRest[i] as Quaternion));
     for (const t of this.tools) t.obj.visible = false;
-    const shade = this.scenery.capsuleShade;
-    if (shade) {
-      shade.scale.y = 0.02;
-      shade.position.y = 0.44;
-    }
+    // The art's tools back in the bag.
+    this.artTools.forEach((t, i) => {
+      const rest = this.toolRest[i];
+      if (!rest || !this.bag) return;
+      this.bag.add(t);
+      t.position.copy(rest.position);
+      t.quaternion.copy(rest.quaternion);
+      t.scale.copy(rest.scale);
+      t.visible = true;
+    });
+    if (this.shade) pullShade(this.shade, 0);
     if (this.scenery.armHand) this.scenery.armHand.quaternion.copy(this.handBase);
   }
 }

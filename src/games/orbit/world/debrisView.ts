@@ -45,6 +45,8 @@ const toEye = new Vector3();
 const q = new Quaternion();
 const q2 = new Quaternion();
 const Z = new Vector3(0, 0, 1);
+/** How much larger than life each kind is drawn, 90 m out (none 15 m out): the Derelict least. */
+const FAR_BOOST: Record<string, number> = { shrapnel: 2.2, chunk: 1.8, foil: 1.8, shard: 1.4, slab: 1.2, derelict: 0.6 };
 
 export class DebrisView {
   readonly group = new Group();
@@ -156,9 +158,10 @@ export class DebrisView {
     v.offset.multiplyScalar(Math.exp(-dt / 0.3));
     v.root.position.set(p.x + v.offset.x, p.y + v.offset.y, p.z + v.offset.z);
     this.orientation(v, t, v.root.quaternion);
-    // Far out, larger than life, so it reads as more than a speck; life size near the glass.
+    // Far out, larger than life, so it reads as more than a speck (the
+    // smaller the kind, the more); life size near the glass.
     const d = v.root.position.distanceTo(this.eye);
-    const boost = 1 + 1.1 * Math.min(1, Math.max(0, (d - 20) / 70));
+    const boost = 1 + (FAR_BOOST[v.f.kind] ?? 1.5) * Math.min(1, Math.max(0, (d - 15) / 75));
     v.root.scale.setScalar(boost);
   }
 

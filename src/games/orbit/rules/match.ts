@@ -348,13 +348,38 @@ export class Match {
     if (usable.length === 0 && facingPane) {
       lane = addScaled(facingPane.center, facingPane.normal, 90);
     } else {
-      let i = pickIndex(this.random, usable.length);
-      if (usable === lanes && i === this.lastLane && lanes.length > 1) i = (i + 1 + pickIndex(this.random, lanes.length - 1)) % lanes.length;
+      // Never the same lane twice running (unless it is the only one).
+      const avoid = usable === lanes && lanes.length > 1 ? this.lastLane : -1;
+      let i = this.pickClear(usable, avoid);
+      if (!this.layout.clear && i === avoid) i = (i + 1 + pickIndex(this.random, lanes.length - 1)) % lanes.length;
       if (usable === lanes) this.lastLane = i;
       lane = usable[i] as V3;
     }
     // A few metres either way, so no two come down exactly the same line.
     return add(lane, v3(range(this.random, -3, 3), range(this.random, -2, 2), range(this.random, -3, 3)));
+  }
+
+  /**
+   * One of these lanes, the ones the player can see coming most often: a
+   * lane mostly hidden behind the station is a fragment that appears from
+   * nowhere at the last moment.
+   */
+  private pickClear(lanes: readonly V3[], avoid: number): number {
+    const clear = this.layout.clear;
+    if (!clear) return pickIndex(this.random, lanes.length);
+    const weight = (i: number) => {
+      if (i === avoid) return 0;
+      const c = clear[this.layout.lanes.indexOf(lanes[i] as V3)] ?? 1;
+      return 0.05 + c * c;
+    };
+    let total = 0;
+    for (let i = 0; i < lanes.length; i++) total += weight(i);
+    let r = this.random() * total;
+    for (let i = 0; i < lanes.length; i++) {
+      r -= weight(i);
+      if (r <= 0 && weight(i) > 0) return i;
+    }
+    return lanes.length - 1 === avoid ? 0 : lanes.length - 1;
   }
 
   /** A pane that a fragment from `from` can reach, the centre most often, the corners of the view least. */
@@ -440,9 +465,13 @@ export class Match {
   sendDerelict(): Fragment {
     const spec = KINDS.derelict;
     const lanes = this.layout.lanes;
-    // The lane nearest the middle of the view, pushed out to its depth.
-    let best = lanes[0] as V3;
-    for (const l of lanes) if (dot(normalize(l), this.forward) > dot(normalize(best), this.forward)) best = l;
+    // The lane nearest the middle of the view (of those the player can see
+    // most of, if the layout says), pushed out to its depth.
+    const clear = this.layout.clear;
+    const seen = clear ? lanes.filter((_, i) => (clear[i] ?? 1) >= 0.6) : lanes;
+    const pool = seen.length > 0 ? seen : lanes;
+    let best = pool[0] as V3;
+    for (const l of pool) if (dot(normalize(l), this.forward) > dot(normalize(best), this.forward)) best = l;
     const from = scale(normalize(best), DERELICT_DEPTH);
     const pane = paneById(this.layout, 0) ?? this.pickPane(from);
     const to = pane.center;
