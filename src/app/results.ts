@@ -1,33 +1,69 @@
 /**
  * The results card - the game's art as its header, its name, the outcome in a
- * word or two, the score counting up, three or four stats, New Best in gold
- * only when it is true - and the branded picture of it to share.
+ * word or two and the game's one line about it, the score counting up, three
+ * or four stats, New Best in gold only when it is true (or, quietly, the best
+ * to beat) - and the branded picture of it to share.
+ *
+ * Personal bests are kept for each game, difficulty and control: the hand
+ * and a pointer, which is far easier to aim, never share a record.
  */
-import type { GameEntry, GameStats } from "../engine/types";
+import type { Difficulty, GameEntry, GameStats } from "../engine/types";
 import { siteUrl } from "../engine/fetch";
 import { $, announce, element, setText, toast } from "../ui/dom";
 import { formatScore, shareFileName } from "../ui/format";
-import { readBest, writeBest } from "./prefs";
+import { judge, readBest, writeBest, type Best, type ControlClass, type Verdict } from "./prefs";
+
+/** How a round was played: what its record is kept under. */
+export interface Round {
+  difficulty: Difficulty;
+  control: ControlClass;
+}
 
 export interface Result {
   game: GameEntry;
   stats: GameStats;
+  round: Round | null;
   best: boolean;
+  /** The best before this round, if there was one. */
+  previous: Best | null;
+}
+
+/** The verdict on each finished round, found again by its stats when the card is shown. */
+const verdicts = new WeakMap<GameStats, { round: Round; verdict: Verdict }>();
+
+/** The difficulty's name where it is worth saying: Standard goes without. */
+export const difficultyLabel = (difficulty: Difficulty): string | null => (difficulty === "relaxed" ? "Relaxed" : null);
+
+/**
+ * A round is over: it is weighed against the best for its game, difficulty
+ * and control, and kept at once if it beats it - before the card arrives,
+ * so closing the tab at the last moment loses nothing.
+ */
+export function recordRound(game: GameEntry, stats: GameStats, round: Round, now = Date.now()): Verdict {
+  const verdict = judge(stats.score, readBest(game.id, round.difficulty, round.control));
+  if (verdict.best) writeBest(game.id, round.difficulty, round.control, { score: stats.score, outcome: stats.outcome, at: now });
+  verdicts.set(stats, { round, verdict });
+  return verdict;
 }
 
 export function showResults(game: GameEntry, stats: GameStats, reducedMotion: boolean): Result {
-  const previous = readBest(game.id);
-  const best = stats.score > 0 && (previous === null || stats.score > previous);
-  if (best) writeBest(game.id, stats.score);
+  const judged = verdicts.get(stats) ?? null;
+  const round = judged?.round ?? null;
+  const best = judged?.verdict.best ?? false;
+  const previous = judged?.verdict.previous ?? null;
 
   const art = $<HTMLImageElement>("results-art");
   art.hidden = false;
   art.onerror = () => (art.hidden = true);
   art.src = siteUrl(game.poster);
-  setText("results-game", game.title);
+  const level = round && difficultyLabel(round.difficulty);
+  setText("results-game", level ? `${game.title} · ${level}` : game.title);
   const outcome = $("results-outcome");
   setText(outcome, stats.outcome);
   outcome.className = `title2${stats.won ? " outcome-won" : " outcome-lost"}`;
+  const note = $("results-note");
+  note.hidden = !stats.note;
+  setText(note, stats.note ?? "");
   $("results-stats").replaceChildren(
     ...stats.stats.slice(0, 4).map(({ label, value }) => {
       const cell = element("div");
@@ -41,17 +77,29 @@ export function showResults(game: GameEntry, stats: GameStats, reducedMotion: bo
   const newBest = $("new-best");
   newBest.hidden = true;
   newBest.classList.remove("pop");
+  // By how much a best beat the one before it; the best to beat otherwise.
+  const margin = best && previous ? stats.score - previous.score : 0;
+  const marginNode = $("new-best-margin");
+  marginNode.hidden = margin <= 0;
+  setText(marginNode, `+${formatScore(margin)} over your best`);
+  const bestLine = $("results-best");
+  bestLine.hidden = true;
+  setText(bestLine, previous ? `Best ${formatScore(previous.score)}` : "");
 
   const sheet = $<HTMLDialogElement>("results");
   if (!sheet.open) sheet.showModal();
   $("again").focus();
   countUp($("results-score"), stats.score, reducedMotion, () => {
-    if (!best) return;
-    newBest.hidden = false;
-    newBest.classList.add("pop");
+    if (best) {
+      newBest.hidden = false;
+      newBest.classList.add("pop");
+    } else if (previous) {
+      bestLine.hidden = false;
+    }
   });
-  announce(`${stats.outcome}. ${formatScore(stats.score)} points.${best ? " New best." : ""}`);
-  return { game, stats, best };
+  const said = best ? (margin > 0 ? ` New best, ${formatScore(margin)} over your last.` : " New best.") : previous ? ` Your best is ${formatScore(previous.score)}.` : "";
+  announce(`${stats.outcome}. ${stats.note ? `${stats.note} ` : ""}${formatScore(stats.score)} points.${said}`);
+  return { game, stats, round, best, previous };
 }
 
 /** The final score counts up; with reduced motion it simply appears. */
@@ -86,9 +134,38 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
 }
 
 /**
+ * Breaks `words` into lines no wider than `width` as `measure` measures them,
+ * at most `max` lines; a last line that would run on ends in an ellipsis.
+ */
+export function wrapLines(words: string, width: number, measure: (text: string) => number, max = 2): string[] {
+  const lines: string[] = [];
+  let line = "";
+  const all = words.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < all.length; i++) {
+    const next = line ? `${line} ${all[i]}` : all[i]!;
+    if (measure(next) <= width || !line) {
+      line = next;
+      continue;
+    }
+    if (lines.length === max - 1) {
+      // The last line: fill it and end it, however much is left.
+      let rest = `${line} ${all.slice(i).join(" ")}`;
+      while (rest.length > 1 && measure(`${rest}…`) > width) rest = rest.slice(0, -1).trimEnd();
+      lines.push(`${rest.replace(/[\s,.;:–-]+$/, "")}…`);
+      return lines;
+    }
+    lines.push(line);
+    line = all[i]!;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
  * The results as a picture worth passing round, 1200x630 (the size link
  * previews use): the game's art on the right fading into black under the
- * words, the wordmark, the outcome, the score and the stats.
+ * words, the wordmark, the game (and Relaxed, when it was), the outcome and
+ * its line, the score and the stats.
  */
 export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
@@ -130,8 +207,9 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
   context.fillRect(0, 380, 1200, 250);
 
   const font = getComputedStyle(document.body).fontFamily;
+  const setFont = (size: number, weight: number) => (context.font = `${weight} ${size}px ${font}`);
   const text = (words: string, x: number, y: number, size: number, weight: number, colour: string, tracking = 0) => {
-    context.font = `${weight} ${size}px ${font}`;
+    setFont(size, weight);
     context.fillStyle = colour;
     context.letterSpacing = `${tracking}px`;
     context.fillText(words, x, y);
@@ -147,10 +225,18 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
   if (hand) context.drawImage(hand, 64, 58, 40, 40);
   text("Handy", 112, 90, 32, 700, "#fff", -0.3);
   const { stats } = result;
-  text(result.game.title.toUpperCase(), 64, 250, 20, 600, "rgba(235,235,245,0.62)", 1.2);
-  text(stats.outcome, 64, 296, 40, 600, stats.won ? "#30d158" : "#ff453a", -0.4);
-  text(formatScore(stats.score), 60, 400, 112, 700, "#fff", -2.2);
-  if (result.best) text("★ New Best", 66, 446, 26, 600, "#ffd60a");
+  // From the score up: the note's lines, the outcome, the game's name.
+  setFont(24, 400);
+  const note = stats.note ? wrapLines(stats.note, 500, (line) => context.measureText(line).width) : [];
+  const scoreY = note.length ? 420 : 400;
+  const noteY = scoreY - 114 - (note.length - 1) * 32;
+  const outcomeY = note.length ? noteY - 44 : scoreY - 104;
+  const level = result.round && difficultyLabel(result.round.difficulty);
+  text((level ? `${result.game.title} · ${level}` : result.game.title).toUpperCase(), 64, outcomeY - 46, 20, 600, "rgba(235,235,245,0.62)", 1.2);
+  text(stats.outcome, 64, outcomeY, 40, 600, stats.won ? "#30d158" : "#ff453a", -0.4);
+  note.forEach((line, i) => text(line, 64, noteY + i * 32, 24, 400, "rgba(235,235,245,0.62)"));
+  text(formatScore(stats.score), 60, scoreY, 112, 700, "#fff", -2.2);
+  if (result.best) text("★ New Best", 66, scoreY + 46, 26, 600, "#ffd60a");
   let x = 64;
   for (const { label, value } of stats.stats.slice(0, 4)) {
     const width = Math.max(text(value, x, 540, 32, 600, "#fff"), text(label, x, 574, 20, 400, "rgba(235,235,245,0.62)"));

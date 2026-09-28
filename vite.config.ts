@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from "vite";
+import pkg from "./package.json" with { type: "json" };
 
 // A static site: `npm run build` writes dist/, which any static host can serve.
 // `base` is relative so the same build works at a domain root or under a path
@@ -68,6 +69,8 @@ function vendorFiles(): Plugin {
 export default defineConfig({
   base: "./",
   plugins: [vendorFiles()],
+  // Handy's version, for Settings' About (src/app/settings.ts).
+  define: { __HANDY_VERSION__: JSON.stringify(pkg.version) },
   build: { target: "es2022", sourcemap: true, assetsInlineLimit: 0 },
   // The tracking worker is an ES module: it loads MediaPipe's module build.
   worker: { format: "es" },

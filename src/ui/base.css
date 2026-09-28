@@ -429,8 +429,12 @@ svg {
 }
 .toast {
   position: fixed;
+  top: auto;
+  right: auto;
   bottom: var(--margin);
   left: 50%;
+  overflow: visible;
+  color: var(--label);
   z-index: 10;
   display: inline-flex;
   align-items: center;
@@ -462,8 +466,11 @@ svg {
 }
 
 /* --- reduced motion: cross-fade instead of move ---------------------------------- */
+/* The system's prefers-reduced-motion, or the player's own Reduce Motion (Settings):
+   the app sets data-reduce-motion on <html> for either, so the one switch
+   governs every rule nested here. */
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-reduce-motion] {
   *,
   *::before,
   *::after {

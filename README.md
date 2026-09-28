@@ -55,6 +55,21 @@ reload.
 | `R` | Reload |
 | `M` | Mute |
 
+**Settings** — the gear in the corner, or Settings on the pause sheet — has
+the difficulty (Relaxed is slower and gentler, for a first evening or a tired
+arm), the volume, a larger or high-contrast crosshair, how steady the aim is
+held, which camera to use, whether the camera's picture stays in the corner in
+play, and Reduce Motion and Reduce Flashing. Everything is remembered in your
+browser; Forget Saved Aim and Reset Handy clear it.
+
+**Records.** Your best score is kept for each difficulty, and apart for your
+hand and for a mouse or touch screen (which is far easier to aim). The arcade
+shows the one to beat under Play; the results say when you beat it, and by how
+much.
+
+Handy can be installed as an app from the browser (Install Handy, or Add to
+Dock / Add to Home Screen); it opens full screen.
+
 ## Privacy
 
 Hand tracking is Google's MediaPipe, running inside your browser in

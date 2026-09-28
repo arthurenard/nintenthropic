@@ -1,0 +1,396 @@
+/* The Settings sheet (DESIGN.md, Settings): grouped rows on glass, in the
+   manner of the system's own settings. Switches and segmented controls are
+   neutral - white for on and for the choice made - because green means one
+   thing only: your gun is ready. */
+
+.settings {
+  width: min(580px, calc(100vw - 2 * var(--margin)));
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+}
+.settings[open] {
+  display: flex;
+  flex-direction: column;
+}
+.settings-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 12px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 250ms var(--ease);
+}
+/* The rows scroll under the title: a hairline says so. */
+.settings.scrolled .settings-head {
+  border-bottom-color: var(--hairline);
+}
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 24px 24px;
+}
+
+/* --- grouped rows --------------------------------------------------------------------- */
+
+.group + .group {
+  margin-top: 28px;
+}
+.group-title {
+  margin: 0 0 8px;
+  padding: 0 16px;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+.rows {
+  border-radius: var(--r-small);
+  background: rgba(118, 118, 128, 0.14);
+}
+.row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-height: 52px;
+  padding: 8px 16px;
+}
+/* A choice too wide for its row goes under its name, still to the right. */
+.row > .segmented,
+.row > .switch,
+.row > .menu-select {
+  margin-left: auto;
+}
+/* The hairline between rows starts where their words do. */
+.rows > * + *::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: var(--hairline);
+  pointer-events: none;
+}
+.rows > :first-child {
+  border-top-left-radius: var(--r-small);
+  border-top-right-radius: var(--r-small);
+}
+.rows > :last-child {
+  border-bottom-left-radius: var(--r-small);
+  border-bottom-right-radius: var(--r-small);
+}
+.row-label {
+  font-size: 17px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.row-value {
+  color: var(--label-2);
+}
+.group-foot {
+  margin-top: 8px;
+  padding: 0 16px;
+  font-size: 13px;
+  line-height: 1.38;
+  color: var(--label-2);
+}
+.group-foot:empty {
+  display: none;
+}
+
+/* A row that does something when chosen: the whole row is the button. */
+.row-action {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--label);
+  font-size: 17px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 250ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.row-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.row-action:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+.row-action:disabled {
+  color: var(--label-3);
+  cursor: default;
+}
+.row-action:focus-visible {
+  outline-offset: -3px;
+}
+.row-action.danger {
+  color: var(--danger);
+}
+.row-chevron {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--label-3);
+  stroke-width: 2.2;
+}
+
+/* --- a segmented control: the choice's thumb slides between the segments ---------------------- */
+
+.segmented {
+  --count: 2;
+  --index: 0;
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(118, 118, 128, 0.24);
+  isolation: isolate;
+}
+.segmented::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--count));
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.12),
+    0 3px 1px rgba(0, 0, 0, 0.04);
+  transform: translateX(calc(var(--index) * 100%));
+  transition: transform 250ms var(--ease);
+}
+.segmented [role="radio"] {
+  position: relative;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--label);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 250ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+/* Small in look, never in reach: 44 tall to a pointer. */
+.segmented [role="radio"]::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+.segmented [role="radio"][aria-checked="true"] {
+  color: #000;
+}
+.segmented [role="radio"]:not([aria-checked="true"]):hover {
+  color: rgba(255, 255, 255, 0.78);
+}
+.segmented [role="radio"]:focus-visible {
+  outline-offset: 1px;
+}
+
+/* --- a switch ---------------------------------------------------------------------------------------- */
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 51px;
+  height: 31px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(120, 120, 128, 0.32);
+  cursor: pointer;
+  transition: background-color 250ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.15),
+    0 3px 1px rgba(0, 0, 0, 0.06);
+  transition:
+    transform 250ms var(--spring),
+    background-color 250ms var(--ease);
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  inset: -7px -4px;
+}
+.switch[aria-checked="true"] {
+  background: #fff;
+}
+.switch[aria-checked="true"]::before {
+  background: #000;
+  box-shadow: none;
+  transform: translateX(20px);
+}
+
+/* --- the volume ---------------------------------------------------------------------------------------- */
+
+.volume-row {
+  gap: 12px;
+}
+.volume-end {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--label-2);
+}
+.slider {
+  --value: 100%;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #fff var(--value), rgba(120, 120, 128, 0.4) var(--value));
+}
+.slider::-webkit-slider-thumb {
+  width: 28px;
+  height: 28px;
+  margin-top: -12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0.5px 4px rgba(0, 0, 0, 0.12),
+    0 6px 13px rgba(0, 0, 0, 0.12);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(120, 120, 128, 0.4);
+}
+.slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: #fff;
+}
+.slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0.5px 4px rgba(0, 0, 0, 0.12),
+    0 6px 13px rgba(0, 0, 0, 0.12);
+}
+.slider:focus-visible {
+  outline-offset: 6px;
+  border-radius: 999px;
+}
+
+/* --- the camera's menu ------------------------------------------------------------------------------------ */
+
+.menu-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 60%;
+}
+.menu-select select {
+  min-width: 0;
+  max-width: 100%;
+  height: 44px;
+  padding: 0 24px 0 8px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--label-2);
+  font-size: 17px;
+  text-align: right;
+  text-align-last: right;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.menu-select select:hover {
+  color: var(--label);
+}
+.menu-select svg {
+  position: absolute;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--label-2);
+  pointer-events: none;
+}
+
+/* --- Reset's alert ------------------------------------------------------------------------------------------ */
+
+.button.destructive {
+  background: var(--danger);
+  color: #fff;
+}
+.button.destructive:hover:not(:disabled) {
+  background: #ff5f55;
+}
+
+/* --- a narrow window: a full-height sheet from the bottom, choices under their names ---------------------------- */
+
+@media (max-width: 600px) {
+  .settings {
+    width: 100%;
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+    margin: auto 0 0;
+    border-bottom: 0;
+    border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  }
+  .settings-head {
+    padding: 20px 16px 12px;
+  }
+  .settings-body {
+    padding: 8px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .row:has(> .segmented) {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px 14px;
+  }
+  .row > .segmented {
+    width: 100%;
+  }
+  .segmented [role="radio"] {
+    padding: 0 8px;
+  }
+}

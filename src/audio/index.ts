@@ -4,8 +4,9 @@
  *
  * The app:
  *
- *     const audio = await createAudioBus({ muted: stored });   // once, after a user gesture
- *     audio.setMuted(true);                                     // the app stores the choice
+ *     const audio = await createAudioBus({ muted: stored, volume });   // once, after a user gesture
+ *     audio.setMuted(true);                                             // the app stores the choice
+ *     audio.setVolume(0.6);                                             // and this one
  *
  * A game, in its ``load(ctx, onProgress)``:
  *
@@ -34,6 +35,7 @@ export { CUE_NAMES };
 /** An AudioBus that plays nothing: for tests, for a browser without Web Audio, and before sound is allowed. */
 export class NullAudioBus implements AudioEngine {
   private _muted: boolean;
+  private _volume = 1;
   readonly generation: readonly GenerationReport[] = [];
 
   constructor(muted = true) {
@@ -46,6 +48,14 @@ export class NullAudioBus implements AudioEngine {
 
   setMuted(muted: boolean): void {
     this._muted = muted;
+  }
+
+  get volume(): number {
+    return this._volume;
+  }
+
+  setVolume(volume: number): void {
+    this._volume = Math.min(1, Math.max(0, Number.isFinite(volume) ? volume : 0));
   }
 
   play(_cue: string, _options?: CueOptions): void {}
@@ -72,17 +82,22 @@ export class NullAudioBus implements AudioEngine {
  * a silent bus. The interface's sounds start synthesising at once; a game's
  * pack when the game asks for it (loadSoundPack) or first plays one of them.
  */
-export async function createAudioBus(options: { muted: boolean }): Promise<AudioEngine> {
+export async function createAudioBus(options: { muted: boolean; volume?: number }): Promise<AudioEngine> {
   const scope = globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
   const Context = scope.AudioContext ?? scope.webkitAudioContext;
-  if (!Context) return new NullAudioBus(options.muted);
+  const silent = (): AudioEngine => {
+    const bus = new NullAudioBus(options.muted);
+    bus.setVolume(options.volume ?? 1);
+    return bus;
+  };
+  if (!Context) return silent();
   try {
     const engine = new WebAudioEngine(new Context({ latencyHint: "interactive" }), options);
     void engine.load("core");
     return engine;
   } catch (error) {
     console.warn("Handy audio: Web Audio is unavailable, playing silently", error);
-    return new NullAudioBus(options.muted);
+    return silent();
   }
 }
 
