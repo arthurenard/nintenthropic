@@ -2,7 +2,9 @@
  * The camera preview: a small rounded picture-in-picture, like FaceTime's,
  * mirrored so it moves the way the player does, with their hand drawn over it
  * in white - soft round joints, not debug colours. It is larger during the
- * aim check, where seeing your hand matters, and small in play.
+ * aim check, where seeing your hand matters, and small in play - or, if the
+ * player turns Show Camera in Play off, gone in play until the hand is lost
+ * (the `lost` class brings it back, whatever the setting).
  */
 import type { HandFrame } from "../tracking/types";
 import { $ } from "../ui/dom";
@@ -23,6 +25,15 @@ export class Pip {
   private readonly canvas = $<HTMLCanvasElement>("hand-graph");
   private readonly context = this.canvas.getContext("2d")!;
   private lostSince: number | null = null;
+
+  /** Shown in play as well as in the aim check (Settings, Show Camera in Play). */
+  get showInPlay(): boolean {
+    return this.box.dataset.inPlay !== "hidden";
+  }
+
+  set showInPlay(show: boolean) {
+    this.box.dataset.inPlay = show ? "shown" : "hidden";
+  }
 
   /** Shows the preview: with the camera's picture, or the hand alone (a scripted hand). */
   show(withPicture: boolean): void {

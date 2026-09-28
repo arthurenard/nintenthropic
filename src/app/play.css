@@ -530,6 +530,15 @@
   opacity: 0;
   transition: opacity 250ms var(--ease);
 }
+/* Show Camera in Play turned off: the preview steps aside once play begins,
+   and comes back the moment the hand is lost. */
+.game[data-phase="play"] #pip[data-in-play="hidden"]:not(.lost) {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 250ms var(--ease),
+    visibility 0s linear 250ms;
+}
 .pip video {
   display: block;
   width: 100%;
@@ -823,9 +832,9 @@
   }
 }
 
-/* --- reduced motion: cross-fade instead of move -------------------------------------------------------------- */
+/* --- reduced motion: cross-fade instead of move (the system's or the player's: see base.css) ------------------------ */
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-reduce-motion] {
   .check-words.fresh,
   .score span.pop,
   .burst,

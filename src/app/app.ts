@@ -10,25 +10,42 @@ import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
 import type { EngineHost } from "../engine/host";
 import { seededRandom } from "../engine/random";
 import { Samples } from "../engine/stats";
+import { gpuName } from "../engine/tier";
 import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
 import { COMING_SOON, GAMES } from "../games/index";
+import { AimController } from "../input/aim";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
 import { MouseInput, TouchInput } from "../input/pointer";
 import type { ScriptedHands } from "../input/script";
-import { CameraError, cameraPermission, openCamera, type Camera, type CameraTrouble } from "../tracking/camera";
+import { CameraError, cameraPermission, chooseCamera, chosenCamera, openCamera, remembered, type Camera, type CameraTrouble } from "../tracking/camera";
 import { ModelError } from "../tracking/errors";
 import type { Tracker } from "../tracking/tracker";
 import type { HandSource } from "../tracking/types";
 import { $, announce, element, icon, setText, toast } from "../ui/dom";
+import { formatScore } from "../ui/format";
 import { AimCheckView } from "./aimCheckView";
 import { Crosshair } from "./crosshair";
 import { Hud } from "./hud";
 import { watchKonami } from "./konami";
 import { Pip } from "./pip";
 import { Yielding, type Spot } from "./yielding";
-import { prefs } from "./prefs";
-import { shareResult, showResults, type Result } from "./results";
+import {
+  DEFAULT_PREFERENCES,
+  controlClass,
+  forgetEverything,
+  forgetSavedAims,
+  hasSavedAim,
+  loadPreferences,
+  prefs,
+  readBest,
+  savePreferences,
+  tipsSeen,
+  type PersistentSet,
+  type Preferences,
+} from "./prefs";
+import { difficultyLabel, recordRound, shareResult, showResults, type Result } from "./results";
+import { SettingsSheet, VERSION, type SettingsHost, type SystemFacts } from "./settings";
 import { LoadingSheet, closeSheet, closeSheets, openSheet, showTrouble, type Fix, type Trouble } from "./sheets";
 
 export interface AppOptions {
@@ -74,12 +91,18 @@ const tagged = <T>(part: Stage["part"], promise: Promise<T>): Promise<T> =>
     throw new Stage(part, error);
   });
 
+type Sound = Pick<AudioEngine, "play" | "loop" | "setFilter" | "setMuted" | "muted" | "setVolume" | "volume">;
+
 /** Silence, until the sound engine arrives with the first gesture. */
-function silence(muted: boolean): Pick<AudioEngine, "play" | "loop" | "setFilter" | "setMuted" | "muted"> {
+function silence(muted: boolean): Sound {
   let quiet = muted;
+  let level = 1;
   return {
     get muted() {
       return quiet;
+    },
+    get volume() {
+      return level;
     },
     play() {},
     loop: () => () => {},
@@ -87,20 +110,13 @@ function silence(muted: boolean): Pick<AudioEngine, "play" | "loop" | "setFilter
     setMuted(value: boolean) {
       quiet = value;
     },
+    setVolume(value: number) {
+      level = value;
+    },
   };
 }
 
 const touchOnly = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
-
-/** Is any aim saved in this browser? (Which camera it is for is known only once one opens.) */
-function anySavedAim(): boolean {
-  try {
-    for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i)?.startsWith("handy.aim.")) return true;
-  } catch {
-    // no storage, nothing saved
-  }
-  return false;
-}
 
 export class App {
   readonly hud: Hud;
@@ -110,8 +126,12 @@ export class App {
   /** How the last aim check ended, for the tests. */
   private lastCheck: { score: number | null; shots: number; ended: "ready" | "anyway" } | null = null;
   private readonly settings: Settings;
+  /** The player's choices in Settings, as saved; `settings` is what the game reads. */
+  private readonly preferences: Preferences = loadPreferences();
+  private readonly tips: PersistentSet = tipsSeen();
+  private readonly settingsSheet: SettingsSheet;
   private host: EngineHost | null = null;
-  private audio: Pick<AudioEngine, "play" | "loop" | "setFilter" | "setMuted" | "muted"> = silence(prefs.muted);
+  private audio: Sound = silence(prefs.muted);
   private audioReady: Promise<void> | null = null;
   private tracker: Tracker | null = null;
   private camera: Camera | null = null;
@@ -129,15 +149,16 @@ export class App {
   constructor(private readonly options: AppOptions = {}) {
     this.settings = {
       duration: 60,
-      reducedMotion: this.motion.matches,
-      reducedFlashing: false,
-      difficulty: "standard",
+      reducedMotion: this.preferences.reduceMotion ?? this.motion.matches,
+      reducedFlashing: this.preferences.reduceFlashing,
+      difficulty: this.preferences.difficulty,
       unlocks: prefs.unlocks,
-      tipsSeen: new Set(),
+      tipsSeen: this.tips,
     };
-    this.motion.addEventListener("change", () => (this.settings.reducedMotion = this.motion.matches));
+    // Reduce Motion follows the system until the player chooses for themselves.
+    this.motion.addEventListener("change", () => this.applyMotion());
     this.hud = new Hud(() => this.settings.reducedMotion);
-    this.hud.onGameOver = (stats) => this.gameOver(stats);
+    this.hud.onGameOver = (stats) => this.roundOver(stats);
     // A fallen player has no gun: a crosshair over the death scene read as
     // one still to be fired.
     this.hud.onPlayerDown = () => {
@@ -145,6 +166,8 @@ export class App {
       this.crosshair.clear();
     };
     this.control = options.scripted ? "hand" : touchOnly() && prefs.control === "mouse" ? "touch" : prefs.control;
+    this.settingsSheet = new SettingsSheet(this.settingsHost());
+    this.applyPreferences();
     this.wire();
   }
 
@@ -193,8 +216,21 @@ export class App {
     label.replaceChildren(icon(hand ? "hand" : "mouse"), hand ? "Finger Pistol" : this.control === "touch" ? "Touch" : "Mouse or Trackpad");
     setText("switch-control", hand ? (touchOnly() ? "Use Touch" : "Use Mouse or Trackpad") : "Use Finger Pistol");
     $("switch-control").hidden = !!this.options.scripted;
-    $("adjust").hidden = !(hand && anySavedAim());
+    $("adjust").hidden = !(hand && hasSavedAim());
     $<HTMLButtonElement>("play").disabled = this.busy;
+    this.syncDifficulty();
+    this.renderBest();
+  }
+
+  /** The best to beat with this control at this difficulty, under the Play button; nothing before there is one. */
+  private renderBest(): void {
+    const difficulty = this.preferences.difficulty;
+    const best = readBest(this.entry.id, difficulty, controlClass(this.control));
+    const line = $("home-best");
+    line.hidden = !best;
+    if (!best) return;
+    const level = difficultyLabel(difficulty);
+    setText(line, `${level ? `Your best on ${level}` : "Your best"}: ${formatScore(best.score)}${best.outcome ? ` · ${best.outcome}` : ""}`);
   }
 
   private setControl(control: InputKind): void {
@@ -213,10 +249,12 @@ export class App {
    * Its code is fetched then too: the first screen does not wait for it.
    */
   private wakeAudio(): Promise<void> {
-    this.audioReady ??= import("../audio/index").then(({ createAudioBus }) => createAudioBus({ muted: this.muted })).then(
+    const volume = () => this.preferences.volume;
+    this.audioReady ??= import("../audio/index").then(({ createAudioBus }) => createAudioBus({ muted: this.muted, volume: volume() })).then(
       (audio) => {
         this.audio = audio;
         audio.setMuted(this.muted);
+        audio.setVolume(volume());
       },
       (error: unknown) => console.warn("Sound is unavailable.", error),
     );
@@ -736,12 +774,21 @@ export class App {
     $("switch-control").onclick = () =>
       this.setControl(this.control === "hand" ? (touchOnly() ? "touch" : "mouse") : "hand");
     $("about").onclick = () => openSheet("privacy");
+    $("settings-open").onclick = () => this.settingsSheet.show("home");
+    $("pause-settings").onclick = () => this.settingsSheet.show("pause");
     $("privacy-done").onclick = () => closeSheet("privacy");
     for (const id of ["mute", "sheet-mute"]) $(id).onclick = () => this.setMuted(!this.muted);
     $("pause").onclick = () => this.pause();
     $("resume").onclick = () => this.resume();
-    $("restart").onclick = () => this.restart();
-    $("adjust-aim").onclick = () => this.restart(true);
+    // A new round from the pause sheet plays at the difficulty chosen now.
+    $("restart").onclick = () => {
+      this.syncDifficulty(true);
+      this.restart();
+    };
+    $("adjust-aim").onclick = () => {
+      this.syncDifficulty(true);
+      this.restart(true);
+    };
     $("choose-game").onclick = () => this.back();
     $("choose").onclick = () => this.back();
     $("again").onclick = () => this.restart();
@@ -823,6 +870,124 @@ export class App {
     this.audio.play("ui_confirm");
   }
 
+  // --- settings, records and preferences ----------------------------------------------------
+
+  /** Puts the player's settings into effect, everywhere one is read. */
+  private applyPreferences(): void {
+    const chosen = this.preferences;
+    this.audio.setVolume(chosen.volume);
+    this.crosshair.style = { ...chosen.crosshair };
+    AimController.steadiness = chosen.steadiness;
+    this.session?.hand?.controller.setSteadiness(chosen.steadiness);
+    this.pip.showInPlay = chosen.cameraInPlay;
+    this.settings.reducedFlashing = chosen.reduceFlashing;
+    this.applyMotion();
+    this.syncDifficulty();
+  }
+
+  /** Reduced motion, the player's or else the system's, for the page's code and its styles alike. */
+  private applyMotion(): void {
+    const reduce = this.preferences.reduceMotion ?? this.motion.matches;
+    this.settings.reducedMotion = reduce;
+    document.documentElement.toggleAttribute("data-reduce-motion", reduce);
+  }
+
+  /**
+   * The difficulty the game reads at start(). While a round is in play it
+   * stays the one that round began with, so its record is kept under the
+   * difficulty it was played at; a new choice takes over when the round ends
+   * or a new one begins (`now`).
+   */
+  private syncDifficulty(now = false): void {
+    if (now || this.session?.phase !== "play") this.settings.difficulty = this.preferences.difficulty;
+  }
+
+  /** The game has ended: its record is weighed and kept at once, then the results follow. */
+  private roundOver(stats: GameStats): void {
+    const session = this.session;
+    if (session && session.phase !== "over") {
+      recordRound(session.entry, stats, { difficulty: this.settings.difficulty, control: controlClass(session.control) });
+    }
+    this.gameOver(stats);
+    this.syncDifficulty();
+  }
+
+  private settingsHost(): SettingsHost {
+    return {
+      preferences: this.preferences,
+      systemReducesMotion: () => this.motion.matches,
+      changed: () => {
+        savePreferences(this.preferences);
+        this.applyPreferences();
+        if (document.body.dataset.view === "home") this.renderHome();
+      },
+      audition: () => this.audio.play("ui_tap"),
+      currentCamera: () => chosenCamera() ?? this.camera?.deviceId ?? remembered(),
+      chooseCamera: (deviceId) => {
+        chooseCamera(deviceId);
+        // At the arcade the choice is for the next Play: a camera still open
+        // from before is let go, so that one opens the chosen camera.
+        if (!this.session && this.camera && this.camera.deviceId !== deviceId) this.releaseCamera();
+      },
+      hasSavedAim: () => hasSavedAim(),
+      forgetSavedAim: () => {
+        forgetSavedAims();
+        this.renderHome();
+      },
+      reset: () => this.resetEverything(),
+      systemInfo: async () => this.systemFacts(),
+    };
+  }
+
+  /** Reset Handy: everything it keeps is forgotten, and it starts again as on the first visit. */
+  private resetEverything(): void {
+    if (this.session) this.back();
+    closeSheets();
+    this.releaseCamera();
+    Object.assign(this.preferences, { ...DEFAULT_PREFERENCES, crosshair: { ...DEFAULT_PREFERENCES.crosshair } });
+    this.tips.forgetInMemory();
+    this.settings.unlocks.clear();
+    this.control = "hand";
+    this.setMuted(false);
+    this.applyPreferences();
+    // Last, so nothing written on the way survives it.
+    forgetEverything();
+    this.renderHome();
+    this.showView("welcome");
+    $("get-started").focus();
+  }
+
+  /** What a bug report needs to know: the browser, the graphics, the timings. Nothing personal. */
+  private systemFacts(): SystemFacts {
+    const state = this.snapshot();
+    let gpu = state.quality?.gpu ?? null;
+    if (!gpu) {
+      // No game yet: ask a throwaway context, and let it go at once.
+      const gl = document.createElement("canvas").getContext("webgl2") ?? document.createElement("canvas").getContext("webgl");
+      if (gl) {
+        gpu = gpuName(gl);
+        gl.getExtension("WEBGL_lose_context")?.loseContext();
+      }
+    }
+    const frames = state.frames && state.frames.frames > 0 ? state.frames : null;
+    return {
+      version: VERSION,
+      userAgent: navigator.userAgent,
+      gpu,
+      tracker: state.tracker ? { where: state.tracker.where, delegate: state.tracker.delegate } : null,
+      frames: frames ? { interval: frames.interval, work: frames.work } : null,
+      latency: state.latency.p50 > 0 ? state.latency : null,
+      quality: state.quality ? { tier: state.quality.tier, scale: state.quality.scale } : null,
+      screen: {
+        width: screen.width,
+        height: screen.height,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        pixelRatio: window.devicePixelRatio || 1,
+      },
+    };
+  }
+
   // --- for the tests and the performance report -----------------------------------------------
 
   /** A snapshot of the app's state (dev and test builds read it). */
@@ -844,6 +1009,14 @@ export class App {
       latency: this.latency.summary(),
       quality: this.host ? { ...this.host.quality, gpu: this.host.gpu } : null,
       unlocks: [...this.settings.unlocks],
+      // What the game reads, and what the player chose.
+      difficulty: this.settings.difficulty,
+      reducedMotion: this.settings.reducedMotion,
+      reducedFlashing: this.settings.reducedFlashing,
+      tipsSeen: [...this.settings.tipsSeen],
+      preferences: { ...this.preferences, crosshair: { ...this.preferences.crosshair } },
+      smoothing: this.session?.hand?.controller.smoothing ?? null,
+      showCameraInPlay: this.pip.showInPlay,
     };
   }
 

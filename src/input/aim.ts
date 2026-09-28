@@ -36,6 +36,26 @@ export interface AimReading {
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
 
+/** The One Euro filter's two settings (see filter.ts). */
+export interface Smoothing {
+  minCutoff: number;
+  beta: number;
+}
+
+/**
+ * The player's Aim Steadiness, as the filter's settings. Balanced is the
+ * desktop's, tuned in play; Steady holds a shaky hand still at the cost of a
+ * little lag, Responsive follows quick moves closely and trembles a little
+ * more.
+ */
+export const STEADINESS = {
+  responsive: { minCutoff: 2.2, beta: 1.2 },
+  balanced: { minCutoff: 1.2, beta: 0.8 },
+  steady: { minCutoff: 0.6, beta: 0.5 },
+} as const satisfies Record<string, Smoothing>;
+
+export type Steadiness = keyof typeof STEADINESS;
+
 export interface AimOptions {
   fireAbove?: number;
   armBelow?: number;
@@ -52,6 +72,12 @@ export interface AimOptions {
  * wobbling on either of them from firing twice.
  */
 export class AimController {
+  /**
+   * The steadiness a new controller starts with, unless given its own
+   * smoothing: the player's, which the app sets from their settings.
+   */
+  static steadiness: Steadiness = "balanced";
+
   /**
    * How long the hand may vanish, in seconds, before the trigger forgets its
    * state. Trackers drop a frame now and then, and a hand is likeliest to be
@@ -76,12 +102,24 @@ export class AimController {
     this.fireAbove = options.fireAbove ?? 0.5;
     this.armBelow = options.armBelow ?? 0.3;
     if (this.armBelow >= this.fireAbove) throw new RangeError("armBelow must be under fireAbove to give hysteresis");
-    this.filter = new PointFilter(options.minCutoff ?? 1.2, options.beta ?? 0.8);
+    const smoothing = STEADINESS[AimController.steadiness];
+    this.filter = new PointFilter(options.minCutoff ?? smoothing.minCutoff, options.beta ?? smoothing.beta);
     this.mapping = options.mapping ?? DEFAULT_MAPPING;
   }
 
   get currentMapping(): Matrix {
     return this.mapping;
+  }
+
+  /** The filter's settings, for the tests. */
+  get smoothing(): Smoothing {
+    return { minCutoff: this.filter.minCutoff, beta: this.filter.beta };
+  }
+
+  /** The player changed their Aim Steadiness: it applies from the next frame, with no jump. */
+  setSteadiness(steadiness: Steadiness): void {
+    const { minCutoff, beta } = STEADINESS[steadiness];
+    this.filter.tune(minCutoff, beta);
   }
 
   /** A new aim fit must not interpolate from the previous mapping. */

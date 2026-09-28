@@ -61,8 +61,26 @@ export function toast(message: string, options: { icon?: string; tone?: "gold" }
   node.replaceChildren(...(options.icon ? [icon(options.icon)] : []), message);
   void node.offsetWidth; // restart its animation
   node.hidden = false;
+  float(node, true);
   window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (node.hidden = true), 4000);
+  toastTimer = window.setTimeout(() => {
+    node.hidden = true;
+    float(node, false);
+  }, 4000);
+}
+
+/**
+ * A popover floats over any sheet that is open (the top layer), so a toast
+ * said from inside Settings is seen above it. Shown again, it goes on top.
+ */
+function float(node: HTMLElement, shown: boolean): void {
+  if (typeof node.showPopover !== "function") return;
+  try {
+    if (node.matches(":popover-open")) node.hidePopover();
+    if (shown) node.showPopover();
+  } catch {
+    // Not a popover here: it shows in the page as before.
+  }
 }
 
 export const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;

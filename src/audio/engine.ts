@@ -5,7 +5,7 @@
  *   voices ─► sfx bus ──┐
  *   voices ─► world bus ├─► muffle (low-pass) ─► duck ─┐
  *   reverb return ──────┘                              │
- *   voices ─► ui bus ──────────────────────────────────┼─► master (mute) ─► limiter ─► soft clip ─► speakers
+ *   voices ─► ui bus ──────────────────────────────────┼─► master (volume, mute) ─► limiter ─► soft clip ─► speakers
  *   heartbeat, death ─► self bus ──────────────────────┘
  *
  * A voice is one take of a cue: its source, the air's low-pass for its
@@ -35,6 +35,7 @@ import {
   slowmoMix,
   travelTime,
   variedRate,
+  volumeGain,
 } from "./routing";
 import type { AudioEngine } from "./types";
 
@@ -92,6 +93,7 @@ export class WebAudioEngine implements AudioEngine {
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   private nextId = 1;
   private _muted: boolean;
+  private _volume: number;
   private closed = false;
   private readonly wake = (): void => this.resumeIfWanted();
   private readonly onVisibility = (): void => {
@@ -99,13 +101,14 @@ export class WebAudioEngine implements AudioEngine {
     else this.resumeIfWanted();
   };
 
-  constructor(ctx: AudioContext, options: { muted: boolean; seed?: number; workers?: number }) {
+  constructor(ctx: AudioContext, options: { muted: boolean; volume?: number; seed?: number; workers?: number }) {
     this.ctx = ctx;
     this._muted = options.muted;
+    this._volume = clamp(options.volume ?? 1, 0, 1);
     this.library = new SoundLibrary(ctx, options.seed ?? 1, options.workers);
 
     this.master = ctx.createGain();
-    this.master.gain.value = options.muted ? 0 : MIX_GAIN;
+    this.master.gain.value = options.muted ? 0 : this.level;
     // The limiter: fast and hard above −1.5 dBFS, so a single shot passes
     // untouched (its transient is the point) and only a big wave's pile-up
     // of shots is caught, rather than clipped.
@@ -189,9 +192,34 @@ export class WebAudioEngine implements AudioEngine {
       }, 150);
     } else {
       this.resumeIfWanted();
-      this.master.gain.setTargetAtTime(MIX_GAIN, now, 0.02);
+      this.master.gain.setTargetAtTime(this.level, now, 0.02);
       this.applyFilters();
     }
+  }
+
+  get volume(): number {
+    return this._volume;
+  }
+
+  /**
+   * The master volume, 0..1 as the slider sets it (the app remembers it).
+   * Apart from mute: a muted engine keeps its volume for when it is unmuted.
+   * Glides over a few milliseconds, so dragging the slider never clicks.
+   */
+  setVolume(volume: number): void {
+    const next = clamp(volume, 0, 1);
+    if (this.closed || next === this._volume) return;
+    this._volume = next;
+    if (this._muted) return;
+    const now = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(now);
+    this.master.gain.setValueAtTime(this.master.gain.value, now);
+    this.master.gain.setTargetAtTime(this.level, now, 0.02);
+  }
+
+  /** The master gain when not muted: the mix's headroom times the volume. */
+  private get level(): number {
+    return MIX_GAIN * volumeGain(this._volume);
   }
 
   /** Synthesise a pack's sounds now (a game's ``load`` calls this through loadSoundPack). */
