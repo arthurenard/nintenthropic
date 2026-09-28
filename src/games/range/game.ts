@@ -130,7 +130,7 @@ export class TestRange implements Game {
       hit: (id) => this.knock(id),
       miss: () => {},
       done: () => {
-        this.lit = null;
+        stage.light(null);
         this.standAll();
       },
     };
