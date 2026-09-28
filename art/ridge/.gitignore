@@ -1,0 +1,6 @@
+# Build products: regenerate with the build scripts (the scripts are the source of truth)
+build/
+_cache/
+*.blend
+*.blend1
+__pycache__/
