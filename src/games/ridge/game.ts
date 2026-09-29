@@ -14,11 +14,12 @@ import { Mission, type AlertCause, type MissionListener, type NearPass } from ".
 import { fallCard } from "./rules/notes";
 import type { Award, StageBonuses } from "./rules/scoring";
 import { HIP_SPREAD } from "./rules/tuning";
-import type { Ending, HitPart, HostileRole, Landing, SecretId, ShotTarget } from "./rules/types";
+import type { Ending, HitPart, HostileRole, Landing, Plan, SecretId, ShotTarget } from "./rules/types";
 import { ALL_TIPS, HintLine, innocentWord, reloadHint, tipText, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type RidgeAssets } from "./world/assets";
 import { Cast } from "./world/cast";
+import { seenStretch } from "./world/duckPath";
 import { Effects } from "./world/effects";
 import { Foreground } from "./world/foreground";
 import { DAWN } from "./world/grade";
@@ -114,6 +115,8 @@ export class OverwatchRidge implements Game, MissionListener {
   private hud!: HudSink;
   private assets!: RidgeAssets;
   private stage!: Stage;
+  /** The plan the missions are played on (see `plan`). */
+  private seenPlan: Plan | null = null;
   private camera!: PlayerCamera;
   /** The view without the scope: what the hand aims in, and what the aim check is judged through. */
   private readonly wide = new PerspectiveCamera(46, 16 / 10, 0.25, 16000);
@@ -264,9 +267,26 @@ export class OverwatchRidge implements Game, MissionListener {
     onProgress(1);
   }
 
+  /**
+   * The valley's plan, with the duck swimming only the stretch of its river
+   * the scope can see: the far bend lies behind the bank, and the duck's slow
+   * swim would spend the round there (see duckPath.ts).
+   */
+  private get plan(): Plan {
+    if (!this.seenPlan) {
+      const valley = this.assets.valley;
+      const { eye } = valley;
+      const ground = this.stage.heightfield;
+      // A duck sits a hand above the water: seen if the eye reaches its middle and its top.
+      const seen = (p: { x: number; y: number; z: number }) => [0.12, 0.2].every((h) => ground.segmentHit(eye.x, eye.y, eye.z, p.x, p.y + h, p.z) < 0);
+      this.seenPlan = { ...valley.plan, duck: seenStretch(valley.plan.duck, seen) };
+    }
+    return this.seenPlan;
+  }
+
   private newMission(): void {
     this.cast?.reset();
-    this.mission = new Mission({ random: this.ctx.random, plan: this.assets.valley.plan, listener: this, difficulty: this.ctx.settings.difficulty });
+    this.mission = new Mission({ random: this.ctx.random, plan: this.plan, listener: this, difficulty: this.ctx.settings.difficulty });
     this.mission.health.immortal = this.options.immortal === true;
   }
 
