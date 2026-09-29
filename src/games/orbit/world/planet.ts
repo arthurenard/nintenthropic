@@ -66,6 +66,15 @@ export function starsCube(renderer: WebGLRenderer, equirect: Texture): WebGLCube
 }
 
 const f = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
+
+/**
+ * The "HI" of town lights (secret 8) is drawn several times smaller than the
+ * art's map has it, through a lens (see hiLens in the shader) whose flat part
+ * reaches this far, in degrees of the planet, from the letters' centre as
+ * seen, and which eases out to the plain map by the edge.
+ */
+const HI_LENS_CORE_DEG = 0.35;
+const HI_LENS_EDGE_DEG = 2.5;
 const v3 = (a: readonly number[]) => `vec3(${a.map(f).join(", ")})`;
 
 const VERTEX = /* glsl */ `
@@ -96,6 +105,7 @@ uniform vec4 uLightning;
 uniform vec4 uHi;
 uniform mat3 uNightMap;
 uniform float uNightScale;
+uniform vec4 uHiLens;
 uniform float uSunDisc;
 uniform float uRaw;
 uniform sampler2D tAlbedo;
@@ -178,6 +188,26 @@ MapAt mapAt(vec3 n, float shift) {
   m.dx = vec2(dFdx(x) * c, dFdx(uv.y));
   m.dy = vec2(dFdy(x) * c, dFdy(uv.y));
   return m;
+}
+// The "HI" (secret 8) is small: the night map is read through a lens that
+// takes the patch around the letters (uHiLens: their place in the map, and
+// how many times smaller they are drawn; 1 is no lens) down in size, easing
+// back over a few degrees to the plain map, so no edge shows. The angle from
+// the letters grows by (scale - 1) times the eased distance: never a fold.
+const float HI_LENS_CORE = ${f(HI_LENS_CORE_DEG * Math.PI / 180)};
+const float HI_LENS_EDGE = ${f(HI_LENS_EDGE_DEG * Math.PI / 180)};
+vec3 hiLens(vec3 n) {
+  if (uHiLens.w <= 1.0) return n;
+  n = normalize(n);
+  vec3 h = uHiLens.xyz;
+  float c = dot(n, h);
+  vec3 side = n - h * c;
+  float sn = length(side);
+  float rho = atan(sn, c);
+  float u = clamp((rho - HI_LENS_CORE) / (HI_LENS_EDGE - HI_LENS_CORE), 0.0, 1.0);
+  float eased = min(rho, HI_LENS_CORE) + (HI_LENS_EDGE - HI_LENS_CORE) * (u - u * u * u + 0.5 * u * u * u * u);
+  float theta = rho + (uHiLens.w - 1.0) * eased;
+  return h * cos(theta) + side / max(sn, 1e-6) * sin(theta);
 }
 vec4 sampleMap(sampler2D t, MapAt m) { return textureGrad(t, m.uv, m.dx, m.dy); }
 vec4 sampleMapAt(sampler2D t, MapAt m, vec2 offset) { return textureGrad(t, m.uv + offset, m.dx, m.dy); }
@@ -370,7 +400,7 @@ void main() {
   float water = sampleMap(tWater, mg).r;
   // The lights: the night map read through the turn the game chose for
   // this night (a lit country under the view; none by day).
-  vec3 lights = sampleMap(tNight, mapAt(uNightMap * ng, 0.0)).rgb;
+  vec3 lights = sampleMap(tNight, mapAt(hiLens(uNightMap * ng), 0.0)).rgb;
   // The detail under the map's pixel: terrain and water at two scales, streets at a finer one.
   Tri tgd = triAt(xg);
   vec4 dg1 = detailAt(tgd, 1.0);
@@ -451,7 +481,7 @@ void main() {
     Lg += water * (0.02 + 0.98 * pow(1.0 - ndv, 5.0)) * SUN_E * vec3(0.02, 0.035, 0.07) * clamp(muG + 0.1, 0.0, 1.0);
     // City lights in the dark, broken into streets and blocks; the "HI" blinks back when asked.
     float dark = smoothstep(0.06, -0.08, muG);
-    float hiBoost = 1.0 + uHi.w * exp(-pow(acos(clamp(dot(ng, uHi.xyz), -1.0, 1.0)) * R / 100.0, 2.0));
+    float hiBoost = 1.0 + uHi.w * exp(-pow(acos(clamp(dot(ng, uHi.xyz), -1.0, 1.0)) * R / 45.0, 2.0));
     // Broken hard into streets and blocks (mean 1), evened out where the
     // streets are finer than a pixel. Not in the environment light: at the
     // night's exposure they would light the station, which cities cannot.
@@ -576,6 +606,7 @@ export class PlanetSky {
         uHi: { value: new Vector4(0, 1, 0, 0) },
         uNightMap: { value: new Matrix3() },
         uNightScale: { value: 1 },
+        uHiLens: { value: new Vector4(0, 1, 0, 1) },
         uSunDisc: { value: 40 },
         uRaw: { value: 0 },
         tAlbedo: { value: textures.albedo },

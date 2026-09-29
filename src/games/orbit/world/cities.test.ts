@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lightAround, pickLitRegions } from "./cities";
+import { HI_EVERY, isHiNight, lightAround, otherCountry, pickLitRegions } from "./cities";
 
 /** A dark 96 × 48 world with bright patches at the given (lon, lat) degrees. */
 function world(patches: [number, number, number][]): Float32Array {
@@ -68,5 +68,21 @@ describe("the night's lit regions", () => {
 
   it("finds nothing in the dark", () => {
     expect(pickLitRegions(new Float32Array(96 * 48), 96, 48, 3)).toEqual([]);
+  });
+});
+
+describe("which nights show the HI", () => {
+  it("is one night in three, never the first", () => {
+    const nights = Array.from({ length: 12 }, (_, n) => isHiNight(n));
+    expect(nights.filter(Boolean).length).toBe(12 / HI_EVERY);
+    expect(nights[0]).toBe(false);
+    expect(nights[1]).toBe(false);
+    expect(nights[2]).toBe(true);
+    expect(nights.slice(3, 6)).toEqual([false, false, true]);
+  });
+
+  it("gives the other nights one country each, in order, skipping the HI's nights", () => {
+    const others = Array.from({ length: 12 }, (_, n) => n).filter((n) => !isHiNight(n));
+    expect(others.map(otherCountry)).toEqual(others.map((_, i) => i));
   });
 });

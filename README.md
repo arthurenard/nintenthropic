@@ -6,26 +6,24 @@ webcam, and never sends the picture anywhere.
 
 ![Dust Creek at golden hour](public/assets/western/poster.webp)
 
-## High Noon
+## The games
 
-Golden hour in Dust Creek, and the Carver gang comes out of every window,
-doorway and barrel. They lean out, aim — watch for the glint of the sun on a
-barrel — and fire back. Clear a wave and the next rides in: runners crossing
-the street, dynamite you can shoot out of the air, riflemen on the roofs, and
-Black Jack Carver himself.
+- **High Noon.** Golden hour in Dust Creek, and the Carver gang comes out of
+  every window, doorway and barrel: runners, dynamite you can shoot out of the
+  air, riflemen on the roofs, and Black Jack Carver himself. Six shots; spare
+  the townsfolk.
+- **Dead of Night.** Midnight at a gas station on Route 9, and the dead walk
+  out of the fog into your flashlight. Eight rounds and a barricade.
+- **Orbital Decay.** Four hundred kilometres up, in a space station's glass
+  cupola, with a cloud of wreckage coming at the windows. The laser never runs
+  out, but it heats; seven panes stand between you and the vacuum.
+- **Overwatch Ridge.** First light over an alpine valley, a bolt-action rifle
+  with five rounds and a six-times scope. Range, drop and wind are yours to
+  read.
 
-- **Six shots.** Point off the screen to reload.
-- **Take cover by being quick.** Get hit and the picture bleeds red at the
-  edges; stay out of the line of fire for a few seconds and you recover. Three
-  hits in quick succession, and it's over.
-- **Spare the townsfolk.** The barber, the bartender and the undertaker have no
-  quarrel with you.
-- **Eight secrets** hide in Dust Creek. Try the bell.
-
-More games — Dead of Night, Orbital Decay and Overwatch Ridge — are on their
-way, and already in the arcade's row as Coming Soon. In Overwatch Ridge you
-will close one eye to look through the scope (or hold Shift, or the right
-mouse button).
+Get hit and the picture bleeds red at the edges; a few seconds unhurt and you
+recover (in Orbital Decay the glass takes the damage, and a pane that fails
+ends the game). Each game hides **eight secrets**. In High Noon, try the bell.
 
 ## Play
 
@@ -47,25 +45,44 @@ fingertip. Fold your thumb down to fire, raise it to cock again. If your
 hand leaves the camera's view mid-round, the round waits for it and counts you
 back in; after a fall, fold your thumb on the results to play again.
 
-**Before every game, a quick aim check.** You warm up on bottles along the
-street. It ends by itself as soon as 95% of your shots would land where you
-aim — about six shots the first time, three when Handy remembers your aim.
+**Reload and vent.** Point past the edge of the screen (a hand swung out of
+the picture counts): that reloads in High Noon, Dead of Night and Overwatch
+Ridge, and vents the overheated laser in Orbital Decay. In Overwatch Ridge,
+raise your thumb after each shot to work the bolt.
 
-**No camera?** Choose **Use Mouse or Trackpad**: click to fire, right-click to
-reload.
+**The scope.** Overwatch Ridge alone has one: **close one eye**, or hold
+**Shift** or the **right mouse button**, or use the **Scope** button in the
+bottom-left corner of a touch screen, and the view jumps to six times. Your
+hand then pans it a quarter as fast, so a tremor is a quarter as big.
+Pointing off the screen reloads only while you are not scoped.
+
+**Before every game, a quick aim check.** You warm up on the game's own
+targets (bottles along the street in High Noon, mason jars in Dead of Night,
+the station's running lights in Orbital Decay, steel plates on the range in
+Overwatch Ridge). It ends by itself as soon as 95% of your shots would land
+where you aim - about six shots the first time, three when Handy remembers
+your aim.
+
+**No camera?** Choose **Use Mouse or Trackpad**: click to fire. The right
+button reloads (High Noon, Dead of Night), vents (Orbital Decay) or scopes
+(Overwatch Ridge, where you reload with `R`). On a touch screen, tap to fire
+and tap with two fingers to reload or vent.
 
 | Key | Does |
 | --- | --- |
 | `P`, `Space` or `Esc` | Pause |
-| `R` | Reload |
+| `R` | Reload (all but Orbital Decay) |
+| `V` | Vent the laser (Orbital Decay) |
+| `Shift` | Scope, held (Overwatch Ridge) |
 | `M` | Mute |
 
 **Settings** — the gear in the corner, or Settings on the pause sheet — has
 the difficulty (Relaxed is slower and gentler, for a first evening or a tired
 arm), the volume, a larger or high-contrast crosshair, how steady the aim is
 held, which camera to use, whether the camera's picture stays in the corner in
-play, and Reduce Motion and Reduce Flashing. Everything is remembered in your
-browser; Forget Saved Aim and Reset Handy clear it.
+play, Reduce Motion and Reduce Flashing, and, for Overwatch Ridge, Close One Eye
+to Scope and whether the Scope button holds or toggles. Everything is
+remembered in your browser; Forget Saved Aim and Reset Handy clear it.
 
 **Records.** Your best score is kept for each game and difficulty, and apart for your
 hand and for a mouse or touch screen (which is far easier to aim). The arcade
@@ -89,7 +106,11 @@ analytics; the only files it downloads are its own.
 
 A computer with a webcam and a current browser with WebGL 2. Handy is built
 and tested in Google Chrome on macOS; current Edge, Safari and Firefox should
-work but haven't been played through yet.
+work but haven't been played through yet. Overwatch Ridge, played with your
+hand, also needs your face in view to scope with an eye, and downloads
+MediaPipe's face model (`face_landmarker.task`, 3.7 MB) the first time, behind
+the loading bar (turn off Close One Eye to Scope and it isn't loaded); the
+other three games never load it.
 
 ## Development
 
@@ -108,14 +129,24 @@ npm run build        # the static site, into dist/
 - `src/engine/`: the game host; `src/engine/types.ts` is the contract every
   game is built against.
 - `src/audio/`: the Web Audio engine and every sound, synthesised in code.
-- `src/games/western/`: High Noon.
-- `art/western/`: the Blender scripts that build Dust Creek and its people.
-  Everything under `public/assets/` is made by these scripts — there are no
-  downloaded assets:
+- `src/games/western/`, `night/`, `orbit/`, `ridge/`: High Noon, Dead of
+  Night, Orbital Decay and Overwatch Ridge (each with a `dev.html` the dev
+  server serves: the game alone, the mouse as the gun).
+- `art/western/`, `night/`, `orbit/`, `ridge/`: the Blender scripts that build
+  each game's world and people. Everything under `public/assets/` is made by
+  these scripts — there are no downloaded assets. Name stages after `--` to
+  run some (`-- bake export`); the folders' READMEs (all but `western`) list
+  them, with `--quick` for a rough pass. Orbital Decay and Overwatch Ridge take
+  the better part of an hour:
 
   ```bash
-  /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P art/western/build_town.py
-  /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P art/western/characters/build.py
+  B=/Applications/Blender.app/Contents/MacOS/Blender
+  $B -b --factory-startup -P art/western/build_town.py           # Dust Creek
+  $B -b --factory-startup -P art/western/characters/build.py     # its people
+  $B -b --factory-startup -t 4 -P art/night/build_road.py        # the road and its sky
+  $B -b --factory-startup -t 4 -P art/night/characters/build.py  # the dead and the living
+  $B -b --factory-startup -t 4 -P art/orbit/build_orbit.py       # cupola, station, planet, debris
+  $B -b --factory-startup -t 4 -P art/ridge/build.py             # the valley, its people
   ```
 
 CI runs the type check, the unit tests, the build and the end-to-end tests on
@@ -124,8 +155,11 @@ the site on GitHub Pages (enable it under Settings → Pages → GitHub Actions)
 
 The design language is in [docs/DESIGN.md](docs/DESIGN.md), the architecture
 and its contracts in [docs/WEB_ARCHITECTURE.md](docs/WEB_ARCHITECTURE.md), and
-High Noon's design in [docs/HIGH_NOON.md](docs/HIGH_NOON.md). The answer to
-the September 2026 product review, item by item, is in
+the games' designs in [docs/HIGH_NOON.md](docs/HIGH_NOON.md),
+[docs/DEAD_OF_NIGHT.md](docs/DEAD_OF_NIGHT.md),
+[docs/ORBITAL_DECAY.md](docs/ORBITAL_DECAY.md) and
+[docs/OVERWATCH_RIDGE.md](docs/OVERWATCH_RIDGE.md). The answer to the
+September 2026 product review, item by item, is in
 [docs/REVIEW_RESPONSE.md](docs/REVIEW_RESPONSE.md).
 
 Handy began as a Python desktop app; that version is kept in git under the tag
