@@ -181,8 +181,11 @@ pane worn down over time. Keep the drone working: don't shoot it."
    breather: an aurora ripples over the limb for the rest of the game.
 7. **The Moon.** When the Moon rises over the limb (pass 4), shoot it: a tiny
    flag glints on it for a moment.
-8. **The message.** On the night side, a city's lights spell a faint "HI" —
-   shoot it and it blinks back "HI" twice.
+8. **The message.** On the night side, on every third night (the third
+   breather, the sixth...), a country's lights spell a small "HI", a few
+   percent of the view across, low in the right-hand window and no brighter
+   than the towns round it. It drifts with the ground; shoot it and it blinks
+   back "HI" twice.
 
 Konami on the arcade: a golden laser and a gold heat gauge.
 

@@ -86,6 +86,19 @@ export function pickLitRegions(lum: Float32Array, w: number, h: number, count: n
   return picked;
 }
 
+/** The "HI" (secret 8) shows on one night in this many. */
+export const HI_EVERY = 3;
+
+/** Whether night number `night` (0 the first of a game) is the one that shows the "HI": the third, the sixth... */
+export function isHiNight(night: number): boolean {
+  return night % HI_EVERY === HI_EVERY - 1;
+}
+
+/** Which of the other countries night number `night` shows, counted over the nights that are not the HI's. */
+export function otherCountry(night: number): number {
+  return night - Math.floor((night + 1) / HI_EVERY);
+}
+
 /** The light within `radiusDeg` of (lon, lat) degrees, as pickLitRegions weighs it. */
 export function lightAround(lum: Float32Array, w: number, h: number, lon: number, lat: number, radiusDeg = 7): number {
   const DEG = Math.PI / 180;

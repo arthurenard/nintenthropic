@@ -22,7 +22,7 @@ import { HintLine, tipText, ventHint, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type OrbitAssets } from "./world/assets";
 import { R as PLANET_R } from "./world/atmosphere";
-import { lightAround, nightLuminance, pickLitRegions, type LitRegion } from "./world/cities";
+import { isHiNight, lightAround, nightLuminance, otherCountry, pickLitRegions, type LitRegion } from "./world/cities";
 import { LaserBeams } from "./world/beam";
 import { DebrisView } from "./world/debrisView";
 import { DroneView } from "./world/droneView";
@@ -58,6 +58,13 @@ const tmp2 = new Vector3();
 const DRONE_VIEW = { x: 0.8, top: 0.72, bottom: 0.7 };
 /** The other nights' countries are turned this far, so they do not stand square to the view. */
 const OTHER_NIGHT_TURN = (30 * Math.PI) / 180;
+/** Where the "HI" is put in the view (NDC): low in the right-hand window, clear of the centre pane. */
+const HI_SPOT = { x: 0.6, y: -0.28 };
+/** How wide the HI is drawn, as a fraction of the view's width (of the art's 16:9 frame), and how wide the art wrote it (km). */
+const HI_WIDTH = 0.022;
+const HI_SOURCE_KM = 130;
+/** How near the HI a shot must land (km on the ground) to find it: the letters are some 50 km across as drawn. */
+const HI_REACH_KM = 80;
 
 /** A (longitude, latitude) in degrees as a direction in the planet's frame (three's sphere: y north, x longitude 0). */
 function lonLatDir(lon: number, lat: number): Vector3 {
@@ -378,19 +385,21 @@ export class OrbitalDecay implements Game, MatchListener {
    * composed it - open ocean under the station, the coast far ahead - where
    * the night would be black. At night only lights show, so the night map
    * is read through a turn that puts a lit region under the view instead,
-   * as the art's own night renders do: on odd nights the country round the
-   * "HI" (secret 8), the letters low in the centre window and upright as the
-   * player looks; on even nights the next of the night map's brightest
-   * countries (found at load). It is set as the breather begins, while the
-   * sun is still up and no light shows, and the lights then turn with the
-   * ground.
+   * as the art's own night renders do: on every third night the country
+   * round the "HI" (secret 8), the letters small (HI_LENS_SCALE times
+   * smaller than the map has them) and upright, low in the right-hand window
+   * - a find, not a headline; on the other nights the next of the night
+   * map's brightest countries (found at load) in the centre of the view. It
+   * is set as the breather begins, while the sun is still up and no light
+   * shows, and the lights then turn with the ground.
    */
   private placeNight(): void {
-    const other = this.litRegions[Math.floor(this.nights / 2) % Math.max(1, this.litRegions.length)];
-    const hiNight = this.nights % 2 === 0 || !other;
+    const other = this.litRegions[otherCountry(this.nights) % Math.max(1, this.litRegions.length)];
+    const hiNight = isHiNight(this.nights) || !other;
     this.nights += 1;
-    const spot = this.groundPoint(hiNight ? -0.06 : 0.02, hiNight ? -0.18 : -0.08);
+    const spot = this.groundPoint(hiNight ? HI_SPOT.x : 0.02, hiNight ? HI_SPOT.y : -0.08);
     if (!spot) return;
+    const world = spot.clone();
     const toPlanet = this.stage.planetRotation.clone().invert();
     const at = spot.applyQuaternion(toPlanet).normalize();
     const right = new Vector3(1, 0, 0).applyQuaternion(this.scenery.eyeQuaternion).applyQuaternion(toPlanet);
@@ -405,13 +414,52 @@ export class OrbitalDecay implements Game, MatchListener {
       srcEast.applyQuaternion(turn);
       srcNorth.applyQuaternion(turn);
     }
-    const map = new Matrix4().makeBasis(srcEast, srcNorth, src).multiply(new Matrix4().makeBasis(east, north, at).transpose());
+    // The HI's night reads the map through how the ground is seen from here,
+    // so the small letters stand upright and true on the screen, not leaning
+    // and squashed as an oblique view would have them; and through a lens
+    // that draws them HI_WIDTH of the view across.
+    const seen = hiNight ? this.groundSeen(world) : null;
+    const lean = seen ? new Matrix4().set(1, seen.lean, 0, 0, seen.rise, seen.stretch, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1) : new Matrix4();
+    const map = new Matrix4().makeBasis(srcEast, srcNorth, src).multiply(lean).multiply(new Matrix4().makeBasis(east, north, at).transpose());
     this.stage.sky.uniform<Matrix3>("uNightMap").value.setFromMatrix4(map);
     // A busier country is dimmed to the HI's, so no night is a white carpet.
     const scale = hiNight || !other || this.hiLight <= 0 ? 1 : Math.min(1, Math.max(0.3, this.hiLight / other.light));
     this.stage.sky.uniform<number>("uNightScale").value = scale;
+    this.stage.sky.uniform<Vector4>("uHiLens").value.set(this.hiSource.x, this.hiSource.y, this.hiSource.z, seen ? seen.zoom : 1);
     this.hiAt.copy(at);
     this.hiShown = hiNight;
+  }
+
+  /**
+   * How the ground at `p` (a unit direction from the planet's centre, in the
+   * world's frame) is seen: where a step east and a step north land on the
+   * screen, as the map matrix and the lens need them. `lean`, `rise` and
+   * `stretch` take a step on the ground to the screen's own right and up
+   * (per unit of the east step's width); `zoom` is how many times smaller than
+   * the art's map the HI must be drawn to span HI_WIDTH of the view.
+   */
+  private groundSeen(p: Vector3): { lean: number; rise: number; stretch: number; zoom: number } {
+    const STEP_KM = 25;
+    const t = Math.tan((this.scenery.fov * Math.PI) / 360);
+    const inverse = this.scenery.eyeQuaternion.clone().invert();
+    const centre = this.scenery.planet.center.clone().multiplyScalar(1 / 1000);
+    // A point of the ground on the view's plane, in units of the view's height.
+    const view = (dir: Vector3): [number, number] => {
+      const c = centre.clone().addScaledVector(dir, PLANET_R).applyQuaternion(inverse);
+      return [c.x / -c.z / t, c.y / -c.z / t];
+    };
+    const right = new Vector3(1, 0, 0).applyQuaternion(this.scenery.eyeQuaternion);
+    const east = right.addScaledVector(p, -right.dot(p)).normalize();
+    const north = new Vector3().crossVectors(p, east);
+    const step = STEP_KM / PLANET_R;
+    const [x0, y0] = view(p);
+    const [xe, ye] = view(p.clone().addScaledVector(east, step).normalize());
+    const [xn, yn] = view(p.clone().addScaledVector(north, step).normalize());
+    const dx = xe - x0;
+    if (!(dx > 1e-6)) return { lean: 0, rise: 0, stretch: 1, zoom: 3.6 };
+    const frameWidth = 2 * (16 / 9);
+    const zoom = ((HI_SOURCE_KM / STEP_KM) * dx) / (HI_WIDTH * frameWidth);
+    return { lean: (xn - x0) / dx, rise: (ye - y0) / dx, stretch: (yn - y0) / dx, zoom: Math.min(8, Math.max(2, zoom)) };
   }
 
   /** The planet's surface point seen through the art's view at NDC (sx, sy), as a unit direction from its centre. */
@@ -517,6 +565,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.nightPlaced = false;
     this.hiShown = false;
     this.stage.sky.uniform<Matrix3>("uNightMap").value.identity();
+    this.stage.sky.uniform<Vector4>("uHiLens").value.setW(1);
     this.flash.reset();
     this.post.set("flash", 0);
     this.post.set("exposure", 1);
@@ -793,7 +842,7 @@ export class OrbitalDecay implements Game, MatchListener {
         const sunP = this.stage.sunDirection.clone().applyQuaternion(this.stage.planetRotation.clone().invert());
         const km = (a: Vector3) => Math.acos(Math.min(1, Math.max(-1, onPlanet.dot(a)))) * PLANET_R;
         const storm = this.secrets.stormOn && km(this.secrets.storm) < 220 && this.secrets.takeFlash();
-        const hi = this.stage.night > 0.5 && this.hiShown && km(this.hiAt) < 180 && this.hiAt.dot(sunP) < 0;
+        const hi = this.stage.night > 0.5 && this.hiShown && km(this.hiAt) < HI_REACH_KM && this.hiAt.dot(sunP) < 0;
         return { storm, hi };
       },
     };
