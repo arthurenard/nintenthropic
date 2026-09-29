@@ -210,6 +210,79 @@ def textures_report(r, g, max_side=None):
             transparent_colour(r, f"image {im.get('name')}", data)
 
 
+AO_MIN_RED_MEAN = 40        # of 255: a baked AO map's red channel (what glTF reads) is never near black
+AO_MAX_CHANNEL_GAP = 12     # of 255: green and blue follow red (opaque grey), give or take the lossy encoder
+
+
+def occlusion_maps(r, g):
+    """Every glTF occlusionTexture reads the **red** channel of its image. The
+    buildings' baked AO once came out with red near black (the occlusion lost,
+    or in green and blue): a black map darkens the ambient light to nothing,
+    so the houses would stand as black boxes. The red channel of each must
+    average well above black, the image be opaque and green and blue follow
+    red (so no occlusion image is packed with a roughness one). Returns how many
+    distinct occlusion images were decoded."""
+    j = g.json
+    users = {}
+    for m in j.get("materials", []):
+        occ = m.get("occlusionTexture")
+        if occ is None:
+            continue
+        tex = j["textures"][occ["index"]]
+        src = tex.get("source")
+        if src is None:
+            src = tex.get("extensions", {}).get("EXT_texture_webp", {}).get("source")
+        r.need(occ.get("texCoord", 0) == 1, f"material {m.get('name')}: occlusionTexture on TEXCOORD_{occ.get('texCoord', 0)}, not 1")
+        mr = m.get("pbrMetallicRoughness", {}).get("metallicRoughnessTexture")
+        r.need(mr is None or mr["index"] != occ["index"],
+               f"material {m.get('name')}: occlusion and metallic-roughness share one image (an ORM the exporter packed: G and B are not the AO)")
+        users.setdefault(src, []).append(m.get("name"))
+    if not users:
+        r.warn(False, "no material carries an occlusionTexture (the buildings' baked AO)")
+        return 0
+    decoded = black = 0
+    for src, names in sorted(users.items()):
+        im = j["images"][src]
+        if "bufferView" not in im:
+            continue
+        bv = j["bufferViews"][im["bufferView"]]
+        off = bv.get("byteOffset", 0)
+        data = bytes(g.bin[off: off + bv["byteLength"]])
+        try:
+            from PIL import Image
+            import io
+            pim = Image.open(io.BytesIO(data))
+            mode = pim.mode
+            rgba = pim.convert("RGBA")
+        except ImportError:
+            r.warn(False, "Pillow missing, occlusion maps not checked")
+            return 0
+        w, h = rgba.size
+        px = rgba.tobytes()
+        n = w * h
+        step = max(1, n // 4096)
+        sr = sg = sb = sa = cnt = 0
+        for i in range(0, n, step):
+            k = 4 * i
+            sr += px[k]
+            sg += px[k + 1]
+            sb += px[k + 2]
+            sa += px[k + 3]
+            cnt += 1
+        mr, mg, mb, ma = sr / cnt, sg / cnt, sb / cnt, sa / cnt
+        decoded += 1
+        label = f"occlusion image {im.get('name')} ({names[0]}{' +%d' % (len(names) - 1) if len(names) > 1 else ''}, {w}x{h})"
+        if mr < AO_MIN_RED_MEAN:
+            black += 1
+        r.need(mr >= AO_MIN_RED_MEAN,
+               f"{label}: red channel mean {mr:.1f}/255 is near black (green {mg:.1f}, blue {mb:.1f}): glTF reads the red channel")
+        r.need(abs(mg - mr) <= AO_MAX_CHANNEL_GAP and abs(mb - mr) <= AO_MAX_CHANNEL_GAP,
+               f"{label}: red/green/blue means {mr:.1f}/{mg:.1f}/{mb:.1f} differ (AO must be grey: G = B = R)")
+        r.need(ma >= 254.5 and mode in ("RGB", "L"), f"{label}: not opaque ({mode}, alpha mean {ma:.1f})")
+    r.info(f"occlusion maps: {decoded} images for {sum(len(v) for v in users.values())} materials, {black} near black")
+    return decoded
+
+
 def skinned_meshes(g):
     return [n for n in g.nodes if "mesh" in n and "skin" in n]
 
@@ -374,6 +447,7 @@ def check_valley(path):
                 no_surface.append(f"{n.get('name')}={s!r}")
     r.need(not no_surface, f"meshes without a valid surface extra: {no_surface[:12]}")
     textures_report(r, g)
+    occlusion_maps(r, g)
     scene_ex = g.json["scenes"][g.json.get("scene", 0)].get("extras", {})
     r.info(f"scene extras: {sorted(scene_ex)}")
     total = size + tex_total
