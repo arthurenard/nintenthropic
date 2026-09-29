@@ -15,7 +15,7 @@ larch and stone pine, a limestone wall, snowfields and the peaks.
 
 | File (`public/assets/ridge/`) | What | Size | Budget |
 | --- | --- | --- | --- |
-| `valley.glb` + `terrain/*.webp` | terrain, forest and shrubs, sites, fields and their fences and walls, water, roads, rocks, contract nodes | 11.7 MB + 12.7 MB = 24.4 MB | ≤ 30 MB |
+| `valley.glb` + `terrain/*.webp` | terrain, forest and shrubs, sites, fields and their fences and walls, water, roads, rocks, contract nodes | 13.0 MB + 12.7 MB = 25.7 MB | ≤ 30 MB |
 | `sky.webp` | the dawn sky and the far world, equirectangular 4096×2048 | 0.11 MB | — |
 | `soldier.glb` | the infantryman, variants, weapons, 23 clips | 1.5 MB | 10–18k tris dressed |
 | `civilian.glb` | farmer, cyclist + bicycle, shepherd, child | 1.5 MB | 10–18k tris dressed |
@@ -256,6 +256,13 @@ occluding): glTF `occlusionTexture` on **TEXCOORD_1** (a second UV map,
 only the ambient light — the eaves, window reveals, the foot of every wall,
 the narrow streets. The dam's downstream face (`dam.face`) carries its
 weathering and AO in COLOR_0 instead.
+
+Each AO image is opaque grey (R = G = B; glTF reads the red channel) and never
+the same size as its material's roughness tile, or the glTF exporter would pack
+the two into one ORM image; `check.py` fails on a near-black red channel, a
+non-grey or non-opaque image, or a shared one. The bake writes through the
+*active* UV map, so `ao` is the active map while it runs (an unwrap of each object
+on its own, filling 0..1) and the tile UVs are made active again after it.
 
 Roads (`road.main.<n>`, `road.lane`,
 `road.switchbacks`, `road.dam`) are ribbons 4 cm over the carved ground:
