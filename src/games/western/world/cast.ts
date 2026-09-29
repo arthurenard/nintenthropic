@@ -51,6 +51,25 @@ function tellFree(state: string): boolean {
   return state !== "tell" && state !== "emerging" && state !== "hiding";
 }
 
+/** How far below a cover's edge the rise starts, metres (see `risingDip`). */
+const RISE_DIP = 0.3;
+/** How much of the rise (its exposure) it takes to come up to his crouch's own height. */
+const RISE_DIP_END = 0.35;
+
+/**
+ * A man behind a barrel, crate or rail crouches, and a crouch leaves his hat
+ * a hand above the top: shown from the first frame of a rise, it was a hat
+ * sitting on the barrel with nobody under it. So a rise starts lower than the
+ * crouch and comes up to it over the first third (and goes down past it at
+ * the end of the sink, so the hat does not vanish from above the barrel
+ * either). Metres to lower him by; 0 for everything else.
+ */
+export function risingDip(b: { state: string; exposure: number; cover: { emerge: string } }): number {
+  if (b.cover.emerge !== "rise" || (b.state !== "emerging" && b.state !== "hiding")) return 0;
+  const k = Math.min(1, Math.max(0, b.exposure / RISE_DIP_END));
+  return RISE_DIP * (1 - k * k * (3 - 2 * k));
+}
+
 const HATS = ["var.hat.stetson", "var.hat.bowler", "var.hat.flat"];
 const COATS = ["var.coat.duster", "var.coat.jacket", null];
 const BANDANAS = ["var.bandana.red", "var.bandana.black", null];
@@ -578,7 +597,7 @@ export class Cast {
         this.fx.dust(rig.root.position, tmp2, 1);
       }
     } else if (b.alive || v.slide.lengthSq() === 0) {
-      if (b.alive) rig.root.position.set(b.pos.x, b.pos.y, b.pos.z);
+      if (b.alive) rig.root.position.set(b.pos.x, b.pos.y - risingDip(b), b.pos.z);
     } else {
       // Momentum carries a runner (or a blast carries anyone) a little further.
       const k = Math.min(1, dt * 5);
