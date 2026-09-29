@@ -560,33 +560,39 @@ def extras_materials():
 
 def debris_materials():
     def torn_alu(g):
-        # bare aluminium torn in a collision: bright where fresh, machining
-        # marks, heat-tinted toward the torn edges (straw, bronze, purple,
-        # blue) and sooted at the very edge
+        # bare aluminium torn in a collision: bright and mirror-like where
+        # fresh (it has to flash in the sun), machining marks, heat tints
+        # (straw, bronze, purple, blue) along the torn edges, soot only at
+        # the very edge
         pt = g.node('ShaderNodeNewGeometry', out='Pointiness')
-        edge = g.smooth(pt, 0.52, 0.64)
+        edge = g.smooth(pt, 0.53, 0.66)
         n = g.noise(obj(g), scale=7.0, detail=6.0)
         n2 = g.noise(obj(g), scale=31.0, detail=4.0)
-        burn = g.clamp01(g.add(g.mul(edge, 0.85), g.mul(g.smooth(n, 0.5, 0.82), g.add(0.35, g.mul(rand(g), 0.5)))))
-        burn = g.clamp01(g.add(burn, g.mul(g.sub(n2, 0.5), 0.15)))
+        burn = g.clamp01(g.add(g.mul(edge, 0.9), g.mul(g.smooth(n, 0.6, 0.85), g.mul(rand(g), 0.45))))
+        burn = g.clamp01(g.add(burn, g.mul(g.sub(n2, 0.5), 0.12)))
         mk = machining(g, 500.0)
-        tint = g.ramp(burn, [(0.0, lin(186, 188, 192)), (0.30, lin(176, 176, 178)), (0.42, lin(200, 172, 110)),
-                             (0.52, lin(160, 104, 66)), (0.62, lin(112, 72, 124)), (0.72, lin(72, 92, 150)),
-                             (0.84, lin(46, 42, 42)), (1.0, lin(20, 18, 17))])
-        rough = g.add(0.16, g.mul(burn, 0.55))
-        metal = g.sub(1.0, g.mul(g.smooth(burn, 0.78, 0.95), 0.85))
+        tint = g.ramp(burn, [(0.0, lin(204, 206, 210)), (0.35, lin(196, 196, 198)), (0.48, lin(216, 186, 122)),
+                             (0.58, lin(184, 124, 76)), (0.68, lin(140, 92, 150)), (0.78, lin(96, 120, 182)),
+                             (0.9, lin(70, 64, 62)), (1.0, lin(34, 30, 28))])
+        # satin rather than mirror: a mirror shows the black sky at nearly
+        # every angle; brushed, torn metal spreads the sun over many
+        rough = g.add(0.30, g.mul(burn, 0.3))
+        metal = g.sub(1.0, g.mul(g.smooth(burn, 0.86, 0.98), 0.8))
         return dict(color=tint, rough=rough, metal=metal, height=g.add(mk, g.mul(n2, 1.5)), bump=0.12, bump_dist=0.001)
     pbr('torn_alu', torn_alu)
 
     def torn_white(g):
+        # painted skin: clean white, chipped to bright bare metal toward the
+        # torn edges, scorched brown only right at them
         pt = g.node('ShaderNodeNewGeometry', out='Pointiness')
-        edge = g.smooth(pt, 0.5, 0.62)
+        edge = g.smooth(pt, 0.5, 0.64)
         n = g.noise(obj(g), scale=7.0, detail=6.0)
-        chip = g.smooth(g.add(g.mul(edge, 0.8), g.mul(n, 0.5)), 0.55, 0.62)
-        burn = g.smooth(g.add(g.mul(edge, 0.7), g.mul(g.noise(obj(g), scale=3.0, detail=4.0), 0.6)), 0.7, 0.95)
-        base = g.mix(chip, g.rgb(lin(220, 220, 214)), g.rgb(lin(170, 172, 176)))
-        base = g.mix(burn, base, g.rgb(lin(30, 26, 24)))
-        return dict(color=base, rough=g.add(0.4, g.mul(burn, 0.4)), metal=g.mul(chip, 0.9), height=g.add(chip, n), bump=0.15, bump_dist=0.001)
+        chip = g.smooth(g.add(g.mul(edge, 0.85), g.mul(n, 0.45)), 0.56, 0.62)
+        burn = g.smooth(g.add(g.mul(edge, 0.8), g.mul(g.noise(obj(g), scale=3.0, detail=4.0), 0.4)), 0.8, 0.98)
+        base = g.mix(chip, g.rgb(lin(236, 236, 230)), g.rgb(lin(196, 198, 202)))
+        base = g.mix(g.mul(burn, 0.8), base, g.rgb(lin(64, 50, 40)))
+        return dict(color=base, rough=g.add(g.sub(0.38, g.mul(chip, 0.2)), g.mul(burn, 0.35)), metal=g.mul(chip, 0.95),
+                    height=g.add(chip, n), bump=0.15, bump_dist=0.001)
     pbr('torn_white', torn_white)
 
     def honeycomb(g):

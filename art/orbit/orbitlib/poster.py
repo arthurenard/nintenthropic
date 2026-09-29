@@ -1,5 +1,15 @@
 """poster.webp: the game's face in the arcade and on shared cards.
 
+(Second pass.) The day side under the cupola - the first look's coast,
+desert, river and range - in low morning light, with the sun just clearing
+the limb in the round window. A sun at the limb would leave the ground
+below in night, so the picture is composed from two suns, as a poster may
+be: the ground, the station and the fragments are lit by the morning sun
+(LIGHT_ELEV above the horizon, ahead and to the left); the sky and the limb
+come from a render with the sun at the disc (SUN_NDC), which gives the
+sunrise band of orange and blue along the edge of the world.
+
+
 The cupola's windows, the planet at sunrise - the sun just clearing the
 limb in a band of orange and blue, the ground below still in night with
 its cities lit - and a torn panel from the debris field a few metres out,
@@ -20,11 +30,8 @@ from mathutils import Matrix, Vector
 from . import pipeline, render, world, bl, imgio
 
 W, H = 1600, 900
-SUN_NDC = (0.03, 0.37)         # the sun just clearing the limb, inside the round window
-# the poster's own planet: over the night side of a coast lined with
-# cities, flying north-east into the dawn
-POSTER_SUBPOINT = (-126.0, 34.0)
-POSTER_HEADING = 45.0
+SUN_NDC = (-0.06, 0.36)        # the sun just clearing the limb, inside the round window
+LIGHT_ELEV, LIGHT_AZ = 24.0, -32.0   # the morning sun that lights the ground and the station
 
 
 def bloom(rgb, threshold=1.0, strength=0.12, clamp=30.0):
@@ -67,32 +74,37 @@ def _box(a, r):
 
 
 def fragment(sc, sun, cam_pos):
-    """The fragments that catch the sun: a solar-wing shard in the upper
-    left window turned to mirror the sun into the eye (a blue-white flash),
-    a gold-foil piece in the right window whose crinkles glint along its
-    sunward rim, and a few scraps."""
+    """A solar-wing shard close outside the round window, turned to mirror
+    the sun into the eye (a blue-white flash), a torn slab in the upper
+    left window, gold foil in the right one, and a few scraps."""
     from . import materials, debris
     from .bl import rng
-    # the opened scene has the station's materials; add the debris ones
     materials.LIB.clear()
     materials.LIB.update({m.name: m for m in bpy.data.materials})
     materials.debris_materials()
     col = bl.collection("poster")
     eye = Vector(cam_pos)
-    bm, mats = debris.shard(rng("shard0"))
+
+    def glint(ob, pos, off_deg=1.2):
+        n = (Vector(sun) + (eye - pos).normalized()).normalized()
+        ob.rotation_mode = 'QUATERNION'
+        ob.rotation_quaternion = n.to_track_quat('Z', 'Y') @ Matrix.Rotation(math.radians(off_deg), 4, 'X').to_quaternion()
+        ob.location = pos
+    bm, mats = debris.shard(rng("shard1"))
     ob = debris.to_object(bm, "poster.shard", mats, col)
     bm.free()
-    ob.scale = (0.9, 0.9, 0.9)
-    pos = Vector(world.view_point(-0.42, 0.34, 7.0))
-    n = (Vector(sun) + (eye - pos).normalized()).normalized()
-    ob.rotation_mode = 'QUATERNION'
-    ob.rotation_quaternion = n.to_track_quat('Z', 'Y') @ Matrix.Rotation(math.radians(1.5), 4, 'X').to_quaternion()
-    ob.location = pos
+    ob.scale = (0.75, 0.75, 0.75)
+    glint(ob, Vector(world.view_point(0.16, 0.12, 5.2)))
+    bm, mats = debris.slab_isogrid(rng("slab0"))
+    sl = debris.to_object(bm, "poster.slab", mats, col)
+    bm.free()
+    sl.location = Vector(world.view_point(-0.62, 0.42, 16.0))
+    sl.rotation_euler = (0.9, 0.4, 2.2)
     for part, fn in (('core', debris.foil_core), ('wrap', debris.foil_wrap)):
         bm, mats = fn(rng("foil0"), 0)
         f = debris.to_object(bm, f"poster.foil.{part}", mats, col)
         bm.free()
-        f.location = Vector(world.view_point(0.64, 0.16, 4.2))
+        f.location = Vector(world.view_point(0.62, 0.08, 6.0))
         f.rotation_euler = (0.4, 2.2, 0.9)
         f.scale = (1.3, 1.3, 1.3)
     rr = rng("poster-scraps")
@@ -100,10 +112,9 @@ def fragment(sc, sun, cam_pos):
         bm, mats = fn(rng(f"poster-scrap{i}"))
         s = debris.to_object(bm, f"poster.scrap.{i}", mats, col)
         bm.free()
-        s.location = Vector(world.view_point(-0.62 + 0.4 * i, 0.05 - 0.18 * (i % 2), 9.0 + 3 * i))
+        s.location = Vector(world.view_point(-0.35 + 0.28 * i, 0.2 - 0.15 * (i % 2), 10.0 + 4 * i))
         s.rotation_euler = (rr.uniform(0, 6), rr.uniform(0, 6), rr.uniform(0, 6))
-        s.scale = (1.6, 1.6, 1.6)
-    # the arm's hand would sit in the middle of the round window: out of the shot
+        s.scale = (1.8, 1.8, 1.8)
     for name in ('station.arm', 'secret.arm.hand', 'station.light.5'):
         o = bpy.data.objects.get(name)
         if o:
@@ -120,38 +131,61 @@ def a_free(a, sx, sy):
     return float(1.0 - win.mean())
 
 
+def light_dir():
+    up = world.station_up()
+    f = world.forward()
+    fh = f - up * (f @ up)
+    fh /= np.linalg.norm(fh)
+    right = np.cross(fh, up)
+    e, a = math.radians(LIGHT_ELEV), math.radians(LIGHT_AZ)
+    d = (fh * math.cos(a) + right * math.sin(a)) * math.cos(e) + up * math.sin(e)
+    return d / np.linalg.norm(d)
+
+
 def stage(ctx):
     pipeline.open_blend(pipeline.scene_blend(ctx))
     sc = bpy.context.scene
     cam = bpy.data.objects['camera.player']
-    sun = Vector(world.view_dir(*SUN_NDC))
-    # the sun lamp at the rising sun, a little warmer; the world stays the
-    # day environment for the interior bounce, but dimmer (we are near the
-    # terminator: most of the planet in view is dark)
+    light = Vector(light_dir())
+    disc = Vector(world.view_dir(*SUN_NDC))
     lamp = bpy.data.objects['SunLamp']
-    lamp.rotation_euler = sun.to_track_quat('Z', 'Y').to_euler()
-    lamp.data.color = (1.0, 0.78, 0.55)
-    lamp.data.energy = 14.0
+    lamp.rotation_euler = light.to_track_quat('Z', 'Y').to_euler()
+    lamp.data.color = (1.0, 0.88, 0.74)
+    lamp.data.energy = 20.0
     maps = pipeline.load_maps(ctx)
-    sky = pipeline.Sky(sun_world=np.array(sun), star_gain=0.35, night_gain=2.0)
-    prot = world.planet_rotation(POSTER_SUBPOINT, POSTER_HEADING)
-    env = pipeline.render_env(ctx, "env_poster.exr", sky, W=1024, maps=maps, samples=32, rot=prot)
+    sky_a = pipeline.Sky(sun_world=np.array(light), star_gain=0.0, night_gain=0.6)
+    sky_b = pipeline.Sky(sun_world=np.array(disc), star_gain=0.3, night_gain=0.6)
+    env = pipeline.render_env(ctx, "env_poster.exr", sky_a, W=1024, maps=maps, samples=32)
     render.world_env(sc, env, name="PosterEnv")
-    fragment(sc, sun, cam.matrix_world.translation)
+    fragment(sc, light, cam.matrix_world.translation)
     q = ctx.quick
     render.cycles(sc, W if not q else 960, H if not q else 540, 64 if q else 640)
-    sc.view_settings.exposure = render.EXPOSURE + 1.2
+    stops = render.EXPOSURE + 0.8
+    sc.view_settings.exposure = stops
     exr = ctx.path("__poster_fg.exr")
     fg, a = render.render_fg(sc, exr)
     w, h = fg.shape[1], fg.shape[0]
-    bg = render.planet_background(ctx, cam, w, h, sky, maps=maps, samples=24 if q else 64, rot=prot)
+    # the planet twice: the ground in the morning light, the sky and the
+    # limb with the sun at the disc; rays that meet the ground take the first
+    ga = render.planet_background(ctx, cam, w, h, sky_a, maps=maps, samples=24 if q else 64)
+    gb = render.planet_background(ctx, cam, w, h, sky_b, maps=maps, samples=24 if q else 64)
+    D, _ = render.camera_rays(cam, w, h)
+    rot = world.planet_rotation()
+    Dp = D.astype(np.float64) @ rot
+    O = world.eye_in_planet_km(rot)
+    b = Dp @ O
+    disc_ = b * b - (O @ O - 6371.0 ** 2)
+    hit = ((disc_ > 0) & (b < 0)).reshape(h, w)
+    # a few pixels of blend across the limb
+    from .noise import blur
+    wgt = np.clip(blur(hit.astype(np.float32)[..., None], 1, 1)[..., 0] * 1.0, 0, 1)
+    bg = ga * wgt[..., None] + gb * (1 - wgt[..., None])
     rgb = render.composite(fg, a, bg)
-    ex = 2 ** (render.EXPOSURE + 1.2)
-    # the sun's glare where it stands on screen (only if it shows)
+    ex = 2 ** stops
     sx = (SUN_NDC[0] * 0.5 + 0.5) * w
     sy = (0.5 - SUN_NDC[1] * 0.5) * h
-    rgb = rgb + glare((h, w), (sx, sy), (1.0, 0.8, 0.6), 3.5 / ex) * a_free(a, sx, sy)
-    rgb = bloom(rgb * ex, threshold=0.9) / ex
+    rgb = rgb + glare((h, w), (sx, sy), (1.0, 0.82, 0.62), 4.0 / ex) * a_free(a, sx, sy)
+    rgb = bloom(rgb * ex, threshold=0.85, strength=0.16) / ex
     out_png = os.path.join(ctx.review_dir, "poster.png")
     render.save_display(rgb, out_png, sc)
     out = ctx.asset("poster.webp")

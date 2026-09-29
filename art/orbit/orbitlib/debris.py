@@ -77,7 +77,7 @@ def shrapnel_skin(r):
     shapes.crumple(bm, 0.012, 14.0, r.uniform(0, 9), along=(0, 0, 1))
     shapes.fold(bm, (0.02, 0, 0), (0.3, 1, 0), (1, -0.3, 0), math.radians(r.uniform(35, 70)))
     shapes.crumple(bm, 0.004, 40.0, r.uniform(0, 9))
-    return bm, ['torn_white', 'torn_alu', 'burnt']
+    return bm, ['torn_white', 'torn_alu', 'torn_alu']
 
 
 def shrapnel_bracket(r):
@@ -219,8 +219,15 @@ def chunk_pipe(r):
         a = 2 * math.pi * i / 8
         g.cyl(Matrix.Identity(4), (math.cos(a) * 0.17, math.sin(a) * 0.17, -0.352), (math.cos(a) * 0.17, math.sin(a) * 0.17, -0.31), 0.01, 'steel', seg=6)
     g.box(Matrix.Identity(4), (0.12, 0.12, 0.12), 'white_paint', center=(0.16, 0, -0.12), bevel=0.01)
-    _merge_geo(bm, g, {'white_paint': 0, 'alu_bare': 1, 'steel': 2})
-    return bm, ['torn_white', 'alu_bare', 'steel']
+    _merge_geo(bm, g, {'white_paint': 0, 'alu_bare': 1, 'steel': 2, 'beta_cloth': 3})
+    # a torn blanket half round the pipe, flapping loose
+    fl = flap(r, 0.22, 0.16, 3, z0=0.0, fold_deg=60, fold_at=0.1, crumple=0.015)
+    for v in fl.verts:
+        x, y, z = v.co
+        a = x / 0.15
+        v.co = Vector((math.cos(a) * (0.145 + z), math.sin(a) * (0.145 + z), y + 0.05))
+    add_bm(bm, fl)
+    return bm, ['torn_white', 'alu_bare', 'steel', 'beta_cloth']
 
 
 def chunk_node(r):
@@ -236,13 +243,16 @@ def chunk_node(r):
     bm = bmesh.new()
     _merge_geo(bm, g, {'white_paint': 0, 'burnt': 1, 'label_yellow': 2})
     shapes.crumple(bm, 0.006, 7.0, r.uniform(0, 9))
-    return bm, ['torn_white', 'burnt', 'label_yellow']
+    fl = flap(r, 0.2, 0.14, 3, z0=0.105, fold_deg=70, fold_at=0.08, crumple=0.02)
+    add_bm(bm, fl)
+    return bm, ['torn_white', 'torn_alu', 'label_yellow', 'mli_silver']
 
 
 def chunk_wheel(r):
     g = bl.Geo("__wheel")
     I = Matrix.Identity(4)
-    g.lathe(I, [(0.0, -0.09), (0.24, -0.09), (0.26, -0.07), (0.26, 0.07), (0.24, 0.09), (0.08, 0.1), (0.0, 0.1)], 'alu_darkext', seg=32)
+    g.lathe(I, [(0.0, -0.09), (0.24, -0.09), (0.26, -0.07), (0.26, 0.07), (0.24, 0.09), (0.08, 0.1), (0.0, 0.1)], 'white_paint', seg=32)
+    g.lathe(I, [(0.262, -0.05), (0.268, -0.05), (0.268, 0.05), (0.262, 0.05)], 'mli_gold', seg=32)
     for i in range(4):
         a = math.pi / 4 + i * math.pi / 2
         g.box(I @ Matrix.Rotation(a, 4, 'Z'), (0.12, 0.05, 0.02), 'alu_bare', center=(0.28, 0, -0.08), bevel=0.005)
@@ -251,10 +261,10 @@ def chunk_wheel(r):
         g.tube(I, [(0.02 * k, 0.22, 0.12), (0.02 * k + 0.05, 0.3, 0.2), (0.02 * k + 0.02, 0.36, 0.22)], 0.006,
                'cable_black' if k else 'cable_orange', seg=6)
     bm = bmesh.new()
-    _merge_geo(bm, g, {'alu_darkext': 0, 'alu_bare': 1, 'black_paint': 2, 'cable_black': 3, 'cable_orange': 4})
+    _merge_geo(bm, g, {'white_paint': 0, 'alu_bare': 1, 'black_paint': 2, 'cable_black': 3, 'cable_orange': 4, 'mli_gold': 5})
     shapes.dent(bm, (0.26, 0.0, 0.0), 0.12, 0.05, (-1, 0, 0))
     shapes.crumple(bm, 0.004, 9.0, r.uniform(0, 9))
-    return bm, ['alu_darkext', 'alu_bare', 'black_paint', 'cable_black', 'cable_orange']
+    return bm, ['torn_white', 'torn_alu', 'black_paint', 'cable_black', 'cable_orange', 'mli_gold']
 
 
 CHUNKS = [chunk_box, chunk_pipe, chunk_node, chunk_wheel]
@@ -263,15 +273,38 @@ CHUNKS = [chunk_box, chunk_pipe, chunk_node, chunk_wheel]
 # ---------------------------------------------------------------------------
 # Slabs
 
+def flap(r, rx, ry, mat, z0=0.0, fold_deg=0.0, fold_at=0.0, crumple=0.02):
+    """A torn blanket or foil flap: a thin crumpled sheet with a ragged
+    outline, lying at height z0, its +x end folded down by fold_deg."""
+    out = shapes.torn_outline(rx, ry, r, n=24, jag=0.32, spikes=0.4)
+    b = shapes.sheet(out, 0.003, 0.03, mats=(mat, mat, mat))
+    shapes.crumple(b, crumple, 9.0, r.uniform(0, 9), along=(0, 0, 1))
+    shapes.crumple(b, crumple * 0.4, 30.0, r.uniform(0, 9))
+    if fold_deg:
+        shapes.fold(b, (fold_at, 0, 0), (0, 1, 0), (1, 0, 0), math.radians(fold_deg))
+    for v in b.verts:
+        v.co.z += z0
+    return b
+
+
+def add_bm(bm, other):
+    me = bpy.data.meshes.new("__add")
+    other.to_mesh(me)
+    other.free()
+    bm.from_mesh(me)
+    bpy.data.meshes.remove(me)
+
+
 def slab_isogrid(r):
+    """A torn piece of an isogrid skin: a 12 mm painted skin, its triangle
+    ribs standing 4 cm behind it, curved like the tank it came from, a
+    corner folded back, the ribs bent with it; a torn white blanket still
+    stuck to part of it, hanging off one edge."""
     out = shapes.torn_outline(0.95, 0.52, r, n=34, jag=0.16, spikes=0.3)
-    bm = shapes.sheet(out, 0.004, 0.08, mats=(0, 1, 2))
-    # the ribs: a triangle grid on the inner face (-z), clipped to the torn
-    # outline (a few cm inside it) and built of short segments so they bend
-    # with the skin when it is curved, folded and crumpled
+    bm = shapes.sheet(out, 0.012, 0.07, mats=(0, 1, 1))
     g = bl.Geo("__iso")
-    s = 0.16
-    shrunk = [(x * 0.94, y * 0.92) for x, y in out]
+    s = 0.17
+    shrunk = [(x * 0.95, y * 0.93) for x, y in out]
 
     def inside(px, py):
         c = False
@@ -295,38 +328,72 @@ def slab_isogrid(r):
                 q = c + dv * (t + seg)
                 if inside(p.x, p.y) and inside(q.x, q.y):
                     M = bl.frame(p, dv, nv, Vector((0, 0, 1)))
-                    g.box(M, (seg, 0.004, 0.03), 'torn_alu', center=(seg / 2, 0, -0.015))
+                    g.box(M, (seg, 0.008, 0.04), 'torn_alu', center=(seg / 2, 0, -0.02))
                 t += seg
-    _merge_geo(bm, g, {'white_paint': 0, 'torn_alu': 1, 'burnt': 2})
-    # curve it like a cylinder skin, fold a corner, dent
+    _merge_geo(bm, g, {'torn_white': 0, 'torn_alu': 1, 'beta_cloth': 2})
+    add_bm(bm, flap(r, 0.42, 0.3, 2, z0=0.016, fold_deg=r.uniform(50, 80), fold_at=0.28))
     for v in bm.verts:
         v.co.z -= (v.co.x ** 2) / (2 * 2.6)
     shapes.fold(bm, (0.5, 0.2, 0), (0.6, -1, 0), (1, 0.6, 0), math.radians(r.uniform(30, 55)))
     shapes.crumple(bm, 0.02, 2.5, r.uniform(0, 9), along=(0, 0, 1))
-    return bm, ['torn_white', 'torn_alu', 'burnt']
+    return bm, ['torn_white', 'torn_alu', 'beta_cloth']
 
 
 def slab_sandwich(r):
+    """A honeycomb sandwich panel, 3 cm thick, holed through by an impact:
+    the core shows at every torn edge and round the hole; a patch of gold
+    foil on its face and a face sheet peeled back from the hole."""
     out = shapes.torn_outline(0.9, 0.55, r, n=30, jag=0.14, spikes=0.25)
     bm = shapes.sheet(out, 0.03, 0.09, mats=(0, 1, 2))
-    shapes.tear_hole(bm, (r.uniform(-0.3, 0.3), r.uniform(-0.15, 0.15), 0), 0.18, r)
-    # line the hole: bridge its top and bottom rims with honeycomb walls
+    hx, hy = r.uniform(-0.3, 0.3), r.uniform(-0.15, 0.15)
+    shapes.tear_hole(bm, (hx, hy, 0), 0.18, r)
     rim = [e for e in bm.edges if e.is_boundary]
     if rim:
         res = bmesh.ops.bridge_loops(bm, edges=rim)
         for f in res.get('faces', []):
             f.material_index = 2
+    foil = flap(r, 0.3, 0.22, 3, z0=0.034, crumple=0.012)
+    for v in foil.verts:
+        v.co.x += -0.45 * (1 if hx > 0 else -1)
+    add_bm(bm, foil)
+    peel = flap(r, 0.16, 0.12, 4, z0=0.033, fold_deg=-75, fold_at=0.05, crumple=0.008)
+    for v in peel.verts:
+        v.co.x += hx + 0.16
+        v.co.y += hy
+    add_bm(bm, peel)
     shapes.fold(bm, (-0.55, 0, 0), (0.2, 1, 0), (-1, 0.2, 0), math.radians(r.uniform(-40, -20)))
     shapes.crumple(bm, 0.015, 3.0, r.uniform(0, 9), along=(0, 0, 1))
-    return bm, ['torn_white', 'composite', 'honeycomb']
+    return bm, ['torn_white', 'composite', 'honeycomb', 'mli_gold', 'torn_alu']
 
 
 def slab_radiator(r):
+    """A torn radiator panel: a 2 cm white panel with the coolant tubes
+    along its back, bare aluminium at every torn edge, bent across."""
     out = shapes.torn_outline(1.0, 0.46, r, n=30, jag=0.12, spikes=0.3)
-    bm = shapes.sheet(out, 0.02, 0.09, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.02, 0.09, mats=(0, 1, 1))
+    g = bl.Geo("__tubes")
+    I = Matrix.Identity(4)
+    for yk in (-0.3, -0.15, 0.0, 0.15, 0.3):
+        # each tube runs as far as the torn panel does at its height, and a
+        # little beyond (torn tubes stick out)
+        xs = [x / 100.0 for x in range(-110, 111) if _inside_outline(out, x / 100.0, yk)]
+        if len(xs) > 4:
+            g.cyl(I, (xs[0] - 0.03, yk, -0.012), (xs[-1] + 0.03, yk, -0.012), 0.012, 'alu_bare', seg=8)
+    _merge_geo(bm, g, {'radiator': 0, 'torn_alu': 1, 'alu_bare': 2})
     shapes.fold(bm, (0.1, 0, 0), (0, 1, 0), (1, 0, 0), math.radians(r.uniform(12, 22)))
     shapes.crumple(bm, 0.012, 3.5, r.uniform(0, 9), along=(0, 0, 1))
-    return bm, ['radiator', 'alu_bare', 'burnt']
+    return bm, ['radiator', 'torn_alu', 'alu_bare']
+
+
+def _inside_outline(out, px, py):
+    c = False
+    n_ = len(out)
+    for i in range(n_):
+        x0, y0 = out[i]
+        x1, y1 = out[(i + 1) % n_]
+        if (y0 > py) != (y1 > py) and px < (x1 - x0) * (py - y0) / (y1 - y0 + 1e-12) + x0:
+            c = not c
+    return c
 
 
 SLABS = [slab_isogrid, slab_sandwich, slab_radiator]
@@ -336,10 +403,20 @@ SLABS = [slab_isogrid, slab_sandwich, slab_radiator]
 # Solar shards and foil
 
 def shard(r):
+    """A piece of a solar wing: cells on one face (blue, flashing when they
+    face the sun), the amber back, and the bright aluminium frame rail it
+    tore from along one edge."""
     out = shapes.torn_outline(r.uniform(0.5, 0.7), r.uniform(0.35, 0.5), r, n=9, jag=0.25, spikes=0.5)
-    bm = shapes.sheet(out, 0.01, 0.11, mats=(0, 1, 2))
+    bm = shapes.sheet(out, 0.012, 0.11, mats=(0, 1, 3))
+    ymin = min(y for x, y in out)
+    yr = ymin + 0.06
+    xs = [x / 100.0 for x in range(-80, 81) if _inside_outline(out, x / 100.0, yr)]
+    g = bl.Geo("__rail")
+    if len(xs) > 4:
+        g.box(Matrix.Identity(4), (xs[-1] - xs[0] + 0.04, 0.035, 0.03), 'torn_alu', center=((xs[0] + xs[-1]) / 2, yr, 0.0))
+    _merge_geo(bm, g, {'solar_cell': 0, 'solar_back': 1, 'burnt': 2, 'torn_alu': 3})
     shapes.crumple(bm, 0.02, 1.8, r.uniform(0, 9), along=(0, 0, 1))
-    return bm, ['solar_cell', 'solar_back', 'burnt']
+    return bm, ['solar_cell', 'solar_back', 'burnt', 'torn_alu']
 
 
 def foil_core(r, k):

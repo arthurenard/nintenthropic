@@ -24,20 +24,20 @@ python3 art/orbit/check_orbit.py        # proves the contract, the budgets, the 
 | `poster` | `poster.webp` (and `build/review/poster.png`) | 1 min |
 | `review` | the review set in `build/review/` (not committed) | ~20 min |
 
-Every stage but `review` runs in about 12 minutes (measured: 691 s); with
+Every stage but `review` runs in about 8 minutes (measured: 452 s); with
 no stage named, all of them run, the review included.
 
 | File | Size | Budget | Triangles |
 | --- | --- | --- | --- |
-| `cupola.glb` | 0.73 MB | 6 MB | 32,498 |
-| `station.glb` | 2.03 MB | 10 MB | 70,038 |
-| `debris.glb` | 2.07 MB | 3 MB | 71,978 (wholes and pieces) |
+| `cupola.glb` | 0.71 MB | 6 MB | 32,498 |
+| `station.glb` | 2.12 MB | 10 MB | 72,486 |
+| `debris.glb` | 2.43 MB | 3 MB | 98,500 (wholes and pieces) |
 | `drone.glb` | 0.17 MB | 3 MB | 2,584 |
 | `derelict.glb` | 1.08 MB | 3 MB | 12,404 |
 | `extras.glb` | 1.04 MB | 3 MB | 12,306 |
-| `planet/*.webp` | 1.8 MB together (clouds 1.1 MB) | – | – |
-| `stars.webp` | 135 KB | – | – |
-| `poster.webp` | 111 KB | – | – |
+| `planet/*.webp` | 2.4 MB together (clouds 1.6 MB) | – | – |
+| `stars.webp` | 134 KB | – | – |
+| `poster.webp` | 180 KB | – | – |
 
 `--quick` runs everything small and fast for iteration. Stages after
 `cupola` reopen the saved `.blend` files in `art/orbit/build/` (gitignored),
@@ -160,32 +160,58 @@ player's screen and how far it is.
 All equirect, **north at the top row, longitude −180° at the left edge**
 (u = lon/360° + 0.5), 2:1. In three.js a `SphereGeometry` with its default
 UVs shows them correctly as the child of the `planet` node (the node's
-local glTF +Y is north, +X longitude 0, −Z longitude 90° E).
+local glTF +Y is north, +X longitude 0, −Z longitude 90° E). Formats, sizes
+and layouts are unchanged from the first delivery.
 
 | File | Size | Encoding |
 | --- | --- | --- |
 | `albedo.webp` | 4096 × 2048 | surface reflectance, sRGB (no atmosphere: oceans are dark navy, the game adds the air) |
 | `clouds.webp` | 4096 × 2048 | cloud opacity 0..1, linear, the same in R, G and B |
-| `night.webp` | 4096 × 2048 | city light, sRGB (sodium orange, whiter modern cores) |
-| `water.webp` | 4096 × 2048 | ocean and lakes 1, land 0, antialiased coasts, linear (lossless) |
-| `height.webp` | 4096 × 2048 | land relief, linear: `(elevation / 6 km)^0.6`, 0 at sea level and on water |
-| `detail.webp` | 1024 × 1024, tileable | sub-pixel detail (optional, see below): R cumulus/cellular cloud texture, G eroded terrain, B fibrous cloud (streets, cirrus) |
+| `night.webp` | 4096 × 2048 | city light, sRGB (sodium orange, whiter modern cores): points, filaments, metropolises |
+| `water.webp` | 4096 × 2048 | ocean, lakes and the great river 1, land 0, coasts ramped over ~2.5 px (sharpen at runtime, below), linear (lossless) |
+| `height.webp` | 4096 × 2048 | land relief, linear: `(elevation / 6 km)^0.8`, 0 at the shore and on water, no steps at coasts |
+| `detail.webp` | 1024 × 1024, tileable | sub-pixel detail (optional, see below): R cellular cumulus, G terrain grain, B cloud rolls and fibres |
 
-How it is made (`orbitlib/planet.py`): plates on a warped sphere push up
-ranges where they converge; continents are placed masses warped at three
-scales with fractal coasts, shelves and hotspot island chains; a climate
-model (latitude bands, prevailing winds, moisture carried from the sea,
-rain shadows behind ranges, cold currents) gives temperature and rainfall,
-which choose biomes (rainforest, forest, boreal, woodland, grassland,
-steppe, desert sand seas and rocky plateaus, tundra, ice sheets); a
-priority-flood drains the land into river networks (green ribbons through
-deserts), lakes and salt pans; sea ice and plankton blooms colour the sea.
-Clouds follow a wind field (jets with meanders, lows and highs) with
-comma-shaped cyclones and trailing cold fronts, three hurricanes, the ITCZ's
-thunderstorm clusters, stratocumulus decks off the west coasts and cirrus.
-Cities are sampled where people would live (coasts, rivers, temperate and
-tropical lowlands), sized by a Zipf law, joined by roads with towns along
-them, with fishing fleets and gas flares.
+How it is made (`orbitlib/planet.py`, `clouds.py`, `hero.py`):
+
+- **Land.** Plates on a warped sphere push up ranges where they converge;
+  continents are placed masses warped at three scales with fractal coasts,
+  shelves and hotspot island chains; a climate model (latitude bands,
+  prevailing winds, moisture carried from the sea, rain shadows, cold
+  currents) chooses biomes (rainforest, forest, boreal, woodland,
+  grassland, steppe, deserts of sand seas and rocky plateaus, tundra, ice);
+  a priority-flood drains the land into rivers, lakes and salt pans.
+- **The first look** (`hero.py`). Under the player's view at the game's
+  start (the station over lon −150, lat 14, heading 60°) lies a designed
+  subcontinent, blended into the generated world: a rugged coast from the
+  lower left of the view toward the limb on the right, with a turquoise
+  shelf; a desert behind it — red and ochre sand seas with linear dunes,
+  gravel plains cut by wadis, dark rock outcrops, black lava fields, pale
+  tidal flats; a great river from a snow-capped range down through the
+  desert in a green corridor to a delta fan and an irrigated coastal plain,
+  with a sediment plume at sea; greener monsoon slopes on the range; clear
+  sky over the desert, cumulus caps on the range, trade-cumulus "flowers"
+  over the sea, and a thunderstorm cluster on the horizon. Every edge is a
+  smooth signed distance, so it holds up magnified.
+- **Clouds, by regime** (`clouds.py`): clear subtropical highs and deserts;
+  trade cumulus as flowers, gravel and sugar, in cloudy and clear zones
+  1,000–3,000 km across; stratocumulus decks off the west coasts, closed
+  cells near the coast opening into rings, a clear coastal strip; the ITCZ
+  as a broken band holding clusters of anvils with crisp upwind edges and
+  fibrous outflow; mid-latitude lows of every size and age (young ones with
+  a long cold front with a sharp leading edge and convective cells along
+  it, a warm-front shield, a dry slot; old occluded ones a spiral alone),
+  the cold sector behind them in open cells and cloud streets; streaked
+  storm-track layers; polar sheets with rifts; cirrus; three hurricanes.
+  Global mean opacity about 0.33 in the map — about 0.45 once the renderer
+  reads partial cover as cloudlets — very uneven (tropics 0.18, mid-latitudes
+  0.46).
+- **City lights.** Towns sampled where people live (coasts and rivers
+  first), clustered, each drawn as a point (no blur); highways between the
+  bigger towns as faint unbroken lines with towns strung along them;
+  **14 metropolises** at the best sites, far apart, each with a white-hot
+  downtown, suburbs and 5–8 radiating highways (`metros` in
+  `build/planet_meta.json`); fishing fleets and gas flares.
 
 Metadata (also in the `planet` node's extras): the **"HI"** of town lights
 (secret 8) is centred at **lon −112°, lat 47°** (letters ~130 km tall);
@@ -201,37 +227,54 @@ and is the reference for the runtime shader (the review renders use it):
 
 - ground: `albedo × (sun · n) × T_sun + skylight`, where the normal comes
   from `height` (slopes exaggerated ~9×) and `T_sun` is the air's
-  transmittance toward the sun; cloud shadows by sampling `clouds` offset
-  toward the sun by `6 km × tan(sun zenith)`;
-- the ocean's glint: GGX, roughness ~0.2 (wind-roughened), Schlick
-  Fresnel (F0 0.02), masked by `water`;
-- clouds as a layer 6 km up: opacity from `clouds`, a relief normal from
-  its gradient (cloud tops ~10 km of exaggerated relief), wrapped Lambert
-  plus skylight, a little forward scattering at thin edges;
-- night: `night × smoothstep(0.06, −0.08, sun · n)`, dimmed under cloud;
+  transmittance toward the sun; cloud shadows by sampling the clouds
+  (with their cloudlets, below) offset toward the sun by
+  `6 km × tan(sun zenith)`;
+- the ocean's glint: GGX, roughness ~0.13 (wind-roughened, modulated by the
+  detail's B), Schlick Fresnel (F0 0.02), masked by `water` sharpened to a
+  crisp shore: `smoothstep(0.42, 0.58, water + 0.5·(G(uv(48)) − 0.5))`;
+- clouds as a layer 6 km up: opacity from `clouds` broken into cloudlets
+  (below), a relief normal from the map's gradient (~10 km of exaggerated
+  relief) and from the cloudlets (below), wrapped Lambert plus skylight, a
+  little forward scattering at thin edges;
+- night: city points (below) × `smoothstep(0.06, −0.08, sun · n)`, dimmed
+  under cloud;
 - the air: single-scattered Rayleigh + Mie with ozone absorption in a
-  100 km shell (scale heights 8 and 1.2 km) — the blue limb, the haze, the
-  orange band at the terminator.
+  100 km shell (scale heights 8 and 1.2 km) plus a multiple-scattering
+  term — the blue limb, the haze, the orange band at the terminator — and
+  a faint green airglow layer at 95 km on the night limb.
 
 **Detail.** The maps are ~10 km a pixel; from 400 km the bottom of the view
 needs ~0.5 km. `detail.webp` supplies the missing scales. Its R and B
 channels have a *uniform histogram*, so the clouds map can be read as
-**coverage** and broken into crisp cloudlets in the right amount:
+**coverage** and broken into crisp cloudlets in the right amount. R is
+cellular cumulus (puffs clustered in cells), so partial cover appears as
+organised clumps, low cover as the tallest puffs at the heart of each cell:
 
 ```
-uv1 = (u·48·2·cos(lat), v·48)  mod 1      // ~0.4 km a texel
-uv2 = (u·192·2·cos(lat), v·192) mod 1
-d   = clamp(0.75·R(uv1) + 0.25·B(uv1) + 0.35·(R(uv2) − 0.5), 0, 1)
-t   = smoothstep(1 − a − 0.14, 1 − a + 0.14, d)
-a'  = max(t · min(1.6·a, 1), 0.08·a)            // a = clouds map
+uv(rep) = (u·rep·2·max(cos(lat), 0.2), v·rep)  mod 1
+d   = clamp(0.75·R(uv(48)) + 0.25·B(uv(48)) + 0.35·(R(uv(192)) − 0.5), 0, 1)
+t   = smoothstep(1 − a − 0.14, 1 − a + 0.14, d)                 // a = clouds map
+a'  = max(t · min(1.25·a, 1)^0.7, 0.08·a)
 ```
 
-Overcast stays overcast and clear stays clear; partial cover becomes
-distinct cloudlets. Treat `1.2 km × a'^1.5` as a height field for the
-cloud-top normal (the lumps catch the sun and shade their far sides), and
-use `a'` for the cloud shadows too. Modulate land albedo by
-`0.82 + 0.36 × G(uv1)`, and (optionally) break the city lights into
-streets and blocks with `night × (0.35 + 1.7 × R(uv3)²)`, uv3 at 384 repeats.
+Overcast stays overcast and clear stays clear. For the cloud-top normal,
+take `2.2 km × a'^1.5 × (0.45 + 0.55·d)` as a height field over the
+detail's texel (~0.4 km at 48 repeats): the lumps catch the sun and shade
+their far sides. Use `a'` for the cloud shadows too. Land albedo:
+`× (0.6 + 0.8·g) × (0.85 + 0.3·G(uv(192)))` with
+`g = 0.6·G(uv(48)) + 0.4·G(uv(192))`.
+
+**City lights as points** (`planetrender.city_points`). Every night-map
+texel is a small cell whose light comes from 3 points hashed from the
+texel's integer coordinates (positions and shares fixed per texel, the
+same hash is two lines of GLSL); each point is a Gaussian of radius
+`max(0.35 km, 0.55 × the screen pixel's footprint on the ground)`,
+normalised so a texel's total light is what the map says; 25% of the
+light stays as the smooth map for the skyglow. Sparse country becomes
+separate points, towns clusters, highways strings of points, and
+downtowns a dense bright mesh. Evaluate the 3×3 texels around the
+sample.
 
 ## `stars.webp`
 
@@ -248,8 +291,8 @@ galaxies. Faint on purpose: it shows when the sun is behind the planet.
 | --- | --- | --- | --- |
 | `shrapnel.<n>` | 6: torn painted skin, twisted bracket, crushed tube, sandwich-panel shard, carbon splinter, nut plate with bolts | 10–27 cm | — |
 | `chunk.<n>` | 4: dented avionics box in torn blanket, bent pipe with a flange, truss node with tube stubs, reaction-wheel housing | 0.6–0.7 m | 2–3 each |
-| `slab.<n>` | 3: curved isogrid skin with its ribs, honeycomb panel holed through, bent radiator panel | ~2 m | 3 each |
-| `shard.<n>` | 4: pieces of a solar wing, cells on one side | 1.2–1.3 m | — |
+| `slab.<n>` | 3: curved isogrid skin (12 mm skin, 4 cm ribs bent with it, a torn white blanket hanging off), honeycomb sandwich panel holed through (core at every edge, gold foil patch, a face sheet peeled back), radiator panel with its coolant tubes | ~2 m | 3 each |
+| `shard.<n>` | 4: pieces of a solar wing, cells on one side, the amber back, a torn aluminium frame rail along one edge | 1.2–1.3 m | — |
 | `foil.<n>` | 3: gold MLI crumpled round a dense core | ~0.5 m | core in 2 |
 
 - **Every whole sits at the file's origin**, its origin at its centre of
@@ -273,6 +316,12 @@ galaxies. Faint on purpose: it shows when the sun is behind the planet.
   flat-shaded on purpose: each facet catches the sun on its own and flashes
   as the piece turns. No tangent attribute is exported for the debris
   (three.js derives tangents per pixel), to keep the file small.
+- Bare metal is satin, not mirror (a mirror shows the black sky at almost
+  every angle): torn aluminium is bright, heat-tinted along its torn edges
+  (straw, bronze, purple, blue) with soot only at the very edge; painted
+  skins are white, chipped to bright metal. Every kind mixes materials that
+  read against both the black sky and the bright planet: white, bare
+  metal, gold or silver foil, dark cores.
 
 ## `drone.glb`
 
@@ -314,10 +363,15 @@ break-up: `derelict.pieces` (sibling group with the root's transform) holds
 
 ## `poster.webp`
 
-1600 × 900: the player's view at sunrise — the sun clearing the limb in the
-left window, the terminator's orange and blue band, the ground below still
-in night with its cities — a solar-wing shard a few metres out throwing the
-sun's glint, and the lit cupola around it all.
+1600 × 900: the player's view at sunrise over the day side — the sun just
+clearing the limb inside the round window, the limb's orange and blue band,
+the first look's coast, desert and ocean below with the sun's glint, a
+solar-wing shard a few metres out flashing the sun into the eye, gold foil
+catching the light in the right window, and the cupola around it all. A
+sun at the limb would leave the ground below in night, so the poster is
+lit by two suns as posters may be (`orbitlib/poster.py`): the ground, the
+station and the fragments by a morning sun 24° up, the sky and the limb
+with the sun at the disc.
 
 ## The review set (`build/review/`, regenerated by the `review` stage)
 
@@ -343,6 +397,11 @@ sun's glint, and the lit cupola around it all.
   the `.pieces` groups, `foil.<n>.wrap`, `toolbag.bag`/`toolbag.tool.<n>`,
   the astronaut's arm chain, `arm.shoulder`/`arm.elbow` on the drone.
 - `planet/detail.webp` is extra and optional; `height.webp` is delivered.
+- WebP and alpha: WebP drops the colour of fully transparent pixels unless
+  saved `exact`. No texture that stores data has an alpha channel; the only
+  alpha is the sticker's cut-out, whose transparent colour is its border's
+  white. `check_orbit.py` verifies this for every WebP, standalone and
+  inside the GLBs.
 - Debris wholes at the origin; pieces in sibling groups (not children), so
   a whole never hides its pieces or shows them doubled.
 - Texture sizes: cupola one 4096² unlit atlas; station one 4096² PBR set;

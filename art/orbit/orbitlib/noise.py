@@ -100,8 +100,8 @@ class Field:
     def __init__(self, seed, octaves=8):
         self.n = Noise3(seed)
         rng = np.random.default_rng(seed + 7919)
-        self.rot = [rotation(rng) for _ in range(max(64, octaves + 16))]
-        self.off = [rng.uniform(-500, 500, 3).astype(F32) for _ in range(max(64, octaves + 16))]
+        self.rot = [rotation(rng) for _ in range(max(128, octaves + 16))]
+        self.off = [rng.uniform(-500, 500, 3).astype(F32) for _ in range(max(128, octaves + 16))]
 
     def _oct(self, P, i, freq):
         R, o = self.rot[i], self.off[i]

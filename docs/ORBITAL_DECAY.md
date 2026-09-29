@@ -288,7 +288,13 @@ contract left open, and a few additions.
   UVs planar with square texels, (0.5, 0.5) at the pane's centre.
 - **Planet.** `height.webp` is delivered, and an optional tileable
   `planet/detail.webp` breaks the clouds into crisp cloudlets below the
-  maps' ~10 km a pixel (recipe in the README).
+  maps' ~10 km a pixel (recipe in the README), and the README's city-points
+  recipe turns `night.webp` into distinct points at any zoom. Under the
+  view at the game's start (the `planet` node's `subpoint_lonlat`) lies a
+  designed coast: desert, river and delta, a snow-capped range.
+- **Textures and alpha.** No texture that stores data carries alpha (WebP
+  drops the colour under zero alpha); the only alpha is the sticker's
+  cut-out. `art/orbit/check_orbit.py` checks every WebP.
 - **Debris.** Wholes at the origin (origin at the centre of mass, extras
   `kind`, `mass_kg`, `size_m`). Pieces live in a sibling group
   `chunk.<n>.pieces` (likewise `slab.<n>.pieces`, `foil.<n>.pieces`) whose

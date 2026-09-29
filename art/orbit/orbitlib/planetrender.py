@@ -203,13 +203,61 @@ def cloud_cover(maps, u, v, lat, use_detail=True, with_d=False):
     return (s, d) if with_d else s
 
 
-def city_points(maps, nig, u, v, lat):
-    """City lights below the map's pixel: modulated by the detail texture at
-    ~0.05 km a texel (384 repeats), which breaks the glow into a mottle of
-    streets and blocks without changing its average much."""
-    u3, v3 = detail_uv(u, v, lat, DETAIL_REP[1] * 2)
-    sp = N.sample(maps.det_r, u3, v3)
-    return nig * (0.35 + 1.7 * sp ** 2)[:, None]
+def _hash01(i, j, k):
+    """Deterministic pseudo-random floats in [0, 1) from integer lattice
+    coordinates (the same hash is easy to write in GLSL)."""
+    h = (i.astype(np.int64) * 73856093) ^ (j.astype(np.int64) * 19349663) ^ (np.int64(k) * 83492791)
+    h = h & 0xffffffff
+    h = ((h >> 16) ^ h) * 0x45d9f3b & 0xffffffff
+    h = ((h >> 16) ^ h) * 0x45d9f3b & 0xffffffff
+    h = (h >> 16) ^ h
+    return ((h & 0xffffff) / float(0x1000000)).astype(F32)
+
+
+CITY_POINTS = 3           # points per night-map texel
+CITY_SIGMA_KM = 0.35      # the smallest point (km); grows with the pixel footprint
+CITY_GLOW = 0.25          # share of the light left as a smooth glow
+
+
+def city_points(maps, u, v, lat, footprint_km):
+    """City lights below the map's pixel. Every texel of the night map is a
+    little cell of land whose light comes from CITY_POINTS hashed points
+    inside it (positions and shares fixed per texel); each point is a
+    Gaussian of radius max(CITY_SIGMA_KM, 0.55 x the pixel's footprint),
+    normalised so a texel's total light is what the map says. Sparse
+    country becomes separate points, towns become clusters, the highways
+    strings of points, and downtowns (where every texel is bright) a dense
+    mesh. A share (CITY_GLOW) stays as the smooth map for the skyglow."""
+    night = maps.night
+    Hn, Wn = night.shape[:2]
+    x = u * Wn - 0.5
+    y = v * Hn - 0.5
+    ix = np.floor(x + 0.5).astype(np.int64)
+    iy = np.floor(y + 0.5).astype(np.int64)
+    kx = (2 * math.pi * R / Wn) * np.maximum(np.cos(lat), 0.05)
+    ky = math.pi * R / Hn
+    sig = np.maximum(CITY_SIGMA_KM, 0.55 * footprint_km)
+    norm = (kx * ky) / (2 * math.pi * sig * sig)
+    acc = np.zeros((u.size, 3), F32)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            ci = (ix + dx) % Wn
+            cj = np.clip(iy + dy, 0, Hn - 1)
+            c = night[cj, ci]
+            if not c.any():
+                continue
+            ws = [_hash01(ci, cj, 10 + k) ** 3 + 0.05 for k in range(CITY_POINTS)]
+            wt = sum(ws)
+            g = np.zeros(u.size, F32)
+            for k in range(CITY_POINTS):
+                px = ci + _hash01(ci, cj, 20 + k) - 0.5
+                py = cj + _hash01(ci, cj, 30 + k) - 0.5
+                ddx = (((x - px + Wn / 2) % Wn) - Wn / 2) * kx
+                ddy = (y - py) * ky
+                g += (ws[k] / wt) * np.exp(-(ddx * ddx + ddy * ddy) / (2 * sig * sig))
+            acc += c * (g * norm)[:, None]
+    smooth = N.sample(night, u, v)
+    return CITY_GLOW * smooth + (1 - CITY_GLOW) * acc
 
 
 def sharpen_clouds(alpha, d, soft=0.14):
@@ -230,6 +278,8 @@ def sharpen_clouds(alpha, d, soft=0.14):
 
 class Settings:
     samples = 48
+    pix_angle = math.radians(62.0) / 900.0     # radians per pixel (for the city points)
+    city_points = True
     exposure = 1.0
     night_gain = 0.6
     star_gain = 1.0
@@ -327,6 +377,12 @@ def _render_chunk(O, D, sun, maps, st):
         lat = np.arcsin(np.clip(ng[:, 2], -1, 1))
         alb = N.sample(maps.albedo, u, v)
         wat = N.sample(maps.water, u, v)
+        if st.detail and maps.detail is not None:
+            # a crisp, fractal shoreline below the map's pixel: the soft
+            # mask thresholded against the terrain detail
+            u1, v1 = detail_uv(u, v, np.arcsin(np.clip(ng[:, 2], -1, 1)), DETAIL_REP[0])
+            gd = N.sample(maps.det_g, u1, v1)
+            wat = N.smoothstep(0.42, 0.58, wat + (gd - 0.5) * 0.5)
         nig = N.sample(maps.night, u, v)
         det = detail_at(maps, u, v, lat) if (st.detail and maps.detail is not None) else None
         if det is not None:
@@ -391,8 +447,15 @@ def _render_chunk(O, D, sun, maps, st):
         Lg = Lg + wat[:, None] * (0.02 + 0.98 * (1 - ndv) ** 5)[:, None] * SUN_E * np.array([0.02, 0.035, 0.07], F32) * np.clip(mu_g + 0.1, 0, 1)[:, None]
         # city lights in the dark
         dark = N.smoothstep(0.06, -0.08, mu_g)
-        if det is not None:
-            nig = city_points(maps, nig, u, v, lat)
+        if st.city_points:
+            nd = np.nonzero(dark > 0.01)[0]
+            if nd.size:
+                # the pixel's footprint on the ground (km), stretched by the
+                # grazing angle
+                cosi = np.clip(np.sum(ng[nd] * -Dg[nd], 1), 0.08, 1)
+                fp = st.pix_angle * tg[gi][nd] / np.sqrt(cosi)
+                nig = nig.copy()
+                nig[nd] = city_points(maps, u[nd], v[nd], lat[nd], fp)
         Ln = nig * (st.night_gain * dark)[:, None]
         Lsurf = Lg + Ln
         # ---------------- clouds ----------------

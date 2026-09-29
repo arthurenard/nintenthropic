@@ -173,9 +173,14 @@ def debris(ctx):
             vis = o in mine
             for x in [o] + list(o.children_recursive):
                 x.hide_render = not vis
-        # wholes in a row; each one's pieces pulled apart behind it
+        # wholes in a row, each turned at random as if tumbling; each one's
+        # pieces pulled apart behind it
+        import random as _r
+        rr = _r.Random(kind)
         for i, o in enumerate(wholes):
             o.location = Vector((i * step, 0.0, 0.0))
+            o.rotation_mode = 'XYZ'
+            o.rotation_euler = (rr.uniform(-0.9, 0.9), rr.uniform(-0.9, 0.9), rr.uniform(0, 6.28))
             g = bpy.data.objects.get(o.name + '.pieces')
             if g is not None:
                 g.location = Vector((i * step, size * 1.5, 0.0))
@@ -314,7 +319,7 @@ PLANET_VIEWS = {
     'planet_day': (55.0, -30.0, 'player', 0.0, 0.0, 0.0),
     'planet_glint': (24.0, -4.0, 'player', 0.0, 0.0, 0.0),
     'planet_terminator': (-2.0, 20.0, 'player', 1.8, 0.1, 0.6),
-    'planet_night': (-40.0, 180.0, 'player', 4.2, 0.6, 2.0, (80.0, 30.0), 30.0),
+    'planet_night': (-40.0, 180.0, 'player', 4.2, 0.6, 2.0, (-139.0, 16.0), 20.0),
     'planet_night_hi': (-40.0, 180.0, 'player', 4.2, 0.6, 2.0, (-112.0, 43.5), 0.0),
     'planet_limb_tele': (6.0, 35.0, (21.0, -4.0, 18.0), 0.6, 0.0, 0.3),
 }
