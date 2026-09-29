@@ -244,7 +244,11 @@ export class Cast {
     v.rig.root.visible = true;
     const clip = { lean_left: "lean_left_out", lean_right: "lean_right_out", rise: "rise", step_out: "step_out" }[b.cover.emerge];
     // The clip takes as long as he does: it ends as he arrives, not before.
-    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
+    // Only a rise starts from the crouch he waited in: a lean or a step
+    // begins standing at the edge of his cover, and blended in from the
+    // crouch (his first time out) he would come up out of it in the
+    // first tenth of a second, scooting sideways as he does.
+    v.rig.play(clip, b.cover.emerge === "rise" ? 0.1 : 0, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
     if (b.role === "boss" && !v.introduced) {
       v.introduced = true;
       this.sound.play("boss_intro");
