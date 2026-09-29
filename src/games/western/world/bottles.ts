@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   Vector2,
+  Quaternion,
   Vector3,
   type Object3D,
   type PerspectiveCamera,
@@ -43,6 +44,7 @@ const PALETTE: [string, string][] = [
 
 const tmp = new Vector3();
 const tmp2 = new Vector3();
+const tmp3 = new Quaternion();
 const ndc = new Vector3();
 
 /** A whiskey bottle's profile, turned on a lathe. */
@@ -69,6 +71,34 @@ const BOTTLE_HEIGHT = 0.305;
 function bottleScale(eye: Vector3, base: Vector3): number {
   const d = Math.hypot(base.x - eye.x, base.z - eye.z);
   return Math.min(1.7, Math.max(1, d / 11));
+}
+
+/**
+ * Where the aim check's enlarged camera picture can cover the art's view
+ * (src/app/play.css: the lower-left corner, up to 320 px wide and about a
+ * quarter of the window tall, its top edge a little over 70% of the way down
+ * at 16:10), in the art camera's terms: x in half-heights from the middle
+ * (so a window's width does not change it) and y as the -1 to 1 of the
+ * screen, negative low.
+ */
+const PICTURE = { xMin: -1.45, xMax: -0.7, yBelow: -0.3, liftTo: -0.24 };
+
+/**
+ * A spot the art put where the camera's picture covers it (calib.7, in a
+ * 16:10 window) moved up the view to where it does not, along a ray from the
+ * eye at the same sideways angle: the direction a bottle should be sought
+ * in, not somewhere to stand. Null when the spot is clear of the picture.
+ */
+export function clearOfThePicture(eye: Vector3, quaternion: Quaternion, fov: number, spot: Vector3): Vector3 | null {
+  const v = spot.clone().sub(eye).applyQuaternion(tmp3.copy(quaternion).invert());
+  if (v.z > -1e-3) return null;
+  const tanHalf = Math.tan((fov * Math.PI) / 360);
+  const x = v.x / -v.z / tanHalf;
+  const y = v.y / -v.z / tanHalf;
+  if (x < PICTURE.xMin || x > PICTURE.xMax || y >= PICTURE.yBelow) return null;
+  const len = v.length();
+  v.set(x * tanHalf, PICTURE.liftTo * tanHalf, -1).setLength(len);
+  return v.applyQuaternion(quaternion).add(eye);
 }
 
 const probe: RayHit = { point: new Vector3(), normal: new Vector3(), distance: 0, object: null };
@@ -206,6 +236,11 @@ export class BottleStage implements CalibrationStage {
       l.position.y = 0.1;
       g.add(juice, body, c, l);
       let base = node.getWorldPosition(new Vector3());
+      // The check's camera picture sits in the lower-left corner: a bottle
+      // the art put under it stands further up the street instead.
+      const lifted = clearOfThePicture(town.eye, town.eyeQuaternion, town.fov, base);
+      const clear = lifted ? findStand(queries, town.eye, lifted) : null;
+      if (clear) base = clear;
       // A spot the eye cannot see (behind a sign's cap, or a stack of crates
       // set down in front of it since) gets the nearest ledge the eye can.
       if (!bottleSeen(queries, town.eye, base)) {
