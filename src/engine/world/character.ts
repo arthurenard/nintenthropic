@@ -25,6 +25,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   Quaternion,
+  ShaderChunk,
   SkinnedMesh,
   Vector3,
   type AnimationAction,
@@ -98,6 +99,40 @@ export interface RigLighting {
   shade: { value: number };
 }
 
+/** The line of three's lights chunk where each directional light's colour is known. */
+const DIRECTIONAL_LIGHT_LINE = "getDirectionalLightInfo( directionalLight, directLight );";
+
+/**
+ * A rig's fragment shader with the key light's reach, the shade and the
+ * template's rim light in it. The key light's line lives in three's
+ * `lights_fragment_begin` chunk, which is still an `#include` when
+ * onBeforeCompile runs, so the chunk is expanded here to reach the line
+ * (looking for it in the unexpanded source finds nothing, and the key light
+ * silently never applies).
+ */
+export function patchRigFragment(source: string): string {
+  const lights = ShaderChunk.lights_fragment_begin;
+  if (!lights.includes(DIRECTIONAL_LIGHT_LINE)) throw new Error("three's lights chunk no longer has the directional light line the rig patch needs");
+  return source
+    .replace("#include <common>", "#include <common>\nuniform float uKeyLight;\nuniform float uShade;\nuniform vec3 uRim;")
+    .replace("#include <lights_fragment_begin>", lights.replace(DIRECTIONAL_LIGHT_LINE, `${DIRECTIONAL_LIGHT_LINE}\n\t\tdirectLight.color *= uKeyLight;`))
+    .replace(
+      "#include <opaque_fragment>",
+      [
+        "{",
+        "\tfloat facing = saturate( dot( geometryNormal, geometryViewDir ) );",
+        "\tfloat rim = pow( 1.0 - facing, 3.0 ) * ( 0.55 + 0.45 * geometryNormal.y );",
+        "\t#ifdef USE_AOMAP",
+        "\trim *= ambientOcclusion;",
+        "\t#endif",
+        "\toutgoingLight += material.diffuseColor * uRim * rim;",
+        "}",
+        "outgoingLight *= uShade;",
+        "#include <opaque_fragment>",
+      ].join("\n"),
+    );
+}
+
 /**
  * Each rig's materials get the key light's reach and the shade, and the
  * template's rim light. Patched once, one shader program for every rig.
@@ -107,27 +142,7 @@ function patchMaterial(m: Material, lighting: RigLighting, rim: RimLight): void 
     shader.uniforms["uKeyLight"] = lighting.key;
     shader.uniforms["uShade"] = lighting.shade;
     shader.uniforms["uRim"] = rim;
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float uKeyLight;\nuniform float uShade;\nuniform vec3 uRim;")
-      .replace(
-        "getDirectionalLightInfo( directionalLight, directLight );",
-        "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= uKeyLight;",
-      )
-      .replace(
-        "#include <opaque_fragment>",
-        [
-          "{",
-          "\tfloat facing = saturate( dot( geometryNormal, geometryViewDir ) );",
-          "\tfloat rim = pow( 1.0 - facing, 3.0 ) * ( 0.55 + 0.45 * geometryNormal.y );",
-          "\t#ifdef USE_AOMAP",
-          "\trim *= ambientOcclusion;",
-          "\t#endif",
-          "\toutgoingLight += material.diffuseColor * uRim * rim;",
-          "}",
-          "outgoingLight *= uShade;",
-          "#include <opaque_fragment>",
-        ].join("\n"),
-      );
+    shader.fragmentShader = patchRigFragment(shader.fragmentShader);
   };
   m.customProgramCacheKey = () => PATCH_KEY;
 }

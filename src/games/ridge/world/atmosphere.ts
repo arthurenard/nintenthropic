@@ -266,16 +266,15 @@ export function patchStandard(material: Material, uniforms: AtmosphereUniforms, 
       );
     let frag = shader.fragmentShader.replace("#include <common>", `#include <common>\nvarying vec3 vAtmoWorld;\n${ATMOSPHERE_GLSL}`);
     // The lights chunk is still an #include here: it is expanded (and the sun's line patched)
-    // now. A rig's sun is its key light's reach, which the game sets from the light map (the
-    // engine's rig patch declares uKeyLight but, looking for the line before the include is
-    // expanded, never applies it).
-    const keyed = !sunFromMap && frag.includes("uniform float uKeyLight;");
-    if (sunFromMap || keyed) {
+    // now. A rig's sun is its key light's reach (uKeyLight, which the engine's rig patch, run
+    // above, has already applied and which the game sets from the light map), so it is not
+    // patched again.
+    if (sunFromMap) {
       frag = frag.replace(
         "#include <lights_fragment_begin>",
         ShaderChunk.lights_fragment_begin.replace(
           "getDirectionalLightInfo( directionalLight, directLight );",
-          `getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= ${sunFromMap ? "atmoSun( vAtmoWorld, 2.0 )" : "uKeyLight"};`,
+          "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= atmoSun( vAtmoWorld, 2.0 );",
         ),
       );
     }
