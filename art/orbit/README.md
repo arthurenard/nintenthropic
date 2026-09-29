@@ -24,20 +24,20 @@ python3 art/orbit/check_orbit.py        # proves the contract, the budgets, the 
 | `poster` | `poster.webp` (and `build/review/poster.png`) | 1 min |
 | `review` | the review set in `build/review/` (not committed) | ~20 min |
 
-Every stage but `review` runs in about 12 minutes (measured: 691 s); with
+Every stage but `review` runs in about 8 minutes (measured: 452 s); with
 no stage named, all of them run, the review included.
 
 | File | Size | Budget | Triangles |
 | --- | --- | --- | --- |
-| `cupola.glb` | 0.73 MB | 6 MB | 32,498 |
-| `station.glb` | 2.03 MB | 10 MB | 70,038 |
-| `debris.glb` | 2.07 MB | 3 MB | 71,978 (wholes and pieces) |
+| `cupola.glb` | 0.71 MB | 6 MB | 32,498 |
+| `station.glb` | 2.12 MB | 10 MB | 72,486 |
+| `debris.glb` | 2.43 MB | 3 MB | 98,500 (wholes and pieces) |
 | `drone.glb` | 0.17 MB | 3 MB | 2,584 |
 | `derelict.glb` | 1.08 MB | 3 MB | 12,404 |
 | `extras.glb` | 1.04 MB | 3 MB | 12,306 |
-| `planet/*.webp` | 1.8 MB together (clouds 1.1 MB) | – | – |
-| `stars.webp` | 135 KB | – | – |
-| `poster.webp` | 111 KB | – | – |
+| `planet/*.webp` | 2.4 MB together (clouds 1.6 MB) | – | – |
+| `stars.webp` | 134 KB | – | – |
+| `poster.webp` | 180 KB | – | – |
 
 `--quick` runs everything small and fast for iteration. Stages after
 `cupola` reopen the saved `.blend` files in `art/orbit/build/` (gitignored),
@@ -168,7 +168,7 @@ and layouts are unchanged from the first delivery.
 | `albedo.webp` | 4096 × 2048 | surface reflectance, sRGB (no atmosphere: oceans are dark navy, the game adds the air) |
 | `clouds.webp` | 4096 × 2048 | cloud opacity 0..1, linear, the same in R, G and B |
 | `night.webp` | 4096 × 2048 | city light, sRGB (sodium orange, whiter modern cores): points, filaments, metropolises |
-| `water.webp` | 4096 × 2048 | ocean, lakes and the great river 1, land 0, antialiased coasts, linear (lossless) |
+| `water.webp` | 4096 × 2048 | ocean, lakes and the great river 1, land 0, coasts ramped over ~2.5 px (sharpen at runtime, below), linear (lossless) |
 | `height.webp` | 4096 × 2048 | land relief, linear: `(elevation / 6 km)^0.8`, 0 at the shore and on water, no steps at coasts |
 | `detail.webp` | 1024 × 1024, tileable | sub-pixel detail (optional, see below): R cellular cumulus, G terrain grain, B cloud rolls and fibres |
 
@@ -231,7 +231,8 @@ and is the reference for the runtime shader (the review renders use it):
   (with their cloudlets, below) offset toward the sun by
   `6 km × tan(sun zenith)`;
 - the ocean's glint: GGX, roughness ~0.13 (wind-roughened, modulated by the
-  detail's B), Schlick Fresnel (F0 0.02), masked by `water`;
+  detail's B), Schlick Fresnel (F0 0.02), masked by `water` sharpened to a
+  crisp shore: `smoothstep(0.42, 0.58, water + 0.5·(G(uv(48)) − 0.5))`;
 - clouds as a layer 6 km up: opacity from `clouds` broken into cloudlets
   (below), a relief normal from the map's gradient (~10 km of exaggerated
   relief) and from the cloudlets (below), wrapped Lambert plus skylight, a

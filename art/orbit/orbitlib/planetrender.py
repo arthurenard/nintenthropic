@@ -377,6 +377,12 @@ def _render_chunk(O, D, sun, maps, st):
         lat = np.arcsin(np.clip(ng[:, 2], -1, 1))
         alb = N.sample(maps.albedo, u, v)
         wat = N.sample(maps.water, u, v)
+        if st.detail and maps.detail is not None:
+            # a crisp, fractal shoreline below the map's pixel: the soft
+            # mask thresholded against the terrain detail
+            u1, v1 = detail_uv(u, v, np.arcsin(np.clip(ng[:, 2], -1, 1)), DETAIL_REP[0])
+            gd = N.sample(maps.det_g, u1, v1)
+            wat = N.smoothstep(0.42, 0.58, wat + (gd - 0.5) * 0.5)
         nig = N.sample(maps.night, u, v)
         det = detail_at(maps, u, v, lat) if (st.detail and maps.detail is not None) else None
         if det is not None:

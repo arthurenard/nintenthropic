@@ -573,7 +573,7 @@ class Planet:
         # land and sea meet over a pixel, not on a staircase: the blend
         # follows the continent field's own zero crossing
         gc = np.sqrt(np.gradient(self.c, axis=0) ** 2 + np.gradient(self.c, axis=1) ** 2) + 1e-6
-        land_aa = np.clip(0.5 + self.c / gc, 0, 1)
+        land_aa = N.smoothstep(0.0, 1.0, np.clip(0.5 + self.c / (2.5 * gc), 0, 1))
         col = lerp(col, oc, (1 - land_aa)[..., None])
         col = np.where(fresh[..., None], srgb((12, 26, 40)), col)
         self.ice = np.maximum(icef * land, self.seaice).astype(F32)
@@ -596,7 +596,7 @@ class Planet:
     def water_and_height(self):
         c = self.c
         g = np.sqrt(np.gradient(c, axis=0) ** 2 + np.gradient(c, axis=1) ** 2) + 1e-6
-        edge = np.clip(0.5 - c / g, 0, 1)
+        edge = N.smoothstep(0.0, 1.0, np.clip(0.5 - c / (2.5 * g), 0, 1))
         w = np.maximum(edge, self.lake)
         w = np.maximum(w, np.clip(self.bigriver * 0.7, 0, 1))
         self.water = np.clip(w - self.seaice * 0.95, 0, 1).astype(F32)
