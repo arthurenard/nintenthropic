@@ -29,6 +29,7 @@ import {
   Vector3,
   type WebGLRenderer,
 } from "three";
+import { disposeTree } from "../../../engine/world/scene";
 import { rangeMarkMils } from "../rules/ballistics";
 import { SCOPE_IN_TIME, SCOPE_OUT_TIME, SCOPE_PAN_GAIN, SCOPE_POWER, SWAY_MOVING, SWAY_SETTLE, SWAY_STILL } from "../rules/tuning";
 
@@ -453,6 +454,7 @@ export class Scope {
   }
 
   dispose(): void {
+    disposeTree(this.overlay);
     this.material.dispose();
     this.reticleTexture.dispose();
     this.crackTexture.dispose();

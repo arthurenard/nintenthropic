@@ -77,6 +77,8 @@ export class DecalPool {
 
   dispose(): void {
     this.mesh.geometry.dispose();
-    (this.mesh.material as MeshBasicMaterial).dispose();
+    const material = this.mesh.material as MeshBasicMaterial;
+    material.map?.dispose();
+    material.dispose();
   }
 }

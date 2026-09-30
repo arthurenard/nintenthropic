@@ -480,7 +480,8 @@ export const ORBIT_CUES: Record<string, CueSpec> = {
     priority: 0, maxInstances: 1, vary: 0.08, expect: [0.3, 1.2],
   },
   orbit_decompress: {
-    recipe: orbitDecompress, pack: "orbit", bus: "sfx", level: -1, steady: true,
+    // Stereo, so 3 dB louder through the panner than a mono cue at the same level: trimmed to sit with the laser.
+    recipe: orbitDecompress, pack: "orbit", bus: "sfx", level: -1, trim: -3, steady: true,
     priority: 3, maxInstances: 1, vary: 0, expect: [1.6, 2.3],
   },
   orbit_shutter: {

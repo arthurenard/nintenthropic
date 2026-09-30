@@ -283,6 +283,8 @@ export class ParticleSystem {
 
   dispose(): void {
     this.points.geometry.dispose();
+    // The atlas is the game's own (made per game, shared by its systems): disposing it again is harmless.
+    (this.material.uniforms["uMap"]?.value as { dispose?(): void } | null)?.dispose?.();
     this.material.dispose();
   }
 }
