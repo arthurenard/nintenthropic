@@ -190,3 +190,26 @@ describe("rendering", () => {
     expect(env[env.length - 3]!).toBeLessThan(top * 0.05);
   });
 });
+
+describe("the mix across the games", () => {
+  /**
+   * How loud a cue reaches the master at its table level: its loudest 50 ms
+   * plus its level, less the 3 dB the engine's stereo panner takes off a
+   * mono cue at centre (a stereo cue passes it whole).
+   */
+  function atTheMaster(cue: string): number {
+    const take = takesOf(cue)[0]!;
+    return momentaryMaxDb(take.channels, SR) + CUES[cue]!.level + (take.channels.length === 1 ? -3.01 : 0);
+  }
+
+  it("plays the player's gun as loud in every game, within 1.5 dB", () => {
+    const guns = ["revolver_shot", "night_rifle", "orbit_laser", "ridge_rifle_shot"];
+    const loud = guns.map(atTheMaster);
+    const spread = Math.max(...loud) - Math.min(...loud);
+    expect(spread, guns.map((g, i) => `${g} ${loud[i]!.toFixed(1)} dB`).join(", ")).toBeLessThan(1.5);
+  });
+
+  it("keeps the glass giving way no louder than the laser that shoots in Orbital Decay", () => {
+    expect(atTheMaster("orbit_decompress")).toBeLessThan(atTheMaster("orbit_laser") + 1);
+  });
+});

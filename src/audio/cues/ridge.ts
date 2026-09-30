@@ -1953,7 +1953,9 @@ export function ridgeGolden(t: Take): Mono[] {
 export const RIDGE_CUES: Record<string, CueSpec> = {
   // --- the rifle, in the player's hands ------------------------------------------------------
   ridge_rifle_shot: {
-    recipe: ridgeRifleShot, pack: "ridge", bus: "sfx", level: 0, reverb: 0.12, echo: 0,
+    // Stereo, and a stereo cue passes the engine's panner at centre 3 dB louder than a mono one: trimmed
+    // so that the player's rifle is as loud as the revolver and the night's rifle (a test pins it).
+    recipe: ridgeRifleShot, pack: "ridge", bus: "sfx", level: 0, trim: -3, reverb: 0.12, echo: 0,
     priority: 3, maxInstances: 3, vary: 0.02, takes: 4, expect: [3.0, 5.0],
   },
   ridge_bolt: {
