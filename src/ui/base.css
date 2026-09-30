@@ -450,6 +450,11 @@ svg {
     fade-out 250ms var(--ease) 3.5s forwards;
   pointer-events: none;
 }
+/* In a game the foot of the view is the aim check's card and the hint line:
+   the toast rises above them instead of covering their words. */
+body[data-view="game"] .toast {
+  bottom: 160px;
+}
 .toast svg {
   width: 18px;
   height: 18px;

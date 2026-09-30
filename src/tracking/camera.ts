@@ -68,6 +68,42 @@ export function chooseCamera(deviceId: string | null): void {
   }
 }
 
+/** A camera the browser knows of: its id, and the name it gives (empty until the page may use a camera). */
+export interface CameraInfo {
+  deviceId: string;
+  label: string;
+}
+
+/** The cameras among the browser's devices; one that has no id yet (the browser has not let the page see it) is not counted. */
+export function videoInputs(devices: readonly Pick<MediaDeviceInfo, "kind" | "deviceId" | "label">[]): CameraInfo[] {
+  return devices.filter((device) => device.kind === "videoinput" && device.deviceId).map(({ deviceId, label }) => ({ deviceId, label }));
+}
+
+/** The cameras now, or none where the browser will not say. */
+export async function listCameras(): Promise<CameraInfo[]> {
+  try {
+    return videoInputs(await navigator.mediaDevices.enumerateDevices());
+  } catch {
+    return [];
+  }
+}
+
+/** What to call a camera to the player: the name it has, else its place in the list. */
+export function cameraName(cameras: readonly CameraInfo[], deviceId: string | null): string {
+  const at = cameras.findIndex((camera) => camera.deviceId === deviceId);
+  return cameras[at]?.label || `Camera ${at + 1 || 1}`;
+}
+
+/**
+ * The camera after the one in use, round the list; the first when the one in
+ * use is not on it. Null when there is nothing to switch to (fewer than two).
+ */
+export function nextCamera(cameras: readonly CameraInfo[], inUse: string | null): CameraInfo | null {
+  if (cameras.length < 2) return null;
+  const at = cameras.findIndex((camera) => camera.deviceId === inUse);
+  return cameras[(at + 1) % cameras.length]!;
+}
+
 /** The browser's own record of whether this page may use the camera. */
 export async function cameraPermission(): Promise<PermissionState | "unknown"> {
   try {

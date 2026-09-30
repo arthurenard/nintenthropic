@@ -795,6 +795,46 @@
   width: 100%;
   height: 100%;
 }
+/* Switch Camera, on the picture during the aim check only (and only with two
+   or more cameras): a small glass circle in the corner, 44 to reach. The
+   picture itself never takes a pointer, the button does. */
+.pip-switch {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  background: none;
+  pointer-events: auto;
+}
+.pip-switch::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 0 0 1px var(--hairline);
+  transition: background-color 250ms var(--ease);
+}
+.pip-switch:hover {
+  background: none;
+}
+.pip-switch:hover::before {
+  background: rgba(58, 58, 60, 0.8);
+}
+.pip-switch svg {
+  position: relative;
+  width: 18px;
+  height: 18px;
+}
+.pip-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.game:not([data-phase="check"]) .pip-switch {
+  display: none;
+}
 
 /* --- the aim check ----------------------------------------------------------------------------------- */
 

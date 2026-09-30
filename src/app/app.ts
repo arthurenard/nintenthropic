@@ -19,7 +19,7 @@ import type { Matrix } from "../input/homography";
 import { MouseInput, TouchInput } from "../input/pointer";
 import { EyeScope, FACE_EVERY, ScopeControl, scopeKeys } from "../input/scope";
 import type { ScriptedHands } from "../input/script";
-import { CameraError, cameraPermission, chooseCamera, chosenCamera, openCamera, remembered, type Camera, type CameraTrouble } from "../tracking/camera";
+import { CameraError, cameraPermission, chooseCamera, chosenCamera, listCameras, openCamera, remembered, type Camera, type CameraInfo, type CameraTrouble } from "../tracking/camera";
 import { ModelError } from "../tracking/errors";
 import type { Tracker } from "../tracking/tracker";
 import type { HandSource } from "../tracking/types";
@@ -29,6 +29,7 @@ import { AimCheckView } from "./aimCheckView";
 import { hashId, initialGame, posterInto, Shelf } from "./arcade";
 import { Crosshair } from "./crosshair";
 import { FireToPlay, HandWatch, type HandWatchEvent } from "./handWatch";
+import { switchCamera } from "./cameraSwitch";
 import { Hud } from "./hud";
 import { watchKonami } from "./konami";
 import { Pip } from "./pip";
@@ -172,6 +173,10 @@ export class App {
   private audioReady: Promise<void> | null = null;
   private tracker: Tracker | null = null;
   private camera: Camera | null = null;
+  /** The cameras the browser lists (Switch Camera shows when there are two or more). */
+  private cameras: CameraInfo[] = [];
+  /** A switch to another camera is under way: the gap with no camera is not a camera that has gone. */
+  private switching = false;
   private session: Session | null = null;
   private control: InputKind;
   private generation = 0;
@@ -515,7 +520,7 @@ export class App {
    */
   private cameraEnded(): void {
     const session = this.session;
-    if (!session || session.control !== "hand") return;
+    if (!session || session.control !== "hand" || this.switching) return;
     if (session.phase === "over") this.stopListening(session, true);
     else if (session.phase === "check" || session.phase === "play") this.cameraTrouble(session, "stopped");
   }
@@ -659,6 +664,7 @@ export class App {
     this.session = session;
     this.scopeFor(session);
     if (hand) this.startTracking();
+    void this.refreshCameras();
     host.setGame(game);
     host.onFrame = ({ now, aim }) => this.frame(session, now, aim);
     this.round(session, adjust);
@@ -858,7 +864,7 @@ export class App {
    * be played: said at once, with the round frozen. Returns whether it was.
    */
   private cameraStopped(session: Session, now: number): boolean {
-    if (session.control !== "hand" || session.troubled || session.paused) return false;
+    if (session.control !== "hand" || session.troubled || session.paused || this.switching) return false;
     if (session.phase !== "check" && session.phase !== "play") return false;
     if (!this.options.scripted && !this.camera) {
       this.cameraTrouble(session, "stopped");
@@ -960,6 +966,7 @@ export class App {
     session.lostSince = null;
     this.pip.hide();
     this.showHold(null);
+    this.showSwitch();
     $("game").dataset.input = control;
     if (session.phase === "check") {
       // The stage is cleared once: a check already done has cleared it.
@@ -1044,6 +1051,8 @@ export class App {
     session.lostSince = null;
     this.pip.calm();
     $("adjust-aim").hidden = session.control !== "hand";
+    this.showSwitch();
+    void this.refreshCameras();
     setText("pause-title", "Paused");
     openSheet("pause-sheet");
     $("resume").focus();
@@ -1236,6 +1245,95 @@ export class App {
     this.camera = null;
   }
 
+  // --- Switch Camera ---------------------------------------------------------------------------
+
+  /** The camera in use (the scripted hand plays a camera of its own). */
+  private cameraInUse(): string | null {
+    return this.options.scripted ? this.options.scripted.deviceId : (this.camera?.deviceId ?? null);
+  }
+
+  /** The cameras the browser lists now; Switch Camera shows while there is more than one to choose from. */
+  private async refreshCameras(): Promise<void> {
+    this.cameras = await listCameras();
+    this.showSwitch();
+  }
+
+  /** The two Switch Camera controls - on the camera's picture, and in the pause menu - shown only for a hand player with two or more cameras. */
+  private showSwitch(): void {
+    const show = this.cameras.length >= 2 && this.session?.control === "hand";
+    for (const id of ["switch-camera", "pause-switch-camera"]) {
+      const button = $<HTMLButtonElement>(id);
+      button.hidden = !show;
+      button.disabled = this.switching;
+    }
+  }
+
+  /**
+   * Switch Camera: the next camera at once, the old one let go. The aim check
+   * begins again for the new camera - from its saved aim when it has one -
+   * and a round already begun starts afresh under it, as it does for any other
+   * camera. The new camera is named, calmly.
+   */
+  private async changeCamera(): Promise<void> {
+    const session = this.session;
+    if (!session || session.control !== "hand" || session.troubled || this.switching) return;
+    // In the aim check, or from the pause menu; not through the ready moment or the results.
+    if (session.phase === "check" ? session.check?.done : !session.paused) return;
+    this.switching = true;
+    this.showSwitch();
+    const scripted = this.options.scripted;
+    const before = session.camera;
+    this.stopTracking();
+    const result = await switchCamera({
+      cameras: () => listCameras(),
+      inUse: () => this.cameraInUse(),
+      release: () => this.releaseCamera(),
+      open: async () => {
+        if (scripted) return scripted.deviceId;
+        await this.openCamera();
+        return this.cameraInUse() ?? "";
+      },
+      choose: (deviceId) => {
+        chooseCamera(deviceId);
+        if (scripted) scripted.deviceId = deviceId;
+      },
+    });
+    this.switching = false;
+    if (this.session !== session) {
+      // The player left while the camera was opening: it is not wanted now.
+      this.releaseCamera();
+      return;
+    }
+    void this.refreshCameras();
+    // Tracking goes on, unless the round is paused (Resume starts it).
+    const carryOn = () => {
+      if (!session.paused) this.startTracking();
+    };
+    switch (result.kind) {
+      case "none":
+        carryOn();
+        return;
+      case "failed":
+        this.cameraTrouble(session, result.trouble);
+        return;
+      case "kept":
+        toast(`Couldn’t switch to ${result.wanted.label}. Another app may be using it.`, { icon: "exclamation" });
+        carryOn();
+        return;
+      case "switched": {
+        toast(result.camera.label, { icon: "camera" });
+        const now = this.cameraIdentity();
+        if (before && now && now.deviceId === before.deviceId && now.width === before.width && now.height === before.height) {
+          carryOn(); // the same camera came back (the next one had gone): the round carries on
+          return;
+        }
+        session.camera = now;
+        this.again(session, false);
+        announce(`Switched to ${result.camera.label}. Aim setup. Shoot the lit target.`);
+      }
+    }
+  }
+
   // --- the page's own controls -------------------------------------------------------------
 
   private wire(): void {
@@ -1309,6 +1407,8 @@ export class App {
       if (this.session?.troubled) event.preventDefault();
     });
     $("hold-menu").onclick = () => this.pause();
+    for (const id of ["switch-camera", "pause-switch-camera"]) $(id).onclick = () => void this.changeCamera();
+    navigator.mediaDevices?.addEventListener?.("devicechange", () => void this.refreshCameras());
     // The touch screen's Scope button: held (or tapped, to toggle) with a thumb while the other hand aims.
     const scopeButton = $("scope-button");
     scopeButton.addEventListener("pointerdown", (event) => {
@@ -1452,7 +1552,12 @@ export class App {
         if (document.body.dataset.view === "home") this.renderHome();
       },
       audition: () => this.audio.play("ui_tap"),
-      currentCamera: () => chosenCamera() ?? this.camera?.deviceId ?? remembered(),
+      currentCamera: () => {
+        // The choice made, unless that camera has gone: then the one in use.
+        const chosen = chosenCamera();
+        if (chosen && (!this.cameras.length || this.cameras.some((camera) => camera.deviceId === chosen))) return chosen;
+        return this.cameraInUse() ?? chosen ?? remembered();
+      },
       chooseCamera: (deviceId) => {
         chooseCamera(deviceId);
         // At the arcade the choice is for the next Play: a camera still open
