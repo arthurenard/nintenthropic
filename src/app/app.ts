@@ -1280,6 +1280,8 @@ export class App {
     // In the aim check, or from the pause menu; not through the ready moment or the results.
     if (session.phase === "check" ? session.check?.done : !session.paused) return;
     this.switching = true;
+    // A keyboard player pressing the button on the picture keeps it in hand, for the next camera.
+    const keepFocus = document.activeElement === $("switch-camera");
     this.showSwitch();
     const scripted = this.options.scripted;
     const before = session.camera;
@@ -1299,6 +1301,7 @@ export class App {
       },
     });
     this.switching = false;
+    this.showSwitch();
     if (this.session !== session) {
       // The player left while the camera was opening: it is not wanted now.
       this.releaseCamera();
@@ -1329,6 +1332,7 @@ export class App {
         }
         session.camera = now;
         this.again(session, false);
+        if (keepFocus) $("switch-camera").focus();
         announce(`Switched to ${result.camera.label}. Aim setup. Shoot the lit target.`);
       }
     }

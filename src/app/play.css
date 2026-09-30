@@ -1283,6 +1283,14 @@
   .cylinder.reloading .drum {
     animation: none !important;
   }
+  /* A rifle's breech worked by bolt or lever: dashed and still, not marching
+     without end; a round fed in fades home instead of sliding. */
+  .magazine[data-action="cycling"] .breech {
+    animation: none !important;
+  }
+  .magazine .chamber.fed {
+    animation: fade-in 180ms var(--ease) !important;
+  }
   .ready-moment .ring .fill,
   .ready-moment .ring .check {
     animation: none !important;

@@ -121,6 +121,8 @@ test("two cameras: switching from the aim check and from the pause menu", async 
   expect(await chosen(page)).toBe("cam-desk");
   await expect.poll(async () => (await snapshot(page)).phase).toBe("check");
   expect((await snapshot(page)).shots).toBe(0);
+  // The keyboard's place is kept, for the next camera.
+  await expect(onPicture).toBeFocused();
   const framesThen = (await snapshot(page)).tracker!.stats.framesWithHand;
   await expect.poll(async () => (await snapshot(page)).tracker!.stats.framesWithHand, { timeout: 30_000 }).toBeGreaterThan(framesThen);
   await shot(page, info, "switch-camera-02-switched");
