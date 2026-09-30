@@ -52,6 +52,12 @@ export interface HandyTest {
   device(id: string): void;
   /** As if the camera had been unplugged. */
   unplug(): void;
+  /**
+   * For performance measurements: the real hand tracker (in its worker, on
+   * the GPU) reads the camera beside a scripted hand, so the frames measured
+   * carry what tracking costs. Its readings never reach the game.
+   */
+  shadowTracking(): Promise<{ stats(): unknown; stop(): void }>;
 }
 
 declare global {
@@ -79,5 +85,19 @@ export function installTestHooks(app: App, options: AppOptions): void {
       if (options.scripted) options.scripted.deviceId = id;
     },
     unplug: () => app.unplugCamera(),
+    async shadowTracking() {
+      const [{ openCamera }, { loadTracker }] = await Promise.all([import("../tracking/camera"), import("../tracking/tracker")]);
+      const video = document.createElement("video");
+      const camera = await openCamera(video);
+      const tracker = await loadTracker({ wasm: () => {}, model: () => {} }, { where: "worker", prefer: "GPU" });
+      tracker.start(video);
+      return {
+        stats: () => tracker.stats(),
+        stop() {
+          tracker.dispose();
+          camera.stop();
+        },
+      };
+    },
   };
 }
