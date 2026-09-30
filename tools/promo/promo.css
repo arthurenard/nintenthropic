@@ -1,0 +1,157 @@
+/* The promo's own layers over the game's real chrome. Everything here reuses
+   the app's tokens (src/ui/base.css): the system face, glass, hairlines. */
+
+:root {
+  --u: 1; /* the video's height / 1080, set by capture.ts */
+}
+html,
+body {
+  background: #000;
+  overflow: hidden;
+}
+/* A promo has no Pause control. */
+#pause {
+  display: none !important;
+}
+/* The camera picture is a little larger than in play, so a video can read the hand in it. */
+#game .stage {
+  --pip-w: calc(288px * var(--u));
+}
+
+.promo-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#promo-caption {
+  z-index: 60;
+}
+#promo-fade {
+  z-index: 90;
+  background: #000;
+  opacity: 0;
+}
+#promo-cards {
+  z-index: 40;
+  background: #000;
+}
+
+/* --- the caption under a game ------------------------------------------------------------------ */
+
+.promo-caption {
+  /* Top right: the one corner no game's chrome, hint or toast uses (the Pause control is hidden). */
+  position: absolute;
+  right: calc(32px * var(--u));
+  top: calc(32px * var(--u));
+  padding: calc(20px * var(--u)) calc(34px * var(--u)) calc(22px * var(--u)) calc(30px * var(--u));
+  border-radius: calc(28px * var(--u));
+  text-align: left;
+  opacity: 0;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.promo-caption .cap-title {
+  font-size: calc(44px * var(--u));
+  line-height: 1.12;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.promo-caption .cap-line {
+  margin-top: calc(6px * var(--u));
+  font-size: calc(28px * var(--u));
+  line-height: 1.3;
+  color: var(--label-2);
+}
+
+/* --- cards: the cold open, the title, the end ---------------------------------------------------- */
+
+.card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.card .gesture {
+  width: calc(1240px * var(--u));
+  margin: 0;
+}
+.card .gesture-steps {
+  display: none;
+}
+.card .words {
+  position: relative;
+  height: calc(150px * var(--u));
+  width: 100%;
+  margin-top: calc(28px * var(--u));
+}
+.card .words > * {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: calc(124px * var(--u));
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.card .mark {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(28px * var(--u));
+  font-size: calc(190px * var(--u));
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.card .mark svg {
+  width: calc(168px * var(--u));
+  height: calc(168px * var(--u));
+  stroke-width: 1.6;
+}
+.card .tagline {
+  margin-top: calc(34px * var(--u));
+  font-size: calc(48px * var(--u));
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--label-2);
+}
+.card .promise {
+  margin-top: calc(48px * var(--u));
+  font-size: calc(58px * var(--u));
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.card .privacy {
+  margin-top: calc(18px * var(--u));
+  font-size: calc(36px * var(--u));
+  line-height: 1.3;
+  color: var(--label-2);
+}
+.card .shelf-row {
+  display: flex;
+  gap: calc(28px * var(--u));
+  margin-top: calc(56px * var(--u));
+}
+.card .shelf-row figure {
+  width: calc(410px * var(--u));
+}
+.card .shelf-row img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: calc(16px * var(--u));
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    var(--shadow);
+}
+.card .shelf-row figcaption {
+  margin-top: calc(14px * var(--u));
+  font-size: calc(27px * var(--u));
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
