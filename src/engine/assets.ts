@@ -5,19 +5,30 @@
  *
  * Downloaded bytes are kept for the life of the page, and every request
  * parses them afresh: a restarted game gets its own objects (a game disposes
- * what it loaded when it ends) without waiting on the network twice.
+ * what it loaded when it ends) without waiting on the network twice. What a
+ * game's own teardown misses (a mesh parked out of the scene in a pool, a
+ * texture held only by a shader) is let go by release(), which the host calls
+ * when the game is put away.
  */
 import { SRGBColorSpace, TextureLoader, type Texture } from "three";
 import { DRACOLoader, DRACO_GLTF_CONFIG } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { AssetLoader, LoadedAsset } from "./types";
 import { fetchBytes, siteUrl } from "./fetch";
+import { disposablesUnder, type Disposable } from "./world/scene";
 
 export class Assets implements AssetLoader {
   private readonly gltfLoader: GLTFLoader;
   private readonly textureLoader = new TextureLoader();
   private readonly bytes = new Map<string, Promise<ArrayBuffer>>();
   private readonly draco: DRACOLoader;
+  /**
+   * The GPU-side resources of everything parsed since the last release():
+   * listed as it arrives, because a game takes pieces out of its scenes
+   * (the debris library keeps its parts loose), and a walk of the scene
+   * later would no longer find them.
+   */
+  private readonly loaded = new Set<Disposable>();
 
   constructor() {
     this.draco = new DRACOLoader().setDecoderPath(DRACO_GLTF_CONFIG).setWorkerLimit(2);
@@ -42,6 +53,7 @@ export class Assets implements AssetLoader {
     onProgress?.(1);
     const base = href.slice(0, href.lastIndexOf("/") + 1);
     const gltf = await this.gltfLoader.parseAsync(data, base);
+    disposablesUnder(gltf.scene, this.loaded);
     return { scene: gltf.scene, animations: gltf.animations };
   }
 
@@ -58,13 +70,26 @@ export class Assets implements AssetLoader {
     try {
       const texture = await this.textureLoader.loadAsync(local);
       texture.colorSpace = SRGBColorSpace;
+      this.loaded.add(texture);
       return texture;
     } finally {
       URL.revokeObjectURL(local);
     }
   }
 
+  /**
+   * Lets go of the GPU memory of everything loaded since the last call: the
+   * geometries, materials and textures of every glTF scene (the pieces a game
+   * cloned share them, so this frees those too) and every texture. Called
+   * when a game is put away; a second call finds nothing left to do.
+   */
+  release(): void {
+    for (const item of this.loaded) item.dispose();
+    this.loaded.clear();
+  }
+
   dispose(): void {
+    this.release();
     this.draco.dispose();
   }
 }

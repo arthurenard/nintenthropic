@@ -97,6 +97,8 @@ export class EngineHost {
   /** The game to run; null clears the stage. */
   setGame(game: Game | null): void {
     this.game = game;
+    // A game put away: whatever it loaded that its own teardown missed goes too.
+    if (!game) this.assets.release();
     this.resolution.reset(INITIAL_SCALE[this.quality.tier]);
     this.quality.scale = this.resolution.scale;
     this.stats.reset();

@@ -18,6 +18,7 @@ import {
   SRGBColorSpace,
   type WebGLRenderer,
 } from "three";
+import { disposeTree } from "../../../engine/world/scene";
 
 const RING_VERTEX = /* glsl */ `
 varying vec2 vUv;
@@ -246,9 +247,7 @@ export class ProximityRings {
 
   dispose(): void {
     this.atlas.dispose();
-    for (const r of this.rings) {
-      r.material.dispose();
-      for (const g of r.glyphs) g.material.dispose();
-    }
+    // The one quad every ring and glyph shares, and their materials.
+    disposeTree(this.scene);
   }
 }

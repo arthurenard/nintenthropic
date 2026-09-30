@@ -3,7 +3,18 @@
  * covers only the part of the world that matters, a shadow resolution for
  * each quality tier, and letting go of a scene's GPU memory.
  */
-import { Box3, Vector3, type DirectionalLight, type Material, type Mesh, type Object3D, type Texture } from "three";
+import {
+  Box3,
+  Vector3,
+  type BufferGeometry,
+  type DirectionalLight,
+  type InstancedMesh,
+  type Material,
+  type Object3D,
+  type ShaderMaterial,
+  type SkinnedMesh,
+  type Texture,
+} from "three";
 import type { Quality } from "../types";
 
 /**
@@ -43,16 +54,45 @@ export function shadowMapSize(tier: Quality["tier"]): number {
   return tier === "high" ? 2048 : tier === "medium" ? 1024 : 0;
 }
 
-/** Every mesh's geometry, materials and textures under `root`, let go. */
-export function disposeTree(root: Object3D): void {
+/** Something that holds GPU memory and lets go of it. */
+export interface Disposable {
+  dispose(): void;
+}
+
+/**
+ * Everything under `root` that holds GPU memory: the geometry, materials and
+ * textures (a material's own maps, and any a shader keeps in its uniforms) of
+ * every mesh, point cloud, line and sprite, the instance buffers and the bone
+ * textures. Collected now, so it can be let go of later even after the
+ * objects have been taken out of the tree.
+ */
+export function disposablesUnder(root: Object3D, into = new Set<Disposable>()): Set<Disposable> {
   root.traverse((o) => {
-    const m = o as Mesh;
-    if (!m.isMesh) return;
-    m.geometry?.dispose();
-    const mats = Array.isArray(m.material) ? m.material : [m.material];
-    for (const mat of mats as Material[]) {
-      for (const v of Object.values(mat)) if ((v as Texture)?.isTexture) (v as Texture).dispose();
-      mat.dispose();
+    const part = o as Object3D & { geometry?: BufferGeometry; material?: Material | Material[] };
+    if (part.geometry) into.add(part.geometry);
+    if ((o as Partial<InstancedMesh>).isInstancedMesh) into.add(o as InstancedMesh);
+    const skeleton = (o as Partial<SkinnedMesh>).skeleton;
+    if (skeleton) into.add(skeleton);
+    if (!part.material) return;
+    for (const mat of Array.isArray(part.material) ? part.material : [part.material]) {
+      for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) into.add(v as Texture);
+      const uniforms = (mat as Partial<ShaderMaterial>).uniforms;
+      if (uniforms) {
+        for (const { value } of Object.values(uniforms)) {
+          for (const v of Array.isArray(value) ? (value as unknown[]) : [value]) if ((v as Texture | null)?.isTexture) into.add(v as Texture);
+        }
+      }
+      into.add(mat);
     }
   });
+  return into;
+}
+
+/**
+ * Everything under `root` that holds GPU memory, let go. (A disposed
+ * resource that is drawn again is simply uploaded again, so letting go of a
+ * shared one is no danger.)
+ */
+export function disposeTree(root: Object3D): void {
+  for (const d of disposablesUnder(root)) d.dispose();
 }
