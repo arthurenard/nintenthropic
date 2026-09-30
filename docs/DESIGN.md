@@ -127,6 +127,11 @@ are neutral: white for *on* and for the choice made, never green (see Settings).
   on it is drawn in white with soft round joints, not in debug colours.
 - **Menus are sheets.** Pausing brings a glass sheet over a dimmed world with a
   few large choices (Resume, Restart, Adjust Aim, Settings, Choose a Game).
+  With two or more cameras, Switch Camera joins them after Adjust Aim, and a
+  small glass icon button of the same name sits on the camera's picture during
+  the aim check. It swaps to the next camera at once, names it in a toast
+  ("FaceTime HD Camera"), and begins the aim check again for it - from that
+  camera's saved aim when it has one. With one camera it is nowhere.
 - **Hints** appear when they help (a round's first seconds, a lost hand, an
   unknown key) and fade away when they stop helping.
 - **Tall and short windows.** The stage is never taller than its game's art
@@ -223,6 +228,13 @@ it is true, with how far it beat the last one beside it, and otherwise,
 quietly, the best to beat. Then two choices (Play Again, Choose a Game) plus
 Share — a PNG of the card, branded Handy, saved or passed to the system share
 sheet.
+
+The card that arrives with the fall, before the results, says the same words
+the results will: the outcome as its title ("Fell on Wave 4", "Breached on
+Pass 2", "Spotted on Stage 3") and, under it, what did it ("A walker at the
+barricade."). A wave, pass or stage opens the same way: "Wave 3", "Pass 3",
+"Stage 3", and one short line under it. Notes and tips use full stops and
+colons, not dashes.
 
 Records are kept apart for each game, difficulty and control: the hand and a
 pointer never share one (a mouse is far easier to aim). The arcade shows the

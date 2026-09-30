@@ -64,8 +64,8 @@ Dust Creek.
 - **Regeneration:** after 3.5 s without being hit, health refills at 40 per
   second; the effects fade with it.
 - **Death:** at zero. Time slows, the picture fades to sepia and the view tips
-  to the dust. A tombstone card names what did it: "Here lies a fast hand.
-  Fell on Wave 4 to a rifleman on the saloon roof." Then the results card.
+  to the dust. A card says what the results will and what did it: "Fell on
+  Wave 4" over "A rifleman on the saloon roof." Then the results card.
 - These are Standard's numbers; Relaxed is gentler (see Difficulty).
 
 ## The Carver gang: how bandits behave
@@ -159,8 +159,8 @@ matches the advice to it:
 
 Covers are named as places ("the saloon balcony", "the livery door", "a hotel
 window", "the church tower"): the real town's one by one, any other by its
-kind and building. The tombstone uses the same words: "Fell on Wave 4 to a
-rifleman on the saloon roof."
+kind and building. The fall's card uses the same words: "A rifleman on the
+saloon roof."
 
 ## Difficulty
 

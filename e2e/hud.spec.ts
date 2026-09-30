@@ -96,3 +96,47 @@ test("the stage keeps the shape the game's art can hold", async ({ page }) => {
   expect(box.height).toBeCloseTo(700, 0);
   expect(box.x + box.width / 2).toBeCloseTo(1000, 0);
 });
+
+// Reduce Motion (the player's own, or the system's): what moves in play only
+// fades, and nothing goes on moving without end. The probe lists every running
+// animation that moves something or never stops; with motion allowed it must
+// find them (so the probe can see), and with Reduce Motion on, none.
+const movers = (page: Page) =>
+  page.evaluate(() =>
+    document
+      .getAnimations()
+      .map((animation) => {
+        const effect = animation.effect as KeyframeEffect | null;
+        const properties = new Set<string>();
+        for (const frame of effect?.getKeyframes() ?? []) {
+          for (const property of Object.keys(frame)) if (!["offset", "easing", "composite", "computedOffset"].includes(property)) properties.add(property);
+        }
+        const endless = effect?.getComputedTiming().iterations === Infinity;
+        const moves = ["transform", "translate", "scale", "rotate", "strokeDashoffset"].some((property) => properties.has(property));
+        return moves || endless ? (animation as CSSAnimation).animationName : null;
+      })
+      .filter((name): name is string => name !== null)
+      .sort(),
+  );
+
+for (const reduce of [false, true]) {
+  test(`${reduce ? "Reduce Motion: a rifle's action stands still, and a hit, a popup and a card only fade" : "with motion allowed the same moments do move (the probe sees them)"}`, async ({ page }) => {
+    await skipWelcome(page, { "handy.control.v1": "mouse", "handy.settings.v1": { reduceMotion: reduce } });
+    await page.goto("/?range=1&weapon=magazine#test-range");
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
+    await page.evaluate(() => window.handyTest!.internals().host!.pause());
+    await hud(
+      page,
+      `hud.ammo(7, 8, false, { kind: "magazine", action: "cycling" });
+       hud.hitMarker(0.5, 0.5, "headshot"); hud.popup(0.5, 0.4, "+150 Headshot", "gold");
+       hud.banner("Wave 3", "Runners cross the street."); hud.score(1240);`,
+    );
+    const names = await movers(page);
+    if (reduce) {
+      expect(names).toEqual([]);
+    } else {
+      expect(names).toEqual(expect.arrayContaining(["cycling", "marker-pop", "popup", "banner-in"]));
+    }
+  });
+}

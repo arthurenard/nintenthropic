@@ -134,19 +134,21 @@ export function advice(f: Felled): string {
   }
 }
 
+/** What landed the last hit, as a sentence: "A rifleman on the saloon roof." The fall card's line, and the results note's first words. */
+export function felledCause(f: Felled): string {
+  if (f.source === "dynamite") {
+    const place = f.cover ? placeOf(f.cover) : null;
+    return place ? `Dynamite from ${place.at === "behind" ? "behind " : ""}${place.name}.` : "Dynamite.";
+  }
+  const by = felledBy(f);
+  return `${by.charAt(0).toUpperCase()}${by.slice(1)}.`;
+}
+
 /**
  * The results card's line under the outcome: what landed the last hit, then
  * what would help. "A rifleman on the saloon roof. Riflemen aim longer from
  * up high, so there’s time to look up."
  */
 export function felledNote(f: Felled): string {
-  let cause: string;
-  if (f.source === "dynamite") {
-    const place = f.cover ? placeOf(f.cover) : null;
-    cause = place ? `Dynamite from ${place.at === "behind" ? "behind " : ""}${place.name}.` : "Dynamite.";
-  } else {
-    const by = felledBy(f);
-    cause = `${by.charAt(0).toUpperCase()}${by.slice(1)}.`;
-  }
-  return `${cause} ${advice(f)}`;
+  return `${felledCause(f)} ${advice(f)}`;
 }

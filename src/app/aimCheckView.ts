@@ -45,6 +45,8 @@ export class AimCheckView {
   private finished = false;
   /** The stage has been asked to stand its targets up again since they ran out. */
   private restood = false;
+  /** The ready moment's timer: a check put away (Restart, Switch Camera) must not start the game later. */
+  private readyTimer = 0;
   private readonly cleanups: (() => void)[] = [];
 
   constructor(private readonly options: AimCheckViewOptions) {
@@ -142,7 +144,7 @@ export class AimCheckView {
       const score = this.check.measure.score ?? 1;
       this.readyMoment(score);
       const mapping = this.check.mapping;
-      window.setTimeout(() => this.options.onDone(mapping, score), this.options.reducedMotion() ? 900 : READY_MOMENT);
+      this.readyTimer = window.setTimeout(() => this.options.onDone(mapping, score), this.options.reducedMotion() ? 900 : READY_MOMENT);
     }
   }
 
@@ -247,6 +249,7 @@ export class AimCheckView {
   }
 
   dispose(): void {
+    window.clearTimeout(this.readyTimer);
     this.options.input.onReading = null;
     for (const cleanup of this.cleanups.splice(0)) cleanup();
   }

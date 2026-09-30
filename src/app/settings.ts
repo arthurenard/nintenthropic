@@ -11,6 +11,7 @@
  */
 import type { Difficulty, GameEntry } from "../engine/types";
 import type { Steadiness } from "../input/aim";
+import { listCameras } from "../tracking/camera";
 import { $, setText, toast } from "../ui/dom";
 import type { CrosshairStyle } from "./crosshair";
 import type { Preferences, ScopePreferences } from "./prefs";
@@ -311,12 +312,7 @@ export class SettingsSheet {
    */
   private async listCameras(): Promise<void> {
     const row = $("camera-row");
-    let cameras: MediaDeviceInfo[] = [];
-    try {
-      cameras = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "videoinput" && device.deviceId);
-    } catch {
-      // No list, no choice.
-    }
+    const cameras = await listCameras();
     row.hidden = cameras.length < 2;
     // Over a game, the camera in use stays until the next one.
     setText("foot-camera", `${CAMERA_FOOT}${this.context === "pause" && !row.hidden ? " A new camera takes over from your next game." : ""}`);

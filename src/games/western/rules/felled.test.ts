@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advice, felledBy, felledNote, LATE_PRESSURE, placeOf, type Felled } from "./felled";
+import { advice, felledBy, felledCause, felledNote, LATE_PRESSURE, placeOf, type Felled } from "./felled";
 import { Match } from "./match";
 import { mulberry32 } from "../../../engine/rules/rng";
 import { playUntilDeath, Recorder, standIdle, testCovers } from "./testkit";
@@ -51,6 +51,13 @@ describe("what felled the player, and what would help", () => {
     const f: Felled = { source: "bullet", role: "rifleman", cover: roof, pressure: 0 };
     expect(felledBy(f)).toBe("a rifleman on the saloon roof");
     expect(felledNote(f)).toBe("A rifleman on the saloon roof. Riflemen aim longer from up high, so there’s time to look up.");
+  });
+
+  it("gives the fall's card the note's first words: what did it, as a sentence", () => {
+    const f: Felled = { source: "bullet", role: "rifleman", cover: roof, pressure: 0 };
+    expect(felledCause(f)).toBe("A rifleman on the saloon roof.");
+    expect(felledNote(f).startsWith(felledCause(f))).toBe(true);
+    expect(felledCause({ source: "dynamite", role: "dynamiter", cover: wagon, pressure: 0 })).toBe("Dynamite from behind the wagon.");
   });
 
   it("says to shoot dynamite in the air", () => {

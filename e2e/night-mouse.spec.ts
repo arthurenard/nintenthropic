@@ -77,9 +77,12 @@ test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the resu
   // The dead crowd the barricade, and the night takes you.
   await gameDebug(page, "[1, 2, 3, 4, 5].map(() => debug.send('walker', 'road', -9))");
   const results = page.locator("#results");
+  // The fall's card says what the results will: the outcome, and what took you.
+  await expect(page.locator(".banner .title1")).toHaveText(/^Fell on Wave \d+$/, { timeout: 40_000 });
+  await expect(page.locator(".banner .subhead")).toHaveText("A walker at the barricade.");
   await expect(results).toBeVisible({ timeout: 40_000 });
   await expect(page.locator("#results-outcome")).toHaveText(/^Fell on Wave \d+$/);
-  await expect(page.locator("#results-note")).toHaveText("A walker at the barricade. Aim for the head — three body shots take too long.");
+  await expect(page.locator("#results-note")).toHaveText("A walker at the barricade. Aim for the head: three body shots take too long.");
   await expect(page.locator("#results-game")).toHaveText(/^Dead of Night/);
   await page.waitForTimeout(1200);
   await shot(page, info, "night-mouse-04-results");

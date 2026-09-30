@@ -54,7 +54,7 @@ export function takenBy(f: Felled): string {
 export function advice(f: Felled): string {
   switch (f.kind) {
     case "walker":
-      return "Aim for the head — three body shots take too long.";
+      return "Aim for the head: three body shots take too long.";
     case "runner":
       return "Runners come fast; a headshot stops them dead.";
     case "crawler":

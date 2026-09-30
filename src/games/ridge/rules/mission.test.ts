@@ -36,7 +36,7 @@ describe("the first stage: sentries", () => {
   it("puts three sentries at the checkpoint and the tower, 250–300 m out", () => {
     const { mission: m, rec } = newMission(1);
     m.start();
-    expect(rec.last("stageIntro")?.args).toEqual([1, "Stage 1 — Sentries", "Three sentries at the checkpoint. Take them quietly."]);
+    expect(rec.last("stageIntro")?.args).toEqual([1, "Stage 1", "Three sentries at the checkpoint. Take them quietly."]);
     const h = hostiles(m);
     expect(h).toHaveLength(3);
     expect(h.map((a) => a.role)).toContain("tower");
@@ -236,7 +236,7 @@ describe("the counter-sniper", () => {
     expect(steady).toBeLessThan(first);
     expect(m.phase).toBe("dead");
     expect(m.ending).toMatchObject({ kind: "fell", by: "sniper" });
-    expect(m.results().note).toMatch(/^The counter-sniper (in the chapel tower|on the far ledge)\. His scope glints before he fires — find it first\.$/);
+    expect(m.results().note).toMatch(/^The counter-sniper (in the chapel tower|on the far ledge)\. His scope glints before he fires\. Find it first\.$/);
   });
 
   it("glints twice as long on Relaxed, and hits softer", () => {

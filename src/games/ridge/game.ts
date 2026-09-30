@@ -954,16 +954,17 @@ export class OverwatchRidge implements Game, MissionListener {
     }
     const w = m.wind.speed;
     const windValue = `${Math.abs(w) < 0.05 ? "" : w > 0 ? "→ " : "← "}${Math.abs(w).toFixed(1)} m/s`;
-    const rangeValue = this.range === null ? "—" : `${Math.round(this.range)} m`;
+    const rangeValue = this.range === null ? "–" : `${Math.round(this.range)} m`;
     const objectives = Math.max(1, m.objectives);
     const key = `${rangeValue}|${windValue}|${m.stage}|${m.remaining}`;
     if (force || key !== this.readoutKey) {
       this.readoutKey = key;
+      // The round first, then what is left of it, as in every game; the rifle's own readings after.
       const list: Readout[] = [
-        { label: "Range", value: rangeValue },
-        { label: "Wind", value: windValue, meter: Math.max(-1, Math.min(1, w / 8)), signed: true, tone: Math.abs(w) > 5.5 ? "warning" : "" },
         { label: "Stage", value: String(m.stage) },
         { label: "Targets", value: String(m.remaining), meter: m.remaining / objectives },
+        { label: "Range", value: rangeValue },
+        { label: "Wind", value: windValue, meter: Math.max(-1, Math.min(1, w / 8)), signed: true, tone: Math.abs(w) > 5.5 ? "warning" : "" },
       ];
       this.hud.readouts(list);
     }
@@ -1206,8 +1207,8 @@ export class OverwatchRidge implements Game, MissionListener {
     this.phase = "failing";
     this.failT = 0;
     this.hud.clock?.(null);
-    const words = ending.kind === "convoy" ? ["The Convoy Crossed", "The lead truck is over the bridge."] : ["The Officer Escaped", "He reached the tunnel."];
-    this.hud.banner(words[0]!, words[1]);
+    const card = fallCard(ending, this.mission.stage);
+    this.hud.banner(card.title, card.line);
     this.hints.setQuiet(true);
     this.syncHint();
   }

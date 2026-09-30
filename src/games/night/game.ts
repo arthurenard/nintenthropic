@@ -751,7 +751,8 @@ export class DeadOfNight implements Game, MatchListener {
       this.card = true;
       const f = this.match.felled;
       const by = f ? takenBy(f) : null;
-      this.hud.banner(`The night took you on Wave ${this.match.wave}.`, by ? `${by.charAt(0).toUpperCase()}${by.slice(1)}.` : undefined);
+      // The results' own words: "Fell on Wave 4", and what took you, "A walker at the barricade."
+      this.hud.banner(`Fell on Wave ${this.match.wave}`, by ? `${by.charAt(0).toUpperCase()}${by.slice(1)}.` : undefined);
     }
     if (t > 5.2 && this.phase === "dying") {
       this.phase = "over";

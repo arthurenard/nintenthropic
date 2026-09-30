@@ -1138,7 +1138,8 @@ export class OrbitalDecay implements Game, MatchListener {
       this.sound.play("orbit_shutter");
       this.camera.rumble(0.9);
     });
-    this.later(1.7, () => this.hud.banner(`The pane failed on Pass ${breach.pass}.`, breachCause(breach)));
+    // The results' own words: "Breached on Pass 4", and what broke the glass.
+    this.later(1.7, () => this.hud.banner(`Breached on Pass ${breach.pass}`, breachCause(breach)));
   }
 
   alarm(on: boolean): void {

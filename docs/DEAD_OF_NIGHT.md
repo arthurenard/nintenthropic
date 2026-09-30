@@ -63,7 +63,7 @@ and out of the fog, one by one, something shuffles into your flashlight.
 - **Regeneration:** after 4 s without being hurt, 30 per second.
 - **The fall:** at zero, the flashlight drops from your hands and rolls on the
   asphalt, its beam swinging across the canopy; the dead close in out of
-  focus; black. A card: "The night took you on Wave 5." Then the results.
+  focus; black. A card: "Fell on Wave 5." Then the results.
 
 ## The dead
 
@@ -156,7 +156,7 @@ them crawl." · `night.reload` — until the player reloads by themselves.
 ## The results note
 
 What took you and what would help: "A walker at the barricade. Aim for the
-head — three body shots take too long." · "A runner out of the corn. Runners
+head: three body shots take too long." · "A runner out of the corn. Runners
 come fast; a headshot stops them dead." · "The bloater. Shoot it before it
 reaches you." · late in a long wave: "The fog gets thicker the longer a wave
 goes. Keep the road clear."
