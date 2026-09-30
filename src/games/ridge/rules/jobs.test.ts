@@ -9,8 +9,9 @@ describe("the stages", () => {
       "sentries", "patrol", "convoy", "sniper", "officer",
       "sentries",
     ]);
-    expect(stageTitle(3)).toBe("Stage 3 — Convoy");
-    expect(stageTitle(4)).toBe("Stage 4 — Counter-Sniper");
+    // A title card like a wave's ("Wave 3"): the job is the line under it.
+    expect(stageTitle(3)).toBe("Stage 3");
+    expect(stageTitle(4)).toBe("Stage 4");
   });
 
   it("grow harder: more men, faster, less mist, a sniper watching and mortars from the sixth", () => {
@@ -45,12 +46,15 @@ describe("the results note", () => {
   it("says what ended the run and what would help", () => {
     expect(endingOutcome({ kind: "fell", by: "sniper", place: "in the chapel tower" }, 4)).toBe("Spotted on Stage 4");
     expect(endingNote({ kind: "fell", by: "sniper", place: "in the chapel tower" })).toBe(
-      "The counter-sniper in the chapel tower. His scope glints before he fires — find it first.",
+      "The counter-sniper in the chapel tower. His scope glints before he fires. Find it first.",
     );
     expect(endingNote({ kind: "convoy" })).toBe("The convoy crossed the bridge. The driver is the quick stop; the engine takes three.");
-    expect(endingNote({ kind: "officer" })).toBe("The officer reached the tunnel. At 900 m the wind matters — aim into it.");
+    expect(endingNote({ kind: "officer" })).toBe("The officer reached the tunnel. At 900 m the wind matters: aim into it.");
     expect(endingOutcome({ kind: "convoy" }, 3)).toBe("Convoy Crossed on Stage 3");
     expect(endingNote({ kind: "fell", by: "gunner", place: "at the checkpoint" })).toMatch(/^A machine-gunner at the checkpoint\. /);
-    expect(fallCard({ kind: "fell", by: "mortar", place: "behind the village" }, 7)).toEqual({ title: "Spotted.", line: "On Stage 7, by a mortar behind the village." });
+    // The fall's card says what the results will: the same outcome, and what did it.
+    expect(fallCard({ kind: "fell", by: "mortar", place: "behind the village" }, 7)).toEqual({ title: "Spotted on Stage 7", line: "A mortar behind the village." });
+    expect(fallCard({ kind: "convoy" }, 3)).toEqual({ title: "Convoy Crossed on Stage 3", line: "The lead truck is over the bridge." });
+    expect(fallCard({ kind: "officer" }, 5)).toEqual({ title: "Officer Escaped on Stage 5", line: "He reached the tunnel." });
   });
 });

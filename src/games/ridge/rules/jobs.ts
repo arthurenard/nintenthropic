@@ -78,7 +78,7 @@ export function stageSpec(stage: number, difficulty: Difficulty = "standard"): S
   };
 }
 
-/** "Stage 3 — Convoy" */
+/** The stage's title card: "Stage 3", as a wave is "Wave 3"; the job is the line under it (JOB_WORDS). */
 export function stageTitle(stage: number): string {
-  return `Stage ${stage} — ${JOB_WORDS[jobFor(stage)].name}`;
+  return `Stage ${stage}`;
 }

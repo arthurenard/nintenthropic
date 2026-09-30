@@ -121,7 +121,7 @@ over.
 | 5 | **The officer**: he inspects the dam, then drives off along the dam road; take him before he reaches the tunnel (900 m, strong wind) | Wind, long range |
 | 6+ | The jobs return, harder and mixed: more hostiles, gustier wind, the mortars on alert | Everything |
 
-Between stages a **breather** (6 s): the title card ("Stage 3 — Convoy"), a
+Between stages a **breather** (6 s): the title card ("Stage 3"), a
 line on the job, health refills, the mist shifts, the wind changes (a new
 direction and strength, shown as it comes).
 

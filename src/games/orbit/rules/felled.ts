@@ -68,7 +68,7 @@ export function breachAdvice(b: Breach): string {
   }
   switch (b.pieceOf ?? b.kind) {
     case "chunk":
-      return "Chunks split into pieces — clear the pieces before they arrive.";
+      return "Chunks split into pieces: clear the pieces before they arrive.";
     case "slab":
       return "Split slabs far out, and there’s time to clear the pieces.";
     case "foil":

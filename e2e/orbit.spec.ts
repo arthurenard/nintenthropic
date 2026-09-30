@@ -84,7 +84,7 @@ test("the mouse through a pass: shooting, overheating, venting, the breather", a
 
   // The glass gives way: the burst, the shutters, the card, then the results.
   await gameDebug(page, "debug.breach()");
-  await expect(page.locator(".banner .title1")).toHaveText(/^The pane failed on Pass \d\.$/, { timeout: 15_000 });
+  await expect(page.locator(".banner .title1")).toHaveText(/^Breached on Pass \d$/, { timeout: 15_000 });
   await shot(page, info, "orbit-mouse-05-failed", 0);
   await expect(page.locator("#results")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#results-outcome")).toHaveText(/^Breached on Pass \d$/);

@@ -6,7 +6,7 @@ const f = (kind: DeadKind, lane: LaneId = "road", pressure = 0, maskHits = 2): F
 
 describe("what took you", () => {
   it("says it as the design words it", () => {
-    expect(felledNote(f("walker"))).toBe("A walker at the barricade. Aim for the head — three body shots take too long.");
+    expect(felledNote(f("walker"))).toBe("A walker at the barricade. Aim for the head: three body shots take too long.");
     expect(felledNote(f("runner", "corn"))).toBe("A runner out of the corn. Runners come fast; a headshot stops them dead.");
     expect(felledNote(f("bloater"))).toBe("The bloater. Shoot it before it reaches you.");
   });

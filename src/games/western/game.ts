@@ -10,7 +10,7 @@ import type {
 } from "../../engine/types";
 import { Bandit as BanditClass, type Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
-import { felledBy } from "./rules/felled";
+import { felledCause } from "./rules/felled";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import { loadSoundPack } from "../../audio/index";
 import type { StreetSpace } from "../../audio/routing";
@@ -852,9 +852,9 @@ export class HighNoon implements Game, MatchListener {
     this.camera.setDeath(this.ctx.settings.reducedMotion ? 0 : Math.min(1, t / 2.4), this.hurtSide);
     if (t > 2.0 && !this.tombstone) {
       this.tombstone = true;
-      // "Fell on Wave 4 to a rifleman on the saloon roof."
+      // The results' own words: "Fell on Wave 4", and what did it, "A rifleman on the saloon roof."
       const f = this.match.felled;
-      this.hud.banner("Here lies a fast hand.", f ? `Fell on Wave ${this.match.wave} to ${felledBy(f)}.` : `Fell on Wave ${this.match.wave}.`);
+      this.hud.banner(`Fell on Wave ${this.match.wave}`, f ? felledCause(f) : undefined);
     }
     if (t > 5.2 && this.phase === "dying") {
       this.phase = "over";

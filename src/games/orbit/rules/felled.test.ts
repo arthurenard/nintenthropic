@@ -11,9 +11,9 @@ describe("what broke the glass", () => {
   });
 
   it("says a chunk, and to clear its pieces", () => {
-    expect(breachNote(base)).toBe("A chunk on the upper-left pane. Chunks split into pieces — clear the pieces before they arrive.");
+    expect(breachNote(base)).toBe("A chunk on the upper-left pane. Chunks split into pieces: clear the pieces before they arrive.");
     expect(breachNote({ ...base, kind: "shrapnel", pieceOf: "chunk" })).toBe(
-      "Pieces of a chunk on the upper-left pane. Chunks split into pieces — clear the pieces before they arrive.",
+      "Pieces of a chunk on the upper-left pane. Chunks split into pieces: clear the pieces before they arrive.",
     );
   });
 

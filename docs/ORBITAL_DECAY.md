@@ -68,7 +68,7 @@ glass. Out there, nothing makes a sound.
   the satellite everything on two panes.
 - **A pane at zero fails** and the game is over: the glass bursts outward in a
   glitter of shards, the air goes with it (a roar, then silence), the cupola's
-  shutters slam, and a card: "The pane failed on Pass 4." Then the results.
+  shutters slam, and a card: "Breached on Pass 4." Then the results.
 - **The repair drone** (below) mends the most damaged pane while it works, 6
   integrity a second; each breather the crew seals chips (+15 to every pane
   under 100). Low integrity on any pane (< 35) sounds the station's master
@@ -158,7 +158,7 @@ to vent the laser." · `orbit.derelict` — the Derelict: "Hit its fuel tank."
 ## The results note
 
 What broke the glass and what would help: "A chunk on the upper-left pane.
-Chunks split into pieces — clear the pieces before they arrive." · "The
+Chunks split into pieces: clear the pieces before they arrive." · "The
 Derelict. Its fuel tank shows as it tumbles; three hits break it up." · "A
 pane worn down over time. Keep the drone working: don't shoot it."
 
