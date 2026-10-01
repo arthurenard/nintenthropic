@@ -17,7 +17,7 @@ import { AimController } from "../input/aim";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
 import { MouseInput, TouchInput } from "../input/pointer";
-import { EyeScope, FACE_EVERY, ScopeControl, scopeKeys } from "../input/scope";
+import { EYE_SCOPE, EyeScope, FACE_EVERY, ScopeControl, scopeKeys, scopeMouse, type EyeView } from "../input/scope";
 import type { ScriptedHands } from "../input/script";
 import { CameraError, cameraPermission, chooseCamera, chosenCamera, listCameras, openCamera, remembered, type Camera, type CameraInfo, type CameraTrouble } from "../tracking/camera";
 import { ModelError } from "../tracking/errors";
@@ -41,10 +41,12 @@ import {
   forgetEverything,
   forgetSavedAims,
   hasSavedAim,
+  loadEyeProfile,
   loadPreferences,
   loadScopePreferences,
   prefs,
   readBest,
+  saveEyeProfile,
   savePreferences,
   saveScopePreferences,
   tipsSeen,
@@ -53,7 +55,7 @@ import {
   type ScopePreferences,
 } from "./prefs";
 import { difficultyLabel, recordRound, shareResult, showResults, type Result } from "./results";
-import { SettingsSheet, VERSION, type SettingsHost, type SystemFacts } from "./settings";
+import { SettingsSheet, VERSION, type EyeTestState, type SettingsHost, type SystemFacts } from "./settings";
 import { LoadingSheet, closeSheet, closeSheets, openSheet, showTrouble, type Fix, type Trouble } from "./sheets";
 
 export interface AppOptions {
@@ -103,6 +105,12 @@ interface Session {
   scope: ScopeControl | null;
   /** Stops Shift scoping, when the session ends. */
   stopScopeKeys: () => void;
+  /** Stops the right mouse button scoping with the hand (a pointer's own input does it for itself). */
+  stopScopeMouse: () => void;
+  /** The player has looked through the scope this round, by any means. */
+  scoped: boolean;
+  /** Since when the eye has not seen the face, ms; null while it does. */
+  faceAway: number | null;
 }
 
 /** No new camera frame for this long, with the camera running, is a camera that has stopped, ms. */
@@ -153,12 +161,17 @@ function silence(muted: boolean): Sound {
 }
 
 const touchOnly = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
+/** Any touch screen at all (a hybrid laptop too): the Scope button is for a player with no Shift to hand. */
+const touchCapable = () => matchMedia("(any-pointer: coarse)").matches;
+/** The face out of view this long, ms, before the player has scoped: the page says so, for this long after. */
+const FACE_AWAY = 6000;
+const FACE_AWAY_SAID = 8000;
 
 export class App {
   readonly hud: Hud;
   private readonly crosshair = new Crosshair($<HTMLCanvasElement>("crosshair"), () => this.settings.reducedMotion);
   private readonly pip = new Pip();
-  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "magazine", "heat", "clock", "hint"]);
+  private readonly yielding = new Yielding($("stage"), ["pip", "check-card", "check-meter", "hud-score", "cylinder", "magazine", "heat", "clock", "hint", "eye-meter"]);
   /** How the last aim check ended, for the tests. */
   private lastCheck: { score: number | null; shots: number; ended: "ready" | "anyway" } | null = null;
   private readonly settings: Settings;
@@ -280,7 +293,10 @@ export class App {
     line.hidden = names.length === 0;
     if (!names.length) return;
     const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
-    setText(line, `In ${list} it also reads whether one of your eyes is closed, for the scope. Only that, and only in ${names.length > 1 ? "those games" : "that game"}. Nothing leaves this computer.`);
+    setText(
+      line,
+      `In ${list} it also reads whether one of your eyes is closed, for the scope: only that, only in ${names.length > 1 ? "those games" : "that game"}, and in Settings’ Eye Test when you start it. Nothing leaves this computer.`,
+    );
   }
 
   /** The best to beat with this control at this difficulty, under the Play button; nothing before there is one. */
@@ -616,7 +632,7 @@ export class App {
     // The scope, in a game with one: Shift, the right button or the Scope
     // button, and - with the hand, in a game that reads it - the eye.
     const uses = entry.uses ?? {};
-    const scope = uses.scope ? new ScopeControl(this.scopePrefs.button, control === "hand" && uses.eye ? new EyeScope() : null) : null;
+    const scope = uses.scope ? new ScopeControl(this.scopePrefs.button, control === "hand" && uses.eye ? this.newEye() : null) : null;
     if (scope) {
       scope.useEye = this.scopePrefs.eye;
       scope.onChange = () => $("scope-button").setAttribute("aria-pressed", String(scope.buttons));
@@ -651,7 +667,11 @@ export class App {
       fire: null,
       timers: [],
       scope,
+      // Shift scopes in every game with a scope; the right button too, with the hand (a pointer does it itself).
       stopScopeKeys: scope ? scopeKeys(scope) : () => {},
+      stopScopeMouse: scope && control === "hand" ? scopeMouse(scope, stage) : () => {},
+      scoped: false,
+      faceAway: null,
     };
     if (hand) {
       const source = this.handSource();
@@ -747,6 +767,7 @@ export class App {
     if (this.crosshair.visible && aim.tracking && !aim.offscreen) spots.push({ x: aim.x * width, y: aim.y * height, r: 28 });
     if (target) spots.push(target);
     this.yielding.update(spots);
+    this.watchEye(session, now, aim);
     // How long a camera frame takes to reach the crosshair: from its capture
     // to the moment the crosshair is drawn from it (the screen shows that
     // frame at the next vsync). Measured on the clock, not the frame's own
@@ -762,7 +783,7 @@ export class App {
       // longer holds the round until it is back (see handWatch.ts).
       if (!aim.tracking && !aim.offscreen) session.lostSince ??= now;
       else session.lostSince = null;
-      this.hud.pageHint(session.lostSince !== null && now - session.lostSince > 600 ? "Show your hand to the camera." : null);
+      this.hud.pageHint(session.lostSince !== null && now - session.lostSince > 600 ? "Show your hand to the camera." : this.faceAwayHint(session, now));
       const event = session.watch.update(now, aim.tracking);
       if (event) this.onWatch(session, event);
     }
@@ -954,6 +975,9 @@ export class App {
     session.unsubscribe = () => {};
     session.check?.dispose();
     session.input.dispose();
+    // The pointer's own input takes the right button from here.
+    session.stopScopeMouse();
+    session.stopScopeMouse = () => {};
     const stage = $("stage");
     session.scope?.reset();
     session.input = control === "touch" ? new TouchInput(stage, session.scope) : new MouseInput(stage, session.scope);
@@ -1022,18 +1046,61 @@ export class App {
       scope.mode = this.scopePrefs.button;
       scope.useEye = eye;
     }
-    this.settings.scope = { eye, button: this.scopePrefs.button };
+    // What the game tells the player: the eye only where the face landmarker is really there to read it.
+    const faceHere = !!this.options.scripted || !!this.tracker?.hasFace;
+    this.settings.scope = { eye: eye && faceHere, button: this.scopePrefs.button, touch: touchCapable() };
     if (eye && !this.options.scripted && this.tracker && !this.tracker.hasFace) {
-      // Turned on mid-game: the face comes quietly, and is read once it is here.
+      // Turned on mid-game, or it did not come with the hand: the face comes quietly, and is
+      // read once it is here. A face that will not load leaves Shift to scope, and says so.
       this.tracker.addFace(() => {}).then(
         () => this.session === session && this.scopeFor(session),
         (error: unknown) => console.warn("The face landmarker did not load.", error),
       );
     }
     this.readFaces(eye ? FACE_EVERY : 0);
+    // The Scope button: on a touch screen, with a pointer or with the hand (a touch screen has no Shift).
     const button = $("scope-button");
-    button.hidden = !(scope && session.control === "touch");
+    button.hidden = !(scope && (session.control === "touch" || (session.control === "hand" && touchCapable())));
     button.setAttribute("aria-pressed", String(scope?.buttons ?? false));
+  }
+
+  /** The eye for a scope: this player's own eyes, as learned from their winks before. */
+  private newEye(): EyeScope {
+    const eye = new EyeScope(EYE_SCOPE, loadEyeProfile());
+    eye.onLearn = (profile) => saveEyeProfile(profile);
+    return eye;
+  }
+
+  /**
+   * The eye's indicator in the HUD, every frame of play: whether the face is
+   * seen and how far the eye has closed. And when the face stays out of view
+   * - the hand across it, a head turned away, a camera that cannot see it -
+   * before the player has looked through the scope at all, the page says so,
+   * and says the way that always works.
+   */
+  private watchEye(session: Session, now: number, aim: Aim): void {
+    const scope = session.scope;
+    if (aim.scope) session.scoped = true;
+    const view: EyeView | null = session.phase === "play" && !session.down && scope ? scope.eyeView(now) : null;
+    this.hud.eye(view);
+    if (view && !view.seen && !view.scoped) session.faceAway ??= now;
+    else session.faceAway = null;
+  }
+
+  /**
+   * The words for a face out of view, or null: said only while the player has
+   * not yet scoped, for a few seconds once the face has been away a while (it
+   * must not hide the game's own hints for good), and again if the face comes
+   * and goes.
+   */
+  private faceAwayHint(session: Session, now: number): string | null {
+    if (session.faceAway === null || session.scoped) return null;
+    const away = now - session.faceAway;
+    if (away < FACE_AWAY || away > FACE_AWAY + FACE_AWAY_SAID) return null;
+    const way = touchCapable() && session.control !== "mouse" ? "Scope" : "Shift";
+    // A face landmarker that never came (nothing to see the eyes with) is told apart from a face out of view.
+    const why = this.options.scripted || this.tracker?.hasFace ? "Your face isn’t in view." : "Your camera can’t read your eyes here.";
+    return `${why} ${this.scopePrefs.button === "toggle" ? "Press" : "Hold"} ${way} to look through the scope.`;
   }
 
   pause(): void {
@@ -1218,6 +1285,7 @@ export class App {
       this.stopListening(session, false);
       session.check?.dispose();
       session.stopScopeKeys();
+      session.stopScopeMouse();
       session.unsubscribe();
       session.input.dispose();
       session.game.dispose();
@@ -1575,6 +1643,103 @@ export class App {
       },
       reset: () => this.resetEverything(),
       systemInfo: async () => this.systemFacts(),
+      eyeTest: (listener, video) => this.eyeTest(listener, video),
+    };
+  }
+
+  /**
+   * The Eye Test (Settings): the camera and the face landmarker, for as long
+   * as the sheet asks, so a player can see that their face is read and how
+   * far each eye closes. Over a paused game they are already here; at the
+   * arcade they are made for the test - the camera let go of afterwards, the
+   * landmarker kept for the game that follows. It is also the "Close one
+   * eye" step: a wink held here teaches the scope how far this player's eye
+   * really closes (and is kept), in full rather than by halves.
+   */
+  private async eyeTest(listener: (state: EyeTestState) => void, video: HTMLVideoElement): Promise<(() => void) | null> {
+    const scripted = this.options.scripted;
+    const blocked = (message: string): null => {
+      listener({ kind: "blocked", message });
+      return null;
+    };
+    let own: Camera | null = null;
+    if (!scripted) {
+      if ((await cameraPermission()) === "denied") return blocked("Your browser is blocking the camera for this page. Allow it from the address bar, then Start again.");
+      if (this.camera) {
+        // The paused game's own camera: its picture, shown here too.
+        video.srcObject = this.camera.stream;
+        void video.play().catch(() => {});
+      } else {
+        try {
+          own = await openCamera(video);
+          prefs.cameraOpened = true;
+        } catch (error) {
+          const trouble = error instanceof CameraError ? error.trouble : "busy";
+          return blocked(
+            trouble === "denied"
+              ? "Your browser is blocking the camera for this page. Allow it from the address bar, then Start again."
+              : trouble === "missing"
+                ? "No camera found. Connect one, then Start again."
+                : trouble === "insecure"
+                  ? "Your browser only shares the camera with secure pages."
+                  : "Your camera is being used by another app. Close it, then Start again.",
+          );
+        }
+      }
+      if (!this.tracker?.hasFace) {
+        const progress = new Progress((fraction) => listener({ kind: "getting-ready", fraction }));
+        try {
+          if (!this.tracker) {
+            const { loadTracker } = await import("../tracking/tracker");
+            const tracker = await loadTracker(
+              { wasm: progress.part("wasm", 12), model: progress.part("model", 8), face: progress.part("face", 4) },
+              { where: this.options.trackerWhere ?? "auto", prefer: this.options.trackerDelegate ?? "GPU", face: true },
+            );
+            this.tracker = tracker;
+          }
+          if (!this.tracker.hasFace) await this.tracker.addFace(progress.part("face", 4));
+        } catch (error) {
+          console.warn("The Eye Test could not get the face landmarker ready.", error);
+        }
+        if (!this.tracker?.hasFace) {
+          own?.stop();
+          video.srcObject = null;
+          return blocked("Couldn’t get your face reading ready. Check your connection, then Start again.");
+        }
+      }
+    }
+    const tracker = this.tracker;
+    const eye = new EyeScope({ ...EYE_SCOPE, learn: 1 }, loadEyeProfile());
+    let learned = false;
+    eye.onLearn = (taught) => {
+      saveEyeProfile(taught);
+      learned = true;
+    };
+    const say = () => listener({ kind: "reading", view: eye.view(performance.now()), learned });
+    const source = scripted ?? tracker!;
+    const off = source.subscribeFace?.((face) => {
+      eye.read(face.eyes, face.capturedAt);
+      say();
+    });
+    // Readings that stop coming (a face lost is a reading; a stalled camera is not) are seen as the face gone.
+    const tick = window.setInterval(say, 250);
+    if (scripted) {
+      scripted.readFace(1);
+      scripted.start();
+    } else {
+      tracker!.readFace(1);
+      tracker!.start(video);
+    }
+    say();
+    return () => {
+      window.clearInterval(tick);
+      off?.();
+      if (scripted) scripted.stop();
+      else tracker!.stop();
+      // A paused game goes on as it was told: stopped, and reading the eye if it was to.
+      this.readFaces(this.session?.scope?.useEye ? FACE_EVERY : 0);
+      if (own) own.stop();
+      else video.srcObject = null;
     };
   }
 
@@ -1666,7 +1831,13 @@ export class App {
       showCameraInPlay: this.pip.showInPlay,
       game: this.session?.entry.id ?? this.selected.id,
       scope: session?.scope
-        ? { active: session.scope.active(performance.now()), buttons: session.scope.buttons, eye: session.scope.useEye, mode: session.scope.mode }
+        ? {
+            active: session.scope.active(performance.now()),
+            buttons: session.scope.buttons,
+            eye: session.scope.useEye,
+            mode: session.scope.mode,
+            view: session.scope.eyeView(performance.now()),
+          }
         : null,
       scopePreferences: { ...this.scopePrefs },
       crosshairHidden: this.crosshair.hiddenByGame,

@@ -52,9 +52,17 @@ raise your thumb after each shot to work the bolt.
 
 **The scope.** Overwatch Ridge alone has one: **close one eye**, or hold
 **Shift** or the **right mouse button**, or use the **Scope** button in the
-bottom-left corner of a touch screen, and the view jumps to six times. Your
-hand then pans it a quarter as fast, so a tremor is a quarter as big.
+bottom-left corner of a touch screen, and the view jumps to six times. Shift,
+the right button and the Scope button work with your hand as with the mouse.
+Your hand then pans it a quarter as fast, so a tremor is a quarter as big.
 Pointing off the screen reloads only while you are not scoped.
+
+The eye adapts to you: it follows how far your eyes read open, learns how far
+yours shut, and keeps the scope while your pointing hand hides your face (until
+you open the eye, or ten seconds). A small eye beside the magazine says whether
+your face is seen and fills as the eye closes; Settings' **Eye Test** shows
+your own picture and each eye's reading live. Men a few pixels tall at 300 m
+are marked in the first two stages (and on Relaxed) so you know where to look.
 
 **Before every game, a quick aim check.** You warm up on the game's own
 targets (bottles along the street in High Noon, mason jars in Dead of Night,
@@ -81,7 +89,7 @@ the difficulty (Relaxed is slower and gentler, for a first evening or a tired
 arm), the volume, a larger or high-contrast crosshair, how steady the aim is
 held, which camera to use, whether the camera's picture stays in the corner in
 play, Reduce Motion and Reduce Flashing, and, for Overwatch Ridge, Close One Eye
-to Scope and whether the Scope button holds or toggles. Everything is
+to Scope, whether the Scope button holds or toggles, and an Eye Test. Everything is
 remembered in your browser; Forget Saved Aim and Reset Handy clear it.
 
 **Records.** Your best score is kept for each game and difficulty, and apart for your
@@ -99,7 +107,10 @@ WebAssembly. The camera picture is read in memory, frame by frame, and never
 stored or sent anywhere. In Overwatch Ridge, the one game with a scope, the
 camera also reads whether one of your eyes is closed (you close one to look
 through the scope); only the two eyes' blink scores are kept, only in that
-game, and they never leave the device either. Handy has no server and no
+game (and in Settings' Eye Test, which shows your own picture on your own
+screen), and they never leave the device either. To fit the scope to you, two
+numbers - how far your eye reads open and shut - are remembered in your
+browser. Handy has no server and no
 analytics; the only files it downloads are its own.
 
 ## Requirements

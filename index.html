@@ -125,6 +125,8 @@
         <div class="arcs" id="arcs" aria-hidden="true"></div>
         <div class="bursts" id="bursts" aria-hidden="true"></div>
         <div class="marks" id="marks" aria-hidden="true"></div>
+        <!-- A spotter's marks over where to look, while the view is wide (Overwatch Ridge). -->
+        <div class="spots" id="spots" aria-hidden="true"></div>
         <!-- The world held for the hand: dimmed under the chrome, which stays clear. -->
         <div class="hold-dim" aria-hidden="true"></div>
 
@@ -149,6 +151,16 @@
           <span class="heat-value num" id="heat-value" aria-hidden="true">0</span>
         </div>
         <p class="clock glass num play-only" id="clock" role="timer" hidden></p>
+        <!-- A game that reads the eye (Overwatch Ridge's scope): is the face seen, and how far the eye has closed. -->
+        <div class="eye-meter glass play-only" id="eye-meter" role="img" aria-label="Eye" data-state="away" hidden>
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle class="eye-ring" cx="20" cy="20" r="18" />
+            <circle class="eye-fill" id="eye-fill" cx="20" cy="20" r="18" transform="rotate(-90 20 20)" pathLength="100" />
+            <path class="eye-lid" id="eye-lid" d="M9 20h22" />
+            <circle class="eye-iris" id="eye-iris" cx="20" cy="20" r="3" />
+            <path class="eye-slash" d="M11.5 28.5 28.5 11.5" />
+          </svg>
+        </div>
         <!-- A touch screen's scope, in a game with one: held or toggled (Settings). -->
         <button class="scope-button icon-button glass play-only" id="scope-button" aria-label="Scope" aria-pressed="false" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scope" /></svg>
@@ -330,8 +342,8 @@
         saved or uploaded.
       </p>
       <p class="subhead secondary" id="privacy-eye">
-        In Overwatch Ridge it also reads whether one of your eyes is closed, for the scope. Only that, and only in
-        that game. Nothing leaves this computer.
+        In Overwatch Ridge it also reads whether one of your eyes is closed, for the scope: only that, only in that
+        game, and in Settings’ Eye Test when you start it. Nothing leaves this computer.
       </p>
       <p class="subhead secondary">
         The first game with your hand downloads about 20 MB, once. After that, your browser keeps it.
@@ -438,6 +450,27 @@
                 <button type="button" role="radio" data-value="hold">Hold</button>
                 <button type="button" role="radio" data-value="toggle">Toggle</button>
               </div>
+            </div>
+            <!-- The face as the camera reads it, live: so a player can see that it is. -->
+            <div class="row" id="eye-test-row" hidden>
+              <span class="row-label" id="label-eye-test">Eye Test</span>
+              <button type="button" class="button secondary small" id="eye-test-toggle" aria-describedby="eye-test-status">Start</button>
+            </div>
+            <div class="eye-test" id="eye-test" hidden>
+              <video class="eye-picture" id="eye-test-video" autoplay playsinline muted aria-hidden="true"></video>
+              <div class="eye-bars" aria-hidden="true">
+                <div class="eye-bar" id="eye-bar-left">
+                  <span class="eye-name">Left Eye</span>
+                  <span class="eye-track"><i></i><b></b></span>
+                  <span class="eye-value num">0%</span>
+                </div>
+                <div class="eye-bar" id="eye-bar-right">
+                  <span class="eye-name">Right Eye</span>
+                  <span class="eye-track"><i></i><b></b></span>
+                  <span class="eye-value num">0%</span>
+                </div>
+              </div>
+              <p class="eye-status" id="eye-test-status" role="status"></p>
             </div>
           </div>
           <p class="group-foot" id="foot-scope"></p>
@@ -561,6 +594,7 @@
       <symbol id="i-gear" viewBox="0 0 24 24"><path d="M10.35 5.4L10.67 3.1A9 9 0 0 1 13.33 3.1L13.65 5.4A6.8 6.8 0 0 1 15.5 6.17L17.35 4.77A9 9 0 0 1 19.23 6.65L17.83 8.5A6.8 6.8 0 0 1 18.6 10.35L20.9 10.67A9 9 0 0 1 20.9 13.33L18.6 13.65A6.8 6.8 0 0 1 17.83 15.5L19.23 17.35A9 9 0 0 1 17.35 19.23L15.5 17.83A6.8 6.8 0 0 1 13.65 18.6L13.33 20.9A9 9 0 0 1 10.67 20.9L10.35 18.6A6.8 6.8 0 0 1 8.5 17.83L6.65 19.23A9 9 0 0 1 4.77 17.35L6.17 15.5A6.8 6.8 0 0 1 5.4 13.65L3.1 13.33A9 9 0 0 1 3.1 10.67L5.4 10.35A6.8 6.8 0 0 1 6.17 8.5L4.77 6.65A9 9 0 0 1 6.65 4.77L8.5 6.17A6.8 6.8 0 0 1 10.35 5.4Z" /><circle cx="12" cy="12" r="2.9" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.5 5.8 15.7 12l-6.2 6.2" /></symbol>
       <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6.2 9.2 12 15l5.8-5.8" /></symbol>
       <symbol id="i-scope" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" /><path d="M12 2.8v4.4M12 16.8v4.4M2.8 12h4.4M16.8 12h4.4" /><circle fill="currentColor" stroke="none" cx="12" cy="12" r="1.3" /></symbol>
       <symbol id="i-hitmark" viewBox="0 0 24 24"><path d="M4.5 4.5l4.2 4.2M19.5 4.5l-4.2 4.2M4.5 19.5l4.2-4.2M19.5 19.5l-4.2-4.2" /></symbol>
     </svg>
