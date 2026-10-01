@@ -33,10 +33,10 @@ function miss(m: Mission, near: Actor, off = 2): void {
 }
 
 describe("the first stage: sentries", () => {
-  it("puts three sentries at the checkpoint and the tower, 250–300 m out", () => {
+  it("puts three sentries at the guard post and the tower, 250–300 m out", () => {
     const { mission: m, rec } = newMission(1);
     m.start();
-    expect(rec.last("stageIntro")?.args).toEqual([1, "Stage 1", "Three sentries at the checkpoint. Take them quietly."]);
+    expect(rec.last("stageIntro")?.args).toEqual([1, "Stage 1", "Three sentries at the guard post. Take them quietly."]);
     const h = hostiles(m);
     expect(h).toHaveLength(3);
     expect(h.map((a) => a.role)).toContain("tower");

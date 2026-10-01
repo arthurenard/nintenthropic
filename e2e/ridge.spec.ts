@@ -63,11 +63,11 @@ test("Overwatch Ridge with the mouse: the scope on the right button, a stage cle
   await expect(page.locator("#game")).toHaveAttribute("data-ready", "true");
   await expect(page.locator("#magazine")).toHaveAttribute("aria-label", /^5 of 5 rounds/);
   await page.mouse.move(720, 450);
-  // A newcomer is shown where to look: a man 290 m out is a few pixels in the wide view. One mark
-  // over the checkpoint (the three sentries stand together), with its range, and how to scope said
+  // A newcomer is shown where to look: a man 290 m out is a few pixels in the wide view. A small
+  // caret over each of the three sentries, one distance (the nearest man's), and how to scope said
   // at the foot of the view until the player has.
-  await expect(page.locator(".spot")).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.locator(".spot-label")).toHaveText(/^Checkpoint · \d{3} m$/);
+  await expect(page.locator(".spot")).toHaveCount(3, { timeout: 15_000 });
+  await expect(page.locator(".spot-label:not([hidden])")).toHaveText(/^\d{3} m$/);
   await expect(page.locator("#hint")).toHaveText("Hold Shift or the right button to look through the scope.");
   await shot(page, info, "ridge-01-valley");
   // Held breath: no sway, so the test's aim is the aim.
@@ -84,7 +84,7 @@ test("Overwatch Ridge with the mouse: the scope on the right button, a stage cle
   await expect.poll(() => gameDebug(page, "debug.scoped()")).toBe(false);
   // Looked through the scope once: the lesson is learned for good, and the marks come back with the wide view.
   expect(JSON.parse((await page.evaluate(() => localStorage.getItem("handy.tips-seen.v1")))!)).toContain("ridge.scope");
-  await expect(page.locator(".spot")).toHaveCount(1, { timeout: 5_000 });
+  await expect(page.locator(".spot")).toHaveCount(3, { timeout: 5_000 });
 
   // Stage 1: three sentries at the checkpoint, each taken through the scope.
   const deadline = Date.now() + 120_000;
@@ -136,6 +136,181 @@ test("Overwatch Ridge with the mouse: the scope on the right button, a stage cle
   await shot(page, info, "ridge-04-results");
   await page.getByRole("button", { name: "Choose a Game" }).click();
   await expect(page.locator("#home")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+type Man = { id: number; role: string; side: string; x: number; y: number; hx: number; hy: number; distance: number };
+
+/** The people in view now, through the wide view (viewport fractions). */
+const people = (page: Page) => gameDebug(page, "debug.targets()") as Promise<Man[]>;
+
+/** Killed through the rules, as a head shot would be: the world answers with the fall. */
+const takeDown = (page: Page, id: number) =>
+  gameDebug(
+    page,
+    `(() => { const m = debug.mission(); const a = m.actors.find((x) => x.id === ${id}); m.land({ target: { kind: "actor", id: a.id, part: "head" }, point: { x: a.pos.x, y: a.pos.y + 1.7, z: a.pos.z }, range: 290 }, []); })()`,
+  );
+
+/** Aim Assist, from the pause sheet's Settings, as a player would turn it. */
+async function setAimAssist(page: Page, on: boolean): Promise<void> {
+  await page.keyboard.press("p");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const assist = page.getByRole("switch", { name: "Aim Assist" });
+  if ((await assist.getAttribute("aria-checked")) !== String(on)) await assist.click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect(page.locator("#pause-sheet")).toBeHidden();
+}
+
+test("Overwatch Ridge marks the men, not the locals, and says which way to pan; Aim Assist takes the marks away", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await openRidge(page, "mouse");
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 120_000 }).toBe("play");
+  await page.mouse.move(720, 760);
+  await gameDebug(page, "debug.still(true)");
+
+  // A caret over each man in the open - the three sentries - and over no one else: the farmer, the cows
+  // and the rest of the valley's own are in view too, and unmarked. The distance is said once.
+  await expect(page.locator(".spot")).toHaveCount(3, { timeout: 15_000 });
+  const everyone = await people(page);
+  const hostile = everyone.filter((p) => p.side === "hostile");
+  expect(hostile).toHaveLength(3);
+  expect(everyone.filter((p) => p.side !== "hostile").length, "locals and animals are in view").toBeGreaterThan(0);
+  await expect(page.locator(".spot-label:not([hidden])")).toHaveCount(1);
+  await expect(page.locator(".spot-label:not([hidden])")).toHaveText(/^\d{3} m$/);
+  // Each caret is above its man, never on him: its tip clears his head, and it is a little see-through.
+  const box = (await page.locator("#stage").boundingBox())!;
+  for (const man of hostile) {
+    const spot = page.locator(".spot").filter({ has: page.locator("svg") });
+    const at = (await spot.evaluateAll((all, head) => all.map((e) => ({ left: parseFloat((e as HTMLElement).style.left), top: parseFloat((e as HTMLElement).style.top) })).filter((p) => Math.abs(p.left - head.x * 100) < 0.6 && Math.abs(p.top - head.y * 100) < 0.6).length, { x: man.hx, y: man.hy }));
+    expect(at, `a caret over the ${man.role}`).toBe(1);
+  }
+  for (const caret of await page.locator(".spot svg").all()) {
+    const c = (await caret.boundingBox())!;
+    const lowest = Math.max(...hostile.map((m) => box.y + m.hy * box.height));
+    // Every caret's tip (16 px down its 24 px box) is above the lowest head: none sits on the men's feet.
+    expect(c.y + 16).toBeLessThan(lowest);
+  }
+  expect(await page.locator(".spot").first().evaluate((e) => Number(getComputedStyle(e).opacity))).toBeLessThan(0.95);
+  await shot(page, info, "ridge-05-markers");
+
+  // The crosshair comes onto a man: his mark fades out of the way, and is back when the crosshair leaves.
+  const target = hostile[0]!;
+  const [mx, my] = await onStage(page, target.x, target.y);
+  await page.mouse.move(mx, my);
+  const faded = () => page.locator(".spot").evaluateAll((all) => all.filter((e) => Number(getComputedStyle(e).opacity) < 0.15).length);
+  await expect.poll(faded, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
+  await page.mouse.move(720, 760);
+  await expect.poll(faded, { timeout: 5_000 }).toBe(0);
+
+  // One of them fires at the player: his flash on the lens, his caret whole with a ring pinging round him, and an arc on
+  // the view's edge pointing his way. The picture is taken at once: the flash is gone in a fifth of a second.
+  expect(await gameDebug(page, `debug.fireFrom(${hostile[0]!.id})`)).toBe(true);
+  await shot(page, info, "ridge-08-shot-fired", 0);
+  await expect(page.locator(".spot.shot")).toHaveCount(1);
+  await expect(page.locator(".spot")).toHaveCount(3);
+  await expect(page.locator("#arcs .arc.soft")).toHaveCount(1);
+  await expect(page.locator(".spot.shot")).toHaveCount(0, { timeout: 5_000 });
+
+  // Through the scope, looking at the hillside away from them: no carets, and an arrow on the glass's rim toward them.
+  const [hx, hy] = await onStage(page, 0.2, 0.3);
+  await page.mouse.move(hx, hy);
+  await page.mouse.down({ button: "right" });
+  await expect.poll(() => gameDebug(page, "debug.zoom()")).toBeGreaterThan(0.99);
+  await expect(page.locator(".spot")).toHaveCount(0);
+  await expect(page.locator(".rim-arrow:not(.gone)")).toHaveCount(1);
+  // They lie to the right and below: so does the arrow.
+  const arrow = (await page.locator(".rim-arrow svg").boundingBox())!;
+  expect(arrow.x + arrow.width / 2).toBeGreaterThan(box.x + box.width / 2);
+  expect(arrow.y + arrow.height / 2).toBeGreaterThan(box.y + box.height / 2);
+  await shot(page, info, "ridge-06-scope-rim-arrow", 200);
+  await page.mouse.up({ button: "right" });
+  await expect.poll(() => gameDebug(page, "debug.scoped()")).toBe(false);
+  // The rim's arrow gives way as the glass shows them.
+  await page.mouse.move(mx, my);
+  await page.mouse.down({ button: "right" });
+  await expect.poll(() => gameDebug(page, "debug.zoom()")).toBeGreaterThan(0.99);
+  await expect(page.locator(".rim-arrow:not(.gone)")).toHaveCount(0);
+  await page.mouse.up({ button: "right" });
+  await expect.poll(() => gameDebug(page, "debug.scoped()")).toBe(false);
+
+  // Aim Assist off, from Settings, at once: the carets over the men go, and so does the rim's arrow. (The man who fired
+  // a moment ago keeps his mark for its three seconds, setting or no; with those run out, nothing marks anyone.)
+  await setAimAssist(page, false);
+  await page.mouse.move(720, 760);
+  await page.waitForTimeout(3_500);
+  await expect(page.locator(".spot")).toHaveCount(0);
+  await shot(page, info, "ridge-07-assist-off");
+  await page.mouse.move(hx, hy);
+  await page.mouse.down({ button: "right" });
+  await expect.poll(() => gameDebug(page, "debug.zoom()")).toBeGreaterThan(0.99);
+  await page.waitForTimeout(600);
+  await expect(page.locator(".rim-arrow:not(.gone)")).toHaveCount(0);
+  await page.mouse.up({ button: "right" });
+  expect(errors).toEqual([]);
+});
+
+test("Overwatch Ridge reveals whoever fires at you, with Aim Assist off, and says where the last man is", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await skipWelcome(page, { "handy.control.v1": "mouse", "handy.settings.v1": { aimAssist: false, revision: 2 } });
+  await page.goto("/#overwatch-ridge");
+  await expect(page.locator("#feature-title")).toHaveText("Overwatch Ridge");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 120_000 }).toBe("play");
+  await page.mouse.move(720, 760);
+  await gameDebug(page, "debug.still(true)");
+  await expect.poll(() => mission(page).then((m) => m.phase), { timeout: 15_000 }).toBe("combat");
+  expect(await page.evaluate(() => (window.handyTest!.snapshot() as unknown as { aimAssist: boolean }).aimAssist)).toBe(false);
+  // Aim Assist off: nobody is marked as they stand.
+  await page.waitForTimeout(1_500);
+  await expect(page.locator(".spot")).toHaveCount(0);
+
+  // A man fires at the player: his flash, a ring pinging round a mark over him, and an arc on the view's edge
+  // pointing his way - the one man, and only for a moment.
+  const hostile = ((await people(page)) as Man[]).filter((p) => p.side === "hostile").sort((a, b) => a.distance - b.distance);
+  expect(await gameDebug(page, `debug.fireFrom(${hostile[0]!.id})`)).toBe(true);
+  await shot(page, info, "ridge-10-shot-fired-assist-off", 0);
+  await expect(page.locator(".spot.shot")).toHaveCount(1);
+  await expect(page.locator(".spot")).toHaveCount(1);
+  await expect(page.locator(".spot-ring")).toHaveCount(1);
+  await expect(page.locator("#arcs .arc.soft")).toHaveCount(1);
+  // The arc is on the side of the view he is on: he stands left of the middle, so it is left of it.
+  const arc = (await page.locator("#arcs .arc svg").boundingBox())!;
+  const stage = (await page.locator("#stage").boundingBox())!;
+  expect(hostile[0]!.x).toBeLessThan(0.5);
+  expect(arc.x + arc.width / 2).toBeLessThan(stage.x + stage.width / 2);
+  // He is not marked for good: a few seconds on, the mark is gone.
+  await expect(page.locator(".spot")).toHaveCount(0, { timeout: 8_000 });
+  // A hit has its own arc, whole rather than soft, and the red edge.
+  await gameDebug(page, "debug.hurt(20)");
+  await expect(page.locator("#arcs .arc:not(.soft)")).toHaveCount(1);
+
+  // Two of the three down, the third not found: the spotter says where, in plain words, and with no marks
+  // to breathe there is nothing on the screen but his words.
+  const ids = hostile.map((m) => m.id);
+  await takeDown(page, ids[1]!);
+  await takeDown(page, ids[2]!);
+  await expect(page.locator("#hint")).toHaveText(/^Last one: (by|between|left of|right of) /, { timeout: 25_000 });
+  expect(await page.locator("#hint").textContent()).not.toMatch(/checkpoint/i);
+  await expect(page.locator(".spot")).toHaveCount(0);
+
+  // Aim Assist on again, live: his mark is there, and breathes.
+  await setAimAssist(page, true);
+  await expect(page.locator(".spot")).toHaveCount(1, { timeout: 5_000 });
+  await expect(page.locator(".spot.last")).toHaveCount(1, { timeout: 5_000 });
+  // The breath held at its fullest, for the picture.
+  const breathe = (at: number | null) =>
+    page.locator(".spot.last svg").evaluate((el, time) => el.getAnimations().forEach((a) => (time === null ? a.play() : (a.pause(), (a.currentTime = time)))), at);
+  await breathe(1200);
+  await shot(page, info, "ridge-09-last-one", 250);
+  await breathe(null);
+  // Found: the crosshair held on him, and he breathes no more.
+  const last = ((await people(page)) as Man[]).find((p) => p.id === ids[0])!;
+  const [lx, ly] = await onStage(page, last.x, last.y);
+  await page.mouse.move(lx, ly);
+  await expect(page.locator(".spot.last")).toHaveCount(0, { timeout: 5_000 });
   expect(errors).toEqual([]);
 });
 
@@ -191,11 +366,11 @@ test("Overwatch Ridge with a scripted hand: the eye is fed back, a low wink scop
   await playRidgeWithHand(page);
 
   // What a newcomer is shown: how to scope - the eye, and the way that always works - left standing at
-  // the foot of the view; the face seen; the checkpoint marked with its range.
+  // the foot of the view; the face seen; the three sentries marked, the nearest with its range.
   await expect(page.locator("#hint")).toHaveText("Close one eye to look through the scope. Or hold Shift.");
   await expect(meter(page)).toHaveAttribute("data-state", "seen");
-  await expect(page.locator(".spot")).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.locator(".spot-label")).toHaveText(/^Checkpoint · \d{3} m$/);
+  await expect(page.locator(".spot")).toHaveCount(3, { timeout: 15_000 });
+  await expect(page.locator(".spot-label:not([hidden])")).toHaveText(/^\d{3} m$/);
   await shot(page, info, "ridge-hand-03-first-time", 900);
 
   // The eye part shut: the indicator fills, and nothing scopes.
@@ -224,7 +399,7 @@ test("Overwatch Ridge with a scripted hand: the eye is fed back, a low wink scop
   await eyes(page, 0.06, 0.08);
   await expect.poll(() => scoped(page), { timeout: 3_000 }).toBe(false);
   await expect(meter(page)).toHaveAttribute("data-state", "seen");
-  await expect(page.locator(".spot")).toHaveCount(1);
+  await expect(page.locator(".spot")).toHaveCount(3);
 
   // A blink, hard and slow, does not scope.
   await eyes(page, 0.95, 0.93);

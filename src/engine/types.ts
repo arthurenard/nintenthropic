@@ -101,15 +101,35 @@ export interface AmmoStyle {
   action?: "ready" | "cycling" | "open";
 }
 
-/** One of the spotter's marks (HudSink.spotter): where, and what to say under the chevron. */
+/**
+ * One of the spotter's marks (HudSink.spotter): a small caret floating above a
+ * man, never over him, the same size on screen at any range.
+ */
 export interface SpotterMark {
   /** Stable while the mark stands, so it moves rather than flickers. */
   id: number;
-  /** The point it points down at, in viewport fractions. */
+  /** The man's head, in viewport fractions; the caret floats above this point. */
   x: number;
   y: number;
-  /** "Checkpoint · 290 m". */
-  label: string;
+  /** Extra pixels to float higher (to clear a man or a mark above), 0 if absent. */
+  lift?: number;
+  /** Pixels to the side of him (carets of men standing close spread into a row), 0 if absent. */
+  shift?: number;
+  /** How visible, 0 to 1 (it fades as the crosshair comes onto him), 1 if absent. */
+  opacity?: number;
+  /** His distance, "289 m": said once, on the nearest man only. */
+  label?: string;
+  /** Extra pixels the label floats above its caret, to clear the marks round it, 0 if absent. */
+  labelLift?: number;
+  /** "last": the last man, not found yet, breathes gently. "shot": he just fired at the player, and the mark pings. */
+  pulse?: "last" | "shot";
+}
+
+/** The arrow on a scope's rim (HudSink.spotter): where it sits (viewport fractions) and which way it points (radians clockwise from the top). */
+export interface RimArrow {
+  x: number;
+  y: number;
+  angle: number;
 }
 
 export interface HudSink {
@@ -159,13 +179,21 @@ export interface HudSink {
   /** How hurt the player is as it recovers, 0..1 (drives the screen's red edge). */
   health(hurt: number): void;
   /**
-   * Calm marks over where to look, while the view is wide (Overwatch
-   * Ridge's spotter): a small chevron with a place and a range over each
-   * place, at viewport positions (the chevron points down at the point).
-   * Called as often as the marks move; null (or an empty list) takes them
-   * all away. Optional; a game without a spotter never calls it.
+   * Calm marks over the men to find (Overwatch Ridge's spotter): a small
+   * caret above each, while the view is wide, and `rim`, an arrow on the
+   * scope's rim pointing to the nearest man when none is in the glass.
+   * Called as often as they move; null (or an empty list, and no rim) takes
+   * them all away. Optional; a game without a spotter never calls it.
    */
-  spotter?(marks: SpotterMark[] | null): void;
+  spotter?(marks: SpotterMark[] | null, rim?: RimArrow | null): void;
+  /**
+   * A shot at the player, from where `direction` points in the view (radians
+   * clockwise from the top): the damage arc's look, drawn on the view's edge,
+   * softer unless the shot `hit`. For a game whose shooters are in sight
+   * across a wide view, where `damage`'s bearing alone would always say
+   * "ahead". A hit also calls `health`. Optional.
+   */
+  incoming?(direction: number, hit?: boolean): void;
   /** A hit marker at a viewport position. */
   hitMarker(x: number, y: number, kind: "hit" | "headshot" | "kill"): void;
   /** A short floating line: "+150 Quick Draw". */
@@ -235,11 +263,13 @@ export interface Settings {
   difficulty: Difficulty;
   /**
    * Aim Assist, as the player has it in Settings (on unless they turn it
-   * off): targets a little easier to hit. A game reads it live, on every
-   * shot, never once at start(): it can change mid-round. On, a shot that
-   * passes just beside a target still counts (engine/rules/assist.ts says
-   * how much); off, it is exact. Innocents are never helped, and a game that
-   * is precision by design (Overwatch Ridge) does not read it at all.
+   * off): targets easier to hit, and to find. A game reads it live, on every
+   * shot and every frame, never once at start(): it can change mid-round. On,
+   * a shot that passes just beside a target still counts (engine/rules/
+   * assist.ts says how much); off, it is exact. Innocents are never helped.
+   * Overwatch Ridge is precision by design: its shots are always exact, and it
+   * reads the switch only to help find the men (a mark over each hostile, an
+   * arrow on the scope's rim).
    */
   aimAssist: boolean;
   /**

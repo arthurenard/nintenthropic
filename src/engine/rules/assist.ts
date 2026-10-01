@@ -1,7 +1,8 @@
 /**
  * Aim Assist: how forgiving a shot is, in one place for every game that has
  * it (High Noon, Dead of Night, Orbital Decay; Overwatch Ridge is precision
- * by design and never reads it).
+ * by design: its shots are always exact, and the switch only marks the men to
+ * find there).
  *
  * Each game's shooter keeps a table of tolerances, `ASSIST`, as fractions of
  * the view's smaller side: a shot that passes this close to a target counts

@@ -15,7 +15,7 @@ export const JOBS: readonly Job[] = ["sentries", "patrol", "convoy", "sniper", "
 
 /** The title card's name and its line on the job. */
 export const JOB_WORDS: Readonly<Record<Job, { name: string; line: string }>> = {
-  sentries: { name: "Sentries", line: "Three sentries at the checkpoint. Take them quietly." },
+  sentries: { name: "Sentries", line: "Three sentries at the guard post. Take them quietly." },
   patrol: { name: "Patrol", line: "A patrol on the river road. Lead them as they walk." },
   convoy: { name: "Convoy", line: "Stop the lead truck before it crosses the bridge." },
   sniper: { name: "Counter-Sniper", line: "A sniper is watching the ridge. Find his glint first." },

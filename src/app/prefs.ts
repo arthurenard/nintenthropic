@@ -124,9 +124,9 @@ export interface Preferences {
   crosshair: CrosshairStyle;
   steadiness: Steadiness;
   /**
-   * Targets a little easier to hit, in the games that have it (every game
-   * but Overwatch Ridge, which is precision by design). Games read it live
-   * as `Settings.aimAssist`.
+   * Targets easier to hit and to find. Every game but Overwatch Ridge widens
+   * its shots; Ridge's stay exact (it is precision by design) and the switch
+   * only marks the men to find. Games read it live as `Settings.aimAssist`.
    */
   aimAssist: boolean;
   /** The camera's picture in the corner during play (the aim setup always shows it). */

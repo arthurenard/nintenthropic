@@ -45,6 +45,11 @@ const FIREBALL: ParticleStyle = { life: [0.12, 0.2], size: [4, 7], color: hdr(6,
 const GLINT_CORE: ParticleStyle = { life: [0.3, 0.3], size: [0.012, 0.006], color: hdr(12, 11, 9), alpha: [1, 0], fadeIn: 0.15, gravity: 0, drag: 0, frame: 0, spin: 0 };
 const GLINT_STREAK: ParticleStyle = { life: [0.3, 0.3], size: [0.07, 0.09], color: hdr(8, 6.5, 3.5), color2: hdr(4, 2.6, 1), alpha: [0.9, 0], fadeIn: 0.15, gravity: 0, drag: 0, frame: 4, spin: 0, angle: 0 };
 const GLINT_RAY: ParticleStyle = { ...GLINT_STREAK, size: [0.03, 0.04], angle: Math.PI / 2, alpha: [0.7, 0] };
+// The flash of a shot fired at you, sized as a fraction of the view's height like the glint's (see shotFlare()):
+// a brief star and a short flare line, bright enough to bloom - or, with reduced flashing, a dim glow that eases in and out.
+const SHOT_STAR: ParticleStyle = { life: [0.22, 0.22], size: [0.022, 0.009], color: hdr(14, 9, 4), alpha: [1, 0], fadeIn: 0.08, gravity: 0, drag: 0, frame: 2, spin: 0 };
+const SHOT_LINE: ParticleStyle = { life: [0.16, 0.16], size: [0.05, 0.028], color: hdr(8, 5.5, 2.5), color2: hdr(3.5, 2, 0.8), alpha: [0.85, 0], fadeIn: 0.1, gravity: 0, drag: 0, frame: 4, spin: 0, angle: 0 };
+const SHOT_GLOW: ParticleStyle = { life: [0.5, 0.5], size: [0.02, 0.012], color: hdr(1.1, 0.8, 0.45), alpha: [0.55, 0], fadeIn: 0.45, gravity: 0, drag: 0, frame: 0, spin: 0 };
 
 const v = new Vector3();
 const t1 = new Vector3();
@@ -215,6 +220,23 @@ export class Effects {
     this.lens.emit(at.x, at.y, at.z, 0, 0, 0, life(GLINT_STREAK), k);
     this.lens.emit(at.x, at.y, at.z, 0, 0, 0, life(GLINT_RAY), k);
     this.lens.emit(at.x, at.y, at.z, 0, 0, 0, life(GLINT_CORE), k);
+  }
+
+  /**
+   * The flash of a shot fired at the player, `distance` metres away. The
+   * muzzle's own flash is a metre across, a pixel at 300 m, so this puts a
+   * brief star in the lens as well, sized against the view's height (like
+   * the glint) so that it reads in the wide view as it does in the scope.
+   * With reduced flashing it is a dim glow that comes and goes gently.
+   */
+  shotFlare(at: Vector3, distance: number, strength = 1): void {
+    const k = Math.max(1, distance) * this.viewSpan * strength;
+    if (this.reducedFlashing) {
+      this.lens.emit(at.x, at.y, at.z, 0, 0, 0, SHOT_GLOW, k);
+      return;
+    }
+    this.lens.emit(at.x, at.y, at.z, 0, 0, 0, SHOT_STAR, k);
+    this.lens.emit(at.x, at.y, at.z, 0, 0, 0, SHOT_LINE, k);
   }
 
   steam(at: Vector3, strength: number): void {

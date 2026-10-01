@@ -6,7 +6,7 @@
  * from a direction and the red edge that recedes as the player recovers,
  * hints, a secret found. The world owns the centre; nothing stays there.
  */
-import type { AmmoStyle, GameStats, HudSink, Readout, SpotterMark } from "../engine/types";
+import type { AmmoStyle, GameStats, HudSink, Readout, RimArrow, SpotterMark } from "../engine/types";
 import type { EyeView } from "../input/scope";
 import { $, announce, element, icon, replay, setText } from "../ui/dom";
 import { formatScore, formatTime } from "../ui/format";
@@ -96,6 +96,8 @@ export class Hud implements HudSink {
   private over = false;
   /** The spotter's marks on screen, by the id the game gave each. */
   private readonly spots = new Map<number, HTMLElement>();
+  /** The arrow on a scope's rim, once there has been one. */
+  private rim: HTMLElement | null = null;
   /** The eye indicator as drawn (a key of what shows), so it is redrawn only when it changes. */
   private eyeShown = "";
 
@@ -121,6 +123,7 @@ export class Hud implements HudSink {
     this.onCrosshair?.("default");
     for (const id of ["arcs", "marks", "moments", "bursts", "spots"]) $(id).replaceChildren();
     this.spots.clear();
+    this.rim = null;
     this.eye(null);
     this.health(0);
     this.gameHint = null;
@@ -341,21 +344,55 @@ export class Hud implements HudSink {
     $("game").dataset.clock = "";
   }
 
-  damage(direction: number, hurt: number): void {
-    // An arc on a ring round the middle of the view, pointing where the shot
-    // came from: straight ahead at the top, to the right on the right.
-    const arc = element("div", "arc");
+  /** The damage arc's own shape: the top of a ring that fades out at both ends (the ring is 92% of its box). */
+  private arcDrawing(): SVGSVGElement {
     const span = 0.38;
     const r = 46;
     const from = [r * Math.sin(-span), -r * Math.cos(-span)];
     const to = [r * Math.sin(span), -r * Math.cos(span)];
     const drawing = svg("svg", { viewBox: "-50 -50 100 100" });
     drawing.append(svg("path", { d: `M ${from[0]} ${from[1]} A ${r} ${r} 0 0 1 ${to[0]} ${to[1]}` }));
-    arc.append(drawing);
+    return drawing;
+  }
+
+  damage(direction: number, hurt: number): void {
+    // An arc on a ring round the middle of the view, pointing where the shot
+    // came from: straight ahead at the top, to the right on the right.
+    const arc = element("div", "arc");
+    arc.append(this.arcDrawing());
     arc.style.transform = `rotate(${direction}rad)`;
     arc.addEventListener("animationend", () => arc.remove());
     $("arcs").append(arc);
     this.health(hurt);
+  }
+
+  /**
+   * A shot at the player, from where `direction` points in the view (radians
+   * clockwise from the top): the damage arc's own look, but on the view's
+   * edge, which is where a man in the open valley can be told from the
+   * middle - and softer unless the shot `hit`.
+   */
+  incoming(direction: number, hit = false): void {
+    const layer = $("arcs");
+    const w = Math.max(1, layer.clientWidth);
+    const h = Math.max(1, layer.clientHeight);
+    // The ray from the middle along `direction`, to the view's edge less a margin.
+    const dx = Math.sin(direction);
+    const dy = -Math.cos(direction);
+    const inset = 44;
+    const reach = Math.min((w / 2 - inset) / Math.max(1e-6, Math.abs(dx)), (h / 2 - inset) / Math.max(1e-6, Math.abs(dy)));
+    // The same arc on a tighter ring, centred so that the arc's middle falls on that point and bulges toward the edge.
+    const radius = Math.max(80, Math.min(170, reach * 0.7));
+    const size = (2 * radius) / 0.92;
+    const arc = element("div", hit ? "arc" : "arc soft");
+    arc.append(this.arcDrawing());
+    arc.style.width = arc.style.height = `${size.toFixed(1)}px`;
+    arc.style.left = `${(w / 2 + (reach - radius) * dx).toFixed(1)}px`;
+    arc.style.top = `${(h / 2 + (reach - radius) * dy).toFixed(1)}px`;
+    arc.style.margin = `${(-size / 2).toFixed(1)}px 0 0 ${(-size / 2).toFixed(1)}px`;
+    arc.style.transform = `rotate(${direction}rad)`;
+    arc.addEventListener("animationend", () => arc.remove());
+    layer.append(arc);
   }
 
   health(hurt: number): void {
@@ -364,28 +401,46 @@ export class Hud implements HudSink {
   }
 
   /**
-   * The spotter's marks: each a chevron over its point with what it is
-   * under a glass pill above it. They are kept as they come (a mark that
-   * stays only moves) and the ones that go fade out.
+   * The spotter's marks: each a small caret floating above its man, never
+   * over him, the same size at any range. They are kept as they come (a mark
+   * that stays only moves) and the ones that go fade out. The nearest man's
+   * carries his distance; one who just fired pings a ring; the last man,
+   * unfound, breathes. `rim` is the arrow on a scope's rim.
    */
-  spotter(marks: SpotterMark[] | null): void {
+  spotter(marks: SpotterMark[] | null, rim: RimArrow | null = null): void {
     const layer = $("spots");
     const keep = new Set<number>();
     for (const mark of marks ?? []) {
       keep.add(mark.id);
       let spot = this.spots.get(mark.id);
       if (!spot) {
-        const fresh = element("div", "spot gone");
-        fresh.append(icon("chevron-down"), element("span", "spot-label glass"));
+        // A man who has just fired is marked at once; the rest fade in from nothing, a frame after they are placed.
+        const fresh = element("div", mark.pulse === "shot" ? "spot" : "spot gone");
+        fresh.append(icon("caret"), element("span", "spot-label glass"));
         layer.append(fresh);
         this.spots.set(mark.id, fresh);
-        // It fades in from nothing, a frame after it is placed.
-        requestAnimationFrame(() => requestAnimationFrame(() => fresh.classList.remove("gone")));
+        if (mark.pulse !== "shot") requestAnimationFrame(() => requestAnimationFrame(() => fresh.classList.remove("gone")));
         spot = fresh;
       }
+      // The rest of the spot's state keys on `gone` being off, in case it was on its way out.
+      if (mark.pulse === "shot") spot.classList.remove("gone");
       spot.style.left = `${(mark.x * 100).toFixed(2)}%`;
       spot.style.top = `${(mark.y * 100).toFixed(2)}%`;
-      setText(spot.lastElementChild!, mark.label);
+      spot.style.setProperty("--lift", `${(mark.lift ?? 0).toFixed(1)}px`);
+      spot.style.setProperty("--shift", `${(mark.shift ?? 0).toFixed(1)}px`);
+      spot.style.setProperty("--fade", (mark.opacity ?? 1).toFixed(2));
+      const label = spot.children[1] as HTMLElement;
+      label.toggleAttribute("hidden", !mark.label);
+      setText(label, mark.label ?? "");
+      spot.style.setProperty("--label-lift", `${(mark.labelLift ?? 0).toFixed(1)}px`);
+      const pulse = mark.pulse ?? "";
+      if (spot.dataset.pulse !== pulse) {
+        spot.dataset.pulse = pulse;
+        spot.classList.toggle("last", pulse === "last");
+        spot.classList.toggle("shot", pulse === "shot");
+        spot.querySelector(".spot-ring")?.remove();
+        if (pulse === "shot") spot.append(element("i", "spot-ring"));
+      }
     }
     for (const [id, spot] of this.spots) {
       if (keep.has(id)) continue;
@@ -393,6 +448,29 @@ export class Hud implements HudSink {
       spot.classList.add("gone");
       window.setTimeout(() => spot.remove(), 260);
     }
+    this.rimArrow(rim);
+  }
+
+  /** The scope's rim arrow: a double caret on the rim pointing toward the nearest man, fading in and out as it comes and goes. */
+  private rimArrow(rim: RimArrow | null): void {
+    let node = this.rim;
+    if (!rim) {
+      node?.classList.add("gone");
+      return;
+    }
+    if (!node) {
+      node = element("div", "rim-arrow gone");
+      node.append(icon("carets"));
+      $("spots").append(node);
+      this.rim = node;
+      // Placed hidden, then shown, so that it fades in.
+      void node.offsetWidth;
+    }
+    node.classList.remove("gone");
+    node.style.left = `${(rim.x * 100).toFixed(2)}%`;
+    node.style.top = `${(rim.y * 100).toFixed(2)}%`;
+    // The carets point down; turned half a circle they point where the man is.
+    (node.firstElementChild as SVGElement).style.transform = `rotate(${((rim.angle * 180) / Math.PI + 180).toFixed(1)}deg)`;
   }
 
   /**

@@ -27,12 +27,6 @@ export function scopeHint(input: InputKind | undefined, scope: Settings["scope"]
   return toggle ? `Press ${way} to look through the scope.` : `Hold ${way} to look through the scope.`;
 }
 
-/** The name of a place, for a mark over it: "at the checkpoint" is "Checkpoint". */
-export function placeName(place: string): string {
-  const name = place.replace(/^(?:at|on|in|by|near|behind|above|beside)\s+(?:the\s+)?/i, "").trim();
-  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Target";
-}
-
 /** What the spotter says to a scope looking at nothing: which way to turn it. */
 export function turnWord(way: "left" | "right" | "up" | "down"): string {
   switch (way) {
@@ -47,10 +41,18 @@ export function turnWord(way: "left" | "right" | "up" | "down"): string {
   }
 }
 
-/** What the spotter says when nobody has found the men yet: where they are, and how far. */
-export function spotterWord(place: string, range: number): string {
+/**
+ * What the spotter says when nobody has found the men yet: where they are, and
+ * how far. `marked`: Aim Assist has a caret over each of them, and he says so.
+ */
+export function spotterWord(place: string, range: number, marked = true, several = true): string {
   const where = place ? ` ${place}` : "";
-  return `Your spotter has them${where}, ${Math.round(range)} m out. Marked.`;
+  return `Your spotter has ${several ? "them" : "him"}${where}, ${Math.round(range)} m out.${marked ? " Marked." : ""}`;
+}
+
+/** What the spotter says of the last man, not yet found: where, in the words you would use to point him out. */
+export function lastOneWord(where: string): string {
+  return `Last one: ${where}.`;
 }
 
 /** Each tip's words, in the player's own terms. */

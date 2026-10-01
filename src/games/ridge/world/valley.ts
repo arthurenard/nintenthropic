@@ -141,14 +141,14 @@ function placeOf(id: string, kind: string, node: Object3D): string {
   const extra = node.userData["place"];
   if (typeof extra === "string") return extra;
   if (kind === "tower") return "on the watchtower";
-  if (kind === "gunner") return "at the checkpoint";
+  if (kind === "gunner") return "at the guard post";
   if (kind === "mortar") return "behind the village";
   if (/tunnel/.test(id)) return "at the tunnel";
   if (/dam/.test(id)) return "on the dam";
   if (/bridge/.test(id)) return "at the bridge";
   if (/village|chapel/.test(id)) return "in the village";
   if (/farm/.test(id)) return "at the farm";
-  return "at the checkpoint";
+  return "at the guard post";
 }
 
 /** How a counter-sniper's nest is named in the note, from its extras. */

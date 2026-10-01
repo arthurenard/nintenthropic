@@ -51,7 +51,7 @@ describe("the results note", () => {
     expect(endingNote({ kind: "convoy" })).toBe("The convoy crossed the bridge. The driver is the quick stop; the engine takes three.");
     expect(endingNote({ kind: "officer" })).toBe("The officer reached the tunnel. At 900 m the wind matters: aim into it.");
     expect(endingOutcome({ kind: "convoy" }, 3)).toBe("Convoy Crossed on Stage 3");
-    expect(endingNote({ kind: "fell", by: "gunner", place: "at the checkpoint" })).toMatch(/^A machine-gunner at the checkpoint\. /);
+    expect(endingNote({ kind: "fell", by: "gunner", place: "at the guard post" })).toMatch(/^A machine-gunner at the guard post\. /);
     // The fall's card says what the results will: the same outcome, and what did it.
     expect(fallCard({ kind: "fell", by: "mortar", place: "behind the village" }, 7)).toEqual({ title: "Spotted on Stage 7", line: "A mortar behind the village." });
     expect(fallCard({ kind: "convoy" }, 3)).toEqual({ title: "Convoy Crossed on Stage 3", line: "The lead truck is over the bridge." });

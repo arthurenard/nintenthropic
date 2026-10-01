@@ -31,7 +31,7 @@ export class Actor {
   /** This man knows the valley is awake (or was startled himself). */
   alerted = false;
   deathClip: DeathClip = "death_back";
-  /** Where the note would name him ("the chapel tower", "the checkpoint"). */
+  /** Where the note would name him ("the chapel tower", "the guard post"). */
   place = "";
   /** Where he stands his post, or where he took cover. */
   readonly home: V3 = { x: 0, y: 0, z: 0 };

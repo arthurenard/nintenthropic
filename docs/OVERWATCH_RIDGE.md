@@ -27,7 +27,8 @@ for the wind to drop, and squeeze.
   focus. The valley runs left to right across the view; the far side rises in
   forest, cliffs and snowfields to peaks 2–3 km away.
 - **The valley floor, near to far (200–900 m):** a road along the river, a
-  **stone bridge** at 350 m, a **checkpoint** with a barrier and a wooden
+  **stone bridge** at 350 m, a **guard post** on the road (the art calls it
+  the checkpoint; a player never hears that word) with a barrier and a wooden
   watchtower at 280 m, a **farm** with a barn, hay bales and a fenced pasture
   (cows, a few sheep) at 250 m left, a **village** of stone houses and a
   **chapel with a bell tower** at 500 m, a switchback road up the far slope, a
@@ -38,9 +39,10 @@ for the wind to drop, and squeeze.
 
 ## The player
 
-- **Aim Assist does not apply here.** Settings' Aim Assist widens shots in the
-  other games; precision through the scope is this game's point, so it never
-  reads it (the footnote under the switch says so).
+- **Aim Assist never widens a shot here.** In the other games it makes a shot
+  a little more forgiving; precision through the scope is this game's point,
+  so Ridge's shots always stay exact (the footnote under the switch says so).
+  The switch only helps the player *find* people: see the spotter below.
 - A prone view, eyes at the scope's height, with a slow breathing sway (felt
   most through the scope).
 - **Unscoped** the whole valley is on screen and the crosshair is a hip-fire
@@ -117,9 +119,9 @@ for the wind to drop, and squeeze.
 
 - **Hostiles** — soldiers in dark green with helmets: sentries (standing,
   smoking, walking a few steps), patrols (walking the road in twos and fours),
-  guards at the checkpoint, **drivers** (in the trucks' cabs), an **officer**
+  guards at the guard post's barrier, **drivers** (in the trucks' cabs), an **officer**
   (a peaked cap, binoculars), **machine-gunners** (behind sandbags at the
-  checkpoint), **the counter-sniper** (a ghillie suit, prone in the chapel
+  guard post), **the counter-sniper** (a ghillie suit, prone in the chapel
   tower or on a far ledge — his scope glints; the Overwatch Ridge glint). A
   headshot kills; two body shots kill; one body shot wounds (he drops to a
   knee, alerting the others).
@@ -144,7 +146,7 @@ over.
 
 | Stage | Job | Teaches |
 | --- | --- | --- |
-| 1 | **Sentries**: three at the checkpoint and the tower, 250–300 m | Range and drop |
+| 1 | **Sentries**: three at the guard post and the tower, 250–300 m | Range and drop |
 | 2 | **Patrol**: four walking the road, 300–450 m | Leading a moving target |
 | 3 | **Convoy**: two trucks heading for the bridge; stop the lead truck before it crosses (40 s), then the soldiers who jump out | Vehicles, pressure |
 | 4 | **Counter-sniper**: he is in the chapel tower or on a ledge; find his glint before he finds you | The glint, being hunted |
@@ -155,23 +157,52 @@ Between stages a **breather** (6 s): the title card ("Stage 3"), a
 line on the job, health refills, the mist shifts, the wind changes (a new
 direction and strength, shown as it comes).
 
-## Finding the men: the spotter
+## Finding the men: the spotter and the marks
 
 A man 300 m away is a few pixels tall in the wide view, and nothing says where
-to look. So a spotter (`rules/spotter.ts`) helps, calmly:
+to look. So the game helps, calmly, and never helps the shot itself
+(`rules/finding.ts`, `rules/spotter.ts`, the HUD's marks). The marks name the
+**people**, never a place: a "Checkpoint" pill over the road was read as a
+game checkpoint, and is gone.
 
-- **Marks** while the view is wide: a chevron over the place the job's men
-  stand, with a glass pill above it - "Checkpoint · 289 m" - for men standing
-  together, one each for the rest. In the first two stages on both
-  difficulties, always on Relaxed (`DifficultyTuning.spotter`), and on
-  Standard's later stages once the spotter has spoken. A hidden man (the
-  counter-sniper in his nest) is never marked. They fade away as the scope
-  goes in and come back with the wide view.
+- **With Aim Assist** (Settings; on unless the player turns it off - the
+  game reads it live) **a small mark floats over each hostile** while the view
+  is wide, in every stage, on both difficulties: a thin red-orange caret above
+  the man, never over him, the same size on screen at any range, a little
+  see-through, fading as the crosshair (or the scope) comes onto him. Never a
+  civilian, an animal or a man who is down or out of sight (a trooper in a
+  truck's back, the counter-sniper in his nest). The counter-sniper, who is
+  found by his glint, is marked in the open only once he has fired at the
+  player, or when he is the last man and still not found. Men standing close
+  have their carets raised clear of each other and of other men; one
+  distance, small, is shown, on the nearest man's caret only. Through the
+  scope the carets go; instead, **when no hostile is inside the glass, a small
+  arrow on the scope's rim points toward the nearest**, so the player knows
+  which way to pan.
+- **Whoever fires at the player is revealed**, Aim Assist or not. A muzzle
+  flash is a metre of light - a pixel at 300 m - so the shot also puts a brief
+  star on the lens, sized on screen like the glint (a dim glow with Reduce
+  Flashing); his mark pings a ring once and stays for three seconds, even if
+  he has gone to ground; and a soft arc on the view's edge points to him. A
+  hit draws High Noon's damage arc the same way, toward where he is on the
+  screen (everyone is across the valley, so a bearing alone would always say
+  "ahead"). A mortar crew is revealed as it launches.
+- **The last man.** When one of a job's several men is left and the player has
+  not found him - in the glass, or under the crosshair - for eight seconds,
+  his caret breathes gently and the spotter says where, in plain words: "Last
+  one: by the guard post, left of the chapel." (the landmark by him, and which
+  side of the next one; "between the farm and the chapel" when nothing is
+  near; the counter-sniper's nest as the rules name it). Again 24 s later if
+  he is still not found; finding him starts the wait over.
 - **A word** when the fight is eight seconds old (fourteen after the first
-  stage) and no one has been in the player's glass: "Your spotter has them at
-  the checkpoint, 289 m out. Marked." Looking through the scope at nothing
-  for five seconds, he says which way to turn: "Your spotter: they're to your
-  left." Neither is said to a player who has found them.
+  stage) and no one has been in the player's glass or under the crosshair:
+  "Your spotter has them at the guard post, 289 m out. Marked." ("Marked."
+  only when Aim Assist has marked them). With the scope looking at nothing for
+  five seconds, he says which way to turn - "Your spotter: they’re to your
+  left." - unless the rim's arrow does it. Neither is said to a player who has
+  found them.
+- **Aim Assist off:** the carets and the rim arrow are gone; the reveal of
+  whoever fires and the spotter's words remain.
 - **The scope's tip stands.** "Close one eye to look through the scope. Or hold
   Shift." stays at the foot of the view until the player has looked through the
   scope once, by any means (the hint line's standing line).

@@ -172,18 +172,29 @@ export const FAIL_HOLD = 3.2;
 
 /**
  * A man 300 m away is a few pixels tall in the wide view, and a newcomer
- * has no way to know where to look. The spotter marks where the job's men
- * are while the view is wide: on every difficulty for the first stages (the
- * stages that teach), and on Relaxed throughout (DifficultyTuning.spotter).
- * Later, on Standard, he only speaks - and marks - once the fight is this
- * many seconds old with no one yet in the glass.
+ * has no way to know where to look. With Aim Assist on (the Settings
+ * switch; on unless the player turns it off) a small caret floats over each
+ * hostile while the view is wide, and an arrow on the scope's rim points to
+ * the nearest when none is in the glass. Whatever the switch says, the
+ * spotter speaks: where the men are when no one has found them (the first
+ * wait is shorter in the first stage), which way to turn a scope that looks
+ * at nothing (only when there is no rim arrow to say it), and where the last
+ * man is.
  */
-export const SPOTTER_STAGES = 2;
 export const SPOTTER_FIRST = 8;
 export const SPOTTER_DELAY = 14;
 /** A scope that has looked at nothing this long (and no one found yet) is told which way to turn, and again no sooner than this many seconds later. */
 export const SPOTTER_LOST = 5;
 export const SPOTTER_REPEAT = 10;
+/**
+ * The job's last man, not found for this many seconds (found: in the glass,
+ * or under the crosshair), has his caret breathe and is described in words;
+ * if he is still not found, in words again this many seconds later.
+ */
+export const LAST_ONE_AFTER = 8;
+export const LAST_ONE_REPEAT = 24;
+/** Whoever fires at you stays marked this long, whatever Aim Assist says. */
+export const REVEAL_SECONDS = 3;
 
 // --- scoring --------------------------------------------------------------------------
 
@@ -220,8 +231,6 @@ export function distanceMultiplier(range: number): number {
 export interface DifficultyTuning {
   /** The holdover dot in the scope: where the round will land at the range under the reticle. */
   holdoverDot: boolean;
-  /** The spotter's marks over the job's men while the view is wide, in every stage (otherwise the first stages' only). */
-  spotter: boolean;
   /** The strongest the wind blows, m/s. */
   maxWind: number;
   /** How long the counter-sniper's scope glints steadily before he fires, seconds. */
@@ -235,9 +244,8 @@ export interface DifficultyTuning {
 }
 
 /**
- * Standard is the game as designed. Relaxed marks the men to find while the
- * view is wide, puts a holdover dot in the scope (the drop and the wind
- * worked out for you), keeps the wind under
+ * Standard is the game as designed. Relaxed puts a holdover dot in the scope
+ * (the drop and the wind worked out for you), keeps the wind under
  * 4 m/s, lets the counter-sniper's glint show twice as long, lets the
  * valley grow suspicious more slowly, gives the timed jobs a third more
  * time, and softens every hit by a quarter.
@@ -245,7 +253,6 @@ export interface DifficultyTuning {
 export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>> = {
   standard: {
     holdoverDot: false,
-    spotter: false,
     maxWind: 8,
     sniperGlint: 1.1,
     alertFactor: 1,
@@ -254,7 +261,6 @@ export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>
   },
   relaxed: {
     holdoverDot: true,
-    spotter: true,
     maxWind: 4,
     sniperGlint: 2.2,
     alertFactor: 0.6,
