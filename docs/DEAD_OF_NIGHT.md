@@ -102,6 +102,13 @@ they stand; body shots twist and stagger them; the fallen stay on the road
 until the breather (the fog takes them). A dark spray, never dismemberment —
 PG-13, not gore.
 
+**Aim Assist** (Settings, on unless turned off) widens what a shot counts as a
+hit on the dead by a little over a third: a torso, a head in the same
+proportion (so a headshot is still earned), a crawler's a little more. Never a
+survivor, and never past one the shot passed close beside; a secret's allowance
+is not widened. Off, a shot hits only what it passes through. Tables: `ASSIST`
+in `world/shooting.ts`.
+
 ## Townsfolk: none. The Survivor.
 
 Now and then (wave 3+) a living survivor runs across the road with a lantern

@@ -56,6 +56,14 @@ export const STEADINESS = {
 
 export type Steadiness = keyof typeof STEADINESS;
 
+/**
+ * The Aim Steadiness a player has until they choose another: Steady, which
+ * holds a shaky hand still at the cost of a little lag (a finger in the air
+ * is far less steady than a mouse). It was Balanced until Settings gained a
+ * migration (see SETTINGS_REVISION in app/prefs.ts).
+ */
+export const DEFAULT_STEADINESS: Steadiness = "steady";
+
 export interface AimOptions {
   fireAbove?: number;
   armBelow?: number;
@@ -76,7 +84,7 @@ export class AimController {
    * The steadiness a new controller starts with, unless given its own
    * smoothing: the player's, which the app sets from their settings.
    */
-  static steadiness: Steadiness = "balanced";
+  static steadiness: Steadiness = DEFAULT_STEADINESS;
 
   /**
    * How long the hand may vanish, in seconds, before the trigger forgets its

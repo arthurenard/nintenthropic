@@ -38,6 +38,9 @@ for the wind to drop, and squeeze.
 
 ## The player
 
+- **Aim Assist does not apply here.** Settings' Aim Assist widens shots in the
+  other games; precision through the scope is this game's point, so it never
+  reads it (the footnote under the switch says so).
 - A prone view, eyes at the scope's height, with a slow breathing sway (felt
   most through the scope).
 - **Unscoped** the whole valley is on screen and the crosshair is a hip-fire

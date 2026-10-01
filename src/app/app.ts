@@ -200,6 +200,7 @@ export class App {
       reducedMotion: this.preferences.reduceMotion ?? this.motion.matches,
       reducedFlashing: this.preferences.reduceFlashing,
       difficulty: this.preferences.difficulty,
+      aimAssist: this.preferences.aimAssist,
       unlocks: prefs.unlocks,
       tipsSeen: this.tips,
       scope: { eye: false, button: this.scopePrefs.button },
@@ -1506,6 +1507,8 @@ export class App {
     this.session?.hand?.controller.setSteadiness(chosen.steadiness);
     this.pip.showInPlay = chosen.cameraInPlay;
     this.settings.reducedFlashing = chosen.reduceFlashing;
+    // Games read it live, on every shot: a change reaches the round in play.
+    this.settings.aimAssist = chosen.aimAssist;
     this.applyMotion();
     this.syncDifficulty();
   }
@@ -1660,6 +1663,7 @@ export class App {
       difficulty: this.settings.difficulty,
       reducedMotion: this.settings.reducedMotion,
       reducedFlashing: this.settings.reducedFlashing,
+      aimAssist: this.settings.aimAssist,
       tipsSeen: [...this.settings.tipsSeen],
       preferences: { ...this.preferences, crosshair: { ...this.preferences.crosshair } },
       smoothing: this.session?.hand?.controller.smoothing ?? null,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
 import type { HandFrame, HandSource } from "../tracking/types";
+import { AimController, DEFAULT_STEADINESS } from "./aim";
 import { EXIT_MOMENT, HandInput, MAX_PREDICTION, STALE_FRAME } from "./handInput";
 import { TRUST_AFTER } from "./trust";
 import { boxMapping } from "./homography";
@@ -56,16 +57,23 @@ describe("the hand as an input", () => {
   });
 
   it("puts the shot where the hand aimed before the fold, not where the fold threw it", () => {
-    const { camera, input } = setup();
-    let t = 0;
-    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
-    // The fingertip jerks as the thumb snaps down.
-    for (let i = 0; i < 2; i++) camera.show({ thumbDegrees: 75, indexTip: [0.56, 0.58] }, (t += 33));
-    const shot = input.sample(t);
-    expect(shot.fired).toBe(true);
-    expect(shot.x).toBeCloseTo(0.5, 1);
-    expect(shot.y).toBeCloseTo(0.5, 1);
-    expect(Math.abs(input.sample(t + 1).y - 0.5)).toBeGreaterThan(0.05); // and then it follows the hand again
+    // How far the crosshair has moved a frame later is the filter's: this case was tuned on Balanced,
+    // and the player's default, Steady, holds it back a little longer (the shot itself is the same).
+    AimController.steadiness = "balanced";
+    try {
+      const { camera, input } = setup();
+      let t = 0;
+      for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+      // The fingertip jerks as the thumb snaps down.
+      for (let i = 0; i < 2; i++) camera.show({ thumbDegrees: 75, indexTip: [0.56, 0.58] }, (t += 33));
+      const shot = input.sample(t);
+      expect(shot.fired).toBe(true);
+      expect(shot.x).toBeCloseTo(0.5, 1);
+      expect(shot.y).toBeCloseTo(0.5, 1);
+      expect(Math.abs(input.sample(t + 1).y - 0.5)).toBeGreaterThan(0.05); // and then it follows the hand again
+    } finally {
+      AimController.steadiness = DEFAULT_STEADINESS;
+    }
   });
 
   it("says the crosshair is off the screen before clamping it to the edge", () => {

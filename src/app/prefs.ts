@@ -5,7 +5,7 @@
  * and anything that does not look right is read as the default.
  */
 import type { Difficulty, InputKind } from "../engine/types";
-import { STEADINESS, type Steadiness } from "../input/aim";
+import { DEFAULT_STEADINESS, STEADINESS, type Steadiness } from "../input/aim";
 import type { CrosshairStyle } from "./crosshair";
 
 const KEYS = {
@@ -121,6 +121,12 @@ export interface Preferences {
   difficulty: Difficulty;
   crosshair: CrosshairStyle;
   steadiness: Steadiness;
+  /**
+   * Targets a little easier to hit, in the games that have it (every game
+   * but Overwatch Ridge, which is precision by design). Games read it live
+   * as `Settings.aimAssist`.
+   */
+  aimAssist: boolean;
   /** The camera's picture in the corner during play (the aim setup always shows it). */
   cameraInPlay: boolean;
   /** The player's choice, or null to follow the system's reduced-motion setting. */
@@ -132,11 +138,25 @@ export const DEFAULT_PREFERENCES: Readonly<Preferences> = Object.freeze({
   volume: 1,
   difficulty: "standard",
   crosshair: Object.freeze({ size: "standard", highContrast: false }),
-  steadiness: "balanced",
+  steadiness: DEFAULT_STEADINESS,
+  aimAssist: true,
   cameraInPlay: true,
   reduceMotion: null,
   reduceFlashing: false,
 });
+
+/**
+ * The revision the settings are saved at, written with them. Revision 2 made
+ * Steady the default Aim Steadiness (it was Balanced) and added Aim Assist.
+ *
+ * Settings saved before it carry no revision, and every one of them holds
+ * the whole sheet, Balanced included, whether the player ever chose it or
+ * not: that Balanced was the old default, so it reads as the new one. Anything
+ * saved from revision 2 on is kept as it is, so a Balanced chosen after the
+ * move stays Balanced. The migration is a read, not a write: it leaves the
+ * stored value alone until the player next changes a setting.
+ */
+export const SETTINGS_REVISION = 2;
 
 const DIFFICULTIES: readonly Difficulty[] = ["relaxed", "standard"];
 const SIZES: readonly CrosshairStyle["size"][] = ["standard", "large"];
@@ -154,6 +174,10 @@ export function loadPreferences(storage: Storage | undefined = local()): Prefere
   const defaults = DEFAULT_PREFERENCES;
   const crosshair = raw.crosshair && typeof raw.crosshair === "object" ? (raw.crosshair as Record<string, unknown>) : {};
   const volume = raw.volume;
+  const revision = typeof raw.revision === "number" && Number.isFinite(raw.revision) ? raw.revision : 1;
+  let steadiness = oneOf(raw.steadiness, STEADINESSES, defaults.steadiness);
+  // Before revision 2 a saved Balanced was only the old default: Steady now.
+  if (revision < SETTINGS_REVISION && steadiness === "balanced") steadiness = DEFAULT_STEADINESS;
   return {
     volume: typeof volume === "number" && Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : defaults.volume,
     difficulty: oneOf(raw.difficulty, DIFFICULTIES, defaults.difficulty),
@@ -161,7 +185,8 @@ export function loadPreferences(storage: Storage | undefined = local()): Prefere
       size: oneOf(crosshair.size, SIZES, defaults.crosshair.size),
       highContrast: flag(crosshair.highContrast, defaults.crosshair.highContrast),
     },
-    steadiness: oneOf(raw.steadiness, STEADINESSES, defaults.steadiness),
+    steadiness,
+    aimAssist: flag(raw.aimAssist, defaults.aimAssist),
     cameraInPlay: flag(raw.cameraInPlay, defaults.cameraInPlay),
     reduceMotion: typeof raw.reduceMotion === "boolean" ? raw.reduceMotion : defaults.reduceMotion,
     reduceFlashing: flag(raw.reduceFlashing, defaults.reduceFlashing),
@@ -170,7 +195,7 @@ export function loadPreferences(storage: Storage | undefined = local()): Prefere
 
 /** Keeps the settings for next time; false if this window cannot store anything. */
 export function savePreferences(value: Preferences, storage: Storage | undefined = local()): boolean {
-  return write(storage, KEYS.settings, value);
+  return write(storage, KEYS.settings, { ...value, revision: SETTINGS_REVISION });
 }
 
 // --- the scope's choices ---------------------------------------------------------------------

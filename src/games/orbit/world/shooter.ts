@@ -7,7 +7,9 @@
  * Moon, the storm and the city lights far below.
  */
 import { Mesh, PerspectiveCamera, Raycaster, Vector2, Vector3, type Object3D } from "three";
+import { assistFactor, secretFactor } from "../../../engine/rules/assist";
 import { effectiveRadius, probePoint, type RayProbe } from "../../../engine/rules/raymath";
+import type { Settings } from "../../../engine/types";
 import type { Fragment } from "../rules/debris";
 import { shootable, tankShows } from "../rules/debris";
 import type { ShotTarget } from "../rules/match";
@@ -20,6 +22,10 @@ import type { SecretCandidate } from "./secretsWorld";
  * a shot this close to a fragment counts, whatever its distance (the aim
  * check guarantees 95% of shots within 3.5%). The tank's is tighter, so the
  * Derelict is earned; the secrets' tighter still.
+ *
+ * These are the table at its base; the player's Aim Assist scales the debris
+ * and the tank on every shot (engine/rules/assist.ts): wider on, exact off.
+ * The secrets and the sky are never widened, and the drone is never helped.
  */
 export const ASSIST = { debris: 0.026, tank: 0.018, secret: 0.012, sky: 0.02 } as const;
 
@@ -53,6 +59,8 @@ export class Shooter {
     private readonly camera: PerspectiveCamera,
     private readonly debris: DebrisView,
     station: Object3D,
+    /** The player's settings, read on every shot: Aim Assist can change mid-round. */
+    private readonly settings: Pick<Settings, "aimAssist">,
   ) {
     station.traverse((o) => {
       if ((o as Mesh).isMesh) this.solids.push(o as Mesh);
@@ -80,9 +88,12 @@ export class Shooter {
     this.raycaster.setFromCamera(ndc, this.camera);
     const o = this.raycaster.ray.origin;
     const d = this.raycaster.ray.direction;
-    const aDebris = Math.atan(this.tanFor(ASSIST.debris));
-    const aTank = Math.atan(this.tanFor(ASSIST.tank));
-    const aSecret = Math.atan(this.tanFor(ASSIST.secret));
+    // Aim Assist, live: the debris and the tank wider, or exact. A secret's allowance is never boosted.
+    const boost = assistFactor(this.settings.aimAssist);
+    const secretBy = secretFactor(this.settings.aimAssist);
+    const aDebris = Math.atan(this.tanFor(ASSIST.debris * boost));
+    const aTank = Math.atan(this.tanFor(ASSIST.tank * boost));
+    const aSecret = Math.atan(this.tanFor(ASSIST.secret * secretBy));
 
     // 1. Debris and the Derelict: the best-aimed within its allowance.
     let best: { f: Fragment; kind: "debris" | "tank" | "body"; t: number; score: number; center: Vector3 } | null = null;
@@ -161,7 +172,7 @@ export class Shooter {
     }
 
     // 4. The sky: the Moon, the storm, the "HI".
-    if (sky.moon && d.angleTo(sky.moon.dir) <= sky.moon.radius * 1.3 + Math.atan(this.tanFor(ASSIST.sky))) {
+    if (sky.moon && d.angleTo(sky.moon.dir) <= sky.moon.radius * 1.3 + Math.atan(this.tanFor(ASSIST.sky * secretBy))) {
       res.target = { kind: "secret", shot: { secret: "moon" } };
       res.point.copy(o).addScaledVector(d, 300);
       res.hit = "secret";

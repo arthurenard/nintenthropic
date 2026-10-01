@@ -189,6 +189,15 @@ pane worn down over time. Keep the drone working: don't shoot it."
 
 Konami on the arcade: a golden laser and a gold heat gauge.
 
+## Aim Assist
+
+Settings' Aim Assist (on unless turned off) widens what the laser counts as a
+hit on debris and on the Derelict's tank by a little over a third, so a finger
+that is a few percent off still lands, and the window's rings round what is
+coming grow with it; off, the beam hits only what it passes through. The drone
+is never helped (help never makes you shoot a friend), and the secrets and the
+sky are not widened. Tables: `ASSIST` in `world/shooter.ts`.
+
 ## The aim check
 
 **Nine running lights** — the station's red, green and white navigation

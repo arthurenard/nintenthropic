@@ -215,6 +215,15 @@ export interface Settings {
   /** Read by a game at start(): a change takes effect from the next round. */
   difficulty: Difficulty;
   /**
+   * Aim Assist, as the player has it in Settings (on unless they turn it
+   * off): targets a little easier to hit. A game reads it live, on every
+   * shot, never once at start(): it can change mid-round. On, a shot that
+   * passes just beside a target still counts (engine/rules/assist.ts says
+   * how much); off, it is exact. Innocents are never helped, and a game that
+   * is precision by design (Overwatch Ridge) does not read it at all.
+   */
+  aimAssist: boolean;
+  /**
    * Konami code and friends, for the visit. "golden": a golden weapon in
    * every game (High Noon's Golden Revolver; HudSink.weaponFinish).
    */
