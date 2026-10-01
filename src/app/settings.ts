@@ -11,6 +11,7 @@
  */
 import type { Difficulty, GameEntry } from "../engine/types";
 import type { Steadiness } from "../input/aim";
+import type { EyeView } from "../input/scope";
 import { listCameras } from "../tracking/camera";
 import { $, setText, toast } from "../ui/dom";
 import type { CrosshairStyle } from "./crosshair";
@@ -21,6 +22,12 @@ declare const __HANDY_VERSION__: string;
 
 /** Handy's version, from package.json (Vite writes it in at build time). */
 export const VERSION: string = typeof __HANDY_VERSION__ === "string" ? __HANDY_VERSION__ : "dev";
+
+/** What the Eye Test is told: the camera is getting ready, it could not start, or the face as read now. */
+export type EyeTestState =
+  | { kind: "getting-ready"; fraction: number }
+  | { kind: "blocked"; message: string }
+  | { kind: "reading"; view: EyeView; learned: boolean };
 
 export interface SettingsHost {
   /** The player's settings; the sheet edits them in place, then calls changed(). */
@@ -46,6 +53,13 @@ export interface SettingsHost {
   reset(): void;
   /** The facts for a bug report (never anything personal). */
   systemInfo(): Promise<SystemFacts>;
+  /**
+   * The Eye Test: the camera reads the player's face - shown in `video`, the
+   * picture staying on this computer - and `listener` hears what it sees on
+   * every reading, until the stop function this resolves is called. Resolves
+   * null when it could not start (the listener has been told why).
+   */
+  eyeTest(listener: (state: EyeTestState) => void, video: HTMLVideoElement): Promise<(() => void) | null>;
 }
 
 const AIM_FOOT = "Steady holds a shaky hand still. Responsive follows quick moves closely.";
@@ -64,6 +78,18 @@ export function scopeFoot(scope: ScopePreferences, touch: boolean, eye: boolean)
   return withEye
     ? `Close one eye for a moment to look through the scope, or press ${button}: once to look, again to stop.`
     : `Press ${button} once to look through the scope, and again to stop.`;
+}
+
+/**
+ * What the Eye Test says of what it sees, in a line: whether the face is
+ * seen at all (the thing a player cannot otherwise know), and what to do next.
+ */
+export function eyeTestWords(view: EyeView, learned: boolean): string {
+  if (!view.seen) return "Looking for your face. Face the camera, with your hand down.";
+  if (view.scoped) return "One eye closed. That opens the scope.";
+  if (learned && view.closing < 0.06) return "Got it. The scope now fits how your eye closes.";
+  if (view.closing > 0.5) return "Almost. Close it a little more.";
+  return "Your face is seen. Close one eye past the mark and hold it.";
 }
 
 /** Where the sheet was opened: from the arcade, or over a paused game. */
@@ -230,7 +256,11 @@ export class SettingsSheet {
     // The rows scroll under the title: a hairline says so, as in the system.
     const body = $("settings-body");
     body.addEventListener("scroll", () => this.sheet.classList.toggle("scrolled", body.scrollTop > 0), { passive: true });
-    this.sheet.addEventListener("close", () => navigator.mediaDevices?.removeEventListener?.("devicechange", this.onDevices));
+    this.sheet.addEventListener("close", () => {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", this.onDevices);
+      this.endEyeTest();
+    });
+    $("eye-test-toggle").onclick = () => void this.toggleEyeTest();
     // Keys pressed on these sheets are theirs: P or Space must not resume
     // the game under them. M still mutes, anywhere.
     for (const id of ["settings", "confirm", "privacy"]) {
@@ -243,6 +273,7 @@ export class SettingsSheet {
   /** Shows the sheet with the settings as they are now. */
   show(context: SettingsContext): void {
     this.context = context;
+    this.endEyeTest();
     this.render();
     const inGame = context === "pause";
     setText(
@@ -291,7 +322,10 @@ export class SettingsSheet {
     const games = this.host.scopeGames();
     $("scope-group").hidden = games.length === 0;
     const eyeRow = $("switch-eye-scope").closest(".row") as HTMLElement;
-    eyeRow.hidden = !games.some((game) => game.uses?.eye);
+    const reads = games.some((game) => game.uses?.eye);
+    eyeRow.hidden = !reads;
+    $("eye-test-row").hidden = !reads;
+    if (!reads) $("eye-test").hidden = true;
     this.eyeScope.on = this.host.scope.eye;
     this.scopeButton.value = this.host.scope.button;
     this.showScopeFoot();
@@ -300,6 +334,81 @@ export class SettingsSheet {
   private showScopeFoot(): void {
     const eye = this.host.scopeGames().some((game) => game.uses?.eye);
     setText("foot-scope", scopeFoot(this.host.scope, this.host.touch(), eye));
+  }
+
+  // --- the Eye Test -------------------------------------------------------------------------
+
+  /** The test is on (or starting), and how to stop it. */
+  private testing = false;
+  private stopTest: (() => void) | null = null;
+
+  private async toggleEyeTest(): Promise<void> {
+    if (this.testing) {
+      this.endEyeTest();
+      return;
+    }
+    this.testing = true;
+    $("eye-test").hidden = false;
+    const button = $<HTMLButtonElement>("eye-test-toggle");
+    setText(button, "Stop");
+    this.showEyeTest({ kind: "getting-ready", fraction: 0 });
+    const stop = await this.host.eyeTest((state) => this.testing && this.showEyeTest(state), $<HTMLVideoElement>("eye-test-video"));
+    if (!this.testing) {
+      // Stop was pressed while the camera was still getting ready.
+      stop?.();
+      return;
+    }
+    if (!stop) {
+      // It could not start: the reason stays on the sheet, and Start tries again.
+      this.testing = false;
+      setText(button, "Start");
+      return;
+    }
+    this.stopTest = stop;
+  }
+
+  /** Ends the test: the camera is let go of, and the readout goes. */
+  private endEyeTest(): void {
+    if (!this.testing && !this.stopTest) return;
+    this.testing = false;
+    this.stopTest?.();
+    this.stopTest = null;
+    setText("eye-test-toggle", "Start");
+    $("eye-test").hidden = true;
+    this.fillEye("left", 0, 0);
+    this.fillEye("right", 0, 0);
+  }
+
+  private showEyeTest(state: EyeTestState): void {
+    const status = $("eye-test-status");
+    const picture = $("eye-test-video");
+    if (state.kind === "getting-ready") {
+      setText(status, state.fraction > 0 ? `Getting ready… ${Math.round(state.fraction * 100)}%` : "Getting ready… Allow the camera if your browser asks. The picture stays on this computer.");
+      return;
+    }
+    if (state.kind === "blocked") {
+      picture.hidden = true;
+      setText(status, state.message);
+      return;
+    }
+    // Your own picture, where there is a camera to show (the test's scripted hand has none).
+    const shown = !!(picture as HTMLVideoElement).srcObject;
+    picture.hidden = !shown;
+    $("eye-test").classList.toggle("bare", !shown);
+    const { view, learned } = state;
+    this.fillEye("left", view.left, view.threshold);
+    this.fillEye("right", view.right, view.threshold);
+    setText(status, eyeTestWords(view, learned));
+  }
+
+  /** One eye's bar: how closed it reads, and a mark where the scope opens. */
+  private fillEye(side: "left" | "right", value: number, threshold: number): void {
+    const bar = $(`eye-bar-${side}`);
+    const share = Math.min(1, Math.max(0, value));
+    (bar.querySelector(".eye-track i") as HTMLElement).style.transform = `scaleX(${share})`;
+    (bar.querySelector(".eye-track b") as HTMLElement).style.left = `${Math.min(1, Math.max(0, threshold)) * 100}%`;
+    bar.classList.toggle("shut", threshold > 0 && value >= threshold);
+    setText(bar.querySelector(".eye-value")!, `${Math.round(share * 100)}%`);
   }
 
   private showVolume(): void {

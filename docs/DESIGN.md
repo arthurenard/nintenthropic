@@ -120,7 +120,19 @@ are neutral: white for *on* and for the choice made, never green (see Settings).
   toggled as Settings says. On a touch screen a Scope button - a glass
   circle, 64 px, the scope's symbol - sits in the bottom-left corner, which
   the camera's picture would take with the hand, and turns white while
-  pressed (or toggled on).
+  pressed (or toggled on). With the hand on a touch screen it rests just above
+  the camera's picture.
+- **The eye.** A game that reads the eye shows a small glass circle (44 px)
+  over the weapon's corner: an eye that is dim and struck through while no
+  face is seen, whose lid comes down and whose ring fills as the eye closes,
+  and that turns white while it scopes, as the Scope button does (dashed while
+  the scope is held for a face the hand hides). It says nothing in words; the
+  hint line speaks if the face stays out of view.
+- **A spotter's marks.** Where a game's men are too small to find (Overwatch
+  Ridge's, 300 m out), a calm chevron marks the place while the view is wide,
+  a glass pill above it saying what and how far ("Checkpoint · 289 m"). White,
+  thin, never over the thing itself, faded in and out, never animating on their
+  own; gone through the scope.
 - **The camera preview** is a small rounded picture-in-picture, like FaceTime's,
   in a corner that the map keeps clear. It grows during setup, where seeing your
   hand matters, and shrinks in play, where the world matters. The hand skeleton
@@ -278,8 +290,14 @@ the system's own settings are.
   a shaky hand still; the player who prefers a quicker crosshair chooses
   Balanced or Responsive.
 - **A game's own group** shows only while such a game can be played: Scope
-  (Close One Eye to Scope, a switch, on; Scope Button, Hold | Toggle), with a
-  footnote that says how to scope in the player's terms.
+  (Close One Eye to Scope, a switch, on; Scope Button, Hold | Toggle; Eye
+  Test, a button), with a footnote that says how to scope in the player's
+  terms. The Eye Test opens the camera and shows the player's own picture
+  (mirrored, on this screen only), a bar for each eye with a mark where the
+  scope opens, and one line on what to do - "Your face is seen. Close one eye
+  past the mark and hold it." or "Looking for your face. Face the camera, with
+  your hand down." A wink held there teaches the scope how far this player's
+  eye closes. It ends when the sheet closes, and lets the camera go.
 - **Destructive rows** are red words that ask first, in an alert that says what
   will be lost, with Cancel focused.
 - In a narrow window the sheet rises from the bottom at full height and scrolls,

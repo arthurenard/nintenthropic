@@ -517,6 +517,131 @@
   background: #fff;
   color: #000;
 }
+/* With the hand on a touch screen the camera's picture holds that corner:
+   the button rests just above it. */
+.game[data-input="hand"] .scope-button {
+  bottom: calc(var(--hud) * 2 + var(--pip-w) * 0.75);
+}
+
+/* --- the eye ------------------------------------------------------------------------------ */
+
+/* A game that reads the eye (Overwatch Ridge's scope) says whether the face
+   is seen and how far the eye has closed: a small glass circle over the
+   weapon's corner. Quiet when all is well, dim and struck through when the
+   face is not in view, a ring that fills as the eye closes, and white - as
+   the Scope button is - while it is scoping. */
+.eye-meter {
+  position: absolute;
+  right: var(--hud);
+  bottom: calc(var(--hud) + var(--mag-h, 64px) + 10px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--label-2);
+  pointer-events: none;
+  transition:
+    opacity 250ms var(--ease),
+    background-color 250ms var(--ease),
+    color 250ms var(--ease);
+}
+.eye-meter svg {
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+}
+.eye-ring {
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1.5;
+}
+.eye-fill {
+  stroke: #fff;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-dasharray: 0 100;
+}
+.eye-lid {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+}
+.eye-iris {
+  fill: currentColor;
+  stroke: none;
+}
+.eye-slash {
+  opacity: 0;
+  stroke: currentColor;
+  transition: opacity 250ms var(--ease);
+}
+.eye-meter[data-state="away"] {
+  color: var(--label-3);
+}
+.eye-meter[data-state="away"] .eye-slash {
+  opacity: 1;
+}
+.eye-meter[data-state="closing"] {
+  color: #fff;
+}
+.eye-meter[data-state="scoped"] {
+  background: #fff;
+  color: #000;
+}
+.eye-meter[data-state="scoped"] .eye-ring,
+.eye-meter[data-state="scoped"] .eye-fill {
+  opacity: 0;
+}
+/* The scope held on faith while the hand hides the face: the ring says so, dashed. */
+.eye-meter[data-held="true"] .eye-ring {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-dasharray: 3 4;
+  opacity: 1;
+}
+
+/* --- the spotter's marks ------------------------------------------------------------------- */
+
+/* Where to look, while the view is wide: a chevron over the place and, over
+   it, what it is and how far. Nothing covers the place itself; they fade in
+   and out, and never move on their own. */
+.spots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.spot {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transition: opacity 250ms var(--ease);
+}
+.spot.gone {
+  opacity: 0;
+}
+.spot > svg {
+  position: absolute;
+  left: -11px;
+  top: -34px;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 2.5px rgba(0, 0, 0, 0.7));
+}
+.spot-label {
+  position: absolute;
+  left: 0;
+  bottom: 34px;
+  padding: 3px 11px 4px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
 
 /* --- being hit --------------------------------------------------------------------- */
 
@@ -1388,6 +1513,18 @@
   .scope-button {
     width: 52px;
     height: 52px;
+  }
+  .eye-meter {
+    bottom: calc(var(--hud) + 48px + 8px);
+    width: 36px;
+    height: 36px;
+  }
+  .eye-meter svg {
+    width: 32px;
+    height: 32px;
+  }
+  .spot-label {
+    font-size: 12px;
   }
   .hint {
     bottom: var(--hud);

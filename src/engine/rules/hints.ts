@@ -27,6 +27,10 @@ interface Tip {
  * - tips: one-time lessons, one at a time for TIP_SECONDS each, queued in
  *   the order their moments came. A tip's time runs only while it shows; one
  *   cut short by a need or a word finishes afterwards.
+ * - a standing line: what a newcomer must be told and cannot be left to miss
+ *   in four seconds (how to look through a scope). It shows whenever nothing
+ *   above does, and stays until the game takes it away (the player has done
+ *   it) - and so never gets in the way of a need, a word or a tip.
  *
  * A lesson is learned when it has been shown - or, for the ids in
  * `learnedByDoing` (High Noon's reload, shown at the start of every game
@@ -39,6 +43,7 @@ interface Tip {
  */
 export class HintLine {
   private need: string | null = null;
+  private standing: string | null = null;
   private word: { text: string; left: number } | null = null;
   private tip: (Tip & { left: number }) | null = null;
   private readonly queue: Tip[] = [];
@@ -56,7 +61,12 @@ export class HintLine {
   /** What the line shows now, or null for nothing. */
   get text(): string | null {
     if (this.quiet) return null;
-    return this.need ?? this.word?.text ?? this.tip?.text ?? null;
+    return this.need ?? this.word?.text ?? this.tip?.text ?? this.standing;
+  }
+
+  /** The line that stays while nothing more pressing shows, or null to take it away. Quiet clears it. */
+  setStanding(text: string | null): void {
+    this.standing = this.quiet ? null : text;
   }
 
   /** Quiet on: nothing shows, and waiting tips are let go. Off: back in play. */
@@ -64,6 +74,7 @@ export class HintLine {
     this.quiet = on;
     if (!on) return;
     this.need = null;
+    this.standing = null;
     this.word = null;
     this.tip = null;
     this.queue.length = 0;

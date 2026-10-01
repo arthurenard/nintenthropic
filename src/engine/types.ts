@@ -101,6 +101,17 @@ export interface AmmoStyle {
   action?: "ready" | "cycling" | "open";
 }
 
+/** One of the spotter's marks (HudSink.spotter): where, and what to say under the chevron. */
+export interface SpotterMark {
+  /** Stable while the mark stands, so it moves rather than flickers. */
+  id: number;
+  /** The point it points down at, in viewport fractions. */
+  x: number;
+  y: number;
+  /** "Checkpoint · 290 m". */
+  label: string;
+}
+
 export interface HudSink {
   score(value: number): void;
   readouts(list: Readout[]): void;
@@ -147,6 +158,14 @@ export interface HudSink {
   damage(direction: number, hurt: number): void;
   /** How hurt the player is as it recovers, 0..1 (drives the screen's red edge). */
   health(hurt: number): void;
+  /**
+   * Calm marks over where to look, while the view is wide (Overwatch
+   * Ridge's spotter): a small chevron with a place and a range over each
+   * place, at viewport positions (the chevron points down at the point).
+   * Called as often as the marks move; null (or an empty list) takes them
+   * all away. Optional; a game without a spotter never calls it.
+   */
+  spotter?(marks: SpotterMark[] | null): void;
   /** A hit marker at a viewport position. */
   hitMarker(x: number, y: number, kind: "hit" | "headshot" | "kill"): void;
   /** A short floating line: "+150 Quick Draw". */
@@ -241,7 +260,12 @@ export interface Settings {
    * whether closing an eye scopes (with the hand, in a game that reads the
    * eye), and whether the buttons are held or toggled.
    */
-  scope: { eye: boolean; button: "hold" | "toggle" };
+  scope: {
+    eye: boolean;
+    button: "hold" | "toggle";
+    /** The player has a touch screen, so the Scope button is there for them (with the hand too). */
+    touch?: boolean;
+  };
 }
 
 export interface Quality {

@@ -55,6 +55,33 @@ for the wind to drop, and squeeze.
   hand's tremor becomes a quarter of the movement; the breathing sway is
   there, and settles a little after a second of stillness. The shot goes where
   the reticle is.
+- **Closing one eye must work for real people.** The eye is read by the face
+  landmarker on the hand's own camera frames, and a real room is not the lab's:
+  the pointing hand is across the face (the landmarker finds none behind a
+  fist), blink scores differ by person, glasses and light (a wink reads 0.9 on
+  one face and 0.45 on another; looking down raises both eyes), and a player
+  cannot tell whether their face is seen at all. So (`input/scope.ts`):
+  - **A scope held by the eye is kept while the face is missing** - until the
+    face is seen again with the eye open, or ten seconds at the longest.
+  - **Nothing is a fixed number.** Each eye's open level is followed as the
+    player plays, and the scope closes on a clear rise above it (one eye
+    shut, the other well behind it, for a quarter of a second), set by how far
+    this player's eye really travels - learned from their winks, kept in
+    `handy.eye.v1`, and learned in full by Settings' Eye Test. A blink, a look
+    down, a squint and a laugh never scope; both eyes squeezed hard shut do,
+    after 0.7 s. (Tried on simulated natural traces on four kinds of open eye:
+    no false scope in 200 of each, bar a head turned so far that one eye reads
+    as a wink; a wink that rises 0.4 or more scopes in about 0.27 s.)
+  - **Feedback.** A small glass eye in the weapon's corner: dim and struck
+    through while no face is seen, an eye whose lid comes down and whose ring
+    fills as the eye closes, white (like the Scope button) while it scopes,
+    and ringed with dashes while the scope is kept for a face the hand hides.
+    If the face stays out of view for six seconds and the player has not
+    scoped yet, the hint says so, with the way that always works.
+  - **Shift, the right mouse button and the touch Scope button always scope**,
+    with the hand as with a pointer, tracked or not (the view stays where it
+    was aimed). On a touch screen the Scope button rests above the camera's
+    picture.
 - **The rifle:** bolt-action, **5 rounds** (the page shows a magazine and the
   bolt's state). After each shot the bolt must be **cycled — raise your thumb**
   (the re-arm) and the bolt works back and forward (0.6 s, a clean metallic
@@ -128,6 +155,27 @@ Between stages a **breather** (6 s): the title card ("Stage 3"), a
 line on the job, health refills, the mist shifts, the wind changes (a new
 direction and strength, shown as it comes).
 
+## Finding the men: the spotter
+
+A man 300 m away is a few pixels tall in the wide view, and nothing says where
+to look. So a spotter (`rules/spotter.ts`) helps, calmly:
+
+- **Marks** while the view is wide: a chevron over the place the job's men
+  stand, with a glass pill above it - "Checkpoint · 289 m" - for men standing
+  together, one each for the rest. In the first two stages on both
+  difficulties, always on Relaxed (`DifficultyTuning.spotter`), and on
+  Standard's later stages once the spotter has spoken. A hidden man (the
+  counter-sniper in his nest) is never marked. They fade away as the scope
+  goes in and come back with the wide view.
+- **A word** when the fight is eight seconds old (fourteen after the first
+  stage) and no one has been in the player's glass: "Your spotter has them at
+  the checkpoint, 289 m out. Marked." Looking through the scope at nothing
+  for five seconds, he says which way to turn: "Your spotter: they're to your
+  left." Neither is said to a player who has found them.
+- **The scope's tip stands.** "Close one eye to look through the scope. Or hold
+  Shift." stays at the foot of the view until the player has looked through the
+  scope once, by any means (the hint line's standing line).
+
 ## Scoring
 
 - Headshot 150; body kill 80; the driver 250; engine stop 300; the counter-
@@ -149,9 +197,10 @@ apart.
 
 ## One-time tips (Settings.tipsSeen)
 
-`ridge.scope` — the start, until the player has scoped by themselves: "Close
-one eye to look through the scope." (or "Hold Shift to look through the
-scope." for a mouse player, "Hold Scope" on touch) · `ridge.drop` — the first
+`ridge.scope` — the start, standing until the player has scoped by themselves:
+"Close one eye to look through the scope. Or hold Shift." (or "Hold Shift or
+the right button to look through the scope." for a mouse player, "Hold Scope"
+on touch; "Press" when the button toggles) · `ridge.drop` — the first
 miss that fell short or long: "It drops with distance. Aim a mark higher for
 every hundred metres past the first two." (wording to be checked against the
 reticle) · `ridge.wind` — the first miss that drifted: "The wind pushes the

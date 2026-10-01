@@ -6,7 +6,8 @@
  * from a direction and the red edge that recedes as the player recovers,
  * hints, a secret found. The world owns the centre; nothing stays there.
  */
-import type { AmmoStyle, GameStats, HudSink, Readout } from "../engine/types";
+import type { AmmoStyle, GameStats, HudSink, Readout, SpotterMark } from "../engine/types";
+import type { EyeView } from "../input/scope";
 import { $, announce, element, icon, replay, setText } from "../ui/dom";
 import { formatScore, formatTime } from "../ui/format";
 
@@ -93,6 +94,10 @@ export class Hud implements HudSink {
   private ownHint: string | null = null;
   /** The round is over: the results own the screen, and a game's late hint waits for the next round. */
   private over = false;
+  /** The spotter's marks on screen, by the id the game gave each. */
+  private readonly spots = new Map<number, HTMLElement>();
+  /** The eye indicator as drawn (a key of what shows), so it is redrawn only when it changes. */
+  private eyeShown = "";
 
   constructor(private readonly reducedMotion: () => boolean) {}
 
@@ -114,7 +119,9 @@ export class Hud implements HudSink {
     }
     this.clock(null);
     this.onCrosshair?.("default");
-    for (const id of ["arcs", "marks", "moments", "bursts"]) $(id).replaceChildren();
+    for (const id of ["arcs", "marks", "moments", "bursts", "spots"]) $(id).replaceChildren();
+    this.spots.clear();
+    this.eye(null);
     this.health(0);
     this.gameHint = null;
     this.ownHint = null;
@@ -354,6 +361,73 @@ export class Hud implements HudSink {
   health(hurt: number): void {
     this.hurt = Math.max(0, Math.min(1, hurt));
     $("hurt-edge").style.opacity = String(Math.min(1, this.hurt * 1.15));
+  }
+
+  /**
+   * The spotter's marks: each a chevron over its point with what it is
+   * under a glass pill above it. They are kept as they come (a mark that
+   * stays only moves) and the ones that go fade out.
+   */
+  spotter(marks: SpotterMark[] | null): void {
+    const layer = $("spots");
+    const keep = new Set<number>();
+    for (const mark of marks ?? []) {
+      keep.add(mark.id);
+      let spot = this.spots.get(mark.id);
+      if (!spot) {
+        const fresh = element("div", "spot gone");
+        fresh.append(icon("chevron-down"), element("span", "spot-label glass"));
+        layer.append(fresh);
+        this.spots.set(mark.id, fresh);
+        // It fades in from nothing, a frame after it is placed.
+        requestAnimationFrame(() => requestAnimationFrame(() => fresh.classList.remove("gone")));
+        spot = fresh;
+      }
+      spot.style.left = `${(mark.x * 100).toFixed(2)}%`;
+      spot.style.top = `${(mark.y * 100).toFixed(2)}%`;
+      setText(spot.lastElementChild!, mark.label);
+    }
+    for (const [id, spot] of this.spots) {
+      if (keep.has(id)) continue;
+      this.spots.delete(id);
+      spot.classList.add("gone");
+      window.setTimeout(() => spot.remove(), 260);
+    }
+  }
+
+  /**
+   * The eye indicator, for a game that reads the eye: a small glass circle
+   * with an eye in it. Dim and struck through while no face is seen, an
+   * open eye with a ring that fills as the eye closes, white and closed
+   * while it scopes. `null` takes it away.
+   */
+  eye(view: EyeView | null): void {
+    const meter = $("eye-meter");
+    if (!view) {
+      if (!meter.hidden) meter.hidden = true;
+      this.eyeShown = "";
+      return;
+    }
+    // An open eye's readings tremble a little: the first sixth of the way is not shown as closing.
+    const closing = view.scoped ? 1 : view.seen ? Math.max(0, (view.closing - 0.15) / 0.85) : 0;
+    const state = view.scoped ? "scoped" : !view.seen ? "away" : closing > 0.02 ? "closing" : "seen";
+    const key = `${state}|${Math.round(closing * 40)}|${view.held}`;
+    if (key === this.eyeShown && !meter.hidden) return;
+    this.eyeShown = key;
+    meter.hidden = false;
+    meter.dataset.state = state;
+    meter.dataset.held = String(view.held);
+    meter.setAttribute(
+      "aria-label",
+      state === "scoped" ? "Eye closed. Scoping" : state === "away" ? "Eye. Your face is not in view" : "Eye. Your face is seen",
+    );
+    // The lid comes down with the eye; the ring fills with it.
+    const open = view.scoped ? 0.1 : Math.max(0.1, 1 - closing * 0.9);
+    const up = (20 - 7.5 * open).toFixed(2);
+    const down = (20 + 7.5 * open).toFixed(2);
+    $("eye-lid").setAttribute("d", `M9 20C13 ${up} 27 ${up} 31 20C27 ${down} 13 ${down} 9 20Z`);
+    $("eye-iris").setAttribute("r", (3 * Math.min(1, Math.max(0, (open - 0.2) * 1.6))).toFixed(2));
+    $("eye-fill").style.strokeDasharray = `${(closing * 100).toFixed(1)} 100`;
   }
 
   hitMarker(x: number, y: number, kind: "hit" | "headshot" | "kill"): void {

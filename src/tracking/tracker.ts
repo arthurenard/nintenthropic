@@ -458,6 +458,8 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
   worker.postMessage(init, face ? [wasm, model, face] : [wasm, model]);
   try {
     const started = await ready;
+    // The worker says why on its own console (where a player never looks); the page says it too.
+    if (withFace && !started.face) console.warn("The face landmarker did not start in the tracking worker, so the eye cannot scope (Shift still does).");
     return new WorkerTracker(worker, started.delegate, started.face);
   } catch (error) {
     worker.terminate();

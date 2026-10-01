@@ -11,13 +11,46 @@ export type TipId = "ridge.scope" | "ridge.hip" | "ridge.bolt" | "ridge.drop" | 
 
 export const ALL_TIPS: readonly TipId[] = ["ridge.scope", "ridge.hip", "ridge.bolt", "ridge.drop", "ridge.wind", "ridge.civilian", "ridge.glint"];
 
-/** How the player looks through the scope, in their own terms. */
+/**
+ * How the player looks through the scope, in their own terms. With the hand
+ * and the eye it also says the way that always works, Shift: it stands at the
+ * foot of the view until the player has looked through the scope once, and
+ * the eye is not the only thing they are told.
+ */
 export function scopeHint(input: InputKind | undefined, scope: Settings["scope"]): string {
   const toggle = scope.button === "toggle";
   if (input === "touch") return toggle ? "Tap Scope to look through the scope." : "Hold Scope to look through the scope.";
   if (input === "mouse") return toggle ? "Press Shift or the right button to look through the scope." : "Hold Shift or the right button to look through the scope.";
-  if (scope.eye) return "Close one eye to look through the scope.";
-  return toggle ? "Press Shift to look through the scope." : "Hold Shift to look through the scope.";
+  // With the hand: Shift, or on a touch screen the Scope button.
+  const way = scope.touch ? "Scope" : "Shift";
+  if (scope.eye) return `Close one eye to look through the scope. Or ${toggle ? "press" : "hold"} ${way}.`;
+  return toggle ? `Press ${way} to look through the scope.` : `Hold ${way} to look through the scope.`;
+}
+
+/** The name of a place, for a mark over it: "at the checkpoint" is "Checkpoint". */
+export function placeName(place: string): string {
+  const name = place.replace(/^(?:at|on|in|by|near|behind|above|beside)\s+(?:the\s+)?/i, "").trim();
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Target";
+}
+
+/** What the spotter says to a scope looking at nothing: which way to turn it. */
+export function turnWord(way: "left" | "right" | "up" | "down"): string {
+  switch (way) {
+    case "left":
+      return "Your spotter: they’re to your left.";
+    case "right":
+      return "Your spotter: they’re to your right.";
+    case "up":
+      return "Your spotter: look higher.";
+    case "down":
+      return "Your spotter: look lower.";
+  }
+}
+
+/** What the spotter says when nobody has found the men yet: where they are, and how far. */
+export function spotterWord(place: string, range: number): string {
+  const where = place ? ` ${place}` : "";
+  return `Your spotter has them${where}, ${Math.round(range)} m out. Marked.`;
 }
 
 /** Each tip's words, in the player's own terms. */

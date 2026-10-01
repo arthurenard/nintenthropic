@@ -34,7 +34,7 @@ import { rangeMarkMils } from "../rules/ballistics";
 import { SCOPE_IN_TIME, SCOPE_OUT_TIME, SCOPE_PAN_GAIN, SCOPE_POWER, SWAY_MOVING, SWAY_SETTLE, SWAY_STILL } from "../rules/tuning";
 
 /** The glass's radius as a fraction of the smaller side of the view. */
-const GLASS = 0.46;
+export const GLASS = 0.46;
 
 const RAD = Math.PI / 180;
 // Scratch vectors for apply(), once a frame: nothing allocated per frame.

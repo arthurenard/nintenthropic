@@ -3,7 +3,7 @@ import type { FaceFrame, FaceReading, HandFrame, HandSource } from "../tracking/
 import { HandInput } from "./handInput";
 import { boxMapping } from "./homography";
 import { MouseInput, RELOAD_MOMENT, TouchInput } from "./pointer";
-import { EYE_SCOPE, EyeScope, ScopeControl, scopeKeys } from "./scope";
+import { EYE_SCOPE, EyeScope, ScopeControl, scopeKeys, scopeMouse, type EyeProfile } from "./scope";
 import { asCameraSees, makeHand } from "./synthetic";
 
 /** Fifteen face readings a second: every other frame of a 30 fps camera. */
@@ -19,77 +19,248 @@ function hold(eye: EyeScope, face: FaceReading | null, from: number, ms: number)
   return t;
 }
 
+/** An eye that has had a moment to see its player's open face. */
+function ready(profile: EyeProfile | null = null, face: FaceReading = open): { eye: EyeScope; t: number } {
+  const eye = new EyeScope(EYE_SCOPE, profile);
+  return { eye, t: hold(eye, face, 0, 600) };
+}
+
 describe("closing one eye to scope", () => {
-  it("scopes once one eye has stayed shut for 180 ms, either eye", () => {
+  it("scopes once one eye has stayed shut for a quarter of a second, either eye", () => {
     for (const shut of [wink, { blinkLeft: 0.1, blinkRight: 0.7 }]) {
-      const eye = new EyeScope();
-      let t = hold(eye, open, 0, 500);
+      const { eye, t: start } = ready();
+      let t = start;
       eye.read(shut, t);
       const closed = t;
       expect(eye.active(t)).toBe(false);
       while (t - closed < EYE_SCOPE.hold) {
         t += EVERY;
         eye.read(shut, t);
-        if (t - closed < EYE_SCOPE.hold) expect(eye.active(t)).toBe(false);
+        if (t - closed < EYE_SCOPE.hold - EVERY) expect(eye.active(t)).toBe(false);
       }
+      t = hold(eye, shut, t, EVERY);
       expect(eye.active(t)).toBe(true);
     }
   });
 
-  it("never scopes for a blink, however hard", () => {
-    const eye = new EyeScope();
-    let t = hold(eye, open, 0, 300);
+  it("never scopes for a blink, however hard or slow", () => {
+    const { eye, t: start } = ready();
+    let t = start;
     for (let i = 0; i < 20; i++) {
-      // A blink: both eyes shut for a tenth to a seventh of a second, every so often.
-      t = hold(eye, blink, t, 100 + (i % 3) * 25);
+      // A blink: both eyes shut for a tenth to nearly half a second, every so often.
+      t = hold(eye, blink, t, 100 + (i % 5) * 80);
       expect(eye.active(t)).toBe(false);
       t = hold(eye, open, t, 400);
     }
   });
 
-  it("starts the hold again when the eye opens past the threshold on the way", () => {
-    const eye = new EyeScope();
-    let t = hold(eye, wink, 0, 140);
-    t = hold(eye, { blinkLeft: 0.5, blinkRight: 0.2 }, t, EVERY);
-    t = hold(eye, wink, t, 140);
+  it("scopes for both eyes squeezed shut only after a long hold, and never for a look down", () => {
+    const { eye, t: start } = ready();
+    let t = hold(eye, blink, start, EYE_SCOPE.holdBoth - 2 * EVERY);
     expect(eye.active(t)).toBe(false);
-    t = hold(eye, wink, t, 100);
+    t = hold(eye, blink, t, 3 * EVERY);
+    expect(eye.active(t)).toBe(true);
+    // Looking down at the lower screen raises both eyes, and it stays raised: not a squeeze.
+    const down = ready();
+    const t2 = hold(down.eye, { blinkLeft: 0.46, blinkRight: 0.44 }, down.t, 5000);
+    expect(down.eye.active(t2)).toBe(false);
+  });
+
+  it("starts the hold again when the eye opens past the threshold on the way", () => {
+    const { eye, t: start } = ready();
+    let t = hold(eye, wink, start, 200);
+    t = hold(eye, { blinkLeft: 0.15, blinkRight: 0.1 }, t, EVERY);
+    t = hold(eye, wink, t, 200);
+    expect(eye.active(t)).toBe(false);
+    t = hold(eye, wink, t, 150);
     expect(eye.active(t)).toBe(true);
   });
 
-  it("stays scoped as the eye eases open a little, and lets go below 0.30", () => {
-    const eye = new EyeScope();
-    let t = hold(eye, wink, 0, 400);
+  it("stays scoped as the eye eases open a little, and lets go once it has been open for a moment", () => {
+    const { eye, t: start } = ready();
+    let t = hold(eye, wink, start, 400);
     expect(eye.active(t)).toBe(true);
     t = hold(eye, { blinkLeft: 0.42, blinkRight: 0.2 }, t, 600);
     expect(eye.active(t)).toBe(true);
-    t = hold(eye, { blinkLeft: 0.33, blinkRight: 0.2 }, t, 300);
+    t = hold(eye, { blinkLeft: 0.3, blinkRight: 0.2 }, t, 300);
     expect(eye.active(t)).toBe(true);
-    eye.read({ blinkLeft: 0.28, blinkRight: 0.2 }, t);
-    expect(eye.active(t)).toBe(false);
-  });
-
-  it("waits 200 ms for a face it lost, then lets the scope go", () => {
-    const eye = new EyeScope();
-    let t = hold(eye, wink, 0, 400);
-    // A moment without a face (a turn of the head): still scoped.
-    t = hold(eye, null, t, 150);
+    // One reading that falls open is noise; the eye staying open is not.
+    eye.read(open, t);
     expect(eye.active(t)).toBe(true);
-    t = hold(eye, wink, t, 100);
+    t = hold(eye, wink, t + EVERY, 200);
     expect(eye.active(t)).toBe(true);
-    // Gone for longer: no longer.
-    t = hold(eye, null, t, 300);
-    expect(eye.active(t)).toBe(false);
-    // And a face back with the eye still shut must hold for 180 ms again.
-    eye.read(wink, t);
+    t = hold(eye, open, t, EYE_SCOPE.release + 2 * EVERY);
     expect(eye.active(t)).toBe(false);
   });
 
   it("lets go when the readings stop coming", () => {
-    const eye = new EyeScope();
-    const t = hold(eye, wink, 0, 400);
+    const { eye, t: start } = ready();
+    const t = hold(eye, wink, start, 400);
     expect(eye.active(t)).toBe(true);
     expect(eye.active(t + EYE_SCOPE.stale + 1)).toBe(false);
+  });
+});
+
+describe("the hand across the face", () => {
+  it("keeps the scope while the face is missing, however long it takes to aim", () => {
+    const { eye, t: start } = ready();
+    let t = hold(eye, wink, start, 400);
+    expect(eye.active(t)).toBe(true);
+    // The finger pistol is raised across the face: the landmarker finds none, for seconds.
+    t = hold(eye, null, t, 6000);
+    expect(eye.active(t)).toBe(true);
+    expect(eye.view(t).held).toBe(true);
+    expect(eye.view(t).seen).toBe(false);
+  });
+
+  it("lets go the moment the face is seen again with the eye open", () => {
+    const { eye, t: start } = ready();
+    let t = hold(eye, wink, start, 400);
+    t = hold(eye, null, t, 3000);
+    expect(eye.active(t)).toBe(true);
+    t = hold(eye, open, t, EYE_SCOPE.release + 2 * EVERY);
+    expect(eye.active(t)).toBe(false);
+    // ... but a face that comes back with the eye still shut keeps it.
+    const again = ready();
+    let u = hold(again.eye, wink, again.t, 400);
+    u = hold(again.eye, null, u, 2000);
+    u = hold(again.eye, wink, u, 600);
+    expect(again.eye.active(u)).toBe(true);
+  });
+
+  it("lets go in the end if the face never comes back", () => {
+    const { eye, t: start } = ready();
+    let t = hold(eye, wink, start, 400);
+    t = hold(eye, null, t, EYE_SCOPE.occlusion - 500);
+    expect(eye.active(t)).toBe(true);
+    t = hold(eye, null, t, 1500);
+    expect(eye.active(t)).toBe(false);
+  });
+
+  it("does not scope on a face it cannot see, but waits a moment for one lost while an eye closes", () => {
+    const { eye, t: start } = ready();
+    // Nothing seen, however long: nothing to scope.
+    const t = hold(eye, null, start, 3000);
+    expect(eye.active(t)).toBe(false);
+    // The face flickers away for a frame or two in the middle of a wink: the hold goes on.
+    const flicker = ready();
+    let u = hold(flicker.eye, wink, flicker.t, 100);
+    u = hold(flicker.eye, null, u, 2 * EVERY);
+    u = hold(flicker.eye, wink, u, 2 * EVERY);
+    expect(flicker.eye.active(u)).toBe(true);
+    // ... and a face lost for longer starts the hold afresh.
+    const lost = ready();
+    let v = hold(lost.eye, wink, lost.t, 120);
+    v = hold(lost.eye, null, v, 600);
+    v = hold(lost.eye, wink, v, 120);
+    expect(lost.eye.active(v)).toBe(false);
+  });
+});
+
+describe("every player's own eyes", () => {
+  it("scopes on a wink that reads low, which a fixed 0.55 never would", () => {
+    const { eye, t: start } = ready();
+    const t = hold(eye, { blinkLeft: 0.46, blinkRight: 0.12 }, start, 500);
+    expect(eye.active(t)).toBe(true);
+  });
+
+  it("does not scope on a squint or a half-closed eye", () => {
+    const { eye, t: start } = ready();
+    const t = hold(eye, { blinkLeft: 0.27, blinkRight: 0.08 }, start, 3000);
+    expect(eye.active(t)).toBe(false);
+  });
+
+  it("does not scope on what both eyes do together - a squint, a look down, a laugh - or on an eye only a little ahead of the other", () => {
+    for (const natural of [
+      { blinkLeft: 0.42, blinkRight: 0.4 }, // a squint
+      { blinkLeft: 0.5, blinkRight: 0.46 }, // a look down
+      { blinkLeft: 0.6, blinkRight: 0.56 }, // a laugh
+      { blinkLeft: 0.53, blinkRight: 0.33 }, // a look down with the head turned a little: one eye ahead by 0.2
+    ]) {
+      const { eye, t: start } = ready();
+      expect(eye.active(hold(eye, natural, start, 6000))).toBe(false);
+    }
+  });
+
+  it("asks a player whose open eyes read high for no less than one whose read low", () => {
+    // Narrow eyes: open reads 0.25. An eye that rises by 0.22 (the head turned) is not a wink, as on any face...
+    const { eye, t: start } = ready(null, { blinkLeft: 0.25, blinkRight: 0.28 });
+    let t = hold(eye, { blinkLeft: 0.47, blinkRight: 0.28 }, start, 3000);
+    expect(eye.active(t)).toBe(false);
+    // ... and a wink is.
+    t = hold(eye, { blinkLeft: 0.8, blinkRight: 0.3 }, t, 500);
+    expect(eye.active(t)).toBe(true);
+  });
+
+  it("finds the open level of a player whose open eyes read high, and scopes on a rise above that", () => {
+    // Glasses, or narrow eyes: open reads 0.35.
+    const { eye, t: start } = ready(null, { blinkLeft: 0.35, blinkRight: 0.33 });
+    let t = hold(eye, { blinkLeft: 0.37, blinkRight: 0.34 }, start, 4000);
+    expect(eye.active(t)).toBe(false);
+    t = hold(eye, { blinkLeft: 0.9, blinkRight: 0.4 }, t, 500);
+    expect(eye.active(t)).toBe(true);
+    // Open again: the open level is still theirs, and the scope lets go.
+    t = hold(eye, { blinkLeft: 0.36, blinkRight: 0.34 }, t, 400);
+    expect(eye.active(t)).toBe(false);
+  });
+
+  it("follows an open level that drifts (the light changes) without scoping", () => {
+    const { eye, t: start } = ready();
+    let t = start;
+    for (let level = 0.06; level <= 0.3; level += 0.01) t = hold(eye, { blinkLeft: level, blinkRight: level + 0.02 }, t, 1200);
+    expect(eye.active(t)).toBe(false);
+    // And at the new level, a wink still scopes.
+    t = hold(eye, { blinkLeft: 0.86, blinkRight: 0.33 }, t, 500);
+    expect(eye.active(t)).toBe(true);
+  });
+
+  it("learns how far this player's eye shuts from a scope held, and keeps it for next time", () => {
+    const { eye, t: start } = ready();
+    const learned: EyeProfile[] = [];
+    eye.onLearn = (profile) => learned.push(profile);
+    // A short scope teaches nothing.
+    let t = hold(eye, { blinkLeft: 0.5, blinkRight: 0.1 }, start, 450);
+    t = hold(eye, open, t, 400);
+    expect(learned).toHaveLength(0);
+    // A held one does.
+    t = hold(eye, { blinkLeft: 0.52, blinkRight: 0.1 }, t, 2000);
+    t = hold(eye, open, t, 400);
+    expect(learned).toHaveLength(1);
+    expect(learned[0]!.closed).toBeGreaterThan(0.5);
+    expect(learned[0]!.closed).toBeLessThan(0.6);
+    expect(learned[0]!.open).toBeLessThan(0.15);
+    expect(eye.profile).toEqual(learned[0]);
+  });
+
+  it("starts from a kept profile: a weak wink scopes only because the player's eye is known", () => {
+    const weak: FaceReading = { blinkLeft: 0.3, blinkRight: 0.07 };
+    const stranger = ready();
+    expect(stranger.eye.active(hold(stranger.eye, weak, stranger.t, 1500))).toBe(false);
+    const known = ready({ open: 0.06, closed: 0.34 });
+    expect(known.eye.active(hold(known.eye, weak, known.t, 600))).toBe(true);
+  });
+});
+
+describe("what the eye shows the player", () => {
+  it("says whether a face is seen, how near the eye is to scoping, and when it is held on faith", () => {
+    const eye = new EyeScope();
+    expect(eye.view(0)).toMatchObject({ seen: false, closing: 0, scoped: false, held: false });
+    let t = hold(eye, open, 0, 500);
+    expect(eye.view(t)).toMatchObject({ seen: true, scoped: false });
+    expect(eye.view(t).closing).toBeLessThan(0.2);
+    // Halfway shut: part of the way there.
+    t = hold(eye, { blinkLeft: 0.22, blinkRight: 0.08 }, t, 100);
+    const half = eye.view(t).closing;
+    expect(half).toBeGreaterThan(0.3);
+    expect(half).toBeLessThan(0.9);
+    t = hold(eye, wink, t, 500);
+    expect(eye.view(t)).toMatchObject({ seen: true, scoped: true, closing: 1, held: false });
+    expect(eye.view(t).left).toBeCloseTo(0.82);
+    expect(eye.view(t).threshold).toBeGreaterThan(0.2);
+    expect(eye.view(t).threshold).toBeLessThan(0.55);
+    // The face is lost: scoped still, held, and no longer seen.
+    t = hold(eye, null, t, 1000);
+    expect(eye.view(t)).toMatchObject({ seen: false, scoped: true, held: true });
   });
 });
 
@@ -120,25 +291,27 @@ describe("the scope's buttons", () => {
   });
 
   it("with the eye, either scopes; without Close One Eye, only the buttons do", () => {
-    const eye = new EyeScope();
+    const { eye, t: start } = ready();
     const scope = new ScopeControl("hold", eye);
-    const t = hold(eye, wink, 0, 400);
+    const t = hold(eye, wink, start, 400);
     expect(scope.active(t)).toBe(true);
+    expect(scope.eyeView(t)?.scoped).toBe(true);
     scope.useEye = false;
     expect(scope.active(t)).toBe(false);
+    expect(scope.eyeView(t)).toBeNull();
     scope.press("mouse");
     expect(scope.active(t)).toBe(true);
   });
 
   it("lets everything go on a reset (a pause): nothing held comes back by itself", () => {
-    const eye = new EyeScope();
+    const { eye, t: start } = ready();
     const scope = new ScopeControl("toggle", eye);
     let changes = 0;
     scope.onChange = () => changes++;
     scope.press("key");
-    hold(eye, wink, 0, 400);
+    const t = hold(eye, wink, start, 400);
     scope.reset();
-    expect(scope.active(400)).toBe(false);
+    expect(scope.active(t)).toBe(false);
     expect(changes).toBe(2);
   });
 });
@@ -287,28 +460,91 @@ describe("the hand in a game that reads the eye", () => {
     latest() {
       return null;
     }
-    frame(at: number, eyes: FaceReading | null | undefined) {
-      const hand: HandFrame = { landmarks: asCameraSees(makeHand({ thumbDegrees: 20 })), handedness: "Right", capturedAt: at, sequence: at };
-      for (const l of this.hands) l(hand);
+    frame(at: number, eyes: FaceReading | null | undefined, hand = true) {
+      const frame: HandFrame = { landmarks: hand ? asCameraSees(makeHand({ thumbDegrees: 20 })) : null, handedness: hand ? "Right" : null, capturedAt: at, sequence: at };
+      for (const l of this.hands) l(frame);
       if (eyes !== undefined) for (const l of this.faces) l({ eyes, capturedAt: at });
     }
   }
 
-  it("scopes on the eye read from the same camera frames, and lets it go when the eye opens", () => {
+  function player() {
     const camera = new Camera();
     const scope = new ScopeControl("hold", new EyeScope());
     const input = new HandInput(camera, () => ({ width: 1440, height: 900 }), boxMapping([0.2, 0.2], [0.8, 0.8]), scope);
     let t = 0;
     // A 30 fps camera, the face read on every other frame.
-    const run = (eyes: FaceReading, ms: number) => {
-      for (const end = t + ms; t < end; t += 1000 / 30) camera.frame(t, (Math.round(t / (1000 / 30)) % 2 === 0 ? eyes : undefined));
+    const run = (eyes: FaceReading | null, ms: number, hand = true) => {
+      for (const end = t + ms; t < end; t += 1000 / 30) camera.frame(t, Math.round(t / (1000 / 30)) % 2 === 0 ? eyes : undefined, hand);
     };
+    return { input, scope, run, now: () => t };
+  }
+
+  it("scopes on the eye read from the same camera frames, and lets it go when the eye opens", () => {
+    const { input, run, now } = player();
     run(open, 300);
-    expect(input.sample(t).scope).toBe(false);
-    run(wink, 300);
-    expect(input.sample(t).scope).toBe(true);
-    run(open, 100);
-    expect(input.sample(t).scope).toBe(false);
+    expect(input.sample(now()).scope).toBe(false);
+    run(wink, 400);
+    expect(input.sample(now()).scope).toBe(true);
+    run(open, 300);
+    expect(input.sample(now()).scope).toBe(false);
     input.dispose();
+  });
+
+  it("keeps the scope while the hand hides the face, and lets go when the face is open again", () => {
+    const { input, run, now } = player();
+    run(open, 300);
+    run(wink, 400);
+    expect(input.sample(now()).scope).toBe(true);
+    // The pistol across the face: the camera sees the hand, the landmarker no face.
+    run(null, 3000);
+    expect(input.sample(now()).scope).toBe(true);
+    run(open, 300);
+    expect(input.sample(now()).scope).toBe(false);
+    input.dispose();
+  });
+
+  it("scopes with Shift or the right button with the hand, tracked or not", () => {
+    const { input, scope, run, now } = player();
+    const stage = new FakeElement();
+    const window_ = window as unknown as EventTarget;
+    const stopKeys = scopeKeys(scope, window as unknown as Window);
+    const stopMouse = scopeMouse(scope, stage as unknown as HTMLElement, window as unknown as Window);
+    run(open, 300);
+    expect(input.sample(now()).scope).toBe(false);
+    // Shift, with the hand in view.
+    window_.dispatchEvent(event("keydown", { key: "Shift", repeat: false }));
+    expect(input.sample(now()).scope).toBe(true);
+    window_.dispatchEvent(event("keyup", { key: "Shift" }));
+    expect(input.sample(now()).scope).toBe(false);
+    // The right button, with the hand lost: the aim is not tracked, the scope is still asked for.
+    run(open, 600, false);
+    const down = event("pointerdown", { pointerType: "mouse", buttons: 2, target: stage });
+    stage.dispatchEvent(down);
+    expect(input.sample(now()).scope).toBe(true);
+    expect(input.sample(now()).tracking).toBe(false);
+    // A left click on its own is not the scope; the right button coming up lets go.
+    window_.dispatchEvent(event("pointerup", { pointerType: "mouse", buttons: 0, target: stage }));
+    expect(input.sample(now()).scope).toBe(false);
+    // The browser's menu stays shut on the stage.
+    const menu = event("contextmenu", { target: stage });
+    stage.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(true);
+    stopKeys();
+    stopMouse();
+    input.dispose();
+  });
+
+  it("ignores the right button on the page's own controls, and a touch", () => {
+    const { scope } = player();
+    const stage = new FakeElement();
+    const control = new FakeElement();
+    control.closest = () => control as unknown as Element;
+    Object.assign(globalThis, { Element: FakeElement });
+    const stop = scopeMouse(scope, stage as unknown as HTMLElement, window as unknown as Window);
+    stage.dispatchEvent(event("pointerdown", { pointerType: "mouse", buttons: 2, target: control }));
+    expect(scope.buttons).toBe(false);
+    stage.dispatchEvent(event("pointerdown", { pointerType: "touch", buttons: 2, target: stage }));
+    expect(scope.buttons).toBe(false);
+    stop();
   });
 });
