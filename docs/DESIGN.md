@@ -168,12 +168,13 @@ Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off
 camera, hand, checkmark, share, gear (settings), scope, chevrons (a row that leads on,
 a menu).
 
-The mark is the one exception: a white finger pistol aimed at the game's own green
-crosshair, on a dark rounded square. Its wrist fades into the dark, and a faint glow
-sits behind the crosshair. One source, `tools/icons/mark.mjs`, draws it.
-`node tools/icons/render.mjs` writes `public/icons/icon.svg` and the app icons. The
-wordmark, the favicon, the share card and the promo all use that file. Never redraw
-the mark elsewhere, and never use it as a button icon.
+The mark is the one exception: a sculpted white hand making a finger pistol, aimed at
+the game's own green crosshair, on a dark rounded square. Its forearm fades into the
+dark, and a faint glow sits behind the crosshair. The hand is a Cycles render built
+from real bone lengths (`tools/icons/hand.py`). `tools/icons/mark.mjs` lays it out,
+and `node tools/icons/render.mjs` writes the app icons and the favicon to
+`public/icons/`. The wordmark, the share card and the promo use `icon-192.png` or
+`icon-512.png`. Never redraw the mark elsewhere, and never use it as a button icon.
 
 ## Sound
 

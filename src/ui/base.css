@@ -352,7 +352,7 @@ svg {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-/* The mark (public/icons/icon.svg, drawn by tools/icons/mark.mjs). */
+/* The mark (public/icons/icon-192.png, from tools/icons/). */
 .wordmark-icon {
   display: block;
   width: 28px;

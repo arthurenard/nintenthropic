@@ -204,8 +204,8 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
     context.letterSpacing = "0px";
     return context.measureText(words).width;
   };
-  // The mark (public/icons/icon.svg, drawn by tools/icons/mark.mjs).
-  const mark = await loadImage(siteUrl("icons/icon.svg"));
+  // The mark (public/icons/icon-192.png, from tools/icons/).
+  const mark = await loadImage(siteUrl("icons/icon-192.png"));
   if (mark) context.drawImage(mark, 62, 56, 44, 44);
   text("Handy", 112, 90, 32, 700, "#fff", -0.3);
   const { stats } = result;

@@ -27,8 +27,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, ht
   return node;
 }
 
-/** The mark (public/icons/icon.svg, drawn by tools/icons/mark.mjs). */
-const HAND = `<img class="mark-icon" alt="" src="/icons/icon.svg" />`;
+/** The mark (public/icons/icon-512.png, from tools/icons/). */
+const HAND = `<img class="mark-icon" alt="" src="/icons/icon-512.png" />`;
 
 /** Mounts the app's icon sprites once (they are in index.html's markup). */
 export function mountSymbols(): void {
