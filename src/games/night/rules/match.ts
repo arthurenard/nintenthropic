@@ -17,6 +17,8 @@ import {
   HEALTH_MAX,
   LANE_REACH,
   MECHANIC_AURA,
+  OPENING_REACH,
+  OPENING_STAGGER,
   WALKER_SPEED,
   WAVE_INTRO,
   WORN,
@@ -106,6 +108,8 @@ export interface Results {
 interface QueueEntry {
   kind: DeadKind;
   lane: LaneId;
+  /** One of the wave's opening: it starts closer in (OPENING_REACH), and the next of them follows a moment later. */
+  near?: boolean;
 }
 
 /** The Mechanic quickens the dead within this many metres of him. */
@@ -150,6 +154,8 @@ export class Match implements DeadWorld {
   private readonly listener: MatchListener;
   private readonly survivorEvents: SurvivorEvents;
   private readonly lanes = new Map<LaneId, Lane>();
+  /** The lanes as the dead of an opening walk them: begun closer in where something hides them. */
+  private readonly nearLanes = new Map<LaneId, Lane>();
   private readonly survivorPaths: readonly (readonly V3[])[];
   private queue: QueueEntry[] = [];
   private spawnTimer = 0;
@@ -174,6 +180,11 @@ export class Match implements DeadWorld {
     this.listener = options.listener;
     this.survivorPaths = options.survivorPaths ?? [];
     for (const lane of this.plan.lanes) if (lane.points.length >= 2) this.lanes.set(lane.id, lane);
+    for (const lane of options.plan.lanes) {
+      if (SURPRISES.includes(lane.id)) continue;
+      const near = withinReach(lane, eye, OPENING_REACH[lane.id] ?? LANE_REACH);
+      if (near.points.length >= 2) this.nearLanes.set(lane.id, near);
+    }
     const l = this.listener;
     this.events = {
       deadEmerged: (d) => l.deadEmerged(d),
@@ -315,7 +326,7 @@ export class Match implements DeadWorld {
     if (entry.kind !== "mechanic" && this.activeCount() >= this.spec.maxActive) return;
     this.queue.shift();
     if (this.queue.length === 0) this.lastSpawnAt = this.phaseT;
-    const lane = this.lanes.get(entry.lane) ?? this.lanes.get("road") ?? ([...this.lanes.values()][0] as Lane);
+    const lane = (entry.near ? this.nearLanes.get(entry.lane) : undefined) ?? this.lanes.get(entry.lane) ?? this.lanes.get("road") ?? ([...this.lanes.values()][0] as Lane);
     const gait = pick(this.random, GAITS);
     const draw = range(this.random, WALKER_SPEED[0], WALKER_SPEED[1]);
     const offset = range(this.random, -lane.spread, lane.spread);
@@ -324,7 +335,11 @@ export class Match implements DeadWorld {
     d.spawn(this);
     this.dead.push(d);
     this.listener.deadSpawn(d);
-    const gap = range(this.random, this.spec.gap[0], this.spec.gap[1]) / this.boldness();
+    // One of an opening is followed a moment later by the next of it; after the last, the wave's own gap.
+    const together = entry.near && this.queue[0]?.near;
+    const gap = together
+      ? range(this.random, OPENING_STAGGER[0], OPENING_STAGGER[1])
+      : range(this.random, this.spec.gap[0], this.spec.gap[1]) / this.boldness();
     // The Mechanic walks out alone: the rest give him a moment.
     this.spawnTimer = entry.kind === "mechanic" ? 3 : gap;
   }
@@ -731,6 +746,16 @@ export function buildQueue(spec: WaveSpec, random: Random, available: ReadonlySe
     }
     return { kind, lane: lanes[lanes.length - 1] as LaneId };
   });
+  // The opening: the first of the wave's walkers, brought forward to come together by the lanes it names.
+  const opening = spec.opening.filter((l) => available.has(l));
+  const front: QueueEntry[] = [];
+  for (const lane of opening) {
+    const at = queue.findIndex((e) => e.kind === "walker");
+    if (at < 0) break;
+    queue.splice(at, 1);
+    front.push({ kind: "walker", lane, near: true });
+  }
+  queue.unshift(...front);
   if (spec.mechanic) queue.unshift({ kind: "mechanic", lane: available.has("road") ? "road" : fallback });
   return queue;
 }

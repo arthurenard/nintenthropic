@@ -70,7 +70,8 @@ and out of the fog, one by one, something shuffles into your flashlight.
 They come out of the fog along three lanes — the road, the cornfield (they
 push through the corn, which sways and rustles ahead of them), and the tree
 line past the motel — and one lane of surprises: out of the bus, from behind
-the phone booth, and (wave 4+) over the fence at 12 m.
+the phone booth, and over the fence at 12 m (the surprises come from wave 4;
+the bus and the phone booth also open the first waves, see Waves).
 
 - **Walkers** — the most of them. A shambling walk with a varied gait (a
   limp, a drag, a lurch, arms up or hanging), 0.8–1.2 m/s. **A headshot kills.
@@ -122,13 +123,29 @@ catches their lantern first.
 
 | Wave | Dead | New |
 | --- | --- | --- |
-| 1 | 6 walkers | The road only; learn the fog |
-| 2 | 9 | The cornfield lane |
-| 3 | 12 | Runners; the tree line |
+| 1 | 6 walkers | The road; learn the fog. Opens with three together: out of the bus, up the road behind it, from behind the phone booth |
+| 2 | 9 | The cornfield lane. Opens with the bus, the corn and the road |
+| 3 | 12 | Runners; the tree line. Opens with the bus, the tree line and the corn |
 | 4 | 14 | Crawlers; the surprises (bus, booth, fence) |
 | 5 | 16 | Bloaters |
 | 6 | The Mechanic + 14 | Boss |
 | 7+ | +3 each | More runners, thicker fog, faster walkers |
+
+**The opening.** The road is never empty while a wave begins. The first three
+waves open with a burst of walkers, a moment apart (0.4–0.9 s), the first in
+view within a second of the title card going: the first out of the burned bus
+(44 m, climbing out as it appears), the others where the night already hides
+them - up the road from behind the bus, in the corn 45 m out (it still hides
+them for 16 m of their way, not 38), from the tree line past the right of the
+view, and, on wave 1, from behind the phone booth 22 m out, whose walker is
+the first to reach the barricade, a little over twenty seconds in. Nothing
+begins in the open: every one begins in a surprise's cover, in the corn, or
+out in the fog (a figure at no more than half clarity). The wave's other dead
+follow at shorter gaps than before on these waves (1.8–3.2 s; they were
+2.6–4.4 s on wave 1 and 2–3.6 s on waves 2 and 3), and wave 1 lets five be in
+play at once (it was four). From wave 4 on nothing is changed: one at a time,
+at the gaps and the reach the night was balanced on (`OPENINGS` in
+`rules/waves.ts`, `OPENING_REACH` and `OPENING_STAGGER` in `rules/tuning.ts`).
 
 A wave ends when every one of it is down. Then a **breather** (6 s): the fog
 thins, the streetlight steadies and buzzes back to full, a distant church bell

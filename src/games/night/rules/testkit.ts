@@ -13,7 +13,7 @@ import { Match, type MatchListener, type StartOptions } from "./match";
 import type { Award, WaveBonuses } from "./scoring";
 import type { SecretId, SignLetter } from "./secrets";
 import type { Survivor } from "./survivors";
-import type { DeathCause, HitPart, Lane, RoadPlan } from "./types";
+import type { DeadKind, DeathCause, HitPart, Lane, LaneId, RoadPlan } from "./types";
 import type { WaveSpec } from "./waves";
 
 const v = (p: P): V3 => ({ x: p[0], y: p[1], z: p[2] });
@@ -313,6 +313,61 @@ export function playUntilDeath(
     m.resolveShot({ kind: "dead", dead: target, part: wantsHead ? "head" : "body" });
   }
   return { wave: m.wave, time: maxTime, match: m, listener: rec };
+}
+
+/** One of the dead as it came into play, for what a wave's first seconds look like. */
+export interface Spawned {
+  /** Seconds after the wave began (its title card over). */
+  at: number;
+  lane: LaneId;
+  kind: DeadKind;
+  /** Metres from the eye, on the ground, where it began. */
+  distance: number;
+  /** Metres of its lane the corn still hides it for, as it began. */
+  cover: number;
+  /** How far into the fog the road could be read, metres, as it began. */
+  sight: number;
+}
+
+/** What the player sees of a wave's first seconds, with no one shooting. */
+export interface Opening {
+  /** Seconds from the wave's start to the first of the dead in view (see inView), or -1 if none was. */
+  firstInView: number;
+  /** ... to the first at the barricade, or -1. */
+  firstAtBarricade: number;
+  /** How many came into play within the first 3 s. */
+  together: number;
+  spawns: Spawned[];
+}
+
+/**
+ * A wave's first `seconds` (after its title card), watched with nobody
+ * shooting and the player unhurt: when the first of the dead is in view
+ * and when the first reaches the barricade, how many are in play within 3 s,
+ * and where each began.
+ */
+export function openingOf(seed: number, wave: number, options: { difficulty?: Difficulty; road?: Road; seconds?: number } = {}): Opening {
+  const { m } = makeMatch(seed, { difficulty: options.difficulty ?? "standard", start: { wave }, ...(options.road ? { road: options.road } : {}) });
+  m.health.immortal = true;
+  const dt = 1 / 30;
+  while (m.phase === "intro") m.update(dt, false);
+  const begun = m.time;
+  const out: Opening = { firstInView: -1, firstAtBarricade: -1, together: 0, spawns: [] };
+  const seen = new Set<number>();
+  for (let s = 0; s < (options.seconds ?? 60); s += dt) {
+    m.update(dt, false);
+    const now = m.time - begun;
+    for (const d of m.dead) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        out.spawns.push({ at: now, lane: d.lane.id, kind: d.kind, distance: horizontalDistance(d.pos, m.eye), cover: d.lane.cover, sight: m.sight() });
+        if (now <= 3) out.together++;
+      }
+      if (out.firstInView < 0 && inView(m, d)) out.firstInView = now;
+      if (out.firstAtBarricade < 0 && d.atBarricade) out.firstAtBarricade = now;
+    }
+  }
+  return out;
 }
 
 /** A player who never fires, left standing for up to `maxTime` seconds. */

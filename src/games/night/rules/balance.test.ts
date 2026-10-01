@@ -48,13 +48,15 @@ describe("the night on Standard", { timeout: 120_000 }, () => {
 });
 
 describe("an idle player", () => {
-  it("is overrun on the first wave, when the first walker reaches the barricade", () => {
+  it("is overrun on the first wave, when the first walkers reach the barricade, in about half a minute", () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const x = standIdle(seed, "standard", 240, road);
       expect(x.dead, `seed ${seed}`).toBe(true);
       expect(x.wave, "never shooting, the first wave never clears").toBe(1);
-      expect(x.time).toBeGreaterThan(40);
-      expect(x.time).toBeLessThan(120);
+      // The first wave opens with a burst (the phone booth's walker is 22 m out): 23-32 s on the shipped road.
+      // It was 57-73 s, from 62 m, and the bounds were 40 and 120.
+      expect(x.time).toBeGreaterThan(15);
+      expect(x.time).toBeLessThan(45);
     }
   });
 });

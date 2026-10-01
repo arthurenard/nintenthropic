@@ -28,6 +28,27 @@ describe("the wave table", () => {
     expect(table[4]?.bloaters).toBeGreaterThan(0);
   });
 
+  it("opens the first three waves with a burst, the bus's door first, and nothing after", () => {
+    const table = [1, 2, 3, 4, 5, 6, 7, 12].map((w) => waveSpec(w));
+    expect(table.map((s) => s.opening)).toEqual([["bus", "road", "booth"], ["bus", "corn", "road"], ["bus", "trees", "corn"], [], [], [], [], []]);
+    // Each one a lane the wave could send the dead by anyway, or a surprise's cover.
+    for (const s of table.slice(0, 3)) for (const l of s.opening) expect([...s.lanes, "bus", "booth", "fence"]).toContain(l);
+  });
+
+  it("shortens the early gaps and leaves the later waves' escalation as it was designed", () => {
+    expect([1, 2, 3].map((w) => waveSpec(w).gap)).toEqual([[1.8, 3.2], [1.8, 3.2], [1.8, 3.2]]);
+    expect([1, 2, 3].map((w) => waveSpec(w).maxActive)).toEqual([5, 6, 7]);
+    // From wave 4 on: exactly the table the night was balanced on.
+    expect([4, 5, 6].map((w) => waveSpec(w).gap)).toEqual([[1.6, 3], [1.6, 3], [1.6, 3]]);
+    expect([4, 5, 6, 7, 10].map((w) => waveSpec(w).maxActive)).toEqual([8, 8, 9, 10, 13]);
+    expect(waveSpec(7).gap[0]).toBeCloseTo(1.3, 9);
+    expect(waveSpec(7).gap[1]).toBeCloseTo(2.45, 9);
+    expect(waveSpec(10).gap[0]).toBeCloseTo(1.0, 9);
+    expect(waveSpec(10).gap[1]).toBeCloseTo(2.0, 9);
+    // Never slower as the night goes on.
+    for (let w = 2; w <= 20; w++) expect(waveSpec(w).gap[0], `wave ${w}`).toBeLessThanOrEqual(waveSpec(w - 1).gap[0]);
+  });
+
   it("adds three a wave from wave 7, with more runners, thicker fog and faster walkers", () => {
     for (let w = 7; w <= 20; w++) {
       const s = waveSpec(w);
@@ -88,9 +109,34 @@ describe("the wave's queue", () => {
     for (let seed = 1; seed < 20; seed++) {
       const q = buildQueue(waveSpec(4), mulberry32(seed), ALL);
       for (const e of q) if (e.kind === "crawler") expect(["road", "trees"]).toContain(e.lane);
+      // Wave 1: the opening's three (the bus, the road, the phone booth), then the road alone.
       const early = buildQueue(waveSpec(1), mulberry32(seed), ALL);
-      for (const e of early) expect(e.lane).toBe("road");
+      expect(early.slice(0, 3).map((e) => e.lane)).toEqual(["bus", "road", "booth"]);
+      for (const e of early.slice(3)) expect(e.lane).toBe("road");
     }
+  });
+
+  it("brings the opening forward as walkers, and changes nothing else about the wave", () => {
+    for (const wave of [1, 2, 3]) {
+      const spec = waveSpec(wave);
+      const q = buildQueue(spec, mulberry32(7), ALL);
+      expect(q.length).toBe(spec.dead);
+      expect(q.slice(0, spec.opening.length).map((e) => [e.kind, e.lane, e.near])).toEqual(spec.opening.map((l) => ["walker", l, true]));
+      // Only those are the opening's; the rest are the wave as before: its runners, the lanes it opens.
+      expect(q.slice(spec.opening.length).some((e) => e.near)).toBe(false);
+      expect(q.filter((e) => e.kind === "runner").length).toBe(spec.runners);
+      for (const e of q.slice(spec.opening.length)) expect(spec.lanes).toContain(e.lane);
+    }
+    // Nothing from wave 4 on.
+    for (const wave of [4, 5, 6, 9]) expect(buildQueue(waveSpec(wave), mulberry32(7), ALL).some((e) => e.near)).toBe(false);
+  });
+
+  it("skips an opening lane the road does not have, and falls back to the wave's own", () => {
+    const q = buildQueue(waveSpec(1), mulberry32(7), new Set<LaneId>(["road", "booth"]));
+    expect(q.slice(0, 2).map((e) => e.lane)).toEqual(["road", "booth"]);
+    expect(q.length).toBe(6);
+    const bare = buildQueue(waveSpec(3), mulberry32(7), new Set<LaneId>(["road"]));
+    for (const e of bare) expect(e.lane).toBe("road");
   });
 
   it("falls back to the road for a lane the road does not have", () => {
