@@ -67,9 +67,11 @@ are marked in the first two stages (and on Relaxed) so you know where to look.
 **Before every game, a quick aim check.** You warm up on the game's own
 targets (bottles along the street in High Noon, mason jars in Dead of Night,
 the station's running lights in Orbital Decay, steel plates on the range in
-Overwatch Ridge). It ends by itself as soon as 95% of your shots would land
-where you aim - about six shots the first time, three when Handy remembers
-your aim.
+Overwatch Ridge). Point your finger at the lit target and fire: Handy is
+learning where you point, so there is no crosshair to steer, and none is
+shown. It ends by itself as soon as 95% of your shots would land where you
+aim - about six shots the first time, three when Handy remembers your aim -
+with "Aim Set": that is when the crosshair appears, following your finger.
 
 **No camera?** Choose **Use Mouse or Trackpad**: click to fire. The right
 button reloads (High Noon, Dead of Night), vents (Orbital Decay) or scopes

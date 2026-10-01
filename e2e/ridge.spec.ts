@@ -321,7 +321,7 @@ test("Overwatch Ridge with a scripted hand: the plates, one eye closed to scope,
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 120_000 }).toBe("check");
   await eyes(page, 0.05, 0.07);
   await pose(page, handAt(0.5, 0.5));
-  await expect(page.locator("#check-title")).toHaveText("Shoot the lit target.");
+  await expect(page.locator("#check-title")).toHaveText("Point at the Lit Plate");
   await shot(page, info, "ridge-hand-01-plates");
   // The nine plates, unscoped: the hand's aim is fitted to the wide view.
   expect(await gameDebug(page, "debug.scoped()")).toBe(false);

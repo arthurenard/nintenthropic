@@ -237,7 +237,7 @@ test("another camera after Try Again starts the round afresh with its own aim ch
   await page.getByRole("button", { name: "Try Again" }).click();
   await expect.poll(async () => (await state(page)).phase, { timeout: 10_000 }).toBe("check");
   // No aim is saved for this camera: the check starts from the beginning.
-  await expect(page.locator("#check-title")).toHaveText("Shoot the lit target.");
+  await expect(page.locator("#check-title")).toHaveText("Point at the Lit Bottle");
   expect((await state(page)).running).toBe(true);
   expect(errors).toEqual([]);
 });

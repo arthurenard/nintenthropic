@@ -63,19 +63,43 @@ export const OPENING_REACH: Readonly<Partial<Record<LaneId, number>>> = { corn: 
  */
 export const OPENING_STAGGER: readonly [number, number] = [0.4, 0.9];
 
-/** Walking pace, metres per second, before difficulty and the waves: a walker's own is drawn from this range. */
-export const WALKER_SPEED: readonly [number, number] = [0.8, 1.2];
-/** Each walker's gait keeps its pace within the walker range; these nudge it (a limp is slower than a lurch). */
-export const GAIT_PACE: Readonly<Record<Gait, number>> = {
-  "walk.shamble": 1,
-  "walk.limp": 0.88,
-  "walk.drag": 0.8,
+/**
+ * The ground speed each walking gait's clip was made for, metres per second:
+ * the art says so itself (`extras.clips.<gait>.speed_mps` in walker.glb, read by
+ * world/rigs.ts), and world/rigs.test.ts holds the two together. The world
+ * plays a clip at the pace the dead walk at, divided by this, so the feet
+ * never slide: a faster gait is how the dead go faster without a clip being
+ * run far past what it was made for.
+ */
+export const GAIT_SPEED: Readonly<Record<Gait, number>> = {
+  "walk.shamble": 0.85,
+  "walk.limp": 0.7,
+  "walk.drag": 0.6,
   "walk.lurch": 1.1,
 };
-export const RUNNER_SPEED = 3.5;
-export const CRAWLER_SPEED = 0.45;
-export const BLOATER_SPEED = 0.6;
-export const MECHANIC_SPEED = 0.9;
+/**
+ * How the dead's gaits are shared out: the lurch and the shamble carry most
+ * of them, the limp and the drag are the odd one out. (They were a quarter
+ * each; at the pace the dead walk now, a drag would play its clip at twice
+ * the speed it was made for.)
+ */
+export const GAIT_WEIGHT: Readonly<Record<Gait, number>> = {
+  "walk.shamble": 0.3,
+  "walk.limp": 0.15,
+  "walk.drag": 0.1,
+  "walk.lurch": 0.45,
+};
+/**
+ * How hurried a walker is: its pace as a multiple of its gait's own
+ * (GAIT_SPEED), drawn from this range. Standard's dead walk about a third
+ * faster than the night first walked them (1.26 m/s on average, from 0.95),
+ * and their clips play 15-60% quicker than they were made, never more.
+ */
+export const WALKER_HURRY: readonly [number, number] = [1.15, 1.6];
+export const RUNNER_SPEED = 4.2;
+export const CRAWLER_SPEED = 0.7;
+export const BLOATER_SPEED = 0.85;
+export const MECHANIC_SPEED = 1.2;
 /** The dead around the Mechanic come faster while he walks. */
 export const MECHANIC_AURA = 1.25;
 
@@ -158,8 +182,8 @@ export const STREAK_MAX_MULTIPLIER = 4;
 
 /** The title card's time before the first wave's dead start to come. */
 export const WAVE_INTRO = 2;
-/** The breather between waves: the fog thins, the bell counts, health comes back. */
-export const BREATHER = 6;
+/** The breather between waves: the fog thins, the bell counts, health comes back. It was 6 s; the night lets up for less now. */
+export const BREATHER = 4;
 export const MECHANIC_EVERY = 6;
 
 // --- difficulty -------------------------------------------------------------------
@@ -199,13 +223,16 @@ export interface DifficultyTuning {
 }
 
 /**
- * Standard is the game as designed. Relaxed is for a first evening, a
- * younger player or a tired arm: the dead walk a quarter slower and claw
- * for 20 instead of 25 (five quick claws to fall, not four), health comes
- * back after 3 s at 40 a second, the fog is a little thinner, a bloater
- * swells for longer at the barricade before it bursts, and one shot takes
- * the Mechanic's mask off. As a wave drags on, the pressure wears these
- * allowances away toward Standard's, so it is still a night you can lose.
+ * Standard is the game as designed: tense from the first waves, a steady
+ * hand falling around wave 9. Relaxed is for a first evening, a younger
+ * player or a tired arm, and carries the same hands to about where Standard
+ * used to (waves 16, 9 and 6): the dead walk at half the pace (as slowly as
+ * the night first walked them) and claw for 20 instead of 25 (five quick
+ * claws to fall, not four), health comes back after 3 s at 40 a second, the
+ * fog is a little thinner, a bloater swells for longer at the barricade
+ * before it bursts, and one shot takes the Mechanic's mask off. As a wave
+ * drags on, the pressure wears these allowances away toward Standard's, so
+ * it is still a night you can lose.
  */
 export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>> = {
   standard: {
@@ -216,12 +243,12 @@ export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>
     fogFactor: 1,
     burstWarning: 0.8,
     maskHits: MASK_HITS,
-    boldAfter: 25,
-    boldRate: 0.02,
-    boldMax: 1.45,
+    boldAfter: 10,
+    boldRate: 0.035,
+    boldMax: 1.7,
   },
   relaxed: {
-    speedFactor: 0.75,
+    speedFactor: 0.5,
     // 25 becomes 20: five claws in quick succession to fall.
     damageFactor: 0.8,
     regenDelay: 3,
@@ -229,9 +256,9 @@ export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>
     fogFactor: 0.85,
     burstWarning: 1.8,
     maskHits: 1,
-    boldAfter: 40,
-    boldRate: 0.013,
-    boldMax: 1.45,
+    boldAfter: 30,
+    boldRate: 0.015,
+    boldMax: 1.5,
   },
 };
 

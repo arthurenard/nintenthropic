@@ -7,6 +7,8 @@ import {
   CLIMB_TIME,
   CRAWLER_SPEED,
   DEATH_TIME,
+  GAIT_SPEED,
+  GAIT_WEIGHT,
   LUNGE_RANGE,
   LUNGE_TIME,
   MECHANIC_SPEED,
@@ -17,7 +19,7 @@ import {
   VAULT_TIME,
   type DifficultyTuning,
 } from "./tuning";
-import type { DeadKind, DeadState, DeathCause, Gait, Lane, Slot } from "./types";
+import { GAITS, type DeadKind, type DeadState, type DeathCause, type Gait, type Lane, type Slot } from "./types";
 
 /** What one of the dead needs from the match around it. The Match implements it. */
 export interface DeadWorld {
@@ -357,11 +359,21 @@ export class Dead {
   }
 }
 
-/** Its own pace, by kind (a walker's from its gait and a draw in the walker range). */
-export function paceOf(kind: DeadKind, gaitPace: number, draw: number): number {
+/** A walker's gait, drawn by the weights the dead share them out by (GAIT_WEIGHT). */
+export function drawGait(random: Random): Gait {
+  let r = random() * GAITS.reduce((sum, gait) => sum + GAIT_WEIGHT[gait], 0);
+  for (const gait of GAITS) {
+    r -= GAIT_WEIGHT[gait];
+    if (r <= 0) return gait;
+  }
+  return GAITS[GAITS.length - 1] as Gait;
+}
+
+/** Its own pace, by kind (a walker's is its gait's own, made faster by how hurried it is: WALKER_HURRY). */
+export function paceOf(kind: DeadKind, gait: Gait, hurry: number): number {
   switch (kind) {
     case "walker":
-      return draw * gaitPace;
+      return GAIT_SPEED[gait] * hurry;
     case "runner":
       return RUNNER_SPEED;
     case "crawler":

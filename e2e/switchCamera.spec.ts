@@ -168,15 +168,20 @@ test("a camera with a saved aim begins its check from it", async ({ page }) => {
       ),
     { width, height },
   );
-  const crosshair = () => page.evaluate(() => window.handyTest!.internals().session!.check!.showsCrosshair);
-  // This camera has no aim yet: no crosshair until the check has learned one.
-  expect(await crosshair()).toBe(false);
+  const returning = () => page.evaluate(() => window.handyTest!.internals().session!.check!.check.returning);
+  // This camera has no aim yet: the check starts from the beginning, and shows no crosshair.
+  expect(await returning()).toBe(false);
+  await expect(page.locator("#check-title")).toHaveText("Point at the Lit Bottle");
+  expect((await snapshot(page)).crosshairShown).toBe(false);
   await page.locator("#switch-camera").click();
   await expect(page.locator("#toast")).toHaveText("Studio Display Camera");
   await expect.poll(async () => (await snapshot(page)).shots).toBe(0);
   await expect.poll(async () => (await snapshot(page)).phase).toBe("check");
-  // The other one has: the check starts from it, crosshair and all.
-  expect(await crosshair()).toBe(true);
+  // The other one has one: the check starts from it (three shots to confirm it) - and still shows
+  // no crosshair, so a returning player points, too, instead of steering a saved aim onto the bottles.
+  expect(await returning()).toBe(true);
+  await expect(page.locator("#check-title")).toHaveText("Welcome Back");
+  expect((await snapshot(page)).crosshairShown).toBe(false);
 });
 
 test("a next camera another app has: the one in use stays, and the player is told", async ({ page }) => {

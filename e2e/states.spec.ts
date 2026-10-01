@@ -64,10 +64,11 @@ test("the aim check and play", async ({ page }, info) => {
   await pose(page, handAt(0.5, 0.5));
   await shot(page, info, "08-aim-check");
   await passAimCheck(page, async (n) => {
-    if (n === 2) await shot(page, info, "09-aim-check-crosshair");
+    // No crosshair while the aim is learned: the lit bottle, the words and a ring that fills.
+    if (n === 2) await shot(page, info, "09-aim-check-learning");
     if (n === 4) await shot(page, info, "10-aim-check-measuring");
-    // The ready moment lasts a second and a half: caught as it arrives.
-    if (await page.locator(".ready-moment").isVisible()) await shot(page, info, "11-ready", 250);
+    // The ready moment lasts a second and a half: caught as it arrives, with the crosshair under it.
+    if (await page.locator(".ready-moment").isVisible()) await shot(page, info, "11-aim-set", 250);
   });
   // A narrow window may show fewer targets than a first check needs; then
   // it ends with Play Anyway instead of the ready moment.
@@ -147,17 +148,25 @@ test("an aim that will not settle is offered Play Anyway, with one tip", async (
     [-0.08, 0.07],
   ];
   for (let shotIndex = 0; shotIndex < 12; shotIndex++) {
-    const lit = (await snapshot(page)).lit;
-    if (!lit) break; // every target broken: Play Anyway is already offered
+    // Every shot takes its target, so the bottles run out before twelve shots: they are stood up again,
+    // a frame later, and the check goes on.
+    await expect.poll(async () => (await snapshot(page)).lit, { timeout: 5_000 }).not.toBeNull();
+    const lit = (await snapshot(page)).lit!;
     const [dx, dy] = wander[shotIndex % wander.length]!;
     await shoot(page, lit.x + dx, lit.y + dy);
     await page.waitForTimeout(150);
   }
   await expect(page.getByRole("button", { name: "Play Anyway" })).toBeVisible();
   expect((await snapshot(page)).checkDone).toBe(false);
+  // Handy says it is still learning, with the one tip, and no crosshair has shown.
+  await expect(page.locator("#check-title")).toHaveText("Still Learning");
+  expect((await snapshot(page)).crosshairShown).toBe(false);
   await shot(page, info, "10b-aim-check-play-anyway");
   await page.getByRole("button", { name: "Play Anyway" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 5_000 }).toBe("play");
+  // The crosshair arrives with the round, and a hint says what it is.
+  await expect(page.locator("#hint")).toHaveText("The crosshair now follows your finger.");
+  expect((await snapshot(page)).crosshairShown).toBe(true);
 });
 
 const TROUBLES: [string, string][] = [

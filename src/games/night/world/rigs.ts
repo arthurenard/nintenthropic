@@ -9,6 +9,7 @@ import { Color, Matrix4, Mesh, Vector3, type AnimationClip, type Material, type 
 import type { LoadedAsset } from "../../../engine/types";
 import { rimLight, templateFrom, type CharacterTemplate, type Rig } from "../../../engine/world/character";
 import { contractName } from "../../../engine/world/names";
+import { GAIT_SPEED } from "../rules/tuning";
 import type { DeadKind } from "../rules/types";
 
 export type CharacterKind = "walker" | "mechanic" | "survivor" | "cat";
@@ -55,15 +56,39 @@ export const CLIP_FALLBACKS: Readonly<Record<string, readonly string[]>> = {
  * itself in its scene's extras (clipSpeeds), which win.
  */
 export const CLIP_SPEED: Readonly<Record<string, number>> = {
-  "walk.shamble": 0.85,
-  "walk.limp": 0.7,
-  "walk.drag": 0.6,
-  "walk.lurch": 1.1,
+  // The walking gaits: the rules' own table (GAIT_SPEED), which a test holds to the art.
+  ...GAIT_SPEED,
   run: 3.5,
   crawl: 0.5,
   run_lantern: 4.4,
   walk: 0.6,
 };
+
+/** The gaits from the slowest to the fastest, then the run: the order one of the dead moves up through as it goes faster. */
+export const GAIT_LADDER: readonly string[] = ["walk.drag", "walk.limp", "walk.shamble", "walk.lurch", "run"];
+
+/**
+ * The most a clip is played faster than it was made (a clip's timeScale is
+ * the pace the dead walk at over the speed it was made for, so the feet never
+ * slide): past this the steps blur, and the dead take a faster gait instead.
+ */
+export const MAX_PLAYBACK = 1.8;
+
+/**
+ * The gait to play for one of the dead walking at `pace`, metres per second,
+ * from the one it has now on up the ladder: the same while its clip would be
+ * played no faster than MAX_PLAYBACK times what it was made for, a faster one
+ * (a drag becomes a limp, a limp a shamble, a shamble a lurch, and a lurch a
+ * run) once it would. It never goes back down, so a pace that wavers about a
+ * line does not flicker between two gaits; a gait not on the ladder (the
+ * crawl) stays as it is. `speeds` are the file's own (clipSpeeds).
+ */
+export function gaitForPace(current: string, pace: number, speeds: Readonly<Record<string, number>>): string {
+  let i = GAIT_LADDER.indexOf(current);
+  if (i < 0) return current;
+  while (i < GAIT_LADDER.length - 1 && pace / (speeds[GAIT_LADDER[i] as string] ?? 1) > MAX_PLAYBACK) i++;
+  return GAIT_LADDER[i] as string;
+}
 
 /**
  * The ground speeds a character file's clips were made for: its scene's

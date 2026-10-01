@@ -1138,6 +1138,10 @@
   display: grid;
   gap: 4px;
 }
+/* Two short sentences, balanced over two lines rather than one and a stray word. */
+.check-words .subhead {
+  text-wrap: balance;
+}
 .check-words.fresh {
   animation: words-in 450ms var(--spring);
 }

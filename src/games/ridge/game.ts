@@ -1,5 +1,5 @@
 import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Object3D, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark } from "../../engine/types";
+import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark, TargetNoun } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
 import { ScreenFlash } from "../../engine/world/flash";
@@ -82,6 +82,7 @@ function breathe(): Promise<void> {
 
 /** The aim check's stage until the plates exist, and a way back to them after a game. */
 class CalibrationProxy implements CalibrationStage {
+  readonly noun: TargetNoun = { one: "plate", many: "plates" };
   target: PlateStage | null = null;
   onBegin: () => void = () => {};
   begin(): void {

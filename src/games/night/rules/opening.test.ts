@@ -51,10 +51,11 @@ describe("the first waves' opening", () => {
         // The phone booth is 22 m out; the bus is 44 m.
         expect(Math.min(...near.map((s) => s.distance))).toBeLessThan(25);
       }
-      // Walkers set off at 0.64-1.3 m/s: the booth's, 17 m of road, reaches the barricade after 13-27 s
-      // (the first one came after 58 s on Standard, 76 s on Relaxed, from 62 m).
+      // Walkers set off at 0.5-1.4 m/s on this wave (0.8 of the pace of the third): the booth's, 17 m of road,
+      // reaches the barricade after 15-30 s on Standard and 28-58 s on Relaxed
+      // (13-27 s and 17-38 s with the dead as slow as they first were; 58 s and 76 s from 62 m).
       expect(Math.min(...first), difficulty).toBeGreaterThan(8);
-      expect(Math.max(...first), difficulty).toBeLessThan(difficulty === "standard" ? 30 : 38);
+      expect(Math.max(...first), difficulty).toBeLessThan(difficulty === "standard" ? 35 : 65);
     }
   });
 

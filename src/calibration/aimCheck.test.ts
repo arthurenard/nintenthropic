@@ -143,16 +143,19 @@ describe("a first aim check", () => {
     const player = new Player();
     const check = player.check;
     expect(check.mapping).toBeNull();
-    expect(check.words.title).toBe("Shoot the lit target.");
+    // Point at it: the words never ask the player to steer anything.
+    expect(check.words.title).toBe("Point at the Lit Target");
+    expect(check.words.detail).toBe("Point your finger at it and fire. Handy is learning where you point.");
 
-    expect(player.shoot().outcome).toBe("hit"); // a learning shot breaks its target
+    expect(player.shoot().outcome).toBe("hit"); // a learning shot takes its target
     expect(check.mapping).toBeNull();
+    expect(check.words.title).toBe("One Down");
     player.shoot();
-    expect(check.fit).toBe("scaled"); // the crosshair appears
-    expect(check.words.title).toBe("There’s your crosshair.");
-    // The third shot is aimed with the crosshair on, but a map of scale and
-    // offset alone cannot know how the camera is turned: what it predicted
-    // says nothing yet about the player, so it is shown, not scored.
+    expect(check.fit).toBe("scaled"); // a map of scale and offset: still no crosshair to show
+    expect(check.words.title).toBe("Two Down");
+    // The third shot is predicted with a map of scale and offset, which
+    // cannot know how the camera is turned: what it predicted says nothing
+    // yet about the player, so it is measured but not scored.
     const third = player.shoot();
     expect(third.landed).not.toBeNull();
     expect(check.errors.length).toBe(0);
@@ -166,8 +169,62 @@ describe("a first aim check", () => {
     expect(check.done).toBe(true);
     expect(check.shots).toBe(6);
     expect(check.measure.score!).toBeGreaterThanOrEqual(READY_SCORE);
-    expect(check.words.title).toMatch(/^Aim \d+%$/);
+    expect(check.words).toEqual({ title: "Aim Set", detail: "The crosshair now follows your finger." });
     accurate(check.mapping, 0.002);
+  });
+
+  it("says its own targets: the game's bottles, jars, lights or plates", () => {
+    for (const [one, many] of [["bottle", "bottles"], ["jar", "jars"], ["light", "lights"], ["plate", "plates"]] as const) {
+      const noun = { one, many };
+      const first = new AimCheck({ saved: null, targets: TARGETS, viewport: VIEWPORT, noun });
+      expect(first.words.title).toBe(`Point at the Lit ${one[0]!.toUpperCase()}${one.slice(1)}`);
+      expect(first.words.detail).toBe("Point your finger at it and fire. Handy is learning where you point.");
+      const back = new AimCheck({ saved: trueMap(), targets: TARGETS, viewport: VIEWPORT, noun });
+      expect(back.words.title).toBe("Welcome Back");
+      expect(back.words.detail).toBe(`Point at the lit ${one} and fire. Three shots and you’re in.`);
+    }
+  });
+
+  it("counts the shots as targets taken, and says what Handy is doing, never where a crosshair landed", () => {
+    const player = new Player();
+    const said: string[] = [];
+    while (!player.check.done) {
+      said.push(player.check.words.title, player.check.words.detail);
+      player.shoot({ noise: 0.01 });
+    }
+    expect(said.slice(0, 8)).toEqual([
+      "Point at the Lit Target",
+      "Point your finger at it and fire. Handy is learning where you point.",
+      "One Down",
+      "Point at the next lit target and fire.",
+      "Two Down",
+      "Handy is learning where you point. Keep going.",
+      "Three Down",
+      "Handy knows roughly where you point. A few more.",
+    ]);
+    for (const line of said) expect(line.toLowerCase(), line).not.toMatch(/crosshair|cursor|landed|just off|nice shot|miss/);
+  });
+
+  it("fills a calm ring: more with every shot, never less, full only when the aim is set", () => {
+    for (const noise of [0, 0.02, 0.04]) {
+      const player = new Player();
+      const rings = [player.check.progress];
+      for (let i = 0; i < PLAY_ANYWAY_AFTER && !player.check.done; i++) {
+        player.shoot({ noise });
+        rings.push(player.check.progress);
+      }
+      expect(rings[0]).toBe(0);
+      for (let i = 1; i < rings.length; i++) {
+        expect(rings[i]!, `noise ${noise}, shot ${i}`).toBeGreaterThanOrEqual(rings[i - 1]!);
+        expect(rings[i]!).toBeLessThan(player.check.done && i === rings.length - 1 ? 1.0001 : 0.95);
+      }
+      expect(player.check.progress === 1, `noise ${noise}`).toBe(player.check.done);
+    }
+    // The shots a first check cannot do without (three to learn, three to prove) are most of the way.
+    const player = new Player();
+    for (let i = 0; i < 5; i++) player.shoot();
+    expect(player.check.progress).toBeGreaterThan(0.8);
+    expect(player.check.progress).toBeLessThan(0.95);
   });
 
   it("opens with two targets far apart on both axes, then one off their line", () => {
@@ -225,7 +282,7 @@ describe("a first aim check", () => {
     expect(event.outcome).toBe("refused");
     expect(player.check.lit!.id).toBe(second.id);
     expect(player.check.mapping).toBeNull();
-    expect(player.check.words.title).toBe("Those two were too alike.");
+    expect(player.check.words.title).toBe("Move Your Finger");
   });
 
   it("does not count a shot it never saw aimed", () => {
@@ -235,7 +292,7 @@ describe("a first aim check", () => {
     const event = check.observe({ pointer: [0.5, 0.5], armed: false, travel: 1, fired: true }, 0.5);
     expect(event!.outcome).toBe("unaimed");
     expect(check.shots).toBe(0);
-    expect(check.words.title).toBe("Raise your thumb first.");
+    expect(check.words.title).toBe("Raise Your Thumb First");
   });
 
   it("drops a wild shot from the map instead of bending it", () => {
@@ -256,6 +313,7 @@ describe("a first aim check", () => {
     expect(player.check.done).toBe(false);
     expect(player.check.canPlayAnyway).toBe(true);
     expect(player.check.tip).toBe("Keep your finger still as your thumb folds.");
+    expect(player.check.words.title).toBe("Still Learning");
     expect(player.check.words.detail).toBe(player.check.tip);
   });
 });
@@ -269,7 +327,7 @@ describe("a stage that runs out of targets", () => {
     player.check.setTargets([]); // every bottle broken
     expect(player.check.lit).toBeNull();
     expect(player.check.canPlayAnyway).toBe(true);
-    expect(player.check.words.title).toBe("That’s every target.");
+    expect(player.check.words.title).toBe("That’s Every Target");
     expect(player.check.words.detail).toBe(player.check.tip);
   });
 
@@ -281,14 +339,14 @@ describe("a stage that runs out of targets", () => {
     player.check.setTargets([]);
     expect(player.check.canPlayAnyway).toBe(true);
     expect(player.check.tip).toBeNull();
-    expect(player.check.words.title).toBe("Your aim looks good.");
+    expect(player.check.words.title).toBe("Aim Looks Good");
   });
 });
 
 describe("a returning player", () => {
   it("finishes in three shots when the saved aim still fits", () => {
     const player = new Player(trueMap());
-    expect(player.check.words.title).toBe("Welcome back.");
+    expect(player.check.words.title).toBe("Welcome Back");
     player.shoot();
     player.shoot();
     expect(player.check.done).toBe(false);
@@ -374,7 +432,11 @@ const ENGINEERING = ["calibrat", "rig", "track", "fused", "landmark", "session",
 describe("the words", () => {
   it("are short, second person, and free of engineering", () => {
     const said: string[] = [];
-    const listen = (check: AimCheck) => said.push(check.words.title, check.words.detail, check.tip ?? "");
+    const titles: string[] = [];
+    const listen = (check: AimCheck) => {
+      said.push(check.words.title, check.words.detail, check.tip ?? "");
+      titles.push(check.words.title);
+    };
     const fresh = new Player();
     listen(fresh.check);
     while (!fresh.check.done) {
@@ -388,9 +450,31 @@ describe("the words", () => {
     }
     listen(new Player(trueMap()).check);
     for (const line of new Set(said.filter(Boolean))) {
-      expect(line.length, line).toBeLessThanOrEqual(64);
+      // The longest, "Point your finger at it and fire. Handy is learning where you point.", is 68: two short sentences.
+      expect(line.length, line).toBeLessThanOrEqual(72);
       expect(ENGINEERING.some((word) => line.toLowerCase().includes(word)), line).toBe(false);
     }
+    // Titles are Title Case, with no full stop (DESIGN.md, Voice).
+    for (const title of new Set(titles)) {
+      expect(title, title).not.toMatch(/[.!]$/);
+      for (const word of title.split(" ")) if (!["at", "the", "of"].includes(word)) expect(word[0], title).toBe(word[0]!.toUpperCase());
+    }
+  });
+
+  it("lets a returning player's three shots read as three, and a stage's own noun carry through", () => {
+    const noun = { one: "plate", many: "plates" };
+    const player = new Player(trueMap());
+    const back = new AimCheck({ saved: trueMap(), targets: TARGETS, viewport: VIEWPORT, noun });
+    expect(back.words.detail).toBe("Point at the lit plate and fire. Three shots and you’re in.");
+    expect(player.check.progress).toBe(0);
+    player.shoot();
+    expect(player.check.words).toEqual({ title: "One Down", detail: "Point at the next lit target and fire." });
+    player.shoot();
+    expect(player.check.words).toEqual({ title: "Two Down", detail: "One more should do it." });
+    expect(player.check.progress).toBeGreaterThan(0.5);
+    player.shoot();
+    expect(player.check.done).toBe(true);
+    expect(player.check.progress).toBe(1);
   });
 });
 
