@@ -27,7 +27,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, ht
   return node;
 }
 
-const HAND = `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg>`;
+/** The mark (public/icons/icon.svg, drawn by tools/icons/mark.mjs). */
+const HAND = `<img class="mark-icon" alt="" src="/icons/icon.svg" />`;
 
 /** Mounts the app's icon sprites once (they are in index.html's markup). */
 export function mountSymbols(): void {

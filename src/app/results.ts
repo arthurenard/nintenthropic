@@ -204,13 +204,9 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
     context.letterSpacing = "0px";
     return context.measureText(words).width;
   };
-  const hand = await loadImage(
-    "data:image/svg+xml," +
-      encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${document.getElementById("i-hand")?.innerHTML ?? ""}</svg>`,
-      ),
-  );
-  if (hand) context.drawImage(hand, 64, 58, 40, 40);
+  // The mark (public/icons/icon.svg, drawn by tools/icons/mark.mjs).
+  const mark = await loadImage(siteUrl("icons/icon.svg"));
+  if (mark) context.drawImage(mark, 62, 56, 44, 44);
   text("Handy", 112, 90, 32, 700, "#fff", -0.3);
   const { stats } = result;
   // From the score up: the note's lines, the outcome, the game's name.

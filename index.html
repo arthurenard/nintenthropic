@@ -10,17 +10,14 @@
     <title>Handy</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8'/%3E%3Cg transform='translate(4 4)' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.2 8.4V4.6a1.45 1.45 0 0 1 2.9 0v3.8M11.1 8.4h8.4a1.6 1.6 0 0 1 0 3.2h-6.4M13.1 11.6h.7a1.5 1.5 0 0 1 0 3h-.9M12.9 14.6a1.4 1.4 0 0 1 0 2.8h-1.1M8.2 8.4H7a2.6 2.6 0 0 0-2.6 2.6v5a3.8 3.8 0 0 0 3.8 3.8h1.6a2.6 2.6 0 0 0 2-1'/%3E%3C/g%3E%3C/svg%3E"
-    />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
   </head>
   <body data-view="none">
     <!-- First run: what Handy is, the gesture, one button. -->
     <div id="welcome" class="view welcome" hidden>
       <div class="welcome-inner">
         <p class="wordmark" aria-hidden="true">
-          <svg class="wordmark-icon" viewBox="0 0 24 24"><use href="#i-hand" /></svg>Handy
+          <img class="wordmark-icon" src="/icons/icon.svg" alt="" />Handy
         </p>
         <h1 class="large-title">Welcome to Handy.</h1>
         <p class="body secondary">
@@ -76,7 +73,7 @@
     <div id="home" class="view home" hidden>
       <header class="nav">
         <p class="wordmark">
-          <svg class="wordmark-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg>Handy
+          <img class="wordmark-icon" src="/icons/icon.svg" alt="" />Handy
         </p>
         <div class="nav-actions">
           <button id="about" class="button plain small">Privacy</button>

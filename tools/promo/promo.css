@@ -106,10 +106,10 @@ body {
   font-weight: 700;
   letter-spacing: -0.03em;
 }
-.card .mark svg {
-  width: calc(168px * var(--u));
-  height: calc(168px * var(--u));
-  stroke-width: 1.6;
+.card .mark .mark-icon {
+  display: block;
+  width: calc(176px * var(--u));
+  height: calc(176px * var(--u));
 }
 .card .tagline {
   margin-top: calc(34px * var(--u));
