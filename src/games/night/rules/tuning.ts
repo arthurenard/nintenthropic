@@ -6,7 +6,7 @@
  * each one is for.
  */
 import type { Difficulty } from "../../../engine/types";
-import type { DeadKind, Gait } from "./types";
+import type { DeadKind, Gait, LaneId } from "./types";
 
 // --- the player -------------------------------------------------------------
 
@@ -44,6 +44,24 @@ export const RELOAD_LEVER = 0.2;
  * nobody sees them appear; the balance tests are tuned to it.
  */
 export const LANE_REACH = 62;
+
+/**
+ * Closer starts for the dead of a wave's opening (WaveSpec.opening), where
+ * the lane hides them: metres on the ground from the eye, per lane. The corn
+ * hides one walking in it (the lane's cover shortens by what is cut), so
+ * they start 16 m from where they step out rather than 38; the tree line's
+ * far end is past the right of the view. The road is not here: out in the
+ * open only the fog and the burned bus hide a figure, as far out as ever
+ * (LANE_REACH), and the opening's closer ones come by the bus, the corn and
+ * the phone booth instead.
+ */
+export const OPENING_REACH: Readonly<Partial<Record<LaneId, number>>> = { corn: 45, trees: 52 };
+
+/**
+ * Seconds between one of an opening's dead coming into play and the next:
+ * a moment apart, so a few come together rather than as a trickle.
+ */
+export const OPENING_STAGGER: readonly [number, number] = [0.4, 0.9];
 
 /** Walking pace, metres per second, before difficulty and the waves: a walker's own is drawn from this range. */
 export const WALKER_SPEED: readonly [number, number] = [0.8, 1.2];

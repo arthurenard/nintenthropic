@@ -158,5 +158,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
     // eslint-disable-next-line no-console
     console.log(`an idle player falls after: standard ${s.map((x) => x.time.toFixed(0)).join(" ")} s; relaxed ${r.map((x) => x.time.toFixed(0)).join(" ")} s`);
     expect(mean(r)).toBeGreaterThan(mean(s));
+    // The opening brings the first of the dead to the barricade within the minute on both
+    // (it was 57-73 s on Standard and 76-95 s on Relaxed, from 62 m).
+    expect(mean(s)).toBeLessThan(45);
+    expect(mean(r)).toBeLessThan(55);
   });
 });

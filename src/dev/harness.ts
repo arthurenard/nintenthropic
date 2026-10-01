@@ -78,6 +78,10 @@ export class HarnessParams {
   get reducedFlashing(): boolean {
     return this.query.get("flashing") === "reduced";
   }
+  /** Aim Assist is on, as it is for a player, unless ?assist=0. */
+  get aimAssist(): boolean {
+    return this.flag("assist") !== false;
+  }
   /** Load the art from this folder instead of public/: ?assetBase=/some/folder/. */
   get assetBase(): string | null {
     return this.query.get("assetBase");
@@ -236,6 +240,7 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
       reducedMotion: false,
       reducedFlashing: params.reducedFlashing,
       difficulty: params.difficulty,
+      aimAssist: params.aimAssist,
       unlocks,
       tipsSeen: new Set(params.query.get("tips") === "seen" ? (options.tips ?? []) : []),
       scope: { eye: false, button: "hold" },

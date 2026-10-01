@@ -2,7 +2,7 @@
 // tests/test_shot_calibration.py: one camera, the same poses, the same numbers.
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
-import { AimController, Recoil, STEADINESS, type AimOptions, type AimReading, type Steadiness } from "./aim";
+import { AimController, DEFAULT_STEADINESS, Recoil, STEADINESS, type AimOptions, type AimReading, type Steadiness } from "./aim";
 import { angleBetween, palmSpan, thumbAngle, thumbExtension, thumbPull } from "./hand";
 import { boxMapping, type Matrix } from "./homography";
 import { asCameraSees, makeHand, type HandPose } from "./synthetic";
@@ -344,10 +344,15 @@ describe("recoil", () => {
 });
 
 describe("Aim Steadiness", () => {
-  it("is today's filter when Balanced, exactly", () => {
+  it("is the desktop's filter when Balanced, exactly", () => {
     expect(STEADINESS.balanced).toEqual({ minCutoff: 1.2, beta: 0.8 });
-    expect(AimController.steadiness).toBe("balanced");
-    expect(new AimController().smoothing).toEqual({ minCutoff: 1.2, beta: 0.8 });
+    expect(new AimController({ ...STEADINESS.balanced }).smoothing).toEqual({ minCutoff: 1.2, beta: 0.8 });
+  });
+
+  it("is Steady for a player who has not chosen: a finger in the air is far less steady than a mouse", () => {
+    expect(DEFAULT_STEADINESS).toBe("steady");
+    expect(AimController.steadiness).toBe("steady");
+    expect(new AimController().smoothing).toEqual(STEADINESS.steady);
   });
 
   it("holds a trembling hand steadier when Steady, and less so when Responsive", () => {
@@ -391,7 +396,7 @@ describe("Aim Steadiness", () => {
       // A controller given its own smoothing keeps it.
       expect(new AimController({ minCutoff: 3, beta: 0 }).smoothing).toEqual({ minCutoff: 3, beta: 0 });
     } finally {
-      AimController.steadiness = "balanced";
+      AimController.steadiness = DEFAULT_STEADINESS;
     }
   });
 });

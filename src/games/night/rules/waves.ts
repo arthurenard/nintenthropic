@@ -11,6 +11,10 @@
  * | 5    | 16                | Bloaters                        |
  * | 6    | The Mechanic + 14 | Boss                            |
  * | 7+   | +3 each           | More runners, thicker fog, faster walkers |
+ *
+ * The first three waves open with a burst (OPENINGS): the first of the dead in
+ * view within a second of the title card going, a few of them at once, from
+ * places already hidden. Everything from wave 4 on is as designed.
  */
 import { MECHANIC_EVERY } from "./tuning";
 import type { LaneId } from "./types";
@@ -28,6 +32,15 @@ export interface WaveSpec {
   surprises: number;
   /** The lanes out of the fog this wave uses. */
   lanes: readonly LaneId[];
+  /**
+   * How the wave opens: the lanes its first dead come by, in order, all
+   * together (a moment apart), from close in. Each starts where nothing
+   * shows it appear - in the bus's door, in the corn (OPENING_REACH), past
+   * the right of the view, behind the bus on the road, behind the phone
+   * booth - so the road is not empty while the wave begins. Empty from
+   * wave 4 on.
+   */
+  opening: readonly LaneId[];
   /** The dead in play at once (the rest wait their turn in the fog). */
   maxActive: number;
   /** Seconds between one coming into play and the next, drawn from this range. */
@@ -47,6 +60,20 @@ export interface WaveSpec {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * How each of the first waves opens (WaveSpec.opening): the burned bus's door
+ * first, which is in view at once and climbing out, then the rest; always
+ * walkers, taken from the front of the wave's own (its runners come as the
+ * wave brings them). The phone booth is the closest of them, 22 m out: on
+ * wave 1 it is the one that reaches the barricade first, a little over twenty
+ * seconds in.
+ */
+const OPENINGS: Readonly<Record<number, readonly LaneId[]>> = {
+  1: ["bus", "road", "booth"],
+  2: ["bus", "corn", "road"],
+  3: ["bus", "trees", "corn"],
+};
 
 export function isMechanicWave(wave: number): boolean {
   return wave >= MECHANIC_EVERY && wave % MECHANIC_EVERY === 0;
@@ -102,8 +129,9 @@ export function waveSpec(wave: number): WaveSpec {
     bloaters,
     surprises,
     lanes,
-    maxActive: w === 1 ? 4 : w === 2 ? 6 : w === 3 ? 7 : w <= 5 ? 8 : Math.min(22, 9 + (w - 6)),
-    gap: w === 1 ? [2.6, 4.4] : w <= 3 ? [2, 3.6] : w <= 6 ? [1.6, 3] : [Math.max(0.45, 1.4 - 0.1 * (w - 6)), Math.max(1, 2.6 - 0.15 * (w - 6))],
+    opening: OPENINGS[w] ?? [],
+    maxActive: w === 1 ? 5 : w === 2 ? 6 : w === 3 ? 7 : w <= 5 ? 8 : Math.min(22, 9 + (w - 6)),
+    gap: w <= 3 ? [1.8, 3.2] : w <= 6 ? [1.6, 3] : [Math.max(0.45, 1.4 - 0.1 * (w - 6)), Math.max(1, 2.6 - 0.15 * (w - 6))],
     pace: w <= 4 ? 1 : Math.min(1.7, 1 + 0.045 * (w - 4)),
     fog: fogFor(w),
     survivors: w < 3 ? 0 : w <= 5 ? 1 : 2,

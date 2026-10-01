@@ -9,11 +9,18 @@ type Preferences = {
   difficulty: string;
   crosshair: { size: string; highContrast: boolean };
   steadiness: string;
+  aimAssist: boolean;
   cameraInPlay: boolean;
   reduceMotion: boolean | null;
   reduceFlashing: boolean;
 };
-type Extra = { difficulty: string; preferences: Preferences; reducedMotion: boolean; smoothing: { minCutoff: number; beta: number } | null };
+type Extra = {
+  difficulty: string;
+  aimAssist: boolean;
+  preferences: Preferences;
+  reducedMotion: boolean;
+  smoothing: { minCutoff: number; beta: number } | null;
+};
 
 const extra = (page: Page) => page.evaluate(() => window.handyTest!.snapshot() as unknown as Extra);
 
@@ -102,14 +109,25 @@ test("the settings sheet from the arcade, by keyboard alone", async ({ page }, i
   await page.keyboard.press("Space");
   await expect(contrast).toHaveAttribute("aria-checked", "true");
 
-  // Aim Steadiness wraps round with the arrows.
+  // Aim Steadiness starts on Steady, and wraps round with the arrows; the player ends on Balanced, on purpose.
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("radio", { name: "Balanced" })).toBeFocused();
-  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "Steady" })).toBeFocused();
   await expect(page.getByRole("radio", { name: "Steady" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("radio", { name: "Responsive" })).toHaveAttribute("aria-checked", "true");
-  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "Balanced" })).toHaveAttribute("aria-checked", "true");
+
+  // Aim Assist is next, on: Space turns it off, and the game reads that at once.
+  await page.keyboard.press("Tab");
+  const assist = page.getByRole("switch", { name: "Aim Assist" });
+  await expect(assist).toBeFocused();
+  await expect(assist).toHaveAttribute("aria-checked", "true");
+  expect((await extra(page)).aimAssist).toBe(true);
+  await page.keyboard.press("Space");
+  await expect(assist).toHaveAttribute("aria-checked", "false");
+  expect((await extra(page)).aimAssist).toBe(false);
+  await expect(page.locator("#foot-assist")).toHaveText("Makes targets a little easier to hit. Overwatch Ridge always stays exact.");
 
   // Reduce Motion follows the system (not reduced here) until chosen.
   const motion = page.getByRole("switch", { name: "Reduce Motion" });
@@ -127,7 +145,8 @@ test("the settings sheet from the arcade, by keyboard alone", async ({ page }, i
     volume: 0.8,
     difficulty: "relaxed",
     crosshair: { size: "large", highContrast: true },
-    steadiness: "steady",
+    steadiness: "balanced",
+    aimAssist: false,
     cameraInPlay: false,
     reduceMotion: true,
     reduceFlashing: true,
@@ -328,7 +347,7 @@ test("Reset Handy asks first, then forgets everything and welcomes you again", a
   await skipWelcome(page, {
     "handy.aim.v1.cam-a.1280x720": { version: 1 },
     "handy.best.v2.high-noon.standard.hand": { score: 900, outcome: "Fell on Wave 1", at: 1 },
-    "handy.settings.v1": { difficulty: "relaxed", volume: 0.3 },
+    "handy.settings.v1": { difficulty: "relaxed", volume: 0.3, aimAssist: false, revision: 2, steadiness: "balanced" },
     "handy.tips-seen.v1": ["glint"],
     "handy.camera-choice.v1": "cam-desk",
     "handy.muted.v1": true,
@@ -357,7 +376,39 @@ test("Reset Handy asks first, then forgets everything and welcomes you again", a
   const state = await extra(page);
   expect(state.difficulty).toBe("standard");
   expect(state.preferences.volume).toBe(1);
+  // Back to a steady hand and a little help aiming, as on the first visit.
+  expect(state.preferences).toMatchObject({ steadiness: "steady", aimAssist: true });
+  expect(state.aimAssist).toBe(true);
   expect((await snapshot(page)).view).toBe("welcome");
+});
+
+test("a new player is Steady with Aim Assist on; a Balanced saved before moves to Steady once, and a Balanced chosen after stays", async ({ page }) => {
+  // Nothing saved: the defaults, on the sheet and in what the game reads.
+  await skipWelcome(page);
+  await page.goto("/");
+  let state = await extra(page);
+  expect(state.preferences).toMatchObject({ steadiness: "steady", aimAssist: true });
+  expect(state.aimAssist).toBe(true);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("radio", { name: "Steady" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("switch", { name: "Aim Assist" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Done" }).click();
+
+  // Settings saved before the move, with the old default in them (and a volume that must not be touched).
+  await page.evaluate(() => localStorage.setItem("handy.settings.v1", JSON.stringify({ volume: 0.5, steadiness: "balanced", cameraInPlay: false })));
+  await page.reload();
+  state = await extra(page);
+  expect(state.preferences).toMatchObject({ steadiness: "steady", volume: 0.5, cameraInPlay: false, aimAssist: true });
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("radio", { name: "Steady" })).toHaveAttribute("aria-checked", "true");
+
+  // Choosing Balanced now is a choice: it is kept, reload after reload.
+  await page.getByRole("radio", { name: "Balanced" }).click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.reload();
+  expect((await extra(page)).preferences).toMatchObject({ steadiness: "balanced", volume: 0.5 });
+  await page.reload();
+  expect((await extra(page)).preferences).toMatchObject({ steadiness: "balanced", volume: 0.5 });
 });
 
 test("the settings sheet in a narrow window is a full-height sheet", async ({ page }, info) => {

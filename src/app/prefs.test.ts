@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PREFERENCES,
   PersistentSet,
+  SETTINGS_REVISION,
   bestKey,
   controlClass,
   forgetEverything,
@@ -70,12 +71,13 @@ describe("the player's settings", () => {
     expect(loadPreferences(undefined)).toEqual(DEFAULT_PREFERENCES);
   });
 
-  it("default to the game as it plays today", () => {
+  it("default to a steady hand and a little help aiming", () => {
     expect(DEFAULT_PREFERENCES).toEqual({
       volume: 1,
       difficulty: "standard",
       crosshair: { size: "standard", highContrast: false },
-      steadiness: "balanced",
+      steadiness: "steady",
+      aimAssist: true,
       cameraInPlay: true,
       reduceMotion: null,
       reduceFlashing: false,
@@ -88,7 +90,8 @@ describe("the player's settings", () => {
       volume: 0.35,
       difficulty: "relaxed",
       crosshair: { size: "large", highContrast: true },
-      steadiness: "steady",
+      steadiness: "responsive",
+      aimAssist: false,
       cameraInPlay: false,
       reduceMotion: false,
       reduceFlashing: true,
@@ -109,10 +112,12 @@ describe("the player's settings", () => {
   it("read each bad value as its default, and only that one", () => {
     const loaded = loadPreferences(
       settingsWith({
+        revision: SETTINGS_REVISION,
         volume: "loud",
         difficulty: "nightmare",
         crosshair: { size: "huge", highContrast: true },
         steadiness: "balanced",
+        aimAssist: "yes",
         cameraInPlay: "yes",
         reduceMotion: 1,
         reduceFlashing: true,
@@ -121,6 +126,7 @@ describe("the player's settings", () => {
     expect(loaded).toEqual({
       ...DEFAULT_PREFERENCES,
       crosshair: { size: "standard", highContrast: true },
+      steadiness: "balanced",
       reduceFlashing: true,
     });
   });
@@ -161,6 +167,75 @@ describe("the player's settings", () => {
     savePreferences({ ...DEFAULT_PREFERENCES, difficulty: "relaxed" });
     expect(loadPreferences().difficulty).toBe("relaxed");
     expect(storage.getItem("handy.settings.v1")).toContain('"relaxed"');
+  });
+});
+
+describe("the move to Steady", () => {
+  it("reads a Balanced saved before it as Steady: it was only the old default, whether or not the player ever chose it", () => {
+    const loaded = loadPreferences(settingsWith({ volume: 0.5, steadiness: "balanced", difficulty: "relaxed" }));
+    expect(loaded.steadiness).toBe("steady");
+    // Nothing else about them changes.
+    expect(loaded).toEqual({ ...DEFAULT_PREFERENCES, volume: 0.5, difficulty: "relaxed" });
+  });
+
+  it("leaves a Responsive or Steady saved before it as it was", () => {
+    expect(loadPreferences(settingsWith({ steadiness: "responsive" })).steadiness).toBe("responsive");
+    expect(loadPreferences(settingsWith({ steadiness: "steady" })).steadiness).toBe("steady");
+  });
+
+  it("gives a player with nothing saved Steady, and one with a setting saved but not this one", () => {
+    expect(loadPreferences(new MemoryStorage()).steadiness).toBe("steady");
+    expect(loadPreferences(settingsWith({ volume: 0.2 })).steadiness).toBe("steady");
+    expect(loadPreferences(settingsWith({ steadiness: "bold" })).steadiness).toBe("steady");
+  });
+
+  it("keeps a Balanced chosen after it: a save carries the revision, which says so", () => {
+    const storage = new MemoryStorage();
+    savePreferences({ ...DEFAULT_PREFERENCES, crosshair: { ...DEFAULT_PREFERENCES.crosshair }, steadiness: "balanced" }, storage);
+    expect(JSON.parse(storage.getItem("handy.settings.v1")!).revision).toBe(SETTINGS_REVISION);
+    expect(loadPreferences(storage).steadiness).toBe("balanced");
+    // ... however many times it is read and saved again.
+    savePreferences(loadPreferences(storage), storage);
+    expect(loadPreferences(storage).steadiness).toBe("balanced");
+  });
+
+  it("moves a player once: after the sheet saves, what is chosen is kept", () => {
+    const storage = settingsWith({ steadiness: "balanced", cameraInPlay: false });
+    const moved = loadPreferences(storage);
+    expect(moved.steadiness).toBe("steady");
+    // The player changes another setting: the sheet saves everything, Steady included.
+    savePreferences({ ...moved, volume: 0.4 }, storage);
+    expect(loadPreferences(storage)).toMatchObject({ steadiness: "steady", volume: 0.4, cameraInPlay: false });
+    // And then picks Balanced on purpose.
+    savePreferences({ ...moved, steadiness: "balanced" }, storage);
+    expect(loadPreferences(storage).steadiness).toBe("balanced");
+  });
+
+  it("does not rewrite what it moved: the stored settings stay as they were until the player changes one", () => {
+    const storage = settingsWith({ steadiness: "balanced", volume: 0.5 });
+    const before = storage.getItem("handy.settings.v1");
+    loadPreferences(storage);
+    expect(storage.getItem("handy.settings.v1")).toBe(before);
+  });
+
+  it("reads a revision that is not a number as no revision", () => {
+    expect(loadPreferences(settingsWith({ revision: "2", steadiness: "balanced" })).steadiness).toBe("steady");
+    expect(loadPreferences(settingsWith({ revision: null, steadiness: "balanced" })).steadiness).toBe("steady");
+  });
+});
+
+describe("Aim Assist", () => {
+  it("is on for a new player, and for one whose settings were saved before it existed", () => {
+    expect(DEFAULT_PREFERENCES.aimAssist).toBe(true);
+    expect(loadPreferences(new MemoryStorage()).aimAssist).toBe(true);
+    expect(loadPreferences(settingsWith({ volume: 0.5, steadiness: "responsive" })).aimAssist).toBe(true);
+  });
+
+  it("is kept when it is turned off, and read as on when what is saved is not a yes or a no", () => {
+    const storage = new MemoryStorage();
+    savePreferences({ ...DEFAULT_PREFERENCES, crosshair: { ...DEFAULT_PREFERENCES.crosshair }, aimAssist: false }, storage);
+    expect(loadPreferences(storage).aimAssist).toBe(false);
+    for (const bad of ["no", 0, null, {}]) expect(loadPreferences(settingsWith({ aimAssist: bad })).aimAssist).toBe(true);
   });
 });
 

@@ -299,7 +299,7 @@ export class HighNoon implements Game, MatchListener {
       chicken: () => this.ambient.chickenCenterOrNull(),
       bellCenter: () => this.secretsWorld.bellCenter(),
       vaneCenter: () => this.secretsWorld.vaneCenter(),
-    });
+    }, ctx.settings);
     this.post = new PostFX(renderer, this.stage.scene, this.camera.camera, ctx.quality, { grade: GOLDEN_HOUR });
     this.post.set("noon", this.noon ? 1 : 0);
     this.tier = ctx.quality.tier;

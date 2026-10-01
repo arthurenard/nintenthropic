@@ -1,5 +1,7 @@
 import { Box3, Raycaster, Vector2, Vector3, type Object3D, type PerspectiveCamera } from "three";
+import { assistFactor, choose, secretFactor } from "../../../engine/rules/assist";
 import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../../../engine/rules/raymath";
+import type { Settings } from "../../../engine/types";
 import type { Dead } from "../rules/dead";
 import type { ShotTarget } from "../rules/match";
 import type { SignLetter } from "../rules/secrets";
@@ -15,6 +17,9 @@ import { surfaceOf, type RoadLayout, type Surface } from "./road";
  * not a mouse (the aim check guarantees 95% of shots within 3.5%), so the
  * torso's zone is wide; the head's is tight, so a headshot is still earned;
  * survivors get no help at all - assistance never makes you shoot one.
+ *
+ * These are the table at its base; the player's Aim Assist scales it on every
+ * shot (engine/rules/assist.ts): wider on, exact off. Secrets are never widened.
  */
 export const ASSIST = {
   torso: 0.024,
@@ -103,6 +108,8 @@ export class Shooter {
     private readonly road: RoadLayout,
     private readonly cast: Cast,
     private readonly world: ShootableWorld,
+    /** The player's settings, read on every shot: Aim Assist can change mid-round. */
+    private readonly settings: Pick<Settings, "aimAssist">,
   ) {
     for (let i = 0; i < 24; i++) this.candidates.push(blank());
     road.root.updateMatrixWorld(true);
@@ -139,9 +146,13 @@ export class Shooter {
       return c;
     };
 
-    const aTorso = Math.atan(this.tanFor(ASSIST.torso));
-    const aHead = Math.atan(this.tanFor(ASSIST.head));
-    const aCrawler = Math.atan(this.tanFor(ASSIST.crawler));
+    // Aim Assist, live: the tables wider, or exact (a tolerance of none).
+    const boost = assistFactor(this.settings.aimAssist);
+    const aTorso = Math.atan(this.tanFor(ASSIST.torso * boost));
+    const aHead = Math.atan(this.tanFor(ASSIST.head * boost));
+    const aCrawler = Math.atan(this.tanFor(ASSIST.crawler * boost));
+    // The nearest survivor the shot passes close beside (not through): no help beyond it.
+    let guardAt = Number.POSITIVE_INFINITY;
     for (const v of this.cast.dead) {
       const dead = v.d;
       if (!dead.shootable) continue;
@@ -183,6 +194,9 @@ export class Shooter {
       const aboveNeck = !crawler && closest.y > j.neck.y + 0.03;
       const scoreH = missH / rH;
       const scoreT = missT / rT;
+      // The shot passes through one of its real shapes, whatever zone the allowance calls it: with
+      // assist an arm's hit can read as the body's, and must still be a real hit, not a near miss.
+      const real = missH <= headR || missT <= torsoR || limbScore <= 1;
       let part: HitPart | null = null;
       let score = 0;
       let t = 0;
@@ -204,12 +218,12 @@ export class Shooter {
           part = "head";
           score = scoreH;
           t = tH;
-          physical = missH <= headR;
+          physical = real;
         } else {
           part = "body";
           score = scoreT;
           t = tT;
-          physical = missT <= torsoR;
+          physical = real;
         }
       }
       if (!part) continue;
@@ -233,7 +247,17 @@ export class Shooter {
         hit = probe.t > 0 && probe.miss <= 0.22;
         t = probe.t;
       }
-      if (!hit) continue;
+      if (!hit) {
+        // Close beside one, as near as a torso would be helped: prefer no hit to a wrong one.
+        probePoint(o, d, j.head, probe);
+        const headT = probe.t;
+        const nearHead = probe.t > 0 && probe.miss <= effectiveRadius(0.14, probe.t, aTorso);
+        probeSegment(o, d, j.hips, j.neck, probe);
+        const nearBody = probe.t > 0 && probe.miss <= effectiveRadius(0.22, probe.t, aTorso);
+        if (nearHead) guardAt = Math.min(guardAt, headT);
+        if (nearBody) guardAt = Math.min(guardAt, probe.t);
+        continue;
+      }
       const c = add();
       c.kind = "survivor";
       c.survivor = sv.s;
@@ -242,8 +266,9 @@ export class Shooter {
       c.physical = true;
     }
 
-    // The secrets.
-    const aSecret = Math.atan(this.tanFor(ASSIST.secret));
+    // The secrets: their own allowance is never boosted, so assist does not trigger one the player was not aiming at.
+    const secretBy = secretFactor(this.settings.aimAssist);
+    const aSecret = Math.atan(this.tanFor(ASSIST.secret * secretBy));
     const secretAt = (shot: ShotTarget, center: Vector3, radius: number, assist = aSecret) => {
       probePoint(o, d, center, probe);
       if (probe.t <= 0) return;
@@ -274,7 +299,7 @@ export class Shooter {
     const s = this.road.secrets;
     const center = (node: Object3D | null) => (node ? this.box.setFromObject(node).getCenter(tmp) : null);
     const moon = center(s.moonDisc);
-    if (moon) secretAt({ kind: "secret", shot: { secret: "moon" } }, moon.clone(), this.box.getSize(new Vector3()).x * 0.5, Math.atan(this.tanFor(ASSIST.moon)));
+    if (moon) secretAt({ kind: "secret", shot: { secret: "moon" } }, moon.clone(), this.box.getSize(new Vector3()).x * 0.5, Math.atan(this.tanFor(ASSIST.moon * secretBy)));
     if (this.world.scarecrowHere() && s.scarecrow) {
       this.box.setFromObject(s.scarecrow);
       const at = ray.intersectBox(this.box, hitBox);
@@ -314,20 +339,9 @@ export class Shooter {
     }
 
     // Choose: a real hit on anything wins (nearest first); otherwise the best
-    // near miss by priority; otherwise the road.
-    let best: Candidate | null = null;
-    for (let i = 0; i < n; i++) {
-      const c = this.candidates[i] as Candidate;
-      if (!c.physical || c.t > roadT + 0.1) continue;
-      if (!best || c.t < best.t) best = c;
-    }
-    if (!best) {
-      for (let i = 0; i < n; i++) {
-        const c = this.candidates[i] as Candidate;
-        if (c.physical || c.kind === "survivor" || c.t > roadT + 0.5) continue;
-        if (!best || PRIORITY[c.kind] < PRIORITY[best.kind] || (PRIORITY[c.kind] === PRIORITY[best.kind] && c.score < best.score)) best = c;
-      }
-    }
+    // near miss by priority, never a survivor's and never past one the shot
+    // passed close beside; otherwise the road.
+    const best = choose(this.candidates, n, roadT, (c) => PRIORITY[c.kind], (c) => c.kind === "survivor", guardAt);
     res.part = null;
     res.scenery = false;
     if (best) {

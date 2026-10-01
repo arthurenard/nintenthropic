@@ -1,6 +1,7 @@
 import { Matrix3, Matrix4, Mesh, Quaternion, Raycaster, SRGBColorSpace, Vector2, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
 import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
+import { assistFactor } from "../../engine/rules/assist";
 import { mulberry32 } from "../../engine/rules/rng";
 import { ScreenFlash } from "../../engine/world/flash";
 import { checkFraming } from "../../engine/world/framing";
@@ -259,7 +260,7 @@ export class OrbitalDecay implements Game, MatchListener {
       stage.sky,
       this.visualRandom,
     );
-    this.shooter = new Shooter(this.camera.camera, this.debris, this.scenery.station);
+    this.shooter = new Shooter(this.camera.camera, this.debris, this.scenery.station, ctx.settings);
     this.ambient = new Ambient(this.sound, this.visualRandom);
     this.floats = new Floats(this.scenery.floats, this.visualRandom);
     this.floats.reducedMotion = ctx.settings.reducedMotion;
@@ -932,7 +933,8 @@ export class OrbitalDecay implements Game, MatchListener {
       if (!p || p.x < -0.05 || p.x > 1.05 || p.y < -0.05 || p.y > 1.05) continue;
       const d = b.center.distanceTo(cam.position);
       const physical = (b.radius / (d * 2 * tanHalf)) * this.height;
-      const assist = ASSIST.debris * minSide;
+      // The ring is the zone a shot counts in: it follows Aim Assist.
+      const assist = ASSIST.debris * assistFactor(this.ctx.settings.aimAssist) * minSide;
       list.push({ x: p.x, y: p.y, radius: Math.max(physical, assist) + 6, seconds: closing, lead });
     }
     list.sort((a, b) => a.seconds - b.seconds);

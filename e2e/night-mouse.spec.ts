@@ -47,7 +47,7 @@ test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the resu
   await expect(page.locator("#magazine")).toHaveAttribute("aria-label", "8 of 8 rounds", { timeout: 5_000 });
 
   // Wave 1: shoot the dead as they come out of the fog until the road is clear.
-  // Wave 1's six walk some sixty metres of Route 9 out of the fog, behind the burned bus.
+  // Wave 1's six open together (out of the burned bus, up Route 9 behind it, from behind the phone booth) and the rest follow.
   const deadline = Date.now() + 240_000;
   let wave = 1;
   while (Date.now() < deadline) {

@@ -103,6 +103,19 @@ ones (wave 6+, a visible iron plate) need two. Hit reactions and deaths are
 physical: they twist with the hit, drop the gun, fall out of windows, tumble off
 roofs, slump over barrels.
 
+**Aim Assist** (Settings, on unless turned off). A finger is not a mouse, so a
+shot that passes just beside a target still counts: within 3.5% of the view's
+smaller side of a bandit's torso (the aim check's own 95% line), and the
+head's zone, the dynamite's and the chicken's, in the same proportion, so a
+headshot is as hard to earn, relative to the body, as ever. It reaches
+bandits however they move (a runner is a target, and so is a stick of dynamite
+in the air), never a townsperson, and never past one the shot passed close
+beside: no hit is better than a wrong one. A real hit always beats a near
+miss, and a secret's allowance is never widened, so assist does not trigger
+one the player was not aiming at. Off, a shot hits exactly what it passes
+through. The tables are `ASSIST` in `world/shooting.ts`, scaled on every shot
+(`engine/rules/assist.ts`).
+
 ## Townsfolk
 
 Now and then an innocent appears — the barber in his doorway, a woman on the

@@ -142,6 +142,7 @@ export class SettingsSheet {
   private readonly crosshairSize: Segmented<CrosshairStyle["size"]>;
   private readonly steadiness: Segmented<Steadiness>;
   private readonly highContrast: Switch;
+  private readonly aimAssist: Switch;
   private readonly cameraInPlay: Switch;
   private readonly reduceMotion: Switch;
   private readonly reduceFlashing: Switch;
@@ -170,6 +171,10 @@ export class SettingsSheet {
     this.highContrast = new Switch($("switch-contrast"), (on) => {
       prefs.crosshair = { ...prefs.crosshair, highContrast: on };
       change("crosshair");
+    });
+    this.aimAssist = new Switch($("switch-assist"), (on) => {
+      prefs.aimAssist = on;
+      change("aimAssist");
     });
     this.cameraInPlay = new Switch($("switch-preview"), (on) => {
       prefs.cameraInPlay = on;
@@ -268,6 +273,7 @@ export class SettingsSheet {
     this.crosshairSize.value = prefs.crosshair.size;
     this.steadiness.value = prefs.steadiness;
     this.highContrast.on = prefs.crosshair.highContrast;
+    this.aimAssist.on = prefs.aimAssist;
     this.cameraInPlay.on = prefs.cameraInPlay;
     this.reduceMotion.on = prefs.reduceMotion ?? this.host.systemReducesMotion();
     this.reduceFlashing.on = prefs.reduceFlashing;

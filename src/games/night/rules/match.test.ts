@@ -54,15 +54,22 @@ function marksman(m: Match, range = 40) {
 }
 
 describe("the wave director", () => {
-  it("opens with a title card, then sends wave 1's six walkers up the road", () => {
+  it("opens with a title card, then sends wave 1's six walkers: the first three together, by the bus, the road and the phone booth", () => {
     const { m, rec } = makeMatch(3);
     expect(rec.last("banner")?.args).toEqual(["Wave 1", "Something is coming up the road."]);
     expect(m.phase).toBe("intro");
     run(m, WAVE_INTRO + 0.1);
     expect(m.phase).toBe("combat");
+    // The first of them is in play as the wave starts, the three within a couple of seconds.
+    run(m, 0.5);
+    expect(rec.count("deadSpawn")).toBe(1);
+    run(m, 2.5);
+    expect(rec.count("deadSpawn")).toBeGreaterThanOrEqual(3);
     run(m, 120, marksman(m));
     const spawns = rec.all("deadSpawn");
-    expect(spawns.slice(0, 6).every((e) => e.args[1] === "walker" && e.args[2] === "road")).toBe(true);
+    expect(spawns.slice(0, 6).every((e) => e.args[1] === "walker")).toBe(true);
+    expect(spawns.slice(0, 3).map((e) => e.args[2])).toEqual(["bus", "road", "booth"]);
+    expect(spawns.slice(3, 6).every((e) => e.args[2] === "road")).toBe(true);
     expect(rec.count("waveClear")).toBeGreaterThanOrEqual(1);
     const firstClear = rec.log.findIndex((e) => e.name === "waveClear");
     expect(rec.log.slice(0, firstClear).filter((e) => e.name === "deadDeath").length).toBe(6);

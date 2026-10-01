@@ -271,6 +271,12 @@ the system's own settings are.
   there is no Save. What cannot change mid-round (the difficulty, the camera)
   waits for the next, and the footnote says so when the sheet is over a paused
   game.
+- **Aim Assist** is a switch in a group of its own, on unless the player turns
+  it off, with a footnote that says what it does and where it does not apply:
+  "Makes targets a little easier to hit. Overwatch Ridge always stays exact."
+  Aim Steadiness (a segmented control above it) starts on Steady, which holds
+  a shaky hand still; the player who prefers a quicker crosshair chooses
+  Balanced or Responsive.
 - **A game's own group** shows only while such a game can be played: Scope
   (Close One Eye to Scope, a switch, on; Scope Button, Hold | Toggle), with a
   footnote that says how to scope in the player's terms.

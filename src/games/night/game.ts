@@ -270,12 +270,19 @@ export class DeadOfNight implements Game, MatchListener {
     const lamp = road.streetLight ? road.streetLight.getWorldPosition(new Vector3()) : new Vector3(3.6, 7.4, -24);
     this.ambient = new Ambient(this.sound, u, this.stage.street, this.stage.streetPower, this.stage.lampGlow, lamp, this.visualRandom);
     this.newMatch();
-    this.shooter = new Shooter(this.camera.camera, this.queries, road, this.cast, {
-      survivors: () => this.cast.survivors.map((v) => ({ s: v.s, joints: () => v.rig.updateJoints() })),
-      cat: () => this.secretsWorld.catCenter(),
-      driveInVisible: () => this.match.phase === "breather",
-      scarecrowHere: () => this.secretsWorld.scarecrowHere(),
-    });
+    this.shooter = new Shooter(
+      this.camera.camera,
+      this.queries,
+      road,
+      this.cast,
+      {
+        survivors: () => this.cast.survivors.map((v) => ({ s: v.s, joints: () => v.rig.updateJoints() })),
+        cat: () => this.secretsWorld.catCenter(),
+        driveInVisible: () => this.match.phase === "breather",
+        scarecrowHere: () => this.secretsWorld.scarecrowHere(),
+      },
+      ctx.settings,
+    );
     this.sights = playSights(this.assets.road);
     const volume = this.volume;
     this.post = new PostFX(renderer, this.stage.scene, this.camera.camera, ctx.quality, {

@@ -197,7 +197,10 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   reload" to a mouse player). `Settings.scope` says how the player scopes
   (`eye`: closing an eye does, now; `button`: hold or toggle), for a game's
   hints; `Settings.unlocks` holding "golden" means a golden weapon in every
-  game (High Noon's Golden Revolver).
+  game (High Noon's Golden Revolver). `Settings.aimAssist` is the player's
+  Aim Assist (on unless they turn it off): a game reads it live, on every shot,
+  and makes the shot forgiving with it on and exact with it off
+  (`engine/rules/assist.ts`; Overwatch Ridge never reads it).
 - `GameEntry` — a game in the arcade (`src/games/index.ts`): `id`, `title`,
   `blurb`, `about` (the hero's two or three sentences), `poster` (16:9, under
   `public/`), `backdrop` (the game's light, drawn where the poster would be
@@ -297,6 +300,7 @@ variant of each) on them.
 | `hammer.ts` | `Hammer`: the frames on which the re-arm's soft click should sound as the thumb comes back up after a shot, and never when it should not. |
 | `rng.ts` | `range`, `chance`, `pick`, `shuffle` over `GameContext.random`, and `mulberry32` for a replayable `?seed=`: route every decision through the seeded source and a seed replays a round exactly. |
 | `raymath.ts` | Ray against sphere and capsule (a head, a torso, a limb) with an honest angular tolerance: aim assist that is not a magnet. |
+| `assist.ts` | Aim Assist for every game that has it: `assistFactor(on)` scales a shooter's table of tolerances (`ASSIST_BOOST` = 1.35 on, none off), `secretFactor(on)` keeps a secret's allowance as it is (never boosted, so a secret is not triggered by a shot that was not aimed at it), and `choose(...)` picks what a shot hit: a real hit first, else the best near miss, never an innocent and never past one the shot passed close beside. |
 
 ### What stays yours
 
@@ -378,10 +382,16 @@ read checked and every write allowed to fail, so a window that stores nothing
 plays the same without remembering (`src/app/prefs.ts`).
 
 - `handy.settings.v1` — the Settings sheet: volume, difficulty, crosshair,
-  Aim Steadiness, Show Camera in Play, Reduce Motion (absent: follow the
-  system), Reduce Flashing. The app puts them into effect: `settings` for the
+  Aim Steadiness (Steady unless chosen otherwise), Aim Assist (on unless turned
+  off), Show Camera in Play, Reduce Motion (absent: follow the system), Reduce
+  Flashing, and a `revision`. Revision 2 made Steady the default (it was
+  Balanced): settings saved without a revision hold a Balanced that was only
+  the old default, so it reads as Steady, and anything saved from revision 2 on
+  is kept as chosen - a Balanced picked after the move stays. The move is a
+  read: the stored value is left alone until the player next changes a setting.
+  The app puts them into effect: `settings` for the
   game (`difficulty` is held for a round in play and changes when the next
-  begins), `AudioEngine.setVolume` (apart from mute), `Crosshair.style`,
+  begins; `aimAssist` is read live, on every shot), `AudioEngine.setVolume` (apart from mute), `Crosshair.style`,
   `AimController.steadiness` for every new hand input (and `setSteadiness` on
   the one in play), `Pip.showInPlay`, `<html data-reduce-motion>`.
 - `handy.best.v2.<game>.<relaxed|standard>.<hand|pointer>` —

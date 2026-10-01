@@ -2,7 +2,9 @@ import { Box3, Mesh, Object3D, Raycaster, Vector2, Vector3, type Intersection, t
 import type { Bandit } from "../rules/bandit";
 import type { Dynamite } from "../rules/dynamite";
 import type { ShotTarget } from "../rules/match";
+import { assistFactor, choose, secretFactor } from "../../../engine/rules/assist";
 import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../../../engine/rules/raymath";
+import type { Settings } from "../../../engine/types";
 import type { SecretId } from "../rules/secrets";
 import type { Townsperson } from "../rules/townsfolk";
 import type { HitPart } from "../rules/types";
@@ -17,6 +19,9 @@ import { surfaceOf, type Surface, type TownLayout } from "./town";
  * mouse (the aim check guarantees 95% of shots within 3.5%), so the torso's
  * zone is wide; the head's is tight, so a headshot is still earned; innocents
  * get no help at all — assistance never makes you shoot someone.
+ *
+ * These are the table at its base; the player's Aim Assist scales it on every
+ * shot (engine/rules/assist.ts): wider on, exact off. Secrets are never widened.
  */
 export const ASSIST = {
   torso: 0.026,
@@ -107,6 +112,8 @@ export class Shooter {
     town: TownLayout,
     private readonly cast: Cast,
     private readonly world: ShootableWorld,
+    /** The player's settings, read on every shot: Aim Assist can change mid-round. */
+    private readonly settings: Pick<Settings, "aimAssist">,
   ) {
     this.panes = [...town.glass.values()];
     if (town.secrets.piano) this.pianoBox.setFromObject(town.secrets.piano);
@@ -145,8 +152,12 @@ export class Shooter {
       c.part = "body";
       return c;
     };
-    const aTorso = Math.atan(this.tanFor(ASSIST.torso));
-    const aHead = Math.atan(this.tanFor(ASSIST.head));
+    // Aim Assist, live: the tables wider, or exact (a tolerance of none).
+    const boost = assistFactor(this.settings.aimAssist);
+    const aTorso = Math.atan(this.tanFor(ASSIST.torso * boost));
+    const aHead = Math.atan(this.tanFor(ASSIST.head * boost));
+    // The nearest innocent the shot passes close beside (not through): no help beyond it.
+    let guardAt = Number.POSITIVE_INFINITY;
 
     for (const v of this.cast.bandits) {
       const b = v.b;
@@ -185,6 +196,9 @@ export class Shooter {
       const aboveNeck = closest.y > j.neck.y + 0.03;
       const scoreH = missH / rH;
       const scoreT = missT / rT;
+      // The shot passes through one of his real shapes, whatever zone the allowance calls it: with
+      // assist an arm's hit can read as the body's, and must still be a real hit, not a near miss.
+      const real = missH <= 0.13 || missT <= 0.2 || limbScore <= 1;
       let part: HitPart | null = null;
       let score = 0;
       let t = 0;
@@ -206,12 +220,12 @@ export class Shooter {
           part = "head";
           score = scoreH;
           t = tH;
-          physical = missH <= 0.13;
+          physical = real;
         } else {
           part = "body";
           score = scoreT;
           t = tT;
-          physical = missT <= 0.2;
+          physical = real;
         }
       }
       if (!part) continue;
@@ -236,7 +250,17 @@ export class Shooter {
         hit = probe.t > 0 && probe.miss <= 0.22;
         t = probe.t;
       }
-      if (!hit) continue;
+      if (!hit) {
+        // Close beside one, as near as a bandit's torso would be helped: prefer no hit to a wrong one.
+        probePoint(o, d, j.head, probe);
+        const headT = probe.t;
+        const nearHead = probe.t > 0 && probe.miss <= effectiveRadius(0.14, probe.t, aTorso);
+        probeSegment(o, d, j.hips, j.neck, probe);
+        const nearBody = probe.t > 0 && probe.miss <= effectiveRadius(0.22, probe.t, aTorso);
+        if (nearHead) guardAt = Math.min(guardAt, headT);
+        if (nearBody) guardAt = Math.min(guardAt, probe.t);
+        continue;
+      }
       const c = add();
       c.kind = "townsfolk";
       c.person = p;
@@ -245,7 +269,7 @@ export class Shooter {
       c.physical = true;
     }
 
-    const aDyn = Math.atan(this.tanFor(ASSIST.dynamite));
+    const aDyn = Math.atan(this.tanFor(ASSIST.dynamite * boost));
     for (const s of this.world.sticks()) {
       if (!s.airborne) continue;
       tmp.set(s.position.x, s.position.y, s.position.z);
@@ -261,7 +285,7 @@ export class Shooter {
       c.physical = probe.miss <= 0.18;
     }
 
-    const aWeed = Math.atan(this.tanFor(ASSIST.tumbleweed));
+    const aWeed = Math.atan(this.tanFor(ASSIST.tumbleweed * boost));
     const weeds = this.world.tumbleweeds();
     for (let i = 0; i < weeds.length; i++) {
       const w = weeds[i];
@@ -281,7 +305,7 @@ export class Shooter {
     const chicken = this.world.chicken();
     if (chicken) {
       probePoint(o, d, chicken, probe);
-      const r = effectiveRadius(0.25, probe.t, Math.atan(this.tanFor(ASSIST.chicken)));
+      const r = effectiveRadius(0.25, probe.t, Math.atan(this.tanFor(ASSIST.chicken * boost)));
       if (probe.t > 0 && probe.miss <= r) {
         const c = add();
         c.kind = "chicken";
@@ -291,7 +315,8 @@ export class Shooter {
       }
     }
 
-    const aSecret = Math.atan(this.tanFor(ASSIST.secret));
+    // A secret's own allowance is never boosted: assist does not trigger one the player was not aiming at.
+    const aSecret = Math.atan(this.tanFor(ASSIST.secret * secretFactor(this.settings.aimAssist)));
     for (const [id, center, radius] of [
       ["bell", this.world.bellCenter(), 0.55],
       ["vane", this.world.vaneCenter(), 0.6],
@@ -305,25 +330,15 @@ export class Shooter {
         c.secret = id;
         c.t = probe.t;
         c.score = probe.miss / r;
-        c.physical = false;
+        // Through the bell or the vane itself is a real hit, which no near miss of a bandit takes away.
+        c.physical = probe.miss <= radius;
       }
     }
 
     // 3. Choose: a real hit on anything wins (nearest first); otherwise the
-    // best near miss by priority; otherwise the town.
-    let best: Candidate | null = null;
-    for (let i = 0; i < n; i++) {
-      const c = this.candidates[i] as Candidate;
-      if (!c.physical || c.t > townT + 0.1) continue;
-      if (!best || c.t < best.t) best = c;
-    }
-    if (!best) {
-      for (let i = 0; i < n; i++) {
-        const c = this.candidates[i] as Candidate;
-        if (c.physical || c.kind === "townsfolk" || c.t > townT + 0.5) continue;
-        if (!best || PRIORITY[c.kind] < PRIORITY[best.kind] || (PRIORITY[c.kind] === PRIORITY[best.kind] && c.score < best.score)) best = c;
-      }
-    }
+    // best near miss by priority, never an innocent's and never past one the
+    // shot passed close beside; otherwise the town.
+    const best = choose(this.candidates, n, townT, (c) => PRIORITY[c.kind], (c) => c.kind === "townsfolk", guardAt);
 
     res.panes.length = 0;
     res.note = 1;
