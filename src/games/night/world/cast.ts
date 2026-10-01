@@ -12,7 +12,7 @@ import type { Effects } from "./effects";
 import type { Eyeshine } from "./eyes";
 import type { Flashlight } from "./flashlight";
 import type { RoadQueries } from "./queries";
-import { CLIP_SPEED, darkEyes, dressDead, eyeFrame, eyesMaterial, find, shineEyes, type EyeFrame } from "./rigs";
+import { CLIP_SPEED, darkEyes, dressDead, eyeFrame, eyesMaterial, find, gaitForPace, shineEyes, type EyeFrame } from "./rigs";
 import type { NightUniforms } from "./shading";
 
 /** The ground speeds each file's clips were made for (rigs.ts, clipSpeeds), and when the bloater's burst comes in its clip. */
@@ -31,6 +31,8 @@ export interface DeadView {
   eyes: EyeFrame;
   eyesMat: MeshStandardMaterial | null;
   lastState: string;
+  /** The walking clip it plays: its own gait, or a faster one once the pace it walks at would blur the first (see gaitForPace). */
+  gait: string;
   /** How much its eyes shine now, eased. */
   shine: number;
   /** Fading away once the fog takes the body: 1 → 0; −1 not yet. */
@@ -153,6 +155,7 @@ export class Cast {
       eyes: this.eyeFrames.get(pool) ?? eyeFrame(rig.model),
       eyesMat: darkEyes(eyesMaterial(rig)),
       lastState: "",
+      gait: "",
       shine: 0,
       fade: -1,
       groanIn: 1 + this.random() * 4,
@@ -165,6 +168,7 @@ export class Cast {
       swell: 0,
       deathPlayed: false,
     };
+    v.gait = this.gaitOf(v);
     this.dead.push(v);
     this.enterState(v);
   }
@@ -195,7 +199,7 @@ export class Cast {
         break;
       }
       case "approaching":
-        rig.play(this.gaitOf(v), 0.25, true);
+        rig.play(v.gait, 0.25, true);
         break;
       case "staggered":
         rig.play("stagger", 0.06, false, rig.duration("stagger") / (d.kind === "mechanic" ? 0.3 : STAGGER_TIME));
@@ -449,12 +453,21 @@ export class Cast {
       if (facing) turnRig(rig, Math.atan2(d.heading.x, d.heading.z), dt);
       else turnRig(rig, headingTo(d.pos.x, d.pos.z, this.eye), dt);
       if (d.state === "approaching") {
-        // The gait at the pace it walks now: the wave, the pressure, the Mechanic.
-        const clip = this.gaitOf(v);
+        // The gait at the pace it walks now: the wave, the pressure, the Mechanic. The clip plays at
+        // that pace over the speed it was made for, so the feet never slide; and a pace that would
+        // run a gait far past what it was made for takes a faster gait instead (never back again).
         const pace = d.speed * match.paceFor(d);
         // (The Mechanic's roar, when he first comes out of the fog, plays at its own pace.)
-        const made = (v.pool === this.pools.mechanic ? this.speeds.mechanic : this.speeds.walker)[clip] ?? 1;
-        if (rig.current && rig.currentName === clip) rig.current.timeScale = pace / made;
+        const speeds = v.pool === this.pools.mechanic ? this.speeds.mechanic : this.speeds.walker;
+        const faster = gaitForPace(v.gait, pace, speeds);
+        if (faster !== v.gait) {
+          // (Not over the roar: the walk that follows it takes the faster gait.)
+          const walking = rig.currentName === v.gait;
+          v.gait = faster;
+          if (walking) rig.play(faster, 0.3, true);
+        }
+        const made = speeds[v.gait] ?? 1;
+        if (rig.current && rig.currentName === v.gait) rig.current.timeScale = pace / made;
       }
       if (d.state === "swelling") {
         // Swelling to burst: a shudder over the clip.

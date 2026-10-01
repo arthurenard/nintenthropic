@@ -7,7 +7,7 @@ import { checkFraming, type Framing, type Sight } from "../../engine/world/frami
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
-import { Dead as DeadClass, offsetPath, type Dead } from "./rules/dead";
+import { Dead as DeadClass, offsetPath, paceOf, type Dead } from "./rules/dead";
 import { takenBy } from "./rules/felled";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import type { Award, WaveBonuses } from "./rules/scoring";
@@ -796,7 +796,7 @@ export class DeadOfNight implements Game, MatchListener {
     const v = this.cast.view(d);
     v?.rig.play("roar", 0.15, false);
     this.later(1.9, () => {
-      if (d.state === "approaching") v?.rig.play("walk.shamble", 0.3, true);
+      if (d.state === "approaching" && v) v.rig.play(v.gait, 0.3, true);
     });
     this.sound.at("night_mech_roar", d.pos, 1);
     this.sound.play("night_boss", { delay: 0.2 });
@@ -1038,7 +1038,7 @@ export class DeadOfNight implements Game, MatchListener {
         const l = this.match.plan.lanes.find((x) => x.id === lane) ?? this.match.plan.lanes[0];
         if (!l) return -1;
         const m = this.match as unknown as { nextId: number };
-        const d = new DeadClass(m.nextId++, kind, l, offsetPath(l, 0), kind === "runner" ? 3.5 : kind === "crawler" ? 0.45 : kind === "bloater" ? 0.6 : kind === "mechanic" ? 0.9 : 1, "walk.shamble");
+        const d = new DeadClass(m.nextId++, kind, l, offsetPath(l, 0), paceOf(kind, "walk.shamble", 1.3), "walk.shamble");
         if (kind === "mechanic") d.mask = this.match.tuning.maskHits;
         d.spawn(this.match);
         if (along !== 0) d.placeAt(along > 0 ? along : d.pathLength + along);

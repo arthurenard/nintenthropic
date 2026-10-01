@@ -1,8 +1,8 @@
 import { damageDirection, PlayerHealth } from "../../../engine/rules/health";
 import type { V3 } from "../../../engine/rules/raymath";
-import { pick, range, shuffle, type Random } from "../../../engine/rules/rng";
+import { range, shuffle, type Random } from "../../../engine/rules/rng";
 import type { Difficulty } from "../../../engine/types";
-import { Dead, horizontalDistance, offsetPath, paceOf, withinReach, type DeadEvents, type DeadWorld } from "./dead";
+import { Dead, drawGait, horizontalDistance, offsetPath, paceOf, withinReach, type DeadEvents, type DeadWorld } from "./dead";
 import { felledNote, type Felled } from "./felled";
 import { Rifle, type TriggerResult } from "./rifle";
 import { Scorer, type Award, type WaveBonuses } from "./scoring";
@@ -13,18 +13,17 @@ import {
   BREATHER,
   CHAIN_RADIUS,
   DIFFICULTY,
-  GAIT_PACE,
   HEALTH_MAX,
   LANE_REACH,
   MECHANIC_AURA,
   OPENING_REACH,
   OPENING_STAGGER,
-  WALKER_SPEED,
+  WALKER_HURRY,
   WAVE_INTRO,
   WORN,
   type DifficultyTuning,
 } from "./tuning";
-import { GAITS, SURPRISES, type DeadKind, type DeathCause, type HitPart, type Lane, type LaneId, type RoadPlan, type Slot } from "./types";
+import { SURPRISES, type DeadKind, type DeathCause, type HitPart, type Lane, type LaneId, type RoadPlan, type Slot } from "./types";
 import { sightFor, waveSpec, type WaveSpec } from "./waves";
 
 /** What a player's bullet found, as worked out by the world's ray casts. */
@@ -327,10 +326,10 @@ export class Match implements DeadWorld {
     this.queue.shift();
     if (this.queue.length === 0) this.lastSpawnAt = this.phaseT;
     const lane = (entry.near ? this.nearLanes.get(entry.lane) : undefined) ?? this.lanes.get(entry.lane) ?? this.lanes.get("road") ?? ([...this.lanes.values()][0] as Lane);
-    const gait = pick(this.random, GAITS);
-    const draw = range(this.random, WALKER_SPEED[0], WALKER_SPEED[1]);
+    const gait = drawGait(this.random);
+    const hurry = range(this.random, WALKER_HURRY[0], WALKER_HURRY[1]);
     const offset = range(this.random, -lane.spread, lane.spread);
-    const d = new Dead(this.nextId++, entry.kind, lane, offsetPath(lane, offset), paceOf(entry.kind, GAIT_PACE[gait], draw), gait);
+    const d = new Dead(this.nextId++, entry.kind, lane, offsetPath(lane, offset), paceOf(entry.kind, gait, hurry), gait);
     if (entry.kind === "mechanic") d.mask = this.tuning.maskHits;
     d.spawn(this);
     this.dead.push(d);

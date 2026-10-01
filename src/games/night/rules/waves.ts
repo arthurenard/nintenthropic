@@ -1,20 +1,23 @@
 /**
  * The wave table from docs/DEAD_OF_NIGHT.md, extended past wave 6 by the
- * rule "+3 each: more runners, thicker fog, faster walkers", and everything
- * else that tightens as the night goes on.
+ * rule "+6 each: more runners, a bigger crowd at once, thicker fog, faster
+ * walkers", and everything else that tightens as the night goes on.
  *
- * | Wave | Dead              | New                             |
- * | 1    | 6 walkers         | The road only; learn the fog    |
- * | 2    | 9                 | The cornfield lane              |
- * | 3    | 12                | Runners; the tree line          |
- * | 4    | 14                | Crawlers; the surprises         |
- * | 5    | 16                | Bloaters                        |
- * | 6    | The Mechanic + 14 | Boss                            |
- * | 7+   | +3 each           | More runners, thicker fog, faster walkers |
+ * | Wave | Dead              | New                                           |
+ * | 1    | 6 walkers         | The road only; learn the fog, at a gentle pace |
+ * | 2    | 9                 | The cornfield lane; the first runner and crawler |
+ * | 3    | 11                | The tree line; the surprises begin            |
+ * | 4    | 14                | The first bloater                             |
+ * | 5    | 17                | More of each                                  |
+ * | 6    | The Mechanic + 20 | Boss                                          |
+ * | 7+   | +6 each           | More runners, a bigger crowd at once, faster walkers |
  *
- * The first three waves open with a burst (OPENINGS): the first of the dead in
- * view within a second of the title card going, a few of them at once, from
- * places already hidden. Everything from wave 4 on is as designed.
+ * The night was once slower to start (runners from wave 3, crawlers from 4,
+ * bloaters from 5, +3 a wave): this table is the tense one. Waves 1 and 2 are
+ * still gentle on purpose (the dead walk at 0.8 and 0.9 of the pace of wave
+ * 3), so that a first wave can be learned, and the first three open with a
+ * burst (OPENINGS): the first of the dead in view within a second of the title
+ * card going, a few of them at once, from places already hidden.
  */
 import { MECHANIC_EVERY } from "./tuning";
 import type { LaneId } from "./types";
@@ -45,7 +48,7 @@ export interface WaveSpec {
   maxActive: number;
   /** Seconds between one coming into play and the next, drawn from this range. */
   gap: readonly [number, number];
-  /** Every walker's pace is multiplied by this: faster walkers from wave 7. */
+  /** Every walker's pace is multiplied by this: gentle on waves 1 and 2, faster and faster walkers from wave 4. */
   pace: number;
   /**
    * The fog's density (an exponential-squared coefficient per metre) at the
@@ -80,11 +83,11 @@ export function isMechanicWave(wave: number): boolean {
 }
 
 function deadFor(wave: number): number {
-  const table = [6, 9, 12, 14, 16, 14];
+  const table = [6, 9, 11, 14, 17, 20];
   if (wave <= 6) return table[wave - 1] as number;
-  // +3 each from wave 7; a Mechanic's wave keeps the count of the wave before.
-  const regular = 16 + 3 * (wave - 6);
-  return isMechanicWave(wave) ? regular - 3 : regular;
+  // +6 each from wave 7; a Mechanic's wave keeps the count of the wave before.
+  const regular = 20 + 6 * (wave - 6);
+  return isMechanicWave(wave) ? regular - 6 : regular;
 }
 
 /** The fog thickens from wave to wave: about 80 m of road readable on wave 1, 45 m by wave 10. */
@@ -97,13 +100,13 @@ function subtitleFor(wave: number): string {
     case 1:
       return "Something is coming up the road.";
     case 2:
-      return "The corn is moving.";
+      return "Runners in the corn.";
     case 3:
-      return "Runners. And the tree line.";
+      return "From the tree line, too.";
     case 4:
-      return "Some of them crawl.";
-    case 5:
       return "Bloaters. Shoot them early.";
+    case 5:
+      return "They keep coming.";
     case 6:
       return "The Mechanic.";
     default:
@@ -115,10 +118,10 @@ export function waveSpec(wave: number): WaveSpec {
   const w = Math.max(1, Math.floor(wave));
   const dead = deadFor(w);
   const mechanic = isMechanicWave(w);
-  const runners = w < 3 ? 0 : w <= 4 ? 2 : w <= 6 ? 3 : Math.min(10, 4 + (w - 7));
-  const crawlers = w < 4 ? 0 : w <= 6 ? 2 : Math.min(5, 3 + Math.floor((w - 7) / 3));
-  const bloaters = w < 5 ? 0 : w <= 6 ? 2 : Math.min(4, 2 + Math.floor((w - 7) / 3));
-  const surprises = w < 4 ? 0 : w <= 5 ? 3 : Math.min(7, 4 + Math.floor((w - 6) / 2));
+  const runners = w < 2 ? 0 : w <= 6 ? w - 1 : Math.min(14, Math.floor(5 + 1.5 * (w - 6)));
+  const crawlers = w < 2 ? 0 : w <= 3 ? 1 : w <= 4 ? 2 : w <= 6 ? 3 : Math.min(6, 3 + Math.floor((w - 6) / 2));
+  const bloaters = w < 4 ? 0 : w === 4 ? 1 : w <= 6 ? 2 : Math.min(5, 2 + Math.floor((w - 6) / 2));
+  const surprises = w < 3 ? 0 : w === 3 ? 2 : w === 4 ? 3 : w <= 6 ? 4 : Math.min(9, 4 + Math.floor((w - 5) / 2));
   const lanes: LaneId[] = w === 1 ? ["road"] : w === 2 ? ["road", "corn"] : ["road", "corn", "trees"];
   return {
     wave: w,
@@ -130,9 +133,9 @@ export function waveSpec(wave: number): WaveSpec {
     surprises,
     lanes,
     opening: OPENINGS[w] ?? [],
-    maxActive: w === 1 ? 5 : w === 2 ? 6 : w === 3 ? 7 : w <= 5 ? 8 : Math.min(22, 9 + (w - 6)),
-    gap: w <= 3 ? [1.8, 3.2] : w <= 6 ? [1.6, 3] : [Math.max(0.45, 1.4 - 0.1 * (w - 6)), Math.max(1, 2.6 - 0.15 * (w - 6))],
-    pace: w <= 4 ? 1 : Math.min(1.7, 1 + 0.045 * (w - 4)),
+    maxActive: w === 1 ? 5 : w === 2 ? 6 : w === 3 ? 7 : w <= 5 ? 9 : Math.min(30, 10 + 2 * (w - 6)),
+    gap: w <= 3 ? [1.7, 3.0] : w <= 6 ? [1.4, 2.5] : [Math.max(0.3, 1.2 - 0.15 * (w - 6)), Math.max(0.7, 2.2 - 0.25 * (w - 6))],
+    pace: w === 1 ? 0.8 : w === 2 ? 0.9 : Math.min(1.8, 1 + 0.09 * (w - 3)),
     fog: fogFor(w),
     survivors: w < 3 ? 0 : w <= 5 ? 1 : 2,
     subtitle: subtitleFor(w),

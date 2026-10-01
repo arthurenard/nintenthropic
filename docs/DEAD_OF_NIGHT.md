@@ -70,29 +70,36 @@ and out of the fog, one by one, something shuffles into your flashlight.
 They come out of the fog along three lanes — the road, the cornfield (they
 push through the corn, which sways and rustles ahead of them), and the tree
 line past the motel — and one lane of surprises: out of the bus, from behind
-the phone booth, and over the fence at 12 m (the surprises come from wave 4;
+the phone booth, and over the fence at 12 m (the surprises come from wave 3;
 the bus and the phone booth also open the first waves, see Waves).
 
-- **Walkers** — the most of them. A shambling walk with a varied gait (a
-  limp, a drag, a lurch, arms up or hanging), 0.8–1.2 m/s. **A headshot kills.
+- **Walkers** — the most of them. A shambling walk with a varied gait (mostly
+  a lurch or a shamble, now and then a limp or a drag, arms up or hanging),
+  1.26 m/s on average on Standard - a third faster than the night first
+  walked them - and faster as the waves go on. A walker's pace is its gait's
+  own (the speed its clip was made for: 1.1 m/s lurching, 0.85 shambling, 0.7
+  limping, 0.6 dragging) made 15-60% quicker, and its clip plays at that pace
+  over the one it was made for, so the feet never slide; a pace that would
+  play a clip past 1.8 times its speed takes a faster gait instead (a shamble
+  becomes a lurch, a lurch a run). **A headshot kills.
   Three body shots drop one; each body shot staggers it back half a step**, so
   body shots buy time and head shots end things. They wear what they died in:
   a farmer's overalls, a trucker's cap and flannel, a waitress's uniform, a
   hunter's orange vest, a mechanic's coveralls, a businessman's suit.
-- **Runners** (wave 3+) — the recently dead: a lurching sprint, 3.5 m/s, then
+- **Runners** (wave 2+) — the recently dead: a lurching sprint, 4.2 m/s, then
   a lunge. Two body shots or one to the head. Worth a bonus.
-- **Crawlers** (wave 4+) — low on the road, dragging themselves, hard to see
-  in the fog and easy to forget: they only need one shot, anywhere, but they
-  are small and near the ground.
-- **Bloaters** (wave 5+) — swollen, slow, pale green. **Shoot one in the belly
+- **Crawlers** (wave 2+) — low on the road, dragging themselves (0.7 m/s),
+  hard to see in the fog and easy to forget: they only need one shot,
+  anywhere, but they are small and near the ground.
+- **Bloaters** (wave 4+) — swollen, slow (0.85 m/s), pale green. **Shoot one in the belly
   and it bursts**: a burst of foul gas and matter that downs every walker
   within 3 m (a chain, scored). Let it reach the barricade and it bursts on
   you.
 - **The Mechanic** (wave 6, then every sixth wave) — a huge man in grease-
   stained coveralls with a welding mask down over his face and a tyre iron.
   The mask stops bullets: **two shots knock it off**, then a headshot drops
-  him; body shots only slow him (eight to drop). The dead around him come
-  faster while he walks.
+  him; body shots only slow him (eight to drop). He walks at 1.2 m/s, and the
+  dead around him come faster while he walks.
 
 **Their tells.** Eyeshine in the beam before the body resolves; the corn
 bending ahead of one; a groan (panned and distanced) when one leaves the fog;
@@ -123,13 +130,23 @@ catches their lantern first.
 
 | Wave | Dead | New |
 | --- | --- | --- |
-| 1 | 6 walkers | The road; learn the fog. Opens with three together: out of the bus, up the road behind it, from behind the phone booth |
-| 2 | 9 | The cornfield lane. Opens with the bus, the corn and the road |
-| 3 | 12 | Runners; the tree line. Opens with the bus, the tree line and the corn |
-| 4 | 14 | Crawlers; the surprises (bus, booth, fence) |
-| 5 | 16 | Bloaters |
-| 6 | The Mechanic + 14 | Boss |
-| 7+ | +3 each | More runners, thicker fog, faster walkers |
+| 1 | 6 walkers | The road; learn the fog, at a gentle pace (0.8 of wave 3's). Opens with three together: out of the bus, up the road behind it, from behind the phone booth |
+| 2 | 9 | The cornfield lane; the first runner and the first crawler (0.9 of wave 3's pace). Opens with the bus, the corn and the road |
+| 3 | 11 | The tree line; the surprises begin (bus, booth, fence); two runners. Opens with the bus, the tree line and the corn |
+| 4 | 14 | The first bloater; three runners, two crawlers |
+| 5 | 17 | More of each |
+| 6 | The Mechanic + 20 | Boss |
+| 7+ | +6 each | More runners, a bigger crowd at once, thicker fog, faster walkers (+9% a wave) |
+
+The night was once slower to start (runners from wave 3, crawlers from 4,
+bloaters from 5, three more dead a wave, the dead a third slower): a steady
+hand fell around wave 16, and the game was not as hard as the others. On
+Standard a steady hand now falls around wave 9, a slow, wild one around 5 or 6
+and the slowest around 3 or 4 (`rules/balance.test.ts` plays them out). What
+gets harder is the crowd: each wave the dead come closer together, more of
+them at once (`maxActive`), and a wave dragged out turns against you after
+10 s rather than 25 (the fog thickens and they quicken, to 1.7 times their
+pace).
 
 **The opening.** The road is never empty while a wave begins. The first three
 waves open with a burst of walkers, a moment apart (0.4–0.9 s), the first in
@@ -141,13 +158,14 @@ view, and, on wave 1, from behind the phone booth 22 m out, whose walker is
 the first to reach the barricade, a little over twenty seconds in. Nothing
 begins in the open: every one begins in a surprise's cover, in the corn, or
 out in the fog (a figure at no more than half clarity). The wave's other dead
-follow at shorter gaps than before on these waves (1.8–3.2 s; they were
+follow at shorter gaps than before on these waves (1.7–3 s; they were
 2.6–4.4 s on wave 1 and 2–3.6 s on waves 2 and 3), and wave 1 lets five be in
-play at once (it was four). From wave 4 on nothing is changed: one at a time,
-at the gaps and the reach the night was balanced on (`OPENINGS` in
-`rules/waves.ts`, `OPENING_REACH` and `OPENING_STAGGER` in `rules/tuning.ts`).
+play at once (it was four). From wave 4 on they come one at a time, at the
+table's gaps and the fog's reach (`OPENINGS` in `rules/waves.ts`,
+`OPENING_REACH` and `OPENING_STAGGER` in `rules/tuning.ts`).
 
-A wave ends when every one of it is down. Then a **breather** (6 s): the fog
+A wave ends when every one of it is down. Then a **breather** (4 s; it was
+6): the fog
 thins, the streetlight steadies and buzzes back to full, a distant church bell
 counts the wave, the title card slides in ("Wave 3"), health refills, and the
 crickets start again. There is no clock: you last until the night takes you.
@@ -164,10 +182,13 @@ crickets start again. There is no clock: you last until the night takes you.
 ## Difficulty
 
 Relaxed and Standard, as in High Noon: one table in the game's `tuning.ts`.
-Relaxed: the dead walk ~25% slower, claw for 18 instead of 25 (five in quick
-succession to fall, not four), health returns after 3 s at 40/s, the fog is a
-little thinner, bloaters burst with a wider warning, the Mechanic needs one
-shot on the mask. Standard is the game as designed. Records are apart.
+Relaxed: the dead walk at half Standard's pace, claw for 20 instead of 25
+(five in quick succession to fall, not four), health returns after 3 s at
+40/s, the fog is a little thinner, bloaters burst with a wider warning, the
+Mechanic needs one shot on the mask, and a wave has to drag on for 30 s
+before it turns against you. It carries the same hands to about where Standard
+used to (a steady hand to wave 15, a wild one to 9, the slowest to 6).
+Standard is the game as designed. Records are apart.
 
 ## One-time tips (Settings.tipsSeen)
 
@@ -220,9 +241,11 @@ Before every game, as High Noon's bottles: **nine mason jars** on the fence
 posts, the pumps, the barricade and the bus, each with a candle stub glowing
 inside, placed to cover the screen's corners, edges and centre. The lit one
 glows brighter and its candle flares; a hit bursts it into glass and a puff of
-wax smoke. The flashlight is on through the check (it helps the player see
-where they aim). The check's framing is the scene's own wide lens; play closes
-in from the same eye, as in High Noon.
+wax smoke. The flashlight is on through the check, and rests on the lit jar:
+no crosshair and no beam follows the aim until it is set, the player points
+at the jar and Handy learns where that is ("Point at the Lit Jar"; see
+WEB_ARCHITECTURE.md). The check's framing is the scene's own wide lens; play
+closes in from the same eye, as in High Noon.
 
 ## Feel and sound
 

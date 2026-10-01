@@ -95,7 +95,7 @@ describe("the wave director", () => {
     expect(breather?.args[0]).toBe(2);
     expect(rec.count("bodyCleared")).toBeGreaterThanOrEqual(6);
     expect(rec.all("banner").map((e) => e.args[0])).toContain("Wave 2");
-    expect(BREATHER).toBe(6);
+    expect(BREATHER).toBe(4);
   });
 
   it("brings the Mechanic first on his wave, masked", () => {

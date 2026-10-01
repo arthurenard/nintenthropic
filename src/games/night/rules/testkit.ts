@@ -123,6 +123,22 @@ export async function shippedRoad(): Promise<Road | null> {
   return { plan: { lanes, slots, eye }, survivorPaths };
 }
 
+/**
+ * What a shipped character file says about itself: its scene's extras
+ * (`public/assets/night/<name>.glb`, its clips' speeds among them), read from
+ * the file's JSON. Null when the file is not there.
+ */
+export async function shippedExtras(name: string): Promise<Record<string, unknown> | null> {
+  const fs = (await import("node:fs" as string)) as Files;
+  const url = new URL(`../../../../public/assets/night/${name}.glb`, import.meta.url);
+  if (!fs.existsSync(url)) return null;
+  const bytes = fs.readFileSync(url);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const length = view.getUint32(12, true);
+  const doc = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + length))) as { scenes?: { extras?: Record<string, unknown> }[] };
+  return doc.scenes?.[0]?.extras ?? null;
+}
+
 export interface Recorded {
   name: string;
   args: unknown[];

@@ -22,8 +22,8 @@ describe("the difficulty table", () => {
     expect(BLOATER_BURST_DAMAGE).toBe(60);
   });
 
-  it("walks Relaxed's dead about a quarter slower, clawing softer: five claws to fall, not four", () => {
-    expect(relaxed.speedFactor).toBeCloseTo(0.75, 6);
+  it("walks Relaxed's dead at half Standard's pace, clawing softer: five claws to fall, not four", () => {
+    expect(relaxed.speedFactor).toBeCloseTo(0.5, 6);
     const claw = Math.round(ATTACKS.walker.damage * relaxed.damageFactor);
     expect(claw).toBe(20);
     expect(Math.ceil(100 / claw)).toBe(5);
@@ -64,7 +64,8 @@ describe("a match on Relaxed", () => {
     d.spawn(m);
     d.placeAt(40);
     m.dead.push(d);
-    for (let t = 0; t < 30; t += 1 / 60) m.update(1 / 60, false);
+    // 22 m left to walk at Relaxed's pace on wave 1: well over half a minute.
+    for (let t = 0; t < 90; t += 1 / 60) m.update(1 / 60, false);
     const strikes = rec.all("deadStrike");
     expect(strikes.length).toBeGreaterThan(0);
     for (const s of strikes) expect(s.args[1]).toBe(20);
@@ -108,7 +109,9 @@ describe("a match on Relaxed", () => {
 /**
  * The same simulated players as balance.test.ts (see testkit.ts), on the
  * same shipped road, over both difficulties and the same seeds: Relaxed
- * should carry each of them further, and still end every night in the end.
+ * should carry each of them further - to about where Standard used to carry
+ * them, before the night was made tense (a steady hand to wave 16, a slow,
+ * wild one to 9, the slowest to 6) - and still end every night in the end.
  */
 const road = (await shippedRoad()) ?? placeholderRoad();
 
@@ -124,7 +127,10 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
     const r = medianWave(STEADY, "relaxed");
     // eslint-disable-next-line no-console
     console.log(`steady hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
-    expect(r.median).toBeGreaterThanOrEqual(s.median + 1);
+    expect(r.median).toBeGreaterThanOrEqual(s.median + 4);
+    // About where Standard used to be (16), or a little harder.
+    expect(r.median).toBeGreaterThanOrEqual(13);
+    expect(r.median).toBeLessThanOrEqual(17);
     expect(r.waves[0]).toBeGreaterThanOrEqual(s.waves[0] as number);
     expect(r.waves.filter((w) => w <= 25).length).toBeGreaterThanOrEqual(12);
   });
@@ -135,6 +141,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
     // eslint-disable-next-line no-console
     console.log(`slow, wild hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 2);
+    // Where Standard used to be (9), or a little harder.
+    expect(r.median).toBeGreaterThanOrEqual(8);
+    expect(r.median).toBeLessThanOrEqual(10);
     expect(r.waves[0]).toBeGreaterThanOrEqual(4);
   });
 
@@ -144,6 +153,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
     // eslint-disable-next-line no-console
     console.log(`slowest hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 2);
+    // Where Standard used to be (6), or a little easier.
+    expect(r.median).toBeGreaterThanOrEqual(5);
+    expect(r.median).toBeLessThanOrEqual(8);
   });
 
   it("overruns an idle player on both, in the first wave, a little later on Relaxed", () => {
@@ -159,8 +171,8 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
     console.log(`an idle player falls after: standard ${s.map((x) => x.time.toFixed(0)).join(" ")} s; relaxed ${r.map((x) => x.time.toFixed(0)).join(" ")} s`);
     expect(mean(r)).toBeGreaterThan(mean(s));
     // The opening brings the first of the dead to the barricade within the minute on both
-    // (it was 57-73 s on Standard and 76-95 s on Relaxed, from 62 m).
+    // (it was 57-73 s on Standard and 76-95 s on Relaxed, from 62 m; 23-32 s and 29-42 s before the dead went faster).
     expect(mean(s)).toBeLessThan(45);
-    expect(mean(r)).toBeLessThan(55);
+    expect(mean(r)).toBeLessThan(65);
   });
 });

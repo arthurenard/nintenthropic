@@ -5,7 +5,11 @@ import { placeholderRoad, playUntilDeath, shippedRoad, SLOWEST, standIdle, STEAD
  * Simulated players against the real rules on Standard, over many seeds
  * (testkit.ts says how each plays), on the road the game ships with (its
  * lanes, barricade and survivors' runs, read from road.glb): the night
- * should be fair early, tense later, and end for everyone in the end.
+ * should be tense from the start and end for everyone in the end. A steady
+ * hand falls around wave 9 (it was 16: the night was not as hard as the
+ * others), a slow, wild one around 5-6 (it was 9) and the slowest around 3-4
+ * (it was 6); Relaxed carries each of them to where Standard used to
+ * (difficulty.test.ts).
  */
 const seeds = Array.from({ length: 16 }, (_, i) => i + 1);
 const road = (await shippedRoad()) ?? placeholderRoad();
@@ -17,33 +21,35 @@ function falls(skill: Skill): { waves: number[]; median: number } {
 
 // Each case plays sixteen whole nights: give a busy machine time.
 describe("the night on Standard", { timeout: 120_000 }, () => {
-  it("lets a steady hand through the first waves and a long way into the night, and still takes it", () => {
+  it("lets a steady hand through the first waves, takes it around wave 9, and ends the night for all of them", () => {
     const { waves, median } = falls(STEADY);
     // eslint-disable-next-line no-console
     console.log(`steady hand falls on waves: ${waves.join(" ")} (median ${median})`);
-    expect(waves[0]).toBeGreaterThanOrEqual(6);
-    expect(median).toBeGreaterThanOrEqual(10);
-    expect(median).toBeLessThanOrEqual(20);
+    expect(waves[0]).toBeGreaterThanOrEqual(5);
+    expect(median).toBeGreaterThanOrEqual(8);
+    expect(median).toBeLessThanOrEqual(10);
     expect(waves.filter((w) => w <= 25).length).toBe(seeds.length);
+    // Nobody coasts to wave 14: the night is tense for a hand that does everything right.
+    expect(waves[waves.length - 1]).toBeLessThanOrEqual(13);
   });
 
-  it("is harder on a slow, wild hand, which rarely sees wave 11", () => {
+  it("is harder on a slow, wild hand, which falls around wave 5 or 6 and rarely sees wave 9", () => {
     const { waves, median } = falls(WILD);
     // eslint-disable-next-line no-console
     console.log(`slow, wild hand falls on waves: ${waves.join(" ")} (median ${median})`);
     expect(waves[0]).toBeGreaterThanOrEqual(2);
     expect(median).toBeGreaterThanOrEqual(5);
-    expect(median).toBeLessThanOrEqual(10);
-    expect(waves.filter((w) => w > 11).length).toBeLessThanOrEqual(2);
+    expect(median).toBeLessThanOrEqual(6);
+    expect(waves.filter((w) => w > 9).length).toBe(0);
   });
 
-  it("gives the slowest hand a few waves", () => {
+  it("gives the slowest hand a few waves: it falls around the third or fourth, and hardly ever on the first", () => {
     const { waves, median } = falls(SLOWEST);
     // eslint-disable-next-line no-console
     console.log(`slowest hand falls on waves: ${waves.join(" ")} (median ${median})`);
-    expect(waves[0]).toBeGreaterThanOrEqual(2);
-    expect(median).toBeGreaterThanOrEqual(2);
-    expect(median).toBeLessThanOrEqual(7);
+    expect(waves.filter((w) => w === 1).length).toBeLessThanOrEqual(2);
+    expect(median).toBeGreaterThanOrEqual(3);
+    expect(median).toBeLessThanOrEqual(4);
   });
 });
 
@@ -53,8 +59,8 @@ describe("an idle player", () => {
       const x = standIdle(seed, "standard", 240, road);
       expect(x.dead, `seed ${seed}`).toBe(true);
       expect(x.wave, "never shooting, the first wave never clears").toBe(1);
-      // The first wave opens with a burst (the phone booth's walker is 22 m out): 23-32 s on the shipped road.
-      // It was 57-73 s, from 62 m, and the bounds were 40 and 120.
+      // The first wave opens with a burst (the phone booth's walker is 22 m out): 22-35 s on the shipped road
+      // (it was 23-32 s with slower dead, and 57-73 s from 62 m before the opening).
       expect(x.time).toBeGreaterThan(15);
       expect(x.time).toBeLessThan(45);
     }

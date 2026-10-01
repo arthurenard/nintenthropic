@@ -9,23 +9,26 @@ const ALL = new Set<LaneId>(["road", "corn", "trees", "bus", "booth", "fence"]);
 describe("the wave table", () => {
   it("follows the design's first six waves", () => {
     const table = [1, 2, 3, 4, 5, 6].map((w) => waveSpec(w));
-    expect(table.map((s) => s.dead)).toEqual([6, 9, 12, 14, 16, 14]);
+    expect(table.map((s) => s.dead)).toEqual([6, 9, 11, 14, 17, 20]);
     expect(table.map((s) => s.mechanic)).toEqual([false, false, false, false, false, true]);
-    // Wave 1: walkers up the road only.
+    // Wave 1: walkers up the road only: the one wave to learn on.
     expect(table[0]).toMatchObject({ runners: 0, crawlers: 0, bloaters: 0, surprises: 0, lanes: ["road"] });
-    // Wave 2: the cornfield.
+    // Wave 2: the cornfield, and the first runner and crawler: mixed in early, not saved for later.
     expect(table[1]?.lanes).toEqual(["road", "corn"]);
-    expect(table[1]?.runners).toBe(0);
-    // Wave 3: runners and the tree line.
-    expect(table[2]?.runners).toBeGreaterThan(0);
+    expect(table[1]).toMatchObject({ runners: 1, crawlers: 1, bloaters: 0, surprises: 0 });
+    // Wave 3: the tree line, the bus and the booth, more of them running.
     expect(table[2]?.lanes).toContain("trees");
-    // Wave 4: crawlers and the surprises.
-    expect(table[3]?.crawlers).toBeGreaterThan(0);
-    expect(table[3]?.surprises).toBeGreaterThan(0);
-    expect(table[2]?.surprises).toBe(0);
-    // Wave 5: bloaters.
-    expect(table[3]?.bloaters).toBe(0);
-    expect(table[4]?.bloaters).toBeGreaterThan(0);
+    expect(table[2]?.runners).toBe(2);
+    expect(table[2]?.surprises).toBeGreaterThan(0);
+    // Wave 4: the first bloater.
+    expect(table[2]?.bloaters).toBe(0);
+    expect(table[3]?.bloaters).toBe(1);
+    // Never fewer of any kind as the night goes on.
+    for (let i = 1; i < table.length; i++) {
+      for (const kind of ["runners", "crawlers", "bloaters", "surprises"] as const) {
+        expect(table[i]![kind], `wave ${i + 1} ${kind}`).toBeGreaterThanOrEqual(table[i - 1]![kind]);
+      }
+    }
   });
 
   it("opens the first three waves with a burst, the bus's door first, and nothing after", () => {
@@ -35,32 +38,38 @@ describe("the wave table", () => {
     for (const s of table.slice(0, 3)) for (const l of s.opening) expect([...s.lanes, "bus", "booth", "fence"]).toContain(l);
   });
 
-  it("shortens the early gaps and leaves the later waves' escalation as it was designed", () => {
-    expect([1, 2, 3].map((w) => waveSpec(w).gap)).toEqual([[1.8, 3.2], [1.8, 3.2], [1.8, 3.2]]);
+  it("keeps the first waves' gaps short, the dead's pace gentle at first, and lets more of them in at once as the night goes on", () => {
+    // The first three: the dead come every 1.7-3 s, five, six and seven in play at once.
+    expect([1, 2, 3].map((w) => waveSpec(w).gap)).toEqual([[1.7, 3], [1.7, 3], [1.7, 3]]);
     expect([1, 2, 3].map((w) => waveSpec(w).maxActive)).toEqual([5, 6, 7]);
-    // From wave 4 on: exactly the table the night was balanced on.
-    expect([4, 5, 6].map((w) => waveSpec(w).gap)).toEqual([[1.6, 3], [1.6, 3], [1.6, 3]]);
-    expect([4, 5, 6, 7, 10].map((w) => waveSpec(w).maxActive)).toEqual([8, 8, 9, 10, 13]);
-    expect(waveSpec(7).gap[0]).toBeCloseTo(1.3, 9);
-    expect(waveSpec(7).gap[1]).toBeCloseTo(2.45, 9);
-    expect(waveSpec(10).gap[0]).toBeCloseTo(1.0, 9);
-    expect(waveSpec(10).gap[1]).toBeCloseTo(2.0, 9);
-    // Never slower as the night goes on.
-    for (let w = 2; w <= 20; w++) expect(waveSpec(w).gap[0], `wave ${w}`).toBeLessThanOrEqual(waveSpec(w - 1).gap[0]);
+    expect([4, 5, 6].map((w) => waveSpec(w).gap)).toEqual([[1.4, 2.5], [1.4, 2.5], [1.4, 2.5]]);
+    expect([4, 5, 6, 7, 10].map((w) => waveSpec(w).maxActive)).toEqual([9, 9, 10, 12, 18]);
+    expect(waveSpec(7).gap[0]).toBeCloseTo(1.05, 9);
+    expect(waveSpec(7).gap[1]).toBeCloseTo(1.95, 9);
+    expect(waveSpec(10).gap[0]).toBeCloseTo(0.6, 9);
+    expect(waveSpec(10).gap[1]).toBeCloseTo(1.2, 9);
+    // The first two waves walk gently (a first wave is to be learned on), the third at the pace the night is built on, and faster from there.
+    expect([1, 2, 3, 4, 8].map((w) => waveSpec(w).pace)).toEqual([0.8, 0.9, 1, 1.09, 1.45].map((p) => expect.closeTo(p, 9)));
+    // Never slower as the night goes on, from the third wave: more at once, closer together.
+    for (let w = 3; w <= 20; w++) {
+      expect(waveSpec(w).gap[0], `wave ${w}`).toBeLessThanOrEqual(waveSpec(w - 1).gap[0]);
+      expect(waveSpec(w).maxActive, `wave ${w}`).toBeGreaterThanOrEqual(waveSpec(w - 1).maxActive);
+      expect(waveSpec(w).pace, `wave ${w}`).toBeGreaterThanOrEqual(waveSpec(w - 1).pace);
+    }
   });
 
-  it("adds three a wave from wave 7, with more runners, thicker fog and faster walkers", () => {
+  it("adds six a wave from wave 7, with more runners, thicker fog and faster walkers", () => {
     for (let w = 7; w <= 20; w++) {
       const s = waveSpec(w);
       const before = waveSpec(w - 1);
-      if (!s.mechanic && !before.mechanic) expect(s.dead).toBe(before.dead + 3);
+      if (!s.mechanic && !before.mechanic) expect(s.dead).toBe(before.dead + 6);
       expect(s.runners).toBeGreaterThanOrEqual(before.runners);
       expect(s.fog).toBeGreaterThanOrEqual(before.fog);
       expect(s.pace).toBeGreaterThanOrEqual(before.pace);
       expect(s.gap[0]).toBeLessThanOrEqual(before.gap[0]);
       expect(s.maxActive).toBeGreaterThanOrEqual(before.maxActive);
     }
-    expect(waveSpec(7).dead).toBe(19);
+    expect(waveSpec(7).dead).toBe(26);
     expect(waveSpec(10).pace).toBeGreaterThan(1);
   });
 
@@ -88,7 +97,7 @@ describe("the wave's queue", () => {
   it("holds every one of the wave's dead, the Mechanic first", () => {
     const spec = waveSpec(6);
     const q = buildQueue(spec, mulberry32(4), ALL);
-    expect(q.length).toBe(15);
+    expect(q.length).toBe(21);
     expect(q[0]).toEqual({ kind: "mechanic", lane: "road" });
     const count = (k: string) => q.filter((e) => e.kind === k).length;
     expect(count("runner")).toBe(spec.runners);
