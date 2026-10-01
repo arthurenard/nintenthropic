@@ -300,8 +300,20 @@ export interface CalibrationTarget {
   radius: number;
 }
 
+/** What a game's aim-check targets are called, for the words around them ("Point at the Lit Bottle"). */
+export interface TargetNoun {
+  one: string;
+  many: string;
+}
+
 /** The game's own aim-check targets: bottles on the fence in High Noon. */
 export interface CalibrationStage {
+  /**
+   * What its targets are (bottles, jars, lights, plates): the aim check's
+   * words use it, so every game's check says its own thing. "Target" when
+   * a stage does not say.
+   */
+  noun?: TargetNoun;
   /**
    * An aim check is starting: stand every target up (again, for Play Again
    * on the same game). Optional; the platform calls it, when present, before
@@ -312,8 +324,14 @@ export interface CalibrationStage {
   targets(): CalibrationTarget[];
   /** Show one target as the one to shoot now. */
   light(id: string | null): void;
-  /** A shot at `id` landed well (break it) or missed (a puff of dust beside it). */
+  /**
+   * A shot was taken at `id`: take the target (break it, ring it). The hand's
+   * aim check calls this for every shot that counts - the shot is where the
+   * finger pointed, and the crosshair is not shown while the aim is being
+   * learned, so there is no landing place to judge it by.
+   */
   hit(id: string): void;
+  /** A pointer's shot landed at (x, y) and missed `id` (the dev harness's mouse check; the hand's never calls it). */
   miss(id: string, x: number, y: number): void;
   /** The check is over: clear the stage for play. */
   done(): void;

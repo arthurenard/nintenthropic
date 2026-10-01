@@ -7,6 +7,7 @@ import type {
   GameContext,
   HudSink,
   Readout,
+  TargetNoun,
 } from "../../engine/types";
 import { Bandit as BanditClass, type Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
@@ -89,6 +90,7 @@ function breathe(): Promise<void> {
  * a game (Play Again), the first call puts the town back for it.
  */
 class CalibrationProxy implements CalibrationStage {
+  readonly noun: TargetNoun = { one: "bottle", many: "bottles" };
   target: BottleStage | null = null;
   onUse: () => void = () => {};
   onBegin: () => void = () => {};

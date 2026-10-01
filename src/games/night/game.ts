@@ -1,5 +1,5 @@
 import { Box3, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type Texture, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout } from "../../engine/types";
+import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, TargetNoun } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
 import { RigPool } from "../../engine/world/character";
@@ -78,6 +78,7 @@ function breathe(): Promise<void> {
  * a game (Play Again), the first call puts the road back for it.
  */
 class CalibrationProxy implements CalibrationStage {
+  readonly noun: TargetNoun = { one: "jar", many: "jars" };
   target: JarStage | null = null;
   onUse: () => void = () => {};
   onBegin: () => void = () => {};

@@ -108,6 +108,8 @@ test("the scripted hand: the running lights' aim check, a shot, venting off the 
   // Nine running lights to shoot, spread over the view.
   const lit = (await snapshot(page)).lit;
   expect(lit).not.toBeNull();
+  await expect(page.locator("#check-title")).toHaveText("Point at the Lit Light");
+  expect((await snapshot(page)).crosshairShown).toBe(false);
   await shot(page, info, "orbit-hand-01-aim-check");
   await passAimCheck(page);
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 10_000 }).toBe("play");

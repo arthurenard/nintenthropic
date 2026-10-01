@@ -171,11 +171,12 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   Restart and Adjust Aim on the same instance; any other is made afresh.
 - **Until `start()`** the host still runs the game's `update` and `render` every
   frame (the world is alive behind the aim check). The check's shots belong to
-  the check: the platform judges each one and tells the stage `hit` or `miss`;
-  the game sees `aim.fired` too, and answers it only with the gun's sound and
+  the check: the platform judges each one and tells the stage `hit` (it takes
+  its target: see "The aim check"); the game sees `aim.fired` too, with an aim
+  that rests on the lit target, and answers it only with the gun's sound and
   smoke. The stage plays the check's sounds (a bottle's ting on `hit`, the
   closing flourish on `done`), and the platform calls `done()` once, with the
-  "you're ready" moment, a moment before `start()`; after a game begun without
+  "Aim Set" moment, a moment before `start()`; after a game begun without
   a check (the mouse) `start()` alone clears the stage.
 
 ## The contract: `src/engine/types.ts`
@@ -341,12 +342,40 @@ on the fence, sills and barrels). It ends on its own as soon as the aim is
 **95% accurate**, which for a returning player whose saved aim still fits takes
 three shots.
 
+- **Nothing to steer.** The player points their finger at the lit target and
+  fires; Handy is learning where they point. So no crosshair is shown while
+  the aim is learned (an unfinished crosshair is only wrong, and a player who
+  sees it steers it onto the targets instead of pointing), for a returning
+  player as much as a new one, and nothing the game draws follows the
+  unfinished aim either: the game is handed an `Aim` whose position rests on
+  the lit target (`AimCheckView.aimFor`; Dead of Night's beam lights the lit
+  jar, Orbital Decay's laser flies to the lit light) and that is never
+  "off the screen". Every shot that counts takes its target - `CalibrationStage.hit`,
+  a small celebration where it hung - wherever an unfinished map would have
+  put it, so there is no landing place to read as a miss (`miss` is the
+  dev harness's mouse check alone). The crosshair arrives with **Aim Set**
+  ("The crosshair now follows your finger."), already right, and stays for
+  play; after Play Anyway it arrives with the round, with a hint that says
+  what it is.
+- **The words** say what is happening, in each game's own noun
+  (`CalibrationStage.noun`: bottles, jars, lights, plates): "Point at the Lit
+  Bottle" / "Point your finger at it and fire. Handy is learning where you
+  point.", then "One Down", "Two Down"... with what Handy is doing under them,
+  "Still Learning" with the one tip after twelve shots, "Aim Set" at the end.
+  The pill stays "Learning Your Aim".
+- **The ring** is progress, not a score: it climbs with every shot - the
+  shots a check must take (six the first time, three for a returning player)
+  are most of it, how near the aim is to 95% the rest - never falls back, and
+  fills only when the check is done (`AimCheck.progress`); the number in it is
+  the shots taken.
+
 - **What is fitted.** An affine map from the fingertip's position in the
   (mirrored) camera image to the viewport, as the desktop's shot setup did. The
   hand position for each shot is the median of the thumb-up samples just before
   the fold, so the motion of firing does not move the aim.
 - **Learning.** With no saved aim for this camera: the first two shots at
-  well-spread targets fit scale and offset (the crosshair appears), the third
+  well-spread targets fit scale and offset (a map to measure by, not a
+  crosshair to show), the third
   fits the full affine map. Every later shot refits it (least squares over the
   recent shots, outliers beyond 3σ dropped).
 - **Measuring.** Each shot, before it is used to refit, gives an honest
@@ -356,7 +385,7 @@ three shots.
   Gaussian (`σ² = Σe² / 2n`), and a systematic bias as their mean vector.
 - **The score.** `aim = 1 − exp(−R² / 2σ²)`: the probability that a shot lands
   within `R` of where you aim, with `R` = 3.5% of the smaller viewport side (a
-  bandit's torso at mid-street). Shown live as a ring filling to 95%.
+  bandit's torso at mid-street). The ring's 95% mark is where the check ends.
 - **Only full maps are scored.** The two-shot map of scale and offset is there
   to put a crosshair on screen; it cannot know how the camera is turned, so its
   miss on the third shot is shown but not scored - it would be the camera's

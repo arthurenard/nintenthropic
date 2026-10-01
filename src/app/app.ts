@@ -717,12 +717,21 @@ export class App {
           const check = session.check?.check;
           this.lastCheck = { score: check?.measure.score ?? null, shots: check?.shots ?? 0, ended: "anyway" };
           this.play(session, mapping);
+          // The crosshair has not been shown yet: it appears with the game, and the hint says what it is.
+          if (this.session !== session || session.phase !== "play") return;
+          this.hud.hint("The crosshair now follows your finger.");
+          window.setTimeout(() => this.session === session && this.hud.hint(null), 3500);
         },
       });
       // The check judges its shots; the game sees them too, to answer with
-      // the gun's sound and smoke (it scores nothing before start()).
-      host.aim = (now) => hand.sample(now);
-      announce(`${session.entry.title}. Aim setup. Shoot the lit target: point at it, then fold your thumb to fire.`);
+      // the gun's sound and smoke (it scores nothing before start()). While
+      // the aim is learned the game is told it rests on the lit target (see
+      // AimCheckView.aimFor): nothing it draws follows the unfinished aim.
+      host.aim = (now) => {
+        const aim = hand.sample(now);
+        return session.check ? session.check.aimFor(aim) : aim;
+      };
+      announce(`${session.entry.title}. Aim setup. ${session.check.spoken}`);
     } else {
       host.aim = (now) => session.input.sample(now);
       this.play(session, null);
@@ -1402,7 +1411,7 @@ export class App {
         session.camera = now;
         this.again(session, false);
         if (keepFocus) $("switch-camera").focus();
-        announce(`Switched to ${result.camera.label}. Aim setup. Shoot the lit target.`);
+        announce(`Switched to ${result.camera.label}. Aim setup. ${session.check?.spoken ?? ""}`);
       }
     }
   }
@@ -1845,6 +1854,8 @@ export class App {
         : null,
       scopePreferences: { ...this.scopePrefs },
       crosshairHidden: this.crosshair.hiddenByGame,
+      /** The page's crosshair is on screen (drawn whenever the hand is followed): never while an aim is being learned. */
+      crosshairShown: this.crosshair.visible && !this.crosshair.hiddenByGame,
     };
   }
 

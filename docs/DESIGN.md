@@ -232,9 +232,12 @@ row beneath it.
    picture: "Handy needs your camera to see your hand. The picture stays on
    this computer."
 3. Aim setup is the Target Range and feels like part of the game: large targets,
-   a clear count of what is left, a small celebration on each good hit. A
-   returning player whose saved aim still fits goes straight into the game, with
-   Adjust Aim one click away.
+   a small celebration on each shot, a calm ring that fills as the aim is
+   learned. The player points their finger at the lit target; there is no
+   crosshair to steer until the aim is set ("Aim Set", and the crosshair
+   follows the finger from there), and the words say so in the game's own
+   noun ("Point at the Lit Bottle"). A returning player whose saved aim still
+   fits needs three shots, with Adjust Aim one click away.
 4. A download on first use shows real progress ("Getting ready… 45%"), not a
    spinner.
 

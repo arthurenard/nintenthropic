@@ -6,11 +6,16 @@
  *
  * This is the logic alone, fed one observation per camera frame; the screen
  * around it lives in src/app.
+ *
+ * While the aim is being learned the player points at the lit target, and
+ * every shot is taken there: the words and the progress say that, and the
+ * page shows no crosshair until the aim is set (see AimCheckView), so there is
+ * nothing to steer onto a target.
  */
-import type { CalibrationTarget } from "../engine/types";
+import type { CalibrationTarget, TargetNoun } from "../engine/types";
 import type { Point } from "../input/filter";
 import { apply, fitAffine, fitScaled, gain, type Matrix } from "../input/homography";
-import { AIM_RADIUS, READY_SCORE, measure, type Measure, type Vector } from "./score";
+import { AIM_RADIUS, MIN_ERRORS, READY_SCORE, measure, type Measure, type Vector } from "./score";
 import { GAIN_LIMIT } from "./storage";
 
 /** Only this many of the latest shots are fitted: the hand drifts, and the
@@ -26,6 +31,16 @@ const STILL_AIMING = 0.35;
 const MIN_SHOT_GAP = 0.45;
 /** A camera silent for longer than this has lost the thread of the aim. */
 const STALE = 0.35;
+/** The shots a first check needs before any can be measured: two that fit scale and offset, one that fits the whole map. */
+const LEARNING_SHOTS = 3;
+/** The ring stops short of full until the check is done: how far the shots and the aim's quality can take it. */
+const PROGRESS_CAP = 0.94;
+/** What a stage's targets are called when it does not say. */
+export const TARGET_NOUN: TargetNoun = { one: "target", many: "targets" };
+
+const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+const NUMBERS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
+const number = (n: number) => NUMBERS[n] ?? String(n);
 
 /** One camera frame, as the aim check needs it. */
 export interface Observation {
@@ -174,6 +189,8 @@ export interface AimCheckOptions {
   saved: Matrix | null;
   targets: CalibrationTarget[];
   viewport: { width: number; height: number };
+  /** What the game's targets are: its bottles, jars, lights or plates, for the words. */
+  noun?: TargetNoun;
 }
 
 export class AimCheck {
@@ -193,6 +210,15 @@ export class AimCheck {
   tip: string | null = null;
   words: Words;
   lit: CalibrationTarget | null = null;
+  /**
+   * How far along the check is, 0..1, for the ring that fills while the aim
+   * is learned. It climbs with every shot - the shots a check must take
+   * (three to learn the aim and three to prove it; a returning player's
+   * three) are most of it, how near the aim is to 95% the rest - and never
+   * falls back, so the ring is calm. Only a finished check fills it.
+   */
+  progress = 0;
+  readonly noun: TargetNoun;
 
   private targets: CalibrationTarget[] = [];
   private viewport: { width: number; height: number };
@@ -204,15 +230,18 @@ export class AimCheck {
   private lastFrame = Number.NEGATIVE_INFINITY;
   private readonly stats: CheckStats = { frames: 0, framesWithoutHand: 0, spans: [], edgeShots: 0 };
 
-  constructor({ saved, targets, viewport }: AimCheckOptions) {
+  constructor({ saved, targets, viewport, noun }: AimCheckOptions) {
+    this.noun = noun ?? TARGET_NOUN;
     this.mapping = saved;
     this.returning = saved !== null;
     this.fit = saved ? "saved" : "none";
     this.viewport = viewport;
     this.setTargets(targets);
+    // Point your finger at the lit one: there is no crosshair to steer, and
+    // the words say so.
     this.words = this.returning
-      ? { title: "Welcome back.", detail: "Hit three targets and you’re in." }
-      : { title: "Shoot the lit target.", detail: "Point at it, then fold your thumb to fire." };
+      ? { title: "Welcome Back", detail: `Point at the lit ${this.noun.one} and fire. Three shots and you’re in.` }
+      : { title: `Point at the Lit ${capital(this.noun.one)}`, detail: "Point your finger at it and fire. Handy is learning where you point." };
   }
 
   /** The stage's targets as they sit in the view now (they move on resize). */
@@ -230,8 +259,8 @@ export class AimCheck {
       const good = (this.measure.score ?? 0) >= READY_SCORE;
       this.tip = good ? null : tipFor(this.stats);
       this.words = good
-        ? { title: "Your aim looks good.", detail: "Play on, or Start Over to check again." }
-        : { title: "That’s every target.", detail: this.tip! };
+        ? { title: "Aim Looks Good", detail: "Play on, or Start Over to check again." }
+        : { title: `That’s Every ${capital(this.noun.one)}`, detail: this.tip! };
     }
   }
 
@@ -260,7 +289,7 @@ export class AimCheck {
     this.lastShot = time;
     const target = this.lit;
     if (!this.history.length) {
-      this.words = { title: "Raise your thumb first.", detail: "Aim with it up, then fold it to fire." };
+      this.words = { title: "Raise Your Thumb First", detail: "Point with it up, then fold it to fire." };
       return { target, outcome: "unaimed", landed: null, error: null };
     }
     const pointer: Point = [median(this.history.map((s) => s.pointer[0])), median(this.history.map((s) => s.pointer[1]))];
@@ -280,9 +309,9 @@ export class AimCheck {
     if (framingOf(pointer, undefined) === "edge") this.stats.edgeShots++;
 
     // Only a full map's predictions are scored. The two-shot map of scale and
-    // offset is there to put a crosshair on screen; it cannot know how the
-    // camera is turned, so its misses would be the camera's, not the
-    // player's, and would hold the score down for six more shots.
+    // offset is a first guess to learn from (it is never shown); it cannot
+    // know how the camera is turned, so its misses would be the camera's, not
+    // the player's, and would hold the score down for six more shots.
     const scored = error !== null && this.fit !== "scaled";
     const errors = scored ? [...this.errors, error] : this.errors;
     const measured = measure(errors);
@@ -292,7 +321,7 @@ export class AimCheck {
     if (!measured.ready && !this.refit()) {
       // Two shots from the same spot cannot say which way the hand moves.
       this.pool.pop();
-      this.words = { title: "Those two were too alike.", detail: "Aim right at the lit target and fire." };
+      this.words = { title: "Move Your Finger", detail: `That was the same spot as the last. Point at the lit ${this.noun.one}.` };
       return { target, outcome: "refused", landed: null, error: null };
     }
 
@@ -303,11 +332,12 @@ export class AimCheck {
     const distance = error ? Math.hypot(error[0], error[1]) : null;
     const hit = distance === null || distance <= Math.max(target.radius, AIM_RADIUS / 2);
     this.done = this.measure.ready;
+    this.progress = this.done ? 1 : Math.max(this.progress, this.progressNow());
     if (!this.done && this.shots >= PLAY_ANYWAY_AFTER) {
       this.canPlayAnyway = true;
       this.tip = tipFor(this.stats);
     }
-    this.words = this.say(hit);
+    this.words = this.say();
     if (!this.done) this.lit = this.next();
     return { target, outcome: hit ? "hit" : "miss", landed, error: distance };
   }
@@ -368,22 +398,34 @@ export class AimCheck {
     );
   }
 
-  private say(hit: boolean): Words {
-    const percent = Math.round((this.measure.score ?? 0) * 100);
-    if (this.done) return { title: `Aim ${percent}%`, detail: "You’re ready." };
-    if (this.canPlayAnyway && this.tip) return { title: hit ? "Nice shot." : "Just off.", detail: this.tip };
-    if (!this.returning && this.fit === "scaled" && this.pool.length === 2) {
-      return { title: "There’s your crosshair.", detail: "One more to learn your aim." };
+  /** Where the ring would stand now: the shots taken of those the check needs at the least, and how near the aim is to ready. */
+  private progressNow(): number {
+    const need = (this.returning ? 0 : LEARNING_SHOTS) + MIN_ERRORS;
+    const taken = Math.min(need, this.shots) / need;
+    const near = Math.min(1, (this.measure.score ?? 0) / READY_SCORE);
+    return Math.min(PROGRESS_CAP, 0.88 * taken + 0.12 * near);
+  }
+
+  /**
+   * What the card says after a shot. Every shot at the lit target is taken,
+   * so the words count them and say what Handy is doing: learning where
+   * the player points, then checking it. Nothing here is about where an
+   * unfinished crosshair would have landed.
+   */
+  private say(): Words {
+    const { one } = this.noun;
+    const n = this.shots;
+    if (this.done) return { title: "Aim Set", detail: "The crosshair now follows your finger." };
+    if (this.canPlayAnyway && this.tip) return { title: "Still Learning", detail: this.tip };
+    if (n === 1) return { title: "One Down", detail: `Point at the next lit ${one} and fire.` };
+    if (n === 2) return { title: "Two Down", detail: this.returning ? "One more should do it." : "Handy is learning where you point. Keep going." };
+    if (n === 3) {
+      return {
+        title: "Three Down",
+        detail: this.returning ? "Handy is adjusting to where you point. Keep going." : "Handy knows roughly where you point. A few more.",
+      };
     }
-    if (!this.returning && this.pool.length === 1) {
-      return { title: "Good. Now the next one.", detail: "Point at the lit target and fire." };
-    }
-    if (!this.returning && this.pool.length === 3) {
-      return { title: "Aim learned.", detail: "Now hit a few. Your game starts at 95%." };
-    }
-    return hit
-      ? { title: "Nice shot.", detail: "Keep going. Your game starts at 95%." }
-      : { title: "Just off.", detail: "Aim for the middle of the lit target." };
+    return { title: `${number(n)} Down`, detail: `Keep pointing at the lit ${one}. Handy is checking its aim.` };
   }
 
   /**

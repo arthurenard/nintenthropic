@@ -1,5 +1,5 @@
 import { Matrix3, Matrix4, Mesh, Quaternion, Raycaster, SRGBColorSpace, Vector2, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout } from "../../engine/types";
+import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, TargetNoun } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { assistFactor } from "../../engine/rules/assist";
 import { mulberry32 } from "../../engine/rules/rng";
@@ -84,6 +84,7 @@ function breathe(): Promise<void> {
  * instance after a game (Play Again), the first call puts the station back.
  */
 class CalibrationProxy implements CalibrationStage {
+  readonly noun: TargetNoun = { one: "light", many: "lights" };
   target: RunningLights | null = null;
   onUse: () => void = () => {};
   onBegin: () => void = () => {};
