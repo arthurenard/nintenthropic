@@ -1,5 +1,5 @@
 import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Object3D, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout } from "../../engine/types";
+import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
 import { ScreenFlash } from "../../engine/world/flash";
@@ -11,12 +11,13 @@ import type { Actor, Vehicle } from "./rules/actors";
 import { landingMils, rangeAt, roundAt, timeOfFlight } from "./rules/ballistics";
 import type { StageSpec } from "./rules/jobs";
 import { Mission, type AlertCause, type MissionListener, type NearPass } from "./rules/mission";
+import { fadeNear, landmarksOf, liftLabel, nearestOf, placeMarks, ON_HIM, rimArrow, whereWords, whoIsMarked, type CamMan, type Head, type Landmark, type Marked } from "./rules/finding";
 import { fallCard } from "./rules/notes";
 import type { Award, StageBonuses } from "./rules/scoring";
-import { Spotter } from "./rules/spotter";
-import { HIP_SPREAD } from "./rules/tuning";
+import { LastOne, Spotter } from "./rules/spotter";
+import { HIP_SPREAD, REVEAL_SECONDS } from "./rules/tuning";
 import type { Ending, HitPart, HostileRole, Landing, Plan, SecretId, ShotTarget } from "./rules/types";
-import { ALL_TIPS, HintLine, innocentWord, placeName, reloadHint, spotterWord, tipText, turnWord, type TipId } from "./tips";
+import { ALL_TIPS, HintLine, innocentWord, lastOneWord, reloadHint, spotterWord, tipText, turnWord, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type RidgeAssets } from "./world/assets";
 import { Cast } from "./world/cast";
@@ -138,10 +139,19 @@ export class OverwatchRidge implements Game, MissionListener {
   private secrets!: SecretsWorld;
   private post!: PostFX;
   private mission!: Mission;
-  /** The spotter: marks over where the job's men are, and a word when no one has found them. */
+  /** The spotter: a word when no one has found the job's men, and where the last one is. */
   private spotter = new Spotter();
+  private lastOne = new LastOne();
   private markClock = 0;
   private marked = false;
+  /** A job's man is under the crosshair in the wide view (found, for the spotter). */
+  private crossOn = false;
+  /** Who has fired at the player lately, and from where, for the mark that says so (whatever Aim Assist says). */
+  private readonly reveals = new Map<number, { at: Vector3; time: number }>();
+  /** The last shot from each kind of shooter, so the arc a hit draws points where it came from. */
+  private readonly lastShots = new Map<HostileRole, { at: Vector3; time: number }>();
+  /** What a player can point at in the valley, for describing where the last man is. */
+  private landmarks: Landmark[] | null = null;
 
   private phase: "loading" | "calibration" | "playing" | "failing" | "dying" | "over" = "loading";
   private paused = false;
@@ -298,7 +308,10 @@ export class OverwatchRidge implements Game, MissionListener {
     this.cast?.reset();
     this.mission = new Mission({ random: this.ctx.random, plan: this.plan, listener: this, difficulty: this.ctx.settings.difficulty });
     this.mission.health.immortal = this.options.immortal === true;
-    this.spotter = new Spotter(this.ctx.settings.difficulty);
+    this.spotter = new Spotter();
+    this.lastOne = new LastOne();
+    this.reveals.clear();
+    this.lastShots.clear();
     this.marked = false;
   }
 
@@ -1012,10 +1025,15 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   /**
-   * The spotter. While the view is wide he marks where the job's men are
-   * (a chevron, the place, the range): for a newcomer a man 300 m away is a
-   * few pixels, and nothing says where to look. When the fight is some
-   * seconds old and no one has been in the glass, he says so too.
+   * The spotter, and the marks. A man 300 m away is a few pixels in the wide
+   * view and nothing says where to look. Whatever Aim Assist says, the
+   * spotter speaks: where the men are when no one has found them, where the
+   * last one is when the job is down to one, and - with no arrow on the
+   * scope's rim to do it - which way to turn a scope that looks at nothing.
+   * With Aim Assist on, a small caret floats over every hostile while the
+   * view is wide, and the rim has an arrow toward the nearest when none is in
+   * the glass (see rules/finding.ts). Whoever fires at the player is marked
+   * for a moment, setting or no (`reveal`).
    */
   private watchSpotter(dt: number): void {
     this.standScope();
@@ -1024,63 +1042,181 @@ export class OverwatchRidge implements Game, MissionListener {
     const inPlay = fighting || m.phase === "intro";
     const w = this.width;
     const h = this.height;
+    const assist = this.ctx.settings.aimAssist;
     const scoped = this.scope.scoped;
-    // The job's men in sight: what a mark is for, and what the glass finds.
+    const reach = GLASS * Math.min(w, h) * 0.9;
+    // The job's men in sight: what the spotter's words are about, and what finding is.
     let men: Actor[] | null = null;
     const inSight = (): Actor[] => (men ??= m.actors.filter((a) => a.hostile && a.objective && a.shootable));
+    // Found: one of them inside the scope's glass, or under the crosshair in the wide view (kept by the marks' step).
     let inGlass = false;
     if (scoped && fighting) {
-      const reach = GLASS * Math.min(w, h) * 0.9;
       for (const a of inSight()) {
-        const at = this.cast.chestOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.2, a.pos.z);
-        const p = this.project(at);
-        if (p && Math.hypot((p.x - 0.5) * w, (p.y - 0.5) * h) < reach) {
+        const d = this.pxFrom(a, 0.5, 0.5);
+        if (d !== null && d < reach) {
           inGlass = true;
           break;
         }
       }
+    } else if (!this.scope.showing) {
+      inGlass = this.crossOn;
     }
-    const says = this.spotter.update(dt, fighting, this.scope.showing, inGlass);
+    const says = this.spotter.update(dt, fighting, this.scope.showing, inGlass, !assist);
     if (says) {
       const eye = this.camera.camera.position;
       const first = [...inSight()].sort((a, b) => rangeFrom(a, eye) - rangeFrom(b, eye))[0];
       if (first) {
         // Through the scope the marks are not drawn: which way to turn is what helps; in the wide view, where.
         const way = this.scope.showing ? this.turnToward(first, w, h) : null;
-        this.hints.say(way ?? spotterWord(first.place, rangeFrom(first, eye)), 5);
+        this.hints.say(way ?? spotterWord(first.place, rangeFrom(first, eye), assist, inSight().length > 1), 5);
         this.syncHint();
       }
     }
-    // The marks follow the men ten times a second, only while the wide view is up.
+    // The last man, when the job has been several: not found for a while, he is described in words (and his mark breathes).
+    const last = m.objectives >= 2 && m.remaining === 1 ? (m.actors.find((a) => a.objective && a.alive) ?? null) : null;
+    let lastFound = false;
+    if (last && last.shootable && fighting && !(this.scope.showing && !scoped)) {
+      const d = scoped ? this.pxFrom(last, 0.5, 0.5) : this.pxFrom(last, this.scope.look.x, this.scope.look.y);
+      lastFound = d !== null && d < (scoped ? reach : ON_HIM);
+    }
+    if (this.lastOne.update(dt, fighting, last ? last.id : null, lastFound) && last) {
+      this.hints.say(lastOneWord(this.whereIs(last)), 6);
+      this.syncHint();
+    }
+    this.updateMarks(dt, inPlay, assist);
+  }
+
+  /** How far, in pixels, a man's chest is from a point of the view (fractions); null if he is behind it. */
+  private pxFrom(a: Actor, fx: number, fy: number): number | null {
+    const at = this.cast.chestOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.2, a.pos.z);
+    const p = this.project(at);
+    return p ? Math.hypot((p.x - fx) * this.width, (p.y - fy) * this.height) : null;
+  }
+
+  /** Where a man is, in the words you would point him out with ("by the watchtower, right of the guard post"). */
+  private whereIs(a: Actor): string {
+    this.landmarks ??= landmarksOf(this.plan);
+    const eye = this.assets.valley.eye;
+    const yaw = new Euler().setFromQuaternion(this.assets.valley.eyeQuaternion, "YXZ").y;
+    // The counter-sniper's nest is named by the rules; everyone else by what stands near him.
+    return whereWords(a.pos, eye, yaw, this.landmarks, a.nest ? a.place : undefined);
+  }
+
+  /** The marks follow the men thirty times a second: carets in the wide view, the arrow on the scope's rim. */
+  private updateMarks(dt: number, inPlay: boolean, assist: boolean): void {
     this.markClock -= dt;
     if (this.markClock > 0) return;
-    this.markClock = 0.1;
+    this.markClock = 1 / 30;
+    const m = this.mission;
+    const w = this.width;
+    const h = this.height;
+    const showing = this.scope.showing;
+    const look = this.scope.look;
+    // Is a job's man under the crosshair? Found, in the wide view (with or without marks).
+    this.crossOn = false;
+    if (!showing && m.phase === "combat") {
+      for (const a of m.actors) {
+        if (!a.hostile || !a.objective || !a.shootable) continue;
+        const d = this.pxFrom(a, look.x, look.y);
+        if (d !== null && d < ON_HIM) {
+          this.crossOn = true;
+          break;
+        }
+      }
+    }
     // Not while the view is still widening to the valley (the marks would split and merge as it goes).
     const settled = this.ctx.settings.reducedMotion || this.runTime > FRAMING_EASE + 0.2;
-    if (!inPlay || !settled || !this.spotter.marking || this.scope.showing) {
+    if (!inPlay || !settled) {
       this.showMarks(null);
       return;
     }
+    const revealed = new Set<number>();
+    for (const [id, r] of this.reveals) {
+      if (this.time - r.time > REVEAL_SECONDS) this.reveals.delete(id);
+      else revealed.add(id);
+    }
+    const marked = whoIsMarked(m.actors, { assist, revealed, lastOne: this.lastOne.pulsing });
+    if (!marked.length) {
+      this.showMarks(null);
+      return;
+    }
+    // Through the scope: no carets, and the rim's arrow when no man is in the glass.
+    if (showing) {
+      this.showMarks(null, this.scope.scoped && assist ? this.rimFor(marked) : null);
+      return;
+    }
     const eye = this.camera.camera.position;
-    const marks: { id: number; x: number; y: number; label: string; range: number }[] = [];
-    for (const a of inSight()) {
-      const head = this.cast.headOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.7, a.pos.z);
+    const items: { id: number; x: number; y: number; fx: number; fy: number; range: number; pulse: Marked["pulse"]; away: number }[] = [];
+    for (const k of marked) {
+      const a = m.actors.find((o) => o.id === k.id);
+      if (!a) continue;
+      // The mark follows a man in the open; one who fired and went to ground keeps the place he fired from.
+      const spot = k.standing ? (this.cast.headOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.7, a.pos.z)) : (this.reveals.get(k.id)?.at ?? null);
+      if (!spot) continue;
+      const head = tmp2.copy(spot);
+      const range = head.distanceTo(eye);
       const p = this.project(head);
       if (!p || p.x < 0.02 || p.x > 0.98 || p.y < 0.05 || p.y > 0.95) continue;
-      const range = rangeFrom(a, eye);
-      // Men standing together share one mark: the first of them keeps its id, the nearest speaks for them.
-      const near = marks.find((o) => Math.hypot((o.x - p.x) * w, (o.y - p.y) * h) < 56);
-      if (near) {
-        if (range < near.range) {
-          near.range = range;
-          near.label = `${placeName(a.place)} · ${Math.round(range)} m`;
-        }
-        near.y = Math.min(near.y, p.y);
-        continue;
-      }
-      marks.push({ id: a.id, x: p.x, y: p.y, label: `${placeName(a.place)} · ${Math.round(range)} m`, range });
+      items.push({ id: a.id, x: p.x * w, y: p.y * h, fx: p.x, fy: p.y, range, pulse: k.pulse, away: Math.hypot((p.x - look.x) * w, (p.y - look.y) * h) });
     }
+    const heads: Head[] = items.map(({ id, x, y }) => ({ id, x, y }));
+    const places = placeMarks(heads);
+    // His distance, said once: on the nearest man only.
+    const near = assist ? nearestOf(items) : null;
+    const marks: SpotterMark[] = items.map((i) => {
+      // Someone who has just fired is whole and pings; the rest fade as the crosshair comes onto them.
+      const pinging = i.pulse === "shot" && this.time - (this.reveals.get(i.id)?.time ?? -9) < 1;
+      const place = places.get(i.id);
+      const mark: SpotterMark = { id: i.id, x: i.fx, y: i.fy, lift: place?.lift ?? 0, shift: place?.shift ?? 0, opacity: pinging ? 1 : fadeNear(i.away) };
+      if (i.id === near) {
+        mark.label = `${Math.round(i.range)} m`;
+        mark.labelLift = liftLabel(heads, places, i.id);
+      }
+      if (pinging) mark.pulse = "shot";
+      else if (i.pulse === "last") mark.pulse = "last";
+      return mark;
+    });
     this.showMarks(marks);
+  }
+
+  /** The arrow on the scope's rim: toward the man nearest the reticle, or none while any man is inside the glass. */
+  private rimFor(marked: Marked[]): RimArrow | null {
+    const cam = this.camera.camera;
+    const w = this.width;
+    const h = this.height;
+    const men: CamMan[] = [];
+    for (const k of marked) {
+      const a = this.mission.actors.find((o) => o.id === k.id);
+      if (!a) continue;
+      const at = k.standing ? (this.cast.chestOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.2, a.pos.z)) : (this.reveals.get(k.id)?.at ?? null);
+      if (!at) continue;
+      tmp2.copy(at).applyMatrix4(cam.matrixWorldInverse);
+      men.push({ id: a.id, x: tmp2.x, y: tmp2.y, z: tmp2.z });
+    }
+    const focal = h / 2 / Math.tan((cam.fov * Math.PI) / 360);
+    const rim = rimArrow(men, focal, GLASS * Math.min(w, h) * 0.9);
+    if (!rim) return null;
+    // On the glass's rim, just inside its edge.
+    const r = GLASS * Math.min(w, h) - 18;
+    return { x: 0.5 + (r * Math.sin(rim.angle)) / w, y: 0.5 - (r * Math.cos(rim.angle)) / h, angle: rim.angle };
+  }
+
+  /** Which way a point lies from the middle of the view, as the HUD's arcs want it: radians clockwise from the top. */
+  private angleToward(at: Vector3): number {
+    const v = tmp2.copy(at).applyMatrix4(this.camera.camera.matrixWorldInverse);
+    return Math.atan2(v.x, v.y);
+  }
+
+  /**
+   * Someone has fired at the player (or launched a round): whatever Aim Assist
+   * says, he is marked for a moment, a soft arc on the view's edge points to
+   * him, and the hit that may follow draws its arc the same way.
+   */
+  private reveal(a: Actor, at: Vector3): void {
+    const spot = at.clone();
+    this.reveals.set(a.id, { at: spot, time: this.time });
+    this.lastShots.set(a.role as HostileRole, { at: spot, time: this.time });
+    this.hud.incoming?.(this.angleToward(spot), false);
   }
 
   /** Which way to turn the scope to bring a man into the glass, in words; null if he is behind the view. */
@@ -1093,14 +1229,14 @@ export class OverwatchRidge implements Game, MissionListener {
     return turnWord(Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? "left" : "right") : dy < 0 ? "up" : "down");
   }
 
-  private showMarks(marks: { id: number; x: number; y: number; label: string }[] | null): void {
-    if (!marks?.length) {
-      if (this.marked) this.hud.spotter?.(null);
+  private showMarks(marks: SpotterMark[] | null, rim: RimArrow | null = null): void {
+    if (!marks?.length && !rim) {
+      if (this.marked) this.hud.spotter?.(null, null);
       this.marked = false;
       return;
     }
     this.marked = true;
-    this.hud.spotter?.(marks.map(({ id, x, y, label }) => ({ id, x, y, label })));
+    this.hud.spotter?.(marks, rim);
   }
 
   /** The first local seen through the scope is a lesson; so is the counter-sniper's first glint. */
@@ -1203,6 +1339,8 @@ export class OverwatchRidge implements Game, MissionListener {
 
   stageIntro(stage: number, _spec: StageSpec, title: string, line: string): void {
     this.spotter.begin(stage);
+    this.lastOne.begin();
+    this.reveals.clear();
     this.hud.banner(title, line);
     this.sound.play("ridge_stage_start", { volume: 0.9 });
     this.pushReadouts(true);
@@ -1270,20 +1408,33 @@ export class OverwatchRidge implements Game, MissionListener {
   enemyFire(a: Actor, weapon: "sniper" | "mg", hit: boolean): void {
     const at = this.cast.lensOf(a.id, new Vector3()) ?? new Vector3(a.pos.x, a.pos.y + 1.2, a.pos.z);
     const eye = this.camera.camera.position;
-    const toEye = tmp.copy(eye).sub(at).normalize();
+    // Its own vector: the burst's later flashes (below) must not find the shared scratch one moved on.
+    const toEye = new Vector3().copy(eye).sub(at).normalize();
+    // The flash must read across the valley in the wide view: a muzzle is a metre of light, a pixel at 300 m.
+    const through = this.scope.zoom > 0.5 ? 0.55 : 1;
+    const away = at.distanceTo(eye);
     if (weapon === "mg") {
-      for (let k = 0; k < 7; k++) this.later(k * 0.085, () => this.effects.muzzle(at, toEye, 0.8));
+      for (let k = 0; k < 7; k++) {
+        this.later(k * 0.085, () => {
+          this.effects.muzzle(at, toEye, 0.8);
+          if (k % 3 === 0) this.effects.shotFlare(at, away, through);
+        });
+      }
       this.sound.at("ridge_mg_burst", at, 1);
     } else {
       this.effects.muzzle(at, toEye, 1.2);
+      this.effects.shotFlare(at, away, through);
       this.sound.at("ridge_far_shot", at, 1);
     }
+    // Whoever it is is marked for a moment, and an arc on the view's edge points to him.
+    this.reveal(a, at);
     // The bullets outrun their sound: the crack by your head comes first.
     const d = at.distanceTo(eye);
     if (!hit) this.later(d / 780, () => this.sound.play("ridge_crack_near", { volume: 0.8, pan: (this.visual() - 0.5) * 1.2 }));
   }
 
   mortarLaunch(a: Actor, flight: number): void {
+    this.reveal(a, new Vector3(a.pos.x, a.pos.y + 1, a.pos.z));
     this.sound.at("ridge_mortar_launch", a.pos, 1);
     this.later(Math.max(0, flight - 1.6), () => this.sound.play("ridge_mortar_whistle", { volume: 0.9 }));
   }
@@ -1302,8 +1453,16 @@ export class OverwatchRidge implements Game, MissionListener {
     if (this.scope.scoped) this.scope.boltShake();
   }
 
-  playerHit(damage: number, direction: number, hurt: number, _by: HostileRole): void {
-    this.hud.damage(direction, hurt);
+  playerHit(damage: number, direction: number, hurt: number, by: HostileRole): void {
+    // The arc points where the shot came from on the screen (everyone is across the valley, so the bearing alone
+    // would always say "ahead"); a hit from someone not seen firing falls back to the bearing.
+    const shot = this.lastShots.get(by);
+    if (this.hud.incoming) {
+      this.hud.incoming(shot && this.time - shot.time < 8 ? this.angleToward(shot.at) : direction, true);
+      this.hud.health(hurt);
+    } else {
+      this.hud.damage(direction, hurt);
+    }
     this.sound.play("ridge_hurt", { volume: Math.min(1, 0.6 + damage / 80), pan: Math.sin(direction) * 0.5 });
     this.sound.play("ridge_crack_near", { volume: 0.9, pan: Math.sin(direction) * 0.6 });
     this.camera.flinch(direction, Math.min(1.5, damage / 30));
@@ -1479,6 +1638,12 @@ export class OverwatchRidge implements Game, MissionListener {
       /** Hold the breath: no sway (for scripted shots and pictures). */
       still: (on: boolean) => {
         this.stillDebug = on;
+      },
+      /** Someone fires at the player, now (a miss): his flash, his mark and the arc, as the rules' own shot would show them. */
+      fireFrom: (id: number) => {
+        const a = this.mission.actors.find((o) => o.id === id);
+        if (a) this.enemyFire(a, a.role === "gunner" ? "mg" : "sniper", false);
+        return a !== undefined;
       },
       /** A round from the counter-sniper's ledge, now (the fall and the results, for the tests). */
       hurt: (damage: number) => this.mission.debugHit(damage),

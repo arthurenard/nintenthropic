@@ -4,7 +4,7 @@
  * words for the fall's title card.
  *
  * A place is a phrase with its preposition, as the valley's plan names it:
- * "in the chapel tower", "at the checkpoint", "on the far ledge".
+ * "in the chapel tower", "at the guard post", "on the far ledge".
  */
 import type { Ending, HostileRole } from "./types";
 

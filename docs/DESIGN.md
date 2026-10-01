@@ -77,6 +77,7 @@ Colour comes from the game worlds; the interface is monochrome plus one tint.
 | Danger | `#FF453A` | Health low, a lost hand, destructive actions |
 | Warning | `#FF9F0A` | Attention without alarm |
 | Gold | `#FFD60A` | New best, perfect hits |
+| Hostile | `#FF6A33` | A mark over a man it is right to shoot (Overwatch Ridge's spotter): the danger red leaning to orange, an enemy and not an alarm |
 
 Green means *your gun is ready* everywhere and nothing else competes with it.
 Primary buttons are white pills with black labels (the way Apple Arcade's Play
@@ -129,10 +130,17 @@ are neutral: white for *on* and for the choice made, never green (see Settings).
   the scope is held for a face the hand hides). It says nothing in words; the
   hint line speaks if the face stays out of view.
 - **A spotter's marks.** Where a game's men are too small to find (Overwatch
-  Ridge's, 300 m out), a calm chevron marks the place while the view is wide,
-  a glass pill above it saying what and how far ("Checkpoint · 289 m"). White,
-  thin, never over the thing itself, faded in and out, never animating on their
-  own; gone through the scope.
+  Ridge's, 300 m out), a calm caret marks each hostile while the view is wide:
+  thin, red-orange, floating above the man and never over him, the same size on
+  screen at any range, a little see-through, and fading as the crosshair comes
+  onto him. Only people it is right to shoot, never a place (a pill reading
+  "Checkpoint" was taken for a game checkpoint) and never a label on everyone:
+  one small distance, on the nearest. Nothing about them moves but the last
+  man's, which breathes, and a ring that pings once when someone fires at you.
+  Through the scope they give way to a small arrow on the glass's rim toward the
+  nearest man when none is inside it. They belong to Aim Assist; whoever fires
+  at you is shown whether it is on or not, with the damage arc's own look drawn
+  on the view's edge, pointing at him.
 - **The camera preview** is a small rounded picture-in-picture, like FaceTime's,
   in a corner that the map keeps clear. It grows during setup, where seeing your
   hand matters, and shrinks in play, where the world matters. The hand skeleton
@@ -178,7 +186,7 @@ joins, drawn on a 24-unit grid, filled variants only for the active state.
 Inline SVG.
 Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off,
 camera, hand, checkmark, share, gear (settings), scope, chevrons (a row that leads on,
-a menu).
+a menu), carets (a man marked; a double one on a scope's rim, pointing the way to pan).
 
 The mark is the one exception: a sculpted white hand making a finger pistol, aimed at
 the game's own green crosshair, on a dark rounded square. Its forearm fades into the
@@ -285,7 +293,7 @@ the system's own settings are.
   game.
 - **Aim Assist** is a switch in a group of its own, on unless the player turns
   it off, with a footnote that says what it does and where it does not apply:
-  "Makes targets a little easier to hit. Overwatch Ridge always stays exact."
+  "Makes targets easier to hit and to find. Overwatch Ridge’s shots stay exact."
   Aim Steadiness (a segmented control above it) starts on Steady, which holds
   a shaky hand still; the player who prefers a quicker crosshair chooses
   Balanced or Responsive.

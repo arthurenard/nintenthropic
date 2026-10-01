@@ -127,7 +127,7 @@ test("the settings sheet from the arcade, by keyboard alone", async ({ page }, i
   await page.keyboard.press("Space");
   await expect(assist).toHaveAttribute("aria-checked", "false");
   expect((await extra(page)).aimAssist).toBe(false);
-  await expect(page.locator("#foot-assist")).toHaveText("Makes targets a little easier to hit. Overwatch Ridge always stays exact.");
+  await expect(page.locator("#foot-assist")).toHaveText("Makes targets easier to hit and to find. Overwatch Ridge’s shots stay exact.");
 
   // Reduce Motion follows the system (not reduced here) until chosen.
   const motion = page.getByRole("switch", { name: "Reduce Motion" });

@@ -381,9 +381,9 @@ export const HOUSES: readonly (readonly [number, number, number, number, number]
 /** Posts: [id, kind, x, z, height above the ground, place]. */
 export const POSTS: readonly (readonly [string, "sentry" | "tower" | "gunner" | "guard" | "mortar", number, number, number, string])[] = [
   ["tower", "tower", TOWER[0], TOWER[1], TOWER_HEIGHT, "on the watchtower"],
-  ["mg", "gunner", SANDBAGS[0], SANDBAGS[1] - 1.4, 0, "at the checkpoint"],
-  ["barrier", "guard", 46, -268, 0, "at the checkpoint"],
-  ["hut", "sentry", 58, -276, 0, "at the checkpoint"],
+  ["mg", "gunner", SANDBAGS[0], SANDBAGS[1] - 1.4, 0, "at the guard post"],
+  ["barrier", "guard", 46, -268, 0, "at the guard post"],
+  ["hut", "sentry", 58, -276, 0, "at the guard post"],
   ["bridge.near", "sentry", 72, -306, 0, "at the bridge"],
   ["bridge.far", "sentry", 120, -382, 0, "at the bridge"],
   ["village.well", "sentry", -120, -462, 0, "in the village"],

@@ -15,7 +15,7 @@ export interface Post {
   at: V3;
   /** The way he faces, radians about Y (0 faces +Z, toward the ridge). */
   heading: number;
-  /** How the note names the place ("the checkpoint", "the watchtower"). */
+  /** How the note names the place ("the guard post", "the watchtower"). */
   place: string;
 }
 

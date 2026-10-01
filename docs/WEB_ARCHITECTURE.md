@@ -200,7 +200,8 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   game (High Noon's Golden Revolver). `Settings.aimAssist` is the player's
   Aim Assist (on unless they turn it off): a game reads it live, on every shot,
   and makes the shot forgiving with it on and exact with it off
-  (`engine/rules/assist.ts`; Overwatch Ridge never reads it).
+  (`engine/rules/assist.ts`). Overwatch Ridge's shots are always exact: it
+  reads the switch, also live, only to mark the men to find.
 - `GameEntry` — a game in the arcade (`src/games/index.ts`): `id`, `title`,
   `blurb`, `about` (the hero's two or three sentences), `poster` (16:9, under
   `public/`), `backdrop` (the game's light, drawn where the poster would be

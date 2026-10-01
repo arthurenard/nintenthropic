@@ -602,45 +602,131 @@
 
 /* --- the spotter's marks ------------------------------------------------------------------- */
 
-/* Where to look, while the view is wide: a chevron over the place and, over
-   it, what it is and how far. Nothing covers the place itself; they fade in
-   and out, and never move on their own. */
+/* Where the men are, while the view is wide: a thin red-orange caret floating
+   above each hostile, never over him, the same size at any range and a little
+   see-through, fading as the crosshair comes onto him. Nothing on them moves
+   by itself except the last man's, which breathes, and the ring that pings
+   when someone fires at you. Through the scope they give way to an arrow on
+   the glass's rim that says which way to pan. */
 .spots {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* The danger red leaning to orange: an enemy, not an alarm. */
+  --mark: #ff6a33;
 }
 .spot {
   position: absolute;
   width: 0;
   height: 0;
-  transition: opacity 250ms var(--ease);
+  opacity: calc(var(--fade, 1) * 0.84);
+  transition:
+    opacity 250ms var(--ease),
+    left 120ms linear,
+    top 120ms linear;
+}
+.spot.shot {
+  opacity: 1;
 }
 .spot.gone {
   opacity: 0;
 }
 .spot > svg {
   position: absolute;
-  left: -11px;
-  top: -34px;
-  width: 22px;
-  height: 22px;
-  color: #fff;
-  stroke-width: 2;
-  filter: drop-shadow(0 0 2.5px rgba(0, 0, 0, 0.7));
+  /* The caret's tip sits 10 px above the man's head, higher by --lift to clear a man or a mark above him. */
+  left: calc(-12px + var(--shift, 0px));
+  top: calc(-26px - var(--lift, 0px));
+  width: 24px;
+  height: 24px;
+  color: var(--mark);
+  stroke-width: 1.75;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.65));
 }
 .spot-label {
   position: absolute;
   left: 0;
-  bottom: 34px;
-  padding: 3px 11px 4px;
+  bottom: calc(24px + var(--lift, 0px) + var(--label-lift, 0px));
+  padding: 2px 8px 3px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.3;
   font-weight: 500;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--shift, 0px)));
+}
+.spot-label[hidden] {
+  display: none;
+}
+/* The last man, not found yet: his caret breathes, slowly. */
+.spot.last > svg {
+  animation: spot-breathe 2.4s ease-in-out infinite;
+}
+@keyframes spot-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+/* Someone who has just fired at you: his caret is whole, pops, and a thin ring pings round him. */
+.spot.shot > svg {
+  animation: spot-pop 420ms var(--spring) both;
+}
+@keyframes spot-pop {
+  0% {
+    transform: translateY(-6px) scale(1.35);
+  }
+  100% {
+    transform: none;
+  }
+}
+.spot-ring {
+  position: absolute;
+  left: -15px;
+  top: -12px;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--mark);
+  border-radius: 50%;
+  opacity: 0;
+  animation: spot-ping 900ms var(--ease) forwards;
+}
+@keyframes spot-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+/* Through the scope: an arrow on the glass's rim, toward the nearest man, when none is in the glass. */
+.rim-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0.88;
+  transition: opacity 250ms var(--ease);
+}
+.rim-arrow.gone {
+  opacity: 0;
+}
+.rim-arrow > svg {
+  position: absolute;
+  left: -18px;
+  top: -18px;
+  width: 36px;
+  height: 36px;
+  color: var(--mark);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 2.5px rgba(0, 0, 0, 0.75));
 }
 
 /* --- being hit --------------------------------------------------------------------- */
@@ -685,6 +771,15 @@
   stroke-width: 4.5;
   stroke-linecap: butt;
   filter: drop-shadow(0 0 5px rgba(255, 69, 58, 0.6));
+}
+/* A shot at you that has not found you (or is on its way): the same arc, softer and quicker. */
+.arc.soft {
+  animation-duration: 1100ms;
+}
+.arc.soft path {
+  stroke-width: 3.5;
+  opacity: 0.75;
+  filter: drop-shadow(0 0 4px rgba(255, 69, 58, 0.4));
 }
 @keyframes arc {
   0% {
@@ -1369,9 +1464,34 @@
   }
 }
 
+@keyframes spot-ping-still {
+  0% {
+    opacity: 0.9;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+
 /* --- reduced motion: cross-fade instead of move (the system's or the player's: see base.css) ------------------------ */
 
 :root[data-reduce-motion] {
+  .spot.last > svg,
+  .spot.shot > svg {
+    animation: none;
+  }
+  /* The last man still stands out, without moving: a touch bolder. */
+  .spot.last > svg {
+    stroke-width: 2.6;
+  }
+  .spot {
+    transition: opacity 250ms var(--ease);
+  }
+  .spot-ring {
+    animation-name: spot-ping-still;
+  }
   .check-words.fresh,
   .score span.pop,
   .burst,
@@ -1522,9 +1642,6 @@
   .eye-meter svg {
     width: 32px;
     height: 32px;
-  }
-  .spot-label {
-    font-size: 12px;
   }
   .hint {
     bottom: var(--hud);
