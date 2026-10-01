@@ -6,6 +6,7 @@
  */
 import type { Difficulty, InputKind } from "../engine/types";
 import { STEADINESS, type Steadiness } from "../input/aim";
+import type { EyeProfile } from "../input/scope";
 import type { CrosshairStyle } from "./crosshair";
 
 const KEYS = {
@@ -19,6 +20,7 @@ const KEYS = {
   tipsSeen: "handy.tips-seen.v1",
   game: "handy.game.v1",
   scope: "handy.scope.v1",
+  eye: "handy.eye.v1",
 };
 
 /** Everything Handy keeps starts with this, in both storages. */
@@ -197,6 +199,24 @@ export function loadScopePreferences(storage: Storage | undefined = local()): Sc
 
 export function saveScopePreferences(value: ScopePreferences, storage: Storage | undefined = local()): boolean {
   return write(storage, KEYS.scope, value);
+}
+
+/**
+ * What this player's eyes read (open, and one shut), as learned from their
+ * own winks, so that the scope fits them from the first shot next time (see
+ * input/scope.ts). Null until one has been learned, or when what is kept
+ * does not look right.
+ */
+export function loadEyeProfile(storage: Storage | undefined = local()): EyeProfile | null {
+  const saved = read<Record<string, unknown>>(storage, KEYS.eye);
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+  const { open, closed } = saved;
+  if (typeof open !== "number" || typeof closed !== "number" || !Number.isFinite(open) || !Number.isFinite(closed)) return null;
+  return { open: Math.min(0.45, Math.max(0, open)), closed: Math.min(1, Math.max(0.3, closed)) };
+}
+
+export function saveEyeProfile(value: EyeProfile, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.eye, value);
 }
 
 // --- one-time tips ------------------------------------------------------------------------------
