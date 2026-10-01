@@ -13,9 +13,10 @@ import type { StageSpec } from "./rules/jobs";
 import { Mission, type AlertCause, type MissionListener, type NearPass } from "./rules/mission";
 import { fallCard } from "./rules/notes";
 import type { Award, StageBonuses } from "./rules/scoring";
+import { Spotter } from "./rules/spotter";
 import { HIP_SPREAD } from "./rules/tuning";
 import type { Ending, HitPart, HostileRole, Landing, Plan, SecretId, ShotTarget } from "./rules/types";
-import { ALL_TIPS, HintLine, innocentWord, reloadHint, tipText, type TipId } from "./tips";
+import { ALL_TIPS, HintLine, innocentWord, placeName, reloadHint, spotterWord, tipText, turnWord, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type RidgeAssets } from "./world/assets";
 import { Cast } from "./world/cast";
@@ -24,7 +25,7 @@ import { Effects } from "./world/effects";
 import { Foreground } from "./world/foreground";
 import { DAWN } from "./world/grade";
 import { PlateStage } from "./world/plates";
-import { Scope } from "./world/scope";
+import { GLASS, Scope } from "./world/scope";
 import { SecretsWorld } from "./world/secretsWorld";
 import { Shooter, type Flight, type Landing3D } from "./world/shots";
 import { Stage } from "./world/stage";
@@ -67,6 +68,11 @@ const tmp2 = new Vector3();
 const TRAIL_POINT = new Vector3();
 /** How much the eye opens up for a scoped view in the shade: at most two stops (art/ridge/README.md). */
 const SCOPE_ADAPT = 3.2;
+
+/** How far a man is from the eye, metres. */
+function rangeFrom(a: Actor, eye: Vector3): number {
+  return Math.hypot(a.pos.x - eye.x, a.pos.y - eye.y, a.pos.z - eye.z);
+}
 
 /** A moment for the page between the long steps of getting ready, so the bar keeps moving. */
 function breathe(): Promise<void> {
@@ -132,6 +138,10 @@ export class OverwatchRidge implements Game, MissionListener {
   private secrets!: SecretsWorld;
   private post!: PostFX;
   private mission!: Mission;
+  /** The spotter: marks over where the job's men are, and a word when no one has found them. */
+  private spotter = new Spotter();
+  private markClock = 0;
+  private marked = false;
 
   private phase: "loading" | "calibration" | "playing" | "failing" | "dying" | "over" = "loading";
   private paused = false;
@@ -288,6 +298,8 @@ export class OverwatchRidge implements Game, MissionListener {
     this.cast?.reset();
     this.mission = new Mission({ random: this.ctx.random, plan: this.plan, listener: this, difficulty: this.ctx.settings.difficulty });
     this.mission.health.immortal = this.options.immortal === true;
+    this.spotter = new Spotter(this.ctx.settings.difficulty);
+    this.marked = false;
   }
 
   /** Compile every shader before play: a shader first compiled mid-shot is a dropped frame at the worst time. */
@@ -375,7 +387,8 @@ export class OverwatchRidge implements Game, MissionListener {
     this.hints.setQuiet(false);
     this.mission.start(Math.max(1, Math.floor(this.options.startStage ?? 1)));
     this.showAmmo();
-    this.offerTip("ridge.scope");
+    // How to look through the scope stands at the foot of the view until the player has done it.
+    this.standScope();
     if (this.golden) {
       this.hud.weaponFinish?.("gold");
       this.sound.play("ridge_golden", { volume: 0.8, delay: 0.4 });
@@ -395,13 +408,19 @@ export class OverwatchRidge implements Game, MissionListener {
     this.runSchedule();
 
     // The scope: asked for in play (and only while the rifle is shouldered: not in the fall).
+    // Whether the hand is in view does not matter to it: Shift, the right button or the Scope
+    // button must scope with the hand lowered or lost (the view stays where it was aimed), and the
+    // eye's scope is held on while the pointing hand hides the face.
     const canScope = this.phase === "playing" && this.mission.phase !== "failed";
-    const changed = this.scope.update(dt, canScope && aim.scope && aim.tracking, aim);
+    const changed = this.scope.update(dt, canScope && aim.scope, aim);
     if (changed === "in") {
       this.hud.crosshair?.("none");
       this.sound.play("ridge_scope_in", { volume: 0.8 });
       this.sound.loop("breath", "ridge_breath", { volume: 0.7 });
-      if (this.phase === "playing") this.hints.learned("ridge.scope");
+      if (this.phase === "playing") {
+        this.hints.learned("ridge.scope");
+        this.hints.setStanding(null);
+      }
     } else if (changed === "out") {
       this.hud.crosshair?.("default");
       this.sound.play("ridge_scope_out", { volume: 0.7 });
@@ -425,6 +444,9 @@ export class OverwatchRidge implements Game, MissionListener {
     if (this.phase === "playing") {
       this.pushReadouts(false);
       this.watchScope();
+      this.watchSpotter(dt);
+    } else {
+      this.showMarks(null);
     }
     if (this.phase === "dying" || this.phase === "over") this.updateDeath(dt);
     if (this.phase === "failing") this.updateFail(dt);
@@ -976,6 +998,111 @@ export class OverwatchRidge implements Game, MissionListener {
     }
   }
 
+  /**
+   * How to look through the scope, said at the foot of the view and left
+   * there until the player has done it themselves (a scope by the eye, Shift
+   * or the button all count). Said again as the settings change under it.
+   */
+  private standScope(): void {
+    if (this.ctx.settings.tipsSeen.has("ridge.scope")) {
+      this.hints.setStanding(null);
+      return;
+    }
+    this.hints.setStanding(tipText("ridge.scope", this.ctx.input, this.ctx.settings.scope));
+  }
+
+  /**
+   * The spotter. While the view is wide he marks where the job's men are
+   * (a chevron, the place, the range): for a newcomer a man 300 m away is a
+   * few pixels, and nothing says where to look. When the fight is some
+   * seconds old and no one has been in the glass, he says so too.
+   */
+  private watchSpotter(dt: number): void {
+    this.standScope();
+    const m = this.mission;
+    const fighting = m.phase === "combat";
+    const inPlay = fighting || m.phase === "intro";
+    const w = this.width;
+    const h = this.height;
+    const scoped = this.scope.scoped;
+    // The job's men in sight: what a mark is for, and what the glass finds.
+    let men: Actor[] | null = null;
+    const inSight = (): Actor[] => (men ??= m.actors.filter((a) => a.hostile && a.objective && a.shootable));
+    let inGlass = false;
+    if (scoped && fighting) {
+      const reach = GLASS * Math.min(w, h) * 0.9;
+      for (const a of inSight()) {
+        const at = this.cast.chestOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.2, a.pos.z);
+        const p = this.project(at);
+        if (p && Math.hypot((p.x - 0.5) * w, (p.y - 0.5) * h) < reach) {
+          inGlass = true;
+          break;
+        }
+      }
+    }
+    const says = this.spotter.update(dt, fighting, this.scope.showing, inGlass);
+    if (says) {
+      const eye = this.camera.camera.position;
+      const first = [...inSight()].sort((a, b) => rangeFrom(a, eye) - rangeFrom(b, eye))[0];
+      if (first) {
+        // Through the scope the marks are not drawn: which way to turn is what helps; in the wide view, where.
+        const way = this.scope.showing ? this.turnToward(first, w, h) : null;
+        this.hints.say(way ?? spotterWord(first.place, rangeFrom(first, eye)), 5);
+        this.syncHint();
+      }
+    }
+    // The marks follow the men ten times a second, only while the wide view is up.
+    this.markClock -= dt;
+    if (this.markClock > 0) return;
+    this.markClock = 0.1;
+    // Not while the view is still widening to the valley (the marks would split and merge as it goes).
+    const settled = this.ctx.settings.reducedMotion || this.runTime > FRAMING_EASE + 0.2;
+    if (!inPlay || !settled || !this.spotter.marking || this.scope.showing) {
+      this.showMarks(null);
+      return;
+    }
+    const eye = this.camera.camera.position;
+    const marks: { id: number; x: number; y: number; label: string; range: number }[] = [];
+    for (const a of inSight()) {
+      const head = this.cast.headOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.7, a.pos.z);
+      const p = this.project(head);
+      if (!p || p.x < 0.02 || p.x > 0.98 || p.y < 0.05 || p.y > 0.95) continue;
+      const range = rangeFrom(a, eye);
+      // Men standing together share one mark: the first of them keeps its id, the nearest speaks for them.
+      const near = marks.find((o) => Math.hypot((o.x - p.x) * w, (o.y - p.y) * h) < 56);
+      if (near) {
+        if (range < near.range) {
+          near.range = range;
+          near.label = `${placeName(a.place)} · ${Math.round(range)} m`;
+        }
+        near.y = Math.min(near.y, p.y);
+        continue;
+      }
+      marks.push({ id: a.id, x: p.x, y: p.y, label: `${placeName(a.place)} · ${Math.round(range)} m`, range });
+    }
+    this.showMarks(marks);
+  }
+
+  /** Which way to turn the scope to bring a man into the glass, in words; null if he is behind the view. */
+  private turnToward(a: Actor, w: number, h: number): string | null {
+    const at = this.cast.chestOf(a.id, tmp) ?? tmp.set(a.pos.x, a.pos.y + 1.2, a.pos.z);
+    const p = this.project(at);
+    if (!p) return null;
+    const dx = (p.x - 0.5) * w;
+    const dy = (p.y - 0.5) * h;
+    return turnWord(Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? "left" : "right") : dy < 0 ? "up" : "down");
+  }
+
+  private showMarks(marks: { id: number; x: number; y: number; label: string }[] | null): void {
+    if (!marks?.length) {
+      if (this.marked) this.hud.spotter?.(null);
+      this.marked = false;
+      return;
+    }
+    this.marked = true;
+    this.hud.spotter?.(marks.map(({ id, x, y, label }) => ({ id, x, y, label })));
+  }
+
   /** The first local seen through the scope is a lesson; so is the counter-sniper's first glint. */
   private watchScope(): void {
     if (!this.scope.scoped) return;
@@ -1074,7 +1201,8 @@ export class OverwatchRidge implements Game, MissionListener {
 
   // --- MissionListener ----------------------------------------------------------------------
 
-  stageIntro(_stage: number, _spec: StageSpec, title: string, line: string): void {
+  stageIntro(stage: number, _spec: StageSpec, title: string, line: string): void {
+    this.spotter.begin(stage);
     this.hud.banner(title, line);
     this.sound.play("ridge_stage_start", { volume: 0.9 });
     this.pushReadouts(true);
