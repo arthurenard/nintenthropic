@@ -1,8 +1,10 @@
 /**
  * The things on the track that are not karts: the puck (a hovering disc that
  * spins and leaves a cyan trail), the seeker (a red glowing missile with a
- * fin) and the slick (a glossy dark puddle with an oily rainbow edge). Item
- * boxes are drawn by world/boxes.ts.
+ * fin), the slick (a glossy dark puddle with an oily rainbow edge) and the
+ * skyrocket (a white and red rocket arcing high over the pack, trailing fire
+ * and smoke). Item boxes, and the decoys that pass for them, are drawn by
+ * world/boxes.ts.
  *
  * Models are made once and shared; each thing on the track is a small
  * object that follows its ThingView by id.
@@ -18,6 +20,8 @@ interface Visual {
   /** Parts animated each frame. */
   spin?: Object3D;
   seen: number;
+  /** Where it was last frame (a rocket points along its flight). */
+  prev?: [number, number, number];
 }
 
 function puckGeometry(): BufferGeometry {
@@ -43,6 +47,25 @@ function seekerGeometry(): BufferGeometry {
   b.add(shapes.cone(8), xf(0, 0.5, 0.86, 0.22, 0.5, 0.22, 0, Math.PI / 2, 0), dark);
   b.box(0, 0.98, -0.42, 0.06, 0.52, 0.5, dark);
   for (const s of [-1, 1]) b.box(s * 0.36, 0.5, -0.38, 0.4, 0.05, 0.34, dark, 0, 0, s * 0.1);
+  return b.build();
+}
+
+function rocketGeometry(): BufferGeometry {
+  const b = new MeshBuilder();
+  const white = rgb("#f4f5f9");
+  const red = rgb("#e8392c");
+  const dark = rgb("#2b2e3b");
+  // A body, a red nose and band, four fins and a nozzle, all along +z.
+  b.add(shapes.cylinder(14), xf(0, 0, 0, 0.4, 2.3, 0.4, 0, Math.PI / 2, 0), { bottom: scaleRgb(white, 0.62), top: white });
+  b.add(shapes.cone(14), xf(0, 0, 1.6, 0.4, 0.95, 0.4, 0, Math.PI / 2, 0), red);
+  b.add(shapes.cylinder(14), xf(0, 0, 0.35, 0.42, 0.34, 0.42, 0, Math.PI / 2, 0), red);
+  b.add(shapes.cylinder(14), xf(0, 0, -1.2, 0.27, 0.3, 0.27, 0, Math.PI / 2, 0), dark);
+  b.box(0, 0.5, -0.95, 0.07, 0.7, 0.62, red);
+  b.box(0, -0.5, -0.95, 0.07, 0.7, 0.62, red);
+  b.box(0.5, 0, -0.95, 0.7, 0.07, 0.62, red);
+  b.box(-0.5, 0, -0.95, 0.7, 0.07, 0.62, red);
+  // A porthole.
+  b.add(shapes.cylinder(10), xf(0, 0.38, 0.9, 0.13, 0.08, 0.13, 0, 0, 0), rgb("#57b8ff"));
   return b.build();
 }
 
@@ -92,10 +115,12 @@ function puddleGeometry(variant: number): BufferGeometry {
 export class Things {
   readonly group = new Group();
   private readonly visuals = new Map<number, Visual>();
-  private readonly puck: BufferGeometry;
+  readonly puck: BufferGeometry;
   private readonly seeker: BufferGeometry;
+  private readonly rocket: BufferGeometry;
   private readonly puddles: BufferGeometry[];
-  private readonly lit: MeshLambertMaterial;
+  /** The puck's model and material, for the pucks orbiting a kart that holds three (itemfx.ts). */
+  readonly lit: MeshLambertMaterial;
   private readonly slickMat: MeshPhongMaterial;
   private readonly sheenMat: MeshBasicMaterial;
   private readonly resources: { dispose(): void }[];
@@ -104,6 +129,7 @@ export class Things {
   constructor(private readonly fx: Effects) {
     this.puck = puckGeometry();
     this.seeker = seekerGeometry();
+    this.rocket = rocketGeometry();
     this.puddles = [0, 1, 2, 3].map(puddleGeometry);
     this.lit = new MeshLambertMaterial({ vertexColors: true });
     this.slickMat = new MeshPhongMaterial({
@@ -118,7 +144,7 @@ export class Things {
       depthWrite: false,
     });
     this.sheenMat = new MeshBasicMaterial({ color: 0x6674b8, transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
-    this.resources = [this.puck, this.seeker, ...this.puddles, this.lit, this.slickMat, this.sheenMat];
+    this.resources = [this.puck, this.seeker, this.rocket, ...this.puddles, this.lit, this.slickMat, this.sheenMat];
   }
 
   private make(t: ThingView): Visual {
@@ -134,6 +160,12 @@ export class Things {
       case "seeker":
         g.add(new Mesh(this.seeker, this.lit));
         break;
+      case "skyrocket": {
+        const m = new Mesh(this.rocket, this.lit);
+        m.scale.set(1.5, 1.5, 1.5);
+        g.add(m);
+        break;
+      }
       case "slick": {
         const geo = this.puddles[((t.id % 4) + 4) % 4]!;
         const m = new Mesh(geo, this.slickMat);
@@ -156,7 +188,7 @@ export class Things {
   update(things: readonly ThingView[], time: number): void {
     this.frameNo++;
     for (const t of things) {
-      if (t.kind === "box" || !t.active) continue;
+      if (t.kind === "box" || t.kind === "decoy" || !t.active) continue;
       let v = this.visuals.get(t.id);
       if (v && v.kind !== t.kind) {
         this.group.remove(v.obj);
@@ -183,6 +215,28 @@ export class Things {
           const pulse = 0.75 + 0.25 * Math.sin(time * 18 + t.id);
           this.fx.glowNow(t.x, t.y + 0.75, t.z, 3.4 * pulse + 0.6, 1.0, 0.18, 0.1, 0.8);
           this.fx.trail(t.x - Math.sin(t.heading) * 0.8, t.y + 0.7, t.z - Math.cos(t.heading) * 0.8, 1.0, 0.45, 0.12, 0.5);
+          break;
+        }
+        case "skyrocket": {
+          o.position.set(t.x, t.y, t.z);
+          const p = v.prev;
+          if (p) {
+            const dx = t.x - p[0];
+            const dy = t.y - p[1];
+            const dz = t.z - p[2];
+            const flat = Math.hypot(dx, dz);
+            if (flat + Math.abs(dy) > 0.02) o.rotation.set(-Math.atan2(dy, Math.max(flat, 0.001)), flat > 0.01 ? Math.atan2(dx, dz) : t.heading, 0, "YXZ");
+          } else {
+            o.rotation.set(0, t.heading, 0);
+          }
+          v.prev = [t.x, t.y, t.z];
+          const back = [-Math.sin(o.rotation.y) * Math.cos(o.rotation.x), Math.sin(o.rotation.x), -Math.cos(o.rotation.y) * Math.cos(o.rotation.x)] as const;
+          const flicker = 0.8 + 0.2 * Math.sin(time * 40 + t.id);
+          // The flame at its tail, a glow, and a long grey trail that hangs behind.
+          this.fx.glowNow(t.x + back[0] * 2.2, t.y + back[1] * 2.2, t.z + back[2] * 2.2, 2.4 * flicker, 2.2, 1.0, 0.25, 0.8);
+          this.fx.trail(t.x + back[0] * 1.9, t.y + back[1] * 1.9, t.z + back[2] * 1.9, 1.6, 0.8, 0.2, 0.9);
+          this.fx.smoke(t.x + back[0] * 2.4, t.y + back[1] * 2.4, t.z + back[2] * 2.4, 1.0, 1.7, 0.3);
+          if ((this.frameNo & 1) === 0) this.fx.smoke(t.x + back[0] * 3.2, t.y + back[1] * 3.2, t.z + back[2] * 3.2, 1.3, 2.1, 0.3);
           break;
         }
         case "slick": {

@@ -39,6 +39,8 @@ export interface BoxSlot {
   y: number;
   z: number;
   active: boolean;
+  /** A decoy: an item box that is not one. Its tells are a duller colour and a wink of the gem every few seconds. */
+  decoy?: boolean;
 }
 
 /** The slots a track's own rows make: five boxes across the road at each row. */
@@ -136,7 +138,7 @@ export class ItemBoxes {
       if (n >= CAPACITY) break;
       let st = this.states.get(slot.id);
       if (!st) {
-        st = { scale: slot.active ? 1 : 0, seen: 0 };
+        st = { scale: slot.active && !slot.decoy ? 1 : 0, seen: 0 };
         this.states.set(slot.id, st);
       }
       st.seen = this.frameNo;
@@ -148,7 +150,7 @@ export class ItemBoxes {
       const phase = slot.id * 1.7;
       const bob = Math.sin(time * 2.0 + phase) * 0.12;
       p.set(slot.x, slot.y + 1.25 + bob, slot.z);
-      e.set(Math.sin(time * 0.9 + phase) * 0.35 + 0.35, time * 1.3 + phase, Math.cos(time * 0.7 + phase) * 0.3, "YXZ");
+      e.set(Math.sin(time * 0.9 + phase) * 0.35 + 0.35, time * (slot.decoy ? 1.42 : 1.3) + phase, Math.cos(time * 0.7 + phase) * 0.3, "YXZ");
       q.setFromEuler(e);
       m.compose(p, q, s.set(sc, sc, sc));
       this.shell.setMatrixAt(n, m);
@@ -157,12 +159,15 @@ export class ItemBoxes {
       e.set(0, -time * 2.2 + phase, 0);
       q.setFromEuler(e);
       const breathe = sc * (1 + Math.sin(time * 4 + phase) * 0.08);
-      m.compose(p, q, s.set(breathe, breathe, breathe));
+      // A decoy winks: the gem squeezes shut for a moment every few seconds.
+      const wink = slot.decoy && (time + phase * 0.6) % 3.2 < 0.17 ? 0.1 : 1;
+      m.compose(p, q, s.set(breathe, breathe * wink, breathe));
       this.gem.setMatrixAt(n, m);
       p.set(slot.x, slot.y + 0.07, slot.z);
       m.compose(p, q.identity(), s.set(sc, sc, sc));
       this.pool.setMatrixAt(n, m);
-      colour.setHSL((time * 0.12 + slot.id * 0.11) % 1, 1, 0.55);
+      if (slot.decoy) colour.setHSL((time * 0.12 + (slot.id % 5) * 0.11) % 1, 0.78, 0.47);
+      else colour.setHSL((time * 0.12 + slot.id * 0.11) % 1, 1, 0.55);
       this.shell.setColorAt(n, colour);
       this.frame.setColorAt(n, colour);
       this.pool.setColorAt(n, colour);

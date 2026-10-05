@@ -22,13 +22,16 @@ const ICONS: Record<ItemKind, string> = {
   seeker: '<circle cx="12" cy="12" r="6.6" fill="none"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.4v3.4M12 18.2v3.4M2.4 12h3.4M18.2 12h3.4" fill="none"/>',
   slick: '<path d="M12 3s6.8 6.8 6.8 11.5a6.8 6.8 0 0 1-13.6 0C5.2 9.8 12 3 12 3Z"/>',
   puck3: '<ellipse cx="7" cy="8" rx="4.4" ry="2"/><ellipse cx="17" cy="8" rx="4.4" ry="2"/><ellipse cx="12" cy="16" rx="4.4" ry="2"/>',
-  comet: '<path d="m12 2.8 2.7 5.9 6.4.7-4.8 4.3 1.4 6.3L12 16.8 6.3 20l1.4-6.3-4.8-4.3 6.4-.7Z"/>',
-  storm: '<path d="M7 14.5a4.5 4.5 0 0 1 .4-9 5.6 5.6 0 0 1 10.6 1.6 3.8 3.8 0 0 1-.6 7.4Z"/><path d="m12.6 13-3 5h3l-1.2 4 4-6h-3l1.2-3Z"/>',
-  skyrocket: '<path d="M12 2.5c3 2.4 4.2 6 4.2 9.6l2.3 3.4-3.5-.8-1.4 2.3h-3.2L9 14.7l-3.5.8 2.3-3.4c0-3.6 1.2-7.2 4.2-9.6Z"/><path d="M10.6 19.2 12 22l1.4-2.8Z"/>',
-  blast: '<circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.6" fill="none"/><circle cx="12" cy="12" r="9.6" fill="none" stroke-dasharray="2.4 2.4"/>',
-  decoy: '<path d="M12 2.8 20.5 7.4v9.2L12 21.2l-8.5-4.6V7.4Z" fill="none"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6M12 16.6v.4" fill="none"/>',
+  comet: '<circle cx="16.4" cy="7.6" r="3.5"/><path d="M13.7 9.9 3.2 20.4M11.4 7.4 4 14.8M16.4 12.3 9.4 19.4" fill="none"/>',
+  storm: '<path d="M7.2 14.2a4.4 4.4 0 0 1 .5-8.8 5.6 5.6 0 0 1 10.5 1.7 3.6 3.6 0 0 1-.4 7.1" fill="none"/><path d="m12.9 11.4-3.6 5.4h3l-1.3 4.8 4.4-6.5h-3l1.1-3.7Z"/>',
+  skyrocket: '<path d="M12.5 2.6c3.2 2.3 4.5 5.8 4.2 9.6l2.1 3.6-3.6-.9-1.3 2.2h-3.3l-1.3-2.2-3.6.9 2.1-3.6c-.3-3.8 1-7.3 4.2-9.6Z" transform="rotate(32 12 12)"/><circle cx="12.5" cy="9.2" r="1.5" fill="#000" stroke="none" transform="rotate(32 12 12)"/>',
+  blast: '<circle cx="12" cy="12" r="2.8"/><circle cx="12" cy="12" r="6.2" fill="none"/><circle cx="12" cy="12" r="9.6" fill="none" stroke-dasharray="2.6 2.4"/>',
+  decoy: '<path d="M12 2.8 20.5 7.4v9.2L12 21.2l-8.5-4.6V7.4Z" fill="none"/><circle cx="9.2" cy="10.3" r="1.1"/><path d="M13.4 10.3h2.6M8.7 14c1.8 2.1 4.9 2.1 6.7 0" fill="none"/>',
 };
-const ROLL_ORDER: ItemKind[] = ["nitro", "puck", "slick", "seeker", "nitro3"];
+/** The roulette turns through these, alternating shapes. */
+const ROLL_ORDER: ItemKind[] = ["nitro", "puck", "comet", "slick", "storm", "seeker", "blast", "nitro3", "decoy", "puck3", "skyrocket"];
+/** An item's icon as a 24-unit SVG body (the dev page's icon sheet draws them all). */
+export const ITEM_ICONS: Readonly<Record<ItemKind, string>> = ICONS;
 const EMPTY_ICON = '<circle cx="12" cy="12" r="7.5" fill="none" stroke-dasharray="2 4.2"/>';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent?: HTMLElement): HTMLElementTagNameMap[K] {
@@ -71,6 +74,8 @@ interface ViewHud {
   item: HTMLElement;
   itemSvg: SVGSVGElement;
   uses: HTMLElement;
+  incoming: HTMLElement;
+  incomingText: HTMLElement;
   place: HTMLElement;
   placeN: HTMLElement;
   placeS: HTMLElement;
@@ -193,6 +198,14 @@ export class Hud {
     item.appendChild(itemSvg);
     const uses = el("span", "gp-uses", item);
 
+    // A skyrocket on its way to this kart: the edges of the view glow red, and the banner says so.
+    const incoming = el("div", "gp-incoming", root);
+    const incomingBanner = el("div", "gp-incoming-banner gp-glass", incoming);
+    const incomingRing = el("span", "gp-incoming-ring", incomingBanner);
+    incomingRing.setAttribute("aria-hidden", "true");
+    const incomingText = el("span", "gp-incoming-text", incomingBanner);
+    incoming.setAttribute("aria-live", "assertive");
+
     const place = el("div", "gp-place", root);
     const placeN = el("span", "gp-place-n", place);
     const placeS = el("span", "gp-place-s", place);
@@ -230,6 +243,8 @@ export class Hud {
       item,
       itemSvg,
       uses,
+      incoming,
+      incomingText,
       place,
       placeN,
       placeS,
@@ -315,6 +330,7 @@ export class Hud {
 
     // The item slot.
     this.updateItem(v, kart);
+    this.updateIncoming(v, kart, view);
 
     // Final lap: by event, or by the lap counter when no event reached us.
     if (!v.shownFinal && view.laps > 1 && kart.lap === view.laps && !done) {
@@ -393,7 +409,22 @@ export class Hud {
     v.item.classList.toggle("gp-rolling", kart.rolling);
     if (v.wasRolling && !kart.rolling && kart.item) restart(v.item, "gp-got");
     v.wasRolling = kart.rolling;
-    setText(v.uses, !kart.rolling && kart.item === "nitro3" ? `×${kart.itemUses}` : "");
+    setText(v.uses, !kart.rolling && (kart.item === "nitro3" || kart.item === "puck3") ? `×${kart.itemUses}` : "");
+    v.item.dataset.item = kart.rolling ? "" : (kart.item ?? "");
+  }
+
+  /** A skyrocket flying to this kart: red edges, "Incoming", and what to do about it. */
+  private updateIncoming(v: ViewHud, kart: KartView, view: RaceView): void {
+    let near = -1;
+    for (const t of view.things) {
+      if (t.kind !== "skyrocket" || t.target !== v.kartId) continue;
+      near = Math.max(near, 1 - Math.min(1, Math.hypot(t.x - kart.x, t.z - kart.z) / 70));
+    }
+    const on = near >= 0 && kart.finished === null;
+    v.incoming.classList.toggle("gp-on", on);
+    if (!on) return;
+    v.incoming.style.setProperty("--near", near.toFixed(2));
+    setText(v.incomingText, kart.item === "blast" && !kart.rolling ? "Skyrocket incoming: use your Blast" : "Skyrocket incoming");
   }
 
   private updateFree(f: FreeHud, view: RaceView): void {

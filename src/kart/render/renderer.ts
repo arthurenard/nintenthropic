@@ -27,6 +27,7 @@ import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
 import { Effects } from "./effects";
 import { Hud } from "./hud";
+import { ItemFx } from "./itemfx";
 import { KartActor, type ActorContext, type KartFactory } from "./kart";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
@@ -122,6 +123,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let world: World | null = null;
   let effects: Effects | null = null;
   let things: Things | null = null;
+  let itemFx: ItemFx | null = null;
   let skids: Skids | null = null;
   let actors = new Map<number, KartActor>();
   let racers: readonly RacerSetup[] = [];
@@ -190,6 +192,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     effects = null;
     things?.dispose();
     things = null;
+    itemFx?.dispose();
+    itemFx = null;
     skids?.dispose();
     skids = null;
     world?.dispose();
@@ -219,6 +223,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       dynamic.add(effects.group);
       things = new Things(effects);
       dynamic.add(things.group);
+      itemFx = new ItemFx(effects, { geometry: things.puck, material: things.lit });
+      dynamic.add(itemFx.group);
       skids = new Skids();
       dynamic.add(skids.mesh);
       for (const r of racers) makeActor(r);
@@ -241,7 +247,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     },
 
     frame(view: RaceView, dtRaw: number): void {
-      if (!world || !effects || !things || !skids || disposed || ctxLost) return;
+      if (!world || !effects || !things || !itemFx || !skids || disposed || ctxLost) return;
       const dt = Math.min(0.1, Math.max(0, dtRaw));
       time += dt;
       if (dtRaw > 0 && resolution.sample(dtRaw * 1000)) applySize();
@@ -250,6 +256,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       if (view.tick < lastTick - 5) {
         lastEventId = -1;
         effects.clear();
+        itemFx.clear();
         skids.clear();
         hud.resetRace();
         for (const c of cameras) c.reset();
@@ -283,6 +290,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         }
       }
 
+      itemFx.update(view, byId, actors, dt, time);
+
       // Item boxes: the sim's if it sends any, else the track's own rows. A banked road lifts them like everything else on it.
       const sent = slotsFromThings(view.things);
       boxSlots = sent ?? boxSlots;
@@ -294,6 +303,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         }
         return lift === 0 ? slot : { ...slot, y: slot.y + lift };
       });
+      // Decoys are boxes that are not: drawn with the rest, with their tells.
+      for (const t of view.things) {
+        if (t.kind === "decoy") lifted.push({ id: t.id, x: t.x, y: t.y + world.surfaceLift(t.x, t.z).lift, z: t.z, active: true, decoy: true });
+      }
       world.boxes.update(lifted, time, dt, (x, y, z, r, g, b) => effects!.glowNow(x, y, z, 2.4, r * 1.2, g * 1.2, b * 1.2, 0.28));
       things.update(
         view.things.map((t) => (t.kind === "box" ? t : { ...t, y: t.y + world!.surfaceLift(t.x, t.z).lift })),
@@ -306,7 +319,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         if (e.id <= lastEventId) continue;
         lastEventId = e.id;
         effects.onEvent(e, kartAt);
-        const shake = e.type === "bump" ? 0.35 : e.type === "wall" ? 0.5 : e.type === "hit" ? 0.8 : 0;
+        itemFx.onEvent(e, kartAt);
+        const shake = e.type === "bump" ? 0.35 : e.type === "wall" ? 0.5 : e.type === "hit" ? 0.8 : e.type === "strike" && e.item !== "storm" ? 0.6 : 0;
         if (shake > 0) {
           viewKarts.forEach((id, i) => {
             const involved = e.type === "bump" ? e.a === id || e.b === id : "kart" in e && e.kart === id;
