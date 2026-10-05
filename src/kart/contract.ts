@@ -88,7 +88,11 @@ export interface RaceSetup {
   racers: RacerSetup[];
 }
 
-/** Something that happened in the race, for sound, effects, the HUD and the results. */
+/**
+ * Something that happened in the race, for sound, effects, the HUD and the
+ * results. A `bump`'s and a `wall`'s strength is 0..1 (a scrape under 3 m/s
+ * makes none); a `lap` carries the lap just begun.
+ */
 export type RaceEvent = { id: number; tick: number } & (
   | { type: "countdown"; n: 3 | 2 | 1 | 0 }
   | { type: "pickup"; kart: number; item: ItemKind }
@@ -107,6 +111,7 @@ export type RaceEvent = { id: number; tick: number } & (
 export interface KartView {
   id: number;
   x: number;
+  /** The road's height under the kart; add `hop` for the kart's. */
   y: number;
   z: number;
   heading: number;
@@ -158,7 +163,7 @@ export interface ThingView {
 export interface RaceView {
   tick: number;
   phase: "countdown" | "racing" | "finished";
-  /** Seconds until the start while counting down (3.x, 2.x...), 0 after. */
+  /** Seconds until the start while counting down, 3.5 → 0 (3.5..3.0 is "ready"), 0 after. */
   countdown: number;
   /** Seconds since the start (0 while counting down). */
   time: number;
@@ -167,7 +172,7 @@ export interface RaceView {
   racers: readonly RacerSetup[];
   karts: readonly KartView[];
   things: readonly ThingView[];
-  /** What happened since the view before this one, oldest first. */
+  /** What happened since the view before this one, oldest first: a sim's view() hands each event out once, so call it once a frame. */
   events: readonly RaceEvent[];
 }
 
@@ -202,6 +207,8 @@ export interface Race {
   snapshot(): RaceSnapshot;
   restore(snapshot: RaceSnapshot): void;
   result(): RaceResult | null;
+  /** From now on this kart drives itself, as a bot does (a player who left mid-race). */
+  handOver?(kart: number): void;
 }
 
 /** A race's state as plain JSON, opaque outside the sim. */
@@ -349,4 +356,4 @@ export interface Session {
   leave(): void;
 }
 
-export type SessionClosed = "host-left" | "full" | "not-found" | "network" | "left" | "started";
+export type SessionClosed = "host-left" | "full" | "not-found" | "network" | "left" | "started" | "version";

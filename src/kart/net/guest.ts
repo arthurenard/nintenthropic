@@ -59,7 +59,7 @@ import { DisplayClock, SnapshotBuffer, cloneView } from "./view";
  * has no such reason yet (it wants a "version"); until it does, the screens
  * can test for this string.
  */
-export const VERSION_MISMATCH = "version" as SessionClosed;
+export const VERSION_MISMATCH: SessionClosed = "version";
 
 const MAX_TICKS_PER_FRAME = 5;
 const MAX_TICKS_HIDDEN = 90;
