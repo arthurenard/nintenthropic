@@ -413,7 +413,7 @@ export function buildRamps(b: TrackBuild): void {
 
 const PATCH_COLOUR: Record<Exclude<Surface, "boost">, Rgb> = {
   ice: [0.62, 0.84, 1.0],
-  mud: [0.3, 0.19, 0.11],
+  mud: [0.46, 0.3, 0.17],
   sand: [0.93, 0.79, 0.5],
   snow: [0.95, 0.98, 1.0],
   grass: [0.36, 0.72, 0.26],

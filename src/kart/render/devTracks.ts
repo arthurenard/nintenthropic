@@ -170,7 +170,7 @@ export const DEV_KITCHEN: TrackDef = {
     L("window", 0.92, -62),
     L("wall-clock", 0.97, 66),
   ],
-  duck: { at: 0.74, offset: -48, y: -2 },
+  duck: { at: 0.74, offset: -48, y: 2.9 },
 };
 
 // ─── Snow ────────────────────────────────────────────────────────────────────

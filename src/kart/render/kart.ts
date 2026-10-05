@@ -70,7 +70,7 @@ export interface ActorContext {
   spinInModel: boolean;
   lightTexture: Texture;
   /** How far above the sim's flat road the surface is under (x, z): banking and ramps (world.surfaceLift). */
-  surface?: (x: number, z: number, hint?: number) => { lift: number; s: number; offset: number };
+  surface?: (x: number, z: number, hint?: number) => { lift: number; ramp: number; s: number; offset: number };
   /** The road's lean at distance s, radians (+ in a right-hand bend). */
   rollAt?: (s: number) => number;
   /** The scene the rescue drone flies in. */
@@ -150,6 +150,7 @@ export class KartActor {
   private settle = { x: 0, y: 0, z: 0 };
   private tumble = { x: 0, y: 0, z: 0 };
   private lastLift = 0;
+  private rampBonus = 0;
 
   constructor(
     readonly id: number,
@@ -197,7 +198,11 @@ export class KartActor {
     const behind = ctx.track.at(proj.s - 2).y;
     const slope = Math.atan(((ahead - behind) / 4) * along);
     this.slope = damp(this.slope, slope, 12, dt);
-    const surf = ctx.surface ? ctx.surface(view.x, view.z, proj.s) : { lift: 0, s: proj.s, offset: proj.offset };
+    const surf = ctx.surface ? ctx.surface(view.x, view.z, proj.s) : { lift: 0, ramp: 0, s: proj.s, offset: proj.offset };
+    // Off the end of a ramp the sim's kart is level with the road again; the picture's has climbed the wedge, so it keeps the height
+    // it had and gives it back as it flies (or at once, if it was too slow to fly).
+    if (surf.ramp > 0.02) this.rampBonus = surf.ramp;
+    else this.rampBonus *= Math.exp(-dt * (view.hop > 0.2 ? 2.4 : 12));
     this.lastLift = ctx.surface ? surf.lift : 0;
     const roll = ctx.rollAt ? ctx.rollAt(proj.s) : 0;
     // The banked road's plane, seen from the kart: how much it tips the kart's nose and its side.
@@ -225,6 +230,8 @@ export class KartActor {
     }
 
     const baseY = view.y + surf.lift;
+    // The shadow stays on the road (and the wedge); only the kart carries the leftover height.
+    const flyBonus = surf.ramp > 0.02 ? 0 : this.rampBonus;
     this.roadY = baseY;
     let px = view.x;
     let py = baseY;
@@ -349,7 +356,7 @@ export class KartActor {
     if (!rescuing) this.lastGood = { x: view.x, y: baseY, z: view.z, heading: view.heading, speed };
 
     // A hop is the body lifting off its wheels; a jump (several metres) lifts the whole kart, wheels and all.
-    const jump = rescuing ? 0 : Math.max(0, view.hop - 0.4);
+    const jump = rescuing ? 0 : Math.max(0, view.hop - 0.4) + flyBonus;
     py += jump;
     this.x = px;
     this.y = py;

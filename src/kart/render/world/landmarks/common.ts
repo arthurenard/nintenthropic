@@ -7,11 +7,13 @@
 import { MeshBuilder, ramp, rgb, scaleRgb } from "./kit";
 import type { HazardSpec, LandmarkContext, LandmarkModel, LandmarkSpec } from "./types";
 
-const YELLOW = rgb("#ffd92e");
-const YELLOW_DARK = rgb("#e9a400");
 const ORANGE = rgb("#ff8a1c");
 
 function duck(ctx: LandmarkContext): LandmarkModel {
+  // In the coloured light of dusk, lava and neon a yellow duck turns orange: lift it so it still reads as the classic yellow.
+  const k = ctx.night ? 1.4 : 1;
+  const YELLOW = scaleRgb(rgb("#ffd92e"), k);
+  const YELLOW_DARK = scaleRgb(rgb("#e9a400"), k);
   const lit = new MeshBuilder();
   const glass = new MeshBuilder();
   const body = ramp(YELLOW_DARK, YELLOW);

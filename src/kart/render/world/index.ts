@@ -68,7 +68,7 @@ export interface World {
    * banking plus any ramp before its lip. Karts, boxes and things add it to
    * their y. `near` is the s it was at a moment ago (a hint for the search).
    */
-  surfaceLift(x: number, z: number, near?: number): { lift: number; s: number; offset: number };
+  surfaceLift(x: number, z: number, near?: number): { lift: number; ramp: number; s: number; offset: number };
   dispose(): void;
 }
 
@@ -289,8 +289,8 @@ export async function createWorld(
       let proj = geometry.project(x, z, hint ?? near);
       if (Math.hypot(proj.sample.x - x, proj.sample.z - z) > 40) proj = geometry.project(x, z);
       near = proj.s;
-      const lift = bank.lift(proj.s, proj.offset) + (Math.abs(proj.offset) < proj.sample.width / 2 ? rampHeight(meshes.features.ramps, proj.s, geometry.length) : 0);
-      return { lift, s: proj.s, offset: proj.offset };
+      const ramp = Math.abs(proj.offset) < proj.sample.width / 2 ? rampHeight(meshes.features.ramps, proj.s, geometry.length) : 0;
+      return { lift: bank.lift(proj.s, proj.offset) + ramp, ramp, s: proj.s, offset: proj.offset };
     },
     dispose() {
       for (const d of disposables) d.dispose();
