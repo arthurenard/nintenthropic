@@ -26,6 +26,7 @@ import {
   type LobbySettings,
   type LobbyState,
   type LocalPlayerSetup,
+  type PauseState,
   type Race,
   type RaceEvent,
   type RaceResult,
@@ -50,10 +51,11 @@ import {
   type ToHost,
   type WirePlayer,
 } from "./protocol";
-import { DEFAULT_SETTINGS, Roster, cleanPlayer, kartsOnScreen, mergeSettings } from "./roster";
+import { DEFAULT_SETTINGS, Roster, cleanPlayer, kartsOnScreen, mergeSettings, sharesHostScreen } from "./roster";
 import { buildSetup } from "./setup";
 import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, token } from "./util";
+import { blendViews, cloneView } from "./view";
 
 /** A snapshot goes out every this many ticks: 60 / 2 = 30 a second. */
 const SNAPSHOT_EVERY = 2;
@@ -75,6 +77,8 @@ const FALLBACK_MS = 100;
 const NO_FRAME_MS = 250;
 /** How often the slow housekeeping runs, ms. */
 const HOUSEKEEPING_MS = 250;
+/** After "Resume": this long, ms, of 3-2-1 before the race moves again. */
+const RESUME_MS = 3000;
 
 interface Guest {
   device: string;
@@ -121,8 +125,17 @@ export class HostSession implements Session {
   private clock = new TickClock();
   private remote = new Map<number, Remote>();
   private controls = new Map<number, DriverControl>();
+  /** Only for a race whose sim cannot hand a kart over to its own bot (`Race.handOver`). */
   private autopilots = new Map<number, Autopilot>();
   private geometry: TrackGeometry | null = null;
+  /** The last two ticks' pictures: a frame is drawn between them, by how far into the next tick it is. */
+  private prevView: RaceView | null = null;
+  private currView: RaceView | null = null;
+  /** The race stopped for the whole room, and when its 3-2-1 ends (ms) once it has been resumed. */
+  private paused: PauseState | null = null;
+  private resumeAt: number | null = null;
+  /** How far between the two pictures the frame stood when the race was stopped: it stays there. */
+  private frozenAt = 1;
   private feed = new EventFeed();
   private outEvents: RaceEvent[] = [];
   private sinceSnapshot = 0;
@@ -258,6 +271,11 @@ export class HostSession implements Session {
         this.roster.setReady(guest.device, message.ready === true);
         this.changed();
         return;
+      case "lost":
+        if (this.phase === "racing" && Array.isArray(message.lost) && this.roster.setLost(guest.device, message.lost.map((flag) => flag === true))) {
+          this.changed();
+        }
+        return;
       case "in":
         if (message.r === this.raceId) this.onInputs(guest.device, message.k);
         return;
@@ -295,7 +313,9 @@ export class HostSession implements Session {
         const presses = this.remote.get(kart)?.last.itemPresses ?? 0;
         this.remote.delete(kart);
         delete this.kartSlots[kart];
-        this.autopilots.set(kart, new Autopilot((this.geometry ??= TrackGeometry.build(this.race.setup.track)), presses));
+        // The sim drives it from here as it does a bot; a stand-in race without that gets the net's own simple pilot.
+        if (this.race.handOver) this.race.handOver(kart);
+        else this.autopilots.set(kart, new Autopilot((this.geometry ??= TrackGeometry.build(this.race.setup.track)), presses));
       }
     }
     this.changed();
@@ -312,6 +332,8 @@ export class HostSession implements Session {
       phase: this.phase,
       result: this.result,
       karts: { ...this.kartSlots },
+      race: this.raceId,
+      pause: this.paused,
     };
     return this.lobbyCache;
   }
@@ -355,14 +377,26 @@ export class HostSession implements Session {
   configure(settings: Partial<LobbySettings>): void {
     if (this.phase === "racing") return;
     this.settings = mergeSettings(this.settings, settings, MAX_RACERS);
+    this.roster.setDisplay(this.settings.display);
     this.changed();
   }
 
   start(): void {
     if (this.closedWith || this.phase === "racing") return;
     const players = this.roster.players();
-    if (players.length === 0) return;
+    // Everyone's wheel has to be level and seen: nobody is left on the grid waiting for their hands.
+    if (players.length === 0 || !players.every((player) => player.ready)) return;
+    this.launch(players);
+  }
 
+  restart(): void {
+    if (this.closedWith || (this.phase !== "racing" && this.phase !== "results")) return;
+    const players = this.roster.players();
+    if (players.length > 0) this.launch(players);
+  }
+
+  /** Builds the grid and the race and tells everyone to begin: a first start, a race again, a restart. */
+  private launch(players: LobbyState["players"]): void {
     const seed = Math.floor(this.env.random() * 2 ** 32) >>> 0;
     const { setup, karts } = buildSetup(players, this.settings, seed);
     this.race = this.env.createRace(setup);
@@ -372,6 +406,11 @@ export class HostSession implements Session {
     this.phase = "racing";
     this.result = null;
     this.endedAt = null;
+    this.paused = null;
+    this.resumeAt = null;
+    this.roster.clearLost();
+    this.prevView = this.currView = cloneView(this.race.view());
+    this.frozenAt = 1;
     this.remote.clear();
     this.controls.clear();
     this.autopilots.clear();
@@ -407,11 +446,66 @@ export class HostSession implements Session {
     this.phase = "lobby";
     this.result = null;
     this.kartSlots = {};
+    this.paused = null;
+    this.resumeAt = null;
+    this.roster.clearLost();
     this.changed();
+  }
+
+  /**
+   * Stops the race like a console's pause. Practice always stops (nobody else
+   * is racing); a room stops only if it is watched on this screen by players
+   * who have no screen of their own to carry on with. Otherwise the others
+   * race on, and a pause is only this screen's.
+   */
+  pause(): boolean {
+    if (this.closedWith || this.phase !== "racing" || !this.race) return false;
+    if (this.role === "host" && !sharesHostScreen(this.lobby())) return false;
+    if (!this.paused) {
+      this.frozenAt = this.clock.fraction;
+      this.paused = { by: this.device, resume: null };
+      this.resumeAt = null;
+      this.changed();
+    }
+    return true;
+  }
+
+  /** Picks the race up again after a pause: three seconds of 3-2-1 first, in which nothing moves. */
+  resume(): void {
+    if (!this.paused || this.paused.resume !== null) return;
+    this.resumeAt = this.env.now() + RESUME_MS;
+    this.paused = { ...this.paused, resume: 3 };
+    this.changed();
+  }
+
+  setHandsLost(lost: readonly boolean[]): void {
+    if (this.closedWith || this.phase !== "racing") return;
+    if (this.roster.setLost(this.device, lost)) this.changed();
+  }
+
+  /** The pause's own clock: the 3-2-1 after a resume, and the end of the pause. */
+  private pauseTick(now: number): void {
+    const paused = this.paused;
+    if (!paused || this.resumeAt === null) return;
+    const left = this.resumeAt - now;
+    if (left <= 0) {
+      this.paused = null;
+      this.resumeAt = null;
+      // The time spent stopped is not owed to the race.
+      this.clock.reset();
+      this.changed();
+      return;
+    }
+    const count = Math.ceil(left / 1000);
+    if (count !== paused.resume) {
+      this.paused = { ...paused, resume: count };
+      this.changed();
+    }
   }
 
   private endRace(): void {
     this.race = null;
+    this.prevView = this.currView = null;
     this.remote.clear();
     this.controls.clear();
     this.autopilots.clear();
@@ -426,7 +520,12 @@ export class HostSession implements Session {
     this.advance(now, MAX_TICKS_PER_FRAME);
     const race = this.race;
     if (this.phase !== "racing" || !race) return null;
-    return { ...race.view(), events: this.feed.drain() };
+    // Drawn at this frame's own time: some of the way from the tick before the last to the last. A screen that
+    // refreshes at 120 Hz then moves every frame, not every other one; the price is under one tick of lateness.
+    const prev = this.prevView ?? this.currView;
+    const curr = this.currView ?? (this.currView = cloneView(race.view()));
+    const view = prev ? blendViews(prev, curr, this.paused ? this.frozenAt : this.clock.fraction) : curr;
+    return { ...view, events: this.feed.drain() };
   }
 
   views(): number[] {
@@ -444,10 +543,17 @@ export class HostSession implements Session {
     this.housekeeping();
     const race = this.race;
     if (this.phase !== "racing" || !race) return;
+    // Stopped for the room: nothing moves (the pause's own clock still counts a 3-2-1 down).
+    if (this.paused) return this.pauseTick(this.env.now());
 
     const ticks = this.clock.ticks(now, maxTicks);
-    for (let i = 0; i < ticks; i++) this.tickOnce(race, now);
+    for (let i = 0; i < ticks; i++) {
+      // The picture before the last tick, kept to draw between it and the one after.
+      if (i === ticks - 1) this.prevView = ticks === 1 && this.currView ? this.currView : cloneView(race.view());
+      this.tickOnce(race, now);
+    }
     if (ticks > 0) {
+      this.currView = cloneView(race.view());
       this.sinceSnapshot += ticks;
       if (this.sinceSnapshot >= SNAPSHOT_EVERY) {
         this.sinceSnapshot = 0;
@@ -539,8 +645,17 @@ export class HostSession implements Session {
   private conclude(race: Race): void {
     this.sendSnapshot(race);
     this.flushEvents();
-    this.result = race.result() ?? { standings: [] };
+    // The standings carry names and colours, so a screen that never saw the grid can still read them.
+    const result = race.result() ?? { standings: [] };
+    this.result = {
+      standings: result.standings.map((row) => {
+        const racer = race.setup.racers.find((candidate) => candidate.id === row.kart);
+        return racer ? { ...row, name: racer.name, colour: racer.colour } : row;
+      }),
+    };
     this.phase = "results";
+    this.paused = null;
+    this.roster.clearLost();
     this.race = null;
     this.endedAt = null;
     this.lobbyCache = null;

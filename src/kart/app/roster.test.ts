@@ -17,7 +17,7 @@ const lobby = (players: LobbyPlayer[], extra: Partial<LobbyState> = {}): LobbySt
   code: "ABCD",
   host: "host",
   players,
-  settings: { track: "meadow-loop", laps: 3, bots: true, racers: 6 },
+  settings: { track: "meadow-loop", laps: 3, bots: true, racers: 6, display: "own" },
   phase: "lobby",
   result: null,
   karts: {},

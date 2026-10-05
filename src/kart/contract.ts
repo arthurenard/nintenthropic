@@ -199,8 +199,13 @@ export interface RaceView {
 
 /** The final standings, for the results. */
 export interface RaceResult {
-  /** In finishing order. A kart that did not finish (the race ended for it) has time null and comes last. */
-  standings: { kart: number; place: number; time: number | null; bestLap: number | null }[];
+  /**
+   * In finishing order. A kart that did not finish (the race ended for it)
+   * has time null and comes last. `name` and `colour` are the racer's own,
+   * so a device that never saw the grid (a phone that was only a controller)
+   * can still read the results; the room's host fills them in.
+   */
+  standings: { kart: number; place: number; time: number | null; bestLap: number | null; name?: string; colour?: string }[];
 }
 
 /**
@@ -310,8 +315,13 @@ export interface LobbyPlayer {
   /** The device whose screen shows them (their own, or the host's big screen). */
   screen: string;
   control: DriverControl["kind"];
-  /** Their wheel is level and seen: ready to race. */
+  /** Their wheel is level and seen: ready to race. Stays so from one race to the next. */
   ready: boolean;
+  /**
+   * In a race: their hands have been out of the picture for a while (1.5 s),
+   * which the host's big screen says in their viewport ("Show Both Hands").
+   */
+  handsLost?: boolean;
 }
 
 export interface LobbySettings {
@@ -320,6 +330,23 @@ export interface LobbySettings {
   /** Fill the grid with bots up to `racers`. */
   bots: boolean;
   racers: number;
+  /**
+   * Where the race shows: "own" on each player's own screen, "host" on the
+   * host's, in split screen (every other device is then only a wheel). A
+   * player who chose a screen for themself keeps it (`LocalPlayerSetup.screen`).
+   */
+  display: "own" | "host";
+}
+
+/**
+ * The race stopped for the whole room (the host's pause, like a console's):
+ * nothing moves until the host resumes, and then a 3-2-1.
+ */
+export interface PauseState {
+  /** The device that paused. */
+  by: string;
+  /** While the race picks up again: seconds left, 3, 2, 1. Null while it is stopped. */
+  resume: number | null;
 }
 
 export interface LobbyState {
@@ -334,14 +361,26 @@ export interface LobbyState {
   result: RaceResult | null;
   /** Kart id → lobby slot for the race being run (bots absent). */
   karts: Record<number, number>;
+  /**
+   * Names the race being run (or last run): it changes when a new race starts
+   * even if the room never left the racing phase (a restart), so a screen can
+   * tell a fresh race from the one it already shows.
+   */
+  race?: number;
+  /** Set while the host has stopped the race for everyone. */
+  pause?: PauseState | null;
 }
 
 /** A player this device brings to the room. */
 export interface LocalPlayerSetup {
   name: string;
   control: DriverControl;
-  /** Show this player's race here, or on the host's big screen. */
-  screen: "here" | "host";
+  /**
+   * Show this player's race here, or on the host's big screen, or ("auto")
+   * wherever the host's `display` setting says: the default for a player who
+   * has not chosen. The host's own players are always shown on the host.
+   */
+  screen: "here" | "host" | "auto";
 }
 
 /**
@@ -362,13 +401,35 @@ export interface Session {
   setReady(ready: boolean): void;
   /** The host's: settings and the start. Guests' calls are ignored. */
   configure(settings: Partial<LobbySettings>): void;
+  /** The host's: starts the race once every player is ready (until then it does nothing). */
   start(): void;
-  /** Back to the lobby after the results (the host's). */
+  /** The host's: this race again from the countdown, with the same players and settings (a new seed). */
+  restart(): void;
+  /** Back to the lobby after the results (the host's). Players stay ready. */
   backToLobby(): void;
+  /**
+   * The host's (and practice's): stops the race. True when it is now stopped
+   * for the whole room (practice, or a room that watches the host's screen:
+   * `LobbyState.pause` is set and everyone sees "Paused"); false when a
+   * pause is only a screen's own, because the others race on their own
+   * screens, in which case the race goes on. A guest's call is always false.
+   */
+  pause(): boolean;
+  /** Picks the race up again after `pause()`: a 3-2-1, then it runs. */
+  resume(): void;
+  /**
+   * This device's players, in `setLocalPlayers` order: whose hands have been
+   * out of the picture for a while. The host's big screen shows it in their
+   * viewport. Call it when it changes; only a change is sent.
+   */
+  setHandsLost(lost: readonly boolean[]): void;
   /**
    * Every animation frame: samples this device's controls at the fixed tick,
    * runs (host, solo) or follows (guest) the race, and returns what to draw,
-   * or null outside a race.
+   * or null outside a race. The view is drawn at the frame's own time, between
+   * two ticks, so a screen faster than 60 Hz moves smoothly. It is returned
+   * even when `views()` is empty: a device that is only a wheel still shows
+   * its player's place, lap and item from it.
    */
   frame(now: number): RaceView | null;
   /** The karts this screen shows, one viewport each, in order. */

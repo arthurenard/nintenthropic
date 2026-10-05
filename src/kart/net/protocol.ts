@@ -23,7 +23,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
@@ -32,8 +32,11 @@ export const INPUTS_PER_PACKET = 6;
 export interface WirePlayer {
   name: string;
   control: DriverControl["kind"];
-  /** "here" shows the race on their own device; "host" on the host's big screen. */
-  screen: "here" | "host";
+  /**
+   * "here" shows the race on their own device; "host" on the host's big
+   * screen; "auto" wherever the host's `display` setting says.
+   */
+  screen: "here" | "host" | "auto";
 }
 
 /**
@@ -59,6 +62,8 @@ export type ToHost =
   | { t: "hello"; v: number; device: string; /** How many players this device brings, 1 or 2. */ n: number }
   | { t: "configure"; players: WirePlayer[] }
   | { t: "ready"; ready: boolean }
+  /** Whose hands (in the order the players were configured) have been out of the picture for a while. */
+  | { t: "lost"; lost: boolean[] }
   /**
    * Per kart: its latest inputs, oldest first. `r` names the race (its seed)
    * so a packet that wandered in late from the last race is not taken for this one's.

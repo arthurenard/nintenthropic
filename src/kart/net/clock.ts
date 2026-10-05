@@ -8,6 +8,16 @@ export class TickClock {
   private last: number | null = null;
   private owed = 0;
 
+  /**
+   * How far the last frame's time is into the next tick, 0..1: the part of a
+   * tick that has passed but is not yet run. A screen faster than the sim
+   * draws the picture that far between the last two ticks, so the motion is
+   * smooth at 120 Hz (and does not step at 60).
+   */
+  get fraction(): number {
+    return Math.min(1, Math.max(0, this.owed / TICK));
+  }
+
   /** Forget the past: the next call starts counting from its own `now`. */
   reset(): void {
     this.last = null;
