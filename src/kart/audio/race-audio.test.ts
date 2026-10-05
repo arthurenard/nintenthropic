@@ -8,6 +8,7 @@ import type { AudioBus, CueOptions } from "../../engine/types";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
 import type { KartView, RaceEvent, RaceView, ThingView, TrackDef } from "../contract";
 import { createRaceAudio, type LocalKart, type RaceAudio } from "./race-audio";
+import { localKarts } from "./scene";
 import type { MusicRenderer } from "./music/loader";
 import type { MusicTrack } from "./music/player";
 import type { RenderedMusic } from "./music/render";
@@ -628,5 +629,18 @@ describe("with a bus that cannot steer loops", () => {
     audio.music("menu");
     audio.dispose();
     expect(plain.plain.every((l) => l.stopped)).toBe(true);
+  });
+});
+
+describe("localKarts", () => {
+  it("spreads the viewports across the stereo field in reading order", () => {
+    expect(localKarts([7])).toEqual([{ kart: 7, pan: 0 }]);
+    const two = localKarts([3, 5]);
+    expect(two[0]!.pan).toBeLessThan(0);
+    expect(two[1]!.pan).toBeGreaterThan(0);
+    const four = localKarts([0, 1, 2, 3, 4]);
+    expect(four).toHaveLength(4);
+    expect(four.map((l) => l.kart)).toEqual([0, 1, 2, 3]);
+    expect(localKarts([])).toEqual([]);
   });
 });

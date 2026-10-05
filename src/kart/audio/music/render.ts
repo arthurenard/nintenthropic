@@ -160,13 +160,16 @@ export class PieceRenderer {
     const list = this.cache.get(k) ?? [];
     const count = this.counters.get(k) ?? 0;
     this.counters.set(k, count + 1);
-    if (list.length < VARIANTS) {
+    // Short sounds (a hat, a pluck) get a few variants so repeats do not machine-gun; a long sustained note (a pad) is the same each time.
+    const first = list[0];
+    const allowed = !first ? VARIANTS : first.length > this.sr * 1.5 ? 1 : first.length > this.sr * 0.6 ? 2 : VARIANTS;
+    if (list.length < allowed) {
       const fresh = make();
       list.push(fresh);
       this.cache.set(k, list);
       return fresh;
     }
-    return list[count % VARIANTS]!;
+    return list[count % list.length]!;
   }
 
   private renderPart(name: string): void {
@@ -194,7 +197,8 @@ export class PieceRenderer {
         for (const note of this.score.notes) {
           if (note.part !== name) continue;
           const vel = Math.round(note.vel * 8) / 8;
-          const hold = Math.round(note.dur * 50) / 50;
+          // (A bell rings out whatever the key does: its length need not split the cache.)
+          const hold = voice.ignoresHold ? 0 : Math.round(note.dur * 50) / 50;
           const buf = this.voiceFor(rack.inst, `${note.midi}|${hold}|${vel}`, () =>
             voice({ sr, freq: midiToHz(note.midi), hold: Math.max(0.03, hold), vel, rng: this.rng.fork(`${note.midi}${this.counters.size}`) }),
           );

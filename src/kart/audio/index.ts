@@ -7,4 +7,5 @@
  * See race-audio.ts for the API.
  */
 export { createRaceAudio } from "./race-audio";
+export { localKarts } from "./scene";
 export type { KartSound, LocalKart, MusicKind, RaceAudio, RaceAudioOptions, RaceAudioStats, TrackTheme } from "./race-audio";

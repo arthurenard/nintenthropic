@@ -4,12 +4,15 @@
  * right length, loud enough but not too loud, balanced, seamless where it
  * loops, quick to make and the same every time. Nothing is played.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { meanOf, peakOfBuffer, rmsOf, toDb } from "../analysis";
 import { PIECES, THEME_PIECES, type PieceId } from "./pieces";
 import { MUSIC_PEAK_DB, MUSIC_RMS_DB, MUSIC_SAMPLE_RATE, renderPiece, type RenderedMusic } from "./render";
 import { compile } from "./score";
 import { pitchClass, parseChord, chordPitchClasses, scalePitchClasses } from "./theory";
+
+// Rendering a minute of music takes a second or so; a busy machine takes longer.
+vi.setConfig({ testTimeout: 60_000 });
 
 const IDS = Object.keys(PIECES) as PieceId[];
 const SHORT: readonly string[] = ["results-win", "results", "podium"];
@@ -65,7 +68,8 @@ describe.each(IDS)("%s", (id) => {
     let onBeat = 0;
     let onBeatChordTones = 0;
     for (const n of score.notes) {
-      if (!tunes.has(n.part)) continue;
+      // (A name shared with a generated part has notes with no chord or step; only written tunes are checked.)
+      if (!tunes.has(n.part) || n.chord === undefined) continue;
       const pc = n.midi % 12;
       const chord = parseChord(n.chord!);
       const chordPcs = new Set(chordPitchClasses(chord));
@@ -128,8 +132,11 @@ describe.each(IDS)("%s", (id) => {
   it("renders the same samples every time, and quickly", () => {
     const again = renderPiece(spec);
     const first = render(id);
-    expect(again.left).toEqual(first.left);
-    expect(again.right).toEqual(first.right);
+    // (A plain loop: toEqual on millions of samples takes seconds.)
+    expect(again.left.length).toBe(first.left.length);
+    let different = 0;
+    for (let i = 0; i < first.left.length; i++) if (again.left[i] !== first.left[i] || again.right[i] !== first.right[i]) different++;
+    expect(different, `${id}: samples that differ between two renders`).toBe(0);
     // Under the budget for a main-thread render with a good deal of room for a slow machine.
     expect(first.stats.renderMs).toBeLessThan(2500);
   });

@@ -29,33 +29,45 @@ export function chorus(left: Mono, right: Mono, sr: number, amount: number, rate
   const size = Math.ceil(base + depth + 4);
   const dl = new Float32Array(size);
   const dr = new Float32Array(size);
+  // The two wobbles are rotating phasors, so there is no sin() in the loop.
   const wl = (2 * Math.PI * rate) / sr;
   const wr = (2 * Math.PI * rate * 1.13) / sr;
-  let pl = 0;
-  let pr = 1.7;
+  const cl = Math.cos(wl);
+  const sl = Math.sin(wl);
+  const cr = Math.cos(wr);
+  const sr2 = Math.sin(wr);
+  let xl = 1;
+  let yl = 0;
+  let xr = Math.cos(1.7);
+  let yr = Math.sin(1.7);
+  const gain = amount * 0.7;
   let w = 0;
   for (let i = 0; i < n; i++) {
     const l = left[i]!;
     const r = right[i]!;
     dl[w] = l;
     dr[w] = r;
-    // Fractional taps, linear.
-    const tl = base + depth * Math.sin(pl);
-    const tr = base + depth * Math.sin(pr);
-    const readL = w - tl;
-    const readR = w - tr;
+    // Fractional taps, linear; the delay is under the buffer's size, so one wrap is enough.
+    let readL = w - (base + depth * yl);
+    let readR = w - (base + depth * yr);
+    if (readL < 0) readL += size;
+    if (readR < 0) readR += size;
     const il = Math.floor(readL);
     const ir = Math.floor(readR);
     const fl = readL - il;
     const fr = readR - ir;
-    const a = dr[((il % size) + size) % size]!;
-    const b = dr[(((il + 1) % size) + size) % size]!;
-    const c = dl[((ir % size) + size) % size]!;
-    const d = dl[(((ir + 1) % size) + size) % size]!;
-    left[i] = l + amount * 0.7 * (a + (b - a) * fl);
-    right[i] = r + amount * 0.7 * (c + (d - c) * fr);
-    pl += wl;
-    pr += wr;
+    const il1 = il + 1 === size ? 0 : il + 1;
+    const ir1 = ir + 1 === size ? 0 : ir + 1;
+    const a = dr[il]!;
+    const c = dl[ir]!;
+    left[i] = l + gain * (a + (dr[il1]! - a) * fl);
+    right[i] = r + gain * (c + (dl[ir1]! - c) * fr);
+    const nxl = xl * cl - yl * sl;
+    yl = xl * sl + yl * cl;
+    xl = nxl;
+    const nxr = xr * cr - yr * sr2;
+    yr = xr * sr2 + yr * cr;
+    xr = nxr;
     w = w + 1 === size ? 0 : w + 1;
   }
 }

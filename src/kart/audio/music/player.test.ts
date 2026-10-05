@@ -59,8 +59,9 @@ describe("the main-thread renderer", { timeout: 60_000 }, () => {
     const progress: number[] = [];
     const staged = await renderOnMainThread("meadow", false, (f) => progress.push(f));
     const whole = renderPiece(PIECES.meadow);
-    expect(staged.left).toEqual(whole.left);
-    expect(staged.right).toEqual(whole.right);
+    let different = 0;
+    for (let i = 0; i < whole.left.length; i++) if (staged.left[i] !== whole.left[i] || staged.right[i] !== whole.right[i]) different++;
+    expect(different).toBe(0);
     expect(progress.length).toBeGreaterThan(4);
     expect(progress.at(-1)).toBe(1);
     for (let i = 1; i < progress.length; i++) expect(progress[i]!).toBeGreaterThan(progress[i - 1]!);

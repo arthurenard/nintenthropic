@@ -293,28 +293,37 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
         case "bass": {
           const template = BASS_PATTERNS[part.pattern];
           const floor = part.floor ?? 36;
+          // What follows the last bar is the next section's first chord (round to the first at the end of the piece).
+          const upcoming = parseChordBars(spec.sections[(sectionIndex + 1) % spec.sections.length]!.chords)[0]![0]!;
           for (let b = 0; b < section.bars; b++) {
             const slots = chordBars[b % chordBars.length]!;
-            const next = chordBars[(b + 1) % chordBars.length]![0]!;
+            const next = b + 1 < section.bars ? chordBars[(b + 1) % chordBars.length]![0]! : upcoming;
             const slotLen = stepsPerBar / slots.length;
             slots.forEach((chord, j) => {
               const following = j + 1 < slots.length ? slots[j + 1]! : next;
+              const base = bassNote(chord.bass, floor);
+              let last = base;
               for (const item of template) {
                 if (item.step >= slotLen) continue;
                 const at = j * slotLen + item.step;
-                const base = bassNote(chord.bass, floor);
                 let midi: number;
                 if (item.degree === "a") {
-                  const target = bassNote(following.bass, floor);
-                  // Approach the next root from the semitone below (or above if that is the chord's own root).
-                  midi = target === base ? base + 7 : target - 1 + (target - 1 === base ? 2 : 0);
+                  // The next chord's root in whichever octave is nearest the line, approached from the semitone on the near side.
+                  const home = bassNote(following.bass, floor);
+                  const target =
+                    [home - 12, home, home + 12]
+                      .filter((n) => n >= floor - 4 && n <= floor + 19)
+                      .sort((x, y) => Math.abs(x - last) - Math.abs(y - last))[0] ?? home;
+                  midi = last < target ? target - 1 : target + 1;
                 } else if (item.degree === "r") {
                   midi = base;
                 } else {
-                  midi = base + degreeSemitones(item.degree, chord.intervals);
+                  // The fifth, third and octave are the chord's own (a slash chord's bass note is only where the line starts).
+                  midi = bassNote(chord.root, floor) + degreeSemitones(item.degree, chord.intervals);
+                  // The line stays inside a sensible range for a bass (two octaves from the floor).
+                  while (midi > floor + 24) midi -= 12;
                 }
-                // The line stays inside a sensible range for a bass.
-                while (midi > floor + 19) midi -= 12;
+                last = midi;
                 notes.push({
                   part: name,
                   time: when(b, at) + slip(),

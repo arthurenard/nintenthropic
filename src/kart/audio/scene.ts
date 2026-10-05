@@ -13,6 +13,23 @@ export interface LocalKart {
   pan: number;
 }
 
+/**
+ * The stereo places for the karts a screen shows, given in the viewports'
+ * reading order (the order of ``Session.views()``): one viewport sounds from
+ * the centre, two from left and right, three as a left, a right and a lower
+ * middle, four as a 2 x 2 (left, right, left, right).
+ */
+export function localKarts(views: readonly number[]): LocalKart[] {
+  const pans: Record<number, readonly number[]> = {
+    1: [0],
+    2: [-0.5, 0.5],
+    3: [-0.55, 0.55, 0],
+    4: [-0.55, 0.55, -0.55, 0.55],
+  };
+  const row = pans[Math.min(4, Math.max(1, views.length))]!;
+  return views.slice(0, 4).map((kart, i) => ({ kart, pan: row[i]! }));
+}
+
 export interface Scene {
   locals: readonly LocalKart[];
   karts: ReadonlyMap<number, KartView>;

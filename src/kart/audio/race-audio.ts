@@ -39,7 +39,7 @@ import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor }
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
 import { type MusicTrack, MusicPlayer, beatTimes, sliderGain } from "./music/player";
 import { type PieceId, THEME_PIECES } from "./music/pieces";
-import type { RenderedMusic } from "./music/render";
+import { MUSIC_SAMPLE_RATE, type RenderedMusic } from "./music/render";
 import { type LocalKart, type Scene, falloff, hearThing, listenerAt, localOf } from "./scene";
 
 export type { KartSound, MusicKind, TrackTheme } from "./kinds";
@@ -227,7 +227,10 @@ class RaceAudioImpl implements RaceAudio {
     options: RaceAudioOptions,
   ) {
     this.steer = isSteerable(bus) ? bus : null;
-    this.renderer = options.renderer ?? (this.steer || options.player ? createMusicRenderer(options.render ?? "auto") : null);
+    // Music is made at the device's own rate (44.1 or 48 kHz) so playing it needs no resampling; a stand-in context gets the default.
+    const deviceRate = (this.steer?.ctx as Partial<BaseAudioContext> | undefined)?.sampleRate;
+    const musicRate = deviceRate ? Math.min(48000, Math.max(MUSIC_SAMPLE_RATE, deviceRate)) : MUSIC_SAMPLE_RATE;
+    this.renderer = options.renderer ?? (this.steer || options.player ? createMusicRenderer(options.render ?? "auto", musicRate) : null);
     if (options.player) {
       this.player = options.player;
     } else if (this.steer) {

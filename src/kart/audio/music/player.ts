@@ -41,7 +41,7 @@ export function nextBeat(beats: Float32Array, duration: number, position: number
 export const sliderGain = (v: number): number => (v > 0 ? Math.min(1, v) ** 2 : 0);
 
 /** Music sits this far under its rendered level in the mix (the engine's ambience and the effects come first). */
-export const MUSIC_TRIM = 0.72;
+export const MUSIC_TRIM = 0.64;
 
 interface Voice {
   track: MusicTrack;

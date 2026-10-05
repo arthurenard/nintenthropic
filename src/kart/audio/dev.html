@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grip Prix sound desk</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #14151c;
+        --panel: #1d1f29;
+        --ink: #e9ebf5;
+        --dim: #9097b0;
+        --accent: #0a84ff;
+      }
+      body {
+        margin: 0;
+        padding: 20px 16px 60px;
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.4 system-ui, -apple-system, sans-serif;
+      }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 { font-size: 16px; margin: 28px 0 8px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+      h3 { font: 600 13px ui-monospace, monospace; margin: 0 0 6px; }
+      .row { background: var(--panel); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+      button, select {
+        font: inherit;
+        color: var(--ink);
+        background: #2a2d3b;
+        border: 1px solid #3a3e52;
+        border-radius: 6px;
+        padding: 3px 10px;
+        margin: 0 6px 6px 0;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--accent); }
+      .info { color: var(--dim); font: 12px ui-monospace, monospace; margin: 2px 0 6px; }
+      canvas.pic { display: block; max-width: 100%; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./dev.ts"></script>
+  </body>
+</html>

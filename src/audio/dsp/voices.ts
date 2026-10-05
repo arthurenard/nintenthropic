@@ -38,7 +38,10 @@ export interface NoteSpec {
 }
 
 /** Plays a note: returns a mono buffer from the note's first sample to the end of its release. */
-export type Voice = (note: NoteSpec) => Mono;
+export type Voice = ((note: NoteSpec) => Mono) & {
+  /** True for a voice that rings out whatever the key does (a bell): a renderer need not tell notes of different lengths apart. */
+  ignoresHold?: boolean;
+};
 
 const TAU = 2 * Math.PI;
 
@@ -267,9 +270,10 @@ export interface ModalSpec {
 
 /** Ringing partials: the sound of anything struck. */
 export function modal(spec: ModalSpec): Voice {
-  return ({ sr, freq, hold, vel, rng }) => {
+  const voice: Voice = ({ sr, freq, hold, vel, rng }) => {
     const damp = spec.damp ?? 0.12;
-    const ring = spec.tau * 6.5;
+    // A ringing note is let go after about 4 s (a bell's last 30 dB are inaudible under a mix, and a long tail costs every note it is mixed into).
+    const ring = Math.min(spec.tau * 6.5, 4);
     const length = spec.free ? ring : Math.min(ring, hold + damp * 3);
     const total = Math.max(8, samples(sr, length));
     const out = new Float32Array(total);
@@ -317,12 +321,14 @@ export function modal(spec: ModalSpec): Voice {
         out[i]! *= g;
       }
     }
-    const fade = Math.min(total >> 1, samples(sr, spec.free ? 0.12 : 0.02));
+    const fade = Math.min(total >> 1, samples(sr, spec.free ? 0.25 : 0.02));
     for (let i = 0; i < fade; i++) out[total - 1 - i]! *= i / fade;
     const gain = 0.25 + 0.75 * vel;
     for (let i = 0; i < total; i++) out[i]! *= gain;
     return out;
   };
+  voice.ignoresHold = !!spec.free;
+  return voice;
 }
 
 // --- plucked strings ---------------------------------------------------------------------------

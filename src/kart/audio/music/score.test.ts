@@ -195,14 +195,52 @@ describe("parts", () => {
     expect(inLast.some((h) => h.kind === "hat" && h.time > lastBar.start + 0.75 * lastBar.dur + 1e-6)).toBe(false);
   });
 
-  it("walks a bass line to the next chord's root from a semitone away", () => {
+  it("walks a bass line to the next chord's root from a semitone away, in the octave nearest the line", () => {
     const score = compile(
       tiny({ sections: [{ name: "A", bars: 2, chords: "C G", parts: { bass: bass("walk") } }] }),
       { humanise: false },
     );
     const firstBar = score.notes.filter((n) => n.time < score.bars[1]!.start);
     expect(firstBar.length).toBe(4);
-    expect(firstBar[3]!.midi).toBe(bassNote(pitchClass("G"), 36) - 1);
+    const g = bassNote(pitchClass("G"), 36);
+    expect(Math.abs(firstBar[3]!.midi - g)).toBe(1);
+    // No leaps of more than an octave in the line.
+    for (let k = 1; k < firstBar.length; k++) expect(Math.abs(firstBar[k]!.midi - firstBar[k - 1]!.midi)).toBeLessThanOrEqual(12);
+  });
+
+  it("leads the last bar of a section into the next section's first chord, not its own", () => {
+    const score = compile(
+      tiny({
+        sections: [
+          { name: "A", bars: 1, chords: "C", parts: { bass: bass("walk") } },
+          { name: "B", bars: 1, chords: "D", parts: { bass: bass("walk") } },
+        ],
+      }),
+      { humanise: false },
+    );
+    const last = score.notes.filter((n) => n.time < score.bars[1]!.start).at(-1)!;
+    expect(Math.abs(last.midi - bassNote(pitchClass("D"), 36))).toBe(1);
+  });
+
+  it("keeps the octave of a pulsing bass on high roots (the line is allowed two octaves)", () => {
+    const score = compile(
+      tiny({ sections: [{ name: "A", bars: 1, chords: "A", parts: { bass: bass("pulse16") } }] }),
+      { humanise: false },
+    );
+    const midis = new Set(score.notes.map((n) => n.midi));
+    expect(midis.has(45)).toBe(true);
+    expect(midis.has(57)).toBe(true);
+  });
+
+  it("builds a fifth from a slash chord's root, not its bass note", () => {
+    const score = compile(
+      tiny({ sections: [{ name: "A", bars: 1, chords: "A/C#", parts: { bass: bass("rf") } }] }),
+      { humanise: false },
+    );
+    const midis = score.notes.map((n) => n.midi);
+    // Root at the C#, fifth above the A (E).
+    expect(midis[0]! % 12).toBe(pitchClass("C#"));
+    expect(midis[1]! % 12).toBe(pitchClass("E"));
   });
 
   it("gives an arpeggio the chord's own tones", () => {
