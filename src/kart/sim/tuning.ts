@@ -78,6 +78,81 @@ export const TUNING = {
     height: 0.35,
   },
 
+  /**
+   * What each kind of ground does to the kart. `top` is the top speed, `boostTop`
+   * the top speed under a boost on rough ground (on smooth ground a boost is
+   * the usual +35%), `grip` the rate (1/s) the velocity is pulled into the
+   * heading, `decel` how fast speed over the limit is shed, and `accel`, `brake`
+   * and `coast` scale pulling away, braking and rolling to a stop. `rough` is
+   * what the kart reports as off the road: no drift charge, dust and spray.
+   *
+   * Road and grass are the sim's old numbers, except that a boost on rough
+   * ground now carries the kart at nearly full speed (what makes a verge cut
+   * worth taking with a Nitro). The rest are new: sand and snow a little slower
+   * than grass, mud very slow, ice with almost no grip and next to no brake (the
+   * kart slides on, in the direction it was going), a boost strip as road.
+   */
+  ground: {
+    road: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
+    boost: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
+    ice: { rough: false, top: 24, boostTop: 0, grip: 1.2, gripDrift: 1.0, decel: 5, accel: 0.8, brake: 0.25, coast: 0.3 },
+    grass: { rough: true, top: 11, boostTop: 19, grip: 6, gripDrift: 4.2, decel: 10, accel: 1, brake: 1, coast: 1 },
+    sand: { rough: true, top: 9, boostTop: 17, grip: 5, gripDrift: 4.2, decel: 12, accel: 1, brake: 1, coast: 1 },
+    snow: { rough: true, top: 10, boostTop: 17, grip: 3.5, gripDrift: 3, decel: 10, accel: 1, brake: 1, coast: 1 },
+    mud: { rough: true, top: 7, boostTop: 11, grip: 8, gripDrift: 4.2, decel: 16, accel: 1, brake: 1, coast: 1 },
+  },
+
+  /** The ground beyond the road where a verge does not say, by theme (grass for the rest). */
+  groundByTheme: { canyon: "sand", snow: "snow", palm: "sand" } as Readonly<Record<string, "sand" | "snow">>,
+
+  ramp: {
+    /** A ramp rises this far over this length up to its lip (the picture draws it so; the kart climbs it). */
+    length: 8,
+    height: 0.9,
+    /** Upward speed at the lip at top speed, m/s, unless the ramp says: about 1.1 s in the air. */
+    lift: 7,
+    gravity: 14,
+    /** The lift scales with speed over top speed, between these. */
+    minShare: 0.4,
+    maxShare: 1.3,
+    /** Slower than this the ramp is only a bump. */
+    minSpeed: 9,
+    /** In the air the wheel turns the kart this share of what it does on the road, and the velocity follows the heading at this rate (1/s). */
+    airYaw: 0.3,
+    airGrip: 0.8,
+    /** A kart this much higher than another passes over it. */
+    passOver: 1.1,
+    /** A trick in the air boosts on landing for this long. */
+    trickBoost: 0.8,
+  },
+
+  /** Falling off an open edge, and the drone that fetches the kart. */
+  fall: {
+    /** Past the road's edge by this much on an open side: over. */
+    edge: 0.5,
+    /** The whole rescue takes this long: falling, carried, set down. */
+    rescue: 2.5,
+    fall: 0.8,
+    carryEnd: 2.1,
+    /** Falling pulls down at this m/s^2, the forward speed fades with this time constant (s), and the drone carries the kart this high. */
+    gravity: 18,
+    glide: 0.5,
+    hang: 2.5,
+    /** Set down on the centre line this far behind where it fell... */
+    back: 15,
+    /** ...or this far before a gap it fell into, for a run-up. */
+    runUp: 32,
+    /** Hazards and items pass through the kart for this long after it is set down. */
+    immune: 1.5,
+  },
+
+  hazard: {
+    /** Hit by a hazard: the spin of an item hit, then this much longer before another can touch it. */
+    immuneAfter: 0.8,
+    /** A kart higher than this in the air flies over a hazard. */
+    clearHeight: 0.8,
+  },
+
   drift: {
     /** In a drift the steer is remapped to base + range * (own way: 1, other way: -1): 0.4..1.4 of a full turn. */
     steerBase: 0.9,
@@ -100,6 +175,8 @@ export const TUNING = {
     nitro: 1.5,
     nitro3: 1.0,
     pad: 1.0,
+    /** A boost strip keeps a boost of this length topped up while a kart is on it. */
+    strip: 0.4,
     start: 1.0,
     /** A pad is this long and wide (half-extents, metres). */
     padHalfLength: 3.5,
@@ -206,6 +283,34 @@ export const TUNING = {
     startBoostLow: 0.1,
     startBoostHigh: 0.9,
     floodChance: 0.12,
+    /** Keeps this far (metres) beyond edgeMargin from an open edge, and up to dropSlack more at skill 0; bends beside one are planned for a lower sideways acceleration. */
+    dropMargin: 1.6,
+    dropSlack: 2.4,
+    dropLateral: 22,
+    /** A verge is a cut worth taking when its barrier is at least this far out and the road it skips is at least this many times the straight line. */
+    cutMinDistance: 12,
+    cutGain: 1.3,
+    /** Ice: a bot plans its bends for this sideways acceleration, never faster than iceTop, and brakes for it this hard (m/s^2). */
+    iceLateral: 9,
+    iceTop: 17,
+    iceBrake: 5,
+    /** Mud it cannot avoid: never faster than this. */
+    mudTop: 10,
+    /** Keeps this far (metres) off the edge of a patch of mud or ice it goes round. */
+    patchClearance: 1.8,
+    /** A bot takes a ramp straight from this far before it (metres) and keeps its wheel straight in the air. */
+    rampStraight: 26,
+    /** Hazards: looks this far ahead in time (s) in steps of this, and keeps this far (metres, beyond their size) clear, more for the gentler. */
+    hazardLook: 2.4,
+    hazardStep: 0.2,
+    hazardClear: 1.4,
+    /** Skill under which a bot does not look for hazards at all. */
+    hazardSkill: 0.25,
+    /** Skill from which a bot takes a verge cut when it holds a Nitro; it uses the Nitro this far (metres) before the cut. */
+    cutSkill: 0.7,
+    cutNitroBefore: 6,
+    /** A bot tricks off a ramp: skill plus this, as a share of an id-and-lap lottery. */
+    trickBase: 0.2,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.4,
     /** and starts steering clear of one this far (metres) before the point it is aiming at. */

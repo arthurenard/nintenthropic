@@ -25,7 +25,7 @@ import {
 import { mulberry32 } from "../../engine/rules/rng";
 import { botInput, rubberBand } from "./bots";
 import { stepItems, pressItem } from "./items";
-import { GO_TICK, NO_EMIT, bumpKarts, hopHeight, forwardSpeed, newKart, placeOnTrack, settle, stepKart } from "./kart";
+import { GO_TICK, NO_EMIT, bumpKarts, forwardSpeed, newKart, placeOnTrack, settle, stepKart, viewHop } from "./kart";
 import { planFor } from "./plan";
 import { standings, updatePlaces, updateProgress } from "./progress";
 import { applySnapshot, takeSnapshot } from "./snapshot";
@@ -152,6 +152,7 @@ class Sim implements SimRace {
       bumpKarts(w, this.emit, moved);
       for (const id of moved) {
         const k = this.byId.get(id)!;
+        if (k.rescue > 0) continue;
         placeOnTrack(w, k, this.emit, true);
         settle(k);
       }
@@ -188,9 +189,9 @@ class Sim implements SimRace {
       const done = k.finished !== null;
       return {
         id: k.id,
-        surface: k.offroad ? "grass" : "road",
-        trick: 0,
-        rescue: 0,
+        surface: k.ground,
+        trick: k.trick / TICK_HZ,
+        rescue: k.rescue / TICK_HZ,
         x: k.x,
         y: k.y,
         z: k.z,
@@ -201,7 +202,7 @@ class Sim implements SimRace {
         driftLevel: k.level,
         boost: k.boost / TICK_HZ,
         spin: k.spin / TICK_HZ,
-        hop: hopHeight(k),
+        hop: viewHop(this.world, k),
         offroad: k.offroad,
         item: k.roll > 0 ? null : k.item,
         itemUses: k.roll > 0 ? 0 : k.uses,

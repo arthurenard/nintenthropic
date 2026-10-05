@@ -138,7 +138,15 @@ export interface TrackDef {
    * Edges with nothing to stop a kart: drive off and it falls, and the
    * rescue drone puts it back on the road a little behind (about 2.5 s lost).
    */
-  drops?: (Stretch & { side: "left" | "right" | "both" })[];
+  drops?: (Stretch & {
+    side: "left" | "right" | "both";
+    /**
+     * The road itself is missing in this stretch (side "both"): a gap to jump.
+     * Only a kart in the air gets across; one that lands short, or drives in,
+     * falls. Put a ramp just before it, and a straight run-up before that.
+     */
+    gap?: boolean;
+  })[];
   /**
    * Where the barrier stands farther out than its usual 6 m from the road's
    * edge, on `surface` ground (default grass): a wide verge, or a cut across
