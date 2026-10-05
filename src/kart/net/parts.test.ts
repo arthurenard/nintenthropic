@@ -1,0 +1,382 @@
+/**
+ * The small pure parts: codes, the wire format, the lobby's roster and the
+ * grid, the view blending, and the autopilot.
+ */
+import { describe, expect, it } from "vitest";
+import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type RaceView } from "../contract";
+import { TrackGeometry } from "../track/geometry";
+import { MEADOW_LOOP, TRACKS } from "../track/tracks";
+import { Autopilot } from "./autopilot";
+import { TickClock } from "./clock";
+import { CODE_ALPHABET, joinCodeFrom, joinUrl, makeCode, parseCode, peerIdFor } from "./codes";
+import { EventFeed } from "./feed";
+import { gridKart, stepFakeKart } from "./fakeRace";
+import { decode, decodeInput, encode, encodeInput, encodeSnapshot, quantiseInput } from "./protocol";
+import { DEFAULT_SETTINGS, Roster, cleanName, mergeSettings } from "./roster";
+import { BOT_NAMES, buildSetup } from "./setup";
+import { seeded } from "./util";
+import { DisplayClock, RENDER_LAG, SnapshotBuffer, blendViews } from "./view";
+
+describe("room codes", () => {
+  it("are four letters from the alphabet without I or O", () => {
+    expect(CODE_ALPHABET).toBe("ABCDEFGHJKLMNPQRSTUVWXYZ");
+    const random = seeded(5);
+    for (let i = 0; i < 200; i++) expect(makeCode(random)).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ]{4}$/);
+  });
+
+  it("are read forgivingly and refused when wrong", () => {
+    expect(parseCode("abcd")).toBe("ABCD");
+    expect(parseCode(" a-b c d ")).toBe("ABCD");
+    expect(parseCode("ABC")).toBeNull();
+    expect(parseCode("ABCDE")).toBeNull();
+    expect(parseCode("AB1D")).toBeNull();
+    expect(parseCode("ABOD")).toBeNull();
+    expect(parseCode(null)).toBeNull();
+  });
+
+  it("make the join address the QR code holds", () => {
+    expect(joinUrl("WXYZ", "https://example.com/handy/race.html?x=1#y")).toBe("https://example.com/handy/race.html?join=WXYZ");
+    expect(joinUrl("WXYZ", "http://localhost:5173/")).toBe("http://localhost:5173/race.html?join=WXYZ");
+    expect(joinCodeFrom("?join=wxyz")).toBe("WXYZ");
+    expect(joinCodeFrom("?join=nope")).toBeNull();
+    expect(joinCodeFrom("")).toBeNull();
+    expect(peerIdFor("WXYZ")).toBe("grip-prix-v1-WXYZ");
+  });
+});
+
+describe("the wire format", () => {
+  it("rounds an input to hundredths and back, identically at both ends", () => {
+    const input: DriveInput = { steer: -0.3333, throttle: 1, brake: 0.004, drift: true, itemPresses: 7 };
+    const wire = encodeInput(42, input);
+    expect(wire).toEqual([42, -33, 100, 0, 1, 7]);
+    expect(decodeInput(wire)).toEqual({ steer: -0.33, throttle: 1, brake: 0, drift: true, itemPresses: 7 });
+    expect(quantiseInput(input)).toEqual(decodeInput(wire));
+    // Idempotent: what both ends hold survives another trip.
+    expect(quantiseInput(quantiseInput(input))).toEqual(quantiseInput(input));
+  });
+
+  it("keeps wild values in range", () => {
+    expect(decodeInput([1, 9999, -5, 400, 0, -3])).toEqual({ steer: 1, throttle: 0, brake: 1, drift: false, itemPresses: 0 });
+    expect(decodeInput([1, Number.NaN, 0, 0, 0, 0]).steer).toBe(0);
+    expect(quantiseInput({ ...IDLE_INPUT, steer: 7 }).steer).toBe(1);
+  });
+
+  it("decodes messages, and ignores anything that is not one", () => {
+    expect(decode(encode({ t: "ping", at: 5 }))).toEqual({ t: "ping", at: 5 });
+    expect(decode("not json")).toBeNull();
+    expect(decode("42")).toBeNull();
+    expect(decode("null")).toBeNull();
+    expect(decode('{"x":1}')).toBeNull();
+  });
+
+  it("builds a snapshot message around state that is already JSON", () => {
+    const state = { tick: 9, karts: [1, 2] };
+    const text = encodeSnapshot(JSON.stringify(state), 99, { 3: 17 });
+    expect(JSON.parse(text)).toEqual({ t: "snap", r: 99, acks: { 3: 17 }, state });
+  });
+});
+
+describe("the tick clock", () => {
+  it("turns elapsed time into whole ticks and carries the rest", () => {
+    const clock = new TickClock();
+    expect(clock.ticks(1000, 5)).toBe(0); // the first call only starts the count
+    expect(clock.ticks(1000 + 1000 / 60 / 2, 5)).toBe(0);
+    expect(clock.ticks(1000 + 1000 / 60, 5)).toBe(1);
+    let total = 0;
+    for (let i = 1; i <= 60; i++) total += clock.ticks(1000 + 1000 / 60 + (i * 1000) / 30, 5);
+    expect(total).toBe(120);
+  });
+
+  it("never runs more than the cap, and drops what it cannot run", () => {
+    const clock = new TickClock();
+    clock.ticks(0, 5);
+    expect(clock.ticks(10_007, 5)).toBe(5);
+    expect(clock.ticks(10_007 + 1000 / 60, 5)).toBe(1);
+  });
+});
+
+describe("the event feed", () => {
+  it("lets each id through once and hands over what is new", () => {
+    const feed = new EventFeed();
+    const event = (id: number) => ({ id, tick: id, type: "bump" as const, a: 0, b: 1, strength: 1 });
+    feed.push([event(1), event(2)]);
+    feed.push([event(2), event(3)]);
+    expect(feed.drain().map((e) => e.id)).toEqual([1, 2, 3]);
+    feed.push([event(3), event(4)]);
+    expect(feed.drain().map((e) => e.id)).toEqual([4]);
+    expect(feed.drain()).toEqual([]);
+  });
+});
+
+describe("the roster", () => {
+  const spec = (name: string, screen: "here" | "host" = "here") => ({ name, control: "wheel" as const, screen });
+
+  it("seats players in the lowest free slot and takes a device's seats back whole", () => {
+    const roster = new Roster("host");
+    roster.set("host", [spec("Ann")]);
+    roster.set("a", [spec("Bob"), spec("Bea")]);
+    roster.set("b", [spec("Cy")]);
+    expect(roster.players().map((p) => [p.slot, p.name, p.device])).toEqual([
+      [0, "Ann", "host"],
+      [1, "Bob", "a"],
+      [2, "Bea", "a"],
+      [3, "Cy", "b"],
+    ]);
+    expect(roster.free).toBe(0);
+    expect(roster.reserve("c", 1)).toBe(false);
+    expect(roster.remove("a")).toEqual([1, 2]);
+    expect(roster.free).toBe(2);
+    expect(roster.reserve("c", 2)).toBe(true);
+    expect(roster.slotsOf("c")).toEqual([1, 2]);
+  });
+
+  it("keeps readiness when names change, and points 'host' players at the host's screen", () => {
+    const roster = new Roster("host");
+    roster.set("a", [spec("Bob", "host")]);
+    roster.setReady("a", true);
+    roster.set("a", [spec("Robert", "host")]);
+    expect(roster.players()[0]).toMatchObject({ name: "Robert", ready: true, device: "a", screen: "host" });
+    roster.set("a", [spec("Robert", "here")]);
+    expect(roster.players()[0]!.screen).toBe("a");
+  });
+
+  it("cleans up what a guest sends", () => {
+    expect(cleanName("  Very   Long Name That Goes On And On ", "x")).toBe("Very Long Name T");
+    expect(cleanName(42, "Player 3")).toBe("Player 3");
+    const roster = new Roster("host");
+    roster.set("a", [{ name: "", control: "joystick" as never, screen: "elsewhere" as never }]);
+    expect(roster.players()[0]).toMatchObject({ name: "Player 1", control: "keyboard", screen: "a" });
+  });
+
+  it("hands out copies", () => {
+    const roster = new Roster("host");
+    roster.set("host", [spec("Ann")]);
+    const first = roster.players();
+    first[0]!.name = "Changed";
+    expect(roster.players()[0]!.name).toBe("Ann");
+  });
+});
+
+describe("settings", () => {
+  it("start at three laps, six racers, bots on", () => {
+    expect(DEFAULT_SETTINGS).toMatchObject({ laps: 3, racers: 6, bots: true, track: TRACKS[0]!.id });
+  });
+
+  it("stay in range whatever is sent", () => {
+    const merged = mergeSettings(DEFAULT_SETTINGS, { laps: 9, racers: 40, bots: false }, MAX_RACERS);
+    expect(merged).toMatchObject({ laps: 5, racers: MAX_RACERS, bots: false });
+    expect(mergeSettings(DEFAULT_SETTINGS, { laps: Number.NaN, track: 7 as never }, MAX_RACERS)).toEqual(DEFAULT_SETTINGS);
+    expect(mergeSettings(DEFAULT_SETTINGS, { laps: 0, racers: 0 }, MAX_RACERS)).toMatchObject({ laps: 1, racers: 1 });
+  });
+});
+
+describe("the grid", () => {
+  const players = (n: number): LobbyPlayer[] =>
+    Array.from({ length: n }, (_, slot) => ({
+      slot,
+      name: `P${slot}`,
+      colour: ["#FF453A", "#0A84FF", "#30D158", "#FFD60A"][slot]!,
+      device: "d",
+      screen: "d",
+      control: "keyboard",
+      ready: true,
+    }));
+
+  it("puts bots at the front and players behind, ids in grid order", () => {
+    const { setup, karts } = buildSetup(players(2), DEFAULT_SETTINGS, 123);
+    expect(setup.racers.map((r) => [r.id, r.player])).toEqual([[0, null], [1, null], [2, null], [3, null], [4, 0], [5, 1]]);
+    expect(karts).toEqual({ 4: 0, 5: 1 });
+    expect(setup.laps).toBe(3);
+    expect(setup.track.id).toBe(MEADOW_LOOP.id);
+    expect(setup.seed).toBe(123);
+    expect(setup.racers[4]).toMatchObject({ name: "P0", colour: "#FF453A" });
+  });
+
+  it("fills to the racers wanted, never fewer than the players, never past the cap", () => {
+    expect(buildSetup(players(4), { ...DEFAULT_SETTINGS, racers: 2 }, 1).setup.racers).toHaveLength(4);
+    expect(buildSetup(players(1), { ...DEFAULT_SETTINGS, racers: 99 }, 1).setup.racers).toHaveLength(MAX_RACERS);
+    expect(buildSetup(players(3), { ...DEFAULT_SETTINGS, bots: false }, 1).setup.racers).toHaveLength(3);
+  });
+
+  it("names the bots from the friendly list, all different, the same for the same seed", () => {
+    const a = buildSetup(players(1), { ...DEFAULT_SETTINGS, racers: 8 }, 77).setup.racers.slice(0, 7);
+    const b = buildSetup(players(1), { ...DEFAULT_SETTINGS, racers: 8 }, 77).setup.racers.slice(0, 7);
+    expect(a).toEqual(b);
+    expect(new Set(a.map((r) => r.name)).size).toBe(7);
+    for (const bot of a) {
+      expect(BOT_NAMES).toContain(bot.name);
+      expect(bot.skill).toBeGreaterThanOrEqual(0.3);
+      expect(bot.skill).toBeLessThanOrEqual(1);
+    }
+    const c = buildSetup(players(1), { ...DEFAULT_SETTINGS, racers: 8 }, 78).setup.racers.slice(0, 7);
+    expect(c.map((r) => r.name)).not.toEqual(a.map((r) => r.name));
+  });
+});
+
+function view(time: number, karts: Partial<KartView>[], extra: Partial<RaceView> = {}): RaceView {
+  return {
+    tick: Math.round(time / TICK),
+    phase: "racing",
+    countdown: 0,
+    time,
+    laps: 3,
+    track: MEADOW_LOOP,
+    racers: [],
+    karts: karts.map(
+      (k, id) =>
+        ({
+          id, x: 0, y: 0, z: 0, heading: 0, speed: 0, steer: 0, drift: 0, driftLevel: 0, boost: 0, spin: 0, hop: 0,
+          offroad: false, item: null, itemUses: 0, rolling: false, place: 1, lap: 1, lapProgress: 0, wrongWay: false, finished: null,
+          ...k,
+        }) as KartView,
+    ),
+    things: [],
+    events: [],
+    ...extra,
+  };
+}
+
+describe("blending views", () => {
+  it("glides position and heading, and takes everything else from the newer", () => {
+    const a = view(0, [{ x: 0, z: 0, heading: 0, place: 3, speed: 5 }]);
+    const b = view(1, [{ x: 10, z: 20, heading: 1, place: 2, speed: 9 }], { phase: "racing", time: 1 });
+    const mid = blendViews(a, b, 0.25);
+    expect(mid.karts[0]).toMatchObject({ x: 2.5, z: 5, heading: 0.25, place: 2, speed: 9 });
+    expect(mid.time).toBe(1);
+  });
+
+  it("turns the short way round the circle", () => {
+    const a = view(0, [{ heading: Math.PI - 0.1 }]);
+    const b = view(1, [{ heading: -Math.PI + 0.1 }]);
+    const mid = blendViews(a, b, 0.5).karts[0]!.heading;
+    expect(Math.abs(Math.abs(mid) - Math.PI)).toBeLessThan(1e-9);
+  });
+
+  it("glides things that are the same thing, and snaps ones that appeared, vanished or changed", () => {
+    const thing = (id: number, x: number, extra = {}) => ({ id, kind: "puck" as const, x, y: 0, z: 0, heading: 0, active: true, ...extra });
+    const a = view(0, [{}], { things: [thing(1, 0), thing(2, 0), thing(3, 0)] });
+    const b = view(1, [{}], { things: [thing(1, 10), thing(3, 10, { active: false }), thing(4, 7)] });
+    expect(blendViews(a, b, 0.5).things.map((t) => t.x)).toEqual([5, 10, 7]);
+  });
+});
+
+describe("the snapshot buffer", () => {
+  const at = (time: number, x: number) => view(time, [{ x }]);
+
+  it("ignores a tick no newer than the newest", () => {
+    const buffer = new SnapshotBuffer();
+    expect(buffer.push(10, at(10 * TICK, 1))).toBe(true);
+    expect(buffer.push(10, at(10 * TICK, 99))).toBe(false);
+    expect(buffer.push(8, at(8 * TICK, 99))).toBe(false);
+    expect(buffer.push(12, at(12 * TICK, 2))).toBe(true);
+    expect(buffer.size).toBe(2);
+  });
+
+  it("glides between the two around a time, and holds at the ends", () => {
+    const buffer = new SnapshotBuffer();
+    expect(buffer.at(0)).toBeNull();
+    buffer.push(0, at(0, 0));
+    expect(buffer.at(5)!.karts[0]!.x).toBe(0);
+    buffer.push(6, at(6 * TICK, 6));
+    buffer.push(12, at(12 * TICK, 18));
+    expect(buffer.at(-1)!.karts[0]!.x).toBe(0);
+    expect(buffer.at(3 * TICK)!.karts[0]!.x).toBeCloseTo(3, 9);
+    expect(buffer.at(9 * TICK)!.karts[0]!.x).toBeCloseTo(12, 9);
+  });
+
+  it("carries on past the newest for a tenth of a second, at the last pace, then holds", () => {
+    const buffer = new SnapshotBuffer();
+    buffer.push(0, at(0, 0));
+    buffer.push(6, at(6 * TICK, 6)); // 60 m/s
+    const newest = 6 * TICK;
+    expect(buffer.at(newest + 0.05)!.karts[0]!.x).toBeCloseTo(6 + 3, 6);
+    expect(buffer.at(newest + 0.1)!.karts[0]!.x).toBeCloseTo(6 + 6, 6);
+    expect(buffer.at(newest + 5)!.karts[0]!.x).toBeCloseTo(6 + 6, 6);
+  });
+
+  it("keeps only the recent past", () => {
+    const buffer = new SnapshotBuffer();
+    for (let i = 0; i < 100; i++) buffer.push(i * 2, at(i * 2 * TICK, i));
+    expect(buffer.size).toBeLessThanOrEqual(20);
+    expect(buffer.newest!.view.karts[0]!.x).toBe(99);
+  });
+});
+
+describe("the display clock", () => {
+  it("starts a lag behind the newest snapshot and keeps pace with real time", () => {
+    const clock = new DisplayClock();
+    let newest = 5;
+    let shown = clock.advance(0, newest);
+    expect(shown).toBeCloseTo(5 - RENDER_LAG, 9);
+    for (let i = 0; i < 120; i++) {
+      newest += TICK;
+      const next = clock.advance(TICK, newest);
+      expect(next).toBeGreaterThan(shown); // never stops, never goes back
+      shown = next;
+    }
+    expect(newest - shown).toBeCloseTo(RENDER_LAG, 1);
+  });
+
+  it("leans back toward the lag after a stall, without a jump, and jumps only when far out", () => {
+    const clock = new DisplayClock();
+    const t0 = clock.advance(0, 5);
+    // Snapshots stop for 0.2 s while frames go on: the clock slows rather than overrun.
+    let shown = t0;
+    for (let i = 0; i < 12; i++) shown = clock.advance(TICK, 5);
+    expect(shown - t0).toBeLessThan(0.2);
+    expect(shown - t0).toBeGreaterThan(0.1);
+    // A huge gap resets it.
+    expect(clock.advance(TICK, 50)).toBeCloseTo(50 - RENDER_LAG, 9);
+  });
+});
+
+describe("the autopilot", () => {
+  /** Drives the fake physics round the real track for as long as it takes to do `laps`. */
+  function drive(def = MEADOW_LOOP, laps = 2, onTick?: (offset: number, speed: number) => void) {
+    const geometry = TrackGeometry.build(def);
+    const kart = gridKart(geometry, 0);
+    const pilot = new Autopilot(geometry, 0);
+    let ticks = 0;
+    let worst = 0;
+    let topSpeed = 0;
+    let distance = 0;
+    let previous = geometry.project(kart.x, kart.z);
+    while (distance < laps * geometry.length && ticks < 60 * 200) {
+      const view = { x: kart.x, z: kart.z, heading: kart.heading, speed: kart.speed, item: null, rolling: false } as KartView;
+      stepFakeKart(kart, pilot.drive(view));
+      ticks++;
+      const here = geometry.project(kart.x, kart.z, previous.s);
+      distance += geometry.delta(previous.s, here.s);
+      previous = here;
+      worst = Math.max(worst, Math.abs(here.offset) / (here.sample.width / 2));
+      topSpeed = Math.max(topSpeed, kart.speed);
+      onTick?.(here.offset, kart.speed);
+    }
+    return { seconds: ticks * TICK, worst, topSpeed, distance, length: geometry.length };
+  }
+
+  it("goes round the track twice, on the road the whole way, at a sane pace", () => {
+    const run = drive(MEADOW_LOOP, 2);
+    expect(run.distance).toBeGreaterThan(2 * run.length);
+    // Never past the road's edge (1 is the edge itself).
+    expect(run.worst).toBeLessThan(0.9);
+    // About a kilometre a lap at up to 24 m/s: neither crawling nor flying.
+    const lap = run.seconds / 2;
+    expect(lap).toBeGreaterThan(run.length / 24);
+    expect(lap).toBeLessThan(run.length / 9);
+    expect(run.topSpeed).toBeLessThanOrEqual(24.5);
+  });
+
+  it("presses an item once when it has one, and not again at once", () => {
+    const geometry = TrackGeometry.build(MEADOW_LOOP);
+    const pilot = new Autopilot(geometry, 4);
+    const start = geometry.point(0);
+    const holding = { x: start.x, z: start.z, heading: 0, speed: 10, item: "nitro", rolling: false } as KartView;
+    const rolling = { ...holding, rolling: true } as KartView;
+    expect(pilot.drive(rolling).itemPresses).toBe(4);
+    expect(pilot.drive(holding).itemPresses).toBe(5);
+    expect(pilot.drive(holding).itemPresses).toBe(5);
+    for (let i = 0; i < 100; i++) pilot.drive(holding);
+    expect(pilot.drive(holding).itemPresses).toBe(6);
+  });
+});
