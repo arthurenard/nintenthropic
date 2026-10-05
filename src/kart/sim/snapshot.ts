@@ -23,9 +23,10 @@ export const KART_AT = {
   lap: 26, lapStart: 27, bestLap: 28, finished: 29, finalPlace: 30, ai: 31,
   botPresses: 32, botWait: 33, botStuck: 34, botBack: 35, botNext: 36, botFreeze: 37, botSteer: 38, botDrifting: 39,
   botCut: 40, air: 41, vy: 42, flight: 43, trick: 44, rescue: 45, immune: 46,
+  comet: 47, zap: 48,
 } as const;
 
-const KART_FIELDS = 47;
+const KART_FIELDS = 49;
 
 const item = (kind: KartState["item"]): number => (kind === null ? -1 : ITEM_KINDS.indexOf(kind));
 const kind = (index: number): KartState["item"] => (index < 0 ? null : (ITEM_KINDS[index] ?? null));
@@ -81,6 +82,8 @@ function packKart(k: KartState): number[] {
   a[KART_AT.trick] = k.trick;
   a[KART_AT.rescue] = k.rescue;
   a[KART_AT.immune] = k.immune;
+  a[KART_AT.comet] = k.comet;
+  a[KART_AT.zap] = k.zap;
   return a;
 }
 
@@ -134,6 +137,8 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.trick = at("trick");
   k.rescue = at("rescue");
   k.immune = at("immune");
+  k.comet = at("comet");
+  k.zap = at("zap");
   // What follows from the rest.
   const c = w.geo.at(k.s);
   k.y = c.y;
@@ -162,6 +167,9 @@ export function takeSnapshot(state: SimState, draws: number): RaceSnapshot {
     p: state.pucks.map((p) => [p.id, p.owner, p.x, p.z, p.s, p.vx, p.vz, p.life, p.age]),
     e: state.seekers.map((e) => [e.id, e.owner, e.target, e.x, e.z, e.dx, e.dz, e.s, e.life, e.age]),
     l: state.slicks.map((l) => [l.id, l.owner, l.x, l.z, l.s, l.offset, l.age]),
+    d: state.decoys.map((l) => [l.id, l.owner, l.x, l.z, l.s, l.offset, l.age]),
+    r: state.skyrockets.map((r) => [r.id, r.owner, r.s, r.total, r.age]),
+    st: state.stormAt,
   };
 }
 
@@ -185,6 +193,7 @@ export function applySnapshot(w: World, snap: RaceSnapshot): boolean {
   if (!Array.isArray(boxes) || boxes.length % 2 !== 0 || !boxes.every((v) => Number.isFinite(v))) return false;
   if (!Array.isArray(snap.home) || !snap.home.every((v) => Number.isFinite(v))) return false;
   if (!table(snap.p, 9) || !table(snap.e, 10) || !table(snap.l, 7)) return false;
+  if (!table(snap.d ?? [], 7) || !table(snap.r ?? [], 5) || !finite(snap.st ?? -1)) return false;
   const state = w.state;
   state.tick = snap.tick;
   w.rng.reset(snap.rng as number);
@@ -201,6 +210,10 @@ export function applySnapshot(w: World, snap: RaceSnapshot): boolean {
   state.pucks = (snap.p as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, x: r[2]!, z: r[3]!, s: r[4]!, vx: r[5]!, vz: r[6]!, life: r[7]!, age: r[8]! }));
   state.seekers = (snap.e as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, target: r[2]!, x: r[3]!, z: r[4]!, dx: r[5]!, dz: r[6]!, s: r[7]!, life: r[8]!, age: r[9]! }));
   state.slicks = (snap.l as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, x: r[2]!, z: r[3]!, s: r[4]!, offset: r[5]!, age: r[6]! }));
+  const trap = (r: number[]) => ({ id: r[0]!, owner: r[1]!, x: r[2]!, z: r[3]!, s: r[4]!, offset: r[5]!, age: r[6]! });
+  state.decoys = ((snap.d ?? []) as number[][]).map(trap);
+  state.skyrockets = ((snap.r ?? []) as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, s: r[2]!, total: r[3]!, age: r[4]! }));
+  state.stormAt = (snap.st ?? -1) as number;
   state.karts.forEach((k, i) => unpackKart(k, rows[i]!, w));
   updatePlaces(w);
   return true;

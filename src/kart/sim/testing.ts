@@ -8,7 +8,7 @@ import { GO_TICK } from "./kart";
 import { planFor } from "./plan";
 import { createSimRace, type SimRace } from "./race";
 import { KART_AT } from "./snapshot";
-import { ITEM_KINDS } from "./state";
+import { ITEM_KINDS, ITEM_USES } from "./state";
 import { barrierDistance, isOpen } from "./terrain";
 import { TUNING } from "./tuning";
 
@@ -80,7 +80,7 @@ export function patch(r: SimRace, index: number, values: Partial<Record<keyof ty
 
 /** Puts an item in a kart's hand. */
 export function give(r: SimRace, index: number, item: (typeof ITEM_KINDS)[number]): void {
-  patch(r, index, { item: ITEM_KINDS.indexOf(item), uses: item === "nitro3" ? 3 : 1, roll: 0 });
+  patch(r, index, { item: ITEM_KINDS.indexOf(item), uses: ITEM_USES[item] ?? 1, roll: 0 });
 }
 
 /** Counts events of a type for a kart. */

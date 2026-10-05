@@ -24,13 +24,13 @@ import {
 } from "../contract";
 import { mulberry32 } from "../../engine/rules/rng";
 import { botInput, rubberBand } from "./bots";
-import { stepItems, pressItem } from "./items";
+import { stepItems, pressItem, rocketTarget } from "./items";
 import { GO_TICK, NO_EMIT, bumpKarts, forwardSpeed, newKart, placeOnTrack, settle, stepKart, viewHop } from "./kart";
 import { planFor } from "./plan";
 import { standings, updatePlaces, updateProgress } from "./progress";
 import { applySnapshot, takeSnapshot } from "./snapshot";
 import { clamp, type EventBody, type KartState, type SimState, type World } from "./state";
-import { ticks } from "./tuning";
+import { ticks, TUNING } from "./tuning";
 
 /** The most events kept waiting for a caller that is not taking them. */
 const EVENT_BACKLOG = 400;
@@ -79,6 +79,9 @@ class Sim implements SimRace {
       pucks: [],
       seekers: [],
       slicks: [],
+      decoys: [],
+      skyrockets: [],
+      stormAt: -1,
       nextThing: plan.boxes.length,
       nextEvent: 1,
       firstHome: -1,
@@ -192,6 +195,8 @@ class Sim implements SimRace {
         surface: k.ground,
         trick: k.trick / TICK_HZ,
         rescue: k.rescue / TICK_HZ,
+        comet: k.comet / TICK_HZ,
+        zapped: k.zap / TICK_HZ,
         x: k.x,
         y: k.y,
         z: k.z,
@@ -222,6 +227,28 @@ class Sim implements SimRace {
     for (const e of state.seekers) things.push({ id: e.id, kind: "seeker", x: e.x, y: geo.at(e.s).y, z: e.z, heading: Math.atan2(e.dx, e.dz), active: true });
     for (const l of state.slicks) {
       things.push({ id: l.id, kind: "slick", x: l.x, y: geo.at(l.s).y, z: l.z, heading: (l.id * 2.399963) % (Math.PI * 2), active: true });
+    }
+    for (const l of state.decoys) {
+      things.push({ id: l.id, kind: "decoy", x: l.x, y: geo.at(l.s).y, z: l.z, heading: (l.id * 2.399963) % (Math.PI * 2), active: true });
+    }
+    for (const r of state.skyrockets) {
+      const target = rocketTarget(this.world, r.owner);
+      if (!target) continue;
+      const gap = geo.delta(r.s, target.s);
+      const at = geo.point(r.s, 0);
+      // Up and over: the arc is the share of the way flown, but it never touches down before the burst.
+      const flown = clamp(1 - Math.abs(gap) / Math.max(r.total, 25), 0, 1);
+      const up = TUNING.items.skyrocket.height * Math.sin(Math.PI * flown);
+      things.push({
+        id: r.id,
+        kind: "skyrocket",
+        x: at.x,
+        y: at.y + 3 + up,
+        z: at.z,
+        heading: geo.heading(r.s) + (gap < 0 ? Math.PI : 0),
+        active: true,
+        target: target.id,
+      });
     }
     const events = this.toView;
     this.toView = [];

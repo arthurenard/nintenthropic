@@ -23,6 +23,7 @@ const W = TUNING.wall;
 const R = TUNING.ramp;
 const F = TUNING.fall;
 const GROUND = TUNING.ground;
+const I = TUNING.items;
 
 /** The tick the countdown ends at and the race starts: 3 s and half a second of "ready". */
 export const GO_TICK = ticks(TUNING.start.countdown + TUNING.start.ready);
@@ -90,6 +91,8 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     trick: 0,
     rescue: 0,
     immune: 0,
+    comet: 0,
+    zap: 0,
     wrong: 0,
     wrongWay: false,
     place: place + 1,
@@ -173,8 +176,8 @@ function endDrift(k: KartState, boost: boolean, emit: Emit): void {
 }
 
 /** A hit: spun round, most of the speed gone, no drift, no boost. */
-export function spinOut(k: KartState): void {
-  k.spin = ticks(TUNING.items.spin);
+export function spinOut(k: KartState, seconds: number = TUNING.items.spin): void {
+  k.spin = ticks(seconds);
   k.vx *= TUNING.items.spinSpeedKept;
   k.vz *= TUNING.items.spinSpeedKept;
   k.boost = 0;
@@ -407,7 +410,15 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   }
 
   const prevS = k.s;
-  if (k.immune > 0) k.immune--;
+  if (k.comet > 0) {
+    // A Comet: nothing touches it, and no storm crawls it.
+    k.comet--;
+    k.zap = 0;
+    k.immune = Math.max(k.immune, 1);
+  } else if (k.immune > 0) {
+    k.immune--;
+  }
+  if (k.zap > 0) k.zap--;
 
   // In the air off a ramp: up and down, and a trick the first time `drift` goes down in the air.
   let landed = false;
@@ -465,7 +476,8 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     k.vz = along * cos + across * sin;
     capSpeed(k, D.maxSpeed);
   } else {
-    const ground = GROUND[k.ground];
+    // A Comet drives the rough as if it were road.
+    const ground = k.comet > 0 && GROUND[k.ground].rough ? GROUND.road : GROUND[k.ground];
     // The throttle, unless the engine is flooded.
     let throttle = throttleIn;
     if (k.flood > 0) {
@@ -524,7 +536,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
 
     // Speeding up, braking, coasting.
     const boosted = k.boost > 0;
-    let top = ground.top * k.band;
+    let top = ground.top * k.band * (k.comet > 0 ? I.comet.speed : k.zap > 0 ? I.storm.speed : 1);
     if (boosted) top = ground.rough ? ground.boostTop * k.band : top * D.boostSpeed;
     if (braking) {
       if (along > 0) along = Math.max(0, along - D.brakeDecel * ground.brake * brakeIn * TICK);
@@ -622,6 +634,8 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
       const b = karts[j]!;
       // Karts in the drone's hook touch nothing, and one flying over another passes above it.
       if (b.rescue > 0 || Math.abs(a.air - b.air) > TUNING.ramp.passOver) continue;
+      // A Comet and a kart that is not one pass through (the Comet spins it: items.ts).
+      if ((a.comet > 0) !== (b.comet > 0)) continue;
       const dx = a.x - b.x;
       const dz = a.z - b.z;
       const d2 = dx * dx + dz * dz;

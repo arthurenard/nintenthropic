@@ -64,7 +64,7 @@ describe("item boxes", () => {
       const weights = itemOdds(place, 8);
       return { nitro: weights[0]!, nitro3: weights[1]!, puck: weights[2]!, seeker: weights[3]!, slick: weights[4]! };
     };
-    expect(ITEM_KINDS).toEqual(["nitro", "nitro3", "puck", "seeker", "slick"]);
+    expect(ITEM_KINDS.slice(0, 5)).toEqual(["nitro", "nitro3", "puck", "seeker", "slick"]);
     expect(odds(1).seeker).toBe(0);
     expect(odds(8).slick).toBe(0);
     expect(odds(1).slick + odds(1).puck).toBeGreaterThan(odds(8).slick + odds(8).puck);
