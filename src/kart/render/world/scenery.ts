@@ -29,7 +29,9 @@ import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb } from "./builder";
+import type { KeepOut } from "./landmarks/place";
 import * as props from "./props";
+import { addWorldScenery } from "./sceneryWorlds";
 import { WATER_LEVEL, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 
@@ -40,7 +42,7 @@ export interface Scenery {
   dispose(): void;
 }
 
-interface Item {
+export interface Item {
   x: number;
   y: number;
   z: number;
@@ -85,12 +87,44 @@ function tint(rnd: () => number, amount = 0.16): Rgb {
   return [k * (1 + (rnd() - 0.5) * amount), k, k * (1 + (rnd() - 0.5) * amount)];
 }
 
+/** What the scenery of one world needs from the scattering machinery of all of them. */
+export interface SceneryTools {
+  style: ThemeStyle;
+  terrain: Terrain;
+  quality: QualitySettings;
+  material: Material;
+  rnd: () => number;
+  group: Group;
+  scatter(spec: Spec): Item[];
+  instanced(geometry: BufferGeometry, items: Item[]): void;
+  geo<G extends BufferGeometry>(g: G): G;
+  landmarkSpots(count: number, minEdge: number, maxEdge: number, accept?: (x: number, z: number, h: number) => boolean): { x: number; z: number; h: number; edge: number }[];
+  animated: ((t: number) => void)[];
+  disposables: (() => void)[];
+  /** True where a landmark stands (or the ground is not worth planting). */
+  blocked(x: number, z: number, margin?: number): boolean;
+}
+
+export interface Spec {
+  count: number;
+  minEdge: number;
+  maxEdge?: number;
+  /** 0..1 chance of keeping a candidate given its place. */
+  keep?: (x: number, z: number, h: number, edge: number) => number;
+  cell?: number;
+  scale: [number, number];
+  stretch?: [number, number];
+  lift?: number;
+  maxSlope?: number;
+}
+
 export function buildScenery(
   style: ThemeStyle,
   terrain: Terrain,
   quality: QualitySettings,
   material: Material,
   seed = 1234,
+  keepOut: readonly KeepOut[] = [],
 ): Scenery {
   const rnd = seededRandom(seed);
   const group = new Group();
@@ -114,24 +148,17 @@ export function buildScenery(
   const occupied = new Set<number>();
   const key = (x: number, z: number, cell: number) => Math.floor(x / cell) * 73856093 + Math.floor(z / cell) * 19349663;
 
-  interface Spec {
-    count: number;
-    minEdge: number;
-    maxEdge?: number;
-    /** 0..1 chance of keeping a candidate given its place. */
-    keep?: (x: number, z: number, h: number, edge: number) => number;
-    cell?: number;
-    scale: [number, number];
-    stretch?: [number, number];
-    lift?: number;
-    maxSlope?: number;
-  }
+  const blocked = (x: number, z: number, margin = 3): boolean => {
+    for (const k of keepOut) if ((k.x - x) ** 2 + (k.z - z) ** 2 < (k.r + margin) ** 2) return true;
+    return false;
+  };
   const scatter = (spec: Spec): Item[] => {
     const items: Item[] = [];
     const want = Math.round(spec.count * quality.scenery);
     let tries = want * 24;
     while (items.length < want && tries-- > 0) {
       const { x, z } = pick();
+      if (blocked(x, z)) continue;
       const h = terrain.heightAt(x, z);
       if (spec.keep && rnd() > spec.keep(x, z, h, 0)) continue;
       const cellKey = spec.cell ? key(x, z, spec.cell) : null;
@@ -159,7 +186,7 @@ export function buildScenery(
       const { x, z } = pick();
       const edge = terrain.edgeAt(x, z);
       const h = terrain.heightAt(x, z);
-      if (edge < minEdge || edge > maxEdge || !accept(x, z, h)) continue;
+      if (edge < minEdge || edge > maxEdge || !accept(x, z, h) || blocked(x, z, 12)) continue;
       if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 70)) continue;
       spots.push({ x, z, h, edge });
     }
@@ -239,7 +266,7 @@ export function buildScenery(
       m.scale.setScalar(1.5);
       add(m);
     }
-  } else {
+  } else if (style.id === "harbour") {
     // Harbour: yards of containers, warehouses, cranes, ships and a skyline of lights.
     const boxGeo = geo(props.container());
     const palette: Rgb[] = ["#d9473b", "#2f6bff", "#27b5a2", "#f2a33a", "#8e5bd6", "#e8e8ec", "#d95b9a", "#4aa3ff"].map(rgb).map((c) => [c[0] * 1.05, c[1] * 1.05, c[2] * 1.05] as Rgb);
@@ -380,6 +407,22 @@ export function buildScenery(
     disposables.push(() => {
       lights.geometry.dispose();
       (lights.material as Material).dispose();
+    });
+  } else {
+    addWorldScenery({
+      style,
+      terrain,
+      quality,
+      material,
+      rnd,
+      group,
+      scatter,
+      instanced: (geometry, items) => add(instanced(geometry, material, items)),
+      geo,
+      landmarkSpots,
+      animated,
+      disposables,
+      blocked,
     });
   }
 

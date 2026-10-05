@@ -137,6 +137,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let disposed = false;
   let ctxLost = false;
   let boxSlots: BoxSlot[] = [];
+  const boxLift = new Map<number, number>();
   let debugCamera: PerspectiveCamera | null = null;
 
   canvas.addEventListener("webglcontextlost", (e) => {
@@ -177,6 +178,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     lightTexture,
     night: world!.style.night,
     spinInModel: options.spinInModel ?? true,
+    surface: (x, z, hint) => world!.surfaceLift(x, z, hint),
+    rollAt: (distance) => world!.bank.rollAt(distance),
+    dynamic,
   });
 
   const disposeWorld = () => {
@@ -209,6 +213,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       scene.background = null;
       effects = new Effects(settings.particles);
       effects.calm = calm;
+      effects.world = world.style.id;
       const dust = new Color(world.style.dust);
       effects.setDustColour(dust.r, dust.g, dust.b);
       dynamic.add(effects.group);
@@ -219,6 +224,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const r of racers) makeActor(r);
       hud.setTrack(world.geometry, racers);
       boxSlots = rowSlots(world.geometry);
+      boxLift.clear();
       lastEventId = -1;
       hud.resetRace();
       time = 0;
@@ -250,21 +256,22 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       }
       lastTick = view.tick;
 
+      // Karts, standing where the road really is (its banking and any ramp lift them) and, when they have fallen, where the drone has them.
       const byId = new Map<number, KartView>();
-      for (const k of view.karts) byId.set(k.id, k);
-
-      // Karts.
       const ctx = actorContext();
-      for (const k of view.karts) {
-        let a = actors.get(k.id);
+      for (const k0 of view.karts) {
+        let a = actors.get(k0.id);
         if (!a) {
-          const r = view.racers.find((x) => x.id === k.id) ?? { id: k.id, colour: "#ffffff" };
+          const r = view.racers.find((x) => x.id === k0.id) ?? { id: k0.id, colour: "#ffffff" };
           a = makeActor(r);
         }
-        a.update(k, dt, ctx, time);
-        effects.kart(k, dt);
-        skids.kart(k);
-        if (world.style.night) {
+        a.update(k0, dt, ctx, time);
+        // Everything below this line sees the kart as drawn.
+        const k: KartView = { ...k0, x: a.x, y: a.roadY, z: a.z };
+        byId.set(k.id, k);
+        effects.kart(k, dt, k0.rescue > 0 ? { x: a.x, y: a.y, z: a.z, falling: a.falling } : undefined);
+        if (k0.rescue <= 0) skids.kart(k);
+        if (world.style.night && k0.rescue <= 0) {
           const fx = Math.sin(k.heading);
           const fz = Math.cos(k.heading);
           const rx = -Math.cos(k.heading);
@@ -276,10 +283,22 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         }
       }
 
-      // Item boxes: the sim's if it sends any, else the track's own rows.
-      boxSlots = slotsFromThings(view.things) ?? boxSlots;
-      world.boxes.update(boxSlots, time, dt, (x, y, z, r, g, b) => effects!.glowNow(x, y, z, 2.4, r * 1.2, g * 1.2, b * 1.2, 0.28));
-      things.update(view.things, time);
+      // Item boxes: the sim's if it sends any, else the track's own rows. A banked road lifts them like everything else on it.
+      const sent = slotsFromThings(view.things);
+      boxSlots = sent ?? boxSlots;
+      const lifted = boxSlots.map((slot) => {
+        let lift = boxLift.get(slot.id);
+        if (lift === undefined) {
+          lift = world!.surfaceLift(slot.x, slot.z).lift;
+          boxLift.set(slot.id, lift);
+        }
+        return lift === 0 ? slot : { ...slot, y: slot.y + lift };
+      });
+      world.boxes.update(lifted, time, dt, (x, y, z, r, g, b) => effects!.glowNow(x, y, z, 2.4, r * 1.2, g * 1.2, b * 1.2, 0.28));
+      things.update(
+        view.things.map((t) => (t.kind === "box" ? t : { ...t, y: t.y + world!.surfaceLift(t.x, t.z).lift })),
+        time,
+      );
 
       // Events, once each.
       const kartAt = (id: number) => byId.get(id);
@@ -300,7 +319,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       if (view.phase === "countdown") world.setStartLights(view.countdown > 3 ? 0 : 4 - Math.ceil(Math.max(0.001, view.countdown)));
       else world.setStartLights(view.time < 1.6 ? "go" : "off");
 
-      world.update(time, dt);
+      world.update(time, dt, view.time);
       effects.update(dt);
       skids.update(dt);
 
@@ -316,7 +335,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         const kart = byId.get(id);
         const cam = cameras[i];
         if (!rect || !kart || !cam) return;
-        cam.update(kart, view, dt, rect.w / rect.h);
+        const actor = actors.get(id);
+        const follow = actor ? { ...kart, x: actor.anchor.x, y: actor.anchor.y, z: actor.anchor.z } : kart;
+        cam.update(follow, view, dt, rect.w / rect.h);
         let eye = cam.camera;
         if (debugCamera && i === 0) {
           debugCamera.aspect = rect.w / rect.h;

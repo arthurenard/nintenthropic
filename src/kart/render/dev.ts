@@ -3,8 +3,12 @@
  * karts from the demo source (demo.ts, a stand-in for the real sim), the
  * keyboard driving kart 0.
  *
- *   ?track=meadow-loop     which track (an unknown id falls back to the first)
- *   ?theme=canyon          dress the track in another theme (meadow | canyon | harbour)
+ *   ?track=meadow-loop     which track (an unknown id falls back to the first); dev-kitchen, dev-snow,
+ *                          dev-volcano, dev-funfair, dev-space, dev-palm are the test tracks of devTracks.ts
+ *   ?theme=canyon          dress the track in another theme (any of the nine)
+ *   ?go=1                  skip the countdown
+ *   ?hud=0                 hide the HUD (for pictures)
+ *   ?at=0.3                start kart 0 at this fraction of the lap (and ?offset=2 metres right of the centre)
  *   ?views=1..4            split screen: kart 0 to 3, one view each
  *   ?quality=low|medium|high
  *   ?skip=8                run the demo this many seconds before showing it
@@ -19,6 +23,7 @@
  */
 import type { TrackTheme } from "../track/geometry";
 import { trackById, TRACKS } from "../track/tracks";
+import { DEV_TRACKS, devTrackById } from "./devTracks";
 import { createDemoRace, type DemoInput, type RaceViewSource } from "./demo";
 import type { Tier } from "./quality";
 import { createRaceRenderer, type GripRenderer } from "./renderer";
@@ -32,8 +37,8 @@ const loading = document.getElementById("loading") as HTMLElement;
 
 function startRace(): void {
   const wantedTrack = params.get("track") ?? TRACKS[0]!.id;
-  const track = trackById(wantedTrack);
-  const unknownTrack = TRACKS.every((t) => t.id !== wantedTrack);
+  const track = devTrackById(wantedTrack) ?? trackById(wantedTrack);
+  const unknownTrack = [...TRACKS, ...DEV_TRACKS].every((t) => t.id !== wantedTrack);
   const views = Math.max(1, Math.min(4, Number(params.get("views") ?? 1) || 1));
   const quality = (params.get("quality") as Tier | null) ?? "auto";
   const theme = (params.get("theme") as TrackTheme | null) ?? undefined;
@@ -93,6 +98,9 @@ function startRace(): void {
     });
     setViews(views);
     resize();
+    if (params.get("go") === "1") demo.skipCountdown();
+    if (params.get("hud") === "0") hudRoot.style.display = "none";
+    if (params.has("at")) demo.teleport(0, Number(params.get("at")), Number(params.get("offset") ?? 0), Number(params.get("speed") ?? 22));
     const skip = Number(params.get("skip") ?? 0) || 0;
     for (let t = 0; t < skip; t += 1 / 30) source.step(1 / 30, null);
     loading.classList.add("done");

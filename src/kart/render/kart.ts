@@ -7,16 +7,18 @@
  * the renderer needs from a model is a root to place and a `pose()` to
  * animate. The actor owns
  * what is true of every kart whatever it looks like: where it is, the roll,
- * pitch and lean it shows from its motion, the spin-out, the hop, and its
- * blob shadow.
+ * pitch and lean it shows from its motion, the spin-out, the hop, the lean
+ * of a banked road, a trick's twirl in the air, the long fall when it leaves
+ * the road and the rescue drone that fishes it out, and its blob shadow.
  *
  * Built facing +z; its left is +x (so its right is -x), which is what
  * `rotation.y = heading` expects (contract.ts).
  */
-import { AdditiveBlending, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, type Object3D, type Texture } from "three";
+import { AdditiveBlending, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, type Object3D, type Texture } from "three";
 import type { KartView, RacerSetup } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
-import { clamp, damp, easeOutCubic, lerp, TAU } from "./math";
+import { RescueDrone } from "./drone";
+import { clamp, damp, easeOutCubic, lerp, smoothstep, TAU } from "./math";
 
 // ─── The model's contract ──────────────────────────────────────────────────
 
@@ -42,6 +44,8 @@ export interface KartPose {
   flicker: number;
   /** Extra yaw of the body against the travel direction (a drift's slide), radians. */
   slide: number;
+  /** How far the driver has twirled in a trick, radians (0 when none); a model with nothing to twirl may ignore it. */
+  twirl?: number;
 }
 
 export interface KartModel {
@@ -65,9 +69,40 @@ export interface ActorContext {
   /** The actor adds the visual spin on top of the heading; set false if the sim already turns the heading. */
   spinInModel: boolean;
   lightTexture: Texture;
+  /** How far above the sim's flat road the surface is under (x, z): banking and ramps (world.surfaceLift). */
+  surface?: (x: number, z: number, hint?: number) => { lift: number; ramp: number; s: number; offset: number };
+  /** The road's lean at distance s, radians (+ in a right-hand bend). */
+  rollAt?: (s: number) => number;
+  /** The scene the rescue drone flies in. */
+  dynamic?: Group;
 }
 
 const SPIN_TURNS = 2;
+/** How long a trick's twirl takes, seconds, and how many turns the driver makes. */
+const TRICK_TIME = 0.75;
+const TRICK_TURNS = 2;
+/** The stylised fall: gravity, and the longest drop the picture shows before the drone has the kart. */
+const FALL_G = 24;
+const FALL_MAX = 9;
+
+/** The state of a fall and rescue, from the moment the kart leaves the road. */
+interface FallState {
+  /** The duration it was first given, seconds. */
+  T: number;
+  /** Where it fell from, which way it was going, how fast. */
+  x: number;
+  y: number;
+  z: number;
+  heading: number;
+  speed: number;
+  /** Where the drone sets it down. */
+  toX: number;
+  toZ: number;
+  toY: number;
+}
+
+const _inv = new Quaternion();
+const _off = new Vector3();
 
 export class KartActor {
   readonly root = new Group();
@@ -89,9 +124,33 @@ export class KartActor {
   private spinMax = 0;
   private near = 0;
   private accel = 0;
+  private tiltX = 0;
+  private tiltZ = 0;
+  /** Where the kart is on screen (it differs from the view while it falls and is carried), and the height of the road under it. */
+  x = 0;
+  y = 0;
+  z = 0;
+  roadY = 0;
+  /** What the chase camera should look at, which holds the road's height while the kart falls away. */
+  anchor = { x: 0, y: 0, z: 0 };
   /** Where the kart is now, for effects and the cameras. */
   yaw = 0;
   slope = 0;
+  /** True while the drone has it (and the drone is still in the air after). */
+  rescuing = false;
+  /** True while it is still dropping, before the hook has it. */
+  falling = false;
+
+  // The rescue.
+  private drone: RescueDrone | null = null;
+  private fall: FallState | null = null;
+  private lastGood = { x: 0, y: 0, z: 0, heading: 0, speed: 0 };
+  private droneOut = -1;
+  private droneLast = { x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0 };
+  private settle = { x: 0, y: 0, z: 0 };
+  private tumble = { x: 0, y: 0, z: 0 };
+  private lastLift = 0;
+  private rampBonus = 0;
 
   constructor(
     readonly id: number,
@@ -128,7 +187,7 @@ export class KartActor {
     const speed = view.speed;
     const sr = clamp(Math.abs(speed) / 24, 0, 1.4);
 
-    // The road under it: its slope in the kart's direction of travel.
+    // The road under it: its slope in the kart's direction of travel, its lean, and how high bends and ramps lift it.
     let proj = ctx.track.project(view.x, view.z, this.near);
     // After a jump (a restart, a new race) the hint is stale: look at the whole loop.
     if (Math.hypot(view.x - proj.sample.x, view.z - proj.sample.z) > 20) proj = ctx.track.project(view.x, view.z);
@@ -139,6 +198,26 @@ export class KartActor {
     const behind = ctx.track.at(proj.s - 2).y;
     const slope = Math.atan(((ahead - behind) / 4) * along);
     this.slope = damp(this.slope, slope, 12, dt);
+    const surf = ctx.surface ? ctx.surface(view.x, view.z, proj.s) : { lift: 0, ramp: 0, s: proj.s, offset: proj.offset };
+    // Off the end of a ramp the sim's kart is level with the road again; the picture's has climbed the wedge, so it keeps the height
+    // it had and gives it back as it flies (or at once, if it was too slow to fly).
+    if (surf.ramp > 0.02) this.rampBonus = surf.ramp;
+    else this.rampBonus *= Math.exp(-dt * (view.hop > 0.2 ? 2.4 : 12));
+    this.lastLift = ctx.surface ? surf.lift : 0;
+    const roll = ctx.rollAt ? ctx.rollAt(proj.s) : 0;
+    // The banked road's plane, seen from the kart: how much it tips the kart's nose and its side.
+    const rrx = -t.tz;
+    const rrz = t.tx;
+    const fx = Math.sin(view.heading);
+    const fz = Math.cos(view.heading);
+    const rx = -Math.cos(view.heading);
+    const rz = Math.sin(view.heading);
+    const tanRoll = Math.tan(roll);
+    const edge = Math.abs(proj.offset) < t.width / 2 + 0.5;
+    const bankPitch = edge ? Math.atan(-tanRoll * (rrx * fx + rrz * fz)) : 0;
+    const bankRoll = edge ? Math.atan(tanRoll * (rrx * rx + rrz * rz)) : 0;
+    this.tiltX = damp(this.tiltX, -bankPitch, 14, dt);
+    this.tiltZ = damp(this.tiltZ, bankRoll, 14, dt);
 
     // Spin-out: two turns, easing out, over the time the sim says it lasts.
     let spinYaw = 0;
@@ -150,8 +229,140 @@ export class KartActor {
       this.spinMax = 0;
     }
 
-    this.root.position.set(view.x, view.y, view.z);
-    this.root.rotation.y = view.heading + spinYaw;
+    const baseY = view.y + surf.lift;
+    // The shadow stays on the road (and the wedge); only the kart carries the leftover height.
+    const flyBonus = surf.ramp > 0.02 ? 0 : this.rampBonus;
+    this.roadY = baseY;
+    let px = view.x;
+    let py = baseY;
+    let pz = view.z;
+    let rotX = this.tiltX;
+    let rotZ = this.tiltZ;
+    let rotY = view.heading + spinYaw;
+
+    // A trick in the air: the driver twirls and the kart wobbles about its length.
+    let twirl = 0;
+    if (view.trick > 0 && view.rescue <= 0) {
+      const u = clamp(view.trick / TRICK_TIME);
+      twirl = TAU * TRICK_TURNS * (u * u * (3 - 2 * u));
+      rotZ += Math.sin(view.trick * 11) * 0.22 * (1 - u * 0.6);
+    }
+
+    // The long fall and the drone.
+    const rescuing = view.rescue > 0;
+    if (rescuing && !this.fall) {
+      // Where the drone will set it down: the sim's own spot if it has moved the kart back to the road, otherwise a little behind, on the road.
+      let toX = view.x;
+      let toZ = view.z;
+      let toY = baseY;
+      if (!onRoad(proj.offset, t.width)) {
+        const back = ctx.track.at(proj.s - 12);
+        const off = clamp(proj.offset, -(back.width / 2 - 3), back.width / 2 - 3);
+        const p = ctx.track.point(proj.s - 12, off);
+        toX = p.x;
+        toZ = p.z;
+        toY = p.y + (ctx.surface ? ctx.surface(p.x, p.z, proj.s - 12).lift : 0);
+      }
+      const from = this.lastGood.speed !== 0 || this.lastGood.x !== 0 ? this.lastGood : { x: view.x, y: baseY, z: view.z, heading: view.heading, speed };
+      this.fall = { T: view.rescue, x: from.x, y: from.y, z: from.z, heading: from.heading, speed: from.speed, toX, toZ, toY };
+      this.tumble = { x: 0, y: 0, z: 0 };
+      this.droneOut = -1;
+    }
+    if (rescuing && this.fall) {
+      const f = this.fall;
+      // The sim may move the kart to the road at some point: follow it there.
+      if (onRoad(proj.offset, t.width) && (Math.abs(view.x - f.x) > 8 || Math.abs(view.z - f.z) > 8)) {
+        f.toX = view.x;
+        f.toZ = view.z;
+        f.toY = baseY;
+      }
+      const tt = f.T - view.rescue;
+      const tFall = Math.min(0.9, f.T * 0.38);
+      const tRelease = f.T - 0.45;
+      const fallY = f.y - Math.min(FALL_MAX, 0.5 * FALL_G * Math.min(tt, tFall) ** 2);
+      // Momentum carries it on a little as it drops.
+      const carry = Math.min(tt, tFall);
+      const ahead = clamp(f.speed, 0, 26) * 0.32 * (1 - carry / (tFall * 2.2)) * carry;
+      const fallX = f.x + Math.sin(f.heading) * ahead;
+      const fallZ = f.z + Math.cos(f.heading) * ahead;
+      let kx = fallX;
+      let ky = fallY;
+      let kz = fallZ;
+      let hang = 0;
+      if (tt > tFall) {
+        const lift = easeOutCubic(clamp((tt - tFall) / 0.75));
+        const move = smoothstep(0.25, 1, clamp((tt - tFall) / Math.max(0.1, tRelease - tFall)));
+        kx = lerp(fallX, f.toX, move);
+        kz = lerp(fallZ, f.toZ, move);
+        const carryY = Math.max(f.toY + 3.2, fallY + 0.5);
+        ky = lerp(fallY, carryY, lift);
+        if (tt > tRelease) {
+          const r = smoothstep(0, 1, clamp((tt - tRelease) / 0.45));
+          ky = lerp(carryY, f.toY, r);
+        } else {
+          ky = lerp(fallY, lerp(carryY, f.toY + 3.2, move), lift);
+        }
+        hang = 1;
+      }
+      px = kx;
+      py = ky;
+      pz = kz;
+      // Tumbling while it falls; hanging by the hook, swaying, once caught.
+      if (tt <= tFall) {
+        this.tumble.x = tt * 5.8;
+        this.tumble.y = tt * 3.4;
+        this.tumble.z = tt * 4.2;
+        rotX = this.tumble.x;
+        rotY = f.heading + this.tumble.y;
+        rotZ = this.tumble.z;
+      } else {
+        const settled = 1 - Math.exp(-(tt - tFall) * 4.5);
+        const sway = Math.sin(tt * 4.2) * 0.2 * (1 - clamp((tt - tFall) / 1.6) * 0.5);
+        const wrap = (a: number) => a - TAU * Math.round(a / TAU);
+        rotX = lerp(wrap(this.tumble.x), 0.28, settled);
+        rotZ = lerp(wrap(this.tumble.z), sway, settled);
+        rotY = lerp(f.heading + wrap(this.tumble.y), view.heading, settled);
+      }
+      this.updateDrone(ctx, f, tt, tFall, tRelease, hang, px, py, pz, time);
+      this.rescuing = true;
+      this.falling = tt <= tFall;
+      this.anchor.x = px;
+      this.anchor.z = pz;
+      this.anchor.y = lerp(f.y, py, 0.55);
+      this.settle = { x: 0, y: 0, z: 0 };
+    } else {
+      if (this.fall) {
+        // The drone has let go: a little blend from where the picture had it to where the sim says it is, and the drone flies off.
+        this.settle = { x: this.x - view.x, y: this.y - baseY, z: this.z - view.z };
+        const f = this.fall;
+        this.fall = null;
+        this.droneOut = 0;
+        this.droneLast.yaw = f.heading;
+      }
+      this.anchor.x = view.x;
+      this.anchor.z = view.z;
+      this.anchor.y = baseY + view.hop * 0.7;
+      this.falling = false;
+      if (this.droneOut >= 0) this.flyAway(dt, time);
+      else this.rescuing = false;
+      const k = Math.exp(-dt * 9);
+      this.settle.x *= k;
+      this.settle.y *= k;
+      this.settle.z *= k;
+      px += this.settle.x;
+      py += this.settle.y;
+      pz += this.settle.z;
+    }
+    if (!rescuing) this.lastGood = { x: view.x, y: baseY, z: view.z, heading: view.heading, speed };
+
+    // A hop is the body lifting off its wheels; a jump (several metres) lifts the whole kart, wheels and all.
+    const jump = rescuing ? 0 : Math.max(0, view.hop - 0.4) + flyBonus;
+    py += jump;
+    this.x = px;
+    this.y = py;
+    this.z = pz;
+    this.root.position.set(px, py, pz);
+    this.root.rotation.set(rotX, rotY, rotZ, "YXZ");
     this.yaw = view.heading;
 
     // Motion-driven attitude.
@@ -165,35 +376,124 @@ export class KartActor {
     const leanTarget = clamp(view.steer * 0.3 + view.drift * 0.22, -0.55, 0.55);
     this.lean = damp(this.lean, leanTarget, 12, dt);
     this.slide = damp(this.slide, -view.drift * 0.2 * (spinning ? 0 : 1), 8, dt);
-    this.flame = damp(this.flame, view.boost > 0 ? 1 : 0, view.boost > 0 ? 16 : 10, dt);
-    this.hop = damp(this.hop, view.hop, 30, dt);
-    this.wheelSpin += (speed * dt) / 0.4;
+    this.flame = damp(this.flame, view.boost > 0 && !rescuing ? 1 : 0, view.boost > 0 ? 16 : 10, dt);
+    this.hop = damp(this.hop, rescuing ? 0 : Math.min(view.hop, 0.4), 30, dt);
+    this.wheelSpin += (rescuing ? 0 : speed * dt) / 0.4;
 
-    const rough = view.offroad ? 0.035 : 0.006;
+    const rough = view.offroad || view.surface === "mud" ? 0.035 : 0.006;
     const shake = Math.sin(time * 61 + this.id * 7) * rough * clamp(sr * 1.5, 0, 1);
     this.model.pose({
-      steer: view.steer,
+      steer: rescuing ? 0 : view.steer,
       wheelSpin: this.wheelSpin,
-      lean: this.lean,
-      roll: this.roll,
-      pitch: this.pitch,
+      lean: rescuing ? 0 : this.lean,
+      roll: rescuing ? 0 : this.roll,
+      pitch: rescuing ? 0 : this.pitch,
       hop: this.hop,
-      shake,
+      shake: rescuing ? 0 : shake,
       flame: this.flame,
       flicker: 0.5 + 0.5 * Math.sin(time * 71 + this.id * 3.1) * Math.sin(time * 47),
       slide: this.slide,
+      twirl,
     });
 
-    // Shadow lies on the road, shrinking and paling while the kart is in the air.
-    this.shadowGroup.rotation.x = -this.slope;
-    const air = clamp(this.hop / 0.6);
-    this.shadowMat.opacity = lerp(0.55, 0.3, air);
-    this.shadow.scale.set(lerp(2.5, 2.1, air), 1, lerp(3.5, 3.0, air));
+    // Shadow lies on the road, shrinking and paling while the kart is in the air or being carried.
+    const high = Math.max(0, py - baseY) + this.hop;
+    const air = clamp(high / 4.5);
+    // The shadow belongs to the road, not to the tumbling kart: undo the kart's own tilt and drop it to the road.
+    _inv.copy(this.root.quaternion).invert();
+    _off.set(0, baseY - py, 0).applyQuaternion(_inv);
+    this.shadowGroup.position.copy(_off);
+    this.shadowGroup.quaternion.copy(_inv);
+    this.shadowGroup.rotateY(rotY);
+    this.shadowGroup.rotateX(-this.slope);
+    this.shadowMat.opacity = lerp(0.55, 0.22, air) * (py < baseY - 1 ? 0 : 1);
+    this.shadow.scale.set(lerp(2.5, 1.9, air), 1, lerp(3.5, 2.7, air));
+  }
+
+  /** The drone dives in, hooks the kart as it stops falling, carries it, and lowers it. */
+  private updateDrone(ctx: ActorContext, f: FallState, tt: number, tFall: number, tRelease: number, hang: number, kx: number, ky: number, kz: number, time: number): void {
+    if (!this.drone) {
+      this.drone = new RescueDrone();
+      (ctx.dynamic ?? this.root.parent)?.add(this.drone.root);
+    }
+    const cableCarry = 3.0;
+    const hover = 1.3 + cableCarry + 0.62;
+    let dx: number;
+    let dy: number;
+    let dz: number;
+    let cable: number;
+    let pitch = 0;
+    let roll = 0;
+    let yaw = f.heading;
+    if (tt <= tFall || !hang) {
+      // Diving in from ahead and above, to be over the kart as it is caught.
+      const catchX = f.x + Math.sin(f.heading) * clamp(f.speed, 0, 26) * 0.32 * 0.6 * tFall * 0.65;
+      const catchZ = f.z + Math.cos(f.heading) * clamp(f.speed, 0, 26) * 0.32 * 0.6 * tFall * 0.65;
+      const catchY = f.y - Math.min(FALL_MAX, 0.5 * FALL_G * tFall * tFall) + hover;
+      const p = easeOutCubic(clamp(tt / tFall));
+      const sx = catchX + Math.sin(f.heading + 0.9) * 46;
+      const sz = catchZ + Math.cos(f.heading + 0.9) * 46;
+      const sy = catchY + 30;
+      dx = lerp(sx, catchX, p);
+      dy = lerp(sy, catchY, p);
+      dz = lerp(sz, catchZ, p);
+      cable = lerp(1.2, cableCarry, p);
+      yaw = Math.atan2(catchX - sx, catchZ - sz);
+      pitch = 0.3 * (1 - p);
+      roll = Math.sin(time * 3) * 0.05;
+    } else {
+      const sinceCatch = tt - tFall;
+      dx = kx;
+      dz = kz;
+      dy = ky + hover + (tt > tRelease ? lerp(0, 0.6, clamp((tt - tRelease) / 0.45)) : 0);
+      cable = cableCarry + (tt > tRelease ? lerp(0, 0.9, clamp((tt - tRelease) / 0.45)) : 0);
+      // Leaning into the way it is going.
+      const toX = f.toX - kx;
+      const toZ = f.toZ - kz;
+      const d = Math.hypot(toX, toZ);
+      if (d > 0.5) yaw = Math.atan2(toX, toZ);
+      pitch = clamp(d * 0.02, 0, 0.2);
+      roll = Math.sin(sinceCatch * 3.1) * 0.06;
+      dy += Math.sin(sinceCatch * 5) * 0.12;
+    }
+    this.droneLast = { x: dx, y: dy, z: dz, yaw, vx: Math.sin(yaw) * 6, vz: Math.cos(yaw) * 6 };
+    this.drone.pose(dx, dy, dz, yaw, pitch, roll, cable, time);
+  }
+
+  /** After the release the drone climbs away and is gone in a moment. */
+  private flyAway(dt: number, time: number): void {
+    if (!this.drone) {
+      this.droneOut = -1;
+      this.rescuing = false;
+      return;
+    }
+    this.droneOut += dt;
+    const d = this.droneLast;
+    const gain = 1 + this.droneOut * 3.2;
+    d.vx *= 1 + dt * 1.8;
+    d.vz *= 1 + dt * 1.8;
+    d.x += d.vx * dt * gain;
+    d.z += d.vz * dt * gain;
+    d.y += (4 + this.droneOut * 16) * dt;
+    this.drone.pose(d.x, d.y, d.z, d.yaw, -0.25, 0, Math.max(0.4, 3.9 - this.droneOut * 4), time);
+    if (this.droneOut > 1.4) {
+      this.drone.hide();
+      this.droneOut = -1;
+      this.rescuing = false;
+    } else {
+      this.rescuing = true;
+    }
   }
 
   dispose(): void {
     this.model.dispose();
+    this.drone?.dispose();
     for (const r of this.resources) r.dispose();
     this.root.removeFromParent();
   }
+}
+
+/** Is a point `offset` metres off the centre line on or just beside a road of this width? */
+function onRoad(offset: number, width: number): boolean {
+  return Math.abs(offset) <= width / 2 + 4;
 }

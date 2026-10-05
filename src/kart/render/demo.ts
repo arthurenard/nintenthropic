@@ -99,6 +99,12 @@ export class DemoRace implements RaceViewSource {
   private lastPresses = 0;
   /** Whether boxes are sent as things (the real sim will) or left to the track's rows. */
   boxesAsThings = true;
+  /** For the dev page: fields forced onto a kart's view whatever the demo does (a trick, a fall, a surface). */
+  private overrides = new Map<number, Partial<KartView>>();
+  /** For the dev page: the race clock the view reports, whatever it is (hazards move on it). */
+  timeOverride: number | null = null;
+  /** Rescues the demo is running: seconds left, and where the kart goes back to. */
+  private rescues = new Map<number, { left: number; s: number; offset: number }>();
 
   constructor(
     readonly track: TrackDef,
@@ -200,6 +206,52 @@ export class DemoRace implements RaceViewSource {
     }
   }
 
+  /** Jumps past the countdown to the race itself (the dev page's ?go=1). */
+  skipCountdown(): void {
+    if (this.clock < COUNTDOWN) {
+      this.clock = COUNTDOWN + 0.01;
+      this.emit({ type: "countdown", n: 0 });
+    }
+  }
+
+  /** Forces fields onto kart `id`'s view (null clears). */
+  override(id: number, patch: Partial<KartView> | null): void {
+    if (patch === null) this.overrides.delete(id);
+    else this.overrides.set(id, { ...(this.overrides.get(id) ?? {}), ...patch });
+  }
+
+  /** Puts kart `id` at a fraction of the lap and `offset` metres right of the centre, facing along the road. */
+  teleport(id: number, fraction: number, offset = 0, speed = 20): void {
+    const k = this.karts.find((x) => x.id === id);
+    if (!k) return;
+    const g = this.geometry;
+    const s = fraction * g.length;
+    const p = g.point(s, offset);
+    k.x = p.x;
+    k.y = p.y;
+    k.z = p.z;
+    k.heading = g.heading(s);
+    k.speed = speed;
+    k.progress = s;
+    k.near = s;
+    k.lane = offset;
+    k.laneTarget = offset;
+  }
+
+  /** Reports an event as the sim would (a fall, a trick, a jump), for the dev page. */
+  inject(e: EventBody): void {
+    this.emit(e);
+  }
+
+  /** Starts a fall: the kart is left where it is (off the road, say) for `seconds`, then set back `behind` metres on the road. */
+  startRescue(id: number, seconds = 2.5, behind = 12): void {
+    const k = this.karts.find((x) => x.id === id);
+    if (!k) return;
+    const proj = this.geometry.project(k.x, k.z, k.near);
+    this.rescues.set(id, { left: seconds, s: proj.s - behind, offset: Math.max(-4, Math.min(4, proj.offset)) });
+    this.emit({ type: "fall", kart: id });
+  }
+
   private place(): void {
     const order = [...this.karts].sort((a, b) => {
       if (a.finished !== null && b.finished !== null) return a.finished - b.finished;
@@ -230,6 +282,18 @@ export class DemoRace implements RaceViewSource {
     const raceTime = Math.max(0, this.clock - COUNTDOWN);
 
     for (const k of this.karts) {
+      const resc = this.rescues.get(k.id);
+      if (resc) {
+        // Held where it fell until the drone lets go, then back on the road.
+        resc.left -= dt;
+        k.speed = 0;
+        if (resc.left <= 0) {
+          this.rescues.delete(k.id);
+          this.teleport(k.id, resc.s / this.geometry.length, resc.offset, 4);
+          this.emit({ type: "rescued", kart: k.id });
+        }
+        continue;
+      }
       if (k.hasDriver) this.driveDriver(k, dt, racing, input, raceTime);
       else this.driveRails(k, dt, racing, raceTime);
       this.common(k, dt, raceTime);
@@ -606,7 +670,7 @@ export class DemoRace implements RaceViewSource {
       id: k.id,
       surface: k.offroad ? "grass" : "road",
       trick: 0,
-      rescue: 0,
+      rescue: this.rescues.get(k.id)?.left ?? 0,
       x: k.x,
       y: k.y,
       z: k.z,
@@ -627,6 +691,7 @@ export class DemoRace implements RaceViewSource {
       lapProgress: k.lapProgress,
       wrongWay: k.wrongWay,
       finished: k.finished,
+      ...this.overrides.get(k.id),
     }));
     const things: ThingView[] = this.things.map((t) => ({ id: t.id, kind: t.kind, x: t.x, y: t.y, z: t.z, heading: t.heading, active: true }));
     if (this.boxesAsThings) for (const b of this.boxes) things.push({ ...b.thing });
@@ -636,7 +701,7 @@ export class DemoRace implements RaceViewSource {
       tick: Math.round(this.tick),
       phase: me.finished !== null && this.clock - this.finishedAt > 3 ? "finished" : racing ? "racing" : "countdown",
       countdown: racing ? 0 : COUNTDOWN - this.clock,
-      time: racing ? this.clock - COUNTDOWN : 0,
+      time: this.timeOverride ?? (racing ? this.clock - COUNTDOWN : 0),
       laps: this.options.laps ?? this.track.laps,
       track: this.track,
       racers: this.racers,
