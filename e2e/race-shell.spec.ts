@@ -174,6 +174,37 @@ test("pausing: Escape and the button open a sheet; practice waits, Resume counts
   await expect.poll(() => phase(page), { timeout: 30_000 }).toBe("countdown");
 });
 
+test("the host's lobby, Grand Prix and Mirror included, is never wider than the screen, and its long choices stay in their track", async ({ page }) => {
+  await host(page, "Maya");
+  await page.getByRole("radio", { name: "Grand Prix" }).click();
+  await expect(page.locator("#row-cup")).toBeVisible();
+  await page.getByRole("switch", { name: "Mirror Mode" }).click();
+  await page.waitForTimeout(600);
+  // Nothing sideways to scroll to (at 390 px this was 457 wide once).
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  // The segmented control that says where the race shows: both of its choices inside it.
+  const track = (await page.locator("#pick-display").boundingBox())!;
+  for (const name of ["On Everyone’s Own Screen", "On This Screen"]) {
+    const choice = (await page.getByRole("radio", { name }).boundingBox())!;
+    expect(choice.x).toBeGreaterThanOrEqual(track.x - 1);
+    expect(choice.x + choice.width).toBeLessThanOrEqual(track.x + track.width + 1);
+  }
+});
+
+test("on a phone on its side the pause sheet shows all its buttons", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await practiceRace(page);
+  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe("racing");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#pause-sheet")).toBeVisible();
+  await page.waitForTimeout(600);
+  for (const name of ["Resume", "Restart", "Leave Race"]) {
+    const box = (await page.getByRole("button", { name }).boundingBox())!;
+    expect(box.y, name).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height, name).toBeLessThanOrEqual(390);
+  }
+});
+
 test("hosting with the wheel: the check, the code and its QR code, and the wheel's picture in the race", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
