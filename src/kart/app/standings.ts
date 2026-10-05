@@ -136,7 +136,9 @@ export class StandingsScreen {
 
   /** One row of the table. */
   private item(row: Row, mine: ReadonlySet<number>): HTMLLIElement {
-    const li = element("li", row.player !== null && mine.has(row.player) ? "st-row mine" : "st-row");
+    // The people at the table stand out from the bots: a stripe in their colour, and the ones on this screen lit.
+    const li = element("li", `st-row${row.player !== null ? " human" : ""}${row.player !== null && mine.has(row.player) ? " mine" : ""}`);
+    li.style.setProperty("--colour", row.colour);
     const name = element("span", "st-name");
     name.append(colourDot(row.colour), element("span", "st-driver", row.name));
     if (row.player !== null && mine.has(row.player)) name.append(element("span", "player-tag", "You"));

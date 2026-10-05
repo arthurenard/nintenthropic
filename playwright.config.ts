@@ -46,7 +46,7 @@ export default defineConfig({
   projects: [
     {
       name: "flows",
-      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience|orbit|ridge|switchCamera|race-shell|race-room)\.spec\.ts/,
+      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience|orbit|ridge|switchCamera|race-shell|race-room|race-gp)\.spec\.ts/,
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
     {

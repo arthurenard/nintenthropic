@@ -285,7 +285,7 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
     // same measure): the podium sits in what is left, with the cup's name above it.
     camera.clearViewOffset();
     if (sheet()) camera.setViewOffset(width, height, 0, height * 0.12, width, height);
-    else camera.setViewOffset(width, height, width * 0.15, -height * 0.1, width, height);
+    else camera.setViewOffset(width, height, width * 0.15, -height * 0.13, width, height);
   };
 
   /** The standings are a sheet at the foot, not a panel at the side. */

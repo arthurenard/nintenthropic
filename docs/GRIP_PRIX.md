@@ -62,6 +62,41 @@ finished, or 25 s after the first player finished — the rest are placed by
 how far round they got. A finished player's kart drives itself on. A player
 who leaves mid-race is replaced by a bot.
 
+### Grand Prix and Mirror
+
+The host's lobby chooses **Single Race** or **Grand Prix**. A Grand Prix is a
+cup's four tracks in a row (the Acorn Cup or the Comet Cup, shown with their
+tracks in the lobby; laps are per race). Points go 15, 12, 10, 8, 6, 4, 2, 1
+by place; ties go to the better place in the last race (`src/kart/grandprix.ts`,
+`GrandPrixRun`, which the host keeps and publishes as `LobbyState.grandPrix`).
+After each race the **results** (with the points each place earned) give way to
+the **standings** by themselves after 10 s, and the standings to the next race
+(or, after the fourth, the **podium**) after 15 s; the host's Standings / Next
+Race button (`Session.next()`) skips ahead, so a big screen needs no phone.
+The standings count the points up from where they were, the rows sliding to
+their new places with a mark for who rose or fell (`app/standings.ts`). Bots
+keep their names, colours and drivers (`RacerSetup`) through the cup; the
+leader starts on pole. The cup runs on the settings it began with. A latecomer
+is turned away ("started"); a guest who leaves keeps their row and their kart
+races on as a bot.
+
+The **podium** (`render/podium.ts`, `createPodium(canvas)`, shown by
+`app/podium.ts`) is a 3D ceremony: the top three drivers in their karts on a
+three-step podium with gold, silver and bronze trophies turning over them,
+confetti, and the camera swinging round the front (still, with little
+confetti, for reduced motion); the cup's name, who won, and the final
+standings beside it (a sheet at the foot on a phone); Play Again (`restart()`,
+the same cup from the start) or Back to Lobby. `render/podium.html` is a dev
+page for it. A player who wins a cup on this device has it written down
+(`wonCup`); winning the second one says "You unlocked a secret track!".
+
+**Mirror** (`LobbySettings.mirror`, a switch in the lobby): `mirrorTrack(def)`
+(`track/mirror.ts`) flips every point's x and every lateral thing (offsets
+negated, left and right swapped, landmark turns negated); the flag, not the
+track, goes to the guests (`StartInfo.mirror`), who rebuild the same def. A
+mirrored track's id is the original's plus `-mirror`. The secret track is in
+the host's track list (single races) once the host's device has opened it.
+
 ## Where people play
 
 A **room** has up to four players across any number of devices. One device

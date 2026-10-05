@@ -7,7 +7,7 @@
 import { expect, type Page } from "@playwright/test";
 import type { KartAppSnapshot } from "../src/kart/app/app";
 import { TrackGeometry } from "../src/kart/track/geometry";
-import { trackById } from "../src/kart/track/tracks";
+import { trackByRaceId } from "../src/kart/track/mirror";
 
 export const state = (page: Page): Promise<KartAppSnapshot> =>
   page.evaluate(() => window.gripTest!.state()) as Promise<KartAppSnapshot>;
@@ -129,7 +129,7 @@ export class KeyboardDriver {
         await this.page.waitForTimeout(100);
         continue;
       }
-      if (this.geometry?.id !== race.trackId) this.geometry = { id: race.trackId, geometry: TrackGeometry.build(trackById(race.trackId)) };
+      if (this.geometry?.id !== race.trackId) this.geometry = { id: race.trackId, geometry: TrackGeometry.build(trackByRaceId(race.trackId)) };
       const road = this.geometry.geometry;
       const at = road.project(kart.x, kart.z);
       // Aim at a point on the centre line a little way ahead, further when faster.
