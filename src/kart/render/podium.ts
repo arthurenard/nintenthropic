@@ -281,15 +281,15 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
     camera.aspect = aspect;
     camera.fov = sheet() ? 44 : 32;
     camera.updateProjectionMatrix();
-    // A side panel takes the right of a wide window, a sheet the foot of a tall one (race.css decides which, by the
+    // A side panel takes the right of a wide window, a sheet the foot of a tall one (grandprix.css decides which, by the
     // same measure): the podium sits in what is left, with the cup's name above it.
     camera.clearViewOffset();
     if (sheet()) camera.setViewOffset(width, height, 0, height * 0.12, width, height);
     else camera.setViewOffset(width, height, width * 0.15, -height * 0.13, width, height);
   };
 
-  /** The standings are a sheet at the foot, not a panel at the side. */
-  const sheet = (): boolean => width <= 900 || width <= height;
+  /** The standings are a sheet at the foot, not a panel at the side (grandprix.css: 700 px, or taller than wide). */
+  const sheet = (): boolean => width <= 700 || width <= height;
 
   const place = (): void => {
     const half = Math.tan((camera.fov * Math.PI) / 360);
@@ -361,8 +361,10 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
           flame: 0,
           flicker: 0,
           slide: 0,
+          // The driver's own clock, so the cheer pumps and bounces (still, for reduced motion: the arms just stay up).
+          time: calm ? 0 : t,
           // A driver that has the pose cheers; the rest take no notice.
-          ...({ emote: "cheer" } as object),
+          emote: "cheer",
         };
         standing.model.pose(pose);
         standing.trophy.rotation.y = calm ? 0.4 : t * 1.1;

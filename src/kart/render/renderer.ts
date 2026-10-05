@@ -401,6 +401,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       shadowTexture.dispose();
       lightTexture.dispose();
       renderer.dispose();
+      // Give the context itself back: each race (and each restart) makes a canvas of its own, and a browser allows only sixteen.
+      renderer.forceContextLoss();
     },
 
     setDebugCamera(pose) {
