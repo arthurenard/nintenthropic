@@ -63,6 +63,21 @@ describe("the wheel's angle", () => {
     expect(worst).toBe(0);
   });
 
+  it("makes no brake, item or drift out of tracking noise on fists held for a long drive", () => {
+    for (const yaw of [0, 90]) {
+      const rig = new Rig({ jitter: 0.006 });
+      rig.wheel(1, { angle: 0, yaw });
+      let phantom = 0;
+      for (let i = 0; i < 300; i++) {
+        // A gentle weave of the wheel, as a real driver's hands make.
+        rig.wheel(0.1, { angle: 12 * Math.sin(i / 8), yaw });
+        const { status, input } = rig.last;
+        if (status.mode !== "drive" || input.brake || input.drift || input.itemPresses || status.hands !== 2) phantom++;
+      }
+      expect(phantom).toBe(0);
+    }
+  });
+
   it("follows a turn without lagging far behind", () => {
     const rig = driving();
     rig.run(0.5, (t) => wheelHands({ angle: Math.min(40, t * 160) }));
@@ -501,6 +516,13 @@ describe("hop and drift", () => {
     // ...and is gone a fifth of a second after.
     rig.wheel(0.5, { angle: 0, centre: [0.5, 0.2] });
     expect(rig.last.input.drift).toBe(false);
+  });
+
+  it("is still seen when the jerk costs a dropped frame", () => {
+    const rig = driving();
+    rig.wheel(1, { angle: 30 });
+    rig.run(0.2, (t) => (t > 0.05 && t < 0.09 ? [] : wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, t / 0.12)] })));
+    expect(rig.last.input.drift).toBe(true);
   });
 
   it("is not a slow lift", () => {

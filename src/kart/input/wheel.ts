@@ -199,7 +199,9 @@ export class WheelReader {
       this.lastBothSeen = t;
       this.turn(seen.left!, seen.right!, t);
     } else {
-      this.hopTrail.length = 0;
+      // The hop trail is kept: a sharp lift blurs the hands and often costs a frame
+      // or two, which must not hide the very jerk being looked for. Its own
+      // time window lets old points go.
       this.restartAutoLevel();
     }
     this.settle(t);
