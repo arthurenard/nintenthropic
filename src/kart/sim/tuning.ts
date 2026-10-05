@@ -78,6 +78,77 @@ export const TUNING = {
     height: 0.35,
   },
 
+  /**
+   * What each kind of ground does to the kart. `top` is the top speed, `boostTop`
+   * the top speed under a boost on rough ground (on smooth ground a boost is
+   * the usual +35%), `grip` the rate (1/s) the velocity is pulled into the
+   * heading, `decel` how fast speed over the limit is shed, and `accel`, `brake`
+   * and `coast` scale pulling away, braking and rolling to a stop. `rough` is
+   * what the kart reports as off the road: no drift charge, dust and spray.
+   *
+   * Road and grass are the sim's old numbers, except that a boost on rough
+   * ground now carries the kart at nearly full speed (what makes a verge cut
+   * worth taking with a Nitro). The rest are new: sand and snow a little slower
+   * than grass, mud very slow, ice with almost no grip and next to no brake (the
+   * kart slides on, in the direction it was going), a boost strip as road.
+   */
+  ground: {
+    road: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
+    boost: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
+    ice: { rough: false, top: 24, boostTop: 0, grip: 1.2, gripDrift: 1.0, decel: 5, accel: 0.65, brake: 0.25, coast: 0.3 },
+    grass: { rough: true, top: 11, boostTop: 21, grip: 6, gripDrift: 4.2, decel: 10, accel: 1, brake: 1, coast: 1 },
+    sand: { rough: true, top: 9, boostTop: 20, grip: 5, gripDrift: 4.2, decel: 12, accel: 1, brake: 1, coast: 1 },
+    snow: { rough: true, top: 10, boostTop: 20, grip: 3.5, gripDrift: 3, decel: 10, accel: 1, brake: 1, coast: 1 },
+    mud: { rough: true, top: 7, boostTop: 11, grip: 8, gripDrift: 4.2, decel: 16, accel: 1, brake: 1, coast: 1 },
+  },
+
+  /** The ground beyond the road where a verge does not say, by theme (grass for the rest). */
+  groundByTheme: { canyon: "sand", snow: "snow", palm: "sand" } as Readonly<Record<string, "sand" | "snow">>,
+
+  ramp: {
+    /**
+     * Upward speed at the lip at top speed, m/s, unless the ramp says: about
+     * 1.1 s in the air. (The picture draws a ramp as a wedge 16 m long and 2.4 m
+     * high ending at the lip and has the kart climb it; the sim's height, the
+     * `hop`, is 0 on it and at the lip, and the jump rises from there.)
+     */
+    lift: 7,
+    gravity: 12.5,
+    /** The lift scales with speed over top speed, between these. */
+    minShare: 0.4,
+    maxShare: 1.3,
+    /** Slower than this the ramp is only a bump. */
+    minSpeed: 9,
+    /** In the air the wheel turns the kart this share of what it does on the road, and the velocity follows the heading at this rate (1/s). */
+    airYaw: 0.3,
+    airGrip: 0.8,
+    /** A kart this much higher than another passes over it. */
+    passOver: 1.1,
+    /** A trick in the air boosts on landing for this long. */
+    trickBoost: 0.8,
+  },
+
+  /** Falling off an open edge, and the drone that fetches the kart. */
+  fall: {
+    /** Past the road's edge by this much on an open side: over. */
+    edge: 0.5,
+    /** The whole rescue takes this long: falling, hooked and carried, set down. The kart stays where it went over (the picture does the rest) until it is set down. */
+    rescue: 2.5,
+    /** Set down on the centre line this far behind where it fell... */
+    back: 15,
+    /** ...or this far before a gap it fell into: room to get up to the speed the jump needs (about 21 m/s after 35 m from a standstill). */
+    runUp: 48,
+    /** Hazards and items pass through the kart for this long after it is set down. */
+    immune: 1.5,
+  },
+
+  hazard: {
+    /** Hit by a hazard: the spin of an item hit, then this much longer before another can touch it. */
+    immuneAfter: 1.6,
+    /** A kart higher than this in the air flies over a hazard. */
+    clearHeight: 0.8,
+  },
+
   drift: {
     /** In a drift the steer is remapped to base + range * (own way: 1, other way: -1): 0.4..1.4 of a full turn. */
     steerBase: 0.9,
@@ -100,6 +171,8 @@ export const TUNING = {
     nitro: 1.5,
     nitro3: 1.0,
     pad: 1.0,
+    /** A boost strip keeps a boost of this length topped up while a kart is on it. */
+    strip: 0.4,
     start: 1.0,
     /** A pad is this long and wide (half-extents, metres). */
     padHalfLength: 3.5,
@@ -190,6 +263,8 @@ export const TUNING = {
     planBrake: 16,
     /** Fastest a bot plans for in a straight line. */
     planCap: 50,
+    /** The curvature a bot plans a bend's speed for is at least this share of the tightest part of the line round there. */
+    peakShare: 0.85,
     /** Curvature-smoothing and line-cutting: bends tighter than 1/cutCurvature cut the full distance. */
     cutCurvature: 1 / 45,
     /** Of the room between the road's middle and its edge (less a margin), a bot cuts this much at most. */
@@ -206,6 +281,42 @@ export const TUNING = {
     startBoostLow: 0.1,
     startBoostHigh: 0.9,
     floodChance: 0.12,
+    /** Keeps this far (metres) beyond edgeMargin from an open edge, and up to dropSlack more at skill 0; bends beside one are planned for a lower sideways acceleration. */
+    dropMargin: 1.6,
+    dropSlack: 2.4,
+    dropLateral: 22,
+    /** A verge is a cut worth taking when its barrier is at least this far out and the road it skips is at least this many times the straight line. */
+    cutMinDistance: 12,
+    cutGain: 1.3,
+    /** A cut runs from this far (metres) inside the verge's start to this far inside its end. */
+    cutInset: 12,
+    /** Ice: a bot plans its bends for this sideways acceleration, never faster than iceTop, and brakes for it this hard (m/s^2). */
+    iceLateral: 9,
+    iceTop: 17,
+    iceBrake: 5,
+    /** Mud it cannot avoid: never faster than this. */
+    mudTop: 10,
+    /** Keeps this far (metres) off the edge of a patch of mud or ice it goes round. */
+    patchClearance: 1.8,
+    /** A bot takes a ramp straight from this far before it (metres) and keeps its wheel straight in the air. */
+    rampStraight: 26,
+    /** Nearer than this (metres) to a ramp's lip a bot holds its speed whatever the plan says. */
+    rampSpeedNear: 60,
+    /** Hazards: looks this far ahead in time (s) in steps of this, and keeps this far (metres, beyond their size) clear, more for the gentler. */
+    hazardLook: 2.6,
+    /** A kart swings across the road at about this many m/s when dodging. */
+    dodgeRate: 5.5,
+    hazardStep: 0.15,
+    hazardClear: 0.9,
+    /** The nearest to the road's edge a bot goes to get round a hazard (metres in from it). */
+    hazardEdge: 1.4,
+    /** Skill under which a bot does not look for hazards at all. */
+    hazardSkill: 0,
+    /** Skill from which a bot takes a verge cut when it holds a Nitro; it uses the Nitro this far (metres) before the cut. */
+    cutSkill: 0.7,
+    cutNitroBefore: 6,
+    /** A bot tricks off a ramp: skill plus this, as a share of an id-and-lap lottery. */
+    trickBase: 0.2,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.4,
     /** and starts steering clear of one this far (metres) before the point it is aiming at. */
@@ -223,12 +334,16 @@ export const TUNING = {
     backTime: 1.0,
     /** A bot drifts a bend that is tighter than this curvature and has at least this much left (metres, or this many seconds at its speed, whichever is more): enough to charge a boost. */
     driftCurvature: 1 / 60,
+    /** ...but not a hairpin as tight as this (a bot slides out of it): the wheel is too hard over to leave room for a drift. */
+    driftMaxCurvature: 1 / 15,
     driftMinLength: 24,
     driftMinTime: 1.5,
     driftMinSpeed: 14,
     /** A bot waits this long (seconds, low..high skill) after getting an item before using it. */
     itemWaitSlow: 2.6,
     itemWaitFast: 0.7,
+    /** A bot holds its pucks, seekers and slicks within this far (metres) before the lip of a jump over a gap. */
+    itemGapQuiet: 140,
     /** And uses it regardless after this long. */
     itemHoldMax: 14,
   },

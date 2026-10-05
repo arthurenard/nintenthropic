@@ -5,9 +5,12 @@
  */
 import { IDLE_INPUT, type DriveInput, type KartView, type RaceEvent, type RacerSetup, type RaceSetup, type TrackDef } from "../contract";
 import { GO_TICK } from "./kart";
+import { planFor } from "./plan";
 import { createSimRace, type SimRace } from "./race";
 import { KART_AT } from "./snapshot";
 import { ITEM_KINDS } from "./state";
+import { barrierDistance, isOpen } from "./terrain";
+import { TUNING } from "./tuning";
 
 /** A wide round arena, so a kart can drift in circles without ever leaving the road. */
 export const ARENA: TrackDef = {
@@ -83,4 +86,16 @@ export function give(r: SimRace, index: number, item: (typeof ITEM_KINDS)[number
 /** Counts events of a type for a kart. */
 export function count(events: RaceEvent[], type: RaceEvent["type"], kart?: number): number {
   return events.filter((e) => e.type === type && (kart === undefined || ("kart" in e && e.kart === kart))).length;
+}
+
+/**
+ * How far from the centre line a kart can be at this place of the track
+ * before it is past the barrier (the usual 6 m beyond the edge, or a verge's),
+ * or, on an open edge, past the point where it falls (about a metre over).
+ */
+export function reach(track: TrackDef, s: number, offset: number): number {
+  const plan = planFor(track);
+  const side = offset > 0 ? 1 : -1;
+  const half = plan.geo.at(s).width / 2;
+  return half + (isOpen(plan.terrain, s, side) ? TUNING.fall.edge + 1 : barrierDistance(plan.terrain, s, side));
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RaceEvent, RacerSetup } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
-import { ARENA, count, patch, race, racers, run, toGo, view } from "./testing";
+import { ARENA, count, patch, race, racers, reach, run, toGo, view } from "./testing";
 
 /** Eight bots of every skill from sharp to gentle. */
 function field(): RacerSetup[] {
@@ -25,7 +25,7 @@ describe("a bot driving alone", () => {
           const v = r.view();
           const k = v.karts[0]!;
           const p = geo.project(k.x, k.z);
-          outside = Math.max(outside, Math.abs(p.offset) - (p.sample.width / 2 + 6));
+          outside = Math.max(outside, Math.abs(p.offset) - reach(track, p.s, p.offset));
           if (k.offroad) offroad++;
           if (v.phase === "racing") racing++;
           for (const e of r.takeEvents()) {

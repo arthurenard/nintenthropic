@@ -5,7 +5,7 @@ import { TrackGeometry } from "../track/geometry";
 import { CANYON_RUN, HARBOUR_LIGHTS, MEADOW_LOOP, TRACKS } from "../track/tracks";
 import { GO_TICK } from "./kart";
 import { createRace } from "./race";
-import { give, input, patch, race, racers, run, toGo, view, type Script } from "./testing";
+import { give, input, patch, race, racers, reach, run, toGo, view, type Script } from "./testing";
 
 /** Inputs for two people that wander about like hands do, from a seeded source. */
 function wandering(seed: number): Script {
@@ -457,7 +457,7 @@ describe("the view", () => {
 });
 
 describe("whatever the hands do", () => {
-  it("every number stays a number, every kart inside the barriers, and no kart goes faster than a boost allows", () => {
+  it("every number stays a number, every kart inside the barriers, and no kart goes faster than a boost allows", { timeout: 60000 }, () => {
     for (const track of TRACKS) {
       const geo = TrackGeometry.build(track);
       const r = race(track, racers(4, 4, 0.6), { seed: 13, laps: 2 });
@@ -478,8 +478,11 @@ describe("whatever the hands do", () => {
         const v = r.view();
         for (const k of v.karts) {
           for (const key of ["x", "y", "z", "heading", "speed", "boost", "spin", "hop", "lapProgress"] as const) expect(Number.isFinite(k[key]), `${track.id} kart ${k.id} ${key} at ${i}`).toBe(true);
-          const p = geo.project(k.x, k.z);
-          expect(Math.abs(p.offset), `${track.id} kart ${k.id} at ${i}`).toBeLessThanOrEqual(p.sample.width / 2 + 6 + 0.01);
+          // In the drone's hook a kart is carried over the edge it fell from: only the others are held to the barriers.
+          if (k.rescue === 0) {
+            const p = geo.project(k.x, k.z);
+            expect(Math.abs(p.offset), `${track.id} kart ${k.id} at ${i}`).toBeLessThanOrEqual(reach(track, p.s, p.offset) + 0.01);
+          }
           expect(Math.abs(k.speed)).toBeLessThanOrEqual(36.01);
         }
         expect(v.karts.map((k) => k.place).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);

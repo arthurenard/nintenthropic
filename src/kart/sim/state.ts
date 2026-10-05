@@ -9,7 +9,7 @@
  * and speeds, a tenth of a milliradian for headings. Timers are whole ticks.
  */
 import type { DriveInput, ItemKind, RaceEvent, RaceSetup } from "../contract";
-import type { TrackGeometry } from "../track/geometry";
+import type { Surface, TrackGeometry } from "../track/geometry";
 import type { TrackPlan } from "./plan";
 
 export const ITEM_KINDS: readonly ItemKind[] = ["nitro", "nitro3", "puck", "seeker", "slick"];
@@ -55,7 +55,12 @@ export interface BotMemory {
   steer: number;
   /** Wanting to drift: holds the drift button. */
   drifting: boolean;
+  /** The verge cut (index + 1, in the plan's list) it is driving, or 0. */
+  cut: number;
 }
+
+/** What the kart is driving on: the road, or one of the track's other grounds. */
+export type Ground = Surface | "road";
 
 export interface KartState {
   id: number;
@@ -104,8 +109,23 @@ export interface KartState {
   offroad: boolean;
   /** Net distance travelled along the lap from the start line, metres (negative on the grid). */
   progress: number;
-  /** The boost pad (index + 1) the kart is on, or 0. */
+  /** The boost pad (index + 1) the kart is on, -1 on a boost strip, or 0. */
   pad: number;
+  /** What it is driving on (worked out from where it is, so not kept in a snapshot). */
+  ground: Ground;
+
+  // In the air off a ramp (the hop above is the small one) and falling off the edge.
+  /** Metres above the road, and the upward speed. */
+  air: number;
+  vy: number;
+  /** 0 on the ground, 1 in a jump, 2 in a jump where a trick is allowed. */
+  flight: 0 | 1 | 2;
+  /** Ticks since a trick began in the air, or 0. */
+  trick: number;
+  /** Ticks left of a rescue (0: none). */
+  rescue: number;
+  /** Ticks left in which hazards and items pass through the kart. */
+  immune: number;
   wrong: number;
   wrongWay: boolean;
 

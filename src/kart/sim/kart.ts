@@ -1,13 +1,18 @@
 /**
- * One kart's physics: speed, steering and grip, the grass and the barriers,
- * braking and reversing, the hop and drift with their mini-turbos, boost, the
- * start. Nothing here looks at another kart or at the items; the race does
- * (race.ts, items.ts), which is also why `predict` can run just this.
+ * One kart's physics: speed, steering and grip on whatever it drives over (the
+ * road, grass, ice, mud...), the barriers and the open edges, braking and
+ * reversing, the hop and drift with their mini-turbos, jumps off ramps and
+ * their tricks, falling and the drone that fetches the kart, a track's
+ * hazards, boost, the start. Nothing here looks at another kart or at the
+ * items; the race does (race.ts, items.ts), which is also why `predict` can
+ * run just this.
  */
-import { TICK, type DriveInput, type RacerSetup } from "../contract";
+import { TICK, TICK_HZ, type DriveInput, type RacerSetup } from "../contract";
 import { mulberry32 } from "../../engine/rules/rng";
+import { hazardAt } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
+import { barrierDistance, gapAt, groundAt, isOpen, rescueSpot } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
 const D = TUNING.drive;
@@ -15,6 +20,9 @@ const S = TUNING.steer;
 const H = TUNING.hop;
 const DR = TUNING.drift;
 const W = TUNING.wall;
+const R = TUNING.ramp;
+const F = TUNING.fall;
+const GROUND = TUNING.ground;
 
 /** The tick the countdown ends at and the race starts: 3 s and half a second of "ready". */
 export const GO_TICK = ticks(TUNING.start.countdown + TUNING.start.ready);
@@ -28,11 +36,12 @@ const LEVEL_1 = ticks(DR.level1);
 const LEVEL_2 = ticks(DR.level2);
 const FLOOD_AFTER = ticks(TUNING.start.floodAfter);
 const BOOST_WINDOW = ticks(TUNING.start.boostWindow);
+const RESCUE_TICKS = ticks(F.rescue);
 
 const finite = (v: number): number => (Number.isFinite(v) ? v : 0);
 
 export function newBotMemory(): BotMemory {
-  return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false };
+  return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false, cut: 0 };
 }
 
 /** A kart on the grid: pairs side by side, each pair a little further back, the first on pole. */
@@ -74,6 +83,13 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     offroad: false,
     progress: -behind,
     pad: 0,
+    ground: "road",
+    air: 0,
+    vy: 0,
+    flight: 0,
+    trick: 0,
+    rescue: 0,
+    immune: 0,
     wrong: 0,
     wrongWay: false,
     place: place + 1,
@@ -104,6 +120,8 @@ export function settle(k: KartState): void {
   k.s = q3(k.s);
   k.offset = q3(k.offset);
   k.progress = q3(k.progress);
+  k.air = q3(k.air);
+  k.vy = q3(k.vy);
 }
 
 /** The speed along the heading: negative reversing. */
@@ -167,19 +185,123 @@ export function spinOut(k: KartState): void {
 }
 
 /**
+ * The kart's height above the road for the picture: the jump's, or the hop's.
+ * It is 0 on the road, on the ramp (the picture draws the ramp's wedge and has
+ * the kart climb it) and at the lip, where a jump begins; and 0 through a
+ * rescue (the picture draws the fall and the drone from `rescue` alone).
+ */
+export function viewHop(k: KartState): number {
+  if (k.rescue > 0) return 0;
+  if (k.flight > 0) return k.air;
+  return hopHeight(k);
+}
+
+/** Over the edge, or into a gap: the kart is lost to the drone for a while, and keeps its item. */
+function startFall(k: KartState, emit: Emit): void {
+  k.rescue = RESCUE_TICKS;
+  // It stays where it went over until the drone sets it down.
+  k.vx = 0;
+  k.vz = 0;
+  k.boost = 0;
+  k.spin = 0;
+  k.hop = 0;
+  k.drift = 0;
+  k.charge = 0;
+  k.level = 0;
+  k.air = 0;
+  k.vy = 0;
+  k.flight = 0;
+  k.trick = 0;
+  k.pad = 0;
+  k.steer = 0;
+  emit({ type: "fall", kart: k.id });
+}
+
+/**
+ * One tick of being rescued. The kart stays where it went over (x, y, z the
+ * fall spot, nothing moving: the picture draws it falling, hooked and carried
+ * from `rescue` alone) and when the 2.5 s are up it is set down on the centre
+ * line a little behind, facing forward, standing still, with a moment when
+ * nothing can touch it.
+ */
+function stepRescue(w: World, k: KartState, emit: Emit): void {
+  const geo = w.geo;
+  k.rescue--;
+  if (k.rescue > 0) return;
+  const target = rescueSpot(w.plan.terrain, k.s);
+  const landing = geo.at(target);
+  k.progress += geo.delta(k.s, target);
+  k.s = target;
+  k.offset = 0;
+  k.x = landing.x;
+  k.z = landing.z;
+  k.y = landing.y;
+  k.heading = geo.heading(target);
+  k.vx = 0;
+  k.vz = 0;
+  k.steer = 0;
+  k.hop = 0;
+  k.ground = groundAt(w.plan.terrain, target, 0, landing.width / 2);
+  k.offroad = GROUND[k.ground].rough;
+  k.immune = ticks(F.immune);
+  k.wrong = 0;
+  k.wrongWay = false;
+  k.bot.stuck = 0;
+  k.bot.back = 0;
+  k.bot.freeze = 0;
+  k.bot.cut = 0;
+  k.bot.drifting = false;
+  emit({ type: "rescued", kart: k.id });
+}
+
+/** A kart touching a hazard spins as if hit, and for a moment nothing else can touch it. */
+function checkHazards(w: World, k: KartState, emit: Emit): void {
+  const hazards = w.plan.terrain.hazards;
+  if (hazards.length === 0 || k.immune > 0 || k.spin > 0 || k.air > TUNING.hazard.clearHeight) return;
+  const geo = w.geo;
+  const time = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
+  for (const hazard of hazards) {
+    // Far down the road, and not one that roams that far: not worth the working out.
+    const reach = (hazard.motion === "roll" ? (hazard.span ?? 0.05) * geo.length : hazard.motion === "orbit" ? (hazard.span ?? 8) : 0) + hazard.radius + TUNING.kartRadius + 12;
+    if (Math.abs(geo.delta(k.s, hazard.at * geo.length)) > reach + (hazard.motion === "cross" ? (hazard.span ?? 12) : 0)) continue;
+    const pose = hazardAt(geo, hazard, time);
+    if (!pose.active) continue;
+    const dx = pose.x - k.x;
+    const dz = pose.z - k.z;
+    const near = hazard.radius + TUNING.kartRadius;
+    if (dx * dx + dz * dz >= near * near) continue;
+    spinOut(k);
+    k.immune = ticks(TUNING.items.spin + TUNING.hazard.immuneAfter);
+    emit({ type: "hazard", kart: k.id, kind: hazard.kind });
+    return;
+  }
+}
+
+/**
  * Where the kart is on the track, with the barriers: finds s and offset,
  * stands the kart back inside the barrier if it went through (killing the
  * speed into it), and keeps the lap's progress, the road's height and
- * whether it is on the grass.
+ * what it is driving on. An open edge has no barrier: over it, or in a gap
+ * in the road, a kart on the ground falls.
  */
 export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean): void {
   const geo = w.geo;
-  const p = geo.project(k.x, k.z, k.s);
-  const half = p.sample.width / 2;
-  const limit = half + TUNING.barrierGap - TUNING.barrierInset;
+  const terrain = w.plan.terrain;
+  let p = geo.project(k.x, k.z, k.s);
+  let half = p.sample.width / 2;
+  // Well off the road by the answer near where it was: it may have crossed to another part (over a verge, skipping some road). The whole lap says.
+  if (Math.abs(p.offset) > half + 1.5) {
+    const elsewhere = geo.project(k.x, k.z);
+    if (Math.abs(elsewhere.offset) < Math.abs(p.offset) - 1.5) {
+      p = elsewhere;
+      half = p.sample.width / 2;
+    }
+  }
   let offset = p.offset;
-  if (Math.abs(offset) > limit) {
-    const side = offset > 0 ? 1 : -1;
+  const side = offset > 0 ? 1 : -1;
+  const open = isOpen(terrain, p.s, side);
+  const limit = half + barrierDistance(terrain, p.s, side) - TUNING.barrierInset;
+  if (!open && Math.abs(offset) > limit) {
     // The right of the track here, and the way out of the barrier is along it, signed by side.
     const rx = -p.sample.tz * side;
     const rz = p.sample.tx * side;
@@ -211,14 +333,15 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
   k.s = p.s;
   k.offset = offset;
   k.y = p.sample.y;
-  k.offroad = Math.abs(offset) > half;
+  k.ground = groundAt(terrain, p.s, offset, half);
+  k.offroad = GROUND[k.ground].rough;
   // The pull of the track's direction, for the wrong-way check.
   const along = Math.sin(k.heading) * p.sample.tx + Math.cos(k.heading) * p.sample.tz;
   const speed = forwardSpeed(k);
   if (along < Math.cos(TUNING.race.wrongAngle) && speed > TUNING.race.wrongSpeed) k.wrong++;
   else k.wrong = 0;
   k.wrongWay = k.wrong >= ticks(TUNING.race.wrongTime);
-  // Boost pads.
+  // Boost pads, and the strips that are as pads but long (-1).
   let onPad = 0;
   const pads = w.plan.pads;
   for (let i = 0; i < pads.length; i++) {
@@ -228,11 +351,17 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
       break;
     }
   }
+  if (onPad === 0 && k.ground === "boost" && k.flight === 0) {
+    onPad = -1;
+    k.boost = Math.max(k.boost, ticks(TUNING.boost.strip));
+  }
   if (onPad !== 0 && onPad !== k.pad) {
     giveBoost(k, TUNING.boost.pad);
     emit({ type: "boost", kart: k.id, source: "pad", level: 1 });
   }
   k.pad = onPad;
+  // Over an open edge or into a gap, on the ground: down it goes.
+  if (k.flight === 0 && k.rescue === 0 && ((open && Math.abs(offset) > half + F.edge) || gapAt(terrain, p.s) !== null)) startFall(k, emit);
 }
 
 /**
@@ -268,6 +397,35 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     k.held = 0;
   }
 
+  if (k.rescue > 0) {
+    // In the drone's hook: no say in anything.
+    k.prevDrift = driftIn;
+    stepRescue(w, k, emit);
+    k.t++;
+    settle(k);
+    return;
+  }
+
+  const prevS = k.s;
+  if (k.immune > 0) k.immune--;
+
+  // In the air off a ramp: up and down, and a trick the first time `drift` goes down in the air.
+  let landed = false;
+  let tricked = false;
+  if (k.flight > 0) {
+    k.air += k.vy * TICK;
+    k.vy -= R.gravity * TICK;
+    if (k.trick > 0) k.trick = Math.min(k.trick + 1, 255);
+    if (k.air <= 0 && k.vy < 0) {
+      landed = true;
+      tricked = k.trick > 0;
+      k.air = 0;
+      k.vy = 0;
+      k.flight = 0;
+      k.trick = 0;
+    }
+  }
+
   const sinH = Math.sin(k.heading);
   const cosH = Math.cos(k.heading);
   const fwd = k.vx * sinH + k.vz * cosH;
@@ -282,7 +440,32 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     k.prevDrift = driftIn;
     if (k.hop > 0) k.hop--;
     if (k.boost > 0) k.boost--;
+  } else if (k.flight > 0) {
+    // Flying: the wheel turns the kart a little, the velocity follows slowly, and neither pedal does anything.
+    const rising = driftIn && !k.prevDrift;
+    k.prevDrift = driftIn;
+    if (rising && k.flight === 2 && k.trick === 0) {
+      k.trick = 1;
+      emit({ type: "trick", kart: k.id });
+    }
+    if (k.flood > 0) k.flood--;
+    k.steer += (steerIn - k.steer) * (1 - Math.exp(-S.response * TICK));
+    k.heading = wrapAngle(k.heading - yawRate(k.steer, fwd) * R.airYaw * TICK * (fwd >= 0 ? 1 : -1));
+    const sin = Math.sin(k.heading);
+    const cos = Math.cos(k.heading);
+    let along = k.vx * sin + k.vz * cos;
+    let across = -k.vx * cos + k.vz * sin;
+    const lost = across * (1 - Math.exp(-R.airGrip * TICK));
+    const speedBefore = Math.hypot(along, across);
+    across -= lost;
+    const speedAfter = Math.max(0, speedBefore - (1 - S.slideKept) * Math.abs(lost));
+    along = Math.sqrt(Math.max(0, speedAfter * speedAfter - across * across)) * (along >= 0 ? 1 : -1);
+    if (k.boost > 0) k.boost--;
+    k.vx = along * sin - across * cos;
+    k.vz = along * cos + across * sin;
+    capSpeed(k, D.maxSpeed);
   } else {
+    const ground = GROUND[k.ground];
     // The throttle, unless the engine is flooded.
     let throttle = throttleIn;
     if (k.flood > 0) {
@@ -332,7 +515,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     let along = k.vx * sin + k.vz * cos;
     let across = -k.vx * cos + k.vz * sin;
     // The grip turns the velocity toward the heading: the speed stays (less a little scrubbed off for the slide), the sideways part becomes forward.
-    const grip = k.drift !== 0 ? S.gripDrift : k.offroad ? S.gripOffroad : S.grip;
+    const grip = k.drift !== 0 ? ground.gripDrift : ground.grip;
     const lost = across * (1 - Math.exp(-grip * TICK));
     const speedBefore = Math.hypot(along, across);
     across -= lost;
@@ -341,10 +524,10 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
 
     // Speeding up, braking, coasting.
     const boosted = k.boost > 0;
-    let top = (k.offroad ? D.offroadTop : D.topSpeed) * k.band;
-    if (boosted) top *= k.offroad ? D.boostSpeedOffroad : D.boostSpeed;
+    let top = ground.top * k.band;
+    if (boosted) top = ground.rough ? ground.boostTop * k.band : top * D.boostSpeed;
     if (braking) {
-      if (along > 0) along = Math.max(0, along - D.brakeDecel * brakeIn * TICK);
+      if (along > 0) along = Math.max(0, along - D.brakeDecel * ground.brake * brakeIn * TICK);
       if (along <= 0) {
         if (along > -D.standstill) k.stand++;
         else k.stand = REVERSE_TICKS;
@@ -356,13 +539,13 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
       k.stand = 0;
       const drive = boosted ? 1 : throttle;
       if (drive > 0) {
-        const tau = boosted ? D.boostTau : D.accelTau;
+        const tau = boosted ? D.boostTau : D.accelTau / ground.accel;
         if (along < top) along = Math.min(top, along + ((top - along) / tau) * drive * TICK);
       } else {
-        const slow = (D.coastDrag + D.coastDragPerSpeed * Math.abs(along)) * TICK;
+        const slow = (D.coastDrag + D.coastDragPerSpeed * Math.abs(along)) * ground.coast * TICK;
         along = along > 0 ? Math.max(0, along - slow) : Math.min(0, along + slow);
       }
-      if (along > top) along = Math.max(top, along - (k.offroad ? D.offroadDecel : D.overspeedDecel) * TICK);
+      if (along > top) along = Math.max(top, along - ground.decel * TICK);
     }
     if (boosted) k.boost--;
 
@@ -374,8 +557,39 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   k.x += k.vx * TICK;
   k.z += k.vz * TICK;
   placeOnTrack(w, k, emit, true);
+
+  if (landed && k.rescue === 0) {
+    // Down again: a trick in the air is worth a boost.
+    if (tricked) giveBoost(k, R.trickBoost);
+    emit({ type: "land", kart: k.id, boost: tricked });
+  }
+  if (k.rescue === 0 && k.flight === 0 && k.spin === 0) launchOffRamps(w, k, prevS, emit);
+  if (k.rescue === 0) checkHazards(w, k, emit);
   k.t++;
   settle(k);
+}
+
+/** A kart that crossed a ramp's lip this tick, fast enough, is thrown into the air. */
+function launchOffRamps(w: World, k: KartState, prevS: number, emit: Emit): void {
+  const ramps = w.plan.terrain.ramps;
+  if (ramps.length === 0) return;
+  const speed = forwardSpeed(k);
+  if (speed < R.minSpeed) return;
+  const half = w.geo.at(k.s).width / 2;
+  if (Math.abs(k.offset) > half) return;
+  for (const ramp of ramps) {
+    const before = w.geo.delta(prevS, ramp.s);
+    const after = w.geo.delta(k.s, ramp.s);
+    if (before <= 0 || after > 0 || before > 8) continue;
+    k.flight = ramp.trick ? 2 : 1;
+    k.vy = ramp.lift * clamp(speed / D.topSpeed, R.minShare, R.maxShare);
+    k.air = 0;
+    k.hop = 0;
+    k.trick = 0;
+    if (k.drift !== 0) endDrift(k, true, emit);
+    emit({ type: "jump", kart: k.id });
+    return;
+  }
 }
 
 /**
@@ -403,8 +617,11 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
   const B = TUNING.bump;
   for (let i = 0; i < karts.length; i++) {
     const a = karts[i]!;
+    if (a.rescue > 0) continue;
     for (let j = i + 1; j < karts.length; j++) {
       const b = karts[j]!;
+      // Karts in the drone's hook touch nothing, and one flying over another passes above it.
+      if (b.rescue > 0 || Math.abs(a.air - b.air) > TUNING.ramp.passOver) continue;
       const dx = a.x - b.x;
       const dz = a.z - b.z;
       const d2 = dx * dx + dz * dz;

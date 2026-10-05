@@ -6,6 +6,7 @@
 import { TICK, type DriveInput, type ItemKind } from "../contract";
 import { giveBoost, spinOut, type Emit } from "./kart";
 import { ITEM_KINDS, q3, wrapAngle, type KartState, type Puck, type Seeker, type World } from "./state";
+import { barrierDistance, isOpen } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
 const I = TUNING.items;
@@ -30,7 +31,7 @@ function drawItem(w: World, place: number, racers: number): ItemKind {
 
 /** A hit by a puck, a seeker or a slick: spins the victim out, unless it is already spinning. */
 export function hitKart(victim: KartState, by: number | null, cause: "puck" | "seeker" | "slick", emit: Emit): boolean {
-  if (victim.spin > 0) return false;
+  if (victim.spin > 0 || victim.immune > 0 || victim.rescue > 0) return false;
   spinOut(victim);
   emit({ type: "hit", kart: victim.id, by, cause });
   return true;
@@ -44,7 +45,8 @@ export function hitKart(victim: KartState, by: number | null, cause: "puck" | "s
 export function pressItem(w: World, k: KartState, input: DriveInput, full: boolean, emit: Emit): void {
   if (!(input.itemPresses > k.presses) || !Number.isSafeInteger(input.itemPresses)) return;
   k.presses = input.itemPresses;
-  if (k.roll > 0 || k.item === null) return;
+  // In the drone's hook nothing can be used (the press is lost, the item kept).
+  if (k.roll > 0 || k.item === null || k.rescue > 0) return;
   const state = w.state;
   const forwardX = Math.sin(k.heading);
   const forwardZ = Math.cos(k.heading);
@@ -113,9 +115,15 @@ export function pressItem(w: World, k: KartState, input: DriveInput, full: boole
   }
 }
 
-/** Stops a thing at the barrier: the distance in from the centre line it may reach, at this point of the track. */
-function barrierLimit(w: World, s: number): number {
-  return w.geo.at(s).width / 2 + TUNING.barrierGap - 0.3;
+/**
+ * Stops a thing at the barrier: the distance in from the centre line it may
+ * reach, on this side (+1 right, -1 left) at this point of the track, or
+ * Infinity where the edge is open (it flies on and is lost).
+ */
+function barrierLimit(w: World, s: number, side: 1 | -1): number {
+  const terrain = w.plan.terrain;
+  if (isOpen(terrain, s, side)) return Infinity;
+  return w.geo.at(s).width / 2 + barrierDistance(terrain, s, side) - 0.3;
 }
 
 /** Whichever kart a thing at (x, z) with this reach hits first (lowest id), or null. */
@@ -123,7 +131,7 @@ function kartHit(w: World, x: number, z: number, reach: number, owner: number, a
   const r2 = reach * reach;
   for (const k of w.state.karts) {
     if (k.id === owner && age < grace) continue;
-    if (k.spin > 0) continue;
+    if (k.spin > 0 || k.immune > 0 || k.rescue > 0) continue;
     const dx = k.x - x;
     const dz = k.z - z;
     if (dx * dx + dz * dz < r2) return k;
@@ -140,10 +148,12 @@ function stepPuck(w: World, puck: Puck, emit: Emit): boolean {
   puck.z = q3(puck.z + puck.vz * TICK);
   const p = w.geo.project(puck.x, puck.z, puck.s);
   puck.s = q3(p.s);
-  const limit = barrierLimit(w, p.s);
+  const side = p.offset > 0 ? 1 : -1;
+  const limit = barrierLimit(w, p.s, side);
+  // Off an open edge a puck is gone.
+  if (limit === Infinity && Math.abs(p.offset) > p.sample.width / 2 + 8) return false;
   if (Math.abs(p.offset) > limit) {
     // Bounce: back inside, and the speed into the barrier turned round.
-    const side = p.offset > 0 ? 1 : -1;
     const rx = -p.sample.tz * side;
     const rz = p.sample.tx * side;
     const back = Math.abs(p.offset) - limit;
@@ -199,9 +209,9 @@ function stepSeeker(w: World, seeker: Seeker, emit: Emit): boolean {
   seeker.z = q3(seeker.z + seeker.dz * S.speed * TICK);
   const p = w.geo.project(seeker.x, seeker.z, seeker.s);
   seeker.s = q3(p.s);
-  const limit = barrierLimit(w, p.s);
+  const side = p.offset > 0 ? 1 : -1;
+  const limit = Math.min(barrierLimit(w, p.s, side), p.sample.width / 2 + TUNING.barrierGap - 0.3);
   if (Math.abs(p.offset) > limit) {
-    const side = p.offset > 0 ? 1 : -1;
     const back = Math.abs(p.offset) - limit;
     seeker.x = q3(seeker.x + p.sample.tz * side * back);
     seeker.z = q3(seeker.z - p.sample.tx * side * back);
@@ -243,7 +253,7 @@ export function stepItems(w: World, emit: Emit): void {
     }
     const site = sites[b]!;
     for (const k of karts) {
-      if (k.item !== null || k.roll > 0) continue;
+      if (k.item !== null || k.roll > 0 || k.rescue > 0) continue;
       const dx = k.x - site.x;
       const dz = k.z - site.z;
       if (dx * dx + dz * dz >= reach2) continue;
@@ -266,7 +276,7 @@ export function stepItems(w: World, emit: Emit): void {
     slick.age++;
     for (const k of karts) {
       if (k.id === slick.owner && slick.age < ticks(S.ownerGrace)) continue;
-      if (k.spin > 0 || k.hop > 0) continue;
+      if (k.spin > 0 || k.hop > 0 || k.flight > 0 || k.immune > 0 || k.rescue > 0) continue;
       const dx = k.x - slick.x;
       const dz = k.z - slick.z;
       if (dx * dx + dz * dz < reach) {
