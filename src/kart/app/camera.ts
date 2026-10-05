@@ -54,6 +54,31 @@ export interface CameraStackOptions {
   open?: (video: HTMLVideoElement) => Promise<Camera>;
   /** Loads the tracker for this many hands. */
   load?: (hands: number, progress: (fraction: number) => void) => Promise<Tracker>;
+  /** Makes the video the camera plays into (in the page, out of sight, by default). */
+  makeVideo?: () => HTMLVideoElement;
+}
+
+/** The video for the camera: in the page, inline, muted and 1 px, so every browser (an iPhone's most of all) decodes it. */
+function makeVideo(): HTMLVideoElement {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("muted", "");
+  video.setAttribute("aria-hidden", "true");
+  video.tabIndex = -1;
+  Object.assign(video.style, {
+    position: "fixed",
+    left: "0",
+    top: "0",
+    width: "1px",
+    height: "1px",
+    opacity: "0.01",
+    pointerEvents: "none",
+  });
+  document.body.append(video);
+  return video;
 }
 
 export class CameraStack implements CameraService {
@@ -67,31 +92,38 @@ export class CameraStack implements CameraService {
   private generation = 0;
   private busy: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly options: CameraStackOptions = {}) {}
+  private reviving = false;
+
+  constructor(private readonly options: CameraStackOptions = {}) {
+    // A phone that took a call or switched apps comes back with its camera cut off: pick it up again.
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => void this.revive());
+  }
+
+  /** Back in the page after being away: if the system took the camera, open it again so the wheel sees hands. */
+  private async revive(): Promise<void> {
+    const camera = this.camera;
+    if (document.visibilityState !== "visible" || !camera || this.reviving) return;
+    if (camera.stream.getVideoTracks().some((track) => track.readyState === "live")) {
+      // Still ours, but the picture may have been paused with the page.
+      void this.video.play().catch(() => {});
+      return;
+    }
+    this.reviving = true;
+    const mine = this.generation;
+    try {
+      const next = await (this.options.open ?? openCamera)(this.video);
+      if (mine !== this.generation) next.stop();
+      else this.camera = next;
+    } catch {
+      // The wheel will say "Show Both Hands"; leaving and coming back asks for the camera afresh.
+    } finally {
+      this.reviving = false;
+    }
+  }
 
   /** The video the camera plays into (made when first asked for, in the page, out of sight). */
   get video(): HTMLVideoElement {
-    if (!this.video_) {
-      const video = document.createElement("video");
-      video.muted = true;
-      video.playsInline = true;
-      video.autoplay = true;
-      video.setAttribute("playsinline", "");
-      video.setAttribute("muted", "");
-      video.setAttribute("aria-hidden", "true");
-      video.tabIndex = -1;
-      Object.assign(video.style, {
-        position: "fixed",
-        left: "0",
-        top: "0",
-        width: "1px",
-        height: "1px",
-        opacity: "0.01",
-        pointerEvents: "none",
-      });
-      document.body.append(video);
-      this.video_ = video;
-    }
+    this.video_ ??= (this.options.makeVideo ?? makeVideo)();
     return this.video_;
   }
 

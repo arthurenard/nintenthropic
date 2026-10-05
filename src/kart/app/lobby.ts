@@ -30,7 +30,7 @@ export class LobbyScreen {
   private readonly laps: Segmented<string>;
   private readonly bots: Switch;
   private readonly screen: Segmented<ScreenChoice>;
-  private readonly display: Segmented<LobbySettings["display"]>;
+  private readonly display: Segmented<"own" | "host">;
   private readonly select = $<HTMLSelectElement>("track-select");
   private readonly start = $<HTMLButtonElement>("lobby-start");
   private qrFor = "";
@@ -48,7 +48,7 @@ export class LobbyScreen {
     this.laps = new Segmented<string>($("pick-laps"), (laps) => hooks.configure({ laps: Number(laps) }));
     this.bots = new Switch($<HTMLButtonElement>("switch-bots"), (bots) => hooks.configure({ bots }));
     this.screen = new Segmented<ScreenChoice>($("pick-screen"), (choice) => hooks.screen(choice));
-    this.display = new Segmented<LobbySettings["display"]>($("pick-display"), (display) => hooks.configure({ display }));
+    this.display = new Segmented<"own" | "host">($("pick-display"), (display) => hooks.configure({ display }));
     this.select.addEventListener("change", () => hooks.configure({ track: this.select.value }));
     this.select.replaceChildren(
       ...services.tracks.map((track) => {
@@ -167,7 +167,7 @@ export class LobbyScreen {
     // Where the race shows is for a room: practice has only the one screen.
     $("row-display").hidden = this.role !== "host";
     $("foot-display").hidden = this.role !== "host";
-    this.display.value = settings.display;
+    this.display.value = settings.display ?? "own";
     setText(
       "foot-display",
       settings.display === "host"

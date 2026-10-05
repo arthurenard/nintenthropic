@@ -334,8 +334,9 @@ export interface LobbySettings {
    * Where the race shows: "own" on each player's own screen, "host" on the
    * host's, in split screen (every other device is then only a wheel). A
    * player who chose a screen for themself keeps it (`LocalPlayerSetup.screen`).
+   * Absent means "own": the room always fills it in.
    */
-  display: "own" | "host";
+  display?: "own" | "host";
 }
 
 /**

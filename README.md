@@ -25,6 +25,10 @@ Get hit and the picture bleeds red at the edges; a few seconds unhurt and you
 recover (in Orbital Decay the glass takes the damage, and a pane that fails
 ends the game). Each game hides **eight secrets**. In High Noon, try the bell.
 
+And a different kind of game, on its own page: **Grip Prix**, a kart racer for
+up to four that you steer with both hands held up like a wheel (see [Play Grip
+Prix with friends](#play-grip-prix-with-friends)).
+
 ## Play
 
 Handy is a website: open it in a current browser on a computer with a webcam,

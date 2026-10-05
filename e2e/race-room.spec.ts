@@ -89,6 +89,10 @@ test("a host and two guests race a lap: one watches on the big screen, and Race 
   await onScreen(gus, "race", 20_000);
   await onScreen(bea, "race", 20_000);
   await expect(bea.locator("#controller")).toBeVisible();
+  // Gus's own screen is drawing the new race, and the host's still shows two viewports.
+  await expect(gus.locator("canvas.race-canvas")).toBeVisible();
+  await expect.poll(async () => (await state(gus)).race?.phase, { timeout: 30_000 }).toBe("countdown");
+  expect((await state(page)).views).toHaveLength(2);
   await expect.poll(async () => (await state(page)).race?.phase, { timeout: 30_000 }).toBe("countdown");
   expect((await state(page)).lobby!.players.map((p) => p.ready)).toEqual([true, true, true]);
   expect(errors).toEqual([]);

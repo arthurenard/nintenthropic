@@ -774,7 +774,7 @@ body[data-screen="race"] {
 .controller-banner {
   min-height: 1.1em;
   margin: -8px 0 -4px;
-  font-size: clamp(56px, 16vmin, 110px);
+  font-size: clamp(64px, 20vmin, 120px);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -836,6 +836,9 @@ body[data-screen="race"] {
 /* The host's "Show the Race" has two long choices: they take the row's width under their name. */
 .row-stack > .segmented {
   flex: 1 1 320px;
+}
+.row-stack > .segmented [role="radio"] {
+  padding: 0 22px;
 }
 
 /* The pause sheet (a menu, as the arcade's). */
@@ -1079,6 +1082,39 @@ body[data-screen="race"] {
   }
   .lost-hands {
     top: 22%;
+  }
+}
+
+/* A phone propped up on its side: the wheel's picture beside the words instead of above them. */
+@media (max-height: 520px) and (min-width: 600px) {
+  .controller {
+    gap: 8px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .controller > .eyebrow {
+    display: none;
+  }
+  .controller-cards {
+    max-width: 720px;
+  }
+  .controller-card,
+  .controller-cards[data-count="2"] .controller-card {
+    flex: 1 1 100%;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 24px;
+  }
+  .controller-card .wheel-view {
+    max-height: calc(100vh - 120px);
+  }
+  .controller-place {
+    font-size: clamp(56px, 26vh, 110px);
+  }
+  .controller-banner {
+    min-height: 0;
+    margin: 0;
+    font-size: clamp(36px, 14vh, 64px);
   }
 }
 
