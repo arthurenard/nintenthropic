@@ -201,6 +201,13 @@
           <section class="group" id="group-race" aria-labelledby="group-race-title" hidden>
             <h2 class="group-title" id="group-race-title">Race</h2>
             <div class="rows">
+              <div class="row" id="row-mode">
+                <span class="row-label" id="label-mode">Mode</span>
+                <div class="segmented" role="radiogroup" id="pick-mode" aria-labelledby="label-mode" aria-describedby="foot-mode">
+                  <button type="button" role="radio" data-value="race">Single Race</button>
+                  <button type="button" role="radio" data-value="grand-prix">Grand Prix</button>
+                </div>
+              </div>
               <div class="row" id="row-track">
                 <span class="row-label" id="label-track">Track</span>
                 <span class="row-value" id="track-value"></span>
@@ -209,6 +216,10 @@
                   <select id="track-select"></select>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-updown" /></svg>
                 </label>
+              </div>
+              <div class="row row-stack" id="row-cup" hidden>
+                <span class="row-label" id="label-cup">Cup</span>
+                <div class="cups" role="radiogroup" id="pick-cup" aria-labelledby="label-cup" aria-describedby="foot-mode"></div>
               </div>
               <div class="row">
                 <span class="row-label" id="label-laps">Laps</span>
@@ -224,6 +235,10 @@
                 <label class="row-label" for="switch-bots">Bots</label>
                 <button type="button" class="switch" role="switch" id="switch-bots" aria-checked="true"></button>
               </div>
+              <div class="row">
+                <label class="row-label" for="switch-mirror">Mirror Mode</label>
+                <button type="button" class="switch" role="switch" id="switch-mirror" aria-checked="false" aria-describedby="foot-mirror"></button>
+              </div>
               <div class="row row-stack" id="row-display">
                 <span class="row-label" id="label-display">Show the Race</span>
                 <div class="segmented" role="radiogroup" id="pick-display" aria-labelledby="label-display" aria-describedby="foot-display">
@@ -232,6 +247,8 @@
                 </div>
               </div>
             </div>
+            <p class="group-foot" id="foot-mode"></p>
+            <p class="group-foot" id="foot-mirror"></p>
             <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
             <p class="group-foot" id="foot-display"></p>
           </section>
@@ -288,17 +305,73 @@
         <table class="standings num" id="standings">
           <caption class="visually-hidden">Standings</caption>
           <thead>
-            <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th></tr>
+            <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th><th scope="col" id="th-points" hidden>Points</th></tr>
           </thead>
           <tbody id="standings-body"></tbody>
         </table>
         <div class="results-actions">
+          <button id="results-next" class="button primary large" hidden>Standings</button>
           <button id="results-again" class="button primary large">
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Race Again
           </button>
           <button id="results-lobby" class="button secondary large">Back to Lobby</button>
         </div>
         <p class="footnote secondary" id="results-wait" hidden></p>
+      </div>
+    </section>
+
+    <!-- 7. The Grand Prix's standings between its races. -->
+    <section id="screen-standings" class="screen page st-standings" hidden aria-labelledby="gp-title">
+      <header class="bar">
+        <button id="gp-leave" class="button plain small back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="gp-leave-label">Leave</span>
+        </button>
+      </header>
+      <div class="st-inner">
+        <div class="page-head center">
+          <p class="eyebrow" id="gp-eyebrow"></p>
+          <h1 class="large-title" id="gp-title" tabindex="-1">Standings</h1>
+          <p class="body secondary" id="gp-sub"></p>
+        </div>
+        <ol class="st-rows num" id="gp-rows" aria-label="Grand Prix standings"></ol>
+        <div class="st-foot">
+          <div class="st-next glass" id="gp-next-card">
+            <div class="st-next-words">
+              <p class="eyebrow" id="gp-next-eyebrow">Next Up</p>
+              <p class="title3" id="gp-next-name"></p>
+            </div>
+            <div class="st-drain" aria-hidden="true"><span id="gp-drain"></span></div>
+          </div>
+          <button id="gp-next" class="button primary large">Next Race</button>
+          <p class="footnote secondary" id="gp-wait" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. The podium: the cup's end. -->
+    <section id="screen-podium" class="screen podium" hidden aria-labelledby="podium-title">
+      <div class="podium-stage" id="podium-stage" aria-hidden="true"></div>
+      <header class="bar podium-bar">
+        <button id="podium-leave" class="button plain small back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="podium-leave-label">Leave</span>
+        </button>
+      </header>
+      <div class="podium-head">
+        <p class="eyebrow" id="podium-eyebrow">Grand Prix</p>
+        <h1 class="large-title" id="podium-title" tabindex="-1">Podium</h1>
+        <p class="body" id="podium-sub"></p>
+        <p class="podium-unlock glass" id="podium-unlock" role="status" hidden>You unlocked a secret track!</p>
+      </div>
+      <aside class="podium-board glass" aria-labelledby="podium-board-title">
+        <h2 class="eyebrow" id="podium-board-title">Final Standings</h2>
+        <ol class="podium-rows num" id="podium-rows"></ol>
+      </aside>
+      <div class="podium-actions">
+        <button id="podium-again" class="button primary large">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Play Again
+        </button>
+        <button id="podium-lobby" class="button secondary large">Back to Lobby</button>
+        <p class="footnote secondary" id="podium-wait" hidden></p>
       </div>
     </section>
 
