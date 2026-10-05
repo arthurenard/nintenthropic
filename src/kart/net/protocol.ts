@@ -47,9 +47,15 @@ export interface WirePlayer {
  * hundredths, so both ends (the guest predicting, the host driving) use exactly
  * the same values.
  *
- *   [seq, steer, throttle, brake, drift, itemPresses]
+ *   [seq, steer, throttle, brake, drift, itemPresses, horn, emote]
+ *
+ * `horn` is the count of honks, ever (like itemPresses); `emote` is 0 none,
+ * 1 cheer, 2 wave. The last two are sent only when there is something to
+ * say, and read as none when absent, so older senders still work.
  */
-export type WireInput = [number, number, number, number, 0 | 1, number];
+export type WireInput = [number, number, number, number, 0 | 1, number, number?, number?];
+
+const EMOTES = [null, "cheer", "wave"] as const;
 
 /** What a guest needs to build the race the host is about to run. */
 export interface StartInfo {
@@ -116,7 +122,9 @@ export function decode(data: string): Message | null {
 }
 
 export function encodeInput(seq: number, input: DriveInput): WireInput {
-  return [
+  const horn = Math.max(0, Math.floor(input.horn ?? 0));
+  const emote = Math.max(0, EMOTES.indexOf(input.emote ?? null));
+  const wire: WireInput = [
     seq,
     Math.round(clamp(input.steer, -1, 1) * 100),
     Math.round(clamp(input.throttle, 0, 1) * 100),
@@ -124,17 +132,25 @@ export function encodeInput(seq: number, input: DriveInput): WireInput {
     input.drift ? 1 : 0,
     Math.max(0, Math.floor(input.itemPresses)),
   ];
+  if (horn > 0 || emote > 0) wire.push(horn, emote);
+  return wire;
 }
 
-export function decodeInput(wire: readonly number[]): DriveInput {
+export function decodeInput(wire: readonly (number | undefined)[]): DriveInput {
   const num = (value: number | undefined) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
-  return {
+  const input: DriveInput = {
     steer: clamp(num(wire[1]), -100, 100) / 100,
     throttle: clamp(num(wire[2]), 0, 100) / 100,
     brake: clamp(num(wire[3]), 0, 100) / 100,
     drift: num(wire[4]) === 1,
     itemPresses: Math.max(0, Math.floor(num(wire[5]))),
   };
+  // Only when there is one, so an input that cannot honk reads as it always did.
+  const horn = Math.max(0, Math.floor(num(wire[6])));
+  if (horn > 0) input.horn = horn;
+  const emote = EMOTES[Math.floor(num(wire[7]))];
+  if (emote) input.emote = emote;
+  return input;
 }
 
 /**

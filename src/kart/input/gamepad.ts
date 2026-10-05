@@ -7,6 +7,7 @@
  *   left trigger                brake, and back up if held at a standstill
  *   A                           drift, held
  *   B or X                      use the item
+ *   Y                           honk
  */
 import type { DriveInput, DriverControl } from "../contract";
 
@@ -17,7 +18,7 @@ const CURVE = 1.4;
 /** A trigger pressed less than this is not pressed. */
 const TRIGGER_FLOOR = 0.05;
 
-const BUTTON = { drift: 0, itemB: 1, itemX: 2, brake: 6, throttle: 7, up: 12, down: 13, left: 14, right: 15 } as const;
+const BUTTON = { drift: 0, itemB: 1, itemX: 2, horn: 3, brake: 6, throttle: 7, up: 12, down: 13, left: 14, right: 15 } as const;
 
 type Pads = () => readonly (Gamepad | null)[];
 
@@ -37,6 +38,8 @@ export function shapeStick(raw: number): number {
 export function gamepadControl(index?: number, pads: Pads = browserPads): DriverControl {
   let presses = 0;
   let itemWasDown = false;
+  let hornWasDown = false;
+  let horns = 0;
 
   return {
     kind: "gamepad",
@@ -46,7 +49,8 @@ export function gamepadControl(index?: number, pads: Pads = browserPads): Driver
       const pad = index === undefined ? list.find((candidate) => candidate?.connected) : list[index];
       if (!pad?.connected) {
         itemWasDown = false;
-        return { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: presses };
+        hornWasDown = false;
+        return { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: presses, horn: horns };
       }
       const button = (i: number) => pad.buttons[i];
       const value = (i: number) => {
@@ -58,6 +62,9 @@ export function gamepadControl(index?: number, pads: Pads = browserPads): Driver
       const itemDown = pressed(BUTTON.itemB) || pressed(BUTTON.itemX);
       if (itemDown && !itemWasDown) presses++;
       itemWasDown = itemDown;
+      const hornDown = pressed(BUTTON.horn);
+      if (hornDown && !hornWasDown) horns++;
+      hornWasDown = hornDown;
       const trigger = (i: number) => {
         const v = value(i);
         return v < TRIGGER_FLOOR ? 0 : Math.min(1, v);
@@ -69,6 +76,7 @@ export function gamepadControl(index?: number, pads: Pads = browserPads): Driver
         brake,
         drift: pressed(BUTTON.drift),
         itemPresses: presses,
+        horn: horns,
       };
     },
     dispose() {

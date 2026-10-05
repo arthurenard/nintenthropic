@@ -24,6 +24,7 @@ import {
 } from "../contract";
 import { mulberry32 } from "../../engine/rules/rng";
 import { botInput, rubberBand } from "./bots";
+import { Eggs } from "./eggs";
 import { stepItems, pressItem, rocketTarget } from "./items";
 import { GO_TICK, NO_EMIT, bumpKarts, forwardSpeed, newKart, placeOnTrack, settle, stepKart, viewHop } from "./kart";
 import { planFor } from "./plan";
@@ -68,6 +69,8 @@ class Sim implements SimRace {
   private toTake: RaceEvent[] = [];
   private toView: RaceEvent[] = [];
   private readonly emit: (body: EventBody) => void;
+  /** The horn, the emotes and the duck. */
+  private readonly eggs: Eggs;
 
   constructor(readonly setup: RaceSetup) {
     const plan = planFor(setup.track);
@@ -102,6 +105,7 @@ class Sim implements SimRace {
       bestPlayer: null,
     };
     updatePlaces(this.world);
+    this.eggs = new Eggs(this.world);
   }
 
   get tick(): number {
@@ -147,6 +151,7 @@ class Sim implements SimRace {
       const input = this.inputFor(k, inputs);
       pressItem(w, k, input, true, this.emit);
       stepKart(w, k, input, this.emit);
+      this.eggs.kart(w, k, input, this.emit);
     }
 
     if (racing) {
@@ -217,6 +222,7 @@ class Sim implements SimRace {
         lapProgress: done ? 0 : clamp((k.progress - (k.lap - 1) * length) / length, 0, 1),
         wrongWay: k.wrongWay,
         finished: k.finished,
+        emote: this.eggs.emote(k.id),
       };
     });
     const things: ThingView[] = [];
@@ -273,11 +279,12 @@ class Sim implements SimRace {
   }
 
   snapshot(): RaceSnapshot {
-    return takeSnapshot(this.state, this.world.rng.draws());
+    return { ...takeSnapshot(this.state, this.world.rng.draws()), eg: this.eggs.save(this.state.karts) };
   }
 
   restore(snapshot: RaceSnapshot): void {
     if (!applySnapshot(this.world, snapshot)) return;
+    this.eggs.load(this.state.karts, snapshot.eg);
     // Events belong to the host's clock: what was waiting here is moot now.
     this.toTake = [];
     this.toView = [];

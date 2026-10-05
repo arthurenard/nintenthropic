@@ -241,6 +241,16 @@ only those karts' physics against the world as it is.
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
   between the palms) by at least a quarter span → hop; drift held from the
   hop until |steer| < 0.15 for 200 ms or a brake.
+- **Tricks** (`gestures.ts`, in hand lengths, a hand's span being twice the
+  wrist-to-knuckle size): a **clap** (palms from at least one hand length
+  apart to within 0.6 and back to 0.9 inside half a second, not from a brake
+  and not with the wheel near full lock) → `horn` +1, at most one in 0.4 s;
+  **both open hands** two hand lengths above where the wheel is usually held
+  (learnt from the fists), held 0.3 s → `emote: "cheer"` while they stay up;
+  **one open hand** turning round twice in a second, the other a fist or down
+  → `emote: "wave"`. While palms are together or a cheer is on, the wheel
+  does not brake, hop or flick an item. Keys: H honks, C and V hold cheer
+  and wave; a gamepad's Y honks.
 - **`WheelPreview`.** A canvas that draws the mirrored camera picture with
   the wheel on it: a ring through both palms turned with them, its colour the
   mode (green driving, amber braking, red lost), each hand a dot that is

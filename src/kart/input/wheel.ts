@@ -14,6 +14,8 @@
  *   - both hands jerked up: hop, which starts a drift the player lets go of by
  *     straightening the wheel
  *   - hands out of the picture: hold the angle a moment, then ease to the centre
+ *   - a clap (a horn), both open hands raised high (a cheer) and one open hand
+ *     waving (a wave) are gestures.ts's
  *
  * Times are seconds inside, milliseconds at the doors (a frame's capturedAt,
  * sample's `now`), as the rest of the tracker's clock is.
@@ -21,6 +23,7 @@
 import { OneEuroFilter } from "../../input/filter";
 import type { DriveInput, WheelHand, WheelStatus } from "../contract";
 import type { HandFrame } from "../../tracking/types";
+import { Gestures, type GestureHand } from "./gestures";
 import { Grip, readHand, type HandReading } from "./hands";
 
 /** How much turn is full lock: Settings, Steering. */
@@ -138,6 +141,7 @@ export class WheelReader {
 
   private readonly slots: Record<Side, Slot> = { left: newSlot(), right: newSlot() };
   private readonly filter = new OneEuroFilter(WHEEL.smoothing.minCutoff, WHEEL.smoothing.beta);
+  private readonly gestures = new Gestures();
   /** The smoothed wheel angle before the level is taken away, degrees, unwrapped (it can pass 180). */
   private angle = 0;
   private haveAngle = false;
@@ -205,6 +209,7 @@ export class WheelReader {
       this.restartAutoLevel();
     }
     this.settle(t);
+    this.gestures.frame(t, this.aspect, this.gestureHand("left", t), this.gestureHand("right", t), shapeSteer(this.angleAt(), this.steering), this.braking);
     if (both) this.hop(seen.left!, seen.right!, t);
   }
 
@@ -232,6 +237,7 @@ export class WheelReader {
     this.drifting = false;
     this.straightSince = null;
     this.hopTrail.length = 0;
+    this.gestures.reset();
     this.restartAutoLevel();
   }
 
@@ -370,7 +376,8 @@ export class WheelReader {
       slot.flickOk = !first && otherFist && !together;
       if (other.grip.state === "open") other.flickOk = false;
     } else if (state === "fist") {
-      if (slot.flickOk && otherFist && slot.grip.since - slot.openedAt <= WHEEL.flick) this.presses++;
+      // Open hands that clapped, or are raised in a cheer, are no flick.
+      if (slot.flickOk && otherFist && slot.grip.since - slot.openedAt <= WHEEL.flick && !this.gestures.stands(t)) this.presses++;
       slot.flickOk = false;
     }
   }
@@ -430,7 +437,7 @@ export class WheelReader {
     const span = Math.hypot((right.x - left.x) * this.aspect, right.y - left.y);
     this.hopTrail.push({ t, y: centre });
     while (this.hopTrail.length > 1 && t - this.hopTrail[0]!.t > WHEEL.hop.window) this.hopTrail.shift();
-    if (this.braking || t < this.hopAllowedAt || !(span > 0.02)) return;
+    if (this.braking || this.gestures.stands(t) || t < this.hopAllowedAt || !(span > 0.02)) return;
     for (const earlier of this.hopTrail) {
       const seconds = t - earlier.t;
       if (seconds <= 0) continue;
@@ -443,6 +450,14 @@ export class WheelReader {
         return;
       }
     }
+  }
+
+  /** A hand as the gestures see it, or null when it is not in the picture. */
+  private gestureHand(side: Side, t: number): GestureHand | null {
+    if (!this.slotPresent(side, t)) return null;
+    const slot = this.slots[side];
+    const reading = slot.reading!;
+    return { x: reading.x, y: reading.y, size: reading.size, grip: slot.grip.state };
   }
 
   private slotPresent(side: Side, t: number): boolean {
@@ -467,7 +482,9 @@ export class WheelReader {
       this.slotHeld(right, t) &&
       left.grip.state === "open" &&
       right.grip.state === "open" &&
-      t - Math.max(left.grip.since, right.grip.since) >= WHEEL.brakeAfter;
+      t - Math.max(left.grip.since, right.grip.since) >= WHEEL.brakeAfter &&
+      // Palms pressed together or raised high are a clap or a cheer, not a brake.
+      !this.gestures.stands(t);
 
     // The steer's fade: 1 while the hands are there, easing to 0 as they go.
     const sinceBoth = t - this.lastBothSeen;
@@ -541,6 +558,8 @@ export class WheelReader {
       brake: mode === "brake" ? 1 : 0,
       drift: this.drifting,
       itemPresses: this.presses,
+      horn: this.gestures.horns,
+      emote: this.gestures.emoteAt(t),
     };
   }
 }

@@ -16,8 +16,9 @@
  */
 import { WebGLUnavailable } from "../../engine/common";
 import type { DriverControl, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRenderer, RaceView, Session } from "../contract";
-import { $, element, setText } from "../../ui/dom";
+import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
+import { PHOTO_GAP, recordDuck, tricksFor } from "./eggs";
 import { itemWords, lapLabel, ordinal } from "./format";
 import { hostName, kartOf } from "./roster";
 import type { Disposable, RaceSound, Services } from "./services";
@@ -69,6 +70,11 @@ export class RaceScreen {
   private shownViews = "";
   private veilKey = "";
   private notesKey = "";
+  /** The easter eggs: the last event looked at, the tick it was on, the finishes so far, and the photo finish's still. */
+  private eggEvent = -1;
+  private eggTick = 0;
+  private finishes: { place: number; time: number }[] = [];
+  private still: string | null = null;
   private cards: { place: HTMLElement; lap: HTMLElement; item: HTMLElement; slot: number }[] = [];
   private banner = "";
   private view: RaceView | null = null;
@@ -112,6 +118,11 @@ export class RaceScreen {
     return this.view;
   }
 
+  /** A picture of the finish if two karts crossed the line together for a top-three place (it outlives `end`, until the next race). */
+  get photo(): string | null {
+    return this.still;
+  }
+
   begin(ctx: RaceContext): void {
     this.end();
     this.ctx = ctx;
@@ -122,6 +133,11 @@ export class RaceScreen {
     this.shownViews = "";
     this.veilKey = "";
     this.notesKey = "";
+    this.eggEvent = -1;
+    this.eggTick = 0;
+    this.finishes = [];
+    this.still = null;
+    $("view-toasts").replaceChildren();
     this.reported = "";
     this.banner = "";
     this.hushed = false;
@@ -164,6 +180,7 @@ export class RaceScreen {
     $("race-previews").replaceChildren();
     $("controller-cards").replaceChildren();
     $("view-notes").replaceChildren();
+    $("view-toasts").replaceChildren();
     $("kart-hud").replaceChildren();
     $("lost-hands").hidden = true;
     $("pause-veil").hidden = true;
@@ -178,6 +195,7 @@ export class RaceScreen {
     // Practice and a room watched on the host's screen stop for everyone; a screen of its own only covers itself.
     this.stopped = ctx.session.pause();
     this.note();
+    this.tricks();
     this.sheet.showModal();
     $("pause-resume").focus();
   }
@@ -272,11 +290,13 @@ export class RaceScreen {
         this.fit();
       }
       this.renderer.frame(view, dt);
+      this.eggs(view, lobby);
     }
     // Heard from the first frame, not from when the picture is ready: the lights count down meanwhile.
     if (this.mode === "world") this.sound?.frame(view, ctx.session.views(), dt);
     if (this.mode === "controller") {
       this.readouts(view);
+      this.eggs(view, lobby);
     }
   }
 
@@ -338,6 +358,74 @@ export class RaceScreen {
     setBar($("race-loading-bar"), fraction);
     const percent = Math.round(fraction * 100);
     setText("race-loading-title", percent > 0 && on ? `Getting ready… ${percent}%` : "Getting ready…");
+  }
+
+  // --- the small delights -------------------------------------------------------------------------------------
+
+  /** The pause sheet's "Tricks": what this device's drivers can try, by what they drive with. */
+  private tricks(): void {
+    const kind = this.ctx?.controls[0]?.kind;
+    $("pause-tricks").hidden = !kind;
+    $("pause-tricks-list").replaceChildren(...(kind ? tricksFor(kind) : []).map((words) => element("li", undefined, words)));
+  }
+
+  /** The race's events once each: a duck found by one of ours, and the finishes that may make a photo finish. */
+  private eggs(view: RaceView, lobby: LobbyState): void {
+    // A new race (a restart) starts the numbering again.
+    if (view.tick < this.eggTick - 5) {
+      this.eggEvent = -1;
+      this.finishes = [];
+    }
+    this.eggTick = view.tick;
+    for (const event of view.events) {
+      if (event.id <= this.eggEvent) continue;
+      this.eggEvent = event.id;
+      if (event.type === "duck") this.duckFound(event.kart, view, lobby);
+      else if (event.type === "finish") this.finished(event.place, event.time);
+    }
+  }
+
+  /** One of this device's players drove up to the duck: the first time on this track, they are told how many are found. */
+  private duckFound(kart: number, view: RaceView, lobby: LobbyState): void {
+    const ctx = this.ctx;
+    const slot = lobby.karts[kart];
+    if (!ctx || slot === undefined || !ctx.players.some((player) => player.slot === slot)) return;
+    const words = recordDuck(view.track.id);
+    if (!words) return;
+    const index = ctx.session.views().indexOf(kart);
+    const box = $("race-stage").getBoundingClientRect();
+    const rect = index >= 0 ? layoutViews(ctx.session.views().length, box.width, box.height).views[index] : undefined;
+    // In that player's viewport; a controller with no viewport says it on its own screen.
+    if (!rect) {
+      toast(words, { icon: "check", tone: "gold" });
+      return;
+    }
+    const pill = element("p", "view-toast glass");
+    pill.setAttribute("role", "status");
+    pill.style.left = `${Math.round(rect.x + rect.w / 2)}px`;
+    pill.style.top = `${Math.round(rect.y + rect.h * 0.26)}px`;
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#i-check");
+    icon.append(use);
+    pill.append(icon, element("span", undefined, words));
+    $("view-toasts").append(pill);
+    window.setTimeout(() => pill.remove(), 3500);
+  }
+
+  /** A kart crossed the line: if it was right behind the one before, for a place in the top three, the screen takes the picture now. */
+  private finished(place: number, time: number): void {
+    const ahead = this.finishes.find((finish) => finish.place === place - 1);
+    this.finishes.push({ place, time });
+    if (!ahead || place - 1 > 3 || time - ahead.time > PHOTO_GAP || !this.canvas || this.mode !== "world" || !this.loaded) return;
+    // Straight after the frame was drawn, which is the only moment a WebGL canvas can be read.
+    try {
+      this.still = this.canvas.toDataURL("image/jpeg", 0.8);
+    } catch {
+      this.still = null;
+    }
   }
 
   // --- the wheel's picture ------------------------------------------------------------------------------------

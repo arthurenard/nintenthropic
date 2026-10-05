@@ -7,6 +7,8 @@
  *   Down or S               brake, and back up if held at a standstill
  *   Space                   drift, held
  *   E or Shift              use the item
+ *   H                       honk
+ *   C / V                   cheer / wave, held
  *
  * Steering is eased: the wheel turns to the key over about a quarter of a
  * second and comes back faster, so a tap is a nudge and a hold is a turn.
@@ -21,6 +23,9 @@ const THROTTLE = ["ArrowUp", "KeyW"];
 const BRAKE = ["ArrowDown", "KeyS"];
 const DRIFT = ["Space"];
 const ITEM = ["KeyE", "ShiftLeft", "ShiftRight"];
+const HORN = ["KeyH"];
+const CHEER = ["KeyC"];
+const WAVE = ["KeyV"];
 /** Keys the page would otherwise scroll with (or press a focused button with). */
 const SCROLLS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"]);
 
@@ -30,7 +35,7 @@ const RETURN_RATE = 6;
 /** A gap in sampling longer than this (a hidden tab) is not a time to turn through, seconds. */
 const LONGEST_STEP = 0.1;
 
-const all = [...LEFT, ...RIGHT, ...THROTTLE, ...BRAKE, ...DRIFT, ...ITEM];
+const all = [...LEFT, ...RIGHT, ...THROTTLE, ...BRAKE, ...DRIFT, ...ITEM, ...HORN, ...CHEER, ...WAVE];
 
 /** Typing in a field is not driving. */
 function typing(target: EventTarget | null): boolean {
@@ -44,6 +49,7 @@ export function keyboardControl(target: EventTarget = window): DriverControl {
   let steer = 0;
   let last: number | null = null;
   let presses = 0;
+  let horns = 0;
 
   const held = (keys: readonly string[]) => keys.some((key) => down.has(key));
 
@@ -53,6 +59,7 @@ export function keyboardControl(target: EventTarget = window): DriverControl {
     if (SCROLLS.has(code) && (from as { tagName?: string } | null)?.tagName?.toUpperCase() !== "BUTTON") event.preventDefault();
     // Counted on the press, not on the key repeating while it is held (nor twice when E and Shift go down together).
     if (ITEM.includes(code) && !held(ITEM)) presses++;
+    if (HORN.includes(code) && !down.has(code)) horns++;
     down.add(code);
   };
   const onKeyUp = (event: Event) => {
@@ -85,6 +92,8 @@ export function keyboardControl(target: EventTarget = window): DriverControl {
         brake: braking ? 1 : 0,
         drift: held(DRIFT),
         itemPresses: presses,
+        horn: horns,
+        emote: held(CHEER) ? "cheer" : held(WAVE) ? "wave" : null,
       };
     },
     dispose() {

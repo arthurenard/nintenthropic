@@ -26,6 +26,7 @@ import type { KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef 
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
 import { Effects } from "./effects";
+import { RenderEggs } from "./eggs";
 import { Hud } from "./hud";
 import { ItemFx } from "./itemfx";
 import { KartActor, type ActorContext, type KartFactory } from "./kart";
@@ -115,6 +116,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   scene.add(dynamic);
   const kartGroup = new Group();
   dynamic.add(kartGroup);
+  /** Honk bubbles, the duck's flight and the Fun Fair's fireworks (eggs.ts). */
+  const eggs = new RenderEggs(hudRoot, dynamic, calm);
 
   const factory = options.kartFactory ?? createProceduralKart;
   const shadowTexture: Texture = glowTexture(0.0, 1.0);
@@ -166,6 +169,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     cameras.length = viewKarts.length;
     for (const c of cameras) c.calm = calm;
     hud.setViews(layout, viewKarts);
+    eggs.setViews(viewKarts.length);
   };
 
   const makeActor = (r: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartActor => {
@@ -232,6 +236,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       dynamic.add(skids.mesh);
       for (const r of racers) makeActor(r);
       hud.setTrack(world.geometry, racers);
+      eggs.load(world.style.id, world.geometry);
       boxSlots = rowSlots(world.geometry);
       boxLift.clear();
       lastEventId = -1;
@@ -262,6 +267,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         itemFx.clear();
         skids.clear();
         hud.resetRace();
+        eggs.reset();
         for (const c of cameras) c.reset();
       }
       lastTick = view.tick;
@@ -324,6 +330,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         lastEventId = e.id;
         effects.onEvent(e, kartAt);
         itemFx.onEvent(e, kartAt);
+        eggs.onEvent(e, view.racers, time);
         const shake = e.type === "bump" ? 0.35 : e.type === "wall" ? 0.5 : e.type === "hit" ? 0.8 : e.type === "strike" && e.item !== "storm" ? 0.6 : 0;
         if (shake > 0) {
           viewKarts.forEach((id, i) => {
@@ -339,6 +346,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
       world.update(time, dt, view.time);
       effects.update(dt);
+      eggs.update(dt);
       skids.update(dt);
 
       // Draw.
@@ -369,8 +377,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         renderer.setViewport(rect.x, y, rect.w, rect.h);
         renderer.setScissor(rect.x, y, rect.w, rect.h);
         renderer.render(scene, eye);
+        eggs.view(i, rect, eye, kartAt, time);
       });
       renderer.setScissorTest(false);
+      eggs.end(time);
 
       hud.update(view, dt);
     },
@@ -386,6 +396,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     dispose(): void {
       disposed = true;
       disposeWorld();
+      eggs.dispose();
       hud.dispose();
       shadowTexture.dispose();
       lightTexture.dispose();

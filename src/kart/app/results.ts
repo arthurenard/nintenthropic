@@ -5,8 +5,9 @@
  */
 import type { LobbyState, RaceResult, RacerSetup, Session } from "../contract";
 import { $, element, setText } from "../../ui/dom";
+import { photoFinish, type PhotoFinish } from "./eggs";
 import { lapsLabel, ordinal, raceTime } from "./format";
-import { hostName, standingRows } from "./roster";
+import { hostName, standingRows, type StandingRow } from "./roster";
 import { colourDot, focusHeading } from "./ui";
 
 export interface ResultsHooks {
@@ -22,15 +23,22 @@ export interface ResultsInput {
   racers: readonly RacerSetup[];
   laps: number;
   trackName: string;
+  /** A picture of the finish (the race's canvas as the closest one happened), for the photo finish, or null. */
+  still?: string | null;
 }
 
+/** The photo finish stays this long, ms: a beat and a half, and then it fades. */
+const PHOTO_FOR = 1750;
+
 export class ResultsScreen {
+  private photoTimer = 0;
+
   constructor(hooks: ResultsHooks) {
     $("results-again").addEventListener("click", () => hooks.again());
     $("results-lobby").addEventListener("click", () => hooks.lobby());
   }
 
-  render({ result, lobby, session, racers, laps, trackName }: ResultsInput): void {
+  render({ result, lobby, session, racers, laps, trackName, still }: ResultsInput): void {
     const rows = standingRows(result, racers, lobby, session.device);
     const mine = rows.filter((row) => row.mine);
     setText("results-eyebrow", `${trackName} · ${lapsLabel(laps)}`);
@@ -67,5 +75,24 @@ export class ResultsScreen {
     wait.hidden = host;
     if (!host) setText(wait, `${hostName(lobby)} can start another race from the lobby.`);
     focusHeading($("results-title"));
+    this.photo(photoFinish(result.standings), rows, still ?? null);
+  }
+
+  /** Two karts over the line together for a top-three place: a flash, the still, "Photo Finish!", and then the results. */
+  private photo(finish: PhotoFinish | null, rows: readonly StandingRow[], still: string | null): void {
+    const figure = $("photo-finish");
+    const image = $<HTMLImageElement>("photo-finish-still");
+    window.clearTimeout(this.photoTimer);
+    figure.hidden = true;
+    if (!finish) return;
+    const name = (kart: number) => rows.find((row) => row.kart === kart)?.name ?? "";
+    const by = finish.gap < 0.005 ? "by a hair" : `by ${finish.gap.toFixed(2)} s`;
+    setText("photo-finish-words", `${name(finish.ahead)} edges out ${name(finish.behind)} ${by}.`);
+    if (still) image.src = still;
+    else image.removeAttribute("src");
+    image.hidden = !still;
+    void figure.offsetWidth; // restart its animation
+    figure.hidden = false;
+    this.photoTimer = window.setTimeout(() => (figure.hidden = true), PHOTO_FOR);
   }
 }

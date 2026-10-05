@@ -4,6 +4,7 @@
  * track). It is a classic yellow bath duck, three metres long, bobbing and
  * looking about; in some worlds it has dressed for the weather.
  */
+import { duckAt, resetDuck } from "./duckFlight";
 import { MeshBuilder, ramp, rgb, scaleRgb } from "./kit";
 import type { HazardSpec, LandmarkContext, LandmarkModel, LandmarkSpec } from "./types";
 
@@ -94,6 +95,18 @@ function duck(ctx: LandmarkContext): LandmarkModel {
         glass: glass.empty ? undefined : glass,
         pivot: [0, 1, 0],
         update(t, part) {
+          // Found by a kart: it squeaks and flies off, and paddles back later (duckFlight.ts).
+          const day = duckAt(t);
+          if (day) {
+            part.visible = day.visible;
+            part.position.set(day.x, day.y, day.z);
+            part.rotation.set(day.pitch, day.yaw, day.roll);
+            part.scale.set(1, day.squash, 1);
+            return;
+          }
+          part.visible = true;
+          part.scale.set(1, 1, 1);
+          part.position.x = part.position.z = 0;
           const space = ctx.theme === "space";
           part.position.y = Math.sin(t * (space ? 0.9 : 1.7)) * (space ? 0.45 : 0.11);
           part.rotation.z = Math.sin(t * 1.15) * (space ? 0.12 : 0.05);
@@ -109,6 +122,8 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "rubber-duck": {
     footprint: 2,
     build: (ctx) => {
+      // A new world: the duck is home.
+      resetDuck();
       const model = duck(ctx);
       // The duck lives in its moving part; the static model is left empty so it is not drawn twice.
       return { ...model, lit: new MeshBuilder(), glass: undefined };
