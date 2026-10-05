@@ -12,6 +12,8 @@ import { clamp, lerp, lerpAngle } from "./util";
 
 /** How far behind the newest snapshot the others are drawn, seconds. */
 export const RENDER_LAG = 0.07;
+/** How far past the newest snapshot a kart is carried on while the next is awaited, seconds. */
+const MAX_EXTRAPOLATION = 0.1;
 /** Snapshots kept: about half a second. */
 const KEEP = 16;
 
@@ -50,10 +52,11 @@ function blendThing(a: ThingView, b: ThingView, f: number): ThingView {
 /**
  * Between two views, `f` of the way from `a` to `b` (0..1): karts' (and
  * things') place and heading blend; everything else is `b`'s, the newer.
+ * `f` beyond 1 carries on the same way past `b` (see `SnapshotBuffer.at`).
  */
 export function blendViews(a: RaceView, b: RaceView, f: number): RaceView {
-  if (a === b || f >= 1) return b;
-  if (f <= 0) return a;
+  if (a === b || f === 1) return b;
+  if (f === 0) return a;
   const before = new Map(a.karts.map((k) => [k.id, k]));
   const things = new Map(a.things.map((t) => [t.id, t]));
   return {
@@ -106,14 +109,25 @@ export class SnapshotBuffer {
     return true;
   }
 
-  /** The view at host time `time`: gliding between the snapshots around it, or the nearest one at either end. */
+  /**
+   * The view at host time `time`: gliding between the snapshots around it.
+   * Past the newest (the next one is late or lost) it carries on at the pace
+   * of the last two for a tenth of a second, then holds: a gap in snapshots
+   * should look like a kart that kept going, not one that stopped and then
+   * leapt.
+   */
   at(time: number): RaceView | null {
     const frames = this.frames;
     const first = frames[0];
     const last = frames[frames.length - 1];
     if (!first || !last) return null;
     if (time <= first.time) return first.view;
-    if (time >= last.time) return last.view;
+    if (time >= last.time) {
+      const before = frames[frames.length - 2];
+      if (!before) return last.view;
+      const over = Math.min(time - last.time, MAX_EXTRAPOLATION);
+      return blendViews(before.view, last.view, 1 + over / (last.time - before.time));
+    }
     for (let i = frames.length - 1; i > 0; i--) {
       const b = frames[i]!;
       const a = frames[i - 1]!;
