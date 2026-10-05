@@ -246,8 +246,12 @@ each model behind a small factory, so a Blender-made glTF can replace it.
   glowing emblem), scenery instanced well clear of the road (trees, rocks,
   cacti, lamps, cranes by theme), a sky dome and fog.
 - **Karts.** Chassis, four wheels turning with the speed and the front two
-  with the steer, the driver in a round helmet in the kart's colour leaning
-  into turns; body roll and pitch from the motion; a blob shadow. Effects:
+  with the steer, the driver (one of nine low-poly creatures, `render/drivers/`,
+  each in a helmet, goggles or scarf in the kart's colour) leaning into turns
+  with its hands on the wheel as it turns; cheering or waving with the player's
+  gesture, bouncing at the finish, dizzy in a spin-out; the golden kart has a
+  gold tub with the player's colour on its stripe, spoiler and hubs; body roll
+  and pitch from the motion; a blob shadow. Effects:
   drift sparks (blue, then orange), boost flames, dust off the road, a spin,
   a hop, a puff on a bump.
 - **Things.** The puck, the seeker (with a red glow and a fin), the slick (a

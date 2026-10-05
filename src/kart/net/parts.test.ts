@@ -12,7 +12,7 @@ import { CODE_ALPHABET, joinCodeFrom, joinUrl, makeCode, parseCode, peerIdFor } 
 import { EventFeed } from "./feed";
 import { gridKart, stepFakeKart } from "./fakeRace";
 import { decode, decodeInput, encode, encodeInput, encodeSnapshot, quantiseInput } from "./protocol";
-import { DEFAULT_SETTINGS, Roster, cleanName, mergeSettings } from "./roster";
+import { DEFAULT_SETTINGS, Roster, cleanName, cleanPlayer, mergeSettings } from "./roster";
 import { BOT_NAMES, buildSetup } from "./setup";
 import { seeded } from "./util";
 import { DisplayClock, RENDER_LAG, SnapshotBuffer, blendViews } from "./view";
@@ -130,6 +130,20 @@ describe("the roster", () => {
     expect(roster.slotsOf("c")).toEqual([1, 2]);
   });
 
+  it("carries each player's driver and golden kart, and drops a driver that does not exist", () => {
+    const roster = new Roster("host");
+    roster.set("a", [
+      { ...spec("Bob"), character: "rivet", golden: true },
+      { ...spec("Bea"), character: "nobody", golden: false },
+    ]);
+    const [bob, bea] = roster.players();
+    expect(bob).toMatchObject({ character: "rivet", golden: true });
+    expect(bea!.character).toBeUndefined();
+    expect(bea!.golden).toBeUndefined();
+    // A guest's garbage cannot break the host.
+    expect(cleanPlayer({ name: "X", control: "wheel", character: 7, golden: "yes" }, "P").character).toBeUndefined();
+  });
+
   it("keeps readiness when names change, and points 'host' players at the host's screen", () => {
     const roster = new Roster("host");
     roster.set("a", [spec("Bob", "host")]);
@@ -190,6 +204,22 @@ describe("the grid", () => {
     expect(setup.track.id).toBe(MEADOW_LOOP.id);
     expect(setup.seed).toBe(123);
     expect(setup.racers[4]).toMatchObject({ name: "P0", colour: "#FF453A" });
+  });
+
+  it("seats each player with their driver, and gives the bots the drivers nobody picked (never the duck)", () => {
+    const picked = players(2).map((p, i) => ({ ...p, character: i === 0 ? "bun" : "rivet", golden: i === 1 }));
+    const { setup } = buildSetup(picked, { ...DEFAULT_SETTINGS, racers: 8 }, 5);
+    const bots = setup.racers.filter((r) => r.player === null);
+    const humans = setup.racers.filter((r) => r.player !== null);
+    expect(humans.map((r) => [r.character, r.golden ?? false])).toEqual([["bun", false], ["rivet", true]]);
+    expect(bots).toHaveLength(6);
+    // Six bots, six drivers left of the eight: all different, none a player's, none the duck.
+    expect(new Set(bots.map((b) => b.character)).size).toBe(6);
+    for (const bot of bots) expect(["bun", "rivet", "dabble", undefined]).not.toContain(bot.character);
+    // The same seed, the same drivers.
+    expect(buildSetup(picked, { ...DEFAULT_SETTINGS, racers: 8 }, 5).setup.racers.map((r) => r.character)).toEqual(setup.racers.map((r) => r.character));
+    // More bots than free drivers still get one each.
+    expect(buildSetup(players(1), { ...DEFAULT_SETTINGS, racers: 8 }, 5).setup.racers.every((r) => r.character !== undefined || r.player !== null)).toBe(true);
   });
 
   it("fills to the racers wanted, never fewer than the players, never past the cap", () => {

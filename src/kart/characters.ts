@@ -36,7 +36,14 @@ export const CHARACTERS: readonly Character[] = [
  * pick up speed sooner and are shoved about; heavy ones top out a little
  * higher and shove back. Small differences — skill decides races.
  */
-export const WEIGHTS: Record<Weight, { acceleration: number; topSpeed: number; shoved: number; grip: number }> = {
+export interface WeightMods {
+  acceleration: number;
+  topSpeed: number;
+  shoved: number;
+  grip: number;
+}
+
+export const WEIGHTS: Record<Weight, WeightMods> = {
   light: { acceleration: 1.12, topSpeed: 0.97, shoved: 1.4, grip: 1.05 },
   middle: { acceleration: 1, topSpeed: 1, shoved: 1, grip: 1 },
   heavy: { acceleration: 0.9, topSpeed: 1.03, shoved: 0.6, grip: 0.96 },

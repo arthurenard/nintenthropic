@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS } from "../track/tracks";
 import { GO_TICK } from "./kart";
-import { ARENA, count, input, patch, race, racers, run, toGo, view } from "./testing";
+import { ARENA, count, input, patch, race, racer, racers, run, toGo, view } from "./testing";
 
 const harbour = TrackGeometry.build(HARBOUR_LIGHTS);
 
@@ -397,5 +397,59 @@ describe("laps", () => {
     expect(view(r).wrongWay).toBe(false);
     run(r, 40, () => input({ throttle: 1 }));
     expect(view(r).wrongWay).toBe(true);
+  });
+});
+
+describe("weights", () => {
+  const withCharacters = (...characters: (string | undefined)[]) =>
+    characters.map((character, i) => ({ ...racer(i, i), character }));
+
+  /** Kart 1 stands just ahead of kart 0, which comes up at 20 m/s: how fast the standing one is sent on, and how fast the rammer is left. */
+  const ram = (rammer: string, standing: string) => {
+    const r = race(HARBOUR_LIGHTS, withCharacters(rammer, standing));
+    toGo(r);
+    const s = view(r).z;
+    patch(r, 0, { vz: 20, vx: 0, steer: 0 });
+    patch(r, 1, { x: view(r).x, z: s + 1.6, s: s + 1.6, vz: 0, vx: 0, heading: 0, offset: -3.04, progress: s + 1.6 });
+    run(r, 1, () => undefined);
+    return { sent: view(r, 1).speed, left: view(r, 0).speed };
+  };
+
+  it("a heavy kart shoves a light one further than the reverse", () => {
+    const heavyHitsLight = ram("bramble", "bun");
+    const lightHitsHeavy = ram("bun", "bramble");
+    expect(heavyHitsLight.sent).toBeGreaterThan(lightHitsHeavy.sent + 1);
+    // And the rammer loses less speed against the light kart.
+    expect(heavyHitsLight.left).toBeGreaterThan(lightHitsHeavy.left);
+  });
+
+  it("a light kart reaches 15 m/s sooner than a middle one, and a middle one sooner than a heavy one", () => {
+    const secondsTo15 = (character: string): number => {
+      const r = race(HARBOUR_LIGHTS, withCharacters(character));
+      toGo(r);
+      let ticks = 0;
+      while (view(r).speed < 15 && ticks < 600) {
+        run(r, 1, () => input({ throttle: 1 }));
+        ticks++;
+      }
+      return ticks / 60;
+    };
+    const light = secondsTo15("bun");
+    const middle = secondsTo15("kit");
+    const heavy = secondsTo15("bramble");
+    expect(light).toBeLessThan(middle);
+    expect(middle).toBeLessThan(heavy);
+  });
+
+  it("a heavy kart tops out a little higher, a light one a little lower, and an unknown driver is a middleweight", () => {
+    const top = (character: string | undefined): number => {
+      const r = race(HARBOUR_LIGHTS, withCharacters(character));
+      toGo(r);
+      run(r, 60 * 8, () => input({ throttle: 1 }));
+      return view(r).speed;
+    };
+    expect(top("bun")).toBeLessThan(top("kit"));
+    expect(top("rivet")).toBeGreaterThan(top("kit"));
+    expect(top("nobody")).toBe(top(undefined));
   });
 });

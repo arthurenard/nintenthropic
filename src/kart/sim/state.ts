@@ -9,6 +9,7 @@
  * and speeds, a tenth of a milliradian for headings. Timers are whole ticks.
  */
 import type { DriveInput, ItemKind, RaceEvent, RaceSetup } from "../contract";
+import type { WeightMods } from "../characters";
 import type { Surface, TrackGeometry } from "../track/geometry";
 import type { TrackPlan } from "./plan";
 
@@ -148,6 +149,8 @@ export interface KartState {
   bot: BotMemory;
   /** The rubber band's say in a bot's top speed this tick (1: none). Worked out afresh every tick, so not kept in a snapshot. */
   band: number;
+  /** The driver's weight in numbers (characters.ts WEIGHTS), fixed by the setup: not kept in a snapshot. */
+  mods: WeightMods;
 }
 
 export interface Puck {

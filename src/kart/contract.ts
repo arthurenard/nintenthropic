@@ -442,6 +442,10 @@ export interface LocalPlayerSetup {
    * has not chosen. The host's own players are always shown on the host.
    */
   screen: "here" | "host" | "auto";
+  /** Their driver (characters.ts id); none drives as the host's pick. */
+  character?: string;
+  /** They drive a golden kart. */
+  golden?: boolean;
 }
 
 /**

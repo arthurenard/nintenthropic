@@ -134,6 +134,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let time = 0;
   let lastEventId = -1;
   let lastTick = 0;
+  /** The race's laps, from the latest view: a kart past them has finished. */
+  let raceLaps = Infinity;
   let disposed = false;
   let ctxLost = false;
   let boxSlots: BoxSlot[] = [];
@@ -164,7 +166,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     hud.setViews(layout, viewKarts);
   };
 
-  const makeActor = (r: Pick<RacerSetup, "id" | "colour">): KartActor => {
+  const makeActor = (r: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartActor => {
     const ctx = actorContext();
     const a = new KartActor(r.id, factory, r, ctx);
     kartGroup.add(a.root);
@@ -181,6 +183,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     surface: (x, z, hint) => world!.surfaceLift(x, z, hint),
     rollAt: (distance) => world!.bank.rollAt(distance),
     dynamic,
+    laps: raceLaps,
   });
 
   const disposeWorld = () => {
@@ -255,6 +258,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         for (const c of cameras) c.reset();
       }
       lastTick = view.tick;
+      raceLaps = view.laps;
 
       // Karts, standing where the road really is (its banking and any ramp lift them) and, when they have fallen, where the drone has them.
       const byId = new Map<number, KartView>();

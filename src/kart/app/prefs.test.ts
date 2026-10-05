@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_NAMES } from "./format";
-import { DEFAULT_LEVELS, loadLevels, loadYou, saveLevels, saveYou, setWheelChecked, wheelChecked } from "./prefs";
+import { DEFAULT_LEVELS, STARTERS, loadLevels, loadYou, saveLevels, saveYou, setWheelChecked, wheelChecked } from "./prefs";
 
 /** A storage in memory, as the browser's but without the browser. */
 function memory(initial: Record<string, string> = {}): Storage {
@@ -33,8 +33,9 @@ describe("the player Grip Prix remembers", () => {
 
   it("remembers what was chosen", () => {
     const storage = memory();
-    saveYou({ name: "Maya", drive: "keyboard", steering: "quick", second: true, secondName: "Lou" }, storage);
-    expect(loadYou(0, storage)).toEqual({ name: "Maya", drive: "keyboard", steering: "quick", second: true, secondName: "Lou" });
+    const chosen = { name: "Maya", drive: "keyboard", steering: "quick", second: true, secondName: "Lou", character: "rivet", golden: true, secondCharacter: "dabble", secondGolden: false } as const;
+    saveYou(chosen, storage);
+    expect(loadYou(0, storage)).toEqual(chosen);
   });
 
   it("reads anything odd as the default", () => {
@@ -45,6 +46,18 @@ describe("the player Grip Prix remembers", () => {
     expect(you.steering).toBe("normal");
     expect(you.second).toBe(false);
     expect(loadYou(0, memory({ "handy.kart.you.v1": "not json{" })).drive).toBe("wheel");
+  });
+
+  it("gives a first-time player a driver, a different one to the second driver, and ignores one that does not exist", () => {
+    const first = loadYou(0.3, memory());
+    expect(STARTERS).toContain(first.character);
+    expect(STARTERS).toContain(first.secondCharacter);
+    expect(first.secondCharacter).not.toBe(first.character);
+    expect(first.golden).toBe(false);
+    const odd = loadYou(0, memory({ "handy.kart.you.v1": JSON.stringify({ character: "nobody", secondCharacter: 7, golden: "yes" }) }));
+    expect(odd.character).toBe(STARTERS[0]);
+    expect(odd.secondCharacter).toBe(STARTERS[3]);
+    expect(odd.golden).toBe(false);
   });
 
   it("plays without a storage", () => {

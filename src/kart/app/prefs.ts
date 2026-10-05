@@ -4,6 +4,7 @@
  * and anything stored that does not look right reads as the default. Keys
  * are versioned and hold JSON.
  */
+import { CHARACTERS, characterById } from "../characters";
 import { cleanName, defaultName } from "./format";
 import type { SoundLevels, Steering } from "./services";
 
@@ -28,7 +29,18 @@ export interface You {
   second: boolean;
   /** The second player's name. */
   secondName: string;
+  /** Who drives (characters.ts id), and whether the kart is golden (only once that is unlocked). */
+  character: string;
+  golden: boolean;
+  /** The second player's driver and kart. */
+  secondCharacter: string;
+  secondGolden: boolean;
 }
+
+/** The drivers anyone can pick from the start (a first-time player is given one of these). */
+export const STARTERS: readonly string[] = CHARACTERS.filter((c) => !c.unlock).map((c) => c.id);
+
+const driver = (saved: unknown, fallback: string): string => (typeof saved === "string" && characterById(saved) ? saved : fallback);
 
 const local = (): Storage | undefined => {
   try {
@@ -65,8 +77,14 @@ function write(storage: Storage | undefined, key: string, value: unknown): boole
 export function loadYou(random = Math.random(), storage: Storage | undefined = local()): You {
   const saved = read<Partial<You>>(storage, KEYS.you);
   const name = cleanName(typeof saved?.name === "string" ? saved.name : "", defaultName(random));
+  const first = Math.floor((((random % 1) + 1) % 1) * STARTERS.length);
   const you: You = {
     name,
+    character: driver(saved?.character, STARTERS[first]!),
+    golden: saved?.golden === true,
+    // The second driver starts as someone else, a few places along.
+    secondCharacter: driver(saved?.secondCharacter, STARTERS[(first + 3) % STARTERS.length]!),
+    secondGolden: saved?.secondGolden === true,
     drive: DRIVES.includes(saved?.drive as Drive) ? (saved!.drive as Drive) : "wheel",
     steering: STEERINGS.includes(saved?.steering as Steering) ? (saved!.steering as Steering) : "normal",
     second: saved?.second === true,

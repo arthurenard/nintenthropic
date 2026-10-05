@@ -8,7 +8,7 @@
  * `render` is called on every change of the room and rebuilds what shows
  * from it: the screen keeps no copy of the room.
  */
-import type { LobbySettings, LobbyState, Session } from "../contract";
+import type { LobbyPlayer, LobbySettings, LobbyState, Session } from "../contract";
 import { $, element, icon, setText, toast } from "../../ui/dom";
 import { canStart, hostName, localPlayers, screenLabel, waitingLine } from "./roster";
 import { joinUrl, spellCode } from "./format";
@@ -36,6 +36,10 @@ export class LobbyScreen {
   private qrFor = "";
   private url = "";
   private role: Session["role"] | null = null;
+  /** The drivers' pictures (render/portraits.ts), fetched the first time the lobby shows: until they are here a player has a colour dot. */
+  private portraits: typeof import("../render/portraits") | null = null;
+  private asked = false;
+  private last: [LobbyState, Session, ScreenChoice] | null = null;
 
   constructor(
     private readonly services: Services,
@@ -64,6 +68,16 @@ export class LobbyScreen {
 
   /** Shows the room as it is now. */
   render(lobby: LobbyState, session: Session, choice: ScreenChoice): void {
+    this.last = [lobby, session, choice];
+    if (!this.asked) {
+      this.asked = true;
+      import("../render/portraits")
+        .then((module) => {
+          this.portraits = module;
+          if (this.last) this.render(...this.last);
+        })
+        .catch(() => undefined);
+    }
     const { role, device } = session;
     const host = role !== "guest";
     const first = this.role !== role;
@@ -149,10 +163,22 @@ export class LobbyScreen {
       } else {
         state.textContent = "Getting ready…";
       }
-      row.append(colourDot(player.colour), words, state);
+      row.append(this.face(player), words, state);
       return row;
     });
     $("lobby-players").replaceChildren(...rows);
+  }
+
+  /** Who this player is driving, in their colour; a plain colour dot until (or unless) the picture can be drawn. */
+  private face(player: LobbyPlayer): HTMLElement {
+    const url = this.portraits?.portrait(player.character, { colour: player.colour, size: 128 });
+    if (!url) return colourDot(player.colour);
+    const face = element("img", "player-face");
+    face.src = url;
+    face.alt = "";
+    face.width = face.height = 44;
+    face.style.setProperty("--colour", player.colour);
+    return face;
   }
 
   private settings(settings: LobbySettings): void {

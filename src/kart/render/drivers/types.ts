@@ -1,0 +1,52 @@
+import type { BufferGeometry, Object3D } from "three";
+import type { Emote } from "../../contract";
+import type { Character } from "../../characters";
+import type { V3 } from "../world/builder";
+
+export type Species = Character["species"];
+
+/** What the rig tells a bit that moves on its own. */
+export interface BitState {
+  time: number;
+  /** 0..1: how happy (a cheer, a finish). */
+  happy: number;
+  /** 0..1: how dizzy. */
+  dizzy: number;
+  steer: number;
+  lean: number;
+}
+
+/** A part that moves by itself (a tail, an antenna): its geometry is built round its pivot. */
+export interface Bit {
+  geo: BufferGeometry;
+  at: V3;
+  on: "torso" | "head";
+  move?(o: Object3D, s: BitState): void;
+}
+
+export interface DriverBuild {
+  torso: BufferGeometry;
+  head: BufferGeometry;
+  /** An arm along +z from the shoulder; both sides use it. */
+  arm: BufferGeometry;
+  bits: Bit[];
+  /** The shoulders' distance from the middle. */
+  shoulder: number;
+  /** Where the head sits (HEAD_AT by default). */
+  headAt?: V3;
+  /** How high above the head's centre the dizzy stars circle. */
+  crown: number;
+}
+
+/** What a driver is asked to show on one frame. */
+export interface DriverMotion {
+  time: number;
+  /** -1..1 */
+  steer: number;
+  lean: number;
+  /** Radians the driver has twirled in a trick. */
+  twirl: number;
+  emote?: Emote | null;
+  finished?: boolean;
+  dizzy?: boolean;
+}

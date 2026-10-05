@@ -364,7 +364,7 @@ export class HostSession implements Session {
     this.local = players.slice(0, 2);
     this.roster.set(
       this.device,
-      this.local.map((p): WirePlayer => ({ name: p.name, control: p.control.kind, screen: p.screen })),
+      this.local.map((p): WirePlayer => ({ name: p.name, control: p.control.kind, screen: p.screen, character: p.character, golden: p.golden })),
     );
     this.changed();
   }

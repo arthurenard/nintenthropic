@@ -4,6 +4,9 @@
  * comes back the next time.
  */
 import { $, setText } from "../../ui/dom";
+import { TRACKS } from "../track/tracks";
+import { isUnlocked, loadUnlocks } from "../unlocks";
+import { DriverPicker } from "./driverPicker";
 import { cleanName, defaultName } from "./format";
 import type { Drive, You } from "./prefs";
 import type { Steering } from "./services";
@@ -34,6 +37,8 @@ export class YouScreen {
   private readonly drive: Segmented<Drive>;
   private readonly steering: Segmented<Steering>;
   private readonly two: Switch;
+  private readonly pickFirst: DriverPicker;
+  private readonly pickSecond: DriverPicker;
 
   constructor(private readonly hooks: YouHooks) {
     this.drive = new Segmented<Drive>($("pick-drive"), (drive) => {
@@ -47,6 +52,14 @@ export class YouScreen {
       this.you.second = on;
       this.sync();
       if (on) this.second.focus({ preventScroll: true });
+    });
+    this.pickFirst = new DriverPicker($("driver-pick"), "Your character", ({ character, golden }) => {
+      this.you.character = character;
+      this.you.golden = golden;
+    });
+    this.pickSecond = new DriverPicker($("driver-pick2"), "Second character", ({ character, golden }) => {
+      this.you.secondCharacter = character;
+      this.you.secondGolden = golden;
     });
     $("you-back").addEventListener("click", () => hooks.back());
     this.name.addEventListener("input", () => (this.you.name = this.name.value));
@@ -69,6 +82,15 @@ export class YouScreen {
     this.drive.value = you.drive;
     this.steering.value = you.steering;
     this.two.on = you.second;
+    // What this device has found: the duck driver once every track's duck is, the golden kart with the Konami code.
+    const unlocks = loadUnlocks();
+    const access = {
+      duck: isUnlocked("duck-driver", unlocks, { duckTracks: TRACKS.filter((track) => track.duck).map((track) => track.id), cups: [] }),
+      golden: isUnlocked("golden", unlocks, { duckTracks: [], cups: [] }),
+    };
+    const first = this.pickFirst.open({ character: you.character, golden: you.golden }, access);
+    const second = this.pickSecond.open({ character: you.secondCharacter, golden: you.secondGolden }, access);
+    this.you = { ...this.you, character: first.character, golden: first.golden, secondCharacter: second.character, secondGolden: second.golden };
     this.setBusy(false);
     this.sync();
     focusHeading($("you-title"));
@@ -87,6 +109,7 @@ export class YouScreen {
     $("row-steering").hidden = !wheel;
     $("group-second").hidden = !wheel;
     $("row-second").hidden = !wheel || !this.you.second;
+    $("group-driver2").hidden = !wheel || !this.you.second;
     setText("foot-drive", ABOUT[this.you.drive]);
   }
 

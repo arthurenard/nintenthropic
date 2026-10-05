@@ -47,7 +47,7 @@ function startRace(): void {
 
   // The stand-in source. To try the real sim, make `source` an adapter over it: a RaceViewSource whose
   // `step` runs the race on its fixed tick with the keyboard's DriveInput and whose `view` is `race.view()`.
-  const demo = createDemoRace(track, { karts, laps });
+  const demo = createDemoRace(track, { karts, laps, golden: params.get("golden") === "1" });
   demo.boxesAsThings = params.get("boxes") !== "rows";
   const source: RaceViewSource = demo;
   const renderer: GripRenderer = createRaceRenderer(canvas, hudRoot, { quality, theme });
