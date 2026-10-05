@@ -9,6 +9,7 @@
  */
 import { Group, Mesh, type Object3D } from "three";
 import type { Paint } from "../builder";
+import { clockAngles } from "./clock";
 import { byHeight, extrudeZ, grid, lathe, MeshBuilder, mixRgb, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
@@ -1297,10 +1298,10 @@ const wallClock: LandmarkSpec = {
       const a = (m / 12) * TAU;
       lit.box(Math.sin(a) * 7.2, cy + Math.cos(a) * 7.2, zf + 0.9, 0.55, 1.5, 0.35, rim, 0, 0, -a);
     }
-    // The hour hand stands at ten past ten, a spade-tipped bar, fixed.
-    const ha = (305 / 360) * TAU;
-    lit.rod([0, cy, zf + 1.4], [Math.sin(ha) * 4.4, cy + Math.cos(ha) * 4.4, zf + 1.4], 0.85, ink);
-    lit.blob(Math.sin(ha) * 4.7, cy + Math.cos(ha) * 4.7, zf + 1.4, 0.8, 1.2, 0.3, ink, 0, -ha);
+    // The hour hand, a spade-tipped bar, drawn at twelve; the clock turns it to the real time.
+    const hour = new MeshBuilder();
+    hour.rod([0, cy, zf + 1.4], [0, cy + 4.4, zf + 1.4], 0.85, ink);
+    hour.blob(0, cy + 4.7, zf + 1.4, 0.8, 1.2, 0.3, ink, 0, 0);
     const cap = (w: number, len: number, z: number, paint: Paint, tail: number) => {
       const g = new MeshBuilder();
       g.box(0, cy + len / 2 - tail / 2, z, w, len + tail, 0.4, paint);
@@ -1310,21 +1311,27 @@ const wallClock: LandmarkSpec = {
     const minute = cap(0.8, 6.6, zf + 1.8, ink, 1.0);
     const second = cap(0.35, 7.4, zf + 2.3, rim, 2.0);
     second.add(shapes.cylinder(10), xf(0, cy - 2.0, zf + 2.3, 0.8, 0.4, 0.8, 0, Math.PI / 2), rim);
+    // The hands tell the real time (clock.ts), on the player's own clock.
     const moving: MovingPart[] = [
+      {
+        lit: hour,
+        pivot: [0, cy, zf + 1.4],
+        update(_t, part) {
+          part.rotation.z = -clockAngles(new Date()).hour;
+        },
+      },
       {
         lit: minute,
         pivot: [0, cy, zf + 1.8],
-        update(t, part) {
-          // One turn in 144 s, so it creeps visibly.
-          part.rotation.z = -(((t / 144) % 1) + 60 / 360) * TAU;
+        update(_t, part) {
+          part.rotation.z = -clockAngles(new Date()).minute;
         },
       },
       {
         lit: second,
         pivot: [0, cy, zf + 2.3],
-        update(t, part) {
-          // One turn in 12 s, to be seen from a kart.
-          part.rotation.z = -((t / 12) % 1) * TAU;
+        update(_t, part) {
+          part.rotation.z = -clockAngles(new Date()).second;
         },
       },
     ];
