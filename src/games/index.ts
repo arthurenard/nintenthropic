@@ -1,8 +1,9 @@
 /**
  * The arcade: every game, in the order the home screen shows them. A game
- * whose entry has `create` can be played; one without is Coming Soon -
- * named, shown, never faked. Each game's code is imported only when it is
- * played, so the first screen downloads none of it.
+ * whose entry has `create` can be played here; one with a `page` (Grip Prix,
+ * on race.html) opens that page; one with neither is Coming Soon - named,
+ * shown, never faked. Each game's code is imported only when it is played,
+ * so the first screen downloads none of it.
  *
  * A game's agent owns its own entry here: add `create` (importing
  * `./<folder>/index` on demand) when the game can be played, and the poster
@@ -156,11 +157,53 @@ export const OVERWATCH_RIDGE: GameEntry = {
   },
 };
 
-/** Every game, playable or Coming Soon, in the arcade's order. */
-export const ARCADE: GameEntry[] = [HIGH_NOON, DEAD_OF_NIGHT, ORBITAL_DECAY, OVERWATCH_RIDGE];
+/**
+ * Grip Prix: a kart racer steered with both hands, on a page of its own
+ * (race.html). It is not played in the arcade's page, so it has no `create`:
+ * its Play opens `page`. Its light is a sunny meadow, bright where the
+ * shooting games are dark, so the Racing heading reads as another kind of game.
+ */
+export const GRIP_PRIX: GameEntry = {
+  id: "grip-prix",
+  title: "Grip Prix",
+  blurb: "Grip the wheel. Race your friends.",
+  about:
+    "Hold your fists up like a wheel and turn it. Drift round the bends, grab a nitro, and race up to three friends, each on their own camera or all on one big screen.",
+  poster: "assets/kart/poster.webp",
+  // A sunny meadow: a clear blue sky over bright grass, the sun high on the right.
+  backdrop: {
+    sky: [
+      ["#2f7fe0", 0],
+      ["#6db8f5", 0.42],
+      ["#bfe6fb", 0.62],
+      ["#8bd957", 0.63],
+      ["#4aa83f", 0.82],
+      ["#2f7f35", 1],
+    ],
+    glow: {
+      x: 0.8,
+      y: 0.2,
+      width: 0.5,
+      height: 0.62,
+      stops: [
+        ["rgba(255, 244, 196, 0.95)", 0],
+        ["rgba(255, 236, 160, 0.5)", 0.3],
+        ["rgba(255, 236, 160, 0)", 1],
+      ],
+    },
+  },
+  category: "racing",
+  page: "race.html",
+};
 
-/** Can this game be played yet? */
+/** Every game, playable or Coming Soon, in the arcade's order: the Shooting games, then Racing. */
+export const ARCADE: GameEntry[] = [HIGH_NOON, DEAD_OF_NIGHT, ORBITAL_DECAY, OVERWATCH_RIDGE, GRIP_PRIX];
+
+/** Can this game be played here, in the arcade's own page? (Not: has it a page of its own - see `hasPlay`.) */
 export const playable = (entry: GameEntry): entry is GameEntry & { create(): Promise<Game> } => typeof entry.create === "function";
+
+/** Does Play do anything for this game: start it here, or open the page it lives on? False is Coming Soon. */
+export const hasPlay = (entry: GameEntry): boolean => playable(entry) || typeof entry.page === "string";
 
 /** The games that can be played now. */
 export function playableGames(): GameEntry[] {

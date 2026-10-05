@@ -45,8 +45,14 @@ export default defineConfig({
   projects: [
     {
       name: "flows",
-      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience|orbit|ridge|switchCamera)\.spec\.ts/,
+      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience|orbit|ridge|switchCamera|race-shell)\.spec\.ts/,
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
+    },
+    {
+      // Grip Prix's screens again on a phone held upright, where the design must hold too.
+      name: "kart-phone",
+      testMatch: /race-shell\.spec\.ts/,
+      use: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true },
     },
     {
       name: "states-1440",

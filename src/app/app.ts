@@ -5,14 +5,14 @@
  */
 import type { AudioEngine } from "../audio/index";
 import { browserStore, loadAim, saveAim, type CameraIdentity } from "../calibration/storage";
-import { DownloadError, Progress } from "../engine/fetch";
+import { DownloadError, Progress, siteUrl } from "../engine/fetch";
 import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
 import type { EngineHost } from "../engine/host";
 import { seededRandom } from "../engine/random";
 import { Samples } from "../engine/stats";
 import { gpuName } from "../engine/tier";
 import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
-import { ARCADE, gameById, playable, playableGames } from "../games/index";
+import { ARCADE, gameById, hasPlay, playable, playableGames } from "../games/index";
 import { AimController } from "../input/aim";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
@@ -272,16 +272,20 @@ export class App {
     setText("feature-about", entry.about ?? entry.blurb);
     // The game's poster; its light stands in until it loads, or while there is none.
     posterInto($("feature-frame"), $<HTMLImageElement>("feature-art"), entry);
-    // A game still to come is named and described, and cannot be played.
-    const open = playable(entry);
-    for (const id of ["feature-actions", "start-control"]) $(id).hidden = !open;
+    // A game still to come is named and described, and cannot be played. A game
+    // with a page of its own (Grip Prix) has Play, but how you aim here (the
+    // finger pistol or the mouse) is no business of its page.
+    const open = hasPlay(entry);
+    const here = playable(entry);
+    $("feature-actions").hidden = !open;
+    $("start-control").hidden = !here;
     $("feature-soon").hidden = open;
     const label = $("control-label");
     const hand = this.control === "hand";
     label.replaceChildren(icon(hand ? "hand" : "mouse"), hand ? "Finger Pistol" : this.control === "touch" ? "Touch" : "Mouse or Trackpad");
     setText("switch-control", hand ? (touchOnly() ? "Use Touch" : "Use Mouse or Trackpad") : "Use Finger Pistol");
     $("switch-control").hidden = !!this.options.scripted;
-    $("adjust").hidden = !(hand && hasSavedAim());
+    $("adjust").hidden = !(here && hand && hasSavedAim());
     $<HTMLButtonElement>("play").disabled = this.busy;
     this.syncDifficulty();
     this.renderBest();
@@ -418,6 +422,11 @@ export class App {
 
   async start({ adjust = false }: { adjust?: boolean } = {}): Promise<void> {
     const entry = this.selected;
+    // A game on a page of its own: Play goes there. The arcade has no part in it.
+    if (!playable(entry) && entry.page) {
+      location.assign(siteUrl(entry.page));
+      return;
+    }
     if (this.busy || !playable(entry)) return;
     this.busy = true;
     this.renderHome();

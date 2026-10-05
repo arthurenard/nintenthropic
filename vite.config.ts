@@ -71,7 +71,13 @@ export default defineConfig({
   plugins: [vendorFiles()],
   // Handy's version, for Settings' About (src/app/settings.ts).
   define: { __HANDY_VERSION__: JSON.stringify(pkg.version) },
-  build: { target: "es2022", sourcemap: true, assetsInlineLimit: 0 },
+  build: {
+    target: "es2022",
+    sourcemap: true,
+    assetsInlineLimit: 0,
+    // Two pages: the arcade, and Grip Prix on its own page (src/kart/main.ts).
+    rollupOptions: { input: { index: "index.html", race: "race.html" } },
+  },
   // The tracking worker is an ES module: it loads MediaPipe's module build.
   worker: { format: "es" },
   server: { host: "127.0.0.1", port: 5173 },

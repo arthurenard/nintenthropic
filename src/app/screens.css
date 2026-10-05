@@ -258,7 +258,15 @@
      names), and what that leaves the hero: its picture's greatest height,
      and its share of the width beside the words. */
   --content: calc(min(100vw, var(--home-max)) - 2 * var(--margin));
-  --shelf: calc((var(--content) - 3 * 16px) / 4 * 9 / 16 + 48px);
+  /* A card's width: the content less the gaps (16 between cards, 32 between
+     headings' groups), shared among all the cards. The page's code says how
+     many cards and groups there are (--all, --groups); the row is 4 and 1
+     until it does. */
+  --card: calc(
+    (var(--content) - (var(--all, 4) - var(--groups, 1)) * 16px - (var(--groups, 1) - 1) * 32px) / var(--all, 4)
+  );
+  /* The row: its heading, a card's picture, and its name. */
+  --shelf: calc(var(--card) * 9 / 16 + 48px + 28px);
   --hero-height: calc(100dvh - 64px - var(--shelf) - 40px - var(--margin) - 32px);
   --hero-share: 0.63;
   display: flex;
@@ -368,9 +376,23 @@
 
 /* --- the row of games -------------------------------------------------------------- */
 
+/* One row, a heading over each kind of game: Shooting's cards, then Racing's. */
 .shelf {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+}
+.shelf-group {
+  flex: none;
+  width: calc(var(--n) * var(--card) + (var(--n) - 1) * 16px);
+}
+.shelf-heading {
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.shelf-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
   gap: 16px;
 }
 .game-card {
@@ -708,8 +730,16 @@ body[data-view="game"] {
   .feature .large-title {
     font-size: 40px;
   }
-  /* Two by two: every game in sight at once, none behind a scroll. */
+  /* Two by two: every game in sight at once, none behind a scroll. Each heading's
+     cards under it, the headings one above the other. */
   .shelf {
+    display: grid;
+    gap: 28px;
+  }
+  .shelf-group {
+    width: auto;
+  }
+  .shelf-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px 12px;
   }

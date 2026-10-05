@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Grip Prix: a kart racer you steer with both hands, for up to four players. Right in your browser." />
+    <meta name="apple-mobile-web-app-title" content="Grip Prix" />
+    <title>Grip Prix</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  </head>
+  <body data-screen="start">
+    <!-- 1. Start: the title over a bright meadow, and the three ways in. -->
+    <section id="screen-start" class="screen start" aria-labelledby="start-title">
+      <div class="start-world" aria-hidden="true">
+        <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i>
+        <svg class="start-hills" viewBox="0 0 1600 220" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="hill-far-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#a9d9c8" />
+              <stop offset="1" stop-color="#93d890" />
+            </linearGradient>
+            <linearGradient id="hill-near-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#78cb6a" />
+              <stop offset="1" stop-color="#8bd957" />
+            </linearGradient>
+          </defs>
+          <path fill="url(#hill-far-fill)" d="M0 220V104C140 40 280 28 420 56C560 84 640 112 800 100C960 88 1060 24 1220 22C1360 20 1480 64 1600 96V220z" />
+          <path fill="url(#hill-near-fill)" d="M0 220V150C130 110 270 102 420 126C560 148 640 176 800 170C960 164 1080 112 1240 108C1380 104 1500 130 1600 152V220z" />
+        </svg>
+        <svg class="start-road" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="road-fade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#9aa6b8" />
+              <stop offset="0.35" stop-color="#6b7587" />
+              <stop offset="1" stop-color="#4b5362" />
+            </linearGradient>
+          </defs>
+          <path class="road-base" d="M49.46 0L50.54 0L99.45 100L0.55 100z" />
+          <path class="road-kerb-white" d="M14.5 76.92L11.84 76.92L18.89 62.5L21.06 62.5zM85.5 76.92L88.16 76.92L81.11 62.5L78.94 62.5zM25.55 52.63L23.72 52.63L27.23 45.45L28.82 45.45zM74.45 52.63L76.28 52.63L72.77 45.45L71.18 45.45zM31.3 40L29.9 40L31.99 35.71L33.25 35.71zM68.7 40L70.1 40L68.01 35.71L66.75 35.71zM34.82 32.26L33.68 32.26L35.08 29.41L36.12 29.41zM65.18 32.26L66.32 32.26L64.92 29.41L63.88 29.41zM37.2 27.03L36.24 27.03L37.23 25L38.12 25zM62.8 27.03L63.76 27.03L62.77 25L61.88 25zM38.92 23.26L38.09 23.26L38.83 21.74L39.61 21.74zM61.08 23.26L61.91 23.26L61.17 21.74L60.39 21.74zM40.21 20.41L39.48 20.41L40.06 19.23L40.75 19.23zM59.79 20.41L60.52 20.41L59.94 19.23L59.25 19.23zM41.23 18.18L40.57 18.18L41.03 17.24L41.66 17.24zM58.77 18.18L59.43 18.18L58.97 17.24L58.34 17.24zM42.04 16.39L41.44 16.39L41.82 15.63L42.39 15.63zM57.96 16.39L58.56 16.39L58.18 15.63L57.61 15.63zM42.71 14.93L42.16 14.93L42.48 14.29L43 14.29zM57.29 14.93L57.84 14.93L57.52 14.29L57 14.29zM43.27 13.7L42.76 13.7L43.03 13.16L43.51 13.16zM56.73 13.7L57.24 13.7L56.97 13.16L56.49 13.16zM43.74 12.66L43.27 12.66L43.5 12.2L43.95 12.2zM56.26 12.66L56.73 12.66L56.5 12.2L56.05 12.2zM44.15 11.76L43.71 11.76L43.9 11.36L44.33 11.36zM55.85 11.76L56.29 11.76L56.1 11.36L55.67 11.36zM44.5 10.99L44.09 10.99L44.26 10.64L44.66 10.64zM55.5 10.99L55.91 10.99L55.74 10.64L55.34 10.64zM44.81 10.31L44.42 10.31L44.57 10L44.95 10zM55.19 10.31L55.58 10.31L55.43 10L55.05 10zM45.08 9.71L44.71 9.71L44.85 9.43L45.21 9.43zM54.92 9.71L55.29 9.71L55.15 9.43L54.79 9.43zM45.33 9.17L44.98 9.17L45.1 8.93L45.44 8.93zM54.67 9.17L55.02 9.17L54.9 8.93L54.56 8.93zM45.54 8.7L45.21 8.7L45.32 8.47L45.64 8.47zM54.46 8.7L54.79 8.7L54.68 8.47L54.36 8.47zM45.74 8.26L45.42 8.26L45.52 8.06L45.83 8.06zM54.26 8.26L54.58 8.26L54.48 8.06L54.17 8.06zM45.92 7.87L45.61 7.87L45.7 7.69L46 7.69zM54.08 7.87L54.39 7.87L54.3 7.69L54 7.69zM46.08 7.52L45.78 7.52L45.87 7.35L46.15 7.35zM53.92 7.52L54.22 7.52L54.13 7.35L53.85 7.35zM46.23 7.19L45.94 7.19L46.02 7.04L46.3 7.04zM53.77 7.19L54.06 7.19L53.98 7.04L53.7 7.04z" />
+          <path class="road-kerb-red" d="M4 100L0.55 100L11.84 76.92L14.5 76.92zM96 100L99.45 100L88.16 76.92L85.5 76.92zM21.06 62.5L18.89 62.5L23.72 52.63L25.55 52.63zM78.94 62.5L81.11 62.5L76.28 52.63L74.45 52.63zM28.82 45.45L27.23 45.45L29.9 40L31.3 40zM71.18 45.45L72.77 45.45L70.1 40L68.7 40zM33.25 35.71L31.99 35.71L33.68 32.26L34.82 32.26zM66.75 35.71L68.01 35.71L66.32 32.26L65.18 32.26zM36.12 29.41L35.08 29.41L36.24 27.03L37.2 27.03zM63.88 29.41L64.92 29.41L63.76 27.03L62.8 27.03zM38.12 25L37.23 25L38.09 23.26L38.92 23.26zM61.88 25L62.77 25L61.91 23.26L61.08 23.26zM39.61 21.74L38.83 21.74L39.48 20.41L40.21 20.41zM60.39 21.74L61.17 21.74L60.52 20.41L59.79 20.41zM40.75 19.23L40.06 19.23L40.57 18.18L41.23 18.18zM59.25 19.23L59.94 19.23L59.43 18.18L58.77 18.18zM41.66 17.24L41.03 17.24L41.44 16.39L42.04 16.39zM58.34 17.24L58.97 17.24L58.56 16.39L57.96 16.39zM42.39 15.63L41.82 15.63L42.16 14.93L42.71 14.93zM57.61 15.63L58.18 15.63L57.84 14.93L57.29 14.93zM43 14.29L42.48 14.29L42.76 13.7L43.27 13.7zM57 14.29L57.52 14.29L57.24 13.7L56.73 13.7zM43.51 13.16L43.03 13.16L43.27 12.66L43.74 12.66zM56.49 13.16L56.97 13.16L56.73 12.66L56.26 12.66zM43.95 12.2L43.5 12.2L43.71 11.76L44.15 11.76zM56.05 12.2L56.5 12.2L56.29 11.76L55.85 11.76zM44.33 11.36L43.9 11.36L44.09 10.99L44.5 10.99zM55.67 11.36L56.1 11.36L55.91 10.99L55.5 10.99zM44.66 10.64L44.26 10.64L44.42 10.31L44.81 10.31zM55.34 10.64L55.74 10.64L55.58 10.31L55.19 10.31zM44.95 10L44.57 10L44.71 9.71L45.08 9.71zM55.05 10L55.43 10L55.29 9.71L54.92 9.71zM45.21 9.43L44.85 9.43L44.98 9.17L45.33 9.17zM54.79 9.43L55.15 9.43L55.02 9.17L54.67 9.17zM45.44 8.93L45.1 8.93L45.21 8.7L45.54 8.7zM54.56 8.93L54.9 8.93L54.79 8.7L54.46 8.7zM45.64 8.47L45.32 8.47L45.42 8.26L45.74 8.26zM54.36 8.47L54.68 8.47L54.58 8.26L54.26 8.26zM45.83 8.06L45.52 8.06L45.61 7.87L45.92 7.87zM54.17 8.06L54.48 8.06L54.39 7.87L54.08 7.87zM46 7.69L45.7 7.69L45.78 7.52L46.08 7.52zM54 7.69L54.3 7.69L54.22 7.52L53.92 7.52zM46.15 7.35L45.87 7.35L45.94 7.19L46.23 7.19zM53.85 7.35L54.13 7.35L54.06 7.19L53.77 7.19z" />
+          <path class="road-asphalt" d="M49.5 0L50.5 0L96 100L4 100z" />
+          <path class="road-line" d="M49.6 100L50.4 100L50.33 76.92L49.67 76.92zM49.71 62.5L50.29 62.5L50.26 52.63L49.74 52.63zM49.76 45.45L50.24 45.45L50.22 40L49.78 40zM49.79 35.71L50.21 35.71L50.2 32.26L49.8 32.26zM49.81 29.41L50.19 29.41L50.18 27.03L49.82 27.03zM49.83 25L50.17 25L50.17 23.26L49.83 23.26zM49.83 21.74L50.17 21.74L50.16 20.41L49.84 20.41zM49.84 19.23L50.16 19.23L50.15 18.18L49.85 18.18zM49.85 17.24L50.15 17.24L50.15 16.39L49.85 16.39zM49.85 15.63L50.15 15.63L50.14 14.93L49.86 14.93zM49.86 14.29L50.14 14.29L50.14 13.7L49.86 13.7zM49.86 13.16L50.14 13.16L50.14 12.66L49.86 12.66zM49.86 12.2L50.14 12.2L50.14 11.76L49.86 11.76zM49.87 11.36L50.13 11.36L50.13 10.99L49.87 10.99zM49.87 10.64L50.13 10.64L50.13 10.31L49.87 10.31zM49.87 10L50.13 10L50.13 9.71L49.87 9.71zM49.87 9.43L50.13 9.43L50.13 9.17L49.87 9.17zM49.87 8.93L50.13 8.93L50.13 8.7L49.87 8.7zM49.87 8.47L50.13 8.47L50.12 8.26L49.88 8.26zM49.88 8.06L50.12 8.06L50.12 7.87L49.88 7.87zM49.88 7.69L50.12 7.69L50.12 7.52L49.88 7.52zM49.88 7.35L50.12 7.35L50.12 7.19L49.88 7.19z" />
+        </svg>
+        <i class="start-glow"></i>
+      </div>
+      <a class="back-link" href="index.html#grip-prix">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Handy
+      </a>
+      <div class="start-main">
+        <h1 class="large-title" id="start-title">Grip Prix</h1>
+        <p class="start-tag">Grip the wheel. Race your friends.</p>
+        <div class="start-card glass">
+          <button id="start-host" class="button primary large wide">Host a Race</button>
+          <form id="join-form" class="join-row" autocomplete="off" novalidate>
+            <label class="visually-hidden" for="join-code">Race code</label>
+            <input
+              id="join-code"
+              class="code-field"
+              type="text"
+              inputmode="text"
+              autocapitalize="characters"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+              maxlength="4"
+              placeholder="CODE"
+              enterkeyhint="go"
+            />
+            <button id="join-go" class="button secondary large" type="submit" disabled>Join a Race</button>
+          </form>
+          <button id="start-practice" class="button secondary large wide">Practice</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. You: a name, how you drive. -->
+    <section id="screen-you" class="screen page" hidden aria-labelledby="you-title">
+      <header class="bar">
+        <button id="you-back" class="button plain small back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
+        </button>
+      </header>
+      <div class="page-inner">
+        <div class="page-head">
+          <p class="eyebrow" id="you-eyebrow">Practice</p>
+          <h1 class="title1" id="you-title" tabindex="-1">Who’s Driving?</h1>
+        </div>
+        <section class="group" aria-labelledby="group-you">
+          <h2 class="group-title" id="group-you">You</h2>
+          <div class="rows">
+            <div class="row">
+              <label class="row-label" for="you-name">Name</label>
+              <input id="you-name" class="row-input" type="text" maxlength="14" autocomplete="nickname" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+            </div>
+            <div class="row">
+              <span class="row-label" id="label-drive">Drive With</span>
+              <div class="segmented" role="radiogroup" id="pick-drive" aria-labelledby="label-drive" aria-describedby="foot-drive">
+                <button type="button" role="radio" data-value="wheel">Wheel</button>
+                <button type="button" role="radio" data-value="keyboard">Keyboard</button>
+                <button type="button" role="radio" data-value="gamepad">Gamepad</button>
+              </div>
+            </div>
+            <div class="row" id="row-steering">
+              <span class="row-label" id="label-steering">Steering</span>
+              <div class="segmented" role="radiogroup" id="pick-steering" aria-labelledby="label-steering" aria-describedby="foot-drive">
+                <button type="button" role="radio" data-value="gentle">Gentle</button>
+                <button type="button" role="radio" data-value="normal">Normal</button>
+                <button type="button" role="radio" data-value="quick">Quick</button>
+              </div>
+            </div>
+          </div>
+          <p class="group-foot" id="foot-drive"></p>
+        </section>
+        <section class="group" id="group-second" aria-labelledby="group-two">
+          <h2 class="group-title" id="group-two">Two Players</h2>
+          <div class="rows">
+            <div class="row">
+              <label class="row-label" for="switch-second">Two on This Camera</label>
+              <button type="button" class="switch" role="switch" id="switch-second" aria-checked="false"></button>
+            </div>
+            <div class="row" id="row-second">
+              <label class="row-label" for="you-name2">Second Driver</label>
+              <input id="you-name2" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+            </div>
+          </div>
+          <p class="group-foot">You share one camera: you drive with the left half of the picture, your friend with the right.</p>
+        </section>
+        <div class="page-actions">
+          <button id="you-continue" class="button primary large wide">Continue</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. The wheel check: hold the wheel up, level, turn it, brake. -->
+    <section id="screen-check" class="screen page" hidden aria-labelledby="check-title">
+      <header class="bar">
+        <button id="check-back" class="button plain small back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
+        </button>
+      </header>
+      <div class="check-inner">
+        <div class="check-pictures" id="check-pictures"></div>
+        <div class="check-words" aria-live="polite">
+          <h1 class="title2" id="check-title" tabindex="-1">Hold your fists up, like a wheel</h1>
+          <p class="subhead secondary" id="check-detail">Keep both fists in view of the camera.</p>
+        </div>
+        <ol class="steps" id="check-steps" aria-hidden="true"><li></li><li></li><li></li><li></li></ol>
+        <button id="check-continue" class="button primary large" style="visibility: hidden">Continue</button>
+      </div>
+    </section>
+
+    <!-- 4. The lobby: the code and who is here; the host chooses and starts. -->
+    <section id="screen-lobby" class="screen page lobby" hidden aria-labelledby="lobby-title">
+      <header class="bar">
+        <button id="lobby-leave" class="button plain small back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="lobby-leave-label">Leave</span>
+        </button>
+      </header>
+      <div class="lobby-inner" id="lobby-inner">
+        <aside class="join-card" id="join-card">
+          <p class="eyebrow">Race Code</p>
+          <p class="code-big num" id="lobby-code" aria-live="polite"></p>
+          <div class="qr" id="lobby-qr" hidden>
+            <canvas id="qr-canvas" role="img" aria-label="QR code to join this race"></canvas>
+          </div>
+          <p class="footnote secondary join-hint" id="lobby-hint">Friends type the code at Join a Race, or scan this.</p>
+          <p class="footnote tertiary join-url" id="lobby-url"></p>
+          <button id="lobby-copy" class="button quiet small">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg>Copy Link
+          </button>
+        </aside>
+        <div class="lobby-main">
+          <div class="page-head">
+            <p class="eyebrow" id="lobby-eyebrow">Your Race</p>
+            <h1 class="title1" id="lobby-title" tabindex="-1">Lobby</h1>
+            <p class="body secondary" id="lobby-waiting" hidden></p>
+          </div>
+          <section class="group" aria-labelledby="group-players">
+            <h2 class="group-title" id="group-players">Players</h2>
+            <div class="rows" id="lobby-players"></div>
+            <p class="group-foot" id="foot-players"></p>
+          </section>
+          <section class="group" id="group-screen" aria-labelledby="group-showme" hidden>
+            <h2 class="group-title" id="group-showme">Your Screen</h2>
+            <div class="rows">
+              <div class="row">
+                <span class="row-label" id="label-screen">Show Me On</span>
+                <div class="segmented" role="radiogroup" id="pick-screen" aria-labelledby="label-screen" aria-describedby="foot-screen">
+                  <button type="button" role="radio" data-value="here">This Screen</button>
+                  <button type="button" role="radio" data-value="host">Big Screen</button>
+                </div>
+              </div>
+            </div>
+            <p class="group-foot" id="foot-screen">Your race plays on this device. Choose Big Screen to share the host’s screen with everyone else who does, and use this one only as your wheel.</p>
+          </section>
+          <section class="group" id="group-race" aria-labelledby="group-race-title" hidden>
+            <h2 class="group-title" id="group-race-title">Race</h2>
+            <div class="rows">
+              <div class="row" id="row-track">
+                <span class="row-label" id="label-track">Track</span>
+                <span class="row-value" id="track-value"></span>
+                <label class="menu-select" id="track-menu" hidden>
+                  <span class="visually-hidden">Track</span>
+                  <select id="track-select"></select>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-updown" /></svg>
+                </label>
+              </div>
+              <div class="row">
+                <span class="row-label" id="label-laps">Laps</span>
+                <div class="segmented" role="radiogroup" id="pick-laps" aria-labelledby="label-laps">
+                  <button type="button" role="radio" data-value="1">1</button>
+                  <button type="button" role="radio" data-value="2">2</button>
+                  <button type="button" role="radio" data-value="3">3</button>
+                  <button type="button" role="radio" data-value="4">4</button>
+                  <button type="button" role="radio" data-value="5">5</button>
+                </div>
+              </div>
+              <div class="row">
+                <label class="row-label" for="switch-bots">Bots</label>
+                <button type="button" class="switch" role="switch" id="switch-bots" aria-checked="true"></button>
+              </div>
+            </div>
+            <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
+          </section>
+          <div class="page-actions">
+            <button id="lobby-start" class="button primary large wide" disabled>Start Race</button>
+            <p class="footnote secondary" id="lobby-start-hint" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. The race: the world full-window, the wheel's picture in a corner. -->
+    <section id="screen-race" class="screen race" hidden aria-label="Race">
+      <div class="race-stage" id="race-stage">
+        <div class="kart-hud" id="kart-hud"></div>
+      </div>
+      <div class="controller" id="controller" hidden>
+        <p class="eyebrow">Your Race</p>
+        <div class="controller-cards" id="controller-cards"></div>
+        <p class="footnote secondary">Your race is on the big screen. This is your wheel.</p>
+      </div>
+      <button class="race-pause icon-button glass" id="race-pause" aria-label="Pause" title="Pause (Esc)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause" /></svg>
+      </button>
+      <div class="race-previews" id="race-previews"></div>
+      <p class="lost-hands glass" id="lost-hands" role="status" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg><span id="lost-hands-text">Show Both Hands</span>
+      </p>
+      <div class="race-loading" id="race-loading">
+        <div class="race-loading-card glass">
+          <p class="title3 num" id="race-loading-title">Getting ready…</p>
+          <div class="progress" id="race-loading-bar" role="progressbar" aria-labelledby="race-loading-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Results. -->
+    <section id="screen-results" class="screen page results" hidden aria-labelledby="results-title">
+      <div class="results-inner">
+        <div class="page-head center">
+          <p class="eyebrow" id="results-eyebrow"></p>
+          <h1 class="large-title" id="results-title" tabindex="-1">Results</h1>
+          <p class="body secondary" id="results-sub" hidden></p>
+        </div>
+        <table class="standings num" id="standings">
+          <caption class="visually-hidden">Standings</caption>
+          <thead>
+            <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th></tr>
+          </thead>
+          <tbody id="standings-body"></tbody>
+        </table>
+        <div class="results-actions">
+          <button id="results-again" class="button primary large">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Race Again
+          </button>
+          <button id="results-lobby" class="button secondary large">Back to Lobby</button>
+        </div>
+        <p class="footnote secondary" id="results-wait" hidden></p>
+      </div>
+    </section>
+
+    <!-- Sheets. -->
+    <dialog id="prime" class="sheet alert" aria-labelledby="prime-title">
+      <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
+      <h2 class="title2" id="prime-title">Use Your Camera</h2>
+      <p class="body secondary">Grip Prix needs your camera to see your hands. The picture stays on this device.</p>
+      <div class="sheet-actions">
+        <button class="button primary wide" id="prime-continue">Continue</button>
+        <button class="button plain wide" id="prime-keys">Drive With Keyboard</button>
+      </div>
+    </dialog>
+
+    <dialog id="trouble" class="sheet alert" aria-labelledby="trouble-title" aria-describedby="trouble-body">
+      <span class="alert-icon danger" id="trouble-icon"></span>
+      <h2 class="title2" id="trouble-title"></h2>
+      <p class="body secondary" id="trouble-body"></p>
+      <div class="sheet-actions" id="trouble-actions"></div>
+    </dialog>
+
+    <dialog id="pause-sheet" class="sheet menu" aria-labelledby="pause-title">
+      <div class="sheet-head">
+        <h2 class="title2" id="pause-title">Paused</h2>
+      </div>
+      <div class="menu-list">
+        <button class="button primary wide" id="pause-resume">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-play" /></svg>Resume
+        </button>
+        <button class="button secondary wide" id="pause-restart" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Restart
+        </button>
+        <button class="button secondary wide" id="pause-leave">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-xmark" /></svg>Leave Race
+        </button>
+      </div>
+      <p class="footnote tertiary" id="pause-note"></p>
+    </dialog>
+
+    <p class="toast glass" id="toast" role="status" popover="manual" hidden></p>
+    <p class="visually-hidden" id="announce" aria-live="polite"></p>
+
+    <!-- Line icons, drawn like SF Symbols: 24-unit grid, 1.75 strokes, round caps. -->
+    <svg class="symbols" aria-hidden="true">
+      <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.6v12.8a1.1 1.1 0 0 0 1.66.94l10.3-6.4a1.1 1.1 0 0 0 0-1.88L9.66 4.66A1.1 1.1 0 0 0 8 5.6z" /></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" stroke="none" x="6.5" y="5" width="3.6" height="14" rx="1.3" /><rect fill="currentColor" stroke="none" x="13.9" y="5" width="3.6" height="14" rx="1.3" /></symbol>
+      <symbol id="i-restart" viewBox="0 0 24 24"><path d="M5.2 13.2A7 7 0 1 0 7.4 7" /><path d="M7.6 3.4 7.4 7l3.6.4" /></symbol>
+      <symbol id="i-xmark" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5.5 12.6 9.8 17l8.7-9.8" /></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><rect x="2.9" y="6.6" width="13" height="10.8" rx="2.6" /><path d="M15.9 10.4 21 7.6v8.8l-5.1-2.8" /></symbol>
+      <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8.2 8.4V4.6a1.45 1.45 0 0 1 2.9 0v3.8" /><path d="M11.1 8.4h8.4a1.6 1.6 0 0 1 0 3.2h-6.4" /><path d="M13.1 11.6h.7a1.5 1.5 0 0 1 0 3h-.9" /><path d="M12.9 14.6a1.4 1.4 0 0 1 0 2.8h-1.1" /><path d="M8.2 8.4H7a2.6 2.6 0 0 0-2.6 2.6v5a3.8 3.8 0 0 0 3.8 3.8h1.6a2.6 2.6 0 0 0 2-1" /></symbol>
+      <symbol id="i-exclamation" viewBox="0 0 24 24"><path d="M12 5.2v9.2" stroke-width="2.2" /><circle fill="currentColor" stroke="none" cx="12" cy="18.8" r="1.45" /></symbol>
+      <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 16.4 0" /><path d="M6.8 12.7a7.3 7.3 0 0 1 10.4 0" /><path d="M9.8 15.8a3 3 0 0 1 4.4 0" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /></symbol>
+      <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 5.5-3.1M13.9 6.1a11.6 11.6 0 0 1 6.3 3.5" /><path d="M6.8 12.7a7.3 7.3 0 0 1 3.4-2M17.2 12.7a7.3 7.3 0 0 0-2.3-1.6" /><path d="M9.8 15.8a3 3 0 0 1 3.2-.8" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /><path d="M5.2 4.4 18.8 19.6" /></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="4.5" y="13.3" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="13.3" width="6.2" height="6.2" rx="1.6" /></symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14.5 5.8 8.3 12l6.2 6.2" /></symbol>
+      <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.2 13.8a3.9 3.9 0 0 0 5.5 0l3-3a3.9 3.9 0 0 0-5.5-5.5l-1 1" /><path d="M13.8 10.2a3.9 3.9 0 0 0-5.5 0l-3 3a3.9 3.9 0 0 0 5.5 5.5l1-1" /></symbol>
+      <symbol id="i-wheel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" /><circle cx="12" cy="12" r="2.3" /><path d="M3.7 10.4l6 1.1M20.3 10.4l-6 1.1M12 14.3v6.2" /></symbol>
+      <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.8" y="6.2" width="18.4" height="11.6" rx="2.6" /><path d="M6.6 10.2h.01M10.2 10.2h.01M13.8 10.2h.01M17.4 10.2h.01M8 14h8" /></symbol>
+      <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M7.4 7.4h9.2a4.4 4.4 0 0 1 4.3 3.6l.8 4.2a2.5 2.5 0 0 1-4.4 2.1l-1.8-2.2H8.5l-1.8 2.2a2.5 2.5 0 0 1-4.4-2.1l.8-4.2a4.4 4.4 0 0 1 4.3-3.6z" /><path d="M8 10v3M6.5 11.5h3" /><path d="M15.6 10.6h.01M17.6 12.6h.01" /></symbol>
+    </svg>
+    <script type="module" src="/src/kart/main.ts"></script>
+  </body>
+</html>
