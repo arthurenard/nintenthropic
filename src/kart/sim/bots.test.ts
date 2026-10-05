@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RaceEvent, RacerSetup } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
-import { count, patch, race, racers, run, toGo, view } from "./testing";
+import { ARENA, count, patch, race, racers, run, toGo, view } from "./testing";
 
 /** Eight bots of every skill from sharp to gentle. */
 function field(): RacerSetup[] {
@@ -58,6 +58,23 @@ describe("a bot driving alone", () => {
     });
     expect(times[0]!).toBeGreaterThan(times[2]!);
     expect(times[1]!).toBeGreaterThanOrEqual(times[2]! - 0.5);
+  });
+
+  it("steers round a slick lying on its line", () => {
+    for (const offset of [-3, 0, 3]) {
+      const r = race(HARBOUR_LIGHTS, racers(0, 1, 1));
+      toGo(r);
+      run(r, 100);
+      // A slick on the long straight, ahead of it, at this offset from the middle (x runs the other way to the offset there).
+      const snap = r.snapshot();
+      const ahead = view(r).z + 90;
+      (snap.l as number[][]).push([999, 5, -offset, ahead, ahead, offset, 0]);
+      snap.th = 1000;
+      r.restore(snap);
+      const events = run(r, 60 * 6);
+      expect(events.some((e) => e.type === "hit" && e.cause === "slick")).toBe(false);
+      expect(view(r).z).toBeGreaterThan(ahead + 20);
+    }
   });
 
   it("backs out when it is stuck against a barrier", () => {
@@ -147,14 +164,14 @@ describe("eight bots", () => {
 });
 
 describe("the rubber band", () => {
-  it("eases a bot far ahead of the best player and pushes one far behind", () => {
-    const track = TRACKS[0]!;
-    const length = TrackGeometry.build(track).length;
-    /** How far round (in laps) the bot, kart 1, is after 50 s, a still player (kart 0) claiming to be at `player` metres, or keeping level with it. */
+  it("eases a bot far ahead of the best player and pushes one far behind, by a few per cent", () => {
+    // The open arena, with no items to make luck: only the band differs between the runs.
+    const length = TrackGeometry.build(ARENA).length;
+    /** How far round (in laps) the bot, kart 1, is after 40 s, a still player (kart 0) claiming to be at `player` metres, or keeping level with it. */
     const lapsDone = (player: number | "level") => {
-      const r = race(track, racers(1, 1, 1), { seed: 1 });
+      const r = race(ARENA, racers(1, 1, 1), { seed: 1, laps: 5 });
       toGo(r);
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < 40; i++) {
         const bot = view(r, 1);
         patch(r, 0, { progress: player === "level" ? (bot.lap - 1 + bot.lapProgress) * length : player });
         run(r, 60);
@@ -165,12 +182,20 @@ describe("the rubber band", () => {
     const level = lapsDone("level");
     // A player still on the grid: the bot soon gets far ahead of the best player and eases off.
     const ahead = lapsDone(-3);
-    // A player most of a lap ahead (standing there, as far as it can tell): the bot is far behind and pushes.
-    const behind = lapsDone(950);
-    expect(ahead).toBeLessThan(level - 0.004);
-    expect(behind).toBeGreaterThan(level + 0.004);
+    // A player more than a lap ahead (standing there, as far as it can tell): the bot is far behind and pushes.
+    const behind = lapsDone(2 * length);
+    expect(ahead).toBeLessThan(level * 0.97);
+    expect(behind).toBeGreaterThan(level * 1.02);
     // A few per cent, not a different race.
     expect(ahead).toBeGreaterThan(level * 0.9);
     expect(behind).toBeLessThan(level * 1.1);
+  });
+
+  it("leaves bots alone when there is no player to be near", () => {
+    const r = race(ARENA, racers(0, 2, 1), { seed: 1 });
+    toGo(r);
+    run(r, 60 * 30);
+    // Two equal bots side by side: neither is held back or pushed on.
+    expect(Math.abs(view(r, 0).speed - view(r, 1).speed)).toBeLessThan(1.5);
   });
 });

@@ -126,6 +126,8 @@ export interface KartState {
   ai: boolean;
   skill: number;
   bot: BotMemory;
+  /** The rubber band's say in a bot's top speed this tick (1: none). Worked out afresh every tick, so not kept in a snapshot. */
+  band: number;
 }
 
 export interface Puck {

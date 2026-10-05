@@ -85,6 +85,7 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     ai: racer.player === null,
     skill: clamp(racer.skill ?? 0.8, 0, 1),
     bot: newBotMemory(),
+    band: 1,
   };
   settle(kart);
   return kart;
@@ -340,7 +341,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
 
     // Speeding up, braking, coasting.
     const boosted = k.boost > 0;
-    let top = k.offroad ? D.offroadTop : D.topSpeed;
+    let top = (k.offroad ? D.offroadTop : D.topSpeed) * k.band;
     if (boosted) top *= k.offroad ? D.boostSpeedOffroad : D.boostSpeed;
     if (braking) {
       if (along > 0) along = Math.max(0, along - D.brakeDecel * brakeIn * TICK);

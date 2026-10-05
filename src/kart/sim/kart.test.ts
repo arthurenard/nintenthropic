@@ -389,7 +389,7 @@ describe("laps", () => {
     expect(r.view().phase).toBe("finished");
   });
 
-  it("see a wrong-way kart flagged after 1.5 s of facing the wrong way at speed", () => {
+  it("flag a kart facing the wrong way at speed for 1.5 s", () => {
     const r = solo();
     run(r, 120, () => input({ throttle: 1 }));
     patch(r, 0, { heading: Math.PI, vx: 0, vz: -15 });

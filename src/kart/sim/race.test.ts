@@ -103,6 +103,22 @@ describe("places", () => {
   });
 });
 
+describe("handing a kart to the bots", () => {
+  it("makes a player's kart drive itself from then on, as a bot", () => {
+    const r = race(HARBOUR_LIGHTS, racers(2, 0));
+    toGo(r);
+    run(r, 120, () => new Map([[0, input({ throttle: 1 })]]));
+    r.handOver(1);
+    // Kart 1 was still; now it drives. Kart 0 is still the player's.
+    run(r, 240, () => new Map([[0, input({ brake: 1 })], [1, input()]]));
+    expect(view(r, 1).speed).toBeGreaterThan(15);
+    expect(view(r, 0).speed).toBeLessThanOrEqual(0.01);
+    // And handing over a kart that does not exist, or one already a bot, does nothing.
+    r.handOver(9);
+    r.handOver(1);
+  });
+});
+
 describe("the end of the race", () => {
   /** Two people and four bots; whoever is `drivers` is handed to the bots' hands and so finishes (their place in the race is still a player's). */
   function twoPlayers() {

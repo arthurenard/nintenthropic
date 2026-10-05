@@ -5,7 +5,7 @@
  */
 import type { TrackDef } from "./geometry";
 
-/** A first track: a long start straight, a sweeping hill, an S, a hairpin, and home. About 1 km. */
+/** A first track: a long start straight, a sweeping hill, an S, a hairpin, and a wide U-turn onto the straight again. About 1 km. */
 export const MEADOW_LOOP: TrackDef = {
   id: "meadow-loop",
   name: "Meadow Loop",
@@ -33,9 +33,13 @@ export const MEADOW_LOOP: TrackDef = {
     { x: 115, z: 40 },
     { x: 80, z: 35 },
     { x: 60, z: 0 },
-    { x: 45, z: -40 },
-    { x: 15, z: -55 },
-    { x: -5, z: -35 },
+    { x: 54, z: -20 },
+    { x: 52, z: -38 },
+    { x: 44, z: -56 },
+    { x: 26, z: -64 },
+    { x: 8, z: -56 },
+    { x: 0, z: -38 },
+    { x: 0, z: -18 },
   ],
   itemRows: [0.22, 0.55, 0.82],
   boostPads: [

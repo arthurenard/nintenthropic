@@ -23,7 +23,7 @@ import {
   type ThingView,
 } from "../contract";
 import { mulberry32 } from "../../engine/rules/rng";
-import { botInput } from "./bots";
+import { botInput, rubberBand } from "./bots";
 import { stepItems, pressItem } from "./items";
 import { GO_TICK, NO_EMIT, bumpKarts, hopHeight, forwardSpeed, newKart, placeOnTrack, settle, stepKart } from "./kart";
 import { planFor } from "./plan";
@@ -140,6 +140,7 @@ class Sim implements SimRace {
     // Every kart drives. (A kart's own clock is the race's, whatever a `predict` did to it.)
     for (const k of state.karts) {
       k.t = state.tick;
+      k.band = rubberBand(w, k);
       const input = this.inputFor(k, inputs);
       pressItem(w, k, input, true, this.emit);
       stepKart(w, k, input, this.emit);

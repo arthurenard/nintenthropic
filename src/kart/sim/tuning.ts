@@ -207,7 +207,9 @@ export const TUNING = {
     startBoostHigh: 0.9,
     floodChance: 0.12,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
-    slickClearance: 3.3,
+    slickClearance: 3.4,
+    /** and starts steering clear of one this far (metres) before the point it is aiming at. */
+    slickNotice: 30,
     /** A bot reads its speed plan this many seconds ahead of itself. */
     planAhead: 0.2,
     /** Rubber band: a bot more than `start` metres from the best player eases off up to `easeOff`, or pushes up to `push`, by `span` metres. */

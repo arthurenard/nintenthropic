@@ -33,9 +33,13 @@ function relative(k: KartState, x: number, z: number): { ahead: number; right: n
   return { ahead: dx * sin + dz * cos, right: -dx * cos + dz * sin };
 }
 
-/** The speed share a bot can ask of the throttle given where it is against the best player. */
-function rubberBand(w: World, k: KartState): number {
-  if (w.bestPlayer === null) return 1;
+/**
+ * The rubber band: a bot far ahead of the best player eases off a few per
+ * cent, one far behind pushes a few per cent. It scales the speed it plans
+ * for and, in the physics, its top speed (kart.ts).
+ */
+export function rubberBand(w: World, k: KartState): number {
+  if (w.bestPlayer === null || k.player) return 1;
   const gap = k.progress - w.bestPlayer;
   if (gap > B.rubberStart) return 1 - B.easeOff * Math.min(1, (gap - B.rubberStart) / B.rubberSpan);
   if (gap < -B.rubberStart) return 1 + B.push * Math.min(1, (-gap - B.rubberStart) / B.rubberSpan);
@@ -108,7 +112,7 @@ export function botInput(w: World, k: KartState): DriveInput {
   if (k.skill > 0.3) {
     for (const slick of w.state.slicks) {
       const ahead = geo.delta(k.s, slick.s);
-      if (ahead > 1 && ahead < look + 8 && Math.abs(aimOffset - slick.offset) < B.slickClearance) {
+      if (ahead > 1 && ahead < look + B.slickNotice && Math.abs(aimOffset - slick.offset) < B.slickClearance) {
         const wider = aimOffset >= slick.offset ? 1 : -1;
         const side = Math.abs(slick.offset + wider * B.slickClearance) <= room ? wider : -wider;
         aimOffset = clamp(slick.offset + side * B.slickClearance, -room, room);
@@ -175,7 +179,7 @@ export function botInput(w: World, k: KartState): DriveInput {
   }
 
   // Speed: what the line allows ahead, within this bot's top speed.
-  const band = rubberBand(w, k);
+  const band = k.band;
   const top = (B.topSpeedLow + (B.topSpeedHigh - B.topSpeedLow) * k.skill) * TUNING.drive.topSpeed * (k.boost > 0 ? TUNING.drive.boostSpeed : 1);
   const planned = tableAt(plan, plan.speed, k.s + Math.max(0, fwd) * B.planAhead) * (0.88 + 0.12 * k.skill);
   const target = Math.min(top, planned) * band;
