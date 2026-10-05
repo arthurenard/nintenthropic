@@ -298,7 +298,6 @@ export function bakeStatic(renderer: WebGLRenderer, scene: Scene, root: Object3D
       disposables.push(aoTarget);
 
       uniforms.uAoMap.value = aoTarget.texture;
-      (globalThis as unknown as { __aoTarget?: unknown }).__aoTarget = aoTarget;
       uniforms.uAoRect.value.set(b.minX, b.maxZ, 1 / w, -1 / d);
       uniforms.uAoInfo.value.set(b.minY, range, 1, 1);
     }

@@ -80,7 +80,7 @@ export const LOOKS: Record<TrackTheme, Look> = {
   // The last warm hour: long orange light, deep warm shadows, not a world dyed orange.
   canyon: { ...day, exposure: 0.92, sun: 1.2, fill: 0.5, envIntensity: 0.65, saturation: 0.9, vibrance: 0.18, highlightTint: [1.05, 1.0, 0.92], shadowTint: [0.95, 0.96, 1.06] },
   harbour: { ...night, exposure: 1.2, sun: 0.55, fill: 0.5, envIntensity: 0.6, saturation: 0.98, vibrance: 0.12, bloom: { threshold: 0.95, intensity: 0.75, radius: 0.8 } },
-  kitchen: { ...day, exposure: 0.74, sun: 1.35, fill: 0.5, envIntensity: 0.7, saturation: 1.0, highlightTint: [1.06, 1.0, 0.92] },
+  kitchen: { ...day, exposure: 0.72, sun: 1.35, fill: 0.5, envIntensity: 0.7, saturation: 1.0, contrast: 0.2, highlightTint: [1.06, 1.0, 0.92] },
   snow: { ...night, exposure: 1.25, sun: 1.0, fill: 0.7, envIntensity: 0.8, vibrance: 0.25, shadow: 0.75 },
   volcano: { ...night, exposure: 1.55, sun: 1.1, fill: 0.95, envIntensity: 0.9, bloom: { threshold: 0.85, intensity: 0.85, radius: 0.85 } },
   funfair: { ...night, exposure: 1.25, sun: 0.8, fill: 0.7, envIntensity: 0.75, bloom: { threshold: 0.85, intensity: 0.95, radius: 0.85 } },

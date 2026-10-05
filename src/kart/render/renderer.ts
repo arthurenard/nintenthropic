@@ -2,6 +2,14 @@
  * Grip Prix's renderer: one WebGLRenderer, one scene, and for every viewport a
  * scissored draw from its own chase camera, with its own HTML HUD on top.
  *
+ * Every frame, each view is drawn (scissored) into one multisampled HDR
+ * target, with the sun's shadow map re-aimed at that view's kart first; then
+ * ONE post pass over the whole canvas does bloom, the tone curve, the theme's
+ * colour grade and a vignette per view (post.ts). The world's light that does
+ * not move (the sun's shadow on the static scenery, its ambient occlusion) is
+ * baked once at load (world/bake.ts); the sky is the scene's environment, so
+ * everything glossy reflects the world it is in.
+ *
  * Speed matters more than polish in the plumbing. The track is built once
  * into merged, frustum-culled chunks; scenery is instanced; particles are two
  * pooled point clouds; the karts are a dozen draw calls each. A frame with
@@ -121,8 +129,6 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const hud = new Hud(hudRoot, { blur: settings.glassBlur, calm });
 
   const scene = new Scene();
-  (globalThis as unknown as { __scene?: Scene }).__scene = scene;
-  (globalThis as unknown as { __renderer?: WebGLRenderer }).__renderer = renderer;
   const dynamic = new Group();
   scene.add(dynamic);
   const kartGroup = new Group();
@@ -281,7 +287,6 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       world.install(scene);
       world.prepare(renderer, scene);
       shareBake(kartBake, world.bake);
-      (globalThis as unknown as { __bake?: unknown }).__bake = world.bake;
       addBakedSun(kartMaterial(), kartBake);
       post.setLook(world.look);
       scene.background = null;
