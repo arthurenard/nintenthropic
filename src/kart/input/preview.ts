@@ -224,7 +224,7 @@ export class WheelPreview {
       [status.left, left],
       [status.right, right],
     ] as const) {
-      if (hand && point) this.drawHand(point, Math.min(30 * k, Math.max(9 * k, hand.size * fit.scale * 0.3)), hand.open, colour, k);
+      if (hand && point) this.drawHand(point, Math.min(34 * k, Math.max(11 * k, hand.size * fit.scale * 0.4)), hand.open, colour, k);
     }
     if (status.mode !== "lost") this.drawMeter(status.steer, colour, k);
   }
