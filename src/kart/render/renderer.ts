@@ -52,7 +52,7 @@ import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
 import { createWorld, type World } from "./world";
 import { kartMaterial } from "./kartMaterial";
-import { addBakedSun, makeBakeUniforms, shareBake } from "./world/shading";
+import { addBakedSun, clearBake, makeBakeUniforms, shareBake } from "./world/shading";
 import { glowTexture } from "./world/textures";
 import { styleFor } from "./world/themes";
 
@@ -269,6 +269,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     skids = null;
     world?.dispose();
     world = null;
+    clearBake(kartBake);
   };
 
   const api: GripRenderer = {

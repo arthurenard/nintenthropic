@@ -38,11 +38,14 @@ export interface BakeUniforms {
 }
 
 /** A one-pixel texture to stand in until a map is baked (a sampler must always have one). */
+let blankTexture: DataTexture | null = null;
 function blank(): DataTexture {
-  const t = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
-  t.magFilter = t.minFilter = NearestFilter;
-  t.needsUpdate = true;
-  return t;
+  if (!blankTexture) {
+    blankTexture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    blankTexture.magFilter = blankTexture.minFilter = NearestFilter;
+    blankTexture.needsUpdate = true;
+  }
+  return blankTexture;
 }
 
 export function makeBakeUniforms(): BakeUniforms {
@@ -205,6 +208,16 @@ export function addBakedSun<M extends MeshStandardMaterial>(material: M, uniform
   material.customProgramCacheKey = () => `${key()}+baked-sun`;
   material.needsUpdate = true;
   return material;
+}
+
+/** Takes a world's maps away again (it is going; the karts may be drawn somewhere else next, a podium say, with no baked light). */
+export function clearBake(target: BakeUniforms): void {
+  target.uSunMap.value = blank();
+  target.uAoMap.value = blank();
+  target.uHeightMap.value = blank();
+  target.uSunInfo.value.w = 0;
+  target.uAoInfo.value.w = 0;
+  target.uHeightInfo.value.w = 0;
 }
 
 /** Points `target`'s maps at `source`'s (the same textures, so nothing is copied but the references). */
