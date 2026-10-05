@@ -105,7 +105,7 @@ const FIRST_THEMES: Record<"meadow" | "canyon" | "harbour", ThemeStyle> = {
       cloudShade: "#c7dcf5",
     },
     fog: { colour: "#c4def6", near: 140, far: 760 },
-    light: { skyColour: "#d7e9ff", groundColour: "#8dba62", hemiIntensity: 1.45, sunColour: "#fff1d2", sunIntensity: 2.2 },
+    light: { skyColour: "#d7e9ff", groundColour: "#b4c486", hemiIntensity: 1.45, sunColour: "#fff1d2", sunIntensity: 2.2 },
     exposure: 1.0,
     road: { base: "#4b5059", speckle: "#6a707a", line: "#f4f4ef", edge: "#fbfbf6", shoulder: "#4b5059", dash: true },
     verge: ["#79d255", "#6ac648"],
