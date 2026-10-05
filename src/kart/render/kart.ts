@@ -54,6 +54,8 @@ export interface KartPose {
   finished?: boolean;
   /** Spinning out: the driver is dizzy. */
   dizzy?: boolean;
+  /** The suspension's compression, about -1..1: + squashes the body onto its wheels (a landing, a hit), - lets it spring up. */
+  squash?: number;
 }
 
 export interface KartModel {
@@ -136,6 +138,11 @@ export class KartActor {
   private accel = 0;
   private tiltX = 0;
   private tiltZ = 0;
+  /** The suspension: how far it is compressed and how fast it is moving, and how high the kart was last frame. */
+  private susp = 0;
+  private suspV = 0;
+  private lastAir = 0;
+  private lastSpin = 0;
   /** Where the kart is on screen (it differs from the view while it falls and is carried), and the height of the road under it. */
   x = 0;
   y = 0;
@@ -388,6 +395,16 @@ export class KartActor {
     this.slide = damp(this.slide, -view.drift * 0.2 * (spinning ? 0 : 1), 8, dt);
     this.flame = damp(this.flame, view.boost > 0 && !rescuing ? 1 : 0, view.boost > 0 ? 16 : 10, dt);
     this.hop = damp(this.hop, rescuing ? 0 : Math.min(view.hop, 0.4), 30, dt);
+    // The suspension: a landing or a hit presses the body down onto its springs, which let it bob back.
+    const airNow = rescuing ? 0 : Math.max(0, view.hop) + flyBonus;
+    if (dt > 0) {
+      if (this.lastAir > 0.18 && airNow < 0.1) this.suspV += clamp(this.lastAir * 4 + 3, 3, 14);
+      if (view.spin > 0 && this.lastSpin <= 0) this.suspV += 6;
+      this.suspV += (-210 * this.susp - 15 * this.suspV) * dt;
+      this.susp = clamp(this.susp + this.suspV * dt, -1, 1);
+    }
+    this.lastAir = airNow;
+    this.lastSpin = view.spin;
     this.wheelSpin += (rescuing ? 0 : speed * dt) / 0.4;
 
     const rough = view.offroad || view.surface === "mud" ? 0.035 : 0.006;
@@ -408,6 +425,7 @@ export class KartActor {
       emote: rescuing ? null : view.emote,
       finished: view.lap > ctx.laps && !rescuing,
       dizzy: spinning && !rescuing,
+      squash: rescuing ? 0 : this.susp,
     });
 
     // Shadow lies on the road, shrinking and paling while the kart is in the air or being carried.

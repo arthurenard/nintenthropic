@@ -1,6 +1,6 @@
 /** Mango the cat: pointed ears through a helmet, striped, whiskers, and a tall tail that curls. */
-import { MeshBuilder, rgb } from "../world/builder";
-import { INK, WHITE, armGeometry, body, dome, eyes, fur, horn, legs, orb, shell, surfaceZ, type Look } from "./parts";
+import { MeshBuilder, rgb } from "../kartBuilder";
+import { INK, WHITE, armGeometry, body, helmet, eyes, fur, horn, legs, orb, surfaceZ, type Look } from "./parts";
 import type { DriverBuild } from "./types";
 
 const FUR = rgb("#ffae42");
@@ -32,8 +32,7 @@ export function buildCat(l: Look): DriverBuild {
     horn(h, [sx * 0.17, 0.2, -0.02], [sx * 0.24, 0.53, -0.05], 0.115, { bottom: FUR, top: STRIPE }, 4, 0.05);
     horn(h, [sx * 0.17, 0.2, 0.01], [sx * 0.225, 0.46, -0.02], 0.07, PINK, 4, 0.03);
   }
-  dome(h, [0, 0.05, -0.01], [0.31, 0.28, 0.29], shell(l), 0.4);
-  h.box(0, 0.125, 0.28, 0.34, 0.035, 0.12, l.low, 0, -0.16);
+  helmet(h, l, [0, 0.05, -0.01], [0.31, 0.28, 0.29], 0.4);
   void INK;
 
   // A tail that rises behind the seat and curls over, rings of stripe.

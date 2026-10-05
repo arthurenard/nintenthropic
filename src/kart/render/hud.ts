@@ -407,6 +407,8 @@ export class Hud {
     }
     v.item.classList.toggle("gp-empty", empty);
     v.item.classList.toggle("gp-rolling", kart.rolling);
+    // A box was taken: the slot pops and starts its rainbow; when the roulette stops it pops again.
+    if (!v.wasRolling && kart.rolling) restart(v.item, "gp-take");
     if (v.wasRolling && !kart.rolling && kart.item) restart(v.item, "gp-got");
     v.wasRolling = kart.rolling;
     setText(v.uses, !kart.rolling && (kart.item === "nitro3" || kart.item === "puck3") ? `×${kart.itemUses}` : "");

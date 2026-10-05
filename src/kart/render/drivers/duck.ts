@@ -1,6 +1,6 @@
 /** Dabble the rubber duck: round and yellow, an orange bill, a swim cap helmet and a perky tail. */
-import { MeshBuilder, rgb } from "../world/builder";
-import { INK, WHITE, armGeometry, body, dome, eyes, fur, legs, orb, shell, surfaceZ, type Look } from "./parts";
+import { MeshBuilder, rgb } from "../kartBuilder";
+import { INK, WHITE, armGeometry, body, helmet, eyes, fur, legs, orb, surfaceZ, type Look } from "./parts";
 import type { DriverBuild } from "./types";
 
 const YELLOW = rgb("#ffd83a");
@@ -24,8 +24,7 @@ export function buildDuck(l: Look): DriverBuild {
   }
   eyes(h, 0.125, 0.075, surfaceZ([0, 0, 0], [...r], 0.125, 0.075) - 0.004, 0.047);
   // A swim cap, with its ridge and a bobble.
-  dome(h, [0, 0.05, -0.01], [0.33, 0.3, 0.315], shell(l), 0.42);
-  h.box(0, 0.13, 0.3, 0.36, 0.035, 0.12, l.low, 0, -0.16);
+  helmet(h, l, [0, 0.05, -0.01], [0.33, 0.3, 0.315], 0.42, { stripe: false });
   h.box(0, 0.3, -0.02, 0.045, 0.045, 0.5, WHITE, 0, 0.0);
   orb(h, [0, 0.34, -0.01], [0.045, 0.04, 0.045], WHITE, 0);
 

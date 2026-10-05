@@ -1,6 +1,7 @@
 /** Juniper the otter: sleek and brown, a cream muzzle with whiskers, swim goggles pushed up, a scarf, a flat tail. */
-import { MeshBuilder, rgb, shapes, xf } from "../world/builder";
+import { MeshBuilder, rgb, shapes, xf } from "../kartBuilder";
 import { INK, WHITE, armGeometry, body, collar, eyes, fur, headBand, legs, orb, scarfTail, surfaceZ, type Look } from "./parts";
+import { SURF } from "../kartMaterial";
 import type { DriverBuild } from "./types";
 
 const FUR = rgb("#8a5c3b");
@@ -30,8 +31,8 @@ export function buildOtter(l: Look): DriverBuild {
   headBand(h, head, 0.16, { bottom: l.low, top: l.top }, 0.07, 1.05);
   for (const sx of [-1, 1]) {
     const z = surfaceZ([0, 0, 0], [...head.r], sx * 0.105, 0.18) + 0.008;
-    h.add(shapes.cylinder(12), xf(sx * 0.105, 0.19, z, 0.098, 0.07, 0.098, 0, 1.0, 0), { bottom: l.low, top: l.top });
-    h.add(shapes.cylinder(12), xf(sx * 0.105, 0.2, z + 0.03, 0.075, 0.04, 0.075, 0, 1.0, 0), GLASS);
+    h.as(SURF.paint, () => h.add(shapes.cylinder(12), xf(sx * 0.105, 0.19, z, 0.098, 0.07, 0.098, 0, 1.0, 0), { bottom: l.low, top: l.top }));
+    h.as(SURF.glass, () => h.add(shapes.cylinder(12), xf(sx * 0.105, 0.2, z + 0.03, 0.075, 0.04, 0.075, 0, 1.0, 0), GLASS));
   }
 
   const tail = new MeshBuilder();

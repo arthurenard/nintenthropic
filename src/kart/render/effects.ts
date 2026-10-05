@@ -5,7 +5,7 @@
  * (smoke and dust), each a single draw call over a ring buffer of sprites.
  * Nothing is allocated while racing.
  */
-import { Group, type Points } from "three";
+import { AdditiveBlending, BufferAttribute, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, ShaderMaterial, type Points } from "three";
 import type { KartView, RaceEvent } from "../contract";
 import { KART_EXHAUST, KART_REAR_WHEEL } from "./kartModel";
 import { clamp } from "./math";
@@ -133,6 +133,126 @@ class Sprites {
   }
 }
 
+
+/**
+ * Speed lines: thin soft streaks standing in the air round a fast kart that it
+ * rushes past (a pool of camera-facing quads stretched along the heading).
+ * They are world-static, so every split-screen view sees them go by.
+ */
+class Streaks {
+  readonly mesh: Mesh;
+  private readonly n: number;
+  private next = 0;
+  private readonly a: Float32Array;
+  private readonly b: Float32Array;
+  private readonly col: Float32Array;
+  private readonly w: Float32Array;
+  private readonly age: Float32Array;
+  private readonly life: Float32Array;
+  private readonly base: Float32Array;
+  private readonly attrs: InstancedBufferAttribute[];
+
+  constructor(capacity: number) {
+    this.n = capacity;
+    this.a = new Float32Array(capacity * 3);
+    this.b = new Float32Array(capacity * 3);
+    this.col = new Float32Array(capacity * 4);
+    this.w = new Float32Array(capacity);
+    this.age = new Float32Array(capacity).fill(1);
+    this.life = new Float32Array(capacity).fill(1);
+    this.base = new Float32Array(capacity * 4);
+    const g = new InstancedBufferGeometry();
+    g.setAttribute("position", new BufferAttribute(new Float32Array([-1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 1, 0]), 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const A = new InstancedBufferAttribute(this.a, 3).setUsage(DynamicDrawUsage);
+    const B = new InstancedBufferAttribute(this.b, 3).setUsage(DynamicDrawUsage);
+    const C = new InstancedBufferAttribute(this.col, 4).setUsage(DynamicDrawUsage);
+    const W = new InstancedBufferAttribute(this.w, 1).setUsage(DynamicDrawUsage);
+    g.setAttribute("aA", A);
+    g.setAttribute("aB", B);
+    g.setAttribute("aCol", C);
+    g.setAttribute("aW", W);
+    this.attrs = [A, B, C, W];
+    g.instanceCount = capacity;
+    const material = new ShaderMaterial({
+      vertexShader: `
+        attribute vec3 aA; attribute vec3 aB; attribute vec4 aCol; attribute float aW;
+        varying vec4 vCol; varying vec2 vC;
+        void main() {
+          vec4 a = modelViewMatrix * vec4(aA, 1.0);
+          vec4 b = modelViewMatrix * vec4(aB, 1.0);
+          vec3 dir = b.xyz - a.xyz;
+          vec3 side = normalize(cross(dir, a.xyz + b.xyz));
+          vec3 p = mix(a.xyz, b.xyz, position.y) + side * position.x * aW;
+          vCol = aCol; vC = position.xy;
+          gl_Position = aCol.a <= 0.002 ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * vec4(p, 1.0);
+        }`,
+      fragmentShader: `
+        varying vec4 vCol; varying vec2 vC;
+        void main() {
+          float soft = (1.0 - abs(vC.x)) * smoothstep(0.0, 0.3, vC.y) * (1.0 - smoothstep(0.55, 1.0, vC.y));
+          gl_FragColor = vec4(vCol.rgb, vCol.a * soft);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    });
+    this.mesh = new Mesh(g, material);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 19;
+  }
+
+  /** A streak from (x, y, z) back along (dx, dz), this long and this wide, in this colour. */
+  add(x: number, y: number, z: number, dx: number, dz: number, length: number, width: number, r: number, g: number, b: number, a: number, life: number): void {
+    const i = this.next;
+    this.next = (this.next + 1) % this.n;
+    this.a[i * 3] = x;
+    this.a[i * 3 + 1] = y;
+    this.a[i * 3 + 2] = z;
+    this.b[i * 3] = x - dx * length;
+    this.b[i * 3 + 1] = y;
+    this.b[i * 3 + 2] = z - dz * length;
+    this.w[i] = width;
+    this.base.set([r, g, b, a], i * 4);
+    this.age[i] = 0;
+    this.life[i] = life;
+  }
+
+  update(dt: number): void {
+    for (let i = 0; i < this.n; i++) {
+      const L = this.life[i]!;
+      let age = this.age[i]!;
+      if (age >= L) {
+        this.col[i * 4 + 3] = 0;
+        continue;
+      }
+      age += dt;
+      this.age[i] = age;
+      const u = age / L;
+      // Quick in, slow out.
+      const fade = Math.min(1, u / 0.15) * (1 - u) ** 1.2;
+      this.col[i * 4] = this.base[i * 4]!;
+      this.col[i * 4 + 1] = this.base[i * 4 + 1]!;
+      this.col[i * 4 + 2] = this.base[i * 4 + 2]!;
+      this.col[i * 4 + 3] = u >= 1 ? 0 : this.base[i * 4 + 3]! * fade;
+    }
+    for (const attr of this.attrs) attr.needsUpdate = true;
+  }
+
+  clear(): void {
+    this.age.fill(1);
+    this.col.fill(0);
+    this.attrs[2]!.needsUpdate = true;
+  }
+
+  dispose(): void {
+    this.mesh.geometry.dispose();
+    (this.mesh.material as ShaderMaterial).dispose();
+  }
+}
+
 /** Per-kart emitter state: fractional particles owed. */
 interface Emit {
   spark: number;
@@ -148,6 +268,7 @@ interface Emit {
   sand: number;
   trail: number;
   trick: number;
+  lines: number;
 }
 
 /** Where a kart is on screen while a drone has it (its view says only where it fell), and what it is doing. */
@@ -160,18 +281,22 @@ export interface Visual {
 }
 
 // Overbright colours: the soft sprite's core goes white-hot while its halo keeps the colour.
-const BLUE0 = [0.22, 0.7, 2.0, 1] as const;
-const BLUE1 = [0.08, 0.25, 1.6, 0] as const;
-const ORANGE0 = [1.9, 0.8, 0.08, 1] as const;
-const ORANGE1 = [1.5, 0.22, 0.0, 0] as const;
-const WHITE0 = [1.5, 1.4, 1.1, 0.9] as const;
-const WHITE1 = [1.2, 0.7, 0.25, 0] as const;
+const BLUE0 = [0.3, 1.05, 3.4, 1] as const;
+const BLUE1 = [0.08, 0.3, 2.0, 0] as const;
+const ORANGE0 = [3.0, 1.1, 0.08, 1] as const;
+const ORANGE1 = [2.2, 0.3, 0.0, 0] as const;
+const WHITE0 = [2.4, 2.2, 1.8, 0.95] as const;
+const WHITE1 = [1.6, 0.9, 0.3, 0] as const;
+/** The hot centre of a spark or a flame. */
+const HOT0 = [3.6, 3.3, 2.8, 1] as const;
+const HOT1 = [2.4, 1.4, 0.5, 0] as const;
 
 export class Effects {
   readonly group = new Group();
   private readonly add: Sprites;
   private readonly norm: Sprites;
   private readonly now: Sprites;
+  private readonly streaks: Streaks;
   private readonly state = new Map<number, Emit>();
   private rnd = 1;
   private dust: [number, number, number] = [0.8, 0.7, 0.5];
@@ -185,7 +310,8 @@ export class Effects {
     this.norm = new Sprites(Math.round(capacity * 0.35), false);
     // Glows that last one frame (a seeker's light, a kart's lamps): rewritten every frame.
     this.now = new Sprites(160, true);
-    this.group.add(this.norm.points, this.add.points, this.now.points);
+    this.streaks = new Streaks(Math.max(80, Math.round(capacity * 0.14)));
+    this.group.add(this.norm.points, this.add.points, this.now.points, this.streaks.mesh);
   }
 
   setDustColour(r: number, g: number, b: number): void {
@@ -300,14 +426,17 @@ export class Effects {
     }
   }
 
-  /** A burst of glitter where an item box was taken. */
+  /** A burst of glitter where an item box was taken: a flash, rainbow motes thrown out and a ring of white sparks. */
   pickup(x: number, y: number, z: number): void {
-    for (let i = 0; i < 26; i++) {
+    this.flash(x, y + 1.2, z, 3.6, 1.6, 1.7, 2.2, 0.22);
+    for (let i = 0; i < 40; i++) {
       const hue = this.r();
       const rgb = hsl(hue);
       const a = this.r() * Math.PI * 2;
-      const s = 2 + this.r() * 5;
-      this.add.emit(x, y + 1.2, z, Math.cos(a) * s, 1.5 + this.r() * 4, Math.sin(a) * s, 0.5 + this.r() * 0.5, 0.34, 0.06, [rgb[0], rgb[1], rgb[2], 1], [rgb[0], rgb[1], rgb[2], 0], -6, 1.2);
+      const s = 2 + this.r() * 5.5;
+      const c: [number, number, number, number] = [rgb[0] * 2.6, rgb[1] * 2.6, rgb[2] * 2.6, 1];
+      this.add.emit(x, y + 1.2, z, Math.cos(a) * s, 1.5 + this.r() * 4.5, Math.sin(a) * s, 0.5 + this.r() * 0.6, 0.38, 0.06, c, [c[0] * 0.5, c[1] * 0.5, c[2] * 0.5, 0], -6, 1.2);
+      if (i % 3 === 0) this.add.emit(x, y + 1.2, z, Math.cos(a) * s * 0.8, 2 + this.r() * 4, Math.sin(a) * s * 0.8, 0.25 + this.r() * 0.2, 0.2, 0.04, HOT0, HOT1, -8, 1.2);
     }
   }
 
@@ -392,22 +521,15 @@ export class Effects {
         const rx = -Math.cos(k.heading);
         const rz = Math.sin(k.heading);
         for (const side of [-1, 1]) {
-          for (let i = 0; i < 9; i++) {
-            this.add.emit(
-              k.x + rx * side * KART_REAR_WHEEL.right + fx * KART_REAR_WHEEL.forward,
-              k.y + 0.3,
-              k.z + rz * side * KART_REAR_WHEEL.right + fz * KART_REAR_WHEEL.forward,
-              rx * side * (1 + this.r() * 3) - fx * 2,
-              2 + this.r() * 3,
-              rz * side * (1 + this.r() * 3) - fz * 2,
-              0.3 + this.r() * 0.2,
-              0.3,
-              0.06,
-              c0,
-              c1,
-              -14,
-              0.5,
-            );
+          const x = k.x + rx * side * KART_REAR_WHEEL.right + fx * KART_REAR_WHEEL.forward;
+          const z = k.z + rz * side * KART_REAR_WHEEL.right + fz * KART_REAR_WHEEL.forward;
+          this.flash(x, k.y + 0.3, z, e.level === 1 ? 2.4 : 3, c0[0] * 0.8, c0[1] * 0.8, c0[2] * 0.8, 0.22);
+          for (let i = 0; i < 14; i++) {
+            const vx = rx * side * (1 + this.r() * 4) - fx * 2 + this.spread() * 0.8;
+            const vy = 2 + this.r() * 4;
+            const vz = rz * side * (1 + this.r() * 4) - fz * 2 + this.spread() * 0.8;
+            this.add.emit(x, k.y + 0.3, z, vx, vy, vz, 0.3 + this.r() * 0.25, 0.34, 0.05, c0, c1, -14, 0.5);
+            this.add.emit(x, k.y + 0.3, z, vx, vy, vz, 0.18 + this.r() * 0.1, 0.18, 0.03, HOT0, HOT1, -14, 0.5);
           }
         }
         return;
@@ -442,13 +564,24 @@ export class Effects {
         const k = kartAt(e.kart);
         if (!k) return;
         const d = this.dust;
-        const n = e.boost ? 14 : 9;
+        const n = e.boost ? 20 : 15;
+        // A ring of dust rolling out from under the wheels, low and fast, and a second, softer one behind it.
         for (let i = 0; i < n; i++) {
           const a = (i / n) * Math.PI * 2 + this.r() * 0.4;
-          const sp = 2.5 + this.r() * 2.5;
-          this.norm.emit(k.x + Math.cos(a) * 0.9, k.y + 0.25, k.z + Math.sin(a) * 0.9, Math.cos(a) * sp, 0.5 + this.r() * 1.2, Math.sin(a) * sp, 0.55 + this.r() * 0.35, 0.6, 2.0, [0.95 + d[0] * 0.0, 0.94, 0.9, 0.5], [d[0], d[1], d[2], 0], 0, 2.4);
+          const sp = 3.2 + this.r() * 3.2;
+          this.norm.emit(k.x + Math.cos(a) * 0.9, k.y + 0.2, k.z + Math.sin(a) * 0.9, Math.cos(a) * sp, 0.4 + this.r() * 1.0, Math.sin(a) * sp, 0.6 + this.r() * 0.4, 0.7, 2.6, [0.95 + d[0] * 0.0, 0.94, 0.9, 0.62], [d[0], d[1], d[2], 0], 0, 2.4);
         }
-        if (e.boost) this.sparksBurst(k.x, k.y + 0.4, k.z, 16, 6.5, true);
+        for (let i = 0; i < 7; i++) {
+          const a = this.r() * Math.PI * 2;
+          this.norm.emit(k.x + Math.cos(a) * 0.5, k.y + 0.3, k.z + Math.sin(a) * 0.5, Math.cos(a) * 1.4, 1.2 + this.r() * 1.4, Math.sin(a) * 1.4, 0.9 + this.r() * 0.4, 0.9, 3.2, [d[0], d[1], d[2], 0.4], [d[0], d[1], d[2], 0], 0, 1.6);
+        }
+        // Grit thrown up.
+        for (let i = 0; i < 10; i++) {
+          const a = this.r() * Math.PI * 2;
+          const sp = 2 + this.r() * 3;
+          this.add.emit(k.x + Math.cos(a) * 0.8, k.y + 0.25, k.z + Math.sin(a) * 0.8, Math.cos(a) * sp, 2 + this.r() * 3, Math.sin(a) * sp, 0.3 + this.r() * 0.25, 0.12, 0.03, WHITE0, WHITE1, -14, 0.5);
+        }
+        if (e.boost) this.sparksBurst(k.x, k.y + 0.4, k.z, 22, 7, true);
         return;
       }
       case "fall": {
@@ -477,7 +610,7 @@ export class Effects {
   kart(k: KartView, dt: number, vis?: Visual): void {
     let st = this.state.get(k.id);
     if (!st) {
-      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, lastLevel: 0, lastBoost: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, trick: 0 };
+      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, lastLevel: 0, lastBoost: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, trick: 0, lines: 0 };
       this.state.set(k.id, st);
     }
     // Falling or being carried: the kart is not where the sim says, and none of the driving effects apply.
@@ -501,20 +634,21 @@ export class Effects {
       k.z + rz * side * KART_REAR_WHEEL.right + fz * KART_REAR_WHEEL.forward,
     ];
 
-    // Drift sparks: a few pale ones while it builds, then blue, then orange.
+    // Drift sparks: a few pale ones while it builds, then blue, then orange; each a hot white core with a coloured streak behind.
     if (k.drift !== 0 && !k.offroad) {
       const level = k.driftLevel;
-      const rate = level === 0 ? 16 : level === 1 ? 130 : 170;
+      const rate = level === 0 ? 22 : level === 1 ? 150 : 210;
       st.spark += rate * dt;
       const c0 = level === 0 ? WHITE0 : level === 1 ? BLUE0 : ORANGE0;
       const c1 = level === 0 ? WHITE1 : level === 1 ? BLUE1 : ORANGE1;
-      const size = level === 0 ? 0.16 : level === 1 ? 0.3 : 0.38;
+      const size = level === 0 ? 0.17 : level === 1 ? 0.34 : 0.42;
       // The charge shows as a glow at each rear wheel, too.
       if (level > 0) {
-        const glow = level === 1 ? [0.25, 0.65, 1.8] : [1.8, 0.75, 0.08];
+        const glow = level === 1 ? [0.35, 0.95, 3.2] : [3.2, 1.2, 0.1];
         for (const side of [-1, 1]) {
           const p = wheel(side, 0.2);
-          this.glowNow(p[0], p[1], p[2], level === 1 ? 1.5 : 1.9, glow[0]!, glow[1]!, glow[2]!, 0.55);
+          this.glowNow(p[0], p[1], p[2], level === 1 ? 1.9 : 2.3, glow[0]!, glow[1]!, glow[2]!, 0.7);
+          this.glowNow(p[0], p[1] + 0.1, p[2], 0.7, glow[0]! * 1.4, glow[1]! * 1.4, glow[2]! * 1.4, 0.8);
         }
       }
       while (st.spark >= 1) {
@@ -522,22 +656,17 @@ export class Effects {
         const side = this.r() < 0.5 ? -1 : 1;
         const p = wheel(side, 0.14);
         // Thrown out sideways and back, with a flick up, falling quickly.
-        const out = 1.2 + this.r() * 3.2;
-        this.add.emit(
-          p[0],
-          p[1],
-          p[2],
-          rx * side * out - fx * (1.5 + this.r() * 3) + this.spread() * 0.8,
-          1.8 + this.r() * 3.5,
-          rz * side * out - fz * (1.5 + this.r() * 3) + this.spread() * 0.8,
-          0.22 + this.r() * 0.3,
-          size,
-          0.04,
-          c0,
-          c1,
-          -16,
-          0.4,
-        );
+        const out = 1.2 + this.r() * 3.6;
+        const vx = rx * side * out - fx * (1.5 + this.r() * 3) + this.spread() * 0.8;
+        const vy = 1.8 + this.r() * 3.8;
+        const vz = rz * side * out - fz * (1.5 + this.r() * 3) + this.spread() * 0.8;
+        const life = 0.24 + this.r() * 0.32;
+        this.add.emit(p[0], p[1], p[2], vx, vy, vz, life, size, 0.04, c0, c1, -16, 0.4);
+        if (level > 0) {
+          // The white-hot core, and two motes of streak trailing back along its path.
+          this.add.emit(p[0], p[1], p[2], vx, vy, vz, life * 0.55, size * 0.55, 0.03, HOT0, HOT1, -16, 0.4);
+          for (let t = 1; t <= 2; t++) this.add.emit(p[0] - vx * 0.03 * t, p[1] - vy * 0.03 * t, p[2] - vz * 0.03 * t, vx, vy, vz, life * (0.8 - t * 0.2), size * (0.75 - t * 0.2), 0.03, c0, c1, -16, 0.4);
+        }
       }
       // A little tyre smoke under the sparks.
       st.smoke += 22 * dt;
@@ -556,9 +685,9 @@ export class Effects {
       for (const side of [-1, 1]) {
         const ex = KART_EXHAUST.right * side;
         const back = KART_EXHAUST.forward - 0.5;
-        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.1, 1.8, 0.7, 0.12, 0.6);
+        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.2, 2.4, 0.9, 0.12, 0.55);
       }
-      st.flame += 190 * dt;
+      st.flame += 210 * dt;
       while (st.flame >= 1) {
         st.flame -= 1;
         const side = this.r() < 0.5 ? -1 : 1;
@@ -573,16 +702,36 @@ export class Effects {
           this.spread() * 0.6,
           -fz * (4 + this.r() * 5) + this.spread() * 0.5,
           0.2 + this.r() * 0.22,
-          blue ? 0.4 : 0.62,
+          blue ? 0.4 : 0.68,
           0.08,
-          blue ? [0.4, 0.9, 2.0, 0.95] : [1.9, 0.9, 0.15, 0.95],
-          blue ? [0.1, 0.3, 1.6, 0] : [1.5, 0.25, 0.02, 0],
+          blue ? [0.5, 1.2, 3.0, 0.9] : [2.8, 1.2, 0.15, 0.9],
+          blue ? [0.1, 0.3, 2.0, 0] : [1.8, 0.3, 0.0, 0],
           0,
           1.2,
         );
+        // The white-hot core of the flame, right at the pipe.
+        if (this.r() < 0.3) this.add.emit(k.x + rx * ex + fx * (KART_EXHAUST.forward - 0.1), k.y + KART_EXHAUST.y + 0.08, k.z + rz * ex + fz * (KART_EXHAUST.forward - 0.1), -fx * (2 + this.r() * 3), this.spread() * 0.3, -fz * (2 + this.r() * 3), 0.12 + this.r() * 0.08, 0.26, 0.06, HOT0, HOT1, 0, 1.2);
       }
     } else {
       st.flame = 0;
+    }
+
+    // Speed lines: streaks hanging in the air that a fast kart (or one on a boost) rushes past.
+    const fast = Math.abs(k.speed);
+    if (!this.calm && (k.boost > 0 || fast > 30) && k.hop < 3) {
+      const power = k.boost > 0 ? 1 : clamp((fast - 30) / 22) * 0.55;
+      st.lines += (k.boost > 0 ? 55 : 24 * power) * dt;
+      while (st.lines >= 1) {
+        st.lines -= 1;
+        const ahead = 2 + this.r() * 22;
+        const lat = (this.r() < 0.5 ? -1 : 1) * (1.7 + this.r() * 5.5);
+        const height = 0.2 + this.r() * 2.9;
+        const length = clamp(fast * 0.05, 1.2, 3.8) * (0.6 + this.r() * 0.9);
+        const warm = k.boost > 0;
+        this.streaks.add(k.x + fx * ahead + rx * lat, k.y + height, k.z + fz * ahead + rz * lat, fx, fz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, warm ? 1.5 : 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
+      }
+    } else {
+      st.lines = 0;
     }
 
     // Dust off the road: the harder the faster.
@@ -669,11 +818,13 @@ export class Effects {
     this.add.update(step);
     this.norm.update(step);
     this.now.update(step);
+    this.streaks.update(step);
   }
 
   /** Forgets per-kart state (a new race). */
   clear(): void {
     this.state.clear();
+    this.streaks.clear();
   }
 
   dispose(): void {
@@ -681,6 +832,7 @@ export class Effects {
       s.points.geometry.dispose();
       (s.points.material as { dispose(): void }).dispose();
     }
+    this.streaks.dispose();
   }
 }
 

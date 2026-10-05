@@ -1,6 +1,6 @@
 /** Bramble the bear: broad and round, round ears over a helmet's edge, a tan muzzle, a stub of a tail. */
-import { MeshBuilder, rgb } from "../world/builder";
-import { INK, armGeometry, body, dome, eyes, fur, legs, orb, shell, surfaceZ, type Look } from "./parts";
+import { MeshBuilder, rgb } from "../kartBuilder";
+import { INK, armGeometry, body, helmet, eyes, fur, legs, orb, surfaceZ, type Look } from "./parts";
 import type { DriverBuild } from "./types";
 
 const FUR = rgb("#7b4a2d");
@@ -25,8 +25,7 @@ export function buildBear(l: Look): DriverBuild {
     orb(h, [sx * 0.215, 0.285, -0.07], [0.105, 0.105, 0.065], fur(FUR), 1);
     orb(h, [sx * 0.215, 0.285, -0.03], [0.065, 0.065, 0.03], fur(TAN), 0);
   }
-  dome(h, [0, 0.03, -0.01], [0.335, 0.31, 0.32], shell(l), 0.4);
-  h.box(0, 0.115, 0.3, 0.38, 0.04, 0.13, l.low, 0, -0.16);
+  helmet(h, l, [0, 0.03, -0.01], [0.335, 0.31, 0.32], 0.4);
 
   return {
     torso: t.build(),

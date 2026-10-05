@@ -15,7 +15,6 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   Object3D,
   Quaternion,
   Vector3,
@@ -23,7 +22,8 @@ import {
 } from "three";
 import { characterById } from "../../characters";
 import { clamp, damp } from "../math";
-import { MeshBuilder, type V3 } from "../world/builder";
+import { MeshBuilder, mergeBaked, type V3 } from "../kartBuilder";
+import { SURF, kartMaterial, withStudioFallback } from "../kartMaterial";
 import { ARM_LEN, HEAD_AT, SHOULDER_Y, SHOULDER_Z, look, type Look } from "./parts";
 import type { Bit, BitState, DriverBuild, DriverMotion, Species } from "./types";
 
@@ -53,7 +53,6 @@ const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
 /** The steering wheel in the driver's space (kartModel.ts holds the wheel itself): its centre, tilt and the radius hands hold. */
 export const WHEEL = { centre: [0, 0.12, 0.52] as V3, tilt: -0.95, grip: 0.15, turn: 1.5 };
 
-const MATERIAL = new MeshLambertMaterial({ vertexColors: true });
 
 /** Drivers are drawn a little larger than life so they read from the chase camera. */
 export const DRIVER_SCALE = 1.14;
@@ -61,9 +60,10 @@ export const DRIVER_SCALE = 1.14;
 // Dizzy stars: shared by every driver.
 const starGeometry = (() => {
   const b = new MeshBuilder();
+  b.surf = SURF.lamp;
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2;
-    b.box(Math.cos(a) * 0.3, 0.02 * (k % 2), Math.sin(a) * 0.3, 0.09, 0.09, 0.09, [2.2, 1.7, 0.3], a, 0.6, 0.6);
+    b.box(Math.cos(a) * 0.3, 0.02 * (k % 2), Math.sin(a) * 0.3, 0.1, 0.1, 0.1, [2.6, 1.9, 0.3], a, 0.6, 0.6);
   }
   return b.build();
 })();
@@ -98,28 +98,28 @@ export class Driver {
   private fin = 0;
   private dizzy = 0;
 
-  constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = MATERIAL) {
+  constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = kartMaterial()) {
     this.base.set(base[0], base[1], base[2]);
     this.root.position.copy(this.base);
     this.root.scale.setScalar(DRIVER_SCALE);
     this.geometries.push(built.torso, built.head, built.arm);
-    this.root.add(new Mesh(built.torso, material));
+    this.root.add(this.solid(built.torso, material));
     const headAt = built.headAt ?? HEAD_AT;
     this.head.position.set(headAt[0], headAt[1], headAt[2]);
     this.head.rotation.order = "YXZ";
-    this.head.add(new Mesh(built.head, material));
+    this.head.add(this.solid(built.head, material));
     this.root.add(this.head);
     for (const side of [1, -1] as const) {
       const group = new Group();
       group.position.set(side * built.shoulder, SHOULDER_Y, SHOULDER_Z);
-      group.add(new Mesh(built.arm, material));
+      group.add(this.solid(built.arm, material));
       this.root.add(group);
       this.arms.push({ group, side, shoulder: group.position.clone() });
     }
     for (const bit of built.bits) {
       const o = new Group();
       o.position.set(bit.at[0], bit.at[1], bit.at[2]);
-      o.add(new Mesh(bit.geo, material));
+      o.add(this.solid(bit.geo, material));
       (bit.on === "head" ? this.head : this.root).add(o);
       this.bits.push({ o, bit });
       this.geometries.push(bit.geo);
@@ -128,6 +128,31 @@ export class Driver {
     this.stars.position.set(0, built.crown + 0.12, 0);
     this.stars.visible = false;
     this.head.add(this.stars);
+  }
+
+  /** A mesh that throws and catches shadows. */
+  private solid(geometry: BufferGeometry, material: Material): Mesh {
+    const mesh = new Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    withStudioFallback(mesh);
+    return mesh;
+  }
+
+  /**
+   * The driver as it stands now, welded into one geometry in the kart's space
+   * (the far kart draws this instead of the live rig). Call after `update`.
+   */
+  bake(): BufferGeometry {
+    this.root.updateMatrixWorld(true);
+    const inv = new Matrix4().copy(this.root.parent ? this.root.parent.matrixWorld : new Matrix4()).invert();
+    const parts: { geometry: BufferGeometry; matrix: Matrix4 }[] = [];
+    this.root.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh || mesh === this.stars || !mesh.visible) return;
+      parts.push({ geometry: mesh.geometry, matrix: new Matrix4().multiplyMatrices(inv, mesh.matrixWorld) });
+    });
+    return mergeBaked(parts);
   }
 
   /** Where a hand on the wheel is, on the side `side` (+1: the driver's left), in the driver's space at rest. */
