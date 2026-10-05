@@ -1,0 +1,906 @@
+/* Grip Prix's screens (docs/DESIGN.md): the same glass, type and 8-point
+   grid as the arcade, over a bright meadow instead of a dark room. Colour
+   comes from the world and the players; the interface stays monochrome plus
+   the one green that means ready. base.css and settings.css (grouped rows,
+   segmented controls, switches) come first. */
+
+:root {
+  /* The game's light, set by the page from games/index.ts (GRIP_PRIX.backdrop). */
+  --world: linear-gradient(180deg, #2f7fe0 0%, #bfe6fb 62%, #4aa83f 63%, #2f7f35 100%);
+}
+
+.screen {
+  animation: view-in 450ms var(--spring) both;
+}
+body[data-screen="race"] {
+  overflow: hidden;
+}
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+/* --- 1. start ------------------------------------------------------------------------------------ */
+
+.start {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--margin);
+  overflow: hidden;
+  background: var(--world);
+  isolation: isolate;
+}
+.start-world {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+/* Hills stand on the horizon, which the meadow's light puts at 62%; the road
+   runs from there to the viewer. */
+.start-hills {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  top: 62.4%;
+  height: clamp(110px, 24vh, 240px);
+  transform: translateY(-100%);
+}
+.hill-far {
+  fill: #86c98f;
+}
+.hill-near {
+  fill: #6dc267;
+}
+.start-road {
+  position: absolute;
+  left: 0;
+  top: 62.2%;
+  width: 100%;
+  height: 37.8%;
+}
+.road-verge {
+  fill: #3f9a3b;
+}
+.road-kerb {
+  fill: #f4f5f7;
+}
+.road-asphalt {
+  fill: #59616e;
+}
+.road-line {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.9;
+  stroke-dasharray: 5 6;
+  vector-effect: non-scaling-stroke;
+}
+.start-main {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 28px rgba(8, 48, 120, 0.4);
+}
+.start-main .large-title {
+  font-size: clamp(44px, 9vw, 72px);
+}
+.start-tag {
+  margin-bottom: 20px;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.94);
+}
+.start-card {
+  display: grid;
+  gap: 12px;
+  width: min(380px, 100%);
+  padding: 16px;
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  text-shadow: none;
+}
+.join-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+}
+.code-field {
+  min-width: 0;
+  height: 52px;
+  padding: 0 0 0 0.3em;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--label);
+  font: 700 22px/1 var(--font);
+  letter-spacing: 0.3em;
+  text-align: center;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 250ms var(--ease);
+}
+.code-field::placeholder {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--label-3);
+}
+.code-field:hover:not(:disabled),
+.code-field:focus {
+  background: rgba(255, 255, 255, 0.14);
+}
+.code-field:disabled {
+  opacity: 0.4;
+}
+.join-row .button {
+  padding: 0 12px;
+}
+.back-link {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: var(--margin);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 16px 0 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(28, 28, 30, 0.55);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 250ms var(--ease);
+}
+.back-link:hover {
+  background: rgba(28, 28, 30, 0.72);
+}
+.back-link svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- pages: you, the wheel check, the lobby, results ------------------------------------------------- */
+
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  isolation: isolate;
+}
+/* A trace of the meadow's sky along the top, fading into the dark. */
+.page::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: -1;
+  height: min(70vh, 560px);
+  background: var(--world);
+  opacity: 0.3;
+  -webkit-mask-image: linear-gradient(#000, transparent);
+  mask-image: linear-gradient(#000, transparent);
+  pointer-events: none;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 64px;
+  padding: 0 var(--margin);
+}
+.button.back {
+  padding-left: 6px;
+  gap: 2px;
+}
+.button.back svg {
+  margin-left: 0;
+  width: 20px;
+  height: 20px;
+}
+.page-inner,
+.check-inner,
+.results-inner,
+.lobby-inner {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--margin) calc(var(--margin) + env(safe-area-inset-bottom));
+}
+.page-inner {
+  display: grid;
+  gap: 28px;
+  align-content: start;
+  max-width: calc(580px + 2 * var(--margin));
+}
+.page-head {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.page-head.center {
+  justify-items: center;
+  text-align: center;
+}
+.page-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+
+/* A name typed into a row. */
+.row-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  text-align: right;
+}
+.row-input::placeholder {
+  color: var(--label-3);
+}
+.row-input:focus-visible {
+  outline: none;
+}
+.row:focus-within {
+  background: rgba(255, 255, 255, 0.04);
+}
+.rows > :first-child {
+  border-top-left-radius: var(--r-small);
+  border-top-right-radius: var(--r-small);
+}
+.rows > :last-child {
+  border-bottom-left-radius: var(--r-small);
+  border-bottom-right-radius: var(--r-small);
+}
+
+/* --- 3. the wheel check ------------------------------------------------------------------------------------- */
+
+.check-inner {
+  display: grid;
+  gap: 28px;
+  justify-items: center;
+  align-content: start;
+  max-width: calc(760px + 2 * var(--margin));
+  text-align: center;
+}
+.check-pictures {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+.check-picture {
+  position: relative;
+  flex: 0 1 560px;
+  min-width: 0;
+  margin: 0;
+}
+.check-pictures[data-count="2"] .check-picture {
+  flex-basis: 360px;
+}
+.wheel-view {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: #14161b;
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    var(--shadow);
+}
+.wheel-view canvas,
+.fake-preview {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* The level: a ring that fills as the wheel is held steady. Green, for ready. */
+.level-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 136px;
+  height: 136px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 250ms var(--ease);
+  pointer-events: none;
+}
+.check-picture[data-step="level"] .level-ring {
+  opacity: 1;
+}
+.ring-track,
+.ring-fill {
+  fill: none;
+  stroke-width: 7;
+}
+.ring-track {
+  stroke: rgba(255, 255, 255, 0.28);
+}
+.ring-fill {
+  stroke: var(--tint);
+  stroke-linecap: round;
+  transition: stroke-dasharray 120ms linear;
+}
+.check-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--tint);
+  color: #000;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    transform 450ms var(--spring),
+    opacity 250ms var(--ease);
+}
+.check-badge svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.4;
+}
+.check-picture[data-step="ready"] .check-badge {
+  opacity: 1;
+  transform: none;
+}
+.check-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-weight: 600;
+}
+.check-words {
+  display: grid;
+  gap: 6px;
+  min-height: 76px;
+  max-width: 32em;
+}
+.steps {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  width: 28px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background-color 250ms var(--ease);
+}
+.steps li.now {
+  background: rgba(255, 255, 255, 0.6);
+}
+.steps li.done {
+  background: #fff;
+}
+
+/* --- 4. the lobby -------------------------------------------------------------------------------------------- */
+
+.lobby-inner {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+  max-width: calc(1000px + 2 * var(--margin));
+}
+.lobby-inner[data-code="no"] {
+  grid-template-columns: minmax(0, 580px);
+  justify-content: center;
+}
+.lobby-main {
+  display: grid;
+  gap: 28px;
+  max-width: 580px;
+}
+.join-card {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 28px 24px 24px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--hairline);
+  text-align: center;
+}
+.code-big {
+  padding-left: 0.14em;
+  font-size: 56px;
+  line-height: 1.07;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.qr {
+  width: min(200px, 100%);
+  padding: 10px;
+  border-radius: 16px;
+  background: #fff;
+}
+.qr canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+.join-hint {
+  max-width: 22em;
+}
+.join-url {
+  max-width: 100%;
+  word-break: break-all;
+  user-select: all;
+}
+.player-row {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 64px;
+}
+.player-words {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.player-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.player-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.player-state {
+  flex: none;
+  white-space: nowrap;
+}
+.player-state.ready {
+  display: inline-flex;
+  color: var(--tint);
+}
+.player-state svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.2;
+}
+#lobby-start {
+  max-width: 380px;
+}
+#lobby-start-hint:empty {
+  display: none;
+}
+#track-value {
+  color: var(--label-2);
+}
+
+/* --- 5. the race ------------------------------------------------------------------------------------------------ */
+
+.race {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  animation: none;
+}
+.race-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.race-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.kart-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.race-pause {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 3;
+}
+/* The wheel's picture, small, in the corner the map keeps clear. */
+.race-previews {
+  position: absolute;
+  top: calc(max(16px, env(safe-area-inset-top)) + 56px);
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.corner-preview {
+  width: 148px;
+  overflow: hidden;
+  border-radius: var(--r-small);
+  box-shadow:
+    0 0 0 2px var(--colour, #fff),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.corner-preview .wheel-view {
+  border-radius: 0;
+  box-shadow: none;
+}
+.lost-hands {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px 12px 16px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 600;
+  transform: translateX(-50%);
+  animation: lost-in 250ms var(--ease);
+}
+.lost-hands svg {
+  width: 24px;
+  height: 24px;
+  color: var(--danger);
+}
+@keyframes lost-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+.race-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  background: var(--world);
+}
+.race-loading-card {
+  display: grid;
+  gap: 14px;
+  width: min(320px, calc(100% - 2 * var(--margin)));
+  padding: 24px;
+  border-radius: var(--r-card);
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--tint);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 250ms var(--ease);
+}
+/* A big-screen player's own device: their wheel, large, and where they are in the race. */
+.controller {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 20px;
+  padding: var(--margin);
+  background: #000;
+  text-align: center;
+}
+.controller::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: min(60vh, 480px);
+  background: var(--world);
+  opacity: 0.3;
+  -webkit-mask-image: linear-gradient(#000, transparent);
+  mask-image: linear-gradient(#000, transparent);
+  pointer-events: none;
+}
+.controller > * {
+  position: relative;
+}
+.controller-cards {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  width: 100%;
+}
+.controller-card {
+  display: grid;
+  flex: 0 1 460px;
+  justify-items: center;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+}
+.controller-card .wheel-view {
+  width: 100%;
+}
+.controller-cards[data-count="2"] .controller-card {
+  flex-basis: 360px;
+}
+.controller-words {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.controller-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The pause sheet (a menu, as the arcade's). */
+.menu[open] {
+  display: grid;
+  gap: 16px;
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.menu-list {
+  display: grid;
+  gap: 8px;
+}
+.menu-list .button {
+  min-height: 52px;
+  justify-content: flex-start;
+  padding: 0 20px;
+}
+.menu-list .button svg {
+  margin-left: 0;
+  margin-right: 4px;
+}
+.menu > .footnote {
+  text-align: center;
+}
+.menu > .footnote:empty {
+  display: none;
+}
+
+/* The renderer's stand-in HUD (fakes.ts): just enough to see the screens. */
+.fake-hud {
+  position: absolute;
+  pointer-events: none;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.fake-hud-top {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.fake-hud-place {
+  position: absolute;
+  right: 20px;
+  bottom: 12px;
+  margin: 0;
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+}
+.fake-hud-centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-size: 96px;
+  font-weight: 700;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* --- 6. results --------------------------------------------------------------------------------------------------- */
+
+.results-inner {
+  display: grid;
+  gap: 28px;
+  align-content: start;
+  max-width: calc(640px + 2 * var(--margin));
+  padding-top: 32px;
+}
+.standings {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: var(--r-small);
+  background: rgba(118, 118, 128, 0.14);
+  font-variant-numeric: tabular-nums;
+}
+.standings th {
+  padding: 12px 16px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+.standings th:nth-child(n + 3),
+.standings td:nth-child(n + 3) {
+  text-align: right;
+}
+.standings td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.standings tbody tr:first-child td {
+  border-top-color: transparent;
+}
+.standings .mine td {
+  background: rgba(255, 255, 255, 0.07);
+}
+.c-place {
+  width: 64px;
+  font-weight: 600;
+}
+.c-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 0;
+}
+.standings .c-name {
+  display: table-cell;
+}
+.c-name .dot {
+  margin-right: 10px;
+  vertical-align: -1px;
+}
+.c-name .player-tag {
+  margin-left: 8px;
+}
+.c-driver {
+  font-weight: 600;
+}
+.c-best.gold {
+  color: var(--gold);
+  font-weight: 600;
+}
+.results-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.results-inner > .footnote {
+  text-align: center;
+}
+
+/* --- narrow windows ------------------------------------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .lobby-inner {
+    grid-template-columns: minmax(0, 580px);
+    justify-content: center;
+    gap: 28px;
+  }
+  .join-card {
+    position: static;
+    padding: 24px 20px 20px;
+  }
+  .code-big {
+    font-size: 48px;
+  }
+}
+@media (max-width: 600px) {
+  .page-head .title1 {
+    font-size: 30px;
+  }
+  .check-pictures[data-count="2"] {
+    flex-direction: column;
+    align-items: center;
+  }
+  .controller-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+  .controller-card .wheel-view {
+    max-width: 320px;
+  }
+  .standings th,
+  .standings td {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .c-place {
+    width: 52px;
+  }
+  .corner-preview {
+    width: 112px;
+  }
+  .lost-hands {
+    top: 24%;
+    max-width: calc(100vw - 2 * var(--margin));
+  }
+}
+/* A short window (a phone on its side): the chrome shrinks to what its corners can spare. */
+@media (max-height: 520px) {
+  .corner-preview {
+    width: 112px;
+  }
+  .lost-hands {
+    top: 22%;
+  }
+}
+
+/* --- reduced motion (the system's or the player's: see base.css) ---------------------------------------------------- */
+
+:root[data-reduce-motion] {
+  .screen {
+    animation-name: fade-in !important;
+  }
+  .lost-hands {
+    animation: none !important;
+  }
+  .check-badge {
+    transform: none;
+  }
+}
