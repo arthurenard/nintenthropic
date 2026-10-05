@@ -148,7 +148,7 @@ export const TUNING = {
 
   hazard: {
     /** Hit by a hazard: the spin of an item hit, then this much longer before another can touch it. */
-    immuneAfter: 0.8,
+    immuneAfter: 1.6,
     /** A kart higher than this in the air flies over a hazard. */
     clearHeight: 0.8,
   },
@@ -267,6 +267,8 @@ export const TUNING = {
     planBrake: 16,
     /** Fastest a bot plans for in a straight line. */
     planCap: 50,
+    /** The curvature a bot plans a bend's speed for is at least this share of the tightest part of the line round there. */
+    peakShare: 0.85,
     /** Curvature-smoothing and line-cutting: bends tighter than 1/cutCurvature cut the full distance. */
     cutCurvature: 1 / 45,
     /** Of the room between the road's middle and its edge (less a margin), a bot cuts this much at most. */
@@ -300,6 +302,8 @@ export const TUNING = {
     patchClearance: 1.8,
     /** A bot takes a ramp straight from this far before it (metres) and keeps its wheel straight in the air. */
     rampStraight: 26,
+    /** Nearer than this (metres) to a ramp's lip a bot holds its speed whatever the plan says. */
+    rampSpeedNear: 60,
     /** Hazards: looks this far ahead in time (s) in steps of this, and keeps this far (metres, beyond their size) clear, more for the gentler. */
     hazardLook: 2.6,
     /** A kart swings across the road at about this many m/s when dodging. */
@@ -309,7 +313,7 @@ export const TUNING = {
     /** The nearest to the road's edge a bot goes to get round a hazard (metres in from it). */
     hazardEdge: 1.4,
     /** Skill under which a bot does not look for hazards at all. */
-    hazardSkill: 0.25,
+    hazardSkill: 0,
     /** Skill from which a bot takes a verge cut when it holds a Nitro; it uses the Nitro this far (metres) before the cut. */
     cutSkill: 0.7,
     cutNitroBefore: 6,
@@ -332,12 +336,16 @@ export const TUNING = {
     backTime: 1.0,
     /** A bot drifts a bend that is tighter than this curvature and has at least this much left (metres, or this many seconds at its speed, whichever is more): enough to charge a boost. */
     driftCurvature: 1 / 60,
+    /** ...but not a hairpin as tight as this (a bot slides out of it): the wheel is too hard over to leave room for a drift. */
+    driftMaxCurvature: 1 / 15,
     driftMinLength: 24,
     driftMinTime: 1.5,
     driftMinSpeed: 14,
     /** A bot waits this long (seconds, low..high skill) after getting an item before using it. */
     itemWaitSlow: 2.6,
     itemWaitFast: 0.7,
+    /** A bot holds its pucks, seekers and slicks within this far (metres) before the lip of a jump over a gap. */
+    itemGapQuiet: 140,
     /** And uses it regardless after this long. */
     itemHoldMax: 14,
   },

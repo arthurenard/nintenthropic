@@ -57,6 +57,8 @@ export function rubberBand(w: World, k: KartState): number {
 /** Whether the item the bot holds is worth using now. */
 function worthUsing(w: World, k: KartState, fwd: number): boolean {
   const plan = w.plan;
+  // Nobody is spun out just before a jump over a gap: it would be a fall, not a spin.
+  if ((k.item === "puck" || k.item === "seeker" || k.item === "slick") && gapAhead(w, k) < B.itemGapQuiet) return false;
   switch (k.item) {
     case "nitro":
     case "nitro3": {
@@ -92,6 +94,17 @@ function rampAhead(w: World, k: KartState): number {
   for (const ramp of w.plan.terrain.ramps) {
     const d = w.geo.delta(k.s, ramp.s);
     if (d > -6 && d < nearest) nearest = d;
+  }
+  return nearest;
+}
+
+/** The distance along the lap to the lip of the next ramp with a gap beyond it, or Infinity. */
+function gapAhead(w: World, k: KartState): number {
+  let nearest = Infinity;
+  for (const gap of w.plan.terrain.gaps) {
+    // A ramp's lip is just before its gap.
+    const d = w.geo.delta(k.s, gap.from - 1.5);
+    if (d > -20 && d < nearest) nearest = d;
   }
   return nearest;
 }
@@ -327,7 +340,8 @@ export function botInput(w: World, k: KartState): DriveInput {
     fwd > B.driftMinSpeed &&
     bendLength >= Math.max(B.driftMinLength, fwd * B.driftMinTime) &&
     Math.abs(steer) > 0.34 &&
-    Math.sign(steer) === Math.sign(bendTurn)
+    Math.sign(steer) === Math.sign(bendTurn) &&
+    Math.abs(bendTurn) < B.driftMaxCurvature
   ) {
     m.drifting = true;
   }
@@ -342,7 +356,9 @@ export function botInput(w: World, k: KartState): DriveInput {
   const top = (B.topSpeedLow + (B.topSpeedHigh - B.topSpeedLow) * k.skill) * TUNING.drive.topSpeed * (k.boost > 0 ? TUNING.drive.boostSpeed : 1);
   const planned = tableAt(plan, plan.speed, k.s + Math.max(0, fwd) * B.planAhead) * (0.88 + 0.12 * k.skill);
   // On a verge cut it goes flat out; a hazard ahead may ask it to ease.
-  const target = (cutting ? top : Math.min(top, planned)) * band * dodging.speed;
+  // Close to a ramp it keeps its speed: a jump needs it, and a slow-down for a hazard is not worth a fall.
+  const nearRamp = toRamp < B.rampSpeedNear;
+  const target = (cutting || nearRamp ? top : Math.min(top, planned)) * band * (nearRamp ? 1 : dodging.speed);
   let throttle = 1;
   let brake = 0;
   if (fwd > target + 1.5 && fwd > 8) {
@@ -358,7 +374,7 @@ export function botInput(w: World, k: KartState): DriveInput {
   } else if (k.roll === 0) {
     m.wait++;
     const delay = ticks((B.itemWaitSlow + (B.itemWaitFast - B.itemWaitSlow) * k.skill) * (0.7 + (((k.id * 7 + k.presses * 13) % 10) / 10) * 0.6));
-    if ((m.wait >= delay && worthUsing(w, k, fwd)) || m.wait >= ticks(B.itemHoldMax)) {
+    if ((m.wait >= delay && worthUsing(w, k, fwd)) || (m.wait >= ticks(B.itemHoldMax) && gapAhead(w, k) >= B.itemGapQuiet)) {
       presses++;
       m.wait = 0;
     }

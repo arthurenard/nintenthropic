@@ -182,9 +182,17 @@ function buildPlan(def: TrackDef): TrackPlan {
     const bx = px[b]! - px[i]!;
     const bz = pz[b]! - pz[i]!;
     const turn = Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
-    lineCurve[i] = Math.abs(turn) / (reach * 2 * spacing);
+    lineCurve[i] = Math.abs(turn) / (reach * spacing);
   }
-  const smooth = blur(lineCurve, spacing, 6);
+  // Smoothed for steadiness, but not so much that the peak of a tight hairpin is lost: the kart must be slow enough for the tightest part of the line.
+  const blurred = blur(lineCurve, spacing, 6);
+  const smooth = new Float64Array(n);
+  const window = Math.max(1, Math.round(6 / spacing));
+  for (let i = 0; i < n; i++) {
+    let peak = 0;
+    for (let k = -window; k <= window; k++) peak = Math.max(peak, lineCurve[(i + k + n) % n]!);
+    smooth[i] = Math.max(blurred[i]!, bots.peakShare * peak);
+  }
   const speed = new Float64Array(n);
   const brake = new Float64Array(n).fill(bots.planBrake);
   for (let i = 0; i < n; i++) {
