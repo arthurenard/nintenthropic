@@ -201,6 +201,20 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       return who ? keep(order("kart_hazard", who, own, { radius: RADIUS.big, rate: hazardRate(event.kind), priority: own ? 3 : 1 })) : [];
     }
 
+    case "horn": {
+      // Each kart's horn sits a little differently in pitch, so two honks together are two horns.
+      const who = hearKart(scene, event.kart);
+      const own = !!localOf(scene, event.kart);
+      return who ? keep(order("kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
+    }
+
+    case "duck": {
+      // Found: a squeak a beat after the drive-by one, higher, so it is told from it.
+      const who = hearKart(scene, event.kart);
+      const own = !!localOf(scene, event.kart);
+      return who ? keep(order("kart_duck", who, own, { radius: RADIUS.big, rate: 1.3, delay: 0.12, priority: 3 })) : [];
+    }
+
     default:
       return otherEvent(event, scene);
   }
