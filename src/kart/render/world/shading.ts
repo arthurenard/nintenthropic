@@ -100,12 +100,29 @@ float bakedSun( vec3 p, vec3 n ) {
   float inv = 1.0 / uSunInfo.y;
   float phi = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) ) * 6.2831853;
   float z = c.z - uSunDirW.w * ( 0.08 + 0.25 * ( 1.0 - ndl ) );
+  // Blocker search: how far above this spot is whatever shades it? The farther, the softer the shadow's edge (a
+  // contact is crisp, the shadow of a tree-top on the ground is a wide blur).
+  float sum = 0.0;
+  float cnt = 0.0;
+  const int SEARCH = 8;
+  float searchR = 7.0;
+  for ( int i = 0; i < SEARCH; i ++ ) {
+    float r = sqrt( ( float( i ) + 0.5 ) / float( SEARCH ) );
+    float a = float( i ) * 2.399963 + phi;
+    float d = texture2D( uSunMap, c.xy + vec2( cos( a ), sin( a ) ) * r * searchR * inv ).r;
+    if ( d < z ) { sum += d; cnt += 1.0; }
+  }
+  float radius = 2.0;
+  if ( cnt > 0.5 ) {
+    float metres = ( z - sum / cnt ) / uSunDirW.w;
+    radius = clamp( metres * 0.06 / uSunInfo.x, 2.0, 12.0 );
+  }
   float vis = 0.0;
-  const int TAPS = 12;
+  const int TAPS = 10;
   for ( int i = 0; i < TAPS; i ++ ) {
     float r = sqrt( ( float( i ) + 0.5 ) / float( TAPS ) );
-    float a = float( i ) * 2.399963 + phi;
-    vis += step( z, texture2D( uSunMap, c.xy + vec2( cos( a ), sin( a ) ) * r * 2.4 * inv ).r );
+    float a = float( i ) * 2.399963 + phi * 1.7;
+    vis += step( z, texture2D( uSunMap, c.xy + vec2( cos( a ), sin( a ) ) * r * radius * inv ).r );
   }
   vis /= float( TAPS );
   return mix( 1.0, mix( 1.0 - uSunInfo.z, 1.0, vis ), fade );

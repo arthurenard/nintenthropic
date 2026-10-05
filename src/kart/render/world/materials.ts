@@ -55,7 +55,7 @@ export interface GroundMaterial {
 
 /** What each ground is like underfoot: the relief that catches the sun, how glossy it is, and how fine the relief is. */
 const GROUND: Record<string, { kind: DetailKind; tile: number; rough: number; normal: number; coat?: number }> = {
-  meadow: { kind: "grass", tile: 2.6, rough: 0.95, normal: 1.0 },
+  meadow: { kind: "grass", tile: 2.6, rough: 0.95, normal: 1.35 },
   canyon: { kind: "rock", tile: 4.5, rough: 0.96, normal: 0.8 },
   harbour: { kind: "stone", tile: 2.5, rough: 0.42, normal: 0.6 },
   kitchen: { kind: "stone", tile: 3, rough: 0.2, normal: 0.25, coat: 0.55 },

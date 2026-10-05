@@ -117,9 +117,12 @@ void main() {
     for ( int s = 0; s < STEPS; s ++ ) {
       float t = ( float( s ) + 0.5 ) / float( STEPS );
       float r = uRadius * t * t + 0.12;
-      float dh = min( H( vUv + dir * r * uInvMetres ) - h0, 3.2 );
+      float dh0 = H( vUv + dir * r * uInvMetres ) - h0;
+      // Props and barriers shade their surroundings; a cliff, a mesa or a mountain is a landscape, not an obstacle (and from above its lip hangs over its foot).
+      float dh = min( dh0 * ( 1.0 - smoothstep( 5.0, 8.0, dh0 ) ), 3.2 );
       // Gentle slopes are hills, not obstacles: only what rises steeper than about twenty degrees counts.
-      best = max( best, dh / r - 0.34 );
+      float fall = 1.0 - clamp( r / ( uRadius * 1.04 ), 0.0, 1.0 );
+      best = max( best, dh / r * fall * fall - 0.34 * fall );
     }
     best = max( best, 0.0 );
     occ += best / sqrt( 1.0 + best * best );
@@ -295,6 +298,7 @@ export function bakeStatic(renderer: WebGLRenderer, scene: Scene, root: Object3D
       disposables.push(aoTarget);
 
       uniforms.uAoMap.value = aoTarget.texture;
+      (globalThis as unknown as { __aoTarget?: unknown }).__aoTarget = aoTarget;
       uniforms.uAoRect.value.set(b.minX, b.maxZ, 1 / w, -1 / d);
       uniforms.uAoInfo.value.set(b.minY, range, 1, 1);
     }

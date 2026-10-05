@@ -281,6 +281,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       world.install(scene);
       world.prepare(renderer, scene);
       shareBake(kartBake, world.bake);
+      (globalThis as unknown as { __bake?: unknown }).__bake = world.bake;
       addBakedSun(kartMaterial(), kartBake);
       post.setLook(world.look);
       scene.background = null;

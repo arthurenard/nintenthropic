@@ -153,9 +153,10 @@ export async function createWorld(
 
   // The track.
   const bank = new Bank(geometry);
-  const meshes = buildTrackMeshes(geometry, style, terrain, quality);
+  const meshes = buildTrackMeshes(geometry, style, terrain, quality, ground.metres);
   for (const g of meshes.road) addStatic(g, roadMat, space ? 1 : 0);
   for (const g of meshes.deco) addStatic(g, deco);
+  if (!space) for (const g of meshes.verge) addStatic(g, ground.material);
   if (meshes.pools) {
     const mat = track(new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false })) as Material;
     addStatic(meshes.pools, mat, 3);

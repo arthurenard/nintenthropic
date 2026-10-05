@@ -264,6 +264,88 @@ export function groundDetail(style: ThemeStyle, anisotropy: number, size = 512):
   const f = size / 512;
   const rnd = seededRandom(41);
   switch (style.id) {
+    case "meadow": {
+      // A lawn in greys: big soft patches of lighter and darker growth, and smaller tufts and bare flecks, tiling.
+      const [c, ctx] = canvas(W, W);
+      ctx.fillStyle = "#f0f0f0";
+      ctx.fillRect(0, 0, W, W);
+      const blot = (n: number, r0: number, r1: number, a: number) => {
+        for (let i = 0; i < n; i++) {
+          const x = rnd() * W;
+          const y = rnd() * W;
+          const r = (r0 + rnd() * (r1 - r0)) * f;
+          const light = rnd() > 0.5;
+          wrapped(ctx, W, W, (dx, dy) => {
+            const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+            g.addColorStop(0, light ? `rgba(255,255,255,${a})` : `rgba(40,60,30,${a * 1.3})`);
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = g;
+            ctx.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+          });
+        }
+      };
+      blot(46, 40, 110, 0.22);
+      blot(260, 9, 28, 0.2);
+      blot(900 * f, 2, 6, 0.28);
+      return { map: finish(c, anisotropy, true), glow: null, metres: 36 };
+    }
+    case "canyon": {
+      // Sand and gravel: soft drifts, streaks along the wind and a scatter of pebbles.
+      const [c, ctx] = canvas(W, W);
+      ctx.fillStyle = "#f1f1f1";
+      ctx.fillRect(0, 0, W, W);
+      for (let i = 0; i < 70; i++) {
+        const x = rnd() * W;
+        const y = rnd() * W;
+        const r = (30 + rnd() * 90) * f;
+        wrapped(ctx, W, W, (dx, dy) => {
+          const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          g.addColorStop(0, rnd() > 0.5 ? "rgba(255,255,255,0.22)" : "rgba(120,80,50,0.2)");
+          g.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+        });
+      }
+      for (let i = 0; i < 1400 * f * f; i++) {
+        const s = (1 + rnd() * 2.2) * f;
+        ctx.fillStyle = rnd() > 0.5 ? "rgba(255,240,220,0.5)" : "rgba(90,60,40,0.4)";
+        ctx.fillRect(rnd() * W, rnd() * W, s, s * (0.6 + rnd() * 0.8));
+      }
+      return { map: finish(c, anisotropy, true), glow: null, metres: 60 };
+    }
+    case "harbour": {
+      // Quay concrete: big slabs with joints, tyre-black stains, damp patches.
+      const [c, ctx] = canvas(W, W);
+      ctx.fillStyle = "#e8e8e8";
+      ctx.fillRect(0, 0, W, W);
+      const slabs = 8;
+      const sw = W / slabs;
+      for (let i = 0; i < slabs; i++) {
+        for (let j = 0; j < slabs; j++) {
+          const shade = 236 + Math.floor(rnd() * 19);
+          ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+          ctx.fillRect(i * sw + 1.5 * f, j * sw + 1.5 * f, sw - 3 * f, sw - 3 * f);
+        }
+      }
+      for (let i = 0; i < 90; i++) {
+        const x = rnd() * W;
+        const y = rnd() * W;
+        const r = (12 + rnd() * 60) * f;
+        wrapped(ctx, W, W, (dx, dy) => {
+          const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          g.addColorStop(0, rnd() > 0.35 ? "rgba(30,34,50,0.28)" : "rgba(255,255,255,0.18)");
+          g.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+        });
+      }
+      for (let i = 0; i < 2200 * f * f; i++) {
+        const sz = (0.8 + rnd() * 1.4) * f;
+        ctx.fillStyle = rnd() > 0.5 ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.25)";
+        ctx.fillRect(rnd() * W, rnd() * W, sz, sz);
+      }
+      return { map: finish(c, anisotropy, true), glow: null, metres: 48 };
+    }
     case "kitchen": {
       const [c, ctx] = canvas(W, W);
       ctx.fillStyle = "#f4f4f4";

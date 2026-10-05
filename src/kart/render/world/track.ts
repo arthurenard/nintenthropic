@@ -38,8 +38,10 @@ const TIGHT_EDGE = 1 / 52;
 export interface TrackMeshes {
   /** Textured with the road texture (uv across, along / ROAD_TILE). */
   road: BufferGeometry[];
-  /** Vertex coloured: verge, kerbs, barriers, signs, gantry, lamps, ramps, cliffs. */
+  /** Vertex coloured: kerbs, barriers, signs, gantry, lamps, ramps, cliffs. */
   deco: BufferGeometry[];
+  /** The verge on both sides of the road: vertex coloured, uv = world metres / `groundMetres`, so it takes the ground's own material. */
+  verge: BufferGeometry[];
   /** Boost pads and strips, textured with the chevrons (v in 4 m repeats). */
   pads: BufferGeometry | null;
   /** Additive light pools (vertex colour is the light). */
@@ -77,7 +79,7 @@ function surfaceStripes(kind: string): [Rgb, Rgb] | null {
   }
 }
 
-export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings): TrackMeshes {
+export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings, groundMetres = 64): TrackMeshes {
   const n = track.samples.length;
   const spacing = track.spacing;
   const samples = track.samples;
@@ -92,10 +94,14 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   const chunks = Math.ceil(n / CHUNK);
   const road: MeshBuilder[] = [];
   const deco: MeshBuilder[] = [];
+  const vergeB: MeshBuilder[] = [];
   for (let c = 0; c < chunks; c++) {
     road.push(new MeshBuilder(true));
     deco.push(new MeshBuilder(false));
+    vergeB.push(new MeshBuilder(true));
   }
+  /** The ground's uv of four corners, as quad() wants them. */
+  const groundUv = (...p: V3[]): number[] => p.flatMap((q) => [q[0] / groundMetres, q[2] / groundMetres]);
   const chunkOf = (i: number) => Math.min(chunks - 1, Math.floor(((i % n) + n) % n / CHUNK));
   const glows: Glow[] = [];
   const additive = new MeshBuilder();
@@ -188,10 +194,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
         side > 0 ? [P(i, h0, d), P(i, m0, d), P(i + 2, m1, d), P(i + 2, h1, d)] : [P(i, -m0, d), P(i, -h0, d), P(i + 2, -h1, d), P(i + 2, -m1, d)];
       const wall: V3[] =
         side > 0 ? [P(i, m0, d), P(i, flat0, d), P(i + 2, flat1, d), P(i + 2, m1, d)] : [P(i, -flat0, d), P(i, -m0, d), P(i + 2, -m1, d), P(i + 2, -flat1, d)];
-      const dc = deco[chunkOf(i)]!;
-      dc.quad(inner[0]!, inner[1]!, inner[2]!, inner[3]!, stripe, stripe, next, next, UP);
-      if (side > 0) dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, stripe, shade, shadeNext, next, UP);
-      else dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, shade, stripe, next, shadeNext, UP);
+      const dc = vergeB[chunkOf(i)]!;
+      dc.quad(inner[0]!, inner[1]!, inner[2]!, inner[3]!, stripe, stripe, next, next, UP, groundUv(inner[0]!, inner[1]!, inner[2]!, inner[3]!));
+      if (side > 0) dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, stripe, shade, shadeNext, next, UP, groundUv(wall[0]!, wall[1]!, wall[2]!, wall[3]!));
+      else dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, shade, stripe, next, shadeNext, UP, groundUv(wall[0]!, wall[1]!, wall[2]!, wall[3]!));
       // Outer strip falls to the ground beside it, taking the ground's colour so there is no seam. Where a verge puts
       // the barrier far out the ground there is not at the road's own level, so it falls (or rises) to where the ground is.
       const edgeP = (j: number, o: number): V3 => {
@@ -206,8 +212,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
           : [far ? edgeP(i, -out0) : P(i, -out0, -GROUND_SINK + 0.02), P(i, -flat0, d), P(i + 2, -flat1, d), far ? edgeP(i + 2, -out1) : P(i + 2, -out1, -GROUND_SINK + 0.02)];
       const outerA = groundAt(side > 0 ? slope[1]! : slope[0]!);
       const outerB = groundAt(side > 0 ? slope[2]! : slope[3]!);
-      if (side > 0) dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP);
-      else dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP);
+      const slopeUv = groundUv(slope[0]!, slope[1]!, slope[2]!, slope[3]!);
+      if (side > 0) dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP, slopeUv);
+      else dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP, slopeUv);
     }
   }
 
@@ -544,6 +551,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   return {
     road: road.filter((b) => !b.empty).map((b) => b.build()),
     deco: deco.filter((b) => !b.empty).map((b) => b.build()),
+    verge: vergeB.filter((b) => !b.empty).map((b) => b.build()),
     pads,
     pools,
     additive: additive.empty ? null : additive.build(),
