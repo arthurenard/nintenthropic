@@ -9,6 +9,17 @@ import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
 import { host, join, open, state } from "./kart";
 
+// Handy's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => {
+    try {
+      localStorage.setItem("handy.muted.v1", "true");
+    } catch {
+      // no storage: the page decides
+    }
+  });
+});
+
 /** A returning player: the wheel check done once, the camera already opened. */
 const returning = async (page: Page) => {
   await page.addInitScript(() => {
@@ -445,6 +456,58 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
   await shot(page, info, "race-7g-webgl", 300);
   await trouble.getByRole("button", { name: "Leave Race" }).click();
   await expect(heading(page, "Grip Prix")).toBeVisible();
+});
+
+test("sound: off by the arcade's preference, on with the speaker; music on the menus, engines and the race's tune in a race", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const sound = async () => (await state(page)).sound;
+  // With the preference off nothing is made: not the engine, not the music.
+  await open(page);
+  await page.getByRole("button", { name: "Practice" }).click();
+  expect(await sound()).toMatchObject({ awake: false, muted: true, music: null });
+  await expect(page.locator("#sound-button")).toHaveAttribute("aria-pressed", "true");
+
+  // The speaker turns it on (the same preference the arcade keeps), and the menus have their tune.
+  await page.locator("#sound-button").click();
+  await expect(page.locator("#sound-button")).toHaveAttribute("aria-pressed", "false");
+  expect(await page.evaluate(() => localStorage.getItem("handy.muted.v1"))).toBe("false");
+  await expect.poll(async () => (await sound()).awake, { timeout: 20_000 }).toBe(true);
+  await expect.poll(async () => (await sound()).music, { timeout: 90_000 }).toBe("menu");
+  await shot(page, info, "race-8a-sound-corner", 200);
+
+  // M does the same from the keyboard, anywhere.
+  await page.keyboard.press("m");
+  await expect(page.locator("#sound-button")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("m");
+  await expect(page.locator("#sound-button")).toHaveAttribute("aria-pressed", "false");
+
+  // A race: the engine runs, and at Go the track's own tune.
+  await page.getByRole("radio", { name: "Keyboard" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("radio", { name: "1", exact: true }).click();
+  await start(page).click();
+  await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
+  await expect.poll(async () => (await sound()).engines, { timeout: 30_000 }).toBeGreaterThan(0);
+  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe("racing");
+  await expect.poll(async () => (await sound()).music, { timeout: 90_000 }).toBe("meadow");
+
+  // The pause sheet: the engines are still, and the sliders are there.
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => (await sound()).paused).toBe(true);
+  await expect(page.locator("#pause-music")).toBeEnabled();
+  await page.locator("#pause-music").fill("40");
+  await page.locator("#pause-effects").fill("70");
+  expect(JSON.parse((await page.evaluate(() => localStorage.getItem("handy.kart.sound.v1"))) ?? "null")).toEqual({ music: 0.4, effects: 0.7 });
+  await shot(page, info, "race-8b-sound-sheet", 300);
+  await page.locator("#sheet-sound").click();
+  await expect(page.locator("#pause-music")).toBeDisabled();
+  await expect(page.locator("#sheet-sound")).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#sheet-sound").click();
+  await expect(page.locator("#pause-music")).toBeEnabled();
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect.poll(async () => (await sound()).paused, { timeout: 10_000 }).toBe(false);
+  expect(errors).toEqual([]);
 });
 
 test("leaving puts everything down and starts again", async ({ page }) => {

@@ -323,6 +323,19 @@
     <dialog id="pause-sheet" class="sheet menu" aria-labelledby="pause-title">
       <div class="sheet-head">
         <h2 class="title2" id="pause-title">Paused</h2>
+        <button class="icon-button sound-control" id="sheet-sound" aria-pressed="false" aria-label="Turn Sound Off">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" /></svg>
+        </button>
+      </div>
+      <div class="rows sound-rows">
+        <div class="row volume-row">
+          <label class="row-label" for="pause-music">Music</label>
+          <input type="range" class="slider" id="pause-music" min="0" max="100" step="5" value="80" />
+        </div>
+        <div class="row volume-row">
+          <label class="row-label" for="pause-effects">Effects</label>
+          <input type="range" class="slider" id="pause-effects" min="0" max="100" step="5" value="100" />
+        </div>
       </div>
       <div class="menu-list">
         <button class="button primary wide" id="pause-resume">
@@ -338,11 +351,17 @@
       <p class="footnote tertiary" id="pause-note"></p>
     </dialog>
 
+    <button class="icon-button glass sound-control" id="sound-button" aria-pressed="false" aria-label="Turn Sound Off" title="Sound (M)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" /></svg>
+    </button>
+
     <p class="toast glass" id="toast" role="status" popover="manual" hidden></p>
     <p class="visually-hidden" id="announce" aria-live="polite"></p>
 
     <!-- Line icons, drawn like SF Symbols: 24-unit grid, 1.75 strokes, round caps. -->
     <svg class="symbols" aria-hidden="true">
+      <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H4z" /><path d="M14.6 9.3a3.8 3.8 0 0 1 0 5.4" /><path d="M17.2 6.8a7.4 7.4 0 0 1 0 10.4" /></symbol>
+      <symbol id="i-speaker-off" viewBox="0 0 24 24"><path d="M4 9.6h2.9l4.3-3.8v12.4l-4.3-3.8H4z" /><path d="M15 9.5l5 5M20 9.5l-5 5" /></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.6v12.8a1.1 1.1 0 0 0 1.66.94l10.3-6.4a1.1 1.1 0 0 0 0-1.88L9.66 4.66A1.1 1.1 0 0 0 8 5.6z" /></symbol>
       <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" stroke="none" x="6.5" y="5" width="3.6" height="14" rx="1.3" /><rect fill="currentColor" stroke="none" x="13.9" y="5" width="3.6" height="14" rx="1.3" /></symbol>
       <symbol id="i-restart" viewBox="0 0 24 24"><path d="M5.2 13.2A7 7 0 1 0 7.4 7" /><path d="M7.6 3.4 7.4 7l3.6.4" /></symbol>

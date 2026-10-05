@@ -8,7 +8,8 @@
  * write a `createServices()` that builds this interface from net/, input/,
  * render/ and tracking/, and swap that line.
  */
-import type { DriverControl, RaceRenderer, Session, SessionClosed } from "../contract";
+import type { KartSound, MusicKind } from "../audio";
+import type { DriverControl, RaceRenderer, RaceView, Session, SessionClosed, TrackDef } from "../contract";
 
 // --- the room --------------------------------------------------------------------------------------------
 
@@ -111,6 +112,63 @@ export interface CameraService {
   stop(): void;
 }
 
+// --- sound ---------------------------------------------------------------------------------------------------
+
+/** The two sliders, each 0..1 as a slider sits (half way is a quarter of the power). */
+export interface SoundLevels {
+  music: number;
+  effects: number;
+}
+
+/** One race's sound: the engines, the events, the music of the track. */
+export interface RaceSound {
+  /**
+   * Gets the kart sounds and the track's music ready. Never rejects (a race
+   * without sound is still a race), and the race does not wait for it: the
+   * music starts when it is made.
+   */
+  load(theme: TrackDef["theme"], progress?: (fraction: number) => void): Promise<void>;
+  /** Every frame of a race, after the picture: the view drawn and the karts this screen shows (`Session.views()`). */
+  frame(view: RaceView, views: readonly number[], dt: number): void;
+  /** The race is stopped (the pause sheet, the host's pause): engines fall silent, the music is muffled. */
+  pause(): void;
+  resume(): void;
+  /** This screen's race is over. */
+  dispose(): void;
+}
+
+/** What a test can see of the sound (it cannot hear it). */
+export interface SoundReport {
+  awake: boolean;
+  muted: boolean;
+  /** The music playing on the menus, or in the race. */
+  music: string | null;
+  engines: number;
+  paused: boolean;
+}
+
+/**
+ * Grip Prix's sound for the screens. Handy has one sound preference (on or
+ * off, shared with the arcade) and a master volume; the race page adds the
+ * music and the effects. Browsers start audio only after a gesture, so
+ * nothing is made until `wake` (the page's first click or key press), and
+ * with sound off nothing is made at all.
+ */
+export interface SoundService {
+  readonly muted: boolean;
+  setMuted(muted: boolean): void;
+  levels(): SoundLevels;
+  setLevels(levels: Partial<SoundLevels>): void;
+  wake(): void;
+  /** The music of a menu screen (null for none). */
+  music(kind: MusicKind | null): void;
+  /** An interface sound. */
+  play(sound: KartSound): void;
+  /** The sound of a race, for one race screen. */
+  race(): RaceSound;
+  report(): SoundReport;
+}
+
 // --- everything -------------------------------------------------------------------------------------------
 
 export interface Services {
@@ -137,4 +195,5 @@ export interface Services {
   preview(container: HTMLElement, control: DriverControl, size: "corner" | "large"): Disposable;
   /** The tracks the host may choose from, in order. */
   tracks: readonly { id: string; name: string }[];
+  sound: SoundService;
 }

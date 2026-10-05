@@ -20,7 +20,7 @@ import { $, element, setText } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
 import { itemWords, lapLabel, ordinal } from "./format";
 import { hostName, kartOf } from "./roster";
-import type { Disposable, Services } from "./services";
+import type { Disposable, RaceSound, Services } from "./services";
 import { colourDot, setBar } from "./ui";
 
 export type RaceFailure = "load" | "webgl";
@@ -57,6 +57,10 @@ export class RaceScreen {
   private mode: "pending" | "world" | "controller" | "failed" = "pending";
   private canvas: HTMLCanvasElement | null = null;
   private renderer: RaceRenderer | null = null;
+  /** The race's engines and music, on a screen that shows the race (a device that is only a wheel makes none). */
+  private sound: RaceSound | null = null;
+  /** The sound is held still: the pause sheet is open, or the host has stopped the race. */
+  private hushed = false;
   private loaded = false;
   private watch: ResizeObserver | null = null;
   private previews: Disposable[] = [];
@@ -120,6 +124,8 @@ export class RaceScreen {
     this.notesKey = "";
     this.reported = "";
     this.banner = "";
+    this.hushed = false;
+    this.sound = this.services.sound.race();
     this.last = 0;
     this.stopped = false;
     this.leaving = false;
@@ -146,6 +152,8 @@ export class RaceScreen {
     if (this.sheet.open) this.sheet.close();
     this.watch?.disconnect();
     this.watch = null;
+    this.sound?.dispose();
+    this.sound = null;
     this.renderer?.dispose();
     this.renderer = null;
     this.canvas?.remove();
@@ -248,6 +256,13 @@ export class RaceScreen {
     if (this.mode === "pending") this.choose(view);
     // While the room is stopped the picture holds still, effects and cameras too.
     const dt = lobby.pause ? 0 : seconds;
+    // The engines fall silent and the music is muffled behind the sheet, and through the host's pause.
+    const hush = this.sheet.open || !!lobby.pause;
+    if (hush !== this.hushed) {
+      this.hushed = hush;
+      if (hush) this.sound?.pause();
+      else this.sound?.resume();
+    }
     if (this.mode === "world" && this.renderer && this.loaded) {
       const views = ctx.session.views();
       const key = views.join(",");
@@ -257,7 +272,10 @@ export class RaceScreen {
         this.fit();
       }
       this.renderer.frame(view, dt);
-    } else if (this.mode === "controller") {
+    }
+    // Heard from the first frame, not from when the picture is ready: the lights count down meanwhile.
+    if (this.mode === "world") this.sound?.frame(view, ctx.session.views(), dt);
+    if (this.mode === "controller") {
       this.readouts(view);
     }
   }
@@ -267,6 +285,9 @@ export class RaceScreen {
     const ctx = this.ctx!;
     if (ctx.session.views().length === 0) {
       this.mode = "controller";
+      // The race is heard where it is shown: a phone that is only a wheel stays quiet.
+      this.sound?.dispose();
+      this.sound = null;
       this.loading(false, 1);
       this.controller();
       return;
@@ -285,6 +306,8 @@ export class RaceScreen {
       return;
     }
     this.mode = "world";
+    // The sounds and the track's music are made beside the picture; the race does not wait for them.
+    void this.sound?.load(view.track.theme);
     this.corners();
     $("race-stage").prepend(canvas);
     this.canvas = canvas;

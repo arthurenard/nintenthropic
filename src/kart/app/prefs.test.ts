@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_NAMES } from "./format";
-import { loadYou, saveYou, setWheelChecked, wheelChecked } from "./prefs";
+import { DEFAULT_LEVELS, loadLevels, loadYou, saveLevels, saveYou, setWheelChecked, wheelChecked } from "./prefs";
 
 /** A storage in memory, as the browser's but without the browser. */
 function memory(initial: Record<string, string> = {}): Storage {
@@ -57,5 +57,21 @@ describe("the player Grip Prix remembers", () => {
     expect(wheelChecked(storage)).toBe(false);
     setWheelChecked(storage);
     expect(wheelChecked(storage)).toBe(true);
+  });
+});
+
+describe("the Music and Effects sliders", () => {
+  it("start where the tune sits a little under the engines, and are remembered", () => {
+    const storage = memory();
+    expect(loadLevels(storage)).toEqual(DEFAULT_LEVELS);
+    saveLevels({ music: 0.25, effects: 0.6 }, storage);
+    expect(loadLevels(storage)).toEqual({ music: 0.25, effects: 0.6 });
+  });
+
+  it("read anything odd as the default, each slider on its own", () => {
+    const storage = memory({ "handy.kart.sound.v1": JSON.stringify({ music: "loud", effects: 7 }) });
+    expect(loadLevels(storage)).toEqual({ music: DEFAULT_LEVELS.music, effects: 1 });
+    expect(loadLevels(memory({ "handy.kart.sound.v1": "{" }))).toEqual(DEFAULT_LEVELS);
+    expect(loadLevels(undefined)).toEqual(DEFAULT_LEVELS);
   });
 });

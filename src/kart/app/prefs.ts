@@ -5,11 +5,12 @@
  * are versioned and hold JSON.
  */
 import { cleanName, defaultName } from "./format";
-import type { Steering } from "./services";
+import type { SoundLevels, Steering } from "./services";
 
 const KEYS = {
   you: "handy.kart.you.v1",
   checked: "handy.kart.checked.v1",
+  sound: "handy.kart.sound.v1",
 } as const;
 
 /** How a player drives. */
@@ -86,4 +87,20 @@ export function wheelChecked(storage: Storage | undefined = local()): boolean {
 
 export function setWheelChecked(storage: Storage | undefined = local()): boolean {
   return write(storage, KEYS.checked, true);
+}
+
+/** The music rests a little under the effects, so the engines are heard over the tune. */
+export const DEFAULT_LEVELS: Readonly<SoundLevels> = { music: 0.8, effects: 1 };
+
+const level = (value: unknown, fallback: number): number =>
+  typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+
+/** The Music and Effects sliders as the player left them (each checked on its own). */
+export function loadLevels(storage: Storage | undefined = local()): SoundLevels {
+  const saved = read<Partial<SoundLevels>>(storage, KEYS.sound);
+  return { music: level(saved?.music, DEFAULT_LEVELS.music), effects: level(saved?.effects, DEFAULT_LEVELS.effects) };
+}
+
+export function saveLevels(levels: SoundLevels, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.sound, levels);
 }

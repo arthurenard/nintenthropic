@@ -841,6 +841,29 @@ body[data-screen="race"] {
   padding: 0 22px;
 }
 
+/* The speaker: in the corner of every screen but the race, whose pause sheet has its own. */
+#sound-button {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 6;
+}
+body[data-screen="race"] #sound-button {
+  display: none;
+}
+.sound-rows {
+  margin-bottom: 4px;
+}
+.sound-rows .row {
+  gap: 16px;
+}
+.sound-rows .row-label {
+  min-width: 64px;
+}
+.sound-rows .slider:disabled {
+  opacity: 0.4;
+}
+
 /* The pause sheet (a menu, as the arcade's). */
 .menu[open] {
   display: grid;

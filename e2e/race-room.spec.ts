@@ -7,6 +7,17 @@ import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
 import { KeyboardDriver, host, join, onScreen, open, state } from "./kart";
 
+// Handy's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => {
+    try {
+      localStorage.setItem("handy.muted.v1", "true");
+    } catch {
+      // no storage: the page decides
+    }
+  });
+});
+
 const heading = (page: Page, name: string | RegExp) => page.getByRole("heading", { name });
 const startButton = (page: Page) => page.getByRole("button", { name: "Start Race" });
 

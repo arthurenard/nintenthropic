@@ -51,6 +51,7 @@ import {
   type WheelControl,
   type WheelOptions,
 } from "./services";
+import { silentSound } from "./sound";
 
 const params = (): URLSearchParams => new URLSearchParams(typeof location === "undefined" ? "" : location.search);
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -909,5 +910,6 @@ export function createFakeServices(): Services {
     camera: fakeCamera(),
     preview: fakePreview,
     tracks,
+    sound: silentSound(),
   };
 }

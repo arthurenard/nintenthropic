@@ -17,6 +17,7 @@ import { createRaceRenderer } from "../render";
 import { createSimRace } from "../sim/race";
 import { CameraStack } from "./camera";
 import { loadYou } from "./prefs";
+import { KartSounds } from "./sound";
 import {
   SessionFailure,
   type Disposable,
@@ -162,5 +163,6 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     },
     // Every track but the secret one, which has to be earned.
     tracks: TRACKS.filter((track) => !track.secret).map((track) => ({ id: track.id, name: track.name })),
+    sound: new KartSounds(),
   };
 }

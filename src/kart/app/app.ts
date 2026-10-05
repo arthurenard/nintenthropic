@@ -11,6 +11,7 @@
  * says which screen to show.
  */
 import { loadPreferences, prefs } from "../../app/prefs";
+import type { MusicKind } from "../audio";
 import { GRIP_PRIX } from "../../games/index";
 import { $, announce } from "../../ui/dom";
 import { backdropCss } from "../../ui/backdrop";
@@ -30,7 +31,8 @@ import { loadYou, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
 import { ResultsScreen } from "./results";
 import { kartOf, localPlayers } from "./roster";
-import { CameraFailure, SessionFailure, type Services, type SessionOptions, type WheelControl } from "./services";
+import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
+import { SoundControls } from "./soundui";
 import { StartScreen, type StartChoice } from "./start";
 import { AwakeWhileRacing } from "./wake";
 import { closeTrouble, showTrouble, type Fix, type TroubleKind } from "./troubles";
@@ -59,6 +61,8 @@ export interface KartAppSnapshot {
   race: { tick: number; phase: string; time: number; countdown: number; laps: number; trackId: string; karts: readonly KartView[] } | null;
   views: number[];
   mine: (number | null)[];
+  /** What the sound is doing (a test cannot hear it). */
+  sound: SoundReport;
 }
 
 export class KartApp {
@@ -79,6 +83,9 @@ export class KartApp {
   /** The race the race screen shows, so a restart (a new race in the same phase) is noticed. */
   private raceId: number | undefined;
   private readonly wake = new AwakeWhileRacing();
+  private readonly soundControls: SoundControls;
+  /** How many were in the lobby, and how many ready, when it last changed: a join, a leave or a tick has its sound. */
+  private crowd = { count: 0, ready: 0 };
   /** The You screen (and the wheel check) are done: the room's phase now says what to show. */
   private ready = false;
   /** Counts attempts to open a room, so a slow one that was given up on is dropped. */
@@ -127,6 +134,7 @@ export class KartApp {
       again: () => this.again(),
       lobby: () => this.backToLobby(),
     });
+    this.soundControls = new SoundControls(services.sound);
   }
 
   /**
@@ -146,6 +154,7 @@ export class KartApp {
       race: view ? { tick: view.tick, phase: view.phase, time: view.time, countdown: view.countdown, laps: view.laps, trackId: view.track.id, karts: view.karts } : null,
       views: session?.views() ?? [],
       mine: lobby && session ? localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)) : [],
+      sound: this.services.sound.report(),
     };
   }
 
@@ -164,6 +173,7 @@ export class KartApp {
     const apply = () => document.documentElement.toggleAttribute("data-reduce-motion", loadPreferences().reduceMotion ?? motion.matches);
     motion.addEventListener("change", apply);
     apply();
+    this.listenForSound();
     this.show("start");
     const code = this.options.join;
     if (code) {
@@ -172,12 +182,49 @@ export class KartApp {
     }
   }
 
+  // --- sound -----------------------------------------------------------------------------------------------
+
+  /**
+   * Browsers start audio only after a gesture: the page's first click or key
+   * press wakes the sound. After it every button answers with a sound of the
+   * interface's, and M turns sound off and on, as it does in the arcade.
+   */
+  private listenForSound(): void {
+    const { sound } = this.services;
+    for (const type of ["pointerdown", "keydown"] as const) window.addEventListener(type, () => sound.wake(), { capture: true, once: true });
+    document.addEventListener(
+      "click",
+      (event) => {
+        const button = (event.target as Element | null)?.closest?.("button");
+        if (!button || button.disabled || button.closest(".sound-control")) return;
+        const back = button.classList.contains("back") || ["pause-leave", "results-lobby"].includes(button.id);
+        const go = ["lobby-start", "results-again"].includes(button.id);
+        sound.play(go ? "ui-start" : back ? "ui-back" : "ui-select");
+      },
+      true,
+    );
+    window.addEventListener("keydown", (event) => {
+      if (event.key.toLowerCase() !== "m" || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
+      this.soundControls.toggle();
+    });
+  }
+
+  /** The music of a screen: the menus' tune, the lobby's (the same tune), and none in a race, which has its own. */
+  private music(screen: ScreenName): void {
+    const tunes: Record<Exclude<ScreenName, "results">, MusicKind | null> = { start: "menu", you: "menu", check: "menu", lobby: "lobby", race: null };
+    // The results choose theirs when they know whether the player won.
+    if (screen !== "results") this.services.sound.music(tunes[screen]);
+  }
+
   // --- screens -------------------------------------------------------------------------------------------
 
   private show(screen: ScreenName): void {
     this.screen = screen;
     for (const name of ["start", "you", "check", "lobby", "race", "results"] as const) $(`screen-${name}`).hidden = name !== screen;
     document.body.dataset.screen = screen;
+    this.music(screen);
     // A phone propped up as a wheel is not touched for minutes: its screen stays on from the wheel check to the end.
     if (screen === "start" || screen === "you") this.wake.release();
     else this.wake.hold();
@@ -386,6 +433,7 @@ export class KartApp {
     if (!lobby || !this.session) return;
     window.clearTimeout(this.finishTimer);
     this.raceScreen.end();
+    this.crowd = { count: lobby.players.length, ready: lobby.players.filter((player) => player.ready).length };
     this.show("lobby");
     this.lobbyScreen.render(lobby, this.session, this.where(lobby));
   }
@@ -410,7 +458,21 @@ export class KartApp {
         if (this.screen === "race" || this.screen === "results") this.showLobby(lobby);
         break;
     }
-    if (this.screen === "lobby") this.lobbyScreen.render(lobby, this.session, this.where(lobby));
+    if (this.screen === "lobby") {
+      this.lobbyScreen.render(lobby, this.session, this.where(lobby));
+      this.hearTheRoom(lobby);
+    }
+  }
+
+  /** A friend joins, leaves, or is ready: each has its sound in the lobby. */
+  private hearTheRoom(lobby: LobbyState): void {
+    const count = lobby.players.length;
+    const ready = lobby.players.filter((player) => player.ready).length;
+    const { sound } = this.services;
+    if (count > this.crowd.count) sound.play("ui-join");
+    else if (count < this.crowd.count) sound.play("ui-leave");
+    else if (ready > this.crowd.ready) sound.play("ui-ready");
+    this.crowd = { count, ready };
   }
 
   private enterRace(lobby: LobbyState): void {
@@ -438,6 +500,10 @@ export class KartApp {
     const track = this.services.tracks.find((candidate) => candidate.id === lobby.settings.track);
     this.resultsScreen.render({ result, lobby, session, racers: this.racers, laps: lobby.settings.laps, trackName: track?.name ?? "" });
     this.show("results");
+    // A win has its own tune.
+    const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));
+    const first = result.standings.find((row) => row.place === 1);
+    this.services.sound.music(first && mine.has(first.kart) ? "results-win" : "results");
   }
 
   /** Restart (the host's pause sheet): this race again from the countdown, the same people. */

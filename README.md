@@ -136,7 +136,9 @@ Everyone on the same Wi-Fi connects directly. The devices find each other
 through a public PeerJS broker, so the network needs internet access (only the
 introduction goes through it; no race data does). Friends in other places can
 join with the code too, though with no relay a strict network may refuse. Press
-**F** in the race for full screen on the TV. Keyboards and gamepads drive as well:
+**F** in the race for full screen on the TV, and **M** to turn sound off and on
+(the same preference as the arcade's; Music and Effects have their own sliders
+in the pause sheet). Keyboards and gamepads drive as well:
 choose them on the "Who's Driving?" screen. The camera picture never leaves
 the device; only each player's steering goes over the network.
 
