@@ -3,7 +3,7 @@
 .claude/settings.local.json
 .claude/worktrees/
 dist/
-node_modules/
+node_modules
 test-results/
 playwright-report/
 art/**/*.blend1
