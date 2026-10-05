@@ -49,7 +49,18 @@ export interface DriveInput {
    * on the way to the host. The sim uses an item each time it goes up.
    */
   itemPresses: number;
+  /** How many times this driver has honked, ever (a count, as itemPresses). Optional: none is 0. */
+  horn?: number;
+  /** What the driver is doing with their hands beyond driving, held while they do it (the input decides). */
+  emote?: Emote | null;
 }
+
+/**
+ * A gesture the driver makes that their driver copies: both open hands
+ * raised high ("cheer": after the finish, on the podium), one open hand
+ * waving ("wave": at the start, in the lobby).
+ */
+export type Emote = "cheer" | "wave";
 
 export const IDLE_INPUT: DriveInput = { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0 };
 
@@ -64,7 +75,19 @@ export type ItemKind =
   /** A puck that steers itself toward the kart one place ahead. */
   | "seeker"
   /** A puddle of oil dropped behind; whoever drives through it spins. */
-  | "slick";
+  | "slick"
+  /** Three pucks, fired one per use. */
+  | "puck3"
+  /** Untouchable and faster for a while: what it drives into spins. */
+  | "comet"
+  /** A storm over everyone else: every other kart spins and crawls for a moment. */
+  | "storm"
+  /** Flies over the pack to whoever leads and bursts there, spinning everyone near. */
+  | "skyrocket"
+  /** A ring of force round you: it spins karts close by and clears pucks, slicks and skyrockets near you. */
+  | "blast"
+  /** An item box that is not one: whoever drives into it spins. */
+  | "decoy";
 
 /** A racer on the grid: a player or a bot. */
 export interface RacerSetup {
@@ -77,6 +100,10 @@ export interface RacerSetup {
   player: number | null;
   /** A bot's skill, 0 (gentle) .. 1 (sharp). Ignored for players. */
   skill?: number;
+  /** The driver (characters.ts): who sits in the kart, and their weight. A missing or unknown id drives as a middleweight. */
+  character?: string;
+  /** A golden kart (an easter egg). */
+  golden?: boolean;
 }
 
 export interface RaceSetup {
@@ -116,6 +143,11 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "rescued"; kart: number }
   /** Touched a track's hazard and spun. */
   | { type: "hazard"; kart: number; kind: string }
+  | { type: "horn"; kart: number }
+  /** Drove into the track's rubber duck (it squeaks and flies off). */
+  | { type: "duck"; kart: number }
+  /** An item's effect landing: a storm over the pack, a skyrocket's burst, a blast round a kart. */
+  | { type: "strike"; kart: number; item: "storm" | "skyrocket" | "blast"; x: number; z: number }
 );
 
 /** One kart as the picture needs it. */
@@ -151,6 +183,12 @@ export interface KartView {
    * first part and carried for the rest; the kart cannot be driven meanwhile.
    */
   rescue: number;
+  /** Seconds left untouchable (a Comet), 0 when none. Optional: none is 0. */
+  comet?: number;
+  /** Seconds left crawling after a storm, 0 when none. Optional. */
+  zapped?: number;
+  /** What the driver is doing with their hands (copied from their input). */
+  emote?: Emote | null;
   /** The item held, or null; `uses` left for nitro3. */
   item: ItemKind | null;
   itemUses: number;
@@ -317,6 +355,10 @@ export interface LobbyPlayer {
   control: DriverControl["kind"];
   /** Their wheel is level and seen: ready to race. Stays so from one race to the next. */
   ready: boolean;
+  /** Their driver (characters.ts). */
+  character?: string;
+  /** They drive a golden kart. */
+  golden?: boolean;
   /**
    * In a race: their hands have been out of the picture for a while (1.5 s),
    * which the host's big screen says in their viewport ("Show Both Hands").
@@ -337,6 +379,21 @@ export interface LobbySettings {
    * Absent means "own": the room always fills it in.
    */
   display?: "own" | "host";
+  /** A single race, or a Grand Prix: a cup's four tracks in a row, for points. Absent means a race. */
+  mode?: "race" | "grand-prix";
+  /** The cup a Grand Prix runs (track/tracks.ts CUPS). */
+  cup?: string;
+  /** Every track mirrored, left for right. */
+  mirror?: boolean;
+}
+
+/** A Grand Prix under way: which race of the cup, and the points so far. */
+export interface GrandPrixState {
+  cup: string;
+  /** 0-based: the race being run or just run. */
+  race: number;
+  /** Everyone's points: players keyed by lobby slot ("p0"), bots by name ("b:Name": a bot keeps its name and driver through a cup). */
+  points: { key: string; name: string; colour: string; character?: string; player: number | null; points: number }[];
 }
 
 /**
@@ -357,7 +414,10 @@ export interface LobbyState {
   host: string;
   players: LobbyPlayer[];
   settings: LobbySettings;
-  phase: "lobby" | "racing" | "results";
+  /** "standings": a Grand Prix's points after a race; "podium": the cup's end. */
+  phase: "lobby" | "racing" | "results" | "standings" | "podium";
+  /** Set while a Grand Prix is under way (and through its podium). */
+  grandPrix?: GrandPrixState | null;
   /** The last race's results, in the results phase. */
   result: RaceResult | null;
   /** Kart id → lobby slot for the race being run (bots absent). */

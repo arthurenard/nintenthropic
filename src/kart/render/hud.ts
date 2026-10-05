@@ -21,6 +21,12 @@ const ICONS: Record<ItemKind, string> = {
   puck: '<ellipse cx="12" cy="9" rx="8.2" ry="3.7"/><path d="M3.8 9v5.6c0 2 3.7 3.7 8.2 3.7s8.2-1.7 8.2-3.7V9"/>',
   seeker: '<circle cx="12" cy="12" r="6.6" fill="none"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.4v3.4M12 18.2v3.4M2.4 12h3.4M18.2 12h3.4" fill="none"/>',
   slick: '<path d="M12 3s6.8 6.8 6.8 11.5a6.8 6.8 0 0 1-13.6 0C5.2 9.8 12 3 12 3Z"/>',
+  puck3: '<ellipse cx="7" cy="8" rx="4.4" ry="2"/><ellipse cx="17" cy="8" rx="4.4" ry="2"/><ellipse cx="12" cy="16" rx="4.4" ry="2"/>',
+  comet: '<path d="m12 2.8 2.7 5.9 6.4.7-4.8 4.3 1.4 6.3L12 16.8 6.3 20l1.4-6.3-4.8-4.3 6.4-.7Z"/>',
+  storm: '<path d="M7 14.5a4.5 4.5 0 0 1 .4-9 5.6 5.6 0 0 1 10.6 1.6 3.8 3.8 0 0 1-.6 7.4Z"/><path d="m12.6 13-3 5h3l-1.2 4 4-6h-3l1.2-3Z"/>',
+  skyrocket: '<path d="M12 2.5c3 2.4 4.2 6 4.2 9.6l2.3 3.4-3.5-.8-1.4 2.3h-3.2L9 14.7l-3.5.8 2.3-3.4c0-3.6 1.2-7.2 4.2-9.6Z"/><path d="M10.6 19.2 12 22l1.4-2.8Z"/>',
+  blast: '<circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.6" fill="none"/><circle cx="12" cy="12" r="9.6" fill="none" stroke-dasharray="2.4 2.4"/>',
+  decoy: '<path d="M12 2.8 20.5 7.4v9.2L12 21.2l-8.5-4.6V7.4Z" fill="none"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6M12 16.6v.4" fill="none"/>',
 };
 const ROLL_ORDER: ItemKind[] = ["nitro", "puck", "slick", "seeker", "nitro3"];
 const EMPTY_ICON = '<circle cx="12" cy="12" r="7.5" fill="none" stroke-dasharray="2 4.2"/>';

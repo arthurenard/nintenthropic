@@ -97,12 +97,26 @@ export function lapLabel(lap: number, laps: number): string {
   return `Lap ${Math.max(1, Math.min(lap, laps))}/${laps}`;
 }
 
+const ITEM_NAMES: Record<ItemKind, string> = {
+  nitro: "Nitro",
+  nitro3: "Triple Nitro",
+  puck: "Puck",
+  puck3: "Triple Puck",
+  seeker: "Seeker",
+  slick: "Slick",
+  comet: "Comet",
+  storm: "Storm",
+  skyrocket: "Skyrocket",
+  blast: "Blast",
+  decoy: "Decoy Box",
+};
+
 /** What an item is called on a screen that has no icon for it: the phone that is only a wheel. */
 export function itemWords(item: ItemKind | null, uses: number, rolling: boolean): string {
   if (rolling) return "Picking an item…";
   if (!item) return "No item";
-  const name = { nitro: "Nitro", nitro3: "Triple Nitro", puck: "Puck", seeker: "Seeker", slick: "Slick" }[item];
-  return item === "nitro3" && uses > 0 ? `${name} ×${uses}` : name;
+  const name = ITEM_NAMES[item];
+  return (item === "nitro3" || item === "puck3") && uses > 0 ? `${name} ×${uses}` : name;
 }
 
 /** "1 lap", "3 laps". */
