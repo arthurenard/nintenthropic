@@ -21,12 +21,14 @@ export interface QualitySettings {
   /** The most the device pixel ratio may count for. */
   pixelRatioCap: number;
   anisotropy: number;
+  /** Pixels on a side of the road texture. */
+  roadTexture: number;
   /** Backdrop blur on the HUD's glass; blurring a canvas that changes every frame is not free. */
   glassBlur: boolean;
 }
 
 export const QUALITY: Record<Tier, QualitySettings> = {
-  high: { tier: "high", cell: 4, scenery: 1, detailedTyres: true, particles: 1400, pixelRatioCap: 2, anisotropy: 8, glassBlur: true },
-  medium: { tier: "medium", cell: 5, scenery: 0.7, detailedTyres: true, particles: 900, pixelRatioCap: 1.75, anisotropy: 4, glassBlur: true },
-  low: { tier: "low", cell: 7, scenery: 0.4, detailedTyres: false, particles: 450, pixelRatioCap: 1.25, anisotropy: 2, glassBlur: false },
+  high: { tier: "high", cell: 4, scenery: 1, detailedTyres: true, particles: 1400, pixelRatioCap: 2, anisotropy: 8, roadTexture: 1024, glassBlur: true },
+  medium: { tier: "medium", cell: 5, scenery: 0.7, detailedTyres: true, particles: 900, pixelRatioCap: 1.75, anisotropy: 4, roadTexture: 1024, glassBlur: true },
+  low: { tier: "low", cell: 7, scenery: 0.4, detailedTyres: false, particles: 450, pixelRatioCap: 1.25, anisotropy: 2, roadTexture: 512, glassBlur: false },
 };

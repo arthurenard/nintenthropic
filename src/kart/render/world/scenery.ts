@@ -17,6 +17,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshLambertMaterial,
   Quaternion,
   StaticDrawUsage,
   Vector3,
@@ -183,7 +184,7 @@ export function buildScenery(
     add(instanced(rocks, material, scatter({ count: 110, minEdge: 11, cell: 4, scale: [0.7, 2.2], stretch: [0.7, 1.1] })));
     // Flowers: bright dots of colour just beyond the barriers, where the eye passes.
     const petals: Rgb[] = [rgb("#ff5d8f"), rgb("#ffd60a"), rgb("#ffffff"), rgb("#bf5af2"), rgb("#ff9f0a")];
-    const flowerItems = scatter({ count: 1300, minEdge: 9.6, maxEdge: 38, cell: 1.4, scale: [0.9, 1.7], keep: (x, z) => 0.2 + 0.8 * smoothstep(0.4, 0.62, fbm2(x / 20, z / 20, 2)) });
+    const flowerItems = scatter({ count: 1300, minEdge: 9.6, maxEdge: 38, cell: 1.4, scale: [0.8, 1.3], keep: (x, z) => 0.2 + 0.8 * smoothstep(0.4, 0.62, fbm2(x / 20, z / 20, 2)) });
     flowerItems.forEach((f) => {
       f.colour = petals[Math.floor(rnd() * petals.length)]!;
     });
@@ -337,7 +338,7 @@ export function buildScenery(
     // A skyline of lit windows beyond the water: thousands of dim lights, one draw call.
     const cx = (terrain.minX + terrain.maxX) / 2;
     const cz = (terrain.minZ + terrain.maxZ) / 2;
-    const ring = Math.max(terrain.maxX - terrain.minX, terrain.maxZ - terrain.minZ) / 2 + 40;
+    const ring = Math.max(terrain.maxX - terrain.minX, terrain.maxZ - terrain.minZ) / 2 + 120;
     const dark = new MeshBuilder();
     const windows: number[] = [];
     const blocks = 150;
@@ -346,7 +347,7 @@ export function buildScenery(
       const r = ring + rnd() * 90;
       const w = 18 + rnd() * 34;
       const d = 18 + rnd() * 30;
-      const hgt = 16 + Math.pow(rnd(), 2.2) * 150;
+      const hgt = 14 + Math.pow(rnd(), 2.4) * 100;
       const bx = cx + Math.cos(ang) * r;
       const bz = cz + Math.sin(ang) * r;
       dark.box(bx, hgt / 2 - 2, bz, w, hgt, d, { bottom: rgb("#0c1330"), top: rgb("#1a2550") }, -ang);
@@ -372,8 +373,8 @@ export function buildScenery(
     for (let i = 0; i < windows.length / 3; i++) {
       pa.setXYZ(i, windows[i * 3]!, windows[i * 3 + 1]!, windows[i * 3 + 2]!);
       const warm = rnd();
-      ca.setXYZW(i, 1.0, 0.7 + warm * 0.2, 0.3 + warm * 0.4, 0.55 + rnd() * 0.45);
-      sa.setX(i, 2.4 + rnd() * 2.2);
+      ca.setXYZW(i, 1.0, 0.7 + warm * 0.2, 0.3 + warm * 0.4, 0.4 + rnd() * 0.5);
+      sa.setX(i, 1.8 + rnd() * 1.8);
     }
     pa.needsUpdate = true;
     ca.needsUpdate = true;
@@ -389,12 +390,16 @@ export function buildScenery(
   // Clouds drift slowly round the whole world.
   if (style.sky.clouds) {
     const clouds = new Group();
-    const mat = material;
+    // Clouds are lit mostly from within: lit from below by the green ground they would go grey.
+    const mat = new MeshLambertMaterial({ vertexColors: true, emissive: new Color(style.sky.cloudShade).multiplyScalar(0.55) });
+    disposables.push(() => mat.dispose());
+    const litCol = rgb(style.sky.cloudColour);
+    const shadeCol = rgb(style.sky.cloudShade);
     const cx = (terrain.minX + terrain.maxX) / 2;
     const cz = (terrain.minZ + terrain.maxZ) / 2;
     const n = 20;
     for (let k = 0; k < n; k++) {
-      const g = geo(props.cloud(k));
+      const g = geo(props.cloud(k, litCol, shadeCol));
       const m = new Mesh(g, mat);
       const ang = rnd() * Math.PI * 2;
       const r = 140 + rnd() * 560;

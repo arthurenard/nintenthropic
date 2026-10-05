@@ -7,7 +7,7 @@
  */
 import { Group, type Points } from "three";
 import type { KartView, RaceEvent } from "../contract";
-import { KART_EXHAUST, KART_REAR_WHEEL } from "./kart";
+import { KART_EXHAUST, KART_REAR_WHEEL } from "./kartModel";
 import { clamp } from "./math";
 import { makePoints } from "./points";
 

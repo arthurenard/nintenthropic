@@ -30,7 +30,7 @@ export function baseFov(aspect: number): number {
 /** How far the camera trails the kart and how high it rides, for a speed ratio 0..1+. */
 export function chaseOffsets(speedRatio: number, boost: number): { distance: number; height: number } {
   const s = clamp(speedRatio, 0, 1.3);
-  return { distance: lerp(5.8, 7.2, s) + boost * 0.9, height: lerp(2.6, 3.1, s) };
+  return { distance: lerp(4.5, 5.7, s) + boost * 0.9, height: lerp(2.1, 2.55, s) };
 }
 
 const _fwd = new Vector3();
@@ -116,7 +116,7 @@ export class ChaseCamera {
     _fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
     const lift = smoothstep(0, 1, this.orbitBlend) * 0.4;
     _want.set(kart.x - _fwd.x * (distance + lift * 2), kart.y + height - lift, kart.z - _fwd.z * (distance + lift * 2));
-    _look.set(kart.x + _fwd.x * 4.2, kart.y + 1.0, kart.z + _fwd.z * 4.2);
+    _look.set(kart.x + _fwd.x * 4.6, kart.y + 0.9, kart.z + _fwd.z * 4.6);
 
     if (introEase > 0.001) {
       // High and back, drifting round from one side as the lights count down.

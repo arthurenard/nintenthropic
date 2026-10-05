@@ -36,9 +36,10 @@ export const ROAD_TILE = 12;
  * along it (v): speckled asphalt, two darker rubbered-in lanes, white edge
  * lines and a dashed centre line, the shoulders fading to the theme's dust.
  */
-export function roadTexture(style: ThemeStyle, anisotropy: number): CanvasTexture {
-  const W = 512;
-  const H = 512;
+export function roadTexture(style: ThemeStyle, anisotropy: number, size = 512): CanvasTexture {
+  const W = size;
+  const H = size;
+  const f = size / 512;
   const [c, ctx] = canvas(W, H);
   const rnd = seededRandom(7);
   ctx.fillStyle = style.road.base;
@@ -48,7 +49,7 @@ export function roadTexture(style: ThemeStyle, anisotropy: number): CanvasTextur
   for (let i = 0; i < 60; i++) {
     const x = rnd() * W;
     const y = rnd() * H;
-    const r = 30 + rnd() * 90;
+    const r = (30 + rnd() * 90) * f;
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     const light = rnd() > 0.5;
     g.addColorStop(0, light ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)");
@@ -68,10 +69,10 @@ export function roadTexture(style: ThemeStyle, anisotropy: number): CanvasTextur
   }
 
   // Fine grain.
-  for (let i = 0; i < 9000; i++) {
+  for (let i = 0; i < 9000 * f * f; i++) {
     const x = rnd() * W;
     const y = rnd() * H;
-    const s = 1 + rnd() * 1.6;
+    const s = (1 + rnd() * 1.6) * f;
     ctx.fillStyle = rnd() > 0.5 ? style.road.speckle : "#000";
     ctx.globalAlpha = 0.05 + rnd() * 0.16;
     ctx.fillRect(x, y, s, s);
@@ -107,11 +108,11 @@ export function roadTexture(style: ThemeStyle, anisotropy: number): CanvasTextur
     ctx.globalAlpha = 1;
   }
   // Wear: knock bits out of the paint.
-  for (let i = 0; i < 220; i++) {
+  for (let i = 0; i < 260 * f; i++) {
     const x = rnd() < 0.5 ? 0.035 * W + rnd() * 0.016 * W : 0.949 * W + rnd() * 0.016 * W;
     ctx.fillStyle = style.road.base;
-    ctx.globalAlpha = 0.25 + rnd() * 0.4;
-    ctx.fillRect(x, rnd() * H, 1 + rnd() * 3, 1 + rnd() * 6);
+    ctx.globalAlpha = 0.18 + rnd() * 0.3;
+    ctx.fillRect(x, rnd() * H, (0.8 + rnd() * 1.6) * f, (1 + rnd() * 3) * f);
   }
   ctx.globalAlpha = 1;
   return finish(new CanvasTexture(c), anisotropy, true);

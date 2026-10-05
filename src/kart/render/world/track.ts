@@ -21,8 +21,10 @@ import { ROAD_TILE } from "./textures";
 const CHUNK = 48;
 /** A barrier's inner face stands this far beyond the road's edge: the sim's wall. */
 export const WALL_DISTANCE = 6;
-/** Curvature above which a bend counts as tight (radius under about 55 m). */
-const TIGHT = 1 / 55;
+/** A bend counts as tight when it curves harder than this (radius under about 33 m) somewhere along it... */
+const TIGHT_PEAK = 1 / 33;
+/** ...and the stretch of it curving more than this (radius under about 52 m) is what gets kerbs and signs. */
+const TIGHT_EDGE = 1 / 52;
 
 export interface Glow {
   x: number;
@@ -129,7 +131,18 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
 
   // ── Kerbs on the outside of tight bends ──────────────────────────────────
   const tight = new Uint8Array(n);
-  for (let i = 0; i < n; i++) if (Math.abs(S(i).curvature) > TIGHT) tight[i] = 1;
+  for (let i = 0; i < n; i++) {
+    const k = S(i).curvature;
+    if (Math.abs(k) <= TIGHT_EDGE) continue;
+    // Only where the same bend, within a few dozen metres, really tightens: a gentle wobble gets nothing.
+    for (let j = -25; j <= 25; j++) {
+      const kj = S(i + j).curvature;
+      if (Math.sign(kj) === Math.sign(k) && Math.abs(kj) > TIGHT_PEAK) {
+        tight[i] = 1;
+        break;
+      }
+    }
+  }
   const kerbed = new Uint8Array(n);
   const reach = 10;
   for (let i = 0; i < n; i++) {
@@ -489,7 +502,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
         const wz = czw + rz * u + tz * v;
         const proj = track.project(wx, wz, a.s);
         const r = Math.hypot(u, v) / R;
-        const fall = Math.pow(Math.max(0, 1 - r), 1.7) * 0.5;
+        const fall = Math.pow(Math.max(0, 1 - r), 1.8) * 0.34;
         const c: Rgb = [1.0 * fall, 0.78 * fall, 0.42 * fall];
         return [[wx, proj.sample.y + 0.045, wz], c];
       };

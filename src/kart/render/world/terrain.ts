@@ -220,8 +220,7 @@ export class Terrain {
         let c = mixRgb(a, b, smoothstep(30, 200, g.edge));
         c = mixRgb(c, MEADOW.light, smoothstep(0.55, 0.85, n) * 0.55);
         c = mixRgb(c, MEADOW.dark, smoothstep(0.45, 0.2, n) * 0.5);
-        c = mixRgb(c, MEADOW.rock, smoothstep(0.55, 0.95, slope) * 0.85);
-        c = mixRgb(c, MEADOW.snowish, smoothstep(55, 95, h) * 0.5);
+        c = mixRgb(c, MEADOW.rock, smoothstep(0.35, 0.9, slope) * 0.8);
         const k = 0.95 + speck * 0.1;
         return [c[0] * k, c[1] * k, c[2] * k];
       }
@@ -358,8 +357,7 @@ const MEADOW = {
   far: rgb("#58b84a"),
   light: rgb("#9be06a"),
   dark: rgb("#3f9f3d"),
-  rock: rgb("#8d8f7c"),
-  snowish: rgb("#7fb7c9"),
+  rock: rgb("#3d9a48"),
 };
 
 const CANYON = {
@@ -370,8 +368,8 @@ const CANYON = {
 };
 
 const HARBOUR = {
-  concrete: rgb("#8d97ae"),
-  concreteDark: rgb("#727c96"),
-  wet: rgb("#4b5675"),
+  concrete: rgb("#9aa4bd"),
+  concreteDark: rgb("#7f89a6"),
+  wet: rgb("#56628a"),
   seabed: rgb("#10305a"),
 };

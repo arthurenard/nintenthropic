@@ -97,7 +97,6 @@
   opacity: 0.6;
 }
 .gp-item.gp-rolling svg {
-  filter: blur(calc(1.2px * var(--u)));
   animation: gp-roll 90ms linear infinite;
 }
 .gp-item.gp-got {
@@ -180,7 +179,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 22%;
+  top: 12%;
   text-align: center;
   font-size: calc(200px * var(--u));
   font-weight: 800;
@@ -199,7 +198,7 @@
 .gp-count.gp-ready {
   font-size: calc(48px * var(--u));
   font-weight: 700;
-  top: 30%;
+  top: 22%;
   opacity: 0.9;
   animation: none;
 }

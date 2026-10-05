@@ -395,6 +395,7 @@ export class DemoRace implements RaceViewSource {
 
     // Progress, and driving the wrong way.
     k.progress += g.delta(k.progress, after.s);
+    k.lane = after.offset;
     const along = Math.cos(k.heading) * after.sample.tz + Math.sin(k.heading) * after.sample.tx;
     k.wrongClock = along < -0.35 && k.speed > 2 ? k.wrongClock + dt : 0;
     k.wrongWay = k.wrongClock > 1.5;
@@ -422,6 +423,15 @@ export class DemoRace implements RaceViewSource {
       } else if (k.offroadIn <= 0) {
         k.laneTarget = (this.random() * 2 - 1) * (here.width / 2 - 2.2);
         k.offroadIn = 4 + 8 * this.random();
+      }
+      // Keep out of the way of whoever is just ahead (these karts do not really collide).
+      for (const o of this.karts) {
+        const gap = o.progress - k.progress;
+        if (o === k || gap <= 0 || gap > 16 || Math.abs(o.lane - k.lane) > 2.5) continue;
+        const room = here.width / 2 - 1.8;
+        const side = k.lane >= o.lane ? 1 : -1;
+        k.laneTarget = clamp(o.lane + side * 3.2, -room, room);
+        if (Math.abs(k.laneTarget - o.lane) < 2.5) k.laneTarget = clamp(o.lane - side * 3.2, -room, room);
       }
       k.spinCool -= dt;
       if (k.spinCool <= 0 && k.spin <= 0 && k.id % 3 === 2) {

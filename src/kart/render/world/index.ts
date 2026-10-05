@@ -80,7 +80,7 @@ export async function createWorld(
   const terrain = Terrain.build(geometry, style, quality.cell);
 
   const vertexMat = track(new MeshLambertMaterial({ vertexColors: true })) as MeshLambertMaterial;
-  const roadTex = track(roadTexture(style, quality.anisotropy)) as CanvasTexture;
+  const roadTex = track(roadTexture(style, quality.anisotropy, quality.roadTexture)) as CanvasTexture;
   const roadMat = track(new MeshLambertMaterial({ map: roadTex })) as MeshLambertMaterial;
 
   const addStatic = (g: BufferGeometry, material: Material, order = 0): Mesh => {
