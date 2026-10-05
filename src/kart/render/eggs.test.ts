@@ -36,7 +36,8 @@ describe("the fireworks", () => {
     for (let i = 1; i < a.length; i++) expect(a[i]!.at).toBeGreaterThan(a[i - 1]!.at - 0.3);
     for (const shell of a) {
       expect(shell.z).toBeGreaterThan(0);
-      expect(shell.burst).toBeGreaterThan(25);
+      expect(shell.burst).toBeGreaterThanOrEqual(16);
+      expect(shell.burst).toBeLessThan(shell.z);
       expect(shell.flight).toBeGreaterThan(0.5);
       expect(shell.colour).not.toBe(shell.second);
     }
@@ -78,8 +79,8 @@ describe("the fireworks", () => {
         ahead = Math.max(ahead, pos.getZ(i));
       }
     }
-    expect(high).toBeGreaterThan(30);
-    expect(ahead).toBeGreaterThan(20);
+    expect(high).toBeGreaterThan(20);
+    expect(ahead).toBeGreaterThan(50);
     show.dispose();
   });
 

@@ -45,16 +45,18 @@ export function planShow(seed: number, count = 14): Shell[] {
     const colour = PALETTE[Math.floor(random() * PALETTE.length)]!;
     let second = PALETTE[Math.floor(random() * PALETTE.length)]!;
     if (second === colour) second = PALETTE[(PALETTE.indexOf(colour) + 3) % PALETTE.length]!;
+    const z = between(55, 140);
     shells.push({
       at: i * 0.36 + between(0, 0.25),
-      x: between(-42, 42),
-      z: between(20, 110),
-      burst: between(30, 62),
+      x: between(-48, 48),
+      z,
+      // Seen from the line, a shell this far off bursts up in the sky at a comfortable angle, not over the camera's head.
+      burst: Math.max(16, z * between(0.2, 0.42)),
       flight: between(1.05, 1.5),
       colour,
       second,
       sparks: Math.round(between(46, 72)),
-      speed: between(11, 19),
+      speed: between(16, 26),
     });
   }
   return shells;
@@ -149,7 +151,7 @@ export class Fireworks {
         this.trail[i]! += dt;
         while (this.trail[i]! > 0.025) {
           this.trail[i]! -= 0.025;
-          this.emit(this.x[i]!, this.y[i]!, this.z[i]!, (Math.random() - 0.5) * 2, -2 - Math.random() * 2, (Math.random() - 0.5) * 2, 0.5 + Math.random() * 0.4, 0.5, [3.0, 2.0, 0.7], 2, 2.2);
+          this.emit(this.x[i]!, this.y[i]!, this.z[i]!, (Math.random() - 0.5) * 2, -2 - Math.random() * 2, (Math.random() - 0.5) * 2, 0.5 + Math.random() * 0.4, 0.9, [3.0, 2.0, 0.7], 2, 2.2);
         }
         if (this.age[i]! >= life) this.burst(this.shell[i]!, this.x[i]!, this.y[i]!, this.z[i]!);
       }
@@ -170,7 +172,7 @@ export class Fireworks {
     // In the show's frame: x to the right of the road (the right is (-fz, fx) of the forward (fx, fz)), z ahead.
     const wx = show.ox + shell.z * show.fx - shell.x * show.fz;
     const wz = show.oz + shell.z * show.fz + shell.x * show.fx;
-    const i = this.emit(wx, show.oy, wz, 0, shell.burst / shell.flight, 0, shell.flight, 0.5, shell.colour, 1, 0);
+    const i = this.emit(wx, show.oy, wz, 0, shell.burst / shell.flight, 0, shell.flight, 1.1, shell.colour, 1, 0);
     this.shell[i] = shell;
     this.trail[i] = 0;
   }
@@ -183,10 +185,10 @@ export class Fireworks {
       const around = Math.sqrt(1 - up * up);
       const angle = k * golden;
       const speed = shell.speed * (k % 2 ? 1 : 0.62);
-      this.emit(x, y, z, Math.cos(angle) * around * speed, up * speed, Math.sin(angle) * around * speed, 1.3 + (k % 3) * 0.25, 0.7, k % 2 ? shell.colour : shell.second, 0, 1.6);
+      this.emit(x, y, z, Math.cos(angle) * around * speed, up * speed, Math.sin(angle) * around * speed, 1.4 + (k % 3) * 0.3, 1.7, k % 2 ? shell.colour : shell.second, 0, 1.5);
     }
     // A flash at the heart of it.
-    this.emit(x, y, z, 0, 0, 0, 0.35, 5, [3.4, 3.2, 2.8], 0, 0);
+    this.emit(x, y, z, 0, 0, 0, 0.4, 14, [3.4, 3.2, 2.8], 0, 0);
   }
 
   /** Brings one particle to life; returns where. */
