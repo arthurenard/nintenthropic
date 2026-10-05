@@ -4,6 +4,8 @@
  * stay thin and these can be tested.
  */
 
+import type { ItemKind } from "../contract";
+
 /** A room's code is this many letters. */
 export const CODE_LENGTH = 4;
 
@@ -45,6 +47,31 @@ export function joinUrl(page: string, code: string, net?: string | null): string
   return url.toString();
 }
 
+/** Addresses that only mean "this computer": a phone scanning a code made with one would look for itself. */
+const THIS_COMPUTER = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"]);
+
+/**
+ * The page's address as a friend on the network should open it. On the host's
+ * own computer the page is usually at 127.0.0.1 or localhost, which is no use
+ * to a phone; `npm run party` knows the computer's address on the network
+ * (`lan`, an origin like "https://192.168.1.20:5173") and this swaps it in.
+ * Any other address is left as it is.
+ */
+export function lanAddress(href: string, lan: string | undefined | null): string {
+  if (!lan) return href;
+  try {
+    const here = new URL(href);
+    if (!THIS_COMPUTER.has(here.hostname)) return href;
+    const there = new URL(lan);
+    here.protocol = there.protocol;
+    here.hostname = there.hostname;
+    here.port = there.port;
+    return here.toString();
+  } catch {
+    return href;
+  }
+}
+
 /**
  * A race time as it is read at the finish: minutes, seconds and a tenth,
  * "0:48.3". The tenth is cut, not rounded, so 59.97 never reads "0:60.0".
@@ -68,6 +95,14 @@ export function ordinal(place: number): string {
 /** "Lap 2/3": the lap being driven, never past the last (a finished kart is on lap laps + 1). */
 export function lapLabel(lap: number, laps: number): string {
   return `Lap ${Math.max(1, Math.min(lap, laps))}/${laps}`;
+}
+
+/** What an item is called on a screen that has no icon for it: the phone that is only a wheel. */
+export function itemWords(item: ItemKind | null, uses: number, rolling: boolean): string {
+  if (rolling) return "Picking an item…";
+  if (!item) return "No item";
+  const name = { nitro: "Nitro", nitro3: "Triple Nitro", puck: "Puck", seeker: "Seeker", slick: "Slick" }[item];
+  return item === "nitro3" && uses > 0 ? `${name} ×${uses}` : name;
 }
 
 /** "1 lap", "3 laps". */

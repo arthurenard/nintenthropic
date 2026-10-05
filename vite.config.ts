@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type UserConfig } from "vite";
 import pkg from "./package.json" with { type: "json" };
 
 // A static site: `npm run build` writes dist/, which any static host can serve.
@@ -66,21 +66,126 @@ function vendorFiles(): Plugin {
   };
 }
 
-export default defineConfig({
-  base: "./",
-  plugins: [vendorFiles()],
-  // Handy's version, for Settings' About (src/app/settings.ts).
-  define: { __HANDY_VERSION__: JSON.stringify(pkg.version) },
-  build: {
-    target: "es2022",
-    sourcemap: true,
-    assetsInlineLimit: 0,
-    // Two pages: the arcade, and Grip Prix on its own page (src/kart/main.ts).
-    rollupOptions: { input: { index: "index.html", race: "race.html" } },
-  },
-  // The tracking worker is an ES module: it loads MediaPipe's module build.
-  worker: { format: "es" },
-  server: { host: "127.0.0.1", port: 5173 },
-  preview: { host: "127.0.0.1", port: 4173 },
-  test: { environment: "node", include: ["src/**/*.test.ts"] },
+/**
+ * `npm run party` (mode "party"): the game on the local network for a living
+ * room. A phone's camera works only on a secure page, so it is served over
+ * HTTPS with a self-signed certificate (the phone asks once whether to trust
+ * it), on every address of this computer, on a port of its own so the
+ * ordinary dev server can run beside it. The computer's address on the network
+ * is found now and baked into the page (`__GRIP_LAN_ORIGIN__`), so the lobby's
+ * code and link name the computer, never "127.0.0.1".
+ */
+const PARTY_PORT = 5190;
+
+/*
+ * Which of the computer's network addresses a friend's phone should be sent
+ * to (`npm run party`, below). Pure: the caller hands over what
+ * `os.networkInterfaces()` says, and src/kart/app/lan.test.ts checks it. It
+ * lives in this file because a config that imports its own helpers by path
+ * needs file extensions the type check does not accept.
+ */
+/** The parts of one entry of `os.networkInterfaces()` this needs. */
+export interface InterfaceAddress {
+  address: string;
+  /** "IPv4", or 4 on newer versions of Node. */
+  family: string | number;
+  internal: boolean;
+}
+
+export type Interfaces = Record<string, readonly InterfaceAddress[] | undefined>;
+
+/**
+ * How likely an address is to be the Wi-Fi or Ethernet a living room shares:
+ * home routers hand out 192.168.x.x, then 10.x.x.x, then 172.16-31.x.x. Link-local
+ * addresses (169.254.x.x) mean no network was found, so they come last.
+ */
+function rank(address: string): number {
+  if (address.startsWith("192.168.")) return 0;
+  if (address.startsWith("10.")) return 1;
+  const second = Number(address.split(".")[1]);
+  if (address.startsWith("172.") && second >= 16 && second <= 31) return 2;
+  if (address.startsWith("169.254.")) return 4;
+  return 3;
+}
+
+/** The best IPv4 address of this computer on a network, or null when it is on none. */
+export function pickLanAddress(interfaces: Interfaces): string | null {
+  const found: { address: string; rank: number; name: string }[] = [];
+  for (const [name, entries] of Object.entries(interfaces)) {
+    for (const entry of entries ?? []) {
+      const v4 = entry.family === "IPv4" || entry.family === 4;
+      if (v4 && !entry.internal) found.push({ address: entry.address, rank: rank(entry.address), name });
+    }
+  }
+  // The best rank, then the interface name (en0 before en5 before a bridge), so the choice is the same every time.
+  found.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  return found[0]?.address ?? null;
+}
+
+/** "https://192.168.1.20:5190" for this address, or null. */
+export function lanOrigin(interfaces: Interfaces, port: number, secure = true): string | null {
+  const address = pickLanAddress(interfaces);
+  return address ? `${secure ? "https" : "http"}://${address}:${port}` : null;
+}
+
+
+interface Network {
+  networkInterfaces(): Interfaces;
+}
+
+/** Says, when the server is up, which page the TV opens and what friends will scan. */
+function partyBanner(origin: string | null): Plugin {
+  return {
+    name: "handy:party-banner",
+    configureServer(server) {
+      server.httpServer?.once("listening", () => {
+        const log = (text: string) => server.config.logger.info(text);
+        log("");
+        log("  Grip Prix party");
+        log(`    On the big screen, open  https://localhost:${PARTY_PORT}/race.html  and choose Host a Race.`);
+        if (origin) log(`    Friends scan the code in the lobby (it points at ${origin}/race.html).`);
+        else log("    No network address was found for this computer: connect it to Wi-Fi, then start again.");
+        log("    The first time, each browser asks whether to trust this computer's certificate: say yes.");
+        log("");
+      });
+    },
+  };
+}
+
+export default defineConfig(async ({ mode }) => {
+  const party = mode === "party";
+  let origin: string | null = null;
+  const plugins: Plugin[] = [vendorFiles()];
+  if (party) {
+    const os = (await import("node:os" as string)) as Network;
+    origin = lanOrigin(os.networkInterfaces(), PARTY_PORT);
+    const { default: basicSsl } = await import("@vitejs/plugin-basic-ssl");
+    plugins.push(basicSsl(), partyBanner(origin));
+  }
+  return baseConfig(party, origin, plugins);
 });
+
+function baseConfig(party: boolean, origin: string | null, plugins: Plugin[]): UserConfig {
+  return {
+    base: "./",
+    plugins,
+    // Handy's version, for Settings' About (src/app/settings.ts); in a party, where the computer is on the network.
+    define: {
+      __HANDY_VERSION__: JSON.stringify(pkg.version),
+      ...(party && origin ? { __GRIP_LAN_ORIGIN__: JSON.stringify(origin) } : {}),
+    },
+    build: {
+      target: "es2022",
+      sourcemap: true,
+      assetsInlineLimit: 0,
+      // Two pages: the arcade, and Grip Prix on its own page (src/kart/main.ts).
+      rollupOptions: { input: { index: "index.html", race: "race.html" } },
+    },
+    // The tracking worker is an ES module: it loads MediaPipe's module build.
+    worker: { format: "es" },
+    // A party listens on every address of this computer, on a port it can say out loud (the page names it).
+    server: party ? { host: true, port: PARTY_PORT, strictPort: true } : { host: "127.0.0.1", port: 5173 },
+    preview: { host: "127.0.0.1", port: 4173 },
+    test: { environment: "node", include: ["src/**/*.test.ts"] },
+  };
+}

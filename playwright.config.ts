@@ -15,7 +15,8 @@ const env: Record<string, string | undefined> =
   (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 /** HANDY_E2E_PORT lets two checkouts run their tests side by side, each on its own build. */
 const PORT = Number(env.HANDY_E2E_PORT) || 4174;
-const OUT = "node_modules/.cache/handy-e2e/dist";
+/** HANDY_E2E_OUT gives a checkout a build of its own: node_modules may be shared between worktrees, and so would the default folder be. */
+const OUT = env.HANDY_E2E_OUT ?? "node_modules/.cache/handy-e2e/dist";
 
 export default defineConfig({
   testDir: "e2e",
@@ -45,7 +46,7 @@ export default defineConfig({
   projects: [
     {
       name: "flows",
-      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience|orbit|ridge|switchCamera|race-shell)\.spec\.ts/,
+      testMatch: /(arcade|scope|hud|mouse|camera|scripted|settings|resilience|orbit|ridge|switchCamera|race-shell|race-room)\.spec\.ts/,
       use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
     {

@@ -72,9 +72,9 @@ export interface StandingRow {
 }
 
 /**
- * The results, with names and colours. The karts' names come from the race's
- * grid (`racers`) when it is known; a kart not in it is named from the lobby
- * (a player) or "Racer N" (a bot) so a row is never blank.
+ * The results, with names and colours. The standings say whose they are; a
+ * result that does not is read against the race's grid (`racers`), then the
+ * lobby (a player), and a bot nobody knows is "Racer N", so a row is never blank.
  */
 export function standingRows(result: RaceResult, racers: readonly RacerSetup[], lobby: LobbyState, device: string): StandingRow[] {
   const mineSlots = new Set(localPlayers(lobby, device).map((player) => player.slot));
@@ -90,8 +90,9 @@ export function standingRows(result: RaceResult, racers: readonly RacerSetup[], 
       kart: row.kart,
       place: row.place,
       placeLabel: ordinal(row.place),
-      name: racer?.name ?? player?.name ?? `Racer ${row.kart + 1}`,
-      colour: racer?.colour ?? player?.colour ?? BOT_COLOURS[row.kart % BOT_COLOURS.length]!,
+      // The standings carry their own names and colours; the grid and the lobby are for results from a sim that does not.
+      name: row.name ?? racer?.name ?? player?.name ?? `Racer ${row.kart + 1}`,
+      colour: row.colour ?? racer?.colour ?? player?.colour ?? BOT_COLOURS[row.kart % BOT_COLOURS.length]!,
       mine: slot !== null && mineSlots.has(slot),
       bot: slot === null,
       time: row.time,

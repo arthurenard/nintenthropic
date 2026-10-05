@@ -78,8 +78,12 @@ export interface Disposable {
 
 // --- the camera -------------------------------------------------------------------------------------------
 
-/** Why the camera would not start, by what the player can do about it (as the arcade's). */
-export type CameraTrouble = "denied" | "busy" | "missing" | "insecure";
+/**
+ * Why the camera would not start, by what the player can do about it (as the
+ * arcade's), and "model": the camera is fine but the hand tracker would not
+ * download.
+ */
+export type CameraTrouble = "denied" | "busy" | "missing" | "insecure" | "model";
 
 export class CameraFailure extends Error {
   constructor(readonly trouble: CameraTrouble) {
@@ -99,9 +103,10 @@ export interface CameraService {
    * Starts the camera and the hand tracker for this many hands: 2 for one
    * wheel, 4 for two players on one camera. Resolves when pictures are
    * coming; rejects with a CameraFailure. Calling it again changes the
-   * number of hands without opening the camera twice.
+   * number of hands without opening the camera twice. `progress` hears the
+   * download of the tracker, 0..1 (the first visit fetches about 20 MB).
    */
-  start(hands: 2 | 4): Promise<void>;
+  start(hands: 2 | 4, progress?: (fraction: number) => void): Promise<void>;
   /** Lets the camera go. */
   stop(): void;
 }

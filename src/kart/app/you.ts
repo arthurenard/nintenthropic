@@ -74,10 +74,11 @@ export class YouScreen {
     focusHeading($("you-title"));
   }
 
-  /** The camera is starting: Continue waits. */
-  setBusy(busy: boolean): void {
+  /** The camera is starting: Continue waits. `fraction` is how much of the hand tracker has arrived (the first visit fetches it). */
+  setBusy(busy: boolean, fraction = 0): void {
     this.proceed.disabled = busy;
-    this.proceed.textContent = busy ? "Starting Camera…" : "Continue";
+    const percent = Math.round(fraction * 100);
+    this.proceed.textContent = !busy ? "Continue" : percent > 0 && percent < 100 ? `Getting Ready… ${percent}%` : "Starting Camera…";
   }
 
   /** Shows what the current choice needs: steering and a second player only go with the wheel. */

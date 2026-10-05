@@ -14,15 +14,25 @@ import { loadPreferences, prefs } from "../../app/prefs";
 import { GRIP_PRIX } from "../../games/index";
 import { $, announce } from "../../ui/dom";
 import { backdropCss } from "../../ui/backdrop";
-import { PLAYER_COLOURS, type DriverControl, type LobbyState, type LocalPlayerSetup, type RacerSetup, type Session, type SessionClosed } from "../contract";
+import {
+  PLAYER_COLOURS,
+  type DriverControl,
+  type KartView,
+  type LobbyState,
+  type LocalPlayerSetup,
+  type RacerSetup,
+  type Session,
+  type SessionClosed,
+} from "../contract";
 import { CheckScreen } from "./check";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
 import { loadYou, saveYou, wheelChecked, type You } from "./prefs";
-import { RaceScreen } from "./race";
+import { RaceScreen, type RaceFailure } from "./race";
 import { ResultsScreen } from "./results";
-import { localPlayers } from "./roster";
+import { kartOf, localPlayers } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type WheelControl } from "./services";
 import { StartScreen, type StartChoice } from "./start";
+import { AwakeWhileRacing } from "./wake";
 import { closeTrouble, showTrouble, type Fix, type TroubleKind } from "./troubles";
 import { YouScreen } from "./you";
 
@@ -33,10 +43,23 @@ export interface KartAppOptions {
   net?: "local";
   /** `?join=CODE`: go straight to joining this room. */
   join?: string | null;
+  /** The page's address as a friend on the network opens it (for the lobby's code and link); the page's own by default. */
+  page?: () => string;
 }
 
 /** How long the finish stays in view before the results cover it, ms. */
 const FINISH_HOLD = 1500;
+
+/** What `KartApp.snapshot` says. */
+export interface KartAppSnapshot {
+  screen: ScreenName;
+  role: Session["role"] | null;
+  device: string | null;
+  lobby: LobbyState | null;
+  race: { tick: number; phase: string; time: number; countdown: number; laps: number; trackId: string; karts: readonly KartView[] } | null;
+  views: number[];
+  mine: (number | null)[];
+}
 
 export class KartApp {
   private readonly startScreen: StartScreen;
@@ -51,7 +74,11 @@ export class KartApp {
   private intent: StartChoice = "practice";
   private you: You = loadYou();
   private controls: DriverControl[] = [];
-  private choice: ScreenChoice = "here";
+  /** Where this player chose to watch, or null: wherever the host says (the room's `display`). */
+  private choice: ScreenChoice | null = null;
+  /** The race the race screen shows, so a restart (a new race in the same phase) is noticed. */
+  private raceId: number | undefined;
+  private readonly wake = new AwakeWhileRacing();
   /** The You screen (and the wheel check) are done: the room's phase now says what to show. */
   private ready = false;
   /** Counts attempts to open a room, so a slow one that was given up on is dropped. */
@@ -88,18 +115,38 @@ export class KartApp {
           this.sendPlayers();
         },
       },
-      () => location.href,
+      () => options.page?.() ?? location.href,
       options.net,
     );
     this.raceScreen = new RaceScreen(services, {
       leave: () => this.leave(),
-      restart: () => this.again(),
-      failed: () => this.loadFailed(),
+      restart: () => this.restart(),
+      failed: (kind) => this.loadFailed(kind),
     });
     this.resultsScreen = new ResultsScreen({
       again: () => this.again(),
       lobby: () => this.backToLobby(),
     });
+  }
+
+  /**
+   * What the page is showing and how the race stands, as plain data: for the
+   * end-to-end tests, which drive the karts by keyboard from outside. `mine`
+   * is the kart of each player on this device.
+   */
+  snapshot(): KartAppSnapshot {
+    const session = this.session;
+    const lobby = session?.lobby() ?? null;
+    const view = this.raceScreen.lastView;
+    return {
+      screen: this.screen,
+      role: session?.role ?? null,
+      device: session?.device ?? null,
+      lobby,
+      race: view ? { tick: view.tick, phase: view.phase, time: view.time, countdown: view.countdown, laps: view.laps, trackId: view.track.id, karts: view.karts } : null,
+      views: session?.views() ?? [],
+      mine: lobby && session ? localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)) : [],
+    };
   }
 
   boot(): void {
@@ -131,6 +178,9 @@ export class KartApp {
     this.screen = screen;
     for (const name of ["start", "you", "check", "lobby", "race", "results"] as const) $(`screen-${name}`).hidden = name !== screen;
     document.body.dataset.screen = screen;
+    // A phone propped up as a wheel is not touched for minutes: its screen stays on from the wheel check to the end.
+    if (screen === "start" || screen === "you") this.wake.release();
+    else this.wake.hold();
     window.scrollTo(0, 0);
     const title = { start: "Grip Prix", you: "Who’s Driving?", check: "Wheel Check", lobby: "Lobby", race: "Race", results: "Results" }[screen];
     document.title = screen === "start" ? "Grip Prix" : `${title} · Grip Prix`;
@@ -171,7 +221,7 @@ export class KartApp {
     this.session = session;
     this.intent = kind;
     this.ready = false;
-    this.choice = "here";
+    this.choice = null;
     this.unlisten = [session.onLobby((lobby) => this.lobbyChanged(lobby)), session.onClosed((reason) => this.closed(reason))];
   }
 
@@ -253,7 +303,7 @@ export class KartApp {
     const session = this.session;
     if (!session || !this.controls.length) return;
     const names = this.you.drive === "wheel" && this.you.second ? [this.you.name, this.you.secondName] : [this.you.name];
-    const screen = session.role === "guest" ? this.choice : "here";
+    const screen = session.role === "guest" ? (this.choice ?? "auto") : "here";
     const players: LocalPlayerSetup[] = this.controls.map((control, i) => ({ name: names[i] ?? this.you.name, control, screen }));
     session.setLocalPlayers(players);
     // A change of screen does not undo being ready.
@@ -274,7 +324,7 @@ export class KartApp {
       if (answer === "stay") return false;
     }
     try {
-      await camera.start(hands);
+      await camera.start(hands, (fraction) => this.youScreen.setBusy(true, fraction));
       prefs.cameraOpened = true;
       return true;
     } catch (error) {
@@ -337,7 +387,12 @@ export class KartApp {
     window.clearTimeout(this.finishTimer);
     this.raceScreen.end();
     this.show("lobby");
-    this.lobbyScreen.render(lobby, this.session, this.choice);
+    this.lobbyScreen.render(lobby, this.session, this.where(lobby));
+  }
+
+  /** Where this player's race shows, as the lobby says it: their own choice, else the host's. */
+  private where(lobby: LobbyState): ScreenChoice {
+    return this.choice ?? (lobby.settings.display === "host" ? "host" : "here");
   }
 
   private lobbyChanged(lobby: LobbyState): void {
@@ -345,7 +400,8 @@ export class KartApp {
     if (!this.ready || !this.session) return;
     switch (lobby.phase) {
       case "racing":
-        if (this.screen !== "race") this.enterRace(lobby);
+        // A first start, or a restart: the same phase, a different race.
+        if (this.screen !== "race" || lobby.race !== this.raceId) this.enterRace(lobby);
         break;
       case "results":
         if (this.screen === "race") this.finishRace(lobby);
@@ -354,13 +410,14 @@ export class KartApp {
         if (this.screen === "race" || this.screen === "results") this.showLobby(lobby);
         break;
     }
-    if (this.screen === "lobby") this.lobbyScreen.render(lobby, this.session, this.choice);
+    if (this.screen === "lobby") this.lobbyScreen.render(lobby, this.session, this.where(lobby));
   }
 
   private enterRace(lobby: LobbyState): void {
     const session = this.session;
     if (!session) return;
     window.clearTimeout(this.finishTimer);
+    this.raceId = lobby.race;
     const mine = localPlayers(lobby, session.device);
     this.show("race");
     this.raceScreen.begin({ session, controls: this.controls.slice(0, mine.length), players: mine });
@@ -383,6 +440,14 @@ export class KartApp {
     this.show("results");
   }
 
+  /** Restart (the host's pause sheet): this race again from the countdown, the same people. */
+  private restart(): void {
+    const session = this.session;
+    if (!session || session.role === "guest") return;
+    window.clearTimeout(this.finishTimer);
+    session.restart();
+  }
+
   /** Race again (the host's): back to the lobby and straight off. If the room is not ready to, the lobby is where we wait. */
   private again(): void {
     const session = this.session;
@@ -400,9 +465,9 @@ export class KartApp {
     this.showLobby();
   }
 
-  private loadFailed(): void {
+  private loadFailed(kind: RaceFailure): void {
     const session = this.session;
-    showTrouble("load", [
+    showTrouble(kind, [
       { label: "Try Again", run: () => session && this.enterRace(session.lobby()) },
       { label: "Leave Race", run: () => this.leave() },
     ]);
@@ -480,6 +545,9 @@ export class KartApp {
         break;
       case "started":
         showTrouble("started", [toStart]);
+        break;
+      case "version":
+        showTrouble("version", [{ label: "Reload", run: () => location.reload() }, toStart]);
         break;
       default:
         showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);

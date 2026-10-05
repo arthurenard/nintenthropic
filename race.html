@@ -224,8 +224,16 @@
                 <label class="row-label" for="switch-bots">Bots</label>
                 <button type="button" class="switch" role="switch" id="switch-bots" aria-checked="true"></button>
               </div>
+              <div class="row row-stack" id="row-display">
+                <span class="row-label" id="label-display">Show the Race</span>
+                <div class="segmented" role="radiogroup" id="pick-display" aria-labelledby="label-display" aria-describedby="foot-display">
+                  <button type="button" role="radio" data-value="own">On Everyone’s Own Screen</button>
+                  <button type="button" role="radio" data-value="host">On This Screen</button>
+                </div>
+              </div>
             </div>
             <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
+            <p class="group-foot" id="foot-display"></p>
           </section>
           <div class="page-actions">
             <button id="lobby-start" class="button primary large wide" disabled>Start Race</button>
@@ -242,6 +250,7 @@
       </div>
       <div class="controller" id="controller" hidden>
         <p class="eyebrow">Your Race</p>
+        <p class="controller-banner num" id="controller-banner" aria-hidden="true"></p>
         <div class="controller-cards" id="controller-cards"></div>
         <p class="footnote secondary">Your race is on the big screen. This is your wheel.</p>
       </div>
@@ -249,6 +258,14 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause" /></svg>
       </button>
       <div class="race-previews" id="race-previews"></div>
+      <div class="view-notes" id="view-notes"></div>
+      <div class="pause-veil" id="pause-veil" role="status" hidden>
+        <div class="pause-card glass">
+          <p class="pause-count num" id="pause-count" hidden></p>
+          <p class="title2" id="pause-heading">Paused</p>
+          <p class="subhead secondary" id="pause-words"></p>
+        </div>
+      </div>
       <p class="lost-hands glass" id="lost-hands" role="status" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg><span id="lost-hands-text">Show Both Hands</span>
       </p>
