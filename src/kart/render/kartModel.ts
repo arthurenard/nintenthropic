@@ -11,12 +11,16 @@
 import {
   AdditiveBlending,
   BufferGeometry,
+  Color,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshPhongMaterial,
 } from "three";
+import { CHARACTERS } from "../characters";
 import type { RacerSetup } from "../contract";
+import { createDriver, speciesOf } from "./drivers";
 import { TAU } from "./math";
 import { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, xf, type Rgb, type V3 } from "./world/builder";
 import type { KartModel } from "./kart";
@@ -137,13 +141,23 @@ function wheelGeometry(spec: { r: number; w: number }, hubColour: Rgb): BufferGe
   return b.build();
 }
 
-export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): KartModel {
-  const body = rgb(racer.colour);
-  const top = mixRgb(body, [1, 1, 1], 0.1);
+/** A gleaming gold tub for the golden kart (the player's colour stays on its stripe, spoiler and hubs). */
+const GOLD = rgb("#f6b414");
+
+/** Who sits in a kart whose racer names no driver: the base cast in turn, by the kart's id. */
+const STAND_INS = CHARACTERS.filter((c) => !c.unlock);
+
+export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartModel {
+  const golden = racer.golden === true;
+  const accent = rgb(racer.colour);
+  const accentTop = mixRgb(accent, [1, 1, 1], 0.1);
+  const body = golden ? GOLD : accent;
+  const top = golden ? ([1.5, 1.05, 0.28] as const) : mixRgb(body, [1, 1, 1], 0.1);
   const flank = scaleRgb(body, 0.86);
   const lower = scaleRgb(body, 0.62);
   const deep = scaleRgb(body, 0.4);
   const white = rgb("#f6f7fa");
+  const stripe = golden ? accentTop : white;
   const dark = rgb("#3a3e4a");
   const darker = rgb("#262932");
   const silver = rgb("#d5dae4");
@@ -165,7 +179,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
     [lower, flank],
     [flank, top],
     [top, top],
-    [white, white],
+    [stripe, stripe],
     [top, top],
     [top, flank],
     [flank, lower],
@@ -190,12 +204,12 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
     c.add(shapes.cylinder(9), xf(x, KART_EXHAUST.y + 0.005, KART_EXHAUST.forward - 0.01, 0.07, 0.04, 0.07, 0, Math.PI / 2 - 0.1, 0), [0.02, 0.02, 0.03]);
   }
   // A small ducktail spoiler on the tail, in the kart's colour, with white end fins.
-  c.box(0, 0.95, -1.3, 1.16, 0.05, 0.3, top, 0, 0.12);
+  c.box(0, 0.95, -1.3, 1.16, 0.05, 0.3, accentTop, 0, 0.12);
   for (const sx of [-1, 1]) c.box(sx * 0.57, 0.99, -1.3, 0.05, 0.16, 0.34, white, 0, 0.12);
   // Front bumper and wing.
   c.box(0, 0.38, 1.48, 1.36, 0.14, 0.2, dark);
   for (const sx of [-1, 1]) c.box(sx * 0.7, 0.42, 1.44, 0.14, 0.2, 0.26, flank);
-  c.box(0, 0.3, 1.64, 1.46, 0.04, 0.3, white);
+  c.box(0, 0.3, 1.64, 1.46, 0.04, 0.3, stripe);
   // Lamps, overbright so they glow: headlights at the nose, tail lights at the back.
   for (const sx of [-1, 1]) {
     c.add(shapes.cylinder(10), xf(sx * 0.2, 0.5, 1.5, 0.1, 0.05, 0.1, 0, Math.PI / 2, 0), [5, 4.6, 3.4]);
@@ -203,31 +217,11 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
   }
   const chassisGeo = c.build();
 
-  // ── The driver: torso and arms (lean), helmet (turns), steering wheel (turns by steer) ──
-  const d = new MeshBuilder();
-  const suit = mixRgb(white, body, 0.1);
-  d.box(0, 0.3, 0.0, 0.5, 0.56, 0.3, { bottom: scaleRgb(suit, 0.72), top: suit }, 0, 0.16);
-  d.box(0, 0.08, 0.04, 0.52, 0.1, 0.32, lower);
-  d.box(0, 0.5, 0.1, 0.5, 0.12, 0.12, top);
-  for (const sx of [-1, 1]) {
-    limb(d, [sx * 0.29, 0.46, 0.02], [sx * 0.19, 0.2, 0.46], 0.13, suit);
-    d.blob(sx * 0.19, 0.2, 0.5, 0.085, 0.085, 0.085, darker, 0);
-    limb(d, [sx * 0.14, -0.02, -0.06], [sx * 0.3, -0.04, 0.36], 0.16, scaleRgb(suit, 0.82));
-  }
-  const torsoGeo = d.build();
-
-  const h = new MeshBuilder();
-  h.blob(0, 0, 0, 0.3, 0.29, 0.31, { bottom: lower, top }, 1);
-  // Visor, a glint on it, and a stripe over the crown.
-  h.blob(0, 0.0, 0.14, 0.25, 0.115, 0.2, [0.04, 0.06, 0.13], 1);
-  h.blob(0.08, 0.04, 0.27, 0.07, 0.025, 0.04, [1.4, 1.6, 2.0], 0);
-  h.blob(0, 0.04, -0.02, 0.034, 0.32, 0.33, white, 0);
-  const headGeo = h.build();
-
+  // ── The wheel (turns by steer); the driver is built by drivers/ ──
   const w = new MeshBuilder();
   for (let k = 0; k < 10; k++) {
     const a = (k / 10) * TAU;
-    w.add(shapes.box(), xf(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0, 0.1, 0.05, 0.06, 0, 0, a + Math.PI / 2), k === 0 ? top : dark);
+    w.add(shapes.box(), xf(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0, 0.1, 0.05, 0.06, 0, 0, a + Math.PI / 2), k === 0 ? accentTop : dark);
   }
   w.box(0, 0, 0, 0.3, 0.04, 0.04, dark);
   w.box(0, 0, 0, 0.04, 0.3, 0.04, dark);
@@ -238,26 +232,23 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
   flame.add(shapes.cone(8), xf(0, 0, -0.55, 0.16, 1.1, 0.16, 0, -Math.PI / 2, 0), [0.6, 0.9, 1.9]);
   const flameGeo = flame.build();
 
-  const frontGeo = wheelGeometry(WHEEL_FRONT, top);
-  const rearGeo = wheelGeometry(WHEEL_REAR, top);
+  const frontGeo = wheelGeometry(WHEEL_FRONT, accentTop);
+  const rearGeo = wheelGeometry(WHEEL_REAR, accentTop);
 
   const lit = new MeshLambertMaterial({ vertexColors: true });
+  // The golden tub catches the light.
+  const gleam = golden ? new MeshPhongMaterial({ vertexColors: true, shininess: 90, specular: new Color(1, 0.86, 0.5) }) : lit;
   const flameMat = new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.9, fog: false });
 
   const root = new Group();
   const bodyGroup = new Group();
   root.add(bodyGroup);
-  bodyGroup.add(new Mesh(chassisGeo, lit));
+  bodyGroup.add(new Mesh(chassisGeo, gleam));
 
   // The driver pivots at the hip.
-  const driver = new Group();
-  driver.position.set(0, 0.92, -0.28);
-  driver.add(new Mesh(torsoGeo, lit));
-  const head = new Group();
-  head.position.set(0, 0.84, 0.06);
-  head.add(new Mesh(headGeo, lit));
-  driver.add(head);
-  bodyGroup.add(driver);
+  const species = speciesOf(racer.character, STAND_INS[racer.id % STAND_INS.length]!.species);
+  const driver = createDriver(species, racer.colour, [0, 0.92, -0.28], lit);
+  bodyGroup.add(driver.root);
 
   const wheelPivot = new Group();
   wheelPivot.position.set(0, 1.04, 0.24);
@@ -295,10 +286,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
     pose(p) {
       bodyGroup.position.y = p.hop + p.shake;
       bodyGroup.rotation.set(-p.pitch, p.slide, p.roll, "YXZ");
-      driver.rotation.z = p.lean;
-      driver.rotation.y = p.twirl ?? 0;
-      head.rotation.y = -p.steer * 0.4;
-      head.rotation.z = -p.lean * 0.35;
+      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy });
       wheelRim.rotation.z = -p.steer * 1.5;
       for (const f of fronts) {
         f.pivot.rotation.y = -p.steer * 0.5;
@@ -315,8 +303,10 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
       }
     },
     dispose() {
-      for (const g of [chassisGeo, torsoGeo, headGeo, wheelRimGeo, flameGeo, frontGeo, rearGeo]) g.dispose();
+      for (const g of [chassisGeo, wheelRimGeo, flameGeo, frontGeo, rearGeo]) g.dispose();
+      driver.dispose();
       lit.dispose();
+      if (gleam !== lit) gleam.dispose();
       flameMat.dispose();
     },
   };

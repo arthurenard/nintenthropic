@@ -8,6 +8,7 @@
  * run just this.
  */
 import { TICK, TICK_HZ, type DriveInput, type RacerSetup } from "../contract";
+import { WEIGHTS, weightOf } from "../characters";
 import { mulberry32 } from "../../engine/rules/rng";
 import { hazardAt } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
@@ -102,6 +103,7 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     skill: clamp(racer.skill ?? 0.8, 0, 1),
     bot: newBotMemory(),
     band: 1,
+    mods: WEIGHTS[weightOf(racer.character)],
   };
   settle(kart);
   return kart;
@@ -515,7 +517,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     let along = k.vx * sin + k.vz * cos;
     let across = -k.vx * cos + k.vz * sin;
     // The grip turns the velocity toward the heading: the speed stays (less a little scrubbed off for the slide), the sideways part becomes forward.
-    const grip = k.drift !== 0 ? ground.gripDrift : ground.grip;
+    const grip = (k.drift !== 0 ? ground.gripDrift : ground.grip) * k.mods.grip;
     const lost = across * (1 - Math.exp(-grip * TICK));
     const speedBefore = Math.hypot(along, across);
     across -= lost;
@@ -524,8 +526,8 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
 
     // Speeding up, braking, coasting.
     const boosted = k.boost > 0;
-    let top = ground.top * k.band;
-    if (boosted) top = ground.rough ? ground.boostTop * k.band : top * D.boostSpeed;
+    let top = ground.top * k.band * k.mods.topSpeed;
+    if (boosted) top = ground.rough ? ground.boostTop * k.band * k.mods.topSpeed : top * D.boostSpeed;
     if (braking) {
       if (along > 0) along = Math.max(0, along - D.brakeDecel * ground.brake * brakeIn * TICK);
       if (along <= 0) {
@@ -539,7 +541,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
       k.stand = 0;
       const drive = boosted ? 1 : throttle;
       if (drive > 0) {
-        const tau = boosted ? D.boostTau : D.accelTau / ground.accel;
+        const tau = boosted ? D.boostTau : D.accelTau / (ground.accel * k.mods.acceleration);
         if (along < top) along = Math.min(top, along + ((top - along) / tau) * drive * TICK);
       } else {
         const slow = (D.coastDrag + D.coastDragPerSpeed * Math.abs(along)) * ground.coast * TICK;
@@ -630,8 +632,9 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
       // The way from b to a; if exactly on top of each other, any way will do.
       const nx = d > 1e-6 ? dx / d : 1;
       const nz = d > 1e-6 ? dz / d : 0;
-      const wa = 1 + Math.hypot(a.vx, a.vz) / B.weightPerSpeed;
-      const wb = 1 + Math.hypot(b.vx, b.vz) / B.weightPerSpeed;
+      // A heavy driver is hard to shove (its mass counts for more); a light one is knocked about.
+      const wa = (1 + Math.hypot(a.vx, a.vz) / B.weightPerSpeed) / a.mods.shoved;
+      const wb = (1 + Math.hypot(b.vx, b.vz) / B.weightPerSpeed) / b.mods.shoved;
       const overlap = reach - d;
       const shareA = wb / (wa + wb);
       a.x += nx * overlap * shareA;

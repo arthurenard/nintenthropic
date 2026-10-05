@@ -15,7 +15,7 @@
  * `rotation.y = heading` expects (contract.ts).
  */
 import { AdditiveBlending, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, type Object3D, type Texture } from "three";
-import type { KartView, RacerSetup } from "../contract";
+import type { Emote, KartView, RacerSetup } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
 import { RescueDrone } from "./drone";
 import { clamp, damp, easeOutCubic, lerp, smoothstep, TAU } from "./math";
@@ -46,6 +46,14 @@ export interface KartPose {
   slide: number;
   /** How far the driver has twirled in a trick, radians (0 when none); a model with nothing to twirl may ignore it. */
   twirl?: number;
+  /** The clock, seconds: for the driver's own little motions (a tail, a bounce). */
+  time?: number;
+  /** The driver's gesture: both arms up, or one hand waving. */
+  emote?: Emote | null;
+  /** The kart has crossed the line: the driver bounces happily. */
+  finished?: boolean;
+  /** Spinning out: the driver is dizzy. */
+  dizzy?: boolean;
 }
 
 export interface KartModel {
@@ -56,7 +64,7 @@ export interface KartModel {
 }
 
 /** Makes the model for one racer. A glTF loader can stand in for the procedural one. */
-export type KartFactory = (racer: Pick<RacerSetup, "id" | "colour">) => KartModel;
+export type KartFactory = (racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">) => KartModel;
 
 // ─── The actor ─────────────────────────────────────────────────────────────
 
@@ -75,6 +83,8 @@ export interface ActorContext {
   rollAt?: (s: number) => number;
   /** The scene the rescue drone flies in. */
   dynamic?: Group;
+  /** The race's laps: a kart past them has finished. */
+  laps: number;
 }
 
 const SPIN_TURNS = 2;
@@ -155,7 +165,7 @@ export class KartActor {
   constructor(
     readonly id: number,
     factory: KartFactory,
-    racer: Pick<RacerSetup, "id" | "colour">,
+    racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">,
     ctx: ActorContext,
   ) {
     this.model = factory(racer);
@@ -394,6 +404,10 @@ export class KartActor {
       flicker: 0.5 + 0.5 * Math.sin(time * 71 + this.id * 3.1) * Math.sin(time * 47),
       slide: this.slide,
       twirl,
+      time,
+      emote: rescuing ? null : view.emote,
+      finished: view.lap > ctx.laps && !rescuing,
+      dizzy: spinning && !rescuing,
     });
 
     // Shadow lies on the road, shrinking and paling while the kart is in the air or being carried.
