@@ -43,6 +43,8 @@ import { QUALITY, type QualitySettings, type Tier } from "./quality";
 import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
 import { createWorld, type World } from "./world";
+import { kartMaterial } from "./kartMaterial";
+import { addBakedSun, makeBakeUniforms, shareBake } from "./world/shading";
 import { glowTexture } from "./world/textures";
 import { styleFor } from "./world/themes";
 
@@ -132,6 +134,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const shadowTexture: Texture = glowTexture(0.0, 1.0);
   const lightTexture: Texture = glowTexture(0.0, 1.5);
 
+  /** The karts' material reads the world's baked sun shadow through uniforms of its own. */
+  const kartBake = makeBakeUniforms();
   let world: World | null = null;
   let effects: Effects | null = null;
   let things: Things | null = null;
@@ -276,6 +280,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       scene.fog = null;
       world.install(scene);
       world.prepare(renderer, scene);
+      shareBake(kartBake, world.bake);
+      addBakedSun(kartMaterial(), kartBake);
       post.setLook(world.look);
       scene.background = null;
       effects = new Effects(settings.particles);

@@ -165,6 +165,42 @@ export function bakedLit<M extends MeshStandardMaterial>(material: M, uniforms: 
   return material;
 }
 
+const patched = new WeakSet<Material>();
+
+/**
+ * Lets a material that already has its own shader patches (the karts') read
+ * the baked SUN shadow too, so a kart driving under a tree or through a
+ * tunnel goes into its shade. Not the occlusion: a kart stands a metre above
+ * the road and is not hidden by the barrier beside it. The uniforms are the
+ * material's own copy; `shareBake` copies a world's maps into them.
+ */
+export function addBakedSun<M extends MeshStandardMaterial>(material: M, uniforms: BakeUniforms): M {
+  if (patched.has(material)) return material;
+  patched.add(material);
+  const before = material.onBeforeCompile.bind(material);
+  const key = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    before(shader, renderer);
+    for (const [k, u] of Object.entries(uniforms)) shader.uniforms[k] = u;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", COMMON_VERTEX).replace("#include <project_vertex>", WORLD_POS);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", COMMON_FRAGMENT).replace("#include <lights_fragment_begin>", LIGHTS_BEGIN);
+  };
+  material.customProgramCacheKey = () => `${key()}+baked-sun`;
+  material.needsUpdate = true;
+  return material;
+}
+
+/** Points `target`'s maps at `source`'s (the same textures, so nothing is copied but the references). */
+export function shareBake(target: BakeUniforms, source: BakeUniforms): void {
+  target.uSunMap.value = source.uSunMap.value;
+  target.uSunMat.value.copy(source.uSunMat.value);
+  target.uSunInfo.value.copy(source.uSunInfo.value);
+  target.uSunDirW.value.copy(source.uSunDirW.value);
+  target.uAoMap.value = source.uAoMap.value;
+  target.uAoRect.value.copy(source.uAoRect.value);
+  target.uAoInfo.value.copy(source.uAoInfo.value);
+}
+
 /** True for materials that should not cast into the baked sun map (glass, glows, ribbons of light). */
 export function castsShadow(material: Material | Material[]): boolean {
   const m = Array.isArray(material) ? material[0] : material;
