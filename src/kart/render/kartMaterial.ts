@@ -42,7 +42,8 @@ export const SURF = {
   paint: [0.32, 0.3, 1, 0] as Surf,
   /** Pale paint, white trims. */
   trim: [0.05, 0.34, 1, 0] as Surf,
-  gold: [1, 0.2, 1, 0] as Surf,
+  /** Gold: half metal, half rich paint, so it stays gold whatever it reflects (a blue sky tints a pure metal brown). */
+  gold: [0.88, 0.2, 1, 0.07] as Surf,
   chrome: [1, 0.1, 0, 0] as Surf,
   steel: [0.9, 0.34, 0, 0] as Surf,
   rubber: [0, 0.86, 0, 0] as Surf,
@@ -184,6 +185,10 @@ export function studioEnvironment(renderer: WebGLRenderer): Texture {
  */
 export function withStudioFallback(mesh: Object3D): void {
   mesh.onBeforeRender = (renderer, scene) => {
-    if (!scene.environment) scene.environment = studioEnvironment(renderer);
+    if (!scene.environment) {
+      scene.environment = studioEnvironment(renderer);
+      // The scene has its own lights; the studio sky only adds the reflections and a little fill.
+      scene.environmentIntensity = 0.75;
+    }
   };
 }

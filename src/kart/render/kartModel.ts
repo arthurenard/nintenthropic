@@ -36,7 +36,7 @@ export const KART_HALF_WIDTH = WHEEL_REAR.x + WHEEL_REAR.w / 2;
 const FAR_DISTANCE = 34;
 
 const WHITE = rgb("#f7f8fb");
-const GOLD_BODY = [1.0, 0.7, 0.2] as const;
+const GOLD_BODY = [1.0, 0.52, 0.06] as const;
 
 // ── The tub ─────────────────────────────────────────────────────────────────
 
@@ -403,7 +403,7 @@ function buildChassis(accent: Rgb, golden: boolean, id: number, lod: number): Bu
 
   // The wing on struts, with end plates.
   b.as(trimSurf, () => {
-    b.slab(0, 1.16, -1.36, 1.34, 0.045, 0.4, 0.02, golden ? trim : body, 0, 0.1);
+    b.add(shapes.ball(1), xf(0, 1.16, -1.36, 0.67, 0.034, 0.21, 0, 0.1, 0), golden ? trim : body);
     for (const sx of [-1, 1]) b.slab(sx * 0.68, 1.1, -1.35, 0.045, 0.24, 0.5, 0.02, golden ? [accent[0], accent[1], accent[2]] : trim, 0, 0.0);
   });
   b.as(SURF.chrome, () => {
@@ -412,16 +412,16 @@ function buildChassis(accent: Rgb, golden: boolean, id: number, lod: number): Bu
 
   // The number plate under the wing, between the pipes, and the lamps.
   b.as(SURF.trim, () => {
-    b.slab(0, 0.62, -1.345, 0.42, 0.22, 0.03, 0.02, WHITE, 0, -0.05);
+    b.slab(0, 0.62, -1.345, 0.44, 0.26, 0.03, 0.02, WHITE, 0, -0.05);
   });
   b.as(SURF.plastic, () => {
     const text = String((id % 9) + 1);
-    digit(b, text, 0, 0.62, -1.368, 0.15, mixRgb(accent, [0, 0, 0], 0.55));
+    digit(b, text, 0, 0.62, -1.368, 0.18, mixRgb(accent, [0, 0, 0], 0.55));
   });
   b.as(SURF.lamp, () => {
     for (const sx of [-1, 1]) {
       b.slab(sx * 0.4, 0.86, -1.3, 0.21, 0.06, 0.05, 0.025, [2.8, 0.1, 0.07]);
-      b.blob(sx * 0.18, 0.5, 1.4, 0.1, 0.075, 0.07, [3.2, 3.0, 2.4], 1);
+      b.blob(sx * 0.18, 0.5, 1.4, 0.1, 0.075, 0.07, [1.9, 1.75, 1.35], 1);
     }
   });
   b.as(SURF.chrome, () => {
@@ -430,7 +430,7 @@ function buildChassis(accent: Rgb, golden: boolean, id: number, lod: number): Bu
 
   // The front: a splitter wing with end plates, a bumper bar, and the suspension arms.
   b.as(trimSurf, () => {
-    b.slab(0, 0.3, 1.66, 1.56, 0.05, 0.36, 0.022, trim, 0, 0.04);
+    b.add(shapes.ball(1), xf(0, 0.3, 1.66, 0.78, 0.03, 0.19, 0, 0.04, 0), trim);
     for (const sx of [-1, 1]) b.slab(sx * 0.78, 0.37, 1.66, 0.05, 0.2, 0.42, 0.022, golden ? [accent[0], accent[1], accent[2]] : body);
   });
   b.as(SURF.chrome, () => {
@@ -459,7 +459,6 @@ function buildChassis(accent: Rgb, golden: boolean, id: number, lod: number): Bu
   return b.build();
 }
 
-export const _internals = { buildChassis, wheelGeometry, WHEEL_FRONT, WHEEL_REAR };
 
 /** The steering wheel, in its own space (ring in the xy plane, facing +z). */
 function steeringGeometry(accent: Rgb): BufferGeometry {
@@ -490,9 +489,9 @@ function flameGeometry(): BufferGeometry {
   const b = new MeshBuilder();
   const cone = (r: number, len: number, hot: Rgb, tip: Rgb) => b.add(shapes.cone(10), xf(0, 0, -len / 2, r, len, r, 0, -Math.PI / 2, 0), { bottom: hot, top: tip });
   // Orange sheath, yellow body, white-blue core; a base glow. Over-bright so the bloom takes it.
-  cone(0.17, 1.9, [3.0, 1.5, 0.28], [1.2, 0.18, 0.0]);
-  cone(0.125, 1.35, [3.4, 2.5, 0.7], [1.4, 0.55, 0.05]);
-  cone(0.07, 0.85, [3.6, 3.7, 3.4], [0.5, 1.4, 3.2]);
+  cone(0.17, 1.9, [2.2, 0.95, 0.12], [0.9, 0.12, 0.0]);
+  cone(0.125, 1.35, [2.6, 1.7, 0.35], [1.0, 0.4, 0.03]);
+  cone(0.07, 0.85, [2.4, 2.6, 3.0], [0.4, 1.0, 2.6]);
   return b.build();
 }
 

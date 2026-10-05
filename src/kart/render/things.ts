@@ -52,7 +52,7 @@ function seekerGeometry(): BufferGeometry {
     b.slab(0, 0.98, -0.42, 0.07, 0.52, 0.5, 0.025, dark);
     for (const s of [-1, 1]) b.slab(s * 0.38, 0.5, -0.38, 0.42, 0.055, 0.36, 0.02, dark, 0, 0, s * 0.1);
   });
-  b.as(SURF.lamp, () => b.blob(0, 0.5, -0.82, 0.22, 0.22, 0.16, [5, 1.8, 0.3], 1));
+  b.as(SURF.lamp, () => b.blob(0, 0.5, -0.84, 0.16, 0.16, 0.2, [3.2, 1.0, 0.18], 1));
   return b.build();
 }
 
@@ -67,11 +67,11 @@ function rocketGeometry(): BufferGeometry {
     b.lathe([[0.001, -1.2], [0.36, -1.15], [0.4, -0.9], [0.4, 0.6], [0.37, 1.0], [0.001, 1.0]], along(0, 0, 0), white, 30);
     b.lathe([[0.37, 1.0], [0.28, 1.35], [0.14, 1.65], [0.001, 1.85]], along(0, 0, 0), red, 30);
     b.lathe([[0.405, 0.2], [0.405, 0.5], [0.4, 0.5], [0.4, 0.2]], along(0, 0, 0), red, 30);
-    for (const a of [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2]) b.slab(Math.cos(a) * 0.52, Math.sin(a) * 0.52, -0.95, 0.07, 0.7, 0.62, 0.025, red, 0, 0, a);
+    for (const a of [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2]) b.slab(Math.cos(a) * 0.52, Math.sin(a) * 0.52, -0.95, 0.62, 0.07, 0.62, 0.025, red, 0, 0, a);
   });
   b.as(SURF.glass, () => b.blob(0, 0.4, 0.9, 0.12, 0.12, 0.08, [0.3, 0.7, 1.0], 1));
   b.as(SURF.plastic, () => b.lathe([[0.2, -1.35], [0.3, -1.15], [0.001, -1.15]], along(0, 0, 0), dark, 20));
-  b.as(SURF.lamp, () => b.blob(0, 0, -1.3, 0.2, 0.2, 0.22, [5, 2.6, 0.5], 1));
+  b.as(SURF.lamp, () => b.blob(0, 0, -1.3, 0.16, 0.16, 0.3, [3.2, 1.3, 0.2], 1));
   return b.build();
 }
 

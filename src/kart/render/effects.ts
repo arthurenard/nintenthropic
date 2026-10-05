@@ -281,14 +281,14 @@ export interface Visual {
 }
 
 // Overbright colours: the soft sprite's core goes white-hot while its halo keeps the colour.
-const BLUE0 = [0.55, 1.5, 4.2, 1] as const;
-const BLUE1 = [0.1, 0.35, 2.4, 0] as const;
-const ORANGE0 = [4.0, 1.7, 0.18, 1] as const;
-const ORANGE1 = [2.6, 0.4, 0.0, 0] as const;
+const BLUE0 = [0.3, 1.05, 3.4, 1] as const;
+const BLUE1 = [0.08, 0.3, 2.0, 0] as const;
+const ORANGE0 = [3.0, 1.1, 0.08, 1] as const;
+const ORANGE1 = [2.2, 0.3, 0.0, 0] as const;
 const WHITE0 = [2.4, 2.2, 1.8, 0.95] as const;
 const WHITE1 = [1.6, 0.9, 0.3, 0] as const;
 /** The hot centre of a spark or a flame. */
-const HOT0 = [4.5, 4.2, 3.6, 1] as const;
+const HOT0 = [3.6, 3.3, 2.8, 1] as const;
 const HOT1 = [2.4, 1.4, 0.5, 0] as const;
 
 export class Effects {
@@ -685,7 +685,7 @@ export class Effects {
       for (const side of [-1, 1]) {
         const ex = KART_EXHAUST.right * side;
         const back = KART_EXHAUST.forward - 0.5;
-        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.5, 3.4, 1.4, 0.2, 0.7);
+        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.2, 2.4, 0.9, 0.12, 0.55);
       }
       st.flame += 210 * dt;
       while (st.flame >= 1) {
@@ -704,13 +704,13 @@ export class Effects {
           0.2 + this.r() * 0.22,
           blue ? 0.4 : 0.68,
           0.08,
-          blue ? [0.7, 1.6, 4.0, 0.95] : [4.0, 1.9, 0.3, 0.95],
-          blue ? [0.1, 0.3, 2.2, 0] : [2.6, 0.4, 0.02, 0],
+          blue ? [0.5, 1.2, 3.0, 0.9] : [2.8, 1.2, 0.15, 0.9],
+          blue ? [0.1, 0.3, 2.0, 0] : [1.8, 0.3, 0.0, 0],
           0,
           1.2,
         );
         // The white-hot core of the flame, right at the pipe.
-        if (this.r() < 0.55) this.add.emit(k.x + rx * ex + fx * (KART_EXHAUST.forward - 0.1), k.y + KART_EXHAUST.y + 0.08, k.z + rz * ex + fz * (KART_EXHAUST.forward - 0.1), -fx * (2 + this.r() * 3), this.spread() * 0.3, -fz * (2 + this.r() * 3), 0.14 + this.r() * 0.1, 0.4, 0.08, HOT0, HOT1, 0, 1.2);
+        if (this.r() < 0.3) this.add.emit(k.x + rx * ex + fx * (KART_EXHAUST.forward - 0.1), k.y + KART_EXHAUST.y + 0.08, k.z + rz * ex + fz * (KART_EXHAUST.forward - 0.1), -fx * (2 + this.r() * 3), this.spread() * 0.3, -fz * (2 + this.r() * 3), 0.12 + this.r() * 0.08, 0.26, 0.06, HOT0, HOT1, 0, 1.2);
       }
     } else {
       st.flame = 0;

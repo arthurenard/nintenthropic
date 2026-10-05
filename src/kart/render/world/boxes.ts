@@ -1,7 +1,7 @@
 /**
  * Item boxes: glassy rainbow cubes that turn and bob above the road, a bright
  * question mark on every face (and its mirror image through the glass), a
- * glowing gem inside and a pool of coloured light beneath. All slots are drawn
+ * soft glow at its heart and a pool of coloured light beneath. All slots are drawn
  * as instances (a handful of draw calls for any number of boxes).
  *
  * Driving through one shatters it: the cube bursts into glassy shards that
@@ -183,8 +183,8 @@ void main() {
     vec3 c = glass * (0.3 + 1.7 * fres) + col * 0.55 + mix(vec3(1.0), col, 0.3) * 3.2 * mark + vec3(spec * 3.0 + spec2);
     a = clamp(a, 0.0, 0.96) * vInfo.w;
     #ifdef BACK
-      c *= 0.62;
-      a *= 0.7;
+      c *= 0.5;
+      a *= 0.6;
     #endif
   #endif
   gl_FragColor = vec4(c, a);
@@ -255,20 +255,20 @@ function markTexture(): Texture {
       ctx.fillStyle = "white";
       ctx.lineWidth = width;
       ctx.beginPath();
-      ctx.arc(128, 94, 42, Math.PI * 1.08, Math.PI * 2.42, false);
-      ctx.bezierCurveTo(168, 136, 128, 132, 128, 160);
+      ctx.arc(128, 90, 38, Math.PI * 1.08, Math.PI * 2.42, false);
+      ctx.bezierCurveTo(160, 128, 128, 126, 128, 152);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(128, 160);
-      ctx.lineTo(128, 172);
+      ctx.moveTo(128, 152);
+      ctx.lineTo(128, 160);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(128, 208, width * 0.62, 0, Math.PI * 2);
+      ctx.arc(128, 200, width * 0.6, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     };
-    draw(34, 30, 0.7);
-    draw(30, 0, 1);
+    draw(30, 26, 0.7);
+    draw(26, 0, 1);
     const t = new CanvasTexture(c);
     t.colorSpace = SRGBColorSpace;
     t.needsUpdate = true;
@@ -323,7 +323,6 @@ export class ItemBoxes {
   readonly group = new Group();
   private readonly back: InstancedMesh;
   private readonly front: InstancedMesh;
-  private readonly core: InstancedMesh;
   private readonly pool: InstancedMesh;
   private readonly shards: InstancedMesh;
   private readonly flashes: InstancedMesh;
@@ -365,10 +364,6 @@ export class ItemBoxes {
     this.back = new InstancedMesh(shellGeo, backMat, CAPACITY);
     this.front = new InstancedMesh(shellGeo, frontMat, CAPACITY);
 
-    const coreGeo = new IcosahedronGeometry(0.34, 1);
-    const coreMat = new MeshBasicMaterial({ color: 0xffffff, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false });
-    this.core = new InstancedMesh(coreGeo, coreMat, CAPACITY);
-
     const poolTex = glowTexture(0, 1.1);
     const poolGeo = new PlaneGeometry(4.2, 4.2);
     poolGeo.rotateX(-Math.PI / 2);
@@ -386,8 +381,8 @@ export class ItemBoxes {
     const flashMat = flashMaterial();
     this.flashes = new InstancedMesh(flashGeo, flashMat, FLASHES);
 
-    this.resources.push(shellGeo, backMat, frontMat, coreGeo, coreMat, poolTex, poolGeo, poolMat, shardGeo, shardMat, flashGeo, flashMat);
-    for (const m of [this.back, this.front, this.core, this.pool, this.shards, this.flashes]) {
+    this.resources.push(shellGeo, backMat, frontMat, poolTex, poolGeo, poolMat, shardGeo, shardMat, flashGeo, flashMat);
+    for (const m of [this.back, this.front, this.pool, this.shards, this.flashes]) {
       m.instanceMatrix.setUsage(DynamicDrawUsage);
       m.count = 0;
       m.frustumCulled = false;
@@ -397,7 +392,6 @@ export class ItemBoxes {
     this.flashes.count = FLASHES;
     this.pool.renderOrder = 4;
     this.back.renderOrder = 5;
-    this.core.renderOrder = 5;
     this.front.renderOrder = 6;
     this.shards.renderOrder = 7;
     this.flashes.renderOrder = 8;
@@ -503,12 +497,6 @@ export class ItemBoxes {
       I[n * 4 + 1] = decoy ? 1 : 0;
       I[n * 4 + 2] = (phase * 0.37) % 1;
       I[n * 4 + 3] = 1;
-      // The gem turns the other way, breathes, and shines in the box's colour.
-      e.set(time * 1.7 + phase, -time * 2.2 + phase, 0);
-      q.setFromEuler(e);
-      const breathe = sc * (0.85 + Math.sin(time * 4 + phase) * 0.12);
-      m.compose(p, q, s.set(breathe, breathe, breathe));
-      this.core.setMatrixAt(n, m);
       p.set(slot.x, slot.y + 0.07, slot.z);
       m.compose(p, q.identity(), s.set(sc, sc, sc));
       this.pool.setMatrixAt(n, m);
@@ -516,12 +504,11 @@ export class ItemBoxes {
       const sat = decoy ? 0.8 : 1;
       const lum = (rgb[0] + rgb[1] + rgb[2]) / 3;
       colour.setRGB(lum + (rgb[0] - lum) * sat, lum + (rgb[1] - lum) * sat, lum + (rgb[2] - lum) * sat);
-      this.core.setColorAt(n, colour.clone().multiplyScalar(2.2));
       this.pool.setColorAt(n, colour);
       if (glow && sc > 0.5) glow(slot.x, slot.y + BOX_LIFT, slot.z, colour.r, colour.g, colour.b);
       n++;
     }
-    for (const mesh of [this.back, this.front, this.core, this.pool]) {
+    for (const mesh of [this.back, this.front, this.pool]) {
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -633,6 +620,6 @@ export class ItemBoxes {
 
   dispose(): void {
     for (const r of this.resources) r.dispose();
-    for (const m of [this.back, this.front, this.core, this.pool, this.shards, this.flashes]) m.dispose();
+    for (const m of [this.back, this.front, this.pool, this.shards, this.flashes]) m.dispose();
   }
 }
