@@ -10,7 +10,8 @@ import {
   type RacerSetup,
   type RaceSetup,
 } from "../contract";
-import { trackById } from "../track/tracks";
+import type { TrackDef } from "../track/geometry";
+import { raceTrack } from "../track/mirror";
 import { seeded } from "./util";
 
 /** Friendly, original names for the bots. Nobody's trademark in here. */
@@ -29,9 +30,15 @@ export interface BuiltSetup {
  * The grid: bots first, so they start at the front, then the players in slot
  * order behind them; kart ids are the grid positions, 0.. . With bots on, the
  * grid is filled up to `settings.racers` (never fewer than the players, never
- * more than MAX_RACERS); with bots off it is the players alone.
+ * more than MAX_RACERS); with bots off it is the players alone. The track is
+ * the room's chosen one (mirrored if it asks) unless a Grand Prix names its own.
  */
-export function buildSetup(players: readonly LobbyPlayer[], settings: LobbySettings, seed: number): BuiltSetup {
+export function buildSetup(
+  players: readonly LobbyPlayer[],
+  settings: LobbySettings,
+  seed: number,
+  track: TrackDef = raceTrack(settings.track, settings.mirror),
+): BuiltSetup {
   const total = settings.bots ? Math.min(MAX_RACERS, Math.max(settings.racers, players.length)) : players.length;
   const botCount = total - players.length;
   const random = seeded(seed ^ 0x9e3779b9);
@@ -61,7 +68,7 @@ export function buildSetup(players: readonly LobbyPlayer[], settings: LobbySetti
     karts[id] = player.slot;
   }
   return {
-    setup: { track: trackById(settings.track), laps: settings.laps, seed, racers },
+    setup: { track, laps: settings.laps, seed, racers },
     karts,
   };
 }

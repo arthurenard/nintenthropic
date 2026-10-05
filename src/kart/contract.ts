@@ -392,8 +392,13 @@ export interface GrandPrixState {
   cup: string;
   /** 0-based: the race being run or just run. */
   race: number;
-  /** Everyone's points: players keyed by lobby slot ("p0"), bots by name ("b:Name": a bot keeps its name and driver through a cup). */
-  points: { key: string; name: string; colour: string; character?: string; player: number | null; points: number }[];
+  /**
+   * Everyone's points, best first (ties go to the better place in the last race): players keyed by lobby slot
+   * ("p0"), bots by name ("b:Name": a bot keeps its name and driver through a cup). A player who left keeps
+   * their row, with `player` null. After a race `place` is where the row finished it, `gain` the points it won,
+   * and `was` its rank (1-based) before it, for the standings' count-up.
+   */
+  points: { key: string; name: string; colour: string; character?: string; player: number | null; points: number; place?: number; gain?: number; was?: number }[];
 }
 
 /**
@@ -468,6 +473,11 @@ export interface Session {
   restart(): void;
   /** Back to the lobby after the results (the host's). Players stay ready. */
   backToLobby(): void;
+  /**
+   * The host's: moves a Grand Prix on without waiting (results → standings → the next race, or the podium);
+   * the room does so by itself after a few seconds. Optional: a session with no Grand Prix has none.
+   */
+  next?(): void;
   /**
    * The host's (and practice's): stops the race. True when it is now stopped
    * for the whole room (practice, or a room that watches the host's screen:
