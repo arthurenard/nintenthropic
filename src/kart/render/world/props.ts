@@ -54,24 +54,23 @@ export function rock(): BufferGeometry {
   return b.build();
 }
 
-/** A tuft of flowers: white, so each instance's colour picks its petals. */
+/** A tuft of flowers: white, so each instance's colour picks its petals. Kept to about 70 triangles. */
 export function flowers(): BufferGeometry {
   const b = new MeshBuilder();
   const stem = rgb("#3f9a3a");
   const petal: Rgb = [1, 1, 1];
-  const centre: Rgb = [1.0, 0.82, 0.18];
   const spots: [number, number, number][] = [
-    [0, 0, 0.34],
-    [0.26, 0.2, 0.26],
-    [-0.24, 0.16, 0.22],
-    [0.08, -0.26, 0.2],
+    [0, 0, 0.36],
+    [0.26, 0.18, 0.27],
+    [-0.24, 0.14, 0.22],
   ];
   for (const [x, z, h] of spots) {
     b.post(x, 0, z, 0.02, h, stem, 4);
-    b.blob(x, h, z, 0.13, 0.05, 0.13, ramp(mixRgb(petal, [0.45, 0.45, 0.45], 0.3), petal), 0);
-    b.blob(x, h + 0.04, z, 0.05, 0.035, 0.05, centre, 0);
+    // A shallow cone, apex up, reads from above as a five-petalled flower with a bright eye.
+    b.add(shapes.cone(5), xf(x, h + 0.03, z, 0.15, 0.1, 0.15, x * 5), ramp(mixRgb(petal, [0.5, 0.5, 0.5], 0.35), petal));
+    b.blob(x, h + 0.09, z, 0.045, 0.03, 0.045, [1.0, 0.82, 0.18], 0);
   }
-  b.blob(0, 0.06, 0, 0.3, 0.12, 0.3, stem, 0);
+  b.blob(0, 0.05, 0, 0.28, 0.1, 0.28, stem, 0);
   return b.build();
 }
 

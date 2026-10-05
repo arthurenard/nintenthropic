@@ -225,7 +225,6 @@ export class DemoRace implements RaceViewSource {
       if (n !== before && n <= 3) this.emit({ type: "countdown", n: n as 1 | 2 | 3 });
     }
     const raceTime = Math.max(0, this.clock - COUNTDOWN);
-    const g = this.geometry;
 
     for (const k of this.karts) {
       if (k.hasDriver) this.driveDriver(k, dt, racing, input, raceTime);
@@ -242,7 +241,6 @@ export class DemoRace implements RaceViewSource {
       if (this.finishedAt < 0) this.finishedAt = this.clock;
       if (this.options.autoRestart !== false && this.clock - this.finishedAt > 9) this.restart();
     }
-    void g;
   }
 
   /** The things every kart shares: timers, laps, the pads, the finish. */
@@ -302,7 +300,6 @@ export class DemoRace implements RaceViewSource {
     const g = this.geometry;
     const auto = input === null;
     const proj = g.project(k.x, k.z, k.near);
-    const half = proj.sample.width / 2;
     let steer = 0;
     let throttle = 0;
     let brake = 0;
@@ -399,7 +396,6 @@ export class DemoRace implements RaceViewSource {
     const along = Math.cos(k.heading) * after.sample.tz + Math.sin(k.heading) * after.sample.tx;
     k.wrongClock = along < -0.35 && k.speed > 2 ? k.wrongClock + dt : 0;
     k.wrongWay = k.wrongClock > 1.5;
-    void raceTime;
   }
 
   // ── The rest, on rails ────────────────────────────────────────────────────

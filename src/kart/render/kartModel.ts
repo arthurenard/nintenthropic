@@ -112,12 +112,7 @@ function loft(b: MeshBuilder, sections: Section[], edges: [Rgb, Rgb][], capRear:
 
 /** A thin box from point a to point c, for limbs and rods. */
 function limb(b: MeshBuilder, a: V3, c: V3, thickness: number, paint: Rgb): void {
-  const dx = c[0] - a[0];
-  const dy = c[1] - a[1];
-  const dz = c[2] - a[2];
-  const horiz = Math.hypot(dx, dz);
-  const len = Math.hypot(horiz, dy);
-  b.add(shapes.box(), xf((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2, thickness, thickness, len, Math.atan2(dx, dz), -Math.atan2(dy, horiz), 0), paint);
+  b.rod(a, c, thickness, paint);
 }
 
 function wheelGeometry(spec: { r: number; w: number }, hubColour: Rgb): BufferGeometry {
@@ -239,8 +234,8 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
   const wheelRimGeo = w.build();
 
   const flame = new MeshBuilder();
-  flame.add(shapes.cone(7), xf(0, 0, -0.5, 0.15, 1.0, 0.15, 0, -Math.PI / 2, 0), [1.6, 0.55, 0.12]);
-  flame.add(shapes.cone(7), xf(0, 0, -0.34, 0.08, 0.66, 0.08, 0, -Math.PI / 2, 0), [0.7, 0.9, 1.8]);
+  flame.add(shapes.cone(8), xf(0, 0, -0.8, 0.3, 1.6, 0.3, 0, -Math.PI / 2, 0), [1.4, 0.5, 0.07]);
+  flame.add(shapes.cone(8), xf(0, 0, -0.55, 0.16, 1.1, 0.16, 0, -Math.PI / 2, 0), [0.6, 0.9, 1.9]);
   const flameGeo = flame.build();
 
   const frontGeo = wheelGeometry(WHEEL_FRONT, top);

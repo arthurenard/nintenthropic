@@ -39,8 +39,8 @@ void main() {
   if (d > 1.0) discard;
   float soft = 1.0 - d;
   #ifdef GLOW
-    float a = soft * soft;
-    vec3 col = mix(vColor.rgb, vec3(1.0), pow(soft, 5.0) * 0.55);
+    float a = pow(soft, 1.35);
+    vec3 col = mix(vColor.rgb, vec3(1.0), pow(soft, 4.0) * 0.5);
   #else
     float a = smoothstep(0.0, 0.55, soft);
     vec3 col = vColor.rgb;

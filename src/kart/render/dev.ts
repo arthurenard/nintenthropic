@@ -19,7 +19,7 @@
  */
 import type { TrackTheme } from "../track/geometry";
 import { trackById, TRACKS } from "../track/tracks";
-import { createDemoRace, type DemoInput } from "./demo";
+import { createDemoRace, type DemoInput, type RaceViewSource } from "./demo";
 import type { Tier } from "./quality";
 import { createRaceRenderer, type GripRenderer } from "./renderer";
 import { runTurntable } from "./turntable";
@@ -40,8 +40,11 @@ function startRace(): void {
   const karts = Number(params.get("karts") ?? 8) || 8;
   const laps = Number(params.get("laps") ?? 0) || undefined;
 
+  // The stand-in source. To try the real sim, make `source` an adapter over it: a RaceViewSource whose
+  // `step` runs the race on its fixed tick with the keyboard's DriveInput and whose `view` is `race.view()`.
   const demo = createDemoRace(track, { karts, laps });
   demo.boxesAsThings = params.get("boxes") !== "rows";
+  const source: RaceViewSource = demo;
   const renderer: GripRenderer = createRaceRenderer(canvas, hudRoot, { quality, theme });
 
   const keys = new Set<string>();
@@ -57,7 +60,7 @@ function startRace(): void {
     lastKey = performance.now() / 1000;
     if (e.code === "KeyE" || e.code === "ShiftLeft" || e.code === "ShiftRight") presses++;
     if (/^Digit[1-4]$/.test(e.code)) setViews(Number(e.code.slice(5)));
-    if (e.code === "KeyR") demo.restart();
+    if (e.code === "KeyR") source.restart();
     if (e.code === "KeyP") paused = !paused;
     if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
   });
@@ -85,13 +88,13 @@ function startRace(): void {
 
   const main = async (): Promise<void> => {
     resize();
-    await renderer.load(track, demo.racers, (f) => {
+    await renderer.load(source.track, source.racers, (f) => {
       loading.textContent = `Getting ready… ${Math.round(f * 100)}%`;
     });
     setViews(views);
     resize();
     const skip = Number(params.get("skip") ?? 0) || 0;
-    for (let t = 0; t < skip; t += 1 / 30) demo.step(1 / 30, null);
+    for (let t = 0; t < skip; t += 1 / 30) source.step(1 / 30, null);
     loading.classList.add("done");
 
     let last = performance.now();
@@ -101,9 +104,9 @@ function startRace(): void {
     const loop = (now: number): void => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      if (!paused) demo.step(dt, input());
+      if (!paused) source.step(dt, input());
       const t0 = performance.now();
-      renderer.frame(demo.view(), dt);
+      renderer.frame(source.view(), dt);
       const cpu = performance.now() - t0;
       frames++;
       acc += dt;

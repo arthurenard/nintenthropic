@@ -44,6 +44,11 @@ function setRect(node: HTMLElement, r: Rect): void {
   node.style.height = `${r.h}px`;
 }
 
+/** The free quadrant holds only a map and a list, so its type runs larger than the play views'. */
+function freeScale(rect: Rect): number {
+  return Math.max(0.7, Math.min(1.35, hudScale(rect.w, rect.h) * 1.6));
+}
+
 function restart(node: HTMLElement, cls: string): void {
   node.classList.remove(cls);
   void node.offsetWidth;
@@ -135,6 +140,17 @@ export class Hud {
     this.racers = racers;
   }
 
+  /** A new race: events are numbered afresh, and nothing from the last one lingers. */
+  resetRace(): void {
+    this.lastEvent = -1;
+    for (const v of this.views) {
+      v.finalUntil = -1;
+      v.shownFinal = false;
+      v.lastLap = 0;
+      v.lastPlace = -1;
+    }
+  }
+
   setDpr(dpr: number): void {
     this.dpr = dpr;
   }
@@ -177,12 +193,16 @@ export class Hud {
 
     const finalLap = el("div", "gp-banner gp-glass", root);
     finalLap.textContent = "Final Lap";
+    finalLap.setAttribute("aria-live", "polite");
     const wrong = el("div", "gp-banner gp-wrong gp-glass", root);
     wrong.textContent = "Wrong Way";
+    wrong.setAttribute("aria-live", "assertive");
     wrong.style.top = `calc(var(--m) + 90px * var(--u))`;
 
     const count = el("div", "gp-count", root);
+    count.setAttribute("aria-live", "polite");
     const finish = el("div", "gp-finish gp-glass", root);
+    finish.setAttribute("aria-live", "polite");
     el("div", "gp-finish-eyebrow", finish).textContent = "Finished";
     const finishPlace = el("div", "gp-finish-place", finish);
     const finishTime = el("div", "gp-finish-time", finish);
@@ -230,7 +250,7 @@ export class Hud {
   private buildFree(rect: Rect): FreeHud {
     const root = el("div", "gp-free", this.root);
     setRect(root, rect);
-    const scale = hudScale(rect.w, rect.h);
+    const scale = freeScale(rect);
     root.style.setProperty("--u", String(scale));
     const inner = el("div", "gp-free-inner", root);
     const mapBox = el("div", "gp-map gp-glass", inner);
@@ -263,7 +283,7 @@ export class Hud {
       }
       this.updateView(v, kart, view);
     }
-    if (this.free) this.updateFree(this.free, view, byId);
+    if (this.free) this.updateFree(this.free, view);
   }
 
   private updateView(v: ViewHud, kart: KartView, view: RaceView): void {
@@ -370,9 +390,9 @@ export class Hud {
     setText(v.uses, !kart.rolling && kart.item === "nitro3" ? `×${kart.itemUses}` : "");
   }
 
-  private updateFree(f: FreeHud, view: RaceView, byId: Map<number, KartView>): void {
+  private updateFree(f: FreeHud, view: RaceView): void {
     // The map.
-    const scale = hudScale(f.rect.w, f.rect.h);
+    const scale = freeScale(f.rect);
     if (!f.mapSize) {
       const box = f.mapBox.getBoundingClientRect();
       f.mapSize = { w: Math.max(40, Math.floor(box.width - 20 * scale)), h: Math.max(40, Math.floor(box.height - 20 * scale)) };
@@ -400,7 +420,6 @@ export class Hud {
         return row;
       });
     }
-    void byId;
   }
 
   dispose(): void {

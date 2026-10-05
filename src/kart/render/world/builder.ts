@@ -189,6 +189,17 @@ export class MeshBuilder {
     this.add(shapes.box(), xf(cx, cy, cz, sx, sy, sz, yaw, pitch, roll), paint);
   }
 
+  /** A thin square rod from point `a` to point `c`: limbs, strings, struts. */
+  rod(a: V3, c: V3, thickness: number, paint: Paint): void {
+    const dx = c[0] - a[0];
+    const dy = c[1] - a[1];
+    const dz = c[2] - a[2];
+    const horiz = Math.hypot(dx, dz);
+    const len = Math.hypot(horiz, dy);
+    if (len < 1e-6) return;
+    this.add(shapes.box(), xf((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2, thickness, thickness, len, Math.atan2(dx, dz), -Math.atan2(dy, horiz), 0), paint);
+  }
+
   /** A vertical cylinder standing on `y` (its base), radius r, height h. */
   post(cx: number, y: number, cz: number, r: number, h: number, paint: Paint, segments = 8, topRadius = 1): void {
     const shape = topRadius === 1 ? shapes.cylinder(segments) : shapes.frustum(topRadius, segments);

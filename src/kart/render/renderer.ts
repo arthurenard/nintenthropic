@@ -13,6 +13,7 @@ import {
   Color,
   Group,
   NeutralToneMapping,
+  PerspectiveCamera,
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
@@ -29,6 +30,7 @@ import { KartActor, type ActorContext, type KartFactory } from "./kart";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
 import { pointScale } from "./points";
+import { Skids } from "./skids";
 import { QUALITY, type QualitySettings, type Tier } from "./quality";
 import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
@@ -67,6 +69,8 @@ export interface RenderStats {
 
 export interface GripRenderer extends RaceRenderer {
   stats(): RenderStats;
+  /** For looking at the whole world from anywhere (the dev page): replaces the first view's camera; null puts the chase camera back. */
+  setDebugCamera(pose: { x: number; y: number; z: number; lookX: number; lookY: number; lookZ: number; fov?: number } | null): void;
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -111,6 +115,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let world: World | null = null;
   let effects: Effects | null = null;
   let things: Things | null = null;
+  let skids: Skids | null = null;
   let actors = new Map<number, KartActor>();
   let racers: readonly RacerSetup[] = [];
   let layout: ViewLayout = { views: [], free: null };
@@ -124,8 +129,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let lastTick = 0;
   let disposed = false;
   let ctxLost = false;
-  let fpsEma = 60;
   let boxSlots: BoxSlot[] = [];
+  let debugCamera: PerspectiveCamera | null = null;
 
   canvas.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
@@ -174,6 +179,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     effects = null;
     things?.dispose();
     things = null;
+    skids?.dispose();
+    skids = null;
     world?.dispose();
     world = null;
   };
@@ -200,10 +207,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       dynamic.add(effects.group);
       things = new Things(effects);
       dynamic.add(things.group);
+      skids = new Skids();
+      dynamic.add(skids.mesh);
       for (const r of racers) makeActor(r);
       hud.setTrack(world.geometry, racers);
       boxSlots = rowSlots(world.geometry);
       lastEventId = -1;
+      hud.resetRace();
       time = 0;
       for (const c of cameras) c.reset();
       relayout();
@@ -218,16 +228,17 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     },
 
     frame(view: RaceView, dtRaw: number): void {
-      if (!world || !effects || !things || disposed || ctxLost) return;
+      if (!world || !effects || !things || !skids || disposed || ctxLost) return;
       const dt = Math.min(0.1, Math.max(0, dtRaw));
       time += dt;
-      if (dt > 0) fpsEma += (1 / Math.max(dt, 1e-3) - fpsEma) * 0.05;
       if (dtRaw > 0 && resolution.sample(dtRaw * 1000)) applySize();
 
       // A new race starts the tick count over.
       if (view.tick < lastTick - 5) {
         lastEventId = -1;
         effects.clear();
+        skids.clear();
+        hud.resetRace();
         for (const c of cameras) c.reset();
       }
       lastTick = view.tick;
@@ -245,6 +256,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         }
         a.update(k, dt, ctx, time);
         effects.kart(k, dt);
+        skids.kart(k);
         if (world.style.night) {
           const fx = Math.sin(k.heading);
           const fz = Math.cos(k.heading);
@@ -259,8 +271,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
       // Item boxes: the sim's if it sends any, else the track's own rows.
       boxSlots = slotsFromThings(view.things) ?? boxSlots;
-      world.boxes.update(boxSlots, time, dt);
-      things.update(view.things, time, dt);
+      world.boxes.update(boxSlots, time, dt, (x, y, z, r, g, b) => effects!.glowNow(x, y, z, 2.4, r * 1.2, g * 1.2, b * 1.2, 0.28));
+      things.update(view.things, time);
 
       // Events, once each.
       const kartAt = (id: number) => byId.get(id);
@@ -283,6 +295,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
       world.update(time, dt);
       effects.update(dt);
+      skids.update(dt);
 
       // Draw.
       renderer.info.reset();
@@ -297,13 +310,19 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         const cam = cameras[i];
         if (!rect || !kart || !cam) return;
         cam.update(kart, view, dt, rect.w / rect.h);
-        world!.sky.group.position.copy(cam.camera.position);
-        const fovRad = (cam.camera.fov * Math.PI) / 180;
+        let eye = cam.camera;
+        if (debugCamera && i === 0) {
+          debugCamera.aspect = rect.w / rect.h;
+          debugCamera.updateProjectionMatrix();
+          eye = debugCamera;
+        }
+        world!.sky.group.position.copy(eye.position);
+        const fovRad = (eye.fov * Math.PI) / 180;
         pointScale.value = (rect.h * pr) / (2 * Math.tan(fovRad / 2));
         const y = height - rect.y - rect.h;
         renderer.setViewport(rect.x, y, rect.w, rect.h);
         renderer.setScissor(rect.x, y, rect.w, rect.h);
-        renderer.render(scene, cam.camera);
+        renderer.render(scene, eye);
       });
       renderer.setScissorTest(false);
 
@@ -327,6 +346,16 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       renderer.dispose();
     },
 
+    setDebugCamera(pose) {
+      if (!pose) {
+        debugCamera = null;
+        return;
+      }
+      debugCamera = new PerspectiveCamera(pose.fov ?? 60, 1, 0.5, 2600);
+      debugCamera.position.set(pose.x, pose.y, pose.z);
+      debugCamera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
+    },
+
     stats(): RenderStats {
       return {
         gpu,
@@ -341,7 +370,6 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       };
     },
   };
-  void fpsEma;
   renderer.info.autoReset = false;
   applySize();
   relayout();

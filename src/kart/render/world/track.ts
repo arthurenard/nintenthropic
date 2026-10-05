@@ -459,6 +459,51 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     };
   }
 
+  // ── Bunting along the start straight, by day ─────────────────────────────
+  if (!style.night) {
+    const flagColours = ["#ff453a", "#ffd60a", "#0a84ff", "#30d158", "#ffffff", "#ff9f0a", "#bf5af2"].map(rgb);
+    const pole = rgb("#d8dce6");
+    const string = rgb("#2b2e37");
+    const span = 7;
+    const from = -84;
+    const to = 63;
+    for (const side of [-1, 1] as const) {
+      const tops: V3[] = [];
+      const index: number[] = [];
+      for (let k = from; k <= to; k += span) {
+        const i = Math.round(k / spacing);
+        const a = S(i);
+        const o = side * (a.width / 2 + wallBase + 3.6);
+        const x = a.x - a.tz * o;
+        const z = a.z + a.tx * o;
+        deco[chunkOf(i)]!.post(x, a.y - 0.6, z, 0.08, 6.2, { bottom: scaleRgb(pole, 0.7), top: pole }, 6, 0.8);
+        tops.push([x, a.y + 5.2, z]);
+        index.push(i);
+      }
+      for (let k = 0; k < tops.length - 1; k++) {
+        const p = tops[k]!;
+        const q = tops[k + 1]!;
+        const bd = deco[chunkOf(index[k]!)]!;
+        const flags = 8;
+        let prev: V3 = p;
+        for (let f = 1; f <= flags; f++) {
+          const t = f / flags;
+          const sag = 0.9 * (1 - (2 * t - 1) ** 2);
+          const here: V3 = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t - sag, p[2] + (q[2] - p[2]) * t];
+          bd.rod(prev, here, 0.035, string);
+          // A pennant hangs from the string's middle: a triangle, drawn from both sides.
+          const mid: V3 = [(prev[0] + here[0]) / 2, (prev[1] + here[1]) / 2, (prev[2] + here[2]) / 2];
+          const apex: V3 = [mid[0], mid[1] - 0.62, mid[2]];
+          const c = flagColours[(k * flags + f + (side > 0 ? 3 : 0)) % flagColours.length]!;
+          const dim = scaleRgb(c, 0.8);
+          bd.tri(prev, here, apex, c, c, dim);
+          bd.tri(here, prev, apex, c, c, dim);
+          prev = here;
+        }
+      }
+    }
+  }
+
   // ── Night lamps with pools of light ──────────────────────────────────────
   let pools: BufferGeometry | null = null;
   if (style.night) {

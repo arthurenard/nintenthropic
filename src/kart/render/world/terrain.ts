@@ -133,7 +133,7 @@ export class Terrain {
   }
 
   private fill(): void {
-    const { nx, nz, cell, style } = this;
+    const { nx, nz, cell } = this;
     const cx = (this.minX + this.maxX) / 2;
     const cz = (this.minZ + this.maxZ) / 2;
     const hx = (this.maxX - this.minX) / 2;
@@ -168,7 +168,6 @@ export class Terrain {
         this.colours[o + 2] = c[2];
       }
     }
-    void style;
   }
 
   private heightOf(x: number, z: number, g: GroundInfo, rim: number): number {

@@ -36,6 +36,10 @@ describe("chaseOffsets", () => {
     expect(fast.height).toBeGreaterThan(slow.height);
     expect(chaseOffsets(1, 1).distance).toBeGreaterThan(fast.distance);
   });
+  it("stands farther back in a narrow view, and never closer in a wide one", () => {
+    expect(chaseOffsets(0.5, 0, 0.6).distance).toBeGreaterThan(chaseOffsets(0.5, 0, 1.6).distance);
+    expect(chaseOffsets(0.5, 0, 3.2).distance).toBeCloseTo(chaseOffsets(0.5, 0, 1.6).distance, 6);
+  });
 });
 
 describe("ChaseCamera", () => {
@@ -53,9 +57,15 @@ describe("ChaseCamera", () => {
     const k = kart();
     c.update(k, view("countdown", COUNTDOWN_SPAN), 1 / 60, 1.6);
     const high = c.camera.position.y;
-    c.update(k, view("countdown", 0.02), 1 / 60, 1.6);
-    const low = c.camera.position.y;
-    expect(high).toBeGreaterThan(low + 8);
+    let last = high;
+    // The countdown runs down; the camera only ever comes lower, and ends near the chase height.
+    for (let t = COUNTDOWN_SPAN; t > 0; t -= 1 / 60) {
+      c.update(k, view("countdown", t), 1 / 60, 1.6);
+      expect(c.camera.position.y).toBeLessThanOrEqual(last + 1e-6);
+      last = c.camera.position.y;
+    }
+    expect(high).toBeGreaterThan(last + 8);
+    expect(last).toBeLessThan(k.y + 4);
   });
 
   it("does not whirl with a spinning kart", () => {

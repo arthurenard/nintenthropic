@@ -153,7 +153,7 @@ export class Things {
     return { kind: t.kind, obj: g, spin, seen: this.frameNo };
   }
 
-  update(things: readonly ThingView[], time: number, dt: number): void {
+  update(things: readonly ThingView[], time: number): void {
     this.frameNo++;
     for (const t of things) {
       if (t.kind === "box" || !t.active) continue;
@@ -202,7 +202,6 @@ export class Things {
         this.visuals.delete(id);
       }
     }
-    void dt;
   }
 
   clear(): void {

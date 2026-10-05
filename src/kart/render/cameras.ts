@@ -27,10 +27,15 @@ export function baseFov(aspect: number): number {
   return clamp((vertical * 180) / Math.PI, 50, 66);
 }
 
-/** How far the camera trails the kart and how high it rides, for a speed ratio 0..1+. */
-export function chaseOffsets(speedRatio: number, boost: number): { distance: number; height: number } {
+/**
+ * How far the camera trails the kart and how high it rides, for a speed ratio
+ * 0..1+. In a narrow view (two players side by side, a portrait window) it
+ * stands farther back and higher, so the kart does not swallow the picture.
+ */
+export function chaseOffsets(speedRatio: number, boost: number, aspect = 1.6): { distance: number; height: number } {
   const s = clamp(speedRatio, 0, 1.3);
-  return { distance: lerp(4.5, 5.7, s) + boost * 0.9, height: lerp(2.1, 2.55, s) };
+  const back = Math.sqrt(clamp(1.6 / Math.max(0.3, aspect), 1, 1.7));
+  return { distance: (lerp(4.5, 5.7, s) + boost * 0.9) * back, height: lerp(2.1, 2.55, s) * (0.8 + 0.2 * back) * back };
 }
 
 const _fwd = new Vector3();
@@ -111,7 +116,7 @@ export class ChaseCamera {
     }
     const swing = Math.sin(this.orbit) * 1.15 * smoothstep(0, 1, this.orbitBlend);
 
-    const { distance, height } = chaseOffsets(speedRatio, this.boost);
+    const { distance, height } = chaseOffsets(speedRatio, this.boost, aspect);
     const yaw = this.yaw + swing;
     _fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
     const lift = smoothstep(0, 1, this.orbitBlend) * 0.4;

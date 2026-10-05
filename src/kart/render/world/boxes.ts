@@ -84,11 +84,11 @@ export class ItemBoxes {
 
   constructor() {
     const shellGeo = new BoxGeometry(SIZE, SIZE, SIZE);
-    const shellMat = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false, side: DoubleSide });
+    const shellMat = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.27, depthWrite: false, side: DoubleSide });
     this.shell = new InstancedMesh(shellGeo, shellMat, CAPACITY);
 
     const fb = new MeshBuilder();
-    const t = 0.085;
+    const t = 0.11;
     const h = SIZE / 2;
     const white: [number, number, number] = [1, 1, 1];
     for (const y of [-h, h]) {
@@ -100,8 +100,8 @@ export class ItemBoxes {
     const frameMat = new MeshBasicMaterial({ vertexColors: true });
     this.frame = new InstancedMesh(frameGeo, frameMat, CAPACITY);
 
-    const gemGeo = new OctahedronGeometry(0.46, 0);
-    gemGeo.scale(0.8, 1.15, 0.8);
+    const gemGeo = new OctahedronGeometry(0.5, 0);
+    gemGeo.scale(0.8, 1.2, 0.8);
     const gemMat = new MeshBasicMaterial({ color: new Color(2.2, 1.9, 0.9) });
     this.gem = new InstancedMesh(gemGeo, gemMat, CAPACITY);
 
@@ -123,7 +123,7 @@ export class ItemBoxes {
     this.group.renderOrder = 6;
   }
 
-  update(slots: readonly BoxSlot[], time: number, dt: number): void {
+  update(slots: readonly BoxSlot[], time: number, dt: number, glow?: (x: number, y: number, z: number, r: number, g: number, b: number) => void): void {
     this.frameNo++;
     const m = new Matrix4();
     const q = new Quaternion();
@@ -162,10 +162,11 @@ export class ItemBoxes {
       p.set(slot.x, slot.y + 0.07, slot.z);
       m.compose(p, q.identity(), s.set(sc, sc, sc));
       this.pool.setMatrixAt(n, m);
-      colour.setHSL((time * 0.12 + slot.id * 0.037) % 1, 0.9, 0.62);
+      colour.setHSL((time * 0.12 + slot.id * 0.11) % 1, 1, 0.55);
       this.shell.setColorAt(n, colour);
-      this.frame.setColorAt(n, colour.multiplyScalar(1.3));
+      this.frame.setColorAt(n, colour);
       this.pool.setColorAt(n, colour);
+      if (glow && sc > 0.5) glow(slot.x, slot.y + 1.25, slot.z, colour.r, colour.g, colour.b);
       n++;
     }
     for (const mesh of [this.shell, this.frame, this.gem, this.pool]) {

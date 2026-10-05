@@ -11,8 +11,6 @@ import { KART_EXHAUST, KART_REAR_WHEEL } from "./kartModel";
 import { clamp } from "./math";
 import { makePoints } from "./points";
 
-type Pool = "add" | "norm";
-
 class Sprites {
   readonly points: Points;
   private readonly n: number;
@@ -33,8 +31,12 @@ class Sprites {
   private readonly gravity: Float32Array;
   private readonly drag: Float32Array;
 
+  /** Light holds its brightness most of its life and then drops away; smoke fades steadily. */
+  private readonly hold: boolean;
+
   constructor(capacity: number, additive: boolean) {
     this.n = capacity;
+    this.hold = additive;
     this.points = makePoints(capacity, additive);
     const f = (k = 1) => new Float32Array(capacity * k);
     this.x = f();
@@ -120,7 +122,9 @@ class Sprites {
       P[i * 3 + 1] = this.y[i]!;
       P[i * 3 + 2] = this.z[i]!;
       const k = i * 4;
-      for (let q = 0; q < 4; q++) C[k + q] = this.c0[k + q]! + (this.c1[k + q]! - this.c0[k + q]!) * u;
+      const uc = this.hold ? u * u : u;
+      for (let q = 0; q < 3; q++) C[k + q] = this.c0[k + q]! + (this.c1[k + q]! - this.c0[k + q]!) * u;
+      C[k + 3] = this.c0[k + 3]! + (this.c1[k + 3]! - this.c0[k + 3]!) * uc;
       S[i] = this.s0[i]! + (this.s1[i]! - this.s0[i]!) * u;
     }
     pos.needsUpdate = true;
@@ -140,12 +144,13 @@ interface Emit {
   lastBoost: number;
 }
 
-const BLUE0 = [0.35, 0.78, 1.0, 1] as const;
-const BLUE1 = [0.1, 0.3, 1.0, 0] as const;
-const ORANGE0 = [1.0, 0.78, 0.22, 1] as const;
-const ORANGE1 = [1.0, 0.25, 0.0, 0] as const;
-const WHITE0 = [1.0, 0.96, 0.8, 0.9] as const;
-const WHITE1 = [1.0, 0.7, 0.3, 0] as const;
+// Overbright colours: the soft sprite's core goes white-hot while its halo keeps the colour.
+const BLUE0 = [0.22, 0.7, 2.0, 1] as const;
+const BLUE1 = [0.08, 0.25, 1.6, 0] as const;
+const ORANGE0 = [1.9, 0.8, 0.08, 1] as const;
+const ORANGE1 = [1.5, 0.22, 0.0, 0] as const;
+const WHITE0 = [1.5, 1.4, 1.1, 0.9] as const;
+const WHITE1 = [1.2, 0.7, 0.25, 0] as const;
 
 export class Effects {
   readonly group = new Group();
@@ -373,11 +378,19 @@ export class Effects {
     // Drift sparks: a few pale ones while it builds, then blue, then orange.
     if (k.drift !== 0 && !k.offroad) {
       const level = k.driftLevel;
-      const rate = level === 0 ? 14 : level === 1 ? 80 : 110;
+      const rate = level === 0 ? 16 : level === 1 ? 130 : 170;
       st.spark += rate * dt;
       const c0 = level === 0 ? WHITE0 : level === 1 ? BLUE0 : ORANGE0;
       const c1 = level === 0 ? WHITE1 : level === 1 ? BLUE1 : ORANGE1;
-      const size = level === 0 ? 0.14 : level === 1 ? 0.22 : 0.28;
+      const size = level === 0 ? 0.16 : level === 1 ? 0.3 : 0.38;
+      // The charge shows as a glow at each rear wheel, too.
+      if (level > 0) {
+        const glow = level === 1 ? [0.25, 0.65, 1.8] : [1.8, 0.75, 0.08];
+        for (const side of [-1, 1]) {
+          const p = wheel(side, 0.2);
+          this.glowNow(p[0], p[1], p[2], level === 1 ? 1.5 : 1.9, glow[0]!, glow[1]!, glow[2]!, 0.55);
+        }
+      }
       while (st.spark >= 1) {
         st.spark -= 1;
         const side = this.r() < 0.5 ? -1 : 1;
@@ -405,7 +418,7 @@ export class Effects {
       while (st.smoke >= 1) {
         st.smoke -= 1;
         const p = wheel(this.r() < 0.5 ? -1 : 1, 0.2);
-        this.norm.emit(p[0], p[1], p[2], this.spread() * 0.8 - fx * 1.2, 0.5 + this.r() * 0.8, this.spread() * 0.8 - fz * 1.2, 0.5 + this.r() * 0.4, 0.45, 1.5, [0.94, 0.94, 0.98, 0.28], [0.9, 0.9, 0.95, 0], 0, 1.5);
+        this.norm.emit(p[0], p[1], p[2], this.spread() * 0.8 - fx * 1.2, 0.5 + this.r() * 0.8, this.spread() * 0.8 - fz * 1.2, 0.5 + this.r() * 0.4, 0.45, 1.5, [0.94, 0.94, 0.98, 0.2], [0.9, 0.9, 0.95, 0], 0, 1.5);
       }
     } else {
       st.spark = 0;
@@ -414,7 +427,12 @@ export class Effects {
 
     // Boost flames out of both exhausts.
     if (k.boost > 0) {
-      st.flame += 110 * dt;
+      for (const side of [-1, 1]) {
+        const ex = KART_EXHAUST.right * side;
+        const back = KART_EXHAUST.forward - 0.5;
+        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.1, 1.8, 0.7, 0.12, 0.6);
+      }
+      st.flame += 190 * dt;
       while (st.flame >= 1) {
         st.flame -= 1;
         const side = this.r() < 0.5 ? -1 : 1;
@@ -428,11 +446,11 @@ export class Effects {
           -fx * (4 + this.r() * 5) + this.spread() * 0.5,
           this.spread() * 0.6,
           -fz * (4 + this.r() * 5) + this.spread() * 0.5,
-          0.16 + this.r() * 0.16,
-          blue ? 0.28 : 0.42,
-          0.06,
-          blue ? [0.55, 0.8, 1.0, 0.95] : [1.0, 0.8, 0.3, 0.95],
-          blue ? [0.2, 0.4, 1.0, 0] : [1.0, 0.25, 0.04, 0],
+          0.2 + this.r() * 0.22,
+          blue ? 0.4 : 0.62,
+          0.08,
+          blue ? [0.4, 0.9, 2.0, 0.95] : [1.9, 0.9, 0.15, 0.95],
+          blue ? [0.1, 0.3, 1.6, 0] : [1.5, 0.25, 0.02, 0],
           0,
           1.2,
         );

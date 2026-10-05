@@ -266,7 +266,7 @@
 }
 .gp-free-inner {
   position: absolute;
-  inset: calc(18px * var(--u));
+  inset: calc(16px * var(--u));
   display: flex;
   gap: calc(18px * var(--u));
   align-items: stretch;
@@ -291,20 +291,20 @@
   gap: calc(2px * var(--u));
 }
 .gp-eyebrow {
-  font-size: calc(12px * var(--u));
+  font-size: calc(14px * var(--u));
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--gp-secondary);
-  padding: 0 calc(4px * var(--u)) calc(6px * var(--u));
+  padding: 0 calc(6px * var(--u)) calc(8px * var(--u));
 }
 .gp-row {
   display: grid;
-  grid-template-columns: calc(28px * var(--u)) calc(14px * var(--u)) 1fr auto;
+  grid-template-columns: calc(30px * var(--u)) calc(16px * var(--u)) 1fr auto;
   align-items: center;
-  gap: calc(8px * var(--u));
-  padding: calc(4px * var(--u)) calc(4px * var(--u));
-  font-size: calc(15px * var(--u));
+  gap: calc(10px * var(--u));
+  padding: calc(6px * var(--u)) calc(6px * var(--u));
+  font-size: calc(20px * var(--u));
   font-weight: 500;
   white-space: nowrap;
 }
@@ -313,8 +313,8 @@
   color: var(--gp-secondary);
 }
 .gp-row .gp-dot {
-  width: calc(12px * var(--u));
-  height: calc(12px * var(--u));
+  width: calc(16px * var(--u));
+  height: calc(16px * var(--u));
   border-radius: 50%;
 }
 .gp-row .gp-name {

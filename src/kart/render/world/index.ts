@@ -183,7 +183,7 @@ export async function createWorld(
   await breathe();
 
   // Scenery.
-  const scenery: Scenery = buildScenery(geometry, style, terrain, quality, vertexMat);
+  const scenery: Scenery = buildScenery(style, terrain, quality, vertexMat);
   track(scenery);
   group.add(scenery.group);
   onProgress(0.86);
