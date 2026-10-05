@@ -314,6 +314,8 @@ test("two on one camera: a second name, and each checked in their own picture", 
   const second = page.getByRole("switch", { name: "Two on This Camera" });
   await second.click();
   await expect(second).toHaveAttribute("aria-checked", "true");
+  // The first name is chosen too: a random default that happened to be Finn would make the second one change (two with one name).
+  await page.getByLabel("Name", { exact: true }).fill("Maya");
   await page.getByLabel("Second Driver").fill("Finn");
   await shot(page, info, "race-2c-you-two", 400);
   await page.getByRole("button", { name: "Continue" }).click();
