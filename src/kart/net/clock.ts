@@ -29,7 +29,8 @@ export class TickClock {
     this.owed += dt;
     const whole = Math.min(max, Math.floor(this.owed / TICK + 1e-9));
     this.owed -= whole * TICK;
-    if (whole === max) this.owed = Math.min(this.owed, TICK);
+    // At the cap, whole ticks still owed are forgotten; only the part of a tick carries on.
+    if (whole === max) this.owed %= TICK;
     return whole;
   }
 }
