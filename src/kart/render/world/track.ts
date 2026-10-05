@@ -240,16 +240,39 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     // On an open edge the kerb would be the shelf's: leave it.
     if (ctx.open(i, side) > 0.3) continue;
     const stripe = Math.floor(i / 2) % 2 === 0 ? colour.kerbA : colour.kerbB;
-    const inner0 = a.width / 2 - 0.12;
-    const inner1 = b.width / 2 - 0.12;
-    const outer0 = a.width / 2 + 1.25;
-    const outer1 = b.width / 2 + 1.25;
-    const lift = (e: number) => 0.055 - 0.035 * clamp(e);
-    const quad =
-      side > 0
-        ? ([P(i, inner0, lift(0)), P(i, outer0, lift(1)), P(i + 1, outer1, lift(1)), P(i + 1, inner1, lift(0))] as const)
-        : ([P(i, -outer0, lift(1)), P(i, -inner0, lift(0)), P(i + 1, -inner1, lift(0)), P(i + 1, -outer1, lift(1))] as const);
-    deco[chunkOf(i)]!.quad(quad[0], quad[1], quad[2], quad[3], stripe, stripe, stripe, stripe, UP);
+    // A kerb has a profile: it rises from the road in a short bevel, runs flat along its top, and bevels down to the verge.
+    // The bevels take the light differently from the top, which is what makes the stripe read as a solid thing.
+    const in0 = a.width / 2 - 0.12;
+    const in1 = b.width / 2 - 0.12;
+    const out0 = a.width / 2 + 1.25;
+    const out1 = b.width / 2 + 1.25;
+    const mix = (x: number, y: number, t: number) => x + (y - x) * t;
+    const prof: [number, number][] = [
+      [0, 0.012],
+      [0.1, 0.075],
+      [0.9, 0.075],
+      [1, 0.004],
+    ];
+    const rx = -a.tz * side;
+    const rz = a.tx * side;
+    const slope: V3 = [rx * 0.62, 0.78, rz * 0.62];
+    const slopeIn: V3 = [-rx * 0.62, 0.78, -rz * 0.62];
+    const bevel = scaleRgb(stripe, 0.8);
+    for (let k = 0; k < prof.length - 1; k++) {
+      const [t0, l0] = prof[k]!;
+      const [t1, l1] = prof[k + 1]!;
+      const o = (i0: number, i1: number, t: number) => mix(i0, i1, t);
+      const s0 = side > 0 ? 1 : -1;
+      const A0 = P(i, s0 * o(in0, out0, t0), l0);
+      const A1 = P(i, s0 * o(in0, out0, t1), l1);
+      const B1 = P(i + 1, s0 * o(in1, out1, t1), l1);
+      const B0 = P(i + 1, s0 * o(in1, out1, t0), l0);
+      const flat = k === 1;
+      const col = flat ? stripe : bevel;
+      const n: V3 = flat ? UP : k === 0 ? slopeIn : slope;
+      if (side > 0) deco[chunkOf(i)]!.quad(A0, A1, B1, B0, col, col, col, col, n);
+      else deco[chunkOf(i)]!.quad(A1, A0, B0, B1, col, col, col, col, n);
+    }
   }
 
   // ── Barriers, and the edges that have none ───────────────────────────────
@@ -488,7 +511,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
         const wz = czw + rz * u + tz * v;
         const proj = track.project(wx, wz, a.s);
         const r = Math.hypot(u, v) / R;
-        const fall = Math.pow(Math.max(0, 1 - r), 1.8) * 0.34;
+        const fall = Math.pow(Math.max(0, 1 - r), 1.8) * 0.8;
         const c: Rgb = [1.0 * fall, 0.78 * fall, 0.42 * fall];
         return [[wx, proj.sample.y + 0.045, wz], c];
       };

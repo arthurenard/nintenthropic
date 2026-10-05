@@ -97,7 +97,7 @@ export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: O
   if (style.id === "space") {
     // A ribbon of dark glass with light in it: you see the stars through it, a little.
     const m = bakedLit(
-      new MeshPhysicalMaterial({ map, emissive: new Color(1, 1, 1), emissiveMap: glow, transparent: true, opacity: 0.8, roughness: 0.18, metalness: 0.1, clearcoat: 0.6, clearcoatRoughness: 0.1 }),
+      new MeshStandardMaterial({ map, emissive: new Color(1, 1, 1), emissiveMap: glow, roughness: 0.2, metalness: 0.2 }),
       bake,
       "road-glass",
     );

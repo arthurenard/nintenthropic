@@ -50,10 +50,10 @@ export function roadTexture(style: ThemeStyle, anisotropy: number, size = 512): 
   for (let i = 0; i < 60; i++) {
     const x = rnd() * W;
     const y = rnd() * H;
-    const r = (30 + rnd() * 90) * f;
+    const r = (60 + rnd() * 160) * f;
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     const light = rnd() > 0.5;
-    g.addColorStop(0, light ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)");
+    g.addColorStop(0, light ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.04)");
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);

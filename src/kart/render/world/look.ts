@@ -60,27 +60,32 @@ const day: Look = {
 const night: Look = {
   ...day,
   tone: "aces",
-  exposure: 1.0,
+  exposure: 1.1,
   bloom: { threshold: 0.9, intensity: 0.8, radius: 0.8 },
-  vibrance: 0.3,
-  saturation: 1.12,
-  contrast: 0.1,
-  shadowTint: [0.94, 0.98, 1.1],
-  highlightTint: [1.04, 1.0, 0.97],
+  vibrance: 0.2,
+  saturation: 1.02,
+  contrast: 0.12,
+  shadowTint: [0.95, 0.98, 1.06],
+  highlightTint: [1.05, 1.0, 0.95],
   vignette: 0.28,
-  envIntensity: 0.85,
+  envIntensity: 0.7,
+  fill: 0.6,
+  sun: 0.8,
+  shadow: 0.8,
 };
 
 export const LOOKS: Record<TrackTheme, Look> = {
-  meadow: { ...day, exposure: 1.05, vibrance: 0.4 },
-  canyon: { ...day, exposure: 1.0, highlightTint: [1.07, 1.0, 0.9], shadowTint: [0.98, 0.96, 1.04], vibrance: 0.3 },
-  harbour: { ...night, exposure: 1.1 },
-  kitchen: { ...day, exposure: 1.0, highlightTint: [1.06, 1.0, 0.92], envIntensity: 0.7 },
-  snow: { ...night, exposure: 1.2, vibrance: 0.25 },
-  volcano: { ...night, exposure: 1.1, bloom: { threshold: 0.85, intensity: 0.95, radius: 0.85 } },
-  funfair: { ...night, exposure: 1.15, bloom: { threshold: 0.85, intensity: 0.95, radius: 0.85 } },
-  space: { ...night, exposure: 1.0, bloom: { threshold: 0.8, intensity: 1.0, radius: 0.9 } },
-  palm: { ...day, exposure: 1.05, vibrance: 0.4 },
+  // Morning: a bright, saturated world; a warm sun, a blue sky in the shadows.
+  meadow: { ...day, exposure: 1.0, sun: 1.55, fill: 0.55, envIntensity: 0.75, vibrance: 0.35, saturation: 1.04 },
+  // The last warm hour: long orange light, deep warm shadows, not a world dyed orange.
+  canyon: { ...day, exposure: 0.92, sun: 1.2, fill: 0.5, envIntensity: 0.65, saturation: 0.9, vibrance: 0.18, highlightTint: [1.05, 1.0, 0.92], shadowTint: [0.95, 0.96, 1.06] },
+  harbour: { ...night, exposure: 1.2, sun: 0.55, fill: 0.5, envIntensity: 0.6, saturation: 0.98, vibrance: 0.12, bloom: { threshold: 0.95, intensity: 0.75, radius: 0.8 } },
+  kitchen: { ...day, exposure: 0.74, sun: 1.35, fill: 0.5, envIntensity: 0.7, saturation: 1.0, highlightTint: [1.06, 1.0, 0.92] },
+  snow: { ...night, exposure: 1.25, sun: 1.0, fill: 0.7, envIntensity: 0.8, vibrance: 0.25, shadow: 0.75 },
+  volcano: { ...night, exposure: 1.55, sun: 1.1, fill: 0.95, envIntensity: 0.9, bloom: { threshold: 0.85, intensity: 0.85, radius: 0.85 } },
+  funfair: { ...night, exposure: 1.25, sun: 0.8, fill: 0.7, envIntensity: 0.75, bloom: { threshold: 0.85, intensity: 0.95, radius: 0.85 } },
+  space: { ...night, exposure: 1.05, sun: 1.2, fill: 0.8, envIntensity: 0.9, bloom: { threshold: 0.9, intensity: 0.8, radius: 0.9 } },
+  palm: { ...day, exposure: 0.88, sun: 1.3, fill: 0.5, envIntensity: 0.7, vibrance: 0.3, saturation: 1.04 },
 };
 
 export function lookFor(theme: TrackTheme): Look {

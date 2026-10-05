@@ -134,6 +134,7 @@ export async function createWorld(
     m.matrixAutoUpdate = false;
     m.updateMatrix();
     m.renderOrder = order;
+    m.receiveShadow = true;
     group.add(m);
     return m;
   };

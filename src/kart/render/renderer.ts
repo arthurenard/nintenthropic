@@ -119,6 +119,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const hud = new Hud(hudRoot, { blur: settings.glassBlur, calm });
 
   const scene = new Scene();
+  (globalThis as unknown as { __scene?: Scene }).__scene = scene;
+  (globalThis as unknown as { __renderer?: WebGLRenderer }).__renderer = renderer;
   const dynamic = new Group();
   scene.add(dynamic);
   const kartGroup = new Group();
