@@ -28,14 +28,36 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   turning: the kart hops into a drift that way. Sparks grow blue, then
   orange; straighten the wheel to let go, and the kart boosts — longer for
   orange. A hop going straight is only a hop.
-- **Items.** Drive through an item box for an item. Flick one hand open and
-  closed again (under 0.6 s, the other hand staying a fist) to use it. Both
-  hands opening together is a brake, never an item.
+- **Items.** Drive through an item box for an item (eleven kinds, below).
+  Flick one hand open and closed again (under 0.6 s, the other hand staying a
+  fist) to use it. Both hands opening together is a brake, never an item.
 - **Start boost.** During the countdown, open your hands; close them on "1".
   Too early and the engine floods for a moment.
 - **Hands gone.** One hand lost: the wheel holds its angle for 0.4 s, then
   eases to the centre. Both lost: the kart coasts, and the screen says "Show
   Both Hands".
+- **Drivers.** Everyone picks one of eight drivers (a ninth, Dabble the duck,
+  joins once every track's rubber duck has been found), in three weights
+  (`src/kart/characters.ts`): **light** (Bun, Pepper, Moss) pick up speed 12%
+  sooner and grip a little better but top out 3% lower and are shoved about
+  (x1.4); **middle** (Kit, Juniper, Mango, Dabble) are the baseline; **heavy**
+  (Bramble, Rivet) accelerate 10% slower and grip a little less but top out
+  3% higher and shove back (x0.6). Small differences: skill decides races.
+  Bots drive the drivers nobody picked and keep them all cup long.
+- **Grand Prix and Mirror.** The host can race a **cup** (four tracks in a
+  row, points 15, 12, 10, 8, 6, 4, 2, 1, standings between races, a podium at
+  the end) instead of a single race, and can flip every track left for right
+  with **Mirror Mode**. Details below.
+- **Tricks.** Clap to honk (a Honk! bubble over your kart, and a horn the
+  karts near you hear), raise both open hands high to cheer, wave one open
+  hand to say hello (a cheering driver cheers on the podium too). Keyboard:
+  H, C, V; gamepad: Y. A clap is not a brake and a cheer is not an item.
+- **Eggs.** A rubber duck hides off the racing line on every track (drive up
+  to it for a squeak and a toast; find them all and Dabble joins). Two karts
+  over the line within 0.15 s for a top-three place get a **photo finish**. A
+  win on the Fun Fair sets off fireworks. Enter the Konami code on the start
+  screen (arrows, B, A; or a gamepad's d-pad, B, A) for a **golden kart** and
+  the secret track, Five Finger Circuit, which winning both cups opens too.
 - **Keyboard and gamepad** drive too (testing, accessibility): arrows or
   WASD, Space to drift, E or Shift for the item; a gamepad's left stick,
   triggers, A to drift, B or X for the item.

@@ -13,7 +13,8 @@
 }
 
 .screen {
-  animation: view-in 450ms var(--spring) both;
+  /* Backwards, not both: held at its end, the finished animation left a phone's start screen eight pixels of scroll. */
+  animation: view-in 450ms var(--spring) backwards;
 }
 body[data-screen="race"] {
   overflow: hidden;
@@ -192,7 +193,7 @@ body[data-screen="race"] {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 40px;
+  height: 44px;
   padding: 0 16px 0 8px;
   border: 1px solid var(--hairline);
   border-radius: 999px;
@@ -899,12 +900,21 @@ body[data-screen="race"] {
 .pause-words:empty {
   display: none;
 }
-/* The host's "Show the Race" has two long choices: they take the row's width under their name. */
+/* The host's "Show the Race" has two long choices: they take the row's width under their name.
+   The columns are equal whatever the words (so the thumb always covers the choice), and on a phone
+   a long choice goes onto two lines instead of pushing the row wider than the screen. */
 .row-stack > .segmented {
   flex: 1 1 320px;
+  grid-auto-columns: minmax(0, 1fr);
 }
 .row-stack > .segmented [role="radio"] {
-  padding: 0 22px;
+  height: auto;
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 14px;
+  line-height: 1.15;
+  white-space: normal;
+  text-wrap: balance;
 }
 
 /* The speaker: in the corner of every screen but the race, whose pause sheet has its own. */
@@ -1126,13 +1136,49 @@ body[data-screen="race"] #sound-button {
     flex: none;
     width: min(358px, 100%);
   }
+  /* Up to five columns (a Grand Prix adds the points) in a phone's width: the numbers keep theirs and the driver's name gives way, ellipsis and all. */
+  .standings {
+    table-layout: fixed;
+  }
   .standings th,
   .standings td {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  .standings th:first-child,
+  .standings td:first-child {
     padding-left: 12px;
+  }
+  .standings th:last-child,
+  .standings td:last-child {
     padding-right: 12px;
   }
+  .standings td {
+    font-size: 14px;
+  }
+  .standings th {
+    font-size: 10px;
+    letter-spacing: 0.02em;
+  }
+  .standings th:nth-child(1) {
+    width: 50px;
+  }
+  .standings th:nth-child(3),
+  .standings th:nth-child(4) {
+    width: 58px;
+  }
+  .standings th:nth-child(5) {
+    width: 54px;
+  }
+  .standings .c-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .standings .c-name .dot {
+    margin-right: 8px;
+  }
   .c-place {
-    width: 52px;
+    width: 50px;
   }
   .corner-preview {
     width: 112px;
@@ -1174,6 +1220,37 @@ body[data-screen="race"] #sound-button {
   }
   .lost-hands {
     top: 22%;
+  }
+}
+
+/* The pause sheet on a phone on its side: the sound beside the buttons, so Leave Race is not below the fold. */
+@media (max-height: 520px) and (min-width: 560px) {
+  #pause-sheet {
+    width: min(620px, calc(100vw - 2 * var(--margin)));
+    padding: 18px 22px;
+  }
+  #pause-sheet[open] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 12px 20px;
+  }
+  #pause-sheet > .sheet-head {
+    grid-column: 1;
+  }
+  #pause-sheet > .sound-rows {
+    grid-column: 1;
+    margin-bottom: 0;
+  }
+  #pause-sheet > .menu-list {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  #pause-sheet > .tricks,
+  #pause-sheet > .footnote {
+    grid-column: 1 / -1;
+  }
+  #pause-sheet .menu-list .button {
+    min-height: 48px;
   }
 }
 
@@ -1560,4 +1637,10 @@ body[data-screen="race"] #sound-button {
 }
 :root[data-reduce-motion] .photo-finish figcaption {
   animation: none;
+}
+
+/* The screen reader's line sits at the page's corner: left where the flow puts it, it added a pixel of scroll under every full-height screen. */
+#announce {
+  top: 0;
+  left: 0;
 }

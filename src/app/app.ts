@@ -96,6 +96,8 @@ interface Session {
   camera: CameraIdentity | null;
   unsubscribe: () => void;
   lostSince: number | null;
+  /** Until when (performance.now() ms) the page says what the crosshair now does, after Play Anyway. */
+  noteUntil: number;
   result: Result | null;
   /** Play Again with a fold of the thumb, while the results are up. */
   fire: FireToPlay | null;
@@ -673,6 +675,7 @@ export class App {
       camera: hand ? this.cameraIdentity() : null,
       unsubscribe: () => {},
       lostSince: null,
+      noteUntil: 0,
       result: null,
       fire: null,
       timers: [],
@@ -728,8 +731,8 @@ export class App {
           this.play(session, mapping);
           // The crosshair has not been shown yet: it appears with the game, and the hint says what it is.
           if (this.session !== session || session.phase !== "play") return;
-          this.hud.hint("The crosshair now follows your finger.");
-          window.setTimeout(() => this.session === session && this.hud.hint(null), 3500);
+          // Said as the page's own hint (see frame): the game's first tips, on the game's line, would take the words away at once.
+          session.noteUntil = performance.now() + 3500;
         },
       });
       // The check judges its shots; the game sees them too, to answer with
@@ -802,7 +805,8 @@ export class App {
       // longer holds the round until it is back (see handWatch.ts).
       if (!aim.tracking && !aim.offscreen) session.lostSince ??= now;
       else session.lostSince = null;
-      this.hud.pageHint(session.lostSince !== null && now - session.lostSince > 600 ? "Show your hand to the camera." : this.faceAwayHint(session, now));
+      const note = now < session.noteUntil ? "The crosshair now follows your finger." : null;
+      this.hud.pageHint(session.lostSince !== null && now - session.lostSince > 600 ? "Show your hand to the camera." : (this.faceAwayHint(session, now) ?? note));
       const event = session.watch.update(now, aim.tracking);
       if (event) this.onWatch(session, event);
     }

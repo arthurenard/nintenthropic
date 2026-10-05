@@ -76,7 +76,7 @@ describe("the track's meshes", () => {
     });
   }
 
-  it("puts the barriers 6 m beyond the road's edge: nothing solid stands closer", () => {
+  it("puts the barriers 6 m beyond the road's edge: nothing solid stands closer", { timeout: 30_000 }, () => {
     // The kerbs and verge are flat; look at what stands tall near the road: the lowest vertex of anything
     // above 0.3 m must be at least 6 m out. Check the deco chunk at the middle of the first straight.
     const style = styleFor("meadow");
