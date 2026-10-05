@@ -15,10 +15,17 @@ import { HandLandmarker } from "@mediapipe/tasks-vision";
 import { createFaceLandmarker, eyesFrom, type Fileset } from "./face";
 import type { FromWorker, ToWorker } from "./protocol";
 import { seenHands } from "./hands";
+import { joinTiles, tileRects } from "./tiles";
 import type { FaceReading, SeenHand } from "./types";
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let landmarker: HandLandmarker | null = null;
+/**
+ * Players sharing a camera: one more landmarker for each tile after the first
+ * (see tiles.ts), each reading its own tile of the picture. Empty otherwise.
+ */
+let more: HandLandmarker[] = [];
+const tileCanvases: OffscreenCanvas[] = [];
 let face: FaceLandmarker | null = null;
 /**
  * Where the runtime's files are on the site, for a face landmarker added
@@ -50,14 +57,16 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
   const files = { wasmLoaderPath: message.loader, wasmBinaryPath: binary };
   later = { wasmLoaderPath: message.loader, wasmBinaryPath: message.binary };
   prefer = message.prefer;
-  const create = (delegate: "GPU" | "CPU") =>
-    HandLandmarker.createFromOptions(files, {
+  const tiles = Math.max(1, Math.round(message.tiles ?? 1));
+  const create = (delegate: "GPU" | "CPU", runtime: Fileset = files) =>
+    HandLandmarker.createFromOptions(runtime, {
       runningMode: "VIDEO",
       // One hand for the shooting games, deliberately: a second costs time
       // (measured in input/trust.ts, which keeps a passer-by's hand from
       // taking the aim). Grip Prix asks for two, or four for two wheels on
-      // one camera.
-      numHands: message.hands ?? 1,
+      // one camera. Players sharing a camera in tiles (tiles.ts) get their share of the hands
+      // in each tile.
+      numHands: tiles > 1 ? Math.max(1, Math.ceil((message.hands ?? 2) / tiles)) : (message.hands ?? 1),
       minHandDetectionConfidence: message.confidence ?? 0.5,
       minHandPresenceConfidence: message.confidence ?? 0.5,
       minTrackingConfidence: 0.5,
@@ -74,6 +83,17 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
       }
     }
     landmarker ??= await create("CPU");
+    if (tiles > 1) {
+      // A landmarker for each tile after the first. Each starts its own copy of the runtime,
+      // handed the factory again (see addFace), from the site's files, which are cached by now.
+      const loader = (await import(/* @vite-ignore */ files.wasmLoaderPath)) as { default?: unknown };
+      const global = self as unknown as { ModuleFactory?: unknown };
+      more = [];
+      for (let i = 1; i < tiles; i++) {
+        global.ModuleFactory ??= loader.default;
+        more.push(await create(delegate, later));
+      }
+    }
     // The face is optional: a face that will not start leaves the hand playing.
     let withFace = false;
     if (message.face) {
@@ -92,13 +112,26 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
   }
 }
 
+/** Players sharing a camera: each tile of the picture to its own landmarker, the hands joined (tiles.ts). */
+function readTiles(image: VideoFrame | ImageBitmap, timestamp: number): SeenHand[] {
+  const landmarkers = [landmarker!, ...more];
+  const width = "displayWidth" in image ? image.displayWidth : image.width;
+  const height = "displayHeight" in image ? image.displayHeight : image.height;
+  const found = tileRects(landmarkers.length, width, height).map((tile, i) => {
+    let canvas = tileCanvases[i];
+    if (!canvas || canvas.width !== tile.width || canvas.height !== tile.height) canvas = tileCanvases[i] = new OffscreenCanvas(tile.width, tile.height);
+    canvas.getContext("2d")!.drawImage(image, tile.x, tile.y, tile.width, tile.height, 0, 0, tile.width, tile.height);
+    return { tile, hands: seenHands(landmarkers[i]!.detectForVideo(canvas, timestamp)) };
+  });
+  return joinTiles(found, width, height);
+}
+
 function read(message: Extract<ToWorker, { type: "frame" }>): void {
   const began = performance.now();
   let hands: SeenHand[] = [];
   const withFace = message.face === true && face !== null;
   try {
-    const result = landmarker!.detectForVideo(message.image, message.timestamp);
-    hands = seenHands(result);
+    hands = more.length ? readTiles(message.image, message.timestamp) : seenHands(landmarker!.detectForVideo(message.image, message.timestamp));
   } catch (error) {
     // One bad frame (a camera mid-reconfiguration) is skipped, not fatal.
     console.warn("A camera frame could not be read.", error);

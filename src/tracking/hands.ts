@@ -23,6 +23,11 @@ export function handConfidence(hands: number): number {
   return isCrowd(hands) ? 0.4 : 0.5;
 }
 
+/** How many side-by-side tiles the picture is read in: one for each player once three or four share the camera (tiles.ts), else the whole picture. */
+export function tilesFor(hands: number): number {
+  return isCrowd(hands) ? hands / 2 : 1;
+}
+
 /** The camera size asked for: 1920x1080 for a crowd (so small hands keep their pixels), else 1280x720. */
 export function cameraSize(hands: number): { width: number; height: number } {
   return isCrowd(hands) ? { width: 1920, height: 1080 } : { width: 1280, height: 720 };

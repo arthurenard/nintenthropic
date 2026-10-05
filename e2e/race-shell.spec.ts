@@ -387,6 +387,43 @@ test("the real camera: asked politely, opened, and the hand tracker looks for tw
   expect(errors).toEqual([]);
 });
 
+test("the real camera with four players: eight hands, a tracker per column, and the camera's picture in the shared check", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    // MediaPipe's own start-up notes (glog lines, one for each landmarker) are not the page's.
+    if ((message.type() === "warning" || message.type() === "error") && !/^[WI]\d{4} /.test(message.text())) errors.push(message.text());
+  });
+  await returning(page);
+  await page.addInitScript(() => localStorage.setItem("handy.kart.you.v1", JSON.stringify({ name: "Maya", drive: "wheel", players: 4 })));
+  await open(page);
+  await page.getByRole("button", { name: "Practice" }).click();
+  await expect(page.getByRole("radiogroup", { name: "Players on This Camera" }).getByRole("radio", { name: "4", exact: true })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Continue" }).click();
+  // The camera is a still picture of one hand: the check waits for four wheels, with the camera in its one shared picture.
+  await expect(page.locator("#check-title")).toHaveText(/Hold it level|Hold your fists up/, { timeout: 90_000 });
+  await expect(page.locator(".check-chip")).toHaveCount(4);
+  const picture = page.locator(".check-shared canvas");
+  await expect(picture).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        picture.evaluate((canvas: HTMLCanvasElement) => {
+          const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+          const first = data[0]!;
+          let different = 0;
+          for (let i = 0; i < data.length; i += 4 * 97) if (Math.abs(data[i]! - first) > 24) different++;
+          return different;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThan(20);
+  await shot(page, info, "race-3i-check-four-camera", 500);
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(heading(page, /Driving/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("joining: a link with no race behind it says so, and a real room's guests see its lobby", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));

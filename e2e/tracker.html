@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- The tracker as the game runs it, served by the dev server only: a still
      picture of a hand played as a 30 fps video, read frame by frame by the
-     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, and
+     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, ?confidence=0.4, ?tiles=4, ?copies=4, and
      ?face=N to read the face too on every Nth frame, as a game that reads the
      eye does), while a busy animation loop measures what the tracking costs
      the page's frames. -->
@@ -23,12 +23,29 @@
         image.src = "/e2e/fixtures/hand.jpg";
         await image.decode();
         const canvas = document.getElementById("frame");
+        // ?copies=N: the same hand N times in the picture (side by side, two rows from five), to see what a crowd of hands costs.
+        const copies = Number(params.get("copies") ?? 1);
+        if (copies > 1) {
+          canvas.width = 1280;
+          canvas.height = 720;
+        }
         const context = canvas.getContext("2d");
         const video = document.getElementById("video");
         video.srcObject = canvas.captureStream(30);
         let tick = 0;
         const paint = () => {
-          context.drawImage(image, 0, 0, 480, 720);
+          if (copies > 1) {
+            const rows = copies > 4 ? 2 : 1;
+            const columns = Math.ceil(copies / rows);
+            const w = canvas.width / columns;
+            const h = canvas.height / rows;
+            const scale = Math.min(w / image.width, h / image.height);
+            for (let i = 0; i < copies; i++) {
+              const x = (i % columns) * w + (w - image.width * scale) / 2;
+              const y = Math.floor(i / columns) * h + (h - image.height * scale) / 2;
+              context.drawImage(image, x, y, image.width * scale, image.height * scale);
+            }
+          } else context.drawImage(image, 0, 0, 480, 720);
           context.fillStyle = tick++ % 2 ? "#000" : "#010101";
           context.fillRect(0, 0, 1, 1);
         };
@@ -40,6 +57,8 @@
             where: params.get("where") ?? "auto",
             prefer: params.get("delegate") === "CPU" ? "CPU" : "GPU",
             hands: Number(params.get("hands") ?? 1),
+            confidence: params.has("confidence") ? Number(params.get("confidence")) : undefined,
+            tiles: params.has("tiles") ? Number(params.get("tiles")) : undefined,
             face: Number(params.get("face") ?? 0) > 0,
           },
         );
@@ -48,7 +67,13 @@
         report.where = tracker.where;
         report.delegate = tracker.delegate;
         let hands = 0;
-        tracker.subscribe((frame) => (hands += frame.landmarks ? 1 : 0));
+        let total = 0;
+        let counted = 0;
+        tracker.subscribe((frame) => {
+          hands += frame.landmarks ? 1 : 0;
+          total += frame.hands.length;
+          report.handsPerFrame = total / ++counted;
+        });
         let faces = 0;
         tracker.subscribeFace((face) => (faces += face.eyes ? 1 : 0));
         tracker.start(video);
@@ -69,7 +94,9 @@
         });
         const sorted = [...intervals].sort((a, b) => a - b);
         report.frames = { p50: sorted[150], p95: sorted[285], max: sorted[299], over20: intervals.filter((v) => v > 20).length };
+        report.seconds = intervals.reduce((sum, v) => sum + v, 0) / 1000;
         report.tracker = tracker.stats();
+        report.fps = report.tracker.frames / report.seconds;
         report.hands = hands;
         report.faces = faces;
         tracker.dispose();

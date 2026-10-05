@@ -15,7 +15,7 @@
  * in size and invisible, and the wheel's picture is drawn from it.
  */
 import { CameraError, cameraPermission, openCamera, type Camera } from "../../tracking/camera";
-import { cameraSize, handConfidence, isCrowd } from "../../tracking/hands";
+import { cameraSize, handConfidence, isCrowd, tilesFor } from "../../tracking/hands";
 import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
 import type { HandFrame, HandSource } from "../../tracking/types";
@@ -205,6 +205,13 @@ export class CameraStack implements CameraService {
   }
 }
 
+/** `?tiles=1` in the address reads the whole picture at once even for a crowd (to compare with the tiles on real hands). */
+function tilesOverride(): number | null {
+  if (typeof location === "undefined") return null;
+  const asked = Number(new URLSearchParams(location.search).get("tiles"));
+  return Number.isInteger(asked) && asked >= 1 && asked <= 4 ? asked : null;
+}
+
 /** The real tracker for a wheel, with the download's two parts folded into one fraction. */
 async function loadForWheel(hands: number, progress: (fraction: number) => void): Promise<Tracker> {
   let wasm = 0;
@@ -221,6 +228,6 @@ async function loadForWheel(hands: number, progress: (fraction: number) => void)
         report();
       },
     },
-    { hands, confidence: handConfidence(hands) },
+    { hands, confidence: handConfidence(hands), tiles: tilesOverride() ?? tilesFor(hands) },
   );
 }

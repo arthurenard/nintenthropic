@@ -119,9 +119,15 @@ typed, or by scanning the QR code on the host's screen, which opens
   instead: the host's screen shows them, split screen with everyone else who
   chose it, and their own device is only their wheel (the camera picture with
   the wheel drawn on it, their place and lap).
-- **Two on one camera.** A device can bring two players sharing one camera:
-  the picture is split down the middle, left half the first player's wheel,
-  right half the second's.
+- **Up to four on one camera.** A device can bring two, three or four players
+  sharing one camera, standing side by side: the mirrored picture is split
+  into that many vertical columns, left to right, and a hand belongs to the
+  player whose column holds its palm. A hand that strays within 2% of a line
+  stays its player's until it is clearly across. With three or four the
+  tracker looks for six or eight hands at a lower confidence (0.4 instead of
+  0.5) and the camera is asked for 1920x1080; the wheel check and the race
+  show one picture with the columns marked in the players' colours. The
+  host's screen is the big screen by default. The room still holds four.
 - **Practice** is a room with no one else, and never touches the network.
 
 The camera picture never leaves the device. What goes over the network is
@@ -260,7 +266,7 @@ only those karts' physics against the world as it is.
   tell a fist from an open hand whichever way it faces the camera),
   handedness and score. `landmarks` stays the first hand's, so the shooting
   games are unchanged; they keep looking for one hand. Grip Prix asks the
-  tracker for two (four for two on one camera).
+  tracker for two (four, six or eight for two, three or four on one camera).
 - **The wheel.** Palm centre = mean of landmarks 0, 5, 9, 13, 17, mirrored
   (as the player sees themself). The two hands are told apart by side, then
   kept by continuity (each frame's nearest to the last), so a wheel turned
@@ -344,7 +350,7 @@ Screens, in DESIGN.md's voice and style:
 1. **Start.** Grip Prix's title over its world; Host a Race, Join a Race,
    Practice; back to the arcade.
 2. **You.** Your name (a friendly default), how you drive (Wheel, Keyboard,
-   Gamepad), Two on This Camera. Remembered.
+   Gamepad), Players on This Camera (1 to 4, each with a name and a driver). Remembered.
 3. **The wheel check** (wheel players): "Hold your fists up, like a wheel" →
    "Hold it level" (the level is set) → "Turn it" → "Open your hands to
    brake" → ready. After the first time, only "Hold it level".

@@ -15,6 +15,11 @@ export type ToWorker =
       hands?: number;
       /** Detection and presence confidence, 0..1 (0.5 when absent; lower for three or four players on one camera, see handConfidence). */
       confidence?: number;
+      /**
+       * Players sharing the camera, read in tiles (tiles.ts): one landmarker for each of this many
+       * vertical slices of the picture, two hands to a slice, so small hands keep their pixels. 1 or absent: the whole picture.
+       */
+      tiles?: number;
       /** The face landmarker's model, for a game that reads the eye; it can also come later ("face"). */
       face?: ArrayBuffer;
     }
