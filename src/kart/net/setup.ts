@@ -10,6 +10,7 @@ import {
   type RacerSetup,
   type RaceSetup,
 } from "../contract";
+import { CHARACTERS } from "../characters";
 import { trackById } from "../track/tracks";
 import { seeded } from "./util";
 
@@ -43,6 +44,17 @@ export function buildSetup(players: readonly LobbyPlayer[], settings: LobbySetti
     [names[i], names[j]] = [names[j]!, names[i]!];
   }
 
+  // The bots drive whoever the players did not pick (never the duck, who is a prize), in a shuffled order.
+  const picked = new Set(players.map((p) => p.character));
+  const starters = CHARACTERS.filter((c) => !c.unlock).map((c) => c.id);
+  const drivers = starters.filter((id) => !picked.has(id));
+  for (let i = drivers.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [drivers[i], drivers[j]] = [drivers[j]!, drivers[i]!];
+  }
+  // More bots than free drivers: the rest are shared out among all of them.
+  const spare = starters.filter((id) => !drivers.includes(id));
+
   const racers: RacerSetup[] = [];
   const karts: Record<number, number> = {};
   for (let i = 0; i < botCount; i++) {
@@ -51,13 +63,21 @@ export function buildSetup(players: readonly LobbyPlayer[], settings: LobbySetti
       name: names[i % names.length]!,
       colour: BOT_COLOURS[i % BOT_COLOURS.length]!,
       player: null,
+      character: drivers[i] ?? spare[(i - drivers.length) % spare.length],
       // A spread from gentle to sharp, in a shuffled order.
       skill: Math.round((0.35 + 0.6 * ((i * 0.618033988) % 1)) * 100) / 100,
     });
   }
   for (const player of players) {
     const id = racers.length;
-    racers.push({ id, name: player.name, colour: player.colour, player: player.slot });
+    racers.push({
+      id,
+      name: player.name,
+      colour: player.colour,
+      player: player.slot,
+      ...(player.character ? { character: player.character } : {}),
+      ...(player.golden ? { golden: true } : {}),
+    });
     karts[id] = player.slot;
   }
   return {

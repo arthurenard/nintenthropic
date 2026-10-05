@@ -351,7 +351,14 @@ export class KartApp {
     if (!session || !this.controls.length) return;
     const names = this.you.drive === "wheel" && this.you.second ? [this.you.name, this.you.secondName] : [this.you.name];
     const screen = session.role === "guest" ? (this.choice ?? "auto") : "here";
-    const players: LocalPlayerSetup[] = this.controls.map((control, i) => ({ name: names[i] ?? this.you.name, control, screen }));
+    const second = (i: number): boolean => i === 1;
+    const players: LocalPlayerSetup[] = this.controls.map((control, i) => ({
+      name: names[i] ?? this.you.name,
+      control,
+      screen,
+      character: second(i) ? this.you.secondCharacter : this.you.character,
+      golden: second(i) ? this.you.secondGolden : this.you.golden,
+    }));
     session.setLocalPlayers(players);
     // A change of screen does not undo being ready.
     if (this.ready) session.setReady(true);

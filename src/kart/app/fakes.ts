@@ -745,6 +745,8 @@ class FakeSession implements Session {
         screen: local.screen === "host" && this.role === "guest" ? this.hostDevice : this.device,
         control: local.control.kind,
         ready: this.ready,
+        character: local.character,
+        golden: local.golden,
       });
       slot++;
     }

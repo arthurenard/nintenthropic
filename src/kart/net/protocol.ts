@@ -37,6 +37,9 @@ export interface WirePlayer {
    * screen; "auto" wherever the host's `display` setting says.
    */
   screen: "here" | "host" | "auto";
+  /** Their driver (characters.ts id), and whether the kart is golden. */
+  character?: string;
+  golden?: boolean;
 }
 
 /**

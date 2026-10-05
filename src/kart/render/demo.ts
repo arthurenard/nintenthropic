@@ -9,6 +9,7 @@
  * `RaceView`s of exactly the shape the real sim does, so the dev page can
  * swap this for `createRace(...).view()` and the picture will not know.
  */
+import { CHARACTERS } from "../characters";
 import {
   BOT_COLOURS,
   PLAYER_COLOURS,
@@ -108,7 +109,7 @@ export class DemoRace implements RaceViewSource {
 
   constructor(
     readonly track: TrackDef,
-    private readonly options: { karts?: number; laps?: number; autoRestart?: boolean } = {},
+    private readonly options: { karts?: number; laps?: number; autoRestart?: boolean; golden?: boolean } = {},
   ) {
     this.geometry = TrackGeometry.build(track);
     const n = Math.max(1, Math.min(8, options.karts ?? 8));
@@ -117,6 +118,9 @@ export class DemoRace implements RaceViewSource {
       name: NAMES[i] ?? `Kart ${i + 1}`,
       colour: i < 4 ? PLAYER_COLOURS[i]! : BOT_COLOURS[i - 4]!,
       player: i < 4 ? i : null,
+      // Each kart a different driver (the first eight), the first golden when asked.
+      character: CHARACTERS[i % 8]?.id,
+      golden: i === 0 && options.golden === true,
     }));
     this.restart();
   }
@@ -712,6 +716,6 @@ export class DemoRace implements RaceViewSource {
   }
 }
 
-export function createDemoRace(track: TrackDef, options: { karts?: number; laps?: number; autoRestart?: boolean } = {}): DemoRace {
+export function createDemoRace(track: TrackDef, options: { karts?: number; laps?: number; autoRestart?: boolean; golden?: boolean } = {}): DemoRace {
   return new DemoRace(track, options);
 }

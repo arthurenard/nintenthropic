@@ -142,7 +142,7 @@ function wheelGeometry(spec: { r: number; w: number }, hubColour: Rgb): BufferGe
 }
 
 /** A gleaming gold tub for the golden kart (the player's colour stays on its stripe, spoiler and hubs). */
-const GOLD = rgb("#f6b414");
+const GOLD = rgb("#d38a06");
 
 /** Who sits in a kart whose racer names no driver: the base cast in turn, by the kart's id. */
 const STAND_INS = CHARACTERS.filter((c) => !c.unlock);
@@ -152,7 +152,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   const accent = rgb(racer.colour);
   const accentTop = mixRgb(accent, [1, 1, 1], 0.1);
   const body = golden ? GOLD : accent;
-  const top = golden ? ([1.5, 1.05, 0.28] as const) : mixRgb(body, [1, 1, 1], 0.1);
+  const top = golden ? ([0.8, 0.45, 0.04] as const) : mixRgb(body, [1, 1, 1], 0.1);
   const flank = scaleRgb(body, 0.86);
   const lower = scaleRgb(body, 0.62);
   const deep = scaleRgb(body, 0.4);
@@ -237,7 +237,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
 
   const lit = new MeshLambertMaterial({ vertexColors: true });
   // The golden tub catches the light.
-  const gleam = golden ? new MeshPhongMaterial({ vertexColors: true, shininess: 90, specular: new Color(1, 0.86, 0.5) }) : lit;
+  const gleam = golden ? new MeshPhongMaterial({ vertexColors: true, shininess: 38, specular: new Color(0.32, 0.22, 0.06) }) : lit;
   const flameMat = new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.9, fog: false });
 
   const root = new Group();

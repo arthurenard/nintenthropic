@@ -5,6 +5,7 @@
  * A slot is also a colour (PLAYER_COLOURS[slot]), so a player keeps their
  * colour for as long as they hold the slot, and nobody else gets it.
  */
+import { characterById } from "../characters";
 import { MAX_PLAYERS, PLAYER_COLOURS, type DriverControl, type LobbyPlayer } from "../contract";
 import { TRACKS } from "../track/tracks";
 import type { LobbySettings, LobbyState } from "../contract";
@@ -42,6 +43,8 @@ export function cleanPlayer(player: unknown, fallback: string): WirePlayer {
     name: cleanName(p.name, fallback),
     control: CONTROLS.includes(p.control as DriverControl["kind"]) ? (p.control as DriverControl["kind"]) : "keyboard",
     screen: p.screen === "host" || p.screen === "auto" ? p.screen : "here",
+    ...(typeof p.character === "string" && characterById(p.character) ? { character: p.character } : {}),
+    ...(p.golden === true ? { golden: true } : {}),
   };
 }
 
@@ -173,6 +176,8 @@ export class Roster {
         screen: this.screenFor(device, spec.screen),
         control: spec.control,
         ready: was.ready,
+        ...(spec.character ? { character: spec.character } : {}),
+        ...(spec.golden ? { golden: true } : {}),
       };
     });
   }

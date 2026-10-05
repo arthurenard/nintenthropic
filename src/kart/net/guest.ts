@@ -304,7 +304,7 @@ export class GuestSession implements Session {
   }
 
   private sendConfigure(): void {
-    const players = this.local.map((p): WirePlayer => ({ name: p.name, control: p.control.kind, screen: p.screen }));
+    const players = this.local.map((p): WirePlayer => ({ name: p.name, control: p.control.kind, screen: p.screen, character: p.character, golden: p.golden }));
     this.sendToHost({ t: "configure", players });
   }
 
