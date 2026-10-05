@@ -311,3 +311,112 @@ The arcade (`index.html`) gains a heading per kind of game: **Shooting**
 - End to end (Playwright, `?net=local`, muted): a host and two guests in tabs
   of one browser join by code, drive by keyboard and finish a one-lap race;
   practice against bots; the arcade's Racing heading opens the page.
+
+## The couch: four friends, one big screen
+
+The Mario Kart evening is the one to get exactly right: a TV, four people on
+a sofa, split screen. Here each friend's wheel is their phone, propped up in
+front of them (or a laptop), and the TV is the host's screen.
+
+- The host's lobby says where the race shows: **On Everyone's Own Screen**
+  or **On This Screen** (split screen; every player's device becomes only
+  their wheel: the camera picture with the wheel drawn on it, their place,
+  lap and item, big). A player can still change their own.
+- Phones need a secure page for the camera. `npm run party` serves the game
+  over HTTPS on the local network (a self-signed certificate: the phone asks
+  once to trust it) and the QR code in the lobby points at the computer's
+  address on the network, never at `127.0.0.1`.
+- Once the host starts, everything happens on the big screen: countdown,
+  race, results, the next race. Phones only need attention to join.
+
+## Track features
+
+`TrackDef` (track/geometry.ts) says, beyond the road itself:
+
+- **Ramps** (`ramps`): a ramp across the road; fast enough over its lip and
+  the kart flies (about a second). The hop gesture (or Space) in the air is a
+  **trick**: the driver spins, and the kart boosts on landing. Jumps can
+  cross a gap: a drop under the flight.
+- **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
+  a sink, space) the kart **falls**, and a **rescue drone** (a little
+  propeller drone with a hook, Grip Prix's own) lifts it back to the road a
+  little behind, facing the right way: about 2.5 s lost, no item lost.
+- **Verges** (`verges`): the barrier farther out on one side, over sand or
+  grass: the cut across a hairpin worth taking with a Nitro.
+- **Surfaces** (`surfaces`): ice (little grip: the kart slides on), mud,
+  sand, snow (slow off-road with spray), boost strips.
+- **Hazards** (`hazards`): things that move on their own (track/hazards.ts:
+  a pure function of race time) and spin out a kart they touch.
+- **Landmarks** (`landmarks`): set pieces the picture builds, by name from
+  the theme's list below; `span` for a thing over the road (a tunnel, an
+  arch).
+- **The duck** (`duck`): every Handy game hides a rubber duck. Every track
+  has one somewhere off the racing line.
+- **Bank** (`bank`): the road leans into its bends (for the picture).
+
+### What each theme can build
+
+| Theme | Landmarks | Hazards |
+| --- | --- | --- |
+| meadow | windmill, barn, pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
+| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed |
+| harbour | crane, lighthouse, ship, containers, warehouse, buoy | crab, forklift |
+| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit) |
+| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob) |
+| volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
+| funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross) |
+| space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll) |
+| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry) | crab (cross), coconut (roll), beach-ball (roll) |
+
+## The tracks
+
+Two cups of four, as a Grand Prix is raced, and one secret.
+
+**Acorn Cup**
+
+1. **Meadow Loop** (meadow): the gentle opener. Windmill on the hill, a pond
+   by the hairpin (the duck), hay bales, a hot-air balloon drifting over.
+2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
+   in late-afternoon sun through the window. A chopping-board start
+   straight; round the fruit bowl; a chicane between salt and pepper; under
+   the cheese grater (a tunnel); a ramp off a cookbook over the sink (fall in
+   and the drone fishes you out — the duck floats in the sink); spilt milk
+   (ice) on a bend; the counter's edge is a long open drop on the outside of a
+   sweeping curve; oranges roll down the counter; a teacup spins. Everything is
+   enormous: the teapot is thirty metres tall.
+3. **Harbour Lights** (harbour): night on the quay, cranes and ships, crabs
+   scuttling across the chicane.
+4. **Canyon Run** (canyon): the climb, the ridge road, a jump over a gap in
+   the ridge, boulders rolling down the descent, a sand cut inside the
+   hairpin for the brave.
+
+**Comet Cup**
+
+5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
+   round the carousel; through the big top (a tunnel full of lights); under
+   the rollercoaster; a teacup ride spinning beside the road and bumper cars
+   crossing a wide plaza; a ramp off the helter-skelter's foot; the hook-a-duck
+   stall (the duck); fireworks over the finish.
+6. **Glacier Pass** (snow): an alpine pass at blue hour. Ice patches on the
+   bends, a frozen lake (all ice, wide) to slide across, an ice cave glowing
+   blue, a ski-jump over a crevasse (a drop), penguins waddling across,
+   snowballs rolling down, a yeti who pops out of a snowdrift once a lap.
+   The duck sits by an ice-fishing hole on the lake.
+7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), a stone
+   bridge over lava with nothing either side, fireballs leaping from the lava,
+   boulders, a jump over a lava gap, the volcano smoking behind it all. The
+   duck relaxes in a hot spring.
+8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
+   over a ringed planet, banked bends and almost no barriers (fall and the
+   drone brings you back), boost strips, ring gates, a long jump between two
+   ribbons, asteroids orbiting the road. The duck floats in an astronaut's
+   helmet by a satellite.
+
+**Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
+seen from above — Handy's own hand. The road runs up and down every finger
+(the fingertips are hairpins), round the thumb, across the palm and back
+along the wrist, where a giant wristwatch is the start gantry; a ring on the
+ring finger to drive through; palm trees, beach huts, crabs, coconuts. The
+minimap is a hand. The duck sunbathes on a towel in the middle of the palm.
+Unlocked by winning both cups (or, for those who know, the Konami code on the
+start screen).

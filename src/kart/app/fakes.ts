@@ -618,6 +618,9 @@ class FakeRace {
       const lap = Math.floor(kart.angle / (Math.PI * 2));
       return {
         id: kart.id,
+        surface: "road",
+        trick: 0,
+        rescue: 0,
         x: radius * Math.sin(kart.angle),
         y: 0,
         z: radius * Math.cos(kart.angle),

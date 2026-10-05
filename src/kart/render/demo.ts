@@ -143,6 +143,9 @@ export class DemoRace implements RaceViewSource {
       const p = g.point(progress, lane);
       const heading = g.heading(progress);
       return {
+        surface: "road" as const,
+        trick: 0,
+        rescue: 0,
         id: r.id,
         x: p.x,
         y: p.y,
@@ -601,6 +604,9 @@ export class DemoRace implements RaceViewSource {
     const me = this.karts[0]!;
     const views: KartView[] = this.karts.map((k) => ({
       id: k.id,
+      surface: k.offroad ? "grass" : "road",
+      trick: 0,
+      rescue: 0,
       x: k.x,
       y: k.y,
       z: k.z,

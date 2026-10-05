@@ -170,6 +170,9 @@ class FakeRace implements Race {
     const place = new Map(order.map((o, i) => [o.id, i + 1]));
     const karts: KartView[] = this.state.karts.map((k, id) => ({
       id,
+      surface: "road",
+      trick: 0,
+      rescue: 0,
       x: k.x,
       y: 0,
       z: k.z,

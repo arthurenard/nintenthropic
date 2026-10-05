@@ -10,7 +10,7 @@
 import type { TrackTheme } from "../../track/geometry";
 
 export interface ThemeStyle {
-  id: TrackTheme;
+  id: "meadow" | "canyon" | "harbour";
   night: boolean;
   sky: {
     zenith: string;
@@ -55,7 +55,7 @@ export interface ThemeStyle {
   margin: number;
 }
 
-export const THEMES: Record<TrackTheme, ThemeStyle> = {
+const FIRST_THEMES: Record<"meadow" | "canyon" | "harbour", ThemeStyle> = {
   meadow: {
     id: "meadow",
     night: false,
@@ -134,6 +134,17 @@ export const THEMES: Record<TrackTheme, ThemeStyle> = {
     dust: "#8f98ae",
     margin: 260,
   },
+};
+
+/** The newer worlds borrow a first world's look until they have their own. */
+export const THEMES: Record<TrackTheme, ThemeStyle> = {
+  ...FIRST_THEMES,
+  kitchen: { ...FIRST_THEMES.meadow, id: "meadow" },
+  snow: { ...FIRST_THEMES.meadow, id: "meadow" },
+  volcano: { ...FIRST_THEMES.canyon, id: "canyon" },
+  funfair: { ...FIRST_THEMES.harbour, id: "harbour" },
+  space: { ...FIRST_THEMES.harbour, id: "harbour" },
+  palm: { ...FIRST_THEMES.meadow, id: "meadow" },
 };
 
 export function styleFor(theme: TrackTheme): ThemeStyle {

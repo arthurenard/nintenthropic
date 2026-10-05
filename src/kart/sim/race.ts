@@ -188,6 +188,9 @@ class Sim implements SimRace {
       const done = k.finished !== null;
       return {
         id: k.id,
+        surface: k.offroad ? "grass" : "road",
+        trick: 0,
+        rescue: 0,
         x: k.x,
         y: k.y,
         z: k.z,

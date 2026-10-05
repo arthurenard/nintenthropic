@@ -16,9 +16,9 @@
  * (-cos h, sin h). Steering right (+1) turns the heading down (clockwise
  * seen from above).
  */
-import type { TrackDef } from "./track/geometry";
+import type { Surface, TrackDef } from "./track/geometry";
 
-export type { TrackDef } from "./track/geometry";
+export type { Surface, TrackDef } from "./track/geometry";
 
 /** The simulation's fixed step: every device steps the same 60 ticks a second. */
 export const TICK_HZ = 60;
@@ -105,6 +105,17 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "lap"; kart: number; lap: number }
   | { type: "final-lap"; kart: number }
   | { type: "finish"; kart: number; place: number; time: number }
+  /** Off a ramp's lip into the air. */
+  | { type: "jump"; kart: number }
+  /** A trick in the air (it boosts on landing). */
+  | { type: "trick"; kart: number }
+  | { type: "land"; kart: number; boost: boolean }
+  /** Over an edge with no barrier (or into lava): the rescue drone is on its way. */
+  | { type: "fall"; kart: number }
+  /** Set back on the road by the rescue drone. */
+  | { type: "rescued"; kart: number }
+  /** Touched a track's hazard and spun. */
+  | { type: "hazard"; kart: number; kind: string }
 );
 
 /** One kart as the picture needs it. */
@@ -127,9 +138,19 @@ export interface KartView {
   boost: number;
   /** Seconds left of a spin-out (0 when none). */
   spin: number;
-  /** In the air (a hop), metres above the road. */
+  /** In the air (a hop, a jump), metres above the road. */
   hop: number;
   offroad: boolean;
+  /** What it is driving on. */
+  surface: Surface | "road";
+  /** Seconds since a trick began in the air (for its animation), 0 when none. */
+  trick: number;
+  /**
+   * Seconds left of a rescue (0 when none): it fell, the drone lifts it
+   * back to the road and lets it go. The picture draws it falling for the
+   * first part and carried for the rest; the kart cannot be driven meanwhile.
+   */
+  rescue: number;
   /** The item held, or null; `uses` left for nitro3. */
   item: ItemKind | null;
   itemUses: number;

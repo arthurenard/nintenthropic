@@ -12,7 +12,100 @@
  * lateral `offset` is metres to the right of the driving direction.
  */
 
-export type TrackTheme = "meadow" | "canyon" | "harbour";
+export type TrackTheme =
+  | "meadow"
+  | "canyon"
+  | "harbour"
+  /** Toy karts on a giant kitchen counter. */
+  | "kitchen"
+  /** An alpine pass in snow and ice. */
+  | "snow"
+  /** Black rock among rivers of lava. */
+  | "volcano"
+  /** A fairground at dusk, every ride lit. */
+  | "funfair"
+  /** A glowing ribbon of road in space. */
+  | "space"
+  /** A sunny beach island shaped like an open hand (the secret track). */
+  | "palm";
+
+/** What the ground is, where it is not plain road. */
+export type Surface =
+  /** The verge: slow (the sim's off-road). */
+  | "grass"
+  /** Slower still, and kicks up dust. */
+  | "sand"
+  /** Off-road that sprays snow. */
+  | "snow"
+  /** Little grip: the kart slides on (a frozen lake, spilt milk). */
+  | "ice"
+  /** Very slow, and sticky. */
+  | "mud"
+  /** A boost strip along the road (as a pad, but long). */
+  | "boost";
+
+/**
+ * A part of the lap, as fractions 0..1 of it. `from` > `to` wraps over the
+ * start line (0.9 → 0.1 is the last tenth and the first).
+ */
+export interface Stretch {
+  from: number;
+  to: number;
+}
+
+/** A jump: a ramp across the whole road at `at`; a kart crossing it fast flies. */
+export interface Ramp {
+  /** Where its lip is, a fraction of the lap. */
+  at: number;
+  /** Upward speed it gives at the lip at top speed, m/s (default 7: about a second in the air). */
+  lift?: number;
+  /** A trick here (the hop gesture, or Space, in the air) boosts on landing. Default true. */
+  trick?: boolean;
+}
+
+/**
+ * Something that moves on its own and spins out a kart it touches. Where
+ * it is is a pure function of the race's time (`hazardAt` in hazards.ts),
+ * so the sim and every screen agree without sending it.
+ */
+export interface HazardDef {
+  /** What it looks like: a name from the theme's list in docs/GRIP_PRIX.md ("boulder", "penguin"...). The sim ignores it. */
+  kind: string;
+  /** Where along the lap, a fraction. */
+  at: number;
+  /**
+   * How it moves. "cross": back and forth across the road. "roll": along the
+   * road against the traffic, from `at` for `span` of the lap, then again.
+   * "bob": up out of the ground and down again at `offset` (harmless while
+   * down). "orbit": round a circle of radius `span` metres centred at `offset`.
+   */
+  motion: "cross" | "roll" | "bob" | "orbit";
+  /** Seconds for one cycle. */
+  period: number;
+  /** 0..1 of the cycle at time 0, so several of a kind are not in step. */
+  phase?: number;
+  /** Its size, metres: a kart within this (plus the kart's own 1.1 m) is hit. */
+  radius: number;
+  /** Metres right of the centre (bob, orbit's centre; cross's middle). Default 0. */
+  offset?: number;
+  /** "cross": metres either side of `offset` (default to the road's edges). "roll": the fraction of the lap it rolls. "orbit": the circle's radius, metres. */
+  span?: number;
+}
+
+/** A set piece the picture builds beside the road (a giant teapot, a ferris wheel); the sim ignores it. */
+export interface Landmark {
+  /** A name from the theme's list in docs/GRIP_PRIX.md; one the picture does not know is left out. */
+  kind: string;
+  /** Where along the lap, a fraction, and metres right of the centre (negative: left). */
+  at: number;
+  offset: number;
+  /** Its size relative to the picture's own idea of it (default 1). */
+  scale?: number;
+  /** Turned about +y from facing the road, radians (default 0). */
+  turn?: number;
+  /** For a thing over the road (a tunnel, an arch, a bridge): metres along the road it covers, centred on `at`. */
+  span?: number;
+}
 
 export interface TrackPoint {
   x: number;
@@ -37,6 +130,37 @@ export interface TrackDef {
   itemRows: number[];
   /** Boost pads: `at` a fraction of the lap, `offset` metres right of the centre. */
   boostPads?: { at: number; offset: number }[];
+  /** A sentence for the lobby: what the track is. */
+  blurb?: string;
+  /** Jumps. */
+  ramps?: Ramp[];
+  /**
+   * Edges with nothing to stop a kart: drive off and it falls, and the
+   * rescue drone puts it back on the road a little behind (about 2.5 s lost).
+   */
+  drops?: (Stretch & { side: "left" | "right" | "both" })[];
+  /**
+   * Where the barrier stands farther out than its usual 6 m from the road's
+   * edge, on `surface` ground (default grass): a wide verge, or a cut across
+   * the inside of a bend worth taking with a Nitro.
+   */
+  verges?: (Stretch & { side: "left" | "right"; distance: number; surface?: Surface })[];
+  /** Patches that drive differently, across the road from `offset - width/2` to `offset + width/2` (the whole road if unset). */
+  surfaces?: (Stretch & { kind: Surface; offset?: number; width?: number })[];
+  hazards?: HazardDef[];
+  landmarks?: Landmark[];
+  /** Where the rubber duck hides (every Handy game has one). */
+  duck?: { at: number; offset: number; y?: number };
+  /** How far the road leans into its bends, for the picture: radians per 1/m of curvature (0 = flat). */
+  bank?: number;
+  /** Hidden until it is unlocked. */
+  secret?: boolean;
+}
+
+/** Is `fraction` (0..1 of the lap) within `stretch`, wrapping over the line? */
+export function inStretch(fraction: number, stretch: Stretch): boolean {
+  const f = fraction - Math.floor(fraction);
+  return stretch.from <= stretch.to ? f >= stretch.from && f <= stretch.to : f >= stretch.from || f <= stretch.to;
 }
 
 export interface TrackSample {

@@ -6,7 +6,7 @@ import { baseFov, chaseOffsets, ChaseCamera, COUNTDOWN_SPAN } from "./cameras";
 function kart(over: Partial<KartView> = {}): KartView {
   return {
     id: 0, x: 0, y: 0, z: 0, heading: 0, speed: 0, steer: 0, drift: 0, driftLevel: 0, boost: 0, spin: 0, hop: 0,
-    offroad: false, item: null, itemUses: 0, rolling: false, place: 1, lap: 1, lapProgress: 0, wrongWay: false, finished: null,
+    offroad: false, surface: "road", trick: 0, rescue: 0, item: null, itemUses: 0, rolling: false, place: 1, lap: 1, lapProgress: 0, wrongWay: false, finished: null,
     ...over,
   };
 }
