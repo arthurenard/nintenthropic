@@ -6,7 +6,7 @@
  * and canyon files borrow too, so the three worlds share one way of building rock and ice.
  */
 import { DoubleSide, Group, Mesh, MeshLambertMaterial, type Material, type Object3D } from "three";
-import { arc, archBand, byHeight, extrudeZ, dome2D, grid, lathe, MeshBuilder, mixRgb, pipe, prism, ramp, rgb, rockBlob, scaleRgb, shapes, stripes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
+import { archBand, byHeight, extrudeZ, dome2D, grid, MeshBuilder, mixRgb, pipe, ramp, rgb, rockBlob, scaleRgb, shapes, stripes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
 // ─── Shared helpers (also used by volcano.ts and canyon.ts) ──────────────────
@@ -1329,10 +1329,3 @@ const yeti: HazardSpec = {
 };
 
 export const HAZARDS: Record<string, HazardSpec> = { penguin, snowball, yeti };
-void Group;
-void Mesh;
-void arc;
-void lathe;
-void prism;
-void tube;
-void ICE_GLOW;

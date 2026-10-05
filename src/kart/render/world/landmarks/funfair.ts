@@ -312,18 +312,16 @@ LANDMARKS["ferris-wheel"] = {
 function horse(coat: Rgb, mane: Rgb, saddle: Rgb): MeshBuilder {
   const b = new MeshBuilder();
   const dark = scaleRgb(coat, 0.55);
-  b.blob(0, 0, -0.1, 0.78, 0.82, 1.45, ramp(dark, coat), 1);
+  b.blob(0, 0, -0.1, 0.78, 0.82, 1.45, ramp(dark, coat), 0);
   b.blob(0, 0.2, 0.95, 0.72, 0.85, 0.75, ramp(dark, coat), 0);
   b.rod([0, 0.55, 1.1], [0, 1.75, 1.65], 0.85, ramp(dark, coat));
   b.box(0, 2.0, 2.05, 0.62, 0.68, 1.05, coat, 0, 0.45, 0);
   b.box(0, 1.78, 2.55, 0.5, 0.45, 0.4, mixRgb(coat, WHITE, 0.35), 0, 0.45, 0);
   for (const s of [-1, 1]) {
     b.spire(s * 0.22, 2.3, 1.7, 0.14, 0.4, dark, 4);
-    b.box(s * 0.33, 2.08, 2.18, 0.08, 0.16, 0.16, DARK);
   }
   // Mane down the neck and a plume of a tail.
-  for (let k = 0; k < 5; k++) b.blob(0, 0.95 + k * 0.28, 1.05 + k * 0.1 - 0.35, 0.2, 0.3, 0.22, mane, 0);
-  b.blob(0, 0.5, -1.55, 0.2, 0.2, 0.35, mane, 0);
+  for (let k = 0; k < 3; k++) b.box(0, 1.0 + k * 0.42, 0.75 + k * 0.28, 0.24, 0.5, 0.5, mane, 0, 0.5);
   b.rod([0, 0.45, -1.35], [0, -0.7, -1.9], 0.38, mane);
   // Saddle with gold trim and a blanket.
   b.box(0, 0.86, -0.15, 1.2, 0.18, 1.3, saddle);
@@ -335,8 +333,7 @@ function horse(coat: Rgb, mane: Rgb, saddle: Rgb): MeshBuilder {
     const knee: V3 = [sx * 0.42, -1.1, sz * 0.9 + reach * 0.45];
     const foot: V3 = [sx * 0.42, -1.25, sz * 0.9 + reach * 0.9 - 0.2];
     b.rod(top, knee, 0.34, coat);
-    b.rod(knee, [foot[0], foot[1] + 0.3, foot[2] - 0.2], 0.26, coat);
-    b.box(foot[0], foot[1] + 0.2, foot[2], 0.34, 0.26, 0.4, GOLD);
+    b.rod(knee, [foot[0], foot[1] + 0.3, foot[2] - 0.2], 0.28, mixRgb(coat, GOLD, 0.4));
   }
   return b;
 }
@@ -397,8 +394,8 @@ LANDMARKS.carousel = {
     const stageGlow = new MeshBuilder();
     // Static stage the carousel turns on, with a bulb-studded kerb.
     lathe(stage, [[0, -1.5], [14, -1.5], [14.4, 0], [13.2, 1.0], [0, 1.0]], { segments: 24, shade: byHeight(-1.5, 1, DARK, rgb("#6b58b8")), caps: "top" });
-    for (let k = 0; k < 36; k++) {
-      const a = (k / 36) * TAU;
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * TAU;
       bulb(stageGlow, Math.cos(a) * 14.1, 0.4, Math.sin(a) * 14.1, 0.5, lightAt(k));
     }
     // A little ticket step at the front.
@@ -449,12 +446,12 @@ LANDMARKS.carousel = {
       for (let k = 0; k < pts.length - 1; k++) spin.tri(c, pts[k]!, pts[k + 1]!, col, scaleRgb(col, 0.8), scaleRgb(col, 0.8));
       spin.blob(Math.cos(mid) * r, TOP - 1.45, Math.sin(mid) * r, 0.22, 0.22, 0.22, GOLD, 0);
     }
-    for (let k = 0; k < 24; k++) {
-      const a = (k / 24) * TAU;
+    for (let k = 0; k < 20; k++) {
+      const a = (k / 20) * TAU;
       bulb(spinGlow, Math.cos(a) * 13.4, TOP - 0.2, Math.sin(a) * 13.4, 0.55, lightAt(k));
     }
-    for (let k = 0; k < 14; k++) {
-      const a = (k / 14) * TAU;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * TAU;
       bulb(spinGlow, Math.cos(a) * 7, TOP + 0.1, Math.sin(a) * 7, 0.45, lightAt(k + 2));
     }
     spin.post(0, TOP + 5.8, 0, 0.18, 2.6, BRASS, 6);
@@ -526,7 +523,7 @@ LANDMARKS["big-top"] = {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const glass = new MeshBuilder();
-    const rows = Math.max(4, Math.round(L / 2));
+    const rows = Math.max(4, Math.round(L / 3));
     // A barrel vault: straight walls to 6.5 m, then half an ellipse up to a 17.2 m ridge (smooth, so the canvas looks swagged).
     const right: [number, number][] = [[w, 6.5]];
     for (let k = 1; k <= 9; k++) {
@@ -554,7 +551,7 @@ LANDMARKS["big-top"] = {
     for (const z of ribs) {
       const path: V3[] = section.map(([x, y]): V3 => [x * 0.975, y * 0.975, z]);
       tube(lit, path, { radius: 0.34, sides: 4, shade: STEEL });
-      for (let k = 1; k < section.length - 1; k++) {
+      for (let k = 1; k < section.length - 1; k += 2) {
         const [x, y] = section[k]!;
         bulb(glow, x * 0.955, y * 0.955, z, 0.5, lightAt(k + Math.round(z)));
       }
@@ -1114,7 +1111,7 @@ LANDMARKS["balloon-stand"] = {
 function toyDuck(): MeshBuilder {
   const b = new MeshBuilder();
   const Y = rgb("#ffe433");
-  b.blob(0, 0.55, 0, 0.85, 0.65, 1.1, ramp(rgb("#f5c400"), mixRgb(Y, WHITE, 0.25)), 1);
+  b.blob(0, 0.55, 0, 0.85, 0.65, 1.1, ramp(rgb("#ffd400"), mixRgb(Y, WHITE, 0.45)), 0);
   b.blob(0, 1.35, 0.7, 0.52, 0.5, 0.5, ramp(rgb("#f0b800"), mixRgb(Y, WHITE, 0.15)), 0);
   b.box(0, 1.25, 1.25, 0.46, 0.14, 0.5, ORANGE);
   b.box(-0.27, 1.5, 1.05, 0.1, 0.1, 0.06, DARK);
@@ -1145,8 +1142,7 @@ LANDMARKS["hook-a-duck"] = {
     for (let q = 0; q < 6; q++) {
       const x = -3.6 + q * 1.44;
       lit.rod([x, 6.4, -3.9], [x, 5.9, -3.9], 0.15, STEEL);
-      plush(lit, x, 4.7, -3.7, q, 0.8);
-      plush(lit, x + 0.7, 3.45, -3.7, q + 2, 0.6);
+      plush(lit, x, 4.2, -3.7, q, 0.85);
     }
     // Counters left and right of the pool, striped.
     for (const s of [-1, 1]) {
@@ -1470,8 +1466,8 @@ HAZARDS["bumper-car"] = {
     // A round-bodied dodgem: floor skirt, bubble body, black rubber ring, seat and wheel.
     lathe(b, [[0.7, 0.2], [1.0, 0.3], [1.08, 0.7], [0.98, 1.05], [0.7, 1.25], [0.45, 1.3]], { segments: 12, shade: byHeight(0.2, 1.3, scaleRgb(col, 0.7), mixRgb(col, WHITE, 0.2)) });
     torus(b, 1.16, 0.24, { at: [0, 0.55, 0], facing: "y", ringSegments: 14, tubeSegments: 5, shade: rgb("#232323") });
-    b.box(0, 1.0, -0.35, 0.9, 0.3, 0.6, rgb("#2a2150"));
-    b.box(0, 1.35, -0.62, 0.9, 0.7, 0.18, rgb("#2a2150"));
+    b.box(0, 1.0, -0.35, 0.9, 0.3, 0.6, rgb("#3b82ff"));
+    b.box(0, 1.35, -0.62, 0.9, 0.7, 0.18, rgb("#1fc8c8"));
     b.box(0, 1.15, 0.45, 0.6, 0.3, 0.3, rgb("#fff1d6"));
     torus(b, 0.28, 0.07, { at: [0, 1.45, 0.4], facing: "z", ringSegments: 10, tubeSegments: 4, shade: rgb("#232323") });
     b.rod([0, 1.2, 0.5], [0, 1.45, 0.4], 0.14, STEEL);

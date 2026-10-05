@@ -809,13 +809,13 @@ HAZARDS.coconut = {
     rockBlob(b, 0, 0, 0, 0.9, 0.88, 0.9, byHeight(-0.9, 0.9, rgb("#4a2c14"), rgb("#8a5a30")), 3, { detail: 1, roughness: 0.1 });
     b.blob(0.2, 0.5, 0.7, 0.55, 0.42, 0.22, ramp(rgb("#d9b878"), rgb("#f3dcaa")), 0);
     for (const [x, y, z] of [[-0.18, 0.74, 0.5], [0.18, 0.86, 0.38], [0.0, 0.62, 0.66]] as const) b.blob(x * 1.1, y, z, 0.15, 0.15, 0.1, DARK, 0);
-    // Husk fibres: little tufts standing out all over.
-    for (let k = 0; k < 24; k++) {
+    // Husk fibres: mats of coarse hair lying over the shell.
+    for (let k = 0; k < 18; k++) {
       const a = hash(k + 3) * TAU;
       const y = (hash(k + 9) - 0.5) * 1.7;
       const r = Math.sqrt(Math.max(0.05, 1 - y * y));
       const n: V3 = [Math.cos(a) * r, y, Math.sin(a) * r];
-      orient(b, shapes.cone(4), [n[0] * 0.86, n[1] * 0.86, n[2] * 0.86], n, 0.13, 0.27, 0.13, ramp(rgb("#6a4220"), rgb("#b88a54")));
+      orient(b, shapes.ball(0), [n[0] * 0.83, n[1] * 0.83, n[2] * 0.83], n, 0.3, 0.2, 0.19, ramp(rgb("#7a4e26"), rgb("#c49a60")));
     }
     const inner = new Group();
     inner.add(new Mesh(b.build(), ctx.lit));

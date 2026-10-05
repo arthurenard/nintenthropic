@@ -4,7 +4,7 @@
  *
  * `boulder` is defined once, here, and also serves the volcano (a black rock cracked with lava).
  */
-import { Group, Mesh, type Material, type Object3D } from "three";
+import { Group, Mesh, type Material } from "three";
 import { byHeight, grid, lathe, MeshBuilder, mixRgb, pipe, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
 import { beam, drift, flutedPipe, hash, hazardGlass, noisyArch, taper, vec } from "./snow";
 import type { HazardSpec, LandmarkSpec } from "./types";
@@ -560,5 +560,3 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "mine-cart": mineCart,
 };
 export const HAZARDS: Record<string, HazardSpec> = { boulder, tumbleweed };
-void Group;
-void (null as unknown as Object3D);

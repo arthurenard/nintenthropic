@@ -5,7 +5,7 @@
  */
 import { Group, Mesh, type Material, type Object3D } from "three";
 import { byHeight, grid, MeshBuilder, mixRgb, pipe, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
-import { beam, disc, flutedPipe, hash, hazardGlass, icicle, noisyArch, puffPart, ribbon, vec } from "./snow";
+import { disc, flutedPipe, hash, hazardGlass, icicle, noisyArch, puffPart, ribbon, vec } from "./snow";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
@@ -13,8 +13,8 @@ import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
 /** Lava, from white-hot to cooling crust. */
 // (Kept near 1 on the strongest channel: the tone mapping washes anything much brighter out to pale peach.)
 const LAVA_HOT: Rgb = [1.9, 1.3, 0.35];
-const LAVA: Rgb = [1.6, 0.6, 0.1];
-const LAVA_DEEP: Rgb = [1.15, 0.3, 0.05];
+const LAVA: Rgb = [1.4, 0.48, 0.07];
+const LAVA_DEEP: Rgb = [1.0, 0.24, 0.04];
 const LAVA_CRUST: Rgb = [0.7, 0.14, 0.04];
 const GLOW_HALO: Rgb = [2.6, 0.95, 0.28];
 const BASALT_LOW: Rgb = [0.08, 0.036, 0.028];
@@ -242,7 +242,7 @@ const lavaFall: LandmarkSpec = {
     const cols = [-6, -3.6, -1.4, 0, 1.4, 3.6, 6];
     const rows: V3[][] = [];
     for (let i = 0; i <= 12; i++) rows.push(cols.map((x) => sheet(i / 12, x)));
-    grid(glow, rows, (p, i, j) => {
+    grid(glow, rows, (_p, i, j) => {
       const centre = 1 - Math.abs(j - 3) / 3.2;
       const heat = Math.max(0, Math.min(1, centre * 0.8 + 0.25 * hash(i, j, 9) + (1 - i / 12) * 0.3));
       return mixRgb(LAVA_DEEP, LAVA, heat);
@@ -370,7 +370,6 @@ const basaltColumns: LandmarkSpec = {
 // ─── Stone bridge ────────────────────────────────────────────────────────────
 
 const STONE_HI: Rgb = [0.5, 0.42, 0.4];
-const STONE_LO: Rgb = [0.13, 0.1, 0.11];
 
 const stoneBridge: LandmarkSpec = {
   span: true,
