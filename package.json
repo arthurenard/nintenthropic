@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "party": "vite --mode party --host",
+    "play": "vite --port 5191 --strictPort --open /race.html",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
