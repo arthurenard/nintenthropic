@@ -90,7 +90,8 @@ export class CheckScreen {
     const pips = $("check-steps");
     pips.hidden = returning;
     pips.replaceChildren(...this.steps.slice(0, -1).map(() => element("li")));
-    $("check-continue").hidden = true;
+    // Hidden but holding its place, so the picture does not jump when it appears.
+    $("check-continue").style.visibility = "hidden";
     this.enter(0);
     this.words(performance.now());
     focusHeading($("check-title"));
@@ -112,27 +113,31 @@ export class CheckScreen {
   private build(player: CheckPlayer, named: boolean): Entry {
     const figure = element("figure", "check-picture");
     const view = element("div", "wheel-view");
+    // One round badge in the picture's corner: a ring that fills while the wheel is held level,
+    // then a green tick when this wheel is set. It stays out of the way of the wheel itself.
     const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    ring.setAttribute("viewBox", "0 0 120 120");
+    ring.setAttribute("viewBox", "0 0 48 48");
     ring.setAttribute("class", "level-ring");
     ring.setAttribute("aria-hidden", "true");
     const track = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     const fill = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     for (const circle of [track, fill]) {
-      circle.setAttribute("cx", "60");
-      circle.setAttribute("cy", "60");
-      circle.setAttribute("r", "50");
+      circle.setAttribute("cx", "24");
+      circle.setAttribute("cy", "24");
+      circle.setAttribute("r", "18");
     }
     track.setAttribute("class", "ring-track");
     fill.setAttribute("class", "ring-fill");
     fill.setAttribute("pathLength", "100");
-    fill.setAttribute("transform", "rotate(-90 60 60)");
+    fill.setAttribute("transform", "rotate(-90 24 24)");
     fill.setAttribute("stroke-dasharray", "0 100");
     ring.append(track, fill);
-    const badge = element("span", "check-badge");
+    const badge = element("span", "check-badge glass");
     badge.setAttribute("aria-hidden", "true");
-    badge.append(icon("check"));
-    figure.append(view, ring, badge);
+    const tick = icon("check");
+    tick.setAttribute("class", "tick");
+    badge.append(ring, tick);
+    figure.append(view, badge);
     if (named) {
       const caption = element("figcaption", "check-name");
       const dot = element("span", "dot");
@@ -160,7 +165,7 @@ export class CheckScreen {
     for (const entry of this.entries) this.advance(entry, now);
     this.words(now);
     if (this.entries.length && this.entries.every((entry) => this.steps[entry.step] === "ready") && !this.timer) {
-      $("check-continue").hidden = false;
+      $("check-continue").style.visibility = "visible";
       setWheelChecked();
       this.timer = window.setTimeout(() => this.finish(), READY_FOR);
     }

@@ -204,7 +204,12 @@ export class KartApp {
     this.youScreen.setBusy(true);
     const on = await this.cameraOn(you.second ? 4 : 2);
     this.youScreen.setBusy(false);
-    if (!on || !this.session) return;
+    if (!this.session) {
+      // Left while the camera was starting: it must not stay on with nobody to use it.
+      this.services.camera.stop();
+      return;
+    }
+    if (!on) return;
     this.show("check");
     const lobby = this.session.lobby();
     const mine = localPlayers(lobby, this.session.device);

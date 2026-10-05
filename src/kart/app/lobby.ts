@@ -10,8 +10,8 @@
  */
 import type { LobbySettings, LobbyState, Session } from "../contract";
 import { $, element, icon, setText, toast } from "../../ui/dom";
-import { canStart, hostName, localPlayers, screenLabel } from "./roster";
-import { joinUrl } from "./format";
+import { canStart, hostName, localPlayers, screenLabel, waitingLine } from "./roster";
+import { joinUrl, spellCode } from "./format";
 import type { Services } from "./services";
 import { Segmented, Switch, colourDot, focusHeading } from "./ui";
 
@@ -74,7 +74,7 @@ export class LobbyScreen {
     $("join-card").hidden = !lobby.code;
     if (lobby.code) {
       setText("lobby-code", lobby.code);
-      $("lobby-code").setAttribute("aria-label", `Race code ${lobby.code.split("").join(" ")}`);
+      $("lobby-code").setAttribute("aria-label", `Race code ${spellCode(lobby.code)}`);
       this.url = joinUrl(this.page(), lobby.code, this.net);
       $("lobby-qr").hidden = !host;
       $("lobby-copy").hidden = !host;
@@ -120,16 +120,10 @@ export class LobbyScreen {
     if (host) {
       const ready = canStart(lobby) && lobby.phase === "lobby";
       if (this.start.disabled === ready) this.start.disabled = !ready;
-      setText(hint, ready ? "" : this.waitingLine(lobby));
+      setText(hint, ready ? "" : waitingLine(lobby));
     }
     setText("lobby-leave-label", host && role === "host" ? "Close Race" : "Leave");
     if (first) focusHeading($("lobby-title"));
-  }
-
-  private waitingLine(lobby: LobbyState): string {
-    const names = lobby.players.filter((player) => !player.ready).map((player) => player.name);
-    if (!names.length) return "";
-    return names.length <= 2 ? `Waiting for ${names.join(" and ")} to get ready.` : `Waiting for ${names.length} players to get ready.`;
   }
 
   private players(lobby: LobbyState, device: string): void {

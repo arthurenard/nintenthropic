@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LobbyPlayer, LobbyState, RaceResult, RacerSetup } from "../contract";
-import { canStart, hostName, kartOf, localPlayers, screenLabel, standingRows, waitingOn } from "./roster";
+import { canStart, hostName, kartOf, localPlayers, screenLabel, standingRows, waitingLine } from "./roster";
 
 const player = (slot: number, name: string, device: string, extra: Partial<LobbyPlayer> = {}): LobbyPlayer => ({
   slot,
@@ -39,7 +39,11 @@ describe("the room", () => {
 
   it("may start when everyone is ready, and someone is there", () => {
     expect(canStart(room)).toBe(false);
-    expect(waitingOn(room)).toBe(1);
+    expect(waitingLine(room)).toBe("Waiting for Lu to get ready.");
+    expect(waitingLine(lobby([player(0, "Maya", "host")]))).toBe("");
+    const many = lobby([player(0, "A", "d", { ready: false }), player(1, "B", "d", { ready: false }), player(2, "C", "d", { ready: false })]);
+    expect(waitingLine(many)).toBe("Waiting for 3 players to get ready.");
+    expect(waitingLine(lobby([player(0, "A", "d", { ready: false }), player(1, "B", "d", { ready: false })]))).toBe("Waiting for A and B to get ready.");
     expect(canStart(lobby([player(0, "Maya", "host")]))).toBe(true);
     expect(canStart(lobby([]))).toBe(false);
   });

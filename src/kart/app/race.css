@@ -48,6 +48,13 @@ body[data-screen="race"] {
   inset: 0;
   background: var(--glow);
 }
+/* A tall window: the sun keeps its round shape instead of stretching into a streak. */
+@media (max-aspect-ratio: 4 / 5) {
+  .start-glow {
+    bottom: auto;
+    height: 130vw;
+  }
+}
 .start-world {
   position: absolute;
   inset: 0;
@@ -234,8 +241,8 @@ body[data-screen="race"] {
   display: flex;
   align-items: center;
   flex: none;
-  height: 64px;
-  padding: 0 var(--margin);
+  height: calc(64px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) var(--margin) 0;
 }
 .button.back {
   padding-left: 6px;
@@ -327,8 +334,11 @@ body[data-screen="race"] {
   position: relative;
   flex: 0 1 560px;
   min-width: 0;
+  /* Never so tall that the words fall off the window (a phone on its side). */
+  max-width: max(240px, calc((100dvh - 280px) * 4 / 3));
   margin: 0;
 }
+/* Two on one camera: side by side, the left half's picture on the left, as the camera is split. */
 .check-pictures[data-count="2"] .check-picture {
   flex-basis: 360px;
 }
@@ -351,25 +361,35 @@ body[data-screen="race"] {
   height: 100%;
   object-fit: cover;
 }
-/* The level: a ring that fills as the wheel is held steady. Green, for ready. */
-.level-ring {
+/* One round badge in the picture's corner: a ring that fills as the wheel is held level, then a
+   green tick when it is set. Green is ready, here as everywhere. */
+.check-badge {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 136px;
-  height: 136px;
-  transform: translate(-50%, -50%);
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   opacity: 0;
-  transition: opacity 250ms var(--ease);
-  pointer-events: none;
+  transform: scale(0.8);
+  transition:
+    transform 450ms var(--spring),
+    opacity 250ms var(--ease),
+    background-color 250ms var(--ease);
 }
-.check-picture[data-step="level"] .level-ring {
-  opacity: 1;
+.check-badge svg {
+  grid-area: 1 / 1;
+}
+.level-ring {
+  width: 48px;
+  height: 48px;
 }
 .ring-track,
 .ring-fill {
   fill: none;
-  stroke-width: 7;
+  stroke-width: 4;
 }
 .ring-track {
   stroke: rgba(255, 255, 255, 0.28);
@@ -379,31 +399,27 @@ body[data-screen="race"] {
   stroke-linecap: round;
   transition: stroke-dasharray 120ms linear;
 }
-.check-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--tint);
+.check-badge .tick {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.4;
   color: #000;
   opacity: 0;
-  transform: scale(0.6);
-  transition:
-    transform 450ms var(--spring),
-    opacity 250ms var(--ease);
 }
-.check-badge svg {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.4;
-}
+.check-picture[data-step="level"] .check-badge,
 .check-picture[data-step="ready"] .check-badge {
   opacity: 1;
   transform: none;
+}
+.check-picture[data-step="ready"] .check-badge {
+  border-color: transparent;
+  background: var(--tint);
+}
+.check-picture[data-step="ready"] .level-ring {
+  opacity: 0;
+}
+.check-picture[data-step="ready"] .tick {
+  opacity: 1;
 }
 .check-name {
   display: flex;
@@ -612,12 +628,18 @@ body[data-screen="race"] {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  /* As wide as its words, not the half of the window to the right of its left edge. */
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--margin));
   padding: 12px 22px 12px 16px;
   border-radius: 999px;
   font-size: 17px;
   font-weight: 600;
   transform: translateX(-50%);
   animation: lost-in 250ms var(--ease);
+}
+.lost-hands svg {
+  flex: none;
 }
 .lost-hands svg {
   width: 24px;
@@ -900,16 +922,22 @@ body[data-screen="race"] {
   .page-head .title1 {
     font-size: 30px;
   }
-  .check-pictures[data-count="2"] {
-    flex-direction: column;
-    align-items: center;
+  .check-pictures {
+    gap: 10px;
+  }
+  .check-badge {
+    top: 8px;
+    right: 8px;
+    transform-origin: center;
   }
   .controller-cards {
     flex-direction: column;
     align-items: center;
   }
-  .controller-card .wheel-view {
-    max-width: 320px;
+  .controller-card,
+  .controller-cards[data-count="2"] .controller-card {
+    flex: none;
+    width: min(320px, 100%);
   }
   .standings th,
   .standings td {
@@ -929,6 +957,28 @@ body[data-screen="race"] {
 }
 /* A short window (a phone on its side): the chrome shrinks to what its corners can spare. */
 @media (max-height: 520px) {
+  .start-main .large-title {
+    font-size: 40px;
+  }
+  .start-tag {
+    margin-bottom: 4px;
+    font-size: 16px;
+  }
+  .start-card {
+    grid-template-columns: 1fr 1fr;
+    width: min(460px, 100%);
+    padding: 12px;
+  }
+  .join-row {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .start-card .button.large {
+    min-height: 48px;
+  }
+  .code-field {
+    height: 48px;
+  }
   .corner-preview {
     width: 112px;
   }

@@ -33,8 +33,15 @@ export function canStart(lobby: LobbyState): boolean {
   return lobby.players.length > 0 && lobby.players.every((player) => player.ready);
 }
 
-/** How many players are not ready yet. */
-export const waitingOn = (lobby: LobbyState): number => lobby.players.filter((player) => !player.ready).length;
+/**
+ * What the host's Start says while it cannot be pressed: who is still getting
+ * ready ("Waiting for Sam to get ready."), or nothing once all are.
+ */
+export function waitingLine(lobby: LobbyState): string {
+  const names = lobby.players.filter((player) => !player.ready).map((player) => player.name);
+  if (!names.length) return "";
+  return names.length <= 2 ? `Waiting for ${names.join(" and ")} to get ready.` : `Waiting for ${names.length} players to get ready.`;
+}
 
 /**
  * Where a player's race is shown, as the viewer reads it: "Big screen" when
