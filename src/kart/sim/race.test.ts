@@ -456,6 +456,39 @@ describe("the view", () => {
   });
 });
 
+describe("whatever the hands do", () => {
+  it("every number stays a number, every kart inside the barriers, and no kart goes faster than a boost allows", () => {
+    for (const track of TRACKS) {
+      const geo = TrackGeometry.build(track);
+      const r = race(track, racers(4, 4, 0.6), { seed: 13, laps: 2 });
+      const random = mulberry32(99);
+      const presses = [0, 0, 0, 0];
+      const drift = [false, false, false, false];
+      for (let i = 0; i < 60 * 150; i++) {
+        const inputs = new Map<number, DriveInput>();
+        for (let id = 0; id < 4; id++) {
+          if (random() < 0.02) drift[id] = !drift[id]!;
+          if (random() < 0.01) presses[id]!++;
+          const roll = random();
+          // Wild: full lock one way or the other, throttle on and off, a lot of braking.
+          inputs.set(id, { steer: random() < 0.5 ? roll * 2 - 1 : Math.sign(roll - 0.5), throttle: random() < 0.7 ? 1 : 0, brake: random() < 0.15 ? 1 : 0, drift: drift[id]!, itemPresses: presses[id]! });
+        }
+        r.step(inputs);
+        if (i % 7 !== 0) continue;
+        const v = r.view();
+        for (const k of v.karts) {
+          for (const key of ["x", "y", "z", "heading", "speed", "boost", "spin", "hop", "lapProgress"] as const) expect(Number.isFinite(k[key]), `${track.id} kart ${k.id} ${key} at ${i}`).toBe(true);
+          const p = geo.project(k.x, k.z);
+          expect(Math.abs(p.offset), `${track.id} kart ${k.id} at ${i}`).toBeLessThanOrEqual(p.sample.width / 2 + 6 + 0.01);
+          expect(Math.abs(k.speed)).toBeLessThanOrEqual(36.01);
+        }
+        expect(v.karts.map((k) => k.place).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      }
+      expect(JSON.stringify(r.snapshot()).length).toBeLessThan(3200);
+    }
+  });
+});
+
 describe("speed", () => {
   it("steps eight karts in well under a third of a millisecond", () => {
     const r = race(MEADOW_LOOP, racers(2, 6, 0.8), { seed: 3 });
