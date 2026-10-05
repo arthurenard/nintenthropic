@@ -1,7 +1,9 @@
 /**
  * The arcade's row of games: every game's poster as a card, the chosen one
  * marked, chosen by a click or - as a radio group, one tab stop - the arrow
- * keys. The choice is remembered, and it is the page's address: a link to
+ * keys. The cards sit under a heading per kind of game (Shooting, Racing),
+ * side by side in the one row, and the arrow keys run on through them all.
+ * The choice is remembered, and it is the page's address: a link to
  * `#dead-of-night` (or `?game=dead-of-night`) opens the arcade on that game,
  * so a player can pass a game on.
  */
@@ -9,6 +11,28 @@ import type { GameEntry } from "../engine/types";
 import { siteUrl } from "../engine/fetch";
 import { backdropCss } from "../ui/backdrop";
 import { element } from "../ui/dom";
+
+/** The headings the arcade lists games under, in order. */
+export const CATEGORIES = [
+  { id: "shooting", title: "Shooting" },
+  { id: "racing", title: "Racing" },
+] as const;
+
+export type Category = (typeof CATEGORIES)[number]["id"];
+
+/** Which heading a game is under: Shooting unless its entry says otherwise. */
+export const categoryOf = (game: GameEntry): Category => game.category ?? "shooting";
+
+/**
+ * The games under their headings, in the headings' order and the arcade's
+ * order within each. A heading with no game is left out. Flattened, this is
+ * the order the row is walked in with the arrow keys.
+ */
+export function groupGames(games: readonly GameEntry[]): { id: Category; title: string; games: GameEntry[] }[] {
+  return CATEGORIES.map(({ id, title }) => ({ id, title, games: games.filter((game) => categoryOf(game) === id) })).filter(
+    (group) => group.games.length > 0,
+  );
+}
 
 /** The game id an address's hash names ("#dead-of-night"), or "" for none or one that is not text. */
 export function hashId(hash: string): string {
@@ -55,15 +79,35 @@ export function posterInto(box: HTMLElement, image: HTMLImageElement, game: Game
 
 export class Shelf {
   private readonly cards: HTMLButtonElement[];
+  /** The games in the order the row shows them (grouped by heading): the order of the cards and of the arrow keys. */
+  private readonly games: GameEntry[];
   private index = 0;
 
   constructor(
-    private readonly group: HTMLElement,
-    private readonly games: readonly GameEntry[],
+    group: HTMLElement,
+    games: readonly GameEntry[],
     private readonly onChoose: (game: GameEntry, how: "click" | "key") => void,
   ) {
-    this.cards = games.map((game) => this.card(game));
-    group.replaceChildren(...this.cards);
+    const groups = groupGames(games);
+    this.games = groups.flatMap((g) => g.games);
+    this.cards = this.games.map((game) => this.card(game));
+    // The row's width is shared out by how many cards there are and how many headings
+    // (screens.css works out a card's width from them, and so the hero's height).
+    const home = group.parentElement ?? group;
+    home.style.setProperty("--all", String(this.cards.length));
+    home.style.setProperty("--groups", String(groups.length));
+    let at = 0;
+    group.replaceChildren(
+      ...groups.map((g) => {
+        const section = element("div", "shelf-group");
+        section.style.setProperty("--n", String(g.games.length));
+        const cards = element("div", "shelf-cards");
+        cards.append(...this.cards.slice(at, at + g.games.length));
+        at += g.games.length;
+        section.append(element("h2", "shelf-heading eyebrow", g.title), cards);
+        return section;
+      }),
+    );
     group.addEventListener("keydown", (event) => {
       const to = step(this.cards.length, this.index, event.key);
       if (to === null) return;
@@ -87,7 +131,7 @@ export class Shelf {
     posterInto(art, image, game);
     const words = element("span", "game-card-words");
     words.append(element("span", "game-card-title", game.title));
-    if (typeof game.create !== "function") words.append(element("span", "game-card-soon", "Coming Soon"));
+    if (typeof game.create !== "function" && typeof game.page !== "string") words.append(element("span", "game-card-soon", "Coming Soon"));
     card.append(art, words);
     card.addEventListener("click", () => this.choose(this.cards.indexOf(card), "click"));
     return card;

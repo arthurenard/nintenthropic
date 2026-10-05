@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Game, GameEntry } from "../engine/types";
 import { backdropCss } from "../ui/backdrop";
-import { initialGame, step } from "./arcade";
+import { categoryOf, groupGames, initialGame, step } from "./arcade";
 
 const game = (id: string, open = true): GameEntry => ({
   id,
@@ -57,5 +57,23 @@ describe("a game's backdrop", () => {
     });
     expect(css).toBe("radial-gradient(120% 90% at 62% 108%, red 0%, transparent 62%), linear-gradient(180deg, #000 0%, #123 100%)");
     expect(backdropCss({ sky: [["#000", 0]] })).toBe("linear-gradient(180deg, #000 0%)");
+  });
+});
+
+describe("the headings", () => {
+  const racer: GameEntry = { ...game("grip-prix", false), category: "racing", page: "race.html" };
+
+  it("put a game under Shooting unless its entry says Racing", () => {
+    expect(categoryOf(game("high-noon"))).toBe("shooting");
+    expect(categoryOf(racer)).toBe("racing");
+  });
+
+  it("list the games under their heading in the arcade's order, and leave out an empty one", () => {
+    const grouped = groupGames([game("high-noon"), racer, game("dead-of-night")]);
+    expect(grouped.map((g) => [g.title, g.games.map((x) => x.id)])).toEqual([
+      ["Shooting", ["high-noon", "dead-of-night"]],
+      ["Racing", ["grip-prix"]],
+    ]);
+    expect(groupGames([game("high-noon")]).map((g) => g.title)).toEqual(["Shooting"]);
   });
 });

@@ -451,6 +451,16 @@ export interface GameEntry {
   uses?: GameUses;
   /** The stage's shape its art can hold. */
   stage?: StageShape;
+  /**
+   * Which heading the arcade lists the game under: the four finger-pistol
+   * games are "shooting" (the default), Grip Prix is "racing".
+   */
+  category?: "shooting" | "racing";
+  /**
+   * A game with a page of its own (race.html): its Play opens that page
+   * instead of starting the game here, so it has no `create`.
+   */
+  page?: string;
   /** Makes the game. Absent while it is Coming Soon: the arcade shows it, and it cannot be played. */
   create?(): Promise<Game>;
 }
