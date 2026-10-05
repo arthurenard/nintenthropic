@@ -102,6 +102,7 @@ export class KartApp {
       host: () => void this.open("host"),
       join: (code) => void this.open("join", code),
       practice: () => void this.open("practice"),
+      konami: () => this.services.sound.play("cheer"),
     });
     this.youScreen = new YouScreen({
       back: () => this.leave(),
@@ -498,7 +499,7 @@ export class KartApp {
     this.racers = this.raceScreen.lastView?.racers ?? this.racers;
     this.raceScreen.end();
     const track = this.services.tracks.find((candidate) => candidate.id === lobby.settings.track);
-    this.resultsScreen.render({ result, lobby, session, racers: this.racers, laps: lobby.settings.laps, trackName: track?.name ?? "" });
+    this.resultsScreen.render({ result, lobby, session, racers: this.racers, laps: lobby.settings.laps, trackName: track?.name ?? "", still: this.raceScreen.photo });
     this.show("results");
     // A win has its own tune.
     const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));

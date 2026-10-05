@@ -150,6 +150,10 @@
           <p class="subhead secondary" id="check-detail">Keep both fists in view of the camera.</p>
         </div>
         <ol class="steps" id="check-steps" aria-hidden="true"><li></li><li></li><li></li><li></li></ol>
+        <div class="tricks">
+          <p class="eyebrow">Tricks</p>
+          <ul><li>Clap to honk.</li><li>Raise both hands to cheer.</li><li>Wave hello.</li></ul>
+        </div>
         <button id="check-continue" class="button primary large" style="visibility: hidden">Continue</button>
       </div>
     </section>
@@ -259,6 +263,7 @@
       </button>
       <div class="race-previews" id="race-previews"></div>
       <div class="view-notes" id="view-notes"></div>
+      <div class="view-notes" id="view-toasts"></div>
       <div class="pause-veil" id="pause-veil" role="status" hidden>
         <div class="pause-card glass">
           <p class="pause-count num" id="pause-count" hidden></p>
@@ -279,6 +284,13 @@
 
     <!-- 6. Results. -->
     <section id="screen-results" class="screen page results" hidden aria-labelledby="results-title">
+      <figure class="photo-finish" id="photo-finish" role="status" hidden>
+        <img id="photo-finish-still" alt="" hidden />
+        <figcaption>
+          <p class="large-title">Photo Finish!</p>
+          <p class="title3" id="photo-finish-words"></p>
+        </figcaption>
+      </figure>
       <div class="results-inner">
         <div class="page-head center">
           <p class="eyebrow" id="results-eyebrow"></p>
@@ -348,6 +360,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-xmark" /></svg>Leave Race
         </button>
       </div>
+      <div class="tricks" id="pause-tricks" hidden>
+        <p class="eyebrow">Tricks</p>
+        <ul id="pause-tricks-list"></ul>
+      </div>
       <p class="footnote tertiary" id="pause-note"></p>
     </dialog>
 
@@ -356,6 +372,7 @@
     </button>
 
     <p class="toast glass" id="toast" role="status" popover="manual" hidden></p>
+    <div class="gold-flash" id="gold-flash" aria-hidden="true"></div>
     <p class="visually-hidden" id="announce" aria-live="polite"></p>
 
     <!-- Line icons, drawn like SF Symbols: 24-unit grid, 1.75 strokes, round caps. -->
