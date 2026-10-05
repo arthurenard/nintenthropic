@@ -49,9 +49,18 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
 | Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second). |
 | Seeker | A puck that follows the track to the kart one place ahead. |
 | Slick | A puddle of oil dropped behind you. Whoever drives through it spins. |
+| Triple Puck | Three Pucks, one per use; they orbit your kart until fired. |
+| Comet | Six seconds untouchable (pucks, slicks, hazards and bumps pass through), 15% faster, the grass no slower than the road; the karts it touches spin. |
+| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared. |
+| Skyrocket | Flies high over the track to the leader (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
+| Blast | An instant ring of force, 7 m round you: spins karts inside it and destroys Pucks, Seekers, Slicks, Decoys and Skyrockets there. |
+| Decoy Box | Dropped behind like a Slick, but it looks like an item box (a duller colour, a wink). Whoever drives into it spins. |
 
 The roulette takes about a second. What you get depends on your place: the
-leader gets Slicks and Pucks, the back of the pack Nitros and Seekers.
+leader gets Slicks, Decoys, Pucks and Blasts; the middle of the pack Pucks,
+Seekers, Triple Pucks and Nitros; the back Triple Nitros, Comets and Seekers
+and, rarely, Storms and Skyrockets. A Storm is dealt once in 15 seconds at
+most, and no more than one Skyrocket is in the air or in hand at a time.
 
 ### A race
 
@@ -147,7 +156,16 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
   Seeker: 36 m/s along the centre line toward the kart one place ahead,
   homing within 30 m. Slick: dropped 2.5 m behind, stays until driven through
   (at most 12 on the track; the oldest goes). A hit spins the kart 1.2 s,
-  cuts its speed to a fifth, and ends its drift.
+  cuts its speed to a fifth, and ends its drift. Decoy: a slick that looks
+  like a box (at most 8). Odds are three rows (`oddsFirst`, `oddsMid`,
+  `oddsLast` in `tuning.ts`) blended by place. Comet 6 s (+15% top speed, no
+  slowing on rough ground, `immune` held up so items and hazards pass through,
+  the sim spins what it touches and bumps pass through it). Storm: spin 0.7 s,
+  `zap` 3 s at 60% top speed, rationed by `stormAt`. Skyrocket: 60 m/s along
+  the centre line to the leader, burst after 1 s at the earliest, 9 m radius;
+  the bots use a Blast when one comes within 6 m. Blast: radius 7 m. The sim
+  tells the picture with `strike` events (a bolt per kart a storm zaps, a
+  skyrocket's burst, a blast) and `KartView.comet` / `zapped`.
 - **Laps and places.** Progress = lap × length + s. A lap counts only when
   the kart crossed the line forward having been past the halfway point — no
   cutting back across the line. Places by progress (finished karts by finish
