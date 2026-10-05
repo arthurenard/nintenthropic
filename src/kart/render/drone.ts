@@ -86,8 +86,6 @@ export class RescueDrone {
     blades.box(0, 0, 0, 0.2, 0.05, 1.6, mixRgb(dark, white, 0.2), Math.PI / 4);
     blades.blob(0, 0.05, 0, 0.14, 0.1, 0.14, orange, 0);
     const bladeGeo = keep(blades.build());
-    const discGeo = keep(new MeshBuilder().build());
-    void discGeo;
     for (const [x, y, z] of ARMS) {
       const g = new Group();
       g.position.set(x, y + 0.2, z);

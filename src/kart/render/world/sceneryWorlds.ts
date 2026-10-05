@@ -5,10 +5,9 @@
  * and embers beside the lava; fairground trees, stalls and lamps; floating
  * rocks in space; palms, bushes and boats on the island's sea.
  */
-import { Group, Mesh, type Material } from "three";
+import type { Material } from "three";
 import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
-import { rgb } from "./builder";
 import * as p from "./props2";
 import type { Item, SceneryTools } from "./scenery";
 import { SEA_LEVEL } from "./terrain";
@@ -179,7 +178,4 @@ function palm(t: SceneryTools): void {
   const spots = t.landmarkSpots(7, 60, 330, (_x, _z, h) => h < shore - 3);
   const items: Item[] = spots.map((s) => ({ x: s.x, y: SEA_LEVEL - 0.15, z: s.z, yaw: t.rnd() * Math.PI * 2, sx: 2.2, sy: 2.2, sz: 2.2 }));
   t.instanced(boat, items);
-  void Group;
-  void Mesh;
-  void rgb;
 }

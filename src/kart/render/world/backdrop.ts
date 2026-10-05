@@ -299,7 +299,6 @@ function volcano(group: Group, track: <T extends { dispose(): void }>(d: T) => T
 // ─── Space: a ringed planet below the road, moons, a far sun's glare ────────
 
 function space(group: Group, track: <T extends { dispose(): void }>(d: T) => T, updates: ((t: number) => void)[], terrain: Terrain, cx: number, cz: number, hx: number, hz: number): void {
-  void terrain;
   const rnd = seededRandom(3);
   const b = new MeshBuilder();
   const glassRing = new MeshBuilder();

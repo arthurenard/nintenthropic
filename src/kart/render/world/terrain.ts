@@ -351,7 +351,6 @@ export class Terrain {
         return [c[0] * k, c[1] * k, c[2] * k];
       }
       case "kitchen": {
-        const rel = h - (g.roadY + 0);
         if (h < -6 || slope > 0.9) {
           // The room's floor far below (checkered tiles, darkening with depth) and the cabinet fronts that hold the counter up.
           const deep = smoothstep(-46, -8, h);
@@ -364,7 +363,6 @@ export class Terrain {
           const k = 0.38 + 0.5 * deep;
           return [check[0] * k, check[1] * k, check[2] * k];
         }
-        void rel;
         let c = mixRgb(KITCHEN.marble, KITCHEN.marbleWarm, smoothstep(0.35, 0.75, n));
         c = mixRgb(c, KITCHEN.marbleCool, smoothstep(0.55, 0.85, fbm2(x / 90 + 5, z / 90, 2)) * 0.5);
         const k = 0.97 + speck * 0.05;
