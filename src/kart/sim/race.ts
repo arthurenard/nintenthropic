@@ -255,4 +255,9 @@ class Sim implements SimRace {
   }
 }
 
-export const createRace: CreateRace = (setup) => new Sim(setup);
+/** Like `createRace`, but typed with `handOver` too. */
+export function createSimRace(setup: RaceSetup): SimRace {
+  return new Sim(setup);
+}
+
+export const createRace: CreateRace = createSimRace;

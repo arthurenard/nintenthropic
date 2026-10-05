@@ -1,0 +1,261 @@
+import { describe, expect, it } from "vitest";
+import type { DriveInput } from "../contract";
+import { TrackGeometry } from "../track/geometry";
+import { HARBOUR_LIGHTS } from "../track/tracks";
+import { itemOdds } from "./items";
+import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
+import { ITEM_KINDS } from "./state";
+
+const harbour = TrackGeometry.build(HARBOUR_LIGHTS);
+
+/** Steps until something is hit (up to three seconds), and says what. */
+function untilHit(r: ReturnType<typeof race>) {
+  for (let i = 0; i < 180; i++) {
+    const hit = run(r, 1).find((e) => e.type === "hit");
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** A press of the item button: the count goes up by one. */
+const press = (n: number, over: Partial<DriveInput> = {}): DriveInput => input({ itemPresses: n, ...over });
+
+describe("item boxes", () => {
+  it("are five across the road at each row, and come back after 3 s", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    const boxes = r.view().things.filter((t) => t.kind === "box");
+    expect(boxes).toHaveLength(HARBOUR_LIGHTS.itemRows.length * 5);
+    expect(new Set(boxes.map((b) => b.id)).size).toBe(boxes.length);
+    // The first row, ten per cent of the way round, spans most of the road.
+    const row = boxes.slice(0, 5).map((b) => harbour.project(b.x, b.z).offset);
+    expect(Math.min(...row)).toBeLessThan(-4);
+    expect(Math.max(...row)).toBeGreaterThan(4);
+    expect(Math.min(...row.map(Math.abs))).toBeCloseTo(0, 1);
+  });
+
+  it("give an item after a second's roulette, hide while taken, and show again", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    const events = [];
+    let taken = -1;
+    for (let i = 0; i < 60 * 14 && taken < 0; i++) {
+      events.push(...run(r, 1, () => input({ throttle: 1 })));
+      if (view(r).rolling) taken = i;
+    }
+    expect(taken).toBeGreaterThan(0);
+    const pickup = events.find((e) => e.type === "pickup");
+    expect(pickup).toMatchObject({ type: "pickup", kart: 0 });
+    expect(view(r).item).toBeNull();
+    expect(r.view().things.filter((t) => t.kind === "box" && !t.active)).toHaveLength(1);
+    // About a second later the roulette stops on what the pickup said.
+    run(r, 50, () => input({ throttle: 1 }));
+    expect(view(r).rolling).toBe(true);
+    run(r, 15, () => input({ throttle: 1 }));
+    expect(view(r).rolling).toBe(false);
+    if (pickup?.type === "pickup") expect(view(r).item).toBe(pickup.item);
+    expect(view(r).itemUses).toBe(pickup?.type === "pickup" && pickup.item === "nitro3" ? 3 : 1);
+    // Three seconds after being taken the box is back.
+    run(r, 120, () => input({ throttle: 1 }));
+    expect(r.view().things.filter((t) => t.kind === "box" && !t.active)).toHaveLength(0);
+  });
+
+  it("are given by place: slicks and pucks to the leader, nitros and seekers to the back", () => {
+    const odds = (place: number) => {
+      const weights = itemOdds(place, 8);
+      return { nitro: weights[0]!, nitro3: weights[1]!, puck: weights[2]!, seeker: weights[3]!, slick: weights[4]! };
+    };
+    expect(ITEM_KINDS).toEqual(["nitro", "nitro3", "puck", "seeker", "slick"]);
+    expect(odds(1).seeker).toBe(0);
+    expect(odds(8).slick).toBe(0);
+    expect(odds(1).slick + odds(1).puck).toBeGreaterThan(odds(8).slick + odds(8).puck);
+    expect(odds(8).nitro + odds(8).nitro3 + odds(8).seeker).toBeGreaterThan(odds(1).nitro + odds(1).nitro3 + odds(1).seeker);
+    // Between, a blend; and a lone kart is the leader.
+    expect(odds(4).seeker).toBeGreaterThan(0);
+    expect(odds(4).seeker).toBeLessThan(odds(8).seeker);
+    expect(itemOdds(1, 1)).toEqual(itemOdds(1, 8));
+  });
+});
+
+describe("nitro", () => {
+  it("is a burst of speed, now", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    run(r, 240, () => input({ throttle: 1 }));
+    give(r, 0, "nitro");
+    const events = run(r, 1, () => press(1, { throttle: 1 }));
+    expect(events.map((e) => e.type)).toEqual(["use", "boost"]);
+    expect(events[1]).toMatchObject({ source: "nitro", kart: 0 });
+    expect(view(r).item).toBeNull();
+    expect(view(r).boost).toBeGreaterThan(1.45);
+    run(r, 60, () => press(1, { throttle: 1 }));
+    expect(view(r).speed).toBeGreaterThan(28);
+    expect(view(r).speed).toBeLessThanOrEqual(24 * 1.35 + 0.01);
+    run(r, 240, () => press(1, { throttle: 1 }));
+    expect(view(r).boost).toBe(0);
+    expect(view(r).speed).toBeLessThanOrEqual(24.01);
+  });
+
+  it("is used one press at a time when it is three", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    give(r, 0, "nitro3");
+    expect(view(r).itemUses).toBe(3);
+    for (let n = 1; n <= 3; n++) {
+      const events = run(r, 1, () => press(n, { throttle: 1 }));
+      expect(count(events, "use")).toBe(1);
+      expect(view(r).itemUses).toBe(3 - n);
+      run(r, 20, () => press(n, { throttle: 1 }));
+    }
+    expect(view(r).item).toBeNull();
+  });
+
+  it("does nothing while the roulette turns or with no item, and a press is never counted twice", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    expect(count(run(r, 5, () => press(1)), "use")).toBe(0);
+    give(r, 0, "nitro3");
+    // The same count again and again is one press only.
+    const events = run(r, 30, () => press(2));
+    expect(count(events, "use")).toBe(1);
+    expect(view(r).itemUses).toBe(2);
+  });
+});
+
+describe("pucks", () => {
+  it("fly straight and spin out the kart in front", () => {
+    const r = race(HARBOUR_LIGHTS, racers(3, 0));
+    toGo(r);
+    // Kart 2 is on the same side of the road as kart 0, a few metres behind it.
+    give(r, 2, "puck");
+    const used = run(r, 1, () => new Map([[2, press(1)]]));
+    expect(used.find((e) => e.type === "use")).toMatchObject({ kart: 2, item: "puck" });
+    expect(r.view().things.some((t) => t.kind === "puck")).toBe(true);
+    const hit = untilHit(r);
+    expect(hit).toMatchObject({ kart: 0, by: 2, cause: "puck" });
+    expect(view(r, 0).spin).toBeGreaterThan(1);
+    expect(view(r, 2).spin).toBe(0);
+    expect(r.view().things.some((t) => t.kind === "puck")).toBe(false);
+  });
+
+  it("spin the hit kart for 1.2 s, cut its speed to a fifth and end its drift and boost", () => {
+    const r = race(HARBOUR_LIGHTS, racers(3, 0));
+    toGo(r);
+    patch(r, 0, { vz: 20, boost: 60, drift: 1, level: 1, charge: 70 });
+    give(r, 2, "puck");
+    run(r, 1, () => new Map([[2, press(1)]]));
+    untilHit(r);
+    const k = view(r, 0);
+    expect(k.spin).toBeGreaterThan(1.1);
+    expect(k.spin).toBeLessThanOrEqual(1.2);
+    expect(k.speed).toBeLessThan(6);
+    expect(k.drift).toBe(0);
+    expect(k.boost).toBe(0);
+    run(r, 80);
+    expect(view(r, 0).spin).toBe(0);
+  });
+
+  it("bounce off the barriers and, after half a second, spin out their own driver", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    // Pointing at the right-hand barrier.
+    patch(r, 0, { heading: -Math.PI / 2 });
+    give(r, 0, "puck");
+    const events = run(r, 1, () => press(1));
+    expect(count(events, "use")).toBe(1);
+    const useTick = events[0]!.tick;
+    let bounced = false;
+    let hit: (typeof events)[number] | undefined;
+    for (let i = 0; i < 90 && !hit; i++) {
+      const more = run(r, 1);
+      const puck = r.view().things.find((t) => t.kind === "puck");
+      if (puck) {
+        const half = HARBOUR_LIGHTS.width / 2 + 6;
+        expect(Math.abs(harbour.project(puck.x, puck.z).offset)).toBeLessThanOrEqual(half);
+        if (puck.heading > 0) bounced = true;
+      }
+      hit = more.find((e) => e.type === "hit");
+    }
+    expect(bounced).toBe(true);
+    expect(hit).toMatchObject({ kart: 0, by: 0, cause: "puck" });
+    expect(hit!.tick - useTick).toBeGreaterThanOrEqual(30);
+  });
+
+  it("do not hit their own driver straight away", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    give(r, 0, "puck");
+    run(r, 1, () => press(1));
+    const events = run(r, 25);
+    expect(count(events, "hit")).toBe(0);
+  });
+
+  it("die after six seconds", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    // Aimed down the straight, away from everything.
+    patch(r, 0, { heading: Math.PI, s: 0 });
+    give(r, 0, "puck");
+    run(r, 1, () => press(1));
+    run(r, 60 * 5);
+    expect(r.view().things.filter((t) => t.kind === "puck").length).toBeLessThanOrEqual(1);
+    run(r, 70);
+    expect(r.view().things.some((t) => t.kind === "puck")).toBe(false);
+  });
+});
+
+describe("seekers", () => {
+  it("follow the track to the kart one place ahead", () => {
+    const r = race(HARBOUR_LIGHTS, racers(2, 0));
+    toGo(r);
+    // Kart 0 is leading, well up the straight; kart 1 is second and fires.
+    patch(r, 0, { x: 0, z: 70, s: 70, progress: 70, offset: 0 });
+    expect(view(r, 0).place).toBe(1);
+    expect(view(r, 1).place).toBe(2);
+    give(r, 1, "seeker");
+    run(r, 1, () => new Map([[1, press(1)]]));
+    expect(r.view().things.some((t) => t.kind === "seeker")).toBe(true);
+    const events = run(r, 180);
+    expect(events.find((e) => e.type === "hit")).toMatchObject({ kart: 0, by: 1, cause: "seeker" });
+    expect(r.view().things.some((t) => t.kind === "seeker")).toBe(false);
+  });
+});
+
+describe("slicks", () => {
+  it("lie where they are dropped, spin whoever drives through, and are used up", () => {
+    const r = race(HARBOUR_LIGHTS, racers(3, 0));
+    toGo(r);
+    // Kart 0 drops one behind it; kart 2, on the same side of the road, drives through it.
+    give(r, 0, "slick");
+    const dropped = run(r, 1, () => press(1));
+    expect(dropped.find((e) => e.type === "use")).toMatchObject({ kart: 0, item: "slick" });
+    const slick = r.view().things.find((t) => t.kind === "slick")!;
+    expect(slick).toBeDefined();
+    expect(Math.hypot(slick.x - view(r, 0).x, slick.z - view(r, 0).z)).toBeCloseTo(2.5, 0);
+    const events = run(r, 90, () => new Map([[2, input({ throttle: 1 })]]));
+    expect(events.find((e) => e.type === "hit")).toMatchObject({ kart: 2, by: 0, cause: "slick" });
+    expect(r.view().things.some((t) => t.kind === "slick")).toBe(false);
+    expect(view(r, 0).spin).toBe(0);
+  });
+
+  it("do not spin the kart that dropped them as it drives off", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    run(r, 120, () => input({ throttle: 1 }));
+    give(r, 0, "slick");
+    const events = run(r, 120, () => press(1, { throttle: 1 }));
+    expect(count(events, "hit")).toBe(0);
+  });
+
+  it("number at most twelve, the oldest going", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    for (let n = 1; n <= 14; n++) {
+      give(r, 0, "slick");
+      run(r, 1, () => press(n));
+    }
+    const slicks = r.view().things.filter((t) => t.kind === "slick");
+    expect(slicks).toHaveLength(12);
+    // The first two are gone.
+    expect(Math.min(...slicks.map((s) => s.id))).toBeGreaterThan(HARBOUR_LIGHTS.itemRows.length * 5 + 1);
+  });
+});

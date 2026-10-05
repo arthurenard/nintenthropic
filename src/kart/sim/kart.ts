@@ -5,6 +5,7 @@
  * (race.ts, items.ts), which is also why `predict` can run just this.
  */
 import { TICK, type DriveInput, type RacerSetup } from "../contract";
+import { mulberry32 } from "../../engine/rules/rng";
 import type { TrackGeometry } from "../track/geometry";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
 import { ticks, TUNING } from "./tuning";
@@ -241,7 +242,9 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     settle(k);
     return;
   }
-  if (k.t === GO_TICK && !k.ai) {
+  if (k.t === GO_TICK && k.ai) {
+    botStart(w, k, emit);
+  } else if (k.t === GO_TICK) {
     if (k.held > FLOOD_AFTER) {
       k.flood = ticks(TUNING.start.flood);
     } else if (k.held > 0 && k.held <= BOOST_WINDOW) {
@@ -355,6 +358,24 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   placeOnTrack(w, k, emit, true);
   k.t++;
   settle(k);
+}
+
+/**
+ * A bot's start: whether it timed the lights, by its skill, from the race's
+ * seed and its own number (not the shared generator, so a `predict` of it
+ * cannot disturb the draws).
+ */
+function botStart(w: World, k: KartState, emit: Emit): void {
+  const random = mulberry32(w.setup.seed * 31 + k.id * 7919 + 17);
+  const timed = random();
+  const slipped = random();
+  const B = TUNING.bots;
+  if (slipped < B.floodChance * (1 - k.skill)) {
+    k.flood = ticks(TUNING.start.flood);
+  } else if (timed < B.startBoostLow + (B.startBoostHigh - B.startBoostLow) * k.skill * k.skill) {
+    giveBoost(k, TUNING.boost.start);
+    emit({ type: "boost", kart: k.id, source: "start", level: 1 });
+  }
 }
 
 /** Karts that touch push apart, the faster shoving harder; says which were moved. */

@@ -176,8 +176,6 @@ export const TUNING = {
     gridStep: 3.2,
     /** Pairs of karts stand this far either side of the middle, as a share of the road's width. */
     gridSide: 0.19,
-    /** A track's slowest tick in a kart counts a lap only past this share of it, so a lap can't be had by shuffling over the line. */
-    halfway: 0.5,
   },
 
   bots: {
@@ -202,6 +200,10 @@ export const TUNING = {
     lookPerSpeed: 0.6,
     lookMin: 6,
     lookMax: 20,
+    /** At the start a bot times the lights well with this chance (low skill..high), and a poor one floods with up to this chance. */
+    startBoostLow: 0.1,
+    startBoostHigh: 0.9,
+    floodChance: 0.12,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.3,
     /** A bot reads its speed plan this many seconds ahead of itself. */

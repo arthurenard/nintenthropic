@@ -13,7 +13,7 @@
 import { IDLE_INPUT, type DriveInput } from "../contract";
 import { GO_TICK, forwardSpeed, yawRate } from "./kart";
 import { tableAt } from "./plan";
-import { clamp, wrapAngle, type KartState, type World } from "./state";
+import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
 import { ticks, TUNING } from "./tuning";
 
 const B = TUNING.bots;
@@ -147,7 +147,7 @@ export function botInput(w: World, k: KartState): DriveInput {
       if (a > 0.35 + 0.65 * k.skill) m.freeze = ticks(0.35 + 0.5 * b);
     }
   }
-  m.steer = steer;
+  m.steer = q3(steer);
 
   // Drifting the long bends.
   const bendLength = tableAt(plan, plan.bend, k.s + 6);
