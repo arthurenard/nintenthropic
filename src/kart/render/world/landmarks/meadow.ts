@@ -514,13 +514,11 @@ function sheep(b: MeshBuilder, x: number, z: number, yaw: number, k: number, hea
     [0.6, 1.1, -0.45, 0.55, 0.5],
     [-0.6, 1.12, -0.45, 0.55, 0.5],
     [0, 1.55, -0.1, 0.62, 0.52],
-    [0.2, 1.5, 0.55, 0.45, 0.4],
-    [-0.25, 1.48, -0.6, 0.45, 0.4],
     [0, 1.1, -0.9, 0.45, 0.42],
   ];
   for (const [lx, ly, lz, rr, ry] of lumps) {
     const p = P(lx, ly, lz);
-    b.blob(p[0], p[1], p[2], rr * k, ry * k, rr * k, ramp(woolD, wool), 1, yaw + rnd());
+    b.blob(p[0], p[1], p[2], rr * k, ry * k, rr * k, ramp(woolD, wool), rr > 0.8 ? 1 : 0, yaw + rnd());
   }
   // The head: a dark wedge on a short neck, with ears, eyes, and a woolly topknot.
   const hy = headDown ? 0.55 : 1.45;
@@ -591,7 +589,7 @@ const flowerField: LandmarkSpec = {
     lit.blob(0, 0.05, 0, W - 0.4, 0.7, D - 0.4, ramp(GRASS_D, rgb("#58c448")), 1);
     // Flowers on stems with leaves, in drifts of colour: reds, yellows, whites, purples.
     const palette: Rgb[] = [rgb("#e23b44"), rgb("#f6c92c"), rgb("#fbf6ea"), rgb("#8d4ad0"), rgb("#ff8fb0"), rgb("#ff9a2e")];
-    const cell = 1.9;
+    const cell = 2.25;
     for (let gx = -W + 1.2; gx < W - 0.8; gx += cell) {
       for (let gz = -D + 1.1; gz < D - 0.7; gz += cell) {
         const x = gx + (ctx.rnd() - 0.5) * cell * 0.8;
@@ -628,8 +626,8 @@ function flowerOn(b: MeshBuilder, x: number, z: number, h: number, col: Rgb, lea
   const green = GRASS_D;
   const tx = x + Math.sin(lean) * h;
   b.add(shapes.cone(4), xf((x + tx) / 2, h / 2, z, 0.13, h, 0.13, 0, 0, -lean), ramp(green, rgb("#6bd04a")));
-  b.add(shapes.ball(0), xf(x + Math.sin(lean) * h * 0.4 + 0.65, h * 0.38, z + 0.1, 0.65, 0.12, 0.24, 0, 0, 0.5), rgb("#46b845"));
-  b.add(shapes.ball(0), xf(x - 0.6, h * 0.26, z - 0.1, 0.6, 0.11, 0.2, 0, 0, -0.5), rgb("#3ca03f"));
+  b.add(shapes.cone(3), xf(x + Math.sin(lean) * h * 0.4 + 0.5, h * 0.38, z + 0.1, 0.3, 1.3, 0.1, 0, 0, -1.1), rgb("#46b845"));
+  b.add(shapes.cone(3), xf(x - 0.45, h * 0.26, z - 0.1, 0.28, 1.2, 0.1, 0, 0, 1.1), rgb("#3ca03f"));
   const style = Math.floor(rnd() * 3);
   if (style === 0) {
     // A daisy-like flower: a petal disc tilted toward the road, and a golden eye.

@@ -4,13 +4,15 @@ import { DEV_TRACKS, turtle } from "./devTracks";
 import { THEME_HAZARDS, THEME_LANDMARKS } from "./world/landmarks";
 
 describe("turtle", () => {
-  it("closes a loop whose moves bring it back", () => {
-    const pts = turtle([["s", 100], ["a", 90, 50], ["s", 100], ["a", 90, 50], ["s", 100], ["a", 90, 50], ["s", 100], ["a", 90, 50]]);
+  it("closes a loop: the road ends a short straight before the start line, heading along it", () => {
+    const pts = turtle([["s", 100], ["a", 90, 50], ["s", -1], ["a", 90, 50], ["s", -1], ["a", 90, 50], ["s", 60], ["a", 90, 50]]);
     const first = pts[0]!;
     const last = pts[pts.length - 1]!;
-    // The last point is a step from the first, not on top of it.
-    expect(Math.hypot(last.x - first.x, last.z - first.z)).toBeGreaterThan(5);
+    expect(Math.hypot(last.x - first.x, last.z - first.z)).toBeGreaterThan(15);
     expect(Math.hypot(last.x - first.x, last.z - first.z)).toBeLessThan(40);
+    // And arrives from behind the line, not from the side.
+    expect(Math.abs(last.x - first.x)).toBeLessThan(2);
+    expect(last.z).toBeLessThan(first.z);
   });
 });
 

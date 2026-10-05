@@ -7,6 +7,7 @@
  * where shots.json is a list of
  *   { "out": "src/kart/render/shots/a.png", "url": "gallery.html?theme=kitchen&kind=teapot",
  *     "wait": 1500, "eval": "window.__grip.something()", "size": [1440, 900], "waitFor": "window.__grip" }
+ * Instead of (or as well as) one `out`, `steps` takes several pictures of one run: [{ "eval", "wait", "out" }].
  * `url` is relative to http://127.0.0.1:5181/src/kart/render/. `eval` runs in the page after it has loaded
  * and `wait` (ms) has passed; `evalWait` (ms) then waits again before the picture is taken.
  * The page's console errors are printed.
@@ -43,9 +44,19 @@ try {
       result = await page.evaluate(spec.eval);
       await page.waitForTimeout(spec.evalWait ?? 600);
     }
-    mkdirSync(dirname(resolve(spec.out)), { recursive: true });
-    await page.screenshot({ path: resolve(spec.out) });
-    console.log(`${spec.out}${result !== undefined ? "  -> " + JSON.stringify(result) : ""}`);
+    // A shot may be several pictures of one run: each step evaluates something, waits, and takes its own picture.
+    for (const step of spec.steps ?? []) {
+      if (step.eval) await page.evaluate(step.eval);
+      await page.waitForTimeout(step.wait ?? 300);
+      mkdirSync(dirname(resolve(step.out)), { recursive: true });
+      await page.screenshot({ path: resolve(step.out) });
+      console.log(step.out);
+    }
+    if (spec.out) {
+      mkdirSync(dirname(resolve(spec.out)), { recursive: true });
+      await page.screenshot({ path: resolve(spec.out) });
+      console.log(`${spec.out}${result !== undefined ? "  -> " + JSON.stringify(result) : ""}`);
+    }
     for (const e of errors.slice(0, 6)) console.log("   " + e);
     await page.close();
   }

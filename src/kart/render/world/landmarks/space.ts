@@ -573,15 +573,15 @@ LANDMARKS.nebula = {
     for (let k = 0; k < 6; k++) {
       const a = hash(k + 200) * TAU;
       const rr = hash(k + 210) * 26;
-      const c: Rgb = k % 3 === 0 ? [3.2, 0.5, 2.6] : k % 3 === 1 ? [1.0, 0.8, 3.6] : [0.4, 2.8, 2.8];
+      const c: Rgb = k % 3 === 0 ? [2.2, 0.4, 1.8] : k % 3 === 1 ? [0.8, 0.6, 2.6] : [0.3, 2.0, 2.0];
       glow.blob(Math.cos(a) * rr, CY + (hash(k + 220) - 0.5) * 20, Math.sin(a) * rr * 0.7, 3.2 + hash(k + 230) * 2.4, 2.6 + hash(k + 240) * 1.6, 3.0, c, 1);
     }
     // Soft clouds of colour: big dim halos that give the cloud its airy edge.
-    for (let k = 0; k < 12; k++) {
+    for (let k = 0; k < 9; k++) {
       const a = hash(k + 400) * TAU;
       const rr = hash(k + 410) * 46;
       const col: Rgb = k % 3 === 0 ? [2.6, 0.5, 2.0] : k % 3 === 1 ? [1.2, 0.8, 3.0] : [0.3, 2.0, 2.2];
-      halos.push({ x: Math.cos(a) * rr, y: CY + (hash(k + 420) - 0.5) * 30, z: Math.sin(a) * rr * 0.7 + 6, size: 55 + hash(k + 430) * 45, colour: col, alpha: 0.2, twinkle: 0.15 });
+      halos.push({ x: Math.cos(a) * rr, y: CY + (hash(k + 420) - 0.5) * 30, z: Math.sin(a) * rr * 0.7 + 6, size: 50 + hash(k + 430) * 40, colour: col, alpha: 0.07, twinkle: 0.15 });
     }
     // Stars inside: halos that twinkle, with a pinprick of glow at the middle of each.
     for (let k = 0; k < 26; k++) {
@@ -590,7 +590,7 @@ LANDMARKS.nebula = {
       const x = Math.cos(a) * rr;
       const y = CY + (hash(k + 320) - 0.5) * 50;
       const z = Math.sin(a) * rr * 0.7 + 4;
-      halos.push({ x, y, z, size: 3 + hash(k + 330) * 5, colour: k % 3 === 0 ? [1.6, 2.0, 3.4] : k % 3 === 1 ? [3.4, 2.4, 1.6] : [3.0, 1.2, 3.0], alpha: 0.7, twinkle: 0.7 });
+      halos.push({ x, y, z, size: 2.5 + hash(k + 330) * 4, colour: k % 3 === 0 ? [1.6, 2.0, 3.4] : k % 3 === 1 ? [3.4, 2.4, 1.6] : [3.0, 1.2, 3.0], alpha: 0.5, twinkle: 0.7 });
       glow.box(x, y, z, 0.7, 0.7, 0.7, G_WHITE, 0.7, 0.6, 0.3);
     }
     return {

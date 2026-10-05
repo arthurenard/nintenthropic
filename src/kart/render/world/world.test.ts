@@ -71,7 +71,8 @@ describe("the track's meshes", () => {
       expect(meshes.deco.length).toBeGreaterThan(10);
       expect(meshes.startLights).toHaveLength(3);
       expect(meshes.pads).not.toBeNull();
-      expect(meshes.glows.length > 0).toBe(style.night);
+      // Street lamps (the harbour) and the fair's strings of bulbs give lights; nothing else needs to.
+      if (style.lamps) expect(meshes.glows.length).toBeGreaterThan(0);
     });
   }
 

@@ -321,7 +321,7 @@ export class KartActor {
       this.falling = tt <= tFall;
       this.anchor.x = px;
       this.anchor.z = pz;
-      this.anchor.y = lerp(f.y, py, 0.4) + 0;
+      this.anchor.y = lerp(f.y, py, 0.55);
       this.settle = { x: 0, y: 0, z: 0 };
     } else {
       if (this.fall) {
@@ -334,7 +334,7 @@ export class KartActor {
       }
       this.anchor.x = view.x;
       this.anchor.z = view.z;
-      this.anchor.y = baseY + view.hop * 0.55;
+      this.anchor.y = baseY + view.hop * 0.7;
       this.falling = false;
       if (this.droneOut >= 0) this.flyAway(dt, time);
       else this.rescuing = false;
@@ -348,6 +348,9 @@ export class KartActor {
     }
     if (!rescuing) this.lastGood = { x: view.x, y: baseY, z: view.z, heading: view.heading, speed };
 
+    // A hop is the body lifting off its wheels; a jump (several metres) lifts the whole kart, wheels and all.
+    const jump = rescuing ? 0 : Math.max(0, view.hop - 0.4);
+    py += jump;
     this.x = px;
     this.y = py;
     this.z = pz;
@@ -367,7 +370,7 @@ export class KartActor {
     this.lean = damp(this.lean, leanTarget, 12, dt);
     this.slide = damp(this.slide, -view.drift * 0.2 * (spinning ? 0 : 1), 8, dt);
     this.flame = damp(this.flame, view.boost > 0 && !rescuing ? 1 : 0, view.boost > 0 ? 16 : 10, dt);
-    this.hop = damp(this.hop, rescuing ? 0 : view.hop, 30, dt);
+    this.hop = damp(this.hop, rescuing ? 0 : Math.min(view.hop, 0.4), 30, dt);
     this.wheelSpin += (rescuing ? 0 : speed * dt) / 0.4;
 
     const rough = view.offroad || view.surface === "mud" ? 0.035 : 0.006;

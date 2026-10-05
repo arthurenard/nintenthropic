@@ -24,8 +24,8 @@ const GOLD = lift("#ffcf4a", 1.2);
 const STEEL_D: Rgb = [0.3, 0.4, 0.62];
 const STEEL: Rgb = [0.72, 1.0, 1.7];
 const STEEL_L: Rgb = [1.15, 1.55, 2.5];
-const WALNUT = lift("#5e3a22", 1.15);
-const WOOD_L = lift("#a8794c", 1.2);
+const WALNUT = lift("#44281a", 1.15);
+const WOOD_L = lift("#8a5c38", 1.2);
 const WHITE: Rgb = [1.05, 1.22, 1.6];
 
 /** Brushed steel for a lathe or a tube: dim at y0, bright at y1, with each facet a touch different. */
@@ -279,11 +279,11 @@ const teapot: LandmarkSpec = {
     // The painting goes on the flanks, either side of the spout and the handle: a big cobalt flower with gold at its heart on each
     // side, smaller ones round it, leaves between. (A kart sees the front quarter and the side nearest, so both sides are done.)
     for (const side of [-1, 1]) {
-      paintedFlower(lit, side * 1.5, 11.4, 1.15);
-      paintedFlower(lit, side * 0.95, 7.2, 0.5);
-      paintedFlower(lit, side * 0.9, 15.4, 0.46);
-      paintedFlower(lit, side * 2.15, 8.0, 0.55);
-      paintedFlower(lit, side * 2.1, 15.0, 0.42);
+      paintedFlower(lit, side * 1.5, 11.4, 1.6);
+      paintedFlower(lit, side * 0.9, 6.4, 0.6);
+      paintedFlower(lit, side * 0.85, 16.2, 0.55);
+      paintedFlower(lit, side * 2.2, 7.6, 0.65);
+      paintedFlower(lit, side * 2.2, 15.8, 0.5);
       for (const [daz, y, a] of [[-0.38, 11.4, 3.3], [0.4, 11.4, 6.0], [0.0, 8.2, 4.9], [0.0, 14.2, 1.6], [-0.45, 7.8, 2.6], [0.5, 7.0, 0.4], [0.8, 12.6, 0.7], [-0.7, 13, 2.4]] as const) paintedLeaf(lit, side * (1.5 + daz), y, a, 1.15);
     }
     // A pattern of cobalt dashes round the waist, and on the lid.
@@ -411,35 +411,34 @@ const fruitBowl: LandmarkSpec = {
     lathe(lit, [[5.2, 0.2], [5.4, 0.2], [5.4, 0.6], [5.2, 0.6]], { segments: 18, shade: WOOD_L });
 
     const rnd = ctx.rnd;
-    // The bottom ring: nine fruit packed round the wall, then a second ring and a crown.
+    // The bottom ring: nine fruit packed round the wall, then a second ring, a crown, and a hand of bananas on top.
     const ring1: [number, string][] = [[20, "apple"], [58, "orange"], [96, "lemon"], [132, "orange"], [170, "green"], [212, "apple"], [256, "orange"], [300, "pear"], [340, "orange"]];
     ring1.forEach(([deg, kind], n) => {
       const a = (deg * Math.PI) / 180;
-      const x = Math.cos(a) * 5.9;
-      const z = Math.sin(a) * 5.9;
-      const y = 4.9;
-      if (kind === "orange") orange(lit, x, y, z, 2.35, n + 3);
-      else if (kind === "apple") apple(lit, x, y, z, 2.4, APPLE, a);
-      else if (kind === "green") apple(lit, x, y, z, 2.3, rgb("#8bc83c"), a);
-      else if (kind === "lemon") lemon(lit, x, y - 0.4, z, 2.1, a + Math.PI / 2);
-      else pear(lit, x, y - 2.3, z, 0.95, 0.5, a);
+      const x = Math.cos(a) * 6.2;
+      const z = Math.sin(a) * 6.2;
+      const y = 5.6;
+      if (kind === "orange") orange(lit, x, y, z, 2.85, n + 3);
+      else if (kind === "apple") apple(lit, x, y, z, 2.9, APPLE, a);
+      else if (kind === "green") apple(lit, x, y, z, 2.8, rgb("#8bc83c"), a);
+      else if (kind === "lemon") lemon(lit, x, y - 0.5, z, 2.5, a + Math.PI / 2);
+      else pear(lit, x, y - 2.8, z, 1.15, 0.5, a);
     });
     const ring2: [number, string][] = [[10, "apple"], [82, "orange"], [155, "pear"], [228, "orange"], [300, "green"]];
     ring2.forEach(([deg, kind], n) => {
       const a = (deg * Math.PI) / 180;
-      const x = Math.cos(a) * 3.0;
-      const z = Math.sin(a) * 3.0;
-      if (kind === "orange") orange(lit, x, 7.5, z, 2.3, n + 20);
-      else if (kind === "apple") apple(lit, x, 7.5, z, 2.35, APPLE, a);
-      else if (kind === "green") apple(lit, x, 7.5, z, 2.3, rgb("#8bc83c"), a);
-      else pear(lit, x, 5.4, z, 0.95, -0.3, a);
+      const x = Math.cos(a) * 3.4;
+      const z = Math.sin(a) * 3.4;
+      if (kind === "orange") orange(lit, x, 8.7, z, 2.8, n + 20);
+      else if (kind === "apple") apple(lit, x, 8.7, z, 2.85, APPLE, a);
+      else if (kind === "green") apple(lit, x, 8.7, z, 2.8, rgb("#8bc83c"), a);
+      else pear(lit, x, 6.2, z, 1.15, -0.3, a);
     });
-    apple(lit, -0.4, 10.0, -0.3, 2.4, rgb("#e63a2a"), 0.4);
-    orange(lit, 1.6, 9.6, 1.8, 2.1, 77);
-    // A hand of bananas draped over the front rim, grapes spilling the other side.
-    bananas(lit, [-3.5, 9.4, 3.5], -0.3, 5, 11);
-    grapes(lit, [-9.2, 6.6, 5.4], rnd);
-    grapes(lit, [3.8, 9.2, -5.4], rnd);
+    apple(lit, -0.4, 11.7, -0.3, 2.9, rgb("#e63a2a"), 0.4);
+    orange(lit, 2.0, 11.0, 2.2, 2.5, 77);
+    bananas(lit, [-4.2, 12.0, 4.6], -0.3, 5, 13);
+    grapes(lit, [-10.6, 7.6, 6.4], rnd);
+    grapes(lit, [4.4, 11.0, -6.2], rnd);
     // A pair of cherries on the counter for the bowl's cheek.
     for (const s of [-1, 1]) {
       lit.blob(15.3 + s * 0.9, 1.2, 4 + s * 0.4, 1.2, 1.2, 1.2, ramp(rgb("#7a0f1c"), rgb("#d3213a")), 1);
@@ -673,7 +672,7 @@ const pepperMill: LandmarkSpec = {
     const lit = new MeshBuilder();
     const peppercorn = lift("#3a2c26", 1.6);
     // The steel grinder at the foot.
-    lathe(lit, [[0, -0.5], [5.4, -0.5], [5.7, 0.6], [5.7, 2.2], [6.3, 2.7]], { segments: 12, shade: chrome(0, 2.7, 0.1), caps: "bottom" });
+    lathe(lit, [[0, -0.5], [5.4, -0.5], [5.7, 0.6], [5.7, 2.2], [6.3, 2.7]], { segments: 12, shade: chrome(-8, 14, 0.08), caps: "bottom" });
     // The turned walnut body: foot, belly, long waist, shoulder.
     const wood: Shade = (p, _i, j) => {
       const t = Math.max(0, Math.min(1, (p[1] - 2) / 33));
@@ -683,14 +682,14 @@ const pepperMill: LandmarkSpec = {
     // Two dark turned rings on the belly.
     for (const y of [12.2, 13.0]) lathe(lit, [[7.62, y - 0.3], [7.72, y - 0.3], [7.72, y + 0.3], [7.62, y + 0.3]], { segments: 12, shade: scaleRgb(WALNUT, 0.55) });
     // A steel band, then the slimmer top section and a rounded shoulder.
-    lathe(lit, [[4.9, 27], [5.1, 27], [5.1, 29], [4.9, 29]], { segments: 12, shade: chrome(27, 29, 0.12) });
+    lathe(lit, [[4.9, 27], [5.1, 27], [5.1, 29], [4.9, 29]], { segments: 12, shade: chrome(12, 44, 0.08) });
     lathe(lit, [[4.6, 29], [4.4, 31], [4.2, 33], [3.8, 34.6], [3.0, 35.6], [1.4, 36.1], [0, 36.2]], { segments: 12, shade: wood });
     // The knob.
     lit.post(0, 36, 0, 1.0, 1.6, scaleRgb(WALNUT, 0.7), 8);
     lit.blob(0, 38.5, 0, 2.6, 2.2, 2.6, ramp(scaleRgb(WALNUT, 0.85), WOOD_L), 1);
     lit.blob(0, 40.0, 0, 1.1, 0.35, 1.1, scaleRgb(WALNUT, 0.6), 0);
     // A second, slim steel ring under the shoulder.
-    lathe(lit, [[4.55, 31.2], [4.75, 31.2], [4.75, 31.8], [4.55, 31.8]], { segments: 12, shade: chrome(31, 32, 0.12) });
+    lathe(lit, [[4.55, 31.2], [4.75, 31.2], [4.75, 31.8], [4.55, 31.8]], { segments: 12, shade: chrome(12, 44, 0.08) });
     // Peppercorns that have escaped, and the dusting of ground pepper round them.
     for (let i = 0; i < 40; i++) {
       const a = Math.PI * (0.02 + ctx.rnd() * 0.96);
