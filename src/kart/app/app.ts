@@ -28,7 +28,7 @@ import {
 import { cupById, trackOfRace } from "../grandprix";
 import { CheckScreen } from "./check";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
-import { loadYou, saveYou, wheelChecked, type You } from "./prefs";
+import { crew, loadYou, playerCount, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
 import { PodiumScreen } from "./podium";
@@ -99,6 +99,8 @@ export class KartApp {
   /** Counts attempts to open a room, so a slow one that was given up on is dropped. */
   private attempt = 0;
   private finishTimer = 0;
+  /** The host's screen has been made the big screen for this room (once, for three or four on the camera). */
+  private bigScreenSet = false;
   private racers: readonly RacerSetup[] = [];
   private unlisten: (() => void)[] = [];
 
@@ -302,6 +304,7 @@ export class KartApp {
     this.intent = kind;
     this.ready = false;
     this.choice = null;
+    this.bigScreenSet = false;
     this.unlisten = [session.onLobby((lobby) => this.lobbyChanged(lobby)), session.onClosed((reason) => this.closed(reason))];
   }
 
@@ -332,7 +335,7 @@ export class KartApp {
       return;
     }
     this.youScreen.setBusy(true);
-    const on = await this.cameraOn(you.second ? 4 : 2);
+    const on = await this.cameraOn((playerCount(you) * 2) as 2 | 4 | 6 | 8);
     this.youScreen.setBusy(false);
     if (!this.session) {
       // Left while the camera was starting: it must not stay on with nobody to use it.
@@ -343,7 +346,7 @@ export class KartApp {
     this.show("check");
     const lobby = this.session.lobby();
     const mine = localPlayers(lobby, this.session.device);
-    const names = you.second ? [you.name, you.secondName] : [you.name];
+    const names = crew(you).map((one) => one.name);
     this.session.setReady(false);
     this.checkScreen.start(
       (this.controls as WheelControl[]).map((control, i) => ({
@@ -367,7 +370,9 @@ export class KartApp {
     const you = this.you;
     if (you.drive === "wheel") {
       const base = { steering: you.steering };
-      this.controls = you.second ? [controls.wheel({ ...base, half: "left" }), controls.wheel({ ...base, half: "right" })] : [controls.wheel(base)];
+      // Friends sharing the camera each take a column of the picture, left to right.
+      const of = playerCount(you);
+      this.controls = of > 1 ? Array.from({ length: of }, (_, index) => controls.wheel({ ...base, seat: { index, of } })) : [controls.wheel(base)];
     } else {
       this.controls = [you.drive === "keyboard" ? controls.keyboard() : controls.gamepad()];
     }
@@ -382,15 +387,14 @@ export class KartApp {
   private sendPlayers(): void {
     const session = this.session;
     if (!session || !this.controls.length) return;
-    const names = this.you.drive === "wheel" && this.you.second ? [this.you.name, this.you.secondName] : [this.you.name];
+    const people = crew(this.you);
     const screen = session.role === "guest" ? (this.choice ?? "auto") : "here";
-    const second = (i: number): boolean => i === 1;
     const players: LocalPlayerSetup[] = this.controls.map((control, i) => ({
-      name: names[i] ?? this.you.name,
+      name: people[i]?.name ?? this.you.name,
       control,
       screen,
-      character: second(i) ? this.you.secondCharacter : this.you.character,
-      golden: second(i) ? this.you.secondGolden : this.you.golden,
+      character: people[i]?.character ?? this.you.character,
+      golden: people[i]?.golden ?? this.you.golden,
     }));
     session.setLocalPlayers(players);
     // A change of screen does not undo being ready.
@@ -398,7 +402,7 @@ export class KartApp {
   }
 
   /** Before the browser asks for the camera, say why; then start it. False: the player is not going on with the wheel (yet). */
-  private async cameraOn(hands: 2 | 4): Promise<boolean> {
+  private async cameraOn(hands: 2 | 4 | 6 | 8): Promise<boolean> {
     const { camera } = this.services;
     const permission = await camera.permission();
     if (permission === "denied") return this.cameraTrouble("camera-denied");
@@ -447,7 +451,7 @@ export class KartApp {
 
   /** Drives with the keyboard instead: no camera, no check. */
   private useKeyboard(): void {
-    this.you = { ...this.you, drive: "keyboard", second: false };
+    this.you = { ...this.you, drive: "keyboard" };
     saveYou(this.you);
     this.services.camera.stop();
     this.makeControls();
@@ -462,6 +466,11 @@ export class KartApp {
     const session = this.session;
     if (!session) return;
     this.ready = true;
+    // Three or four of us on this screen's camera: the host's screen is the big screen for the room, to start with.
+    if (session.role === "host" && !this.bigScreenSet && playerCount(this.you) >= 3) {
+      this.bigScreenSet = true;
+      session.configure({ display: "host" });
+    }
     const lobby = session.lobby();
     if (lobby.phase === "racing") this.enterRace(lobby);
     else {

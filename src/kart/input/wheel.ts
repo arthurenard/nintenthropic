@@ -93,9 +93,43 @@ export function shapeSteer(angle: number, steering: Steering | number = "normal"
   return Math.sign(angle) * Math.pow(fraction, WHEEL.curve);
 }
 
+/**
+ * One player's column of the picture when several share a camera: seat
+ * `index` (0 is the leftmost, as the player sees the mirrored picture) of
+ * `of` equal vertical columns.
+ */
+export interface Seat {
+  index: number;
+  of: number;
+}
+
+/** A column's edges across the mirrored picture, 0..1. */
+export function seatZone(seat: Seat): readonly [number, number] {
+  return [seat.index / seat.of, (seat.index + 1) / seat.of];
+}
+
+/** The seat a half is: the left or the right of two. */
+export function halfSeat(half: "left" | "right"): Seat {
+  return { index: half === "left" ? 0 : 1, of: 2 };
+}
+
+/** The seat the options name (a `seat`, else a `half`), or null for the whole picture. */
+export function seatOf(options: { seat?: Seat | null; half?: "left" | "right" | null }): Seat | null {
+  if (options.seat && options.seat.of > 1) {
+    const of = Math.round(options.seat.of);
+    return { index: Math.max(0, Math.min(of - 1, Math.round(options.seat.index))), of };
+  }
+  return options.half ? halfSeat(options.half) : null;
+}
+
 export interface WheelOptions {
   steering?: Steering;
-  /** Two players on one camera: only hands whose (mirrored) palm is in this half of the picture count. */
+  /**
+   * Several players on one camera (up to four): only hands whose (mirrored)
+   * palm is in this player's column of the picture count.
+   */
+  seat?: Seat | null;
+  /** Two players on one camera, the old way to say it: `seat` 0 or 1 of 2. */
   half?: "left" | "right" | null;
   /** The picture's width over its height (x and y are fractions of each, so angles need it). */
   aspect?: number;
@@ -123,6 +157,17 @@ interface Slot {
 /** A lone hand within this of the one known (picture heights) is that hand, not the other. */
 const NEAR = 0.25;
 
+/** How far a hand may have moved to still be the one seen a moment ago: this much (picture heights), and this much more per second. */
+const FOLLOW = { base: 0.08, speed: 0.6 } as const;
+
+/**
+ * Between neighbouring columns, a band this wide (picture widths) either side
+ * of the line belongs to whoever already had the hand: a fist that strays
+ * over the line stays its player's, and a stranger's hand has to be properly
+ * inside a column to be taken for theirs.
+ */
+export const SEAT_MARGIN = 0.02;
+
 const newSlot = (): Slot => ({ grip: new Grip(), reading: null, seenAt: -Infinity, openedAt: -Infinity, flickOk: false });
 
 const smooth = (x: number): number => {
@@ -135,7 +180,8 @@ const wrap = (degrees: number): number => degrees - 360 * Math.round(degrees / 3
 
 export class WheelReader {
   steering: Steering;
-  half: "left" | "right" | null;
+  /** This player's column of a shared camera, or null for the whole picture. */
+  seat: Seat | null;
   /** The picture's width over its height. Set it from the camera (width / height) once it is open. */
   aspect: number;
 
@@ -163,7 +209,7 @@ export class WheelReader {
 
   constructor(options: WheelOptions = {}) {
     this.steering = options.steering ?? "normal";
-    this.half = options.half ?? null;
+    this.seat = seatOf(options);
     this.aspect = options.aspect ?? 16 / 9;
   }
 
@@ -177,7 +223,7 @@ export class WheelReader {
    */
   push(frame: HandFrame, at: number = frame.capturedAt): void {
     const t = this.advance(at);
-    const seen = this.assign(this.candidates(frame), t);
+    const seen = this.assign(this.candidates(frame, t), t);
     for (const side of ["left", "right"] as const) {
       const slot = this.slots[side];
       // A hand back after a long absence is a stranger again: no hold against what it was.
@@ -309,17 +355,57 @@ export class WheelReader {
     return this.time;
   }
 
-  /** The hands of a frame that count: in this player's half, at most two. */
-  private candidates(frame: HandFrame): HandReading[] {
-    const readings: HandReading[] = [];
+  /** "left" or "right" when this is one of two players on a camera (what `half` used to say). */
+  get half(): "left" | "right" | null {
+    return this.seat?.of === 2 ? (this.seat.index === 0 ? "left" : "right") : null;
+  }
+
+  /**
+   * The hands of a frame that count: those in this player's column, at most
+   * two. A hand this wheel already holds keeps counting a little way over the
+   * line to a neighbour's column; a hand it does not hold must be inside by
+   * the margin. When there are more than two, the hands it holds come first,
+   * then those nearest the column's middle.
+   */
+  private candidates(frame: HandFrame, t: number): HandReading[] {
+    const found: { reading: HandReading; follows: number | null }[] = [];
+    const seat = this.seat;
+    const zone = seat ? seatZone(seat) : null;
     for (const hand of frame.hands) {
       const reading = readHand(hand, this.aspect);
-      if (this.half === "left" && reading.x >= 0.5) continue;
-      if (this.half === "right" && reading.x < 0.5) continue;
-      readings.push(reading);
-      if (readings.length === 2) break;
+      const follows = zone !== null ? this.follows(reading, t) : null;
+      if (seat && zone) {
+        const grow = follows !== null ? SEAT_MARGIN : -SEAT_MARGIN;
+        if (seat.index > 0 && reading.x < zone[0] - grow) continue;
+        if (seat.index < seat.of - 1 && reading.x >= zone[1] + grow) continue;
+      }
+      found.push({ reading, follows });
     }
-    return readings;
+    if (found.length > 2 && zone) {
+      const middle = (zone[0] + zone[1]) / 2;
+      found.sort((a, b) => {
+        if (a.follows !== null && b.follows !== null) return a.follows - b.follows;
+        if (a.follows !== null || b.follows !== null) return a.follows !== null ? -1 : 1;
+        return Math.abs(a.reading.x - middle) - Math.abs(b.reading.x - middle);
+      });
+    }
+    return found.slice(0, 2).map((one) => one.reading);
+  }
+
+  /**
+   * How far this hand is from where this wheel last had one, if it can be
+   * that hand moved on (a hand covers only so much in the time that has
+   * passed); null for a hand that is not a continuation of either.
+   */
+  private follows(reading: HandReading, t: number): number | null {
+    let nearest: number | null = null;
+    for (const side of ["left", "right"] as const) {
+      const slot = this.slots[side];
+      if (!slot.reading || t - slot.seenAt > WHEEL.held) continue;
+      const far = this.distance(slot, reading);
+      if (far < Math.min(NEAR, FOLLOW.base + FOLLOW.speed * (t - slot.seenAt)) && (nearest === null || far < nearest)) nearest = far;
+    }
+    return nearest;
   }
 
   private distance(slot: Slot, hand: HandReading): number {
@@ -356,7 +442,8 @@ export class WheelReader {
     // With one hand known and the other not, a hand near the known one is it; a far one is the other.
     if (knowsLeft) return this.distance(left, a) < NEAR ? { left: a, right: null } : { left: null, right: a };
     if (knowsRight) return this.distance(right, a) < NEAR ? { left: null, right: a } : { left: a, right: null };
-    const middle = this.half === "left" ? 0.25 : this.half === "right" ? 0.75 : 0.5;
+    const zone = this.seat ? seatZone(this.seat) : ([0, 1] as const);
+    const middle = (zone[0] + zone[1]) / 2;
     return a.x < middle ? { left: a, right: null } : { left: null, right: a };
   }
 

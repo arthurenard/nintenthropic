@@ -23,8 +23,8 @@ export interface NetOptions {
    * the lobby); the default is `setInterval`.
    */
   schedule?: (run: () => void, ms: number) => () => void;
-  /** How many players this device brings to begin with, 1 or 2 (their seats are held at once). Default 1. */
-  players?: 1 | 2;
+  /** How many players this device brings to begin with, 1 to 4 (their seats are held at once). Default 1. */
+  players?: 1 | 2 | 3 | 4;
   /** This device's id (a random one if left out). */
   device?: string;
   /** Host: seconds of race to keep running after it is decided, so the finish is seen, before the results. Default 3. */
@@ -45,7 +45,7 @@ export interface Settled {
   now: () => number;
   random: () => number;
   schedule: (run: () => void, ms: number) => () => void;
-  players: 1 | 2;
+  players: 1 | 2 | 3 | 4;
   device: string | undefined;
   resultsDelay: number;
   onApply: ((kart: number, seq: number, input: DriveInput) => void) | undefined;
@@ -63,7 +63,7 @@ export function settle(options: NetOptions): Settled {
         const id = setInterval(run, ms);
         return () => clearInterval(id);
       }),
-    players: options.players === 2 ? 2 : 1,
+    players: options.players === 2 || options.players === 3 || options.players === 4 ? options.players : 1,
     device: options.device,
     resultsDelay: options.resultsDelay ?? 3,
     onApply: options.onApply,

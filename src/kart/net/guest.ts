@@ -20,6 +20,7 @@
  */
 import {
   IDLE_INPUT,
+  MAX_PLAYERS,
   type DriveInput,
   type DriverControl,
   type LobbySettings,
@@ -299,7 +300,7 @@ export class GuestSession implements Session {
   }
 
   setLocalPlayers(players: LocalPlayerSetup[]): void {
-    this.local = players.slice(0, 2);
+    this.local = players.slice(0, MAX_PLAYERS);
     if (this.open && this.race === null) this.sendConfigure();
   }
 

@@ -14,6 +14,7 @@
  * The geometry (fitPicture, wheelRing) is plain functions, tested without a DOM.
  */
 import type { WheelStatus } from "../contract";
+import { halfSeat, seatOf, seatZone, type Seat } from "./wheel";
 
 /** Handy's tint for each mode (DESIGN.md: Ready green, Warning amber, Danger red). */
 export const MODE_COLOURS: Readonly<Record<WheelStatus["mode"], string>> = {
@@ -27,6 +28,16 @@ const HAIRLINE = "rgba(255, 255, 255, 0.10)";
 
 export type PreviewSize = "pip" | "full";
 
+/** One player's column in a shared picture: whose it is, and what their wheel is doing. */
+export interface PreviewColumn {
+  name: string;
+  /** The player's colour (a #rrggbb). */
+  colour: string;
+  /** Null: the hands are not being read (an empty column). */
+  status: WheelStatus | null;
+  extras?: PreviewExtras;
+}
+
 /** Things the picture can show that a WheelStatus does not carry. */
 export interface PreviewExtras {
   /** 0..1: the level being held, drawn as a ring filling round the wheel. */
@@ -36,7 +47,9 @@ export interface PreviewExtras {
 export interface WheelPreviewOptions {
   /** A small corner picture-in-picture, or filling its container. */
   size?: PreviewSize;
-  /** Two on one camera: show only this half of the picture, the one this player's wheel is in. */
+  /** Players sharing a camera: show only this column of the picture, the one this player's wheel is in. */
+  seat?: Seat | null;
+  /** Two on one camera, the old way to say it: the left or right half. */
   half?: "left" | "right" | null;
   /** The picture's width over its height until the video says (default 16:9). */
   aspect?: number;
@@ -62,9 +75,9 @@ export interface PictureFit {
  * goes through `point`, so it lands on the hand it belongs to whatever the
  * canvas's shape.
  */
-export function fitPicture(width: number, height: number, aspect: number, half: "left" | "right" | null = null): PictureFit {
-  const from = half === "right" ? 0.5 : 0;
-  const to = half === "left" ? 0.5 : 1;
+export function fitPicture(width: number, height: number, aspect: number, part: "left" | "right" | Seat | null = null): PictureFit {
+  const seat = part === null ? null : typeof part === "string" ? halfSeat(part) : part;
+  const [from, to] = seat ? seatZone(seat) : [0, 1];
   const wide = aspect * (to - from); // the region's width, in picture heights
   const scale = Math.max(width / wide, height);
   const dest = { x: (width - wide * scale) / 2, y: (height - scale) / 2, width: wide * scale, height: scale };
@@ -95,14 +108,16 @@ export class WheelPreview {
   private readonly context: CanvasRenderingContext2D;
   private video: HTMLVideoElement | null = null;
   private size: PreviewSize;
-  private half: "left" | "right" | null;
+  private seat: Seat | null;
+  /** More than one player on the picture: every column is drawn, each with its player's name (see `followColumns`). */
+  private columns = 0;
   private aspect: number;
   private observer: ResizeObserver | null = null;
   private frame = 0;
 
   constructor(options: WheelPreviewOptions = {}) {
     this.size = options.size ?? "full";
-    this.half = options.half ?? null;
+    this.seat = seatOf(options);
     this.aspect = options.aspect ?? 16 / 9;
     this.canvas = document.createElement("canvas");
     this.canvas.setAttribute("role", "img");
@@ -135,13 +150,18 @@ export class WheelPreview {
   }
 
   setHalf(half: "left" | "right" | null): void {
-    this.half = half;
+    this.seat = seatOf({ half });
+    this.style();
+  }
+
+  setSeat(seat: Seat | null): void {
+    this.seat = seatOf({ seat });
     this.style();
   }
 
   /** The visible region's width over its height. */
   private shape(): number {
-    return this.aspectNow() * (this.half ? 0.5 : 1);
+    return this.aspectNow() / (this.seat ? this.seat.of : 1);
   }
 
   private aspectNow(): number {
@@ -193,10 +213,110 @@ export class WheelPreview {
     const { context: g, canvas } = this;
     const width = canvas.width;
     const height = canvas.height;
-    const fit = fitPicture(width, height, this.aspectNow(), this.half);
+    const fit = fitPicture(width, height, this.aspectNow(), this.seat);
     // Line widths and sizes scale with the picture so a corner PiP and a full screen look alike.
     const k = Math.min(2.2, Math.max(0.6, width / 640));
+    this.paintPicture(fit);
+    if (status) this.paintWheel(status, fit, extras, k, 0, width);
+  }
 
+  /**
+   * Draws the whole picture, every player's column marked and named, with
+   * each one's wheel on it. `named: false` (a small corner picture) marks a
+   * column with its colour's dot only: a name would not fit.
+   */
+  followColumns(read: () => PreviewColumn[], named = true): () => void {
+    const tick = () => {
+      this.drawColumns(read(), named);
+      this.frame = requestAnimationFrame(tick);
+    };
+    this.frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(this.frame);
+  }
+
+  drawColumns(columns: PreviewColumn[], named = true): void {
+    const g = this.context;
+    const { width, height } = this.canvas;
+    this.columns = columns.length;
+    const fit = fitPicture(width, height, this.aspectNow(), null);
+    const k = Math.min(2.2, Math.max(0.6, width / 640));
+    this.paintPicture(fit);
+    const n = Math.max(1, columns.length);
+    const edge = (i: number): number => Math.min(width, Math.max(0, fit.point(i / n, 0)[0]));
+    // The column lines.
+    g.save();
+    g.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    g.lineWidth = 2 * k;
+    g.setLineDash([10 * k, 8 * k]);
+    g.beginPath();
+    for (let i = 1; i < n; i++) {
+      g.moveTo(edge(i), 0);
+      g.lineTo(edge(i), height);
+    }
+    g.stroke();
+    g.restore();
+    columns.forEach((column, i) => {
+      const x0 = edge(i);
+      const x1 = edge(i + 1);
+      // The player's colour along the top of their column, and their name over it.
+      g.fillStyle = column.colour;
+      g.fillRect(x0 + 3 * k, 0, Math.max(0, x1 - x0 - 6 * k), 6 * k);
+      if (named) this.drawTag(column.name, column.colour, (x0 + x1) / 2, 26 * k, x1 - x0 - 16 * k, k);
+      else this.drawDot(column.colour, (x0 + x1) / 2, 20 * k, k);
+      if (column.status) this.paintWheel(column.status, fit, column.extras ?? {}, k, x0, x1);
+    });
+  }
+
+  /** A column's colour as a dot with a dark rim, centred at (x, y). */
+  private drawDot(colour: string, x: number, y: number, k: number): void {
+    const g = this.context;
+    g.save();
+    g.beginPath();
+    g.arc(x, y, 8 * k, 0, Math.PI * 2);
+    g.fillStyle = colour;
+    g.fill();
+    g.lineWidth = 2.5 * k;
+    g.strokeStyle = "rgba(0, 0, 0, 0.6)";
+    g.stroke();
+    g.restore();
+  }
+
+  /** The player's name on a dark pill with their colour's dot, centred at (x, y) and no wider than `room`. */
+  private drawTag(name: string, colour: string, x: number, y: number, room: number, k: number): void {
+    const g = this.context;
+    g.save();
+    let size = 15 * k;
+    const dot = 5 * k;
+    const pad = 9 * k;
+    let text = name;
+    g.textBaseline = "middle";
+    g.textAlign = "left";
+    const measure = (): number => {
+      g.font = `600 ${size}px -apple-system, "SF Pro Text", system-ui, sans-serif`;
+      return g.measureText(text).width + dot * 2 + pad * 3;
+    };
+    while (measure() > room && size > 9 * k) size -= k;
+    while (measure() > room && text.length > 1) text = `${text.slice(0, -2)}…`;
+    const width = measure();
+    const height = size + 12 * k;
+    g.fillStyle = "rgba(0, 0, 0, 0.55)";
+    g.beginPath();
+    g.roundRect(x - width / 2, y - height / 2, width, height, height / 2);
+    g.fill();
+    g.fillStyle = colour;
+    g.beginPath();
+    g.arc(x - width / 2 + pad + dot, y, dot, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#FFFFFF";
+    g.fillText(text, x - width / 2 + pad * 2 + dot * 2, y + 0.5 * k);
+    g.restore();
+  }
+
+  /** The camera's picture, veiled, in the canvas. */
+  private paintPicture(fit: PictureFit): void {
+    const { context: g, canvas } = this;
+    const width = canvas.width;
+    const height = canvas.height;
     g.clearRect(0, 0, width, height);
     g.fillStyle = SURFACE;
     g.fillRect(0, 0, width, height);
@@ -213,8 +333,10 @@ export class WheelPreview {
     // A veil so the wheel reads over any room.
     g.fillStyle = "rgba(0, 0, 0, 0.22)";
     g.fillRect(0, 0, width, height);
+  }
 
-    if (!status) return;
+  /** One wheel on the picture; its steer meter sits between `x0` and `x1` along the bottom. */
+  private paintWheel(status: WheelStatus, fit: PictureFit, extras: PreviewExtras, k: number, x0: number, x1: number): void {
     const colour = MODE_COLOURS[status.mode];
     const left = status.left ? fit.point(status.left.x, status.left.y) : null;
     const right = status.right ? fit.point(status.right.x, status.right.y) : null;
@@ -226,7 +348,7 @@ export class WheelPreview {
     ] as const) {
       if (hand && point) this.drawHand(point, Math.min(34 * k, Math.max(11 * k, hand.size * fit.scale * 0.4)), hand.open, colour, k);
     }
-    if (status.mode !== "lost") this.drawMeter(status.steer, colour, k);
+    if (status.mode !== "lost") this.drawMeter(status.steer, colour, k, x0, x1);
   }
 
   private drawRing(ring: { x: number; y: number; radius: number; turn: number }, colour: string, k: number): void {
@@ -305,10 +427,10 @@ export class WheelPreview {
   }
 
   /** A thin bar along the bottom: how far the wheel is steering, from the middle. */
-  private drawMeter(steer: number, colour: string, k: number): void {
+  private drawMeter(steer: number, colour: string, k: number, x0: number, x1: number): void {
     const g = this.context;
-    const width = Math.min(this.canvas.width * 0.5, 320 * k);
-    const x = (this.canvas.width - width) / 2;
+    const width = Math.min((x1 - x0) * (this.columns > 1 ? 0.7 : 0.5), 320 * k);
+    const x = x0 + (x1 - x0 - width) / 2;
     const y = this.canvas.height - 18 * k;
     const middle = x + width / 2;
     g.save();

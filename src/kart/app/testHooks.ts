@@ -67,7 +67,7 @@ export class ScriptedCamera implements CameraService {
     return this.fail === "denied" ? "denied" : this.ask ? "prompt" : "granted";
   }
 
-  async start(_hands: 2 | 4, progress?: (fraction: number) => void): Promise<void> {
+  async start(_hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void> {
     if (this.fail) throw new CameraFailure(this.fail);
     progress?.(1);
     this.wheel.start();

@@ -15,6 +15,7 @@
  * in size and invisible, and the wheel's picture is drawn from it.
  */
 import { CameraError, cameraPermission, openCamera, type Camera } from "../../tracking/camera";
+import { cameraSize, handConfidence, isCrowd } from "../../tracking/hands";
 import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
 import type { HandFrame, HandSource } from "../../tracking/types";
@@ -50,8 +51,8 @@ export class SwitchableSource implements HandSource {
 
 /** The camera, however it is really made (the tests and the scripted hand stand in). */
 export interface CameraStackOptions {
-  /** Opens the camera into a video. */
-  open?: (video: HTMLVideoElement) => Promise<Camera>;
+  /** Opens the camera into a video, asking for a picture this size. */
+  open?: (video: HTMLVideoElement, size: { width: number; height: number }) => Promise<Camera>;
   /** Loads the tracker for this many hands. */
   load?: (hands: number, progress: (fraction: number) => void) => Promise<Tracker>;
   /** Makes the video the camera plays into (in the page, out of sight, by default). */
@@ -88,6 +89,8 @@ export class CameraStack implements CameraService {
   private camera: Camera | null = null;
   private tracker: Tracker | null = null;
   private hands = 0;
+  /** Whether the camera was opened for a crowd (three or four players: a bigger picture). */
+  private crowd = false;
   /** Counts starts and stops, so a start that was overtaken lets go of what it opened. */
   private generation = 0;
   private busy: Promise<unknown> = Promise.resolve();
@@ -111,7 +114,7 @@ export class CameraStack implements CameraService {
     this.reviving = true;
     const mine = this.generation;
     try {
-      const next = await (this.options.open ?? openCamera)(this.video);
+      const next = await this.open(this.crowd);
       if (mine !== this.generation) next.stop();
       else this.camera = next;
     } catch {
@@ -138,7 +141,13 @@ export class CameraStack implements CameraService {
     return state === "granted" || state === "denied" ? state : "prompt";
   }
 
-  start(hands: 2 | 4, progress?: (fraction: number) => void): Promise<void> {
+  /** Opens the camera, for a crowd (three or four players) or not. */
+  private open(crowd: boolean): Promise<Camera> {
+    const size = cameraSize(crowd ? 6 : 2);
+    return (this.options.open ?? ((video, want) => openCamera(video, { size: want })))(this.video, size);
+  }
+
+  start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void> {
     const mine = ++this.generation;
     // One start at a time: a second call waits for the first, then only changes what differs.
     const run = this.busy.then(() => this.begin(hands, mine, progress));
@@ -146,15 +155,21 @@ export class CameraStack implements CameraService {
     return run;
   }
 
-  private async begin(hands: 2 | 4, mine: number, progress?: (fraction: number) => void): Promise<void> {
+  private async begin(hands: 2 | 4 | 6 | 8, mine: number, progress?: (fraction: number) => void): Promise<void> {
     // Overtaken (the player left, or asked again): quietly nothing to do, and nothing left open.
     if (mine !== this.generation) return;
     try {
+      // A crowd needs a bigger picture than one or two players do: a camera opened for the other kind is opened again.
+      const crowd = isCrowd(hands);
+      if (this.camera && this.crowd !== crowd) {
+        this.camera.stop();
+        this.camera = null;
+      }
       if (!this.camera) {
-        const open = this.options.open ?? openCamera;
-        const camera = await open(this.video);
+        const camera = await this.open(crowd);
         if (mine !== this.generation) return camera.stop();
         this.camera = camera;
+        this.crowd = crowd;
       }
       if (!this.tracker || this.hands !== hands) {
         this.source.use(null);
@@ -184,6 +199,7 @@ export class CameraStack implements CameraService {
     this.tracker?.dispose();
     this.tracker = null;
     this.hands = 0;
+    this.crowd = false;
     this.camera?.stop();
     this.camera = null;
   }
@@ -205,6 +221,6 @@ async function loadForWheel(hands: number, progress: (fraction: number) => void)
         report();
       },
     },
-    { hands },
+    { hands, confidence: handConfidence(hands) },
   );
 }

@@ -49,6 +49,12 @@ export interface WheelOptions {
    * this wheel is the left half's or the right half's. Absent: the whole picture.
    */
   half?: "left" | "right";
+  /**
+   * Up to four players on one camera: the picture is split into `of` equal
+   * columns and this wheel is column `index` (0 is the leftmost as the
+   * player sees themself). Absent: the whole picture (or the `half`).
+   */
+  seat?: { index: number; of: number };
   steering: Steering;
 }
 
@@ -71,6 +77,14 @@ export interface WheelControl extends DriverControl {
   readonly kind: "wheel";
   readonly wheel: NonNullable<DriverControl["wheel"]>;
   readonly level: WheelLevel;
+}
+
+/** One player's column in a shared picture. */
+export interface ColumnSeat {
+  control: DriverControl;
+  name: string;
+  /** The player's colour, #rrggbb. */
+  colour: string;
 }
 
 /** A picture of a wheel (the camera, mirrored, with the wheel drawn on it) that can be taken down. */
@@ -103,12 +117,14 @@ export interface CameraService {
   permission(): Promise<"granted" | "denied" | "prompt">;
   /**
    * Starts the camera and the hand tracker for this many hands: 2 for one
-   * wheel, 4 for two players on one camera. Resolves when pictures are
+   * wheel, 4, 6 or 8 for two, three or four players on one camera (three or
+   * four ask the camera for a bigger picture and the tracker for a little
+   * less certainty, since each hand is small). Resolves when pictures are
    * coming; rejects with a CameraFailure. Calling it again changes the
    * number of hands without opening the camera twice. `progress` hears the
    * download of the tracker, 0..1 (the first visit fetches about 20 MB).
    */
-  start(hands: 2 | 4, progress?: (fraction: number) => void): Promise<void>;
+  start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void>;
   /** Lets the camera go. */
   stop(): void;
 }
@@ -194,6 +210,13 @@ export interface Services {
    * big-screen player's own device.
    */
   preview(container: HTMLElement, control: DriverControl, size: "corner" | "large"): Disposable;
+  /**
+   * One picture for several players on one camera: the whole mirrored
+   * picture with the columns marked, each player's colour and name over their
+   * column and their wheel drawn in it. Used for three or four players,
+   * whose own columns would be narrow slivers.
+   */
+  previewColumns(container: HTMLElement, seats: readonly ColumnSeat[], size: "corner" | "large"): Disposable;
   /**
    * The podium's picture, on a canvas of its own: the ceremony after a Grand Prix. May throw WebGLUnavailable.
    * Absent in stand-ins, whose podium is the final standings alone.

@@ -67,12 +67,12 @@ describe("a source that follows whichever tracker is current", () => {
 /** A camera and tracker that count what is done to them. */
 function parts() {
   const video = {} as HTMLVideoElement;
-  const cameras: { stopped: boolean }[] = [];
+  const cameras: { stopped: boolean; size: { width: number; height: number } }[] = [];
   const trackers: { hands: number; started: boolean; disposed: boolean; source: ReturnType<typeof source> }[] = [];
   const stack = new CameraStack({
     makeVideo: () => video,
-    open: async () => {
-      const camera = { stopped: false };
+    open: async (_video, size) => {
+      const camera = { stopped: false, size };
       cameras.push(camera);
       return { stop: () => (camera.stopped = true) } as unknown as Camera;
     },
@@ -122,6 +122,27 @@ describe("the camera and the tracker behind the wheels", () => {
     trackers[1]!.source.publish(frame(7));
     trackers[0]!.source.publish(frame(8));
     expect(heard).toEqual([7]);
+  });
+
+  it("asks a crowd of three or four players for a bigger picture, and opens the camera again to do it", async () => {
+    const { stack, cameras, trackers } = parts();
+    await stack.start(4);
+    expect(cameras[0]!.size).toEqual({ width: 1280, height: 720 });
+    // Three players on one camera: six hands, a bigger picture, the first camera let go of.
+    await stack.start(6);
+    expect(cameras).toHaveLength(2);
+    expect(cameras[0]!.stopped).toBe(true);
+    expect(cameras[1]!.size).toEqual({ width: 1920, height: 1080 });
+    expect(trackers[1]).toMatchObject({ hands: 6, started: true });
+    // Four players: the same camera, a tracker for eight hands.
+    await stack.start(8);
+    expect(cameras).toHaveLength(2);
+    expect(trackers[2]).toMatchObject({ hands: 8, started: true });
+    expect(trackers[1]!.disposed).toBe(true);
+    // And back to two: the smaller picture again.
+    await stack.start(2);
+    expect(cameras).toHaveLength(3);
+    expect(cameras[2]!.size).toEqual({ width: 1280, height: 720 });
   });
 
   it("lets go of everything when stopped", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rig, handFrame, wheelHands, type WheelPose } from "./testHands";
-import { STEERING_LOCK, WHEEL, WheelReader, shapeSteer, type Steering } from "./wheel";
+import { SEAT_MARGIN, STEERING_LOCK, WHEEL, WheelReader, halfSeat, seatZone, shapeSteer, type Steering } from "./wheel";
 
 /** A rig that has been driving straight with fists for a second, so the wheel is settled. */
 function driving(options: ConstructorParameters<typeof Rig>[0] = {}): Rig {
@@ -739,5 +739,129 @@ describe("a HandFrame with no hands field filled", () => {
     const reader = new WheelReader();
     reader.push({ ...handFrame([], 1000) });
     expect(reader.sample(1100).status.hands).toBe(0);
+  });
+});
+
+describe("up to four players on one camera", () => {
+  /** Four wheels, one in each quarter of the picture; narrow, as they are when friends stand side by side. */
+  const crowd = (angles: number[], overrides: (Partial<WheelPose> | undefined)[] = []) =>
+    angles.flatMap((angle, i) => wheelHands({ angle, centre: [0.125 + 0.25 * i, 0.5], span: 0.2, ...overrides[i] }));
+  const rigs = (of: number) => Array.from({ length: of }, (_, index) => new Rig({ seat: { index, of } }));
+  const feed = (all: Rig[], seconds: number, hands: ReturnType<typeof crowd>) => all.forEach((rig) => rig.run(seconds, () => hands));
+
+  it("says its column, and keeps half for two", () => {
+    expect(seatZone({ index: 2, of: 4 })).toEqual([0.5, 0.75]);
+    expect(new WheelReader({ seat: { index: 3, of: 4 } }).seat).toEqual({ index: 3, of: 4 });
+    expect(new WheelReader({ half: "right" }).seat).toEqual(halfSeat("right"));
+    expect(new WheelReader({ half: "left" }).half).toBe("left");
+    expect(new WheelReader({ seat: { index: 1, of: 3 } }).half).toBeNull();
+    expect(new WheelReader({ seat: { index: 0, of: 1 } }).seat).toBeNull();
+  });
+
+  it("steers four players' eight hands independently", () => {
+    const all = rigs(4);
+    feed(all, 1.5, crowd([25, -25, 0, 40]));
+    expect(all.map((rig) => rig.last.status.hands)).toEqual([2, 2, 2, 2]);
+    const [a, b, c, d] = all.map((rig) => rig.last.status.angle) as [number, number, number, number];
+    expect(a).toBeCloseTo(25, 0);
+    expect(b).toBeCloseTo(-25, 0);
+    expect(c).toBeCloseTo(0, 0);
+    expect(d).toBeCloseTo(40, 0);
+    const steer = all.map((rig) => rig.last.input.steer);
+    expect(steer[0]).toBeGreaterThan(0.3);
+    expect(steer[1]).toBeLessThan(-0.3);
+    expect(steer[2]).toBe(0);
+    expect(steer[3]).toBe(1);
+    // Each player's palms are in their own column.
+    all.forEach((rig, i) => {
+      expect(rig.last.status.left!.x).toBeGreaterThan(i / 4);
+      expect(rig.last.status.right!.x).toBeLessThan((i + 1) / 4);
+    });
+  });
+
+  it("keeps each player's gestures to themselves, with small hands", () => {
+    const all = rigs(4);
+    const small = { left: { size: 0.045 }, right: { size: 0.045 } };
+    feed(all, 1, crowd([0, 0, 0, 0], [small, small, small, small]));
+    // The third player flicks the right hand open and closed; the others do nothing.
+    feed(all, 0.3, crowd([0, 0, 0, 0], [small, small, { ...small, right: { size: 0.045, fingers: "open" } }, small]));
+    feed(all, 1, crowd([0, 0, 0, 0], [small, small, small, small]));
+    expect(all.map((rig) => rig.last.input.itemPresses)).toEqual([0, 0, 1, 0]);
+    // The fourth brakes; the second keeps driving.
+    feed(all, 0.5, crowd([0, 0, 0, 0], [small, small, small, { ...small, fingers: "open" }]));
+    expect(all.map((rig) => rig.last.status.mode)).toEqual(["drive", "drive", "drive", "brake"]);
+  });
+
+  it("leaves a column empty when its player steps out", () => {
+    const all = rigs(4);
+    feed(all, 1, crowd([10, 10, 10, 10]));
+    const without = crowd([10, 10, 10, 10]).filter((hand) => hand.x < 0.5 || hand.x > 0.75);
+    feed(all, 1, without);
+    expect(all.map((rig) => rig.last.status.mode)).toEqual(["drive", "drive", "lost", "drive"]);
+  });
+
+  describe("at the line between two columns", () => {
+    /** Players two and three side by side: the line between them is at 0.5. Two's right hand is at `x`. */
+    const pair = (x: number) => [...wheelHands({ angle: 0, centre: [0.4, 0.5], span: 0.2, right: { x } }), ...wheelHands({ angle: 0, centre: [0.65, 0.5], span: 0.2 })];
+    const two = () => new Rig({ seat: { index: 1, of: 4 } });
+    const three = () => new Rig({ seat: { index: 2, of: 4 } });
+
+    it("does not hand a hand to the neighbour for straying a little over", () => {
+      const one = two();
+      const next = three();
+      const together = (seconds: number, x: number) => {
+        const hands = pair(x);
+        one.run(seconds, () => hands);
+        next.run(seconds, () => hands);
+      };
+      together(1, 0.45);
+      expect(one.last.status.hands).toBe(2);
+      expect(next.last.status.hands).toBe(2);
+      // The fist drifts over the line, within the margin: still the second player's, never the third's.
+      for (let x = 0.46; x <= 0.5 + SEAT_MARGIN - 0.002; x += 0.004) together(1 / 30, x);
+      together(0.3, 0.5 + SEAT_MARGIN - 0.002);
+      expect(one.last.status.hands).toBe(2);
+      expect(one.last.status.right!.x).toBeCloseTo(0.5 + SEAT_MARGIN - 0.002, 2);
+      expect(next.last.status.hands).toBe(2);
+      expect(next.last.status.left!.x).toBeGreaterThan(0.55);
+      expect(next.last.status.angle).toBeCloseTo(0, 0);
+    });
+
+    it("lets the neighbour have it once it is properly across, without disturbing the neighbour's own wheel", () => {
+      const one = two();
+      const next = three();
+      const together = (seconds: number, x: number) => {
+        const hands = pair(x);
+        one.run(seconds, () => hands);
+        next.run(seconds, () => hands);
+      };
+      together(1, 0.45);
+      together(0.5, 0.56);
+      // The second player lost the hand, and the third still has their own two.
+      expect(one.last.status.right).toBeNull();
+      expect(next.last.status.hands).toBe(2);
+      expect(next.last.status.left!.x).toBeGreaterThan(0.55);
+      expect(next.last.status.left!.x).toBeLessThan(0.62);
+    });
+
+    it("gives a hand that appears right on the line to no one", () => {
+      const one = two();
+      const next = three();
+      const lone = wheelHands({ angle: 0, centre: [0.5, 0.5], span: 0.01 }).slice(0, 1);
+      one.hold(0.5, lone);
+      next.hold(0.5, lone);
+      expect(one.last.status.hands).toBe(0);
+      expect(next.last.status.hands).toBe(0);
+    });
+  });
+
+  it("ignores a third hand in a column, keeping the player's own two", () => {
+    const rig = new Rig({ seat: { index: 1, of: 4 } });
+    const own = wheelHands({ angle: 15, centre: [0.375, 0.5], span: 0.2 });
+    const stranger = wheelHands({ angle: 0, centre: [0.4, 0.3], span: 0.05 })[0]!;
+    rig.hold(1, own);
+    rig.hold(1, [stranger, ...own]);
+    expect(rig.last.status.hands).toBe(2);
+    expect(rig.last.status.angle).toBeCloseTo(15, 0);
   });
 });

@@ -1,7 +1,7 @@
 /**
- * The You screen: your name, how you drive, and (with the wheel) a second
- * player on the same camera. What is chosen is remembered (prefs.ts) and
- * comes back the next time.
+ * The You screen: your name, how you drive, and (with the wheel) up to three
+ * friends on the same camera, each with a name and a driver. What is chosen
+ * is remembered (prefs.ts) and comes back the next time.
  */
 import { $, setText } from "../../ui/dom";
 import { TRACKS } from "../track/tracks";
@@ -10,7 +10,7 @@ import { DriverPicker } from "./driverPicker";
 import { cleanName, defaultName } from "./format";
 import type { Drive, You } from "./prefs";
 import type { Steering } from "./services";
-import { Segmented, Switch, focusHeading } from "./ui";
+import { Segmented, focusHeading } from "./ui";
 
 export interface YouHooks {
   back(): void;
@@ -25,20 +25,31 @@ const ABOUT: Record<Drive, string> = {
   gamepad: "Left stick to steer, the triggers to go and stop, A to drift, B or X for your item.",
 };
 
+/** What sharing the camera asks of the players, by how many there are. */
+const SHARING: Record<1 | 2 | 3 | 4, string> = {
+  1: "You drive alone, with the whole picture.",
+  2: "You share one camera: you drive with the left half of the picture, your friend with the right.",
+  3: "You share one camera, standing side by side: the picture is split into three columns, left to right in the order below.",
+  4: "You share one camera, standing side by side about an arm's length apart: the picture is split into four columns, left to right in the order below. Stand back far enough to fit.",
+};
+
 const WHERE = { host: "Host a Race", join: "Join a Race", practice: "Practice" } as const;
+
+type Count = "1" | "2" | "3" | "4";
 
 export class YouScreen {
   private you!: You;
-  /** The name and the second name when the screen opened: what a cleared field falls back to. */
-  private was = { name: "", second: "" };
+  /** The names when the screen opened: what a cleared field falls back to. */
+  private was = { name: "", mates: ["", "", ""] };
   private readonly name = $<HTMLInputElement>("you-name");
-  private readonly second = $<HTMLInputElement>("you-name2");
+  /** The second, third and fourth players' names. */
+  private readonly mates = [$<HTMLInputElement>("you-name2"), $<HTMLInputElement>("you-name3"), $<HTMLInputElement>("you-name4")];
   private readonly proceed = $<HTMLButtonElement>("you-continue");
   private readonly drive: Segmented<Drive>;
   private readonly steering: Segmented<Steering>;
-  private readonly two: Switch;
+  private readonly players: Segmented<Count>;
   private readonly pickFirst: DriverPicker;
-  private readonly pickSecond: DriverPicker;
+  private readonly pickMates: DriverPicker[];
 
   constructor(private readonly hooks: YouHooks) {
     this.drive = new Segmented<Drive>($("pick-drive"), (drive) => {
@@ -48,23 +59,26 @@ export class YouScreen {
     this.steering = new Segmented<Steering>($("pick-steering"), (steering) => {
       this.you.steering = steering;
     });
-    this.two = new Switch($<HTMLButtonElement>("switch-second"), (on) => {
-      this.you.second = on;
+    this.players = new Segmented<Count>($("pick-players"), (count) => {
+      const was = this.you.players;
+      this.you.players = Number(count) as You["players"];
       this.sync();
-      if (on) this.second.focus({ preventScroll: true });
+      if (this.you.players > was) this.mates[this.you.players - 2]?.focus({ preventScroll: true });
     });
     this.pickFirst = new DriverPicker($("driver-pick"), "Your character", ({ character, golden }) => {
       this.you.character = character;
       this.you.golden = golden;
     });
-    this.pickSecond = new DriverPicker($("driver-pick2"), "Second character", ({ character, golden }) => {
-      this.you.secondCharacter = character;
-      this.you.secondGolden = golden;
-    });
+    this.pickMates = ["Second", "Third", "Fourth"].map(
+      (ordinal, i) =>
+        new DriverPicker($(`driver-pick${i + 2}`), `${ordinal} character`, ({ character, golden }) => {
+          this.you.mates[i] = { ...this.you.mates[i]!, character, golden };
+        }),
+    );
     $("you-back").addEventListener("click", () => hooks.back());
     this.name.addEventListener("input", () => (this.you.name = this.name.value));
-    this.second.addEventListener("input", () => (this.you.secondName = this.second.value));
-    for (const field of [this.name, this.second]) {
+    this.mates.forEach((field, i) => field.addEventListener("input", () => (this.you.mates[i] = { ...this.you.mates[i]!, name: field.value })));
+    for (const field of [this.name, ...this.mates]) {
       field.addEventListener("keydown", (event) => {
         if (event.key === "Enter") this.finish();
       });
@@ -74,14 +88,14 @@ export class YouScreen {
 
   /** Shows the screen with what was remembered. `where` says which door brought the player here. */
   open(you: You, where: keyof typeof WHERE): void {
-    this.you = { ...you };
-    this.was = { name: you.name, second: you.secondName };
+    this.you = { ...you, mates: you.mates.map((mate) => ({ ...mate })) };
+    this.was = { name: you.name, mates: you.mates.map((mate) => mate.name) };
     setText("you-eyebrow", WHERE[where]);
     this.name.value = you.name;
-    this.second.value = you.secondName;
+    this.mates.forEach((field, i) => (field.value = you.mates[i]!.name));
     this.drive.value = you.drive;
     this.steering.value = you.steering;
-    this.two.on = you.second;
+    this.players.value = String(you.players) as Count;
     // What this device has found: the duck driver once every track's duck is, the golden kart with the Konami code.
     const unlocks = loadUnlocks();
     const access = {
@@ -89,8 +103,13 @@ export class YouScreen {
       golden: isUnlocked("golden", unlocks, { duckTracks: [], cups: [] }),
     };
     const first = this.pickFirst.open({ character: you.character, golden: you.golden }, access);
-    const second = this.pickSecond.open({ character: you.secondCharacter, golden: you.secondGolden }, access);
-    this.you = { ...this.you, character: first.character, golden: first.golden, secondCharacter: second.character, secondGolden: second.golden };
+    const chosen = this.pickMates.map((picker, i) => picker.open({ character: you.mates[i]!.character, golden: you.mates[i]!.golden }, access));
+    this.you = {
+      ...this.you,
+      character: first.character,
+      golden: first.golden,
+      mates: this.you.mates.map((mate, i) => ({ ...mate, character: chosen[i]!.character, golden: chosen[i]!.golden })),
+    };
     this.setBusy(false);
     this.sync();
     focusHeading($("you-title"));
@@ -103,25 +122,39 @@ export class YouScreen {
     this.proceed.textContent = !busy ? "Continue" : percent > 0 && percent < 100 ? `Getting Ready… ${percent}%` : "Starting Camera…";
   }
 
-  /** Shows what the current choice needs: steering and a second player only go with the wheel. */
+  /** Shows what the current choice needs: steering and friends on the camera only go with the wheel. */
   private sync(): void {
     const wheel = this.you.drive === "wheel";
+    const count = this.you.players;
     $("row-steering").hidden = !wheel;
     $("group-second").hidden = !wheel;
-    $("row-second").hidden = !wheel || !this.you.second;
-    $("group-driver2").hidden = !wheel || !this.you.second;
+    $("row-second").hidden = !wheel || count < 2;
+    $("row-third").hidden = !wheel || count < 3;
+    $("row-fourth").hidden = !wheel || count < 4;
+    $("group-driver2").hidden = !wheel || count < 2;
+    $("group-driver3").hidden = !wheel || count < 3;
+    $("group-driver4").hidden = !wheel || count < 4;
+    setText("foot-players", SHARING[count]);
     setText("foot-drive", ABOUT[this.you.drive]);
   }
 
   private finish(): void {
     const name = cleanName(this.name.value, this.was.name);
     const wheel = this.you.drive === "wheel";
-    // Two drivers with the same name could not be told apart on the screen.
-    let secondName = cleanName(this.second.value, this.was.second);
-    if (secondName.toLowerCase() === name.toLowerCase()) secondName = defaultName(Math.random(), [name]);
-    this.you = { ...this.you, name, secondName, second: wheel && this.you.second };
+    const count = wheel ? this.you.players : 1;
+    // Drivers with the same name could not be told apart on the screen.
+    const taken = [name];
+    const mates = this.you.mates.map((mate, i) => {
+      let mateName = cleanName(this.mates[i]!.value, this.was.mates[i]!);
+      if (i < count - 1) {
+        if (taken.some((other) => other.toLowerCase() === mateName.toLowerCase())) mateName = defaultName(Math.random(), taken);
+        taken.push(mateName);
+      }
+      this.mates[i]!.value = mateName;
+      return { ...mate, name: mateName };
+    });
+    this.you = { ...this.you, name, mates };
     this.name.value = name;
-    this.second.value = secondName;
     this.hooks.next(this.you);
   }
 }

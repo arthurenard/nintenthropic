@@ -7,7 +7,7 @@
 // (desktop and phone). Rooms with several people are in race-room.spec.ts.
 import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
-import { host, join, open, state } from "./kart";
+import { WheelDrivers, host, join, onScreen, open, state } from "./kart";
 
 // Handy's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
 test.beforeEach(async ({ context }) => {
@@ -89,9 +89,9 @@ test("practice with the keyboard: you, the lobby, the race, and its pause and re
   await shot(page, info, "race-2-you", 500);
   await name.fill("Maya");
   await page.getByRole("radio", { name: "Keyboard" }).click();
-  // Keys and pads have no steering to set and no second player.
+  // Keys and pads have no steering to set and no friends on the camera.
   await expect(page.getByText("Steering", { exact: true })).toBeHidden();
-  await expect(page.getByRole("switch", { name: "Two on This Camera" })).toBeHidden();
+  await expect(page.getByRole("radiogroup", { name: "Players on This Camera" })).toBeHidden();
   await shot(page, info, "race-2b-you-keyboard", 300);
   await page.getByRole("button", { name: "Continue" }).click();
 
@@ -280,9 +280,10 @@ test("two on one camera: a second name, and each checked in their own picture", 
     ]),
   );
   await page.getByRole("button", { name: "Practice" }).click();
-  const second = page.getByRole("switch", { name: "Two on This Camera" });
-  await second.click();
-  await expect(second).toHaveAttribute("aria-checked", "true");
+  const players = page.getByRole("radiogroup", { name: "Players on This Camera" });
+  await expect(players.getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");
+  await players.getByRole("radio", { name: "2", exact: true }).click();
+  await expect(players.getByRole("radio", { name: "2", exact: true })).toHaveAttribute("aria-checked", "true");
   await page.getByLabel("Second Driver").fill("Finn");
   await shot(page, info, "race-2c-you-two", 400);
   await page.getByRole("button", { name: "Continue" }).click();
@@ -297,6 +298,58 @@ test("two on one camera: a second name, and each checked in their own picture", 
   await expect(page.locator(".corner-preview")).toHaveCount(2);
   await expect(page.locator("canvas.race-canvas")).toBeVisible();
   await expect.poll(async () => (await state(page)).views.length).toBe(2);
+});
+
+test("four on one camera: names and drivers for each, one picture with four columns, a 4-view race, the results", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await returning(page);
+  await open(page, "&input=script");
+  // Four wheels, one in each quarter of the picture.
+  const quarters = [0, 1, 2, 3].map((i) => ({ angle: [20, -15, 0, 25][i]!, centre: [0.125 + 0.25 * i, 0.5] as const, span: 0.2 }));
+  await page.evaluate((poses) => window.gripTest!.wheel(poses), quarters);
+  await page.getByRole("button", { name: "Practice" }).click();
+  const players = page.getByRole("radiogroup", { name: "Players on This Camera" });
+  await players.getByRole("radio", { name: "4", exact: true }).click();
+  await expect(players.getByRole("radio", { name: "4", exact: true })).toHaveAttribute("aria-checked", "true");
+  await page.getByLabel("Name", { exact: true }).fill("Maya");
+  await page.getByLabel("Second Driver").fill("Finn");
+  await page.getByLabel("Third Driver").fill("Ada");
+  await page.getByLabel("Fourth Driver").fill("Kit");
+  for (const title of ["Second Character", "Third Character", "Fourth Character"]) await expect(heading(page, title)).toBeVisible();
+  await page.locator("#group-second").scrollIntoViewIfNeeded();
+  await shot(page, info, "race-2d-you-four", 500);
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  // One picture of the whole camera with the columns marked, and a chip for each player under it.
+  await expect(page.locator(".check-shared")).toBeVisible();
+  await expect(page.locator(".check-shared canvas")).toHaveCount(1);
+  await expect(page.locator(".check-chip")).toHaveCount(4);
+  await expect(page.locator(".check-chip .check-name")).toHaveText(["Maya", "Finn", "Ada", "Kit"]);
+  await shot(page, info, "race-3h-check-four", 700);
+  await expect(heading(page, "Ready to Race")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#lobby-players .row")).toHaveCount(4);
+  for (const name of ["Maya", "Finn", "Ada", "Kit"]) await expect(page.locator("#lobby-players")).toContainText(name);
+  await page.getByRole("radio", { name: "1", exact: true }).click();
+
+  // Four viewports and one shared picture of the camera in the corner.
+  await start(page).click();
+  await expect(page.locator("canvas.race-canvas")).toBeVisible();
+  await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator(".corner-preview")).toHaveCount(1);
+  await expect(page.locator(".corner-preview.shared canvas")).toHaveCount(1);
+  await expect.poll(async () => (await state(page)).views.length).toBe(4);
+  expect((await state(page)).mine.every((kart) => kart !== null)).toBe(true);
+  expect((await raceState(page))!.karts).toHaveLength(6);
+  const drivers = new WheelDrivers(page, 4).start();
+  await expect.poll(() => phase(page), { timeout: 30_000 }).toBe("racing");
+  await shot(page, info, "race-5f-race-four", 4000);
+  await onScreen(page, "results", 170_000);
+  await drivers.stop();
+  await expect(page.locator("#standings-body tr")).toHaveCount(6);
+  await expect(page.locator("#standings-body tr.mine")).toHaveCount(4);
+  await shot(page, info, "race-6-results-four", 400);
+  expect(errors).toEqual([]);
 });
 
 test("the real camera: asked politely, opened, and the hand tracker looks for two fists", async ({ page }, info) => {

@@ -171,3 +171,9 @@ export function defaultName(random: number, taken: readonly string[] = []): stri
   }
   return DEFAULT_NAMES[start]!;
 }
+
+/** Names read out as a list: "Sam", "Sam and Jo", "Sam, Jo and Ada". */
+export function list(names: readonly string[]): string {
+  if (names.length <= 2) return names.join(" and ");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}

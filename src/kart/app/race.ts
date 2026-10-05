@@ -19,7 +19,7 @@ import type { DriverControl, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRe
 import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
 import { PHOTO_GAP, recordDuck, tricksFor } from "./eggs";
-import { itemWords, lapLabel, ordinal } from "./format";
+import { itemWords, lapLabel, list, ordinal } from "./format";
 import { hostName, kartOf } from "./roster";
 import type { Disposable, RaceSound, Services } from "./services";
 import { colourDot, setBar } from "./ui";
@@ -430,9 +430,29 @@ export class RaceScreen {
 
   // --- the wheel's picture ------------------------------------------------------------------------------------
 
-  /** A small picture of each wheel player's wheel, in the corner. */
+  /**
+   * A small picture of each wheel player's wheel, in the corner. Three or
+   * four players on one camera share one picture of it instead, the columns
+   * marked in their colours: four slivers of the camera would read worse.
+   */
   private corners(): void {
     const ctx = this.ctx!;
+    const wheels = ctx.controls.filter((control) => control.kind === "wheel");
+    if (wheels.length >= 3) {
+      const box = element("div", "corner-preview shared");
+      box.setAttribute("aria-hidden", "true");
+      const view = element("div", "wheel-view wide");
+      box.append(view);
+      this.previews.push(
+        this.services.previewColumns(
+          view,
+          ctx.controls.map((control, i) => ({ control, name: ctx.players[i]?.name ?? "", colour: ctx.players[i]?.colour ?? "#ffffff" })),
+          "corner",
+        ),
+      );
+      $("race-previews").replaceChildren(box);
+      return;
+    }
     const boxes = ctx.controls.map((control, i) => {
       if (control.kind !== "wheel") return null;
       const box = element("div", "corner-preview");
@@ -478,7 +498,7 @@ export class RaceScreen {
       const lost = ctx.controls.flatMap((_, i) => (this.lostFor(i, now) > LOST_FOR ? [ctx.players[i]?.name ?? ""] : []));
       const pill = $("lost-hands");
       pill.hidden = lost.length === 0;
-      if (lost.length) setText("lost-hands-text", ctx.controls.length > 1 ? `${lost.join(" and ")}: Show Both Hands` : "Show Both Hands");
+      if (lost.length) setText("lost-hands-text", ctx.controls.length > 1 ? `${list(lost)}: Show Both Hands` : "Show Both Hands");
       return;
     }
     $("lost-hands").hidden = true;
@@ -532,13 +552,27 @@ export class RaceScreen {
   private controller(): void {
     const ctx = this.ctx!;
     $("controller").hidden = false;
+    // Three or four on one camera: one picture of the whole camera above their cards, not a sliver in each.
+    const together = ctx.controls.filter((control) => control.kind === "wheel").length >= 3;
+    const shared = together ? element("figure", "controller-shared") : null;
+    if (shared) {
+      const view = element("div", "wheel-view wide");
+      shared.append(view);
+      this.previews.push(
+        this.services.previewColumns(
+          view,
+          ctx.controls.map((control, i) => ({ control, name: ctx.players[i]?.name ?? "", colour: ctx.players[i]?.colour ?? "#ffffff" })),
+          "large",
+        ),
+      );
+    }
     const cards = ctx.controls.map((control, i) => {
       const player = ctx.players[i];
       const card = element("figure", "controller-card");
       if (player) card.style.setProperty("--colour", player.colour);
       const picture = element("div", "wheel-view");
       card.append(picture);
-      if (control.kind === "wheel") this.previews.push(this.services.preview(picture, control, "large"));
+      if (control.kind === "wheel" && !together) this.previews.push(this.services.preview(picture, control, "large"));
       else picture.hidden = true;
       const words = element("figcaption", "controller-words");
       const who = element("p", "controller-who headline");
@@ -552,7 +586,7 @@ export class RaceScreen {
       return card;
     });
     $("controller-cards").dataset.count = String(cards.length);
-    $("controller-cards").replaceChildren(...cards);
+    $("controller-cards").replaceChildren(...(shared ? [shared] : []), ...cards);
   }
 
   private readouts(view: RaceView): void {

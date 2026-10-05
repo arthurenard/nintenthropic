@@ -19,6 +19,7 @@
  */
 import {
   IDLE_INPUT,
+  MAX_PLAYERS,
   MAX_RACERS,
   TICK_HZ,
   type DriveInput,
@@ -251,7 +252,7 @@ export class HostSession implements Session {
     if (hello.v !== PROTOCOL_VERSION) return refuse("version");
     // A race under way, or a Grand Prix between its races: the cup's points belong to the players who began it.
     if (this.phase === "racing" || this.gp) return refuse("started");
-    const want = clamp(Math.round(Number(hello.n) || 1), 1, 2);
+    const want = clamp(Math.round(Number(hello.n) || 1), 1, MAX_PLAYERS);
     let device = typeof hello.device === "string" ? hello.device.slice(0, 32) : "";
     if (!device || device === this.device || this.guests.has(device)) device = `d-${token(this.env.random)}`;
     if (!this.roster.reserve(device, want)) return refuse("full");
@@ -269,7 +270,7 @@ export class HostSession implements Session {
         if (this.phase === "racing" || !Array.isArray(message.players)) return;
         this.roster.set(
           guest.device,
-          message.players.slice(0, 2).map((p, i) => cleanPlayer(p, `Player ${i + 1}`)),
+          message.players.slice(0, MAX_PLAYERS).map((p, i) => cleanPlayer(p, `Player ${i + 1}`)),
         );
         this.changed();
         return;
@@ -370,7 +371,7 @@ export class HostSession implements Session {
 
   setLocalPlayers(players: LocalPlayerSetup[]): void {
     if (this.phase === "racing") return;
-    this.local = players.slice(0, 2);
+    this.local = players.slice(0, MAX_PLAYERS);
     this.roster.set(
       this.device,
       this.local.map((p): WirePlayer => ({ name: p.name, control: p.control.kind, screen: p.screen, character: p.character, golden: p.golden })),

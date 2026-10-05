@@ -20,21 +20,38 @@ export type Drive = "wheel" | "keyboard" | "gamepad";
 export const DRIVES: readonly Drive[] = ["wheel", "keyboard", "gamepad"];
 export const STEERINGS: readonly Steering[] = ["gentle", "normal", "quick"];
 
+/** Players who can share one camera (the room holds four). */
+export const MAX_ON_CAMERA = 4;
+
+/** A friend sharing the camera: their name, driver and kart. */
+export interface Mate {
+  name: string;
+  character: string;
+  golden: boolean;
+}
+
 /** The You screen's answers. */
 export interface You {
   name: string;
   drive: Drive;
   steering: Steering;
-  /** Two on this camera (wheel only). */
-  second: boolean;
-  /** The second player's name. */
-  secondName: string;
   /** Who drives (characters.ts id), and whether the kart is golden (only once that is unlocked). */
   character: string;
   golden: boolean;
-  /** The second player's driver and kart. */
-  secondCharacter: string;
-  secondGolden: boolean;
+  /** Players on this camera, 1 to 4 (wheel only): you, then the first of `mates`, and so on. */
+  players: 1 | 2 | 3 | 4;
+  /** The second, third and fourth players, always three kept so choosing more players brings back who they were. */
+  mates: Mate[];
+}
+
+/** How many players this You brings to the room: the camera's, or one for the keyboard and the pad. */
+export function playerCount(you: Pick<You, "drive" | "players">): 1 | 2 | 3 | 4 {
+  return you.drive === "wheel" ? you.players : 1;
+}
+
+/** The players of this device, in seat order: you, then your mates as far as `playerCount`. */
+export function crew(you: You): Mate[] {
+  return [{ name: you.name, character: you.character, golden: you.golden }, ...you.mates].slice(0, playerCount(you));
 }
 
 /** The drivers anyone can pick from the start (a first-time player is given one of these). */
@@ -75,20 +92,33 @@ function write(storage: Storage | undefined, key: string, value: unknown): boole
  * kept at once, so the name a player sees today is the one they see tomorrow.
  */
 export function loadYou(random = Math.random(), storage: Storage | undefined = local()): You {
-  const saved = read<Partial<You>>(storage, KEYS.you);
+  // What the first version kept for a second player (`second`, `secondName`...) still reads.
+  const saved = read<Partial<You> & { second?: unknown; secondName?: unknown; secondCharacter?: unknown; secondGolden?: unknown }>(storage, KEYS.you);
   const name = cleanName(typeof saved?.name === "string" ? saved.name : "", defaultName(random));
   const first = Math.floor((((random % 1) + 1) % 1) * STARTERS.length);
+  const kept: Partial<Mate>[] = Array.isArray(saved?.mates) ? saved.mates : [];
+  const old: Partial<Mate> = { name: saved?.secondName as string | undefined, character: saved?.secondCharacter as string | undefined, golden: saved?.secondGolden === true };
+  const taken = [name];
+  const mates: Mate[] = [0, 1, 2].map((i) => {
+    const mate = kept[i] ?? (i === 0 ? old : {});
+    // Each friend starts as someone else, a few places further along the drivers and the names.
+    const mateName = cleanName(typeof mate.name === "string" ? mate.name : "", defaultName((random + 0.37 * (i + 1)) % 1, taken));
+    taken.push(mateName);
+    return {
+      name: mateName,
+      character: driver(mate.character, STARTERS[(first + 3 * (i + 1)) % STARTERS.length]!),
+      golden: mate.golden === true,
+    };
+  });
+  const asked = typeof saved?.players === "number" ? Math.round(saved.players) : saved?.second === true ? 2 : 1;
   const you: You = {
     name,
     character: driver(saved?.character, STARTERS[first]!),
     golden: saved?.golden === true,
-    // The second driver starts as someone else, a few places along.
-    secondCharacter: driver(saved?.secondCharacter, STARTERS[(first + 3) % STARTERS.length]!),
-    secondGolden: saved?.secondGolden === true,
     drive: DRIVES.includes(saved?.drive as Drive) ? (saved!.drive as Drive) : "wheel",
     steering: STEERINGS.includes(saved?.steering as Steering) ? (saved!.steering as Steering) : "normal",
-    second: saved?.second === true,
-    secondName: cleanName(typeof saved?.secondName === "string" ? saved.secondName : "", defaultName((random + 0.37) % 1, [name])),
+    players: Math.min(MAX_ON_CAMERA, Math.max(1, asked)) as You["players"],
+    mates,
   };
   if (!saved) saveYou(you, storage);
   return you;

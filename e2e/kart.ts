@@ -155,3 +155,76 @@ export class KeyboardDriver {
 export async function onScreen(page: Page, screen: KartAppSnapshot["screen"], timeout = 20_000): Promise<void> {
   await expect.poll(() => screenOf(page), { timeout }).toBe(screen);
 }
+
+/**
+ * Scripted wheels (?input=script) for players sharing a camera, steered round
+ * the track the way KeyboardDriver does: each player's two fists sit in their
+ * own column of the picture and are turned towards the road. Hands are taken
+ * away during the countdown (fists would flood the engine) and come back when
+ * the lights go out.
+ */
+export class WheelDrivers {
+  private running = false;
+  private done: Promise<void> = Promise.resolve();
+  private geometry: { id: string; geometry: TrackGeometry } | null = null;
+  turns = 0;
+
+  constructor(
+    private readonly page: Page,
+    private readonly players: number,
+    /** Degrees of wheel for full steer (Normal is 40). */
+    private readonly lock = 40,
+  ) {}
+
+  start(): this {
+    this.running = true;
+    this.done = this.loop();
+    return this;
+  }
+
+  async stop(): Promise<void> {
+    this.running = false;
+    await this.done;
+  }
+
+  private async set(angles: readonly number[] | null): Promise<void> {
+    const poses =
+      angles === null
+        ? null
+        : angles.map((angle, i) => ({ angle, centre: [(i + 0.5) / this.players, 0.5] as const, span: 0.2 }));
+    await this.page.evaluate((p) => window.gripTest!.wheel(p), poses).catch(() => {});
+  }
+
+  private async loop(): Promise<void> {
+    while (this.running) {
+      let snapshot: KartAppSnapshot | null = null;
+      try {
+        snapshot = await state(this.page);
+      } catch {
+        // The page is between screens.
+      }
+      this.turns++;
+      const race = snapshot?.race;
+      if (!race || snapshot?.screen !== "race" || race.phase === "countdown") {
+        await this.set(race?.phase === "countdown" ? null : Array.from({ length: this.players }, () => 0));
+        await this.page.waitForTimeout(80);
+        continue;
+      }
+      if (this.geometry?.id !== race.trackId) this.geometry = { id: race.trackId, geometry: TrackGeometry.build(trackByRaceId(race.trackId)) };
+      const road = this.geometry.geometry;
+      const angles = Array.from({ length: this.players }, (_, i) => {
+        const id = snapshot!.mine[i];
+        const kart = id === null || id === undefined ? undefined : race.karts.find((candidate) => candidate.id === id);
+        if (!kart) return 0;
+        const at = road.project(kart.x, kart.z);
+        const ahead = road.point(at.s + 8 + Math.max(0, kart.speed) * 0.55);
+        let error = Math.atan2(ahead.x - kart.x, ahead.z - kart.z) - kart.heading;
+        error = Math.atan2(Math.sin(error), Math.cos(error));
+        // Steering right turns the heading down; the wheel's angle is + with the right hand lower, which steers right.
+        return Math.max(-1, Math.min(1, -error * 1.6)) * this.lock;
+      });
+      await this.set(angles);
+      await this.page.waitForTimeout(50);
+    }
+  }
+}

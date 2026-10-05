@@ -11,12 +11,12 @@ import { WebGLUnavailable } from "../../engine/common";
 import type { HandSource } from "../../tracking/types";
 import { TRACKS } from "../track/tracks";
 import type { DriverControl, RaceRenderer, Session } from "../contract";
-import { gamepadControl, keyboardControl, wheelControl, WheelPreview, type WheelControl as ReadWheel } from "../input";
+import { gamepadControl, keyboardControl, wheelControl, WheelPreview, type Seat, type WheelControl as ReadWheel } from "../input";
 import { hostSession, joinSession, localTransport, peerTransport, soloSession, type NetOptions } from "../net";
 import { createPodium, createRaceRenderer } from "../render";
 import { createSimRace } from "../sim/race";
 import { CameraStack } from "./camera";
-import { loadYou } from "./prefs";
+import { loadYou, playerCount } from "./prefs";
 import { KartSounds } from "./sound";
 import {
   SessionFailure,
@@ -45,7 +45,7 @@ export interface RealServicesOptions {
 /** A wheel as the screens know it, with the reader behind it for the picture. */
 interface Wheel extends WheelControl {
   readonly inner: ReadWheel;
-  readonly half: "left" | "right" | null;
+  readonly seat: Seat | null;
 }
 
 const isWheel = (control: DriverControl): control is Wheel => control.kind === "wheel" && "inner" in control;
@@ -66,11 +66,8 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     ...extra,
   });
 
-  /** A player who brings a second to the same camera takes two seats from the start. */
-  const seats = (): 1 | 2 => {
-    const you = loadYou();
-    return you.drive === "wheel" && you.second ? 2 : 1;
-  };
+  /** A player who brings friends to the same camera takes a seat for each from the start. */
+  const seats = (): 1 | 2 | 3 | 4 => playerCount(loadYou());
 
   /** Resolves once the room is open (or joined), rejects with the reason if it could not be. */
   const opened = (session: Session, ready: () => boolean): Promise<Session> =>
@@ -118,7 +115,8 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     controls: {
       wheel(wheelOptions: WheelOptions): Wheel {
         const half = wheelOptions.half ?? null;
-        const inner = wheelControl(source, { steering: wheelOptions.steering, half, aspect });
+        const seat = wheelOptions.seat && wheelOptions.seat.of > 1 ? wheelOptions.seat : null;
+        const inner = wheelControl(source, { steering: wheelOptions.steering, seat, half, aspect });
         // The check holds the wheel level for a second; the reader does that by itself and sets the level when done.
         const level: WheelLevel = {
           progress: () => inner.levelProgress,
@@ -132,7 +130,7 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
         return {
           kind: "wheel",
           inner,
-          half,
+          seat: inner.reader.seat,
           level,
           get wheel() {
             return inner.wheel;
@@ -147,7 +145,7 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     camera,
     preview(container: HTMLElement, control: DriverControl, size: "corner" | "large"): Disposable {
       const wheel = isWheel(control) ? control : null;
-      const picture = new WheelPreview({ size: "full", half: wheel?.half ?? null, aspect: aspect() });
+      const picture = new WheelPreview({ size: "full", seat: wheel?.seat ?? null, aspect: aspect() });
       picture.attach(script ? null : stack.video);
       // The page sizes the picture (a box of its own shape that it fills); the preview's own styling is for pages that do not.
       picture.canvas.removeAttribute("style");
@@ -158,6 +156,31 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
         // The ring that fills while the wheel is held level belongs to the check (the large picture), only while it fills.
         return { status: control.wheel, extras: size === "large" && progress > 0 && progress < 1 ? { levelProgress: progress } : {} };
       });
+      return {
+        dispose() {
+          stop();
+          picture.dispose();
+        },
+      };
+    },
+    previewColumns(container: HTMLElement, seats, size): Disposable {
+      const picture = new WheelPreview({ size: "full", aspect: aspect() });
+      picture.attach(script ? null : stack.video);
+      picture.canvas.removeAttribute("style");
+      container.append(picture.canvas);
+      const stop = picture.followColumns(() =>
+        seats.map((seat) => {
+          const wheel = isWheel(seat.control) ? seat.control : null;
+          const progress = wheel?.inner.levelProgress ?? 0;
+          return {
+            name: seat.name,
+            colour: seat.colour,
+            status: seat.control.wheel ?? null,
+            extras: size === "large" && progress > 0 && progress < 1 ? { levelProgress: progress } : {},
+          };
+        }),
+        size === "large",
+      );
       return {
         dispose() {
           stop();

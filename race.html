@@ -121,22 +121,43 @@
           <div id="driver-pick"></div>
         </section>
         <section class="group" id="group-second" aria-labelledby="group-two">
-          <h2 class="group-title" id="group-two">Two Players</h2>
+          <h2 class="group-title" id="group-two">Players on This Camera</h2>
           <div class="rows">
             <div class="row">
-              <label class="row-label" for="switch-second">Two on This Camera</label>
-              <button type="button" class="switch" role="switch" id="switch-second" aria-checked="false"></button>
+              <span class="row-label" id="label-players">Players on This Camera</span>
+              <div class="segmented" role="radiogroup" id="pick-players" aria-labelledby="label-players" aria-describedby="foot-players">
+                <button type="button" role="radio" data-value="1">1</button>
+                <button type="button" role="radio" data-value="2">2</button>
+                <button type="button" role="radio" data-value="3">3</button>
+                <button type="button" role="radio" data-value="4">4</button>
+              </div>
             </div>
             <div class="row" id="row-second">
               <label class="row-label" for="you-name2">Second Driver</label>
               <input id="you-name2" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
             </div>
+            <div class="row" id="row-third" hidden>
+              <label class="row-label" for="you-name3">Third Driver</label>
+              <input id="you-name3" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+            </div>
+            <div class="row" id="row-fourth" hidden>
+              <label class="row-label" for="you-name4">Fourth Driver</label>
+              <input id="you-name4" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+            </div>
           </div>
-          <p class="group-foot">You share one camera: you drive with the left half of the picture, your friend with the right.</p>
+          <p class="group-foot" id="foot-players">You drive alone with your own camera.</p>
         </section>
         <section class="group" id="group-driver2" aria-labelledby="group-driver-two" hidden>
           <h2 class="group-title" id="group-driver-two">Second Character</h2>
           <div id="driver-pick2"></div>
+        </section>
+        <section class="group" id="group-driver3" aria-labelledby="group-driver-three" hidden>
+          <h2 class="group-title" id="group-driver-three">Third Character</h2>
+          <div id="driver-pick3"></div>
+        </section>
+        <section class="group" id="group-driver4" aria-labelledby="group-driver-four" hidden>
+          <h2 class="group-title" id="group-driver-four">Fourth Character</h2>
+          <div id="driver-pick4"></div>
         </section>
         <div class="page-actions">
           <button id="you-continue" class="button primary large wide">Continue</button>

@@ -122,12 +122,18 @@ export interface Camera {
   stop(): void;
 }
 
+export interface OpenOptions {
+  /** The picture size to ask for (the camera gives the nearest it has); 1280x720 by default. */
+  size?: { width: number; height: number };
+}
+
 /**
- * Opens the user-facing camera at 1280x720 if it offers it - the one chosen
- * in Settings, else preferring the one used last - and plays it into `video`
- * (muted, inline, never shown full size).
+ * Opens the user-facing camera at 1280x720 if it offers it (or the size
+ * asked for) - the one chosen in Settings, else preferring the one used last
+ * - and plays it into `video` (muted, inline, never shown full size).
  */
-export async function openCamera(video: HTMLVideoElement): Promise<Camera> {
+export async function openCamera(video: HTMLVideoElement, options: OpenOptions = {}): Promise<Camera> {
+  const size = options.size ?? { width: 1280, height: 720 };
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new CameraError("insecure");
   const last = remembered();
   const chosen = chosenCamera();
@@ -135,8 +141,8 @@ export async function openCamera(video: HTMLVideoElement): Promise<Camera> {
     navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: size.width },
+        height: { ideal: size.height },
         frameRate: { ideal: 60 },
         facingMode: "user",
         ...(deviceId ? { deviceId } : {}),

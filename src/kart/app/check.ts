@@ -5,7 +5,9 @@
  * level is the one thing that changes with where the camera stands.
  *
  * Two players on one camera are checked side by side, each in their own
- * picture; the words say what the player furthest behind has still to do.
+ * picture; three or four share one picture of the whole camera, split into
+ * their columns, with a chip for each (their colour, name, and the ring and
+ * tick). The words say what the player furthest behind has still to do.
  */
 import { $, announce, element, icon, setText } from "../../ui/dom";
 import { setWheelChecked } from "./prefs";
@@ -59,9 +61,12 @@ interface Entry {
   preview: Disposable;
 }
 
+const NO_PICTURE: Disposable = { dispose() {} };
+
 export class CheckScreen {
   private steps: readonly Step[] = FIRST_TIME;
   private entries: Entry[] = [];
+  private shared: Disposable | null = null;
   private frame = 0;
   private timer = 0;
   private shown = "";
@@ -84,8 +89,25 @@ export class CheckScreen {
     this.shown = "";
     const pictures = $("check-pictures");
     pictures.dataset.count = String(players.length);
-    this.entries = players.map((player) => this.build(player, players.length > 1));
-    pictures.replaceChildren(...this.entries.map((entry) => entry.figure));
+    const together = players.length >= 3;
+    this.entries = players.map((player) => this.build(player, players.length > 1, together));
+    $("screen-check").toggleAttribute("data-shared", together);
+    if (together) {
+      // One picture of the whole camera, its columns marked, and a chip for each player under it.
+      const figure = element("figure", "check-shared");
+      const view = element("div", "wheel-view wide");
+      figure.append(view);
+      this.shared = this.services.previewColumns(
+        view,
+        players.map((player) => ({ control: player.control, name: player.name, colour: player.colour })),
+        "large",
+      );
+      const chips = element("div", "check-chips");
+      chips.append(...this.entries.map((entry) => entry.figure));
+      pictures.replaceChildren(figure, chips);
+    } else {
+      pictures.replaceChildren(...this.entries.map((entry) => entry.figure));
+    }
     // One pip for each thing to do. A returning player has only one: no pips.
     const pips = $("check-steps");
     pips.hidden = returning;
@@ -108,10 +130,12 @@ export class CheckScreen {
     this.timer = 0;
     for (const entry of this.entries) entry.preview.dispose();
     this.entries = [];
+    this.shared?.dispose();
+    this.shared = null;
   }
 
-  private build(player: CheckPlayer, named: boolean): Entry {
-    const figure = element("figure", "check-picture");
+  private build(player: CheckPlayer, named: boolean, together: boolean): Entry {
+    const figure = element("figure", together ? "check-picture check-chip" : "check-picture");
     const view = element("div", "wheel-view");
     // One round badge in the picture's corner: a ring that fills while the wheel is held level,
     // then a green tick when this wheel is set. It stays out of the way of the wheel itself.
@@ -137,7 +161,8 @@ export class CheckScreen {
     const tick = icon("check");
     tick.setAttribute("class", "tick");
     badge.append(ring, tick);
-    figure.append(view, badge);
+    if (!together) figure.append(view);
+    figure.append(badge);
     if (named) {
       const caption = element("figcaption", "check-name");
       const dot = element("span", "dot");
@@ -145,7 +170,7 @@ export class CheckScreen {
       caption.append(dot, player.name);
       figure.append(caption);
     }
-    const preview = this.services.preview(view, player.control, "large");
+    const preview = together ? NO_PICTURE : this.services.preview(view, player.control, "large");
     return { player, step: 0, since: null, left: false, right: false, lostSince: null, figure, ring: fill, preview };
   }
 

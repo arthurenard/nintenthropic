@@ -58,6 +58,8 @@ export async function loadHandLandmarker(
    * Grip Prix steers with two (four for two wheels on one camera).
    */
   hands = 1,
+  /** Detection and presence confidence (see handConfidence). */
+  confidence = OPTIONS.minHandDetectionConfidence,
 ): Promise<LoadedLandmarker> {
   let binaryUrl: string | null = null;
   try {
@@ -74,6 +76,8 @@ export async function loadHandLandmarker(
     const create = (delegate: "GPU" | "CPU") =>
       HandLandmarker.createFromOptions(fileset, {
         ...OPTIONS,
+        minHandDetectionConfidence: confidence,
+        minHandPresenceConfidence: confidence,
         numHands: hands,
         baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate },
       });

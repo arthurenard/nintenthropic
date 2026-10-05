@@ -361,6 +361,72 @@ body[data-screen="race"] {
   height: 100%;
   object-fit: cover;
 }
+/* Three or four on one camera: one picture of the whole camera (16:9, so no column is cropped) with the
+   columns marked, and a chip for each player under it. */
+.wheel-view.wide {
+  aspect-ratio: 16 / 9;
+}
+#screen-check[data-shared] .check-inner {
+  max-width: calc(1000px + 2 * var(--margin));
+  width: 100%;
+}
+.check-shared {
+  width: min(100%, calc((100dvh - 330px) * 16 / 9));
+  min-width: 240px;
+  margin: 0 auto;
+}
+.check-pictures[data-shared],
+#screen-check[data-shared] .check-pictures {
+  flex-direction: column;
+  align-items: center;
+}
+.check-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.check-chip {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 10px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.check-chip .check-badge {
+  position: static;
+  width: 32px;
+  height: 32px;
+  box-shadow: none;
+}
+.check-chip .level-ring {
+  width: 32px;
+  height: 32px;
+}
+.check-chip .check-badge .tick {
+  width: 18px;
+  height: 18px;
+}
+.check-chip .check-name {
+  margin-top: 0;
+}
+.corner-preview.shared {
+  width: 224px;
+}
+.controller-shared {
+  flex: 1 1 100%;
+  max-width: 720px;
+  margin: 0 auto 8px;
+}
+.controller-cards:has(.controller-shared) {
+  flex-wrap: wrap;
+}
+.controller-cards:has(.controller-shared) .controller-card {
+  flex: 1 1 140px;
+}
 /* One round badge in the picture's corner: a ring that fills as the wheel is held level, then a
    green tick when it is set. Green is ready, here as everywhere. */
 .check-badge {
@@ -1070,6 +1136,9 @@ body[data-screen="race"] #sound-button {
   }
   .corner-preview {
     width: 112px;
+  }
+  .corner-preview.shared {
+    width: 168px;
   }
   .lost-hands {
     top: 24%;

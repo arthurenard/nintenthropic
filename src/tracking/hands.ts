@@ -4,6 +4,30 @@
  */
 import type { Landmark, SeenHand } from "./types";
 
+/** How many hands are looked for when this many players share a camera: two each, at most eight. */
+export function handsFor(players: number): number {
+  return 2 * Math.max(1, Math.min(4, Math.round(players)));
+}
+
+/**
+ * Three or four players on one camera stand side by side a metre or two
+ * back, so each hand is small. Detection and presence confidence come down a
+ * little (0.5 to 0.4) for that crowd, and the camera is asked for more
+ * pixels; one or two players keep the settings they have always had.
+ */
+export function isCrowd(hands: number): boolean {
+  return hands >= 6;
+}
+
+export function handConfidence(hands: number): number {
+  return isCrowd(hands) ? 0.4 : 0.5;
+}
+
+/** The camera size asked for: 1920x1080 for a crowd (so small hands keep their pixels), else 1280x720. */
+export function cameraSize(hands: number): { width: number; height: number } {
+  return isCrowd(hands) ? { width: 1920, height: 1080 } : { width: 1280, height: 720 };
+}
+
 /** The parts of a HandLandmarkerResult the tracker reads (so a test needs no MediaPipe). */
 export interface RawHands {
   landmarks: readonly (readonly Landmark[])[];

@@ -70,7 +70,7 @@ export interface StartInfo {
 }
 
 export type ToHost =
-  | { t: "hello"; v: number; device: string; /** How many players this device brings, 1 or 2. */ n: number }
+  | { t: "hello"; v: number; device: string; /** How many players this device brings, 1 to 4. */ n: number }
   | { t: "configure"; players: WirePlayer[] }
   | { t: "ready"; ready: boolean }
   /** Whose hands (in the order the players were configured) have been out of the picture for a while. */

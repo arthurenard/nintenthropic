@@ -5,5 +5,5 @@
 export { wheelControl, type WheelControl, type WheelControlOptions } from "./control";
 export { gamepadControl } from "./gamepad";
 export { keyboardControl } from "./keyboard";
-export { MODE_COLOURS, WheelPreview, type PreviewExtras, type PreviewSize, type WheelPreviewOptions } from "./preview";
-export { STEERING_LOCK, WHEEL, WheelReader, shapeSteer, type Steering } from "./wheel";
+export { MODE_COLOURS, WheelPreview, type PreviewColumn, type PreviewExtras, type PreviewSize, type WheelPreviewOptions } from "./preview";
+export { STEERING_LOCK, WHEEL, WheelReader, halfSeat, seatZone, shapeSteer, type Seat, type Steering } from "./wheel";

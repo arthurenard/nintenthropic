@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seenHands } from "./hands";
+import { cameraSize, handConfidence, handsFor, isCrowd, seenHands } from "./hands";
 import type { Landmark } from "./types";
 
 const points = (x: number, z = 0): Landmark[] => Array.from({ length: 21 }, (_, i) => ({ x: x + i / 100, y: 0.5, z }));
@@ -48,5 +48,26 @@ describe("seenHands", () => {
   it("calls an unknown handedness null", () => {
     const [hand] = seenHands({ landmarks: [points(0.4)], handedness: [[{ categoryName: "", score: 0.5 }]] });
     expect(hand!.handedness).toBeNull();
+  });
+});
+
+describe("hands for the players on one camera", () => {
+  it("looks for two hands a player, up to eight", () => {
+    expect([1, 2, 3, 4].map(handsFor)).toEqual([2, 4, 6, 8]);
+    expect(handsFor(0)).toBe(2);
+    expect(handsFor(9)).toBe(8);
+  });
+
+  it("is less certain, and asks the camera for more pixels, only for three or four players", () => {
+    for (const hands of [1, 2, 4]) {
+      expect(isCrowd(hands)).toBe(false);
+      expect(handConfidence(hands)).toBe(0.5);
+      expect(cameraSize(hands)).toEqual({ width: 1280, height: 720 });
+    }
+    for (const hands of [6, 8]) {
+      expect(isCrowd(hands)).toBe(true);
+      expect(handConfidence(hands)).toBe(0.4);
+      expect(cameraSize(hands)).toEqual({ width: 1920, height: 1080 });
+    }
   });
 });

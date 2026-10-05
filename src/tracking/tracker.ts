@@ -421,6 +421,8 @@ export interface TrackerOptions {
   where?: "auto" | "worker" | "page";
   /** How many hands to look for: 1 in the shooting games (see input/trust.ts); 2 for Grip Prix's wheel, 4 for two wheels on one camera. */
   hands?: number;
+  /** Detection and presence confidence, 0..1; 0.5 by default (handConfidence says what a crowd of players on one camera gets). */
+  confidence?: number;
   /** Load the face landmarker too (a game that reads the eye is the first to be played). */
   face?: boolean;
 }
@@ -429,7 +431,7 @@ function workerSupported(): boolean {
   return typeof Worker !== "undefined" && typeof VideoFrame !== "undefined" && typeof OffscreenCanvas !== "undefined";
 }
 
-async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number, withFace: boolean): Promise<WorkerTracker> {
+async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number, withFace: boolean, confidence?: number): Promise<WorkerTracker> {
   const binary = siteUrl("mediapipe/vision_wasm_module_internal.wasm");
   const [wasm, model, face] = await Promise.all([
     fetchBytes(binary, progress.wasm, WASM_BYTES),
@@ -455,6 +457,7 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
     model,
     prefer,
     hands,
+    ...(confidence === undefined ? {} : { confidence }),
     ...(face ? { face } : {}),
   };
   worker.postMessage(init, face ? [wasm, model, face] : [wasm, model]);
@@ -476,7 +479,7 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
   const hands = options.hands ?? 1;
   if (where !== "page" && workerSupported()) {
     try {
-      return await startWorker(progress, prefer, hands, options.face === true);
+      return await startWorker(progress, prefer, hands, options.face === true, options.confidence);
     } catch (error) {
       // A download that failed would fail again on the page (the same
       // files): only a worker that could not run is worth the page's try.
@@ -486,7 +489,7 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
   }
   // Only here is MediaPipe needed on the page itself.
   const { loadHandLandmarker } = await import("./landmarker");
-  const { landmarker, delegate } = await loadHandLandmarker(progress, prefer, hands);
+  const { landmarker, delegate } = await loadHandLandmarker(progress, prefer, hands, options.confidence);
   const tracker = new PageTracker(landmarker, delegate);
   if (options.face) await tracker.addFace(progress.face ?? (() => {}));
   return tracker;

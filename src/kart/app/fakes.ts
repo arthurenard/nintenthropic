@@ -148,11 +148,16 @@ function fakeGamepad(): DriverControl {
 function fakeWheel(options: WheelOptions): WheelControl {
   const stop = listen();
   const limit = STEERING_DEGREES[options.steering];
-  const keys = {
-    left: options.half === "right" ? ["ArrowLeft"] : options.half === "left" ? ["KeyA"] : ["ArrowLeft", "KeyA"],
-    right: options.half === "right" ? ["ArrowRight"] : options.half === "left" ? ["KeyD"] : ["ArrowRight", "KeyD"],
-    brake: options.half === "right" ? ["ArrowDown"] : options.half === "left" ? ["KeyS"] : ["ArrowDown", "KeyS"],
-  };
+  // One player has both sets of keys; two share them as halves; three and four add J-L and the number pad.
+  const sets = [
+    { left: "KeyA", right: "KeyD", brake: "KeyS" },
+    { left: "ArrowLeft", right: "ArrowRight", brake: "ArrowDown" },
+    { left: "KeyJ", right: "KeyL", brake: "KeyK" },
+    { left: "Numpad4", right: "Numpad6", brake: "Numpad5" },
+  ];
+  const seat = options.seat && options.seat.of > 1 ? options.seat.index : options.half === "left" ? 0 : options.half === "right" ? 1 : -1;
+  const mine = seat >= 0 ? [sets[Math.min(3, seat)]!] : sets.slice(0, 2);
+  const keys = { left: mine.map((set) => set.left), right: mine.map((set) => set.right), brake: mine.map((set) => set.brake) };
   let angle = 0;
   let level = 0;
   let levelled = false;
@@ -911,6 +916,10 @@ export function createFakeServices(): Services {
     controls: { wheel: fakeWheel, keyboard: fakeKeyboard, gamepad: fakeGamepad },
     camera: fakeCamera(),
     preview: fakePreview,
+    previewColumns(container, seats, size) {
+      const parts = seats.map((seat) => fakePreview(container, seat.control, size));
+      return { dispose: () => parts.forEach((part) => part.dispose()) };
+    },
     tracks,
     sound: silentSound(),
   };

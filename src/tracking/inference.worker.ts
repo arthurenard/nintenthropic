@@ -58,8 +58,8 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
       // taking the aim). Grip Prix asks for two, or four for two wheels on
       // one camera.
       numHands: message.hands ?? 1,
-      minHandDetectionConfidence: 0.5,
-      minHandPresenceConfidence: 0.5,
+      minHandDetectionConfidence: message.confidence ?? 0.5,
+      minHandPresenceConfidence: message.confidence ?? 0.5,
       minTrackingConfidence: 0.5,
       baseOptions: { modelAssetBuffer: new Uint8Array(message.model), delegate },
     });
