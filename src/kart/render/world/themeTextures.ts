@@ -294,11 +294,11 @@ export function groundDetail(style: ThemeStyle, anisotropy: number, size = 512):
           pts.push([x, y]);
         }
         wrapped(ctx, W, W, (dx, dy) => {
-          ctx.strokeStyle = "rgba(140,150,170,0.08)";
-          ctx.lineWidth = 7 * f;
+          ctx.strokeStyle = "rgba(120,135,165,0.13)";
+          ctx.lineWidth = 8 * f;
           strokePaths(ctx, [pts], dx, dy);
-          ctx.strokeStyle = "rgba(120,130,150,0.26)";
-          ctx.lineWidth = 1.4 * f;
+          ctx.strokeStyle = "rgba(85,100,135,0.5)";
+          ctx.lineWidth = 1.6 * f;
           strokePaths(ctx, [pts], dx, dy);
         });
       }

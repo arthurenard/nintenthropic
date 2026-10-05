@@ -618,9 +618,9 @@ const HARBOUR = {
 };
 
 const KITCHEN = {
-  marble: rgb("#f2ece2"),
-  marbleWarm: rgb("#f6e6cc"),
-  marbleCool: rgb("#dfe7ee"),
+  marble: rgb("#e6ebf1"),
+  marbleWarm: rgb("#f2ece2"),
+  marbleCool: rgb("#d3dce8"),
   cabinet: rgb("#efe3cb"),
   cabinetDark: rgb("#c6a77b"),
   tileA: rgb("#efe7d6"),
@@ -637,10 +637,10 @@ const SNOW = {
 };
 
 const VOLCANO = {
-  rock: rgb("#232029"),
-  rockLight: rgb("#3a3641"),
-  ash: rgb("#5a4f58"),
-  dark: rgb("#121016"),
+  rock: rgb("#3b3743"),
+  rockLight: rgb("#5a5463"),
+  ash: rgb("#7a6a72"),
+  dark: rgb("#24202a"),
   crust: rgb("#5a1d0e"),
 };
 
