@@ -9,10 +9,11 @@
  * Models are made once and shared; each thing on the track is a small
  * object that follows its ThingView by id.
  */
-import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhongMaterial, type Material, type Object3D } from "three";
+import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, type Material, type Object3D } from "three";
 import type { ThingView } from "../contract";
 import type { Effects } from "./effects";
-import { MeshBuilder, rgb, scaleRgb, shapes, xf } from "./world/builder";
+import { MeshBuilder, rgb, shapes, xf } from "./kartBuilder";
+import { SURF, kartMaterial, withStudioFallback } from "./kartMaterial";
 
 interface Visual {
   kind: ThingView["kind"];
@@ -26,27 +27,32 @@ interface Visual {
 
 function puckGeometry(): BufferGeometry {
   const b = new MeshBuilder();
-  const rubber = rgb("#23262e");
-  const rim: [number, number, number] = [0.5, 2.4, 3.0];
-  b.add(shapes.cylinder(16), xf(0, 0.14, 0, 0.5, 0.28, 0.5), { bottom: scaleRgb(rubber, 0.6), top: rubber });
-  b.add(shapes.cylinder(16), xf(0, 0.2, 0, 0.53, 0.07, 0.53), rim);
-  b.add(shapes.cylinder(16), xf(0, 0.285, 0, 0.36, 0.02, 0.36), rgb("#3a3f4c"));
-  for (let k = 0; k < 4; k++) {
-    const a = (k * Math.PI) / 2;
-    b.box(Math.cos(a) * 0.24, 0.3, Math.sin(a) * 0.24, 0.16, 0.02, 0.07, k % 2 === 0 ? [3.2, 1.8, 0.4] : [1, 1, 1], -a);
-  }
+  const rubber = { bottom: [0.025, 0.027, 0.034] as const, top: [0.07, 0.075, 0.09] as const };
+  // A rounded black puck, a ring of cyan light round its waist, a chrome plate on top with four glowing chevrons.
+  b.as(SURF.rubber, () => b.lathe([[0.001, 0], [0.44, 0], [0.5, 0.04], [0.525, 0.14], [0.5, 0.24], [0.42, 0.285], [0.001, 0.285]], xf(0, 0, 0), rubber, 30));
+  b.as(SURF.lamp, () => b.torus(0.522, 0.034, xf(0, 0.145, 0), [0.5, 2.8, 3.8], 34, 6));
+  b.as(SURF.chrome, () => b.lathe([[0.001, 0.3], [0.33, 0.3], [0.37, 0.285], [0.36, 0.27], [0.001, 0.27]], xf(0, 0, 0), [0.9, 0.93, 1], 28));
+  b.as(SURF.lamp, () => {
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2;
+      b.slab(Math.cos(a) * 0.23, 0.31, Math.sin(a) * 0.23, 0.17, 0.03, 0.075, 0.012, k % 2 === 0 ? [4.2, 2.4, 0.4] : [3, 3.2, 3.6], -a);
+    }
+  });
   return b.build();
 }
 
 function seekerGeometry(): BufferGeometry {
   const b = new MeshBuilder();
-  const hot: [number, number, number] = [2.6, 0.28, 0.2];
-  const dark = rgb("#3a1018");
-  b.blob(0, 0.5, 0, 0.36, 0.34, 0.78, { bottom: [1.6, 0.14, 0.1], top: hot }, 1);
-  // A dark nose, a fin on the back and two small wings.
-  b.add(shapes.cone(8), xf(0, 0.5, 0.86, 0.22, 0.5, 0.22, 0, Math.PI / 2, 0), dark);
-  b.box(0, 0.98, -0.42, 0.06, 0.52, 0.5, dark);
-  for (const s of [-1, 1]) b.box(s * 0.36, 0.5, -0.38, 0.4, 0.05, 0.34, dark, 0, 0, s * 0.1);
+  const dark = rgb("#2a0d14");
+  // A glossy red body with a pale stripe, a dark nose, a fin, two wings, and the jet burning at the back.
+  b.as(SURF.paint, () => b.blob(0, 0.5, 0, 0.36, 0.34, 0.8, { bottom: [0.5, 0.03, 0.03], top: [1.0, 0.08, 0.06] }, 2));
+  b.as(SURF.trim, () => b.blob(0, 0.67, 0.02, 0.1, 0.05, 0.62, [0.97, 0.97, 1], 1));
+  b.as(SURF.plastic, () => {
+    b.add(shapes.cone(10), xf(0, 0.5, 0.88, 0.22, 0.5, 0.22, 0, Math.PI / 2, 0), dark);
+    b.slab(0, 0.98, -0.42, 0.07, 0.52, 0.5, 0.025, dark);
+    for (const s of [-1, 1]) b.slab(s * 0.38, 0.5, -0.38, 0.42, 0.055, 0.36, 0.02, dark, 0, 0, s * 0.1);
+  });
+  b.as(SURF.lamp, () => b.blob(0, 0.5, -0.82, 0.22, 0.22, 0.16, [5, 1.8, 0.3], 1));
   return b.build();
 }
 
@@ -55,17 +61,17 @@ function rocketGeometry(): BufferGeometry {
   const white = rgb("#f4f5f9");
   const red = rgb("#e8392c");
   const dark = rgb("#2b2e3b");
-  // A body, a red nose and band, four fins and a nozzle, all along +z.
-  b.add(shapes.cylinder(14), xf(0, 0, 0, 0.4, 2.3, 0.4, 0, Math.PI / 2, 0), { bottom: scaleRgb(white, 0.62), top: white });
-  b.add(shapes.cone(14), xf(0, 0, 1.6, 0.4, 0.95, 0.4, 0, Math.PI / 2, 0), red);
-  b.add(shapes.cylinder(14), xf(0, 0, 0.35, 0.42, 0.34, 0.42, 0, Math.PI / 2, 0), red);
-  b.add(shapes.cylinder(14), xf(0, 0, -1.2, 0.27, 0.3, 0.27, 0, Math.PI / 2, 0), dark);
-  b.box(0, 0.5, -0.95, 0.07, 0.7, 0.62, red);
-  b.box(0, -0.5, -0.95, 0.07, 0.7, 0.62, red);
-  b.box(0.5, 0, -0.95, 0.7, 0.07, 0.62, red);
-  b.box(-0.5, 0, -0.95, 0.7, 0.07, 0.62, red);
-  // A porthole.
-  b.add(shapes.cylinder(10), xf(0, 0.38, 0.9, 0.13, 0.08, 0.13, 0, 0, 0), rgb("#57b8ff"));
+  // A body, a red ogive nose and band, four fins, a porthole and a nozzle with its fire, all along +z.
+  const along = (x: number, y: number, z: number) => xf(x, y, z, 1, 1, 1, 0, Math.PI / 2, 0);
+  b.as(SURF.paint, () => {
+    b.lathe([[0.001, -1.2], [0.36, -1.15], [0.4, -0.9], [0.4, 0.6], [0.37, 1.0], [0.001, 1.0]], along(0, 0, 0), white, 30);
+    b.lathe([[0.37, 1.0], [0.28, 1.35], [0.14, 1.65], [0.001, 1.85]], along(0, 0, 0), red, 30);
+    b.lathe([[0.405, 0.2], [0.405, 0.5], [0.4, 0.5], [0.4, 0.2]], along(0, 0, 0), red, 30);
+    for (const a of [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2]) b.slab(Math.cos(a) * 0.52, Math.sin(a) * 0.52, -0.95, 0.07, 0.7, 0.62, 0.025, red, 0, 0, a);
+  });
+  b.as(SURF.glass, () => b.blob(0, 0.4, 0.9, 0.12, 0.12, 0.08, [0.3, 0.7, 1.0], 1));
+  b.as(SURF.plastic, () => b.lathe([[0.2, -1.35], [0.3, -1.15], [0.001, -1.15]], along(0, 0, 0), dark, 20));
+  b.as(SURF.lamp, () => b.blob(0, 0, -1.3, 0.2, 0.2, 0.22, [5, 2.6, 0.5], 1));
   return b.build();
 }
 
@@ -120,8 +126,8 @@ export class Things {
   private readonly rocket: BufferGeometry;
   private readonly puddles: BufferGeometry[];
   /** The puck's model and material, for the pucks orbiting a kart that holds three (itemfx.ts). */
-  readonly lit: MeshLambertMaterial;
-  private readonly slickMat: MeshPhongMaterial;
+  readonly lit: MeshPhysicalMaterial;
+  private readonly slickMat: MeshPhysicalMaterial;
   private readonly sheenMat: MeshBasicMaterial;
   private readonly resources: { dispose(): void }[];
   private frameNo = 0;
@@ -131,20 +137,26 @@ export class Things {
     this.seeker = seekerGeometry();
     this.rocket = rocketGeometry();
     this.puddles = [0, 1, 2, 3].map(puddleGeometry);
-    this.lit = new MeshLambertMaterial({ vertexColors: true });
-    this.slickMat = new MeshPhongMaterial({
+    this.lit = kartMaterial();
+    // Oil on the road: nearly black, glassy, with the rainbow film of a thin layer.
+    this.slickMat = new MeshPhysicalMaterial({
       vertexColors: true,
-      shininess: 140,
-      specular: 0x8a9cff,
+      roughness: 0.06,
+      metalness: 0.15,
+      clearcoat: 1,
+      clearcoatRoughness: 0.03,
+      iridescence: 1,
+      iridescenceIOR: 1.6,
+      iridescenceThicknessRange: [220, 620],
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.96,
       polygonOffset: true,
       polygonOffsetFactor: -3,
       polygonOffsetUnits: -3,
       depthWrite: false,
     });
     this.sheenMat = new MeshBasicMaterial({ color: 0x6674b8, transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
-    this.resources = [this.puck, this.seeker, this.rocket, ...this.puddles, this.lit, this.slickMat, this.sheenMat];
+    this.resources = [this.puck, this.seeker, this.rocket, ...this.puddles, this.slickMat, this.sheenMat];
   }
 
   private make(t: ThingView): Visual {
@@ -153,16 +165,25 @@ export class Things {
     switch (t.kind) {
       case "puck": {
         const m = new Mesh(this.puck, this.lit);
+        m.castShadow = true;
+        withStudioFallback(m);
         g.add(m);
         spin = m;
         break;
       }
       case "seeker":
-        g.add(new Mesh(this.seeker, this.lit));
+        {
+          const m = new Mesh(this.seeker, this.lit);
+          m.castShadow = true;
+          withStudioFallback(m);
+          g.add(m);
+        }
         break;
       case "skyrocket": {
         const m = new Mesh(this.rocket, this.lit);
         m.scale.set(1.5, 1.5, 1.5);
+        m.castShadow = true;
+        withStudioFallback(m);
         g.add(m);
         break;
       }

@@ -218,7 +218,12 @@ export const TUNING = {
     boxesPerRow: 5,
     /** Boxes in a row are spread over this much of the road's width. */
     rowSpread: 0.68,
-    pickupRadius: 1.7,
+    /**
+     * A box is taken when a kart's centre is this close (metres, flat). Sized from the drawn cube (render/world/boxes.ts BOX_SIZE, 1.6 m):
+     * its rotating corner reaches 1.13 m, a kart's wheels are 1.16 m out from its middle, so anything that visibly touches takes it.
+     * It was 1.7: a kart could drive a wheel through the glass and nothing happened.
+     */
+    pickupRadius: 2.3,
     respawn: 3,
     roulette: 1.0,
     puck: { speed: 40, life: 6, hitRadius: 1.4, ownerGrace: 0.5, spawnAhead: 2.5 },

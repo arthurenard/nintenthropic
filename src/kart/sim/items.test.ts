@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DriveInput } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS } from "../track/tracks";
+import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
 import { itemOdds } from "./items";
+import { planFor } from "./plan";
 import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
 import { ITEM_KINDS } from "./state";
+import { TUNING } from "./tuning";
 
 const harbour = TrackGeometry.build(HARBOUR_LIGHTS);
 
@@ -73,6 +75,74 @@ describe("item boxes", () => {
     expect(odds(4).seeker).toBeGreaterThan(0);
     expect(odds(4).seeker).toBeLessThan(odds(8).seeker);
     expect(itemOdds(1, 1)).toEqual(itemOdds(1, 8));
+  });
+});
+
+describe("driving through the boxes", () => {
+  /**
+   * Puts kart 0 8 m before `box`, heading straight along the box's heading on the line that passes `edge` metres to the side of the
+   * box's middle (the kart's right is +), empty-handed, at 22 m/s, and lets it drive on for 0.8 s.
+   */
+  function driveThrough(r: ReturnType<typeof race>, track: (typeof TRACKS)[number], box: ReturnType<typeof planFor>["boxes"][number], edge: number) {
+    const plan = planFor(track);
+    const h = box.heading;
+    const forward = [Math.sin(h), Math.cos(h)] as const;
+    const right = [-Math.cos(h), Math.sin(h)] as const;
+    const x = box.x + right[0] * edge - forward[0] * 8;
+    const z = box.z + right[1] * edge - forward[1] * 8;
+    const where = plan.geo.project(x, z);
+    // Every box is back (a box that was just taken stays hidden for three seconds).
+    const snap = r.snapshot();
+    snap.b = [];
+    r.restore(JSON.parse(JSON.stringify(snap)));
+    patch(r, 0, { x, z, s: where.s, offset: where.offset, progress: where.s, heading: h, vx: forward[0] * 22, vz: forward[1] * 22, item: -1, uses: 0, roll: 0, rolled: -1 });
+    return run(r, 48, () => input({ throttle: 1 }));
+  }
+
+  it("takes every box of every row on every track: through its middle, and with a wheel on its edge", () => {
+    // The kart is 2.3 m wide with its wheels and the cube 1.6 m: a wheel touches the cube's side 1.96 m from the kart's middle.
+    for (const track of TRACKS) {
+      const plan = planFor(track);
+      const r = race(track, racers(1, 0));
+      toGo(r);
+      expect(plan.boxes.length).toBeGreaterThan(0);
+      const perRow = TUNING.items.boxesPerRow;
+      plan.boxes.forEach((box, i) => {
+        // Through its middle; and, for the two at the ends of a row (which have no neighbour on that side), with a wheel on the outer edge.
+        const k = i % perRow;
+        const row = plan.boxes.slice(i - k, i - k + perRow);
+        const outward = Math.sign((box.x - row[perRow - 1 - k]!.x) * -Math.cos(box.heading) + (box.z - row[perRow - 1 - k]!.z) * Math.sin(box.heading));
+        const passes = k === 0 || k === perRow - 1 ? [0, 1.9 * outward] : [0];
+        for (const edge of passes) {
+          const taken = driveThrough(r, track, box, edge).filter((e) => e.type === "pickup");
+          expect(taken, `${track.id} box ${i} at ${edge}`).toHaveLength(1);
+          expect(taken[0]).toMatchObject({ kart: 0 });
+          expect(r.view().things.find((t) => t.kind === "box" && t.id === i)?.active, `${track.id} box ${i} at ${edge} is hidden`).toBe(false);
+        }
+      });
+    }
+  });
+
+  it("is not a magnet: a kart passing 3 m outside the end of a row takes nothing", () => {
+    const plan = planFor(HARBOUR_LIGHTS);
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    const perRow = TUNING.items.boxesPerRow;
+    for (let row = 0; row < plan.boxes.length / perRow; row++) {
+      const first = plan.boxes[row * perRow]!;
+      const last = plan.boxes[row * perRow + perRow - 1]!;
+      // "Outside" is away from the row's middle; the kart's right is (-cos h, sin h).
+      const side = (box: typeof first, other: typeof first): number => Math.sign((box.x - other.x) * -Math.cos(box.heading) + (box.z - other.z) * Math.sin(box.heading));
+      expect(count(driveThrough(r, HARBOUR_LIGHTS, first, 3 * side(first, last)), "pickup")).toBe(0);
+      expect(count(driveThrough(r, HARBOUR_LIGHTS, last, 3 * side(last, first)), "pickup")).toBe(0);
+    }
+  });
+
+  it("is a radius that covers the drawn cube: its corner and a kart's wheel", () => {
+    // The cube is 1.6 m (render/world/boxes.ts BOX_SIZE); a corner of it reaches 1.13 m, the kart's tyres are 1.16 m out.
+    expect(TUNING.items.pickupRadius).toBeGreaterThanOrEqual(1.6 / Math.SQRT2 + 1.16 - 0.01);
+    // And not so wide that it becomes a magnet.
+    expect(TUNING.items.pickupRadius).toBeLessThan(2.6);
   });
 });
 

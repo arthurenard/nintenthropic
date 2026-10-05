@@ -1,8 +1,8 @@
 /** Moss the frog: eyes on stalks inside big goggles, a wide grin, a throat that puffs. */
-import { MeshBuilder, rgb, shapes, xf } from "../world/builder";
+import { MeshBuilder, rgb, xf } from "../kartBuilder";
 import { INK, armGeometry, body, eye, fur, headBand, legs, orb, type Look } from "./parts";
 import type { DriverBuild } from "./types";
-import { TAU } from "../math";
+import { SURF } from "../kartMaterial";
 
 const SKIN = rgb("#74c64a");
 const BELLY = rgb("#e1f4ac");
@@ -28,10 +28,7 @@ export function buildFrog(l: Look): DriverBuild {
   for (const sx of [-1, 1]) {
     orb(h, [sx * 0.15, 0.15, 0.08], [0.115, 0.105, 0.115], fur(SKIN), 1);
     eye(h, sx * 0.15, 0.165, 0.185, 0.055);
-    for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * TAU;
-      h.add(shapes.box(), xf(sx * 0.15 + Math.cos(a) * 0.125, 0.165 + Math.sin(a) * 0.125, 0.15, 0.09, 0.034, 0.1, 0, 0, a + Math.PI / 2), { bottom: l.low, top: l.top });
-    }
+    h.as(SURF.paint, () => h.torus(0.125, 0.032, xf(sx * 0.15, 0.165, 0.15, 1, 1, 1, 0, Math.PI / 2, 0), { bottom: l.low, top: l.top }, 24, 8));
   }
   headBand(h, head, 0.1, { bottom: l.low, top: l.top }, 0.075, 1.045);
   // A strap over the crown, flush with the head.

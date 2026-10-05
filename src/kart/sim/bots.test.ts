@@ -138,7 +138,9 @@ describe("eight bots", () => {
   it("use every kind of item, and the hits spin karts out", () => {
     const used = new Set<string>();
     let hits = 0;
-    for (const seed of [1, 2, 3, 4]) {
+    // (A skyrocket is rare, only from the back half, so a few more seeds are tried until every kind has shown.)
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+      if (used.size === ITEM_KINDS.length && seed > 4) break;
       const r = race(TRACKS[0]!, field(), { laps: 3, seed });
       for (const e of run(r, 60 * 140)) {
         if (e.type === "use") used.add(e.item);
