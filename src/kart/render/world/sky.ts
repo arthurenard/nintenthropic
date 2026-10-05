@@ -274,6 +274,7 @@ export function createSky(style: ThemeStyle): Sky {
   });
   const dome = new Mesh(geometry, material);
   dome.frustumCulled = false;
+  dome.userData.noShadow = true;
   // After every other opaque thing, at the far plane: only the pixels left empty are shaded.
   dome.renderOrder = 1000;
   group.add(dome);

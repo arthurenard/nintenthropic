@@ -14,7 +14,7 @@
  *    whatever surface is at the top of that spot, so the ground and the
  *    road and the roofs, but not the walls and the undersides.
  */
-import { DataTexture, Matrix4, NearestFilter, ShaderChunk, Uniform, Vector3, Vector4, type Material, type MeshStandardMaterial, type Texture, type WebGLProgramParametersWithUniforms } from "three";
+import { DataTexture, Matrix4, NearestFilter, ShaderChunk, Uniform, Vector4, type Material, type MeshStandardMaterial, type Texture, type WebGLProgramParametersWithUniforms } from "three";
 
 export interface BakeUniforms {
   /** Depth texture of the world from the sun (a comparison sampler). */
@@ -23,13 +23,18 @@ export interface BakeUniforms {
   uSunMat: Uniform<Matrix4>;
   /** x: metres per texel, y: size in texels, z: strength of a sun shadow (0..1), w: 1 when a map is bound. */
   uSunInfo: Uniform<Vector4>;
-  uSunDirW: Uniform<Vector3>;
+  /** xyz: the direction to the sun; w: 1 / the depth range of the map in metres. */
+  uSunDirW: Uniform<Vector4>;
   /** Occlusion (r) and top height (g), over the world rect. */
   uAoMap: Uniform<Texture | null>;
   /** minX, minZ, 1/sizeX, 1/sizeZ */
   uAoRect: Uniform<Vector4>;
   /** x: height at g = 0, y: height range, z: strength, w: 1 when a map is bound. */
   uAoInfo: Uniform<Vector4>;
+  /** The whole terrain's height from above, coarse, for water that reads its own depth (only built where there is water). */
+  uHeightMap: Uniform<Texture | null>;
+  uHeightRect: Uniform<Vector4>;
+  uHeightInfo: Uniform<Vector4>;
 }
 
 /** A one-pixel texture to stand in until a map is baked (a sampler must always have one). */
@@ -45,10 +50,13 @@ export function makeBakeUniforms(): BakeUniforms {
     uSunMap: new Uniform<Texture | null>(blank()),
     uSunMat: new Uniform(new Matrix4()),
     uSunInfo: new Uniform(new Vector4(0.2, 2048, 0.9, 0)),
-    uSunDirW: new Uniform(new Vector3(0, 1, 0)),
+    uSunDirW: new Uniform(new Vector4(0, 1, 0, 0.003)),
     uAoMap: new Uniform<Texture | null>(blank()),
     uAoRect: new Uniform(new Vector4(0, 0, 1, 1)),
     uAoInfo: new Uniform(new Vector4(0, 1, 1, 0)),
+    uHeightMap: new Uniform<Texture | null>(blank()),
+    uHeightRect: new Uniform(new Vector4(0, 0, 1, 1)),
+    uHeightInfo: new Uniform(new Vector4(0, 1, 0, 0)),
   };
 }
 
@@ -74,7 +82,7 @@ varying vec3 vWorldP;
 uniform sampler2D uSunMap;
 uniform mat4 uSunMat;
 uniform vec4 uSunInfo;
-uniform vec3 uSunDirW;
+uniform vec4 uSunDirW;
 uniform sampler2D uAoMap;
 uniform vec4 uAoRect;
 uniform vec4 uAoInfo;
@@ -82,7 +90,7 @@ uniform vec4 uAoInfo;
 // Sun visibility from the baked depth map: 0 in shadow, 1 in the light. Soft edges from a rotated disc of taps.
 float bakedSun( vec3 p, vec3 n ) {
   if ( uSunInfo.w < 0.5 ) return 1.0;
-  float ndl = clamp( dot( n, uSunDirW ), 0.0, 1.0 );
+  float ndl = clamp( dot( n, uSunDirW.xyz ), 0.0, 1.0 );
   // Push the point out along its normal by a couple of texels (more on a grazing surface) before looking it up.
   vec3 q = p + n * uSunInfo.x * ( 1.2 + 2.6 * ( 1.0 - ndl ) );
   vec4 c = uSunMat * vec4( q, 1.0 );
@@ -91,7 +99,7 @@ float bakedSun( vec3 p, vec3 n ) {
   float fade = 1.0 - smoothstep( 0.44, 0.5, max( e.x, e.y ) );
   float inv = 1.0 / uSunInfo.y;
   float phi = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) ) * 6.2831853;
-  float z = c.z - 0.0012;
+  float z = c.z - uSunDirW.w * ( 0.08 + 0.25 * ( 1.0 - ndl ) );
   float vis = 0.0;
   const int TAPS = 12;
   for ( int i = 0; i < TAPS; i ++ ) {

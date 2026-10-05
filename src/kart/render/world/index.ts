@@ -37,10 +37,12 @@ import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { Bank } from "./bank";
 import { buildBackdrop } from "./backdrop";
+import { bakeStatic, type Baked } from "./bake";
 import { ItemBoxes } from "./boxes";
 import { rampHeight, type Features } from "./features";
 import { buildHazards, buildLandmarks, landmarkMaterials, type HazardLayer, type LandmarkLayer, type PlacedLandmark } from "./landmarks/place";
 import { additiveMaterial, groundMaterial, lavaMaterial, patchMaterial, roadMaterial, type Animated } from "./materials";
+import { buildFoliage } from "./foliage";
 import { buildScenery, type Scenery } from "./scenery";
 import { lookFor, type Look } from "./look";
 import { bakedLit, makeBakeUniforms, type BakeUniforms } from "./shading";
@@ -138,7 +140,7 @@ export async function createWorld(
 
   // Ground tiles (space has none: the road floats in the dark).
   if (!space) {
-    for (const g of terrain.buildTiles(20, ground.detail?.metres ?? 64)) addStatic(g, ground.material);
+    for (const g of terrain.buildTiles(20, ground.metres)) addStatic(g, ground.material);
     const lavaTiles = terrain.buildLava(20);
     if (lavaTiles.length) {
       lavaAnim = lavaMaterial(disposables);
@@ -256,6 +258,25 @@ export async function createWorld(
   const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, landmarks.keepOut, bake);
   track(scenery);
   group.add(scenery.group);
+  // Tufts and flowers beyond the barriers, within reach of the track.
+  const reach = (() => {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const smp of geometry.samples) {
+      minX = Math.min(minX, smp.x);
+      maxX = Math.max(maxX, smp.x);
+      minZ = Math.min(minZ, smp.z);
+      maxZ = Math.max(maxZ, smp.z);
+    }
+    return { minX: minX - 55, maxX: maxX + 55, minZ: minZ - 55, maxZ: maxZ + 55 };
+  })();
+  const foliage = buildFoliage(style, terrain, quality, bake, landmarks.keepOut, reach);
+  if (foliage) {
+    track(foliage);
+    group.add(foliage.group);
+  }
   onProgress(0.86);
   await breathe();
 
@@ -268,7 +289,7 @@ export async function createWorld(
   if (style.id === "harbour") {
     const cx = (terrain.minX + terrain.maxX) / 2;
     const cz = (terrain.minZ + terrain.maxZ) / 2;
-    water = createWater(style, { x: cx, z: cz });
+    water = createWater(style, { x: cx, z: cz }, bake, quality.anisotropy);
     track(water);
     group.add(water.mesh);
   }
@@ -302,6 +323,33 @@ export async function createWorld(
   group.add(hemi, sun, sun.target);
   const fog = new Fog(style.fog.colour, style.fog.near, style.fog.far);
   let envTexture: Texture | null = null;
+  let baked: Baked | null = null;
+  /** The part of the world the baked light covers: the track and a margin, and the heights from below its lowest road to above its tallest landmark. */
+  const playBounds = () => {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const smp of geometry.samples) {
+      minX = Math.min(minX, smp.x);
+      maxX = Math.max(maxX, smp.x);
+      minZ = Math.min(minZ, smp.z);
+      maxZ = Math.max(maxZ, smp.z);
+      minY = Math.min(minY, smp.y);
+      maxY = Math.max(maxY, smp.y);
+    }
+    const pad = quality.bakeSun >= 3000 ? 150 : 120;
+    return {
+      minX: Math.max(terrain.minX, minX - pad),
+      maxX: Math.min(terrain.maxX, maxX + pad),
+      minZ: Math.max(terrain.minZ, minZ - pad),
+      maxZ: Math.min(terrain.maxZ, maxZ + pad),
+      minY: minY - 14,
+      maxY: maxY + 70,
+    };
+  };
 
   onProgress(1);
   let near = 0;
@@ -322,6 +370,7 @@ export async function createWorld(
     update(time, dt, raceTime = 0) {
       chevrons.offset.y = -(time * 1.3) % 1;
       scenery.update(time);
+      foliage?.update(time);
       water?.update(time);
       lavaAnim?.update(time);
       sky.update(time);
@@ -337,6 +386,18 @@ export async function createWorld(
       envTexture = sky.environment(renderer, style.light.groundColour);
       scene.environment = envTexture;
       scene.environmentIntensity = look.envIntensity;
+      baked?.dispose();
+      baked = bakeStatic(renderer, scene, group, bake, {
+        sunDir: sky.sunDir,
+        bounds: playBounds(),
+        sunSize: quality.bakeSun,
+        aoSize: quality.bakeAo,
+        aoStrength: 0.75,
+        aoRadius: 6,
+        ...(style.id === "harbour" || style.id === "palm"
+          ? { waterBounds: { minX: terrain.minX, maxX: terrain.maxX, minZ: terrain.minZ, maxZ: terrain.maxZ, minY: -12, maxY: 40 }, waterSize: quality.tier === "low" ? 512 : 1024 }
+          : {}),
+      });
     },
     focusSun(x, y, z) {
       const R = quality.shadowRange;
@@ -361,6 +422,7 @@ export async function createWorld(
     },
     dispose() {
       envTexture?.dispose();
+      baked?.dispose();
       sun.shadow.map?.dispose();
       for (const d of disposables) d.dispose();
       group.traverse((o: Object3D) => {

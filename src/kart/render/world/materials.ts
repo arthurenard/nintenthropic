@@ -16,6 +16,7 @@ import {
   ShaderMaterial,
   UniformsLib,
   UniformsUtils,
+  Vector2,
   Vector3,
   type Material,
   type Texture,
@@ -24,7 +25,8 @@ import {
 import type { Surface } from "../../track/geometry";
 import type { QualitySettings } from "../quality";
 import { bakedLit, type BakeUniforms } from "./shading";
-import { roadTexture } from "./textures";
+import { detailNormal, type DetailKind } from "./detail";
+import { roadRoughness, roadTexture } from "./textures";
 import { groundDetail, roadGlowTexture, surfaceTexture, type GroundDetail } from "./themeTextures";
 import type { ThemeStyle } from "./themes";
 
@@ -47,17 +49,34 @@ function glowFromVertices(colour: Color, strength: number): (shader: WebGLProgra
 export interface GroundMaterial {
   material: MeshStandardMaterial;
   detail: GroundDetail | null;
+  /** Metres one repeat of the ground's uv covers. */
+  metres: number;
 }
+
+/** What each ground is like underfoot: the relief that catches the sun, how glossy it is, and how fine the relief is. */
+const GROUND: Record<string, { kind: DetailKind; tile: number; rough: number; normal: number; coat?: number }> = {
+  meadow: { kind: "grass", tile: 2.6, rough: 0.95, normal: 1.0 },
+  canyon: { kind: "rock", tile: 4.5, rough: 0.96, normal: 0.8 },
+  harbour: { kind: "stone", tile: 2.5, rough: 0.42, normal: 0.6 },
+  kitchen: { kind: "stone", tile: 3, rough: 0.2, normal: 0.25, coat: 0.55 },
+  snow: { kind: "snow", tile: 2.2, rough: 0.5, normal: 1.0 },
+  volcano: { kind: "rock", tile: 3, rough: 0.5, normal: 1.1 },
+  funfair: { kind: "stone", tile: 2, rough: 0.55, normal: 0.8 },
+  palm: { kind: "sand", tile: 4, rough: 0.85, normal: 0.8 },
+  space: { kind: "stone", tile: 3, rough: 0.5, normal: 0.2 },
+};
 
 export function groundMaterial(style: ThemeStyle, quality: QualitySettings, own: Own, bake: BakeUniforms): GroundMaterial {
   const detail = groundDetail(style, quality.anisotropy, quality.tier === "low" ? 256 : 512);
   const volcano = style.id === "volcano";
-  const material = bakedLit(
-    new MeshStandardMaterial({ vertexColors: true, map: detail?.map ?? null, roughness: 0.95, metalness: 0 }),
-    bake,
-    volcano ? "ground-glow" : "ground",
-    volcano ? glowFromVertices(new Color(1.0, 0.36, 0.07), 1.3) : undefined,
-  );
+  const surface = GROUND[style.id] ?? GROUND.meadow!;
+  const metres = detail?.metres ?? 64;
+  const normal = detailNormal(surface.kind, 256, quality.anisotropy);
+  normal.repeat.set(metres / surface.tile, metres / surface.tile);
+  own.push(normal);
+  const params = { vertexColors: true, map: detail?.map ?? null, normalMap: normal, normalScale: new Vector2(surface.normal, surface.normal), roughness: surface.rough, metalness: 0 };
+  const lit = surface.coat ? new MeshPhysicalMaterial({ ...params, clearcoat: surface.coat, clearcoatRoughness: 0.12 }) : new MeshStandardMaterial(params);
+  const material = bakedLit(lit, bake, `${volcano ? "ground-glow" : "ground"}${surface.coat ? "-coat" : ""}`, volcano ? glowFromVertices(new Color(1.0, 0.36, 0.07), 1.3) : undefined);
   own.push(material);
   if (detail) {
     own.push(detail.map);
@@ -67,7 +86,7 @@ export function groundMaterial(style: ThemeStyle, quality: QualitySettings, own:
       material.emissiveMap = detail.glow;
     }
   }
-  return { material, detail };
+  return { material, detail, metres };
 }
 
 export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: Own, bake: BakeUniforms): Material {
@@ -85,7 +104,16 @@ export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: O
     own.push(m);
     return m;
   }
-  const m = bakedLit(new MeshStandardMaterial({ map, roughness: 0.78, metalness: 0 }), bake, "road");
+  const kind: DetailKind = style.id === "kitchen" ? "wood" : style.id === "volcano" ? "rock" : style.id === "palm" || style.id === "funfair" ? "stone" : "asphalt";
+  const normal = detailNormal(kind, 256, quality.anisotropy);
+  normal.repeat.set(8, 8);
+  const rough = roadRoughness(style, quality.anisotropy, Math.min(512, quality.roadTexture));
+  own.push(normal, rough);
+  const m = bakedLit(
+    new MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, normalMap: normal, normalScale: new Vector2(0.85, 0.85), metalness: 0 }),
+    bake,
+    "road",
+  );
   if (glow) {
     m.emissive = new Color(0.6, 0.5, 0.48);
     m.emissiveMap = glow;

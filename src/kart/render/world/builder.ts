@@ -14,6 +14,7 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   IcosahedronGeometry,
+  Matrix3,
   Matrix4,
   Quaternion,
   Vector3,
@@ -43,6 +44,8 @@ export type Paint = Rgb | { bottom: Rgb; top: Rgb };
 /** A unit shape as flat triangles: positions only, with its height range for ramps. */
 export interface Shape {
   readonly positions: Float32Array;
+  /** The shape's own normal at each corner: smooth on a ball or a cylinder's side, flat on a box's faces. */
+  readonly normals?: Float32Array;
   readonly minY: number;
   readonly maxY: number;
 }
@@ -50,6 +53,7 @@ export interface Shape {
 function shapeOf(geometry: BufferGeometry): Shape {
   const flat = geometry.index ? geometry.toNonIndexed() : geometry;
   const positions = new Float32Array((flat.getAttribute("position") as Float32BufferAttribute).array);
+  const normals = new Float32Array((flat.getAttribute("normal") as Float32BufferAttribute).array);
   let minY = Infinity;
   let maxY = -Infinity;
   for (let i = 1; i < positions.length; i += 3) {
@@ -58,7 +62,7 @@ function shapeOf(geometry: BufferGeometry): Shape {
   }
   geometry.dispose();
   if (flat !== geometry) flat.dispose();
-  return { positions, minY, maxY };
+  return { positions, normals, minY, maxY };
 }
 
 const shapeCache = new Map<string, Shape>();
@@ -96,6 +100,7 @@ export function xf(x: number, y: number, z: number, sx = 1, sy = sx, sz = sx, ry
   return _m.clone().compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz));
 }
 
+const _nm = new Matrix3();
 const _a = new Vector3();
 const _b = new Vector3();
 const _c = new Vector3();
@@ -142,6 +147,18 @@ export class MeshBuilder {
     }
   }
 
+  /** One triangle with a normal of its own at each corner (a smooth surface). */
+  triN(a: V3, b: V3, c: V3, ca: Rgb, cb: Rgb, cc: Rgb, na: V3, nb: V3, nc: V3): void {
+    _a.set(a[0], a[1], a[2]);
+    _b.set(b[0], b[1], b[2]).sub(_a);
+    _c.set(c[0], c[1], c[2]).sub(_a);
+    if (_n.crossVectors(_b, _c).lengthSq() < 1e-24) return; // degenerate
+    this.position.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    this.normal.push(na[0], na[1], na[2], nb[0], nb[1], nb[2], nc[0], nc[1], nc[2]);
+    this.color.push(ca[0], ca[1], ca[2], cb[0], cb[1], cb[2], cc[0], cc[1], cc[2]);
+    if (this.withUv) this.uv.push(0, 0, 0, 0, 0, 0);
+  }
+
   /**
    * A quad a-b-c-d, counter-clockwise from the front (a, b along one edge, c, d back). `n` is used for
    * all four corners when given (a smooth surface such as a road); `uvs` is [ua, va, ub, vb, uc, vc, ud, vd].
@@ -168,19 +185,28 @@ export class MeshBuilder {
       world[i + 2] = _a.z;
       heights.push((pos[i + 1]! - shape.minY) / range);
     }
+    // The shape's own normals, carried through the transform (its inverse transpose), so a ball stays round.
+    let nor: Float32Array | null = null;
+    if (shape.normals) {
+      const nm = _nm.setFromMatrix4(matrix).invert().transpose();
+      nor = new Float32Array(pos.length);
+      for (let i = 0; i < pos.length; i += 3) {
+        _a.set(shape.normals[i]!, shape.normals[i + 1]!, shape.normals[i + 2]!).applyMatrix3(nm).normalize();
+        nor[i] = _a.x;
+        nor[i + 1] = _a.y;
+        nor[i + 2] = _a.z;
+      }
+    }
     for (let i = 0; i < pos.length; i += 9) {
       const h0 = heights[i / 3]!;
       const h1 = heights[i / 3 + 1]!;
       const h2 = heights[i / 3 + 2]!;
       const col = (h: number): Rgb => (ramp ? mixRgb(bottom, top, h) : bottom);
-      this.tri(
-        [world[i]!, world[i + 1]!, world[i + 2]!],
-        [world[i + 3]!, world[i + 4]!, world[i + 5]!],
-        [world[i + 6]!, world[i + 7]!, world[i + 8]!],
-        col(h0),
-        col(h1),
-        col(h2),
-      );
+      const pa: V3 = [world[i]!, world[i + 1]!, world[i + 2]!];
+      const pb: V3 = [world[i + 3]!, world[i + 4]!, world[i + 5]!];
+      const pc: V3 = [world[i + 6]!, world[i + 7]!, world[i + 8]!];
+      if (nor) this.triN(pa, pb, pc, col(h0), col(h1), col(h2), [nor[i]!, nor[i + 1]!, nor[i + 2]!], [nor[i + 3]!, nor[i + 4]!, nor[i + 5]!], [nor[i + 6]!, nor[i + 7]!, nor[i + 8]!]);
+      else this.tri(pa, pb, pc, col(h0), col(h1), col(h2));
     }
   }
 

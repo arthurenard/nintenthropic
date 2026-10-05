@@ -3,7 +3,7 @@
  * boost pad's chevrons, soft glows and shadow blobs, the start gantry's
  * banner. Drawn, not downloaded, like every Handy asset until art exists.
  */
-import { CanvasTexture, LinearMipmapLinearFilter, LinearFilter, RepeatWrapping, SRGBColorSpace, ClampToEdgeWrapping } from "three";
+import { CanvasTexture, LinearMipmapLinearFilter, LinearFilter, NoColorSpace, RepeatWrapping, SRGBColorSpace, ClampToEdgeWrapping } from "three";
 import { seededRandom } from "../../../engine/random";
 import type { ThemeStyle } from "./themes";
 import { paintRoadTheme } from "./themeTextures";
@@ -71,16 +71,28 @@ export function roadTexture(style: ThemeStyle, anisotropy: number, size = 512): 
     ctx.fillRect((cx - 0.12) * W, 0, 0.24 * W, H);
   }
 
-  // Fine grain.
-  for (let i = 0; i < 9000 * f * f; i++) {
+  // Fine grain: specks about a pixel across (the normal map carries the relief, this is only the tone of it).
+  for (let i = 0; i < 42000 * f * f; i++) {
     const x = rnd() * W;
     const y = rnd() * H;
-    const s = (1 + rnd() * 1.6) * f;
-    ctx.fillStyle = rnd() > 0.5 ? style.road.speckle : "#000";
-    ctx.globalAlpha = 0.05 + rnd() * 0.16;
+    const s = (0.7 + rnd() * 1.1) * Math.max(1, f * 0.7);
+    ctx.fillStyle = rnd() > 0.45 ? style.road.speckle : "#000";
+    ctx.globalAlpha = 0.05 + rnd() * 0.15;
     ctx.fillRect(x, y, s, s);
   }
   ctx.globalAlpha = 1;
+  // Patched tarmac: a few repairs, slightly darker or paler than the rest, with a crisp edge.
+  for (let i = 0; i < 7; i++) {
+    const x = rnd() * W * 0.8 + W * 0.08;
+    const y = rnd() * H;
+    const w = (0.08 + rnd() * 0.16) * W;
+    const h = (0.04 + rnd() * 0.12) * H;
+    ctx.fillStyle = rnd() > 0.5 ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.035)";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "rgba(0,0,0,0.05)";
+    ctx.lineWidth = f;
+    ctx.strokeRect(x, y, w, h);
+  }
 
   // Shoulders: dust or damp drifting in from each edge.
   for (const side of [0, 1]) {
@@ -120,6 +132,47 @@ export function roadTexture(style: ThemeStyle, anisotropy: number, size = 512): 
   ctx.globalAlpha = 1;
   paintRoadTheme(ctx, style, W, H, f, rnd, "over");
   return finish(new CanvasTexture(c), anisotropy, true);
+}
+
+/**
+ * The road's roughness (the green channel, which is where three reads it),
+ * in the same layout as its paint: tyres polish the two lanes where the karts
+ * run, paint is smoother than tar, a dust of grains breaks the rest up.
+ */
+export function roadRoughness(style: ThemeStyle, anisotropy: number, size = 512): CanvasTexture {
+  const W = size;
+  const f = size / 512;
+  const [c, ctx] = canvas(W, W);
+  const base = style.id === "kitchen" ? 0.5 : style.id === "space" ? 0.3 : style.id === "snow" ? 0.7 : 0.9;
+  const level = (r: number) => `rgb(0,${Math.round(Math.max(0, Math.min(1, r)) * 255)},0)`;
+  ctx.fillStyle = level(base);
+  ctx.fillRect(0, 0, W, W);
+  const rnd = seededRandom(19);
+  // Polished lanes.
+  for (const cx of [0.3, 0.7]) {
+    const g = ctx.createLinearGradient((cx - 0.13) * W, 0, (cx + 0.13) * W, 0);
+    g.addColorStop(0, level(base));
+    g.addColorStop(0.5, level(base - 0.2));
+    g.addColorStop(1, level(base));
+    ctx.fillStyle = g;
+    ctx.fillRect((cx - 0.13) * W, 0, 0.26 * W, W);
+  }
+  // Paint is smoother than tar.
+  ctx.fillStyle = level(base - 0.14);
+  ctx.fillRect(0.035 * W, 0, 0.016 * W, W);
+  ctx.fillRect(0.949 * W, 0, 0.016 * W, W);
+  if (style.road.dash) ctx.fillRect(0.4915 * W, W * 0.04, 0.017 * W, W * 0.3);
+  // Grain.
+  for (let i = 0; i < 16000 * f * f; i++) {
+    ctx.fillStyle = level(base + (rnd() - 0.55) * 0.3);
+    ctx.globalAlpha = 0.5;
+    const s = (0.8 + rnd() * 1.4) * Math.max(1, f * 0.7);
+    ctx.fillRect(rnd() * W, rnd() * W, s, s);
+  }
+  ctx.globalAlpha = 1;
+  const t = finish(new CanvasTexture(c), anisotropy, true);
+  t.colorSpace = NoColorSpace;
+  return t;
 }
 
 /**

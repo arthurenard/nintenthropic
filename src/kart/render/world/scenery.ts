@@ -428,33 +428,7 @@ export function buildScenery(
     });
   }
 
-  // Clouds drift slowly round the whole world.
-  if (style.sky.clouds) {
-    const clouds = new Group();
-    // Clouds are lit mostly from within: lit from below by the green ground they would go grey.
-    const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, emissive: new Color(style.sky.cloudShade).multiplyScalar(0.55) });
-    disposables.push(() => mat.dispose());
-    const litCol = rgb(style.sky.cloudColour);
-    const shadeCol = rgb(style.sky.cloudShade);
-    const cx = (terrain.minX + terrain.maxX) / 2;
-    const cz = (terrain.minZ + terrain.maxZ) / 2;
-    const n = 20;
-    for (let k = 0; k < n; k++) {
-      const g = geo(props.cloud(k, litCol, shadeCol));
-      const m = new Mesh(g, mat);
-      const ang = rnd() * Math.PI * 2;
-      const r = 140 + rnd() * 560;
-      m.position.set(Math.cos(ang) * r, 120 + rnd() * 90, Math.sin(ang) * r);
-      m.scale.set(30 + rnd() * 34, 16 + rnd() * 10, 24 + rnd() * 18);
-      m.rotation.y = rnd() * 6;
-      clouds.add(m);
-    }
-    clouds.position.set(cx, 0, cz);
-    group.add(clouds);
-    animated.push((t) => {
-      clouds.rotation.y = t * 0.004;
-    });
-  }
+  // (The clouds are painted in the sky now: see sky.ts.)
 
   return {
     group,

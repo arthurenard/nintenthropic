@@ -21,7 +21,8 @@ import { seededRandom } from "../../../engine/random";
 import { makePoints } from "../points";
 import { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, type Paint, type Rgb } from "./builder";
 import { DROP_DEPTH } from "./features";
-import { seaMaterial, type Own } from "./materials";
+import type { Own } from "./materials";
+import { oceanMaterial } from "./ocean";
 import type { BakeUniforms } from "./shading";
 import { SEA_LEVEL, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
@@ -80,7 +81,7 @@ function tileTexture(): CanvasTexture {
   return tex;
 }
 
-export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, _bake?: BakeUniforms): Backdrop | null {
+export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, bake: BakeUniforms): Backdrop | null {
   const group = new Group();
   const disposables: { dispose(): void }[] = [];
   const updates: ((t: number) => void)[] = [];
@@ -105,10 +106,14 @@ export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, _ba
       space(group, track, updates, terrain, cx, cz, hx, hz);
       break;
     case "palm": {
-      const sea = seaMaterial(style, own);
+      const sea = oceanMaterial({ deep: "#0a6fa8", shallow: "#35d6c8", alpha: 0.82, shore: 5.5, level: SEA_LEVEL, foam: 1, roughness: 0.07, ripple: 6, anisotropy: 4 }, bake);
+      own.push(sea);
       const geo = track(new PlaneGeometry(7000, 7000, 1, 1));
       geo.rotateX(-Math.PI / 2);
+      const uv = geo.getAttribute("uv");
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * 7000) / 6, (uv.getY(i) * 7000) / 6);
       const mesh = new Mesh(geo, sea.material);
+      mesh.userData.noShadow = true;
       mesh.position.set(cx, SEA_LEVEL, cz);
       mesh.frustumCulled = false;
       mesh.renderOrder = 1;

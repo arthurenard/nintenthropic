@@ -46,14 +46,14 @@ const day: Look = {
   exposure: 1.0,
   bloom: { threshold: 1.0, intensity: 0.5, radius: 0.72 },
   vibrance: 0.35,
-  saturation: 1.1,
+  saturation: 1.0,
   contrast: 0.12,
   shadowTint: [0.96, 0.98, 1.06],
   highlightTint: [1.05, 1.0, 0.94],
   vignette: 0.2,
-  envIntensity: 0.9,
-  fill: 0.5,
-  sun: 1.0,
+  envIntensity: 0.62,
+  fill: 0.35,
+  sun: 1.75,
   shadow: 0.92,
 };
 
