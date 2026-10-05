@@ -1,0 +1,389 @@
+/* Grip Prix's HUD: one layer of HTML per viewport, over the canvas.
+   DESIGN.md's language: the world is the hero, chrome is quiet glass in the
+   corners, the system face with tabular figures, 250 ms eases. Everything
+   scales with --u (1 at a 900 px tall view), set per viewport by hud.ts. */
+
+.gp-hud {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  --gp-glass: rgba(28, 28, 30, 0.72);
+  --gp-hairline: rgba(255, 255, 255, 0.1);
+  --gp-secondary: rgba(235, 235, 245, 0.62);
+  --gp-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --gp-spring: cubic-bezier(0.2, 0.9, 0.1, 1);
+}
+
+.gp-view {
+  position: absolute;
+  overflow: hidden;
+  --u: 1;
+  --m: calc(24px * var(--u));
+}
+
+/* Glass: blurred world behind, a hairline edge. Without the blur (low quality,
+   where blurring a canvas that changes every frame costs too much) it is a
+   little more opaque so it stays legible. */
+.gp-glass {
+  background: rgba(28, 28, 30, 0.8);
+  border: 1px solid var(--gp-hairline);
+  border-radius: calc(16px * var(--u));
+}
+.gp-hud.gp-blur .gp-glass {
+  background: var(--gp-glass);
+  -webkit-backdrop-filter: saturate(180%) blur(calc(16px * var(--u)));
+  backdrop-filter: saturate(180%) blur(calc(16px * var(--u)));
+}
+
+/* Lap and time, top left. */
+.gp-lap {
+  position: absolute;
+  left: var(--m);
+  top: var(--m);
+  padding: calc(9px * var(--u)) calc(16px * var(--u)) calc(10px * var(--u));
+  min-width: calc(112px * var(--u));
+}
+.gp-lap-count {
+  font-size: calc(17px * var(--u));
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.gp-lap-count.gp-pop {
+  animation: gp-pop 260ms var(--gp-spring);
+}
+.gp-lap-time {
+  font-size: calc(22px * var(--u));
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--gp-secondary);
+}
+
+/* The item slot, top centre. */
+.gp-item {
+  position: absolute;
+  left: 50%;
+  top: var(--m);
+  width: calc(76px * var(--u));
+  height: calc(76px * var(--u));
+  margin-left: calc(-38px * var(--u));
+  border-radius: calc(22px * var(--u));
+  display: grid;
+  place-items: center;
+  transition: opacity 250ms var(--gp-ease), transform 250ms var(--gp-ease);
+}
+.gp-item svg {
+  width: calc(40px * var(--u));
+  height: calc(40px * var(--u));
+  fill: #fff;
+  stroke: #fff;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+.gp-item.gp-empty svg {
+  opacity: 0.28;
+  fill: none;
+}
+.gp-item.gp-empty {
+  opacity: 0.6;
+}
+.gp-item.gp-rolling svg {
+  filter: blur(calc(1.2px * var(--u)));
+  animation: gp-roll 90ms linear infinite;
+}
+.gp-item.gp-got {
+  animation: gp-pop 280ms var(--gp-spring);
+}
+.gp-item .gp-uses {
+  position: absolute;
+  right: calc(-6px * var(--u));
+  bottom: calc(-6px * var(--u));
+  min-width: calc(26px * var(--u));
+  padding: calc(2px * var(--u)) calc(7px * var(--u));
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-size: calc(14px * var(--u));
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3;
+}
+.gp-item .gp-uses:empty {
+  display: none;
+}
+
+/* Place, bottom right: large, and quiet apart from its size. */
+.gp-place {
+  position: absolute;
+  right: var(--m);
+  bottom: calc(18px * var(--u));
+  display: flex;
+  align-items: baseline;
+  gap: calc(2px * var(--u));
+  line-height: 0.9;
+  text-shadow: 0 calc(2px * var(--u)) calc(18px * var(--u)) rgba(0, 0, 0, 0.5), 0 0 calc(2px * var(--u)) rgba(0, 0, 0, 0.35);
+}
+.gp-place-n {
+  font-size: calc(112px * var(--u));
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.gp-place-s {
+  font-size: calc(44px * var(--u));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.gp-place.gp-first {
+  color: #ffd60a;
+}
+.gp-place.gp-pop {
+  animation: gp-pop 260ms var(--gp-spring);
+}
+
+/* Banners: Final Lap, Wrong Way. */
+.gp-banner {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--m) + 90px * var(--u));
+  transform: translate(-50%, calc(-12px * var(--u)));
+  padding: calc(10px * var(--u)) calc(22px * var(--u));
+  border-radius: 999px;
+  font-size: calc(22px * var(--u));
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 250ms var(--gp-ease), transform 450ms var(--gp-spring);
+}
+.gp-banner.gp-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.gp-wrong {
+  color: #ff453a;
+}
+.gp-wrong.gp-on {
+  animation: gp-blink 900ms ease-in-out infinite;
+}
+
+/* The countdown, centre. */
+.gp-count {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 22%;
+  text-align: center;
+  font-size: calc(200px * var(--u));
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  text-shadow: 0 calc(4px * var(--u)) calc(30px * var(--u)) rgba(0, 0, 0, 0.45);
+  opacity: 0;
+}
+.gp-count.gp-on {
+  opacity: 1;
+  animation: gp-count 900ms var(--gp-spring) both;
+}
+.gp-count.gp-go {
+  color: #30d158;
+}
+.gp-count.gp-ready {
+  font-size: calc(48px * var(--u));
+  font-weight: 700;
+  top: 30%;
+  opacity: 0.9;
+  animation: none;
+}
+
+/* The place on finishing. */
+.gp-finish {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.92);
+  padding: calc(22px * var(--u)) calc(44px * var(--u)) calc(24px * var(--u));
+  border-radius: calc(28px * var(--u));
+  text-align: center;
+  opacity: 0;
+  transition: opacity 250ms var(--gp-ease), transform 450ms var(--gp-spring);
+}
+.gp-finish.gp-on {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.gp-finish-eyebrow {
+  font-size: calc(12px * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gp-secondary);
+}
+.gp-finish-place {
+  font-size: calc(96px * var(--u));
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+.gp-finish-place small {
+  font-size: 0.42em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.gp-finish-place.gp-first {
+  color: #ffd60a;
+}
+.gp-finish-time {
+  font-size: calc(22px * var(--u));
+  font-weight: 600;
+  color: var(--gp-secondary);
+}
+
+/* The minimap, bottom left. */
+.gp-map {
+  position: absolute;
+  left: var(--m);
+  bottom: var(--m);
+  padding: calc(8px * var(--u));
+  border-radius: calc(16px * var(--u));
+}
+.gp-map canvas {
+  display: block;
+}
+
+/* The free quadrant with three players: the map and the standings. */
+.gp-free {
+  position: absolute;
+  background: #0b0b0d;
+  --u: 1;
+}
+.gp-free-inner {
+  position: absolute;
+  inset: calc(18px * var(--u));
+  display: flex;
+  gap: calc(18px * var(--u));
+  align-items: stretch;
+}
+.gp-free .gp-map {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  flex: 1 1 55%;
+  display: grid;
+  place-items: center;
+  padding: calc(10px * var(--u));
+  min-width: 0;
+}
+.gp-standings {
+  flex: 1 1 45%;
+  min-width: 0;
+  padding: calc(12px * var(--u)) calc(14px * var(--u));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(2px * var(--u));
+}
+.gp-eyebrow {
+  font-size: calc(12px * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gp-secondary);
+  padding: 0 calc(4px * var(--u)) calc(6px * var(--u));
+}
+.gp-row {
+  display: grid;
+  grid-template-columns: calc(28px * var(--u)) calc(14px * var(--u)) 1fr auto;
+  align-items: center;
+  gap: calc(8px * var(--u));
+  padding: calc(4px * var(--u)) calc(4px * var(--u));
+  font-size: calc(15px * var(--u));
+  font-weight: 500;
+  white-space: nowrap;
+}
+.gp-row b {
+  font-weight: 600;
+  color: var(--gp-secondary);
+}
+.gp-row .gp-dot {
+  width: calc(12px * var(--u));
+  height: calc(12px * var(--u));
+  border-radius: 50%;
+}
+.gp-row .gp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gp-row .gp-note {
+  color: var(--gp-secondary);
+}
+.gp-row.gp-local .gp-name {
+  font-weight: 700;
+}
+.gp-row.gp-local .gp-dot {
+  box-shadow: 0 0 0 calc(2px * var(--u)) rgba(255, 255, 255, 0.9);
+}
+
+@keyframes gp-pop {
+  0% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes gp-roll {
+  0% {
+    transform: translateY(calc(-3px * var(--u)));
+  }
+  100% {
+    transform: translateY(calc(3px * var(--u)));
+  }
+}
+@keyframes gp-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes gp-count {
+  0% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.96);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Reduce Motion (the system's or Settings'): fade, never move. */
+:root[data-reduce-motion] .gp-hud *,
+.gp-hud.gp-calm * {
+  animation: none !important;
+}
+:root[data-reduce-motion] .gp-banner,
+:root[data-reduce-motion] .gp-finish,
+.gp-hud.gp-calm .gp-banner,
+.gp-hud.gp-calm .gp-finish {
+  transition: opacity 250ms var(--gp-ease);
+}

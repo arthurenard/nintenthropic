@@ -1,0 +1,10 @@
+/**
+ * Grip Prix's picture (docs/GRIP_PRIX.md, "Render"): `createRaceRenderer`
+ * draws a RaceView into one canvas, a viewport and HUD per player.
+ */
+export { createRaceRenderer } from "./renderer";
+export type { GripRenderer, RaceRendererOptions, RenderStats } from "./renderer";
+export { createProceduralKart } from "./kart";
+export type { KartFactory, KartModel, KartPose } from "./kart";
+export { layoutViews } from "./layout";
+export type { Rect, ViewLayout } from "./layout";
