@@ -18,7 +18,7 @@ describe("beats", () => {
     { start: 4, dur: 1.5, beats: 3, bpm: 120, section: 1, index: 0 },
   ];
 
-  it("lists every beat of every bar, whatever the meter", () => {
+  it("lists every beat of every bar, whatever the metre", () => {
     const beats = beatTimes(bars);
     expect(Array.from(beats)).toEqual([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]);
   });

@@ -34,6 +34,7 @@ const SR = 44100;
 // --- drawing and playing ---------------------------------------------------------------------------------
 
 function paint(canvas: HTMLCanvasElement, picture: Picture): void {
+  canvas.style.display = "block";
   canvas.width = picture.width;
   canvas.height = picture.height;
   const g = canvas.getContext("2d")!;
@@ -188,6 +189,8 @@ export interface SimResult {
   loopsAtEnd: { engines: number; music: string | null };
   /** Milliseconds the audio code took on the page's thread per frame: mean and worst. */
   frameMs: { mean: number; worst: number };
+  /** Loading the race's sounds and music: wall-clock time, and the longest stretch the page's thread was held (a "long task"). */
+  load: { ms: number; longestTaskMs: number };
 }
 
 /**
@@ -203,7 +206,17 @@ export async function simulateRace(options: { seconds?: number; music?: boolean;
   // The engine resumes itself when its context changes state; here this script is in charge of the clock.
   ctx.onstatechange = null;
   const audio = createRaceAudio(engine, { volumes: { music: options.music === false ? 0 : 1, effects: options.effects === false ? 0 : 1 } });
+  const longTasks: number[] = [];
+  const observer = typeof PerformanceObserver === "undefined" ? null : new PerformanceObserver((list) => list.getEntries().forEach((e) => longTasks.push(e.duration)));
+  try {
+    observer?.observe({ entryTypes: ["longtask"] });
+  } catch {
+    // Long-task timing is not offered everywhere.
+  }
+  const loadStart = performance.now();
   await audio.load(options.theme ?? "meadow");
+  const loadMs = performance.now() - loadStart;
+  observer?.disconnect();
   const dt = 1 / 60;
   const frames = Math.floor(seconds / dt) - 1;
   let sum = 0;
@@ -253,6 +266,7 @@ export async function simulateRace(options: { seconds?: number; music?: boolean;
     sampleRate: sr,
     loopsAtEnd: last,
     frameMs: { mean: sum / frames, worst },
+    load: { ms: loadMs, longestTaskMs: Math.max(0, ...longTasks) },
   };
 }
 

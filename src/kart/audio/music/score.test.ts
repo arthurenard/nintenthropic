@@ -123,7 +123,7 @@ describe("timing", () => {
     expect(waltz.duration).toBeCloseTo(3, 9);
   });
 
-  it("lets a section change tempo and meter, and adds the bars up", () => {
+  it("lets a section change tempo and metre, and adds the bars up", () => {
     const score = compile(
       tiny({
         sections: [
