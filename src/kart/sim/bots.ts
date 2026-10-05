@@ -5,15 +5,23 @@
  * A bot follows a racing line that cuts each bend by how tight it is, plus a
  * lane of its own, steering at a point on it a little way ahead (pure
  * pursuit). It carries the speed the line allows, planned once per track
- * (plan.ts: sqrt(a / curvature), braked for in advance), and drifts the long
- * bends. Skill 0..1 scales its top speed, how crisply it steers, and how
- * often it makes a mistake. A gentle rubber band keeps them near the best
- * player.
+ * (plan.ts: sqrt(a / curvature), braked for in advance, slower on ice), and
+ * drifts the long bends. Skill 0..1 scales its top speed, how crisply it
+ * steers, and how often it makes a mistake. A gentle rubber band keeps them
+ * near the best player.
+ *
+ * The track's features: a bot keeps clear of an open edge (further the
+ * gentler it is) and makes no mistakes beside one; takes a ramp straight and,
+ * by skill, tricks off it; looks ahead for hazards and goes round or slows
+ * for them; with a Nitro in hand and the skill for it, cuts across a verge;
+ * and drives off again from where the drone sets it down.
  */
 import { IDLE_INPUT, type DriveInput } from "../contract";
+import { hazardAt } from "../track/hazards";
 import { GO_TICK, forwardSpeed, yawRate } from "./kart";
 import { tableAt } from "./plan";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
+import { isOpen } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
 const B = TUNING.bots;
@@ -78,13 +86,105 @@ function worthUsing(w: World, k: KartState, fwd: number): boolean {
   }
 }
 
+/** The distance along the lap from `k` to the next ramp's lip, or Infinity. */
+function rampAhead(w: World, k: KartState): number {
+  let nearest = Infinity;
+  for (const ramp of w.plan.terrain.ramps) {
+    const d = w.geo.delta(k.s, ramp.s);
+    if (d > -6 && d < nearest) nearest = d;
+  }
+  return nearest;
+}
+
+/**
+ * Hazards: how much a kart that goes at `speed` along `offset` would run into
+ * over the next couple of seconds (metres of overlap with their reach, 0 if
+ * it is clear), their positions read from the race's clock.
+ */
+function hazardTrouble(w: World, k: KartState, now: number, relevant: number[], offset: number, speed: number): number {
+  const { geo } = w;
+  const hazards = w.plan.terrain.hazards;
+  let trouble = 0;
+  for (let t = B.hazardStep; t <= B.hazardLook + 1e-9; t += B.hazardStep) {
+    // It moves over to the offset as fast as a kart can swing across the road.
+    const lateral = k.offset + clamp(offset - k.offset, -B.dodgeRate * t, B.dodgeRate * t);
+    const where = geo.point(k.s + speed * t, lateral);
+    for (const index of relevant) {
+      const hazard = hazards[index]!;
+      const pose = hazardAt(geo, hazard, now + t);
+      if (!pose.active) continue;
+      const clear = hazard.radius + TUNING.kartRadius + B.hazardClear + (1 - k.skill) * 0.8;
+      const gap = Math.hypot(pose.x - where.x, pose.z - where.z);
+      if (gap < clear) trouble += clear - gap;
+    }
+  }
+  return trouble;
+}
+
+/**
+ * Round the hazards that are coming: where to aim (shifted sideways if that
+ * helps) and how much of its speed to keep (a little slower lets a crossing
+ * thing pass). Left alone when nothing is coming or the way is clear. It tries
+ * other places across the road first, at the speed it has, and slows only if no
+ * place is clear.
+ */
+function dodge(w: World, k: KartState, fwd: number, aimOffset: number, limitLeft: number, limitRight: number): { offset: number; speed: number } {
+  const hazards = w.plan.terrain.hazards;
+  if (hazards.length === 0 || k.skill < B.hazardSkill) return { offset: aimOffset, speed: 1 };
+  const { geo } = w;
+  const speed = Math.max(fwd, 8);
+  const reach = speed * B.hazardLook + 24;
+  const relevant: number[] = [];
+  hazards.forEach((hazard, index) => {
+    const ahead = geo.delta(k.s, hazard.at * geo.length);
+    const roams = hazard.motion === "roll" ? (hazard.span ?? 0.05) * geo.length : hazard.motion === "orbit" ? (hazard.span ?? 8) * 2 : 0;
+    if (ahead > -roams - 10 && ahead < reach) relevant.push(index);
+  });
+  if (relevant.length === 0) return { offset: aimOffset, speed: 1 };
+  const now = Math.max(0, (k.t - GO_TICK) / 60);
+  const base = clamp(aimOffset, -limitLeft, limitRight);
+  if (hazardTrouble(w, k, now, relevant, base, speed) === 0) return { offset: aimOffset, speed: 1 };
+  let best = { offset: aimOffset, speed: 1 };
+  let bestCost = Infinity;
+  for (const share of [1, 0.85, 0.7, 0.55]) {
+    for (const shift of [0, 2, -2, 4, -4, 6, -6, 8, -8, 11, -11]) {
+      const offset = clamp(base + shift, -limitLeft, limitRight);
+      const trouble = hazardTrouble(w, k, now, relevant, offset, speed * share);
+      const cost = trouble * 100 + Math.abs(offset - aimOffset) + (1 - share) * 12;
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = { offset, speed: share };
+      }
+    }
+    // A clear place at this speed is good enough.
+    if (bestCost < 100) break;
+  }
+  return best;
+}
+
+/** Does this bot try a trick off this ramp? A lottery weighted by skill, settled by the kart's number and lap. */
+function wantsTrick(k: KartState): boolean {
+  return ((k.id * 7 + k.lap * 3) % 10) / 10 < k.skill * (1 - B.trickBase) + B.trickBase * (k.skill > 0.45 ? 1 : 0);
+}
+
 export function botInput(w: World, k: KartState): DriveInput {
   const m = k.bot;
   if (k.t < GO_TICK) return { ...IDLE_INPUT, itemPresses: m.presses };
 
   const { geo, plan } = w;
+  const terrain = plan.terrain;
   const fwd = forwardSpeed(k);
   let presses = m.presses;
+
+  // In the drone's hook: nothing to do.
+  if (k.rescue > 0) return { steer: 0, throttle: 1, brake: 0, drift: false, itemPresses: presses };
+
+  // In the air off a ramp: wheel straight along the track, a trick for the keen.
+  if (k.flight > 0) {
+    m.drifting = false;
+    const err = wrapAngle(geo.heading(k.s + 12) - k.heading);
+    return { steer: clamp(-err * 2, -1, 1), throttle: 1, brake: 0, drift: k.flight === 2 && k.trick === 0 && !k.prevDrift && wantsTrick(k), itemPresses: presses };
+  }
 
   // Stuck against a barrier or another kart: back up a little, nose toward the way of the track.
   if (m.back > 0) {
@@ -103,10 +203,18 @@ export function botInput(w: World, k: KartState): DriveInput {
   const look = clamp(B.lookBase + B.lookPerSpeed * Math.max(fwd, 0), B.lookMin, B.lookMax);
   const sAim = k.s + look;
   const half = geo.at(sAim).width / 2;
+  // Room to either side, less the usual margin and, beside an open edge, a wider one (wider the gentler the bot).
+  const dropMargin = B.edgeMargin + B.dropMargin + B.dropSlack * (1 - k.skill);
+  const roomLeft = Math.max(0, half - (isOpen(terrain, sAim, -1) ? dropMargin : B.edgeMargin));
+  const roomRight = Math.max(0, half - (isOpen(terrain, sAim, 1) ? dropMargin : B.edgeMargin));
   const room = Math.max(0, half - B.edgeMargin);
   const cut = tableAt(plan, plan.line, sAim);
   const lane = laneOf(k) * B.laneShare * half * (1 - Math.min(1, Math.abs(cut) / Math.max(room, 0.1)));
-  let aimOffset = clamp(cut + lane, -room, room);
+  let aimOffset = clamp(cut + lane, -roomLeft, roomRight);
+
+  // A ramp is taken straight on.
+  const toRamp = rampAhead(w, k);
+  if (toRamp < B.rampStraight + look) aimOffset = clamp(aimOffset, -1.2, 1.2);
 
   // Steer round a slick lying in the way: the aim moves to one side of it.
   if (k.skill > 0.3) {
@@ -114,15 +222,61 @@ export function botInput(w: World, k: KartState): DriveInput {
       const ahead = geo.delta(k.s, slick.s);
       if (ahead > 1 && ahead < look + B.slickNotice && Math.abs(aimOffset - slick.offset) < B.slickClearance) {
         const wider = aimOffset >= slick.offset ? 1 : -1;
-        const side = Math.abs(slick.offset + wider * B.slickClearance) <= room ? wider : -wider;
-        aimOffset = clamp(slick.offset + side * B.slickClearance, -room, room);
+        const side = slick.offset + wider * B.slickClearance <= roomRight && slick.offset + wider * B.slickClearance >= -roomLeft ? wider : -wider;
+        aimOffset = clamp(slick.offset + side * B.slickClearance, -roomLeft, roomRight);
         break;
       }
     }
   }
-  const aim = geo.point(sAim, aimOffset);
-  const aimX = aim.x;
-  const aimZ = aim.z;
+
+  // Hazards coming: round them, or a little slower.
+  const dodgeLeft = Math.max(0, half - (isOpen(terrain, sAim, -1) ? dropMargin : B.hazardEdge));
+  const dodgeRight = Math.max(0, half - (isOpen(terrain, sAim, 1) ? dropMargin : B.hazardEdge));
+  const beforeDodge = aimOffset;
+  const dodging = dodge(w, k, fwd, aimOffset, dodgeLeft, dodgeRight);
+  aimOffset = dodging.offset;
+
+  // Swinging across the road for a hazard: look nearer, so the wheel goes over harder.
+  const swing = Math.abs(dodging.offset - beforeDodge);
+  const sSteer = swing > 1.5 ? k.s + clamp(look * (1 - 0.55 * Math.min(1, swing / 6)), 7, look) : sAim;
+  let aim = geo.point(sSteer, aimOffset);
+  let aimX = aim.x;
+  let aimZ = aim.z;
+
+  // A verge cut: with a Nitro in hand and the nerve, straight across the inside of the bend.
+  let cutting = false;
+  if (m.cut > 0) {
+    const site = plan.cuts[m.cut - 1];
+    if (site) {
+      const u = (k.x - site.ex) * site.dx + (k.z - site.ez) * site.dz;
+      if (u > site.len - 2 || u < -12) {
+        m.cut = 0;
+      } else {
+        const along = clamp(u + 9, 0, site.len);
+        aimX = site.ex + site.dx * along;
+        aimZ = site.ez + site.dz * along;
+        cutting = true;
+      }
+    } else {
+      m.cut = 0;
+    }
+  } else if (k.skill >= B.cutSkill && plan.cuts.length > 0 && k.spin === 0 && k.ground !== "ice") {
+    const nitro = (k.item === "nitro" || k.item === "nitro3") && k.roll === 0;
+    if (nitro || k.boost > ticks(1.0)) {
+      for (let c = 0; c < plan.cuts.length; c++) {
+        const site = plan.cuts[c]!;
+        const ahead = geo.delta(k.s, site.from);
+        if (ahead < 0 || ahead > B.cutNitroBefore + 8) continue;
+        // On the inside already, and not cutting across the road to get there.
+        const sideways = (k.x - site.ex) * -site.dz + (k.z - site.ez) * site.dx;
+        if (Math.abs(sideways) > 5.5) continue;
+        m.cut = c + 1;
+        // The Nitro goes on as it leaves the road.
+        if (nitro && k.boost === 0) presses++;
+        break;
+      }
+    }
+  }
 
   // Pure pursuit: the turn that would bring the kart onto the aim point, as a wheel angle.
   const dx = aimX - k.x;
@@ -135,7 +289,9 @@ export function botInput(w: World, k: KartState): DriveInput {
   const authority = Math.max(0.35, yawRate(1, speed));
   let steer = clamp(-wanted / authority, -1, 1);
 
-  // Mistakes: now and then the bot's attention wanders and the wheel freezes a moment.
+  // Mistakes: now and then the bot's attention wanders and the wheel freezes a moment. (Not beside an open edge.)
+  const beside = isOpen(terrain, k.s, -1) || isOpen(terrain, k.s, 1) || isOpen(terrain, k.s + 25, -1) || isOpen(terrain, k.s + 25, 1);
+  if (m.freeze > 0 && (beside || cutting)) m.freeze = 0;
   if (m.freeze > 0) {
     m.freeze--;
     steer = m.steer;
@@ -148,23 +304,26 @@ export function botInput(w: World, k: KartState): DriveInput {
       const a = w.rng.next();
       const b = w.rng.next();
       m.next = ticks(4 + 6 * b);
-      if (a > 0.35 + 0.65 * k.skill) m.freeze = ticks(0.35 + 0.5 * b);
+      if (a > 0.35 + 0.65 * k.skill && !beside && !cutting) m.freeze = ticks(0.35 + 0.5 * b);
     }
   }
   m.steer = q3(steer);
 
-  // Drifting the long bends.
+  // Drifting the long bends (not on ice, not into a ramp, not across a verge).
   const bendLength = tableAt(plan, plan.bend, k.s + 6);
   const bendTurn = tableAt(plan, plan.curve, k.s + 6);
   const bendLeft = tableAt(plan, plan.bend, k.s + 2);
   if (m.drifting) {
-    const ending = bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0;
+    const ending = bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0 || toRamp < 30 || cutting || k.ground === "ice";
     const failed = k.drift === 0 && k.hop === 0;
     if (ending || failed) m.drifting = false;
   } else if (
     k.skill > 0.35 &&
     k.spin === 0 &&
     !k.offroad &&
+    k.ground !== "ice" &&
+    !cutting &&
+    toRamp > 40 &&
     fwd > B.driftMinSpeed &&
     bendLength >= Math.max(B.driftMinLength, fwd * B.driftMinTime) &&
     Math.abs(steer) > 0.34 &&
@@ -182,7 +341,8 @@ export function botInput(w: World, k: KartState): DriveInput {
   const band = k.band;
   const top = (B.topSpeedLow + (B.topSpeedHigh - B.topSpeedLow) * k.skill) * TUNING.drive.topSpeed * (k.boost > 0 ? TUNING.drive.boostSpeed : 1);
   const planned = tableAt(plan, plan.speed, k.s + Math.max(0, fwd) * B.planAhead) * (0.88 + 0.12 * k.skill);
-  const target = Math.min(top, planned) * band;
+  // On a verge cut it goes flat out; a hazard ahead may ask it to ease.
+  const target = (cutting ? top : Math.min(top, planned)) * band * dodging.speed;
   let throttle = 1;
   let brake = 0;
   if (fwd > target + 1.5 && fwd > 8) {

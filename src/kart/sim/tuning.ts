@@ -301,9 +301,13 @@ export const TUNING = {
     /** A bot takes a ramp straight from this far before it (metres) and keeps its wheel straight in the air. */
     rampStraight: 26,
     /** Hazards: looks this far ahead in time (s) in steps of this, and keeps this far (metres, beyond their size) clear, more for the gentler. */
-    hazardLook: 2.4,
-    hazardStep: 0.2,
-    hazardClear: 1.4,
+    hazardLook: 2.6,
+    /** A kart swings across the road at about this many m/s when dodging. */
+    dodgeRate: 5.5,
+    hazardStep: 0.15,
+    hazardClear: 0.9,
+    /** The nearest to the road's edge a bot goes to get round a hazard (metres in from it). */
+    hazardEdge: 1.4,
     /** Skill under which a bot does not look for hazards at all. */
     hazardSkill: 0.25,
     /** Skill from which a bot takes a verge cut when it holds a Nitro; it uses the Nitro this far (metres) before the cut. */

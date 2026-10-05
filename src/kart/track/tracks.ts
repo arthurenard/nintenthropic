@@ -4,6 +4,7 @@
  * The geometry test checks every track here never passes close to itself.
  */
 import type { TrackDef } from "./geometry";
+import { FIVE_FINGER_CIRCUIT, FUN_FAIR, GLACIER_PASS, KITCHEN_RALLY, STARLIGHT_RIBBON, VOLCANO_RUSH } from "./tracks.generated";
 
 /** A first track: a long start straight, a sweeping hill, an S, a hairpin, and a wide U-turn onto the straight again. About 1 km. */
 export const MEADOW_LOOP: TrackDef = {
@@ -173,7 +174,13 @@ export const HARBOUR_LIGHTS: TrackDef = {
   ],
 };
 
-export const TRACKS: TrackDef[] = [MEADOW_LOOP, CANYON_RUN, HARBOUR_LIGHTS];
+export const TRACKS: TrackDef[] = [MEADOW_LOOP, KITCHEN_RALLY, HARBOUR_LIGHTS, CANYON_RUN, FUN_FAIR, GLACIER_PASS, VOLCANO_RUSH, STARLIGHT_RIBBON, FIVE_FINGER_CIRCUIT];
+
+/** The two cups of four, in the order they are raced; the secret track is in TRACKS (flagged) but in no cup. */
+export const CUPS: { id: string; name: string; tracks: string[] }[] = [
+  { id: "acorn", name: "Acorn Cup", tracks: ["meadow-loop", "kitchen-rally", "harbour-lights", "canyon-run"] },
+  { id: "comet", name: "Comet Cup", tracks: ["fun-fair", "glacier-pass", "volcano-rush", "starlight-ribbon"] },
+];
 
 export function trackById(id: string): TrackDef {
   return TRACKS.find((track) => track.id === id) ?? TRACKS[0]!;
