@@ -18,6 +18,7 @@
  */
 import { IDLE_INPUT, type DriveInput } from "../contract";
 import { hazardAt } from "../track/hazards";
+import { rocketTarget } from "./items";
 import { GO_TICK, forwardSpeed, yawRate } from "./kart";
 import { tableAt } from "./plan";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
@@ -54,18 +55,65 @@ export function rubberBand(w: World, k: KartState): number {
   return 1;
 }
 
+/**
+ * A blast clears the air round a bot: a skyrocket coming down on it, a puck
+ * or seeker that is not its own close by, or (when `crowd`) a slick or decoy
+ * in its path or two karts right beside it. A bot reacts to a threat by
+ * its skill, and a sharp one always does.
+ */
+function blastWanted(w: World, k: KartState, crowd: boolean): boolean {
+  const near = TUNING.items.blast.radius - 1;
+  const reacts = (id: number): boolean => ((id * 7 + k.id * 13) % 10) / 10 < k.skill + 0.15;
+  for (const rocket of w.state.skyrockets) {
+    if (rocketTarget(w, rocket.owner)?.id !== k.id) continue;
+    const at = w.geo.point(rocket.s, 0);
+    if (Math.hypot(at.x - k.x, at.z - k.z) < near && reacts(rocket.id)) return true;
+  }
+  for (const thing of [...w.state.pucks, ...w.state.seekers]) {
+    if (thing.owner !== k.id && Math.hypot(thing.x - k.x, thing.z - k.z) < near && reacts(thing.id)) return true;
+  }
+  if (!crowd) return false;
+  for (const trap of [...w.state.slicks, ...w.state.decoys]) {
+    const r = relative(k, trap.x, trap.z);
+    if (trap.owner !== k.id && r.ahead > 1 && r.ahead < near && Math.abs(r.right) < 2.6 && reacts(trap.id)) return true;
+  }
+  let beside = 0;
+  for (const other of w.state.karts) {
+    if (other.id !== k.id && other.comet === 0 && Math.hypot(other.x - k.x, other.z - k.z) < near - 0.5) beside++;
+  }
+  return beside >= 2;
+}
+
+/** Whether the item the bot holds would spin someone (itself, or whoever it flies or storms to) just before a jump over a gap. */
+function nearGap(w: World, k: KartState): boolean {
+  const harm = k.item === "puck" || k.item === "puck3" || k.item === "seeker" || k.item === "slick" || k.item === "decoy" || k.item === "blast";
+  if (harm) return gapAhead(w, k) < B.itemGapQuiet;
+  if (k.item === "storm") return w.state.karts.some((other) => other.place < k.place && gapAhead(w, other) < B.itemGapQuiet);
+  if (k.item === "skyrocket") {
+    const target = rocketTarget(w, k.id);
+    return target !== undefined && gapAhead(w, target) < B.itemGapQuiet;
+  }
+  return false;
+}
+
+/** How many karts are ahead of `k` in the race. */
+function aheadCount(w: World, k: KartState): number {
+  return w.state.karts.filter((other) => other.place < k.place).length;
+}
+
 /** Whether the item the bot holds is worth using now. */
 function worthUsing(w: World, k: KartState, fwd: number): boolean {
   const plan = w.plan;
   // Nobody is spun out just before a jump over a gap: it would be a fall, not a spin.
-  if ((k.item === "puck" || k.item === "seeker" || k.item === "slick") && gapAhead(w, k) < B.itemGapQuiet) return false;
+  if (nearGap(w, k)) return false;
   switch (k.item) {
     case "nitro":
     case "nitro3": {
       // On a straight: the line ahead allows a fast run.
       return k.boost === 0 && fwd > 10 && tableAt(plan, plan.speed, k.s + 45) > 30;
     }
-    case "puck": {
+    case "puck":
+    case "puck3": {
       for (const other of w.state.karts) {
         if (other.id === k.id) continue;
         const r = relative(k, other.x, other.z);
@@ -75,7 +123,19 @@ function worthUsing(w: World, k: KartState, fwd: number): boolean {
     }
     case "seeker":
       return k.place > 1;
-    case "slick": {
+    // Behind on a straight, with the road to use it.
+    case "comet":
+      return k.place > 1 && k.comet === 0 && fwd > 10 && tableAt(plan, plan.speed, k.s + 45) > 30;
+    // Well down the field, with a pack to cut through.
+    case "storm":
+      return aheadCount(w, k) >= 2;
+    // It flies to the leader, or to the runner-up when the bot leads.
+    case "skyrocket":
+      return w.state.karts.length > 1;
+    case "blast":
+      return blastWanted(w, k, true);
+    case "slick":
+    case "decoy": {
       for (const other of w.state.karts) {
         if (other.id === k.id) continue;
         const r = relative(k, other.x, other.z);
@@ -374,7 +434,9 @@ export function botInput(w: World, k: KartState): DriveInput {
   } else if (k.roll === 0) {
     m.wait++;
     const delay = ticks((B.itemWaitSlow + (B.itemWaitFast - B.itemWaitSlow) * k.skill) * (0.7 + (((k.id * 7 + k.presses * 13) % 10) / 10) * 0.6));
-    if ((m.wait >= delay && worthUsing(w, k, fwd)) || (m.wait >= ticks(B.itemHoldMax) && gapAhead(w, k) >= B.itemGapQuiet)) {
+    // A skyrocket about to burst on it, or a puck about to hit it: no waiting for a blast.
+    const urgent = k.item === "blast" && blastWanted(w, k, false);
+    if (urgent || (m.wait >= delay && worthUsing(w, k, fwd)) || (m.wait >= ticks(B.itemHoldMax) && !nearGap(w, k))) {
       presses++;
       m.wait = 0;
     }

@@ -16,6 +16,7 @@
  *   ?boxes=rows            leave the item boxes to the track's rows, not the source's things
  *   ?karts=6  ?laps=2
  *   ?turntable=1           just the kart model, on a turntable (see turntable.ts)
+ *   ?sim=1                 the real sim for the race (simSource.ts), with ?item=storm &holder=7 &use=12 &drive=1 to show an item
  *
  * Arrows or WASD drive, Space drifts, E or Shift uses the item, 1-4 change the
  * views, R restarts, P pauses. Nothing pressed for a few seconds: the
@@ -27,6 +28,9 @@ import { DEV_TRACKS, devTrackById } from "./devTracks";
 import { createDemoRace, type DemoInput, type RaceViewSource } from "./demo";
 import type { Tier } from "./quality";
 import { createRaceRenderer, type GripRenderer } from "./renderer";
+import { ITEM_ICONS } from "./hud";
+import { SimSource } from "./simSource";
+import type { ItemKind } from "../contract";
 import { runTurntable } from "./turntable";
 
 const params = new URLSearchParams(location.search);
@@ -47,7 +51,17 @@ function startRace(): void {
 
   // The stand-in source. To try the real sim, make `source` an adapter over it: a RaceViewSource whose
   // `step` runs the race on its fixed tick with the keyboard's DriveInput and whose `view` is `race.view()`.
-  const demo = createDemoRace(track, { karts, laps, golden: params.get("golden") === "1" });
+  const useSim = params.get("sim") === "1";
+  const demo: ReturnType<typeof createDemoRace> | SimSource = useSim
+    ? new SimSource(track, {
+        karts,
+        laps,
+        item: (params.get("item") as ItemKind | null) ?? undefined,
+        holder: Number(params.get("holder") ?? 0) || 0,
+        use: params.has("use") ? Number(params.get("use")) : undefined,
+        drive: params.get("drive") === "1",
+      })
+    : createDemoRace(track, { karts, laps, golden: params.get("golden") === "1" });
   demo.boxesAsThings = params.get("boxes") !== "rows";
   const source: RaceViewSource = demo;
   const renderer: GripRenderer = createRaceRenderer(canvas, hudRoot, { quality, theme });
@@ -88,6 +102,9 @@ function startRace(): void {
     demo,
     stats: () => renderer.stats(),
     setViews,
+    setPaused: (p: boolean) => {
+      paused = p;
+    },
     fps: () => (window as unknown as { __fps?: number }).__fps ?? 0,
   };
 
@@ -144,5 +161,22 @@ function startRace(): void {
   });
 }
 
-if (params.get("turntable") === "1") runTurntable(canvas, params);
+/** ?icons=1: every item's HUD slot in a row, for looking at the icons. */
+function iconSheet(): void {
+  const root = document.createElement("div");
+  root.className = "gp-hud";
+  root.style.cssText = "position:fixed;inset:0;background:#5a7a5a;display:flex;flex-wrap:wrap;gap:34px;align-content:center;justify-content:center;pointer-events:none";
+  document.body.appendChild(root);
+  loading.classList.add("done");
+  for (const [kind, body] of Object.entries(ITEM_ICONS)) {
+    const view = document.createElement("div");
+    view.className = "gp-view";
+    view.style.cssText = "position:relative;width:110px;height:120px;--u:1.2";
+    view.innerHTML = '<div class="gp-item gp-glass" data-item="' + kind + '" style="position:relative;left:0;top:0;margin:0"><svg viewBox="0 0 24 24">' + body + '</svg></div><div style="color:#fff;font:600 13px system-ui;text-align:center;margin-top:8px">' + kind + "</div>";
+    root.appendChild(view);
+  }
+}
+
+if (params.get("icons") === "1") iconSheet();
+else if (params.get("turntable") === "1") runTurntable(canvas, params);
 else startRace();

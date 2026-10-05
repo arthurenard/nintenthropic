@@ -41,6 +41,8 @@ describe("the kart pack", () => {
       "kart_spark_blue", "kart_spark_orange", "kart_mini_turbo", "kart_boost_whoosh", "kart_boost_pad", "kart_start_boost", "kart_flood",
       // item boxes and items
       "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_puck_fire", "kart_puck_bounce", "kart_seeker", "kart_slick_splat",
+      // the newer items
+      "kart_comet", "kart_storm", "kart_skyrocket", "kart_skyrocket_burst", "kart_blast", "kart_decoy_pop",
       // hits, bumps, walls
       "kart_hit", "kart_spinout", "kart_bump", "kart_wall_thud", "kart_wall_scrape",
       // countdown, laps, finishing

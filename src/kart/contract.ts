@@ -115,6 +115,9 @@ export interface RaceSetup {
   racers: RacerSetup[];
 }
 
+/** What spun a kart out: an item driven into or hit by, a Comet's touch. */
+export type HitCause = "puck" | "seeker" | "slick" | "decoy" | "storm" | "skyrocket" | "blast" | "comet";
+
 /**
  * Something that happened in the race, for sound, effects, the HUD and the
  * results. A `bump`'s and a `wall`'s strength is 0..1 (a scrape under 3 m/s
@@ -124,7 +127,7 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "countdown"; n: 3 | 2 | 1 | 0 }
   | { type: "pickup"; kart: number; item: ItemKind }
   | { type: "use"; kart: number; item: ItemKind }
-  | { type: "hit"; kart: number; by: number | null; cause: "puck" | "seeker" | "slick" }
+  | { type: "hit"; kart: number; by: number | null; cause: HitCause }
   | { type: "boost"; kart: number; source: "nitro" | "pad" | "drift" | "start"; level: number }
   | { type: "drift-level"; kart: number; level: 1 | 2 }
   | { type: "bump"; a: number; b: number; strength: number }
@@ -146,7 +149,11 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "horn"; kart: number }
   /** Drove into the track's rubber duck (it squeaks and flies off). */
   | { type: "duck"; kart: number }
-  /** An item's effect landing: a storm over the pack, a skyrocket's burst, a blast round a kart. */
+  /**
+   * An item's effect landing, at (x, z): a storm's bolt on `kart` (one event
+   * per kart it zaps), a skyrocket's burst (`kart` is the one it flew to), a
+   * blast round `kart` (the one who used it).
+   */
   | { type: "strike"; kart: number; item: "storm" | "skyrocket" | "blast"; x: number; z: number }
 );
 
@@ -209,13 +216,15 @@ export interface KartView {
 /** Something on the track that is not a kart. */
 export interface ThingView {
   id: number;
-  kind: "box" | "puck" | "seeker" | "slick";
+  kind: "box" | "puck" | "seeker" | "slick" | "decoy" | "skyrocket";
   x: number;
   y: number;
   z: number;
   heading: number;
   /** A box taken and not back yet is hidden (false). */
   active: boolean;
+  /** A skyrocket's: the kart it flies to (its y is then its height in the air). */
+  target?: number;
 }
 
 /** The race as every screen draws it, host or guest. */

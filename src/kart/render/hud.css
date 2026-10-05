@@ -102,6 +102,16 @@
 .gp-item.gp-got {
   animation: gp-pop 280ms var(--gp-spring);
 }
+/* The newer items glow in their own colour. */
+.gp-item[data-item="comet"] svg { fill: #ffd60a; stroke: #ffd60a; }
+.gp-item[data-item="storm"] svg { fill: #b9c8ff; stroke: #b9c8ff; }
+.gp-item[data-item="skyrocket"] svg { fill: #ff6a55; stroke: #ff6a55; }
+.gp-item[data-item="blast"] svg { fill: #64d2ff; stroke: #64d2ff; }
+.gp-item[data-item="decoy"] svg { fill: #ffb340; stroke: #ffb340; }
+.gp-item[data-item="comet"] { box-shadow: 0 0 calc(22px * var(--u)) rgba(255, 214, 10, 0.35); }
+.gp-item[data-item="skyrocket"] { box-shadow: 0 0 calc(22px * var(--u)) rgba(255, 90, 70, 0.35); }
+.gp-item[data-item="blast"] { box-shadow: 0 0 calc(22px * var(--u)) rgba(100, 210, 255, 0.3); }
+
 .gp-item .gp-uses {
   position: absolute;
   right: calc(-6px * var(--u));
@@ -118,6 +128,53 @@
 }
 .gp-item .gp-uses:empty {
   display: none;
+}
+
+/* A skyrocket on its way to this view's kart. */
+.gp-incoming {
+  position: absolute;
+  inset: 0;
+  --near: 0;
+  opacity: 0;
+  transition: opacity 200ms var(--gp-ease);
+  box-shadow: inset 0 0 calc(110px * var(--u)) calc(14px * var(--u)) rgba(255, 59, 48, 0.55);
+}
+.gp-incoming.gp-on {
+  opacity: 1;
+  animation: gp-incoming 520ms ease-in-out infinite;
+}
+.gp-incoming-banner {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--m) + 90px * var(--u));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: calc(12px * var(--u));
+  padding: calc(10px * var(--u)) calc(22px * var(--u)) calc(10px * var(--u)) calc(14px * var(--u));
+  border-radius: 999px;
+  font-size: calc(22px * var(--u));
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: #ff453a;
+}
+.gp-incoming-ring {
+  width: calc(26px * var(--u));
+  height: calc(26px * var(--u));
+  border-radius: 50%;
+  border: calc(3px * var(--u)) solid currentColor;
+  box-shadow: inset 0 0 0 calc(5px * var(--u)) rgba(28, 28, 30, 0.9), inset 0 0 0 calc(9px * var(--u)) currentColor;
+  transform: scale(calc(1.2 - 0.35 * var(--near)));
+}
+@keyframes gp-incoming {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(calc(1.2 + 0.5 * var(--near)));
+  }
 }
 
 /* Place, bottom right: large, and quiet apart from its size. */

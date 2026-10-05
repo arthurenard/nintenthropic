@@ -1,11 +1,12 @@
 /**
  * The item boxes and what comes out of them: the roulette, the odds by place,
- * using an item, and the pucks, seekers and slicks once they are on the
- * track. A hit spins the kart (kart.ts `spinOut`).
+ * using an item, and what is on the track once used: pucks, seekers, slicks,
+ * decoys and skyrockets, and a Comet's touch. A hit spins the kart (kart.ts
+ * `spinOut`); a Comet is never hit.
  */
-import { TICK, type DriveInput, type ItemKind } from "../contract";
+import { TICK, type DriveInput, type HitCause, type ItemKind } from "../contract";
 import { giveBoost, spinOut, type Emit } from "./kart";
-import { ITEM_KINDS, q3, wrapAngle, type KartState, type Puck, type Seeker, type World } from "./state";
+import { ITEM_KINDS, ITEM_USES, q3, wrapAngle, type KartState, type Puck, type Seeker, type Skyrocket, type Slick, type World } from "./state";
 import { barrierDistance, isOpen } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
@@ -14,33 +15,61 @@ const I = TUNING.items;
 /** The odds of each item (in ITEM_KINDS order, as weights) for this place (1 = leading) among this many racers. */
 export function itemOdds(place: number, racers: number): number[] {
   const t = racers > 1 ? (place - 1) / (racers - 1) : 0;
-  return ITEM_KINDS.map((_, i) => I.oddsFirst[i]! + (I.oddsLast[i]! - I.oddsFirst[i]!) * t);
+  // First place to the middle of the pack, then on to the back.
+  const [from, to, u] = t <= 0.5 ? [I.oddsFirst, I.oddsMid, t * 2] : [I.oddsMid, I.oddsLast, t * 2 - 1];
+  return ITEM_KINDS.map((_, i) => from[i]! + (to[i]! - from[i]!) * u);
 }
 
-/** Picks an item from the odds for this place. */
+/** Whether any kart holds this item, or its roulette is about to land on it. */
+function inHand(w: World, kind: ItemKind): boolean {
+  return w.state.karts.some((k) => k.item === kind || (k.roll > 0 && k.rolled === kind));
+}
+
+/**
+ * Picks an item from the odds for this place. A storm is rationed (one in
+ * `cooldown` seconds over the whole race) and so is a skyrocket (one in the
+ * air or in hand at a time).
+ */
 function drawItem(w: World, place: number, racers: number): ItemKind {
   const weights = itemOdds(place, racers);
+  const state = w.state;
+  if ((state.stormAt >= 0 && state.tick - state.stormAt < ticks(I.storm.cooldown)) || inHand(w, "storm")) weights[ITEM_KINDS.indexOf("storm")] = 0;
+  if (state.skyrockets.length > 0 || inHand(w, "skyrocket")) weights[ITEM_KINDS.indexOf("skyrocket")] = 0;
   const total = weights.reduce((sum, weight) => sum + weight, 0);
   let r = w.rng.next() * total;
+  let drawn = ITEM_KINDS[ITEM_KINDS.length - 1]!;
   for (let i = 0; i < weights.length; i++) {
     r -= weights[i]!;
-    if (r < 0) return ITEM_KINDS[i]!;
+    if (r < 0) {
+      drawn = ITEM_KINDS[i]!;
+      break;
+    }
   }
-  return ITEM_KINDS[ITEM_KINDS.length - 1]!;
+  if (drawn === "storm") state.stormAt = state.tick;
+  return drawn;
 }
 
-/** A hit by a puck, a seeker or a slick: spins the victim out, unless it is already spinning. */
-export function hitKart(victim: KartState, by: number | null, cause: "puck" | "seeker" | "slick", emit: Emit): boolean {
-  if (victim.spin > 0 || victim.immune > 0 || victim.rescue > 0) return false;
-  spinOut(victim);
+/** A hit by an item (or a Comet): spins the victim out, unless it is already spinning or untouchable. */
+export function hitKart(victim: KartState, by: number | null, cause: HitCause, emit: Emit, seconds?: number): boolean {
+  if (victim.spin > 0 || victim.immune > 0 || victim.comet > 0 || victim.rescue > 0) return false;
+  spinOut(victim, seconds);
   emit({ type: "hit", kart: victim.id, by, cause });
   return true;
 }
 
+/** The kart a skyrocket flies to: the leader, or the runner-up when the user leads. */
+export function rocketTarget(w: World, owner: number): KartState | undefined {
+  let best: KartState | undefined;
+  for (const k of w.state.karts) {
+    if (k.id !== owner && (best === undefined || k.place < best.place)) best = k;
+  }
+  return best;
+}
+
 /**
  * The driver's item presses: each time the count goes up, the held item is
- * used. When only predicting (`full` false) a nitro is used, since it is the
- * kart's own boost, but nothing is put on the track.
+ * used. When only predicting (`full` false) a nitro or a comet is used, since
+ * they are the kart's own, but nothing is put on the track.
  */
 export function pressItem(w: World, k: KartState, input: DriveInput, full: boolean, emit: Emit): void {
   if (!(input.itemPresses > k.presses) || !Number.isSafeInteger(input.itemPresses)) return;
@@ -62,13 +91,25 @@ export function pressItem(w: World, k: KartState, input: DriveInput, full: boole
     }
     return;
   }
+  if (k.item === "comet") {
+    k.comet = ticks(I.comet.duration);
+    k.zap = 0;
+    k.item = null;
+    k.uses = 0;
+    emit({ type: "use", kart: k.id, item: "comet" });
+    return;
+  }
   if (!full) return;
 
   const item = k.item;
-  k.item = null;
-  k.uses = 0;
+  if (item === "puck3" && k.uses > 1) {
+    k.uses--;
+  } else {
+    k.item = null;
+    k.uses = 0;
+  }
   emit({ type: "use", kart: k.id, item });
-  if (item === "puck") {
+  if (item === "puck" || item === "puck3") {
     const P = I.puck;
     const x = k.x + forwardX * P.spawnAhead;
     const z = k.z + forwardZ * P.spawnAhead;
@@ -97,22 +138,67 @@ export function pressItem(w: World, k: KartState, input: DriveInput, full: boole
       life: ticks(I.seeker.life),
       age: 0,
     });
-  } else {
-    state.slicks.push({
+  } else if (item === "slick" || item === "decoy") {
+    const list = item === "slick" ? state.slicks : state.decoys;
+    const behind = item === "slick" ? I.slick.behind : I.decoy.behind;
+    const trap: Slick = {
       id: state.nextThing++,
       owner: k.id,
-      x: q3(k.x - forwardX * I.slick.behind),
-      z: q3(k.z - forwardZ * I.slick.behind),
+      x: q3(k.x - forwardX * behind),
+      z: q3(k.z - forwardZ * behind),
       s: k.s,
       offset: 0,
       age: 0,
-    });
-    const slick = state.slicks[state.slicks.length - 1]!;
-    const where = w.geo.project(slick.x, slick.z, k.s);
-    slick.s = q3(where.s);
-    slick.offset = q3(where.offset);
-    if (state.slicks.length > I.slick.max) state.slicks.shift();
+    };
+    const where = w.geo.project(trap.x, trap.z, k.s);
+    trap.s = q3(where.s);
+    trap.offset = q3(where.offset);
+    list.push(trap);
+    if (list.length > (item === "slick" ? I.slick.max : I.decoy.max)) list.shift();
+  } else if (item === "storm") {
+    storm(w, k, emit);
+  } else if (item === "skyrocket") {
+    const target = rocketTarget(w, k.id);
+    if (target) {
+      const total = Math.abs(w.geo.delta(k.s, target.s));
+      state.skyrockets.push({ id: state.nextThing++, owner: k.id, s: k.s, total: q3(total), age: 0 });
+    }
+  } else if (item === "blast") {
+    blast(w, k, emit);
   }
+}
+
+/** A storm over the pack: every kart ahead of the user (everyone else when none is) spins briefly and then crawls. A Comet is spared. */
+function storm(w: World, user: KartState, emit: Emit): void {
+  const state = w.state;
+  state.stormAt = state.tick;
+  const others = state.karts.filter((o) => o.id !== user.id && o.finished === null);
+  const ahead = others.filter((o) => o.place < user.place);
+  for (const victim of ahead.length > 0 ? ahead : others) {
+    if (victim.comet > 0) continue;
+    victim.zap = ticks(I.storm.zap);
+    hitKart(victim, user.id, "storm", emit, I.storm.spin);
+    emit({ type: "strike", kart: victim.id, item: "storm", x: victim.x, z: victim.z });
+  }
+}
+
+/** A ring of force round the user: karts close by spin, and what is on the track inside it is destroyed. */
+function blast(w: World, user: KartState, emit: Emit): void {
+  const state = w.state;
+  const reach = I.blast.radius;
+  const inside = (x: number, z: number): boolean => Math.hypot(x - user.x, z - user.z) < reach;
+  for (const other of state.karts) {
+    if (other.id !== user.id && inside(other.x, other.z)) hitKart(other, user.id, "blast", emit);
+  }
+  state.pucks = state.pucks.filter((p) => !inside(p.x, p.z));
+  state.seekers = state.seekers.filter((e) => !inside(e.x, e.z));
+  state.slicks = state.slicks.filter((l) => !inside(l.x, l.z));
+  state.decoys = state.decoys.filter((l) => !inside(l.x, l.z));
+  state.skyrockets = state.skyrockets.filter((r) => {
+    const at = w.geo.point(r.s, 0);
+    return !inside(at.x, at.z);
+  });
+  emit({ type: "strike", kart: user.id, item: "blast", x: user.x, z: user.z });
 }
 
 /**
@@ -131,7 +217,7 @@ function kartHit(w: World, x: number, z: number, reach: number, owner: number, a
   const r2 = reach * reach;
   for (const k of w.state.karts) {
     if (k.id === owner && age < grace) continue;
-    if (k.spin > 0 || k.immune > 0 || k.rescue > 0) continue;
+    if (k.spin > 0 || k.immune > 0 || k.comet > 0 || k.rescue > 0) continue;
     const dx = k.x - x;
     const dz = k.z - z;
     if (dx * dx + dz * dz < r2) return k;
@@ -226,6 +312,58 @@ function stepSeeker(w: World, seeker: Seeker, emit: Emit): boolean {
   return true;
 }
 
+/** A skyrocket flies along the centre line to its target and bursts there: everyone within reach of the burst spins. */
+function stepSkyrocket(w: World, rocket: Skyrocket, emit: Emit): boolean {
+  const R = I.skyrocket;
+  rocket.age++;
+  const target = rocketTarget(w, rocket.owner);
+  if (!target) return false;
+  const gap = w.geo.delta(rocket.s, target.s);
+  const step = R.speed * TICK;
+  rocket.s = q3(w.geo.wrap(rocket.s + Math.max(-step, Math.min(step, gap))));
+  const arrived = Math.abs(gap) < R.reach && rocket.age >= ticks(R.minFlight);
+  if (!arrived && rocket.age < ticks(R.life)) return true;
+  emit({ type: "strike", kart: target.id, item: "skyrocket", x: target.x, z: target.z });
+  const reach2 = R.burstRadius * R.burstRadius;
+  for (const k of w.state.karts) {
+    const dx = k.x - target.x;
+    const dz = k.z - target.z;
+    if (dx * dx + dz * dz < reach2) hitKart(k, rocket.owner, "skyrocket", emit);
+  }
+  return false;
+}
+
+/** A trap (slick, decoy) waits for a kart to drive into it. */
+function stepTrap(w: World, list: Slick[], radius: number, grace: number, cause: HitCause, emit: Emit): Slick[] {
+  const reach = radius * radius;
+  return list.filter((trap) => {
+    trap.age++;
+    for (const k of w.state.karts) {
+      if (k.id === trap.owner && trap.age < grace) continue;
+      if (k.spin > 0 || k.hop > 0 || k.flight > 0 || k.immune > 0 || k.comet > 0 || k.rescue > 0) continue;
+      const dx = k.x - trap.x;
+      const dz = k.z - trap.z;
+      if (dx * dx + dz * dz < reach) {
+        hitKart(k, trap.owner, cause, emit);
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+/** A Comet spins what it touches. */
+function cometTouch(w: World, emit: Emit): void {
+  const reach = TUNING.kartRadius * 2 + 0.2;
+  for (const comet of w.state.karts) {
+    if (comet.comet <= 0 || comet.rescue > 0) continue;
+    for (const other of w.state.karts) {
+      if (other.id === comet.id || other.comet > 0 || Math.abs(other.air - comet.air) > TUNING.ramp.passOver) continue;
+      if (Math.hypot(other.x - comet.x, other.z - comet.z) < reach) hitKart(other, comet.id, "comet", emit);
+    }
+  }
+}
+
 /** The boxes, the roulette, and everything flying or lying about, one tick. */
 export function stepItems(w: World, emit: Emit): void {
   const state = w.state;
@@ -237,7 +375,7 @@ export function stepItems(w: World, emit: Emit): void {
       k.roll--;
       if (k.roll === 0 && k.rolled) {
         k.item = k.rolled;
-        k.uses = k.rolled === "nitro3" ? 3 : 1;
+        k.uses = ITEM_USES[k.rolled] ?? 1;
         k.rolled = null;
       }
     }
@@ -265,25 +403,13 @@ export function stepItems(w: World, emit: Emit): void {
     }
   }
 
-  // Pucks and seekers fly.
+  // Pucks and seekers fly; skyrockets cross the sky.
   state.pucks = state.pucks.filter((puck) => stepPuck(w, puck, emit));
   state.seekers = state.seekers.filter((seeker) => stepSeeker(w, seeker, emit));
+  state.skyrockets = state.skyrockets.filter((rocket) => stepSkyrocket(w, rocket, emit));
 
-  // Slicks wait for a kart.
-  const S = I.slick;
-  const reach = S.radius * S.radius;
-  state.slicks = state.slicks.filter((slick) => {
-    slick.age++;
-    for (const k of karts) {
-      if (k.id === slick.owner && slick.age < ticks(S.ownerGrace)) continue;
-      if (k.spin > 0 || k.hop > 0 || k.flight > 0 || k.immune > 0 || k.rescue > 0) continue;
-      const dx = k.x - slick.x;
-      const dz = k.z - slick.z;
-      if (dx * dx + dz * dz < reach) {
-        hitKart(k, slick.owner, "slick", emit);
-        return false;
-      }
-    }
-    return true;
-  });
+  // Slicks and decoys wait for a kart; a Comet runs into whoever it touches.
+  state.slicks = stepTrap(w, state.slicks, I.slick.radius, ticks(I.slick.ownerGrace), "slick", emit);
+  state.decoys = stepTrap(w, state.decoys, I.decoy.radius, ticks(I.decoy.ownerGrace), "decoy", emit);
+  cometTouch(w, emit);
 }

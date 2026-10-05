@@ -13,7 +13,10 @@ import type { WeightMods } from "../characters";
 import type { Surface, TrackGeometry } from "../track/geometry";
 import type { TrackPlan } from "./plan";
 
-export const ITEM_KINDS: readonly ItemKind[] = ["nitro", "nitro3", "puck", "seeker", "slick"];
+export const ITEM_KINDS: readonly ItemKind[] = ["nitro", "nitro3", "puck", "seeker", "slick", "puck3", "comet", "storm", "skyrocket", "blast", "decoy"];
+
+/** Items that are used more than once: how many uses they come with. */
+export const ITEM_USES: Readonly<Partial<Record<ItemKind, number>>> = { nitro3: 3, puck3: 3 };
 
 /** Millimetres (or milliseconds, or milli-anything). */
 export function q3(v: number): number {
@@ -127,6 +130,10 @@ export interface KartState {
   rescue: number;
   /** Ticks left in which hazards and items pass through the kart. */
   immune: number;
+  /** Ticks left of a Comet (untouchable, faster); it keeps `immune` up meanwhile. */
+  comet: number;
+  /** Ticks left crawling after a storm. */
+  zap: number;
   wrong: number;
   wrongWay: boolean;
 
@@ -193,6 +200,17 @@ export interface Slick {
   age: number;
 }
 
+/** A skyrocket in flight: along the centre line to the leader, then a burst. */
+export interface Skyrocket {
+  id: number;
+  owner: number;
+  /** Where along the track (the lap's s) it flies over. */
+  s: number;
+  /** How far it had to go when it left (for its arc in the picture). */
+  total: number;
+  age: number;
+}
+
 /** Everything that moves and ticks over: this is what a snapshot carries. */
 export interface SimState {
   tick: number;
@@ -202,6 +220,11 @@ export interface SimState {
   pucks: Puck[];
   seekers: Seeker[];
   slicks: Slick[];
+  /** Item boxes that are not (same shape as a slick: it waits for a kart). */
+  decoys: Slick[];
+  skyrockets: Skyrocket[];
+  /** The tick the last storm was drawn or used, or -1: storms are rationed. */
+  stormAt: number;
   nextThing: number;
   nextEvent: number;
   /** The tick the first player finished at, or -1. */

@@ -227,14 +227,33 @@ export const TUNING = {
     /** A hit spins the kart this long, leaves a fifth of its speed, and ends its drift. */
     spin: 1.2,
     spinSpeedKept: 0.2,
+    /** Comet: untouchable (items, hazards, bumps) and faster for a while; what it touches spins. Rough ground does not slow it. */
+    comet: { duration: 6, speed: 1.15 },
+    /** Storm: every kart ahead of the user spins briefly, then crawls at a share of its top speed. At most one per `cooldown` seconds. */
+    storm: { spin: 0.7, zap: 3, speed: 0.6, cooldown: 15 },
     /**
-     * Odds by place, as weights [nitro, nitro3, puck, seeker, slick]: first
-     * place gets the left row, last place the right, the places between a
-     * blend. The leader gets slicks and pucks, the back of the pack nitros and
-     * seekers (and a seeker is no use to the leader, so none).
+     * Skyrocket: flies along the centre line to the leader (or the runner-up
+     * when the user leads) at `speed` m/s, bursts within `reach` m of them but
+     * not before `minFlight` s, or after `life` s at the latest; everyone within `burstRadius` spins.
+     * `height` is how high it arcs in the picture.
      */
-    oddsFirst: [25, 5, 35, 0, 35],
-    oddsLast: [35, 25, 8, 32, 0],
+    skyrocket: { speed: 60, minFlight: 1.0, life: 8, reach: 2.5, burstRadius: 9, height: 14 },
+    /** Blast: an instant ring round the user. */
+    blast: { radius: 7 },
+    /** Decoy: dropped behind like a slick; looks like an item box. */
+    decoy: { behind: 2.5, radius: 1.7, max: 8, ownerGrace: 1.0 },
+    /**
+     * Odds by place, as weights in ITEM_KINDS order [nitro, nitro3, puck,
+     * seeker, slick, puck3, comet, storm, skyrocket, blast, decoy]: first
+     * place gets the first row, a middle place the second, last place the
+     * third, the places between a blend. The leader gets slicks, decoys, pucks
+     * and blasts, the middle pucks, seekers and nitros, the back nitro3s, comets
+     * and, rarely, storms and skyrockets (a seeker is no use to the leader, so
+     * none; a storm or skyrocket only from the back half).
+     */
+    oddsFirst: [18, 0, 20, 0, 22, 0, 0, 0, 0, 16, 24],
+    oddsMid: [18, 8, 20, 14, 4, 14, 4, 0, 0, 6, 8],
+    oddsLast: [12, 24, 4, 16, 0, 6, 22, 8, 8, 0, 0],
   },
 
   race: {

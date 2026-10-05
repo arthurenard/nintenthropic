@@ -212,6 +212,44 @@ export class Effects {
     this.add.emit(x, y, z, this.spread() * 0.4, this.spread() * 0.4, this.spread() * 0.4, 0.32, size, 0.05, [r, g, b, 0.8], [r, g, b, 0], 0, 1.5);
   }
 
+  // ── Items (itemfx.ts draws their shapes; these are the particles) ──────
+  /** A mote of coloured light of hue 0..1 (an item's sparkle). */
+  sparkle(x: number, y: number, z: number, hue: number, size = 0.35, life = 0.5, rise = 1.2, gold = 0): void {
+    const c = hsl(hue);
+    const m = 1 - gold;
+    const rgb: [number, number, number, number] = [c[0] * 2 * m + 2.0 * gold, c[1] * 2 * m + 1.5 * gold, c[2] * 2 * m + 0.35 * gold, 1];
+    this.add.emit(x, y, z, this.spread() * 0.8, rise + this.r() * 0.8, this.spread() * 0.8, life, size, 0.04, rgb, [rgb[0] * 0.5, rgb[1] * 0.5, rgb[2] * 0.5, 0], 0, 1.4);
+  }
+
+  /** A big soft flash of light that fades quickly. */
+  flash(x: number, y: number, z: number, size: number, r: number, g: number, b: number, life = 0.28): void {
+    this.add.emit(x, y, z, 0, 0, 0, life, size, size * 1.5, [r, g, b, 0.9], [r, g, b, 0]);
+  }
+
+  /** A puff of grey smoke that hangs and spreads (a rocket's trail, a burst's cloud). */
+  smoke(x: number, y: number, z: number, size = 0.8, life = 1.3, power = 0.4): void {
+    const shade = 0.78 + this.r() * 0.2;
+    this.norm.emit(x, y, z, this.spread() * power, this.r() * power, this.spread() * power, life, size * 0.5, size * (1.8 + this.r()), [shade, shade, shade + 0.03, 0.75], [shade * 0.7, shade * 0.72, shade * 0.78, 0], 0, 1.3);
+  }
+
+  /** One streak of rain falling. */
+  rain(x: number, y: number, z: number): void {
+    this.add.emit(x, y, z, this.spread() * 0.5, -13 - this.r() * 4, this.spread() * 0.5, 0.42, 0.11, 0.07, [0.55, 0.8, 1.7, 0.85], [0.3, 0.5, 1.2, 0], 0, 0.1);
+  }
+
+  /** Embers thrown outward and up from a point (a burst). */
+  fireworks(x: number, y: number, z: number, count: number, power: number, hot: boolean): void {
+    for (let i = 0; i < count; i++) {
+      const a = this.r() * Math.PI * 2;
+      const up = this.r() * 2 - 0.4;
+      const horizontal = Math.sqrt(Math.max(0.05, 1 - up * up * 0.25));
+      const s = power * (0.5 + this.r() * 0.7);
+      const c = hot ? (this.r() < 0.5 ? ORANGE0 : WHITE0) : BLUE0;
+      const c1 = hot ? (this.r() < 0.5 ? ORANGE1 : WHITE1) : BLUE1;
+      this.add.emit(x, y, z, Math.cos(a) * s * horizontal, up * s * 0.9 + 2, Math.sin(a) * s * horizontal, 0.5 + this.r() * 0.6, 0.3, 0.05, c, c1, -9, 0.7);
+    }
+  }
+
   // ── Events ──────────────────────────────────────────────────────────────
   puff(x: number, y: number, z: number, count: number, size = 1.1, power = 2): void {
     for (let i = 0; i < count; i++) {

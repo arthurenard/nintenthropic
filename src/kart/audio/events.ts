@@ -82,17 +82,47 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
           return keep(order("kart_puck_fire", who, own, { radius: RADIUS.big, rate: 1.28, priority: own ? 3 : 1 }));
         case "slick":
           return keep(order("kart_slick_splat", who, own, { radius: RADIUS.medium, priority: own ? 3 : 1 }));
+        case "puck3":
+          return keep(order("kart_puck_fire", who, own, { radius: RADIUS.big, priority: own ? 3 : 1 }));
+        // A decoy is dropped as quietly as a slick, a little higher: the sound of an item box that is not one comes when it is driven into.
+        case "decoy":
+          return keep(order("kart_slick_splat", who, own, { radius: RADIUS.small, rate: 1.3, volume: 0.7, priority: own ? 2 : 0 }));
+        case "comet":
+          return keep(order("kart_comet", who, own, { radius: RADIUS.medium, priority: own ? 3 : 1 }));
+        case "skyrocket":
+          return keep(order("kart_skyrocket", who, own, { radius: RADIUS.big, priority: own ? 3 : 1 }));
+        // A storm and a blast sound where they strike (below).
+        default:
+          return [];
       }
-      return [];
+    }
+
+    case "strike": {
+      if (event.item === "skyrocket") {
+        // Heard from where it bursts: loud on the kart it fell on.
+        const who = listenerAt(scene, event.x, event.z);
+        if (!who) return [];
+        const near = who.distance < 14;
+        return keep(order("kart_skyrocket_burst", who, false, { radius: RADIUS.big, priority: near ? 3 : 1, ...(near ? { duck: { depth: 0.5, hold: 0.9 } } : {}) }));
+      }
+      const who = hearKart(scene, event.kart);
+      if (!who) return [];
+      const own = !!localOf(scene, event.kart);
+      if (event.item === "blast") return keep(order("kart_blast", who, own, { radius: RADIUS.big, priority: own ? 3 : 1, ...(own ? { duck: { depth: 0.6, hold: 0.5 } } : {}) }));
+      // One bolt on each kart it zaps: the closer ones a moment sooner, so a storm cracks across the pack.
+      return keep(order("kart_storm", who, own, { radius: RADIUS.big, priority: own ? 3 : 1, delay: 0.035 * (event.kart % 4), ...(own ? { duck: { depth: 0.5, hold: 1.0 } } : {}) }));
     }
 
     case "hit": {
       const who = hearKart(scene, event.kart);
       if (!who) return [];
       const own = !!localOf(scene, event.kart);
-      const cue = event.cause === "slick" ? "kart_spinout" : "kart_hit";
-      const o = order(cue, who, own, { radius: RADIUS.big, priority: own ? 3 : 1, ...(own ? { duck: { depth: 0.5, hold: 0.7 } } : {}) });
-      return keep(o);
+      const soft = event.cause === "slick" || event.cause === "decoy" || event.cause === "storm";
+      const cue = soft ? "kart_spinout" : "kart_hit";
+      const o = order(cue, who, own, { radius: RADIUS.big, volume: event.cause === "storm" ? 0.6 : 1, priority: own ? 3 : 1, ...(own ? { duck: { depth: 0.5, hold: 0.7 } } : {}) });
+      // An item box that was not one: its smash, wrong, before the spin.
+      const pop = event.cause === "decoy" ? order("kart_decoy_pop", who, own, { radius: RADIUS.medium, priority: own ? 3 : 1 }) : null;
+      return keep(pop, o);
     }
 
     case "boost": {

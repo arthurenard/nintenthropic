@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RaceEvent, RacerSetup } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
+import { ITEM_KINDS } from "./state";
 import { ARENA, count, patch, race, racers, reach, run, toGo, view } from "./testing";
 
 /** Eight bots of every skill from sharp to gentle. */
@@ -144,7 +145,7 @@ describe("eight bots", () => {
         if (e.type === "hit") hits++;
       }
     }
-    expect([...used].sort()).toEqual(["nitro", "nitro3", "puck", "seeker", "slick"]);
+    expect([...used].sort()).toEqual([...ITEM_KINDS].sort());
     expect(hits).toBeGreaterThan(10);
   });
 
