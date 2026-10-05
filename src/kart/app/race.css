@@ -694,7 +694,9 @@ body[data-screen="race"] {
   align-content: center;
   justify-items: center;
   gap: 20px;
-  padding: var(--margin);
+  /* Clear of the pause button in the corner. */
+  padding: calc(max(16px, env(safe-area-inset-top)) + 56px) var(--margin) var(--margin);
+  overflow-y: auto;
   background: #000;
   text-align: center;
 }
@@ -937,7 +939,7 @@ body[data-screen="race"] {
   .controller-card,
   .controller-cards[data-count="2"] .controller-card {
     flex: none;
-    width: min(320px, 100%);
+    width: min(280px, 100%);
   }
   .standings th,
   .standings td {
