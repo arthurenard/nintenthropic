@@ -51,6 +51,7 @@ import {
   type WheelControl,
   type WheelOptions,
 } from "./services";
+import { silentSound } from "./sound";
 
 const params = (): URLSearchParams => new URLSearchParams(typeof location === "undefined" ? "" : location.search);
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -683,7 +684,7 @@ class FakeSession implements Session {
       code,
       host: hostDevice === "" ? this.device : hostDevice,
       players: [],
-      settings: { track: TRACKS[0]!.id, laps: 3, bots: true, racers: 6 },
+      settings: { track: TRACKS[0]!.id, laps: 3, bots: true, racers: 6, display: "own" },
       phase: "lobby",
       result: null,
       karts: {},
@@ -829,6 +830,18 @@ class FakeSession implements Session {
     this.publish({ phase: "lobby", result: null, karts: {} });
   }
 
+  restart(): void {
+    if (this.role === "guest" || !this.race) return;
+    this.begin();
+  }
+
+  // The stand-in race waits behind the app's own sheet; it has no room-wide pause.
+  pause(): boolean {
+    return false;
+  }
+  resume(): void {}
+  setHandsLost(): void {}
+
   frame(now: number): RaceView | null {
     const race = this.race;
     if (!race || this.state.phase === "results") return null;
@@ -897,5 +910,6 @@ export function createFakeServices(): Services {
     camera: fakeCamera(),
     preview: fakePreview,
     tracks,
+    sound: silentSound(),
   };
 }

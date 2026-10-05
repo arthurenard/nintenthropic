@@ -1,0 +1,210 @@
+/**
+ * The camera and the hand tracker behind the wheel, as the screens' one
+ * `CameraService`. The picture is read in memory and never stored or sent.
+ *
+ * The camera opens once and stays open while the player is in a room; the
+ * tracker is loaded for the number of hands wanted (2 for a wheel, 4 for two
+ * players on one camera) and replaced if that changes. The wheels are built
+ * before the camera is up (the You screen makes them, the wheel check then
+ * starts the camera), so they read from a `SwitchableSource`, which forwards
+ * to whichever tracker is current.
+ *
+ * It also owns the `<video>` the camera plays into. Safari on a phone only
+ * decodes a video that is in the page, inline (never full screen), muted and
+ * started from something the player did; this one is all of those, kept 1 px
+ * in size and invisible, and the wheel's picture is drawn from it.
+ */
+import { CameraError, cameraPermission, openCamera, type Camera } from "../../tracking/camera";
+import { loadTracker, type Tracker } from "../../tracking/tracker";
+import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
+import type { HandFrame, HandSource } from "../../tracking/types";
+import { CameraFailure, type CameraService } from "./services";
+
+/** A hand source that follows whichever real source is current, so a wheel built early keeps working when the tracker is replaced. */
+export class SwitchableSource implements HandSource {
+  private current: HandSource | null = null;
+  private stopCurrent: (() => void) | null = null;
+  private readonly listeners = new Set<(frame: HandFrame) => void>();
+
+  /** Reads from `source` from now on (null: from nothing). */
+  use(source: HandSource | null): void {
+    this.stopCurrent?.();
+    this.stopCurrent = null;
+    this.current = source;
+    if (source) this.stopCurrent = source.subscribe((frame) => this.publish(frame));
+  }
+
+  private publish(frame: HandFrame): void {
+    for (const listener of [...this.listeners]) listener(frame);
+  }
+
+  subscribe(listener: (frame: HandFrame) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  latest(): HandFrame | null {
+    return this.current?.latest() ?? null;
+  }
+}
+
+/** The camera, however it is really made (the tests and the scripted hand stand in). */
+export interface CameraStackOptions {
+  /** Opens the camera into a video. */
+  open?: (video: HTMLVideoElement) => Promise<Camera>;
+  /** Loads the tracker for this many hands. */
+  load?: (hands: number, progress: (fraction: number) => void) => Promise<Tracker>;
+  /** Makes the video the camera plays into (in the page, out of sight, by default). */
+  makeVideo?: () => HTMLVideoElement;
+}
+
+/** The video for the camera: in the page, inline, muted and 1 px, so every browser (an iPhone's most of all) decodes it. */
+function makeVideo(): HTMLVideoElement {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("muted", "");
+  video.setAttribute("aria-hidden", "true");
+  video.tabIndex = -1;
+  Object.assign(video.style, {
+    position: "fixed",
+    left: "0",
+    top: "0",
+    width: "1px",
+    height: "1px",
+    opacity: "0.01",
+    pointerEvents: "none",
+  });
+  document.body.append(video);
+  return video;
+}
+
+export class CameraStack implements CameraService {
+  /** What the wheels read. */
+  readonly source = new SwitchableSource();
+  private video_: HTMLVideoElement | null = null;
+  private camera: Camera | null = null;
+  private tracker: Tracker | null = null;
+  private hands = 0;
+  /** Counts starts and stops, so a start that was overtaken lets go of what it opened. */
+  private generation = 0;
+  private busy: Promise<unknown> = Promise.resolve();
+
+  private reviving = false;
+
+  constructor(private readonly options: CameraStackOptions = {}) {
+    // A phone that took a call or switched apps comes back with its camera cut off: pick it up again.
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => void this.revive());
+  }
+
+  /** Back in the page after being away: if the system took the camera, open it again so the wheel sees hands. */
+  private async revive(): Promise<void> {
+    const camera = this.camera;
+    if (document.visibilityState !== "visible" || !camera || this.reviving) return;
+    if (camera.stream.getVideoTracks().some((track) => track.readyState === "live")) {
+      // Still ours, but the picture may have been paused with the page.
+      void this.video.play().catch(() => {});
+      return;
+    }
+    this.reviving = true;
+    const mine = this.generation;
+    try {
+      const next = await (this.options.open ?? openCamera)(this.video);
+      if (mine !== this.generation) next.stop();
+      else this.camera = next;
+    } catch {
+      // The wheel will say "Show Both Hands"; leaving and coming back asks for the camera afresh.
+    } finally {
+      this.reviving = false;
+    }
+  }
+
+  /** The video the camera plays into (made when first asked for, in the page, out of sight). */
+  get video(): HTMLVideoElement {
+    this.video_ ??= (this.options.makeVideo ?? makeVideo)();
+    return this.video_;
+  }
+
+  /** The picture's width over its height (16:9 until the camera says). */
+  aspect(): number {
+    const video = this.video_;
+    return video && video.videoWidth > 0 && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : 16 / 9;
+  }
+
+  async permission(): Promise<"granted" | "denied" | "prompt"> {
+    const state = await cameraPermission();
+    return state === "granted" || state === "denied" ? state : "prompt";
+  }
+
+  start(hands: 2 | 4, progress?: (fraction: number) => void): Promise<void> {
+    const mine = ++this.generation;
+    // One start at a time: a second call waits for the first, then only changes what differs.
+    const run = this.busy.then(() => this.begin(hands, mine, progress));
+    this.busy = run.catch(() => {});
+    return run;
+  }
+
+  private async begin(hands: 2 | 4, mine: number, progress?: (fraction: number) => void): Promise<void> {
+    // Overtaken (the player left, or asked again): quietly nothing to do, and nothing left open.
+    if (mine !== this.generation) return;
+    try {
+      if (!this.camera) {
+        const open = this.options.open ?? openCamera;
+        const camera = await open(this.video);
+        if (mine !== this.generation) return camera.stop();
+        this.camera = camera;
+      }
+      if (!this.tracker || this.hands !== hands) {
+        this.source.use(null);
+        this.tracker?.dispose();
+        this.tracker = null;
+        const load = this.options.load ?? loadForWheel;
+        const tracker = await load(hands, (fraction) => progress?.(fraction));
+        if (mine !== this.generation) return tracker.dispose();
+        this.tracker = tracker;
+        this.hands = hands;
+        this.source.use(tracker);
+        tracker.start(this.video);
+      }
+    } catch (error) {
+      if (error instanceof CameraFailure) throw error;
+      if (error instanceof CameraError) throw new CameraFailure(error.trouble);
+      // The camera is open; it is the tracker that would not come.
+      console.warn("Grip Prix: the hand tracker could not start.", error);
+      throw new CameraFailure("model");
+    }
+  }
+
+  stop(): void {
+    this.generation++;
+    this.source.use(null);
+    this.tracker?.stop();
+    this.tracker?.dispose();
+    this.tracker = null;
+    this.hands = 0;
+    this.camera?.stop();
+    this.camera = null;
+  }
+}
+
+/** The real tracker for a wheel, with the download's two parts folded into one fraction. */
+async function loadForWheel(hands: number, progress: (fraction: number) => void): Promise<Tracker> {
+  let wasm = 0;
+  let model = 0;
+  const report = () => progress((wasm * WASM_BYTES + model * MODEL_BYTES) / (WASM_BYTES + MODEL_BYTES));
+  return loadTracker(
+    {
+      wasm: (fraction) => {
+        wasm = fraction;
+        report();
+      },
+      model: (fraction) => {
+        model = fraction;
+        report();
+      },
+    },
+    { hands },
+  );
+}

@@ -11,11 +11,14 @@ export type TroubleKind =
   | "host-left"
   | "network"
   | "started"
+  | "version"
   | "camera-denied"
   | "camera-busy"
   | "camera-missing"
   | "camera-insecure"
-  | "load";
+  | "camera-model"
+  | "load"
+  | "webgl";
 
 interface TroubleWords {
   icon: string;
@@ -49,6 +52,11 @@ export const TROUBLES: Record<TroubleKind, TroubleWords> = {
     title: "Race Already Started",
     body: "That race has already started. Ask the host to start another, then join again.",
   },
+  version: {
+    icon: "exclamation",
+    title: "Different Version",
+    body: "The host is running a different version of Grip Prix. Reload this page to get the latest, then try again.",
+  },
   "camera-denied": {
     icon: "camera",
     title: "Camera Is Off",
@@ -68,6 +76,16 @@ export const TROUBLES: Record<TroubleKind, TroubleWords> = {
     icon: "camera",
     title: "Camera Unavailable",
     body: "Your browser only shares the camera with secure pages. Open Grip Prix from its https address.",
+  },
+  "camera-model": {
+    icon: "wifi",
+    title: "Hand Tracking Didn’t Load",
+    body: "The part that sees your hands didn’t arrive. Check your internet connection, then Try Again. Or drive with the keyboard.",
+  },
+  webgl: {
+    icon: "exclamation",
+    title: "Can’t Show the Race",
+    body: "Your browser can’t draw 3D graphics right now. Close other tabs that use graphics, then Try Again.",
   },
   load: {
     icon: "wifi",

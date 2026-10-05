@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: LobbySettings = {
   laps: 3,
   bots: true,
   racers: 6,
+  display: "own",
 };
 
 const CONTROLS: readonly DriverControl["kind"][] = ["wheel", "keyboard", "gamepad"];
@@ -25,7 +26,8 @@ export function mergeSettings(current: LobbySettings, patch: Partial<LobbySettin
   const track = typeof patch.track === "string" && TRACKS.some((t) => t.id === patch.track) ? patch.track : current.track;
   const laps = Number.isFinite(patch.laps) ? clamp(Math.round(patch.laps!), 1, 5) : current.laps;
   const racers = Number.isFinite(patch.racers) ? clamp(Math.round(patch.racers!), 1, maxRacers) : current.racers;
-  return { track, laps, racers, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots };
+  const display = patch.display === "own" || patch.display === "host" ? patch.display : current.display;
+  return { track, laps, racers, display, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots };
 }
 
 /** A name a person typed, cleaned up for display. */
@@ -39,7 +41,7 @@ export function cleanPlayer(player: unknown, fallback: string): WirePlayer {
   return {
     name: cleanName(p.name, fallback),
     control: CONTROLS.includes(p.control as DriverControl["kind"]) ? (p.control as DriverControl["kind"]) : "keyboard",
-    screen: p.screen === "host" ? "host" : "here",
+    screen: p.screen === "host" || p.screen === "auto" ? p.screen : "here",
   };
 }
 
@@ -57,8 +59,36 @@ export function kartsOnScreen(lobby: LobbyState, device: string): number[] {
   return out;
 }
 
+/**
+ * True when the race is watched on the host's screen by someone else's
+ * players (a guest's device that is only a wheel): the host's pause then
+ * has to stop the race for everyone, because they have no screen of their own
+ * to carry on watching.
+ */
+export function sharesHostScreen(lobby: LobbyState): boolean {
+  return lobby.players.some((player) => player.device !== lobby.host && player.screen === lobby.host);
+}
+
+/**
+ * Two friends who both kept the default name (or both typed "Sam") would be
+ * one name on the results and the split screen: the later one is "Sam 2".
+ * `taken` holds the names (lower case) already in the room.
+ */
+function tellApart(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let n = 2; n <= MAX_PLAYERS + 1; n++) {
+    const suffix = ` ${n}`;
+    const tried = `${name.slice(0, 16 - suffix.length).trimEnd()}${suffix}`;
+    if (!taken.has(tried.toLowerCase())) return tried;
+  }
+  return name;
+}
+
 export class Roster {
   private slots: (LobbyPlayer | null)[] = Array.from({ length: MAX_PLAYERS }, () => null);
+  /** What each player asked for (their `screen`), before "auto" is settled by the host's display setting. */
+  private wants: ("here" | "host" | "auto")[] = Array.from({ length: MAX_PLAYERS }, () => "here");
+  private display: LobbySettings["display"] = "own";
 
   constructor(private hostDevice: string) {}
 
@@ -86,15 +116,33 @@ export class Roster {
   /** Gives `device` a seat for `n` players, or none at all if there are not enough. */
   reserve(device: string, n: number): boolean {
     if (this.free < n) return false;
-    this.set(device, Array.from({ length: n }, () => ({ name: "", control: "keyboard" as const, screen: "here" as const })));
+    this.set(device, Array.from({ length: n }, () => ({ name: "", control: "keyboard" as const, screen: "auto" as const })));
     return true;
+  }
+
+  /** Where "auto" players are shown from now on: the host's `display` setting. */
+  setDisplay(display: LobbySettings["display"]): void {
+    if (display === this.display) return;
+    this.display = display;
+    this.slots.forEach((player, slot) => {
+      if (player) this.slots[slot] = { ...player, screen: this.screenFor(player.device, this.wants[slot]!) };
+    });
+  }
+
+  private screenFor(device: string, want: "here" | "host" | "auto"): string {
+    // The host's own players are on the host's screen whatever they asked.
+    if (device === this.hostDevice) return device;
+    const host = want === "auto" ? this.display === "host" : want === "host";
+    return host ? this.hostDevice : device;
   }
 
   /**
    * Makes `device`'s players exactly `wanted`: new seats from the lowest free
    * slot, surplus seats (the highest) given up, the names, controls and
    * screens filled in. If the room cannot seat them all the last are left
-   * out. Readiness is kept for those who stay.
+   * out. Readiness is kept for those who stay. The players come back in this
+   * order, lowest slot first: the Nth of `wanted` holds the Nth of the
+   * device's slots.
    */
   set(device: string, wanted: readonly WirePlayer[]): void {
     const mine = this.slotsOf(device);
@@ -109,15 +157,20 @@ export class Roster {
       mine.push(slot);
       mine.sort((a, b) => a - b);
     }
+    // The names already in the room that are not this device's own to change.
+    const taken = new Set(this.slots.filter((p) => p && p.device !== device).map((p) => p!.name.toLowerCase()));
     mine.forEach((slot, i) => {
       const spec = cleanPlayer(wanted[i], `Player ${slot + 1}`);
       const was = this.slots[slot]!;
+      this.wants[slot] = spec.screen;
+      const name = tellApart(spec.name, taken);
+      taken.add(name.toLowerCase());
       this.slots[slot] = {
         slot,
-        name: spec.name,
+        name,
         colour: PLAYER_COLOURS[slot]!,
         device,
-        screen: spec.screen === "host" ? this.hostDevice : device,
+        screen: this.screenFor(device, spec.screen),
         control: spec.control,
         ready: was.ready,
       };
@@ -126,6 +179,30 @@ export class Roster {
 
   setReady(device: string, ready: boolean): void {
     for (const slot of this.slotsOf(device)) this.slots[slot] = { ...this.slots[slot]!, ready };
+  }
+
+  /** Whose hands are gone (in the order of the device's slots). True when something changed. */
+  setLost(device: string, lost: readonly boolean[]): boolean {
+    let changed = false;
+    this.slotsOf(device).forEach((slot, i) => {
+      const was = this.slots[slot]!;
+      const now = lost[i] === true;
+      if ((was.handsLost === true) === now) return;
+      this.slots[slot] = { ...was, handsLost: now };
+      changed = true;
+    });
+    return changed;
+  }
+
+  /** Nobody's hands are gone (a race is over or about to begin). True when something changed. */
+  clearLost(): boolean {
+    let changed = false;
+    this.slots.forEach((player, slot) => {
+      if (!player?.handsLost) return;
+      this.slots[slot] = { ...player, handsLost: false };
+      changed = true;
+    });
+    return changed;
   }
 
   /** Takes `device` out of the room; returns the slots it held. */

@@ -25,6 +25,10 @@ Get hit and the picture bleeds red at the edges; a few seconds unhurt and you
 recover (in Orbital Decay the glass takes the damage, and a pane that fails
 ends the game). Each game hides **eight secrets**. In High Noon, try the bell.
 
+And a different kind of game, on its own page: **Grip Prix**, a kart racer for
+up to four that you steer with both hands held up like a wheel (see [Play Grip
+Prix with friends](#play-grip-prix-with-friends)).
+
 ## Play
 
 Handy is a website: open it in a current browser on a computer with a webcam,
@@ -102,6 +106,42 @@ much.
 Handy can be installed as an app from the browser (Install Handy, or Add to
 Dock / Add to Home Screen); it opens full screen.
 
+## Play Grip Prix with friends
+
+Grip Prix is a kart racer for up to four, steered with both hands held up like
+a wheel (open them to brake). It lives at `race.html`, and it is built for a
+sofa: the computer on the TV hosts the race, and each friend's phone (or
+laptop), propped up in front of them, is their wheel.
+
+```bash
+npm run party
+```
+
+That serves the game over HTTPS on your local network (a phone's camera only
+works on a secure page, so there is a self-signed certificate: each device
+asks once whether to trust it, and you say yes). The terminal prints the
+address. Then:
+
+1. On the TV's computer, open the `https://localhost:5190/race.html` it shows,
+   choose **Host a Race**, and under **Show the Race** choose **On This
+   Screen**: the race plays in split screen, and everyone else's device
+   becomes just their wheel, with their place, lap and item.
+2. Friends scan the QR code in the lobby (it points at the computer's address
+   on your network, not `127.0.0.1`), or type the four-letter code at **Join a
+   Race**. They pick a name, allow the camera, and hold the wheel level once.
+3. When everyone shows a tick, the host presses **Start Race**. The host's
+   pause stops the race for everyone, and resumes with a 3-2-1.
+
+Everyone on the same Wi-Fi connects directly. The devices find each other
+through a public PeerJS broker, so the network needs internet access (only the
+introduction goes through it; no race data does). Friends in other places can
+join with the code too, though with no relay a strict network may refuse. Press
+**F** in the race for full screen on the TV, and **M** to turn sound off and on
+(the same preference as the arcade's; Music and Effects have their own sliders
+in the pause sheet). Keyboards and gamepads drive as well:
+choose them on the "Who's Driving?" screen. The camera picture never leaves
+the device; only each player's steering goes over the network.
+
 ## Privacy
 
 Hand tracking is Google's MediaPipe, running inside your browser in
@@ -130,6 +170,7 @@ other three games never load it.
 ```bash
 npm install
 npm run dev          # the site, with hot reload
+npm run party        # Grip Prix over HTTPS on your network, for phones (see above)
 npm run typecheck
 npx vitest run       # unit tests
 npx playwright test  # end to end in headless Chrome (muted), with a fake camera

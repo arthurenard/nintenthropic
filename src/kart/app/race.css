@@ -737,12 +737,131 @@ body[data-screen="race"] {
 .controller-words {
   display: grid;
   justify-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 .controller-who {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-size: 20px;
+}
+/* Read from a phone propped up a long arm's length away: the place is the biggest thing on the screen. */
+.controller-place {
+  margin: 0;
+  font-size: clamp(76px, 24vmin, 150px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+.controller-lap {
+  margin: 0;
+  font-size: clamp(24px, 6vmin, 34px);
+}
+.controller-item {
+  margin: 8px 0 0;
+  padding: 10px 24px;
+  border-radius: 999px;
+  font-size: clamp(22px, 5.4vmin, 30px);
+  font-weight: 600;
+  color: var(--label-2);
+}
+.controller-item[data-held="yes"] {
+  color: var(--label);
+  box-shadow: 0 0 0 3px var(--colour, #fff);
+}
+/* The start lights, large, above the wheel: the start boost is won by opening the hands and closing them on 1. */
+.controller-banner {
+  min-height: 1.1em;
+  margin: -8px 0 -4px;
+  font-size: clamp(64px, 20vmin, 120px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+.controller-banner[data-kind="warn"] {
+  color: var(--danger);
+  font-size: clamp(36px, 10vmin, 64px);
+}
+.controller-banner:empty {
+  visibility: hidden;
+}
+
+/* "Show Both Hands", in the viewport of the player whose hands are gone: one pill each, centred high in it. */
+.view-notes {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.view-note {
+  /* The pill sits where its viewport says (left and top are set from it). */
+  position: absolute;
+}
+/* The race stopped for the room, as a console's pause: a veil over every device, then 3-2-1. */
+.pause-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: fade-in 250ms var(--ease) both;
+}
+.pause-veil[hidden] {
+  display: none;
+}
+.pause-card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: min(300px, calc(100vw - 2 * var(--margin)));
+  padding: 28px 40px;
+  border-radius: var(--r-card);
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.pause-count {
+  margin: 0;
+  font-size: clamp(88px, 22vmin, 180px);
+  font-weight: 700;
+  line-height: 1;
+}
+.pause-words:empty {
+  display: none;
+}
+/* The host's "Show the Race" has two long choices: they take the row's width under their name. */
+.row-stack > .segmented {
+  flex: 1 1 320px;
+}
+.row-stack > .segmented [role="radio"] {
+  padding: 0 22px;
+}
+
+/* The speaker: in the corner of every screen but the race, whose pause sheet has its own. */
+#sound-button {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 6;
+}
+body[data-screen="race"] #sound-button {
+  display: none;
+}
+.sound-rows {
+  margin-bottom: 4px;
+}
+.sound-rows .row {
+  gap: 16px;
+}
+.sound-rows .row-label {
+  min-width: 64px;
+}
+.sound-rows .slider:disabled {
+  opacity: 0.4;
 }
 
 /* The pause sheet (a menu, as the arcade's). */
@@ -939,7 +1058,7 @@ body[data-screen="race"] {
   .controller-card,
   .controller-cards[data-count="2"] .controller-card {
     flex: none;
-    width: min(280px, 100%);
+    width: min(358px, 100%);
   }
   .standings th,
   .standings td {
@@ -986,6 +1105,39 @@ body[data-screen="race"] {
   }
   .lost-hands {
     top: 22%;
+  }
+}
+
+/* A phone propped up on its side: the wheel's picture beside the words instead of above them. */
+@media (max-height: 520px) and (min-width: 600px) {
+  .controller {
+    gap: 8px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .controller > .eyebrow {
+    display: none;
+  }
+  .controller-cards {
+    max-width: 720px;
+  }
+  .controller-card,
+  .controller-cards[data-count="2"] .controller-card {
+    flex: 1 1 100%;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 24px;
+  }
+  .controller-card .wheel-view {
+    max-height: calc(100vh - 120px);
+  }
+  .controller-place {
+    font-size: clamp(56px, 26vh, 110px);
+  }
+  .controller-banner {
+    min-height: 0;
+    margin: 0;
+    font-size: clamp(36px, 14vh, 64px);
   }
 }
 

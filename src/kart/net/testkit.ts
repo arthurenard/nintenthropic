@@ -39,7 +39,7 @@ export function scripted(fn: (now: number, n: number) => Partial<DriveInput>, ki
 /** Holds the throttle down and the wheel straight: a driver who just drives. */
 export const straight = () => scripted(() => ({ throttle: 1 }));
 
-export function player(name: string, control: DriverControl = straight(), screen: "here" | "host" = "here"): LocalPlayerSetup {
+export function player(name: string, control: DriverControl = straight(), screen: LocalPlayerSetup["screen"] = "here"): LocalPlayerSetup {
   return { name, control, screen };
 }
 
@@ -87,7 +87,18 @@ export class World {
     };
   }
 
+  /**
+   * A player who sits down is ready, as keyboard players are in the real
+   * screens, so tests need not say so; a test of readiness turns this off.
+   */
+  autoReady = true;
+
   private add<T extends Session>(session: T): T {
+    const seat = session.setLocalPlayers.bind(session);
+    session.setLocalPlayers = (players) => {
+      seat(players);
+      if (this.autoReady) session.setReady(true);
+    };
     this.sessions.push(session);
     this.views.set(session, []);
     return session;
@@ -105,9 +116,9 @@ export class World {
     return this.add(soloSession(this.options(extra)));
   }
 
-  /** Runs `seconds` of frames at 60 Hz; `each` is called after every frame. */
-  async run(seconds: number, each?: (world: World) => void): Promise<void> {
-    const frame = 1000 / 60;
+  /** Runs `seconds` of frames (60 Hz, or `hz`: a faster screen); `each` is called after every frame. */
+  async run(seconds: number, each?: (world: World) => void, hz = 60): Promise<void> {
+    const frame = 1000 / hz;
     const frames = Math.round((seconds * 1000) / frame);
     for (let i = 0; i < frames; i++) {
       this.now += frame;

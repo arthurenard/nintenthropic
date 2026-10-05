@@ -17,7 +17,7 @@ const lobby = (players: LobbyPlayer[], extra: Partial<LobbyState> = {}): LobbySt
   code: "ABCD",
   host: "host",
   players,
-  settings: { track: "meadow-loop", laps: 3, bots: true, racers: 6 },
+  settings: { track: "meadow-loop", laps: 3, bots: true, racers: 6, display: "own" },
   phase: "lobby",
   result: null,
   karts: {},
@@ -85,6 +85,20 @@ describe("the standings", () => {
       ["3rd", "Sam", false, false, false],
     ]);
     expect(rows[2]!.time).toBeNull();
+  });
+
+  it("read their names and colours from the standings themselves, for a screen that never saw the grid", () => {
+    const named: RaceResult = {
+      standings: [
+        { kart: 1, place: 1, time: 48.3, bestLap: 15.9, name: "Bolt", colour: "#FF9F0A" },
+        { kart: 2, place: 2, time: 50.1, bestLap: 16.4, name: "Sam", colour: "#0A84FF" },
+      ],
+    };
+    const rows = standingRows(named, [], room, "phone");
+    expect(rows.map((r) => [r.name, r.colour, r.mine, r.bot])).toEqual([
+      ["Bolt", "#FF9F0A", false, true],
+      ["Sam", "#0A84FF", true, false],
+    ]);
   });
 
   it("never leaves a row blank when the grid is not known", () => {

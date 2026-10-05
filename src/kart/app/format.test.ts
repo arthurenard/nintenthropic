@@ -6,8 +6,10 @@ import {
   cleanName,
   defaultName,
   isCode,
+  itemWords,
   joinParam,
   joinUrl,
+  lanAddress,
   lapLabel,
   lapsLabel,
   normaliseCode,
@@ -128,5 +130,37 @@ describe("names", () => {
     expect(defaultName(2)).toBe(DEFAULT_NAMES[DEFAULT_NAMES.length - 1]);
     // Even with every name taken there is one to give.
     expect(DEFAULT_NAMES).toContain(defaultName(0.3, DEFAULT_NAMES));
+  });
+});
+
+describe("the address a friend scans", () => {
+  const lan = "https://192.168.1.20:5173";
+
+  it("swaps this computer's address for its place on the network", () => {
+    expect(lanAddress("https://localhost:5173/race.html", lan)).toBe("https://192.168.1.20:5173/race.html");
+    expect(lanAddress("https://127.0.0.1:5173/race.html?x=1#y", lan)).toBe("https://192.168.1.20:5173/race.html?x=1#y");
+    expect(lanAddress("http://[::1]:5173/race.html", lan)).toBe("https://192.168.1.20:5173/race.html");
+  });
+
+  it("leaves a real address alone, and does nothing without a network address", () => {
+    expect(lanAddress("https://grip.example/race.html", lan)).toBe("https://grip.example/race.html");
+    expect(lanAddress("https://192.168.1.20:5173/race.html", lan)).toBe("https://192.168.1.20:5173/race.html");
+    expect(lanAddress("https://localhost:5173/race.html", undefined)).toBe("https://localhost:5173/race.html");
+    expect(lanAddress("https://localhost:5173/race.html", "not a url")).toBe("https://localhost:5173/race.html");
+  });
+
+  it("keeps the join link's query when it is built from the swapped address", () => {
+    const page = lanAddress("https://localhost:5173/race.html", lan);
+    expect(joinUrl(page, "ABCD")).toBe("https://192.168.1.20:5173/race.html?join=ABCD");
+  });
+});
+
+describe("items on a screen with no icons", () => {
+  it("names what is held, and says so while the box is still turning", () => {
+    expect(itemWords(null, 0, false)).toBe("No item");
+    expect(itemWords("nitro", 1, false)).toBe("Nitro");
+    expect(itemWords("nitro3", 3, false)).toBe("Triple Nitro ×3");
+    expect(itemWords("slick", 1, false)).toBe("Slick");
+    expect(itemWords("puck", 1, true)).toBe("Picking an item…");
   });
 });

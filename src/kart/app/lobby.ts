@@ -30,6 +30,7 @@ export class LobbyScreen {
   private readonly laps: Segmented<string>;
   private readonly bots: Switch;
   private readonly screen: Segmented<ScreenChoice>;
+  private readonly display: Segmented<"own" | "host">;
   private readonly select = $<HTMLSelectElement>("track-select");
   private readonly start = $<HTMLButtonElement>("lobby-start");
   private qrFor = "";
@@ -47,6 +48,7 @@ export class LobbyScreen {
     this.laps = new Segmented<string>($("pick-laps"), (laps) => hooks.configure({ laps: Number(laps) }));
     this.bots = new Switch($<HTMLButtonElement>("switch-bots"), (bots) => hooks.configure({ bots }));
     this.screen = new Segmented<ScreenChoice>($("pick-screen"), (choice) => hooks.screen(choice));
+    this.display = new Segmented<"own" | "host">($("pick-display"), (display) => hooks.configure({ display }));
     this.select.addEventListener("change", () => hooks.configure({ track: this.select.value }));
     this.select.replaceChildren(
       ...services.tracks.map((track) => {
@@ -110,6 +112,12 @@ export class LobbyScreen {
     // A guest chooses where their race plays; the host chooses the race.
     $("group-screen").hidden = role !== "guest";
     this.screen.value = choice;
+    setText(
+      "foot-screen",
+      lobby.settings.display === "host"
+        ? `${hostName(lobby)} chose to show the race on their screen, in split screen. Choose This Screen to watch it here instead.`
+        : "Your race plays on this device. Choose Big Screen to share the host’s screen with everyone else who does, and use this one only as your wheel.",
+    );
     $("group-race").hidden = !host;
     if (host) this.settings(lobby.settings);
 
@@ -156,6 +164,16 @@ export class LobbyScreen {
     else setText("track-value", tracks.find((track) => track.id === settings.track)?.name ?? tracks[0]?.name ?? "");
     this.laps.value = String(settings.laps);
     this.bots.on = settings.bots;
+    // Where the race shows is for a room: practice has only the one screen.
+    $("row-display").hidden = this.role !== "host";
+    $("foot-display").hidden = this.role !== "host";
+    this.display.value = settings.display ?? "own";
+    setText(
+      "foot-display",
+      settings.display === "host"
+        ? "The race plays on this screen in split screen (press F for full screen). Everyone else’s device becomes their wheel, with their place, lap and item."
+        : "Each player watches the race on their own device. Anyone can choose the big screen for themselves.",
+    );
     setText("foot-bots", settings.bots ? `Bots fill the grid, so there are ${settings.racers} karts in all.` : "Only the players race.");
   }
 

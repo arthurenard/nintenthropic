@@ -51,7 +51,7 @@ import {
 } from "./protocol";
 import { DEFAULT_SETTINGS, kartsOnScreen } from "./roster";
 import { TransportError, type Link, type Transport } from "./transport";
-import { Emitter, clamp, lerp, token, wrapAngle } from "./util";
+import { Emitter, clamp, lerp, lerpAngle, token, wrapAngle } from "./util";
 import { DisplayClock, SnapshotBuffer, cloneView } from "./view";
 
 /**
@@ -98,6 +98,15 @@ interface Own {
   offset: Pose;
   /** When `offset` was set, ms. */
   since: number;
+  /** The prediction at the last two ticks: a frame is drawn between them, so a fast screen glides. */
+  prev: Pose;
+  curr: Pose;
+}
+
+const poseOf = (k: Pose): Pose => ({ x: k.x, y: k.y, z: k.z, heading: k.heading });
+
+function lerpPose(a: Pose, b: Pose, f: number): Pose {
+  return { x: lerp(a.x, b.x, f), y: lerp(a.y, b.y, f), z: lerp(a.z, b.z, f), heading: lerpAngle(a.heading, b.heading, f) };
 }
 
 function placeholderLobby(code: string): LobbyState {
@@ -135,6 +144,10 @@ export class GuestSession implements Session {
   private display = new DisplayClock();
   private feed = new EventFeed();
   private lastFrameNow: number | null = null;
+  /** How far into a tick the frame stood when the host stopped the race: it stays there. */
+  private frozenAt = 0;
+  /** The last hands-lost flags sent, to send only a change. */
+  private lostSent = "";
 
   private rtt_: number | null = null;
   private heard = 0;
@@ -226,12 +239,20 @@ export class GuestSession implements Session {
         return;
       case "reject":
         return this.close(message.reason === "full" ? "full" : message.reason === "started" ? "started" : VERSION_MISMATCH);
-      case "lobby":
+      case "lobby": {
+        const wasPaused = !!this.lobbyState.pause;
         this.lobbyState = message.lobby;
         // The host called the race off, or went back to the lobby.
         if (message.lobby.phase !== "racing" && this.race) this.endRace();
+        // The host stopped the race: hold the picture where it is. Picked up again: the time spent stopped is not owed.
+        if (!wasPaused && message.lobby.pause) this.frozenAt = this.clock.fraction;
+        if (wasPaused && !message.lobby.pause) {
+          this.clock.reset();
+          this.lastFrameNow = null;
+        }
         this.lobbyListeners.emit(this.lobbyState);
         return;
+      }
       case "start":
         this.begin(message.start);
         return;
@@ -292,10 +313,24 @@ export class GuestSession implements Session {
     if (this.open) this.sendToHost({ t: "ready", ready });
   }
 
-  /** Only the host chooses. */
+  /** Whose hands are gone, in the order of `setLocalPlayers`: sent to the host when it changes. */
+  setHandsLost(lost: readonly boolean[]): void {
+    const flags = this.local.map((_, i) => lost[i] === true);
+    const text = flags.map((flag) => (flag ? "1" : "0")).join("");
+    if (text === this.lostSent) return;
+    this.lostSent = text;
+    if (this.open) this.sendToHost({ t: "lost", lost: flags });
+  }
+
+  /** Only the host chooses, and stops and starts the race. */
   configure(_settings: Partial<LobbySettings>): void {}
   start(): void {}
+  restart(): void {}
   backToLobby(): void {}
+  pause(): boolean {
+    return false;
+  }
+  resume(): void {}
 
   // ─── Session: the race ────────────────────────────────────────────────────
 
@@ -311,8 +346,10 @@ export class GuestSession implements Session {
     this.feed.clear();
     this.clock.reset();
     this.lastFrameNow = null;
+    this.lostSent = "";
     // Until the first snapshot there is only the grid as it begins.
-    this.buffer.push(0, cloneView(race.view()));
+    const grid = cloneView(race.view());
+    this.buffer.push(0, grid);
 
     const mine = start.lobby.players.filter((p) => p.device === this.myDevice).map((p) => p.slot);
     this.own.clear();
@@ -320,6 +357,8 @@ export class GuestSession implements Session {
       const index = mine.indexOf(slot);
       if (index < 0) continue;
       const kart = Number(kartText);
+      const placed = grid.karts.find((k) => k.id === kart);
+      const at = placed ? poseOf(placed) : NO_OFFSET;
       this.own.set(kart, {
         kart,
         control: this.local[index]?.control,
@@ -327,6 +366,8 @@ export class GuestSession implements Session {
         history: [],
         offset: NO_OFFSET,
         since: 0,
+        prev: at,
+        curr: at,
       });
     }
     // Only karts drawn here are worth predicting; the others (on the big screen) are just driven.
@@ -354,7 +395,9 @@ export class GuestSession implements Session {
     const newest = this.buffer.newest;
     if (!race || !newest || this.lobbyState.phase !== "racing") return null;
 
-    const dt = this.lastFrameNow === null ? 0 : Math.max(0, now - this.lastFrameNow) / 1000;
+    // While the host has the race stopped, the picture holds still: time does not pass.
+    const stopped = !!this.lobbyState.pause;
+    const dt = this.lastFrameNow === null || stopped ? 0 : Math.max(0, now - this.lastFrameNow) / 1000;
     this.lastFrameNow = now;
     const base = this.buffer.at(this.display.advance(dt, newest.time));
     if (!base) return null;
@@ -363,18 +406,19 @@ export class GuestSession implements Session {
     if (this.shown.length > 0) {
       const predicted = new Map(race.view().karts.map((k) => [k.id, k]));
       const t = this.env.now();
+      const into = stopped ? this.frozenAt : this.clock.fraction;
       karts = base.karts.map((snapshot) => {
         const own = this.own.get(snapshot.id);
         const mine = predicted.get(snapshot.id);
         if (!own || !mine || !this.shown.includes(snapshot.id)) return snapshot;
-        const left = 1 - ease((t - own.since) / CORRECTION_MS);
+        const at = this.drawnAt(own, into, t);
         return {
           // The race's own facts (place, lap, finish) are the host's; how the kart is moving is ours.
           ...snapshot,
-          x: mine.x + own.offset.x * left,
-          y: mine.y + own.offset.y * left,
-          z: mine.z + own.offset.z * left,
-          heading: mine.heading + own.offset.heading * left,
+          x: at.x,
+          y: at.y,
+          z: at.z,
+          heading: at.heading,
           speed: mine.speed,
           steer: mine.steer,
           drift: mine.drift,
@@ -392,6 +436,22 @@ export class GuestSession implements Session {
     return { ...base, karts, events: this.feed.drain() };
   }
 
+  /**
+   * Where one of our karts is drawn: its prediction `into` the way from the
+   * tick before the last to the last (so a 120 Hz screen moves every frame),
+   * plus whatever correction from the host is still easing out.
+   */
+  private drawnAt(own: Own, into: number, t: number): Pose {
+    const at = lerpPose(own.prev, own.curr, into);
+    const left = 1 - ease((t - own.since) / CORRECTION_MS);
+    return {
+      x: at.x + own.offset.x * left,
+      y: at.y + own.offset.y * left,
+      z: at.z + own.offset.z * left,
+      heading: at.heading + own.offset.heading * left,
+    };
+  }
+
   private fallback(): void {
     const now = this.env.now();
     if (pageHidden() || now - this.lastFrameAt > NO_FRAME_MS) this.advance(now, MAX_TICKS_HIDDEN);
@@ -402,6 +462,8 @@ export class GuestSession implements Session {
     this.housekeeping();
     const race = this.race;
     if (!race || this.lobbyState.phase !== "racing") return;
+    // The host has stopped the race: no inputs go out, nothing is predicted.
+    if (this.lobbyState.pause) return;
     const ticks = this.clock.ticks(now, maxTicks);
     for (let i = 0; i < ticks; i++) this.localTick(race, now);
   }
@@ -420,7 +482,15 @@ export class GuestSession implements Session {
       if (this.shown.includes(own.kart)) predicted.set(own.kart, input);
     }
     if (packet.length > 0) this.sendToHost({ t: "in", r: this.raceId, k: packet }, "unreliable");
-    if (predicted.size > 0) race.predict([...predicted.keys()], predicted);
+    if (predicted.size > 0) {
+      race.predict([...predicted.keys()], predicted);
+      for (const k of race.view().karts) {
+        const own = this.own.get(k.id);
+        if (!own || !predicted.has(k.id)) continue;
+        own.prev = own.curr;
+        own.curr = poseOf(k);
+      }
+    }
   }
 
   /** The host's snapshot: take its word, replay what it has not heard yet, and ease out the difference. */
@@ -433,19 +503,8 @@ export class GuestSession implements Session {
     const shown = this.shown.map((k) => this.own.get(k)!);
     // Where each of our karts is being drawn right now.
     const before = new Map<number, Pose>();
-    if (shown.length > 0) {
-      for (const k of race.view().karts) {
-        const own = this.own.get(k.id);
-        if (!own || !this.shown.includes(k.id)) continue;
-        const left = 1 - ease((t - own.since) / CORRECTION_MS);
-        before.set(k.id, {
-          x: k.x + own.offset.x * left,
-          y: k.y + own.offset.y * left,
-          z: k.z + own.offset.z * left,
-          heading: k.heading + own.offset.heading * left,
-        });
-      }
-    }
+    const into = this.lobbyState.pause ? this.frozenAt : this.clock.fraction;
+    for (const own of shown) before.set(own.kart, this.drawnAt(own, into, t));
 
     race.restore(state);
     this.buffer.push(state.tick, cloneView(race.view()));
@@ -471,14 +530,21 @@ export class GuestSession implements Session {
       const own = this.own.get(k.id);
       const was = before.get(k.id);
       if (!own || !was) continue;
-      const offset: Pose = {
-        x: was.x - k.x,
-        y: was.y - k.y,
-        z: was.z - k.z,
-        heading: wrapAngle(was.heading - k.heading),
-      };
-      own.offset = Math.hypot(offset.x, offset.z) > SNAP_DISTANCE ? NO_OFFSET : offset;
+      const now = poseOf(k);
+      const moved = { x: now.x - own.curr.x, y: now.y - own.curr.y, z: now.z - own.curr.z, heading: wrapAngle(now.heading - own.curr.heading) };
       own.since = t;
+      if (Math.hypot(moved.x, moved.z) > SNAP_DISTANCE) {
+        // A teleport or a respawn, not a drift: jump, do not glide.
+        own.prev = own.curr = now;
+        own.offset = NO_OFFSET;
+        continue;
+      }
+      // The host's word moves where the kart is; the picture it was gliding through moves with it, so the
+      // motion carries on unbroken, and what is left between where it was drawn and where it is now eases out.
+      own.prev = { x: own.prev.x + moved.x, y: own.prev.y + moved.y, z: own.prev.z + moved.z, heading: own.prev.heading + moved.heading };
+      own.curr = now;
+      const at = lerpPose(own.prev, own.curr, into);
+      own.offset = { x: was.x - at.x, y: was.y - at.y, z: was.z - at.z, heading: wrapAngle(was.heading - at.heading) };
     }
   }
 
