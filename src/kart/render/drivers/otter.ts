@@ -35,8 +35,9 @@ export function buildOtter(l: Look): DriverBuild {
   }
 
   const tail = new MeshBuilder();
-  orb(tail, [0, 0, -0.17], [0.1, 0.06, 0.2], fur(FUR), 1, [0, -0.15, 0]);
-  orb(tail, [0, 0.05, -0.4], [0.08, 0.045, 0.18], fur(FUR), 1, [0, -0.35, 0]);
+  orb(tail, [0, 0, -0.1], [0.115, 0.08, 0.17], fur(FUR), 1);
+  orb(tail, [0, 0.02, -0.28], [0.1, 0.065, 0.17], fur(FUR), 1);
+  orb(tail, [0, 0.06, -0.44], [0.075, 0.05, 0.13], fur(FUR), 1);
 
   return {
     torso: t.build(),

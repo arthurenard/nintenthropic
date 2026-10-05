@@ -30,11 +30,12 @@ export function buildFrog(l: Look): DriverBuild {
     eye(h, sx * 0.15, 0.165, 0.185, 0.055);
     for (let k = 0; k < 10; k++) {
       const a = (k / 10) * TAU;
-      h.add(shapes.box(), xf(sx * 0.15 + Math.cos(a) * 0.125, 0.165 + Math.sin(a) * 0.125, 0.15, 0.065, 0.065, 0.1, 0, 0, a + Math.PI / 2), { bottom: l.low, top: l.top });
+      h.add(shapes.box(), xf(sx * 0.15 + Math.cos(a) * 0.125, 0.165 + Math.sin(a) * 0.125, 0.15, 0.09, 0.034, 0.1, 0, 0, a + Math.PI / 2), { bottom: l.low, top: l.top });
     }
   }
   headBand(h, head, 0.1, { bottom: l.low, top: l.top }, 0.075, 1.045);
-  h.box(0, 0.115, 0.0, 0.085, 0.08, 0.6, l.kart);
+  // A strap over the crown, flush with the head.
+  h.box(0, 0.152, -0.02, 0.07, 0.024, 0.3, l.kart, 0, 0.0);
 
   const sac = new MeshBuilder();
   orb(sac, [0, 0, 0], [0.12, 0.075, 0.1], fur(BELLY), 1);
