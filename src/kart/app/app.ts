@@ -104,7 +104,14 @@ export class KartApp {
 
   boot(): void {
     // The page's colours come from the game's own light (games/index.ts), as the arcade's card does.
-    document.documentElement.style.setProperty("--world", backdropCss(GRIP_PRIX.backdrop));
+    // The start screen draws the meadow and the sun's glow apart, so the glow can lie over the hills and road too.
+    const light = GRIP_PRIX.backdrop;
+    const style = document.documentElement.style;
+    style.setProperty("--world", backdropCss(light));
+    if (light) {
+      style.setProperty("--meadow", backdropCss({ sky: light.sky }));
+      style.setProperty("--glow", backdropCss({ sky: [["transparent", 0]], glow: light.glow }));
+    }
     // Reduced motion, the player's own choice in the arcade's Settings or else the system's.
     const motion = matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => document.documentElement.toggleAttribute("data-reduce-motion", loadPreferences().reduceMotion ?? motion.matches);

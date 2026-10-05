@@ -858,22 +858,35 @@ class FakeSession implements Session {
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const randomCode = (): string => Array.from({ length: 4 }, () => LETTERS[Math.floor(Math.random() * LETTERS.length)]).join("");
 
+/** What the screens last asked a session maker for, so a test can see that `?net=local` arrived. */
+declare global {
+  interface Window {
+    __fakeSessionOptions?: { how: "host" | "join" | "solo"; options: SessionOptions };
+  }
+}
+
 export function createFakeServices(): Services {
   // A second track on request (?tracks=2), to see the lobby's menu.
   const tracks = TRACKS.map(({ id, name }) => ({ id, name }));
   if (params().get("tracks") === "2") tracks.push({ id: "canyon-run", name: "Canyon Run" });
+  const asked = (how: "host" | "join" | "solo", options: SessionOptions) => {
+    window.__fakeSessionOptions = { how, options };
+  };
   return {
-    async host(_options: SessionOptions) {
+    async host(options: SessionOptions) {
+      asked("host", options);
       await wait(200);
       return new FakeSession("host", randomCode(), "");
     },
-    async join(code: string, _options: SessionOptions) {
+    async join(code: string, options: SessionOptions) {
+      asked("join", options);
       await wait(350);
       if (code === "ZZZZ") throw new SessionFailure("not-found");
       if (code === "FULL") throw new SessionFailure("full");
       return new FakeSession("guest", code, "device-maya");
     },
-    async solo(_options: SessionOptions) {
+    async solo(options: SessionOptions) {
+      asked("solo", options);
       return new FakeSession("solo", null, "");
     },
     renderer: (canvas, hudRoot) => new FakeRenderer(canvas, hudRoot),

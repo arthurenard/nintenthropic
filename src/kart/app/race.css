@@ -7,6 +7,9 @@
 :root {
   /* The game's light, set by the page from games/index.ts (GRIP_PRIX.backdrop). */
   --world: linear-gradient(180deg, #2f7fe0 0%, #bfe6fb 62%, #4aa83f 63%, #2f7f35 100%);
+  /* The same without the sun's glow, and the glow alone (the start screen lays the glow over its scenery). */
+  --meadow: var(--world);
+  --glow: none;
 }
 
 .screen {
@@ -37,8 +40,13 @@ body[data-screen="race"] {
   min-height: 100dvh;
   padding: var(--margin);
   overflow: hidden;
-  background: var(--world);
+  background: var(--meadow);
   isolation: isolate;
+}
+.start-glow {
+  position: absolute;
+  inset: 0;
+  background: var(--glow);
 }
 .start-world {
   position: absolute;
@@ -46,44 +54,65 @@ body[data-screen="race"] {
   z-index: -1;
   pointer-events: none;
 }
-/* Hills stand on the horizon, which the meadow's light puts at 62%; the road
-   runs from there to the viewer. */
+/* Hills stand on the horizon, which the meadow's light puts at 62% (their feet melt into the grass);
+   the road runs from there to the viewer in perspective, its kerbs striped red and white. */
 .start-hills {
   position: absolute;
   left: 0;
   width: 100%;
-  top: 62.4%;
+  top: 63%;
   height: clamp(110px, 24vh, 240px);
   transform: translateY(-100%);
-}
-.hill-far {
-  fill: #86c98f;
-}
-.hill-near {
-  fill: #6dc267;
 }
 .start-road {
   position: absolute;
   left: 0;
-  top: 62.2%;
+  top: 62.6%;
   width: 100%;
-  height: 37.8%;
+  height: 37.4%;
 }
-.road-verge {
-  fill: #3f9a3b;
+/* The page's line icons are stroked (base.css); the scenery is filled shapes. */
+.start-world path {
+  stroke: none;
 }
-.road-kerb {
-  fill: #f4f5f7;
+.road-base,
+.road-kerb-white {
+  fill: #f6f7f9;
+}
+.road-kerb-red {
+  fill: var(--danger);
 }
 .road-asphalt {
-  fill: #59616e;
+  fill: url(#road-fade);
 }
 .road-line {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.85);
-  stroke-width: 0.9;
-  stroke-dasharray: 5 6;
-  vector-effect: non-scaling-stroke;
+  fill: rgba(255, 255, 255, 0.9);
+}
+/* Soft clouds, high in the sky. */
+.cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+}
+.cloud.c1 {
+  left: 6%;
+  top: 12%;
+  width: 28vw;
+  height: 7vw;
+}
+.cloud.c2 {
+  left: 38%;
+  top: 6%;
+  width: 22vw;
+  height: 5vw;
+  opacity: 0.8;
+}
+.cloud.c3 {
+  right: 4%;
+  top: 33%;
+  width: 24vw;
+  height: 6vw;
+  opacity: 0.7;
 }
 .start-main {
   display: grid;
@@ -137,7 +166,7 @@ body[data-screen="race"] {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  color: var(--label-3);
+  color: var(--label-2);
 }
 .code-field:hover:not(:disabled),
 .code-field:focus {
@@ -194,7 +223,8 @@ body[data-screen="race"] {
   inset: 0 0 auto 0;
   z-index: -1;
   height: min(70vh, 560px);
-  background: var(--world);
+  /* Only the sky of the meadow's light: stretched so its horizon is below the fade. */
+  background: var(--world) top / 100% 170% no-repeat;
   opacity: 0.3;
   -webkit-mask-image: linear-gradient(#000, transparent);
   mask-image: linear-gradient(#000, transparent);
@@ -283,6 +313,7 @@ body[data-screen="race"] {
   gap: 28px;
   justify-items: center;
   align-content: start;
+  margin-block: auto;
   max-width: calc(760px + 2 * var(--margin));
   text-align: center;
 }
@@ -505,8 +536,12 @@ body[data-screen="race"] {
   height: 24px;
   stroke-width: 2.2;
 }
-#lobby-start {
-  max-width: 380px;
+.lobby-main .page-actions {
+  justify-items: stretch;
+  text-align: left;
+}
+#lobby-start-hint {
+  padding: 0 16px;
 }
 #lobby-start-hint:empty {
   display: none;
@@ -646,7 +681,7 @@ body[data-screen="race"] {
   position: absolute;
   inset: 0 0 auto 0;
   height: min(60vh, 480px);
-  background: var(--world);
+  background: var(--world) top / 100% 170% no-repeat;
   opacity: 0.3;
   -webkit-mask-image: linear-gradient(#000, transparent);
   mask-image: linear-gradient(#000, transparent);
@@ -762,7 +797,8 @@ body[data-screen="race"] {
   gap: 28px;
   align-content: start;
   max-width: calc(640px + 2 * var(--margin));
-  padding-top: 32px;
+  margin-block: auto;
+  padding-top: var(--margin);
 }
 .standings {
   width: 100%;
@@ -775,6 +811,7 @@ body[data-screen="race"] {
 }
 .standings th {
   padding: 12px 16px 6px;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -841,6 +878,15 @@ body[data-screen="race"] {
     grid-template-columns: minmax(0, 580px);
     justify-content: center;
     gap: 28px;
+  }
+  /* Start stays in reach at the foot of a long lobby. */
+  .lobby-main .page-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 calc(-1 * var(--margin));
+    padding: 24px var(--margin) calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(transparent, #000 36%);
   }
   .join-card {
     position: static;
