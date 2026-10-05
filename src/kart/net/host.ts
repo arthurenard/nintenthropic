@@ -34,7 +34,9 @@ import {
   type Session,
   type SessionClosed,
 } from "../contract";
+import { GP_RESULTS_MS, GP_STANDINGS_MS, GrandPrixRun, cupById } from "../grandprix";
 import { TrackGeometry } from "../track/geometry";
+import { raceTrack } from "../track/mirror";
 import { Autopilot } from "./autopilot";
 import { TickClock } from "./clock";
 import { makeCode } from "./codes";
@@ -110,6 +112,9 @@ export class HostSession implements Session {
   private settings: LobbySettings = { ...DEFAULT_SETTINGS };
   private phase: LobbyState["phase"] = "lobby";
   private result: RaceResult | null = null;
+  /** A Grand Prix under way (through its podium), and when (ms) its results or standings came up. */
+  private gp: GrandPrixRun | null = null;
+  private gpSince = 0;
   private kartSlots: Record<number, number> = {};
   private code: string | null = null;
   private lobbyCache: LobbyState | null = null;
@@ -244,7 +249,8 @@ export class HostSession implements Session {
       link.close();
     };
     if (hello.v !== PROTOCOL_VERSION) return refuse("version");
-    if (this.phase === "racing") return refuse("started");
+    // A race under way, or a Grand Prix between its races: the cup's points belong to the players who began it.
+    if (this.phase === "racing" || this.gp) return refuse("started");
     const want = clamp(Math.round(Number(hello.n) || 1), 1, 2);
     let device = typeof hello.device === "string" ? hello.device.slice(0, 32) : "";
     if (!device || device === this.device || this.guests.has(device)) device = `d-${token(this.env.random)}`;
@@ -306,6 +312,8 @@ export class HostSession implements Session {
     this.links.delete(guest.link);
     guest.link.close();
     const slots = this.roster.remove(device);
+    // Their points stay in the cup, and their kart is a bot from the next race on.
+    this.gp?.leave(slots);
     if (this.phase === "racing" && this.race) {
       for (const [kartText, slot] of Object.entries(this.kartSlots)) {
         if (!slots.includes(slot)) continue;
@@ -330,6 +338,7 @@ export class HostSession implements Session {
       players: this.roster.players(),
       settings: { ...this.settings },
       phase: this.phase,
+      grandPrix: this.gp ? this.gp.state() : null,
       result: this.result,
       karts: { ...this.kartSlots },
       race: this.raceId,
@@ -375,14 +384,16 @@ export class HostSession implements Session {
   }
 
   configure(settings: Partial<LobbySettings>): void {
-    if (this.phase === "racing") return;
+    // A cup is run on the settings it began with.
+    if (this.phase === "racing" || this.gp) return;
     this.settings = mergeSettings(this.settings, settings, MAX_RACERS);
     this.roster.setDisplay(this.settings.display);
     this.changed();
   }
 
   start(): void {
-    if (this.closedWith || this.phase === "racing") return;
+    // A Grand Prix goes on by itself (or by `next`), not by a start.
+    if (this.closedWith || this.phase === "racing" || this.gp) return;
     const players = this.roster.players();
     // Everyone's wheel has to be level and seen: nobody is left on the grid waiting for their hands.
     if (players.length === 0 || !players.every((player) => player.ready)) return;
@@ -390,15 +401,73 @@ export class HostSession implements Session {
   }
 
   restart(): void {
-    if (this.closedWith || (this.phase !== "racing" && this.phase !== "results")) return;
+    if (this.closedWith) return;
     const players = this.roster.players();
-    if (players.length > 0) this.launch(players);
+    if (players.length === 0) return;
+    if (this.gp) {
+      // On the podium: the same cup again from its first race. In a race: that race again. Between races: nothing to redo.
+      if (this.phase === "podium") this.gp = null;
+      else if (this.phase !== "racing") return;
+      this.launch(players);
+      return;
+    }
+    if (this.phase !== "racing" && this.phase !== "results") return;
+    this.launch(players);
+  }
+
+  /** The host's: moves a Grand Prix on from its results to the standings, and from them to the next race or the podium. */
+  next(): void {
+    const gp = this.gp;
+    if (this.closedWith || !gp) return;
+    if (this.phase === "results") {
+      this.phase = "standings";
+      this.gpSince = this.env.now();
+      this.changed();
+    } else if (this.phase === "standings") {
+      if (gp.last) {
+        this.phase = "podium";
+        this.gpSince = this.env.now();
+        this.changed();
+      } else {
+        const players = this.roster.players();
+        if (players.length === 0) return;
+        gp.advance();
+        this.launch(players);
+      }
+    }
+  }
+
+  /** The Grand Prix's own clock: results and standings give way by themselves after a few seconds. */
+  private gpTick(): void {
+    if (!this.gp) return;
+    const waited = this.env.now() - this.gpSince;
+    if ((this.phase === "results" && waited >= GP_RESULTS_MS) || (this.phase === "standings" && waited >= GP_STANDINGS_MS)) this.next();
+  }
+
+  /** The grid for the race about to start, and the Grand Prix it belongs to (begun here on a cup's first race). */
+  private grid(players: LobbyState["players"], seed: number): ReturnType<typeof buildSetup> {
+    if (this.settings.mode !== "grand-prix" && !this.gp) return buildSetup(players, this.settings, seed);
+    if (!this.gp || this.gp.race === 0) {
+      // A cup's first race (or its restart): the room's grid, which the cup then keeps.
+      const cup = this.gp?.cup ?? cupById(this.settings.cup).id;
+      const track = raceTrack(cupById(cup).tracks[0]!, this.settings.mirror);
+      const built = buildSetup(players, this.settings, seed, track);
+      this.gp = GrandPrixRun.begin(cup, built.setup.racers);
+      return built;
+    }
+    // The cup's later races: the players as they are now, every bot as it was, the leader on pole.
+    const track = raceTrack(this.gp.track, this.settings.mirror);
+    const here = buildSetup(players, { ...this.settings, bots: false }, seed, track);
+    const racers = this.gp.grid(here.setup.racers);
+    const karts: Record<number, number> = {};
+    for (const racer of racers) if (racer.player !== null) karts[racer.id] = racer.player;
+    return { setup: { ...here.setup, racers }, karts };
   }
 
   /** Builds the grid and the race and tells everyone to begin: a first start, a race again, a restart. */
   private launch(players: LobbyState["players"]): void {
     const seed = Math.floor(this.env.random() * 2 ** 32) >>> 0;
-    const { setup, karts } = buildSetup(players, this.settings, seed);
+    const { setup, karts } = this.grid(players, seed);
     this.race = this.env.createRace(setup);
     this.raceId = seed;
     this.geometry = null;
@@ -435,7 +504,14 @@ export class HostSession implements Session {
     const lobby = this.lobby();
     this.broadcast({
       t: "start",
-      start: { track: this.settings.track, laps: setup.laps, seed, racers: setup.racers, lobby },
+      start: {
+        track: this.gp ? this.gp.track : this.settings.track,
+        mirror: this.settings.mirror === true,
+        laps: setup.laps,
+        seed,
+        racers: setup.racers,
+        lobby,
+      },
     });
     this.lobbyListeners.emit(lobby);
   }
@@ -444,6 +520,7 @@ export class HostSession implements Session {
     if (this.closedWith || this.phase === "lobby") return;
     this.endRace();
     this.phase = "lobby";
+    this.gp = null;
     this.result = null;
     this.kartSlots = {};
     this.paused = null;
@@ -541,6 +618,7 @@ export class HostSession implements Session {
   private advance(now: number, maxTicks: number): void {
     if (this.closedWith) return;
     this.housekeeping();
+    this.gpTick();
     const race = this.race;
     if (this.phase !== "racing" || !race) return;
     // Stopped for the room: nothing moves (the pause's own clock still counts a 3-2-1 down).
@@ -654,6 +732,8 @@ export class HostSession implements Session {
       }),
     };
     this.phase = "results";
+    this.gp?.record(this.result, race.setup.racers);
+    this.gpSince = this.env.now();
     this.paused = null;
     this.roster.clearLost();
     this.race = null;

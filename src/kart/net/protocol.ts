@@ -23,7 +23,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
@@ -61,6 +61,8 @@ const EMOTES = [null, "cheer", "wave"] as const;
 export interface StartInfo {
   /** The track by id: guests rebuild it with trackById, so no track data crosses the wire. */
   track: string;
+  /** The track is flipped left for right (Mirror mode): guests rebuild it with mirrorTrack. Absent: not. */
+  mirror?: boolean;
   laps: number;
   seed: number;
   racers: RacerSetup[];

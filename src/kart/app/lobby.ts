@@ -10,6 +10,9 @@
  */
 import type { LobbyPlayer, LobbySettings, LobbyState, Session } from "../contract";
 import { $, element, icon, setText, toast } from "../../ui/dom";
+import { cupById } from "../grandprix";
+import { CUPS, TRACKS, trackById } from "../track/tracks";
+import { isUnlocked, loadUnlocks } from "../unlocks";
 import { canStart, hostName, localPlayers, screenLabel, waitingLine } from "./roster";
 import { joinUrl, spellCode } from "./format";
 import type { Services } from "./services";
@@ -26,13 +29,28 @@ export interface LobbyHooks {
 
 const CONTROL_NAMES = { wheel: "Wheel", keyboard: "Keyboard", gamepad: "Gamepad" } as const;
 
+/**
+ * The tracks this device has earned beyond the usual ones (the secret track,
+ * after both cups are won, or the Konami code): the host's device decides what a room can race.
+ */
+export function earnedTracks(): { id: string; name: string }[] {
+  const all = { duckTracks: TRACKS.filter((track) => track.duck).map((track) => track.id), cups: CUPS.map((cup) => cup.id) };
+  if (!isUnlocked("secret-track", loadUnlocks(), all)) return [];
+  return TRACKS.filter((track) => track.secret).map((track) => ({ id: track.id, name: track.name }));
+}
+
 export class LobbyScreen {
   private readonly laps: Segmented<string>;
   private readonly bots: Switch;
+  private readonly mode: Segmented<"race" | "grand-prix">;
+  private readonly cup: Segmented<string>;
+  private readonly mirror: Switch;
   private readonly screen: Segmented<ScreenChoice>;
   private readonly display: Segmented<"own" | "host">;
   private readonly select = $<HTMLSelectElement>("track-select");
   private readonly start = $<HTMLButtonElement>("lobby-start");
+  /** The tracks the menu lists now, as a key: it is rebuilt when a cup won opens another. */
+  private listed = "";
   private qrFor = "";
   private url = "";
   private role: Session["role"] | null = null;
@@ -53,14 +71,24 @@ export class LobbyScreen {
     this.bots = new Switch($<HTMLButtonElement>("switch-bots"), (bots) => hooks.configure({ bots }));
     this.screen = new Segmented<ScreenChoice>($("pick-screen"), (choice) => hooks.screen(choice));
     this.display = new Segmented<"own" | "host">($("pick-display"), (display) => hooks.configure({ display }));
-    this.select.addEventListener("change", () => hooks.configure({ track: this.select.value }));
-    this.select.replaceChildren(
-      ...services.tracks.map((track) => {
-        const option = element("option", undefined, track.name);
-        option.value = track.id;
-        return option;
+    this.mode = new Segmented<"race" | "grand-prix">($("pick-mode"), (mode) => hooks.configure({ mode }));
+    this.mirror = new Switch($<HTMLButtonElement>("switch-mirror"), (mirror) => hooks.configure({ mirror }));
+    // The cups, each with its four tracks to read.
+    const cups = $("pick-cup");
+    cups.replaceChildren(
+      ...CUPS.map((cup) => {
+        const card = element("button", "cup");
+        card.type = "button";
+        card.setAttribute("role", "radio");
+        card.dataset.value = cup.id;
+        const list = element("ol", "cup-tracks");
+        list.append(...cup.tracks.map((id) => element("li", undefined, trackById(id).name)));
+        card.append(element("span", "cup-name", cup.name), list);
+        return card;
       }),
     );
+    this.cup = new Segmented<string>(cups, (cup) => hooks.configure({ cup }));
+    this.select.addEventListener("change", () => hooks.configure({ track: this.select.value }));
     this.start.addEventListener("click", () => hooks.start());
     $("lobby-leave").addEventListener("click", () => hooks.leave());
     $("lobby-copy").addEventListener("click", () => void this.copy());
@@ -106,7 +134,9 @@ export class LobbyScreen {
       setText("lobby-eyebrow", "Lobby");
       setText("lobby-title", `${hostName(lobby)}’s Race`);
       waiting.hidden = false;
-      setText(waiting, `Waiting for ${hostName(lobby)} to start.`);
+      const grand = lobby.settings.mode === "grand-prix";
+      const what = grand ? ` the ${cupById(lobby.settings.cup).name}` : "";
+      setText(waiting, `Waiting for ${hostName(lobby)} to start${what}.${lobby.settings.mirror ? " Every track is mirrored." : ""}`);
     } else if (role === "solo") {
       setText("lobby-eyebrow", "Practice");
       setText("lobby-title", "Ready to Race");
@@ -182,12 +212,39 @@ export class LobbyScreen {
   }
 
   private settings(settings: LobbySettings): void {
-    const tracks = this.services.tracks;
+    const earned = earnedTracks();
+    const tracks = [...this.services.tracks, ...earned];
+    const key = tracks.map((track) => track.id).join();
+    if (key !== this.listed) {
+      this.listed = key;
+      this.select.replaceChildren(
+        ...tracks.map((track) => {
+          const option = element("option", undefined, earned.some((e) => e.id === track.id) ? `${track.name} · Secret` : track.name);
+          option.value = track.id;
+          return option;
+        }),
+      );
+    }
     const several = tracks.length > 1;
+    const grandPrix = settings.mode === "grand-prix";
+    $("row-track").hidden = grandPrix;
+    $("row-cup").hidden = !grandPrix;
     $("track-menu").hidden = !several;
     $("track-value").hidden = several;
     if (several) this.select.value = settings.track;
     else setText("track-value", tracks.find((track) => track.id === settings.track)?.name ?? tracks[0]?.name ?? "");
+    this.mode.value = grandPrix ? "grand-prix" : "race";
+    this.cup.value = cupById(settings.cup).id;
+    this.mirror.on = settings.mirror === true;
+    setText("label-laps", grandPrix ? "Laps per Race" : "Laps");
+    setText(
+      "foot-mode",
+      grandPrix
+        ? `${cupById(settings.cup).name} is four races in a row. Every place scores (15 for first, then 12, 10, 8, 6, 4, 2, 1), and the most points wins the cup.`
+        : "One race, on the track you choose.",
+    );
+    setText("foot-mirror", settings.mirror ? "Every track is flipped, left for right: a right turn becomes a left." : "Race every track flipped, left for right.");
+    setText(this.start, grandPrix ? "Start Grand Prix" : "Start Race");
     this.laps.value = String(settings.laps);
     this.bots.on = settings.bots;
     // Where the race shows is for a room: practice has only the one screen.

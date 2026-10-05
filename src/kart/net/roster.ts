@@ -7,7 +7,7 @@
  */
 import { characterById } from "../characters";
 import { MAX_PLAYERS, PLAYER_COLOURS, type DriverControl, type LobbyPlayer } from "../contract";
-import { TRACKS } from "../track/tracks";
+import { CUPS, TRACKS } from "../track/tracks";
 import type { LobbySettings, LobbyState } from "../contract";
 import { clamp } from "./util";
 import type { WirePlayer } from "./protocol";
@@ -18,6 +18,9 @@ export const DEFAULT_SETTINGS: LobbySettings = {
   bots: true,
   racers: 6,
   display: "own",
+  mode: "race",
+  cup: CUPS[0]!.id,
+  mirror: false,
 };
 
 const CONTROLS: readonly DriverControl["kind"][] = ["wheel", "keyboard", "gamepad"];
@@ -28,7 +31,10 @@ export function mergeSettings(current: LobbySettings, patch: Partial<LobbySettin
   const laps = Number.isFinite(patch.laps) ? clamp(Math.round(patch.laps!), 1, 5) : current.laps;
   const racers = Number.isFinite(patch.racers) ? clamp(Math.round(patch.racers!), 1, maxRacers) : current.racers;
   const display = patch.display === "own" || patch.display === "host" ? patch.display : current.display;
-  return { track, laps, racers, display, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots };
+  const mode = patch.mode === "race" || patch.mode === "grand-prix" ? patch.mode : current.mode;
+  const cup = typeof patch.cup === "string" && CUPS.some((c) => c.id === patch.cup) ? patch.cup : current.cup;
+  const mirror = typeof patch.mirror === "boolean" ? patch.mirror : current.mirror;
+  return { track, laps, racers, display, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots, mode, cup, mirror };
 }
 
 /** A name a person typed, cleaned up for display. */

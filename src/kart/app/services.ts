@@ -10,6 +10,7 @@
  */
 import type { KartSound, MusicKind } from "../audio";
 import type { DriverControl, RaceRenderer, RaceView, Session, SessionClosed, TrackDef } from "../contract";
+import type { PodiumRenderer } from "../render/podium";
 
 // --- the room --------------------------------------------------------------------------------------------
 
@@ -193,6 +194,11 @@ export interface Services {
    * big-screen player's own device.
    */
   preview(container: HTMLElement, control: DriverControl, size: "corner" | "large"): Disposable;
+  /**
+   * The podium's picture, on a canvas of its own: the ceremony after a Grand Prix. May throw WebGLUnavailable.
+   * Absent in stand-ins, whose podium is the final standings alone.
+   */
+  podium?(canvas: HTMLCanvasElement): PodiumRenderer;
   /** The tracks the host may choose from, in order. */
   tracks: readonly { id: string; name: string }[];
   sound: SoundService;

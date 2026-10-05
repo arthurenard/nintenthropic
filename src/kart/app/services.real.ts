@@ -13,7 +13,7 @@ import { TRACKS } from "../track/tracks";
 import type { DriverControl, RaceRenderer, Session } from "../contract";
 import { gamepadControl, keyboardControl, wheelControl, WheelPreview, type WheelControl as ReadWheel } from "../input";
 import { hostSession, joinSession, localTransport, peerTransport, soloSession, type NetOptions } from "../net";
-import { createRaceRenderer } from "../render";
+import { createPodium, createRaceRenderer } from "../render";
 import { createSimRace } from "../sim/race";
 import { CameraStack } from "./camera";
 import { loadYou } from "./prefs";
@@ -110,6 +110,10 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     renderer(canvas, hudRoot): RaceRenderer {
       if (options.fail === "webgl") throw new WebGLUnavailable();
       return createRaceRenderer(canvas, hudRoot);
+    },
+    podium(canvas) {
+      if (options.fail === "webgl") throw new WebGLUnavailable();
+      return createPodium(canvas);
     },
     controls: {
       wheel(wheelOptions: WheelOptions): Wheel {

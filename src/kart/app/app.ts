@@ -25,20 +25,24 @@ import {
   type Session,
   type SessionClosed,
 } from "../contract";
+import { cupById, trackOfRace } from "../grandprix";
 import { CheckScreen } from "./check";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
 import { loadYou, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
+import { trackById } from "../track/tracks";
+import { PodiumScreen } from "./podium";
 import { ResultsScreen } from "./results";
 import { kartOf, localPlayers } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
 import { SoundControls } from "./soundui";
+import { StandingsScreen } from "./standings";
 import { StartScreen, type StartChoice } from "./start";
 import { AwakeWhileRacing } from "./wake";
 import { closeTrouble, showTrouble, type Fix, type TroubleKind } from "./troubles";
 import { YouScreen } from "./you";
 
-export type ScreenName = "start" | "you" | "check" | "lobby" | "race" | "results";
+export type ScreenName = "start" | "you" | "check" | "lobby" | "race" | "results" | "standings" | "podium";
 
 export interface KartAppOptions {
   /** `?net=local`: several tabs of one browser as the network (development, tests). */
@@ -72,6 +76,10 @@ export class KartApp {
   private readonly lobbyScreen: LobbyScreen;
   private readonly raceScreen: RaceScreen;
   private readonly resultsScreen: ResultsScreen;
+  private readonly standingsScreen: StandingsScreen;
+  private readonly podiumScreen: PodiumScreen;
+  /** The Grand Prix standings on show, as "cup:race", so the same ones are not played twice. */
+  private standingsKey = "";
 
   private screen: ScreenName = "start";
   private session: Session | null = null;
@@ -134,6 +142,13 @@ export class KartApp {
     this.resultsScreen = new ResultsScreen({
       again: () => this.again(),
       lobby: () => this.backToLobby(),
+      next: () => this.nextInCup(),
+    });
+    this.standingsScreen = new StandingsScreen({ next: () => this.nextInCup(), leave: () => this.leave() });
+    this.podiumScreen = new PodiumScreen(services, {
+      again: () => this.session?.restart(),
+      lobby: () => this.backToLobby(),
+      leave: () => this.leave(),
     });
     this.soundControls = new SoundControls(services.sound);
   }
@@ -214,7 +229,15 @@ export class KartApp {
 
   /** The music of a screen: the menus' tune, the lobby's (the same tune), and none in a race, which has its own. */
   private music(screen: ScreenName): void {
-    const tunes: Record<Exclude<ScreenName, "results">, MusicKind | null> = { start: "menu", you: "menu", check: "menu", lobby: "lobby", race: null };
+    const tunes: Record<Exclude<ScreenName, "results">, MusicKind | null> = {
+      start: "menu",
+      you: "menu",
+      check: "menu",
+      lobby: "lobby",
+      race: null,
+      standings: "results",
+      podium: "podium",
+    };
     // The results choose theirs when they know whether the player won.
     if (screen !== "results") this.services.sound.music(tunes[screen]);
   }
@@ -223,14 +246,23 @@ export class KartApp {
 
   private show(screen: ScreenName): void {
     this.screen = screen;
-    for (const name of ["start", "you", "check", "lobby", "race", "results"] as const) $(`screen-${name}`).hidden = name !== screen;
+    for (const name of ["start", "you", "check", "lobby", "race", "results", "standings", "podium"] as const) $(`screen-${name}`).hidden = name !== screen;
     document.body.dataset.screen = screen;
     this.music(screen);
     // A phone propped up as a wheel is not touched for minutes: its screen stays on from the wheel check to the end.
     if (screen === "start" || screen === "you") this.wake.release();
     else this.wake.hold();
     window.scrollTo(0, 0);
-    const title = { start: "Grip Prix", you: "Who’s Driving?", check: "Wheel Check", lobby: "Lobby", race: "Race", results: "Results" }[screen];
+    const title = {
+      start: "Grip Prix",
+      you: "Who’s Driving?",
+      check: "Wheel Check",
+      lobby: "Lobby",
+      race: "Race",
+      results: "Results",
+      standings: "Standings",
+      podium: "Podium",
+    }[screen];
     document.title = screen === "start" ? "Grip Prix" : `${title} · Grip Prix`;
     if (screen === "race") announce("The race is on.");
   }
@@ -441,6 +473,7 @@ export class KartApp {
     if (!lobby || !this.session) return;
     window.clearTimeout(this.finishTimer);
     this.raceScreen.end();
+    this.endCupScreens();
     this.crowd = { count: lobby.players.length, ready: lobby.players.filter((player) => player.ready).length };
     this.show("lobby");
     this.lobbyScreen.render(lobby, this.session, this.where(lobby));
@@ -454,6 +487,7 @@ export class KartApp {
   private lobbyChanged(lobby: LobbyState): void {
     // Still choosing a name or setting up the wheel: the room's phases are not ours yet.
     if (!this.ready || !this.session) return;
+    const cupScreen = this.screen === "race" || this.screen === "results" || this.screen === "standings";
     switch (lobby.phase) {
       case "racing":
         // A first start, or a restart: the same phase, a different race.
@@ -462,8 +496,15 @@ export class KartApp {
       case "results":
         if (this.screen === "race") this.finishRace(lobby);
         break;
+      case "standings":
+        // Once for each race of the cup (a screen back in the lobby is not pulled to it again).
+        if (cupScreen && (this.screen !== "standings" || this.standingsKey !== this.cupKey(lobby))) this.showStandings(lobby);
+        break;
+      case "podium":
+        if (cupScreen) this.showPodium(lobby);
+        break;
       case "lobby":
-        if (this.screen === "race" || this.screen === "results") this.showLobby(lobby);
+        if (this.screen === "race" || this.screen === "results" || this.screen === "standings" || this.screen === "podium") this.showLobby(lobby);
         break;
     }
     if (this.screen === "lobby") {
@@ -487,6 +528,7 @@ export class KartApp {
     const session = this.session;
     if (!session) return;
     window.clearTimeout(this.finishTimer);
+    this.endCupScreens();
     this.raceId = lobby.race;
     const mine = localPlayers(lobby, session.device);
     this.show("race");
@@ -505,13 +547,70 @@ export class KartApp {
     if (!session || !result) return;
     this.racers = this.raceScreen.lastView?.racers ?? this.racers;
     this.raceScreen.end();
-    const track = this.services.tracks.find((candidate) => candidate.id === lobby.settings.track);
-    this.resultsScreen.render({ result, lobby, session, racers: this.racers, laps: lobby.settings.laps, trackName: track?.name ?? "", still: this.raceScreen.photo });
+    this.resultsScreen.render({
+      result,
+      lobby,
+      session,
+      racers: this.racers,
+      laps: lobby.settings.laps,
+      trackName: this.trackName(lobby),
+      grandPrix: lobby.grandPrix ?? null,
+      still: this.raceScreen.photo,
+    });
     this.show("results");
     // A win has its own tune.
     const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));
     const first = result.standings.find((row) => row.place === 1);
     this.services.sound.music(first && mine.has(first.kart) ? "results-win" : "results");
+  }
+
+  /** The name of the track being raced (or just raced): the Grand Prix's race, or the room's chosen one. */
+  private trackName(lobby: LobbyState, race = lobby.grandPrix): string {
+    const id = trackOfRace(lobby.settings, race);
+    return this.services.tracks.find((candidate) => candidate.id === id)?.name ?? trackById(id).name;
+  }
+
+  private cupKey(lobby: LobbyState): string {
+    return `${lobby.grandPrix?.cup}:${lobby.grandPrix?.race}`;
+  }
+
+  /** After a Grand Prix's race: everyone's points. */
+  private showStandings(lobby: LobbyState): void {
+    const gp = lobby.grandPrix;
+    const session = this.session;
+    if (!gp || !session) return;
+    window.clearTimeout(this.finishTimer);
+    this.raceScreen.end();
+    this.podiumScreen.stop();
+    this.standingsKey = this.cupKey(lobby);
+    const tracks = cupById(gp.cup).tracks;
+    const next = gp.race + 1 < tracks.length ? this.trackName(lobby, { ...gp, race: gp.race + 1 }) : null;
+    this.standingsScreen.render({ lobby, session, trackName: this.trackName(lobby), nextTrackName: next });
+    this.show("standings");
+  }
+
+  /** After a Grand Prix's last standings: the ceremony. */
+  private showPodium(lobby: LobbyState): void {
+    const session = this.session;
+    if (!lobby.grandPrix || !session) return;
+    window.clearTimeout(this.finishTimer);
+    this.raceScreen.end();
+    this.standingsScreen.stop();
+    this.podiumScreen.render({ lobby, session });
+    this.show("podium");
+  }
+
+  /** The host's: on in the cup without waiting (results → standings → the next race or the podium). */
+  private nextInCup(): void {
+    const session = this.session;
+    if (!session || session.role === "guest") return;
+    window.clearTimeout(this.finishTimer);
+    session.next?.();
+  }
+
+  private endCupScreens(): void {
+    this.standingsScreen.stop();
+    this.podiumScreen.stop();
   }
 
   /** Restart (the host's pause sheet): this race again from the countdown, the same people. */
@@ -560,6 +659,7 @@ export class KartApp {
     window.clearTimeout(this.finishTimer);
     this.checkScreen.stop();
     this.raceScreen.end();
+    this.endCupScreens();
     this.detach();
     const session = this.session;
     this.session = null;
