@@ -14,7 +14,8 @@ import type { FaceLandmarker } from "@mediapipe/tasks-vision";
 import { HandLandmarker } from "@mediapipe/tasks-vision";
 import { createFaceLandmarker, eyesFrom, type Fileset } from "./face";
 import type { FromWorker, ToWorker } from "./protocol";
-import type { FaceReading, Landmark } from "./types";
+import { seenHands } from "./hands";
+import type { FaceReading, SeenHand } from "./types";
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let landmarker: HandLandmarker | null = null;
@@ -52,8 +53,10 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
   const create = (delegate: "GPU" | "CPU") =>
     HandLandmarker.createFromOptions(files, {
       runningMode: "VIDEO",
-      // One hand, deliberately: a second costs time (measured in
-      // input/trust.ts, which keeps a passer-by's hand from taking the aim).
+      // One hand for the shooting games, deliberately: a second costs time
+      // (measured in input/trust.ts, which keeps a passer-by's hand from
+      // taking the aim). Grip Prix asks for two, or four for two wheels on
+      // one camera.
       numHands: message.hands ?? 1,
       minHandDetectionConfidence: 0.5,
       minHandPresenceConfidence: 0.5,
@@ -91,17 +94,11 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
 
 function read(message: Extract<ToWorker, { type: "frame" }>): void {
   const began = performance.now();
-  let landmarks: Landmark[] | null = null;
-  let handedness: "Left" | "Right" | null = null;
+  let hands: SeenHand[] = [];
   const withFace = message.face === true && face !== null;
   try {
     const result = landmarker!.detectForVideo(message.image, message.timestamp);
-    const hand = result.landmarks[0];
-    if (hand && hand.length >= 21) {
-      landmarks = hand.map(({ x, y, z }) => ({ x, y, z }));
-      const name = result.handedness[0]?.[0]?.categoryName;
-      handedness = name === "Left" || name === "Right" ? name : null;
-    }
+    hands = seenHands(result);
   } catch (error) {
     // One bad frame (a camera mid-reconfiguration) is skipped, not fatal.
     console.warn("A camera frame could not be read.", error);
@@ -110,8 +107,7 @@ function read(message: Extract<ToWorker, { type: "frame" }>): void {
     type: "result",
     sequence: message.sequence,
     capturedAt: message.capturedAt,
-    landmarks,
-    handedness,
+    hands,
     inference: performance.now() - began,
     face: withFace,
   });

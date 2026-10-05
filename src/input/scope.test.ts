@@ -461,7 +461,7 @@ describe("the hand in a game that reads the eye", () => {
       return null;
     }
     frame(at: number, eyes: FaceReading | null | undefined, hand = true) {
-      const frame: HandFrame = { landmarks: hand ? asCameraSees(makeHand({ thumbDegrees: 20 })) : null, handedness: hand ? "Right" : null, capturedAt: at, sequence: at };
+      const frame: HandFrame = { landmarks: hand ? asCameraSees(makeHand({ thumbDegrees: 20 })) : null, handedness: hand ? "Right" : null, hands: [], capturedAt: at, sequence: at };
       for (const l of this.hands) l(frame);
       if (eyes !== undefined) for (const l of this.faces) l({ eyes, capturedAt: at });
     }

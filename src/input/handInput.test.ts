@@ -26,6 +26,7 @@ class FakeCamera implements HandSource {
     const frame: HandFrame = {
       landmarks: pose ? asCameraSees(makeHand(pose)) : null,
       handedness: pose ? "Right" : null,
+      hands: [],
       capturedAt,
       sequence: ++this.sequence,
     };

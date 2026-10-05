@@ -63,9 +63,12 @@ export class ScriptedHands implements HandSource {
   publish(): void {
     if (this.stalled) return;
     const pose = this.pose;
+    const landmarks = pose ? asCameraSees(makeHand(pose)) : null;
     const frame: HandFrame = {
-      landmarks: pose ? asCameraSees(makeHand(pose)) : null,
+      landmarks,
       handedness: pose ? "Right" : null,
+      // The one scripted hand (a flat picture: it has no world points of its own).
+      hands: landmarks ? [{ landmarks, world: landmarks, handedness: "Right", score: 1 }] : [],
       capturedAt: performance.now(),
       sequence: ++this.sequence,
     };
