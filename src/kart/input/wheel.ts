@@ -36,7 +36,7 @@ export const WHEEL = {
   /** Steer = (how far into the lock, 0..1) to this power: below 1 would be twitchy, above 1 is gentle near the centre. */
   curve: 1.5,
   /** The angle's One Euro filter: steady when the wheel rests, quick when it is turned fast. */
-  smoothing: { minCutoff: 1.5, beta: 0.03 },
+  smoothing: { minCutoff: 1.5, beta: 0.05 },
   /** Both hands open this long: brake, seconds. */
   brakeAfter: 0.15,
   /** A hand open for longer than this and closed again is not a flick, seconds. */
