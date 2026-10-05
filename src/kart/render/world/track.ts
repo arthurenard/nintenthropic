@@ -112,11 +112,22 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const out1 = b.width / 2 + vergeOuter;
       // Inner strip, flat just under the road's surface.
       const d = -0.025;
+      // The last stretch before the barrier darkens a little: the wall's contact shadow, baked.
+      const m0 = flat0 - 1.5;
+      const m1 = flat1 - 1.5;
+      const shade = scaleRgb(stripe, 0.7);
+      const shadeNext = scaleRgb(next, 0.7);
       const inner: V3[] =
         side > 0
-          ? [P(i, h0, d), P(i, flat0, d), P(i + 2, flat1, d), P(i + 2, h1, d)]
-          : [P(i, -flat0, d), P(i, -h0, d), P(i + 2, -h1, d), P(i + 2, -flat1, d)];
+          ? [P(i, h0, d), P(i, m0, d), P(i + 2, m1, d), P(i + 2, h1, d)]
+          : [P(i, -m0, d), P(i, -h0, d), P(i + 2, -h1, d), P(i + 2, -m1, d)];
+      const wall: V3[] =
+        side > 0
+          ? [P(i, m0, d), P(i, flat0, d), P(i + 2, flat1, d), P(i + 2, m1, d)]
+          : [P(i, -flat0, d), P(i, -m0, d), P(i + 2, -m1, d), P(i + 2, -flat1, d)];
       deco[chunkOf(i)]!.quad(inner[0]!, inner[1]!, inner[2]!, inner[3]!, stripe, stripe, next, next, UP);
+      if (side > 0) deco[chunkOf(i)]!.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, stripe, shade, shadeNext, next, UP);
+      else deco[chunkOf(i)]!.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, shade, stripe, next, shadeNext, UP);
       // Outer strip falls to the ground beside it, taking the ground's colour so there is no seam.
       const slope: V3[] =
         side > 0
@@ -124,8 +135,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
           : [P(i, -out0, -GROUND_SINK + 0.02), P(i, -flat0, d), P(i + 2, -flat1, d), P(i + 2, -out1, -GROUND_SINK + 0.02)];
       const outerA = groundAt(side > 0 ? slope[1]! : slope[0]!);
       const outerB = groundAt(side > 0 ? slope[2]! : slope[3]!);
-      if (side > 0) deco[chunkOf(i)]!.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, stripe, outerA, outerB, next, UP);
-      else deco[chunkOf(i)]!.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, stripe, next, outerB, UP);
+      if (side > 0) deco[chunkOf(i)]!.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP);
+      else deco[chunkOf(i)]!.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP);
     }
   }
 

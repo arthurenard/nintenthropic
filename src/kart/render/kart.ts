@@ -129,7 +129,9 @@ export class KartActor {
     const sr = clamp(Math.abs(speed) / 24, 0, 1.4);
 
     // The road under it: its slope in the kart's direction of travel.
-    const proj = ctx.track.project(view.x, view.z, this.near);
+    let proj = ctx.track.project(view.x, view.z, this.near);
+    // After a jump (a restart, a new race) the hint is stale: look at the whole loop.
+    if (Math.hypot(view.x - proj.sample.x, view.z - proj.sample.z) > 20) proj = ctx.track.project(view.x, view.z);
     this.near = proj.s;
     const t = proj.sample;
     const along = Math.cos(view.heading) * t.tz + Math.sin(view.heading) * t.tx;

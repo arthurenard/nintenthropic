@@ -19,6 +19,7 @@ import {
   WebGLRenderer,
   type Texture,
 } from "three";
+import { WebGLUnavailable } from "../../engine/common";
 import { DynamicResolution } from "../../engine/dynamicResolution";
 import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
@@ -75,14 +76,20 @@ export interface GripRenderer extends RaceRenderer {
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
   const dprNow = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  const renderer = new WebGLRenderer({
-    canvas,
-    // A retina screen hides the jaggies already; MSAA there would cost a lot for little.
-    antialias: dprNow < 2,
-    alpha: false,
-    stencil: false,
-    powerPreference: "high-performance",
-  });
+  let renderer: WebGLRenderer;
+  try {
+    renderer = new WebGLRenderer({
+      canvas,
+      // A retina screen hides the jaggies already; MSAA there would cost a lot for little.
+      antialias: dprNow < 2,
+      alpha: false,
+      stencil: false,
+      powerPreference: "high-performance",
+    });
+  } catch {
+    // The same error the shooting games throw, so the page can show the same message.
+    throw new WebGLUnavailable();
+  }
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;

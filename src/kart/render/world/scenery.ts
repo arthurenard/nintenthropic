@@ -305,7 +305,7 @@ export function buildScenery(
       const posAttr = p.geometry.getAttribute("position");
       posAttr.setXYZ(0, lx, s.h + crane.light[1], lz);
       posAttr.needsUpdate = true;
-      const colAttr = p.geometry.getAttribute("aColor");
+      const colAttr = p.geometry.getAttribute("aColour");
       colAttr.setXYZW(0, 1.0, 0.1, 0.05, 1);
       const sizeAttr = p.geometry.getAttribute("aSize");
       sizeAttr.setX(0, 3.2);
@@ -364,7 +364,7 @@ export function buildScenery(
     add(new Mesh(sky, material));
     const lights = makePoints(windows.length / 3, true);
     const pa = lights.geometry.getAttribute("position");
-    const ca = lights.geometry.getAttribute("aColor");
+    const ca = lights.geometry.getAttribute("aColour");
     const sa = lights.geometry.getAttribute("aSize");
     for (let i = 0; i < windows.length / 3; i++) {
       pa.setXYZ(i, windows[i * 3]!, windows[i * 3 + 1]!, windows[i * 3 + 2]!);

@@ -141,7 +141,7 @@ export async function createWorld(
   });
   {
     const pos = glowPoints.geometry.getAttribute("position");
-    const col = glowPoints.geometry.getAttribute("aColor");
+    const col = glowPoints.geometry.getAttribute("aColour");
     const size = glowPoints.geometry.getAttribute("aSize");
     staticGlows.forEach((g, i) => {
       pos.setXYZ(i, g.x, g.y, g.z);
@@ -159,7 +159,7 @@ export async function createWorld(
     size.needsUpdate = true;
   }
   group.add(glowPoints);
-  const glowColour = glowPoints.geometry.getAttribute("aColor");
+  const glowColour = glowPoints.geometry.getAttribute("aColour");
   const setStartLights = (state: number | "go" | "off") => {
     meshes.startLights.forEach((_p, k) => {
       const mat = bulbMats[k]!;

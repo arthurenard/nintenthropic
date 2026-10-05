@@ -121,7 +121,7 @@ export class ChaseCamera {
     _fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
     const lift = smoothstep(0, 1, this.orbitBlend) * 0.4;
     _want.set(kart.x - _fwd.x * (distance + lift * 2), kart.y + height - lift, kart.z - _fwd.z * (distance + lift * 2));
-    _look.set(kart.x + _fwd.x * 4.6, kart.y + 0.9, kart.z + _fwd.z * 4.6);
+    _look.set(kart.x + _fwd.x * 5.4, kart.y + 1.25, kart.z + _fwd.z * 5.4);
 
     if (introEase > 0.001) {
       // High and back, drifting round from one side as the lights count down.

@@ -92,7 +92,7 @@ class Sprites {
 
   update(dt: number): void {
     const pos = this.points.geometry.getAttribute("position");
-    const col = this.points.geometry.getAttribute("aColor");
+    const col = this.points.geometry.getAttribute("aColour");
     const size = this.points.geometry.getAttribute("aSize");
     const P = pos.array as Float32Array;
     const C = col.array as Float32Array;
