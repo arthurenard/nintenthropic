@@ -16,7 +16,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
   Quaternion,
   StaticDrawUsage,
   Vector3,
@@ -29,6 +29,7 @@ import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb } from "./builder";
+import type { BakeUniforms } from "./shading";
 import type { KeepOut } from "./landmarks/place";
 import * as props from "./props";
 import { addWorldScenery } from "./sceneryWorlds";
@@ -125,6 +126,7 @@ export function buildScenery(
   material: Material,
   seed = 1234,
   keepOut: readonly KeepOut[] = [],
+  _bake?: BakeUniforms,
 ): Scenery {
   const rnd = seededRandom(seed);
   const group = new Group();
@@ -430,7 +432,7 @@ export function buildScenery(
   if (style.sky.clouds) {
     const clouds = new Group();
     // Clouds are lit mostly from within: lit from below by the green ground they would go grey.
-    const mat = new MeshLambertMaterial({ vertexColors: true, emissive: new Color(style.sky.cloudShade).multiplyScalar(0.55) });
+    const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, emissive: new Color(style.sky.cloudShade).multiplyScalar(0.55) });
     disposables.push(() => mat.dispose());
     const litCol = rgb(style.sky.cloudColour);
     const shadeCol = rgb(style.sky.cloudShade);

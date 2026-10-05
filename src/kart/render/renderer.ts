@@ -12,12 +12,16 @@
 import {
   Color,
   Group,
-  NeutralToneMapping,
+  Mesh,
+  NoToneMapping,
+  PCFShadowMap,
   PerspectiveCamera,
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
+  type Object3D,
   type Texture,
+  type WebGLRenderTarget,
 } from "three";
 import { WebGLUnavailable } from "../../engine/common";
 import { DynamicResolution } from "../../engine/dynamicResolution";
@@ -32,6 +36,7 @@ import { ItemFx } from "./itemfx";
 import { KartActor, type ActorContext, type KartFactory } from "./kart";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
+import { PostChain, type DrawViews } from "./post";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
 import { QUALITY, type QualitySettings, type Tier } from "./quality";
@@ -82,8 +87,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   try {
     renderer = new WebGLRenderer({
       canvas,
-      // A retina screen hides the jaggies already; MSAA there would cost a lot for little.
-      antialias: dprNow < 2,
+      // Anti-aliasing is the post chain's (MSAA on its HDR target, or SMAA), not the canvas's.
+      antialias: false,
       alpha: false,
       stencil: false,
       powerPreference: "high-performance",
@@ -93,9 +98,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     throw new WebGLUnavailable();
   }
   renderer.outputColorSpace = SRGBColorSpace;
-  renderer.toneMapping = NeutralToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  // The post chain's grade is the tone map; the scene renders in linear HDR.
+  renderer.toneMapping = NoToneMapping;
   renderer.autoClear = false;
+  renderer.shadowMap.type = PCFShadowMap;
   renderer.setClearColor(new Color(0x0b0b0d), 1);
 
   const gpu = gpuName(renderer.getContext());
@@ -103,6 +109,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const tier: Tier = options.quality && options.quality !== "auto" ? options.quality : guessed;
   const settings: QualitySettings = QUALITY[tier];
   const resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier] });
+  renderer.shadowMap.enabled = settings.shadowMap > 0;
 
   const calm =
     options.reduceMotion ??
@@ -146,6 +153,50 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let boxSlots: BoxSlot[] = [];
   const boxLift = new Map<number, number>();
   let debugCamera: PerspectiveCamera | null = null;
+  /** The views of the frame being drawn: the post chain's first pass walks them. */
+  const frameViews: { rect: { x: number; y: number; w: number; h: number }; eye: PerspectiveCamera; at: { x: number; y: number; z: number } }[] = [];
+
+  /** Draws every view, scissored, into the post chain's HDR target. */
+  const drawViews: DrawViews = (target: WebGLRenderTarget) => {
+    if (!world) return;
+    const pr = target.width / Math.max(1, width);
+    renderer.setRenderTarget(target);
+    target.scissorTest = false;
+    target.viewport.set(0, 0, target.width, target.height);
+    renderer.setRenderTarget(target);
+    renderer.clear(true, true, false);
+    target.scissorTest = true;
+    for (const v of frameViews) {
+      const x = Math.floor(v.rect.x * pr);
+      const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
+      const h = Math.ceil(v.rect.h * pr);
+      const y = Math.max(0, target.height - Math.floor(v.rect.y * pr) - h);
+      target.viewport.set(x, y, w, h);
+      target.scissor.set(x, y, w, h);
+      renderer.setRenderTarget(target);
+      world.sky.group.position.copy(v.eye.position);
+      const fovRad = (v.eye.fov * Math.PI) / 180;
+      pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
+      world.focusSun(v.at.x, v.at.y, v.at.z);
+      renderer.render(scene, v.eye);
+    }
+    target.scissorTest = false;
+  };
+  const post = new PostChain(renderer, tier, drawViews);
+
+  /** Everything solid that moves casts a shadow and receives one; particles, glows and glass do not. */
+  const markShadows = (root: Object3D) => {
+    root.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh || o.userData.shadowed) return;
+      o.userData.shadowed = true;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      if (!mat || (mat.transparent && mat.opacity < 0.99) || mat.blending !== 1) return;
+      m.castShadow = true;
+      m.receiveShadow = true;
+    });
+  };
+  let shadowSweep = 0;
 
   canvas.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
@@ -159,7 +210,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
   const applySize = () => {
     renderer.setPixelRatio(pixelRatio());
-    renderer.setSize(width, height, false);
+    post.setSize(width, height);
+    post.setTiles(layout.views, width, height);
     hud.setDpr(Math.min(dpr, 2));
   };
 
@@ -221,6 +273,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       scene.add(world.group);
       scene.fog = null;
       world.install(scene);
+      world.prepare(renderer, scene);
+      post.setLook(world.look);
       scene.background = null;
       effects = new Effects(settings.particles);
       effects.calm = calm;
@@ -235,6 +289,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       skids = new Skids();
       dynamic.add(skids.mesh);
       for (const r of racers) makeActor(r);
+      markShadows(dynamic);
       hud.setTrack(world.geometry, racers);
       eggs.load(world.style.id, world.geometry);
       boxSlots = rowSlots(world.geometry);
@@ -349,13 +404,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       eggs.update(dt);
       skids.update(dt);
 
-      // Draw.
+      // Cameras, then the post chain draws every view and grades the result once.
       renderer.info.reset();
-      const pr = renderer.getPixelRatio();
-      renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, width, height);
-      renderer.clear(true, true, false);
-      renderer.setScissorTest(true);
+      if (++shadowSweep % 45 === 1) markShadows(dynamic);
+      frameViews.length = 0;
       viewKarts.forEach((id, i) => {
         const rect = layout.views[i];
         const kart = byId.get(id);
@@ -370,16 +422,11 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
           debugCamera.updateProjectionMatrix();
           eye = debugCamera;
         }
-        world!.sky.group.position.copy(eye.position);
-        const fovRad = (eye.fov * Math.PI) / 180;
-        pointScale.value = (rect.h * pr) / (2 * Math.tan(fovRad / 2));
-        const y = height - rect.y - rect.h;
-        renderer.setViewport(rect.x, y, rect.w, rect.h);
-        renderer.setScissor(rect.x, y, rect.w, rect.h);
-        renderer.render(scene, eye);
-        eggs.view(i, rect, eye, kartAt, time);
+        frameViews.push({ rect, eye, at: { x: follow.x, y: follow.y, z: follow.z } });
       });
-      renderer.setScissorTest(false);
+      post.setTiles(layout.views, width, height);
+      post.render(dt);
+      frameViews.forEach((v, i) => eggs.view(i, v.rect, v.eye, kartAt, time));
       eggs.end(time);
 
       hud.update(view, dt);
@@ -398,6 +445,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       disposeWorld();
       eggs.dispose();
       hud.dispose();
+      post.dispose();
       shadowTexture.dispose();
       lightTexture.dispose();
       renderer.dispose();

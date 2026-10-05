@@ -16,16 +16,20 @@ import {
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
   PlaneGeometry,
   Points,
   RepeatWrapping,
   SphereGeometry,
+  Vector3,
   type BufferGeometry,
   type CanvasTexture,
   type Material,
   type Object3D,
+  type OrthographicCamera,
   type Scene,
+  type Texture,
+  type WebGLRenderer,
   Color,
 } from "three";
 import { TrackGeometry, type TrackDef } from "../../track/geometry";
@@ -38,12 +42,17 @@ import { rampHeight, type Features } from "./features";
 import { buildHazards, buildLandmarks, landmarkMaterials, type HazardLayer, type LandmarkLayer, type PlacedLandmark } from "./landmarks/place";
 import { additiveMaterial, groundMaterial, lavaMaterial, patchMaterial, roadMaterial, type Animated } from "./materials";
 import { buildScenery, type Scenery } from "./scenery";
+import { lookFor, type Look } from "./look";
+import { bakedLit, makeBakeUniforms, type BakeUniforms } from "./shading";
 import { createSky, type Sky } from "./sky";
 import { Terrain } from "./terrain";
 import { styleFor, type ThemeStyle } from "./themes";
 import { bannerTexture, chevronTexture, glowTexture } from "./textures";
 import { buildTrackMeshes } from "./track";
 import { createWater, type Water } from "./water";
+
+const _r = new Vector3();
+const _u = new Vector3();
 
 /** Hands control back to the browser for a moment, so a long build does not freeze the page. */
 const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -57,12 +66,26 @@ export interface World {
   readonly boxes: ItemBoxes;
   readonly bank: Bank;
   readonly features: Features;
+  /** How this world is photographed (tone, bloom, grade): see look.ts. */
+  readonly look: Look;
+  /** The sun (or moon): a directional light whose shadow map follows the view's kart; see `focusSun`. */
+  readonly sun: DirectionalLight;
+  /** What the baked light of the static world reads (set by `prepare`). */
+  readonly bake: BakeUniforms;
   /** How the start lights stand: how many reds are lit (0-3), or green. */
   setStartLights(state: number | "go" | "off"): void;
   /** `time` is the picture's clock; `raceTime` the race's (the hazards move on it, as in the sim). */
   update(time: number, dt: number, raceTime?: number): void;
-  /** Puts the scene's fog, lights and background in place. */
+  /** Puts the scene's fog and environment in place. */
   install(scene: Scene): void;
+  /**
+   * Makes what needs the GPU, once, with the live renderer: the sky as the
+   * scene's environment (the reflections on everything glossy), and the
+   * static world's baked sun shadow and ambient occlusion.
+   */
+  prepare(renderer: WebGLRenderer, scene: Scene): void;
+  /** Aims the sun's shadow map at a spot (a view's kart): call before drawing each view. */
+  focusSun(x: number, y: number, z: number): void;
   /**
    * How far above the sim's flat road the surface is at a point: the road's
    * banking plus any ramp before its lip. Karts, boxes and things add it to
@@ -95,9 +118,12 @@ export async function createWorld(
   const terrain = Terrain.build(geometry, style, quality.cell);
   const space = style.id === "space";
 
-  const ground = groundMaterial(style, quality, disposables);
-  const roadMat = roadMaterial(style, quality, disposables);
-  const deco = track(new MeshLambertMaterial({ vertexColors: true })) as Material;
+  const look = lookFor(style.id);
+  const bake = makeBakeUniforms();
+  bake.uSunInfo.value.z = look.shadow;
+  const ground = groundMaterial(style, quality, disposables, bake);
+  const roadMat = roadMaterial(style, quality, disposables, bake);
+  const deco = track(bakedLit(new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }), bake, "deco")) as Material;
   let lavaAnim: Animated | null = null;
 
   const addStatic = (g: BufferGeometry, material: Material, order = 0): Mesh => {
@@ -132,7 +158,7 @@ export async function createWorld(
     addStatic(meshes.pools, mat, 3);
   }
   if (meshes.additive) addStatic(meshes.additive, additiveMaterial(disposables), 3);
-  for (const p of meshes.patches) addStatic(p.geometry, patchMaterial(p.kind, quality, disposables), 2);
+  for (const p of meshes.patches) addStatic(p.geometry, patchMaterial(p.kind, quality, disposables, bake), 2);
   const chevrons = track(chevronTexture(quality.anisotropy)) as CanvasTexture;
   chevrons.wrapT = RepeatWrapping;
   if (meshes.pads) {
@@ -160,7 +186,7 @@ export async function createWorld(
   // Landmarks, the rubber duck and the hazards.
   onProgress(0.5);
   await breathe();
-  const mats = landmarkMaterials();
+  const mats = landmarkMaterials(bake);
   track(mats);
   const groundAt = (x: number, z: number) => terrain.heightAt(x, z);
   const env = { track: geometry, style, bank, groundAt };
@@ -227,7 +253,7 @@ export async function createWorld(
   await breathe();
 
   // Scenery, kept clear of the landmarks.
-  const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, landmarks.keepOut);
+  const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, landmarks.keepOut, bake);
   track(scenery);
   group.add(scenery.group);
   onProgress(0.86);
@@ -246,18 +272,36 @@ export async function createWorld(
     track(water);
     group.add(water.mesh);
   }
-  const backdrop = buildBackdrop(style, terrain, disposables);
+  const backdrop = buildBackdrop(style, terrain, disposables, bake);
   if (backdrop) group.add(backdrop.group);
 
   const boxes = new ItemBoxes();
   track(boxes);
   group.add(boxes.group);
 
-  const hemi = new HemisphereLight(style.light.skyColour, style.light.groundColour, style.light.hemiIntensity);
-  const sun = new DirectionalLight(style.light.sunColour, style.light.sunIntensity);
-  sun.position.copy(sky.sunDir).multiplyScalar(200);
+  const hemi = new HemisphereLight(style.light.skyColour, style.light.groundColour, style.light.hemiIntensity * look.fill);
+  const sun = new DirectionalLight(style.light.sunColour, style.light.sunIntensity * look.sun);
+  sun.position.copy(sky.sunDir).multiplyScalar(160);
+  // The dynamic shadow: karts and what they throw, in a box that follows the view (focusSun). The static world has its baked one.
+  if (quality.shadowMap > 0) {
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(quality.shadowMap, quality.shadowMap);
+    const cam = sun.shadow.camera as OrthographicCamera;
+    const R = quality.shadowRange;
+    cam.left = -R;
+    cam.right = R;
+    cam.top = R;
+    cam.bottom = -R;
+    cam.near = 20;
+    cam.far = 320;
+    cam.updateProjectionMatrix();
+    sun.shadow.bias = -0.0003;
+    sun.shadow.normalBias = 0.03;
+    sun.shadow.radius = 2.5;
+  }
   group.add(hemi, sun, sun.target);
   const fog = new Fog(style.fog.colour, style.fog.near, style.fog.far);
+  let envTexture: Texture | null = null;
 
   onProgress(1);
   let near = 0;
@@ -271,6 +315,9 @@ export async function createWorld(
     boxes,
     bank,
     features: meshes.features,
+    look,
+    sun,
+    bake,
     setStartLights,
     update(time, dt, raceTime = 0) {
       chevrons.offset.y = -(time * 1.3) % 1;
@@ -285,6 +332,26 @@ export async function createWorld(
     install(scene) {
       scene.fog = fog;
     },
+    prepare(renderer, scene) {
+      envTexture?.dispose();
+      envTexture = sky.environment(renderer, style.light.groundColour);
+      scene.environment = envTexture;
+      scene.environmentIntensity = look.envIntensity;
+    },
+    focusSun(x, y, z) {
+      const R = quality.shadowRange;
+      const texel = (2 * R) / Math.max(1, quality.shadowMap);
+      // Snap to whole texels along the light's own axes, so the shadows do not crawl as the kart moves.
+      const d = sky.sunDir;
+      const right = _r.set(d.z, 0, -d.x).normalize();
+      const up = _u.crossVectors(d, right).normalize();
+      const a = Math.round((x * right.x + y * right.y + z * right.z) / texel) * texel;
+      const b = Math.round((x * up.x + y * up.y + z * up.z) / texel) * texel;
+      const f = x * d.x + y * d.y + z * d.z;
+      sun.target.position.set(right.x * a + up.x * b + d.x * f, right.y * a + up.y * b + d.y * f, right.z * a + up.z * b + d.z * f);
+      sun.position.copy(sun.target.position).addScaledVector(d, 160);
+      sun.target.updateMatrixWorld();
+    },
     surfaceLift(x, z, hint) {
       let proj = geometry.project(x, z, hint ?? near);
       if (Math.hypot(proj.sample.x - x, proj.sample.z - z) > 40) proj = geometry.project(x, z);
@@ -293,6 +360,8 @@ export async function createWorld(
       return { lift: bank.lift(proj.s, proj.offset) + ramp, ramp, s: proj.s, offset: proj.offset };
     },
     dispose() {
+      envTexture?.dispose();
+      sun.shadow.map?.dispose();
       for (const d of disposables) d.dispose();
       group.traverse((o: Object3D) => {
         const m = o as Mesh;

@@ -1,0 +1,177 @@
+/**
+ * Grip Prix's post chain. Every viewport of a frame is drawn, scissored, into
+ * one multisampled half-float target (so a boost pad or a lamp can be
+ * brighter than white); then ONE pass over the whole canvas does bloom on
+ * what is brighter than white, the tone curve, the theme's colour grade and,
+ * for each view tile separately, a vignette.
+ *
+ * Anti-aliasing is MSAA on the target (4x high, 2x medium); the low tier has
+ * none on the target and runs SMAA over the finished picture instead.
+ *
+ * The renderer's own tone mapping stays off: the grade effect is the tone map.
+ */
+import { BlendFunction, BloomEffect, Effect, EffectComposer, EffectPass, Pass, SMAAEffect, SMAAPreset } from "postprocessing";
+import { Color, HalfFloatType, NoToneMapping, PerspectiveCamera, ShaderChunk, Uniform, Vector4, type WebGLRenderer, type WebGLRenderTarget } from "three";
+import type { Tier } from "./quality";
+import type { Look } from "./world/look";
+
+/** Draws every view into `target`. */
+export type DrawViews = (target: WebGLRenderTarget) => void;
+
+class ViewsPass extends Pass {
+  constructor(private readonly draw: DrawViews) {
+    super("ViewsPass");
+    this.needsSwap = false;
+  }
+
+  override render(_renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget): void {
+    this.draw(inputBuffer);
+  }
+}
+
+const TONES = { aces: 0, agx: 1, neutral: 2 } as const;
+
+const GRADE = /* glsl */ `
+${ShaderChunk.tonemapping_pars_fragment}
+uniform int uTone;
+uniform float uVibrance;
+uniform float uSaturation;
+uniform float uContrast;
+uniform vec3 uShadowTint;
+uniform vec3 uHighlightTint;
+uniform float uVignette;
+uniform vec4 uTiles[4];
+uniform int uTileCount;
+uniform float uCanvasAspect;
+
+float gLuma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  vec3 c = max(inputColor.rgb, vec3(0.0));
+  if (uTone == 0) c = ACESFilmicToneMapping(c);
+  else if (uTone == 1) c = AgXToneMapping(c);
+  else c = NeutralToneMapping(c);
+  c = clamp(c, 0.0, 1.0);
+
+  // Saturation, then vibrance (which lifts the dull colours more than the vivid ones).
+  float l = gLuma(c);
+  c = mix(vec3(l), c, uSaturation);
+  float mx = max(c.r, max(c.g, c.b));
+  float mn = min(c.r, min(c.g, c.b));
+  c = mix(vec3(gLuma(c)), c, 1.0 + uVibrance * (1.0 - clamp(mx - mn, 0.0, 1.0)));
+
+  // An S curve about mid grey, applied in a perceptual space.
+  vec3 p = pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+  p = mix(p, p * p * (3.0 - 2.0 * p), uContrast);
+  c = pow(p, vec3(2.2));
+
+  // Split tone: cool in the shadows, warm in the lights.
+  c *= mix(uShadowTint, uHighlightTint, smoothstep(0.02, 0.7, gLuma(c)));
+
+  // Vignette, per view tile.
+  float v = 1.0;
+  for (int i = 0; i < 4; i++) {
+    if (i >= uTileCount) break;
+    vec4 t = uTiles[i];
+    vec2 q = (uv - t.xy) / t.zw;
+    if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+      vec2 d = (q - 0.5) * vec2(t.z / t.w * uCanvasAspect, 1.0);
+      float r = length(d) * 1.25;
+      v = 1.0 - uVignette * smoothstep(0.5, 1.15, r);
+    }
+  }
+  c *= v;
+
+  // A whisper of dither so the sky's long gradients do not band.
+  float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  c += (n - 0.5) * (1.1 / 255.0) * max(0.15, sqrt(gLuma(c)));
+  outputColor = vec4(max(c, vec3(0.0)), inputColor.a);
+}
+`;
+
+export class GradeEffect extends Effect {
+  private readonly tiles: Vector4[] = [new Vector4(), new Vector4(), new Vector4(), new Vector4()];
+
+  constructor() {
+    super("GripGrade", GRADE, {
+      blendFunction: BlendFunction.SET,
+      uniforms: new Map<string, Uniform>([
+        ["toneMappingExposure", new Uniform(1)],
+        ["uTone", new Uniform(0)],
+        ["uVibrance", new Uniform(0)],
+        ["uSaturation", new Uniform(1)],
+        ["uContrast", new Uniform(0)],
+        ["uShadowTint", new Uniform(new Color(1, 1, 1))],
+        ["uHighlightTint", new Uniform(new Color(1, 1, 1))],
+        ["uVignette", new Uniform(0.2)],
+        ["uTiles", new Uniform([new Vector4(), new Vector4(), new Vector4(), new Vector4()])],
+        ["uTileCount", new Uniform(1)],
+        ["uCanvasAspect", new Uniform(1)],
+      ]),
+    });
+    (this.uniforms.get("uTiles") as Uniform).value = this.tiles;
+  }
+
+  setLook(look: Look): void {
+    const u = (n: string) => this.uniforms.get(n) as Uniform;
+    u("toneMappingExposure").value = look.exposure;
+    u("uTone").value = TONES[look.tone];
+    u("uVibrance").value = look.vibrance;
+    u("uSaturation").value = look.saturation;
+    u("uContrast").value = look.contrast;
+    (u("uShadowTint").value as Color).setRGB(...look.shadowTint);
+    (u("uHighlightTint").value as Color).setRGB(...look.highlightTint);
+    u("uVignette").value = look.vignette;
+  }
+
+  /** The view tiles as fractions of the canvas: x, y (from the bottom), w, h. */
+  setTiles(tiles: readonly { x: number; y: number; w: number; h: number }[], width: number, height: number): void {
+    (this.uniforms.get("uTileCount") as Uniform).value = Math.min(4, tiles.length);
+    (this.uniforms.get("uCanvasAspect") as Uniform).value = width / height;
+    tiles.slice(0, 4).forEach((t, i) => this.tiles[i]!.set(t.x / width, 1 - (t.y + t.h) / height, t.w / width, t.h / height));
+  }
+}
+
+const samplesFor = (tier: Tier): number => (tier === "high" ? 4 : tier === "medium" ? 2 : 0);
+
+export class PostChain {
+  readonly composer: EffectComposer;
+  private readonly grade = new GradeEffect();
+  private readonly bloom: BloomEffect;
+  /** The effects need a camera to be built with; none of them looks through it. */
+  private readonly camera = new PerspectiveCamera();
+
+  constructor(renderer: WebGLRenderer, tier: Tier, draw: DrawViews) {
+    renderer.toneMapping = NoToneMapping;
+    this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, multisampling: samplesFor(tier), depthBuffer: true, stencilBuffer: false });
+    this.composer.addPass(new ViewsPass(draw));
+    this.bloom = new BloomEffect({ luminanceThreshold: 1, luminanceSmoothing: 0.25, mipmapBlur: true, intensity: 0.5, radius: 0.72, levels: tier === "low" ? 5 : 7 });
+    // Bloom's own blend (screen) adds the glow to the picture; the grade then maps the sum.
+    this.composer.addPass(new EffectPass(this.camera, this.bloom, this.grade));
+    if (tier === "low") this.composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.LOW })));
+  }
+
+  setLook(look: Look): void {
+    this.grade.setLook(look);
+    this.bloom.intensity = look.bloom.intensity;
+    this.bloom.luminanceMaterial.threshold = look.bloom.threshold;
+    this.bloom.mipmapBlurPass.radius = look.bloom.radius;
+  }
+
+  setTiles(tiles: readonly { x: number; y: number; w: number; h: number }[], width: number, height: number): void {
+    this.grade.setTiles(tiles, width, height);
+  }
+
+  /** `width` x `height` are CSS pixels; the renderer's pixel ratio is already set. */
+  setSize(width: number, height: number): void {
+    this.composer.setSize(width, height, false);
+  }
+
+  render(dt: number): void {
+    this.composer.render(dt);
+  }
+
+  dispose(): void {
+    this.composer.dispose();
+  }
+}

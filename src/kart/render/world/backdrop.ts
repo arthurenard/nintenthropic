@@ -22,6 +22,7 @@ import { makePoints } from "../points";
 import { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, type Paint, type Rgb } from "./builder";
 import { DROP_DEPTH } from "./features";
 import { seaMaterial, type Own } from "./materials";
+import type { BakeUniforms } from "./shading";
 import { SEA_LEVEL, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 
@@ -79,7 +80,7 @@ function tileTexture(): CanvasTexture {
   return tex;
 }
 
-export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own): Backdrop | null {
+export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, _bake?: BakeUniforms): Backdrop | null {
   const group = new Group();
   const disposables: { dispose(): void }[] = [];
   const updates: ((t: number) => void)[] = [];

@@ -11,26 +11,28 @@ import {
   Color,
   DoubleSide,
   MeshBasicMaterial,
-  MeshLambertMaterial,
-  MeshPhongMaterial,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
   ShaderMaterial,
   UniformsLib,
   UniformsUtils,
   Vector3,
   type Material,
   type Texture,
+  type WebGLProgramParametersWithUniforms,
 } from "three";
 import type { Surface } from "../../track/geometry";
 import type { QualitySettings } from "../quality";
+import { bakedLit, type BakeUniforms } from "./shading";
 import { roadTexture } from "./textures";
 import { groundDetail, roadGlowTexture, surfaceTexture, type GroundDetail } from "./themeTextures";
 import type { ThemeStyle } from "./themes";
 
 export type Own = { dispose(): void }[];
 
-/** Lets a Lambert material take a per-vertex `aGlow` (0..1) as extra light of `colour`: cracks and hot banks that need no light. */
-function glowFromVertices(material: MeshLambertMaterial, colour: Color, strength: number): void {
-  material.onBeforeCompile = (shader) => {
+/** Lets a lit material take a per-vertex `aGlow` (0..1) as extra light of `colour`: cracks and hot banks that need no light. */
+function glowFromVertices(colour: Color, strength: number): (shader: WebGLProgramParametersWithUniforms) => void {
+  return (shader) => {
     shader.uniforms.uGlowColour = { value: colour.clone().multiplyScalar(strength) };
     // The painted cracks (the emissive map) glow on level ground only: on a mountainside they would stretch into a web.
     shader.vertexShader = shader.vertexShader
@@ -43,13 +45,19 @@ function glowFromVertices(material: MeshLambertMaterial, colour: Color, strength
 }
 
 export interface GroundMaterial {
-  material: MeshLambertMaterial;
+  material: MeshStandardMaterial;
   detail: GroundDetail | null;
 }
 
-export function groundMaterial(style: ThemeStyle, quality: QualitySettings, own: Own): GroundMaterial {
+export function groundMaterial(style: ThemeStyle, quality: QualitySettings, own: Own, bake: BakeUniforms): GroundMaterial {
   const detail = groundDetail(style, quality.anisotropy, quality.tier === "low" ? 256 : 512);
-  const material = new MeshLambertMaterial({ vertexColors: true, map: detail?.map ?? null });
+  const volcano = style.id === "volcano";
+  const material = bakedLit(
+    new MeshStandardMaterial({ vertexColors: true, map: detail?.map ?? null, roughness: 0.95, metalness: 0 }),
+    bake,
+    volcano ? "ground-glow" : "ground",
+    volcano ? glowFromVertices(new Color(1.0, 0.36, 0.07), 1.3) : undefined,
+  );
   own.push(material);
   if (detail) {
     own.push(detail.map);
@@ -59,22 +67,25 @@ export function groundMaterial(style: ThemeStyle, quality: QualitySettings, own:
       material.emissiveMap = detail.glow;
     }
   }
-  if (style.id === "volcano") glowFromVertices(material, new Color(1.0, 0.36, 0.07), 1.3);
   return { material, detail };
 }
 
-export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: Own): Material {
+export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: Own, bake: BakeUniforms): Material {
   const map = roadTexture(style, quality.anisotropy, quality.roadTexture);
   own.push(map);
   const glow = roadGlowTexture(style, quality.anisotropy, quality.roadTexture);
   if (glow) own.push(glow);
   if (style.id === "space") {
     // A ribbon of dark glass with light in it: you see the stars through it, a little.
-    const m = new MeshLambertMaterial({ map, emissive: new Color(1, 1, 1), emissiveMap: glow, transparent: true, opacity: 0.8 });
+    const m = bakedLit(
+      new MeshPhysicalMaterial({ map, emissive: new Color(1, 1, 1), emissiveMap: glow, transparent: true, opacity: 0.8, roughness: 0.18, metalness: 0.1, clearcoat: 0.6, clearcoatRoughness: 0.1 }),
+      bake,
+      "road-glass",
+    );
     own.push(m);
     return m;
   }
-  const m = new MeshLambertMaterial({ map });
+  const m = bakedLit(new MeshStandardMaterial({ map, roughness: 0.78, metalness: 0 }), bake, "road");
   if (glow) {
     m.emissive = new Color(0.6, 0.5, 0.48);
     m.emissiveMap = glow;
@@ -84,14 +95,14 @@ export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: O
 }
 
 /** A patch of ice (glossy), mud, sand, snow or grass laid on the road. */
-export function patchMaterial(kind: Exclude<Surface, "boost">, quality: QualitySettings, own: Own): Material {
+export function patchMaterial(kind: Exclude<Surface, "boost">, quality: QualitySettings, own: Own, bake: BakeUniforms): Material {
   const map: Texture = surfaceTexture(kind, quality.anisotropy);
   own.push(map);
   const common = { vertexColors: true, map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 } as const;
   const m =
     kind === "ice"
-      ? new MeshPhongMaterial({ ...common, specular: new Color(1, 1, 1), shininess: 140, opacity: 0.92 })
-      : new MeshLambertMaterial({ ...common });
+      ? bakedLit(new MeshPhysicalMaterial({ ...common, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, opacity: 0.92 }), bake, "ice")
+      : bakedLit(new MeshStandardMaterial({ ...common, roughness: kind === "snow" ? 0.7 : 0.95, metalness: 0 }), bake, `patch-${kind}`);
   own.push(m);
   return m;
 }

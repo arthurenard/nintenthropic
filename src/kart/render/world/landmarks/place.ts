@@ -20,7 +20,8 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
   Vector3,
@@ -35,6 +36,7 @@ import { hazardAt } from "../../../track/hazards";
 import { makePoints } from "../../points";
 import type { Bank } from "../bank";
 import { MeshBuilder, type V3 } from "../builder";
+import { bakedLit, makeBakeUniforms, type BakeUniforms } from "../shading";
 import { glowTexture } from "../textures";
 import type { ThemeStyle } from "../themes";
 import { HAZARDS, LANDMARKS } from "./index";
@@ -43,17 +45,17 @@ import type { Halo, HazardModel, HazardState, LandmarkContext, LandmarkModel } f
 // ─── Materials ───────────────────────────────────────────────────────────────
 
 export interface LandmarkMaterials {
-  lit: MeshLambertMaterial;
+  lit: MeshStandardMaterial;
   glow: MeshBasicMaterial;
-  glass: MeshLambertMaterial;
+  glass: MeshPhysicalMaterial;
   dispose(): void;
 }
 
 /** The three materials every landmark and hazard is drawn with: solid, glowing, translucent; all double sided. */
-export function landmarkMaterials(): LandmarkMaterials {
-  const lit = new MeshLambertMaterial({ vertexColors: true, side: DoubleSide });
+export function landmarkMaterials(bake: BakeUniforms = makeBakeUniforms()): LandmarkMaterials {
+  const lit = bakedLit(new MeshStandardMaterial({ vertexColors: true, side: DoubleSide, roughness: 0.62, metalness: 0.02 }), bake, "landmark");
   const glow = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide });
-  const glass = new MeshLambertMaterial({ vertexColors: true, side: DoubleSide, transparent: true, opacity: 0.5, depthWrite: false });
+  const glass = new MeshPhysicalMaterial({ vertexColors: true, side: DoubleSide, transparent: true, opacity: 0.5, depthWrite: false, roughness: 0.05, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05 });
   return {
     lit,
     glow,
