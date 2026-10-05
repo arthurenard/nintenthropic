@@ -154,7 +154,7 @@ export function botInput(w: World, k: KartState): DriveInput {
   const bendTurn = tableAt(plan, plan.curve, k.s + 6);
   const bendLeft = tableAt(plan, plan.bend, k.s + 2);
   if (m.drifting) {
-    const ending = bendLeft < 14 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0;
+    const ending = bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0;
     const failed = k.drift === 0 && k.hop === 0;
     if (ending || failed) m.drifting = false;
   } else if (
@@ -162,8 +162,8 @@ export function botInput(w: World, k: KartState): DriveInput {
     k.spin === 0 &&
     !k.offroad &&
     fwd > B.driftMinSpeed &&
-    bendLength >= B.driftMinLength &&
-    Math.abs(steer) > 0.4 &&
+    bendLength >= Math.max(B.driftMinLength, fwd * B.driftMinTime) &&
+    Math.abs(steer) > 0.34 &&
     Math.sign(steer) === Math.sign(bendTurn)
   ) {
     m.drifting = true;

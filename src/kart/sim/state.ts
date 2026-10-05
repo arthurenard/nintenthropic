@@ -190,6 +190,8 @@ export interface SimState {
 /** What the parts of the simulation see of the race they are part of. */
 export interface World {
   setup: RaceSetup;
+  /** Laps to the race: the setup's, but at least one. */
+  laps: number;
   geo: TrackGeometry;
   plan: TrackPlan;
   state: SimState;

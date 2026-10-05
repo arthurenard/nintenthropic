@@ -148,11 +148,26 @@ export function takeSnapshot(state: SimState, draws: number): RaceSnapshot {
   };
 }
 
-/** Puts a snapshot's state back; says whether it was one of this race's (the same karts) and was taken. */
+/** Whether `rows` is a list of rows of exactly `width` finite numbers. */
+function table(rows: unknown, width: number, count?: number): rows is number[][] {
+  return (
+    Array.isArray(rows) &&
+    (count === undefined || rows.length === count) &&
+    rows.every((row) => Array.isArray(row) && row.length === width && row.every((v) => Number.isFinite(v)))
+  );
+}
+
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** Puts a snapshot's state back; says whether it was one of this race's (the same karts) and was taken. Anything else changes nothing. */
 export function applySnapshot(w: World, snap: RaceSnapshot): boolean {
-  const rows = snap.k as number[][] | undefined;
-  if (!Array.isArray(rows) || rows.length !== w.state.karts.length) return false;
-  if (rows.some((row) => !Array.isArray(row) || row.length !== KART_FIELDS)) return false;
+  const rows = snap.k;
+  if (!table(rows, KART_FIELDS, w.state.karts.length)) return false;
+  if (!finite(snap.tick) || !finite(snap.rng) || snap.rng < 0 || snap.rng > 1_000_000 || !finite(snap.ev) || !finite(snap.th) || !finite(snap.first)) return false;
+  const boxes = snap.b;
+  if (!Array.isArray(boxes) || boxes.length % 2 !== 0 || !boxes.every((v) => Number.isFinite(v))) return false;
+  if (!Array.isArray(snap.home) || !snap.home.every((v) => Number.isFinite(v))) return false;
+  if (!table(snap.p, 9) || !table(snap.e, 10) || !table(snap.l, 7)) return false;
   const state = w.state;
   state.tick = snap.tick;
   w.rng.reset(snap.rng as number);
@@ -162,8 +177,10 @@ export function applySnapshot(w: World, snap: RaceSnapshot): boolean {
   state.firstHome = snap.first as number;
   state.over = snap.over === 1;
   state.boxes.fill(0);
-  const boxes = snap.b as number[];
-  for (let i = 0; i + 1 < boxes.length; i += 2) state.boxes[boxes[i]!] = boxes[i + 1]!;
+  for (let i = 0; i + 1 < boxes.length; i += 2) {
+    const at = boxes[i] as number;
+    if (at >= 0 && at < state.boxes.length) state.boxes[at] = boxes[i + 1] as number;
+  }
   state.pucks = (snap.p as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, x: r[2]!, z: r[3]!, s: r[4]!, vx: r[5]!, vz: r[6]!, life: r[7]!, age: r[8]! }));
   state.seekers = (snap.e as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, target: r[2]!, x: r[3]!, z: r[4]!, dx: r[5]!, dz: r[6]!, s: r[7]!, life: r[8]!, age: r[9]! }));
   state.slicks = (snap.l as number[][]).map((r) => ({ id: r[0]!, owner: r[1]!, x: r[2]!, z: r[3]!, s: r[4]!, offset: r[5]!, age: r[6]! }));

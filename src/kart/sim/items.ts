@@ -42,7 +42,7 @@ export function hitKart(victim: KartState, by: number | null, cause: "puck" | "s
  * kart's own boost, but nothing is put on the track.
  */
 export function pressItem(w: World, k: KartState, input: DriveInput, full: boolean, emit: Emit): void {
-  if (input.itemPresses <= k.presses) return;
+  if (!(input.itemPresses > k.presses) || !Number.isSafeInteger(input.itemPresses)) return;
   k.presses = input.itemPresses;
   if (k.roll > 0 || k.item === null) return;
   const state = w.state;

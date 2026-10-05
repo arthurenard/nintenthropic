@@ -69,6 +69,21 @@ describe("driving", () => {
   });
 });
 
+describe("inputs from the network", () => {
+  it("that are not numbers are nothing", () => {
+    const r = solo();
+    const bad = input({ throttle: Number.NaN, steer: Number.POSITIVE_INFINITY, brake: Number.NaN, itemPresses: Number.NaN });
+    run(r, 60, () => bad);
+    run(r, 120, () => input({ throttle: 1, steer: Number.NaN }));
+    const k = view(r);
+    for (const key of ["x", "z", "heading", "speed", "steer"] as const) expect(Number.isFinite(k[key])).toBe(true);
+    expect(k.speed).toBeGreaterThan(10);
+    // Values out of range are held to it.
+    run(r, 60, () => input({ throttle: 7, steer: -40, brake: -3 }));
+    expect(Math.abs(view(r).steer)).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("barriers", () => {
   it("stop a kart 6 m beyond the edge, take the speed into them and a little of the rest, and say so", () => {
     const r = solo();
@@ -233,14 +248,23 @@ describe("hop and drift", () => {
     expect(view(quick).boost).toBe(0);
   });
 
-  it("is ended by the brake, without a boost", () => {
+  it("is ended by a brake, which still gives the boost it had charged", () => {
     const r = arena();
     run(r, 130, () => drift(1));
     expect(view(r).driftLevel).toBe(2);
     const events = run(r, 3, () => input({ brake: 1, drift: true, steer: 1 }));
     expect(view(r).drift).toBe(0);
+    expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 2 });
+    expect(view(r).boost).toBeGreaterThan(1);
+  });
+
+  it("is ended by running out of speed, with nothing", () => {
+    const r = arena();
+    run(r, 130, () => drift(1));
+    patch(r, 0, { vx: 0, vz: 0 });
+    const events = run(r, 3, () => drift(1));
+    expect(view(r).drift).toBe(0);
     expect(count(events, "boost")).toBe(0);
-    expect(view(r).boost).toBe(0);
   });
 
   it("does not build charge off the road", () => {

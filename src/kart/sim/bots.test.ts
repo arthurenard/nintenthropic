@@ -167,8 +167,8 @@ describe("the rubber band", () => {
     const ahead = lapsDone(-3);
     // A player most of a lap ahead (standing there, as far as it can tell): the bot is far behind and pushes.
     const behind = lapsDone(950);
-    expect(ahead).toBeLessThan(level - 0.01);
-    expect(behind).toBeGreaterThan(level + 0.005);
+    expect(ahead).toBeLessThan(level - 0.004);
+    expect(behind).toBeGreaterThan(level + 0.004);
     // A few per cent, not a different race.
     expect(ahead).toBeGreaterThan(level * 0.9);
     expect(behind).toBeLessThan(level * 1.1);

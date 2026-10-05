@@ -29,6 +29,8 @@ const LEVEL_2 = ticks(DR.level2);
 const FLOOD_AFTER = ticks(TUNING.start.floodAfter);
 const BOOST_WINDOW = ticks(TUNING.start.boostWindow);
 
+const finite = (v: number): number => (Number.isFinite(v) ? v : 0);
+
 export function newBotMemory(): BotMemory {
   return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false };
 }
@@ -127,11 +129,20 @@ export function yawRate(steer: number, speed: number): number {
   return steer * S.yawMax * turnShare(Math.abs(speed));
 }
 
+/** Brings a velocity down to `limit` m/s if it is over. */
+export function capSpeed(k: KartState, limit: number): void {
+  const speed = Math.hypot(k.vx, k.vz);
+  if (speed > limit) {
+    k.vx *= limit / speed;
+    k.vz *= limit / speed;
+  }
+}
+
 export function giveBoost(k: KartState, seconds: number): void {
   k.boost = Math.max(k.boost, ticks(seconds));
 }
 
-/** Ends a drift, with a boost for the charge when `release` (the driver let go), without when not. */
+/** Ends a drift, with the boost its charge earned if `boost`. */
 function endDrift(k: KartState, boost: boolean, emit: Emit): void {
   if (boost && k.level > 0) {
     giveBoost(k, k.level === 2 ? DR.boost2 : DR.boost1);
@@ -229,15 +240,17 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
  */
 export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit): void {
   const racing = k.t >= GO_TICK;
-  const steerIn = clamp(input.steer, -1, 1);
-  const throttleIn = clamp(input.throttle, 0, 1);
-  const brakeIn = clamp(input.brake, 0, 1);
+  // Inputs can come off the network: anything that is not a number is nothing.
+  const steerIn = clamp(finite(input.steer), -1, 1);
+  const throttleIn = clamp(finite(input.throttle), 0, 1);
+  const brakeIn = clamp(finite(input.brake), 0, 1);
+  const driftIn = input.drift === true;
 
   if (!racing) {
     // Counting down: the kart stands. Remember how long the throttle has been down, for the start.
     k.held = throttleIn > 0.5 && brakeIn < 0.5 ? k.held + 1 : 0;
     k.steer += (steerIn - k.steer) * (1 - Math.exp(-S.response * TICK));
-    k.prevDrift = input.drift;
+    k.prevDrift = driftIn;
     k.t++;
     settle(k);
     return;
@@ -265,7 +278,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     k.vx *= keep;
     k.vz *= keep;
     k.steer *= 0.8;
-    k.prevDrift = input.drift;
+    k.prevDrift = driftIn;
     if (k.hop > 0) k.hop--;
     if (k.boost > 0) k.boost--;
   } else {
@@ -278,11 +291,11 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     const braking = brakeIn > 0.1 && brakeIn >= throttleIn;
 
     // Hop, and the drift it starts.
-    const rising = input.drift && !k.prevDrift;
-    k.prevDrift = input.drift;
+    const rising = driftIn && !k.prevDrift;
+    k.prevDrift = driftIn;
     if (k.hop > 0) k.hop--;
     if (rising && k.hop === 0 && k.drift === 0 && fwd > H.minSpeed) k.hop = HOP_TICKS;
-    if (k.drift === 0 && k.hop > 0 && input.drift && Math.abs(steerIn) > H.minSteer && fwd > H.minSpeed * 0.8) {
+    if (k.drift === 0 && k.hop > 0 && driftIn && Math.abs(steerIn) > H.minSteer && fwd > H.minSpeed * 0.8) {
       k.drift = steerIn > 0 ? 1 : -1;
       k.charge = 0;
       k.level = 0;
@@ -290,9 +303,9 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
 
     let steerTarget = steerIn;
     if (k.drift !== 0) {
-      if (!input.drift || brakeIn > DR.cancelBrake || fwd < DR.minSpeed) {
-        // Letting go gives the boost; a brake or running out of speed gives nothing.
-        endDrift(k, !input.drift && brakeIn <= DR.cancelBrake && fwd >= DR.minSpeed, emit);
+      if (!driftIn || brakeIn > DR.endBrake || fwd < DR.minSpeed) {
+        // Letting go, or a brake, ends it and gives the boost the charge earned; running out of speed gives nothing.
+        endDrift(k, fwd >= DR.minSpeed, emit);
       } else {
         // Always turning into the drift: 0.4 of a full turn with the wheel straightened out, 1.4 with it hard over.
         const own = steerIn * k.drift;
@@ -317,10 +330,13 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     const cos = Math.cos(k.heading);
     let along = k.vx * sin + k.vz * cos;
     let across = -k.vx * cos + k.vz * sin;
+    // The grip turns the velocity toward the heading: the speed stays (less a little scrubbed off for the slide), the sideways part becomes forward.
     const grip = k.drift !== 0 ? S.gripDrift : k.offroad ? S.gripOffroad : S.grip;
     const lost = across * (1 - Math.exp(-grip * TICK));
+    const speedBefore = Math.hypot(along, across);
     across -= lost;
-    along += Math.abs(lost) * S.slideKept * (along >= 0 ? 1 : -1);
+    const speedAfter = Math.max(0, speedBefore - (1 - S.slideKept) * Math.abs(lost));
+    along = Math.sqrt(Math.max(0, speedAfter * speedAfter - across * across)) * (along >= 0 ? 1 : -1);
 
     // Speeding up, braking, coasting.
     const boosted = k.boost > 0;
@@ -351,6 +367,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
 
     k.vx = along * sin - across * cos;
     k.vz = along * cos + across * sin;
+    capSpeed(k, D.maxSpeed);
   }
 
   k.x += k.vx * TICK;
@@ -407,11 +424,15 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
       moved.add(b.id);
       const closing = -((a.vx - b.vx) * nx + (a.vz - b.vz) * nz);
       if (closing > 0) {
+        const faster = Math.max(Math.hypot(a.vx, a.vz), Math.hypot(b.vx, b.vz));
         const impulse = ((1 + B.restitution) * closing) / (1 / wa + 1 / wb);
         a.vx += (nx * impulse) / wa;
         a.vz += (nz * impulse) / wa;
         b.vx -= (nx * impulse) / wb;
         b.vz -= (nz * impulse) / wb;
+        // A shove sends the other kart on, but never faster than the faster of the two had been.
+        capSpeed(a, faster);
+        capSpeed(b, faster);
         if (closing > B.minReport) emit({ type: "bump", a: a.id, b: b.id, strength: Math.min(1, closing / B.fullStrength) });
       }
     }

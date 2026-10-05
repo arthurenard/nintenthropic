@@ -252,6 +252,29 @@ describe("a snapshot", () => {
     expect(JSON.stringify(b.snapshot())).toBe(before);
   });
 
+  it("that is damaged changes nothing", () => {
+    const a = busyRace();
+    run(a, 300);
+    const b = busyRace();
+    run(b, 200);
+    const before = JSON.stringify(b.snapshot());
+    const good = a.snapshot();
+    const k = good.k as number[][];
+    for (const damaged of [
+      { ...good, k: k.slice(1) },
+      { ...good, k: k.map((row) => row.slice(1)) },
+      { ...good, k: k.map((row, i) => (i === 3 ? row.map(() => Number.NaN) : row)) },
+      { ...good, b: [1] },
+      { ...good, home: undefined },
+      { ...good, p: [[1, 2, 3]] },
+      { ...good, rng: 1e12 },
+      { ...good, tick: "soon" },
+    ]) {
+      b.restore(damaged as unknown as typeof good);
+      expect(JSON.stringify(b.snapshot())).toBe(before);
+    }
+  });
+
   it("leaves no events waiting from before", () => {
     const a = busyRace();
     run(a, 400);

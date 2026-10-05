@@ -37,7 +37,8 @@ function watched(w: World): KartState[] {
 
 /** Counts laps and finishes after a tick's movement; ends the race when it is time. */
 export function updateProgress(w: World, emit: Emit): void {
-  const { state, geo, setup } = w;
+  const { state, geo } = w;
+  const laps = w.laps;
   if (state.tick < GO_TICK || state.over) {
     updatePlaces(w);
     return;
@@ -51,7 +52,7 @@ export function updateProgress(w: World, emit: Emit): void {
     // When it crossed whatever line it just crossed, a little before the end of this tick.
     const crossed = (progress: number) => Math.max(0, now - Math.max(0, k.progress - progress) / Math.max(1, Math.abs(forwardSpeed(k))));
     if (k.lapStart < 0 && k.progress >= 0) k.lapStart = q3(crossed(0));
-    const reached = Math.min(setup.laps, Math.floor(Math.max(0, k.progress) / length) + 1);
+    const reached = Math.min(laps, Math.floor(Math.max(0, k.progress) / length) + 1);
     while (k.lap < reached) {
       const at = q3(crossed(k.lap * length));
       const time = at - k.lapStart;
@@ -59,19 +60,19 @@ export function updateProgress(w: World, emit: Emit): void {
       k.lapStart = at;
       k.lap++;
       emit({ type: "lap", kart: k.id, lap: k.lap });
-      if (k.lap === setup.laps) emit({ type: "final-lap", kart: k.id });
+      if (k.lap === laps) emit({ type: "final-lap", kart: k.id });
     }
-    if (k.progress >= setup.laps * length) finishers.push(k);
+    if (k.progress >= laps * length) finishers.push(k);
   }
 
   // Several karts can finish on one tick: the one furthest past the line was first.
   finishers.sort((a, b) => b.progress - a.progress || a.id - b.id);
   for (const k of finishers) {
-    const at = q3(Math.max(k.lapStart, Math.min(now, now - (k.progress - setup.laps * length) / Math.max(1, Math.abs(forwardSpeed(k))))));
+    const at = q3(Math.max(k.lapStart, Math.min(now, now - (k.progress - laps * length) / Math.max(1, Math.abs(forwardSpeed(k))))));
     const time = at - k.lapStart;
     if (time > 0 && (k.bestLap === null || time < k.bestLap)) k.bestLap = q3(time);
     k.finished = at;
-    k.lap = setup.laps + 1;
+    k.lap = laps + 1;
     state.home.push(k.id);
     k.finalPlace = state.home.length;
     k.place = k.finalPlace;

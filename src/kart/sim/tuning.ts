@@ -46,6 +46,8 @@ export const TUNING = {
     reverseDelay: 0.3,
     reverseTop: 7,
     reverseTau: 0.6,
+    /** Nothing goes faster than this, whatever bumps and slides do: a boosted top speed and a little over. */
+    maxSpeed: 36,
     /** A spinning kart sheds speed with this rate constant (1/s). */
     spinDrag: 2.5,
   },
@@ -90,8 +92,8 @@ export const TUNING = {
     boost2: 1.4,
     /** Slower than this the drift is over (no boost). */
     minSpeed: 4,
-    /** A brake this hard ends a drift without the boost. */
-    cancelBrake: 0.5,
+    /** A brake this hard ends a drift (the boost is still earned). */
+    endBrake: 0.5,
   },
 
   boost: {
@@ -211,15 +213,16 @@ export const TUNING = {
     /** Rubber band: a bot more than `start` metres from the best player eases off up to `easeOff`, or pushes up to `push`, by `span` metres. */
     rubberStart: 60,
     rubberSpan: 140,
-    easeOff: 0.05,
-    push: 0.04,
+    easeOff: 0.06,
+    push: 0.05,
     /** Stuck: slower than this for this long and a bot backs up for a while. */
     stuckSpeed: 1.5,
     stuckTime: 1.0,
     backTime: 1.0,
-    /** A bot drifts a bend that is tighter than this curvature and lasts at least this long (metres). */
-    driftCurvature: 1 / 55,
-    driftMinLength: 55,
+    /** A bot drifts a bend that is tighter than this curvature and has at least this much left (metres, or this many seconds at its speed, whichever is more): enough to charge a boost. */
+    driftCurvature: 1 / 60,
+    driftMinLength: 24,
+    driftMinTime: 1.5,
     driftMinSpeed: 14,
     /** A bot waits this long (seconds, low..high skill) after getting an item before using it. */
     itemWaitSlow: 2.6,

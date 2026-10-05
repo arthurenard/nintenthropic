@@ -89,6 +89,7 @@ class Sim implements SimRace {
     this.emit = (body) => this.record(body);
     this.world = {
       setup,
+      laps: Math.max(1, Math.round(setup.laps)),
       geo: plan.geo,
       plan,
       state: this.state,
@@ -224,7 +225,7 @@ class Sim implements SimRace {
       phase,
       countdown: state.tick >= GO_TICK ? 0 : (GO_TICK - state.tick) / TICK_HZ,
       time: Math.max(0, (state.tick - GO_TICK) / TICK_HZ),
-      laps: this.setup.laps,
+      laps: this.world.laps,
       track: this.setup.track,
       racers: this.setup.racers,
       karts,
