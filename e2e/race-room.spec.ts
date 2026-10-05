@@ -205,6 +205,19 @@ test("the host's pause stops the race for everyone when it plays on the big scre
   await expect(bea.locator("#pause-veil")).toBeHidden({ timeout: 6000 });
   await expect(page.locator("#pause-veil")).toBeHidden();
   await expect.poll(async () => (await state(page)).race!.time, { timeout: 5000 }).toBeGreaterThan(stopped + 0.5);
+
+  // Restart from the pause sheet: the same people, the lights again, on every device.
+  const before = (await state(page)).lobby!.race;
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Restart" }).click();
+  await expect.poll(async () => (await state(bea)).lobby!.race, { timeout: 10_000 }).not.toBe(before);
+  await expect.poll(async () => (await state(page)).race?.phase, { timeout: 30_000 }).toBe("countdown");
+  await expect(page.locator("#pause-veil")).toBeHidden();
+  await expect(page.locator("#pause-sheet")).toBeHidden();
+  await expect(bea.locator("#controller")).toBeVisible();
+  await expect.poll(async () => (await state(bea)).race?.phase, { timeout: 30_000 }).toBe("countdown");
+  expect((await state(page)).views).toHaveLength(2);
+  expect((await state(page)).lobby!.players.map((p) => p.ready)).toEqual([true, true]);
 });
 
 test("a wheel player on the big screen who loses their hands is told in their own viewport", async ({ page }, info) => {
@@ -235,6 +248,11 @@ test("a wheel player on the big screen who loses their hands is told in their ow
   await bea.evaluate(() => window.gripTest!.wheel({ angle: 0 }));
   await expect(page.locator(".view-note")).toHaveCount(0, { timeout: 5000 });
   await expect(bea.locator("#lost-hands")).toBeHidden();
+
+  // Her phone propped up in front of her: the wheel's picture, her place, lap and item, large.
+  await bea.setViewportSize({ width: 390, height: 844 });
+  await bea.evaluate(() => window.gripTest!.wheel({ angle: 14 }));
+  await shot(bea, info, "room-8b-controller-wheel-phone", 500);
 });
 
 test("practice against bots, all the way to the results and round again", async ({ page }, info) => {

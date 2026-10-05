@@ -69,6 +69,21 @@ export function sharesHostScreen(lobby: LobbyState): boolean {
   return lobby.players.some((player) => player.device !== lobby.host && player.screen === lobby.host);
 }
 
+/**
+ * Two friends who both kept the default name (or both typed "Sam") would be
+ * one name on the results and the split screen: the later one is "Sam 2".
+ * `taken` holds the names (lower case) already in the room.
+ */
+function tellApart(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let n = 2; n <= MAX_PLAYERS + 1; n++) {
+    const suffix = ` ${n}`;
+    const tried = `${name.slice(0, 16 - suffix.length).trimEnd()}${suffix}`;
+    if (!taken.has(tried.toLowerCase())) return tried;
+  }
+  return name;
+}
+
 export class Roster {
   private slots: (LobbyPlayer | null)[] = Array.from({ length: MAX_PLAYERS }, () => null);
   /** What each player asked for (their `screen`), before "auto" is settled by the host's display setting. */
@@ -142,13 +157,17 @@ export class Roster {
       mine.push(slot);
       mine.sort((a, b) => a - b);
     }
+    // The names already in the room that are not this device's own to change.
+    const taken = new Set(this.slots.filter((p) => p && p.device !== device).map((p) => p!.name.toLowerCase()));
     mine.forEach((slot, i) => {
       const spec = cleanPlayer(wanted[i], `Player ${slot + 1}`);
       const was = this.slots[slot]!;
       this.wants[slot] = spec.screen;
+      const name = tellApart(spec.name, taken);
+      taken.add(name.toLowerCase());
       this.slots[slot] = {
         slot,
-        name: spec.name,
+        name,
         colour: PLAYER_COLOURS[slot]!,
         device,
         screen: this.screenFor(device, spec.screen),

@@ -103,6 +103,12 @@ describe("starting", () => {
     expect(host.lobby().players.filter((p) => p.device === pair.device).map((p) => p.name)).toEqual(["Abe", "Zed"]);
   });
 
+  it("tells two players of the same name apart", async () => {
+    const world = new World({ latency: 20 });
+    const { host } = await room(world, [player("Ann"), player("ann"), player("Cy")]);
+    expect(host.lobby().players.map((p) => p.name)).toEqual(["Ann", "Ann 2", "ann 3", "Cy"]);
+  });
+
   it("puts the names and colours of everyone in the results", async () => {
     const world = new World({ latency: 20 });
     const { host, guests } = await room(world, [player("Bob")]);

@@ -184,6 +184,19 @@ export class RaceScreen {
     } else if ((event.key === "p" || event.key === "P") && !event.repeat) {
       if (this.sheet.open) this.sheet.close();
       else if (!document.querySelector("dialog[open]")) this.pause();
+    } else if ((event.key === "f" || event.key === "F") && !event.repeat) {
+      // The TV wants the whole screen. (Not a key any driver uses.)
+      void this.fullScreen();
+    }
+  }
+
+  /** Full screen on and off, where the browser lets a page have it. */
+  private async fullScreen(): Promise<void> {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      // A browser that says no (an iPhone's) just stays as it is.
     }
   }
 

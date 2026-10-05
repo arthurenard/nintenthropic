@@ -5,6 +5,8 @@
  *
  *   ?input=script     the wheel reads a scripted pair of hands instead of the
  *                     camera; the tests move them with `gripTest.wheel(...)`
+ *   ?camera=ask       the scripted camera says the browser will ask first, so
+ *                     the page explains why before it does
  *   ?fail=<trouble>   camera-denied (or just camera), camera-busy,
  *                     camera-missing, camera-insecure, model, webgl: to see
  *                     each sheet
@@ -58,10 +60,11 @@ export class ScriptedCamera implements CameraService {
   constructor(
     readonly wheel: ScriptedWheel,
     private readonly fail: CameraTrouble | null,
+    private readonly ask = false,
   ) {}
 
   async permission(): Promise<"granted" | "denied" | "prompt"> {
-    return this.fail === "denied" ? "denied" : "granted";
+    return this.fail === "denied" ? "denied" : this.ask ? "prompt" : "granted";
   }
 
   async start(_hands: 2 | 4, progress?: (fraction: number) => void): Promise<void> {
@@ -105,7 +108,7 @@ export function standIn(params: URLSearchParams): StandIn | null {
   if (!scripted && !trouble) return null;
   const wheel = new ScriptedWheel();
   if (scripted) installGripTest(wheel);
-  return { source: wheel, camera: new ScriptedCamera(wheel, trouble) };
+  return { source: wheel, camera: new ScriptedCamera(wheel, trouble, params.get("camera") === "ask") };
 }
 
 export interface GripTest {

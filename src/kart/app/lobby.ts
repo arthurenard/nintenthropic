@@ -171,7 +171,7 @@ export class LobbyScreen {
     setText(
       "foot-display",
       settings.display === "host"
-        ? "The race plays on this screen in split screen. Everyone else’s device becomes their wheel, with their place, lap and item."
+        ? "The race plays on this screen in split screen (press F for full screen). Everyone else’s device becomes their wheel, with their place, lap and item."
         : "Each player watches the race on their own device. Anyone can choose the big screen for themselves.",
     );
     setText("foot-bots", settings.bots ? `Bots fill the grid, so there are ${settings.racers} karts in all.` : "Only the players race.");
