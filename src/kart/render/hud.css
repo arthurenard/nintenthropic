@@ -102,6 +102,28 @@
 .gp-item.gp-got {
   animation: gp-pop 280ms var(--gp-spring);
 }
+.gp-item.gp-take {
+  animation: gp-take 360ms var(--gp-spring);
+}
+/* While the roulette turns, a rainbow spins behind the slot. */
+.gp-item::before {
+  content: "";
+  position: absolute;
+  inset: calc(-9px * var(--u));
+  border-radius: 50%;
+  background: conic-gradient(#ff453a, #ffd60a, #30d158, #64d2ff, #bf5af2, #ff453a);
+  filter: blur(calc(9px * var(--u)));
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+.gp-item.gp-rolling::before {
+  opacity: 0.85;
+  animation: gp-spin 800ms linear infinite;
+}
+.gp-item svg {
+  position: relative;
+}
 /* The newer items glow in their own colour. */
 .gp-item[data-item="comet"] svg { fill: #ffd60a; stroke: #ffd60a; }
 .gp-item[data-item="storm"] svg { fill: #b9c8ff; stroke: #b9c8ff; }
@@ -394,6 +416,22 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+@keyframes gp-take {
+  0% {
+    transform: scale(0.55);
+  }
+  55% {
+    transform: scale(1.32);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes gp-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 @keyframes gp-roll {

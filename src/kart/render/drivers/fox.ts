@@ -1,6 +1,6 @@
 /** Kit the fox: pointed ears through a helmet, a white-tipped brush of a tail, a sharp snout. */
-import { MeshBuilder, rgb } from "../world/builder";
-import { armGeometry, body, dome, eyes, fur, horn, legs, orb, shell, surfaceZ, type Look } from "./parts";
+import { MeshBuilder, rgb } from "../kartBuilder";
+import { armGeometry, body, helmet, eyes, fur, horn, legs, orb, surfaceZ, type Look } from "./parts";
 import type { DriverBuild } from "./types";
 
 const FUR = rgb("#ee7f2d");
@@ -27,8 +27,7 @@ export function buildFox(l: Look): DriverBuild {
     horn(h, [sx * 0.15, 0.2, -0.04], [sx * 0.25, 0.58, -0.1], 0.125, { bottom: FUR, top: DARK }, 4, 0.06);
     horn(h, [sx * 0.15, 0.2, -0.0], [sx * 0.235, 0.5, -0.06], 0.075, { bottom: CREAM, top: CREAM }, 4, 0.03);
   }
-  dome(h, [0, 0.05, -0.01], [0.305, 0.28, 0.29], shell(l), 0.4);
-  h.box(0, 0.125, 0.28, 0.34, 0.035, 0.12, l.low, 0, -0.16);
+  helmet(h, l, [0, 0.05, -0.01], [0.305, 0.28, 0.29], 0.4);
 
   // The brush: big, trailing, a white tip.
   const tail = new MeshBuilder();

@@ -126,6 +126,8 @@ export type HitCause = "puck" | "seeker" | "slick" | "decoy" | "storm" | "skyroc
 export type RaceEvent = { id: number; tick: number } & (
   | { type: "countdown"; n: 3 | 2 | 1 | 0 }
   | { type: "pickup"; kart: number; item: ItemKind }
+  /** Drove through an item box already holding an item: the box breaks, nothing is given. */
+  | { type: "box"; kart: number }
   | { type: "use"; kart: number; item: ItemKind }
   | { type: "hit"; kart: number; by: number | null; cause: HitCause }
   | { type: "boost"; kart: number; source: "nitro" | "pad" | "drift" | "start"; level: number }
