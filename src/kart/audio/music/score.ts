@@ -155,6 +155,10 @@ export interface ScoreNote {
   dur: number;
   midi: number;
   vel: number;
+  /** The chord sounding when the note starts, as written (for checking a tune against its harmony). */
+  chord?: string;
+  /** The sixteenth-note step of the bar it starts on (tunes only). */
+  step?: number;
 }
 
 export interface ScoreHit {
@@ -204,11 +208,12 @@ export function parseNotes(text: string): { notes: ParsedNote[]; steps: number }
   let step = 0;
   for (const raw of text.replace(/\|/g, " ").split(/\s+/)) {
     if (!raw) continue;
-    const m = /^(r|[a-gA-G][#b]?-?\d(?:\+[a-gA-G][#b]?-?\d)*)(?::(\d+(?:\.\d+)?))?([!']*)$/.exec(raw);
+    const m = /^(r|[a-gA-G][#b]?-?\d(?:\+[a-gA-G][#b]?-?\d)*)([!']*)(?::(\d+(?:\.\d+)?))?([!']*)$/.exec(raw);
     if (!m) throw new Error(`bad note token "${raw}"`);
-    const dur = m[2] ? Number(m[2]) : 2;
+    const dur = m[3] ? Number(m[3]) : 2;
+    const marks = m[2]! + m[4]!;
     if (m[1] !== "r") {
-      notes.push({ step, midi: m[1]!.split("+").map(noteToMidi), dur, accent: m[3]!.includes("!"), staccato: m[3]!.includes("'") });
+      notes.push({ step, midi: m[1]!.split("+").map(noteToMidi), dur, accent: marks.includes("!"), staccato: marks.includes("'") });
     }
     step += dur;
   }
@@ -395,6 +400,8 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
             if (b >= section.bars) continue;
             const inBar = n.step - b * stepsPerBar;
             const gate = n.staccato ? 0.45 : 0.92;
+            const slots = chordBars[b % chordBars.length]!;
+            const chord = slots[Math.min(slots.length - 1, Math.floor((inBar + 1e-9) / (stepsPerBar / slots.length)))]!;
             for (const midi of n.midi) {
               notes.push({
                 part: name,
@@ -402,6 +409,8 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
                 dur: length(n.dur * gate, b),
                 midi: midi + (part.shift ?? 0) + transpose,
                 vel: force((part.vel ?? 0.8) * (n.accent ? 1.18 : 1)),
+                chord: chord.symbol,
+                step: inBar,
               });
             }
           }
