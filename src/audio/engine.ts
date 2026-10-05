@@ -37,7 +37,7 @@ import {
   variedRate,
   volumeGain,
 } from "./routing";
-import type { AudioEngine } from "./types";
+import type { AudioEngine, LoopControl, LoopParams, SteerableAudio } from "./types";
 
 /** At most this many one-shot voices at once (loops and heartbeats are apart). */
 export const MAX_VOICES = 24;
@@ -68,7 +68,7 @@ interface LoopState {
 const db = (x: number): number => Math.pow(10, x / 20);
 const clamp = (x: number, lo: number, hi: number): number => (Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : lo);
 
-export class WebAudioEngine implements AudioEngine {
+export class WebAudioEngine implements AudioEngine, SteerableAudio {
   readonly ctx: AudioContext;
   readonly library: SoundLibrary;
   private readonly buses: Record<BusName, GainNode>;
@@ -77,6 +77,7 @@ export class WebAudioEngine implements AudioEngine {
   private readonly master: GainNode;
   private readonly reverbIn: GainNode;
   private readonly reverbReturn: GainNode;
+  private music: GainNode | null = null;
   private voices: Voice[] = [];
   private readonly loops = new Set<LoopState>();
   /** Loops not slowed by slow motion (steady cues, the interface). */
@@ -303,6 +304,99 @@ export class WebAudioEngine implements AudioEngine {
       source.stop(now + fadeOut + 0.02);
       source.onended = () => nodes.forEach((n) => n.disconnect());
     };
+  }
+
+  /**
+   * A loop that can be steered while it plays (see LoopControl): the same
+   * voice as ``loop`` (fades, a random start inside the loop, the air's
+   * low-pass for its distance) with its rate, level, pan and distance left
+   * open to change. It is not slowed by slow motion: a steered loop is the
+   * game's instrument, and the game sets its pitch itself.
+   */
+  controlledLoop(cue: string, options: CueOptions = {}): LoopControl {
+    const spec = this.spec(cue);
+    if (!spec || this.closed) return { set: () => {}, stop: () => {} };
+    let stopped = false;
+    let params: Required<Omit<LoopParams, "distance">> & { distance: number } = {
+      rate: options.rate ?? 1,
+      volume: Math.max(0, options.volume ?? 1),
+      pan: clamp(options.pan ?? 0, -1, 1),
+      distance: Math.max(0, options.distance ?? 0),
+    };
+    let live: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode; air: BiquadFilterNode; nodes: AudioNode[] } | null = null;
+    const target = (): number => db(spec.level) * params.volume * distanceGain(params.distance);
+    const begin = (): void => {
+      if (stopped || this.closed) return;
+      const takes = this.library.get(cue);
+      if (!takes) return;
+      const k = pickTake(takes.length, this.lastTake.get(cue) ?? -1, Math.random());
+      this.lastTake.set(cue, k);
+      const take = takes[k]!;
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      src.buffer = take.buffer;
+      src.loop = true;
+      src.playbackRate.value = clamp(params.rate, 0.1, 8);
+      const air = ctx.createBiquadFilter();
+      air.type = "lowpass";
+      air.frequency.value = airCutoff(params.distance);
+      air.Q.value = 0.5;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(target(), now + Math.max(0.01, spec.fadeIn ?? 0.1));
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = params.pan;
+      src.connect(air).connect(gain).connect(pan).connect(this.buses[spec.bus]);
+      src.start(now + Math.max(0, options.delay ?? 0), Math.random() * take.buffer.duration);
+      live = { src, gain, pan, air, nodes: [src, air, gain, pan] };
+    };
+    if (this.library.get(cue)) begin();
+    else void this.library.request(cue).then(begin);
+    return {
+      set: (next, glide = 0.06) => {
+        params = { ...params, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined && Number.isFinite(v))) };
+        params.pan = clamp(params.pan, -1, 1);
+        params.volume = Math.max(0, params.volume);
+        params.distance = Math.max(0, params.distance);
+        if (!live || stopped) return;
+        const now = this.ctx.currentTime;
+        const tau = Math.max(0.005, glide / 3);
+        live.src.playbackRate.setTargetAtTime(clamp(params.rate, 0.1, 8), now, tau);
+        live.gain.gain.setTargetAtTime(target(), now, tau);
+        live.pan.pan.setTargetAtTime(params.pan, now, tau);
+        live.air.frequency.setTargetAtTime(airCutoff(params.distance), now, tau);
+      },
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        if (!live) return;
+        const { src, gain, nodes } = live;
+        const now = this.ctx.currentTime;
+        const fadeOut = Math.max(0.02, spec.fadeOut ?? 0.15);
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + fadeOut);
+        src.stop(now + fadeOut + 0.02);
+        src.onended = () => nodes.forEach((n) => n.disconnect());
+        live = null;
+      },
+    };
+  }
+
+  /**
+   * The bus for a game's own long pieces (rendered music). It joins the
+   * master like the interface does, past the muffle and the duck: being
+   * hurt in one game must not dull another's score, and the volume slider,
+   * mute and the limiter all still apply.
+   */
+  musicBus(): AudioNode {
+    if (!this.music) {
+      this.music = this.ctx.createGain();
+      this.music.gain.value = 1;
+      this.music.connect(this.master);
+    }
+    return this.music;
   }
 
   setFilter(name: "hurt" | "slowmo", amount: number): void {
