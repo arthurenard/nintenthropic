@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { TICK_HZ, type DriveInput, type RaceEvent, type TrackDef } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { CANYON_RUN } from "../track/tracks";
+import { CANYON_RUN, trackById } from "../track/tracks";
 import { GO_TICK } from "./kart";
 import { planFor } from "./plan";
 import type { SimRace } from "./race";
@@ -529,6 +529,23 @@ describe("snapshots and prediction", () => {
     expect(sawRescue).toBeGreaterThan(30);
     expect(sawAir).toBeGreaterThan(30);
   });
+});
+
+describe("on the busiest tracks", () => {
+  it("eight karts step in well under a third of a millisecond, a snapshot stays under 3 KB, and the same seed replays the same race", () => {
+    for (const track of ["glacier-pass", "volcano-rush", "starlight-ribbon"].map(trackById)) {
+      const r = race(track, racers(0, 8, 0.7), { seed: 3 });
+      run(r, 600);
+      const count = 3000;
+      const started = performance.now();
+      for (let i = 0; i < count; i++) r.step(new Map());
+      expect((performance.now() - started) / count, track.id).toBeLessThan(0.3);
+      expect(JSON.stringify(r.snapshot()).length, track.id).toBeLessThan(3000);
+      const again = race(track, racers(0, 8, 0.7), { seed: 3 });
+      run(again, 600 + count);
+      expect(again.snapshot(), track.id).toEqual(r.snapshot());
+    }
+  }, 60000);
 });
 
 describe("the bots", () => {
