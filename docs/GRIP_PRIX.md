@@ -335,12 +335,18 @@ front of them (or a laptop), and the TV is the host's screen.
 
 - **Ramps** (`ramps`): a ramp across the road; fast enough over its lip and
   the kart flies (about a second). The hop gesture (or Space) in the air is a
-  **trick**: the driver spins, and the kart boosts on landing. Jumps can
-  cross a gap: a drop under the flight.
+  **trick**: the driver spins, and the kart boosts on landing (0.8 s). The
+  picture draws a 16 m wedge, 2.4 m high, ending at the lip; the sim's `hop`
+  is 0 up the wedge and at the lip. Jumps can cross a gap: a `drops` entry
+  with `gap: true` and side `both`, starting just past the lip — a kart that
+  lands short falls.
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a
   little behind, facing the right way: about 2.5 s lost, no item lost.
+  Throughout the rescue the kart's x/y/z stay where it fell (the picture
+  flies the drone from there); then it is set down on the centre line 15 m
+  behind (48 m before a gap), at a standstill, untouchable for 1.5 s.
 - **Verges** (`verges`): the barrier farther out on one side, over sand or
   grass: the cut across a hairpin worth taking with a Nitro.
 - **Surfaces** (`surfaces`): ice (little grip: the kart slides on), mud,
