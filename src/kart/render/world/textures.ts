@@ -6,6 +6,7 @@
 import { CanvasTexture, LinearMipmapLinearFilter, LinearFilter, RepeatWrapping, SRGBColorSpace, ClampToEdgeWrapping } from "three";
 import { seededRandom } from "../../../engine/random";
 import type { ThemeStyle } from "./themes";
+import { paintRoadTheme } from "./themeTextures";
 
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement("canvas");
@@ -57,6 +58,8 @@ export function roadTexture(style: ThemeStyle, anisotropy: number, size = 512): 
     ctx.fillStyle = g;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
+
+  paintRoadTheme(ctx, style, W, H, f, rnd, "under");
 
   // Rubbered-in lanes: two faint dark bands where the karts run.
   for (const cx of [0.3, 0.7]) {
@@ -115,6 +118,7 @@ export function roadTexture(style: ThemeStyle, anisotropy: number, size = 512): 
     ctx.fillRect(x, rnd() * H, (0.8 + rnd() * 1.6) * f, (1 + rnd() * 3) * f);
   }
   ctx.globalAlpha = 1;
+  paintRoadTheme(ctx, style, W, H, f, rnd, "over");
   return finish(new CanvasTexture(c), anisotropy, true);
 }
 

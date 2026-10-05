@@ -296,6 +296,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour">): 
       bodyGroup.position.y = p.hop + p.shake;
       bodyGroup.rotation.set(-p.pitch, p.slide, p.roll, "YXZ");
       driver.rotation.z = p.lean;
+      driver.rotation.y = p.twirl ?? 0;
       head.rotation.y = -p.steer * 0.4;
       head.rotation.z = -p.lean * 0.35;
       wheelRim.rotation.z = -p.steer * 1.5;

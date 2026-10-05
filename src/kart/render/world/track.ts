@@ -1,8 +1,10 @@
 /**
- * The track itself, from its centre line: the road ribbon, kerbs on the outside
- * of tight bends, the verge, the barriers 6 m beyond each edge, bend signs,
- * the start line and gantry, boost pads and (at night) lamps with their pools
- * of light.
+ * The track itself, from its centre line: the road ribbon (banked into its
+ * bends), kerbs on the outside of tight bends, the verge, the barriers (a
+ * theme's own, 6 m beyond the edge unless a verge moves them), bend signs,
+ * the start line and gantry, and (at night) lamps with their pools of light.
+ * The features a track adds (ramps, open edges, gaps, patches, boost strips,
+ * the space ribbon's glow) are drawn by trackFeatures.ts.
  *
  * Everything is cut into chunks of about 48 m of track. Each chunk is a couple
  * of merged geometries, so the camera skips whatever is behind it and a lap is
@@ -12,56 +14,80 @@ import { BufferGeometry, Float32BufferAttribute } from "three";
 import type { TrackGeometry, TrackSample } from "../../track/geometry";
 import { clamp } from "../math";
 import type { QualitySettings } from "../quality";
+import { Bank } from "./bank";
+import { buildBarriers } from "./barriers";
 import { MeshBuilder, rgb, scaleRgb, type Rgb, type V3 } from "./builder";
+import { analyseFeatures, WALL_DISTANCE as WALL, type Features } from "./features";
 import { GROUND_SINK, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 import { ROAD_TILE } from "./textures";
+import type { Glow, TrackBuild } from "./trackContext";
+import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, type PatchGeometry } from "./trackFeatures";
+
+export type { Glow } from "./trackContext";
 
 /** Samples per chunk (about metres: the geometry samples every metre). */
 const CHUNK = 48;
-/** A barrier's inner face stands this far beyond the road's edge: the sim's wall. */
-export const WALL_DISTANCE = 6;
+/** A barrier's inner face stands this far beyond the road's edge: the sim's wall (a verge can move it out). */
+export const WALL_DISTANCE = WALL;
 /** A bend counts as tight when it curves harder than this (radius under about 33 m) somewhere along it... */
 const TIGHT_PEAK = 1 / 33;
 /** ...and the stretch of it curving more than this (radius under about 52 m) is what gets kerbs and signs. */
 const TIGHT_EDGE = 1 / 52;
 
-export interface Glow {
-  x: number;
-  y: number;
-  z: number;
-  size: number;
-  colour: Rgb;
-  alpha: number;
-}
-
 export interface TrackMeshes {
   /** Textured with the road texture (uv across, along / ROAD_TILE). */
   road: BufferGeometry[];
-  /** Vertex coloured: verge, kerbs, barriers, signs, gantry, lamps. */
+  /** Vertex coloured: verge, kerbs, barriers, signs, gantry, lamps, ramps, cliffs. */
   deco: BufferGeometry[];
-  /** Boost pads, textured with the chevrons (v in 4 m repeats). */
+  /** Boost pads and strips, textured with the chevrons (v in 4 m repeats). */
   pads: BufferGeometry | null;
   /** Additive light pools (vertex colour is the light). */
   pools: BufferGeometry | null;
+  /** Additive glowing ribbons: the space road's edges, holographic rails. */
+  additive: BufferGeometry | null;
+  /** Ice, mud, sand, snow and grass patches. */
+  patches: PatchGeometry[];
   glows: Glow[];
   /** The three bulbs of the start lights, world positions. */
   startLights: V3[];
   /** Where the banner hangs. */
   banner: { x: number; y: number; z: number; yaw: number; width: number; height: number };
+  features: Features;
+  bank: Bank;
 }
 
 const UP: V3 = [0, 1, 0];
+
+/** The colours of the ground a verge can be made of (sand, mud...), as stripes of two. */
+function surfaceStripes(kind: string): [Rgb, Rgb] | null {
+  switch (kind) {
+    case "sand":
+      return [rgb("#f0d595"), rgb("#e8c984")];
+    case "mud":
+      return [rgb("#6b4a2e"), rgb("#5e4027")];
+    case "snow":
+      return [rgb("#f4f8ff"), rgb("#e4eefb")];
+    case "ice":
+      return [rgb("#bfe3ff"), rgb("#aad6fa")];
+    case "grass":
+      return [rgb("#79d255"), rgb("#6ac648")];
+    default:
+      return null;
+  }
+}
 
 export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings): TrackMeshes {
   const n = track.samples.length;
   const spacing = track.spacing;
   const samples = track.samples;
+  const features = terrain.features ?? analyseFeatures(track);
+  const bank = new Bank(track);
   const S = (i: number): TrackSample => samples[((i % n) + n) % n]!;
-  /** A point `off` metres right of sample i's centre, lifted by dy. */
+  /** A point `off` metres right of sample i's centre, lifted by dy, following the bank. */
   const P = (i: number, off: number, dy = 0): V3 => {
     const a = S(i);
-    return [a.x - a.tz * off, a.y + dy, a.z + a.tx * off];
+    return [a.x - a.tz * off, a.y + bank.liftAt(i, off) + dy, a.z + a.tx * off];
   };
   const chunks = Math.ceil(n / CHUNK);
   const road: MeshBuilder[] = [];
@@ -72,44 +98,85 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
   const chunkOf = (i: number) => Math.min(chunks - 1, Math.floor(((i % n) + n) % n / CHUNK));
   const glows: Glow[] = [];
+  const additive = new MeshBuilder();
+  const wrapI = (i: number) => ((i % n) + n) % n;
+  const ctx: TrackBuild = {
+    track,
+    style,
+    terrain,
+    quality,
+    features,
+    bank,
+    n,
+    spacing,
+    S,
+    P,
+    chunkOf,
+    deco,
+    additive,
+    glows,
+    wall: (i, side) => (side < 0 ? features.wallLeft : features.wallRight)[wrapI(i)]!,
+    open: (i, side) => (side < 0 ? features.dropLeft : features.dropRight)[wrapI(i)]!,
+    gap: (i) => features.gap[wrapI(i)] === 1,
+  };
   const colour = {
     kerbA: rgb(style.kerb[0]),
     kerbB: rgb(style.kerb[1]),
     vergeA: rgb(style.verge[0]),
     vergeB: rgb(style.verge[1]),
   };
+  const space = style.id === "space";
 
   // ── Road ──────────────────────────────────────────────────────────────────
   const WHITE: Rgb = [1, 1, 1];
   for (let i = 0; i < n; i++) {
+    if (ctx.gap(i) || ctx.gap(i + 1)) continue;
     const a = S(i);
     const b = S(i + 1);
     const hw0 = a.width / 2;
     const hw1 = b.width / 2;
     const v0 = (i * spacing) / ROAD_TILE;
     const v1 = ((i + 1) * spacing) / ROAD_TILE;
-    road[chunkOf(i)]!.quad(P(i, -hw0), P(i, hw0), P(i + 1, hw1), P(i + 1, -hw1), WHITE, WHITE, WHITE, WHITE, UP, [0, v0, 1, v0, 1, v1, 0, v1]);
+    // Three strips across, so a banked road is not a single tilted plane through its middle.
+    const cols = bank.any ? 4 : 1;
+    for (let k = 0; k < cols; k++) {
+      const u0 = k / cols;
+      const u1 = (k + 1) / cols;
+      const l0 = -hw0 + u0 * hw0 * 2;
+      const l1 = -hw0 + u1 * hw0 * 2;
+      const m0 = -hw1 + u0 * hw1 * 2;
+      const m1 = -hw1 + u1 * hw1 * 2;
+      road[chunkOf(i)]!.quad(P(i, l0), P(i, l1), P(i + 1, m1), P(i + 1, m0), WHITE, WHITE, WHITE, WHITE, UP, [u0, v0, u1, v0, u1, v1, u0, v1]);
+    }
   }
 
   // ── Verge, both sides: two stripes of the theme's ground colour, sloping away at the edge ──
-  const vergeOuter = WALL_DISTANCE + 3.4;
   const groundAt = (p: V3): Rgb => {
     const gi = clamp(Math.round((p[0] - terrain.minX) / terrain.cell), 0, terrain.nx - 1);
     const gj = clamp(Math.round((p[2] - terrain.minZ) / terrain.cell), 0, terrain.nz - 1);
     return terrain.colourAt(gi, gj);
   };
-  for (let i = 0; i < n; i += 2) {
+  for (let i = 0; i < n && !space; i += 2) {
     const a = S(i);
     const b = S(i + 2);
-    const stripe = Math.floor(i / 8) % 2 === 0 ? colour.vergeA : colour.vergeB;
-    const next = Math.floor((i + 2) / 8) % 2 === 0 ? colour.vergeA : colour.vergeB;
     for (const side of [-1, 1] as const) {
+      // An open edge has its shelf and cliff instead; a gap has no road to flank.
+      if (ctx.open(i, side) > 0.3 || ctx.open(i + 2, side) > 0.3 || ctx.gap(i) || ctx.gap(i + 2)) continue;
+      const w0 = ctx.wall(i, side);
+      const w1 = ctx.wall(i + 2, side);
+      const kind = (side < 0 ? features.vergeLeft : features.vergeRight)[wrapI(i)];
+      const own = kind ? surfaceStripes(kind) : null;
+      const [sa, sb] = own ?? [colour.vergeA, colour.vergeB];
+      const stripe = Math.floor(i / 8) % 2 === 0 ? sa : sb;
+      const next = Math.floor((i + 2) / 8) % 2 === 0 ? sa : sb;
+      const vergeOuter0 = w0 + 3.4;
+      const vergeOuter1 = w1 + 3.4;
       const h0 = a.width / 2 - 0.05;
       const h1 = b.width / 2 - 0.05;
-      const flat0 = a.width / 2 + WALL_DISTANCE + 0.4;
-      const flat1 = b.width / 2 + WALL_DISTANCE + 0.4;
-      const out0 = a.width / 2 + vergeOuter;
-      const out1 = b.width / 2 + vergeOuter;
+      const flat0 = a.width / 2 + w0 + 0.4;
+      const flat1 = b.width / 2 + w1 + 0.4;
+      const out0 = a.width / 2 + vergeOuter0;
+      const out1 = b.width / 2 + vergeOuter1;
       // Inner strip, flat just under the road's surface.
       const d = -0.025;
       // The last stretch before the barrier darkens a little: the wall's contact shadow, baked.
@@ -118,25 +185,29 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const shade = scaleRgb(stripe, 0.7);
       const shadeNext = scaleRgb(next, 0.7);
       const inner: V3[] =
-        side > 0
-          ? [P(i, h0, d), P(i, m0, d), P(i + 2, m1, d), P(i + 2, h1, d)]
-          : [P(i, -m0, d), P(i, -h0, d), P(i + 2, -h1, d), P(i + 2, -m1, d)];
+        side > 0 ? [P(i, h0, d), P(i, m0, d), P(i + 2, m1, d), P(i + 2, h1, d)] : [P(i, -m0, d), P(i, -h0, d), P(i + 2, -h1, d), P(i + 2, -m1, d)];
       const wall: V3[] =
-        side > 0
-          ? [P(i, m0, d), P(i, flat0, d), P(i + 2, flat1, d), P(i + 2, m1, d)]
-          : [P(i, -flat0, d), P(i, -m0, d), P(i + 2, -m1, d), P(i + 2, -flat1, d)];
-      deco[chunkOf(i)]!.quad(inner[0]!, inner[1]!, inner[2]!, inner[3]!, stripe, stripe, next, next, UP);
-      if (side > 0) deco[chunkOf(i)]!.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, stripe, shade, shadeNext, next, UP);
-      else deco[chunkOf(i)]!.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, shade, stripe, next, shadeNext, UP);
-      // Outer strip falls to the ground beside it, taking the ground's colour so there is no seam.
+        side > 0 ? [P(i, m0, d), P(i, flat0, d), P(i + 2, flat1, d), P(i + 2, m1, d)] : [P(i, -flat0, d), P(i, -m0, d), P(i + 2, -m1, d), P(i + 2, -flat1, d)];
+      const dc = deco[chunkOf(i)]!;
+      dc.quad(inner[0]!, inner[1]!, inner[2]!, inner[3]!, stripe, stripe, next, next, UP);
+      if (side > 0) dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, stripe, shade, shadeNext, next, UP);
+      else dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, shade, stripe, next, shadeNext, UP);
+      // Outer strip falls to the ground beside it, taking the ground's colour so there is no seam. Where a verge puts
+      // the barrier far out the ground there is not at the road's own level, so it falls (or rises) to where the ground is.
+      const edgeP = (j: number, o: number): V3 => {
+        const base = P(j, o, 0);
+        const g = terrain.heightAt(base[0], base[2]);
+        return [base[0], Math.min(g + 0.02, base[1] + 0.3), base[2]];
+      };
+      const far = w0 > WALL + 1;
       const slope: V3[] =
         side > 0
-          ? [P(i, flat0, d), P(i, out0, -GROUND_SINK + 0.02), P(i + 2, out1, -GROUND_SINK + 0.02), P(i + 2, flat1, d)]
-          : [P(i, -out0, -GROUND_SINK + 0.02), P(i, -flat0, d), P(i + 2, -flat1, d), P(i + 2, -out1, -GROUND_SINK + 0.02)];
+          ? [P(i, flat0, d), far ? edgeP(i, out0) : P(i, out0, -GROUND_SINK + 0.02), far ? edgeP(i + 2, out1) : P(i + 2, out1, -GROUND_SINK + 0.02), P(i + 2, flat1, d)]
+          : [far ? edgeP(i, -out0) : P(i, -out0, -GROUND_SINK + 0.02), P(i, -flat0, d), P(i + 2, -flat1, d), far ? edgeP(i + 2, -out1) : P(i + 2, -out1, -GROUND_SINK + 0.02)];
       const outerA = groundAt(side > 0 ? slope[1]! : slope[0]!);
       const outerB = groundAt(side > 0 ? slope[2]! : slope[3]!);
-      if (side > 0) deco[chunkOf(i)]!.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP);
-      else deco[chunkOf(i)]!.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP);
+      if (side > 0) dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP);
+      else dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP);
     }
   }
 
@@ -161,11 +232,13 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     for (let k = -reach; k <= reach; k++) kerbed[(((i + k) % n) + n) % n] = 1;
   }
   for (let i = 0; i < n; i++) {
-    if (!kerbed[i]) continue;
+    if (!kerbed[i] || ctx.gap(i) || ctx.gap(i + 1)) continue;
     const a = S(i);
     const b = S(i + 1);
     // Bends right (+): the outside is the left (negative offset).
     const side = a.curvature > 0 ? -1 : 1;
+    // On an open edge the kerb would be the shelf's: leave it.
+    if (ctx.open(i, side) > 0.3) continue;
     const stripe = Math.floor(i / 2) % 2 === 0 ? colour.kerbA : colour.kerbB;
     const inner0 = a.width / 2 - 0.12;
     const inner1 = b.width / 2 - 0.12;
@@ -176,166 +249,13 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       side > 0
         ? ([P(i, inner0, lift(0)), P(i, outer0, lift(1)), P(i + 1, outer1, lift(1)), P(i + 1, inner1, lift(0))] as const)
         : ([P(i, -outer0, lift(1)), P(i, -inner0, lift(0)), P(i + 1, -inner1, lift(0)), P(i + 1, -outer1, lift(1))] as const);
-    const shade = scaleRgb(stripe, 1);
-    deco[chunkOf(i)]!.quad(quad[0], quad[1], quad[2], quad[3], shade, shade, shade, shade, UP);
+    deco[chunkOf(i)]!.quad(quad[0], quad[1], quad[2], quad[3], stripe, stripe, stripe, stripe, UP);
   }
 
-  // ── Barriers: walk each side's wall line at an even spacing ──────────────
-  const walk = (offsetOf: (a: TrackSample) => number, step: number, emit: (x: number, y: number, z: number, dx: number, dz: number, index: number, count: number) => void) => {
-    let acc = 0;
-    let count = 0;
-    let prev: V3 | null = null;
-    for (let i = 0; i <= n; i++) {
-      const a = S(i);
-      const o = offsetOf(a);
-      const p: V3 = [a.x - a.tz * o, a.y, a.z + a.tx * o];
-      if (prev) {
-        const dx = p[0] - prev[0];
-        const dz = p[2] - prev[2];
-        const len = Math.hypot(dx, dz);
-        if (len > 0) {
-          let t = step - acc;
-          while (t <= len) {
-            const f = t / len;
-            emit(prev[0] + dx * f, prev[1] + (p[1] - prev[1]) * f, prev[2] + dz * f, dx / len, dz / len, i - 1, count++);
-            t += step;
-          }
-          acc = len - (t - step);
-        }
-      }
-      prev = p;
-    }
-  };
-
-  const tyreSteps = quality.detailedTyres ? 8 : 6;
-  const tyre = (b: MeshBuilder, cx: number, y: number, cz: number, R: number, H: number, side: Rgb, top: Rgb, rot: number) => {
-    const r = R * 0.52;
-    const dark = scaleRgb(side, 0.62);
-    const inside: Rgb = [0.01, 0.01, 0.012];
-    for (let k = 0; k < tyreSteps; k++) {
-      const a0 = rot + (k / tyreSteps) * Math.PI * 2;
-      const a1 = rot + ((k + 1) / tyreSteps) * Math.PI * 2;
-      const o0: V3 = [cx + Math.cos(a0) * R, y, cz + Math.sin(a0) * R];
-      const o1: V3 = [cx + Math.cos(a1) * R, y, cz + Math.sin(a1) * R];
-      const t0: V3 = [o0[0], y + H, o0[2]];
-      const t1: V3 = [o1[0], y + H, o1[2]];
-      // Outer wall: lighter at the top, a baked shadow at the foot.
-      b.quad(o1, o0, t0, t1, dark, dark, side, side);
-      if (quality.detailedTyres) {
-        const i0: V3 = [cx + Math.cos(a0) * r, y + H, cz + Math.sin(a0) * r];
-        const i1: V3 = [cx + Math.cos(a1) * r, y + H, cz + Math.sin(a1) * r];
-        b.quad(t1, t0, i0, i1, top, top, top, top, UP);
-        b.tri([cx, y + H * 0.35, cz], i1, i0, inside, inside, inside, UP);
-      } else {
-        b.tri([cx, y + H, cz], t1, t0, top, top, top, UP);
-      }
-    }
-  };
-
-  const barrier = style.barrier;
-  const wallBase = WALL_DISTANCE;
-  if (barrier === "tyres") {
-    const reds = [rgb("#e8352d"), rgb("#f6f6f2")];
-    const rubber = rgb("#1d1f24");
-    for (const side of [-1, 1] as const) {
-      walk(
-        (a) => side * (a.width / 2 + wallBase + 0.55),
-        1.12,
-        (x, y, z, dx, dz, i, k) => {
-          const band = Math.floor(k / 3) % 2;
-          const paint = reds[band]!;
-          const bld = deco[chunkOf(i)]!;
-          const swing = (k * 2.399) % 6.28;
-          tyre(bld, x, y - 0.04, z, 0.56, 0.36, paint, rubber, swing);
-          // The second row sits half a tyre along and a little in, like a real stack.
-          tyre(bld, x + dx * 0.5 + dz * 0.08 * side, y + 0.34, z + dz * 0.5 - dx * 0.08 * side, 0.54, 0.36, reds[(band + 1) % 2]!, rubber, swing + 0.4);
-        },
-      );
-    }
-  } else if (barrier === "fence") {
-    const wood = rgb("#b88655");
-    const woodLight = rgb("#d3a572");
-    const woodDark = scaleRgb(wood, 0.62);
-    for (const side of [-1, 1] as const) {
-      let lastX = NaN;
-      let lastZ = NaN;
-      let lastY = 0;
-      walk(
-        (a) => side * (a.width / 2 + wallBase + 0.5),
-        2.6,
-        (x, y, z, _dx, _dz, i) => {
-          const bld = deco[chunkOf(i)]!;
-          bld.post(x, y - 0.1, z, 0.13, 1.4, { bottom: woodDark, top: wood }, 6);
-          bld.box(x, y + 1.32, z, 0.34, 0.1, 0.34, woodLight);
-          if (!Number.isNaN(lastX)) {
-            const mx = (x + lastX) / 2;
-            const mz = (z + lastZ) / 2;
-            const my = (y + lastY) / 2;
-            const dx = x - lastX;
-            const dz = z - lastZ;
-            const len = Math.hypot(dx, dz);
-            const yaw = Math.atan2(-dz, dx);
-            const slope = Math.atan2(y - lastY, len);
-            for (const [h, c] of [
-              [0.55, wood],
-              [1.0, woodLight],
-            ] as const) {
-              bld.box(mx, my + h, mz, len, 0.13, 0.1, c, yaw, 0, slope);
-            }
-          }
-          lastX = x;
-          lastZ = z;
-          lastY = y;
-        },
-      );
-    }
-  } else {
-    // Harbour: a low concrete kerb wall with painted blocks, and bollards with lamps on top.
-    const concrete = rgb("#a9b2c6");
-    const concreteDark = scaleRgb(concrete, 0.6);
-    const paintA = rgb("#2f6bff");
-    const paintB = rgb("#f2f4fa");
-    const yellow = rgb("#ffcf2e");
-    const black = rgb("#1a1d27");
-    for (const side of [-1, 1] as const) {
-      for (let i = 0; i < n; i++) {
-        const a = S(i);
-        const b = S(i + 1);
-        const o0 = side * (a.width / 2 + wallBase);
-        const o1 = side * (b.width / 2 + wallBase);
-        const t = 0.9;
-        const stripe = Math.floor(i / 4) % 2 === 0 ? paintA : paintB;
-        const bd = deco[chunkOf(i)]!;
-        const inner0 = P(i, o0, -0.04);
-        const inner1 = P(i + 1, o1, -0.04);
-        const outer0 = P(i, o0 + side * t, -0.04);
-        const outer1 = P(i + 1, o1 + side * t, -0.04);
-        const up = (p: V3, h: number): V3 => [p[0], p[1] + h, p[2]];
-        // Face toward the road, then the top, with a painted band.
-        const faceFlip = side < 0;
-        const f0 = inner0;
-        const f1 = inner1;
-        if (faceFlip) {
-          bd.quad(f0, f1, up(f1, 0.62), up(f0, 0.62), concreteDark, concreteDark, concrete, concrete);
-          bd.quad(up(f0, 0.62), up(f1, 0.62), up(outer1, 0.62), up(outer0, 0.62), concrete, concrete, concrete, concrete, UP);
-          bd.quad(up(f0, 0.34), up(f1, 0.34), up(f1, 0.5), up(f0, 0.5), stripe, stripe, stripe, stripe);
-        } else {
-          bd.quad(f1, f0, up(f0, 0.62), up(f1, 0.62), concreteDark, concreteDark, concrete, concrete);
-          bd.quad(up(f1, 0.62), up(f0, 0.62), up(outer0, 0.62), up(outer1, 0.62), concrete, concrete, concrete, concrete, UP);
-          bd.quad(up(f1, 0.34), up(f0, 0.34), up(f0, 0.5), up(f1, 0.5), stripe, stripe, stripe, stripe);
-        }
-      }
-      walk(
-        (a) => side * (a.width / 2 + wallBase + 0.45),
-        5,
-        (x, y, z, _dx, _dz, i) => {
-          const bd = deco[chunkOf(i)]!;
-          bd.post(x, y + 0.5, z, 0.17, 0.75, { bottom: black, top: yellow }, 8, 0.9);
-          bd.post(x, y + 1.22, z, 0.19, 0.09, [3.4, 2.5, 0.7], 8);
-        },
-      );
-    }
-  }
+  // ── Barriers, and the edges that have none ───────────────────────────────
+  buildBarriers(ctx);
+  buildOpenEdges(ctx);
+  buildGapEnds(ctx);
 
   // ── Bend signs: yellow boards with chevrons beyond the outer barrier, on tight bends ──
   {
@@ -347,10 +267,11 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       if (!tight[i] || i - last < 7) continue;
       const a = S(i);
       const side = a.curvature > 0 ? -1 : 1;
-      const o = side * (a.width / 2 + wallBase + 1.45 + (barrier === "tyres" ? 0.5 : 0.2));
+      if (ctx.open(i, side) > 0.1 || ctx.gap(i)) continue;
+      const o = side * (a.width / 2 + ctx.wall(i, side) + 1.45 + (style.barrier === "tyres" ? 0.5 : 0.2));
       const cx = a.x - a.tz * o;
       const cz = a.z + a.tx * o;
-      const y0 = a.y + 0.3;
+      const y0 = a.y + bank.liftAt(i, side * (a.width / 2)) + 0.3;
       // The viewer is on the road looking outward: f = outward direction.
       const fx = side > 0 ? -a.tz : a.tz;
       const fz = side > 0 ? a.tx : -a.tx;
@@ -378,9 +299,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
           [0.12, 0],
         ];
         const w = (p: [number, number]): V3 => [
-          cx + rx * (cu + p[0] * 0.95 * dir) + (-fx) * 0.02,
+          cx + rx * (cu + p[0] * 0.95 * dir) + -fx * 0.02,
           y0 + 0.9 + 0.85 + p[1] * 1.15,
-          cz + rz * (cu + p[0] * 0.95 * dir) + (-fz) * 0.02,
+          cz + rz * (cu + p[0] * 0.95 * dir) + -fz * 0.02,
         ];
         const [A, B, C, D, E, F] = pts.map(w) as [V3, V3, V3, V3, V3, V3];
         if (dir > 0) {
@@ -418,7 +339,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const rl = 0.62;
     const pt = (u: number, v: number, dy: number): V3 => {
       const c = track.at(v);
-      return [c.x - c.tz * u, c.y + dy, c.z + c.tx * u];
+      return [c.x - c.tz * u, c.y + bank.lift(v, u) + dy, c.z + c.tx * u];
     };
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -430,7 +351,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
         bd.quad(pt(u0, v0, 0.03), pt(u1, v0, 0.03), pt(u1, v1, 0.03), pt(u0, v1, 0.03), col, col, col, col, UP);
       }
     }
-    // Gantry: two stout legs, a beam, a light box on its face, and the banner under it.
+    // A giant wristwatch over the line (the palm island's start) carries the lights itself; every other
+    // start has a gantry: two stout legs, a beam, a light box on its face, and the banner under it.
+    const watch = (track.def.landmarks ?? []).some((l) => l.kind === "wristwatch" && Math.min(Math.abs(l.at * track.length), Math.abs(track.length - l.at * track.length)) < 20);
     const leg = hw + 1.9;
     const base = g0.y;
     const white2 = rgb("#f4f5f8");
@@ -439,22 +362,28 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const rightX = -g0.tz;
     const rightZ = g0.tx;
     const yawBeam = Math.atan2(-rightZ, rightX);
-    for (const sgn of [-1, 1]) {
-      const lx = g0.x + rightX * leg * sgn;
-      const lz = g0.z + rightZ * leg * sgn;
-      bd.post(lx, base - 0.2, lz, 0.45, 8.0, { bottom: scaleRgb(white2, 0.6), top: white2 }, 10, 0.8);
-      bd.post(lx, base - 0.2, lz, 0.62, 0.7, steel, 10, 1);
-      bd.post(lx, base + 1.3, lz, 0.5, 0.5, accent, 10, 0.9);
+    const beamY = base + (watch ? 9.6 : 8.1);
+    if (!watch) {
+      for (const sgn of [-1, 1]) {
+        const lx = g0.x + rightX * leg * sgn;
+        const lz = g0.z + rightZ * leg * sgn;
+        bd.post(lx, base - 0.2, lz, 0.45, 8.0, { bottom: scaleRgb(white2, 0.6), top: white2 }, 10, 0.8);
+        bd.post(lx, base - 0.2, lz, 0.62, 0.7, steel, 10, 1);
+        bd.post(lx, base + 1.3, lz, 0.5, 0.5, accent, 10, 0.9);
+      }
+      bd.box(g0.x, beamY, g0.z, leg * 2 + 1.1, 1.0, 0.95, { bottom: scaleRgb(white2, 0.7), top: white2 }, yawBeam);
+      bd.box(g0.x, beamY + 0.55, g0.z, leg * 2 + 1.3, 0.22, 1.1, accent, yawBeam);
     }
-    const beamY = base + 8.1;
-    bd.box(g0.x, beamY, g0.z, leg * 2 + 1.1, 1.0, 0.95, { bottom: scaleRgb(white2, 0.7), top: white2 }, yawBeam);
-    bd.box(g0.x, beamY + 0.55, g0.z, leg * 2 + 1.3, 0.22, 1.1, accent, yawBeam);
     // The light box faces the grid (behind the line: -tangent).
     const fx = -g0.tx;
     const fz = -g0.tz;
     const lbx = g0.x + fx * 0.62;
     const lbz = g0.z + fz * 0.62;
     bd.box(lbx, beamY, lbz, 5.0, 1.15, 0.34, steel, yawBeam);
+    if (watch) {
+      // Two slim hangers up to the watch's case, which is some twelve metres above the road.
+      for (const sgn of [-1, 1]) bd.rod([lbx + rightX * 2.3 * sgn, beamY + 0.5, lbz + rightZ * 2.3 * sgn], [lbx + rightX * 2.3 * sgn, base + 13, lbz + rightZ * 2.3 * sgn], 0.14, steel);
+    }
     for (const k of [-1, 0, 1]) {
       const bx = lbx + rightX * k * 1.5 + fx * 0.26;
       const bz = lbz + rightZ * k * 1.5 + fz * 0.26;
@@ -471,7 +400,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
 
   // ── Bunting along the start straight, by day ─────────────────────────────
-  if (!style.night) {
+  if (style.bunting) {
     const flagColours = ["#ff453a", "#ffd60a", "#0a84ff", "#30d158", "#ffffff", "#ff9f0a", "#bf5af2"].map(rgb);
     const pole = rgb("#d8dce6");
     const string = rgb("#2b2e37");
@@ -484,7 +413,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       for (let k = from; k <= to; k += span) {
         const i = Math.round(k / spacing);
         const a = S(i);
-        const o = side * (a.width / 2 + wallBase + 3.6);
+        const o = side * (a.width / 2 + ctx.wall(i, side) + 3.6);
         const x = a.x - a.tz * o;
         const z = a.z + a.tx * o;
         deco[chunkOf(i)]!.post(x, a.y - 0.6, z, 0.08, 6.2, { bottom: scaleRgb(pole, 0.7), top: pole }, 6, 0.8);
@@ -517,7 +446,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
 
   // ── Night lamps with pools of light ──────────────────────────────────────
   let pools: BufferGeometry | null = null;
-  if (style.night) {
+  if (style.lamps) {
     const steel = rgb("#2a2f40");
     const poolPos: number[] = [];
     const poolCol: number[] = [];
@@ -528,7 +457,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const i = Math.round(s / spacing);
       const a = S(i);
       const side = k % 2 === 0 ? 1 : -1;
-      const o = side * (a.width / 2 + wallBase + 2.4);
+      if (ctx.open(i, side) > 0.1) continue;
+      const o = side * (a.width / 2 + ctx.wall(i, side) + 2.4);
       const px = a.x - a.tz * o;
       const pz = a.z + a.tx * o;
       const bd = deco[chunkOf(i)]!;
@@ -581,39 +511,24 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     pools.computeBoundingSphere();
   }
 
-  // ── Boost pads ───────────────────────────────────────────────────────────
-  let pads: BufferGeometry | null = null;
-  if (track.def.boostPads?.length) {
-    const b = new MeshBuilder(true);
-    const lengthHalf = 4.2;
-    const widthHalf = 2.5;
-    const steps = 10;
-    for (const pad of track.def.boostPads) {
-      const sc = pad.at * track.length;
-      for (let k = 0; k < steps; k++) {
-        const s0 = sc - lengthHalf + (k / steps) * lengthHalf * 2;
-        const s1 = sc - lengthHalf + ((k + 1) / steps) * lengthHalf * 2;
-        const p = (s: number, o: number): V3 => {
-          const q = track.point(s, o);
-          return [q.x, q.y + 0.04, q.z];
-        };
-        const o0 = pad.offset - widthHalf;
-        const o1 = pad.offset + widthHalf;
-        const v0 = ((s0 - sc) / 4) % 1000;
-        const v1 = ((s1 - sc) / 4) % 1000;
-        b.quad(p(s0, o0), p(s0, o1), p(s1, o1), p(s1, o0), [1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1], UP, [0, v0, 1, v0, 1, v1, 0, v1]);
-      }
-    }
-    pads = b.build();
-  }
+  // ── What the track adds ──────────────────────────────────────────────────
+  buildRamps(ctx);
+  buildSpaceEdges(ctx);
+  buildFestoons(ctx);
+  const pads = buildPads(ctx);
+  const patches = buildPatches(ctx);
 
   return {
     road: road.filter((b) => !b.empty).map((b) => b.build()),
     deco: deco.filter((b) => !b.empty).map((b) => b.build()),
     pads,
     pools,
+    additive: additive.empty ? null : additive.build(),
+    patches,
     glows,
     startLights,
     banner,
+    features,
+    bank,
   };
 }

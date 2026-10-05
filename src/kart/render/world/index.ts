@@ -1,7 +1,8 @@
 /**
  * Builds a track's whole world from its definition: ground, road, verge,
- * barriers, scenery, sky, water and light, and keeps the few parts that move
- * (boost pads, the item boxes, the start lights, windmill blades, water).
+ * barriers, scenery, landmarks, hazards, sky, water and light, and keeps the
+ * few parts that move (boost pads, the item boxes, the start lights, sails,
+ * lava, water, every hazard).
  *
  * Built once per track, in steps that each hand control back to the browser,
  * so the page can show real progress and stay responsive.
@@ -30,12 +31,17 @@ import {
 import { TrackGeometry, type TrackDef } from "../../track/geometry";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
+import { Bank } from "./bank";
+import { buildBackdrop } from "./backdrop";
 import { ItemBoxes } from "./boxes";
+import { rampHeight, type Features } from "./features";
+import { buildHazards, buildLandmarks, landmarkMaterials, type HazardLayer, type LandmarkLayer, type PlacedLandmark } from "./landmarks/place";
+import { additiveMaterial, groundMaterial, lavaMaterial, patchMaterial, roadMaterial, type Animated } from "./materials";
 import { buildScenery, type Scenery } from "./scenery";
 import { createSky, type Sky } from "./sky";
 import { Terrain } from "./terrain";
 import { styleFor, type ThemeStyle } from "./themes";
-import { bannerTexture, chevronTexture, roadTexture } from "./textures";
+import { bannerTexture, chevronTexture, glowTexture } from "./textures";
 import { buildTrackMeshes } from "./track";
 import { createWater, type Water } from "./water";
 
@@ -49,11 +55,20 @@ export interface World {
   readonly terrain: Terrain;
   readonly sky: Sky;
   readonly boxes: ItemBoxes;
+  readonly bank: Bank;
+  readonly features: Features;
   /** How the start lights stand: how many reds are lit (0-3), or green. */
   setStartLights(state: number | "go" | "off"): void;
-  update(time: number, dt: number): void;
+  /** `time` is the picture's clock; `raceTime` the race's (the hazards move on it, as in the sim). */
+  update(time: number, dt: number, raceTime?: number): void;
   /** Puts the scene's fog, lights and background in place. */
   install(scene: Scene): void;
+  /**
+   * How far above the sim's flat road the surface is at a point: the road's
+   * banking plus any ramp before its lip. Karts, boxes and things add it to
+   * their y. `near` is the s it was at a moment ago (a hint for the search).
+   */
+  surfaceLift(x: number, z: number, near?: number): { lift: number; s: number; offset: number };
   dispose(): void;
 }
 
@@ -66,7 +81,7 @@ export async function createWorld(
   const style = theme ?? styleFor(def.theme);
   const group = new Group();
   const disposables: { dispose(): void }[] = [];
-  const track = (d: { dispose(): void }) => {
+  const track = <T extends { dispose(): void }>(d: T): T => {
     disposables.push(d);
     return d;
   };
@@ -78,10 +93,12 @@ export async function createWorld(
   onProgress(0.08);
   await breathe();
   const terrain = Terrain.build(geometry, style, quality.cell);
+  const space = style.id === "space";
 
-  const vertexMat = track(new MeshLambertMaterial({ vertexColors: true })) as MeshLambertMaterial;
-  const roadTex = track(roadTexture(style, quality.anisotropy, quality.roadTexture)) as CanvasTexture;
-  const roadMat = track(new MeshLambertMaterial({ map: roadTex })) as MeshLambertMaterial;
+  const ground = groundMaterial(style, quality, disposables);
+  const roadMat = roadMaterial(style, quality, disposables);
+  const deco = track(new MeshLambertMaterial({ vertexColors: true })) as Material;
+  let lavaAnim: Animated | null = null;
 
   const addStatic = (g: BufferGeometry, material: Material, order = 0): Mesh => {
     track(g);
@@ -93,19 +110,29 @@ export async function createWorld(
     return m;
   };
 
-  // Ground tiles.
-  for (const g of terrain.buildTiles(20)) addStatic(g, vertexMat);
+  // Ground tiles (space has none: the road floats in the dark).
+  if (!space) {
+    for (const g of terrain.buildTiles(20, ground.detail?.metres ?? 64)) addStatic(g, ground.material);
+    const lavaTiles = terrain.buildLava(20);
+    if (lavaTiles.length) {
+      lavaAnim = lavaMaterial(disposables);
+      for (const g of lavaTiles) addStatic(g, lavaAnim.material, 1);
+    }
+  }
   onProgress(0.38);
   await breathe();
 
   // The track.
+  const bank = new Bank(geometry);
   const meshes = buildTrackMeshes(geometry, style, terrain, quality);
-  for (const g of meshes.road) addStatic(g, roadMat);
-  for (const g of meshes.deco) addStatic(g, vertexMat);
+  for (const g of meshes.road) addStatic(g, roadMat, space ? 1 : 0);
+  for (const g of meshes.deco) addStatic(g, deco);
   if (meshes.pools) {
     const mat = track(new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false })) as Material;
     addStatic(meshes.pools, mat, 3);
   }
+  if (meshes.additive) addStatic(meshes.additive, additiveMaterial(disposables), 3);
+  for (const p of meshes.patches) addStatic(p.geometry, patchMaterial(p.kind, quality, disposables), 2);
   const chevrons = track(chevronTexture(quality.anisotropy)) as CanvasTexture;
   chevrons.wrapT = RepeatWrapping;
   if (meshes.pads) {
@@ -129,6 +156,23 @@ export async function createWorld(
     b.position.set(p[0], p[1], p[2]);
     group.add(b);
   });
+
+  // Landmarks, the rubber duck and the hazards.
+  onProgress(0.5);
+  await breathe();
+  const mats = landmarkMaterials();
+  track(mats);
+  const groundAt = (x: number, z: number) => terrain.heightAt(x, z);
+  const env = { track: geometry, style, bank, groundAt };
+  const placed: PlacedLandmark[] = [...(def.landmarks ?? [])];
+  if (def.duck) placed.push({ kind: "rubber-duck", at: def.duck.at, offset: def.duck.offset, lift: def.duck.y ?? 0 });
+  const landmarks: LandmarkLayer = buildLandmarks(env, placed, mats);
+  track(landmarks);
+  group.add(landmarks.group);
+  const shadowTex = track(glowTexture(0, 1.0));
+  const hazards: HazardLayer = buildHazards(env, def.hazards ?? [], mats, shadowTex);
+  track(hazards);
+  group.add(hazards.group);
 
   // Glows: lamps (static) and the three start lights (changing).
   const staticGlows = meshes.glows;
@@ -182,14 +226,14 @@ export async function createWorld(
   onProgress(0.62);
   await breathe();
 
-  // Scenery.
-  const scenery: Scenery = buildScenery(style, terrain, quality, vertexMat);
+  // Scenery, kept clear of the landmarks.
+  const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, landmarks.keepOut);
   track(scenery);
   group.add(scenery.group);
   onProgress(0.86);
   await breathe();
 
-  // Sky, water, light.
+  // Sky, water, backdrop, light.
   const sky = createSky(style);
   track(sky);
   group.add(sky.group);
@@ -202,6 +246,8 @@ export async function createWorld(
     track(water);
     group.add(water.mesh);
   }
+  const backdrop = buildBackdrop(style, terrain, disposables);
+  if (backdrop) group.add(backdrop.group);
 
   const boxes = new ItemBoxes();
   track(boxes);
@@ -214,6 +260,7 @@ export async function createWorld(
   const fog = new Fog(style.fog.colour, style.fog.near, style.fog.far);
 
   onProgress(1);
+  let near = 0;
 
   return {
     group,
@@ -222,14 +269,28 @@ export async function createWorld(
     terrain,
     sky,
     boxes,
+    bank,
+    features: meshes.features,
     setStartLights,
-    update(time, _dt) {
+    update(time, dt, raceTime = 0) {
       chevrons.offset.y = -(time * 1.3) % 1;
       scenery.update(time);
       water?.update(time);
+      lavaAnim?.update(time);
+      sky.update(time);
+      backdrop?.update(time);
+      landmarks.update(time);
+      hazards.update(raceTime, dt);
     },
     install(scene) {
       scene.fog = fog;
+    },
+    surfaceLift(x, z, hint) {
+      let proj = geometry.project(x, z, hint ?? near);
+      if (Math.hypot(proj.sample.x - x, proj.sample.z - z) > 40) proj = geometry.project(x, z);
+      near = proj.s;
+      const lift = bank.lift(proj.s, proj.offset) + (Math.abs(proj.offset) < proj.sample.width / 2 ? rampHeight(meshes.features.ramps, proj.s, geometry.length) : 0);
+      return { lift, s: proj.s, offset: proj.offset };
     },
     dispose() {
       for (const d of disposables) d.dispose();

@@ -15,6 +15,7 @@
 import {
   BufferGeometry,
   DoubleSide,
+  Float32BufferAttribute,
   Group,
   Matrix4,
   Mesh,
@@ -34,6 +35,7 @@ import { hazardAt } from "../../../track/hazards";
 import { makePoints } from "../../points";
 import type { Bank } from "../bank";
 import { MeshBuilder, type V3 } from "../builder";
+import { glowTexture } from "../textures";
 import type { ThemeStyle } from "../themes";
 import { HAZARDS, LANDMARKS } from "./index";
 import type { Halo, HazardModel, HazardState, LandmarkContext, LandmarkModel } from "./types";
@@ -151,6 +153,9 @@ export interface KeepOut {
   r: number;
 }
 
+/** A landmark as the track gives it, or placed by the world itself: `lift` raises it (the duck on a stool), `abs` puts it at a world position instead of beside the road. */
+export type PlacedLandmark = Landmark & { lift?: number; abs?: { x: number; z: number; yaw: number } };
+
 export interface LandmarkLayer {
   group: Group;
   keepOut: KeepOut[];
@@ -185,7 +190,7 @@ function modelRadius(model: LandmarkModel): number {
   return Math.sqrt(r2);
 }
 
-export function buildLandmarks(env: PlaceEnv, list: readonly Landmark[], mats: LandmarkMaterials): LandmarkLayer {
+export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], mats: LandmarkMaterials): LandmarkLayer {
   const { track } = env;
   const group = new Group();
   const keepOut: KeepOut[] = [];
@@ -193,6 +198,9 @@ export function buildLandmarks(env: PlaceEnv, list: readonly Landmark[], mats: L
   const animated: ((t: number) => void)[] = [];
   const halos: (Halo & { phase: number })[] = [];
   const disposables: { dispose(): void }[] = [];
+  /** Soft dark blobs on the ground under the big things, so they sit there instead of floating. */
+  const blobs: { x: number; y: number; z: number; rx: number; rz: number; yaw: number; strength: number }[] = [];
+  const sun = new Vector3(...env.style.sky.sunDir).normalize();
   let count = 0;
 
   const chunkAt = (s: number): Chunk => {
@@ -241,14 +249,15 @@ export function buildLandmarks(env: PlaceEnv, list: readonly Landmark[], mats: L
     const side = Math.sign(lm.offset);
     const fx = side === 0 ? -c.tx : side * c.tz;
     const fz = side === 0 ? -c.tz : side * -c.tx;
-    const yaw = Math.atan2(fx, fz) + (lm.turn ?? 0);
-    const p = track.point(at, lm.offset);
+    const yaw = lm.abs ? lm.abs.yaw : Math.atan2(fx, fz) + (lm.turn ?? 0);
+    const p = lm.abs ? { x: lm.abs.x, y: 0, z: lm.abs.z } : track.point(at, lm.offset);
     const r = modelRadius(model) * scale;
     // The lowest ground under its footprint: models carry a skirt below y = 0 to bury the difference.
     let y = env.groundAt(p.x, p.z);
     if (r > 3) {
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) y = Math.min(y, env.groundAt(p.x + dx * r * 0.6, p.z + dz * r * 0.6));
     }
+    y += lm.lift ?? 0;
     const m = new Matrix4().compose(new Vector3(p.x, y - 0.05, p.z), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw), new Vector3(scale, scale, scale));
     const e = m.elements;
     const map = ([x, yy, z]: V3): V3 => [
@@ -285,6 +294,39 @@ export function buildLandmarks(env: PlaceEnv, list: readonly Landmark[], mats: L
       animated.push((t) => part.update(t, inner));
     }
     keepOut.push({ x: p.x, z: p.z, r: Math.max(spec.footprint ?? 0, r * 0.85) });
+    // Its contact shadow: the footprint's ellipse, nudged away from the sun.
+    {
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minZ = Infinity;
+      let maxZ = -Infinity;
+      let maxY = 0;
+      const pp = model.lit.position;
+      for (let i = 0; i < pp.length; i += 3) {
+        minX = Math.min(minX, pp[i]!);
+        maxX = Math.max(maxX, pp[i]!);
+        minZ = Math.min(minZ, pp[i + 2]!);
+        maxZ = Math.max(maxZ, pp[i + 2]!);
+        maxY = Math.max(maxY, pp[i + 1]!);
+      }
+      if (Number.isFinite(minX) && r > 1.5 && !lm.abs && env.style.id !== "space") {
+        const cxm = ((minX + maxX) / 2) * scale;
+        const czm = ((minZ + maxZ) / 2) * scale;
+        const cs = Math.cos(yaw);
+        const sn = Math.sin(yaw);
+        const reach = Math.min(maxY * scale * 0.22, r * 0.5);
+        const hs = Math.hypot(sun.x, sun.z) || 1;
+        blobs.push({
+          x: p.x + cxm * cs + czm * sn - (sun.x / hs) * reach,
+          y: y + 0.08,
+          z: p.z - cxm * sn + czm * cs - (sun.z / hs) * reach,
+          rx: Math.max(1.5, ((maxX - minX) / 2) * scale * 1.18),
+          rz: Math.max(1.5, ((maxZ - minZ) / 2) * scale * 1.18),
+          yaw,
+          strength: Math.min(1, 0.55 + maxY * scale * 0.01),
+        });
+      }
+    }
     count++;
   });
 
@@ -303,6 +345,37 @@ export function buildLandmarks(env: PlaceEnv, list: readonly Landmark[], mats: L
       mesh.name = `landmarks-${key}`;
       group.add(mesh);
     }
+  }
+
+  // The contact shadows, one mesh: quads with the soft-blob texture.
+  if (blobs.length) {
+    const pos: number[] = [];
+    const uv: number[] = [];
+    const col: number[] = [];
+    for (const b of blobs) {
+      const cs = Math.cos(b.yaw);
+      const sn = Math.sin(b.yaw);
+      const corner = (u: number, v: number): [number, number, number] => [b.x + u * b.rx * cs + v * b.rz * sn, b.y, b.z - u * b.rx * sn + v * b.rz * cs];
+      const q = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+      const t = [[0, 0], [1, 0], [1, 1], [0, 1]];
+      for (const idx of [0, 1, 2, 0, 2, 3]) {
+        pos.push(...q[idx]!);
+        uv.push(t[idx]![0]!, t[idx]![1]!);
+        col.push(b.strength, b.strength, b.strength);
+      }
+    }
+    const g = new BufferGeometry();
+    g.setAttribute("position", new Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+    g.setAttribute("color", new Float32BufferAttribute(col, 3));
+    g.computeBoundingSphere();
+    const tex = glowTexture(0, 1.1);
+    const mat = new MeshBasicMaterial({ map: tex, color: 0x070b18, vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    disposables.push(g, tex, mat);
+    const mesh = new Mesh(g, mat);
+    mesh.renderOrder = 1;
+    mesh.matrixAutoUpdate = false;
+    group.add(mesh);
   }
 
   // Halos: soft round lights standing in for bloom, twinkling.

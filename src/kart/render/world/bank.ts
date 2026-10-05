@@ -54,6 +54,16 @@ export class Bank {
     return a + (b - a) * u;
   }
 
+  /** `lift` at sample `i` of the track's samples (what the road mesh uses, one sample at a time). */
+  liftAt(i: number, offset: number): number {
+    if (!this.any) return 0;
+    const n = this.roll.length;
+    const k = ((i % n) + n) % n;
+    const hw = this.halfWidths[k]!;
+    const o = Math.max(-hw, Math.min(hw, offset));
+    return -o * Math.tan(this.roll[k]!);
+  }
+
   /**
    * How much higher the road is `offset` metres right of the centre line at
    * `s` than the centre line: negative on the inside of a right bend. Beyond

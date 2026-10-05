@@ -142,6 +142,21 @@ interface Emit {
   star: number;
   lastLevel: number;
   lastBoost: number;
+  snow: number;
+  ice: number;
+  mud: number;
+  sand: number;
+  trail: number;
+  trick: number;
+}
+
+/** Where a kart is on screen while a drone has it (its view says only where it fell), and what it is doing. */
+export interface Visual {
+  x: number;
+  y: number;
+  z: number;
+  /** True while it is still dropping, false once the drone has the hook in it. */
+  falling: boolean;
 }
 
 // Overbright colours: the soft sprite's core goes white-hot while its halo keeps the colour.
@@ -162,6 +177,8 @@ export class Effects {
   private dust: [number, number, number] = [0.8, 0.7, 0.5];
   /** Switch off the shakes and flashes for players who asked for less motion. */
   calm = false;
+  /** Which world this is, for what a fall looks like (embers over lava, stars in space). */
+  world = "meadow";
 
   constructor(capacity: number) {
     this.add = new Sprites(Math.round(capacity * 0.65), true);
@@ -233,6 +250,15 @@ export class Effects {
         -16,
         0.6,
       );
+    }
+  }
+
+  /** Hot sparks and ash lifting off lava. */
+  embers(x: number, y: number, z: number, count: number, spread = 1): void {
+    for (let i = 0; i < count; i++) {
+      const hot = this.r() < 0.6;
+      this.add.emit(x + this.spread() * spread, y, z + this.spread() * spread, this.spread() * 2.2, 2 + this.r() * 5, this.spread() * 2.2, 0.7 + this.r() * 0.7, 0.3, 0.04, hot ? [2.2, 0.8, 0.12, 1] : [1.6, 0.3, 0.03, 1], [1.2, 0.15, 0.0, 0], -2, 0.5);
+      if (i % 3 === 0) this.norm.emit(x + this.spread() * spread, y, z + this.spread() * spread, this.spread() * 1.4, 1.5 + this.r() * 2, this.spread() * 1.4, 1.0 + this.r() * 0.6, 0.8, 2.6, [0.22, 0.18, 0.2, 0.55], [0.15, 0.12, 0.14, 0], 0.5, 1.2);
     }
   }
 
@@ -353,17 +379,79 @@ export class Effects {
         if (k) this.confetti(k.x, k.y, k.z);
         return;
       }
+      case "jump": {
+        const k = kartAt(e.kart);
+        if (!k) return;
+        const d = this.dust;
+        for (let i = 0; i < 8; i++) {
+          const a = this.r() * Math.PI * 2;
+          this.norm.emit(k.x + Math.cos(a) * 0.8, k.y + 0.2, k.z + Math.sin(a) * 0.8, Math.cos(a) * 2.2, 0.6 + this.r(), Math.sin(a) * 2.2, 0.5 + this.r() * 0.3, 0.5, 1.5, [d[0], d[1], d[2], 0.45], [d[0], d[1], d[2], 0], 0, 2);
+        }
+        return;
+      }
+      case "trick": {
+        const k = kartAt(e.kart);
+        if (!k) return;
+        // A ring of coloured stars flung out round the kart.
+        for (let i = 0; i < 22; i++) {
+          const a = (i / 22) * Math.PI * 2;
+          const c = hsl(i / 22);
+          this.add.emit(k.x, k.y + k.hop + 1.1, k.z, Math.cos(a) * 5, 1 + this.r() * 2, Math.sin(a) * 5, 0.55, 0.42, 0.05, [c[0] * 2, c[1] * 2, c[2] * 2, 1], [c[0], c[1], c[2], 0], -3, 1.4);
+        }
+        return;
+      }
+      case "land": {
+        const k = kartAt(e.kart);
+        if (!k) return;
+        const d = this.dust;
+        const n = e.boost ? 14 : 9;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + this.r() * 0.4;
+          const sp = 2.5 + this.r() * 2.5;
+          this.norm.emit(k.x + Math.cos(a) * 0.9, k.y + 0.25, k.z + Math.sin(a) * 0.9, Math.cos(a) * sp, 0.5 + this.r() * 1.2, Math.sin(a) * sp, 0.55 + this.r() * 0.35, 0.6, 2.0, [0.95 + d[0] * 0.0, 0.94, 0.9, 0.5], [d[0], d[1], d[2], 0], 0, 2.4);
+        }
+        if (e.boost) this.sparksBurst(k.x, k.y + 0.4, k.z, 16, 6.5, true);
+        return;
+      }
+      case "fall": {
+        const k = kartAt(e.kart);
+        if (!k) return;
+        this.puff(k.x, k.y + 0.4, k.z, 6, 1.1, 3);
+        if (this.world === "volcano") this.embers(k.x, k.y - 2, k.z, 26, 1.4);
+        return;
+      }
+      case "rescued": {
+        const k = kartAt(e.kart);
+        if (!k) return;
+        for (let i = 0; i < 18; i++) {
+          const a = (i / 18) * Math.PI * 2;
+          this.add.emit(k.x + Math.cos(a) * 1.0, k.y + 0.3, k.z + Math.sin(a) * 1.0, Math.cos(a) * 2.2, 2 + this.r() * 2, Math.sin(a) * 2.2, 0.6, 0.3, 0.05, [0.7, 1.7, 1.9, 1], [0.2, 0.7, 1.4, 0], -4, 1.2);
+        }
+        this.puff(k.x, k.y + 0.3, k.z, 5, 1.0, 2);
+        return;
+      }
       default:
         return;
     }
   }
 
   // ── Per kart, every frame ───────────────────────────────────────────────
-  kart(k: KartView, dt: number): void {
+  kart(k: KartView, dt: number, vis?: Visual): void {
     let st = this.state.get(k.id);
     if (!st) {
-      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, lastLevel: 0, lastBoost: 0 };
+      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, lastLevel: 0, lastBoost: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, trick: 0 };
       this.state.set(k.id, st);
+    }
+    // Falling or being carried: the kart is not where the sim says, and none of the driving effects apply.
+    if (k.rescue > 0 && vis) {
+      st.trail += (vis.falling ? 70 : 16) * dt;
+      while (st.trail >= 1) {
+        st.trail -= 1;
+        const c = this.world === "space" ? [0.5 + this.r() * 0.5, 0.6, 1.8] : this.world === "volcano" ? [2.0, 0.6 + this.r() * 0.4, 0.1] : [1.4, 1.5, 1.7];
+        this.add.emit(vis.x + this.spread() * 0.9, vis.y + 0.4 + this.r() * 1.2, vis.z + this.spread() * 0.9, this.spread() * 0.6, vis.falling ? 3 + this.r() * 3 : -0.5, this.spread() * 0.6, 0.5 + this.r() * 0.4, vis.falling ? 0.34 : 0.22, 0.04, [c[0]!, c[1]!, c[2]!, 0.9], [c[0]!, c[1]!, c[2]!, 0], 0, 0.8);
+      }
+      if (this.world === "volcano" && vis.falling) this.embers(vis.x, vis.y - 1, vis.z, 2, 0.8);
+      return;
     }
     const fx = Math.sin(k.heading);
     const fz = Math.cos(k.heading);
@@ -460,7 +548,8 @@ export class Effects {
     }
 
     // Dust off the road: the harder the faster.
-    if (k.offroad && Math.abs(k.speed) > 3 && k.hop < 0.1) {
+    const special = k.surface === "snow" || k.surface === "ice" || k.surface === "mud" || k.surface === "sand";
+    if (k.offroad && !special && Math.abs(k.speed) > 3 && k.hop < 0.1) {
       st.dust += (20 + Math.abs(k.speed) * 2) * dt;
       while (st.dust >= 1) {
         st.dust -= 1;
@@ -470,6 +559,51 @@ export class Effects {
       }
     } else {
       st.dust = 0;
+    }
+
+    // What the kart is driving on throws up its own stuff: snow spray, ice glints, mud, sand.
+    const surf = k.surface;
+    if (Math.abs(k.speed) > 3 && k.hop < 0.15) {
+      if (surf === "snow") {
+        st.snow += (22 + Math.abs(k.speed) * 2.4) * dt;
+        while (st.snow >= 1) {
+          st.snow -= 1;
+          const p = wheel(this.r() < 0.5 ? -1 : 1, 0.2);
+          this.norm.emit(p[0], p[1], p[2], this.spread() * 1.6 - fx * 2, 1.0 + this.r() * 2.4, this.spread() * 1.6 - fz * 2, 0.7 + this.r() * 0.5, 0.45, 1.8, [0.97, 0.99, 1.0, 0.7], [0.9, 0.95, 1.0, 0], -2, 1.4);
+          if (this.r() < 0.35) this.add.emit(p[0], p[1] + 0.2, p[2], this.spread() * 2 - fx * 2, 1.5 + this.r() * 2.5, this.spread() * 2 - fz * 2, 0.5, 0.12, 0.03, [1.6, 1.8, 2.0, 1], [0.9, 1.2, 1.6, 0], -9, 0.6);
+        }
+      } else if (surf === "ice") {
+        st.ice += 40 * dt;
+        while (st.ice >= 1) {
+          st.ice -= 1;
+          const p = wheel(this.r() < 0.5 ? -1 : 1, 0.06);
+          // Bright glints skittering out behind the wheels, and a pale streak where it slides.
+          this.add.emit(p[0] + this.spread() * 0.4, p[1], p[2] + this.spread() * 0.4, -fx * (2 + this.r() * 4) + this.spread() * 1.5, 0.3 + this.r() * 1.2, -fz * (2 + this.r() * 4) + this.spread() * 1.5, 0.35 + this.r() * 0.3, 0.2, 0.03, [1.5, 2.0, 2.4, 1], [0.6, 1.2, 2.0, 0], -3, 1.0);
+        }
+      } else if (surf === "mud") {
+        st.mud += (26 + Math.abs(k.speed) * 2.2) * dt;
+        while (st.mud >= 1) {
+          st.mud -= 1;
+          const p = wheel(this.r() < 0.5 ? -1 : 1, 0.2);
+          this.norm.emit(p[0], p[1], p[2], this.spread() * 1.4 - fx * 3.4, 2.4 + this.r() * 3.6, this.spread() * 1.4 - fz * 3.4, 0.55 + this.r() * 0.4, 0.34, 0.5, [0.33, 0.21, 0.11, 0.95], [0.26, 0.16, 0.08, 0], -16, 0.5);
+        }
+      } else if (surf === "sand") {
+        st.sand += (24 + Math.abs(k.speed) * 2) * dt;
+        while (st.sand >= 1) {
+          st.sand -= 1;
+          const p = wheel(this.r() < 0.5 ? -1 : 1, 0.15);
+          this.norm.emit(p[0], p[1], p[2], this.spread() * 1.4 - fx * 2, 0.8 + this.r() * 1.6, this.spread() * 1.4 - fz * 2, 0.8 + this.r() * 0.5, 0.6, 2.2, [0.93, 0.8, 0.52, 0.55], [0.93, 0.8, 0.52, 0], 0.2, 1.3);
+        }
+      }
+    }
+    // A trick throws coloured lights round the kart.
+    if (k.trick > 0) {
+      const t = k.trick * 12;
+      for (let i = 0; i < 3; i++) {
+        const a = t + (i * Math.PI * 2) / 3;
+        const c = hsl(((k.trick * 1.4 + i / 3) % 1 + 1) % 1);
+        this.glowNow(k.x + Math.cos(a) * 1.3, k.y + k.hop + 1.0 + Math.sin(a * 0.5) * 0.4, k.z + Math.sin(a) * 1.3, 0.6, c[0] * 2.4, c[1] * 2.4, c[2] * 2.4, 0.9);
+      }
     }
 
     // A spin-out throws up smoke and circling sparkles.
