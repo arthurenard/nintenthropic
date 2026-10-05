@@ -89,6 +89,65 @@ test("H honks: a Honk! bubble over the kart, and the tricks are in the pause she
   expect(errors).toEqual([]);
 });
 
+test("a wheel player claps to honk, raises both hands to cheer, and waves hello", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  // A returning player with the scripted hands: only the level to hold, then the lobby.
+  await page.addInitScript(() => {
+    localStorage.setItem("handy.kart.checked.v1", "true");
+    localStorage.setItem("handy.camera-opened.v1", "true");
+  });
+  await open(page, "&input=script");
+  await page.getByRole("button", { name: "Practice" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("radio", { name: "1", exact: true }).click();
+  await page.getByRole("button", { name: "Start Race" }).click();
+  await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
+  await expect.poll(async () => (await state(page)).race?.phase, { timeout: 20_000 }).toBe("racing");
+
+  const emote = async () => {
+    const snapshot = await state(page);
+    return snapshot.race?.karts.find((kart) => kart.id === snapshot.mine[0])?.emote ?? null;
+  };
+  /** Moves the scripted hands through `pose(t)` for `seconds`, 30 pictures a second. */
+  const move = (seconds: number, pose: string) =>
+    page.evaluate(
+      async ([length, source]) => {
+        const make = new Function("t", `return (${source})(t)`) as (t: number) => Parameters<NonNullable<Window["gripTest"]>["wheel"]>[0];
+        const began = performance.now();
+        for (let t = 0; t < (length as number) * 1000; t = performance.now() - began) {
+          window.gripTest!.wheel(make(t / 1000));
+          await new Promise((resolve) => setTimeout(resolve, 33));
+        }
+      },
+      [seconds, pose] as const,
+    );
+
+  // Fists on the wheel for a moment, then a clap: the palms together and apart in half a second.
+  await move(1.2, "() => ({ angle: 0 })");
+  await expect(page.locator(".gp-bubble")).toHaveCount(0);
+  await move(0.45, "(t) => ({ angle: 0, fingers: 'open', span: 0.5 - 0.46 * Math.sin(Math.PI * t / 0.45) })");
+  await move(0.3, "() => ({ angle: 0 })");
+  await expect(page.locator(".gp-bubble")).toHaveText("Honk!");
+  expect(await emote()).toBeNull();
+
+  // Both open hands high above the wheel, held: a cheer, for as long as they are up.
+  await move(0.6, "() => ({ angle: 0 })");
+  await move(0.4, "() => ({ angle: 0, fingers: 'open' })");
+  await move(0.9, "() => ({ angle: 0, fingers: 'open', centre: [0.5, 0.08] })");
+  expect(await emote()).toBe("cheer");
+  await move(1, "() => ({ angle: 0 })");
+  await expect.poll(emote).toBeNull();
+
+  // One open hand swinging side to side, the other a fist: a wave.
+  await move(1.6, "(t) => ({ angle: 0, right: { fingers: 'open', x: 0.64 + 0.07 * Math.sin(2 * Math.PI * 2.5 * t) } })");
+  expect(await emote()).toBe("wave");
+  await move(1.4, "() => ({ angle: 0 })");
+  await expect.poll(emote).toBeNull();
+  expect(errors).toEqual([]);
+});
+
 test("driving up to the duck tells you, in your own viewport, and it is kept", async ({ page }, info) => {
   test.setTimeout(240_000);
   const errors: string[] = [];
