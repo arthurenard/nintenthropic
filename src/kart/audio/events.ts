@@ -63,7 +63,8 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     case "countdown":
       return [{ cue: event.n === 0 ? "kart_beep_high" : "kart_beep_low", volume: 1, pan: 0, distance: 0, rate: 1, delay: 0, priority: 3 }];
 
-    case "pickup": {
+    case "pickup":
+    case "box": {
       const who = hearKart(scene, event.kart);
       return who ? keep(order("kart_box_smash", who, !!localOf(scene, event.kart), { radius: RADIUS.medium, volume: 1 })) : [];
     }

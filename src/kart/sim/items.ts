@@ -391,11 +391,17 @@ export function stepItems(w: World, emit: Emit): void {
     }
     const site = sites[b]!;
     for (const k of karts) {
-      if (k.item !== null || k.roll > 0 || k.rescue > 0) continue;
+      if (k.rescue > 0) continue;
       const dx = k.x - site.x;
       const dz = k.z - site.z;
       if (dx * dx + dz * dz >= reach2) continue;
+      // Every kart breaks the box it drives through, as in any kart racer;
+      // only one with empty hands gets an item from it.
       state.boxes[b] = ticks(I.respawn);
+      if (k.item !== null || k.roll > 0) {
+        emit({ type: "box", kart: k.id });
+        break;
+      }
       k.rolled = drawItem(w, k.place, karts.length);
       k.roll = ticks(I.roulette);
       emit({ type: "pickup", kart: k.id, item: k.rolled });

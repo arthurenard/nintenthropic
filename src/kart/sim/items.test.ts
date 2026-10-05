@@ -1,3 +1,4 @@
+import type { RaceEvent } from "../contract";
 import { describe, expect, it } from "vitest";
 import type { DriveInput } from "../contract";
 import { TrackGeometry } from "../track/geometry";
@@ -48,7 +49,10 @@ describe("item boxes", () => {
     const pickup = events.find((e) => e.type === "pickup");
     expect(pickup).toMatchObject({ type: "pickup", kart: 0 });
     expect(view(r).item).toBeNull();
-    expect(r.view().things.filter((t) => t.kind === "box" && !t.active)).toHaveLength(1);
+    // The box it took is gone; so is a neighbour it clipped in the same breath (every kart breaks what it touches).
+    const gone = r.view().things.filter((t) => t.kind === "box" && !t.active).length;
+    expect(gone).toBeGreaterThanOrEqual(1);
+    expect(gone).toBeLessThanOrEqual(2);
     // About a second later the roulette stops on what the pickup said.
     run(r, 50, () => input({ throttle: 1 }));
     expect(view(r).rolling).toBe(true);
@@ -327,5 +331,19 @@ describe("slicks", () => {
     expect(slicks).toHaveLength(12);
     // The first two are gone.
     expect(Math.min(...slicks.map((s) => s.id))).toBeGreaterThan(HARBOUR_LIGHTS.itemRows.length * 5 + 1);
+  });
+});
+
+describe("a box driven through with full hands", () => {
+  it("still breaks, gives nothing, and says so", () => {
+    const r = race(HARBOUR_LIGHTS, racers(1, 0));
+    toGo(r);
+    const events: RaceEvent[] = [];
+    // Drive until the first item arrives and is held, then on through the next row.
+    for (let i = 0; i < 60 * 40 && !events.some((e) => e.type === "box"); i++) {
+      events.push(...run(r, 1, () => input({ throttle: 1 })));
+    }
+    const box = events.find((e) => e.type === "box");
+    expect(box).toMatchObject({ type: "box", kart: 0 });
   });
 });
