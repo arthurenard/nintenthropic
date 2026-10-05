@@ -39,8 +39,10 @@ function strataShade(seed: number, band = 2.6, tone = 1): Shade {
 interface Layer {
   h: number;
   col: Rgb;
-  /** How far the next layer stands back from this one (soft rock erodes back, hard rock juts). */
-  recede: number;
+  /** Radius of this layer's wall, as a fraction of the mesa's base radius: hard rock juts out, soft rock is cut back. */
+  r: number;
+  /** How much the wall leans in over its height (soft rock slumps; hard rock stands sheer). */
+  batter?: number;
 }
 
 /** A ring of `n` points about (cx, cz), uneven and stretched along x. */
@@ -60,24 +62,30 @@ function mesaBody(lit: MeshBuilder, cx: number, cz: number, baseR: number, strat
   let y = 0;
   // The talus: a sloping apron of fallen rock round the foot.
   const talusH = strata.reduce((a, l) => a + l.h, 0) * 0.24;
-  const tBot = mesaRing(cx, cz, baseR * 1.42, -2, stretch, seed, n, 0.06);
+  const tBot = mesaRing(cx, cz, baseR * 1.26, -2, stretch, seed, n, 0.1);
+  const tMid = mesaRing(cx, cz, baseR * 1.12, talusH * 0.45, stretch, seed, n, 0.1);
   const tTop = mesaRing(cx, cz, baseR * 1.0, talusH, stretch, seed, n, 0.06);
-  grid(lit, [tBot, tTop], (p, i, j) => scaleRgb(mixRgb(DUST, ORANGE, Math.max(0, Math.min(1, p[1] / talusH))), 0.85 + 0.3 * hash(i, j, seed + 5)), true);
+  const talusShade: Shade = (p, i, j) => scaleRgb(mixRgb(scaleRgb(DUST, 0.8), RED, Math.max(0, Math.min(1, p[1] / talusH))), 0.78 + 0.3 * hash(i, j, seed + 5));
+  grid(lit, [tBot, tMid, tTop], talusShade, true);
   y = talusH;
   let r = baseR;
   const rings: V3[][] = [tTop];
   strata.forEach((l, li) => {
-    const bot = mesaRing(cx, cz, r, y, stretch, seed, n, 0.03);
-    const top = mesaRing(cx, cz, r * 0.985, y + l.h, stretch, seed, n, 0.03);
-    grid(lit, [bot, top], (p, i, j) => scaleRgb(l.col, (0.74 + 0.3 * ((p[1] - y) / l.h)) * (0.92 + 0.16 * hash(i, j, seed + li))), true);
-    const nextR = r * 0.985 - l.recede;
-    if (l.recede > 0.2) {
-      const inner = mesaRing(cx, cz, nextR, y + l.h, stretch, seed, n, 0.03);
-      grid(lit, [top, inner], scaleRgb(mixRgb(l.col, SAND, 0.5), 1.05), true);
+    const rr = baseR * l.r;
+    const rTop = rr * (1 - (l.batter ?? 0.012));
+    const bot = mesaRing(cx, cz, rr, y, stretch, seed, n, 0.03);
+    const top = mesaRing(cx, cz, rTop, y + l.h, stretch, seed, n, 0.03);
+    // The step from the layer below to this one: a ledge if this layer is cut back, an overhang if it juts.
+    const prevTop = rings[rings.length - 1]!;
+    const prevR = li === 0 ? baseR : baseR * strata[li - 1]!.r * (1 - (strata[li - 1]!.batter ?? 0.012));
+    if (Math.abs(rr - prevR) > 0.3) {
+      const prevCol = li === 0 ? ORANGE : strata[li - 1]!.col;
+      grid(lit, [prevTop, bot], rr < prevR ? scaleRgb(mixRgb(prevCol, SAND, 0.55), 1.1) : scaleRgb(prevCol, 0.5), true);
     }
+    grid(lit, [bot, top], (p, i, j) => scaleRgb(l.col, (0.72 + 0.34 * ((p[1] - y) / l.h)) * (0.92 + 0.16 * hash(i, j, seed + li))), true);
     rings.push(top);
     y += l.h;
-    r = Math.max(2, nextR);
+    r = rTop;
   });
   // The cap: a plate of dark rock on top, with a few boulders and a pinnacle or two.
   const lastRing = mesaRing(cx, cz, r, y, stretch, seed, n, 0.03);
@@ -124,19 +132,19 @@ const mesa: LandmarkSpec = {
   build() {
     const lit = new MeshBuilder();
     const strata: Layer[] = [
-      { h: 6, col: CREAM, recede: 1.8 },
-      { h: 5, col: ORANGE, recede: -0.3 },
-      { h: 7, col: RED, recede: 0.4 },
-      { h: 4, col: TAN, recede: 2.0 },
-      { h: 6, col: DEEP_RED, recede: -0.3 },
-      { h: 3, col: SAND, recede: 1.6 },
-      { h: 5, col: ORANGE, recede: 0.5 },
-      { h: 4, col: RED, recede: 0.8 },
-      { h: 3, col: CAP, recede: 0 },
+      { h: 6, col: CREAM, r: 0.93, batter: 0.06 },
+      { h: 5, col: ORANGE, r: 1.0 },
+      { h: 7, col: RED, r: 1.04 },
+      { h: 4, col: TAN, r: 0.92, batter: 0.07 },
+      { h: 6, col: DEEP_RED, r: 1.0 },
+      { h: 3, col: SAND, r: 0.9, batter: 0.06 },
+      { h: 5, col: ORANGE, r: 0.98 },
+      { h: 4, col: RED, r: 1.02 },
+      { h: 3, col: CAP, r: 1.07, batter: 0 },
     ];
     mesaBody(lit, 0, 0, 33, strata, 1.3, 1);
     // A small butte beside it, a few strata only, standing a little apart.
-    mesaBody(lit, -66, 14, 10, [{ h: 5, col: CREAM, recede: 1.8 }, { h: 6, col: ORANGE, recede: 1.2 }, { h: 6, col: RED, recede: 1.6 }, { h: 3, col: CAP, recede: 0 }], 0.9, 7);
+    mesaBody(lit, -66, 14, 10, [{ h: 5, col: CREAM, r: 0.92, batter: 0.06 }, { h: 6, col: ORANGE, r: 1.0 }, { h: 6, col: RED, r: 1.05 }, { h: 3, col: CAP, r: 1.1, batter: 0 }], 0.9, 7);
     return { lit };
   },
 };
@@ -471,7 +479,7 @@ const boulder: HazardSpec = {
     const trail: Mesh[] = [];
     for (let k = 0; k < 4; k++) {
       const tb = new MeshBuilder();
-      if (volcanic) tb.blob(0, 0, 0, 0.32, 0.32, 0.32, [1.5, 0.55, 0.08], 0);
+      if (volcanic) tb.blob(0, 0, 0, 0.3, 0.3, 0.3, [1.1, 0.34, 0.04], 0);
       else tb.blob(0, 0, 0, 1.0, 0.65, 1.0, rgb("#e2c08a"), 0);
       const m = meshOf(tb, volcanic ? ctx.glow : hazardGlass());
       root.add(m);

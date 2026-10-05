@@ -5,7 +5,7 @@
  */
 import { Group, Mesh, type Material, type Object3D } from "three";
 import { byHeight, grid, MeshBuilder, mixRgb, pipe, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
-import { beam, disc, hash, hazardGlass, icicle, noisyArch, puffPart, ribbon, vec } from "./snow";
+import { beam, disc, flutedPipe, hash, hazardGlass, icicle, noisyArch, puffPart, ribbon, vec } from "./snow";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
@@ -132,19 +132,20 @@ const volcano: LandmarkSpec = {
         return u < 0.25 ? mixRgb(LAVA_HOT, LAVA, u / 0.25) : u < 0.7 ? mixRgb(LAVA, LAVA_DEEP, (u - 0.25) / 0.45) : mixRgb(LAVA_DEEP, LAVA_CRUST, (u - 0.7) / 0.3);
       });
       // A glowing tongue where the streak meets the plain, for the longer ones.
-      if (sk.end > 2.2) {
+      if (sk.end < 1.6) {
         const p = sample(sk.end, sk.th);
         const out = vec.norm([p[0], 0, p[2]]);
-        const q = vec.add(p, vec.mul(out, 38));
-        ribbon(glow, [vec.add(p, [0, 0.4, 0]), vec.add(vec.lerp(p, q, 0.5), [0, 0.35, 0]), vec.add(q, [0, 0.3, 0])], (i) => (i === 0 ? sk.w / 2 : i === 1 ? sk.w * 0.9 : sk.w * 0.35), [0, 1, 0], (i) => (i === 0 ? LAVA : i === 1 ? LAVA_DEEP : LAVA_CRUST));
+        const p0: V3 = [p[0] + out[0] * 2, 0.45, p[2] + out[2] * 2];
+        const q: V3 = [p0[0] + out[0] * 40, 0.4, p0[2] + out[2] * 40];
+        ribbon(glow, [p0, vec.lerp(p0, q, 0.5), q], (i) => (i === 0 ? sk.w * 0.5 : i === 1 ? sk.w * 0.85 : sk.w * 0.3), [0, 1, 0], (i) => (i === 0 ? LAVA : i === 1 ? LAVA_DEEP : LAVA_CRUST));
       }
     });
     // Bombs thrown up from the crater, arcing out and falling back on a loop.
     const moving: MovingPart[] = [];
     for (let k = 0; k < 5; k++) {
       const g = new MeshBuilder();
-      g.blob(0, 0, 0, 2.2, 2.2, 2.2, LAVA_HOT, 0);
-      g.blob(0, 0, 0, 3.2, 3.2, 3.2, LAVA, 0);
+      g.blob(0, H + 2, 0, 2.2, 2.2, 2.2, LAVA_HOT, 0);
+      g.blob(0, H + 2, 0, 3.2, 3.2, 3.2, LAVA, 0);
       const ang = k * 1.7 + 0.4;
       const vx = Math.cos(ang) * (22 + k * 4);
       const vz = Math.sin(ang) * (22 + k * 4);
@@ -164,8 +165,8 @@ const volcano: LandmarkSpec = {
     for (let k = 0; k < 9; k++) {
       const g = new MeshBuilder();
       const r = 15 + hash(k, 1) * 8;
-      g.blob(0, 0, 0, r, r * 0.8, r, ramp(scaleRgb(PUFF[k % 3]!, 0.8), scaleRgb(PUFF[k % 3]!, 1.5)), 1);
-      g.blob(r * 0.6, r * 0.2, r * 0.2, r * 0.7, r * 0.6, r * 0.7, scaleRgb(PUFF[(k + 1) % 3]!, 1.2), 1);
+      g.blob(0, H + 14, 0, r, r * 0.8, r, ramp(scaleRgb(PUFF[k % 3]!, 0.8), scaleRgb(PUFF[k % 3]!, 1.5)), 1);
+      g.blob(r * 0.6, H + 14 + r * 0.2, r * 0.2, r * 0.7, r * 0.6, r * 0.7, scaleRgb(PUFF[(k + 1) % 3]!, 1.2), 1);
       moving.push(puffPart(g, [0, H + 14, 0], k / 9, 26, 95, [70, 0, -34], 2.6));
     }
     // Embers drifting about, as soft halos; a big glow over the crater and low red ones on the flanks.
@@ -304,7 +305,7 @@ const lavaFall: LandmarkSpec = {
     // Steam rising off the pool.
     for (let k = 0; k < 3; k++) {
       const g = new MeshBuilder();
-      for (let i = 0; i < 4; i++) g.blob((hash(k, i, 2) - 0.5) * 1.6, i * 1.4, (hash(k, i, 3) - 0.5) * 1.6, 1.1 + i * 0.35, 0.9 + i * 0.25, 1.1 + i * 0.35, rgb("#d8c0b8"), 0);
+      for (let i = 0; i < 4; i++) g.blob((k - 1) * 6 + (hash(k, i, 2) - 0.5) * 1.6, 2 + i * 1.4, 12 + (hash(k, i, 3) - 0.5) * 1.6, 1.1 + i * 0.35, 0.9 + i * 0.25, 1.1 + i * 0.35, [1.5, 1.4, 1.3], 0);
       moving.push(puffPart(g, [(k - 1) * 6, 2, 12], k / 3, 6, 18, [3, 0, 3], 1.3));
     }
     const halos: Halo[] = [
@@ -472,9 +473,9 @@ const obsidianArch: LandmarkSpec = {
     // Glassy black: mostly very dark with the odd facet catching the light brightly.
     const glass: Shade = (p, i, j) => {
       const v = hash(i, j, 7);
-      const spark = Math.pow(v, 5);
-      const base = mixRgb([0.003, 0.003, 0.006], [0.02, 0.015, 0.03], Math.max(0, Math.min(1, p[1] / 22)));
-      return mixRgb(base, [0.5, 0.22, 0.1], spark * 0.85);
+      const spark = Math.pow(v, 14);
+      const base = mixRgb([0.0012, 0.0012, 0.0025], [0.008, 0.006, 0.012], Math.max(0, Math.min(1, p[1] / 22)));
+      return mixRgb(base, [0.4, 0.17, 0.08], spark);
     };
     noisyArch(lit, { halfIn: hw, topIn: top, legs, thick: (t) => thick(t), z0: -half, z1: half, steps: Math.max(4, Math.round(ctx.span / 5)), arcSteps: 10, rough: 1.1, seed: 12, skirt: 3, inner: glass, outer: glass });
     // Glowing veins: seams that follow the arch round the inside, and a zigzag along each face.
@@ -527,10 +528,10 @@ const obsidianArch: LandmarkSpec = {
 // ─── Hot spring ──────────────────────────────────────────────────────────────
 
 /** A wisp of steam: a loose stack of soft puffs, wider as it rises. */
-function steamWisp(g: MeshBuilder, seed: number): void {
+function steamWisp(g: MeshBuilder, seed: number, ox: number, oy: number, oz: number): void {
   for (let i = 0; i < 4; i++) {
     const r = 0.8 + i * 0.28 + hash(seed, i, 1) * 0.3;
-    g.blob((hash(seed, i, 2) - 0.5) * 1.0, i * 1.1, (hash(seed, i, 3) - 0.5) * 1.0, r, r * 0.7, r, rgb("#efe6e0"), 0);
+    g.blob(ox + (hash(seed, i, 2) - 0.5) * 1.0, oy + i * 1.1, oz + (hash(seed, i, 3) - 0.5) * 1.0, r, r * 0.7, r, [1.7, 1.6, 1.5], 0);
   }
 }
 
@@ -598,8 +599,8 @@ const hotSpring: LandmarkSpec = {
     const moving: MovingPart[] = [];
     for (let k = 0; k < 7; k++) {
       const g = new MeshBuilder();
-      steamWisp(g, k);
       const a = k * 0.95;
+      steamWisp(g, k, Math.sin(a) * 5.5, 1.0, Math.cos(a) * 5);
       moving.push(puffPart(g, [Math.sin(a) * 5.5, 1.0, Math.cos(a) * 5], k / 7, 6 + (k % 3), 12, [1.2 * Math.sin(a), 0, 1.2 * Math.cos(a)], 1.2));
     }
     const halos: Halo[] = [
@@ -646,7 +647,7 @@ const fireball: HazardSpec = {
       const a = k * 2.4;
       const dir = vec.norm([Math.cos(a) * r, y, Math.sin(a) * r]);
       const len = 0.9 + hash(k, 2) * 0.5 + (y > 0 ? 0.3 : 0);
-      beam(bb, vec.mul(dir, 0.7), vec.mul(dir, 0.7 + len), 0.45, 0.45, [0, 1, 0], FLAME, EMBER);
+      flutedPipe(bb, vec.mul(dir, 0.7), vec.mul(dir, 0.7 + len), 0.34, 3, (q) => mixRgb(FLAME_HOT, EMBER, Math.min(1, Math.max(0, (vec.len(q) - 0.7) / len))), 0.03, false);
     }
     ball.add(meshOf(bb, ctx.glow));
     // The flame trailing below: three layers of cones, hottest in the middle.

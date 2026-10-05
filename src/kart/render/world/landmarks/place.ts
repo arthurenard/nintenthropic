@@ -146,6 +146,18 @@ export function roadFrameMap(track: TrackGeometry, bank: Bank, s0: number, offse
 
 // ─── Landmarks ───────────────────────────────────────────────────────────────
 
+/**
+ * The yaw (contract.ts heading) at which a landmark beside the road faces it:
+ * its front, +z in model space, looks across the road. A landmark on the
+ * centre line (offset 0) looks back at the oncoming kart. `tx, tz` is the
+ * road's direction there.
+ */
+export function facingRoad(tx: number, tz: number, offset: number): number {
+  const side = Math.sign(offset);
+  // The road's right is (-tz, tx); the thing stands on that side (offset > 0) and looks the other way.
+  return side === 0 ? Math.atan2(-tx, -tz) : Math.atan2(side * tz, side * -tx);
+}
+
 /** A circle on the ground that clutter (trees, rocks) must stay out of. */
 export interface KeepOut {
   x: number;
@@ -246,10 +258,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
     }
 
     // Standing beside the road, turned to face it (an offset of 0: facing the oncoming kart).
-    const side = Math.sign(lm.offset);
-    const fx = side === 0 ? -c.tx : side * c.tz;
-    const fz = side === 0 ? -c.tz : side * -c.tx;
-    const yaw = lm.abs ? lm.abs.yaw : Math.atan2(fx, fz) + (lm.turn ?? 0);
+    const yaw = lm.abs ? lm.abs.yaw : facingRoad(c.tx, c.tz, lm.offset) + (lm.turn ?? 0);
     const p = lm.abs ? { x: lm.abs.x, y: 0, z: lm.abs.z } : track.point(at, lm.offset);
     const r = modelRadius(model) * scale;
     // The lowest ground under its footprint: models carry a skirt below y = 0 to bury the difference.
@@ -348,7 +357,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
   }
 
   // The contact shadows, one mesh: quads with the soft-blob texture.
-  if (blobs.length) {
+  if (blobs.length && typeof document !== "undefined") {
     const pos: number[] = [];
     const uv: number[] = [];
     const col: number[] = [];

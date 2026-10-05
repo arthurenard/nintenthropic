@@ -553,7 +553,7 @@ const cabin: LandmarkSpec = {
     drift(lit, 0, 11.6, 3.2, 0.5, 1.4, snowShade(0, 1), 34);
     const smoke: MovingPart[] = [0, 1, 2].map((k) => {
       const g = new MeshBuilder();
-      g.blob(0, 16.9, 0, 1.2, 1.0, 1.2, rgb("#e3e9f4"), 0);
+      g.blob(cx, 16.9, cz, 1.2, 1.0, 1.2, rgb("#e3e9f4"), 0);
       return puffPart(g, [cx, 16.9, cz], k / 3, 7, 10, [4.5, 0, -1.2], 1.9);
     });
     return { lit, glow, glass, halos, moving: smoke };

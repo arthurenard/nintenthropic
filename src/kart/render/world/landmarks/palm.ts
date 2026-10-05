@@ -87,23 +87,25 @@ function sandMound(b: MeshBuilder, cx: number, cz: number, r: number, h: number,
 /** Rich glossy colours for a beach ball panel number. */
 const BALL_PANELS: Rgb[] = [RED, YELLOW, BLUE, WHITE, GREEN, SUNSET];
 
-/** A beach ball of radius `r` centred on the origin: six panels and white caps. */
+/** A beach ball of radius `r` centred on the origin: six hard-edged panels and white caps. */
 function beachBall(r: number): MeshBuilder {
   const b = new MeshBuilder();
-  const prof: [number, number][] = [];
-  for (let lat = -90; lat <= 90; lat += 22.5) prof.push([r * Math.cos((lat * Math.PI) / 180), r * Math.sin((lat * Math.PI) / 180)]);
-  lathe(b, prof, {
-    segments: 12,
-    shade: (p, _i, j) => {
-      const lat = Math.abs(Math.asin(p[1] / r));
-      if (lat > 1.2) return WHITE;
-      const c = BALL_PANELS[Math.floor(j / 2) % BALL_PANELS.length]!;
-      return scaleRgb(c, 0.72 + 0.28 * (p[1] / r + 1) * 0.5 + 0.1);
-    },
-  });
-  for (const s of [-1, 1]) {
-    b.add(shapes.cylinder(8), xf(0, s * (r - 0.02), 0, r * 0.2, r * 0.1, r * 0.2), rgb("#e8e0cc"));
+  const SEG = 12;
+  const lats = [-90, -67.5, -45, -22.5, 0, 22.5, 45, 67.5, 90];
+  const pt = (lat: number, j: number): V3 => {
+    const la = (lat * Math.PI) / 180;
+    const a = (j / SEG) * TAU;
+    return [Math.cos(la) * Math.cos(a) * r, Math.sin(la) * r, Math.cos(la) * Math.sin(a) * r];
+  };
+  for (let i = 0; i < lats.length - 1; i++) {
+    for (let j = 0; j < SEG; j++) {
+      const cap = i === 0 || i === lats.length - 2;
+      const c = cap ? WHITE : BALL_PANELS[Math.floor(j / 2) % BALL_PANELS.length]!;
+      const lo = scaleRgb(c, 0.8);
+      b.quad(pt(lats[i]!, j), pt(lats[i]!, j + 1), pt(lats[i + 1]!, j + 1), pt(lats[i + 1]!, j), i < 4 ? lo : c, i < 4 ? lo : c, c, c);
+    }
   }
+  for (const s of [-1, 1]) b.add(shapes.cylinder(8), xf(0, s * (r - 0.02), 0, r * 0.2, r * 0.1, r * 0.2), rgb("#e8e0cc"));
   return b;
 }
 
@@ -128,8 +130,8 @@ function frond(b: MeshBuilder, base: V3, az: number, len: number, rise: number, 
     const s = k / N;
     const L = leaf * (0.45 + 0.55 * Math.sin(Math.min(1, s * 1.05) * Math.PI)) * (0.9 + hash(seed + k) * 0.2);
     for (const side of [-1, 1]) {
-      for (let h = 0; h < 2; h++) {
-        const f = h === 0 ? 0.25 : 0.75;
+      for (let h = 0; h < 3; h++) {
+        const f = 0.17 + h * 0.33;
         const a: V3 = [prev[0] + (p[0] - prev[0]) * (f - 0.22), prev[1] + (p[1] - prev[1]) * (f - 0.22), prev[2] + (p[2] - prev[2]) * (f - 0.22)];
         const c: V3 = [prev[0] + (p[0] - prev[0]) * (f + 0.22), prev[1] + (p[1] - prev[1]) * (f + 0.22), prev[2] + (p[2] - prev[2]) * (f + 0.22)];
         const down = 0.5 + 0.5 * s;
@@ -159,10 +161,10 @@ LANDMARKS["palm-tree"] = {
     const top = path[path.length - 1]!;
     const crown = new MeshBuilder();
     crown.blob(top[0], top[1] + 0.2, top[2], 0.85, 0.7, 0.85, ramp(COCONUT, TRUNK_B), 0);
-    for (let k = 0; k < 10; k++) {
-      const az = (k / 10) * TAU + hash(k) * 0.3;
-      const len = 7.2 + hash(k + 11) * 1.8;
-      frond(crown, [top[0], top[1] + 0.3, top[2]], az, len, 1.6 + hash(k + 21) * 1.6, 4.2 + hash(k + 31) * 2.2, 2.9, k % 3 === 0 ? FROND_LIGHT : FROND_MID, FROND_DARK, k % 2 === 0 ? SAND_LIGHT : rgb("#c9e8a0"), k * 7);
+    for (let k = 0; k < 11; k++) {
+      const az = (k / 11) * TAU + hash(k) * 0.3;
+      const len = 7.8 + hash(k + 11) * 1.8;
+      frond(crown, [top[0], top[1] + 0.3, top[2]], az, len, 1.6 + hash(k + 21) * 1.6, 4.2 + hash(k + 31) * 2.2, 4.1, k % 3 === 0 ? FROND_LIGHT : FROND_MID, FROND_DARK, k % 2 === 0 ? SAND_LIGHT : rgb("#c9e8a0"), k * 7);
     }
     for (let k = 0; k < 3; k++) {
       const az = (k / 3) * TAU + 0.5;
@@ -345,7 +347,8 @@ function surfboard(b: MeshBuilder, x: number, z: number, y0: number, L: number, 
     const bandStripe = (t > 0.22 && t < 0.27) || (t > 0.7 && t < 0.75);
     if (bandStripe) return stripe;
     void p;
-    return mixRgb(a, c, Math.min(1, Math.max(0, t * 1.1 - 0.05)));
+    const g = Math.min(1, Math.max(0, t * 1.1 - 0.05));
+    return g < 0.5 ? mixRgb(a, SAND_LIGHT, g * 1.1) : mixRgb(mixRgb(a, SAND_LIGHT, 0.55), c, (g - 0.5) * 2);
   };
   grid(b, rowsTop, paint);
   grid(b, rowsBot, (p, i) => scaleRgb(mixRgb(a, c, i / N), 0.62));
@@ -373,7 +376,7 @@ LANDMARKS.surfboard = {
   build() {
     const lit = new MeshBuilder();
     sandMound(lit, 0, 0, 5.2, 1.5, 12);
-    surfboard(lit, 0, 0, 0.4, 16, 3.6, -0.07, 0.06, TURQUOISE, SUNSET, WHITE, 3);
+    surfboard(lit, 0, 0, 0.4, 16, 3.6, -0.07, 0.06, TURQUOISE, SUNSET, BLUE, 3);
     sandMound(lit, 4.7, -0.4, 3.4, 1.1, 10);
     surfboard(lit, 4.7, -0.4, 0.2, 9.5, 2.5, -0.05, -0.12, CORAL, YELLOW, TURQUOISE, 1);
     // The leash: a black cord from the tail looping into the sand, with a cuff.
@@ -504,7 +507,18 @@ LANDMARKS["beach-towel"] = {
       rows.push(row);
     }
     const stripeCols = [CORAL, WHITE, TURQUOISE, YELLOW, PINK, WHITE, BLUE, SUNSET];
-    grid(lit, rows, (p, i) => scaleRgb(stripeCols[i % stripeCols.length]!, 0.78 + 1.2 * (p[1] - 0.14)));
+    // Each cell is one flat quad of one stripe colour, brightened a little on the ridges.
+    for (let k = 0; k < NZ; k++) {
+      const col = stripeCols[k % stripeCols.length]!;
+      for (let i = 0; i < NX; i++) {
+        const a = rows[k]![i]!;
+        const b2 = rows[k]![i + 1]!;
+        const c = rows[k + 1]![i + 1]!;
+        const d = rows[k + 1]![i]!;
+        const lum = (p: V3): Rgb => scaleRgb(col, 0.8 + 1.1 * (p[1] - 0.14));
+        lit.quad(a, b2, c, d, lum(a), lum(b2), lum(c), lum(d));
+      }
+    }
     // The folded edge and the fringe at both short ends.
     for (let i = 0; i < NX; i++) {
       for (const s of [0, NZ]) {
@@ -573,7 +587,7 @@ function gem(b: MeshBuilder, glow: MeshBuilder, x: number, y: number, z: number,
   lathe(
     g,
     [[0.3, 0], [2.6, 2.1], [3.3, 2.7], [3.4, 3.2], [2.3, 5.0], [1.9, 5.2]],
-    { segments: 8, scale: [1, 1, 0.8], shade: (p, _i, j) => mixRgb(j % 2 === 0 ? a : c, WHITE, 0.15 + 0.5 * Math.min(1, p[1] / 5.2)), caps: "top" },
+    { segments: 8, scale: [1, 1, 0.8], shade: (p, _i, j) => mixRgb(j % 2 === 0 ? a : c, WHITE, 0.02 + 0.22 * Math.min(1, p[1] / 5.2)), caps: "top" },
   );
   stamp(b, g, new Matrix4().compose(new Vector3(x, y, z), new Quaternion(), new Vector3(s, s, s)));
   glow.add(shapes.cylinder(8), xf(x, y + 5.22 * s, z, 1.7 * s, 0.1 * s, 1.36 * s), [2.2, 2.6, 3.4]);
@@ -638,7 +652,7 @@ LANDMARKS["giant-ring"] = {
     const topY = C + RC + 1.1;
     lit.box(0, topY + 0.6, 0, 6.6, 1.5, 3.4, ramp(GOLD_DARK, GOLD));
     for (const [cx, cz] of [[-2.6, -1.2], [2.6, -1.2], [-2.6, 1.2], [2.6, 1.2]] as const) lit.add(shapes.cone(5), xf(cx, topY + 2.2, cz, 0.55, 3.4, 0.55), ramp(GOLD_DARK, GOLD));
-    gem(lit, glow, 0, topY + 1.3, 0, 1.15, BLUE, PINK);
+    gem(lit, glow, 0, topY + 1.3, 0, 1.55, BLUE, PINK);
     for (const [deg, a, c] of [[-24, PINK, BLUE], [24, BLUE, PINK], [-42, BLUE, PINK], [42, PINK, BLUE]] as const) {
       const th = (deg * Math.PI) / 180;
       const px = Math.sin(th) * (RC + 1.0);
@@ -651,13 +665,13 @@ LANDMARKS["giant-ring"] = {
       stamp(glow, gl, new Matrix4().compose(new Vector3(px + Math.sin(th) * 0.4, py + Math.cos(th) * 0.4, 0), new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -th), new Vector3(1, 1, 1)));
     }
     // Sparkles: crossed glints over the gem.
-    for (const [dx, dy, r] of [[-3.6, 3.8, 2.0], [3.8, 5.8, 1.5], [1.2, 8.6, 1.1]] as const) {
+    for (const [dx, dy, r] of [[-4.6, 4.6, 2.2], [4.8, 7.4, 1.6], [1.2, 10.6, 1.2]] as const) {
       glow.rod([dx - r, topY + dy, -1.9], [dx + r, topY + dy, -1.9], 0.18, [3.4, 3.4, 4]);
       glow.rod([dx, topY + dy - r, -1.9], [dx, topY + dy + r, -1.9], 0.18, [3.4, 3.4, 4]);
       halos.push({ x: dx, y: topY + dy, z: -2.2, size: 3.2, colour: [2.6, 2.8, 3.6], alpha: 0.8, twinkle: 0.9 });
     }
-    halos.push({ x: 0, y: topY + 4.2, z: -2, size: 12, colour: [1.6, 2.0, 3.6], alpha: 0.45, twinkle: 0.7 });
-    halos.push({ x: 0, y: topY + 4.2, z: 2, size: 12, colour: [3.2, 1.6, 2.8], alpha: 0.35, twinkle: 0.7 });
+    halos.push({ x: 0, y: topY + 5.2, z: -2, size: 16, colour: [1.6, 2.0, 3.6], alpha: 0.45, twinkle: 0.7 });
+    halos.push({ x: 0, y: topY + 5.2, z: 2, size: 16, colour: [3.2, 1.6, 2.8], alpha: 0.35, twinkle: 0.7 });
     return { lit, glow, halos };
   },
 };
@@ -793,15 +807,15 @@ HAZARDS.coconut = {
     const b = new MeshBuilder();
     // A hairy brown nut: a lumpy ball with a pale husk patch, three dark eyes and a few stray fibres.
     rockBlob(b, 0, 0, 0, 0.9, 0.88, 0.9, byHeight(-0.9, 0.9, rgb("#4a2c14"), rgb("#8a5a30")), 3, { detail: 1, roughness: 0.1 });
-    b.blob(0.2, 0.55, 0.72, 0.42, 0.34, 0.2, ramp(rgb("#d9b878"), rgb("#f3dcaa")), 0);
-    for (const [x, y, z] of [[-0.18, 0.74, 0.5], [0.18, 0.86, 0.38], [0.0, 0.62, 0.66]] as const) b.blob(x * 1.1, y, z, 0.1, 0.1, 0.07, DARK, 0);
-    for (let k = 0; k < 9; k++) {
+    b.blob(0.2, 0.5, 0.7, 0.55, 0.42, 0.22, ramp(rgb("#d9b878"), rgb("#f3dcaa")), 0);
+    for (const [x, y, z] of [[-0.18, 0.74, 0.5], [0.18, 0.86, 0.38], [0.0, 0.62, 0.66]] as const) b.blob(x * 1.1, y, z, 0.15, 0.15, 0.1, DARK, 0);
+    // Husk fibres: little tufts standing out all over.
+    for (let k = 0; k < 24; k++) {
       const a = hash(k + 3) * TAU;
-      const y = (hash(k + 9) - 0.5) * 1.6;
+      const y = (hash(k + 9) - 0.5) * 1.7;
       const r = Math.sqrt(Math.max(0.05, 1 - y * y));
-      const x = Math.cos(a) * r * 0.9;
-      const z = Math.sin(a) * r * 0.9;
-      b.rod([x, y, z], [x * 1.12, y * 1.12 + 0.05, z * 1.12], 0.16, rgb("#7a4a22"));
+      const n: V3 = [Math.cos(a) * r, y, Math.sin(a) * r];
+      orient(b, shapes.cone(4), [n[0] * 0.86, n[1] * 0.86, n[2] * 0.86], n, 0.13, 0.27, 0.13, ramp(rgb("#6a4220"), rgb("#b88a54")));
     }
     const inner = new Group();
     inner.add(new Mesh(b.build(), ctx.lit));

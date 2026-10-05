@@ -32,10 +32,13 @@ export type Own = { dispose(): void }[];
 function glowFromVertices(material: MeshLambertMaterial, colour: Color, strength: number): void {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uGlowColour = { value: colour.clone().multiplyScalar(strength) };
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float aGlow;\nvarying float vGlow;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = aGlow;");
+    // The painted cracks (the emissive map) glow on level ground only: on a mountainside they would stretch into a web.
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float aGlow;\nvarying float vGlow;\nvarying float vFlat;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = aGlow;\nvFlat = smoothstep(0.8, 0.97, normal.y);");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vGlow;\nuniform vec3 uGlowColour;")
-      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += uGlowColour * vGlow;");
+      .replace("#include <common>", "#include <common>\nvarying float vGlow;\nvarying float vFlat;\nuniform vec3 uGlowColour;")
+      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vFlat;\ntotalEmissiveRadiance += uGlowColour * vGlow;");
   };
 }
 
