@@ -255,9 +255,11 @@ function findCuts(def: TrackDef, geo: TrackGeometry, terrain: Terrain): CutSite[
   for (const verge of def.verges ?? []) {
     if (verge.distance < TUNING.bots.cutMinDistance) continue;
     const side = verge.side === "right" ? 1 : -1;
-    const from = verge.from * length;
-    const to = verge.to * length;
+    // The barrier is out of the way a little before the line leaves the road and after it comes back.
+    const from = verge.from * length + TUNING.bots.cutInset;
+    const to = verge.to * length - TUNING.bots.cutInset;
     const run = geo.wrap(to - from);
+    if (run < 20 || run > length / 2) continue;
     const a = geo.point(from, side * (geo.at(from).width / 2 - 1.5));
     const b = geo.point(to, side * (geo.at(to).width / 2 - 1.5));
     const len = Math.hypot(b.x - a.x, b.z - a.z);

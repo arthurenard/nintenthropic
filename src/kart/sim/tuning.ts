@@ -95,10 +95,10 @@ export const TUNING = {
   ground: {
     road: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
     boost: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
-    ice: { rough: false, top: 24, boostTop: 0, grip: 1.2, gripDrift: 1.0, decel: 5, accel: 0.8, brake: 0.25, coast: 0.3 },
-    grass: { rough: true, top: 11, boostTop: 19, grip: 6, gripDrift: 4.2, decel: 10, accel: 1, brake: 1, coast: 1 },
-    sand: { rough: true, top: 9, boostTop: 17, grip: 5, gripDrift: 4.2, decel: 12, accel: 1, brake: 1, coast: 1 },
-    snow: { rough: true, top: 10, boostTop: 17, grip: 3.5, gripDrift: 3, decel: 10, accel: 1, brake: 1, coast: 1 },
+    ice: { rough: false, top: 24, boostTop: 0, grip: 1.2, gripDrift: 1.0, decel: 5, accel: 0.65, brake: 0.25, coast: 0.3 },
+    grass: { rough: true, top: 11, boostTop: 21, grip: 6, gripDrift: 4.2, decel: 10, accel: 1, brake: 1, coast: 1 },
+    sand: { rough: true, top: 9, boostTop: 20, grip: 5, gripDrift: 4.2, decel: 12, accel: 1, brake: 1, coast: 1 },
+    snow: { rough: true, top: 10, boostTop: 20, grip: 3.5, gripDrift: 3, decel: 10, accel: 1, brake: 1, coast: 1 },
     mud: { rough: true, top: 7, boostTop: 11, grip: 8, gripDrift: 4.2, decel: 16, accel: 1, brake: 1, coast: 1 },
   },
 
@@ -292,6 +292,8 @@ export const TUNING = {
     /** A verge is a cut worth taking when its barrier is at least this far out and the road it skips is at least this many times the straight line. */
     cutMinDistance: 12,
     cutGain: 1.3,
+    /** A cut runs from this far (metres) inside the verge's start to this far inside its end. */
+    cutInset: 12,
     /** Ice: a bot plans its bends for this sideways acceleration, never faster than iceTop, and brakes for it this hard (m/s^2). */
     iceLateral: 9,
     iceTop: 17,

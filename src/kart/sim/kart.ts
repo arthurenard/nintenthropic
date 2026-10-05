@@ -317,8 +317,16 @@ function checkHazards(w: World, k: KartState, emit: Emit): void {
 export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean): void {
   const geo = w.geo;
   const terrain = w.plan.terrain;
-  const p = geo.project(k.x, k.z, k.s);
-  const half = p.sample.width / 2;
+  let p = geo.project(k.x, k.z, k.s);
+  let half = p.sample.width / 2;
+  // Well off the road by the answer near where it was: it may have crossed to another part (over a verge, skipping some road). The whole lap says.
+  if (Math.abs(p.offset) > half + 1.5) {
+    const elsewhere = geo.project(k.x, k.z);
+    if (Math.abs(elsewhere.offset) < Math.abs(p.offset) - 1.5) {
+      p = elsewhere;
+      half = p.sample.width / 2;
+    }
+  }
   let offset = p.offset;
   const side = offset > 0 ? 1 : -1;
   const open = isOpen(terrain, p.s, side);
