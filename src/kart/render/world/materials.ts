@@ -110,7 +110,7 @@ export function roadMaterial(style: ThemeStyle, quality: QualitySettings, own: O
   const rough = roadRoughness(style, quality.anisotropy, Math.min(512, quality.roadTexture));
   own.push(normal, rough);
   const m = bakedLit(
-    new MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, normalMap: normal, normalScale: new Vector2(0.85, 0.85), metalness: 0 }),
+    new MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, normalMap: normal, normalScale: new Vector2(0.6, 0.6), metalness: 0 }),
     bake,
     "road",
   );

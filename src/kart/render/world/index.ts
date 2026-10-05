@@ -165,7 +165,7 @@ export async function createWorld(
   const chevrons = track(chevronTexture(quality.anisotropy)) as CanvasTexture;
   chevrons.wrapT = RepeatWrapping;
   if (meshes.pads) {
-    const padMat = track(new MeshBasicMaterial({ map: chevrons, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })) as Material;
+    const padMat = track(new MeshBasicMaterial({ map: chevrons, color: new Color(2.1, 2.1, 2.3), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })) as Material;
     addStatic(meshes.pads, padMat, 1);
   }
 

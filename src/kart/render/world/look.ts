@@ -54,7 +54,7 @@ const day: Look = {
   envIntensity: 0.62,
   fill: 0.35,
   sun: 1.75,
-  shadow: 0.92,
+  shadow: 0.86,
 };
 
 const night: Look = {
