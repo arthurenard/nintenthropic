@@ -17,7 +17,7 @@ export const BUBBLE_LIFE = 1.4;
 /** Farther than this a kart is too small for a bubble to be worth it, metres. */
 const FAR = 110;
 /** A bubble floats this far over the kart's roof, metres. */
-const OVER = 2.3;
+const OVER = 1.9;
 
 export interface BubbleLook {
   opacity: number;
