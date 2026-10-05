@@ -62,6 +62,7 @@ import {
   wallScrape,
   wallThud,
 } from "./kart-events";
+import { blastWump, cometGlitter, decoyPop, skyrocketBurst, skyrocketLaunch, stormCrack } from "./kart-items";
 import {
   beepHigh,
   beepLow,
@@ -119,6 +120,14 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_puck_fire: { recipe: puckFire, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.3, 0.8] },
   kart_puck_bounce: { recipe: puckBounce, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.04, expect: [0.2, 0.6] },
   kart_slick_splat: { recipe: slickSplat, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.4, 1.1] },
+
+  // --- the newer items: a comet's glitter (as long as the comet lasts), a storm, a skyrocket, a blast, a decoy ----------------
+  kart_comet: { recipe: cometGlitter, pack: "kart", bus: "sfx", level: -8, priority: 2, maxInstances: 3, vary: 0, expect: [5.8, 6.6] },
+  kart_storm: { recipe: stormCrack, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [1.8, 2.5] },
+  kart_skyrocket: { recipe: skyrocketLaunch, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, expect: [1.4, 2.1] },
+  kart_skyrocket_burst: { recipe: skyrocketBurst, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, expect: [1.7, 2.4] },
+  kart_blast: { recipe: blastWump, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.1, expect: [0.9, 1.5] },
+  kart_decoy_pop: { recipe: decoyPop, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.05, expect: [1.1, 1.7] },
 
   // --- hits ---------------------------------------------------------------------------------------------------------
   kart_hit: { recipe: hit, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, expect: [0.7, 1.5] },
