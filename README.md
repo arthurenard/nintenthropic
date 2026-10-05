@@ -27,7 +27,7 @@ ends the game). Each game hides **eight secrets**. In High Noon, try the bell.
 
 And a different kind of game, on its own page: **Grip Prix**, a kart racer for
 up to four that you steer with both hands held up like a wheel (see [Play Grip
-Prix with friends](#play-grip-prix-with-friends)).
+Prix](#play-grip-prix)).
 
 ## Play
 
@@ -106,12 +106,26 @@ much.
 Handy can be installed as an app from the browser (Install Handy, or Add to
 Dock / Add to Home Screen); it opens full screen.
 
-## Play Grip Prix with friends
+## Play Grip Prix
 
 Grip Prix is a kart racer for up to four, steered with both hands held up like
-a wheel (open them to brake). It lives at `race.html`, and it is built for a
-sofa: the computer on the TV hosts the race, and each friend's phone (or
-laptop), propped up in front of them, is their wheel.
+a wheel (open them to brake). It lives at `race.html`: choose a driver, race
+bots, or host a room for friends, race one track or a four-race Grand Prix, and
+flip the tracks with Mirror Mode.
+
+**On this computer** (Chrome, with a webcam):
+
+```bash
+npm run play
+```
+
+That starts the site and opens http://localhost:5191/race.html. Choose
+**Practice** to race the bots alone, or **Host a Race** to open a room. Over
+plain `localhost` the camera needs no certificate.
+
+**With friends' phones** it is built for a sofa: the computer on the TV hosts
+the race, and each friend's phone (or laptop), propped up in front of them, is
+their wheel.
 
 ```bash
 npm run party
@@ -119,8 +133,8 @@ npm run party
 
 That serves the game over HTTPS on your local network (a phone's camera only
 works on a secure page, so there is a self-signed certificate: each device
-asks once whether to trust it, and you say yes). The terminal prints the
-address. Then:
+asks once whether to trust it, and you accept it that one time). The terminal
+prints the address. Then:
 
 1. On the TV's computer, open the `https://localhost:5190/race.html` it shows,
    choose **Host a Race**, and under **Show the Race** choose **On This
@@ -128,9 +142,11 @@ address. Then:
    becomes just their wheel, with their place, lap and item.
 2. Friends scan the QR code in the lobby (it points at the computer's address
    on your network, not `127.0.0.1`), or type the four-letter code at **Join a
-   Race**. They pick a name, allow the camera, and hold the wheel level once.
-3. When everyone shows a tick, the host presses **Start Race**. The host's
-   pause stops the race for everyone, and resumes with a 3-2-1.
+   Race**. They pick a name and a driver, allow the camera, and hold the wheel
+   level once.
+3. When everyone shows a tick, the host presses **Start Race** (or **Start
+   Grand Prix**). The host's pause stops the race for everyone, and resumes
+   with a 3-2-1.
 
 Everyone on the same Wi-Fi connects directly. The devices find each other
 through a public PeerJS broker, so the network needs internet access (only the
@@ -170,6 +186,7 @@ other three games never load it.
 ```bash
 npm install
 npm run dev          # the site, with hot reload
+npm run play         # Grip Prix on this computer, http://localhost:5191/race.html
 npm run party        # Grip Prix over HTTPS on your network, for phones (see above)
 npm run typecheck
 npx vitest run       # unit tests
