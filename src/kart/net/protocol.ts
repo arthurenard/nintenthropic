@@ -59,8 +59,11 @@ export type ToHost =
   | { t: "hello"; v: number; device: string; /** How many players this device brings, 1 or 2. */ n: number }
   | { t: "configure"; players: WirePlayer[] }
   | { t: "ready"; ready: boolean }
-  /** Per kart: its latest inputs, oldest first. */
-  | { t: "in"; k: [kart: number, inputs: WireInput[]][] }
+  /**
+   * Per kart: its latest inputs, oldest first. `r` names the race (its seed)
+   * so a packet that wandered in late from the last race is not taken for this one's.
+   */
+  | { t: "in"; r: number; k: [kart: number, inputs: WireInput[]][] }
   | { t: "ping"; at: number }
   | { t: "leave" };
 
@@ -70,7 +73,7 @@ export type ToGuest =
   | { t: "lobby"; lobby: LobbyState }
   | { t: "start"; start: StartInfo }
   /** The race as it is: `acks` is, for this guest's karts, the last `seq` the host applied. */
-  | { t: "snap"; acks: Record<number, number>; state: RaceSnapshot }
+  | { t: "snap"; r: number; acks: Record<number, number>; state: RaceSnapshot }
   | { t: "events"; events: RaceEvent[] }
   | { t: "results"; result: RaceResult; lobby: LobbyState }
   | { t: "pong"; at: number }
@@ -87,8 +90,8 @@ export function encode(message: Message): string {
  * the host does that once and shares it with every guest, adding only each
  * guest's own acks.
  */
-export function encodeSnapshot(stateJson: string, acks: Record<number, number>): string {
-  return `{"t":"snap","acks":${JSON.stringify(acks)},"state":${stateJson}}`;
+export function encodeSnapshot(stateJson: string, race: number, acks: Record<number, number>): string {
+  return `{"t":"snap","r":${race},"acks":${JSON.stringify(acks)},"state":${stateJson}}`;
 }
 
 /** A message from the wire, or null if it is not one of ours. Never throws. */

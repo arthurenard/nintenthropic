@@ -98,10 +98,34 @@ describe("inputs from a guest", () => {
     await world.run(1);
     // A cheat: Bob also claims Ann's kart.
     const ann = kartOf(host, "Ann");
+    const bob = kartOf(host, "Bob");
     const link = (guest as unknown as { link_: { send(c: string, d: string): void } }).link_;
-    link.send("unreliable", JSON.stringify({ t: "in", k: [[ann, [[500000, 100, 100, 0, 0, 0]]]] }));
+    const race = (guest as unknown as { raceId: number }).raceId;
+    link.send("unreliable", JSON.stringify({ t: "in", r: race, k: [[ann, [[500000, 100, 100, 0, 0, 0]]]] }));
     await world.run(0.5);
     expect(applied).not.toContain(ann);
+
+    // And a straggler from some earlier race, whose numbers are far ahead of this one's, is not this race's input.
+    const before = applied.length;
+    link.send("unreliable", JSON.stringify({ t: "in", r: race + 1, k: [[bob, [[900000, 100, 100, 0, 0, 0]]]] }));
+    await world.run(0.5);
+    expect(applied.slice(before)).not.toContain(900000);
+    expect(applied.length - before).toBeGreaterThan(20); // Bob's real inputs went on being taken
+  });
+
+  it("do not mix in a snapshot of another race", async () => {
+    const world = new World({ latency: 10 }, 5);
+    const { host, guest } = await twoPlayers(world, player("Bob", straight()));
+    host.start();
+    await world.run(1);
+    const tick = world.last(guest)!.tick;
+    // A late snapshot from an earlier race, tick far ahead: it must not reach the picture.
+    const raceId = (host as unknown as { raceId: number }).raceId;
+    const state = (host as unknown as { race: { snapshot(): { tick: number } } }).race.snapshot();
+    const stale = JSON.stringify({ t: "snap", r: raceId + 1, acks: {}, state: { ...state, tick: tick + 5000 } });
+    (guest as unknown as { onMessage(d: string): void }).onMessage(stale);
+    await world.run(0.2);
+    expect(world.last(guest)!.tick).toBeLessThan(tick + 100);
   });
 });
 

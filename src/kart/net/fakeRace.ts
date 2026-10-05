@@ -135,8 +135,8 @@ class FakeRace implements Race {
       if (racer.player === null) {
         // A bot: round the centre line at a steady pace.
         k.progress += BOT_SPEED * TICK;
-        const s = this.geometry.wrap(k.progress);
-        const p = this.geometry.point(s);
+        const s = this.geometry.wrap(k.progress - 8 * (id + 1));
+        const p = this.geometry.point(s, id % 2 === 0 ? -2.5 : 2.5);
         [k.x, k.z, k.heading, k.speed] = [p.x, p.z, this.geometry.heading(s), BOT_SPEED];
       } else {
         const usesBefore = k.uses;

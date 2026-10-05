@@ -125,6 +125,8 @@ export class GuestSession implements Session {
   private ready = false;
 
   private race: Race | null = null;
+  /** The race's seed, which names it on the wire. */
+  private raceId = 0;
   private clock = new TickClock();
   private own = new Map<number, Own>();
   /** Our karts this screen draws: the ones worth predicting. */
@@ -234,7 +236,7 @@ export class GuestSession implements Session {
         this.begin(message.start);
         return;
       case "snap":
-        this.onSnapshot(message.state, message.acks);
+        if (message.r === this.raceId) this.onSnapshot(message.state, message.acks);
         return;
       case "events":
         this.feed.push(message.events);
@@ -302,6 +304,7 @@ export class GuestSession implements Session {
     const setup: RaceSetup = { track: trackById(start.track), laps: start.laps, seed: start.seed, racers: start.racers };
     const race = this.env.createRace(setup);
     this.race = race;
+    this.raceId = start.seed;
     this.lobbyState = start.lobby;
     this.buffer.clear();
     this.display.reset();
@@ -416,7 +419,7 @@ export class GuestSession implements Session {
       packet.push([own.kart, own.history.slice(-INPUTS_PER_PACKET).map((h) => h.wire)]);
       if (this.shown.includes(own.kart)) predicted.set(own.kart, input);
     }
-    if (packet.length > 0) this.sendToHost({ t: "in", k: packet }, "unreliable");
+    if (packet.length > 0) this.sendToHost({ t: "in", r: this.raceId, k: packet }, "unreliable");
     if (predicted.size > 0) race.predict([...predicted.keys()], predicted);
   }
 

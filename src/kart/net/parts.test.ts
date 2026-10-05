@@ -71,8 +71,8 @@ describe("the wire format", () => {
 
   it("builds a snapshot message around state that is already JSON", () => {
     const state = { tick: 9, karts: [1, 2] };
-    const text = encodeSnapshot(JSON.stringify(state), { 3: 17 });
-    expect(JSON.parse(text)).toEqual({ t: "snap", acks: { 3: 17 }, state });
+    const text = encodeSnapshot(JSON.stringify(state), 99, { 3: 17 });
+    expect(JSON.parse(text)).toEqual({ t: "snap", r: 99, acks: { 3: 17 }, state });
   });
 });
 

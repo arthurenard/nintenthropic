@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Grip Prix net: dev</title>
+    <style>
+      :root { color-scheme: dark; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+      body { margin: 0; padding: 16px; background: #000; color: #f5f5f7; display: grid; gap: 16px; max-width: 980px; }
+      h1 { font-size: 20px; margin: 0; }
+      fieldset { border: 1px solid #38383a; border-radius: 12px; padding: 12px; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      legend { color: #98989d; padding: 0 6px; }
+      button, input, select { font: inherit; color: inherit; background: #1c1c1e; border: 1px solid #38383a; border-radius: 8px; padding: 6px 12px; }
+      button { cursor: pointer; }
+      button:hover:not(:disabled) { background: #2c2c2e; }
+      button:disabled { opacity: 0.4; cursor: default; }
+      input[type="text"] { width: 7em; text-transform: uppercase; }
+      input#name { text-transform: none; }
+      input[type="number"] { width: 4em; }
+      pre { margin: 0; padding: 12px; background: #1c1c1e; border-radius: 12px; overflow: auto; max-height: 280px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      #status { font: 600 16px ui-monospace, Menlo, monospace; }
+      canvas { width: 100%; max-width: 640px; aspect-ratio: 4 / 3; background: #1c1c1e; border-radius: 12px; }
+      .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+      small { color: #98989d; }
+    </style>
+  </head>
+  <body>
+    <h1>Grip Prix: the room</h1>
+    <small id="note"></small>
+
+    <fieldset>
+      <legend>You</legend>
+      <label>Name <input id="name" type="text" value="Dev" maxlength="16" /></label>
+      <label><input id="two" type="checkbox" /> Two players here (second: I J K L, U drift, O item)</label>
+      <label>Show me on
+        <select id="screen"><option value="here">this screen</option><option value="host">the big screen</option></select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Room</legend>
+      <button id="host">Host a race</button>
+      <input id="code" type="text" placeholder="CODE" maxlength="4" />
+      <button id="join">Join</button>
+      <button id="solo">Practice</button>
+      <button id="ready">Ready</button>
+      <button id="leave">Leave</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Host's controls</legend>
+      <label>Laps <input id="laps" type="number" min="1" max="5" value="3" /></label>
+      <label>Racers <input id="racers" type="number" min="1" max="8" value="6" /></label>
+      <label><input id="bots" type="checkbox" checked /> Bots</label>
+      <button id="start">Start</button>
+      <button id="back">Back to lobby</button>
+    </fieldset>
+
+    <div id="status">no session</div>
+
+    <div class="cols">
+      <canvas id="map" width="640" height="480"></canvas>
+      <div style="display: grid; gap: 16px">
+        <pre id="view">no race</pre>
+        <pre id="events"></pre>
+      </div>
+    </div>
+    <pre id="lobby"></pre>
+
+    <small>
+      Arrows or WASD drive (throttle is on by default), Space drifts, E uses an item. Open this page in two tabs of one
+      browser with <code>?net=local</code>, or on two devices without it (PeerJS, needs the network).
+    </small>
+
+    <script type="module" src="./dev.ts"></script>
+  </body>
+</html>

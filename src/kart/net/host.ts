@@ -116,6 +116,8 @@ export class HostSession implements Session {
   private links = new Map<Link, { device: string | null; since: number }>();
 
   private race: Race | null = null;
+  /** The race's seed, which names it on the wire. */
+  private raceId = 0;
   private clock = new TickClock();
   private remote = new Map<number, Remote>();
   private controls = new Map<number, DriverControl>();
@@ -257,7 +259,7 @@ export class HostSession implements Session {
         this.changed();
         return;
       case "in":
-        this.onInputs(guest.device, message.k);
+        if (message.r === this.raceId) this.onInputs(guest.device, message.k);
         return;
       case "ping":
         this.send(guest.link, { t: "pong", at: message.at });
@@ -364,6 +366,7 @@ export class HostSession implements Session {
     const seed = Math.floor(this.env.random() * 2 ** 32) >>> 0;
     const { setup, karts } = buildSetup(players, this.settings, seed);
     this.race = this.env.createRace(setup);
+    this.raceId = seed;
     this.geometry = null;
     this.kartSlots = karts;
     this.phase = "racing";
@@ -522,7 +525,7 @@ export class HostSession implements Session {
     for (const guest of this.guests.values()) {
       const acks: Record<number, number> = {};
       for (const remote of this.remote.values()) if (remote.device === guest.device) acks[remote.kart] = remote.applied;
-      guest.link.send("unreliable", encodeSnapshot(state, acks));
+      guest.link.send("unreliable", encodeSnapshot(state, this.raceId, acks));
     }
   }
 
