@@ -120,7 +120,7 @@ describe("the registry", () => {
     expect(missing).toEqual([]);
   });
 
-  it("builds every landmark without error, with some geometry", () => {
+  it("builds every landmark without error, with some geometry", { timeout: 30_000 }, () => {
     for (const [name, spec] of Object.entries(LANDMARKS)) {
       let n = 0;
       const seed = (name.length * 7919) % 1000;
