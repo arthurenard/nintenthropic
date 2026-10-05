@@ -1,0 +1,54 @@
+/**
+ * The registry of everything the picture can build beside, over or on the
+ * road, by the names the tracks use (docs/GRIP_PRIX.md). One file per theme;
+ * `common.ts` holds what several themes share (the rubber duck, rocks).
+ *
+ * A name the picture does not know is left out (a landmark) or drawn as a
+ * plain marker ball (a hazard), never an error: a track written before a
+ * model exists still loads.
+ */
+import * as canyon from "./canyon";
+import * as common from "./common";
+import * as funfair from "./funfair";
+import * as harbour from "./harbour";
+import * as kitchen from "./kitchen";
+import * as meadow from "./meadow";
+import * as palm from "./palm";
+import * as snow from "./snow";
+import * as space from "./space";
+import * as volcano from "./volcano";
+import type { HazardSpec, LandmarkSpec } from "./types";
+
+const THEME_FILES = [meadow, canyon, harbour, kitchen, snow, volcano, funfair, space, palm, common];
+
+/** Every landmark by name. Names are unique across themes. */
+export const LANDMARKS: Readonly<Record<string, LandmarkSpec>> = Object.assign({}, ...THEME_FILES.map((m) => m.LANDMARKS));
+
+/** Every hazard by name ("boulder" and "crab" serve two themes and look right in each). */
+export const HAZARDS: Readonly<Record<string, HazardSpec>> = Object.assign({}, ...THEME_FILES.map((m) => m.HAZARDS));
+
+/** The names each theme's tracks may use, for the gallery and the dev tracks. */
+export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
+  meadow: ["windmill", "barn", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field"],
+  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart"],
+  harbour: ["crane", "lighthouse", "ship", "containers", "warehouse", "buoy"],
+  kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
+  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
+  volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
+  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],
+  space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
+  palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch"],
+};
+
+/** The hazard kinds each theme's tracks may use, with how each moves (hazards.ts). */
+export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; motion: "cross" | "roll" | "bob" | "orbit" }[]>> = {
+  meadow: [],
+  canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }],
+  harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }],
+  kitchen: [{ kind: "orange", motion: "roll" }, { kind: "pea", motion: "cross" }, { kind: "teacup", motion: "orbit" }],
+  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }],
+  volcano: [{ kind: "fireball", motion: "bob" }, { kind: "boulder", motion: "roll" }, { kind: "geyser", motion: "bob" }],
+  funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }],
+  space: [{ kind: "asteroid", motion: "orbit" }, { kind: "comet", motion: "roll" }],
+  palm: [{ kind: "crab", motion: "cross" }, { kind: "coconut", motion: "roll" }, { kind: "beach-ball", motion: "roll" }],
+};

@@ -205,6 +205,8 @@ export class Terrain {
         far = lerp(level, -3.6, drop);
         break;
       }
+      default:
+        far = g.level - GROUND_SINK;
     }
     return lerp(near, far, smoothstep(10, 26, e));
   }
@@ -243,6 +245,8 @@ export class Terrain {
         const k = 0.96 + speck * 0.08;
         return [c[0] * k, c[1] * k, c[2] * k];
       }
+      default:
+        return [0.5, 0.5, 0.5];
     }
   }
 
