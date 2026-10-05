@@ -35,7 +35,7 @@ describe("keyboardControl", () => {
   });
 
   it("does nothing until a key is pressed", () => {
-    expect(keys().run(0.5)).toEqual({ steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0 });
+    expect(keys().run(0.5)).toEqual({ steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0, horn: 0, emote: null });
   });
 
   it("steers with the arrows and with A and D", () => {
@@ -156,6 +156,26 @@ describe("keyboardControl", () => {
     expect(input.steer).toBeLessThan(0.36);
   });
 
+  it("honks on each press of H, not while the key repeats, and cheers and waves while C and V are held", () => {
+    const k = keys();
+    expect(k.run(0.1).horn).toBe(0);
+    k.down("KeyH");
+    k.down("KeyH");
+    expect(k.run(0.1).horn).toBe(1);
+    k.up("KeyH");
+    k.down("KeyH");
+    expect(k.run(0.1).horn).toBe(2);
+    k.up("KeyH");
+    expect(k.run(0.1).emote).toBeNull();
+    k.down("KeyC");
+    expect(k.run(0.1).emote).toBe("cheer");
+    k.up("KeyC");
+    k.down("KeyV");
+    expect(k.run(0.1).emote).toBe("wave");
+    k.up("KeyV");
+    expect(k.run(0.1)).toMatchObject({ emote: null, horn: 2, itemPresses: 0, throttle: 0 });
+  });
+
   it("stops listening when disposed", () => {
     const k = keys();
     k.control.dispose();
@@ -182,7 +202,7 @@ describe("gamepadControl", () => {
   });
 
   it("is idle with no pad, and with a disconnected one", () => {
-    const idle = { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0 };
+    const idle = { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0, horn: 0 };
     expect(gamepadControl(undefined, pads()).sample(0)).toEqual(idle);
     expect(gamepadControl(undefined, pads(null, pad({ connected: false }))).sample(0)).toEqual(idle);
   });
@@ -225,6 +245,19 @@ describe("gamepadControl", () => {
   it("drifts while A is held", () => {
     expect(gamepadControl(undefined, pads(pad({ buttons: { 0: true } }))).sample(0).drift).toBe(true);
     expect(gamepadControl(undefined, pads(pad())).sample(0).drift).toBe(false);
+  });
+
+  it("honks on each press of Y, once per press", () => {
+    const held = { current: false };
+    const live = gamepadControl(undefined, () => [pad({ buttons: { 3: held.current } })]);
+    expect(live.sample(0).horn).toBe(0);
+    held.current = true;
+    expect(live.sample(1).horn).toBe(1);
+    expect(live.sample(2).horn).toBe(1); // still held
+    held.current = false;
+    expect(live.sample(3).horn).toBe(1);
+    held.current = true;
+    expect(live.sample(4)).toMatchObject({ horn: 2, itemPresses: 0 });
   });
 
   it("uses an item on each press of B or X, once per press", () => {
