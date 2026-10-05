@@ -480,7 +480,7 @@ class RaceAudioImpl implements RaceAudio {
     this.stateLoops(view, scene, step);
     this.roulette(scene);
     this.startFlood(view, scene);
-    this.duckSqueaks(view, scene);
+    // The duck squeaks on its own `duck` event now (sim/eggs.ts), once per kart: the old drive-by squeak would sound twice.
     this.finalLapFallback(view, scene);
     this.lastPhase = view.phase;
   }

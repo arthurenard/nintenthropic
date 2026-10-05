@@ -454,14 +454,11 @@ describe("loops that follow state", () => {
     expect(bus.cues.filter((c) => c === "kart_flood")).toHaveLength(1);
   });
 
-  it("squeaks the duck as a local kart drives past it, once a lap", () => {
+  it("leaves the duck to its own event: driving past it is silent", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
     frame([kart(0, { lapProgress: 0.49 })]);
     frame([kart(0, { lapProgress: 0.51 })]);
-    frame([kart(0, { lapProgress: 0.52 })]);
-    expect(bus.cues.filter((c) => c === "kart_duck")).toHaveLength(1);
-    frame([kart(0, { lapProgress: 0.02 })]);
-    expect(bus.cues.filter((c) => c === "kart_duck")).toHaveLength(1);
+    expect(bus.cues.filter((c) => c === "kart_duck")).toHaveLength(0);
   });
 });
 
