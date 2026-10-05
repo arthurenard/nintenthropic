@@ -12,7 +12,7 @@ import { mulberry32 } from "../../engine/rules/rng";
 import { hazardAt } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
-import { barrierDistance, gapAt, groundAt, isOpen, rampRise, rescueSpot } from "./terrain";
+import { barrierDistance, gapAt, groundAt, isOpen, rescueSpot } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
 const D = TUNING.drive;
@@ -37,8 +37,6 @@ const LEVEL_2 = ticks(DR.level2);
 const FLOOD_AFTER = ticks(TUNING.start.floodAfter);
 const BOOST_WINDOW = ticks(TUNING.start.boostWindow);
 const RESCUE_TICKS = ticks(F.rescue);
-const FALL_TICKS = ticks(F.fall);
-const CARRY_END_TICKS = ticks(F.carryEnd);
 
 const finite = (v: number): number => (Number.isFinite(v) ? v : 0);
 
@@ -91,8 +89,6 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     flight: 0,
     trick: 0,
     rescue: 0,
-    fx: 0,
-    fz: 0,
     immune: 0,
     wrong: 0,
     wrongWay: false,
@@ -126,8 +122,6 @@ export function settle(k: KartState): void {
   k.progress = q3(k.progress);
   k.air = q3(k.air);
   k.vy = q3(k.vy);
-  k.fx = q3(k.fx);
-  k.fz = q3(k.fz);
 }
 
 /** The speed along the heading: negative reversing. */
@@ -190,35 +184,24 @@ export function spinOut(k: KartState): void {
   k.level = 0;
 }
 
-/** The smooth 0..1 ease. */
-function smooth(u: number): number {
-  const c = clamp(u, 0, 1);
-  return c * c * (3 - 2 * c);
-}
-
 /**
- * How high the drone's kart is, `elapsed` ticks into a rescue: falling away
- * (below the road) for the first part, lifted and carried, then lowered.
+ * The kart's height above the road for the picture: the jump's, or the hop's.
+ * It is 0 on the road, on the ramp (the picture draws the ramp's wedge and has
+ * the kart climb it) and at the lip, where a jump begins; and 0 through a
+ * rescue (the picture draws the fall and the drone from `rescue` alone).
  */
-export function rescueHop(elapsed: number): number {
-  const fallen = (F.gravity * (FALL_TICKS * TICK) ** 2) / 2;
-  if (elapsed < FALL_TICKS) return -(F.gravity * (elapsed * TICK) ** 2) / 2;
-  if (elapsed < CARRY_END_TICKS) return -fallen + (F.hang + fallen) * smooth((elapsed - FALL_TICKS) / ticks(0.4));
-  return F.hang * (1 - smooth((elapsed - CARRY_END_TICKS) / ticks(0.4)));
-}
-
-/** The kart's height above the road for the picture: the drone's, the jump's, or the hop's and the ramp's under it. */
-export function viewHop(w: World, k: KartState): number {
-  if (k.rescue > 0) return rescueHop(RESCUE_TICKS - k.rescue);
+export function viewHop(k: KartState): number {
+  if (k.rescue > 0) return 0;
   if (k.flight > 0) return k.air;
-  return hopHeight(k) + rampRise(w.plan.terrain, k.s);
+  return hopHeight(k);
 }
 
 /** Over the edge, or into a gap: the kart is lost to the drone for a while, and keeps its item. */
 function startFall(k: KartState, emit: Emit): void {
   k.rescue = RESCUE_TICKS;
-  k.fx = k.x;
-  k.fz = k.z;
+  // It stays where it went over until the drone sets it down.
+  k.vx = 0;
+  k.vz = 0;
   k.boost = 0;
   k.spin = 0;
   k.hop = 0;
@@ -235,53 +218,40 @@ function startFall(k: KartState, emit: Emit): void {
 }
 
 /**
- * One tick of being rescued. The kart keeps its way for a moment while it
- * falls away, then the drone lifts it, carries it to the centre line a little
- * behind where it fell and sets it down facing forward, standing still, with a
- * moment when nothing can touch it. Its place is a function of how long it has
- * been, so a prediction and the host agree.
+ * One tick of being rescued. The kart stays where it went over (x, y, z the
+ * fall spot, nothing moving: the picture draws it falling, hooked and carried
+ * from `rescue` alone) and when the 2.5 s are up it is set down on the centre
+ * line a little behind, facing forward, standing still, with a moment when
+ * nothing can touch it.
  */
 function stepRescue(w: World, k: KartState, emit: Emit): void {
   const geo = w.geo;
   k.rescue--;
-  const elapsed = RESCUE_TICKS - k.rescue;
+  if (k.rescue > 0) return;
   const target = rescueSpot(w.plan.terrain, k.s);
   const landing = geo.at(target);
-  if (k.rescue === 0) {
-    k.progress += geo.delta(k.s, target);
-    k.s = target;
-    k.offset = 0;
-    k.x = landing.x;
-    k.z = landing.z;
-    k.y = landing.y;
-    k.heading = geo.heading(target);
-    k.vx = 0;
-    k.vz = 0;
-    k.steer = 0;
-    k.hop = 0;
-    k.ground = groundAt(w.plan.terrain, target, 0, landing.width / 2);
-    k.offroad = GROUND[k.ground].rough;
-    k.immune = ticks(F.immune);
-    k.wrong = 0;
-    k.wrongWay = false;
-    k.bot.stuck = 0;
-    k.bot.back = 0;
-    k.bot.freeze = 0;
-    k.bot.cut = 0;
-    k.bot.drifting = false;
-    emit({ type: "rescued", kart: k.id });
-    return;
-  }
-  // Falling away, still sliding on in the way it was going.
-  const t = Math.min(elapsed, FALL_TICKS) * TICK;
-  const slid = F.glide * (1 - Math.exp(-t / F.glide));
-  const gx = k.fx + k.vx * slid;
-  const gz = k.fz + k.vz * slid;
-  const u = smooth((elapsed - FALL_TICKS) / (CARRY_END_TICKS - FALL_TICKS));
-  k.x = gx + (landing.x - gx) * u;
-  k.z = gz + (landing.z - gz) * u;
-  const here = geo.at(k.s).y;
-  k.y = here + (landing.y - here) * u;
+  k.progress += geo.delta(k.s, target);
+  k.s = target;
+  k.offset = 0;
+  k.x = landing.x;
+  k.z = landing.z;
+  k.y = landing.y;
+  k.heading = geo.heading(target);
+  k.vx = 0;
+  k.vz = 0;
+  k.steer = 0;
+  k.hop = 0;
+  k.ground = groundAt(w.plan.terrain, target, 0, landing.width / 2);
+  k.offroad = GROUND[k.ground].rough;
+  k.immune = ticks(F.immune);
+  k.wrong = 0;
+  k.wrongWay = false;
+  k.bot.stuck = 0;
+  k.bot.back = 0;
+  k.bot.freeze = 0;
+  k.bot.cut = 0;
+  k.bot.drifting = false;
+  emit({ type: "rescued", kart: k.id });
 }
 
 /** A kart touching a hazard spins as if hit, and for a moment nothing else can touch it. */
@@ -613,7 +583,7 @@ function launchOffRamps(w: World, k: KartState, prevS: number, emit: Emit): void
     if (before <= 0 || after > 0 || before > 8) continue;
     k.flight = ramp.trick ? 2 : 1;
     k.vy = ramp.lift * clamp(speed / D.topSpeed, R.minShare, R.maxShare);
-    k.air = R.height;
+    k.air = 0;
     k.hop = 0;
     k.trick = 0;
     if (k.drift !== 0) endDrift(k, true, emit);

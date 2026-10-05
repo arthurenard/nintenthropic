@@ -97,13 +97,28 @@ describe("ramps", () => {
     expect(flight(20)).toBeLessThan(flight(26));
   });
 
-  it("climb: the kart rises with the ramp under it before the lip, and the picture's height there is the ramp's", () => {
+  it("start the jump from height 0 at the lip (the picture has the kart climb the ramp's wedge), rising from there", () => {
     const r = race(track, racers(1, 0));
     toGo(r);
-    place(r, track, 295, 0, 15);
-    run(r, 1, () => input({ throttle: 1 }));
-    expect(view(r).hop).toBeGreaterThan(0.1);
-    expect(view(r).hop).toBeLessThan(0.9);
+    place(r, track, 288, 0, 15);
+    let before = 0;
+    let after = 0;
+    let lip = false;
+    for (let i = 0; i < 40 && !lip; i++) {
+      run(r, 1, () => input({ throttle: 1 }));
+      const k = view(r);
+      const sOnTrack = planFor(track).geo.project(k.x, k.z).s;
+      if (sOnTrack < 300) before = Math.max(before, k.hop);
+      else {
+        lip = true;
+        after = k.hop;
+      }
+    }
+    expect(before).toBe(0);
+    expect(after).toBeGreaterThanOrEqual(0);
+    expect(after).toBeLessThan(0.1);
+    run(r, 20, () => input({ throttle: 1 }));
+    expect(view(r).hop).toBeGreaterThan(0.5);
     expect(view(r).y).toBeCloseTo(0, 1);
   });
 
@@ -171,27 +186,28 @@ describe("open edges and the rescue drone", () => {
     expect(count(events, "wall")).toBe(0);
   });
 
-  it("holds a kart for 2.5 s: falling, then carried, then set down on the centre line about 15 m behind, standing still, facing forward", () => {
+  it("holds a kart for 2.5 s where it went over, then sets it down on the centre line about 15 m behind, standing still, facing forward", () => {
     const { r, events } = falling();
     const fell = first(events, "fall")!;
     const before = r.snapshot();
     const at = (before.k as number[][])[0]![KART_AT.s]!;
     expect(view(r).rescue).toBeGreaterThan(2.4);
     expect(view(r).rescue).toBeLessThanOrEqual(2.5);
-    // It drops below the road first, then is lifted above it, then set down.
-    let low = 0;
-    let high = 0;
+    // It stays where it went over, nothing moving, for the whole rescue (the picture draws the fall and the drone).
+    const over = view(r);
     const more: RaceEvent[] = [];
     for (let i = 0; i < 400 && !more.some((e) => e.type === "rescued"); i++) {
       more.push(...run(r, 1, () => input({ throttle: 1, steer: 1 })));
-      low = Math.min(low, view(r).hop);
-      high = Math.max(high, view(r).hop);
-      if (!more.some((e) => e.type === "rescued")) expect(view(r).rescue).toBeGreaterThan(0);
+      if (!more.some((e) => e.type === "rescued")) {
+        expect(view(r).rescue).toBeGreaterThan(0);
+        expect(view(r).x).toBe(over.x);
+        expect(view(r).z).toBe(over.z);
+        expect(view(r).hop).toBe(0);
+        expect(view(r).speed).toBe(0);
+      }
     }
     const back = first(more, "rescued")!;
     expect(back.tick - fell.tick).toBe(TICK_HZ * 2.5);
-    expect(low).toBeLessThan(-3);
-    expect(high).toBeGreaterThan(1.5);
     const k = view(r);
     const geo = planFor(track).geo;
     const p = geo.project(k.x, k.z);
@@ -265,9 +281,9 @@ describe("a gap in the road", () => {
     expect(first(more, "rescued")).toBeDefined();
     const geo = planFor(track).geo;
     const s = geo.project(view(r).x, view(r).z).s;
-    // 32 m before the gap's start.
-    expect(s).toBeGreaterThan(260);
-    expect(s).toBeLessThan(272);
+    // 48 m before the gap's start.
+    expect(s).toBeGreaterThan(248);
+    expect(s).toBeLessThan(259);
     // From there it gets up to speed and clears it.
     const again = drive(r, () => ({ throttle: 1 }), (e) => e.some((x) => x.type === "land" || x.type === "fall"), 600);
     expect(count(again, "fall")).toBe(0);
@@ -474,7 +490,7 @@ describe("verges", () => {
 describe("snapshots and prediction", () => {
   const track = stadium((f) => ({
     ramps: [{ at: f(300) }],
-    drops: [{ from: f(301.5), to: f(315), side: "both", gap: true }, { from: f(120), to: f(250), side: "left" }],
+    drops: [{ from: f(301.5), to: f(315), side: "both", gap: true }, { from: f(80), to: f(250), side: "left" }],
     surfaces: [{ from: f(40), to: f(110), kind: "ice" }],
   }));
 
@@ -512,10 +528,10 @@ describe("snapshots and prediction", () => {
     let sawAir = 0;
     let sawRescue = 0;
     let sawIce = 0;
-    for (let i = 0; i < 60 * 14; i++) {
-      // Down the ice, off the left edge for a while, back, then up the ramp and over.
+    for (let i = 0; i < 60 * 20; i++) {
+      // Slide left over the edge on the ice, be fetched back, then up the straight, the ramp and over.
       const t = i / 60;
-      const given = input({ throttle: 1, steer: t > 1 && t < 2.5 ? -0.5 : t > 5 && t < 6.5 ? 0.45 : 0, drift: i % 97 < 3 });
+      const given = input({ throttle: 1, steer: t > 1 && t < 2.5 ? -0.5 : 0, drift: i % 97 < 3 });
       stepped.step(new Map([[0, given]]));
       predicted.predict([0], new Map([[0, given]]));
       const s = view(stepped);

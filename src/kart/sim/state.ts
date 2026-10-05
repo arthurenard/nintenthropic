@@ -122,10 +122,8 @@ export interface KartState {
   flight: 0 | 1 | 2;
   /** Ticks since a trick began in the air, or 0. */
   trick: number;
-  /** Ticks left of a rescue (0: none), and where the kart went over the edge. */
+  /** Ticks left of a rescue (0: none). */
   rescue: number;
-  fx: number;
-  fz: number;
   /** Ticks left in which hazards and items pass through the kart. */
   immune: number;
   wrong: number;

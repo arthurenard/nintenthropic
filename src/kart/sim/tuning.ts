@@ -106,12 +106,14 @@ export const TUNING = {
   groundByTheme: { canyon: "sand", snow: "snow", palm: "sand" } as Readonly<Record<string, "sand" | "snow">>,
 
   ramp: {
-    /** A ramp rises this far over this length up to its lip (the picture draws it so; the kart climbs it). */
-    length: 8,
-    height: 0.9,
-    /** Upward speed at the lip at top speed, m/s, unless the ramp says: about 1.1 s in the air. */
+    /**
+     * Upward speed at the lip at top speed, m/s, unless the ramp says: about
+     * 1.1 s in the air. (The picture draws a ramp as a wedge 16 m long and 2.4 m
+     * high ending at the lip and has the kart climb it; the sim's height, the
+     * `hop`, is 0 on it and at the lip, and the jump rises from there.)
+     */
     lift: 7,
-    gravity: 14,
+    gravity: 12.5,
     /** The lift scales with speed over top speed, between these. */
     minShare: 0.4,
     maxShare: 1.3,
@@ -130,18 +132,12 @@ export const TUNING = {
   fall: {
     /** Past the road's edge by this much on an open side: over. */
     edge: 0.5,
-    /** The whole rescue takes this long: falling, carried, set down. */
+    /** The whole rescue takes this long: falling, hooked and carried, set down. The kart stays where it went over (the picture does the rest) until it is set down. */
     rescue: 2.5,
-    fall: 0.8,
-    carryEnd: 2.1,
-    /** Falling pulls down at this m/s^2, the forward speed fades with this time constant (s), and the drone carries the kart this high. */
-    gravity: 18,
-    glide: 0.5,
-    hang: 2.5,
     /** Set down on the centre line this far behind where it fell... */
     back: 15,
-    /** ...or this far before a gap it fell into, for a run-up. */
-    runUp: 32,
+    /** ...or this far before a gap it fell into: room to get up to the speed the jump needs (about 21 m/s after 35 m from a standstill). */
+    runUp: 48,
     /** Hazards and items pass through the kart for this long after it is set down. */
     immune: 1.5,
   },

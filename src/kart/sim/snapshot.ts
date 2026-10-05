@@ -22,10 +22,10 @@ export const KART_AT = {
   s: 21, offset: 22, progress: 23, pad: 24, wrong: 25,
   lap: 26, lapStart: 27, bestLap: 28, finished: 29, finalPlace: 30, ai: 31,
   botPresses: 32, botWait: 33, botStuck: 34, botBack: 35, botNext: 36, botFreeze: 37, botSteer: 38, botDrifting: 39,
-  botCut: 40, air: 41, vy: 42, flight: 43, trick: 44, rescue: 45, fx: 46, fz: 47, immune: 48,
+  botCut: 40, air: 41, vy: 42, flight: 43, trick: 44, rescue: 45, immune: 46,
 } as const;
 
-const KART_FIELDS = 49;
+const KART_FIELDS = 47;
 
 const item = (kind: KartState["item"]): number => (kind === null ? -1 : ITEM_KINDS.indexOf(kind));
 const kind = (index: number): KartState["item"] => (index < 0 ? null : (ITEM_KINDS[index] ?? null));
@@ -80,8 +80,6 @@ function packKart(k: KartState): number[] {
   a[KART_AT.flight] = k.flight;
   a[KART_AT.trick] = k.trick;
   a[KART_AT.rescue] = k.rescue;
-  a[KART_AT.fx] = k.fx;
-  a[KART_AT.fz] = k.fz;
   a[KART_AT.immune] = k.immune;
   return a;
 }
@@ -135,8 +133,6 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.flight = at("flight") as 0 | 1 | 2;
   k.trick = at("trick");
   k.rescue = at("rescue");
-  k.fx = at("fx");
-  k.fz = at("fz");
   k.immune = at("immune");
   // What follows from the rest.
   const c = w.geo.at(k.s);

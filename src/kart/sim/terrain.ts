@@ -143,17 +143,6 @@ export function groundAt(t: Terrain, s: number, offset: number, half: number): G
   return "road";
 }
 
-/** How high the ramp is under a kart on the road at `s`, metres (0 away from every ramp). */
-export function rampRise(t: Terrain, s: number): number {
-  const R = TUNING.ramp;
-  for (const ramp of t.ramps) {
-    let d = ramp.s - s;
-    d -= Math.round(d / t.length) * t.length;
-    if (d > 0 && d <= R.length) return R.height * (1 - d / R.length);
-  }
-  return 0;
-}
-
 /**
  * Where the drone puts a kart that fell at `s` back on the road: a little
  * behind, or well before a gap (with room to get up to speed for the jump).

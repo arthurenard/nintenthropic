@@ -202,7 +202,7 @@ class Sim implements SimRace {
         driftLevel: k.level,
         boost: k.boost / TICK_HZ,
         spin: k.spin / TICK_HZ,
-        hop: viewHop(this.world, k),
+        hop: viewHop(k),
         offroad: k.offroad,
         item: k.roll > 0 ? null : k.item,
         itemUses: k.roll > 0 ? 0 : k.uses,

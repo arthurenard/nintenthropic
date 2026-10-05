@@ -93,7 +93,10 @@ describe.each(TRACKS)("$name", (track) => {
       for (const surface of track.surfaces ?? []) if (surface.kind !== "boost") expect(inStretch(f, surface), `${track.id} ${surface.kind} at ${s}`).toBe(false);
       for (const verge of track.verges ?? []) expect(inStretch(f, verge), `${track.id} verge at ${s}`).toBe(false);
     }
-    for (const h of track.hazards ?? []) expect(near(metres(h.at)) || near(metres(h.at) - (h.span ?? 0) * geo.length), `${track.id} ${h.kind}`).toBe(false);
+    for (const h of track.hazards ?? []) {
+      const roams = h.motion === "roll" ? (h.span ?? 0.05) * geo.length : h.motion === "orbit" ? (h.span ?? 8) : 0;
+      expect(near(metres(h.at)) || near(metres(h.at) - roams) || near(metres(h.at) + roams), `${track.id} ${h.kind}`).toBe(false);
+    }
     for (const r of track.ramps ?? []) expect(near(metres(r.at))).toBe(false);
     // The grid itself is straight: eight karts, 26 m behind the line.
     for (let s = -30; s <= 0; s += 2) expect(Math.abs(geo.at(s).curvature), `${track.id} grid`).toBeLessThan(1 / 40);
@@ -124,6 +127,33 @@ describe.each(TRACKS)("$name", (track) => {
         }
         for (const row of track.itemRows) expect(Math.abs(geo.delta(metres(row), lip + 8)), `${track.id} item row on the jump`).toBeGreaterThan(14);
       }
+    }
+  });
+
+  it("keeps the ramp's wedge (16 m up to the lip) clear of pads, strips and item boxes, and its hazards over the road, off every open edge", () => {
+    for (const ramp of track.ramps ?? []) {
+      const lip = metres(ramp.at);
+      const onWedge = (s: number) => {
+        const d = geo.delta(s, lip);
+        return d > -2 && d < 20;
+      };
+      for (const pad of track.boostPads ?? []) expect(onWedge(metres(pad.at)), `${track.id} pad on the wedge`).toBe(false);
+      for (const row of track.itemRows) expect(onWedge(metres(row)), `${track.id} item row on the wedge`).toBe(false);
+      for (const strip of (track.surfaces ?? []).filter((x) => x.kind === "boost")) {
+        for (let s = metres(strip.from); geo.delta(s, metres(strip.to)) > 0; s += 2) expect(onWedge(s), `${track.id} strip on the wedge`).toBe(false);
+      }
+    }
+    const drops = (track.drops ?? []).filter((d) => !d.gap);
+    for (const h of track.hazards ?? []) {
+      // Where the hazard goes along the lap.
+      const from = h.motion === "roll" ? h.at - (h.span ?? 0.05) : h.at;
+      let overEdge = false;
+      for (let f = from; f <= h.at + 1e-9; f += 0.002) if (drops.some((d) => inStretch(f, d))) overEdge = true;
+      if (!overEdge) continue;
+      const half = geo.at(h.at * geo.length).width / 2;
+      const reach =
+        h.motion === "cross" ? (h.span ?? half + 1) + Math.abs(h.offset ?? 0) + h.radius : h.motion === "orbit" ? (h.span ?? 8) + Math.abs(h.offset ?? 0) + h.radius : Math.abs(h.offset ?? 0) + h.radius;
+      expect(reach, `${track.id} ${h.kind} reaches past the road`).toBeLessThanOrEqual(half);
     }
   });
 
