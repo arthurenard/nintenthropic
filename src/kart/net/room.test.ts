@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import { MAX_PLAYERS, PLAYER_COLOURS, type SessionClosed } from "../contract";
 import { PROTOCOL_VERSION, encode } from "./protocol";
 import { player, World } from "./testkit";
-import { MemoryNetwork } from "./memory";
 
 async function openRoom(world: World, options = {}) {
   const host = world.host(options);

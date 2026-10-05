@@ -17,8 +17,10 @@
  * PeerJS is imported when a room is first hosted or joined, so a practice
  * race (which never gets here) never downloads it.
  *
- * Not exercised against a live broker by the tests: peer.test.ts drives it
- * with a stand-in `Peer`. Try it for real with src/kart/net/dev.html.
+ * The unit tests (transport.test.ts) drive it with a stand-in `Peer`; the real
+ * thing is tried by hand with src/kart/net/dev.html, which was run between two
+ * tabs through PeerJS's public broker (a lobby, a race, a leave). Not yet tried
+ * across two machines or through a strict NAT: there is no TURN (docs/GRIP_PRIX.md).
  */
 import type { DataConnection, Peer, PeerJSOption } from "peerjs";
 import { peerIdFor } from "./codes";
