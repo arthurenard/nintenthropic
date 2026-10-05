@@ -1318,6 +1318,7 @@ body[data-screen="race"] #sound-button {
   background: var(--fill);
   box-shadow: 0 0 0 2px var(--colour, #fff);
   object-fit: cover;
+}
 
 /* --- the small delights ------------------------------------------------------------------------------------------ */
 
