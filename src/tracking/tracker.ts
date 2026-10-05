@@ -44,10 +44,11 @@ import { DownloadError, fetchBytes, siteUrl } from "../engine/fetch";
 import { Samples, type Percentiles } from "../engine/stats";
 import { ModelError } from "./errors";
 import { eyesFrom } from "./eyes";
+import { seenHands } from "./hands";
 import type { LandmarkerProgress } from "./landmarker";
 import { FACE_MODEL_BYTES, MODEL_BYTES, WASM_BYTES } from "./sizes";
 import type { FromWorker, ToWorker } from "./protocol";
-import type { FaceFrame, FaceReading, HandFrame, HandSource, Landmark } from "./types";
+import type { FaceFrame, FaceReading, HandFrame, HandSource, SeenHand } from "./types";
 
 export interface TrackerStats {
   frames: number;
@@ -211,11 +212,19 @@ abstract class BaseTracker implements Tracker {
     return this.lastTimestamp;
   }
 
-  protected publish(landmarks: Landmark[] | null, handedness: HandFrame["handedness"], capturedAt: number): void {
+  protected publish(hands: SeenHand[], capturedAt: number): void {
     this.frames++;
-    if (landmarks) this.framesWithHand++;
+    if (hands.length) this.framesWithHand++;
     this.delay.push(performance.now() - capturedAt);
-    const frame: HandFrame = { landmarks, handedness, capturedAt, sequence: ++this.sequence };
+    // landmarks and handedness stay the first hand's, as the shooting games read them.
+    const first = hands[0];
+    const frame: HandFrame = {
+      landmarks: first?.landmarks ?? null,
+      handedness: first?.handedness ?? null,
+      hands,
+      capturedAt,
+      sequence: ++this.sequence,
+    };
     this.newest = frame;
     for (const listener of this.listeners) listener(frame);
   }
@@ -266,7 +275,7 @@ class WorkerTracker extends BaseTracker {
         // With a face to follow, the worker is busy until it comes.
         if (!message.face) this.busy = false;
         this.inference.push(message.inference);
-        if (this.running) this.publish(message.landmarks, message.handedness, message.capturedAt);
+        if (this.running) this.publish(message.hands, message.capturedAt);
       } else if (message.type === "face-result") {
         this.busy = false;
         if (this.running) this.publishFace(message.eyes, message.capturedAt, message.inference);
@@ -373,23 +382,16 @@ class PageTracker extends BaseTracker {
 
   protected read(video: HTMLVideoElement, capturedAt: number): void {
     const began = performance.now();
-    let landmarks: Landmark[] | null = null;
-    let handedness: HandFrame["handedness"] = null;
+    let hands: SeenHand[] = [];
     try {
       this.lastStamp = this.timestampFor(capturedAt);
-      const result = this.landmarker.detectForVideo(video, this.lastStamp);
-      const hand = result.landmarks[0];
-      if (hand && hand.length >= 21) {
-        landmarks = hand.map(({ x, y, z }) => ({ x, y, z }));
-        const name = result.handedness[0]?.[0]?.categoryName;
-        handedness = name === "Left" || name === "Right" ? name : null;
-      }
+      hands = seenHands(this.landmarker.detectForVideo(video, this.lastStamp));
     } catch (error) {
       console.warn("A camera frame could not be read.", error);
     }
     const spent = performance.now() - began;
     this.inference.push(spent);
-    this.publish(landmarks, handedness, capturedAt);
+    this.publish(hands, capturedAt);
     let cost = spent;
     if (this.faceDue() && this.face) {
       const faceBegan = performance.now();
@@ -417,7 +419,7 @@ export interface TrackerOptions {
   prefer?: "GPU" | "CPU";
   /** Where to run the landmarker; "auto" picks a worker where the browser can. */
   where?: "auto" | "worker" | "page";
-  /** How many hands to look for: 1 in the game (see input/trust.ts); 2 only to measure. */
+  /** How many hands to look for: 1 in the shooting games (see input/trust.ts); 2 for Grip Prix's wheel, 4 for two wheels on one camera. */
   hands?: number;
   /** Load the face landmarker too (a game that reads the eye is the first to be played). */
   face?: boolean;

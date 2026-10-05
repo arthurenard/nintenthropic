@@ -1,5 +1,5 @@
 /** Messages between the page and the tracking worker. */
-import type { FaceReading, Landmark } from "./types";
+import type { FaceReading, SeenHand } from "./types";
 
 export type ToWorker =
   | {
@@ -11,7 +11,7 @@ export type ToWorker =
       binary: string;
       model: ArrayBuffer;
       prefer: "GPU" | "CPU";
-      /** How many hands the landmarker looks for: 1 in the game (see input/trust.ts); 2 only to measure. */
+      /** How many hands the landmarker looks for: 1 in the shooting games (see input/trust.ts); 2 for Grip Prix's wheel, 4 for two wheels on one camera. */
       hands?: number;
       /** The face landmarker's model, for a game that reads the eye; it can also come later ("face"). */
       face?: ArrayBuffer;
@@ -41,8 +41,8 @@ export type FromWorker =
       type: "result";
       sequence: number;
       capturedAt: number;
-      landmarks: Landmark[] | null;
-      handedness: "Left" | "Right" | null;
+      /** Every hand seen, the first one first (empty when none). */
+      hands: SeenHand[];
       /** Time spent in the landmarker, ms. */
       inference: number;
       /** A face reading for this frame follows. */

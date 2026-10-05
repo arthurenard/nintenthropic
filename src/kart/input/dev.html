@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Grip Prix's wheel on its own, for development: the camera, the wheel the
+     game sees drawn over it, and the numbers the kart would be given. Served
+     by the dev server only (`npx vite --port 5182`, then
+     /src/kart/input/dev.html); never part of the production build. See dev.ts. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The tracker finds its models and runtime relative to the site's root. -->
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <title>Grip Prix · Wheel Check</title>
+  </head>
+  <body>
+    <main class="dev">
+      <header class="dev-head">
+        <p class="eyebrow">Grip Prix</p>
+        <h1 class="title1">Wheel Check</h1>
+        <p class="body secondary">
+          Hold both fists up in front of you, like the grips of a wheel, and turn it. Open both hands to brake. Flick
+          one hand open and shut for an item. Lift the wheel sharply to hop into a drift.
+        </p>
+      </header>
+      <div class="dev-body">
+        <section class="stage" aria-label="Your camera">
+          <div class="previews" id="previews"></div>
+          <div class="notice glass" id="notice" role="status" hidden>
+            <p class="headline" id="notice-title"></p>
+            <p class="subhead secondary" id="notice-detail"></p>
+            <button class="button primary small" id="notice-action" type="button" hidden></button>
+          </div>
+        </section>
+        <aside class="side" id="side" aria-label="What the wheel reads"></aside>
+      </div>
+      <video id="camera" class="camera-source" muted playsinline></video>
+    </main>
+    <script type="module" src="/src/kart/input/dev.ts"></script>
+  </body>
+</html>

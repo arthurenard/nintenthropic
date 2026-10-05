@@ -52,9 +52,10 @@ export async function loadHandLandmarker(
   progress: LandmarkerProgress,
   prefer: "GPU" | "CPU" = "GPU",
   /**
-   * How many hands to look for. One, deliberately: the game aims with a
-   * single hand, and a second costs time (measured in input/trust.ts, which
-   * keeps a passer-by's hand from taking the aim). Two only to measure.
+   * How many hands to look for. One for the shooting games, deliberately:
+   * they aim with a single hand, and a second costs time (measured in
+   * input/trust.ts, which keeps a passer-by's hand from taking the aim).
+   * Grip Prix steers with two (four for two wheels on one camera).
    */
   hands = 1,
 ): Promise<LoadedLandmarker> {
