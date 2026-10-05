@@ -1,6 +1,6 @@
 /**
  * Gestures beyond driving, read from the same two hands as the wheel
- * (docs/GRIP_PRIX.md, "Easter eggs"):
+ * (docs/GRIP_PRIX.md, "Input"):
  *
  *   - clap: the two hands come together and apart again at once -> a horn
  *   - cheer: both open hands raised high above where the wheel is held, for a moment -> `emote: "cheer"`
