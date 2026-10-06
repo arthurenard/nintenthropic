@@ -80,7 +80,11 @@ export class ChaseCamera {
     this.kickY += (Math.random() - 0.5) * strength;
   }
 
-  update(kart: KartView, view: RaceView, dt: number, aspect: number): void {
+  /**
+   * Eases the camera toward behind `kart`. `space`, where there is a world, keeps it out of the ground, the roofs over
+   * the road and what stands beyond the barrier: it moves where the camera is drawn, not where the camera is heading.
+   */
+  update(kart: KartView, view: RaceView, dt: number, aspect: number, space?: { fit(pos: Vector3, kart: { x: number; y: number; z: number }): void }): void {
     const cam = this.camera;
     const speedRatio = Math.abs(kart.speed) / 24;
 
@@ -154,6 +158,7 @@ export class ChaseCamera {
     this.kickX = damp(this.kickX, 0, 9, dt);
     this.kickY = damp(this.kickY, 0, 9, dt);
     cam.position.set(this.pos.x + this.kickX * 0.6, this.pos.y + this.kickY * 0.5, this.pos.z + this.kickX * 0.4);
+    space?.fit(cam.position, kart);
     cam.up.set(0, 1, 0);
     cam.lookAt(this.target);
     // Lean into the bend, a hair.

@@ -36,6 +36,7 @@ import { TrackGeometry, type TrackDef } from "../../track/geometry";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { Bank } from "./bank";
+import { createCameraSpace, type CameraSpace } from "./cameraSpace";
 import { buildBackdrop } from "./backdrop";
 import { bakeStatic, type Baked } from "./bake";
 import { ItemBoxes } from "./boxes";
@@ -70,6 +71,8 @@ export interface World {
   readonly features: Features;
   /** How this world is photographed (tone, bloom, grade): see look.ts. */
   readonly look: Look;
+  /** Where the chase camera may be: out of the ground, the margin beyond the barrier and the roofs over the road. */
+  readonly cameraSpace: CameraSpace;
   /** The sun (or moon): a directional light whose shadow map follows the view's kart; see `focusSun`. */
   readonly sun: DirectionalLight;
   /** What the baked light of the static world reads (set by `prepare`). */
@@ -193,7 +196,16 @@ export async function createWorld(
   const mats = landmarkMaterials(bake);
   track(mats);
   const groundAt = (x: number, z: number) => terrain.heightAt(x, z);
-  const env = { track: geometry, style, bank, groundAt };
+  const env = {
+    track: geometry,
+    style,
+    bank,
+    groundAt,
+    wall: (s: number, side: -1 | 1) => {
+      const i = Math.round(geometry.wrap(s) / geometry.spacing) % geometry.samples.length;
+      return (side < 0 ? terrain.features.wallLeft : terrain.features.wallRight)[i]!;
+    },
+  };
   const placed: PlacedLandmark[] = [...(def.landmarks ?? [])];
   if (def.duck) placed.push({ kind: "rubber-duck", at: def.duck.at, offset: def.duck.offset, lift: def.duck.y ?? 0 });
   const landmarks: LandmarkLayer = buildLandmarks(env, placed, mats);
@@ -365,6 +377,7 @@ export async function createWorld(
     boxes,
     bank,
     features: meshes.features,
+    cameraSpace: createCameraSpace(geometry, terrain, meshes.features, landmarks.roofs, bank),
     look,
     sun,
     bake,

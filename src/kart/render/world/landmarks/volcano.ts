@@ -398,6 +398,9 @@ const stoneBridge: LandmarkSpec = {
     const spring = -10.5;
     const rIn = W / 2;
     const rOut = rIn + 1.6;
+    // A long span makes wide arches: they flatten (an ellipse) rather than rise through the deck and stand as walls on the road.
+    const ryOut = Math.min(rOut, deckBot - 0.1 - spring);
+    const ryIn = Math.min(rIn, ryOut - 1.6);
     const centres = [-1, 0, 1].map((k) => k * (W + pier));
     // Abutments and piers: blocks down into the lava with courses of lighter stone.
     const piers = [(centres[0]! + centres[1]!) / 2, (centres[1]! + centres[2]!) / 2];
@@ -417,8 +420,8 @@ const stoneBridge: LandmarkSpec = {
       const outer: V3[] = [];
       for (let k = 0; k <= arcN; k++) {
         const a = Math.PI - (k / arcN) * Math.PI;
-        inner.push([0, spring + Math.sin(a) * rIn, cz + Math.cos(a) * rIn]);
-        outer.push([0, spring + Math.sin(a) * rOut, cz + Math.cos(a) * rOut]);
+        inner.push([0, spring + Math.sin(a) * ryIn, cz + Math.cos(a) * rIn]);
+        outer.push([0, spring + Math.sin(a) * ryOut, cz + Math.cos(a) * rOut]);
       }
       for (const s of [-1, 1]) {
         const x = s * (xe + 0.08);
@@ -427,7 +430,7 @@ const stoneBridge: LandmarkSpec = {
         // The wall of stone above the ring up to the deck, a stepped face between the piers.
         const top = outer.map(([, , z]): V3 => [x - s * 0.05, deckBot + 0.02, z]);
         grid(lit, [outer.map(([, y, z]): V3 => [x - s * 0.05, y, z]), top], (p) => stoneAt(p[1], 0.9));
-        lit.box(x + s * 0.12, spring + rOut, cz, 0.5, 1.0, 1.7, stoneAt(spring + rOut, 1.25));
+        lit.box(x + s * 0.12, spring + ryOut, cz, 0.5, 1.0, 1.7, stoneAt(spring + ryOut, 1.25));
       }
       // The soffit: the underside of the arch, lit by the lava (warm at the springing, darker at the crown).
       grid(lit, [inner.map(([, y, z]): V3 => [-xe, y, z]), inner.map(([, y, z]): V3 => [xe, y, z])], (p) => stoneAt(p[1] - 1.5, 1.1));
