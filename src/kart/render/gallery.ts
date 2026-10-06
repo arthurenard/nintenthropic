@@ -10,6 +10,7 @@
  *   &span=50  &scale=1.5  &turn=0.5  as a track's landmark would say
  *   &t=2  &freeze=1                  the race clock, and stop it
  *   &kart=0                          leave out the kart
+ *   &art=0                           the code-built models, not the Blender-made ones (public/assets/kart/world-<theme>.glb)
  *
  * `window.__gallery`: `names` (this theme's), `show(kind, opts)`, `orbit(az, el, zoom)`, `time(t)`.
  * Drag to turn, wheel to zoom, left and right arrows for the previous and next.
@@ -34,6 +35,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { TrackGeometry, type HazardDef, type Landmark, type TrackDef, type TrackTheme } from "../track/geometry";
+import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { pointScale } from "./points";
 import { Bank } from "./world/bank";
@@ -261,8 +263,9 @@ window.addEventListener("keydown", (e) => {
   get names() {
     return names();
   },
-  show(kind: string, opts: { theme?: TrackTheme; offset?: number; span?: number; scale?: number; turn?: number; kart?: boolean } = {}) {
+  async show(kind: string, opts: { theme?: TrackTheme; offset?: number; span?: number; scale?: number; turn?: number; kart?: boolean } = {}) {
     if (opts.theme) theme = opts.theme;
+    await loadArt();
     build(kind, opts);
   },
   orbit(newAz: number, newEl: number, newZoom = 1) {
@@ -279,13 +282,20 @@ window.addEventListener("keydown", (e) => {
   ready: true,
 };
 
+/** The Blender-made models of this theme's world, unless `?art=0` asks for the code-built ones. */
+async function loadArt(): Promise<void> {
+  if (params.get("art") !== "0") await loadKartArt(theme);
+}
+
 resize();
-build(current || names()[0] || "windmill", {
-  offset: params.has("offset") ? Number(params.get("offset")) : undefined,
-  span: params.has("span") ? Number(params.get("span")) : undefined,
-  scale: params.has("scale") ? Number(params.get("scale")) : undefined,
-  turn: params.has("turn") ? Number(params.get("turn")) : undefined,
-});
+void loadArt().then(() =>
+  build(current || names()[0] || "windmill", {
+    offset: params.has("offset") ? Number(params.get("offset")) : undefined,
+    span: params.has("span") ? Number(params.get("span")) : undefined,
+    scale: params.has("scale") ? Number(params.get("scale")) : undefined,
+    turn: params.has("turn") ? Number(params.get("turn")) : undefined,
+  }),
+);
 
 let last = performance.now();
 const loop = (now: number): void => {

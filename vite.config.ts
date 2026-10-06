@@ -152,10 +152,30 @@ function partyBanner(origin: string | null): Plugin {
   };
 }
 
+/**
+ * Dev only: Grip Prix's renderer dev pages (src/kart/render/dev.html, gallery.html) sit a few folders
+ * down, so the models they load by a path relative to the page (assets/kart/world-kitchen.glb) would
+ * be looked for in src/kart/render/assets/ and fall back to the code-built stand-ins. Served from public/.
+ */
+function devPagesAssets(): Plugin {
+  const prefix = "/src/kart/render/assets/";
+  return {
+    name: "handy:dev-pages-assets",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((request, _res, next) => {
+        const req = request as { url?: string };
+        if (req.url?.startsWith(prefix)) req.url = `/assets/${req.url.slice(prefix.length)}`;
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(async ({ mode }) => {
   const party = mode === "party";
   let origin: string | null = null;
-  const plugins: Plugin[] = [vendorFiles()];
+  const plugins: Plugin[] = [vendorFiles(), devPagesAssets()];
   if (party) {
     const os = (await import("node:os" as string)) as Network;
     origin = lanOrigin(os.networkInterfaces(), PARTY_PORT);

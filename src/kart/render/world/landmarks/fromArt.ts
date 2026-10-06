@@ -16,6 +16,10 @@
  * - a part that turns (a ferris wheel, a carousel, a windmill's sails) is a
  *   child node named "<anything>.spin.x" (or .y, .z), turning about its own
  *   origin, at the custom property "speed" radians a second (default 0.5).
+ *   Optional "bob" (metres), "bobspeed" (rad/s, default 1.5) and "phase" make it rise and fall
+ *   as it turns (carousel mounts). A child named "<anything>.orbit.x|y|z" instead keeps its
+ *   attitude and travels a circle about the point ("cx", "cy", "cz") at "speed": a ferris
+ *   wheel's cars, which stay upright.
  */
 import { Matrix3, Matrix4, Vector3, type BufferAttribute, type Material, type Mesh, type Object3D } from "three";
 import { contractName, extraNumber } from "../../../../engine/world/names";
@@ -90,21 +94,21 @@ function addMesh(mesh: Mesh, toRoot: Matrix4, builders: Record<Kind, MeshBuilder
       const a = corner(k);
       const b = corner(k + 1);
       const c = corner(k + 2);
-      // The builder takes one normal a triangle: the corners' mean keeps smooth shading close enough at this size.
-      const n: V3 | undefined = a.n && b.n && c.n ? normalised([a.n[0] + b.n[0] + c.n[0], a.n[1] + b.n[1] + c.n[1], a.n[2] + b.n[2] + c.n[2]]) : undefined;
-      builder.tri(a.p, b.p, c.p, a.c, b.c, c.c, n);
+      // A model with normals keeps them: smooth shading, as modelled (bevels, round china). Without, the builder flattens.
+      if (a.n && b.n && c.n) {
+        builder.triN(a.p, b.p, c.p, a.c, b.c, c.c, a.n, b.n, c.n);
+        builder.smooth = true;
+      } else {
+        builder.tri(a.p, b.p, c.p, a.c, b.c, c.c);
+      }
     }
   }
 }
 
-function normalised(v: V3): V3 {
-  const l = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / l, v[1] / l, v[2] / l];
-}
-
-function spinAxis(name: string): "x" | "y" | "z" | null {
-  const m = /\.spin\.([xyz])$/.exec(name);
-  return m ? (m[1] as "x" | "y" | "z") : null;
+/** What a node's name says it does: ".spin.y" turns about its origin, ".orbit.z" travels a circle about another point without turning. */
+function motionOf(name: string): { kind: "spin" | "orbit"; axis: "x" | "y" | "z" } | null {
+  const m = /\.(spin|orbit)\.([xyz])$/.exec(name);
+  return m ? { kind: m[1] as "spin" | "orbit", axis: m[2] as "x" | "y" | "z" } : null;
 }
 
 /** The Blender-made model of `kind`, as a LandmarkModel, or null when there is none (the code-built one stands in). */
@@ -122,7 +126,7 @@ export function landmarkFromArt(kind: string): LandmarkModel | null {
   const moving: MovingPart[] = [];
   const spinners = new Set<Object3D>();
   root.traverse((o) => {
-    if (o !== root && spinAxis(contractName(o))) spinners.add(o);
+    if (o !== root && motionOf(contractName(o))) spinners.add(o);
   });
   const underSpinner = (o: Object3D): Object3D | null => {
     for (let p: Object3D | null = o; p && p !== root; p = p.parent) if (spinners.has(p)) return p;
@@ -143,16 +147,35 @@ export function landmarkFromArt(kind: string): LandmarkModel | null {
   });
 
   for (const [spinner, builders] of parts) {
-    const axis = spinAxis(contractName(spinner))!;
+    const motion = motionOf(contractName(spinner))!;
     const speed = extraNumber(spinner, "speed") ?? 0.5;
+    // Optional bobbing up and down as it goes (carousel horses): "bob" metres, at "bobspeed" rad/s, from "phase".
+    const bob = extraNumber(spinner, "bob") ?? 0;
+    const bobSpeed = extraNumber(spinner, "bobspeed") ?? 1.5;
+    const phase = extraNumber(spinner, "phase") ?? 0;
     const pivot = new Vector3().setFromMatrixPosition(new Matrix4().multiplyMatrices(inverse, spinner.matrixWorld));
+    // An orbiting node keeps its attitude and circles "cx", "cy", "cz" (a ferris wheel's cars stay upright).
+    const offset = pivot.clone().sub(new Vector3(extraNumber(spinner, "cx") ?? 0, extraNumber(spinner, "cy") ?? 0, extraNumber(spinner, "cz") ?? 0));
     moving.push({
       ...(builders.lit.empty ? {} : { lit: builders.lit }),
       ...(builders.glow.empty ? {} : { glow: builders.glow }),
       ...(builders.glass.empty ? {} : { glass: builders.glass }),
       pivot: [pivot.x, pivot.y, pivot.z],
       update(t: number, part: Object3D) {
-        part.rotation[axis] = t * speed;
+        const a = t * speed;
+        const lift = bob ? Math.sin(t * bobSpeed + phase) * bob : 0;
+        if (motion.kind === "spin") {
+          part.rotation[motion.axis] = a;
+          part.position.set(0, lift, 0);
+        } else {
+          const c = Math.cos(a);
+          const s = Math.sin(a);
+          const g = offset;
+          if (motion.axis === "z") part.position.set(g.x * c - g.y * s - g.x, g.x * s + g.y * c - g.y, 0);
+          else if (motion.axis === "y") part.position.set(g.x * c + g.z * s - g.x, 0, -g.x * s + g.z * c - g.z);
+          else part.position.set(0, g.y * c - g.z * s - g.y, g.y * s + g.z * c - g.z);
+          part.position.y += lift;
+        }
       },
     });
   }
