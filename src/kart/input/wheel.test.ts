@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rig, handFrame, wheelHands, type WheelPose } from "./testHands";
-import { SEAT_MARGIN, STEERING_LOCK, WHEEL, WheelReader, halfSeat, seatZone, shapeSteer, type Steering } from "./wheel";
+import { SEAT_MARGIN, STEERING_LOCK, WHEEL, WheelReader, halfSeat, wheelAngle, seatZone, shapeSteer, type Steering } from "./wheel";
 
 /** A rig that has been driving straight with fists for a second, so the wheel is settled. */
 function driving(options: ConstructorParameters<typeof Rig>[0] = {}): Rig {
@@ -865,3 +865,44 @@ describe("up to four players on one camera", () => {
     expect(rig.last.status.angle).toBeCloseTo(15, 0);
   });
 });
+
+describe("a wheel that is never inside out", () => {
+  it("reads the same angle whichever hand is taken for which", () => {
+    for (const [l, r] of [
+      [{ x: 0.3, y: 0.5 }, { x: 0.7, y: 0.6 }],
+      [{ x: 0.3, y: 0.6 }, { x: 0.7, y: 0.4 }],
+      [{ x: 0.45, y: 0.3 }, { x: 0.55, y: 0.7 }],
+    ] as const) {
+      expect(wheelAngle(r, l, 16 / 9, null)).toBeCloseTo(wheelAngle(l, r, 16 / 9, null), 6);
+      expect(wheelAngle(r, l, 16 / 9, 20)).toBeCloseTo(wheelAngle(l, r, 16 / 9, 20), 6);
+    }
+  });
+
+  it("turns right when the right hand is lower, swapped or not", () => {
+    const left = { x: 0.3, y: 0.45 };
+    const right = { x: 0.7, y: 0.6 };
+    expect(wheelAngle(left, right, 16 / 9, null)).toBeGreaterThan(0);
+    expect(wheelAngle(right, left, 16 / 9, null)).toBeGreaterThan(0);
+  });
+
+  it("carries on round past a quarter turn, and only there leans on the last angle", () => {
+    // Hands one above the other: 90° or -90°, and the way the wheel was going says which.
+    const top = { x: 0.5, y: 0.3 };
+    const bottom = { x: 0.5001, y: 0.7 };
+    expect(wheelAngle(top, bottom, 16 / 9, 80)).toBeGreaterThan(80);
+    expect(wheelAngle(top, bottom, 16 / 9, -80)).toBeLessThan(-80);
+    // Near level, the last angle has no say at all.
+    expect(wheelAngle({ x: 0.3, y: 0.5 }, { x: 0.7, y: 0.52 }, 16 / 9, 30)).toBeLessThan(10);
+  });
+
+  it("refuses a level that is not a small tilt", () => {
+    const reader = new WheelReader();
+    reader.level = 180;
+    expect(reader.levelled).toBe(false);
+    expect(reader.level).toBe(0);
+    reader.level = 12;
+    expect(reader.levelled).toBe(true);
+    expect(reader.level).toBe(12);
+  });
+});
+

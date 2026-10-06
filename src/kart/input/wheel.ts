@@ -82,7 +82,35 @@ export const WHEEL = {
     /** A wheel turned further than this is not level, however steady. */
     tilt: 30,
   },
+  /**
+   * Past this many degrees of turn the line through the palms can no longer
+   * say on its own which way the wheel went (at 90° it points straight up
+   * either way), so from here the wheel's last angle decides.
+   */
+  quarter: 60,
 } as const;
+
+/**
+ * The wheel's turn, degrees, from the two palms: + when the right hand is
+ * lower. The wheel is read as a LINE through the palms, not an arrow from
+ * one to the other: which hand is which can be mistaken (the hands cross, or
+ * one is lost and found again), and an arrow would then point the other way
+ * and turn the steering inside out. A line is the same whichever end is
+ * which, so a swap changes nothing. Its angle is in (-90°, 90°]; only past a
+ * quarter turn (`WHEEL.quarter`), where the line alone is ambiguous, is the
+ * wheel's `previous` angle used to carry on round the way it was going.
+ */
+export function wheelAngle(left: { x: number; y: number }, right: { x: number; y: number }, aspect: number, previous: number | null): number {
+  let dx = (right.x - left.x) * aspect;
+  let dy = right.y - left.y;
+  if (dx < 0 || (dx === 0 && dy < 0)) {
+    dx = -dx;
+    dy = -dy;
+  }
+  let degrees = (Math.atan2(dy, dx) * 180) / Math.PI;
+  if (previous !== null && Math.abs(previous) > WHEEL.quarter) degrees += 180 * Math.round((previous - degrees) / 180);
+  return degrees;
+}
 
 /** Steer, -1..1, for a wheel turned `angle` degrees from level. */
 export function shapeSteer(angle: number, steering: Steering | number = "normal"): number {
@@ -246,8 +274,10 @@ export class WheelReader {
     if (seen.left || seen.right) this.lastAnySeen = t;
     const both = seen.left !== null && seen.right !== null;
     if (both) {
+      // Back after a while without both hands: the wheel is read afresh, not carried on from where it was.
+      const fresh = t - this.lastBothSeen > WHEEL.held;
       this.lastBothSeen = t;
-      this.turn(seen.left!, seen.right!, t);
+      this.turn(seen.left!, seen.right!, t, fresh);
     } else {
       // The hop trail is kept: a sharp lift blurs the hands and often costs a frame
       // or two, which must not hide the very jerk being looked for. Its own
@@ -293,7 +323,7 @@ export class WheelReader {
   setLevel(): boolean {
     if (!this.haveAngle || !this.bothPresent(this.time)) return false;
     this.level = this.angle;
-    return true;
+    return this.isLevelled;
   }
 
   /** The level offset, degrees: the camera's tilt and the way this player holds the wheel (to keep between visits). */
@@ -302,6 +332,14 @@ export class WheelReader {
   }
 
   set level(degrees: number) {
+    // A level is a small tilt (the camera's, the player's habit). Anything
+    // more - a saved level from before the wheel was read as a line, say -
+    // would turn every straight into a bend: it is not taken.
+    if (!Number.isFinite(degrees) || Math.abs(degrees) > WHEEL.level.tilt) {
+      this.levelDegrees = 0;
+      this.isLevelled = false;
+      return;
+    }
     this.levelDegrees = degrees;
     this.isLevelled = true;
   }
@@ -470,10 +508,9 @@ export class WheelReader {
   }
 
   /** Turns the two palms into the wheel's angle (and feeds the level helper). */
-  private turn(left: HandReading, right: HandReading, t: number): void {
-    let degrees = (Math.atan2(right.y - left.y, (right.x - left.x) * this.aspect) * 180) / Math.PI;
-    // Keep to the branch the wheel was on, so turning through 180° carries on rather than jumping.
-    if (this.haveAngle) degrees += 360 * Math.round((this.angle - degrees) / 360);
+  private turn(left: HandReading, right: HandReading, t: number, fresh: boolean): void {
+    if (fresh) this.filter.reset();
+    const degrees = wheelAngle(left, right, this.aspect, this.haveAngle && !fresh ? this.angle : null);
     this.angle = this.filter.filter(degrees, t);
     this.haveAngle = true;
     if (this.auto) this.watchLevel(t);
