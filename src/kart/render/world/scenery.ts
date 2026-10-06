@@ -29,6 +29,7 @@ import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb } from "./builder";
+import { hasSceneryArt, sceneryVariants } from "./sceneryArt";
 import type { BakeUniforms } from "./shading";
 import type { KeepOut } from "./landmarks/place";
 import * as props from "./props";
@@ -98,6 +99,11 @@ export interface SceneryTools {
   group: Group;
   scatter(spec: Spec): Item[];
   instanced(geometry: BufferGeometry, items: Item[]): void;
+  /**
+   * Instances `items` as the Blender-made variants of a kind of scenery (`scenery.<kind>.<n>`, dealt round
+   * them) when the world's file has some, else as the code-built shape `fallback` makes.
+   */
+  variants(kind: string, fallback: () => BufferGeometry, items: Item[]): void;
   geo<G extends BufferGeometry>(g: G): G;
   landmarkSpots(count: number, minEdge: number, maxEdge: number, accept?: (x: number, z: number, h: number) => boolean): { x: number; z: number; h: number; edge: number }[];
   animated: ((t: number) => void)[];
@@ -138,6 +144,15 @@ export function buildScenery(
   const geo = <G extends BufferGeometry>(g: G): G => {
     disposables.push(() => g.dispose());
     return g;
+  };
+
+  const variants = (kind: string, fallback: () => BufferGeometry, items: Item[]): void => {
+    const art = sceneryVariants(kind);
+    if (!art.length) {
+      add(instanced(geo(fallback()), material, items));
+      return;
+    }
+    art.forEach((g, k) => add(instanced(geo(g), material, items.filter((_, i) => i % art.length === k))));
   };
 
   // The ground facts of a random point, or null where it is out of bounds.
@@ -198,23 +213,21 @@ export function buildScenery(
   const forest = (x: number, z: number) => smoothstep(0.46, 0.64, fbm2(x / 55 + 3, z / 55 - 7, 3));
 
   if (style.id === "meadow") {
-    const trees = geo(props.roundTree());
-    const pines = geo(props.pineTree());
-    const bushes = geo(props.bush());
-    const rocks = geo(props.rock());
-    const flowers = geo(props.flowers());
     const hay = geo(props.hayBale());
-    add(instanced(trees, material, scatter({ count: 760, minEdge: 13, cell: 6, scale: [0.85, 1.5], stretch: [0.9, 1.25], maxSlope: 0.5, keep: (x, z, _h, e) => (e === 0 ? 1 : (0.08 + 0.92 * forest(x, z)) * (1 - 0.5 * smoothstep(40, 200, e))) })));
-    add(instanced(pines, material, scatter({ count: 520, minEdge: 15, cell: 6, scale: [0.9, 1.7], stretch: [0.95, 1.4], maxSlope: 0.7, keep: (x, z, h, e) => (e === 0 ? 1 : (0.04 + 0.96 * forest(x + 120, z - 80)) * smoothstep(-2, 10, h + e * 0.04)) })));
-    add(instanced(bushes, material, scatter({ count: 420, minEdge: 11, cell: 3, scale: [0.7, 1.4], maxSlope: 0.6, keep: (x, z, _h, e) => (e === 0 ? 1 : 0.25 + 0.75 * forest(x, z) * (1 - smoothstep(40, 90, e))) })));
-    add(instanced(rocks, material, scatter({ count: 110, minEdge: 11, cell: 4, scale: [0.7, 2.2], stretch: [0.7, 1.1] })));
+    variants("tree", props.roundTree, scatter({ count: 760, minEdge: 13, cell: 6, scale: [0.85, 1.5], stretch: [0.9, 1.25], maxSlope: 0.5, keep: (x, z, _h, e) => (e === 0 ? 1 : (0.08 + 0.92 * forest(x, z)) * (1 - 0.5 * smoothstep(40, 200, e))) }));
+    variants("pine", props.pineTree, scatter({ count: 520, minEdge: 15, cell: 6, scale: [0.9, 1.7], stretch: [0.95, 1.4], maxSlope: 0.7, keep: (x, z, h, e) => (e === 0 ? 1 : (0.04 + 0.96 * forest(x + 120, z - 80)) * smoothstep(-2, 10, h + e * 0.04)) }));
+    variants("bush", props.bush, scatter({ count: 420, minEdge: 11, cell: 3, scale: [0.7, 1.4], maxSlope: 0.6, keep: (x, z, _h, e) => (e === 0 ? 1 : 0.25 + 0.75 * forest(x, z) * (1 - smoothstep(40, 90, e))) }));
+    variants("rock", props.rock, scatter({ count: 110, minEdge: 11, cell: 4, scale: [0.7, 2.2], stretch: [0.7, 1.1] }));
     // Flowers: bright dots of colour just beyond the barriers, where the eye passes.
     const petals: Rgb[] = [rgb("#ff5d8f"), rgb("#ffd60a"), rgb("#ffffff"), rgb("#bf5af2"), rgb("#ff9f0a")];
     const flowerItems = scatter({ count: 800, minEdge: 9.6, maxEdge: 38, cell: 1.4, scale: [0.8, 1.3], keep: (x, z) => 0.2 + 0.8 * smoothstep(0.4, 0.62, fbm2(x / 20, z / 20, 2)) });
-    flowerItems.forEach((f) => {
-      f.colour = petals[Math.floor(rnd() * petals.length)]!;
-    });
-    add(instanced(flowers, material, flowerItems));
+    // (Modelled clumps come in the colours themselves: one variant each, dealt round.)
+    if (!hasSceneryArt("flower")) {
+      flowerItems.forEach((f) => {
+        f.colour = petals[Math.floor(rnd() * petals.length)]!;
+      });
+    }
+    variants("flower", props.flowers, flowerItems);
     add(instanced(hay, material, scatter({ count: 16, minEdge: 16, maxEdge: 80, cell: 6, scale: [0.9, 1.2], maxSlope: 0.2 })));
 
     // The windmill and barn: landmarks in open ground.
@@ -244,9 +257,6 @@ export function buildScenery(
     }
   } else if (style.id === "canyon") {
     const mesas = [0, 1, 2, 3].map((k) => geo(props.mesa(k)));
-    const rocks = geo(props.boulder());
-    const cacti = geo(props.cactus());
-    const dry = geo(props.dryBush());
     const sand = (x: number, z: number) => 0.3 + 0.7 * smoothstep(0.35, 0.6, fbm2(x / 44, z / 44, 2));
     mesas.forEach((g) => {
       const items = scatter({ count: 9, minEdge: 150, maxEdge: 520, cell: 60, scale: [26, 52], stretch: [0.9, 1.7], lift: -2, keep: (_x, _z, h) => (h < 40 ? 1 : 0) });
@@ -257,9 +267,9 @@ export function buildScenery(
       });
       add(instanced(g, material, items));
     });
-    add(instanced(rocks, material, scatter({ count: 460, minEdge: 11, cell: 3.5, scale: [0.7, 2.4], stretch: [0.7, 1.2], keep: (x, z) => sand(x, z) })));
-    add(instanced(cacti, material, scatter({ count: 300, minEdge: 13, maxEdge: 160, cell: 5, scale: [0.9, 1.7], maxSlope: 0.35, keep: (x, z) => sand(x + 50, z) })));
-    add(instanced(dry, material, scatter({ count: 520, minEdge: 10, cell: 2.5, scale: [0.7, 1.5], maxSlope: 0.45 })));
+    variants("rock", props.boulder, scatter({ count: 460, minEdge: 11, cell: 3.5, scale: [0.7, 2.4], stretch: [0.7, 1.2], keep: (x, z) => sand(x, z) }));
+    variants("cactus", props.cactus, scatter({ count: 300, minEdge: 13, maxEdge: 160, cell: 5, scale: [0.9, 1.7], maxSlope: 0.35, keep: (x, z) => sand(x + 50, z) }));
+    variants("shrub", props.dryBush, scatter({ count: 520, minEdge: 10, cell: 2.5, scale: [0.7, 1.5], maxSlope: 0.45 }));
     const arch = landmarkSpots(1, 60, 150, (_x, _z, h) => h < 8);
     if (arch[0]) {
       const m = new Mesh(geo(props.rockArch()), material);
@@ -419,6 +429,7 @@ export function buildScenery(
       rnd,
       group,
       scatter,
+      variants,
       instanced: (geometry, items) => add(instanced(geometry, material, items)),
       geo,
       landmarkSpots,

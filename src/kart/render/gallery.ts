@@ -5,6 +5,7 @@
  * place.ts), so what shows here is what shows in a race.
  *
  *   ?theme=kitchen&kind=teapot       a landmark (or a hazard, if the name is one)
+ *   ?theme=meadow&kind=scenery:tree  the Blender-made variants of a kind of scenery (art/kart/world/), in a row
  *   &az=30&el=15&zoom=1              the camera, degrees round and above the target; zoom 1 frames it
  *   &offset=40                       how far right of the road (negative: left); spans ignore it
  *   &span=50  &scale=1.5  &turn=0.5  as a track's landmark would say
@@ -25,6 +26,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshStandardMaterial,
   NeutralToneMapping,
   PerspectiveCamera,
   PlaneGeometry,
@@ -34,12 +36,14 @@ import {
   WebGLRenderer,
 } from "three";
 import { TrackGeometry, type HazardDef, type Landmark, type TrackDef, type TrackTheme } from "../track/geometry";
+import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { pointScale } from "./points";
 import { Bank } from "./world/bank";
 import { MeshBuilder, rgb } from "./world/builder";
 import { HAZARDS, LANDMARKS, THEME_HAZARDS, THEME_LANDMARKS } from "./world/landmarks";
 import { buildHazards, buildLandmarks, landmarkMaterials, type HazardLayer, type LandmarkLayer } from "./world/landmarks/place";
+import { sceneryVariants } from "./world/sceneryArt";
 import { createSky } from "./world/sky";
 import { glowTexture } from "./world/textures";
 import { styleFor } from "./world/themes";
@@ -177,11 +181,31 @@ function build(kind: string, opts: { offset?: number; span?: number; scale?: num
 
   const at = 500 / geometry.length;
   const env = { track: geometry, style, bank, groundAt: () => 0 };
-  const isHazard = kind.startsWith("hazard:") || (!(kind in LANDMARKS) && kind in HAZARDS);
+  const isScenery = kind.startsWith("scenery:");
+  const isHazard = !isScenery && (kind.startsWith("hazard:") || (!(kind in LANDMARKS) && kind in HAZARDS));
   const name = kind.replace(/^hazard:/, "");
   focus.set(0, 5, 500);
   radius = 30;
-  if (isHazard) {
+  if (isScenery) {
+    // The variants side by side, centred on the focus, in the world's own scenery material.
+    const variants = sceneryVariants(kind.slice("scenery:".length));
+    const sceneryMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
+    const widths = variants.map((g) => {
+      g.computeBoundingBox();
+      return Math.max(1, g.boundingBox!.max.x - g.boundingBox!.min.x);
+    });
+    const total = widths.reduce((a, w) => a + w + 1.2, 0);
+    let x = -total / 2;
+    variants.forEach((g, i) => {
+      x += widths[i]! / 2 + 0.6;
+      const mesh = new Mesh(g, sceneryMaterial);
+      mesh.position.set(x, 0, 500);
+      stage.add(mesh);
+      x += widths[i]! / 2 + 0.6;
+    });
+    focus.set(0, 2, 500);
+    radius = Math.max(4, total * 0.4);
+  } else if (isHazard) {
     const motion = (THEME_HAZARDS[theme] ?? []).find((h) => h.kind === name)?.motion ?? "cross";
     const def: HazardDef = {
       kind: name,
@@ -209,14 +233,14 @@ function build(kind: string, opts: { offset?: number; span?: number; scale?: num
       radius = Math.max(size.x, size.y, size.z) * 0.85 + 8;
     }
   }
-  if (opts.kart !== false && params.get("kart") !== "0") {
+  if (!isScenery && opts.kart !== false && params.get("kart") !== "0") {
     const kart = createProceduralKart({ id: 0, colour: "#ff453a" });
     kartRoot = new Group();
     kartRoot.add(kart.root);
     kartRoot.position.set(isHazard ? 3.5 : 0, 0.02, 490);
     stage.add(kartRoot);
   }
-  label.textContent = `${theme}: ${name}${isHazard ? " (hazard)" : ""}   ${current ? "" : ""}`;
+  label.textContent = `${theme}: ${isScenery ? kind : name}${isHazard ? " (hazard)" : ""}`;
 }
 
 function placeCamera(): void {
@@ -257,13 +281,15 @@ window.addEventListener("keydown", (e) => {
   if (e.key === " ") frozen = !frozen;
 });
 
+let artLoaded = false;
 (window as unknown as { __gallery: unknown }).__gallery = {
   get names() {
     return names();
   },
   show(kind: string, opts: { theme?: TrackTheme; offset?: number; span?: number; scale?: number; turn?: number; kart?: boolean } = {}) {
     if (opts.theme) theme = opts.theme;
-    build(kind, opts);
+    // The theme's Blender-made art first (a no-op when it is loaded, or not built yet).
+    void loadKartArt(theme).then(() => build(kind, opts));
   },
   orbit(newAz: number, newEl: number, newZoom = 1) {
     az = newAz;
@@ -276,15 +302,20 @@ window.addEventListener("keydown", (e) => {
   setTheme(t: TrackTheme) {
     theme = t;
   },
-  ready: true,
+  get ready() {
+    return artLoaded;
+  },
 };
 
 resize();
-build(current || names()[0] || "windmill", {
-  offset: params.has("offset") ? Number(params.get("offset")) : undefined,
-  span: params.has("span") ? Number(params.get("span")) : undefined,
-  scale: params.has("scale") ? Number(params.get("scale")) : undefined,
-  turn: params.has("turn") ? Number(params.get("turn")) : undefined,
+void loadKartArt(theme).then(() => {
+  build(current || names()[0] || "windmill", {
+    offset: params.has("offset") ? Number(params.get("offset")) : undefined,
+    span: params.has("span") ? Number(params.get("span")) : undefined,
+    scale: params.has("scale") ? Number(params.get("scale")) : undefined,
+    turn: params.has("turn") ? Number(params.get("turn")) : undefined,
+  });
+  artLoaded = true;
 });
 
 let last = performance.now();

@@ -90,16 +90,11 @@ function addMesh(mesh: Mesh, toRoot: Matrix4, builders: Record<Kind, MeshBuilder
       const a = corner(k);
       const b = corner(k + 1);
       const c = corner(k + 2);
-      // The builder takes one normal a triangle: the corners' mean keeps smooth shading close enough at this size.
-      const n: V3 | undefined = a.n && b.n && c.n ? normalised([a.n[0] + b.n[0] + c.n[0], a.n[1] + b.n[1] + c.n[1], a.n[2] + b.n[2] + c.n[2]]) : undefined;
-      builder.tri(a.p, b.p, c.p, a.c, b.c, c.c, n);
+      // A modelled surface keeps its own smooth normals (the layer carries them: LandmarkModel.smooth).
+      if (a.n && b.n && c.n) builder.triN(a.p, b.p, c.p, a.c, b.c, c.c, a.n, b.n, c.n);
+      else builder.tri(a.p, b.p, c.p, a.c, b.c, c.c);
     }
   }
-}
-
-function normalised(v: V3): V3 {
-  const l = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / l, v[1] / l, v[2] / l];
 }
 
 function spinAxis(name: string): "x" | "y" | "z" | null {
@@ -158,6 +153,7 @@ export function landmarkFromArt(kind: string): LandmarkModel | null {
   }
 
   return {
+    smooth: true,
     lit: still.lit,
     ...(still.glow.empty ? {} : { glow: still.glow }),
     ...(still.glass.empty ? {} : { glass: still.glass }),
