@@ -19,6 +19,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { characterById } from "../characters";
+import { driverArtSettled, loadDriverArt } from "./art";
 import { createDriver } from "./drivers";
 
 export interface PortraitOptions {
@@ -75,6 +76,9 @@ export function portrait(characterId: string | undefined, options: PortraitOptio
   const key = `${character.id}|${colour}|${options.silhouette ? 1 : 0}|${size}|${framing}`;
   const hit = cache.get(key);
   if (hit) return hit;
+  // The modelled drivers come from a file: ask for it, and keep what is drawn before it is here out of the cache.
+  const art = driverArtSettled();
+  if (!art) void loadDriverArt();
   try {
     const { renderer, scene, camera } = stage(size);
     const driver = createDriver(character.species, colour);
@@ -112,7 +116,7 @@ export function portrait(characterId: string | undefined, options: PortraitOptio
     scene.remove(driver.root);
     driver.dispose();
     const url = out.toDataURL("image/png");
-    cache.set(key, url);
+    if (art) cache.set(key, url);
     return url;
   } catch {
     return null;

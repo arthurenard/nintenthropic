@@ -190,6 +190,8 @@ export class DriverPicker {
   private async paint(): Promise<void> {
     try {
       const { portrait } = await import("../render/portraits");
+      // The modelled drivers are a file: wait for it (or for finding it missing) so the pictures show the real ones.
+      await (await import("../render/art")).loadDriverArt();
       for (const tile of this.tiles) {
         const url = portrait(tile.id, { colour: PAINT, silhouette: tile.locked, size: 256 });
         if (url) tile.image.src = url;

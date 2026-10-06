@@ -17,6 +17,7 @@ import { Color, DirectionalLight, Fog, HemisphereLight, Mesh, MeshLambertMateria
 import { CHARACTERS } from "../characters";
 import { BOT_COLOURS, PLAYER_COLOURS, type Emote } from "../contract";
 import type { ThingView } from "../contract";
+import { loadKartArt } from "./art";
 import { Effects } from "./effects";
 import type { KartModel } from "./kart";
 import { createProceduralKart } from "./kartModel";
@@ -24,7 +25,9 @@ import { Things } from "./things";
 import { ItemBoxes, type BoxSlot } from "./world/boxes";
 import { styleFor } from "./world/themes";
 
-export function runTurntable(canvas: HTMLCanvasElement, params: URLSearchParams): void {
+export async function runTurntable(canvas: HTMLCanvasElement, params: URLSearchParams): Promise<void> {
+  // The modelled art first, as a race loads it (what is not there yet is the code-built stand-in).
+  await loadKartArt((params.get("theme") as "meadow" | "canyon" | "harbour" | null) ?? "meadow");
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
