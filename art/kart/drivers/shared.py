@@ -65,7 +65,7 @@ def shoe_sdf(thigh=0.085, spread=0.15, scale=1.0):
 
 def torso(sp, w=0.25, d=0.19, shoulder=0.28, thigh=0.085, spread=0.15, shoe="#2d3350", shoe_mat="plastic", pants=NAVY, belly=None,
           chest="vest", chest_albedo=None, bib=True, collar=True, belt=True, collar_mat="paintcloth", extra=None, belly_size=(0.74, 0.24, 0.62), budget=1.0,
-          chest_h=0.31, chest_y=0.33, collar_h=0.072):
+          chest_h=0.31, chest_y=0.33, collar_h=0.072, chest_band=True):
     """The body: trousers over the hips and thighs (forward over the kart's hood) and shoes, a racing jacket over the chest
     and shoulders, a belt in the kart's colour where they meet, a bib on the back, a collar.
 
@@ -83,6 +83,12 @@ def torso(sp, w=0.25, d=0.19, shoulder=0.28, thigh=0.085, spread=0.15, shoe="#2d
     body = S.union(upper, lower, k=0.03)
     if belt:
         part.solid(patch(body, band(None, 0.175, 0.232), 0.012, 0.012), (-0.4, 0.1, -0.35), (0.4, 0.34, 0.35), h=0.008, tris=t(110), mat="paintcloth", ao=0.25)
+    if chest_band and chest == "vest":
+        # A racing band across the chest, a white pin below it.
+        front = lambda P: np.maximum(np.abs(P[:, 1] - 0.415) - 0.03, 0.02 - P[:, 2])
+        part.solid(patch(upper, front, 0.013, 0.012), (-0.4, 0.2, -0.05), (0.4, 0.62, 0.4), h=0.0075, tris=t(120), mat="paintcloth", ao=0.25)
+        pin = lambda P: np.maximum(np.abs(P[:, 1] - 0.368) - 0.007, 0.02 - P[:, 2])
+        part.solid(patch(upper, pin, 0.011, 0.005), (-0.4, 0.2, -0.05), (0.4, 0.62, 0.4), h=0.0055, tris=t(60), mat="trim", albedo=WHITE, ao=0.0)
     if bib:
         back = lambda P: np.maximum(np.abs(P[:, 0]) - w * 0.55, np.maximum(np.abs(P[:, 1] - 0.38) - 0.14, -(P[:, 2] + d * 0.1)))
         part.solid(patch(upper, back, 0.014, 0.014), (-0.4, 0.15, -0.35), (0.4, 0.6, 0.0), h=0.008, tris=t(120), mat="paintcloth", ao=0.25)

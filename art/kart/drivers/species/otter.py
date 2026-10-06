@@ -25,7 +25,7 @@ def build():
         return out * H.furvar(P, 0.05)
 
     h = Part("otter", "head", H.HEAD_AT)
-    h.solid(head, (-0.4, -0.3, -0.36), (0.4, 0.38, 0.42), h=0.0085, tris=730, albedo=albedo, mat="fur", ao=0.45, reach=0.09)
+    h.solid(head, (-0.4, -0.3, -0.36), (0.4, 0.38, 0.42), h=0.0085, tris=670, albedo=albedo, mat="fur", ao=0.45, reach=0.09)
     h.solid(muzzle, (-0.25, -0.3, 0.0), (0.25, 0.1, 0.4), h=0.0065, tris=210, albedo=CREAM, mat="fur", ao=0.4, reach=0.06)
     for sx in (-1, 1):
         ear_in = S.ellipsoid((sx * 0.232, 0.14, -0.04), (0.04, 0.04, 0.026))

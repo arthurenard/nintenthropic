@@ -43,7 +43,7 @@ def build():
         return out * H.furvar(P, 0.03)
 
     h = Part("cat", "head", H.HEAD_AT)
-    h.solid(head, (-0.46, -0.3, -0.38), (0.46, 0.7, 0.46), h=0.0085, tris=730, albedo=albedo, mat="fur", ao=0.45, reach=0.09)
+    h.solid(head, (-0.46, -0.3, -0.38), (0.46, 0.7, 0.46), h=0.0085, tris=660, albedo=albedo, mat="fur", ao=0.45, reach=0.09)
     pads = S.union(S.mirror(S.ellipsoid((0.058, -0.1, 0.25), (0.082, 0.064, 0.078))), S.ellipsoid((0, -0.125, 0.245), (0.07, 0.05, 0.08)), k=0.02)
     face2 = S.union(face, pads, k=0.0)
     h.solid(pads, (-0.25, -0.3, 0.0), (0.25, 0.1, 0.4), h=0.0055, tris=150, albedo=CREAM, mat="fur", ao=0.4, reach=0.05)

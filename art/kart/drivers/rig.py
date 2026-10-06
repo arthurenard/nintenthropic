@@ -24,7 +24,7 @@ import sdflib as S
 
 PAINT_KINDS = ("paint", "paintcloth", "vest")
 # Every big piece is decimated to this fraction of the target it asks for (the whole driver stays under 5k triangles).
-TRI_SCALE = float(os.environ.get("DRV_TRI_SCALE", "0.9"))
+TRI_SCALE = float(os.environ.get("DRV_TRI_SCALE", "0.86"))
 
 # name -> (preview colour, metallic, roughness, emission strength)
 MATS = {

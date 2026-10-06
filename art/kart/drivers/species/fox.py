@@ -28,7 +28,7 @@ def build():
     cheeks = S.mirror(S.ellipsoid((0.2, -0.105, 0.085), (0.118, 0.098, 0.155), rot=(-12, 0, 0)))
     muzzle = S.ellipsoid((0, -0.055, 0.268), (0.098, 0.078, 0.128))
     jaw = S.ellipsoid((0, -0.108, 0.25), (0.086, 0.05, 0.105))
-    ruffs = S.mirror(S.scaled(S.roundcone((0.17, -0.1, 0.12), (0.37, -0.18, -0.04), 0.115, 0.014), (1, 1, 0.8), about=(0.2, -0.1, 0.1)))
+    ruffs = S.mirror(S.scaled(S.roundcone((0.17, -0.1, 0.12), (0.335, -0.17, -0.02), 0.1, 0.014), (1, 1, 0.8), about=(0.2, -0.1, 0.1)))
     face = S.union(skull, cheeks, muzzle, jaw, k=0.045)
     face_r = S.union(face, ruffs, k=0.05)
     ears = S.mirror(ear_shape())
@@ -44,7 +44,7 @@ def build():
         return out * furvar(P)
 
     h = Part("fox", "head", H.HEAD_AT)
-    h.solid(head, (-0.46, -0.28, -0.42), (0.46, 0.7, 0.5), h=0.0085, tris=1050, albedo=albedo, mat="fur", ao=0.5, reach=0.09)
+    h.solid(head, (-0.46, -0.28, -0.42), (0.46, 0.7, 0.5), h=0.0085, tris=980, albedo=albedo, mat="fur", ao=0.5, reach=0.09)
     inner = S.mirror(S.scaled(S.roundcone((0.19, 0.27, -0.03), (0.255, 0.54, -0.085), 0.075, 0.01), (1, 1, 0.5), about=(0.2, 0.35, -0.055)))
     h.solid(inner, (-0.4, 0.1, -0.25), (0.4, 0.7, 0.1), h=0.005, tris=90, albedo=PINKY, mat="fur", ao=0.3, reach=0.04)
     nose = S.ellipsoid((0, -0.03, 0.392), (0.046, 0.036, 0.033))
