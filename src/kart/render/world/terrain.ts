@@ -21,7 +21,7 @@ import { BufferGeometry, Float32BufferAttribute, Uint32BufferAttribute } from "t
 import type { TrackGeometry } from "../../track/geometry";
 import { clamp, fbm2, lerp, noise2, smoothstep } from "../math";
 import { mixRgb, rgb, scaleRgb, type Rgb } from "./builder";
-import { analyseFeatures, DROP_DEPTH, DROP_REACH, type Features } from "./features";
+import { analyseFeatures, DROP_DEPTH, DROP_REACH, WALL_DISTANCE, type Features } from "./features";
 import type { ThemeStyle } from "./themes";
 
 /** How far below the road the ground sits next to it, so the verge ribbon covers it cleanly. */
@@ -63,6 +63,8 @@ export class Terrain {
   readonly heights: Float32Array;
   /** Distance beyond the road's edge at each grid vertex (negative on the road). */
   readonly edges: Float32Array;
+  /** How far out the sim's barrier stands beyond the road's edge there (6 m, or a verge's), by the nearest stretch of road. */
+  readonly walls: Float32Array;
   readonly colours: Float32Array;
   /** Self-lit glow, 0..1 per vertex (cracks and banks beside lava). */
   readonly glow: Float32Array;
@@ -95,6 +97,7 @@ export class Terrain {
     this.dropDepth = -DROP_DEPTH[style.id];
     this.heights = new Float32Array(nx * nz);
     this.edges = new Float32Array(nx * nz);
+    this.walls = new Float32Array(nx * nz).fill(WALL_DISTANCE);
     this.colours = new Float32Array(nx * nz * 3);
     this.glow = new Float32Array(nx * nz);
     this.lavaY = new Float32Array(nx * nz).fill(NaN);
@@ -179,6 +182,7 @@ export class Terrain {
         const g = this.info(x, z);
         info[j * nx + i] = g;
         this.edges[j * nx + i] = g.edge;
+        this.walls[j * nx + i] = this.wallOf(g);
         const rim = Math.max(Math.abs(x - cx) / hx, Math.abs(z - cz) / hz);
         this.heights[j * nx + i] = this.heightOf(x, z, g, rim, j * nx + i);
       }
@@ -201,6 +205,12 @@ export class Terrain {
         this.colours[o + 2] = c[2];
       }
     }
+  }
+
+  /** Where the barrier stands beyond the road's edge on the side of `g.lateral` at its nearest sample: the ground out to there is the road's own. */
+  private wallOf(g: GroundInfo): number {
+    const f = this.features;
+    return (g.lateral < 0 ? f.wallLeft : f.wallRight)[g.i] ?? WALL_DISTANCE;
   }
 
   /** How open the ground on the side of `g.lateral` is at its nearest sample, 0..1, within the theme's reach. */
@@ -301,7 +311,9 @@ export class Terrain {
         break;
       }
     }
-    let h = lerp(near, far, smoothstep(10, 26, e));
+    // The ground follows the road out to the barrier (and a little past it): a wide verge is as flat as the road beside it, never a hill the sim lets a kart drive into.
+    const flat = Math.max(10, this.wallOf(g) + 2.5);
+    let h = lerp(near, far, smoothstep(flat, flat + 16, e));
     // An open edge: beyond the centre line on that side the ground falls to the world's floor.
     const open = this.openness(g);
     if (open > 0) {
@@ -470,6 +482,22 @@ export class Terrain {
     const v = fz - j;
     const e = this.edges;
     return lerp(lerp(e[j * this.nx + i]!, e[j * this.nx + i + 1]!, u), lerp(e[(j + 1) * this.nx + i]!, e[(j + 1) * this.nx + i + 1]!, u), v);
+  }
+
+  /**
+   * How far beyond the barrier a point is, from the grid (negative: between the road and the barrier). Where the barrier
+   * stands at the usual 6 m this is `edgeAt - 6`; a verge pushes it out.
+   */
+  clearAt(x: number, z: number): number {
+    const fx = clamp((x - this.minX) / this.cell, 0, this.nx - 1.001);
+    const fz = clamp((z - this.minZ) / this.cell, 0, this.nz - 1.001);
+    const i = Math.floor(fx);
+    const j = Math.floor(fz);
+    const u = fx - i;
+    const v = fz - j;
+    const w = this.walls;
+    const wall = lerp(lerp(w[j * this.nx + i]!, w[j * this.nx + i + 1]!, u), lerp(w[(j + 1) * this.nx + i]!, w[(j + 1) * this.nx + i + 1]!, u), v);
+    return this.edgeAt(x, z) - wall;
   }
 
   /** The vertex colour at a grid vertex. */

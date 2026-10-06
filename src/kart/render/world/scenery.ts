@@ -29,6 +29,7 @@ import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb } from "./builder";
+import { SOLID_MARGIN, WALL_DISTANCE } from "./features";
 import type { BakeUniforms } from "./shading";
 import type { KeepOut } from "./landmarks/place";
 import * as props from "./props";
@@ -61,7 +62,7 @@ const _p = new Vector3();
 const _s = new Vector3();
 const _c = new Color();
 
-function instanced(geometry: BufferGeometry, material: Material, items: Item[]): InstancedMesh | null {
+function instancedMesh(geometry: BufferGeometry, material: Material, items: Item[]): InstancedMesh | null {
   if (items.length === 0) return null;
   const mesh = new InstancedMesh(geometry, material, items.length);
   mesh.instanceMatrix.setUsage(StaticDrawUsage);
@@ -106,6 +107,25 @@ export interface SceneryTools {
   blocked(x: number, z: number, margin?: number): boolean;
 }
 
+/** How far, horizontally, a geometry reaches from its origin at heights a kart can meet, and how tall it is: worked out once. */
+const reaches = new WeakMap<BufferGeometry, { radius: number; height: number }>();
+function reachOf(geometry: BufferGeometry): { radius: number; height: number } {
+  let r = reaches.get(geometry);
+  if (!r) {
+    const pos = geometry.getAttribute("position");
+    let radius = 0;
+    let height = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      height = Math.max(height, y);
+      if (y > 0.2) radius = Math.max(radius, Math.hypot(pos.getX(i), pos.getZ(i)));
+    }
+    r = { radius, height };
+    reaches.set(geometry, r);
+  }
+  return r;
+}
+
 export interface Spec {
   count: number;
   minEdge: number;
@@ -132,6 +152,24 @@ export function buildScenery(
   const group = new Group();
   const disposables: (() => void)[] = [];
   const animated: ((t: number) => void)[] = [];
+  /**
+   * Instances, but never one whose body reaches within a camera's width of the sim's barrier (the scatter keeps their
+   * centres clear; a big boulder or drift is wider than that): the picture shows nothing solid where a kart can be.
+   */
+  const instanced = (geometry: BufferGeometry, mat: Material, items: Item[]): InstancedMesh | null => {
+    const { radius, height } = reachOf(geometry);
+    const clear = items.filter((it) => {
+      if (height * it.sy < 0.45) return true;
+      // The body's rim, all round: the nearest road to the middle is not always the one the rim reaches.
+      const r = radius * Math.max(it.sx, it.sz);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        if (terrain.clearAt(it.x + Math.sin(a) * r, it.z + Math.cos(a) * r) < SOLID_MARGIN + 0.3) return false;
+      }
+      return terrain.clearAt(it.x, it.z) >= SOLID_MARGIN + 0.3;
+    });
+    return instancedMesh(geometry, mat, clear);
+  };
   const add = (o: Object3D | null) => {
     if (o) group.add(o);
   };
@@ -165,7 +203,8 @@ export function buildScenery(
       if (spec.keep && rnd() > spec.keep(x, z, h, 0)) continue;
       const cellKey = spec.cell ? key(x, z, spec.cell) : null;
       if (cellKey !== null && occupied.has(cellKey)) continue;
-      const edge = terrain.edgeAt(x, z);
+      // Measured from where the sim's barrier stands (6 m out by default): a verge pushes the scenery out with it.
+      const edge = terrain.clearAt(x, z) + WALL_DISTANCE;
       if (edge < spec.minEdge || (spec.maxEdge !== undefined && edge > spec.maxEdge)) continue;
       if (spec.keep && rnd() > spec.keep(x, z, h, edge)) continue;
       if (spec.maxSlope !== undefined) {
@@ -186,7 +225,7 @@ export function buildScenery(
     let tries = 4000;
     while (spots.length < count && tries-- > 0) {
       const { x, z } = pick();
-      const edge = terrain.edgeAt(x, z);
+      const edge = terrain.clearAt(x, z) + WALL_DISTANCE;
       const h = terrain.heightAt(x, z);
       if (edge < minEdge || edge > maxEdge || !accept(x, z, h) || blocked(x, z, 12)) continue;
       if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 70)) continue;
