@@ -423,6 +423,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       renderer.info.reset();
       if (++shadowSweep % 45 === 1) markShadows(dynamic);
       frameViews.length = 0;
+      const space = world.cameraSpace;
       viewKarts.forEach((id, i) => {
         const rect = layout.views[i];
         const kart = byId.get(id);
@@ -430,7 +431,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         if (!rect || !kart || !cam) return;
         const actor = actors.get(id);
         const follow = actor ? { ...kart, x: actor.anchor.x, y: actor.anchor.y, z: actor.anchor.z } : kart;
-        cam.update(follow, view, dt, rect.w / rect.h);
+        cam.update(follow, view, dt, rect.w / rect.h, space);
         let eye = cam.camera;
         if (debugCamera && i === 0) {
           debugCamera.aspect = rect.w / rect.h;

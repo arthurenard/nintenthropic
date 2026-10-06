@@ -122,6 +122,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     additive,
     glows,
     wall: (i, side) => (side < 0 ? features.wallLeft : features.wallRight)[wrapI(i)]!,
+    hidden: (i, side) => (side < 0 ? features.hiddenLeft : features.hiddenRight)[wrapI(i)] === 1,
     open: (i, side) => (side < 0 ? features.dropLeft : features.dropRight)[wrapI(i)]!,
     gap: (i) => features.gap[wrapI(i)] === 1,
   };

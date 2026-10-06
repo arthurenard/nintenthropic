@@ -34,8 +34,10 @@ import { seededRandom } from "../../../../engine/random";
 import type { HazardDef, Landmark, TrackGeometry } from "../../../track/geometry";
 import { hazardAt } from "../../../track/hazards";
 import { makePoints } from "../../points";
+import { smoothstep } from "../../math";
 import type { Bank } from "../bank";
 import { MeshBuilder, type V3 } from "../builder";
+import { SOLID_MARGIN, WALL_DISTANCE } from "../features";
 import { bakedLit, makeBakeUniforms, type BakeUniforms } from "../shading";
 import { glowTexture } from "../textures";
 import type { ThemeStyle } from "../themes";
@@ -170,9 +172,19 @@ export interface KeepOut {
 /** A landmark as the track gives it, or placed by the world itself: `lift` raises it (the duck on a stool), `abs` puts it at a world position instead of beside the road. */
 export type PlacedLandmark = Landmark & { lift?: number; abs?: { x: number; z: number; yaw: number } };
 
+/** The roof of a thing over the road: how high its lowest surface above a kart's reach is, every `step` metres from `s0` along the lap. */
+export interface Roof {
+  s0: number;
+  step: number;
+  /** Metres above the road; Infinity where there is no roof. */
+  heights: Float32Array;
+}
+
 export interface LandmarkLayer {
   group: Group;
   keepOut: KeepOut[];
+  /** The roofs of the things over the road, for the camera to keep under. */
+  roofs: Roof[];
   /** Number of landmarks actually built (unknown names are left out). */
   count: number;
   update(time: number): void;
@@ -183,6 +195,8 @@ export interface PlaceEnv {
   track: TrackGeometry;
   style: ThemeStyle;
   bank: Bank;
+  /** Where the sim's barrier stands at `s` metres along the lap, beyond the road's edge on this side (default: the usual 6 m). */
+  wall?(s: number, side: -1 | 1): number;
   /** The ground's height at a point. */
   groundAt(x: number, z: number): number;
   /** Fraction of optional detail to keep (quality). Landmarks themselves are always built. */
@@ -190,6 +204,96 @@ export interface PlaceEnv {
 }
 
 const CHUNK_METRES = 300;
+
+/** What a kart (or a camera swung out past the barrier) can meet of a thing over the road: between these heights above it. */
+const SOLID_BAND: [number, number] = [0.45, 5];
+
+/**
+ * Widens a thing over the road where its legs or walls would stand inside the barrier, or within a camera's width of it:
+ * everything beyond its innermost low part moves out, smoothly from where it begins, so the arch stands a little wider and
+ * nothing solid is in the way of a kart. The model is in the road's frame (x to the right); `reach` is how far beyond the
+ * road's edge, left and right, its low parts must stay clear. `dip` is how much lower, per metre beyond the edge, the banked
+ * road tilts it on each side (the verge beside the road stays flat, so a leaning structure stands lower over it).
+ */
+export function standClear(model: LandmarkModel, halfWidth: number, reach: readonly [number, number], dip: readonly [number, number] = [0, 0]): void {
+  const builders = [model.lit, model.glow, model.glass].filter((b): b is MeshBuilder => !!b);
+  const [lo, hi] = SOLID_BAND;
+  /** How near the road's edge, each side, any surface of the model stands in the band (Infinity: none). */
+  const innermost = (): number[] => {
+    const inner = [Infinity, Infinity];
+    const f = [0, 0, 0];
+    const bx = [0, 0, 0];
+    for (const b of builders) {
+      const p = b.position;
+      for (let i = 0; i < p.length; i += 9) {
+        for (let k = 0; k < 3; k++) {
+          const x = p[i + k * 3]!;
+          bx[k] = x;
+          f[k] = p[i + k * 3 + 1]! - Math.max(0, Math.abs(x) - halfWidth) * dip[x < 0 ? 0 : 1]!;
+        }
+        // The triangle's corners in the band, and where its edges cross the band's limits.
+        for (let k = 0; k < 3; k++) {
+          const side = bx[k]! < 0 ? 0 : 1;
+          if (f[k]! >= lo && f[k]! <= hi) inner[side] = Math.min(inner[side]!, Math.abs(bx[k]!) - halfWidth);
+          const j = (k + 1) % 3;
+          for (const limit of [lo, hi]) {
+            if ((f[k]! - limit) * (f[j]! - limit) >= 0) continue;
+            const t = (limit - f[k]!) / (f[j]! - f[k]!);
+            const x = bx[k]! + (bx[j]! - bx[k]!) * t;
+            inner[x < 0 ? 0 : 1] = Math.min(inner[x < 0 ? 0 : 1]!, Math.abs(x) - halfWidth);
+          }
+        }
+      }
+    }
+    return inner.map((v) => Math.max(0, v));
+  };
+  for (let pass = 0; pass < 6; pass++) {
+    const inner = innermost();
+    // A little more than asked, so what stands at the line is not on it.
+    const shift = [Math.max(0, reach[0] + 0.3 - inner[0]!), Math.max(0, reach[1] + 0.3 - inner[1]!)];
+    if (!(shift[0]! > 0.05 || shift[1]! > 0.05)) return;
+    const move = (x: number): number => {
+      const k = x < 0 ? 0 : 1;
+      const by = shift[k]!;
+      if (by <= 0) return x;
+      const ramp = smoothstep(inner[k]! - 3, inner[k]!, Math.abs(x) - halfWidth);
+      return x + Math.sign(x) * by * ramp;
+    };
+    for (const b of builders) {
+      const p = b.position;
+      for (let i = 0; i < p.length; i += 3) p[i] = move(p[i]!);
+    }
+    if (model.halos) model.halos = model.halos.map((h) => ({ ...h, x: move(h.x) }));
+  }
+}
+
+/** Where a span model's lowest surface above `SOLID_BAND` is, along its length, within `lateral` metres of the centre line. */
+function roofProfile(model: LandmarkModel, s0: number, span: number, lateral: number): Roof {
+  const step = 2;
+  const heights = new Float32Array(Math.ceil(span / step) + 1).fill(Infinity);
+  const note = (x: number, y: number, z: number): void => {
+    if (Math.abs(x) > lateral || y <= SOLID_BAND[1]) return;
+    const i = Math.round((z + span / 2) / step);
+    if (i >= 0 && i < heights.length) heights[i] = Math.min(heights[i]!, y);
+  };
+  for (const b of [model.lit, model.glow, model.glass]) {
+    if (!b) continue;
+    const p = b.position;
+    for (let i = 0; i < p.length; i += 9) {
+      for (let k = 0; k < 3; k++) {
+        const a = i + k * 3;
+        const n = i + ((k + 1) % 3) * 3;
+        // The corner and the edge to the next, a metre at a time.
+        const len = Math.max(1, Math.ceil(Math.hypot(p[n]! - p[a]!, p[n + 1]! - p[a + 1]!, p[n + 2]! - p[a + 2]!)));
+        for (let q = 0; q < len; q++) {
+          const t = q / len;
+          note(p[a]! + (p[n]! - p[a]!) * t, p[a + 1]! + (p[n + 1]! - p[a + 1]!) * t, p[a + 2]! + (p[n + 2]! - p[a + 2]!) * t);
+        }
+      }
+    }
+  }
+  return { s0: s0 - span / 2, step, heights };
+}
 
 interface Chunk {
   lit: MeshBuilder;
@@ -208,6 +312,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
   const { track } = env;
   const group = new Group();
   const keepOut: KeepOut[] = [];
+  const roofs: Roof[] = [];
   const chunks = new Map<number, Chunk>();
   const animated: ((t: number) => void)[] = [];
   const halos: (Halo & { phase: number })[] = [];
@@ -247,6 +352,22 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
     const rnd = seededRandom(31 + index);
 
     if (spec.span) {
+      // Its legs and walls stand beyond the barrier and the camera's margin, wherever the barrier is along its span.
+      const reach: [number, number] = env.wall ? [0, 0] : [WALL_DISTANCE, WALL_DISTANCE];
+      const dip: [number, number] = [0, 0];
+      let wide = c.width / 2;
+      for (let d = -span / 2; d <= span / 2; d += 2) {
+        if (env.wall) {
+          reach[0] = Math.max(reach[0], env.wall(at + d, -1));
+          reach[1] = Math.max(reach[1], env.wall(at + d, 1));
+        }
+        wide = Math.max(wide, track.at(at + d).width / 2);
+        const roll = Math.sin(env.bank.rollAt(track.wrap(at + d)));
+        dip[0] = Math.max(dip[0], -roll);
+        dip[1] = Math.max(dip[1], roll);
+      }
+      standClear(model, wide, [reach[0] + SOLID_MARGIN, reach[1] + SOLID_MARGIN], dip);
+      if (lm.offset === 0) roofs.push(roofProfile(model, at, span, wide + Math.max(reach[0], reach[1]) + SOLID_MARGIN));
       const map = roadFrameMap(track, env.bank, at, lm.offset);
       bakeBent(chunk.lit, model.lit, map);
       if (model.glow) bakeBent(chunk.glow, model.glow, map);
@@ -420,6 +541,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
   return {
     group,
     keepOut,
+    roofs,
     count,
     update(time) {
       for (const f of animated) f(time);
