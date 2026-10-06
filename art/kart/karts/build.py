@@ -376,11 +376,21 @@ def sym(m):
     return out
 
 
-def aim(m, point, normal, spin=0.0):
-    """Turns a part built along +z so +z follows `normal`, and puts it at `point`."""
+def aim(m, point, normal, spin=0.0, level=False):
+    """Turns a part built along +z so +z follows `normal`, and puts it at `point`.
+    `level` also rolls it about the normal so its x axis stays as horizontal as the surface allows."""
     n = Vector(normal).normalized()
-    r = Vector((0, 0, 1)).rotation_difference(n).to_matrix().to_4x4()
-    return m.xf(RZ(spin)).xf(r).xf(T(*point))
+    r = Vector((0, 0, 1)).rotation_difference(n).to_matrix()
+    if level:
+        x = r @ Vector((1, 0, 0))
+        level_x = Vector((1, 0, 0)) - n * n.x
+        if level_x.length > 1e-4:
+            level_x.normalize()
+            roll = x.angle(level_x)
+            if x.cross(level_x).dot(n) < 0:
+                roll = -roll
+            r = Matrix.Rotation(roll, 3, n) @ r
+    return m.xf(RZ(spin)).xf(r.to_4x4()).xf(T(*point))
 
 
 # ── The tub ─────────────────────────────────────────────────────────────────
@@ -484,12 +494,12 @@ def wheel():
             tyre.m[fi] = MI["paint"]
     out.add(tyre)
     # Tread lugs: tapered blocks standing on the tread (block's +y is radial), chevroned, two staggered rings.
-    n = 16
+    n = 20
     for side in (-1, 1):
         for i in range(n):
             a = math.tau * (i + (0.5 if side > 0 else 0.0)) / n
-            lug = block(0.095, 0.032, 0.095, 0.72, "tread")
-            lug.xf(RY(side * 0.45))                   # chevron about the radial axis
+            lug = block(0.092, 0.03, 0.082, 0.7, "tread")
+            lug.xf(RY(side * 0.5))                    # chevron about the radial axis
             lug.xf(RZ(-math.pi / 2))                  # radial y -> x (the lug now points along +x)
             lug.xf(T(R - 0.03, side * 0.088, 0))      # onto the tread, offset along the axis (y)
             out.add(lug.xf(RY(-a)))                   # round the wheel
@@ -618,6 +628,29 @@ def build_body():
                 f.reverse()
         return out
 
+    def flank(sx, y, z0, z1, mat, nz=22, width=0.026, lift=0.004):
+        """A pinstripe down the side of the hull, projected in from the side."""
+        rows = []
+        for i in range(nz + 1):
+            z = z0 + (z1 - z0) * i / nz
+            row = []
+            for yy in (y - width / 2, y + width / 2):
+                hit = tree.ray_cast(Vector((sx * 3.0, yy, z)), Vector((-sx, 0, 0)), 6.0)
+                if hit[0] is None:
+                    return M()
+                row.append(tuple(hit[0] + hit[1] * lift))
+            rows.append(row)
+        bm = bmesh.new()
+        vr = [[bm.verts.new(p) for p in row] for row in rows]
+        for i in range(nz):
+            bm.faces.new((vr[i][0], vr[i + 1][0], vr[i + 1][1], vr[i][1]))
+        out = finish(bm, mat, closed=False)
+        for f in out.f:
+            a, b, c = (Vector(out.v[i]) for i in f[:3])
+            if (b - a).cross(c - a).x * sx < 0:
+                f.reverse()
+        return out
+
     def roundel(point, normal, radius, mat, lift, seg=16):
         """A disc laid on the hull around `point`, each vertex projected along the normal onto the surface."""
         n = Vector(normal).normalized()
@@ -654,11 +687,13 @@ def build_body():
         body.add(strip(sx * 0.15, sx * 0.17, -1.2, -0.81, "stripe", nx=2, nz=10))
         body.add(strip(sx * 0.15, sx * 0.17, 0.6, 1.4, "stripe", nx=2, nz=18))
         # A roundel on each flank, by the cockpit.
-        p, n = hull_hit(sx * 3.0, 0.61, -0.12, (-sx, 0, 0))
+        p, n = hull_hit(sx * 3.0, 0.665, -0.14, (-sx, 0, 0))
         if p is not None:
-            body.add(roundel(p, n, 0.115, "stripe", 0.004))
-            body.add(roundel(p, n, 0.088, "paint", 0.007))
-            body.add(roundel(p, n, 0.048, "stripe", 0.010))
+            body.add(roundel(p, n, 0.1, "stripe", 0.004))
+            body.add(roundel(p, n, 0.076, "paint", 0.007))
+            body.add(roundel(p, n, 0.042, "stripe", 0.010))
+        body.add(flank(sx, 0.585, -0.5, -0.27, "stripe", nz=6))
+        body.add(flank(sx, 0.585, 0.04, 1.0, "stripe", nz=16))
 
     # The cockpit's piping, laid round the rim of the well.
     ring = []
@@ -742,7 +777,7 @@ def build_body():
     for sx in (-1, 1):
         p, n = hull_hit(sx * 0.4, 0.74, -3.0, (0, 0, 1))
         if p is not None:
-            body.add(aim(rbox(0.22, 0.06, 0.05, 0.02, "tail", seg=1), p + n * 0.012, n))
+            body.add(aim(rbox(0.24, 0.07, 0.05, 0.02, "tail", seg=1), p + n * 0.012, n, level=True))
 
     # The nose: lamps in chrome bezels.
     for sx in (-1, 1):
