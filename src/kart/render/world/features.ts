@@ -15,6 +15,12 @@ import { inStretch, type Surface, type Stretch, type TrackGeometry, type TrackTh
 /** A barrier's inner face stands this far beyond the road's edge unless a verge moves it: the sim's wall. */
 export const WALL_DISTANCE = 6;
 
+/**
+ * Nothing solid stands closer than this beyond the barrier's face: the chase camera swings out past the barrier in a
+ * bend, and what stands there is a thing a kart's picture can pass through.
+ */
+export const SOLID_MARGIN = 1.5;
+
 /** How far below the road the floor is where an edge is open, by world, metres. */
 export const DROP_DEPTH: Record<TrackTheme, number> = {
   meadow: 14,
@@ -75,6 +81,13 @@ export interface Features {
   /** Where the barrier's inner face stands beyond the road's edge, each side, metres. */
   readonly wallLeft: Float32Array;
   readonly wallRight: Float32Array;
+  /**
+   * 1 where the barrier line is not a boundary of the drivable area, so none is drawn: the sim places a kart by the nearest
+   * stretch of road, and where a wide verge's barrier line would run through the ground of another stretch (across a
+   * hairpin's inside, or doubled back on itself round its apex) a kart passes it.
+   */
+  readonly hiddenLeft: Uint8Array;
+  readonly hiddenRight: Uint8Array;
   /** The ground between the road and a far barrier, where a verge says so (null: the theme's own verge). */
   readonly vergeLeft: (Surface | null)[];
   readonly vergeRight: (Surface | null)[];
@@ -149,6 +162,19 @@ export function analyseFeatures(track: TrackGeometry): Features {
     }
   }
 
+  const hiddenLeft = new Uint8Array(n);
+  const hiddenRight = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = track.samples[i]!;
+    for (const side of [-1, 1] as const) {
+      const wall = (side < 0 ? wallLeft : wallRight)[i]!;
+      if (wall <= WALL_DISTANCE) continue;
+      const o = side * (a.width / 2 + wall + 0.55);
+      const near = track.project(a.x - a.tz * o, a.z + a.tx * o);
+      if (Math.abs(track.delta(a.s, near.s)) > 25) (side < 0 ? hiddenLeft : hiddenRight)[i] = 1;
+    }
+  }
+
   const surfaces: SurfacePatch[] = (def.surfaces ?? []).map((s) => ({
     kind: s.kind,
     from: s.from * track.length,
@@ -157,7 +183,7 @@ export function analyseFeatures(track: TrackGeometry): Features {
     width: s.width ?? 0,
   }));
 
-  return { count: n, dropLeft: left, dropRight: right, gap, wallLeft, wallRight, vergeLeft, vergeRight, ramps, surfaces, anyDrop };
+  return { count: n, dropLeft: left, dropRight: right, gap, wallLeft, wallRight, hiddenLeft, hiddenRight, vergeLeft, vergeRight, ramps, surfaces, anyDrop };
 }
 
 /**

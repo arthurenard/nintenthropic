@@ -37,7 +37,7 @@ def volcano():
     m = Model("volcano.body", seed=41)
     g = Model("volcano.lava", seed=42)
     rim_notch = lambda th: 13 * max(0.0, math.cos(th + 1.25)) ** 3 + 5 * max(0.0, math.cos(th - 2.0)) ** 4
-    radius_at = lambda z: 134.0 if z <= 0 else 22.0 + 112.0 * max(0.0, 1.0 - z / H) ** 2.4
+    radius_at = lambda z: 116.0 if z <= 0 else 22.0 + 94.0 * max(0.0, 1.0 - z / H) ** 2.4
     zs = [-8.0, 0.0] + [float(z) for z in range(6, 130, 6)] + [130.0, 136.0, 141.0]
     sides = 56
     rings = []
@@ -98,7 +98,7 @@ def volcano():
     # Rubble round the foot, black boulders of every size, and a few smoking vents.
     for k in range(22):
         th = k * 0.31 + 0.2 * ((k * 3) % 5)
-        rr = 128 + 28 * ((k * 5) % 7) / 6
+        rr = 112 + 24 * ((k * 5) % 7) / 6
         s = 5 + 9 * ((k * 11) % 9) / 8
         m.blob((math.cos(th) * rr, math.sin(th) * rr, 0), (s, s * 0.9, s * 0.7), 2, basalt(k), amp=0.25, seed=k, flat_base=-0.4)
     m.build(parent=root, ao_args=dict(reach=14.0, strength=0.7, rays=14, ground_reach=10.0), sharp=40)

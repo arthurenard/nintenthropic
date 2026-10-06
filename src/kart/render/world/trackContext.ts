@@ -44,6 +44,8 @@ export interface TrackBuild {
   glows: Glow[];
   /** Where sample i's barrier stands beyond the road's edge on `side` (-1 left, 1 right), metres. */
   wall(i: number, side: -1 | 1): number;
+  /** True where the barrier line at sample i on `side` runs through another stretch's ground: no barrier is drawn there. */
+  hidden(i: number, side: -1 | 1): boolean;
   /** How open that edge is at sample i, 0..1. */
   open(i: number, side: -1 | 1): number;
   /** The road is missing at sample i (a gap to jump). */

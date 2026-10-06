@@ -443,14 +443,28 @@ front of them (or a laptop), and the TV is the host's screen.
   flies the drone from there); then it is set down on the centre line 15 m
   behind (48 m before a gap), at a standstill, untouchable for 1.5 s.
 - **Verges** (`verges`): the barrier farther out on one side, over sand or
-  grass: the cut across a hairpin worth taking with a Nitro.
+  grass: the cut across a hairpin worth taking with a Nitro. The road on
+  the two legs of such a hairpin must meet the cut at about the same height
+  (the sim places a kart by the nearest road, so its height changes where
+  the nearer leg does), and the picture draws no barrier where the line
+  would run through another stretch's ground.
 - **Surfaces** (`surfaces`): ice (little grip: the kart slides on), mud,
   sand, snow (slow off-road with spray), boost strips.
 - **Hazards** (`hazards`): things that move on their own (track/hazards.ts:
   a pure function of race time) and spin out a kart they touch.
 - **Landmarks** (`landmarks`): set pieces the picture builds, by name from
   the theme's list below; `span` for a thing over the road (a tunnel, an
-  arch).
+  arch). What the picture builds never stands where a kart can be: nothing
+  solid within the barrier and 1.5 m beyond it (a camera's margin), nothing
+  over the road lower than 5 m, the ground out to the barrier at the road's
+  height, and the first hill or wall beyond it. A span landmark's legs are
+  moved out to stand clear; a landmark beside the road needs an `offset`
+  (and `scale`) that clears it, and its footprint may reach the road's other
+  legs where the track doubles back. `src/kart/render/world/corridor.test.ts`
+  measures all of it on every track (`CORRIDOR_REPORT=1` prints how far each
+  offender must move). The chase camera is held to the same margin
+  (`cameraSpace.ts`): it slides back toward the road in a bend, rises over
+  rising ground and stays under a roof.
 - **The duck** (`duck`): every Handy game hides a rubber duck. Every track
   has one somewhere off the racing line.
 - **Bank** (`bank`): the road leans into its bends (for the picture).

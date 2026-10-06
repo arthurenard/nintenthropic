@@ -18,7 +18,7 @@ def mesa():
     root = empty("landmark.mesa")
     m = Model("mesa.body", seed=11)
     # The profile, base radius 30: a talus slope, three sheer cliffs split by ledges, a flat crown.
-    prof = [(47, -2.0), (42, 2.5), (37, 7.0), (33.5, 11.0), (31.0, 12.5), (30.6, 24.0), (32.0, 24.8), (32.2, 25.6), (30.2, 26.4), (29.8, 38.0), (31.0, 38.8), (31.2, 39.6), (29.0, 40.4), (28.6, 52.0), (29.6, 52.7), (29.5, 53.6), (26.0, 54.0), (16.0, 54.4), (7.0, 54.6), (0.0, 54.7)]
+    prof = [(38, -2.0), (35, 2.0), (31, 6.5), (28.5, 10.5), (26.5, 12.5), (26.1, 24.0), (27.4, 24.8), (27.6, 25.6), (25.7, 26.4), (25.3, 38.0), (26.4, 38.8), (26.6, 39.6), (24.6, 40.4), (24.2, 52.0), (25.2, 52.7), (25.1, 53.6), (22.0, 54.0), (14.0, 54.4), (6.0, 54.6), (0.0, 54.7)]
     dense = []
     for (r0, z0), (r1, z1) in zip(prof[:-1], prof[1:]):
         steps = max(1, int(math.ceil(abs(z1 - z0) / 2.0)))
@@ -48,10 +48,10 @@ def mesa():
     m.lathe(prof, sides, (0, 0, 0), varied(mesa_col, 0.04, 0.4, 3), mod=mod, squash=squash, cap_end=True)
     # A split-off tower beside it and rubble at the foot of the cliffs.
     spire = [(7.0, -1.0), (6.2, 6), (5.0, 12), (5.4, 13), (4.6, 24), (4.9, 25.5), (4.0, 38), (4.3, 39), (0.0, 42.0)]
-    m.lathe(spire, 14, (-44, -14, 0), varied(strata(0.0, 6.0, 42.0, seed=4, wobble=0.06, top_dust=0.4), 0.04, 0.4, 4), mod=lambda j, k: 1 + 0.12 * n3(j * 0.9, k * 0.6, 0, 5), cap_start=True)
+    m.lathe(spire, 14, (-36, -8, 0), varied(strata(0.0, 6.0, 42.0, seed=4, wobble=0.06, top_dust=0.4), 0.04, 0.4, 4), mod=lambda j, k: 1 + 0.12 * n3(j * 0.9, k * 0.6, 0, 5), cap_start=True)
     for k in range(16):
         a = k * 2.399 + 0.4
-        r = 36 + 20 * ((k * 7) % 5) / 4
+        r = 30 + 12 * ((k * 7) % 5) / 4
         s = 2.5 + 3.5 * ((k * 11) % 7) / 6
         m.blob((math.cos(a) * r, math.sin(a) * r * 0.8, 0), (s, s * 0.85, s * 0.7), 2, varied(strata(0.0, 3.0, s * 1.6, seed=k, top_dust=0.5), 0.08, 1.0, k), amp=0.22, seed=k, flat_base=-0.4)
     # The crown: boulders and a stubby pinnacle, a few sage-green scrub.

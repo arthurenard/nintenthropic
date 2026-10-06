@@ -11,7 +11,7 @@ stand-in (src/kart/render/art.ts loads what exists).
 
 | File (`public/assets/kart/`) | Built by | What | Budget |
 | --- | --- | --- | --- |
-| `karts.glb` | `art/kart/karts/` | `kart.body` (paint material "paint"), `kart.wheel` (one, origin at its hub), `kart.trim` | ≤ 12k tris, ≤ 0.6 MB |
+| `karts.glb` | `art/kart/karts/` | `kart.body` (the whole fixed kart; material "paint" takes the racer's colour), `kart.wheel` (one, rear size, origin at its hub, axis x, outer face +x; the game scales it 0.84 for the front), `kart.steering` (ring in xy, origin at its hub). Material names the game reads: paint, trim, stripe, chrome, rim, steel, rubber, tread, plastic, seat, lamp, tail, glass (src/kart/render/kartArt.ts). AO is in the vertex colours | ≤ 12k tris, ≤ 0.6 MB |
 | `drivers.glb` | `art/kart/drivers/` | `driver.<species>.<part>`: head, torso, arm.L, arm.R, helmet (paint), pivots at the joints | ≤ 5k tris each, ≤ 1.5 MB |
 | `world-<theme>.glb` | `art/kart/world/` | `landmark.<kind>` (the doc's theme table), `scenery.<kind>.<n>` (trees, rocks...) | ≤ 3 MB each |
 

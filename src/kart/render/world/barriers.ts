@@ -27,7 +27,7 @@ function walk(
   let count = 0;
   let prev: V3 | null = null;
   for (let i = 0; i <= b.n; i++) {
-    if (b.open(i, side) > 0.5 || b.gap(i)) {
+    if (b.open(i, side) > 0.5 || b.gap(i) || b.hidden(i, side)) {
       prev = null;
       acc = 0;
       continue;
@@ -174,7 +174,7 @@ function bollards(b: TrackBuild): void {
   const black = rgb("#1a1d27");
   for (const side of SIDES) {
     for (let i = 0; i < b.n; i++) {
-      if (b.open(i, side) > 0.5 || b.gap(i)) continue;
+      if (b.open(i, side) > 0.5 || b.gap(i) || b.hidden(i, side)) continue;
       const a = b.S(i);
       const c = b.S(i + 1);
       const o0 = side * (a.width / 2 + b.wall(i, side));
@@ -322,7 +322,7 @@ function hologram(b: TrackBuild): void {
     });
     // The rail: a band of light that is brightest at its middle.
     for (let i = 0; i < b.n; i++) {
-      if (b.open(i, side) > 0.5 || b.gap(i)) continue;
+      if (b.open(i, side) > 0.5 || b.gap(i) || b.hidden(i, side)) continue;
       const a = b.S(i);
       const c = b.S(i + 1);
       if (b.open(i + 1, side) > 0.5) continue;

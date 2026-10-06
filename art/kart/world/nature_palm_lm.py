@@ -184,44 +184,47 @@ def giant_ring():
     root = empty("landmark.giant-ring")
     m = Model("ring.body", seed=55)
     g = Model("ring.glow", seed=56)
-    zc, R, r = 13.5, 19.5, 2.4
-    # The ring: an upright inflatable swim ring, striped in sectors, the lower arc buried in the ground.
-    a0 = math.asin((-3.2 - zc) / R)
-    a1 = math.pi - a0
-    n = 56
-    pts = [V((math.cos(a0 + (a1 - a0) * i / n) * R, 0.0, zc + math.sin(a0 + (a1 - a0) * i / n) * R)) for i in range(n + 1)]
+    zc, A, B, r = 16.0, 15.9, 18.0, 2.4
+    # The ring: an upright inflatable swim ring, an arch with upright legs (nothing leans out over the verge) and a rounded crown,
+    # striped in sectors, its feet buried.
+    pts = [V((A, 0.0, -3.2 + (zc + 3.2) * i / 6)) for i in range(6)]
+    n_arc = 48
+    pts += [V((A * math.cos(math.pi * i / n_arc), 0.0, zc + B * math.sin(math.pi * i / n_arc))) for i in range(n_arc + 1)]
+    pts += [V((-A, 0.0, zc - (zc + 3.2) * (i + 1) / 6)) for i in range(6)]
+    n = len(pts) - 1
     sectors = 14
 
     def stripe(p, nn):
-        ang = math.atan2(p.z - zc, p.x) % TAU
+        ang = math.atan2((p.z - zc) * (A / B), p.x) % TAU
         k = int(ang / TAU * sectors)
         c = hexc("#ee3b3b") if k % 2 == 0 else hexc("#fbf8ef")
         return mul(c, 0.8 + 0.3 * smoothstep(-0.4, 0.9, nn.z))
     m.tube(pts, [r] * (n + 1), 14, varied(stripe, 0.02, 0.2), cap_start=True, cap_end=True)
-    # The ropes: four lashings tying the sectors, each a ring of dark twine.
-    for k in range(0, sectors, 2):
-        ang = (k + 0.5) / sectors * TAU
-        if math.sin(ang) * R + zc < -2.5:
+    # The ropes: lashings tying the sectors, each a ring of dark twine.
+    for i in range(4, n - 3, 6):
+        c = pts[i]
+        if c.z < -1.0:
             continue
-        c = V((math.cos(ang) * R, 0.0, zc + math.sin(ang) * R))
-        tang = V((-math.sin(ang), 0, math.cos(ang)))
-        rad = V((math.cos(ang), 0, math.sin(ang)))
-        pts2 = [c + rad * (r * 1.02 * math.cos(t)) + V((0, 1, 0)) * (r * 1.02 * math.sin(t)) for t in [i * TAU / 16 for i in range(16)]]
+        tang = (pts[i + 1] - pts[i - 1]).normalized()
+        side = V((0, 1, 0))
+        nrm = tang.cross(side).normalized()
+        pts2 = [c + nrm * (r * 1.02 * math.cos(q)) + side * (r * 1.02 * math.sin(q)) for q in [j * TAU / 16 for j in range(16)]]
         m.tube(pts2, [0.14] * 16, 5, hexc("#2c2118"), loop=True)
     # A valve on the crown, a bright cap.
-    m.lathe([(0.55, 0.0), (0.45, 0.8), (0.0, 0.9)], 10, (0, 0, zc + R + r - 0.1), hexc("#ffd23d"), cap_start=True)
+    m.lathe([(0.55, 0.0), (0.45, 0.8), (0.0, 0.9)], 10, (0, 0, zc + B + r - 0.1), hexc("#ffd23d"), cap_start=True)
     # Sandbags and stones at the feet, holding it down; a ring of bulbs along the inner edge (lit by night).
     for sx in (-1, 1):
-        xf = sx * math.sqrt(max(0.0, R * R - zc * zc))
-        for k in range(5):
-            a = k * 1.4
-            m.blob((xf + sx * (r + 1.0 + 0.8 * (k % 2)), -3.0 + 1.6 * k, 0.4), (1.2, 0.8, 0.6), 1, hexc("#c9a46a"), amp=0.1, seed=k, flat_base=-0.3, rot=(0, 0, 0.3 * k))
-        m.blob((xf, 0.0, 0.0), (6.0, 6.5, 0.9), 2, SAND, amp=0.08, flat_base=0.0)
-    for i in range(3, n - 2, 2):
-        a = a0 + (a1 - a0) * i / n
-        if zc + math.sin(a) * (R - r) < 0.5:
+        # A skirt of sand where it goes into the ground, and a sandbag tucked against the outer side.
+        m.blob((sx * A, 0.0, -0.2), (r + 0.5, r + 0.5, 0.6), 1, SAND, amp=0.06, flat_base=0.0)
+        m.blob((sx * (A + 0.3), 3.4, 0.3), (0.8, 0.6, 0.4), 1, hexc("#c9a46a"), amp=0.1, seed=3, flat_base=-0.3)
+    for i in range(7, n - 6, 2):
+        c = pts[i]
+        mid = V((0.0, 0.0, zc))
+        d = (mid - c).normalized()
+        q = c + d * (r + 0.15)
+        if q.z < 0.5:
             continue
-        g.blob((math.cos(a) * (R - r - 0.15), 0.0, zc + math.sin(a) * (R - r - 0.15)), 0.3, 0, GLOW_WARM, mat="glow")
+        g.blob(q, 0.3, 0, GLOW_WARM, mat="glow")
     m.build(parent=root, ao_args=dict(reach=4.0, strength=0.5, rays=12), sharp=60)
     g.build(parent=root, ao=False, sharp=70)
     return root
@@ -288,7 +291,7 @@ def wristwatch():
     m.box(bp + V((0.0, 0, 0)), (1.2, 3.6, 1.6), (0, 0, 0), strap, bevel=0.1)
     # Feet: the straps are buried in sand, a mound each side.
     for sx in (-1, 1):
-        m.blob((sx * 15.2, 0.0, 0.0), (4.6, 4.6, 0.9), 2, SAND, amp=0.08, flat_base=0.0)
+        m.blob((sx * 16.2, 0.0, 0.0), (3.4, 4.0, 0.7), 2, SAND, amp=0.08, flat_base=0.0)
     # The glow: the hour batons and the hands lit by night, and a ring of light round the bezel.
     for k in range(12):
         a = k * TAU / 12
