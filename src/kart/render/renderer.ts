@@ -42,6 +42,7 @@ import { RenderEggs } from "./eggs";
 import { Hud } from "./hud";
 import { ItemFx } from "./itemfx";
 import { KartActor, type ActorContext, type KartFactory } from "./kart";
+import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
 import { PostChain, type DrawViews } from "./post";
@@ -277,7 +278,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       disposeWorld();
       racers = racerSetups;
       const style = options.theme ? styleFor(options.theme) : undefined;
-      const built = await createWorld(track, settings, (f) => onProgress?.(f * 0.95), style);
+      // The modelled art first (what of it exists: the code-built stand-ins cover the rest).
+      await loadKartArt(options.theme ?? track.theme, (f) => onProgress?.(f * 0.3));
+      const built = await createWorld(track, settings, (f) => onProgress?.(0.3 + f * 0.65), style);
       if (disposed) {
         built.dispose();
         return;

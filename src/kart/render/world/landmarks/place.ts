@@ -12,6 +12,7 @@
  * Hazards: one animated actor each, posed every frame from `hazardAt` and
  * the race clock, the same pure function the sim spins karts out with.
  */
+import { landmarkFromArt } from "./fromArt";
 import {
   BufferGeometry,
   DoubleSide,
@@ -242,7 +243,8 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       span,
       halfWidth: c.width / 2,
     };
-    const model = spec.build(ctx);
+    // The Blender-made model when there is one (art/kart/), else the code-built one.
+    const model = landmarkFromArt(lm.kind) ?? spec.build(ctx);
     const chunk = chunkAt(at);
     const rnd = seededRandom(31 + index);
 
