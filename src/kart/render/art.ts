@@ -31,15 +31,14 @@ const FILES = {
 
 const assets = new Assets();
 const nodes = new Map<string, Object3D>();
-const tried = new Set<string>();
+const loading = new Map<string, Promise<void>>();
+const settled = new Set<string>();
 
-/** Loads what exists of the karts, the drivers and `theme`'s world; never fails (a missing file leaves the stand-ins). */
-export async function loadKartArt(theme: TrackTheme, onProgress?: (fraction: number) => void): Promise<void> {
-  const files = [FILES.karts, FILES.drivers, FILES.world(theme)].filter((f) => !tried.has(f));
-  let done = 0;
-  await Promise.all(
-    files.map(async (file) => {
-      tried.add(file);
+/** One file, loaded once (whoever asks first starts it; the rest wait on the same promise); a file that is missing or fails to load leaves the stand-ins. */
+function load(file: string): Promise<void> {
+  let pending = loading.get(file);
+  if (!pending) {
+    pending = (async () => {
       try {
         const { scene } = await assets.gltf(file);
         scene.traverse((o) => {
@@ -49,11 +48,29 @@ export async function loadKartArt(theme: TrackTheme, onProgress?: (fraction: num
       } catch {
         // Not built yet, or not reachable: the code-built stand-ins carry on.
       } finally {
-        onProgress?.(++done / Math.max(1, files.length));
+        settled.add(file);
       }
-    }),
-  );
-  if (!files.length) onProgress?.(1);
+    })();
+    loading.set(file, pending);
+  }
+  return pending;
+}
+
+/** Loads what exists of the karts, the drivers and `theme`'s world; never fails (a missing file leaves the stand-ins). */
+export async function loadKartArt(theme: TrackTheme, onProgress?: (fraction: number) => void): Promise<void> {
+  const files = [FILES.karts, FILES.drivers, FILES.world(theme)];
+  let done = 0;
+  await Promise.all(files.map((file) => load(file).then(() => onProgress?.(++done / files.length))));
+}
+
+/** Just the drivers (the character select and the lobby draw them before any race has loaded the rest). */
+export function loadDriverArt(): Promise<void> {
+  return load(FILES.drivers);
+}
+
+/** Has the drivers' file been tried (loaded, or found missing)? Pictures of the drivers made before it was are the stand-ins'. */
+export function driverArtSettled(): boolean {
+  return settled.has(FILES.drivers);
 }
 
 /** A fresh copy of the named model, or null when there is none (use the stand-in). Geometry and materials are shared with the original. */

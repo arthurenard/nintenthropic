@@ -37,6 +37,7 @@ import { buildOtter } from "./otter";
 import { buildPenguin } from "./penguin";
 import { buildRabbit } from "./rabbit";
 import { buildRobot } from "./robot";
+import { driverFromArt } from "./fromArt";
 
 const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
   rabbit: buildRabbit,
@@ -103,6 +104,7 @@ export class Driver {
     this.root.position.copy(this.base);
     this.root.scale.setScalar(DRIVER_SCALE);
     this.geometries.push(built.torso, built.head, built.arm);
+    if (built.armR) this.geometries.push(built.armR);
     this.root.add(this.solid(built.torso, material));
     const headAt = built.headAt ?? HEAD_AT;
     this.head.position.set(headAt[0], headAt[1], headAt[2]);
@@ -111,8 +113,10 @@ export class Driver {
     this.root.add(this.head);
     for (const side of [1, -1] as const) {
       const group = new Group();
-      group.position.set(side * built.shoulder, SHOULDER_Y, SHOULDER_Z);
-      group.add(this.solid(built.arm, material));
+      const at = built.shoulderAt;
+      if (at) group.position.set(side * at[0], at[1], at[2]);
+      else group.position.set(side * built.shoulder, SHOULDER_Y, SHOULDER_Z);
+      group.add(this.solid(side < 0 && built.armR ? built.armR : built.arm, material));
       this.root.add(group);
       this.arms.push({ group, side, shoulder: group.position.clone() });
     }
@@ -234,6 +238,9 @@ export function speciesOf(character: string | undefined, fallback: Species = "fo
   return characterById(character)?.species ?? fallback;
 }
 
+/** The driver of this species in the kart's colour: from the modelled art (drivers.glb) when it is loaded, else built in code. */
 export function createDriver(species: Species, colour: string, base: V3 = [0, 0, 0], material?: Material): Driver {
-  return new Driver(BUILDERS[species](look(colour)), base, material);
+  const l = look(colour);
+  const code = BUILDERS[species](l);
+  return new Driver(driverFromArt(species, l, code) ?? code, base, material);
 }
