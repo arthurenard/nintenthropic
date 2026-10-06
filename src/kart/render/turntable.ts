@@ -5,6 +5,7 @@
  * `steer`, `boost` and `lean` to see the poses. Not part of the game.
  *
  *   ?character=bun      the driver (characters.ts id); ?golden=1 the golden kart
+ *   ?art=0              the code-built kart, not the Blender one (art/kart/karts)
  *   ?all=1              all nine drivers at once, one viewport each (3 x 3)
  *   ?emote=cheer|wave   the driver's gesture; ?finished=1 the finish bounce; ?dizzy=1 a spin-out
  *   ?t=1.2              freeze the clock there (for a steady picture)
@@ -17,6 +18,8 @@ import { Color, DirectionalLight, Fog, HemisphereLight, Mesh, MeshLambertMateria
 import { CHARACTERS } from "../characters";
 import { BOT_COLOURS, PLAYER_COLOURS, type Emote } from "../contract";
 import type { ThingView } from "../contract";
+import type { TrackTheme } from "../track/geometry";
+import { loadKartArt } from "./art";
 import { Effects } from "./effects";
 import type { KartModel } from "./kart";
 import { createProceduralKart } from "./kartModel";
@@ -24,7 +27,17 @@ import { Things } from "./things";
 import { ItemBoxes, type BoxSlot } from "./world/boxes";
 import { styleFor } from "./world/themes";
 
+/** Loads the modelled art (unless ?art=0 asks for the code-built kart), then shows the turntable. */
 export function runTurntable(canvas: HTMLCanvasElement, params: URLSearchParams): void {
+  if (params.get("art") === "0") {
+    build(canvas, params);
+    return;
+  }
+  const theme = (params.get("theme") as TrackTheme | null) ?? "meadow";
+  loadKartArt(theme).then(() => build(canvas, params), () => build(canvas, params));
+}
+
+function build(canvas: HTMLCanvasElement, params: URLSearchParams): void {
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
