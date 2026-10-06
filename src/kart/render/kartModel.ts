@@ -18,22 +18,15 @@
 import { AdditiveBlending, BufferGeometry, Group, LOD, Matrix4, Mesh, MeshBasicMaterial, TorusGeometry, Vector3 } from "three";
 import { CHARACTERS } from "../characters";
 import type { RacerSetup } from "../contract";
+import { hasArtKart, createArtKart, type ArtKit } from "./kartArt";
 import { createDriver, speciesOf } from "./drivers";
 import { MeshBuilder, mergeBaked, mixRgb, rgb, shapes, withDetail, xf, type Rgb } from "./kartBuilder";
 import { SURF, kartMaterial, withStudioFallback, type Surf } from "./kartMaterial";
+import { DRIVER_AT, FAR_DISTANCE, PLATE, WHEEL_FRONT, WHEEL_REAR, KART_EXHAUST } from "./kartSpec";
 import { TAU } from "./math";
 import type { KartModel } from "./kart";
 
-const WHEEL_FRONT = { x: 0.86, y: 0.36, z: 0.94, r: 0.36, w: 0.3 };
-const WHEEL_REAR = { x: 0.95, y: 0.43, z: -0.84, r: 0.43, w: 0.42 };
-/** Where the rear wheels and exhausts are, for effects: metres to the right of, and ahead of, the kart's centre. */
-export const KART_REAR_WHEEL = { right: WHEEL_REAR.x, forward: WHEEL_REAR.z };
-export const KART_EXHAUST = { right: 0.3, forward: -1.5, y: 0.64 };
-/** How far the kart's widest part (a rear tyre's outer edge) is from its middle, metres. */
-export const KART_HALF_WIDTH = WHEEL_REAR.x + WHEEL_REAR.w / 2;
-
-/** Beyond this many metres from the camera the kart is drawn as one welded mesh. */
-const FAR_DISTANCE = 34;
+export { KART_EXHAUST, KART_HALF_WIDTH, KART_REAR_WHEEL } from "./kartSpec";
 
 const WHITE = rgb("#f7f8fb");
 const GOLD_BODY = [1.0, 0.52, 0.06] as const;
@@ -500,7 +493,30 @@ const flameMaterial = new MeshBasicMaterial({ vertexColors: true, blending: Addi
 /** Who sits in a kart whose racer names no driver: the base cast in turn, by the kart's id. */
 const STAND_INS = CHARACTERS.filter((c) => !c.unlock);
 
+/** What the Blender kart (kartArt.ts) borrows from this one: the flames, the numbered plate and the driver. */
+function artKit(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): ArtKit {
+  const species = speciesOf(racer.character, STAND_INS[racer.id % STAND_INS.length]!.species);
+  return {
+    flame: flameGeometry,
+    flameMaterial,
+    plate(id, accent) {
+      const b = new MeshBuilder();
+      b.as(SURF.plastic, () => digit(b, String((id % 9) + 1), 0, PLATE.y, PLATE.z - 0.008, 0.18, mixRgb(accent, [0, 0, 0], 0.55)));
+      return b.build();
+    },
+    driver: () => createDriver(species, racer.colour, [...DRIVER_AT], kartMaterial()),
+  };
+}
+
+/**
+ * The kart for a racer: the Blender model when its art is loaded (kartArt.ts),
+ * else the one built here in code.
+ */
 export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartModel {
+  if (hasArtKart()) {
+    const art = createArtKart(racer, artKit(racer));
+    if (art) return art;
+  }
   const golden = racer.golden === true;
   const accent = rgb(racer.colour);
   const material = kartMaterial();
@@ -526,7 +542,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   bodyGroup.add(chassis);
 
   // The driver pivots at the hip.
-  const driver = createDriver(species, racer.colour, [0, 0.9, -0.28], material);
+  const driver = createDriver(species, racer.colour, [...DRIVER_AT], material);
   bodyGroup.add(driver.root);
 
   const wheelPivot = new Group();
@@ -585,7 +601,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       parts.push(r);
     }
     driverFar = withDetail(0.45, () => {
-      const d = createDriver(species, racer.colour, [0, 0.9, -0.28], material);
+      const d = createDriver(species, racer.colour, [...DRIVER_AT], material);
       d.update({ time: 0, steer: 0, lean: 0, twirl: 0 });
       const g = d.bake();
       d.dispose();
