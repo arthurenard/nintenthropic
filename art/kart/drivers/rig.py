@@ -97,6 +97,39 @@ def clean(tris):
     return tris[np.sort(first)]
 
 
+def labels_of(points, regions):
+    """Which region (1-based, the first listed wins; 0 for none) each point is in."""
+    lab = np.zeros(len(points), np.int64)
+    for k in range(len(regions), 0, -1):
+        lab[regions[k - 1][1](points) < 0] = k
+    return lab
+
+
+def refine_boundary(f, verts, tris, regions, passes):
+    """Split the edges that cross from one region into another, so a colour patch ends along a line of small
+    triangles (a clean edge) without the whole mesh being dense."""
+    for _ in range(passes):
+        lab = labels_of(verts, regions)
+        bm = bmesh.new()
+        bv = [bm.verts.new(v) for v in verts]
+        for t in tris:
+            bm.faces.new([bv[t[0]], bv[t[1]], bv[t[2]]])
+        bm.verts.index_update()
+        bm.verts.ensure_lookup_table()
+        cut = [e for e in bm.edges if lab[e.verts[0].index] != lab[e.verts[1].index]]
+        if not cut:
+            bm.free()
+            break
+        bmesh.ops.subdivide_edges(bm, edges=cut, cuts=1, use_grid_fill=False)
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        bm.verts.index_update()
+        verts = np.array([tuple(v.co) for v in bm.verts], float)
+        tris = np.array([[v.index for v in fc.verts] for fc in bm.faces], np.int64)
+        bm.free()
+        verts = S.snap(f, verts, 2)
+    return verts, tris
+
+
 def compact(verts, tris):
     used = np.unique(tris)
     remap = np.full(len(verts), -1, np.int64)
@@ -113,12 +146,13 @@ class Part:
 
     # ------------------------------------------------------------ solids
 
-    def solid(self, f, lo, hi, h=0.01, tris=1200, albedo=(0.8, 0.8, 0.8), mat="fur", regions=(), ao=0.55, reach=0.09, symmetric=True, flat=False):
+    def solid(self, f, lo, hi, h=0.01, tris=1200, albedo=(0.8, 0.8, 0.8), mat="fur", regions=(), ao=0.55, reach=0.09, symmetric=True, refine=0):
         """Mesh a distance field into the part.
 
-        `albedo` is a colour or a function (P, N) -> colours (linear); `regions` is a list of (material, region)
-        where region(P) < 0 marks the faces (by their centres) that are that material instead of `mat`; the first
-        listed wins. `ao` is how dark the creases get.
+        `albedo` is a colour or a function (P, N) -> colours (linear). `regions` is a list of (material, region) or
+        (material, region, albedo): region(P) < 0 marks the faces (by their centres) that are that material (and colour)
+        instead of `mat`; the first listed wins. `refine` splits the triangles along a region's edge that many times
+        so the edge is clean. `ao` is how dark the creases get.
         """
         if tris >= 150:
             tris = int(tris * TRI_SCALE)
@@ -134,25 +168,28 @@ class Part:
         if len(tri) > tris:
             verts, tri = decimate(verts, tri, tris, symmetric)
         verts, tri = compact(verts, clean(tri))
+        verts = S.snap(f, verts)
+        regions = list(regions)
+        if refine and regions:
+            verts, tri = refine_boundary(f, verts, clean(tri), regions, refine)
+            verts, tri = compact(verts, clean(tri))
         if os.environ.get("DRV_DEBUG"):
             print(f"    solid {mat:10s} raw {raw:6d} target {tris:5d} got {len(tri):5d}")
-        verts = S.snap(f, verts)
         nor = S.normals(f, verts)
         occ = S.occlusion(f, verts, nor, reach)
         shade = 1.0 - ao * (1.0 - occ)
         cent = verts[tri].mean(axis=1)
-        face_mat = np.full(len(tri), mat, dtype=object)
-        for name, region in reversed(list(regions)):
-            face_mat[region(cent) < 0] = name
-        for m in dict.fromkeys(face_mat):
-            sel = tri[face_mat == m]
+        label = labels_of(cent, regions)
+        for k in np.unique(label):
+            m, tint = (mat, albedo) if k == 0 else (regions[k - 1][0], regions[k - 1][2] if len(regions[k - 1]) > 2 else albedo)
+            sel = tri[label == k]
             v, t = compact(verts, sel)
             used = np.unique(sel)
             n, sh = nor[used], shade[used]
             if m in PAINT_KINDS:
                 col = np.repeat(sh[:, None], 3, axis=1)
             else:
-                base = albedo(v, n) if callable(albedo) else np.broadcast_to(np.asarray(albedo, float), v.shape)
+                base = tint(v, n) if callable(tint) else np.broadcast_to(np.asarray(tint, float), v.shape)
                 col = base * sh[:, None]
             self.pieces.append(dict(mat=m, verts=v, nors=n, cols=col, faces=t))
 

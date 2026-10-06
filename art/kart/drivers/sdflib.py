@@ -118,11 +118,6 @@ def torus(c, R, r, rot=None):
     return f
 
 
-def halfspace(n, d):
-    """Inside where n.p < d (n is a unit normal)."""
-    n = np.asarray(n, float)
-    n = n / np.linalg.norm(n)
-    return lambda P: P @ n - d
 
 
 # --------------------------------------------------------------- operators
@@ -186,19 +181,6 @@ def scaled(a, s, about=(0.0, 0.0, 0.0)):
     return lambda P: a(about + (P - about) / s) * m
 
 
-def moved(a, by, rot=None, about=(0.0, 0.0, 0.0)):
-    """Turn the shape (degrees, about `about`) and then move it by `by`."""
-    by = np.asarray(by, float)
-    about = np.asarray(about, float)
-    R = None if rot is None else euler(*rot)
-
-    def f(P):
-        q = P - by - about
-        if R is not None:
-            q = q @ R
-        return a(q + about)
-
-    return f
 
 
 def chain(points, radii, k=0.0):
@@ -207,9 +189,6 @@ def chain(points, radii, k=0.0):
     return union(*parts, k=k)
 
 
-def bend_x(a, curve):
-    """Not used for now: reserved."""
-    return a
 
 
 # ------------------------------------------------------------------ fields

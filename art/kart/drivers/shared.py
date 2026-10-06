@@ -27,7 +27,7 @@ def furvar(P, s=0.06):
     return 1.0 - s + s * 1.7 * (S.noise(P, 9.0, 3.1) * 0.6 + S.noise(P, 23.0, 8.7) * 0.4)[:, None]
 
 
-def band(f, lo, hi, axis=1):
+def band(lo, hi, axis=1):
     """A slab region (negative where lo < p[axis] < hi) for cutting patches."""
     mid, half = (lo + hi) / 2.0, (hi - lo) / 2.0
     return lambda P: np.abs(P[:, axis] - mid) - half
@@ -36,12 +36,6 @@ def band(f, lo, hi, axis=1):
 def patch(base, region, lift=0.006, k=0.008):
     """A skin laid over `base` where `region` is negative: a raised decal with rounded edges (belt, bib, stripe)."""
     return S.intersect(S.offset(base, lift), region, k)
-
-
-def decal(part, base, region, albedo, mat="fur", lift=0.008, k=0.01, tris=100, h=0.006, lo=(-0.5, -0.4, -0.45), hi=(0.5, 0.75, 0.55), ao=0.3):
-    """A crisp-edged patch of another colour laid over `base` (cheeks, a muzzle, a belly): its own little mesh, so its
-    edge is the shape's, not a smear of vertex colour across big triangles."""
-    part.solid(patch(base, region, lift, k), lo, hi, h=h, tris=tris, albedo=albedo, mat=mat, ao=ao, reach=0.05)
 
 
 # ---------------------------------------------------------------- the suit
@@ -82,7 +76,7 @@ def torso(sp, w=0.25, d=0.19, shoulder=0.28, thigh=0.085, spread=0.15, shoe="#2d
     part.solid(upper, (-0.5, -0.02, -0.4), (0.5, 0.72, 0.4), h=0.0085, tris=t(560), albedo=chest_albedo if chest == "fur" else (1, 1, 1), mat=chest, ao=0.4)
     body = S.union(upper, lower, k=0.03)
     if belt:
-        part.solid(patch(body, band(None, 0.175, 0.232), 0.012, 0.012), (-0.4, 0.1, -0.35), (0.4, 0.34, 0.35), h=0.008, tris=t(110), mat="paintcloth", ao=0.25)
+        part.solid(patch(body, band(0.175, 0.232), 0.012, 0.012), (-0.4, 0.1, -0.35), (0.4, 0.34, 0.35), h=0.008, tris=t(110), mat="paintcloth", ao=0.25)
     if chest_band and chest == "vest":
         # A racing band across the chest, a white pin below it.
         front = lambda P: np.maximum(np.abs(P[:, 1] - 0.415) - 0.03, 0.02 - P[:, 2])
@@ -137,13 +131,13 @@ def arm(sp, side, shoulder_x, r=0.07, fur=(0.8, 0.5, 0.2), glove=WHITE, glove_ma
     part.solid(gl, *bounds, h=0.0065, tris=t(140), albedo=glove_c, mat=glove_mat, ao=0.35, symmetric=False)
     if glove_ring:
         wrist = zh - hr * 1.0
-        ring = S.intersect(S.offset(gl, 0.005), band(None, wrist - 0.016, wrist + 0.016, 2), 0.006)
+        ring = S.intersect(S.offset(gl, 0.005), band(wrist - 0.016, wrist + 0.016, 2), 0.006)
         part.solid(ring, *bounds, h=0.005, tris=t(50), mat=cuff_mat, ao=0.2, symmetric=False)
     if sleeve:
         zc = length * 0.33
         sl = S.intersect(S.roundcone((0, 0, 0.0), (0, 0, zc + 0.05), r * 1.34, r * 1.26), lambda P: P[:, 2] - zc, 0.008)
         part.solid(sl, *bounds, h=0.0065, tris=t(100), mat="vest", ao=0.35, symmetric=False)
-        rim = S.intersect(S.offset(sl, 0.006), band(None, zc - 0.034, zc + 0.002, 2), 0.006)
+        rim = S.intersect(S.offset(sl, 0.006), band(zc - 0.034, zc + 0.002, 2), 0.006)
         part.solid(rim, *bounds, h=0.005, tris=t(60), mat=cuff_mat, ao=0.2, symmetric=False)
     return part
 

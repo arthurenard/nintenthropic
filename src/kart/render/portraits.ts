@@ -22,6 +22,11 @@ import { characterById } from "../characters";
 import { driverArtSettled, loadDriverArt } from "./art";
 import { createDriver } from "./drivers";
 
+/** Resolves when the modelled drivers' file is loaded (or found missing), so the pictures drawn after it are the real ones. */
+export function driversReady(): Promise<void> {
+  return loadDriverArt();
+}
+
 export interface PortraitOptions {
   /** The kart's colour: the helmet, goggles or scarf. */
   colour?: string;

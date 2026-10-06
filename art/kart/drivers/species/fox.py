@@ -25,26 +25,40 @@ def ear_shape():
 def build():
     parts = []
     skull = S.ellipsoid((0, 0, 0), (0.29, 0.262, 0.272))
-    cheeks = S.mirror(S.ellipsoid((0.2, -0.105, 0.085), (0.118, 0.098, 0.155), rot=(-12, 0, 0)))
+    cheeks = S.mirror(S.ellipsoid((0.195, -0.105, 0.085), (0.108, 0.094, 0.15), rot=(-12, 0, 0)))
     muzzle = S.ellipsoid((0, -0.055, 0.268), (0.098, 0.078, 0.128))
     jaw = S.ellipsoid((0, -0.108, 0.25), (0.086, 0.05, 0.105))
-    ruffs = S.mirror(S.scaled(S.roundcone((0.17, -0.1, 0.12), (0.335, -0.17, -0.02), 0.1, 0.014), (1, 1, 0.8), about=(0.2, -0.1, 0.1)))
+    ruffs = S.mirror(S.scaled(S.roundcone((0.17, -0.1, 0.12), (0.31, -0.16, -0.01), 0.095, 0.016), (1, 1, 0.8), about=(0.2, -0.1, 0.1)))
     face = S.union(skull, cheeks, muzzle, jaw, k=0.045)
     face_r = S.union(face, ruffs, k=0.05)
     ears = S.mirror(ear_shape())
     head = S.union(face_r, ears, k=0.03)
     mask = S.ellipsoid((0, 0.125, 0.15), (0.2, 0.1, 0.16))
-    cream = S.union(S.mirror(S.ellipsoid((0.235, -0.125, 0.07), (0.14, 0.105, 0.2), rot=(-12, 0, 0))), S.ellipsoid((0, -0.14, 0.24), (0.115, 0.075, 0.14)), ruffs, k=0.03)
+    # The cream: cheeks and chin, one clean-edged patch; dark socks on the ear tips.
+    cream = S.union(
+        S.mirror(S.ellipsoid((0.2, -0.125, 0.07), (0.135, 0.105, 0.19), rot=(-10, 0, 0))),
+        S.ellipsoid((0, -0.14, 0.235), (0.105, 0.075, 0.14)),
+        ruffs,
+        k=0.04,
+    )
+    tips = lambda P: np.maximum(0.455 - P[:, 1], 0.09 - np.abs(P[:, 0]))
 
-    def albedo(P, N):
+    def orange(P, N):
         out = np.tile(ORANGE, (len(P), 1))
         out = S.mix(out, DEEP, S.inside(mask, 0.06)(P) * 0.55)
-        out = S.mix(out, CREAM, S.inside(cream, 0.022)(P))
-        out = S.mix(out, DARK, S.smoothstep(0.43, 0.52, P[:, 1]) * (np.abs(P[:, 0]) > 0.1))
         return out * furvar(P)
 
+    def creamy(P, N):
+        out = np.tile(CREAM, (len(P), 1))
+        out = S.mix(out, ORANGE, S.smoothstep(-0.02, 0.1, P[:, 1] + 0.0 * N[:, 0]) * 0.25)
+        return out * furvar(P, 0.04)
+
+    def socks(P, N):
+        return np.tile(DARK, (len(P), 1)) * furvar(P, 0.05)
+
     h = Part("fox", "head", H.HEAD_AT)
-    h.solid(head, (-0.46, -0.28, -0.42), (0.46, 0.7, 0.5), h=0.0085, tris=980, albedo=albedo, mat="fur", ao=0.5, reach=0.09)
+    h.solid(head, (-0.46, -0.28, -0.42), (0.46, 0.7, 0.5), h=0.0085, tris=700, albedo=orange, mat="fur", ao=0.5, reach=0.09,
+            regions=[("fur", cream, creamy), ("fur", tips, socks)], refine=2)
     inner = S.mirror(S.scaled(S.roundcone((0.19, 0.27, -0.03), (0.255, 0.54, -0.085), 0.075, 0.01), (1, 1, 0.5), about=(0.2, 0.35, -0.055)))
     h.solid(inner, (-0.4, 0.1, -0.25), (0.4, 0.7, 0.1), h=0.005, tris=90, albedo=PINKY, mat="fur", ao=0.3, reach=0.04)
     nose = S.ellipsoid((0, -0.03, 0.392), (0.046, 0.036, 0.033))
@@ -57,10 +71,10 @@ def build():
     H.smile(h, face, half=0.075, y=-0.112, depth=0.02, r=0.0058, colour=DARK, n=9)
     parts.append(h)
 
-    parts.append(H.helmet("fox", (0, 0.05, -0.01), (0.307, 0.282, 0.292), ear_holes=S.offset(ears, 0.012)))
-    parts.append(H.torso("fox", w=0.25, d=0.19, shoulder=0.28, shoe="#3f2620"))
+    parts.append(H.helmet("fox", (0, 0.05, -0.01), (0.307, 0.282, 0.292), ear_holes=S.offset(ears, 0.012), budget=0.88))
+    parts.append(H.torso("fox", w=0.25, d=0.19, shoulder=0.28, shoe="#3f2620", budget=0.88))
     for side in (1, -1):
-        parts.append(H.arm("fox", side, 0.28, r=0.068, fur=ORANGE, glove=DARK, glove_mat="fur", handR=0.095))
+        parts.append(H.arm("fox", side, 0.28, r=0.068, fur=ORANGE, glove=DARK, glove_mat="fur", handR=0.095, budget=0.88))
 
     # ---- the brush
     t = Part("fox", "tail", (0.0, 0.2, -0.26))
