@@ -53,3 +53,27 @@ piece's material by name:
 
 A species with all four of head, torso, arm.L, arm.R is built from the art; any missing piece of a bit (tail,
 scarf...) is the code-built one. The helmet joins the head. Otherwise the driver is the code-built stand-in.
+
+## The natural worlds (`art/kart/world/nature*.py`)
+
+`Blender -b --factory-startup -P art/kart/world/nature.py -- [meadow canyon snow volcano palm]`
+writes `world-<theme>.glb` for the meadow, canyon, glacier, volcano and
+island: `scenery.<kind>.<n>` kits (several variants a kind, instanced by
+src/kart/render/world/scenery.ts in place of the code-built shape; at most
+~1.5k triangles each, smooth normals, ambient occlusion in the vertex colours)
+and the signature landmarks. `naturekit.py` is the kit (bmesh primitives that
+paint their vertices, a BVH ambient-occlusion bake, the glTF export);
+`nature_<theme>.py` holds a world's scenery and `nature_<theme>_lm.py` its
+landmarks. Things to know when changing them:
+
+- Modelled landmarks keep their smooth normals in the world (`LandmarkModel.smooth`).
+- A modelled span landmark has one fixed span (rock-arch 16 m, ice-arch 14,
+  stone-bridge 98, giant-ring 10, wristwatch 12: what tracks.ts asks for); a
+  part of it that turns (`.spin`) is ignored, because the game bends the
+  whole model along the road.
+- Keep every model inside the code-built footprint: nothing solid within a
+  camera's width of the barrier. `world/corridor.test.ts` checks the code-built
+  world; to check the modelled one, load the art in a page and run
+  `measureTrack` from `world/corridorProbe.ts` (the dev pages load it).
+- `gallery.html?theme=canyon&kind=mesa` shows a landmark and
+  `kind=scenery:cactus` a kind of scenery, with the Blender art loaded.

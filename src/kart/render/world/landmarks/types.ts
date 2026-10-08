@@ -81,6 +81,12 @@ export interface LandmarkModel {
   glass?: MeshBuilder;
   moving?: MovingPart[];
   halos?: Halo[];
+  /**
+   * The model's normals are meant (a Blender-made one, rounded and bevelled):
+   * the layer keeps them when it bakes the model into the chunk instead of
+   * flattening every triangle, which is the look of the code-built models.
+   */
+  smooth?: boolean;
 }
 
 export interface LandmarkSpec {

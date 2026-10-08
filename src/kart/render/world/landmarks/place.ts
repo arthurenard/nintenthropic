@@ -73,42 +73,74 @@ export function landmarkMaterials(bake: BakeUniforms = makeBakeUniforms()): Land
 
 // ─── Baking ──────────────────────────────────────────────────────────────────
 
-/** Copies `src`'s triangles into `dst`, every point through `map`; normals are recomputed flat. */
-export function bake(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3): void {
+/** Where the map takes a direction at a point (a normal): the difference of two mapped points, so a bend or a turn carries it along. */
+function mapNormal(map: (p: V3) => V3, p: V3, n: V3): V3 {
+  const a = map(p);
+  const b = map([p[0] + n[0] * 0.25, p[1] + n[1] * 0.25, p[2] + n[2] * 0.25]);
+  const x = b[0] - a[0];
+  const y = b[1] - a[1];
+  const z = b[2] - a[2];
+  const l = Math.hypot(x, y, z) || 1;
+  return [x / l, y / l, z / l];
+}
+
+/**
+ * Copies `src`'s triangles into `dst`, every point through `map`; normals are recomputed flat (the faceted look
+ * of the code-built models), or, for a `smooth` model, carried through the map (a rounded Blender-made one).
+ */
+export function bake(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, smooth = false): void {
   const p = src.position;
   const c = src.color;
+  const n = src.normal;
   for (let i = 0; i < p.length; i += 9) {
-    dst.tri(
-      map([p[i]!, p[i + 1]!, p[i + 2]!]),
-      map([p[i + 3]!, p[i + 4]!, p[i + 5]!]),
-      map([p[i + 6]!, p[i + 7]!, p[i + 8]!]),
-      [c[i]!, c[i + 1]!, c[i + 2]!],
-      [c[i + 3]!, c[i + 4]!, c[i + 5]!],
-      [c[i + 6]!, c[i + 7]!, c[i + 8]!],
-    );
+    const a: V3 = [p[i]!, p[i + 1]!, p[i + 2]!];
+    const b: V3 = [p[i + 3]!, p[i + 4]!, p[i + 5]!];
+    const d: V3 = [p[i + 6]!, p[i + 7]!, p[i + 8]!];
+    const ca: V3 = [c[i]!, c[i + 1]!, c[i + 2]!];
+    const cb: V3 = [c[i + 3]!, c[i + 4]!, c[i + 5]!];
+    const cd: V3 = [c[i + 6]!, c[i + 7]!, c[i + 8]!];
+    if (smooth) {
+      dst.triN(map(a), map(b), map(d), ca, cb, cd, mapNormal(map, a, [n[i]!, n[i + 1]!, n[i + 2]!]), mapNormal(map, b, [n[i + 3]!, n[i + 4]!, n[i + 5]!]), mapNormal(map, d, [n[i + 6]!, n[i + 7]!, n[i + 8]!]));
+    } else {
+      dst.tri(map(a), map(b), map(d), ca, cb, cd);
+    }
   }
 }
 
-type Corner = { p: V3; c: V3 };
+interface Corner {
+  p: V3;
+  c: V3;
+  n: V3;
+}
 
 /**
  * Like `bake`, but first cuts every triangle that is longer than `maxZ`
  * metres along z into smaller ones, so a long wall bends smoothly round a
  * curve instead of cutting the corner.
  */
-export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, maxZ = 2.5): void {
+export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, maxZ = 2.5, smooth = false): void {
   const p = src.position;
   const c = src.color;
+  const nn = src.normal;
   const stack: [Corner, Corner, Corner][] = [];
-  const mid = (a: Corner, b: Corner): Corner => ({
-    p: [(a.p[0] + b.p[0]) / 2, (a.p[1] + b.p[1]) / 2, (a.p[2] + b.p[2]) / 2],
-    c: [(a.c[0] + b.c[0]) / 2, (a.c[1] + b.c[1]) / 2, (a.c[2] + b.c[2]) / 2],
-  });
+  const mid = (a: Corner, b: Corner): Corner => {
+    const n: V3 = [(a.n[0] + b.n[0]) / 2, (a.n[1] + b.n[1]) / 2, (a.n[2] + b.n[2]) / 2];
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    return {
+      p: [(a.p[0] + b.p[0]) / 2, (a.p[1] + b.p[1]) / 2, (a.p[2] + b.p[2]) / 2],
+      c: [(a.c[0] + b.c[0]) / 2, (a.c[1] + b.c[1]) / 2, (a.c[2] + b.c[2]) / 2],
+      n: [n[0] / l, n[1] / l, n[2] / l],
+    };
+  };
+  const emit = (a: Corner, b: Corner, d: Corner): void => {
+    if (smooth) dst.triN(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c, mapNormal(map, a.p, a.n), mapNormal(map, b.p, b.n), mapNormal(map, d.p, d.n));
+    else dst.tri(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c);
+  };
   for (let i = 0; i < p.length; i += 9) {
     stack.push([
-      { p: [p[i]!, p[i + 1]!, p[i + 2]!], c: [c[i]!, c[i + 1]!, c[i + 2]!] },
-      { p: [p[i + 3]!, p[i + 4]!, p[i + 5]!], c: [c[i + 3]!, c[i + 4]!, c[i + 5]!] },
-      { p: [p[i + 6]!, p[i + 7]!, p[i + 8]!], c: [c[i + 6]!, c[i + 7]!, c[i + 8]!] },
+      { p: [p[i]!, p[i + 1]!, p[i + 2]!], c: [c[i]!, c[i + 1]!, c[i + 2]!], n: [nn[i]!, nn[i + 1]!, nn[i + 2]!] },
+      { p: [p[i + 3]!, p[i + 4]!, p[i + 5]!], c: [c[i + 3]!, c[i + 4]!, c[i + 5]!], n: [nn[i + 3]!, nn[i + 4]!, nn[i + 5]!] },
+      { p: [p[i + 6]!, p[i + 7]!, p[i + 8]!], c: [c[i + 6]!, c[i + 7]!, c[i + 8]!], n: [nn[i + 6]!, nn[i + 7]!, nn[i + 8]!] },
     ]);
     let guard = 0;
     while (stack.length && guard++ < 4000) {
@@ -116,7 +148,7 @@ export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3,
       const ez = [Math.abs(a.p[2] - b.p[2]), Math.abs(b.p[2] - d.p[2]), Math.abs(d.p[2] - a.p[2])];
       const worst = Math.max(...ez);
       if (worst <= maxZ) {
-        dst.tri(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c);
+        emit(a, b, d);
         continue;
       }
       if (worst === ez[0]) {
@@ -371,9 +403,9 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       standClear(model, wide, [reach[0] + SOLID_MARGIN, reach[1] + SOLID_MARGIN], dip);
       if (lm.offset === 0) roofs.push(roofProfile(model, at, span, wide + Math.max(reach[0], reach[1]) + SOLID_MARGIN));
       const map = roadFrameMap(track, env.bank, at, lm.offset);
-      bakeBent(chunk.lit, model.lit, map);
-      if (model.glow) bakeBent(chunk.glow, model.glow, map);
-      if (model.glass) bakeBent(chunk.glass, model.glass, map);
+      bakeBent(chunk.lit, model.lit, map, 2.5, model.smooth);
+      if (model.glow) bakeBent(chunk.glow, model.glow, map, 2.5, model.smooth);
+      if (model.glass) bakeBent(chunk.glass, model.glass, map, 2.5, model.smooth);
       for (const h of model.halos ?? []) {
         const w = map([h.x, h.y, h.z]);
         halos.push({ ...h, x: w[0], y: w[1], z: w[2], phase: rnd() * 6.28 });
@@ -399,9 +431,9 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       e[1]! * x + e[5]! * yy + e[9]! * z + e[13]!,
       e[2]! * x + e[6]! * yy + e[10]! * z + e[14]!,
     ];
-    bake(chunk.lit, model.lit, map);
-    if (model.glow) bake(chunk.glow, model.glow, map);
-    if (model.glass) bake(chunk.glass, model.glass, map);
+    bake(chunk.lit, model.lit, map, model.smooth);
+    if (model.glow) bake(chunk.glow, model.glow, map, model.smooth);
+    if (model.glass) bake(chunk.glass, model.glass, map, model.smooth);
     for (const h of model.halos ?? []) {
       const w = map([h.x, h.y, h.z]);
       halos.push({ ...h, x: w[0], y: w[1], z: w[2], size: h.size * scale, phase: rnd() * 6.28 });
@@ -416,7 +448,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       outer.add(inner);
       const shift = (b: MeshBuilder, material: Material) => {
         const g = new MeshBuilder();
-        bake(g, b, ([x, yy, z]) => [x - part.pivot[0], yy - part.pivot[1], z - part.pivot[2]]);
+        bake(g, b, ([x, yy, z]) => [x - part.pivot[0], yy - part.pivot[1], z - part.pivot[2]], model.smooth);
         const mesh = new Mesh(g.build(), material);
         disposables.push(mesh.geometry);
         inner.add(mesh);

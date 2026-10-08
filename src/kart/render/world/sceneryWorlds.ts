@@ -8,6 +8,7 @@
 import type { Material } from "three";
 import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
+import { hasSceneryArt } from "./sceneryArt";
 import * as p from "./props2";
 import type { Item, SceneryTools } from "./scenery";
 import { SEA_LEVEL } from "./terrain";
@@ -53,8 +54,9 @@ function kitchen(t: SceneryTools): void {
 
 function snow(t: SceneryTools): void {
   const forest = (x: number, z: number) => smoothstep(0.44, 0.62, fbm2(x / 60 + 3, z / 60 - 7, 3));
-  t.instanced(
-    t.geo(p.snowPine()),
+  t.variants(
+    "pine",
+    p.snowPine,
     t.scatter({
       count: 820,
       minEdge: 14,
@@ -65,9 +67,9 @@ function snow(t: SceneryTools): void {
       keep: (x, z, h, e) => (h < -8 ? 0 : e === 0 ? 1 : (0.05 + 0.95 * forest(x, z)) * (1 - smoothstep(35, 100, h))),
     }),
   );
-  t.instanced(t.geo(p.snowRock()), t.scatter({ count: 150, minEdge: 12, cell: 5, scale: [0.8, 2.8], keep: above(-8) }));
+  t.variants("rock", p.snowRock, t.scatter({ count: 150, minEdge: 12, cell: 5, scale: [0.8, 2.8], keep: above(-8) }));
   t.instanced(t.geo(p.snowDrift()), t.scatter({ count: 340, minEdge: 10, maxEdge: 140, cell: 4, scale: [1, 2.4], keep: above(-8) }));
-  t.instanced(t.geo(p.iceCrystals()), t.scatter({ count: 70, minEdge: 18, maxEdge: 200, cell: 8, scale: [0.9, 1.9], keep: above(-8) }));
+  t.variants("ice", p.iceCrystals, t.scatter({ count: 70, minEdge: 18, maxEdge: 200, cell: 8, scale: [0.9, 1.9], keep: above(-8) }));
   // A few lit cabins far off: a warm window in the blue dusk.
   const spots = t.landmarkSpots(7, 70, 280, (_x, _z, h) => h > -2 && h < 8);
   const items: Item[] = spots.map((s) => ({ x: s.x, y: s.h - 0.1, z: s.z, yaw: t.rnd() * Math.PI * 2, sx: 1.6, sy: 1.6, sz: 1.6 }));
@@ -76,10 +78,10 @@ function snow(t: SceneryTools): void {
 
 function volcano(t: SceneryTools): void {
   const dry = (x: number, z: number, h: number) => (h > -12 && !t.terrain.isLava(x, z) ? 1 : 0);
-  t.instanced(t.geo(p.basaltBoulder()), t.scatter({ count: 540, minEdge: 11, cell: 4, scale: [0.8, 2.5], stretch: [0.7, 1.2], keep: dry }));
-  t.instanced(t.geo(p.basaltSpike()), t.scatter({ count: 150, minEdge: 14, cell: 7, scale: [0.8, 2.6], stretch: [1, 1.7], keep: dry }));
-  t.instanced(t.geo(p.charredTree()), t.scatter({ count: 80, minEdge: 16, cell: 8, scale: [0.9, 1.7], maxSlope: 0.6, keep: dry }));
-  t.instanced(t.geo(p.emberRock()), t.scatter({ count: 80, minEdge: 12, cell: 5, scale: [0.9, 2.1], keep: dry }));
+  t.variants("rock", p.basaltBoulder, t.scatter({ count: 540, minEdge: 11, cell: 4, scale: [0.8, 2.5], stretch: [0.7, 1.2], keep: dry }));
+  t.variants("spire", p.basaltSpike, t.scatter({ count: 150, minEdge: 14, cell: 7, scale: [0.8, 2.6], stretch: [1, 1.7], keep: dry }));
+  t.variants("deadtree", p.charredTree, t.scatter({ count: 80, minEdge: 16, cell: 8, scale: [0.9, 1.7], maxSlope: 0.6, keep: dry }));
+  t.variants("ember", p.emberRock, t.scatter({ count: 80, minEdge: 12, cell: 5, scale: [0.9, 2.1], keep: dry }));
   t.instanced(t.geo(p.ashMound()), t.scatter({ count: 180, minEdge: 10, maxEdge: 200, cell: 5, scale: [0.8, 2.2], keep: dry }));
   // Heat over the lava: soft orange lights along the rivers and lakes.
   const { terrain } = t;
@@ -168,10 +170,16 @@ function palm(t: SceneryTools): void {
   const land = (_x: number, _z: number, h: number) => (h > shore + 0.45 ? 1 : 0);
   const density = (x: number, z: number) => 0.25 + 0.75 * smoothstep(0.35, 0.6, fbm2(x / 50 + 4, z / 50 - 2, 3));
   for (const seed of [0, 1]) {
-    t.instanced(t.geo(p.palmTree(seed)), t.scatter({ count: 120, minEdge: 11, cell: 9, scale: [1.0, 1.7], maxSlope: 0.55, keep: (x, z, h, e) => (h > shore + 0.45 ? (e === 0 ? 1 : density(x, z)) : 0) }));
+    t.variants("palm", () => p.palmTree(seed), t.scatter({ count: 120, minEdge: 11, cell: 9, scale: [1.0, 1.7], maxSlope: 0.55, keep: (x, z, h, e) => (h > shore + 0.45 ? (e === 0 ? 1 : density(x, z)) : 0) }));
   }
-  t.instanced(t.geo(p.tropicalBush()), t.scatter({ count: 340, minEdge: 10, cell: 3.5, scale: [0.8, 1.7], keep: land }));
-  t.instanced(t.geo(p.coralRock()), t.scatter({ count: 130, minEdge: 12, cell: 5, scale: [0.8, 2.6], keep: (_x, _z, h) => (h > shore - 2.5 ? 1 : 0) }));
+  t.variants("bush", p.tropicalBush, t.scatter({ count: 340, minEdge: 10, cell: 3.5, scale: [0.8, 1.7], keep: land }));
+  if (hasSceneryArt("rock") || hasSceneryArt("coral")) {
+    // Beach rocks on the sand, and coral heads in the shallows along the shore.
+    t.variants("rock", p.coralRock, t.scatter({ count: 70, minEdge: 12, cell: 5, scale: [0.8, 2.4], keep: (_x, _z, h) => (h > shore + 0.1 ? 1 : 0) }));
+    t.variants("coral", p.coralRock, t.scatter({ count: 90, minEdge: 12, cell: 4, scale: [0.8, 2.2], keep: (_x, _z, h) => (h > shore - 2.2 && h < shore + 0.5 ? 1 : 0) }));
+  } else {
+    t.variants("rock", p.coralRock, t.scatter({ count: 130, minEdge: 12, cell: 5, scale: [0.8, 2.6], keep: (_x, _z, h) => (h > shore - 2.5 ? 1 : 0) }));
+  }
   t.instanced(t.geo(p.parasol()), t.scatter({ count: 30, minEdge: 12, maxEdge: 70, cell: 12, scale: [1, 1.3], keep: (_x, _z, h) => (h > shore + 0.3 && h < shore + 3 ? 1 : 0) }));
   // Boats out on the water.
   const boat = t.geo(p.sailboat());

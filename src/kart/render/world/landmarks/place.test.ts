@@ -60,6 +60,24 @@ describe("bake and bakeBent", () => {
     expect(dst.position[0]).toBe(10);
   });
 
+  it("keeps a modelled surface's own normals through the map when it is smooth, and flattens the code-built ones", () => {
+    const src = new MeshBuilder();
+    const s = Math.SQRT1_2;
+    src.triN([0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 1], [1, 1, 1], [1, 1, 1], [0, 0, 1], [s, 0, s], [0, s, s]);
+    const flat = new MeshBuilder();
+    bake(flat, src, ([x, y, z]) => [x + 5, y, z]);
+    expect(flat.normal.slice(0, 3)).toEqual(flat.normal.slice(3, 6));
+    const smooth = new MeshBuilder();
+    bake(smooth, src, ([x, y, z]) => [x + 5, y, z], true);
+    expect(smooth.normal[3]).toBeCloseTo(s, 5);
+    expect(smooth.normal[5]).toBeCloseTo(s, 5);
+    expect(smooth.normal[8]).toBeCloseTo(s, 5);
+    const bent = new MeshBuilder();
+    bakeBent(bent, src, (p) => p, 2.5, true);
+    expect(bent.triangles).toBe(1);
+    expect(bent.normal[3]).toBeCloseTo(s, 5);
+  });
+
   it("cuts long triangles short, so a long wall can follow a bend", () => {
     const src = new MeshBuilder();
     src.quad([0, 0, -20], [0, 5, -20], [0, 5, 20], [0, 0, 20], [1, 1, 1]);
