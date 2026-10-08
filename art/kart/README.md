@@ -28,7 +28,11 @@ stand-in (src/kart/render/art.ts loads what exists).
   vertex colour layer. Glowing parts: an emissive colour. Glass, ice and
   canvas: transparent, or a material named "glass". A part that turns: a
   child node named `<anything>.spin.x|y|z` about its own origin, with a
-  custom property `speed` (rad/s).
+  custom property `speed` (rad/s); optional `bob`, `bobspeed`, `phase` make it
+  rise and fall as it turns. `<anything>.orbit.x|y|z` (with `speed`, and the
+  circle's centre `cx`, `cy`, `cz`) keeps its attitude and travels the circle:
+  a ferris wheel's cars. Normals in the file are kept (smooth shading); the
+  world scripts (art/kart/world/made.py) are the reference.
 - A span landmark (a tunnel, an arch over the road) is modelled in the road's
   frame: x metres right of the centre line, z along the road centred on 0,
   cut into pieces of 3 m or less along z so the game can bend it.

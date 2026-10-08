@@ -73,10 +73,11 @@ export function landmarkMaterials(bake: BakeUniforms = makeBakeUniforms()): Land
 
 // ─── Baking ──────────────────────────────────────────────────────────────────
 
-/** Where the map takes a direction at a point (a normal): the difference of two mapped points, so a bend or a turn carries it along. */
+/** Where the unit normal `n` at `p` points after `map` (the map's own bending included): a short step along it, mapped. */
 function mapNormal(map: (p: V3) => V3, p: V3, n: V3): V3 {
+  const e = 0.05;
   const a = map(p);
-  const b = map([p[0] + n[0] * 0.25, p[1] + n[1] * 0.25, p[2] + n[2] * 0.25]);
+  const b = map([p[0] + n[0] * e, p[1] + n[1] * e, p[2] + n[2] * e]);
   const x = b[0] - a[0];
   const y = b[1] - a[1];
   const z = b[2] - a[2];
@@ -85,13 +86,13 @@ function mapNormal(map: (p: V3) => V3, p: V3, n: V3): V3 {
 }
 
 /**
- * Copies `src`'s triangles into `dst`, every point through `map`; normals are recomputed flat (the faceted look
- * of the code-built models), or, for a `smooth` model, carried through the map (a rounded Blender-made one).
+ * Copies `src`'s triangles into `dst`, every point through `map`. Normals are recomputed flat, except
+ * for a smooth source (a Blender-made model, `src.smooth`): it keeps the normal at each corner.
  */
-export function bake(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, smooth = false): void {
+export function bake(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, smooth: boolean = src.smooth): void {
   const p = src.position;
   const c = src.color;
-  const n = src.normal;
+  const nr = src.normal;
   for (let i = 0; i < p.length; i += 9) {
     const a: V3 = [p[i]!, p[i + 1]!, p[i + 2]!];
     const b: V3 = [p[i + 3]!, p[i + 4]!, p[i + 5]!];
@@ -100,55 +101,66 @@ export function bake(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, smo
     const cb: V3 = [c[i + 3]!, c[i + 4]!, c[i + 5]!];
     const cd: V3 = [c[i + 6]!, c[i + 7]!, c[i + 8]!];
     if (smooth) {
-      dst.triN(map(a), map(b), map(d), ca, cb, cd, mapNormal(map, a, [n[i]!, n[i + 1]!, n[i + 2]!]), mapNormal(map, b, [n[i + 3]!, n[i + 4]!, n[i + 5]!]), mapNormal(map, d, [n[i + 6]!, n[i + 7]!, n[i + 8]!]));
+      dst.triN(
+        map(a),
+        map(b),
+        map(d),
+        ca,
+        cb,
+        cd,
+        mapNormal(map, a, [nr[i]!, nr[i + 1]!, nr[i + 2]!]),
+        mapNormal(map, b, [nr[i + 3]!, nr[i + 4]!, nr[i + 5]!]),
+        mapNormal(map, d, [nr[i + 6]!, nr[i + 7]!, nr[i + 8]!]),
+      );
     } else {
       dst.tri(map(a), map(b), map(d), ca, cb, cd);
     }
   }
 }
 
-interface Corner {
-  p: V3;
-  c: V3;
-  n: V3;
-}
+type Corner = { p: V3; c: V3; n?: V3 };
 
 /**
  * Like `bake`, but first cuts every triangle that is longer than `maxZ`
  * metres along z into smaller ones, so a long wall bends smoothly round a
  * curve instead of cutting the corner.
  */
-export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, maxZ = 2.5, smooth = false): void {
+export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, maxZ = 2.5, smoothOverride?: boolean): void {
   const p = src.position;
   const c = src.color;
-  const nn = src.normal;
+  const nr = src.normal;
+  // A Blender-made model keeps its smooth normals (its builder says so, or the caller does).
+  const smooth = smoothOverride ?? src.smooth;
   const stack: [Corner, Corner, Corner][] = [];
   const mid = (a: Corner, b: Corner): Corner => {
-    const n: V3 = [(a.n[0] + b.n[0]) / 2, (a.n[1] + b.n[1]) / 2, (a.n[2] + b.n[2]) / 2];
-    const l = Math.hypot(n[0], n[1], n[2]) || 1;
-    return {
+    const m: Corner = {
       p: [(a.p[0] + b.p[0]) / 2, (a.p[1] + b.p[1]) / 2, (a.p[2] + b.p[2]) / 2],
       c: [(a.c[0] + b.c[0]) / 2, (a.c[1] + b.c[1]) / 2, (a.c[2] + b.c[2]) / 2],
-      n: [n[0] / l, n[1] / l, n[2] / l],
     };
+    if (a.n && b.n) {
+      const x = a.n[0] + b.n[0];
+      const y = a.n[1] + b.n[1];
+      const z = a.n[2] + b.n[2];
+      const l = Math.hypot(x, y, z) || 1;
+      m.n = [x / l, y / l, z / l];
+    }
+    return m;
   };
-  const emit = (a: Corner, b: Corner, d: Corner): void => {
-    if (smooth) dst.triN(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c, mapNormal(map, a.p, a.n), mapNormal(map, b.p, b.n), mapNormal(map, d.p, d.n));
-    else dst.tri(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c);
+  const corner = (i: number): Corner => {
+    const k: Corner = { p: [p[i]!, p[i + 1]!, p[i + 2]!], c: [c[i]!, c[i + 1]!, c[i + 2]!] };
+    if (smooth) k.n = [nr[i]!, nr[i + 1]!, nr[i + 2]!];
+    return k;
   };
   for (let i = 0; i < p.length; i += 9) {
-    stack.push([
-      { p: [p[i]!, p[i + 1]!, p[i + 2]!], c: [c[i]!, c[i + 1]!, c[i + 2]!], n: [nn[i]!, nn[i + 1]!, nn[i + 2]!] },
-      { p: [p[i + 3]!, p[i + 4]!, p[i + 5]!], c: [c[i + 3]!, c[i + 4]!, c[i + 5]!], n: [nn[i + 3]!, nn[i + 4]!, nn[i + 5]!] },
-      { p: [p[i + 6]!, p[i + 7]!, p[i + 8]!], c: [c[i + 6]!, c[i + 7]!, c[i + 8]!], n: [nn[i + 6]!, nn[i + 7]!, nn[i + 8]!] },
-    ]);
+    stack.push([corner(i), corner(i + 3), corner(i + 6)]);
     let guard = 0;
     while (stack.length && guard++ < 4000) {
       const [a, b, d] = stack.pop()!;
       const ez = [Math.abs(a.p[2] - b.p[2]), Math.abs(b.p[2] - d.p[2]), Math.abs(d.p[2] - a.p[2])];
       const worst = Math.max(...ez);
       if (worst <= maxZ) {
-        emit(a, b, d);
+        if (smooth && a.n && b.n && d.n) dst.triN(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c, mapNormal(map, a.p, a.n), mapNormal(map, b.p, b.n), mapNormal(map, d.p, d.n));
+        else dst.tri(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c);
         continue;
       }
       if (worst === ez[0]) {

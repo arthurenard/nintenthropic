@@ -111,6 +111,11 @@ export class MeshBuilder {
   readonly normal: number[] = [];
   readonly color: number[] = [];
   readonly uv: number[] = [];
+  /**
+   * The normals are a model's own, smooth, to be kept through placement (bake / bakeBent in
+   * landmarks/place.ts) rather than recomputed flat: set by a Blender-made model's loader.
+   */
+  smooth = false;
   private readonly withUv: boolean;
 
   constructor(withUv = false) {
