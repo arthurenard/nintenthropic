@@ -44,7 +44,7 @@
 /* Lap and time, top left. */
 .gp-lap {
   position: absolute;
-  left: var(--m);
+  left: calc(var(--m) + var(--clear-lap, 0px));
   top: var(--m);
   padding: calc(9px * var(--u)) calc(16px * var(--u)) calc(10px * var(--u));
   min-width: calc(112px * var(--u));
@@ -152,6 +152,26 @@
   display: none;
 }
 
+/* How to use the item, beside the slot, for a player who never has. It fades in and out (never moves). */
+.gp-hint {
+  position: absolute;
+  left: calc(50% + 38px * var(--u) + 14px * var(--u));
+  top: calc(var(--m) + 38px * var(--u));
+  transform: translateY(-50%);
+  max-width: calc(50% - 52px * var(--u) - var(--m));
+  padding: calc(8px * var(--u)) calc(18px * var(--u));
+  border-radius: 999px;
+  font-size: max(14px, calc(21px * var(--u)));
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  opacity: 0;
+  transition: opacity 250ms var(--gp-ease);
+}
+.gp-hint.gp-on {
+  opacity: 1;
+}
+
 /* A skyrocket on its way to this view's kart. */
 .gp-incoming {
   position: absolute;
@@ -202,7 +222,7 @@
 /* Place, bottom right: large, and quiet apart from its size. */
 .gp-place {
   position: absolute;
-  right: var(--m);
+  right: calc(var(--m) + var(--clear-place, 0px));
   bottom: calc(18px * var(--u));
   display: flex;
   align-items: baseline;
@@ -325,16 +345,51 @@
   color: var(--gp-secondary);
 }
 
-/* The minimap, bottom left. */
-.gp-map {
+/* The map, in a glass box: over the views (.gp-float: a corner with one view, the right edge at the split
+   with two, the middle with four) or in the free quadrant (.gp-map). */
+.gp-float {
   position: absolute;
-  left: var(--m);
-  bottom: var(--m);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: calc(14px * var(--u));
+  padding: calc(8px * var(--u));
+  border-radius: calc(16px * var(--u));
+  --u: 1;
+}
+.gp-float canvas,
+.gp-map canvas {
+  display: block;
+  flex: none;
+}
+.gp-map {
   padding: calc(8px * var(--u));
   border-radius: calc(16px * var(--u));
 }
-.gp-map canvas {
-  display: block;
+
+/* The compact standings beside the middle map: place, colour, name. */
+.gp-strip {
+  flex: none;
+  box-sizing: border-box;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: calc(10px * var(--u));
+  border-left: 1px solid var(--gp-hairline);
+  min-width: 0;
+}
+.gp-strip .gp-row {
+  grid-template-columns: calc(14px * var(--u)) calc(13px * var(--u)) 1fr;
+  gap: calc(7px * var(--u));
+  height: calc(22px * var(--u));
+  padding: 0 calc(6px * var(--u));
+  font-size: calc(15px * var(--u));
+  border-radius: calc(7px * var(--u));
+}
+.gp-strip .gp-row .gp-dot {
+  width: calc(13px * var(--u));
+  height: calc(13px * var(--u));
 }
 
 /* The free quadrant with three players: the map and the standings. */
@@ -403,8 +458,15 @@
 .gp-row .gp-note {
   color: var(--gp-secondary);
 }
+.gp-row.gp-local {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: calc(8px * var(--u));
+}
 .gp-row.gp-local .gp-name {
   font-weight: 700;
+}
+.gp-row.gp-lead b {
+  color: #ffd60a;
 }
 .gp-row.gp-local .gp-dot {
   box-shadow: 0 0 0 calc(2px * var(--u)) rgba(255, 255, 255, 0.9);

@@ -68,6 +68,8 @@ export class RaceScreen {
   private lostSince: (number | null)[] = [];
   private reported = "";
   private shownViews = "";
+  /** What the renderer was last told each kart drives with (as a key). */
+  private shownKinds = "";
   private veilKey = "";
   private notesKey = "";
   /** The easter eggs: the last event looked at, the tick it was on, the finishes so far, and the photo finish's still. */
@@ -131,6 +133,7 @@ export class RaceScreen {
     this.loaded = false;
     this.view = null;
     this.shownViews = "";
+    this.shownKinds = "";
     this.veilKey = "";
     this.notesKey = "";
     this.eggEvent = -1;
@@ -289,6 +292,7 @@ export class RaceScreen {
         this.renderer.setViews(views);
         this.fit();
       }
+      this.teachItems(lobby);
       this.renderer.frame(view, dt);
       this.eggs(view, lobby);
     }
@@ -345,6 +349,22 @@ export class RaceScreen {
       .catch(() => {
         if (this.renderer === renderer) this.hooks.failed("load");
       });
+  }
+
+  /** Tells the picture what each of this device's drivers drives with, so a viewport can teach the item in their words. */
+  private teachItems(lobby: LobbyState): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.renderer?.setControls) return;
+    const kinds: Record<number, DriverControl["kind"]> = {};
+    ctx.players.forEach((player, i) => {
+      const control = ctx.controls[i];
+      const kart = kartOf(lobby, player.slot);
+      if (control && kart !== null) kinds[kart] = control.kind;
+    });
+    const key = JSON.stringify(kinds);
+    if (key === this.shownKinds) return;
+    this.shownKinds = key;
+    this.renderer.setControls(kinds);
   }
 
   private fit(): void {

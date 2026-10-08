@@ -29,8 +29,9 @@ import { createDemoRace, type DemoInput, type RaceViewSource } from "./demo";
 import type { Tier } from "./quality";
 import { createRaceRenderer, type GripRenderer } from "./renderer";
 import { ITEM_ICONS } from "./hud";
+import { forgetTaught } from "./itemHint";
 import { SimSource } from "./simSource";
-import type { ItemKind } from "../contract";
+import type { ControlKind, ItemKind } from "../contract";
 import { runTurntable } from "./turntable";
 
 const params = new URLSearchParams(location.search);
@@ -102,6 +103,8 @@ function startRace(): void {
     demo,
     stats: () => renderer.stats(),
     setViews,
+    /** Forgets who has used an item, so the hints show again (for pictures). */
+    forgetTaught,
     setPaused: (p: boolean) => {
       paused = p;
     },
@@ -114,6 +117,9 @@ function startRace(): void {
       loading.textContent = `Getting ready… ${Math.round(f * 100)}%`;
     });
     setViews(views);
+    // What each kart drives with, for the item hint: kart 0 is the keyboard's; ?controls=wheel,keyboard,gamepad,wheel sets them in order.
+    const kinds = (params.get("controls") ?? "keyboard").split(",").filter((k): k is ControlKind => k === "wheel" || k === "keyboard" || k === "gamepad");
+    renderer.setControls(Object.fromEntries(kinds.map((kind, i) => [i, kind])));
     resize();
     if (params.get("go") === "1") demo.skipCountdown();
     if (params.get("hud") === "0") hudRoot.style.display = "none";

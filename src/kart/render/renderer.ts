@@ -34,7 +34,7 @@ import {
 import { WebGLUnavailable } from "../../engine/common";
 import { DynamicResolution } from "../../engine/dynamicResolution";
 import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
-import type { KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
+import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
 import { Effects } from "./effects";
@@ -87,6 +87,8 @@ export interface RenderStats {
 }
 
 export interface GripRenderer extends RaceRenderer {
+  /** This renderer teaches the item (RaceRenderer's is optional). */
+  setControls(kinds: Readonly<Record<number, ControlKind>>): void;
   stats(): RenderStats;
   /** For looking at the whole world from anywhere (the dev page): replaces the first view's camera; null puts the chase camera back. */
   setDebugCamera(pose: { x: number; y: number; z: number; lookX: number; lookY: number; lookZ: number; fov?: number } | null): void;
@@ -325,6 +327,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       viewKarts = karts.length ? [...karts].slice(0, 4) : [0];
       relayout();
       for (const c of cameras) c.reset();
+    },
+
+    setControls(kinds: Readonly<Record<number, ControlKind>>): void {
+      hud.setControls(kinds);
     },
 
     frame(view: RaceView, dtRaw: number): void {
