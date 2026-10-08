@@ -1,6 +1,6 @@
 """The volcano's landmarks: volcano, stone-bridge (a span), lava-fall. Blender coordinates: z up, the front (the
 side that faces the road) is -y; a span model has x right of the road's centre line and the road running along -y.
-Lava is the glow material (emissive strength 2): its vertex colours are 0..1 and the strength carries them
+Lava is the glow material (emissive strength 1.6): its vertex colours are 0..1 and the strength carries them
 over 1, as the game's lights read them."""
 
 import math
@@ -10,7 +10,7 @@ from mathutils import Vector as V, noise
 from naturekit import Model, empty, grad_z, hexc, mix, mul, post, rod, smooth_path, smoothstep, spinner, tint, varied, TAU
 from nature_volcano import BASALT_D, BASALT_M, BASALT_L, LAVA, LAVA_HOT, LAVA_DEEP, basalt
 
-LAVA_CRUST = (0.55, 0.12, 0.03)
+LAVA_CRUST = (0.42, 0.09, 0.02)
 
 
 def n3(x, y, z, seed=0.0):
@@ -27,7 +27,7 @@ def lava_col(top_z, bottom_z):
     """A flow cools as it runs: white-hot where it spills, orange in the middle, a dull crust at the foot."""
     def f(p):
         t = max(0.0, min(1.0, (p.z - bottom_z) / (top_z - bottom_z)))
-        return mix(mix(LAVA_CRUST, LAVA, smoothstep(0.0, 0.45, t)), LAVA_HOT, smoothstep(0.55, 1.0, t))
+        return mix(mix(LAVA_CRUST, LAVA, smoothstep(0.0, 0.45, t)), mix(LAVA, LAVA_HOT, 0.3), smoothstep(0.55, 1.0, t))
     return f
 
 
@@ -93,7 +93,7 @@ def volcano():
             th = th0 + math.sin(u * 9 + si * 1.7) * 0.05 * (1 + u) + (n3(u * 4, si, 0, 5)) * 0.02
             pts_far.append(V((math.cos(th) * 420, math.sin(th) * 420, z)))
         on = m.drape(pts_far, lambda p: V((0, 0, p.z)), lift=1.0)
-        widths = lambda t, w=w: w * 0.7 * (0.5 + 0.9 * math.sin(math.pi * min(1.0, t * 1.1 + 0.1)) + 0.25 * t)
+        widths = lambda t, w=w: w * 0.42 * (0.5 + 0.9 * math.sin(math.pi * min(1.0, t * 1.1 + 0.1)) + 0.25 * t)
         g.blade(on, V((-math.sin(th0), math.cos(th0), 0)), widths, 0.4, lambda p, n, top=H - 8, bot=z_end: lava_col(top, bot)(p), mat="glow", fold=0.0, tip_point=False)
     # Rubble round the foot, black boulders of every size, and a few smoking vents.
     for k in range(22):
@@ -185,7 +185,7 @@ def stone_bridge():
         yc = -half + abut + W * (a + 1) + pier * a + pier / 2
         for sx in (-1, 1):
             post(m, sx * (deck_w + 0.1), -yc, 0.6, 4.2, 0.18, hexc("#2a232d"), 6)
-            g.blob((sx * (deck_w + 0.1), -yc, 4.5), 0.5, 1, (1.0, 0.55, 0.15), mat="glow")
+            g.blob((sx * (deck_w + 0.1), -yc, 4.5), 0.5, 1, (0.8, 0.45, 0.12), mat="glow")
     # The lava far below the arches: a glowing sheet between the piers, brighter where it laps their feet.
     g.box((0, 0, -9.0), (66, 130, 0.2), (0, 0, 0), lambda p, n: mix(LAVA_DEEP, LAVA, 0.5 + 0.5 * n3(p.x * 0.12, p.y * 0.12, 0, 3)), mat="glow")
     m.build(parent=root, ao_args=dict(reach=8.0, strength=0.7, rays=14), sharp=40)
@@ -216,7 +216,7 @@ def lava_fall():
     # An elongated cliff (wider than it is deep) like a lava tube's mouth, the face to the road.
     m.lathe(prof, sides, (0, 0, 0), cliff_col, mod=mod, squash=0.62, cap_end=True)
     # The falls: four ribbons of lava from the lip, draped down the face, thickening and cooling at the foot.
-    falls = [(-9.0, 3.4), (-2.0, 2.4), (5.0, 3.8), (12.0, 2.2)]
+    falls = [(-10.0, 2.6), (-3.0, 1.8), (4.5, 3.0), (12.0, 1.8)]
     for i, (x0, w) in enumerate(falls):
         far = []
         steps = 24

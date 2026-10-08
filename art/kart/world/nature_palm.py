@@ -26,16 +26,16 @@ def trunk_colour(h):
 def frond(m, base, az, length, droop, curl, size=1.0, shade=None):
     """One palm frond: a long arching blade with a feathery edge, out from `base` at azimuth `az`."""
     cx, cy = math.cos(az), math.sin(az)
-    n = 7
+    n = 9
     spine = []
     for k in range(n):
         t = k / (n - 1)
         out = length * t
-        up = length * (0.55 * math.sin(t * math.pi * 0.62) - droop * t * t)
+        up = length * (0.62 * math.sin(t * math.pi * 0.55) - droop * t * t * t)
         spine.append(V((base[0] + cx * out, base[1] + cy * out, base[2] + up + 0.1 * math.sin(curl + t * 6) * t)))
     col = shade or (lambda p, nn: mix(FROND_D, FROND_L, smoothstep(base[2] - 0.3, base[2] + length * 0.45, p.z) * 0.35 + smoothstep(0.1, 1.0, math.hypot(p.x - base[0], p.y - base[1]) / length) * 0.55))
-    w = lambda t: size * 0.55 * math.sin(math.pi * min(1.0, 0.12 + t * 0.95)) ** 0.8 * (1.0 - 0.25 * t)
-    m.blade(spine, V((-cy, cx, 0)), w, 0.04, col, fold=0.55, serrate=0.22)
+    w = lambda t: size * 0.9 * math.sin(math.pi * min(1.0, 0.12 + t * 0.95)) ** 0.8 * (1.0 - 0.25 * t)
+    m.blade(spine, V((-cy, cx, 0)), w, 0.04, col, fold=0.5, serrate=0.34)
 
 
 def palm(i):
@@ -49,14 +49,14 @@ def palm(i):
     for k in range(fronds):
         az = k * TAU / fronds + (0.3 if i == 1 else 0.0) + 0.15 * math.sin(k * 3.1)
         ln = 3.9 + 0.7 * math.sin(k * 2.3 + i) + (0 if i != 2 else -0.7)
-        frond(m, top + V((0, 0, 0.1)), az, ln, 1.1 + 0.8 * (k % 3) / 2 + (0.5 if i == 2 else 0.0), k, 1.0)
+        frond(m, top + V((0, 0, 0.1)), az, ln, 0.55 + 0.6 * (k % 3) / 2 + (0.3 if i == 2 else 0.0), k, 1.0)
     # The heart: young fronds standing up, and a cluster of coconuts under the crown.
     for k in range(3):
         az = k * 2.1
         frond(m, top, az, 1.8, -0.7, k, 0.55)
     for k in range(5):
         a = k * 1.25 + 0.4
-        m.blob(top + V((math.cos(a) * 0.32, math.sin(a) * 0.32, -0.35 - 0.08 * (k % 2))), (0.22, 0.22, 0.26), 1, varied(lambda p, n: mix(hexc("#4a3217"), hexc("#8a6a2e"), smoothstep(-0.4, 0.8, n.z)), 0.1, 3.0, k))
+        m.blob(top + V((math.cos(a) * 0.36, math.sin(a) * 0.36, -0.35 - 0.08 * (k % 2))), (0.3, 0.3, 0.34), 1, varied(lambda p, n: mix(hexc("#4a3217"), hexc("#8a6a2e"), smoothstep(-0.4, 0.8, n.z)), 0.1, 3.0, k))
     return m.build(ao_args=dict(reach=2.0, strength=0.7, rays=14), sharp=60)
 
 

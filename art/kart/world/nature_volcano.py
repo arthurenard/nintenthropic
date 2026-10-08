@@ -10,9 +10,9 @@ from naturekit import Model, empty, hexc, mix, mul, smooth_path, smoothstep, tin
 BASALT_D = hexc("#1b171f")
 BASALT_M = hexc("#2d2733")
 BASALT_L = hexc("#5a5066")
-LAVA_HOT = (1.0, 0.82, 0.25)   # glow colours: the emissive strength of the material carries them over 1
-LAVA = (1.0, 0.38, 0.06)
-LAVA_DEEP = (0.85, 0.16, 0.03)
+LAVA_HOT = (0.85, 0.5, 0.12)   # glow colours: the game multiplies a glowing material by at least 1.6, so these stay under 1
+LAVA = (0.78, 0.26, 0.04)
+LAVA_DEEP = (0.62, 0.13, 0.025)
 
 
 def basalt(seed=0, warm=0.35, top=BASALT_L):

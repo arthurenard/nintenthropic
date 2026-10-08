@@ -34,7 +34,7 @@ def mesa():
         z = prof[k][1]
         cliff = 1.0 + 0.07 * n3(math.cos(th) * 2.0, math.sin(th) * 2.0, z * 0.05, 1) + 0.045 * n3(math.cos(th) * 5.0, math.sin(th) * 5.0, z * 0.12, 2)
         # Gullies: vertical grooves cut into the cliffs, deeper higher up, and a lopsided outline.
-        groove = 1.0 - 0.05 * max(0.0, math.sin(th * 9.0 + n3(th, 0, 0, 3) * 4.0)) * smoothstep(8, 20, z) * (1 - smoothstep(52, 54, z))
+        groove = 1.0 - 0.03 * max(0.0, math.sin(th * 9.0 + n3(th, 0, 0, 3) * 4.0)) * smoothstep(8, 20, z) * (1 - smoothstep(52, 54, z))
         lobes = 1.0 + 0.1 * math.cos(th * 2.0 + 0.7) + 0.05 * math.cos(th * 3.0 + 2.1)
         return cliff * groove * lobes
     col = strata(0.0, 12.0, 55.0, seed=3, wobble=0.012, top_dust=0.5)

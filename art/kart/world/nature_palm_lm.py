@@ -15,7 +15,7 @@ BAMBOO = hexc("#c9a85a")
 BAMBOO_D = hexc("#8a6a2e")
 THATCH = hexc("#d6b45c")
 THATCH_D = hexc("#8e6a2a")
-GLOW_WARM = (1.0, 0.75, 0.3)
+GLOW_WARM = (0.9, 0.65, 0.25)
 
 
 def n3(x, y, z, seed=0.0):
@@ -87,7 +87,7 @@ def beach_hut():
         g.blob((sx, -R - 1.4, floor_z + 2.5), 0.28, 1, GLOW_WARM, mat="glow")
         m.tube([V((sx, -R - 1.4, floor_z + 3.4)), V((sx, -R - 1.4, floor_z + 2.8))], [0.03, 0.03], 4, hexc("#5a3a1e"))
     post(m, -6.0, -3.2, 0.0, 3.6, 0.1, hexc("#5a3a1e"), 6)
-    g.lathe([(0.0, 0.0), (0.3, 0.2), (0.12, 0.9), (0.0, 1.1)], 6, (-6.0, -3.2, 3.5), (1.0, 0.55, 0.12), mat="glow", cap_start=True)
+    g.lathe([(0.0, 0.0), (0.3, 0.2), (0.12, 0.9), (0.0, 1.1)], 6, (-6.0, -3.2, 3.5), (0.85, 0.45, 0.1), mat="glow", cap_start=True)
     # Surfboards leaning on the wall: three, bright.
     surfboard(m, (R * 0.7 + 0.1, 1.8, floor_z + 0.1), (0.2, 0.2, 1.0), 4.2, hexc("#2fb8d6"), hexc("#fbf3df"))
     surfboard(m, (R * 0.7 + 0.5, 2.2, floor_z + 0.1), (0.25, 0.25, 1.0), 3.9, hexc("#ff6a3d"), hexc("#fbf3df"))
@@ -265,7 +265,7 @@ def wristwatch():
     m.blob(cc + V((0, dial_y + 0.3, 0)), 0.5, 1, gold)
     m.lathe([(0.0, 0.0), (2.0, 0.0), (2.0, 0.08)], 20, cc + V((0, dial_y + 0.02, -4.2)), mix(cream, steel, 0.25), rot=(-math.pi / 2, 0, 0), cap_start=True)
     # The crystal: a domed glass over the whole face.
-    glass.lathe([(0.0, 0.0), (Rc - 0.9, -0.05), (Rc - 1.6, 0.5), (Rc - 4.0, 0.85), (0.0, 1.05)], 40, cc + V((0, dial_y + 0.7, 0)), (0.85, 0.95, 1.0), mat="glass", rot=(-math.pi / 2, 0, 0))
+    glass.lathe([(0.0, 0.0), (Rc - 0.9, -0.05), (Rc - 1.6, 0.5), (Rc - 4.0, 0.85), (0.0, 1.05)], 40, cc + V((0, dial_y + 0.7, 0)), (1.0, 1.0, 1.0), mat="glass", rot=(-math.pi / 2, 0, 0))
     # The crown on top and a pusher beside it, a gold lug each side where the strap hangs.
     m.lathe([(0.9, -0.2), (1.1, 0.0), (1.1, 1.2), (0.9, 1.4), (0.0, 1.45)], 14, cc + V((0, 0, Rc + 0.2)), gold, cap_start=True)
     m.box(cc + V((0, 0, Rc + 1.5)), (1.8, 0.8, 0.5), (0, 0, 0), gold, bevel=0.1)

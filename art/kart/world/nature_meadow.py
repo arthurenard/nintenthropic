@@ -64,7 +64,7 @@ def round_tree(i):
         trunk(m, (0, 0, 0), 2.7, 0.44, 0.27, bend=(0.15, 0.05))
         m.tube([V((0.1, 0, 2.0)), V((0.7, 0.1, 2.9)), V((1.25, 0.1, 3.4))], [0.19, 0.14, 0.1], 5, col=BARK_D, cap_end=True)
         m.tube([V((0.1, 0, 2.2)), V((-0.7, -0.2, 3.0)), V((-1.15, -0.2, 3.5))], [0.19, 0.13, 0.09], 5, col=BARK_D, cap_end=True)
-        puffs(m, c, [(0.1, 0, 3.55, 1.85, 1.75, 1.5), (1.35, 0.15, 3.0, 1.1, 1.05, 0.95), (-1.3, -0.25, 3.15, 1.15, 1.05, 0.95), (0.2, 0.7, 4.55, 1.2, 1.15, 0.9), (-0.45, -0.7, 4.3, 1.0, 0.95, 0.85), (0.95, -0.8, 3.9, 0.95, 0.9, 0.8), (-0.85, 0.85, 3.85, 0.95, 0.9, 0.8)])
+        puffs(m, c, [(0.1, 0, 3.55, 1.85, 1.75, 1.5), (1.35, 0.15, 3.0, 1.1, 1.05, 0.95), (-1.3, -0.25, 3.15, 1.15, 1.05, 0.95), (0.2, 0.7, 4.55, 1.2, 1.15, 0.9), (-0.45, -0.7, 4.3, 1.0, 0.95, 0.85), (0.95, -0.8, 3.9, 0.95, 0.9, 0.8)])
     elif i == 1:
         # A tall tree with a rounder, fuller crown.
         trunk(m, (0, 0, 0), 3.0, 0.37, 0.22, bend=(-0.2, 0.1))
@@ -89,7 +89,7 @@ def round_tree(i):
         trunk(m, (0, 0, 0), 2.3, 0.4, 0.25, bend=(0.3, 0.2), col=lambda p, n: mix(hexc("#3d2a22"), hexc("#7b5744"), smoothstep(0.1, 2.4, p.z)))
         m.tube([V((0.2, 0.1, 1.9)), V((1.0, 0.2, 2.8)), V((1.5, 0.1, 3.5))], [0.17, 0.12, 0.08], 5, col=hexc("#3d2a22"), cap_end=True)
         m.tube([V((0.2, 0.1, 2.1)), V((-0.7, -0.2, 3.1)), V((-1.2, -0.3, 3.6))], [0.17, 0.12, 0.08], 5, col=hexc("#3d2a22"), cap_end=True)
-        blossom = leaf_colour(hexc("#e07aa6"), hexc("#ffe3ee"), 1.6, 5.4, seed=i, up=0.7)
+        blossom = leaf_colour(hexc("#d9488c"), hexc("#ffc6dc"), 1.6, 5.4, seed=i, up=0.9)
         puffs(m, blossom, [(0.2, 0.1, 3.7, 1.9, 1.8, 1.4), (1.5, 0.1, 3.2, 1.05, 1.0, 0.9), (-1.3, -0.3, 3.4, 1.1, 1.0, 0.9), (0.3, 0.7, 4.6, 1.2, 1.1, 0.85), (-0.5, -0.8, 4.3, 1.0, 0.95, 0.8), (0.9, -0.9, 4.0, 0.9, 0.85, 0.75)])
     return m.build(ao_args=dict(reach=2.8, strength=0.8, rays=18), sharp=85)
 
@@ -106,7 +106,7 @@ def pine(i):
         z0 = 1.0 + t * (h - 2.4)
         rad = (1.95 - 1.55 * t) * (0.8 if tall else 1.0) + 0.1
         height = 1.4 - 0.35 * t
-        sides = 14 if k < 3 else 10
+        sides = 12 if k < 3 else 9
         scallop = lambda j, kk: 1.0 if j % 2 == 0 else 0.7
         col = leaf_colour(shade, lit, z0 - 0.2, z0 + height, seed=k + i * 3, jitter=0.1, up=1.0)
         m.lathe([(0.0, z0 - 0.4), (rad, z0 - 0.12), (rad * 0.8, z0 + height * 0.3), (rad * 0.42, z0 + height * 0.7), (0, z0 + height)], sides, (0, 0, 0), col, phase=k * 0.35, mod=scallop)
@@ -117,7 +117,7 @@ def bush(i):
     m = Model(f"scenery.bush.{i}", seed=50 + i)
     shade, lit = [(hexc("#157a38"), hexc("#86e04e")), (hexc("#1f8a3a"), hexc("#b8e856")), (hexc("#0f6e46"), hexc("#62cf80"))][i % 3]
     c = leaf_colour(shade, lit, 0.0, 1.3, seed=i, jitter=0.2)
-    for k, (x, y, z, rx, ry, rz) in enumerate([(0, 0, 0.55, 0.95, 0.9, 0.72), (0.8, 0.15, 0.4, 0.62, 0.6, 0.5), (-0.6, -0.3, 0.4, 0.62, 0.58, 0.5), (0.1, 0.62, 0.38, 0.55, 0.5, 0.42), (-0.15, -0.7, 0.34, 0.5, 0.45, 0.4)]):
+    for k, (x, y, z, rx, ry, rz) in enumerate([(0, 0, 0.55, 0.95, 0.9, 0.72), (0.8, 0.15, 0.4, 0.62, 0.6, 0.5), (-0.6, -0.3, 0.4, 0.62, 0.58, 0.5), (0.1, 0.62, 0.38, 0.55, 0.5, 0.42)]):
         m.blob((x, y, z), (rx, ry, rz), 2 if k == 0 else 1, c, amp=0.09, seed=k + 2, flat_base=-0.5)
     if i == 1:
         for k in range(8):
@@ -155,15 +155,15 @@ def flower(i):
     petals = [hexc("#ff4f81"), hexc("#ffd23d"), hexc("#fbfbff"), hexc("#b86bff"), hexc("#ff8a2a"), hexc("#ff5252")][i % 6]
     centre = hexc("#ffcf2e") if i % 6 != 1 else hexc("#c1651f")
     green = grad_z(0, 0.45, hexc("#2b7a2e"), hexc("#7ad24b"))
-    for k in range(5):
-        a = k * 1.3 + 0.2
+    for k in range(4):
+        a = k * 1.6 + 0.2
         r = 0.2 + 0.05 * (k % 3)
-        m.cone((math.cos(a) * r, math.sin(a) * r, 0), 0.08, 0.3 + 0.04 * (k % 3), 4, green, cap=False)
-    spots = [(0.0, 0.0, 0.42), (0.27, 0.16, 0.34), (-0.25, 0.12, 0.30), (0.08, -0.26, 0.26), (-0.12, 0.28, 0.36)]
+        m.cone((math.cos(a) * r, math.sin(a) * r, 0), 0.08, 0.3 + 0.04 * (k % 3), 3, green, cap=False)
+    spots = [(0.0, 0.0, 0.42), (0.27, 0.16, 0.34), (-0.25, 0.12, 0.30), (0.08, -0.26, 0.26)]
     for (x, y, h) in spots:
-        m.tube([V((x * 0.7, y * 0.7, 0)), V((x, y, h * 0.55)), V((x, y, h))], [0.022, 0.018, 0.016], 4, col=hexc("#3f9a3a"), cap_end=False)
+        m.tube([V((x * 0.7, y * 0.7, 0)), V((x, y, h * 0.55)), V((x, y, h))], [0.022, 0.018, 0.016], 3, col=hexc("#3f9a3a"), cap_end=False)
         petal = varied(grad_z(h - 0.02, h + 0.09, mul(petals, 0.78), petals), 0.04)
-        m.lathe([(0.0, h + 0.0), (0.17, h + 0.035), (0.0, h + 0.09)], 10, (x, y, 0), petal, mod=lambda j, kk: 1.0 if j % 2 == 0 else 0.62, phase=x * 9)
+        m.lathe([(0.0, h + 0.0), (0.17, h + 0.035), (0.0, h + 0.09)], 8, (x, y, 0), petal, mod=lambda j, kk: 1.0 if j % 2 == 0 else 0.62, phase=x * 9)
         m.blob((x, y, h + 0.075), (0.055, 0.055, 0.04), 0, centre)
     return m.build(ao_args=dict(reach=0.6, strength=0.6, rays=12, ground_reach=1.0))
 

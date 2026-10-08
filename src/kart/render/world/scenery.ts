@@ -32,7 +32,8 @@ import { MeshBuilder, rgb, type Rgb } from "./builder";
 import { SOLID_MARGIN, WALL_DISTANCE } from "./features";
 import { hasSceneryArt, sceneryVariants } from "./sceneryArt";
 import type { BakeUniforms } from "./shading";
-import type { KeepOut } from "./landmarks/place";
+import { landmarkFromArt } from "./landmarks/fromArt";
+import { bake, type KeepOut } from "./landmarks/place";
 import * as props from "./props";
 import { addWorldScenery } from "./sceneryWorlds";
 import { WATER_LEVEL, type Terrain } from "./terrain";
@@ -184,6 +185,27 @@ export function buildScenery(
     return g;
   };
 
+  /** A Blender-made landmark standing on the ground here as plain meshes, its turning parts turning: false when there is none. */
+  const standArt = (kind: string, x: number, y: number, z: number, yaw: number, scale: number): boolean => {
+    const art = landmarkFromArt(kind);
+    if (!art) return false;
+    const stand = new Group();
+    stand.position.set(x, y, z);
+    stand.rotation.y = yaw;
+    stand.scale.setScalar(scale);
+    stand.add(new Mesh(geo(art.lit.build()), material));
+    for (const part of art.moving ?? []) {
+      const about = new MeshBuilder();
+      if (part.lit) bake(about, part.lit, ([px, py, pz]) => [px - part.pivot[0], py - part.pivot[1], pz - part.pivot[2]], true);
+      const mesh = new Mesh(geo(about.build()), material);
+      mesh.position.set(part.pivot[0], part.pivot[1], part.pivot[2]);
+      stand.add(mesh);
+      animated.push((t) => part.update(t, mesh));
+    }
+    add(stand);
+    return true;
+  };
+
   const variants = (kind: string, fallback: () => BufferGeometry, items: Item[]): void => {
     const art = sceneryVariants(kind);
     if (!art.length) {
@@ -271,10 +293,11 @@ export function buildScenery(
 
     // The windmill and barn: landmarks in open ground.
     const spots = landmarkSpots(2, 38, 120, (x, z, h) => h < 6 && fbm2(x / 55 + 3, z / 55 - 7, 3) < 0.55);
-    const windmill = props.windmill();
-    const tower = geo(windmill.tower);
-    const blades = geo(windmill.blades);
-    if (spots[0]) {
+    // The Blender-made windmill and barn (art/kart/world/) stand here too when there are some, so the farm is of a piece.
+    if (spots[0] && !standArt("windmill", spots[0].x, spots[0].h - 0.1, spots[0].z, rnd() * 6, 1)) {
+      const windmill = props.windmill();
+      const tower = geo(windmill.tower);
+      const blades = geo(windmill.blades);
       const s = spots[0];
       const tm = new Mesh(tower, material);
       tm.position.set(s.x, s.h - 0.1, s.z);
@@ -288,7 +311,7 @@ export function buildScenery(
         bm.rotation.z = t * 0.35;
       });
     }
-    if (spots[1]) {
+    if (spots[1] && !standArt("barn", spots[1].x, spots[1].h - 0.1, spots[1].z, rnd() * 6, 1)) {
       const bm = new Mesh(geo(props.barn()), material);
       bm.position.set(spots[1].x, spots[1].h - 0.1, spots[1].z);
       bm.rotation.y = rnd() * 6;
@@ -310,7 +333,8 @@ export function buildScenery(
     variants("cactus", props.cactus, scatter({ count: 300, minEdge: 13, maxEdge: 160, cell: 5, scale: [0.9, 1.7], maxSlope: 0.35, keep: (x, z) => sand(x + 50, z) }));
     variants("shrub", props.dryBush, scatter({ count: 520, minEdge: 10, cell: 2.5, scale: [0.7, 1.5], maxSlope: 0.45 }));
     const arch = landmarkSpots(1, 60, 150, (_x, _z, h) => h < 8);
-    if (arch[0]) {
+    // (A free-standing arch: the modelled one, whose span is the road's own frame, stands as it is.)
+    if (arch[0] && !standArt("rock-arch", arch[0].x, arch[0].h - 1, arch[0].z, rnd() * 6.28, 1.3)) {
       const m = new Mesh(geo(props.rockArch()), material);
       m.position.set(arch[0].x, arch[0].h - 1, arch[0].z);
       m.rotation.y = rnd() * 6.28;

@@ -8,7 +8,7 @@ from mathutils import Vector as V, noise
 from naturekit import Model, empty, hexc, mix, mul, smooth_path, smoothstep, tint, varied, TAU
 
 # The strata of the canyon walls, bottom to top: oxide red, burnt orange, cream, rust.
-STRATA = [hexc("#a8402a"), hexc("#c9532e"), hexc("#e08b50"), hexc("#ecc08a"), hexc("#bf4b2c"), hexc("#d9703a"), hexc("#f0cf9c")]
+STRATA = [hexc("#8f2e1f"), hexc("#c9532e"), hexc("#f0a05a"), hexc("#f6d7a0"), hexc("#a63a24"), hexc("#dd6f36"), hexc("#f4cf94")]
 
 
 def strata(z0, bands, height, seed=0, wobble=0.04, top_dust=0.0, dust=hexc("#e9cf9f")):

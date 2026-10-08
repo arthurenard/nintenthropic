@@ -556,7 +556,7 @@ def material(kind):
     bsdf.inputs["Metallic"].default_value = 0.0
     if kind == "glow":
         bsdf.inputs["Emission Color"].default_value = (1, 1, 1, 1)
-        bsdf.inputs["Emission Strength"].default_value = 2.0
+        bsdf.inputs["Emission Strength"].default_value = 1.6
         m.name = "glow"
     elif kind == "glass":
         bsdf.inputs["Alpha"].default_value = 0.5

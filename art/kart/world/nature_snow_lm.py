@@ -12,7 +12,7 @@ from nature_snow import SNOW, SNOW_SHADE, snow_on
 LOG = hexc("#8a5a35")
 LOG_D = hexc("#4d2f1c")
 LOG_L = hexc("#b07a45")
-WARM = (1.0, 0.72, 0.28)      # lit window: a glow colour (the glow material's strength carries it over 1)
+WARM = (0.9, 0.62, 0.24)      # lit window: a glow colour (the glow material's strength carries it over 1)
 
 
 def n3(x, y, z, seed=0.0):
@@ -30,9 +30,9 @@ def icicles(m, pts, length, col, count_scale=1.0, mat="lit"):
 def cabin():
     root = empty("landmark.cabin")
     m = Model("cabin.body", seed=21)
-    W, D = 6.0, 4.4          # half width and half depth
-    r = 0.42
-    courses = 10
+    W, D = 7.2, 5.2          # half width and half depth
+    r = 0.5
+    courses = 9
     cols = [LOG, LOG_L, mul(LOG, 0.85), LOG_D]
     colf = lambda q: varied(mix(cols[q % 4], LOG_D, 0.05 * (q % 3)), 0.06, 1.5, q)
     # A stone footing, then the log walls, corners notched and crossing.
@@ -111,7 +111,7 @@ def cabin():
 def igloo():
     root = empty("landmark.igloo")
     m = Model("igloo.body", seed=24)
-    R = 6.2
+    R = 7.4
     block = [hexc("#eef6ff"), hexc("#dfeeff"), hexc("#e8f2ff"), hexc("#d3e6fb")]
     # The dome: courses of snow blocks, each course a little narrower and each block a little proud.
     rows = 8
@@ -129,7 +129,7 @@ def igloo():
             ring = [[P(a0, th0), P(a0, thm, 1.03), P(a0, th1)], [P(a1, th0), P(a1, thm, 1.03), P(a1, th1)]]
             m.loft(ring, varied(col, 0.03, 2.0, j + q), close=False)
     # The entrance: a vaulted tunnel of blocks reaching toward the road, dark inside with a warm glow.
-    tl = 4.2
+    tl = 4.8
     for q in range(4):
         y0 = -R + 0.6 - q * tl / 4
         y1 = y0 - tl / 4
@@ -138,7 +138,7 @@ def igloo():
             a1 = math.pi * (j + 1) / 8
             col = block[(j + q) % 4]
             def T(a, y, k=1.0):
-                return V((math.cos(a) * 1.85 * k, y, math.sin(a) * 2.3 * k))
+                return V((math.cos(a) * 2.2 * k, y, math.sin(a) * 2.7 * k))
             m.loft([[T(a0, y0), T(a1, y0)], [T(a0, y1, 1.0), T(a1, y1, 1.0)], ], varied(col, 0.03, 2.0, j * 3 + q), close=False)
             m.loft([[T(a0, y0, 1.18), T(a1, y0, 1.18)], [T(a0, y1, 1.18), T(a1, y1, 1.18)]], varied(col, 0.03, 2.0, j * 5 + q), close=False)
     m.box((0, -R - tl + 0.6, 0.05), (5.6, 0.5, 0.3), (0, 0, 0), block[0], bevel=0.05)
@@ -191,7 +191,7 @@ def ice_arch():
         outer = [p[1] for p in ring][::-1]
         full = [V((q.x, q.y, q.z - 2.5 if q.z < 0.6 else q.z)) for q in inner + outer]
         rings.append(full)
-    ice_col = varied(lambda p, n: mix(hexc("#7cc8f2"), hexc("#e6f8ff"), smoothstep(0.0, 19.0, p.z) * 0.7 + 0.3 * smoothstep(-0.3, 0.9, n.z)), 0.05, 0.6, 2)
+    ice_col = varied(lambda p, n: mix(hexc("#2f9ee8"), hexc("#a8e6ff"), smoothstep(0.0, 19.0, p.z) * 0.6 + 0.4 * smoothstep(-0.3, 0.9, n.z)), 0.05, 0.6, 2)
     shell.loft(rings[::-1], ice_col, mat="glass")
     for ring, flip in ((rings[0], True), (rings[-1], False)):
         inner, outer = ring[: arc + 1], ring[arc + 1:][::-1]
@@ -236,11 +236,11 @@ def snowman():
     for z, y in ((8.9, -3.62), (10.4, -3.88), (11.9, -3.62)):
         m.blob((0, y, z), (0.42, 0.22, 0.42), 1, coal)
     for sx in (-0.95, 0.95):
-        m.blob((sx, -2.65, 16.0), (0.4, 0.22, 0.45), 1, coal)
+        m.blob((sx, -3.0, 16.0), (0.4, 0.22, 0.45), 1, coal)
     for k in range(7):
         a = -0.9 + k * 0.3
-        m.blob((math.sin(a) * 1.5, -2.7 + (1 - math.cos(a)) * -0.2, 14.4 - (1 - math.cos(a * 2.0)) * 0.9), (0.22, 0.14, 0.22), 0, coal)
-    m.lathe([(0.5, 0.0), (0.35, 1.5), (0.0, 3.4)], 8, (0, -2.7, 15.2), hexc("#ff7a1c"), rot=(-math.pi / 2 - 0.1, 0, 0), cap_start=True)
+        m.blob((math.sin(a) * 1.5, -3.05 + (1 - math.cos(a)) * 0.9, 14.5 - (1 - math.cos(a * 2.0)) * 0.9), (0.22, 0.14, 0.22), 0, coal)
+    m.lathe([(0.5, 0.0), (0.35, 1.5), (0.0, 3.4)], 8, (0, -3.0, 15.2), hexc("#ff7a1c"), rot=(math.pi / 2 + 0.1, 0, 0), cap_start=True)
     # The scarf: wound twice round the neck, two tails over the shoulder; stripes of red and cream.
     red, cream = hexc("#d1342f"), hexc("#f4ecd8")
     for k, z in enumerate((12.6, 13.5)):
