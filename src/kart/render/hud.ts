@@ -1,17 +1,23 @@
 /**
  * Each viewport's HUD, in HTML over the canvas (hud.css; DESIGN.md's glass,
- * type and voice): lap and time top left, the item slot top centre, the
- * place large bottom right, the minimap bottom left, and in the middle the
- * countdown, "Final Lap", "Wrong Way" and the place on finishing. With three
- * players the free quadrant holds the map and the standings instead.
+ * type and voice): lap and time top left, the item slot top centre (with, for
+ * a player who has never used one, how to), the place large bottom right, and
+ * in the middle the countdown, "Final Lap", "Wrong Way" and the place on
+ * finishing.
+ *
+ * The map is on screen in every layout (layout.ts's mapPlacement): bottom left
+ * with one view, on the right edge at the split with two, in the free quadrant
+ * with the standings beside it with three, and small in the middle with a
+ * compact standings strip with four.
  *
  * It only touches the DOM when a value changes, so a steady frame costs a few
  * comparisons per viewport.
  */
 import "./hud.css";
-import type { ItemKind, KartView, RaceEvent, RaceView, RacerSetup } from "../contract";
+import type { ControlKind, ItemKind, KartView, RaceEvent, RaceView, RacerSetup } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
-import { hudScale, type Rect, type ViewLayout } from "./layout";
+import { ItemHint, hintWords, markTaught } from "./itemHint";
+import { clearance, hudScale, mapPlacement, type MapPlacement, type Rect, type ViewLayout } from "./layout";
 import { formatRaceTime, ordinal } from "./math";
 import { Minimap } from "./minimap";
 
@@ -85,9 +91,11 @@ interface ViewHud {
   finish: HTMLElement;
   finishPlace: HTMLElement;
   finishTime: HTMLElement;
-  map: HTMLElement | null;
-  mapCanvas: HTMLCanvasElement | null;
+  hint: HTMLElement;
+  teacher: ItemHint;
   // What was last written.
+  lastHint: string;
+  hintOn: boolean;
   lastPlace: number;
   lastItem: string;
   lastCount: string;
@@ -99,16 +107,28 @@ interface ViewHud {
   shownFinal: boolean;
 }
 
-interface FreeHud {
+/** A list of the karts in order, rebuilt only when the order (or a lap) changes. */
+interface Standings {
+  list: HTMLElement;
+  rows: HTMLElement[];
+  lastKey: string;
+}
+
+interface FreeHud extends Standings {
   root: HTMLElement;
   /** The map box's size in CSS px once laid out (measured once, not every frame). */
   mapSize: { w: number; h: number } | null;
   rect: Rect;
   mapBox: HTMLElement;
   canvas: HTMLCanvasElement;
-  list: HTMLElement;
-  rows: HTMLElement[];
-  lastKey: string;
+}
+
+/** The map as a glass box over the views: in a corner, on the edge, or in the middle (with a standings strip). */
+interface FloatHud {
+  root: HTMLElement;
+  canvas: HTMLCanvasElement;
+  place: MapPlacement;
+  strip: Standings | null;
 }
 
 export interface HudOptions {
@@ -121,11 +141,14 @@ export interface HudOptions {
 export class Hud {
   private views: ViewHud[] = [];
   private free: FreeHud | null = null;
+  private float: FloatHud | null = null;
+  private kinds = new Map<number, ControlKind>();
   private readonly map = new Minimap();
   private racers: readonly RacerSetup[] = [];
   private local = new Set<number>();
   private lastEvent = -1;
   private clock = 0;
+  private dt = 0;
   private dpr = 1;
 
   constructor(
@@ -151,10 +174,16 @@ export class Hud {
     this.racers = racers;
   }
 
+  /** What each kart on this screen is driven with (kart id → kind), so the item can be taught in the right words. */
+  setControls(kinds: Readonly<Record<number, ControlKind>>): void {
+    this.kinds = new Map(Object.entries(kinds).map(([id, kind]) => [Number(id), kind]));
+  }
+
   /** A new race: events are numbered afresh, and nothing from the last one lingers. */
   resetRace(): void {
     this.lastEvent = -1;
     for (const v of this.views) {
+      v.teacher.reset();
       v.finalUntil = -1;
       v.shownFinal = false;
       v.lastLap = 0;
@@ -172,16 +201,30 @@ export class Hud {
     this.views = [];
     this.free?.root.remove();
     this.free = null;
+    this.float?.root.remove();
+    this.float = null;
     this.local = new Set(karts);
     layout.views.forEach((rect, i) => {
       const id = karts[i];
       if (id === undefined) return;
-      this.views.push(this.build(id, rect, layout.views.length === 1));
+      this.views.push(this.build(id, rect));
     });
-    if (layout.free) this.free = this.buildFree(layout.free);
+    const place = mapPlacement(layout, this.map.aspect, Math.max(this.racers.length, 1));
+    if (!place) return;
+    if (place.mode === "free") {
+      this.free = this.buildFree(place.rect);
+      return;
+    }
+    this.float = this.buildFloat(place);
+    // The furniture the map sits over (a place on the right, a lap on the left) steps aside.
+    for (const v of this.views) {
+      const c = clearance(v.rect, place.rect, v.scale);
+      v.root.style.setProperty("--clear-place", `${Math.round(c.place)}px`);
+      v.root.style.setProperty("--clear-lap", `${Math.round(c.lap)}px`);
+    }
   }
 
-  private build(kartId: number, rect: Rect, withMap: boolean): ViewHud {
+  private build(kartId: number, rect: Rect): ViewHud {
     const root = el("div", "gp-view", this.root);
     const scale = hudScale(rect.w, rect.h);
     setRect(root, rect);
@@ -226,12 +269,9 @@ export class Hud {
     const finishPlace = el("div", "gp-finish-place", finish);
     const finishTime = el("div", "gp-finish-time", finish);
 
-    let map: HTMLElement | null = null;
-    let mapCanvas: HTMLCanvasElement | null = null;
-    if (withMap) {
-      map = el("div", "gp-map gp-glass", root);
-      mapCanvas = el("canvas", "", map);
-    }
+    // How to use the item, for a player who has not yet: beside the slot.
+    const hint = el("div", "gp-hint gp-glass", root);
+    hint.setAttribute("aria-live", "polite");
 
     return {
       kartId,
@@ -254,8 +294,10 @@ export class Hud {
       finish,
       finishPlace,
       finishTime,
-      map,
-      mapCanvas,
+      hint,
+      teacher: new ItemHint(),
+      lastHint: "",
+      hintOn: false,
       lastPlace: -1,
       lastItem: "",
       lastCount: "",
@@ -281,8 +323,25 @@ export class Hud {
     return { root, mapSize: null, rect, mapBox, canvas, list, rows: [], lastKey: "" };
   }
 
+  private buildFloat(place: MapPlacement): FloatHud {
+    const root = el("div", `gp-float gp-glass gp-${place.mode}`, this.root);
+    setRect(root, place.rect);
+    root.style.setProperty("--u", String(place.scale));
+    const canvas = el("canvas", "", root);
+    canvas.style.width = `${place.canvas!.w}px`;
+    canvas.style.height = `${place.canvas!.h}px`;
+    let strip: Standings | null = null;
+    if (place.strip) {
+      const list = el("div", "gp-strip", root);
+      list.style.width = `${place.strip.w}px`;
+      strip = { list, rows: [], lastKey: "" };
+    }
+    return { root, canvas, place, strip };
+  }
+
   update(view: RaceView, dt: number): void {
     this.clock += dt;
+    this.dt = dt;
     const byId = new Map<number, KartView>();
     for (const k of view.karts) byId.set(k.id, k);
 
@@ -301,10 +360,18 @@ export class Hud {
       for (const e of fresh) {
         if (e.type === "final-lap" && e.kart === v.kartId) v.finalUntil = this.clock + 2.6;
         if (e.type === "lap" && e.kart === v.kartId) restart(v.lapCount, "gp-pop");
+        // Using an item is learning it: no more telling.
+        if (e.type === "use" && e.kart === v.kartId) markTaught(this.whoIs(v.kartId));
       }
       this.updateView(v, kart, view);
     }
     if (this.free) this.updateFree(this.free, view);
+    if (this.float) this.updateFloat(this.float, view);
+  }
+
+  /** Who a kart's driver is for remembering what they have learnt: their lobby slot, else the kart. */
+  private whoIs(kartId: number): number {
+    return this.racers.find((r) => r.id === kartId)?.player ?? kartId;
   }
 
   private updateView(v: ViewHud, kart: KartView, view: RaceView): void {
@@ -330,6 +397,7 @@ export class Hud {
 
     // The item slot.
     this.updateItem(v, kart);
+    this.updateHint(v, kart);
     this.updateIncoming(v, kart, view);
 
     // Final lap: by event, or by the lap counter when no event reached us.
@@ -374,12 +442,21 @@ export class Hud {
       setText(v.finishTime, formatRaceTime(kart.finished as number));
     }
 
-    if (v.map && v.mapCanvas) {
-      const w = Math.round(190 * v.scale);
-      const h = Math.max(Math.round(70 * v.scale), Math.min(Math.round(170 * v.scale), Math.round(w / this.map.aspect)));
-      v.mapCanvas.style.width = `${w}px`;
-      v.mapCanvas.style.height = `${h}px`;
-      this.map.draw(v.mapCanvas, w, h, this.dpr, v.scale, view.karts, this.racers, this.local);
+  }
+
+  /** "Press E to use it", beside the slot, until the player has used one (itemHint.ts). */
+  private updateHint(v: ViewHud, kart: KartView): void {
+    const kind = this.kinds.get(v.kartId);
+    const holding = kind !== undefined && !kart.rolling && kart.item !== null && kart.finished === null;
+    const on = v.teacher.step(this.whoIs(v.kartId), holding, this.dt);
+    const words = kind ? hintWords(kind) : "";
+    if (words && words !== v.lastHint) {
+      v.lastHint = words;
+      setText(v.hint, words);
+    }
+    if (on !== v.hintOn) {
+      v.hintOn = on;
+      v.hint.classList.toggle("gp-on", on);
     }
   }
 
@@ -440,32 +517,44 @@ export class Hud {
     }
     this.map.draw(f.canvas, f.mapSize.w, f.mapSize.h, this.dpr, scale * 1.15, view.karts, this.racers, this.local);
 
-    // The standings: rebuilt only when the order or a lap changes.
+    this.updateStandings(f, view, false);
+  }
+
+  /** The map in its glass box, and in the middle the strip of who is where. */
+  private updateFloat(f: FloatHud, view: RaceView): void {
+    const { canvas, scale } = f.place;
+    this.map.draw(f.canvas, canvas!.w, canvas!.h, this.dpr, scale, view.karts, this.racers, this.local);
+    if (f.strip) this.updateStandings(f.strip, view, true);
+  }
+
+  /** The standings, rebuilt only when the order or a lap changes. `compact`: place, colour and name only. */
+  private updateStandings(s: Standings, view: RaceView, compact: boolean): void {
     const order = [...view.karts].sort((a, b) => a.place - b.place);
     const key = order.map((k) => `${k.id}:${k.lap}:${k.finished !== null ? 1 : 0}`).join("|");
     const live = order.map((k) => (k.finished !== null ? formatRaceTime(k.finished) : `Lap ${Math.min(k.lap, view.laps)}`));
-    const rowKey = key + "#" + live.join("|");
-    if (rowKey !== f.lastKey) {
-      f.lastKey = rowKey;
-      for (const r of f.rows) r.remove();
-      f.rows = order.map((k, i) => {
-        const racer = this.racers.find((r) => r.id === k.id);
-        const row = el("div", `gp-row${this.local.has(k.id) ? " gp-local" : ""}`, f.list);
-        el("b", "", row).textContent = String(k.place);
-        const dot = el("span", "gp-dot", row);
-        dot.style.background = racer?.colour ?? "#fff";
-        el("span", "gp-name", row).textContent = racer?.name ?? `Kart ${k.id + 1}`;
-        el("span", "gp-note", row).textContent = live[i] ?? "";
-        return row;
-      });
-    }
+    const rowKey = key + "#" + (compact ? "" : live.join("|"));
+    if (rowKey === s.lastKey) return;
+    s.lastKey = rowKey;
+    for (const r of s.rows) r.remove();
+    s.rows = order.map((k, i) => {
+      const racer = this.racers.find((r) => r.id === k.id);
+      const row = el("div", `gp-row${this.local.has(k.id) ? " gp-local" : ""}${k.place === 1 ? " gp-lead" : ""}`, s.list);
+      el("b", "", row).textContent = String(k.place);
+      const dot = el("span", "gp-dot", row);
+      dot.style.background = racer?.colour ?? "#fff";
+      el("span", "gp-name", row).textContent = racer?.name ?? `Kart ${k.id + 1}`;
+      if (!compact) el("span", "gp-note", row).textContent = live[i] ?? "";
+      return row;
+    });
   }
 
   dispose(): void {
     for (const v of this.views) v.root.remove();
     this.free?.root.remove();
+    this.float?.root.remove();
     this.views = [];
     this.free = null;
+    this.float = null;
     this.root.classList.remove("gp-hud", "gp-blur", "gp-calm");
   }
 }

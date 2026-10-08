@@ -310,14 +310,23 @@ export interface RaceRenderer {
   /** Draws `view`; `dt` is real seconds since the last frame (for the cameras' and effects' easing). */
   frame(view: RaceView, dt: number): void;
   resize(width: number, height: number, dpr: number): void;
+  /**
+   * What each kart on this device drives with (kart id → kind), so a viewport can teach the item
+   * in the right words. Kinds for karts this screen does not drive are ignored; none, no hints.
+   * Optional: a renderer that does not teach leaves it out.
+   */
+  setControls?(kinds: Readonly<Record<number, ControlKind>>): void;
   dispose(): void;
 }
 
 // ─── Input ──────────────────────────────────────────────────────────────────
 
+/** What a player drives with. */
+export type ControlKind = "wheel" | "keyboard" | "gamepad";
+
 /** How one player on this device drives. */
 export interface DriverControl {
-  readonly kind: "wheel" | "keyboard" | "gamepad";
+  readonly kind: ControlKind;
   /** The input for the next tick; called TICK_HZ times a second. */
   sample(now: number): DriveInput;
   /** What the wheel sees, for the screens (null for keys and pads). */
