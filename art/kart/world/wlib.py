@@ -880,7 +880,7 @@ def fresh_scene():
     return bpy.context.scene.collection
 
 
-def export_glb(path: str):
+def export_glb(path: str, draco: bool = True):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     kw = dict(
         filepath=path,
@@ -896,7 +896,7 @@ def export_glb(path: str):
         export_animations=False,
         export_texcoords=False,
         export_normals=True,
-        export_draco_mesh_compression_enable=True,
+        export_draco_mesh_compression_enable=draco,
         export_draco_mesh_compression_level=7,
         export_draco_position_quantization=14,
         export_draco_normal_quantization=10,
@@ -906,7 +906,7 @@ def export_glb(path: str):
     print(f"exported {path}  {os.path.getsize(path) / 1024:.0f} KB", flush=True)
 
 
-def build_theme(theme: str, builders: dict, out_path: str, only=None):
+def build_theme(theme: str, builders: dict, out_path: str, only=None, draco: bool = True):
     """Build the named landmark builders (kind -> function returning a Landmark) and write the theme's .glb."""
     coll = fresh_scene()
     total = 0
@@ -919,7 +919,7 @@ def build_theme(theme: str, builders: dict, out_path: str, only=None):
         total += lm.tri_count()
         print(f"  {theme}/{kind}: {lm.tri_count()} tris  ({time.time() - t0:.1f}s)", flush=True)
     print(f"{theme}: {total} tris")
-    export_glb(out_path)
+    export_glb(out_path, draco)
 
 
 def aim(direction) -> tuple:

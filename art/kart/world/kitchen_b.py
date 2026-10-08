@@ -224,7 +224,7 @@ def pepper_mill() -> Landmark:
     rnd = random.Random(11)
     for i in range(26):
         a = rnd.uniform(0, TAU)
-        r = rnd.uniform(8.6, 15.0)
+        r = rnd.uniform(8.6, 12.6)
         s = rnd.uniform(0.7, 1.1)
         lm.sphere(s, at=(math.cos(a) * r, s * 0.8, math.sin(a) * r * 0.9), segs=10, rings=7, col=lambda p, n: mix(C("#161210"), C("#4b4038"), max(0.0, n.y) ** 2), mat="glossy", disp=lambda p, s=s: 0.1 * s * noise(p, 5.0))
     return lm
@@ -258,9 +258,9 @@ def book(lm, at, size, yaw, cloth, trim, title=None, spine_to=-1):
 
 def cookbook() -> Landmark:
     lm = Landmark("cookbook", ao=0.8)
-    place1 = book(lm, (0.0, 0.0, 0.0), (32.0, 6.2, 23.0), 0, C("#b3262b"), GOLD)
-    place2 = book(lm, (-1.5, 6.2, 0.5), (28.0, 5.0, 21.0), 7, C("#2f7d4a"), C("#f4dc8a"), spine_to=1)
-    place3 = book(lm, (1.0, 11.2, -0.5), (26.0, 4.2, 19.0), -9, C("#e08a1a"), C("#fff1c8"))
+    place1 = book(lm, (0.0, 0.0, 0.0), (30.0, 6.2, 21.5), 0, C("#b3262b"), GOLD)
+    place2 = book(lm, (-1.5, 6.2, 0.5), (26.5, 5.0, 19.5), 7, C("#2f7d4a"), C("#f4dc8a"), spine_to=1)
+    place3 = book(lm, (1.0, 11.2, -0.5), (24.5, 4.2, 17.5), -9, C("#e08a1a"), C("#fff1c8"))
     # the top book's cover: a gold frame, a fork and spoon, the title
     top = 11.2 + 4.2 + 0.02
     yaw = math.radians(-9)
@@ -283,10 +283,10 @@ SUN_YELLOW = C("#ffcf2e")
 SUN_ORANGE = C("#ff8a1c")
 
 
-def cereal_loops(lm, rnd, n, centre, spread, y0=0.0, lift=0.0):
+def cereal_loops(lm, rnd, n, centre, spread, y0=0.0, lift=0.0, rmax=99.0):
     for i in range(n):
         a = rnd.uniform(0, TAU)
-        r = abs(rnd.gauss(0, spread))
+        r = min(abs(rnd.gauss(0, spread)), rmax)
         x, z = centre[0] + math.cos(a) * r, centre[1] + math.sin(a) * r * 0.8
         h = y0 + 0.45 + lift * math.exp(-r * r / (2 * spread * spread)) * rnd.uniform(0.2, 1.0)
         c = mix(C("#e8a53a"), C("#c27a22"), rnd.random())
@@ -340,11 +340,11 @@ def cereal_box() -> Landmark:
     lm.rbox((W - 0.8, 0.45, 4.4), at=(bx, H + 2.4, -D / 2 - 1.0), rot=(-48, 0, 0), bevel=0.12, bseg=1, col=C("#f1b91e"), mat="glossy")
     # spilled cereal and a bowl
     rnd = random.Random(5)
-    cereal_loops(lm, rnd, 34, (-14.0, 17.0), 5.5, 0.0)
+    cereal_loops(lm, rnd, 30, (-12.5, 7.5), 3.2, 0.0, 0.0, 4.6)
     bowl = [(0.0, 0.0), (3.4, 0.0), (3.8, 0.6), (6.6, 2.4), (7.4, 4.4), (7.6, 4.8), (7.2, 4.9), (6.8, 4.6), (5.8, 2.9), (2.8, 1.7), (0.0, 1.5)]
-    lm.lathe(smooth_profile(bowl, 4), at=(-11.0, 0.0, 15.0), segs=36, col=glossy(C("#ff6b6b"), 0.2), mat="glossy")
-    lm.cylinder(r=6.0, h=0.3, at=(-11.0, 3.5, 15.0), segs=28, col=C("#fff7e8"), mat="glossy")
-    cereal_loops(lm, rnd, 26, (-11.0, 15.0), 2.4, 3.6, 2.0)
+    lm.lathe(smooth_profile([(r * 0.84, y) for r, y in bowl], 4), at=(-11.0, 0.0, 9.0), segs=36, col=glossy(C("#ff6b6b"), 0.2), mat="glossy")
+    lm.cylinder(r=5.0, h=0.3, at=(-11.0, 3.5, 9.0), segs=28, col=C("#fff7e8"), mat="glossy")
+    cereal_loops(lm, rnd, 24, (-11.0, 9.0), 2.0, 3.6, 2.0, 3.6)
     return lm
 
 

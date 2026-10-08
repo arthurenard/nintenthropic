@@ -213,6 +213,12 @@ def awning(m, x0, x1, y_back, z_back, y_front, z_front, n, ca, cb, drop=1.0):
 
 def food_stall() -> Landmark:
     lm = Landmark("food-stall", ao=0.7, ao_dist=5.0, rays=14)
+    with lm.group(at=(0, 0, 1.6)):  # forward, off the neighbouring leg of the road behind it
+        _food_stall(lm)
+    return lm
+
+
+def _food_stall(lm):
     lm.rbox((14.4, 0.5, 9.4), at=(0.8, 0.0, 0.8), bevel=0.15, col=C("#3a2c6b"), mat="lit")
     lm.rbox((13.6, 15.5, 0.8), at=(0.8, 7.9, -3.8), bevel=0.2, col=candy(C("#ffe6f0")), mat="glossy")
     for sx in (-1, 1):
