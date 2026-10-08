@@ -27,8 +27,12 @@ export interface Bit {
 export interface DriverBuild {
   torso: BufferGeometry;
   head: BufferGeometry;
-  /** An arm along +z from the shoulder; both sides use it. */
+  /** An arm along +z from the shoulder; both sides use it unless `armR` is given. */
   arm: BufferGeometry;
+  /** The other (right, -x) arm, when the two are modelled apart. */
+  armR?: BufferGeometry;
+  /** Where the left shoulder is (the right is its mirror), when the model says; else (shoulder, SHOULDER_Y, SHOULDER_Z). */
+  shoulderAt?: V3;
   bits: Bit[];
   /** The shoulders' distance from the middle. */
   shoulder: number;

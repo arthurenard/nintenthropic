@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- The site root, so the art files (assets/kart/*.glb) are found the way the game finds them. -->
+    <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The site root, so the modelled art (assets/kart/*.glb) is found from here as it is from race.html. -->
+    <base href="/" />
     <title>Grip Prix: Podium</title>
     <style>
       html,
@@ -23,6 +27,6 @@
   </head>
   <body>
     <canvas id="canvas"></canvas>
-    <script type="module" src="./podiumDev.ts"></script>
+    <script type="module" src="/src/kart/render/podiumDev.ts"></script>
   </body>
 </html>
