@@ -45,7 +45,7 @@ test("a host and a guest run a whole Grand Prix: four one-lap races, standings b
 
   const code = await host(page, "Hana");
   await join(gus, code, "Gus");
-  await expect(page.locator("#lobby-players .row")).toHaveCount(2);
+  await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(2);
 
   // The host chooses a Grand Prix: the cups show their four tracks, the Acorn Cup is chosen, laps are per race.
   await page.getByRole("radio", { name: "Grand Prix" }).click();
@@ -218,9 +218,9 @@ test("a mirrored race: the same road flipped, on the host and on the guest, driv
 test("the secret track is in the host's track list only once both cups are won", async ({ page, context }) => {
   // Not yet won: the eight tracks of the cups, and no more.
   await host(page, "Hana");
-  let options = await page.locator("#track-select option").allTextContents();
-  expect(options).toHaveLength(8);
-  expect(options.join()).not.toContain("Five Finger Circuit");
+  const tracksOf = (p: Page) => p.getByRole("radiogroup", { name: "Track" }).getByRole("radio");
+  await expect(tracksOf(page)).toHaveCount(8);
+  expect((await tracksOf(page).allTextContents()).join()).not.toContain("Five Finger Circuit");
 
   // Both cups won on this device: the secret track joins the list, and can be raced.
   const second = await context.newPage();
@@ -228,10 +228,10 @@ test("the secret track is in the host's track list only once both cups are won",
     localStorage.setItem("grip-prix.unlocks", JSON.stringify({ ducks: [], cups: ["acorn", "comet"], konami: false }));
   });
   await host(second, "Hana");
-  options = await second.locator("#track-select option").allTextContents();
-  expect(options).toHaveLength(9);
-  expect(options.at(-1)).toBe("Five Finger Circuit · Secret");
-  await second.locator("#track-select").selectOption({ label: "Five Finger Circuit · Secret" });
+  await expect(tracksOf(second)).toHaveCount(9);
+  await expect(tracksOf(second).last()).toContainText("Five Finger Circuit");
+  await expect(tracksOf(second).last()).toContainText("Secret");
+  await tracksOf(second).last().click();
   await second.getByRole("radio", { name: "1", exact: true }).click();
   await second.getByRole("button", { name: "Start Race" }).click();
   await onScreen(second, "race", 60_000);

@@ -5,7 +5,7 @@
 // like every test here.
 import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
-import { KeyboardDriver, host, join, onScreen, open, state } from "./kart";
+import { KeyboardDriver, chooseDrivers, host, join, onScreen, open, state } from "./kart";
 
 // Handy's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
 test.beforeEach(async ({ context }) => {
@@ -33,6 +33,7 @@ async function wheelGuest(page: Page, code: string, name: string): Promise<void>
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("radio", { name: "Wheel" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await expect(page.locator("#lobby-waiting")).toBeVisible({ timeout: 20_000 });
 }
 
@@ -49,7 +50,7 @@ test("a host and two guests race a lap: one watches on the big screen, and Race 
   const code = await host(page, "Hana");
   await join(gus, code, "Gus");
   await join(bea, code, "Bea", true);
-  await expect(page.locator("#lobby-players .row")).toHaveCount(3);
+  await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(3);
   await expect(page.locator("#lobby-players")).toContainText("Big screen");
   await expect(startButton(page)).toBeEnabled();
   await page.getByRole("radio", { name: "1", exact: true }).click();
@@ -165,7 +166,7 @@ test("a full room turns the fifth away, and a wrong code finds no race", async (
 
   const code = await host(page, "Hana");
   for (const [i, guest] of guests.entries()) await join(guest, code, names[i]!);
-  await expect(page.locator("#lobby-players .row")).toHaveCount(4);
+  await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(4);
 
   await open(fifth);
   await fifth.getByLabel("Race code").fill(code);
@@ -180,7 +181,7 @@ test("a full room turns the fifth away, and a wrong code finds no race", async (
   await fifth.getByRole("button", { name: "Join a Race" }).click();
   await expect(fifth.locator("#trouble")).toContainText("There’s no race with that code.");
   // The room is as it was.
-  await expect(page.locator("#lobby-players .row")).toHaveCount(4);
+  await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(4);
 });
 
 test("the host's pause stops the race for everyone when it plays on the big screen, and resumes with a 3-2-1", async ({ page }, info) => {
@@ -279,6 +280,7 @@ test("practice against bots, all the way to the results and round again", async 
   await page.getByLabel("Name", { exact: true }).fill("Maya");
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await startButton(page).click();
   await expect(page.locator("canvas.race-canvas")).toBeVisible();

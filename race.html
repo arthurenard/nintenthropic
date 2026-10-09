@@ -274,7 +274,7 @@
           </section>
         </div>
         <div class="lobby-setup" id="group-race" aria-labelledby="group-race-title">
-          <h2 class="section-title" id="group-race-title">Race</h2>
+          <h2 class="section-title visually-hidden" id="group-race-title">Race</h2>
           <div class="mode-switch segmented big" role="radiogroup" id="pick-mode" aria-label="Mode" aria-describedby="foot-mode">
             <button type="button" role="radio" data-value="race">Single Race</button>
             <button type="button" role="radio" data-value="grand-prix">Grand Prix</button>
@@ -315,10 +315,12 @@
               </div>
             </div>
           </div>
-          <p class="group-foot" id="foot-mirror"></p>
-          <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
-          <p class="group-foot" id="foot-display"></p>
-          <p class="group-foot" id="foot-guest" hidden></p>
+          <div class="setup-notes">
+            <p class="group-foot" id="foot-mirror"></p>
+            <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
+            <p class="group-foot" id="foot-display"></p>
+            <p class="group-foot" id="foot-guest" hidden></p>
+          </div>
         </div>
         <div class="lobby-go">
           <button id="lobby-start" class="button primary large wide" disabled>Start Race</button>

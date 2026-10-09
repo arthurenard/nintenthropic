@@ -32,6 +32,7 @@ import {
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
+  Vector3,
   type Object3D,
 } from "three";
 import { WebGLUnavailable } from "../../engine/common";
@@ -73,8 +74,19 @@ const TAU = Math.PI * 2;
 /** A three-quarter view from the front, where the driver's face and the kart's nose both show. */
 const REST_YAW = 0.62;
 /** The plinth: radius at the top, and its height. */
-const PLINTH_R = 2.7;
+const PLINTH_R = 2.4;
 const PLINTH_H = 0.34;
+/** The top of the tallest driver in a kart, metres (the nine measure 2.6 to 2.9, a hand raised in a wave included). */
+const HEAD_TOP = 3.05;
+/** What the camera must see whole, wherever the kart has turned: the tallest head, the plinth's edge all round and its foot. */
+const FRAME: readonly Vector3[] = [
+  new Vector3(0, HEAD_TOP, 0),
+  new Vector3(0, -PLINTH_H, PLINTH_R + 0.22),
+  new Vector3(PLINTH_R + 0.22, -PLINTH_H, 0),
+  new Vector3(-(PLINTH_R + 0.22), -PLINTH_H, 0),
+  new Vector3(PLINTH_R * 0.72, -PLINTH_H, PLINTH_R * 0.72),
+  new Vector3(-PLINTH_R * 0.72, -PLINTH_H, PLINTH_R * 0.72),
+];
 /** How long a rider takes to spring in, seconds, and how long the driver waves. */
 const SPRING_FOR = 0.9;
 const WAVE_FOR = 1.5;
@@ -184,18 +196,37 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
   let disposed = false;
   let rimColour = new Color("#ffffff");
 
-  const place = (): void => {
-    const aspect = width / Math.max(1, height);
-    camera.aspect = aspect;
-    const half = Math.tan((camera.fov * Math.PI) / 360);
-    // The whole plinth across (the kart overhangs it a little), and from the driver's ears down to the plinth's foot.
-    const fitWidth = (PLINTH_R * 1.2) / (half * Math.min(aspect, 1.7));
-    const fitHeight = (3.7 / 2 / half) * 1.04;
-    const distance = Math.max(fitWidth, fitHeight);
+  /** Aims the camera from `aim` metres up the middle, `distance` away, a little above the plinth. */
+  const aimFrom = (aim: number, distance: number): void => {
     const lift = 0.2;
-    camera.position.set(0, 0.9 + distance * Math.sin(lift), distance * Math.cos(lift));
-    camera.lookAt(0, 0.62, 0);
+    camera.position.set(0, aim + distance * Math.sin(lift), distance * Math.cos(lift));
+    camera.lookAt(0, aim, 0);
+    camera.updateMatrixWorld();
     camera.updateProjectionMatrix();
+  };
+  /** Is all of what must be seen in the picture, with a little room all round? */
+  const sees = (): boolean =>
+    FRAME.every((point) => {
+      const v = point.clone().project(camera);
+      return Math.abs(v.x) <= 0.96 && Math.abs(v.y) <= 0.92;
+    });
+
+  const place = (): void => {
+    camera.aspect = width / Math.max(1, height);
+    camera.updateProjectionMatrix();
+    // The nearest the camera can stand and still see the whole plinth and the tallest driver's head, found by looking:
+    // for each height to aim at, back off until everything fits, and keep the aim that needed the least room.
+    let best = { aim: 1, distance: 40 };
+    for (let aim = 0.5; aim <= 1.6; aim += 0.1) {
+      for (let distance = 6; distance < best.distance; distance += 0.25) {
+        aimFrom(aim, distance);
+        if (sees()) {
+          best = { aim, distance };
+          break;
+        }
+      }
+    }
+    aimFrom(best.aim, best.distance);
   };
 
   const key = (rider: Rider): string => `${rider.character}|${rider.colour}|${rider.golden ? 1 : 0}`;

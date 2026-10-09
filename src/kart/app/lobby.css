@@ -53,6 +53,10 @@
   display: grid;
   gap: 10px;
   align-self: start;
+  /* Start stays in reach if the room is taller than the window (a Grand Prix's cups are). */
+  position: sticky;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 4;
 }
 .lobby-go .button.large {
   min-height: 60px;
@@ -347,8 +351,14 @@
 
 /* --- the race ----------------------------------------------------------------------------------------------- */
 
-.lobby-setup .section-title {
-  margin-bottom: -4px;
+.setup-notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px 18px;
+}
+.setup-notes .group-foot {
+  font-size: 12px;
+  line-height: 1.35;
 }
 .mode-switch.segmented.big {
   min-height: 52px;
@@ -549,27 +559,33 @@
   counter-reset: stop;
 }
 .cup-tracks li {
-  display: grid;
-  gap: 5px;
+  position: relative;
   min-width: 0;
   counter-increment: stop;
 }
 .cup-thumb {
   border-radius: 12px;
 }
+/* Each track's name sits on its picture, like a postcard's. */
 .cup-track {
+  position: absolute;
+  inset: auto 0 0;
   display: flex;
   gap: 6px;
-  font-size: 13px;
-  line-height: 1.25;
-  font-weight: 550;
-  color: rgba(255, 255, 255, 0.92);
+  padding: 18px 9px 6px;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(0deg, rgba(4, 16, 44, 0.7), rgba(4, 16, 44, 0));
+  font-size: 12.5px;
+  line-height: 1.2;
+  font-weight: 650;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
 }
 .cup-track::before {
   content: counter(stop);
   flex: none;
   width: 1ch;
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.72);
   font-variant-numeric: tabular-nums;
 }
 

@@ -28,8 +28,11 @@ export const THEME_COLOURS: Record<TrackTheme, readonly [string, string]> = {
   palm: ["#52d4c8", "#f6e3a0"],
 };
 
-/** The picture's own size: its outline is drawn in a box of this many units. */
+/** The picture's own size: its outline is drawn in a box of this many units (16 x 9, like a postcard). */
 export const OUTLINE_BOX = { width: 160, height: 90 } as const;
+
+/** Where in the box the outline goes: the upper part, leaving the foot clear for a name written over the picture. */
+export const OUTLINE_AREA = { x: 0, y: 3, width: 160, height: 66 } as const;
 
 export interface Outline {
   /** An SVG path (M, L, Z) in OUTLINE_BOX units. */
@@ -43,13 +46,13 @@ export interface Outline {
 const cache = new Map<string, Outline>();
 
 /**
- * The track's outline fitted to a box (160 x 90 by default) with `pad` units
+ * The track's outline fitted to an area of the picture (the upper part of 160 x 90) with `pad` units
  * clear all round, drawn the way the minimap draws it: north (+z) up the
  * page and +x to the left, the world as seen from above, so a right turn on
  * the road turns right on the card.
  */
-export function trackOutline(def: TrackDef, pad = 12, box: { width: number; height: number } = OUTLINE_BOX): Outline {
-  const key = `${def.id}|${pad}|${box.width}x${box.height}`;
+export function trackOutline(def: TrackDef, pad = 10, box: { x: number; y: number; width: number; height: number } = OUTLINE_AREA): Outline {
+  const key = `${def.id}|${pad}|${box.x},${box.y},${box.width}x${box.height}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const geometry = TrackGeometry.build(def, 3);
@@ -65,8 +68,8 @@ export function trackOutline(def: TrackDef, pad = 12, box: { width: number; heig
     maxY = Math.max(maxY, y);
   }
   const scale = Math.min((box.width - pad * 2) / Math.max(1, maxX - minX), (box.height - pad * 2) / Math.max(1, maxY - minY));
-  const offsetX = (box.width - (maxX - minX) * scale) / 2 - minX * scale;
-  const offsetY = (box.height - (maxY - minY) * scale) / 2 - minY * scale;
+  const offsetX = box.x + (box.width - (maxX - minX) * scale) / 2 - minX * scale;
+  const offsetY = box.y + (box.height - (maxY - minY) * scale) / 2 - minY * scale;
   const at = (x: number, y: number) => [x * scale + offsetX, y * scale + offsetY] as const;
   const round = (n: number) => Math.round(n * 10) / 10;
   const d =

@@ -20,12 +20,24 @@ export async function open(page: Page, extra = ""): Promise<void> {
   await page.goto(`/race.html?net=local${extra}`);
 }
 
-/** The You screen, filled in for a keyboard driver, and on to what comes next. */
+/**
+ * Choose Your Driver, one seat at a time: Next Driver until the last seat's Continue, each seat keeping the driver it
+ * has (the one remembered, or the one a test chose before this).
+ */
+export async function chooseDrivers(page: Page): Promise<void> {
+  await expect(page.locator("#screen-driver")).toBeVisible();
+  const button = page.locator("#driver-continue");
+  while ((await button.textContent()) === "Next Driver") await button.click();
+  await button.click();
+}
+
+/** The You screen, filled in for a keyboard driver, and on to what comes next (the driver stage after it). */
 export async function keyboardPlayer(page: Page, name: string): Promise<void> {
   await expect(page.getByRole("heading", { name: /Driving/ })).toBeVisible();
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
 }
 
 /** Hosts a room as a keyboard driver; the room's code. */

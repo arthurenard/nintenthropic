@@ -475,23 +475,6 @@ body[data-screen="race"] {
 .pause-words:empty {
   display: none;
 }
-/* The host's "Show the Race" has two long choices: they take the row's width under their name.
-   The columns are equal whatever the words (so the thumb always covers the choice), and on a phone
-   a long choice goes onto two lines instead of pushing the row wider than the screen. */
-.row-stack > .segmented {
-  flex: 1 1 320px;
-  grid-auto-columns: minmax(0, 1fr);
-}
-.row-stack > .segmented [role="radio"] {
-  height: auto;
-  min-height: 32px;
-  padding: 6px 8px;
-  font-size: 14px;
-  line-height: 1.15;
-  white-space: normal;
-  text-wrap: balance;
-}
-
 /* The speaker: in the corner of every screen but the race, whose pause sheet has its own. */
 #sound-button {
   position: fixed;

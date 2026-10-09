@@ -7,7 +7,7 @@
 // (desktop and phone). Rooms with several people are in race-room.spec.ts.
 import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
-import { WheelDrivers, host, join, onScreen, open, state } from "./kart";
+import { WheelDrivers, chooseDrivers, host, join, onScreen, open, state } from "./kart";
 
 // Handy's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
 test.beforeEach(async ({ context }) => {
@@ -40,6 +40,7 @@ async function practiceToLobby(page: Page, laps = 1) {
   await expect(heading(page, /Driving/)).toBeVisible();
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await expect(heading(page, "Ready to Race")).toBeVisible();
   await page.getByRole("radio", { name: String(laps), exact: true }).click();
 }
@@ -59,7 +60,7 @@ test("the start screen: the title, three ways in, a code field that tidies what 
   await expect(heading(page, "Grip Prix")).toBeVisible();
   await expect(page.getByText("Grip the wheel. Race your friends.")).toBeVisible();
   for (const name of ["Host a Race", "Practice"]) await expect(page.getByRole("button", { name })).toBeEnabled();
-  await expect(page.getByRole("link", { name: "Handy" })).toHaveAttribute("href", "index.html#grip-prix");
+  await expect(page.getByRole("link", { name: "Handy" })).toHaveAttribute("href", "./");
   await shot(page, info, "race-1-start", 400);
 
   // Capitals, letters only, four at most; Join waits for all four.
@@ -95,6 +96,14 @@ test("practice with the keyboard: you, the lobby, the race, and its pause and re
   await shot(page, info, "race-2b-you-keyboard", 300);
   await page.getByRole("button", { name: "Continue" }).click();
 
+  // Choose Your Driver: a stage with the driver in their kart, their weight class and bars, the nine drivers to choose from.
+  await expect(heading(page, "Choose Your Driver")).toBeVisible();
+  await expect(page.locator("#driver-name")).not.toHaveText("");
+  await expect(page.locator("#driver-stats .stat")).toHaveCount(4);
+  await expect(page.getByRole("radiogroup", { name: "Drivers" }).getByRole("radio")).toHaveCount(9);
+  await shot(page, info, "race-2e-driver", 800);
+  await chooseDrivers(page);
+
   // The lobby for practice: no code, no choice of where to watch, the players, the race to set.
   await expect(heading(page, "Ready to Race")).toBeVisible();
   await expect(page.locator("#lobby-code")).toBeHidden();
@@ -109,6 +118,9 @@ test("practice with the keyboard: you, the lobby, the race, and its pause and re
   // The race: the canvas, the pause control, the countdown first, then Go.
   await expect(page.locator("canvas.race-canvas")).toBeVisible();
   await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
+  // The loading screen said what was loading: the track, its cup and the laps.
+  await expect(page.locator("#loading-track")).toHaveText("Meadow Loop");
+  await expect(page.locator("#loading-cup")).toHaveText("Acorn Cup · 1 lap");
   await expect(page.locator("#screen-race")).toBeVisible();
   await expect.poll(() => phase(page)).toBe("countdown");
   await shot(page, info, "race-5-countdown", 300);
@@ -216,6 +228,7 @@ test("hosting with the wheel: the check, the code and its QR code, and the wheel
   await expect(page.getByRole("radio", { name: "Normal" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("radio", { name: "Quick" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
 
   // Before the browser asks for the camera, we say why.
   await expect(page.locator("#prime")).toBeVisible();
@@ -292,6 +305,7 @@ test("a returning wheel player is asked only to hold it level", async ({ page },
   await open(page, "&input=script");
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   // No prime for a camera that has opened here before; only the level.
   await expect(page.locator("#screen-check")).toBeVisible();
   await expect(page.locator("#check-title")).toHaveText("Hold it level");
@@ -320,11 +334,12 @@ test("two on one camera: a second name, and each checked in their own picture", 
   await page.getByLabel("Second Driver").fill("Finn");
   await shot(page, info, "race-2c-you-two", 400);
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await expect(page.locator(".check-picture")).toHaveCount(2);
   await expect(page.locator(".check-name").nth(1)).toHaveText("Finn");
   await shot(page, info, "race-3g-check-two", 400);
   await expect(heading(page, "Ready to Race")).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator("#lobby-players .row")).toHaveCount(2);
+  await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(2);
   await expect(page.locator("#lobby-players")).toContainText("Finn");
   // Both wheels race: a corner picture each, and a viewport each.
   await start(page).click();
@@ -349,11 +364,20 @@ test("four on one camera: names and drivers for each, one picture with four colu
   await page.getByLabel("Second Driver").fill("Finn");
   await page.getByLabel("Third Driver").fill("Ada");
   await page.getByLabel("Fourth Driver").fill("Kit");
-  for (const title of ["Second Character", "Third Character", "Fourth Character"]) await expect(heading(page, title)).toBeVisible();
   await page.locator("#group-second").scrollIntoViewIfNeeded();
   await shot(page, info, "race-2d-you-four", 500);
 
+  // Every seat picks its driver, in turn: four chips say whose turn it is.
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(heading(page, "Choose Your Driver")).toBeVisible();
+  await expect(page.locator("#driver-seats button")).toHaveCount(4);
+  const picks = ["Pepper", "Moss", "Kit", "Juniper"];
+  for (const [i, pick] of picks.entries()) {
+    await page.getByRole("radiogroup", { name: "Drivers" }).getByRole("radio", { name: new RegExp("^" + pick) }).click();
+    await expect(page.locator("#driver-name")).toHaveText(pick);
+    await shot(page, info, "race-2f-driver-seat-" + (i + 1), i === 0 ? 800 : 200);
+    await page.locator("#driver-continue").click();
+  }
   // One picture of the whole camera with the columns marked, and a chip for each player under it.
   await expect(page.locator(".check-shared")).toBeVisible();
   await expect(page.locator(".check-shared canvas")).toHaveCount(1);
@@ -361,8 +385,10 @@ test("four on one camera: names and drivers for each, one picture with four colu
   await expect(page.locator(".check-chip .check-name")).toHaveText(["Maya", "Finn", "Ada", "Kit"]);
   await shot(page, info, "race-3h-check-four", 700);
   await expect(heading(page, "Ready to Race")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator("#lobby-players .row")).toHaveCount(4);
+  await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(4);
   for (const name of ["Maya", "Finn", "Ada", "Kit"]) await expect(page.locator("#lobby-players")).toContainText(name);
+  // Each of the four is driving the driver their seat chose.
+  expect((await state(page)).lobby!.players.map((player) => player.character)).toEqual(["pepper", "moss", "kit", "juniper"]);
   await page.getByRole("radio", { name: "1", exact: true }).click();
 
   // Four viewports and one shared picture of the camera in the corner.
@@ -381,6 +407,8 @@ test("four on one camera: names and drivers for each, one picture with four colu
   await drivers.stop();
   await expect(page.locator("#standings-body tr")).toHaveCount(6);
   await expect(page.locator("#standings-body tr.mine")).toHaveCount(4);
+  // The top three wear their medals.
+  await expect(page.locator("#standings-body tr[data-place='1'] .medal")).toHaveText("1st");
   await shot(page, info, "race-6-results-four", 400);
   expect(errors).toEqual([]);
 });
@@ -391,6 +419,7 @@ test("the real camera: asked politely, opened, and the hand tracker looks for tw
   await open(page);
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   // A fake-camera Chrome may already allow the camera (the page explains first only when the browser will ask).
   const prime = page.locator("#prime");
   const check = page.locator("#check-title");
@@ -416,6 +445,8 @@ test("the real camera: asked politely, opened, and the hand tracker looks for tw
     .toBeGreaterThan(20);
   await shot(page, info, "race-3b-check-camera", 300);
   await page.getByRole("button", { name: "Back" }).click();
+  await expect(heading(page, "Choose Your Driver")).toBeVisible();
+  await page.getByRole("button", { name: "Back" }).click();
   await expect(heading(page, /Driving/)).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -433,6 +464,7 @@ test("the real camera with four players: eight hands, a tracker per column, and 
   await page.getByRole("button", { name: "Practice" }).click();
   await expect(page.getByRole("radiogroup", { name: "Players on This Camera" }).getByRole("radio", { name: "4", exact: true })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   // The camera is a still picture of one hand: the check waits for four wheels, with the camera in its one shared picture.
   await expect(page.locator("#check-title")).toHaveText(/Hold it level|Hold your fists up/, { timeout: 90_000 });
   await expect(page.locator(".check-chip")).toHaveCount(4);
@@ -452,6 +484,8 @@ test("the real camera with four players: eight hands, a tracker per column, and 
     )
     .toBeGreaterThan(20);
   await shot(page, info, "race-3i-check-four-camera", 500);
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(heading(page, "Choose Your Driver")).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await expect(heading(page, /Driving/)).toBeVisible();
   expect(errors).toEqual([]);
@@ -481,6 +515,7 @@ test("joining: a link with no race behind it says so, and a real room's guests s
   await page.getByLabel("Name", { exact: true }).fill("Sam");
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await expect(heading(page, /Maya.s Race/)).toBeVisible();
   await expect(page.locator("#lobby-code")).toHaveText(code);
   await expect(page.locator("#lobby-waiting")).toHaveText("Waiting for Maya to start.");
@@ -488,7 +523,11 @@ test("joining: a link with no race behind it says so, and a real room's guests s
   await expect(page.locator("#lobby-players")).toContainText("You");
   await expect(page.locator("#lobby-qr")).toBeHidden();
   await expect(start(page)).toBeHidden();
-  await expect(page.locator("#group-race")).toBeHidden();
+  // The race is the host's to set: the guest sees it, read-only.
+  await expect(page.locator("#group-race")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Grand Prix" })).toBeDisabled();
+  await expect(page.getByRole("switch", { name: "Bots" })).toBeDisabled();
+  await expect(page.locator("#foot-guest")).toHaveText("Maya sets the race.");
   await shot(page, info, "race-4b-lobby-guest", 400);
   // Show Me On: This Screen or the Big Screen.
   const bigScreen = page.getByRole("radio", { name: "Big Screen" });
@@ -543,6 +582,7 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
     // (The keyboard may be remembered from before: back to the wheel.)
     await page.getByRole("radio", { name: "Wheel" }).click();
     await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   };
 
   // A camera the browser refuses: try again, or drive with the keyboard.
@@ -574,6 +614,7 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
   await open(page, "&fail=webgl");
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await start(page).click();
   await expect(trouble).toContainText("Your browser can’t draw 3D graphics right now.");
   await shot(page, info, "race-7g-webgl", 300);
@@ -608,6 +649,7 @@ test("sound: off by the arcade's preference, on with the speaker; music on the m
   // A race: the engine runs, and at Go the track's own tune.
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await start(page).click();
   await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
@@ -642,6 +684,7 @@ test("leaving puts everything down and starts again", async ({ page }) => {
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByLabel("Name", { exact: true }).fill("Otto");
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await page.reload();
   await page.getByRole("button", { name: "Practice" }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Otto");

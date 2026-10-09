@@ -14,8 +14,8 @@
   grid-template-areas:
     "stage head"
     "stage info"
-    "dock dock"
-    "actions actions";
+    "stage actions"
+    "dock dock";
   column-gap: clamp(24px, 4vw, 64px);
   row-gap: 12px;
   width: 100%;
@@ -116,7 +116,7 @@
 }
 .driver-name {
   margin: 0;
-  font-size: clamp(52px, 6.6vw, 92px);
+  font-size: clamp(46px, min(6.4vw, 8.6vh), 88px);
   line-height: 0.98;
   font-weight: 800;
   letter-spacing: -0.04em;
@@ -275,6 +275,29 @@
   transition: opacity 600ms var(--pop);
   pointer-events: none;
 }
+/* Until the kart is up (its art is fetched first), a plinth's shadow breathes where it will stand. */
+.driver-stage[data-stage="loading"]::before {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 18%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  animation: stage-wait 1400ms ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes stage-wait {
+  from {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
 .stage-canvas {
   position: absolute;
   inset: 0;
@@ -308,6 +331,9 @@
   opacity: 1;
 }
 .driver-stage.peeking .stage-photo {
+  inset: 10% 14% 12%;
+  width: 72%;
+  height: 78%;
   opacity: 0.9;
 }
 .stage-hint {
@@ -339,11 +365,12 @@
 /* --- the dock: nine drivers ------------------------------------------------------------------------- */
 
 .driver-dock {
+  position: relative;
   grid-area: dock;
   display: grid;
   grid-template-columns: repeat(var(--dock-cols), minmax(0, 1fr));
   gap: 10px;
-  padding: 18px 0 10px;
+  padding: 22px 0 6px;
 }
 .driver-tile {
   position: relative;
@@ -386,7 +413,7 @@
 }
 .driver-tile-img {
   width: 100%;
-  max-width: 96px;
+  max-width: clamp(64px, 10.5vh, 96px);
   height: auto;
   aspect-ratio: 1;
   object-fit: contain;
@@ -454,12 +481,13 @@
 .driver-actions {
   grid-area: actions;
   display: grid;
-  justify-items: center;
+  justify-items: start;
   gap: 10px;
-  padding-top: 8px;
+  padding-top: 6px;
 }
 .driver-actions .button {
   min-width: min(100%, 280px);
+  box-shadow: 0 14px 34px rgba(4, 16, 44, 0.3);
 }
 .keys-hint {
   display: flex;
@@ -517,6 +545,9 @@
     justify-items: center;
     text-align: center;
   }
+  .driver-actions {
+    justify-items: center;
+  }
   .driver-class {
     justify-self: center;
   }
@@ -544,11 +575,14 @@
     font-size: 28px;
   }
   .driver-stage {
-    height: min(34vh, 300px);
+    height: min(32vh, 290px);
     margin: 0 calc(-1 * var(--margin));
   }
   .driver-name {
-    font-size: 44px;
+    font-size: 42px;
+  }
+  .driver-info {
+    gap: 8px;
   }
   .driver-blurb {
     font-size: 16px;
@@ -577,16 +611,34 @@
     width: auto;
     height: 7px;
   }
+  /* The nine in one row, side to side under the stage: the chosen one comes to the middle. */
   .driver-dock {
+    display: flex;
     gap: 8px;
-    padding-top: 14px;
+    margin: 0 calc(-1 * var(--margin));
+    padding: 16px var(--margin) 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+  }
+  .driver-dock::-webkit-scrollbar {
+    display: none;
   }
   .driver-tile {
+    flex: none;
+    width: 70px;
     padding: 6px 2px 8px;
     border-radius: 18px;
+    scroll-snap-align: center;
   }
   .driver-tile-name {
     font-size: 12px;
+  }
+  .driver-tile-sub {
+    min-height: 0;
   }
   .driver-tile-sub span {
     display: none;
@@ -603,6 +655,38 @@
     width: 100%;
   }
 }
+/* A short desktop window: the same, a little tighter. */
+@media (max-height: 960px) and (min-width: 1101px) {
+  .keys-hint {
+    display: none;
+  }
+  .driver-actions .button {
+    min-height: 52px;
+  }
+}
+@media (max-height: 860px) and (min-width: 1101px) {
+  .driver-blurb {
+    font-size: 17px;
+  }
+  .stats {
+    gap: 7px;
+    margin-top: 6px;
+    padding: 12px 16px;
+  }
+  .golden-row {
+    padding-block: 6px;
+  }
+  .keys-hint {
+    display: none;
+  }
+  .driver-dock {
+    padding-top: 14px;
+  }
+  .driver-tile {
+    padding-top: 6px;
+    padding-bottom: 8px;
+  }
+}
 /* A short window (a phone on its side): the stage and the details side by side again, the dock squeezed. */
 @media (max-height: 560px) and (min-width: 700px) {
   .driver {
@@ -613,8 +697,8 @@
     grid-template-areas:
       "stage head"
       "stage info"
-      "dock dock"
-      "actions actions";
+      "stage actions"
+      "dock dock";
   }
   .driver-stage {
     height: auto;

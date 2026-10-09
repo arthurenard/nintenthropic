@@ -90,8 +90,15 @@ export interface StageProbe {
   low: boolean;
 }
 
-/** Asks the browser what drawing here is like, without keeping anything it made. */
-export async function probeStage(): Promise<StageProbe> {
+let probed: Promise<StageProbe> | null = null;
+
+/** Asks the browser what drawing here is like, without keeping anything it made (once: the answer does not change). */
+export function probeStage(): Promise<StageProbe> {
+  probed ??= askBrowser();
+  return probed;
+}
+
+async function askBrowser(): Promise<StageProbe> {
   try {
     const canvas = document.createElement("canvas");
     const gl = (canvas.getContext("webgl2") ?? canvas.getContext("webgl")) as WebGLRenderingContext | WebGL2RenderingContext | null;
@@ -283,6 +290,8 @@ export class DriverScreen {
     const several = this.seats.length > 1;
     const colourName = COLOUR_NAMES[seat.colour.toUpperCase()];
     $("driver-eyebrow").textContent = several ? `Driver ${this.seat + 1} of ${this.seats.length}` : colourName ? `Your ${colourName} Kart` : "Your Kart";
+    // With several seats the chips under the title say whose turn it is; the line is for a screen reader then.
+    $("driver-eyebrow").classList.toggle("visually-hidden", several);
     $("driver-title").textContent = this.seat === 0 ? "Choose Your Driver" : `Choose ${seat.name}’s Driver`;
     $("screen-driver").style.setProperty("--seat", seat.colour);
     this.seatStrip.querySelectorAll<HTMLButtonElement>("button[data-seat]").forEach((button) => {
@@ -297,13 +306,18 @@ export class DriverScreen {
     this.mark();
   }
 
-  /** Marks the chosen tile in the dock. */
+  /** Marks the chosen tile in the dock, and brings it to the middle of a dock that scrolls. */
   private mark(): void {
     const chosen = this.current.character;
     for (const tile of this.tiles) {
       const on = tile.id === chosen;
       tile.button.setAttribute("aria-checked", String(on));
       tile.button.tabIndex = on ? 0 : -1;
+      if (on && this.dock.scrollWidth > this.dock.clientWidth + 1) {
+        const left = tile.button.offsetLeft - (this.dock.clientWidth - tile.button.offsetWidth) / 2;
+        const calm = document.documentElement.hasAttribute("data-reduce-motion");
+        this.dock.scrollTo({ left: Math.max(0, left), behavior: calm ? "auto" : "smooth" });
+      }
     }
   }
 
@@ -402,15 +416,24 @@ export class DriverScreen {
     }
     const move = ({ ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" } as Record<string, NavKey | undefined>)[event.key];
     if (!move) return;
-    // A segmented control or a switch has its own use of the arrows.
-    if (target?.closest("#driver-seats, .golden-row")) return;
+    // On the seats' chips the sideways arrows hop between seats; on the switch the arrows are the page's.
+    if (target?.closest("#driver-seats")) {
+      if (move !== "left" && move !== "right") return;
+      event.preventDefault();
+      this.pick(this.seat + (move === "left" ? -1 : 1));
+      this.seatStrip.querySelector<HTMLButtonElement>(`button[data-seat="${this.seat}"]`)?.focus({ preventScroll: true });
+      return;
+    }
+    if (target?.closest(".golden-row")) return;
     event.preventDefault();
     this.move(move, true);
   }
 
   /** Moves the choice one way through the nine, over the locked one. */
   private move(key: NavKey, focus: boolean): void {
-    const columns = Math.max(1, getComputedStyle(this.dock).gridTemplateColumns.split(" ").length);
+    // The nine are a grid, or on a phone one row side to side.
+    const style = getComputedStyle(this.dock);
+    const columns = style.display === "grid" ? Math.max(1, style.gridTemplateColumns.split(" ").length) : this.tiles.length;
     let at = this.tiles.findIndex((tile) => tile.id === this.current.character);
     for (;;) {
       const next = moveIn(at, key, this.tiles.length, columns);
@@ -441,15 +464,17 @@ export class DriverScreen {
   /** Draws the nine portraits in this seat's kart colour, a few at a time so the screen stays smooth. */
   private paintTiles(): void {
     const colour = this.current.colour;
-    if (this.painted === colour) return;
-    this.painted = colour;
+    // Drawn again when the colour changes, or when a driver has been found since.
+    const key = colour + "|" + this.tiles.map((tile) => (tile.locked ? 1 : 0)).join("");
+    if (this.painted === key) return;
+    this.painted = key;
     const run = this.opened;
     void (async () => {
       try {
         const { portrait, driversReady } = await import("../render/portraits");
         await driversReady();
         for (const tile of this.tiles) {
-          if (run !== this.opened || this.painted !== colour) return;
+          if (run !== this.opened || this.painted !== key) return;
           const url = portrait(tile.id, { colour, silhouette: tile.locked, size: 256 });
           if (url) tile.image.src = url;
           tile.image.classList.toggle("blank", !url);

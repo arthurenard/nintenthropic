@@ -335,7 +335,7 @@ export class LobbyScreen {
     setText(
       "foot-mode",
       grandPrix
-        ? `${cupById(settings.cup).name} is four races in a row. Every place scores (15 for first, then 12, 10, 8, 6, 4, 2, 1), and the most points wins the cup.`
+        ? `Four races in a row. Every place scores, from 15 points for first to 1 for eighth, and the most points wins the ${cupById(settings.cup).name}.`
         : "One race, on the track you choose.",
     );
     setText("foot-mirror", settings.mirror ? "Every track is flipped, left for right: a right turn becomes a left." : "Race every track flipped, left for right.");
@@ -378,9 +378,10 @@ export class LobbyScreen {
       card.setAttribute("role", "radio");
       card.dataset.value = track.id;
       const where = cupOfTrack(track.id);
-      const sub = earned.has(track.id) || trackById(track.id).secret ? "Secret" : where ? `${where.cup} · ${where.race}` : "";
+      const secret = earned.has(track.id) || trackById(track.id).secret === true;
       const words = element("span", "postcard-words");
-      words.append(element("span", "postcard-name", earned.has(track.id) || trackById(track.id).secret ? `${track.name} · Secret` : track.name));
+      words.append(element("span", "postcard-name", track.name));
+      const sub = secret ? "Secret Track" : where ? `${where.cup} · ${where.race}` : "";
       if (sub) words.append(element("span", "postcard-sub", sub));
       card.append(postcard(track.id), words);
       return card;
