@@ -217,6 +217,13 @@ body[data-view="landing"] .spaces {
 .tile-art img.loaded {
   opacity: 1;
 }
+/* Grip Prix's poster is 16:9 in a tile that is square or taller, so only the middle half of it shows (46% of its width on a
+   phone, 55 to 64% on a desktop). Its hero, the cat's kart, sits at about 72% of the picture's width and is 34% wide (55 to
+   89%): the crop is moved to the right, so that at every size the whole kart stays in the tile, with room for the lean
+   toward the pointer (8 px) and the swell on hover (5%) to move the picture without cutting it. */
+.tile-grip .tile-art img {
+  object-position: 90% 50%;
+}
 /* The arcade's posters take turns: only the one showing is seen, and it drifts while it is. */
 .tile-art img[data-game] {
   opacity: 0;
