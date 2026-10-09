@@ -5,14 +5,14 @@
  */
 import type { AudioEngine } from "../audio/index";
 import { browserStore, loadAim, saveAim, type CameraIdentity } from "../calibration/storage";
-import { DownloadError, Progress, siteUrl } from "../engine/fetch";
+import { DownloadError, Progress } from "../engine/fetch";
 import { IDLE_AIM, WebGLUnavailable } from "../engine/common";
 import type { EngineHost } from "../engine/host";
 import { seededRandom } from "../engine/random";
 import { Samples } from "../engine/stats";
 import { gpuName } from "../engine/tier";
 import type { Aim, Game, GameContext, GameEntry, GameStats, InputKind, InputSource, Settings } from "../engine/types";
-import { ARCADE, gameById, hasPlay, playable, playableGames } from "../games/index";
+import { ARCADE, GRIP_PRIX, playable, playableGames } from "../games/index";
 import { AimController } from "../input/aim";
 import { HandInput } from "../input/handInput";
 import type { Matrix } from "../input/homography";
@@ -26,12 +26,13 @@ import type { HandSource } from "../tracking/types";
 import { $, announce, icon, replay, setText, toast } from "../ui/dom";
 import { formatScore } from "../ui/format";
 import { AimCheckView } from "./aimCheckView";
-import { hashId, initialGame, posterInto, Shelf } from "./arcade";
+import { HeroArt, pickGame, posterInto, Shelf, shooters } from "./arcade";
 import { Crosshair } from "./crosshair";
 import { FireToPlay, HandWatch, type HandWatchEvent } from "./handWatch";
 import { switchCamera } from "./cameraSwitch";
 import { Hud } from "./hud";
 import { watchKonami } from "./konami";
+import { gestureInto, Landing } from "./landing";
 import { Pip } from "./pip";
 import { Yielding, type Spot } from "./yielding";
 import {
@@ -55,6 +56,7 @@ import {
   type ScopePreferences,
 } from "./prefs";
 import { difficultyLabel, recordRound, shareResult, showResults, type Result } from "./results";
+import { hashFor, parseRoute, type Route } from "./route";
 import { SettingsSheet, VERSION, type EyeTestState, type SettingsHost, type SystemFacts } from "./settings";
 import { LoadingSheet, closeSheet, closeSheets, openSheet, showTrouble, type Fix, type Trouble } from "./sheets";
 
@@ -199,7 +201,13 @@ export class App {
   private muted = prefs.muted;
   /** The game chosen in the arcade: the hero, and the one Play plays. */
   private selected: GameEntry;
+  /** The games the arcade lists: the shooters (Grip Prix is a page of its own, a tile of the landing). */
+  private readonly shooting: GameEntry[];
   private readonly shelf: Shelf;
+  private readonly hero: HeroArt;
+  private readonly landing: Landing;
+  /** Where the page is, as its address says: the landing, or the arcade on a game. */
+  private route: Route;
   private readonly motion = matchMedia("(prefers-reduced-motion: reduce)");
   /** Camera capture to crosshair drawn, ms: for the performance report. */
   private readonly latency = new Samples(600);
@@ -239,8 +247,12 @@ export class App {
       this.hud.pageHint(null);
     };
     this.control = options.scripted ? "hand" : touchOnly() && prefs.control === "mouse" ? "touch" : prefs.control;
-    this.selected = initialGame(ARCADE, { hash: location.hash, search: location.search, remembered: prefs.game })!;
-    this.shelf = new Shelf($("shelf"), ARCADE, (game, how) => this.choose(game, how));
+    this.shooting = shooters(ARCADE);
+    this.route = parseRoute(location, this.shooting);
+    this.selected = pickGame(this.shooting, this.route.space === "arcade" ? this.route.game : null, prefs.game)!;
+    this.shelf = new Shelf($("shelf"), this.shooting, (game, how) => this.choose(game, how));
+    this.hero = new HeroArt($("feature-frame"));
+    this.landing = new Landing(this.shooting, GRIP_PRIX);
     this.settingsSheet = new SettingsSheet(this.settingsHost());
     this.applyPreferences();
     this.wire();
@@ -249,9 +261,13 @@ export class App {
   // --- the arcade -----------------------------------------------------------------
 
   boot(): void {
-    this.renderHome();
+    this.renderArcade();
     this.setMuted(this.muted);
-    this.showView(prefs.welcomed ? "home" : "welcome");
+    for (const figure of document.querySelectorAll<HTMLElement>("#welcome [data-gesture]")) {
+      gestureInto(figure, figure.dataset.gesture === "wheel" ? "wheel" : "pistol");
+    }
+    if (prefs.welcomed) this.arrive(this.route, { remembered: true });
+    else this.showView("welcome");
     // The first screen needs neither three.js nor the tracker; fetch them
     // once it is up, so Play does not wait for them.
     const later = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 1200));
@@ -261,27 +277,76 @@ export class App {
     });
   }
 
-  private showView(name: "welcome" | "home" | "game"): void {
-    for (const view of ["welcome", "home", "game"] as const) $(view).hidden = view !== name;
+  private showView(name: "welcome" | "landing" | "arcade" | "game"): void {
+    const opened = document.body.dataset.view !== name;
+    for (const view of ["welcome", "landing", "arcade", "game"] as const) $(view).hidden = view !== name;
+    // The bar is over the landing and the arcade; a game and the welcome have their own chrome.
+    $("nav").hidden = name !== "landing" && name !== "arcade";
     document.body.dataset.view = name;
+    if (name === "landing") this.landing.show();
+    else this.landing.hide();
+    if (name === "arcade") this.shelf.reveal(false);
+    // A screen opens at its top, wherever the last one was scrolled to.
+    if (opened && (name === "landing" || name === "arcade")) window.scrollTo(0, 0);
   }
 
-  private renderHome(): void {
+  /** The address for a route: the page's own, with the game and the space it names changed and nothing else. */
+  private addressFor(route: Route): string {
+    const search = new URLSearchParams(location.search);
+    search.delete("game");
+    const query = search.toString();
+    return `${location.pathname}${query ? `?${query}` : ""}${hashFor(route, this.selected)}`;
+  }
+
+  /**
+   * Turns to a space. `remembered` is the page just opened: it stands where
+   * the player last was, without taking the focus (except to give Grip Prix's
+   * tile back to a player who is coming home from it).
+   */
+  private arrive(route: Route, { remembered = false }: { remembered?: boolean } = {}): void {
+    this.route = route;
+    if (route.space === "arcade") {
+      const named = route.game ? this.shooting.find((game) => game.id === route.game) : undefined;
+      if (named && named !== this.selected) {
+        this.selected = named;
+        replay($("feature-text"), "fresh");
+      }
+      prefs.game = this.selected.id;
+      prefs.space = "arcade";
+      this.renderArcade();
+      this.showView("arcade");
+      // The address names the game the arcade is on, whichever way it was reached.
+      const address = this.addressFor(route);
+      if (address !== `${location.pathname}${location.search}${location.hash}`) history.replaceState(history.state, "", address);
+      if (!remembered) $("play").focus({ preventScroll: true });
+      return;
+    }
+    this.showView("landing");
+    // Standing where the player was: sent to a tile by the address, back from Grip Prix, or back from the arcade.
+    const tile = route.focus ?? (remembered && prefs.space !== "grip-prix" ? null : prefs.space);
+    if (tile) this.landing.focus(tile);
+  }
+
+  /** A step in the browser's history to a space (the browser's Back comes back from it). */
+  private navigate(route: Route): void {
+    const address = this.addressFor(route);
+    if (address !== `${location.pathname}${location.search}${location.hash}`) history.pushState(null, "", address);
+    this.arrive(route);
+  }
+
+  private renderArcade(): void {
     this.sayWhoReadsTheEye();
     const entry = this.selected;
     this.shelf.show(entry);
     setText("feature-title", entry.title);
     setText("feature-about", entry.about ?? entry.blurb);
-    // The game's poster; its light stands in until it loads, or while there is none.
-    posterInto($("feature-frame"), $<HTMLImageElement>("feature-art"), entry);
-    // A game still to come is named and described, and cannot be played. A game
-    // with a page of its own (Grip Prix) has Play, but how you aim here (the
-    // finger pistol or the mouse) is no business of its page.
-    const open = hasPlay(entry);
+    // The game's poster, full-bleed; its light stands in until it loads, or while there is none.
+    this.hero.show(entry);
+    // A game still to come is named and described, and cannot be played.
     const here = playable(entry);
-    $("feature-actions").hidden = !open;
+    $("feature-actions").hidden = !here;
     $("start-control").hidden = !here;
-    $("feature-soon").hidden = open;
+    $("feature-soon").hidden = here;
     const label = $("control-label");
     const hand = this.control === "hand";
     label.replaceChildren(icon(hand ? "hand" : "mouse"), hand ? "Finger Pistol" : this.control === "touch" ? "Touch" : "Mouse or Trackpad");
@@ -329,8 +394,9 @@ export class App {
     if (location.hash !== `#${game.id}`) history.replaceState(history.state, "", `#${game.id}`);
     if (changed) {
       replay($("feature-text"), "fresh");
-      this.renderHome();
+      this.renderArcade();
     }
+    this.shelf.reveal(!this.settings.reducedMotion);
     if (how === "click" && $("feature").getBoundingClientRect().top < 0) {
       $("feature").scrollIntoView({ behavior: this.settings.reducedMotion ? "auto" : "smooth", block: "start" });
     }
@@ -340,7 +406,7 @@ export class App {
     this.control = control;
     if (control !== "touch") prefs.control = control;
     else prefs.control = "mouse";
-    this.renderHome();
+    this.renderArcade();
   }
 
   // --- sound ---------------------------------------------------------------------------
@@ -424,14 +490,9 @@ export class App {
 
   async start({ adjust = false }: { adjust?: boolean } = {}): Promise<void> {
     const entry = this.selected;
-    // A game on a page of its own: Play goes there. The arcade has no part in it.
-    if (!playable(entry) && entry.page) {
-      location.assign(siteUrl(entry.page));
-      return;
-    }
     if (this.busy || !playable(entry)) return;
     this.busy = true;
-    this.renderHome();
+    this.renderArcade();
     const run = ++this.generation;
     const stale = () => run !== this.generation;
     let loading: LoadingSheet | null = null;
@@ -523,7 +584,7 @@ export class App {
       this.fail(error);
     } finally {
       if (run === this.generation) this.busy = false;
-      this.renderHome();
+      this.renderArcade();
     }
   }
 
@@ -573,7 +634,7 @@ export class App {
     const cause = error instanceof Stage ? error.error : error;
     console.error("Handy could not start the game.", cause);
     this.endSession();
-    this.showView("home");
+    this.showView("arcade");
     if (cause instanceof WebGLUnavailable) this.trouble("webgl");
     else if (cause instanceof CameraError) this.trouble(cause.trouble);
     // Anything else that failed with the browser offline was a download (a
@@ -1293,8 +1354,9 @@ export class App {
     this.endSession();
     this.releaseCamera();
     closeSheets();
-    this.showView("home");
-    this.renderHome();
+    this.route = { space: "arcade", game: this.selected.id };
+    this.showView("arcade");
+    this.renderArcade();
     $("play").focus();
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
   }
@@ -1448,8 +1510,9 @@ export class App {
     );
     $("get-started").onclick = () => {
       prefs.welcomed = true;
-      this.showView("home");
-      $("play").focus();
+      // The landing, unless the address was a link to a game: then that game. Where the button was, the focus goes on to the Arcade's.
+      this.arrive(this.route);
+      if (this.route.space === "landing" && !this.route.focus && !prefs.space) this.landing.focus("arcade");
     };
     $("play").onclick = () => void this.start();
     $("adjust").onclick = () => void this.start({ adjust: true });
@@ -1532,17 +1595,41 @@ export class App {
     });
 
     window.addEventListener("keydown", (event) => this.key(event));
-    // A link to a game followed on the page (or the address edited): the arcade turns to it.
-    window.addEventListener("hashchange", () => {
-      const game = gameById(hashId(location.hash));
-      if (game && game !== this.selected && document.body.dataset.view !== "game") this.choose(game, "link");
+    // The browser's Back and Forward, a link to a game followed on the page, the address edited:
+    // the page turns to the space the address names (in a game, or at the welcome, it stays where it is).
+    const followAddress = () => {
+      const view = document.body.dataset.view;
+      if (view !== "landing" && view !== "arcade") return;
+      this.arrive(parseRoute(location, this.shooting));
+    };
+    window.addEventListener("popstate", followAddress);
+    window.addEventListener("hashchange", followAddress);
+    // The bar's Handy is the way back to the landing (a link, so that it opens there from anywhere too).
+    $("brand").addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      this.navigate({ space: "landing", focus: this.route.space === "arcade" ? "arcade" : null });
     });
+    // Already in the arcade, its name in the bar does nothing.
+    $("space-arcade").addEventListener("click", (event) => {
+      if (document.body.dataset.view === "arcade") event.preventDefault();
+    });
+    // Grip Prix is a page of its own: leaving for it is remembered, so coming back finds its tile in hand.
+    for (const id of ["space-grip", "tile-grip-go"]) $(id).addEventListener("click", () => (prefs.space = "grip-prix"));
+    // How It Plays, under each tile.
+    for (const button of document.querySelectorAll<HTMLElement>("[data-how]")) {
+      button.addEventListener("click", () => {
+        this.landing.how(button.dataset.how === "grip-prix" ? "grip-prix" : "arcade");
+        openSheet("how");
+      });
+    }
+    $("how-done").onclick = () => closeSheet("how");
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) this.pause();
     });
     window.addEventListener("pagehide", () => this.releaseCamera());
     watchKonami(
-      () => document.body.dataset.view === "home" && !document.querySelector("dialog[open]"),
+      () => ["landing", "arcade"].includes(document.body.dataset.view ?? "") && !document.querySelector("dialog[open]"),
       () => this.unlockGolden(),
     );
   }
@@ -1646,7 +1733,7 @@ export class App {
         }
         savePreferences(this.preferences);
         this.applyPreferences();
-        if (document.body.dataset.view === "home") this.renderHome();
+        if (document.body.dataset.view === "arcade") this.renderArcade();
       },
       audition: () => this.audio.play("ui_tap"),
       currentCamera: () => {
@@ -1664,7 +1751,7 @@ export class App {
       hasSavedAim: () => hasSavedAim(),
       forgetSavedAim: () => {
         forgetSavedAims();
-        this.renderHome();
+        this.renderArcade();
       },
       reset: () => this.resetEverything(),
       systemInfo: async () => this.systemFacts(),
@@ -1782,7 +1869,10 @@ export class App {
     this.applyPreferences();
     // Last, so nothing written on the way survives it.
     forgetEverything();
-    this.renderHome();
+    // As on the first visit: the landing is where Get Started goes.
+    this.route = { space: "landing", focus: null };
+    history.replaceState(history.state, "", this.addressFor(this.route));
+    this.renderArcade();
     this.showView("welcome");
     $("get-started").focus();
   }

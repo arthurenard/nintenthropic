@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Game, GameEntry } from "../engine/types";
 import { backdropCss } from "../ui/backdrop";
-import { categoryOf, groupGames, initialGame, step } from "./arcade";
+import { categoryOf, pickGame, shooters, step } from "./arcade";
 
 const game = (id: string, open = true): GameEntry => ({
   id,
@@ -10,27 +10,27 @@ const game = (id: string, open = true): GameEntry => ({
   poster: `assets/${id}/poster.webp`,
   ...(open ? { create: async () => ({}) as Game } : {}),
 });
+const racer: GameEntry = { ...game("grip-prix", false), category: "racing", page: "race.html" };
 const arcade = [game("soon-first", false), game("high-noon"), game("dead-of-night"), game("overwatch-ridge", false)];
-const open = (from: Partial<{ hash: string; search: string; remembered: string | null }>) =>
-  initialGame(arcade, { hash: "", search: "", remembered: null, ...from })?.id;
+const open = (named: string | null, remembered: string | null = null) => pickGame(arcade, named, remembered)?.id;
 
 describe("the game the arcade opens on", () => {
-  it("is the one the address names, by its hash or ?game=", () => {
-    expect(open({ hash: "#dead-of-night" })).toBe("dead-of-night");
-    expect(open({ search: "?input=script&game=overwatch-ridge" })).toBe("overwatch-ridge");
-    // The hash is what the page writes as the player chooses: it wins.
-    expect(open({ hash: "#dead-of-night", search: "?game=high-noon" })).toBe("dead-of-night");
+  it("is the one the address named", () => {
+    expect(open("dead-of-night")).toBe("dead-of-night");
+    // The address wins over what was chosen last.
+    expect(open("dead-of-night", "high-noon")).toBe("dead-of-night");
   });
 
   it("is otherwise the one chosen last, and at first the first that can be played", () => {
-    expect(open({ remembered: "dead-of-night" })).toBe("dead-of-night");
-    expect(open({})).toBe("high-noon");
+    expect(open(null, "dead-of-night")).toBe("dead-of-night");
+    expect(open(null)).toBe("high-noon");
   });
 
   it("passes over a name that is not a game in the arcade", () => {
-    expect(open({ hash: "#no-such-game", remembered: "gone-since" })).toBe("high-noon");
-    expect(open({ hash: "#%E2%80%A6" })).toBe("high-noon");
-    expect(open({ hash: "#%E2" })).toBe("high-noon");
+    expect(open("no-such-game", "gone-since")).toBe("high-noon");
+    expect(open("overwatch-ridge")).toBe("overwatch-ridge");
+    // Grip Prix has left the arcade for its own tile: an old choice of it opens the arcade on a shooter.
+    expect(pickGame(shooters([...arcade, racer]), null, "grip-prix")?.id).toBe("high-noon");
   });
 });
 
@@ -60,20 +60,16 @@ describe("a game's backdrop", () => {
   });
 });
 
-describe("the headings", () => {
-  const racer: GameEntry = { ...game("grip-prix", false), category: "racing", page: "race.html" };
-
-  it("put a game under Shooting unless its entry says Racing", () => {
+describe("what the arcade lists", () => {
+  it("puts a game under Shooting unless its entry says Racing", () => {
     expect(categoryOf(game("high-noon"))).toBe("shooting");
     expect(categoryOf(racer)).toBe("racing");
   });
 
-  it("list the games under their heading in the arcade's order, and leave out an empty one", () => {
-    const grouped = groupGames([game("high-noon"), racer, game("dead-of-night")]);
-    expect(grouped.map((g) => [g.title, g.games.map((x) => x.id)])).toEqual([
-      ["Shooting", ["high-noon", "dead-of-night"]],
-      ["Racing", ["grip-prix"]],
-    ]);
-    expect(groupGames([game("high-noon")]).map((g) => g.title)).toEqual(["Shooting"]);
+  it("is the shooters only, in the arcade's order: Grip Prix is a tile of the landing, not a card of the row", () => {
+    const listed = shooters([game("high-noon"), racer, game("dead-of-night")]);
+    expect(listed.map((g) => g.id)).toEqual(["high-noon", "dead-of-night"]);
+    expect(listed.some((g) => categoryOf(g) === "racing")).toBe(false);
+    expect(shooters([racer])).toEqual([]);
   });
 });

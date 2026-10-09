@@ -135,7 +135,7 @@ test("Overwatch Ridge with the mouse: the scope on the right button, a stage cle
   await page.waitForTimeout(1_200);
   await shot(page, info, "ridge-04-results");
   await page.getByRole("button", { name: "Choose a Game" }).click();
-  await expect(page.locator("#home")).toBeVisible();
+  await expect(page.locator("#arcade")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -502,7 +502,7 @@ test("Settings' Eye Test shows both eyes live, learns a held wink, and says when
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#scope-group")).toBeVisible();
   const status = page.locator("#eye-test-status");
@@ -560,7 +560,7 @@ test("Settings' Eye Test with the real camera: your own picture, the face landma
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page, { "handy.camera-opened.v1": true });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.locator("#eye-test-toggle").click();
   // The camera's fake picture is a face behind a fist: the landmarker sees a face or it does not, and says which.

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
-    <meta name="description" content="An arcade you play with a finger pistol in front of your camera. Right in your browser." />
+    <meta name="description" content="Games you play with your hands, in front of your camera. A finger-pistol arcade and a four-player kart race, right in your browser." />
     <meta name="apple-mobile-web-app-title" content="Handy" />
     <title>Handy</title>
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -14,103 +14,118 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   </head>
   <body data-view="none">
-    <!-- First run: what Handy is, the gesture, one button. -->
+    <!-- First run: what Handy is, and the two ways to play with your hands. -->
     <div id="welcome" class="view welcome" hidden>
       <div class="welcome-inner">
         <p class="wordmark" aria-hidden="true">
           <img class="wordmark-icon" src="/icons/icon-192.png" alt="" />Handy
         </p>
         <h1 class="large-title">Welcome to Handy.</h1>
-        <p class="body secondary">
-          An arcade you play with a finger pistol. No controller, just your hand and your camera.
-        </p>
-        <figure class="gesture" aria-labelledby="gesture-caption">
-          <svg class="gesture-art" viewBox="0 0 360 180" aria-hidden="true">
-            <defs>
-              <linearGradient id="g-sleeve" gradientUnits="userSpaceOnUse" x1="12" y1="0" x2="92" y2="0">
-                <stop offset="0" stop-color="#fff" stop-opacity="0" />
-                <stop offset="1" stop-color="#fff" stop-opacity="1" />
-              </linearGradient>
-            </defs>
-            <g class="g-recoil">
-              <path class="g-arm" d="M12 114 L96 106 M12 160 L94 158" />
-              <rect class="g-shape" x="84" y="84" width="84" height="76" rx="24" />
-              <rect class="g-shape" x="146" y="112" width="34" height="16" rx="8" />
-              <rect class="g-shape" x="146" y="128" width="32" height="16" rx="8" />
-              <rect class="g-shape" x="144" y="144" width="28" height="15" rx="7.5" />
-              <rect class="g-shape" x="134" y="84" width="130" height="26" rx="13" />
-              <g class="g-thumb">
-                <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
-              </g>
-              <!-- Folded, for a cross-fade when motion is reduced. -->
-              <g class="g-thumb-folded" transform="rotate(80 122 92)">
-                <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
-              </g>
-              <g class="g-flash">
-                <path class="g-line" d="M274 97 L290 97 M272 86 L284 77 M272 108 L284 117" />
-              </g>
-            </g>
-            <g class="g-target">
-              <circle class="g-ring" cx="324" cy="97" r="24" />
-              <circle class="g-ring" cx="324" cy="97" r="14" />
-              <circle class="g-bull" cx="324" cy="97" r="5.5" />
-              <circle class="g-pulse" cx="324" cy="97" r="24" />
-            </g>
-          </svg>
-          <figcaption id="gesture-caption">
-            <ol class="gesture-steps">
-              <li class="step-point">Point</li>
-              <li class="step-fold">Fold your thumb</li>
-              <li class="step-fire">Fire</li>
-            </ol>
-          </figcaption>
-        </figure>
+        <p class="body secondary">Games you play with your hands. No controller, just your camera.</p>
+        <div class="gestures">
+          <figure class="gesture" data-gesture="pistol" aria-label="Finger pistol">
+            <p class="eyebrow">Arcade</p>
+          </figure>
+          <figure class="gesture" data-gesture="wheel" aria-label="Steering wheel">
+            <p class="eyebrow">Grip Prix</p>
+          </figure>
+        </div>
         <button id="get-started" class="button primary large" data-sound="confirm">Get Started</button>
         <p class="footnote tertiary">Your camera picture stays on this computer.</p>
       </div>
     </div>
 
-    <!-- The arcade. -->
-    <div id="home" class="view home" hidden>
-      <header class="nav">
-        <p class="wordmark">
-          <img class="wordmark-icon" src="/icons/icon-192.png" alt="" />Handy
-        </p>
-        <div class="nav-actions">
-          <button id="about" class="button plain small">Privacy</button>
-          <button id="mute" class="icon-button" aria-pressed="false" aria-label="Mute">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" />
-            </svg>
-          </button>
-          <button id="settings-open" class="icon-button" aria-label="Settings" title="Settings">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-gear" /></svg>
-          </button>
+    <!-- The bar over the landing and the arcade: back to Handy, between its two spaces, and the page's own controls. -->
+    <header class="nav" id="nav" hidden>
+      <a class="brand" id="brand" href="./">
+        <svg class="brand-back" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>
+        <img class="wordmark-icon" src="/icons/icon-192.png" alt="" /><span class="brand-name">Handy</span>
+      </a>
+      <nav class="spaces" aria-label="Sections">
+        <a class="space" id="space-arcade" href="#arcade" aria-current="page">Arcade</a>
+        <a class="space" id="space-grip" href="race.html">Grip Prix</a>
+      </nav>
+      <div class="nav-actions">
+        <button id="about" class="button plain small">Privacy</button>
+        <button id="mute" class="icon-button" aria-pressed="false" aria-label="Mute">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <use class="sound-on" href="#i-speaker" /><use class="sound-off" href="#i-speaker-off" />
+          </svg>
+        </button>
+        <button id="settings-open" class="icon-button" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-gear" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- The landing: Handy's two families, side by side. -->
+    <div id="landing" class="view landing" hidden>
+      <main class="landing-main">
+        <h1 class="landing-title" id="landing-title">Games you play with your hands.</h1>
+        <div class="tiles">
+          <article class="tile tile-arcade" id="tile-arcade" aria-labelledby="tile-arcade-title">
+            <div class="tile-art" id="tile-arcade-art" aria-hidden="true"></div>
+            <div class="tile-body">
+              <img class="tile-icon" src="/icons/icon-192.png" alt="" />
+              <p class="eyebrow" id="tile-arcade-eyebrow">Shooting</p>
+              <h2 class="tile-title" id="tile-arcade-title">Arcade</h2>
+              <p class="tile-line">Make a finger pistol. Take the shot.</p>
+              <div class="tile-actions">
+                <a class="button primary large tile-go" id="tile-arcade-go" href="#arcade" aria-describedby="tile-arcade-title">Play</a>
+                <button type="button" class="tile-how" data-how="arcade" aria-describedby="tile-arcade-title">
+                  How It Plays<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+              </div>
+            </div>
+          </article>
+          <article class="tile tile-grip" id="tile-grip" aria-labelledby="tile-grip-title">
+            <div class="tile-art" id="tile-grip-art" aria-hidden="true"></div>
+            <div class="tile-body">
+              <img class="tile-icon" id="tile-grip-icon" alt="" hidden />
+              <p class="eyebrow">Racing · Up to 4 Players</p>
+              <h2 class="tile-title" id="tile-grip-title">Grip Prix</h2>
+              <p class="tile-line" id="tile-grip-line">Grip the wheel. Race your friends.</p>
+              <div class="tile-actions">
+                <a class="button primary large tile-go" id="tile-grip-go" href="race.html" aria-describedby="tile-grip-title">Race</a>
+                <button type="button" class="tile-how" data-how="grip-prix" aria-describedby="tile-grip-title">
+                  How It Plays<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+              </div>
+            </div>
+          </article>
         </div>
-      </header>
-      <main class="home-main">
-        <!-- The game chosen below, large: its art beside its name and the Play button. -->
+        <p class="footnote landing-foot">Your camera picture stays on this computer.</p>
+      </main>
+    </div>
+
+    <!-- The arcade: the finger-pistol shooters. -->
+    <div id="arcade" class="view arcade" hidden>
+      <main class="arcade-main">
+        <!-- The game chosen below, full-bleed: its art behind its name and the Play button. -->
         <section class="feature" id="feature" aria-labelledby="feature-title">
-          <div class="feature-art" id="feature-frame" aria-hidden="true"><img id="feature-art" alt="" decoding="async" /></div>
+          <div class="hero-art" id="feature-frame" aria-hidden="true"></div>
           <div class="feature-text" id="feature-text">
-            <h1 class="large-title" id="feature-title">High Noon</h1>
-            <p class="body secondary" id="feature-about"></p>
+            <h1 class="hero-title" id="feature-title">High Noon</h1>
+            <p class="body hero-about" id="feature-about"></p>
             <div class="feature-actions" id="feature-actions">
               <button id="play" class="button primary large" data-sound="confirm">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-play" /></svg>Play
               </button>
               <button id="adjust" class="button secondary large" hidden>Adjust Aim</button>
             </div>
-            <p class="subhead secondary start-control" id="start-control">
+            <p class="subhead start-control" id="start-control">
               <span id="control-label" class="control-label"></span>
               <button id="switch-control" class="link">Use Mouse or Trackpad</button>
             </p>
-            <p class="subhead secondary home-best num" id="home-best" hidden></p>
+            <p class="subhead home-best num" id="home-best" hidden></p>
             <p class="coming-soon subhead" id="feature-soon" hidden>Coming Soon</p>
           </div>
         </section>
         <!-- Every game in the arcade: one tab stop, the arrow keys choose. -->
-        <div class="shelf" id="shelf" role="radiogroup" aria-label="Games"></div>
+        <section class="shelf-section" aria-labelledby="shelf-title">
+          <h2 class="shelf-heading eyebrow" id="shelf-title">Choose a Game</h2>
+          <div class="shelf" id="shelf" role="radiogroup" aria-label="Games"></div>
+        </section>
       </main>
     </div>
 
@@ -573,6 +588,84 @@
       </div>
     </dialog>
 
+    <!-- How a family of games is played with the hands: the landing's "How It Plays". -->
+    <dialog id="how" class="sheet alert how" aria-labelledby="how-title">
+      <p class="eyebrow" id="how-eyebrow">Arcade</p>
+      <h2 class="title2" id="how-title">Finger Pistol</h2>
+      <p class="body secondary" id="how-body"></p>
+      <figure class="gesture" id="how-figure"></figure>
+      <div class="sheet-actions">
+        <button class="button primary wide" id="how-done">Done</button>
+      </div>
+    </dialog>
+
+    <!-- The two gestures, in line art: the welcome shows both, and How It Plays shows one. -->
+    <template id="gesture-pistol">
+      <svg class="gesture-art" viewBox="0 0 360 180" aria-hidden="true">
+        <g class="g-recoil">
+          <path class="g-arm" d="M12 114 L96 106 M12 160 L94 158" />
+          <rect class="g-shape" x="84" y="84" width="84" height="76" rx="24" />
+          <rect class="g-shape" x="146" y="112" width="34" height="16" rx="8" />
+          <rect class="g-shape" x="146" y="128" width="32" height="16" rx="8" />
+          <rect class="g-shape" x="144" y="144" width="28" height="15" rx="7.5" />
+          <rect class="g-shape" x="134" y="84" width="130" height="26" rx="13" />
+          <g class="g-thumb">
+            <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
+          </g>
+          <!-- Folded, for a cross-fade when motion is reduced. -->
+          <g class="g-thumb-folded" transform="rotate(80 122 92)">
+            <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
+          </g>
+          <g class="g-flash">
+            <path class="g-line" d="M274 97 L290 97 M272 86 L284 77 M272 108 L284 117" />
+          </g>
+        </g>
+        <g class="g-target">
+          <circle class="g-ring" cx="324" cy="97" r="24" />
+          <circle class="g-ring" cx="324" cy="97" r="14" />
+          <circle class="g-bull" cx="324" cy="97" r="5.5" />
+          <circle class="g-pulse" cx="324" cy="97" r="24" />
+        </g>
+      </svg>
+      <figcaption>
+        <ol class="gesture-steps">
+          <li class="step-point">Point</li>
+          <li class="step-fold">Fold your thumb</li>
+          <li class="step-fire">Fire</li>
+        </ol>
+      </figcaption>
+    </template>
+    <template id="gesture-wheel">
+      <svg class="gesture-art" viewBox="24 6 312 156" aria-hidden="true">
+        <!-- Which way the wheel is turning, outside it, so they hold still while it turns. -->
+        <path class="g-turn g-turn-left" d="M152.6 16.8 A80 80 0 0 0 114.5 46.1 M125.8 42 L114.5 46.1 L114.5 34.1" />
+        <path class="g-turn g-turn-right" d="M207.4 16.8 A80 80 0 0 1 245.5 46.1 M234.2 42 L245.5 46.1 L245.5 34.1" />
+        <g class="g-wheel">
+          <circle class="g-shape" cx="180" cy="92" r="60" />
+          <circle class="g-shape" cx="180" cy="92" r="46" />
+          <rect class="g-shape" x="136" y="85" width="32" height="14" rx="7" />
+          <rect class="g-shape" x="192" y="85" width="32" height="14" rx="7" />
+          <rect class="g-shape" x="173" y="106" width="14" height="32" rx="7" />
+          <circle class="g-shape" cx="180" cy="92" r="16" />
+          <rect class="g-mark" x="176" y="33" width="8" height="12" rx="4" />
+          <!-- Two fists on the rim, a thumb over it. -->
+          <rect class="g-shape" x="112" y="56" width="22" height="26" rx="11" />
+          <rect class="g-shape" x="104" y="70" width="44" height="50" rx="17" />
+          <path class="g-line g-knuckles" d="M114 84 H128 M114 95 H130 M114 106 H128" />
+          <rect class="g-shape" x="226" y="56" width="22" height="26" rx="11" />
+          <rect class="g-shape" x="212" y="70" width="44" height="50" rx="17" />
+          <path class="g-line g-knuckles" d="M246 84 H232 M246 95 H230 M246 106 H232" />
+        </g>
+      </svg>
+      <figcaption>
+        <ol class="gesture-steps wheel-steps">
+          <li class="step-grip">Grip</li>
+          <li class="step-left">Turn left</li>
+          <li class="step-right">Turn right</li>
+        </ol>
+      </figcaption>
+    </template>
+
     <p class="toast glass" id="toast" role="status" popover="manual" hidden></p>
     <p class="visually-hidden" id="announce" aria-live="polite"></p>
 
@@ -580,6 +673,11 @@
     <svg class="symbols" aria-hidden="true">
       <!-- A damage arc fades out at both ends, so it points rather than cuts. -->
       <defs>
+        <!-- The line-art arm fades into the page at its sleeve (the welcome's and How It Plays' finger pistol). -->
+        <linearGradient id="g-sleeve" gradientUnits="userSpaceOnUse" x1="12" y1="0" x2="92" y2="0">
+          <stop offset="0" stop-color="#fff" stop-opacity="0" />
+          <stop offset="1" stop-color="#fff" stop-opacity="1" />
+        </linearGradient>
         <linearGradient id="arc-fade" gradientUnits="userSpaceOnUse" x1="-18" y1="0" x2="18" y2="0">
           <stop offset="0" stop-color="#ff453a" stop-opacity="0" />
           <stop offset="0.32" stop-color="#ff453a" />
@@ -608,6 +706,7 @@
       <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 5.5-3.1M13.9 6.1a11.6 11.6 0 0 1 6.3 3.5" /><path d="M6.8 12.7a7.3 7.3 0 0 1 3.4-2M17.2 12.7a7.3 7.3 0 0 0-2.3-1.6" /><path d="M9.8 15.8a3 3 0 0 1 3.2-.8" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /><path d="M5.2 4.4 18.8 19.6" /></symbol>
       <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3.6 19.4 7.8v8.4L12 20.4 4.6 16.2V7.8z" /><path d="M4.8 8 12 12.1 19.2 8" /><path d="M12 12.1v8.1" /></symbol>
       <symbol id="i-gear" viewBox="0 0 24 24"><path d="M10.35 5.4L10.67 3.1A9 9 0 0 1 13.33 3.1L13.65 5.4A6.8 6.8 0 0 1 15.5 6.17L17.35 4.77A9 9 0 0 1 19.23 6.65L17.83 8.5A6.8 6.8 0 0 1 18.6 10.35L20.9 10.67A9 9 0 0 1 20.9 13.33L18.6 13.65A6.8 6.8 0 0 1 17.83 15.5L19.23 17.35A9 9 0 0 1 17.35 19.23L15.5 17.83A6.8 6.8 0 0 1 13.65 18.6L13.33 20.9A9 9 0 0 1 10.67 20.9L10.35 18.6A6.8 6.8 0 0 1 8.5 17.83L6.65 19.23A9 9 0 0 1 4.77 17.35L6.17 15.5A6.8 6.8 0 0 1 5.4 13.65L3.1 13.33A9 9 0 0 1 3.1 10.67L5.4 10.35A6.8 6.8 0 0 1 6.17 8.5L4.77 6.65A9 9 0 0 1 6.65 4.77L8.5 6.17A6.8 6.8 0 0 1 10.35 5.4Z" /><circle cx="12" cy="12" r="2.9" /></symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14.5 5.8 8.3 12l6.2 6.2" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.5 5.8 15.7 12l-6.2 6.2" /></symbol>
       <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
       <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6.2 9.2 12 15l5.8-5.8" /></symbol>

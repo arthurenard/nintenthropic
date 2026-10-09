@@ -132,7 +132,7 @@ export async function shoot(page: Page, x: number, y: number): Promise<void> {
 }
 
 /** A game with the scripted hand, through the aim check and into play, the hand held up mid-view. */
-export async function playWithHand(page: Page, url = "/?input=script"): Promise<void> {
+export async function playWithHand(page: Page, url = "/?input=script#arcade"): Promise<void> {
   await skipWelcome(page);
   await page.goto(url);
   await page.getByRole("button", { name: "Play" }).click();

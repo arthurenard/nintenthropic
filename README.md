@@ -32,8 +32,10 @@ Prix](#play-grip-prix)).
 ## Play
 
 Handy is a website: open it in a current browser on a computer with a webcam,
-choose a game in the arcade's row, choose **Play**, and allow the camera. A
-link to a game (`…/#high-noon`) opens the arcade on it.
+choose **Play** on the Arcade's tile (or **Race** for Grip Prix), choose a game in the
+arcade's row, choose **Play**, and allow the camera. A link to a game
+(`…/#high-noon`) opens the arcade on it, and `…/#arcade` opens the arcade on the
+game you chose last; `./` is the landing, with the two side by side.
 
 To run it on your own machine:
 

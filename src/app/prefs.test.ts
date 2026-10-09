@@ -161,6 +161,25 @@ describe("the player's settings", () => {
     expect(() => (prefs.muted = true)).not.toThrow();
   });
 
+  it("remember which of the landing's tiles was last gone through, and read anything else as none", () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal("localStorage", storage);
+    expect(prefs.space).toBeNull();
+    prefs.space = "grip-prix";
+    expect(prefs.space).toBe("grip-prix");
+    expect(storage.getItem("handy.space.v1")).toBe('"grip-prix"');
+    prefs.space = "arcade";
+    expect(prefs.space).toBe("arcade");
+    storage.setItem("handy.space.v1", JSON.stringify("somewhere-else"));
+    expect(prefs.space).toBeNull();
+    storage.setItem("handy.space.v1", "not json");
+    expect(prefs.space).toBeNull();
+    // Reset Handy forgets it with the rest.
+    prefs.space = "grip-prix";
+    forgetEverything([storage]);
+    expect(prefs.space).toBeNull();
+  });
+
   it("are read from the page's own storage by default", () => {
     const storage = new MemoryStorage();
     vi.stubGlobal("localStorage", storage);

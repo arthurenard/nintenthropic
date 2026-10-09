@@ -1,7 +1,7 @@
 {
   "name": "Handy",
   "short_name": "Handy",
-  "description": "An arcade you play with a finger pistol in front of your camera.",
+  "description": "Games you play with your hands in front of your camera: a finger-pistol arcade and a four-player kart race.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

@@ -1,60 +1,32 @@
 /**
- * The arcade's row of games: every game's poster as a card, the chosen one
- * marked, chosen by a click or - as a radio group, one tab stop - the arrow
- * keys. The cards sit under a heading per kind of game (Shooting, Racing),
- * side by side in the one row, and the arrow keys run on through them all.
- * The choice is remembered, and it is the page's address: a link to
- * `#dead-of-night` (or `?game=dead-of-night`) opens the arcade on that game,
- * so a player can pass a game on.
+ * The arcade: the finger-pistol shooters, one chosen to be the hero and the
+ * rest in a row of posters below it - a radio group with one tab stop, the
+ * arrow keys choosing - which scrolls and snaps where the row is wider than
+ * the window. The choice is remembered, and it is the page's address
+ * (route.ts): a link to `#dead-of-night` opens the arcade on that game.
+ *
+ * Grip Prix is not in the row. It is a page of its own, shown beside the
+ * arcade on the landing, not a game to choose here.
  */
 import type { GameEntry } from "../engine/types";
 import { siteUrl } from "../engine/fetch";
 import { backdropCss } from "../ui/backdrop";
 import { element } from "../ui/dom";
 
-/** The headings the arcade lists games under, in order. */
-export const CATEGORIES = [
-  { id: "shooting", title: "Shooting" },
-  { id: "racing", title: "Racing" },
-] as const;
+/** Which kind of game: Shooting unless its entry says otherwise. */
+export const categoryOf = (game: GameEntry): "shooting" | "racing" => game.category ?? "shooting";
 
-export type Category = (typeof CATEGORIES)[number]["id"];
-
-/** Which heading a game is under: Shooting unless its entry says otherwise. */
-export const categoryOf = (game: GameEntry): Category => game.category ?? "shooting";
+/** The games the arcade lists: the shooters, in the arcade's order. */
+export const shooters = (games: readonly GameEntry[]): GameEntry[] => games.filter((game) => categoryOf(game) === "shooting");
 
 /**
- * The games under their headings, in the headings' order and the arcade's
- * order within each. A heading with no game is left out. Flattened, this is
- * the order the row is walked in with the arrow keys.
+ * The game to open the arcade on: the one the address named, else the one
+ * chosen last, else the first that can be played. A name that is not in the
+ * arcade (a game that has left it, Grip Prix) is passed over.
  */
-export function groupGames(games: readonly GameEntry[]): { id: Category; title: string; games: GameEntry[] }[] {
-  return CATEGORIES.map(({ id, title }) => ({ id, title, games: games.filter((game) => categoryOf(game) === id) })).filter(
-    (group) => group.games.length > 0,
-  );
-}
-
-/** The game id an address's hash names ("#dead-of-night"), or "" for none or one that is not text. */
-export function hashId(hash: string): string {
-  try {
-    return decodeURIComponent(hash.replace(/^#/, ""));
-  } catch {
-    return "";
-  }
-}
-
-/**
- * The game to open the arcade on: the one the address names (its hash, else
- * its ?game=), else the one chosen last, else the first that can be played.
- */
-export function initialGame(
-  arcade: readonly GameEntry[],
-  from: { hash: string; search: string; remembered: string | null },
-): GameEntry | undefined {
+export function pickGame(arcade: readonly GameEntry[], named: string | null, remembered: string | null): GameEntry | undefined {
   const byId = (id: string | null | undefined) => (id ? arcade.find((game) => game.id === id) : undefined);
-  const hash = hashId(from.hash);
-  const query = new URLSearchParams(from.search).get("game");
-  return byId(hash) ?? byId(query) ?? byId(from.remembered) ?? arcade.find((game) => typeof game.create === "function") ?? arcade[0];
+  return byId(named) ?? byId(remembered) ?? arcade.find((game) => typeof game.create === "function") ?? arcade[0];
 }
 
 /** The next game along the row for a key, wrapping round, or null for a key that does not move. */
@@ -77,37 +49,69 @@ export function posterInto(box: HTMLElement, image: HTMLImageElement, game: Game
   image.src = src;
 }
 
+/** How long a poster takes to give way to the next, ms (the CSS transition on .hero-art img). */
+const CROSSFADE = 700;
+
+/**
+ * The hero's full-bleed picture. Another game's poster fades in over the
+ * one before it, which goes only once the new one is whole: the picture
+ * never dips to the backdrop between two games.
+ */
+export class HeroArt {
+  private current: HTMLImageElement | null = null;
+  private readonly layers = new Set<HTMLImageElement>();
+
+  constructor(private readonly box: HTMLElement) {}
+
+  show(game: GameEntry): void {
+    this.box.style.setProperty("--poster-fallback", backdropCss(game.backdrop));
+    const src = siteUrl(game.poster);
+    if (this.current?.dataset.src === src) return;
+    const image = element("img");
+    image.alt = "";
+    image.decoding = "async";
+    image.dataset.src = src;
+    this.current = image;
+    this.layers.add(image);
+    const retire = (others: HTMLImageElement[], fade: boolean) => {
+      for (const other of others) {
+        this.layers.delete(other);
+        if (fade) other.classList.remove("loaded");
+        window.setTimeout(() => other.remove(), CROSSFADE);
+      }
+    };
+    image.onload = () => {
+      image.classList.add("loaded");
+      retire([...this.layers].filter((other) => other !== image), false);
+    };
+    image.onerror = () => {
+      // No poster for this game: the others fade away to its backdrop, and nothing pretends to be the game.
+      this.layers.delete(image);
+      image.remove();
+      if (this.current === image) {
+        this.current = null;
+        retire([...this.layers], true);
+      }
+    };
+    this.box.append(image);
+    image.src = src;
+  }
+}
+
 export class Shelf {
   private readonly cards: HTMLButtonElement[];
-  /** The games in the order the row shows them (grouped by heading): the order of the cards and of the arrow keys. */
-  private readonly games: GameEntry[];
   private index = 0;
 
   constructor(
-    group: HTMLElement,
-    games: readonly GameEntry[],
+    private readonly group: HTMLElement,
+    /** The games in the order the row shows them: the order of the cards and of the arrow keys. */
+    private readonly games: readonly GameEntry[],
     private readonly onChoose: (game: GameEntry, how: "click" | "key") => void,
   ) {
-    const groups = groupGames(games);
-    this.games = groups.flatMap((g) => g.games);
     this.cards = this.games.map((game) => this.card(game));
-    // The row's width is shared out by how many cards there are and how many headings
-    // (screens.css works out a card's width from them, and so the hero's height).
-    const home = group.parentElement ?? group;
-    home.style.setProperty("--all", String(this.cards.length));
-    home.style.setProperty("--groups", String(groups.length));
-    let at = 0;
-    group.replaceChildren(
-      ...groups.map((g) => {
-        const section = element("div", "shelf-group");
-        section.style.setProperty("--n", String(g.games.length));
-        const cards = element("div", "shelf-cards");
-        cards.append(...this.cards.slice(at, at + g.games.length));
-        at += g.games.length;
-        section.append(element("h2", "shelf-heading eyebrow", g.title), cards);
-        return section;
-      }),
-    );
+    // The row's width is shared out by how many cards there are (arcade.css sizes a card from it).
+    group.style.setProperty("--n", String(this.cards.length));
+    group.replaceChildren(...this.cards);
     group.addEventListener("keydown", (event) => {
       const to = step(this.cards.length, this.index, event.key);
       if (to === null) return;
@@ -145,7 +149,7 @@ export class Shelf {
     if (changed || how === "click") this.onChoose(game, how);
   }
 
-  /** Marks `game` as the chosen one (one tab stop: the chosen card). */
+  /** Marks `game` as the chosen one (one tab stop: the chosen card), and brings its card into the row's view. */
   show(game: GameEntry): void {
     const index = Math.max(0, this.games.indexOf(game));
     this.index = index;
@@ -154,5 +158,13 @@ export class Shelf {
       card.setAttribute("aria-checked", String(chosen));
       card.tabIndex = chosen ? 0 : -1;
     });
+  }
+
+  /** Scrolls the row, not the page, so the chosen card is whole in it (the row scrolls where it is wider than the window). */
+  reveal(smooth: boolean): void {
+    const card = this.cards[this.index];
+    if (!card || this.group.scrollWidth <= this.group.clientWidth) return;
+    const to = card.offsetLeft - (this.group.clientWidth - card.offsetWidth) / 2;
+    this.group.scrollTo({ left: Math.max(0, to), behavior: smooth ? "smooth" : "auto" });
   }
 }

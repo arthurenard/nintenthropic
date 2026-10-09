@@ -1,0 +1,479 @@
+/* The bar over the landing and the arcade, and the landing itself: two equal,
+   cinematic tiles. Apple's two-up product tiles are the model - art first, a
+   few big words, one white pill - and the arcade's own hero (screens.css) is
+   their other half. */
+
+:root {
+  /* The bar's height, and what a page under it must clear. */
+  --nav: 64px;
+  --r-tile: 28px;
+  /* How wide the landing's content gets (the bar over it lines up with it). */
+  --page: 1600px;
+}
+
+/* --- the bar --------------------------------------------------------------------------- */
+
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  height: var(--nav);
+  padding: 0 var(--margin);
+  background: rgba(18, 18, 20, 0.5);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  border-bottom: 1px solid var(--hairline);
+}
+/* Over the landing the bar's ends are the content's, not the window's. */
+body[data-view="landing"] .nav {
+  padding-inline: max(var(--margin), calc((100% - var(--page)) / 2 + var(--margin)));
+}
+.brand {
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  min-height: 44px;
+  padding-right: 12px;
+  border-radius: 999px;
+  color: var(--label);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* In the arcade the wordmark is also the way back to the landing, and says so with Grip Prix's own chevron. */
+.brand-back {
+  display: none;
+  width: 22px;
+  height: 22px;
+  margin: 0 -4px 0 -6px;
+  color: var(--label-2);
+  transition: transform 250ms var(--spring);
+}
+body[data-view="arcade"] .brand-back {
+  display: block;
+}
+body[data-view="arcade"] .brand:hover .brand-back {
+  transform: translateX(-3px);
+}
+/* The two spaces: a segmented control, as the settings' are, with the arcade chosen. Where it is, there is nothing to choose between. */
+.spaces {
+  grid-column: 2;
+  position: relative;
+  display: inline-grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  justify-self: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(118, 118, 128, 0.3);
+  isolation: isolate;
+}
+body[data-view="landing"] .spaces {
+  display: none;
+}
+.spaces::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 2);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.12),
+    0 3px 1px rgba(0, 0, 0, 0.04);
+}
+.space {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 104px;
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 999px;
+  color: var(--label);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 250ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+/* Small in look, never in reach. */
+.space::after {
+  content: "";
+  position: absolute;
+  inset: -5px -2px;
+}
+.space[aria-current="page"] {
+  color: #000;
+}
+.nav-actions {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+}
+
+/* --- the landing ----------------------------------------------------------------------- */
+
+.landing {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.landing-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 32px;
+  width: 100%;
+  max-width: var(--page);
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: calc(var(--nav) + 24px) var(--margin) 24px;
+}
+.landing-title {
+  font-size: clamp(32px, 4.4vw, 68px);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-align: center;
+  text-wrap: balance;
+}
+.landing-foot {
+  text-align: center;
+  color: var(--label-3);
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+/* A tile: the picture fills it, a scrim darkens where the words sit, the words and the pill are at its foot. */
+.tile {
+  --zoom: 1;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: clamp(400px, calc(100dvh - 276px), 780px);
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--r-tile);
+  background: var(--poster-fallback);
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    0 32px 64px -24px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  /* Keeps the rounded corners honest while the picture inside moves. */
+  transform: translateZ(0);
+  transition:
+    box-shadow 500ms var(--spring),
+    transform 500ms var(--spring);
+}
+/* The picture leans toward the pointer and swells a little: slow, so it is felt more than seen. */
+.tile-art {
+  position: absolute;
+  inset: -4%;
+  z-index: -2;
+  background: var(--poster-fallback);
+  transform: translate3d(var(--dx, 0px), var(--dy, 0px), 0) scale(var(--zoom));
+  transition: transform 900ms var(--spring);
+}
+.tile:hover,
+.tile:has(.tile-go:focus-visible) {
+  --zoom: 1.05;
+}
+.tile:active {
+  transform: translateZ(0) scale(0.994);
+}
+.tile:has(.tile-go:focus-visible) {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 6px var(--label),
+    0 32px 64px -24px rgba(0, 0, 0, 0.7);
+}
+.tile-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 900ms var(--ease);
+}
+.tile-art img.loaded {
+  opacity: 1;
+}
+/* The arcade's posters take turns: only the one showing is seen, and it drifts while it is. */
+.tile-art img[data-game] {
+  opacity: 0;
+  transition: opacity 1600ms var(--ease);
+}
+.tile-art img[data-game].on.loaded {
+  opacity: 1;
+  animation: drift 12s linear both;
+}
+@keyframes drift {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+/* The arcade: dark, and a little cold, with the light kept in the middle of the picture. */
+.tile-arcade .tile-art {
+  filter: saturate(0.9) contrast(1.06);
+}
+.tile-arcade::before {
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.62) 36%, rgba(0, 0, 0, 0.12) 68%),
+    radial-gradient(120% 90% at 50% 40%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.55) 100%);
+}
+/* Grip Prix: its sun stays on the picture; a blue-black shade comes up under the words only. */
+.tile-grip::before {
+  background:
+    linear-gradient(to top, rgba(4, 22, 52, 0.88) 0%, rgba(4, 22, 52, 0.72) 26%, rgba(4, 22, 52, 0.5) 40%, rgba(4, 22, 52, 0.14) 58%, rgba(4, 22, 52, 0) 72%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 30%);
+}
+.tile-body {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  max-width: 600px;
+  padding: 0 40px 40px;
+  text-shadow: 0 1px 24px rgba(0, 0, 0, 0.3);
+}
+.tile-body .eyebrow {
+  color: rgba(255, 255, 255, 0.78);
+}
+.tile-icon {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 22.4%;
+  object-fit: cover;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.tile-title {
+  font-size: clamp(40px, 4.6vw, 72px);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.tile-line {
+  max-width: 22em;
+  font-size: clamp(17px, 1.5vw, 21px);
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.86);
+}
+.tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+  margin-top: 16px;
+}
+.tile-go {
+  min-width: 132px;
+  text-decoration: none;
+}
+/* The whole tile is the pill's: the link reaches to its edges. (The pill itself is not positioned, so this is the tile's.) */
+.tile-go::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+/* The tile wears its own ring for the keyboard, in place of the pill's. */
+.tile-go:focus-visible {
+  outline: none;
+}
+.tile-how {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: inherit;
+  transition: color 250ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.tile-how:hover {
+  color: #fff;
+}
+.tile-how svg {
+  width: 20px;
+  height: 20px;
+  transition: transform 250ms var(--spring);
+}
+.tile-how:hover svg {
+  transform: translateX(3px);
+}
+
+/* --- How It Plays ---------------------------------------------------------------------- */
+
+.how {
+  width: min(440px, calc(100vw - 2 * var(--margin)));
+}
+.how .gesture {
+  width: 100%;
+  margin: 12px 0 4px;
+}
+
+/* --- larger and narrower windows ------------------------------------------------------- */
+
+/* A large display: the tiles grow with it, words and all. */
+@media (min-width: 2200px) {
+  :root {
+    --page: 2000px;
+  }
+  .landing-main {
+    gap: 40px;
+  }
+  .landing-title {
+    font-size: 84px;
+  }
+  .tile {
+    height: clamp(400px, calc(100dvh - 330px), 960px);
+  }
+  .tile-body {
+    max-width: 760px;
+    padding: 0 56px 56px;
+  }
+  .tile-title {
+    font-size: 96px;
+  }
+  .tile-line {
+    font-size: 26px;
+  }
+  .tile-body .eyebrow {
+    font-size: 15px;
+  }
+  .tile-icon {
+    top: 40px;
+    left: 40px;
+    width: 72px;
+    height: 72px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .space {
+    min-width: 88px;
+  }
+}
+/* A short window: the title gives way to the tiles. */
+@media (max-height: 720px) and (min-width: 861px) {
+  .landing-main {
+    gap: 24px;
+  }
+  .landing-title {
+    font-size: clamp(28px, 3.6vw, 48px);
+  }
+  .tile {
+    height: clamp(380px, calc(100dvh - 240px), 780px);
+  }
+  .tile-body {
+    padding: 0 32px 32px;
+  }
+}
+/* Stacked: two tiles, one above the other, each as wide as the page. */
+@media (max-width: 860px) {
+  .tiles {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .tile {
+    height: clamp(400px, 112vw, 560px);
+  }
+  .tile-body {
+    padding: 0 24px 28px;
+  }
+  .tile-icon {
+    top: 20px;
+    left: 20px;
+    width: 48px;
+    height: 48px;
+  }
+  .landing-main {
+    justify-content: flex-start;
+    gap: 24px;
+  }
+}
+@media (max-width: 600px) {
+  .nav {
+    gap: 8px;
+  }
+  /* Settings has a Privacy row too: here the room goes to the choice between spaces. */
+  #about {
+    display: none;
+  }
+  body[data-view="arcade"] .brand-name {
+    display: none;
+  }
+  .space {
+    min-width: 72px;
+    padding: 0 12px;
+  }
+}
+
+/* --- reduced motion: the tiles hold still, and the posters do not turn ---------------------- */
+
+:root[data-reduce-motion] {
+  .tile {
+    --zoom: 1 !important;
+  }
+  .tile:hover {
+    box-shadow:
+      0 0 0 1px var(--hairline),
+      0 32px 64px -24px rgba(0, 0, 0, 0.7),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  }
+  .tile-art {
+    transform: none !important;
+    transition-property: opacity !important;
+  }
+  .tile-art img[data-game].on.loaded {
+    animation: none;
+  }
+  .tile:active {
+    transform: translateZ(0);
+  }
+  body[data-view="arcade"] .brand:hover .brand-back,
+  .tile-how:hover svg {
+    transform: none;
+  }
+}

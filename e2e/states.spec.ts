@@ -9,12 +9,17 @@ async function stage(page: Page, script: string): Promise<void> {
   await page.evaluate(script);
 }
 
-test("first run and the arcade", async ({ page }, info) => {
+test("first run, the landing and the arcade", async ({ page }, info) => {
   await page.goto("/");
   await expect(page.locator("#welcome")).toBeVisible();
   await shot(page, info, "01-welcome");
   await page.getByRole("button", { name: "Get Started" }).click();
-  await expect(page.locator("#home")).toBeVisible();
+  // The welcome lands on the landing, with the two spaces side by side.
+  await expect(page.locator("#landing")).toBeVisible();
+  await page.mouse.move(1, 1);
+  await shot(page, info, "02-landing", 1200);
+  await page.getByRole("link", { name: "Play" }).click();
+  await expect(page.locator("#arcade")).toBeVisible();
   await page.mouse.move(1, 1);
   await shot(page, info, "02-arcade");
   // The Konami code, typed on the arcade.
@@ -43,7 +48,7 @@ test("the camera's question and getting ready", async ({ page }, info) => {
     await new Promise((resolve) => setTimeout(resolve, 2500));
     await route.continue();
   });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.locator("#prime")).toBeVisible();
   await shot(page, info, "05-camera-question");
@@ -58,7 +63,7 @@ test("the camera's question and getting ready", async ({ page }, info) => {
 
 test("the aim check and play", async ({ page }, info) => {
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
   await pose(page, handAt(0.5, 0.5));
@@ -134,7 +139,7 @@ test("the aim check and play", async ({ page }, info) => {
 
 test("an aim that will not settle is offered Play Anyway, with one tip", async ({ page }, info) => {
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
   // A hand that never goes quite where the player looks: every shot lands
@@ -182,7 +187,7 @@ const TROUBLES: [string, string][] = [
 test("trouble, said calmly with the fix as a button", async ({ page }, info) => {
   await skipWelcome(page, { "handy.camera-opened.v1": true });
   for (const [kind, title] of TROUBLES) {
-    await page.goto(`/?fail=${kind}`);
+    await page.goto(`/?fail=${kind}#arcade`);
     await page.getByRole("button", { name: "Play" }).click();
     await expect(page.locator("#alert")).toBeVisible();
     await expect(page.locator("#alert-title")).toHaveText(title);

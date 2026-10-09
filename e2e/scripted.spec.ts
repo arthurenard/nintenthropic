@@ -9,7 +9,7 @@ test("a scripted hand passes the aim check at 95% and plays", async ({ page }, i
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
   await pose(page, handAt(0.5, 0.5));
@@ -86,7 +86,7 @@ test("with Reduce Motion the aim check says the same, shows no crosshair until t
   page.on("pageerror", (error) => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");

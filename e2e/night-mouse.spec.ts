@@ -88,7 +88,7 @@ test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the resu
   await shot(page, info, "night-mouse-04-results");
 
   await page.getByRole("button", { name: "Choose a Game" }).click();
-  await expect(page.locator("#home")).toBeVisible();
+  await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
   expect(errors).toEqual([]);
 });

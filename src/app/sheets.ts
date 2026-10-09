@@ -143,7 +143,7 @@ export function showTrouble(
   const sheet = TROUBLES[kind];
   // Raised over the arcade (a game that could not start), Choose a Game
   // would only close the sheet on the arcade it is already over: it says so.
-  const atHome = document.body.dataset.view === "home";
+  const atHome = document.body.dataset.view === "arcade" || document.body.dataset.view === "landing";
   const badge = $("alert-icon");
   badge.replaceChildren(icon(sheet.icon));
   badge.classList.add("danger");

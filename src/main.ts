@@ -1,5 +1,6 @@
 // Boots the app: the styles, then the page's controller.
 import "./ui/base.css";
+import "./app/landing.css";
 import "./app/screens.css";
 import "./app/play.css";
 import "./app/settings.css";

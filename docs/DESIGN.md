@@ -203,23 +203,55 @@ Every meaningful event has a sound, synthesised in code at load
 Interface sounds are soft and short; game sounds carry the weight. Mute is one
 click and remembered.
 
+## The landing
+
+`./` is Handy's front door: "Games you play with your hands." over two
+equal, cinematic tiles (Apple's two-up product tiles are the model: art
+first, a few big words, one white pill). Stacked, one above the other, on a phone.
+
+- **Arcade** (dark): the four shooters' posters, one fading into the next
+  every few seconds (still with Reduce Motion), a shade coming up from the
+  foot. Eyebrow "Shooting · 4 Games", the name, one line ("Make a finger
+  pistol. Take the shot."), and Play, which opens the arcade.
+- **Grip Prix** (bright): its sunny poster, the same shape of words
+  ("Racing · Up to 4 Players", "Grip the wheel. Race your friends."), and
+  Race, which goes to race.html. The poster is
+  `public/assets/kart/poster.webp`, its badge `icon.png`; until they exist the
+  game's backdrop and no badge stand in.
+- **How It Plays**, quiet under each pill, opens a sheet with that family's
+  gesture in line art: the finger pistol, or two fists turned like a wheel.
+- **Hover or focus** swells the picture a little and, under a mouse, leans it
+  toward the pointer; the keyboard ring goes round the whole tile. Reduce
+  Motion holds everything still.
+- **Addresses.** `./` is the landing. `#arcade`, `#high-noon` and `?game=high-noon`
+  open the arcade (on that game); `#grip-prix` and `?game=grip-prix` open the
+  landing with Grip Prix's tile in hand. Coming home from Grip Prix lands on
+  its tile too (`handy.space.v1` remembers which tile was last gone through).
+  Moving between the spaces is history: the browser's Back comes back.
+
+The bar over the landing and the arcade is frosted glass (64 tall): Handy,
+Privacy, sound, Settings. In the arcade Handy has a chevron (the way back to the
+landing, as Grip Prix's own "‹ Handy" is) and a segmented control sits in
+the middle: **Arcade | Grip Prix**, the arcade chosen, Grip Prix a link to its page.
+
 ## The arcade
 
-The home screen is the arcade: the chosen game large, and every game in a
-row beneath it.
+The shooting arcade is a space of its own: the chosen game full-bleed, and
+the four shooters in a row beneath it. Grip Prix is not in the row.
 
-- **The hero** is the chosen game: its poster (rounded 22, lifted by the
-  shadow) beside its name (Large Title), two or three sentences about it,
-  Play and Adjust Aim, how you are playing (Finger Pistol, or the mouse),
-  and, quietly, your best in this game. When the window is short the picture
-  gives way to the row before the words do.
-- **The row** holds every game's poster as a card (16:9, rounded 16) with its
-  name under it. The chosen card is ringed in white, the page's colour for a
-  choice made, and the others sit back a little until the pointer is on
-  them. It is a radio group: one tab stop, the arrow keys choose (Home and
-  End go to the ends), a click chooses. With the keyboard the card in hand
-  lifts toward you. In a narrow window the row goes two by two, every game
-  in sight.
+- **The hero** is the chosen game's poster running to the edges of the window,
+  under the bar, with a scrim that is dark where the words are (white on any
+  poster reads at AA): its name (Display, tight tracking), two or three
+  sentences about it, Play and Adjust Aim, how you are playing (Finger Pistol,
+  or the mouse), and, quietly, your best in this game. Another game's poster
+  fades in over the last; the words rise in with it.
+- **The row** ("Choose a Game") holds every game's poster as a card (16:9,
+  rounded 16) with its name under it. The chosen card lifts and is ringed in
+  white, the page's colour for a choice made, and the others sit back a little
+  until the pointer is on them. It is a radio group: one tab stop, the arrow
+  keys choose (Home and End go to the ends), a click chooses. Where the row is
+  wider than the window (a phone) it scrolls and snaps to a card, and the
+  chosen one is kept in view. With the keyboard the ring grows a step.
 - **Coming Soon** games are in the row too, named and never faked: "Coming
   Soon" under the name, and in the hero, where Play would be, a quiet
   label rather than a button.
@@ -234,8 +266,11 @@ row beneath it.
 
 ## First run
 
-1. A welcome that fits on one screen: what Handy is, one looping illustration of
-   the gesture (point, fold the thumb, fire), and one button.
+1. A welcome that fits on one screen: what Handy is ("Games you play with your
+   hands"), both gestures in looping line art - the finger pistol (point, fold the
+   thumb, fire) for the Arcade, and two fists held like a wheel and turned
+   (grip, turn left, turn right) for Grip Prix - and one button, which lands on
+   the landing (or on the game a link named).
 2. Before the browser asks for the camera, say why and what happens to the
    picture: "Handy needs your camera to see your hand. The picture stays on
    this computer."

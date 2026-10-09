@@ -9,7 +9,7 @@ test("the camera flow: the hand is tracked, frame after frame", async ({ page },
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page);
-  await page.goto("/");
+  await page.goto("/#arcade");
   await expect(page.locator("#control-label")).toHaveText("Finger Pistol");
   await page.getByRole("button", { name: "Play" }).click();
 
@@ -50,6 +50,6 @@ test("the camera flow: the hand is tracked, frame after frame", async ({ page },
 
   await page.keyboard.press("p");
   await page.getByRole("button", { name: "Choose a Game" }).click();
-  await expect(page.locator("#home")).toBeVisible();
+  await expect(page.locator("#arcade")).toBeVisible();
   expect(errors).toEqual([]);
 });

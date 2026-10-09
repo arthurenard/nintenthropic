@@ -119,7 +119,7 @@ test("Shift and the right mouse button scope, held or toggled, and the right but
 
 test("a game without a scope: the right button reloads as before (the Scope settings are Overwatch Ridge's)", async ({ page }) => {
   await skipWelcome(page, { "handy.control.v1": "mouse" });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#settings")).toBeVisible();
   // Overwatch Ridge can be played, and it has a scope (and reads the eye).

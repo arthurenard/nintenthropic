@@ -301,7 +301,7 @@ test("the results: a fold of the thumb plays again, and the world rests", async 
 test("the aim check says how to frame the hand, once it has seen a problem for a moment", async ({ page }, info) => {
   const errors = watchErrors(page);
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await state(page)).phase, { timeout: 60_000 }).toBe("check");
   const trigger = page.locator("#trigger");
@@ -328,8 +328,8 @@ test("the aim check says how to frame the hand, once it has seen a problem for a
 
 test("getting ready offline says so, with the fix", async ({ page, context }, info) => {
   await skipWelcome(page, { "handy.camera-opened.v1": true });
-  await page.goto("/");
-  await expect(page.locator("#home")).toBeVisible();
+  await page.goto("/#arcade");
+  await expect(page.locator("#arcade")).toBeVisible();
   await context.setOffline(true);
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.locator("#alert")).toBeVisible({ timeout: 60_000 });

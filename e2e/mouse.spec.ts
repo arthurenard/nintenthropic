@@ -7,8 +7,8 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page);
-  await page.goto("/");
-  await expect(page.locator("#home")).toBeVisible();
+  await page.goto("/#arcade");
+  await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#feature-title")).toHaveText("High Noon");
   await shot(page, info, "mouse-01-arcade");
 
@@ -70,14 +70,14 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   await shot(page, info, "mouse-04-results");
 
   await page.getByRole("button", { name: "Choose a Game" }).click();
-  await expect(page.locator("#home")).toBeVisible();
+  await expect(page.locator("#arcade")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
 test("a tall window plays in a band the town can fill, and a short one keeps its chrome small", async ({ page }) => {
   await skipWelcome(page, { "handy.control.v1": "mouse" });
   await page.setViewportSize({ width: 420, height: 860 });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
   // Never taller than 1.1 : 1, centred, with the night above and below.

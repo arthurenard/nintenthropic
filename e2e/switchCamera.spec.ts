@@ -68,7 +68,7 @@ const chosen = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getIt
 
 /** Through the camera's question (if the browser asks it) into the aim check, with the real fake camera. */
 async function toAimCheck(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 90_000 }).toBe("check");
   await expect(page.locator("#pip")).toBeVisible();
@@ -76,7 +76,7 @@ async function toAimCheck(page: Page): Promise<void> {
 
 test("with one camera, Switch Camera is nowhere", async ({ page }) => {
   await skipWelcome(page);
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
   await expect(page.locator("#pip")).toBeVisible();
@@ -232,7 +232,7 @@ test("a camera unplugged mid-game gives way to the other, and the switch goes wi
 
 test("a round in play starts afresh under the other camera, through its aim check", async ({ page }) => {
   await skipWelcome(page, { "handy.camera-opened.v1": true });
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.evaluate(() => {
     const list = [
       { deviceId: "cam-front", label: "FaceTime HD Camera" },

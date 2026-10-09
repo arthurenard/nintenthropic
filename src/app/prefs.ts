@@ -19,6 +19,7 @@ const KEYS = {
   settings: "handy.settings.v1",
   tipsSeen: "handy.tips-seen.v1",
   game: "handy.game.v1",
+  space: "handy.space.v1",
   scope: "handy.scope.v1",
   eye: "handy.eye.v1",
 };
@@ -104,6 +105,18 @@ export const prefs = {
   },
   set game(value: string | null) {
     write(local(), KEYS.game, value);
+  },
+  /**
+   * Which of the landing's two tiles the player last went through: the arcade,
+   * or Grip Prix (a page of its own). Coming home from Grip Prix lands on its
+   * tile. Anything else is read as none.
+   */
+  get space(): "arcade" | "grip-prix" | null {
+    const space = read<string>(local(), KEYS.space);
+    return space === "arcade" || space === "grip-prix" ? space : null;
+  },
+  set space(value: "arcade" | "grip-prix" | null) {
+    write(local(), KEYS.space, value);
   },
   /** Unlocks last for the visit (the Golden Revolver is "for the session"). */
   get unlocks(): Set<string> {

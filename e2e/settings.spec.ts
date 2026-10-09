@@ -68,8 +68,8 @@ test("the settings sheet from the arcade, by keyboard alone", async ({ page }, i
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await skipWelcome(page);
-  await page.goto("/");
-  await expect(page.locator("#home")).toBeVisible();
+  await page.goto("/#arcade");
+  await expect(page.locator("#arcade")).toBeVisible();
   // The gear is in the arcade's corner, after Privacy and the sound.
   await page.getByRole("button", { name: "Settings" }).focus();
   await page.keyboard.press("Enter");
@@ -170,7 +170,7 @@ test("the settings sheet from the arcade, by keyboard alone", async ({ page }, i
 
 test("difficulty persists across a reload, reaches the game, and keeps its own record", async ({ page }, info) => {
   await skipWelcome(page);
-  await page.goto("/");
+  await page.goto("/#arcade");
   await expect(page.locator("#home-best")).toBeHidden(); // no record yet
   await page.getByRole("button", { name: "Settings" }).click();
   await pickDifficulty(page, "Relaxed");
@@ -222,7 +222,7 @@ test("difficulty persists across a reload, reaches the game, and keeps its own r
 
 test("the settings sheet over a paused game", async ({ page }, info) => {
   await skipWelcome(page);
-  await page.goto("/");
+  await page.goto("/#arcade");
   await mouseGame(page);
   await page.keyboard.press("p");
   await expect(page.locator("#pause-sheet")).toBeVisible();
@@ -267,7 +267,7 @@ test("the camera menu shows only when there is a choice, and the choice is kept"
     ];
     navigator.mediaDevices.enumerateDevices = () => Promise.resolve(devices.map((d) => ({ ...d, toJSON: () => d }) as unknown as MediaDeviceInfo));
   });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   const menu = page.getByRole("combobox", { name: "Camera" });
   await expect(menu).toBeVisible();
@@ -281,7 +281,7 @@ test("the camera menu shows only when there is a choice, and the choice is kept"
 
 test("one camera, no menu; the chosen camera opens, and a missing one gives way", async ({ page }) => {
   await skipWelcome(page, { "handy.camera-choice.v1": "a-camera-long-gone", "handy.camera-opened.v1": true });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#camera-row")).toBeHidden();
   await page.getByRole("button", { name: "Done" }).click();
@@ -292,7 +292,7 @@ test("one camera, no menu; the chosen camera opens, and a missing one gives way"
 
 test("the camera's picture steps aside in play when asked, and comes back for the aim setup", async ({ page }) => {
   await skipWelcome(page, { "handy.settings.v1": { cameraInPlay: false, steadiness: "responsive" } });
-  await page.goto("/?input=script");
+  await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
   const pip = page.locator("#pip");
@@ -314,7 +314,7 @@ test("Forget Saved Aim forgets every camera's aim, and says so", async ({ page }
     "handy.aim.v1.cam-b.640x480": { version: 1 },
     "handy.best.v2.high-noon.standard.hand": { score: 900, outcome: "Fell on Wave 1", at: 1 },
   });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await expect(page.getByRole("button", { name: "Adjust Aim" })).toBeVisible();
   await page.getByRole("button", { name: "Settings" }).click();
   const forget = page.getByRole("button", { name: "Forget Saved Aim" });
@@ -331,7 +331,7 @@ test("Forget Saved Aim forgets every camera's aim, and says so", async ({ page }
 test("Copy System Info copies what a bug report needs", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await skipWelcome(page);
-  await page.goto("/");
+  await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Copy System Info" }).click();
   await expect(page.locator("#toast")).toHaveText("Copied.");
@@ -353,7 +353,7 @@ test("Reset Handy asks first, then forgets everything and welcomes you again", a
     "handy.muted.v1": true,
     "someone-else": "theirs",
   });
-  await page.goto("/");
+  await page.goto("/#arcade");
   expect((await extra(page)).difficulty).toBe("relaxed");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Reset Handy" }).click();
@@ -380,12 +380,16 @@ test("Reset Handy asks first, then forgets everything and welcomes you again", a
   expect(state.preferences).toMatchObject({ steadiness: "steady", aimAssist: true });
   expect(state.aimAssist).toBe(true);
   expect((await snapshot(page)).view).toBe("welcome");
+  // Afresh, as on a first visit: Get Started lands on the landing, though the reset was done in the arcade.
+  await page.getByRole("button", { name: "Get Started" }).click();
+  await expect(page.locator("#landing")).toBeVisible();
+  expect(new URL(page.url()).hash).toBe("");
 });
 
 test("a new player is Steady with Aim Assist on; a Balanced saved before moves to Steady once, and a Balanced chosen after stays", async ({ page }) => {
   // Nothing saved: the defaults, on the sheet and in what the game reads.
   await skipWelcome(page);
-  await page.goto("/");
+  await page.goto("/#arcade");
   let state = await extra(page);
   expect(state.preferences).toMatchObject({ steadiness: "steady", aimAssist: true });
   expect(state.aimAssist).toBe(true);
@@ -414,7 +418,7 @@ test("a new player is Steady with Aim Assist on; a Balanced saved before moves t
 test("the settings sheet in a narrow window is a full-height sheet", async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await skipWelcome(page, { "handy.best.v2.high-noon.standard.hand": { score: 12340, outcome: "Fell on Wave 6", at: 1 } });
-  await page.goto("/");
+  await page.goto("/#arcade");
   await expect(page.locator("#home-best")).toHaveText("Your best: 12,340 · Fell on Wave 6");
   // The arcade fits the window: nothing scrolls sideways.
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);

@@ -92,7 +92,7 @@ test("the mouse through a pass: shooting, overheating, venting, the breather", a
   await page.waitForTimeout(1200);
   await shot(page, info, "orbit-mouse-06-results");
   await page.getByRole("button", { name: "Choose a Game" }).click();
-  await expect(page.locator("#home")).toBeVisible();
+  await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#feature-title")).toHaveText("Orbital Decay");
   expect(errors).toEqual([]);
 });
