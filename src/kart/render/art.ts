@@ -63,6 +63,11 @@ export async function loadKartArt(theme: TrackTheme, onProgress?: (fraction: num
   await Promise.all(files.map((file) => load(file).then(() => onProgress?.(++done / files.length))));
 }
 
+/** The karts and the drivers, no world (the driver stage shows a kart on a plinth before any race has loaded its track). Never fails. */
+export async function loadStageArt(): Promise<void> {
+  await Promise.all([load(FILES.karts), load(FILES.drivers)]);
+}
+
 /** Just the drivers (the character select and the lobby draw them before any race has loaded the rest). */
 export function loadDriverArt(): Promise<void> {
   return load(FILES.drivers);

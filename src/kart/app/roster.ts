@@ -5,7 +5,7 @@
  * standings read.
  */
 import type { LobbyPlayer, LobbyState, RaceResult, RacerSetup } from "../contract";
-import { BOT_COLOURS } from "../contract";
+import { BOT_COLOURS, MAX_PLAYERS, PLAYER_COLOURS } from "../contract";
 import { ordinal } from "./format";
 
 /**
@@ -15,6 +15,19 @@ import { ordinal } from "./format";
  */
 export function localPlayers(lobby: LobbyState, device: string): LobbyPlayer[] {
   return lobby.players.filter((player) => player.device === device).sort((a, b) => a.slot - b.slot);
+}
+
+/**
+ * The colours the room will give the players this device is about to bring
+ * (`count` of them): the lowest slots nobody on another device has, in order,
+ * as the room hands them out. A guess for the driver screen, which shows
+ * each player's kart in its colour before the room has been told who they are.
+ */
+export function previewColours(players: readonly Pick<LobbyPlayer, "slot" | "device">[], device: string, count: number): string[] {
+  const taken = new Set(players.filter((player) => player.device !== device).map((player) => player.slot));
+  const free: number[] = [];
+  for (let slot = 0; slot < MAX_PLAYERS; slot++) if (!taken.has(slot)) free.push(slot);
+  return Array.from({ length: count }, (_, i) => PLAYER_COLOURS[(free[i] ?? i) % PLAYER_COLOURS.length]!);
 }
 
 /** The kart a lobby slot is driving in the race being run, or null (not in it). */

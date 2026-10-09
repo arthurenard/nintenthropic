@@ -20,9 +20,10 @@ import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
 import { PHOTO_GAP, recordDuck, tricksFor } from "./eggs";
 import { itemWords, lapLabel, list, ordinal } from "./format";
+import { LoadingScreen, raceWords } from "./loading";
 import { hostName, kartOf } from "./roster";
 import type { Disposable, RaceSound, Services } from "./services";
-import { colourDot, setBar } from "./ui";
+import { colourDot } from "./ui";
 
 export type RaceFailure = "load" | "webgl";
 
@@ -81,6 +82,7 @@ export class RaceScreen {
   private banner = "";
   private view: RaceView | null = null;
   private readonly sheet = $<HTMLDialogElement>("pause-sheet");
+  private readonly loadingUi = new LoadingScreen();
 
   constructor(
     private readonly services: Services,
@@ -154,6 +156,8 @@ export class RaceScreen {
     $("view-notes").replaceChildren();
     $("pause-veil").hidden = true;
     $("lost-hands").hidden = true;
+    const lobby = ctx.session.lobby();
+    this.loadingUi.begin(raceWords(lobby.settings, lobby.grandPrix), ctx.controls[0]?.kind ?? null);
     this.loading(true, 0);
     this.note();
     const loop = (now: number) => {
@@ -167,6 +171,7 @@ export class RaceScreen {
   end(): void {
     this.running = false;
     cancelAnimationFrame(this.raf);
+    this.loadingUi.end();
     this.leaving = true;
     if (this.sheet.open) this.sheet.close();
     this.watch?.disconnect();
@@ -374,10 +379,7 @@ export class RaceScreen {
   }
 
   private loading(on: boolean, fraction: number): void {
-    $("race-loading").hidden = !on;
-    setBar($("race-loading-bar"), fraction);
-    const percent = Math.round(fraction * 100);
-    setText("race-loading-title", percent > 0 && on ? `Getting ready… ${percent}%` : "Getting ready…");
+    this.loadingUi.progress(on, fraction);
   }
 
   // --- the small delights -------------------------------------------------------------------------------------

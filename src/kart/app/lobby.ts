@@ -1,14 +1,21 @@
 /**
- * The lobby. A host sees the code large with a QR code of the join address,
- * who is here, and the race's track, laps and bots, and starts when everyone
- * is ready. A guest sees the code, who is here, "Waiting for <host> to
- * start", and chooses whether their race plays on their own screen or the
- * host's big one. Practice is the host's lobby without the code.
+ * The lobby: a two-column room. On the left, who is here: a host's code and
+ * QR code, then a big card for each racer (their driver, kart colour, name, how they
+ * drive and a tick when ready) and a soft dashed seat for each friend still
+ * to come. On the right, the race: Single Race or Grand Prix as a large
+ * segmented control, the track as a carousel of postcards (or the cup as
+ * cards that show their four tracks), laps, bots and mirror as compact
+ * controls, and a big Start.
  *
- * `render` is called on every change of the room and rebuilds what shows
- * from it: the screen keeps no copy of the room.
+ * A guest sees the same room, read-only, with a line saying they are waiting
+ * for the host, and chooses whether their race plays on their own screen or
+ * the host's big one. Practice is the host's lobby without the code.
+ *
+ * `render` is called on every change of the room and updates what shows from
+ * it: the screen keeps no copy of the room (the racers' cards are kept by
+ * slot, so a new one arrives with a flourish and the rest stay still).
  */
-import type { LobbyPlayer, LobbySettings, LobbyState, Session } from "../contract";
+import { MAX_PLAYERS, type LobbyPlayer, type LobbySettings, type LobbyState, type Session } from "../contract";
 import { $, element, icon, setText, toast } from "../../ui/dom";
 import { cupById } from "../grandprix";
 import { CUPS, TRACKS, trackById } from "../track/tracks";
@@ -16,6 +23,7 @@ import { isUnlocked, loadUnlocks } from "../unlocks";
 import { canStart, hostName, localPlayers, screenLabel, waitingLine } from "./roster";
 import { joinUrl, spellCode } from "./format";
 import type { Services } from "./services";
+import { postcard, cupOfTrack } from "./trackArt";
 import { Segmented, Switch, colourDot, focusHeading } from "./ui";
 
 export type ScreenChoice = "here" | "host";
@@ -28,6 +36,7 @@ export interface LobbyHooks {
 }
 
 const CONTROL_NAMES = { wheel: "Wheel", keyboard: "Keyboard", gamepad: "Gamepad" } as const;
+const CONTROL_ICONS = { wheel: "wheel", keyboard: "keyboard", gamepad: "gamepad" } as const;
 
 /**
  * The tracks this device has earned beyond the usual ones (the secret track,
@@ -39,6 +48,19 @@ export function earnedTracks(): { id: string; name: string }[] {
   return TRACKS.filter((track) => track.secret).map((track) => ({ id: track.id, name: track.name }));
 }
 
+const calm = (): boolean => document.documentElement.hasAttribute("data-reduce-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** One racer's card, kept between renders so only what changed moves. */
+interface Card {
+  root: HTMLElement;
+  face: HTMLElement;
+  name: HTMLElement;
+  meta: HTMLElement;
+  state: HTMLElement;
+  /** What the face was drawn from, so it is drawn again only when it changes. */
+  drawn: string;
+}
+
 export class LobbyScreen {
   private readonly laps: Segmented<string>;
   private readonly bots: Switch;
@@ -47,10 +69,12 @@ export class LobbyScreen {
   private readonly mirror: Switch;
   private readonly screen: Segmented<ScreenChoice>;
   private readonly display: Segmented<"own" | "host">;
-  private readonly select = $<HTMLSelectElement>("track-select");
+  private readonly track: Segmented<string>;
   private readonly start = $<HTMLButtonElement>("lobby-start");
-  /** The tracks the menu lists now, as a key: it is rebuilt when a cup won opens another. */
+  private readonly postcards = $("pick-track");
+  /** The tracks the carousel lists now, as a key: it is rebuilt when a cup won opens another, or the host's room names one this device does not have. */
   private listed = "";
+  private shownTrack = "";
   private qrFor = "";
   private url = "";
   private role: Session["role"] | null = null;
@@ -58,6 +82,8 @@ export class LobbyScreen {
   private portraits: typeof import("../render/portraits") | null = null;
   private asked = false;
   private last: [LobbyState, Session, ScreenChoice] | null = null;
+  private readonly cards = new Map<number, Card>();
+  private readonly empties: HTMLElement[] = [];
 
   constructor(
     private readonly services: Services,
@@ -73,7 +99,7 @@ export class LobbyScreen {
     this.display = new Segmented<"own" | "host">($("pick-display"), (display) => hooks.configure({ display }));
     this.mode = new Segmented<"race" | "grand-prix">($("pick-mode"), (mode) => hooks.configure({ mode }));
     this.mirror = new Switch($<HTMLButtonElement>("switch-mirror"), (mirror) => hooks.configure({ mirror }));
-    // The cups, each with its four tracks to read.
+    // The cups, each with its four tracks to see and read.
     const cups = $("pick-cup");
     cups.replaceChildren(
       ...CUPS.map((cup) => {
@@ -81,17 +107,25 @@ export class LobbyScreen {
         card.type = "button";
         card.setAttribute("role", "radio");
         card.dataset.value = cup.id;
+        const head = element("span", "cup-head");
+        head.append(icon("trophy"), element("span", "cup-name", cup.name), element("span", "cup-count", `${cup.tracks.length} races`));
         const list = element("ol", "cup-tracks");
-        list.append(...cup.tracks.map((id) => element("li", undefined, trackById(id).name)));
-        card.append(element("span", "cup-name", cup.name), list);
+        list.append(
+          ...cup.tracks.map((id) => {
+            const item = element("li");
+            item.append(postcard(id, "cup-thumb"), element("span", "cup-track", trackById(id).name));
+            return item;
+          }),
+        );
+        card.append(head, list);
         return card;
       }),
     );
     this.cup = new Segmented<string>(cups, (cup) => hooks.configure({ cup }));
-    this.select.addEventListener("change", () => hooks.configure({ track: this.select.value }));
     this.start.addEventListener("click", () => hooks.start());
     $("lobby-leave").addEventListener("click", () => hooks.leave());
     $("lobby-copy").addEventListener("click", () => void this.copy());
+    this.track = new Segmented<string>(this.postcards, (track) => hooks.configure({ track }));
   }
 
   /** Shows the room as it is now. */
@@ -147,7 +181,7 @@ export class LobbyScreen {
       waiting.hidden = true;
     }
 
-    this.players(lobby, device);
+    this.players(lobby, device, role);
     setText(
       "foot-players",
       role === "solo" ? "Practice is just you and the bots." : host ? "Up to four people can race. Friends join with the code." : "",
@@ -162,8 +196,8 @@ export class LobbyScreen {
         ? `${hostName(lobby)} chose to show the race on their screen, in split screen. Choose This Screen to watch it here instead.`
         : "Your race plays on this device. Choose Big Screen to share the host’s screen with everyone else who does, and use this one only as your wheel.",
     );
-    $("group-race").hidden = !host;
-    if (host) this.settings(lobby.settings);
+    // The race is the host's to set; a guest sees it as it is.
+    this.settings(lobby, host);
 
     // Only the host starts.
     this.start.hidden = !host;
@@ -178,61 +212,122 @@ export class LobbyScreen {
     if (first) focusHeading($("lobby-title"));
   }
 
-  private players(lobby: LobbyState, device: string): void {
+  // --- the racers ---------------------------------------------------------------------------------------------
+
+  private players(lobby: LobbyState, device: string, role: Session["role"]): void {
+    const list = $("lobby-players");
     const mine = new Set(localPlayers(lobby, device).map((player) => player.slot));
-    const rows = lobby.players.map((player) => {
-      const row = element("div", "row player-row");
-      const words = element("div", "player-words");
-      const name = element("span", "player-name", player.name);
-      if (mine.has(player.slot)) name.append(element("span", "player-tag", "You"));
-      else if (player.device === lobby.host) name.append(element("span", "player-tag", "Host"));
-      words.append(name, element("span", "player-meta subhead secondary", `${CONTROL_NAMES[player.control]} · ${screenLabel(player, device)}`));
-      const state = element("span", player.ready ? "player-state ready" : "player-state subhead tertiary");
-      if (player.ready) {
-        state.append(icon("check"), element("span", "visually-hidden", "Ready"));
-      } else {
-        state.textContent = "Getting ready…";
+    const slots = new Set(lobby.players.map((player) => player.slot));
+    for (const [slot, card] of this.cards) {
+      if (slots.has(slot)) continue;
+      card.root.remove();
+      this.cards.delete(slot);
+    }
+    const ordered = [...lobby.players].sort((a, b) => a.slot - b.slot);
+    ordered.forEach((player, index) => {
+      let card = this.cards.get(player.slot);
+      if (!card) {
+        card = this.card();
+        card.root.style.setProperty("--i", String(index));
+        this.cards.set(player.slot, card);
       }
-      row.append(this.face(player), words, state);
-      return row;
+      this.fill(card, player, lobby, device, mine.has(player.slot));
+      // Kept in slot order, each where it belongs (an existing card is not moved if it is already there).
+      const at = list.children[index];
+      if (at !== card.root) list.insertBefore(card.root, at ?? null);
     });
-    $("lobby-players").replaceChildren(...rows);
+    // Seats still to fill: soft, dashed, with the code to join by. Practice has no one else to wait for.
+    const open = lobby.code && role !== "solo" ? Math.max(0, MAX_PLAYERS - lobby.players.length) : 0;
+    while (this.empties.length > open) this.empties.pop()!.remove();
+    while (this.empties.length < open) {
+      const seat = element("div", "racer empty");
+      const face = element("span", "racer-face open");
+      face.append(icon("person-plus"));
+      const words = element("span", "racer-words");
+      words.append(element("span", "racer-name", "Open Seat"), element("span", "racer-meta"));
+      seat.append(face, words);
+      this.empties.push(seat);
+    }
+    for (const seat of this.empties) {
+      setText(seat.querySelector(".racer-meta")!, lobby.code ? `Join with code ${lobby.code}` : "");
+      // After the racers, in order.
+      list.append(seat);
+    }
+    setText("racer-count", lobby.code ? `${lobby.players.length} of ${MAX_PLAYERS}` : "");
   }
 
-  /** Who this player is driving, in their colour; a plain colour dot until (or unless) the picture can be drawn. */
-  private face(player: LobbyPlayer): HTMLElement {
-    const url = this.portraits?.portrait(player.character, { colour: player.colour, size: 128 });
-    if (!url) return colourDot(player.colour);
-    const face = element("img", "player-face");
-    face.src = url;
-    face.alt = "";
-    face.width = face.height = 44;
-    face.style.setProperty("--colour", player.colour);
-    return face;
+  private card(): Card {
+    const root = element("div", "racer");
+    const face = element("span", "racer-face");
+    const words = element("span", "racer-words");
+    const name = element("span", "racer-name");
+    const meta = element("span", "racer-meta");
+    words.append(name, meta);
+    const state = element("span", "racer-state");
+    root.append(face, words, state);
+    return { root, face, name, meta, state, drawn: "" };
   }
 
-  private settings(settings: LobbySettings): void {
+  private fill(card: Card, player: LobbyPlayer, lobby: LobbyState, device: string, you: boolean): void {
+    card.root.style.setProperty("--colour", player.colour);
+    card.root.classList.toggle("ready", player.ready);
+    card.root.classList.toggle("you", you);
+    // The name, and who this is for the person looking.
+    const tag = you ? "You" : player.device === lobby.host ? "Host" : "";
+    const label = `${player.name}${tag}`;
+    if (card.name.dataset.label !== label) {
+      card.name.dataset.label = label;
+      card.name.replaceChildren(element("span", "racer-title", player.name));
+      if (tag) card.name.append(element("span", "player-tag", tag));
+    }
+    const how = `${CONTROL_NAMES[player.control]} · ${screenLabel(player, device)}`;
+    if (card.meta.dataset.how !== how) {
+      card.meta.dataset.how = how;
+      card.meta.replaceChildren(icon(CONTROL_ICONS[player.control]), document.createTextNode(how));
+    }
+    const state = player.ready ? "ready" : "waiting";
+    if (card.state.dataset.state !== state) {
+      card.state.dataset.state = state;
+      if (player.ready) card.state.replaceChildren(icon("check"), element("span", "visually-hidden", "Ready"));
+      else card.state.replaceChildren(element("span", "racer-wait", "Getting ready…"));
+    }
+    // Their driver, in their colour; a plain colour dot until (or unless) the picture can be drawn.
+    const drawn = `${player.character ?? ""}|${player.colour}|${this.portraits ? 1 : 0}`;
+    if (card.drawn !== drawn) {
+      card.drawn = drawn;
+      const url = this.portraits?.portrait(player.character, { colour: player.colour, size: 192 });
+      if (url) {
+        const face = element("img", "racer-portrait");
+        face.src = url;
+        face.alt = "";
+        face.width = face.height = 64;
+        card.face.replaceChildren(face);
+      } else {
+        card.face.replaceChildren(colourDot(player.colour));
+      }
+    }
+  }
+
+  // --- the race --------------------------------------------------------------------------------------------------
+
+  private settings(lobby: LobbyState, host: boolean): void {
+    const settings = lobby.settings;
     const earned = earnedTracks();
-    const tracks = [...this.services.tracks, ...earned];
+    const tracks = [...this.services.tracks, ...earned.filter((track) => !this.services.tracks.some((have) => have.id === track.id))];
+    // The host's room may name a track this device does not have (the secret one): show it all the same.
+    if (!tracks.some((track) => track.id === settings.track)) {
+      const def = trackById(settings.track);
+      tracks.push({ id: def.id, name: def.name });
+    }
     const key = tracks.map((track) => track.id).join();
     if (key !== this.listed) {
       this.listed = key;
-      this.select.replaceChildren(
-        ...tracks.map((track) => {
-          const option = element("option", undefined, earned.some((e) => e.id === track.id) ? `${track.name} · Secret` : track.name);
-          option.value = track.id;
-          return option;
-        }),
-      );
+      this.buildTracks(tracks, new Set(earned.map((track) => track.id)));
     }
-    const several = tracks.length > 1;
     const grandPrix = settings.mode === "grand-prix";
     $("row-track").hidden = grandPrix;
     $("row-cup").hidden = !grandPrix;
-    $("track-menu").hidden = !several;
-    $("track-value").hidden = several;
-    if (several) this.select.value = settings.track;
-    else setText("track-value", tracks.find((track) => track.id === settings.track)?.name ?? tracks[0]?.name ?? "");
+    this.track.value = settings.track;
     this.mode.value = grandPrix ? "grand-prix" : "race";
     this.cup.value = cupById(settings.cup).id;
     this.mirror.on = settings.mirror === true;
@@ -258,6 +353,49 @@ export class LobbyScreen {
         : "Each player watches the race on their own device. Anyone can choose the big screen for themselves.",
     );
     setText("foot-bots", settings.bots ? `Bots fill the grid, so there are ${settings.racers} karts in all.` : "Only the players race.");
+
+    // A guest sees it all and changes none of it.
+    const setup = $("group-race");
+    setup.dataset.readonly = host ? "no" : "yes";
+    for (const control of setup.querySelectorAll<HTMLButtonElement>("button")) {
+      if (control.disabled !== !host) control.disabled = !host;
+    }
+    for (const group of setup.querySelectorAll<HTMLElement>('[role="radiogroup"]')) group.toggleAttribute("aria-disabled", !host);
+    $("foot-guest").hidden = host;
+    setText("foot-guest", host ? "" : `${hostName(lobby)} sets the race.`);
+    // The chosen postcard is brought to the middle of the carousel when it changes (and the first time it shows).
+    if (!grandPrix && this.shownTrack !== settings.track) {
+      this.shownTrack = settings.track;
+      requestAnimationFrame(() => this.reveal(settings.track));
+    }
+  }
+
+  /** The carousel of postcards: one for each track, each with its name and cup. */
+  private buildTracks(tracks: readonly { id: string; name: string }[], earned: ReadonlySet<string>): void {
+    const cards = tracks.map((track) => {
+      const card = element("button", "postcard");
+      card.type = "button";
+      card.setAttribute("role", "radio");
+      card.dataset.value = track.id;
+      const where = cupOfTrack(track.id);
+      const sub = earned.has(track.id) || trackById(track.id).secret ? "Secret" : where ? `${where.cup} · ${where.race}` : "";
+      const words = element("span", "postcard-words");
+      words.append(element("span", "postcard-name", earned.has(track.id) || trackById(track.id).secret ? `${track.name} · Secret` : track.name));
+      if (sub) words.append(element("span", "postcard-sub", sub));
+      card.append(postcard(track.id), words);
+      return card;
+    });
+    this.postcards.replaceChildren(...cards);
+    this.track.refresh();
+    this.shownTrack = "";
+  }
+
+  /** Scrolls the carousel to centre this track's card (smoothly, unless motion is reduced). */
+  private reveal(id: string): void {
+    const card = [...this.postcards.children].find((child) => (child as HTMLElement).dataset.value === id) as HTMLElement | undefined;
+    if (!card || this.postcards.clientWidth === 0) return;
+    const left = card.offsetLeft - (this.postcards.clientWidth - card.offsetWidth) / 2;
+    this.postcards.scrollTo({ left: Math.max(0, left), behavior: calm() ? "auto" : "smooth" });
   }
 
   /** The QR code of the join address, drawn crisp at a whole number of pixels a module. */

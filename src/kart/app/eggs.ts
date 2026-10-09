@@ -151,3 +151,17 @@ export function tricksFor(kind: DriverControl["kind"]): string[] {
       return ["Press Y to honk."];
   }
 }
+
+// ─── The tips on the loading screen ──────────────────────────────────────────
+
+/** A line to read while a race loads, by what the player drives with: how to do the one thing they will want to know. */
+export function tipsFor(kind: DriverControl["kind"] | null): string[] {
+  switch (kind) {
+    case "keyboard":
+      return ["Hold Space to drift, and let go to boost.", "Press E or Shift to use an item.", "Press H to honk.", "Tap Down to brake, hold it to reverse."];
+    case "gamepad":
+      return ["Hold A to drift, and let go to boost.", "Press B or X to use an item.", "Press Y to honk.", "The right trigger goes, the left one stops."];
+    default:
+      return ["Open both hands to brake.", "Flick one hand to use an item.", "Hop to drift.", "Clap to honk."];
+  }
+}

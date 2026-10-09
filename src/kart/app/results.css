@@ -1,0 +1,343 @@
+/* The results: the postcard of the track just raced, blurred behind a glass table; each place a row in its
+   player's colour that comes up in turn, last place first, the winner last, with the medal colours for the
+   top three. The pause sheet and the pause veil share the same material. */
+
+/* The medals, as the screens use them. */
+:root {
+  --medal-1: linear-gradient(145deg, #fff1a8 0%, #ffd60a 46%, #f0a500 100%);
+  --medal-2: linear-gradient(145deg, #f7f9fc 0%, #cfd6e2 50%, #9ba5b6 100%);
+  --medal-3: linear-gradient(145deg, #ffd0a0 0%, #e39a5c 50%, #b36a2f 100%);
+}
+
+.results {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.results-art {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.results-art img {
+  position: absolute;
+  inset: -4%;
+  width: 108%;
+  height: 108%;
+  object-fit: cover;
+  filter: blur(26px) brightness(0.5) saturate(1.2);
+  opacity: 0;
+  transition: opacity 800ms var(--ease);
+}
+.results-art img.ready {
+  opacity: 0.9;
+}
+.results-inner {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  width: 100%;
+  max-width: calc(760px + 2 * var(--margin));
+  margin: auto;
+  padding: calc(var(--margin) + env(safe-area-inset-top)) var(--margin) calc(var(--margin) + env(safe-area-inset-bottom));
+}
+.results .page-head {
+  gap: 8px;
+}
+.results .display {
+  font-size: clamp(44px, 7vw, 84px);
+  letter-spacing: -0.04em;
+}
+/* A medal's colour on the winner's words. */
+.results .display[data-place] {
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 4px 24px rgba(4, 16, 44, 0.4));
+}
+.results .display[data-place="1"] {
+  background-image: var(--medal-1);
+}
+.results .display[data-place="2"] {
+  background-image: var(--medal-2);
+}
+.results .display[data-place="3"] {
+  background-image: var(--medal-3);
+}
+.results-card {
+  padding: 8px 14px 10px;
+  border-radius: 28px;
+}
+.standings {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.standings th {
+  padding: 8px 16px 2px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-align: left;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+.standings th:nth-child(n + 3),
+.standings td:nth-child(n + 3) {
+  text-align: right;
+}
+.standings td {
+  padding: 10px 16px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 17px;
+  animation: row-up 560ms var(--pop) backwards;
+  animation-delay: calc(var(--r, 0) * 80ms + 200ms);
+}
+.standings td:first-child {
+  border-radius: 18px 0 0 18px;
+  box-shadow: inset 5px 0 0 var(--colour, transparent);
+}
+.standings td:last-child {
+  border-radius: 0 18px 18px 0;
+}
+@keyframes row-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+.standings .mine td {
+  background: rgba(255, 255, 255, 0.22);
+}
+.standings tr[data-place="1"] td {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 214, 10, 0.75),
+    inset 0 -1.5px 0 rgba(255, 214, 10, 0.75);
+}
+.standings tr[data-place="1"] td:first-child {
+  box-shadow:
+    inset 5px 0 0 var(--colour, transparent),
+    inset 0 1.5px 0 rgba(255, 214, 10, 0.75),
+    inset 0 -1.5px 0 rgba(255, 214, 10, 0.75);
+}
+.standings tr[data-place="1"] td:last-child {
+  box-shadow:
+    inset -1.5px 0 0 rgba(255, 214, 10, 0.75),
+    inset 0 1.5px 0 rgba(255, 214, 10, 0.75),
+    inset 0 -1.5px 0 rgba(255, 214, 10, 0.75);
+}
+.c-place {
+  width: 84px;
+  font-weight: 650;
+}
+.medal {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.12);
+}
+tr[data-place="1"] .medal,
+tr[data-place="2"] .medal,
+tr[data-place="3"] .medal {
+  color: #1b1500;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 3px 10px rgba(4, 16, 44, 0.3);
+}
+tr[data-place="1"] .medal {
+  background: var(--medal-1);
+}
+tr[data-place="2"] .medal {
+  background: var(--medal-2);
+  color: #1a2130;
+}
+tr[data-place="3"] .medal {
+  background: var(--medal-3);
+  color: #2a1503;
+}
+.c-name {
+  display: table-cell;
+}
+.c-name .dot {
+  margin-right: 10px;
+  vertical-align: -1px;
+}
+.c-name .player-tag {
+  margin-left: 8px;
+}
+.c-driver {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.c-best.gold {
+  color: var(--gold);
+  font-weight: 650;
+}
+.c-points {
+  color: #7dff9b;
+  font-weight: 750;
+}
+.results-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.results-actions .button.large {
+  min-height: 56px;
+  padding-inline: 34px;
+  font-size: 18px;
+}
+.results-actions .button.primary {
+  box-shadow: 0 12px 30px rgba(4, 16, 44, 0.3);
+}
+.results-actions .button.secondary {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi);
+}
+.results-inner > .footnote {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.86);
+}
+.results .body.secondary {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 19px;
+}
+.results .eyebrow {
+  letter-spacing: 0.07em;
+}
+
+@media (max-width: 600px) {
+  .results-inner {
+    gap: 18px;
+    padding-top: calc(28px + env(safe-area-inset-top));
+  }
+  .results-card {
+    padding: 4px 8px 8px;
+    border-radius: 24px;
+  }
+  /* Up to five columns (a Grand Prix adds the points) in a phone's width: the numbers keep theirs and the driver's name gives way, ellipsis and all. */
+  .standings {
+    table-layout: fixed;
+    border-spacing: 0 5px;
+  }
+  .standings th,
+  .standings td {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .standings th:first-child,
+  .standings td:first-child {
+    padding-left: 12px;
+  }
+  .standings th:last-child,
+  .standings td:last-child {
+    padding-right: 12px;
+  }
+  .standings td {
+    font-size: 14px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+  .standings th {
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .standings th:nth-child(1) {
+    width: 62px;
+  }
+  .standings th:nth-child(3),
+  .standings th:nth-child(4) {
+    width: 56px;
+  }
+  .standings th:nth-child(5) {
+    width: 54px;
+  }
+  .standings .c-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .standings .c-name .dot {
+    margin-right: 6px;
+    width: 10px;
+    height: 10px;
+  }
+  .c-place {
+    width: 62px;
+  }
+  .medal {
+    min-width: 36px;
+    height: 26px;
+    padding: 0 7px;
+    font-size: 13px;
+  }
+  .results-actions .button.large {
+    flex: 1 1 100%;
+  }
+}
+
+/* --- the pause: a veil over the race, a sheet to leave by ------------------------------------------------------------------ */
+
+body[data-screen="race"] .pause-card.glass {
+  border: 1px solid var(--glass-line);
+  border-radius: 32px;
+  background: rgba(10, 26, 62, 0.5);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+}
+.pause-veil {
+  background: rgba(4, 14, 40, 0.42);
+}
+.pause-count {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.pause-card .title2 {
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+.menu[open] {
+  gap: 18px;
+  width: min(420px, calc(100vw - 2 * var(--margin)));
+}
+.menu .title2 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.menu-list .button {
+  min-height: 56px;
+  font-size: 18px;
+}
+.menu-list .button.secondary {
+  background: rgba(255, 255, 255, 0.14);
+}
+.menu-list .button.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+.menu .rows {
+  background: rgba(255, 255, 255, 0.1);
+}
+.menu .tricks,
+.menu .tricks .eyebrow,
+.menu .footnote {
+  color: rgba(255, 255, 255, 0.78);
+}

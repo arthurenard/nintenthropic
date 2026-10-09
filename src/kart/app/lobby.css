@@ -1,0 +1,711 @@
+/* The lobby: the room on the left (the code, then a big card for each racer and a soft dashed seat for each
+   friend still to come), the race on the right (mode, track or cup, laps and the rest, Start). One column on a
+   phone, with Start at the foot of the screen. A guest sees the same room with nothing to press but their own
+   screen. */
+
+.lobby-inner {
+  display: grid;
+  grid-template-columns: minmax(340px, 460px) minmax(0, 1fr);
+  grid-template-areas:
+    "head head"
+    "room setup"
+    "room go";
+  grid-template-rows: auto auto 1fr;
+  gap: 18px clamp(28px, 4vw, 56px);
+  align-items: start;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 var(--margin) calc(var(--margin) + env(safe-area-inset-bottom));
+}
+.lobby-head {
+  grid-area: head;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  margin-bottom: 6px;
+}
+.lobby-sub {
+  max-width: 40em;
+  font-size: 19px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 14px rgba(4, 16, 44, 0.3);
+}
+.lobby-room {
+  grid-area: room;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  min-width: 0;
+}
+.lobby-setup {
+  grid-area: setup;
+  display: grid;
+  /* One column that may be narrower than the carousel inside it: that is what the carousel scrolls for. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+.lobby-go {
+  grid-area: go;
+  display: grid;
+  gap: 10px;
+  align-self: start;
+}
+.lobby-go .button.large {
+  min-height: 60px;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  box-shadow: 0 14px 34px rgba(4, 16, 44, 0.32);
+}
+#lobby-start-hint {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.86);
+}
+#lobby-start-hint:empty {
+  display: none;
+}
+
+/* --- the code ------------------------------------------------------------------------------------------ */
+
+.join-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 22px;
+  padding: 18px 22px 18px 18px;
+  border-radius: 28px;
+}
+.join-card:has(#lobby-qr[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 14px 22px;
+}
+.qr {
+  width: clamp(112px, 32vw, 152px);
+  padding: 9px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(4, 16, 44, 0.3);
+  animation: qr-in 600ms var(--pop) backwards;
+}
+@keyframes qr-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) rotate(-2deg);
+  }
+}
+.qr canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+}
+.join-words {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.code-big {
+  padding-left: 0.04em;
+  font-size: clamp(40px, 11vw, 60px);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-shadow: 0 2px 20px rgba(4, 16, 44, 0.3);
+}
+.join-hint {
+  max-width: 21em;
+  color: rgba(255, 255, 255, 0.86);
+}
+.join-url {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.58);
+  user-select: all;
+}
+.join-words .button {
+  margin-top: 6px;
+}
+
+/* --- the racers ------------------------------------------------------------------------------------------ */
+
+.racers {
+  display: grid;
+  gap: 10px;
+}
+.racers .section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.racers .section-title .num {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+}
+.racer-list {
+  display: grid;
+  gap: 10px;
+}
+.racer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 84px;
+  padding: 10px 18px 10px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: 24px;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+  animation: racer-in 560ms var(--pop) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+  transition:
+    background-color 350ms var(--pop),
+    border-color 350ms var(--pop);
+}
+@keyframes racer-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+.racer.ready {
+  border-color: rgba(48, 209, 88, 0.42);
+}
+.racer-face {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+}
+.racer-portrait {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px var(--colour, #fff);
+  object-fit: cover;
+}
+.racer-face .dot {
+  width: 44px;
+  height: 44px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.4);
+}
+.racer-words {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.racer-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 21px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.racer-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-tag {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+.racer-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.78);
+}
+.racer-meta svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.racer-state {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 38px;
+  height: 38px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.64);
+  white-space: nowrap;
+}
+.racer-state[data-state="ready"] {
+  width: 38px;
+  border-radius: 50%;
+  background: var(--tint);
+  color: #03230d;
+  box-shadow: 0 6px 16px rgba(20, 150, 60, 0.4);
+  animation: tick-in 520ms var(--pop) backwards;
+}
+.racer-state svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.6;
+}
+@keyframes tick-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+.racer-wait::after {
+  content: "";
+  animation: dots 1.6s steps(4) infinite;
+}
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+.racer.empty {
+  border: 2px dashed rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  animation: none;
+}
+.racer.empty .racer-face {
+  border: 2px dashed rgba(255, 255, 255, 0.42);
+  border-radius: 50%;
+}
+.racer.empty .racer-face svg {
+  width: 28px;
+  height: 28px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.racer.empty .racer-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+}
+.racer.empty .racer-meta {
+  font-variant-numeric: tabular-nums;
+}
+.racers .group-foot {
+  margin: 0;
+  padding: 0 4px;
+}
+
+/* A guest's choice of where their race plays. */
+.screen-choice {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px 14px;
+  border-radius: 24px;
+}
+.screen-choice[hidden] {
+  display: none;
+}
+.screen-choice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.screen-choice .group-foot {
+  margin: 0;
+}
+
+/* --- the race ----------------------------------------------------------------------------------------------- */
+
+.lobby-setup .section-title {
+  margin-bottom: -4px;
+}
+.mode-switch.segmented.big {
+  min-height: 52px;
+}
+.mode-switch.segmented.big [role="radio"] {
+  height: 46px;
+  font-size: 17px;
+}
+.lobby-setup .group-foot {
+  margin: 0;
+  padding: 0 4px;
+}
+.setup-block[hidden] {
+  display: none;
+}
+
+/* The track: postcards in a row that snaps, the chosen one lifted. */
+.postcards {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  margin: 0 -8px;
+  padding: 14px 8px 18px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 12px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+}
+.postcards::-webkit-scrollbar {
+  display: none;
+}
+.postcard {
+  position: relative;
+  flex: none;
+  width: clamp(212px, 19vw, 264px);
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: center;
+  box-shadow: 0 10px 26px rgba(4, 16, 44, 0.28);
+  transition:
+    transform 420ms var(--pop),
+    box-shadow 320ms var(--pop),
+    filter 320ms var(--pop);
+  -webkit-tap-highlight-color: transparent;
+}
+.postcard:hover:not(:disabled) {
+  transform: translateY(-3px);
+}
+.postcard[aria-checked="true"] {
+  transform: translateY(-6px) scale(1.04);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 22px 44px rgba(4, 16, 44, 0.42);
+}
+.postcard:not([aria-checked="true"]) {
+  filter: saturate(0.82) brightness(0.92);
+}
+.postcard:disabled {
+  cursor: default;
+}
+.postcard:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 5px;
+}
+.postcard-art,
+.cup-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #2a74d6;
+}
+.postcard-art svg,
+.cup-thumb svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  stroke-width: initial;
+}
+.postcard-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 500ms var(--pop);
+}
+.postcard-image.ready {
+  opacity: 1;
+}
+.postcard-words {
+  position: absolute;
+  inset: auto 0 0;
+  display: grid;
+  gap: 1px;
+  padding: 36px 14px 12px;
+  border-radius: 0 0 20px 20px;
+  background: linear-gradient(0deg, rgba(4, 16, 44, 0.72), rgba(4, 16, 44, 0));
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+.postcard-name {
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.postcard-sub {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+/* The cup: its four tracks, as small postcards. */
+.cups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 4px 0 8px;
+}
+.cup {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--glass-line);
+  border-radius: 24px;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 420ms var(--pop),
+    background-color 250ms var(--pop),
+    box-shadow 320ms var(--pop);
+}
+.cup:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.cup[aria-checked="true"] {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 0 0 3px #fff,
+    0 20px 44px rgba(4, 16, 44, 0.36);
+  transform: translateY(-4px);
+}
+.cup:disabled {
+  cursor: default;
+}
+.cup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cup-head svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+.cup-name {
+  flex: 1;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.cup-count {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
+}
+.cup-tracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: stop;
+}
+.cup-tracks li {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  counter-increment: stop;
+}
+.cup-thumb {
+  border-radius: 12px;
+}
+.cup-track {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 550;
+  color: rgba(255, 255, 255, 0.92);
+}
+.cup-track::before {
+  content: counter(stop);
+  flex: none;
+  width: 1ch;
+  color: rgba(255, 255, 255, 0.58);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Laps, bots, mirror: a compact strip. */
+.setup-controls {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 16px 20px;
+  border-radius: 24px;
+}
+.control {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.control-stack {
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.control-stack[hidden] {
+  display: none;
+}
+.control-stack .segmented {
+  width: 100%;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.control-stack .segmented [role="radio"] {
+  height: auto;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: normal;
+  text-wrap: balance;
+}
+.setup-controls .segmented [role="radio"] {
+  min-width: 40px;
+}
+.control-label {
+  line-height: 1;
+}
+
+/* --- narrower: one column, Start at the foot ---------------------------------------------------------------- */
+
+@media (max-width: 960px) {
+  .lobby-inner {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "head"
+      "room"
+      "setup"
+      "go";
+    grid-template-rows: none;
+    gap: 18px;
+    max-width: 680px;
+  }
+  .lobby-go {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    margin: 0 calc(-1 * var(--margin));
+    padding: 22px var(--margin) calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(28, 88, 184, 0), rgba(24, 78, 172, 0.9) 44%);
+  }
+}
+@media (max-width: 600px) {
+  /* A phone has room for one open seat; the code on it says the rest. */
+  .racer.empty ~ .racer.empty {
+    display: none;
+  }
+  .lobby-inner {
+    gap: 14px;
+  }
+  .lobby-sub {
+    font-size: 17px;
+  }
+  .join-card {
+    gap: 16px;
+    padding: 14px 16px 14px 14px;
+    border-radius: 24px;
+  }
+  .join-hint {
+    font-size: 12px;
+  }
+  .racer {
+    min-height: 72px;
+    gap: 12px;
+    padding: 8px 14px 8px 10px;
+    border-radius: 22px;
+  }
+  .racer-face,
+  .racer-portrait {
+    width: 56px;
+    height: 56px;
+  }
+  .racer-name {
+    font-size: 19px;
+  }
+  .postcard {
+    width: min(64vw, 248px);
+  }
+  .cups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup-controls {
+    grid-template-columns: auto auto;
+    padding: 14px 16px;
+  }
+  .setup-controls .control:first-child {
+    grid-column: 1 / -1;
+  }
+  .setup-controls .control:first-child .segmented {
+    width: 100%;
+  }
+  .setup-controls .control:first-child .segmented [role="radio"] {
+    min-width: 0;
+  }
+}
+
+:root[data-reduce-motion] {
+  .racer,
+  .qr {
+    animation: fade-in 250ms var(--ease) backwards;
+  }
+  .racer-state[data-state="ready"] {
+    animation: none;
+  }
+  .postcard[aria-checked="true"],
+  .cup[aria-checked="true"],
+  .postcard:hover:not(:disabled),
+  .cup:hover:not(:disabled) {
+    transform: none;
+  }
+}

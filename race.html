@@ -4,35 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#1c58b8" />
     <meta name="description" content="Grip Prix: a kart racer you steer with both hands, for up to four players. Right in your browser." />
     <meta name="apple-mobile-web-app-title" content="Grip Prix" />
     <title>Grip Prix</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="180x180" href="/assets/kart/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/kart/icon-180.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   </head>
   <body data-screen="start">
-    <!-- 1. Start: the title over a bright meadow, and the three ways in. -->
+    <!-- A sky behind every screen but the title, the race and the podium: the page's own light, deepened so words keep their contrast. -->
+    <div class="menu-sky" aria-hidden="true"><i class="menu-sun"></i><i class="menu-cloud m1"></i><i class="menu-cloud m2"></i></div>
+
+    <!-- 1. Start: the key art (or, until it is drawn, a bright meadow and a road), the wordmark, and the three ways in. -->
     <section id="screen-start" class="screen start" aria-labelledby="start-title">
       <div class="start-world" aria-hidden="true">
-        <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i>
-        <svg class="start-hills" viewBox="0 0 1600 220" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="hill-far-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#a9d9c8" />
-              <stop offset="1" stop-color="#93d890" />
-            </linearGradient>
-            <linearGradient id="hill-near-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#78cb6a" />
-              <stop offset="1" stop-color="#8bd957" />
-            </linearGradient>
-          </defs>
-          <path fill="url(#hill-far-fill)" d="M0 220V104C140 40 280 28 420 56C560 84 640 112 800 100C960 88 1060 24 1220 22C1360 20 1480 64 1600 96V220z" />
-          <path fill="url(#hill-near-fill)" d="M0 220V150C130 110 270 102 420 126C560 148 640 176 800 170C960 164 1080 112 1240 108C1380 104 1500 130 1600 152V220z" />
-        </svg>
-        <svg class="start-road" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <div class="start-fallback">
+          <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i>
+          <svg class="start-hills" viewBox="0 0 1600 220" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="hill-far-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#a9d9c8" />
+                <stop offset="1" stop-color="#93d890" />
+              </linearGradient>
+              <linearGradient id="hill-near-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#78cb6a" />
+                <stop offset="1" stop-color="#8bd957" />
+              </linearGradient>
+            </defs>
+            <path fill="url(#hill-far-fill)" d="M0 220V104C140 40 280 28 420 56C560 84 640 112 800 100C960 88 1060 24 1220 22C1360 20 1480 64 1600 96V220z" />
+            <path fill="url(#hill-near-fill)" d="M0 220V150C130 110 270 102 420 126C560 148 640 176 800 170C960 164 1080 112 1240 108C1380 104 1500 130 1600 152V220z" />
+          </svg>
+          <svg class="start-road" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="road-fade" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stop-color="#9aa6b8" />
@@ -46,17 +51,28 @@
           <path class="road-asphalt" d="M49.5 0L50.5 0L96 100L4 100z" />
           <path class="road-line" d="M49.6 100L50.4 100L50.33 76.92L49.67 76.92zM49.71 62.5L50.29 62.5L50.26 52.63L49.74 52.63zM49.76 45.45L50.24 45.45L50.22 40L49.78 40zM49.79 35.71L50.21 35.71L50.2 32.26L49.8 32.26zM49.81 29.41L50.19 29.41L50.18 27.03L49.82 27.03zM49.83 25L50.17 25L50.17 23.26L49.83 23.26zM49.83 21.74L50.17 21.74L50.16 20.41L49.84 20.41zM49.84 19.23L50.16 19.23L50.15 18.18L49.85 18.18zM49.85 17.24L50.15 17.24L50.15 16.39L49.85 16.39zM49.85 15.63L50.15 15.63L50.14 14.93L49.86 14.93zM49.86 14.29L50.14 14.29L50.14 13.7L49.86 13.7zM49.86 13.16L50.14 13.16L50.14 12.66L49.86 12.66zM49.86 12.2L50.14 12.2L50.14 11.76L49.86 11.76zM49.87 11.36L50.13 11.36L50.13 10.99L49.87 10.99zM49.87 10.64L50.13 10.64L50.13 10.31L49.87 10.31zM49.87 10L50.13 10L50.13 9.71L49.87 9.71zM49.87 9.43L50.13 9.43L50.13 9.17L49.87 9.17zM49.87 8.93L50.13 8.93L50.13 8.7L49.87 8.7zM49.87 8.47L50.13 8.47L50.12 8.26L49.88 8.26zM49.88 8.06L50.12 8.06L50.12 7.87L49.88 7.87zM49.88 7.69L50.12 7.69L50.12 7.52L49.88 7.52zM49.88 7.35L50.12 7.35L50.12 7.19L49.88 7.19z" />
         </svg>
-        <i class="start-glow"></i>
+          <i class="start-glow"></i>
+        </div>
+        <img class="start-art" id="start-art" alt="" width="2560" height="1440" decoding="async" fetchpriority="low" hidden />
+        <i class="start-scrim"></i>
       </div>
-      <a class="back-link" href="index.html#grip-prix">
+      <a class="back-link" href="./">
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Handy
       </a>
       <div class="start-main">
-        <h1 class="large-title" id="start-title">Grip Prix</h1>
-        <p class="start-tag">Grip the wheel. Race your friends.</p>
-        <div class="start-card glass">
-          <button id="start-host" class="button primary large wide">Host a Race</button>
-          <form id="join-form" class="join-row" autocomplete="off" novalidate>
+        <div class="start-brand">
+          <svg class="gp-speed" viewBox="0 0 120 64" aria-hidden="true">
+            <path d="M6 12h74M0 32h96M12 52h62" />
+          </svg>
+          <h1 class="gp-mark" id="start-title"><span class="gp-grip">Grip</span> <span class="gp-prix">Prix</span></h1>
+          <i class="gp-flag" aria-hidden="true"></i>
+          <p class="start-tag">Grip the wheel. Race your friends.</p>
+        </div>
+        <div class="start-menu glass">
+          <button id="start-host" class="button primary large wide">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flag" /></svg><span>Host a Race</span>
+          </button>
+          <form id="join-form" class="join-capsule" autocomplete="off" novalidate>
             <label class="visually-hidden" for="join-code">Race code</label>
             <input
               id="join-code"
@@ -71,60 +87,59 @@
               placeholder="CODE"
               enterkeyhint="go"
             />
-            <button id="join-go" class="button secondary large" type="submit" disabled>Join a Race</button>
+            <button id="join-go" class="join-go" type="submit" disabled>Join a Race</button>
           </form>
-          <button id="start-practice" class="button secondary large wide">Practice</button>
+          <button id="start-practice" class="button secondary large wide">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-timer" /></svg><span>Practice</span>
+          </button>
         </div>
+        <p class="start-foot">Up to 4 players · Each on their own camera or all on one screen</p>
       </div>
     </section>
 
-    <!-- 2. You: a name, how you drive. -->
-    <section id="screen-you" class="screen page" hidden aria-labelledby="you-title">
+    <!-- 2. You: a name, how you drive, and who is on this camera. The driver comes next. -->
+    <section id="screen-you" class="screen page you" hidden aria-labelledby="you-title">
       <header class="bar">
-        <button id="you-back" class="button plain small back">
+        <button id="you-back" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
         </button>
       </header>
-      <div class="page-inner">
+      <div class="you-inner">
         <div class="page-head">
           <p class="eyebrow" id="you-eyebrow">Practice</p>
-          <h1 class="title1" id="you-title" tabindex="-1">Who’s Driving?</h1>
+          <h1 class="display" id="you-title" tabindex="-1">Who’s Driving?</h1>
         </div>
-        <section class="group" aria-labelledby="group-you">
-          <h2 class="group-title" id="group-you">You</h2>
-          <div class="rows">
-            <div class="row">
-              <label class="row-label" for="you-name">Name</label>
-              <input id="you-name" class="row-input" type="text" maxlength="14" autocomplete="nickname" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+        <div class="you-card glass">
+          <div class="you-field">
+            <label class="field-label" for="you-name">Name</label>
+            <input id="you-name" class="name-input" type="text" maxlength="14" autocomplete="nickname" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+          </div>
+          <div class="you-field">
+            <span class="field-label" id="label-drive">Drive With</span>
+            <div class="drive-tiles" role="radiogroup" id="pick-drive" aria-labelledby="label-drive" aria-describedby="foot-drive">
+              <button type="button" role="radio" data-value="wheel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-wheel" /></svg><b>Wheel</b><small aria-hidden="true">Both fists</small>
+              </button>
+              <button type="button" role="radio" data-value="keyboard">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-keyboard" /></svg><b>Keyboard</b><small aria-hidden="true">Arrow keys</small>
+              </button>
+              <button type="button" role="radio" data-value="gamepad">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-gamepad" /></svg><b>Gamepad</b><small aria-hidden="true">Controller</small>
+              </button>
             </div>
-            <div class="row">
-              <span class="row-label" id="label-drive">Drive With</span>
-              <div class="segmented" role="radiogroup" id="pick-drive" aria-labelledby="label-drive" aria-describedby="foot-drive">
-                <button type="button" role="radio" data-value="wheel">Wheel</button>
-                <button type="button" role="radio" data-value="keyboard">Keyboard</button>
-                <button type="button" role="radio" data-value="gamepad">Gamepad</button>
-              </div>
-            </div>
-            <div class="row" id="row-steering">
-              <span class="row-label" id="label-steering">Steering</span>
-              <div class="segmented" role="radiogroup" id="pick-steering" aria-labelledby="label-steering" aria-describedby="foot-drive">
-                <button type="button" role="radio" data-value="gentle">Gentle</button>
-                <button type="button" role="radio" data-value="normal">Normal</button>
-                <button type="button" role="radio" data-value="quick">Quick</button>
-              </div>
+            <p class="field-foot" id="foot-drive"></p>
+          </div>
+          <div class="you-field you-line" id="row-steering">
+            <span class="field-label" id="label-steering">Steering</span>
+            <div class="segmented" role="radiogroup" id="pick-steering" aria-labelledby="label-steering" aria-describedby="foot-drive">
+              <button type="button" role="radio" data-value="gentle">Gentle</button>
+              <button type="button" role="radio" data-value="normal">Normal</button>
+              <button type="button" role="radio" data-value="quick">Quick</button>
             </div>
           </div>
-          <p class="group-foot" id="foot-drive"></p>
-        </section>
-        <section class="group" aria-labelledby="group-driver">
-          <h2 class="group-title" id="group-driver">Your Character</h2>
-          <div id="driver-pick"></div>
-        </section>
-        <section class="group" id="group-second" aria-labelledby="group-two">
-          <h2 class="group-title" id="group-two">Players on This Camera</h2>
-          <div class="rows">
-            <div class="row">
-              <span class="row-label" id="label-players">Players on This Camera</span>
+          <div class="you-field" id="group-second">
+            <div class="you-line">
+              <span class="field-label" id="label-players">Players on This Camera</span>
               <div class="segmented" role="radiogroup" id="pick-players" aria-labelledby="label-players" aria-describedby="foot-players">
                 <button type="button" role="radio" data-value="1">1</button>
                 <button type="button" role="radio" data-value="2">2</button>
@@ -132,43 +147,70 @@
                 <button type="button" role="radio" data-value="4">4</button>
               </div>
             </div>
-            <div class="row" id="row-second">
-              <label class="row-label" for="you-name2">Second Driver</label>
-              <input id="you-name2" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
-            </div>
-            <div class="row" id="row-third" hidden>
-              <label class="row-label" for="you-name3">Third Driver</label>
-              <input id="you-name3" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
-            </div>
-            <div class="row" id="row-fourth" hidden>
-              <label class="row-label" for="you-name4">Fourth Driver</label>
-              <input id="you-name4" class="row-input" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+            <p class="field-foot" id="foot-players">You drive alone with your own camera.</p>
+            <div class="mate-fields">
+              <div class="mate-field" id="row-second">
+                <label class="field-label" for="you-name2">Second Driver</label>
+                <input id="you-name2" class="name-input small" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+              </div>
+              <div class="mate-field" id="row-third" hidden>
+                <label class="field-label" for="you-name3">Third Driver</label>
+                <input id="you-name3" class="name-input small" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+              </div>
+              <div class="mate-field" id="row-fourth" hidden>
+                <label class="field-label" for="you-name4">Fourth Driver</label>
+                <input id="you-name4" class="name-input small" type="text" maxlength="14" autocapitalize="words" spellcheck="false" enterkeyhint="done" />
+              </div>
             </div>
           </div>
-          <p class="group-foot" id="foot-players">You drive alone with your own camera.</p>
-        </section>
-        <section class="group" id="group-driver2" aria-labelledby="group-driver-two" hidden>
-          <h2 class="group-title" id="group-driver-two">Second Character</h2>
-          <div id="driver-pick2"></div>
-        </section>
-        <section class="group" id="group-driver3" aria-labelledby="group-driver-three" hidden>
-          <h2 class="group-title" id="group-driver-three">Third Character</h2>
-          <div id="driver-pick3"></div>
-        </section>
-        <section class="group" id="group-driver4" aria-labelledby="group-driver-four" hidden>
-          <h2 class="group-title" id="group-driver-four">Fourth Character</h2>
-          <div id="driver-pick4"></div>
-        </section>
+        </div>
         <div class="page-actions">
           <button id="you-continue" class="button primary large wide">Continue</button>
         </div>
       </div>
     </section>
 
-    <!-- 3. The wheel check: hold the wheel up, level, turn it, brake. -->
-    <section id="screen-check" class="screen page" hidden aria-labelledby="check-title">
+    <!-- 3. The driver: who sits in the kart. One seat at a time; the stage is live 3D where it can be, a portrait where it cannot. -->
+    <section id="screen-driver" class="screen page driver" hidden aria-labelledby="driver-title">
       <header class="bar">
-        <button id="check-back" class="button plain small back">
+        <button id="driver-back" class="button back glass">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
+        </button>
+      </header>
+      <div class="driver-inner">
+        <div class="driver-head">
+          <p class="eyebrow" id="driver-eyebrow">Your Kart</p>
+          <h1 class="display" id="driver-title" tabindex="-1">Choose Your Driver</h1>
+          <div class="seat-strip" id="driver-seats" role="radiogroup" aria-label="Driver" hidden></div>
+        </div>
+        <div class="driver-stage" id="driver-stage">
+          <i class="stage-glow" aria-hidden="true"></i>
+          <img class="stage-photo" id="driver-photo" alt="" width="640" height="640" hidden />
+          <p class="stage-hint" id="driver-hint" aria-hidden="true">Drag to turn</p>
+        </div>
+        <div class="driver-info">
+          <h2 class="driver-name" id="driver-name" aria-live="polite">Bun</h2>
+          <p class="driver-class" id="driver-class"></p>
+          <p class="driver-blurb" id="driver-blurb"></p>
+          <ul class="stats" id="driver-stats" aria-label="Stats"></ul>
+          <div class="golden-row" id="driver-golden" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg>
+            <label for="driver-golden-switch">Golden Kart</label>
+            <button type="button" class="switch" role="switch" id="driver-golden-switch" aria-checked="false"></button>
+          </div>
+        </div>
+        <div class="driver-dock" id="driver-dock" role="radiogroup" aria-label="Drivers"></div>
+        <div class="driver-actions">
+          <button id="driver-continue" class="button primary large">Continue</button>
+          <p class="keys-hint" id="driver-keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> Choose <kbd>Return</kbd> Continue</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. The wheel check: hold the wheel up, level, turn it, brake. -->
+    <section id="screen-check" class="screen page check" hidden aria-labelledby="check-title">
+      <header class="bar">
+        <button id="check-back" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
         </button>
       </header>
@@ -187,113 +229,105 @@
       </div>
     </section>
 
-    <!-- 4. The lobby: the code and who is here; the host chooses and starts. -->
+    <!-- 5. The lobby: the room on the left (the code, who is here), the race on the right. -->
     <section id="screen-lobby" class="screen page lobby" hidden aria-labelledby="lobby-title">
       <header class="bar">
-        <button id="lobby-leave" class="button plain small back">
+        <button id="lobby-leave" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="lobby-leave-label">Leave</span>
         </button>
       </header>
       <div class="lobby-inner" id="lobby-inner">
-        <aside class="join-card" id="join-card">
-          <p class="eyebrow">Race Code</p>
-          <p class="code-big num" id="lobby-code" aria-live="polite"></p>
-          <div class="qr" id="lobby-qr" hidden>
-            <canvas id="qr-canvas" role="img" aria-label="QR code to join this race"></canvas>
-          </div>
-          <p class="footnote secondary join-hint" id="lobby-hint">Friends type the code at Join a Race, or scan this.</p>
-          <p class="footnote tertiary join-url" id="lobby-url"></p>
-          <button id="lobby-copy" class="button quiet small">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg>Copy Link
-          </button>
-        </aside>
-        <div class="lobby-main">
-          <div class="page-head">
-            <p class="eyebrow" id="lobby-eyebrow">Your Race</p>
-            <h1 class="title1" id="lobby-title" tabindex="-1">Lobby</h1>
-            <p class="body secondary" id="lobby-waiting" hidden></p>
-          </div>
-          <section class="group" aria-labelledby="group-players">
-            <h2 class="group-title" id="group-players">Players</h2>
-            <div class="rows" id="lobby-players"></div>
+        <div class="lobby-head">
+          <p class="eyebrow" id="lobby-eyebrow">Your Race</p>
+          <h1 class="display" id="lobby-title" tabindex="-1">Lobby</h1>
+          <p class="lobby-sub" id="lobby-waiting" hidden></p>
+        </div>
+        <div class="lobby-room">
+          <aside class="join-card glass" id="join-card">
+            <div class="qr" id="lobby-qr" hidden>
+              <canvas id="qr-canvas" role="img" aria-label="QR code to join this race"></canvas>
+            </div>
+            <div class="join-words">
+              <p class="eyebrow">Race Code</p>
+              <p class="code-big num" id="lobby-code" aria-live="polite"></p>
+              <p class="footnote join-hint" id="lobby-hint">Friends type the code at Join a Race, or scan this.</p>
+              <p class="footnote join-url" id="lobby-url"></p>
+              <button id="lobby-copy" class="button quiet small">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link" /></svg>Copy Link
+              </button>
+            </div>
+          </aside>
+          <section class="racers" aria-labelledby="group-players">
+            <h2 class="section-title" id="group-players">Racers <span class="num" id="racer-count"></span></h2>
+            <div class="racer-list" id="lobby-players"></div>
             <p class="group-foot" id="foot-players"></p>
           </section>
-          <section class="group" id="group-screen" aria-labelledby="group-showme" hidden>
-            <h2 class="group-title" id="group-showme">Your Screen</h2>
-            <div class="rows">
-              <div class="row">
-                <span class="row-label" id="label-screen">Show Me On</span>
-                <div class="segmented" role="radiogroup" id="pick-screen" aria-labelledby="label-screen" aria-describedby="foot-screen">
-                  <button type="button" role="radio" data-value="here">This Screen</button>
-                  <button type="button" role="radio" data-value="host">Big Screen</button>
-                </div>
+          <section class="screen-choice glass" id="group-screen" aria-labelledby="group-showme" hidden>
+            <div class="screen-choice-head">
+              <h2 class="section-title" id="group-showme">Your Screen</h2>
+              <div class="segmented" role="radiogroup" id="pick-screen" aria-label="Show Me On" aria-describedby="foot-screen">
+                <button type="button" role="radio" data-value="here">This Screen</button>
+                <button type="button" role="radio" data-value="host">Big Screen</button>
               </div>
             </div>
             <p class="group-foot" id="foot-screen">Your race plays on this device. Choose Big Screen to share the host’s screen with everyone else who does, and use this one only as your wheel.</p>
           </section>
-          <section class="group" id="group-race" aria-labelledby="group-race-title" hidden>
-            <h2 class="group-title" id="group-race-title">Race</h2>
-            <div class="rows">
-              <div class="row" id="row-mode">
-                <span class="row-label" id="label-mode">Mode</span>
-                <div class="segmented" role="radiogroup" id="pick-mode" aria-labelledby="label-mode" aria-describedby="foot-mode">
-                  <button type="button" role="radio" data-value="race">Single Race</button>
-                  <button type="button" role="radio" data-value="grand-prix">Grand Prix</button>
-                </div>
-              </div>
-              <div class="row" id="row-track">
-                <span class="row-label" id="label-track">Track</span>
-                <span class="row-value" id="track-value"></span>
-                <label class="menu-select" id="track-menu" hidden>
-                  <span class="visually-hidden">Track</span>
-                  <select id="track-select"></select>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-updown" /></svg>
-                </label>
-              </div>
-              <div class="row row-stack" id="row-cup" hidden>
-                <span class="row-label" id="label-cup">Cup</span>
-                <div class="cups" role="radiogroup" id="pick-cup" aria-labelledby="label-cup" aria-describedby="foot-mode"></div>
-              </div>
-              <div class="row">
-                <span class="row-label" id="label-laps">Laps</span>
-                <div class="segmented" role="radiogroup" id="pick-laps" aria-labelledby="label-laps">
-                  <button type="button" role="radio" data-value="1">1</button>
-                  <button type="button" role="radio" data-value="2">2</button>
-                  <button type="button" role="radio" data-value="3">3</button>
-                  <button type="button" role="radio" data-value="4">4</button>
-                  <button type="button" role="radio" data-value="5">5</button>
-                </div>
-              </div>
-              <div class="row">
-                <label class="row-label" for="switch-bots">Bots</label>
-                <button type="button" class="switch" role="switch" id="switch-bots" aria-checked="true"></button>
-              </div>
-              <div class="row">
-                <label class="row-label" for="switch-mirror">Mirror Mode</label>
-                <button type="button" class="switch" role="switch" id="switch-mirror" aria-checked="false" aria-describedby="foot-mirror"></button>
-              </div>
-              <div class="row row-stack" id="row-display">
-                <span class="row-label" id="label-display">Show the Race</span>
-                <div class="segmented" role="radiogroup" id="pick-display" aria-labelledby="label-display" aria-describedby="foot-display">
-                  <button type="button" role="radio" data-value="own">On Everyone’s Own Screen</button>
-                  <button type="button" role="radio" data-value="host">On This Screen</button>
-                </div>
+        </div>
+        <div class="lobby-setup" id="group-race" aria-labelledby="group-race-title">
+          <h2 class="section-title" id="group-race-title">Race</h2>
+          <div class="mode-switch segmented big" role="radiogroup" id="pick-mode" aria-label="Mode" aria-describedby="foot-mode">
+            <button type="button" role="radio" data-value="race">Single Race</button>
+            <button type="button" role="radio" data-value="grand-prix">Grand Prix</button>
+          </div>
+          <p class="group-foot" id="foot-mode"></p>
+          <div class="setup-block" id="row-track">
+            <span class="visually-hidden" id="label-track">Track</span>
+            <div class="postcards" role="radiogroup" id="pick-track" aria-labelledby="label-track"></div>
+          </div>
+          <div class="setup-block" id="row-cup" hidden>
+            <span class="visually-hidden" id="label-cup">Cup</span>
+            <div class="cups" role="radiogroup" id="pick-cup" aria-labelledby="label-cup" aria-describedby="foot-mode"></div>
+          </div>
+          <div class="setup-controls glass">
+            <div class="control">
+              <span class="control-label" id="label-laps">Laps</span>
+              <div class="segmented" role="radiogroup" id="pick-laps" aria-labelledby="label-laps">
+                <button type="button" role="radio" data-value="1">1</button>
+                <button type="button" role="radio" data-value="2">2</button>
+                <button type="button" role="radio" data-value="3">3</button>
+                <button type="button" role="radio" data-value="4">4</button>
+                <button type="button" role="radio" data-value="5">5</button>
               </div>
             </div>
-            <p class="group-foot" id="foot-mode"></p>
-            <p class="group-foot" id="foot-mirror"></p>
-            <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
-            <p class="group-foot" id="foot-display"></p>
-          </section>
-          <div class="page-actions">
-            <button id="lobby-start" class="button primary large wide" disabled>Start Race</button>
-            <p class="footnote secondary" id="lobby-start-hint" aria-live="polite"></p>
+            <div class="control">
+              <label class="control-label" for="switch-bots">Bots</label>
+              <button type="button" class="switch" role="switch" id="switch-bots" aria-checked="true"></button>
+            </div>
+            <div class="control">
+              <label class="control-label" for="switch-mirror">Mirror Mode</label>
+              <button type="button" class="switch" role="switch" id="switch-mirror" aria-checked="false" aria-describedby="foot-mirror"></button>
+            </div>
+            <div class="control control-stack" id="row-display">
+              <span class="control-label" id="label-display">Show the Race</span>
+              <div class="segmented" role="radiogroup" id="pick-display" aria-labelledby="label-display" aria-describedby="foot-display">
+                <button type="button" role="radio" data-value="own">On Everyone’s Own Screen</button>
+                <button type="button" role="radio" data-value="host">On This Screen</button>
+              </div>
+            </div>
           </div>
+          <p class="group-foot" id="foot-mirror"></p>
+          <p class="group-foot" id="foot-bots">Bots fill the grid, so there are six karts in all.</p>
+          <p class="group-foot" id="foot-display"></p>
+          <p class="group-foot" id="foot-guest" hidden></p>
+        </div>
+        <div class="lobby-go">
+          <button id="lobby-start" class="button primary large wide" disabled>Start Race</button>
+          <p class="footnote secondary" id="lobby-start-hint" aria-live="polite"></p>
         </div>
       </div>
     </section>
 
-    <!-- 5. The race: the world full-window, the wheel's picture in a corner. -->
+    <!-- 6. The race: the world full-window, the wheel's picture in a corner. -->
     <section id="screen-race" class="screen race" hidden aria-label="Race">
       <div class="race-stage" id="race-stage">
         <div class="kart-hud" id="kart-hud"></div>
@@ -321,14 +355,21 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand" /></svg><span id="lost-hands-text">Show Both Hands</span>
       </p>
       <div class="race-loading" id="race-loading">
-        <div class="race-loading-card glass">
-          <p class="title3 num" id="race-loading-title">Getting ready…</p>
+        <div class="loading-art" id="loading-art" aria-hidden="true">
+          <div class="loading-outline" id="loading-outline"></div>
+          <img id="loading-postcard" alt="" width="960" height="540" hidden />
+        </div>
+        <div class="loading-card">
+          <p class="eyebrow" id="loading-cup">Grip Prix</p>
+          <h2 class="loading-track" id="loading-track">Getting ready…</h2>
           <div class="progress" id="race-loading-bar" role="progressbar" aria-labelledby="race-loading-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+          <p class="loading-status num" id="race-loading-title">Getting ready…</p>
+          <p class="loading-tip" id="loading-tip"></p>
         </div>
       </div>
     </section>
 
-    <!-- 6. Results. -->
+    <!-- 7. Results. -->
     <section id="screen-results" class="screen page results" hidden aria-labelledby="results-title">
       <figure class="photo-finish" id="photo-finish" role="status" hidden>
         <img id="photo-finish-still" alt="" hidden />
@@ -337,19 +378,22 @@
           <p class="title3" id="photo-finish-words"></p>
         </figcaption>
       </figure>
+      <div class="results-art" id="results-art" aria-hidden="true"><img id="results-postcard" alt="" width="960" height="540" hidden /></div>
       <div class="results-inner">
         <div class="page-head center">
           <p class="eyebrow" id="results-eyebrow"></p>
-          <h1 class="large-title" id="results-title" tabindex="-1">Results</h1>
+          <h1 class="display" id="results-title" tabindex="-1">Results</h1>
           <p class="body secondary" id="results-sub" hidden></p>
         </div>
-        <table class="standings num" id="standings">
-          <caption class="visually-hidden">Standings</caption>
-          <thead>
-            <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th><th scope="col" id="th-points" hidden>Points</th></tr>
-          </thead>
-          <tbody id="standings-body"></tbody>
-        </table>
+        <div class="results-card glass">
+          <table class="standings num" id="standings">
+            <caption class="visually-hidden">Standings</caption>
+            <thead>
+              <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th><th scope="col" id="th-points" hidden>Points</th></tr>
+            </thead>
+            <tbody id="standings-body"></tbody>
+          </table>
+        </div>
         <div class="results-actions">
           <button id="results-next" class="button primary large" hidden>Standings</button>
           <button id="results-again" class="button primary large">
@@ -361,17 +405,17 @@
       </div>
     </section>
 
-    <!-- 7. The Grand Prix's standings between its races. -->
+    <!-- 8. The Grand Prix's standings between its races. -->
     <section id="screen-standings" class="screen page st-standings" hidden aria-labelledby="gp-title">
       <header class="bar">
-        <button id="gp-leave" class="button plain small back">
+        <button id="gp-leave" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="gp-leave-label">Leave</span>
         </button>
       </header>
       <div class="st-inner">
         <div class="page-head center">
           <p class="eyebrow" id="gp-eyebrow"></p>
-          <h1 class="large-title" id="gp-title" tabindex="-1">Standings</h1>
+          <h1 class="display" id="gp-title" tabindex="-1">Standings</h1>
           <p class="body secondary" id="gp-sub"></p>
         </div>
         <ol class="st-rows num" id="gp-rows" aria-label="Grand Prix standings"></ol>
@@ -389,17 +433,17 @@
       </div>
     </section>
 
-    <!-- 8. The podium: the cup's end. -->
+    <!-- 9. The podium: the cup's end. -->
     <section id="screen-podium" class="screen podium" hidden aria-labelledby="podium-title">
       <div class="podium-stage" id="podium-stage" aria-hidden="true"></div>
       <header class="bar podium-bar">
-        <button id="podium-leave" class="button plain small back">
+        <button id="podium-leave" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="podium-leave-label">Leave</span>
         </button>
       </header>
       <div class="podium-head">
         <p class="eyebrow" id="podium-eyebrow">Grand Prix</p>
-        <h1 class="large-title" id="podium-title" tabindex="-1">Podium</h1>
+        <h1 class="display" id="podium-title" tabindex="-1">Podium</h1>
         <p class="body" id="podium-sub"></p>
         <p class="podium-unlock glass" id="podium-unlock" role="status" hidden>You unlocked a secret track!</p>
       </div>
@@ -493,11 +537,23 @@
       <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 5.5-3.1M13.9 6.1a11.6 11.6 0 0 1 6.3 3.5" /><path d="M6.8 12.7a7.3 7.3 0 0 1 3.4-2M17.2 12.7a7.3 7.3 0 0 0-2.3-1.6" /><path d="M9.8 15.8a3 3 0 0 1 3.2-.8" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /><path d="M5.2 4.4 18.8 19.6" /></symbol>
       <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="4.5" y="13.3" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="13.3" width="6.2" height="6.2" rx="1.6" /></symbol>
       <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14.5 5.8 8.3 12l6.2 6.2" /></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.5 5.8 15.7 12l-6.2 6.2" /></symbol>
       <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
       <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.2 13.8a3.9 3.9 0 0 0 5.5 0l3-3a3.9 3.9 0 0 0-5.5-5.5l-1 1" /><path d="M13.8 10.2a3.9 3.9 0 0 0-5.5 0l-3 3a3.9 3.9 0 0 0 5.5 5.5l1-1" /></symbol>
       <symbol id="i-wheel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" /><circle cx="12" cy="12" r="2.3" /><path d="M3.7 10.4l6 1.1M20.3 10.4l-6 1.1M12 14.3v6.2" /></symbol>
       <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.8" y="6.2" width="18.4" height="11.6" rx="2.6" /><path d="M6.6 10.2h.01M10.2 10.2h.01M13.8 10.2h.01M17.4 10.2h.01M8 14h8" /></symbol>
       <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M7.4 7.4h9.2a4.4 4.4 0 0 1 4.3 3.6l.8 4.2a2.5 2.5 0 0 1-4.4 2.1l-1.8-2.2H8.5l-1.8 2.2a2.5 2.5 0 0 1-4.4-2.1l.8-4.2a4.4 4.4 0 0 1 4.3-3.6z" /><path d="M8 10v3M6.5 11.5h3" /><path d="M15.6 10.6h.01M17.6 12.6h.01" /></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.4" r="7.2" /><path d="M12 13.4V9.4M9.4 3.7h5.2M18.6 6.4l1.3-1.3" /></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5.5 21V3.8" /><path d="M5.5 5c3.4-1.9 6 1.9 9.4 0 1.5-.8 2.9-.9 4.1-.4v8.1c-1.2-.5-2.6-.4-4.1.4-3.4 1.9-6-1.9-9.4 0" /><path d="M10.4 6.6v8M14.8 6.1v8" opacity=".55" /></symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.6 17a8.4 8.4 0 1 1 14.8 0" /><path d="M12 13.8 15.4 9.4" /><circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none" /></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.4 3.4 6 13h5.2l-.8 7.6L18 10.8h-5.3z" /></symbol>
+      <symbol id="i-weight" viewBox="0 0 24 24"><path d="M9.4 7.6a3.6 3.6 0 1 1 5.2 0" /><path d="M7.3 8.2h9.4l2.2 10a1.7 1.7 0 0 1-1.7 2.1H6.8A1.7 1.7 0 0 1 5.1 18.2z" /></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.6" y="10.6" width="12.8" height="9.4" rx="2.4" /><path d="M8.6 10.6V8.2a3.4 3.4 0 0 1 6.8 0v2.4" /></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4.2l1.5 4.3 4.3 1.5-4.3 1.5L10 15.8l-1.5-4.3L4.2 10l4.3-1.5z" /><path d="M18 14.2l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13" /></symbol>
+      <symbol id="i-person-plus" viewBox="0 0 24 24"><circle cx="9.6" cy="8.4" r="3.5" /><path d="M3.4 19.6c.5-3.6 3.1-5.7 6.2-5.7s5.7 2.1 6.2 5.7" /><path d="M18.6 8.2v6M15.6 11.2h6" /></symbol>
+      <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7.4 4.4h9.2v5.2a4.6 4.6 0 0 1-9.2 0z" /><path d="M7.4 6H4.6v1.4a3 3 0 0 0 3 3M16.6 6h2.8v1.4a3 3 0 0 1-3 3" /><path d="M12 14.2v3.2M8.6 20h6.8M9.6 20v-2.6h4.8V20" /></symbol>
+      <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.7" /><path d="M4.8 20c.6-3.8 3.4-6 7.2-6s6.6 2.2 7.2 6" /></symbol>
     </svg>
     <script type="module" src="/src/kart/main.ts"></script>
   </body>

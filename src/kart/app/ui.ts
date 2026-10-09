@@ -11,24 +11,30 @@ import { element, setText } from "../../ui/dom";
  * `--count` and `--index` position its sliding thumb (settings.css).
  */
 export class Segmented<T extends string> {
-  private readonly radios: HTMLButtonElement[];
+  private radios: HTMLButtonElement[] = [];
   private current: T | null = null;
 
   constructor(
     private readonly group: HTMLElement,
     private readonly onPick: (value: T) => void,
   ) {
-    this.radios = [...group.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
-    group.style.setProperty("--count", String(this.radios.length));
-    for (const radio of this.radios) radio.addEventListener("click", () => this.pick(radio, false));
+    this.refresh();
     group.addEventListener("keydown", (event) => {
       const at = this.radios.findIndex((radio) => radio.getAttribute("aria-checked") === "true");
       const last = this.radios.length - 1;
       const to = ({ ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: last } as Record<string, number>)[event.key];
-      if (to === undefined) return;
+      if (to === undefined || this.radios.length === 0) return;
       event.preventDefault();
       this.pick(this.radios[(to + this.radios.length) % this.radios.length]!, true);
     });
+  }
+
+  /** Picks up the choices the group has now (a group whose choices are made later, or change). What was chosen stays chosen. */
+  refresh(): void {
+    this.radios = [...this.group.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    this.group.style.setProperty("--count", String(this.radios.length));
+    for (const radio of this.radios) radio.addEventListener("click", () => this.pick(radio, false));
+    if (this.current !== null) this.value = this.current;
   }
 
   private pick(radio: HTMLButtonElement, focus: boolean): void {
@@ -52,7 +58,7 @@ export class Segmented<T extends string> {
       if (checked) this.group.style.setProperty("--index", String(i));
     });
     // Nothing chosen yet: the first is still the one tab stop.
-    if (!this.radios.some((radio) => radio.tabIndex === 0)) this.radios[0]!.tabIndex = 0;
+    if (this.radios.length > 0 && !this.radios.some((radio) => radio.tabIndex === 0)) this.radios[0]!.tabIndex = 0;
   }
 }
 

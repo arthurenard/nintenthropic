@@ -1,12 +1,10 @@
 /**
  * The You screen: your name, how you drive, and (with the wheel) up to three
- * friends on the same camera, each with a name and a driver. What is chosen
- * is remembered (prefs.ts) and comes back the next time.
+ * friends on the same camera, each with a name. What is chosen is remembered
+ * (prefs.ts) and comes back the next time. Who sits in the kart is the next
+ * screen's question (driver.ts): one thing at a time.
  */
 import { $, setText } from "../../ui/dom";
-import { TRACKS } from "../track/tracks";
-import { isUnlocked, loadUnlocks } from "../unlocks";
-import { DriverPicker } from "./driverPicker";
 import { cleanName, defaultName } from "./format";
 import type { Drive, You } from "./prefs";
 import type { Steering } from "./services";
@@ -48,8 +46,6 @@ export class YouScreen {
   private readonly drive: Segmented<Drive>;
   private readonly steering: Segmented<Steering>;
   private readonly players: Segmented<Count>;
-  private readonly pickFirst: DriverPicker;
-  private readonly pickMates: DriverPicker[];
 
   constructor(private readonly hooks: YouHooks) {
     this.drive = new Segmented<Drive>($("pick-drive"), (drive) => {
@@ -65,16 +61,6 @@ export class YouScreen {
       this.sync();
       if (this.you.players > was) this.mates[this.you.players - 2]?.focus({ preventScroll: true });
     });
-    this.pickFirst = new DriverPicker($("driver-pick"), "Your character", ({ character, golden }) => {
-      this.you.character = character;
-      this.you.golden = golden;
-    });
-    this.pickMates = ["Second", "Third", "Fourth"].map(
-      (ordinal, i) =>
-        new DriverPicker($(`driver-pick${i + 2}`), `${ordinal} character`, ({ character, golden }) => {
-          this.you.mates[i] = { ...this.you.mates[i]!, character, golden };
-        }),
-    );
     $("you-back").addEventListener("click", () => hooks.back());
     this.name.addEventListener("input", () => (this.you.name = this.name.value));
     this.mates.forEach((field, i) => field.addEventListener("input", () => (this.you.mates[i] = { ...this.you.mates[i]!, name: field.value })));
@@ -96,20 +82,6 @@ export class YouScreen {
     this.drive.value = you.drive;
     this.steering.value = you.steering;
     this.players.value = String(you.players) as Count;
-    // What this device has found: the duck driver once every track's duck is, the golden kart with the Konami code.
-    const unlocks = loadUnlocks();
-    const access = {
-      duck: isUnlocked("duck-driver", unlocks, { duckTracks: TRACKS.filter((track) => track.duck).map((track) => track.id), cups: [] }),
-      golden: isUnlocked("golden", unlocks, { duckTracks: [], cups: [] }),
-    };
-    const first = this.pickFirst.open({ character: you.character, golden: you.golden }, access);
-    const chosen = this.pickMates.map((picker, i) => picker.open({ character: you.mates[i]!.character, golden: you.mates[i]!.golden }, access));
-    this.you = {
-      ...this.you,
-      character: first.character,
-      golden: first.golden,
-      mates: this.you.mates.map((mate, i) => ({ ...mate, character: chosen[i]!.character, golden: chosen[i]!.golden })),
-    };
     this.setBusy(false);
     this.sync();
     focusHeading($("you-title"));
@@ -131,14 +103,12 @@ export class YouScreen {
     $("row-second").hidden = !wheel || count < 2;
     $("row-third").hidden = !wheel || count < 3;
     $("row-fourth").hidden = !wheel || count < 4;
-    $("group-driver2").hidden = !wheel || count < 2;
-    $("group-driver3").hidden = !wheel || count < 3;
-    $("group-driver4").hidden = !wheel || count < 4;
     setText("foot-players", SHARING[count]);
     setText("foot-drive", ABOUT[this.you.drive]);
   }
 
-  private finish(): void {
+  /** The names as the screen reads them now, cleaned (a cleared field is what it was; friends with one name are told apart). */
+  finish(): void {
     const name = cleanName(this.name.value, this.was.name);
     const wheel = this.you.drive === "wheel";
     const count = wheel ? this.you.players : 1;

@@ -27,13 +27,14 @@ import {
 } from "../contract";
 import { cupById, trackOfRace } from "../grandprix";
 import { CheckScreen } from "./check";
+import { DriverScreen, driverAccess, type DriverChoice, type DriverSeat } from "./driver";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
 import { crew, loadYou, playerCount, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
 import { PodiumScreen } from "./podium";
 import { ResultsScreen } from "./results";
-import { kartOf, localPlayers } from "./roster";
+import { kartOf, localPlayers, previewColours } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
 import { SoundControls } from "./soundui";
 import { StandingsScreen } from "./standings";
@@ -42,7 +43,7 @@ import { AwakeWhileRacing } from "./wake";
 import { closeTrouble, showTrouble, type Fix, type TroubleKind } from "./troubles";
 import { YouScreen } from "./you";
 
-export type ScreenName = "start" | "you" | "check" | "lobby" | "race" | "results" | "standings" | "podium";
+export type ScreenName = "start" | "you" | "driver" | "check" | "lobby" | "race" | "results" | "standings" | "podium";
 
 export interface KartAppOptions {
   /** `?net=local`: several tabs of one browser as the network (development, tests). */
@@ -72,6 +73,7 @@ export interface KartAppSnapshot {
 export class KartApp {
   private readonly startScreen: StartScreen;
   private readonly youScreen: YouScreen;
+  private readonly driverScreen: DriverScreen;
   private readonly checkScreen: CheckScreen;
   private readonly lobbyScreen: LobbyScreen;
   private readonly raceScreen: RaceScreen;
@@ -108,18 +110,26 @@ export class KartApp {
     private readonly services: Services,
     private readonly options: KartAppOptions = {},
   ) {
-    this.startScreen = new StartScreen({
-      host: () => void this.open("host"),
-      join: (code) => void this.open("join", code),
-      practice: () => void this.open("practice"),
-      konami: () => this.services.sound.play("cheer"),
-    });
+    this.startScreen = new StartScreen(
+      {
+        host: () => void this.open("host"),
+        join: (code) => void this.open("join", code),
+        practice: () => void this.open("practice"),
+        konami: () => this.services.sound.play("cheer"),
+      },
+      // A phone that came with a link to join is on its way to a room: no time for the key art.
+      { art: !options.join },
+    );
     this.youScreen = new YouScreen({
       back: () => this.leave(),
-      next: (you) => void this.youDone(you),
+      next: (you) => this.youDone(you),
+    });
+    this.driverScreen = new DriverScreen({
+      back: () => this.openYou(),
+      next: (choices) => void this.driverDone(choices),
     });
     this.checkScreen = new CheckScreen(services, {
-      back: () => this.openYou(),
+      back: () => this.openDriver(),
       done: () => this.checkDone(),
     });
     this.lobbyScreen = new LobbyScreen(
@@ -174,6 +184,19 @@ export class KartApp {
       mine: lobby && session ? localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)) : [],
       sound: this.services.sound.report(),
     };
+  }
+
+  /**
+   * To look at the screens that come after a race without driving one: puts
+   * them up with the room's lobby as given. Only testHooks.ts (dev and test
+   * builds) calls it.
+   */
+  preview(screen: "results" | "standings" | "podium", lobby: LobbyState): void {
+    if (!this.session) return;
+    this.ready = true;
+    if (screen === "results") this.showResults(lobby);
+    else if (screen === "standings") this.showStandings(lobby);
+    else this.showPodium(lobby);
   }
 
   boot(): void {
@@ -234,6 +257,7 @@ export class KartApp {
     const tunes: Record<Exclude<ScreenName, "results">, MusicKind | null> = {
       start: "menu",
       you: "menu",
+      driver: "menu",
       check: "menu",
       lobby: "lobby",
       race: null,
@@ -247,17 +271,20 @@ export class KartApp {
   // --- screens -------------------------------------------------------------------------------------------
 
   private show(screen: ScreenName): void {
+    // The driver stage is a WebGL renderer: it goes with the screen.
+    if (this.screen === "driver" && screen !== "driver") this.driverScreen.close();
     this.screen = screen;
-    for (const name of ["start", "you", "check", "lobby", "race", "results", "standings", "podium"] as const) $(`screen-${name}`).hidden = name !== screen;
+    for (const name of ["start", "you", "driver", "check", "lobby", "race", "results", "standings", "podium"] as const) $(`screen-${name}`).hidden = name !== screen;
     document.body.dataset.screen = screen;
     this.music(screen);
     // A phone propped up as a wheel is not touched for minutes: its screen stays on from the wheel check to the end.
-    if (screen === "start" || screen === "you") this.wake.release();
+    if (screen === "start" || screen === "you" || screen === "driver") this.wake.release();
     else this.wake.hold();
     window.scrollTo(0, 0);
     const title = {
       start: "Grip Prix",
       you: "Who’s Driving?",
+      driver: "Choose Your Driver",
       check: "Wheel Check",
       lobby: "Lobby",
       race: "Race",
@@ -323,10 +350,46 @@ export class KartApp {
     this.show("you");
   }
 
-  private async youDone(you: You): Promise<void> {
+  /** Name, how to drive and who is on the camera are set: who sits in each kart is next. */
+  private youDone(you: You): void {
     if (!this.session) return;
     this.you = you;
     saveYou(you);
+    this.openDriver();
+  }
+
+  /** Choose Your Driver, a seat at a time, each in the colour the room will give them. */
+  private openDriver(): void {
+    const session = this.session;
+    if (!session) return;
+    this.checkScreen.stop();
+    this.services.camera.stop();
+    this.ready = false;
+    const people = crew(this.you);
+    const colours = previewColours(session.lobby().players, session.device, people.length);
+    const seats: DriverSeat[] = people.map((person, i) => ({ name: person.name, colour: colours[i]!, character: person.character, golden: person.golden }));
+    this.driverScreen.open(seats, driverAccess());
+    this.show("driver");
+  }
+
+  /** Every seat has its driver: they are told to the room, and the wheel (if it is a wheel) is checked. */
+  private async driverDone(choices: DriverChoice[]): Promise<void> {
+    if (!this.session) return;
+    const you = this.you;
+    this.you = {
+      ...you,
+      character: choices[0]?.character ?? you.character,
+      golden: choices[0]?.golden ?? you.golden,
+      mates: you.mates.map((mate, i) => ({ ...mate, character: choices[i + 1]?.character ?? mate.character, golden: choices[i + 1]?.golden ?? mate.golden })),
+    };
+    saveYou(this.you);
+    await this.proceed();
+  }
+
+  /** On from the drivers: the controls are made, the room is told who is here, and a wheel goes through its check. */
+  private async proceed(): Promise<void> {
+    if (!this.session) return;
+    const you = this.you;
     this.makeControls();
     this.sendPlayers();
     if (you.drive !== "wheel") {
@@ -334,9 +397,9 @@ export class KartApp {
       this.enterLobby();
       return;
     }
-    this.youScreen.setBusy(true);
+    this.driverScreen.setBusy(true);
     const on = await this.cameraOn((playerCount(you) * 2) as 2 | 4 | 6 | 8);
-    this.youScreen.setBusy(false);
+    this.driverScreen.setBusy(false);
     if (!this.session) {
       // Left while the camera was starting: it must not stay on with nobody to use it.
       this.services.camera.stop();
@@ -415,7 +478,7 @@ export class KartApp {
       if (answer === "stay") return false;
     }
     try {
-      await camera.start(hands, (fraction) => this.youScreen.setBusy(true, fraction));
+      await camera.start(hands, (fraction) => this.driverScreen.setBusy(true, fraction));
       prefs.cameraOpened = true;
       return true;
     } catch (error) {
@@ -443,7 +506,7 @@ export class KartApp {
 
   /** The camera would not start: say why, and offer another try or the keyboard. Always false. */
   private cameraTrouble(kind: TroubleKind): false {
-    const again: Fix = { label: "Try Again", run: () => void this.youDone(this.you) };
+    const again: Fix = { label: "Try Again", run: () => void this.proceed() };
     const keys: Fix = { label: "Drive With Keyboard", run: () => this.useKeyboard() };
     showTrouble(kind, kind === "camera-insecure" ? [keys, { label: "Back", run: () => this.openYou() }] : [again, keys]);
     return false;
@@ -563,6 +626,7 @@ export class KartApp {
       racers: this.racers,
       laps: lobby.settings.laps,
       trackName: this.trackName(lobby),
+      trackId: trackOfRace(lobby.settings, lobby.grandPrix),
       grandPrix: lobby.grandPrix ?? null,
       still: this.raceScreen.photo,
     });

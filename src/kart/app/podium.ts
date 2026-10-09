@@ -95,6 +95,8 @@ export class PodiumScreen {
         const name = element("span", "podium-name");
         name.append(colourDot(row.colour), element("span", "st-driver", row.name));
         if (row.player !== null && mine.has(row.player)) name.append(element("span", "player-tag", "You"));
+        li.dataset.rank = String(i + 1);
+        li.style.setProperty("--i", String(i));
         li.append(element("span", "podium-rank", String(i + 1)), name, element("span", "podium-points", String(row.points)));
         return li;
       }),

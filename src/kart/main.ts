@@ -2,6 +2,12 @@
 import "../ui/base.css";
 import "../app/settings.css";
 import "./app/race.css";
+import "./app/menu.css";
+import "./app/title.css";
+import "./app/driver.css";
+import "./app/lobby.css";
+import "./app/loading.css";
+import "./app/results.css";
 import { KartApp } from "./app/app";
 import { joinParam, lanAddress } from "./app/format";
 import { createRealServices, type RealServicesOptions } from "./app/services.real";
