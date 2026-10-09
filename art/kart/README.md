@@ -98,7 +98,9 @@ right and up) and where the karts stand, per track.
 
 Each card is drawn at 3x in quality high (2880x1620, muted, HUD hidden), brought down to 960x540 with Pillow's LANCZOS
 and encoded by `cwebp` at the highest quality that fits. The script says which karts and landmarks are in each frame.
-In a git worktree whose `node_modules` is a link, vite must be allowed to serve the real folder
+A kart's `yaw` turns it about the road's direction: the three night cards (harbour-lights, glacier-pass, starlight-ribbon) put
+every kart at about pi, so the camera ahead sees their backs (tail lamps and flames); seen head on, the headlights bloomed
+into big white blobs on the road. In a git worktree whose `node_modules` is a link, vite must be allowed to serve the real folder
 (`server.fs.allow`), or the Draco decoder is refused and the pictures would show the code-built stand-ins; the script
 stops when a model fails to load. `shot.ts` is imported by `dev.ts` only, so none of it reaches the game's bundle.
 

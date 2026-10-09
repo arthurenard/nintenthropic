@@ -1,7 +1,8 @@
 /**
  * Choose Your Driver: the stage of the kart select. The chosen driver sits in
- * their kart on a plinth, in the player's own kart colour, turning slowly
- * (drag to spin it); beside it their name, weight class, a line about them
+ * their kart on a plinth in a small studio, in the player's own kart colour,
+ * at a front three-quarter (it turns slowly only after a few idle seconds, and
+ * a drag spins it); beside it their name, weight class, a line about them
  * and four bars (Speed, Acceleration, Handling, Weight, read honestly from
  * the sim's weights: driverStats.ts). Under it the nine drivers as portrait
  * tiles; the ninth, Dabble the duck, is a dark shape that says "Find every

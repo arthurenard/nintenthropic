@@ -25,7 +25,6 @@
  * drawn only when something changes (a new rider, a drag, a resize).
  */
 import {
-  ACESFilmicToneMapping,
   Box3,
   CanvasTexture,
   CircleGeometry,
@@ -37,6 +36,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshPhysicalMaterial,
+  NoToneMapping,
   PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
@@ -54,6 +54,8 @@ import { WebGLUnavailable } from "../../engine/common";
 import { loadStageArt } from "./art";
 import type { KartModel } from "./kart";
 import { createProceduralKart } from "./kartModel";
+import { PostChain } from "./post";
+import { LOOKS } from "./world/look";
 
 /** Who sits on the plinth. */
 export interface Rider {
@@ -180,9 +182,10 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
   const calm = options.reduceMotion ?? false;
   const low = options.lowPower ?? false;
   renderer.outputColorSpace = SRGBColorSpace;
-  // The race's own curve: ACES keeps the paint rich and lets the lights roll off, where a flat curve left it pale.
-  renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.86;
+  // The picture is graded the way the race's is (post.ts: the meadow's look, ACES with its vibrance, contrast and split tone), so the
+  // paint is as rich here as it is on the road; the scene itself is drawn in linear light.
+  renderer.toneMapping = NoToneMapping;
+  renderer.autoClear = false;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = PCFShadowMap;
   renderer.setClearColor(new Color(0x000000), 0);
@@ -244,7 +247,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
   const plinth = new Group();
   const slab = new Mesh(
     own(new LatheGeometry(plinthProfile(), 128)),
-    own(new MeshPhysicalMaterial({ color: 0xb4bdcb, roughness: 0.46, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.22, envMapIntensity: 0.8 })),
+    own(new MeshPhysicalMaterial({ color: 0xaab5c6, roughness: 0.46, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.22, envMapIntensity: 0.8 })),
   );
   slab.receiveShadow = true;
   plinth.add(slab);
@@ -275,6 +278,13 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
   scene.add(plinth);
 
   const camera = new PerspectiveCamera(24, 1, 0.5, 80);
+  // The race's own post chain with the meadow's look, without its warm light tint (it would make the plinth blush) or its vignette; the bloom is a breath, for the lamps.
+  const post = new PostChain(renderer, low ? "low" : "high", (target) => {
+    renderer.setRenderTarget(target);
+    renderer.clear(true, true, false);
+    renderer.render(scene, camera);
+  });
+  post.setLook({ ...LOOKS.meadow, vignette: 0, shadowTint: [0.97, 0.99, 1.04], highlightTint: [1, 1, 1], bloom: { threshold: 1.1, intensity: 0.16, radius: 0.6 } });
   let width = canvas.clientWidth || 640;
   let height = canvas.clientHeight || 480;
 
@@ -384,7 +394,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
     ring.scale.setScalar(1 + flash * 0.025);
     ringMaterial.opacity = 0.9 + flash * 0.1;
     rim.color.copy(rimColour);
-    renderer.render(scene, camera);
+    post.render(1 / 60);
     frames++;
   };
 
@@ -459,6 +469,8 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
     height = Math.max(1, h);
     renderer.setPixelRatio(Math.max(0.75, Math.min(dpr, low ? 1.5 : 2)));
     renderer.setSize(width, height, false);
+    post.setSize(width, height);
+    post.setTiles([{ x: 0, y: 0, w: width, h: height }], width, height);
     place();
     dirty = true;
     if (!running) draw();
@@ -488,7 +500,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
       // The next driver comes round to the front three-quarter (at once, with reduced motion).
       if (calm || first) spin = REST_YAW;
       else settling = true;
-      rimColour.set(rider.colour).lerp(new Color("#ffffff"), 0.2);
+      rimColour.set(rider.colour).lerp(new Color("#ffffff"), 0.4);
       ringMaterial.color.set(rider.colour);
       dirty = true;
       if (!running) draw();
@@ -520,6 +532,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
       built.clear();
       for (const thing of owned) thing.dispose();
       key.shadow.map?.dispose();
+      post.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },

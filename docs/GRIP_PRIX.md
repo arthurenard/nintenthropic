@@ -389,8 +389,15 @@ tight type, springy motion; a white pill is the one main action of a screen;
    The player's turn at the stage, one seat at a time (a chip for each seat
    says whose turn it is; Next Driver, then Continue; Back goes back a seat):
    the chosen driver sitting in their kart in the colour the room will give
-   them, live 3D on a softly lit plinth, turning slowly (drag to spin; the
-   driver waves as they land); their name big, their weight class, a line
+   them, live 3D as a product shot on a glossy grey plinth with a thin ring in
+   their colour, on a calm studio backdrop (a pool of light behind the stage,
+   deeper blue toward the words): the race's own grade, a warm key light that
+   throws the kart's shadow, a cool fill and two rims. It rests at a front
+   three-quarter, begins to turn by itself only after a few idle seconds, and
+   comes back to the front when another driver is chosen (drag to spin; the
+   driver waves as they land). On a desktop the stage takes the left 60% and
+   the words are one column, centred, on the right; the nine drivers run along
+   the foot on the same grid. Their name big, their weight class, a line
    about them and four bars (Speed, Acceleration, Handling, Weight, 1 to 5
    segments each, read from `WEIGHTS`: the class with the least of a thing has
    one, the class with the most five, as the sim has it); the nine drivers
@@ -414,7 +421,9 @@ tight type, springy motion; a white pill is the one main action of a screen;
    carousel of postcards, one for each track, snapping, with its name and cup
    (`assets/kart/tracks/<id>.webp`, 960 x 540; until one is drawn the track's
    own outline from `TrackGeometry`, in white over its world's colours,
-   stands in: `trackArt.ts`); for a Grand Prix the cups as cards that show
+   stands in: `trackArt.ts`); the screen stands on the chosen track's postcard
+   (or the chosen cup's first), blurred, dimmed and veiled, crossfading when the
+   choice changes (`backdrop.ts`; the sky where a postcard is missing); for a Grand Prix the cups as cards that show
    their four tracks; Laps, Bots and Mirror Mode as a compact strip; where the
    host's room shows the race; and a big Start. A guest sees the same room,
    read-only ("<host> sets the race"), with Show Me On: This Screen / Big
@@ -427,11 +436,15 @@ tight type, springy motion; a white pill is the one main action of a screen;
    hand to use an item, hop to drift, clap to honk; in keys or buttons for
    the others). Escape or the pause button: a sheet with Leave Race (the
    host's also Restart).
-7. **Results.** The track's postcard blurred behind a glass table: each
-   place a row in its player's colour that comes up in turn (last place first,
-   the winner last), the medal colours for the top three, the fastest lap in
-   gold; Race Again (the host), Back to Lobby. **Standings** (a Grand Prix,
-   between races) and the **Podium** (its end) wear the same.
+7. **Results.** The track's postcard blurred behind a glass table (the
+   page's backdrop, as in the lobby and the standings: `backdrop.ts`, darker
+   glass over a picture so every word passes AA): each place a row in its
+   player's colour that comes up in turn (last place first, the winner last),
+   the medal colours for the top three, the fastest lap in gold; the title is
+   gold, silver or bronze for a podium place and white otherwise; Race Again
+   (the host), Back to Lobby. **Standings** (a Grand Prix, between races) wear
+   the same, on the postcard of the race just run; the **Podium** (its end)
+   has its own stage.
 
 Troubles say what happened and what to do: "There's no race with that code.
 Check it and try again.", "This race is full.", "The host left the race.",
