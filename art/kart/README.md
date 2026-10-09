@@ -84,6 +84,24 @@ landmarks. Things to know when changing them:
 - `gallery.html?theme=canyon&kind=mesa` shows a landmark and
   `kind=scenery:cactus` a kind of scenery, with the Blender art loaded.
 
+## The track postcards (`tools/kart-postcards.mjs`)
+
+The track picker's nine postcards (`public/assets/kart/tracks/<trackId>.webp`, 960x540, each at most 90 KB) are not
+Blender renders: they are the game's own renderer, so they show what you will drive. The dev page takes a posed still
+(`src/kart/render/dev.html?track=<id>&shot=<json>`, handled by `src/kart/render/shot.ts`: it freezes the demo, puts the
+karts where the pose says, hides the HUD and sets `window.__shotReady`), and the script has one table of poses, a
+camera (`eye`, `target`, `fov`, `roll`) written in the track's own frame (a landmark or a lap fraction, metres along,
+right and up) and where the karts stand, per track.
+
+    npx vite --port 5195 --host 127.0.0.1            # in another terminal; stop it when done
+    node tools/kart-postcards.mjs [trackId ...]      # all nine by default; --draft for quick PNGs to tune a pose
+
+Each card is drawn at 3x in quality high (2880x1620, muted, HUD hidden), brought down to 960x540 with Pillow's LANCZOS
+and encoded by `cwebp` at the highest quality that fits. The script says which karts and landmarks are in each frame.
+In a git worktree whose `node_modules` is a link, vite must be allowed to serve the real folder
+(`server.fs.allow`), or the Draco decoder is refused and the pictures would show the code-built stand-ins; the script
+stops when a model fails to load. `shot.ts` is imported by `dev.ts` only, so none of it reaches the game's bundle.
+
 ## The key art (`art/kart/poster/`)
 
 The poster, the title screen's background and the app icon are Blender Cycles renders (Metal GPU, OpenImageDenoise,
@@ -113,6 +131,8 @@ Things to know when changing them:
 - The poster's cast and camera are a table at the top of `shot_poster.py` (`P`), the title's in `shot_title.py`
   (`TITLE`): who drives which colour (`PLAYER_COLOURS`), where on the road, the camera's distance, angle and lens, the sun,
   the clouds. A render prints where the hero, the pack and the sun land in the frame.
+- `VIEW="AgX" LOOK="AgX - Punchy"` in the environment swaps the colour transform for a try (the default, Khronos PBR
+  Neutral, keeps the kart's reds and the meadow's greens from washing out under the sun).
 - Everything is built from what the camera sees (`Visible`), so a render stays cheap. The title keeps its left 40% bare
   (`calm_x`): no trees, no flowers, no kart there.
 - The portrait crop of the title (object-position about 70% 50%) keeps the hero in the middle; the top 8% and bottom 6%

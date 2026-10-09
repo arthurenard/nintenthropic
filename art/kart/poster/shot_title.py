@@ -20,7 +20,7 @@ TITLE = dict(
     boxes=[(-24.0, (-3.4, 0.2, 3.6))],
     windmill_rel_az=29.0, windmill_dist=190.0,
     calm_x=-0.05, trees=90, bushes=22, flowers=70,
-    disc_rel_az=-5.0, disc_el=15.0,
+    disc_rel_az=3.0, disc_el=16.0,
     speed=30.0,
 )
 

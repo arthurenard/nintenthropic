@@ -17,6 +17,7 @@
  *   ?karts=6  ?laps=2
  *   ?turntable=1           just the kart model, on a turntable (see turntable.ts)
  *   ?sim=1                 the real sim for the race (simSource.ts), with ?item=storm &holder=7 &use=12 &drive=1 to show an item
+ *   ?shot={json}           a still, posed picture (shot.ts; tools/kart-postcards.mjs takes the track-picker postcards with it): window.__shotReady is true once drawn
  *
  * Arrows or WASD drive, Space drifts, E or Shift uses the item, 1-4 change the
  * views, R restarts, P pauses. Nothing pressed for a few seconds: the
@@ -25,7 +26,7 @@
 import type { TrackTheme } from "../track/geometry";
 import { trackById, TRACKS } from "../track/tracks";
 import { DEV_TRACKS, devTrackById } from "./devTracks";
-import { createDemoRace, type DemoInput, type RaceViewSource } from "./demo";
+import { createDemoRace, DemoRace, type DemoInput, type RaceViewSource } from "./demo";
 import type { Tier } from "./quality";
 import { createRaceRenderer, type GripRenderer } from "./renderer";
 import { ITEM_ICONS } from "./hud";
@@ -33,6 +34,7 @@ import { forgetTaught } from "./itemHint";
 import { SimSource } from "./simSource";
 import type { ControlKind, ItemKind } from "../contract";
 import { runTurntable } from "./turntable";
+import { parseShot, runShot, shotView } from "./shot";
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
@@ -127,6 +129,17 @@ function startRace(): void {
     const skip = Number(params.get("skip") ?? 0) || 0;
     for (let t = 0; t < skip; t += 1 / 30) source.step(1 / 30, null);
     loading.classList.add("done");
+
+    // A posed still (the postcards): the shot runs the frames itself, one pose, no autopilot, no stats on the picture.
+    const shot = params.has("shot") ? parseShot(params.get("shot")) : null;
+    if (params.has("shot")) {
+      devPanel.style.display = "none";
+      loading.style.display = "none";
+      hudRoot.style.display = "none";
+      if (!shot || !(demo instanceof DemoRace)) throw new Error("?shot= needs a JSON pose with eye and target (and not ?sim=1)");
+      await runShot({ renderer, demo, racers: source.racers, track: source.track, draw: (dt) => renderer.frame(shotView(source.view(), shot), dt) }, shot);
+      return;
+    }
 
     let last = performance.now();
     let frames = 0;
