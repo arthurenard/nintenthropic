@@ -70,6 +70,19 @@
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 214, 10, 0.8);
 }
+/* Over a track's postcard the rows are darker, and the highlights are tints of blue and gold, never a lightening: white words keep their contrast. */
+body[data-backdrop="photo"] .st-row {
+  background: rgba(6, 16, 40, 0.66);
+}
+body[data-backdrop="photo"] .st-row.mine {
+  background: rgba(40, 84, 168, 0.72);
+}
+body[data-backdrop="photo"] .st-row.leader {
+  background: rgba(58, 44, 8, 0.7);
+}
+body[data-backdrop="photo"] .st-row.leader.mine {
+  background: rgba(64, 76, 130, 0.74);
+}
 .st-rank {
   display: grid;
   place-items: center;

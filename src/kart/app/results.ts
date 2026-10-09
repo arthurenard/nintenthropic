@@ -12,7 +12,6 @@ import type { GrandPrixState, LobbyState, RaceResult, RacerSetup, Session } from
 import { $, element, setText } from "../../ui/dom";
 import { photoFinish, type PhotoFinish } from "./eggs";
 import { cupById, pointsFor } from "../grandprix";
-import { postcardUrl } from "./trackArt";
 import { lapsLabel, ordinal, raceTime } from "./format";
 import { hostName, standingRows, type StandingRow } from "./roster";
 import { colourDot, focusHeading } from "./ui";
@@ -32,8 +31,6 @@ export interface ResultsInput {
   racers: readonly RacerSetup[];
   laps: number;
   trackName: string;
-  /** The track raced, for its postcard behind the results (none: the sky). */
-  trackId?: string;
   /** A picture of the finish (the race's canvas as the closest one happened), for the photo finish, or null. */
   still?: string | null;
   /** Set in a Grand Prix: which race of which cup this was. */
@@ -52,7 +49,7 @@ export class ResultsScreen {
     $("results-next").addEventListener("click", () => hooks.next());
   }
 
-  render({ result, lobby, session, racers, laps, trackName, trackId, still, grandPrix }: ResultsInput): void {
+  render({ result, lobby, session, racers, laps, trackName, still, grandPrix }: ResultsInput): void {
     const rows = standingRows(result, racers, lobby, session.device);
     const mine = rows.filter((row) => row.mine);
     const cup = grandPrix ? cupById(grandPrix.cup) : null;
@@ -67,7 +64,6 @@ export class ResultsScreen {
     const title = $("results-title");
     if (only && only.place <= 3) title.dataset.place = String(only.place);
     else delete title.dataset.place;
-    this.postcard(trackId);
 
     const fastest = rows.find((row) => row.fastest);
     const sub = $("results-sub");
@@ -111,22 +107,6 @@ export class ResultsScreen {
     else if (!host) setText(wait, `${hostName(lobby)} can start another race from the lobby.`);
     focusHeading($("results-title"));
     this.photo(photoFinish(result.standings), rows, still ?? null);
-  }
-
-  /** The postcard of the track just raced, blurred behind the results (until it comes, or if it never does: the sky). */
-  private postcard(trackId: string | undefined): void {
-    const image = $<HTMLImageElement>("results-postcard");
-    image.classList.remove("ready");
-    image.hidden = true;
-    if (!trackId) return;
-    image.onload = () => {
-      image.hidden = false;
-      requestAnimationFrame(() => image.classList.add("ready"));
-    };
-    image.onerror = () => {
-      image.hidden = true;
-    };
-    image.src = postcardUrl(trackId);
   }
 
   /** Two karts over the line together for a top-three place: a flash, the still, "Photo Finish!", and then the results. */

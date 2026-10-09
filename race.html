@@ -15,8 +15,9 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   </head>
   <body data-screen="start">
-    <!-- A sky behind every screen but the title, the race and the podium: the page's own light, deepened so words keep their contrast. -->
-    <div class="menu-sky" aria-hidden="true"><i class="menu-sun"></i><i class="menu-cloud m1"></i><i class="menu-cloud m2"></i></div>
+    <!-- A sky behind every screen but the title, the race and the podium: the page's own light, deepened so words keep their contrast.
+         The lobby, the results and the standings lay their track's postcard over it (.menu-photo, backdrop.ts); the driver's screen makes it a studio. -->
+    <div class="menu-sky" aria-hidden="true"><div class="menu-photo" id="menu-photo"></div><i class="menu-sun"></i><i class="menu-cloud m1"></i><i class="menu-cloud m2"></i></div>
 
     <!-- 1. Start: the key art (or, until it is drawn, a bright meadow and a road), the wordmark, and the three ways in. -->
     <section id="screen-start" class="screen start" aria-labelledby="start-title">
@@ -184,7 +185,6 @@
           <div class="seat-strip" id="driver-seats" role="radiogroup" aria-label="Driver" hidden></div>
         </div>
         <div class="driver-stage" id="driver-stage">
-          <i class="stage-glow" aria-hidden="true"></i>
           <img class="stage-photo" id="driver-photo" alt="" width="640" height="640" hidden />
           <p class="stage-hint" id="driver-hint" aria-hidden="true">Drag to turn</p>
         </div>
@@ -380,7 +380,6 @@
           <p class="title3" id="photo-finish-words"></p>
         </figcaption>
       </figure>
-      <div class="results-art" id="results-art" aria-hidden="true"><img id="results-postcard" alt="" width="960" height="540" hidden /></div>
       <div class="results-inner">
         <div class="page-head center">
           <p class="eyebrow" id="results-eyebrow"></p>

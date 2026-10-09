@@ -13,26 +13,6 @@
   min-height: 100vh;
   min-height: 100dvh;
 }
-.results-art {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-}
-.results-art img {
-  position: absolute;
-  inset: -4%;
-  width: 108%;
-  height: 108%;
-  object-fit: cover;
-  filter: blur(26px) brightness(0.5) saturate(1.2);
-  opacity: 0;
-  transition: opacity 800ms var(--ease);
-}
-.results-art img.ready {
-  opacity: 0.9;
-}
 .results-inner {
   display: grid;
   gap: 24px;
@@ -49,22 +29,26 @@
   font-size: clamp(44px, 7vw, 84px);
   letter-spacing: -0.04em;
 }
-/* A medal's colour on the winner's words. */
+/* A podium place wears its medal's colour, big and bright (gold, silver, bronze: lit from the top, a darker foot, a hard dark edge
+   under it and a soft glow of its own colour, over the darkened postcard); any other place is plain white. The colours stay light
+   and saturated on purpose: each is 7 to 1 or better against the veiled picture, and the shadow keeps it so over a bright one. */
 .results .display[data-place] {
   color: transparent;
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow: none;
-  filter: drop-shadow(0 4px 24px rgba(4, 16, 44, 0.4));
 }
 .results .display[data-place="1"] {
-  background-image: var(--medal-1);
+  background-image: linear-gradient(180deg, #fff4a8 0%, #ffd60a 46%, #ffae00 100%);
+  filter: drop-shadow(0 2px 0 rgba(70, 38, 0, 0.45)) drop-shadow(0 8px 30px rgba(3, 12, 32, 0.55)) drop-shadow(0 0 30px rgba(255, 214, 10, 0.32));
 }
 .results .display[data-place="2"] {
-  background-image: var(--medal-2);
+  background-image: linear-gradient(180deg, #ffffff 0%, #e3e9f3 48%, #b4c0d4 100%);
+  filter: drop-shadow(0 2px 0 rgba(20, 30, 54, 0.5)) drop-shadow(0 8px 30px rgba(3, 12, 32, 0.55)) drop-shadow(0 0 26px rgba(214, 226, 248, 0.22));
 }
 .results .display[data-place="3"] {
-  background-image: var(--medal-3);
+  background-image: linear-gradient(180deg, #ffd9b0 0%, #ff9f5a 50%, #e36d28 100%);
+  filter: drop-shadow(0 2px 0 rgba(60, 24, 0, 0.5)) drop-shadow(0 8px 30px rgba(3, 12, 32, 0.55)) drop-shadow(0 0 26px rgba(255, 150, 80, 0.26));
 }
 .results-card {
   padding: 8px 14px 10px;

@@ -26,6 +26,7 @@ import {
   type SessionClosed,
 } from "../contract";
 import { cupById, trackOfRace } from "../grandprix";
+import { Backdrop } from "./backdrop";
 import { CheckScreen } from "./check";
 import { DriverScreen, driverAccess, type DriverChoice, type DriverSeat } from "./driver";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
@@ -93,6 +94,8 @@ export class KartApp {
   /** The race the race screen shows, so a restart (a new race in the same phase) is noticed. */
   private raceId: number | undefined;
   private readonly wake = new AwakeWhileRacing();
+  /** The track's postcard behind the lobby, the results and the standings (the sky for every other screen). */
+  private readonly backdrop = new Backdrop($("menu-photo"));
   private readonly soundControls: SoundControls;
   /** How many were in the lobby, and how many ready, when it last changed: a join, a leave or a tick has its sound. */
   private crowd = { count: 0, ready: 0 };
@@ -276,6 +279,8 @@ export class KartApp {
     this.screen = screen;
     for (const name of ["start", "you", "driver", "check", "lobby", "race", "results", "standings", "podium"] as const) $(`screen-${name}`).hidden = name !== screen;
     document.body.dataset.screen = screen;
+    // The lobby, the results and the standings stand on their track's postcard (they set it); every other screen on the sky or the studio.
+    if (screen !== "lobby" && screen !== "results" && screen !== "standings") this.backdrop.set(null);
     this.music(screen);
     // A phone propped up as a wheel is not touched for minutes: its screen stays on from the wheel check to the end.
     if (screen === "start" || screen === "you" || screen === "driver") this.wake.release();
@@ -548,7 +553,13 @@ export class KartApp {
     this.endCupScreens();
     this.crowd = { count: lobby.players.length, ready: lobby.players.filter((player) => player.ready).length };
     this.show("lobby");
+    this.backdrop.set(this.lobbyTrack(lobby));
     this.lobbyScreen.render(lobby, this.session, this.where(lobby));
+  }
+
+  /** The track the lobby is about: the one chosen for a single race, or the first race of the chosen cup. */
+  private lobbyTrack(lobby: LobbyState): string {
+    return lobby.settings.mode === "grand-prix" ? (cupById(lobby.settings.cup).tracks[0] ?? lobby.settings.track) : lobby.settings.track;
   }
 
   /** Where this player's race shows, as the lobby says it: their own choice, else the host's. */
@@ -580,6 +591,7 @@ export class KartApp {
         break;
     }
     if (this.screen === "lobby") {
+      this.backdrop.set(this.lobbyTrack(lobby));
       this.lobbyScreen.render(lobby, this.session, this.where(lobby));
       this.hearTheRoom(lobby);
     }
@@ -626,11 +638,11 @@ export class KartApp {
       racers: this.racers,
       laps: lobby.settings.laps,
       trackName: this.trackName(lobby),
-      trackId: trackOfRace(lobby.settings, lobby.grandPrix),
       grandPrix: lobby.grandPrix ?? null,
       still: this.raceScreen.photo,
     });
     this.show("results");
+    this.backdrop.set(trackOfRace(lobby.settings, lobby.grandPrix));
     // A win has its own tune.
     const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));
     const first = result.standings.find((row) => row.place === 1);
@@ -660,6 +672,7 @@ export class KartApp {
     const next = gp.race + 1 < tracks.length ? this.trackName(lobby, { ...gp, race: gp.race + 1 }) : null;
     this.standingsScreen.render({ lobby, session, trackName: this.trackName(lobby), nextTrackName: next });
     this.show("standings");
+    this.backdrop.set(trackOfRace(lobby.settings, gp));
   }
 
   /** After a Grand Prix's last standings: the ceremony. */

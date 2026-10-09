@@ -249,10 +249,10 @@
   flex: none;
   padding: 2px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 .racer-meta {
@@ -485,10 +485,10 @@
   inset: auto 0 0;
   display: grid;
   gap: 1px;
-  padding: 36px 14px 12px;
+  padding: 44px 14px 12px;
   border-radius: 0 0 20px 20px;
-  background: linear-gradient(0deg, rgba(4, 16, 44, 0.72), rgba(4, 16, 44, 0));
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(0deg, rgba(4, 16, 44, 0.88) 0%, rgba(4, 16, 44, 0.6) 55%, rgba(4, 16, 44, 0));
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
 }
 .postcard-name {
   font-size: 17px;
@@ -536,7 +536,8 @@
   transform: translateY(-2px);
 }
 .cup[aria-checked="true"] {
-  background: rgba(255, 255, 255, 0.2);
+  /* The glass stays under the lift (a bare translucent white would wash out over a picture and the words with it). */
+  background: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), var(--glass-fill);
   box-shadow:
     0 0 0 3px #fff,
     0 20px 44px rgba(4, 16, 44, 0.36);
@@ -564,7 +565,7 @@
 }
 .cup-count {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.86);
 }
 .cup-tracks {
   display: grid;
@@ -589,9 +590,9 @@
   inset: auto 0 0;
   display: flex;
   gap: 6px;
-  padding: 18px 9px 6px;
+  padding: 22px 9px 6px;
   border-radius: 0 0 12px 12px;
-  background: linear-gradient(0deg, rgba(4, 16, 44, 0.7), rgba(4, 16, 44, 0));
+  background: linear-gradient(0deg, rgba(4, 16, 44, 0.88) 0%, rgba(4, 16, 44, 0.6) 58%, rgba(4, 16, 44, 0));
   font-size: 12.5px;
   line-height: 1.2;
   font-weight: 650;

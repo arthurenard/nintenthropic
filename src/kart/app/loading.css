@@ -15,7 +15,7 @@
 .loading-art {
   position: absolute;
   inset: -6%;
-  filter: blur(20px) brightness(0.52) saturate(1.2);
+  filter: blur(20px) brightness(0.5) saturate(1.15);
   transform: scale(1.05);
 }
 .loading-outline,
@@ -59,7 +59,7 @@
   animation: rise 700ms var(--pop) 80ms backwards;
 }
 .loading-card .eyebrow {
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.96);
   letter-spacing: 0.08em;
 }
 .loading-track {
@@ -93,7 +93,7 @@
 .loading-status {
   font-size: 15px;
   font-weight: 550;
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(255, 255, 255, 0.96);
 }
 .loading-tip {
   position: absolute;

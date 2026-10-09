@@ -53,6 +53,97 @@ body[data-screen="podium"] .menu-sky {
   inset: 0;
   background: linear-gradient(180deg, rgba(6, 26, 78, 0) 30%, rgba(6, 26, 78, 0.62) 100%);
 }
+
+/* --- a track's postcard behind the lobby, the results and the standings ------------------------------------------ */
+
+/* Two layers (backdrop.ts crossfades them), each a postcard blown up, blurred and dimmed; a veil over both holds the words'
+   contrast whatever the picture (a snowfield is bright, a harbour is dark), darker at the top and foot where the titles and
+   the buttons stand, and toward the corners. Until a postcard has come (or if it never does) the sky shows and nothing changes. */
+.menu-photo {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 700ms var(--ease);
+}
+body[data-backdrop="photo"] .menu-photo {
+  opacity: 1;
+}
+body[data-backdrop="photo"] .menu-sun,
+body[data-backdrop="photo"] .menu-cloud,
+body[data-backdrop="photo"] .menu-sky::after {
+  opacity: 0;
+}
+.menu-photo img {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  opacity: 0;
+  filter: blur(26px) saturate(1.1) brightness(0.52);
+  transition: opacity 900ms var(--ease);
+}
+.menu-photo img.on {
+  opacity: 1;
+}
+.menu-photo img.drop {
+  transition: none;
+}
+.menu-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 100% at 50% 42%, rgba(3, 12, 32, 0.42) 20%, rgba(3, 12, 32, 0.66) 100%),
+    linear-gradient(180deg, rgba(3, 12, 32, 0.54) 0%, rgba(3, 12, 32, 0.3) 34%, rgba(3, 12, 32, 0.24) 65%, rgba(3, 12, 32, 0.52) 100%);
+}
+/* Over a picture the glass is darker and a little more opaque: the cards read the same whatever is behind them. */
+body[data-backdrop="photo"] {
+  --glass-fill: rgba(6, 16, 40, 0.66);
+  --glass-line: rgba(255, 255, 255, 0.2);
+}
+/* The words that stand straight on the picture (no card) are brighter and shadowed, and the control that stands on it is dark. */
+body[data-backdrop="photo"] .eyebrow,
+body[data-backdrop="photo"] .field-foot,
+body[data-backdrop="photo"] .group-foot,
+body[data-backdrop="photo"] .page .secondary {
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 12px rgba(2, 8, 24, 0.7);
+}
+body[data-backdrop="photo"]:not([data-screen="race"]) .segmented {
+  background: rgba(6, 16, 40, 0.5);
+}
+
+/* --- the driver's studio ---------------------------------------------------------------------------------------- */
+
+/* A calm studio instead of the sky: a soft pool of light on the wall behind the stage, falling away into a deeper blue at the
+   sides and the foot, with the floor's horizon a little below the middle. The words stand on the deeper part, on the right. */
+body[data-screen="driver"] .menu-sky {
+  background:
+    radial-gradient(46% 38% at 33% 60%, rgba(233, 243, 255, 0.95) 0%, rgba(206, 226, 252, 0.62) 42%, rgba(186, 212, 246, 0) 100%),
+    linear-gradient(180deg, rgba(10, 36, 86, 0) 48%, rgba(20, 52, 110, 0.3) 62%, rgba(10, 30, 76, 0.22) 76%, rgba(10, 30, 76, 0) 100%),
+    linear-gradient(90deg, rgba(9, 28, 66, 0) 32%, rgba(9, 28, 66, 0.56) 60%, rgba(9, 28, 66, 0.7) 100%),
+    linear-gradient(180deg, #3c6db4 0%, #5b8fd0 34%, #86b2e6 56%, #5f8bc6 100%);
+}
+/* One column (a phone, a narrow window): the stage is on top, so the pool of light is too, and the words below stand on the deep blue. */
+@media (max-width: 1100px) {
+  body[data-screen="driver"] .menu-sky {
+    background:
+      radial-gradient(86% 17% at 50% 32%, rgba(233, 243, 255, 0.95) 0%, rgba(206, 226, 252, 0.6) 46%, rgba(186, 212, 246, 0) 100%),
+      linear-gradient(180deg, rgba(9, 28, 66, 0) 36%, rgba(9, 28, 66, 0.6) 52%, rgba(9, 28, 66, 0.74) 100%),
+      linear-gradient(180deg, #3c6db4 0%, #5b8fd0 30%, #86b2e6 46%, #5f8bc6 100%);
+  }
+}
+body[data-screen="driver"] .menu-sky::after {
+  background: radial-gradient(120% 100% at 36% 52%, rgba(6, 26, 78, 0) 40%, rgba(6, 22, 60, 0.46) 100%);
+}
+body[data-screen="driver"] .menu-sun,
+body[data-screen="driver"] .menu-cloud {
+  display: none;
+}
+body[data-screen="driver"] .eyebrow {
+  color: rgba(255, 255, 255, 0.94);
+}
 .menu-cloud {
   position: absolute;
   border-radius: 50%;
