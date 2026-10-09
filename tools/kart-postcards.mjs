@@ -77,19 +77,20 @@ const POSES = {
     ],
   },
   "harbour-lights": {
-    // Night on the quay: the lighthouse and its beam, a crane, the town's lights; headlights and tail flames.
+    // Night on the quay, from behind: the karts drive away from us past the lighthouse and its beam, a crane and the town's
+    // lights, and what glows is their tail lamps and Juniper's flame (head on, the headlights were big white blobs on the road).
     at: 0.1768,
     boxes: false,
     focus: 4,
-    eye: { d: 33, off: -3.5, up: 0.45 },
-    target: { lm: "lighthouse", d: 0, off: 10, up: 14 },
+    eye: { d: 34, off: -3.5, up: 0.5 },
+    target: { lm: "lighthouse", d: 0, off: 10, up: 13 },
     fov: 58,
     roll: 3,
     karts: [
-      { id: 4, d: 26, off: 1.0, boost: 1.2, yaw: 0.35 },
-      { id: 0, d: 20, off: -3.6, yaw: -0.2 },
-      { id: 1, d: 15, off: 3.4 },
-      { id: 3, d: 9, off: -1.2 },
+      { id: 4, d: 21, off: 2.8, boost: 0.6, yaw: 3.4 },
+      { id: 0, d: 17, off: -3.2, yaw: 3.0 },
+      { id: 1, d: 12, off: 0.6, yaw: 3.2 },
+      { id: 3, d: 7, off: -1.8, yaw: 3.1 },
     ],
   },
   "canyon-run": {
@@ -125,7 +126,8 @@ const POSES = {
     ],
   },
   "glacier-pass": {
-    // Head-on under the ice arch on the frozen lake, the aurora above; Bun slides wide.
+    // The ice arch on the frozen lake, the aurora above, the karts driving away from us (a yaw of about pi turns each one
+    // round, so the camera sees tail lamps and flames; head on, their headlights were white blobs); Bun's flame trails.
     at: 0.1898,
     boxes: false,
     focus: 0,
@@ -134,11 +136,10 @@ const POSES = {
     fov: 60,
     roll: -3,
     karts: [
-      { id: 0, d: 27, off: -1.0, boost: 1.2, drift: "auto", yaw: -0.3 },
-      { id: 3, d: 21, off: 3.8 },
-      { id: 1, d: 15, off: -4.5 },
-      { id: 5, d: 10, off: 2.0 },
-      { id: 2, d: 5, off: -2 },
+      { id: 0, d: 25, off: -1.0, boost: 1.2, yaw: 3.4 },
+      { id: 3, d: 19, off: 3.8, yaw: 3.0 },
+      { id: 1, d: 13, off: -4.5, yaw: 3.2 },
+      { id: 5, d: 8, off: 2.0, yaw: 3.1 },
     ],
   },
   "volcano-rush": {
@@ -159,7 +160,8 @@ const POSES = {
     ],
   },
   "starlight-ribbon": {
-    // Head-on through a ring gate on a boost strip, the nebula behind, the ribbon glowing.
+    // Through a ring gate on a boost strip, the nebula behind, the ribbon glowing; the karts head for the gate with their
+    // backs to us (a yaw of about pi), so the glow is a tail flame, not a headlight blob.
     at: 0.1722,
     boxes: false,
     focus: 3,
@@ -168,10 +170,10 @@ const POSES = {
     fov: 60,
     roll: 3,
     karts: [
-      { id: 3, d: 23, off: 1.0, boost: 1.2, yaw: 0.35 },
-      { id: 0, d: 17, off: -4.0 },
-      { id: 1, d: 12, off: 4.0 },
-      { id: 5, d: 6, off: -1.2 },
+      { id: 3, d: 21, off: 1.0, boost: 1.2, yaw: 3.3 },
+      { id: 0, d: 15, off: -4.0, yaw: 3.0 },
+      { id: 1, d: 10, off: 4.0, yaw: 3.2 },
+      { id: 5, d: 4, off: -1.2, yaw: 3.1 },
     ],
   },
   "five-finger-circuit": {
