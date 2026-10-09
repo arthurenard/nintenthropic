@@ -90,8 +90,8 @@ export interface GripRenderer extends RaceRenderer {
   /** This renderer teaches the item (RaceRenderer's is optional). */
   setControls(kinds: Readonly<Record<number, ControlKind>>): void;
   stats(): RenderStats;
-  /** For looking at the whole world from anywhere (the dev page): replaces the first view's camera; null puts the chase camera back. */
-  setDebugCamera(pose: { x: number; y: number; z: number; lookX: number; lookY: number; lookZ: number; fov?: number } | null): void;
+  /** For looking at the whole world from anywhere (the dev page): replaces the first view's camera; null puts the chase camera back. `roll` (degrees; + lifts the horizon on the right) tilts the picture, for the postcards (shot.ts). */
+  setDebugCamera(pose: { x: number; y: number; z: number; lookX: number; lookY: number; lookZ: number; fov?: number; roll?: number } | null): void;
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -486,6 +486,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       debugCamera = new PerspectiveCamera(pose.fov ?? 60, 1, 0.5, 2600);
       debugCamera.position.set(pose.x, pose.y, pose.z);
       debugCamera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
+      if (pose.roll) debugCamera.rotateZ((-pose.roll * Math.PI) / 180);
     },
 
     stats(): RenderStats {

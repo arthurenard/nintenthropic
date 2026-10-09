@@ -14,6 +14,8 @@ stand-in (src/kart/render/art.ts loads what exists).
 | `karts.glb` | `art/kart/karts/` | `kart.body` (the whole fixed kart; material "paint" takes the racer's colour), `kart.wheel` (one, rear size, origin at its hub, axis x, outer face +x; the game scales it 0.84 for the front), `kart.steering` (ring in xy, origin at its hub). Material names the game reads: paint, trim, stripe, chrome, rim, steel, rubber, tread, plastic, seat, lamp, tail, glass (src/kart/render/kartArt.ts). AO is in the vertex colours | ≤ 12k tris, ≤ 0.6 MB |
 | `drivers.glb` | `art/kart/drivers/` | `driver.<species>.<part>` for the nine species: head, torso, arm.L, arm.R, helmet, and the bits that move on their own (tail, scarf, sac, bulb); each node's translation is its joint | ≤ 5k tris per driver, ≤ 1.5 MB |
 | `world-<theme>.glb` | `art/kart/world/` | `landmark.<kind>` (the doc's theme table), `scenery.<kind>.<n>` (trees, rocks...) | ≤ 3 MB each |
+| `poster.webp`, `title.webp`, `icon.png`, `icon-180.png` | `art/kart/poster/` | Key art for the home page's card, the title screen's background and the app icon: Blender Cycles renders of the game's own models (see "The key art") | poster 1600×900 ≤ 250 KB, title 2560×1440 ≤ 450 KB |
+| `tracks/<trackId>.webp` | `tools/kart-postcards.mjs` | The track picker's postcards, captured from the game's own renderer (see "The track postcards") | 960×540 ≤ 90 KB each |
 
 ## Rules for every model
 
@@ -81,3 +83,59 @@ landmarks. Things to know when changing them:
   `measureTrack` from `world/corridorProbe.ts` (the dev pages load it).
 - `gallery.html?theme=canyon&kind=mesa` shows a landmark and
   `kind=scenery:cactus` a kind of scenery, with the Blender art loaded.
+
+## The track postcards (`tools/kart-postcards.mjs`)
+
+The track picker's nine postcards (`public/assets/kart/tracks/<trackId>.webp`, 960x540, each at most 90 KB) are not
+Blender renders: they are the game's own renderer, so they show what you will drive. The dev page takes a posed still
+(`src/kart/render/dev.html?track=<id>&shot=<json>`, handled by `src/kart/render/shot.ts`: it freezes the demo, puts the
+karts where the pose says, hides the HUD and sets `window.__shotReady`), and the script has one table of poses, a
+camera (`eye`, `target`, `fov`, `roll`) written in the track's own frame (a landmark or a lap fraction, metres along,
+right and up) and where the karts stand, per track.
+
+    npx vite --port 5195 --host 127.0.0.1            # in another terminal; stop it when done
+    node tools/kart-postcards.mjs [trackId ...]      # all nine by default; --draft for quick PNGs to tune a pose
+
+Each card is drawn at 3x in quality high (2880x1620, muted, HUD hidden), brought down to 960x540 with Pillow's LANCZOS
+and encoded by `cwebp` at the highest quality that fits. The script says which karts and landmarks are in each frame.
+In a git worktree whose `node_modules` is a link, vite must be allowed to serve the real folder
+(`server.fs.allow`), or the Draco decoder is refused and the pictures would show the code-built stand-ins; the script
+stops when a model fails to load. `shot.ts` is imported by `dev.ts` only, so none of it reaches the game's bundle.
+
+## The key art (`art/kart/poster/`)
+
+The poster, the title screen's background and the app icon are Blender Cycles renders (Metal GPU, OpenImageDenoise,
+depth of field and real motion blur) made from nothing but the game's own files: the kart, the drivers and the meadow
+world are loaded from `public/assets/kart/{karts,drivers,world-meadow}.glb` and put together the way the game does it
+(`kit.py` follows `kartArt.ts`, `kartSpec.ts` and `drivers/index.ts`: the wheels at the spec's hubs with the front pair at
+0.84, the driver at the seat, the arms stretched to the wheel by the rig's own grip maths), with their materials rebuilt
+as Cycles shaders from the same material names. The road, the kerbs, the painted lines, the terrain with its mowing
+stripes, the clouds, the item boxes and the effects (flame, sparks, smoke, tyre marks) are modelled in the scripts.
+
+    B=/Applications/Blender.app/Contents/MacOS/Blender
+    $B -b --factory-startup -P art/kart/poster/build.py -- poster      # or: title, icon, all
+    python3 art/kart/poster/finish.py                                  # grade + encode into public/assets/kart/
+
+| File | What |
+| --- | --- |
+| `build.py` | The command line: `-- <shot>... [--samples N] [--scale S] [--preview] [--set key=value]`. Writes `build/<shot>.png` (git-ignored). `--preview` is a half-size, 32-sample look (1-2 s); a full render takes 5-15 s on the GPU |
+| `kit.py` | The game's frame to Blender's, the Cycles set-up (Khronos PBR Neutral view, so the game's saturated colours stay saturated), the glTF library, the materials, `build_kart` (kart + driver + wheels + steering, posed like the game's) |
+| `world.py` | The sky (the game's meadow gradient) and sun, the road swept along a spline (asphalt, kerbs, lines), the terrain, shader haze, the clouds, the item boxes, the game's scenery and landmarks |
+| `fx.py` | The boost flame (the game's three nested cones), sparks, drift smoke, tyre marks |
+| `shots.py` | The meadow stage and what every shot shares (the road's control points, the hills, the props scattered into the camera's view) |
+| `shot_poster.py`, `shot_title.py`, `shot_icon.py` | The three compositions. `shot_title.py` is the poster's builder with another cast, camera and a calm left side |
+| `finish.py` | Plain python3 (Pillow, numpy): saturation, a soft S-curve, bloom, the sun's glow, a breath of vignette and grain, then WebP at the highest quality that fits the size limit |
+
+Things to know when changing them:
+
+- The poster's cast and camera are a table at the top of `shot_poster.py` (`P`), the title's in `shot_title.py`
+  (`TITLE`): who drives which colour (`PLAYER_COLOURS`), where on the road, the camera's distance, angle and lens, the sun,
+  the clouds. A render prints where the hero, the pack and the sun land in the frame.
+- `VIEW="AgX" LOOK="AgX - Punchy"` in the environment swaps the colour transform for a try (the default, Khronos PBR
+  Neutral, keeps the kart's reds and the meadow's greens from washing out under the sun).
+- Everything is built from what the camera sees (`Visible`), so a render stays cheap. The title keeps its left 40% bare
+  (`calm_x`): no trees, no flowers, no kart there.
+- The portrait crop of the title (object-position about 70% 50%) keeps the hero in the middle; the top 8% and bottom 6%
+  hold nothing important.
+- The icon is full-bleed and square with no rounded corners; the kart sits inside the central ~72% so the OS's squircle
+  mask keeps it whole.
