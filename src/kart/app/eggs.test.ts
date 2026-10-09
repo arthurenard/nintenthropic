@@ -4,7 +4,7 @@ import { TRACKS } from "../track/tracks";
 import { enterKonami, foundDuck, isUnlocked, loadUnlocks, wonCup } from "../unlocks";
 import { CHARACTERS } from "../characters";
 import { CUPS } from "../track/tracks";
-import { KONAMI, KonamiDetector, PHOTO_GAP, duckTracks, konamiKey, padPresses, photoFinish, recordDuck, tricksFor, type KonamiKey } from "./eggs";
+import { KONAMI, KonamiDetector, PHOTO_GAP, duckTracks, konamiKey, padPresses, photoFinish, recordDuck, tipsFor, tricksFor, type KonamiKey } from "./eggs";
 
 /** A localStorage that lives in the test. */
 function storage(): void {
@@ -165,5 +165,19 @@ describe("the tricks", () => {
     expect(tricksFor("wheel")).toEqual(["Clap to honk.", "Raise both hands to cheer.", "Wave hello."]);
     expect(tricksFor("keyboard")[0]).toMatch(/H/);
     expect(tricksFor("gamepad")[0]).toMatch(/Y/);
+  });
+});
+
+describe("the tips while a race loads", () => {
+  it("teach a wheel player the four things their hands do", () => {
+    expect(tipsFor("wheel")).toEqual(["Open both hands to brake.", "Flick one hand to use an item.", "Hop to drift.", "Clap to honk."]);
+    // A device with no controls of its own (a screen that only shows) is told the hands' way.
+    expect(tipsFor(null)).toEqual(tipsFor("wheel"));
+  });
+
+  it("speak in keys to the keyboard and in buttons to the pad", () => {
+    expect(tipsFor("keyboard").join(" ")).toMatch(/Space/);
+    expect(tipsFor("gamepad").join(" ")).toMatch(/trigger/);
+    for (const kind of ["wheel", "keyboard", "gamepad"] as const) expect(tipsFor(kind).length).toBeGreaterThanOrEqual(3);
   });
 });

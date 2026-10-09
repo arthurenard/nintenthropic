@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LobbyPlayer, LobbyState, RaceResult, RacerSetup } from "../contract";
-import { canStart, hostName, kartOf, localPlayers, screenLabel, standingRows, waitingLine } from "./roster";
+import { canStart, hostName, kartOf, localPlayers, previewColours, screenLabel, standingRows, waitingLine } from "./roster";
 
 const player = (slot: number, name: string, device: string, extra: Partial<LobbyPlayer> = {}): LobbyPlayer => ({
   slot,
@@ -105,5 +105,26 @@ describe("the standings", () => {
     const rows = standingRows(result, [], room, "host");
     expect(rows.map((r) => r.name)).toEqual(["Racer 2", "Maya", "Sam"]);
     expect(rows[0]!.bot).toBe(true);
+  });
+});
+
+describe("the colours a device is about to be given", () => {
+  const room = [player(0, "Maya", "host"), player(2, "Ada", "phone")];
+
+  it("start with red for the first one into an empty room", () => {
+    expect(previewColours([], "me", 1)).toEqual(["#FF453A"]);
+  });
+
+  it("are the lowest slots nobody else has, in order", () => {
+    // Slots 0 and 2 are taken by other devices: this one gets 1, then 3.
+    expect(previewColours(room, "me", 2)).toEqual(["#0A84FF", "#FFD60A"]);
+  });
+
+  it("do not count this device's own players as taken (it is coming back to choose again)", () => {
+    expect(previewColours([player(0, "Maya", "me"), player(1, "Finn", "me")], "me", 2)).toEqual(["#FF453A", "#0A84FF"]);
+  });
+
+  it("never run out, whatever the room says", () => {
+    expect(previewColours(room, "me", 4)).toHaveLength(4);
   });
 });

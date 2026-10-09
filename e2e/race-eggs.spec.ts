@@ -5,9 +5,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { duckSpot } from "../src/kart/sim/eggs";
 import { planFor } from "../src/kart/sim/plan";
-import { MEADOW_LOOP } from "../src/kart/track/tracks";
+import { MEADOW_LOOP, TRACKS } from "../src/kart/track/tracks";
 import { shot } from "./helpers";
-import { open, state } from "./kart";
+import { chooseDrivers, open, state } from "./kart";
 
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
@@ -30,6 +30,7 @@ async function practiceRace(page: Page, laps = "1") {
   await expect(page.getByRole("heading", { name: /Driving/ })).toBeVisible();
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
   await page.getByRole("radio", { name: laps, exact: true }).click();
   await page.getByRole("button", { name: "Start Race" }).click();
@@ -100,6 +101,7 @@ test("a wheel player claps to honk, raises both hands to cheer, and waves hello"
   await open(page, "&input=script");
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
   await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await page.getByRole("button", { name: "Start Race" }).click();
@@ -211,5 +213,97 @@ test("driving up to the duck tells you, in your own viewport, and it is kept", a
   await expect(toast).toHaveText("Duck found! 1 of 9");
   await shot(page, info, "eggs-duck-found", 100);
   expect((await unlocks(page))?.ducks).toEqual(["meadow-loop"]);
+  expect(errors).toEqual([]);
+});
+
+test("the driver stage: arrows choose and Return goes on; Dabble is a locked silhouette until every duck is found; the Golden Kart comes with the Konami code", async ({ page, context }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const toStage = async (p: Page) => {
+    await open(p);
+    await p.getByRole("button", { name: "Practice" }).click();
+    await p.getByRole("radio", { name: "Keyboard" }).click();
+    await p.getByRole("button", { name: "Continue" }).click();
+    await expect(p.getByRole("heading", { name: "Choose Your Driver" })).toBeVisible();
+  };
+  await toStage(page);
+  const dock = page.getByRole("radiogroup", { name: "Drivers" });
+  await expect(dock.getByRole("radio")).toHaveCount(9);
+  // Nothing found yet: no golden kart, and the ninth is a silhouette that says how to find it.
+  await expect(page.locator("#driver-golden")).toBeHidden();
+  const dabble = dock.getByRole("radio", { name: /^Locked/ });
+  await expect(dabble).toContainText("Find every duck");
+  await dock.getByRole("radio", { name: /^Bun/ }).click();
+  await expect(page.locator("#driver-name")).toHaveText("Bun");
+  await expect(page.locator("#driver-class")).toHaveText("Lightweight");
+  await expect(page.locator("#driver-stats .stat")).toHaveCount(4);
+  // Arrows move through the nine and stop at the ends; the locked one is looked at, never chosen.
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#driver-name")).toHaveText("Pepper");
+  await expect(dock.getByRole("radio", { name: /^Pepper/ })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#driver-name")).toHaveText("Bun");
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#driver-name")).toHaveText("Rivet");
+  await dabble.click({ force: true });
+  await expect(page.locator("#driver-name")).toHaveText("???");
+  await expect(page.locator("#driver-blurb")).toContainText("Find every duck");
+  await expect(page.locator("#driver-stats")).toBeHidden();
+  await expect(dock.getByRole("radio", { name: /^Rivet/ })).toHaveAttribute("aria-checked", "true");
+  await shot(page, info, "eggs-driver-locked", 700);
+  // Return goes on, with the driver that is chosen (Rivet).
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
+  expect((await state(page)).lobby!.players[0]!.character).toBe("rivet");
+
+  // Every duck found, and the Konami code entered: Dabble can be driven, in a golden kart.
+  const other = await context.newPage();
+  await other.addInitScript((ducks) => {
+    localStorage.setItem("handy.muted.v1", "true");
+    localStorage.setItem("grip-prix.unlocks", JSON.stringify({ ducks, cups: [], konami: true }));
+  }, TRACKS.filter((track) => track.duck).map((track) => track.id));
+  await toStage(other);
+  const dockTwo = other.getByRole("radiogroup", { name: "Drivers" });
+  await expect(dockTwo.getByRole("radio", { name: /^Locked/ })).toHaveCount(0);
+  await dockTwo.getByRole("radio", { name: /^Dabble/ }).click();
+  await expect(other.locator("#driver-name")).toHaveText("Dabble");
+  await expect(other.locator("#driver-golden")).toBeVisible();
+  const golden = other.getByRole("switch", { name: "Golden Kart" });
+  await expect(golden).toHaveAttribute("aria-checked", "false");
+  await golden.click();
+  await expect(golden).toHaveAttribute("aria-checked", "true");
+  await shot(other, info, "eggs-driver-dabble-golden", 700);
+  await other.getByRole("button", { name: "Continue" }).click();
+  await expect(other.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
+  const me = (await state(other)).lobby!.players[0]!;
+  expect([me.character, me.golden]).toEqual(["dabble", true]);
+  expect(errors).toEqual([]);
+});
+
+test("the driver stage is live 3D where the page can draw it, and turns when it is dragged", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await open(page, "&stage=3d");
+  await page.getByRole("button", { name: "Practice" }).click();
+  await page.getByRole("radio", { name: "Keyboard" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  const stage = page.locator("#driver-stage");
+  await expect(stage).toHaveAttribute("data-stage", "3d", { timeout: 30_000 });
+  await expect(stage).toHaveClass(/live/);
+  const canvas = stage.locator("canvas.stage-canvas");
+  await expect(canvas).toBeVisible();
+  const box = (await canvas.boundingBox())!;
+  expect(box.width).toBeGreaterThan(200);
+  expect(box.height).toBeGreaterThan(200);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await shot(page, info, "eggs-driver-3d", 600);
+  // The stage goes with the screen: its canvas is let go of.
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
+  await expect(page.locator("canvas.stage-canvas")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

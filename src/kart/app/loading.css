@@ -1,0 +1,144 @@
+/* The loading screen: the track's postcard, blurred and darkened, fills the window; its name is big, the
+   progress is a thin bar, and a tip about the hands changes at the foot. */
+
+.race-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #0b2a66;
+  color: #fff;
+  animation: fade-in 300ms var(--ease) backwards;
+}
+.loading-art {
+  position: absolute;
+  inset: -6%;
+  filter: blur(20px) brightness(0.52) saturate(1.2);
+  transform: scale(1.05);
+}
+.loading-outline,
+.loading-outline svg,
+#loading-postcard {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.loading-outline svg {
+  stroke-width: initial;
+}
+#loading-postcard {
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 700ms var(--ease);
+}
+#loading-postcard.ready {
+  opacity: 1;
+}
+/* A scrim at the foot for the tip, and a soft vignette. */
+.race-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(2, 10, 30, 0) 30%, rgba(2, 10, 30, 0.5) 100%),
+    linear-gradient(0deg, rgba(2, 10, 30, 0.5), rgba(2, 10, 30, 0) 34%);
+  pointer-events: none;
+}
+.loading-card {
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: min(620px, calc(100% - 2 * var(--margin)));
+  text-align: center;
+  text-shadow: 0 2px 30px rgba(2, 10, 30, 0.55);
+  animation: rise 700ms var(--pop) 80ms backwards;
+}
+.loading-card .eyebrow {
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.08em;
+}
+.loading-track {
+  margin: 0;
+  font-size: clamp(42px, 8vw, 92px);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.progress {
+  width: min(360px, 100%);
+  height: 6px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.progress span {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.65);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 300ms var(--pop);
+}
+.loading-status {
+  font-size: 15px;
+  font-weight: 550;
+  color: rgba(255, 255, 255, 0.84);
+}
+.loading-tip {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: max(36px, calc(env(safe-area-inset-bottom) + 24px));
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 2 * var(--margin));
+  min-height: 44px;
+  padding: 10px 20px 10px 16px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: rgba(10, 26, 62, 0.46);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  text-shadow: none;
+  transform: translateX(-50%);
+  transition:
+    opacity 260ms var(--ease),
+    transform 360ms var(--pop);
+}
+.loading-tip:empty {
+  display: none;
+}
+.loading-tip svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.loading-tip.out {
+  opacity: 0;
+  transform: translateX(-50%) translateY(6px);
+}
+
+:root[data-reduce-motion] {
+  .loading-card {
+    animation: fade-in 250ms var(--ease) backwards;
+  }
+  .loading-tip.out {
+    transform: translateX(-50%);
+  }
+}

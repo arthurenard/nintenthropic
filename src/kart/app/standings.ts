@@ -84,7 +84,7 @@ export class StandingsScreen {
 
     const mine = new Set(localPlayers(lobby, session.device).map((player) => player.slot));
     const rows = gp.points.map((row, i) => ({ row, now: i + 1, was: row.was ?? i + 1, before: row.points - (row.gain ?? 0) }));
-    const items = rows.map(({ row }) => this.item(row, mine));
+    const items = rows.map(({ row }, index) => this.item(row, mine, index));
     const start = [...rows].sort((a, b) => a.was - b.was || a.now - b.now);
     const byRow = new Map(rows.map((r, i) => [r, items[i]!]));
     const calm = document.documentElement.hasAttribute("data-reduce-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -96,6 +96,8 @@ export class StandingsScreen {
         setText(li.querySelector(".st-rank")!, String(rank(r)));
         setText(li.querySelector(".st-total")!, String(total(r)));
         li.classList.toggle("leader", rank(r) === 1);
+        // The top three wear a medal's colour.
+        li.dataset.rank = String(rank(r));
       }
     };
     const finish = () => {
@@ -107,6 +109,9 @@ export class StandingsScreen {
     };
     focusHeading($("gp-title"));
     this.list.classList.remove("gains", "moves");
+    // The rows rise one after the other the first moment they are there; once they have, the sliding of the count-up must not start them again.
+    this.list.classList.add("entering");
+    this.later(1100, () => this.list.classList.remove("entering"));
     if (calm) return finish();
 
     // Where they stood, with the points they had.
@@ -135,10 +140,11 @@ export class StandingsScreen {
   }
 
   /** One row of the table. */
-  private item(row: Row, mine: ReadonlySet<number>): HTMLLIElement {
+  private item(row: Row, mine: ReadonlySet<number>, index: number): HTMLLIElement {
     // The people at the table stand out from the bots: a stripe in their colour, and the ones on this screen lit.
     const li = element("li", `st-row${row.player !== null ? " human" : ""}${row.player !== null && mine.has(row.player) ? " mine" : ""}`);
     li.style.setProperty("--colour", row.colour);
+    li.style.setProperty("--i", String(index));
     const name = element("span", "st-name");
     name.append(colourDot(row.colour), element("span", "st-driver", row.name));
     if (row.player !== null && mine.has(row.player)) name.append(element("span", "player-tag", "You"));

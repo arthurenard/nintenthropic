@@ -1,8 +1,13 @@
 /**
- * The start screen: Grip Prix's title over its meadow, and three ways in -
+ * The start screen: Grip Prix's title over its key art, and three ways in -
  * open a race of your own, join a friend's with its four-letter code, or
  * practise alone. The code field turns whatever is typed (or pasted) into
  * capitals, letters only, four at most.
+ *
+ * The key art (assets/kart/title.webp) is fetched after the page is up, and
+ * not at all by a phone that came with a link to join (it is on its way to a
+ * room, and the art is the heaviest thing here); until it is drawn, or where
+ * it never comes, the page's own meadow and road are the picture.
  */
 import { $, replay, toast } from "../../ui/dom";
 import { enterKonami } from "../unlocks";
@@ -19,6 +24,20 @@ export interface StartHooks {
 
 export type StartChoice = "host" | "join" | "practice";
 
+/** The key art: 2560 x 1440, the action on the right and the left calm. */
+export const TITLE_ART = "assets/kart/title.webp";
+
+/** A button's words: the span inside it when it has an icon beside them. */
+const label = (button: HTMLElement, text: string) => {
+  const span = button.querySelector("span");
+  (span ?? button).textContent = text;
+};
+
+export interface StartOptions {
+  /** Fetch the key art. False for a phone arriving with a link to join. */
+  art?: boolean;
+}
+
 export class StartScreen {
   private readonly host = $<HTMLButtonElement>("start-host");
   private readonly practice = $<HTMLButtonElement>("start-practice");
@@ -28,7 +47,8 @@ export class StartScreen {
   private readonly code = new KonamiDetector();
   private readonly padDown = new Set<KonamiKey>();
 
-  constructor(hooks: StartHooks) {
+  constructor(hooks: StartHooks, options: StartOptions = {}) {
+    if (options.art !== false) this.drawArt();
     this.host.addEventListener("click", () => hooks.host());
     this.practice.addEventListener("click", () => hooks.practice());
     this.field.addEventListener("input", () => {
@@ -42,6 +62,22 @@ export class StartScreen {
       if (!this.busy && isCode(this.field.value)) hooks.join(this.field.value);
     });
     this.watchForTheCode(hooks);
+  }
+
+  /** The key art, once the page has had its first paint and the browser has a moment: it fades in over the drawn meadow. */
+  private drawArt(): void {
+    const image = $<HTMLImageElement>("start-art");
+    const fetch = () => {
+      image.addEventListener("load", () => {
+        image.hidden = false;
+        // A frame shown at no opacity first lets the fade run.
+        requestAnimationFrame(() => image.classList.add("ready"));
+      });
+      image.addEventListener("error", () => image.remove());
+      image.src = TITLE_ART;
+    };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(fetch, { timeout: 1500 });
+    else window.setTimeout(fetch, 300);
   }
 
   // --- the Konami code -----------------------------------------------------------------------------------
@@ -88,7 +124,7 @@ export class StartScreen {
   setBusy(choice: StartChoice | null): void {
     this.busy = choice !== null;
     this.host.disabled = this.practice.disabled = this.field.disabled = this.busy;
-    this.host.textContent = choice === "host" ? "Opening…" : "Host a Race";
+    label(this.host, choice === "host" ? "Opening…" : "Host a Race");
     this.go.textContent = choice === "join" ? "Joining…" : "Join a Race";
     this.sync();
   }

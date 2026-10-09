@@ -1,0 +1,460 @@
+/* Grip Prix's menus: one light, one material, one set of motions. Every screen
+   but the race and the podium stands on the same sky (the page's own light,
+   deepened so white words keep their contrast); the controls sit on frosted
+   glass over it. The race, the HUD and the wheel check's pictures are in
+   race.css; each menu screen has its own file (title, driver, lobby, results). */
+
+:root {
+  /* The sky the menus stand on, top to foot; the sun's warmth comes in from the top right. */
+  --sky-0: #1649a8;
+  --sky-1: #2468cc;
+  --sky-2: #4a98e4;
+  --sky-3: #8cc6f2;
+  /* The material: dark, blue-tinted glass, a hairline and a highlight along its top edge. */
+  --glass-fill: rgba(10, 26, 62, 0.46);
+  --glass-line: rgba(255, 255, 255, 0.16);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --glass-drop: 0 18px 48px rgba(4, 16, 44, 0.32), 0 2px 8px rgba(4, 16, 44, 0.22);
+  --glass-blur: blur(24px) saturate(180%);
+  /* Motion: springy, purposeful, 250 to 500 ms. */
+  --pop: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --medal-gold: #ffd60a;
+  --medal-silver: #d4dbe6;
+  --medal-bronze: #e39a5c;
+  /* The kart colour of whoever is in front of the screen (driver.ts sets it); white until then. */
+  --seat: #ffffff;
+}
+
+/* --- the sky -------------------------------------------------------------------------------------- */
+
+/* The sky is painted behind the page's content but over the root: the body's own black must let it through. */
+body {
+  background: transparent;
+}
+.menu-sky {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 52% at 88% -6%, rgba(255, 238, 176, 0.6), rgba(255, 238, 176, 0) 72%),
+    linear-gradient(180deg, var(--sky-0) 0%, var(--sky-1) 34%, var(--sky-2) 72%, var(--sky-3) 100%);
+}
+body[data-screen="start"] .menu-sky,
+body[data-screen="race"] .menu-sky,
+body[data-screen="podium"] .menu-sky {
+  display: none;
+}
+/* The foot of the sky settles into a deeper blue, so white words keep their contrast wherever they stand (4.5 to 1 and better). */
+.menu-sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 26, 78, 0) 30%, rgba(6, 26, 78, 0.62) 100%);
+}
+.menu-cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+  animation: cloud-drift 120s linear infinite alternate;
+}
+.menu-cloud.m1 {
+  top: 14%;
+  left: -6%;
+  width: 46vw;
+  height: 11vw;
+}
+.menu-cloud.m2 {
+  top: 54%;
+  right: -10%;
+  width: 56vw;
+  height: 12vw;
+  opacity: 0.7;
+  animation-duration: 160s;
+  animation-direction: alternate-reverse;
+}
+@keyframes cloud-drift {
+  to {
+    transform: translateX(14vw);
+  }
+}
+
+/* --- the material -------------------------------------------------------------------------------------- */
+
+body:not([data-screen="race"]) .glass {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+}
+
+/* --- pages ---------------------------------------------------------------------------------------------- */
+
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  isolation: isolate;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: calc(68px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) var(--margin) 0;
+}
+.button.back {
+  min-height: 44px;
+  padding: 0 18px 0 10px;
+  gap: 2px;
+  font-size: 15px;
+  color: #fff;
+}
+.button.back svg {
+  margin-left: 0;
+  width: 20px;
+  height: 20px;
+}
+.button.back:hover:not(:disabled) {
+  background: rgba(10, 26, 62, 0.64);
+}
+.page-head {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.page-head.center {
+  justify-items: center;
+  text-align: center;
+}
+.page-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+.eyebrow {
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 1px 12px rgba(4, 16, 44, 0.35);
+}
+/* Big, tight, heavy: the title of a screen. */
+.display {
+  margin: 0;
+  font-size: clamp(34px, 4.6vw, 56px);
+  line-height: 1.04;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 24px rgba(4, 16, 44, 0.32);
+}
+.section-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.group-foot {
+  color: rgba(255, 255, 255, 0.78);
+}
+.group-foot:empty {
+  display: none;
+}
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* Springy entrance for what a screen is made of: each child rises a little after the one before. */
+.rise > * {
+  animation: rise 520ms var(--pop) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms + 60ms);
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* --- fields --------------------------------------------------------------------------------------------- */
+
+.field-label,
+.control-label {
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.82);
+}
+.field-foot {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.76);
+}
+.field-foot:empty {
+  display: none;
+}
+.name-input {
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: 600 22px/1 var(--font);
+  letter-spacing: -0.01em;
+  transition:
+    background-color 250ms var(--pop),
+    border-color 250ms var(--pop),
+    box-shadow 250ms var(--pop);
+}
+.name-input.small {
+  height: 48px;
+  font-size: 18px;
+}
+.name-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+.name-input:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.name-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+}
+
+/* Segmented controls on glass: the thumb stays white, the track lets the glass show. */
+body:not([data-screen="race"]) .segmented {
+  background: rgba(255, 255, 255, 0.14);
+}
+.segmented.big {
+  display: grid;
+  width: 100%;
+  padding: 3px;
+}
+.segmented.big::before {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--count));
+}
+.segmented.big [role="radio"] {
+  height: 44px;
+  font-size: 17px;
+}
+.segmented [role="radio"]:disabled {
+  cursor: default;
+}
+.segmented[aria-disabled="true"] {
+  opacity: 0.74;
+}
+.switch:disabled {
+  cursor: default;
+  opacity: 0.74;
+}
+
+/* The designed focus ring: white, with a halo of the sky's own blue. */
+:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+.button:focus-visible,
+.icon-button:focus-visible,
+.switch:focus-visible,
+.back-link:focus-visible {
+  box-shadow: 0 0 0 7px rgba(10, 132, 255, 0.55);
+}
+.name-input:focus-visible {
+  outline: none;
+}
+
+/* --- you ---------------------------------------------------------------------------------------------- */
+
+.you-inner,
+.check-inner {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--margin) calc(var(--margin) + env(safe-area-inset-bottom));
+}
+.you-inner {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  max-width: calc(600px + 2 * var(--margin));
+  animation: rise 520ms var(--pop) backwards;
+}
+.you-card {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+  border-radius: 28px;
+}
+.you-field {
+  display: grid;
+  gap: 8px;
+}
+.you-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.you-line .field-label {
+  white-space: nowrap;
+}
+.drive-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.drive-tiles [role="radio"] {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  min-height: 108px;
+  padding: 14px 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 250ms var(--pop),
+    color 250ms var(--pop),
+    transform 350ms var(--pop),
+    box-shadow 250ms var(--pop);
+  -webkit-tap-highlight-color: transparent;
+}
+.drive-tiles [role="radio"]:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.drive-tiles [role="radio"]:active {
+  transform: scale(0.97);
+}
+.drive-tiles svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 6px;
+  stroke-width: 1.6;
+}
+.drive-tiles b {
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 650;
+}
+.drive-tiles small {
+  font-size: 12px;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.72);
+  transition: color 250ms var(--pop);
+}
+.drive-tiles [role="radio"][aria-checked="true"] {
+  background: #fff;
+  color: #05153a;
+  box-shadow:
+    0 12px 28px rgba(4, 16, 44, 0.3),
+    0 2px 6px rgba(4, 16, 44, 0.2);
+  transform: translateY(-2px);
+}
+.drive-tiles [role="radio"][aria-checked="true"] small {
+  color: rgba(5, 21, 58, 0.62);
+}
+.mate-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+.mate-field {
+  display: grid;
+  gap: 6px;
+}
+.mate-field[hidden] {
+  display: none;
+}
+
+/* --- the wheel check, on the same sky ------------------------------------------------------------------- */
+
+.check-inner {
+  text-shadow: 0 1px 14px rgba(4, 16, 44, 0.35);
+}
+.check-words .secondary,
+.check .tricks,
+.check .tricks .eyebrow {
+  color: rgba(255, 255, 255, 0.8);
+}
+.check .steps li {
+  background: rgba(255, 255, 255, 0.28);
+}
+.check .steps li.now {
+  background: rgba(255, 255, 255, 0.7);
+}
+.check .steps li.done {
+  background: #fff;
+}
+.check .wheel-view {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 24px 60px rgba(4, 16, 44, 0.45);
+}
+.check .check-chip {
+  background: rgba(10, 26, 62, 0.5);
+}
+
+/* --- sheets: the same glass --------------------------------------------------------------------------- */
+
+.sheet {
+  border-color: var(--glass-line);
+  border-radius: 28px;
+  background: rgba(14, 30, 66, 0.72);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow:
+    var(--glass-hi),
+    0 30px 80px rgba(2, 10, 30, 0.5);
+}
+.sheet::backdrop {
+  background: rgba(4, 14, 40, 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.alert-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.alert-icon svg {
+  width: 30px;
+  height: 30px;
+}
+.alert-icon.danger {
+  color: #ff6a5f;
+}
+.alert .title2 {
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+/* --- reduced motion ------------------------------------------------------------------------------------- */
+
+:root[data-reduce-motion] {
+  .menu-cloud {
+    animation: none;
+  }
+  .rise > *,
+  .you-inner {
+    animation: fade-in 250ms var(--ease) backwards;
+  }
+}

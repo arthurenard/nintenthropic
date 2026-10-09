@@ -1,0 +1,440 @@
+/* The title: full-bleed key art (assets/kart/title.webp: action on the right, the left calm) with a slow
+   drift, the wordmark, and a glass menu on the left. Until the art is drawn (or where it is not fetched:
+   a phone arriving by a link has a room to join, not time to look), the page's own meadow and road stand in. */
+
+.start {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--margin);
+  padding-left: max(var(--margin), env(safe-area-inset-left));
+  overflow: hidden;
+  background: var(--meadow);
+  isolation: isolate;
+}
+.start-world {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.start-fallback {
+  position: absolute;
+  inset: 0;
+  background: var(--meadow);
+}
+.start-glow {
+  position: absolute;
+  inset: 0;
+  background: var(--glow);
+}
+/* A tall window: the sun keeps its round shape instead of stretching into a streak. */
+@media (max-aspect-ratio: 4 / 5) {
+  .start-glow {
+    bottom: auto;
+    height: 130vw;
+  }
+}
+/* Hills stand on the horizon, which the meadow's light puts at 62% (their feet melt into the grass);
+   the road runs from there to the viewer in perspective, its kerbs striped red and white, towards the right. */
+.start-hills {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  top: 63%;
+  height: clamp(110px, 24vh, 240px);
+  transform: translateY(-100%);
+}
+.start-road {
+  position: absolute;
+  left: 14%;
+  top: 62.6%;
+  width: 118%;
+  height: 37.4%;
+}
+/* The page's line icons are stroked (base.css); the scenery is filled shapes. */
+.start-fallback path {
+  stroke: none;
+}
+.road-base,
+.road-kerb-white {
+  fill: #f6f7f9;
+}
+.road-kerb-red {
+  fill: var(--danger);
+}
+.road-asphalt {
+  fill: url(#road-fade);
+}
+.road-line {
+  fill: rgba(255, 255, 255, 0.9);
+}
+.cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+}
+.cloud.c1 {
+  left: 30%;
+  top: 10%;
+  width: 28vw;
+  height: 7vw;
+}
+.cloud.c2 {
+  left: 56%;
+  top: 5%;
+  width: 22vw;
+  height: 5vw;
+  opacity: 0.8;
+}
+.cloud.c3 {
+  right: 2%;
+  top: 30%;
+  width: 24vw;
+  height: 6vw;
+  opacity: 0.7;
+}
+
+/* The art: it fades in once drawn, and drifts, very slowly, as if the camera were still moving. */
+.start-art {
+  position: absolute;
+  top: -3%;
+  left: -3%;
+  width: 106%;
+  height: 106%;
+  object-fit: cover;
+  object-position: 68% 50%;
+  opacity: 0;
+  transition: opacity 1100ms var(--pop);
+  animation: title-drift 42s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.start-art.ready {
+  opacity: 1;
+}
+@keyframes title-drift {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.08) translate3d(-1.6%, -0.9%, 0);
+  }
+}
+/* A scrim on the calm side and at the foot, so white words keep their contrast over any art. */
+.start-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(5, 22, 66, 0.5) 0%, rgba(5, 22, 66, 0.24) 32%, rgba(5, 22, 66, 0) 60%),
+    linear-gradient(0deg, rgba(5, 22, 66, 0.32) 0%, rgba(5, 22, 66, 0) 30%);
+}
+
+/* The back link: a glass pill. */
+.back-link {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(var(--margin), env(safe-area-inset-left));
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 18px 0 8px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 250ms var(--pop),
+    transform 250ms var(--pop);
+}
+.back-link:hover {
+  background: rgba(10, 26, 62, 0.64);
+}
+.back-link:active {
+  transform: scale(0.97);
+}
+.back-link svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- the words and the menu -------------------------------------------------------------------------- */
+
+.start-main {
+  display: grid;
+  gap: 28px;
+  justify-items: start;
+  width: min(460px, 100%);
+  margin-left: clamp(0px, 6vw, 96px);
+  padding-top: 28px;
+  color: #fff;
+  text-shadow: 0 2px 28px rgba(5, 22, 66, 0.45);
+}
+.start-brand {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  animation: rise 700ms var(--pop) backwards;
+}
+.gp-mark {
+  position: relative;
+  margin: 0;
+  font-size: clamp(54px, 8.2vw, 124px);
+  line-height: 0.92;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+  text-wrap: nowrap;
+  color: #fff;
+  /* A slab of the sky's deeper blue under the letters: the wordmark stands on the page. */
+  text-shadow:
+    0 0.045em 0 rgba(10, 46, 124, 0.6),
+    0 0.09em 0 rgba(10, 46, 124, 0.28),
+    0 0.2em 0.5em rgba(5, 22, 66, 0.4);
+}
+.gp-prix {
+  /* The second word leans in a little further, as if it had the speed. */
+  display: inline-block;
+  margin-left: 0.04em;
+}
+.gp-speed {
+  position: absolute;
+  top: 0.36em;
+  left: -0.78em;
+  width: 0.7em;
+  height: auto;
+  font-size: clamp(54px, 8.2vw, 124px);
+  fill: none;
+  stroke: #fff;
+  stroke-width: 6.5;
+  stroke-linecap: round;
+  opacity: 0.78;
+  filter: drop-shadow(0 2px 8px rgba(5, 22, 66, 0.4));
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%);
+  mask-image: linear-gradient(90deg, transparent, #000 70%);
+}
+.gp-flag {
+  display: block;
+  width: 100%;
+  height: 18px;
+  margin: 2px 0 0;
+  transform: skewX(-18deg);
+  transform-origin: left bottom;
+  border-radius: 3px;
+  background: conic-gradient(#fff 25%, #0b1f4d 0 50%, #fff 0 75%, #0b1f4d 0) 0 0 / 18px 18px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 10px 26px rgba(5, 22, 66, 0.4);
+}
+.start-tag {
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.95);
+}
+.start-menu {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 28px;
+  text-shadow: none;
+  animation: rise 700ms var(--pop) 120ms backwards;
+}
+.start-menu .button.large {
+  min-height: 56px;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+.start-menu .button svg {
+  margin-left: 0;
+  width: 22px;
+  height: 22px;
+}
+.start-menu .button.secondary {
+  background: rgba(255, 255, 255, 0.14);
+}
+.start-menu .button.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+.start-menu .button.primary {
+  box-shadow: 0 10px 28px rgba(5, 22, 66, 0.3);
+}
+
+/* Join: a capsule with the code field and its button in one. The button is quiet until there are four letters. */
+.join-capsule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 56px;
+  padding: 4px 4px 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition:
+    background-color 250ms var(--pop),
+    border-color 250ms var(--pop),
+    box-shadow 250ms var(--pop);
+}
+.join-capsule:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.join-capsule:focus-within {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.16);
+}
+.code-field {
+  min-width: 0;
+  height: 46px;
+  padding: 0 0 0 calc(18px + 0.3em);
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: 750 22px/46px var(--font);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+.code-field:focus {
+  outline: none;
+}
+.code-field::placeholder {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.58);
+}
+.code-field:disabled {
+  opacity: 0.5;
+}
+.join-go {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: default;
+  transition:
+    background-color 300ms var(--pop),
+    color 300ms var(--pop),
+    transform 300ms var(--pop);
+  -webkit-tap-highlight-color: transparent;
+}
+.join-go:not(:disabled) {
+  background: #fff;
+  color: #05153a;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(5, 22, 66, 0.3);
+}
+.join-go:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.88);
+}
+.join-go:not(:disabled):active {
+  transform: scale(0.97);
+}
+.start-foot {
+  max-width: 34em;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.86);
+  animation: rise 700ms var(--pop) 240ms backwards;
+}
+
+/* A phone, upright: the name at the top, the menu in thumb's reach at the bottom. */
+@media (max-width: 700px) {
+  .start {
+    align-items: stretch;
+    padding-top: calc(72px + env(safe-area-inset-top));
+    padding-bottom: calc(var(--margin) + env(safe-area-inset-bottom));
+  }
+  .start-art {
+    object-position: 74% 50%;
+  }
+  .start-scrim {
+    background:
+      linear-gradient(180deg, rgba(5, 22, 66, 0.5) 0%, rgba(5, 22, 66, 0.16) 34%, rgba(5, 22, 66, 0) 52%),
+      linear-gradient(0deg, rgba(5, 22, 66, 0.62) 0%, rgba(5, 22, 66, 0) 44%);
+  }
+  .start-main {
+    grid-template-rows: auto 1fr auto auto;
+    align-content: stretch;
+    width: 100%;
+    margin-left: 0;
+    padding-top: 0;
+    gap: 14px;
+  }
+  .start-main .start-brand {
+    margin-top: 2vh;
+  }
+  .start-menu {
+    grid-row: 3;
+  }
+  .start-foot {
+    grid-row: 4;
+    text-align: center;
+    justify-self: center;
+  }
+  .gp-speed {
+    display: none;
+  }
+}
+/* A short window (a phone on its side): the menu goes beside the name. */
+@media (max-height: 520px) {
+  .start-main {
+    padding-top: 0;
+    gap: 12px;
+  }
+  .gp-mark {
+    font-size: 48px;
+  }
+  .start-tag {
+    font-size: 16px;
+  }
+  .start-menu {
+    grid-template-columns: 1fr 1fr;
+    padding: 10px;
+    gap: 8px;
+  }
+  .join-capsule {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .start-menu .button.large {
+    min-height: 48px;
+  }
+  .start-foot {
+    display: none;
+  }
+}
+
+:root[data-reduce-motion] {
+  .start-art {
+    animation: none;
+  }
+  .start-brand,
+  .start-menu,
+  .start-foot {
+    animation: fade-in 250ms var(--ease) backwards;
+  }
+}

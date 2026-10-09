@@ -13,7 +13,9 @@
  */
 import type { HandFrame, HandSource } from "../../tracking/types";
 import { handFrame, wheelHands, type SynthHand, type WheelPose } from "../input/testHands";
+import type { LobbyState } from "../contract";
 import type { KartApp, KartAppSnapshot } from "./app";
+import { LoadingScreen, raceWords } from "./loading";
 import type { StandIn } from "./services.real";
 import { CameraFailure, type CameraService, type CameraTrouble } from "./services";
 
@@ -118,6 +120,10 @@ export interface GripTest {
   readonly running: boolean;
   /** What the page shows and how the race stands. */
   state(): KartAppSnapshot | null;
+  /** Puts up a screen that comes after a race, with this room (to look at it: no race is run). */
+  preview(screen: "results" | "standings" | "podium", lobby: LobbyState): void;
+  /** Puts up the loading screen of the race this room would run, at this far (to look at it). */
+  loading(lobby: LobbyState, fraction: number): void;
 }
 
 let app: KartApp | null = null;
@@ -139,6 +145,15 @@ function makeTest(wheel: ScriptedWheel | null): GripTest {
       return wheel?.running ?? false;
     },
     state: () => app?.snapshot() ?? null,
+    preview: (screen, lobby) => app?.preview(screen, lobby),
+    loading(lobby, fraction) {
+      // The race screen as the page shows it, with only its loading overlay up.
+      for (const section of document.querySelectorAll<HTMLElement>("section.screen")) section.hidden = section.id !== "screen-race";
+      document.body.dataset.screen = "race";
+      const screen = new LoadingScreen();
+      screen.begin(raceWords(lobby.settings, lobby.grandPrix), "wheel");
+      screen.progress(true, fraction);
+    },
   };
 }
 

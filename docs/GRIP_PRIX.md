@@ -169,7 +169,7 @@ Everything is under `src/kart/`. Each part is built against
 | Net | `net/` | `hostSession`, `joinSession`, `soloSession` → `Session`; transports (PeerJS WebRTC, BroadcastChannel, in-memory). |
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
-| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, the wheel check, lobby, race, results; the arcade's Racing heading. |
+| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium; the arcade's Racing heading. |
 | Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Handy sound. |
 
 ### Coordinates
@@ -368,24 +368,70 @@ each model behind a small factory, so a Blender-made glTF can replace it.
 
 ## App (`race.html`, `src/kart/app/`, `src/kart/main.ts`)
 
-Screens, in DESIGN.md's voice and style:
+Screens, in DESIGN.md's voice and style (frosted glass over one sky, big
+tight type, springy motion; a white pill is the one main action of a screen;
+`menu.css` holds the material, each screen has its own file):
 
-1. **Start.** Grip Prix's title over its world; Host a Race, Join a Race,
-   Practice; back to the arcade.
-2. **You.** Your name (a friendly default), how you drive (Wheel, Keyboard,
-   Gamepad), Players on This Camera (1 to 4, each with a name and a driver). Remembered.
-3. **The wheel check** (wheel players): "Hold your fists up, like a wheel" →
+1. **Start** (`start.ts`, `title.css`). Full-bleed key art
+   (`assets/kart/title.webp`, 2560 x 1440: the action on the right, the left
+   calm) with a slow drift, the Grip Prix wordmark (heavy italic, a chequered
+   strip, speed lines) and a glass menu on the left: Host a Race (the white
+   pill), the race code field and its Join a Race button in one capsule,
+   Practice; "Up to 4 players" under it. Until the art is drawn, or where it
+   is not fetched, the page's own meadow and road stand in. A phone that came
+   with a `?join=` link does not fetch the art at all (it is on its way to a
+   room). The back link goes to the Handy landing (`./`). `race.html` carries
+   `assets/kart/icon-180.png` as its icon and Apple touch icon.
+2. **You** (`you.ts`). One calm card: your name (a friendly default), how you
+   drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and
+   Players on This Camera (1 to 4, each with a name). Remembered.
+3. **Choose Your Driver** (`driver.ts`, `driverStats.ts`, `render/stage.ts`).
+   The player's turn at the stage, one seat at a time (a chip for each seat
+   says whose turn it is; Next Driver, then Continue; Back goes back a seat):
+   the chosen driver sitting in their kart in the colour the room will give
+   them, live 3D on a softly lit plinth, turning slowly (drag to spin; the
+   driver waves as they land); their name big, their weight class, a line
+   about them and four bars (Speed, Acceleration, Handling, Weight, 1 to 5
+   segments each, read from `WEIGHTS`: the class with the least of a thing has
+   one, the class with the most five, as the sim has it); the nine drivers
+   as portrait tiles (the selected one lifts; Dabble is a locked silhouette
+   that says "Find every duck", and looking at it shows how); the Golden Kart
+   switch once the Konami code has been entered. Arrows (or a pad's d-pad or
+   stick) choose, Return (A) goes on, B goes back. The stage is the one
+   WebGL renderer of the screen and goes with it; where there is no WebGL, only
+   software drawing, or the browser asks for less data (`?stage=3d` and
+   `?stage=photo` choose by hand) it is a portrait of the driver instead.
+4. **The wheel check** (wheel players): "Hold your fists up, like a wheel" →
    "Hold it level" (the level is set) → "Turn it" → "Open your hands to
-   brake" → ready. After the first time, only "Hold it level".
-4. **Lobby.** The host: the code large, the QR code, the players (colour,
-   name, ready), the track, laps and bots, Start. A guest: the code, the
-   players, "Waiting for <host> to start", Show Me On: This Screen / Big
-   Screen.
-5. **Race.** The canvas, each viewport's HUD, the wheel's picture in a
-   corner for every wheel player on this device. Escape or the pause button:
-   a sheet with Leave Race (the host's also Restart).
-6. **Results.** The standings, times and best laps; Race Again (the host),
-   Back to Lobby.
+   brake" → ready. After the first time, only "Hold it level". Back goes to
+   the driver stage.
+5. **Lobby** (`lobby.ts`, `lobby.css`). Two columns. On the left, the room:
+   the host's join card (the QR code, the code large, Copy Link), a big card
+   for every racer (their driver in their kart colour, name, how they drive
+   and on which screen, a green tick when ready) and a soft dashed seat for
+   each friend still to come ("Join with code ABCD"). On the right, the race:
+   Single Race or Grand Prix as a large segmented control; for a single race a
+   carousel of postcards, one for each track, snapping, with its name and cup
+   (`assets/kart/tracks/<id>.webp`, 960 x 540; until one is drawn the track's
+   own outline from `TrackGeometry`, in white over its world's colours,
+   stands in: `trackArt.ts`); for a Grand Prix the cups as cards that show
+   their four tracks; Laps, Bots and Mirror Mode as a compact strip; where the
+   host's room shows the race; and a big Start. A guest sees the same room,
+   read-only ("<host> sets the race"), with Show Me On: This Screen / Big
+   Screen, and "Waiting for <host> to start".
+6. **Race.** The canvas, each viewport's HUD, the wheel's picture in a
+   corner for every wheel player on this device. While the world is built:
+   the track's postcard, blurred and darkened, its name big with its cup
+   (and "Race 2 of 4" in a Grand Prix), a thin progress bar and a tip about
+   the hands that changes (`loading.ts`: open both hands to brake, flick one
+   hand to use an item, hop to drift, clap to honk; in keys or buttons for
+   the others). Escape or the pause button: a sheet with Leave Race (the
+   host's also Restart).
+7. **Results.** The track's postcard blurred behind a glass table: each
+   place a row in its player's colour that comes up in turn (last place first,
+   the winner last), the medal colours for the top three, the fastest lap in
+   gold; Race Again (the host), Back to Lobby. **Standings** (a Grand Prix,
+   between races) and the **Podium** (its end) wear the same.
 
 Troubles say what happened and what to do: "There's no race with that code.
 Check it and try again.", "This race is full.", "The host left the race.",

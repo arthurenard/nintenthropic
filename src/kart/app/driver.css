@@ -1,0 +1,765 @@
+/* Choose Your Driver: the stage on the left (the kart on its plinth, glowing in the player's colour), the
+   details on the right, the nine drivers in a dock underneath. On a phone the stage is above the grid. */
+
+.driver {
+  min-height: 100vh;
+  min-height: 100dvh;
+  --dock-cols: 9;
+}
+.driver-inner {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "stage head"
+    "stage info"
+    "stage actions"
+    "dock dock";
+  column-gap: clamp(24px, 4vw, 64px);
+  row-gap: 12px;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 var(--margin) calc(var(--margin) + env(safe-area-inset-bottom));
+}
+
+/* --- the words ------------------------------------------------------------------------------------------ */
+
+.driver-head {
+  grid-area: head;
+  display: grid;
+  gap: 4px;
+  align-content: end;
+  justify-items: start;
+  padding-top: 8px;
+}
+.driver-head .display {
+  font-size: clamp(30px, 3.4vw, 46px);
+}
+.seat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.seat-strip[hidden] {
+  display: none;
+}
+.seat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(10, 26, 62, 0.4);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 250ms var(--pop),
+    color 250ms var(--pop),
+    transform 350ms var(--pop);
+  -webkit-tap-highlight-color: transparent;
+}
+.seat-chip:hover {
+  background: rgba(10, 26, 62, 0.6);
+}
+.seat-chip[aria-checked="true"] {
+  background: #fff;
+  color: #05153a;
+}
+.seat-chip:active {
+  transform: scale(0.97);
+}
+.seat-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.driver-info {
+  grid-area: info;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+.driver-info.swap > * {
+  animation: driver-swap 520ms var(--pop) backwards;
+  animation-delay: calc(var(--n, 0) * 36ms);
+}
+.driver-info.swap > :nth-child(1) {
+  --n: 0;
+}
+.driver-info.swap > :nth-child(2) {
+  --n: 1;
+}
+.driver-info.swap > :nth-child(3) {
+  --n: 2;
+}
+.driver-info.swap > :nth-child(4) {
+  --n: 3;
+}
+@keyframes driver-swap {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+.driver-name {
+  margin: 0;
+  font-size: clamp(46px, min(6.4vw, 8.6vh), 88px);
+  line-height: 0.98;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-shadow: 0 2px 28px rgba(4, 16, 44, 0.3);
+}
+.driver-class {
+  justify-self: start;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.driver-class.locked {
+  background: rgba(10, 26, 62, 0.5);
+}
+.driver-blurb {
+  max-width: 24em;
+  font-size: clamp(17px, 1.5vw, 21px);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 14px rgba(4, 16, 44, 0.3);
+}
+
+.stats {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 16px 18px;
+  list-style: none;
+  border-radius: 20px;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-hi), var(--glass-drop);
+  max-width: 440px;
+}
+.stats[hidden] {
+  display: none;
+}
+.stat {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.stat svg {
+  width: 20px;
+  height: 20px;
+  opacity: 0.85;
+}
+.stat-label {
+  font-size: 15px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+}
+.stat-bar {
+  display: flex;
+  gap: 4px;
+}
+.stat-bar i {
+  width: 26px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  transform-origin: left center;
+  transition:
+    background-color 320ms var(--pop),
+    transform 460ms var(--pop);
+}
+.stat-bar i.on {
+  background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.45);
+}
+.driver-info.swap .stat-bar i.on {
+  animation: segment-in 480ms var(--pop) backwards;
+}
+.driver-info.swap .stat-bar i:nth-child(2).on {
+  animation-delay: 40ms;
+}
+.driver-info.swap .stat-bar i:nth-child(3).on {
+  animation-delay: 80ms;
+}
+.driver-info.swap .stat-bar i:nth-child(4).on {
+  animation-delay: 120ms;
+}
+.driver-info.swap .stat-bar i:nth-child(5).on {
+  animation-delay: 160ms;
+}
+@keyframes segment-in {
+  from {
+    transform: scaleX(0.2);
+    opacity: 0.2;
+  }
+}
+.golden-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 440px;
+  padding: 10px 14px 10px 16px;
+  border-radius: 18px;
+  background: rgba(255, 214, 10, 0.16);
+  border: 1px solid rgba(255, 214, 10, 0.4);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.golden-row[hidden] {
+  display: none;
+}
+.golden-row svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+.golden-row label {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* --- the stage ------------------------------------------------------------------------------------------- */
+
+.driver-stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 300px;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.driver-stage:active {
+  cursor: grabbing;
+}
+/* A glow of the player's own colour behind the kart, so the kart reads against any sky. */
+.stage-glow {
+  position: absolute;
+  left: 50%;
+  bottom: 4%;
+  width: 96%;
+  height: 80%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 100%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--seat, #fff) 62%, rgba(255, 255, 255, 0.5)), transparent 100%);
+  opacity: 0.8;
+  transition: opacity 600ms var(--pop);
+  pointer-events: none;
+}
+/* Until the kart is up (its art is fetched first), a plinth's shadow breathes where it will stand. */
+.driver-stage[data-stage="loading"]::before {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 18%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  animation: stage-wait 1400ms ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes stage-wait {
+  from {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 500ms var(--pop);
+  touch-action: pan-y;
+}
+.driver-stage.live .stage-canvas {
+  opacity: 1;
+}
+.driver-stage.peeking .stage-canvas {
+  opacity: 0;
+}
+/* The portrait: the whole stage where there is no live one, the silhouette over it for a driver still to be found. */
+.stage-photo {
+  position: absolute;
+  inset: 4% 8% 6%;
+  width: 84%;
+  height: 90%;
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 18px 24px rgba(4, 16, 44, 0.35));
+  transition: opacity 400ms var(--pop);
+  pointer-events: none;
+}
+.driver-stage[data-stage="photo"] .stage-photo,
+.driver-stage.peeking .stage-photo {
+  opacity: 1;
+}
+.driver-stage.peeking .stage-photo {
+  inset: 10% 14% 12%;
+  width: 72%;
+  height: 78%;
+  opacity: 0.9;
+}
+.stage-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(10, 26, 62, 0.4);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.86);
+  opacity: 0;
+  transition: opacity 600ms var(--pop) 1.2s;
+  pointer-events: none;
+}
+.driver-stage[data-stage="3d"].live .stage-hint {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .stage-hint {
+    display: none;
+  }
+}
+
+/* --- the dock: nine drivers ------------------------------------------------------------------------- */
+
+.driver-dock {
+  position: relative;
+  grid-area: dock;
+  display: grid;
+  grid-template-columns: repeat(var(--dock-cols), minmax(0, 1fr));
+  gap: 10px;
+  padding: 22px 0 6px;
+}
+.driver-tile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  background: rgba(10, 26, 62, 0.34);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform 420ms var(--pop),
+    background-color 250ms var(--pop),
+    color 250ms var(--pop),
+    box-shadow 320ms var(--pop),
+    border-color 250ms var(--pop);
+  -webkit-tap-highlight-color: transparent;
+}
+.driver-tile:hover {
+  transform: translateY(-3px);
+  background: rgba(10, 26, 62, 0.5);
+}
+.driver-tile[aria-checked="true"] {
+  transform: translateY(-8px) scale(1.06);
+  border-color: transparent;
+  background: #fff;
+  color: #05153a;
+  box-shadow:
+    0 0 0 3px var(--seat, #fff),
+    0 18px 36px rgba(4, 16, 44, 0.38),
+    0 4px 10px rgba(4, 16, 44, 0.24);
+}
+.driver-tile:active {
+  transform: translateY(-4px) scale(0.98);
+}
+.driver-tile-img {
+  width: 100%;
+  max-width: clamp(64px, 10.5vh, 96px);
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  transition: opacity 300ms var(--pop);
+}
+.driver-tile-img.blank {
+  opacity: 0;
+}
+.driver-tile-img:not([src]) {
+  opacity: 0;
+}
+.driver-tile-name {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.driver-tile-sub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 16px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.76);
+}
+.driver-tile-sub svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.driver-tile.locked {
+  background: rgba(10, 26, 62, 0.5);
+  border-style: dashed;
+}
+.driver-tile.locked .driver-tile-img {
+  opacity: 0.72;
+}
+.driver-tile.locked.peek {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-4px);
+  animation: tile-nudge 420ms var(--pop);
+}
+@keyframes tile-nudge {
+  20% {
+    transform: translateY(-4px) translateX(-5px);
+  }
+  40% {
+    transform: translateY(-4px) translateX(5px);
+  }
+  60% {
+    transform: translateY(-4px) translateX(-3px);
+  }
+  80% {
+    transform: translateY(-4px) translateX(2px);
+  }
+}
+.driver-tile:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px rgba(10, 132, 255, 0.55);
+}
+
+.driver-actions {
+  grid-area: actions;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding-top: 6px;
+}
+.driver-actions .button {
+  min-width: min(100%, 280px);
+  box-shadow: 0 14px 34px rgba(4, 16, 44, 0.3);
+}
+.keys-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.keys-hint kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+  font: 600 12px/1 var(--font);
+}
+.keys-hint kbd + kbd {
+  margin-left: -2px;
+}
+
+/* --- narrower: one column, the stage over the nine ------------------------------------------------------ */
+
+@media (max-width: 1100px) {
+  .driver {
+    --dock-cols: 5;
+  }
+  .driver-inner {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas:
+      "head"
+      "stage"
+      "info"
+      "dock"
+      "actions";
+    align-content: start;
+    row-gap: 8px;
+  }
+  .driver-head {
+    justify-items: center;
+    text-align: center;
+  }
+  .seat-strip {
+    justify-content: center;
+  }
+  .driver-stage {
+    height: clamp(260px, 42vh, 460px);
+    min-height: 0;
+  }
+  .driver-info {
+    justify-items: center;
+    text-align: center;
+  }
+  .driver-actions {
+    justify-items: center;
+  }
+  .driver-class {
+    justify-self: center;
+  }
+  .stats {
+    width: min(440px, 100%);
+  }
+  .golden-row {
+    width: min(440px, 100%);
+  }
+  .driver-name {
+    font-size: clamp(44px, 9vw, 72px);
+  }
+  .keys-hint {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .driver {
+    --dock-cols: 5;
+  }
+  .bar {
+    height: calc(60px + env(safe-area-inset-top));
+  }
+  .driver-head .display {
+    font-size: 28px;
+  }
+  .driver-stage {
+    height: min(32vh, 290px);
+    margin: 0 calc(-1 * var(--margin));
+  }
+  .driver-name {
+    font-size: 42px;
+  }
+  .driver-info {
+    gap: 8px;
+  }
+  .driver-blurb {
+    font-size: 16px;
+  }
+  .stats {
+    gap: 8px;
+    padding: 12px 14px;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 18px;
+  }
+  .stat {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .stat svg {
+    display: none;
+  }
+  .stat-label {
+    font-size: 13px;
+  }
+  .stat-bar {
+    gap: 3px;
+  }
+  .stat-bar i {
+    flex: 1;
+    width: auto;
+    height: 7px;
+  }
+  /* The nine in one row, side to side under the stage: the chosen one comes to the middle. */
+  .driver-dock {
+    display: flex;
+    gap: 8px;
+    margin: 0 calc(-1 * var(--margin));
+    padding: 16px var(--margin) 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+  }
+  .driver-dock::-webkit-scrollbar {
+    display: none;
+  }
+  .driver-tile {
+    flex: none;
+    width: 70px;
+    padding: 6px 2px 8px;
+    border-radius: 18px;
+    scroll-snap-align: center;
+  }
+  .driver-tile-name {
+    font-size: 12px;
+  }
+  .driver-tile-sub {
+    min-height: 0;
+  }
+  .driver-tile-sub span {
+    display: none;
+  }
+  .driver-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin: 0 calc(-1 * var(--margin));
+    padding: 18px var(--margin) calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(28, 88, 184, 0), rgba(22, 73, 168, 0.88) 42%);
+  }
+  .driver-actions .button {
+    width: 100%;
+  }
+}
+/* A short desktop window: the same, a little tighter. */
+@media (max-height: 960px) and (min-width: 1101px) {
+  .keys-hint {
+    display: none;
+  }
+  .driver-actions .button {
+    min-height: 52px;
+  }
+}
+@media (max-height: 860px) and (min-width: 1101px) {
+  .driver-blurb {
+    font-size: 17px;
+  }
+  .stats {
+    gap: 7px;
+    margin-top: 6px;
+    padding: 12px 16px;
+  }
+  .golden-row {
+    padding-block: 6px;
+  }
+  .keys-hint {
+    display: none;
+  }
+  .driver-dock {
+    padding-top: 14px;
+  }
+  .driver-tile {
+    padding-top: 6px;
+    padding-bottom: 8px;
+  }
+}
+/* A short window (a phone on its side): the stage and the details side by side again, the dock squeezed. */
+@media (max-height: 560px) and (min-width: 700px) {
+  .driver {
+    --dock-cols: 9;
+  }
+  .driver-inner {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+    grid-template-areas:
+      "stage head"
+      "stage info"
+      "stage actions"
+      "dock dock";
+  }
+  .driver-stage {
+    height: auto;
+    min-height: 200px;
+  }
+  .driver-name {
+    font-size: 44px;
+  }
+  .stats {
+    display: none;
+  }
+  .driver-tile-sub {
+    display: none;
+  }
+  .driver-tile-img {
+    max-width: 56px;
+  }
+}
+
+:root[data-reduce-motion] {
+  .driver-info.swap > *,
+  .driver-info.swap .stat-bar i.on {
+    animation: fade-in 250ms var(--ease) backwards;
+  }
+  .driver-tile[aria-checked="true"] {
+    transform: none;
+  }
+  .driver-tile:hover {
+    transform: none;
+  }
+  .driver-tile.locked.peek {
+    animation: none;
+  }
+}
+
+/* A big screen: the stage and the dock a size up. */
+@media (min-width: 1700px) and (min-height: 960px) {
+  .driver-inner {
+    max-width: 1560px;
+  }
+  .driver-name {
+    font-size: 104px;
+  }
+  .driver-blurb {
+    font-size: 24px;
+  }
+  .stats,
+  .golden-row {
+    max-width: 520px;
+  }
+  .stat-label {
+    font-size: 17px;
+  }
+  .driver-tile-img {
+    max-width: 112px;
+  }
+  .driver-tile-name {
+    font-size: 17px;
+  }
+  .driver-actions .button {
+    min-height: 60px;
+    font-size: 19px;
+  }
+}
