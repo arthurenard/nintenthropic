@@ -687,6 +687,28 @@ def rainbow_glass_material():
     return m
 
 
+def question_material():
+    """The bright white of a box's question mark: glowing on its front, clear from behind (so the far side's marks do not show through the glass)."""
+    m = bpy.data.materials.new("itembox.q")
+    m.use_nodes = True
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        if n.type != "OUTPUT_MATERIAL":
+            nt.nodes.remove(n)
+    out = nt.nodes["Material Output"]
+    glow = nt.nodes.new("ShaderNodeEmission")
+    glow.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+    glow.inputs["Strength"].default_value = 4.5
+    clear = nt.nodes.new("ShaderNodeBsdfTransparent")
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(geo.outputs["Backfacing"], mix.inputs["Fac"])
+    nt.links.new(glow.outputs["Emission"], mix.inputs[1])
+    nt.links.new(clear.outputs["BSDF"], mix.inputs[2])
+    nt.links.new(mix.outputs["Shader"], out.inputs["Surface"])
+    return m
+
+
 def item_box(loc, yaw=0.0, size=1.6, tilt=(0.0, 0.0)):
     """Returns the root empty. The cube's edge is `size` (the game's BOX_SIZE 1.6): a glassy rainbow cube, a bright question mark
     on each side, a glow at its heart."""
@@ -709,19 +731,21 @@ def item_box(loc, yaw=0.0, size=1.6, tilt=(0.0, 0.0)):
     core = bpy.data.objects.new("itembox.core", bpy.data.meshes.new("itembox.core"))
     bpy.context.scene.collection.objects.link(core)
     bm = bmesh.new()
-    bmesh.ops.create_icosphere(bm, subdivisions=3, radius=size * 0.13)
+    bmesh.ops.create_icosphere(bm, subdivisions=3, radius=size * 0.06)
     bm.to_mesh(core.data)
     bm.free()
-    core.data.materials.append(kit.emissive_material("itembox.core", hexl("#fff0c8"), 3.0))
+    core.data.materials.append(kit.emissive_material("itembox.core", hexl("#fff0c8"), 1.8))
     core.parent = root
     core.visible_shadow = False
-    qm = kit.emissive_material("itembox.q", hexl("#ffffff"), 4.5)
+    qm = question_material()
     for k in range(4):
         cu = bpy.data.curves.new("q", "FONT")
         cu.body = "?"
         cu.size = size * 0.66
-        cu.extrude = size * 0.035
-        cu.bevel_depth = size * 0.012
+        # A flat glyph, one sided: seen through the glass from the far side it is the back of a face's mark, and is left clear, so
+        # each side shows one clean "?" the right way round (an extruded one showed its mirror image through the glass, overlapping).
+        cu.extrude = 0.0
+        cu.bevel_depth = 0.0
         cu.align_x = "CENTER"
         cu.align_y = "CENTER"
         q = bpy.data.objects.new("itembox.q", cu)
