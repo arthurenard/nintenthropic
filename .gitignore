@@ -4,6 +4,7 @@
 .claude/worktrees/
 dist/
 node_modules
+.vite/
 test-results/
 playwright-report/
 art/**/*.blend1

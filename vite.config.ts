@@ -189,6 +189,11 @@ function baseConfig(party: boolean, origin: string | null, plugins: Plugin[]): U
   return {
     base: "./",
     plugins,
+    // Each checkout pre-bundles its dependencies into its own folder. A worktree links node_modules to the main
+    // checkout's, so with the default (node_modules/.vite) a worktree's dev server rewrote the main one's bundles
+    // with paths counted from the worktree, and Three's Draco decoder was looked for in the wrong place: every
+    // Blender model fell back to its code-built stand-in.
+    cacheDir: ".vite",
     // Handy's version, for Settings' About (src/app/settings.ts); in a party, where the computer is on the network.
     define: {
       __HANDY_VERSION__: JSON.stringify(pkg.version),
