@@ -133,7 +133,6 @@ export class DriverScreen {
   private readonly tiles: Tile[] = [];
   private seats: DriverSeat[] = [];
   private seat = 0;
-  private access: DriverAccess = { duck: false, golden: false };
   /** The tile whose details are showing (a locked one is only looked at). */
   private looking = "";
   private canvas: HTMLCanvasElement | null = null;
@@ -187,8 +186,9 @@ export class DriverScreen {
 
   /** Shows the screen for these seats (each with the driver they had), starting with the first. */
   open(seats: DriverSeat[], access: DriverAccess): void {
+    // (Opened again without being left: whatever it had up is let go first.)
+    this.close();
     this.seats = seats.map((seat) => ({ ...seat }));
-    this.access = access;
     this.seat = 0;
     this.visible = true;
     this.opened++;

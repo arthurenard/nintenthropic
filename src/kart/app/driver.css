@@ -733,3 +733,33 @@
     animation: none;
   }
 }
+
+/* A big screen: the stage and the dock a size up. */
+@media (min-width: 1700px) and (min-height: 960px) {
+  .driver-inner {
+    max-width: 1560px;
+  }
+  .driver-name {
+    font-size: 104px;
+  }
+  .driver-blurb {
+    font-size: 24px;
+  }
+  .stats,
+  .golden-row {
+    max-width: 520px;
+  }
+  .stat-label {
+    font-size: 17px;
+  }
+  .driver-tile-img {
+    max-width: 112px;
+  }
+  .driver-tile-name {
+    font-size: 17px;
+  }
+  .driver-actions .button {
+    min-height: 60px;
+    font-size: 19px;
+  }
+}

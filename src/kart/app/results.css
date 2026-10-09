@@ -341,3 +341,13 @@ body[data-screen="race"] .pause-card.glass {
 .menu .footnote {
   color: rgba(255, 255, 255, 0.78);
 }
+
+@media (min-width: 1700px) and (min-height: 960px) {
+  .results-inner {
+    max-width: calc(900px + 2 * var(--margin));
+  }
+  .standings td {
+    font-size: 20px;
+    padding-block: 13px;
+  }
+}

@@ -46,6 +46,13 @@ body[data-screen="race"] .menu-sky,
 body[data-screen="podium"] .menu-sky {
   display: none;
 }
+/* The foot of the sky settles into a deeper blue, so white words keep their contrast wherever they stand (4.5 to 1 and better). */
+.menu-sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 26, 78, 0) 30%, rgba(6, 26, 78, 0.62) 100%);
+}
 .menu-cloud {
   position: absolute;
   border-radius: 50%;

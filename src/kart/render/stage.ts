@@ -194,6 +194,8 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
   let last = 0;
   let skip = false;
   let disposed = false;
+  /** Something changed since the last picture (a rider, the size, a drag): with reduced motion, the only reason to draw. */
+  let dirty = true;
   let rimColour = new Color("#ffffff");
 
   /** Aims the camera from `aim` metres up the middle, `distance` away, a little above the plinth. */
@@ -286,6 +288,8 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
       if (!calm && idle > 1.6) spin += 0.42 * Math.min(1, (idle - 1.6) / 1.2) * dt;
     }
     spin %= TAU;
+    if (calm && !dirty && !dragging && Math.abs(velocity) < 0.002) return;
+    dirty = false;
     draw();
   };
 
@@ -300,6 +304,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
     dragging.x = event.clientX;
     spin += dx * 0.011;
     velocity = dx * 0.011 * 60 * 0.5;
+    dirty = true;
     if (!running) draw();
   };
   const onUp = (event: PointerEvent): void => {
@@ -319,6 +324,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
     renderer.setPixelRatio(Math.max(0.75, Math.min(dpr, low ? 1.5 : 2)));
     renderer.setSize(width, height, false);
     place();
+    dirty = true;
     if (!running) draw();
   };
   setSize(width, height, window.devicePixelRatio || 1);
@@ -341,6 +347,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
       rimColour = new Color(rider.colour).lerp(new Color("#ffffff"), 0.25);
       ringMaterial.color.set(rider.colour);
       haloMaterial.color.set(rider.colour);
+      dirty = true;
       if (!running) draw();
     },
     resize: setSize,

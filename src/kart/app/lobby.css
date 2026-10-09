@@ -57,6 +57,23 @@
   position: sticky;
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 4;
+  isolation: isolate;
+}
+/* Under it, the page blurs away, so what Start covers does not show through its edges. */
+.lobby-go::before {
+  content: "";
+  position: absolute;
+  inset: -28px -16px -16px;
+  z-index: -1;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  background: linear-gradient(rgba(24, 78, 172, 0), rgba(24, 78, 172, 0.7) 46%);
+  /* Faded on every side, so there is no edge to the blur. */
+  -webkit-mask-image: linear-gradient(transparent, #000 38%, #000 74%, transparent), linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(transparent, #000 38%, #000 74%, transparent), linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-composite: intersect;
+  pointer-events: none;
 }
 .lobby-go .button.large {
   min-height: 60px;
@@ -648,12 +665,14 @@
     max-width: 680px;
   }
   .lobby-go {
-    position: sticky;
     bottom: 0;
-    z-index: 4;
     margin: 0 calc(-1 * var(--margin));
     padding: 22px var(--margin) calc(12px + env(safe-area-inset-bottom));
-    background: linear-gradient(rgba(28, 88, 184, 0), rgba(24, 78, 172, 0.9) 44%);
+  }
+  .lobby-go::before {
+    inset: 0;
+    -webkit-mask-image: linear-gradient(transparent, #000 40%);
+    mask-image: linear-gradient(transparent, #000 40%);
   }
 }
 @media (max-width: 600px) {
@@ -723,5 +742,52 @@
   .postcard:hover:not(:disabled),
   .cup:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* A big screen (the TV on the sofa's far wall): the same room, a size up. */
+@media (min-width: 1700px) and (min-height: 960px) {
+  .lobby-inner {
+    max-width: 1560px;
+    grid-template-columns: minmax(400px, 520px) minmax(0, 1fr);
+    gap: 24px 64px;
+  }
+  .lobby-head .display {
+    font-size: 64px;
+  }
+  .racer {
+    min-height: 96px;
+    padding-left: 14px;
+  }
+  .racer-face,
+  .racer-portrait {
+    width: 72px;
+    height: 72px;
+  }
+  .racer-name {
+    font-size: 24px;
+  }
+  .racer-meta {
+    font-size: 15px;
+  }
+  .code-big {
+    font-size: 72px;
+  }
+  .qr {
+    width: 176px;
+  }
+  .postcard {
+    width: 300px;
+  }
+  .mode-switch.segmented.big [role="radio"] {
+    height: 52px;
+    font-size: 19px;
+  }
+  .lobby-go .button.large {
+    min-height: 68px;
+    font-size: 21px;
+  }
+  .setup-notes .group-foot {
+    font-size: 13px;
   }
 }
