@@ -360,8 +360,9 @@ export class RaceScreen {
         this.loaded = true;
         this.loading(false, 1);
       })
-      .catch(() => {
-        if (this.renderer === renderer) this.hooks.failed("load");
+      .catch((error: unknown) => {
+        // The drawing code is fetched with the load, so the browser that cannot draw says so here, not when the renderer is made.
+        if (this.renderer === renderer) this.hooks.failed(error instanceof WebGLUnavailable ? "webgl" : "load");
       });
   }
 

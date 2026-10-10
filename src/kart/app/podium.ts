@@ -113,13 +113,14 @@ export class PodiumScreen {
     focusHeading($("podium-title"));
     announce(winner ? `${winner.name} wins the ${cup.name}.` : "The podium.");
 
-    this.ceremony(gp.points.slice(0, 3));
+    // A phone that is only a wheel (its race is on the host's big screen) shows the standings, not the ceremony: that is the big screen's.
+    this.ceremony(gp.points.slice(0, 3), session.views().length > 0);
   }
 
-  /** The 3D podium behind it all, if the browser can draw it. */
-  private ceremony(winners: GrandPrixState["points"]): void {
+  /** The 3D podium behind it all, if the browser can draw it and this screen shows the race. */
+  private ceremony(winners: GrandPrixState["points"], draws: boolean): void {
     const make = this.services.podium;
-    if (!make) return;
+    if (!make || !draws) return;
     const stage = $("podium-stage");
     const canvas = element("canvas", "podium-canvas");
     stage.replaceChildren(canvas);

@@ -156,6 +156,9 @@ export class PostChain {
     this.views = new ViewsPass(draw);
     this.composer.addPass(this.views);
     this.bloom = new BloomEffect({ luminanceThreshold: 1, luminanceSmoothing: 0.25, mipmapBlur: true, intensity: 0.5, radius: 0.72, levels: tier === "low" ? 5 : 7 });
+    // The thresholded copy the glow is blurred from is full size, which is a full-size read and write of the half-float picture; on the
+    // lesser tiers it is made at half size (the blur's first step halves it anyway), a slightly softer glow for a quarter of the work.
+    if (tier !== "high") this.bloom.luminancePass.resolution.scale = 0.5;
     // Bloom's own blend (screen) adds the glow to the picture; the grade then maps the sum.
     this.composer.addPass(new EffectPass(this.camera, this.bloom, this.grade));
     if (tier === "low") this.composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.LOW })));
