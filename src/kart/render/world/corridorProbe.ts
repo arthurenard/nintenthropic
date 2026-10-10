@@ -3,24 +3,26 @@
  * sampled every couple of metres, against the ground, landmarks and scenery the world builds. corridor.test.ts asserts
  * on it; the same machinery can score where a landmark could stand instead.
  */
-import { Matrix4, MeshLambertMaterial, Vector3, type BufferGeometry, type InstancedMesh, type Mesh, type Object3D } from "three";
+import { Group, Matrix4, Mesh, MeshLambertMaterial, Vector3, type BufferGeometry, type InstancedMesh, type Object3D } from "three";
 import { barrierDistance, buildTerrain as buildSimTerrain, gapAt, isOpen, type Terrain as SimTerrain } from "../../sim/terrain";
 import { TUNING } from "../../sim/tuning";
 import { TrackGeometry, type Landmark, type TrackDef } from "../../track/geometry";
-import { QUALITY } from "../quality";
+import { QUALITY, type Tier } from "../quality";
 import { buildBackdrop } from "./backdrop";
 import { Bank } from "./bank";
 import { SOLID_MARGIN } from "./features";
 import { buildLandmarks, landmarkMaterials, type LandmarkMaterials, type PlaceEnv, type PlacedLandmark } from "./landmarks/place";
 import { buildScenery } from "./scenery";
+import { buildTrackMeshes } from "./track";
 import { makeBakeUniforms } from "./shading";
 import { Terrain } from "./terrain";
 import { styleFor, type ThemeStyle } from "./themes";
 
-const quality = QUALITY.high;
-
 /** What a kart (or its camera) can meet: nothing may stand between these heights above the road. */
 const BAND: [number, number] = [0.45, 5];
+
+/** A thing must reach this far into the margin (metres) to count: one that only touches its outer edge is not in the way. */
+const MIN_DEPTH = 0.25;
 
 /** One place a kart (or the camera behind it) can be: where, how high the road is there, and which way it is from the road. */
 export interface Spot {
@@ -126,8 +128,11 @@ export function eachTriangle(geometry: BufferGeometry, world: Matrix4, tri: (a: 
   }
 }
 
-/** Drops each triangle of `root`'s meshes onto the spots under it: wherever it covers one in the band, the lowest such surface is noted. */
-export function dropOnto(root: Object3D, grid: SpotGrid, who: string, lowest: Map<number, Hit>): void {
+/**
+ * Drops each triangle of `root`'s meshes onto the spots under it: wherever it covers one in the band, the lowest such surface is
+ * noted. `skip` leaves out what is meant to be there (the barrier's own picture, a ramp's wedge).
+ */
+export function dropOnto(root: Object3D, grid: SpotGrid, who: string, lowest: Map<number, Hit>, skip?: (spot: Spot) => boolean): void {
   root.updateMatrixWorld(true);
   const place = (geometry: BufferGeometry, world: Matrix4) => {
     eachTriangle(geometry, world, (a, b, c) => {
@@ -140,6 +145,7 @@ export function dropOnto(root: Object3D, grid: SpotGrid, who: string, lowest: Ma
       if (Math.abs(det) < 1e-9) return;
       grid.box(x0, z0, x1, z1, (k) => {
         const p = grid.spots[k]!;
+        if (skip?.(p)) return;
         const u = ((b.z - c.z) * (p.x - c.x) + (c.x - b.x) * (p.z - c.z)) / det;
         const v = ((c.z - a.z) * (p.x - c.x) + (a.x - c.x) * (p.z - c.z)) / det;
         const w = 1 - u - v;
@@ -187,6 +193,8 @@ export interface Report {
   flank: Offender | null;
   /** Solid things standing in the drivable area or its margin, worst first (one per thing). */
   solids: Offender[];
+  /** Span landmarks the world had to cut to keep them out of another stretch's ground (see place.ts): a modelled one should need none. */
+  cuts: string[];
 }
 
 /** A track built the way the game builds it, with its drivable area, ready to have things dropped onto. */
@@ -202,13 +210,19 @@ export interface Probe {
   env: PlaceEnv;
 }
 
-export function makeProbe(def: TrackDef): Probe {
+/** How densely the drivable area is sampled: every `along` metres of the lap, every `across` metres across it. */
+export interface Density {
+  along: number;
+  across: number;
+}
+
+export function makeProbe(def: TrackDef, density: Density = { along: 2, across: 1 }, tier: Tier = "high"): Probe {
   const geo = TrackGeometry.build(def);
   const bank = new Bank(geo);
   const style = styleFor(def.theme);
-  const terrain = Terrain.build(geo, style, quality.cell);
+  const terrain = Terrain.build(geo, style, QUALITY[tier].cell);
   const sim = buildSimTerrain(def, geo);
-  const spots = drivableSpots(def, geo, bank, (x, z) => terrain.heightAt(x, z));
+  const spots = drivableSpots(def, geo, bank, (x, z) => terrain.heightAt(x, z), density.along, density.across);
   const wall = (s: number, side: -1 | 1) => barrierDistance(sim, s, side);
   const env: PlaceEnv = { track: geo, style, bank, groundAt: (x: number, z: number) => terrain.heightAt(x, z), wall };
   return { def, geo, bank, style, terrain, sim, spots, grid: new SpotGrid(spots), env };
@@ -221,12 +235,33 @@ export function placedLandmarks(def: TrackDef): PlacedLandmark[] {
   return placed;
 }
 
+/**
+ * The clock times, seconds, at which what turns (a windmill's sails, a wheel, a carousel's roof) is looked at: its sweep, not
+ * only its pose at the start. Not a round step, so a part that turns a whole number of times a second is not always caught
+ * in the same place.
+ */
+export const CLOCK: readonly number[] = Array.from({ length: 24 }, (_, k) => k * 0.83);
+
+/** The pieces of a layer that move (a part is its own Group; what stands still is merged into meshes). */
+const movingOf = (group: Group): Object3D[] => group.children.filter((c) => c instanceof Group);
+
+/** Drops a landmark layer's picture: all of it as it stands at the start, then only what moves, at each clock time. */
+function dropLayer(layer: { group: Group; update(time: number): void }, grid: SpotGrid, who: string, lowest: Map<number, Hit>): void {
+  layer.update(0);
+  dropOnto(layer.group, grid, who, lowest);
+  const moving = movingOf(layer.group);
+  if (!moving.length) return;
+  for (const t of CLOCK.slice(1)) {
+    layer.update(t);
+    for (const part of moving) dropOnto(part, grid, who, lowest);
+  }
+}
+
 /** What one landmark puts in the drivable area (its worst spot), or null if it is clear of it. */
 export function landmarkOffender(probe: Probe, lm: PlacedLandmark, mats: LandmarkMaterials, who = lm.kind): Offender | null {
   const lowest = new Map<number, Hit>();
   const layer = buildLandmarks(probe.env, [lm], mats);
-  layer.update(0);
-  dropOnto(layer.group, probe.grid, who, lowest);
+  dropLayer(layer, probe.grid, who, lowest);
   layer.dispose();
   return worstOf(probe, lowest).get(who) ?? null;
 }
@@ -242,9 +277,61 @@ function worstOf(probe: Probe, lowest: Map<number, Hit>): Map<string, Offender> 
   return byWho;
 }
 
+/**
+ * What the track's own decoration (the start gantry, signs, lamps, ramps, the open edges' shelves...) puts where a kart's centre
+ * can be, one offender for each stretch of 12 m. The barrier is meant to be there (it stands from the kart's reach outward) and so
+ * is a ramp's wedge on the road; everything else is not.
+ */
+function decorationOffenders(probe: Probe, material: MeshLambertMaterial, tier: Tier): Offender[] {
+  const { geo, terrain, sim } = probe;
+  const meshes = buildTrackMeshes(geo, probe.style, terrain, QUALITY[tier]);
+  const group = new Group();
+  for (const g of meshes.deco) group.add(new Mesh(g, material));
+  const lowest = new Map<number, Hit>();
+  const ramps = terrain.features.ramps;
+  const onRamp = (s: number): boolean =>
+    ramps.some((r) => {
+      let d = r.lip - s;
+      if (d > geo.length / 2) d -= geo.length;
+      if (d < -geo.length / 2) d += geo.length;
+      return d > -2 && d < r.length + 2;
+    });
+  dropOnto(group, probe.grid, "decoration", lowest, (p) => {
+    // The barrier's own picture: it stands from the face of the wall outward, and a soft one (a snowbank, a boulder) leans in a
+    // little past the limit of a kart's centre (the wall less TUNING.barrierInset).
+    if (p.beyond >= barrierDistance(sim, p.s, p.side) - TUNING.barrierInset - 0.7) return true;
+    return p.beyond < 0 && onRamp(p.s);
+  });
+  for (const g of [...meshes.deco, ...meshes.road, ...meshes.verge, meshes.pads, meshes.pools, meshes.additive, ...meshes.patches.map((q) => q.geometry)]) g?.dispose();
+  const found = new Map<string, Offender>();
+  for (const [k, hit] of lowest) {
+    const p = probe.spots[k]!;
+    const depth = p.reach - p.beyond;
+    // The start line's own: the gantry's legs and light box stand at s = 0.
+    const gantry = Math.min(p.s, geo.length - p.s) < 8;
+    const key = gantry ? `gantry${p.side}` : `${p.side}:${Math.round(p.s / 12)}`;
+    const old = found.get(key);
+    if (!old || depth > old.depth) {
+      found.set(key, { what: `${gantry ? "start gantry" : "decoration"} (${p.side < 0 ? "left" : "right"} of the road)`, at: [p.x, p.z], s: p.s, beyond: p.beyond, height: hit.low, depth });
+    }
+  }
+  return [...found.values()];
+}
+
+/**
+ * What `measureTrack` builds: the quality tier (the ground's grid and the scenery's share), and whether the landmarks and the
+ * track's decoration are measured (they do not change with the tier).
+ */
+export interface Measure {
+  tier?: Tier;
+  things?: boolean;
+}
+
 /** Measures one track: what the picture puts in the drivable area. */
-export function measureTrack(def: TrackDef): Report {
-  const probe = makeProbe(def);
+export function measureTrack(def: TrackDef, { tier = "high", things = true }: Measure = {}): Report {
+  const quality = QUALITY[tier];
+  // Finer than the default, so a pole or a post cannot fall between two samples.
+  const probe = makeProbe(def, { along: 1, across: 0.5 }, tier);
   const { geo, terrain, sim, spots } = probe;
 
   let rise: Offender | null = null;
@@ -277,25 +364,35 @@ export function measureTrack(def: TrackDef): Report {
   }
 
   const lowest = new Map<number, Hit>();
+  const cuts: string[] = [];
   const mats = landmarkMaterials();
   const placed = placedLandmarks(def);
   const keepOut = buildLandmarks(probe.env, placed, mats).keepOut;
   // One by one, so a hit has a name.
-  placed.forEach((lm: Landmark, k) => {
-    const layer = buildLandmarks(probe.env, [lm], mats);
-    layer.update(0);
-    dropOnto(layer.group, probe.grid, `${lm.kind}#${k}@${lm.at}`, lowest);
-    layer.dispose();
-  });
+  if (things) {
+    placed.forEach((lm: Landmark, k) => {
+      const layer = buildLandmarks(probe.env, [lm], mats);
+      dropLayer(layer, probe.grid, `${lm.kind}#${k}@${lm.at}`, lowest);
+      if (layer.cuts > 0) cuts.push(`${lm.kind}#${k}@${lm.at}: ${layer.cuts} triangles cut away where it stands in another stretch's ground`);
+      layer.dispose();
+    });
+  }
   mats.dispose();
   const material = new MeshLambertMaterial({ vertexColors: true });
   const scenery = buildScenery(probe.style, terrain, quality, material, 1234, keepOut);
   let n = 0;
   scenery.group.children.forEach((child) => dropOnto(child, probe.grid, `scenery#${n++}`, lowest));
+  // What turns in the scenery (a modelled windmill's sails) is looked at as it sweeps.
+  const turning = movingOf(scenery.group);
+  if (turning.length) {
+    for (const t of CLOCK.slice(1)) {
+      scenery.update(t);
+      for (const part of turning) dropOnto(part, probe.grid, `scenery#${scenery.group.children.indexOf(part)}`, lowest);
+    }
+  }
   scenery.dispose();
-  material.dispose();
   // The volcano's great cone is the one backdrop that can come near the road (the others build from textures, and stand far off).
-  if (probe.style.id === "volcano") {
+  if (things && probe.style.id === "volcano") {
     const own: { dispose(): void }[] = [];
     const backdrop = buildBackdrop(probe.style, terrain, own, makeBakeUniforms());
     if (backdrop) dropOnto(backdrop.group, probe.grid, "backdrop", lowest);
@@ -303,6 +400,8 @@ export function measureTrack(def: TrackDef): Report {
     for (const d of own) d.dispose();
   }
 
-  const solids =[...worstOf(probe, lowest).values()].sort((a, b) => b.depth - a.depth);
-  return { groundRise: rise, flank, solids };
+  // A thing that only touches the margin's outer edge (a quarter metre in) is not an offender: the margin is a rule of thumb.
+  const solids = [...worstOf(probe, lowest).values(), ...(things ? decorationOffenders(probe, material, tier) : [])].filter((o) => o.depth >= MIN_DEPTH).sort((a, b) => b.depth - a.depth);
+  material.dispose();
+  return { groundRise: rise, flank, solids, cuts };
 }

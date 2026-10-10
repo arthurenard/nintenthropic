@@ -60,7 +60,7 @@ describe("the chase camera's room", () => {
     });
   }
 
-  it("keeps the camera under the roof of a thing over the road, and the roofs are over a kart's reach", () => {
+  it("keeps the camera under the roof of a thing over the road, and the roofs are over a kart's reach", { timeout: 120_000 }, () => {
     let roofs = 0;
     for (const def of TRACKS) {
       const probe = makeProbe(def);

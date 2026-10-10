@@ -79,8 +79,14 @@ landmarks. Things to know when changing them:
   whole model along the road.
 - Keep every model inside the code-built footprint: nothing solid within a
   camera's width of the barrier. `world/corridor.test.ts` checks the code-built
-  world; to check the modelled one, load the art in a page and run
-  `measureTrack` from `world/corridorProbe.ts` (the dev pages load it).
+  world and `world/corridor.art.test.ts` the modelled one, on every track and
+  its mirror: it decodes the Draco files here in Node (`world/nodeArt.ts`) and
+  runs `measureTrack` from `world/corridorProbe.ts` on them, so
+  `npx vitest run src/kart/render/world/corridor.art.test.ts` (with
+  `CORRIDOR_REPORT=1` to see how far each offender must move) says whether a
+  rebuilt world file is clear of the road. When a model is wider than its
+  stand-in, move the landmark's `offset` in `track/tracks.ts` (or slim the
+  model): the sim and the barriers stay as they are.
 - `gallery.html?theme=canyon&kind=mesa` shows a landmark and
   `kind=scenery:cactus` a kind of scenery, with the Blender art loaded.
 

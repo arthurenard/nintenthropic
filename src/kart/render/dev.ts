@@ -5,6 +5,7 @@
  *
  *   ?track=meadow-loop     which track (an unknown id falls back to the first); dev-kitchen, dev-snow,
  *                          dev-volcano, dev-funfair, dev-space, dev-palm are the test tracks of devTracks.ts
+ *   ?mirror=1              the track flipped left for right (mirror mode)
  *   ?theme=canyon          dress the track in another theme (any of the nine)
  *   ?go=1                  skip the countdown
  *   ?hud=0                 hide the HUD (for pictures)
@@ -24,6 +25,7 @@
  * autopilot drives.
  */
 import type { TrackTheme } from "../track/geometry";
+import { mirrorTrack } from "../track/mirror";
 import { trackById, TRACKS } from "../track/tracks";
 import { DEV_TRACKS, devTrackById } from "./devTracks";
 import { createDemoRace, DemoRace, type DemoInput, type RaceViewSource } from "./demo";
@@ -44,7 +46,8 @@ const loading = document.getElementById("loading") as HTMLElement;
 
 function startRace(): void {
   const wantedTrack = params.get("track") ?? TRACKS[0]!.id;
-  const track = devTrackById(wantedTrack) ?? trackById(wantedTrack);
+  const ordinary = devTrackById(wantedTrack) ?? trackById(wantedTrack);
+  const track = params.get("mirror") === "1" ? mirrorTrack(ordinary) : ordinary;
   const unknownTrack = [...TRACKS, ...DEV_TRACKS].every((t) => t.id !== wantedTrack);
   const views = Math.max(1, Math.min(4, Number(params.get("views") ?? 1) || 1));
   const quality = (params.get("quality") as Tier | null) ?? "auto";
