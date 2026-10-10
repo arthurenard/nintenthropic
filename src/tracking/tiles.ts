@@ -34,6 +34,48 @@ export function tileRects(count: number, width: number, height: number, overlap:
   return rects;
 }
 
+/** Camera frames a tile may go without a hand before it is looked at only now and then. */
+export const QUIET_AFTER = 8;
+/** A quiet tile is looked at on every this-many camera frames (staggered across the tiles). */
+export const QUIET_EVERY = 3;
+
+/**
+ * Which tiles are worth reading on a camera frame. Every tile with hands in
+ * it (or that had some a moment ago) is read on every frame, so a player
+ * steering never waits; a tile nobody has held a hand up in for a few frames
+ * (an empty seat, a player looking away) is read on every third frame, and
+ * the ones that are quiet together on different frames, so the worker's time
+ * is spent where the hands are. A hand raised in a quiet tile is found within
+ * `QUIET_EVERY` frames, the one time it matters: when a player starts.
+ */
+export class TileSchedule {
+  /** Camera frames in a row each tile has come back empty. */
+  private readonly empty: number[];
+  private reads = 0;
+
+  constructor(
+    readonly count: number,
+    private readonly after: number = QUIET_AFTER,
+    private readonly every: number = QUIET_EVERY,
+  ) {
+    this.empty = Array.from({ length: count }, () => 0);
+  }
+
+  /** Which tiles to read on the next camera frame (counts the frame). */
+  next(): boolean[] {
+    const frame = this.reads++;
+    return this.empty.map((quiet, i) => quiet < this.after || (frame + i) % this.every === 0);
+  }
+
+  /** What each tile found on the frame just read: how many hands, or null for a tile that was skipped. */
+  record(found: readonly (number | null)[]): void {
+    found.forEach((hands, i) => {
+      if (hands === null) return;
+      this.empty[i] = hands > 0 ? 0 : Math.min(this.after, (this.empty[i] ?? 0) + 1);
+    });
+  }
+}
+
 const PALM = [0, 5, 9, 13, 17] as const;
 
 /** The palm's centre in the picture's pixels. */

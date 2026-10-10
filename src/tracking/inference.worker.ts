@@ -15,7 +15,7 @@ import { HandLandmarker } from "@mediapipe/tasks-vision";
 import { createFaceLandmarker, eyesFrom, type Fileset } from "./face";
 import type { FromWorker, ToWorker } from "./protocol";
 import { seenHands } from "./hands";
-import { joinTiles, tileRects } from "./tiles";
+import { TileSchedule, joinTiles, tileRects } from "./tiles";
 import type { FaceReading, SeenHand } from "./types";
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -26,6 +26,7 @@ let landmarker: HandLandmarker | null = null;
  */
 let more: HandLandmarker[] = [];
 const tileCanvases: OffscreenCanvas[] = [];
+let schedule: TileSchedule | null = null;
 let face: FaceLandmarker | null = null;
 /**
  * Where the runtime's files are on the site, for a face landmarker added
@@ -112,17 +113,24 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
   }
 }
 
-/** Players sharing a camera: each tile of the picture to its own landmarker, the hands joined (tiles.ts). */
+/**
+ * Players sharing a camera: each tile of the picture to its own landmarker, the hands joined (tiles.ts).
+ * A tile that has had no hand for a few frames is read only now and then (TileSchedule); the others, always.
+ */
 function readTiles(image: VideoFrame | ImageBitmap, timestamp: number): SeenHand[] {
   const landmarkers = [landmarker!, ...more];
+  if (schedule?.count !== landmarkers.length) schedule = new TileSchedule(landmarkers.length);
   const width = "displayWidth" in image ? image.displayWidth : image.width;
   const height = "displayHeight" in image ? image.displayHeight : image.height;
+  const due = schedule.next();
   const found = tileRects(landmarkers.length, width, height).map((tile, i) => {
+    if (!due[i]) return { tile, hands: [] as SeenHand[], read: false };
     let canvas = tileCanvases[i];
     if (!canvas || canvas.width !== tile.width || canvas.height !== tile.height) canvas = tileCanvases[i] = new OffscreenCanvas(tile.width, tile.height);
     canvas.getContext("2d")!.drawImage(image, tile.x, tile.y, tile.width, tile.height, 0, 0, tile.width, tile.height);
-    return { tile, hands: seenHands(landmarkers[i]!.detectForVideo(canvas, timestamp)) };
+    return { tile, hands: seenHands(landmarkers[i]!.detectForVideo(canvas, timestamp)), read: true };
   });
+  schedule.record(found.map((one) => (one.read ? one.hands.length : null)));
   return joinTiles(found, width, height);
 }
 
