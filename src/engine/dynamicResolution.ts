@@ -133,3 +133,28 @@ export class DynamicResolution {
     return true;
   }
 }
+
+/**
+ * Notices a machine that dynamic resolution cannot save: the scale has sat at
+ * its floor, frame after frame, for `after` seconds. A hitch (a tab put
+ * away, a debugger) is not time spent at the floor and starts the count
+ * again. It speaks once.
+ */
+export class StrainWatch {
+  private seconds = 0;
+  private told = false;
+
+  constructor(private readonly after = 6) {}
+
+  /** One frame of `seconds`; true, once, when the floor has held long enough. */
+  frame(seconds: number, atFloor: boolean): boolean {
+    if (!atFloor || !(seconds > 0) || seconds > HITCH / 1000) {
+      this.seconds = 0;
+      return false;
+    }
+    this.seconds += seconds;
+    if (this.told || this.seconds < this.after) return false;
+    this.told = true;
+    return true;
+  }
+}

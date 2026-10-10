@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { joinTiles, tileRects, untile } from "./tiles";
+import { QUIET_AFTER, QUIET_EVERY, TileSchedule, joinTiles, tileRects, untile } from "./tiles";
 import type { Landmark, SeenHand } from "./types";
 
 /** A hand whose 21 points sit at (x, y) in its own picture, a little spread out, with a score. */
@@ -21,6 +21,64 @@ describe("the tiles a picture is cut into", () => {
     expect(rects.every((rect) => rect.y === 0 && rect.height === 1080)).toBe(true);
     // The middle ones are the quarter and the overlap either side; the ends only on the inside.
     expect(rects[1]!.width).toBeGreaterThan(rects[0]!.width);
+  });
+});
+
+describe("which tiles are read", () => {
+  /** Reads `frames` camera frames of a picture whose tiles find `hands[i]` hands each; returns the reads per tile. */
+  function run(schedule: TileSchedule, hands: number[], frames: number): number[] {
+    const reads = hands.map(() => 0);
+    for (let f = 0; f < frames; f++) {
+      const due = schedule.next();
+      schedule.record(due.map((read, i) => (read ? hands[i]! : null)));
+      due.forEach((read, i) => (reads[i]! += read ? 1 : 0));
+    }
+    return reads;
+  }
+
+  it("reads every tile on every frame while each has hands, and at the start before anything is known", () => {
+    expect(run(new TileSchedule(4), [2, 2, 2, 2], 60)).toEqual([60, 60, 60, 60]);
+    expect(run(new TileSchedule(4), [0, 0, 0, 0], QUIET_AFTER)).toEqual([QUIET_AFTER, QUIET_AFTER, QUIET_AFTER, QUIET_AFTER]);
+  });
+
+  it("looks at an empty seat only every few frames, and the seats that sit empty on different frames", () => {
+    const schedule = new TileSchedule(4);
+    const reads = run(schedule, [2, 2, 0, 0], 300);
+    expect(reads[0]).toBe(300);
+    expect(reads[1]).toBe(300);
+    // After the settling frames, an empty tile is read on every QUIET_EVERY-th.
+    expect(reads[2]).toBeLessThanOrEqual(QUIET_AFTER + Math.ceil((300 - QUIET_AFTER) / QUIET_EVERY));
+    expect(reads[2]).toBeGreaterThanOrEqual(QUIET_AFTER + Math.floor((300 - QUIET_AFTER) / QUIET_EVERY));
+    // Never the two empty tiles on the same late frame.
+    const late = new TileSchedule(4);
+    run(late, [2, 2, 0, 0], 100);
+    for (let f = 0; f < 12; f++) {
+      const due = late.next();
+      late.record(due.map((read, i) => (read ? [2, 2, 0, 0][i]! : null)));
+      expect(due[2] && due[3]).toBe(false);
+    }
+  });
+
+  it("finds a hand raised in a quiet tile within a few frames, then reads that tile every frame again", () => {
+    const schedule = new TileSchedule(3);
+    run(schedule, [2, 0, 0], 50);
+    let waited = 0;
+    let found = false;
+    while (!found && waited < 20) {
+      const due = schedule.next();
+      schedule.record(due.map((read, i) => (read ? [2, 2, 0][i]! : null)));
+      found = due[1]!;
+      waited++;
+    }
+    expect(found).toBe(true);
+    expect(waited).toBeLessThanOrEqual(QUIET_EVERY);
+    expect(run(schedule, [2, 2, 0], 10)[1]).toBe(10);
+  });
+
+  it("goes on reading a tile for a moment after its hands go, so a hand lost for a frame is not lost for good", () => {
+    const schedule = new TileSchedule(1);
+    run(schedule, [2], 20);
+    expect(run(schedule, [0], QUIET_AFTER - 1)).toEqual([QUIET_AFTER - 1]);
   });
 });
 

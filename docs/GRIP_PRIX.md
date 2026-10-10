@@ -365,10 +365,123 @@ each model behind a small factory, so a Blender-made glTF can replace it.
   place on finishing. A minimap (the track's outline, a dot per kart, players
   ringed) bottom-left when there is one view, in the free quadrant with three.
 - **Fast.** 60 fps with four viewports on a MacBook with tracking running:
-  the engine's quality tiers and dynamic resolution, instanced scenery, no
-  real-time shadows beyond one cheap map near the karts.
+  the engine's quality tiers and dynamic resolution, instanced scenery that
+  each view culls cell by cell, no real-time shadows beyond one cheap map near
+  the karts. How it was measured, and what each tier costs: "Performance"
+  below.
 - **The dev page** `src/kart/render/dev.html`: the track and eight karts
-  driven by the real sim (bots), the keyboard driving kart 0, `?views=1..4`.
+  driven by the real sim (bots), the keyboard driving kart 0, `?views=1..4`;
+  `?profile=1` times the frame and `?scale=1` holds the resolution (see
+  "Performance").
+
+## Performance
+
+Measured, then changed, in this order; everything below is on an Apple M4 Max in Chrome on Metal,
+a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels, eight bots on the real sim.
+
+**Tools** (`tools/perf/`, all headless Chrome with `--use-angle=metal --enable-gpu --mute-audio`, frame-rate limit off):
+
+- `bench.mjs`: every track x 1 or 4 views x tier through the dev page (`dev.html?profile=1`): fps, CPU ms (sim, scene
+  update, draw submit, HUD), GPU ms (EXT_disjoint_timer_query_webgl2: the views with their shadow passes, and the
+  post chain), draw calls, triangles, shader programs, texture and renderbuffer memory (counted at the WebGL calls),
+  time to the first frame, the worst of the first 240 frames, heap allocated per frame. `--bases a,b --rounds n`
+  alternates two dev pages (two checkouts) and prints medians, which is the only fair way on a busy machine (the same
+  configuration measured 190 and 275 fps an hour apart); `--cpu n` slows the page's main thread; `--soft` draws on a
+  software GPU, where every triangle and pixel costs.
+- `same.mjs`: proves an optimisation leaves the picture alone (the same moment redrawn through the post chain with it
+  off and on, canvases compared). `shots.mjs`: the same posed still from two dev pages at each tier, with the
+  difference in 8-bit levels.
+- `tracking.mjs`: the hand tracker for 1 to 4 players on one camera (`e2e/tracker.html`).
+- A worktree whose `node_modules` is a link needs a Vite config that adds the real `node_modules` to `server.fs.allow`,
+  or Three's Draco decoder is refused (403) and every Blender model falls back to its code-built stand-in.
+
+**What the numbers said.** On this machine a frame is limited by the number of GL calls, not by triangles or pixels:
+the main thread sits in `uniformMatrix4fv` and the draw calls waiting for the GPU process (a quarter to a half of
+its time), the GPU's own time for the views is a few milliseconds, and hiding every tree changes the frame time
+by nothing. Four views multiply draw calls and vertices by four and pixels by none, so they are where weaker
+hardware breaks: 700 to 1200 calls and 2 to 9 million triangles a frame at the high tier, a third of the
+calls in the shadow pass. The Blender art had doubled the triangles; most were never on screen. Three.js's own
+per-draw bookkeeping (uniform uploads, material parameters, sorting) is about four fifths of the 100 to 800 KB allocated per
+frame, so it falls with the draw calls; the game's own is about 50 KB.
+
+**Before and after, the worst tracks, medians of two or three alternating runs** (draw calls and kilo-triangles are
+what one frame draws; "hitch" is the longest of the first 240 frames of a race, ms, which the dev loop clamps at 100,
+and which carries the machine's other work too; meadow-loop, four views, high, drew 8.8 M triangles and 939 calls and
+now draws 4.3 M and 783, measured at one moment with `same.mjs`):
+
+| track, views, tier | frame ms | draw calls | k triangles | hitch ms |
+| --- | --- | --- | --- | --- |
+| canyon-run, 1 view, high | 9.4 to 8.4 | 199 to 165 | 1322 to 620 | 100+ to 14 |
+| canyon-run, 4 views, high | 9.9 to 10.1 | 858 to 721 | 5454 to 2621 | 55 to 17 |
+| canyon-run, 4 views, medium | 10.1 to 8.9 | 790 to 629 | 4149 to 2357 | 38 to 51 |
+| canyon-run, 4 views, low | 6.0 to 5.0 | 738 to 571 | 3091 to 2128 | 12 to 9 |
+| five-finger-circuit, 1 view, high | 5.7 to 5.7 | 186 to 171 | 1038 to 515 | 100+ to 12 |
+| five-finger-circuit, 4 views, high | 7.1 to 6.8 | 863 to 736 | 4644 to 2489 | 62 to 16 |
+| five-finger-circuit, 4 views, medium | 5.1 to 4.8 | 834 to 673 | 3548 to 2151 | 40 to 11 |
+| starlight-ribbon, 4 views, high | 6.5 to 6.5 | 689 to 674 | 1860 to 1855 | 37 to 16 |
+
+On this GPU the frame time barely moves (it was never the triangles), which is the point of the other columns:
+what a weaker GPU or a slower driver pays for falls by 30 to 60% in triangles and 15 to 25% in calls. On a software GPU
+(`--soft`, 640x360, meadow-loop, four views) one frame took 4.7 s and now takes 2.2 s. The first frame of a race, which
+compiled thirty-odd shaders while the countdown began, went from 148, 227 and 185 ms (meadow, glacier, canyon, four views)
+to 27, 19 and 21 ms, and the 63 to 113 ms hitch at the green light (a kart's flames, their program only built when
+first drawn) is gone; the shaders (about 80 programs, up from 37 compiled lazily) are now built behind the loading
+screen, which can take a few hundred milliseconds longer to finish (the first frame came within 0 to 600 ms of its old
+time, either way, in a noisy run). Texture memory is 218 MB and 235 MB of multisampled targets at the high tier
+(110 MB and 3 MB at low). Between races each renderer gives its context back (`forceContextLoss`), so the GPU's
+memory goes with it; four restarts in one page grew the JS heap from 113 to 117 MB.
+
+**What changed, and why**
+
+- *Scenery culling per view* (`world/cull.ts`, its own commit; positions, scales and colours untouched). A scenery
+  kind was one InstancedMesh for the whole map, so three could only ask if all of it was in view and it always was.
+  Instances are grouped in 48 m cells with bounding spheres; a view draws only the cells its frustum touches, from an
+  instance buffer of its own that is rewritten only when its cells change. Scenery and foliage (tufts, flower
+  stems, petals). `same.mjs` compares the canvases with it off and on: identical on all nine tracks, 1 and 4 views, high
+  and medium.
+- *Shaders and first pictures at load* (`warmUp` in `renderer.ts`): compile in parallel (`compileAsync`), then draw two
+  pictures through the whole post chain with the hidden things (flames, the item pool) shown, then clear the canvas.
+- *Ground tiles of 40 cells* instead of 20: a fifth fewer draw calls, same picture.
+- *Lesser tiers*: karts are welded into one mesh from 26 m (medium) and 18 m (low) instead of 34 m; ground tiles of 60
+  and 80 cells; bloom's thresholded copy at half size. The high tier keeps all of its detail: the same still of every
+  track at the high tier, before and after, differs by 0.000 levels (identical pixels; `shots.mjs`); medium and low
+  differ by 0.01 to 0.7 levels on average (the half-size glow and the welded far karts).
+- *Drawing code loaded with the race, not the page* (`app/lazyRenderer.ts`): the start screen, the lobby and a phone that
+  is only a wheel no longer download three.js and the world builders. Script loaded eagerly by `race.html`: 1.6 MB
+  to 0.29 MB.
+- *Hand tracking*: a tile whose seat has shown no hand for eight frames is read every third frame (`TileSchedule` in
+  `tiles.ts`, staggered across tiles); a tile with hands is read on every frame, so steering never waits. Measured
+  on the GPU delegate in the worker, 30 fps camera: four seats with two hands up 29 to 24 ms per camera frame, four seats
+  with three up 37 to 24 ms (13.6 to 26 reads a second, 81 to 17 frames skipped). One player on the whole picture:
+  11 to 13 ms; two: 17 to 20; three: 24 to 27; four, all seated and playing: about 30 to 40. One inference is in
+  flight at a time already (a frame that arrives while the worker is busy is dropped, never queued).
+
+**Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
+base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
+core count says a Pro or Max: 12 or more); Apple Pro, Max and Ultra start at high; old Intel graphics at low, Iris Xe
+and Arc at medium; a laptop Adreno (X1) at medium, a phone's at low; the small GeForce parts (MX, GT) at medium; a big
+GPU in a machine of four cores or fewer is a step down.
+
+**The safety net.** If dynamic resolution has sat at its floor for six seconds of racing (`StrainWatch`), the renderer
+tells the app, and in Auto the next race starts a tier lower on this device (`handy.kart.ceiling.v1`, kept 14 days,
+forgotten when the player chooses Graphics again). Checked end to end on a software GPU that said it was an M1:
+medium, then "Auto is using Low here: a race ran slowly, so it stepped down."
+
+**Graphics.** The pause sheet has Graphics (Auto, Low, Medium, High; `handy.kart.graphics.v1`, Auto by default) and a
+Frame Rate switch (`handy.kart.fps.v1`: a small readout beside the pause button). The renderer is built from the choice
+at the start of each race, so a change shows from the next one (Restart, in the same sheet, is the way to see it now);
+the footnote says which tier Auto uses here.
+
+**Phones as wheels.** A phone whose race is on the host's big screen creates no renderer, no world and no canvas
+(`views()` is empty: `app/race.ts` shows the controller), fetches none of `world-*.glb`, and no longer builds the
+3D podium after a Grand Prix. What it still does is 3D for the driver picker and the lobby's portraits (the karts' and
+drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
+
+**Next.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
+models at all); caster culling for the shadow pass (karts behind a view's camera, 23% of the draw calls at four views are
+the shadow pass); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
+merging the track's road, kerb and verge meshes beyond 150 m; a second tracking worker so four seated players read in
+parallel.
 
 ## App (`race.html`, `src/kart/app/`, `src/kart/main.ts`)
 
@@ -438,8 +551,10 @@ tight type, springy motion; a white pill is the one main action of a screen;
    (and "Race 2 of 4" in a Grand Prix), a thin progress bar and a tip about
    the hands that changes (`loading.ts`: open both hands to brake, flick one
    hand to use an item, hop to drift, clap to honk; in keys or buttons for
-   the others). Escape or the pause button: a sheet with Leave Race (the
-   host's also Restart).
+   the others). Escape or the pause button: a sheet with the Music and
+   Effects sliders, Graphics (Auto, Low, Medium, High) and a Frame Rate
+   switch (`graphicsui.ts`; see "Performance"), and Leave Race (the host's
+   also Restart).
 7. **Results.** The track's postcard blurred behind a glass table (the
    page's backdrop, as in the lobby and the standings: `backdrop.ts`, darker
    glass over a picture so every word passes AA): each place a row in its
@@ -467,6 +582,11 @@ The arcade (`index.html`) gains a heading per kind of game: **Shooting**
   in order under loss, prediction converging, the host leaving); the wheel
   (angles, the level, fists and open hands from recorded landmarks, every
   gesture, hands lost).
+- Performance (Vitest): the tier guess for each GPU family (and the split-screen
+  rules), the safety net's watch and its ceiling in prefs, the per-view culling of
+  instances (everything the frustum reaches is drawn once with its colour, a buffer is
+  rewritten only when its cells change), the tracker's tile schedule, the lazy
+  renderers. Pictures and timings are `tools/perf/` (not run by CI).
 - End to end (Playwright, `?net=local`, muted): a host and two guests in tabs
   of one browser join by code, drive by keyboard and finish a one-lap race;
   practice against bots; the arcade's Racing heading opens the page.

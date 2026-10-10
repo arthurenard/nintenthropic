@@ -20,6 +20,7 @@ import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
 import { PHOTO_GAP, recordDuck, tricksFor } from "./eggs";
 import { itemWords, lapLabel, list, ordinal } from "./format";
+import { FrameRate } from "./graphicsui";
 import { LoadingScreen, raceWords } from "./loading";
 import { hostName, kartOf } from "./roster";
 import type { Disposable, RaceSound, Services } from "./services";
@@ -83,6 +84,13 @@ export class RaceScreen {
   private view: RaceView | null = null;
   private readonly sheet = $<HTMLDialogElement>("pause-sheet");
   private readonly loadingUi = new LoadingScreen();
+  /** The small frame-rate readout, when the pause sheet's Frame Rate switch has it on. */
+  private readonly rate = new FrameRate($("race-fps"));
+
+  /** The readout on or off (the pause sheet's switch, and the setting as it was kept). */
+  showFrameRate(on: boolean): void {
+    this.rate.show(on);
+  }
 
   constructor(
     private readonly services: Services,
@@ -299,6 +307,7 @@ export class RaceScreen {
       }
       this.teachItems(lobby);
       this.renderer.frame(view, dt);
+      this.rate.tick(seconds);
       this.eggs(view, lobby);
     }
     // Heard from the first frame, not from when the picture is ready: the lights count down meanwhile.
@@ -351,8 +360,9 @@ export class RaceScreen {
         this.loaded = true;
         this.loading(false, 1);
       })
-      .catch(() => {
-        if (this.renderer === renderer) this.hooks.failed("load");
+      .catch((error: unknown) => {
+        // The drawing code is fetched with the load, so the browser that cannot draw says so here, not when the renderer is made.
+        if (this.renderer === renderer) this.hooks.failed(error instanceof WebGLUnavailable ? "webgl" : "load");
       });
   }
 

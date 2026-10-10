@@ -37,6 +37,7 @@ import { PodiumScreen } from "./podium";
 import { ResultsScreen } from "./results";
 import { kartOf, localPlayers, previewColours } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
+import { GraphicsControls } from "./graphicsui";
 import { SoundControls } from "./soundui";
 import { StandingsScreen } from "./standings";
 import { StartScreen, type StartChoice } from "./start";
@@ -97,6 +98,8 @@ export class KartApp {
   /** The track's postcard behind the lobby, the results and the standings (the sky for every other screen). */
   private readonly backdrop = new Backdrop($("menu-photo"));
   private readonly soundControls: SoundControls;
+  /** The pause sheet's Graphics row and Frame Rate switch. */
+  private readonly graphicsControls: GraphicsControls;
   /** How many were in the lobby, and how many ready, when it last changed: a join, a leave or a tick has its sound. */
   private crowd = { count: 0, ready: 0 };
   /** The You screen (and the wheel check) are done: the room's phase now says what to show. */
@@ -166,6 +169,7 @@ export class KartApp {
       leave: () => this.leave(),
     });
     this.soundControls = new SoundControls(services.sound);
+    this.graphicsControls = new GraphicsControls((on) => this.raceScreen.showFrameRate(on));
   }
 
   /**

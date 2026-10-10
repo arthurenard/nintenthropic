@@ -13,10 +13,11 @@ import { TRACKS } from "../track/tracks";
 import type { DriverControl, RaceRenderer, Session } from "../contract";
 import { gamepadControl, keyboardControl, wheelControl, WheelPreview, type Seat, type WheelControl as ReadWheel } from "../input";
 import { hostSession, joinSession, localTransport, peerTransport, soloSession, type NetOptions } from "../net";
-import { createPodium, createRaceRenderer } from "../render";
+import { lowerTier } from "../render/quality";
 import { createSimRace } from "../sim/race";
 import { CameraStack } from "./camera";
-import { loadYou, playerCount } from "./prefs";
+import { lazyPodium, lazyRenderer } from "./lazyRenderer";
+import { loadCeiling, loadGraphics, loadYou, playerCount, saveCeiling } from "./prefs";
 import { KartSounds } from "./sound";
 import {
   SessionFailure,
@@ -106,11 +107,28 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     solo: async (session) => soloSession(netOptions(session)),
     renderer(canvas, hudRoot): RaceRenderer {
       if (options.fail === "webgl") throw new WebGLUnavailable();
-      return createRaceRenderer(canvas, hudRoot);
+      // Graphics (the pause sheet): a tier of the player's choosing, or Auto, which the safety net holds back on a device that could not keep up.
+      const choice = loadGraphics();
+      const auto = choice === "auto";
+      // The drawing code (three.js and the world, about a megabyte) is fetched when the race is first loaded, not with the page:
+      // a start screen, a lobby, and a phone that is only a wheel never need it.
+      return lazyRenderer(async () => {
+        const { createRaceRenderer } = await import("../render");
+        return createRaceRenderer(canvas, hudRoot, {
+          quality: choice,
+          ceiling: auto ? loadCeiling() : null,
+          onStrain: auto
+            ? (tier) => {
+                const lower = lowerTier(tier);
+                if (lower) saveCeiling(lower);
+              }
+            : undefined,
+        });
+      });
     },
     podium(canvas) {
       if (options.fail === "webgl") throw new WebGLUnavailable();
-      return createPodium(canvas);
+      return lazyPodium(canvas, async () => (await import("../render")).createPodium(canvas));
     },
     controls: {
       wheel(wheelOptions: WheelOptions): Wheel {

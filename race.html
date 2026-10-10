@@ -343,6 +343,7 @@
       <button class="race-pause icon-button glass" id="race-pause" aria-label="Pause" title="Pause (Esc)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause" /></svg>
       </button>
+      <p class="race-fps glass num" id="race-fps" aria-hidden="true" hidden></p>
       <div class="race-previews" id="race-previews"></div>
       <div class="view-notes" id="view-notes"></div>
       <div class="view-notes" id="view-toasts"></div>
@@ -495,6 +496,19 @@
           <label class="row-label" for="pause-effects">Effects</label>
           <input type="range" class="slider" id="pause-effects" min="0" max="100" step="5" value="100" />
         </div>
+        <div class="row graphics-row">
+          <span class="row-label" id="label-graphics">Graphics</span>
+          <div class="segmented" role="radiogroup" id="pause-graphics" aria-labelledby="label-graphics" aria-describedby="graphics-note">
+            <button type="button" role="radio" data-value="auto">Auto</button>
+            <button type="button" role="radio" data-value="low">Low</button>
+            <button type="button" role="radio" data-value="medium">Medium</button>
+            <button type="button" role="radio" data-value="high">High</button>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row-label" for="pause-fps">Frame Rate</label>
+          <button type="button" class="switch" role="switch" id="pause-fps" aria-checked="false"></button>
+        </div>
       </div>
       <div class="menu-list">
         <button class="button primary wide" id="pause-resume">
@@ -511,6 +525,7 @@
         <p class="eyebrow">Tricks</p>
         <ul id="pause-tricks-list"></ul>
       </div>
+      <p class="footnote tertiary" id="graphics-note"></p>
       <p class="footnote tertiary" id="pause-note"></p>
     </dialog>
 

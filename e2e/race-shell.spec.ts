@@ -151,6 +151,24 @@ test("pausing: Escape and the button open a sheet; practice waits, Resume counts
   // Practice is the host's own: it can restart.
   await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
   await shot(page, info, "race-5d-pause", 500);
+
+  // Graphics: Auto until chosen; a choice is kept on the device for the next race. The frame-rate readout is off until switched on.
+  const graphics = sheet.getByRole("radiogroup", { name: "Graphics" });
+  await expect(graphics.getByRole("radio")).toHaveCount(4);
+  await expect(graphics.getByRole("radio", { name: "Auto" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("#graphics-note")).toContainText(/Auto uses (Low|Medium|High) on this device/);
+  await graphics.getByRole("radio", { name: "Low" }).click();
+  await expect(graphics.getByRole("radio", { name: "Low" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("#graphics-note")).toHaveText("Low graphics from the next race.");
+  expect(await page.evaluate(() => localStorage.getItem("handy.kart.graphics.v1"))).toBe('"low"');
+  await expect(page.locator("#race-fps")).toBeHidden();
+  await sheet.getByRole("switch", { name: "Frame Rate" }).click();
+  await expect(page.locator("#race-fps")).toBeVisible();
+  await shot(page, info, "race-5d2-pause-graphics", 300);
+  await sheet.getByRole("switch", { name: "Frame Rate" }).click();
+  await expect(page.locator("#race-fps")).toBeHidden();
+  await graphics.getByRole("radio", { name: "Auto" }).click();
+  expect(await page.evaluate(() => localStorage.getItem("handy.kart.graphics.v1"))).toBe('"auto"');
   const stopped = (await raceState(page))!.time;
   await page.waitForTimeout(1200);
   expect((await raceState(page))!.time).toBe(stopped);

@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_NAMES } from "./format";
-import { DEFAULT_LEVELS, STARTERS, crew, loadLevels, loadYou, playerCount, saveLevels, saveYou, setWheelChecked, wheelChecked, type You } from "./prefs";
+import {
+  CEILING_DAYS,
+  DEFAULT_LEVELS,
+  STARTERS,
+  clearCeiling,
+  crew,
+  loadCeiling,
+  loadFpsReadout,
+  loadGraphics,
+  loadLevels,
+  loadYou,
+  playerCount,
+  saveCeiling,
+  saveFpsReadout,
+  saveGraphics,
+  saveLevels,
+  saveYou,
+  setWheelChecked,
+  wheelChecked,
+  type You,
+} from "./prefs";
 
 /** A storage in memory, as the browser's but without the browser. */
 function memory(initial: Record<string, string> = {}): Storage {
@@ -111,5 +131,54 @@ describe("the Music and Effects sliders", () => {
     expect(loadLevels(storage)).toEqual({ music: DEFAULT_LEVELS.music, effects: 1 });
     expect(loadLevels(memory({ "handy.kart.sound.v1": "{" }))).toEqual(DEFAULT_LEVELS);
     expect(loadLevels(undefined)).toEqual(DEFAULT_LEVELS);
+  });
+});
+
+describe("the Graphics setting", () => {
+  it("is Auto until chosen, then remembered", () => {
+    const storage = memory();
+    expect(loadGraphics(storage)).toBe("auto");
+    expect(saveGraphics("medium", storage)).toBe(true);
+    expect(loadGraphics(storage)).toBe("medium");
+    saveGraphics("auto", storage);
+    expect(loadGraphics(storage)).toBe("auto");
+  });
+
+  it("reads anything odd as Auto, and plays without a storage", () => {
+    expect(loadGraphics(memory({ "handy.kart.graphics.v1": JSON.stringify("ultra") }))).toBe("auto");
+    expect(loadGraphics(memory({ "handy.kart.graphics.v1": "{" }))).toBe("auto");
+    expect(loadGraphics(undefined)).toBe("auto");
+    expect(saveGraphics("high", undefined)).toBe(false);
+  });
+
+  it("keeps the safety net's ceiling until the player chooses again", () => {
+    const storage = memory();
+    expect(loadCeiling(storage)).toBeNull();
+    saveCeiling("low", storage);
+    expect(loadCeiling(storage)).toBe("low");
+    saveGraphics("auto", storage);
+    expect(loadCeiling(storage)).toBeNull();
+    saveCeiling("medium", storage);
+    clearCeiling(storage);
+    expect(loadCeiling(storage)).toBeNull();
+    expect(loadCeiling(memory({ "handy.kart.ceiling.v1": JSON.stringify({ tier: "ultra", at: Date.now() }) }))).toBeNull();
+    expect(loadCeiling(memory({ "handy.kart.ceiling.v1": JSON.stringify("low") }))).toBeNull();
+  });
+
+  it("lets the safety net's ceiling lapse after a couple of weeks", () => {
+    const storage = memory();
+    const day = 86_400_000;
+    saveCeiling("medium", storage, 1_000_000);
+    expect(loadCeiling(storage, 1_000_000 + 13 * day)).toBe("medium");
+    expect(loadCeiling(storage, 1_000_000 + CEILING_DAYS * day)).toBeNull();
+    expect(saveCeiling("low", undefined)).toBe(false);
+  });
+
+  it("keeps the frame-rate readout off until it is turned on", () => {
+    const storage = memory();
+    expect(loadFpsReadout(storage)).toBe(false);
+    saveFpsReadout(true, storage);
+    expect(loadFpsReadout(storage)).toBe(true);
+    expect(loadFpsReadout(undefined)).toBe(false);
   });
 });

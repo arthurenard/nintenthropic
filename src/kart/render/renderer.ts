@@ -19,7 +19,10 @@
  */
 import {
   Color,
+  Frustum,
   Group,
+  LOD,
+  Matrix4,
   Mesh,
   NoToneMapping,
   PCFShadowMap,
@@ -32,7 +35,7 @@ import {
   type WebGLRenderTarget,
 } from "three";
 import { WebGLUnavailable } from "../../engine/common";
-import { DynamicResolution } from "../../engine/dynamicResolution";
+import { DynamicResolution, StrainWatch } from "../../engine/dynamicResolution";
 import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
@@ -45,10 +48,12 @@ import { KartActor, type ActorContext, type KartFactory } from "./kart";
 import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
+import { FAR_DISTANCE } from "./kartSpec";
 import { PostChain, type DrawViews } from "./post";
+import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
-import { QUALITY, type QualitySettings, type Tier } from "./quality";
+import { QUALITY, capTier, type QualitySettings, type Tier } from "./quality";
 import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
 import { createWorld, type World } from "./world";
@@ -57,9 +62,26 @@ import { addBakedSun, clearBake, makeBakeUniforms, shareBake } from "./world/sha
 import { glowTexture } from "./world/textures";
 import { styleFor } from "./world/themes";
 
+/** Seconds at the lowest resolution before the renderer says it is straining (see `onStrain`). */
+export const STRAIN_SECONDS = 6;
+
+const _projScreen = new Matrix4();
+const _frustum = new Frustum();
+
 export interface RaceRendererOptions {
   /** "auto" (the default) guesses from the GPU. */
   quality?: Tier | "auto";
+  /**
+   * With "auto": no tier above this one, whatever the GPU's name says (what the safety net
+   * remembers about a device that could not hold the frame rate at its guessed tier).
+   */
+  ceiling?: Tier | null;
+  /**
+   * Called once, with the tier in use, when dynamic resolution has sat at its lowest for
+   * `STRAIN_SECONDS` of racing: the picture could not be made cheap enough by pixels alone.
+   * The app turns it into a lower ceiling for the next race (prefs.ts).
+   */
+  onStrain?: (tier: Tier) => void;
   /** Makes a kart's model; the procedural toy by default, a glTF loader later. */
   kartFactory?: KartFactory;
   /**
@@ -71,6 +93,8 @@ export interface RaceRendererOptions {
   theme?: TrackTheme;
   /** Fade instead of move; also follows the page's Reduce Motion. */
   reduceMotion?: boolean;
+  /** Hold the resolution scale here instead of letting dynamic resolution move it (the dev page and the bench, to compare tiers at equal pixels). */
+  resolutionScale?: number;
 }
 
 /** What the dev page and the tests can ask the renderer about itself. */
@@ -84,6 +108,25 @@ export interface RenderStats {
   geometries: number;
   textures: number;
   views: number;
+  /** Shader programs compiled so far. */
+  programs: number;
+  /** Where the CPU's frame went, ms (running averages; zero until `profile(true)`). */
+  timings: FrameTimings;
+}
+
+/** CPU and GPU milliseconds per frame, as running averages. The GPU's are -1 where the browser has no timer queries. */
+export interface FrameTimings {
+  /** Karts, effects, hazards, cameras: everything before the draw. */
+  update: number;
+  /** The draw and the post chain, as the CPU submits them (no waiting for the GPU). */
+  submit: number;
+  /** Of `submit`, the scene draws of every view (shadow maps included). */
+  draw: number;
+  /** The HTML HUD and the eggs. */
+  hud: number;
+  /** The GPU's time on the views (scene and its shadow passes) and on the post chain (resolve, bloom, grade). */
+  gpuViews: number;
+  gpuPost: number;
 }
 
 export interface GripRenderer extends RaceRenderer {
@@ -92,6 +135,12 @@ export interface GripRenderer extends RaceRenderer {
   stats(): RenderStats;
   /** For looking at the whole world from anywhere (the dev page): replaces the first view's camera; null puts the chase camera back. `roll` (degrees; + lifts the horizon on the right) tilts the picture, for the postcards (shot.ts). */
   setDebugCamera(pose: { x: number; y: number; z: number; lookX: number; lookY: number; lookZ: number; fov?: number; roll?: number } | null): void;
+  /** Starts (or stops) timing the frame: the CPU phases and, where the browser allows, the GPU's. For the dev page and the bench; a game never asks. */
+  profile(on: boolean): void;
+  /** The GPU timer's totals over the frames since the last reset (mean ms; 0 where unavailable). */
+  gpuMean(label: "views" | "post", reset?: boolean): number;
+  /** Everything the dev page's bench may need to take apart: the live objects. */
+  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void };
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -118,10 +167,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   renderer.setClearColor(new Color(0x0b0b0d), 1);
 
   const gpu = gpuName(renderer.getContext());
-  const guessed = guessTier(gpu, typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4);
-  const tier: Tier = options.quality && options.quality !== "auto" ? options.quality : guessed;
+  const guessed = guessTier(gpu, typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4, { splitScreen: true });
+  const tier: Tier = options.quality && options.quality !== "auto" ? options.quality : capTier(guessed, options.ceiling);
   const settings: QualitySettings = QUALITY[tier];
-  const resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier] });
+  const resolution = new DynamicResolution({ initial: options.resolutionScale ?? INITIAL_SCALE[tier] });
   renderer.shadowMap.enabled = settings.shadowMap > 0;
 
   const calm =
@@ -172,8 +221,17 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const frameViews: { rect: { x: number; y: number; w: number; h: number }; eye: PerspectiveCamera; at: { x: number; y: number; z: number } }[] = [];
 
   /** Draws every view, scissored, into the post chain's HDR target. */
+  let profiling = false;
+  let timer: GpuTimer | null = null;
+  /** Each view draws only the scenery its frustum reaches (off, for comparing pictures: they must be the same). */
+  let culling = true;
+  const timings: FrameTimings = { update: 0, submit: 0, draw: 0, hud: 0, gpuViews: -1, gpuPost: -1 };
+  const smooth = (key: "update" | "submit" | "draw" | "hud", ms: number) => {
+    timings[key] += (ms - timings[key]) * 0.1;
+  };
   const drawViews: DrawViews = (target: WebGLRenderTarget) => {
     if (!world) return;
+    const t0 = profiling ? performance.now() : 0;
     const pr = target.width / Math.max(1, width);
     renderer.setRenderTarget(target);
     target.scissorTest = false;
@@ -181,7 +239,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.setRenderTarget(target);
     renderer.clear(true, true, false);
     target.scissorTest = true;
-    for (const v of frameViews) {
+    for (const [index, v] of frameViews.entries()) {
       const x = Math.floor(v.rect.x * pr);
       const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
       const h = Math.ceil(v.rect.h * pr);
@@ -193,9 +251,17 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       const fovRad = (v.eye.fov * Math.PI) / 180;
       pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
       world.focusSun(v.at.x, v.at.y, v.at.z);
+      // This view's frustum decides which trees, rocks and tufts are drawn for it.
+      v.eye.updateMatrixWorld();
+      v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
+      _projScreen.multiplyMatrices(v.eye.projectionMatrix, v.eye.matrixWorldInverse);
+      _frustum.setFromProjectionMatrix(_projScreen);
+      if (culling) world.cull(index, _frustum);
+      else world.uncull();
       renderer.render(scene, v.eye);
     }
     target.scissorTest = false;
+    if (profiling) smooth("draw", performance.now() - t0);
   };
   const post = new PostChain(renderer, tier, drawViews);
 
@@ -212,6 +278,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     });
   };
   let shadowSweep = 0;
+  /** Tells the app (once) when dynamic resolution has sat at its lowest for STRAIN_SECONDS. */
+  const strain = new StrainWatch(STRAIN_SECONDS);
 
   canvas.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
@@ -242,6 +310,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const makeActor = (r: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartActor => {
     const ctx = actorContext();
     const a = new KartActor(r.id, factory, r, ctx);
+    // The lesser tiers weld a kart into one mesh sooner (each kart is a dozen draw calls, and again in the shadow pass).
+    if (settings.kartDetail < FAR_DISTANCE) {
+      a.root.traverse((o) => {
+        const lod = o as LOD;
+        if (lod.isLOD && lod.levels[1]) lod.levels[1].distance = settings.kartDetail;
+      });
+    }
     kartGroup.add(a.root);
     actors.set(r.id, a);
     return a;
@@ -258,6 +333,49 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     dynamic,
     laps: raceLaps,
   });
+
+  /**
+   * Compiles every shader this race can ask for, and draws two pictures through the whole post chain, while the
+   * loading screen is up: the first frames of the countdown (and the first boost, the first banana) then cost
+   * what any other does, instead of the 150 to 230 ms a first draw took compiling thirty-odd programs.
+   * What is hidden now (a kart's flames, the item pool) is shown for the length of it, so it is drawn the way
+   * it will be, and put back. The first picture is from the start line; the second from the origin, where the
+   * karts stand until the first frame, so the shadow map's box has them in it and builds their depth shaders.
+   */
+  const warmUp = async (): Promise<void> => {
+    if (!world || disposed) return;
+    const start = world.geometry.samples[0] ?? { x: 0, y: 0, z: 0, tx: 0, tz: 1 };
+    const eyes = [
+      { eye: new PerspectiveCamera(60, width / height, 0.4, 2600), at: start, from: [start.x - start.tx * 9, start.y + 4, start.z - start.tz * 9], to: [start.x + start.tx * 10, start.y + 1, start.z + start.tz * 10] },
+      { eye: new PerspectiveCamera(60, width / height, 0.4, 2600), at: { x: 0, y: 0, z: 0 }, from: [0, 6, -12], to: [0, 1, 0] },
+    ] as const;
+    for (const e of eyes) {
+      e.eye.position.set(e.from[0], e.from[1], e.from[2]);
+      e.eye.lookAt(e.to[0], e.to[1], e.to[2]);
+      e.eye.updateMatrixWorld();
+    }
+    const hidden: Object3D[] = [];
+    scene.traverse((o) => {
+      if (!o.visible && !(o as { isLight?: boolean }).isLight) hidden.push(o);
+    });
+    for (const o of hidden) o.visible = true;
+    try {
+      // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)...
+      await renderer.compileAsync(scene, eyes[0].eye).catch(() => {});
+      // ...and the pictures build what remains, the way a frame does.
+      for (const e of eyes) {
+        if (disposed || !world) break;
+        frameViews.length = 0;
+        frameViews.push({ rect: { x: 0, y: 0, w: width, h: height }, eye: e.eye, at: { x: e.at.x, y: e.at.y, z: e.at.z } });
+        post.render(0);
+      }
+    } finally {
+      frameViews.length = 0;
+      for (const o of hidden) o.visible = false;
+    }
+    renderer.setRenderTarget(null);
+    renderer.clear(true, true, false);
+  };
 
   const disposeWorld = () => {
     for (const a of actors.values()) a.dispose();
@@ -320,6 +438,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const c of cameras) c.reset();
       relayout();
       applySize();
+      await warmUp();
       onProgress?.(1);
     },
 
@@ -335,9 +454,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
     frame(view: RaceView, dtRaw: number): void {
       if (!world || !effects || !things || !itemFx || !skids || disposed || ctxLost) return;
+      const tStart = profiling ? performance.now() : 0;
       const dt = Math.min(0.1, Math.max(0, dtRaw));
       time += dt;
-      if (dtRaw > 0 && resolution.sample(dtRaw * 1000)) applySize();
+      if (dtRaw > 0 && options.resolutionScale === undefined) {
+        if (resolution.sample(dtRaw * 1000)) applySize();
+        // Pixels were the cheap way to save time; if they have run out and the frames are still slow, the next race starts a tier lower.
+        if (strain.frame(dtRaw, resolution.scale <= resolution.min + 1e-6)) options.onStrain?.(tier);
+      }
 
       // A new race starts the tick count over.
       if (view.tick < lastTick - 5) {
@@ -450,11 +574,22 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         frameViews.push({ rect, eye, at: { x: follow.x, y: follow.y, z: follow.z } });
       });
       post.setTiles(layout.views, width, height);
+      const tSubmit = profiling ? performance.now() : 0;
       post.render(dt);
+      const tHud = profiling ? performance.now() : 0;
       frameViews.forEach((v, i) => eggs.view(i, v.rect, v.eye, kartAt, time));
       eggs.end(time);
 
       hud.update(view, dt);
+      if (profiling) {
+        const tEnd = performance.now();
+        smooth("update", tSubmit - tStart);
+        smooth("submit", tHud - tSubmit);
+        smooth("hud", tEnd - tHud);
+        timer?.poll();
+        timings.gpuViews = timer?.reading("views")?.ms ?? -1;
+        timings.gpuPost = timer?.reading("post")?.ms ?? -1;
+      }
     },
 
     resize(w: number, h: number, ratio: number): void {
@@ -471,6 +606,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       eggs.dispose();
       hud.dispose();
       post.dispose();
+      timer?.dispose();
       shadowTexture.dispose();
       lightTexture.dispose();
       renderer.dispose();
@@ -500,7 +636,35 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures,
         views: viewKarts.length,
+        programs: renderer.info.programs?.length ?? 0,
+        timings: { ...timings },
       };
+    },
+
+    profile(on: boolean): void {
+      profiling = on;
+      if (on && !timer) {
+        timer = new GpuTimer(renderer.getContext() as WebGL2RenderingContext);
+        if (!timer.supported) timer = null;
+      }
+      post.timer = on ? timer : null;
+    },
+
+    gpuMean(label, reset = false): number {
+      const r = timer?.reading(label);
+      const mean = r && r.count ? r.total / r.count : 0;
+      if (reset) timer?.resetTotals();
+      return mean;
+    },
+
+    inspect: {
+      renderer,
+      scene,
+      post,
+      world: () => world,
+      setCulling(on: boolean) {
+        culling = on;
+      },
     },
   };
   renderer.info.autoReset = false;
