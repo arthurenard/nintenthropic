@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DynamicResolution } from "./dynamicResolution";
+import { DynamicResolution, StrainWatch } from "./dynamicResolution";
 
 const VSYNC = 1000 / 60;
 
@@ -68,5 +68,57 @@ describe("dynamic resolution", () => {
   it("starts where the tier guess says", () => {
     expect(new DynamicResolution({ initial: 0.75 }).scale).toBe(0.75);
     expect(new DynamicResolution({ initial: 0.1 }).scale).toBe(0.6);
+  });
+});
+
+describe("the strain watch", () => {
+  const frames = (watch: StrainWatch, seconds: number, atFloor: boolean, per = 1 / 30): number => {
+    let told = 0;
+    for (let t = 0; t < seconds - 1e-9; t += per) if (watch.frame(per, atFloor)) told++;
+    return told;
+  };
+
+  it("says nothing while the resolution has room, and speaks once when it has sat at the floor long enough", () => {
+    const watch = new StrainWatch(6);
+    expect(frames(watch, 30, false)).toBe(0);
+    expect(frames(watch, 5, true)).toBe(0);
+    expect(frames(watch, 3, true)).toBe(1);
+    expect(frames(watch, 30, true)).toBe(0);
+  });
+
+  it("starts counting again when the resolution comes off the floor or a hitch comes", () => {
+    const watch = new StrainWatch(6);
+    frames(watch, 5, true);
+    frames(watch, 0.1, false);
+    expect(frames(watch, 5, true)).toBe(0);
+    watch.frame(2, true); // a tab put away, not time spent struggling
+    expect(frames(watch, 5.5, true)).toBe(0);
+    expect(frames(watch, 1, true)).toBe(1);
+  });
+
+  it("is told by dynamic resolution itself on a machine that cannot keep up at any size", () => {
+    const resolution = new DynamicResolution();
+    const watch = new StrainWatch(6);
+    let seconds = 0;
+    let told = -1;
+    for (let i = 0; i < 60 * 30 && told < 0; i++) {
+      resolution.sample(40);
+      seconds += 0.04;
+      if (watch.frame(0.04, resolution.scale <= resolution.min + 1e-6)) told = seconds;
+    }
+    // The scale takes a few seconds to reach the floor, then six more there.
+    expect(told).toBeGreaterThan(6);
+    expect(told).toBeLessThan(16);
+  });
+
+  it("never fires for a machine that keeps up, whatever its tier", () => {
+    const resolution = new DynamicResolution({ initial: 0.7 });
+    const watch = new StrainWatch(6);
+    let told = 0;
+    for (let i = 0; i < 60 * 120; i++) {
+      resolution.sample(VSYNC);
+      if (watch.frame(VSYNC / 1000, resolution.scale <= resolution.min + 1e-6)) told++;
+    }
+    expect(told).toBe(0);
   });
 });

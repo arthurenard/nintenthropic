@@ -11,6 +11,8 @@
  *   ?at=0.3                start kart 0 at this fraction of the lap (and ?offset=2 metres right of the centre)
  *   ?views=1..4            split screen: kart 0 to 3, one view each
  *   ?quality=low|medium|high
+ *   ?scale=1               hold the resolution scale (dynamic resolution off), to compare tiers at equal pixels
+ *   ?profile=1             time the frame (CPU phases, GPU views and post) and log every frame to window.__grip.log, for tools/perf/bench.mjs
  *   ?skip=8                run the demo this many seconds before showing it
  *   ?freeze=1              stop the demo (the picture still renders)
  *   ?boxes=rows            leave the item boxes to the track's rows, not the source's things
@@ -67,7 +69,8 @@ function startRace(): void {
     : createDemoRace(track, { karts, laps, golden: params.get("golden") === "1" });
   demo.boxesAsThings = params.get("boxes") !== "rows";
   const source: RaceViewSource = demo;
-  const renderer: GripRenderer = createRaceRenderer(canvas, hudRoot, { quality, theme });
+  const scale = params.has("scale") ? Number(params.get("scale")) || undefined : undefined;
+  const renderer: GripRenderer = createRaceRenderer(canvas, hudRoot, { quality, theme, resolutionScale: scale });
 
   const keys = new Set<string>();
   let lastKey = -100;
@@ -100,9 +103,21 @@ function startRace(): void {
   const resize = (): void => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
   window.addEventListener("resize", resize);
 
+  /** ?profile=1: one row per frame - [interval ms, sim ms, renderer.frame ms, JS heap bytes] - for the bench. */
+  const profile = params.get("profile") === "1";
+  const log: number[][] = [];
+  const marks: Record<string, number> = { start: performance.now() };
+  const heap = (): number => (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
+  if (profile) renderer.profile(true);
+
   (window as unknown as { __grip: unknown }).__grip = {
     renderer,
     demo,
+    marks,
+    log,
+    clearLog: () => {
+      log.length = 0;
+    },
     stats: () => renderer.stats(),
     setViews,
     /** Forgets who has used an item, so the hints show again (for pictures). */
@@ -115,9 +130,11 @@ function startRace(): void {
 
   const main = async (): Promise<void> => {
     resize();
+    marks.loadStart = performance.now();
     await renderer.load(source.track, source.racers, (f) => {
       loading.textContent = `Getting ready… ${Math.round(f * 100)}%`;
     });
+    marks.loaded = performance.now();
     setViews(views);
     // What each kart drives with, for the item hint: kart 0 is the keyboard's; ?controls=wheel,keyboard,gamepad,wheel sets them in order.
     const kinds = (params.get("controls") ?? "keyboard").split(",").filter((k): k is ControlKind => k === "wheel" || k === "keyboard" || k === "gamepad");
@@ -148,10 +165,15 @@ function startRace(): void {
     const loop = (now: number): void => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      const tSim = performance.now();
       if (!paused) source.step(dt, input());
       const t0 = performance.now();
       renderer.frame(source.view(), dt);
       const cpu = performance.now() - t0;
+      if (profile) {
+        marks.firstFrame ??= performance.now();
+        log.push([dt * 1000, t0 - tSim, cpu, heap()]);
+      }
       frames++;
       acc += dt;
       worst = Math.max(worst, dt * 1000);

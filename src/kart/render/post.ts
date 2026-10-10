@@ -12,6 +12,7 @@
  */
 import { BlendFunction, BloomEffect, Effect, EffectComposer, EffectPass, Pass, SMAAEffect, SMAAPreset } from "postprocessing";
 import { Color, HalfFloatType, NoToneMapping, PerspectiveCamera, ShaderChunk, Uniform, Vector4, type WebGLRenderer, type WebGLRenderTarget } from "three";
+import type { GpuTimer } from "./gpuTimer";
 import type { Tier } from "./quality";
 import type { Look } from "./world/look";
 
@@ -19,13 +20,19 @@ import type { Look } from "./world/look";
 export type DrawViews = (target: WebGLRenderTarget) => void;
 
 class ViewsPass extends Pass {
+  /** Times the views, then hands the stopwatch on to the passes after it (see PostChain.timer). */
+  timer: GpuTimer | null = null;
+
   constructor(private readonly draw: DrawViews) {
     super("ViewsPass");
     this.needsSwap = false;
   }
 
   override render(_renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget): void {
+    this.timer?.begin("views");
     this.draw(inputBuffer);
+    this.timer?.end();
+    this.timer?.begin("post");
   }
 }
 
@@ -140,11 +147,14 @@ export class PostChain {
   private readonly bloom: BloomEffect;
   /** The effects need a camera to be built with; none of them looks through it. */
   private readonly camera = new PerspectiveCamera();
+  private readonly views: ViewsPass;
+  private stopwatch: GpuTimer | null = null;
 
   constructor(renderer: WebGLRenderer, tier: Tier, draw: DrawViews) {
     renderer.toneMapping = NoToneMapping;
     this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, multisampling: samplesFor(tier), depthBuffer: true, stencilBuffer: false });
-    this.composer.addPass(new ViewsPass(draw));
+    this.views = new ViewsPass(draw);
+    this.composer.addPass(this.views);
     this.bloom = new BloomEffect({ luminanceThreshold: 1, luminanceSmoothing: 0.25, mipmapBlur: true, intensity: 0.5, radius: 0.72, levels: tier === "low" ? 5 : 7 });
     // Bloom's own blend (screen) adds the glow to the picture; the grade then maps the sum.
     this.composer.addPass(new EffectPass(this.camera, this.bloom, this.grade));
@@ -167,8 +177,20 @@ export class PostChain {
     this.composer.setSize(width, height, false);
   }
 
+  /** A GPU stopwatch to time the views and the post passes with (dev page and bench only). */
+  set timer(timer: GpuTimer | null) {
+    this.stopwatch = timer;
+    this.views.timer = timer;
+  }
+
+  /** The post passes' pieces, for taking the chain apart while measuring. */
+  get parts(): { bloom: BloomEffect; passes: readonly Pass[] } {
+    return { bloom: this.bloom, passes: this.composer.passes };
+  }
+
   render(dt: number): void {
     this.composer.render(dt);
+    this.stopwatch?.end();
   }
 
   dispose(): void {

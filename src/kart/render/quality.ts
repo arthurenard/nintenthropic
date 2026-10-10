@@ -15,6 +15,19 @@ import type { Quality } from "../../engine/types";
 
 export type Tier = Quality["tier"];
 
+/** The tiers, lowest first. */
+export const TIERS: readonly Tier[] = ["low", "medium", "high"];
+
+/** The tier below this one, or null for the lowest. */
+export function lowerTier(tier: Tier): Tier | null {
+  return TIERS[TIERS.indexOf(tier) - 1] ?? null;
+}
+
+/** `tier`, but no higher than `ceiling` (none: as it is). */
+export function capTier(tier: Tier, ceiling: Tier | null | undefined): Tier {
+  return ceiling && TIERS.indexOf(ceiling) < TIERS.indexOf(tier) ? ceiling : tier;
+}
+
 export interface QualitySettings {
   tier: Tier;
   /** Ground grid cell, metres: smaller is a finer landscape. */

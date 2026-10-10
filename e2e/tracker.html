@@ -36,7 +36,8 @@
         const paint = () => {
           if (copies > 1) {
             const rows = copies > 4 ? 2 : 1;
-            const columns = Math.ceil(copies / rows);
+            // ?slots=4 with ?copies=2: four seats' columns, hands in the first two (the others empty).
+            const columns = Number(params.get("slots") ?? 0) || Math.ceil(copies / rows);
             const w = canvas.width / columns;
             const h = canvas.height / rows;
             const scale = Math.min(w / image.width, h / image.height);
