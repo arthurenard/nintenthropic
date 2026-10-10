@@ -7,6 +7,8 @@
 //   node tools/perf/bench.mjs --tracks canyon-run,fun-fair --views 4 --tiers high,low
 //   node tools/perf/bench.mjs --seconds 8 --out perf.json      (default 6 s measured after 2 s warm-up)
 //   node tools/perf/bench.mjs --viewport 1920x1080@1           (default 1440x900@2, a MacBook's screen)
+//   node tools/perf/bench.mjs --cpu 4                          the page's main thread four times slower
+//   node tools/perf/bench.mjs --bases URL_A,URL_B --rounds 3   compare two dev pages (two checkouts), alternating, medians
 //   node tools/perf/bench.mjs --base http://127.0.0.1:5198/src/kart/render/dev.html
 //
 // Per configuration it prints: fps, CPU ms per frame (the sim; the scene update, the draw submit and the HUD, from
@@ -34,7 +36,9 @@ const args = Object.fromEntries(
       return [k, v.join(" ") || "1"];
     }),
 );
-const BASE = args.base ?? "http://127.0.0.1:5198/src/kart/render/dev.html";
+/** One dev page, or several to compare (--bases a,b: each configuration is measured on each in turn, --rounds times, and the medians are compared). */
+const BASES = (args.bases ?? args.base ?? "http://127.0.0.1:5198/src/kart/render/dev.html").split(",");
+const ROUNDS = Number(args.rounds ?? 1);
 const ALL_TRACKS = ["meadow-loop", "kitchen-rally", "harbour-lights", "canyon-run", "fun-fair", "glacier-pass", "volcano-rush", "starlight-ribbon", "five-finger-circuit"];
 const TRACKS = args.tracks ? args.tracks.split(",") : ALL_TRACKS;
 const VIEWS = (args.views ?? "1,4").split(",").map(Number);
@@ -44,6 +48,8 @@ const WARM = Number(args.warm ?? 2);
 const SCALE = args.scale ?? "1";
 const [vw, vh, vr] = (args.viewport ?? "1440x900@2").split(/[x@]/).map(Number);
 const EXTRA = args.extra ?? "";
+/** --cpu 4: the page's main thread runs four times slower (Chrome's own throttle), a stand-in for a laptop with a slower CPU than this one. */
+const CPU = Number(args.cpu ?? 1);
 
 /** Counts the bytes WebGL is asked to hold: textures (every level), renderbuffers (every sample), less what is deleted. */
 function glMemory() {
@@ -140,11 +146,12 @@ function glMemory() {
 const pct = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ?? 0;
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 
-async function measure(browser, track, views, tier) {
+async function measure(browser, BASE, track, views, tier) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: vr });
   await ctx.addInitScript(() => localStorage.setItem("handy.muted.v1", "true"));
   await ctx.addInitScript(glMemory);
   const page = await ctx.newPage();
+  if (CPU > 1) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: CPU });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const t0 = Date.now();
@@ -231,15 +238,33 @@ const browser = await chromium.launch({
   args: ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu", "--mute-audio", "--disable-frame-rate-limit", "--disable-gpu-vsync", "--enable-precise-memory-info", "--js-flags=--expose-gc"],
 });
 const rows = [];
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+const line = (r) =>
+  `${r.track.padEnd(20)} ${r.views}v ${r.tier.padEnd(6)} ${String(r.fps).padStart(4)} fps | cpu ${r.cpuMs} (sim ${r.simMs} upd ${r.updateMs} sub ${r.submitMs} hud ${r.hudMs}) | gpu ${r.gpuMs} (views ${r.gpuViewsMs} post ${r.gpuPostMs}) | ${r.calls} calls ${r.kTris}k tris ${r.programs} prog | tex ${r.texMB} MB rb ${r.rbMB} MB | first ${r.firstFrameMs} ms build ${r.buildMs} | worst start ${r.worstStartMs} ms (${r.startHitches}) | ${r.allocKBperFrame} KB/frame ${r.gcPerMin} gc/min${r.errors ? " ERRORS " + r.errors : ""}`;
 try {
   for (const track of TRACKS) {
     for (const views of VIEWS) {
       for (const tier of TIERS) {
-        const r = await measure(browser, track, views, tier);
-        rows.push(r);
-        console.log(
-          `${track.padEnd(20)} ${views}v ${tier.padEnd(6)} ${String(r.fps).padStart(4)} fps | cpu ${r.cpuMs} (sim ${r.simMs} upd ${r.updateMs} sub ${r.submitMs} hud ${r.hudMs}) | gpu ${r.gpuMs} (views ${r.gpuViewsMs} post ${r.gpuPostMs}) | ${r.calls} calls ${r.kTris}k tris ${r.programs} prog | tex ${r.texMB} MB rb ${r.rbMB} MB | first ${r.firstFrameMs} ms build ${r.buildMs} | worst start ${r.worstStartMs} ms (${r.startHitches}) | ${r.allocKBperFrame} KB/frame ${r.gcPerMin} gc/min${r.errors ? " ERRORS " + r.errors : ""}`,
-        );
+        if (BASES.length === 1 && ROUNDS === 1) {
+          const r = await measure(browser, BASES[0], track, views, tier);
+          rows.push(r);
+          console.log(line(r));
+          continue;
+        }
+        // Compare: alternate the pages round by round, so a busy machine hurts them alike.
+        const runs = BASES.map(() => []);
+        for (let round = 0; round < ROUNDS; round++) {
+          for (let b = 0; b < BASES.length; b++) runs[b].push(await measure(browser, BASES[b], track, views, tier));
+        }
+        const med = (b, key) => +median(runs[b].map((r) => r[key])).toFixed(2);
+        const keys = ["frameMs", "cpuMs", "gpuViewsMs", "gpuPostMs", "calls", "kTris", "programs", "texMB", "rbMB", "firstFrameMs", "worstStartMs", "allocKBperFrame"];
+        for (let b = 0; b < BASES.length; b++) {
+          const summary = { track, views, tier, base: BASES[b], rounds: ROUNDS };
+          for (const k of keys) summary[k] = med(b, k);
+          rows.push(summary);
+        }
+        console.log(`${track.padEnd(20)} ${views}v ${tier.padEnd(6)} (median of ${ROUNDS})`);
+        for (const k of keys) console.log(`    ${k.padEnd(16)} ${BASES.map((_, b) => String(med(b, k)).padStart(9)).join("  ")}   ${BASES.length === 2 && med(0, k) ? ((med(1, k) / med(0, k) - 1) * 100).toFixed(0).padStart(5) + " %" : ""}`);
       }
     }
   }
