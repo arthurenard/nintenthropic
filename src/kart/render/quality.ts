@@ -53,6 +53,10 @@ export interface QualitySettings {
   bakeAo: number;
   /** Grass tufts and flowers along the verge (0 for none). */
   tufts: number;
+  /** Beyond this many metres from a camera a kart is drawn as one welded mesh instead of its dozen parts (kartSpec.ts's FAR_DISTANCE is the full detail's). */
+  kartDetail: number;
+  /** The ground's tiles, in cells on a side: bigger ones are fewer draw calls and more triangles outside the view. */
+  groundTile: number;
 }
 
 export const QUALITY: Record<Tier, QualitySettings> = {
@@ -71,6 +75,8 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     bakeSun: 3072,
     bakeAo: 2048,
     tufts: 26000,
+    kartDetail: 34,
+    groundTile: 40,
   },
   medium: {
     tier: "medium",
@@ -87,6 +93,8 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     bakeSun: 2048,
     bakeAo: 1024,
     tufts: 9000,
+    kartDetail: 26,
+    groundTile: 60,
   },
   low: {
     tier: "low",
@@ -103,5 +111,7 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     bakeSun: 1536,
     bakeAo: 0,
     tufts: 0,
+    kartDetail: 18,
+    groundTile: 80,
   },
 };

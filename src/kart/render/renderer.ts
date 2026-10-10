@@ -21,6 +21,7 @@ import {
   Color,
   Frustum,
   Group,
+  LOD,
   Matrix4,
   Mesh,
   NoToneMapping,
@@ -47,6 +48,7 @@ import { KartActor, type ActorContext, type KartFactory } from "./kart";
 import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
+import { FAR_DISTANCE } from "./kartSpec";
 import { PostChain, type DrawViews } from "./post";
 import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
@@ -308,6 +310,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const makeActor = (r: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartActor => {
     const ctx = actorContext();
     const a = new KartActor(r.id, factory, r, ctx);
+    // The lesser tiers weld a kart into one mesh sooner (each kart is a dozen draw calls, and again in the shadow pass).
+    if (settings.kartDetail < FAR_DISTANCE) {
+      a.root.traverse((o) => {
+        const lod = o as LOD;
+        if (lod.isLOD && lod.levels[1]) lod.levels[1].distance = settings.kartDetail;
+      });
+    }
     kartGroup.add(a.root);
     actors.set(r.id, a);
     return a;
