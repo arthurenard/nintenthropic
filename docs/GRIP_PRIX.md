@@ -125,7 +125,11 @@ page for it. A player who wins a cup on this device has it written down
 (`track/mirror.ts`) flips every point's x and every lateral thing (offsets
 negated, left and right swapped, landmark turns negated); the flag, not the
 track, goes to the guests (`StartInfo.mirror`), who rebuild the same def. A
-mirrored track's id is the original's plus `-mirror`. The secret track is in
+mirrored track's id is the original's plus `-mirror`. The picture is the
+world's mirror image: each landmark's model is reflected too
+(`landmarks/mirror.ts`), not only turned, so a pond with its bank on one side
+or a cart with its load stands the way the original does and what was clear of
+the road on the original is clear on its mirror. The secret track is in
 the host's track list (single races) once the host's device has opened it.
 
 ## Where people play
@@ -518,13 +522,25 @@ front of them (or a laptop), and the TV is the host's screen.
   solid within the barrier and 1.5 m beyond it (a camera's margin), nothing
   over the road lower than 5 m, the ground out to the barrier at the road's
   height, and the first hill or wall beyond it. A span landmark's legs are
-  moved out to stand clear; a landmark beside the road needs an `offset`
-  (and `scale`) that clears it, and its footprint may reach the road's other
-  legs where the track doubles back. `src/kart/render/world/corridor.test.ts`
-  measures all of it on every track (`CORRIDOR_REPORT=1` prints how far each
-  offender must move). The chase camera is held to the same margin
-  (`cameraSpace.ts`): it slides back toward the road in a bend, rises over
-  rising ground and stays under a roof.
+  moved out to stand clear (and, where the track doubles back beside itself,
+  what would stand in the neighbouring stretch's ground is cut away, so a
+  modelled one is placed to need no cut); a landmark beside the road needs an
+  `offset` (and `scale`) that clears it, and its footprint may reach the
+  road's other legs where the track doubles back (on the palm island nothing
+  fits between the legs of a finger). The track's own decoration obeys the
+  same rule: the start gantry's legs stand beyond the barrier and its margin,
+  the barrier is not drawn where the nearest road would let a kart stand
+  (the inside of a tight U-turn), and a soft barrier (snowbank, basalt) is
+  drawn so that its face meets the wall rather than reaching in. Two tests
+  measure all of it every metre along and half a metre across, on every track
+  and its mirror, with what turns looked at as it sweeps:
+  `src/kart/render/world/corridor.test.ts` (the code-built world, and the
+  lower quality tiers' ground and scenery) and `corridor.art.test.ts` (the
+  Blender world: `nodeArt.ts` decodes the Draco files in Node and files them
+  where `art.ts` would, so the real landmarks and scenery are measured).
+  `CORRIDOR_REPORT=1` prints how far each offender must move. The chase
+  camera is held to the same margin (`cameraSpace.ts`): it slides back toward
+  the road in a bend, rises over rising ground and stays under a roof.
 - **The duck** (`duck`): every Handy game hides a rubber duck. Every track
   has one somewhere off the racing line.
 - **Bank** (`bank`): the road leans into its bends (for the picture).
@@ -590,8 +606,9 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — Handy's own hand. The road runs up and down every finger
 (the fingertips are hairpins), round the thumb, across the palm and back
-along the wrist, where a giant wristwatch is the start gantry; a ring on the
-ring finger to drive through; palm trees, beach huts, crabs, coconuts. The
+along the wrist, where a giant wristwatch is the start gantry; a ring to
+drive through on the straight by the wrist (the fingers are too close to one
+another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
 minimap is a hand. The duck sunbathes on a towel in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).

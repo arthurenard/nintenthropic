@@ -15,9 +15,9 @@ import type { TrackGeometry, TrackSample } from "../../track/geometry";
 import { clamp } from "../math";
 import type { QualitySettings } from "../quality";
 import { Bank } from "./bank";
-import { buildBarriers } from "./barriers";
+import { buildBarriers, SOFT_PUSH } from "./barriers";
 import { MeshBuilder, rgb, scaleRgb, type Rgb, type V3 } from "./builder";
-import { analyseFeatures, WALL_DISTANCE as WALL, type Features } from "./features";
+import { analyseFeatures, SOLID_MARGIN, WALL_DISTANCE as WALL, type Features } from "./features";
 import { GROUND_SINK, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 import { ROAD_TILE } from "./textures";
@@ -299,7 +299,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const a = S(i);
       const side = a.curvature > 0 ? -1 : 1;
       if (ctx.open(i, side) > 0.1 || ctx.gap(i)) continue;
-      const o = side * (a.width / 2 + ctx.wall(i, side) + 1.45 + (style.barrier === "tyres" ? 0.5 : 0.2));
+      const o = side * (a.width / 2 + ctx.wall(i, side) + 1.45 + (style.barrier === "tyres" ? 0.5 : 0.2) + ((SOFT_PUSH as Record<string, number | undefined>)[style.barrier] ?? 0));
       const cx = a.x - a.tz * o;
       const cz = a.z + a.tx * o;
       const y0 = a.y + bank.liftAt(i, side * (a.width / 2)) + 0.3;
@@ -385,7 +385,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     // A giant wristwatch over the line (the palm island's start) carries the lights itself; every other
     // start has a gantry: two stout legs, a beam, a light box on its face, and the banner under it.
     const watch = (track.def.landmarks ?? []).some((l) => l.kind === "wristwatch" && Math.min(Math.abs(l.at * track.length), Math.abs(track.length - l.at * track.length)) < 20);
-    const leg = hw + 1.9;
+    // The legs stand beyond the barrier and the camera's margin (a kart can drive out to the barrier, so nothing solid may be
+    // on the verge): the beam is longer than the road is wide, and the banner hangs under it at the width it always had.
+    const leg = hw + Math.max(ctx.wall(0, -1), ctx.wall(0, 1)) + SOLID_MARGIN + 0.9;
+    const bannerLeg = hw + 1.9;
     const base = g0.y;
     const white2 = rgb("#f4f5f8");
     const accent = rgb("#ff453a");
@@ -425,7 +428,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       y: beamY - 1.55,
       z: g0.z + fz * 0.52,
       yaw: Math.atan2(fx, fz),
-      width: leg * 2 - 0.4,
+      width: bannerLeg * 2 - 0.4,
       height: 1.75,
     };
   }

@@ -168,10 +168,22 @@ export function analyseFeatures(track: TrackGeometry): Features {
     const a = track.samples[i]!;
     for (const side of [-1, 1] as const) {
       const wall = (side < 0 ? wallLeft : wallRight)[i]!;
-      if (wall <= WALL_DISTANCE) continue;
-      const o = side * (a.width / 2 + wall + 0.55);
-      const near = track.project(a.x - a.tz * o, a.z + a.tx * o);
-      if (Math.abs(track.delta(a.s, near.s)) > 25) (side < 0 ? hiddenLeft : hiddenRight)[i] = 1;
+      // The barrier's pieces stand from the wall's face out to two or three metres beyond it (a bank of snow is that deep).
+      for (const beyond of [0.55, 1.2, 1.9, 2.6]) {
+        const o = side * (a.width / 2 + wall + beyond);
+        const near = track.project(a.x - a.tz * o, a.z + a.tx * o);
+        // Only a line that runs through another stretch's ground (the nearest road is a different stretch of the lap).
+        if (Math.abs(track.delta(a.s, near.s)) <= 25) continue;
+        // A wide verge's far barrier: wherever another stretch is the nearer road. An ordinary one: only where it stands inside
+        // the other stretch's own drivable ground (the inside of a tight U-turn, such as a fingertip of the palm island, where
+        // the two legs are closer than their barriers are wide).
+        const k = Math.min(n - 1, Math.round(near.s / track.spacing));
+        const nearWall = (near.offset < 0 ? wallLeft : wallRight)[k]!;
+        if (wall > WALL_DISTANCE || Math.abs(near.offset) - near.sample.width / 2 < nearWall) {
+          (side < 0 ? hiddenLeft : hiddenRight)[i] = 1;
+          break;
+        }
+      }
     }
   }
 

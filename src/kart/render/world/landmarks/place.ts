@@ -34,6 +34,7 @@ import {
 import { seededRandom } from "../../../../engine/random";
 import type { HazardDef, Landmark, TrackGeometry } from "../../../track/geometry";
 import { hazardAt } from "../../../track/hazards";
+import { isMirrored } from "../../../track/mirror";
 import { makePoints } from "../../points";
 import { smoothstep } from "../../math";
 import type { Bank } from "../bank";
@@ -43,6 +44,7 @@ import { bakedLit, makeBakeUniforms, type BakeUniforms } from "../shading";
 import { glowTexture } from "../textures";
 import type { ThemeStyle } from "../themes";
 import { HAZARDS, LANDMARKS } from "./index";
+import { mirrorModel } from "./mirror";
 import type { Halo, HazardModel, HazardState, LandmarkContext, LandmarkModel } from "./types";
 
 // ─── Materials ───────────────────────────────────────────────────────────────
@@ -125,7 +127,8 @@ type Corner = { p: V3; c: V3; n?: V3 };
  * metres along z into smaller ones, so a long wall bends smoothly round a
  * curve instead of cutting the corner.
  */
-export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, maxZ = 2.5, smoothOverride?: boolean): void {
+export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3, maxZ = 2.5, smoothOverride?: boolean, cut?: (a: V3, b: V3, c: V3, lateral: number) => boolean): number {
+  let cuts = 0;
   const p = src.position;
   const c = src.color;
   const nr = src.normal;
@@ -159,8 +162,15 @@ export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3,
       const ez = [Math.abs(a.p[2] - b.p[2]), Math.abs(b.p[2] - d.p[2]), Math.abs(d.p[2] - a.p[2])];
       const worst = Math.max(...ez);
       if (worst <= maxZ) {
-        if (smooth && a.n && b.n && d.n) dst.triN(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c, mapNormal(map, a.p, a.n), mapNormal(map, b.p, b.n), mapNormal(map, d.p, d.n));
-        else dst.tri(map(a.p), map(b.p), map(d.p), a.c, b.c, d.c);
+        const wa = map(a.p);
+        const wb = map(b.p);
+        const wd = map(d.p);
+        if (cut?.(wa, wb, wd, Math.max(Math.abs(a.p[0]), Math.abs(b.p[0]), Math.abs(d.p[0])))) {
+          cuts++;
+          continue;
+        }
+        if (smooth && a.n && b.n && d.n) dst.triN(wa, wb, wd, a.c, b.c, d.c, mapNormal(map, a.p, a.n), mapNormal(map, b.p, b.n), mapNormal(map, d.p, d.n));
+        else dst.tri(wa, wb, wd, a.c, b.c, d.c);
         continue;
       }
       if (worst === ez[0]) {
@@ -175,6 +185,62 @@ export function bakeBent(dst: MeshBuilder, src: MeshBuilder, map: (p: V3) => V3,
       }
     }
   }
+  return cuts;
+}
+
+/** Metres of the lap, beyond a span's ends, that still count as the span's own stretch of road (a bend swings its far legs a little along). */
+const OWN_STRETCH = 8;
+
+/**
+ * What of a span landmark stands in the drivable ground of ANOTHER stretch of the road: a track that doubles back beside
+ * itself (the fair's midway, the palm island's fingers) has a neighbour's verge and barrier where the span's far legs and
+ * loops would reach, and pushing them outward only pushes them further in. Returns a test for a triangle of the baked
+ * landmark (world coordinates), true where it must be cut: it lies in the neighbour's corridor and the camera's margin and
+ * in the band a kart and its camera meet; or null when no other stretch is near enough to matter (the common case, free).
+ */
+export function cutAtOtherStretches(env: PlaceEnv, at: number, span: number, lateral: number, own: number): ((a: V3, b: V3, c: V3, x: number) => boolean) | null {
+  const { track } = env;
+  const reach = lateral + WALL_DISTANCE + SOLID_MARGIN + 6;
+  let near = false;
+  const here = track.at(at);
+  for (let i = 0; i < track.samples.length && !near; i += 2) {
+    const s = track.samples[i]!;
+    if (Math.abs(track.delta(at, s.s)) <= span / 2 + OWN_STRETCH) continue;
+    near = Math.hypot(s.x - here.x, s.z - here.z) < reach + span / 2 + s.width / 2;
+  }
+  if (!near) return null;
+  const [lo, hi] = SOLID_BAND;
+  // The lowest and highest the road gets: what is out of the band over all of it is out of it over any stretch.
+  let roadLow = Infinity;
+  let roadHigh = -Infinity;
+  for (const smp of track.samples) {
+    roadLow = Math.min(roadLow, smp.y);
+    roadHigh = Math.max(roadHigh, smp.y);
+  }
+  const inOther = (x: number, z: number, yLow: number, yHigh: number): boolean => {
+    const p = track.project(x, z);
+    // The landmark's own stretch is the standClear's business.
+    if (Math.abs(track.delta(at, p.s)) <= span / 2 + OWN_STRETCH) return false;
+    const side = p.offset > 0 ? 1 : -1;
+    const beyond = Math.abs(p.offset) - p.sample.width / 2;
+    if (beyond >= (env.wall ? env.wall(p.s, side) : WALL_DISTANCE) + SOLID_MARGIN) return false;
+    const road = p.sample.y + env.bank.lift(p.s, p.offset);
+    return yHigh - road >= lo && yLow - road <= hi;
+  };
+  return (a, b, c, x) => {
+    // Over its own road (and a little beyond it) a triangle is nearer its own stretch; high over every road or below all of them it is out of the band.
+    if (x < own) return false;
+    const yLow = Math.min(a[1], b[1], c[1]);
+    const yHigh = Math.max(a[1], b[1], c[1]);
+    if (yLow - roadHigh > hi + 1 || yHigh - roadLow < lo - 1) return false;
+    const cx = (a[0] + b[0] + c[0]) / 3;
+    const z = (a[2] + b[2] + c[2]) / 3;
+    if (inOther(cx, z, yLow, yHigh)) return true;
+    return [a, b, c].some((v, k) => {
+      const w = [b, c, a][k]!;
+      return inOther(v[0], v[2], yLow, yHigh) || inOther((v[0] + w[0]) / 2, (v[2] + w[2]) / 2, yLow, yHigh);
+    });
+  };
 }
 
 /** Where a point of a span landmark's own frame (x right, y up, z along) lands in the world. */
@@ -232,6 +298,8 @@ export interface LandmarkLayer {
   roofs: Roof[];
   /** Number of landmarks actually built (unknown names are left out). */
   count: number;
+  /** Triangles of span landmarks cut away for standing in another stretch of the road's ground (see cutAtOtherStretches). */
+  cuts: number;
   update(time: number): void;
   dispose(): void;
 }
@@ -366,6 +434,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
   const blobs: { x: number; y: number; z: number; rx: number; rz: number; yaw: number; strength: number }[] = [];
   const sun = new Vector3(...env.style.sky.sunDir).normalize();
   let count = 0;
+  let cuts = 0;
 
   const chunkAt = (s: number): Chunk => {
     const k = Math.floor(track.wrap(s) / CHUNK_METRES);
@@ -392,8 +461,9 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       span,
       halfWidth: c.width / 2,
     };
-    // The Blender-made model when there is one (art/kart/), else the code-built one.
-    const model = landmarkFromArt(lm.kind) ?? spec.build(ctx);
+    // The Blender-made model when there is one (art/kart/), else the code-built one; seen in a mirror on a mirrored track.
+    const built = landmarkFromArt(lm.kind) ?? spec.build(ctx);
+    const model = isMirrored(track.def) ? mirrorModel(built) : built;
     const chunk = chunkAt(at);
     const rnd = seededRandom(31 + index);
 
@@ -415,9 +485,13 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       standClear(model, wide, [reach[0] + SOLID_MARGIN, reach[1] + SOLID_MARGIN], dip);
       if (lm.offset === 0) roofs.push(roofProfile(model, at, span, wide + Math.max(reach[0], reach[1]) + SOLID_MARGIN));
       const map = roadFrameMap(track, env.bank, at, lm.offset);
-      bakeBent(chunk.lit, model.lit, map, 2.5, model.smooth);
-      if (model.glow) bakeBent(chunk.glow, model.glow, map, 2.5, model.smooth);
-      if (model.glass) bakeBent(chunk.glass, model.glass, map, 2.5, model.smooth);
+      // Where the road doubles back beside itself, what of the span would stand in the neighbouring stretch's ground is cut.
+      let lateral = 0;
+      for (let i = 0; i < model.lit.position.length; i += 3) lateral = Math.max(lateral, Math.abs(model.lit.position[i]! + lm.offset));
+      const cut = cutAtOtherStretches(env, at, span, lateral, wide + 1.5 - Math.abs(lm.offset)) ?? undefined;
+      cuts += bakeBent(chunk.lit, model.lit, map, 2.5, model.smooth, cut);
+      if (model.glow) cuts += bakeBent(chunk.glow, model.glow, map, 2.5, model.smooth, cut);
+      if (model.glass) cuts += bakeBent(chunk.glass, model.glass, map, 2.5, model.smooth, cut);
       for (const h of model.halos ?? []) {
         const w = map([h.x, h.y, h.z]);
         halos.push({ ...h, x: w[0], y: w[1], z: w[2], phase: rnd() * 6.28 });
@@ -589,6 +663,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
     keepOut,
     roofs,
     count,
+    cuts,
     update(time) {
       for (const f of animated) f(time);
     },

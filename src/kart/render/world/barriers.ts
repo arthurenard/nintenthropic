@@ -15,6 +15,25 @@ import { hash1, type TrackBuild } from "./trackContext";
 const UP: V3 = [0, 1, 0];
 const SIDES = [-1, 1] as const;
 
+/**
+ * A barrier made of big round lumps (a snowbank, basalt boulders) is drawn that many metres farther out than a thin one: a lump
+ * is as wide as two metres, and standing on the wall's line it would reach that far inside it, over ground a kart can drive on.
+ * Pushed out, its inner face meets the wall (a kart's body touches the wall at the limit of its centre) and does not pass it.
+ */
+export const SOFT_PUSH = { snowbank: 0.8, basalt: 0.55 } as const;
+
+/**
+ * Does the sim let a kart's centre stand here? A kart is placed by the nearest stretch of road and kept inside that stretch's wall
+ * (less its inset), so a piece of barrier that the nearest road sees more than a metre inside its own wall stands on a kart's ground
+ * (the inside of a tight U-turn, where the barrier line folds over the other leg, or the first metres of a wide verge).
+ */
+function onKartGround(b: TrackBuild, x: number, z: number): boolean {
+  const p = b.track.project(x, z);
+  const side = p.offset > 0 ? 1 : -1;
+  const k = Math.round(p.s / b.spacing);
+  return Math.abs(p.offset) - p.sample.width / 2 < b.wall(k, side) - 1;
+}
+
 /** Walks one side's wall line at an even spacing, calling `emit` at each stop; breaks wherever the edge is open. */
 function walk(
   b: TrackBuild,
@@ -43,7 +62,14 @@ function walk(
         let t = step - acc;
         while (t <= len) {
           const f = t / len;
-          emit(prev[0] + dx * f, prev[1] + (p[1] - prev[1]) * f, prev[2] + dz * f, dx / len, dz / len, i - 1, count++);
+          const x = prev[0] + dx * f;
+          const z = prev[2] + dz * f;
+          // Not where the sim's nearest road has its kart's ground (the inside of a tight U-turn, a verge's first metres).
+          // (A lump is a few metres across: its ends count too.)
+          const tx = (dx / len) * 2.2;
+          const tz = (dz / len) * 2.2;
+          if (onKartGround(b, x, z) || onKartGround(b, x + tx, z + tz) || onKartGround(b, x - tx, z - tz)) count++;
+          else emit(x, prev[1] + (p[1] - prev[1]) * f, z, dx / len, dz / len, i - 1, count++);
           t += step;
         }
         acc = len - (t - step);
@@ -241,7 +267,7 @@ function snowbank(b: TrackBuild): void {
   const red = rgb("#e8453c");
   const pole = rgb("#fbfbfb");
   for (const side of SIDES) {
-    walk(b, side, 0.75, 1.55, (x, y, z, dx, dz, i, k) => {
+    walk(b, side, 0.75 + SOFT_PUSH.snowbank, 1.55, (x, y, z, dx, dz, i, k) => {
       const bld = b.deco[b.chunkOf(i)]!;
       const r = hash1(k * 5 + side * 11);
       const sc = 0.9 + r * 0.5;
@@ -265,7 +291,7 @@ function basalt(b: TrackBuild): void {
   const dark = rgb("#14121a");
   const top = rgb("#4a4552");
   for (const side of SIDES) {
-    walk(b, side, 0.8, 1.9, (x, y, z, dx, dz, i, k) => {
+    walk(b, side, 0.8 + SOFT_PUSH.basalt, 1.9, (x, y, z, dx, dz, i, k) => {
       const bld = b.deco[b.chunkOf(i)]!;
       const r = hash1(k * 7 + side);
       const sx = 1.0 + r * 0.8;
