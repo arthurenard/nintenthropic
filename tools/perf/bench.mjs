@@ -7,6 +7,8 @@
 //   node tools/perf/bench.mjs --tracks canyon-run,fun-fair --views 4 --tiers high,low
 //   node tools/perf/bench.mjs --seconds 8 --out perf.json      (default 6 s measured after 2 s warm-up)
 //   node tools/perf/bench.mjs --viewport 1920x1080@1           (default 1440x900@2, a MacBook's screen)
+//   node tools/perf/bench.mjs --soft --viewport 960x540@1     on SwiftShader, a software GPU: slow, and every triangle and pixel costs, so
+//                                                             the saving from drawing less shows (use a small window)
 //   node tools/perf/bench.mjs --cpu 4                          the page's main thread four times slower
 //   node tools/perf/bench.mjs --bases URL_A,URL_B --rounds 3   compare two dev pages (two checkouts), alternating, medians
 //   node tools/perf/bench.mjs --base http://127.0.0.1:5198/src/kart/render/dev.html
@@ -48,6 +50,8 @@ const WARM = Number(args.warm ?? 2);
 const SCALE = args.scale ?? "1";
 const [vw, vh, vr] = (args.viewport ?? "1440x900@2").split(/[x@]/).map(Number);
 const EXTRA = args.extra ?? "";
+/** How many frames from the start are kept for the hitch count (a software GPU makes five a second: fewer). */
+const START_FRAMES = Number(args.startframes ?? (args.soft ? 15 : 240));
 /** --cpu 4: the page's main thread runs four times slower (Chrome's own throttle), a stand-in for a laptop with a slower CPU than this one. */
 const CPU = Number(args.cpu ?? 1);
 
@@ -161,8 +165,8 @@ async function measure(browser, BASE, track, views, tier) {
   const firstFrameMs = Date.now() - t0;
   const load = await page.evaluate(() => ({ build: window.__grip.marks.loaded - window.__grip.marks.loadStart }));
   // The first 240 frames, as the race starts: the worst of them is a compile hitch, the rest a fair start.
-  await page.waitForFunction(() => window.__grip.log.length >= 240, null, { timeout: 60000 });
-  const start = await page.evaluate(() => window.__grip.log.slice(0, 240).map((r) => r[0]));
+  await page.waitForFunction((n) => window.__grip.log.length >= n, START_FRAMES, { timeout: 180000 });
+  const start = await page.evaluate((n) => window.__grip.log.slice(0, n).map((r) => r[0]), START_FRAMES);
   await page.waitForTimeout(WARM * 1000);
   await page.evaluate(() => {
     window.__grip.clearLog();
@@ -235,7 +239,7 @@ async function measure(browser, BASE, track, views, tier) {
 const browser = await chromium.launch({
   channel: "chrome",
   headless: true,
-  args: ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu", "--mute-audio", "--disable-frame-rate-limit", "--disable-gpu-vsync", "--enable-precise-memory-info", "--js-flags=--expose-gc"],
+  args: [...(args.soft ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] : ["--use-angle=metal"]), "--ignore-gpu-blocklist", "--enable-gpu", "--mute-audio", "--disable-frame-rate-limit", "--disable-gpu-vsync", "--enable-precise-memory-info", "--js-flags=--expose-gc"],
 });
 const rows = [];
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;

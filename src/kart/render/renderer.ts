@@ -325,6 +325,49 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     laps: raceLaps,
   });
 
+  /**
+   * Compiles every shader this race can ask for, and draws two pictures through the whole post chain, while the
+   * loading screen is up: the first frames of the countdown (and the first boost, the first banana) then cost
+   * what any other does, instead of the 150 to 230 ms a first draw took compiling thirty-odd programs.
+   * What is hidden now (a kart's flames, the item pool) is shown for the length of it, so it is drawn the way
+   * it will be, and put back. The first picture is from the start line; the second from the origin, where the
+   * karts stand until the first frame, so the shadow map's box has them in it and builds their depth shaders.
+   */
+  const warmUp = async (): Promise<void> => {
+    if (!world || disposed) return;
+    const start = world.geometry.samples[0] ?? { x: 0, y: 0, z: 0, tx: 0, tz: 1 };
+    const eyes = [
+      { eye: new PerspectiveCamera(60, width / height, 0.4, 2600), at: start, from: [start.x - start.tx * 9, start.y + 4, start.z - start.tz * 9], to: [start.x + start.tx * 10, start.y + 1, start.z + start.tz * 10] },
+      { eye: new PerspectiveCamera(60, width / height, 0.4, 2600), at: { x: 0, y: 0, z: 0 }, from: [0, 6, -12], to: [0, 1, 0] },
+    ] as const;
+    for (const e of eyes) {
+      e.eye.position.set(e.from[0], e.from[1], e.from[2]);
+      e.eye.lookAt(e.to[0], e.to[1], e.to[2]);
+      e.eye.updateMatrixWorld();
+    }
+    const hidden: Object3D[] = [];
+    scene.traverse((o) => {
+      if (!o.visible && !(o as { isLight?: boolean }).isLight) hidden.push(o);
+    });
+    for (const o of hidden) o.visible = true;
+    try {
+      // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)...
+      await renderer.compileAsync(scene, eyes[0].eye).catch(() => {});
+      // ...and the pictures build what remains, the way a frame does.
+      for (const e of eyes) {
+        if (disposed || !world) break;
+        frameViews.length = 0;
+        frameViews.push({ rect: { x: 0, y: 0, w: width, h: height }, eye: e.eye, at: { x: e.at.x, y: e.at.y, z: e.at.z } });
+        post.render(0);
+      }
+    } finally {
+      frameViews.length = 0;
+      for (const o of hidden) o.visible = false;
+    }
+    renderer.setRenderTarget(null);
+    renderer.clear(true, true, false);
+  };
+
   const disposeWorld = () => {
     for (const a of actors.values()) a.dispose();
     actors = new Map();
@@ -386,6 +429,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const c of cameras) c.reset();
       relayout();
       applySize();
+      await warmUp();
       onProgress?.(1);
     },
 
