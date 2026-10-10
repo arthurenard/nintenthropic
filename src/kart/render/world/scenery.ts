@@ -21,6 +21,7 @@ import {
   StaticDrawUsage,
   Vector3,
   Euler,
+  type Frustum,
   type Material,
   type Object3D,
 } from "three";
@@ -29,6 +30,7 @@ import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb } from "./builder";
+import { CulledInstances } from "./cull";
 import { SOLID_MARGIN, WALL_DISTANCE } from "./features";
 import { hasSceneryArt, sceneryVariants } from "./sceneryArt";
 import type { BakeUniforms } from "./shading";
@@ -43,6 +45,10 @@ export interface Scenery {
   group: Group;
   /** Called every frame with the clock in seconds. */
   update(time: number): void;
+  /** View `view` is about to be drawn: its instanced scenery shows only what `frustum` reaches (see cull.ts). */
+  cull(view: number, frustum: Frustum): void;
+  /** Every instance again, for a draw that is not one of the views. */
+  uncull(): void;
   dispose(): void;
 }
 
@@ -159,6 +165,8 @@ export function buildScenery(
   const group = new Group();
   const disposables: (() => void)[] = [];
   const animated: ((t: number) => void)[] = [];
+  /** Every instanced kind, culled for each view. */
+  const culls: CulledInstances[] = [];
   /**
    * Instances, but never one whose body reaches within a camera's width of the sim's barrier (the scatter keeps their
    * centres clear; a big boulder or drift is wider than that): the picture shows nothing solid where a kart can be.
@@ -175,7 +183,9 @@ export function buildScenery(
       }
       return terrain.clearAt(it.x, it.z) >= SOLID_MARGIN + 0.3;
     });
-    return instancedMesh(geometry, mat, clear);
+    const mesh = instancedMesh(geometry, mat, clear);
+    if (mesh) culls.push(new CulledInstances(mesh));
+    return mesh;
   };
   const add = (o: Object3D | null) => {
     if (o) group.add(o);
@@ -509,7 +519,14 @@ export function buildScenery(
     update(time: number) {
       for (const f of animated) f(time);
     },
+    cull(view: number, frustum: Frustum) {
+      for (const c of culls) c.select(view, frustum);
+    },
+    uncull() {
+      for (const c of culls) c.all();
+    },
     dispose() {
+      for (const c of culls) c.dispose();
       for (const d of disposables) d();
     },
   };

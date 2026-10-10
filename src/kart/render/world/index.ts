@@ -24,6 +24,7 @@ import {
   Vector3,
   type BufferGeometry,
   type CanvasTexture,
+  type Frustum,
   type Material,
   type Object3D,
   type OrthographicCamera,
@@ -91,6 +92,12 @@ export interface World {
   prepare(renderer: WebGLRenderer, scene: Scene): void;
   /** Aims the sun's shadow map at a spot (a view's kart): call before drawing each view. */
   focusSun(x: number, y: number, z: number): void;
+  /**
+   * Call before drawing view `view` from the camera whose frustum this is: the scattered scenery and foliage draw
+   * only the instances that frustum can reach (cull.ts). `uncull` puts them all back, for a draw that is not a view.
+   */
+  cull(view: number, frustum: Frustum): void;
+  uncull(): void;
   /**
    * How far above the sim's flat road the surface is at a point: the road's
    * banking plus any ramp before its lip. Karts, boxes and things add it to
@@ -413,6 +420,14 @@ export async function createWorld(
           ? { waterBounds: { minX: terrain.minX, maxX: terrain.maxX, minZ: terrain.minZ, maxZ: terrain.maxZ, minY: -12, maxY: 40 }, waterSize: quality.tier === "low" ? 512 : 1024 }
           : {}),
       });
+    },
+    cull(view, frustum) {
+      scenery.cull(view, frustum);
+      foliage?.cull(view, frustum);
+    },
+    uncull() {
+      scenery.uncull();
+      foliage?.uncull();
     },
     focusSun(x, y, z) {
       const R = quality.shadowRange;

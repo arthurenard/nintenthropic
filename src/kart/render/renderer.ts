@@ -19,7 +19,9 @@
  */
 import {
   Color,
+  Frustum,
   Group,
+  Matrix4,
   Mesh,
   NoToneMapping,
   PCFShadowMap,
@@ -60,6 +62,9 @@ import { styleFor } from "./world/themes";
 
 /** Seconds at the lowest resolution before the renderer says it is straining (see `onStrain`). */
 export const STRAIN_SECONDS = 6;
+
+const _projScreen = new Matrix4();
+const _frustum = new Frustum();
 
 export interface RaceRendererOptions {
   /** "auto" (the default) guesses from the GPU. */
@@ -133,7 +138,7 @@ export interface GripRenderer extends RaceRenderer {
   /** The GPU timer's totals over the frames since the last reset (mean ms; 0 where unavailable). */
   gpuMean(label: "views" | "post", reset?: boolean): number;
   /** Everything the dev page's bench may need to take apart: the live objects. */
-  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null };
+  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void };
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -216,6 +221,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   /** Draws every view, scissored, into the post chain's HDR target. */
   let profiling = false;
   let timer: GpuTimer | null = null;
+  /** Each view draws only the scenery its frustum reaches (off, for comparing pictures: they must be the same). */
+  let culling = true;
   const timings: FrameTimings = { update: 0, submit: 0, draw: 0, hud: 0, gpuViews: -1, gpuPost: -1 };
   const smooth = (key: "update" | "submit" | "draw" | "hud", ms: number) => {
     timings[key] += (ms - timings[key]) * 0.1;
@@ -230,7 +237,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.setRenderTarget(target);
     renderer.clear(true, true, false);
     target.scissorTest = true;
-    for (const v of frameViews) {
+    for (const [index, v] of frameViews.entries()) {
       const x = Math.floor(v.rect.x * pr);
       const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
       const h = Math.ceil(v.rect.h * pr);
@@ -242,6 +249,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       const fovRad = (v.eye.fov * Math.PI) / 180;
       pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
       world.focusSun(v.at.x, v.at.y, v.at.z);
+      // This view's frustum decides which trees, rocks and tufts are drawn for it.
+      v.eye.updateMatrixWorld();
+      v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
+      _projScreen.multiplyMatrices(v.eye.projectionMatrix, v.eye.matrixWorldInverse);
+      _frustum.setFromProjectionMatrix(_projScreen);
+      if (culling) world.cull(index, _frustum);
+      else world.uncull();
       renderer.render(scene, v.eye);
     }
     target.scissorTest = false;
@@ -590,7 +604,15 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       return mean;
     },
 
-    inspect: { renderer, scene, post, world: () => world },
+    inspect: {
+      renderer,
+      scene,
+      post,
+      world: () => world,
+      setCulling(on: boolean) {
+        culling = on;
+      },
+    },
   };
   renderer.info.autoReset = false;
   applySize();

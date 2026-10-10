@@ -22,12 +22,14 @@ import {
   Vector3,
   Euler,
   BufferGeometry,
+  type Frustum,
   type WebGLProgramParametersWithUniforms,
 } from "three";
 import { seededRandom } from "../../../engine/random";
 import { clamp, fbm2, smoothstep } from "../math";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb, type V3 } from "./builder";
+import { CulledInstances } from "./cull";
 import type { KeepOut } from "./landmarks/place";
 import { bakedLit, type BakeUniforms } from "./shading";
 import type { Terrain } from "./terrain";
@@ -36,6 +38,10 @@ import type { ThemeStyle } from "./themes";
 export interface Foliage {
   group: Group;
   update(time: number): void;
+  /** View `view` is about to be drawn: only the tufts and flowers its frustum reaches are drawn (see cull.ts). */
+  cull(view: number, frustum: Frustum): void;
+  /** Every instance again, for a draw that is not one of the views. */
+  uncull(): void;
   dispose(): void;
 }
 
@@ -256,8 +262,8 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
   if (tufts.instanceColor) tufts.instanceColor.needsUpdate = true;
   tufts.computeBoundingSphere();
   tufts.computeBoundingBox();
-  tufts.frustumCulled = true;
   group.add(tufts);
+  const culls: CulledInstances[] = [new CulledInstances(tufts)];
 
   // ── Flowers ──
   if (flowerSpots.length > 0) {
@@ -283,6 +289,7 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
       group.add(m);
     }
     if (petals.instanceColor) petals.instanceColor.needsUpdate = true;
+    culls.push(new CulledInstances(stems), new CulledInstances(petals));
   }
 
   return {
@@ -290,7 +297,14 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
     update(t) {
       time.value = t;
     },
+    cull(view, frustum) {
+      for (const c of culls) c.select(view, frustum);
+    },
+    uncull() {
+      for (const c of culls) c.all();
+    },
     dispose() {
+      for (const c of culls) c.dispose();
       for (const d of disposables) d.dispose();
       tufts.dispose();
       group.removeFromParent();
