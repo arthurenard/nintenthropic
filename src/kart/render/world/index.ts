@@ -151,7 +151,7 @@ export async function createWorld(
 
   // Ground tiles (space has none: the road floats in the dark).
   if (!space) {
-    for (const g of terrain.buildTiles(20, ground.metres)) addStatic(g, ground.material);
+    for (const g of terrain.buildTiles(40, ground.metres)) addStatic(g, ground.material);
     const lavaTiles = terrain.buildLava(20);
     if (lavaTiles.length) {
       lavaAnim = lavaMaterial(disposables);
