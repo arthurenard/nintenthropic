@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FAR_DISTANCE } from "./kartSpec";
-import { QUALITY, TIERS, capTier, lowerTier } from "./quality";
+import { QUALITY, TIERS, capTier, hudBlurFor, lowerTier } from "./quality";
 
 describe("the quality tiers", () => {
   it("are ordered low to high, and each costs less than the one above", () => {
@@ -33,5 +33,21 @@ describe("the quality tiers", () => {
     expect(capTier("low", "medium")).toBe("low");
     expect(capTier("high", null)).toBe("high");
     expect(capTier("high", undefined)).toBe("high");
+  });
+});
+
+describe("the HUD's glass beside the hand tracker", () => {
+  it("blurs for one wheel player or none, and stays flat from two wheel players on", () => {
+    expect(hudBlurFor(true, {})).toBe(true);
+    expect(hudBlurFor(true, { 0: "keyboard" })).toBe(true);
+    expect(hudBlurFor(true, { 0: "wheel" })).toBe(true);
+    expect(hudBlurFor(true, { 0: "wheel", 1: "keyboard" })).toBe(true);
+    expect(hudBlurFor(true, { 0: "wheel", 1: "wheel" })).toBe(false);
+    expect(hudBlurFor(true, { 0: "wheel", 1: "wheel", 2: "wheel", 3: "wheel" })).toBe(false);
+  });
+
+  it("never turns a tier's missing blur on", () => {
+    expect(hudBlurFor(false, { 0: "wheel" })).toBe(false);
+    expect(QUALITY.low.glassBlur).toBe(false);
   });
 });

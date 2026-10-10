@@ -34,16 +34,19 @@ export function tileRects(count: number, width: number, height: number, overlap:
   return rects;
 }
 
-/** Camera frames a tile may go without a hand before it is looked at only now and then. */
-export const QUIET_AFTER = 8;
+/**
+ * Reads a tile may go without a hand before it is looked at only now and then: about a second at the camera's pace (a player who
+ * opens their hands to brake, turns fast or ducks out of the picture for a moment is found again on the very next frame).
+ */
+export const QUIET_AFTER = 30;
 /** A quiet tile is looked at on every this-many camera frames (staggered across the tiles). */
 export const QUIET_EVERY = 3;
 
 /**
  * Which tiles are worth reading on a camera frame. Every tile with hands in
- * it (or that had some a moment ago) is read on every frame, so a player
- * steering never waits; a tile nobody has held a hand up in for a few frames
- * (an empty seat, a player looking away) is read on every third frame, and
+ * it (or that had some within the last second) is read on every frame, so a
+ * player steering never waits; a tile nobody has held a hand up in for longer
+ * (an empty seat, a player who has walked off) is read on every third frame, and
  * the ones that are quiet together on different frames, so the worker's time
  * is spent where the hands are. A hand raised in a quiet tile is found within
  * `QUIET_EVERY` frames, the one time it matters: when a player starts.

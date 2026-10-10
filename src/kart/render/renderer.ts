@@ -53,7 +53,7 @@ import { PostChain, type DrawViews } from "./post";
 import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
-import { QUALITY, capTier, type QualitySettings, type Tier } from "./quality";
+import { QUALITY, capTier, hudBlurFor, type QualitySettings, type Tier } from "./quality";
 import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
 import { createWorld, type World } from "./world";
@@ -450,6 +450,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
     setControls(kinds: Readonly<Record<number, ControlKind>>): void {
       hud.setControls(kinds);
+      // Several wheel players share the GPU with the hand tracker: no backdrop blur on the glass then (quality.ts, hudBlurFor).
+      hud.setOptions({ blur: hudBlurFor(settings.glassBlur, kinds) });
     },
 
     frame(view: RaceView, dtRaw: number): void {

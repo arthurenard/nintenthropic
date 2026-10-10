@@ -1,0 +1,137 @@
+<!doctype html>
+<!-- The hand tracker beside a race, in one page, as in the game: a picture of a hand played as a 30 fps video and read
+     by the tracker in its worker on the GPU delegate (?hands=2 ?tiles=1 ?copies=1 ?confidence=0.5, as e2e/tracker.html),
+     while the renderer's dev page (?race=<its query>, e.g. track=meadow-loop&sim=1&go=1&views=4&quality=high&art=0)
+     draws a race in an iframe of the same page, sharing its main thread and the GPU. Served by the dev server only;
+     tools/perf/trackrace.mjs reads window.smoke. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <base href="/" />
+    <title>Tracker beside a race</title>
+    <style>
+      body { margin: 0; background: #000; }
+      iframe { position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; }
+      canvas, video { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0.01; }
+    </style>
+  </head>
+  <body>
+    <canvas id="frame" width="480" height="720"></canvas>
+    <video id="video" muted playsinline></video>
+    <script type="module">
+      import { loadTracker } from "/src/tracking/tracker.ts";
+      const params = new URLSearchParams(location.search);
+      const report = (window.smoke = { error: null });
+      try {
+        const image = new Image();
+        image.src = "/e2e/fixtures/hand.jpg";
+        await image.decode();
+        const canvas = document.getElementById("frame");
+        const copies = Number(params.get("copies") ?? 1);
+        if (copies > 1) {
+          canvas.width = 1280;
+          canvas.height = 720;
+        }
+        const context = canvas.getContext("2d");
+        const video = document.getElementById("video");
+        video.srcObject = canvas.captureStream(30);
+        let tick = 0;
+        const paint = () => {
+          if (copies > 1) {
+            const columns = Number(params.get("slots") ?? 0) || copies;
+            const w = canvas.width / columns;
+            const h = canvas.height;
+            const scale = Math.min(w / image.width, h / image.height);
+            for (let i = 0; i < copies; i++) context.drawImage(image, i * w + (w - image.width * scale) / 2, (h - image.height * scale) / 2, image.width * scale, image.height * scale);
+          } else context.drawImage(image, 0, 0, 480, 720);
+          context.fillStyle = tick++ % 2 ? "#000" : "#010101";
+          context.fillRect(0, 0, 1, 1);
+        };
+        paint();
+        await video.play();
+        const make = () =>
+          loadTracker(
+            { wasm: () => {}, model: () => {} },
+            {
+              where: "worker",
+              prefer: "GPU",
+              hands: Number(params.get("hands") ?? 2),
+              confidence: params.has("confidence") ? Number(params.get("confidence")) : undefined,
+              tiles: params.has("tiles") ? Number(params.get("tiles")) : undefined,
+            },
+          );
+        const tracker = await make();
+        // ?twin=1: a second tracker beside the first, each reading what ?tiles says, to see what two workers would cost together.
+        const twin = params.get("twin") === "1" ? await make() : null;
+        report.delegate = tracker.delegate;
+        let framesSeen = 0;
+        let withHands = 0;
+        let handsTotal = 0;
+        let scoreTotal = 0;
+        tracker.subscribe((frame) => {
+          framesSeen++;
+          withHands += frame.hands.length ? 1 : 0;
+          handsTotal += frame.hands.length;
+          for (const hand of frame.hands) scoreTotal += hand.score;
+        });
+        // The camera's own pace, counted on the video: how many frames it delivered while the tracker was read.
+        let camera = 0;
+        const count = () => {
+          camera++;
+          video.requestVideoFrameCallback(count);
+        };
+        video.requestVideoFrameCallback(count);
+        tracker.start(video);
+        twin?.start(video);
+        if (params.has("race")) {
+          const frameEl = document.createElement("iframe");
+          frameEl.src = `/src/kart/render/dev.html?${params.get("race")}`;
+          document.body.append(frameEl);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          // Until the race has drawn a frame.
+          for (let i = 0; i < 600 && !frameEl.contentWindow.__grip?.marks?.firstFrame; i++) await new Promise((resolve) => setTimeout(resolve, 100));
+          report.raceReady = true;
+          window.race = frameEl.contentWindow;
+        }
+        // Let the shaders compile and the race settle, then measure.
+        await new Promise((resolve) => setTimeout(resolve, Number(params.get("warm") ?? 5) * 1000));
+        tracker.resetStats();
+        twin?.resetStats();
+        framesSeen = withHands = handsTotal = scoreTotal = 0;
+        camera = 0;
+        const raceFrames = [];
+        const raceWindow = window.race;
+        const started = performance.now();
+        const seconds = Number(params.get("seconds") ?? 12);
+        let last = performance.now();
+        await new Promise((resolve) => {
+          const loop = (now) => {
+            raceFrames.push(now - last);
+            last = now;
+            paint();
+            if (now - started < seconds * 1000) requestAnimationFrame(loop);
+            else resolve();
+          };
+          requestAnimationFrame(loop);
+        });
+        const elapsed = (performance.now() - started) / 1000;
+        const sorted = [...raceFrames].sort((a, b) => a - b);
+        report.page = { p50: sorted[Math.floor(sorted.length * 0.5)], p95: sorted[Math.floor(sorted.length * 0.95)], fps: raceFrames.length / elapsed };
+        report.race = raceWindow ? { fps: raceWindow.__grip.fps(), stats: raceWindow.__grip.stats() } : null;
+        report.tracker = tracker.stats();
+        if (twin) report.twin = twin.stats();
+        report.cameraFrames = camera;
+        report.cameraFps = camera / elapsed;
+        report.readsPerSecond = report.tracker.frames / elapsed;
+        report.detection = framesSeen ? withHands / framesSeen : 0;
+        report.handsPerFrame = framesSeen ? handsTotal / framesSeen : 0;
+        report.meanScore = handsTotal ? scoreTotal / handsTotal : 0;
+        tracker.dispose();
+        twin?.dispose();
+      } catch (error) {
+        report.error = String(error?.stack || error);
+      }
+      report.done = true;
+    </script>
+  </body>
+</html>

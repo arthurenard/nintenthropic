@@ -36,6 +36,11 @@ const settled = new Set<string>();
 
 /** One file, loaded once (whoever asks first starts it; the rest wait on the same promise); a file that is missing or fails to load leaves the stand-ins. */
 function load(file: string): Promise<void> {
+  // Outside a production build, ?art=0 leaves the modelled art out, so the code-built stand-ins are drawn (to measure what the art costs).
+  if (!import.meta.env.PROD && typeof location !== "undefined" && new URLSearchParams(location.search).get("art") === "0") {
+    settled.add(file);
+    return Promise.resolve();
+  }
   let pending = loading.get(file);
   if (!pending) {
     pending = (async () => {

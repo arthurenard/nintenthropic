@@ -449,12 +449,40 @@ memory goes with it; four restarts in one page grew the JS heap from 113 to 117 
 - *Drawing code loaded with the race, not the page* (`app/lazyRenderer.ts`): the start screen, the lobby and a phone that
   is only a wheel no longer download three.js and the world builders. Script loaded eagerly by `race.html`: 1.6 MB
   to 0.29 MB.
-- *Hand tracking*: a tile whose seat has shown no hand for eight frames is read every third frame (`TileSchedule` in
+- *Hand tracking*: a tile whose seat has shown no hand for a second is read every third frame (`TileSchedule` in
   `tiles.ts`, staggered across tiles); a tile with hands is read on every frame, so steering never waits. Measured
   on the GPU delegate in the worker, 30 fps camera: four seats with two hands up 29 to 24 ms per camera frame, four seats
   with three up 37 to 24 ms (13.6 to 26 reads a second, 81 to 17 frames skipped). One player on the whole picture:
   11 to 13 ms; two: 17 to 20; three: 24 to 27; four, all seated and playing: about 30 to 40. One inference is in
   flight at a time already (a frame that arrives while the worker is busy is dropped, never queued).
+
+**Hand tracking beside a race** (`e2e/trackrace.html`, `tools/perf/trackrace.mjs`: a picture of a hand at 30 fps read by
+the tracking worker on the GPU delegate while the dev page draws a race in an iframe of the same page; medians of three
+runs, the M4 Max at 1440x900@2). Measured when hand recognition felt worse than it had:
+
+| players on the camera, views | tracker alone | beside the race | race with the stand-ins (`?art=0`) |
+| --- | --- | --- | --- |
+| 1, 1 view: inference / delay | 12.5 / 28 ms | 14.7 / 30 ms | 14.2 / 29 ms |
+| 2, 2 views | 17 / 32 ms | 27.5 / 39 ms | 27 / 39 ms |
+| 4, 4 views (reads a second) | 33 / 48 ms (19) | 63 / 73 ms (13) | 50 / 63 ms (13) |
+
+- A race costs one player's tracking about 2 ms, with or without the Blender art; the menus and the wheel check cost it
+  under 2 ms (inference 13.2 ms, 11.1 without their backdrop blur). The art adds 0 to 12 ms to four players' tracking.
+- Four players is where it hurts: four landmarkers read one after another in one worker (28 to 33 ms a frame on an idle
+  GPU, already the camera's whole interval), and a race beside them roughly doubles that, so the tracker reads 13
+  frames a second instead of 28, 70 ms behind the camera.
+- The one cause that was in our hands was the HUD's glass: `backdrop-filter` over a canvas that changes every frame is
+  GPU compositor work on the GPU the tracker uses, whatever the radius (blur 16 px, 6 px and 16 px without the
+  saturate cost the same; none does not). Without it: four players 64 to 49 ms and 74 to 62 ms behind; two players
+  28.5 to 26 ms, frames skipped 63 to 9, 22 to 29 reads a second. The glass is now left flat (the low tier's
+  slightly more opaque style) when two or more wheel players share the screen (`hudBlurFor`); one wheel player keeps
+  the blur (it cost under 2 ms).
+- Not worth it, measured: a lower tier (no change), a lower resolution (63 to 48 ms at 0.65), drawing the race at 30 or
+  20 fps (45 or 36 ms, reads 14 to 18 a second), a second tracking worker (alone 31 to 19 ms, beside the race 62 to
+  46 ms, still 13 reads a second): the race's frames and the tracker take turns on the GPU, and the turns, not the
+  pixels, are the cost.
+- A seat that lost its hands (opening them to brake, a fast turn) is read on every frame for the next 30 reads, about
+  a second, before an empty seat goes to every third (`QUIET_AFTER`), so it is found again on the very next frame.
 
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the

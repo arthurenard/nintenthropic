@@ -80,6 +80,23 @@ describe("which tiles are read", () => {
     run(schedule, [2], 20);
     expect(run(schedule, [0], QUIET_AFTER - 1)).toEqual([QUIET_AFTER - 1]);
   });
+
+  it("finds a player whose hands were lost for less than a second on the very next frame they come back", () => {
+    // Hands out of the picture for 25 reads (opening them to brake, a fast turn, a duck), then back: no read was skipped, so none was late.
+    const schedule = new TileSchedule(4);
+    run(schedule, [2, 2, 2, 2], 100);
+    const lost = run(schedule, [0, 2, 2, 2], 25);
+    expect(lost[0]).toBe(25);
+    const due = schedule.next();
+    expect(due[0]).toBe(true);
+  });
+
+  it("holds that grace for about a second at the camera's pace, and an empty seat is quiet soon after", () => {
+    expect(QUIET_AFTER).toBeGreaterThanOrEqual(30);
+    const schedule = new TileSchedule(2);
+    const reads = run(schedule, [2, 0], 300);
+    expect(reads[1]).toBeLessThan(300 / 2);
+  });
 });
 
 describe("a hand found in a tile", () => {

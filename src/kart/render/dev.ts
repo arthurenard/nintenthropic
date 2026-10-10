@@ -59,6 +59,8 @@ function startRace(): void {
 
   // The stand-in source. To try the real sim, make `source` an adapter over it: a RaceViewSource whose
   // `step` runs the race on its fixed tick with the keyboard's DriveInput and whose `view` is `race.view()`.
+  // ?inject=<css>: a style added to the page (to try what a rule costs, e.g. no backdrop blur on the HUD's glass).
+  if (params.has("inject")) document.head.append(Object.assign(document.createElement("style"), { textContent: params.get("inject") ?? "" }));
   const useSim = params.get("sim") === "1";
   const demo: ReturnType<typeof createDemoRace> | SimSource = useSim
     ? new SimSource(track, {
@@ -165,7 +167,14 @@ function startRace(): void {
     let frames = 0;
     let acc = 0;
     let worst = 0;
+    // ?fpscap=30 draws every other display frame (to see what the race's rate costs the hand tracker beside it).
+    const every = Math.max(1, Math.round(60 / (Number(params.get("fpscap")) || 60)));
+    let skipFrames = 0;
     const loop = (now: number): void => {
+      if (every > 1 && skipFrames++ % every !== 0) {
+        requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const tSim = performance.now();

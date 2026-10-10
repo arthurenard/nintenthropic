@@ -115,3 +115,15 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     groundTile: 80,
   },
 };
+
+/**
+ * Whether the HUD's glass blurs the picture behind it. Blurring a canvas that changes every frame is work for the GPU's
+ * compositor, and it is the same GPU the hand tracker reads on: with two or more wheel players on this screen (a tracker
+ * reading two to four players' hands, and as many views drawn) the blur made each camera frame take about 14 ms longer
+ * (measured, four players, four views: 63 ms to 49 ms), so the glass is left flat and a little more opaque. One wheel
+ * player, or none, keeps the blur: it cost the tracker under 2 ms.
+ */
+export function hudBlurFor(tierBlur: boolean, controls: Readonly<Record<number, string>>): boolean {
+  const wheels = Object.values(controls).filter((kind) => kind === "wheel").length;
+  return tierBlur && wheels < 2;
+}
