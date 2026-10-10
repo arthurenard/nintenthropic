@@ -5,12 +5,32 @@
  */
 import type { Quality } from "./types";
 
-export function guessTier(gpu: string, cores = 8): Quality["tier"] {
+/** What the game asking is going to draw. */
+export interface TierHints {
+  /**
+   * The game draws up to four views of the world at once (Grip Prix's split
+   * screen), which asks four times the vertices and draw calls of one: a
+   * base Apple chip, or a browser that only says "Apple GPU" (Safari, an
+   * iPad), starts a step lower than for a game with one view.
+   */
+  splitScreen?: boolean;
+}
+
+/** Cores that only a Pro, Max or Ultra Apple chip has (an M4 Pro: 12 to 14; a base M4: 10). */
+const BIG_APPLE_CORES = 12;
+
+export function guessTier(gpu: string, cores = 8, hints: TierHints = {}): Quality["tier"] {
   const name = gpu.toLowerCase().replace(/\((r|tm)\)/g, "");
   if (/swiftshader|llvmpipe|software|basic render/.test(name)) return "low";
-  if (/mali|adreno|powervr|videocore/.test(name)) return "low";
+  // Phones' GPUs; but Qualcomm's laptop part (Adreno X1) is a laptop GPU.
+  if (/mali|adreno(?! x\d)|powervr|videocore/.test(name)) return "low";
   let tier: Quality["tier"] = "medium";
-  if (/apple m\d|geforce|rtx|gtx|quadro|radeon (rx|pro)|nvidia/.test(name)) tier = "high";
+  if (/apple m\d+ (pro|max|ultra)/.test(name)) tier = "high";
+  else if (/apple m\d/.test(name)) tier = hints.splitScreen ? "medium" : "high";
+  // Safari and iPads give the family, not the chip. Only the core count tells a Pro or Max from the rest.
+  else if (/apple/.test(name)) tier = hints.splitScreen && cores >= BIG_APPLE_CORES ? "high" : "medium";
+  else if (/geforce (mx|gt )/.test(name)) tier = "medium";
+  else if (/geforce|rtx|gtx|quadro|radeon (rx|pro)|nvidia/.test(name)) tier = "high";
   else if (/intel/.test(name)) tier = /iris xe|arc/.test(name) ? "medium" : "low";
   // A GPU is rarely better than the machine around it.
   if (cores <= 4 && tier === "high") tier = "medium";

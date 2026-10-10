@@ -5,6 +5,7 @@
  * are versioned and hold JSON.
  */
 import { CHARACTERS, characterById } from "../characters";
+import { TIERS, type Tier } from "../render/quality";
 import { cleanName, defaultName } from "./format";
 import type { SoundLevels, Steering } from "./services";
 
@@ -12,6 +13,9 @@ const KEYS = {
   you: "handy.kart.you.v1",
   checked: "handy.kart.checked.v1",
   sound: "handy.kart.sound.v1",
+  graphics: "handy.kart.graphics.v1",
+  ceiling: "handy.kart.ceiling.v1",
+  fps: "handy.kart.fps.v1",
 } as const;
 
 /** How a player drives. */
@@ -151,4 +155,66 @@ export function loadLevels(storage: Storage | undefined = local()): SoundLevels 
 
 export function saveLevels(levels: SoundLevels, storage: Storage | undefined = local()): boolean {
   return write(storage, KEYS.sound, levels);
+}
+
+/** The quality tiers the renderer draws in (render/quality.ts), lowest first. */
+export const TIER_NAMES = TIERS;
+export type TierName = Tier;
+
+/** The Graphics setting: "auto" lets the game pick for the device, the others hold a tier. */
+export type Graphics = "auto" | TierName;
+export const GRAPHICS: readonly Graphics[] = ["auto", ...TIER_NAMES];
+
+const isTier = (value: unknown): value is TierName => TIER_NAMES.includes(value as TierName);
+
+/** The Graphics setting as the player left it ("auto" until they choose). */
+export function loadGraphics(storage: Storage | undefined = local()): Graphics {
+  const saved = read<unknown>(storage, KEYS.graphics);
+  return saved === "auto" || isTier(saved) ? saved : "auto";
+}
+
+/**
+ * Keeps the Graphics setting. Choosing again, whatever the choice, forgets the
+ * ceiling the safety net set (below): "Auto" then looks at the device afresh.
+ */
+export function saveGraphics(choice: Graphics, storage: Storage | undefined = local()): boolean {
+  clearCeiling(storage);
+  return write(storage, KEYS.graphics, choice);
+}
+
+/**
+ * The safety net's memory: the highest tier "Auto" may use on this device,
+ * set when a race ran at the lowest resolution for seconds on end (see
+ * render/renderer.ts, onStrain). Null when nothing has gone wrong, or when
+ * it was set long enough ago that the device may have changed (a laptop on
+ * battery then on the mains, a new driver): `CEILING_DAYS`.
+ */
+export function loadCeiling(storage: Storage | undefined = local(), now = Date.now()): TierName | null {
+  const saved = read<{ tier?: unknown; at?: unknown }>(storage, KEYS.ceiling);
+  if (!saved || !isTier(saved.tier) || typeof saved.at !== "number") return null;
+  return now - saved.at < CEILING_DAYS * 86_400_000 ? saved.tier : null;
+}
+
+/** How long the safety net's ceiling holds before Auto tries the device's own tier again. */
+export const CEILING_DAYS = 14;
+
+export function saveCeiling(tier: TierName, storage: Storage | undefined = local(), now = Date.now()): boolean {
+  return write(storage, KEYS.ceiling, { tier, at: now });
+}
+
+export function clearCeiling(storage: Storage | undefined = local()): void {
+  try {
+    storage?.removeItem(KEYS.ceiling);
+  } catch {
+    // Nothing kept, nothing to forget.
+  }
+}
+
+/** The small frame-rate readout in a corner of the race (off until the player turns it on). */
+export function loadFpsReadout(storage: Storage | undefined = local()): boolean {
+  return read<unknown>(storage, KEYS.fps) === true;
+}
+
+export function saveFpsReadout(on: boolean, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.fps, on);
 }

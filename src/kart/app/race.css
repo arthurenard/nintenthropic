@@ -497,6 +497,29 @@ body[data-screen="race"] #sound-button {
 .sound-rows .slider:disabled {
   opacity: 0.4;
 }
+/* The four graphics choices side by side where there is room; under their name, to the right, where there is not. */
+.sound-rows .graphics-row .segmented [role="radio"] {
+  padding-inline: 11px;
+}
+/* The frame-rate readout, beside the pause button (the corner the map keeps clear), off until it is switched on. */
+.race-fps {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: calc(max(16px, env(safe-area-inset-right)) + 52px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+.race-fps[hidden] {
+  display: none;
+}
 
 /* The pause sheet (a menu, as the arcade's). */
 .menu[open] {

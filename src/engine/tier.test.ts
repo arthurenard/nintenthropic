@@ -15,6 +15,42 @@ describe("the GPU tier guess", () => {
 
   it("does not trust a big GPU in a small machine", () => {
     expect(guessTier("NVIDIA GeForce GTX 1050", 2)).toBe("medium");
+    expect(guessTier("NVIDIA GeForce RTX 3060", 4)).toBe("medium");
+  });
+
+  it("puts the small discrete GPUs of laptops a step down, and a laptop Adreno with the laptops", () => {
+    expect(guessTier("ANGLE (NVIDIA, NVIDIA GeForce MX450 Direct3D11)")).toBe("medium");
+    expect(guessTier("ANGLE (NVIDIA, NVIDIA GeForce GT 730 Direct3D11)")).toBe("medium");
+    expect(guessTier("ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11)")).toBe("high");
+    expect(guessTier("ANGLE (Qualcomm, Adreno (TM) 740)")).toBe("low");
+    expect(guessTier("ANGLE (Qualcomm, Qualcomm(R) Adreno(TM) X1-85 GPU)")).toBe("medium");
+  });
+});
+
+describe("the tier of a game that draws four views", () => {
+  const split = { splitScreen: true };
+  const m = (chip: string) => `ANGLE (Apple, ANGLE Metal Renderer: Apple ${chip}, Unspecified Version)`;
+
+  it("starts a base Apple chip at medium, and a Pro, Max or Ultra at high", () => {
+    for (const chip of ["M1", "M2", "M3", "M4"]) expect(guessTier(m(chip), 8, split)).toBe("medium");
+    for (const chip of ["M1 Pro", "M2 Max", "M3 Ultra", "M4 Max", "M4 Pro"]) expect(guessTier(m(chip), 12, split)).toBe("high");
+  });
+
+  it("starts Safari and an iPad (which say 'Apple GPU') at medium, unless the cores say a Pro or a Max", () => {
+    expect(guessTier("Apple GPU", 8, split)).toBe("medium");
+    expect(guessTier("Apple GPU", 10, split)).toBe("medium");
+    expect(guessTier("Apple GPU", 16, split)).toBe("high");
+  });
+
+  it("leaves a game with one view as it was", () => {
+    expect(guessTier(m("M1"), 8)).toBe("high");
+    expect(guessTier("Apple GPU", 16)).toBe("medium");
+  });
+
+  it("starts old Intel graphics at low and a modern one at medium", () => {
+    expect(guessTier("ANGLE (Intel, Intel(R) HD Graphics 520 Direct3D11)", 4, split)).toBe("low");
+    expect(guessTier("ANGLE (Intel Inc., Intel(R) Iris(TM) Plus Graphics OpenGL Engine)", 8, split)).toBe("low");
+    expect(guessTier("ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11)", 8, split)).toBe("medium");
   });
 });
 

@@ -89,6 +89,8 @@ export interface StageProbe {
   software: boolean;
   /** A weak or hot device: fewer frames. */
   low: boolean;
+  /** The tier the race would start at here (the GPU's name and the cores, for up to four views): what Graphics, Auto, uses. */
+  tier: "low" | "medium" | "high";
 }
 
 let probed: Promise<StageProbe> | null = null;
@@ -103,15 +105,20 @@ async function askBrowser(): Promise<StageProbe> {
   try {
     const canvas = document.createElement("canvas");
     const gl = (canvas.getContext("webgl2") ?? canvas.getContext("webgl")) as WebGLRenderingContext | WebGL2RenderingContext | null;
-    if (!gl) return { webgl: false, software: false, low: true };
+    if (!gl) return { webgl: false, software: false, low: true, tier: "low" };
     const { gpuName, guessTier } = await import("../../engine/tier");
     const name = gpuName(gl);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
     const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4;
     const software = /swiftshader|llvmpipe|software|basic render/i.test(name);
-    return { webgl: true, software, low: guessTier(name, cores) === "low" || (cores <= 4 && matchMedia("(pointer: coarse)").matches) };
+    return {
+      webgl: true,
+      software,
+      low: guessTier(name, cores) === "low" || (cores <= 4 && matchMedia("(pointer: coarse)").matches),
+      tier: guessTier(name, cores, { splitScreen: true }),
+    };
   } catch {
-    return { webgl: false, software: false, low: true };
+    return { webgl: false, software: false, low: true, tier: "low" };
   }
 }
 
