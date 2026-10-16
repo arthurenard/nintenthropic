@@ -1,6 +1,6 @@
 /**
  * The race page's sound controls: a speaker in the corner of every screen
- * but the race (Handy's own sound preference, on or off, which the arcade
+ * but the race (Handheld's own sound preference, on or off, which the arcade
  * shares), and in the pause sheet that speaker again with the Music and
  * Effects sliders. M turns sound off and on from anywhere.
  */

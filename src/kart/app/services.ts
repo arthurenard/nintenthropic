@@ -165,7 +165,7 @@ export interface SoundReport {
 }
 
 /**
- * Grip Prix's sound for the screens. Handy has one sound preference (on or
+ * Grip Prix's sound for the screens. Handheld has one sound preference (on or
  * off, shared with the arcade) and a master volume; the race page adds the
  * music and the effects. Browsers start audio only after a gesture, so
  * nothing is made until `wake` (the page's first click or key press), and

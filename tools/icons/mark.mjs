@@ -1,22 +1,48 @@
-// Handy's mark: a sculpted hand making a finger pistol, aimed at the game's
-// own green crosshair, on a dark rounded square. The hand is a Cycles render
-// (tools/icons/hand.py, built from real bone lengths); this lays it out with
-// the crosshair, the glow and the shape. tools/icons/render.mjs writes the
-// app icons from it.
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+// Handheld's mark: a finger pistol, drawn flat like an SF Symbol, aimed at a
+// sight, on a sunset gradient (orange into pink). Pure vector, on a 100 grid:
+// one silhouette for the hand, the curled fingers parted by cut creases.
+// tools/icons/render.mjs writes the app icons from it.
 
-const here = dirname(fileURLToPath(import.meta.url));
-const HAND = `data:image/png;base64,${readFileSync(resolve(here, "hand.png")).toString("base64")}`;
-/** Where the fingertip and the aim point fall in hand.png (0-1), from hand.py. */
-const LAYOUT = JSON.parse(readFileSync(resolve(here, "hand.json"), "utf8"));
+/** The hand, pointing right, on its own 100 grid. */
+const HAND = [
+  "M 23.4 21.4", // thumb, back edge near the tip
+  "A 5.8 5.8 0 0 1 34.8 19.2", // thumb tip
+  "L 39.6 32.4", // thumb, front edge
+  "C 40.6 35.2 42.6 36 45.6 36", // webbing into the index
+  "L 78.5 36", // index, top
+  "A 6.5 6.5 0 0 1 78.5 49", // index tip
+  "L 63.5 49", // index, underside
+  "A 5.25 5.25 0 0 1 63.5 59.5", // middle finger's knuckle
+  "L 62 59.5",
+  "A 5.25 5.25 0 0 1 62 70", // ring finger's knuckle
+  "L 58.5 70",
+  "A 4.75 4.75 0 0 1 58.5 79.5", // little finger's knuckle
+  "L 47 79.5",
+  "C 38 79.5 28 76.5 17.75 73.93", // under the wrist
+  "Q 16 73.5 15.75 71.72",
+  "L 12.85 51.28", // the cut across the wrist, its corners eased
+  "Q 12.6 49.5 14.27 48.85",
+  "C 19 47 23 45.6 26.4 42.6", // top of the wrist into the back of the hand
+  "C 27.6 41.4 28 39.6 27.5 37.6", // into the thumb
+  "Z",
+].join(" ");
+/** The creases between the index and the curled fingers, and between those: [x1, y, x2]. */
+const CREASES = [
+  [52, 49.6, 100],
+  [53, 60, 100],
+  [52, 70.5, 100],
+];
+/** The index fingertip and the hand's left edge and vertical middle, on the hand's grid. */
+const TIP = [85, 42.5];
+const LEFT = 12.6;
+const MIDDLE = 46.5;
 
-/** The hand image on the 100 grid: its size and top-left corner. */
-const SIZE = 108;
-const AT = [-7, 1];
-/** How far past the fingertip the crosshair floats, in hand-image widths. */
-const GAP = 0.1;
+/** The hand's scale on the icon, where its left edge falls, and where its middle sits (a little high, for the eye). */
+const SCALE = 0.8;
+const AT = [12, 47.6];
+/** The sight: its radius, and the gap between it and the fingertip. */
+const SIGHT = 6.4;
+const GAP = 4.2;
 
 /**
  * The mark as an SVG document.
@@ -30,33 +56,32 @@ export function markSvg({ shape = "rounded", inset = 1 } = {}) {
   const radius = shape === "rounded" ? 22.5 : 0;
   const k = inset;
   const offset = (100 - 100 * k) / 2;
-  const [tx, ty] = LAYOUT.tip;
-  const dx = LAYOUT.aim[0] - tx;
-  const dy = LAYOUT.aim[1] - ty;
-  const n = Math.hypot(dx, dy);
-  const aimX = AT[0] + (tx + (dx / n) * GAP) * SIZE;
-  const aimY = AT[1] + (ty + (dy / n) * GAP) * SIZE;
-  const gx = offset + k * aimX;
-  const gy = offset + k * aimY;
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100" width="100" height="100">
+  const tx = AT[0] - LEFT * SCALE;
+  const ty = AT[1] - MIDDLE * SCALE;
+  const aimX = tx + TIP[0] * SCALE + GAP + SIGHT;
+  const aimY = ty + TIP[1] * SCALE;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2c2e"/><stop offset="1" stop-color="#0a0a0b"/></linearGradient>
-    <radialGradient id="glow" cx="${gx}" cy="${gy}" r="${26 * k}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#30d158" stop-opacity="0.34"/><stop offset="1" stop-color="#30d158" stop-opacity="0"/></radialGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa40f"/><stop offset="1" stop-color="#ff2d55"/></linearGradient>
+    <radialGradient id="shine" cx="30" cy="0" r="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ink" x1="0" y1="15" x2="0" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#e8e8ed"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2.2" stdDeviation="2.6" flood-color="#000" flood-opacity="0.22"/></filter>
+    <mask id="creases" maskUnits="userSpaceOnUse" x="-100" y="-100" width="300" height="300">
+      <rect x="-100" y="-100" width="300" height="300" fill="#fff"/>
+      <g stroke="#000" stroke-width="2.2" stroke-linecap="round">${CREASES.map(([x1, y, x2]) => `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/>`).join("")}</g>
+    </mask>
     <clipPath id="shape"><rect width="100" height="100" rx="${radius}"/></clipPath>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="1.6" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/></filter>
-    <linearGradient id="fadeRamp" gradientUnits="userSpaceOnUse" x1="6" y1="94" x2="30" y2="66"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
-    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><rect width="100" height="100" fill="url(#fadeRamp)"/></mask>
   </defs>
   <g clip-path="url(#shape)">
     <rect width="100" height="100" fill="url(#bg)"/>
-    <rect width="100" height="100" fill="url(#glow)"/>
-    <g transform="translate(${offset} ${offset}) scale(${k})">
-      <g mask="url(#fade)"><image href="${HAND}" x="${AT[0]}" y="${AT[1]}" width="${SIZE}" height="${SIZE}" filter="url(#shadow)"/></g>
-      <circle cx="${aimX}" cy="${aimY}" r="5.6" fill="none" stroke="#30d158" stroke-width="2.6"/>
-      <circle cx="${aimX}" cy="${aimY}" r="1.6" fill="#30d158"/>
+    <rect width="100" height="100" fill="url(#shine)"/>
+    <g transform="translate(${offset} ${offset}) scale(${k})" filter="url(#shadow)">
+      <g transform="translate(${tx} ${ty}) scale(${SCALE})"><path d="${HAND}" fill="url(#ink)" mask="url(#creases)"/></g>
+      <circle cx="${aimX}" cy="${aimY}" r="${SIGHT}" fill="none" stroke="#fff" stroke-width="2.4"/>
+      <circle cx="${aimX}" cy="${aimY}" r="1.7" fill="#fff"/>
     </g>
   </g>
-  ${radius ? `<rect x="0.4" y="0.4" width="99.2" height="99.2" rx="${radius - 0.4}" fill="none" stroke="#fff" stroke-opacity="0.09" stroke-width="0.8"/>` : ""}
+  ${radius ? `<rect x="0.4" y="0.4" width="99.2" height="99.2" rx="${radius - 0.4}" fill="none" stroke="#fff" stroke-opacity="0.14" stroke-width="0.8"/>` : ""}
 </svg>
 `;
 }

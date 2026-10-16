@@ -1,5 +1,5 @@
 /**
- * Renders the Handy promo video end to end (see README.md):
+ * Renders the Handheld promo video end to end (see README.md):
  *
  *   node tools/promo/render.mjs                    everything, at 1920x1080 and 60 fps
  *   node tools/promo/render.mjs --only western     just re-capture one segment (then audio and video again)
@@ -173,7 +173,7 @@ function video() {
     last = `x${i}`;
   }
   const audioIndex = SEGMENTS.length;
-  const finalPath = `${OUT}/handy-promo.mp4`;
+  const finalPath = `${OUT}/handheld-promo.mp4`;
   ffmpeg([
     ...inputs,
     "-i", `${OUT}/audio.m4a`,
@@ -188,7 +188,7 @@ function video() {
     finalPath,
   ]);
   // A poster (the title card, fully in) and a contact sheet, one frame a second.
-  ffmpeg(["-ss", (starts[segIndex("title")] + 1.9).toFixed(2), "-i", finalPath, "-frames:v", "1", "-q:v", "2", `${OUT}/handy-promo-poster.jpg`]);
+  ffmpeg(["-ss", (starts[segIndex("title")] + 1.9).toFixed(2), "-i", finalPath, "-frames:v", "1", "-q:v", "2", `${OUT}/handheld-promo-poster.jpg`]);
   ffmpeg(["-i", finalPath, "-vf", `fps=1,scale=320:180,tile=8x${Math.ceil(total / 8)}`, "-frames:v", "1", "-q:v", "3", `${OUT}/contact.jpg`]);
   writeFileSync(`${OUT}/timeline.json`, JSON.stringify({ fps, total, segments: SEGMENTS.map((s, i) => ({ id: s.id, start: starts[i], dur: s.dur })) }, null, 1));
   console.log(`[video] ${finalPath}`);

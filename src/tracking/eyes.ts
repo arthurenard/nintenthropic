@@ -1,5 +1,5 @@
 /**
- * The eyes from a face landmarker's result: all Handy keeps of a face. Apart
+ * The eyes from a face landmarker's result: all Handheld keeps of a face. Apart
  * from face.ts so the page's tracker can read results without loading
  * MediaPipe itself (that runs in the worker).
  */

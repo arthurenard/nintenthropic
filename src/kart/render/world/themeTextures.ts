@@ -6,7 +6,7 @@
  * change how the road drives (ice, mud, sand, snow).
  *
  * All drawn on a canvas at load, tileable, in greys where the ground's own
- * vertex colour does the tinting. Drawn, not downloaded, like every Handy
+ * vertex colour does the tinting. Drawn, not downloaded, like every Handheld
  * asset until art exists.
  */
 import { CanvasTexture, ClampToEdgeWrapping, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace } from "three";

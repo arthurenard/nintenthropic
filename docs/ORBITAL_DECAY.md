@@ -1,6 +1,6 @@
 # Orbital Decay — game design
 
-The third game of the web-native Handy. Four hundred kilometres up, in the
+The third game of the web-native Handheld. Four hundred kilometres up, in the
 glass cupola of a space station, as a cloud of wreckage from a satellite
 collision crosses your orbit. You have the station's point-defence laser and
 seven windows between you and the vacuum. It must look and feel like something
@@ -204,7 +204,7 @@ sky are not widened. Tables: `ASSIST` in `world/shooter.ts`.
 beacons on the truss, the arrays, the radiator and the capsule, placed to
 cover the screen's corners, edges and centre. The lit one blinks brighter; a
 hit turns it steady green with a soft ring. The laser fires through the check
-(no heat), always at the lit light: the player points at it and Handy learns
+(no heat), always at the lit light: the player points at it and Handheld learns
 where that is, with no crosshair to steer ("Point at the Lit Light"). Framing: the cupola's own view; play keeps it (no zoom — the
 windows are the frame).
 

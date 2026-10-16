@@ -457,8 +457,8 @@ export class App {
     setText(
       "prime-body",
       eye
-        ? "Handy needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
-        : "Handy needs your camera to see your hand. The picture stays on this computer.",
+        ? "Handheld needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
+        : "Handheld needs your camera to see your hand. The picture stays on this computer.",
     );
     return new Promise((resolve) => {
       const sheet = openSheet("prime");
@@ -632,7 +632,7 @@ export class App {
   private fail(error: unknown): void {
     const part = error instanceof Stage ? error.part : null;
     const cause = error instanceof Stage ? error.error : error;
-    console.error("Handy could not start the game.", cause);
+    console.error("Handheld could not start the game.", cause);
     this.endSession();
     this.showView("arcade");
     if (cause instanceof WebGLUnavailable) this.trouble("webgl");
@@ -1510,7 +1510,7 @@ export class App {
     );
     $("get-started").onclick = () => {
       prefs.welcomed = true;
-      // The landing, unless the address was a link to a game: then that game. Where the button was, the focus goes on to the Arcade's.
+      // The landing, unless the address was a link to a game: then that game. Where the button was, the focus goes on to Finger Guns' Play.
       this.arrive(this.route);
       if (this.route.space === "landing" && !this.route.focus && !prefs.space) this.landing.focus("arcade");
     };
@@ -1604,7 +1604,7 @@ export class App {
     };
     window.addEventListener("popstate", followAddress);
     window.addEventListener("hashchange", followAddress);
-    // The bar's Handy is the way back to the landing (a link, so that it opens there from anywhere too).
+    // The bar's Handheld is the way back to the landing (a link, so that it opens there from anywhere too).
     $("brand").addEventListener("click", (event) => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
@@ -1855,7 +1855,7 @@ export class App {
     };
   }
 
-  /** Reset Handy: everything it keeps is forgotten, and it starts again as on the first visit. */
+  /** Reset Handheld: everything it keeps is forgotten, and it starts again as on the first visit. */
   private resetEverything(): void {
     if (this.session) this.back();
     closeSheets();

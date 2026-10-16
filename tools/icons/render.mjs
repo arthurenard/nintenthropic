@@ -1,7 +1,5 @@
-// Renders Handy's app icons from the mark, in installed Chrome:
+// Renders Handheld's app icons from the mark, in installed Chrome:
 //   node tools/icons/render.mjs
-// (After a change to the hand itself, render it first:
-//   Blender -b --factory-startup -P tools/icons/hand.py -- $PWD/tools/icons/hand.png 1536)
 // public/icons/icon-192.png, -512    web app icons and the wordmark, clear corners
 // public/icons/favicon-32.png        the tab's icon
 // public/icons/icon-maskable-512     full bleed, artwork in the middle 80%
@@ -27,7 +25,6 @@ for (const { file, size, svg, clear } of renders) {
   const page = await browser.newPage({ viewport: { width: size, height: size } });
   const sized = svg.replace('width="100" height="100"', `width="${size}" height="${size}"`);
   await page.setContent(`<style>html,body{margin:0;background:transparent}svg{display:block}</style>${sized}`);
-  await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(100);
   await page.screenshot({ path: resolve(icons, file), omitBackground: clear });
   await page.close();

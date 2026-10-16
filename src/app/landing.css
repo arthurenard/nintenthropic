@@ -451,9 +451,49 @@ body[data-view="landing"] .spaces {
   body[data-view="arcade"] .brand-name {
     display: none;
   }
+  body[data-view="arcade"] .brand {
+    padding-right: 4px;
+  }
+  /* Two equal halves would not hold "Finger Guns": here each segment is as wide as its name, the chosen one in the pill. */
+  .spaces {
+    grid-auto-columns: auto;
+  }
+  .spaces::before {
+    display: none;
+  }
   .space {
-    min-width: 72px;
+    min-width: 0;
     padding: 0 12px;
+    font-size: 13px;
+  }
+  .space[aria-current="page"] {
+    background: #fff;
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.12),
+      0 3px 1px rgba(0, 0, 0, 0.04);
+  }
+}
+@media (max-width: 380px) {
+  /* The chevron alone is the way back, and the room goes to the two names. */
+  .nav {
+    gap: 4px;
+  }
+  body[data-view="arcade"] .brand .wordmark-icon {
+    display: none;
+  }
+  body[data-view="arcade"] .brand {
+    justify-content: center;
+    min-width: 44px;
+    padding-right: 0;
+  }
+  .space {
+    padding: 0 9px;
+  }
+}
+@media (max-width: 350px) {
+  /* Settings has the volume too. */
+  body[data-view="arcade"] #mute {
+    display: none;
   }
 }
 

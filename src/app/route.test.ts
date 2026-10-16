@@ -12,7 +12,8 @@ describe("where an address is", () => {
     expect(at("", "?input=script")).toEqual({ space: "landing", focus: null });
   });
 
-  it("is the arcade for #arcade, on the game chosen last", () => {
+  it("is the arcade for #finger-guns (or #arcade, its old name), on the game chosen last", () => {
+    expect(at("#finger-guns")).toEqual({ space: "arcade", game: null });
     expect(at("#arcade")).toEqual({ space: "arcade", game: null });
   });
 
@@ -53,6 +54,6 @@ describe("the hash a route is written as", () => {
     expect(hashFor({ space: "landing", focus: "grip-prix" })).toBe("");
     expect(hashFor({ space: "arcade", game: null }, shooting[1])).toBe("#dead-of-night");
     expect(hashFor({ space: "arcade", game: "high-noon" })).toBe("#high-noon");
-    expect(hashFor({ space: "arcade", game: null })).toBe("#arcade");
+    expect(hashFor({ space: "arcade", game: null })).toBe("#finger-guns");
   });
 });

@@ -1,6 +1,6 @@
 /**
- * The landing: Handy's two families as two equal, cinematic tiles - the
- * Arcade (the finger-pistol shooters, their posters crossfading in the dark)
+ * The landing: Handheld's two families as two equal, cinematic tiles - the
+ * Finger Guns (the finger-pistol shooters, their posters crossfading in the dark)
  * and Grip Prix (its sunny poster) - each with the one thing to do and a quiet
  * "How It Plays". This module fills the tiles from the games' own entries (so
  * a poster is named once, in games/index.ts), moves their art gently under a
@@ -115,7 +115,7 @@ export class Collage {
 /** What the sheet says for each tile's "How It Plays". */
 const HOW: Record<Tile, { eyebrow: string; title: string; gesture: GestureKind; body: (grip?: GameEntry) => string }> = {
   arcade: {
-    eyebrow: "Arcade",
+    eyebrow: "Finger Guns",
     title: "Finger Pistol",
     gesture: "pistol",
     body: () =>

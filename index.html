@@ -6,25 +6,25 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Games you play with your hands, in front of your camera. A finger-pistol arcade and a four-player kart race, right in your browser." />
-    <meta name="apple-mobile-web-app-title" content="Handy" />
-    <title>Handy</title>
+    <meta name="apple-mobile-web-app-title" content="Handheld" />
+    <title>Handheld</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   </head>
   <body data-view="none">
-    <!-- First run: what Handy is, and the two ways to play with your hands. -->
+    <!-- First run: what Handheld is, and the two ways to play with your hands. -->
     <div id="welcome" class="view welcome" hidden>
       <div class="welcome-inner">
         <p class="wordmark" aria-hidden="true">
-          <img class="wordmark-icon" src="/icons/icon-192.png" alt="" />Handy
+          <img class="wordmark-icon" src="/icons/icon-192.png" alt="" />Handheld
         </p>
-        <h1 class="large-title">Welcome to Handy.</h1>
+        <h1 class="large-title">Welcome to Handheld.</h1>
         <p class="body secondary">Games you play with your hands. No controller, just your camera.</p>
         <div class="gestures">
           <figure class="gesture" data-gesture="pistol" aria-label="Finger pistol">
-            <p class="eyebrow">Arcade</p>
+            <p class="eyebrow">Finger Guns</p>
           </figure>
           <figure class="gesture" data-gesture="wheel" aria-label="Steering wheel">
             <p class="eyebrow">Grip Prix</p>
@@ -35,14 +35,14 @@
       </div>
     </div>
 
-    <!-- The bar over the landing and the arcade: back to Handy, between its two spaces, and the page's own controls. -->
+    <!-- The bar over the landing and the arcade: back to Handheld, between its two spaces, and the page's own controls. -->
     <header class="nav" id="nav" hidden>
       <a class="brand" id="brand" href="./">
         <svg class="brand-back" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>
-        <img class="wordmark-icon" src="/icons/icon-192.png" alt="" /><span class="brand-name">Handy</span>
+        <img class="wordmark-icon" src="/icons/icon-192.png" alt="" /><span class="brand-name">Handheld</span>
       </a>
       <nav class="spaces" aria-label="Sections">
-        <a class="space" id="space-arcade" href="#arcade" aria-current="page">Arcade</a>
+        <a class="space" id="space-arcade" href="#finger-guns" aria-current="page">Finger Guns</a>
         <a class="space" id="space-grip" href="race.html">Grip Prix</a>
       </nav>
       <div class="nav-actions">
@@ -58,7 +58,7 @@
       </div>
     </header>
 
-    <!-- The landing: Handy's two families, side by side. -->
+    <!-- The landing: Handheld's two families, side by side. -->
     <div id="landing" class="view landing" hidden>
       <main class="landing-main">
         <h1 class="landing-title" id="landing-title">Games you play with your hands.</h1>
@@ -68,10 +68,10 @@
             <div class="tile-body">
               <img class="tile-icon" src="/icons/icon-192.png" alt="" />
               <p class="eyebrow" id="tile-arcade-eyebrow">Shooting</p>
-              <h2 class="tile-title" id="tile-arcade-title">Arcade</h2>
+              <h2 class="tile-title" id="tile-arcade-title">Finger Guns</h2>
               <p class="tile-line">Make a finger pistol. Take the shot.</p>
               <div class="tile-actions">
-                <a class="button primary large tile-go" id="tile-arcade-go" href="#arcade" aria-describedby="tile-arcade-title">Play</a>
+                <a class="button primary large tile-go" id="tile-arcade-go" href="#finger-guns" aria-describedby="tile-arcade-title">Play</a>
                 <button type="button" class="tile-how" data-how="arcade" aria-describedby="tile-arcade-title">
                   How It Plays<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
                 </button>
@@ -199,7 +199,7 @@
         <div class="check-card glass check-only" id="check-card">
           <div class="check-words" id="check-words" aria-live="polite">
             <p class="title3" id="check-title">Point at the Lit Target</p>
-            <p class="subhead secondary" id="check-detail">Point your finger at it and fire. Handy is learning where you point.</p>
+            <p class="subhead secondary" id="check-detail">Point your finger at it and fire. Handheld is learning where you point.</p>
           </div>
           <div class="check-side">
             <p class="trigger footnote" id="trigger" data-state="lost"><i></i><span>Show your hand</span></p>
@@ -241,7 +241,7 @@
     <dialog id="prime" class="sheet alert" aria-labelledby="prime-title">
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="prime-title">Use Your Camera</h2>
-      <p class="body secondary" id="prime-body">Handy needs your camera to see your hand. The picture stays on this computer.</p>
+      <p class="body secondary" id="prime-body">Handheld needs your camera to see your hand. The picture stays on this computer.</p>
       <div class="sheet-actions">
         <button class="button primary wide" id="prime-continue" data-sound="confirm">Continue</button>
         <button class="button plain wide" id="prime-mouse">Use Mouse or Trackpad</button>
@@ -351,7 +351,7 @@
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="privacy-title">Your Camera Stays Here</h2>
       <p class="body secondary">
-        Handy runs in your browser. Your camera picture is read on this computer to find your hand, and it is never
+        Handheld runs in your browser. Your camera picture is read on this computer to find your hand, and it is never
         saved or uploaded.
       </p>
       <p class="subhead secondary" id="privacy-eye">
@@ -569,7 +569,7 @@
 
         <section class="group" aria-label="Reset">
           <div class="rows">
-            <button type="button" class="row row-action danger" id="reset">Reset Handy</button>
+            <button type="button" class="row row-action danger" id="reset">Reset Handheld</button>
           </div>
         </section>
       </div>
@@ -578,9 +578,9 @@
 
     <dialog id="confirm" class="sheet alert" aria-labelledby="confirm-title" aria-describedby="confirm-body">
       <span class="alert-icon danger"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg></span>
-      <h2 class="title2" id="confirm-title">Reset Handy?</h2>
+      <h2 class="title2" id="confirm-title">Reset Handheld?</h2>
       <p class="body secondary" id="confirm-body">
-        This clears your records, saved aim and settings on this computer, and starts Handy afresh.
+        This clears your records, saved aim and settings on this computer, and starts Handheld afresh.
       </p>
       <div class="sheet-actions">
         <button class="button destructive wide" id="confirm-reset">Reset</button>
@@ -590,7 +590,7 @@
 
     <!-- How a family of games is played with the hands: the landing's "How It Plays". -->
     <dialog id="how" class="sheet alert how" aria-labelledby="how-title">
-      <p class="eyebrow" id="how-eyebrow">Arcade</p>
+      <p class="eyebrow" id="how-eyebrow">Finger Guns</p>
       <h2 class="title2" id="how-title">Finger Pistol</h2>
       <p class="body secondary" id="how-body"></p>
       <figure class="gesture" id="how-figure"></figure>

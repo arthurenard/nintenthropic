@@ -207,7 +207,7 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
   // The mark (public/icons/icon-192.png, from tools/icons/).
   const mark = await loadImage(siteUrl("icons/icon-192.png"));
   if (mark) context.drawImage(mark, 62, 56, 44, 44);
-  text("Handy", 112, 90, 32, 700, "#fff", -0.3);
+  text("Handheld", 112, 90, 32, 700, "#fff", -0.3);
   const { stats } = result;
   // From the score up: the note's lines, the outcome, the game's name.
   setFont(24, 400);
@@ -238,7 +238,7 @@ export async function shareResult(result: Result): Promise<void> {
   const file = new File([blob], name, { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: `Handy · ${result.game.title}` });
+      await navigator.share({ files: [file], title: `Handheld · ${result.game.title}` });
       return;
     } catch (error) {
       if ((error as Error).name === "AbortError") return; // the player closed the share sheet

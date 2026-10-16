@@ -1,6 +1,6 @@
 // Settings, records and preferences: the sheet from the arcade and from a
 // paused game, by pointer and by keyboard; what it changes, and that it is
-// remembered; a record on the arcade after a game; Reset Handy.
+// remembered; a record on the arcade after a game; Reset Handheld.
 import { expect, test, type Page } from "@playwright/test";
 import { passAimCheck, pose, handAt, shot, skipWelcome, snapshot } from "./helpers";
 
@@ -336,14 +336,14 @@ test("Copy System Info copies what a bug report needs", async ({ page, context }
   await page.getByRole("button", { name: "Copy System Info" }).click();
   await expect(page.locator("#toast")).toHaveText("Copied.");
   const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied).toMatch(/^Handy \d+\.\d+\.\d+\n/);
+  expect(copied).toMatch(/^Handheld \d+\.\d+\.\d+\n/);
   expect(copied).toContain("Browser: Mozilla/5.0");
   expect(copied).toContain("Graphics: ");
   expect(copied).toContain("Screen: ");
   expect(copied).not.toContain("camera-choice");
 });
 
-test("Reset Handy asks first, then forgets everything and welcomes you again", async ({ page }, info) => {
+test("Reset Handheld asks first, then forgets everything and welcomes you again", async ({ page }, info) => {
   await skipWelcome(page, {
     "handy.aim.v1.cam-a.1280x720": { version: 1 },
     "handy.best.v2.high-noon.standard.hand": { score: 900, outcome: "Fell on Wave 1", at: 1 },
@@ -356,8 +356,8 @@ test("Reset Handy asks first, then forgets everything and welcomes you again", a
   await page.goto("/#arcade");
   expect((await extra(page)).difficulty).toBe("relaxed");
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("button", { name: "Reset Handy" }).click();
-  const alert = page.getByRole("dialog", { name: "Reset Handy?" });
+  await page.getByRole("button", { name: "Reset Handheld" }).click();
+  const alert = page.getByRole("dialog", { name: "Reset Handheld?" });
   await expect(alert).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
   await shot(page, info, "settings-07-reset");
@@ -366,7 +366,7 @@ test("Reset Handy asks first, then forgets everything and welcomes you again", a
   await expect(alert).toBeHidden();
   expect(await storedKeys(page)).toContain("handy.settings.v1");
 
-  await page.getByRole("button", { name: "Reset Handy" }).click();
+  await page.getByRole("button", { name: "Reset Handheld" }).click();
   await page.getByRole("button", { name: "Reset", exact: true }).click();
   await expect(page.locator("#welcome")).toBeVisible();
   await expect(page.locator("#settings")).toBeHidden();

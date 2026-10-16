@@ -14,9 +14,9 @@ test("a scripted hand passes the aim check at 95% and plays", async ({ page }, i
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
   await pose(page, handAt(0.5, 0.5));
   await expect(page.locator("#trigger")).toHaveAttribute("data-state", "ready");
-  // The check says what is happening: point at the lit bottle, Handy learns where you point. No crosshair to steer.
+  // The check says what is happening: point at the lit bottle, Handheld learns where you point. No crosshair to steer.
   await expect(page.locator("#check-title")).toHaveText("Point at the Lit Bottle");
-  await expect(page.locator("#check-detail")).toHaveText("Point your finger at it and fire. Handy is learning where you point.");
+  await expect(page.locator("#check-detail")).toHaveText("Point your finger at it and fire. Handheld is learning where you point.");
   await expect(page.locator("#check-status")).toHaveText("Learning Your Aim");
   expect((await snapshot(page)).crosshairShown).toBe(false);
   // Whatever the finger does, the game is told the aim rests on the lit bottle: nothing it draws

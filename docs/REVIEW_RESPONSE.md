@@ -1,8 +1,8 @@
 # Response to the product review of 28 September 2026
 
-The review was written against a stale copy of the **Python** Handy (its
+The review was written against a stale copy of the **Python** Handheld (its
 links point to `handy/browser.py`, `handy/web/app.js`, `handy/maps/…`). That
-code no longer exists: Handy is now a web-native site (TypeScript, Three.js,
+code no longer exists: Handheld is now a web-native site (TypeScript, Three.js,
 MediaPipe in a worker, Web Audio), kept in git under the tag `python-final`
 for the old version. Every item was re-checked against the web version and
 answered below.
@@ -35,7 +35,7 @@ answered below.
 
 | ID | Verdict | On the web |
 | --- | --- | --- |
-| 13 | Does not apply | Handy is a website: no install, no terminal. It is now also installable as an app (web manifest and icons). Putting it online waits on making the repository public. |
+| 13 | Does not apply | Handheld is a website: no install, no terminal. It is now also installable as an app (web manifest and icons). Putting it online waits on making the repository public. |
 | 14 | Already true | The welcome screen loops the gesture: point, fold your thumb, fire. |
 | 15 | Fixed | The aim setup's status now gives live, specific help from what the camera sees: come a little closer, move back a little, keep your hand in the picture — as well as the light, distance and framing tip after twelve shots. |
 | 16 | Fixed | Settings lists your cameras when there is more than one; the choice is remembered, and aims are saved per camera. A hand that suddenly appears elsewhere in the picture is ignored for a moment and cannot fire until its thumb has been raised, so someone walking past cannot jump the crosshair or fire a shot. (Tracking two hands and choosing between them was measured: it nearly doubles the tracker's cost, so it was not adopted.) |
@@ -66,7 +66,7 @@ answered below.
 | 31 | Fixed | Your best shows on the home screen; the results say New Best and by how much, or what your best is. |
 | 32 | Already true, extended | The results card has the outcome, the score, four stats, secrets found and Share; it now has the note on what felled you. |
 | 33 | Fixed | Records are kept per game, difficulty, and hand or pointer. |
-| 34 | Fixed | Volume, difficulty, crosshair, steadiness, camera, preview, motion and flashing are all remembered; Reset Handy clears everything. |
+| 34 | Fixed | Volume, difficulty, crosshair, steadiness, camera, preview, motion and flashing are all remembered; Reset Handheld clears everything. |
 | 35 | Fixed | Relaxed and Standard, each explained in a line. |
 | 36 | Later | Seeded daily challenges are a retention experiment for after more games exist. |
 | 37 | Later | Medals and milestones, likewise; High Noon's eight secrets are its current mastery layer. |
@@ -105,6 +105,6 @@ answered below.
 | 55 | Already true | The models ship with the site, pinned in the repository; nothing downloads `latest`. |
 | 56 | Does not apply | No server sessions. |
 | 57 | Does not apply | No CLI. |
-| 58 | Already true, extended | Saved aims are versioned, validated and kept per camera; Forget Saved Aim and Reset Handy are new. |
+| 58 | Already true, extended | Saved aims are versioned, validated and kept per camera; Forget Saved Aim and Reset Handheld are new. |
 | 59 | Fixed | The Python version is gone; High Noon's placeholder art is no longer in the production bundle, and a failed download says so instead of standing in a toy town. |
 | 60 | Already true, extended | CI runs the type check, unit tests, build and end-to-end tests; Settings → Copy System Info gives a bug report everything but the camera picture. A licence and publishing wait on the owner. |

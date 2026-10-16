@@ -1,7 +1,7 @@
 /**
  * Small textures drawn on a canvas at load: the road's asphalt and paint, the
  * boost pad's chevrons, soft glows and shadow blobs, the start gantry's
- * banner. Drawn, not downloaded, like every Handy asset until art exists.
+ * banner. Drawn, not downloaded, like every Handheld asset until art exists.
  */
 import { CanvasTexture, LinearMipmapLinearFilter, LinearFilter, NoColorSpace, RepeatWrapping, SRGBColorSpace, ClampToEdgeWrapping } from "three";
 import { seededRandom } from "../../../engine/random";

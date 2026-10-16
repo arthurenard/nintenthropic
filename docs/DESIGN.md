@@ -1,4 +1,4 @@
-# Handy design language
+# Handheld design language
 
 The bar is simple to state and hard to meet: every screen should feel as if
 Apple had made it. That means three things, in this order.
@@ -188,13 +188,15 @@ Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off
 camera, hand, checkmark, share, gear (settings), scope, chevrons (a row that leads on,
 a menu), carets (a man marked; a double one on a scope's rim, pointing the way to pan).
 
-The mark is the one exception: a sculpted white hand making a finger pistol, aimed at
-the game's own green crosshair, on a dark rounded square. Its forearm fades into the
-dark, and a faint glow sits behind the crosshair. The hand is a Cycles render built
-from real bone lengths (`tools/icons/hand.py`). `tools/icons/mark.mjs` lays it out,
-and `node tools/icons/render.mjs` writes the app icons and the favicon to
-`public/icons/`. The wordmark, the share card and the promo use `icon-192.png` or
-`icon-512.png`. Never redraw the mark elsewhere, and never use it as a button icon.
+The mark is the one exception: a white finger pistol, filled and flat like an SF
+Symbol, aimed at a white sight (a ring and a dot), on a rounded square with a sunset
+gradient (`#ffa40f` into `#ff2d55`), lit softly from the top left. The hand is one
+silhouette; thin cut creases part the curled fingers, and a soft shadow lifts it off
+the colour. It reads as a finger pistol down to the 16 px tab icon. It is pure
+vector, drawn in `tools/icons/mark.mjs`, and `node tools/icons/render.mjs` writes the
+app icons and the favicon to `public/icons/`. The wordmark, the Finger Guns tile, the
+share card and the promo use `icon-192.png` or `icon-512.png`. Never redraw the mark
+elsewhere, and never use it as a button icon.
 
 ## Sound
 
@@ -205,11 +207,11 @@ click and remembered.
 
 ## The landing
 
-`./` is Handy's front door: "Games you play with your hands." over two
+`./` is Handheld's front door: "Games you play with your hands." over two
 equal, cinematic tiles (Apple's two-up product tiles are the model: art
 first, a few big words, one white pill). Stacked, one above the other, on a phone.
 
-- **Arcade** (dark): the four shooters' posters, one fading into the next
+- **Finger Guns** (dark): the four shooters' posters, one fading into the next
   every few seconds (still with Reduce Motion), a shade coming up from the
   foot. Eyebrow "Shooting · 4 Games", the name, one line ("Make a finger
   pistol. Take the shot."), and Play, which opens the arcade.
@@ -223,16 +225,16 @@ first, a few big words, one white pill). Stacked, one above the other, on a phon
 - **Hover or focus** swells the picture a little and, under a mouse, leans it
   toward the pointer; the keyboard ring goes round the whole tile. Reduce
   Motion holds everything still.
-- **Addresses.** `./` is the landing. `#arcade`, `#high-noon` and `?game=high-noon`
-  open the arcade (on that game); `#grip-prix` and `?game=grip-prix` open the
+- **Addresses.** `./` is the landing. `#finger-guns` (or `#arcade`, its old name),
+  `#high-noon` and `?game=high-noon` open the arcade (on that game); `#grip-prix` and `?game=grip-prix` open the
   landing with Grip Prix's tile in hand. Coming home from Grip Prix lands on
   its tile too (`handy.space.v1` remembers which tile was last gone through).
   Moving between the spaces is history: the browser's Back comes back.
 
-The bar over the landing and the arcade is frosted glass (64 tall): Handy,
-Privacy, sound, Settings. In the arcade Handy has a chevron (the way back to the
-landing, as Grip Prix's own "‹ Handy" is) and a segmented control sits in
-the middle: **Arcade | Grip Prix**, the arcade chosen, Grip Prix a link to its page.
+The bar over the landing and the arcade is frosted glass (64 tall): Handheld,
+Privacy, sound, Settings. In the arcade Handheld has a chevron (the way back to the
+landing, as Grip Prix's own "‹ Handheld" is) and a segmented control sits in
+the middle: **Finger Guns | Grip Prix**, the arcade chosen, Grip Prix a link to its page.
 
 ## The arcade
 
@@ -266,13 +268,13 @@ the four shooters in a row beneath it. Grip Prix is not in the row.
 
 ## First run
 
-1. A welcome that fits on one screen: what Handy is ("Games you play with your
+1. A welcome that fits on one screen: what Handheld is ("Games you play with your
    hands"), both gestures in looping line art - the finger pistol (point, fold the
-   thumb, fire) for the Arcade, and two fists held like a wheel and turned
+   thumb, fire) for Finger Guns, and two fists held like a wheel and turned
    (grip, turn left, turn right) for Grip Prix - and one button, which lands on
    the landing (or on the game a link named).
 2. Before the browser asks for the camera, say why and what happens to the
-   picture: "Handy needs your camera to see your hand. The picture stays on
+   picture: "Handheld needs your camera to see your hand. The picture stays on
    this computer."
 3. Aim setup is the Target Range and feels like part of the game: large targets,
    a small celebration on each shot, a calm ring that fills as the aim is
@@ -292,7 +294,7 @@ one line under it when it has one (what felled you, or the thing to watch
 next time), the score large, three or four stats, *New Best* in gold only when
 it is true, with how far it beat the last one beside it, and otherwise,
 quietly, the best to beat. Then two choices (Play Again, Choose a Game) plus
-Share — a PNG of the card, branded Handy, saved or passed to the system share
+Share — a PNG of the card, branded Handheld, saved or passed to the system share
 sheet.
 
 The card that arrives with the fall, before the results, says the same words

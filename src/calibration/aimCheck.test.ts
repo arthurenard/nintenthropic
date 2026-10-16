@@ -145,7 +145,7 @@ describe("a first aim check", () => {
     expect(check.mapping).toBeNull();
     // Point at it: the words never ask the player to steer anything.
     expect(check.words.title).toBe("Point at the Lit Target");
-    expect(check.words.detail).toBe("Point your finger at it and fire. Handy is learning where you point.");
+    expect(check.words.detail).toBe("Point your finger at it and fire. Handheld is learning where you point.");
 
     expect(player.shoot().outcome).toBe("hit"); // a learning shot takes its target
     expect(check.mapping).toBeNull();
@@ -178,14 +178,14 @@ describe("a first aim check", () => {
       const noun = { one, many };
       const first = new AimCheck({ saved: null, targets: TARGETS, viewport: VIEWPORT, noun });
       expect(first.words.title).toBe(`Point at the Lit ${one[0]!.toUpperCase()}${one.slice(1)}`);
-      expect(first.words.detail).toBe("Point your finger at it and fire. Handy is learning where you point.");
+      expect(first.words.detail).toBe("Point your finger at it and fire. Handheld is learning where you point.");
       const back = new AimCheck({ saved: trueMap(), targets: TARGETS, viewport: VIEWPORT, noun });
       expect(back.words.title).toBe("Welcome Back");
       expect(back.words.detail).toBe(`Point at the lit ${one} and fire. Three shots and you’re in.`);
     }
   });
 
-  it("counts the shots as targets taken, and says what Handy is doing, never where a crosshair landed", () => {
+  it("counts the shots as targets taken, and says what Handheld is doing, never where a crosshair landed", () => {
     const player = new Player();
     const said: string[] = [];
     while (!player.check.done) {
@@ -194,13 +194,13 @@ describe("a first aim check", () => {
     }
     expect(said.slice(0, 8)).toEqual([
       "Point at the Lit Target",
-      "Point your finger at it and fire. Handy is learning where you point.",
+      "Point your finger at it and fire. Handheld is learning where you point.",
       "One Down",
       "Point at the next lit target and fire.",
       "Two Down",
-      "Handy is learning where you point. Keep going.",
+      "Handheld is learning where you point. Keep going.",
       "Three Down",
-      "Handy knows roughly where you point. A few more.",
+      "Handheld knows roughly where you point. A few more.",
     ]);
     for (const line of said) expect(line.toLowerCase(), line).not.toMatch(/crosshair|cursor|landed|just off|nice shot|miss/);
   });
@@ -450,7 +450,7 @@ describe("the words", () => {
     }
     listen(new Player(trueMap()).check);
     for (const line of new Set(said.filter(Boolean))) {
-      // The longest, "Point your finger at it and fire. Handy is learning where you point.", is 68: two short sentences.
+      // The longest, "Point your finger at it and fire. Handheld is learning where you point.", is 68: two short sentences.
       expect(line.length, line).toBeLessThanOrEqual(72);
       expect(ENGINEERING.some((word) => line.toLowerCase().includes(word)), line).toBe(false);
     }

@@ -35,7 +35,7 @@ export type KartSound =
   | "ui-join"
   | "ui-leave"
   | "ui-start"
-  /** Handy's rubber duck. */
+  /** Handheld's rubber duck. */
   | "duck"
   /** A two-tone horn. */
   | "horn"

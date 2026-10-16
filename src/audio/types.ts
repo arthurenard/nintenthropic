@@ -29,7 +29,7 @@ export interface LoopControl {
 
 /**
  * What the Web Audio engine offers beyond the bare AudioBus, for the parts of
- * Handy that need more than fire-and-forget cues. Optional on purpose: a
+ * Handheld that need more than fire-and-forget cues. Optional on purpose: a
  * silent bus or a test double lacks them, and callers check before using.
  */
 export interface SteerableAudio {

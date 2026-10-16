@@ -63,7 +63,7 @@ export function coldOpen(root: HTMLElement): Card {
 
 export function title(root: HTMLElement): Card {
   mountSymbols();
-  const mark = el("h1", "mark", `${HAND}Handy`);
+  const mark = el("h1", "mark", `${HAND}Handheld`);
   const tagline = el("p", "tagline", "An arcade you play with your hand.");
   const card = el("div", "card");
   card.append(mark, tagline);
@@ -78,7 +78,7 @@ export function title(root: HTMLElement): Card {
 
 export function endCard(root: HTMLElement, games: { name: string; poster: string }[]): Card {
   mountSymbols();
-  const mark = el("h1", "mark", `${HAND}Handy`);
+  const mark = el("h1", "mark", `${HAND}Handheld`);
   const row = el("div", "shelf-row");
   const figures = games.map((g) => {
     const f = el("figure", "", `<img alt="" src="${g.poster}" /><figcaption>${g.name}</figcaption>`);

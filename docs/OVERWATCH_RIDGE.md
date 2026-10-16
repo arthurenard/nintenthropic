@@ -1,6 +1,6 @@
 # Overwatch Ridge — game design
 
-The fourth game of the web-native Handy. First light over an alpine valley:
+The fourth game of the web-native Handheld. First light over an alpine valley:
 you lie on a ridge with a bolt-action rifle and a spotter's readout, and the
 valley below you is where the job is. Close one eye and the scope brings it
 six times closer. It must look and feel like something Apple would put on

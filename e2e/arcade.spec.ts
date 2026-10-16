@@ -1,5 +1,5 @@
-// Handy's front door and the arcade behind it. The landing shows the two
-// families side by side - the Arcade's four shooters, and Grip Prix, a page
+// Handheld's front door and the arcade behind it. The landing shows the two
+// families side by side - the four shooters of Finger Guns, and Grip Prix, a page
 // of its own - and the arcade is the shooters' own space: the chosen game as
 // a full-bleed hero, the row of games to choose from (by click, by keyboard as
 // a radio group), the choice remembered and in the address, a link that opens
@@ -106,7 +106,7 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   // Two tiles of one size, side by side: each with its name, a line, and the one thing to do.
   const arcade = page.locator("#tile-arcade");
   const grip = page.locator("#tile-grip");
-  await expect(arcade.getByRole("heading", { name: "Arcade" })).toBeVisible();
+  await expect(arcade.getByRole("heading", { name: "Finger Guns" })).toBeVisible();
   await expect(grip.getByRole("heading", { name: "Grip Prix" })).toBeVisible();
   await expect(arcade).toContainText("4 Games");
   await expect(grip).toContainText("Up to 4 Players");
@@ -116,9 +116,9 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   expect(Math.abs(a.height - g.height)).toBeLessThan(2);
   expect(Math.abs(a.y - g.y)).toBeLessThan(2);
   expect(g.x).toBeGreaterThan(a.x + a.width);
-  // Grip Prix goes to its own page; the Arcade's Play opens the arcade, not a game.
+  // Grip Prix goes to its own page; Finger Guns' Play opens the arcade, not a game.
   await expect(grip.getByRole("link", { name: "Race" })).toHaveAttribute("href", "race.html");
-  await expect(arcade.getByRole("link", { name: "Play" })).toHaveAttribute("href", "#arcade");
+  await expect(arcade.getByRole("link", { name: "Play" })).toHaveAttribute("href", "#finger-guns");
 
   // Its picture arrives over its sunny backdrop, which is also what stands in until it does (or if it never does).
   expect(await grip.locator(".tile-art").evaluate((art) => getComputedStyle(art).backgroundImage)).toContain("gradient");
@@ -134,8 +134,8 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Racing" })).toHaveCount(0);
   await expect(card(page, "Grip Prix")).toHaveCount(0);
 
-  // The bar: Handy leads back to the landing, standing on the Arcade's tile; Back and Forward walk the same way.
-  await page.getByRole("link", { name: "Handy" }).click();
+  // The bar: Handheld leads back to the landing, standing on the Finger Guns tile; Back and Forward walk the same way.
+  await page.getByRole("link", { name: "Handheld" }).click();
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
   expect(hash(page)).toBe("");
@@ -157,7 +157,7 @@ test("the arcade is the shooters' own space, with Grip Prix one choice away in t
   await skipWelcome(page);
   await page.goto("/#high-noon");
   const spaces = page.getByRole("navigation", { name: "Sections" });
-  await expect(spaces.getByRole("link", { name: "Arcade" })).toHaveAttribute("aria-current", "page");
+  await expect(spaces.getByRole("link", { name: "Finger Guns" })).toHaveAttribute("aria-current", "page");
   await expect(spaces.getByRole("link", { name: "Grip Prix" })).toHaveAttribute("href", "race.html");
   // The bar's controls are the same ones as the landing's.
   for (const name of ["Privacy", "Mute", "Settings"]) await expect(page.getByRole("button", { name })).toBeVisible();
@@ -184,8 +184,8 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   await expect(page).toHaveURL(/\/race\.html$/);
   await expect(page.getByRole("heading", { name: "Grip Prix" })).toBeVisible();
 
-  // Its Handy link: the landing, Grip Prix's tile in hand (by its address, or by what the page remembers of where you were).
-  await page.getByRole("link", { name: "Handy" }).click();
+  // Its Handheld link: the landing, Grip Prix's tile in hand (by its address, or by what the page remembers of where you were).
+  await page.getByRole("link", { name: "Handheld" }).click();
   await expect(page).toHaveURL(/\/(index\.html)?(#grip-prix)?$/);
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
@@ -200,7 +200,7 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   }
   // And the arcade, once visited, is where the landing stands next time.
   await page.goto("/#arcade");
-  await page.getByRole("link", { name: "Handy" }).click();
+  await page.getByRole("link", { name: "Handheld" }).click();
   await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
   expect(errors).toEqual([]);
 });
@@ -257,7 +257,7 @@ test("the welcome shows both gestures and lands on the landing", async ({ page }
   await page.goto("/");
   await expect(page.locator("#welcome")).toBeVisible();
   await expect(page.locator("#nav")).toBeHidden();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Welcome to Handy.");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Welcome to Handheld.");
   // Both ways to play with the hands, in line art: the finger pistol, and two fists turned like a wheel.
   const pistol = page.locator('#welcome [data-gesture="pistol"]');
   const wheel = page.locator('#welcome [data-gesture="wheel"]');
@@ -278,7 +278,7 @@ test("the welcome shows both gestures and lands on the landing", async ({ page }
   await page.getByRole("button", { name: "Get Started" }).click();
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#welcome")).toBeHidden();
-  // The focus goes on from the button to the Arcade's own.
+  // The focus goes on from the button to Finger Guns' own.
   await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
   expect(await page.evaluate(() => localStorage.getItem("handy.welcomed.v1"))).toBe("true");
   // Seen once: the next visit opens on the landing.
@@ -296,7 +296,7 @@ test("the welcome keeps a link to a game: Get Started goes there", async ({ page
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
 });
 
-test("the posters turn in the Arcade's tile, and hold still with Reduce Motion", async ({ page }) => {
+test("the posters turn in the Finger Guns tile, and hold still with Reduce Motion", async ({ page }) => {
   test.setTimeout(60_000);
   await skipWelcome(page);
   await page.goto("/");

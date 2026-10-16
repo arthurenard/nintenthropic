@@ -120,7 +120,7 @@ export class SoundLibrary {
             };
             this.reports.push(report);
             console.info(
-              `Handy audio: ${report.cues} sounds (${report.takes} takes) of "${pack}" synthesised in ${report.ms.toFixed(0)} ms ` +
+              `Handheld audio: ${report.cues} sounds (${report.takes} takes) of "${pack}" synthesised in ${report.ms.toFixed(0)} ms ` +
                 `(${report.cpuMs.toFixed(0)} ms of DSP on ${report.workers || "the main"} thread${report.workers === 1 ? "" : "s"})`,
             );
             resolve();
@@ -235,7 +235,7 @@ export class SoundLibrary {
           this.cpuMs += performance.now() - t0;
           this.store(job.cue, job.take, r.channels, r.envelope, false);
         } catch (error) {
-          console.warn(`Handy audio: could not synthesise "${job.cue}"`, error);
+          console.warn(`Handheld audio: could not synthesise "${job.cue}"`, error);
         }
         this.finishJob(job.cue, job.take);
       }
@@ -247,7 +247,7 @@ export class SoundLibrary {
     slot.busy = null;
     if (this.disposed) return;
     if ("error" in reply) {
-      console.warn(`Handy audio: could not synthesise "${reply.cue}": ${reply.error}`);
+      console.warn(`Handheld audio: could not synthesise "${reply.cue}": ${reply.error}`);
     } else {
       this.cpuMs += reply.ms;
       if (!this.has(reply.cue, reply.take)) this.store(reply.cue, reply.take, reply.channels, reply.envelope, false);

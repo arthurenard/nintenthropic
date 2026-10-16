@@ -1,11 +1,12 @@
 /**
- * Where the page is, as its address says. Handy has two spaces to be in: the
- * landing (`./`, where Arcade and Grip Prix are side by side) and the arcade
- * (the finger-pistol shooters). Grip Prix is a page of its own (race.html), so
- * its name in an address only says which tile of the landing to stand on.
+ * Where the page is, as its address says. Handheld has two spaces to be in: the
+ * landing (`./`, where Finger Guns and Grip Prix are side by side) and the arcade
+ * (Finger Guns, the finger-pistol shooters). Grip Prix is a page of its own
+ * (race.html), so its name in an address only says which tile of the landing to
+ * stand on.
  *
  *   ./                          the landing
- *   #arcade                     the arcade, on the game chosen last
+ *   #finger-guns                the arcade, on the game chosen last (#arcade, its old name, too)
  *   #high-noon, ?game=high-noon the arcade, on that game
  *   #grip-prix, ?game=grip-prix the landing, with Grip Prix's tile in hand
  *
@@ -17,7 +18,9 @@ import type { GameEntry } from "../engine/types";
 /** Grip Prix's id: a tile of the landing, not a card of the arcade. */
 export const GRIP_PRIX_ID = "grip-prix";
 /** The hash that opens the arcade without naming a game. */
-export const ARCADE_HASH = "arcade";
+export const ARCADE_HASH = "finger-guns";
+/** Its hash from before the arcade was called Finger Guns: links to it keep working. */
+const OLD_ARCADE_HASH = "arcade";
 
 /** The tiles of the landing, and the spaces the page remembers the player was last in. */
 export type Tile = "arcade" | "grip-prix";
@@ -38,7 +41,7 @@ export function hashId(hash: string): string {
 /** What one name in an address means, or null when it means nothing here. */
 function nameRoute(name: string | null | undefined, shooters: readonly GameEntry[]): Route | null {
   if (!name) return null;
-  if (name === ARCADE_HASH) return { space: "arcade", game: null };
+  if (name === ARCADE_HASH || name === OLD_ARCADE_HASH) return { space: "arcade", game: null };
   if (name === GRIP_PRIX_ID) return { space: "landing", focus: "grip-prix" };
   return shooters.some((game) => game.id === name) ? { space: "arcade", game: name } : null;
 }

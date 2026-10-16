@@ -70,7 +70,7 @@ export const TROUBLES: Record<Trouble, TroubleSheet> = {
   insecure: {
     icon: "camera",
     title: "Camera Unavailable",
-    body: "Your browser only shares the camera with secure pages. Open Handy from its https address.",
+    body: "Your browser only shares the camera with secure pages. Open Handheld from its https address.",
     primary: "Use Mouse or Trackpad",
     secondary: "Choose a Game",
   },

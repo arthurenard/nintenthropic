@@ -1,6 +1,6 @@
 # Dead of Night — game design
 
-The second game of the web-native Handy. A night at the last gas station on a
+The second game of the web-native Handheld. A night at the last gas station on a
 country road: the power is out, the fog is in, and the dead are walking up
 the road. You have a lever-action rifle, a flashlight under its barrel, and a
 barricade. It must look and feel like something Apple would put on stage —
@@ -243,7 +243,7 @@ inside, placed to cover the screen's corners, edges and centre. The lit one
 glows brighter and its candle flares; a hit bursts it into glass and a puff of
 wax smoke. The flashlight is on through the check, and rests on the lit jar:
 no crosshair and no beam follows the aim until it is set, the player points
-at the jar and Handy learns where that is ("Point at the Lit Jar"; see
+at the jar and Handheld learns where that is ("Point at the Lit Jar"; see
 WEB_ARCHITECTURE.md). The check's framing is the scene's own wide lens; play
 closes in from the same eye, as in High Noon.
 

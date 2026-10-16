@@ -1,5 +1,5 @@
 /**
- * Handy's sound: a Web Audio engine and a library of sounds synthesised in
+ * Handheld's sound: a Web Audio engine and a library of sounds synthesised in
  * code at load time — no audio file is downloaded or shipped.
  *
  * The app:
@@ -96,7 +96,7 @@ export async function createAudioBus(options: { muted: boolean; volume?: number 
     void engine.load("core");
     return engine;
   } catch (error) {
-    console.warn("Handy audio: Web Audio is unavailable, playing silently", error);
+    console.warn("Handheld audio: Web Audio is unavailable, playing silently", error);
     return silent();
   }
 }

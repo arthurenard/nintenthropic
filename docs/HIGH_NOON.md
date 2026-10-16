@@ -1,6 +1,6 @@
 # High Noon — game design
 
-The flagship of the web-native Handy. A realistic western gunfight you play with
+The flagship of the web-native Handheld. A realistic western gunfight you play with
 a finger pistol: bandits take cover in a sun-baked town, lean out, aim and fire
 back, and you survive wave after wave. It must look and feel like something
 Apple would put on stage — see [DESIGN.md](DESIGN.md) for the interface, and

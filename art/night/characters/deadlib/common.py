@@ -1,6 +1,6 @@
 """The bridge to High Noon's character library, imported read-only.
 
-charlib (art/western/characters/charlib) is the pipeline every Handy person
+charlib (art/western/characters/charlib) is the pipeline every Handheld person
 is made with: signed-distance sculpts in numpy, ring-built garments, the
 analytic atlas baker, bone-heat skinning on a proxy, the shared humanoid
 armature and its animation core. Dead of Night's people reuse all of it and
