@@ -15,6 +15,8 @@
  *   ?scale=1               hold the resolution scale (dynamic resolution off), to compare tiers at equal pixels
  *   ?profile=1             time the frame (CPU phases, GPU views and post) and log every frame to window.__grip.log, for tools/perf/bench.mjs
  *   ?skip=8                run the demo this many seconds before showing it
+ *   ?manual=1              no animation-frame loop: __grip.advance(dt = 1/60) steps the source and draws one frame (tools/trailer/race)
+ *   ?seed=5                the seed of the real sim (?sim=1)
  *   ?freeze=1              stop the demo (the picture still renders)
  *   ?boxes=rows            leave the item boxes to the track's rows, not the source's things
  *   ?karts=6  ?laps=2
@@ -36,7 +38,7 @@ import { createRaceRenderer, type GripRenderer } from "./renderer";
 import { ITEM_ICONS } from "./hud";
 import { forgetTaught } from "./itemHint";
 import { SimSource } from "./simSource";
-import type { ControlKind, ItemKind } from "../contract";
+import type { ControlKind, ItemKind, RaceView } from "../contract";
 import { runTurntable } from "./turntable";
 import { parseShot, runShot, shotView } from "./shot";
 
@@ -70,6 +72,7 @@ function startRace(): void {
         holder: Number(params.get("holder") ?? 0) || 0,
         use: params.has("use") ? Number(params.get("use")) : undefined,
         drive: params.get("drive") === "1",
+        seed: params.has("seed") ? Number(params.get("seed")) : undefined,
       })
     : createDemoRace(track, { karts, laps, golden: params.get("golden") === "1" });
   demo.boxesAsThings = params.get("boxes") !== "rows";
@@ -160,6 +163,22 @@ function startRace(): void {
       hudRoot.style.display = "none";
       if (!shot || !(demo instanceof DemoRace)) throw new Error("?shot= needs a JSON pose with eye and target (and not ?sim=1)");
       await runShot({ renderer, demo, racers: source.racers, track: source.track, draw: (dt) => renderer.frame(shotView(source.view(), shot), dt) }, shot);
+      return;
+    }
+
+    // ?manual=1 (tools/trailer/race): no animation-frame loop. The caller steps the source exactly `dt` and draws one frame
+    // with __grip.advance(dt = 1/60, before?), which hands the view back (for the sound); `before` sees the view just
+    // ahead of the draw (to set a free camera on it), so the footage is the same on any machine.
+    if (params.get("manual") === "1") {
+      Object.assign((window as unknown as { __grip: object }).__grip, {
+        advance: (dt = 1 / 60, before?: (view: RaceView) => void): RaceView => {
+          source.step(dt, null);
+          const view = source.view();
+          before?.(view);
+          renderer.frame(view, dt);
+          return view;
+        },
+      });
       return;
     }
 

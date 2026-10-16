@@ -12,3 +12,6 @@ art/**/_renders/
 
 # The promo video (tools/promo/): frames, mixes and encodes are large and never committed.
 tools/promo/out/
+
+# The trailer (tools/trailer/): clips, cards, music and encodes are large and never committed.
+tools/trailer/out/

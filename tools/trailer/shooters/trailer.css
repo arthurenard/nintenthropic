@@ -1,0 +1,14 @@
+/* The trailer clips' own layer over the game's real chrome (the app's tokens
+   come from src/ui/base.css). Only what a film needs: no Pause control. */
+:root {
+  --u: 1; /* the video's height / 1080, set by capture.ts */
+}
+html,
+body {
+  background: #000;
+  overflow: hidden;
+}
+/* A trailer has no Pause control. */
+#pause {
+  display: none !important;
+}

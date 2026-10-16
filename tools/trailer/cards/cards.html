@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Handheld trailer: cards and titles</title>
+<meta name="viewport" content="width=1920" />
+<style>
+  /* The app's own face and tracking (docs/DESIGN.md): SF Pro through -apple-system, tight on big type. */
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  }
+  html,
+  body {
+    margin: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background: transparent; /* titles are alpha; an opaque card sets its own black */
+  }
+  body {
+    position: relative;
+    font-family: var(--font);
+    color: #fff;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
+  }
+  #stage {
+    position: absolute;
+    inset: 0;
+  }
+  .opaque {
+    background: #000;
+  }
+  .line {
+    white-space: nowrap;
+  }
+
+
+  /* --- the hook and the turn: words and the sight, on black ------------------------------------- */
+  .hook,
+  .turn {
+    position: absolute;
+    inset: 0;
+  }
+  .hook .word {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 136px;
+    line-height: 144px;
+    font-weight: 700;
+    letter-spacing: -0.034em;
+    white-space: nowrap;
+  }
+  .hook .word span {
+    display: inline-block;
+    position: relative;
+    left: -0.017em; /* the trailing tracking pulls the ink right: centre the ink, not the box */
+    transform-origin: 50% 55%;
+  }
+  .turn .caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 722px;
+    text-align: center;
+    font-size: 72px;
+    line-height: 80px;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+  }
+  .white {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+  }
+
+  /* --- titles: top right, right aligned, 72 px from the edges -------------------------------- */
+  .title {
+    position: absolute;
+    right: 72px;
+    top: 65px; /* the eyebrow's cap height starts 7 px into its line: its letters sit 72 px from the top */
+    text-align: right;
+  }
+  .title .scrim {
+    position: absolute;
+    right: -72px;
+    top: -65px;
+    width: 1150px;
+    height: 560px;
+    /* A very soft darkening behind the words, feathered to nothing, so they read over a bright sky. */
+    background: radial-gradient(ellipse 100% 100% at 100% 0%, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0.17) 38%, rgba(0, 0, 0, 0.06) 68%, rgba(0, 0, 0, 0) 100%);
+    pointer-events: none;
+  }
+  .title .eyebrow {
+    position: relative;
+    font-size: 24px;
+    line-height: 30px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.78);
+    margin-right: -0.08em; /* the tracking trails the last letter: keep the right edge optically flush */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 14px rgba(0, 0, 0, 0.5), 0 4px 30px rgba(0, 0, 0, 0.35);
+  }
+  .title .name {
+    position: relative;
+    margin-top: 6px;
+    font-size: 92px;
+    line-height: 96px;
+    font-weight: 700;
+    letter-spacing: -0.026em;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 6px 26px rgba(0, 0, 0, 0.45), 0 14px 64px rgba(0, 0, 0, 0.4);
+  }
+
+  /* --- the split-screen line: centred --------------------------------------------------------- */
+  .four {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .four .scrim {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1700px;
+    height: 360px;
+    margin: -180px 0 0 -850px;
+    background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 45%, rgba(0, 0, 0, 0.12) 75%, rgba(0, 0, 0, 0) 100%);
+    pointer-events: none;
+  }
+  .four .words {
+    position: relative;
+    font-size: 80px;
+    line-height: 96px;
+    font-weight: 700;
+    letter-spacing: -0.026em;
+    white-space: nowrap;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 28px rgba(0, 0, 0, 0.5), 0 14px 60px rgba(0, 0, 0, 0.45);
+  }
+  .four .words span {
+    display: inline-block;
+  }
+
+  /* --- the end card ----------------------------------------------------------------------------- */
+  .end {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .end .fade {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .end .stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  /* SLOTS hold the icons: the app icon (280 px) and the two family icons (96 px), set in by render.mjs. */
+  .slot {
+    box-sizing: border-box;
+    flex: none;
+    border-radius: 22.5%;
+    overflow: hidden;
+  }
+  .slot {
+    position: relative;
+  }
+  .slot img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* The tile's own hairline, like the app's cards (docs/DESIGN.md), only over an image. */
+  .slot img + .edge {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+  .guides .slot {
+    outline: 2px dashed rgba(255, 45, 85, 0.9);
+    outline-offset: -1px;
+  }
+  .end .stack {
+    isolation: isolate;
+  }
+  .end .app-wrap {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin-bottom: 38px;
+  }
+  /* The sunset (the icon's own gradient) spilling under the icon, soft and low. */
+  .end .glow {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 22.5%;
+    background: linear-gradient(#ffa40f, #ff2d55);
+    filter: blur(74px);
+    transform: translateY(68px) scale(0.92);
+  }
+  .end .slot.app {
+    width: 280px;
+    height: 280px;
+  }
+  .end .wordmark {
+    font-size: 160px;
+    line-height: 160px;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    margin-right: -0.028em;
+  }
+  .end .tagline {
+    margin-top: 10px;
+    font-size: 68px;
+    line-height: 80px;
+    font-weight: 500;
+    letter-spacing: -0.018em;
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .end .family {
+    margin-top: 84px;
+    display: flex;
+    align-items: center;
+    gap: 96px;
+  }
+  .end .game {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+  }
+  /* SLOTS: the two family icons (96 px) go here, left of their labels. */
+  .end .slot.family-icon {
+    width: 96px;
+    height: 96px;
+  }
+  .end .game .label {
+    font-size: 48px;
+    line-height: 56px;
+    font-weight: 600;
+    letter-spacing: -0.016em;
+  }
+  .end .footnote {
+    margin-top: 48px;
+    font-size: 44px;
+    line-height: 52px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.7);
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="cards.js"></script>
+</body>
+</html>
