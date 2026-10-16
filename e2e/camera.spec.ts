@@ -3,12 +3,12 @@
 // and the game), and the aim check with MediaPipe finding the hand in every
 // camera frame.
 import { expect, test } from "@playwright/test";
-import { shot, skipWelcome, snapshot } from "./helpers";
+import { shot, returningVisitor, snapshot } from "./helpers";
 
 test("the camera flow: the hand is tracked, frame after frame", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/#arcade");
   await expect(page.locator("#control-label")).toHaveText("Finger Pistol");
   await page.getByRole("button", { name: "Play" }).click();

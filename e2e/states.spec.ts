@@ -3,7 +3,7 @@
 // against DESIGN.md. The moments that happen by chance in play - a wave's
 // title card, being hit, a secret - are staged through the HUD directly.
 import { expect, test, type Page } from "@playwright/test";
-import { handAt, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { handAt, passAimCheck, pose, shoot, shot, returningVisitor, snapshot } from "./helpers";
 
 async function stage(page: Page, script: string): Promise<void> {
   await page.evaluate(script);
@@ -11,10 +11,7 @@ async function stage(page: Page, script: string): Promise<void> {
 
 test("first run, the landing and the arcade", async ({ page }, info) => {
   await page.goto("/");
-  await expect(page.locator("#welcome")).toBeVisible();
-  await shot(page, info, "01-welcome");
-  await page.getByRole("button", { name: "Get Started" }).click();
-  // The welcome lands on the landing, with the two spaces side by side.
+  // A first visit lands on the landing, with the two spaces side by side.
   await expect(page.locator("#landing")).toBeVisible();
   await page.mouse.move(1, 1);
   await shot(page, info, "02-landing", 1200);
@@ -34,7 +31,7 @@ test("first run, the landing and the arcade", async ({ page }, info) => {
 });
 
 test("the camera's question and getting ready", async ({ page }, info) => {
-  await skipWelcome(page);
+  await returningVisitor(page);
   // As a first visit, where the browser has not yet been asked.
   await page.addInitScript(() => {
     const query = navigator.permissions.query.bind(navigator.permissions);
@@ -62,7 +59,7 @@ test("the camera's question and getting ready", async ({ page }, info) => {
 });
 
 test("the aim check and play", async ({ page }, info) => {
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
@@ -138,7 +135,7 @@ test("the aim check and play", async ({ page }, info) => {
 });
 
 test("an aim that will not settle is offered Play Anyway, with one tip", async ({ page }, info) => {
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
@@ -185,7 +182,7 @@ const TROUBLES: [string, string][] = [
 ];
 
 test("trouble, said calmly with the fix as a button", async ({ page }, info) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   for (const [kind, title] of TROUBLES) {
     await page.goto(`/?fail=${kind}#arcade`);
     await page.getByRole("button", { name: "Play" }).click();

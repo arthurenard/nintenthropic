@@ -3,7 +3,7 @@
 // after the fall; with a scripted hand, the aim check's steel plates, one eye
 // closed to scope, and a shot through it with the thumb.
 import { expect, test, type Page } from "@playwright/test";
-import { gameDebug, handAt, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { gameDebug, handAt, passAimCheck, pose, shoot, shot, returningVisitor, snapshot } from "./helpers";
 
 type Target = { id: number; role: string; side: string; activity: string; distance: number };
 type Mission = { stage: number; phase: string; rounds: number; score: number };
@@ -15,7 +15,7 @@ const mission = (page: Page) =>
   gameDebug(page, "(() => { const m = debug.mission(); return { stage: m.stage, phase: m.phase, rounds: m.rifle.rounds, score: m.scorer.score }; })()") as Promise<Mission>;
 
 async function openRidge(page: Page, control: "mouse" | "hand", query = ""): Promise<void> {
-  await skipWelcome(page, control === "mouse" ? { "handy.control.v1": "mouse" } : {});
+  await returningVisitor(page, control === "mouse" ? { "handy.control.v1": "mouse" } : {});
   await page.goto(`/${query}#overwatch-ridge`);
   await expect(page.locator("#feature-title")).toHaveText("Overwatch Ridge");
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -254,7 +254,7 @@ test("Overwatch Ridge marks the men, not the locals, and says which way to pan; 
 test("Overwatch Ridge reveals whoever fires at you, with Aim Assist off, and says where the last man is", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page, { "handy.control.v1": "mouse", "handy.settings.v1": { aimAssist: false, revision: 2 } });
+  await returningVisitor(page, { "handy.control.v1": "mouse", "handy.settings.v1": { aimAssist: false, revision: 2 } });
   await page.goto("/#overwatch-ridge");
   await expect(page.locator("#feature-title")).toHaveText("Overwatch Ridge");
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -474,7 +474,7 @@ test("Overwatch Ridge on a touch screen with the hand: the Scope button rests ab
   const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#overwatch-ridge");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 120_000 }).toBe("check");
@@ -501,7 +501,7 @@ test("Overwatch Ridge on a touch screen with the hand: the Scope button rests ab
 test("Settings' Eye Test shows both eyes live, learns a held wink, and says when the face is hidden", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#scope-group")).toBeVisible();
@@ -559,7 +559,7 @@ test("Settings' Eye Test over a paused game leaves the round as it was: the eye 
 test("Settings' Eye Test with the real camera: your own picture, the face landmarker read beside it, the camera let go after", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.locator("#eye-test-toggle").click();

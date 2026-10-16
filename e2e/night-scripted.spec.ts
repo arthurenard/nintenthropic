@@ -1,13 +1,13 @@
 // Dead of Night with a scripted hand: the aim check on the nine mason jars,
 // into the night, a shot, and the reload by pointing off the screen.
 import { expect, test } from "@playwright/test";
-import { handAt, moveTo, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { handAt, moveTo, passAimCheck, pose, shoot, shot, returningVisitor, snapshot } from "./helpers";
 
 test("a scripted hand through the jars' aim check into the night, and a reload off the screen", async ({ page }, info) => {
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#dead-of-night");
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
   await page.getByRole("button", { name: "Play", exact: true }).click();

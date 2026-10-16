@@ -14,27 +14,6 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   </head>
   <body data-view="none">
-    <!-- First run: what Handheld is, and the two ways to play with your hands. -->
-    <div id="welcome" class="view welcome" hidden>
-      <div class="welcome-inner">
-        <p class="wordmark" aria-hidden="true">
-          <img class="wordmark-icon" src="/icons/icon-192.png" alt="" />Handheld
-        </p>
-        <h1 class="large-title">Welcome to Handheld.</h1>
-        <p class="body secondary">Games you play with your hands. No controller, just your camera.</p>
-        <div class="gestures">
-          <figure class="gesture" data-gesture="pistol" aria-label="Finger pistol">
-            <p class="eyebrow">Finger Guns</p>
-          </figure>
-          <figure class="gesture" data-gesture="wheel" aria-label="Steering wheel">
-            <p class="eyebrow">Grip Prix</p>
-          </figure>
-        </div>
-        <button id="get-started" class="button primary large" data-sound="confirm">Get Started</button>
-        <p class="footnote tertiary">Your camera picture stays on this computer.</p>
-      </div>
-    </div>
-
     <!-- The bar over the landing and the arcade: back to Handheld, between its two spaces, and the page's own controls. -->
     <header class="nav" id="nav" hidden>
       <a class="brand" id="brand" href="./">
@@ -599,34 +578,8 @@
       </div>
     </dialog>
 
-    <!-- The two gestures, in line art: the welcome shows both, and How It Plays shows one. -->
+    <!-- The two gestures' steps, for How It Plays. -->
     <template id="gesture-pistol">
-      <svg class="gesture-art" viewBox="0 0 360 180" aria-hidden="true">
-        <g class="g-recoil">
-          <path class="g-arm" d="M12 114 L96 106 M12 160 L94 158" />
-          <rect class="g-shape" x="84" y="84" width="84" height="76" rx="24" />
-          <rect class="g-shape" x="146" y="112" width="34" height="16" rx="8" />
-          <rect class="g-shape" x="146" y="128" width="32" height="16" rx="8" />
-          <rect class="g-shape" x="144" y="144" width="28" height="15" rx="7.5" />
-          <rect class="g-shape" x="134" y="84" width="130" height="26" rx="13" />
-          <g class="g-thumb">
-            <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
-          </g>
-          <!-- Folded, for a cross-fade when motion is reduced. -->
-          <g class="g-thumb-folded" transform="rotate(80 122 92)">
-            <rect class="g-shape" x="110" y="34" width="24" height="66" rx="12" />
-          </g>
-          <g class="g-flash">
-            <path class="g-line" d="M274 97 L290 97 M272 86 L284 77 M272 108 L284 117" />
-          </g>
-        </g>
-        <g class="g-target">
-          <circle class="g-ring" cx="324" cy="97" r="24" />
-          <circle class="g-ring" cx="324" cy="97" r="14" />
-          <circle class="g-bull" cx="324" cy="97" r="5.5" />
-          <circle class="g-pulse" cx="324" cy="97" r="24" />
-        </g>
-      </svg>
       <figcaption>
         <ol class="gesture-steps">
           <li class="step-point">Point</li>
@@ -636,27 +589,6 @@
       </figcaption>
     </template>
     <template id="gesture-wheel">
-      <svg class="gesture-art" viewBox="24 6 312 156" aria-hidden="true">
-        <!-- Which way the wheel is turning, outside it, so they hold still while it turns. -->
-        <path class="g-turn g-turn-left" d="M152.6 16.8 A80 80 0 0 0 114.5 46.1 M125.8 42 L114.5 46.1 L114.5 34.1" />
-        <path class="g-turn g-turn-right" d="M207.4 16.8 A80 80 0 0 1 245.5 46.1 M234.2 42 L245.5 46.1 L245.5 34.1" />
-        <g class="g-wheel">
-          <circle class="g-shape" cx="180" cy="92" r="60" />
-          <circle class="g-shape" cx="180" cy="92" r="46" />
-          <rect class="g-shape" x="136" y="85" width="32" height="14" rx="7" />
-          <rect class="g-shape" x="192" y="85" width="32" height="14" rx="7" />
-          <rect class="g-shape" x="173" y="106" width="14" height="32" rx="7" />
-          <circle class="g-shape" cx="180" cy="92" r="16" />
-          <rect class="g-mark" x="176" y="33" width="8" height="12" rx="4" />
-          <!-- Two fists on the rim, a thumb over it. -->
-          <rect class="g-shape" x="112" y="56" width="22" height="26" rx="11" />
-          <rect class="g-shape" x="104" y="70" width="44" height="50" rx="17" />
-          <path class="g-line g-knuckles" d="M114 84 H128 M114 95 H130 M114 106 H128" />
-          <rect class="g-shape" x="226" y="56" width="22" height="26" rx="11" />
-          <rect class="g-shape" x="212" y="70" width="44" height="50" rx="17" />
-          <path class="g-line g-knuckles" d="M246 84 H232 M246 95 H230 M246 106 H232" />
-        </g>
-      </svg>
       <figcaption>
         <ol class="gesture-steps wheel-steps">
           <li class="step-grip">Grip</li>
@@ -673,11 +605,6 @@
     <svg class="symbols" aria-hidden="true">
       <!-- A damage arc fades out at both ends, so it points rather than cuts. -->
       <defs>
-        <!-- The line-art arm fades into the page at its sleeve (the welcome's and How It Plays' finger pistol). -->
-        <linearGradient id="g-sleeve" gradientUnits="userSpaceOnUse" x1="12" y1="0" x2="92" y2="0">
-          <stop offset="0" stop-color="#fff" stop-opacity="0" />
-          <stop offset="1" stop-color="#fff" stop-opacity="1" />
-        </linearGradient>
         <linearGradient id="arc-fade" gradientUnits="userSpaceOnUse" x1="-18" y1="0" x2="18" y2="0">
           <stop offset="0" stop-color="#ff453a" stop-opacity="0" />
           <stop offset="0.32" stop-color="#ff453a" />

@@ -5,7 +5,7 @@
 // device, so a second is simulated in the page: enumerateDevices lists two,
 // and getUserMedia opens the real fake camera under the id it was asked for.
 import { expect, test, type Page } from "@playwright/test";
-import { passAimCheck, shot, skipWelcome, snapshot } from "./helpers";
+import { passAimCheck, shot, returningVisitor, snapshot } from "./helpers";
 
 /** The page's cameras, and what has been opened through them, for the tests to read and change. */
 type Cameras = {
@@ -75,7 +75,7 @@ async function toAimCheck(page: Page): Promise<void> {
 }
 
 test("with one camera, Switch Camera is nowhere", async ({ page }) => {
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
@@ -90,7 +90,7 @@ test("with one camera, Switch Camera is nowhere", async ({ page }) => {
 test("two cameras: switching from the aim check and from the pause menu", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await twoCameras(page);
   await toAimCheck(page);
   await expect.poll(async () => (await snapshot(page)).tracker?.stats.framesWithHand ?? 0, { timeout: 60_000 }).toBeGreaterThan(5);
@@ -152,7 +152,7 @@ test("two cameras: switching from the aim check and from the pause menu", async 
 });
 
 test("a camera with a saved aim begins its check from it", async ({ page }) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await twoCameras(page);
   await toAimCheck(page);
   // The other camera has been set up before, in this game, at this picture size.
@@ -185,7 +185,7 @@ test("a camera with a saved aim begins its check from it", async ({ page }) => {
 });
 
 test("a next camera another app has: the one in use stays, and the player is told", async ({ page }) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await twoCameras(page);
   await toAimCheck(page);
   await page.evaluate(() => window.__cameras!.busy.push("cam-desk"));
@@ -202,7 +202,7 @@ test("a next camera another app has: the one in use stays, and the player is tol
 });
 
 test("a camera unplugged mid-game gives way to the other, and the switch goes with it", async ({ page }, info) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await twoCameras(page);
   await toAimCheck(page);
   await page.locator("#switch-camera").click();
@@ -231,7 +231,7 @@ test("a camera unplugged mid-game gives way to the other, and the switch goes wi
 });
 
 test("a round in play starts afresh under the other camera, through its aim check", async ({ page }) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await page.goto("/?input=script#arcade");
   await page.evaluate(() => {
     const list = [

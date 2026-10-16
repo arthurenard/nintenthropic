@@ -24,14 +24,13 @@ export async function shot(
   await page.screenshot({ path: `${folder}/${info.project.name}/${name}.png`, ...(clip ? { clip } : {}) });
 }
 
-/** A returning visitor: the welcome has been seen. */
-export async function skipWelcome(page: Page, extra: Record<string, unknown> = {}): Promise<void> {
+/** A returning visitor: these keys are already in storage. */
+export async function returningVisitor(page: Page, extra: Record<string, unknown> = {}): Promise<void> {
   await page.addInitScript((items) => {
     try {
-      localStorage.setItem("handy.welcomed.v1", "true");
       for (const [key, value] of Object.entries(items)) localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      // storage refused: the welcome shows, and the test will say so
+      // storage refused: the visit starts as a first one, and the test will say so
     }
   }, extra);
 }
@@ -133,7 +132,7 @@ export async function shoot(page: Page, x: number, y: number): Promise<void> {
 
 /** A game with the scripted hand, through the aim check and into play, the hand held up mid-view. */
 export async function playWithHand(page: Page, url = "/?input=script#arcade"): Promise<void> {
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto(url);
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");

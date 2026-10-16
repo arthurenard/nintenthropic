@@ -41,7 +41,7 @@ are in [DESIGN.md](DESIGN.md); the first game's design is in
 index.html            the page
 src/
   main.ts             boots the app
-  app/                screens: landing, first run, calibration, play, pause, results, share
+  app/                screens: landing, calibration, play, pause, results, share
   ui/                 design-language components and styles (from DESIGN.md)
   engine/             the game host: renderer, loop, dynamic resolution, asset loading
     types.ts          THE CONTRACT between app, input, audio and games (below)
@@ -437,7 +437,7 @@ plays the same without remembering (`src/app/prefs.ts`).
   only while a game with a scope can be played.
 - `handy.game.v1` — the game chosen in the arcade (the address's
   `#<game>` or `?game=<game>` wins over it).
-- `handy.welcomed.v1`, `handy.muted.v1`, `handy.control.v1`,
+- `handy.muted.v1`, `handy.control.v1`,
   `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
 
 Reset Handheld removes every `handy.` key from both storages.

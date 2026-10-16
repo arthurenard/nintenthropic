@@ -32,7 +32,7 @@ import { FireToPlay, HandWatch, type HandWatchEvent } from "./handWatch";
 import { switchCamera } from "./cameraSwitch";
 import { Hud } from "./hud";
 import { watchKonami } from "./konami";
-import { gestureInto, Landing } from "./landing";
+import { Landing } from "./landing";
 import { Pip } from "./pip";
 import { Yielding, type Spot } from "./yielding";
 import {
@@ -263,11 +263,8 @@ export class App {
   boot(): void {
     this.renderArcade();
     this.setMuted(this.muted);
-    for (const figure of document.querySelectorAll<HTMLElement>("#welcome [data-gesture]")) {
-      gestureInto(figure, figure.dataset.gesture === "wheel" ? "wheel" : "pistol");
-    }
-    if (prefs.welcomed) this.arrive(this.route, { remembered: true });
-    else this.showView("welcome");
+    // Straight in: the landing, or the space or game the address names.
+    this.arrive(this.route, { remembered: true });
     // The first screen needs neither three.js nor the tracker; fetch them
     // once it is up, so Play does not wait for them.
     const later = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 1200));
@@ -277,10 +274,10 @@ export class App {
     });
   }
 
-  private showView(name: "welcome" | "landing" | "arcade" | "game"): void {
+  private showView(name: "landing" | "arcade" | "game"): void {
     const opened = document.body.dataset.view !== name;
-    for (const view of ["welcome", "landing", "arcade", "game"] as const) $(view).hidden = view !== name;
-    // The bar is over the landing and the arcade; a game and the welcome have their own chrome.
+    for (const view of ["landing", "arcade", "game"] as const) $(view).hidden = view !== name;
+    // The bar is over the landing and the arcade; a game has its own chrome.
     $("nav").hidden = name !== "landing" && name !== "arcade";
     document.body.dataset.view = name;
     if (name === "landing") this.landing.show();
@@ -1508,12 +1505,6 @@ export class App {
       },
       true,
     );
-    $("get-started").onclick = () => {
-      prefs.welcomed = true;
-      // The landing, unless the address was a link to a game: then that game. Where the button was, the focus goes on to Finger Guns' Play.
-      this.arrive(this.route);
-      if (this.route.space === "landing" && !this.route.focus && !prefs.space) this.landing.focus("arcade");
-    };
     $("play").onclick = () => void this.start();
     $("adjust").onclick = () => void this.start({ adjust: true });
     $("switch-control").onclick = () =>
@@ -1596,7 +1587,7 @@ export class App {
 
     window.addEventListener("keydown", (event) => this.key(event));
     // The browser's Back and Forward, a link to a game followed on the page, the address edited:
-    // the page turns to the space the address names (in a game, or at the welcome, it stays where it is).
+    // the page turns to the space the address names (in a game it stays where it is).
     const followAddress = () => {
       const view = document.body.dataset.view;
       if (view !== "landing" && view !== "arcade") return;
@@ -1869,12 +1860,12 @@ export class App {
     this.applyPreferences();
     // Last, so nothing written on the way survives it.
     forgetEverything();
-    // As on the first visit: the landing is where Get Started goes.
+    // As on the first visit: the landing, standing on Finger Guns.
     this.route = { space: "landing", focus: null };
     history.replaceState(history.state, "", this.addressFor(this.route));
     this.renderArcade();
-    this.showView("welcome");
-    $("get-started").focus();
+    this.arrive(this.route);
+    this.landing.focus("arcade");
   }
 
   /** What a bug report needs to know: the browser, the graphics, the timings. Nothing personal. */

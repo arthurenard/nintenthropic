@@ -1,12 +1,12 @@
 // (a) The whole game with the mouse: the arcade, High Noon, pause, and the
 // results card.
 import { expect, test } from "@playwright/test";
-import { shot, skipWelcome, snapshot } from "./helpers";
+import { shot, returningVisitor, snapshot } from "./helpers";
 
 test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/#arcade");
   await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#feature-title")).toHaveText("High Noon");
@@ -75,7 +75,7 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
 });
 
 test("a tall window plays in a band the town can fill, and a short one keeps its chrome small", async ({ page }) => {
-  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.setViewportSize({ width: 420, height: 860 });
   await page.goto("/#arcade");
   await page.getByRole("button", { name: "Play" }).click();

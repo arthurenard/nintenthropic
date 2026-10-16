@@ -4,8 +4,7 @@
  * and Grip Prix (its sunny poster) - each with the one thing to do and a quiet
  * "How It Plays". This module fills the tiles from the games' own entries (so
  * a poster is named once, in games/index.ts), moves their art gently under a
- * mouse, and draws the two gestures in line art for the welcome and for How
- * It Plays.
+ * mouse, and lists each gesture's steps for How It Plays.
  *
  * Everything here is dressing: a poster that is not there leaves its game's
  * backdrop in its place, and nothing waits for a picture.
@@ -19,7 +18,7 @@ import type { Tile } from "./route";
 
 export type GestureKind = "pistol" | "wheel";
 
-/** Draws a gesture's line art and its steps (the templates in index.html) into a figure. */
+/** Puts a gesture's steps (the templates in index.html) into a figure. */
 export function gestureInto(figure: Element, kind: GestureKind, replace = false): void {
   const art = $<HTMLTemplateElement>(`gesture-${kind}`).content.cloneNode(true);
   if (replace) figure.replaceChildren(art);

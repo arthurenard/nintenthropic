@@ -1,4 +1,4 @@
-/* The screens: first run, the arcade, and the sheets around a game. */
+/* The screens: the arcade, and the sheets around a game. */
 
 :root {
   /* Where a game's poster goes, its light stands in until the picture
@@ -7,42 +7,7 @@
   --poster-fallback: linear-gradient(180deg, #15171d 0%, #23262f 60%, #1a1b20 100%);
 }
 
-/* --- first run ------------------------------------------------------------------ */
-
-.welcome {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: var(--margin);
-}
-.welcome-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  width: min(100%, 760px);
-  text-align: center;
-}
-.welcome-inner .wordmark {
-  margin-bottom: 8px;
-  color: var(--label-2);
-}
-.welcome-inner > .body {
-  max-width: 480px;
-}
-.welcome .button {
-  margin-top: 8px;
-}
-/* The two gestures, side by side: the finger pistol for the arcade, the wheel for Grip Prix. */
-.gestures {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  width: 100%;
-  margin: 16px 0 8px;
-}
-.welcome .gesture {
+.gesture {
   display: grid;
   justify-items: center;
   align-content: start;
@@ -53,143 +18,10 @@
   background: rgba(255, 255, 255, 0.045);
   box-shadow: inset 0 0 0 1px var(--hairline);
 }
+/* A gesture's steps (How It Plays), lit one after another. */
 .gesture {
   width: min(520px, 100%);
   margin: 16px 0;
-}
-.gesture-art {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-.g-shape {
-  fill: #000;
-  stroke: #fff;
-  stroke-width: 3.2;
-}
-.g-line {
-  stroke: #fff;
-  stroke-width: 3.2;
-}
-.g-arm {
-  stroke: url(#g-sleeve);
-  stroke-width: 3.2;
-}
-.g-ring {
-  stroke: var(--label-3);
-  stroke-width: 3;
-}
-.g-bull {
-  fill: var(--label-3);
-  stroke: none;
-}
-.g-pulse {
-  stroke: var(--tint);
-  stroke-width: 3;
-  opacity: 0;
-}
-.g-thumb,
-.g-recoil,
-.g-flash,
-.g-pulse {
-  transform-box: fill-box;
-}
-.g-thumb {
-  transform-origin: 50% 88%;
-  animation: g-thumb 2.8s var(--ease) infinite;
-}
-.g-thumb-folded {
-  display: none; /* drawn only for the cross-fade of reduced motion */
-}
-.g-recoil {
-  transform-origin: 20% 60%;
-  animation: g-recoil 2.8s var(--ease) infinite;
-}
-.g-flash {
-  transform-origin: 0% 50%;
-  opacity: 0;
-  animation: g-flash 2.8s var(--ease) infinite;
-}
-.g-bull {
-  animation: g-bull 2.8s var(--ease) infinite;
-}
-.g-pulse {
-  transform-origin: 50% 50%;
-  animation: g-pulse 2.8s var(--spring) infinite;
-}
-@keyframes g-thumb {
-  0%,
-  32% {
-    transform: rotate(0deg);
-  }
-  42%,
-  58% {
-    transform: rotate(80deg);
-  }
-  74%,
-  100% {
-    transform: rotate(0deg);
-  }
-}
-@keyframes g-recoil {
-  0%,
-  42% {
-    transform: rotate(0deg);
-  }
-  45% {
-    transform: rotate(-5deg);
-  }
-  54%,
-  100% {
-    transform: rotate(0deg);
-  }
-}
-@keyframes g-flash {
-  0%,
-  42% {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  44% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  52%,
-  100% {
-    opacity: 0;
-    transform: scale(1.2);
-  }
-}
-@keyframes g-bull {
-  0%,
-  44% {
-    fill: var(--label-3);
-  }
-  46%,
-  78% {
-    fill: var(--tint);
-  }
-  90%,
-  100% {
-    fill: var(--label-3);
-  }
-}
-@keyframes g-pulse {
-  0%,
-  44% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  46% {
-    opacity: 1;
-    transform: scale(0.7);
-  }
-  66%,
-  100% {
-    opacity: 0;
-    transform: scale(1.5);
-  }
 }
 .gesture-steps {
   display: flex;
@@ -251,73 +83,6 @@
   }
 }
 
-/* The wheel: two fists on a rim, turned one way, then the other, then held straight. */
-.g-mark {
-  fill: #fff;
-  stroke: none;
-}
-.g-turn {
-  stroke: var(--label-2);
-  stroke-width: 3.2;
-  opacity: 0;
-}
-.g-wheel {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  animation: g-wheel 4s var(--ease) infinite;
-}
-.g-turn-left {
-  animation: g-turn-left 4s var(--ease) infinite;
-}
-.g-turn-right {
-  animation: g-turn-right 4s var(--ease) infinite;
-}
-@keyframes g-wheel {
-  0%,
-  14% {
-    transform: rotate(0deg);
-  }
-  28%,
-  38% {
-    transform: rotate(-28deg);
-  }
-  54%,
-  64% {
-    transform: rotate(28deg);
-  }
-  80%,
-  100% {
-    transform: rotate(0deg);
-  }
-}
-@keyframes g-turn-left {
-  0%,
-  16% {
-    opacity: 0;
-  }
-  24%,
-  36% {
-    opacity: 1;
-  }
-  44%,
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes g-turn-right {
-  0%,
-  44% {
-    opacity: 0;
-  }
-  52%,
-  62% {
-    opacity: 1;
-  }
-  70%,
-  100% {
-    opacity: 0;
-  }
-}
 .wheel-steps li {
   animation-duration: 4s;
 }
@@ -823,34 +588,6 @@ body[data-view="game"] {
 
 /* --- narrower windows ------------------------------------------------------------------------------- */
 
-/* A phone: the welcome's two gestures, one above the other, small enough that Get Started stays in sight. */
-@media (max-width: 860px) {
-  .large-title {
-    font-size: 40px;
-  }
-}
-@media (max-width: 600px) {
-  .welcome-inner {
-    gap: 12px;
-  }
-  .gestures {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin: 8px 0 4px;
-  }
-  .welcome .gesture {
-    padding: 14px 16px;
-    gap: 4px;
-  }
-  .welcome .gesture-art {
-    width: auto;
-    height: 108px;
-  }
-  .welcome .gesture-steps {
-    margin-top: 8px;
-  }
-}
-
 @media (max-width: 1100px) {
   .hero-title {
     font-size: clamp(44px, 7vw, 76px);
@@ -903,41 +640,8 @@ body[data-view="game"] {
   .game-card:active .game-card-art {
     transform: none;
   }
-  .g-thumb,
-  .g-recoil,
-  .g-flash,
-  .g-pulse,
-  .g-bull,
-  .g-turn,
   .gesture-steps li {
     animation: none !important;
-  }
-  /* The wheel is shown a little turned, with both ways to turn it marked. */
-  .g-wheel {
-    animation: none !important;
-    transform: rotate(-12deg);
-  }
-  .g-turn {
-    opacity: 0.6;
-  }
-  .g-thumb {
-    animation: g-fade 2.8s var(--ease) infinite alternate !important;
-  }
-  .gesture-art .g-thumb-folded {
-    display: inline;
-    animation: g-fade 2.8s var(--ease) infinite alternate-reverse !important;
-  }
-  .gesture-steps li {
     color: var(--label);
-  }
-}
-@keyframes g-fade {
-  0%,
-  40% {
-    opacity: 1;
-  }
-  60%,
-  100% {
-    opacity: 0;
   }
 }

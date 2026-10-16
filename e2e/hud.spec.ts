@@ -3,10 +3,10 @@
 // golden weapon on each), a timed round's clock, and a stage of the shape a
 // game's art can hold - each photographed in every state, on the Test Range.
 import { expect, test, type Page } from "@playwright/test";
-import { shot, skipWelcome, snapshot } from "./helpers";
+import { shot, returningVisitor, snapshot } from "./helpers";
 
 async function range(page: Page, weapon: string): Promise<void> {
-  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.goto(`/?range=1&weapon=${weapon}#test-range`);
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
@@ -81,7 +81,7 @@ test("a timed round's clock, and the gold cylinder", async ({ page }, info) => {
 });
 
 test("the stage keeps the shape the game's art can hold", async ({ page }) => {
-  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
   // The Test Range holds 1.25 : 1 at its tallest and 2.2 : 1 at its widest.
   await page.setViewportSize({ width: 420, height: 860 });
   await page.goto("/?range=1#test-range");
@@ -121,7 +121,7 @@ const movers = (page: Page) =>
 
 for (const reduce of [false, true]) {
   test(`${reduce ? "Reduce Motion: a rifle's action stands still, and a hit, a popup and a card only fade" : "with motion allowed the same moments do move (the probe sees them)"}`, async ({ page }) => {
-    await skipWelcome(page, { "handy.control.v1": "mouse", "handy.settings.v1": { reduceMotion: reduce } });
+    await returningVisitor(page, { "handy.control.v1": "mouse", "handy.settings.v1": { reduceMotion: reduce } });
     await page.goto("/?range=1&weapon=magazine#test-range");
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");

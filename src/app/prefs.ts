@@ -10,7 +10,6 @@ import type { EyeProfile } from "../input/scope";
 import type { CrosshairStyle } from "./crosshair";
 
 const KEYS = {
-  welcomed: "handy.welcomed.v1",
   muted: "handy.muted.v1",
   control: "handy.control.v1",
   cameraOpened: "handy.camera-opened.v1",
@@ -64,12 +63,6 @@ const session = (): Storage | undefined => {
 };
 
 export const prefs = {
-  get welcomed(): boolean {
-    return read<boolean>(local(), KEYS.welcomed) === true;
-  },
-  set welcomed(value: boolean) {
-    write(local(), KEYS.welcomed, value);
-  },
   get muted(): boolean {
     return read<boolean>(local(), KEYS.muted) === true;
   },

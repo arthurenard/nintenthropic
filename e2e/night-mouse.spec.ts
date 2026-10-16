@@ -2,7 +2,7 @@
 // lever, R reloads round by round), a whole wave shot out of the fog, the
 // breather, pause, the fall at the barricade and the results.
 import { expect, test, type Page } from "@playwright/test";
-import { gameDebug, shot, skipWelcome, snapshot } from "./helpers";
+import { gameDebug, shot, returningVisitor, snapshot } from "./helpers";
 
 interface Target {
   kind: string;
@@ -29,7 +29,7 @@ test("Dead of Night with the mouse: a wave, the rifle, pause, the fall, the resu
   test.setTimeout(420_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.goto("/#dead-of-night");
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
   await page.getByRole("button", { name: "Play", exact: true }).click();

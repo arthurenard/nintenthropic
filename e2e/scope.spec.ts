@@ -3,7 +3,7 @@
 // button held or toggled, the touch screen's Scope button, the Settings
 // group, and the face landmarker loading with the first such game.
 import { expect, test, type Page } from "@playwright/test";
-import { handAt, passAimCheck, pose, shot, skipWelcome, snapshot } from "./helpers";
+import { handAt, passAimCheck, pose, shot, returningVisitor, snapshot } from "./helpers";
 
 type ScopeState = { active: boolean; buttons: boolean; eye: boolean; mode: string } | null;
 const scope = async (page: Page) => (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { scope: ScopeState })).scope;
@@ -12,7 +12,7 @@ const gameScoped = (page: Page) => page.evaluate(() => (window.handyTest!.intern
 const eyes = (page: Page, left: number, right: number) => page.evaluate(([l, r]) => window.handyTest!.eyes(l === -1 ? null : { blinkLeft: l!, blinkRight: r! }), [left, right]);
 
 async function playRange(page: Page, query = "", control: "mouse" | "hand" = "mouse"): Promise<void> {
-  await skipWelcome(page, control === "mouse" ? { "handy.control.v1": "mouse" } : {});
+  await returningVisitor(page, control === "mouse" ? { "handy.control.v1": "mouse" } : {});
   await page.goto(`/?range=1${query}#test-range`);
   await expect(page.locator("#feature-title")).toHaveText("Test Range");
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -118,7 +118,7 @@ test("Shift and the right mouse button scope, held or toggled, and the right but
 });
 
 test("a game without a scope: the right button reloads as before (the Scope settings are Overwatch Ridge's)", async ({ page }) => {
-  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.goto("/#arcade");
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.locator("#settings")).toBeVisible();
@@ -158,7 +158,7 @@ test("on a touch screen, the Scope button in the corner", async ({ browser }, in
 });
 
 test("the eye's model loads with the first game that reads it, and the face is read on every other frame", async ({ page }) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await page.goto("/?range=1#test-range");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 90_000 }).toBe("check");

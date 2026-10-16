@@ -3,7 +3,7 @@
 // through the running lights' aim check into play (venting by pointing off
 // the screen), pause, and the glass giving way into the results.
 import { expect, test, type Page } from "@playwright/test";
-import { gameDebug, handAt, moveTo, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { gameDebug, handAt, moveTo, passAimCheck, pose, shoot, shot, returningVisitor, snapshot } from "./helpers";
 
 type Target = { kind: string; id: number; x: number; y: number; distance: number; closing: number | null };
 
@@ -27,7 +27,7 @@ test("the mouse through a pass: shooting, overheating, venting, the breather", a
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page, { "handy.control.v1": "mouse" });
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
   await playOrbit(page);
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 90_000 }).toBe("play");
   await expect(page.locator("#heat")).toBeVisible();
@@ -101,7 +101,7 @@ test("the scripted hand: the running lights' aim check, a shot, venting off the 
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await playOrbit(page, "?input=script");
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 90_000 }).toBe("check");
   await pose(page, handAt(0.5, 0.5));

@@ -188,13 +188,13 @@ Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off
 camera, hand, checkmark, share, gear (settings), scope, chevrons (a row that leads on,
 a menu), carets (a man marked; a double one on a scope's rim, pointing the way to pan).
 
-The mark is the one exception: a white finger pistol, filled and flat like an SF
-Symbol, aimed at a white sight (a ring and a dot), on a rounded square with a sunset
-gradient (`#ffa40f` into `#ff2d55`), lit softly from the top left. The hand is one
-silhouette; thin cut creases part the curled fingers, and a soft shadow lifts it off
-the colour. It reads as a finger pistol down to the 16 px tab icon. It is pure
-vector, drawn in `tools/icons/mark.mjs`, and `node tools/icons/render.mjs` writes the
-app icons and the favicon to `public/icons/`. The wordmark, the Finger Guns tile, the
+The mark is the one exception: a sight in white (a ring, four ticks reaching out
+from it, a dot in the middle) on a rounded square with a sunset gradient (`#ffa40f`
+into `#ff2d55`), lit softly from the top left, the sight lifted off the colour by a
+soft shadow. No hand is drawn: the games are played with yours. The ticks make it a
+gun sight, never a bullseye. It reads down to the 16 px tab icon. It is pure vector,
+drawn in `tools/icons/mark.mjs`, and `node tools/icons/render.mjs` writes the app
+icons and the favicon to `public/icons/`. The wordmark, the Finger Guns tile, the
 share card and the promo use `icon-192.png` or `icon-512.png`. Never redraw the mark
 elsewhere, and never use it as a button icon.
 
@@ -221,7 +221,9 @@ first, a few big words, one white pill). Stacked, one above the other, on a phon
   `public/assets/kart/poster.webp`, its badge `icon.png`; until they exist the
   game's backdrop and no badge stand in.
 - **How It Plays**, quiet under each pill, opens a sheet with that family's
-  gesture in line art: the finger pistol, or two fists turned like a wheel.
+  gesture in words and its three steps, lit one after another (Point, Fold your
+  thumb, Fire; or Grip, Turn left, Turn right). No hand is drawn anywhere in
+  the app.
 - **Hover or focus** swells the picture a little and, under a mouse, leans it
   toward the pointer; the keyboard ring goes round the whole tile. Reduce
   Motion holds everything still.
@@ -268,11 +270,8 @@ the four shooters in a row beneath it. Grip Prix is not in the row.
 
 ## First run
 
-1. A welcome that fits on one screen: what Handheld is ("Games you play with your
-   hands"), both gestures in looping line art - the finger pistol (point, fold the
-   thumb, fire) for Finger Guns, and two fists held like a wheel and turned
-   (grip, turn left, turn right) for Grip Prix - and one button, which lands on
-   the landing (or on the game a link named).
+1. No welcome screen: a first visit lands straight on the landing (or on the
+   game a link named), whose title and tiles already say what Handheld is.
 2. Before the browser asks for the camera, say why and what happens to the
    picture: "Handheld needs your camera to see your hand. The picture stays on
    this computer."

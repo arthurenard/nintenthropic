@@ -6,7 +6,7 @@
 // a game's card, and the way back, to the landing and from a game. Photographed
 // at every size the design must hold at.
 import { expect, test, type Page } from "@playwright/test";
-import { shot, skipWelcome, snapshot } from "./helpers";
+import { shot, returningVisitor, snapshot } from "./helpers";
 
 const card = (page: Page, name: string) => page.getByRole("radiogroup", { name: "Games" }).getByRole("radio", { name: new RegExp(`^${name}`) });
 const hash = (page: Page) => new URL(page.url()).hash;
@@ -15,7 +15,7 @@ const GAMES = ["High Noon", "Dead of Night", "Orbital Decay", "Overwatch Ridge"]
 test("choosing a game: click, keyboard, remembered, in the address", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/#arcade");
   await expect(page.locator("#feature-title")).toHaveText("High Noon");
   await expect(card(page, "High Noon")).toHaveAttribute("aria-checked", "true");
@@ -69,7 +69,7 @@ test("choosing a game: click, keyboard, remembered, in the address", async ({ pa
 });
 
 test("each game's best is its own, and Choose a Game comes back to the game played", async ({ page }) => {
-  await skipWelcome(page, {
+  await returningVisitor(page, {
     "handy.control.v1": "mouse",
     "handy.best.v2.high-noon.standard.pointer": { score: 4210, outcome: "Fell on Wave 3", at: 1 },
   });
@@ -96,7 +96,7 @@ test("each game's best is its own, and Choose a Game comes back to the game play
 test("the landing: two equal tiles, and the way into each", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page, { "handy.game.v1": "dead-of-night" });
+  await returningVisitor(page, { "handy.game.v1": "dead-of-night" });
   await page.goto("/");
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
@@ -154,7 +154,7 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
 });
 
 test("the arcade is the shooters' own space, with Grip Prix one choice away in the bar", async ({ page }) => {
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/#high-noon");
   const spaces = page.getByRole("navigation", { name: "Sections" });
   await expect(spaces.getByRole("link", { name: "Finger Guns" })).toHaveAttribute("aria-current", "page");
@@ -178,7 +178,7 @@ test("the arcade is the shooters' own space, with Grip Prix one choice away in t
 test("Grip Prix, and the way home from it", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/");
   await page.locator("#tile-grip").getByRole("link", { name: "Race" }).click();
   await expect(page).toHaveURL(/\/race\.html$/);
@@ -205,8 +205,8 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("How It Plays: each tile shows its gesture, in a sheet", async ({ page }) => {
-  await skipWelcome(page);
+test("How It Plays: each tile names its gesture and its steps, in a sheet, with no drawing", async ({ page }) => {
+  await returningVisitor(page);
   await page.goto("/");
   const how = page.getByRole("dialog");
   await page.locator("#tile-grip").getByRole("button", { name: "How It Plays" }).click();
@@ -214,7 +214,7 @@ test("How It Plays: each tile shows its gesture, in a sheet", async ({ page }) =
   await expect(how.getByRole("heading", { name: "Grip the Wheel" })).toBeVisible();
   await expect(how).toContainText("fists up like a wheel");
   await expect(how.locator(".gesture-steps li")).toHaveText(["Grip", "Turn left", "Turn right"]);
-  await expect(how.locator("svg.gesture-art .g-wheel")).toHaveCount(1);
+  await expect(how.locator("svg")).toHaveCount(0);
   await how.getByRole("button", { name: "Done" }).click();
   await expect(how).toBeHidden();
   // Back to the button that opened it.
@@ -223,7 +223,7 @@ test("How It Plays: each tile shows its gesture, in a sheet", async ({ page }) =
   await page.locator("#tile-arcade").getByRole("button", { name: "How It Plays" }).click();
   await expect(how.getByRole("heading", { name: "Finger Pistol" })).toBeVisible();
   await expect(how.locator(".gesture-steps li")).toHaveText(["Point", "Fold your thumb", "Fire"]);
-  await expect(how.locator("svg.gesture-art .g-thumb")).toHaveCount(1);
+  await expect(how.locator("svg")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(how).toBeHidden();
   // It did not start anything: still the landing.
@@ -231,7 +231,7 @@ test("How It Plays: each tile shows its gesture, in a sheet", async ({ page }) =
 });
 
 test("the landing keeps Privacy, the sound and Settings, and answers M", async ({ page }) => {
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Privacy" }).click();
   await expect(page.getByRole("dialog", { name: "Your Camera Stays Here" })).toBeVisible();
@@ -250,55 +250,38 @@ test("the landing keeps Privacy, the sound and Settings, and answers M", async (
   await expect(page.locator("#landing")).toBeVisible();
 });
 
-test("the welcome shows both gestures and lands on the landing", async ({ page }) => {
+test("a first visit lands straight on the landing; How It Plays lists the steps, with no drawing", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => localStorage.setItem("handy.muted.v1", "true"));
   await page.goto("/");
-  await expect(page.locator("#welcome")).toBeVisible();
-  await expect(page.locator("#nav")).toBeHidden();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Welcome to Handheld.");
-  // Both ways to play with the hands, in line art: the finger pistol, and two fists turned like a wheel.
-  const pistol = page.locator('#welcome [data-gesture="pistol"]');
-  const wheel = page.locator('#welcome [data-gesture="wheel"]');
-  await expect(pistol.locator(".gesture-steps li")).toHaveText(["Point", "Fold your thumb", "Fire"]);
-  await expect(wheel.locator(".gesture-steps li")).toHaveText(["Grip", "Turn left", "Turn right"]);
-  await expect(pistol.locator("svg .g-thumb")).toHaveCount(1);
-  await expect(wheel.locator("svg .g-wheel")).toHaveCount(1);
-  await expect(wheel.locator("svg .g-knuckles")).toHaveCount(2);
-  // The wheel really turns: it is not still from one moment to the next.
-  const angle = () => wheel.locator(".g-wheel").evaluate((node) => getComputedStyle(node).transform);
-  const seen = new Set<string>();
-  for (let i = 0; i < 8; i++) {
-    seen.add(await angle());
-    await page.waitForTimeout(400);
-  }
-  expect(seen.size).toBeGreaterThan(2);
-
-  await page.getByRole("button", { name: "Get Started" }).click();
   await expect(page.locator("#landing")).toBeVisible();
-  await expect(page.locator("#welcome")).toBeHidden();
-  // The focus goes on from the button to Finger Guns' own.
-  await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
-  expect(await page.evaluate(() => localStorage.getItem("handy.welcomed.v1"))).toBe("true");
-  // Seen once: the next visit opens on the landing.
-  await page.reload();
-  await expect(page.locator("#landing")).toBeVisible();
+  await expect(page.locator("#nav")).toBeVisible();
+  await expect(page.locator("#welcome")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Games you play with your hands.");
+  // How It Plays: the words and the steps, lit one after another; no hand is drawn.
+  const how = page.getByRole("dialog");
+  await page.locator("#tile-arcade").getByRole("button", { name: "How It Plays" }).click();
+  await expect(how.locator(".gesture-steps li")).toHaveText(["Point", "Fold your thumb", "Fire"]);
+  await expect(how.locator("svg")).toHaveCount(0);
+  await how.getByRole("button", { name: "Done" }).click();
+  await page.locator("#tile-grip").getByRole("button", { name: "How It Plays" }).click();
+  await expect(how.locator(".gesture-steps li")).toHaveText(["Grip", "Turn left", "Turn right"]);
+  await expect(how.locator("svg")).toHaveCount(0);
+  await how.getByRole("button", { name: "Done" }).click();
   expect(errors).toEqual([]);
 });
 
-test("the welcome keeps a link to a game: Get Started goes there", async ({ page }) => {
+test("a first visit by a link to a game goes straight to it", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("handy.muted.v1", "true"));
   await page.goto("/#dead-of-night");
-  await expect(page.locator("#welcome")).toBeVisible();
-  await page.getByRole("button", { name: "Get Started" }).click();
   await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
 });
 
 test("the posters turn in the Finger Guns tile, and hold still with Reduce Motion", async ({ page }) => {
   test.setTimeout(60_000);
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/");
   const showing = page.locator('#tile-arcade-art img[data-game].on.loaded');
   await expect(showing.first()).toHaveAttribute("data-game", "high-noon");
@@ -309,16 +292,16 @@ test("the posters turn in the Finger Guns tile, and hold still with Reduce Motio
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "");
   await page.locator("#tile-grip").hover();
-  // The picture neither swells nor leans, and the wheel in How It Plays does not turn.
+  // The picture neither swells nor leans, and How It Plays' steps do not light one after another.
   expect(await page.locator("#tile-grip .tile-art").evaluate((art) => getComputedStyle(art).transform)).toBe("none");
   await page.locator("#tile-grip").getByRole("button", { name: "How It Plays" }).click();
-  expect(await page.locator("#how .g-wheel").evaluate((wheel) => getComputedStyle(wheel).animationName)).toBe("none");
+  expect(await page.locator("#how .gesture-steps li").first().evaluate((step) => getComputedStyle(step).animationName)).toBe("none");
 });
 
 test("the landing and the arcade at every size", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   const sizes = [
     [1280, 720],
     [1440, 900],

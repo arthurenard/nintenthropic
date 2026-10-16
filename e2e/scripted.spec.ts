@@ -3,12 +3,12 @@
 // whole aim check to 95% and into play; then, as a returning player, through
 // the check again in three shots.
 import { expect, test } from "@playwright/test";
-import { handAt, moveTo, passAimCheck, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { handAt, moveTo, passAimCheck, pose, shoot, shot, returningVisitor, snapshot } from "./helpers";
 
 test("a scripted hand passes the aim check at 95% and plays", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
@@ -85,7 +85,7 @@ test("with Reduce Motion the aim check says the same, shows no crosshair until t
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "");
   await page.getByRole("button", { name: "Play" }).click();

@@ -4,7 +4,7 @@
 // played again with a fold of the thumb, the idle world at rest, and a window
 // resized mid-round with the aim still true.
 import { expect, test, type Page } from "@playwright/test";
-import { gameDebug, handAt, moveTo, playWithHand, pose, shoot, shot, skipWelcome, snapshot } from "./helpers";
+import { gameDebug, handAt, moveTo, playWithHand, pose, shoot, shot, returningVisitor, snapshot } from "./helpers";
 
 const state = (page: Page) => snapshot(page);
 
@@ -300,7 +300,7 @@ test("the results: a fold of the thumb plays again, and the world rests", async 
 
 test("the aim check says how to frame the hand, once it has seen a problem for a moment", async ({ page }, info) => {
   const errors = watchErrors(page);
-  await skipWelcome(page);
+  await returningVisitor(page);
   await page.goto("/?input=script#arcade");
   await page.getByRole("button", { name: "Play" }).click();
   await expect.poll(async () => (await state(page)).phase, { timeout: 60_000 }).toBe("check");
@@ -327,7 +327,7 @@ test("the aim check says how to frame the hand, once it has seen a problem for a
 });
 
 test("getting ready offline says so, with the fix", async ({ page, context }, info) => {
-  await skipWelcome(page, { "handy.camera-opened.v1": true });
+  await returningVisitor(page, { "handy.camera-opened.v1": true });
   await page.goto("/#arcade");
   await expect(page.locator("#arcade")).toBeVisible();
   await context.setOffline(true);
