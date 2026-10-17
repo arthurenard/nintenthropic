@@ -40,6 +40,9 @@ export interface Spot {
   reach: number;
   /** True past the barrier, in the camera's margin: the ground need not be flat there, but nothing solid may stand. */
   margin: boolean;
+  /** Away from the road, across it (a unit vector on the ground): a point near the spot is `beyond` plus its step this way. */
+  ox: number;
+  oz: number;
 }
 
 /**
@@ -70,7 +73,7 @@ export function drivableSpots(def: TrackDef, geo: TrackGeometry, bank: Bank, gro
         // Out of the nearest road's own corridor: not a place a kart can be.
         if (beyond > reach) continue;
         const y = p.sample.y + bank.lift(p.s, p.offset);
-        spots.push({ x, z, y, ref: Math.max(y, groundAt(x, z)), s: p.s, beyond, side: pSide, reach, margin: beyond > pWall });
+        spots.push({ x, z, y, ref: Math.max(y, groundAt(x, z)), s: p.s, beyond, side: pSide, reach, margin: beyond > pWall, ox: -pSide * p.sample.tz, oz: pSide * p.sample.tx });
       }
     }
   }
@@ -110,6 +113,8 @@ export class SpotGrid {
 export interface Hit {
   low: number;
   who: string;
+  /** Metres beyond the road's edge of what was hit, when it is not the spot's own (a wall passing beside it). */
+  beyond?: number;
 }
 
 /** Feeds every triangle of a mesh, in world space, to `tri`. */
@@ -128,12 +133,57 @@ export function eachTriangle(geometry: BufferGeometry, world: Matrix4, tri: (a: 
   }
 }
 
+/** How close (metres, across the ground) a steep surface must pass to a spot to be in its way: the spots are 1 m apart along and 0.5 m across. */
+const WALL_REACH = 0.5;
+/** A triangle steeper than this (its shadow on the ground under this share of its area, about 60 degrees) is also walked over, point by point. */
+const STEEP = 0.5;
+/** The step of that walk, metres. */
+const WALL_STEP = 0.35;
+
 /**
  * Drops each triangle of `root`'s meshes onto the spots under it: wherever it covers one in the band, the lowest such surface is
- * noted. `skip` leaves out what is meant to be there (the barrier's own picture, a ramp's wedge).
+ * noted. A steep triangle (a wall, a hull's side, a post) covers next to nothing seen from above, so it is also walked over and
+ * noted at every spot it passes within WALL_REACH of, in the band: a solid whose roof is above the band and whose floor is below
+ * the road (a ship's hull across the road) is caught by its sides. `skip` leaves out what is meant to be there (the barrier's own
+ * picture, a ramp's wedge).
  */
 export function dropOnto(root: Object3D, grid: SpotGrid, who: string, lowest: Map<number, Hit>, skip?: (spot: Spot) => boolean): void {
   root.updateMatrixWorld(true);
+  const note = (k: number, y: number, beyond?: number) => {
+    if (y < BAND[0] || y > BAND[1]) return;
+    const old = lowest.get(k);
+    if (!old || y < old.low) lowest.set(k, beyond === undefined ? { low: y, who } : { low: y, who, beyond });
+  };
+  const ab = new Vector3();
+  const ac = new Vector3();
+  const walk = (a: Vector3, b: Vector3, c: Vector3, x0: number, z0: number, x1: number, z1: number) => {
+    let near = false;
+    grid.box(x0 - WALL_REACH, z0 - WALL_REACH, x1 + WALL_REACH, z1 + WALL_REACH, () => (near = true));
+    if (!near) return;
+    ab.subVectors(b, a);
+    ac.subVectors(c, a);
+    const nb = Math.max(1, Math.ceil(ab.length() / WALL_STEP));
+    const nc = Math.max(1, Math.ceil(ac.length() / WALL_STEP));
+    for (let i = 0; i <= nb; i++) {
+      for (let j = 0; j <= nc; j++) {
+        const u = i / nb;
+        const v = j / nc;
+        if (u + v > 1) break;
+        const x = a.x + ab.x * u + ac.x * v;
+        const y = a.y + ab.y * u + ac.y * v;
+        const z = a.z + ab.z * u + ac.z * v;
+        grid.box(x - WALL_REACH, z - WALL_REACH, x + WALL_REACH, z + WALL_REACH, (k) => {
+          const p = grid.spots[k]!;
+          if ((p.x - x) ** 2 + (p.z - z) ** 2 > WALL_REACH ** 2) return;
+          // Where the wall itself is, across the road: past the margin's end it is not in the way, whichever spot it passes,
+          // and what is meant to be there is asked about where the wall stands, not where the spot does.
+          const beyond = p.beyond + (x - p.x) * p.ox + (z - p.z) * p.oz;
+          if (beyond > p.reach || skip?.({ ...p, beyond })) return;
+          note(k, y - p.ref, beyond);
+        });
+      }
+    }
+  };
   const place = (geometry: BufferGeometry, world: Matrix4) => {
     eachTriangle(geometry, world, (a, b, c) => {
       const x0 = Math.min(a.x, b.x, c.x);
@@ -142,6 +192,9 @@ export function dropOnto(root: Object3D, grid: SpotGrid, who: string, lowest: Ma
       const z1 = Math.max(a.z, b.z, c.z);
       if (!Number.isFinite(x0 + x1 + z0 + z1)) return;
       const det = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
+      // Twice the triangle's area (det is twice its shadow's, signed).
+      const area = ab.subVectors(b, a).cross(ac.subVectors(c, a)).length();
+      if (Math.abs(det) < STEEP * area) walk(a, b, c, x0, z0, x1, z1);
       if (Math.abs(det) < 1e-9) return;
       grid.box(x0, z0, x1, z1, (k) => {
         const p = grid.spots[k]!;
@@ -150,10 +203,7 @@ export function dropOnto(root: Object3D, grid: SpotGrid, who: string, lowest: Ma
         const v = ((c.z - a.z) * (p.x - c.x) + (a.x - c.x) * (p.z - c.z)) / det;
         const w = 1 - u - v;
         if (u < -0.02 || v < -0.02 || w < -0.02) return;
-        const y = u * a.y + v * b.y + w * c.y - p.ref;
-        if (y < BAND[0] || y > BAND[1]) return;
-        const old = lowest.get(k);
-        if (!old || y < old.low) lowest.set(k, { low: y, who });
+        note(k, u * a.y + v * b.y + w * c.y - p.ref);
       });
     });
   };
@@ -270,9 +320,10 @@ function worstOf(probe: Probe, lowest: Map<number, Hit>): Map<string, Offender> 
   const byWho = new Map<string, Offender>();
   for (const [k, hit] of lowest) {
     const p = probe.spots[k]!;
-    const depth = p.reach - p.beyond;
+    const beyond = hit.beyond ?? p.beyond;
+    const depth = p.reach - beyond;
     const old = byWho.get(hit.who);
-    if (!old || depth > old.depth) byWho.set(hit.who, { what: hit.who, at: [p.x, p.z], s: p.s, beyond: p.beyond, height: hit.low, depth });
+    if (!old || depth > old.depth) byWho.set(hit.who, { what: hit.who, at: [p.x, p.z], s: p.s, beyond, height: hit.low, depth });
   }
   return byWho;
 }
@@ -306,13 +357,14 @@ function decorationOffenders(probe: Probe, material: MeshLambertMaterial, tier: 
   const found = new Map<string, Offender>();
   for (const [k, hit] of lowest) {
     const p = probe.spots[k]!;
-    const depth = p.reach - p.beyond;
+    const beyond = hit.beyond ?? p.beyond;
+    const depth = p.reach - beyond;
     // The start line's own: the gantry's legs and light box stand at s = 0.
     const gantry = Math.min(p.s, geo.length - p.s) < 8;
     const key = gantry ? `gantry${p.side}` : `${p.side}:${Math.round(p.s / 12)}`;
     const old = found.get(key);
     if (!old || depth > old.depth) {
-      found.set(key, { what: `${gantry ? "start gantry" : "decoration"} (${p.side < 0 ? "left" : "right"} of the road)`, at: [p.x, p.z], s: p.s, beyond: p.beyond, height: hit.low, depth });
+      found.set(key, { what: `${gantry ? "start gantry" : "decoration"} (${p.side < 0 ? "left" : "right"} of the road)`, at: [p.x, p.z], s: p.s, beyond, height: hit.low, depth });
     }
   }
   return [...found.values()];

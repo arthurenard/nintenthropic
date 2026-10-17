@@ -681,7 +681,17 @@ front of them (or a laptop), and the TV is the host's screen.
   (the inside of a tight U-turn), and a soft barrier (snowbank, basalt) is
   drawn so that its face meets the wall rather than reaching in. Two tests
   measure all of it every metre along and half a metre across, on every track
-  and its mirror, with what turns looked at as it sweeps:
+  and its mirror, with what turns looked at as it sweeps, and every steep
+  surface (a wall, a hull's side, a trunk) walked over a third of a metre at
+  a time, so a solid whose roof is above 5 m and whose floor is below the
+  road is caught by its sides: Harbour Lights' two ships stood across the
+  start straight and the far straight that way (their sterns on the road,
+  the karts driving through the hull), a palm tree stood in the middle of a
+  finger of the palm island, and the meadow's pond had its reeds on the
+  verge, none of which a surface seen from above could show. The ships are
+  now moored alongside the quay, in the water (`turn` 0, 115 and 120 m out),
+  the pond is a little smaller (0.9) and centred in its hairpin, and a dozen
+  landmarks moved a few metres:
   `src/kart/render/world/corridor.test.ts` (the code-built world, and the
   lower quality tiers' ground and scenery) and `corridor.art.test.ts` (the
   Blender world: `nodeArt.ts` decodes the Draco files in Node and files them
