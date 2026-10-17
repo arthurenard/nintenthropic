@@ -316,6 +316,11 @@ export interface RaceRenderer {
    * Optional: a renderer that does not teach leaves it out.
    */
   setControls?(kinds: Readonly<Record<number, ControlKind>>): void;
+  /**
+   * The most of its resolution the picture may use, 0.5..1 (1 until told): the race gives up pixels while the hand
+   * tracker beside it is short of the GPU (app/handsFirst.ts). Optional: a renderer that cannot leaves it out.
+   */
+  limitResolution?(ceiling: number): void;
   dispose(): void;
 }
 

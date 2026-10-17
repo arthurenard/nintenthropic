@@ -4,8 +4,8 @@
  * The page's code for drawing a race (three.js, the world, the landmarks, the post chain) is about a megabyte that the start
  * screen, the lobby and a phone that is only a wheel never use. These stand-ins have the renderer's own interface and wait
  * until the first `load` (or `show`) to fetch it; what the screen says to them before then (the size, the views, what each
- * driver drives with) is kept and handed over when the real one exists. If the real one cannot be made (no WebGL), `load`
- * rejects with the reason, as the screens already expect of a load that fails.
+ * driver drives with, the resolution's ceiling) is kept and handed over when the real one exists. If the real one cannot
+ * be made (no WebGL), `load` rejects with the reason, as the screens already expect of a load that fails.
  */
 import type { ControlKind, RaceRenderer } from "../contract";
 import type { PodiumEntry, PodiumRenderer } from "../render/podium";
@@ -16,6 +16,7 @@ export function lazyRenderer(make: () => Promise<RaceRenderer>): RaceRenderer {
   let size: [number, number, number] | null = null;
   let views: readonly number[] | null = null;
   let controls: Readonly<Record<number, ControlKind>> | null = null;
+  let ceiling = 1;
   return {
     async load(track, racers, onProgress) {
       const made = await make();
@@ -27,6 +28,7 @@ export function lazyRenderer(make: () => Promise<RaceRenderer>): RaceRenderer {
       if (size) made.resize(...size);
       if (views) made.setViews(views);
       if (controls) made.setControls?.(controls);
+      if (ceiling < 1) made.limitResolution?.(ceiling);
       await made.load(track, racers, onProgress);
     },
     setViews(karts) {
@@ -43,6 +45,10 @@ export function lazyRenderer(make: () => Promise<RaceRenderer>): RaceRenderer {
     setControls(kinds) {
       controls = kinds;
       real?.setControls?.(kinds);
+    },
+    limitResolution(value) {
+      ceiling = value;
+      real?.limitResolution?.(value);
     },
     dispose() {
       disposed = true;

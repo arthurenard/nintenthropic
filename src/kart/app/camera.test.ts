@@ -88,6 +88,7 @@ function parts() {
         start: () => (record.started = true),
         stop: () => {},
         dispose: () => (record.disposed = true),
+        counts: () => ({ frames: 40 * hands, skipped: hands, columns: hands / 2 }),
       } as unknown as Tracker;
     },
   });
@@ -95,6 +96,15 @@ function parts() {
 }
 
 describe("the camera and the tracker behind the wheels", () => {
+  it("says the tracker's counts while there is one, for the race to make room for it", async () => {
+    const { stack } = parts();
+    expect(stack.counts()).toBeNull();
+    await stack.start(6);
+    expect(stack.counts()).toEqual({ frames: 240, skipped: 6, columns: 3 });
+    stack.stop();
+    expect(stack.counts()).toBeNull();
+  });
+
   it("opens the camera once, loads the tracker for the hands asked, and reports the download", async () => {
     const { stack, cameras, trackers, video } = parts();
     const seen: number[] = [];

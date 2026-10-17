@@ -21,6 +21,7 @@ import { layoutViews } from "../render/layout";
 import { PHOTO_GAP, recordDuck, tricksFor } from "./eggs";
 import { itemWords, lapLabel, list, ordinal } from "./format";
 import { FrameRate } from "./graphicsui";
+import { HandsFirst, type TrackerCounts } from "./handsFirst";
 import { LoadingScreen, raceWords } from "./loading";
 import { hostName, kartOf } from "./roster";
 import type { Disposable, RaceSound, Services } from "./services";
@@ -72,6 +73,8 @@ export class RaceScreen {
   private shownViews = "";
   /** What the renderer was last told each kart drives with (as a key). */
   private shownKinds = "";
+  /** The race's resolution while the hand tracker beside it is short of the GPU (handsFirst.ts). */
+  private readonly handsFirst = new HandsFirst();
   private veilKey = "";
   private notesKey = "";
   /** The easter eggs: the last event looked at, the tick it was on, the finishes so far, and the photo finish's still. */
@@ -159,6 +162,7 @@ export class RaceScreen {
     this.stopped = false;
     this.leaving = false;
     this.lostSince = ctx.controls.map(() => null);
+    this.handsFirst.reset();
     $("controller").hidden = true;
     $("race-previews").replaceChildren();
     $("view-notes").replaceChildren();
@@ -307,7 +311,9 @@ export class RaceScreen {
       }
       this.teachItems(lobby);
       this.renderer.frame(view, dt);
-      this.rate.tick(seconds);
+      const hands = this.ctx?.controls.some((control) => control.kind === "wheel") ? (this.services.camera.counts?.() ?? null) : null;
+      this.keepHands(now, hands);
+      this.rate.tick(seconds, hands);
       this.eggs(view, lobby);
     }
     // Heard from the first frame, not from when the picture is ready: the lights count down meanwhile.
@@ -316,6 +322,15 @@ export class RaceScreen {
       this.readouts(view);
       this.eggs(view, lobby);
     }
+  }
+
+  /**
+   * The hands come first: while the tracker reading this screen's wheel players drops camera frames, the race gives up
+   * pixels until it keeps up (handsFirst.ts). A screen with no wheel player on it has nothing to make room for.
+   */
+  private keepHands(now: number, counts: TrackerCounts | null): void {
+    const renderer = this.renderer;
+    if (renderer?.limitResolution && counts && this.handsFirst.sample(counts, now / 1000)) renderer.limitResolution(this.handsFirst.ceiling);
   }
 
   /** The first view tells what this screen shows: the race, or only a controller. */

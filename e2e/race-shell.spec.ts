@@ -473,8 +473,9 @@ test("the real camera with four players: eight hands, a tracker per column, and 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    // MediaPipe's own start-up notes (glog lines, one for each landmarker) are not the page's.
-    if ((message.type() === "warning" || message.type() === "error") && !/^[WI]\d{4} /.test(message.text())) errors.push(message.text());
+    // MediaPipe's own start-up notes (glog lines, one for each landmarker, and TensorFlow Lite's INFO line for each one
+    // on the CPU, as players sharing a camera are read) are not the page's.
+    if ((message.type() === "warning" || message.type() === "error") && !/^([WI]\d{4} |INFO: )/.test(message.text())) errors.push(message.text());
   });
   await returning(page);
   await page.addInitScript(() => localStorage.setItem("handy.kart.you.v1", JSON.stringify({ name: "Maya", drive: "wheel", players: 4 })));

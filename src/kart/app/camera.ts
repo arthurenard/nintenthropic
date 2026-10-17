@@ -15,10 +15,11 @@
  * in size and invisible, and the wheel's picture is drawn from it.
  */
 import { CameraError, cameraPermission, openCamera, type Camera } from "../../tracking/camera";
-import { cameraSize, handConfidence, isCrowd, tilesFor } from "../../tracking/hands";
+import { cameraSize, handConfidence, isCrowd, lanesFor, tilesFor } from "../../tracking/hands";
 import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
 import type { HandFrame, HandSource } from "../../tracking/types";
+import type { TrackerCounts } from "./handsFirst";
 import { CameraFailure, type CameraService } from "./services";
 
 /** A hand source that follows whichever real source is current, so a wheel built early keeps working when the tracker is replaced. */
@@ -192,6 +193,10 @@ export class CameraStack implements CameraService {
     }
   }
 
+  counts(): TrackerCounts | null {
+    return this.tracker?.counts() ?? null;
+  }
+
   stop(): void {
     this.generation++;
     this.source.use(null);
@@ -205,15 +210,23 @@ export class CameraStack implements CameraService {
   }
 }
 
-/** `?tiles=1` in the address reads the whole picture at once even for a crowd (to compare with the tiles on real hands). */
+/**
+ * `?tiles=1` in the address reads the whole picture at once, in one worker, even for two to four players (to compare
+ * with the tiles and their workers on real hands; two players were read that way before).
+ */
 function tilesOverride(): number | null {
   if (typeof location === "undefined") return null;
   const asked = Number(new URLSearchParams(location.search).get("tiles"));
   return Number.isInteger(asked) && asked >= 1 && asked <= 4 ? asked : null;
 }
 
-/** The real tracker for a wheel, with the download's two parts folded into one fraction. */
+/**
+ * The real tracker for a wheel, with the download's two parts folded into one fraction: two or more players sharing the
+ * camera each read in a tile and a worker of their own (lanesFor), and a worker whose landmarker is slow here tries the
+ * other delegate (tracking/adapt.ts).
+ */
 async function loadForWheel(hands: number, progress: (fraction: number) => void): Promise<Tracker> {
+  const tiles = tilesOverride() ?? tilesFor(hands);
   let wasm = 0;
   let model = 0;
   const report = () => progress((wasm * WASM_BYTES + model * MODEL_BYTES) / (WASM_BYTES + MODEL_BYTES));
@@ -228,6 +241,6 @@ async function loadForWheel(hands: number, progress: (fraction: number) => void)
         report();
       },
     },
-    { hands, confidence: handConfidence(hands), tiles: tilesOverride() ?? tilesFor(hands) },
+    { hands, confidence: handConfidence(hands), tiles, lanes: lanesFor(tiles) ?? undefined, adapt: true },
   );
 }

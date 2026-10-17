@@ -29,7 +29,8 @@ export interface SeenHand {
 
 /**
  * What the tracker saw in one camera frame. Published once per new camera
- * frame, never twice for the same one.
+ * frame, never twice for the same one (players read each in a worker of their
+ * own: once per column read, `read` naming it).
  */
 export interface HandFrame {
   /** The first hand's 21 points as the camera sees it (not mirrored), or null when no hand is in view. */
@@ -46,6 +47,13 @@ export interface HandFrame {
   capturedAt: number;
   /** Counts camera frames: a new number is a new frame. */
   sequence: number;
+  /**
+   * The columns of the picture this frame looked at, as spans of its width (0..1, the camera's own picture, as the
+   * landmarks), when players sharing a camera are read each in a worker of their own and a frame brings one column's
+   * news (tracker.ts, lanes): the hands elsewhere are the ones last seen there, not looked for again. Absent: the
+   * whole picture was read.
+   */
+  read?: readonly (readonly [number, number])[];
 }
 
 /**

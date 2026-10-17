@@ -8,6 +8,7 @@ import { $, setText } from "../../ui/dom";
 import { probeStage } from "./driver";
 import { TIER_NAMES, loadCeiling, loadFpsReadout, loadGraphics, saveFpsReadout, saveGraphics, type Graphics, type TierName } from "./prefs";
 import { Segmented, Switch } from "./ui";
+import type { TrackerCounts } from "./handsFirst";
 
 const NAME: Record<Graphics, string> = { auto: "Auto", low: "Low", medium: "Medium", high: "High" };
 
@@ -63,11 +64,15 @@ export class GraphicsControls {
   }
 }
 
-/** The readout's numbers: frames over half a second, so it reads steadily. */
+/**
+ * The readout's numbers: frames over half a second, so it reads steadily, and with a wheel on this screen how many times
+ * a second each player's hands were read ("60 fps · hands 29/s": the camera gives 30).
+ */
 export class FrameRate {
   private frames = 0;
   private seconds = 0;
   private on = false;
+  private handsFrom: TrackerCounts | null = null;
 
   constructor(private readonly element: HTMLElement) {}
 
@@ -76,16 +81,29 @@ export class FrameRate {
     this.element.hidden = !on;
     this.frames = 0;
     this.seconds = 0;
+    this.handsFrom = null;
   }
 
-  /** One drawn frame, `dt` seconds after the one before. */
-  tick(dt: number): void {
+  /** One drawn frame, `dt` seconds after the one before; `hands`, the tracker's running counts while it reads. */
+  tick(dt: number, hands: TrackerCounts | null = null): void {
     if (!this.on || !(dt > 0)) return;
     this.frames++;
     this.seconds += dt;
     if (this.seconds < 0.5) return;
-    setText(this.element, `${Math.round(this.frames / this.seconds)} fps`);
+    setText(this.element, frameRateText(this.frames / this.seconds, hands && this.handsFrom ? readsPerColumn(this.handsFrom, hands, this.seconds) : null));
+    this.handsFrom = hands ? { ...hands } : null;
     this.frames = 0;
     this.seconds = 0;
   }
+}
+
+/** Each player's column's reads a second between two of the tracker's counts; null when they are not one tracker's. */
+export function readsPerColumn(from: TrackerCounts, to: TrackerCounts, seconds: number): number | null {
+  const read = to.frames - from.frames;
+  if (read < 0 || !(seconds > 0)) return null;
+  return read / Math.max(1, to.columns ?? 1) / seconds;
+}
+
+export function frameRateText(fps: number, hands: number | null): string {
+  return hands === null ? `${Math.round(fps)} fps` : `${Math.round(fps)} fps · hands ${Math.round(hands)}/s`;
 }

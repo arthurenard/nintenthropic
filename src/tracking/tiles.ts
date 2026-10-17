@@ -70,6 +70,11 @@ export class TileSchedule {
     return this.empty.map((quiet, i) => quiet < this.after || (frame + i) % this.every === 0);
   }
 
+  /** Whether a tile has gone long enough without a hand to be read only now and then (an empty seat). */
+  quiet(i: number): boolean {
+    return (this.empty[i] ?? 0) >= this.after;
+  }
+
   /** What each tile found on the frame just read: how many hands, or null for a tile that was skipped. */
   record(found: readonly (number | null)[]): void {
     found.forEach((hands, i) => {
@@ -112,13 +117,19 @@ export function untile(hand: SeenHand, tile: Rect, width: number, height: number
 /**
  * What the tiles found, as one picture's hands: each put back in place, and a
  * hand that two tiles both saw (on a line between them) kept once, the
- * surer one. Left to right across the picture.
+ * surer one, or the one tile `fresh` saw (a tile just read, beside others
+ * read a moment ago: tracker.ts, lanes), whose view stands for all it
+ * covers. Left to right across the picture.
  */
-export function joinTiles(found: readonly { tile: Rect; hands: readonly SeenHand[] }[], width: number, height: number): SeenHand[] {
-  const all = found.flatMap(({ tile, hands }) => hands.map((hand) => untile(hand, tile, width, height)));
+export function joinTiles(found: readonly { tile: Rect; hands: readonly SeenHand[] }[], width: number, height: number, fresh = -1): SeenHand[] {
+  const all = found.flatMap(({ tile, hands }, i) => hands.map((hand) => ({ hand: untile(hand, tile, width, height), first: i === fresh ? 1 : 0 })));
   const kept: { hand: SeenHand; at: ReturnType<typeof palm> }[] = [];
-  for (const hand of [...all].sort((a, b) => b.score - a.score)) {
+  const looked = found[fresh]?.tile;
+  for (const { hand, first } of all.sort((a, b) => b.first - a.first || b.hand.score - a.hand.score)) {
     const at = palm(hand, width, height);
+    // Where the fresh tile has just looked (but for its edges), what it did not see is not there: another tile's older
+    // sighting of a hand that has moved since is left out, not kept as a third hand beside the two it found.
+    if (looked && !first && at.x > looked.x + at.size / 2 && at.x < looked.x + looked.width - at.size / 2) continue;
     // The same hand if the palms are less than half a hand apart.
     if (kept.some((other) => Math.hypot(other.at.x - at.x, other.at.y - at.y) < 0.5 * Math.max(other.at.size, at.size))) continue;
     kept.push({ hand, at });

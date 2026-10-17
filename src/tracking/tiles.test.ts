@@ -147,6 +147,48 @@ describe("what the tiles found, joined", () => {
     expect(joined[0]!.score).toBe(0.95);
   });
 
+  it("keeps the one the tile just read saw, over a surer reading another tile made a moment ago", () => {
+    // Players each read in a worker of their own: the first tile's news, beside the second's last reading of the same hand.
+    const a = rects[0]!;
+    const b = rects[1]!;
+    const sameX = 0.26;
+    const fresh = hand((sameX * 1920 - a.x) / a.width, 0.503, 0.7);
+    const old = hand((sameX * 1920 - b.x) / b.width, 0.5, 0.95);
+    const joined = joinTiles(
+      [
+        { tile: a, hands: [fresh] },
+        { tile: b, hands: [old] },
+      ],
+      1920,
+      1080,
+      0,
+    );
+    expect(joined).toHaveLength(1);
+    expect(joined[0]!.score).toBe(0.7);
+    expect(joined[0]!.landmarks[0]!.y).toBeCloseTo(0.503, 5);
+  });
+
+  it("leaves out another tile's older sighting of a hand inside the tile just read, which looked there and did not see it", () => {
+    const a = rects[0]!;
+    const b = rects[1]!;
+    // Player one's outer fist sits in the overlap, seen by both tiles; it has moved since the second tile's reading.
+    const x = (a.x + a.width - 40) / 1920;
+    const fresh = hand((x * 1920 - a.x) / a.width, 0.45, 0.8);
+    const old = hand((x * 1920 - 70 - b.x) / b.width, 0.6, 0.95);
+    const joined = joinTiles(
+      [
+        { tile: a, hands: [fresh] },
+        { tile: b, hands: [old, hand(0.6, 0.5)] },
+      ],
+      1920,
+      1080,
+      0,
+    );
+    // The fresh fist, and the second tile's own hand beyond the first tile; not the old copy.
+    expect(joined).toHaveLength(2);
+    expect(joined.some((one) => one.score === 0.95)).toBe(false);
+  });
+
   it("keeps two different hands side by side", () => {
     const a = rects[1]!;
     const joined = joinTiles([{ tile: a, hands: [hand(0.2, 0.5), hand(0.8, 0.5)] }], 1920, 1080);

@@ -9,12 +9,18 @@
  *
  * The face is read on the same frame after the hand, and its result sent
  * after the hand's: the aim never waits for the eye.
+ *
+ * Players sharing a camera are each read by a worker of their own (tracker.ts,
+ * lanes), handed their column of the picture. Asked to ("try", adapt.ts), a
+ * worker makes a landmarker on the other delegate beside its own, reads frames
+ * with each in turn, and keeps the quicker.
  */
 import type { FaceLandmarker } from "@mediapipe/tasks-vision";
 import { HandLandmarker } from "@mediapipe/tasks-vision";
 import { createFaceLandmarker, eyesFrom, type Fileset } from "./face";
 import type { FromWorker, ToWorker } from "./protocol";
 import { seenHands } from "./hands";
+import { gpuName, isSoftwareGpu } from "../engine/tier";
 import { TileSchedule, joinTiles, tileRects } from "./tiles";
 import type { FaceReading, SeenHand } from "./types";
 
@@ -35,6 +41,106 @@ let face: FaceLandmarker | null = null;
  */
 let later: Fileset | null = null;
 let prefer: "GPU" | "CPU" = "GPU";
+/** The delegate the hand's landmarker runs on. */
+let delegate: "GPU" | "CPU" = "CPU";
+/** Makes another hand landmarker like the first, on a delegate (for a try of the other one). */
+let makeAnother: ((delegate: "GPU" | "CPU") => Promise<HandLandmarker>) | null = null;
+
+/**
+ * A try of the other delegate (protocol "try"): the other landmarker, once made, reads every other camera frame, and
+ * after `frames` frames the quicker of the two is kept. Each keeps following the hands on its own frames.
+ */
+interface Trial {
+  delegate: "GPU" | "CPU";
+  other: HandLandmarker | null;
+  frames: number;
+  turn: number;
+  times: { mine: number[]; other: number[] };
+}
+let trial: Trial | null = null;
+
+const median = (values: number[]): number | null => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
+};
+
+function startTrial(message: Extract<ToWorker, { type: "try" }>): void {
+  // One landmarker reading the whole picture only (a worker with tiles of its own does not try), one try at a time.
+  if (trial || more.length || !makeAnother || message.delegate === delegate) {
+    post({ type: "tried", kept: delegate, times: { GPU: null, CPU: null } });
+    return;
+  }
+  const mine = delegate;
+  const current: Trial = { delegate: message.delegate, other: null, frames: Math.max(4, message.frames), turn: 0, times: { mine: [], other: [] } };
+  trial = current;
+  makeAnother(message.delegate).then(
+    (made) => {
+      if (trial === current) current.other = made;
+      else made.close();
+    },
+    (error: unknown) => {
+      console.warn(`Hand tracking on the ${message.delegate} is unavailable here.`, error);
+      if (trial !== current) return;
+      trial = null;
+      post({ type: "tried", kept: mine, times: { [mine]: null, [message.delegate]: null } as { GPU: null; CPU: null } });
+    },
+  );
+}
+
+/** The landmarker to read this frame with: during a try, the two take turns. Counts the try along. */
+function trialReader(): { landmarker: HandLandmarker; which: "mine" | "other" } {
+  const current = trial;
+  if (!current?.other) return { landmarker: landmarker!, which: "mine" };
+  return current.turn++ % 2 ? { landmarker: current.other, which: "other" } : { landmarker: landmarker!, which: "mine" };
+}
+
+/** Closes a landmarker no longer wanted; one that will not close is let go anyway. */
+function letGo(landmarker: HandLandmarker): void {
+  try {
+    landmarker.close();
+  } catch (error) {
+    console.warn("A hand landmarker could not be closed.", error);
+  }
+}
+
+/**
+ * A frame read during a try: noted, and once there are enough of each, the quicker landmarker is kept. A read that
+ * failed says nothing about speed; one the other landmarker failed ends the try, keeping this one.
+ */
+function trialRead(which: "mine" | "other", ms: number, ok: boolean): void {
+  const current = trial;
+  if (!current?.other) return;
+  if (!ok) {
+    if (which === "mine") return;
+    letGo(current.other);
+    trial = null;
+    const times = { GPU: null as number | null, CPU: null as number | null };
+    post({ type: "tried", kept: delegate, times });
+    return;
+  }
+  current.times[which].push(ms);
+  // The first read of a new landmarker builds its shaders: it is left out.
+  const mine = median(current.times.mine) ?? Infinity;
+  const other = median(current.times.other.slice(1)) ?? Infinity;
+  // Plainly the quicker over a few reads each (twice as quick): no need to wait out the try (a GPU drawn in software reads
+  // in seconds).
+  const plain = current.times.mine.length >= 2 && current.times.other.length >= 3 && (other * 2 < mine || mine * 2 < other);
+  if (!plain && current.times.mine.length + current.times.other.length < current.frames) return;
+  const old = delegate;
+  if (other < mine * 0.85) {
+    letGo(landmarker!);
+    landmarker = current.other;
+    delegate = current.delegate;
+  } else {
+    letGo(current.other);
+  }
+  trial = null;
+  const times = { GPU: null as number | null, CPU: null as number | null };
+  times[old] = mine;
+  times[current.delegate] = Number.isFinite(other) ? other : null;
+  post({ type: "tried", kept: delegate, times });
+}
 
 const post = (message: FromWorker) => scope.postMessage(message);
 
@@ -51,6 +157,16 @@ async function addFace(model: ArrayBuffer, files: Fileset | null = later): Promi
   face?.close();
   face = made.landmarker;
   return made.delegate;
+}
+
+/** Whether this worker's WebGL is drawn in software (SwiftShader, llvmpipe...). */
+function softwareGpu(): boolean {
+  try {
+    const gl = new OffscreenCanvas(1, 1).getContext("webgl2") ?? new OffscreenCanvas(1, 1).getContext("webgl");
+    return gl ? isSoftwareGpu(gpuName(gl)) : false;
+  } catch {
+    return false;
+  }
 }
 
 async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void> {
@@ -74,8 +190,10 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
       baseOptions: { modelAssetBuffer: new Uint8Array(message.model), delegate },
     });
   try {
-    let delegate: "GPU" | "CPU" = "CPU";
-    if (message.prefer === "GPU") {
+    delegate = "CPU";
+    // A GPU that is the CPU drawing (a blocklisted driver's fallback) reads a hand in seconds where the CPU takes tens of ms.
+    if (message.prefer === "GPU" && softwareGpu()) console.info("The GPU here is drawn in software: hand tracking runs on the CPU.");
+    else if (message.prefer === "GPU") {
       try {
         landmarker = await create("GPU");
         delegate = "GPU";
@@ -84,6 +202,13 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
       }
     }
     landmarker ??= await create("CPU");
+    makeAnother = async (other) => {
+      // As for the tiles below: the runtime's factory again, and the site's files (cached by now).
+      const loader = (await import(/* @vite-ignore */ files.wasmLoaderPath)) as { default?: unknown };
+      const global = self as unknown as { ModuleFactory?: unknown };
+      global.ModuleFactory ??= loader.default;
+      return create(other, later!);
+    };
     if (tiles > 1) {
       // A landmarker for each tile after the first. Each starts its own copy of the runtime,
       // handed the factory again (see addFace), from the site's files, which are cached by now.
@@ -134,24 +259,42 @@ function readTiles(image: VideoFrame | ImageBitmap, timestamp: number): SeenHand
   return joinTiles(found, width, height);
 }
 
+/** A part of the picture, drawn on a canvas of its own (where the page could not cut the frame itself). */
+function cropped(image: VideoFrame | ImageBitmap, crop: { x: number; y: number; width: number; height: number }): OffscreenCanvas {
+  let canvas = tileCanvases[0];
+  if (!canvas || canvas.width !== crop.width || canvas.height !== crop.height) canvas = tileCanvases[0] = new OffscreenCanvas(crop.width, crop.height);
+  canvas.getContext("2d")!.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  return canvas;
+}
+
 function read(message: Extract<ToWorker, { type: "frame" }>): void {
   const began = performance.now();
   let hands: SeenHand[] = [];
   const withFace = message.face === true && face !== null;
+  let which: "mine" | "other" = "mine";
+  let ok = true;
   try {
-    hands = more.length ? readTiles(message.image, message.timestamp) : seenHands(landmarker!.detectForVideo(message.image, message.timestamp));
+    if (more.length) hands = readTiles(message.image, message.timestamp);
+    else {
+      const reader = trialReader();
+      which = reader.which;
+      hands = seenHands(reader.landmarker.detectForVideo(message.crop ? cropped(message.image, message.crop) : message.image, message.timestamp));
+    }
   } catch (error) {
     // One bad frame (a camera mid-reconfiguration) is skipped, not fatal.
+    ok = false;
     console.warn("A camera frame could not be read.", error);
   }
+  const inference = performance.now() - began;
   post({
     type: "result",
     sequence: message.sequence,
     capturedAt: message.capturedAt,
     hands,
-    inference: performance.now() - began,
+    inference,
     face: withFace,
   });
+  trialRead(which, inference, ok);
   if (withFace) {
     const faceBegan = performance.now();
     let eyes: FaceReading | null = null;
@@ -173,6 +316,8 @@ scope.onmessage = (event: MessageEvent<ToWorker>) => {
       (delegate) => post({ type: "face-ready", delegate }),
       (error: unknown) => post({ type: "face-failed", message: String(error) }),
     );
+  } else if (message.type === "try") {
+    startTrial(message);
   } else if (message.type === "frame") {
     if (landmarker) read(message);
     else message.image.close();

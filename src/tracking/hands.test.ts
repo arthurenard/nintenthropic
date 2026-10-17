@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraSize, handConfidence, handsFor, isCrowd, seenHands, tilesFor } from "./hands";
+import { cameraSize, handConfidence, handsFor, isCrowd, lanesFor, seenHands, tilesFor } from "./hands";
 import type { Landmark } from "./types";
 
 const points = (x: number, z = 0): Landmark[] => Array.from({ length: 21 }, (_, i) => ({ x: x + i / 100, y: 0.5, z }));
@@ -61,15 +61,23 @@ describe("hands for the players on one camera", () => {
   it("is less certain, and asks the camera for more pixels, only for three or four players", () => {
     for (const hands of [1, 2, 4]) {
       expect(isCrowd(hands)).toBe(false);
-      expect(tilesFor(hands)).toBe(1);
       expect(handConfidence(hands)).toBe(0.5);
       expect(cameraSize(hands)).toEqual({ width: 1280, height: 720 });
     }
     for (const hands of [6, 8]) {
       expect(isCrowd(hands)).toBe(true);
-      expect(tilesFor(hands)).toBe(hands / 2);
       expect(handConfidence(hands)).toBe(0.4);
       expect(cameraSize(hands)).toEqual({ width: 1920, height: 1080 });
     }
+  });
+
+  it("reads each of two or more players in a tile and a worker of their own, the first on the GPU and the rest on the CPU", () => {
+    expect([2, 4, 6, 8].map(tilesFor)).toEqual([1, 2, 3, 4]);
+    expect(lanesFor(1)).toBeNull();
+    expect(lanesFor(2, 8)).toEqual(["GPU", "CPU"]);
+    expect(lanesFor(3, 8)).toEqual(["GPU", "CPU", "CPU"]);
+    // Four, with the cores for four workers on the CPU: no GPU worker beside four views.
+    expect(lanesFor(4, 16)).toEqual(["CPU", "CPU", "CPU", "CPU"]);
+    expect(lanesFor(4, 4)).toEqual(["GPU", "CPU", "CPU", "CPU"]);
   });
 });

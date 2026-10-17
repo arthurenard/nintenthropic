@@ -136,6 +136,18 @@ export function seatZone(seat: Seat): readonly [number, number] {
   return [seat.index / seat.of, (seat.index + 1) / seat.of];
 }
 
+/**
+ * Whether a frame looked at this seat's column: a frame that read only other players' columns (each read in a worker
+ * of its own, HandFrame.read) brings this player no news, not a picture without their hands.
+ */
+export function readsSeat(frame: HandFrame, seat: Seat | null): boolean {
+  if (!frame.read || !seat) return true;
+  const [from, to] = seatZone(seat);
+  // The column's middle in the camera's own picture (the zones are in the mirrored one).
+  const middle = 1 - (from + to) / 2;
+  return frame.read.some(([a, b]) => a <= middle && middle <= b);
+}
+
 /** The seat a half is: the left or the right of two. */
 export function halfSeat(half: "left" | "right"): Seat {
   return { index: half === "left" ? 0 : 1, of: 2 };
@@ -250,6 +262,7 @@ export class WheelReader {
    * hands have gone.
    */
   push(frame: HandFrame, at: number = frame.capturedAt): void {
+    if (!readsSeat(frame, this.seat)) return;
     const t = this.advance(at);
     const seen = this.assign(this.candidates(frame, t), t);
     for (const side of ["left", "right"] as const) {

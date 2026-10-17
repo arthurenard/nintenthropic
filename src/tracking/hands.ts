@@ -23,9 +23,28 @@ export function handConfidence(hands: number): number {
   return isCrowd(hands) ? 0.4 : 0.5;
 }
 
-/** How many side-by-side tiles the picture is read in: one for each player once three or four share the camera (tiles.ts), else the whole picture. */
+/**
+ * How many side-by-side tiles the picture is read in: one for each player once two or more share the camera (tiles.ts),
+ * else the whole picture. Two players' tiles give each palm nearly twice the pixels in MediaPipe's palm detector (a
+ * tile 0.56 of the picture wide is squeezed into its 192-pixel square instead of all of it), and are read side by side.
+ */
 export function tilesFor(hands: number): number {
-  return isCrowd(hands) ? hands / 2 : 1;
+  return hands >= 4 ? Math.floor(hands / 2) : 1;
+}
+
+/**
+ * The worker each tile is read in, and its delegate (tracker.ts, lanes), all at once: the first on the GPU and the others
+ * on the CPU, or for four players, on a machine with the cores for it, all on the CPU. Landmarkers on the GPU beside a
+ * race take turns on it with the race and with each other. Measured on an M4 Max beside as many views as players
+ * (docs/GRIP_PRIX.md, Performance): three players read by one worker, tile after tile, 10.3 reads a second each; a
+ * worker each all on the GPU, 4.8; the first on the GPU and the others on the CPU, with the race giving up pixels for
+ * them (app/handsFirst.ts), 22.5 to 25.2. Four: 7 by one worker; 21.5 to 22.3 once all four were on the CPU, 11.3 with
+ * one left on the GPU. Null for the whole picture.
+ */
+export function lanesFor(tiles: number, cores: number = typeof navigator === "undefined" ? 8 : navigator.hardwareConcurrency || 4): ("GPU" | "CPU")[] | null {
+  if (tiles <= 1) return null;
+  const allCpu = tiles >= 4 && cores >= 8;
+  return Array.from({ length: tiles }, (_, i) => (i === 0 && !allCpu ? "GPU" : "CPU"));
 }
 
 /** The camera size asked for: 1920x1080 for a crowd (so small hands keep their pixels), else 1280x720. */
