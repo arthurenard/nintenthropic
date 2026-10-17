@@ -14,7 +14,7 @@ import { $, announce, element, setText } from "../../ui/dom";
 import { cupById } from "../grandprix";
 import { wonCup } from "../unlocks";
 import { earnedTracks } from "./lobby";
-import { hostName, localPlayers } from "./roster";
+import { hostName, localPlayers, showsRace } from "./roster";
 import type { Services } from "./services";
 import { colourDot, focusHeading } from "./ui";
 import "./grandprix.css";
@@ -114,7 +114,7 @@ export class PodiumScreen {
     announce(winner ? `${winner.name} wins the ${cup.name}.` : "The podium.");
 
     // A phone that is only a wheel (its race is on the host's big screen) shows the standings, not the ceremony: that is the big screen's.
-    this.ceremony(gp.points.slice(0, 3), session.views().length > 0);
+    this.ceremony(gp.points.slice(0, 3), showsRace(lobby, session.device));
   }
 
   /** The 3D podium behind it all, if the browser can draw it and this screen shows the race. */

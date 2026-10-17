@@ -67,6 +67,16 @@ export function screenLabel(player: LobbyPlayer, device: string): string {
   return player.device === device ? "This screen" : "Their screen";
 }
 
+/**
+ * True when this device shows a race: some player's `screen` is it (its own
+ * players', or the host's big screen for those who chose it). A phone that
+ * is only a wheel does not. Unlike `Session.views()`, it holds outside a
+ * race too (the podium asks it).
+ */
+export function showsRace(lobby: LobbyState, device: string): boolean {
+  return lobby.players.some((player) => player.screen === device);
+}
+
 /** One line of the standings, ready to draw. */
 export interface StandingRow {
   kart: number;

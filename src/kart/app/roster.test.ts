@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LobbyPlayer, LobbyState, RaceResult, RacerSetup } from "../contract";
-import { canStart, hostName, kartOf, localPlayers, previewColours, screenLabel, standingRows, waitingLine } from "./roster";
+import { canStart, hostName, kartOf, localPlayers, previewColours, screenLabel, showsRace, standingRows, waitingLine } from "./roster";
 
 const player = (slot: number, name: string, device: string, extra: Partial<LobbyPlayer> = {}): LobbyPlayer => ({
   slot,
@@ -59,6 +59,20 @@ describe("the room", () => {
     const mixed = lobby([player(0, "Maya", "host"), player(1, "Sam", "phone", { screen: "host" }), player(2, "Lu", "tablet")]);
     expect(mixed.players.map((p) => screenLabel(p, "host"))).toEqual(["This screen", "Big screen", "Their screen"]);
     expect(mixed.players.map((p) => screenLabel(p, "tablet"))).toEqual(["Their screen", "Big screen", "This screen"]);
+  });
+
+  it("knows which devices show a race, after it as well as during it (the podium's ceremony)", () => {
+    const podium = { phase: "podium" as const };
+    const mixed = lobby([player(0, "Maya", "host"), player(1, "Sam", "phone", { screen: "host" }), player(2, "Lu", "tablet")], podium);
+    expect(showsRace(mixed, "host")).toBe(true);
+    expect(showsRace(mixed, "tablet")).toBe(true);
+    // A phone that is only a wheel: its race was on the host's big screen.
+    expect(showsRace(mixed, "phone")).toBe(false);
+    // A big screen with no players of its own still shows the race of those who chose it.
+    const watched = lobby([player(0, "Sam", "phone", { screen: "host" }), player(1, "Lu", "phone", { screen: "host" })], podium);
+    expect(showsRace(watched, "host")).toBe(true);
+    expect(showsRace(watched, "phone")).toBe(false);
+    expect(showsRace(lobby([player(0, "Maya", "solo")], podium), "solo")).toBe(true);
   });
 });
 
