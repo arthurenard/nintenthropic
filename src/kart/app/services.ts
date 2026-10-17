@@ -11,6 +11,7 @@
 import type { KartSound, MusicKind } from "../audio";
 import type { DriverControl, RaceRenderer, RaceView, Session, SessionClosed, TrackDef } from "../contract";
 import type { PodiumRenderer } from "../render/podium";
+import type { TrackerCounts } from "./handsFirst";
 
 // --- the room --------------------------------------------------------------------------------------------
 
@@ -127,6 +128,11 @@ export interface CameraService {
   start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void>;
   /** Lets the camera go. */
   stop(): void;
+  /**
+   * The tracker's running counts while it reads: frames read, and frames dropped because a worker was still busy (for
+   * the race to make room for it, handsFirst.ts). Null with no tracker; absent where there is no real one.
+   */
+  counts?(): TrackerCounts | null;
 }
 
 // --- sound ---------------------------------------------------------------------------------------------------

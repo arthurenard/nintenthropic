@@ -149,11 +149,13 @@ typed, or by scanning the QR code on the host's screen, which opens
   sharing one camera, standing side by side: the mirrored picture is split
   into that many vertical columns, left to right, and a hand belongs to the
   player whose column holds its palm. A hand that strays within 2% of a line
-  stays its player's until it is clearly across. With three or four the
-  tracker looks for six or eight hands at a lower confidence (0.4 instead of
-  0.5) and the camera is asked for 1920x1080; the wheel check and the race
-  show one picture with the columns marked in the players' colours. The
-  host's screen is the big screen by default. The room still holds four.
+  stays its player's until it is clearly across. From two players up each
+  column is read in a tile of the picture and a worker of its own, all at
+  once (see Input). With three or four the tracker looks for six or eight
+  hands at a lower confidence (0.4 instead of 0.5) and the camera is asked
+  for 1920x1080; the wheel check and the race show one picture with the
+  columns marked in the players' colours. The host's screen is the big
+  screen by default. The room still holds four.
 - **Practice** is a room with no one else, and never touches the network.
 
 The camera picture never leaves the device. What goes over the network is
@@ -293,6 +295,49 @@ only those karts' physics against the world as it is.
   handedness and score. `landmarks` stays the first hand's, so the shooting
   games are unchanged; they keep looking for one hand. Grip Prix asks the
   tracker for two (four, six or eight for two, three or four on one camera).
+- **Players sharing a camera** (`tracking/tracker.ts`, `LaneTracker`). From
+  two players up the picture is cut into one tile per player (`tiles.ts`, a
+  column reaching 6% into its neighbours) and each tile is read by a worker
+  of its own looking for two hands (`lanesFor`): the first on the GPU, the
+  others on the CPU, side by side (four players, on a machine of eight cores
+  or more, all on the CPU). The page hands each worker its column as
+  a VideoFrame cut to it (`visibleRect`, no copy; a browser that cannot cut
+  one sends the whole frame and the worker cuts it). A worker says what it
+  found as soon as it has, and a frame is published for that column alone:
+  `HandFrame.read` names the columns it looked at, the other columns' hands
+  are the ones last seen there, and a seated wheel takes a frame that did
+  not read its column for no news (`readsSeat`), neither hands gone nor
+  hands held still. A hand two tiles both saw is kept once, the column just
+  read winning, and inside that column (but for its edges) a neighbour's
+  older sighting of a hand it did not see is left out. An empty seat's column is read on every third frame
+  (`TileSchedule`). Two players' tiles give each palm nearly twice the
+  pixels in MediaPipe's 192-pixel palm detector, and one player hunting for
+  a lost hand no longer slows the other's reads.
+- **Which delegate** (`tracking/adapt.ts`). A worker whose WebGL is drawn
+  in software (SwiftShader, llvmpipe: what a browser falls back to when the
+  graphics driver is blocklisted, as on many older laptops; `isSoftwareGpu`)
+  starts on the CPU, whatever was asked: there a GPU read takes seconds. A
+  worker whose landmarker has taken more than 40 ms a frame (the median of
+  a second and a half of reading) is asked to try the other delegate: it
+  makes a second landmarker, the two read frames in turn for 24 frames (or
+  until one is plainly twice as quick), and the quicker is kept (by 15% or
+  more; a landmarker that fails a read loses); not asked again for a minute
+  (twice as long after each try that changed nothing, up to eight), one
+  worker at a time, and a CPU worker does not try the GPU while another
+  worker has it. Grip Prix asks for the tries; the shooting games do not.
+- **The hands first** (`app/handsFirst.ts`). Every read ends by fetching the
+  landmarker's answer back from the GPU, behind whatever the race has asked
+  it to draw. While the tracker drops more than a quarter of the frames it
+  wanted (for a second), the race's resolution comes down a step (0.1, to
+  0.6 at the lowest: `RaceRenderer.limitResolution`, on top of dynamic
+  resolution); with three seconds of room it goes back up 0.05, and a step
+  up that brings the drops back is undone and left alone for a while. Steps
+  down that did not help (at 0.6 the tracker reads no larger a share than in
+  the two seconds before the first) are undone, so the picture never pays
+  for nothing. A frame counts as wanted at a reading's pace, thirty a second
+  (a 60 fps camera's in-between frames are not drops), and only for seats
+  being played (an empty seat's column, read every third frame, is left
+  out); the same counts give the Frame Rate readout its "hands N/s".
 - **The wheel.** Palm centre = mean of landmarks 0, 5, 9, 13, 17, mirrored
   (as the player sees themself). The two hands are told apart by side, then
   kept by continuity (each frame's nearest to the last), so a wheel turned
@@ -391,7 +436,10 @@ a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels
 - `same.mjs`: proves an optimisation leaves the picture alone (the same moment redrawn through the post chain with it
   off and on, canvases compared). `shots.mjs`: the same posed still from two dev pages at each tier, with the
   difference in 8-bit levels.
-- `tracking.mjs`: the hand tracker for 1 to 4 players on one camera (`e2e/tracker.html`).
+- `tracking.mjs`: the hand tracker for 1 to 4 players on one camera (`e2e/tracker.html`), before and after the workers
+  per player. `trackrace.mjs`: the tracker beside a race (`e2e/trackrace.html`), 1 to 4 players each beside as many
+  views, before and after, alternating rounds (`--rounds n`), `--soft` on a software GPU. Their pictures: a hand photo
+  per player, or two fists per player (`e2e/crowd.js`, `?players=N`).
 - A worktree whose `node_modules` is a link needs a Vite config that adds the real `node_modules` to `server.fs.allow`,
   or Three's Draco decoder is refused (403) and every Blender model falls back to its code-built stand-in.
 
@@ -480,9 +528,56 @@ runs, the M4 Max at 1440x900@2). Measured when hand recognition felt worse than 
 - Not worth it, measured: a lower tier (no change), a lower resolution (63 to 48 ms at 0.65), drawing the race at 30 or
   20 fps (45 or 36 ms, reads 14 to 18 a second), a second tracking worker (alone 31 to 19 ms, beside the race 62 to
   46 ms, still 13 reads a second): the race's frames and the tracker take turns on the GPU, and the turns, not the
-  pixels, are the cost.
+  pixels, are the cost. (Each of these alone; a worker per player with all but one on the CPU, and the race giving up
+  pixels for them, together, are what worked: see below.)
 - A seat that lost its hands (opening them to brake, a fast turn) is read on every frame for the next 30 reads, about
   a second, before an empty seat goes to every third (`QUIET_AFTER`), so it is found again on the very next frame.
+
+**Several players on one camera: a worker each, and the race makes room** (`tools/perf/trackrace.mjs` and
+`tracking.mjs` compare the tracker as it was, "before", with how the game runs it now, "after"; rounds alternate).
+Measured when three players side by side did not work well on the M4 Max, and two did not on an older laptop.
+
+- Every read ends by fetching the landmarker's answer back from the GPU: the palm detector's, then each hand's, one
+  after another. MediaPipe takes every picture in as a WebGL texture whatever the delegate, so the CPU delegate waits
+  on the GPU too. Each fetch waits behind whatever the race has asked the GPU to draw, so what a read costs beside a
+  race is set by the race's load on the GPU far more than by the landmarker's own work. Three CPU landmarkers took
+  87 ms a read beside three views at the high tier, 53 beside one view, 33 beside three views at the low tier (the
+  race drawing the code-built stand-ins in all three).
+- Three players, three views, high tier (a first, single-round matrix, the race drawing the stand-ins): one worker
+  reading the three tiles one after another, 10.9 reads a second for each player, 79 ms behind the camera; a worker
+  per tile all on the GPU, 4.8 reads a second (the three contexts and the race take turns on the GPU and all slow
+  down); one on the GPU and two on the CPU, 11.7 and 62 ms; the same with the race at 0.6 of its resolution, or at
+  the medium tier, 25.8 and 40 ms. One worker gains nothing from the lighter race (11.8 and 74 ms at 0.6): its reads
+  are one after another whatever the GPU is doing. The workers and the lighter race are worth something only
+  together.
+- Two players: about 29 reads a second and 38 to 40 ms behind with one worker on the whole picture or a worker each,
+  at either resolution, on this machine. Their tiles are still worth it: each palm gets nearly twice the pixels in the
+  palm detector, and one player hunting for a lost hand (the detector runs on every frame until it is found) no longer
+  slows the other.
+- Before and after, with the Blender art, meadow-loop at the high tier, 1440x900 at 2x (`trackrace.mjs --rounds 2`,
+  both rounds: how many times a second each player's hands were read, and how far behind the camera, p50; the race
+  held 60 fps in every case; "ceiling" is where the race's resolution settled, "workers" the delegates they ended on):
+
+| players, views | before | after | ceiling, workers |
+| --- | --- | --- | --- |
+| 1, 1 | 29.3 a second, 30 to 40 ms | 29.0 to 29.4, 30 to 40 ms | 1, GPU |
+| 2, 2 | 29.2 to 29.4, 39 ms | 29.3, 41 to 42 ms | 1, GPU + CPU |
+| 3, 3 | 10.3, 87 to 88 ms (p95 107 to 109) | 22.5 to 24.6, 39 to 41 ms (p95 55 to 61) | 0.7 to 0.8, GPU + 2 CPU |
+| 4, 4 | 7.0 to 7.5, 121 to 124 ms (p95 143 to 157) | 21.5 to 22.3, 42 ms (p95 58) | 0.6 to 0.7, 4 CPU |
+
+- With four, the GPU worker tried the CPU and kept it (`adapt.ts`) in both rounds, and more of the picture's fists were
+  found on each frame (5.9 of 8 instead of 4.4: a hand read often is followed, not searched for again). In a third
+  run it stayed on the GPU and everyone's reads halved (11.3 a second), so four players now start all on the CPU: 21.3
+  a second, 42 ms, the race at 0.6 and 60 fps. On a machine loaded by other work (load average 48), four players read
+  3.2 times a second, 196 ms behind, before, and 15.0, 52 ms, after.
+
+- So: from two players up, a tile and a worker each (`lanesFor`: the first on the GPU, the others on the CPU; all four
+  on the CPU for four players, where one left on the GPU halved everyone's reads: 11.3 a second instead of 22), each
+  publishing as soon as it has read; a slow worker tries the other delegate (`adapt.ts`), for the machine where the
+  CPU is the quicker; and while the tracker drops frames the race gives up pixels (`handsFirst.ts`), down to 0.6 of
+  its resolution, and takes them back when the tracker has room. Not measured on the older laptop itself: the
+  adaptation is there so that it finds its own balance, and the Frame Rate readout says what it got ("60 fps · hands
+  29/s").
 
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
@@ -508,8 +603,8 @@ drivers' models, Draco's decoder, three transient WebGL contexts) before it know
 **Next.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); caster culling for the shadow pass (karts behind a view's camera, 23% of the draw calls at four views are
 the shadow pass); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
-merging the track's road, kerb and verge meshes beyond 150 m; a second tracking worker so four seated players read in
-parallel.
+merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
+tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
 
 ## App (`race.html`, `src/kart/app/`, `src/kart/main.ts`)
 
@@ -614,7 +709,11 @@ The arcade (`index.html`) gains a heading per kind of game: **Shooting**
   rules), the safety net's watch and its ceiling in prefs, the per-view culling of
   instances (everything the frustum reaches is drawn once with its colour, a buffer is
   rewritten only when its cells change), the tracker's tile schedule, the lazy
-  renderers. Pictures and timings are `tools/perf/` (not run by CI).
+  renderers, the workers per player (`lanesFor`, a frame for one column is no news
+  to another player's wheel, the column just read wins a shared hand), the try of
+  the other delegate (`adapt.ts`) and the hands first (`handsFirst.ts`: steps down
+  while frames drop, undone when they do not help, back up with room). Pictures and
+  timings are `tools/perf/` (not run by CI).
 - End to end (Playwright, `?net=local`, muted): a host and two guests in tabs
   of one browser join by code, drive by keyboard and finish a one-lap race;
   practice against bots; the arcade's Racing heading opens the page.

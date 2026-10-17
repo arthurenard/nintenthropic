@@ -19,9 +19,17 @@ export interface TierHints {
 /** Cores that only a Pro, Max or Ultra Apple chip has (an M4 Pro: 12 to 14; a base M4: 10). */
 const BIG_APPLE_CORES = 12;
 
+/**
+ * A GPU that is really the CPU drawing (SwiftShader, llvmpipe, Windows' Basic Render Driver): what a browser falls back
+ * to when the graphics driver is blocklisted, as on many older laptops.
+ */
+export function isSoftwareGpu(gpu: string): boolean {
+  return /swiftshader|llvmpipe|software|basic render/.test(gpu.toLowerCase());
+}
+
 export function guessTier(gpu: string, cores = 8, hints: TierHints = {}): Quality["tier"] {
   const name = gpu.toLowerCase().replace(/\((r|tm)\)/g, "");
-  if (/swiftshader|llvmpipe|software|basic render/.test(name)) return "low";
+  if (isSoftwareGpu(name)) return "low";
   // Phones' GPUs; but Qualcomm's laptop part (Adreno X1) is a laptop GPU.
   if (/mali|adreno(?! x\d)|powervr|videocore/.test(name)) return "low";
   let tier: Quality["tier"] = "medium";

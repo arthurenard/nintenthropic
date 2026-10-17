@@ -29,6 +29,15 @@ export type ToWorker =
       model: ArrayBuffer;
     }
   | {
+      /**
+       * Try the other delegate (DelegateWatch, adapt.ts): the worker makes a landmarker on `delegate` beside its own,
+       * reads the next `frames` camera frames with each in turn, keeps the quicker and says which ("tried").
+       */
+      type: "try";
+      delegate: "GPU" | "CPU";
+      frames: number;
+    }
+  | {
       type: "frame";
       image: VideoFrame | ImageBitmap;
       /** Strictly increasing, in ms, as the landmarkers insist. */
@@ -37,6 +46,11 @@ export type ToWorker =
       sequence: number;
       /** Read the face on this frame too (after the hand, whose result goes first). */
       face?: boolean;
+      /**
+       * Read only this part of the picture, px (a column for one of several players, where the browser could not cut
+       * the VideoFrame to it itself): the hands come back in the part's own picture, as from a cut frame.
+       */
+      crop?: { x: number; y: number; width: number; height: number };
     };
 
 export type FromWorker =
@@ -44,6 +58,8 @@ export type FromWorker =
   | { type: "failed"; message: string }
   | { type: "face-ready"; delegate: "GPU" | "CPU" }
   | { type: "face-failed"; message: string }
+  /** A try of the other delegate is over: the one kept, and the median time each took, ms (null: it could not be made). */
+  | { type: "tried"; kept: "GPU" | "CPU"; times: { GPU: number | null; CPU: number | null } }
   | {
       type: "result";
       sequence: number;

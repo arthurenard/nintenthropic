@@ -14,6 +14,7 @@ import "../../ui/base.css";
 import "../../app/settings.css";
 import "./dev.css";
 import { CameraError, openCamera, type Camera } from "../../tracking/camera";
+import { lanesFor, tilesFor } from "../../tracking/hands";
 import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { $, element, replay, setText } from "../../ui/dom";
 import type { WheelStatus } from "../contract";
@@ -353,10 +354,11 @@ let levelRing: SVGElement | null = null;
 const arrivals: number[] = [];
 let stopCounting: (() => void) | null = null;
 
+/** Frames read a second, for each player's column (two players each read in a worker of their own publish a frame each). */
 function fps(): number {
   const now = performance.now();
   while (arrivals.length && now - arrivals[0]! > 1000) arrivals.shift();
-  return arrivals.length;
+  return Math.round(arrivals.length / (tracker?.counts().columns ?? 1));
 }
 
 // ─── Each animation frame ─────────────────────────────────────────────────────
@@ -443,6 +445,8 @@ async function start(): Promise<void> {
     const progress = () => {
       if (blocking && mine === generation) blocking = { title: "Getting ready…", detail: `${Math.round(((wasm * 11.8 + model * 7.8) / 19.6) * 100)}%` };
     };
+    const hands = state.two ? 4 : 2;
+    const tiles = tilesFor(hands);
     const loaded = await loadTracker(
       {
         wasm: (fraction) => {
@@ -454,8 +458,8 @@ async function start(): Promise<void> {
           progress();
         },
       },
-      // Two hands for one wheel, four for two wheels on one camera.
-      { hands: state.two ? 4 : 2 },
+      // Two hands for one wheel, four for two wheels on one camera, read as the game reads them (a tile and a worker each).
+      { hands, tiles, lanes: lanesFor(tiles) ?? undefined, adapt: true },
     );
     if (mine !== generation) {
       loaded.dispose();

@@ -48,7 +48,12 @@ import { seenHands } from "./hands";
 import type { LandmarkerProgress } from "./landmarker";
 import { FACE_MODEL_BYTES, MODEL_BYTES, WASM_BYTES } from "./sizes";
 import type { FromWorker, ToWorker } from "./protocol";
+import { TileSchedule, joinTiles, tileRects, type Rect } from "./tiles";
+import { DelegateWatch, TRY_FRAMES, Trials } from "./adapt";
 import type { FaceFrame, FaceReading, HandFrame, HandSource, SeenHand } from "./types";
+
+/** Frames closer together than this (ms) are more than a reading thirty times a second needs (a 60 fps camera's). */
+const WANTED_GAP = 30;
 
 export interface TrackerStats {
   frames: number;
@@ -80,6 +85,11 @@ export interface Tracker extends HandSource {
    */
   readonly frameAt: number;
   stats(): TrackerStats;
+  /**
+   * Frames read and due frames dropped since the start, and the columns read each in a worker of their own (frames
+   * count each column's reads): cheap enough to ask every animation frame (stats() sorts).
+   */
+  counts(): { frames: number; skipped: number; columns: number };
   resetStats(): void;
   dispose(): void;
   /** The face landmarker is loaded (for a game that reads the eye). */
@@ -114,6 +124,19 @@ abstract class BaseTracker implements Tracker {
   protected frames = 0;
   protected framesWithHand = 0;
   protected skipped = 0;
+  /** As frames and skipped, never reset (resetStats is the benches'; the race watches these: handsFirst.ts). */
+  private totalFrames = 0;
+  private totalSkipped = 0;
+
+  /**
+   * A due camera frame dropped because the worker reading it was still busy, `since` ms after the frame it is reading.
+   * The benches' `skipped` counts every one; `counts()` only those a reading thirty times a second would have wanted
+   * (a camera at 60 fps hands over two frames for every one a tracker needs), and `counted` false leaves it out there.
+   */
+  protected drop(since: number, counted = true): void {
+    this.skipped++;
+    if (counted && since >= WANTED_GAP) this.totalSkipped++;
+  }
   private readonly faceListeners = new Set<(face: FaceFrame) => void>();
   /** Read the face on every this-many camera frames; 0 not at all. */
   protected faceEvery = 0;
@@ -188,6 +211,15 @@ abstract class BaseTracker implements Tracker {
     };
   }
 
+  counts(): { frames: number; skipped: number; columns: number } {
+    return { frames: this.totalFrames, skipped: this.totalSkipped, columns: this.columns };
+  }
+
+  /** The columns read each in a worker of their own: one, but for a LaneTracker. */
+  protected get columns(): number {
+    return 1;
+  }
+
   resetStats(): void {
     this.inference.clear();
     this.delay.clear();
@@ -212,8 +244,9 @@ abstract class BaseTracker implements Tracker {
     return this.lastTimestamp;
   }
 
-  protected publish(hands: SeenHand[], capturedAt: number): void {
+  protected publish(hands: SeenHand[], capturedAt: number, read?: HandFrame["read"]): void {
     this.frames++;
+    this.totalFrames++;
     if (hands.length) this.framesWithHand++;
     this.delay.push(performance.now() - capturedAt);
     // landmarks and handedness stay the first hand's, as the shooting games read them.
@@ -224,6 +257,7 @@ abstract class BaseTracker implements Tracker {
       hands,
       capturedAt,
       sequence: ++this.sequence,
+      ...(read ? { read } : {}),
     };
     this.newest = frame;
     for (const listener of this.listeners) listener(frame);
@@ -262,25 +296,50 @@ abstract class BaseTracker implements Tracker {
 class WorkerTracker extends BaseTracker {
   readonly where = "worker" as const;
   private busy = false;
+  /** When the frame being read (or last read) was taken, ms. */
+  private sentAt = -Infinity;
+  /** Learns which delegate is quicker here (adapt.ts), when asked to; null otherwise. */
+  private readonly watch: DelegateWatch | null;
 
   constructor(
     private readonly worker: Worker,
-    readonly delegate: "GPU" | "CPU",
+    delegate: "GPU" | "CPU",
     public hasFace: boolean,
+    adapt = false,
   ) {
     super();
+    this.watch = adapt ? new DelegateWatch(delegate) : null;
+    this.started = delegate;
     worker.addEventListener("message", (event: MessageEvent<FromWorker>) => {
       const message = event.data;
       if (message.type === "result") {
         // With a face to follow, the worker is busy until it comes.
         if (!message.face) this.busy = false;
         this.inference.push(message.inference);
+        const proposal = this.watch?.push(message.inference, performance.now());
+        if (proposal) {
+          this.watch!.start();
+          this.ask({ type: "try", delegate: proposal, frames: TRY_FRAMES });
+        }
         if (this.running) this.publish(message.hands, message.capturedAt);
+      } else if (message.type === "tried") {
+        this.watch?.tried(message.kept, performance.now());
       } else if (message.type === "face-result") {
         this.busy = false;
         if (this.running) this.publishFace(message.eyes, message.capturedAt, message.inference);
       }
     });
+  }
+
+  private readonly started: "GPU" | "CPU";
+
+  /** The delegate the landmarker reads with now (it can change once a try of the other has been made: adapt.ts). */
+  get delegate(): "GPU" | "CPU" {
+    return this.watch?.delegate ?? this.started;
+  }
+
+  private ask(message: ToWorker): void {
+    this.worker.postMessage(message);
   }
 
   /** The face on its way, so asking twice loads it once. */
@@ -313,11 +372,12 @@ class WorkerTracker extends BaseTracker {
 
   protected read(video: HTMLVideoElement, capturedAt: number): void {
     if (this.busy) {
-      this.skipped++;
+      this.drop(capturedAt - this.sentAt);
       return;
     }
     const began = performance.now();
     this.busy = true;
+    this.sentAt = capturedAt;
     const face = this.faceDue();
     const send = (image: VideoFrame | ImageBitmap) => {
       const message: ToWorker = {
@@ -345,6 +405,164 @@ class WorkerTracker extends BaseTracker {
   override dispose(): void {
     super.dispose();
     this.worker.terminate();
+  }
+}
+
+/** One worker of a LaneTracker: it reads one player's column of the picture. */
+interface Lane {
+  worker: Worker;
+  delegate: "GPU" | "CPU";
+  busy: boolean;
+  /** The tile it was last given, and the picture's size then, px. */
+  tile: Rect | null;
+  width: number;
+  height: number;
+  /** What it found there, in the tile's own picture. */
+  hands: SeenHand[];
+  /** Learns which delegate is quicker for it (adapt.ts), when asked to. */
+  watch: DelegateWatch | null;
+  /** When the frame it is reading (or last read) was taken, ms. */
+  sentAt: number;
+}
+
+/** A tile's edges on even pixels: a camera's frame is often stored with its colour at half resolution, and a VideoFrame can only be cut on its samples. */
+function evenTile(tile: Rect, width: number): Rect {
+  const x = tile.x - (tile.x % 2);
+  const right = Math.min(width - (width % 2), tile.x + tile.width + ((tile.x + tile.width) % 2));
+  return { x, y: 0, width: right - x, height: tile.height - (tile.height % 2) };
+}
+
+/**
+ * Players sharing a camera, each column of the picture read in a worker of its own (tiles.ts), all at once: one
+ * landmarker per worker, so the columns are read side by side rather than one after another. Each worker is handed
+ * its column as a VideoFrame cut to it (no copy), and says what it found as soon as it has: a frame is published for
+ * that column alone (HandFrame.read), with the other columns' hands as they were last seen, so a player's wheel is
+ * never held up by a neighbour's. A column whose worker is still busy skips the camera frame, as a single worker does.
+ */
+class LaneTracker extends BaseTracker {
+  readonly where = "worker" as const;
+  readonly hasFace = false;
+  private readonly tileSchedule: TileSchedule;
+  /** One try of the other delegate at a time, across the workers. */
+  private readonly trials = new Trials();
+
+  constructor(private readonly lanes: Lane[]) {
+    super();
+    this.tileSchedule = new TileSchedule(lanes.length);
+    lanes.forEach((lane, i) => lane.worker.addEventListener("message", (event: MessageEvent<FromWorker>) => this.received(i, event.data)));
+  }
+
+  /** Reads and wanted drops of the seats being played (an empty seat's column, read every third frame, is left out). */
+  private playedReads = 0;
+  private playedDrops = 0;
+
+  /** As every tracker's, but counting only the seats being played: the race makes room for players, not empty seats. */
+  override counts(): { frames: number; skipped: number; columns: number } {
+    const played = this.lanes.filter((_, i) => !this.tileSchedule.quiet(i)).length;
+    return { frames: this.playedReads, skipped: this.playedDrops, columns: Math.max(1, played) };
+  }
+
+  /** The first column's delegate. */
+  get delegate(): "GPU" | "CPU" {
+    return this.lanes[0]!.watch?.delegate ?? this.lanes[0]!.delegate;
+  }
+
+  /** The delegate each column's worker reads with now. */
+  get delegates(): ("GPU" | "CPU")[] {
+    return this.lanes.map((lane) => lane.watch?.delegate ?? lane.delegate);
+  }
+
+  addFace(): Promise<void> {
+    return Promise.reject(new ModelError("the face is not read for players sharing a camera"));
+  }
+
+  protected read(video: HTMLVideoElement, capturedAt: number): void {
+    const began = performance.now();
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) return;
+    const due = this.tileSchedule.next();
+    const tiles = tileRects(this.lanes.length, width, height);
+    const timestamp = this.timestampFor(capturedAt);
+    this.lanes.forEach((lane, i) => {
+      if (!due[i]) return;
+      if (lane.busy) {
+        const since = capturedAt - lane.sentAt;
+        if (!this.tileSchedule.quiet(i) && since >= WANTED_GAP) this.playedDrops++;
+        this.drop(since, false);
+        return;
+      }
+      const tile = evenTile(tiles[i]!, width);
+      const image = this.frameFor(video, capturedAt, tile);
+      if (!image) return;
+      lane.busy = true;
+      lane.sentAt = capturedAt;
+      lane.tile = tile;
+      lane.width = width;
+      lane.height = height;
+      const message: ToWorker = { type: "frame", image, timestamp, capturedAt, sequence: this.frames, ...(this.cutHere ? {} : { crop: tile }) };
+      lane.worker.postMessage(message, [image]);
+    });
+    this.pageCost.push(performance.now() - began);
+  }
+
+  /** Whether the browser cuts a VideoFrame to a column (visibleRect); where it cannot, the workers cut it. */
+  private cutHere = true;
+
+  /** The camera's frame for one column: cut to it, or whole (with the column for the worker to cut). Null before the camera has a frame. */
+  private frameFor(video: HTMLVideoElement, capturedAt: number, tile: Rect): VideoFrame | null {
+    const timestamp = Math.round(capturedAt * 1000);
+    if (this.cutHere) {
+      try {
+        return new VideoFrame(video, { timestamp, visibleRect: tile });
+      } catch {
+        // A whole frame can be made where a cut one cannot: from now on the workers cut it.
+        try {
+          new VideoFrame(video, { timestamp }).close();
+          this.cutHere = false;
+        } catch {
+          return null; // no frame to give yet (the camera is still starting)
+        }
+      }
+    }
+    try {
+      return new VideoFrame(video, { timestamp });
+    } catch {
+      return null;
+    }
+  }
+
+  private received(index: number, message: FromWorker): void {
+    const lane = this.lanes[index]!;
+    if (message.type === "tried") {
+      lane.watch?.tried(message.kept, performance.now());
+      this.trials.end();
+      return;
+    }
+    if (message.type !== "result") return;
+    lane.busy = false;
+    lane.hands = message.hands;
+    if (!this.tileSchedule.quiet(index)) this.playedReads++;
+    this.inference.push(message.inference);
+    const proposal = lane.watch?.push(message.inference, performance.now());
+    // One GPU landmarker at a time: two or three beside a race take turns on it and all slow down (docs/GRIP_PRIX.md).
+    const gpuTaken = proposal === "GPU" && this.delegates.some((delegate, i) => i !== index && delegate === "GPU");
+    if (proposal && !gpuTaken && this.trials.begin()) {
+      lane.watch!.start();
+      const ask: ToWorker = { type: "try", delegate: proposal, frames: TRY_FRAMES };
+      lane.worker.postMessage(ask);
+    }
+    this.tileSchedule.record(this.lanes.map((_, i) => (i === index ? message.hands.length : null)));
+    const tile = lane.tile;
+    if (!this.running || !tile) return;
+    const seen = this.lanes.filter((one) => one.tile !== null);
+    const found = seen.map((one) => ({ tile: one.tile!, hands: one.hands }));
+    this.publish(joinTiles(found, lane.width, lane.height, seen.indexOf(lane)), message.capturedAt, [[tile.x / lane.width, (tile.x + tile.width) / lane.width]]);
+  }
+
+  override dispose(): void {
+    super.dispose();
+    for (const lane of this.lanes) lane.worker.terminate();
   }
 }
 
@@ -425,6 +643,13 @@ export interface TrackerOptions {
   confidence?: number;
   /** Read the picture in this many side-by-side tiles, one landmarker for each, two hands to a tile (tiles.ts; in a worker only). */
   tiles?: number;
+  /**
+   * With tiles: read each tile in a worker of its own, all at once (LaneTracker), on these delegates, one for each
+   * tile. Absent: one worker reads every tile, one after another.
+   */
+  lanes?: readonly ("GPU" | "CPU")[];
+  /** Learn which delegate is quicker on this machine: a worker whose landmarker is slow tries the other (adapt.ts). */
+  adapt?: boolean;
   /** Load the face landmarker too (a game that reads the eye is the first to be played). */
   face?: boolean;
 }
@@ -433,7 +658,7 @@ function workerSupported(): boolean {
   return typeof Worker !== "undefined" && typeof VideoFrame !== "undefined" && typeof OffscreenCanvas !== "undefined";
 }
 
-async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number, withFace: boolean, confidence?: number, tiles?: number): Promise<WorkerTracker> {
+async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", hands: number, withFace: boolean, confidence?: number, tiles?: number, adapt = false): Promise<WorkerTracker> {
   const binary = siteUrl("mediapipe/vision_wasm_module_internal.wasm");
   const [wasm, model, face] = await Promise.all([
     fetchBytes(binary, progress.wasm, WASM_BYTES),
@@ -468,9 +693,57 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
     const started = await ready;
     // The worker says why on its own console (where a player never looks); the page says it too.
     if (withFace && !started.face) console.warn("The face landmarker did not start in the tracking worker, so the eye cannot scope (Shift still does).");
-    return new WorkerTracker(worker, started.delegate, started.face);
+    return new WorkerTracker(worker, started.delegate, started.face, adapt && !(tiles && tiles > 1));
   } catch (error) {
     worker.terminate();
+    throw error;
+  }
+}
+
+/** Starts a worker for each tile, each with its own landmarker for two hands, on the delegate asked for it (LaneTracker). */
+/** A LaneTracker over workers whose landmarkers have started (startLanes; the tests give it stand-ins). */
+export function makeLaneTracker(workers: readonly { worker: Worker; delegate: "GPU" | "CPU" }[], adapt = false): Tracker & { readonly delegates: ("GPU" | "CPU")[] } {
+  return new LaneTracker(workers.map(({ worker, delegate }) => ({ worker, delegate, busy: false, tile: null, width: 0, height: 0, hands: [], watch: adapt ? new DelegateWatch(delegate) : null, sentAt: -Infinity })));
+}
+
+async function startLanes(progress: LandmarkerProgress, delegates: readonly ("GPU" | "CPU")[], hands: number, confidence?: number, adapt = false): Promise<Tracker> {
+  const binary = siteUrl("mediapipe/vision_wasm_module_internal.wasm");
+  const [wasm, model] = await Promise.all([fetchBytes(binary, progress.wasm, WASM_BYTES), fetchBytes(siteUrl("models/hand_landmarker.task"), progress.model, MODEL_BYTES)]);
+  const workers: Worker[] = [];
+  try {
+    const lanes = await Promise.all(
+      delegates.map(async (prefer): Promise<{ worker: Worker; delegate: "GPU" | "CPU" }> => {
+        const worker = new Worker(new URL("./inference.worker.ts", import.meta.url), { type: "module", name: "hand-tracking" });
+        workers.push(worker);
+        const ready = new Promise<{ delegate: "GPU" | "CPU" }>((resolve, reject) => {
+          const listen = (event: MessageEvent<FromWorker>) => {
+            if (event.data.type === "ready") resolve(event.data);
+            else if (event.data.type === "failed") reject(new Error(event.data.message));
+            else return;
+            worker.removeEventListener("message", listen);
+          };
+          worker.addEventListener("message", listen);
+          worker.addEventListener("error", (event) => reject(new Error(event.message || "a tracking worker failed")), { once: true });
+        });
+        // Each worker is given its own copy of the files (a transfer leaves nothing behind for the next).
+        const init: ToWorker = {
+          type: "init",
+          loader: siteUrl("mediapipe/vision_wasm_module_internal.js"),
+          wasm: wasm.slice(0),
+          binary,
+          model: model.slice(0),
+          prefer,
+          hands: Math.max(1, Math.ceil(hands / delegates.length)),
+          ...(confidence === undefined ? {} : { confidence }),
+        };
+        worker.postMessage(init, [init.wasm, init.model]);
+        const { delegate } = await ready;
+        return { worker, delegate };
+      }),
+    );
+    return makeLaneTracker(lanes, adapt);
+  } catch (error) {
+    for (const worker of workers) worker.terminate();
     throw error;
   }
 }
@@ -482,7 +755,16 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
   const hands = options.hands ?? 1;
   if (where !== "page" && workerSupported()) {
     try {
-      return await startWorker(progress, prefer, hands, options.face === true, options.confidence, options.tiles);
+      const tiles = Math.round(options.tiles ?? 1);
+      if (tiles > 1 && options.lanes?.length === tiles && !options.face) {
+        try {
+          return await startLanes(progress, options.lanes, hands, options.confidence, options.adapt);
+        } catch (error) {
+          if (error instanceof DownloadError) throw error;
+          console.warn("Hand tracking in a worker for each player is unavailable; one worker reads them all.", error);
+        }
+      }
+      return await startWorker(progress, prefer, hands, options.face === true, options.confidence, options.tiles, options.adapt);
     } catch (error) {
       // A download that failed would fail again on the page (the same
       // files): only a worker that could not run is worth the page's try.

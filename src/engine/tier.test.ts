@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Progress } from "./fetch";
-import { guessTier } from "./tier";
+import { guessTier, isSoftwareGpu } from "./tier";
 
 describe("the GPU tier guess", () => {
   it("reads the common names", () => {
@@ -24,6 +24,16 @@ describe("the GPU tier guess", () => {
     expect(guessTier("ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11)")).toBe("high");
     expect(guessTier("ANGLE (Qualcomm, Adreno (TM) 740)")).toBe("low");
     expect(guessTier("ANGLE (Qualcomm, Qualcomm(R) Adreno(TM) X1-85 GPU)")).toBe("medium");
+  });
+});
+
+describe("a GPU drawn in software", () => {
+  it("is told from a real one (the hand tracker then reads on the CPU)", () => {
+    expect(isSoftwareGpu("ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)")).toBe(true);
+    expect(isSoftwareGpu("llvmpipe (LLVM 15.0.7, 256 bits)")).toBe(true);
+    expect(isSoftwareGpu("ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)")).toBe(true);
+    expect(isSoftwareGpu("ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe(false);
+    expect(isSoftwareGpu("ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)")).toBe(false);
   });
 });
 

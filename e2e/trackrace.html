@@ -1,6 +1,8 @@
 <!doctype html>
 <!-- The hand tracker beside a race, in one page, as in the game: a picture of a hand played as a 30 fps video and read
-     by the tracker in its worker on the GPU delegate (?hands=2 ?tiles=1 ?copies=1 ?confidence=0.5, as e2e/tracker.html),
+     by the tracker in its worker on the GPU delegate (?hands=2 ?tiles=1 ?copies=1 ?confidence=0.5 ?players=3
+     ?lanes=GPU,CPU,CPU ?adapt=1, as e2e/tracker.html; ?first=1 lets the race give up pixels while the tracker drops
+     frames, as the game does: src/kart/app/handsFirst.ts),
      while the renderer's dev page (?race=<its query>, e.g. track=meadow-loop&sim=1&go=1&views=4&quality=high&art=0)
      draws a race in an iframe of the same page, sharing its main thread and the GPU. Served by the dev server only;
      tools/perf/trackrace.mjs reads window.smoke. -->
@@ -20,6 +22,8 @@
     <video id="video" muted playsinline></video>
     <script type="module">
       import { loadTracker } from "/src/tracking/tracker.ts";
+      import { HandsFirst } from "/src/kart/app/handsFirst.ts";
+      import { crowdPainter } from "/e2e/crowd.js";
       const params = new URLSearchParams(location.search);
       const report = (window.smoke = { error: null });
       try {
@@ -32,12 +36,15 @@
           canvas.width = 1280;
           canvas.height = 720;
         }
+        // ?players=N: N players holding two fists each (crowd.js), as e2e/tracker.html.
+        const crowd = params.has("players") ? crowdPainter(canvas, image, params) : null;
         const context = canvas.getContext("2d");
         const video = document.getElementById("video");
         video.srcObject = canvas.captureStream(30);
         let tick = 0;
         const paint = () => {
-          if (copies > 1) {
+          if (crowd) crowd();
+          else if (copies > 1) {
             const columns = Number(params.get("slots") ?? 0) || copies;
             const w = canvas.width / columns;
             const h = canvas.height;
@@ -58,12 +65,18 @@
               hands: Number(params.get("hands") ?? 2),
               confidence: params.has("confidence") ? Number(params.get("confidence")) : undefined,
               tiles: params.has("tiles") ? Number(params.get("tiles")) : undefined,
+            // ?lanes=GPU,CPU,CPU: each tile in a worker of its own, on these delegates.
+            lanes: params.has("lanes") ? params.get("lanes").split(",") : undefined,
+            // ?adapt=1: a slow worker tries the other delegate (adapt.ts), as Grip Prix asks.
+            adapt: params.get("adapt") === "1",
             },
           );
         const tracker = await make();
         // ?twin=1: a second tracker beside the first, each reading what ?tiles says, to see what two workers would cost together.
         const twin = params.get("twin") === "1" ? await make() : null;
-        report.delegate = tracker.delegate;
+        report.delegate = tracker.delegates?.join("+") ?? tracker.delegate;
+        // Lanes publish a frame per column read: reads a second are counted per column.
+        report.columns = tracker.delegates?.length ?? 1;
         let framesSeen = 0;
         let withHands = 0;
         let handsTotal = 0;
@@ -93,6 +106,30 @@
           report.raceReady = true;
           window.race = frameEl.contentWindow;
         }
+        // ?first=1: the race gives up pixels while the tracker drops frames, as the game does (src/kart/app/handsFirst.ts).
+        const first = params.get("first") === "1" && window.race ? new HandsFirst() : null;
+        let keeping = !!first;
+        // The ceiling's moves and the share read in each half second, for ?first=1 (report.firstLog).
+        const firstLog = (report.firstLog = []);
+        const began = performance.now();
+        let logged = null;
+        let loggedAt = began;
+        const keep = (now) => {
+          if (!keeping) return;
+          const counts = tracker.counts();
+          if (now - loggedAt >= 500) {
+            if (logged) {
+              const read = counts.frames - logged.frames;
+              const dropped = counts.skipped - logged.skipped;
+              firstLog.push([Math.round((now - began) / 100) / 10, first.ceiling, read + dropped ? Math.round((100 * read) / (read + dropped)) / 100 : null]);
+            }
+            logged = counts;
+            loggedAt = now;
+          }
+          if (first.sample(counts, now / 1000)) window.race.__grip.renderer.limitResolution(first.ceiling);
+          requestAnimationFrame(keep);
+        };
+        if (first) requestAnimationFrame(keep);
         // Let the shaders compile and the race settle, then measure.
         await new Promise((resolve) => setTimeout(resolve, Number(params.get("warm") ?? 5) * 1000));
         tracker.resetStats();
@@ -119,6 +156,10 @@
         report.page = { p50: sorted[Math.floor(sorted.length * 0.5)], p95: sorted[Math.floor(sorted.length * 0.95)], fps: raceFrames.length / elapsed };
         report.race = raceWindow ? { fps: raceWindow.__grip.fps(), stats: raceWindow.__grip.stats() } : null;
         report.tracker = tracker.stats();
+        keeping = false;
+        report.ceiling = first ? first.ceiling : null;
+        // With ?adapt=1 a worker may have moved to the other delegate meanwhile.
+        report.delegateEnd = tracker.delegates?.join("+") ?? tracker.delegate;
         if (twin) report.twin = twin.stats();
         report.cameraFrames = camera;
         report.cameraFps = camera / elapsed;

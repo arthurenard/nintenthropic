@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rig, handFrame, wheelHands, type WheelPose } from "./testHands";
-import { SEAT_MARGIN, STEERING_LOCK, WHEEL, WheelReader, halfSeat, wheelAngle, seatZone, shapeSteer, type Steering } from "./wheel";
+import { SEAT_MARGIN, STEERING_LOCK, WHEEL, WheelReader, halfSeat, readsSeat, wheelAngle, seatZone, shapeSteer, type Steering } from "./wheel";
 
 /** A rig that has been driving straight with fists for a second, so the wheel is settled. */
 function driving(options: ConstructorParameters<typeof Rig>[0] = {}): Rig {
@@ -853,6 +853,33 @@ describe("up to four players on one camera", () => {
       expect(one.last.status.hands).toBe(0);
       expect(next.last.status.hands).toBe(0);
     });
+  });
+
+  it("takes a frame that read only other players' columns for no news, not for hands gone or held still", () => {
+    // Each column read in a worker of its own (tracker.ts, lanes): every other frame is a neighbour's, carrying this
+    // player's hands as they were last seen (here, held level) while they are really turning.
+    const reader = new WheelReader({ seat: { index: 2, of: 4 } });
+    // Seat 2 of 4 is 0.5..0.75 of the mirrored picture: 0.25..0.5 of the camera's own.
+    const mine: [number, number] = [0.2, 0.55];
+    const theirs: [number, number] = [0.7, 1];
+    const stale = wheelHands({ angle: 0, centre: [0.625, 0.5], span: 0.2 });
+    let now = 1000;
+    let last = reader.sample(now);
+    for (let frame = 0; frame < 60; frame++) {
+      now += 1000 / 30;
+      const fresh = frame % 2 === 0;
+      const hands = fresh ? wheelHands({ angle: Math.min(30, frame), centre: [0.625, 0.5], span: 0.2 }) : stale;
+      reader.push({ ...handFrame(hands, now), read: [fresh ? mine : theirs] });
+      last = reader.sample(now);
+    }
+    expect(last.status.hands).toBe(2);
+    expect(last.status.mode).toBe("drive");
+    expect(last.status.angle).toBeCloseTo(30, 0);
+    // A frame that read the whole picture (no `read`) is news for everyone, as always.
+    expect(readsSeat(handFrame([], now), { index: 2, of: 4 })).toBe(true);
+    expect(readsSeat({ ...handFrame([], now), read: [mine] }, { index: 2, of: 4 })).toBe(true);
+    expect(readsSeat({ ...handFrame([], now), read: [theirs] }, { index: 2, of: 4 })).toBe(false);
+    expect(readsSeat({ ...handFrame([], now), read: [theirs] }, null)).toBe(true);
   });
 
   it("ignores a third hand in a column, keeping the player's own two", () => {

@@ -289,7 +289,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     ctxLost = false;
   });
 
-  const pixelRatio = () => Math.max(0.5, Math.min(dpr, settings.pixelRatioCap) * resolution.scale);
+  /** The most of its resolution the picture may use (limitResolution): below 1 while the hand tracker is short of the GPU. */
+  let ceiling = 1;
+  const pixelRatio = () => Math.max(0.5, Math.min(dpr, settings.pixelRatioCap) * Math.min(resolution.scale, ceiling));
 
   const applySize = () => {
     renderer.setPixelRatio(pixelRatio());
@@ -446,6 +448,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       viewKarts = karts.length ? [...karts].slice(0, 4) : [0];
       relayout();
       for (const c of cameras) c.reset();
+    },
+
+    limitResolution(next: number): void {
+      const value = Math.min(1, Math.max(0.5, next));
+      if (value === ceiling) return;
+      ceiling = value;
+      applySize();
     },
 
     setControls(kinds: Readonly<Record<number, ControlKind>>): void {
@@ -632,7 +641,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         gpu,
         tier,
         pixelRatio: renderer.getPixelRatio(),
-        resolutionScale: resolution.scale,
+        resolutionScale: Math.min(resolution.scale, ceiling),
         drawCalls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries,

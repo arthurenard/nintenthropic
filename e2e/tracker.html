@@ -1,10 +1,10 @@
 <!doctype html>
 <!-- The tracker as the game runs it, served by the dev server only: a still
      picture of a hand played as a 30 fps video, read frame by frame by the
-     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, ?confidence=0.4, ?tiles=4, ?copies=4, and
-     ?face=N to read the face too on every Nth frame, as a game that reads the
-     eye does), while a busy animation loop measures what the tracking costs
-     the page's frames. -->
+     tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, ?confidence=0.4, ?tiles=4, ?copies=4,
+     ?players=3 for three players' fists (e2e/crowd.js), ?lanes=GPU,CPU,CPU for a worker per tile, ?adapt=1 for a
+     slow worker to try the other delegate, and ?face=N to read the face too on every Nth frame, as a game that
+     reads the eye does), while a busy animation loop measures what the tracking costs the page's frames. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -16,6 +16,7 @@
     <video id="video" muted playsinline></video>
     <script type="module">
       import { loadTracker } from "/src/tracking/tracker.ts";
+      import { crowdPainter } from "/e2e/crowd.js";
       const params = new URLSearchParams(location.search);
       const report = (window.smoke = { error: null });
       try {
@@ -29,12 +30,15 @@
           canvas.width = 1280;
           canvas.height = 720;
         }
+        // ?players=N: N players holding two fists each, as big as they are in the game's camera (crowd.js).
+        const crowd = params.has("players") ? crowdPainter(canvas, image, params) : null;
         const context = canvas.getContext("2d");
         const video = document.getElementById("video");
         video.srcObject = canvas.captureStream(30);
         let tick = 0;
         const paint = () => {
-          if (copies > 1) {
+          if (crowd) crowd();
+          else if (copies > 1) {
             const rows = copies > 4 ? 2 : 1;
             // ?slots=4 with ?copies=2: four seats' columns, hands in the first two (the others empty).
             const columns = Number(params.get("slots") ?? 0) || Math.ceil(copies / rows);
@@ -60,13 +64,19 @@
             hands: Number(params.get("hands") ?? 1),
             confidence: params.has("confidence") ? Number(params.get("confidence")) : undefined,
             tiles: params.has("tiles") ? Number(params.get("tiles")) : undefined,
+            // ?lanes=GPU,CPU,CPU: each tile in a worker of its own, on these delegates.
+            lanes: params.has("lanes") ? params.get("lanes").split(",") : undefined,
+            // ?adapt=1: a slow worker tries the other delegate (adapt.ts), as Grip Prix asks.
+            adapt: params.get("adapt") === "1",
             face: Number(params.get("face") ?? 0) > 0,
           },
         );
         tracker.readFace(Number(params.get("face") ?? 0));
         if (params.get("carrier") === "bitmap") tracker.carrier = "bitmap";
         report.where = tracker.where;
-        report.delegate = tracker.delegate;
+        report.delegate = tracker.delegates?.join("+") ?? tracker.delegate;
+        // Lanes publish a frame per column read: reads a second are counted per column.
+        report.columns = tracker.delegates?.length ?? 1;
         let hands = 0;
         let total = 0;
         let counted = 0;
