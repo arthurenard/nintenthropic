@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lastOneWord, scopeHint, spotterWord, tipText, turnWord } from "./tips";
+import { innocentWord, lastOneWord, scopeHint, spotterWord, tipText, turnWord } from "./tips";
 
 describe("how Overwatch Ridge says to look through the scope", () => {
   it("tells a hand player the eye and the way that always works", () => {
@@ -39,5 +39,22 @@ describe("the spotter's words", () => {
   it("never call the guard post on the road a checkpoint", () => {
     const words = [spotterWord("at the guard post", 300), lastOneWord("by the guard post, left of the watchtower")];
     for (const line of words) expect(line).not.toMatch(/checkpoint/i);
+  });
+});
+
+describe("the word after an innocent is hit", () => {
+  it("says who it was, calmly", () => {
+    expect(innocentWord("farmer")).toBe("That was the farmer.");
+    expect(innocentWord("cow")).toBe("That was a cow.");
+  });
+
+  it("keeps the herd's count, and the herd keeps it too", () => {
+    expect(["cow", "cow", "cow", "cow"].map((r, i) => innocentWord(r, i + 1))).toEqual(["That was a cow.", "That was another cow.", "The herd has noticed.", "The herd has noticed."]);
+    expect(innocentWord("sheep", 2)).toBe("That was another sheep.");
+    expect(innocentWord("sheep", 3)).toBe("The flock has noticed.");
+  });
+
+  it("never makes a joke of a person", () => {
+    for (const role of ["farmer", "cyclist", "shepherd", "child"]) expect(innocentWord(role, 3)).toBe(innocentWord(role));
   });
 });

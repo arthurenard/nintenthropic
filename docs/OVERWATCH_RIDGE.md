@@ -131,7 +131,8 @@ for the wind to drop, and squeeze.
   500, the **Clean Conscience** bonus, and one more alert. They are
   unmistakable through the scope: no helmet, no weapon, bright clothes.
 - **Animals** — cows, sheep, a goat on a cliff, an eagle circling. Shooting
-  one costs 100 and says so.
+  one costs 100 and says so ("That was a cow."); the herd keeps count over a
+  run ("That was another cow.", then "The herd has noticed.").
 - **Vehicles** — a canvas-backed **truck** and a **jeep**: stop a vehicle by
   its driver (through the windshield — glass deflects the round a little) or
   its engine block (three hits; steam, then it rolls to a stop).
@@ -253,23 +254,25 @@ crossed the bridge. The driver is the quick stop; the engine takes three." ·
 
 1. **The bell.** Shoot the chapel bell: it rings — and you hear it a second and
    a half after the shot, because sound takes that long to cross the valley.
-2. **The goat.** A goat stands on an impossible ledge. Shoot near it: it
-   bleats and hops to an even more impossible one.
-3. **The cheese.** The farmer's cart has a wheel of cheese on it. Shoot the
-   wedge under the cart's wheel: the cheese rolls down the lane, bouncing, all
-   the way to the river.
+2. **The goat** ("Unimpressed"). A goat stands on an impossible ledge. Shoot
+   near it: it bleats and hops to an even more impossible one. Again, and it
+   says so from there: "Still unimpressed."
+3. **The cheese** ("Cheese Rolling"). The farmer's cart has a wheel of cheese
+   on it. Shoot the wedge under the cart's wheel: the cheese rolls down the
+   lane, bouncing, all the way to the river.
 4. **The yeti.** On the far snowfield (1.8 km), only through the scope, a white
    figure peeks from behind a rock. Shoot the rock beside it: it ducks, and
    footprints appear in the snow leading away.
-5. **The dam's siren.** Shoot the loudspeaker on the dam: a long wail echoes up
-   the valley, and every cow turns to look at you.
-6. **The eagle.** Don't shoot the eagle. Shoot near it three times: it lands on
-   the rock right in front of your scope and stares at you.
+5. **The dam's siren** ("All Eyes on You"). Shoot the loudspeaker on the dam: a
+   long wail echoes up the valley, and every cow turns to look at you.
+6. **The eagle** ("Staring Contest"). Don't shoot the eagle. Shoot near it
+   three times: it lands on the rock right in front of your scope and stares at
+   you. "It isn’t blinking."
 7. **The duck.** A yellow rubber duck floats down the river. Shoot it: it
    bobs, and the popup reads "Duck at 412 m." (Every game hides one duck.)
-8. **The echo.** Shoot the great cliff face across the valley: your shot's
-   echo comes back three times, the last one sounding like a distant shot
-   from someone else.
+8. **The echo** ("Echo, Echo, Echo"). Shoot the great cliff face across the
+   valley: your shot's echo comes back three times, the last one sounding like
+   a distant shot from someone else.
 
 Konami on the arcade: a golden rifle and a gold magazine.
 

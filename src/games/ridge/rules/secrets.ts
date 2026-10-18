@@ -8,13 +8,16 @@ import type { SecretId } from "./types";
 
 export const SECRET_NAMES: Readonly<Record<SecretId, string>> = {
   bell: "The Bell",
-  goat: "The Goat",
-  cheese: "The Cheese",
+  // It hops to an even more impossible ledge, and looks back at you.
+  goat: "Unimpressed",
+  cheese: "Cheese Rolling",
   yeti: "The Yeti",
-  siren: "The Siren",
-  eagle: "The Eagle",
+  // Every cow in the pasture turns to look up at the ridge.
+  siren: "All Eyes on You",
+  // It lands on the rock by your scope and stares at you.
+  eagle: "Staring Contest",
   duck: "The Duck",
-  echo: "The Echo",
+  echo: "Echo, Echo, Echo",
 };
 
 export const SECRETS_TOTAL = Object.keys(SECRET_NAMES).length;

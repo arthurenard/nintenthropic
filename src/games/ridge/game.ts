@@ -153,6 +153,10 @@ export class OverwatchRidge implements Game, MissionListener {
   private readonly lastShots = new Map<HostileRole, { at: Vector3; time: number }>();
   /** What a player can point at in the valley, for describing where the last man is. */
   private landmarks: Landmark[] | null = null;
+  /** How many of each of the valley's own the player has hit this run (the herd keeps count). */
+  private readonly innocents = new Map<string, number>();
+  /** The goat's leaps this run: it was unimpressed the first time, and stays so. */
+  private goatHops = 0;
 
   private phase: "loading" | "calibration" | "playing" | "failing" | "dying" | "over" = "loading";
   private paused = false;
@@ -314,6 +318,8 @@ export class OverwatchRidge implements Game, MissionListener {
     this.reveals.clear();
     this.lastShots.clear();
     this.marked = false;
+    this.innocents.clear();
+    this.goatHops = 0;
   }
 
   /** Compile every shader before play: a shader first compiled mid-shot is a dropped frame at the worst time. */
@@ -1521,7 +1527,9 @@ export class OverwatchRidge implements Game, MissionListener {
 
   innocentHit(a: Actor, award: Award): void {
     this.popupAt(new Vector3(a.pos.x, a.pos.y + 2.2, a.pos.z), this.awardText(award), "danger");
-    this.hints.say(innocentWord(a.role), 2);
+    const count = (this.innocents.get(a.role) ?? 0) + 1;
+    this.innocents.set(a.role, count);
+    this.hints.say(innocentWord(a.role, count), 2);
     this.syncHint();
     if (a.role === "cow") this.sound.at("ridge_cow_moo", a.pos, 1);
   }
@@ -1615,11 +1623,33 @@ export class OverwatchRidge implements Game, MissionListener {
 
   goatHop(a: Actor): void {
     this.sound.at("ridge_goat", a.pos, 1, 1, 0.1);
+    // The first leap is the secret ("Unimpressed"); after that it says so itself, from its new ledge.
+    if (++this.goatHops < 2) return;
+    const ledge = new Vector3(a.home.x, a.home.y + 1.4, a.home.z);
+    this.later(1.3, () => {
+      if (a.alive && this.phase === "playing") this.popupAt(ledge, "Still unimpressed.");
+    });
   }
 
   eagleLands(a: Actor): void {
     this.sound.at("ridge_eagle", a.pos, 1);
     this.later(3, () => this.sound.at("ridge_eagle", this.assets.valley.plan.eagleRock, 0.8));
+    this.watchEagle(a, 0);
+  }
+
+  /** Once the eagle has settled on its rock and had a good look at you, a word on how that is going. */
+  private watchEagle(a: Actor, waited: number): void {
+    if (!a.alive || this.phase !== "playing" || waited > 30) return;
+    if (a.activity !== "perched") {
+      this.later(0.25, () => this.watchEagle(a, waited + 0.25));
+      return;
+    }
+    this.later(2.5, () => {
+      if (!a.alive || this.phase !== "playing") return;
+      // Just over its head: an arm's length from the eye, a metre higher would be off the top of the view.
+      const head = this.cast.headOf(a.id, new Vector3()) ?? new Vector3(a.pos.x, a.pos.y + 0.5, a.pos.z);
+      this.popupAt(head.add(tmp.set(0, 0.15, 0)), "It isn’t blinking.");
+    });
   }
 
   // --- for the dev harness and the tests -------------------------------------------------------
