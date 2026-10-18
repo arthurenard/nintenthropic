@@ -5,6 +5,7 @@ import {
   BLOATER_SPEED,
   BODY_SHOTS,
   CLIMB_TIME,
+  CRAWLER_SHORT,
   CRAWLER_SPEED,
   DEATH_TIME,
   GAIT_SPEED,
@@ -24,6 +25,8 @@ import { GAITS, type DeadKind, type DeadState, type DeathCause, type Gait, type 
 /** What one of the dead needs from the match around it. The Match implements it. */
 export interface DeadWorld {
   readonly time: number;
+  /** The player's eye: the barricade is between it and the dead. */
+  readonly eye: V3;
   readonly random: Random;
   /** The difficulty's numbers in force now (worn toward Standard by a long wave). */
   readonly tuning: DifficultyTuning;
@@ -301,22 +304,23 @@ export class Dead {
   /** Its place at the barricade: the path's last stretch now leads there. */
   private goTo(slot: Slot, w: DeadWorld): void {
     this.slot = slot;
+    const place = standingPlace(this.kind, slot, w.eye);
     // The path ends where the lane meets the barricade; a last stretch to
     // the place it claimed, from wherever that stretch would start.
     const end = this.path[this.path.length - 1] as V3;
-    if (Math.hypot(end.x - slot.pos.x, end.z - slot.pos.z) > 0.05) {
-      if (this.state === "waiting") {
-        // From where it stands, not back along the lane.
+    if (Math.hypot(end.x - place.x, end.z - place.z) > 0.05) {
+      if (this.state === "waiting" || this.kind === "crawler") {
+        // From where it is, not on along the lane: a crawler stops short of
+        // the sandbags, and must not crawl in to the lane's end and back out.
         this.path.length = 0;
-        this.path.push({ ...this.pos }, { ...slot.pos });
+        this.path.push({ ...this.pos }, place);
         this.along = 0;
       } else {
-        this.path.push({ ...slot.pos });
+        this.path.push(place);
       }
       this.measure();
     }
     if (this.state === "waiting") this.enter("approaching", 0);
-    void w;
   }
 
   private arrive(w: DeadWorld): void {
@@ -357,6 +361,20 @@ export class Dead {
     this.diedFar = far;
     this.enter("dying", DEATH_TIME);
   }
+}
+
+/**
+ * Where one of the dead stands at its place at the barricade: on the place
+ * itself, but a crawler, low on the road, out in front of the sandbags
+ * (CRAWLER_SHORT farther from the eye), where it can be seen and shot.
+ */
+export function standingPlace(kind: DeadKind, slot: Slot, eye: V3): V3 {
+  const p = slot.pos;
+  if (kind !== "crawler") return { ...p };
+  const dx = p.x - eye.x;
+  const dz = p.z - eye.z;
+  const len = Math.hypot(dx, dz) || 1;
+  return { x: p.x + (dx / len) * CRAWLER_SHORT, y: p.y, z: p.z + (dz / len) * CRAWLER_SHORT };
 }
 
 /** A walker's gait, drawn by the weights the dead share them out by (GAIT_WEIGHT). */

@@ -90,7 +90,9 @@ the bus and the phone booth also open the first waves, see Waves).
   a lunge. Two body shots or one to the head. Worth a bonus.
 - **Crawlers** (wave 2+) — low on the road, dragging themselves (0.7 m/s),
   hard to see in the fog and easy to forget: they only need one shot,
-  anywhere, but they are small and near the ground.
+  anywhere, but they are small and near the ground. At the barricade one
+  claws from 1.5 m out in front of the sandbags, never behind them, where
+  it could be neither seen nor shot.
 - **Bloaters** (wave 4+) — swollen, slow (0.85 m/s), pale green. **Shoot one in the belly
   and it bursts**: a burst of foul gas and matter that downs every walker
   within 3 m (a chain, scored). Let it reach the barricade and it bursts on

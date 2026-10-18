@@ -3,7 +3,7 @@ import { mulberry32 } from "../../../engine/rules/rng";
 import { Dead, horizontalDistance, offsetPath } from "./dead";
 import type { Match } from "./match";
 import { makeMatch, testPlan, type Recorder } from "./testkit";
-import { ATTACKS, BLOATER_BURST_DAMAGE, BREATHER, CLIMB_TIME, DIFFICULTY, LUNGE_TIME, STAGGER_BACK, VAULT_TIME, WAVE_INTRO } from "./tuning";
+import { ATTACKS, BLOATER_BURST_DAMAGE, BREATHER, CLIMB_TIME, CRAWLER_SHORT, DIFFICULTY, LUNGE_TIME, STAGGER_BACK, VAULT_TIME, WAVE_INTRO } from "./tuning";
 import type { DeadKind, LaneId } from "./types";
 
 const DT = 1 / 60;
@@ -232,6 +232,24 @@ describe("the dead", () => {
     m.trigger();
     m.resolveShot({ kind: "dead", dead: d, part: "limb" });
     expect(d.alive).toBe(false);
+  });
+
+  it("a crawler claws from out in front of the sandbags, where it can be seen and shot, not from behind them", () => {
+    for (const lane of ["road", "trees"] as const) {
+      const { m, rec } = combat();
+      quiet(m);
+      const walker = send(m, "walker", lane, 0);
+      const crawler = send(m, "crawler", lane, 0);
+      m.health.immortal = true;
+      run(m, 120);
+      expect(walker.state).toBe("attacking");
+      expect(crawler.state).toBe("attacking");
+      expect(rec.all("deadStrike").some((e) => e.args[0] === crawler.id)).toBe(true);
+      // Its place, CRAWLER_SHORT farther from the eye than the one it holds; a walker stands on its own.
+      const out = (d: Dead) => horizontalDistance(d.pos, m.eye) - horizontalDistance(d.slot!.pos, m.eye);
+      expect(out(crawler)).toBeCloseTo(CRAWLER_SHORT, 1);
+      expect(out(walker)).toBeCloseTo(0, 2);
+    }
   });
 
   it("climb out of the bus and vault the fence before they walk", () => {
