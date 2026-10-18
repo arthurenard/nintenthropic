@@ -866,9 +866,12 @@ export class HighNoon implements Game, MatchListener {
     if (t > 5.2 && this.phase === "dying") {
       this.phase = "over";
       // A stick still in the air goes out quietly: the world stops drawing
-      // under the card, and its fizz would go on under it for ever.
+      // under the card, and its fizz would go on under it for ever, as would
+      // a tumbleweed's roll and the water tower's trickle. The wind blows on.
       this.match.snuffSticks();
       this.quietFuses();
+      this.ambient.hush();
+      this.secretsWorld.hush();
       const results: Results = this.match.results();
       this.hud.gameOver({ ...results });
       this.sound.play("game_over");

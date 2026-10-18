@@ -333,6 +333,11 @@ export class Ambient {
     if (sounds) this.updateSounds(dt);
   }
 
+  /** The world stops under the results: a tumbleweed's roll stops with it (the wind blows on). */
+  hush(): void {
+    this.sound.stopLoop("tumbleweed");
+  }
+
   reset(): void {
     for (const w of this.weeds) {
       w.active = false;

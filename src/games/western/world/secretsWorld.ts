@@ -85,6 +85,11 @@ export class SecretsWorld {
     }
   }
 
+  /** The world stops under the results: the water tower's trickle is not heard on over a still picture. */
+  hush(): void {
+    this.sound.stopLoop("water_leak");
+  }
+
   /** The poster back on its board, the leaks plugged, the doors shut (a new game). */
   reset(): void {
     const poster = this.town.secrets.poster;
