@@ -87,6 +87,39 @@ describe("the wave director", () => {
     expect(most).toBeGreaterThan(2);
   });
 
+  it("never has more of the dead up than the world has figures for, falling ones included", () => {
+    // Wave 13 lets 24 walk at once; the world has figures for 22. One without
+    // a figure would walk up unseen, and nothing could shoot it.
+    const { m, rec } = makeMatch(4, { start: { wave: 13 }, figures: 22 });
+    m.health.immortal = true;
+    expect(m.spec.maxActive).toBeGreaterThan(22);
+    let most = 0;
+    const count = () => {
+      let up = 0;
+      for (const d of m.dead) if (d.state !== "dead" && d.kind !== "mechanic") up++;
+      most = Math.max(most, up);
+    };
+    run(m, 60, count);
+    expect(most).toBe(22);
+    const before = rec.count("deadSpawn");
+    // Three go down at once: their figures go to the next only once each fall is over.
+    for (const d of m.dead.filter((x) => x.shootable).slice(0, 3)) {
+      m.rifle.reset();
+      m.trigger();
+      m.resolveShot({ kind: "dead", dead: d, part: "head" });
+    }
+    run(m, 0.5, count);
+    expect(rec.count("deadSpawn")).toBe(before);
+    run(m, 10, count);
+    expect(rec.count("deadSpawn")).toBe(before + 3);
+    expect(most).toBe(22);
+    // Without a limit, the wave's own crowd is the only one.
+    const free = makeMatch(4, { start: { wave: 13 } });
+    free.m.health.immortal = true;
+    run(free.m, 60);
+    expect(free.m.dead.filter((d) => d.alive).length).toBe(free.m.spec.maxActive);
+  });
+
   it("takes a breather between waves: the bodies go, health comes back, the next wave's card", () => {
     const { m, rec } = combat(2);
     run(m, 150, marksman(m));

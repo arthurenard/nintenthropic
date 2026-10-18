@@ -47,6 +47,11 @@ export interface NightOptions {
 
 /** How long the view takes to close in on the road when a round begins. */
 const FRAMING_EASE = 1.6;
+/**
+ * Figures for the dead, made at load: the rules never have more of them up
+ * at once (MatchOptions.figures), so none walks without a body to show it.
+ */
+const WALKER_FIGURES = 22;
 const HIT_SOUND: Record<Surface, string> = {
   asphalt: "night_hit_ground",
   dirt: "night_hit_ground",
@@ -223,7 +228,7 @@ export class DeadOfNight implements Game, MatchListener {
     const catT = nightTemplate("cat", this.assets.cat, rim);
     const parent = this.stage.dynamic;
     this.pools = {
-      walker: new RigPool(walkerT, 22, parent),
+      walker: new RigPool(walkerT, WALKER_FIGURES, parent),
       mechanic: new RigPool(mechanicT, 1, parent),
       survivor: new RigPool(survivorT, 1, parent),
       cat: new RigPool(catT, 1, parent),
@@ -329,6 +334,7 @@ export class DeadOfNight implements Game, MatchListener {
       listener: this,
       yaw: this.camera.yaw,
       difficulty: this.ctx.settings.difficulty,
+      figures: WALKER_FIGURES,
     });
     this.match.health.immortal = this.options.immortal === true;
   }

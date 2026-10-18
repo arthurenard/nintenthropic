@@ -88,6 +88,13 @@ export interface MatchOptions {
   /** The player's heading about the vertical, for the damage arcs. */
   yaw?: number;
   difficulty?: Difficulty;
+  /**
+   * How many of the dead the world has figures for, the Mechanic aside: no
+   * more than this are ever standing or falling at once, so none walks the
+   * road unseen (a body that has finished falling gives its figure to the
+   * next). Unset, no limit: the wave's own crowd (maxActive) is the only one.
+   */
+  figures?: number;
 }
 
 export interface StartOptions {
@@ -156,6 +163,7 @@ export class Match implements DeadWorld {
   /** The lanes as the dead of an opening walk them: begun closer in where something hides them. */
   private readonly nearLanes = new Map<LaneId, Lane>();
   private readonly survivorPaths: readonly (readonly V3[])[];
+  private readonly figures: number;
   private queue: QueueEntry[] = [];
   private spawnTimer = 0;
   /** When (wave time) the last of the wave came into play. */
@@ -178,6 +186,7 @@ export class Match implements DeadWorld {
     this.health = new PlayerHealth(this.tuning, HEALTH_MAX);
     this.listener = options.listener;
     this.survivorPaths = options.survivorPaths ?? [];
+    this.figures = options.figures ?? Number.POSITIVE_INFINITY;
     for (const lane of this.plan.lanes) if (lane.points.length >= 2) this.lanes.set(lane.id, lane);
     for (const lane of options.plan.lanes) {
       if (SURPRISES.includes(lane.id)) continue;
@@ -318,11 +327,18 @@ export class Match implements DeadWorld {
     return n;
   }
 
+  /** The dead holding a figure now, the Mechanic aside: walking, or still falling. */
+  private upCount(): number {
+    let n = 0;
+    for (const d of this.dead) if (d.state !== "dead" && d.kind !== "mechanic") n++;
+    return n;
+  }
+
   private spawn(dt: number): void {
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0 || this.queue.length === 0) return;
     const entry = this.queue[0] as QueueEntry;
-    if (entry.kind !== "mechanic" && this.activeCount() >= this.spec.maxActive) return;
+    if (entry.kind !== "mechanic" && (this.activeCount() >= this.spec.maxActive || this.upCount() >= this.figures)) return;
     this.queue.shift();
     if (this.queue.length === 0) this.lastSpawnAt = this.phaseT;
     const lane = (entry.near ? this.nearLanes.get(entry.lane) : undefined) ?? this.lanes.get(entry.lane) ?? this.lanes.get("road") ?? ([...this.lanes.values()][0] as Lane);
