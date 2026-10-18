@@ -16,7 +16,7 @@ import { Match, type MatchListener } from "./rules/match";
 import type { Mark } from "./rules/panes";
 import type { PassSpec } from "./rules/passes";
 import type { Award, PassBonuses } from "./rules/scoring";
-import { ASTRONAUT_PASS, DUCK_PASS, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
+import { ASTRONAUT_PASS, duckPass, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
 import { ALARM_BELOW, BREATHER, DERELICT_DEPTH, INTEGRITY_MAX, KINDS } from "./rules/tuning";
 import { normalize, scale, type V3 } from "./rules/vec";
 import { droneShotLine, HintLine, tipText, ventHint, type TipId } from "./tips";
@@ -1006,7 +1006,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.pushReadouts(true);
     // The pass's walk-ons.
     if (pass === ASTRONAUT_PASS) this.later(4, () => this.secrets.startAstronaut());
-    if (pass === DUCK_PASS) this.later(9, () => this.secrets.startDuck());
+    if (duckPass(pass)) this.later(9, () => this.secrets.startDuck());
     if (pass === TOOLBAG_PASS) this.later(12, () => this.secrets.startToolbag());
     if (pass >= MOON_PASS && this.moonT < 0) this.moonT = 0;
   }

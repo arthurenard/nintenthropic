@@ -27,6 +27,12 @@ export const MOON_PASS = 4;
 export const TOOLBAG_PASS = 3;
 /** The duck drifts through the debris field on this pass (and every sixth after). */
 export const DUCK_PASS = 2;
+export const DUCK_EVERY = 6;
+
+/** Does the duck drift by on this pass? On the second, and back on every sixth after until it is shot. */
+export function duckPass(pass: number): boolean {
+  return pass >= DUCK_PASS && (pass - DUCK_PASS) % DUCK_EVERY === 0;
+}
 
 /** What a shot near a secret found (the world decides "near" and "at"). */
 export type SecretShot =
