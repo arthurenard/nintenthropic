@@ -375,6 +375,30 @@ describe("slicks", () => {
   });
 });
 
+describe("a kart that has finished", () => {
+  it("drops what it held and takes nothing more, so its lap of honour hurts no one still racing", () => {
+    // Two people: the race goes on after the first is home.
+    const r = race(HARBOUR_LIGHTS, racers(2, 0), { laps: 1 });
+    toGo(r);
+    const length = harbour.length;
+    const p = harbour.point(length - 1, -3);
+    const h = harbour.heading(length - 1);
+    patch(r, 0, { x: p.x, z: p.z, s: length - 1, offset: -3, progress: length - 1, heading: h, vx: Math.sin(h) * 20, vz: Math.cos(h) * 20, lapStart: 0 });
+    give(r, 0, "puck3");
+    const finished = run(r, 10, () => input({ throttle: 1 }));
+    expect(finished.find((e) => e.type === "finish")).toMatchObject({ kart: 0, place: 1 });
+    expect(view(r, 0).item).toBeNull();
+    // Through a box: it breaks, and gives nothing.
+    const site = planFor(HARBOUR_LIGHTS).boxes[0]!;
+    patch(r, 0, { x: site.x, z: site.z, s: site.s, offset: site.offset, vx: 0, vz: 0 });
+    const events = run(r, 2 * 60);
+    expect(events.find((e) => e.type === "box")).toMatchObject({ kart: 0 });
+    expect(count(events, "pickup", 0)).toBe(0);
+    expect(count(events, "use", 0)).toBe(0);
+    expect(view(r, 0).item).toBeNull();
+  });
+});
+
 describe("a box driven through with full hands", () => {
   it("still breaks, gives nothing, and says so", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));

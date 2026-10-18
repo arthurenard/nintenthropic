@@ -77,9 +77,13 @@ export function updateProgress(w: World, emit: Emit): void {
     state.home.push(k.id);
     k.finalPlace = state.home.length;
     k.place = k.finalPlace;
-    // From here the kart drives itself.
+    // From here the kart drives itself, on a lap of honour: with nothing in hand to throw at those still racing.
     k.ai = true;
     k.bot.presses = k.presses;
+    k.item = null;
+    k.uses = 0;
+    k.roll = 0;
+    k.rolled = null;
     emit({ type: "finish", kart: k.id, place: k.finalPlace, time: at });
   }
 

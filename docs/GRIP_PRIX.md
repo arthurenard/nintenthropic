@@ -90,8 +90,10 @@ Three laps by default (the room may choose 1-5). Up to eight karts: the
 players, and bots filling the grid when the room wants them (on by default,
 six karts in all). Countdown 3-2-1-Go; the race ends when every player has
 finished, or 25 s after the first player finished — the rest are placed by
-how far round they got. A finished player's kart drives itself on. A player
-who leaves mid-race is replaced by a bot.
+how far round they got. A finished kart (a player's too) drives itself on,
+with nothing in hand: it drops its item at the line and the boxes give it
+none, so a lap of honour spins no one still racing. A player who leaves
+mid-race is replaced by a bot.
 
 ### Grand Prix and Mirror
 
