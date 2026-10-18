@@ -214,9 +214,11 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
 - **Boost.** Top speed +35% and strong acceleration while it lasts. Nitro
   1.5 s, a pad 1.0 s, a start boost 1.0 s.
 - **Start.** The countdown is 3 s plus half a second of "ready". Throttle
-  rising from 0 to 1 in the last 0.6 s before Go gives the start boost;
-  throttle held since before 1.2 s floods the engine (no drive for 0.6 s
-  after Go). Bots get a start boost by skill.
+  rising from 0 to 1 in the last second before Go (while the lights say 1)
+  gives the start boost; throttle held since before 1.2 s floods the engine
+  (no drive for 0.6 s after Go). Bots get a start boost by skill. (The window
+  was 0.6 s: hands closed as the 1 came up reached the sim about 0.8 s before
+  Go, after the fist's 0.12 s hold and the camera, and missed it.)
 - **Karts touch.** Circles of radius 1.1 m push apart, the faster one
   shoving harder; a `bump` event.
 - **Item boxes.** A row of five across the road at each of the track's

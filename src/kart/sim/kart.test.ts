@@ -280,7 +280,7 @@ describe("hop and drift", () => {
 });
 
 describe("the start", () => {
-  it("gives a start boost for opening the throttle in the last 0.6 s", () => {
+  it("gives a start boost for opening the throttle while the lights say 1", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));
     const events = run(r, GO_TICK + 1, () => input({ throttle: r.tick >= GO_TICK - 20 ? 1 : 0 }));
     expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "start", kart: 0 });
@@ -288,6 +288,16 @@ describe("the start", () => {
     run(plain, GO_TICK + 90, () => input({ throttle: plain.tick >= GO_TICK ? 1 : 0 }));
     run(r, 89, () => input({ throttle: 1 }));
     expect(view(r).speed).toBeGreaterThan(view(plain).speed + 2);
+  });
+
+  it("gives it to hands closed as the 1 comes up, and to a throttle that arrives a little after them (the hands' delay)", () => {
+    const one = run(race(HARBOUR_LIGHTS, racers(1, 0)), GO_TICK + 1).find((e) => e.type === "countdown" && e.n === 1)!.tick;
+    expect(one, "the lights say 1 for the last second").toBe(GO_TICK - 60);
+    for (const late of [0, 10, 40, 59]) {
+      const r = race(HARBOUR_LIGHTS, racers(1, 0));
+      const events = run(r, GO_TICK + 1, (tick) => input({ throttle: tick >= one + late ? 1 : 0 }));
+      expect(events.find((e) => e.type === "boost"), `${late} ticks after the 1`).toMatchObject({ source: "start", kart: 0 });
+    }
   });
 
   it("floods the engine when the throttle was down before 1.2 s: no drive for 0.6 s after Go", () => {
@@ -299,9 +309,9 @@ describe("the start", () => {
     expect(view(r).speed).toBeGreaterThan(5);
   });
 
-  it("is a plain start in between", () => {
+  it("is a plain start in between: on at the end of the 2", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));
-    const events = run(r, GO_TICK + 60, () => input({ throttle: r.tick >= GO_TICK - 55 ? 1 : 0 }));
+    const events = run(r, GO_TICK + 60, () => input({ throttle: r.tick >= GO_TICK - 66 ? 1 : 0 }));
     expect(count(events, "boost")).toBe(0);
     expect(view(r).speed).toBeGreaterThan(2);
   });

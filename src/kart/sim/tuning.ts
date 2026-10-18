@@ -182,8 +182,14 @@ export const TUNING = {
   start: {
     countdown: 3,
     ready: 0.5,
-    /** Throttle that came on within this long before Go gives the start boost... */
-    boostWindow: 0.6,
+    /**
+     * Throttle that came on within this long before Go gives the start boost:
+     * the whole of "1" on the lights, which is what a player is told ("close
+     * your hands on 1"). It was 0.6 s, and a player who closed their hands as
+     * the 1 came up had the throttle at about 0.8 s before Go (the hands' own
+     * delay: the 0.12 s a fist must last, and the camera) and missed it.
+     */
+    boostWindow: 1.0,
     /** ...and held since before this floods the engine... */
     floodAfter: 1.2,
     /** ...for this long after Go. */
