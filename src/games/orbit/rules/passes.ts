@@ -87,6 +87,9 @@ export function mixFor(pass: number, count: number): Partial<Record<Kind, number
   return out;
 }
 
+/** Past the sixth, the plain passes' cards take turns, so the long run is not one line over and over. */
+const LATER: readonly string[] = ["More debris.", "Still raining metal.", "The field has not thinned."];
+
 function subtitleFor(pass: number): string {
   switch (pass) {
     case 1:
@@ -102,7 +105,7 @@ function subtitleFor(pass: number): string {
     case 6:
       return "Faster now.";
     default:
-      return isDerelictPass(pass) ? "Another derelict." : "More debris.";
+      return isDerelictPass(pass) ? "Another derelict." : (LATER[(pass - 7) % LATER.length] as string);
   }
 }
 

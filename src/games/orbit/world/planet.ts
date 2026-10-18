@@ -102,6 +102,7 @@ uniform float uMoonShow;
 uniform float uFlag;
 uniform float uAurora;
 uniform vec4 uLightning;
+uniform float uStormCell;
 uniform vec4 uHi;
 uniform mat3 uNightMap;
 uniform float uNightScale;
@@ -399,14 +400,23 @@ void main() {
   vec3 albedo = sampleMap(tAlbedo, mg).rgb;
   float water = sampleMap(tWater, mg).r;
   // The lights: the night map read through the turn the game chose for
-  // this night (a lit country under the view; none by day).
-  vec3 lights = sampleMap(tNight, mapAt(hiLens(uNightMap * ng), 0.0)).rgb;
+  // this night (a lit country under the view; none by day). Where it is
+  // read is worked out here, in uniform flow; it is fetched, with the
+  // streets that break it up, only where the ground is in the dark - most
+  // of the planet in a pass, so most pixels skip four fetches.
+  MapAt mn = mapAt(hiLens(uNightMap * ng), 0.0);
+  float darkG = smoothstep(0.06, -0.08, dot(ng, s));
   // The detail under the map's pixel: terrain and water at two scales, streets at a finer one.
   Tri tgd = triAt(xg);
   vec4 dg1 = detailAt(tgd, 1.0);
   vec4 dg2 = detailAt(tgd, 4.0);
   vec4 det = mix(dg1, dg2, 0.4);
-  float streetsAt = detailAt(tgd, 8.0).r;
+  vec3 lights = vec3(0.0);
+  float streetsAt = 0.0;
+  if (darkG > 0.0) {
+    lights = sampleMap(tNight, mn).rgb;
+    streetsAt = detailAt(tgd, 8.0).r;
+  }
   // The relief: the height map's slopes (decoded to km), a little of the detail's.
   float hC = sampleMap(tHeight, mg).r;
   float hU = sampleMapAt(tHeight, mg, vec2(uHeightTexel * 0.35, 0.0)).r;
@@ -431,6 +441,13 @@ void main() {
   Tri tcd = triAt(drifted(pc, uCloudShift));
   float dome;
   float ca = cloudCover(cloud, tcd, dome);
+  // The night's storm brings its own thunderhead, some 80 km across, so its
+  // lightning has a cloud to light wherever the night is placed (open sky
+  // would show nothing at all).
+  if (uStormCell > 0.0) {
+    float cell = uStormCell * exp(-sq(acos(clamp(dot(xc, uLightning.xyz), -1.0, 1.0)) * R / 40.0));
+    ca = max(ca, cell * (0.55 + 0.45 * dome));
+  }
   // Cloudlet tops as a height field, domed by the detail, for their relief.
   float hCloud = CLOUDLET_H * pow(ca, 1.5) * (0.45 + 0.55 * dome) * (1.0 - smoothstep(4.0, 6.0, tcd.fine));
   vec3 dpx = dFdx(pc);
@@ -480,7 +497,7 @@ void main() {
     // Near the horizon the sea mirrors the sky.
     Lg += water * (0.02 + 0.98 * pow(1.0 - ndv, 5.0)) * SUN_E * vec3(0.02, 0.035, 0.07) * clamp(muG + 0.1, 0.0, 1.0);
     // City lights in the dark, broken into streets and blocks; the "HI" blinks back when asked.
-    float dark = smoothstep(0.06, -0.08, muG);
+    float dark = darkG;
     float hiBoost = 1.0 + uHi.w * exp(-pow(acos(clamp(dot(ng, uHi.xyz), -1.0, 1.0)) * R / 45.0, 2.0));
     // Broken hard into streets and blocks (mean 1), evened out where the
     // streets are finer than a pixel. Not in the environment light: at the
@@ -603,6 +620,7 @@ export class PlanetSky {
         uFlag: { value: 0 },
         uAurora: { value: 0 },
         uLightning: { value: new Vector4(0, 1, 0, 0) },
+        uStormCell: { value: 0 },
         uHi: { value: new Vector4(0, 1, 0, 0) },
         uNightMap: { value: new Matrix3() },
         uNightScale: { value: 1 },

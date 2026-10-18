@@ -44,5 +44,9 @@ describe("the passes", () => {
     expect(passSpec(1).subtitle).toBe("Shoot the debris before it hits the glass.");
     expect(passSpec(5).subtitle).toBe("The Derelict. Hit its fuel tank.");
     for (let p = 1; p <= 12; p++) expect(passSpec(p).subtitle.length).toBeGreaterThan(5);
+    // The long run's cards take turns, and a derelict's pass always says so.
+    expect([7, 8, 9, 11].map((p) => passSpec(p).subtitle)).toEqual(["More debris.", "Still raining metal.", "The field has not thinned.", "Still raining metal."]);
+    expect(passSpec(10).subtitle).toBe("Another derelict.");
+    expect(passSpec(8).subtitle).not.toBe(passSpec(7).subtitle);
   });
 });

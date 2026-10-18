@@ -137,10 +137,29 @@ export const GROUND_RATE = 0.14 * DEG;
 /** In the breathers the ground turns faster: the night side is a time-lapse. */
 export const BREATHER_GROUND_RATE = 1.2 * DEG;
 
-/** The Moon rises over the limb from this pass on. */
+/** The middle of a breather's night, seconds into it: what the night shows is placed for this moment. */
+export const NIGHT_MID = (SET_END + RISE_START) / 2;
+
+/**
+ * How far the ground will turn (radians) between `t` seconds into a breather
+ * and the middle of its night. The ground runs some 500 km under the
+ * station between sunset's start and full dark, so a sight set where it
+ * should be seen at the start has gone off the bottom of the view by night.
+ */
+export function turnUntilNight(t: number): number {
+  return BREATHER_GROUND_RATE * Math.max(0, NIGHT_MID - t);
+}
+
+/**
+ * The Moon rises over the limb from this pass on, in the one stretch of sky
+ * the station leaves open there: low in the right-hand window, between the
+ * limb and the solar array, a few degrees up at most (any higher, or further
+ * left, and the array or the window's frame hides it). Opposite the day's
+ * sun, so it shows nearly full.
+ */
 export const MOON_RISE_RATE = 0.16 * DEG;
-export const MOON_TOP = 11 * DEG;
-export const MOON_AZIMUTH = 24 * DEG;
+export const MOON_TOP = 4 * DEG;
+export const MOON_AZIMUTH = 35 * DEG;
 /** Its disc, a little larger than life so it can be found and shot. */
 export const MOON_RADIUS = 0.9 * DEG;
 

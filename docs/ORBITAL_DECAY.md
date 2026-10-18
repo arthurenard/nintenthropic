@@ -167,25 +167,32 @@ pane worn down over time. Keep the drone working: don't shoot it."
 "Secrets 2 of 8" on the results.
 
 1. **The astronaut.** On pass 2, a spacewalker drifts along the truss on a
-   tether. Shoot near (not at) them: they turn and give you a slow thumbs-down.
-   Shoot them and — they were never there; a sticker of one on the truss.
+   tether. Shoot near (not at) them: they turn and give you a slow thumbs-down,
+   then get back to work. Shoot them and — they were never there; a sticker of
+   one on the truss ("Only a sticker.").
 2. **The lost tool bag.** A white tool bag tumbles past once, forever lost.
    Shoot it: "Lost and Found" — it bursts into floating tools.
 3. **The duck.** A yellow rubber duck drifts through the debris field. Shoot
-   it: it spins away, and the popup reads "In space, no one can hear you
-   squeak." (Every game hides one duck.)
-4. **The arm.** Shoot the robotic arm's hand: it waves.
+   it: it spins away, and the line under the view reads "In space, no one can
+   hear you squeak." (Every game hides one duck.)
+4. **The arm.** Shoot the robotic arm's hand: it waves back (every time).
 5. **The capsule.** A crew member peers out of the docked capsule's window.
    Shoot near the capsule: they pull down the shade.
 6. **The storm.** Shoot three lightning flashes in the night-side storm in one
    breather: an aurora ripples over the limb for the rest of the game.
-7. **The Moon.** When the Moon rises over the limb (pass 4), shoot it: a tiny
+7. **The Moon.** When the Moon rises over the limb (pass 4), low in the
+   right-hand window where the station leaves the sky open, shoot it: a tiny
    flag glints on it for a moment.
 8. **The message.** On the night side, on every third night (the third
-   breather, the sixth...), a country's lights spell a small "HI", a few
-   percent of the view across, low in the right-hand window and no brighter
-   than the towns round it. It drifts with the ground; shoot it and it blinks
-   back "HI" twice.
+   breather, the sixth...), a country's lights spell a small "HI", under two
+   percent of the view across in the middle of the night, low in the
+   right-hand window and no brighter than the towns round it. Each night's
+   lights are set for where the ground will have carried them by then (it
+   runs some 500 km under the station between sunset and full dark). It
+   drifts with the ground; shoot it and it blinks back "HI" twice.
+
+A secret found again plays its show again where it still can (the arm, the
+flag, the HI, the spacewalker), with no second toast.
 
 Konami on the arcade: a golden laser and a gold heat gauge.
 

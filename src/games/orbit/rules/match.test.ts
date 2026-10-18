@@ -344,6 +344,12 @@ describe("the drone and the secrets", () => {
     expect(match.scorer.score).toBe(200);
     expect(listener.count("droneShot")).toBe(1);
     expect(match.drone.knocked).toBe(true);
+    // Docked, it was mending nothing; the next time it is caught at a window.
+    expect(listener.last("droneShot")?.args.slice(1)).toEqual([1, false]);
+    match.drone.state = "mending";
+    match.drone.to = 2;
+    match.resolveShot({ kind: "drone" });
+    expect(listener.last("droneShot")?.args.slice(1)).toEqual([2, true]);
   });
 
   it("calls up the aurora after three lightning flashes in one breather", () => {
@@ -364,6 +370,12 @@ describe("the drone and the secrets", () => {
     match.resolveShot({ kind: "secret", shot: { secret: "astronaut", at: true } });
     expect(listener.all("secretFound").map((e) => e.args[0])).toEqual(["duck", "astronaut"]);
     expect(match.results().secretsFound).toBe(2);
+    // Found again, its show plays again (the arm waves back every time), with no second toast.
+    match.resolveShot({ kind: "secret", shot: { secret: "arm" } });
+    match.resolveShot({ kind: "secret", shot: { secret: "arm" } });
+    expect(listener.all("secretFound").map((e) => e.args[0])).toEqual(["duck", "astronaut", "arm"]);
+    expect(listener.all("secretAgain").map((e) => e.args[0])).toEqual(["duck", "arm"]);
+    expect(match.results().secretsFound).toBe(3);
   });
 });
 

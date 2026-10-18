@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TIPS, HintLine, tipText, TIP_SECONDS, ventHint } from "./tips";
+import { ALL_TIPS, droneShotLine, HintLine, tipText, TIP_SECONDS, ventHint } from "./tips";
 
 describe("Orbital Decay's tips", () => {
   it("has the design's five, prefixed with the game's name", () => {
@@ -18,6 +18,13 @@ describe("Orbital Decay's tips", () => {
     expect(ventHint(undefined)).toBe("Point off the screen to vent the laser.");
     expect(ventHint("mouse")).toBe("Right-click or press V to vent the laser.");
     expect(ventHint("touch")).toBe("Tap with two fingers to vent the laser.");
+  });
+
+  it("says who that was when the drone is shot, more pointedly each time", () => {
+    expect(droneShotLine(1, false)).toBe("That was the drone.");
+    expect(droneShotLine(1, true)).toBe("That was the drone.");
+    expect(droneShotLine(2, true)).toBe("The drone. It was mending your window.");
+    expect(droneShotLine(3, false)).toBe("The drone. Again.");
   });
 
   it("learns venting by doing it, and every other tip by seeing it", () => {

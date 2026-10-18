@@ -42,6 +42,16 @@ export function tipText(id: TipId, input: InputKind | undefined): string {
 }
 
 /**
+ * What the hint line says when the drone is shot: the lesson the first time,
+ * and after that the crew's patience wearing thin (and, if it was at a
+ * window when it was hit, whose window).
+ */
+export function droneShotLine(hits: number, mending: boolean): string {
+  if (hits <= 1) return "That was the drone.";
+  return mending ? "The drone. It was mending your window." : "The drone. Again.";
+}
+
+/**
  * A lesson is learned when it has been shown, or - for venting, which is
  * shown at the start of every game until then - when the player has done
  * it by themselves.
