@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { BUBBLE_LIFE, bubbleLook } from "./bubbles";
+import { honkWord } from "./eggs";
 import { Fireworks, planShow } from "./fireworks";
+import { shownSpecies } from "./kartModel";
 
 describe("the honk bubble", () => {
+  it("says what the driver would: Dabble quacks, Rivet beeps, everyone else honks", () => {
+    expect(honkWord(shownSpecies({ id: 0, character: "dabble" }))).toBe("Quack!");
+    expect(honkWord(shownSpecies({ id: 0, character: "rivet" }))).toBe("Beep.");
+    for (const character of ["bun", "pepper", "moss", "kit", "juniper", "mango", "bramble"]) expect(honkWord(shownSpecies({ id: 7, character }))).toBe("Honk!");
+    // A racer who chose nobody is driven by whoever the picture shows for their id, and speaks as they would.
+    expect(honkWord(shownSpecies({ id: 7 }))).toBe(shownSpecies({ id: 7 }) === "robot" ? "Beep." : "Honk!");
+  });
+
   it("pops in with a little overshoot, drifts up, and fades out by the end of its life", () => {
     expect(bubbleLook(0).opacity).toBe(0);
     const early = bubbleLook(0.05);

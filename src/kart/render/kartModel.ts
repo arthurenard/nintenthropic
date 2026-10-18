@@ -19,7 +19,7 @@ import { AdditiveBlending, BufferGeometry, Group, LOD, Matrix4, Mesh, MeshBasicM
 import { CHARACTERS } from "../characters";
 import type { RacerSetup } from "../contract";
 import { hasArtKart, createArtKart, type ArtKit } from "./kartArt";
-import { createDriver, speciesOf } from "./drivers";
+import { createDriver, speciesOf, type Species } from "./drivers";
 import { MeshBuilder, mergeBaked, mixRgb, rgb, shapes, withDetail, xf, type Rgb } from "./kartBuilder";
 import { SURF, kartMaterial, withStudioFallback, type Surf } from "./kartMaterial";
 import { DRIVER_AT, FAR_DISTANCE, PLATE, WHEEL_FRONT, WHEEL_REAR, KART_EXHAUST } from "./kartSpec";
@@ -493,9 +493,14 @@ const flameMaterial = new MeshBasicMaterial({ vertexColors: true, blending: Addi
 /** Who sits in a kart whose racer names no driver: the base cast in turn, by the kart's id. */
 const STAND_INS = CHARACTERS.filter((c) => !c.unlock);
 
+/** Who drives a racer's kart: their driver, or for a racer who chose none, one of the eight by their id. */
+export function shownSpecies(racer: Pick<RacerSetup, "id" | "character">): Species {
+  return speciesOf(racer.character, STAND_INS[racer.id % STAND_INS.length]!.species);
+}
+
 /** What the Blender kart (kartArt.ts) borrows from this one: the flames, the numbered plate and the driver. */
 function artKit(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): ArtKit {
-  const species = speciesOf(racer.character, STAND_INS[racer.id % STAND_INS.length]!.species);
+  const species = shownSpecies(racer);
   return {
     flame: flameGeometry,
     flameMaterial,
@@ -520,7 +525,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   const golden = racer.golden === true;
   const accent = rgb(racer.colour);
   const material = kartMaterial();
-  const species = speciesOf(racer.character, STAND_INS[racer.id % STAND_INS.length]!.species);
+  const species = shownSpecies(racer);
 
   // ── The near kart ──
   const chassisGeo = buildChassis(accent, golden, racer.id, 0);
