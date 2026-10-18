@@ -331,6 +331,9 @@ class WorkerTracker extends BaseTracker {
         if (this.running) this.publish(message.hands, message.capturedAt);
       } else if (message.type === "tried") {
         this.watch?.tried(message.kept, performance.now());
+      } else if (message.type === "restarted") {
+        this.started = message.delegate;
+        this.watch?.restarted(message.delegate, performance.now());
       } else if (message.type === "face-result") {
         this.busy = false;
         if (this.running) this.publishFace(message.eyes, message.capturedAt, message.inference);
@@ -338,7 +341,8 @@ class WorkerTracker extends BaseTracker {
     });
   }
 
-  private readonly started: "GPU" | "CPU";
+  /** The delegate the landmarker was started on, or made again on after its GPU went (gpu.ts). */
+  private started: "GPU" | "CPU";
 
   /** The delegate the landmarker reads with now (it can change once a try of the other has been made: adapt.ts). */
   get delegate(): "GPU" | "CPU" {
@@ -544,6 +548,11 @@ class LaneTracker extends BaseTracker {
     if (message.type === "tried") {
       lane.watch?.tried(message.kept, performance.now());
       this.trials.end();
+      return;
+    }
+    if (message.type === "restarted") {
+      lane.delegate = message.delegate;
+      lane.watch?.restarted(message.delegate, performance.now());
       return;
     }
     if (message.type !== "result") return;

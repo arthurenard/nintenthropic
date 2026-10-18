@@ -142,6 +142,18 @@ describe("players sharing a camera, each read in a worker of their own", () => {
     expect(workers[1]!.sent.filter((m) => m.type === "try")).toEqual([{ type: "try", delegate: "GPU", frames: TRY_FRAMES }]);
   });
 
+  it("follows a worker made again on another delegate, its GPU gone", () => {
+    const { tracker, workers } = make(["GPU", "CPU"], true);
+    tracker.start(video);
+    workers[0]!.answer({ type: "restarted", delegate: "CPU" });
+    expect(tracker.delegates).toEqual(["CPU", "CPU"]);
+    // Its frames go on as before.
+    tick(100);
+    workers[0]!.answer({ type: "result", sequence: 0, capturedAt: 100, hands: [hand()], inference: 20, face: false });
+    tick(133);
+    expect(workers[0]!.frames).toHaveLength(2);
+  });
+
   it("counts a frame a busy worker missed only at a reading's pace: a 60 fps camera's in-between frames are not drops", () => {
     const { tracker, workers } = make(["GPU", "CPU"]);
     tracker.start(video);
