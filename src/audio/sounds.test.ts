@@ -56,7 +56,7 @@ describe("the cue table", () => {
 
   it("keeps the interface and the hurt effect in the core pack, and nothing else there", () => {
     expect(cuesInPack("core").sort()).toEqual(
-      ["calib_done", "calib_hit", "heartbeat", "heartbeat_beat", "slowmo_boom", "ui_confirm", "ui_tap"].sort(),
+      ["calib_done", "calib_hit", "heartbeat", "heartbeat_beat", "slowmo_boom", "ui_confirm", "ui_gold", "ui_tap"].sort(),
     );
   });
 
@@ -66,7 +66,7 @@ describe("the cue table", () => {
     expect(level("bandit_shot")).toBeLessThan(level("revolver_shot"));
     expect(level("bandit_shot")).toBeGreaterThan(level("revolver_shot") - 6);
     for (const cue of ["wind", "water_leak", "tumbleweed_roll", "crow_caw", "dog_bark_distant"]) expect(level(cue), cue).toBeLessThan(-12);
-    for (const cue of ["ui_tap", "ui_confirm", "calib_hit", "calib_done"]) expect(level(cue), cue).toBeLessThanOrEqual(-14);
+    for (const cue of ["ui_tap", "ui_confirm", "calib_hit", "calib_done", "ui_gold"]) expect(level(cue), cue).toBeLessThanOrEqual(-14);
   });
 
   it("gives every cue at least three takes", () => {

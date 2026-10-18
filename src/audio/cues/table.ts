@@ -84,7 +84,7 @@ import {
   waveClear,
   waveStart,
 } from "./music";
-import { calibDone, calibHit, uiConfirm, uiTap } from "./ui";
+import { calibDone, calibHit, uiConfirm, uiGold, uiTap } from "./ui";
 import { NIGHT_CUES } from "./night";
 import { ORBIT_CUES } from "./orbit";
 import { KART_CUES } from "./kart";
@@ -397,6 +397,11 @@ export const CUES: Record<string, CueSpec> = {
   calib_done: {
     recipe: calibDone, pack: "core", bus: "ui", level: -14,
     priority: 2, maxInstances: 1, vary: 0, expect: [0.6, 1.6],
+  },
+  /** A secret unlocked from the arcade (the Konami code): in core, since it is heard outside a game. */
+  ui_gold: {
+    recipe: uiGold, pack: "core", bus: "ui", level: -14,
+    priority: 2, maxInstances: 1, vary: 0, expect: [0.3, 0.7],
   },
   ...NIGHT_CUES,
 
