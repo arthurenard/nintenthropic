@@ -196,6 +196,27 @@ describe("a room", () => {
     expect(bob.link.connected).toBe(false);
   });
 
+  it("says the line is quiet while nothing at all comes from the host, and connected again when it does", async () => {
+    const world = new World({ latency: 20 });
+    const { code } = await openRoom(world);
+    const bob = world.guest(code);
+    bob.setLocalPlayers([player("Bob")]);
+    const closes = closedReasons(bob);
+    await world.run(1);
+    expect(bob.link.connected).toBe(true);
+    // A quiet lobby is not a quiet line: the host answers a ping every second.
+    await world.run(5);
+    expect(bob.link.connected).toBe(true);
+    // The line stalls for four seconds: nothing gets through either way.
+    world.net.setConditions({ latency: 4000 });
+    await world.run(3);
+    expect(bob.link.connected).toBe(false);
+    world.net.setConditions({ latency: 20 });
+    await world.run(3);
+    expect(bob.link.connected).toBe(true);
+    expect(closes).toEqual([]);
+  });
+
   it("says 'network' when the line is cut without a goodbye", async () => {
     const world = new World({ latency: 20 });
     const { code } = await openRoom(world);

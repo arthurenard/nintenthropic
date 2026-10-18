@@ -286,15 +286,24 @@ export class RaceScreen {
 
   /** "Paused" on every other device while the host has the race stopped, then the 3-2-1 on all of them. */
   private veil(lobby: LobbyState): void {
+    const session = this.ctx?.session;
     const pause = lobby.pause ?? null;
-    const mine = pause !== null && pause.by === this.ctx?.session.device;
+    const mine = pause !== null && pause.by === session?.device;
+    // A guest who has heard nothing from the host for a few seconds: the race has not frozen for nothing, it waits.
+    const waiting = pause === null && session?.role === "guest" && !session.link.connected;
     // On the device that paused, the sheet says it; the veil takes over for the 3-2-1.
-    const show = pause !== null && !(mine && pause.resume === null && this.sheet.open);
-    const key = show ? `${pause!.resume}|${mine}` : "";
+    const show = waiting || (pause !== null && !(mine && pause.resume === null && this.sheet.open));
+    const key = waiting ? "waiting" : show ? `${pause!.resume}|${mine}` : "";
     if (key === this.veilKey) return;
     this.veilKey = key;
     $("pause-veil").hidden = !show;
     if (!show) return;
+    if (waiting) {
+      $("pause-count").hidden = true;
+      setText("pause-heading", `Waiting for ${hostName(lobby)}`);
+      setText("pause-words", "The race carries on when the connection is back.");
+      return;
+    }
     const resuming = pause!.resume !== null;
     $("pause-count").hidden = !resuming;
     setText("pause-count", resuming ? String(pause!.resume) : "");
