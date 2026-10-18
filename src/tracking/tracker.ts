@@ -112,7 +112,12 @@ abstract class BaseTracker implements Tracker {
   protected video: HTMLVideoElement | null = null;
   protected running = false;
   frameAt = 0;
+  /**
+   * The callback asked for next, and which kind it is: a video frame's and an animation frame's ids are counted apart,
+   * so cancelling one's id as the other would cancel someone else's (the game loop's next frame, say).
+   */
   private handle = 0;
+  private handleKind: "video" | "animation" | null = null;
   private lastMediaTime = -1;
   private lastTimestamp = -1;
   private readonly listeners = new Set<(frame: HandFrame) => void>();
@@ -190,9 +195,9 @@ abstract class BaseTracker implements Tracker {
 
   stop(): void {
     this.running = false;
-    const video = this.video;
-    if (typeof video?.cancelVideoFrameCallback === "function") video.cancelVideoFrameCallback(this.handle);
-    cancelAnimationFrame(this.handle);
+    if (this.handleKind === "video") this.video?.cancelVideoFrameCallback(this.handle);
+    else if (this.handleKind === "animation") cancelAnimationFrame(this.handle);
+    this.handleKind = null;
   }
 
   get isRunning(): boolean {
@@ -269,6 +274,7 @@ abstract class BaseTracker implements Tracker {
     const video = this.video;
     if (!this.running || !video) return;
     if (typeof video.requestVideoFrameCallback === "function") {
+      this.handleKind = "video";
       this.handle = video.requestVideoFrameCallback((now, metadata) => {
         this.schedule();
         this.frameAt = performance.now();
@@ -280,6 +286,7 @@ abstract class BaseTracker implements Tracker {
     } else {
       // Without it, poll with the display and read a frame only when the
       // video has moved on.
+      this.handleKind = "animation";
       this.handle = requestAnimationFrame((now) => {
         this.schedule();
         if (this.running && video.currentTime !== this.lastMediaTime) {

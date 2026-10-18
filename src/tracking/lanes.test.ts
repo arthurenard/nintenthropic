@@ -157,6 +157,28 @@ describe("players sharing a camera, each read in a worker of their own", () => {
     expect(tracker.stats().skipped).toBeGreaterThan(50);
   });
 
+  it("stops by cancelling the camera's callback, never an animation frame that happens to have its number", () => {
+    const cancelled: string[] = [];
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => cancelled.push(`animation ${id}`));
+    let ids = 0;
+    const camera = {
+      ...video,
+      requestVideoFrameCallback: (callback: (now: number, metadata: { captureTime: number }) => void) => {
+        callbacks.push(callback);
+        return ++ids;
+      },
+      cancelVideoFrameCallback: (id: number) => cancelled.push(`video ${id}`),
+    } as unknown as HTMLVideoElement;
+    const { tracker } = make(["GPU", "CPU"]);
+    tracker.start(camera);
+    tick(100);
+    tracker.stop();
+    // The video's callbacks are counted from 1, as the game loop's animation frames are: #2 is both.
+    expect(cancelled).toEqual(["video 2"]);
+    tracker.stop();
+    expect(cancelled).toEqual(["video 2"]);
+  });
+
   it("lets every worker go when it is done", () => {
     const { tracker, workers } = make(["GPU", "CPU", "CPU", "CPU"]);
     tracker.start(video);
