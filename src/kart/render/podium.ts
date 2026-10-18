@@ -45,6 +45,7 @@ import { WebGLUnavailable } from "../../engine/common";
 import type { RacerSetup } from "../contract";
 import type { KartFactory, KartModel, KartPose } from "./kart";
 import { createProceduralKart } from "./kartModel";
+import { useStudioEnvironment } from "./kartMaterial";
 import { TAU, clamp } from "./math";
 
 /** A winner on the podium. */
@@ -265,6 +266,12 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
   let height = canvas.clientHeight || 600;
   let time = 0;
   let disposed = false;
+  /**
+   * The winners' shaders are being built (`show`): a dozen programs, which the first picture would otherwise build one
+   * after another, holding the page still for a few hundred milliseconds as the ceremony begins. Until they are ready the
+   * ceremony waits, and then starts from its beginning.
+   */
+  let building: Promise<void> | null = null;
   const camera = new PerspectiveCamera(32, width / height, 0.5, 200);
 
   const clearWinners = () => {
@@ -313,7 +320,7 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
   };
   setSize(width, height, dpr0);
 
-  return {
+  const podium: PodiumRenderer = {
     show(entries) {
       clearWinners();
       entries.slice(0, 3).forEach((entry, index) => {
@@ -341,10 +348,20 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
         built.push(cup);
         standings.push({ place: spec.place, model, trophy: cup.group, x: spec.x, y: spec.height, phase: index * 1.7 });
       });
+      // The karts' paint reflects the studio sky, which the first picture of a kart would give the scene: given now, so
+      // the shaders built here are the ones that picture draws with.
+      useStudioEnvironment(scene, renderer);
+      const mine: Promise<void> = renderer
+        .compileAsync(scene, camera)
+        .catch(() => {})
+        .then(() => {
+          if (building === mine) building = null;
+        });
+      building = mine;
     },
 
     frame(dt) {
-      if (disposed) return;
+      if (disposed || building) return;
       dt = clamp(dt, 0, 0.1);
       time += dt;
       for (const standing of standings) {
@@ -407,4 +424,13 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
       renderer.forceContextLoss();
     },
   };
+  readiness.set(podium, () => building ?? Promise.resolve());
+  return podium;
+}
+
+const readiness = new WeakMap<PodiumRenderer, () => Promise<void>>();
+
+/** Resolves once the winners last shown are ready to draw (the dev page waits for it before jumping the clock ahead). */
+export function podiumReady(podium: PodiumRenderer): Promise<void> {
+  return readiness.get(podium)?.() ?? Promise.resolve();
 }
