@@ -234,6 +234,8 @@ export class Scope {
   private readonly crackCanvas = document.createElement("canvas");
   private readonly crackTexture: CanvasTexture;
   private drawnKey = "";
+  /** Which finish the rim's colour was last set for (parsed once, not every frame). */
+  private rimGold: boolean | null = null;
   private width = 1280;
   private height = 720;
   private dpr = 1;
@@ -423,7 +425,10 @@ export class Scope {
     if (dotMils) u["uDot"]!.value.set(dotMils.right * ppm * this.dpr, -dotMils.down * ppm * this.dpr);
     u["uCracked"]!.value = this.cracked ? 1 : 0;
     u["uFlash"]!.value = flash;
-    (u["uRim"]!.value as Color).set(this.gold ? "#d9a441" : "#8d9aa8");
+    if (this.rimGold !== this.gold) {
+      this.rimGold = this.gold;
+      (u["uRim"]!.value as Color).set(this.gold ? "#d9a441" : "#8d9aa8");
+    }
     const auto = renderer.autoClear;
     renderer.autoClear = false;
     // The reticle fades in only once the lens is at power.
