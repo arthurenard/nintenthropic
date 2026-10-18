@@ -206,6 +206,32 @@ describe("the engine", () => {
     stop(); // twice is harmless
   });
 
+  it("lets a loop's nodes go at once when it stops while the sound is off, rather than waiting on a clock that stands still", async () => {
+    const { e, ctx } = engine(true);
+    await Promise.resolve();
+    expect(ctx.state).toBe("suspended");
+    e.library.renderNow("wind");
+    const before = ctx.sources.length;
+    const stop = e.loop("wind");
+    const src = ctx.sources.slice(before).find((s) => s.loop)!;
+    expect(src.outputs.length).toBeGreaterThan(0);
+    stop();
+    expect(src.stoppedAt).not.toBeNull();
+    expect(src.outputs).toEqual([]);
+    expect(src.onended).toBeNull();
+    // Running, it fades as before, and lets go when the source has ended.
+    e.setMuted(false);
+    ctx.state = "running";
+    const n = ctx.sources.length;
+    const stopRunning = e.loop("wind");
+    const running = ctx.sources.slice(n).find((s) => s.loop)!;
+    stopRunning();
+    expect(running.stoppedAt).toBeGreaterThan(0);
+    expect(running.outputs.length).toBeGreaterThan(0);
+    running.onended!();
+    expect(running.outputs).toEqual([]);
+  });
+
   it("muffles and ducks when hurt, and slows the world in slow motion", () => {
     const { e, ctx } = engine();
     e.setFilter("hurt", 0.5);

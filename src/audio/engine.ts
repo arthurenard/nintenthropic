@@ -296,14 +296,34 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       this.loops.delete(state);
       const { source, gain, nodes } = state;
       if (!source || !gain) return;
-      const now = this.ctx.currentTime;
-      const fadeOut = Math.max(0.02, spec.fadeOut ?? 0.3);
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(gain.gain.value, now);
-      gain.gain.linearRampToValueAtTime(0, now + fadeOut);
-      source.stop(now + fadeOut + 0.02);
-      source.onended = () => nodes.forEach((n) => n.disconnect());
+      this.endLoop(source, gain, nodes, Math.max(0.02, spec.fadeOut ?? 0.3));
     };
+  }
+
+  /**
+   * A loop's ending: a fade, and its nodes let go once the source has
+   * stopped. A context that is not running (muted, the tab hidden) is heard
+   * by no one and its clock stands still, so a fade there would hold the
+   * nodes until it runs again - for a player who keeps the sound off, never,
+   * and every round's ambience would pile up - so they go at once.
+   */
+  private endLoop(source: AudioBufferSourceNode, gain: GainNode, nodes: AudioNode[], fadeOut: number): void {
+    if (this.ctx.state !== "running") {
+      source.onended = null;
+      try {
+        source.stop();
+      } catch {
+        // Never started.
+      }
+      for (const n of nodes) n.disconnect();
+      return;
+    }
+    const now = this.ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0, now + fadeOut);
+    source.stop(now + fadeOut + 0.02);
+    source.onended = () => nodes.forEach((n) => n.disconnect());
   }
 
   /**
@@ -382,13 +402,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
         stopped = true;
         if (!live) return;
         const { src, gain, nodes } = live;
-        const now = this.ctx.currentTime;
-        const fadeOut = Math.max(0.02, spec.fadeOut ?? 0.15);
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + fadeOut);
-        src.stop(now + fadeOut + 0.02);
-        src.onended = () => nodes.forEach((n) => n.disconnect());
+        this.endLoop(src, gain, nodes, Math.max(0.02, spec.fadeOut ?? 0.15));
         live = null;
       },
     };
