@@ -131,6 +131,19 @@ class Sprites {
     col.needsUpdate = true;
     size.needsUpdate = true;
   }
+
+  /** Every particle gone (the next update hides them). */
+  clear(): void {
+    this.age.fill(1);
+    this.life.fill(1);
+  }
+
+  /** How many particles are alive. */
+  get live(): number {
+    let n = 0;
+    for (let i = 0; i < this.n; i++) if (this.age[i]! < this.life[i]!) n++;
+    return n;
+  }
 }
 
 
@@ -828,10 +841,18 @@ export class Effects {
     this.streaks.update(step);
   }
 
-  /** Forgets per-kart state (a new race). */
+  /** Forgets per-kart state and lets every particle go (a new race: the last one's smoke and confetti do not hang over the grid). */
   clear(): void {
     this.state.clear();
     this.streaks.clear();
+    this.add.clear();
+    this.norm.clear();
+    this.now.clear();
+  }
+
+  /** Particles alive, of the lasting kinds (light and smoke). */
+  get live(): number {
+    return this.add.live + this.norm.live;
   }
 
   dispose(): void {
