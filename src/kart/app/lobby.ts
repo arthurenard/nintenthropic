@@ -25,7 +25,7 @@ import { canStart, hostName, localPlayers, screenLabel, waitingLine } from "./ro
 import { joinUrl, spellCode } from "./format";
 import type { Services } from "./services";
 import { postcard, cupOfTrack } from "./trackArt";
-import { Segmented, Switch, colourDot, focusHeading } from "./ui";
+import { Segmented, Switch, calm, colourDot, focusHeading } from "./ui";
 
 export type ScreenChoice = "here" | "host";
 
@@ -48,8 +48,6 @@ export function earnedTracks(): { id: string; name: string }[] {
   if (!isUnlocked("secret-track", loadUnlocks(), all)) return [];
   return TRACKS.filter((track) => track.secret).map((track) => ({ id: track.id, name: track.name }));
 }
-
-const calm = (): boolean => document.documentElement.hasAttribute("data-reduce-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** One racer's card, kept between renders so only what changed moves. */
 interface Card {

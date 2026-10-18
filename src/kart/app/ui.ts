@@ -106,3 +106,10 @@ export function setBar(bar: HTMLElement, fraction: number): void {
 export function focusHeading(heading: HTMLElement | null): void {
   heading?.focus({ preventScroll: true });
 }
+
+/**
+ * Whether to keep things still. app.ts sets the page's data-reduce-motion from
+ * the player's own Reduce Motion, or the system's when they have not chosen,
+ * so this reads only the attribute: a player who turned it off gets motion.
+ */
+export const calm = (): boolean => document.documentElement.hasAttribute("data-reduce-motion");

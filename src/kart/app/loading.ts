@@ -13,7 +13,7 @@ import { trackById } from "../track/tracks";
 import { tipsFor } from "./eggs";
 import { lapsLabel } from "./format";
 import { cupOfTrack, outlinePicture, postcardUrl } from "./trackArt";
-import { setBar } from "./ui";
+import { calm, setBar } from "./ui";
 
 /** What the screen says about the race being loaded. */
 export interface RaceWords {
@@ -97,7 +97,7 @@ export class LoadingScreen {
       line.replaceChildren(icon("hand"), element("span", undefined, next));
       line.classList.remove("out");
     };
-    if (first || document.documentElement.hasAttribute("data-reduce-motion")) {
+    if (first || calm()) {
       set();
       return;
     }

@@ -11,7 +11,7 @@ import { $, announce, element, setText } from "../../ui/dom";
 import { GP_STANDINGS_MS, cupById } from "../grandprix";
 import { ordinal } from "./format";
 import { hostName, localPlayers } from "./roster";
-import { colourDot, focusHeading } from "./ui";
+import { calm, colourDot, focusHeading } from "./ui";
 import "./grandprix.css";
 
 export interface StandingsHooks {
@@ -90,7 +90,7 @@ export class StandingsScreen {
     const items = rows.map(({ row }, index) => this.item(row, mine, index));
     const start = [...rows].sort((a, b) => a.was - b.was || a.now - b.now);
     const byRow = new Map(rows.map((r, i) => [r, items[i]!]));
-    const calm = document.documentElement.hasAttribute("data-reduce-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = calm();
 
     const show = (order: typeof rows, rank: (r: (typeof rows)[number]) => number, total: (r: (typeof rows)[number]) => number) => {
       this.list.replaceChildren(...order.map((r) => byRow.get(r)!));
@@ -115,7 +115,7 @@ export class StandingsScreen {
     // The rows rise one after the other the first moment they are there; once they have, the sliding of the count-up must not start them again.
     this.list.classList.add("entering");
     this.later(ENTER_FOR, () => this.list.classList.remove("entering"));
-    if (calm) return finish();
+    if (still) return finish();
 
     // Where they stood, with the points they had.
     show(start, (r) => r.was, (r) => r.before);

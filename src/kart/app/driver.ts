@@ -29,7 +29,7 @@ import type { DriverStage } from "../render/stage";
 import { CLASS_WORDS, SEGMENTS, statsOf } from "./driverStats";
 import { duckTracks } from "./eggs";
 import { moveIn, navPresses, type NavKey } from "./nav";
-import { Switch, focusHeading } from "./ui";
+import { Switch, calm, focusHeading } from "./ui";
 
 export interface DriverChoice {
   character: string;
@@ -318,8 +318,7 @@ export class DriverScreen {
       tile.button.tabIndex = on ? 0 : -1;
       if (on && this.dock.scrollWidth > this.dock.clientWidth + 1) {
         const left = tile.button.offsetLeft - (this.dock.clientWidth - tile.button.offsetWidth) / 2;
-        const calm = document.documentElement.hasAttribute("data-reduce-motion");
-        this.dock.scrollTo({ left: Math.max(0, left), behavior: calm ? "auto" : "smooth" });
+        this.dock.scrollTo({ left: Math.max(0, left), behavior: calm() ? "auto" : "smooth" });
       }
     }
   }
@@ -516,7 +515,7 @@ export class DriverScreen {
 
   private async startStage(): Promise<void> {
     const run = this.opened;
-    const calm = document.documentElement.hasAttribute("data-reduce-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = calm();
     this.mode = "loading";
     this.stageBox.dataset.stage = "loading";
     this.stageBox.classList.remove("has-photo", "peeking", "live");
@@ -531,7 +530,7 @@ export class DriverScreen {
         const canvas = element("canvas", "stage-canvas");
         canvas.setAttribute("aria-hidden", "true");
         this.stageBox.prepend(canvas);
-        const stage = await createDriverStage(canvas, { reduceMotion: calm, lowPower: probe.low });
+        const stage = await createDriverStage(canvas, { reduceMotion: still, lowPower: probe.low });
         if (run !== this.opened) {
           stage.dispose();
           canvas.remove();
