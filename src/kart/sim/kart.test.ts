@@ -342,6 +342,8 @@ describe("the start", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));
     const events = run(r, GO_TICK + 30, () => input({ throttle: r.tick >= GO_TICK - 120 ? 1 : 0 }));
     expect(count(events, "boost")).toBe(0);
+    // Said once, at Go, so the engine coughs for the kart that flooded and no other.
+    expect(events.filter((e) => e.type === "flood")).toMatchObject([{ kart: 0, tick: GO_TICK }]);
     expect(view(r).speed).toBe(0);
     run(r, 60, () => input({ throttle: 1 }));
     expect(view(r).speed).toBeGreaterThan(5);

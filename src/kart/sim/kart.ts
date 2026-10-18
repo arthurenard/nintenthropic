@@ -411,6 +411,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   } else if (k.t === GO_TICK) {
     if (k.held > FLOOD_AFTER) {
       k.flood = ticks(TUNING.start.flood);
+      emit({ type: "flood", kart: k.id });
     } else if (k.held > 0 && k.held <= BOOST_WINDOW) {
       giveBoost(k, TUNING.boost.start);
       emit({ type: "boost", kart: k.id, source: "start", level: 1 });
@@ -636,6 +637,7 @@ function botStart(w: World, k: KartState, emit: Emit): void {
   const B = TUNING.bots;
   if (slipped < B.floodChance * (1 - k.skill)) {
     k.flood = ticks(TUNING.start.flood);
+    emit({ type: "flood", kart: k.id });
   } else if (timed < B.startBoostLow + (B.startBoostHigh - B.startBoostLow) * k.skill * k.skill) {
     giveBoost(k, TUNING.boost.start);
     emit({ type: "boost", kart: k.id, source: "start", level: 1 });

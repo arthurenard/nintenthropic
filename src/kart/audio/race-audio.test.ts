@@ -458,10 +458,11 @@ describe("loops that follow state", () => {
     expect(bus.cues).toContain("kart_item_ready");
   });
 
-  it("coughs when the start floods, once, and not when the kart is away", () => {
+  it("coughs when the sim says the start flooded, and not for a kart that was only slow away", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }, { kart: 1, pan: 0.5 }]);
-    frame([kart(0, { speed: 0 }), kart(1, { speed: 2.5 })], { time: 0.3 });
-    frame([kart(0, { speed: 0 }), kart(1, { speed: 3 })], { time: 0.4 });
+    // Kart 1 sat still at Go without flooding (the throttle came late): no cough for it.
+    frame([kart(0, { speed: 0 }), kart(1, { speed: 0 })], { time: 0.3 }, [ev("flood", { kart: 0 })]);
+    frame([kart(0, { speed: 0 }), kart(1, { speed: 0 })], { time: 0.4 });
     expect(bus.cues.filter((c) => c === "kart_flood")).toHaveLength(1);
   });
 
