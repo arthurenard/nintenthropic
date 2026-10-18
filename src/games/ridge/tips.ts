@@ -65,7 +65,8 @@ export function tipText(id: TipId, input: InputKind | undefined, scope: Settings
     case "ridge.bolt":
       return "Raise your thumb to work the bolt.";
     case "ridge.drop":
-      return "It drops with distance. Aim a mark higher for every hundred metres past the first two.";
+      // In the reticle's own terms: the marks below the centre are labelled in hundreds of metres.
+      return "It drops with distance. Put the mark for his range on him: 4 is 400 m.";
     case "ridge.wind":
       return "The wind pushes the round. Aim into it.";
     case "ridge.civilian":

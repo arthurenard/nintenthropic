@@ -233,9 +233,9 @@ apart.
 "Close one eye to look through the scope. Or hold Shift." (or "Hold Shift or
 the right button to look through the scope." for a mouse player, "Hold Scope"
 on touch; "Press" when the button toggles) · `ridge.drop` — the first
-miss that fell short or long: "It drops with distance. Aim a mark higher for
-every hundred metres past the first two." (wording to be checked against the
-reticle) · `ridge.wind` — the first miss that drifted: "The wind pushes the
+miss that fell short or long: "It drops with distance. Put the mark for his
+range on him: 4 is 400 m." (the reticle's marks below the centre, labelled in
+hundreds) · `ridge.wind` — the first miss that drifted: "The wind pushes the
 round. Aim into it." · `ridge.bolt` — the first shot: "Raise your thumb to
 work the bolt." · `ridge.civilian` — the first civilian in the scope: "Blue
 overalls and bicycles are farmers. Hold your fire." · `ridge.glint` — the

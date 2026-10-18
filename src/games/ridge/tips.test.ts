@@ -58,3 +58,10 @@ describe("the word after an innocent is hit", () => {
     for (const role of ["farmer", "cyclist", "shepherd", "child"]) expect(innocentWord(role, 3)).toBe(innocentWord(role));
   });
 });
+
+describe("the drop's lesson", () => {
+  it("speaks the reticle's language: its marks are labelled in hundreds of metres", () => {
+    const words = tipText("ridge.drop", "hand", { eye: true, button: "hold" });
+    expect(words).toBe("It drops with distance. Put the mark for his range on him: 4 is 400 m.");
+  });
+});
