@@ -278,11 +278,13 @@ function stepSeeker(w: World, seeker: Seeker, emit: Emit): boolean {
   seeker.age++;
   seeker.life--;
   if (seeker.life <= 0) return false;
-  // Aim at the target once close, else follow the track's centre line a little way ahead.
+  // Aim at the target once close, else follow the track's centre line a little way ahead. Close means along the road
+  // too: where the track doubles back (the fingers of the palm island) the target can be near across the barrier, and a
+  // seeker that turned for it would only grind along the barrier between.
   let ax: number;
   let az: number;
   const target = seeker.target >= 0 ? w.kart(seeker.target) : undefined;
-  if (target && Math.hypot(target.x - seeker.x, target.z - seeker.z) < S.homing) {
+  if (target && Math.abs(w.geo.delta(seeker.s, target.s)) < S.homing && Math.hypot(target.x - seeker.x, target.z - seeker.z) < S.homing) {
     ax = target.x;
     az = target.z;
   } else {

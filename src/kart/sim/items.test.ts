@@ -2,7 +2,7 @@ import type { RaceEvent } from "../contract";
 import { describe, expect, it } from "vitest";
 import type { DriveInput } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
+import { FIVE_FINGER_CIRCUIT, HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
 import { itemOdds } from "./items";
 import { planFor } from "./plan";
 import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
@@ -292,6 +292,43 @@ describe("seekers", () => {
     const events = run(r, 180);
     expect(events.find((e) => e.type === "hit")).toMatchObject({ kart: 0, by: 1, cause: "seeker" });
     expect(r.view().things.some((t) => t.kind === "seeker")).toBe(false);
+  });
+
+  it("follow the road round, not across the barrier, to a kart on the next finger of the palm island", () => {
+    const geo = planFor(FIVE_FINGER_CIRCUIT).geo;
+    // A place where the road comes back within 28 m of itself (within a seeker's 30 m), a long way round: the next finger.
+    let from = -1;
+    let to = -1;
+    for (let a = 0; a < geo.length && from < 0; a += 2) {
+      for (let b = 0; b < geo.length; b += 2) {
+        const p = geo.point(a);
+        const q = geo.point(b);
+        const along = geo.delta(a, b);
+        if (along > 80 && Math.hypot(p.x - q.x, p.z - q.z) < 28) {
+          from = a;
+          to = b;
+          break;
+        }
+      }
+    }
+    expect(from).toBeGreaterThanOrEqual(0);
+    const r = race(FIVE_FINGER_CIRCUIT, racers(2, 0));
+    toGo(r);
+    const put = (id: number, s: number) => {
+      const p = geo.point(s);
+      patch(r, id, { x: p.x, z: p.z, s, offset: 0, progress: s, heading: geo.heading(s), vx: 0, vz: 0 });
+    };
+    put(0, to);
+    put(1, from);
+    expect(view(r, 0).place).toBe(1);
+    give(r, 1, "seeker");
+    run(r, 1, () => new Map([[1, press(1)]]));
+    const startS = from;
+    run(r, 45);
+    const seeker = r.view().things.find((t) => t.kind === "seeker")!;
+    expect(seeker).toBeDefined();
+    // Three quarters of a second at 36 m/s: on its way round the road, not stuck at the barrier between the fingers.
+    expect(geo.delta(startS, geo.project(seeker.x, seeker.z, startS + 20).s)).toBeGreaterThan(20);
   });
 });
 

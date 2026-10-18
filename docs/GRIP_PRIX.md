@@ -225,8 +225,10 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
   `itemRows`; a box taken comes back after 3 s. Roulette 1.0 s. Odds by place
   (above). Puck: 40 m/s, 6 s, bounces off barriers, hits within 1.4 m.
   Seeker: 36 m/s along the centre line toward the kart one place ahead,
-  homing within 30 m. Slick: dropped 2.5 m behind, stays until driven through
-  (at most 12 on the track; the oldest goes). A hit spins the kart 1.2 s,
+  homing within 30 m (along the road as well as straight across, so it
+  never turns for a kart beyond the barrier on the next finger). Slick:
+  dropped 2.5 m behind, stays until driven through (at most 12 on the
+  track; the oldest goes). A hit spins the kart 1.2 s,
   cuts its speed to a fifth, and ends its drift. Decoy: a slick that looks
   like a box (at most 8). Odds are three rows (`oddsFirst`, `oddsMid`,
   `oddsLast` in `tuning.ts`) blended by place. Comet 6 s (+15% top speed, no
