@@ -40,6 +40,7 @@ import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
+import { shadowInView } from "./casters";
 import { RescueDrone } from "./drone";
 import { Effects } from "./effects";
 import { RenderEggs } from "./eggs";
@@ -141,7 +142,7 @@ export interface GripRenderer extends RaceRenderer {
   /** The GPU timer's totals over the frames since the last reset (mean ms; 0 where unavailable). */
   gpuMean(label: "views" | "post", reset?: boolean): number;
   /** Everything the dev page's bench may need to take apart: the live objects. */
-  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void };
+  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void; setCasterCulling(on: boolean): void };
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -226,8 +227,12 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   /** Draws every view, scissored, into the post chain's HDR target. */
   let profiling = false;
   let timer: GpuTimer | null = null;
-  /** Each view draws only the scenery its frustum reaches (off, for comparing pictures: they must be the same). */
+  /**
+   * Each view draws only the scenery its frustum reaches, and its shadow pass only the karts whose shadow it can see
+   * (off, for comparing pictures: they must be the same).
+   */
   let culling = true;
+  let casterCulling = true;
   const timings: FrameTimings = { update: 0, submit: 0, draw: 0, hud: 0, gpuViews: -1, gpuPost: -1 };
   const smooth = (key: "update" | "submit" | "draw" | "hud", ms: number) => {
     timings[key] += (ms - timings[key]) * 0.1;
@@ -242,7 +247,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.setRenderTarget(target);
     renderer.clear(true, true, false);
     target.scissorTest = true;
-    for (const [index, v] of frameViews.entries()) {
+    for (let index = 0; index < frameViews.length; index++) {
+      const v = frameViews[index]!;
       const x = Math.floor(v.rect.x * pr);
       const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
       const h = Math.ceil(v.rect.h * pr);
@@ -261,6 +267,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       _frustum.setFromProjectionMatrix(_projScreen);
       if (culling) world.cull(index, _frustum);
       else world.uncull();
+      if (settings.shadowMap > 0) {
+        const reach = settings.shadowRange * 2;
+        for (const a of actors.values()) a.casters.set(a.root, !casterCulling || shadowInView(_frustum, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach));
+      }
       renderer.render(scene, v.eye);
     }
     target.scissorTest = false;
@@ -681,8 +691,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       scene,
       post,
       world: () => world,
+      /** Both kinds of culling: the scenery and the shadow pass's karts (tools/perf/same.mjs proves the picture the same). */
       setCulling(on: boolean) {
         culling = on;
+        casterCulling = on;
+      },
+      /** The shadow pass's karts alone (for measuring what that culling saves). */
+      setCasterCulling(on: boolean) {
+        casterCulling = on;
       },
     },
   };

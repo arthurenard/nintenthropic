@@ -17,6 +17,7 @@
 import { AdditiveBlending, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, type Object3D, type Texture } from "three";
 import type { Emote, KartView, RacerSetup } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
+import { Casters } from "./casters";
 import { RescueDrone } from "./drone";
 import { clamp, damp, easeOutCubic, lerp, smoothstep, TAU } from "./math";
 
@@ -119,6 +120,8 @@ const _off = new Vector3();
 export class KartActor {
   readonly root = new Group();
   readonly model: KartModel;
+  /** Its shadow casters, which a view that cannot see its shadow leaves out (casters.ts). */
+  readonly casters = new Casters();
   private readonly shadowGroup = new Group();
   private readonly shadow: Mesh;
   private readonly shadowMat: MeshBasicMaterial;
