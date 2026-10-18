@@ -500,7 +500,9 @@ export class Hud {
     if (v.wasRolling && !kart.rolling && kart.item) restart(v.item, "gp-got");
     v.wasRolling = kart.rolling;
     setText(v.uses, !kart.rolling && (kart.item === "nitro3" || kart.item === "puck3") ? `×${kart.itemUses}` : "");
-    v.item.dataset.item = kart.rolling ? "" : (kart.item ?? "");
+    // Written only when it changes: setting the same value again is still an attribute change the styles must look at.
+    const shown = kart.rolling ? "" : (kart.item ?? "");
+    if (v.item.dataset.item !== shown) v.item.dataset.item = shown;
   }
 
   /** A skyrocket flying to this kart: red edges, "Incoming", and what to do about it. */
