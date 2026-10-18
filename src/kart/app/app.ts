@@ -35,7 +35,7 @@ import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
 import { PodiumScreen } from "./podium";
 import { ResultsScreen } from "./results";
-import { kartOf, localPlayers, previewColours } from "./roster";
+import { kartOf, localPlayers, previewColours, screenOfRoom } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
 import { GraphicsControls } from "./graphicsui";
 import { SoundControls } from "./soundui";
@@ -729,11 +729,26 @@ export class KartApp {
   }
 
   private loadFailed(kind: RaceFailure): void {
-    const session = this.session;
     showTrouble(kind, [
-      { label: "Try Again", run: () => session && this.enterRace(session.lobby()) },
+      { label: "Try Again", run: () => this.rejoin() },
       { label: "Leave Race", run: () => this.leave() },
     ]);
+  }
+
+  /**
+   * Back to wherever the room has got to: the race again if it is still on, else its results, the cup's screens or the
+   * lobby. (The room goes on while a trouble's sheet is up, and a race that has ended cannot be loaded again.)
+   */
+  private rejoin(): void {
+    const session = this.session;
+    if (!session) return;
+    const lobby = session.lobby();
+    const screen = screenOfRoom(lobby);
+    if (screen === "race") this.enterRace(lobby);
+    else if (screen === "results") this.showResults(lobby);
+    else if (screen === "standings") this.showStandings(lobby);
+    else if (screen === "podium") this.showPodium(lobby);
+    else this.showLobby(lobby);
   }
 
   // --- leaving, and the room closing ----------------------------------------------------------------------------------
