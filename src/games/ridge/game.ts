@@ -22,6 +22,7 @@ import { Ambient } from "./world/ambient";
 import { loadAssets, type RidgeAssets } from "./world/assets";
 import { Cast } from "./world/cast";
 import { seenStretch } from "./world/duckPath";
+import { settleNests, type NestWorld } from "./world/nestSpot";
 import { Effects } from "./world/effects";
 import { Foreground } from "./world/foreground";
 import { DAWN } from "./world/grade";
@@ -295,7 +296,9 @@ export class OverwatchRidge implements Game, MissionListener {
   /**
    * The valley's plan, with the duck swimming only the stretch of its river
    * the scope can see: the far bend lies behind the bank, and the duck's slow
-   * swim would spend the round there (see duckPath.ts).
+   * swim would spend the round there (see duckPath.ts). And the counter-
+   * sniper lying in each nest where the ridge can see him, not inside the
+   * rock or behind the back of the belfry's opening (see nestSpot.ts).
    */
   private get plan(): Plan {
     if (!this.seenPlan) {
@@ -304,9 +307,33 @@ export class OverwatchRidge implements Game, MissionListener {
       const ground = this.stage.heightfield;
       // A duck sits a hand above the water: seen if the eye reaches its middle and its top.
       const seen = (p: { x: number; y: number; z: number }) => [0.12, 0.2].every((h) => ground.segmentHit(eye.x, eye.y, eye.z, p.x, p.y + h, p.z) < 0);
-      this.seenPlan = { ...valley.plan, duck: seenStretch(valley.plan.duck, seen) };
+      this.seenPlan = { ...valley.plan, duck: seenStretch(valley.plan.duck, seen), nests: settleNests(valley.plan.nests, eye, this.nestWorld()) };
     }
     return this.seenPlan;
+  }
+
+  /** The valley's solids and its ground, as a nest is settled in them. */
+  private nestWorld(): NestWorld {
+    const ground = this.stage.heightfield;
+    const queries = this.stage.queries;
+    const hit = { point: new Vector3(), normal: new Vector3(), distance: 0, object: null as Object3D | null };
+    const a = new Vector3();
+    const dir = new Vector3();
+    return {
+      clear: (from, to) => {
+        a.set(from.x, from.y, from.z);
+        dir.set(to.x - from.x, to.y - from.y, to.z - from.z);
+        const length = dir.length();
+        dir.divideScalar(length || 1);
+        return !queries.cast(a, dir, length - 0.02, hit) && ground.segmentHit(from.x, from.y, from.z, to.x, to.y, to.z, 2) < 0;
+      },
+      floor: (x, z, top) => {
+        const g = ground.height(x, z);
+        if (g > top) return null;
+        const s = queries.cast(a.set(x, top, z), dir.set(0, -1, 0), top - g, hit);
+        return s ? Math.max(g, s.point.y) : g;
+      },
+    };
   }
 
   private newMission(): void {
