@@ -82,10 +82,3 @@ function float(node: HTMLElement, shown: boolean): void {
     // Not a popover here: it shows in the page as before.
   }
 }
-
-export const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** Where an element's box sits, as fractions of the stage, and back. */
-export function stageRect(): DOMRect {
-  return $("stage").getBoundingClientRect();
-}
