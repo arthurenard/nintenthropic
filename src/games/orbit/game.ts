@@ -1213,14 +1213,9 @@ export class OrbitalDecay implements Game, MatchListener {
 
   secretFound(id: SecretId, name: string, found: number, total: number): void {
     switch (id) {
-      case "astronaut": {
-        const shot = this.shooter.result.target;
-        const square = shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at;
-        this.secrets.astronautShot(square);
-        // Shot square on, there was never anyone there.
-        if (square) this.hints.say("Only a sticker.", 2.5);
+      case "astronaut":
+        this.astronautShot();
         break;
-      }
       case "toolbag":
         this.secrets.toolbagShot();
         break;
@@ -1256,10 +1251,23 @@ export class OrbitalDecay implements Game, MatchListener {
 
   secretAgain(id: SecretId): void {
     // The ones still there to be shot play their show again: the arm waves
-    // back every time, the flag glints, the HI says hello again.
+    // back every time, the flag glints, the HI says hello again, and the
+    // spacewalker, back at work, is no more impressed (or no less flat).
     if (id === "arm") this.secrets.armShot();
     else if (id === "moon") this.secrets.flag();
     else if (id === "message") this.secrets.blinkHi();
+    else if (id === "astronaut") this.astronautShot();
+  }
+
+  /** The spacewalker: shot near, a thumbs-down; shot square on, there was never anyone there. */
+  private astronautShot(): void {
+    const shot = this.shooter.result.target;
+    const square = shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at;
+    this.secrets.astronautShot(square);
+    if (square) {
+      this.hints.say("Only a sticker.", 2.5);
+      this.syncHint();
+    }
   }
 
   flashShot(count: number, aurora: boolean): void {

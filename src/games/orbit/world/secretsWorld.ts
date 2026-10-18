@@ -27,6 +27,7 @@ import type { Effects } from "./effects";
 import type { PlanetSky } from "./planet";
 
 const tmp = new Vector3();
+const tmp2 = new Vector3();
 const q = new Quaternion();
 const q2 = new Quaternion();
 const X = new Vector3(1, 0, 0);
@@ -34,6 +35,8 @@ const Z = new Vector3(0, 0, 1);
 
 /** The spacewalker floats this far below the truss's handrails on the tether (m): the truss runs along the top edge of the view. */
 const ASTRO_BELOW = 2.3;
+/** The spacewalker's thumbs-down is held until this long (s) after the shot; then the arm comes down and the walk goes on. */
+const THUMBS_HOLD = 2.8;
 /** The duck is drawn to look this big at any distance (radians across), so it can be found: a 12 cm duck is a speck 60 m out. */
 const DUCK_ANGLE = 0.017;
 /**
@@ -144,6 +147,8 @@ export class SecretsWorld {
   private astroT = -1;
   private astroTurned = -1;
   private astroGone = false;
+  /** Seconds left of turning back to the walk after a thumbs-down. */
+  private astroSettle = 0;
   private bagT = -1;
   private bagDone = false;
   private duckT = -1;
@@ -406,13 +411,22 @@ export class SecretsWorld {
       const next = along(this.astroPath, Math.min(1, u + 0.01), tmp);
       next.y -= ASTRO_BELOW;
       if (this.astroTurned < 0) {
+        const was = q2.copy(this.astronaut.quaternion);
         this.astronaut.lookAt(next);
         this.astronaut.rotateY(Math.PI / 2);
+        // Back to the walk after a thumbs-down: turning away, not snapping.
+        if (this.astroSettle > 0) {
+          this.astroSettle -= dt;
+          const walk = q.copy(this.astronaut.quaternion);
+          this.astronaut.quaternion.copy(was).slerp(walk, Math.min(1, dt * 2.5));
+        }
       } else {
-        // Turned to you, slowly, and the arm comes up: thumbs down.
+        // Turned to you, slowly, and the arm comes up: thumbs down; held a
+        // moment, lowered, and back to work.
         this.astroTurned += dt;
-        const k = Math.min(1, this.astroTurned / 1.4);
-        const face = q.setFromUnitVectors(new Vector3(0, 0, 1), this.scenery.eye.clone().sub(this.astronaut.position).setY(0).normalize());
+        const t = this.astroTurned;
+        const k = t < THUMBS_HOLD ? Math.min(1, t / 1.4) : Math.max(0, 1 - (t - THUMBS_HOLD) / 0.8);
+        const face = q.setFromUnitVectors(Z, tmp2.copy(this.scenery.eye).sub(this.astronaut.position).setY(0).normalize());
         this.astronaut.quaternion.slerp(face, Math.min(1, dt * 2));
         // The art's thumbs-down: the arm swings forward about its hinge, the
         // forearm bends a little the same way, the hand turns over.
@@ -420,6 +434,10 @@ export class SecretsWorld {
         if (this.arm) this.arm.quaternion.copy(this.armRest[0] as Quaternion).multiply(q2.setFromAxisAngle(X, 1.4 * e));
         if (this.forearm) this.forearm.quaternion.copy(this.armRest[1] as Quaternion).multiply(q2.setFromAxisAngle(X, 0.35 * e));
         if (this.hand) this.hand.quaternion.copy(this.armRest[2] as Quaternion).multiply(q2.setFromAxisAngle(Z, Math.PI * e));
+        if (t >= THUMBS_HOLD + 0.8) {
+          this.astroTurned = -1;
+          this.astroSettle = 1.5;
+        }
       }
       const pos = this.tether.geometry.getAttribute("position");
       pos.setXYZ(0, this.astronaut.position.x, this.astronaut.position.y + 1.0, this.astronaut.position.z);
@@ -509,6 +527,7 @@ export class SecretsWorld {
     this.astroT = -1;
     this.astroTurned = -1;
     this.astroGone = false;
+    this.astroSettle = 0;
     this.bagT = -1;
     this.bagDone = false;
     this.duckT = -1;
