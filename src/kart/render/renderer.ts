@@ -50,7 +50,7 @@ import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
 import { FAR_DISTANCE } from "./kartSpec";
-import { PostChain, type DrawViews } from "./post";
+import { DIVIDER, PostChain, type DrawViews } from "./post";
 import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
@@ -165,7 +165,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   renderer.toneMapping = NoToneMapping;
   renderer.autoClear = false;
   renderer.shadowMap.type = PCFShadowMap;
-  renderer.setClearColor(new Color(0x0b0b0d), 1);
+  renderer.setClearColor(new Color(DIVIDER), 1);
 
   const gpu = gpuName(renderer.getContext());
   const guessed = guessTier(gpu, typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4, { splitScreen: true });

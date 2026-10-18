@@ -50,6 +50,7 @@ uniform float uVignette;
 uniform vec4 uTiles[4];
 uniform int uTileCount;
 uniform float uCanvasAspect;
+uniform vec3 uDivider;
 
 float gLuma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
@@ -77,11 +78,13 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 
   // Vignette, per view tile.
   float v = 1.0;
+  bool inView = false;
   for (int i = 0; i < 4; i++) {
     if (i >= uTileCount) break;
     vec4 t = uTiles[i];
     vec2 q = (uv - t.xy) / t.zw;
     if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+      inView = true;
       vec2 d = (q - 0.5) * vec2(t.z / t.w * uCanvasAspect, 1.0);
       float r = length(d) * 1.25;
       v = 1.0 - uVignette * smoothstep(0.5, 1.15, r);
@@ -92,9 +95,14 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   // A whisper of dither so the sky's long gradients do not band.
   float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   c += (n - 0.5) * (1.1 / 255.0) * max(0.15, sqrt(gLuma(c)));
-  outputColor = vec4(max(c, vec3(0.0)), inputColor.a);
+  // Between the views (and in the quadrant three views leave free) nothing is drawn: each view's picture is resolved from
+  // the multisampled target inside its own scissor only, so what lies there is whatever an older frame left. The divider.
+  outputColor = vec4(inView ? max(c, vec3(0.0)) : uDivider, inputColor.a);
 }
 `;
+
+/** The divider between split-screen views: the canvas's clear colour and the free quadrant's (hud.css). */
+export const DIVIDER = 0x0b0b0d;
 
 export class GradeEffect extends Effect {
   private readonly tiles: Vector4[] = [new Vector4(), new Vector4(), new Vector4(), new Vector4()];
@@ -114,6 +122,7 @@ export class GradeEffect extends Effect {
         ["uTiles", new Uniform([new Vector4(), new Vector4(), new Vector4(), new Vector4()])],
         ["uTileCount", new Uniform(1)],
         ["uCanvasAspect", new Uniform(1)],
+        ["uDivider", new Uniform(new Color(DIVIDER))],
       ]),
     });
     (this.uniforms.get("uTiles") as Uniform).value = this.tiles;
