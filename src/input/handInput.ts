@@ -69,6 +69,8 @@ export class HandInput implements InputSource {
   private offscreen = false;
   private firedPending = false;
   private shotAt: [number, number] | null = null;
+  /** Whether the aim was off the screen on the frame the shot was taken on. */
+  private shotOffscreen = false;
   private held: { at: number; position: [number, number] } | null = null;
   /** When the hand was last seen, and whether it was then on its way out of the picture. */
   private seen: { at: number; leaving: boolean } | null = null;
@@ -157,6 +159,7 @@ export class HandInput implements InputSource {
       this.firedPending = true;
       const recent = this.held && frame.capturedAt - this.held.at <= AIM_MEMORY ? this.held.position : at;
       this.shotAt = recent ? [...recent] : null;
+      this.shotOffscreen = this.offscreen;
       this.recoil.fire(time);
     }
     this.onReading?.({
@@ -176,7 +179,25 @@ export class HandInput implements InputSource {
     const reading = this.reading;
     const fired = this.firedPending;
     this.firedPending = false;
-    if (!reading?.unclamped || now - this.capturedAt > STALE_FRAME) {
+    const scope = this.scope?.active(now) ?? false;
+    const stale = now - this.capturedAt > STALE_FRAME;
+    if (fired && this.shotAt && !reading?.unclamped && !stale) {
+      // The frame after the shot lost the hand (the tracker drops one most often mid-fold), and came before this
+      // read: the shot is the trigger's all the same, and goes where it was aimed.
+      this.last = [Math.min(Math.max(this.shotAt[0], 0), 1), Math.min(Math.max(this.shotAt[1], 0), 1)];
+      return {
+        x: this.last[0],
+        y: this.last[1],
+        tracking: true,
+        armed: false,
+        fired: true,
+        travel: 1,
+        offscreen: this.shotOffscreen,
+        capturedAt: this.capturedAt,
+        scope,
+      };
+    }
+    if (!reading?.unclamped || stale) {
       // A hand last seen leaving the picture across an edge was swung off
       // the screen, and says so for a moment; one that simply vanished
       // mid-view (or a camera gone quiet) is only lost.
@@ -191,7 +212,7 @@ export class HandInput implements InputSource {
         travel: 0,
         offscreen: seen !== null && seen.leaving && gone <= EXIT_MOMENT,
         capturedAt: this.capturedAt,
-        scope: this.scope?.active(now) ?? false,
+        scope,
       };
     }
     const ahead = this.compensate ? Math.min(Math.max(now - this.capturedAt, 0), MAX_PREDICTION) / 1000 : 0;
@@ -214,7 +235,7 @@ export class HandInput implements InputSource {
       travel: reading.travel,
       offscreen: this.offscreen,
       capturedAt: this.capturedAt,
-      scope: this.scope?.active(now) ?? false,
+      scope,
     };
   }
 
