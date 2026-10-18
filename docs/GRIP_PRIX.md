@@ -49,9 +49,10 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   the end) instead of a single race, and can flip every track left for right
   with **Mirror Mode**. Details below.
 - **Tricks.** Clap to honk (a Honk! bubble over your kart, and a horn the
-  karts near you hear; a bot within 15 m usually honks back), raise both open hands high to cheer, wave one open
-  hand to say hello (a cheering driver cheers on the podium too). Keyboard:
-  H, C, V; gamepad: Y. A clap is not a brake and a cheer is not an item.
+  karts near you hear; a bot within 15 m usually honks back), raise both
+  open hands high to cheer, wave one open hand to say hello (a cheering
+  driver cheers on the podium too). Keyboard: H, C, V; gamepad: Y. A clap is
+  not a brake and a cheer is not an item.
 - **Eggs.** A rubber duck hides off the racing line on every track (drive up
   to it for a squeak and a toast; find them all and Dabble joins). Two karts
   over the line within 0.15 s for a top-three place get a **photo finish**. A
