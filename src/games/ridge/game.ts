@@ -8,7 +8,7 @@ import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
 import type { Actor, Vehicle } from "./rules/actors";
-import { landingMils, rangeAt, roundAt, timeOfFlight } from "./rules/ballistics";
+import { landingMils, rangeAt, rangeUnderDot, roundAt, timeOfFlight } from "./rules/ballistics";
 import type { StageSpec } from "./rules/jobs";
 import { Mission, type AlertCause, type MissionListener, type NearPass } from "./rules/mission";
 import { fadeNear, landmarksOf, liftLabel, nearestOf, placeMarks, ON_HIM, rimArrow, whereWords, whoIsMarked, type CamMan, type Head, type Landmark, type Marked } from "./rules/finding";
@@ -68,6 +68,8 @@ interface Scheduled {
 const tmp = new Vector3();
 const tmp2 = new Vector3();
 const TRAIL_POINT = new Vector3();
+/** The line through Relaxed's holdover dot, for ranging it. */
+const DOT_LINE = new Vector3();
 /** How much the eye opens up for a scoped view in the shade: at most two stops (art/ridge/README.md). */
 const SCOPE_ADAPT = 3.2;
 
@@ -185,6 +187,8 @@ export class OverwatchRidge implements Game, MissionListener {
   private readoutKey = "";
   private readoutClock = 0;
   private range: number | null = null;
+  /** What Relaxed's holdover dot is worked out for: the range where its own line lands (rangeUnderDot). */
+  private dotRange: number | null = null;
   private rangeClock = 0;
   private framings: { check: Framing; play: Framing } | null = null;
   private framed: { width: number; height: number } | null = null;
@@ -587,11 +591,19 @@ export class OverwatchRidge implements Game, MissionListener {
     this.scope.render(this.ctx.renderer, this.camera.camera, dot, this.recoilFlash);
   }
 
-  /** Relaxed's help in the scope: where the round will land at the range under the reticle. */
+  /** Relaxed's help in the scope: where the round will land, on whatever it would land on. */
   private holdoverDot(): { right: number; down: number } | null {
-    if (!this.mission.tuning.holdoverDot || !this.scope.scoped || this.range === null) return null;
+    const range = this.dotRange ?? this.range;
+    if (!this.mission.tuning.holdoverDot || !this.scope.scoped || range === null) return null;
     const dir = tmp.set(0, 0, -1).applyQuaternion(this.camera.camera.quaternion);
-    return landingMils(this.range, dir, this.mission.wind.speed);
+    return landingMils(range, dir, this.mission.wind.speed);
+  }
+
+  /** The range where the line through the holdover dot lands, settled (see rangeUnderDot). */
+  private rangeUnderDot(cam: PerspectiveCamera, sight: Vector3): number | null {
+    return rangeUnderDot(this.range, sight, this.mission.wind.speed, (at) =>
+      this.rangeAlong(cam.position, DOT_LINE.set(at.right / 1000, -at.down / 1000, -1).applyQuaternion(cam.quaternion).normalize()),
+    );
   }
 
   resize(width: number, height: number, pixelRatio: number): void {
@@ -1011,7 +1023,9 @@ export class OverwatchRidge implements Game, MissionListener {
       this.rangeClock = 0.1;
       const cam = this.camera.camera;
       const dir = this.scope.showing ? tmp.set(0, 0, -1).applyQuaternion(cam.quaternion) : tmp.set(this.scope.look.x * 2 - 1, 1 - this.scope.look.y * 2, 0.5).unproject(this.wide).sub(this.wide.position).normalize();
-      this.range = this.rangeAlong(cam.position, dir.clone());
+      const sight = dir.clone();
+      this.range = this.rangeAlong(cam.position, sight);
+      this.dotRange = this.mission.tuning.holdoverDot && this.scope.showing ? this.rangeUnderDot(cam, sight) : null;
       // Is the sun on what the reticle rests on? (For the eye's adaptation through the glass.)
       if (this.range !== null) {
         const p = tmp2.copy(dir).multiplyScalar(this.range).add(cam.position);
