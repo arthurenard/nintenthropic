@@ -465,6 +465,12 @@ body[data-view="game"] {
 .menu > .footnote {
   text-align: center;
 }
+/* A touch screen alone has no P to press. */
+@media (hover: none) and (pointer: coarse) {
+  .menu > .footnote {
+    display: none;
+  }
+}
 
 /* --- results -------------------------------------------------------------------------------------- */
 

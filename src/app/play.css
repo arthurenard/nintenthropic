@@ -1662,6 +1662,13 @@
     font-size: 28px;
   }
 }
+/* The band of a phone held upright has no room for a wave's card between
+   the corners: while one is up, the score panel it would cover steps aside. */
+@media (max-width: 572px) and (orientation: portrait) {
+  .stage:has(#moments > .banner) .hud-score {
+    opacity: 0.18;
+  }
+}
 
 /* The aim setup on a short stage: its card sits at the foot of the view
    beside the preview, in one line where it can, so the bottles and the lit
