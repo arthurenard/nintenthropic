@@ -45,7 +45,7 @@ interface FileSystem {
 
 function vendorFiles(): Plugin {
   return {
-    name: "handy:vendor-files",
+    name: "vendor-files",
     async configResolved(config) {
       const fs = (await import("node:fs" as string)) as FileSystem;
       for (const { from, to, files } of VENDOR) {
@@ -136,7 +136,7 @@ interface Network {
 /** Says, when the server is up, which page the TV opens and what friends will scan. */
 function partyBanner(origin: string | null): Plugin {
   return {
-    name: "handy:party-banner",
+    name: "party-banner",
     configureServer(server) {
       server.httpServer?.once("listening", () => {
         const log = (text: string) => server.config.logger.info(text);
@@ -160,7 +160,7 @@ function partyBanner(origin: string | null): Plugin {
 function devPagesAssets(): Plugin {
   const prefix = "/src/kart/render/assets/";
   return {
-    name: "handy:dev-pages-assets",
+    name: "dev-pages-assets",
     apply: "serve",
     configureServer(server) {
       server.middlewares.use((request, _res, next) => {
@@ -174,8 +174,9 @@ function devPagesAssets(): Plugin {
 
 export default defineConfig(async ({ mode }) => {
   const party = mode === "party";
-  // Where node_modules really is: a worktree links it to the main checkout's, outside the folder the dev server
-  // may read from, and Three's Draco decoder was refused there (every Blender model fell back to its stand-in).
+  // Where node_modules really is. When it is a link to another checkout's (a second git worktree sharing one
+  // install), it lies outside the folder the dev server may read from, and Three's Draco decoder would be refused
+  // there: every Blender model would fall back to its stand-in.
   const fs = (await import("node:fs" as string)) as { realpathSync(path: URL): string };
   const modules = fs.realpathSync(new URL("./node_modules", import.meta.url));
   let origin: string | null = null;
@@ -193,14 +194,13 @@ function baseConfig(party: boolean, origin: string | null, plugins: Plugin[], mo
   return {
     base: "./",
     plugins,
-    // Each checkout pre-bundles its dependencies into its own folder. A worktree links node_modules to the main
-    // checkout's, so with the default (node_modules/.vite) a worktree's dev server rewrote the main one's bundles
-    // with paths counted from the worktree, and Three's Draco decoder was looked for in the wrong place: every
-    // Blender model fell back to its code-built stand-in.
+    // Each checkout pre-bundles its dependencies into a folder of its own. With node_modules shared between
+    // checkouts, the default (node_modules/.vite) would be shared too: each dev server would rewrite the other's
+    // bundles with paths counted from itself, and Three's Draco decoder would be looked for in the wrong place.
     cacheDir: ".vite",
     // The game's version, for Settings' About (src/app/settings.ts); in a party, where the computer is on the network.
     define: {
-      __HANDY_VERSION__: JSON.stringify(pkg.version),
+      __APP_VERSION__: JSON.stringify(pkg.version),
       ...(party && origin ? { __GRIP_LAN_ORIGIN__: JSON.stringify(origin) } : {}),
     },
     build: {

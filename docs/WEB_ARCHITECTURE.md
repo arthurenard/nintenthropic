@@ -47,6 +47,7 @@ src/
   ui/                 design-language components and styles (from DESIGN.md)
   engine/             the game host: renderer, loop, dynamic resolution, asset loading
     types.ts          THE CONTRACT between app, input, audio and games (below)
+    round.ts, hud.ts  what every shooter's Game does the same way (below)
     world/            what every realistic 3D game shares (see "Building a game")
     rules/            pure rules every game shares: health, streak, hints, rng...
     fx/               particles, decals, debris, lights, their textures
@@ -303,12 +304,23 @@ own, and keep in your folder only what is truly your game's.
 | `sky.ts` | `SkyLight(renderer, scene, texture, intensity)`: an equirectangular sky as the background and, through PMREM, the environment light; `asSky(texture)`; `horizonColour(texture)` for the fog to meet the sky without a seam. |
 | `scene.ts` | `fitShadowCamera(sun, box)` spends the shadow map on the part of the world that matters; `shadowMapSize(tier)`; `disposeTree(root)`. |
 | `queries.ts` | `SceneryQueries(solids, moving)`: rays against the scenery fast enough to ask dozens of times a frame (a `TriangleGrid` of 2 m columns): `cast` (where a bullet lands), `groundAt` (under a falling body), `lightReaches` (is the sun on him). |
+| `layout.ts` | `readEye(root, position, fov)`: the player's eye from the art's named nodes; `surfaceFromArt(mesh, surfaces, guess)`: what a mesh is made of, for a bullet. |
+| `targets.ts` | `placeTarget(target, camera, centre, half)`: an aim-check target where a point of the world is in the view, its zone never under the 3.5% the aim score is measured against. |
+| `poses.ts` | Clips made in code from a few key poses, for the placeholders that stand in for the characters' art: `pose`, `mirror`, `quatOf`, `makeClip`. |
 | `art.ts` | `Art(ctx, files, options, onProgress)`: a game's glTF and textures through the engine's protected download, weighted into one progress bar. Every file is required: in production one that does not load fails the load with a `DownloadError` ("Couldn’t Load the Game", Try Again). In development and tests a missing file may be stood in for by a placeholder built in code, which your game imports behind `import.meta.env.MODE !== "production"` (so a production build drops it) and hands to `gltf(name, standIn)` / `texture(name, standIn)`; `probe()` first asks which files are really there. |
 
 `src/engine/fx/` holds the particle system, decals, debris, the pooled
 lights and their textures; High Noon's `world/effects.ts` shows how a game
 builds its own presets (dust, sparks, a muzzle flash, a reduced-flashing
 variant of each) on them.
+
+`src/engine/round.ts` and `src/engine/hud.ts` hold what every shooter's
+`Game` does the same way. `round.ts`: `breathe()` between the long steps of
+loading, `CalibrationProxy` (the aim check's stand-in until the game's own
+targets exist) and `Schedule` (things to do a moment from now on the game's
+clock). `hud.ts`: `awardText`, `popupAt` (a popup over a point of the world),
+`showBonuses`, `announceGolden`, `streakReadout`, and `HintShown` and
+`HurtShown`, which pass the hint line and the hurt on only when they change.
 
 ### `src/engine/rules/`: pure rules
 
@@ -319,6 +331,9 @@ variant of each) on them.
 | `hints.ts` | `HintLine(tipsSeen, learnedByDoing)`: the hint line's one urgent need, a brief word, and one-time tips queued one at a time for four seconds, never twice (`Settings.tipsSeen`, ids prefixed with your game's name). Read `text` every frame and pass it to `hud.hint` when it changes. |
 | `hammer.ts` | `Hammer`: the frames on which the re-arm's soft click should sound as the thumb comes back up after a shot, and never when it should not. |
 | `rng.ts` | `range`, `chance`, `pick`, `shuffle` over `GameContext.random`, and `mulberry32` for a replayable `?seed=`: route every decision through the seeded source and a seed replays a round exactly. |
+| `score.ts` | `Scorekeeper`: the score, shots and hits, a round's own accuracy and the streak multiplier, for a game's `Scorer` to extend with what its points are for (High Noon, Dead of Night, Orbital Decay). |
+| `pressure.ts` | The late-wave pressure High Noon and Dead of Night share: `boldnessAfter`, `pressureOf`, and `wearToward`, which wears an easier difficulty's allowances off toward Standard's as a wave drags on. |
+| `bodyShot.ts` | `weighBody` and `weighInnocent`: a shot weighed against a figure on the shared humanoid armature (a sphere for the head, capsules for the torso and limbs). |
 | `raymath.ts` | Ray against sphere and capsule (a head, a torso, a limb) with an honest angular tolerance: aim assist that is not a magnet. |
 | `assist.ts` | Aim Assist for every game that has it: `assistFactor(on)` scales a shooter's table of tolerances (`ASSIST_BOOST` = 1.35 on, none off), `secretFactor(on)` keeps a secret's allowance as it is (never boosted, so a secret is not triggered by a shot that was not aimed at it), and `choose(...)` picks what a shot hit: a real hit first, else the best near miss, never an innocent and never past one the shot passed close beside. |
 
@@ -349,7 +364,7 @@ and the silent `NullAudioBus`, after a short aim check on the game's own
 targets. Query parameters: `?seed=`, `?wave=`, `?difficulty=relaxed`,
 `?flashing=reduced`, `?tips=seen`, `?assetBase=/folder/`, `?god=1`,
 `?golden=1`, `?quality=`, `?input=mouse|touch|hand`, `?skipcalib=1`,
-`?manual=1` (drive it from `window.__handy`: `advance(seconds)`,
+`?manual=1` (drive it from `window.__harness`: `advance(seconds)`,
 `bench(frames)`, `mouse.aimAt/fire/reloadGesture`, and `hud.log` of every
 HudSink call), `?w=&h=&dpr=`; a game reads its own from `HarnessParams`
 (High Noon's `?noon=1`).
@@ -550,7 +565,7 @@ the environment light for dynamic objects.
   camera-insecure|model|game|webgl` shows each error, and `?range=1` adds
   the Test Range to the arcade (`src/games/range/`: a timed game with a
   scope, `?weapon=cylinder|magazine|heat`), whose scripted eyes the tests set
-  with `handyTest.eyes()`. `e2e/smoke.html` and `e2e/tracker.html` (with
+  with `arcadeTest.eyes()`. `e2e/smoke.html` and `e2e/tracker.html` (with
   `?face=N` for the face on every Nth frame) load and time the tracker alone
   on the dev server.
 - **End to end (Playwright, installed Chrome, `--mute-audio`):** landing →

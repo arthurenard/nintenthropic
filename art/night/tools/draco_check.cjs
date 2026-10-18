@@ -21,7 +21,7 @@ function findDecoder() {
 }
 
 // three's package is an ES module; its Emscripten decoder is plain CommonJS
-const tmp = path.join(os.tmpdir(), 'handy_draco_decoder.cjs');
+const tmp = path.join(os.tmpdir(), 'draco_decoder_check.cjs');
 fs.copyFileSync(findDecoder(), tmp);
 const DracoDecoderModule = require(tmp);
 const NCOMP = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };

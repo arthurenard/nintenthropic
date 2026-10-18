@@ -24,7 +24,7 @@ test("a scripted hand passes the aim check at 95% and plays", async ({ page }, i
   await moveTo(page, 0.2, 0.75);
   await page.waitForTimeout(250);
   const lit = (await snapshot(page)).lit!;
-  const told = (await page.evaluate(() => window.handyTest!.internals().host!.aim(performance.now()))) as { x: number; y: number; tracking: boolean };
+  const told = (await page.evaluate(() => window.arcadeTest!.internals().host!.aim(performance.now()))) as { x: number; y: number; tracking: boolean };
   expect(told.tracking).toBe(true);
   expect(told.x).toBeCloseTo(lit.x, 6);
   expect(told.y).toBeCloseTo(lit.y, 6);

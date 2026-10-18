@@ -13,10 +13,10 @@ import { FIXTURE } from "./e2e/fixture";
 /** The environment, without depending on Node's type definitions. */
 const env: Record<string, string | undefined> =
   (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-/** HANDY_E2E_PORT lets two checkouts run their tests side by side, each on its own build. */
-const PORT = Number(env.HANDY_E2E_PORT) || 4174;
-/** HANDY_E2E_OUT gives a checkout a build of its own: node_modules may be shared between worktrees, and so would the default folder be. */
-const OUT = env.HANDY_E2E_OUT ?? "node_modules/.cache/handy-e2e/dist";
+/** E2E_PORT lets two checkouts run their tests side by side, each on its own build. */
+const PORT = Number(env.E2E_PORT) || 4174;
+/** E2E_OUT gives a checkout a build of its own: with node_modules shared between checkouts, the default folder inside it would be shared too. */
+const OUT = env.E2E_OUT ?? "node_modules/.cache/super-claude-bros-e2e/dist";
 
 export default defineConfig({
   testDir: "e2e",

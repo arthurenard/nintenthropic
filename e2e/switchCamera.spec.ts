@@ -157,7 +157,7 @@ test("a camera with a saved aim begins its check from it", async ({ page }) => {
   await toAimCheck(page);
   // The other camera has been set up before, in this game, at this picture size.
   const { width, height } = await page.evaluate(() => {
-    const camera = window.handyTest!.internals().camera!;
+    const camera = window.arcadeTest!.internals().camera!;
     return { width: camera.width, height: camera.height };
   });
   await page.evaluate(
@@ -168,7 +168,7 @@ test("a camera with a saved aim begins its check from it", async ({ page }) => {
       ),
     { width, height },
   );
-  const returning = () => page.evaluate(() => window.handyTest!.internals().session!.check!.check.returning);
+  const returning = () => page.evaluate(() => window.arcadeTest!.internals().session!.check!.check.returning);
   // This camera has no aim yet: the check starts from the beginning, and shows no crosshair.
   expect(await returning()).toBe(false);
   await expect(page.locator("#check-title")).toHaveText("Point at the Lit Bottle");
@@ -213,7 +213,7 @@ test("a camera unplugged mid-game gives way to the other, and the switch goes wi
   // The desk camera comes out: the round waits, and Try Again finds the front one.
   await page.evaluate(() => {
     window.__cameras!.list = window.__cameras!.list.filter((camera) => camera.deviceId !== "cam-desk");
-    window.handyTest!.unplug();
+    window.arcadeTest!.unplug();
   });
   await devicesChanged(page);
   await expect(page.locator("#alert")).toBeVisible();
@@ -252,5 +252,5 @@ test("a round in play starts afresh under the other camera, through its aim chec
   await expect.poll(async () => (await snapshot(page)).phase).toBe("check");
   expect((await snapshot(page)).paused).toBe(false);
   // The scripted hand is another camera now: its own aim, its own check.
-  expect(await page.evaluate(() => window.handyTest!.internals().session!.camera)).toMatchObject({ deviceId: "cam-front" });
+  expect(await page.evaluate(() => window.arcadeTest!.internals().session!.camera)).toMatchObject({ deviceId: "cam-front" });
 });

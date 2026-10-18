@@ -46,7 +46,7 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   );
   if (!fell) {
     await page.evaluate(() =>
-      window.handyTest!.hud().gameOver({
+      window.arcadeTest!.hud().gameOver({
         outcome: "Fell on Wave 1",
         won: false,
         score: 0,

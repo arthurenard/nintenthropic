@@ -4,7 +4,7 @@
  * so a production build contains none of it.
  *
  *   ?input=script     a scripted hand instead of the camera; the tests move it
- *                     with handyTest.pose() and the real aim pipeline does the rest
+ *                     with arcadeTest.pose() and the real aim pipeline does the rest
  *   ?fail=<trouble>   simulate camera-denied, camera-busy, camera-missing,
  *                     camera-insecure, webgl, model or game, to see each
  *                     error sheet
@@ -33,7 +33,7 @@ export function testOptions(params: URLSearchParams): AppOptions {
   };
 }
 
-export interface HandyTest {
+export interface ArcadeTest {
   snapshot: App["snapshot"];
   /** Shows the scripted hand in this pose (null: no hand). */
   pose(pose: HandPose | null): void;
@@ -63,12 +63,12 @@ export interface HandyTest {
 
 declare global {
   interface Window {
-    handyTest?: HandyTest;
+    arcadeTest?: ArcadeTest;
   }
 }
 
 export function installTestHooks(app: App, options: AppOptions): void {
-  window.handyTest = {
+  window.arcadeTest = {
     snapshot: () => app.snapshot(),
     pose(pose) {
       if (options.scripted) options.scripted.pose = pose;

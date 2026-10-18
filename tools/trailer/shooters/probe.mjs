@@ -1,7 +1,7 @@
 /**
  * A tuning aid: loads a clip's page (no stepping) and evaluates a JavaScript
- * expression against window.capture / window.__handy, printing the result.
- *   node tools/trailer/shooters/probe.mjs hn-hero "window.__handy.game.debug.covers()"
+ * expression against window.capture / window.__harness, printing the result.
+ *   node tools/trailer/shooters/probe.mjs hn-hero "window.__harness.game.debug.covers()"
  */
 import { launch, ORIGIN } from "./browser.mjs";
 

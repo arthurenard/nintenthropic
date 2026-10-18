@@ -88,7 +88,7 @@ test("the aim check and play", async ({ page }, info) => {
   await stage(
     page,
     `(() => {
-      const hud = window.handyTest.hud();
+      const hud = window.arcadeTest.hud();
       hud.score(12450);
       hud.readouts([{ label: "Wave", value: "3" }, { label: "Gang", value: "5", meter: 0.6 }, { label: "Streak", value: "×3", meter: 0.67 }]);
       hud.ammo(3, 6, false);
@@ -120,15 +120,15 @@ test("the aim check and play", async ({ page }, info) => {
   await expect(page.locator("#pause-sheet")).toBeHidden();
   await expect.poll(async () => (await snapshot(page)).held, { timeout: 5_000 }).toBe(false);
   // The camera stops sending pictures: the round waits under the fixes.
-  await page.evaluate(() => window.handyTest!.stall(true));
+  await page.evaluate(() => window.arcadeTest!.stall(true));
   await expect(page.locator("#alert")).toBeVisible({ timeout: 10_000 });
   await shot(page, info, "14b-camera-stalled");
-  await page.evaluate(() => window.handyTest!.stall(false));
+  await page.evaluate(() => window.arcadeTest!.stall(false));
   await page.getByRole("button", { name: "Try Again" }).click();
   await expect.poll(async () => (await snapshot(page)).held, { timeout: 10_000 }).toBe(false);
   await stage(
     page,
-    `window.handyTest.hud().gameOver({
+    `window.arcadeTest.hud().gameOver({
       outcome: "Fell on Wave 4", won: false, score: 12450,
       stats: [{ label: "Waves", value: "3" }, { label: "Kills", value: "27" }, { label: "Accuracy", value: "71%" }, { label: "Best Streak", value: "9" }],
       secretsFound: 2, secretsTotal: 8,

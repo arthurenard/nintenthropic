@@ -1,10 +1,10 @@
 /**
  * High Noon's standalone dev harness, served by Vite at
  * /src/games/western/dev.html (not part of the production build). The
- * harness itself - its query parameters and window.__handy - is shared by
+ * harness itself - its query parameters and window.__harness - is shared by
  * every game: see src/dev/harness.ts. High Noon adds ?noon=1|0 (High Noon
  * for real, or not, whatever the clock says); ?wave=N starts on that wave
- * and ?god=1 lets hits hurt but never kill. window.__handy.game.debug has
+ * and ?god=1 lets hits hurt but never kill. window.__harness.game.debug has
  * High Noon's own views and switches (targets(), match(), gallery()...).
  */
 import { runHarness } from "../../dev/harness";

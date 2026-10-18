@@ -115,7 +115,7 @@ function settle(): void {
 class Capture {
   cfg!: Config;
   ready: Promise<void>;
-  private handy: any = null;
+  private harness: any = null;
   private game: any = null;
   private pip: Pip | null = null;
   private shooter = new Shooter();
@@ -149,13 +149,13 @@ class Capture {
       };
       poll();
     });
-    this.handy = (window as any).__handy;
-    this.game = this.handy.game;
+    this.harness = (window as any).__harness;
+    this.game = this.harness.game;
     this.shooter = new Shooter({ seed: 11, ...(this.director.shooter ?? {}) });
     this.shooter.place(this.director.rest.x, this.director.rest.y);
     this.pip = new Pip();
     // Note what the game asks the HUD for (the harness keeps a log of it, but only its last 2000 calls).
-    const log = this.handy.hud.log as { m: string; a: unknown[] }[];
+    const log = this.harness.hud.log as { m: string; a: unknown[] }[];
     const push = log.push.bind(log);
     log.push = (...entries) => {
       for (const e of entries) {
@@ -181,7 +181,7 @@ class Capture {
     const t = a * dt;
     simT = t;
     const env: Env = {
-      handy: this.handy,
+      harness: this.harness,
       game: this.game,
       t,
       dt,
@@ -204,21 +204,21 @@ class Capture {
     this.shooter.advanceTick(dt);
     const shown = this.shooter.shown;
     this.lastAim = { x: this.shooter.x, y: this.shooter.y };
-    const mouse = this.handy.mouse;
+    const mouse = this.harness.mouse;
     mouse.aimAt(shown.x, shown.y);
     if (fires) {
       mouse.fire();
       this.notes.push({ t: env.local, what: "fire" });
     }
     if (this.rate === 60) {
-      this.handy.advance(1 / 60, true);
+      this.harness.advance(1 / 60, true);
     } else {
       // Slow motion: the harness steps 1/60 s at the least, so step the game by hand, as it does.
       this.simNow += 1000 / this.rate;
       const aim = mouse.sample(this.simNow);
       this.game.update(1 / this.rate, this.simNow, aim);
       this.game.render();
-      this.handy.crosshair.draw(aim, this.simNow, null);
+      this.harness.crosshair.draw(aim, this.simNow, null);
     }
   }
 
@@ -261,7 +261,7 @@ class Capture {
   }
   /** For tuning: the harness's HUD log. */
   hudLog(): unknown[] {
-    return this.handy?.hud?.log ?? [];
+    return this.harness?.hud?.log ?? [];
   }
 }
 

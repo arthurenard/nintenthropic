@@ -18,10 +18,10 @@ import type { CrosshairStyle } from "./crosshair";
 import type { Preferences, ScopePreferences } from "./prefs";
 import { closeSheet, openSheet } from "./sheets";
 
-declare const __HANDY_VERSION__: string;
+declare const __APP_VERSION__: string;
 
 /** The version of Super Claude Bros., from package.json (Vite writes it in at build time). */
-export const VERSION: string = typeof __HANDY_VERSION__ === "string" ? __HANDY_VERSION__ : "dev";
+export const VERSION: string = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
 /** What the Eye Test is told: the camera is getting ready, it could not start, or the face as read now. */
 export type EyeTestState =

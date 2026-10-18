@@ -27,7 +27,7 @@ export interface Target {
 
 /** What a director sees, once a frame. */
 export interface Env {
-  handy: any;
+  harness: any;
   game: any;
   /** Seconds since the game began (all frames, pre-roll included). */
   t: number;
@@ -87,7 +87,7 @@ function western(o: WesternShot): Director {
       // Nobody comes out but the men staged here: the wave director's own spawns are held off.
       m.spawnTimer = 1e9;
       // Empty: the arcade's reload, a flick of the hand off the screen.
-      if (m.revolver.rounds === 0 && !m.revolver.reloading) env.handy.mouse.reloadGesture();
+      if (m.revolver.rounds === 0 && !m.revolver.reloading) env.harness.mouse.reloadGesture();
     },
     pick(env) {
       const m = env.game.debug.match();
@@ -168,7 +168,7 @@ function night(o: NightShot): Director {
     ],
     frame(env) {
       const r = env.game.debug.match().rifle;
-      if (r.rounds === 0 && !r.reloading) env.handy.mouse.reloadGesture();
+      if (r.rounds === 0 && !r.reloading) env.harness.mouse.reloadGesture();
       // Only the dead staged here: the wave's own are held off in the queue.
       const m = env.game.debug.match();
       if (typeof m.spawnTimer === "number") m.spawnTimer = 1e9;
@@ -253,7 +253,7 @@ function orbit(o: OrbitShot): Director {
       const m = env.game.debug.match();
       const l = m.laser;
       // A hot laser is vented with the flick off the screen, as a player would.
-      if (l && l.heat > 0.86 && !l.venting && !l.locked) env.handy.mouse.reloadGesture();
+      if (l && l.heat > 0.86 && !l.venting && !l.locked) env.harness.mouse.reloadGesture();
       // The sends, each on its own clock: the lane's distance over the speed before it should reach the glass.
       const queue: { s: OrbitShot["send"][number]; i: number; done: boolean }[] = (env.memo["queue"] ??= o.send.map((s, i) => ({ s, i, done: false })));
       for (const q of queue) {
@@ -341,7 +341,7 @@ function ridge(o: RidgeShot): Director {
     script: [{ at: -2.9, run: (e) => e.game.debug.still(true) }],
     frame(env) {
       const g = env.game;
-      const mouse = env.handy.mouse;
+      const mouse = env.harness.mouse;
       // The scope goes up, and stays up.
       mouse.scoping(env.local >= o.raiseAt);
       const m = g.debug.mission();

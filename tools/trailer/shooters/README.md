@@ -51,7 +51,7 @@ node tools/trailer/shooters/capture.mjs --only dn-2 --preview --every 3 --size 1
 
 `--pre`, `--frames` and `--seed` override a take's pre-roll (simulated seconds),
 length and seed. `probe.mjs <clip> "<expression>"` evaluates JavaScript in the
-page (`window.__handy.game.debug`, `window.capture`).
+page (`window.__harness.game.debug`, `window.capture`).
 
 ## How it works
 
