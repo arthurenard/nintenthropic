@@ -100,13 +100,16 @@ export class Eyeshine {
   /** One pair of eyes, shining `amount` (0..1+). */
   add(left: V3, right: V3, amount: number): void {
     if (amount <= 0.01 || this.count >= PAIRS * 2) return;
-    for (const p of [left, right]) {
-      const i = this.count++;
-      this.positions[i * 3] = p.x;
-      this.positions[i * 3 + 1] = p.y;
-      this.positions[i * 3 + 2] = p.z;
-      this.shine[i] = amount;
-    }
+    this.point(left, amount);
+    this.point(right, amount);
+  }
+
+  private point(p: V3, amount: number): void {
+    const i = this.count++;
+    this.positions[i * 3] = p.x;
+    this.positions[i * 3 + 1] = p.y;
+    this.positions[i * 3 + 2] = p.z;
+    this.shine[i] = amount;
   }
 
   end(): void {
