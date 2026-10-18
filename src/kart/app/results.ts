@@ -10,7 +10,7 @@
  */
 import type { GrandPrixState, LobbyState, RaceResult, RacerSetup, Session } from "../contract";
 import { $, element, setText } from "../../ui/dom";
-import { photoFinish, type PhotoFinish } from "./eggs";
+import { photoFinish, resultLine, sofaLine, type PhotoFinish } from "./eggs";
 import { cupById, pointsFor } from "../grandprix";
 import { lapsLabel, ordinal, raceTime } from "./format";
 import { hostName, standingRows, type StandingRow } from "./roster";
@@ -21,6 +21,8 @@ export interface ResultsHooks {
   lobby(): void;
   /** A Grand Prix: on to the standings. */
   next(): void;
+  /** The photo finish's flash goes off (its shutter is heard). */
+  photo?(): void;
 }
 
 export interface ResultsInput {
@@ -35,6 +37,8 @@ export interface ResultsInput {
   still?: string | null;
   /** Set in a Grand Prix: which race of which cup this was. */
   grandPrix?: GrandPrixState | null;
+  /** How many times each kart was carried back to the road by the drone, as this screen saw it. */
+  rescues?: ReadonlyMap<number, number>;
 }
 
 /** The photo finish stays this long, ms: a beat and a half, and then it fades. */
@@ -43,13 +47,13 @@ const PHOTO_FOR = 1750;
 export class ResultsScreen {
   private photoTimer = 0;
 
-  constructor(hooks: ResultsHooks) {
+  constructor(private readonly hooks: ResultsHooks) {
     $("results-again").addEventListener("click", () => hooks.again());
     $("results-lobby").addEventListener("click", () => hooks.lobby());
     $("results-next").addEventListener("click", () => hooks.next());
   }
 
-  render({ result, lobby, session, racers, laps, trackName, still, grandPrix }: ResultsInput): void {
+  render({ result, lobby, session, racers, laps, trackName, still, grandPrix, rescues }: ResultsInput): void {
     const rows = standingRows(result, racers, lobby, session.device);
     const mine = rows.filter((row) => row.mine);
     const cup = grandPrix ? cupById(grandPrix.cup) : null;
@@ -65,10 +69,25 @@ export class ResultsScreen {
     if (only && only.place <= 3) title.dataset.place = String(only.place);
     else delete title.dataset.place;
 
+    // Under it, a word on how it went for that one player (or, for friends on one screen, who beat whom), and who set the
+    // fastest lap.
+    const first = rows.find((row) => row.place === 1);
+    const line = only
+      ? resultLine({
+          place: only.place,
+          field: rows.length,
+          time: only.time,
+          winner: first?.name ?? "",
+          winnerTime: first?.time ?? null,
+          secondTime: rows.find((row) => row.place === 2)?.time ?? null,
+          rescues: rescues?.get(only.kart) ?? 0,
+        })
+      : sofaLine([...mine].sort((a, b) => a.place - b.place).map((row) => row.name));
     const fastest = rows.find((row) => row.fastest);
+    const words = [line, fastest ? `Fastest lap: ${fastest.name}, ${raceTime(fastest.bestLap)}.` : null].filter(Boolean).join(" ");
     const sub = $("results-sub");
-    sub.hidden = !fastest;
-    if (fastest) setText(sub, `Fastest lap: ${fastest.name}, ${raceTime(fastest.bestLap)}.`);
+    sub.hidden = !words;
+    setText(sub, words);
 
     $("th-points").hidden = !grandPrix;
     $("standings-body").replaceChildren(
@@ -124,6 +143,7 @@ export class ResultsScreen {
     image.hidden = !still;
     void figure.offsetWidth; // restart its animation
     figure.hidden = false;
+    this.hooks.photo?.();
     this.photoTimer = window.setTimeout(() => (figure.hidden = true), PHOTO_FOR);
   }
 }

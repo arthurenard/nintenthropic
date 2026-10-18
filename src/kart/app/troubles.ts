@@ -10,6 +10,7 @@ export type TroubleKind =
   | "full"
   | "host-left"
   | "network"
+  | "unreachable"
   | "started"
   | "version"
   | "camera-denied"
@@ -46,6 +47,11 @@ export const TROUBLES: Record<TroubleKind, TroubleWords> = {
     icon: "wifi-off",
     title: "Connection Lost",
     body: "Lost the connection to the race. Check your network, then try again.",
+  },
+  unreachable: {
+    icon: "wifi-off",
+    title: "Can’t Reach the Race",
+    body: "The race didn’t answer. Join from the same Wi-Fi as the host, then try again.",
   },
   started: {
     icon: "exclamation",

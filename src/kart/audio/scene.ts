@@ -5,7 +5,7 @@
  * local kart: louder when close, darker when far, and to the left or right of
  * it by where it lies.
  */
-import type { KartView, ThingView } from "../contract";
+import type { KartView, RacerSetup, ThingView } from "../contract";
 
 /** A kart this screen shows, and where its sounds sit in the stereo field (-1 left .. 1 right). */
 export interface LocalKart {
@@ -35,6 +35,8 @@ export interface Scene {
   karts: ReadonlyMap<number, KartView>;
   /** Laps in this race. */
   laps: number;
+  /** Who drives each kart (the grid), for the sounds that are a driver's own: Dabble's horn is a quack. */
+  racers?: readonly Pick<RacerSetup, "id" | "character">[];
 }
 
 /** The nearest local kart to a place, and how the place sounds from there. */

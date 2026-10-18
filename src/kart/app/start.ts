@@ -88,7 +88,7 @@ export class StartScreen {
     const entered = () => {
       const first = enterKonami();
       replay($("gold-flash"), "go");
-      toast(first ? "Golden Kart unlocked — and a secret track." : "The Golden Kart is already yours.", { icon: "check", tone: "gold" });
+      toast(first ? "A golden kart, and a secret track." : "Still gold.", { icon: "check", tone: "gold" });
       hooks.konami?.(first);
     };
     window.addEventListener("keydown", (event) => {

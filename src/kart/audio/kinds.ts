@@ -44,7 +44,9 @@ export type KartSound =
   | "final-lap"
   | "finish-win"
   | "finish-ok"
-  | "cheer";
+  | "cheer"
+  /** The photo finish's camera. */
+  | "shutter";
 
 export const SOUND_CUES: Record<KartSound, string> = {
   "ui-select": "kart_ui_select",
@@ -60,4 +62,5 @@ export const SOUND_CUES: Record<KartSound, string> = {
   "finish-win": "kart_finish_win",
   "finish-ok": "kart_finish_ok",
   cheer: "kart_cheer",
+  shutter: "kart_shutter",
 };

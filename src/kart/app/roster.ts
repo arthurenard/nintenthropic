@@ -77,6 +77,24 @@ export function showsRace(lobby: LobbyState, device: string): boolean {
   return lobby.players.some((player) => player.screen === device);
 }
 
+/**
+ * The screen a room in this phase is shown on: its race, the results, a Grand Prix's standings or podium, or the
+ * lobby. For a screen that has been away (a sheet about a trouble) and comes back to wherever the room has got to.
+ */
+export function screenOfRoom(lobby: Pick<LobbyState, "phase" | "result" | "grandPrix">): "race" | "results" | "standings" | "podium" | "lobby" {
+  switch (lobby.phase) {
+    case "racing":
+      return "race";
+    case "results":
+      return lobby.result ? "results" : "lobby";
+    case "standings":
+    case "podium":
+      return lobby.grandPrix ? lobby.phase : "lobby";
+    default:
+      return "lobby";
+  }
+}
+
 /** One line of the standings, ready to draw. */
 export interface StandingRow {
   kart: number;

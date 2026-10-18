@@ -13,6 +13,7 @@ import type { PodiumRenderer } from "../render/podium";
 import { $, announce, element, setText } from "../../ui/dom";
 import { cupById } from "../grandprix";
 import { wonCup } from "../unlocks";
+import { podiumLine } from "./eggs";
 import { earnedTracks } from "./lobby";
 import { hostName, localPlayers, showsRace } from "./roster";
 import type { Services } from "./services";
@@ -84,10 +85,9 @@ export class PodiumScreen {
 
     setText("podium-eyebrow", "Grand Prix");
     setText("podium-title", cup.name);
-    if (winner) {
-      const points = `${winner.points} ${winner.points === 1 ? "point" : "points"}`;
-      setText("podium-sub", iWon ? `You won the ${cup.name}, with ${points}.` : `${winner.name} wins the ${cup.name}, with ${points}.`);
-    }
+    // Who won, and to the one player here who did not, how close they came.
+    const places = gp.points.flatMap((row, i) => (row.player !== null && mine.has(row.player) ? [i] : []));
+    setText("podium-sub", podiumLine(gp.points, places, cup.name));
 
     $("podium-rows").replaceChildren(
       ...gp.points.map((row, i) => {

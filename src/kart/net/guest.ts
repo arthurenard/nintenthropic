@@ -73,6 +73,11 @@ const SNAP_DISTANCE = 3;
 const PING_MS = 1000;
 /** Nothing from the host for this long (ms): the line has gone. */
 const SILENCE_MS = 8000;
+/**
+ * Nothing from the host for this long (ms), not even an answer to a ping (one goes every second): the line is quiet,
+ * and `link.connected` says so, so the screens can say they are waiting rather than freeze without a word.
+ */
+const QUIET_MS = 2500;
 /** The host did not answer our hello within this long (ms). */
 const WELCOME_MS = 10000;
 const FALLBACK_MS = 100;
@@ -181,7 +186,8 @@ export class GuestSession implements Session {
   }
 
   get link(): Session["link"] {
-    return { connected: this.open && !this.closedWith, rtt: this.rtt_, players: this.lobbyState.players.length };
+    const heardLately = this.env.now() - this.heard < QUIET_MS;
+    return { connected: this.open && !this.closedWith && heardLately, rtt: this.rtt_, players: this.lobbyState.players.length };
   }
 
   // ─── Getting in ───────────────────────────────────────────────────────────

@@ -233,10 +233,11 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     }
 
     case "horn": {
-      // Each kart's horn sits a little differently in pitch, so two honks together are two horns.
+      // Each kart's horn sits a little differently in pitch, so two honks together are two horns. Dabble has no horn: Dabble quacks.
       const who = hearKart(scene, event.kart);
       const own = !!localOf(scene, event.kart);
-      return who ? keep(order("kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
+      const duck = scene.racers?.find((racer) => racer.id === event.kart)?.character === "dabble";
+      return who ? keep(order(duck ? "kart_duck" : "kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
     }
 
     case "duck": {

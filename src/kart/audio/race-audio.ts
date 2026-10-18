@@ -113,6 +113,8 @@ const MAX_PER_CUE = 2;
 /** Another kart's loops (drift squeal, drone) are heard within this many metres. */
 const LOOP_RADIUS = 45;
 const MAX_SEEKERS = 3;
+/** Other karts' drift squeals heard at once, besides the local karts' own. */
+const MAX_OTHER_DRIFTS = 3;
 
 interface EngineVoice {
   timbre: number;
@@ -468,7 +470,7 @@ class RaceAudioImpl implements RaceAudio {
 
     const karts = new Map<number, KartView>();
     for (const k of view.karts) karts.set(k.id, k);
-    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps };
+    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps, racers: view.racers };
 
     this.phases(view);
     this.events(view.events, scene);
@@ -638,18 +640,18 @@ class RaceAudioImpl implements RaceAudio {
     const drifts = new Set<number>();
     const surfaces = new Set<number>();
     const drones = new Set<number>();
+    const squeals: { id: number; own: boolean; distance: number; params: Required<LoopParams> }[] = [];
     for (const k of view.karts) {
       const own = localOf(scene, k.id);
       const who = own ? { local: own, distance: 0, pan: own.pan } : listenerAt(scene, k.x, k.z);
       if (!who) continue;
       const near = own ? 1 : falloff(who.distance, LOOP_RADIUS);
 
-      // The drift's squeal.
+      // The drift's squeal (heard below, for the nearest few).
       const d = driftTarget(k);
       if (d.on && near > 0.05) {
-        drifts.add(k.id);
         const volume = d.volume * near * (own ? 1 : 0.7) * fx;
-        this.drive(this.drifts, k.id, "kart_drift", { rate: d.rate, volume, pan: who.pan, distance: who.distance }, dt);
+        squeals.push({ id: k.id, own: !!own, distance: who.distance, params: { rate: d.rate, volume, pan: who.pan, distance: who.distance } });
       }
 
       // The ground: only under the player's own wheels.
@@ -672,6 +674,12 @@ class RaceAudioImpl implements RaceAudio {
         drones.add(k.id);
         this.drive(this.drones, k.id, "kart_drone", { rate: 1, volume: near * (own ? 1 : 0.8) * fx, pan: who.pan, distance: who.distance }, dt);
       }
+    }
+    // Every local kart's squeal, and the nearest few others': a whole pack drifting round a hairpin is a choir otherwise.
+    squeals.sort((a, b) => (a.own === b.own ? a.distance - b.distance : a.own ? -1 : 1));
+    for (const s of squeals.slice(0, scene.locals.length + MAX_OTHER_DRIFTS)) {
+      drifts.add(s.id);
+      this.drive(this.drifts, s.id, "kart_drift", s.params, dt);
     }
     this.release(this.drifts, drifts);
     this.release(this.surfaces, surfaces);

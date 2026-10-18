@@ -18,7 +18,7 @@ import { WebGLUnavailable } from "../../engine/common";
 import type { DriverControl, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRenderer, RaceView, Session } from "../contract";
 import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
-import { PHOTO_GAP, recordDuck, tricksFor } from "./eggs";
+import { PHOTO_GAP, recordDuck, taunts, tricksFor } from "./eggs";
 import { itemWords, lapLabel, list, ordinal } from "./format";
 import { FrameRate } from "./graphicsui";
 import { HandsFirst, type TrackerCounts } from "./handsFirst";
@@ -48,6 +48,8 @@ export interface RaceContext {
 const LOST_FOR = 300;
 /** Hands gone this long, ms, before the host's big screen is told (it says it in their viewport). */
 const REPORT_AFTER = 1500;
+/** A viewport is taunted at most once in this long, ms. */
+const TAUNT_GAP = 2500;
 
 export class RaceScreen {
   private ctx: RaceContext | null = null;
@@ -82,6 +84,10 @@ export class RaceScreen {
   private eggTick = 0;
   private finishes: { place: number; time: number }[] = [];
   private still: string | null = null;
+  /** How many times the drone has carried each kart back to the road (the results tease about it). */
+  private rescues = new Map<number, number>();
+  /** When each viewport's kart was last taunted, ms. */
+  private taunted = new Map<number, number>();
   private cards: { place: HTMLElement; lap: HTMLElement; item: HTMLElement; slot: number }[] = [];
   private banner = "";
   private view: RaceView | null = null;
@@ -119,8 +125,11 @@ export class RaceScreen {
     });
     window.addEventListener("keydown", (event) => this.key(event));
     document.addEventListener("visibilitychange", () => {
+      if (!document.hidden || !this.running) return;
       // A tab put away while practising: the race waits, behind the sheet.
-      if (document.hidden && this.running && this.ctx?.session.role === "solo") this.pause();
+      if (this.ctx?.session.role === "solo") this.pause();
+      // A hidden page gets no frames, and the frame is what quiets the engines: they would drone on behind the other tabs.
+      this.hush(true);
     });
   }
 
@@ -138,6 +147,11 @@ export class RaceScreen {
     return this.still;
   }
 
+  /** Each kart's rescues by the drone in the race shown last (it outlives `end`, until the next race). */
+  get rescued(): ReadonlyMap<number, number> {
+    return this.rescues;
+  }
+
   begin(ctx: RaceContext): void {
     this.end();
     this.ctx = ctx;
@@ -153,6 +167,8 @@ export class RaceScreen {
     this.eggTick = 0;
     this.finishes = [];
     this.still = null;
+    this.rescues = new Map();
+    this.taunted = new Map();
     $("view-toasts").replaceChildren();
     this.reported = "";
     this.banner = "";
@@ -246,6 +262,14 @@ export class RaceScreen {
     }
   }
 
+  /** The race's sound held still (engines silent, music muffled), or let go again. */
+  private hush(on: boolean): void {
+    if (on === this.hushed) return;
+    this.hushed = on;
+    if (on) this.sound?.pause();
+    else this.sound?.resume();
+  }
+
   /** What the pause sheet tells you: whether the race waits, and what leaving does. */
   private note(): void {
     const session = this.ctx?.session;
@@ -262,15 +286,24 @@ export class RaceScreen {
 
   /** "Paused" on every other device while the host has the race stopped, then the 3-2-1 on all of them. */
   private veil(lobby: LobbyState): void {
+    const session = this.ctx?.session;
     const pause = lobby.pause ?? null;
-    const mine = pause !== null && pause.by === this.ctx?.session.device;
+    const mine = pause !== null && pause.by === session?.device;
+    // A guest who has heard nothing from the host for a few seconds: the race has not frozen for nothing, it waits.
+    const waiting = pause === null && session?.role === "guest" && !session.link.connected;
     // On the device that paused, the sheet says it; the veil takes over for the 3-2-1.
-    const show = pause !== null && !(mine && pause.resume === null && this.sheet.open);
-    const key = show ? `${pause!.resume}|${mine}` : "";
+    const show = waiting || (pause !== null && !(mine && pause.resume === null && this.sheet.open));
+    const key = waiting ? "waiting" : show ? `${pause!.resume}|${mine}` : "";
     if (key === this.veilKey) return;
     this.veilKey = key;
     $("pause-veil").hidden = !show;
     if (!show) return;
+    if (waiting) {
+      $("pause-count").hidden = true;
+      setText("pause-heading", `Waiting for ${hostName(lobby)}`);
+      setText("pause-words", "The race carries on when the connection is back.");
+      return;
+    }
     const resuming = pause!.resume !== null;
     $("pause-count").hidden = !resuming;
     setText("pause-count", resuming ? String(pause!.resume) : "");
@@ -294,13 +327,8 @@ export class RaceScreen {
     if (this.mode === "pending") this.choose(view);
     // While the room is stopped the picture holds still, effects and cameras too.
     const dt = lobby.pause ? 0 : seconds;
-    // The engines fall silent and the music is muffled behind the sheet, and through the host's pause.
-    const hush = this.sheet.open || !!lobby.pause;
-    if (hush !== this.hushed) {
-      this.hushed = hush;
-      if (hush) this.sound?.pause();
-      else this.sound?.resume();
-    }
+    // The engines fall silent and the music is muffled behind the sheet, through the host's pause, and while the page is away.
+    this.hush(this.sheet.open || !!lobby.pause || document.hidden);
     if (this.mode === "world" && this.renderer && this.loaded) {
       const views = ctx.session.views();
       const key = views.join(",");
@@ -422,6 +450,7 @@ export class RaceScreen {
     if (view.tick < this.eggTick - 5) {
       this.eggEvent = -1;
       this.finishes = [];
+      this.rescues = new Map();
     }
     this.eggTick = view.tick;
     for (const event of view.events) {
@@ -429,6 +458,8 @@ export class RaceScreen {
       this.eggEvent = event.id;
       if (event.type === "duck") this.duckFound(event.kart, view, lobby);
       else if (event.type === "finish") this.finished(event.place, event.time);
+      else if (event.type === "rescued") this.rescues.set(event.kart, (this.rescues.get(event.kart) ?? 0) + 1);
+      else if (event.type === "hit") this.hit(event, view, performance.now());
     }
   }
 
@@ -439,27 +470,49 @@ export class RaceScreen {
     if (!ctx || slot === undefined || !ctx.players.some((player) => player.slot === slot)) return;
     const words = recordDuck(view.track.id);
     if (!words) return;
-    const index = ctx.session.views().indexOf(kart);
-    const box = $("race-stage").getBoundingClientRect();
-    const rect = index >= 0 ? layoutViews(ctx.session.views().length, box.width, box.height).views[index] : undefined;
     // In that player's viewport; a controller with no viewport says it on its own screen.
-    if (!rect) {
-      toast(words, { icon: "check", tone: "gold" });
-      return;
+    if (!this.toastIn(kart, words, "check", 3500)) toast(words, { icon: "check", tone: "gold" });
+  }
+
+  /** A hit between people on this screen's karts: a word in the viewport of each it is about, one at a time. */
+  private hit(event: { kart: number; by: number | null }, view: RaceView, now: number): void {
+    const ctx = this.ctx;
+    if (!ctx || this.mode !== "world") return;
+    const players = new Map(view.racers.flatMap((racer) => (racer.player !== null ? [[racer.id, racer.name] as const] : [])));
+    for (const taunt of taunts(event, players, ctx.session.views())) {
+      // A volley of pucks is one taunt, not five.
+      if (now - (this.taunted.get(taunt.kart) ?? -Infinity) < TAUNT_GAP) continue;
+      this.taunted.set(taunt.kart, now);
+      this.toastIn(taunt.kart, taunt.words, null, 2000);
     }
-    const pill = element("p", "view-toast glass");
+  }
+
+  /** A pill high in the viewport that follows `kart`, for `ms`; false when no viewport here follows it. */
+  private toastIn(kart: number, words: string, symbol: string | null, ms: number): boolean {
+    const ctx = this.ctx;
+    if (!ctx) return false;
+    const views = ctx.session.views();
+    const index = views.indexOf(kart);
+    const box = $("race-stage").getBoundingClientRect();
+    const rect = index >= 0 ? layoutViews(views.length, box.width, box.height).views[index] : undefined;
+    if (!rect) return false;
+    const pill = element("p", symbol ? "view-toast glass" : "view-toast quick glass");
     pill.setAttribute("role", "status");
     pill.style.left = `${Math.round(rect.x + rect.w / 2)}px`;
     pill.style.top = `${Math.round(rect.y + rect.h * 0.26)}px`;
-    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    icon.setAttribute("viewBox", "0 0 24 24");
-    icon.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", "#i-check");
-    icon.append(use);
-    pill.append(icon, element("span", undefined, words));
+    if (symbol) {
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("aria-hidden", "true");
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", `#i-${symbol}`);
+      icon.append(use);
+      pill.append(icon);
+    }
+    pill.append(element("span", undefined, words));
     $("view-toasts").append(pill);
-    window.setTimeout(() => pill.remove(), 3500);
+    window.setTimeout(() => pill.remove(), ms);
+    return true;
   }
 
   /** A kart crossed the line: if it was right behind the one before, for a place in the top three, the screen takes the picture now. */

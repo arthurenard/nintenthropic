@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveIn, navKey, navPresses, type NavKey } from "./nav";
+import { moveIn, navKey, nearestBox, navPresses, type Box, type NavKey } from "./nav";
 
 const pad = (pressed: number[] = [], axes: number[] = [0, 0]) => ({
   buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: pressed.includes(i), touched: false, value: 0 })),
@@ -15,6 +15,8 @@ describe("moving about a menu with a pad", () => {
     expect(navPresses(pad([]), was)).toEqual([]);
     expect(navPresses(pad([0, 14]), was).sort()).toEqual(["confirm", "left"]);
     expect(navPresses(pad([1]), was)).toEqual(["back"]);
+    // Start: the pause sheet.
+    expect(navPresses(pad([9]), was)).toEqual(["menu"]);
   });
 
   it("reads the left stick once it leans far enough", () => {
@@ -49,5 +51,39 @@ describe("keys and grids", () => {
     expect(moveIn(7, "up", 9, 5)).toBe(2);
     expect(moveIn(1, "up", 9, 5)).toBe(1);
     expect(moveIn(3, "confirm", 9, 5)).toBe(3);
+  });
+});
+
+describe("the d-pad over a screen", () => {
+  const box = (x: number, y: number, width = 100, height = 44): Box => ({ x, y, width, height });
+
+  it("walks a column of buttons in order, and stops at its ends", () => {
+    const column = [box(0, 0), box(0, 60), box(0, 120)];
+    expect(nearestBox(column[0]!, column, "down")).toBe(1);
+    expect(nearestBox(column[1]!, column, "down")).toBe(2);
+    expect(nearestBox(column[2]!, column, "down")).toBe(-1);
+    expect(nearestBox(column[2]!, column, "up")).toBe(1);
+  });
+
+  it("goes along a row sideways, and never takes a neighbour in the row for one below", () => {
+    const row = [box(0, 0), box(120, 0), box(240, 0)];
+    expect(nearestBox(row[0]!, row, "right")).toBe(1);
+    expect(nearestBox(row[2]!, row, "left")).toBe(1);
+    expect(nearestBox(row[1]!, row, "down")).toBe(-1);
+  });
+
+  it("goes to what shares its column before what is nearer off to the side", () => {
+    // From a wide button: a small one to the lower right is nearer than the one straight below, but not in its column.
+    const from = box(0, 0, 400, 44);
+    const below = box(0, 140, 400, 44);
+    const aside = box(420, 50, 60, 44);
+    expect(nearestBox(from, [aside, below], "down")).toBe(1);
+    // A narrow field under a wide button is in its column: the start screen's code field, between Host and Practice.
+    const field = box(10, 60, 250, 44);
+    const join = box(270, 60, 120, 44);
+    const practice = box(0, 120, 400, 44);
+    expect(nearestBox(from, [practice, join, field], "down")).toBe(2);
+    // With nothing in its column, the nearest off to the side.
+    expect(nearestBox(box(0, 0), [box(300, 200), box(150, 100)], "down")).toBe(1);
   });
 });

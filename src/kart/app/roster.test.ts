@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LobbyPlayer, LobbyState, RaceResult, RacerSetup } from "../contract";
-import { canStart, hostName, kartOf, localPlayers, previewColours, screenLabel, showsRace, standingRows, waitingLine } from "./roster";
+import { canStart, hostName, kartOf, localPlayers, previewColours, screenLabel, screenOfRoom, showsRace, standingRows, waitingLine } from "./roster";
 
 const player = (slot: number, name: string, device: string, extra: Partial<LobbyPlayer> = {}): LobbyPlayer => ({
   slot,
@@ -24,8 +24,27 @@ const lobby = (players: LobbyPlayer[], extra: Partial<LobbyState> = {}): LobbySt
   ...extra,
 });
 
+describe("coming back to the room", () => {
+  const gp = { cup: "acorn", race: 1, points: [] };
+
+  it("shows the screen of the room's phase, wherever it has got to", () => {
+    expect(screenOfRoom({ phase: "racing", result: null })).toBe("race");
+    expect(screenOfRoom({ phase: "results", result: { standings: [] } })).toBe("results");
+    expect(screenOfRoom({ phase: "standings", result: null, grandPrix: gp })).toBe("standings");
+    expect(screenOfRoom({ phase: "podium", result: null, grandPrix: gp })).toBe("podium");
+    expect(screenOfRoom({ phase: "lobby", result: null })).toBe("lobby");
+  });
+
+  it("falls back to the lobby when a phase has nothing to show", () => {
+    // Results with no standings, or a cup's screens with no cup: the lobby, never a blank screen.
+    expect(screenOfRoom({ phase: "results", result: null })).toBe("lobby");
+    expect(screenOfRoom({ phase: "standings", result: null, grandPrix: null })).toBe("lobby");
+    expect(screenOfRoom({ phase: "podium", result: null })).toBe("lobby");
+  });
+});
+
 describe("the room", () => {
-  const room = lobby([player(0, "Maya", "host"), player(1, "Sam", "phone"), player(2, "Lu", "phone", { ready: false })]);
+  const room =lobby([player(0, "Maya", "host"), player(1, "Sam", "phone"), player(2, "Lu", "phone", { ready: false })]);
 
   it("knows the players on a device, by slot", () => {
     expect(localPlayers(room, "phone").map((p) => p.name)).toEqual(["Sam", "Lu"]);
