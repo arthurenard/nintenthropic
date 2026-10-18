@@ -24,9 +24,9 @@ export interface DynamicResolutionOptions {
    * Give the pixels back when fewer of them bought no quicker frame: the
    * frame rate is held by something else - a browser saving the battery at
    * 30 fps (Chrome's Energy Saver, Low Power Mode), or a busy main thread -
-   * and a blurred picture would cost the player for nothing. Off by default:
-   * a game that answers a machine that cannot keep up by lowering its
-   * effects (Grip Prix, through StrainWatch) needs the floor to see it.
+   * and a blurred picture would cost the player for nothing. A game that
+   * answers a machine that cannot keep up by lowering its effects (Grip Prix,
+   * through StrainWatch) watches `spent`, not the floor, with it on.
    */
   restoreFutile?: boolean;
 }
@@ -160,6 +160,15 @@ export class DynamicResolution {
     return false;
   }
 
+  /**
+   * Pixels have done all they can for frames that are still slow: the scale is
+   * at its floor, or (restoreFutile) fewer pixels were found to buy nothing at
+   * these frames and the scale is held where it began.
+   */
+  get spent(): boolean {
+    return this.scale <= this.min + 1e-6 || this.futile !== null;
+  }
+
   /** Back to a clean slate: after a pause, or when a new game starts. */
   reset(scale = this.scale): void {
     this.window = [];
@@ -190,26 +199,52 @@ export class DynamicResolution {
 }
 
 /**
- * Notices a machine that dynamic resolution cannot save: the scale has sat at
- * its floor, frame after frame, for `after` seconds. A hitch (a tab put
- * away, a debugger) is not time spent at the floor and starts the count
- * again. It speaks once.
+ * Notices a machine that dynamic resolution cannot save: pixels have been
+ * spent (`DynamicResolution.spent`, or the floor), frame after frame, for
+ * `after` seconds. A hitch (a tab put away, a debugger) is not time spent
+ * struggling and starts the count again. It speaks once, and keeps how long
+ * those frames took, so a remedy can later be judged by whether it made them
+ * quicker. Running `steadyAfter` seconds without speaking is the other
+ * answer: the machine kept up.
  */
 export class StrainWatch {
   private seconds = 0;
+  private total = 0;
   private told = false;
+  private frames: number[] = [];
 
-  constructor(private readonly after = 6) {}
+  constructor(
+    private readonly after = 6,
+    private readonly steadyAfter = Number.POSITIVE_INFINITY,
+  ) {}
 
-  /** One frame of `seconds`; true, once, when the floor has held long enough. */
-  frame(seconds: number, atFloor: boolean): boolean {
-    if (!atFloor || !(seconds > 0) || seconds > HITCH / 1000) {
+  /** One frame of `seconds`; true, once, when pixels have been spent long enough. */
+  frame(seconds: number, spent: boolean): boolean {
+    const hitch = !(seconds > 0) || seconds > HITCH / 1000;
+    if (!hitch) this.total += seconds;
+    if (!spent || hitch) {
       this.seconds = 0;
+      if (!this.told) this.frames = [];
       return false;
     }
     this.seconds += seconds;
-    if (this.told || this.seconds < this.after) return false;
+    if (this.told) return false;
+    this.frames.push(seconds * 1000);
+    if (this.seconds < this.after) return false;
     this.told = true;
     return true;
+  }
+
+  /** The median interval, in ms, of the frames it spoke about (null until it has). */
+  get interval(): number | null {
+    if (!this.told || this.frames.length === 0) return null;
+    const sorted = [...this.frames].sort((a, b) => a - b);
+    const mid = sorted.length >> 1;
+    return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  }
+
+  /** True once `steadyAfter` seconds have run without it speaking. */
+  get steady(): boolean {
+    return !this.told && this.total >= this.steadyAfter;
   }
 }

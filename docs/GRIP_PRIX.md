@@ -620,10 +620,18 @@ core count says a Pro or Max: 12 or more); Apple Pro, Max and Ultra start at hig
 and Arc at medium; a laptop Adreno (X1) at medium, a phone's at low; the small GeForce parts (MX, GT) at medium; a big
 GPU in a machine of four cores or fewer is a step down.
 
-**The safety net.** If dynamic resolution has sat at its floor for six seconds of racing (`StrainWatch`), the renderer
-tells the app, and in Auto the next race starts a tier lower on this device (`handy.kart.ceiling.v1`, kept 14 days,
-forgotten when the player chooses Graphics again). Checked end to end on a software GPU that said it was an M1:
-medium, then "Auto is using Low here: a race ran slowly, so it stepped down."
+**The safety net.** If the frames stay slow for six seconds of racing with nothing left for pixels to do
+(`StrainWatch` on `DynamicResolution.spent`: the scale at its floor, or fewer pixels found to buy no quicker frame and
+given back), the renderer tells the app how long those frames took, and in Auto the next race tries a tier lower on this
+device (`handy.kart.ceiling.v1`, kept 14 days, forgotten when the player chooses Graphics again). The lower tier is on
+trial (`prefs.ts`, `noteStrain`): a race at it that keeps up for 30 s keeps it (`noteKeptUp`); a race at it that strains
+again with frames less than a tenth quicker shows the tier was not what held them, so the tier above comes back and that
+pace is remembered, and a later strain at it changes nothing. This is a browser holding the page to 30 fps to save the
+battery (Chrome's Energy Saver, Low Power Mode): it used to drop the picture to its floor and save a lower tier for two
+weeks, then the one below; now the picture dips for about 4 s at the start of a race and comes back sharp, and one race
+runs a tier lower before High returns. Checked end to end in headless Chrome on an M4 Max, the page's frames held to
+30 fps: High, a race at Medium, then High for good; at the browser's own pace, High at 60 fps and nothing saved. Earlier,
+on a software GPU that said it was an M1: medium, then "Auto is using Low here: a race ran slowly, so it stepped down."
 
 **Graphics.** The pause sheet has Graphics (Auto, Low, Medium, High; `handy.kart.graphics.v1`, Auto by default) and a
 Frame Rate switch (`handy.kart.fps.v1`: a small readout beside the pause button). The renderer is built from the choice
