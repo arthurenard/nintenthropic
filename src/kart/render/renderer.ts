@@ -377,8 +377,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     });
     for (const o of hidden) o.visible = true;
     try {
-      // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)...
-      await renderer.compileAsync(scene, eyes[0].eye).catch(() => {});
+      // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)... though never
+      // waited on for long: a context lost meanwhile would never say they are ready, and the pictures build what is left.
+      await Promise.race([renderer.compileAsync(scene, eyes[0].eye), new Promise((resolve) => setTimeout(resolve, 8000))]).catch(() => {});
       // ...and the pictures build what remains, the way a frame does.
       for (const e of eyes) {
         if (disposed || !world) break;

@@ -85,6 +85,8 @@ const STEP_DEPTH = 3.9;
 /** Heading of each kart (radians): they look a little toward the winner. */
 const TURN = [0, 0.32, -0.32] as const;
 const CONFETTI = ["#ff453a", "#ffd60a", "#30d158", "#0a84ff", "#bf5af2", "#ff9f0a", "#ffffff"];
+/** The longest the ceremony waits for its shaders before it starts drawing anyway, ms. */
+const BUILD_WAIT_MS = 1500;
 
 function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void): CanvasTexture {
   const canvas = document.createElement("canvas");
@@ -352,8 +354,8 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
       // The karts' paint reflects the studio sky, which the first picture of a kart would give the scene: given now, so
       // the shaders built here are the ones that picture draws with.
       useStudioEnvironment(scene, renderer);
-      const mine: Promise<void> = renderer
-        .compileAsync(scene, camera)
+      // Never waiting more than a moment: a context lost meanwhile would never say its shaders are ready.
+      const mine: Promise<void> = Promise.race([renderer.compileAsync(scene, camera), new Promise((resolve) => setTimeout(resolve, BUILD_WAIT_MS))])
         .catch(() => {})
         .then(() => {
           if (building === mine) building = null;
