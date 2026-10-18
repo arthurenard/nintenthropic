@@ -150,10 +150,16 @@ export function turnUntilNight(t: number): number {
   return BREATHER_GROUND_RATE * Math.max(0, NIGHT_MID - t);
 }
 
-/** The Moon rises over the limb from this pass on. */
+/**
+ * The Moon rises over the limb from this pass on, in the one stretch of sky
+ * the station leaves open there: low in the right-hand window, between the
+ * limb and the solar array, a few degrees up at most (any higher, or further
+ * left, and the array or the window's frame hides it). Opposite the day's
+ * sun, so it shows nearly full.
+ */
 export const MOON_RISE_RATE = 0.16 * DEG;
-export const MOON_TOP = 11 * DEG;
-export const MOON_AZIMUTH = 24 * DEG;
+export const MOON_TOP = 4 * DEG;
+export const MOON_AZIMUTH = 35 * DEG;
 /** Its disc, a little larger than life so it can be found and shot. */
 export const MOON_RADIUS = 0.9 * DEG;
 

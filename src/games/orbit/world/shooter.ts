@@ -171,15 +171,16 @@ export class Shooter {
       return res;
     }
 
-    // 4. The sky: the Moon, the storm, the "HI".
-    if (sky.moon && d.angleTo(sky.moon.dir) <= sky.moon.radius * 1.3 + Math.atan(this.tanFor(ASSIST.sky * secretBy))) {
+    // 4. The sky: the Moon (only in open sky: still under the limb, the
+    // planet is in front of it), the storm, the "HI".
+    const ground = sky.planet(d);
+    if (!ground && sky.moon && d.angleTo(sky.moon.dir) <= sky.moon.radius * 1.3 + Math.atan(this.tanFor(ASSIST.sky * secretBy))) {
       res.target = { kind: "secret", shot: { secret: "moon" } };
       res.point.copy(o).addScaledVector(d, 300);
       res.hit = "secret";
       res.distance = 300;
       return res;
     }
-    const ground = sky.planet(d);
     if (ground && (ground.storm || ground.hi)) {
       res.target = { kind: "secret", shot: { secret: ground.storm ? "storm" : "message" } };
       res.point.copy(o).addScaledVector(d, 300);
