@@ -455,6 +455,8 @@ export class DeadOfNight implements Game, MatchListener {
     const m = this.match as unknown as { queue: unknown[]; spawnTimer: number };
     m.queue = [{ kind: "walker", lane: "road" }];
     m.spawnTimer = 1e9;
+    // The title card's end starts the spawning clock again: no room on the road keeps the one in the queue waiting.
+    this.match.spec = { ...this.match.spec, maxActive: 0 };
   }
 
   update(dt: number, _now: number, aim: Aim): void {

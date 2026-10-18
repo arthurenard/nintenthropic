@@ -322,10 +322,13 @@ export class Cast {
       rig.hitReact(Math.sign(at.x - rig.root.position.x) || 1, 1.3);
       this.sound.at(cause === "head" ? "night_headshot" : "night_hit", at, 1);
     }
-    if (d.kind === "bloater") {
-      // Shot, caught in another's burst, or bursting on the barricade: it
-      // doubles over as its belly goes, under the cloud. (At the barricade
-      // its clip has been running since it began to swell.)
+    if (d.kind === "bloater" && cause !== "head") {
+      // Shot in the belly, caught in another's burst, or bursting on the
+      // barricade: it doubles over as its belly goes, under the cloud. (At
+      // the barricade its clip has been running since it began to swell.)
+      // One caught in another's burst goes with its own belly and cloud; a
+      // headshot leaves the belly whole, and it falls like any of the dead.
+      if (cause === "chain") this.burst(d);
       if (!(cause === "burst" && rig.current?.getClip().name === "bloat_burst")) this.playBurst(v, 0.04);
       v.deathPlayed = true;
       v.thudIn = 1.1;
