@@ -221,8 +221,9 @@ game checkpoint, and is gone.
 ## Difficulty
 
 Relaxed and Standard, one table in `tuning.ts`. Relaxed: a **holdover dot** in
-the scope shows where the round will land at the range under the reticle (the
-drop and the wind worked out for you), wind at most 4 m/s, the counter-
+the scope shows where the round will land (the drop and the wind worked out for
+you, for whatever lies under the dot: held over a man far off, the reticle rests
+on the hill behind him, and the dot is still his), wind at most 4 m/s, the counter-
 sniper's glint shows twice as long, alert rises slower, the timed jobs have a
 third more time, damage ×0.75. Standard is the game as designed. Records
 apart.
