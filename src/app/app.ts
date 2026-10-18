@@ -1027,7 +1027,9 @@ export class App {
     if (this.session !== session) return;
     session.troubled = false;
     const now = this.cameraIdentity();
-    if (before && now && (now.deviceId !== before.deviceId || now.width !== before.width || now.height !== before.height)) {
+    // A round begun with no camera at all (it went while the game loaded) has
+    // no aim yet either: like another camera, it starts afresh with its check.
+    if (now && (!before || now.deviceId !== before.deviceId || now.width !== before.width || now.height !== before.height)) {
       session.camera = now;
       this.again(session, false);
       return;
