@@ -1,4 +1,4 @@
-import { Bone, Group, Vector3, type Object3D } from "three";
+import { Bone, BoxGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, Vector3, type Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import type { LoadedAsset } from "../types";
 import { Rig, patchRigFragment, templateFrom } from "./character";
@@ -50,6 +50,26 @@ function armature(): LoadedAsset {
   }
   return { scene, animations: [] };
 }
+
+describe("a rig's materials", () => {
+  it("draw a two-sided figure in one pass, though they can fade, and leave a one-sided one as it was", () => {
+    const asset = armature();
+    const two = new Mesh(new BoxGeometry(), new MeshStandardMaterial({ side: DoubleSide }));
+    const one = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
+    asset.scene.add(two, one);
+    const rig = new Rig(templateFrom("bandit", asset));
+    const materials: MeshStandardMaterial[] = [];
+    rig.model.traverse((o) => {
+      if ((o as Mesh).isMesh) materials.push((o as Mesh).material as MeshStandardMaterial);
+    });
+    expect(materials).toHaveLength(2);
+    for (const m of materials) expect(m.transparent).toBe(true);
+    expect(materials.find((m) => m.side === DoubleSide)!.forceSinglePass).toBe(true);
+    expect(materials.find((m) => m.side !== DoubleSide)!.forceSinglePass).toBe(false);
+    // The template's own materials are untouched: the rig has clones.
+    expect((two.material as MeshStandardMaterial).forceSinglePass).toBe(false);
+  });
+});
 
 describe("a rig's joints", () => {
   it("are where its bones stand now: moved, turned, aiming and hit, before anything is drawn", () => {
