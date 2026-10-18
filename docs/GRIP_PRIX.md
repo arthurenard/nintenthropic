@@ -697,13 +697,36 @@ tight type, springy motion; a white pill is the one main action of a screen;
    player's colour that comes up in turn (last place first, the winner last),
    the medal colours for the top three, the fastest lap in gold; the title is
    gold, silver or bronze for a podium place and white otherwise; Race Again
-   (the host), Back to Lobby. **Standings** (a Grand Prix, between races) wear
+   (the host), Back to Lobby. Under the title, a line on how it went for the
+   one player on this screen, kinder and funnier further down the table
+   (`eggs.ts` `resultLine`: "By a mile.", "1.4 s behind Pebble.", "You saw
+   more of the track than anyone.", "The drone knows you by name now."), or,
+   for friends sharing a screen, who beat whom ("Ada beat Maya, Finn and
+   Kit.", `sofaLine`). **Standings** (a Grand Prix, between races) wear
    the same, on the postcard of the race just run; the **Podium** (its end)
-   has its own stage.
+   has its own stage, and says to a player who did not win how close they
+   came ("You took silver, 3 points behind.", `podiumLine`).
+
+In a race, a hit between two people on the sofa earns a word in each one's
+view ("Got Finn." for one, "Maya got you." for the other, "Own goal." for a
+puck that comes back), at most one a view every 2.5 s (`eggs.ts` `taunts`);
+a bot at either end says nothing. Each track's duck says where it was found
+("Duck 3 of 9. Fished out of the sink."), and a duck found on a mirrored
+track counts for its track.
+
+**A gamepad** finds its way round the menus (`padnav.ts`): the d-pad or the
+stick moves a visible focus ring to the nearest thing that way, A presses,
+B steps back only where leaving loses nothing (You, the wheel check, a
+sheet), and Start opens and closes the pause sheet. The driver stage reads
+the pad itself, and in a race the pad drives.
 
 Troubles say what happened and what to do: "There's no race with that code.
 Check it and try again.", "This race is full.", "The host left the race.",
-"Lost the connection to the race." — each with the way back as a button.
+"Lost the connection to the race.", and for a code that never answers, "Can't
+Reach the Race" ("Join from the same Wi-Fi as the host, then try again.") —
+each with the way back as a button. A guest who has heard nothing from the
+host for 2.5 s (a ping goes every second) sees "Waiting for <host>" over the
+race instead of a world frozen without a word (`net/guest.ts` `QUIET_MS`).
 
 The arcade (`index.html`) gains a heading per kind of game: **Shooting**
 (the four) and **Racing** (Grip Prix). A `GameEntry` may say `page:
