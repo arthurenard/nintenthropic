@@ -90,7 +90,9 @@ the bus and the phone booth also open the first waves, see Waves).
   a lunge. Two body shots or one to the head. Worth a bonus.
 - **Crawlers** (wave 2+) — low on the road, dragging themselves (0.7 m/s),
   hard to see in the fog and easy to forget: they only need one shot,
-  anywhere, but they are small and near the ground.
+  anywhere, but they are small and near the ground. At the barricade one
+  claws from 1.5 m out in front of the sandbags, never behind them, where
+  it could be neither seen nor shot.
 - **Bloaters** (wave 4+) — swollen, slow (0.85 m/s), pale green. **Shoot one in the belly
   and it bursts**: a burst of foul gas and matter that downs every walker
   within 3 m (a chain, scored). Let it reach the barricade and it bursts on
@@ -106,7 +108,9 @@ bending ahead of one; a groan (panned and distanced) when one leaves the fog;
 the crickets falling silent when the dead are close.
 
 **Hits** read physically: a headshot snaps the head back and they drop where
-they stand; body shots twist and stagger them; the fallen stay on the road
+they stand (but a runner dropped in full stride, carried on by its own run,
+goes down face first and skids a metre along the road on its chin); body
+shots twist and stagger them; the fallen stay on the road
 until the breather (the fog takes them). A dark spray, never dismemberment —
 PG-13, not gore.
 
@@ -144,7 +148,9 @@ hand fell around wave 16, and the game was not as hard as the others. On
 Standard a steady hand now falls around wave 9, a slow, wild one around 5 or 6
 and the slowest around 3 or 4 (`rules/balance.test.ts` plays them out). What
 gets harder is the crowd: each wave the dead come closer together, more of
-them at once (`maxActive`), and a wave dragged out turns against you after
+them at once (`maxActive`, though never more than the 22 figures the night
+makes for them, falling ones included: one past that would walk up unseen),
+and a wave dragged out turns against you after
 10 s rather than 25 (the fog thickens and they quicken, to 1.7 times their
 pace).
 
@@ -209,6 +215,8 @@ goes. Keep the road clear."
 ## Secrets (easter eggs)
 
 Delightful, discoverable, never in the way. "Secrets 2 of 8" on the results.
+Their names, as the toast says them: Eat, The Scarecrow, Wrong Number, The
+Late Show, Something Howled Back, Nine Lives, Easy Listening, The Duck.
 
 1. **Gas & Eats.** The neon sign reads GAS & EATS. Shoot out letters until it
    reads EAT (shoot G, A, S, &, S): the sign sputters, and a groan from the
@@ -225,12 +233,14 @@ Delightful, discoverable, never in the way. "Secrets 2 of 8" on the results.
    time: a second howl answers, much closer.
 6. **The cat.** A black cat sits on a fence post by the corn. Shoot near it:
    it hisses and relocates to the top of the Gas & Eats sign, the wrecked
-   car's roof, the motel sign. It survives everything.
+   car's roof, the motel sign, and each scare costs it a life ("8 lives
+   left.", "7 lives left."). It survives everything.
 7. **The radio.** Through the station window behind the counter (visible at the
    right edge of a wide screen; off screen below about 1.5:1), a radio. Shoot it: it plays a few bars of a 1950s ballad
    (synthesised) until the next wave.
 8. **The duck.** A yellow rubber duck bobs in a puddle by the pumps. Shoot it:
-   it squeaks and spins. (Every game hides one duck. Find them all.)
+   it squeaks and spins ("The duck is fine."). (Every game hides one duck.
+   Find them all.)
 
 Konami on the arcade: the Golden Revolver → in Dead of Night, a golden rifle
 and a golden beam.

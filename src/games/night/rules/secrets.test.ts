@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeMatch } from "./testkit";
-import { EAT_OUT, SECRET_NAMES, SECRETS_TOTAL, SecretTracker } from "./secrets";
+import { CAT_STARTLES, catLine, EAT_OUT, SECRET_NAMES, SECRETS_TOTAL, SecretTracker } from "./secrets";
 import { WAVE_INTRO } from "./tuning";
 
 describe("the secrets", () => {
@@ -79,6 +79,15 @@ describe("the secrets", () => {
     expect(s.radioOff()).toBe(true);
     expect(s.duck()).toEqual({ squeaks: 1, newlyFound: true });
     expect(s.count).toBe(3);
+  });
+
+  it("counts the cat's lives down as it is scared, and leaves the last scare to its name", () => {
+    expect(catLine(1)).toBe("8 lives left.");
+    expect(catLine(2)).toBe("7 lives left.");
+    expect(catLine(CAT_STARTLES)).toBeNull();
+    expect(catLine(CAT_STARTLES + 4)).toBeNull();
+    expect(catLine(0)).toBeNull();
+    expect(SECRET_NAMES.cat).toBe("Nine Lives");
   });
 
   it("through the match: announced once, never scored, never counted in accuracy", () => {

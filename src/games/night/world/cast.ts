@@ -47,6 +47,10 @@ export interface DeadView {
   thudIn: number;
   swell: number;
   deathPlayed: boolean;
+  /** A runner dropped in full stride skids on along the road: the speed it has still to lose (m/s), and how far it has gone. */
+  skid: number;
+  skidX: number;
+  skidZ: number;
 }
 
 export interface SurvivorView {
@@ -55,6 +59,11 @@ export interface SurvivorView {
   flame: MeshStandardMaterial | null;
   stumbled: boolean;
 }
+
+/** A runner's skid: the speed it goes down at (m/s), how fast the road takes it off (m/s², about a metre of road), and how near the eye it may come. */
+const SKID_SPEED = 3.2;
+const SKID_DRAG = 5;
+const SKID_CLEAR = 5;
 
 const tmp = new Vector3();
 const tmp2 = new Vector3();
@@ -167,6 +176,9 @@ export class Cast {
       thudIn: -1,
       swell: 0,
       deathPlayed: false,
+      skid: 0,
+      skidX: 0,
+      skidZ: 0,
     };
     v.gait = this.gaitOf(v);
     this.dead.push(v);
@@ -322,10 +334,13 @@ export class Cast {
       rig.hitReact(Math.sign(at.x - rig.root.position.x) || 1, 1.3);
       this.sound.at(cause === "head" ? "night_headshot" : "night_hit", at, 1);
     }
-    if (d.kind === "bloater") {
-      // Shot, caught in another's burst, or bursting on the barricade: it
-      // doubles over as its belly goes, under the cloud. (At the barricade
-      // its clip has been running since it began to swell.)
+    if (d.kind === "bloater" && cause !== "head") {
+      // Shot in the belly, caught in another's burst, or bursting on the
+      // barricade: it doubles over as its belly goes, under the cloud. (At
+      // the barricade its clip has been running since it began to swell.)
+      // One caught in another's burst goes with its own belly and cloud; a
+      // headshot leaves the belly whole, and it falls like any of the dead.
+      if (cause === "chain") this.burst(d);
       if (!(cause === "burst" && rig.current?.getClip().name === "bloat_burst")) this.playBurst(v, 0.04);
       v.deathPlayed = true;
       v.thudIn = 1.1;
@@ -335,7 +350,13 @@ export class Cast {
     let clip: string;
     if (d.kind === "crawler") clip = "death.low";
     else if (cause === "chain") clip = "death_crumple";
-    else if (cause === "head") clip = this.random() < 0.75 ? "death_back" : "death_crumple";
+    else if (d.kind === "runner" && v.lastState === "approaching") {
+      // Dropped in full stride, it is carried on by its own run: face first,
+      // skidding along the road on its chin.
+      clip = "death_forward";
+      v.skid = SKID_SPEED;
+      this.sound.at("night_shuffle", d.pos, 0.9, 0.6, 0.2);
+    } else if (cause === "head") clip = this.random() < 0.75 ? "death_back" : "death_crumple";
     else clip = this.random() < 0.5 ? "death_forward" : "death_crumple";
     rig.play(clip, 0.08, false);
     v.deathPlayed = true;
@@ -448,6 +469,9 @@ export class Cast {
     if (d.state !== v.lastState && d.alive) this.enterState(v);
     else if (d.state !== v.lastState) v.lastState = d.state;
     rig.root.position.set(d.pos.x, d.pos.y, d.pos.z);
+    if (v.skid > 0) this.skid(v, dt);
+    rig.root.position.x += v.skidX;
+    rig.root.position.z += v.skidZ;
     if (d.alive) {
       const facing = d.state === "approaching" || d.state === "emerging" || d.state === "lunging";
       if (facing) turnRig(rig, Math.atan2(d.heading.x, d.heading.z), dt);
@@ -502,6 +526,21 @@ export class Cast {
       if (v.fade <= 0) return true;
     }
     return false;
+  }
+
+  /** A runner's skid, slowing on the asphalt, and never on into the barricade. */
+  private skid(v: DeadView, dt: number): void {
+    const d = v.d;
+    const step = v.skid * dt;
+    v.skid = Math.max(0, v.skid - SKID_DRAG * dt);
+    const x = d.pos.x + v.skidX + d.heading.x * step;
+    const z = d.pos.z + v.skidZ + d.heading.z * step;
+    if (Math.hypot(x - this.eye.x, z - this.eye.z) < SKID_CLEAR) {
+      v.skid = 0;
+      return;
+    }
+    v.skidX += d.heading.x * step;
+    v.skidZ += d.heading.z * step;
   }
 
   /** Their eyes in the beam: two points of light, and the eyes themselves up close. */

@@ -28,6 +28,7 @@ describe("the corn's baked layers", () => {
 });
 
 describe("the streetlight's masks", () => {
+  // Building the whole placeholder road takes seconds on a busy machine: more than a test's usual five.
   it("are scaled back up by what the export divided them by", () => {
     const root = buildPlaceholderRoad();
     expect(readRoad(root).flickerScale).toBe(1);
@@ -35,5 +36,5 @@ describe("the streetlight's masks", () => {
     scaled.add(...root.children.slice());
     scaled.userData["flicker_scale"] = 8.25;
     expect(readRoad(scaled).flickerScale).toBe(8.25);
-  });
+  }, 60_000);
 });

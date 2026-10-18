@@ -200,7 +200,10 @@ export class Recorder implements MatchListener {
   secretFound(id: SecretId, name: string, found: number, total: number) { this.note("secretFound", id, name, found, total); }
 }
 
-export function makeMatch(seed = 1, options: { difficulty?: Difficulty; start?: StartOptions; survivors?: boolean; road?: Road } = {}): { m: Match; rec: Recorder } {
+export function makeMatch(
+  seed = 1,
+  options: { difficulty?: Difficulty; start?: StartOptions; survivors?: boolean; road?: Road; figures?: number } = {},
+): { m: Match; rec: Recorder } {
   const rec = new Recorder();
   const road = options.road ?? placeholderRoad();
   const m = new Match({
@@ -209,6 +212,7 @@ export function makeMatch(seed = 1, options: { difficulty?: Difficulty; start?: 
     survivorPaths: options.survivors === false ? [] : road.survivorPaths,
     listener: rec,
     difficulty: options.difficulty ?? "standard",
+    ...(options.figures === undefined ? {} : { figures: options.figures }),
   });
   m.start(options.start ?? {});
   return { m, rec };

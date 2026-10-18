@@ -124,6 +124,13 @@ export const MASK_HITS = 2;
 export const CLIMB_TIME = 1.6;
 export const VAULT_TIME = 1.0;
 
+/**
+ * A crawler claws at the sandbags' foot from this far out from its place at
+ * the barricade (metres): any closer, the sandbags hide it from the eye and
+ * stop every bullet aimed at it, and it clawed on, unseen and unshootable.
+ */
+export const CRAWLER_SHORT = 1.5;
+
 /** A runner leaps at the barricade from this far out. */
 export const LUNGE_RANGE = 2.5;
 export const LUNGE_TIME = 0.5;
