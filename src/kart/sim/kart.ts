@@ -289,7 +289,7 @@ function noseOnBarrier(w: World, k: KartState): boolean {
   if (isOpen(terrain, k.s, side)) return false;
   const c = w.geo.at(k.s);
   if (Math.abs(k.offset) < c.width / 2 + barrierDistance(terrain, k.s, side) - TUNING.barrierInset - 0.05) return false;
-  // The way out through the barrier, on this side, against the way the kart faces.
+  // Facing outward on this side: the kart's nose has some of the track's right (left, for the left barrier) in it.
   return Math.sin(k.heading) * -c.tz * side + Math.cos(k.heading) * c.tx * side > 0;
 }
 

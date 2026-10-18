@@ -13,7 +13,8 @@
  *     barrier lets it, along the stretch of fence the duck is across from.
  *   - Bots honk, sometimes, a moment after passing someone (the sharper the
  *     bot the likelier), honk back at a person who honks close by (more often
- *     than not), and cheer for a few seconds when they finish in the top three. They do it from a hash of the kart and the tick, never the
+ *     than not), and cheer for a few seconds when they finish in the top
+ *     three. They do it from a hash of the kart and the tick, never the
  *     race's random numbers, so adding a honk never changes a race.
  *
  * All of it is plain numbers; a snapshot carries them (`save`, `load`), so
