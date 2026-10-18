@@ -322,6 +322,7 @@ export class AimCheck {
     const errors = scored ? [...this.errors, error] : this.errors;
     const measured = measure(errors);
     this.pool.push({ pointer, target: [target.x, target.y], id: target.id });
+    const wasSaved = this.fit === "saved";
     // The shot that proves the aim does not also change it: the map that
     // earned the score is the one the game is played on.
     if (!measured.ready && !this.refit()) {
@@ -333,6 +334,16 @@ export class AimCheck {
 
     if (scored) this.errors.push(error);
     this.measure = measured;
+    // A saved aim the camera has moved away from since (a laptop's lid
+    // tilted, another game's stage) misses the same way on every shot: a
+    // bias of R/2 or more, the camera's and not the player's, as the scaled
+    // map's misses are. Once the shots have fitted an aim of their own, those
+    // misses are not held against it: they kept a returning player to nine
+    // shots, three more than a first check.
+    if (wasSaved && this.fit !== "saved" && Math.hypot(...measured.bias) >= AIM_RADIUS / 2) {
+      this.errors.length = 0;
+      this.measure = measure(this.errors);
+    }
     this.shots++;
     this.uses.set(target.id, (this.uses.get(target.id) ?? 0) + 1);
     const distance = error ? Math.hypot(error[0], error[1]) : null;

@@ -401,6 +401,35 @@ describe("a returning player", () => {
     expect(player.check.done).toBe(true);
     expect(player.check.fit).toBe("affine");
   });
+
+  for (const shift of [
+    [0.008, -0.006],
+    [0.03, -0.02],
+    [0.06, -0.04],
+  ] as const) {
+    it(`relearns a camera moved since (${shift.join(", ")}) in the six shots a first check takes, not nine`, () => {
+      // The saved aim misses the same way three times: the camera's error, not the player's. Once the shots have
+      // fitted an aim of their own, those misses are not held against it.
+      const player = new Player(trueMap());
+      for (let i = 0; i < 3; i++) player.shoot({ shift });
+      expect(player.check.fit).toBe("affine");
+      expect(player.check.errors).toHaveLength(0);
+      while (!player.check.done && player.check.shots < PLAY_ANYWAY_AFTER) player.shoot({ shift });
+      expect(player.check.shots).toBe(6);
+    });
+  }
+
+  it("still holds a shaky hand's misses against it when the saved aim was right", () => {
+    // Misses this way and that, not one way: the player's, and the score keeps them.
+    const player = new Player(trueMap());
+    for (const dx of [0.025, -0.025, 0.025]) {
+      const target = player.check.lit!;
+      player.shoot({ aimAt: [target.x + dx, target.y] });
+    }
+    expect(player.check.done).toBe(false);
+    expect(player.check.fit).toBe("affine");
+    expect(player.check.errors).toHaveLength(3);
+  });
 });
 
 describe("the tip", () => {
