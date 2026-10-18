@@ -105,6 +105,22 @@ describe("steerable loops", () => {
     expect(source.playbackRate.value).toBeLessThanOrEqual(8);
   });
 
+  it("tells the nodes only what changed, so a race steering every frame does not pile up automation", async () => {
+    const { e, ctx } = await ready();
+    const loop = e.controlledLoop("kart_engine_b", { rate: 1.2, volume: 0.5, pan: 0.3, distance: 12 });
+    const params = [ctx.sources.at(-1)!.playbackRate, ctx.gains.at(-1)!.gain, ctx.pans.at(-1)!.pan, ctx.filters.at(-1)!.frequency];
+    const calls = params.map((p) => vi.spyOn(p, "setTargetAtTime"));
+    loop.set({ rate: 1.2, volume: 0.5, pan: 0.3, distance: 12 }); // as it started
+    for (const c of calls) expect(c).not.toHaveBeenCalled();
+    loop.set({ rate: 1.4, volume: 0.5, pan: 0.3, distance: 12 });
+    expect(calls.map((c) => c.mock.calls.length)).toEqual([1, 0, 0, 0]);
+    loop.set({ rate: 1.4, pan: -0.2 });
+    expect(calls.map((c) => c.mock.calls.length)).toEqual([1, 0, 1, 0]);
+    loop.set({ distance: 40 });
+    expect(calls.map((c) => c.mock.calls.length)).toEqual([1, 1, 1, 1]); // farther is quieter and darker
+    expect(ctx.filters.at(-1)!.frequency.value).toBeCloseTo(airCutoff(40), 3);
+  });
+
   it("fades out on stop, stops its source once, and stays still afterwards", async () => {
     const { e, ctx } = await ready();
     const loop = e.controlledLoop("kart_drift", {});

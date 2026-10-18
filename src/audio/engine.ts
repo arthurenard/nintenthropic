@@ -317,12 +317,14 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     const spec = this.spec(cue);
     if (!spec || this.closed) return { set: () => {}, stop: () => {} };
     let stopped = false;
-    let params: Required<Omit<LoopParams, "distance">> & { distance: number } = {
+    const params: Required<LoopParams> = {
       rate: options.rate ?? 1,
       volume: Math.max(0, options.volume ?? 1),
       pan: clamp(options.pan ?? 0, -1, 1),
       distance: Math.max(0, options.distance ?? 0),
     };
+    /** What the playing nodes were last told, so a set that changes nothing schedules nothing. */
+    const applied = { rate: Number.NaN, level: Number.NaN, pan: Number.NaN, distance: Number.NaN };
     let live: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode; air: BiquadFilterNode; nodes: AudioNode[] } | null = null;
     const target = (): number => db(spec.level) * params.volume * distanceGain(params.distance);
     const begin = (): void => {
@@ -350,22 +352,30 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       src.connect(air).connect(gain).connect(pan).connect(this.buses[spec.bus]);
       src.start(now + Math.max(0, options.delay ?? 0), Math.random() * take.buffer.duration);
       live = { src, gain, pan, air, nodes: [src, air, gain, pan] };
+      applied.rate = clamp(params.rate, 0.1, 8);
+      applied.level = target();
+      applied.pan = params.pan;
+      applied.distance = params.distance;
     };
     if (this.library.get(cue)) begin();
     else void this.library.request(cue).then(begin);
     return {
       set: (next, glide = 0.06) => {
-        params = { ...params, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined && Number.isFinite(v))) };
-        params.pan = clamp(params.pan, -1, 1);
-        params.volume = Math.max(0, params.volume);
-        params.distance = Math.max(0, params.distance);
+        // Field by field, allocating nothing, and only what changed goes to
+        // the nodes: a race steers a couple of dozen of these every frame.
+        if (Number.isFinite(next.rate)) params.rate = next.rate as number;
+        if (Number.isFinite(next.volume)) params.volume = Math.max(0, next.volume as number);
+        if (Number.isFinite(next.pan)) params.pan = clamp(next.pan as number, -1, 1);
+        if (Number.isFinite(next.distance)) params.distance = Math.max(0, next.distance as number);
         if (!live || stopped) return;
         const now = this.ctx.currentTime;
         const tau = Math.max(0.005, glide / 3);
-        live.src.playbackRate.setTargetAtTime(clamp(params.rate, 0.1, 8), now, tau);
-        live.gain.gain.setTargetAtTime(target(), now, tau);
-        live.pan.pan.setTargetAtTime(params.pan, now, tau);
-        live.air.frequency.setTargetAtTime(airCutoff(params.distance), now, tau);
+        const rate = clamp(params.rate, 0.1, 8);
+        const level = target();
+        if (rate !== applied.rate) live.src.playbackRate.setTargetAtTime((applied.rate = rate), now, tau);
+        if (level !== applied.level) live.gain.gain.setTargetAtTime((applied.level = level), now, tau);
+        if (params.pan !== applied.pan) live.pan.pan.setTargetAtTime((applied.pan = params.pan), now, tau);
+        if (params.distance !== applied.distance) live.air.frequency.setTargetAtTime(airCutoff((applied.distance = params.distance)), now, tau);
       },
       stop: () => {
         if (stopped) return;
