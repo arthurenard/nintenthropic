@@ -71,6 +71,69 @@ describe("dynamic resolution", () => {
   });
 });
 
+describe("dynamic resolution that gives back pixels which bought nothing", () => {
+  const options = { restoreFutile: true };
+
+  it("leaves a browser that holds every page to 30 fps (saving the battery) sharp, after one look", () => {
+    for (const initial of [1, 0.85, 0.7]) {
+      const resolution = new DynamicResolution({ ...options, initial });
+      const scales = run(resolution, () => 2 * VSYNC, 60 * 600);
+      expect(Math.min(...scales), `from ${initial}`).toBeLessThan(initial); // it did look
+      expect(resolution.scale, `from ${initial}`).toBe(initial);
+      // One dip at the start, then ten minutes held where it began.
+      const changes = scales.filter((scale, i) => i > 0 && scale !== scales[i - 1]).length;
+      expect(changes, `from ${initial}`).toBeLessThanOrEqual(5);
+      expect(scales.slice(60 * 10).every((scale) => scale === initial), `from ${initial}`).toBe(true);
+    }
+    // Without the option the floor is where such a browser ends (and a game watching for strain sees it).
+    const plain = new DynamicResolution();
+    run(plain, () => 2 * VSYNC, 60 * 60);
+    expect(plain.scale).toBe(0.6);
+  });
+
+  it("still finds the largest scale that holds 60 fps on a GPU the pixels do weigh on", () => {
+    const cost = (scale: number) => 6 + 14 * scale * scale;
+    const resolution = new DynamicResolution(options);
+    const scales = run(resolution, cost, 60 * 60);
+    expect(cost(resolution.scale)).toBeLessThanOrEqual(VSYNC);
+    expect(resolution.scale).toBeGreaterThanOrEqual(0.8);
+    const settled = scales.slice(60 * 20);
+    expect(settled.filter((scale, i) => i > 0 && scale !== settled[i - 1]).length).toBeLessThanOrEqual(4);
+  });
+
+  it("goes down all the way for a GPU that needs it, even through the odd long frame", () => {
+    // 45 ms at full size, mostly pixels: the floor is the best there is.
+    const cost = (scale: number) => 5 + 40 * scale * scale;
+    const resolution = new DynamicResolution(options);
+    for (let i = 0; i < 60 * 30; i++) {
+      const work = i % 40 === 0 ? 180 : cost(resolution.scale);
+      resolution.sample(Math.ceil(work / VSYNC - 1e-9) * VSYNC);
+    }
+    expect(resolution.scale).toBe(0.6);
+  });
+
+  it("drops again when the scene grows heavy, and comes back up when the cap is lifted", () => {
+    const resolution = new DynamicResolution(options);
+    run(resolution, () => 2 * VSYNC, 60 * 30);
+    expect(resolution.scale).toBe(1);
+    // The battery saver goes off (plugged in): 60 fps again.
+    run(resolution, () => 9, 60 * 30);
+    expect(resolution.scale).toBe(1);
+    // Then a scene whose pixels are too many: down it goes, as ever.
+    run(resolution, (scale) => 6 + 14 * scale * scale, 60 * 30);
+    expect(resolution.scale).toBeLessThan(1);
+    expect(6 + 14 * resolution.scale ** 2).toBeLessThanOrEqual(VSYNC);
+  });
+
+  it("keeps what it learned of the browser over a pause", () => {
+    const resolution = new DynamicResolution(options);
+    run(resolution, () => 2 * VSYNC, 60 * 30);
+    resolution.reset();
+    const scales = run(resolution, () => 2 * VSYNC, 60 * 30);
+    expect(scales.every((scale) => scale === 1)).toBe(true);
+  });
+});
+
 describe("the strain watch", () => {
   const frames = (watch: StrainWatch, seconds: number, atFloor: boolean, per = 1 / 30): number => {
     let told = 0;

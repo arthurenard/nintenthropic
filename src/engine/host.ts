@@ -103,7 +103,9 @@ export class EngineHost {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.gpu = gpuName(this.renderer.getContext());
     const tier = guessTier(this.gpu, navigator.hardwareConcurrency || 4);
-    this.resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier] });
+    // A browser saving the battery holds the page to 30 fps whatever is drawn:
+    // the shooters stay sharp there rather than blur for nothing.
+    this.resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier], restoreFutile: true });
     this.quality = { scale: this.resolution.scale, tier };
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
