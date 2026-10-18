@@ -31,6 +31,15 @@ export const STALE_FRAME = 400;
 export const EXIT_MOMENT = 1200;
 /** A fingertip this close to the picture's edge, in fractions of it, is on its way out. */
 export const EXIT_EDGE = 0.04;
+/**
+ * How long a hand lost mid-fold must stay gone before the raw aim's trip past
+ * an edge on its last frame counts as a swing off the screen, in ms. The fold
+ * kicks the fingertip (see STILL_AIMING), aiming near an edge it can kick the
+ * raw aim past the margin, and the tracker loses the hand most often as the
+ * thumb blurs: for a frame or two, which at 30 fps is back within 100 ms. A
+ * swing off the screen keeps it gone.
+ */
+export const FOLD_DROPOUT = 120;
 /** A fold under this is still aiming; past it the hand moves with the shot. */
 const STILL_AIMING = 0.35;
 /** How long the aim from before a fold is trusted as the shot's aim, in ms. */
@@ -72,8 +81,11 @@ export class HandInput implements InputSource {
   /** Whether the aim was off the screen on the frame the shot was taken on. */
   private shotOffscreen = false;
   private held: { at: number; position: [number, number] } | null = null;
-  /** When the hand was last seen, and whether it was then on its way out of the picture. */
-  private seen: { at: number; leaving: boolean } | null = null;
+  /**
+   * When the hand was last seen, whether it was then on its way out of the picture, and whether only the raw aim said
+   * so while the thumb folded (the fold's kick may be all that took it there: FOLD_DROPOUT).
+   */
+  private seen: { at: number; leaving: boolean; kicked: boolean } | null = null;
   /** Keeps the aim on the player's hand when another comes into the picture. */
   private readonly trust = new HandTrust();
 
@@ -146,11 +158,15 @@ export class HandInput implements InputSource {
       // Leaving: pointing past the view's edge - by the filtered aim, or the
       // raw one, which a fast swing takes there a frame or two sooner - or
       // the fingertip at the picture's own edge, about to be cut off by it.
+      // The raw aim alone, while the thumb folds, may be the fold's kick: a
+      // hand lost then is off the screen only once it stays gone.
       const tip = reading.pointer;
       const raw = tip ? apply(this.controller.currentMapping, tip) : null;
       const rawBeyond = raw ? Math.max(-raw[0], raw[0] - 1, -raw[1], raw[1] - 1) : 0;
       const edge = tip ? Math.min(tip[0], 1 - tip[0], tip[1], 1 - tip[1]) : 1;
-      this.seen = { at: frame.capturedAt, leaving: this.offscreen || rawBeyond > OFFSCREEN_MARGIN || edge < EXIT_EDGE };
+      const surely = this.offscreen || edge < EXIT_EDGE;
+      const swung = rawBeyond > OFFSCREEN_MARGIN;
+      this.seen = { at: frame.capturedAt, leaving: surely || swung, kicked: !surely && swung && reading.travel >= STILL_AIMING };
     } else {
       this.vx.reset();
       this.vy.reset();
@@ -210,7 +226,7 @@ export class HandInput implements InputSource {
         armed: reading?.armed ?? false,
         fired: false,
         travel: 0,
-        offscreen: seen !== null && seen.leaving && gone <= EXIT_MOMENT,
+        offscreen: seen !== null && seen.leaving && gone <= EXIT_MOMENT && (!seen.kicked || gone >= FOLD_DROPOUT),
         capturedAt: this.capturedAt,
         scope,
       };

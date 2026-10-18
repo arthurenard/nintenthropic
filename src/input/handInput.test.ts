@@ -175,6 +175,37 @@ describe("the hand as an input", () => {
     expect(input.sample(t + 5).offscreen).toBe(true);
   });
 
+  it("does not reload for a frame lost as the thumb folds, aiming near an edge", () => {
+    // Aiming at 0.95 of the view, the fold's kick takes the raw aim past the edge's margin for a frame, and the
+    // tracker loses the hand on the next (most likely mid-fold): a shot, and no reload the player never asked for.
+    const { camera, input } = setup();
+    let t = 0;
+    const aim = 0.2 + 0.95 * 0.6;
+    for (let i = 0; i < 12; i++) camera.show({ thumbDegrees: 20, indexTip: [aim, 0.5] }, (t += 33));
+    camera.show({ thumbDegrees: 45, indexTip: [aim + 0.03, 0.52] }, (t += 33));
+    camera.show({ thumbDegrees: 75, indexTip: [aim + 0.06, 0.55] }, (t += 33));
+    const reads = [input.sample(t + 5)];
+    camera.show(null, (t += 33));
+    for (let at = t + 5; at < t + 33; at += 8) reads.push(input.sample(at));
+    camera.show(null, (t += 33));
+    for (let at = t + 5; at < t + 33; at += 8) reads.push(input.sample(at));
+    camera.show({ thumbDegrees: 75, indexTip: [aim + 0.03, 0.52] }, (t += 33));
+    reads.push(input.sample(t + 5));
+    expect(reads.filter((read) => read.fired)).toHaveLength(1);
+    expect(reads.some((read) => read.offscreen)).toBe(false);
+  });
+
+  it("still counts a swing too fast for the filter as leaving with the thumb down, once the hand stays gone", () => {
+    // A player who fires their last round and swings off to reload with the thumb still folded.
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 75, indexTip: [0.5, 0.5] }, (t += 33));
+    camera.show({ thumbDegrees: 75, indexTip: [0.9, 0.5] }, (t += 33));
+    const leftAt = t;
+    while (t < leftAt + 200) camera.show(null, (t += 33));
+    expect(input.sample(t + 5).offscreen).toBe(true);
+  });
+
   it("counts a fingertip lost at the picture's edge as leaving, even aiming inside the view", () => {
     const camera = new FakeCamera();
     // The whole picture stretched over the view: its edge is the view's edge.
