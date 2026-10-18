@@ -112,6 +112,12 @@ svg {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* Words about a key ("Press P to resume."), said only where there is a keyboard: a touch screen alone has none. */
+@media (hover: none) and (pointer: coarse) {
+  .keys {
+    display: none;
+  }
+}
 
 /* --- type ---------------------------------------------------------------- */
 
@@ -427,6 +433,23 @@ svg {
   gap: 8px;
   width: 100%;
   margin-top: 16px;
+}
+/* A short window (a phone on its side): an alert keeps its words and its
+   choices in view without scrolling - wider, without its icon, and its
+   choices side by side. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .alert {
+    width: min(600px, calc(100vw - 2 * var(--margin)));
+    padding-top: 24px;
+  }
+  .alert-icon {
+    display: none;
+  }
+  .sheet-actions {
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    margin-top: 8px;
+  }
 }
 .toast {
   position: fixed;

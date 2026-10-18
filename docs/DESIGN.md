@@ -231,7 +231,10 @@ first, a few big words, one white pill). Stacked, one above the other, on a phon
   `#high-noon` and `?game=high-noon` open the arcade (on that game); `#grip-prix` and `?game=grip-prix` open the
   landing with Grip Prix's tile in hand. Coming home from Grip Prix lands on
   its tile too (`handy.space.v1` remembers which tile was last gone through).
-  Moving between the spaces is history: the browser's Back comes back.
+  Moving between the spaces is history: the browser's Back comes back. In a
+  game, Back pauses it (Choose a Game is on the sheet), so a round is never lost
+  to it; Resume puts the game's address back. While a game is getting ready,
+  Back is Cancel.
 
 The bar over the landing and the arcade is frosted glass (64 tall): Handheld,
 Privacy, sound, Settings. In the arcade Handheld has a chevron (the way back to the
@@ -292,9 +295,12 @@ A card worth sharing: the map's art as its header, the map's name (and
 one line under it when it has one (what felled you, or the thing to watch
 next time), the score large, three or four stats, *New Best* in gold only when
 it is true, with how far it beat the last one beside it, and otherwise,
-quietly, the best to beat. Then two choices (Play Again, Choose a Game) plus
-Share — a PNG of the card, branded Handheld, saved or passed to the system share
-sheet.
+quietly, the best to beat. The outcome is green for a round won and red for
+one lost, except beside a New Best, where it is said plainly: a record is not
+told off. The secrets found sit under the stats; with none yet, the line says
+where they hide ("The scenery can take a shot."). Then two choices (Play
+Again, Choose a Game) plus Share — a PNG of the card, branded Handheld, saved
+or passed to the system share sheet.
 
 The card that arrives with the fall, before the results, says the same words
 the results will: the outcome as its title ("Fell on Wave 4", "Breached on

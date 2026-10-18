@@ -340,6 +340,17 @@ test("getting ready offline says so, with the fix", async ({ page, context }, in
   await context.setOffline(false);
 });
 
+test("graphics that restart mid-round leave the player at the arcade, never in an empty game", async ({ page }) => {
+  await playWithHand(page);
+  await page.evaluate(() => window.handyTest!.internals().host!.renderer.getContext().getExtension("WEBGL_lose_context")!.loseContext());
+  await expect(page.locator("#alert-title")).toHaveText("Something Went Wrong");
+  expect((await state(page)).view).toBe("arcade");
+  // Esc dismisses the sheet: the arcade is there to play from, not a game with no way out.
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#alert")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+});
+
 test("a paused game and resting results cost no frames", async ({ page }) => {
   const errors = watchErrors(page);
   await page.addInitScript(() => {
