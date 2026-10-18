@@ -60,6 +60,7 @@ export class Recorder implements MatchListener {
   streakUp(m: number) { this.note("streakUp", m); }
   score(v: number) { this.note("score", v); }
   secretFound(id: SecretId, name: string, found: number, total: number) { this.note("secretFound", id, name, found, total); }
+  secretAgain(id: SecretId) { this.note("secretAgain", id); }
   flashShot(count: number, aurora: boolean) { this.note("flashShot", count, aurora); }
 }
 

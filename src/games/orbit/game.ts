@@ -1212,14 +1212,13 @@ export class OrbitalDecay implements Game, MatchListener {
   }
 
   secretFound(id: SecretId, name: string, found: number, total: number): void {
-    const at = new Vector3();
     switch (id) {
       case "astronaut": {
         const shot = this.shooter.result.target;
-        const at = shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at;
-        this.secrets.astronautShot(at);
+        const square = shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at;
+        this.secrets.astronautShot(square);
         // Shot square on, there was never anyone there.
-        if (at) this.popupAt(this.shooter.result.point, "Only a sticker.", "gold");
+        if (square) this.hints.say("Only a sticker.", 2.5);
         break;
       }
       case "toolbag":
@@ -1227,8 +1226,8 @@ export class OrbitalDecay implements Game, MatchListener {
         break;
       case "duck":
         this.secrets.duckShot();
-        at.copy(this.shooter.result.point);
-        this.popupAt(at, "In space, no one can hear you squeak.", "gold");
+        // A line to read, not a number to catch: on the hint line, for long enough.
+        this.hints.say("In space, no one can hear you squeak.", 3.5);
         break;
       case "arm":
         this.secrets.armShot();
@@ -1245,6 +1244,7 @@ export class OrbitalDecay implements Game, MatchListener {
       default:
         break;
     }
+    this.syncHint();
     const announce = () => {
       if (this.phase !== "playing") return;
       this.hud.secret(name, found, total);
@@ -1252,6 +1252,14 @@ export class OrbitalDecay implements Game, MatchListener {
     };
     // Its show plays first, the toast after it.
     this.later(id === "message" ? 1.3 : id === "astronaut" ? 1.2 : 0.3, announce);
+  }
+
+  secretAgain(id: SecretId): void {
+    // The ones still there to be shot play their show again: the arm waves
+    // back every time, the flag glints, the HI says hello again.
+    if (id === "arm") this.secrets.armShot();
+    else if (id === "moon") this.secrets.flag();
+    else if (id === "message") this.secrets.blinkHi();
   }
 
   flashShot(count: number, aurora: boolean): void {

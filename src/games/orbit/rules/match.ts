@@ -90,6 +90,8 @@ export interface MatchListener {
   streakUp(multiplier: number): void;
   score(value: number): void;
   secretFound(id: SecretId, name: string, found: number, total: number): void;
+  /** A secret already found, found again: its show plays again, without the toast. */
+  secretAgain(id: SecretId): void;
   /** A lightning flash shot in the storm: how many this breather, and whether the aurora came. */
   flashShot(count: number, aurora: boolean): void;
 }
@@ -758,6 +760,7 @@ export class Match {
 
   private found(id: SecretId): void {
     if (this.secrets.find(id)) this.listener.secretFound(id, SECRET_NAMES[id], this.secrets.count, SECRETS_TOTAL);
+    else this.listener.secretAgain(id);
   }
 
   // --- the end --------------------------------------------------------------------

@@ -370,6 +370,12 @@ describe("the drone and the secrets", () => {
     match.resolveShot({ kind: "secret", shot: { secret: "astronaut", at: true } });
     expect(listener.all("secretFound").map((e) => e.args[0])).toEqual(["duck", "astronaut"]);
     expect(match.results().secretsFound).toBe(2);
+    // Found again, its show plays again (the arm waves back every time), with no second toast.
+    match.resolveShot({ kind: "secret", shot: { secret: "arm" } });
+    match.resolveShot({ kind: "secret", shot: { secret: "arm" } });
+    expect(listener.all("secretFound").map((e) => e.args[0])).toEqual(["duck", "astronaut", "arm"]);
+    expect(listener.all("secretAgain").map((e) => e.args[0])).toEqual(["duck", "arm"]);
+    expect(match.results().secretsFound).toBe(3);
   });
 });
 
