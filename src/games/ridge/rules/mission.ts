@@ -522,7 +522,8 @@ export class Mission {
     for (let k = 0; k < 2; k++) {
       const a = this.postActor({ ...post, at: { x: post.at.x + (k === 0 ? -1.2 : 1.2), y: post.at.y, z: post.at.z } }, false);
       a.act("crouch");
-      a.nextFire = range(this.random, MORTAR_INTERVAL[0], MORTAR_INTERVAL[1]) * 0.5;
+      // The first round no sooner than this into the stage (the rules' clock runs on over the stages).
+      a.nextFire = this.time + range(this.random, MORTAR_INTERVAL[0], MORTAR_INTERVAL[1]) * 0.5;
     }
   }
 
@@ -574,9 +575,9 @@ export class Mission {
     for (const p of this.plan.cows) {
       const c = this.newActor("animal", "cow");
       c.placeAt(p);
-      c.home.x = p.x;
-      c.home.y = p.y;
-      c.home.z = p.z;
+      c.home.x = c.patch.x = p.x;
+      c.home.y = c.patch.y = p.y;
+      c.home.z = c.patch.z = p.z;
       c.heading = this.random() * Math.PI * 2;
       c.place = "in the pasture";
       c.setState("graze", range(this.random, 3, 10));
@@ -586,9 +587,9 @@ export class Mission {
     for (const p of this.plan.sheep) {
       const c = this.newActor("animal", "sheep");
       c.placeAt(p);
-      c.home.x = p.x;
-      c.home.y = p.y;
-      c.home.z = p.z;
+      c.home.x = c.patch.x = p.x;
+      c.home.y = c.patch.y = p.y;
+      c.home.z = c.patch.z = p.z;
       c.heading = this.random() * Math.PI * 2;
       c.place = "on the far slope";
       c.setState("graze", range(this.random, 3, 10));
@@ -864,8 +865,8 @@ export class Mission {
       this.listener.score(this.scorer.score);
       if (this.scorer.multiplier > before) this.listener.streakUp(this.scorer.multiplier);
     }
-    // A driver down: his vehicle rolls to a stop.
-    if (a.seat === "driver" && a.vehicle && !a.vehicle.stopped && !a.vehicle.parked) {
+    // A driver down: his vehicle rolls to a stop (or, still waiting to set off, never goes).
+    if (a.seat === "driver" && a.vehicle && !a.vehicle.stopped) {
       a.vehicle.stop("driver");
       this.listener.vehicleStopping(a.vehicle, "driver");
     }
@@ -936,7 +937,8 @@ export class Mission {
       if (!a.hostile || !a.alive) continue;
       a.alerted = true;
       if (a.role === "gunner") a.nextFire = this.time + range(this.random, MG_FIRST[0], MG_FIRST[1]);
-      if (a.role === "mortar") a.nextFire = Math.min(a.nextFire, this.time + range(this.random, 3, 6));
+      // The crew needs a few seconds to lay the tube on the ridge: the alarm is heard before the first round.
+      if (a.role === "mortar") a.nextFire = Math.max(a.nextFire, this.time + range(this.random, 3, 6));
     }
     this.listener.alerted(cause, by);
   }
@@ -1139,7 +1141,8 @@ export class Mission {
     }
     if (a.activity === "fire" && a.activityT > 0.9) a.act("aim");
     if (a.activity !== "fire" && a.activity !== "aim") a.act("aim");
-    if (this.time >= a.nextFire) {
+    // Once the job is done he holds his fire: nobody is hurt after the stage is won.
+    if (this.phase === "combat" && this.time >= a.nextFire) {
       a.act("fire");
       a.nextFire = this.time + range(this.random, MG_INTERVAL[0], MG_INTERVAL[1]);
       const hit = chance(this.random, MG_HIT_CHANCE);
@@ -1195,6 +1198,8 @@ export class Mission {
     if (a.state === "cover" || a.state === "hunker" || a.state === "search") {
       if (a.state === "cover") {
         if (this.walkTo(a, a.home, RUN_SPEED)) {
+          // A truck that rolled to a stop since may hide the spot: on to one the ridge can see.
+          if (this.intoSight(a.home)) return;
           a.alerted = true;
           a.setState("hunker", range(this.random, 1, 2.5));
           a.act("crouch");
@@ -1239,16 +1244,52 @@ export class Mission {
     a.vehicle = null;
     a.seat = null;
     a.alerted = true;
-    // Cover: off the road on the side away from the ridge, spread along it.
+    // Cover: off the road on the side away from the ridge, spread along it - and out of the trucks' shadow.
     const away = this.awayFromRidge(v);
     const along = (a.seatIndex - 1) * 5 + (this.random() - 0.5) * 4;
     a.home.x = a.pos.x + away.x * range(this.random, 7, 12) + Math.sin(v.heading) * along;
     a.home.z = a.pos.z + away.z * range(this.random, 7, 12) + Math.cos(v.heading) * along;
     a.home.y = a.pos.y;
+    this.intoSight(a.home);
     a.setState("dismount", DISMOUNT_TIME);
     a.act("dismount");
     this.listener.dismount(a, v);
     if (!this.alerted) this.raise(1, "stopped", a);
+  }
+
+  /**
+   * Can the ridge see a man crouched at `p`? Troops who jump down put their
+   * truck between them and the ridge, and from sixty metres up a truck's
+   * shadow runs a dozen metres behind it: a man in it could never be hit, and
+   * the job could never be finished.
+   */
+  private seenFromRidge(p: V3): boolean {
+    const chest = { x: p.x, y: p.y + 0.9, z: p.z };
+    for (const v of this.vehicles) if (v.blocks(this.plan.eye, chest, 0.4)) return false;
+    return true;
+  }
+
+  /**
+   * Moves a cover spot the ridge cannot see to the nearest one beside it (as
+   * the ridge looks) that it can. True if it moved.
+   */
+  private intoSight(p: V3): boolean {
+    if (this.seenFromRidge(p)) return false;
+    const toEye = { x: this.plan.eye.x - p.x, z: this.plan.eye.z - p.z };
+    const n = Math.hypot(toEye.x, toEye.z) || 1;
+    const side = { x: -toEye.z / n, z: toEye.x / n };
+    const at = { x: p.x, y: p.y, z: p.z };
+    for (let k = 1; k <= 16; k++) {
+      const step = Math.ceil(k / 2) * 2.5 * (k % 2 === 0 ? -1 : 1);
+      at.x = p.x + side.x * step;
+      at.z = p.z + side.z * step;
+      if (this.seenFromRidge(at)) {
+        p.x = at.x;
+        p.z = at.z;
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The horizontal unit direction from a vehicle away from the ridge, square to the road. */
@@ -1418,7 +1459,7 @@ export class Mission {
         break;
       case "aim":
         a.act("prone_aim");
-        if (a.t >= a.dur && live) {
+        if (a.t >= a.dur && live && this.phase === "combat") {
           a.act("fire");
           const p = Math.min(SNIPER_HIT_MAX, SNIPER_HIT_CHANCE + a.shots * SNIPER_HIT_GROWTH);
           a.shots++;
@@ -1457,7 +1498,7 @@ export class Mission {
   private mortarMind(a: Actor, live: boolean): void {
     this.face(a, this.plan.eye, 1);
     if (a.activity === "fire" && a.activityT > 0.8) a.act("crouch");
-    if (!a.alerted || !live) return;
+    if (!a.alerted || !live || this.phase !== "combat") return;
     // The crew fires together: the lower id of the two is the one who drops the round.
     const crew = this.actors.filter((b) => b.role === "mortar" && b.alive);
     if (crew[0] !== a) return;
@@ -1470,7 +1511,8 @@ export class Mission {
     this.later(MORTAR_FLIGHT, () => {
       if (this.stage !== stage || this.over) return;
       const roll = this.random();
-      const outcome = roll < MORTAR_HIT_CHANCE ? "hit" : roll < MORTAR_HIT_CHANCE + MORTAR_NEAR_CHANCE ? "near" : "far";
+      // A round still in the air when the job is done comes down wide.
+      const outcome = this.phase !== "combat" ? "far" : roll < MORTAR_HIT_CHANCE ? "hit" : roll < MORTAR_HIT_CHANCE + MORTAR_NEAR_CHANCE ? "near" : "far";
       const raw = outcome === "hit" ? MORTAR_HIT_DAMAGE : outcome === "near" ? MORTAR_NEAR_DAMAGE : 0;
       const damage = Math.round(raw * this.tuning.damageFactor);
       this.listener.mortarLand(outcome, damage, a);
@@ -1484,7 +1526,8 @@ export class Mission {
     const place = from.place;
     const at = { x: from.pos.x, y: from.pos.y, z: from.pos.z };
     this.later(dist(at, this.plan.eye) / 780, () => {
-      if (this.stage !== stage || this.over) return;
+      // Fired just as the job fell, it finds nobody: the stage is won.
+      if (this.stage !== stage || this.phase !== "combat") return;
       this.hurt(damage, at, by, place);
     });
   }
@@ -1626,10 +1669,9 @@ export class Mission {
           return;
         }
         if (a.t >= a.dur) {
-          // A few steps to fresh grass, round the spot they keep to.
-          const base = a.home;
-          a.home.x = base.x + (this.random() - 0.5) * 4;
-          a.home.z = base.z + (this.random() - 0.5) * 4;
+          // A few steps to fresh grass, round the spot they keep to (never on from the last, or the herd walks off).
+          a.home.x = a.patch.x + (this.random() - 0.5) * 4;
+          a.home.z = a.patch.z + (this.random() - 0.5) * 4;
           a.setState("wander", 6);
           a.act("walk");
         }
@@ -1704,6 +1746,8 @@ export class Mission {
     this.listener.goatHop(a, this.secrets.goatLedge);
     this.found("goat");
     this.later(1.2, () => {
+      // Shot in mid-leap, it stays where it fell.
+      if (!a.alive) return;
       a.placeAt(next);
       a.heading = headingFrom(next, this.plan.eye);
       a.act("stand");

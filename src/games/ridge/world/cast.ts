@@ -24,6 +24,7 @@ import {
 import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../../../engine/rules/raymath";
 import { RigPool, rimLight, templateFrom, turnRig, type CharacterTemplate, type Rig } from "../../../engine/world/character";
 import { contractName, findNode } from "../../../engine/world/names";
+import { disposeTree } from "../../../engine/world/scene";
 import type { LoadedAsset } from "../../../engine/types";
 import type { Actor, Vehicle } from "../rules/actors";
 import type { Activity, AnimalKind } from "../rules/types";
@@ -417,6 +418,8 @@ export class Cast implements MovingWorld {
     const view = this.vehicles.get(v.id);
     if (!view) return;
     view.root.removeFromParent();
+    // Its glass was its own (it breaks); the rest is the art's, shared with the next.
+    for (const g of view.glass) (g.material as Material).dispose();
     this.vehicles.delete(v.id);
   }
 
@@ -669,11 +672,13 @@ export class Cast implements MovingWorld {
     return out.addScaledVector(toEye, 0.35);
   }
 
-  /** The vehicles' engines, for their steam. */
+  /** The top of a vehicle's engine block, under the bonnet, for its steam. (The node's own origin is the vehicle's, at the road.) */
   engineOf(id: number, out: Vector3): Vector3 | null {
     const view = this.vehicles.get(id);
     if (!view?.engine) return null;
-    return view.engine.getWorldPosition(out).add(tmp.set(0, 0.4, 0));
+    const box = view.engineBox;
+    out.set((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
+    return view.engine.localToWorld(out).add(tmp.set(0, 0.15, 0));
   }
 
   view(id: number): View | undefined {
@@ -689,6 +694,9 @@ export class Cast implements MovingWorld {
 
   dispose(): void {
     for (const p of this.pools.values()) p.dispose();
+    // The vehicles' art, kept out of the scene between their stages, and the glass of any still on the road.
+    for (const view of this.vehicles.values()) for (const g of view.glass) (g.material as Material).dispose();
+    for (const t of this.vehicleTemplates.values()) disposeTree(t);
   }
 }
 
