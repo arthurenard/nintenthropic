@@ -1556,6 +1556,17 @@ export class App {
       const request = document.fullscreenElement ? document.exitFullscreen() : $("game").requestFullscreen?.();
       request?.catch(() => toast("Full screen isn’t available here."));
     };
+    // The game going full screen is drawn over everything shown before it -
+    // the pause sheet its button is on included, which would leave a frozen
+    // game and no menu: the sheet is shown again, over it.
+    document.addEventListener("fullscreenchange", () => {
+      const sheet = $<HTMLDialogElement>("pause-sheet");
+      if (!document.fullscreenElement || !sheet.open) return;
+      const focused = document.activeElement;
+      sheet.close();
+      sheet.showModal();
+      if (focused instanceof HTMLElement) focused.focus();
+    });
     // Esc on a sheet over the game: the pause sheet resumes; results and
     // trouble stay until the player chooses; loading goes back to the arcade.
     $("pause-sheet").addEventListener("cancel", (event) => {
