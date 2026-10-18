@@ -395,10 +395,13 @@ export class HighNoon implements Game, MatchListener {
    * bottles standing again, the picture and the sound unmuffled.
    */
   private rearm(): void {
+    this.quietFuses();
     this.cast.reset();
     this.ambient.reset();
     this.effects.clearAll();
     this.secretsWorld.reset();
+    // The windows shot out last game are glazed again.
+    for (const pane of this.assets.town.glass.values()) pane.visible = true;
     this.newMatch();
     this.bottles.reset();
     this.schedule.length = 0;
@@ -458,6 +461,8 @@ export class HighNoon implements Game, MatchListener {
     this.hints.setQuiet(false);
     // How to reload, at the start of every game until they have done it.
     this.offerTip("western.reload");
+    // Read each round, as the page's HUD is: unlocked since this game loaded, it is gold from now.
+    this.golden = this.ctx.settings.unlocks.has("golden");
     if (this.golden) {
       this.hud.weaponFinish?.("gold");
       this.sound.play("golden_unlock", { volume: 0.8, delay: 0.4 });
@@ -860,10 +865,20 @@ export class HighNoon implements Game, MatchListener {
     }
     if (t > 5.2 && this.phase === "dying") {
       this.phase = "over";
+      // A stick still in the air goes out quietly: the world stops drawing
+      // under the card, and its fizz would go on under it for ever.
+      this.match.snuffSticks();
+      this.quietFuses();
       const results: Results = this.match.results();
       this.hud.gameOver({ ...results });
       this.sound.play("game_over");
     }
+  }
+
+  /** Every fuse's fizz stopped: the sticks', and any still in a thrower's hand. */
+  private quietFuses(): void {
+    for (const s of this.match.sticks) this.sound.stopLoop(`fuse.s${s.id}`);
+    for (const b of this.match.bandits) this.sound.stopLoop(`fuse.b${b.id}`);
   }
 
   private later(seconds: number, run: () => void): void {

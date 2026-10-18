@@ -407,6 +407,8 @@ export class Cast {
     }
     this.sound.at(part === "head" ? "hit_headshot" : part === "blast" ? "body_fall" : "hit_flesh", at ?? b.pos, 1);
     this.sound.at("bandit_death", b.pos, 0.9, 0.9 + this.random() * 0.25, 0.05);
+    // A stick lit in his hand stops fizzing there (a dropped one has its own fuse).
+    this.sound.stopLoop(`fuse.b${b.id}`);
     if (choice.fall) {
       // Out of the window (or off the roof), over the nearest drop toward
       // the street (worked out at load), clear of whatever floor he stood on
