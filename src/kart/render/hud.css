@@ -229,8 +229,6 @@
 }
 .gp-incoming-ring {
   flex: none;
-}
-.gp-incoming-ring {
   width: calc(26px * var(--u));
   height: calc(26px * var(--u));
   border-radius: 50%;
