@@ -76,8 +76,9 @@ void main() {
   // The glass's edge: a dark ring shading inward, and a thin bright line at the rim.
   float edge = smoothstep(r * 0.78, r, d);
   float ring = exp(-pow((d - r + 2.0) / 1.6, 2.0));
-  // The reticle, drawn at its true size in the middle.
-  vec2 ruv = p / side + 0.5;
+  // The reticle, drawn at its true size in the middle: one texel to a pixel, read at the texel's
+  // centre (a window an odd number of pixels wider than tall would otherwise blur every line by half).
+  vec2 ruv = (floor(p + 0.5 * side) + 0.5) / side;
   vec4 ret = texture2D(uReticle, ruv);
   // The holdover dot: where the round will land.
   float dot = uDotOn * (1.0 - smoothstep(2.2, 3.4, length(p - uDot)));
@@ -117,17 +118,19 @@ function drawReticle(canvas: HTMLCanvasElement, sidePx: number, pxPerMil: number
   const ink = gold ? "rgba(40, 28, 6, 0.95)" : "rgba(4, 5, 6, 0.95)";
   g.fillStyle = ink;
   g.strokeStyle = ink;
-  const fine = Math.max(1, dpr);
-  const heavy = Math.max(3, 3 * dpr);
+  // On whole pixels: a one-pixel line drawn half a pixel off is two grey ones, not one black.
+  const fine = Math.max(1, Math.round(dpr));
+  const heavy = Math.max(3, Math.round(3 * dpr));
+  const px = Math.round;
   const inner = R * 0.34;
   // The heavy outer posts, from the glass's edge to a third of the way in.
-  g.fillRect(c - heavy / 2, c + inner, heavy, R - inner);
-  g.fillRect(c - heavy / 2, c - R, heavy, R - inner);
-  g.fillRect(c - R, c - heavy / 2, R - inner, heavy);
-  g.fillRect(c + inner, c - heavy / 2, R - inner, heavy);
+  g.fillRect(px(c - heavy / 2), px(c + inner), heavy, px(R - inner));
+  g.fillRect(px(c - heavy / 2), px(c - R), heavy, px(R - inner));
+  g.fillRect(px(c - R), px(c - heavy / 2), px(R - inner), heavy);
+  g.fillRect(px(c + inner), px(c - heavy / 2), px(R - inner), heavy);
   // The fine cross through the middle.
-  g.fillRect(c - fine / 2, c - inner, fine, inner * 2);
-  g.fillRect(c - inner, c - fine / 2, inner * 2, fine);
+  g.fillRect(px(c - fine / 2), px(c - inner), fine, px(inner * 2));
+  g.fillRect(px(c - inner), px(c - fine / 2), px(inner * 2), fine);
   // Mil dots for the wind: one every milliradian out to five each side.
   for (let k = 1; k <= 5; k++) {
     const x = k * pxPerMil;
@@ -156,7 +159,7 @@ function drawReticle(canvas: HTMLCanvasElement, sidePx: number, pxPerMil: number
     const w = (even ? 5 : 3.5) * dpr;
     const gap = 1.5 * dpr;
     const x0 = even ? c + gap : c - gap - w;
-    g.fillRect(x0, y - fine / 2, w, fine);
+    g.fillRect(px(x0), px(y - fine / 2), px(w), fine);
     if (even) g.fillText(String(hundreds), c + gap + w + 2 * dpr, y);
   }
 }
