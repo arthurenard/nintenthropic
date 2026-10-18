@@ -93,6 +93,32 @@ test("each game's best is its own, and Choose a Game comes back to the game play
   expect(hash(page)).toBe("#high-noon");
 });
 
+test("the browser's Back in a game pauses it, and never leaves the page with the round", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
+  await page.goto("/");
+  await page.getByRole("link", { name: "Play" }).click();
+  await card(page, "Dead of Night").click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
+  // Back: the round holds under the pause menu.
+  await page.goBack();
+  await expect(page.locator("#pause-sheet")).toBeVisible();
+  expect(await snapshot(page)).toMatchObject({ view: "game", phase: "play", paused: true });
+  // Resume brings the game's address back with it, so Back pauses again instead of leaving.
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect(page.locator("#pause-sheet")).toBeHidden();
+  expect(hash(page)).toBe("#dead-of-night");
+  await page.goBack();
+  await expect(page.locator("#pause-sheet")).toBeVisible();
+  expect(await snapshot(page)).toMatchObject({ view: "game", paused: true });
+  await page.getByRole("button", { name: "Choose a Game" }).click();
+  await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
+  expect(hash(page)).toBe("#dead-of-night");
+  expect(errors).toEqual([]);
+});
+
 test("the landing: two equal tiles, and the way into each", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));

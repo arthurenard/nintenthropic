@@ -1215,6 +1215,11 @@ export class App {
     closeSheet("pause-sheet");
     if (!session || !session.paused) return;
     session.paused = false;
+    // Paused by the browser's Back, the round left its address behind: it
+    // comes back with the round, so the next Back pauses again rather than
+    // leaving the page.
+    const address = this.addressFor({ space: "arcade", game: session.entry.id });
+    if (address !== `${location.pathname}${location.search}${location.hash}`) history.pushState(null, "", address);
     // Nothing held from before the pause: no stale fold fires on return.
     session.input.reset();
     this.startTracking();
@@ -1590,9 +1595,12 @@ export class App {
 
     window.addEventListener("keydown", (event) => this.key(event));
     // The browser's Back and Forward, a link to a game followed on the page, the address edited:
-    // the page turns to the space the address names (in a game it stays where it is).
+    // the page turns to the space the address names. In a game it stays where
+    // it is and pauses, so Back is answered at once and never costs a round
+    // (Choose a Game is on the sheet); Resume puts the game's address back.
     const followAddress = () => {
       const view = document.body.dataset.view;
+      if (view === "game") this.pause();
       if (view !== "landing" && view !== "arcade") return;
       this.arrive(parseRoute(location, this.shooting));
     };
