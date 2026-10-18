@@ -6,8 +6,8 @@
  * and is remembered; the difficulty and the camera wait for the next round
  * where one is in play, and the sheet says so.
  *
- * The sheet only shows and edits the player's Preferences; the app puts
- * them into effect (SettingsHost.changed).
+ * The sheet only shows and edits the player's Preferences; the page puts
+ * them into effect (SettingsHost.changed, in settingsHost.ts).
  */
 import type { Difficulty, GameEntry } from "../engine/types";
 import type { Steadiness } from "../input/aim";

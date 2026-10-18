@@ -1,6 +1,5 @@
 /* The design language of Super Claude Bros. (docs/DESIGN.md) for the web: monochrome plus one
-   green, the system face, glass over the world, an 8-point grid. Ported from
-   the owner-approved page in handy/web/style.css. */
+   green, the system face, glass over the world, an 8-point grid. */
 
 :root {
   color-scheme: dark;

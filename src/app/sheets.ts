@@ -112,7 +112,7 @@ export const TROUBLES: Record<Trouble, TroubleSheet> = {
     secondary: "Choose a Game",
   },
   // A download that failed with the browser offline. The mouse helps only
-  // when it was the hand's download: the page offers it then (see App.fail).
+  // when it was the hand's download: the page offers it then (see whatWentWrong, gettingReady.ts).
   offline: {
     icon: "wifi-off",
     title: "You’re Offline",

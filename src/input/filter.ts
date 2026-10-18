@@ -1,5 +1,6 @@
 /**
- * Jitter filtering for the crosshair (a port of the desktop's filtering.py).
+ * Jitter filtering for the crosshair (ported from filtering.py, in the Python
+ * version: git tag `python-final`).
  *
  * A plain exponential average forces a bad trade: enough smoothing to hold the
  * crosshair still on a target also makes it lag behind fast movement. The One

@@ -198,7 +198,7 @@ function baseConfig(party: boolean, origin: string | null, plugins: Plugin[], mo
     // with paths counted from the worktree, and Three's Draco decoder was looked for in the wrong place: every
     // Blender model fell back to its code-built stand-in.
     cacheDir: ".vite",
-    // Handy's version, for Settings' About (src/app/settings.ts); in a party, where the computer is on the network.
+    // The game's version, for Settings' About (src/app/settings.ts); in a party, where the computer is on the network.
     define: {
       __HANDY_VERSION__: JSON.stringify(pkg.version),
       ...(party && origin ? { __GRIP_LAN_ORIGIN__: JSON.stringify(origin) } : {}),

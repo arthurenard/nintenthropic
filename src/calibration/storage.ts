@@ -15,7 +15,7 @@ import { definedOver, gain, isMatrix, type Matrix } from "../input/homography";
 export const AIM_VERSION = 1;
 
 /** The most a saved map may magnify a small movement anywhere in the picture
- * (the desktop's gain limit): past that, a camera is too far off to the side. */
+ * (the Python version's gain limit): past that, a camera is too far off to the side. */
 export const GAIN_LIMIT = 20;
 
 /** The subset of localStorage the aim needs, so tests can pass their own. */

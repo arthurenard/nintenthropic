@@ -109,7 +109,7 @@ export class Shelf {
     private readonly onChoose: (game: GameEntry, how: "click" | "key") => void,
   ) {
     this.cards = this.games.map((game) => this.card(game));
-    // The row's width is shared out by how many cards there are (arcade.css sizes a card from it).
+    // The row's width is shared out by how many cards there are (screens.css sizes a card from it).
     group.style.setProperty("--n", String(this.cards.length));
     group.replaceChildren(...this.cards);
     group.addEventListener("keydown", (event) => {

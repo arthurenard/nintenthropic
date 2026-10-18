@@ -1,7 +1,7 @@
-// What the platform gives the coming games beyond High Noon's HUD: a rifle's
-// magazine and a laser's heat in the weapon's corner (and the gold of the
-// golden weapon on each), a timed round's clock, and a stage of the shape a
-// game's art can hold - each photographed in every state, on the Test Range.
+// What the HUD offers beyond High Noon's cylinder: a rifle's magazine and a
+// laser's heat in the weapon's corner (and the gold of the golden weapon on
+// each), a timed round's clock, and a stage of the shape a game's art can
+// hold - each photographed in every state, on the Test Range.
 import { expect, test, type Page } from "@playwright/test";
 import { shot, returningVisitor, snapshot } from "./helpers";
 

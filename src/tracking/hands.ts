@@ -38,7 +38,7 @@ export function tilesFor(hands: number): number {
  * race take turns on it with the race and with each other. Measured on an M4 Max beside as many views as players
  * (docs/GRIP_PRIX.md, Performance): three players read by one worker, tile after tile, 10.3 reads a second each; a
  * worker each all on the GPU, 4.8; the first on the GPU and the others on the CPU, with the race giving up pixels for
- * them (app/handsFirst.ts), 22.5 to 25.2. Four: 7 by one worker; 21.5 to 22.3 once all four were on the CPU, 11.3 with
+ * them (kart/app/handsFirst.ts), 22.5 to 25.2. Four: 7 by one worker; 21.5 to 22.3 once all four were on the CPU, 11.3 with
  * one left on the GPU. Null for the whole picture.
  */
 export function lanesFor(tiles: number, cores: number = typeof navigator === "undefined" ? 8 : navigator.hardwareConcurrency || 4): ("GPU" | "CPU")[] | null {

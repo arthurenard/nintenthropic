@@ -21,7 +21,7 @@ interface Files {
 export const ROOT = new URL("..", import.meta.url).pathname;
 export const FIXTURE = `${ROOT}node_modules/.cache/handy-e2e/hand.y4m`;
 const SOURCE = `${ROOT}e2e/fixtures/hand.jpg`;
-/** The picture's own shape, rounded to even sides for 4:2:0. */
+/** The picture's own 2:3 shape, with the even sides 4:2:0 needs. */
 const WIDTH = 480;
 const HEIGHT = 720;
 const FRAMES = 2;

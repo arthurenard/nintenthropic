@@ -1,4 +1,4 @@
-// (c) A scripted hand - landmarks from a script instead of the camera - drives
+// A scripted hand - landmarks from a script instead of the camera - drives
 // the real aim pipeline (filter, thumb trigger, aim check, fits) through a
 // whole aim check to 95% and into play; then, as a returning player, through
 // the check again in three shots.

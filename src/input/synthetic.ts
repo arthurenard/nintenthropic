@@ -1,5 +1,6 @@
 /**
- * Synthetic hands with geometry we control exactly (a port of tests/hands.py),
+ * Synthetic hands with geometry we control exactly (ported from the Python
+ * version's tests/hands.py, git tag `python-final`),
  * for the aim tests and for the scripted input the end-to-end tests drive.
  */
 import type { Landmark } from "../tracking/types";
@@ -37,7 +38,7 @@ const mix = (a: Landmark, b: Landmark, t: number): Landmark =>
  * A hand whose thumb sits `thumbDegrees` off the palm's up axis, with its 21
  * points in the image as the player sees it (mirrored). The points the aim
  * reads - wrist, thumb base and tip, index knuckle and tip, middle knuckle -
- * are placed exactly as in tests/hands.py; the rest are filled in as a
+ * are placed exactly as in the Python tests; the rest are filled in as a
  * curled fist so a drawn skeleton looks like a hand.
  */
 export function makeHand(pose: HandPose = {}): Landmark[] {

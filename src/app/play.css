@@ -1251,7 +1251,7 @@
     transform: translate(-50%, -50%) scale(0.9);
   }
 }
-/* "Aim 97% — you're ready": the moment the check ends. */
+/* "Aim Set": the moment the check ends. */
 .ready-moment {
   position: absolute;
   top: 50%;

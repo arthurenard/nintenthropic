@@ -1,4 +1,4 @@
-// (d) Hand play when things go wrong between the camera and the game: a hand
+// Hand play when things go wrong between the camera and the game: a hand
 // that goes (the round waits for it and counts the player back in), a camera
 // that stops (the round waits under a sheet with the fixes), the results
 // played again with a fold of the thumb, the idle world at rest, and a window

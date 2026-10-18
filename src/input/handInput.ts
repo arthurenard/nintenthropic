@@ -90,7 +90,7 @@ export class HandInput implements InputSource {
   private readonly trust = new HandTrust();
 
   constructor(
-    private readonly source: HandSource,
+    source: HandSource,
     private readonly viewport: () => Viewport,
     mapping?: Matrix,
     /**

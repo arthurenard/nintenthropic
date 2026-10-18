@@ -196,7 +196,7 @@ test("difficulty persists across a reload, reaches the game, and keeps its own r
   await expect(page.locator("#home-best")).toHaveText("Your best on Relaxed: 4,321 · Fell on Wave 3");
   await shot(page, info, "settings-04-arcade-record");
 
-  // Standard keeps its own records, and the hand its own.
+  // Standard keeps its own records.
   await page.getByRole("button", { name: "Settings" }).click();
   await pickDifficulty(page, "Standard");
   await page.getByRole("button", { name: "Done" }).click();

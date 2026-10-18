@@ -6,7 +6,8 @@
  *   ?input=script     a scripted hand instead of the camera; the tests move it
  *                     with handyTest.pose() and the real aim pipeline does the rest
  *   ?fail=<trouble>   simulate camera-denied, camera-busy, camera-missing,
- *                     webgl, model or game, to see each error sheet
+ *                     camera-insecure, webgl, model or game, to see each
+ *                     error sheet
  *   ?tracker=page     track on the page's thread instead of a worker
  *   ?delegate=cpu     track on the CPU instead of the GPU
  *   ?range=1          the Test Range in the arcade (src/games/range/): a

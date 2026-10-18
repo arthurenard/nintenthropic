@@ -36,7 +36,7 @@
  *                          the page's frames as with the hand alone
  *
  * So the face is read on every other frame (input/scope.ts, FACE_EVERY): 15 readings a
- * second at 30 fps, which EyeScope's 180 ms hold sees two or three of; about
+ * second at 30 fps, which EyeScope's 250 ms hold sees three or four of; about
  * 4.5 ms of the worker's time per camera frame, none of the page's.
  */
 import type { FaceLandmarker, HandLandmarker } from "@mediapipe/tasks-vision";
@@ -653,7 +653,7 @@ export interface TrackerOptions {
   prefer?: "GPU" | "CPU";
   /** Where to run the landmarker; "auto" picks a worker where the browser can. */
   where?: "auto" | "worker" | "page";
-  /** How many hands to look for: 1 in the shooting games (see input/trust.ts); 2 for Grip Prix's wheel, 4 for two wheels on one camera. */
+  /** How many hands to look for: 1 in the shooting games (see input/trust.ts); 2 for each Grip Prix player on the camera. */
   hands?: number;
   /** Detection and presence confidence, 0..1; 0.5 by default (handConfidence says what a crowd of players on one camera gets). */
   confidence?: number;
@@ -716,12 +716,12 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
   }
 }
 
-/** Starts a worker for each tile, each with its own landmarker for two hands, on the delegate asked for it (LaneTracker). */
 /** A LaneTracker over workers whose landmarkers have started (startLanes; the tests give it stand-ins). */
 export function makeLaneTracker(workers: readonly { worker: Worker; delegate: "GPU" | "CPU" }[], adapt = false): Tracker & { readonly delegates: ("GPU" | "CPU")[] } {
   return new LaneTracker(workers.map(({ worker, delegate }) => ({ worker, delegate, busy: false, tile: null, width: 0, height: 0, hands: [], watch: adapt ? new DelegateWatch(delegate) : null, sentAt: -Infinity })));
 }
 
+/** Starts a worker for each tile, each with its own landmarker for two hands, on the delegate asked for it (LaneTracker). */
 async function startLanes(progress: LandmarkerProgress, delegates: readonly ("GPU" | "CPU")[], hands: number, confidence?: number, adapt = false): Promise<Tracker> {
   const binary = siteUrl("mediapipe/vision_wasm_module_internal.wasm");
   const [wasm, model] = await Promise.all([fetchBytes(binary, progress.wasm, WASM_BYTES), fetchBytes(siteUrl("models/hand_landmarker.task"), progress.model, MODEL_BYTES)]);

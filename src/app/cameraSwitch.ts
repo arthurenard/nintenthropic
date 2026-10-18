@@ -3,7 +3,8 @@
  * new one is remembered as the player's choice (so Settings shows it and the
  * next visit opens it), and if it will not open the one that was in use comes
  * back, so the player is never left without a picture they had a moment ago.
- * What the app does with the result - the toast, a new aim check - is its own.
+ * What the round does with the result - the toast, a new aim check - is
+ * cameraInPlay.ts's.
  */
 import { CameraError, cameraName, nextCamera, type CameraInfo, type CameraTrouble } from "../tracking/camera";
 

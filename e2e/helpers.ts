@@ -8,8 +8,9 @@ const env: Record<string, string | undefined> =
 
 /**
  * A picture of the page, in HANDY_SHOTS (or the test's own output folder),
- * under the project's size. By default it waits for entrance animations (450
- * ms springs) to settle; `settle` 0 catches a moment as it happens.
+ * in a folder named after the Playwright project. By default it waits for
+ * entrance animations (450 ms springs) to settle; `settle` 0 catches a
+ * moment as it happens.
  */
 export async function shot(
   page: Page,

@@ -1,4 +1,4 @@
-// (a) The whole game with the mouse: the arcade, High Noon, pause, and the
+// The whole game with the mouse: the arcade, High Noon, pause, and the
 // results card.
 import { expect, test } from "@playwright/test";
 import { shot, returningVisitor, snapshot } from "./helpers";
@@ -36,9 +36,9 @@ test("the mouse flow: arcade, High Noon, pause, results", async ({ page }, info)
   await expect(page.locator("#pause-sheet")).toBeHidden();
   expect((await snapshot(page)).paused).toBe(false);
 
-  // Left alone, the gang may fell the player. A
-  // game that spares an idle player (High Noon's first wave may) is ended
-  // as any game ends, through the HUD, so the results card is still seen.
+  // Left alone, the gang may fell the player. A game that spares an idle
+  // player (High Noon's first wave may) is ended as any game ends, through
+  // the HUD, so the results card is still seen.
   const results = page.locator("#results");
   const fell = await results.waitFor({ state: "visible", timeout: 20_000 }).then(
     () => true,

@@ -8,7 +8,7 @@ import { KeyboardDriver, host, join, onScreen, open, state } from "./kart";
 
 const SHOTS = "src/kart/app/shots";
 
-// Sound off, and the first cup already won: winning the second one will open the secret track.
+// Sound off, like every test here.
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
     try {
@@ -177,7 +177,7 @@ test("a host and a guest run a whole Grand Prix: four one-lap races, standings b
   expect(errors).toEqual([]);
 });
 
-test("a mirrored race: the same road flipped, on the host and on the guest, driven to the finish", async ({ page }, info) => {
+test("a mirrored race: the same road flipped, on the host and on the guest, driven to the finish", async ({ page }) => {
   test.setTimeout(10 * 60_000);
   const errors: string[] = [];
   const gus = await page.context().newPage();
@@ -212,7 +212,6 @@ test("a mirrored race: the same road flipped, on the host and on the guest, driv
   await expect(page.locator("#results-eyebrow")).toContainText("Meadow Loop · 1 lap");
   await expect(page.locator("#standings-body tr")).toHaveCount(6);
   expect(errors).toEqual([]);
-  void info;
 });
 
 test("the secret track is in the host's track list only once both cups are won", async ({ page, context }) => {

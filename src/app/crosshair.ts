@@ -2,9 +2,9 @@
  * The crosshair: drawn by the page on a 2D canvas over the world, at the
  * device's full resolution, at the latest aim - so it is always crisp, never
  * waits for the 3D frame, and moves the moment the hand does. It copies the
- * desktop's: a ring broken at the compass points, ticks through the gaps and
- * a dot, green while the gun is cocked; the ring tightens as the thumb folds
- * and kicks out on each shot.
+ * Python version's: a ring broken at the compass points, ticks through the
+ * gaps and a dot, green while the gun is cocked; the ring tightens as the
+ * thumb folds and kicks out on each shot.
  *
  * The player may make it larger, and give it a dark outline that holds it
  * against the brightest sky (Settings, Crosshair).
@@ -15,7 +15,7 @@
 import type { Aim } from "../engine/types";
 
 const TINT = "#30d158";
-/** How long the ring's kick lasts, ms (the desktop's RECOIL). */
+/** How long the ring's kick lasts, ms (the Python version's RECOIL). */
 const KICK = 180;
 
 export interface CrosshairStyle {
@@ -28,7 +28,7 @@ export interface CrosshairStyle {
 export const CROSSHAIR_SCALE: Record<CrosshairStyle["size"], number> = { standard: 1, large: 1.5 };
 
 export interface CrosshairMetrics {
-  /** One unit of the desktop's drawing, in device pixels. */
+  /** One unit of the Python version's drawing, in device pixels. */
   unit: number;
   /** The ring's and the outer ticks' stroke. */
   weight: number;
@@ -41,7 +41,7 @@ export interface CrosshairMetrics {
 /** The crosshair's measurements on a stage of this size (CSS pixels) at this pixel ratio. */
 export function crosshairMetrics(cssWidth: number, cssHeight: number, ratio: number, style: CrosshairStyle): CrosshairMetrics {
   const scale = CROSSHAIR_SCALE[style.size];
-  // The desktop's size, grown with the window: about 22 px at 1440x900.
+  // The Python version's size, grown with the window: about 22 px at 1440x900.
   const unit = 0.75 * Math.max(cssWidth / 960, cssHeight / 900) * ratio * scale;
   const weight = Math.max(1.5 * scale, 2 * unit);
   return {

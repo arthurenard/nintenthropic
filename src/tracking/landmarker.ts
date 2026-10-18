@@ -55,7 +55,7 @@ export async function loadHandLandmarker(
    * How many hands to look for. One for the shooting games, deliberately:
    * they aim with a single hand, and a second costs time (measured in
    * input/trust.ts, which keeps a passer-by's hand from taking the aim).
-   * Grip Prix steers with two (four for two wheels on one camera).
+   * Grip Prix steers with two for each player on the camera.
    */
   hands = 1,
   /** Detection and presence confidence (see handConfidence). */
