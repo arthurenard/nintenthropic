@@ -799,7 +799,7 @@ test("a gamepad alone gets from the start screen into a race, with the focus rin
   const sheet = page.locator("#pause-sheet");
   await press("start");
   await expect(sheet).toBeVisible();
-  expect((await focused()).name).toBe("pause-resume");
+  expect(await focused()).toEqual({ name: "pause-resume", ring: true });
   await reach("pause-leave", "down");
   await press("b");
   await expect(sheet).toBeHidden();
