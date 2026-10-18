@@ -768,6 +768,13 @@ body[data-screen="race"] #sound-button {
   height: 24px;
   color: var(--gold);
 }
+/* A word between friends ("Got Finn."): no symbol, and gone in two seconds. */
+.view-toast.quick {
+  padding-inline: 20px;
+  animation:
+    lost-in 250ms var(--ease),
+    fade-out 300ms var(--ease) 1.7s forwards;
+}
 
 /* The Konami code: gold washes over the whole page, once. */
 .gold-flash {

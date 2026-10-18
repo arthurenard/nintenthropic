@@ -15,6 +15,7 @@ import {
   podiumLine,
   recordDuck,
   resultLine,
+  taunts,
   tipsFor,
   tricksFor,
   type KonamiKey,
@@ -162,6 +163,34 @@ describe("the duck found", () => {
     expect(recordDuck("glacier-pass-mirror")).toBe("Duck 1 of 9. Ice fishing.");
     expect(loadUnlocks().ducks).toEqual(["glacier-pass"]);
     expect(recordDuck("glacier-pass")).toBeNull();
+  });
+});
+
+describe("hits between friends", () => {
+  // Karts 4 and 5 are Maya and Finn; 0 is a bot.
+  const players = new Map([
+    [4, "Maya"],
+    [5, "Finn"],
+  ]);
+
+  it("tells the one who hit and the one who was hit, each in their own viewport", () => {
+    expect(taunts({ kart: 5, by: 4 }, players, [4, 5])).toEqual([
+      { kart: 4, words: "Got Finn." },
+      { kart: 5, words: "Maya got you." },
+    ]);
+    // Finn's race is on another screen: only Maya hears of it here.
+    expect(taunts({ kart: 5, by: 4 }, players, [4])).toEqual([{ kart: 4, words: "Got Finn." }]);
+  });
+
+  it("calls a player's own item coming back at them an own goal", () => {
+    expect(taunts({ kart: 4, by: 4 }, players, [4, 5])).toEqual([{ kart: 4, words: "Own goal." }]);
+    expect(taunts({ kart: 4, by: 4 }, players, [5])).toEqual([]);
+  });
+
+  it("leaves the bots, and the storms nobody threw, to the race", () => {
+    expect(taunts({ kart: 0, by: 4 }, players, [4, 5])).toEqual([]);
+    expect(taunts({ kart: 4, by: 0 }, players, [4, 5])).toEqual([]);
+    expect(taunts({ kart: 4, by: null }, players, [4, 5])).toEqual([]);
   });
 });
 

@@ -156,6 +156,35 @@ export function photoFinish(standings: RaceResult["standings"]): PhotoFinish | n
   return best;
 }
 
+// ─── Hits between friends ────────────────────────────────────────────────────
+
+/** A word for one of this screen's viewports: the kart it follows, and what it says there. */
+export interface Taunt {
+  kart: number;
+  words: string;
+}
+
+/**
+ * The words a hit earns, in the viewport of each kart on this screen it is
+ * about: a player's own item coming back at them ("Own goal."), or one person
+ * on the sofa getting another ("Got Finn." for the one who did it, "Maya got
+ * you." for the one it got). A bot at either end is the race's business, and
+ * says nothing. `players` names the karts people drive; `here` is the karts
+ * this screen shows.
+ */
+export function taunts(hit: { kart: number; by: number | null }, players: ReadonlyMap<number, string>, here: readonly number[]): Taunt[] {
+  const { kart, by } = hit;
+  const victim = players.get(kart);
+  if (by === null || victim === undefined) return [];
+  if (by === kart) return here.includes(kart) ? [{ kart, words: "Own goal." }] : [];
+  const attacker = players.get(by);
+  if (attacker === undefined) return [];
+  const out: Taunt[] = [];
+  if (here.includes(by)) out.push({ kart: by, words: `Got ${victim}.` });
+  if (here.includes(kart)) out.push({ kart, words: `${attacker} got you.` });
+  return out;
+}
+
 // ─── A line under the result ─────────────────────────────────────────────────
 
 /** How a race went for the one player on this screen. */
