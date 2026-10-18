@@ -1,4 +1,4 @@
-# Handheld
+# Super Claude Bros.
 
 **An arcade you play with your hand.** Point your finger at the screen, fold
 your thumb to fire. It runs in your browser, sees your hand through your
@@ -31,11 +31,12 @@ Prix](#play-grip-prix)).
 
 ## Play
 
-Handheld is a website: open it in a current browser on a computer with a webcam,
-choose **Play** on the Finger Guns tile (or **Race** for Grip Prix), choose a game in the
-arcade's row, choose **Play**, and allow the camera. A link to a game
-(`…/#high-noon`) opens the arcade on it, and `…/#arcade` opens the arcade on the
-game you chose last; `./` is the landing, with the two side by side.
+Super Claude Bros. is a website: open it in a current browser on a computer with
+a webcam, choose **Play** on the Finger Guns tile (or **Race** for Grip Prix),
+choose a game in the arcade's row, choose **Play**, and allow the camera. A link
+to a game (`…/#high-noon`) opens the arcade on it, and `…/#arcade` opens the
+arcade on the game you chose last; `./` is the landing, with the two side by
+side.
 
 To run it on your own machine:
 
@@ -73,10 +74,10 @@ are marked in the first two stages (and on Relaxed) so you know where to look.
 **Before every game, a quick aim check.** You warm up on the game's own
 targets (bottles along the street in High Noon, mason jars in Dead of Night,
 the station's running lights in Orbital Decay, steel plates on the range in
-Overwatch Ridge). Point your finger at the lit target and fire: Handheld is
+Overwatch Ridge). Point your finger at the lit target and fire: the game is
 learning where you point, so there is no crosshair to steer, and none is
 shown. It ends by itself as soon as 95% of your shots would land where you
-aim - about six shots the first time, three when Handheld remembers your aim -
+aim - about six shots the first time, three when the game remembers your aim -
 with "Aim Set": that is when the crosshair appears, following your finger.
 
 **No camera?** Choose **Use Mouse or Trackpad**: click to fire. The right
@@ -98,15 +99,15 @@ arm), the volume, a larger or high-contrast crosshair, how steady the aim is
 held, which camera to use, whether the camera's picture stays in the corner in
 play, Reduce Motion and Reduce Flashing, and, for Overwatch Ridge, Close One Eye
 to Scope, whether the Scope button holds or toggles, and an Eye Test. Everything is
-remembered in your browser; Forget Saved Aim and Reset Handheld clear it.
+remembered in your browser; Forget Saved Aim and Reset Everything clear it.
 
 **Records.** Your best score is kept for each game and difficulty, and apart for your
 hand and for a mouse or touch screen (which is far easier to aim). The arcade
 shows the one to beat under Play; the results say when you beat it, and by how
 much.
 
-Handheld can be installed as an app from the browser (Install Handheld, or Add to
-Dock / Add to Home Screen); it opens full screen.
+Super Claude Bros. can be installed as an app from the browser (Install Super
+Claude Bros., or Add to Dock / Add to Home Screen); it opens full screen.
 
 ## Play Grip Prix
 
@@ -170,18 +171,18 @@ through the scope); only the two eyes' blink scores are kept, only in that
 game (and in Settings' Eye Test, which shows your own picture on your own
 screen), and they never leave the device either. To fit the scope to you, two
 numbers - how far your eye reads open and shut - are remembered in your
-browser. Handheld has no server and no
+browser. Super Claude Bros. has no server and no
 analytics; the only files it downloads are its own.
 
 ## Requirements
 
-A computer with a webcam and a current browser with WebGL 2. Handheld is built
-and tested in Google Chrome on macOS; current Edge, Safari and Firefox should
-work but haven't been played through yet. Overwatch Ridge, played with your
-hand, also needs your face in view to scope with an eye, and downloads
+A computer with a webcam and a current browser with WebGL 2. Super Claude Bros.
+is built and tested in Google Chrome on macOS; current Edge, Safari and Firefox
+should work but haven't been played through yet. Overwatch Ridge, played with
+your hand, also needs your face in view to scope with an eye, and downloads
 MediaPipe's face model (`face_landmarker.task`, 3.7 MB) the first time, behind
-the loading bar (turn off Close One Eye to Scope and it isn't loaded); the
-other three games never load it.
+the loading bar (turn off Close One Eye to Scope and it isn't loaded); the other
+three games never load it.
 
 ## Development
 
@@ -235,5 +236,5 @@ the games' designs in [docs/HIGH_NOON.md](docs/HIGH_NOON.md),
 September 2026 product review, item by item, is in
 [docs/REVIEW_RESPONSE.md](docs/REVIEW_RESPONSE.md).
 
-Handheld began as a Python desktop app; that version is kept in git under the tag
-`python-final`.
+Super Claude Bros. (first Handy, then Handheld) began as a Python desktop app;
+that version is kept in git under the tag `python-final`.

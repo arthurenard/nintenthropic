@@ -1,6 +1,6 @@
 # Grip Prix, filmed for the trailer
 
-Eight clips of Grip Prix for the 40-second Handheld trailer (bars 12-17, the part after the "So is this." card),
+Eight clips of Grip Prix for the 40-second Super Claude Bros. trailer (bars 12-17, the part after the "So is this." card),
 filmed from the game itself: the real sim, the real renderer and its Blender art, the real HUD, stepped exactly one
 video frame at a time in a muted headless Chrome. Nothing is faked: no stand-in karts, no generated images. The
 sounds of each clip are the race's own, rendered offline from the same frames; nothing is ever played.

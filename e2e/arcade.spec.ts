@@ -1,4 +1,4 @@
-// Handheld's front door and the arcade behind it. The landing shows the two
+// The front door of Super Claude Bros. and the arcade behind it. The landing shows the two
 // families side by side - the four shooters of Finger Guns, and Grip Prix, a page
 // of its own - and the arcade is the shooters' own space: the chosen game as
 // a full-bleed hero, the row of games to choose from (by click, by keyboard as
@@ -184,8 +184,8 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Racing" })).toHaveCount(0);
   await expect(card(page, "Grip Prix")).toHaveCount(0);
 
-  // The bar: Handheld leads back to the landing, standing on the Finger Guns tile; Back and Forward walk the same way.
-  await page.getByRole("link", { name: "Handheld" }).click();
+  // The bar: Super Claude Bros. leads back to the landing, standing on the Finger Guns tile; Back and Forward walk the same way.
+  await page.getByRole("link", { name: "Super Claude Bros." }).click();
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
   expect(hash(page)).toBe("");
@@ -234,8 +234,8 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   await expect(page).toHaveURL(/\/race\.html$/);
   await expect(page.getByRole("heading", { name: "Grip Prix" })).toBeVisible();
 
-  // Its Handheld link: the landing, Grip Prix's tile in hand (by its address, or by what the page remembers of where you were).
-  await page.getByRole("link", { name: "Handheld" }).click();
+  // Its Super Claude Bros. link: the landing, Grip Prix's tile in hand (by its address, or by what the page remembers of where you were).
+  await page.getByRole("link", { name: "Super Claude Bros." }).click();
   await expect(page).toHaveURL(/\/(index\.html)?(#grip-prix)?$/);
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
@@ -250,7 +250,7 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   }
   // And the arcade, once visited, is where the landing stands next time.
   await page.goto("/#arcade");
-  await page.getByRole("link", { name: "Handheld" }).click();
+  await page.getByRole("link", { name: "Super Claude Bros." }).click();
   await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
   expect(errors).toEqual([]);
 });

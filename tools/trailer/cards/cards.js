@@ -149,10 +149,10 @@
       dur,
       frames,
       alpha: false,
-      what: 'End card on black: the app icon (280 px) over a soft sunset glow, "Handheld", "Games you play with your hands.", a row of two families (the app icon "Finger Guns", the kart icon "Grip Prix"), "In your browser. No controller.", then fade to black.',
+      what: 'End card on black: the app icon (280 px) over a soft sunset glow, "Super Claude Bros.", "Games you play with your hands.", a row of two families (the app icon "Finger Guns", the kart icon "Grip Prix"), "In your browser. No controller.", then fade to black.',
       beats: [
         { t: 0, what: "the app icon and its sunset glow fade and scale in (0.0-0.6)" },
-        { t: 0.3, what: '"Handheld" rises in (0.3-0.9)' },
+        { t: 0.3, what: '"Super Claude Bros." rises in (0.3-0.9)' },
         { t: 1.0, what: '"Games you play with your hands." rises in (1.0-1.6)' },
         { t: 2.1, what: "the whole stack glides up a little to make room for the row (2.1-2.9)" },
         { t: 2.2, what: 'the two families, "Finger Guns" and "Grip Prix", rise in with their icons (2.2-2.8)' },
@@ -176,7 +176,7 @@
         app.dataset.slot = "app";
         wrap.append(glow, app);
         // The wordmark and the line under it.
-        const word = el("div", "wordmark line", "Handheld");
+        const word = el("div", "wordmark line", "Super Claude Bros.");
         const tag = el("div", "tagline line", "Games you play with your hands.");
         // The two families. SLOTS 2 and 3: the Finger Guns and Grip Prix icons, 96 px.
         const family = el("div", "family");

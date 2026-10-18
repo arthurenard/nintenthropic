@@ -1,5 +1,5 @@
 /**
- * The Handheld trailer's music: a 40-second electronic trailer cue at 120 BPM in
+ * The Super Claude Bros. trailer's music: a 40-second electronic trailer cue at 120 BPM in
  * A minor, synthesised entirely in code (see dsp.mjs and instruments.mjs) and
  * written as a WAV. Nothing here plays a sound: it is arithmetic on arrays.
  *

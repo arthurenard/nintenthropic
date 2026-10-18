@@ -1,4 +1,4 @@
-# The Handheld promo video
+# The Super Claude Bros. promo video
 
 A 38-second, 1920x1080, 60 fps film of the four games, made from the real
 games: every gameplay frame is a screenshot of the game running in headless
@@ -16,8 +16,9 @@ node tools/promo/render.mjs            # everything, about fifteen minutes
 The dev server is started on port 4901 if nothing is listening there. The
 result is in `tools/promo/out/` (ignored by git):
 
-- `handheld-promo.mp4`: H.264 (yuv420p, BT.709), AAC, `+faststart`, about -14 LUFS
-- `handheld-promo-poster.jpg`: the title card
+- `super-claude-bros-promo.mp4`: H.264 (yuv420p, BT.709), AAC, `+faststart`,
+  about -14 LUFS
+- `super-claude-bros-promo-poster.jpg`: the title card
 - `contact.jpg`: one frame a second
 - `frames/<segment>/`: the numbered frames and each game's `events.json`
 - `mix.wav`: the soundtrack before loudness normalisation
@@ -83,7 +84,7 @@ encoded to AAC, decoded and measured, up to eight rounds): about -14 LUFS
 integrated and a true peak under -1 dBTP. The games' shots are much louder than
 their beds, so the limiter works hard, and AAC adds an overshoot of its own that
 the ceiling has to leave room for. Check the result with
-`node tools/promo/loud.mjs anull tools/promo/out/handheld-promo.mp4`.
+`node tools/promo/loud.mjs anull tools/promo/out/super-claude-bros-promo.mp4`.
 
 **Video** (`render.mjs`). ffmpeg reads each segment's frames, converts to
 BT.709 yuv420p, chains `xfade`, and muxes the audio.

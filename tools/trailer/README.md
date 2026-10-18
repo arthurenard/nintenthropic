@@ -1,4 +1,4 @@
-# The Handheld trailer
+# The Super Claude Bros. trailer
 
 A 40-second film for X: 1920x1080, 60 fps, H.264 + AAC (about -14 LUFS, true
 peak under -1 dBTP), cut to a 120 BPM score so every cut falls on a beat. The
@@ -18,10 +18,10 @@ node tools/trailer/music/compose.mjs      # the score (and music/analyze.mjs to 
 node tools/trailer/edit.mjs               # the cut, the mix and the encode, about a minute
 ```
 
-The film is `tools/trailer/out/handheld-trailer.mp4` (ignored by git), with
-`contact.jpg` (two frames a second) beside it. Each part takes `--only id,id`
-to redo a few pieces; `edit.mjs --picture [--until 22]` renders the picture
-alone, for looking.
+The film is `tools/trailer/out/super-claude-bros-trailer.mp4` (ignored by git),
+with `contact.jpg` (two frames a second) beside it. Each part takes `--only
+id,id` to redo a few pieces; `edit.mjs --picture [--until 22]` renders the
+picture alone, for looking.
 
 ## The parts
 

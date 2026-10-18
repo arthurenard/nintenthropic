@@ -9,7 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
 import { WheelDrivers, chooseDrivers, host, join, onScreen, open, state } from "./kart";
 
-// Handheld's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
+// The site's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
     try {
@@ -60,7 +60,7 @@ test("the start screen: the title, three ways in, a code field that tidies what 
   await expect(heading(page, "Grip Prix")).toBeVisible();
   await expect(page.getByText("Grip the wheel. Race your friends.")).toBeVisible();
   for (const name of ["Host a Race", "Practice"]) await expect(page.getByRole("button", { name })).toBeEnabled();
-  await expect(page.getByRole("link", { name: "Handheld" })).toHaveAttribute("href", "./");
+  await expect(page.getByRole("link", { name: "Super Claude Bros." })).toHaveAttribute("href", "./");
   await shot(page, info, "race-1-start", 400);
 
   // Capitals, letters only, four at most; Join waits for all four.

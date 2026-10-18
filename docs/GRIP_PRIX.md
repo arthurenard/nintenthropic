@@ -7,9 +7,9 @@ back up. Every player brings their own camera — a laptop, a phone propped on
 the table — and the race is shown on each player's screen, or all together on
 one big screen in split screen, or both.
 
-It is Handheld's second kind of game. The four shooting games aim a finger
-pistol; Grip Prix holds a wheel. It lives on its own page, `race.html`, and
-the arcade lists it under its own heading, Racing.
+It is the second kind of game in Super Claude Bros. The four shooting games aim
+a finger pistol; Grip Prix holds a wheel. It lives on its own page, `race.html`,
+and the arcade lists it under its own heading, Racing.
 
 Nothing here is borrowed. The karts, drivers, items, tracks and names are
 Grip Prix's own (no plumbers, no shells, no question-mark boxes).
@@ -179,7 +179,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium; the arcade's Racing heading. |
-| Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Handheld sound. |
+| Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Super Claude Bros. sound. |
 
 ### Coordinates
 
@@ -659,11 +659,11 @@ tight type, springy motion; a white pill is the one main action of a screen;
    calm) with a slow drift, the Grip Prix wordmark (heavy italic, a chequered
    strip, speed lines) and a glass menu on the left: Host a Race (the white
    pill), the race code field and its Join a Race button in one capsule,
-   Practice; "Up to 4 players" under it. Until the art is drawn, or where it
-   is not fetched, the page's own meadow and road stand in. A phone that came
-   with a `?join=` link does not fetch the art at all (it is on its way to a
-   room). The back link goes to the Handheld landing (`./`). `race.html` carries
-   `assets/kart/icon-180.png` as its icon and Apple touch icon.
+   Practice; "Up to 4 players" under it. Until the art is drawn, or where it is
+   not fetched, the page's own meadow and road stand in. A phone that came with
+   a `?join=` link does not fetch the art at all (it is on its way to a room).
+   The back link goes to the Super Claude Bros. landing (`./`). `race.html`
+   carries `assets/kart/icon-180.png` as its icon and Apple touch icon.
 2. **You** (`you.ts`). One calm card: your name (a friendly default), how you
    drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and
    Players on This Camera (1 to 4, each with a name). Remembered.
@@ -863,8 +863,8 @@ front of them (or a laptop), and the TV is the host's screen.
   `CORRIDOR_REPORT=1` prints how far each offender must move. The chase
   camera is held to the same margin (`cameraSpace.ts`): it slides back toward
   the road in a bend, rises over rising ground and stays under a roof.
-- **The duck** (`duck`): every Handheld game hides a rubber duck. Every track
-  has one somewhere off the racing line.
+- **The duck** (`duck`): every Super Claude Bros. game hides a rubber duck.
+  Every track has one somewhere off the racing line.
 - **Bank** (`bank`): the road leans into its bends (for the picture).
 
 ### What each theme can build
@@ -926,7 +926,7 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    helmet by a satellite.
 
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
-seen from above — Handheld's own hand. The road runs up and down every finger
+seen from above — the hand you play with. The road runs up and down every finger
 (the fingertips are hairpins), round the thumb, across the palm and back
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one

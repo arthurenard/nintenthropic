@@ -808,7 +808,7 @@ export const STARLIGHT_RIBBON: TrackDef = {
 };
 
 /**
- * Secret. An island shaped like an open hand, seen from above: Handheld's own hand. The road runs up and down every
+ * Secret. An island shaped like an open hand, seen from above: the hand you play with. The road runs up and down every
  * finger (the fingertips are hairpins), round the thumb, and back along the wrist, where a giant wristwatch is the
  * start gantry. A ring to drive through on the long straight by the wrist (the fingers lie too close for anything to
  * stand between them), palm trees, beach huts, crabs and rolling coconuts. The minimap is a hand. The duck sunbathes on

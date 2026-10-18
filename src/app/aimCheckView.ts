@@ -4,7 +4,7 @@
  * is shot, fills a calm ring as the aim is learned, and ends on the moment
  * "Aim Set - the crosshair now follows your finger" before the game begins.
  *
- * The player points their finger at the lit target; Handheld learns where that
+ * The player points their finger at the lit target; the game learns where that
  * is. So the crosshair is not shown while the aim is being learned - an
  * unfinished crosshair is only wrong, and a player who sees it steers it onto
  * the targets instead of pointing - and nothing the game draws follows the
@@ -210,7 +210,7 @@ export class AimCheckView {
     setText("check-title", check.words.title);
     setText("check-detail", check.words.detail);
     // The ring fills as the aim is learned, and never falls back; the number
-    // in it is the shots taken. No percentage: the aim is Handheld's to learn,
+    // in it is the shots taken. No percentage: the aim is the game's to learn,
     // not the player's to score.
     const ring = $("check-ring");
     const fill = ring.querySelector<SVGCircleElement>(".fill")!;

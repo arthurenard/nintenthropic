@@ -6,19 +6,19 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Games you play with your hands, in front of your camera. A finger-pistol arcade and a four-player kart race, right in your browser." />
-    <meta name="apple-mobile-web-app-title" content="Handheld" />
-    <title>Handheld</title>
+    <meta name="apple-mobile-web-app-title" content="Claude Bros." />
+    <title>Super Claude Bros.</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   </head>
   <body data-view="none">
-    <!-- The bar over the landing and the arcade: back to Handheld, between its two spaces, and the page's own controls. -->
+    <!-- The bar over the landing and the arcade: back to Super Claude Bros., between its two spaces, and the page's own controls. -->
     <header class="nav" id="nav" hidden>
       <a class="brand" id="brand" href="./">
         <svg class="brand-back" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>
-        <img class="wordmark-icon" src="/icons/icon-192.png" alt="" /><span class="brand-name">Handheld</span>
+        <img class="wordmark-icon" src="/icons/icon-192.png" alt="" /><span class="brand-name">Super Claude Bros.</span>
       </a>
       <nav class="spaces" aria-label="Sections">
         <a class="space" id="space-arcade" href="#finger-guns" aria-current="page">Finger Guns</a>
@@ -37,7 +37,7 @@
       </div>
     </header>
 
-    <!-- The landing: Handheld's two families, side by side. -->
+    <!-- The landing: the two families of Super Claude Bros., side by side. -->
     <div id="landing" class="view landing" hidden>
       <main class="landing-main">
         <h1 class="landing-title" id="landing-title">Games you play with your hands.</h1>
@@ -178,7 +178,7 @@
         <div class="check-card glass check-only" id="check-card">
           <div class="check-words" id="check-words" aria-live="polite">
             <p class="title3" id="check-title">Point at the Lit Target</p>
-            <p class="subhead secondary" id="check-detail">Point your finger at it and fire. Handheld is learning where you point.</p>
+            <p class="subhead secondary" id="check-detail">Point your finger at it and fire. The game is learning where you point.</p>
           </div>
           <div class="check-side">
             <p class="trigger footnote" id="trigger" data-state="lost"><i></i><span>Show your hand</span></p>
@@ -220,7 +220,7 @@
     <dialog id="prime" class="sheet alert" aria-labelledby="prime-title">
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="prime-title">Use Your Camera</h2>
-      <p class="body secondary" id="prime-body">Handheld needs your camera to see your hand. The picture stays on this computer.</p>
+      <p class="body secondary" id="prime-body">Super Claude Bros. needs your camera to see your hand. The picture stays on this computer.</p>
       <div class="sheet-actions">
         <button class="button primary wide" id="prime-continue" data-sound="confirm">Continue</button>
         <button class="button plain wide" id="prime-mouse">Use Mouse or Trackpad</button>
@@ -330,7 +330,7 @@
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="privacy-title">Your Camera Stays Here</h2>
       <p class="body secondary">
-        Handheld runs in your browser. Your camera picture is read on this computer to find your hand, and it is never
+        Super Claude Bros. runs in your browser. Your camera picture is read on this computer to find your hand, and it is never
         saved or uploaded.
       </p>
       <p class="subhead secondary" id="privacy-eye">
@@ -548,7 +548,7 @@
 
         <section class="group" aria-label="Reset">
           <div class="rows">
-            <button type="button" class="row row-action danger" id="reset">Reset Handheld</button>
+            <button type="button" class="row row-action danger" id="reset">Reset Everything</button>
           </div>
         </section>
       </div>
@@ -557,9 +557,9 @@
 
     <dialog id="confirm" class="sheet alert" aria-labelledby="confirm-title" aria-describedby="confirm-body">
       <span class="alert-icon danger"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg></span>
-      <h2 class="title2" id="confirm-title">Reset Handheld?</h2>
+      <h2 class="title2" id="confirm-title">Reset Everything?</h2>
       <p class="body secondary" id="confirm-body">
-        This clears your records, saved aim and settings on this computer, and starts Handheld afresh.
+        This clears your records, saved aim and settings on this computer, and starts Super Claude Bros. afresh.
       </p>
       <div class="sheet-actions">
         <button class="button destructive wide" id="confirm-reset">Reset</button>

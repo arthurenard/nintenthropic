@@ -21,7 +21,7 @@ const run = (args) => {
   const r = spawnSync("/opt/homebrew/bin/ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args], { encoding: "utf8" });
   if (r.status !== 0) throw new Error(r.stderr);
 };
-times.forEach((t, i) => run(["-ss", t, "-i", `${out}/handheld-promo.mp4`, "-frames:v", "1", "-vf", `scale=${w}:${h}`, `${out}/grab/${i}.png`]));
+times.forEach((t, i) => run(["-ss", t, "-i", `${out}/super-claude-bros-promo.mp4`, "-frames:v", "1", "-vf", `scale=${w}:${h}`, `${out}/grab/${i}.png`]));
 const inputs = times.flatMap((_, i) => ["-i", `${out}/grab/${i}.png`]);
 run([...inputs, "-filter_complex", `xstack=inputs=${times.length}:layout=${times.map((_, i) => `${(i % cols) * Number(w)}_${Math.floor(i / cols) * Number(h)}`).join("|")}`, `${out}/grab.png`]);
 console.log(`${out}/grab.png`);

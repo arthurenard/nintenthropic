@@ -35,7 +35,7 @@ export type KartSound =
   | "ui-join"
   | "ui-leave"
   | "ui-start"
-  /** Handheld's rubber duck. */
+  /** The rubber duck every game hides. */
   | "duck"
   /** A two-tone horn. */
   | "horn"
@@ -47,7 +47,7 @@ export type KartSound =
   | "cheer"
   /** The photo finish's camera. */
   | "shutter"
-  /** The Konami code: Handheld's gold sting, the same as the arcade's (a core cue, loaded with the engine). */
+  /** The Konami code: the gold sting, the same as the arcade's (a core cue, loaded with the engine). */
   | "gold";
 
 export const SOUND_CUES: Record<KartSound, string> = {

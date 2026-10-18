@@ -5,7 +5,7 @@ black sensor band with two camera eyes, the station's running lights
 at its eight corners, a patch of cells on its back, and a two-jointed arm
 with a welding head.
 
-Faces glTF +Z (Blender -Y), like every character in Handheld. Node layout:
+Faces glTF +Z (Blender -Y), like every character in Super Claude Bros. Node layout:
 
     drone                 root (origin at the body's centre)
       drone.body          the shell, band, eyes, cells, side lights

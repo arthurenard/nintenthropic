@@ -195,7 +195,7 @@ function encode({ audio }) {
     `[z][2:v]overlay=0:0:format=auto[f]`,
     `[f]${yuv}[v]`,
   ].join(";");
-  const file = resolve(OUT, audio ? "handheld-trailer.mp4" : "picture.mp4");
+  const file = resolve(OUT, audio ? "super-claude-bros-trailer.mp4" : "picture.mp4");
   const input = (track) => ["-framerate", String(FPS), "-i", resolve(EDIT, track, "%05d.png")];
   ffmpeg([
     ...input("base"),

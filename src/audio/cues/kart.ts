@@ -1,6 +1,6 @@
 /**
  * Grip Prix's sound pack: a toy-box kart racer, every sound synthesised in
- * code like the rest of Handheld. The recipes are in ./kart-motion.ts (what a
+ * code like the rest of Super Claude Bros. The recipes are in ./kart-motion.ts (what a
  * kart sounds like as it moves), ./kart-events.ts (what happens to it) and
  * ./kart-jingles.ts (the tunes and the interface); this is only the table
  * that says how each is played.
@@ -158,7 +158,7 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_seeker: { recipe: seekerWhistle, pack: "kart", bus: "sfx", level: -11, loop: true, priority: 3, fadeIn: 0.1, fadeOut: 0.15, vary: 0, expect: [0.6, 1.0] },
   kart_drone: { recipe: droneRotors, pack: "kart", bus: "sfx", level: -11, loop: true, priority: 3, fadeIn: 0.15, fadeOut: 0.25, vary: 0, expect: [0.8, 1.2] },
 
-  // --- Handheld's rubber duck, and a horn ---------------------------------------------------------------------------------------
+  // --- The rubber duck, and a horn ----------------------------------------------------------------------------------------------
   kart_duck: { recipe: duckSqueak, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.03, minGap: 0.2, expect: [0.4, 1.0] },
   kart_horn: { recipe: horn, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.01, minGap: 0.1, expect: [0.5, 1.2] },
   // The photo finish's flash: the screen's own camera, so it bypasses the world like the interface.

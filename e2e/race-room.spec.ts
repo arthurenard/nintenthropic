@@ -7,7 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
 import { KeyboardDriver, chooseDrivers, host, join, onScreen, open, state } from "./kart";
 
-// Handheld's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
+// The site's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
     try {

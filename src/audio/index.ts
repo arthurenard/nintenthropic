@@ -1,5 +1,5 @@
 /**
- * Handheld's sound: a Web Audio engine and a library of sounds synthesised in
+ * The sound of Super Claude Bros.: a Web Audio engine and a library of sounds synthesised in
  * code at load time — no audio file is downloaded or shipped.
  *
  * The app:
@@ -98,7 +98,7 @@ export async function createAudioBus(options: { muted: boolean; volume?: number 
     void engine.load("core");
     return engine;
   } catch (error) {
-    console.warn("Handheld audio: Web Audio is unavailable, playing silently", error);
+    console.warn("Super Claude Bros. audio: Web Audio is unavailable, playing silently", error);
     return silent();
   }
 }

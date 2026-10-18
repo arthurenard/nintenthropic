@@ -471,7 +471,7 @@ describe("the preview's geometry", () => {
     expect(wheelRing([100, 300], [300, 100]).turn).toBeCloseTo(-Math.PI / 4);
   });
 
-  it("colours the modes with Handheld's green, amber and red", () => {
+  it("colours the modes with the design's green, amber and red", () => {
     expect(MODE_COLOURS).toEqual({ drive: "#30D158", brake: "#FF9F0A", lost: "#FF453A" });
   });
 });

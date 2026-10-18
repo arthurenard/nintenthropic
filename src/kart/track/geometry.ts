@@ -157,7 +157,7 @@ export interface TrackDef {
   surfaces?: (Stretch & { kind: Surface; offset?: number; width?: number })[];
   hazards?: HazardDef[];
   landmarks?: Landmark[];
-  /** Where the rubber duck hides (every Handheld game has one). */
+  /** Where the rubber duck hides (every Super Claude Bros. game has one). */
   duck?: { at: number; offset: number; y?: number };
   /** How far the road leans into its bends, for the picture: radians per 1/m of curvature (0 = flat). */
   bank?: number;

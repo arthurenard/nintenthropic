@@ -1,4 +1,4 @@
-// Renders Handheld's app icons from the mark, in installed Chrome:
+// Renders the app icons from the mark, in installed Chrome:
 //   node tools/icons/render.mjs
 // public/icons/icon-192.png, -512    web app icons and the wordmark, clear corners
 // public/icons/favicon-32.png        the tab's icon

@@ -2,7 +2,7 @@
  * The music in Dust Creek: the saloon's out-of-tune upright, a lonely
  * whistle, a twangy guitar, a harmonica, a drum and the bell — and the short
  * stingers built from them. All original: the tunes below were written for
- * Handheld.
+ * Super Claude Bros.
  *
  * Everything is in G major (the piano, the stingers) or its relative E minor
  * (the ominous and lonely whistles), so a stinger landing over a piano note

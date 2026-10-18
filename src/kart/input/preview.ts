@@ -5,7 +5,7 @@
  * the race, large on the wheel check and on a big-screen player's own device.
  *
  * It follows docs/DESIGN.md: the interface is monochrome plus one tint, and
- * here the tint is the mode - Handheld's green while driving, amber while
+ * here the tint is the mode - the design's green while driving, amber while
  * braking, red when the hands are lost. A dot is solid for a fist and hollow
  * for an open hand.
  *
@@ -16,7 +16,7 @@
 import type { WheelStatus } from "../contract";
 import { halfSeat, seatOf, seatZone, type Seat } from "./wheel";
 
-/** Handheld's tint for each mode (DESIGN.md: Ready green, Warning amber, Danger red). */
+/** The tint for each mode (DESIGN.md: Ready green, Warning amber, Danger red). */
 export const MODE_COLOURS: Readonly<Record<WheelStatus["mode"], string>> = {
   drive: "#30D158",
   brake: "#FF9F0A",

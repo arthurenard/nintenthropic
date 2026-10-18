@@ -1,5 +1,5 @@
 /**
- * Instruments: the engines behind anything in Handheld that plays a note.
+ * Instruments: the engines behind anything in Super Claude Bros. that plays a note.
  *
  * A *voice* turns one note (a pitch, how long the key is held, how hard it is
  * struck) into a mono buffer that starts at the note's first sample and runs
