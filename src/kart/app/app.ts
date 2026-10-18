@@ -162,6 +162,7 @@ export class KartApp {
       again: () => this.again(),
       lobby: () => this.backToLobby(),
       next: () => this.nextInCup(),
+      photo: () => this.services.sound.play("shutter"),
     });
     this.standingsScreen = new StandingsScreen({ next: () => this.nextInCup(), leave: () => this.leave() });
     this.podiumScreen = new PodiumScreen(services, {
@@ -647,6 +648,7 @@ export class KartApp {
       trackName: this.trackName(lobby),
       grandPrix: lobby.grandPrix ?? null,
       still: this.raceScreen.photo,
+      rescues: this.raceScreen.rescued,
     });
     this.show("results");
     this.backdrop.set(trackOfRace(lobby.settings, lobby.grandPrix));

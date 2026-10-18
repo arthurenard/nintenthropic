@@ -743,7 +743,7 @@ body[data-screen="race"] #sound-button {
   display: none;
 }
 
-/* "Duck found! 3 of 9", in the viewport of the player who found it (in the .view-notes layer, like "Show Both Hands"). */
+/* "Duck 3 of 9. Hooked.", in the viewport of the player who found it (in the .view-notes layer, like "Show Both Hands"). */
 .view-toast {
   position: absolute;
   z-index: 3;

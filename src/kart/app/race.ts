@@ -82,6 +82,8 @@ export class RaceScreen {
   private eggTick = 0;
   private finishes: { place: number; time: number }[] = [];
   private still: string | null = null;
+  /** How many times the drone has carried each kart back to the road (the results tease about it). */
+  private rescues = new Map<number, number>();
   private cards: { place: HTMLElement; lap: HTMLElement; item: HTMLElement; slot: number }[] = [];
   private banner = "";
   private view: RaceView | null = null;
@@ -141,6 +143,11 @@ export class RaceScreen {
     return this.still;
   }
 
+  /** Each kart's rescues by the drone in the race shown last (it outlives `end`, until the next race). */
+  get rescued(): ReadonlyMap<number, number> {
+    return this.rescues;
+  }
+
   begin(ctx: RaceContext): void {
     this.end();
     this.ctx = ctx;
@@ -156,6 +163,7 @@ export class RaceScreen {
     this.eggTick = 0;
     this.finishes = [];
     this.still = null;
+    this.rescues = new Map();
     $("view-toasts").replaceChildren();
     this.reported = "";
     this.banner = "";
@@ -428,6 +436,7 @@ export class RaceScreen {
     if (view.tick < this.eggTick - 5) {
       this.eggEvent = -1;
       this.finishes = [];
+      this.rescues = new Map();
     }
     this.eggTick = view.tick;
     for (const event of view.events) {
@@ -435,6 +444,7 @@ export class RaceScreen {
       this.eggEvent = event.id;
       if (event.type === "duck") this.duckFound(event.kart, view, lobby);
       else if (event.type === "finish") this.finished(event.place, event.time);
+      else if (event.type === "rescued") this.rescues.set(event.kart, (this.rescues.get(event.kart) ?? 0) + 1);
     }
   }
 
