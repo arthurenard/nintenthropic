@@ -54,7 +54,7 @@ let makeAnother: ((delegate: "GPU" | "CPU") => Promise<HandLandmarker>) | null =
 const gpu = new GpuWatch();
 /** The face's model, kept to make the face landmarker again should its GPU go. */
 let faceModel: ArrayBuffer | null = null;
-/** Landmarkers being made again, their GPU gone: until they are, frames are answered with nothing found. */
+/** Landmarkers being made again, their GPU gone (until they are, what they read is answered with nothing found). */
 let rebuilding = false;
 /** How often the GPU has gone under this worker: once, the landmarkers go back to it; again, they read on the CPU. */
 let losses = 0;
@@ -294,7 +294,7 @@ const anyLost = (): boolean => gpu.lost(landmarker) || more.some((one) => gpu.lo
 /**
  * Makes again every landmarker whose GPU went: on the GPU the first time (Chrome brings its GPU back within a second
  * or so), on the CPU after that, or where the GPU will not have it. A try of the other delegate under way ends, as
- * one that could not be made does. The landmarkers they replace are let go once the new ones read.
+ * one that could not be made does. The landmarkers they replace are let go once the new ones are made.
  */
 async function rebuild(): Promise<void> {
   rebuilding = true;
@@ -348,14 +348,15 @@ async function rebuild(): Promise<void> {
 function read(message: Extract<ToWorker, { type: "frame" }>): void {
   const began = performance.now();
   let hands: SeenHand[] = [];
-  // A GPU gone since the last frame: nothing is found on it, so nothing is read until the landmarkers are made again.
+  // A GPU gone since the last frame: nothing is found on it, so what read on it waits for the landmarkers made again.
   if (!rebuilding && makeAnother && began >= rebuildAfter && anyLost()) void rebuild();
-  const withFace = message.face === true && face !== null && !rebuilding;
+  const handsLost = gpu.lost(landmarker) || more.some((one) => gpu.lost(one));
+  const withFace = message.face === true && face !== null && !gpu.lost(face);
   let which: "mine" | "other" = "mine";
   let ok = true;
   try {
     try {
-      if (rebuilding) ok = false;
+      if (handsLost) ok = false;
       else if (more.length) hands = readTiles(message.image, message.timestamp);
       else {
         const reader = trialReader();
@@ -376,7 +377,7 @@ function read(message: Extract<ToWorker, { type: "frame" }>): void {
       inference,
       face: withFace,
     });
-    if (!rebuilding) trialRead(which, inference, ok);
+    trialRead(which, inference, ok);
     if (withFace) {
       const faceBegan = performance.now();
       let eyes: FaceReading | null = null;
