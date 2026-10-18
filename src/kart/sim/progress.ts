@@ -9,14 +9,14 @@
  * one without driving the whole way round, past the halfway point, and
  * across the line forward.
  */
-import type { RaceResult } from "../contract";
+import { TICK_HZ, type RaceResult } from "../contract";
 import { GO_TICK, forwardSpeed, type Emit } from "./kart";
 import { q3, type KartState, type World } from "./state";
 import { TUNING, ticks } from "./tuning";
 
 /** Race time in seconds at the end of the tick being processed (`tick` steps already taken, and this one). */
 export function raceTime(tick: number): number {
-  return Math.max(0, (tick + 1 - GO_TICK) / 60);
+  return Math.max(0, (tick + 1 - GO_TICK) / TICK_HZ);
 }
 
 /** Karts in the order of the race: the fixed places first, then the rest by progress. */

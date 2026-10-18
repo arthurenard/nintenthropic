@@ -1,8 +1,7 @@
 /**
  * A tiny stand-in for the sim (`createRace`): kinematics and a finish line,
- * nothing else. The net's tests drive it, and the net's dev page falls back
- * on it when the real sim is not there, so the room can be built and checked
- * without waiting for the physics.
+ * nothing else. The net's tests drive it, so they run fast and test the room
+ * alone: tuning the physics never changes what they expect.
  *
  * What it keeps true to the contract is what the net depends on: `step` and
  * `predict` move a player's kart by exactly the same rule (so a guest that
@@ -163,11 +162,15 @@ class FakeRace implements Race {
     }
   }
 
+  /** Kart ids, first place first: finishers by their time, then everyone else by how far they have driven. */
+  private order(): number[] {
+    const score = (k: FakeKart) => (k.finished === null ? k.progress : 1e9 - k.finished);
+    const karts = this.state.karts;
+    return karts.map((_, id) => id).sort((a, b) => score(karts[b]!) - score(karts[a]!));
+  }
+
   view(): RaceView {
-    const order = this.state.karts
-      .map((k, id) => ({ id, k }))
-      .sort((a, b) => (b.k.finished === null ? b.k.progress : 1e9 - b.k.finished) - (a.k.finished === null ? a.k.progress : 1e9 - a.k.finished));
-    const place = new Map(order.map((o, i) => [o.id, i + 1]));
+    const place = new Map(this.order().map((id, i) => [id, i + 1]));
     const karts: KartView[] = this.state.karts.map((k, id) => ({
       id,
       surface: "road",
@@ -186,6 +189,8 @@ class FakeRace implements Race {
       hop: 0,
       offroad: false,
       item: null,
+      // Not the uses left, as the real sim reports: the stand-in counts the items used, so a test can check
+      // that every press reached the host once.
       itemUses: k.uses,
       rolling: false,
       place: place.get(id)!,
@@ -230,11 +235,8 @@ class FakeRace implements Race {
     const late =
       this.state.firstFinish !== null && (this.tick - FAKE_COUNTDOWN) * TICK - this.state.firstFinish >= 25;
     if (!done && !late) return null;
-    const order = this.state.karts
-      .map((k, kart) => ({ kart, k }))
-      .sort((a, b) => (b.k.finished === null ? b.k.progress : 1e9 - b.k.finished) - (a.k.finished === null ? a.k.progress : 1e9 - a.k.finished));
     return {
-      standings: order.map((o, i) => ({ kart: o.kart, place: i + 1, time: o.k.finished, bestLap: null })),
+      standings: this.order().map((kart, i) => ({ kart, place: i + 1, time: this.state.karts[kart]!.finished, bestLap: null })),
     };
   }
 }

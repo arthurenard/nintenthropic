@@ -489,7 +489,7 @@ export const FUN_FAIR: TrackDef = {
  * penguins waddling over the start of it, a hairpin high in the pass with a cliff on its outside and a snowy cut inside
  * for a Nitro, snowballs rolling down the way back, an ice cave glowing blue, a ski-jump over a crevasse, and a yeti who
  * pops out of a snowdrift on the way home. Ice patches lie on two of the bends. The duck sits by an ice-fishing hole
- * on the lake. About 1.1 km.
+ * on the lake. About 1.2 km.
  */
 export const GLACIER_PASS: TrackDef = {
   id: "glacier-pass",
@@ -711,7 +711,7 @@ export const VOLCANO_RUSH: TrackDef = {
  * The finale: a glowing ribbon of road high over a ringed planet. Banked bends, almost no barriers (go over
  * the edge and the rescue drone brings you back), boost strips on the straights, ring gates to drive through, asteroids
  * orbiting the road, and a long jump between two ribbons. The duck floats in an astronaut's helmet by a satellite.
- * About 1.2 km.
+ * About 1.3 km.
  */
 export const STARLIGHT_RIBBON: TrackDef = {
   id: "starlight-ribbon",
@@ -811,8 +811,8 @@ export const STARLIGHT_RIBBON: TrackDef = {
  * Secret. An island shaped like an open hand, seen from above: the hand you play with. The road runs up and down every
  * finger (the fingertips are hairpins), round the thumb, and back along the wrist, where a giant wristwatch is the
  * start gantry. A ring to drive through on the long straight by the wrist (the fingers lie too close for anything to
- * stand between them), palm trees, beach huts, crabs and rolling coconuts. The minimap is a hand. The duck sunbathes on
- * a towel in the middle of the palm. About 1.25 km.
+ * stand between them), palm trees, beach huts, crabs and rolling coconuts. The minimap is a hand. The duck sunbathes in
+ * sunglasses in the middle of the palm. About 1.2 km.
  */
 export const FIVE_FINGER_CIRCUIT: TrackDef = {
   id: "five-finger-circuit",

@@ -2,7 +2,8 @@
  * Made-up hands for the wheel's tests: 21 image points and 21 world points
  * for a fist or an open hand, placed at a position, size and rotation in 3D,
  * the way MediaPipe would report them (only without its noise, unless asked).
- * Not part of the game: tests import it.
+ * Not part of the shipped game: the unit tests import it, and so do the
+ * end-to-end hooks (app/testHooks.ts), which dev and test builds alone carry.
  *
  * The hand is built in its own space (metres): x across the palm towards the
  * little finger, y along the fingers, z out of the palm. A finger is three

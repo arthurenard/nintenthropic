@@ -124,7 +124,7 @@ describe("barriers", () => {
       if (Math.abs(harbour.project(view(r).x, view(r).z).offset) > HARBOUR_LIGHTS.width / 2 + 5) touching++;
     }
     expect(touching).toBeGreaterThan(50);
-    // It took 5% of the speed a tick, and a kart on the barrier was down to 2 m/s in a second.
+    // A scrape takes a little speed each second, not a share of it each tick, so the kart keeps most of its speed.
     expect(view(r).speed).toBeGreaterThan(7);
   });
 
@@ -213,7 +213,7 @@ describe("hop and drift", () => {
     expect(view(r).hop).toBeLessThanOrEqual(0.35 + 1e-9);
     run(r, 20, () => drift(1));
     expect(view(r).hop).toBe(0);
-    // The wheel straightened: still turning into the drift, at 0.4..1.4 of a full turn.
+    // The wheel hard the other way: still turning into the drift, at 0.4 of a full turn.
     const h = view(r).heading;
     run(r, 30, () => drift(-1));
     expect(h - view(r).heading).toBeGreaterThan(0.2);
@@ -250,7 +250,7 @@ describe("hop and drift", () => {
       if (view(r).driftLevel === 1 && level1 < 0) level1 = i;
       if (view(r).driftLevel === 2 && level2 < 0) level2 = i;
     }
-    // A middling turn is 1.0 s and 2.2 s; the turn here is between loose and middling.
+    // A middling turn is 1.0 s and 2.2 s; the turn here is a little tighter than middling.
     expect(level1).toBeGreaterThan(50);
     expect(level1).toBeLessThan(100);
     expect(level2).toBeGreaterThan(level1 + 40);

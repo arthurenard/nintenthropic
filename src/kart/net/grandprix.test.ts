@@ -102,7 +102,7 @@ describe("a cup, race by race", () => {
     }
     expect(tracks).toEqual(acorn.tracks);
     expect(seen).toEqual(Array.from({ length: 4 }, () => ["results", "standings"]).flat());
-    // The same bots, in the same colours, all cup long.
+    // The same names on the grid, bots and players, all cup long.
     for (const list of names) expect([...list].sort()).toEqual([...names[0]!].sort());
 
     // After the last standings: the podium, on every device, with the final points.

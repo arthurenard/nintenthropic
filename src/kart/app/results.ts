@@ -33,7 +33,7 @@ export interface ResultsInput {
   racers: readonly RacerSetup[];
   laps: number;
   trackName: string;
-  /** A picture of the finish (the race's canvas as the closest one happened), for the photo finish, or null. */
+  /** A picture of the finish (the race's canvas as the last close finish happened), for the photo finish, or null. */
   still?: string | null;
   /** Set in a Grand Prix: which race of which cup this was. */
   grandPrix?: GrandPrixState | null;

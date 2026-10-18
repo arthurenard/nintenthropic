@@ -24,10 +24,10 @@
  */
 import { $, element, icon, replay } from "../../ui/dom";
 import { CHARACTERS, characterById } from "../characters";
-import { TRACKS } from "../track/tracks";
 import { isUnlocked, loadUnlocks } from "../unlocks";
 import type { DriverStage } from "../render/stage";
 import { CLASS_WORDS, SEGMENTS, statsOf } from "./driverStats";
+import { duckTracks } from "./eggs";
 import { moveIn, navPresses, type NavKey } from "./nav";
 import { Switch, focusHeading } from "./ui";
 
@@ -48,7 +48,7 @@ export interface DriverAccess {
 export function driverAccess(): DriverAccess {
   const unlocks = loadUnlocks();
   return {
-    duck: isUnlocked("duck-driver", unlocks, { duckTracks: TRACKS.filter((track) => track.duck).map((track) => track.id), cups: [] }),
+    duck: isUnlocked("duck-driver", unlocks, { duckTracks: duckTracks(), cups: [] }),
     golden: isUnlocked("golden", unlocks, { duckTracks: [], cups: [] }),
   };
 }
@@ -153,7 +153,7 @@ export class DriverScreen {
   private padTimer = 0;
   private visible = false;
   private readonly keydown = (event: KeyboardEvent) => this.key(event);
-  private readonly hidden = () => this.sleep();
+  private readonly onVisibility = () => this.followVisibility();
 
   constructor(private readonly hooks: DriverHooks) {
     this.dock.addEventListener("click", (event) => {
@@ -220,7 +220,7 @@ export class DriverScreen {
     this.buildSeats();
     this.enter();
     window.addEventListener("keydown", this.keydown);
-    document.addEventListener("visibilitychange", this.hidden);
+    document.addEventListener("visibilitychange", this.onVisibility);
     this.pollPad();
     void this.startStage();
     focusHeading($("driver-title"));
@@ -231,7 +231,7 @@ export class DriverScreen {
     this.visible = false;
     this.opened++;
     window.removeEventListener("keydown", this.keydown);
-    document.removeEventListener("visibilitychange", this.hidden);
+    document.removeEventListener("visibilitychange", this.onVisibility);
     window.clearInterval(this.padTimer);
     this.padTimer = 0;
     this.watch?.disconnect();
@@ -258,11 +258,6 @@ export class DriverScreen {
   /** What the seats have chosen so far. */
   get choices(): DriverChoice[] {
     return this.seats.map(({ character, golden }) => ({ character, golden }));
-  }
-
-  /** How the stage is drawn (for a test to know the live one came up). */
-  get stageMode(): StageMode {
-    return this.mode;
   }
 
   // --- seats --------------------------------------------------------------------------------------------
@@ -416,8 +411,7 @@ export class DriverScreen {
     if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
     if (event.key === "Enter") {
       // On a button, Return does what that button does; on a tile or nothing, it goes on.
-      if (target && target.closest("button") && !target.closest(".driver-dock") && target !== this.proceed) return;
-      if (target === this.proceed) return;
+      if (target?.closest("button") && !target.closest(".driver-dock")) return;
       event.preventDefault();
       this.forward();
       return;
@@ -571,8 +565,8 @@ export class DriverScreen {
     if (box.width > 0 && box.height > 0) this.stage.resize(Math.round(box.width), Math.round(box.height), window.devicePixelRatio || 1);
   }
 
-  /** The page is in the background: the stage stops drawing, and starts again when it is back. */
-  private sleep(): void {
+  /** The page went into the background or came back: the stage stops drawing while it is away, and starts again on its return. */
+  private followVisibility(): void {
     if (!this.stage) return;
     if (document.hidden) this.stage.stop();
     else this.stage.start();

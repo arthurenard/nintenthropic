@@ -4,7 +4,7 @@
  * blurred, dimmed and veiled, so the cards over it keep their contrast. Choosing another track crossfades to its postcard:
  * the new picture comes in over the old one, which goes only once it has come, so the screen never dips to the sky between.
  *
- * Where the postcard is missing (a track whose picture was never made, or a slow or failed fetch) the sky stays, and the
+ * Where the postcard is missing (a slow or failed fetch) the sky stays, and the
  * page does not change its glass. The page's state is `body[data-backdrop="photo"]` while a postcard shows.
  */
 import { postcardUrl } from "./trackArt";

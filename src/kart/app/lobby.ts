@@ -20,6 +20,7 @@ import { $, element, icon, setText, toast } from "../../ui/dom";
 import { cupById } from "../grandprix";
 import { CUPS, TRACKS, trackById } from "../track/tracks";
 import { isUnlocked, loadUnlocks } from "../unlocks";
+import { duckTracks } from "./eggs";
 import { canStart, hostName, localPlayers, screenLabel, waitingLine } from "./roster";
 import { joinUrl, spellCode } from "./format";
 import type { Services } from "./services";
@@ -43,7 +44,7 @@ const CONTROL_ICONS = { wheel: "wheel", keyboard: "keyboard", gamepad: "gamepad"
  * after both cups are won, or the Konami code): the host's device decides what a room can race.
  */
 export function earnedTracks(): { id: string; name: string }[] {
-  const all = { duckTracks: TRACKS.filter((track) => track.duck).map((track) => track.id), cups: CUPS.map((cup) => cup.id) };
+  const all = { duckTracks: duckTracks(), cups: CUPS.map((cup) => cup.id) };
   if (!isUnlocked("secret-track", loadUnlocks(), all)) return [];
   return TRACKS.filter((track) => track.secret).map((track) => ({ id: track.id, name: track.name }));
 }
@@ -208,7 +209,7 @@ export class LobbyScreen {
       if (this.start.disabled === ready) this.start.disabled = !ready;
       setText(hint, ready ? "" : waitingLine(lobby));
     }
-    setText("lobby-leave-label", host && role === "host" ? "Close Race" : "Leave");
+    setText("lobby-leave-label", role === "host" ? "Close Race" : "Leave");
     if (first) focusHeading($("lobby-title"));
   }
 

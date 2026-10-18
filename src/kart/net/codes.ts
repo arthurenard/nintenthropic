@@ -1,7 +1,8 @@
 /**
  * Room codes: four letters people can read out over a table or a phone call.
- * I and O are left out of the alphabet so they are never mistaken for 1 and 0
- * (the digits are not used at all, so a typed "0" can be told to be wrong).
+ * I and O are left out of the alphabet so they are never mistaken for 1 and 0,
+ * and no code holds a digit, so `parseCode` ignores anything typed that is not
+ * a letter and refuses a code with an I or an O in it.
  */
 
 export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -24,8 +25,9 @@ export function parseCode(text: string | null | undefined): string | null {
 
 /**
  * The address that joins a room: `race.html?join=CODE` next to the page we
- * are on (or next to `base`, when there is no page, as in tests). It is what
- * the QR code on the host's screen holds.
+ * are on (or next to `base`, when there is no page, as in tests). The game's
+ * lobby builds the link and QR code it shows with app/format.ts's `joinUrl`
+ * instead, which also passes `?net=local` on to the guest.
  */
 export function joinUrl(code: string, base?: string): string {
   const here = base ?? (typeof location !== "undefined" ? location.href : "http://localhost/");

@@ -34,8 +34,8 @@ describe("room codes", () => {
     expect(parseCode(null)).toBeNull();
   });
 
-  it("make the join address the QR code holds", () => {
-    expect(joinUrl("WXYZ", "https://example.com/handy/race.html?x=1#y")).toBe("https://example.com/handy/race.html?join=WXYZ");
+  it("make a join address next to the page, and read the code back out of one", () => {
+    expect(joinUrl("WXYZ", "https://example.com/game/race.html?x=1#y")).toBe("https://example.com/game/race.html?join=WXYZ");
     expect(joinUrl("WXYZ", "http://localhost:5173/")).toBe("http://localhost:5173/race.html?join=WXYZ");
     expect(joinCodeFrom("?join=wxyz")).toBe("WXYZ");
     expect(joinCodeFrom("?join=nope")).toBeNull();
@@ -218,7 +218,7 @@ describe("the grid", () => {
     for (const bot of bots) expect(["bun", "rivet", "dabble", undefined]).not.toContain(bot.character);
     // The same seed, the same drivers.
     expect(buildSetup(picked, { ...DEFAULT_SETTINGS, racers: 8 }, 5).setup.racers.map((r) => r.character)).toEqual(setup.racers.map((r) => r.character));
-    // More bots than free drivers still get one each.
+    // A full grid with one player: seven bots, and every one of them still has a driver.
     expect(buildSetup(players(1), { ...DEFAULT_SETTINGS, racers: 8 }, 5).setup.racers.every((r) => r.character !== undefined || r.player !== null)).toBe(true);
   });
 

@@ -1,14 +1,14 @@
 /**
  * Grip Prix's page: which screen shows, and what moves between them.
  *
- *   start → you → (wheel check) → lobby → race → results → lobby ...
+ *   start → you → driver → (wheel check) → lobby → race → results → lobby ...
  *
  * The screens are written against `Services` (services.ts) and the contract's
  * `Session`; this is the one place that knows the order. A room (a Session)
  * is opened at the start screen, so a wrong code is found before anyone
- * has set anything up; the player's name and controls go to it from the You
- * screen; and from then on the room's own phase (lobby, racing, results)
- * says which screen to show.
+ * has set anything up; the players, their drivers and their controls go to
+ * it once Choose Your Driver is done; and from then on the room's own phase
+ * (lobby, racing, results) says which screen to show.
  */
 import { loadPreferences, prefs } from "../../app/prefs";
 import type { MusicKind } from "../audio";
@@ -103,7 +103,7 @@ export class KartApp {
   private readonly graphicsControls: GraphicsControls;
   /** How many were in the lobby, and how many ready, when it last changed: a join, a leave or a tick has its sound. */
   private crowd = { count: 0, ready: 0 };
-  /** The You screen (and the wheel check) are done: the room's phase now says what to show. */
+  /** The You screen, Choose Your Driver (and the wheel check) are done: the room's phase now says what to show. */
   private ready = false;
   /** Counts attempts to open a room, so a slow one that was given up on is dropped. */
   private attempt = 0;
@@ -576,7 +576,7 @@ export class KartApp {
   }
 
   private lobbyChanged(lobby: LobbyState): void {
-    // Still choosing a name or setting up the wheel: the room's phases are not ours yet.
+    // Still choosing a name or a driver, or setting up the wheel: the room's phases are not ours yet.
     if (!this.ready || !this.session) return;
     const cupScreen = this.screen === "race" || this.screen === "results" || this.screen === "standings";
     switch (lobby.phase) {
@@ -834,14 +834,12 @@ export class KartApp {
         showTrouble("version", [{ label: "Reload", run: () => location.reload() }, toStart]);
         break;
       case "network":
+      default:
         // A code that never answered is not a connection lost: without a relay, players on different networks may not meet.
-        if (kind === "join" && code) {
+        if (reason === "network" && kind === "join" && code) {
           showTrouble("unreachable", [{ label: "Try Again", run: () => void this.open("join", code) }, toStart]);
           break;
         }
-        showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);
-        break;
-      default:
         showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);
     }
   }

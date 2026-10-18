@@ -81,7 +81,7 @@ describe("the wheel's angle", () => {
   it("follows a turn without lagging far behind", () => {
     const rig = driving();
     rig.run(0.5, (t) => wheelHands({ angle: Math.min(40, t * 160) }));
-    // 0.25 s into a 40° turn made in a quarter second, it is done to within a few degrees.
+    // A quarter second after a 40° turn made in a quarter second, it has caught up to within a few degrees.
     expect(rig.last.status.angle).toBeGreaterThan(34);
   });
 });
@@ -237,7 +237,7 @@ describe("telling the hands apart", () => {
   it("keeps them as they were when the wheel is turned past 90° and one is level with, then past, the other", () => {
     const rig = driving();
     const angles: number[] = [];
-    // A slow quarter turn and more: 0 to 170° in four seconds.
+    // Nearly half a turn, slowly: 0 to 170° in four seconds.
     rig.run(4, (t) => wheelHands({ angle: (t / 4) * 170 }));
     angles.push(rig.last.status.angle);
     const { left, right } = rig.last.status;
@@ -469,7 +469,7 @@ describe("hop and drift", () => {
     const rig = driving();
     rig.wheel(1, { angle: 30 });
     expect(rig.last.input.drift).toBe(false);
-    // Half a hand-span (0.25 of a picture height) in a tenth of a second.
+    // Half the wheel's width (0.25 of a picture height, the palms being 0.5 apart) in a tenth of a second.
     lift(rig, 30, 0.25, 0.1);
     expect(rig.last.input.drift).toBe(true);
     expect(rig.last.input.steer).toBeGreaterThan(0.5);
@@ -532,7 +532,7 @@ describe("hop and drift", () => {
     expect(rig.last.input.drift).toBe(false);
   });
 
-  it("is not a small jerk: under a quarter of a hand-span", () => {
+  it("is not a small jerk: under a quarter of the wheel's width", () => {
     const rig = driving();
     rig.wheel(1, { angle: 30 });
     lift(rig, 30, 0.08, 0.05);
@@ -546,7 +546,7 @@ describe("hop and drift", () => {
     expect(rig.last.input.drift).toBe(false);
   });
 
-  it("is judged in hand-spans: a wheel held small and far hops with a smaller lift", () => {
+  it("is judged in wheel widths: a wheel held small and far hops with a smaller lift", () => {
     const rig = new Rig();
     rig.wheel(1, { angle: 30, span: 0.2 });
     rig.run(0.1, (t) => wheelHands({ angle: 30, span: 0.2, centre: [0.5, 0.45 - 0.1 * Math.min(1, t / 0.1)] }));
@@ -774,10 +774,10 @@ describe("two players on one camera", () => {
   });
 });
 
-describe("a HandFrame with no hands field filled", () => {
+describe("a frame with no hands in it", () => {
   it("reads as an empty picture rather than throwing", () => {
     const reader = new WheelReader();
-    reader.push({ ...handFrame([], 1000) });
+    reader.push(handFrame([], 1000));
     expect(reader.sample(1100).status.hands).toBe(0);
   });
 });
@@ -952,7 +952,7 @@ describe("a wheel that is never inside out", () => {
     expect(wheelAngle(right, left, 16 / 9, null)).toBeGreaterThan(0);
   });
 
-  it("carries on round past a quarter turn, and only there leans on the last angle", () => {
+  it("carries on round once the wheel is steeper than WHEEL.steep, and only there leans on the last angle", () => {
     // Hands one above the other: 90° or -90°, and the way the wheel was going says which.
     const top = { x: 0.5, y: 0.3 };
     const bottom = { x: 0.5001, y: 0.7 };

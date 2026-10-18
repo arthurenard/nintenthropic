@@ -123,7 +123,8 @@ function buildPlan(def: TrackDef): TrackPlan {
     line[i] = Math.max(-1, Math.min(1, cutting[i]! / bots.cutCurvature)) * bots.cutShare * room;
   }
 
-  // A ramp is taken straight: the line eases to the middle of the road before it and stays there until well after the landing.
+  // A ramp is taken straight: the line eases to the middle of the road from 44 m before the lip, holds it from 20 m before to 4 m
+  // after, and is back to itself 28 m after.
   for (const ramp of terrain.ramps) {
     for (let i = 0; i < n; i++) {
       let d = ramp.s - i * spacing;

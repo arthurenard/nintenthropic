@@ -16,7 +16,7 @@
  * for them; with a Nitro in hand and the skill for it, cuts across a verge;
  * and drives off again from where the drone sets it down.
  */
-import { IDLE_INPUT, type DriveInput } from "../contract";
+import { IDLE_INPUT, TICK_HZ, type DriveInput } from "../contract";
 import { hazardAt } from "../track/hazards";
 import { rocketTarget } from "./items";
 import { GO_TICK, forwardSpeed, yawRate } from "./kart";
@@ -214,7 +214,7 @@ function dodge(w: World, k: KartState, fwd: number, aimOffset: number, limitLeft
     if (ahead > -roams - 10 && ahead < reach) relevant.push(index);
   });
   if (relevant.length === 0) return { offset: aimOffset, speed: 1 };
-  const now = Math.max(0, (k.t - GO_TICK) / 60);
+  const now = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
   const base = clamp(aimOffset, -limitLeft, limitRight);
   if (hazardTrouble(w, k, now, relevant, base, speed) === 0) return { offset: aimOffset, speed: 1 };
   let best = { offset: aimOffset, speed: 1 };
@@ -344,7 +344,7 @@ export function botInput(w: World, k: KartState): DriveInput {
         const sideways = (k.x - site.ex) * -site.dz + (k.z - site.ez) * site.dx;
         if (Math.abs(sideways) > 5.5) continue;
         m.cut = c + 1;
-        // The Nitro goes on as it leaves the road.
+        // The Nitro goes on as it commits to the cut, still on the road a few metres before it.
         if (nitro && k.boost === 0) presses++;
         break;
       }

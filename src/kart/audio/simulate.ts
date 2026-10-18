@@ -1,14 +1,16 @@
 /**
  * A scripted race for the ears' sake: four local karts and three others
- * driving a made-up thirty-odd seconds that touches every sound there is (the
- * countdown, a flooded start, drifts and their sparks, a roulette, items,
- * bumps, walls, a jump, a fall and a rescue, surfaces, the last lap, the
- * finish). Pure data in, RaceViews out, so the dev page can render it
- * offline through the real audio engine and the tests can run it in Node.
+ * driving a made-up thirty-odd seconds that touches nearly every sound (the
+ * countdown, drifts and their sparks, a roulette, items, bumps, walls, a
+ * jump, a fall and a rescue, surfaces, the last lap, the finish; only the
+ * flooded start, the horn and the duck are left out). Pure data in, RaceViews
+ * out, so the dev page can render it offline through the real audio engine
+ * and the tests can run it in Node.
  */
 import type { KartView, RaceEvent, RaceView, ThingView, TrackDef } from "../contract";
+import { smoothstep } from "./engines";
 
-export const SIM_TRACK = { id: "sim", name: "Sim", theme: "meadow", laps: 3, points: [], width: 12, itemRows: [], duck: { at: 0.5, offset: 3 } } as unknown as TrackDef;
+export const SIM_TRACK = { id: "sim", name: "Sim", theme: "meadow", laps: 3, points: [], width: 12, itemRows: [] } as unknown as TrackDef;
 
 /** The four local karts, left to right across the screen. */
 export const SIM_LOCALS = [
@@ -29,12 +31,7 @@ interface Timed {
   event: Body<RaceEvent>;
 }
 
-const smooth = (a: number, b: number, x: number): number => {
-  const u = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return u * u * (3 - 2 * u);
-};
-
-/** The script's events by time. */
+/** The script's events, each at its time (not listed in order: simView picks them by time). */
 export const SIM_EVENTS: Timed[] = [
   { at: 0.5, event: { type: "countdown", n: 3 } },
   { at: 1.5, event: { type: "countdown", n: 2 } },
@@ -89,7 +86,7 @@ function kart(id: number, t: number): KartView {
   const r = t - SIM_GO;
   // Speeds: each kart accelerates with its own character, with episodes of boost, drift and slowing.
   const top = 20 + id;
-  let speed = racing ? top * smooth(0, 3.5, r + id * 0.3) : 0;
+  let speed = racing ? top * smoothstep(0, 3.5, r + id * 0.3) : 0;
   let boost = 0;
   let drift: -1 | 0 | 1 = 0;
   let driftLevel: 0 | 1 | 2 = 0;
@@ -159,7 +156,7 @@ function kart(id: number, t: number): KartView {
   const along = racing ? (speed * r) % 1000 : 0;
   return {
     id,
-    x: id < 4 ? (id - 1.5) * 4 : (id - 4) * 18 - 10 + 18 * smooth(0, 8, r),
+    x: id < 4 ? (id - 1.5) * 4 : (id - 4) * 18 - 10 + 18 * smoothstep(0, 8, r),
     y: 0,
     z: id < 4 ? along * 0.9 : along * 0.8 + 6 * id,
     heading: 0,

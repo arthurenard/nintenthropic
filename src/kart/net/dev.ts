@@ -1,12 +1,11 @@
 /**
  * A hand-driven check of the room (dev.html): host or join by code over
  * PeerJS (or between tabs with `?net=local`), see the lobby as JSON, the round
- * trip, the race as a top-down map, and the events as they arrive. It uses
- * the real sim when sim/race.ts is there and the net's own stand-in when not.
+ * trip, the race as a top-down map, and the events as they arrive. It runs
+ * the real sim, so what it shows is what the game's screens would get.
  */
 import {
   IDLE_INPUT,
-  type CreateRace,
   type DriveInput,
   type DriverControl,
   type LocalPlayerSetup,
@@ -14,18 +13,14 @@ import {
   type RaceView,
   type Session,
 } from "../contract";
+import { createRace } from "../sim/race";
 import { TrackGeometry } from "../track/geometry";
 import { parseCode, joinCodeFrom } from "./codes";
-import { createFakeRace } from "./fakeRace";
 import { hostSession, joinSession, soloSession } from "./index";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-// The real sim if the sim's branch has landed; otherwise the stand-in.
-const sims = import.meta.glob<{ createRace: CreateRace }>("../sim/race.ts", { eager: true });
-const real = Object.values(sims)[0]?.createRace;
-const createRace: CreateRace = real ?? createFakeRace;
-$("note").textContent = `Race: ${real ? "the real sim" : "the net's stand-in (no sim/race.ts here)"}. Network: ${
+$("note").textContent = `Network: ${
   new URLSearchParams(location.search).get("net") === "local" ? "BroadcastChannel (this browser)" : "PeerJS"
 }.`;
 

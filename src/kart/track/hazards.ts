@@ -39,7 +39,7 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
       return { ...p, y: 0, heading: track.heading(s) + Math.PI, active: true, cycle };
     }
     case "bob": {
-      // Up for the middle half of the cycle, down (and harmless) the rest.
+      // Up for most of the first half of the cycle, down (and harmless) the rest.
       const height = Math.sin(cycle * Math.PI * 2);
       const p = track.point(centre, offset);
       return { ...p, y: height * hazard.radius * 1.5, heading: track.heading(centre), active: height > 0.2, cycle };

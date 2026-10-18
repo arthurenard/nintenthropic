@@ -216,7 +216,7 @@ function catmull(points: readonly TrackPoint[], fallbackWidth: number, i: number
     x: value(p0.x, p1.x, p2.x, p3.x),
     y: value(p0.y ?? 0, p1.y ?? 0, p2.y ?? 0, p3.y ?? 0),
     z: value(p0.z, p1.z, p2.z, p3.z),
-    // Width eases linearly between points: a curve could overshoot to a sliver.
+    // Width eases from point to point along a smoothstep, not the curve, which could overshoot and pinch the road to a sliver.
     width: w(p1) + (w(p2) - w(p1)) * (t * t * (3 - 2 * t)),
   };
 }

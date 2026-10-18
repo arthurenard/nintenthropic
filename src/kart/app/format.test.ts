@@ -51,7 +51,7 @@ describe("a room's code", () => {
 
 describe("the address a guest opens", () => {
   it("is the page with ?join=CODE, without its own query or hash", () => {
-    expect(joinUrl("https://handy.example/race.html?x=1#top", "ABCD")).toBe("https://handy.example/race.html?join=ABCD");
+    expect(joinUrl("https://arcade.example/race.html?x=1#top", "ABCD")).toBe("https://arcade.example/race.html?join=ABCD");
   });
 
   it("keeps net=local so the guest talks the host's way", () => {
@@ -59,7 +59,7 @@ describe("the address a guest opens", () => {
   });
 
   it("works under a sub-path", () => {
-    expect(joinUrl("https://x.github.io/handy/race.html", "ABCD")).toBe("https://x.github.io/handy/race.html?join=ABCD");
+    expect(joinUrl("https://x.github.io/arcade/race.html", "ABCD")).toBe("https://x.github.io/arcade/race.html?join=ABCD");
   });
 });
 

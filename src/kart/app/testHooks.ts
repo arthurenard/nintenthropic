@@ -114,13 +114,16 @@ export function standIn(params: URLSearchParams): StandIn | null {
 }
 
 export interface GripTest {
-  /** Both hands of one wheel, or of several (two players on one camera), or none (null: hands out of the picture). */
+  /** Both hands of one wheel, or of several (two to four players on one camera), or none (null: hands out of the picture). */
   wheel(pose: WheelPose | readonly WheelPose[] | null): void;
-  /** The script is publishing pictures. */
+  /** The script is publishing pictures. No spec reads it: it is for checking by hand, from the browser's console. */
   readonly running: boolean;
   /** What the page shows and how the race stands. */
   state(): KartAppSnapshot | null;
-  /** Puts up a screen that comes after a race, with this room (to look at it: no race is run). */
+  /**
+   * Puts up a screen that comes after a race, with this room (to look at it: no race is run). No spec calls it: it is
+   * for looking at those screens by hand, from the browser's console.
+   */
   preview(screen: "results" | "standings" | "podium", lobby: LobbyState): void;
   /** Puts up the loading screen of the race this room would run, at this far (to look at it). */
   loading(lobby: LobbyState, fraction: number): void;

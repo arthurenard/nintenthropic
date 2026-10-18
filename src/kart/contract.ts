@@ -1,7 +1,7 @@
 /**
  * Grip Prix: the contract between its parts. Every part is built against
- * these types and nothing else of another part's, so they can be built side
- * by side and swapped out (docs/GRIP_PRIX.md, "Parts and owners").
+ * these types and nothing else of another part's, so each can be changed,
+ * tested or swapped out without the others (docs/GRIP_PRIX.md lists the parts).
  *
  *   input   (src/kart/input)   hands, keys, a gamepad → DriveInput, 60 times a second
  *   sim     (src/kart/sim)     DriveInputs → the race, one fixed tick at a time
@@ -200,8 +200,9 @@ export interface KartView {
   zapped?: number;
   /** What the driver is doing with their hands (copied from their input). */
   emote?: Emote | null;
-  /** The item held, or null; `uses` left for nitro3. */
+  /** The item held, or null. */
   item: ItemKind | null;
+  /** Uses left of the item held: counts down from 3 for nitro3 and puck3, 1 for the rest, 0 while it rolls. */
   itemUses: number;
   /** True while the item box's roulette is still turning (no item to use yet). */
   rolling: boolean;
@@ -440,7 +441,7 @@ export interface PauseState {
 }
 
 export interface LobbyState {
-  /** The room's join code (four letters), or null alone. */
+  /** The room's join code (four letters), or null in practice, and on the host until it has taken a code. */
   code: string | null;
   /** The host's device id. */
   host: string;
@@ -474,7 +475,7 @@ export interface LocalPlayerSetup {
    * has not chosen. The host's own players are always shown on the host.
    */
   screen: "here" | "host" | "auto";
-  /** Their driver (characters.ts id); none drives as the host's pick. */
+  /** Their driver (characters.ts id); without one the kart drives as a middleweight (see RacerSetup). */
   character?: string;
   /** They drive a golden kart. */
   golden?: boolean;
@@ -491,7 +492,10 @@ export interface Session {
   lobby(): LobbyState;
   /** Called whenever the lobby changes; returns a function that stops listening. */
   onLobby(listener: (lobby: LobbyState) => void): () => void;
-  /** Called when the session ends for this device (the host left, the room is full, kicked, the network failed). */
+  /**
+   * Called when the session ends for this device: the host left, the room is full or its race has begun, the host
+   * speaks another version of the game, this device left, or the network failed.
+   */
   onClosed(listener: (reason: SessionClosed) => void): () => void;
   setLocalPlayers(players: LocalPlayerSetup[]): void;
   /** This device's players' readiness (their wheels level and seen). */

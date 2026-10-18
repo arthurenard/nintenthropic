@@ -5,8 +5,9 @@
  * direct render, a stage at a time.
  */
 import { describe, expect, it } from "vitest";
+import { volumeGain } from "../../../audio/routing";
 import { FINAL_LAP, createMusicRenderer, renderOnMainThread } from "./loader";
-import { beatTimes, nextBeat, sliderGain } from "./player";
+import { beatTimes, nextBeat } from "./player";
 import { PIECES, THEME_PIECES } from "./pieces";
 import { compile } from "./score";
 import { renderPiece } from "./render";
@@ -38,19 +39,19 @@ describe("beats", () => {
   it("maps a final-lap switch to the same beat of the faster version", () => {
     for (const id of THEME_PIECES) {
       const normal = beatTimes(compile(PIECES[id], { humanise: false }).bars);
-      const fast = beatTimes(compile(PIECES[id], { humanise: false, tempoScale: 1.1, transpose: 1 }).bars);
+      const fast = beatTimes(compile(PIECES[id], { humanise: false, ...FINAL_LAP }).bars);
       expect(fast.length, id).toBe(normal.length);
       // A switch at beat k of one lands at beat k of the other.
-      for (const k of [0, 7, Math.floor(normal.length / 2), normal.length - 1]) expect(fast[k]!, `${id} beat ${k}`).toBeCloseTo(normal[k]! / 1.1, 4);
+      for (const k of [0, 7, Math.floor(normal.length / 2), normal.length - 1]) expect(fast[k]!, `${id} beat ${k}`).toBeCloseTo(normal[k]! / FINAL_LAP.tempoScale, 4);
     }
   });
 
-  it("maps the slider to a gain that spreads loudness evenly along it", () => {
-    expect(sliderGain(0)).toBe(0);
-    expect(sliderGain(1)).toBe(1);
-    expect(sliderGain(0.5)).toBeCloseTo(0.25, 9);
-    expect(sliderGain(-3)).toBe(0);
-    expect(sliderGain(9)).toBe(1);
+  it("maps the music slider to a gain the engine's way, spreading loudness evenly and clamped to 0..1", () => {
+    expect(volumeGain(0)).toBe(0);
+    expect(volumeGain(1)).toBe(1);
+    expect(volumeGain(0.5)).toBeCloseTo(0.25, 9);
+    expect(volumeGain(-3)).toBe(0);
+    expect(volumeGain(9)).toBe(1);
   });
 });
 
@@ -72,7 +73,7 @@ describe("the main-thread renderer", { timeout: 60_000 }, () => {
     const final = await renderOnMainThread("meadow", true);
     expect(final.tempoScale).toBe(FINAL_LAP.tempoScale);
     expect(final.transpose).toBe(FINAL_LAP.transpose);
-    expect(final.loopSamples / normal.loopSamples).toBeCloseTo(1 / 1.1, 2);
+    expect(final.loopSamples / normal.loopSamples).toBeCloseTo(1 / FINAL_LAP.tempoScale, 2);
   });
 
   it("falls back to the main thread when Workers are not there", async () => {

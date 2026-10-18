@@ -18,9 +18,8 @@
  * race (which never gets here) never downloads it.
  *
  * The unit tests (transport.test.ts) drive it with a stand-in `Peer`; the real
- * thing is tried by hand with src/kart/net/dev.html, which was run between two
- * tabs through PeerJS's public broker (a lobby, a race, a leave). Not yet tried
- * across two machines or through a strict NAT: there is no TURN (docs/GRIP_PRIX.md).
+ * thing can be tried by hand with src/kart/net/dev.html. There is no TURN
+ * server (docs/GRIP_PRIX.md), so a strict NAT can keep two players apart.
  */
 import type { DataConnection, Peer, PeerJSOption } from "peerjs";
 import { peerIdFor } from "./codes";
@@ -56,15 +55,15 @@ export function brokerFromEnv(): NonNullable<PeerOptions["broker"]> {
   return out;
 }
 
-/** A PeerJS error as the net reports it: not-found and network are the two a player can act on. */
-function failure(error: { type?: string; message?: string }, fallback: "network" | "taken" = "network"): TransportError {
+/** A PeerJS error as the net reports it: a room nobody hosts is "not-found", a code in use "taken", anything else "network". */
+function failure(error: { type?: string; message?: string }): TransportError {
   switch (error.type) {
     case "peer-unavailable":
       return new TransportError("not-found", "There is no race with that code.");
     case "unavailable-id":
       return new TransportError("taken", "That room code is already in use.");
     default:
-      return new TransportError(fallback, error.message ?? "Could not reach the signalling server.");
+      return new TransportError("network", error.message ?? "Could not reach the signalling server.");
   }
 }
 

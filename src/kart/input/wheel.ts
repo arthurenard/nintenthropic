@@ -47,9 +47,13 @@ export const WHEEL = {
   /** Both hands opening within this of each other is a brake, never an item, seconds. */
   together: 0.25,
   hop: {
-    /** The wheel's centre must rise faster than this many hand-spans a second... */
+    /**
+     * The wheel's centre must rise faster than this many wheel widths (the
+     * distance between the palms) a second, so a wheel held small and far
+     * from the camera hops as readily as one held close...
+     */
     speed: 1.6,
-    /** ...by at least this many spans. */
+    /** ...by at least this many wheel widths. */
     rise: 0.25,
     /** Looking back this far for the start of the rise, seconds. */
     window: 0.3,
@@ -74,7 +78,7 @@ export const WHEEL = {
   noHands: { hold: 0.25, ease: 0.5, throttle: 0.5, mode: 0.3 },
   /** A hand seen this recently still counts as in the picture (a dropped frame or two), seconds. */
   present: 0.2,
-  /** A hand missing this long keeps its grip as it was, for gestures, seconds. */
+  /** A hand missing this long keeps its grip as it was, for the brake and the item flick, seconds. */
   held: 0.4,
   /** A hand missing this long is forgotten: it comes back as a new one, told left from right by side again, seconds. */
   forget: 1.5,
@@ -89,11 +93,11 @@ export const WHEEL = {
     tilt: 30,
   },
   /**
-   * Past this many degrees of turn the line through the palms can no longer
-   * say on its own which way the wheel went (at 90° it points straight up
-   * either way), so from here the wheel's last angle decides.
+   * A wheel turned steeper than this many degrees is past where the line
+   * through the palms can say on its own which way the wheel went (at 90° it
+   * points straight up either way), so from here the wheel's last angle decides.
    */
-  quarter: 60,
+  steep: 60,
 } as const;
 
 /**
@@ -102,9 +106,10 @@ export const WHEEL = {
  * one to the other: which hand is which can be mistaken (the hands cross, or
  * one is lost and found again), and an arrow would then point the other way
  * and turn the steering inside out. A line is the same whichever end is
- * which, so a swap changes nothing. Its angle is in (-90°, 90°]; only past a
- * quarter turn (`WHEEL.quarter`), where the line alone is ambiguous, is the
- * wheel's `previous` angle used to carry on round the way it was going.
+ * which, so a swap changes nothing. Its angle is in (-90°, 90°]. Only once
+ * the wheel was already turned past `WHEEL.steep` (60°), where the line alone
+ * could be either way round, does its `previous` angle decide which, so the
+ * wheel carries on round the way it was going.
  */
 export function wheelAngle(left: { x: number; y: number }, right: { x: number; y: number }, aspect: number, previous: number | null): number {
   let dx = (right.x - left.x) * aspect;
@@ -114,7 +119,7 @@ export function wheelAngle(left: { x: number; y: number }, right: { x: number; y
     dy = -dy;
   }
   let degrees = (Math.atan2(dy, dx) * 180) / Math.PI;
-  if (previous !== null && Math.abs(previous) > WHEEL.quarter) degrees += 180 * Math.round((previous - degrees) / 180);
+  if (previous !== null && Math.abs(previous) > WHEEL.steep) degrees += 180 * Math.round((previous - degrees) / 180);
   return degrees;
 }
 
@@ -175,7 +180,7 @@ export interface WheelOptions {
    * palm is in this player's column of the picture count.
    */
   seat?: Seat | null;
-  /** Two players on one camera, the old way to say it: `seat` 0 or 1 of 2. */
+  /** Two players on one camera, said as a side: a shorthand for `seat` 0 or 1 of 2. */
   half?: "left" | "right" | null;
   /** The picture's width over its height (x and y are fractions of each, so angles need it). */
   aspect?: number;
@@ -320,28 +325,13 @@ export class WheelReader {
     return { status: this.statusAt(t), input: this.inputAt(t) };
   }
 
-  /** Forgets the hands and the filter (the level and the item count stay). */
-  reset(): void {
-    this.slots.left = newSlot();
-    this.slots.right = newSlot();
-    this.filter.reset();
-    this.haveAngle = false;
-    this.angle = 0;
-    this.lastAnySeen = -Infinity;
-    this.lastBothSeen = -Infinity;
-    this.fade = 0;
-    this.braking = false;
-    this.drifting = false;
-    this.straightSince = null;
-    this.hopTrail.length = 0;
-    this.releaseUntil = -Infinity;
-    this.gestures.reset();
-    this.restartAutoLevel();
-  }
-
   // ─── The level ────────────────────────────────────────────────────────────
 
-  /** Takes the wheel as it is now for level. False when both hands are not in view to hold it. */
+  /**
+   * Takes the wheel as it is now for level. False when both hands are not in
+   * view to hold it, or when the wheel is turned too far to be level (past
+   * WHEEL.level.tilt): then the level it had is forgotten too.
+   */
   setLevel(): boolean {
     if (!this.haveAngle || !this.bothPresent(this.time)) return false;
     this.level = this.angle;
@@ -355,8 +345,8 @@ export class WheelReader {
 
   set level(degrees: number) {
     // A level is a small tilt (the camera's, the player's habit). Anything
-    // more - a saved level from before the wheel was read as a line, say -
-    // would turn every straight into a bend: it is not taken.
+    // more - a level taken with the wheel held turned, say - would turn every
+    // straight into a bend: it is not taken.
     if (!Number.isFinite(degrees) || Math.abs(degrees) > WHEEL.level.tilt) {
       this.levelDegrees = 0;
       this.isLevelled = false;
@@ -415,7 +405,7 @@ export class WheelReader {
     return this.time;
   }
 
-  /** "left" or "right" when this is one of two players on a camera (what `half` used to say). */
+  /** This player's half of a camera shared by two ("left" or "right"), else null. */
   get half(): "left" | "right" | null {
     return this.seat?.of === 2 ? (this.seat.index === 0 ? "left" : "right") : null;
   }
@@ -575,8 +565,8 @@ export class WheelReader {
 
   /**
    * Looks for the hop: the wheel's centre rising faster than WHEEL.hop.speed
-   * hand-spans a second by at least WHEEL.hop.rise spans, within a short
-   * look back. Needs both hands, and no brake: open hands are not a wheel to lift.
+   * wheel widths (the distance between the palms) a second by at least
+   * WHEEL.hop.rise widths, within a short look back. Needs both hands, and no brake: open hands are not a wheel to lift.
    */
   private hop(left: HandReading, right: HandReading, t: number): void {
     const centre = (left.y + right.y) / 2;

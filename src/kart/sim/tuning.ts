@@ -29,16 +29,9 @@ export const TUNING = {
     /** With nothing pressed the kart rolls to a stop: a flat drag plus one that grows with speed. */
     coastDrag: 1.5,
     coastDragPerSpeed: 0.12,
-    /** Top speed on the grass and sand (more than half the width from the centre). */
-    offroadTop: 11,
-    /** Speed above the limit (grass, or a boost that has ended) is shed at this rate. */
-    overspeedDecel: 9,
-    offroadDecel: 10,
     /** A boost raises the top speed by this factor and makes the kart pull much harder. */
     boostSpeed: 1.35,
     boostTau: 0.45,
-    /** On the grass a boost is worth less. */
-    boostSpeedOffroad: 1.15,
     brakeDecel: 30,
     /** Slower than this is a standstill for the reverse. */
     standstill: 0.5,
@@ -61,11 +54,7 @@ export const TUNING = {
     yawAtTop: 0.8,
     /** The steer eases toward the wheel with this rate (1/s), so the front wheels do not snap. */
     response: 18,
-    /** Rate (1/s) at which sideways speed is pulled into the heading: a slight slide, never ice. */
-    grip: 9,
-    gripDrift: 4.2,
-    gripOffroad: 6,
-    /** Of the sideways speed the grip removes, this share comes out as forward speed; the rest is scrubbed. */
+    /** Of the sideways speed the ground's grip removes, this share comes out as forward speed; the rest is scrubbed. */
     slideKept: 0.85,
   },
 
@@ -86,11 +75,12 @@ export const TUNING = {
    * and `coast` scale pulling away, braking and rolling to a stop. `rough` is
    * what the kart reports as off the road: no drift charge, dust and spray.
    *
-   * Road and grass are the sim's old numbers, except that a boost on rough
-   * ground now carries the kart at nearly full speed (what makes a verge cut
-   * worth taking with a Nitro). The rest are new: sand and snow a little slower
-   * than grass, mud very slow, ice with almost no grip and next to no brake (the
-   * kart slides on, in the direction it was going), a boost strip as road.
+   * A boost on rough ground carries the kart at nearly full speed, which is
+   * what makes a verge cut worth taking with a Nitro. Sand and snow are a
+   * little slower than grass, mud very slow, ice has almost no grip and next to
+   * no brake (the kart slides on, in the direction it was going), and a boost
+   * strip drives as road. The road's `top` is `drive.topSpeed`, which the bots
+   * and the steering read, so the two change together.
    */
   ground: {
     road: { rough: false, top: 24, boostTop: 0, grip: 9, gripDrift: 4.2, decel: 9, accel: 1, brake: 1, coast: 1 },
@@ -185,9 +175,10 @@ export const TUNING = {
     /**
      * Throttle that came on within this long before Go gives the start boost:
      * the whole of "1" on the lights, which is what a player is told ("close
-     * your hands on 1"). It was 0.6 s, and a player who closed their hands as
-     * the 1 came up had the throttle at about 0.8 s before Go (the hands' own
-     * delay: the 0.12 s a fist must last, and the camera) and missed it.
+     * your hands on 1"). A player who closes their hands as the 1 comes up
+     * has the throttle on about 0.8 s before Go (the hands' own delay: the
+     * 0.12 s a fist must last, and the camera), so a shorter window would miss
+     * them.
      */
     boostWindow: 1.0,
     /** ...and held since before this floods the engine... */
@@ -197,7 +188,7 @@ export const TUNING = {
   },
 
   bump: {
-    /** Of the overlap, the faster kart gives way for this share less: the faster one shoves harder. */
+    /** How lively a bump is: at 0 the karts would move on together, at 1 they would part as fast as they met. */
     restitution: 0.35,
     /** A kart weighs 1 + speed / this much in a bump. */
     weightPerSpeed: 12,
@@ -234,7 +225,7 @@ export const TUNING = {
     /**
      * A box is taken when a kart's centre is this close (metres, flat). Sized from the drawn cube (render/world/boxes.ts BOX_SIZE, 1.6 m):
      * its rotating corner reaches 1.13 m, a kart's wheels are 1.16 m out from its middle, so anything that visibly touches takes it.
-     * It was 1.7: a kart could drive a wheel through the glass and nothing happened.
+     * Any less and a kart could drive a wheel through the glass and nothing would happen.
      */
     pickupRadius: 2.3,
     respawn: 3,
@@ -286,7 +277,7 @@ export const TUNING = {
     /** Where a kart on the grid stands: this far behind the line for pole, and each place further back by this much. */
     gridFirst: 3.5,
     gridStep: 3.2,
-    /** Pairs of karts stand this far either side of the middle, as a share of the road's width. */
+    /** Karts stand this far either side of the middle, left and right in turn, as a share of the road's width. */
     gridSide: 0.19,
   },
 
@@ -341,18 +332,18 @@ export const TUNING = {
     rampSpeedNear: 60,
     /** Hazards: looks this far ahead in time (s) in steps of this, and keeps this far (metres, beyond their size) clear, more for the gentler. */
     hazardLook: 2.6,
-    /** A kart swings across the road at about this many m/s when dodging. */
-    dodgeRate: 5.5,
     hazardStep: 0.15,
     hazardClear: 0.9,
+    /** A kart swings across the road at about this many m/s when dodging. */
+    dodgeRate: 5.5,
     /** The nearest to the road's edge a bot goes to get round a hazard (metres in from it). */
     hazardEdge: 1.4,
     /** Skill under which a bot does not look for hazards at all. */
     hazardSkill: 0,
-    /** Skill from which a bot takes a verge cut when it holds a Nitro; it uses the Nitro this far (metres) before the cut. */
+    /** Skill from which a bot takes a verge cut when it holds a Nitro; it commits to the cut, and fires the Nitro, once the cut starts within this far (metres) plus 8 ahead. */
     cutSkill: 0.7,
     cutNitroBefore: 6,
-    /** A bot tricks off a ramp: skill plus this, as a share of an id-and-lap lottery. */
+    /** A bot tricks off a ramp when an id-and-lap lottery falls under its skill times (1 - this), plus this for a bot sharper than 0.45. */
     trickBase: 0.2,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.4,
@@ -371,15 +362,16 @@ export const TUNING = {
     backTime: 1.0,
     /** A bot drifts a bend that is tighter than this curvature and has at least this much left (metres, or this many seconds at its speed, whichever is more): enough to charge a boost. */
     driftCurvature: 1 / 60,
-    /** ...but not a hairpin as tight as this (a bot slides out of it): the wheel is too hard over to leave room for a drift. */
-    driftMaxCurvature: 1 / 15,
     driftMinLength: 24,
     driftMinTime: 1.5,
+    /** ...but not a hairpin as tight as this (a bot slides out of it): the wheel is too hard over to leave room for a drift. */
+    driftMaxCurvature: 1 / 15,
+    /** ...and only going faster than this (m/s). */
     driftMinSpeed: 14,
     /** A bot waits this long (seconds, low..high skill) after getting an item before using it. */
     itemWaitSlow: 2.6,
     itemWaitFast: 0.7,
-    /** A bot holds its pucks, seekers and slicks within this far (metres) before the lip of a jump over a gap. */
+    /** A bot holds any item that would spin someone (itself, or whoever it storms or sends a rocket to) within this far (metres) before the lip of a jump over a gap. */
     itemGapQuiet: 140,
     /** And uses it regardless after this long. */
     itemHoldMax: 14,

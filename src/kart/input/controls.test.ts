@@ -448,19 +448,6 @@ describe("the preview's geometry", () => {
     expect(fit.point(0.5, 0.5)[1]).toBeCloseTo(150);
   });
 
-  it("shows a half of the picture for two on one camera: the left half is the left of the mirrored picture", () => {
-    const left = fitPicture(400, 450, 16 / 9, "left");
-    expect(left.point(0.25, 0.5)[0]).toBeCloseTo(200);
-    expect(left.point(0, 0)[0]).toBeCloseTo(0);
-    expect(left.point(0.5, 0)[0]).toBeCloseTo(400);
-    // The mirrored left half is the camera's right half.
-    expect(left.source(1280, 720)).toEqual({ x: 640, y: 0, width: 640, height: 720 });
-    const right = fitPicture(400, 450, 16 / 9, "right");
-    expect(right.point(0.75, 0.5)[0]).toBeCloseTo(200);
-    expect(right.point(0.5, 0)[0]).toBeCloseTo(0);
-    expect(right.source(1280, 720)).toEqual({ x: 0, y: 0, width: 640, height: 720 });
-  });
-
   it("puts the ring through both palms, turned with them", () => {
     expect(wheelRing([100, 200], [300, 200])).toEqual({ x: 200, y: 200, radius: 100, turn: 0 });
     const turned = wheelRing([100, 100], [300, 300]);

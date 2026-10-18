@@ -9,7 +9,7 @@
  * the world as seen from above, so a right turn on the road turns right on
  * the page. Pure string-building: no DOM, no files (the test writes them).
  */
-import { TrackGeometry, inStretch, type Landmark, type Stretch, type Surface, type TrackDef } from "./geometry";
+import { TrackGeometry, type Landmark, type Surface, type TrackDef } from "./geometry";
 import { hazardAt } from "./hazards";
 
 export interface MapOptions {
@@ -210,7 +210,8 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     push(`<text x="${(px(p.x) - 8).toFixed(1)}" y="${(py(p.z) + 4).toFixed(1)}" font-size="10" fill="${ink}" opacity="0.65" stroke="${background}" stroke-width="2.5" paint-order="stroke">${s}</text>`);
   }
 
-  // Boost pads and item rows.
+  // Boost pads and item rows, sized and spaced as the sim lays them (TUNING.boost.padHalfLength and padHalfWidth,
+  // TUNING.items.rowSpread and boxesPerRow): the track's files do not import the sim, so the numbers are copied here.
   for (const pad of def.boostPads ?? []) {
     const s = pad.at * geo.length;
     push(`<polygon points="${band(s - 3.5, s + 3.5, () => pad.offset - 3.2, () => pad.offset + 3.2)}" fill="${GROUND_COLOUR.boost}" stroke="#4a5a00" stroke-width="1"/>`);
@@ -289,18 +290,4 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
   });
   push("</svg>");
   return out.join("\n");
-}
-
-/** The stretches of a track's features in one line each, for reading in a terminal. */
-export function describeFeatures(def: TrackDef): string[] {
-  const pct = (f: number) => `${(f * 100).toFixed(1)}%`;
-  const range = (r: Stretch) => `${pct(r.from)}-${pct(r.to)}`;
-  const lines: string[] = [];
-  for (const r of def.ramps ?? []) lines.push(`ramp at ${pct(r.at)}`);
-  for (const d of def.drops ?? []) lines.push(`${d.gap ? "gap" : "drop"} ${range(d)} ${d.side}`);
-  for (const v of def.verges ?? []) lines.push(`verge ${range(v)} ${v.side} ${v.distance} m ${v.surface ?? "grass"}`);
-  for (const s of def.surfaces ?? []) lines.push(`${s.kind} ${range(s)}`);
-  for (const h of def.hazards ?? []) lines.push(`hazard ${h.kind} at ${pct(h.at)}`);
-  void inStretch;
-  return lines;
 }

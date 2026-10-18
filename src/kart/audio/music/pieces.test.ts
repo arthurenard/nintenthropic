@@ -6,10 +6,11 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { meanOf, peakOfBuffer, rmsOf, toDb } from "../analysis";
+import { FINAL_LAP } from "./loader";
 import { PIECES, THEME_PIECES, type PieceId } from "./pieces";
 import { MUSIC_PEAK_DB, MUSIC_RMS_DB, MUSIC_SAMPLE_RATE, renderPiece, type RenderedMusic } from "./render";
 import { compile } from "./score";
-import { pitchClass, parseChord, chordPitchClasses, scalePitchClasses } from "./theory";
+import { parseChord, chordPitchClasses, scalePitchClasses } from "./theory";
 
 // Rendering a minute of music takes a second or so; a busy machine takes longer.
 vi.setConfig({ testTimeout: 60_000 });
@@ -22,7 +23,7 @@ function render(id: PieceId, final = false): RenderedMusic {
   const key = `${id}${final ? "-final" : ""}`;
   let r = rendered.get(key);
   if (!r) {
-    r = renderPiece(PIECES[id], { tempoScale: final ? 1.1 : 1, transpose: final ? 1 : 0 });
+    r = renderPiece(PIECES[id], final ? FINAL_LAP : {});
     rendered.set(key, r);
   }
   return r;
@@ -156,27 +157,22 @@ describe.each(IDS)("%s", (id) => {
 describe("the final lap", () => {
   it.each(THEME_PIECES)("%s: the same piece 1.1 times faster and a semitone up", (id) => {
     const base = compile(PIECES[id], { humanise: false });
-    const fast = compile(PIECES[id], { humanise: false, tempoScale: 1.1, transpose: 1 });
-    expect(fast.duration).toBeCloseTo(base.duration / 1.1, 6);
+    const fast = compile(PIECES[id], { humanise: false, ...FINAL_LAP });
+    expect(fast.duration).toBeCloseTo(base.duration / FINAL_LAP.tempoScale, 6);
     expect(fast.bars.length).toBe(base.bars.length);
-    const pitched = base.notes.filter((n) => n.part !== undefined);
-    expect(fast.notes.length).toBe(pitched.length);
-    expect(fast.notes.every((n, k) => n.midi === base.notes[k]!.midi + 1)).toBe(true);
+    expect(fast.notes.length).toBe(base.notes.length);
+    expect(fast.notes.every((n, k) => n.midi === base.notes[k]!.midi + FINAL_LAP.transpose)).toBe(true);
     // A bar line falls on the same beat count in both, so a switch at a bar line stays musical.
-    base.bars.forEach((b, k) => expect(fast.bars[k]!.start).toBeCloseTo(b.start / 1.1, 6));
+    base.bars.forEach((b, k) => expect(fast.bars[k]!.start).toBeCloseTo(b.start / FINAL_LAP.tempoScale, 6));
   });
 
   it("renders to its own shorter buffer at the same loudness", () => {
     const base = render("meadow");
     const fast = render("meadow", true);
     expect(fast.loopSamples).toBeLessThan(base.loopSamples);
-    expect(fast.loopSamples / base.loopSamples).toBeCloseTo(1 / 1.1, 2);
+    expect(fast.loopSamples / base.loopSamples).toBeCloseTo(1 / FINAL_LAP.tempoScale, 2);
     expect(Math.abs(fast.stats.rmsDb - base.stats.rmsDb)).toBeLessThan(0.7);
     expect(peakOfBuffer(fast.left)).toBeLessThanOrEqual(Math.pow(10, (MUSIC_PEAK_DB + 0.01) / 20));
     expect(fast.sampleRate).toBe(MUSIC_SAMPLE_RATE);
-  });
-
-  it("transposes the whole key by a semitone", () => {
-    expect(pitchClass("C") + 1).toBe(pitchClass("C#"));
   });
 });

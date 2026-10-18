@@ -144,7 +144,7 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.y = c.y;
   k.ground = groundAt(w.plan.terrain, k.s, k.offset, c.width / 2);
   k.offroad = TUNING.ground[k.ground].rough;
-  k.wrongWay = k.wrong >= ticks(1.5);
+  k.wrongWay = k.wrong >= ticks(TUNING.race.wrongTime);
   k.t = w.state.tick;
   settle(k);
 }

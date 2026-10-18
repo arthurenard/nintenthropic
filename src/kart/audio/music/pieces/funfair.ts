@@ -1,7 +1,8 @@
 /**
  * Fun Fair: dusk, every ride lit. A carousel waltz that becomes a rollercoaster
- * march. G major throughout. The waltz (24 bars of three beats at 168) is a
- * pipe organ over an oom-pah-pah of soft organ chords and a round bass, with
+ * march, in G major, leaning to C for the second waltz tune and the trio.
+ * The waltz (24 bars of three beats at 168) is a pipe organ over an
+ * oom-pah-pah of soft organ chords and a round bass, with
  * a glockenspiel scattering sparkles from the second section; at the end it
  * rolls a snare into the march (16 bars of four at 126): brass in the first
  * eight, a trio in C with the organ on top and the brass sighing underneath

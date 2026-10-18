@@ -60,8 +60,6 @@ export const INSTRUMENTS = {
   // --- keys ------------------------------------------------------------------------------------------------
   /** A tine electric piano: FM with a bark at the strike. */
   epiano: fm({ ratio: 1, index: 1.4, indexTau: 0.25, tau: 0.9, release: 0.18, octave: 0.12, velIndex: 0.8 }),
-  /** A felt-soft piano from FM. */
-  piano: fm({ ratio: 2, index: 1.8, indexTau: 0.12, tau: 1.1, release: 0.15, octave: 0.25, velIndex: 1 }),
   organ: organ({ harmonics: [1, 0.7, 0.5, 0.4, 0.28, 0.22, 0.15], shimmer: { rate: 6.4, depth: 0.12, cents: 6 }, chiff: 0.05 }),
   /** A fairground pipe organ: hollow, bright, with a calliope breath. */
   "organ-pipe": organ({ harmonics: [1, 0.05, 0.75, 0.05, 0.5, 0.05, 0.35, 0, 0.2], shimmer: { rate: 5.4, depth: 0.1, cents: 8 }, chiff: 0.09 }),

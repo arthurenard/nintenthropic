@@ -3,7 +3,7 @@
  * arcade's Settings (src/app/settings.ts): segmented controls that are radio
  * groups, switches, a colour dot. The look is settings.css and race.css.
  */
-import { element, setText } from "../../ui/dom";
+import { element } from "../../ui/dom";
 
 /**
  * A segmented control: buttons with role radio inside a radiogroup. One tab
@@ -95,7 +95,7 @@ export function colourDot(colour: string): HTMLSpanElement {
   return dot;
 }
 
-/** A progress bar (the .progress of base.css/screens.css) set to 0..1. */
+/** A progress bar (the loading screen's .progress, loading.css) set to 0..1. */
 export function setBar(bar: HTMLElement, fraction: number): void {
   const clamped = Math.max(0, Math.min(1, fraction));
   bar.setAttribute("aria-valuenow", String(Math.round(clamped * 100)));
@@ -105,10 +105,4 @@ export function setBar(bar: HTMLElement, fraction: number): void {
 /** Moves a screen reader to a screen's heading, without a ring or a scroll. */
 export function focusHeading(heading: HTMLElement | null): void {
   heading?.focus({ preventScroll: true });
-}
-
-/** A button's label and whether it can be pressed, set only when they changed. */
-export function setButton(button: HTMLButtonElement, label: string, disabled = false): void {
-  setText(button, label);
-  if (button.disabled !== disabled) button.disabled = disabled;
 }

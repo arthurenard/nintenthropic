@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { RaceEvent, RacerSetup } from "../contract";
+import type { RaceEvent } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
 import { ITEM_KINDS } from "./state";
 import { ARENA, count, patch, race, racers, reach, run, toGo, view } from "./testing";
-
-/** Eight bots of every skill from sharp to gentle. */
-function field(): RacerSetup[] {
-  return Array.from({ length: 8 }, (_, i) => ({ id: i, name: `Bot ${i}`, colour: "#ffffff", player: null, skill: 1 - i * 0.1 }));
-}
+import { botField } from "./trackStats";
 
 describe("a bot driving alone", () => {
   for (const track of TRACKS) {
@@ -95,7 +91,7 @@ describe("eight bots", () => {
   for (const track of TRACKS) {
     for (const seed of [1, 2, 3]) {
       it(`finish three laps of ${track.name} and the race ends with sane standings (seed ${seed})`, () => {
-        const r = race(track, field(), { laps: 3, seed });
+        const r = race(track, botField(), { laps: 3, seed });
         const events: RaceEvent[] = [];
         let ticks = 0;
         while (r.view().phase !== "finished" && ticks < 60 * 300) {
@@ -141,7 +137,7 @@ describe("eight bots", () => {
     // (A skyrocket is rare, only from the back half, so a few more seeds are tried until every kind has shown.)
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
       if (used.size === ITEM_KINDS.length && seed > 4) break;
-      const r = race(TRACKS[0]!, field(), { laps: 3, seed });
+      const r = race(TRACKS[0]!, botField(), { laps: 3, seed });
       for (const e of run(r, 60 * 140)) {
         if (e.type === "use") used.add(e.item);
         if (e.type === "hit") hits++;
@@ -152,7 +148,7 @@ describe("eight bots", () => {
   });
 
   it("start with some bots timing the lights", () => {
-    const r = race(TRACKS[0]!, field(), { seed: 1 });
+    const r = race(TRACKS[0]!, botField(), { seed: 1 });
     const events = run(r, 215);
     const starts = events.filter((e) => e.type === "boost" && e.source === "start");
     expect(starts.length).toBeGreaterThan(0);
@@ -160,7 +156,7 @@ describe("eight bots", () => {
   });
 
   it("stay out of each other's way well enough that few hit a barrier", () => {
-    const r = race(TRACKS[1]!, field(), { seed: 5 });
+    const r = race(TRACKS[1]!, botField(), { seed: 5 });
     const events = run(r, 60 * 100);
     expect(count(events, "wall")).toBeLessThan(40);
   });

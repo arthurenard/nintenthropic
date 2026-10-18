@@ -18,7 +18,7 @@ const CURVE = 1.4;
 /** A trigger pressed less than this is not pressed. */
 const TRIGGER_FLOOR = 0.05;
 
-const BUTTON = { drift: 0, itemB: 1, itemX: 2, horn: 3, brake: 6, throttle: 7, up: 12, down: 13, left: 14, right: 15 } as const;
+const BUTTON = { drift: 0, itemB: 1, itemX: 2, horn: 3, brake: 6, throttle: 7, left: 14, right: 15 } as const;
 
 type Pads = () => readonly (Gamepad | null)[];
 

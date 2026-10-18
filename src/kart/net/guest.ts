@@ -55,13 +55,6 @@ import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, lerp, lerpAngle, token, wrapAngle } from "./util";
 import { DisplayClock, SnapshotBuffer, cloneView } from "./view";
 
-/**
- * "The host speaks another version of the game". The contract's SessionClosed
- * has no such reason yet (it wants a "version"); until it does, the screens
- * can test for this string.
- */
-export const VERSION_MISMATCH: SessionClosed = "version";
-
 const MAX_TICKS_PER_FRAME = 5;
 const MAX_TICKS_HIDDEN = 90;
 /** Inputs kept for replay: two seconds of ticks, far more than any sane delay. */
@@ -235,7 +228,8 @@ export class GuestSession implements Session {
   private handle(message: ToGuest): void {
     switch (message.t) {
       case "welcome":
-        if (message.v !== PROTOCOL_VERSION) return this.close(VERSION_MISMATCH);
+        // The host speaks another version of the game: better to say so now than misread it mid-race.
+        if (message.v !== PROTOCOL_VERSION) return this.close("version");
         this.myDevice = message.device;
         this.open = true;
         this.lobbyState = message.lobby;
@@ -245,7 +239,7 @@ export class GuestSession implements Session {
         this.lobbyListeners.emit(this.lobbyState);
         return;
       case "reject":
-        return this.close(message.reason === "full" ? "full" : message.reason === "started" ? "started" : VERSION_MISMATCH);
+        return this.close(message.reason === "full" ? "full" : message.reason === "started" ? "started" : "version");
       case "lobby": {
         const wasPaused = !!this.lobbyState.pause;
         this.lobbyState = message.lobby;
@@ -537,19 +531,24 @@ export class GuestSession implements Session {
       const own = this.own.get(k.id);
       const was = before.get(k.id);
       if (!own || !was) continue;
-      const now = poseOf(k);
-      const moved = { x: now.x - own.curr.x, y: now.y - own.curr.y, z: now.z - own.curr.z, heading: wrapAngle(now.heading - own.curr.heading) };
+      const corrected = poseOf(k);
+      const moved = {
+        x: corrected.x - own.curr.x,
+        y: corrected.y - own.curr.y,
+        z: corrected.z - own.curr.z,
+        heading: wrapAngle(corrected.heading - own.curr.heading),
+      };
       own.since = t;
       if (Math.hypot(moved.x, moved.z) > SNAP_DISTANCE) {
         // A teleport or a respawn, not a drift: jump, do not glide.
-        own.prev = own.curr = now;
+        own.prev = own.curr = corrected;
         own.offset = NO_OFFSET;
         continue;
       }
       // The host's word moves where the kart is; the picture it was gliding through moves with it, so the
       // motion carries on unbroken, and what is left between where it was drawn and where it is now eases out.
       own.prev = { x: own.prev.x + moved.x, y: own.prev.y + moved.y, z: own.prev.z + moved.z, heading: own.prev.heading + moved.heading };
-      own.curr = now;
+      own.curr = corrected;
       const at = lerpPose(own.prev, own.curr, into);
       own.offset = { x: was.x - at.x, y: was.y - at.y, z: was.z - at.z, heading: wrapAngle(was.heading - at.heading) };
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveIn, navKey, nearestBox, navPresses, type Box, type NavKey } from "./nav";
+import { moveIn, nearestBox, navPresses, type Box, type NavKey } from "./nav";
 
 const pad = (pressed: number[] = [], axes: number[] = [0, 0]) => ({
   buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: pressed.includes(i), touched: false, value: 0 })),
@@ -34,13 +34,7 @@ describe("moving about a menu with a pad", () => {
   });
 });
 
-describe("keys and grids", () => {
-  it("know the arrows and Return", () => {
-    expect(navKey({ key: "ArrowLeft" })).toBe("left");
-    expect(navKey({ key: "Enter" })).toBe("confirm");
-    expect(navKey({ key: "a" })).toBeNull();
-  });
-
+describe("grids", () => {
   it("move along a grid and stop at its edges", () => {
     // Nine in a 5-wide grid: 0..4 above, 5..8 below.
     expect(moveIn(0, "right", 9, 5)).toBe(1);

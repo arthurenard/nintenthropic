@@ -39,7 +39,7 @@ describe("the horn and the duck", () => {
     expect(rates.size).toBe(3);
   });
 
-  it("squeaks the duck for the finder, a beat after the drive-by one and higher", () => {
+  it("squeaks the duck for the finder, a beat late and pitched up so it is not taken for a quack", () => {
     const [order, ...rest] = ordersFor(event({ type: "duck", kart: 0 }), scene);
     expect(rest).toEqual([]);
     expect(order).toMatchObject({ cue: "kart_duck", distance: 0 });

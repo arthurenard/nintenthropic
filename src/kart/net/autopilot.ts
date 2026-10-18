@@ -1,9 +1,10 @@
 /**
  * A plain follow-the-track driver, for a kart whose player has left.
  *
- * The Race contract has no "turn this kart into a bot", and the sim's own
- * bots are tied to the setup they started with. So the host drives these
- * karts itself, through the same `step(inputs)` a player's kart takes: aim at
+ * The real sim takes such a kart over itself (`Race.handOver`) and drives it
+ * as one of its own bots. A race without `handOver`, such as the net's
+ * stand-in (fakeRace.ts), cannot, so for those the host drives the kart
+ * itself, through the same `step(inputs)` a player's kart takes: aim at
  * a point a little way down the centre line, slow for the bends ahead, use an
  * item when one is held. It is not the sim's racing line, drift or rubber
  * band; it keeps the kart going and on the road, which is all a seat left

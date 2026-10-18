@@ -3,11 +3,12 @@
  * `CameraService`. The picture is read in memory and never stored or sent.
  *
  * The camera opens once and stays open while the player is in a room; the
- * tracker is loaded for the number of hands wanted (2 for a wheel, 4 for two
- * players on one camera) and replaced if that changes. The wheels are built
- * before the camera is up (the You screen makes them, the wheel check then
- * starts the camera), so they read from a `SwitchableSource`, which forwards
- * to whichever tracker is current.
+ * tracker is loaded for the number of hands wanted (2 for a wheel, 4, 6 or 8
+ * for two, three or four players on one camera) and replaced if that changes.
+ * The wheels are built before the camera is up (Choose Your Driver's Continue
+ * makes them, then starts the camera; the wheel check comes after), so they
+ * read from a `SwitchableSource`, which forwards to whichever tracker is
+ * current.
  *
  * It also owns the `<video>` the camera plays into. Safari on a phone only
  * decodes a video that is in the page, inline (never full screen), muted and

@@ -8,7 +8,7 @@
  * to a precision the snapshot then writes out exactly: millimetres for places
  * and speeds, a tenth of a milliradian for headings. Timers are whole ticks.
  */
-import type { DriveInput, ItemKind, RaceEvent, RaceSetup } from "../contract";
+import type { ItemKind, RaceEvent, RaceSetup } from "../contract";
 import type { WeightMods } from "../characters";
 import type { Surface, TrackGeometry } from "../track/geometry";
 import type { TrackPlan } from "./plan";
@@ -255,5 +255,3 @@ export interface World {
 
 /** An event before the race has given it an id and a tick. */
 export type EventBody = RaceEvent extends infer E ? (E extends unknown ? Omit<E, "id" | "tick"> : never) : never;
-
-export const NOTHING: ReadonlyMap<number, DriveInput> = new Map();
