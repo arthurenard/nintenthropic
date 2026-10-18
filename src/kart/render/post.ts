@@ -78,7 +78,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 
   // Vignette, per view tile.
   float v = 1.0;
-  bool inView = false;
+  bool inView = uTileCount == 0;
   for (int i = 0; i < 4; i++) {
     if (i >= uTileCount) break;
     vec4 t = uTiles[i];
@@ -105,7 +105,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 export const DIVIDER = 0x0b0b0d;
 
 export class GradeEffect extends Effect {
-  private readonly tiles: Vector4[] = [new Vector4(), new Vector4(), new Vector4(), new Vector4()];
+  /** The view tiles: the whole canvas is one view until told otherwise. */
+  private readonly tiles: Vector4[] = [new Vector4(0, 0, 1, 1), new Vector4(), new Vector4(), new Vector4()];
 
   constructor() {
     super("GripGrade", GRADE, {
