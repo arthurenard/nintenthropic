@@ -1,79 +1,16 @@
-import {
-  AnimationClip,
-  Euler,
-  InterpolateSmooth,
-  PropertyBinding,
-  Quaternion,
-  QuaternionKeyframeTrack,
-  VectorKeyframeTrack,
-  type KeyframeTrack,
-} from "three";
-
-/** Bone rotations in degrees, applied yaw (Y), then pitch (X), then roll (Z). */
-export type Pose = Record<string, [number, number, number]>;
+import type { AnimationClip } from "three";
+import { makeClip, mirror, pose, type Pose } from "../../../engine/world/poses";
 
 export interface Key {
   t: number;
   pose: Pose;
-  /** Offset of the hips from their rest position, metres. */
+  /** Offset of the hips (the chicken's body) from their rest position, metres. */
   hips?: [number, number, number];
 }
 
-const DEG = Math.PI / 180;
-const euler = new Euler();
-const quat = new Quaternion();
-
-/**
- * Build an AnimationClip from a few key poses, the way the character agent's
- * Blender actions will arrive: quaternion tracks per bone, named with the
- * glTF loader's sanitised node names, plus the hips' translation. Bones not
- * mentioned in a key are at rest.
- */
-export function makeClip(name: string, keys: Key[], hipsRest: [number, number, number], smooth = true): AnimationClip {
-  const bones = new Set<string>();
-  for (const k of keys) for (const b of Object.keys(k.pose)) bones.add(b);
-  const times = keys.map((k) => k.t);
-  const tracks: KeyframeTrack[] = [];
-  for (const bone of bones) {
-    const values: number[] = [];
-    let prev: Quaternion | null = null;
-    for (const k of keys) {
-      const r = k.pose[bone] ?? [0, 0, 0];
-      euler.set(r[0] * DEG, r[1] * DEG, r[2] * DEG, "YXZ");
-      quat.setFromEuler(euler);
-      // Keep successive keys on the same hemisphere so slerp takes the short way.
-      if (prev && prev.dot(quat) < 0) quat.set(-quat.x, -quat.y, -quat.z, -quat.w);
-      prev = quat.clone();
-      values.push(quat.x, quat.y, quat.z, quat.w);
-    }
-    tracks.push(new QuaternionKeyframeTrack(`${PropertyBinding.sanitizeNodeName(bone)}.quaternion`, times, values));
-  }
-  if (keys.some((k) => k.hips)) {
-    const values: number[] = [];
-    for (const k of keys) {
-      const h = k.hips ?? [0, 0, 0];
-      values.push(hipsRest[0] + h[0], hipsRest[1] + h[1], hipsRest[2] + h[2]);
-    }
-    const track = new VectorKeyframeTrack("hips.position", times, values);
-    if (smooth && keys.length > 2) track.setInterpolation(InterpolateSmooth);
-    tracks.push(track);
-  }
-  return new AnimationClip(name, keys[keys.length - 1]?.t ?? 0, tracks);
-}
-
-/** Merge poses: later ones win, bone by bone. */
-export function pose(...parts: Pose[]): Pose {
-  return Object.assign({}, ...parts) as Pose;
-}
-
-/** Mirror a pose left to right (for leaning the other way). */
-export function mirror(p: Pose): Pose {
-  const out: Pose = {};
-  for (const [bone, [x, y, z]] of Object.entries(p)) {
-    const other = bone.endsWith(".L") ? bone.slice(0, -2) + ".R" : bone.endsWith(".R") ? bone.slice(0, -2) + ".L" : bone;
-    out[other] = [x, -y, -z];
-  }
-  return out;
+/** A clip from High Noon's keys (engine/world/poses.ts builds it), its `root` bone carried by their `hips`. */
+function clipOf(name: string, keys: Key[], root: string, rest: [number, number, number], smooth = true): AnimationClip {
+  return makeClip(name, keys.map((k) => ({ t: k.t, pose: k.pose, root: k.hips })), { root, rest }, smooth);
 }
 
 // --- the humanoid's poses ---------------------------------------------------------
@@ -141,7 +78,7 @@ const LEAN_LEFT: Pose = pose(AIM, {
 export function humanoidClips(hipsRest: [number, number, number]): AnimationClip[] {
   const H = hipsRest;
   const clips: AnimationClip[] = [];
-  const add = (name: string, keys: Key[]) => clips.push(makeClip(name, keys, H));
+  const add = (name: string, keys: Key[]) => clips.push(clipOf(name, keys, "hips", H));
 
   add("idle", [
     { t: 0, pose: STAND },
@@ -305,7 +242,7 @@ export function humanoidClips(hipsRest: [number, number, number]): AnimationClip
 export function townsfolkClips(hipsRest: [number, number, number]): AnimationClip[] {
   const H = hipsRest;
   const clips: AnimationClip[] = [];
-  const add = (name: string, keys: Key[]) => clips.push(makeClip(name, keys, H));
+  const add = (name: string, keys: Key[]) => clips.push(clipOf(name, keys, "hips", H));
   const arms: Pose = { "upper_arm.L": [2, 0, 6], "upper_arm.R": [2, 0, -6], "forearm.L": [-10, 0, 0], "forearm.R": [-10, 0, 0] };
   const still = pose(STANCE, arms);
   add("idle", [
@@ -353,12 +290,8 @@ export function townsfolkClips(hipsRest: [number, number, number]): AnimationCli
 
 export function chickenClips(bodyRest: [number, number, number]): AnimationClip[] {
   const clips: AnimationClip[] = [];
-  const tracksFor = (name: string, keys: Key[]) => {
-    const c = makeClip(name, keys, bodyRest, false);
-    // The chicken's root bone is `body`, not `hips`.
-    for (const t of c.tracks) if (t.name === "hips.position") t.name = "body.position";
-    clips.push(c);
-  };
+  // The chicken's root bone is `body`, not `hips`.
+  const tracksFor = (name: string, keys: Key[]) => clips.push(clipOf(name, keys, "body", bodyRest, false));
   tracksFor("peck", [
     { t: 0, pose: { neck: [0, 0, 0], head: [0, 0, 0] } },
     { t: 0.25, pose: { neck: [75, 0, 0], head: [25, 0, 0], body: [18, 0, 0] } },

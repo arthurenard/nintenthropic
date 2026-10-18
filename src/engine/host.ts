@@ -18,8 +18,6 @@ export const MAX_DT = 0.1;
 /** Past 2x, extra pixels cost far more than the eye can see. */
 export const MAX_PIXEL_RATIO = 2;
 
-export { IDLE_AIM, WebGLUnavailable, type FrameInfo };
-
 /**
  * Calls `changed` whenever the device's pixel ratio changes (the window
  * moved to another screen, or the page was zoomed), for the life of the

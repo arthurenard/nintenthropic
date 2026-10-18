@@ -4,9 +4,9 @@
  * Standard and on Relaxed, and an idle player losing a pane on both.
  *
  * | Simulated player                | Standard: breached on pass (median) | Relaxed      |
- * | Steady hand (0.65 s, 80% hits)  | 5–9 (8)                             | 9–13 (11)    |
- * | Slow, wild hand (1.0 s, 55%)    | 4–8 (6)                             | 8–11 (10)    |
- * | Slowest hand (1.3 s, 45%)       | 4–8 (5)                             | 5–11 (9)     |
+ * | Steady hand (0.65 s, 80% hits)  | 5–9 (8)                             | 7–13 (11)    |
+ * | Slow, wild hand (1.0 s, 55%)    | 4–8 (6)                             | 5–11 (10)    |
+ * | Slowest hand (1.3 s, 45%)       | 4–6 (5)                             | 5–11 (9)     |
  * | Never shoots                    | a pane fails on pass 2–4, 70–200 s  | on pass 5 (the Derelict), 270–290 s |
  */
 import { describe, expect, it } from "vitest";
@@ -28,7 +28,6 @@ describe("balance on Standard", () => {
   const slowest = passes(SLOWEST, "standard");
 
   it("lets a steady hand through the learning passes, and still breaks the glass in the end", () => {
-    // eslint-disable-next-line no-console
     console.log(`Standard, steady hand breached on passes: ${steady.list.join(" ")} (median ${steady.median})`);
     expect(steady.list[0]).toBeGreaterThanOrEqual(4);
     expect(steady.median).toBeGreaterThanOrEqual(7);
@@ -37,7 +36,6 @@ describe("balance on Standard", () => {
   });
 
   it("is harder on a slow, wild hand, and hardest on the slowest, but never over in the first three passes", () => {
-    // eslint-disable-next-line no-console
     console.log(`Standard, wild hand: ${wild.list.join(" ")} (median ${wild.median}); slowest: ${slowest.list.join(" ")} (median ${slowest.median})`);
     expect(wild.list[0]).toBeGreaterThanOrEqual(4);
     expect(slowest.list[0]).toBeGreaterThanOrEqual(3);
@@ -57,7 +55,6 @@ describe("balance on Relaxed", () => {
     for (const [name, skill, lo, hi] of pairs) {
       const relaxed = passes(skill, "relaxed");
       const standard = passes(skill, "standard");
-      // eslint-disable-next-line no-console
       console.log(`Relaxed, ${name} hand breached on passes: ${relaxed.list.join(" ")} (median ${relaxed.median})`);
       expect(relaxed.median, name).toBeGreaterThan(standard.median);
       expect(relaxed.median, name).toBeGreaterThanOrEqual(lo);

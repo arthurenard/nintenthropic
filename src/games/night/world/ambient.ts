@@ -21,8 +21,6 @@ export class Ambient {
   private dogIn = 24;
   private owlIn = 40;
   private readonly lamp = new Vector3();
-  /** The dead are close: the crickets hold their breath. */
-  hush = false;
   /** The breather: the lamp steadies. */
   steady = false;
   /** Settings.reducedFlashing: the lamp's stutter becomes a slow dip, never a strobe. */
@@ -136,6 +134,5 @@ export class Ambient {
     this.dropout = 0;
     this.faultIn = 8;
     this.steady = false;
-    this.hush = false;
   }
 }

@@ -1,6 +1,8 @@
 import { Group, Object3D, Vector3 } from "three";
+import { mulberry32 } from "../../../engine/rules/rng";
 import type { LoadedAsset } from "../../../engine/types";
 import { nameNode } from "../../../engine/world/names";
+import { pose, quatOf, type ClipKey, type Pose } from "../../../engine/world/poses";
 import {
   ARM_L,
   ARM_R,
@@ -28,13 +30,8 @@ import {
   holdWith,
   humanBody,
   humanoid,
-  pose,
-  quatOf,
-  random,
   type Armature,
   type Hold,
-  type Key,
-  type Pose,
   type SkinPoints,
   type V3,
 } from "./skin";
@@ -162,7 +159,7 @@ function slungRifle(arm: Armature): SkinGeometry {
  */
 function ghillie(arm: Armature): SkinGeometry {
   const s = new SkinGeometry(arm).mat("cloth");
-  const rnd = random(1944);
+  const rnd = mulberry32(1944);
   const pick = () => GHILLIE[Math.floor(rnd() * GHILLIE.length)] ?? "#4b5b2d";
   // A hood over the head and the shoulders, a cape on the back.
   s.part(blob(0.155, 1), "head", pick(), [0, 1.665, -0.015], [0, 0, 0], [1.05, 0.95, 1.05]);
@@ -341,7 +338,7 @@ const SEATED_ROOT: V3 = [0, -0.45, 0];
 export function soldierClips(points: SkinPoints): ClipSet {
   const poser = new Poser(HUMANOID, "hips");
   const set = new ClipSet(poser, HUMAN_CLIP);
-  const settle = (k: Key, floor = 0, liftOnly = false) => poser.settle(points, k, floor, liftOnly);
+  const settle = (k: ClipKey, floor = 0, liftOnly = false) => poser.settle(points, k, floor, liftOnly);
   const hold = (p: Pose, root: V3 | undefined, h: Hold) => holdWith(poser, p, root, h);
   type Feet = [[number, number], [number, number]];
   /** Feet planted at (x, z) on a floor `floor` metres up, flat, toes out a little; knees forward. */
@@ -352,7 +349,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
     return out;
   };
   /** A standing key: feet planted, hands on whatever is held. */
-  const stand = (t: number, body: Pose, h: Hold | null, root: V3 = [0, -0.015, 0], feet?: Feet, floor = 0): Key => {
+  const stand = (t: number, body: Pose, h: Hold | null, root: V3 = [0, -0.015, 0], feet?: Feet, floor = 0): ClipKey => {
     let p = plant(body, root, feet, floor);
     if (h) p = hold(p, root, h);
     return { t, pose: p, root };
@@ -385,7 +382,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
     const wrist = lips.sub(new Vector3(...SOCKET_HAND_L).applyQuaternion(rot));
     return poser.reach(p, smokeRoot, ARM_L, wrist, new Vector3(1, -1, -0.2), rot);
   };
-  const smokeAt = (t: number, body: Pose, arm: (p: Pose) => Pose): Key => ({ t, pose: arm(plant(body, smokeRoot, smokeFeet)), root: smokeRoot });
+  const smokeAt = (t: number, body: Pose, arm: (p: Pose) => Pose): ClipKey => ({ t, pose: arm(plant(body, smokeRoot, smokeFeet)), root: smokeRoot });
   const low = (p: Pose) => handLow(p, [0.21, 0.99, 0.13]);
   set.add("idle_smoke", [
     smokeAt(0, slouch, low),
@@ -464,7 +461,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
   );
 
   // crouch: down on the heels behind cover, rifle up and ready.
-  const crouchKey = (t: number, body: Pose): Key => {
+  const crouchKey = (t: number, body: Pose): ClipKey => {
     const k = settle({ t, pose: body, root: CROUCH_ROOT });
     return { ...k, pose: hold(k.pose, k.root, CROUCH_READY) };
   };
@@ -478,7 +475,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
   // Down on the belly first (the arms held clear, over the head), then the hands to the rifle,
   // lifting the body only if an elbow would go into the ground.
   const armsClear: Pose = { "upper_arm.L": [-170, 0, 0], "upper_arm.R": [-170, 0, 0] };
-  const proneKey = (t: number, body: Pose, h: Hold): Key => {
+  const proneKey = (t: number, body: Pose, h: Hold): ClipKey => {
     const k = settle({ t, pose: pose(body, armsClear), root: PRONE_ROOT });
     const held = { ...k, pose: hold(body, k.root, h) };
     return settle(held, 0, true);
@@ -535,7 +532,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
   set.add("hit_body", [aimAt(0, AIM_BODY), flinchKey, aimAt(0.5, AIM_BODY)]);
 
   // wound_kneel: down on the right knee, left hand clutching the side, head bowed; holds there.
-  const kneel = (t: number, body: Pose, root: V3): Key => {
+  const kneel = (t: number, body: Pose, root: V3): ClipKey => {
     let p = poser.reach(body, root, LEG_L, new Vector3(0.12, 0.05, 0.4), new Vector3(0.1, 0, 1), quatOf([0, 6, 0]));
     p = poser.reach(p, root, LEG_R, new Vector3(-0.12, 0.1, -0.42), new Vector3(0, -1, 0.3), quatOf([165, 0, 0]));
     p = poser.reach(p, root, ARM_L, poser.set(p, root).point("spine", [0.12, 0.02, 0.1]), new Vector3(1, -0.3, -0.5));
@@ -545,7 +542,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
   };
   const hunched: Pose = { spine: [22, 0, -4], chest: [14, -6, 0], neck: [16, 0, 0], head: [20, -6, 0] };
   // On the way down: the right knee dropping, its foot turning back out of the ground's way.
-  const goingDown = (t: number): Key => {
+  const goingDown = (t: number): ClipKey => {
     const root: V3 = [0, -0.27, 0.02];
     const body = pose(hunched, { spine: [16, 0, -4], chest: [10, -4, 0] });
     let p = poser.reach(body, root, LEG_L, new Vector3(0.12, 0.05, 0.3), new Vector3(0.1, 0, 1), quatOf([0, 6, 0]));
@@ -650,7 +647,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
     [0.12, -0.76],
     [-0.12, -0.82],
   ];
-  const dismount: Key[] = [
+  const dismount: ClipKey[] = [
     stand(0, STAND_UP, PORT_LOW, [0, bed - 0.015, -0.8], onBed, bed),
     stand(0.13, pose(STAND_UP, { spine: [16, 0, 0], chest: [4, 0, 0], head: [-8, 0, 0] }), PORT_LOW, [0, bed - 0.12, -0.77], onBed, bed),
   ];
@@ -663,13 +660,13 @@ export function soldierClips(points: SkinPoints): ClipSet {
   for (let i = 0; i <= 4; i++) {
     const f = i / 4;
     const tau = f * fall;
-    let k: Key = { t: round3(takeoff + tau), pose: i === 4 ? touch : air, root: [0, drop - 4.905 * tau * tau - 0.03, -0.72 * (1 - f)] };
+    let k: ClipKey = { t: round3(takeoff + tau), pose: i === 4 ? touch : air, root: [0, drop - 4.905 * tau * tau - 0.03, -0.72 * (1 - f)] };
     // Touching down: the boots exactly on the ground; in the air, never below it.
     k = i === 4 ? settle(k) : settle(k, 0, true);
     dismount.push({ ...k, pose: hold(k.pose, k.root, PORT_LOW) });
   }
   // The landing, feet planted where they touched: down into a crouch, then up.
-  const landing = dismount[dismount.length - 1] as Key;
+  const landing = dismount[dismount.length - 1] as ClipKey;
   const landFeet: Feet = [
     [0.13, 0.04],
     [-0.13, -0.02],
@@ -683,7 +680,7 @@ export function soldierClips(points: SkinPoints): ClipSet {
   set.add("dismount", poser.keepAbove(points, dismount), false);
 
   // drive: seated, hands on a wheel 0.45 m ahead at chest height, a small sway with the road.
-  const drive = (t: number, sway: number): Key => {
+  const drive = (t: number, sway: number): ClipKey => {
     const body = pose(SEATED, { spine: [-6, 0, sway], chest: [6, sway * 2, 0], head: [0, -sway * 3, -sway] });
     let p = poser.reach(body, SEATED_ROOT, LEG_L, new Vector3(0.13, 0.05, 0.46), new Vector3(0.1, 0.3, 1), quatOf([0, 4, 0]));
     p = poser.reach(p, SEATED_ROOT, LEG_R, new Vector3(-0.13, 0.05, 0.46), new Vector3(-0.1, 0.3, 1), quatOf([0, -4, 0]));

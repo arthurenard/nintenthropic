@@ -9,6 +9,7 @@
 import { AdditiveBlending, Color, Mesh, MeshBasicMaterial, SphereGeometry, Sprite, SpriteMaterial, CanvasTexture, Vector3, type Object3D, type PerspectiveCamera } from "three";
 import type { CalibrationStage, CalibrationTarget } from "../../../engine/types";
 import type { Sound } from "../../../engine/world/sound";
+import { placeTarget } from "../../../engine/world/targets";
 import type { Effects } from "./effects";
 
 interface Light {
@@ -45,7 +46,6 @@ function glowTexture(): CanvasTexture {
   return new CanvasTexture(c);
 }
 
-const ndc = new Vector3();
 const STEPS = [0, 2, 4, 7, 9, 12, 14, 16, 19];
 
 export class RunningLights implements CalibrationStage {
@@ -88,19 +88,10 @@ export class RunningLights implements CalibrationStage {
   /** Where each light is on screen, and the zone that counts as a hit. */
   targets(): CalibrationTarget[] {
     this.list.length = 0;
-    const cam = this.camera;
-    cam.updateMatrixWorld();
-    const minSide = Math.min(1, cam.aspect);
-    const tanHalf = Math.tan((cam.fov * Math.PI) / 360);
+    this.camera.updateMatrixWorld();
     for (const l of this.lights) {
-      if (l.hit) continue;
-      ndc.copy(l.pos).project(cam);
-      if (ndc.z > 1) continue;
-      l.target.x = (ndc.x + 1) / 2;
-      l.target.y = (1 - ndc.y) / 2;
-      const d = l.pos.distanceTo(cam.position);
-      // Its flare's size on screen, never under the 3.5% the aim is measured against.
-      l.target.radius = Math.max(0.035, 0.6 / (d * 2 * tanHalf * minSide));
+      // Its flare's size on screen: 0.6 m round the lamp.
+      if (l.hit || !placeTarget(l.target, this.camera, l.pos, 0.6)) continue;
       if (l.target.x < 0.02 || l.target.x > 0.98 || l.target.y < 0.02 || l.target.y > 0.98) continue;
       this.list.push(l.target);
     }

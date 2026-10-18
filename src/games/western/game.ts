@@ -1,14 +1,7 @@
-import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type Texture, type ToneMapping } from "three";
-import type {
-  Aim,
-  CalibrationStage,
-  CalibrationTarget,
-  Game,
-  GameContext,
-  HudSink,
-  Readout,
-  TargetNoun,
-} from "../../engine/types";
+import { Color, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type ToneMapping } from "three";
+import type { Aim, CalibrationStage, Game, GameContext, HudSink, Readout } from "../../engine/types";
+import { announceGolden, awardText, HintShown, HurtShown, popupAt, showBonuses, streakReadout, viewportOf, type PopupTone } from "../../engine/hud";
+import { breathe, CalibrationProxy, Schedule } from "../../engine/round";
 import { Bandit as BanditClass, type Bandit } from "./rules/bandit";
 import type { Dynamite } from "./rules/dynamite";
 import { felledCause } from "./rules/felled";
@@ -16,6 +9,7 @@ import { Match, type MatchListener, type Results } from "./rules/match";
 import { loadSoundPack } from "../../audio/index";
 import type { StreetSpace } from "../../audio/routing";
 import { mulberry32 } from "../../engine/rules/rng";
+import { streakRate } from "../../engine/rules/streak";
 import type { Award, WaveBonuses } from "./rules/scoring";
 import { isHighNoon, type SecretId } from "./rules/secrets";
 import type { Townsperson } from "./rules/townsfolk";
@@ -27,11 +21,13 @@ import { BottleStage } from "./world/bottles";
 import { Cast } from "./world/cast";
 import { checkCovers, COVER_SHIFTS, fallPaths, readySpots, shiftCovers, unblockCovers, type CoverReport } from "./world/coverCheck";
 import { RigPool } from "../../engine/world/character";
+import { warmUp } from "../../engine/world/scene";
 import { highNoonTemplate, streetRim } from "./world/rigs";
 import { DynamiteView } from "./world/dynamiteView";
 import { Hammer } from "../../engine/rules/hammer";
-import { bossWoundWord, chickenWord, innocentWord, reloadHint, UNSPORTING } from "./hints";
-import { HintLine, tipText, type TipId } from "./tips";
+import { HintLine, reloadHint } from "../../engine/rules/hints";
+import { bossWoundWord, chickenWord, innocentWord, UNSPORTING } from "./hints";
+import { LEARNED_BY_DOING, tipText, type TipId } from "./tips";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "../../engine/world/framing";
 import { PlayerCamera } from "../../engine/world/playerCamera";
@@ -68,54 +64,8 @@ const HIT_SOUND: Record<Surface, string> = {
   water: "hit_water",
 };
 
-interface Scheduled {
-  at: number;
-  run: () => void;
-}
-
 const tmp = new Vector3();
 const tmp2 = new Vector3();
-
-/**
- * A moment for the page between the long steps of getting ready, so the
- * loading bar keeps moving instead of freezing for a second at the end.
- */
-function breathe(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-/**
- * Before load() the aim check has nothing to show; afterwards this forwards
- * to the bottles. If the host runs the aim check again on this instance after
- * a game (Play Again), the first call puts the town back for it.
- */
-class CalibrationProxy implements CalibrationStage {
-  readonly noun: TargetNoun = { one: "bottle", many: "bottles" };
-  target: BottleStage | null = null;
-  onUse: () => void = () => {};
-  onBegin: () => void = () => {};
-  /** The host calls this before every aim check, and again if the bottles run out. */
-  begin(): void {
-    this.onBegin();
-  }
-  targets(): CalibrationTarget[] {
-    this.onUse();
-    return this.target ? this.target.targets() : [];
-  }
-  light(id: string | null): void {
-    this.onUse();
-    this.target?.light(id);
-  }
-  hit(id: string): void {
-    this.target?.hit(id);
-  }
-  miss(id: string, x: number, y: number): void {
-    this.target?.miss(id, x, y);
-  }
-  done(): void {
-    this.target?.done();
-  }
-}
 
 /**
  * High Noon: the Game the app hosts. It owns the world (stage, cast, effects,
@@ -126,7 +76,8 @@ export class HighNoon implements Game, MatchListener {
   readonly id = "western";
   readonly title = "High Noon";
   readonly calibration: CalibrationStage;
-  private readonly calibrationProxy = new CalibrationProxy();
+  /** The bottles, once they exist; and the town put back when the aim check comes round again after a game. */
+  private readonly calibrationProxy = new CalibrationProxy({ one: "bottle", many: "bottles" });
 
   private ctx!: GameContext;
   private hud!: HudSink;
@@ -154,14 +105,11 @@ export class HighNoon implements Game, MatchListener {
   private deathT = 0;
   private sepia = 0;
   private readonly flash = new ScreenFlash();
-  private hurtShown = -1;
-  private hurtDisplay = 0;
-  private hurtFilter = -1;
+  private readonly hurt = new HurtShown();
   private readoutKey = "";
   /** The hint line: the reload when it is needed, a word after a mistake, one-time tips. */
-  private hints = new HintLine(new Set());
-  /** What the HUD's hint shows now, as last told. */
-  private hintShown: string | null = null;
+  private hints = new HintLine(new Set(), LEARNED_BY_DOING);
+  private readonly hintShown = new HintShown();
   private readonly hammer = new Hammer();
   private golden = false;
   private tier: GameContext["quality"]["tier"] = "high";
@@ -170,7 +118,7 @@ export class HighNoon implements Game, MatchListener {
   private tombstone = false;
   /** Which way the view tips at death: away from the last shot that hit. */
   private hurtSide = 1;
-  private readonly schedule: Scheduled[] = [];
+  private readonly schedule = new Schedule(() => this.time);
   private coverReport: CoverReport | null = null;
   private readonly shotPoint = new Vector3();
   private shotKilled = false;
@@ -307,7 +255,7 @@ export class HighNoon implements Game, MatchListener {
     this.tier = ctx.quality.tier;
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
     await breathe();
-    await this.warmUp();
+    await warmUp(renderer, this.stage.scene, this.camera.camera, () => this.post.render(0));
     this.tuneEcho();
     await sounds;
     window.addEventListener("keydown", this.onKey);
@@ -345,51 +293,6 @@ export class HighNoon implements Game, MatchListener {
   }
 
   /**
-   * Compile every shader before play: the rigs, the effects, the post chain.
-   * A shader first compiled mid-gunfight is a dropped frame at the worst time.
-   */
-  private async warmUp(): Promise<void> {
-    const r = this.ctx.renderer;
-    const scene = this.stage.scene;
-    const shown: { visible: boolean; o: { visible: boolean } }[] = [];
-    scene.traverse((o) => {
-      if (!o.visible) {
-        shown.push({ visible: false, o });
-        o.visible = true;
-      }
-    });
-    try {
-      // The textures first, a few at a time between breaths: uploaded all in
-      // the first frame below they froze the page (and its progress bar) for
-      // a quarter of a second.
-      const textures = new Set<Texture>();
-      scene.traverse((o) => {
-        const m = (o as Mesh).material;
-        for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
-          for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) textures.add(v as Texture);
-        }
-      });
-      let since = performance.now();
-      for (const t of textures) {
-        r.initTexture(t);
-        if (performance.now() - since > 40) {
-          await breathe();
-          since = performance.now();
-        }
-      }
-      if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
-      else (r as { compile: (s: unknown, c: unknown) => void }).compile(scene, this.camera.camera);
-      // One real frame with everything shown: the shadow pass's depth
-      // shaders and the post chain only compile when they are drawn.
-      await breathe();
-      this.post.render(0);
-    } catch {
-      // Compilation is an optimisation; the first frames will do it otherwise.
-    }
-    for (const s of shown) s.o.visible = s.visible;
-  }
-
-  /**
    * Back to the state after load, for another game on this instance: a fresh
    * match, the street swept (bodies, holes, the secrets' mischief), the
    * bottles standing again, the picture and the sound unmuffled.
@@ -404,7 +307,7 @@ export class HighNoon implements Game, MatchListener {
     for (const pane of this.assets.town.glass.values()) pane.visible = true;
     this.newMatch();
     this.bottles.reset();
-    this.schedule.length = 0;
+    this.schedule.clear();
     this.camera.still = true;
     this.camera.setDeath(0, 1);
     if (this.framings) this.camera.setFraming(this.framings.check, 0);
@@ -414,7 +317,7 @@ export class HighNoon implements Game, MatchListener {
     this.sepia = 0;
     this.deathT = 0;
     this.tombstone = false;
-    this.hurtDisplay = 0;
+    this.hurt.value = 0;
     this.flash.reset();
     this.post.set("sepia", 0);
     this.post.set("hurt", 0);
@@ -435,7 +338,6 @@ export class HighNoon implements Game, MatchListener {
     // made since the last round (or during the aim check) takes effect now.
     else this.newMatch();
     this.bottles.done();
-    this.bottles.active = false;
     this.camera.still = false;
     this.camera.setDeath(0, 1);
     // The warm-up over, the view closes in on the street as the gang rides in.
@@ -446,7 +348,7 @@ export class HighNoon implements Game, MatchListener {
     this.sepia = 0;
     this.deathT = 0;
     this.tombstone = false;
-    this.hurtShown = -1;
+    this.hurt.retell();
     this.readoutKey = "";
     this.sound.filter("slowmo", 0);
     this.sound.filter("hurt", 0);
@@ -457,17 +359,13 @@ export class HighNoon implements Game, MatchListener {
     this.match.start({ wave, duel: this.noon && wave === 1 });
     this.ambient.running = true;
     // The tips this player has seen, as the page keeps them now.
-    this.hints = new HintLine(this.ctx.settings.tipsSeen);
+    this.hints = new HintLine(this.ctx.settings.tipsSeen, LEARNED_BY_DOING);
     this.hints.setQuiet(false);
     // How to reload, at the start of every game until they have done it.
     this.offerTip("western.reload");
     // Read each round, as the page's HUD is: unlocked since this game loaded, it is gold from now.
     this.golden = this.ctx.settings.unlocks.has("golden");
-    if (this.golden) {
-      this.hud.weaponFinish?.("gold");
-      this.sound.play("golden_unlock", { volume: 0.8, delay: 0.4 });
-      this.later(1.0, () => this.hud.popup(0.5, 0.62, "Golden Revolver", "gold"));
-    }
+    if (this.golden) announceGolden(this.hud, this.sound, this.schedule, "golden_unlock", "Golden Revolver");
     this.pushReadouts(true);
   }
 
@@ -486,7 +384,7 @@ export class HighNoon implements Game, MatchListener {
     const scale = this.timeScale;
     const wdt = dt * scale;
     this.time += wdt;
-    this.runSchedule();
+    this.schedule.run();
 
     if (this.phase === "calibration") {
       if (aim.fired && !aim.offscreen) this.calibrationShot(aim.x, aim.y);
@@ -780,21 +678,11 @@ export class HighNoon implements Game, MatchListener {
   // --- HUD helpers --------------------------------------------------------------------------
 
   private project(at: Vector3): { x: number; y: number } | null {
-    tmp.copy(at).project(this.camera.camera);
-    if (tmp.z > 1) return null;
-    return { x: (tmp.x + 1) / 2, y: (1 - tmp.y) / 2 };
+    return viewportOf(this.camera.camera, at);
   }
 
-  private popupAt(at: Vector3, text: string, tone: "" | "gold" | "danger" = ""): void {
-    const p = this.project(at);
-    if (!p) return;
-    this.hud.popup(Math.min(0.94, Math.max(0.06, p.x)), Math.min(0.9, Math.max(0.1, p.y)), text, tone);
-  }
-
-  private awardText(award: Award): string {
-    const sign = award.points >= 0 ? "+" : "−";
-    const label = award.labels.length ? ` ${award.labels.join(" · ")}` : "";
-    return `${sign}${Math.abs(award.points).toLocaleString("en-US")}${label}`;
+  private popupAt(at: Vector3, text: string, tone: PopupTone = ""): void {
+    popupAt(this.hud, this.camera.camera, at, text, tone);
   }
 
   /** A one-time tip's moment has come (see tips.ts): shown if this player has not had it. */
@@ -806,10 +694,7 @@ export class HighNoon implements Game, MatchListener {
 
   /** Tell the HUD what the hint line shows, when it changes. */
   private syncHint(): void {
-    const text = this.hints.text;
-    if (text === this.hintShown) return;
-    this.hintShown = text;
-    this.hud.hint(text);
+    this.hintShown.tell(this.hud, this.hints);
   }
 
   private pushReadouts(force: boolean): void {
@@ -822,31 +707,17 @@ export class HighNoon implements Game, MatchListener {
     const list: Readout[] = [
       { label: "Wave", value: String(m.wave) },
       { label: "Gang", value: String(left), meter: m.spec.bandits + (m.spec.boss ? 1 : 0) > 0 ? left / (m.spec.bandits + (m.spec.boss ? 1 : 0)) : 0 },
-      { label: "Streak", value: `×${mult}`, meter: (mult - 1) / 3, tone: mult >= 4 ? "warning" : "" },
+      streakReadout(mult),
     ];
     this.hud.readouts(list);
   }
 
   private updateHurt(dt: number): void {
-    const hurt = this.match.health.hurt;
-    // The picture reacts at once to a hit and recovers with the regeneration.
-    // With reduced flashing the red and the grey close in over a quarter of a
-    // second instead, so a hit never darkens the whole view in one frame.
-    const shown = this.hurtDisplay;
-    if (hurt <= shown) this.hurtDisplay = shown + (hurt - shown) * Math.min(1, dt * 4);
-    else this.hurtDisplay = this.effects.reducedFlashing ? shown + (hurt - shown) * Math.min(1, dt * 10) : hurt;
-    const h = this.hurtDisplay;
+    const h = this.hurt.ease(this.match.health.hurt, dt, this.effects.reducedFlashing);
     this.post.set("hurt", h);
     this.post.set("desaturate", Math.min(1, h * 0.6 + this.sepia));
-    if (Math.abs(h - this.hurtShown) > 0.01) {
-      this.hurtShown = h;
-      this.hud.health(h);
-    }
-    if (Math.abs(h - this.hurtFilter) > 0.02) {
-      this.hurtFilter = h;
-      this.sound.filter("hurt", h);
-    }
     // (The heartbeat comes with the "hurt" filter: the audio engine races it with the damage.)
+    this.hurt.tell(this.hud, this.sound);
   }
 
   private updateDeath(dt: number): void {
@@ -884,20 +755,6 @@ export class HighNoon implements Game, MatchListener {
     for (const b of this.match.bandits) this.sound.stopLoop(`fuse.b${b.id}`);
   }
 
-  private later(seconds: number, run: () => void): void {
-    this.schedule.push({ at: this.time + seconds, run });
-  }
-
-  private runSchedule(): void {
-    for (let i = this.schedule.length - 1; i >= 0; i--) {
-      const s = this.schedule[i] as Scheduled;
-      if (this.time >= s.at) {
-        this.schedule.splice(i, 1);
-        s.run();
-      }
-    }
-  }
-
   // --- MatchListener ------------------------------------------------------------------------
 
   banner(title: string, subtitle?: string): void {
@@ -911,11 +768,10 @@ export class HighNoon implements Game, MatchListener {
 
   waveClear(_wave: number, b: WaveBonuses): void {
     this.sound.play("wave_clear");
-    const lines: [string, "" | "gold"][] = [];
-    if (b.accuracyPoints > 0) lines.push([`+${b.accuracyPoints} Accuracy ${Math.round(b.accuracy * 100)}%`, ""]);
-    if (b.untouchable > 0) lines.push([`+${b.untouchable} Untouchable`, "gold"]);
-    if (b.cleanHands > 0) lines.push([`+${b.cleanHands} Clean Hands`, ""]);
-    lines.forEach(([text, tone], i) => this.later(0.35 + i * 0.45, () => this.hud.popup(0.5, 0.56 + i * 0.05, text, tone)));
+    showBonuses(this.hud, this.schedule, b, [
+      [b.untouchable, "Untouchable", "gold"],
+      [b.cleanHands, "Clean Hands", ""],
+    ]);
     // The wave is won: the line clears for the title card (a tip still showing finishes).
     this.hints.setNeed(null);
     this.hints.clearWord();
@@ -923,9 +779,9 @@ export class HighNoon implements Game, MatchListener {
   }
 
   intermission(_next: number, giant: boolean): void {
-    this.later(0.6, () => this.secretsWorld.bellHit(0.8));
-    this.later(1.2, () => this.ambient.spawnTumbleweed(giant));
-    this.hurtDisplay = 0;
+    this.schedule.later(0.6, () => this.secretsWorld.bellHit(0.8));
+    this.schedule.later(1.2, () => this.ambient.spawnTumbleweed(giant));
+    this.hurt.value = 0;
   }
 
   banditSpawn(b: Bandit): void {
@@ -985,7 +841,7 @@ export class HighNoon implements Game, MatchListener {
     if (!blast) this.shotKilled = true;
     tmp2.set(b.pos.x, b.pos.y + 2.05, b.pos.z);
     const special = award.labels.includes("Headshot") || award.labels.includes("Quick Draw") || award.labels.includes("Black Jack");
-    this.popupAt(tmp2, this.awardText(award), special ? "gold" : "");
+    this.popupAt(tmp2, awardText(award), special ? "gold" : "");
     if (award.labels.includes("Quick Draw")) this.sound.play("quick_draw", { volume: 0.9, delay: 0.05 });
     if (b.beforeTheBell) {
       this.hints.say(UNSPORTING, 2);
@@ -1007,7 +863,7 @@ export class HighNoon implements Game, MatchListener {
 
   dynamiteShot(stick: Dynamite, award: Award): void {
     tmp2.set(stick.position.x, stick.position.y + 0.4, stick.position.z);
-    this.popupAt(tmp2, this.awardText(award), "gold");
+    this.popupAt(tmp2, awardText(award), "gold");
   }
 
   dynamiteExplode(stick: Dynamite, _inAir: boolean): void {
@@ -1058,15 +914,13 @@ export class HighNoon implements Game, MatchListener {
     // Said in words, not only in red and a sound: "−200 Townsperson" where
     // they stood, and a calm word on the line about who it was.
     tmp2.set(p.pos.x, p.pos.y + 2.05, p.pos.z);
-    this.popupAt(tmp2, this.awardText(award), "danger");
+    this.popupAt(tmp2, awardText(award), "danger");
     this.hints.say(innocentWord(p.role, this.match.scorer.townsfolkHit), 2);
     this.syncHint();
   }
 
   streakUp(multiplier: number): void {
-    // Up a major triad as the multiplier climbs: x2 root, x3 third, x4 fifth.
-    const semitones = multiplier >= 4 ? 7 : multiplier === 3 ? 4 : 0;
-    this.sound.play("streak_up", { rate: Math.pow(2, semitones / 12) });
+    this.sound.play("streak_up", { rate: streakRate(multiplier) });
     this.pushReadouts(true);
   }
 
@@ -1090,10 +944,10 @@ export class HighNoon implements Game, MatchListener {
 
   bellToll(_toll: number, doorsOpen: boolean): void {
     if (!doorsOpen) return;
-    this.later(0.8, () => {
+    this.schedule.later(0.8, () => {
       this.secretsWorld.openDoors();
       const cover = this.secretsWorld.preacherCover();
-      if (cover) this.later(0.9, () => this.match.spawnPreacher(cover));
+      if (cover) this.schedule.later(0.9, () => this.match.spawnPreacher(cover));
     });
   }
 
@@ -1122,10 +976,10 @@ export class HighNoon implements Game, MatchListener {
     // vane: its show (the spin, then the creak round to point at you) plays
     // first, and the toast after it. (The rules announce the find before the
     // shot has set the vane spinning: its length is read a frame later.)
-    if (id === "vane") this.later(0, () => this.later(this.secretsWorld.vaneShowLeft() + 0.2, announce));
+    if (id === "vane") this.schedule.later(0, () => this.schedule.later(this.secretsWorld.vaneShowLeft() + 0.2, announce));
     // The giant tumbleweed is found as the breather begins; it is announced
     // once it has rolled into view (see intermission()).
-    else if (id === "tumbleweeds") this.later(1.8, announce);
+    else if (id === "tumbleweeds") this.schedule.later(1.8, announce);
     else announce();
   }
 

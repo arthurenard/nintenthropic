@@ -1,12 +1,13 @@
 import { Box3, Raycaster, Vector2, Vector3, type Object3D, type PerspectiveCamera } from "three";
-import { assistFactor, choose, secretFactor } from "../../../engine/rules/assist";
-import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../../../engine/rules/raymath";
+import { assistAngle, assistFactor, choose, secretFactor } from "../../../engine/rules/assist";
+import { weighBody, weighInnocent, type BodyHit, type BodyShape } from "../../../engine/rules/bodyShot";
+import { effectiveRadius, probePoint, type RayProbe } from "../../../engine/rules/raymath";
 import type { Settings } from "../../../engine/types";
 import type { Dead } from "../rules/dead";
 import type { ShotTarget } from "../rules/match";
 import type { SignLetter } from "../rules/secrets";
 import type { Survivor } from "../rules/survivors";
-import type { HitPart } from "../rules/types";
+import type { DeadKind, HitPart } from "../rules/types";
 import type { Cast } from "./cast";
 import type { RayHit, RoadQueries } from "./queries";
 import { surfaceOf, type RoadLayout, type Surface } from "./road";
@@ -54,9 +55,24 @@ export interface ShootableWorld {
 
 const ndc = new Vector2();
 const probe: RayProbe = { t: 0, miss: 0 };
-const closest = new Vector3();
 const tmp = new Vector3();
 const hitBox = new Vector3();
+const body: BodyHit = { part: "body", t: 0, score: 0, physical: false };
+const innocent = { hit: false, t: 0 };
+
+/**
+ * Each kind of the dead's head and torso, metres, for a shot
+ * (engine/rules/bodyShot.ts weighs it): the bloater's body and the
+ * Mechanic's are bigger, and a crawler is down on the road, its neck low and
+ * forward, with no legs under it to hit.
+ */
+const SHAPES: Readonly<Record<DeadKind, BodyShape>> = {
+  walker: { head: 0.13, torso: 0.2, upright: true },
+  runner: { head: 0.13, torso: 0.2, upright: true },
+  crawler: { head: 0.13, torso: 0.2, upright: false },
+  bloater: { head: 0.13, torso: 0.34, upright: true },
+  mechanic: { head: 0.16, torso: 0.27, upright: true },
+};
 
 interface Candidate {
   kind: "dead" | "survivor" | "secret";
@@ -116,12 +132,6 @@ export class Shooter {
     for (const [letter, node] of road.secrets.sign) this.letterBoxes.set(letter, new Box3().setFromObject(node).expandByScalar(0.06));
   }
 
-  /** One fraction of the smaller view side, as a tangent of angle. */
-  private tanFor(fraction: number): number {
-    const tanHalf = Math.tan((this.camera.fov * Math.PI) / 360);
-    return fraction * 2 * tanHalf * Math.min(1, this.camera.aspect);
-  }
-
   shoot(x: number, y: number): ShotResult {
     const res = this.result;
     ndc.set(x * 2 - 1, -(y * 2 - 1));
@@ -148,127 +158,44 @@ export class Shooter {
 
     // Aim Assist, live: the tables wider, or exact (a tolerance of none).
     const boost = assistFactor(this.settings.aimAssist);
-    const aTorso = Math.atan(this.tanFor(ASSIST.torso * boost));
-    const aHead = Math.atan(this.tanFor(ASSIST.head * boost));
-    const aCrawler = Math.atan(this.tanFor(ASSIST.crawler * boost));
+    const aTorso = assistAngle(this.camera, ASSIST.torso * boost);
+    const aHead = assistAngle(this.camera, ASSIST.head * boost);
+    const aCrawler = assistAngle(this.camera, ASSIST.crawler * boost);
     // The nearest survivor the shot passes close beside (not through): no help beyond it.
     let guardAt = Number.POSITIVE_INFINITY;
     for (const v of this.cast.dead) {
       const dead = v.d;
       if (!dead.shootable) continue;
-      const j = v.rig.updateJoints();
-      probePoint(o, d, j.head, probe);
-      if (probe.t <= 0) continue;
-      const crawler = dead.kind === "crawler";
-      const torsoR = dead.kind === "bloater" ? 0.34 : dead.kind === "mechanic" ? 0.27 : 0.2;
-      const headR = dead.kind === "mechanic" ? 0.16 : 0.13;
-      const tH = probe.t;
-      const missH = probe.miss;
-      const rH = effectiveRadius(headR, tH, aHead);
-      probeSegment(o, d, j.hips, j.neck, probe);
-      const tT = probe.t;
-      const missT = probe.miss;
-      const rT = effectiveRadius(torsoR, tT, crawler ? aCrawler : aTorso);
-      let limbT = 0;
-      let limbScore = Number.POSITIVE_INFINITY;
-      const limb = (a: Vector3, b: Vector3, r: number) => {
-        probeSegment(o, d, a, b, probe);
-        const s = probe.miss / r;
-        if (s < limbScore) {
-          limbScore = s;
-          limbT = probe.t;
-        }
-      };
-      limb(j.shoulderL, j.elbowL, 0.065);
-      limb(j.elbowL, j.handL, 0.055);
-      limb(j.shoulderR, j.elbowR, 0.065);
-      limb(j.elbowR, j.handR, 0.055);
-      if (!crawler) {
-        limb(j.thighL, j.kneeL, 0.09);
-        limb(j.kneeL, j.footL, 0.07);
-        limb(j.thighR, j.kneeR, 0.09);
-        limb(j.kneeR, j.footR, 0.07);
-      }
-      // A shot passing above the neck is a headshot or a miss, never a body shot (a crawler's neck is low and forward: no such rule).
-      closest.copy(d).multiplyScalar(tH).add(o);
-      const aboveNeck = !crawler && closest.y > j.neck.y + 0.03;
-      const scoreH = missH / rH;
-      const scoreT = missT / rT;
-      // The shot passes through one of its real shapes, whatever zone the allowance calls it: with
-      // assist an arm's hit can read as the body's, and must still be a real hit, not a near miss.
-      const real = missH <= headR || missT <= torsoR || limbScore <= 1;
-      let part: HitPart | null = null;
-      let score = 0;
-      let t = 0;
-      let physical = false;
-      if (aboveNeck) {
-        if (scoreH <= 1) {
-          part = "head";
-          score = scoreH;
-          t = tH;
-          physical = missH <= headR;
-        }
-      } else if (limbScore <= 1 && limbScore < scoreT && missT > torsoR) {
-        part = "limb";
-        score = limbScore * 0.5;
-        t = limbT;
-        physical = true;
-      } else if (scoreT <= 1 || scoreH <= 1) {
-        if (scoreH <= 1 && scoreH < scoreT) {
-          part = "head";
-          score = scoreH;
-          t = tH;
-          physical = real;
-        } else {
-          part = "body";
-          score = scoreT;
-          t = tT;
-          physical = real;
-        }
-      }
-      if (!part) continue;
+      const hit = weighBody(o, d, v.rig.updateJoints(), SHAPES[dead.kind], aHead, dead.kind === "crawler" ? aCrawler : aTorso, body);
+      if (!hit) continue;
       const c = add();
       c.kind = "dead";
       c.dead = dead;
-      c.part = part;
-      c.t = t;
-      c.score = score;
-      c.physical = physical;
+      c.part = hit.part;
+      c.t = hit.t;
+      c.score = hit.score;
+      c.physical = hit.physical;
     }
 
     for (const sv of this.world.survivors()) {
       if (!sv.s.shootable) continue;
-      const j = sv.joints();
-      probePoint(o, d, j.head, probe);
-      let hit = probe.t > 0 && probe.miss <= 0.14;
-      let t = probe.t;
-      if (!hit) {
-        probeSegment(o, d, j.hips, j.neck, probe);
-        hit = probe.t > 0 && probe.miss <= 0.22;
-        t = probe.t;
-      }
-      if (!hit) {
-        // Close beside one, as near as a torso would be helped: prefer no hit to a wrong one.
-        probePoint(o, d, j.head, probe);
-        const headT = probe.t;
-        const nearHead = probe.t > 0 && probe.miss <= effectiveRadius(0.14, probe.t, aTorso);
-        probeSegment(o, d, j.hips, j.neck, probe);
-        const nearBody = probe.t > 0 && probe.miss <= effectiveRadius(0.22, probe.t, aTorso);
-        if (nearHead) guardAt = Math.min(guardAt, headT);
-        if (nearBody) guardAt = Math.min(guardAt, probe.t);
+      // Close beside one, as near as a torso would be helped, is no hit, and no help beyond them either.
+      const shot = weighInnocent(o, d, sv.joints(), aTorso, innocent);
+      if (!shot.hit) {
+        guardAt = Math.min(guardAt, shot.t);
         continue;
       }
       const c = add();
       c.kind = "survivor";
       c.survivor = sv.s;
-      c.t = t;
+      c.t = shot.t;
       c.score = 0;
       c.physical = true;
     }
 
     // The secrets: their own allowance is never boosted, so assist does not trigger one the player was not aiming at.
     const secretBy = secretFactor(this.settings.aimAssist);
-    const aSecret = Math.atan(this.tanFor(ASSIST.secret * secretBy));
+    const aSecret = assistAngle(this.camera, ASSIST.secret * secretBy);
     const secretAt = (shot: ShotTarget, center: Vector3, radius: number, assist = aSecret) => {
       probePoint(o, d, center, probe);
       if (probe.t <= 0) return;
@@ -299,7 +226,7 @@ export class Shooter {
     const s = this.road.secrets;
     const center = (node: Object3D | null) => (node ? this.box.setFromObject(node).getCenter(tmp) : null);
     const moon = center(s.moonDisc);
-    if (moon) secretAt({ kind: "secret", shot: { secret: "moon" } }, moon.clone(), this.box.getSize(new Vector3()).x * 0.5, Math.atan(this.tanFor(ASSIST.moon * secretBy)));
+    if (moon) secretAt({ kind: "secret", shot: { secret: "moon" } }, moon.clone(), this.box.getSize(new Vector3()).x * 0.5, assistAngle(this.camera, ASSIST.moon * secretBy));
     if (this.world.scarecrowHere() && s.scarecrow) {
       this.box.setFromObject(s.scarecrow);
       const at = ray.intersectBox(this.box, hitBox);

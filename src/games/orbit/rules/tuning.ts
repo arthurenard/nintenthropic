@@ -39,7 +39,7 @@ export const KINDS: Readonly<Record<Kind, KindSpec>> = {
   shard: { speed: [12, 20], cost: 12, radius: 0.6, splitsInto: null, pieces: [0, 0], hits: 1 },
   // Gold insulation round a dense core: the first hit strips the foil, the second splits the core.
   foil: { speed: [9, 15], cost: 26, radius: 0.46, splitsInto: "shrapnel", pieces: [2, 3], hits: 2 },
-  // A dead satellite the size of a car. Its body shrugs off the laser.
+  // A dead satellite the size of a car. Its body shrugs off the laser; three hits on its tank break it up.
   derelict: { speed: [4.6, 5.8], cost: 100, radius: 2.1, splitsInto: "chunk", pieces: [6, 7], hits: 3 },
 };
 
@@ -80,8 +80,6 @@ export const SHARD_TUMBLE: readonly [number, number] = [0.12, 0.3];
 
 // --- the Derelict -----------------------------------------------------------
 
-/** Three hits on the tank rupture it. */
-export const TANK_HITS = 3;
 /** It tumbles end over end, a turn in this many seconds. */
 export const DERELICT_TURN = 7;
 /** The tank shows (can be shot) while it faces the eye at least this much. */
@@ -90,8 +88,6 @@ export const TANK_FACING = 0.18;
 export const DERELICT_DEPTH = 118;
 /** How far (m) the Derelict's arc may bow from its straight line, at most. */
 export const DERELICT_SWAY = 5;
-/** Panes it takes if it arrives: the one it strikes and a neighbour. */
-export const DERELICT_PANES = 2;
 
 // --- the glass --------------------------------------------------------------
 

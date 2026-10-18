@@ -24,10 +24,8 @@ import { GAITS, type DeadKind, type DeadState, type DeathCause, type Gait, type 
 
 /** What one of the dead needs from the match around it. The Match implements it. */
 export interface DeadWorld {
-  readonly time: number;
   /** The player's eye: the barricade is between it and the dead. */
   readonly eye: V3;
-  readonly random: Random;
   /** The difficulty's numbers in force now (worn toward Standard by a long wave). */
   readonly tuning: DifficultyTuning;
   /** Everything that quickens it now besides its own pace: the wave, a long wave's pressure, the Mechanic nearby. */
@@ -85,6 +83,11 @@ export function pointAlong(path: readonly V3[], lengths: readonly number[], alon
   }
 }
 
+/**
+ * How far apart two points are across the ground. Not High Noon's (bandit.ts),
+ * which squares by hand: Math.hypot can differ from that in the last place, and
+ * each game's seeded runs are measured on its own.
+ */
 export function horizontalDistance(a: V3, b: V3): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
@@ -123,13 +126,9 @@ export class Dead {
   slot: Slot | null = null;
   /** Seconds to its next blow at the barricade. */
   private nextStrike = 0;
-  /** Match time it came into play, and when it went down. */
-  spawnedAt = 0;
-  diedAt = 0;
+  /** What brought it down. */
   cause: DeathCause | null = null;
-  /** How far from the eye it was when it went down (for scoring). */
-  diedFar = 0;
-  /** The last stretch it walks: a runner's leap covers the final LUNGE_RANGE of it. */
+  /** A runner has made its leap, over the last LUNGE_RANGE of its way. */
   private lunged = false;
   private stateBeforeStagger: DeadState = "approaching";
   private waitCheck = 0;
@@ -188,8 +187,7 @@ export class Dead {
   }
 
   /** Into play: climbing out of the bus or over the fence, or simply walking out of the fog. */
-  spawn(w: DeadWorld): void {
-    this.spawnedAt = w.time;
+  spawn(): void {
     this.along = 0;
     pointAlong(this.path, this.lengths, 0, this.pos, this.heading);
     if (this.lane.id === "bus") this.enter("emerging", CLIMB_TIME);
@@ -355,10 +353,8 @@ export class Dead {
   }
 
   /** Down. It keeps its place on the road until the breather. */
-  die(cause: DeathCause, time: number, far: number): void {
+  die(cause: DeathCause): void {
     this.cause = cause;
-    this.diedAt = time;
-    this.diedFar = far;
     this.enter("dying", DEATH_TIME);
   }
 }

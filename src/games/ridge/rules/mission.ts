@@ -8,10 +8,10 @@
  * inputs it plays out exactly the same way.
  */
 import { damageDirection, PlayerHealth } from "../../../engine/rules/health";
-import { chance, pick, range, shuffle, type Random } from "../../../engine/rules/rng";
+import { chance, pick, range, type Random } from "../../../engine/rules/rng";
 import type { Difficulty } from "../../../engine/types";
 import { Actor, VEHICLE_SPECS, Vehicle, type DeathClip } from "./actors";
-import { jobFor, JOB_WORDS, stageSpec, stageTitle, type StageSpec } from "./jobs";
+import { JOB_WORDS, stageSpec, stageTitle, type StageSpec } from "./jobs";
 import { dist, flat, headingFrom, PathWalker, Polyline } from "./path";
 import { Rifle, type TriggerResult } from "./rifle";
 import { Scorer, type Award, type StageBonuses } from "./scoring";
@@ -27,6 +27,7 @@ import {
   DIFFICULTY,
   DISMOUNT_GAP,
   DISMOUNT_TIME,
+  ENEMY_BULLET_SPEED,
   ENGINE_HITS,
   FAIL_HOLD,
   FARMER_SPEED,
@@ -66,7 +67,7 @@ import {
   WOUND_KNEEL,
   type DifficultyTuning,
 } from "./tuning";
-import type { Activity, Ending, HitPart, HostileRole, Landing, Plan, Post, SecretId, V3, VehicleKind } from "./types";
+import type { Ending, HitPart, HostileRole, Landing, Plan, Post, SecretId, V3 } from "./types";
 import { stageWind, Wind } from "./wind";
 import { endingNote, endingOutcome } from "./notes";
 
@@ -888,7 +889,7 @@ export class Mission {
     let award: Award;
     if (a.side === "civilian") {
       award = this.scorer.civilian();
-      // "...and one more alert."
+      // The design's "...and one more alert": the valley wakes outright.
       this.raise(1, "civilian", a);
     } else {
       award = this.scorer.animal(animalName(a.role));
@@ -1009,7 +1010,7 @@ export class Mission {
       else {
         a.act("crouch");
         a.still();
-        this.face(a, this.plan.eye, 1);
+        this.face(a, this.plan.eye);
         if (a.flinch <= 0) a.act("idle");
         return;
       }
@@ -1111,7 +1112,7 @@ export class Mission {
       a.setState("hunker", range(this.random, 1.5, 3));
       a.act("crouch");
       a.still();
-      this.face(a, this.plan.eye, 1);
+      this.face(a, this.plan.eye);
       return;
     }
     if (a.t < a.dur) return;
@@ -1125,13 +1126,13 @@ export class Mission {
     }
   }
 
-  private face(a: Actor, p: V3, _k: number): void {
+  private face(a: Actor, p: V3): void {
     a.heading = headingFrom(a.pos, p);
   }
 
   /** The machine-gunner: idle behind his sandbags until the valley wakes, then bursts at the ridge. */
   private gunnerMind(a: Actor, live: boolean): void {
-    this.face(a, this.plan.eye, 1);
+    this.face(a, this.plan.eye);
     if (!a.alerted || !live) {
       if (a.t >= a.dur) {
         a.setState("quiet", range(this.random, 5, 10));
@@ -1203,7 +1204,7 @@ export class Mission {
           a.alerted = true;
           a.setState("hunker", range(this.random, 1, 2.5));
           a.act("crouch");
-          this.face(a, this.plan.eye, 1);
+          this.face(a, this.plan.eye);
         }
         return;
       }
@@ -1425,7 +1426,7 @@ export class Mission {
   private sniperMind(a: Actor, live: boolean): void {
     const nest = a.nest;
     if (!nest) return;
-    this.face(a, this.plan.eye, 1);
+    this.face(a, this.plan.eye);
     switch (a.state) {
       case "hidden":
         a.hidden = true;
@@ -1496,7 +1497,7 @@ export class Mission {
 
   /** The mortar team: crouched by the tube; once the valley is alerted, a round every few seconds. */
   private mortarMind(a: Actor, live: boolean): void {
-    this.face(a, this.plan.eye, 1);
+    this.face(a, this.plan.eye);
     if (a.activity === "fire" && a.activityT > 0.8) a.act("crouch");
     if (!a.alerted || !live || this.phase !== "combat") return;
     // The crew fires together: the lower id of the two is the one who drops the round.
@@ -1525,7 +1526,7 @@ export class Mission {
     const stage = this.stage;
     const place = from.place;
     const at = { x: from.pos.x, y: from.pos.y, z: from.pos.z };
-    this.later(dist(at, this.plan.eye) / 780, () => {
+    this.later(dist(at, this.plan.eye) / ENEMY_BULLET_SPEED, () => {
       // Fired just as the job fell, it finds nobody: the stage is won.
       if (this.stage !== stage || this.phase !== "combat") return;
       this.hurt(damage, at, by, place);
@@ -1829,11 +1830,6 @@ export class Mission {
       secretsTotal: SECRETS_TOTAL,
     };
   }
-
-  /** The job's words for the current stage. */
-  get words(): { name: string; line: string } {
-    return JOB_WORDS[jobFor(this.stage)];
-  }
 }
 
 export function animalName(role: string): string {
@@ -1854,7 +1850,3 @@ export function animalName(role: string): string {
       return "Animal";
   }
 }
-
-/** For the tests: what a vehicle kind is called. */
-export type { VehicleKind, Activity };
-export { shuffle };

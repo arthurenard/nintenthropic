@@ -203,8 +203,7 @@ export class Heightfield {
     if (len < 1e-6) return -1;
     const n = Math.max(1, Math.ceil(len / step));
     let prevT = 0;
-    let prevAbove = ay - this.height(ax, az);
-    if (prevAbove < 0) return 0;
+    if (ay - this.height(ax, az) < 0) return 0;
     for (let k = 1; k <= n; k++) {
       const t = k / n;
       const x = ax + (bx - ax) * t;
@@ -226,9 +225,7 @@ export class Heightfield {
         return hi;
       }
       prevT = t;
-      prevAbove = above;
     }
-    void prevAbove;
     return -1;
   }
 

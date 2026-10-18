@@ -12,12 +12,11 @@
  * | 6    | The Mechanic + 20 | Boss                                          |
  * | 7+   | +6 each           | More runners, a bigger crowd at once, faster walkers |
  *
- * The night was once slower to start (runners from wave 3, crawlers from 4,
- * bloaters from 5, +3 a wave): this table is the tense one. Waves 1 and 2 are
- * still gentle on purpose (the dead walk at 0.8 and 0.9 of the pace of wave
- * 3), so that a first wave can be learned, and the first three open with a
- * burst (OPENINGS): the first of the dead in view within a second of the title
- * card going, a few of them at once, from places already hidden.
+ * Waves 1 and 2 are gentle on purpose (the dead walk at 0.8 and 0.9 of the
+ * pace of wave 3), so that a first wave can be learned, and the first three
+ * open with a burst (OPENINGS): the first of the dead in view within a
+ * second of the title card going, a few of them at once, from places already
+ * hidden.
  */
 import { MECHANIC_EVERY } from "./tuning";
 import type { LaneId } from "./types";

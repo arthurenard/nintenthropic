@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TIPS, HintLine, TIP_GAP, TIP_SECONDS, tipText, type TipId } from "./tips";
+import { HintLine, TIP_GAP, TIP_SECONDS } from "../../engine/rules/hints";
+import { ALL_TIPS, LEARNED_BY_DOING, tipText, type TipId } from "./tips";
 
 const DT = 1 / 60;
 
@@ -25,7 +26,7 @@ function stretches(shown: (string | null)[]): { text: string | null; seconds: nu
 }
 
 function playing(seen: Set<string> = new Set()): HintLine {
-  const line = new HintLine(seen);
+  const line = new HintLine(seen, LEARNED_BY_DOING);
   line.setQuiet(false);
   return line;
 }
@@ -68,7 +69,7 @@ describe("one-time tips", () => {
 
   it("never shows during the aim check, and lets go of what was waiting", () => {
     const seen = new Set<string>();
-    const line = new HintLine(seen); // quiet until play begins
+    const line = new HintLine(seen, LEARNED_BY_DOING); // quiet until play begins
     offer(line, "western.glint");
     expect(run(line, 5).every((t) => t === null)).toBe(true);
     expect(seen.size).toBe(0);

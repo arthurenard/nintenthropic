@@ -42,6 +42,11 @@ export interface StageBonuses {
   total: number;
 }
 
+/**
+ * Not the engine's Scorekeeper, as the other shooters' scorers are: One
+ * Shot, One Kill builds its streak from kills made with a single round, not
+ * from hits, so the shots, the hits and the streak are counted apart.
+ */
 export class Scorer {
   score = 0;
   kills = 0;

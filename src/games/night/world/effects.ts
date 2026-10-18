@@ -1,8 +1,8 @@
-import { BoxGeometry, BufferAttribute, BufferGeometry, Color, MeshStandardMaterial, Vector3, type Group } from "three";
-import { DebrisPool, type DebrisStyle } from "../../../engine/fx/debris";
+import { BoxGeometry, Color, MeshStandardMaterial, Vector3, type Group } from "three";
+import { DebrisPool, shardGeometry, type DebrisStyle } from "../../../engine/fx/debris";
 import { DecalPool } from "../../../engine/fx/decals";
 import { LightPool } from "../../../engine/fx/lights";
-import { ParticleSystem, type ParticleStyle } from "../../../engine/fx/particles";
+import { ParticleSystem, scatter, type ParticleStyle } from "../../../engine/fx/particles";
 import { bulletHoleTexture, particleAtlas } from "../../../engine/fx/textures";
 import type { Quality } from "../../../engine/types";
 import type { NightUniforms } from "./shading";
@@ -47,14 +47,6 @@ const SOFT_TIME = 3;
 const v = new Vector3();
 const t1 = new Vector3();
 const tint = new Color();
-
-function shardGeometry(): BufferGeometry {
-  const g = new BufferGeometry();
-  const p = [0, 0.05, 0, -0.03, -0.03, 0.002, 0.035, -0.02, -0.002, 0, 0.05, 0, 0.035, -0.02, -0.002, -0.03, -0.03, 0.002];
-  g.setAttribute("position", new BufferAttribute(new Float32Array(p), 3));
-  g.computeVertexNormals();
-  return g;
-}
 
 /**
  * Dead of Night's effects, over the engine's shared pools: impacts by
@@ -135,19 +127,13 @@ export class Effects {
     }
   }
 
-  private scatter(n: Vector3, spread: number, out: Vector3): Vector3 {
-    const r = this.random;
-    out.set(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1).multiplyScalar(spread).add(n);
-    return out.normalize();
-  }
-
   /** A bullet meets the road. */
   impact(surface: Surface, at: Vector3, normal: Vector3, floorY: number, hole = true): void {
     const r = this.random;
     switch (surface) {
       case "wood":
         for (let i = 0; i < 6; i++) {
-          this.scatter(normal, 0.9, v).multiplyScalar(2.5 + r() * 3.5);
+          scatter(this.random, normal, 0.9, v).multiplyScalar(2.5 + r() * 3.5);
           tint.setRGB(0.3 + r() * 0.1, 0.24, 0.16);
           this.splinters.emit(at.x, at.y, at.z, v.x, v.y + 1, v.z, floorY, SPLINTERS, tint);
         }
@@ -156,7 +142,7 @@ export class Effects {
         break;
       case "metal":
         for (let i = 0; i < 10; i++) {
-          this.scatter(normal, 1.0, v).multiplyScalar(3 + r() * 5);
+          scatter(this.random, normal, 1.0, v).multiplyScalar(3 + r() * 5);
           this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, this.reducedFlashing ? SPARK_SOFT : SPARK);
         }
         if (hole) this.decals.add(at, normal, 0.045, r() * 6.28, tint.setRGB(0.25, 0.25, 0.26));
@@ -172,13 +158,13 @@ export class Effects {
         break;
       case "plant":
         for (let i = 0; i < 10; i++) {
-          this.scatter(normal, 1.2, v).multiplyScalar(0.8 + r() * 1.8);
+          scatter(this.random, normal, 1.2, v).multiplyScalar(0.8 + r() * 1.8);
           this.alpha.emit(at.x, at.y, at.z, v.x, v.y + 0.5, v.z, LEAF, 1 + r());
         }
         break;
       case "sandbag":
         for (let i = 0; i < 12; i++) {
-          this.scatter(normal, 0.5, v).multiplyScalar(0.4 + r() * 1.2);
+          scatter(this.random, normal, 0.5, v).multiplyScalar(0.4 + r() * 1.2);
           this.alpha.emit(at.x, at.y, at.z, v.x, v.y, v.z, SAND);
         }
         this.puff(at, normal, 0.5);
@@ -189,7 +175,7 @@ export class Effects {
       default:
         // Asphalt and dirt: grit flung up and a low puff.
         for (let i = 0; i < 9; i++) {
-          this.scatter(normal, 0.5, v).multiplyScalar(2 + r() * 3);
+          scatter(this.random, normal, 0.5, v).multiplyScalar(2 + r() * 3);
           this.alpha.emit(at.x, at.y + 0.02, at.z, v.x, v.y, v.z, GRIT);
         }
         this.puff(at, normal, 0.8);
@@ -202,7 +188,7 @@ export class Effects {
   puff(at: Vector3, normal: Vector3, scale: number): void {
     const r = this.random;
     for (let i = 0; i < 6 * scale + 2; i++) {
-      this.scatter(normal, 0.7, v).multiplyScalar((0.6 + r() * 1.4) * scale);
+      scatter(this.random, normal, 0.7, v).multiplyScalar((0.6 + r() * 1.4) * scale);
       this.alpha.emit(at.x, at.y + 0.05, at.z, v.x, v.y, v.z, DUST, 0.7 + scale * 0.5);
     }
   }
@@ -210,12 +196,12 @@ export class Effects {
   glass(at: Vector3, normal: Vector3, count: number, floorY: number, color = col("#9fb3b8")): void {
     const r = this.random;
     for (let i = 0; i < count; i++) {
-      this.scatter(normal, 1.1, v).multiplyScalar(1 + r() * 3.2);
+      scatter(this.random, normal, 1.1, v).multiplyScalar(1 + r() * 3.2);
       tint.copy(color).multiplyScalar(0.8 + r() * 0.5);
       this.shards.emit(at.x + (r() - 0.5) * 0.15, at.y + (r() - 0.5) * 0.15, at.z + (r() - 0.5) * 0.15, v.x, v.y + 1.2, v.z, floorY, SHARDS, tint);
     }
     for (let i = 0; i < 4; i++) {
-      this.scatter(normal, 1, v).multiplyScalar(1 + r() * 2);
+      scatter(this.random, normal, 1, v).multiplyScalar(1 + r() * 2);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, GLINT, 0.35);
     }
   }
@@ -225,11 +211,11 @@ export class Effects {
     const r = this.random;
     const n = headshot ? 7 : 4;
     for (let i = 0; i < n; i++) {
-      this.scatter(away, 0.6, v).multiplyScalar(0.5 + r() * 1.3);
+      scatter(this.random, away, 0.6, v).multiplyScalar(0.5 + r() * 1.3);
       this.alpha.emit(at.x, at.y, at.z, v.x, v.y, v.z, SPRAY, headshot ? 1 : 0.8);
     }
     for (let i = 0; i < n; i++) {
-      this.scatter(away, 0.5, v).multiplyScalar(1.2 + r() * 2);
+      scatter(this.random, away, 0.5, v).multiplyScalar(1.2 + r() * 2);
       this.alpha.emit(at.x, at.y, at.z, v.x, v.y, v.z, SPRAY_DROP);
     }
   }
@@ -252,7 +238,7 @@ export class Effects {
   sparks(at: Vector3, normal: Vector3): void {
     const r = this.random;
     for (let i = 0; i < 14; i++) {
-      this.scatter(normal, 1.0, v).multiplyScalar(3 + r() * 5);
+      scatter(this.random, normal, 1.0, v).multiplyScalar(3 + r() * 5);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, this.reducedFlashing ? SPARK_SOFT : SPARK);
     }
     this.flashLight(at, tint.setRGB(1, 0.75, 0.45), 2.5, 4, 0.06);
@@ -269,7 +255,7 @@ export class Effects {
     const reduced = this.reducedFlashing;
     this.additive.emit(at.x, at.y, at.z, dir.x, dir.y, dir.z, reduced ? FLASH_SOFT : FLASH, 1, golden ? tint.setRGB(reduced ? 1.4 : 7, reduced ? 0.9 : 4.6, reduced ? 0.2 : 1) : undefined);
     for (let i = 0; i < 3; i++) {
-      this.scatter(dir, 0.5, v).multiplyScalar(0.3 + r() * 0.5);
+      scatter(this.random, dir, 0.5, v).multiplyScalar(0.3 + r() * 0.5);
       this.alpha.emit(at.x, at.y, at.z, v.x, v.y + 0.12, v.z, PUFF, 1.2);
     }
     t1.copy(at).addScaledVector(dir, 1.2);

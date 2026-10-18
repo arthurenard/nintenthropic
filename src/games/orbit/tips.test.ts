@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TIPS, droneShotLine, HintLine, tipText, TIP_SECONDS, ventHint } from "./tips";
+import { HintLine, TIP_SECONDS } from "../../engine/rules/hints";
+import { ALL_TIPS, droneShotLine, LEARNED_BY_DOING, tipText, ventHint } from "./tips";
 
 describe("Orbital Decay's tips", () => {
   it("has the design's five, prefixed with the game's name", () => {
@@ -29,7 +30,7 @@ describe("Orbital Decay's tips", () => {
 
   it("learns venting by doing it, and every other tip by seeing it", () => {
     const seen = new Set<string>();
-    const line = new HintLine(seen);
+    const line = new HintLine(seen, LEARNED_BY_DOING);
     line.setQuiet(false);
     line.offer("orbit.heat", tipText("orbit.heat", "hand"));
     line.update(0.01);

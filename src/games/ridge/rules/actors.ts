@@ -5,7 +5,7 @@
  * themselves are in mission.ts; the vehicles' driving is here.
  */
 import { PathWalker, Polyline } from "./path";
-import type { Activity, HostileRole, Nest, Role, Side, V3, VehicleKind } from "./types";
+import type { Activity, Nest, Role, Side, V3, VehicleKind } from "./types";
 import { ENGINE_HITS, ROLL_OUT } from "./tuning";
 
 export type DeathClip = "death_back" | "death_forward" | "death_crumple";
@@ -67,10 +67,6 @@ export class Actor {
 
   get hostile(): boolean {
     return this.side === "hostile";
-  }
-
-  get hostileRole(): HostileRole | null {
-    return this.side === "hostile" ? (this.role as HostileRole) : null;
   }
 
   /** Can a round find him now? */
@@ -234,12 +230,7 @@ export class Vehicle {
     this.sync();
   }
 
-  private readonly prev: V3 = { x: 0, y: 0, z: 0 };
-
   private sync(): void {
-    this.prev.x = this.pos.x;
-    this.prev.y = this.pos.y;
-    this.prev.z = this.pos.z;
     this.walker.pointAt(this.pos);
     this.heading = this.walker.heading();
     const sin = Math.sin(this.heading);

@@ -1,5 +1,4 @@
 import { Color, Matrix4, Mesh, PointLight, SkinnedMesh, Vector3, type Material, type MeshStandardMaterial, type Object3D } from "three";
-import type { V3 } from "../../../engine/rules/raymath";
 import { headingTo, turnRig, type Rig, type RigPool } from "../../../engine/world/character";
 import type { Sound } from "../../../engine/world/sound";
 import { Tumblers } from "../../../engine/world/tumblers";
@@ -46,7 +45,6 @@ export interface DeadView {
   seen: boolean;
   thudIn: number;
   swell: number;
-  deathPlayed: boolean;
   /** A runner dropped in full stride skids on along the road: the speed it has still to lose (m/s), and how far it has gone. */
   skid: number;
   skidX: number;
@@ -175,7 +173,6 @@ export class Cast {
       seen: false,
       thudIn: -1,
       swell: 0,
-      deathPlayed: false,
       skid: 0,
       skidX: 0,
       skidZ: 0,
@@ -342,7 +339,6 @@ export class Cast {
       // headshot leaves the belly whole, and it falls like any of the dead.
       if (cause === "chain") this.burst(d);
       if (!(cause === "burst" && rig.current?.getClip().name === "bloat_burst")) this.playBurst(v, 0.04);
-      v.deathPlayed = true;
       v.thudIn = 1.1;
       this.sound.at("night_dead_fall", d.pos, 0.8, 0.9 + this.random() * 0.2, 0.05);
       return;
@@ -359,7 +355,6 @@ export class Cast {
     } else if (cause === "head") clip = this.random() < 0.75 ? "death_back" : "death_crumple";
     else clip = this.random() < 0.5 ? "death_forward" : "death_crumple";
     rig.play(clip, 0.08, false);
-    v.deathPlayed = true;
     v.thudIn = 0.8;
     this.sound.at("night_dead_fall", d.pos, 0.8, 0.9 + this.random() * 0.2, 0.05);
   }
@@ -638,12 +633,6 @@ export class Cast {
     this.tumblers.reset();
     for (const m of this.maskMeshes) m.visible = false;
     this.lantern.intensity = 0;
-  }
-
-  /** A point on one of the dead a player could aim at: the chest (for the harness's scripted shots). */
-  chest(v: DeadView, out: Vector3): V3 {
-    const j = v.rig.updateJoints();
-    return out.copy(j.hips).lerp(j.neck, 0.6);
   }
 }
 

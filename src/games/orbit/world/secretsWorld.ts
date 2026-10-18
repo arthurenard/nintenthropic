@@ -287,7 +287,7 @@ export class SecretsWorld {
     this.bag.visible = true;
     if (this.bagSack) this.bagSack.visible = true;
     for (const t of this.artTools) t.visible = true;
-    // Across the view in front of the station, a dozen metres out, left to right.
+    // Across the view in front of the station, eight metres or so out, left to right.
     this.viewPoint(BAG_FROM, this.bagFrom);
     this.viewPoint(BAG_TO, this.bagTo);
   }

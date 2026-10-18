@@ -16,7 +16,7 @@
  * Query parameters: ?seed=N, ?wave=N (the game's start wave, if it has
  * waves), ?difficulty=relaxed, ?flashing=reduced, ?tips=seen (as if every
  * one-time tip had been shown already), ?assetBase=/some/folder/ (load the
- * art from there instead, to try an export in progress), ?god=1,
+ * art from there instead, to try an export in progress), ?god=1, ?assist=0,
  * ?golden=1, ?quality=low|medium|high, ?input=mouse|touch|hand (what the
  * game is told the player aims with; unset, as for the hand), ?skipcalib=1,
  * ?manual=1 (no real-time loop: drive it from window.__handy), ?w=&h=&dpr=
@@ -236,7 +236,6 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
     hud,
     assets: assetLoader(),
     settings: {
-      duration: 60,
       reducedMotion: false,
       reducedFlashing: params.reducedFlashing,
       difficulty: params.difficulty,

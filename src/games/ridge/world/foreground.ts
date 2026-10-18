@@ -1,14 +1,12 @@
 /**
  * What lies right in front of the eye on the ridge: a few grass blades and
- * wildflowers, out of focus, moving in the wind, and the rifle's barrel on
- * its rock at the bottom of the view (golden, for a player who has earned
- * it). Seen only without the scope; the scope's narrow view passes over
- * them. Out of focus is painted in: the blades are soft-edged sprites, the
- * rifle is dark and low in contrast.
+ * wildflowers, out of focus, moving in the wind, and the rifle, kept just
+ * below the frame so that only the smoke from its muzzle shows. Seen only
+ * without the scope; the scope's narrow view passes over them. Out of focus
+ * is painted in: the blades are soft-edged sprites.
  */
 import {
   CanvasTexture,
-  Color,
   CylinderGeometry,
   DoubleSide,
   Group,
@@ -207,5 +205,3 @@ export class Foreground {
     });
   }
 }
-
-export type { Color };

@@ -2,13 +2,13 @@ import {
   Box3,
   Mesh,
   Object3D,
-  PerspectiveCamera,
   Quaternion,
   Vector3,
   type Group,
 } from "three";
 import type { Cover, CoverKind, Emerge } from "../rules/types";
-import { contractName, extraNumber, extraString, findNode, nodesWithPrefix } from "../../../engine/world/names";
+import { readEye, surfaceFromArt } from "../../../engine/world/layout";
+import { extraNumber, extraString, findNode, nodesWithPrefix } from "../../../engine/world/names";
 
 export type Surface = "wood" | "dirt" | "glass" | "metal" | "stone" | "cloth" | "water";
 
@@ -51,23 +51,14 @@ export interface TownLayout {
 }
 
 export function surfaceOf(o: Object3D): Surface {
-  const s = extraString(o, "surface");
-  if (s && (SURFACES as readonly string[]).includes(s)) return s as Surface;
-  const mesh = o as Mesh;
-  const mat = mesh.material;
-  const m = Array.isArray(mat) ? mat[0] : mat;
-  const fromMaterial = m?.userData?.["surface"];
-  if (typeof fromMaterial === "string" && (SURFACES as readonly string[]).includes(fromMaterial)) {
-    return fromMaterial as Surface;
-  }
-  // Without extras, guess from names so an early export still plays sensibly.
-  const name = `${contractName(o)} ${m?.name ?? ""}`.toLowerCase();
-  if (/ground|street|dirt|road|sand/.test(name)) return "dirt";
-  if (/glass|window/.test(name)) return "glass";
-  if (/metal|iron|bell|vane|lamp/.test(name)) return "metal";
-  if (/stone|rock|brick/.test(name)) return "stone";
-  if (/water/.test(name)) return "water";
-  return "wood";
+  return surfaceFromArt(o, SURFACES, (name) => {
+    if (/ground|street|dirt|road|sand/.test(name)) return "dirt";
+    if (/glass|window/.test(name)) return "glass";
+    if (/metal|iron|bell|vane|lamp/.test(name)) return "metal";
+    if (/stone|rock|brick/.test(name)) return "stone";
+    if (/water/.test(name)) return "water";
+    return "wood";
+  });
 }
 
 const tmp = new Vector3();
@@ -87,20 +78,7 @@ function pathFrom(root: Object3D, prefix: string): Vector3[] {
 export function readTown(root: Group): TownLayout {
   root.updateMatrixWorld(true);
 
-  // The eye: a glTF camera (the loader makes it a PerspectiveCamera) or an empty with `fov` extras.
-  const camNode = findNode(root, "camera.player");
-  const eye = camNode ? worldPos(camNode) : new Vector3(0, 1.7, 0);
-  const eyeQuaternion = camNode ? camNode.getWorldQuaternion(new Quaternion()) : new Quaternion();
-  let fov = 50;
-  if (camNode) {
-    let cam: PerspectiveCamera | null = null;
-    camNode.traverse((o) => {
-      if (!cam && (o as PerspectiveCamera).isPerspectiveCamera) cam = o as PerspectiveCamera;
-    });
-    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "fov_deg") ?? extraNumber(camNode, "yfov");
-    if (extra !== undefined) fov = extra;
-    else if (cam) fov = (cam as PerspectiveCamera).fov;
-  }
+  const { position: eye, quaternion: eyeQuaternion, fov } = readEye(root, new Vector3(0, 1.7, 0), 50);
 
   const sunNode = findNode(root, "sun");
   const sunDirection = new Vector3(-0.45, -0.37, -0.81).normalize();

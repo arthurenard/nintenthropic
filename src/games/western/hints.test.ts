@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bossWoundWord, chickenWord, innocentWord, reloadHint } from "./hints";
-
-describe("reloadHint", () => {
-  it("speaks to the hand, the mouse and the touch screen in their own terms", () => {
-    expect(reloadHint("hand")).toBe("Point off the screen to reload.");
-    expect(reloadHint(undefined)).toBe("Point off the screen to reload.");
-    expect(reloadHint("mouse")).toBe("Right-click or press R to reload.");
-    expect(reloadHint("touch")).toBe("Tap with two fingers to reload.");
-  });
-});
+import { bossWoundWord, chickenWord, innocentWord } from "./hints";
 
 describe("innocentWord", () => {
   it("says who it was, calmly, in a short sentence", () => {

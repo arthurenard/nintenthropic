@@ -7,9 +7,7 @@
  * on the hour.
  */
 import {
-  AdditiveBlending,
   CanvasTexture,
-  Color,
   DoubleSide,
   Mesh,
   PlaneGeometry,
@@ -83,7 +81,6 @@ export class Ambient {
   private cowbell = 2;
   private dog = 14;
   private readonly flagBase: Float32Array | null;
-  private readonly mistMat: ShaderMaterial;
   /** The run's own clock, for the chapel's bell on the hour. */
   private hourAt = 150;
 
@@ -106,7 +103,6 @@ export class Ambient {
         depthWrite: false,
         side: DoubleSide,
       });
-    this.mistMat = material();
     // Banks of mist along the river, lying on the water, each its own opacity (they share the rest).
     for (let i = 0; i < river.length - 1; i++) {
       const a = river[i]!;
@@ -125,16 +121,13 @@ export class Ambient {
       }
     }
     this.flagBase = flag ? Float32Array.from((flag.geometry.getAttribute("position") as BufferAttribute).array) : null;
-    void AdditiveBlending;
-    void Color;
   }
 
   /** The morning's loops start (and survive pauses: Sound restarts them). */
-  start(eye: V3, riverNear: V3 | null): void {
+  start(riverNear: V3 | null): void {
     this.sound.loop("wind", "ridge_wind_grass", { volume: 0.55 });
     this.sound.loop("birds", "ridge_birds", { volume: 0.5 });
     if (riverNear) this.sound.loop("river", "ridge_river", this.sound.place(riverNear, { volume: 0.9 }));
-    void eye;
     if (this.bell) this.sound.at("ridge_church_bell", this.bell, 0.8, 1, 1.2);
   }
 
@@ -204,6 +197,5 @@ export class Ambient {
       b.mesh.geometry.dispose();
       (b.mesh.material as ShaderMaterial).dispose();
     }
-    this.mistMat.dispose();
   }
 }

@@ -5,11 +5,10 @@
  * shown, never faked. Each game's code is imported only when it is played,
  * so the first screen downloads none of it.
  *
- * A game's agent owns its own entry here: add `create` (importing
- * `./<folder>/index` on demand) when the game can be played, and the poster
- * at its `poster` path when Blender has rendered it. Until then the
- * `backdrop` - the game's light, not a picture pretending to be the game -
- * stands in wherever the poster would be.
+ * Each game's entry has `create` (importing `./<folder>/index` on demand)
+ * once the game can be played, and its poster at its `poster` path. Until
+ * the poster loads, or if it never does, the `backdrop` - the game's light,
+ * not a picture pretending to be the game - stands in wherever it would be.
  */
 import type { Backdrop, Game, GameEntry } from "../engine/types";
 
@@ -199,18 +198,10 @@ export const GRIP_PRIX: GameEntry = {
 /** Every game, playable or Coming Soon, in the arcade's order: the Shooting games, then Racing. */
 export const ARCADE: GameEntry[] = [HIGH_NOON, DEAD_OF_NIGHT, ORBITAL_DECAY, OVERWATCH_RIDGE, GRIP_PRIX];
 
-/** Can this game be played here, in the arcade's own page? (Not: has it a page of its own - see `hasPlay`.) */
+/** Can this game be played here, in the arcade's own page? (A game with a `page` of its own, like Grip Prix, cannot.) */
 export const playable = (entry: GameEntry): entry is GameEntry & { create(): Promise<Game> } => typeof entry.create === "function";
-
-/** Does Play do anything for this game: start it here, or open the page it lives on? False is Coming Soon. */
-export const hasPlay = (entry: GameEntry): boolean => playable(entry) || typeof entry.page === "string";
 
 /** The games that can be played now. */
 export function playableGames(): GameEntry[] {
   return ARCADE.filter(playable);
-}
-
-/** A game in the arcade by its id, playable or not; undefined for none. */
-export function gameById(id: string | null | undefined): GameEntry | undefined {
-  return id ? ARCADE.find((game) => game.id === id) : undefined;
 }

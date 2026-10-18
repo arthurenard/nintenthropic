@@ -1,4 +1,4 @@
-import { HintLine as Line, TIP_GAP, TIP_SECONDS } from "../../engine/rules/hints";
+import { offScreenHint } from "../../engine/rules/hints";
 import type { InputKind } from "../../engine/types";
 
 /**
@@ -11,18 +11,9 @@ export type TipId = "orbit.heat" | "orbit.ring" | "orbit.split" | "orbit.drone" 
 
 export const ALL_TIPS: readonly TipId[] = ["orbit.heat", "orbit.ring", "orbit.split", "orbit.drone", "orbit.derelict"];
 
-export { TIP_GAP, TIP_SECONDS };
-
-/**
- * How to vent the laser, in the player's own terms. A mouse player told to
- * "point off the screen" would drag the pointer out of the window; the page
- * turns a right-click or a two-finger tap into the same gesture, and V is
- * the game's own key.
- */
+/** How to vent the laser, in the player's own terms: V is the game's own key. */
 export function ventHint(input: InputKind | undefined): string {
-  if (input === "mouse") return "Right-click or press V to vent the laser.";
-  if (input === "touch") return "Tap with two fingers to vent the laser.";
-  return "Point off the screen to vent the laser.";
+  return offScreenHint(input, "vent the laser", "Right-click or press V");
 }
 
 /** Each tip's words, in the player's own terms. */
@@ -54,13 +45,6 @@ export function droneShotLine(hits: number, mending: boolean): string {
 /**
  * A lesson is learned when it has been shown, or - for venting, which is
  * shown at the start of every game until then - when the player has done
- * it by themselves.
+ * it by themselves (the game's HintLine is made with these).
  */
-const LEARNED_BY_DOING: readonly TipId[] = ["orbit.heat"];
-
-/** Orbital Decay's hint line: venting is learned by doing it, every other tip by seeing it. */
-export class HintLine extends Line {
-  constructor(seen: Set<string>) {
-    super(seen, LEARNED_BY_DOING);
-  }
-}
+export const LEARNED_BY_DOING: readonly TipId[] = ["orbit.heat"];

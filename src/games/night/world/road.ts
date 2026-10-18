@@ -1,6 +1,7 @@
-import { Box3, InstancedMesh, Matrix4, Mesh, Object3D, PerspectiveCamera, Quaternion, Vector3, type BufferAttribute, type Group } from "three";
+import { Box3, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, Vector3, type BufferAttribute, type Group } from "three";
 import type { V3 } from "../../../engine/rules/raymath";
-import { contractName, extraNumber, extraString, findNode, nodesWithPrefix } from "../../../engine/world/names";
+import { readEye, surfaceFromArt } from "../../../engine/world/layout";
+import { extraNumber, findNode, nodesWithPrefix } from "../../../engine/world/names";
 import type { SignLetter } from "../rules/secrets";
 import { SIGN_LETTERS } from "../rules/secrets";
 import type { Lane, LaneId, Slot } from "../rules/types";
@@ -57,24 +58,17 @@ export interface RoadLayout {
 }
 
 export function surfaceOf(o: Object3D): Surface {
-  const s = extraString(o, "surface");
-  if (s && (SURFACES as readonly string[]).includes(s)) return s as Surface;
-  const mesh = o as Mesh;
-  const mat = mesh.material;
-  const m = Array.isArray(mat) ? mat[0] : mat;
-  const fromMaterial = m?.userData?.["surface"];
-  if (typeof fromMaterial === "string" && (SURFACES as readonly string[]).includes(fromMaterial)) return fromMaterial as Surface;
-  // Without extras, guess from names so an early export still plays sensibly.
-  const name = `${contractName(o)} ${m?.name ?? ""}`.toLowerCase();
-  if (/road|asphalt|tarmac|forecourt|concrete/.test(name)) return "asphalt";
-  if (/corn|grass|plant|tree|pine|bush/.test(name)) return "plant";
-  if (/sandbag/.test(name)) return "sandbag";
-  if (/glass|window/.test(name)) return "glass";
-  if (/metal|steel|iron|pump|truck|bus|tin|pole|sign/.test(name)) return "metal";
-  if (/puddle|water/.test(name)) return "water";
-  if (/cloth|tarp|flag/.test(name)) return "cloth";
-  if (/dirt|field|ground|gravel|mud/.test(name)) return "dirt";
-  return "wood";
+  return surfaceFromArt(o, SURFACES, (name) => {
+    if (/road|asphalt|tarmac|forecourt|concrete/.test(name)) return "asphalt";
+    if (/corn|grass|plant|tree|pine|bush/.test(name)) return "plant";
+    if (/sandbag/.test(name)) return "sandbag";
+    if (/glass|window/.test(name)) return "glass";
+    if (/metal|steel|iron|pump|truck|bus|tin|pole|sign/.test(name)) return "metal";
+    if (/puddle|water/.test(name)) return "water";
+    if (/cloth|tarp|flag/.test(name)) return "cloth";
+    if (/dirt|field|ground|gravel|mud/.test(name)) return "dirt";
+    return "wood";
+  });
 }
 
 const tmp = new Vector3();
@@ -100,20 +94,7 @@ const SPREAD: Readonly<Record<LaneId, number>> = { road: 1.7, corn: 1.3, trees: 
 export function readRoad(root: Group): RoadLayout {
   root.updateMatrixWorld(true);
 
-  // The eye: a glTF camera (the loader makes it a PerspectiveCamera) or an empty with `fov` extras.
-  const camNode = findNode(root, "camera.player");
-  const eye = camNode ? worldPos(camNode) : new Vector3(0, 1.7, 0);
-  const eyeQuaternion = camNode ? camNode.getWorldQuaternion(new Quaternion()) : new Quaternion();
-  let fov = 50;
-  if (camNode) {
-    let cam: PerspectiveCamera | null = null;
-    camNode.traverse((o) => {
-      if (!cam && (o as PerspectiveCamera).isPerspectiveCamera) cam = o as PerspectiveCamera;
-    });
-    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "fov_deg") ?? extraNumber(camNode, "yfov");
-    if (extra !== undefined) fov = extra;
-    else if (cam) fov = (cam as PerspectiveCamera).fov;
-  }
+  const { position: eye, quaternion: eyeQuaternion, fov } = readEye(root, new Vector3(0, 1.7, 0), 50);
 
   const moonNode = findNode(root, "moon");
   const moonDirection = new Vector3(0.45, -0.62, 0.64).normalize();

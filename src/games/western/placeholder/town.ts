@@ -36,8 +36,8 @@ import {
  * `cover.<id>` / `cover.<id>.hidden` with {kind, emerge, level}, `calib.1-9`,
  * the `secret.*` pivots, `glass.*` panes, `path.*` waypoints, `ground.shadow`,
  * and `surface` extras on every mesh. Light is baked into vertex colours and
- * the materials are unlit, like the Cycles bake. When town.glb arrives the
- * game loads it instead and none of the game code changes.
+ * the materials are unlit, like the Cycles bake. With town.glb in place the
+ * game loads that instead, and none of the game code changes.
  *
  * Layout (metres; the player at the origin looking down −Z, left is −X):
  * facades at x = ±8.5 with boardwalks in front of them, the church across the

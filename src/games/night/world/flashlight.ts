@@ -4,10 +4,10 @@ import type { RayHit } from "../../../engine/world/queries";
 import type { NightUniforms } from "./shading";
 
 /**
- * The flashlight's numbers: a warm white lamp under the barrel, a 17° cone
- * whose centre is hot and whose edge falls off softly, and a falloff gentler
- * than the square of distance, so one of the dead at the barricade is lit,
- * not burnt white, and one at 30 m still shows.
+ * The flashlight's numbers: a warm white lamp under the barrel, a cone 17°
+ * to either side of its axis whose centre is hot and whose edge falls off
+ * softly, and a falloff gentler than the square of distance, so one of the
+ * dead at the barricade is lit, not burnt white, and one at 30 m still shows.
  */
 export const BEAM = {
   /** Half the cone, radians. */

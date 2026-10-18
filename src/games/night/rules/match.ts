@@ -1,4 +1,5 @@
 import { damageDirection, PlayerHealth } from "../../../engine/rules/health";
+import { boldnessAfter, pressureOf, wearToward } from "../../../engine/rules/pressure";
 import type { V3 } from "../../../engine/rules/raymath";
 import { range, shuffle, type Random } from "../../../engine/rules/rng";
 import type { Difficulty } from "../../../engine/types";
@@ -347,7 +348,7 @@ export class Match implements DeadWorld {
     const offset = range(this.random, -lane.spread, lane.spread);
     const d = new Dead(this.nextId++, entry.kind, lane, offsetPath(lane, offset), paceOf(entry.kind, gait, hurry), gait);
     if (entry.kind === "mechanic") d.mask = this.tuning.maskHits;
-    d.spawn(this);
+    d.spawn();
     this.dead.push(d);
     this.listener.deadSpawn(d);
     // One of an opening is followed a moment later by the next of it; after the last, the wave's own gap.
@@ -404,7 +405,7 @@ export class Match implements DeadWorld {
 
   burstOnPlayer(d: Dead): void {
     if (!d.alive) return;
-    d.die("burst", this.time, horizontalDistance(d.pos, this.eye));
+    d.die("burst");
     this.listener.bloaterBurst(d, false, [], null);
     this.listener.deadDeath(d, "burst", null);
     this.damagePlayer(Math.round(BLOATER_BURST_DAMAGE * this.tuning.damageFactor), d, true);
@@ -421,14 +422,12 @@ export class Match implements DeadWorld {
    */
   boldness(): number {
     if (this.phase !== "combat" || this.queue.length > 0) return 1;
-    const t = this.baseline;
-    return Math.min(t.boldMax, 1 + Math.max(0, this.phaseT - this.lastSpawnAt - t.boldAfter) * t.boldRate);
+    return boldnessAfter(this.baseline, this.phaseT - this.lastSpawnAt);
   }
 
   /** The late-wave pressure as a fraction: 0 (none yet) to 1 (the fog at its thickest). */
   pressure(): number {
-    const max = this.baseline.boldMax;
-    return max > 1 ? (this.boldness() - 1) / (max - 1) : 0;
+    return pressureOf(this.baseline, this.boldness());
   }
 
   /** The fog's density now: the wave's, thinner on Relaxed, thicker as a wave drags on, thin in a breather. */
@@ -449,11 +448,7 @@ export class Match implements DeadWorld {
    * and health comes back no sooner. On Standard nothing moves.
    */
   private wear(): void {
-    const k = this.pressure();
-    const from = this.baseline;
-    const to = DIFFICULTY.standard;
-    const t = this.tuning;
-    for (const key of WORN) t[key] = from[key] + (to[key] - from[key]) * k;
+    wearToward(this.tuning, this.baseline, DIFFICULTY.standard, WORN, this.pressure());
   }
 
   // --- the player -------------------------------------------------------------------------
@@ -561,7 +556,7 @@ export class Match implements DeadWorld {
   private kill(d: Dead, cause: HitPart): void {
     if (!d.alive) return;
     const far = horizontalDistance(d.pos, this.eye);
-    d.die(cause, this.time, far);
+    d.die(cause);
     const award = this.scorer.kill({ kind: d.kind, headshot: cause === "head", distance: far });
     this.listener.deadDeath(d, cause, award);
     this.listener.score(this.scorer.score);
@@ -570,7 +565,7 @@ export class Match implements DeadWorld {
   /** Shot in the body, a bloater bursts: everything within three metres goes down with it, and a bloater caught bursts too. */
   private burstByShot(d: Dead): void {
     const far = horizontalDistance(d.pos, this.eye);
-    d.die("body", this.time, far);
+    d.die("body");
     const award = this.scorer.kill({ kind: "bloater", headshot: false, distance: far });
     this.listener.deadDeath(d, "body", award);
     const caught: Dead[] = [];
@@ -580,7 +575,7 @@ export class Match implements DeadWorld {
       for (const o of this.dead) {
         if (!o.alive || o.kind === "mechanic") continue;
         if (horizontalDistance(o.pos, at.pos) > CHAIN_RADIUS) continue;
-        o.die("chain", this.time, horizontalDistance(o.pos, this.eye));
+        o.die("chain");
         caught.push(o);
         if (o.kind === "bloater") bursts.push(o);
       }

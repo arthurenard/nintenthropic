@@ -187,7 +187,7 @@ export class DroneView {
     return this.tip ? this.tip.getWorldPosition(out) : out.copy(this.root.position);
   }
 
-  /** How big it is for a shot, and where. */
+  /** Where it is, for a shot. */
   get center(): Vector3 {
     return this.root.position;
   }

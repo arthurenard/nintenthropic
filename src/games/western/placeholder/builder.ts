@@ -65,7 +65,7 @@ const nm = new Matrix3();
 /**
  * Collects the placeholder town's static geometry into a few merged meshes,
  * baking light into vertex colours as it goes — a poor man's Cycles bake, so
- * the placeholder is unlit exactly like the real town.glb will be.
+ * the placeholder is unlit exactly like the real town.glb.
  */
 export class TownBuilder {
   readonly root = new Group();

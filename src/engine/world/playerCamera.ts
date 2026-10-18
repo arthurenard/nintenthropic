@@ -83,11 +83,6 @@ export class PlayerCamera {
     this.apply();
   }
 
-  /** Where the framing is heading (or is). */
-  get framingTarget(): Readonly<Framing> {
-    return this.framingTo;
-  }
-
   private applyFov(): void {
     if (Math.abs(this.camera.fov - this.framing.fov) < 1e-5) return;
     this.camera.fov = this.framing.fov;
@@ -131,9 +126,9 @@ export class PlayerCamera {
       this.framingT = Math.min(1, this.framingT + dt / Math.max(1e-3, this.framingDur));
       // Ease in and out, like a camera operator's hands on the zoom ring.
       const k = this.framingT;
-      const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-      this.framing.fov = this.framingFrom.fov + (this.framingTo.fov - this.framingFrom.fov) * e;
-      this.framing.pitch = this.framingFrom.pitch + (this.framingTo.pitch - this.framingFrom.pitch) * e;
+      const eased = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      this.framing.fov = this.framingFrom.fov + (this.framingTo.fov - this.framingFrom.fov) * eased;
+      this.framing.pitch = this.framingFrom.pitch + (this.framingTo.pitch - this.framingFrom.pitch) * eased;
       this.applyFov();
     }
     // Recoil and flinch settle exponentially: ~250 ms to rest.

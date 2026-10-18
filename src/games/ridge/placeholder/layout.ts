@@ -497,4 +497,3 @@ export function platePositions(): [number, number, number, number][] {
 /** The sun: toward it from the valley, behind the player's left shoulder, low. */
 export const SUN_AZIMUTH = Math.atan2(-0.55, 0.83);
 export const SUN_ELEVATION_START = 5.5;
-export const SUN_ELEVATION_END = 9;

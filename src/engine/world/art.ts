@@ -26,7 +26,7 @@ export interface ArtFile {
   /** Under the site's root: "assets/western/town.glb". */
   path: string;
   kind: "gltf" | "texture";
-  /** Its share of the progress bar, roughly its size: the weights need not add to 1. */
+  /** Its share of the progress bar, roughly its size. The bar is the sum of the finished files' weights, so a game's add up to 1. */
   weight: number;
 }
 

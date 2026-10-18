@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DownloadError, STALL_AFTER, fetchBytes } from "./fetch";
 
-/** A body that hands out `chunks` bytes at the given times (ms from the start), then ends - or never does. */
+/** A body that hands out `parts` of bytes at the given times (ms from the start), then ends - or never does. */
 function trickle(parts: { at: number; bytes: number }[], end: number | null): ReadableStream<Uint8Array> {
   let cancelled = false;
   return new ReadableStream<Uint8Array>({

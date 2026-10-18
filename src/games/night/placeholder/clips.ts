@@ -1,16 +1,5 @@
-import {
-  AnimationClip,
-  Euler,
-  InterpolateSmooth,
-  Matrix4,
-  Object3D,
-  PropertyBinding,
-  Quaternion,
-  QuaternionKeyframeTrack,
-  Vector3,
-  VectorKeyframeTrack,
-  type KeyframeTrack,
-} from "three";
+import { AnimationClip, Euler, Matrix4, Object3D, Quaternion, Vector3 } from "three";
+import { makeClip, pose, quatOf, type Pose } from "../../../engine/world/poses";
 
 /**
  * Dead of Night's placeholder clips: the dead, the Mechanic, the survivors
@@ -25,9 +14,6 @@ import {
 
 export type Vec3 = [number, number, number];
 export type BoneDef = [name: string, parent: string | null, offset: Vec3];
-
-/** Bone rotations in degrees, applied yaw (Y), then pitch (X), then roll (Z). */
-export type Pose = Record<string, Vec3>;
 
 /** Where an end of a limb (a foot, a hand, a paw) must be, in the rig's rest frame. */
 export interface Reach {
@@ -178,10 +164,6 @@ const TAU = Math.PI * 2;
 const X_AXIS = new Vector3(1, 0, 0);
 const euler = new Euler();
 
-function quatOf(r: Vec3, out = new Quaternion()): Quaternion {
-  return out.setFromEuler(euler.set(r[0] * DEG, r[1] * DEG, r[2] * DEG, "YXZ"));
-}
-
 function degOf(q: Quaternion): Vec3 {
   euler.setFromQuaternion(q, "YXZ");
   return [euler.x / DEG, euler.y / DEG, euler.z / DEG];
@@ -200,67 +182,6 @@ function bump(p: number, at: number, width: number): number {
   if (Math.abs(d) >= width / 2) return 0;
   const c = Math.cos((Math.PI * d) / width);
   return c * c;
-}
-
-/**
- * Build an AnimationClip from key poses, the way the Blender actions arrive:
- * quaternion tracks per bone named with the glTF loader's sanitised node
- * names, the root's translation, and any scale. Bones a key leaves out are
- * at rest.
- */
-export function makeClip(name: string, keys: Key[], root: string, rootRest: Vec3, smooth = true): AnimationClip {
-  const bones = new Set<string>();
-  const scaled = new Set<string>();
-  for (const k of keys) {
-    for (const b of Object.keys(k.pose)) bones.add(b);
-    for (const b of Object.keys(k.scale ?? {})) scaled.add(b);
-  }
-  const times = keys.map((k) => k.t);
-  const tracks: KeyframeTrack[] = [];
-  const quat = new Quaternion();
-  for (const bone of bones) {
-    const values: number[] = [];
-    let prev: Quaternion | null = null;
-    for (const k of keys) {
-      quatOf(k.pose[bone] ?? [0, 0, 0], quat);
-      // Keep successive keys on the same hemisphere so slerp takes the short way.
-      if (prev && prev.dot(quat) < 0) quat.set(-quat.x, -quat.y, -quat.z, -quat.w);
-      prev = quat.clone();
-      values.push(quat.x, quat.y, quat.z, quat.w);
-    }
-    tracks.push(new QuaternionKeyframeTrack(`${PropertyBinding.sanitizeNodeName(bone)}.quaternion`, times, values));
-  }
-  for (const bone of scaled) {
-    const values: number[] = [];
-    for (const k of keys) values.push(...(k.scale?.[bone] ?? [1, 1, 1]));
-    tracks.push(new VectorKeyframeTrack(`${PropertyBinding.sanitizeNodeName(bone)}.scale`, times, values));
-  }
-  if (keys.some((k) => k.hips)) {
-    const values: number[] = [];
-    for (const k of keys) {
-      const h = k.hips ?? [0, 0, 0];
-      values.push(rootRest[0] + h[0], rootRest[1] + h[1], rootRest[2] + h[2]);
-    }
-    const track = new VectorKeyframeTrack(`${PropertyBinding.sanitizeNodeName(root)}.position`, times, values);
-    if (smooth && keys.length > 2) track.setInterpolation(InterpolateSmooth);
-    tracks.push(track);
-  }
-  return new AnimationClip(name, keys[keys.length - 1]?.t ?? 0, tracks);
-}
-
-/** Merge poses: later ones win, bone by bone. */
-export function pose(...parts: Pose[]): Pose {
-  return Object.assign({}, ...parts) as Pose;
-}
-
-/** Mirror a pose left to right. */
-export function mirror(p: Pose): Pose {
-  const out: Pose = {};
-  for (const [bone, [x, y, z]] of Object.entries(p)) {
-    const other = bone.endsWith(".L") ? bone.slice(0, -2) + ".R" : bone.endsWith(".R") ? bone.slice(0, -2) + ".L" : bone;
-    out[other] = [x, -y, -z];
-  }
-  return out;
 }
 
 /**
@@ -428,8 +349,10 @@ export class ClipKit {
     return -Math.min(toe, heel);
   }
 
+  /** A clip from the keys, resolved (engine/world/poses.ts builds it): their `hips` carry the root bone. */
   clip(name: string, keys: Key[], smooth = true): AnimationClip {
-    return makeClip(name, this.refine(keys), this.root, this.rootRest, smooth);
+    const resolved = this.refine(keys).map((k) => ({ t: k.t, pose: k.pose, root: k.hips, scale: k.scale }));
+    return makeClip(name, resolved, { root: this.root, rest: this.rootRest }, smooth);
   }
 
   /**

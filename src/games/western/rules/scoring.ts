@@ -1,4 +1,4 @@
-import { Streak } from "../../../engine/rules/streak";
+import { Scorekeeper } from "../../../engine/rules/score";
 import {
   ACCURACY_BONUS_MAX,
   BOSS_BOUNTY,
@@ -46,48 +46,17 @@ export interface WaveBonuses {
  * town's secrets (the bell, the chicken...) are neither: secrets are never
  * in the way, so they neither build nor break a streak nor count in accuracy.
  */
-export class Scorer {
-  score = 0;
-  /** Consecutive hits: ×2 at three, ×3 at six, ×4 at nine. */
-  private readonly run = new Streak(STREAK_STEP, STREAK_MAX_MULTIPLIER);
-  shots = 0;
-  hits = 0;
+export class Scorer extends Scorekeeper {
   kills = 0;
   headshots = 0;
   townsfolkHit = 0;
 
-  private waveShots = 0;
-  private waveHits = 0;
   private waveDamaged = false;
   private waveInnocentHit = false;
 
-  get multiplier(): number {
-    return this.run.multiplier;
-  }
-
-  get streak(): number {
-    return this.run.count;
-  }
-
-  get bestStreak(): number {
-    return this.run.best;
-  }
-
-  get accuracy(): number {
-    return this.shots === 0 ? 0 : this.hits / this.shots;
-  }
-
-  /** A shot that counts toward accuracy, and whether it hit. Returns true if the multiplier went up. */
-  shot(hit: boolean): boolean {
-    this.shots++;
-    this.waveShots++;
-    if (!hit) {
-      this.run.break();
-      return false;
-    }
-    this.hits++;
-    this.waveHits++;
-    return this.run.hit();
+  constructor() {
+    // Consecutive hits: ×2 at three, ×3 at six, ×4 at nine.
+    super(STREAK_STEP, STREAK_MAX_MULTIPLIER);
   }
 
   kill(facts: KillFacts): Award {
@@ -141,15 +110,11 @@ export class Scorer {
 
   /** The end of a wave: its bonuses are added to the score and the wave's tallies reset. */
   endWave(): WaveBonuses {
-    const accuracy = this.waveShots === 0 ? 0 : this.waveHits / this.waveShots;
-    // Rounded to tens so the popup reads cleanly.
-    const accuracyPoints = Math.round((accuracy * ACCURACY_BONUS_MAX) / 10) * 10;
+    const { accuracy, accuracyPoints } = this.endRound(ACCURACY_BONUS_MAX);
     const untouchable = this.waveDamaged ? 0 : UNTOUCHABLE_BONUS;
     const cleanHands = this.waveInnocentHit ? 0 : CLEAN_HANDS_BONUS;
     const total = accuracyPoints + untouchable + cleanHands;
     this.score += total;
-    this.waveShots = 0;
-    this.waveHits = 0;
     this.waveDamaged = false;
     this.waveInnocentHit = false;
     return { accuracy, accuracyPoints, untouchable, cleanHands, total };

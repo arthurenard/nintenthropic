@@ -61,7 +61,7 @@ describe("a match on Relaxed", () => {
     (m as unknown as { spawnTimer: number }).spawnTimer = 1e9;
     const lane = m.plan.lanes[0]!;
     const d = new Dead(99, "walker", lane, offsetPath(lane, 0), 1, "walk.shamble");
-    d.spawn(m);
+    d.spawn();
     d.placeAt(40);
     m.dead.push(d);
     // 22 m left to walk at Relaxed's pace on wave 1: well over half a minute.
@@ -79,7 +79,7 @@ describe("a match on Relaxed", () => {
     // The last of the wave out of the fog now, one still walking (the wave stays open).
     const lane = m.plan.lanes[0]!;
     const d = new Dead(99, "walker", lane, offsetPath(lane, 0), 1, "walk.shamble");
-    d.spawn(m);
+    d.spawn();
     m.dead.push(d);
     (m as unknown as { queue: unknown[] }).queue = [];
     (m as unknown as { lastSpawnAt: number }).lastSpawnAt = m.phaseT;
@@ -109,9 +109,9 @@ describe("a match on Relaxed", () => {
 /**
  * The same simulated players as balance.test.ts (see testkit.ts), on the
  * same shipped road, over both difficulties and the same seeds: Relaxed
- * should carry each of them further - to about where Standard used to carry
- * them, before the night was made tense (a steady hand to wave 16, a slow,
- * wild one to 9, the slowest to 6) - and still end every night in the end.
+ * should carry each of them further - a steady hand to about wave 16, a
+ * slow, wild one to 9, the slowest to 6 - and still end every night in the
+ * end.
  */
 const road = (await shippedRoad()) ?? placeholderRoad();
 
@@ -125,10 +125,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
   it("carries a steady hand further on Relaxed, and still ends most of its nights", () => {
     const s = medianWave(STEADY, "standard");
     const r = medianWave(STEADY, "relaxed");
-    // eslint-disable-next-line no-console
     console.log(`steady hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 4);
-    // About where Standard used to be (16), or a little harder.
+    // About wave 16, or a little short of it.
     expect(r.median).toBeGreaterThanOrEqual(13);
     expect(r.median).toBeLessThanOrEqual(17);
     expect(r.waves[0]).toBeGreaterThanOrEqual(s.waves[0] as number);
@@ -138,10 +137,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
   it("carries a slow, wild hand a few waves further on Relaxed", () => {
     const s = medianWave(WILD, "standard");
     const r = medianWave(WILD, "relaxed");
-    // eslint-disable-next-line no-console
     console.log(`slow, wild hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 2);
-    // Where Standard used to be (9), or a little harder.
+    // About wave 9, a wave either side.
     expect(r.median).toBeGreaterThanOrEqual(8);
     expect(r.median).toBeLessThanOrEqual(10);
     expect(r.waves[0]).toBeGreaterThanOrEqual(4);
@@ -150,10 +148,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
   it("gives the slowest hand several more waves", () => {
     const s = medianWave(SLOWEST, "standard");
     const r = medianWave(SLOWEST, "relaxed");
-    // eslint-disable-next-line no-console
     console.log(`slowest hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 2);
-    // Where Standard used to be (6), or a little easier.
+    // About wave 6, or a little past it.
     expect(r.median).toBeGreaterThanOrEqual(5);
     expect(r.median).toBeLessThanOrEqual(8);
   });
@@ -167,11 +164,9 @@ describe("difficulty balance", { timeout: 180_000 }, () => {
       expect(x.wave, "never shooting, the first wave never clears").toBe(1);
     }
     const mean = (xs: { time: number }[]) => xs.reduce((a, x) => a + x.time, 0) / xs.length;
-    // eslint-disable-next-line no-console
     console.log(`an idle player falls after: standard ${s.map((x) => x.time.toFixed(0)).join(" ")} s; relaxed ${r.map((x) => x.time.toFixed(0)).join(" ")} s`);
     expect(mean(r)).toBeGreaterThan(mean(s));
-    // The opening brings the first of the dead to the barricade within the minute on both
-    // (it was 57-73 s on Standard and 76-95 s on Relaxed, from 62 m; 23-32 s and 29-42 s before the dead went faster).
+    // The opening brings the first of the dead to the barricade well within the minute on Standard, and in about one on Relaxed.
     expect(mean(s)).toBeLessThan(45);
     expect(mean(r)).toBeLessThan(65);
   });

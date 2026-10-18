@@ -9,7 +9,6 @@ import type { V3 } from "../../../engine/rules/raymath";
 export type { V3 };
 
 export const v3 = (x = 0, y = 0, z = 0): V3 => ({ x, y, z });
-export const copy = (a: V3): V3 => ({ x: a.x, y: a.y, z: a.z });
 export const add = (a: V3, b: V3): V3 => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
 export const sub = (a: V3, b: V3): V3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
 export const scale = (a: V3, k: number): V3 => ({ x: a.x * k, y: a.y * k, z: a.z * k });

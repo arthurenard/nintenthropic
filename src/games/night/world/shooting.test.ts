@@ -87,10 +87,10 @@ const CHEST = (z: number, x = 0) => new Vector3(x, 1.2, z);
 const HEAD = (z: number, x = 0) => new Vector3(x, 1.62, z);
 
 describe("Aim Assist in Dead of Night", () => {
-  it("forgives the dead's torsos a little more than the game always did, and their heads in proportion", () => {
+  it("forgives the dead's torsos a little more than the table's own allowance, and their heads in proportion", () => {
     const road = new Road();
     road.walker(0, -30);
-    // 2.8% is 70 cm at 30 m: past the 2.4% the game always gave a torso, inside what assist gives it.
+    // 2.8% is 70 cm at 30 m: past the table's own 2.4% for a torso, inside what assist gives it.
     expect(ASSIST.torso).toBeLessThan(0.028);
     expect(0.028).toBeLessThan(ASSIST.torso * ASSIST_BOOST);
     expect(road.shootAt(CHEST(-30), 0.028, 0)).toMatchObject({ kind: "dead", part: "body" });

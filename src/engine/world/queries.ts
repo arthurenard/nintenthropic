@@ -17,7 +17,7 @@ export interface RayHit {
 
 /** The grid's cell, metres on a side (seen from above). */
 const CELL = 2;
-/** A triangle wider than this many cells goes in the short list every ray checks instead. */
+/** A triangle covering more than this many cells goes in the short list every ray checks instead. */
 const BIG = 256;
 
 /**

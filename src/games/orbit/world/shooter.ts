@@ -7,7 +7,7 @@
  * Moon, the storm and the city lights far below.
  */
 import { Mesh, PerspectiveCamera, Raycaster, Vector2, Vector3, type Object3D } from "three";
-import { assistFactor, secretFactor } from "../../../engine/rules/assist";
+import { assistAngle, assistFactor, secretFactor } from "../../../engine/rules/assist";
 import { effectiveRadius, probePoint, type RayProbe } from "../../../engine/rules/raymath";
 import type { Settings } from "../../../engine/types";
 import type { Fragment } from "../rules/debris";
@@ -67,12 +67,6 @@ export class Shooter {
     });
   }
 
-  /** One fraction of the smaller view side, as a tangent of angle. */
-  private tanFor(fraction: number): number {
-    const tanHalf = Math.tan((this.camera.fov * Math.PI) / 360);
-    return fraction * 2 * tanHalf * Math.min(1, this.camera.aspect);
-  }
-
   /** Cast a shot through viewport position (x, y) in fractions. */
   shoot(
     x: number,
@@ -91,9 +85,9 @@ export class Shooter {
     // Aim Assist, live: the debris and the tank wider, or exact. A secret's allowance is never boosted.
     const boost = assistFactor(this.settings.aimAssist);
     const secretBy = secretFactor(this.settings.aimAssist);
-    const aDebris = Math.atan(this.tanFor(ASSIST.debris * boost));
-    const aTank = Math.atan(this.tanFor(ASSIST.tank * boost));
-    const aSecret = Math.atan(this.tanFor(ASSIST.secret * secretBy));
+    const aDebris = assistAngle(this.camera, ASSIST.debris * boost);
+    const aTank = assistAngle(this.camera, ASSIST.tank * boost);
+    const aSecret = assistAngle(this.camera, ASSIST.secret * secretBy);
 
     // 1. Debris and the Derelict: the best-aimed within its allowance.
     let best: { f: Fragment; kind: "debris" | "tank" | "body"; t: number; score: number; center: Vector3 } | null = null;
@@ -174,7 +168,7 @@ export class Shooter {
     // 4. The sky: the Moon (only in open sky: still under the limb, the
     // planet is in front of it), the storm, the "HI".
     const ground = sky.planet(d);
-    if (!ground && sky.moon && d.angleTo(sky.moon.dir) <= sky.moon.radius * 1.3 + Math.atan(this.tanFor(ASSIST.sky * secretBy))) {
+    if (!ground && sky.moon && d.angleTo(sky.moon.dir) <= sky.moon.radius * 1.3 + assistAngle(this.camera, ASSIST.sky * secretBy)) {
       res.target = { kind: "secret", shot: { secret: "moon" } };
       res.point.copy(o).addScaledVector(d, 300);
       res.hit = "secret";

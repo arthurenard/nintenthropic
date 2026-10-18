@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TIPS, HintLine, reloadHint, survivorWord, TIP_SECONDS, tipText, type TipId } from "./tips";
+import { HintLine, reloadHint, TIP_SECONDS } from "../../engine/rules/hints";
+import { ALL_TIPS, LEARNED_BY_DOING, survivorWord, tipText, type TipId } from "./tips";
 
 const DT = 1 / 60;
 
@@ -13,7 +14,7 @@ function run(line: HintLine, seconds: number): (string | null)[] {
 }
 
 function playing(seen: Set<string> = new Set()): HintLine {
-  const line = new HintLine(seen);
+  const line = new HintLine(seen, LEARNED_BY_DOING);
   line.setQuiet(false);
   return line;
 }

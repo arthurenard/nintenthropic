@@ -4,19 +4,18 @@
  * flakes of a stripped wrap, the Derelict's venting tank, the drone's
  * thruster puffs and blue weld, a strike's grit off the glass, the pane's
  * failure (a glitter of shards, the air going out as a white gush), and
- * the glint of a facet catching the sun, drawn in the lens so a fragment
- * far out still flashes. Nothing here allocates per shot or per frame.
+ * the glint of a facet catching the sun, held the same size on screen so a
+ * fragment far out still flashes. Nothing here allocates per shot or per frame.
  *
  * Out here nothing falls: no gravity, no floor, only drag-free drift.
  */
 import { BufferAttribute, BufferGeometry, Color, MeshStandardMaterial, Vector3, type Group } from "three";
 import { DebrisPool, type DebrisStyle } from "../../../engine/fx/debris";
 import { LightPool } from "../../../engine/fx/lights";
-import { ParticleSystem, type ParticleStyle } from "../../../engine/fx/particles";
+import { ParticleSystem, scatter, type ParticleStyle } from "../../../engine/fx/particles";
 import { particleAtlas } from "../../../engine/fx/textures";
 import type { Quality } from "../../../engine/types";
 
-const col = (hex: string) => new Color(hex);
 const hdr = (r: number, g: number, b: number) => new Color(r, g, b);
 
 // Colours are linear; above 1 they bloom.
@@ -32,7 +31,7 @@ const WELD_SPARK: ParticleStyle = { life: [0.2, 0.5], size: [0.02, 0.01], color:
 const GRIT: ParticleStyle = { life: [0.4, 0.9], size: [0.03, 0.02], color: hdr(1.6, 1.5, 1.4), alpha: [1, 0], gravity: 0, drag: 0.2, frame: 0, spin: 0 };
 const GUST: ParticleStyle = { life: [1.2, 2.4], size: [0.3, 3.2], color: hdr(1.25, 1.28, 1.32), color2: hdr(0.6, 0.62, 0.66), alpha: [0.7, 0], fadeIn: 0.04, gravity: 0, drag: 0.5, frame: 1, spin: 0.6 };
 const RING_PULSE: ParticleStyle = { life: [0.5, 0.6], size: [0.4, 2.6], color: hdr(0.9, 3.2, 1.2), alpha: [0.8, 0], gravity: 0, drag: 0, frame: 0, spin: 0 };
-/** A facet catching the sun: a four-point star and a thin streak, in the lens. */
+/** A facet catching the sun: a four-point star and a thin streak. */
 const GLINT: ParticleStyle = { life: [0.05, 0.07], size: [1, 1], color: hdr(6, 5.8, 5.2), alpha: [1, 0.6], gravity: 0, drag: 0, frame: 2, spin: 0, angle: 0.4 };
 const GLINT_STREAK: ParticleStyle = { life: [0.05, 0.07], size: [2.6, 2.6], color: hdr(3.6, 3.4, 3.0), alpha: [0.8, 0.4], gravity: 0, drag: 0, frame: 4, spin: 0, angle: 0 };
 /** The steady point of light a fragment in the sun is, far out: redrawn every frame. */
@@ -59,8 +58,8 @@ const GLINT_STREAK_SOFT: ParticleStyle = { ...GLINT_STREAK, color: GLINT_STREAK.
 const v = new Vector3();
 const tint = new Color();
 
+/** A thin irregular triangle of glass: a little broader than the engine's shardGeometry, as the cupola's panes break. */
 function shardGeometry(): BufferGeometry {
-  // A thin irregular triangle of glass.
   const g = new BufferGeometry();
   const p = [0, 0.05, 0, -0.035, -0.03, 0.002, 0.04, -0.02, -0.002, 0, 0.05, 0, 0.04, -0.02, -0.002, -0.035, -0.03, 0.002];
   g.setAttribute("position", new BufferAttribute(new Float32Array(p), 3));
@@ -70,8 +69,6 @@ function shardGeometry(): BufferGeometry {
 
 export class Effects {
   readonly additive: ParticleSystem;
-  /** Flares in the lens: drawn over everything. */
-  readonly lens: ParticleSystem;
   readonly alpha: ParticleSystem;
   readonly shards: DebrisPool;
   readonly lights: LightPool;
@@ -85,43 +82,32 @@ export class Effects {
     const atlas = particleAtlas();
     const n = quality.tier === "low" ? 700 : quality.tier === "medium" ? 1400 : 2400;
     this.additive = new ParticleSystem(Math.round(n * 0.7), atlas, true);
-    this.lens = new ParticleSystem(320, atlas, true, true);
     this.alpha = new ParticleSystem(Math.round(n * 0.5), atlas, false);
     const glass = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0.5, transparent: true, opacity: 0.8, name: "pane-shard" });
     this.shards = new DebrisPool(shardGeometry(), glass, quality.tier === "low" ? 90 : 220);
     this.shards.mesh.castShadow = false;
     this.lights = new LightPool(root, 3);
-    root.add(this.alpha.points, this.additive.points, this.lens.points, this.shards.mesh);
+    root.add(this.alpha.points, this.additive.points, this.shards.mesh);
   }
 
   setRandom(random: () => number): void {
     this.random = random;
     this.additive.setRandom(random);
-    this.lens.setRandom(random);
     this.alpha.setRandom(random);
     this.shards.setRandom(random);
   }
 
   setScale(bufferHeight: number, fov: number): void {
     this.additive.setScale(bufferHeight, fov);
-    this.lens.setScale(bufferHeight, fov);
     this.alpha.setScale(bufferHeight, fov);
     this.viewSpan = 2 * Math.tan((fov * Math.PI) / 360);
   }
 
   update(dt: number): void {
     this.additive.update(dt);
-    this.lens.update(dt);
     this.alpha.update(dt);
     this.shards.update(dt);
     this.lights.update(dt);
-  }
-
-  /** A random direction round `n` (spread 0 straight along it, 1 anywhere in front). */
-  private around(n: Vector3, spread: number, out: Vector3): Vector3 {
-    const r = this.random;
-    out.set(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1).multiplyScalar(spread).add(n);
-    return out.normalize();
   }
 
   private randomDir(out: Vector3): Vector3 {
@@ -182,7 +168,7 @@ export class Effects {
     const r = this.random;
     const k = Math.min(3, this.reach(distance));
     for (let i = 0; i < 8; i++) {
-      this.around(normal, 0.9, v).multiplyScalar(3 + r() * 5);
+      scatter(this.random, normal, 0.9, v).multiplyScalar(3 + r() * 5);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, this.reducedFlashing ? SPARK_SOFT : SPARK, k);
     }
   }
@@ -190,7 +176,7 @@ export class Effects {
   /** The Derelict's tank venting a thin plume along `dir`. */
   plume(at: Vector3, dir: Vector3, drift: Vector3, strength: number): void {
     const r = this.random;
-    this.around(dir, 0.15, v).multiplyScalar(4 + r() * 4);
+    scatter(this.random, dir, 0.15, v).multiplyScalar(4 + r() * 4);
     this.alpha.emit(at.x, at.y, at.z, drift.x + v.x, drift.y + v.y, drift.z + v.z, PLUME, strength);
   }
 
@@ -198,7 +184,7 @@ export class Effects {
   thruster(at: Vector3, dir: Vector3): void {
     const r = this.random;
     for (let i = 0; i < 2; i++) {
-      this.around(dir, 0.25, v).multiplyScalar(1.5 + r() * 1.5);
+      scatter(this.random, dir, 0.25, v).multiplyScalar(1.5 + r() * 1.5);
       this.alpha.emit(at.x, at.y, at.z, v.x, v.y, v.z, PUFF, 1);
     }
   }
@@ -208,7 +194,7 @@ export class Effects {
     const r = this.random;
     this.additive.emit(at.x, at.y, at.z, 0, 0, 0, this.reducedFlashing ? WELD_SOFT : WELD, 0.8 + r() * 0.6);
     if (r() < 0.6) {
-      this.around(normal, 1, v).multiplyScalar(0.6 + r() * 1.4);
+      scatter(this.random, normal, 1, v).multiplyScalar(0.6 + r() * 1.4);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, WELD_SPARK);
     }
     if (r() < 0.25) this.flashLight(at, tint.setRGB(0.5, 0.75, 1), 3.5, 3, 0.08);
@@ -219,11 +205,11 @@ export class Effects {
     const r = this.random;
     const n = Math.round(10 + size * 14);
     for (let i = 0; i < n; i++) {
-      this.around(outward, 0.9, v).multiplyScalar(0.8 + r() * 3.5);
+      scatter(this.random, outward, 0.9, v).multiplyScalar(0.8 + r() * 3.5);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, GRIT, 0.6 + size * 0.5);
     }
     for (let i = 0; i < 8; i++) {
-      this.around(outward, 1, v).multiplyScalar(2 + r() * 4);
+      scatter(this.random, outward, 1, v).multiplyScalar(2 + r() * 4);
       this.additive.emit(at.x, at.y, at.z, v.x, v.y, v.z, this.reducedFlashing ? SPARK_SOFT : SPARK, 0.35);
     }
   }
@@ -239,17 +225,17 @@ export class Effects {
       const x = center.x + (side.x * Math.cos(a) + up.x * Math.sin(a)) * d;
       const y = center.y + (side.y * Math.cos(a) + up.y * Math.sin(a)) * d;
       const z = center.z + (side.z * Math.cos(a) + up.z * Math.sin(a)) * d;
-      this.around(outward, 0.5, v).multiplyScalar(3 + r() * 14);
+      scatter(this.random, outward, 0.5, v).multiplyScalar(3 + r() * 14);
       tint.setRGB(0.85 + r() * 0.15, 0.9 + r() * 0.1, 0.95);
       this.shards.emit(x, y, z, v.x, v.y, v.z, -1e9, SHARDS, tint);
     }
     for (let i = 0; i < 60; i++) {
-      this.around(outward, 0.6, v).multiplyScalar(2 + r() * 10);
+      scatter(this.random, outward, 0.6, v).multiplyScalar(2 + r() * 10);
       this.additive.emit(center.x, center.y, center.z, v.x, v.y, v.z, this.reducedFlashing ? GLITTER_SOFT : GLITTER, 1.5);
     }
     // The air, going out: a white gush of condensation.
     for (let i = 0; i < 40; i++) {
-      this.around(outward, 0.45, v).multiplyScalar(4 + r() * 12);
+      scatter(this.random, outward, 0.45, v).multiplyScalar(4 + r() * 12);
       this.alpha.emit(center.x, center.y, center.z, v.x, v.y, v.z, GUST, 1 + r());
     }
   }
@@ -274,7 +260,7 @@ export class Effects {
   /** A fragment in the sun, far out, as a point of light a few pixels across. */
   sparkle(at: Vector3, distance: number, strength: number): void {
     const k = Math.max(1, distance) * this.viewSpan * 0.006;
-    // In the world, not the lens: the cupola's frame hides what is behind it.
+    // In the world, tested against depth: the cupola's frame hides what is behind it.
     this.additive.emit(at.x, at.y, at.z, 0, 0, 0, SPARKLE, k, tint.setRGB(1.6 * strength, 1.55 * strength, 1.45 * strength));
   }
 
@@ -289,18 +275,14 @@ export class Effects {
 
   clearAll(): void {
     this.additive.clear();
-    this.lens.clear();
     this.alpha.clear();
     this.shards.clear();
   }
 
   dispose(): void {
     this.additive.dispose();
-    this.lens.dispose();
     this.alpha.dispose();
     this.shards.dispose();
     this.lights.dispose();
   }
 }
-
-export { col };

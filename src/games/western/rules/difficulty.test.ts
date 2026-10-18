@@ -165,7 +165,6 @@ describe("difficulty balance", { timeout: 60_000 }, () => {
     const skill = { reaction: 0.65, accuracy: 0.8 };
     const s = medianWave(skill, "standard");
     const r = medianWave(skill, "relaxed");
-    // eslint-disable-next-line no-console
     console.log(`steady hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 4);
     expect(r.waves[0]).toBeGreaterThan(s.waves[0] as number);
@@ -177,7 +176,6 @@ describe("difficulty balance", { timeout: 60_000 }, () => {
     const skill = { reaction: 1.0, accuracy: 0.55 };
     const s = medianWave(skill, "standard");
     const r = medianWave(skill, "relaxed");
-    // eslint-disable-next-line no-console
     console.log(`slow, wild hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 3);
     expect(r.waves[0]).toBeGreaterThanOrEqual(4);
@@ -188,7 +186,6 @@ describe("difficulty balance", { timeout: 60_000 }, () => {
     const skill = { reaction: 1.3, accuracy: 0.45 };
     const s = medianWave(skill, "standard");
     const r = medianWave(skill, "relaxed");
-    // eslint-disable-next-line no-console
     console.log(`slowest hand falls on waves: standard ${s.waves.join(" ")} (median ${s.median}); relaxed ${r.waves.join(" ")} (median ${r.median})`);
     expect(r.median).toBeGreaterThanOrEqual(s.median + 2);
   });
@@ -202,7 +199,6 @@ describe("difficulty balance", { timeout: 60_000 }, () => {
       expect(x.wave, "never shooting, the first wave never clears").toBe(1);
     }
     const mean = (xs: { time: number }[]) => xs.reduce((a, x) => a + x.time, 0) / xs.length;
-    // eslint-disable-next-line no-console
     console.log(`an idle player falls after: standard ${s.map((x) => x.time.toFixed(0)).join(" ")} s; relaxed ${r.map((x) => x.time.toFixed(0)).join(" ")} s`);
     expect(mean(r)).toBeGreaterThan(mean(s));
   });

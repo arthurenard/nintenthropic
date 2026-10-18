@@ -35,3 +35,12 @@ export class Streak {
     this.count = 0;
   }
 }
+
+/**
+ * The streak's chime climbing a major triad as the multiplier does (×2 the
+ * root, ×3 the third, ×4 the fifth), as a playback rate.
+ */
+export function streakRate(multiplier: number): number {
+  const semitones = multiplier >= 4 ? 7 : multiplier === 3 ? 4 : 0;
+  return Math.pow(2, semitones / 12);
+}

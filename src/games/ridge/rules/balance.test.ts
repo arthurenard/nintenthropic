@@ -31,7 +31,6 @@ describe("balance: simulated riflemen over both difficulties", { timeout: 120_00
     if (!r) {
       r = campaign(SKILLS[name], difficulty);
       results.set(key, r);
-      // eslint-disable-next-line no-console
       console.log(`${difficulty} ${name}: stages cleared ${r.cleared.join(" ")} (median ${r.median}); endings ${r.endings.join(" ")}`);
     }
     return r;

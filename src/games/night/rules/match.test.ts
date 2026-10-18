@@ -29,7 +29,7 @@ function send(m: Match, kind: DeadKind, lane: LaneId = "road", along = 0): Dead 
   const l = m.plan.lanes.find((x) => x.id === lane)!;
   const d = new Dead(900 + m.dead.length, kind, l, offsetPath(l, 0), kind === "runner" ? 3.5 : 1, "walk.shamble");
   if (kind === "mechanic") d.mask = m.tuning.maskHits;
-  d.spawn(m);
+  d.spawn();
   if (along > 0) d.placeAt(along);
   m.dead.push(d);
   return d;
@@ -358,7 +358,7 @@ describe("the dead", () => {
     const alone = m.paceFor(w);
     const mech = send(m, "mechanic", "road", 12);
     expect(m.paceFor(w)).toBeCloseTo(alone * 1.25, 6);
-    mech.die("head", m.time, 10);
+    mech.die("head");
     expect(m.paceFor(w)).toBeCloseTo(alone, 6);
   });
 });

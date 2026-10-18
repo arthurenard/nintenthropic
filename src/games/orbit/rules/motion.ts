@@ -10,7 +10,7 @@
  * momentum, and a careless shot turns one problem into three.
  */
 import type { PaneSpec } from "./layout";
-import { add, addScaled, cross, dot, scale, sub, type V3 } from "./vec";
+import { add, cross, dot, scale, sub, type V3 } from "./vec";
 
 export interface Motion {
   /** Where it was at t0. */
@@ -128,28 +128,4 @@ export function strikeOf(m: Motion, from: number, horizon: number, panes: readon
     }
   }
   return best;
-}
-
-/** Where along the path the fragment is nearest the eye, and how near (for a miss's flyby). */
-export function closestApproach(m: Motion, eye: V3, from: number, until: number, steps = 24): { time: number; distance: number } {
-  let bestT = from;
-  let bestD = Infinity;
-  for (let i = 0; i <= steps; i++) {
-    const t = from + ((until - from) * i) / steps;
-    const p = positionAt(m, t, tmp);
-    const d = Math.hypot(p.x - eye.x, p.y - eye.y, p.z - eye.z);
-    if (d < bestD) {
-      bestD = d;
-      bestT = t;
-    }
-  }
-  return { time: bestT, distance: bestD };
-}
-
-/** A point `d` metres along the path's direction at t (for a laser that leads its target). */
-export function ahead(m: Motion, t: number, d: number): V3 {
-  const p = positionAt(m, t);
-  const v = velocityAt(m, t);
-  const speed = Math.hypot(v.x, v.y, v.z) || 1;
-  return addScaled(p, v, d / speed);
 }

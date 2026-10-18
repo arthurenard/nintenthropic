@@ -287,8 +287,8 @@ export class Scope {
 
   /**
    * The player's request and the hand, once a frame. `aim` is where the hand
-   * points in the wide view. Returns true on the frame the scope goes in or
-   * comes out (for the sounds and the crosshair).
+   * points in the wide view. Returns "in" or "out" on the frame the scope
+   * goes in or comes out (for the sounds and the crosshair).
    */
   update(dt: number, want: boolean, aim: { x: number; y: number; tracking: boolean }): "in" | "out" | null {
     this.t += dt;

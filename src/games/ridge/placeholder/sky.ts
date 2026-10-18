@@ -61,7 +61,7 @@ export function dawnSky(d: Vector3, sun: Vector3): RGB {
   return c;
 }
 
-/** The dawn sky as an equirectangular texture, and the sun's direction it was painted for. */
+/** The dawn sky as an equirectangular texture, painted for a sun toward `sun`. */
 export function buildSky(sun: Vector3, width = 1024): CanvasTexture {
   const height = width / 2;
   const canvas = document.createElement("canvas");

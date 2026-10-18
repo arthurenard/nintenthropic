@@ -1,11 +1,16 @@
-import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Material, type Mesh, type Object3D, type Texture, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark, TargetNoun } from "../../engine/types";
+import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Object3D, type ToneMapping } from "three";
+import type { Aim, CalibrationStage, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
+import { announceGolden, awardText, HintShown, HurtShown, popupAt, showBonuses, viewportOf, type PopupTone } from "../../engine/hud";
+import { breathe, CalibrationProxy, Schedule } from "../../engine/round";
+import { HintLine } from "../../engine/rules/hints";
 import { mulberry32 } from "../../engine/rules/rng";
+import { streakRate } from "../../engine/rules/streak";
 import { ScreenFlash } from "../../engine/world/flash";
 import { chromeKeepOut, fitFraming, WEAPON_DOCK, type Framing, type Sight } from "../../engine/world/framing";
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
+import { warmUp } from "../../engine/world/scene";
 import { Sound } from "../../engine/world/sound";
 import { Vehicle, type Actor } from "./rules/actors";
 import { landingMils, rangeAt, rangeUnderDot, roundAt, timeOfFlight } from "./rules/ballistics";
@@ -16,9 +21,9 @@ import { fallCard } from "./rules/notes";
 import { Polyline } from "./rules/path";
 import type { Award, StageBonuses } from "./rules/scoring";
 import { LastOne, Spotter } from "./rules/spotter";
-import { HIP_SPREAD, REVEAL_SECONDS } from "./rules/tuning";
+import { ENEMY_BULLET_SPEED, HIP_SPREAD, MORTAR_WHISTLE, REVEAL_SECONDS } from "./rules/tuning";
 import type { Ending, HitPart, HostileRole, Landing, Plan, SecretId, ShotTarget } from "./rules/types";
-import { ALL_TIPS, HintLine, innocentWord, lastOneWord, reloadHint, spotterWord, tipText, turnWord, type TipId } from "./tips";
+import { innocentWord, LEARNED_BY_DOING, lastOneWord, reloadHint, spotterWord, tipText, turnWord, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type RidgeAssets } from "./world/assets";
 import { Cast } from "./world/cast";
@@ -61,11 +66,6 @@ const IMPACT_SOUND: Record<Surface, string> = {
   cloth: "ridge_hit_dirt",
 };
 
-interface Scheduled {
-  at: number;
-  run: () => void;
-}
-
 const tmp = new Vector3();
 const tmp2 = new Vector3();
 const TRAIL_POINT = new Vector3();
@@ -79,37 +79,6 @@ function rangeFrom(a: Actor, eye: Vector3): number {
   return Math.hypot(a.pos.x - eye.x, a.pos.y - eye.y, a.pos.z - eye.z);
 }
 
-/** A moment for the page between the long steps of getting ready, so the bar keeps moving. */
-function breathe(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-/** The aim check's stage until the plates exist, and a way back to them after a game. */
-class CalibrationProxy implements CalibrationStage {
-  readonly noun: TargetNoun = { one: "plate", many: "plates" };
-  target: PlateStage | null = null;
-  onBegin: () => void = () => {};
-  begin(): void {
-    this.onBegin();
-    this.target?.begin();
-  }
-  targets(): CalibrationTarget[] {
-    return this.target ? this.target.targets() : [];
-  }
-  light(id: string | null): void {
-    this.target?.light(id);
-  }
-  hit(id: string): void {
-    this.target?.hit(id);
-  }
-  miss(id: string, x: number, y: number): void {
-    this.target?.miss(id, x, y);
-  }
-  done(): void {
-    this.target?.done();
-  }
-}
-
 /**
  * Overwatch Ridge: the Game the app hosts. It owns the world (the valley,
  * its people, the scope, the rounds in flight, the effects, the plates of
@@ -121,7 +90,8 @@ export class OverwatchRidge implements Game, MissionListener {
   readonly id = "overwatch-ridge";
   readonly title = "Overwatch Ridge";
   readonly calibration: CalibrationStage;
-  private readonly proxy = new CalibrationProxy();
+  /** The plates, once they exist; and the valley put back when the aim check comes round again after a game. */
+  private readonly proxy = new CalibrationProxy({ one: "plate", many: "plates" });
 
   private ctx!: GameContext;
   private hud!: HudSink;
@@ -168,21 +138,17 @@ export class OverwatchRidge implements Game, MissionListener {
   private runTime = 0;
   private lastDt = 1 / 60;
   private readonly flash = new ScreenFlash();
-  private hurtDisplay = 0;
-  private hurtShown = -1;
-  private hurtFilter = -1;
+  private readonly hurt = new HurtShown();
   private deathT = 0;
   private hurtSide = 1;
   private failT = 0;
-  private hints = new HintLine(new Set());
-  private hintShown: string | null = null;
-  private readonly schedule: Scheduled[] = [];
+  private hints = new HintLine(new Set(), LEARNED_BY_DOING);
+  private readonly hintShown = new HintShown();
+  private readonly schedule = new Schedule(() => this.time);
   private readonly visual = mulberry32(17);
   private golden = false;
   private reloadKey = false;
   private wasOffscreen = false;
-  private wasArmed = true;
-  private wasDown = false;
   /** A shot waits for the bolt: the thumb raised (the hand) or the button let go (a pointer). */
   private boltWaiting = false;
   private readoutKey = "";
@@ -260,6 +226,7 @@ export class OverwatchRidge implements Game, MissionListener {
     this.proxy.target = this.plates;
     this.proxy.onBegin = () => {
       if (this.phase === "over" || this.phase === "dying" || this.phase === "failing") this.rearm();
+      this.plates.begin();
     };
     this.foreground = new Foreground(this.stage.atmosphere, valley.foregroundGrass === null);
     this.foreground.golden = this.golden;
@@ -288,11 +255,19 @@ export class OverwatchRidge implements Game, MissionListener {
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
     this.newMission();
     await breathe();
-    await this.warmUp();
+    // Every shader compiled before play: a shader first compiled mid-shot is a dropped frame at the worst time.
+    const parked = this.parkVehicles();
+    await warmUp(renderer, this.stage.scene, this.camera.camera, () => {
+      this.post.render(0);
+      this.scope.zoom = 1;
+      this.scope.render(renderer, this.camera.camera, { right: 0, down: 1 });
+      this.scope.zoom = 0;
+    });
+    for (const v of parked) this.cast.vehicleGone(v);
     await sounds;
     window.addEventListener("keydown", this.onKey);
     const nearRiver = riverLine[Math.floor(riverLine.length / 2)] ?? null;
-    this.ambient.start(valley.plan.eye, nearRiver);
+    this.ambient.start(nearRiver);
     this.phase = "calibration";
     this.plates.begin();
     onProgress(1);
@@ -354,43 +329,18 @@ export class OverwatchRidge implements Game, MissionListener {
     this.goatHops = 0;
   }
 
-  /** Compile every shader before play: a shader first compiled mid-shot is a dropped frame at the worst time. */
-  private async warmUp(): Promise<void> {
-    const r = this.ctx.renderer;
-    const scene = this.stage.scene;
-    // The convoy's trucks and the officer's jeep only come on later in a run: on the road now, dressed as they will
-    // be, so their shaders are compiled and their pictures on the card (the first truck held the picture for a
-    // quarter of a second as the convoy's stage began).
+  /**
+   * The convoy's trucks and the officer's jeep, on the road for the warm-up,
+   * dressed as they will be: they only come on later in a run, and their
+   * shaders must be compiled and their pictures on the card before then (the
+   * first truck held the picture for a quarter of a second as the convoy's
+   * stage began). The game takes them away again after.
+   */
+  private parkVehicles(): Vehicle[] {
     const road = this.plan.road.length > 1 ? new Polyline(this.plan.road) : null;
-    const ghosts = road ? (["truck", "jeep"] as const).map((kind, k) => new Vehicle(-1 - k, kind, road, k * 12, 0)) : [];
-    for (const v of ghosts) this.cast.vehicleSpawn(v);
-    const hidden: Object3D[] = [];
-    scene.traverse((o) => {
-      if (!o.visible) {
-        hidden.push(o);
-        o.visible = true;
-      }
-    });
-    try {
-      if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
-      for (const v of ghosts) {
-        this.cast.vehicles.get(v.id)?.root.traverse((o) => {
-          const materials = (o as Mesh).isMesh ? [(o as Mesh).material].flat() : [];
-          for (const m of materials as (Material & Record<string, unknown>)[]) {
-            for (const value of Object.values(m)) if ((value as Texture | null)?.isTexture) r.initTexture(value as Texture);
-          }
-        });
-      }
-      await breathe();
-      this.post.render(0);
-      this.scope.zoom = 1;
-      this.scope.render(r, this.camera.camera, { right: 0, down: 1 });
-      this.scope.zoom = 0;
-    } catch {
-      // Compiling ahead is an optimisation; the first frames will do it otherwise.
-    }
-    for (const o of hidden) o.visible = false;
-    for (const v of ghosts) this.cast.vehicleGone(v);
+    const parked = road ? (["truck", "jeep"] as const).map((kind, k) => new Vehicle(-1 - k, kind, road, k * 12, 0)) : [];
+    for (const v of parked) this.cast.vehicleSpawn(v);
+    return parked;
   }
 
   /** Back to the state after load, for another game on this instance. */
@@ -405,14 +355,14 @@ export class OverwatchRidge implements Game, MissionListener {
     this.ambient.reset();
     this.scope.reset();
     this.newMission();
-    this.schedule.length = 0;
+    this.schedule.clear();
     this.camera.still = true;
     this.camera.setDeath(0, 1);
     this.foreground?.fall(0);
     this.fallTilt = 0;
     if (this.framings) this.camera.setFraming(this.framings.check, 0);
     this.camera.update(0);
-    this.hurtDisplay = 0;
+    this.hurt.value = 0;
     this.flash.reset();
     this.post.set("hurt", 0);
     this.post.set("desaturate", 0);
@@ -442,7 +392,7 @@ export class OverwatchRidge implements Game, MissionListener {
     this.runTime = 0;
     this.deathT = 0;
     this.failT = 0;
-    this.hurtShown = -1;
+    this.hurt.retell();
     this.readoutKey = "";
     this.boltWaiting = false;
     this.sound.filter("slowmo", 0);
@@ -450,17 +400,13 @@ export class OverwatchRidge implements Game, MissionListener {
     this.hud.score(0);
     this.hud.health(0);
     this.hud.crosshair?.("default");
-    this.hints = new HintLine(this.ctx.settings.tipsSeen);
+    this.hints = new HintLine(this.ctx.settings.tipsSeen, LEARNED_BY_DOING);
     this.hints.setQuiet(false);
     this.mission.start(Math.max(1, Math.floor(this.options.startStage ?? 1)));
     this.showAmmo();
     // How to look through the scope stands at the foot of the view until the player has done it.
     this.standScope();
-    if (this.golden) {
-      this.hud.weaponFinish?.("gold");
-      this.sound.play("ridge_golden", { volume: 0.8, delay: 0.4 });
-      this.later(1.0, () => this.hud.popup(0.5, 0.62, "Golden Rifle", "gold"));
-    }
+    if (this.golden) announceGolden(this.hud, this.sound, this.schedule, "ridge_golden", "Golden Rifle");
     this.pushReadouts(true);
   }
 
@@ -472,7 +418,7 @@ export class OverwatchRidge implements Game, MissionListener {
     this.scope.reducedMotion = this.ctx.settings.reducedMotion;
     this.time += dt;
     if (this.phase === "playing") this.runTime += dt;
-    this.runSchedule();
+    this.schedule.run();
 
     // The scope: asked for in play (and only while the rifle is shouldered: not in the fall).
     // Whether the hand is in view does not matter to it: Shift, the right button or the Scope
@@ -495,14 +441,12 @@ export class OverwatchRidge implements Game, MissionListener {
     }
 
     if (this.phase === "calibration") {
-      if (aim.fired && !aim.offscreen) this.calibrationShot(aim);
+      if (aim.fired && !aim.offscreen) this.calibrationShot();
     } else if (this.phase === "playing") {
-      this.gun(dt, aim);
+      this.gun(aim);
     } else {
       this.reloadKey = false;
     }
-    this.wasArmed = aim.armed;
-    this.wasDown = aim.travel > 0.5;
 
     const wdt = this.phase === "dying" ? dt * Math.max(0.3, 1 - this.deathT / 0.4) : dt;
     if (this.phase !== "calibration") this.mission.update(wdt);
@@ -523,11 +467,9 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   /** The rifle: the bolt worked by the thumb, a reload off the screen or on R, and the trigger. */
-  private gun(_dt: number, aim: Aim): void {
-    const hand = (this.ctx.input ?? "hand") === "hand";
+  private gun(aim: Aim): void {
     // The bolt, after a shot: the thumb raised again (the re-arm), or a pointer's button let go.
     if (this.boltWaiting) {
-      // The thumb back up (cocked, unfolded) - a pointer's button let go reads the same way.
       const raised = aim.armed && aim.travel < 0.3 && !aim.fired;
       if (raised && this.mission.cycle()) this.boltWaiting = false;
       else if (this.mission.rifle.state !== "spent") this.boltWaiting = false;
@@ -734,7 +676,7 @@ export class OverwatchRidge implements Game, MissionListener {
   // --- shooting --------------------------------------------------------------------------
 
   /** During the aim check the platform judges the shot; the valley answers only with the rifle. */
-  private calibrationShot(aim: Aim): void {
+  private calibrationShot(): void {
     this.sound.play("ridge_rifle_shot", { volume: 0.9 });
     this.scope.kick(this.visual);
     this.foreground.fire();
@@ -896,7 +838,7 @@ export class OverwatchRidge implements Game, MissionListener {
         break;
       case "siren":
         this.secretDelay.siren = this.secrets.siren();
-        this.later(this.secretDelay.siren + 1.2, () => this.mission.cowsLook(6));
+        this.schedule.later(this.secretDelay.siren + 1.2, () => this.mission.cowsLook(6));
         break;
       case "cheese":
         this.secretDelay.cheese = this.secrets.cheeseRoll();
@@ -996,21 +938,11 @@ export class OverwatchRidge implements Game, MissionListener {
   // --- the HUD and the hint line ----------------------------------------------------------
 
   private project(at: Vector3): { x: number; y: number } | null {
-    tmp.copy(at).project(this.camera.camera);
-    if (tmp.z > 1) return null;
-    return { x: (tmp.x + 1) / 2, y: (1 - tmp.y) / 2 };
+    return viewportOf(this.camera.camera, at);
   }
 
-  private popupAt(at: Vector3, text: string, tone: "" | "gold" | "danger" = ""): void {
-    const p = this.project(at);
-    if (!p) return;
-    this.hud.popup(Math.min(0.94, Math.max(0.06, p.x)), Math.min(0.9, Math.max(0.1, p.y)), text, tone);
-  }
-
-  private awardText(award: Award): string {
-    const sign = award.points >= 0 ? "+" : "−";
-    const label = award.labels.length ? ` ${award.labels.join(" · ")}` : "";
-    return `${sign}${Math.abs(award.points).toLocaleString("en-US")}${label}`;
+  private popupAt(at: Vector3, text: string, tone: PopupTone = ""): void {
+    popupAt(this.hud, this.camera.camera, at, text, tone);
   }
 
   private offerTip(id: TipId): void {
@@ -1019,11 +951,9 @@ export class OverwatchRidge implements Game, MissionListener {
     this.syncHint();
   }
 
+  /** Tell the HUD what the hint line shows, when it changes. */
   private syncHint(): void {
-    const text = this.hints.text;
-    if (text === this.hintShown) return;
-    this.hintShown = text;
-    this.hud.hint(text);
+    this.hintShown.tell(this.hud, this.hints);
   }
 
   private showAmmo(): void {
@@ -1317,22 +1247,11 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   private updateHurt(dt: number): void {
-    const hurt = this.mission.health.hurt;
-    const shown = this.hurtDisplay;
-    if (hurt <= shown) this.hurtDisplay = shown + (hurt - shown) * Math.min(1, dt * 4);
-    else this.hurtDisplay = this.effects.reducedFlashing ? shown + (hurt - shown) * Math.min(1, dt * 10) : hurt;
-    const h = this.hurtDisplay;
+    const h = this.hurt.ease(this.mission.health.hurt, dt, this.effects.reducedFlashing);
     this.post.set("hurt", h);
     const dying = this.phase === "dying" || this.phase === "over" ? Math.min(1, this.deathT / 2) : 0;
     this.post.set("desaturate", Math.min(1, h * 0.6 + dying * 0.7));
-    if (Math.abs(h - this.hurtShown) > 0.01) {
-      this.hurtShown = h;
-      this.hud.health(h);
-    }
-    if (Math.abs(h - this.hurtFilter) > 0.02) {
-      this.hurtFilter = h;
-      this.sound.filter("hurt", h);
-    }
+    this.hurt.tell(this.hud, this.sound);
   }
 
   /** The fall: the glass cracks, the scope comes down, the view tips into the grass, the card. */
@@ -1385,20 +1304,6 @@ export class OverwatchRidge implements Game, MissionListener {
     }
   }
 
-  private later(seconds: number, run: () => void): void {
-    this.schedule.push({ at: this.time + seconds, run });
-  }
-
-  private runSchedule(): void {
-    for (let i = this.schedule.length - 1; i >= 0; i--) {
-      const s = this.schedule[i]!;
-      if (this.time >= s.at) {
-        this.schedule.splice(i, 1);
-        s.run();
-      }
-    }
-  }
-
   // --- MissionListener ----------------------------------------------------------------------
 
   stageIntro(stage: number, _spec: StageSpec, title: string, line: string): void {
@@ -1416,12 +1321,11 @@ export class OverwatchRidge implements Game, MissionListener {
 
   stageClear(_stage: number, b: StageBonuses): void {
     this.sound.play("ridge_stage_clear");
-    const lines: [string, "" | "gold"][] = [];
-    if (b.accuracyPoints > 0) lines.push([`+${b.accuracyPoints} Accuracy ${Math.round(b.accuracy * 100)}%`, ""]);
-    if (b.ghost > 0) lines.push([`+${b.ghost} Ghost`, "gold"]);
-    if (b.cleanConscience > 0) lines.push([`+${b.cleanConscience} Clean Conscience`, ""]);
-    if (b.time > 0) lines.push([`+${b.time} Time`, ""]);
-    lines.forEach(([text, tone], i) => this.later(0.35 + i * 0.45, () => this.hud.popup(0.5, 0.56 + i * 0.05, text, tone)));
+    showBonuses(this.hud, this.schedule, b, [
+      [b.ghost, "Ghost", "gold"],
+      [b.cleanConscience, "Clean Conscience", ""],
+      [b.time, "Time", ""],
+    ]);
     this.hints.setNeed(null);
     this.hints.clearWord();
     this.syncHint();
@@ -1429,7 +1333,7 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   breather(): void {
-    this.hurtDisplay = 0;
+    this.hurt.value = 0;
   }
 
   spawn(a: Actor): void {
@@ -1479,7 +1383,7 @@ export class OverwatchRidge implements Game, MissionListener {
     const away = at.distanceTo(eye);
     if (weapon === "mg") {
       for (let k = 0; k < 7; k++) {
-        this.later(k * 0.085, () => {
+        this.schedule.later(k * 0.085, () => {
           this.effects.muzzle(at, toEye, 0.8);
           if (k % 3 === 0) this.effects.shotFlare(at, away, through);
         });
@@ -1494,13 +1398,13 @@ export class OverwatchRidge implements Game, MissionListener {
     this.reveal(a, at);
     // The bullets outrun their sound: the crack by your head comes first.
     const d = at.distanceTo(eye);
-    if (!hit) this.later(d / 780, () => this.sound.play("ridge_crack_near", { volume: 0.8, pan: (this.visual() - 0.5) * 1.2 }));
+    if (!hit) this.schedule.later(d / ENEMY_BULLET_SPEED, () => this.sound.play("ridge_crack_near", { volume: 0.8, pan: (this.visual() - 0.5) * 1.2 }));
   }
 
   mortarLaunch(a: Actor, flight: number): void {
     this.reveal(a, new Vector3(a.pos.x, a.pos.y + 1, a.pos.z));
     this.sound.at("ridge_mortar_launch", a.pos, 1);
-    this.later(Math.max(0, flight - 1.6), () => this.sound.play("ridge_mortar_whistle", { volume: 0.9 }));
+    this.schedule.later(Math.max(0, flight - MORTAR_WHISTLE), () => this.sound.play("ridge_mortar_whistle", { volume: 0.9 }));
   }
 
   mortarLand(outcome: "hit" | "near" | "far"): void {
@@ -1570,7 +1474,7 @@ export class OverwatchRidge implements Game, MissionListener {
     if (p) this.hud.hitMarker(p.x, p.y, part === "head" ? "headshot" : "kill");
     if (award.points !== 0) {
       const special = award.labels.some((l) => l === "Headshot" || l === "Officer" || l === "Sniper" || l === "Driver");
-      this.popupAt(chest.add(tmp.set(0, 1.2, 0)), this.awardText(award), special ? "gold" : "");
+      this.popupAt(chest.add(tmp.set(0, 1.2, 0)), awardText(award), special ? "gold" : "");
     }
     this.sound.play("ridge_kill", { volume: 0.7 });
     this.sound.at("ridge_body_fall", a.pos, 0.8, 1, 0.5);
@@ -1583,7 +1487,7 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   innocentHit(a: Actor, award: Award): void {
-    this.popupAt(new Vector3(a.pos.x, a.pos.y + 2.2, a.pos.z), this.awardText(award), "danger");
+    this.popupAt(new Vector3(a.pos.x, a.pos.y + 2.2, a.pos.z), awardText(award), "danger");
     const count = (this.innocents.get(a.role) ?? 0) + 1;
     this.innocents.set(a.role, count);
     this.hints.say(innocentWord(a.role, count), 2);
@@ -1603,7 +1507,7 @@ export class OverwatchRidge implements Game, MissionListener {
       const at = this.cast.engineOf(v.id, new Vector3());
       if (at) this.sound.at("ridge_steam", at, 1);
     }
-    this.later(3, () => {
+    this.schedule.later(3, () => {
       const key = `engine.${v.id}`;
       this.sound.stopLoop(key);
       this.engineLoops.delete(key);
@@ -1612,7 +1516,7 @@ export class OverwatchRidge implements Game, MissionListener {
 
   engineStop(v: Vehicle, award: Award): void {
     const at = this.cast.engineOf(v.id, new Vector3());
-    if (at) this.popupAt(at.add(tmp.set(0, 1.8, 0)), this.awardText(award), "gold");
+    if (at) this.popupAt(at.add(tmp.set(0, 1.8, 0)), awardText(award), "gold");
   }
 
   dismount(): void {}
@@ -1623,8 +1527,7 @@ export class OverwatchRidge implements Game, MissionListener {
   }
 
   streakUp(multiplier: number): void {
-    const semitones = multiplier >= 4 ? 7 : multiplier === 3 ? 4 : 0;
-    this.sound.play("ridge_streak", { rate: Math.pow(2, semitones / 12) });
+    this.sound.play("ridge_streak", { rate: streakRate(multiplier) });
   }
 
   score(value: number): void {
@@ -1671,7 +1574,7 @@ export class OverwatchRidge implements Game, MissionListener {
         this.popupAt(new Vector3(duck.pos.x, duck.pos.y + 1, duck.pos.z), `Duck at ${range} m.`, "gold");
       }
     }
-    this.later(delay, () => {
+    this.schedule.later(delay, () => {
       if (this.phase !== "playing") return;
       this.hud.secret(name, found, total);
       this.sound.play("ridge_secret", { delay: 0.1 });
@@ -1683,14 +1586,14 @@ export class OverwatchRidge implements Game, MissionListener {
     // The first leap is the secret ("Unimpressed"); after that it says so itself, from its new ledge.
     if (++this.goatHops < 2) return;
     const ledge = new Vector3(a.home.x, a.home.y + 1.4, a.home.z);
-    this.later(1.3, () => {
+    this.schedule.later(1.3, () => {
       if (a.alive && this.phase === "playing") this.popupAt(ledge, "Still unimpressed.");
     });
   }
 
   eagleLands(a: Actor): void {
     this.sound.at("ridge_eagle", a.pos, 1);
-    this.later(3, () => this.sound.at("ridge_eagle", this.assets.valley.plan.eagleRock, 0.8));
+    this.schedule.later(3, () => this.sound.at("ridge_eagle", this.assets.valley.plan.eagleRock, 0.8));
     this.watchEagle(a, 0);
   }
 
@@ -1698,10 +1601,10 @@ export class OverwatchRidge implements Game, MissionListener {
   private watchEagle(a: Actor, waited: number): void {
     if (!a.alive || this.phase !== "playing" || waited > 30) return;
     if (a.activity !== "perched") {
-      this.later(0.25, () => this.watchEagle(a, waited + 0.25));
+      this.schedule.later(0.25, () => this.watchEagle(a, waited + 0.25));
       return;
     }
-    this.later(2.5, () => {
+    this.schedule.later(2.5, () => {
       if (!a.alive || this.phase !== "playing") return;
       // Just over its head: an arm's length from the eye, a metre higher would be off the top of the view.
       const head = this.cast.headOf(a.id, new Vector3()) ?? new Vector3(a.pos.x, a.pos.y + 0.5, a.pos.z);
@@ -1821,5 +1724,3 @@ export class OverwatchRidge implements Game, MissionListener {
     return { x: (p.x + 1) / 2, y: (1 - p.y) / 2, distance: d };
   }
 }
-
-export { ALL_TIPS };

@@ -8,9 +8,29 @@
  * seen between visits (Settings.tipsSeen).
  */
 
+import type { InputKind } from "../types";
+
 /** How long a tip stays up, and the breath between two. */
 export const TIP_SECONDS = 4;
 export const TIP_GAP = 0.6;
+
+/**
+ * How to do what pointing off the screen does (reload, vent the laser), in
+ * the player's own terms. A mouse player told to "point off the screen" would
+ * drag the pointer out of the window; the page turns a right-click or a
+ * two-finger tap into the same gesture, and the game may have a key for it
+ * too: `mouse` says what a mouse player does ("Right-click or press R").
+ */
+export function offScreenHint(input: InputKind | undefined, action: string, mouse: string): string {
+  if (input === "mouse") return `${mouse} to ${action}.`;
+  if (input === "touch") return `Tap with two fingers to ${action}.`;
+  return `Point off the screen to ${action}.`;
+}
+
+/** How to reload a gun worked off the screen, R on the keyboard, in the player's own terms. */
+export function reloadHint(input: InputKind | undefined): string {
+  return offScreenHint(input, "reload", "Right-click or press R");
+}
 
 interface Tip {
   id: string;
@@ -18,7 +38,7 @@ interface Tip {
 }
 
 /**
- * The line carries three kinds of message, the most urgent shown:
+ * The line carries four kinds of message, the most urgent shown:
  *
  * - a need: something to do now (the cylinder is empty: reload). It stays
  *   until met, and nothing replaces it.
@@ -102,10 +122,6 @@ export class HintLine {
   /** Something the player must do now, or null when it is done. */
   setNeed(text: string | null): void {
     this.need = text;
-  }
-
-  get needed(): string | null {
-    return this.need;
   }
 
   /** A brief acknowledgement, shown over any tip for `seconds`. */

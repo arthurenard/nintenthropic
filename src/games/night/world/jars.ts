@@ -12,6 +12,7 @@ import {
 } from "three";
 import type { CalibrationStage, CalibrationTarget } from "../../../engine/types";
 import type { Sound } from "../../../engine/world/sound";
+import { placeTarget } from "../../../engine/world/targets";
 import type { Effects } from "./effects";
 import type { RayHit, RoadQueries } from "./queries";
 import { surfaceOf, type RoadLayout } from "./road";
@@ -91,7 +92,6 @@ export class JarStage implements CalibrationStage {
   private lit: string | null = null;
   private hits = 0;
   private time = 0;
-  active = true;
   private ended = false;
 
   constructor(
@@ -162,21 +162,12 @@ export class JarStage implements CalibrationStage {
     return this.jars.find((j) => j.id === id);
   }
 
+  /** Where each jar still standing is on screen, and how big its centre zone is: half the jar's height. */
   targets(): CalibrationTarget[] {
     this.targetList.length = 0;
-    const cam = this.camera;
-    cam.updateMatrixWorld();
-    const minSide = Math.min(1, cam.aspect);
-    const tanHalf = Math.tan((cam.fov * Math.PI) / 360);
+    this.camera.updateMatrixWorld();
     for (const j of this.jars) {
-      if (!j.alive) continue;
-      ndc.copy(j.center).project(cam);
-      if (ndc.z > 1) continue;
-      j.target.x = (ndc.x + 1) / 2;
-      j.target.y = (1 - ndc.y) / 2;
-      const dist = tmp.copy(j.center).sub(cam.position).length();
-      const half = j.height / 2 / (dist * 2 * tanHalf * minSide);
-      j.target.radius = Math.max(0.035, half);
+      if (!j.alive || !placeTarget(j.target, this.camera, j.center, j.height / 2)) continue;
       if (j.target.x < 0 || j.target.x > 1 || j.target.y < 0 || j.target.y > 1) continue;
       this.targetList.push(j.target);
     }
@@ -230,7 +221,6 @@ export class JarStage implements CalibrationStage {
   }
 
   reset(): void {
-    this.active = true;
     this.ended = false;
     this.hits = 0;
     for (const j of this.jars) {

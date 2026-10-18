@@ -169,7 +169,7 @@ describe("Aim Assist in High Noon", () => {
   it("makes a near miss of a bandit's body a hit, a little wider than the game's own allowance", () => {
     const street = new Street();
     street.man(bandit(1), 0, -25);
-    // 3% of the smaller side is 62 cm at 25 m: outside the 2.6% the game always gave, inside the new 3.5%.
+    // 3% of the smaller side is 62 cm at 25 m: outside the table's own 2.6%, inside the 3.5% Aim Assist makes of it.
     expect(metres(0.03, 25)).toBeGreaterThan(metres(ASSIST.torso, 25));
     expect(metres(0.03, 25)).toBeLessThan(metres(ASSIST.torso * ASSIST_BOOST, 25));
     expect(street.shootAt(CHEST(-25), 0.03, 0)).toMatchObject({ kind: "bandit", part: "body" });

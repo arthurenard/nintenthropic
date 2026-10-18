@@ -1,6 +1,6 @@
 /**
  * The eight secrets of Dust Creek and what triggers each one. The world
- * (src/games/western/world/secrets.ts) makes them happen on screen; this only
+ * (world/secretsWorld.ts) makes them happen on screen; this only
  * decides when a secret is found, so the rules can be tested without a town.
  */
 export type SecretId =

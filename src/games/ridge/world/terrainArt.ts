@@ -20,7 +20,6 @@ import {
   NoColorSpace,
   RepeatWrapping,
   ShaderMaterial,
-  SRGBColorSpace,
   UnsignedByteType,
   RGBAFormat,
   Vector3,
@@ -99,7 +98,6 @@ uniform sampler2DArray uHra;
 uniform float uInvSize[8];
 uniform vec3 uInvMean[8];
 uniform float uTri[8];
-uniform float uExposureK;
 varying vec3 vWorld;
 varying vec3 vNormalW;
 varying vec2 vMap;
@@ -271,11 +269,8 @@ export function terrainArtMaterial(inputs: TerrainArtInputs, atmosphere: Atmosph
       uInvSize: { value: pad(tiles.map((t) => 1 / t.size), 1 / 3) },
       uInvMean: { value: pad(tiles.map((t) => new Vector3(1 / Math.max(0.01, t.mean[0]), 1 / Math.max(0.01, t.mean[1]), 1 / Math.max(0.01, t.mean[2]))), new Vector3(1, 1, 1)) },
       uTri: { value: pad(tiles.map((t) => (t.triplanar ? 1 : 0)), 0) },
-      uExposureK: { value: 1 },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,
   });
 }
-
-export { SRGBColorSpace };

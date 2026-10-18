@@ -52,6 +52,17 @@ export function secretFactor(on: boolean): number {
   return on ? 1 : 0;
 }
 
+/**
+ * A tolerance from a game's table (a fraction of the view's smaller side,
+ * already scaled by assistFactor or secretFactor) as the angle it spans from
+ * the eye through `camera`'s lens: what raymath.ts's `effectiveRadius`
+ * widens a target to.
+ */
+export function assistAngle(camera: { fov: number; aspect: number }, fraction: number): number {
+  const tanHalf = Math.tan((camera.fov * Math.PI) / 360);
+  return Math.atan(fraction * 2 * tanHalf * Math.min(1, camera.aspect));
+}
+
 /** What a game's shooter weighs: one thing a shot passes near or through. */
 export interface ShotCandidate {
   kind: string;

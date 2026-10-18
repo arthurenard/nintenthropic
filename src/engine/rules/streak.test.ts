@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HintLine, TIP_SECONDS } from "./hints";
-import { Streak } from "./streak";
+import { Streak, streakRate } from "./streak";
 
 describe("the streak multiplier", () => {
   it("steps up every `step` hits in a row to its ceiling, and a miss sends it back", () => {
@@ -13,19 +12,8 @@ describe("the streak multiplier", () => {
     expect(streak.multiplier).toBe(1);
     expect(streak.best).toBe(8);
   });
-});
 
-describe("a game's hint line", () => {
-  it("keeps showing a tip learned by doing until the player does it", () => {
-    const seen = new Set<string>();
-    for (let game = 0; game < 2; game++) {
-      const line = new HintLine(seen, ["night.reload"]);
-      line.setQuiet(false);
-      line.offer("night.reload", "Point off the screen to reload.");
-      line.offer("night.headshot", "Aim for the head.");
-      for (let t = 0; t < (TIP_SECONDS * 2 + 1) * 60; t++) line.update(1 / 60);
-    }
-    expect(seen.has("night.reload")).toBe(false);
-    expect(seen.has("night.headshot")).toBe(true);
+  it("climbs its chime up a major triad: the root at ×2, the third at ×3, the fifth from ×4", () => {
+    expect([2, 3, 4, 5].map((m) => Math.round(streakRate(m) * 1000) / 1000)).toEqual([1, 1.26, 1.498, 1.498]);
   });
 });

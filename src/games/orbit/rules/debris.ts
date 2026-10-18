@@ -6,7 +6,7 @@
  */
 import type { Motion, Strike } from "./motion";
 import { positionAt } from "./motion";
-import { KINDS, SHARD_FACE_ON, TANK_FACING, TANK_HITS, type Kind } from "./tuning";
+import { KINDS, SHARD_FACE_ON, TANK_FACING, type Kind } from "./tuning";
 import { dot, normalize, rotate, sub, type V3 } from "./vec";
 
 export type FragmentState = "flying" | "vaporised" | "split" | "struck" | "passed";
@@ -105,7 +105,7 @@ export function facing(f: Fragment, t: number, eye: V3): number {
   return Math.abs(dot(f.face(t, faceV), toEye));
 }
 
-/** Can a shot land on it now? A shard only face-on; the Derelict's tank only while it shows. */
+/** Can a shot land on it now? A shard only face-on (the Derelict's tank has its own test, tankShows). */
 export function shootable(f: Fragment, t: number, eye: V3): boolean {
   if (!f.flying) return false;
   if (f.kind === "shard") return facing(f, t, eye) >= SHARD_FACE_ON;
@@ -118,9 +118,4 @@ export function tankShows(f: Fragment, t: number, eye: V3): boolean {
   const p = f.position(t);
   const d = normalize(sub(eye, p));
   return dot(f.face(t, faceV), d) >= TANK_FACING;
-}
-
-/** Tank hits so far. */
-export function tankHits(f: Fragment): number {
-  return f.kind === "derelict" ? TANK_HITS - f.hitsLeft : 0;
 }

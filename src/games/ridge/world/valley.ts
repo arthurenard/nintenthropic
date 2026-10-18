@@ -10,13 +10,13 @@ import {
   InstancedMesh,
   Mesh,
   Object3D,
-  PerspectiveCamera,
   Quaternion,
   Vector3,
   type DataArrayTexture,
   type Group,
   type Texture,
 } from "three";
+import { readEye, surfaceFromArt } from "../../../engine/world/layout";
 import { contractName, extraNumber, extraString, findNode, nodesWithPrefix } from "../../../engine/world/names";
 import type { Nest, Plan, Post, V3 } from "../rules/types";
 import type { TerrainInputs } from "./terrain";
@@ -27,22 +27,16 @@ export type Surface = "grass" | "rock" | "snow" | "dirt" | "stone" | "wood" | "m
 const SURFACES: readonly Surface[] = ["grass", "rock", "snow", "dirt", "stone", "wood", "metal", "glass", "water", "cloth"];
 
 export function surfaceOf(o: Object3D | null): Surface {
-  const s = extraString(o, "surface");
-  if (s && (SURFACES as readonly string[]).includes(s)) return s as Surface;
-  const mesh = o as Mesh | null;
-  const mat = mesh?.material;
-  const m = Array.isArray(mat) ? mat[0] : mat;
-  const fromMaterial = m?.userData?.["surface"];
-  if (typeof fromMaterial === "string" && (SURFACES as readonly string[]).includes(fromMaterial)) return fromMaterial as Surface;
-  const name = `${o ? contractName(o) : ""} ${m?.name ?? ""}`.toLowerCase();
-  if (/water|river|reservoir/.test(name)) return "water";
-  if (/glass|window/.test(name)) return "glass";
-  if (/metal|steel|iron|bell|siren|plate/.test(name)) return "metal";
-  if (/wood|plank|barn|fence|pole|tree|forest/.test(name)) return "wood";
-  if (/rock|cliff|boulder/.test(name)) return "rock";
-  if (/snow/.test(name)) return "snow";
-  if (/terrain|ground|grass/.test(name)) return "grass";
-  return "stone";
+  return surfaceFromArt(o, SURFACES, (name) => {
+    if (/water|river|reservoir/.test(name)) return "water";
+    if (/glass|window/.test(name)) return "glass";
+    if (/metal|steel|iron|bell|siren|plate/.test(name)) return "metal";
+    if (/wood|plank|barn|fence|pole|tree|forest/.test(name)) return "wood";
+    if (/rock|cliff|boulder/.test(name)) return "rock";
+    if (/snow/.test(name)) return "snow";
+    if (/terrain|ground|grass/.test(name)) return "grass";
+    return "stone";
+  });
 }
 
 /** The great wall the echo comes back from: a hit within its rectangle, facing the eye. */
@@ -233,20 +227,7 @@ function headingOf(o: Object3D): number {
 export function readValley(root: Group): ValleyLayout {
   root.updateMatrixWorld(true);
 
-  // The eye: a glTF camera or an empty with `fov` extras.
-  const camNode = findNode(root, "camera.player");
-  const eye = camNode ? w(camNode) : new Vector3(0, 0, 0);
-  const eyeQuaternion = camNode ? camNode.getWorldQuaternion(new Quaternion()) : new Quaternion();
-  let fov = 46;
-  if (camNode) {
-    let cam: PerspectiveCamera | null = null;
-    camNode.traverse((o) => {
-      if (!cam && (o as PerspectiveCamera).isPerspectiveCamera) cam = o as PerspectiveCamera;
-    });
-    const extra = extraNumber(camNode, "fov") ?? extraNumber(camNode, "fov_deg") ?? extraNumber(camNode, "yfov");
-    if (extra !== undefined) fov = extra;
-    else if (cam) fov = (cam as PerspectiveCamera).fov;
-  }
+  const { position: eye, quaternion: eyeQuaternion, fov } = readEye(root, new Vector3(0, 0, 0), 46);
   // A glTF camera looks down its −Z already; an empty stands for the same.
   const sunNode = findNode(root, "sun");
   const sunDirection = new Vector3(0.45, -0.1, -0.85).normalize();
@@ -259,6 +240,7 @@ export function readValley(root: Group): ValleyLayout {
     const kind = (["sentry", "tower", "gunner", "guard", "mortar"] as const).find((k) => k === raw) ?? "sentry";
     posts.push({ id, kind, at: asV3(w(node)), heading: headingOf(node), place: placeOf(id, kind, node) });
   }
+  const bell = findNode(root, "secret.bell");
   const nests: Nest[] = [];
   for (const [key, node] of nodesWithPrefix(root, "sniper.")) {
     if (key.includes(".")) continue;
@@ -271,8 +253,7 @@ export function readValley(root: Group): ValleyLayout {
     });
     const at = asV3(w(exposed ?? node));
     const back = hidden ? asV3(w(hidden)) : { x: at.x, y: at.y - 0.8, z: at.z };
-    const bellNode = findNode(root, "secret.bell");
-    const place = nestPlace(node, bellNode !== null && w(node).distanceTo(w(bellNode)) < 12);
+    const place = nestPlace(node, bell !== null && w(node).distanceTo(w(bell)) < 12);
     nests.push({ id: key, exposed: at, hidden: back, heading: Math.atan2(eye.x - at.x, eye.z - at.z), place });
   }
 
@@ -282,7 +263,6 @@ export function readValley(root: Group): ValleyLayout {
   if (tunnel) dam.push(asV3(w(tunnel)));
   const road = pathFrom(root, "path.road.");
   const bridgeNode = findNode(root, "bridge.cross");
-  const bell = findNode(root, "secret.bell");
   const chapelAt = bell ? w(bell) : new Vector3(-100, -60, -480);
   const cows = pathFrom(root, "animals.cows.");
   const farmPost = posts.find((p) => /farm/.test(p.id));
@@ -347,16 +327,16 @@ export function readValley(root: Group): ValleyLayout {
 
   const terrainArt = ph ? null : terrainArtSpec(root);
 
-  const river = (findNode(root, "water.river") as Mesh | null) ?? null;
+  const river = findNode(root, "water.river") as Mesh | null;
   const mist: Mesh[] = [];
   for (const [, node] of nodesWithPrefix(root, "mist.")) if ((node as Mesh).isMesh) mist.push(node as Mesh);
-  const foregroundGrass = (findNode(root, "foreground.grass") as Mesh | null) ?? null;
+  const foregroundGrass = findNode(root, "foreground.grass") as Mesh | null;
   const cliffNode = findNode(root, "secret.cliff");
   const cliffFace: CliffFace | null =
     cliffNode && extraNumber(cliffNode, "half_width_m") !== undefined
       ? { centre: w(cliffNode), halfWidth: extraNumber(cliffNode, "half_width_m") ?? 150, halfHeight: extraNumber(cliffNode, "half_height_m") ?? 80 }
       : null;
-  const reservoir = (findNode(root, "water.reservoir") as Mesh | null) ?? null;
+  const reservoir = findNode(root, "water.reservoir") as Mesh | null;
   const forest: InstancedMesh[] = [];
   for (const [, node] of nodesWithPrefix(root, "forest.")) {
     node.traverse((o) => {
@@ -397,7 +377,7 @@ export function readValley(root: Group): ValleyLayout {
     if (inPlate) return;
     solids.push(m);
   });
-  const flag = (findNode(root, "flag") as Mesh | null) ?? null;
+  const flag = findNode(root, "flag") as Mesh | null;
 
   return {
     root,
