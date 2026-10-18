@@ -285,6 +285,41 @@ describe("a first aim check", () => {
     expect(player.check.words.title).toBe("Move Your Finger");
   });
 
+  for (const lost of [1, 2, 4]) {
+    it(`keeps the aim through ${lost} frame(s) the tracker dropped as the thumb folds`, () => {
+      // The trigger bridges a hand lost for a moment mid-fold (AimController.GRACE), so the shot fires: the aim from
+      // before the fold must still be there for it, not "Raise Your Thumb First" for a player who did.
+      const player = new Player();
+      const target = player.check.lit!;
+      const aim = pointerFor([target.x, target.y]);
+      for (let i = 0; i < 11; i++) player.frame(20, aim);
+      player.frame(40, aim);
+      for (let i = 0; i < lost; i++) player.frame(0, null);
+      let event: ShotEvent | null = null;
+      for (let i = 0; i < 4; i++) event = player.frame(70, [0.95, 0.95]) ?? event;
+      expect(event?.outcome).toBe("hit");
+      expect(player.check.shots).toBe(1);
+    });
+  }
+
+  it("forgets the aim of a hand gone for longer than the trigger waits", () => {
+    const player = new Player();
+    const target = player.check.lit!;
+    const right = pointerFor([target.x, target.y]);
+    for (let i = 0; i < 11; i++) player.frame(20, [0.3, 0.3]);
+    // Gone half a second: the trigger has disarmed, and nothing from before is the aim of the next shot.
+    for (let i = 0; i < 15; i++) player.frame(0, null);
+    for (let i = 0; i < 3; i++) player.frame(20, right);
+    let event: ShotEvent | null = null;
+    for (let i = 0; i < 4; i++) event = player.frame(70, right) ?? event;
+    expect(event?.outcome).toBe("hit");
+    // Two shots fit a map that passes exactly through both: the first was learned where the hand came back to.
+    player.shoot();
+    const landed = apply(player.check.mapping!, right)!;
+    expect(landed[0]).toBeCloseTo(target.x, 6);
+    expect(landed[1]).toBeCloseTo(target.y, 6);
+  });
+
   it("does not count a shot it never saw aimed", () => {
     const check = new AimCheck({ saved: null, targets: TARGETS, viewport: VIEWPORT });
     check.observe({ pointer: [0.5, 0.5], armed: true, travel: 0.0, fired: false }, 0);

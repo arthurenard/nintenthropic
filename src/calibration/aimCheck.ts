@@ -13,6 +13,7 @@
  * nothing to steer onto a target.
  */
 import type { CalibrationTarget, TargetNoun } from "../engine/types";
+import { AimController } from "../input/aim";
 import type { Point } from "../input/filter";
 import { apply, fitAffine, fitScaled, gain, type Matrix } from "../input/homography";
 import { AIM_RADIUS, MIN_ERRORS, READY_SCORE, measure, type Measure, type Vector } from "./score";
@@ -228,6 +229,8 @@ export class AimCheck {
   private history: { time: number; pointer: Point }[] = [];
   private lastShot = Number.NEGATIVE_INFINITY;
   private lastFrame = Number.NEGATIVE_INFINITY;
+  /** When a hand was last seen, s. */
+  private handAt = Number.NEGATIVE_INFINITY;
   private readonly stats: CheckStats = { frames: 0, framesWithoutHand: 0, spans: [], edgeShots: 0 };
 
   constructor({ saved, targets, viewport, noun }: AimCheckOptions) {
@@ -273,8 +276,11 @@ export class AimCheck {
     this.stats.frames++;
     if (!o.pointer) this.stats.framesWithoutHand++;
     else if (o.span !== undefined) this.stats.spans.push(o.span);
-    // A lost hand, or a camera gone quiet, has nothing to say about the aim.
-    if (!o.pointer || time - this.lastFrame > STALE) this.history = [];
+    // A hand lost for longer than the trigger bridges (AimController.GRACE), or a camera gone quiet, has nothing to
+    // say about the aim. A frame or two dropped as the thumb folds is bridged here too, or the shot the trigger keeps
+    // through them would arrive with no aim and be refused ("Raise Your Thumb First") from a player who did.
+    if (o.pointer) this.handAt = time;
+    if (time - this.handAt > AimController.GRACE || time - this.lastFrame > STALE) this.history = [];
     this.lastFrame = time;
     // Keep the last thumb-up aim, rather than the fingertip after firing. The
     // window rolls only while the thumb is up; once the fold begins it holds
