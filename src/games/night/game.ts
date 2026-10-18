@@ -589,6 +589,7 @@ export class DeadOfNight implements Game, MatchListener {
     for (const p of Object.values(this.pools ?? {})) p.dispose();
     this.effects?.dispose();
     this.eyeshine?.dispose();
+    this.secretsWorld?.dispose();
     this.queries?.dispose();
     this.stage?.dispose();
     if (this.previousToneMapping !== null) this.ctx.renderer.toneMapping = this.previousToneMapping;

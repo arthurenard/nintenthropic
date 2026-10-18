@@ -355,6 +355,11 @@ export class SecretsWorld {
     if (this.catEyesMat) shineEyes(this.catEyesMat, this.catShine);
   }
 
+  /** The drive-in's picture, which the scene no longer holds once the reel has run out. */
+  dispose(): void {
+    this.screenMaterial?.dispose();
+  }
+
   /** Everything back as it was (a new night). */
   reset(): void {
     for (const g of this.letterGlow.values()) {
