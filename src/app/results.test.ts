@@ -87,6 +87,10 @@ describe("the secrets line", () => {
   it("with none found yet, says where they hide", () => {
     expect(secretsLine(0, 8)).toBe("Secrets 0 of 8. The scenery can take a shot.");
   });
+
+  it("with every one found, says so", () => {
+    expect(secretsLine(8, 8)).toBe("Secrets 8 of 8. Nothing left unshot.");
+  });
 });
 
 describe("the share card's lines", () => {

@@ -47,10 +47,12 @@ export function outcomeTone(won: boolean, best: boolean): "won" | "lost" | "plai
 
 /**
  * The secrets found, under the stats; with none found yet, a nudge toward
- * where they hide (every game keeps its jokes in the world around the fight).
+ * where they hide (every game keeps its jokes in the world around the fight),
+ * and with every one found, a word for it.
  */
 export function secretsLine(found: number, total: number): string {
-  return found > 0 ? `Secrets ${found} of ${total}` : `Secrets 0 of ${total}. The scenery can take a shot.`;
+  if (found <= 0) return `Secrets 0 of ${total}. The scenery can take a shot.`;
+  return found >= total ? `Secrets ${found} of ${total}. Nothing left unshot.` : `Secrets ${found} of ${total}`;
 }
 
 /**

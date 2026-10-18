@@ -1,7 +1,7 @@
 // The hint line: the game's words, the page's own over them, and who may
-// take back what.
+// take back what; and what a secret's card says.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Hud } from "./hud";
+import { Hud, secretWords } from "./hud";
 
 /** Just enough of the hint's paragraph for the HUD to write to. */
 function fakeLine() {
@@ -59,5 +59,15 @@ describe("the hint line", () => {
     expect(shown()).toBe("Show your hand to the camera.");
     hud.pageHint(null);
     expect(shown()).toBe("Aim for the head.");
+  });
+});
+
+describe("a secret's card", () => {
+  it("says how many of how many have been found", () => {
+    expect(secretWords(3, 8)).toEqual({ eyebrow: "Secret Found", tally: "3 of 8" });
+  });
+
+  it("makes the last one an occasion", () => {
+    expect(secretWords(8, 8)).toEqual({ eyebrow: "Last Secret", tally: "8 of 8. Nothing left unshot." });
   });
 });

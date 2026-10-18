@@ -72,6 +72,15 @@ function drawSegments(r: Readout): { svg: SVGSVGElement; parts: SVGElement[] } {
   return { svg: s, parts };
 }
 
+/**
+ * What a secret's card says over its name: found, and how many of how many -
+ * and for the last of them, that there is nothing left to find.
+ */
+export function secretWords(found: number, total: number): { eyebrow: string; tally: string } {
+  if (total > 0 && found >= total) return { eyebrow: "Last Secret", tally: `${found} of ${total}. Nothing left unshot.` };
+  return { eyebrow: "Secret Found", tally: `${found} of ${total}` };
+}
+
 export class Hud implements HudSink {
   /** Called once when the game ends, with its stats. */
   onGameOver: ((stats: GameStats) => void) | null = null;
@@ -532,10 +541,11 @@ export class Hud implements HudSink {
     const star = element("span", "star");
     star.append(icon("star"));
     const words = element("span", "secret-text");
-    words.append(element("span", "eyebrow", "Secret Found"), element("span", "headline", name), element("span", "footnote secondary num", `${found} of ${total}`));
+    const said = secretWords(found, total);
+    words.append(element("span", "eyebrow", said.eyebrow), element("span", "headline", name), element("span", "footnote secondary num", said.tally));
     toast.append(star, words);
     this.moment(toast, 3500);
-    announce(`Secret found: ${name}. ${found} of ${total}.`);
+    announce(`${said.eyebrow}: ${name}. ${said.tally.replace(/\.?$/, ".")}`);
   }
 
   hint(text: string | null): void {
