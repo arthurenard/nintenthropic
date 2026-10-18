@@ -636,9 +636,19 @@ body[data-screen="race"] #sound-button {
     padding: 18px 22px;
   }
   #pause-sheet[open] {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     align-items: start;
     gap: 12px 20px;
+  }
+  /* Graphics goes under its name and fills the row: four choices side by side are wider than half a phone. */
+  #pause-sheet .graphics-row .segmented {
+    width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  #pause-sheet .graphics-row .segmented [role="radio"] {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 14px;
   }
   #pause-sheet > .sheet-head {
     grid-column: 1;
