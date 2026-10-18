@@ -23,8 +23,13 @@ test("first run, the landing and the arcade", async ({ page }, info) => {
   for (const key of ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"]) {
     await page.keyboard.press(key);
   }
-  await expect(page.locator("#toast")).toHaveText("Golden Revolver unlocked for this visit.");
+  await expect(page.locator("#toast")).toHaveText("Golden guns, until you go.");
   await shot(page, info, "03-golden-unlocked");
+  // Typed again, it has nothing more to give.
+  for (const key of ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"]) {
+    await page.keyboard.press(key);
+  }
+  await expect(page.locator("#toast")).toHaveText("Still gold.");
   await page.getByRole("button", { name: "Privacy" }).click();
   await expect(page.locator("#privacy")).toBeVisible();
   await shot(page, info, "04-privacy");

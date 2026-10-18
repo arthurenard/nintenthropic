@@ -1658,12 +1658,13 @@ export class App {
 
   private unlockGolden(): void {
     if (this.settings.unlocks.has("golden")) {
-      toast("The Golden Revolver is already yours.", { icon: "star", tone: "gold" });
+      toast("Still gold.", { icon: "star", tone: "gold" });
       return;
     }
     this.settings.unlocks.add("golden");
     prefs.unlocks = this.settings.unlocks;
-    toast("Golden Revolver unlocked for this visit.", { icon: "star", tone: "gold" });
+    // Every game's weapon is gilded, and only until the tab is closed (prefs.unlocks).
+    toast("Golden guns, until you go.", { icon: "star", tone: "gold" });
     this.audio.play("ui_confirm");
   }
 

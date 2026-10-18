@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GameEntry, GameStats } from "../engine/types";
 import { readBest } from "./prefs";
-import { difficultyLabel, recordRound, wrapLines } from "./results";
+import { difficultyLabel, outcomeTone, recordRound, secretsLine, wrapLines } from "./results";
 
 const GAME: GameEntry = { id: "high-noon", title: "High Noon", blurb: "", poster: "", create: () => Promise.reject(new Error("not here")) };
 
@@ -64,6 +64,28 @@ describe("the difficulty's name", () => {
   it("is said for Relaxed, and goes without saying for Standard", () => {
     expect(difficultyLabel("relaxed")).toBe("Relaxed");
     expect(difficultyLabel("standard")).toBeNull();
+  });
+});
+
+describe("the outcome's tone", () => {
+  it("is green for a win and red for a loss", () => {
+    expect(outcomeTone(true, false)).toBe("won");
+    expect(outcomeTone(false, false)).toBe("lost");
+  });
+
+  it("never tells off a new best in red: a lost round that beat the record is said plainly", () => {
+    expect(outcomeTone(false, true)).toBe("plain");
+    expect(outcomeTone(true, true)).toBe("won");
+  });
+});
+
+describe("the secrets line", () => {
+  it("counts the secrets found", () => {
+    expect(secretsLine(3, 8)).toBe("Secrets 3 of 8");
+  });
+
+  it("with none found yet, says where they hide", () => {
+    expect(secretsLine(0, 8)).toBe("Secrets 0 of 8. The scenery can take a shot.");
   });
 });
 
