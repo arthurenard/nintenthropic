@@ -830,8 +830,10 @@ export class App {
 
   /** How a pointer fires, said for the first seconds with it. */
   private pointerHint(session: Session): void {
-    this.hud.hint(session.control === "touch" ? "Tap to fire." : "Click to fire.");
-    window.setTimeout(() => this.session === session && this.hud.hint(null), 3500);
+    const words = session.control === "touch" ? "Tap to fire." : "Click to fire.";
+    this.hud.hint(words);
+    // Only these words go: the game's first tip, said over them, keeps its full time.
+    window.setTimeout(() => this.session === session && this.hud.unsay(words), 3500);
   }
 
   /** Every animation frame, after the game has drawn. */

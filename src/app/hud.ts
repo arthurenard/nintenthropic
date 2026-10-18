@@ -545,6 +545,15 @@ export class Hud implements HudSink {
   }
 
   /**
+   * Takes back words the page put on the game's line ("Click to fire."),
+   * unless the game has said something of its own since: a tip of the
+   * game's is never cut short by the page's own clock.
+   */
+  unsay(text: string): void {
+    if (this.gameHint === text) this.hint(null);
+  }
+
+  /**
    * The page's own hint ("Show your hand to the camera."), which the game
    * cannot know to give. It takes the hint's place while it stands, and the
    * game's own hint comes back after it.
