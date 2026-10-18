@@ -129,6 +129,13 @@ export interface CueSpec {
   echo?: number;
   /** Arrives distance / speed-of-sound late (world events; never feedback). */
   travel?: boolean;
+  /**
+   * The player's own feedback (a shot landing in a man): never quieter than
+   * at this many metres, however far off it lands, so it stays clear of the
+   * shot that caused it. It still darkens and grows wetter with the real
+   * distance, so it is heard where it happened.
+   */
+  feedback?: number;
   /** Voice stealing: higher survives. 3 player, 2 threats, 1 world, 0 garnish. */
   priority?: number;
   /** At most this many at once; the oldest goes. */
@@ -182,12 +189,15 @@ export const CUES: Record<string, CueSpec> = {
   },
 
   // --- hits: the player's feedback, never delayed by distance ----------------
+  // Rendered against the player's shot, a man hit 25 m off fell 8 dB under
+  // it in every band, and 12 dB at 45 m: the blast hid him. Kept as loud as
+  // at 12 m, the hit stays 3-4 dB under the shot wherever he stands.
   hit_flesh: {
-    recipe: hitFlesh, pack: "western", bus: "sfx", level: -6, reverb: 0.12, echo: 0.2,
+    recipe: hitFlesh, pack: "western", bus: "sfx", level: -6, reverb: 0.12, echo: 0.2, feedback: 12,
     priority: 3, maxInstances: 4, vary: 0.06, minGap: 0.03, expect: [0.15, 0.5],
   },
   hit_headshot: {
-    recipe: hitHeadshot, pack: "western", bus: "sfx", level: -4, reverb: 0.15, echo: 0.3,
+    recipe: hitHeadshot, pack: "western", bus: "sfx", level: -4, reverb: 0.15, echo: 0.3, feedback: 12,
     priority: 3, maxInstances: 3, vary: 0.04, minGap: 0.03, expect: [0.2, 0.6],
   },
   hit_wood: {

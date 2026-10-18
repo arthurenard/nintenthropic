@@ -51,7 +51,12 @@ class FakeContext {
   destination = new Node();
   sources: Source[] = [];
   filters: { type: string; frequency: Param; Q: Param }[] = [];
-  createGain(): Node & { gain: Param } { return Object.assign(new Node(), { gain: new Param(1) }); }
+  gains: (Node & { gain: Param })[] = [];
+  createGain(): Node & { gain: Param } {
+    const g = Object.assign(new Node(), { gain: new Param(1) });
+    this.gains.push(g);
+    return g;
+  }
   createStereoPanner(): Node & { pan: Param } { return Object.assign(new Node(), { pan: new Param(0) }); }
   createBiquadFilter(): Node & { type: string; frequency: Param; Q: Param } {
     const f = Object.assign(new Node(), { type: "lowpass", frequency: new Param(350), Q: new Param(1) });
@@ -121,6 +126,25 @@ describe("the engine", () => {
     const n = ctx.sources.length;
     e.play("hit_flesh", { distance: 40 });
     expect(Math.min(...ctx.sources.slice(n).map((s) => s.startedAt!))).toBe(0);
+  });
+
+  it("keeps a hit on a far man as loud as on a near one, and darker, but lets a stray shot's thud fall away", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5); // no level variation
+    const { e, ctx } = engine();
+    /** The direct sound's gain (the second gain a voice makes, after its output) and its air (the first filter). */
+    const voice = (cue: string, distance: number): { gain: number; cutoff: number } => {
+      const g = ctx.gains.length;
+      const f = ctx.filters.length;
+      ctx.currentTime += 1; // apart, so no minimum gap or cap is in play
+      e.play(cue, { distance });
+      return { gain: ctx.gains[g + 1]!.gain.value, cutoff: ctx.filters[f]!.frequency.value };
+    };
+    const near = voice("hit_flesh", 12);
+    const far = voice("hit_flesh", 45);
+    expect(far.gain).toBeCloseTo(near.gain, 9);
+    expect(far.cutoff).toBeLessThan(near.cutoff);
+    expect(voice("hit_flesh", 3).gain).toBeGreaterThan(near.gain); // closer than that is louder still
+    expect(voice("hit_wood", 45).gain).toBeLessThan(voice("hit_wood", 12).gain * 0.8);
   });
 
   it("honours delay and rate, and varies the rate only a little", () => {

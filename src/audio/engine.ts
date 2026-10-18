@@ -538,7 +538,9 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       nodes.push(air);
     }
     const gain = ctx.createGain();
-    gain.gain.value = level * distanceGain(d);
+    // Feedback is held to the level it has near by; the air and the walls still say how far.
+    const loudness = distanceGain(spec.feedback ? Math.min(d, spec.feedback) : d);
+    gain.gain.value = level * loudness;
     const panner = ctx.createStereoPanner();
     panner.pan.value = pan;
     head.connect(gain).connect(panner).connect(out);
@@ -583,7 +585,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       cue,
       priority,
       start: when,
-      gain: level * distanceGain(d),
+      gain: level * loudness,
       playbackRate: rate,
       envelope: take.envelope,
       block: ENVELOPE_BLOCK,
