@@ -23,7 +23,7 @@ describe("formatting", () => {
   });
 
   it("names a share card after its game", () => {
-    expect(shareFileName("High Noon")).toBe("handheld-high-noon.png");
-    expect(shareFileName("Dead of Night!")).toBe("handheld-dead-of-night.png");
+    expect(shareFileName("High Noon")).toBe("super-claude-bros-high-noon.png");
+    expect(shareFileName("Dead of Night!")).toBe("super-claude-bros-dead-of-night.png");
   });
 });

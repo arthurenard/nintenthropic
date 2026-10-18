@@ -174,7 +174,7 @@ describe("the player's settings", () => {
     expect(prefs.space).toBeNull();
     storage.setItem("handy.space.v1", "not json");
     expect(prefs.space).toBeNull();
-    // Reset Handheld forgets it with the rest.
+    // Reset Everything forgets it with the rest.
     prefs.space = "grip-prix";
     forgetEverything([storage]);
     expect(prefs.space).toBeNull();
@@ -388,7 +388,7 @@ describe("forgetting", () => {
     expect(forgetSavedAims(storage)).toBe(0);
   });
 
-  it("everything takes all Handheld keeps, in both storages, and nothing of anyone else's", () => {
+  it("everything takes all Super Claude Bros. keeps, in both storages, and nothing of anyone else's", () => {
     const local = kept();
     const session = new MemoryStorage();
     session.setItem("handy.unlocks.v1", '["golden"]');

@@ -1,5 +1,5 @@
 /**
- * Where the page is, as its address says. Handheld has two spaces to be in: the
+ * Where the page is, as its address says. Super Claude Bros. has two spaces to be in: the
  * landing (`./`, where Finger Guns and Grip Prix are side by side) and the arcade
  * (Finger Guns, the finger-pistol shooters). Grip Prix is a page of its own
  * (race.html), so its name in an address only says which tile of the landing to

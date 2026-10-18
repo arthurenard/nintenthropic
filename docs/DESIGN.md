@@ -1,4 +1,4 @@
-# Handheld design language
+# Super Claude Bros. design language
 
 The bar is simple to state and hard to meet: every screen should feel as if
 Apple had made it. That means three things, in this order.
@@ -207,9 +207,10 @@ click and remembered.
 
 ## The landing
 
-`./` is Handheld's front door: "Games you play with your hands." over two
-equal, cinematic tiles (Apple's two-up product tiles are the model: art
-first, a few big words, one white pill). Stacked, one above the other, on a phone.
+`./` is the front door of Super Claude Bros.: "Games you play with your hands."
+over two equal, cinematic tiles (Apple's two-up product tiles are the model: art
+first, a few big words, one white pill). Stacked, one above the other, on a
+phone.
 
 - **Finger Guns** (dark): the four shooters' posters, one fading into the next
   every few seconds (still with Reduce Motion), a shade coming up from the
@@ -236,10 +237,11 @@ first, a few big words, one white pill). Stacked, one above the other, on a phon
   to it; Resume puts the game's address back. While a game is getting ready,
   Back is Cancel.
 
-The bar over the landing and the arcade is frosted glass (64 tall): Handheld,
-Privacy, sound, Settings. In the arcade Handheld has a chevron (the way back to the
-landing, as Grip Prix's own "‹ Handheld" is) and a segmented control sits in
-the middle: **Finger Guns | Grip Prix**, the arcade chosen, Grip Prix a link to its page.
+The bar over the landing and the arcade is frosted glass (64 tall): Super Claude
+Bros., Privacy, sound, Settings. In the arcade Super Claude Bros. has a chevron
+(the way back to the landing, as Grip Prix's own "‹ Super Claude Bros." is) and
+a segmented control sits in the middle: **Finger Guns | Grip Prix**, the arcade
+chosen, Grip Prix a link to its page.
 
 ## The arcade
 
@@ -274,10 +276,11 @@ the four shooters in a row beneath it. Grip Prix is not in the row.
 ## First run
 
 1. No welcome screen: a first visit lands straight on the landing (or on the
-   game a link named), whose title and tiles already say what Handheld is.
+   game a link named), whose title and tiles already say what Super Claude Bros.
+   is.
 2. Before the browser asks for the camera, say why and what happens to the
-   picture: "Handheld needs your camera to see your hand. The picture stays on
-   this computer."
+   picture: "Super Claude Bros. needs your camera to see your hand. The picture
+   stays on this computer."
 3. Aim setup is the Target Range and feels like part of the game: large targets,
    a small celebration on each shot, a calm ring that fills as the aim is
    learned. The player points their finger at the lit target; there is no
@@ -290,17 +293,17 @@ the four shooters in a row beneath it. Grip Prix is not in the row.
 
 ## Results
 
-A card worth sharing: the map's art as its header, the map's name (and
-"Relaxed" beside it when it was), the outcome in a word or two with the game's
-one line under it when it has one (what felled you, or the thing to watch
-next time), the score large, three or four stats, *New Best* in gold only when
-it is true, with how far it beat the last one beside it, and otherwise,
-quietly, the best to beat. The outcome is green for a round won and red for
-one lost, except beside a New Best, where it is said plainly: a record is not
-told off. The secrets found sit under the stats; with none yet, the line says
-where they hide ("The scenery can take a shot."). Then two choices (Play
-Again, Choose a Game) plus Share — a PNG of the card, branded Handheld, saved
-or passed to the system share sheet.
+A card worth sharing: the map's art as its header, the map's name (and "Relaxed"
+beside it when it was), the outcome in a word or two with the game's one line
+under it when it has one (what felled you, or the thing to watch next time), the
+score large, three or four stats, *New Best* in gold only when it is true, with
+how far it beat the last one beside it, and otherwise, quietly, the best to
+beat. The outcome is green for a round won and red for one lost, except beside a
+New Best, where it is said plainly: a record is not told off. The secrets found
+sit under the stats; with none yet, the line says where they hide ("The scenery
+can take a shot."). Then two choices (Play Again, Choose a Game) plus Share — a
+PNG of the card, branded Super Claude Bros., saved or passed to the system share
+sheet.
 
 The card that arrives with the fall, before the results, says the same words
 the results will: the outcome as its title ("Fell on Wave 4", "Breached on

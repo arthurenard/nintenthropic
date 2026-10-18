@@ -165,7 +165,7 @@ test("an aim that will not settle is offered Play Anyway, with one tip", async (
   }
   await expect(page.getByRole("button", { name: "Play Anyway" })).toBeVisible();
   expect((await snapshot(page)).checkDone).toBe(false);
-  // Handheld says it is still learning, with the one tip, and no crosshair has shown.
+  // The check says it is still learning, with the one tip, and no crosshair has shown.
   await expect(page.locator("#check-title")).toHaveText("Still Learning");
   expect((await snapshot(page)).crosshairShown).toBe(false);
   await shot(page, info, "10b-aim-check-play-anyway");

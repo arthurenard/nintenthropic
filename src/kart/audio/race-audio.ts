@@ -793,7 +793,7 @@ class RaceAudioImpl implements RaceAudio {
 
 }
 
-/** The sound of a Grip Prix race. ``bus`` is Handheld's audio engine (``ctx.audio``). */
+/** The sound of a Grip Prix race. ``bus`` is the shared audio engine (``ctx.audio``). */
 export function createRaceAudio(bus: AudioBus, options: RaceAudioOptions = {}): RaceAudio {
   return new RaceAudioImpl(bus, options);
 }

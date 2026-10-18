@@ -4,7 +4,7 @@
  * (src/kart/audio) for the menus' music and the interface's sounds, and a
  * fresh one for every race.
  *
- * Handheld has one sound preference, on or off, which the arcade shares
+ * Super Claude Bros. has one sound preference, on or off, which the arcade shares
  * (`prefs.muted`), and a master volume (the arcade's Settings). The race page
  * adds Music and Effects sliders, remembered here. With sound off nothing is
  * made: no engine, no music rendered, no code fetched, until it is turned on.

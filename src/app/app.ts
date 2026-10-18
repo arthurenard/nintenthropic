@@ -456,8 +456,8 @@ export class App {
     setText(
       "prime-body",
       eye
-        ? "Handheld needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
-        : "Handheld needs your camera to see your hand. The picture stays on this computer.",
+        ? "Super Claude Bros. needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
+        : "Super Claude Bros. needs your camera to see your hand. The picture stays on this computer.",
     );
     return new Promise((resolve) => {
       const sheet = openSheet("prime");
@@ -636,7 +636,7 @@ export class App {
   private fail(error: unknown): void {
     const part = error instanceof Stage ? error.part : null;
     const cause = error instanceof Stage ? error.error : error;
-    console.error("Handheld could not start the game.", cause);
+    console.error("Super Claude Bros. could not start the game.", cause);
     this.endSession();
     this.showView("arcade");
     if (cause instanceof WebGLUnavailable) this.trouble("webgl");
@@ -1635,7 +1635,7 @@ export class App {
     };
     window.addEventListener("popstate", followAddress);
     window.addEventListener("hashchange", followAddress);
-    // The bar's Handheld is the way back to the landing (a link, so that it opens there from anywhere too).
+    // The bar's wordmark is the way back to the landing (a link, so that it opens there from anywhere too).
     $("brand").addEventListener("click", (event) => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
@@ -1887,7 +1887,7 @@ export class App {
     };
   }
 
-  /** Reset Handheld: everything it keeps is forgotten, and it starts again as on the first visit. */
+  /** Reset Everything: everything it keeps is forgotten, and it starts again as on the first visit. */
   private resetEverything(): void {
     if (this.session) this.back();
     closeSheets();

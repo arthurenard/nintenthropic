@@ -1,5 +1,5 @@
 /**
- * The landing: Handheld's two families as two equal, cinematic tiles - the
+ * The landing: the two families of Super Claude Bros. as two equal, cinematic tiles - the
  * Finger Guns (the finger-pistol shooters, their posters crossfading in the dark)
  * and Grip Prix (its sunny poster) - each with the one thing to do and a quiet
  * "How It Plays". This module fills the tiles from the games' own entries (so

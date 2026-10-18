@@ -437,7 +437,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       this.slowmo = x;
       if (slowmoEngaged(before, x)) this.playInternal("slowmo_boom", {}, true);
     } else {
-      this.warnOnce(`filter:${String(name)}`, `Handheld audio: no filter named "${String(name)}"`);
+      this.warnOnce(`filter:${String(name)}`, `Super Claude Bros. audio: no filter named "${String(name)}"`);
       return;
     }
     this.applyFilters();
@@ -460,7 +460,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
 
   private spec(cue: string): CueSpec | undefined {
     const spec = Object.prototype.hasOwnProperty.call(CUES, cue) ? CUES[cue] : undefined;
-    if (!spec) this.warnOnce(cue, `Handheld audio: no sound named "${cue}"`);
+    if (!spec) this.warnOnce(cue, `Super Claude Bros. audio: no sound named "${cue}"`);
     return spec;
   }
 

@@ -1,4 +1,4 @@
-// Handheld's mark: a sight, in white, on a sunset gradient (orange into pink):
+// The mark of Super Claude Bros.: a sight, in white, on a sunset gradient (orange into pink):
 // a ring, four ticks reaching out from it and a dot in the middle, lifted off
 // the colour by a soft shadow. Pure vector, on a 100 grid.
 // tools/icons/render.mjs writes the app icons from it.

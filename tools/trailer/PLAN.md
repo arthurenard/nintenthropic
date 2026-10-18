@@ -1,4 +1,4 @@
-# The Handheld trailer
+# The Super Claude Bros. trailer
 
 A 40-second trailer to post on X: 1920x1080, 60 fps, H.264 + AAC. It is cut to
 music at **120 BPM**, so one beat is 0.5 s (30 frames) and one bar is 2 s
@@ -14,7 +14,7 @@ hit together on the cuts.
 (the app's mark) snaps in and locks on. Bang: the four shooters in quick cuts.
 "Now grab the wheel.": the sight's ring stays and its ticks swing into the spokes
 of a steering wheel, which turns. Go: Grip Prix, four karts, four players on one
-camera. The mark: **Handheld. Games you play with your hands.**
+camera. The mark: **Super Claude Bros. Games you play with your hands.**
 
 **No hand is drawn anywhere** (no illustrations, no glyphs, no 3D hands, no hand
 skeleton picture in the games): the user rejected every drawn hand. The words, the
@@ -31,7 +31,7 @@ sight and the real games carry it.
 | 9-10 | 0:16-0:20 | Overwatch Ridge: the scope rises; then the long shot in slow motion | Half-time feel on bar 10, a riser into 20.0 |
 | 11 | 0:20-0:22 | **Turn** card: the sight becomes a steering wheel, "Now grab the wheel."; the wheel turns at 1.4 s; white at 2.0 (GO). | Break: the drums drop out, a riser, a reverse swell into 22.0 |
 | 12-17 | 0:22-0:34 | Grip Prix: GO on 22.0 (karts launch), a drift with sparks, four players split screen ("Up to 4 players. One camera."), a jump or an item, a night track, then half-bar cuts into the finish | **Second drop** at 22.0, bigger than the first; climax on bars 16-17 |
-| 18-20 | 0:34-0:40 | **End** card: the app icon, "Handheld", "Games you play with your hands.", then Finger Guns and Grip Prix, "In your browser. No controller." Fade to black 39.4-40.0 | A final hit on 34.0, then the resolve and a long tail; silent at 40.0 |
+| 18-20 | 0:34-0:40 | **End** card: the app icon, "Super Claude Bros.", "Games you play with your hands.", then Finger Guns and Grip Prix, "In your browser. No controller." Fade to black 39.4-40.0 | A final hit on 34.0, then the resolve and a long tail; silent at 40.0 |
 
 Game titles sit over the footage on each game's first bar (an eyebrow and a
 name: "Finger Guns" over "High Noon"; "Up to 4 Players" over "Grip Prix").
@@ -44,7 +44,7 @@ name: "Finger Guns" over "High Noon"; "Up to 4 Players" over "Grip Prix").
 | Grip Prix clips | `tools/trailer/race/` (and the smallest dev hooks in `src/kart/` if needed) | `clips/<id>/...`, `clips/race.json` |
 | Cards and titles | `tools/trailer/cards/` | `cards/<id>/00001.png...` (opaque cards; titles with alpha), `cards/cards.json` |
 | Music and mixer | `tools/trailer/music/`, `tools/trailer/mix/` | `music/music.wav`, `music/spectrogram.png`, `music/cues.json`; the mixer as a script |
-| The edit | `tools/trailer/edit.mjs` | `handheld-trailer.mp4`, `contact.jpg` |
+| The edit | `tools/trailer/edit.mjs` | `super-claude-bros-trailer.mp4`, `contact.jpg` |
 
 A clip manifest entry: `{ "id", "game", "frames", "fps": 60, "slow": 1 | 2, "w": 1920, "h": 1080,
 "what": "one line", "moments": [{ "t": seconds into the clip, "what": "a hit, an explosion..." }] }`.

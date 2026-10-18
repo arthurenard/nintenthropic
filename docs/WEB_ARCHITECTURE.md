@@ -1,8 +1,8 @@
-# Handheld on the web — architecture and contracts
+# Super Claude Bros. on the web — architecture and contracts
 
-Handheld is a static website. Everything — hand tracking, the games, the 3D
-rendering, the sound — runs in the player's browser. There is no server beyond
-whatever hosts the files, and the camera picture never leaves the device.
+Super Claude Bros. is a static website. Everything — hand tracking, the games,
+the 3D rendering, the sound — runs in the player's browser. There is no server
+beyond whatever hosts the files, and the camera picture never leaves the device.
 
 This document is the contract the parts are built against. The interface rules
 are in [DESIGN.md](DESIGN.md); the first game's design is in
@@ -18,9 +18,9 @@ are in [DESIGN.md](DESIGN.md); the first game's design is in
 - **Fast to start.** The first screen is interactive in under 2 s on broadband;
   a game's assets load behind a progress bar with real numbers, and are cached.
 - **Private.** Frames are read in memory and never stored or sent anywhere.
-- **Original.** Every model, texture, sky and sound is made for Handheld — in
-  Blender scripts under `art/` or synthesised in code. Only code dependencies
-  come from npm.
+- **Original.** Every model, texture, sky and sound is made for Super Claude
+  Bros. — in Blender scripts under `art/` or synthesised in code. Only code
+  dependencies come from npm.
 
 ## Stack
 
@@ -356,7 +356,7 @@ on the fence, sills and barrels). It ends on its own as soon as the aim is
 three shots.
 
 - **Nothing to steer.** The player points their finger at the lit target and
-  fires; Handheld is learning where they point. So no crosshair is shown while
+  fires; the game is learning where they point. So no crosshair is shown while
   the aim is learned (an unfinished crosshair is only wrong, and a player who
   sees it steers it onto the targets instead of pointing), for a returning
   player as much as a new one, and nothing the game draws follows the
@@ -372,10 +372,10 @@ three shots.
   what it is.
 - **The words** say what is happening, in each game's own noun
   (`CalibrationStage.noun`: bottles, jars, lights, plates): "Point at the Lit
-  Bottle" / "Point your finger at it and fire. Handheld is learning where you
-  point.", then "One Down", "Two Down"... with what Handheld is doing under them,
-  "Still Learning" with the one tip after twelve shots, "Aim Set" at the end.
-  The pill stays "Learning Your Aim".
+  Bottle" / "Point your finger at it and fire. The game is learning where you
+  point.", then "One Down", "Two Down"... with what the game is doing under
+  them, "Still Learning" with the one tip after twelve shots, "Aim Set" at the
+  end. The pill stays "Learning Your Aim".
 - **The ring** is progress, not a score: it climbs with every shot - the
   shots a check must take (six the first time, three for a returning player)
   are most of it, how near the aim is to 95% the rest - never falls back, and
@@ -456,7 +456,7 @@ plays the same without remembering (`src/app/prefs.ts`).
 - `handy.muted.v1`, `handy.control.v1`,
   `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
 
-Reset Handheld removes every `handy.` key from both storages.
+Reset Everything removes every `handy.` key from both storages.
 
 ## Asset contract: High Noon
 

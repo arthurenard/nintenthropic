@@ -1,7 +1,7 @@
 /**
  * The contract between the app, the input, the audio and the games.
  *
- * Every part of Handheld on the web is built against these types; see
+ * Every part of Super Claude Bros. on the web is built against these types; see
  * docs/WEB_ARCHITECTURE.md for what each one means in play. Change them only
  * deliberately, and update every implementation in the same change.
  */

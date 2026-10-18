@@ -32,6 +32,10 @@
 body[data-view="landing"] .nav {
   padding-inline: max(var(--margin), calc((100% - var(--page)) / 2 + var(--margin)));
 }
+/* Nothing sits in the landing's middle, so the name has all the room it needs. */
+body[data-view="landing"] .nav {
+  grid-template-columns: auto 1fr auto;
+}
 .brand {
   grid-column: 1;
   display: inline-flex;
@@ -46,6 +50,7 @@ body[data-view="landing"] .nav {
   font-weight: 700;
   letter-spacing: -0.01em;
   text-decoration: none;
+  white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
 /* In the arcade the wordmark is also the way back to the landing, and says so with Grip Prix's own chevron. */
@@ -429,6 +434,13 @@ body[data-view="landing"] .spaces {
 }
 /* Stacked: two tiles, one above the other, each as wide as the page. */
 @media (max-width: 860px) {
+  /* Beside the two spaces the name no longer fits: the mark and its chevron lead back. */
+  body[data-view="arcade"] .brand-name {
+    display: none;
+  }
+  body[data-view="arcade"] .brand {
+    padding-right: 4px;
+  }
   .tiles {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -458,12 +470,6 @@ body[data-view="landing"] .spaces {
   #about {
     display: none;
   }
-  body[data-view="arcade"] .brand-name {
-    display: none;
-  }
-  body[data-view="arcade"] .brand {
-    padding-right: 4px;
-  }
   /* Two equal halves would not hold "Finger Guns": here each segment is as wide as its name, the chosen one in the pill. */
   .spaces {
     grid-auto-columns: auto;
@@ -491,6 +497,10 @@ body[data-view="landing"] .spaces {
   body[data-view="arcade"] .brand .wordmark-icon {
     display: none;
   }
+  /* On the landing the name keeps its room: its pill's spare edge goes. */
+  body[data-view="landing"] .brand {
+    padding-right: 4px;
+  }
   body[data-view="arcade"] .brand {
     justify-content: center;
     min-width: 44px;
@@ -502,7 +512,7 @@ body[data-view="landing"] .spaces {
 }
 @media (max-width: 350px) {
   /* Settings has the volume too. */
-  body[data-view="arcade"] #mute {
+  #mute {
     display: none;
   }
 }

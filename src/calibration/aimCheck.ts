@@ -249,7 +249,7 @@ export class AimCheck {
     // the words say so.
     this.words = this.returning
       ? { title: "Welcome Back", detail: `Point at the lit ${this.noun.one} and fire. Three shots and you’re in.` }
-      : { title: `Point at the Lit ${capital(this.noun.one)}`, detail: "Point your finger at it and fire. Handheld is learning where you point." };
+      : { title: `Point at the Lit ${capital(this.noun.one)}`, detail: "Point your finger at it and fire. The game is learning where you point." };
   }
 
   /** The stage's targets as they sit in the view now (they move on resize). */
@@ -448,7 +448,7 @@ export class AimCheck {
 
   /**
    * What the card says after a shot. Every shot at the lit target is taken,
-   * so the words count them and say what Handheld is doing: learning where
+   * so the words count them and say what the game is doing: learning where
    * the player points, then checking it. Nothing here is about where an
    * unfinished crosshair would have landed.
    */
@@ -458,14 +458,14 @@ export class AimCheck {
     if (this.done) return { title: "Aim Set", detail: "The crosshair now follows your finger." };
     if (this.canPlayAnyway && this.tip) return { title: "Still Learning", detail: this.tip };
     if (n === 1) return { title: "One Down", detail: `Point at the next lit ${one} and fire.` };
-    if (n === 2) return { title: "Two Down", detail: this.returning ? "One more should do it." : "Handheld is learning where you point. Keep going." };
+    if (n === 2) return { title: "Two Down", detail: this.returning ? "One more should do it." : "The game is learning where you point. Keep going." };
     if (n === 3) {
       return {
         title: "Three Down",
-        detail: this.returning ? "Handheld is adjusting to where you point. Keep going." : "Handheld knows roughly where you point. A few more.",
+        detail: this.returning ? "The game is adjusting to where you point. Keep going." : "The game knows roughly where you point. A few more.",
       };
     }
-    return { title: `${number(n)} Down`, detail: `Keep pointing at the lit ${one}. Handheld is checking its aim.` };
+    return { title: `${number(n)} Down`, detail: `Keep pointing at the lit ${one}. The game is checking its aim.` };
   }
 
   /**

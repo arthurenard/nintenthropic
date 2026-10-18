@@ -20,7 +20,7 @@ import { closeSheet, openSheet } from "./sheets";
 
 declare const __HANDY_VERSION__: string;
 
-/** Handheld's version, from package.json (Vite writes it in at build time). */
+/** The version of Super Claude Bros., from package.json (Vite writes it in at build time). */
 export const VERSION: string = typeof __HANDY_VERSION__ === "string" ? __HANDY_VERSION__ : "dev";
 
 /** What the Eye Test is told: the camera is getting ready, it could not start, or the face as read now. */
@@ -49,7 +49,7 @@ export interface SettingsHost {
   chooseCamera(deviceId: string): void;
   hasSavedAim(): boolean;
   forgetSavedAim(): void;
-  /** Forget everything Handheld keeps, and start again as on the first visit. */
+  /** Forget everything Super Claude Bros. keeps, and start again as on the first visit. */
   reset(): void;
   /** The facts for a bug report (never anything personal). */
   systemInfo(): Promise<SystemFacts>;
@@ -508,7 +508,7 @@ const ms = (value: number) => `${value.toFixed(1)} ms`;
 export function formatSystemInfo(facts: SystemFacts): string {
   const { screen } = facts;
   const lines = [
-    `Handheld ${facts.version}`,
+    `Super Claude Bros. ${facts.version}`,
     `Browser: ${facts.userAgent}`,
     `Graphics: ${facts.gpu || "unknown"}${facts.quality ? ` (${facts.quality.tier}, ${Math.round(facts.quality.scale * 100)}% resolution)` : ""}`,
     `Hand tracking: ${facts.tracker ? `${facts.tracker.where}, ${facts.tracker.delegate}` : "not started"}`,
