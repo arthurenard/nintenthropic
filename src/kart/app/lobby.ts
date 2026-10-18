@@ -184,7 +184,7 @@ export class LobbyScreen {
 
     this.players(lobby, device, role);
     setText(
-      "foot-players",
+      "foot-racers",
       role === "solo" ? "Practice is just you and the bots." : host ? "Up to four people can race. Friends join with the code." : "",
     );
 
