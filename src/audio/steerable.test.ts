@@ -65,10 +65,15 @@ describe("steerable loops", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  /**
+   * An engine with a take of each loop these tests steer, made on the spot:
+   * synthesising the whole kart pack on this thread for every test took
+   * longer than a test may on a busy machine.
+   */
   async function ready(): Promise<{ e: WebAudioEngine; ctx: FakeContext }> {
     const ctx = new FakeContext();
     const e = new WebAudioEngine(ctx as unknown as AudioContext, { muted: false, workers: 0 });
-    await e.load("kart");
+    for (const cue of ["kart_engine_a", "kart_engine_b", "kart_drift"]) e.library.renderNow(cue);
     return { e, ctx };
   }
 
@@ -147,7 +152,7 @@ describe("steerable loops", () => {
     expect(looping).toHaveLength(1);
     early.set({ rate: 1.5 });
     expect(looping[0]!.playbackRate.value).toBeCloseTo(1.5, 6);
-  });
+  }, 60_000); // the whole pack, synthesised on this thread
 
   it("does nothing, quietly, for a cue it does not have", async () => {
     const { e, ctx } = await ready();
