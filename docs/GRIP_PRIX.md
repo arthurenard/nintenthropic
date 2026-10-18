@@ -502,6 +502,28 @@ memory goes with it; four restarts in one page grew the JS heap from 113 to 117 
   and medium.
 - *Shaders and first pictures at load* (`warmUp` in `renderer.ts`): compile in parallel (`compileAsync`), then draw two
   pictures through the whole post chain with the hidden things (flames, the item pool) shown, then clear the canvas.
+  Hidden stand-ins for what appears only later (a slick, the storm cloud, the comet's bubble, the rescue drone;
+  `standIns.test.ts`) are built with them, so none of those builds its shaders mid-race (each was a 250-480 ms
+  freeze); the podium does the same before its first picture. Both waits give up (8 s, 1.5 s) so a lost context cannot
+  hang them. It costs about 0.3 s more behind the loading screen.
+- *Shadow casters per view* (`casters.ts`): a kart whose shadow a view cannot see is left out of that view's shadow
+  pass. `same.mjs`: identical pictures on all nine tracks, 1 and 4 views.
+- *A colour-only resolve*: each view's multisampled picture is resolved without the depth nobody reads, 0.7 to 1.4 ms
+  less GPU time a frame, identical pixels.
+- *What outlives a race* (`outliving.ts`): three r186's shared lookup texture, and Grip Prix's shared materials and
+  geometries, keep dispose listeners that held every renderer alive (a renderer, six scenes, about fifty materials
+  and twenty render targets a race). The race, the podium and the driver stage dispose them as they go: flat over
+  five races.
+
+  Before and after these four (`bench.mjs --bases`, high tier, medians of two on a loaded machine: trust the calls
+  and triangles over the milliseconds):
+
+  | | Draw calls | Kilo-triangles | Frame (ms) |
+  | --- | --- | --- | --- |
+  | Meadow, 1 view | 157 → 115 | 667 → 567 | 7.0 → 5.9 |
+  | Meadow, 4 views | 677 → 578 | 2929 → 2708 | 10.5 → 8.1 |
+  | Canyon, 1 view | 172 → 130 | 639 → 507 | |
+  | Canyon, 4 views | 754 → 614 | 2752 → 2396 | |
 - *Ground tiles of 40 cells* instead of 20: a fifth fewer draw calls, same picture.
 - *Lesser tiers*: karts are welded into one mesh from 26 m (medium) and 18 m (low) instead of 34 m; ground tiles of 60
   and 80 cells; bloom's thresholded copy at half size. The high tier keeps all of its detail: the same still of every
@@ -614,8 +636,7 @@ the footnote says which tier Auto uses here.
 drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
 
 **Next.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
-models at all); caster culling for the shadow pass (karts behind a view's camera, 23% of the draw calls at four views are
-the shadow pass); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
+models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
 tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
 
