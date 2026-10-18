@@ -11,6 +11,7 @@ import { Group, Mesh, Object3D, Quaternion, Vector3, type Material } from "three
 import { contractName } from "../../../engine/world/names";
 import { disposablesUnder, type Disposable } from "../../../engine/world/scene";
 import type { Fragment } from "../rules/debris";
+import type { MatchOptions } from "../rules/match";
 import type { Effects } from "./effects";
 import type { DerelictParts, Library, Variant } from "./library";
 
@@ -68,6 +69,20 @@ export class DebrisView {
   ) {
     this.group.name = "orbit.debris";
     parent.add(this.group);
+  }
+
+  /**
+   * How many variants of each kind the art has, and how many pieces each one
+   * comes apart into: what the match needs to choose a model for each fragment
+   * and to break it along the art's own cracks. Empty with the stand-ins.
+   */
+  variantCounts(): MatchOptions["variants"] {
+    const counts: NonNullable<MatchOptions["variants"]> = {};
+    for (const [kind, list] of Object.entries(this.library) as [keyof Library, Variant[]][]) {
+      if (list.length > 0) counts[kind] = list.map((v) => v.pieces.length);
+    }
+    if (this.derelict.pieces.length > 0) counts.derelict = [this.derelict.pieces.length];
+    return counts;
   }
 
   private variantFor(f: Fragment): { source: Object3D; size: number; key: string; wrap: boolean } | null {

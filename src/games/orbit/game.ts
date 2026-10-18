@@ -466,13 +466,12 @@ export class OrbitalDecay implements Game, MatchListener {
   }
 
   private newMatch(): void {
-    const variants: Record<string, number[]> = {};
     this.match = new Match({
       random: this.ctx.random,
       layout: this.scenery.layout,
       listener: this,
       difficulty: this.ctx.settings.difficulty,
-      variants: variants as never,
+      variants: this.debris.variantCounts(),
     });
     this.match.glass.immortal = this.options.immortal === true;
   }
