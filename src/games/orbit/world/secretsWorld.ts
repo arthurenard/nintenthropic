@@ -98,6 +98,8 @@ function pullShade(s: ShadePull, k: number): void {
 /** The tool bag's drift across the view, in front of all the station (its nearest arm is 11 m out): from/to as (x, y) on screen (-1..1) and metres out. */
 const BAG_FROM: [number, number, number] = [-0.95, 0.2, 8.5];
 const BAG_TO: [number, number, number] = [0.95, -0.02, 7.5];
+/** How long (s) the tools drift after the bag bursts before they are let go: by then specks tens of metres out. */
+const TOOLS_FOR = 30;
 
 interface Tool {
   obj: Object3D;
@@ -151,6 +153,8 @@ export class SecretsWorld {
   private astroSettle = 0;
   private bagT = -1;
   private bagDone = false;
+  /** Seconds the bag's tools have been drifting away (-1: none are). */
+  private toolsT = -1;
   private duckT = -1;
   private duckSpin = -1;
   private readonly duckVel = new Vector3();
@@ -339,6 +343,7 @@ export class SecretsWorld {
     this.bag.updateMatrixWorld(true);
     for (const t of this.artTools) this.parent.attach(t);
     this.bag.visible = false;
+    this.toolsT = 0;
     for (const t of this.tools) {
       t.obj.visible = true;
       if (!this.artTools.includes(t.obj)) t.obj.position.copy(c);
@@ -458,10 +463,17 @@ export class SecretsWorld {
       this.bag.rotation.set(this.bagT * 0.7, this.bagT * 0.4, this.bagT * 0.2);
       if (u >= 1) this.bag.visible = false;
     }
-    for (const t of this.tools) {
-      if (!t.obj.visible) continue;
-      t.obj.position.addScaledVector(t.vel, dt);
-      t.obj.quaternion.premultiply(q.setFromAxisAngle(t.axis, t.spin * dt));
+    if (this.toolsT >= 0) {
+      this.toolsT += dt;
+      // Lost for good: once they have drifted off to specks, they are let go.
+      const gone = this.toolsT > TOOLS_FOR;
+      if (gone) this.toolsT = -1;
+      for (const t of this.tools) {
+        if (gone) t.obj.visible = false;
+        if (!t.obj.visible) continue;
+        t.obj.position.addScaledVector(t.vel, dt);
+        t.obj.quaternion.premultiply(q.setFromAxisAngle(t.axis, t.spin * dt));
+      }
     }
     // The duck.
     if (this.duck?.visible) {
@@ -530,6 +542,7 @@ export class SecretsWorld {
     this.astroSettle = 0;
     this.bagT = -1;
     this.bagDone = false;
+    this.toolsT = -1;
     this.duckT = -1;
     this.duckSpin = -1;
     this.handWave = -1;
