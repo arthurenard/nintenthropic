@@ -108,7 +108,9 @@ bending ahead of one; a groan (panned and distanced) when one leaves the fog;
 the crickets falling silent when the dead are close.
 
 **Hits** read physically: a headshot snaps the head back and they drop where
-they stand; body shots twist and stagger them; the fallen stay on the road
+they stand (but a runner dropped in full stride, carried on by its own run,
+goes down face first and skids a metre along the road on its chin); body
+shots twist and stagger them; the fallen stay on the road
 until the breather (the fog takes them). A dark spray, never dismemberment —
 PG-13, not gore.
 
