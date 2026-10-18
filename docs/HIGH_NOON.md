@@ -296,9 +296,9 @@ Delightful, discoverable, never in the way. The results card counts "Secrets
 8. **High noon, for real** (High Noon). Play when your clock reads between
    12:00 and 12:05: the sun stands overhead, shadows vanish under the eaves,
    and the first wave opens with a duel — one bandit, a ten-pace standoff,
-   and a bell. Drawn on the bell, he is a Quick Draw; shot before it, on his
-   paces, he goes down all the same, and the hint line says it was "Not very
-   sporting."
+   and a bell. Shot as the bell tolls, he is a Quick Draw; shot before it, on
+   his paces, he goes down all the same, and the hint line says it was "Not
+   very sporting."
 
 Also: typing the Konami code on the title screen unlocks the **Golden Revolver**
 (a gold cylinder in the HUD and golden muzzle flashes) for the session.
