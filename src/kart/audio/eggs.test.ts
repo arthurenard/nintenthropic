@@ -26,6 +26,14 @@ describe("the horn and the duck", () => {
     expect(ordersFor(event({ type: "horn", kart: 2 }), scene)).toEqual([]);
   });
 
+  it("quacks when Dabble the duck honks, and honks for everyone else", () => {
+    const grid = { ...scene, racers: [{ id: 0, character: "dabble" }, { id: 1, character: "bun" }] };
+    expect(ordersFor(event({ type: "horn", kart: 0 }), grid)[0]).toMatchObject({ cue: "kart_duck", distance: 0, priority: 3 });
+    expect(ordersFor(event({ type: "horn", kart: 1 }), grid)[0]).toMatchObject({ cue: "kart_horn" });
+    // A grid nobody told the scene about: a horn.
+    expect(ordersFor(event({ type: "horn", kart: 0 }), scene)[0]).toMatchObject({ cue: "kart_horn" });
+  });
+
   it("gives each kart a horn of its own pitch", () => {
     const rates = new Set([0, 1, 3].map((k) => ordersFor(event({ type: "horn", kart: k }), { ...scene, karts: new Map([...scene.karts, [3, kart(3, 5)]]) })[0]?.rate));
     expect(rates.size).toBe(3);

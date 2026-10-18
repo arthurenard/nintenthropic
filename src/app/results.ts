@@ -37,6 +37,25 @@ const verdicts = new WeakMap<GameStats, { round: Round; verdict: Verdict }>();
 export const difficultyLabel = (difficulty: Difficulty): string | null => (difficulty === "relaxed" ? "Relaxed" : null);
 
 /**
+ * The outcome's tone: green for a round won, red for one lost - unless it
+ * was lost on the way to a new best, which the card celebrates in gold and
+ * does not tell off in red. It is said plainly then.
+ */
+export function outcomeTone(won: boolean, best: boolean): "won" | "lost" | "plain" {
+  return won ? "won" : best ? "plain" : "lost";
+}
+
+/**
+ * The secrets found, under the stats; with none found yet, a nudge toward
+ * where they hide (every game keeps its jokes in the world around the fight),
+ * and with every one found, a word for it.
+ */
+export function secretsLine(found: number, total: number): string {
+  if (found <= 0) return `Secrets 0 of ${total}. The scenery can take a shot.`;
+  return found >= total ? `Secrets ${found} of ${total}. Nothing left unshot.` : `Secrets ${found} of ${total}`;
+}
+
+/**
  * A round is over: it is weighed against the best for its game, difficulty
  * and control, and kept at once if it beats it - before the card arrives,
  * so closing the tab at the last moment loses nothing.
@@ -60,7 +79,7 @@ export function showResults(game: GameEntry, stats: GameStats, reducedMotion: bo
   setText("results-game", level ? `${game.title} · ${level}` : game.title);
   const outcome = $("results-outcome");
   setText(outcome, stats.outcome);
-  outcome.className = `title2${stats.won ? " outcome-won" : " outcome-lost"}`;
+  outcome.className = `title2 outcome-${outcomeTone(stats.won, best)}`;
   const note = $("results-note");
   note.hidden = !stats.note;
   setText(note, stats.note ?? "");
@@ -73,7 +92,7 @@ export function showResults(game: GameEntry, stats: GameStats, reducedMotion: bo
   );
   const secrets = $("results-secrets");
   secrets.hidden = stats.secretsTotal <= 0;
-  setText(secrets, `Secrets ${stats.secretsFound} of ${stats.secretsTotal}`);
+  setText(secrets, secretsLine(stats.secretsFound, stats.secretsTotal));
   const newBest = $("new-best");
   newBest.hidden = true;
   newBest.classList.remove("pop");
@@ -217,7 +236,7 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
   const outcomeY = note.length ? noteY - 44 : scoreY - 104;
   const level = result.round && difficultyLabel(result.round.difficulty);
   text((level ? `${result.game.title} · ${level}` : result.game.title).toUpperCase(), 64, outcomeY - 46, 20, 600, "rgba(235,235,245,0.62)", 1.2);
-  text(stats.outcome, 64, outcomeY, 40, 600, stats.won ? "#30d158" : "#ff453a", -0.4);
+  text(stats.outcome, 64, outcomeY, 40, 600, { won: "#30d158", lost: "#ff453a", plain: "#fff" }[outcomeTone(stats.won, result.best)], -0.4);
   note.forEach((line, i) => text(line, 64, noteY + i * 32, 24, 400, "rgba(235,235,245,0.62)"));
   text(formatScore(stats.score), 60, scoreY, 112, 700, "#fff", -2.2);
   if (result.best) text("★ New Best", 66, scoreY + 46, 26, 600, "#ffd60a");

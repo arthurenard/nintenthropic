@@ -194,6 +194,19 @@ describe("storm", () => {
     expect(view(r, 2).zapped).toBe(0);
   });
 
+  it("spares a kart the drone is carrying, and one it has just set down", () => {
+    const r = race(HARBOUR_LIGHTS, racers(3, 0));
+    toGo(r);
+    patch(r, 0, { rescue: 60 });
+    patch(r, 1, { immune: 60 });
+    give(r, 2, "storm");
+    const events = run(r, 1, only(2, press(1)));
+    expect(count(events, "hit")).toBe(0);
+    expect(count(events, "strike")).toBe(0);
+    expect(view(r, 0).zapped).toBe(0);
+    expect(view(r, 1).zapped).toBe(0);
+  });
+
   it("goes to everyone else when no one is ahead", () => {
     const r = race(HARBOUR_LIGHTS, racers(3, 0));
     toGo(r);
@@ -270,6 +283,22 @@ describe("skyrocket", () => {
     expect(kinds(r, "skyrocket")[0]!.target).toBe(2);
   });
 
+  it("flies past a kart already home to the leader of those still racing, and a bot keeps one when no one is", () => {
+    const r = setup();
+    // Kart 0 has finished: its lap of honour is no target.
+    patch(r, 0, { finished: 30, finalPlace: 1, lap: 4 });
+    run(r, 1, only(1, press(1)));
+    expect(kinds(r, "skyrocket")[0]!.target).toBe(2);
+    const events = run(r, 200);
+    expect(events.find((e) => e.type === "strike")).toMatchObject({ kart: 2, item: "skyrocket" });
+    // With everyone else home, a bot holding one does not throw it away.
+    const alone = race(HARBOUR_LIGHTS, racers(0, 2));
+    toGo(alone);
+    patch(alone, 0, { finished: 30, finalPlace: 1, lap: 4 });
+    give(alone, 1, "skyrocket");
+    expect(count(run(alone, 60 * 5), "use")).toBe(0);
+  });
+
   it("is defended by a blast just as it comes", () => {
     const r = setup();
     run(r, 1, only(1, press(1)));
@@ -306,6 +335,32 @@ describe("skyrocket", () => {
       }
     }
     expect(rockets).toBeGreaterThan(0);
+  });
+});
+
+describe("a kart flying off a ramp", () => {
+  it("is passed under by a puck and a seeker, which skim the road, and hit again once it is down", () => {
+    for (const thing of ["puck", "seeker"] as const) {
+      const r = race(HARBOUR_LIGHTS, racers(3, 0));
+      toGo(r);
+      // Kart 0 hangs in the air, still, up the straight; kart 1 fires at it from behind.
+      put(r, 0, 70);
+      patch(r, 0, { flight: 1, air: 2, vy: 4 });
+      put(r, 1, 50);
+      put(r, 2, 300);
+      give(r, 1, thing);
+      const flying = run(r, 30, only(1, press(1)));
+      expect(count(flying, "hit"), thing).toBe(0);
+      expect(view(r, 0).hop, thing).toBeGreaterThan(TUNING.hazard.clearHeight);
+    }
+    // On the ground the same shot hits.
+    const r = race(HARBOUR_LIGHTS, racers(3, 0));
+    toGo(r);
+    put(r, 0, 70);
+    put(r, 1, 50);
+    put(r, 2, 300);
+    give(r, 1, "puck");
+    expect(run(r, 30, only(1, press(1))).find((e) => e.type === "hit")).toMatchObject({ kart: 0, by: 1, cause: "puck" });
   });
 });
 

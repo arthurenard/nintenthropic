@@ -9,7 +9,9 @@
  */
 import type { DriverControl, RaceResult } from "../contract";
 import { loadUnlocks, foundDuck } from "../unlocks";
+import { MIRROR_SUFFIX } from "../track/mirror";
 import { TRACKS } from "../track/tracks";
+import { list } from "./format";
 
 // ─── The Konami code ─────────────────────────────────────────────────────────
 
@@ -97,15 +99,32 @@ export function padPresses(pad: Pick<Gamepad, "buttons"> | null | undefined, was
 /** Every track with a duck (the secret one too). */
 export const duckTracks = (): string[] => TRACKS.filter((track) => track.duck).map((track) => track.id);
 
+/** What each track's duck is up to where it hides (tracks.ts says where), for the toast that finds it. */
+const DUCK_LINES: Record<string, string> = {
+  "meadow-loop": "Paddling in the pond.",
+  "kitchen-rally": "Fished out of the sink.",
+  "harbour-lights": "Minding the lighthouse.",
+  "canyon-run": "Keeping cool by the water tower.",
+  "fun-fair": "Hooked.",
+  "glacier-pass": "Ice fishing.",
+  "volcano-rush": "Taking the waters.",
+  "starlight-ribbon": "In a space helmet. Bold.",
+  "five-finger-circuit": "Sunbathing.",
+};
+
 /**
- * A duck was found on `track` by one of this device's players. The words for
- * the toast the first time, or null if that duck was already theirs.
+ * A duck was found on `track` (a race's track id: a mirrored track's duck is
+ * the same duck) by one of this device's players. The words for the toast
+ * the first time, or null if that duck was already theirs.
  */
 export function recordDuck(track: string): string | null {
-  if (!foundDuck(track)) return null;
+  const id = track.endsWith(MIRROR_SUFFIX) ? track.slice(0, -MIRROR_SUFFIX.length) : track;
+  if (!foundDuck(id)) return null;
   const all = duckTracks();
-  const found = all.filter((id) => loadUnlocks().ducks.includes(id)).length;
-  return found >= all.length ? "You found every duck — Dabble joins the race!" : `Duck found! ${found} of ${all.length}`;
+  const found = all.filter((one) => loadUnlocks().ducks.includes(one)).length;
+  if (found >= all.length) return "Every duck found. Dabble joins the race.";
+  const line = DUCK_LINES[id];
+  return `Duck ${found} of ${all.length}.${line ? ` ${line}` : ""}`;
 }
 
 // ─── The photo finish ────────────────────────────────────────────────────────
@@ -138,6 +157,108 @@ export function photoFinish(standings: RaceResult["standings"]): PhotoFinish | n
   return best;
 }
 
+// ─── Hits between friends ────────────────────────────────────────────────────
+
+/** A word for one of this screen's viewports: the kart it follows, and what it says there. */
+export interface Taunt {
+  kart: number;
+  words: string;
+}
+
+/**
+ * The words a hit earns, in the viewport of each kart on this screen it is
+ * about: a player's own item coming back at them ("Own goal."), or one person
+ * on the sofa getting another ("Got Finn." for the one who did it, "Maya got
+ * you." for the one it got). A bot at either end is the race's business, and
+ * says nothing. `players` names the karts people drive; `here` is the karts
+ * this screen shows.
+ */
+export function taunts(hit: { kart: number; by: number | null }, players: ReadonlyMap<number, string>, here: readonly number[]): Taunt[] {
+  const { kart, by } = hit;
+  const victim = players.get(kart);
+  if (by === null || victim === undefined) return [];
+  if (by === kart) return here.includes(kart) ? [{ kart, words: "Own goal." }] : [];
+  const attacker = players.get(by);
+  if (attacker === undefined) return [];
+  const out: Taunt[] = [];
+  if (here.includes(by)) out.push({ kart: by, words: `Got ${victim}.` });
+  if (here.includes(kart)) out.push({ kart, words: `${attacker} got you.` });
+  return out;
+}
+
+// ─── A line under the result ─────────────────────────────────────────────────
+
+/** How a race went for the one player on this screen. */
+export interface FinishFacts {
+  /** Their place, and how many karts raced. */
+  place: number;
+  field: number;
+  /** Their time, or null: the race ended before they finished. */
+  time: number | null;
+  /** The winner's name and time, and the runner-up's time (a win's margin). */
+  winner: string;
+  winnerTime: number | null;
+  secondTime: number | null;
+  /** How many times the drone carried them back to the road. */
+  rescues: number;
+}
+
+/**
+ * The line under "You Won" or "4th Place": what everyone on the sofa saw, said
+ * kindly, and the funnier the further down the table. Null when there is
+ * nothing to add.
+ */
+export function resultLine(facts: FinishFacts): string | null {
+  const { place, field, time, winner, winnerTime, secondTime, rescues } = facts;
+  if (time === null) return "The race ended before you did.";
+  if (place === field && field >= 4) return "You saw more of the track than anyone.";
+  if (rescues >= 3) return "The drone knows you by name now.";
+  if (place === 1) {
+    const margin = secondTime === null ? Infinity : secondTime - time;
+    if (margin > 5) return "By a mile.";
+    if (margin < 0.5) return "By a whisker.";
+    return null;
+  }
+  if (place === 2 && winnerTime !== null) {
+    const gap = time - winnerTime;
+    return gap < 0.1 ? `A whisker behind ${winner}.` : `${gap.toFixed(1)} s behind ${winner}.`;
+  }
+  return null;
+}
+
+/** Two to four players on one screen: who got the bragging rights. `names` are theirs, best place first. */
+export function sofaLine(names: readonly string[]): string | null {
+  if (names.length < 2) return null;
+  return `${names[0]} beat ${list(names.slice(1))}.`;
+}
+
+/** One row of a cup's final standings, as the podium needs it. */
+interface CupRow {
+  name: string;
+  points: number;
+}
+
+/**
+ * What the podium says under the cup's name: who won, and to the one player
+ * on this screen who did not, how close they came. `mine` is the places
+ * (0 = the winner) of this screen's players.
+ */
+export function podiumLine(rows: readonly CupRow[], mine: readonly number[], cup: string): string {
+  const winner = rows[0];
+  if (!winner) return "";
+  const points = (n: number) => `${n} ${n === 1 ? "point" : "points"}`;
+  if (mine.includes(0)) return `You won the ${cup}, with ${points(winner.points)}.`;
+  const wins = `${winner.name} wins the ${cup}, with ${points(winner.points)}.`;
+  const me = mine.length === 1 ? mine[0]! : -1;
+  const row = rows[me];
+  if (row && (me === 1 || me === 2)) {
+    const behind = winner.points - row.points;
+    return `${wins} You took ${me === 1 ? "silver" : "bronze"}, ${behind > 0 ? `${points(behind)} behind` : "level on points"}.`;
+  }
+  if (row && me === rows.length - 1 && rows.length >= 4) return `${wins} You took the scenic route.`;
+  return wins;
+}
+
 // ─── The tricks ──────────────────────────────────────────────────────────────
 
 /** What a driver can try, by what they drive with. */
@@ -158,10 +279,31 @@ export function tricksFor(kind: DriverControl["kind"]): string[] {
 export function tipsFor(kind: DriverControl["kind"] | null): string[] {
   switch (kind) {
     case "keyboard":
-      return ["Hold Space to drift, and let go to boost.", "Press E or Shift to use an item.", "Press H to honk.", "Tap Down to brake, hold it to reverse."];
+      return [
+        "Hold Space to drift, and let go to boost.",
+        "Press E or Shift to use an item.",
+        "Press H to honk.",
+        "Tap Down to brake, hold it to reverse.",
+        "Press Up just before Go for a flying start.",
+        "Honk as you overtake. It’s only polite.",
+      ];
     case "gamepad":
-      return ["Hold A to drift, and let go to boost.", "Press B or X to use an item.", "Press Y to honk.", "The right trigger goes, the left one stops."];
+      return [
+        "Hold A to drift, and let go to boost.",
+        "Press B or X to use an item.",
+        "Press Y to honk.",
+        "The right trigger goes, the left one stops.",
+        "Pull the right trigger just before Go for a flying start.",
+        "Honk as you overtake. It’s only polite.",
+      ];
     default:
-      return ["Open both hands to brake.", "Flick one hand to use an item.", "Hop to drift.", "Clap to honk."];
+      return [
+        "Open both hands to brake.",
+        "Flick one hand to use an item.",
+        "Hop to drift.",
+        "Clap to honk.",
+        "Close your fists just before Go for a flying start.",
+        "Wave as you overtake. It’s only polite.",
+      ];
   }
 }

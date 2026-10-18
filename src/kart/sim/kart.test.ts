@@ -104,6 +104,44 @@ describe("barriers", () => {
     expect(fastest).toBeGreaterThan(20);
   });
 
+  /** Stands kart 0 at the right-hand barrier 60 m up the straight, turned `into` degrees toward it, going `speed`. */
+  function atBarrier(into: number, speed: number) {
+    const r = solo();
+    const s = 60;
+    const limit = harbour.at(s).width / 2 + 6 - 0.8;
+    const p = harbour.point(s, limit);
+    const h = harbour.heading(s) - (into * Math.PI) / 180;
+    patch(r, 0, { x: p.x, z: p.z, s, offset: limit, progress: s, heading: h, vx: Math.sin(h) * speed, vz: Math.cos(h) * speed });
+    return { r, limit };
+  }
+
+  it("let a kart brushing along them keep its speed: a scrape wears off 3 m/s a second, no more", () => {
+    // Nose 5° into the barrier, on the grass beside it, flat out: it touches on every tick.
+    const { r } = atBarrier(5, 10);
+    let touching = 0;
+    for (let i = 0; i < 60; i++) {
+      run(r, 1, () => input({ throttle: 1 }));
+      if (Math.abs(harbour.project(view(r).x, view(r).z).offset) > HARBOUR_LIGHTS.width / 2 + 5) touching++;
+    }
+    expect(touching).toBeGreaterThan(50);
+    // It took 5% of the speed a tick, and a kart on the barrier was down to 2 m/s in a second.
+    expect(view(r).speed).toBeGreaterThan(7);
+  });
+
+  it("never wedge a kart that met them head-on: the wheel brings it round, and it drives off", () => {
+    for (const steer of [-1, 1]) {
+      const { r, limit } = atBarrier(90, 0);
+      run(r, 120, () => input({ throttle: 1, steer }));
+      const k = view(r);
+      expect(k.speed, `steer ${steer}`).toBeGreaterThan(3);
+      expect(Math.abs(harbour.project(k.x, k.z).offset), `steer ${steer}`).toBeLessThan(limit - 0.5);
+    }
+    // With the wheel straight it stays put, nose to the barrier: the wheel is what frees it.
+    const { r } = atBarrier(90, 0);
+    run(r, 90, () => input({ throttle: 1 }));
+    expect(Math.abs(view(r).speed)).toBeLessThan(0.5);
+  });
+
   it("hold a kart that is shoved at them", () => {
     const r = solo();
     for (const side of [1, -1]) {
@@ -280,7 +318,7 @@ describe("hop and drift", () => {
 });
 
 describe("the start", () => {
-  it("gives a start boost for opening the throttle in the last 0.6 s", () => {
+  it("gives a start boost for opening the throttle while the lights say 1", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));
     const events = run(r, GO_TICK + 1, () => input({ throttle: r.tick >= GO_TICK - 20 ? 1 : 0 }));
     expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "start", kart: 0 });
@@ -290,18 +328,30 @@ describe("the start", () => {
     expect(view(r).speed).toBeGreaterThan(view(plain).speed + 2);
   });
 
+  it("gives it to hands closed as the 1 comes up, and to a throttle that arrives a little after them (the hands' delay)", () => {
+    const one = run(race(HARBOUR_LIGHTS, racers(1, 0)), GO_TICK + 1).find((e) => e.type === "countdown" && e.n === 1)!.tick;
+    expect(one, "the lights say 1 for the last second").toBe(GO_TICK - 60);
+    for (const late of [0, 10, 40, 59]) {
+      const r = race(HARBOUR_LIGHTS, racers(1, 0));
+      const events = run(r, GO_TICK + 1, (tick) => input({ throttle: tick >= one + late ? 1 : 0 }));
+      expect(events.find((e) => e.type === "boost"), `${late} ticks after the 1`).toMatchObject({ source: "start", kart: 0 });
+    }
+  });
+
   it("floods the engine when the throttle was down before 1.2 s: no drive for 0.6 s after Go", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));
     const events = run(r, GO_TICK + 30, () => input({ throttle: r.tick >= GO_TICK - 120 ? 1 : 0 }));
     expect(count(events, "boost")).toBe(0);
+    // Said once, at Go, so the engine coughs for the kart that flooded and no other.
+    expect(events.filter((e) => e.type === "flood")).toMatchObject([{ kart: 0, tick: GO_TICK }]);
     expect(view(r).speed).toBe(0);
     run(r, 60, () => input({ throttle: 1 }));
     expect(view(r).speed).toBeGreaterThan(5);
   });
 
-  it("is a plain start in between", () => {
+  it("is a plain start in between: on at the end of the 2", () => {
     const r = race(HARBOUR_LIGHTS, racers(1, 0));
-    const events = run(r, GO_TICK + 60, () => input({ throttle: r.tick >= GO_TICK - 55 ? 1 : 0 }));
+    const events = run(r, GO_TICK + 60, () => input({ throttle: r.tick >= GO_TICK - 66 ? 1 : 0 }));
     expect(count(events, "boost")).toBe(0);
     expect(view(r).speed).toBeGreaterThan(2);
   });

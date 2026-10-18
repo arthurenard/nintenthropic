@@ -19,6 +19,8 @@ class Window {
   readonly camera = new PerspectiveCamera(FOV, ASPECT, 0.1, 400);
   readonly chunk: Fragment;
   moon: SkyTargets["moon"] = null;
+  /** What the ray meets on the planet: nothing (open sky) unless a test says. */
+  ground: ReturnType<SkyTargets["planet"]> = null;
   drone: { center: Vector3; radius: number } | null = null;
   private readonly shooter: Shooter;
   private readonly at: Vector3;
@@ -39,7 +41,7 @@ class Window {
   /** A shot at a point, moved sideways by a fraction of the view's smaller side. */
   shoot(point: Vector3, dx = 0): ShotResult {
     const p = point.clone().project(this.camera);
-    const sky: SkyTargets = { moon: this.moon, planet: () => null };
+    const sky: SkyTargets = { moon: this.moon, planet: () => this.ground };
     return this.shooter.shoot((p.x + 1) / 2 + dx / ASPECT, (1 - p.y) / 2, 0, [this.chunk], this.drone, [], sky);
   }
 }
@@ -89,5 +91,14 @@ describe("Aim Assist in Orbital Decay", () => {
     expect(w.shoot(at, 0.024).hit).not.toBe("secret");
     w.settings.aimAssist = false;
     expect(w.shoot(at, 0.018).hit).not.toBe("secret");
+  });
+
+  it("finds the Moon only in open sky: still under the limb, the planet is in front of it", () => {
+    const w = new Window(new Vector3(0, 30, -300));
+    w.moon = { dir: new Vector3(0, 0, -1), radius: 0.01 };
+    const at = new Vector3(0, 0, -100);
+    expect(w.shoot(at).hit).toBe("secret");
+    w.ground = { storm: false, hi: false };
+    expect(w.shoot(at).hit).not.toBe("secret");
   });
 });

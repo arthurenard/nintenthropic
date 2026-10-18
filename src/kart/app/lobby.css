@@ -676,6 +676,16 @@
     mask-image: linear-gradient(transparent, #000 40%);
   }
 }
+/* A window wider than the one column (a phone on its side, a small tablet): the band under Start fades on every side, or
+   it would stand in the window as a blue box (where the room is short, Start is not at the window's foot either). */
+@media (min-width: 601px) and (max-width: 960px) {
+  .lobby-go::before {
+    -webkit-mask-image: linear-gradient(transparent, #000 40%, #000 82%, transparent), linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(transparent, #000 40%, #000 82%, transparent), linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+    mask-composite: intersect;
+  }
+}
 @media (max-width: 600px) {
   /* A phone has room for one open seat; the code on it says the rest. */
   .racer.empty ~ .racer.empty {

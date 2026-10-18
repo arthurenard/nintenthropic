@@ -216,6 +216,8 @@ export class App {
   private tracking = false;
   /** The small loop that watches for the hand while the world is held. */
   private holdLoop = 0;
+  /** The loading sheet of a game getting ready: put away with it, before it has even shown, by Cancel or Back. */
+  private loadingSheet: LoadingSheet | null = null;
 
   constructor(private readonly options: AppOptions = {}) {
     this.settings = {
@@ -478,7 +480,10 @@ export class App {
       const { EngineHost } = await import("../engine/host");
       this.host = new EngineHost($<HTMLCanvasElement>("world"));
       this.host.onContextLost = () => {
-        this.endSession();
+        // A game's view with no game in it has no way out (its Pause and Esc
+        // answer only a game): the page goes back to the arcade, and says why.
+        if (document.body.dataset.view === "game") this.back();
+        else this.endSession();
         this.trouble("context");
       };
     }
@@ -510,6 +515,7 @@ export class App {
       const eye = this.readsEye(entry, control) && !this.options.scripted;
       const firstTime = hand && !this.options.scripted && ((!this.tracker && !prefs.downloaded) || (eye && !this.tracker?.hasFace));
       loading = new LoadingSheet(firstTime);
+      this.loadingSheet = loading;
       const sheet = loading;
       const progress = new Progress((fraction) => sheet.set(fraction));
 
@@ -581,6 +587,7 @@ export class App {
       this.fail(error);
     } finally {
       if (run === this.generation) this.busy = false;
+      if (this.loadingSheet === loading) this.loadingSheet = null;
       this.renderArcade();
     }
   }
@@ -827,8 +834,10 @@ export class App {
 
   /** How a pointer fires, said for the first seconds with it. */
   private pointerHint(session: Session): void {
-    this.hud.hint(session.control === "touch" ? "Tap to fire." : "Click to fire.");
-    window.setTimeout(() => this.session === session && this.hud.hint(null), 3500);
+    const words = session.control === "touch" ? "Tap to fire." : "Click to fire.";
+    this.hud.hint(words);
+    // Only these words go: the game's first tip, said over them, keeps its full time.
+    window.setTimeout(() => this.session === session && this.hud.unsay(words), 3500);
   }
 
   /** Every animation frame, after the game has drawn. */
@@ -1022,7 +1031,9 @@ export class App {
     if (this.session !== session) return;
     session.troubled = false;
     const now = this.cameraIdentity();
-    if (before && now && (now.deviceId !== before.deviceId || now.width !== before.width || now.height !== before.height)) {
+    // A round begun with no camera at all (it went while the game loaded) has
+    // no aim yet either: like another camera, it starts afresh with its check.
+    if (now && (!before || now.deviceId !== before.deviceId || now.width !== before.width || now.height !== before.height)) {
       session.camera = now;
       this.again(session, false);
       return;
@@ -1212,6 +1223,11 @@ export class App {
     closeSheet("pause-sheet");
     if (!session || !session.paused) return;
     session.paused = false;
+    // Paused by the browser's Back, the round left its address behind: it
+    // comes back with the round, so the next Back pauses again rather than
+    // leaving the page.
+    const address = this.addressFor({ space: "arcade", game: session.entry.id });
+    if (address !== `${location.pathname}${location.search}${location.hash}`) history.pushState(null, "", address);
     // Nothing held from before the pause: no stale fold fires on return.
     session.input.reset();
     this.startTracking();
@@ -1347,6 +1363,9 @@ export class App {
   back(): void {
     this.generation++;
     this.busy = false;
+    // A sheet still waiting for its moment to show must not show over the arcade.
+    this.loadingSheet?.close();
+    this.loadingSheet = null;
     if (this.session) this.choose(this.session.entry, "link");
     this.endSession();
     this.releaseCamera();
@@ -1544,6 +1563,17 @@ export class App {
       const request = document.fullscreenElement ? document.exitFullscreen() : $("game").requestFullscreen?.();
       request?.catch(() => toast("Full screen isn’t available here."));
     };
+    // The game going full screen is drawn over everything shown before it -
+    // the pause sheet its button is on included, which would leave a frozen
+    // game and no menu: the sheet is shown again, over it.
+    document.addEventListener("fullscreenchange", () => {
+      const sheet = $<HTMLDialogElement>("pause-sheet");
+      if (!document.fullscreenElement || !sheet.open) return;
+      const focused = document.activeElement;
+      sheet.close();
+      sheet.showModal();
+      if (focused instanceof HTMLElement) focused.focus();
+    });
     // Esc on a sheet over the game: the pause sheet resumes; results and
     // trouble stay until the player chooses; loading goes back to the arcade.
     $("pause-sheet").addEventListener("cancel", (event) => {
@@ -1587,9 +1617,19 @@ export class App {
 
     window.addEventListener("keydown", (event) => this.key(event));
     // The browser's Back and Forward, a link to a game followed on the page, the address edited:
-    // the page turns to the space the address names (in a game it stays where it is).
+    // the page turns to the space the address names. In a game it stays where
+    // it is and pauses, so Back is answered at once and never costs a round
+    // (Choose a Game is on the sheet); Resume puts the game's address back.
     const followAddress = () => {
       const view = document.body.dataset.view;
+      if (view === "game" && !this.session) {
+        // Still getting ready, there is no round to keep: Back is Cancel, to where the address now says.
+        const route = parseRoute(location, this.shooting);
+        this.back();
+        this.arrive(route);
+        return;
+      }
+      if (view === "game") this.pause();
       if (view !== "landing" && view !== "arcade") return;
       this.arrive(parseRoute(location, this.shooting));
     };
@@ -1655,13 +1695,14 @@ export class App {
 
   private unlockGolden(): void {
     if (this.settings.unlocks.has("golden")) {
-      toast("The Golden Revolver is already yours.", { icon: "star", tone: "gold" });
+      toast("Still gold.", { icon: "star", tone: "gold" });
       return;
     }
     this.settings.unlocks.add("golden");
     prefs.unlocks = this.settings.unlocks;
-    toast("Golden Revolver unlocked for this visit.", { icon: "star", tone: "gold" });
-    this.audio.play("ui_confirm");
+    // Every game's weapon is gilded, and only until the tab is closed (prefs.unlocks).
+    toast("Golden guns, until you go.", { icon: "star", tone: "gold" });
+    this.audio.play("ui_gold");
   }
 
   // --- settings, records and preferences ----------------------------------------------------

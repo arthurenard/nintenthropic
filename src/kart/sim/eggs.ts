@@ -12,8 +12,9 @@
  *     where no kart can go: there the kart finds it by driving as near as the
  *     barrier lets it, along the stretch of fence the duck is across from.
  *   - Bots honk, sometimes, a moment after passing someone (the sharper the
- *     bot the likelier), and cheer for a few seconds when they finish in the
- *     top three. They do it from a hash of the kart and the tick, never the
+ *     bot the likelier), honk back at a person who honks close by (more often
+ *     than not), and cheer for a few seconds when they finish in the top
+ *     three. They do it from a hash of the kart and the tick, never the
  *     race's random numbers, so adding a honk never changes a race.
  *
  * All of it is plain numbers; a snapshot carries them (`save`, `load`), so
@@ -44,6 +45,12 @@ export const EGGS = {
   botHonkGap: 8,
   /** Bots start to honk this long after the green light, seconds. */
   botHonkAfter: 3,
+  /** A bot honks back at a person who honked within this far (metres) of it, with this chance plus this much times its skill... */
+  answerRadius: 15,
+  answer: { base: 0.5, skill: 0.4 },
+  /** ...noticing a honk this long old at most, and answering this long after it (seconds). */
+  answerWithin: 1,
+  answerDelay: { least: 0.4, spread: 0.5 },
   /** A bot that finished in the top three cheers for this long, seconds. */
   botCheer: 6,
 } as const;
@@ -158,6 +165,8 @@ export class Eggs {
       }
       egg.place = k.place;
     }
+    // A person honking close by: a real bot (never a player's kart driving itself) honks back, sometimes, a moment later.
+    if (!k.player && egg.honkAt < 0 && tick >= egg.until) this.answer(w, k, egg);
     if (egg.honkAt >= 0 && tick >= egg.honkAt) {
       egg.honkAt = -1;
       egg.until = tick + ticks(EGGS.botHonkGap);
@@ -168,6 +177,28 @@ export class Eggs {
       egg.cheerUntil = tick + ticks(EGGS.botCheer);
     }
     egg.emote = egg.cheerUntil > tick ? EMOTE_CODE.cheer : 0;
+  }
+
+  /**
+   * Whether a person at the wheel near this bot has just honked, and if so
+   * whether it answers. A person's honk is read from what is already kept (a
+   * honk sets their `until` half a second on), and the choice from the honk's
+   * own tick, so the bot decides once per honk and a restored race decides the same.
+   */
+  private answer(w: World, k: KartState, egg: Egg): void {
+    const tick = w.state.tick;
+    for (const other of w.state.karts) {
+      if (other.ai) continue;
+      const theirs = this.eggs.get(other.id);
+      if (!theirs || theirs.until <= 0) continue;
+      const at = theirs.until - ticks(EGGS.hornGap);
+      if (tick < at || tick - at > ticks(EGGS.answerWithin)) continue;
+      if (Math.hypot(other.x - k.x, other.z - k.z) > EGGS.answerRadius) continue;
+      if (unit(k.id + 17, at) < EGGS.answer.base + EGGS.answer.skill * k.skill) {
+        egg.honkAt = at + ticks(EGGS.answerDelay.least + unit(k.id + 29, at) * EGGS.answerDelay.spread);
+      }
+      return;
+    }
   }
 
   /** In the order of `karts`: for the snapshot. */

@@ -159,6 +159,15 @@ describe("mapPlacement", () => {
     expect(p.canvas!.w).toBeGreaterThanOrEqual(150);
   });
 
+  it("leaves the strip out where the quadrants are too narrow to spare it", () => {
+    // A phone held upright: map and strip would cover half of each quadrant.
+    const phone = mapPlacement(layoutViews(4, 390, 844), 1.5, 8)!;
+    expect(phone.strip).toBeNull();
+    expect(phone.rect.w).toBeLessThan(195 * 0.7);
+    // An iPad held upright still has room for it.
+    expect(mapPlacement(layoutViews(4, 768, 1024), 1.5, 8)!.strip).not.toBeNull();
+  });
+
   it("grows with the screen", () => {
     const small = mapPlacement(layoutViews(4, 1280, 720))!;
     const big = mapPlacement(layoutViews(4, 2560, 1440))!;
@@ -189,8 +198,8 @@ describe("clearance", () => {
   const view = { x: 0, y: 0, w: 958, h: 538 };
 
   it("leaves a view alone when the map is nowhere near its furniture", () => {
-    expect(clearance(view, { x: 700, y: 0, w: 200, h: 100 }, 0.63)).toEqual({ place: 0, lap: 0 });
-    expect(clearance(view, { x: 1500, y: 800, w: 200, h: 100 }, 0.63)).toEqual({ place: 0, lap: 0 });
+    expect(clearance(view, { x: 700, y: 0, w: 200, h: 100 }, 0.63)).toEqual({ place: 0, lap: 0, lapDown: 0 });
+    expect(clearance(view, { x: 1500, y: 800, w: 200, h: 100 }, 0.63)).toEqual({ place: 0, lap: 0, lapDown: 0 });
   });
 
   it("moves the place left of a map that sits over the view's bottom right", () => {
@@ -206,5 +215,19 @@ describe("clearance", () => {
     const c = clearance(quadrant, card, 0.63);
     expect(c.lap).toBeGreaterThan(1180 - 962);
     expect(c.place).toBe(0);
+    expect(c.lapDown).toBe(0);
+  });
+
+  it("moves the lap panel down, under the map, in a view too narrow for the panel and the item slot beside it", () => {
+    // Four players on a phone held upright: the bottom right quadrant, under the map where the quadrants meet.
+    const layout = layoutViews(4, 390, 844);
+    const card = mapPlacement(layout, 1.5, 8)!.rect;
+    const quadrant = layout.views[3]!;
+    const u = hudScale(quadrant.w, quadrant.h);
+    const c = clearance(quadrant, card, u);
+    expect(c.lap).toBe(0);
+    expect(quadrant.y + c.lapDown).toBeGreaterThan(card.y + card.h);
+    // Its item slot (top centre) is clear of the map.
+    expect(quadrant.x + quadrant.w / 2 - 38 * u).toBeGreaterThan(card.x + card.w);
   });
 });

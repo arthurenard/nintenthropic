@@ -1825,9 +1825,17 @@ function chime(out: Mono, t: Take, at: number, midi: number, gain: number, tau: 
   t.put(out, click(t.sr, t.rng, 0.001, 3000, 12000), at, gain * 0.06);
 }
 
-/** A steel string plucked bright and close. */
+/**
+ * A steel string plucked bright and close. The pick leaves the string over a
+ * millisecond, and its noise is a pick's, not a file's: the string rings as
+ * bright as before, without a crackle at the start that the reward, heard
+ * again and again and pitched up a fifth at ×4, made harsh.
+ */
 function pluck(out: Mono, t: Take, at: number, midi: number, vel: number, t60: number): void {
-  addString(out, t.sr, t.rng, at, midiHz(midi), vel, { t60, brightness: 0.9, position: 0.14, hardness: 8000, length: t60, release: 0.15 });
+  const note = t.canvas(t60 + 0.2);
+  addString(note, t.sr, t.rng, 0, midiHz(midi), vel, { t60, brightness: 0.9, position: 0.14, hardness: 4500, length: t60, release: 0.15 });
+  fade(note, t.sr, 0.001, 0);
+  t.put(out, note, at, 1);
   t.put(out, click(t.sr, t.rng, 0.0012, 2000, 9000), at, 0.03 * vel);
 }
 

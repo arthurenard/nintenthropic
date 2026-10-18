@@ -178,17 +178,20 @@ export function studioEnvironment(renderer: WebGLRenderer): Texture {
   return texture;
 }
 
+/** Gives a scene that has no environment the studio sky; a scene that already has one (the race's, from its sky) is left alone. */
+export function useStudioEnvironment(scene: Scene, renderer: WebGLRenderer): void {
+  if (scene.environment) return;
+  scene.environment = studioEnvironment(renderer);
+  // The scene has its own lights; the studio sky only adds the reflections and a little fill.
+  scene.environmentIntensity = 0.75;
+}
+
 /**
  * Hooks a mesh so the first frame it is drawn in a scene that has no
- * environment gives the scene the studio sky. A scene that already has one
- * (the renderer's, from the sky) is left alone.
+ * environment gives the scene the studio sky (`useStudioEnvironment`). A scene
+ * that builds its shaders before its first picture calls that itself first,
+ * so they are built with the sky they will be drawn with.
  */
 export function withStudioFallback(mesh: Object3D): void {
-  mesh.onBeforeRender = (renderer, scene) => {
-    if (!scene.environment) {
-      scene.environment = studioEnvironment(renderer);
-      // The scene has its own lights; the studio sky only adds the reflections and a little fill.
-      scene.environmentIntensity = 0.75;
-    }
-  };
+  mesh.onBeforeRender = (renderer, scene) => useStudioEnvironment(scene, renderer);
 }

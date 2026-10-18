@@ -465,6 +465,26 @@ body[data-view="game"] {
 .menu > .footnote {
   text-align: center;
 }
+/* A short window (a phone on its side): the choices in two columns under
+   Resume, so every one of them is in view without scrolling. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .menu {
+    width: min(560px, calc(100vw - 2 * var(--margin)));
+    padding-top: 24px;
+  }
+  .menu[open] {
+    gap: 12px;
+  }
+  .menu-list {
+    grid-template-columns: 1fr 1fr;
+  }
+  .menu-list .button {
+    min-height: 44px;
+  }
+  .menu-list > :first-child {
+    grid-column: 1 / -1;
+  }
+}
 
 /* --- results -------------------------------------------------------------------------------------- */
 
@@ -585,6 +605,62 @@ body[data-view="game"] {
 .results-row .button {
   padding: 0 12px;
 }
+/* A window a little short (720 high): the picture gives up a strip, so the card fits whole. */
+@media (max-height: 760px) {
+  .results-art {
+    aspect-ratio: 2.2 / 1;
+  }
+}
+/* A short window (a phone on its side) has no room for the card's height:
+   it turns sideways - the words and the score on the left, the choices on
+   the right - so all of it is in view at once, the world behind standing in
+   for its picture. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .results {
+    width: min(720px, calc(100vw - 2 * var(--margin)));
+  }
+  .results-art {
+    display: none;
+  }
+  .results-body {
+    grid-template-columns: minmax(0, 1.25fr) minmax(200px, 1fr);
+    column-gap: 24px;
+    margin-top: 0;
+    padding: 16px 24px;
+  }
+  .results-body > * {
+    grid-column: 1;
+  }
+  .results-actions {
+    grid-column: 2;
+    grid-row: 1 / span 8;
+    align-self: center;
+    margin-top: 0;
+  }
+  .results-row {
+    grid-template-columns: 1fr;
+  }
+  .results-score {
+    margin-top: 0;
+    font-size: 44px;
+  }
+  .stats {
+    margin: 8px 0 2px;
+    padding: 8px 0;
+  }
+}
+@media (max-height: 400px) and (orientation: landscape) {
+  .results-body {
+    gap: 2px;
+  }
+  .results-score {
+    font-size: 36px;
+  }
+  .stats {
+    margin: 6px 0 0;
+    padding: 6px 0;
+  }
+}
 
 /* --- narrower windows ------------------------------------------------------------------------------- */
 
@@ -625,6 +701,26 @@ body[data-view="game"] {
   }
   .game-card {
     flex-basis: min(72cqw, 320px);
+  }
+}
+/* A phone on its side: the hero is one short screen, its name, its words
+   and Play in view at once, and the row follows below it. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .arcade-main {
+    --hero-min: 100dvh;
+  }
+  .feature {
+    padding: calc(var(--nav) + 16px) var(--margin) 20px;
+  }
+  .feature-text {
+    gap: 10px;
+  }
+  .hero-title {
+    font-size: clamp(32px, 6vw, 44px);
+  }
+  .hero-about {
+    font-size: 15px;
+    line-height: 1.35;
   }
 }
 

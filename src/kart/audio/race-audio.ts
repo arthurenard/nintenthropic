@@ -113,6 +113,8 @@ const MAX_PER_CUE = 2;
 /** Another kart's loops (drift squeal, drone) are heard within this many metres. */
 const LOOP_RADIUS = 45;
 const MAX_SEEKERS = 3;
+/** Other karts' drift squeals heard at once, besides the local karts' own. */
+const MAX_OTHER_DRIFTS = 3;
 
 interface EngineVoice {
   timbre: number;
@@ -198,7 +200,6 @@ class RaceAudioImpl implements RaceAudio {
   private raceMusicStarted = false;
   private finalSwitched = false;
   private finishAt = -10;
-  private readonly flooded = new Set<number>();
   private readonly seen: number[] = [];
   private readonly seenSet = new Set<number>();
 
@@ -209,7 +210,6 @@ class RaceAudioImpl implements RaceAudio {
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
   private readonly rolls = new Map<number, { next: number; count: number }>();
-  private readonly lastProgress = new Map<number, number>();
   private readonly puckHeading = new Map<number, { heading: number; t: number }[]>();
   private readonly lastBounce = new Map<number, number>();
   private fired = 0;
@@ -468,7 +468,7 @@ class RaceAudioImpl implements RaceAudio {
 
     const karts = new Map<number, KartView>();
     for (const k of view.karts) karts.set(k.id, k);
-    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps };
+    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps, racers: view.racers };
 
     this.phases(view);
     this.events(view.events, scene);
@@ -479,8 +479,7 @@ class RaceAudioImpl implements RaceAudio {
     this.engineLoops(scene, step);
     this.stateLoops(view, scene, step);
     this.roulette(scene);
-    this.startFlood(view, scene);
-    // The duck squeaks on its own `duck` event now (sim/eggs.ts), once per kart: the old drive-by squeak would sound twice.
+    // The flooded start coughs on the sim's own `flood` event, and the duck squeaks on its `duck` event (sim/eggs.ts).
     this.finalLapFallback(view, scene);
     this.lastPhase = view.phase;
   }
@@ -492,9 +491,7 @@ class RaceAudioImpl implements RaceAudio {
       this.raceMusicStarted = false;
       this.finalSwitched = false;
       this.pendingFinal = false;
-      this.flooded.clear();
       this.rolls.clear();
-      this.lastProgress.clear();
       this.puckHeading.clear();
       this.finishAt = -10;
       if (this.playingKey === `${this.loadedTheme}-final` && this.wanted) {
@@ -638,18 +635,18 @@ class RaceAudioImpl implements RaceAudio {
     const drifts = new Set<number>();
     const surfaces = new Set<number>();
     const drones = new Set<number>();
+    const squeals: { id: number; own: boolean; distance: number; params: Required<LoopParams> }[] = [];
     for (const k of view.karts) {
       const own = localOf(scene, k.id);
       const who = own ? { local: own, distance: 0, pan: own.pan } : listenerAt(scene, k.x, k.z);
       if (!who) continue;
       const near = own ? 1 : falloff(who.distance, LOOP_RADIUS);
 
-      // The drift's squeal.
+      // The drift's squeal (heard below, for the nearest few).
       const d = driftTarget(k);
       if (d.on && near > 0.05) {
-        drifts.add(k.id);
         const volume = d.volume * near * (own ? 1 : 0.7) * fx;
-        this.drive(this.drifts, k.id, "kart_drift", { rate: d.rate, volume, pan: who.pan, distance: who.distance }, dt);
+        squeals.push({ id: k.id, own: !!own, distance: who.distance, params: { rate: d.rate, volume, pan: who.pan, distance: who.distance } });
       }
 
       // The ground: only under the player's own wheels.
@@ -672,6 +669,12 @@ class RaceAudioImpl implements RaceAudio {
         drones.add(k.id);
         this.drive(this.drones, k.id, "kart_drone", { rate: 1, volume: near * (own ? 1 : 0.8) * fx, pan: who.pan, distance: who.distance }, dt);
       }
+    }
+    // Every local kart's squeal, and the nearest few others': a whole pack drifting round a hairpin is a choir otherwise.
+    squeals.sort((a, b) => (a.own === b.own ? a.distance - b.distance : a.own ? -1 : 1));
+    for (const s of squeals.slice(0, scene.locals.length + MAX_OTHER_DRIFTS)) {
+      drifts.add(s.id);
+      this.drive(this.drifts, s.id, "kart_drift", s.params, dt);
     }
     this.release(this.drifts, drifts);
     this.release(this.surfaces, surfaces);
@@ -764,7 +767,7 @@ class RaceAudioImpl implements RaceAudio {
     }
   }
 
-  // --- the item roulette, the flooded start, the duck ------------------------------------------------------------------------------------------
+  // --- the item roulette ------------------------------------------------------------------------------------------
 
   /** Ticks while the item box's roulette turns (slowing, rising in pitch), and a chime when it lands. */
   private roulette(scene: Scene): void {
@@ -788,35 +791,6 @@ class RaceAudioImpl implements RaceAudio {
     }
   }
 
-  /** The engine floods when a driver floors it too early: the sim holds the kart still, and the engine coughs. */
-  private startFlood(view: RaceView, scene: Scene): void {
-    if (view.phase !== "racing" || view.time < 0.25 || view.time > 0.9) return;
-    for (const l of scene.locals) {
-      if (this.flooded.has(l.kart)) continue;
-      const k = scene.karts.get(l.kart)!;
-      if (k.speed < 0.35 && k.boost <= 0 && k.rescue <= 0) {
-        this.flooded.add(l.kart);
-        this.start({ cue: "kart_flood", volume: 1, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: 3 });
-      } else if (view.time > 0.4) {
-        this.flooded.add(l.kart);
-      }
-    }
-  }
-
-  /** Driving past the rubber duck squeaks it, once a lap. */
-  private duckSqueaks(view: RaceView, scene: Scene): void {
-    const duck = view.track.duck;
-    if (!duck) return;
-    for (const l of scene.locals) {
-      const k = scene.karts.get(l.kart)!;
-      const before = this.lastProgress.get(l.kart);
-      this.lastProgress.set(l.kart, k.lapProgress);
-      if (before === undefined) continue;
-      // Crossed its place along the lap this frame (and not by wrapping round the start line).
-      const crossed = before < duck.at && k.lapProgress >= duck.at && k.lapProgress - before < 0.05;
-      if (crossed) this.start({ cue: "kart_duck", volume: 0.8, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: 2 });
-    }
-  }
 }
 
 /** The sound of a Grip Prix race. ``bus`` is Handheld's audio engine (``ctx.audio``). */

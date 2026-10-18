@@ -233,10 +233,11 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     }
 
     case "horn": {
-      // Each kart's horn sits a little differently in pitch, so two honks together are two horns.
+      // Each kart's horn sits a little differently in pitch, so two honks together are two horns. Dabble has no horn: Dabble quacks.
       const who = hearKart(scene, event.kart);
       const own = !!localOf(scene, event.kart);
-      return who ? keep(order("kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
+      const duck = scene.racers?.find((racer) => racer.id === event.kart)?.character === "dabble";
+      return who ? keep(order(duck ? "kart_duck" : "kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
     }
 
     case "duck": {
@@ -246,20 +247,13 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       return who ? keep(order("kart_duck", who, own, { radius: RADIUS.big, rate: 1.3, delay: 0.12, priority: 3 })) : [];
     }
 
-    default:
-      return otherEvent(event, scene);
-  }
-}
+    case "flood": {
+      // Floored too early in the countdown: at Go the engine coughs instead of driving.
+      const who = hearKart(scene, event.kart);
+      return who ? keep(order("kart_flood", who, !!localOf(scene, event.kart), { radius: RADIUS.medium, priority: 3 })) : [];
+    }
 
-/**
- * A kind of event this sound table does not know yet (the sim may grow some).
- * The one the design names is the engine flooding at the start.
- */
-function otherEvent(event: { type: string; kart?: number }, scene: Scene): Order[] {
-  const kart = event.kart;
-  if (event.type === "flood" && typeof kart === "number") {
-    const who = hearKart(scene, kart);
-    return who ? keep(order("kart_flood", who, !!localOf(scene, kart), { radius: RADIUS.medium, priority: 3 })) : [];
+    default:
+      return [];
   }
-  return [];
 }

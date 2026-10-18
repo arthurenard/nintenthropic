@@ -204,6 +204,22 @@ test("pausing: Escape and the button open a sheet; practice waits, Resume counts
   await expect.poll(() => phase(page), { timeout: 30_000 }).toBe("countdown");
 });
 
+test("the loading screen: the track's name, its bar and the tip each in their own place, from the first frame", async ({ page }) => {
+  await practiceToLobby(page);
+  const lobby = (await state(page)).lobby!;
+  await page.evaluate((room) => window.gripTest!.loading(room, 0.4), lobby);
+  // At once, while the card is still rising (its rise once carried the tip up over the bar), and when it has settled.
+  for (const wait of [50, 1200]) {
+    await page.waitForTimeout(wait);
+    const status = (await page.locator("#race-loading-title").boundingBox())!;
+    const tip = (await page.locator("#loading-tip").boundingBox())!;
+    expect(tip.y, `the tip, ${wait} ms in`).toBeGreaterThanOrEqual(status.y + status.height);
+    expect(tip.y + tip.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    expect(tip.x).toBeGreaterThanOrEqual(0);
+    expect(tip.x + tip.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
+});
+
 test("the host's lobby, Grand Prix and Mirror included, is never wider than the screen, and its long choices stay in their track", async ({ page }) => {
   await host(page, "Maya");
   await page.getByRole("radio", { name: "Grand Prix" }).click();
@@ -691,7 +707,106 @@ test("sound: off by the arcade's preference, on with the speaker; music on the m
   await expect(page.locator("#pause-music")).toBeEnabled();
   await page.getByRole("button", { name: "Resume" }).click();
   await expect.poll(async () => (await sound()).paused, { timeout: 10_000 }).toBe(false);
+
+  // The tab put away: no frames come to say so, so the engines are stilled at once rather than humming on behind other tabs.
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect.poll(async () => (await sound()).paused).toBe(true);
+  // Back again: practice waited behind its sheet, and Resume brings the sound back.
+  await page.evaluate(() => {
+    delete (document as { hidden?: boolean }).hidden;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(page.locator("#pause-sheet")).toBeVisible();
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect.poll(async () => (await sound()).paused, { timeout: 10_000 }).toBe(false);
   expect(errors).toEqual([]);
+});
+
+test("a gamepad alone gets from the start screen into a race, with the focus ring showing, and its Start pauses", async ({ page }, info) => {
+  // The sofa and the TV: the pad's path through the menus is a desktop's layout.
+  test.skip(info.project.name === "kart-phone", "a pad on a phone held upright is not the case");
+  // Headless Chrome has no pad: a stand-in the page reads as the first one connected.
+  await page.addInitScript(() => {
+    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 }));
+    const pad = { id: "stand-in", index: 0, connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons, timestamp: 0 };
+    navigator.getGamepads = () => [pad as unknown as Gamepad, null, null, null];
+    (window as unknown as { pad: typeof pad }).pad = pad;
+  });
+  const BUTTON = { a: 0, b: 1, start: 9, up: 12, down: 13, left: 14, right: 15 } as const;
+  const press = async (name: keyof typeof BUTTON) => {
+    const set = (down: boolean) =>
+      page.evaluate(([i, on]) => ((window as unknown as { pad: { buttons: object[] } }).pad.buttons[i as number] = { pressed: on, touched: on, value: on ? 1 : 0 }), [BUTTON[name], down] as const);
+    await set(true);
+    await page.waitForTimeout(150);
+    await set(false);
+    await page.waitForTimeout(150);
+  };
+  /** The focused element's id or value, and whether its ring shows. */
+  const focused = () =>
+    page.evaluate(() => {
+      const at = document.activeElement as HTMLElement | null;
+      return { name: at?.id || at?.dataset.value || "", ring: at?.matches(":focus-visible") ?? false };
+    });
+  /** Presses one way until the focus is on `name`, as a player would watch the ring. */
+  const reach = async (name: string, key: keyof typeof BUTTON) => {
+    for (let i = 0; i < 8 && (await focused()).name !== name; i++) await press(key);
+    expect((await focused()).name).toBe(name);
+  };
+  await open(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("gamepadconnected")));
+
+  // The first press puts the focus on the screen's main button, ringed; down walks the menu in order.
+  await press("down");
+  expect(await focused()).toEqual({ name: "start-host", ring: true });
+  await press("down");
+  expect((await focused()).name).toBe("join-code");
+  await press("down");
+  expect((await focused()).name).toBe("start-practice");
+  await press("a");
+  await expect(heading(page, /Driving/)).toBeVisible();
+  // B goes back from You (it loses nothing), and A comes in again.
+  await press("b");
+  await expect(heading(page, "Grip Prix")).toBeVisible();
+  await press("down");
+  await reach("start-practice", "down");
+  await press("a");
+  await expect(heading(page, /Driving/)).toBeVisible();
+
+  // You: up from Continue to the ways to drive, along to the gamepad, chosen with A, and down to Continue.
+  await press("down");
+  expect((await focused()).name).toBe("you-continue");
+  await reach("gamepad", "up");
+  await press("a");
+  await expect(page.getByRole("radio", { name: /Gamepad/ })).toHaveAttribute("aria-checked", "true");
+  await reach("you-continue", "down");
+  await press("a");
+  // The driver stage reads the pad itself: A goes on.
+  await expect(heading(page, "Choose Your Driver")).toBeVisible();
+  await press("a");
+  await expect(heading(page, "Ready to Race")).toBeVisible();
+  await expect(page.locator("#lobby-players")).toContainText("Gamepad");
+
+  // The lobby: the first press is on Start, A starts.
+  await press("down");
+  expect(await focused()).toEqual({ name: "lobby-start", ring: true });
+  await press("a");
+  await expect.poll(() => phase(page), { timeout: 30_000 }).toBe("racing");
+
+  // Start opens the pause sheet on Resume; down reaches Leave Race; B resumes; Start twice is open and shut.
+  const sheet = page.locator("#pause-sheet");
+  await press("start");
+  await expect(sheet).toBeVisible();
+  expect(await focused()).toEqual({ name: "pause-resume", ring: true });
+  await reach("pause-leave", "down");
+  await press("b");
+  await expect(sheet).toBeHidden();
+  await press("start");
+  await expect(sheet).toBeVisible();
+  await press("start");
+  await expect(sheet).toBeHidden();
 });
 
 test("leaving puts everything down and starts again", async ({ page }) => {

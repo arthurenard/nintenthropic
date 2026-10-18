@@ -2,7 +2,7 @@ import type { RaceEvent } from "../contract";
 import { describe, expect, it } from "vitest";
 import type { DriveInput } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
+import { FIVE_FINGER_CIRCUIT, HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
 import { itemOdds } from "./items";
 import { planFor } from "./plan";
 import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
@@ -292,6 +292,43 @@ describe("seekers", () => {
     expect(events.find((e) => e.type === "hit")).toMatchObject({ kart: 0, by: 1, cause: "seeker" });
     expect(r.view().things.some((t) => t.kind === "seeker")).toBe(false);
   });
+
+  it("follow the road round, not across the barrier, to a kart on the next finger of the palm island", () => {
+    const geo = planFor(FIVE_FINGER_CIRCUIT).geo;
+    // A place where the road comes back within 28 m of itself (within a seeker's 30 m), a long way round: the next finger.
+    let from = -1;
+    let to = -1;
+    for (let a = 0; a < geo.length && from < 0; a += 2) {
+      for (let b = 0; b < geo.length; b += 2) {
+        const p = geo.point(a);
+        const q = geo.point(b);
+        const along = geo.delta(a, b);
+        if (along > 80 && Math.hypot(p.x - q.x, p.z - q.z) < 28) {
+          from = a;
+          to = b;
+          break;
+        }
+      }
+    }
+    expect(from).toBeGreaterThanOrEqual(0);
+    const r = race(FIVE_FINGER_CIRCUIT, racers(2, 0));
+    toGo(r);
+    const put = (id: number, s: number) => {
+      const p = geo.point(s);
+      patch(r, id, { x: p.x, z: p.z, s, offset: 0, progress: s, heading: geo.heading(s), vx: 0, vz: 0 });
+    };
+    put(0, to);
+    put(1, from);
+    expect(view(r, 0).place).toBe(1);
+    give(r, 1, "seeker");
+    run(r, 1, () => new Map([[1, press(1)]]));
+    const startS = from;
+    run(r, 45);
+    const seeker = r.view().things.find((t) => t.kind === "seeker")!;
+    expect(seeker).toBeDefined();
+    // Three quarters of a second at 36 m/s: on its way round the road, not stuck at the barrier between the fingers.
+    expect(geo.delta(startS, geo.project(seeker.x, seeker.z, startS + 20).s)).toBeGreaterThan(20);
+  });
 });
 
 describe("slicks", () => {
@@ -331,6 +368,30 @@ describe("slicks", () => {
     expect(slicks).toHaveLength(12);
     // The first two are gone.
     expect(Math.min(...slicks.map((s) => s.id))).toBeGreaterThan(HARBOUR_LIGHTS.itemRows.length * 5 + 1);
+  });
+});
+
+describe("a kart that has finished", () => {
+  it("drops what it held and takes nothing more, so its lap of honour hurts no one still racing", () => {
+    // Two people: the race goes on after the first is home.
+    const r = race(HARBOUR_LIGHTS, racers(2, 0), { laps: 1 });
+    toGo(r);
+    const length = harbour.length;
+    const p = harbour.point(length - 1, -3);
+    const h = harbour.heading(length - 1);
+    patch(r, 0, { x: p.x, z: p.z, s: length - 1, offset: -3, progress: length - 1, heading: h, vx: Math.sin(h) * 20, vz: Math.cos(h) * 20, lapStart: 0 });
+    give(r, 0, "puck3");
+    const finished = run(r, 10, () => input({ throttle: 1 }));
+    expect(finished.find((e) => e.type === "finish")).toMatchObject({ kart: 0, place: 1 });
+    expect(view(r, 0).item).toBeNull();
+    // Through a box: it breaks, and gives nothing.
+    const site = planFor(HARBOUR_LIGHTS).boxes[0]!;
+    patch(r, 0, { x: site.x, z: site.z, s: site.s, offset: site.offset, vx: 0, vz: 0 });
+    const events = run(r, 2 * 60);
+    expect(events.find((e) => e.type === "box")).toMatchObject({ kart: 0 });
+    expect(count(events, "pickup", 0)).toBe(0);
+    expect(count(events, "use", 0)).toBe(0);
+    expect(view(r, 0).item).toBeNull();
   });
 });
 

@@ -28,6 +28,7 @@ import {
 } from "three";
 import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext } from "../../engine/types";
 import { PostFX } from "../../engine/world/post";
+import { disposeTree } from "../../engine/world/scene";
 
 export type RangeWeapon = "cylinder" | "magazine" | "heat";
 
@@ -412,6 +413,9 @@ export class TestRange implements Game {
   dispose(): void {
     window.removeEventListener("keydown", this.onKey);
     this.post?.dispose();
+    // The targets, the floor and the reticle's GPU buffers go with the game.
+    disposeTree(this.scene);
+    disposeTree(this.overlay);
   }
 
   /** For the tests: whether the scope's picture is up, and what the gun is doing. */

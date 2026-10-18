@@ -285,6 +285,77 @@ describe("a first aim check", () => {
     expect(player.check.words.title).toBe("Move Your Finger");
   });
 
+  for (const lost of [1, 2, 4]) {
+    it(`keeps the aim through ${lost} frame(s) the tracker dropped as the thumb folds`, () => {
+      // The trigger bridges a hand lost for a moment mid-fold (AimController.GRACE), so the shot fires: the aim from
+      // before the fold must still be there for it, not "Raise Your Thumb First" for a player who did.
+      const player = new Player();
+      const target = player.check.lit!;
+      const aim = pointerFor([target.x, target.y]);
+      for (let i = 0; i < 11; i++) player.frame(20, aim);
+      player.frame(40, aim);
+      for (let i = 0; i < lost; i++) player.frame(0, null);
+      let event: ShotEvent | null = null;
+      for (let i = 0; i < 4; i++) event = player.frame(70, [0.95, 0.95]) ?? event;
+      expect(event?.outcome).toBe("hit");
+      expect(player.check.shots).toBe(1);
+    });
+  }
+
+  it("forgets the aim of a hand gone for longer than the trigger waits", () => {
+    const player = new Player();
+    const target = player.check.lit!;
+    const right = pointerFor([target.x, target.y]);
+    for (let i = 0; i < 11; i++) player.frame(20, [0.3, 0.3]);
+    // Gone half a second: the trigger has disarmed, and nothing from before is the aim of the next shot.
+    for (let i = 0; i < 15; i++) player.frame(0, null);
+    for (let i = 0; i < 3; i++) player.frame(20, right);
+    let event: ShotEvent | null = null;
+    for (let i = 0; i < 4; i++) event = player.frame(70, right) ?? event;
+    expect(event?.outcome).toBe("hit");
+    // Two shots fit a map that passes exactly through both: the first was learned where the hand came back to.
+    player.shoot();
+    const landed = apply(player.check.mapping!, right)!;
+    expect(landed[0]).toBeCloseTo(target.x, 6);
+    expect(landed[1]).toBeCloseTo(target.y, 6);
+  });
+
+  it("never traps a player whose shots it keeps refusing: Play Anyway comes after twelve tries all the same", () => {
+    // A hand whose fingertip barely rises as it aims higher (pointing with the wrist): the second shot cannot be
+    // learned from, and is refused, however often it is tried.
+    const check = new AimCheck({ saved: null, targets: TARGETS, viewport: VIEWPORT });
+    let time = 0;
+    const outcomes: string[] = [];
+    for (let i = 0; i < PLAY_ANYWAY_AFTER + 2 && !check.canPlayAnyway; i++) {
+      const target = check.lit!;
+      const pointer: [number, number] = [0.3 + 0.4 * target.x, 0.5 + 0.004 * target.y];
+      for (let f = 0; f < 10; f++) check.observe({ pointer, armed: true, travel: 0, fired: false }, (time += 1 / 30));
+      const event = check.observe({ pointer, armed: false, travel: 1, fired: true }, (time += 1 / 30));
+      outcomes.push(event!.outcome);
+      time += 0.5;
+    }
+    expect(outcomes.slice(1).every((outcome) => outcome === "refused")).toBe(true);
+    expect(check.shots).toBe(1);
+    expect(check.canPlayAnyway).toBe(true);
+    expect(outcomes).toHaveLength(PLAY_ANYWAY_AFTER);
+    expect(check.tip).toBe("Move your whole hand toward each one, not just your finger.");
+    expect(check.words).toEqual({ title: "Still Learning", detail: check.tip });
+  });
+
+  it("never traps a player whose camera reads too few frames a second to see an aim before the fold", () => {
+    // Under three frames a second, every frame comes after the camera has gone quiet for longer than an aim is kept.
+    const check = new AimCheck({ saved: null, targets: TARGETS, viewport: VIEWPORT });
+    let time = 0;
+    for (let i = 0; i < PLAY_ANYWAY_AFTER; i++) {
+      const target = check.lit!;
+      const pointer: [number, number] = [0.3 + 0.4 * target.x, 0.28 + 0.36 * target.y];
+      check.observe({ pointer, armed: true, travel: 0, fired: false }, (time += 0.4));
+      expect(check.observe({ pointer, armed: false, travel: 1, fired: true }, (time += 0.4))!.outcome).toBe("unaimed");
+      expect(check.canPlayAnyway).toBe(i === PLAY_ANYWAY_AFTER - 1);
+    }
+    expect(check.words.title).toBe("Still Learning");
+  });
+
   it("does not count a shot it never saw aimed", () => {
     const check = new AimCheck({ saved: null, targets: TARGETS, viewport: VIEWPORT });
     check.observe({ pointer: [0.5, 0.5], armed: true, travel: 0.0, fired: false }, 0);
@@ -366,6 +437,35 @@ describe("a returning player", () => {
     expect(player.check.done).toBe(true);
     expect(player.check.fit).toBe("affine");
   });
+
+  for (const shift of [
+    [0.008, -0.006],
+    [0.03, -0.02],
+    [0.06, -0.04],
+  ] as const) {
+    it(`relearns a camera moved since (${shift.join(", ")}) in the six shots a first check takes, not nine`, () => {
+      // The saved aim misses the same way three times: the camera's error, not the player's. Once the shots have
+      // fitted an aim of their own, those misses are not held against it.
+      const player = new Player(trueMap());
+      for (let i = 0; i < 3; i++) player.shoot({ shift });
+      expect(player.check.fit).toBe("affine");
+      expect(player.check.errors).toHaveLength(0);
+      while (!player.check.done && player.check.shots < PLAY_ANYWAY_AFTER) player.shoot({ shift });
+      expect(player.check.shots).toBe(6);
+    });
+  }
+
+  it("still holds a shaky hand's misses against it when the saved aim was right", () => {
+    // Misses this way and that, not one way: the player's, and the score keeps them.
+    const player = new Player(trueMap());
+    for (const dx of [0.025, -0.025, 0.025]) {
+      const target = player.check.lit!;
+      player.shoot({ aimAt: [target.x + dx, target.y] });
+    }
+    expect(player.check.done).toBe(false);
+    expect(player.check.fit).toBe("affine");
+    expect(player.check.errors).toHaveLength(3);
+  });
 });
 
 describe("the tip", () => {
@@ -375,6 +475,8 @@ describe("the tip", () => {
     expect(tipFor({ ...base, framesWithoutHand: 200 })).toMatch(/light/);
     expect(tipFor({ ...base, spans: Array(20).fill(0.05) })).toMatch(/closer/);
     expect(tipFor({ ...base, spans: Array(20).fill(0.4) })).toMatch(/Sit back/);
+    expect(tipFor({ ...base, refused: 3 })).toMatch(/whole hand/);
+    expect(tipFor({ ...base, refused: 3, spans: Array(20).fill(0.05) })).toMatch(/closer/); // a far hand moves little
     expect(tipFor(base)).toMatch(/still/);
   });
 });

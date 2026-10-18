@@ -9,11 +9,11 @@ export const SECRET_NAMES: Record<SecretId, string> = {
   astronaut: "The Spacewalker",
   toolbag: "Lost and Found",
   duck: "The Duck",
-  arm: "A Wave from the Arm",
+  arm: "It Waved Back",
   capsule: "Privacy, Please",
   storm: "The Aurora",
   moon: "Flag on the Moon",
-  message: "Hello, World",
+  message: "Somebody’s Home",
 };
 
 export const SECRETS_TOTAL = 8;
@@ -27,6 +27,12 @@ export const MOON_PASS = 4;
 export const TOOLBAG_PASS = 3;
 /** The duck drifts through the debris field on this pass (and every sixth after). */
 export const DUCK_PASS = 2;
+export const DUCK_EVERY = 6;
+
+/** Does the duck drift by on this pass? On the second, and back on every sixth after until it is shot. */
+export function duckPass(pass: number): boolean {
+  return pass >= DUCK_PASS && (pass - DUCK_PASS) % DUCK_EVERY === 0;
+}
 
 /** What a shot near a secret found (the world decides "near" and "at"). */
 export type SecretShot =

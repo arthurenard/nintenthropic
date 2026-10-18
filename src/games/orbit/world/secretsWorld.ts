@@ -27,6 +27,7 @@ import type { Effects } from "./effects";
 import type { PlanetSky } from "./planet";
 
 const tmp = new Vector3();
+const tmp2 = new Vector3();
 const q = new Quaternion();
 const q2 = new Quaternion();
 const X = new Vector3(1, 0, 0);
@@ -34,6 +35,8 @@ const Z = new Vector3(0, 0, 1);
 
 /** The spacewalker floats this far below the truss's handrails on the tether (m): the truss runs along the top edge of the view. */
 const ASTRO_BELOW = 2.3;
+/** The spacewalker's thumbs-down is held until this long (s) after the shot; then the arm comes down and the walk goes on. */
+const THUMBS_HOLD = 2.8;
 /** The duck is drawn to look this big at any distance (radians across), so it can be found: a 12 cm duck is a speck 60 m out. */
 const DUCK_ANGLE = 0.017;
 /**
@@ -95,6 +98,14 @@ function pullShade(s: ShadePull, k: number): void {
 /** The tool bag's drift across the view, in front of all the station (its nearest arm is 11 m out): from/to as (x, y) on screen (-1..1) and metres out. */
 const BAG_FROM: [number, number, number] = [-0.95, 0.2, 8.5];
 const BAG_TO: [number, number, number] = [0.95, -0.02, 7.5];
+/**
+ * A shot at the storm counts for a flash this long (s) after it: the time a
+ * hand takes to see it, point and fold - a flash itself is gone in a tenth
+ * of a second. Each flash counts once.
+ */
+const FLASH_WINDOW = 0.9;
+/** How long (s) the tools drift after the bag bursts before they are let go: by then specks tens of metres out. */
+const TOOLS_FOR = 30;
 
 interface Tool {
   obj: Object3D;
@@ -144,8 +155,12 @@ export class SecretsWorld {
   private astroT = -1;
   private astroTurned = -1;
   private astroGone = false;
+  /** Seconds left of turning back to the walk after a thumbs-down. */
+  private astroSettle = 0;
   private bagT = -1;
   private bagDone = false;
+  /** Seconds the bag's tools have been drifting away (-1: none are). */
+  private toolsT = -1;
   private duckT = -1;
   private duckSpin = -1;
   private readonly duckVel = new Vector3();
@@ -164,6 +179,8 @@ export class SecretsWorld {
   /** The storm's place on the planet (its frame), for this breather. */
   readonly storm = new Vector3(0, 1, 0);
   stormOn = false;
+  /** Settings.reducedFlashing: the storm's flashes and the HI's blink are softer. */
+  reducedFlashing = false;
 
   constructor(
     extras: Object3D,
@@ -334,6 +351,7 @@ export class SecretsWorld {
     this.bag.updateMatrixWorld(true);
     for (const t of this.artTools) this.parent.attach(t);
     this.bag.visible = false;
+    this.toolsT = 0;
     for (const t of this.tools) {
       t.obj.visible = true;
       if (!this.artTools.includes(t.obj)) t.obj.position.copy(c);
@@ -365,16 +383,19 @@ export class SecretsWorld {
     this.stormOn = true;
     this.nextFlash = 0.3 + this.random() * 0.5;
     this.sky.uniform<Vector4>("uLightning").value.set(this.storm.x, this.storm.y, this.storm.z, 0);
+    // Its thunderhead, for the flashes to light (gathered in the dark).
+    this.sky.uniform<number>("uStormCell").value = 1;
   }
 
   stopStorm(): void {
     this.stormOn = false;
     this.sky.uniform<Vector4>("uLightning").value.w = 0;
+    this.sky.uniform<number>("uStormCell").value = 0;
   }
 
   /** Is the storm flashing (or has it just)? A shot now counts. */
   get flashing(): boolean {
-    return this.stormOn && this.time - this.lastFlash < 0.4;
+    return this.stormOn && this.time - this.lastFlash < FLASH_WINDOW;
   }
 
   /** Did a shot land on a flash already counted? One flash, one count. */
@@ -406,13 +427,22 @@ export class SecretsWorld {
       const next = along(this.astroPath, Math.min(1, u + 0.01), tmp);
       next.y -= ASTRO_BELOW;
       if (this.astroTurned < 0) {
+        const was = q2.copy(this.astronaut.quaternion);
         this.astronaut.lookAt(next);
         this.astronaut.rotateY(Math.PI / 2);
+        // Back to the walk after a thumbs-down: turning away, not snapping.
+        if (this.astroSettle > 0) {
+          this.astroSettle -= dt;
+          const walk = q.copy(this.astronaut.quaternion);
+          this.astronaut.quaternion.copy(was).slerp(walk, Math.min(1, dt * 2.5));
+        }
       } else {
-        // Turned to you, slowly, and the arm comes up: thumbs down.
+        // Turned to you, slowly, and the arm comes up: thumbs down; held a
+        // moment, lowered, and back to work.
         this.astroTurned += dt;
-        const k = Math.min(1, this.astroTurned / 1.4);
-        const face = q.setFromUnitVectors(new Vector3(0, 0, 1), this.scenery.eye.clone().sub(this.astronaut.position).setY(0).normalize());
+        const t = this.astroTurned;
+        const k = t < THUMBS_HOLD ? Math.min(1, t / 1.4) : Math.max(0, 1 - (t - THUMBS_HOLD) / 0.8);
+        const face = q.setFromUnitVectors(Z, tmp2.copy(this.scenery.eye).sub(this.astronaut.position).setY(0).normalize());
         this.astronaut.quaternion.slerp(face, Math.min(1, dt * 2));
         // The art's thumbs-down: the arm swings forward about its hinge, the
         // forearm bends a little the same way, the hand turns over.
@@ -420,6 +450,10 @@ export class SecretsWorld {
         if (this.arm) this.arm.quaternion.copy(this.armRest[0] as Quaternion).multiply(q2.setFromAxisAngle(X, 1.4 * e));
         if (this.forearm) this.forearm.quaternion.copy(this.armRest[1] as Quaternion).multiply(q2.setFromAxisAngle(X, 0.35 * e));
         if (this.hand) this.hand.quaternion.copy(this.armRest[2] as Quaternion).multiply(q2.setFromAxisAngle(Z, Math.PI * e));
+        if (t >= THUMBS_HOLD + 0.8) {
+          this.astroTurned = -1;
+          this.astroSettle = 1.5;
+        }
       }
       const pos = this.tether.geometry.getAttribute("position");
       pos.setXYZ(0, this.astronaut.position.x, this.astronaut.position.y + 1.0, this.astronaut.position.z);
@@ -440,10 +474,17 @@ export class SecretsWorld {
       this.bag.rotation.set(this.bagT * 0.7, this.bagT * 0.4, this.bagT * 0.2);
       if (u >= 1) this.bag.visible = false;
     }
-    for (const t of this.tools) {
-      if (!t.obj.visible) continue;
-      t.obj.position.addScaledVector(t.vel, dt);
-      t.obj.quaternion.premultiply(q.setFromAxisAngle(t.axis, t.spin * dt));
+    if (this.toolsT >= 0) {
+      this.toolsT += dt;
+      // Lost for good: once they have drifted off to specks, they are let go.
+      const gone = this.toolsT > TOOLS_FOR;
+      if (gone) this.toolsT = -1;
+      for (const t of this.tools) {
+        if (gone) t.obj.visible = false;
+        if (!t.obj.visible) continue;
+        t.obj.position.addScaledVector(t.vel, dt);
+        t.obj.quaternion.premultiply(q.setFromAxisAngle(t.axis, t.spin * dt));
+      }
     }
     // The duck.
     if (this.duck?.visible) {
@@ -486,14 +527,16 @@ export class SecretsWorld {
         this.nextFlash = this.random() < 0.4 ? 0.09 + this.random() * 0.1 : 0.5 + this.random() * 0.9;
       }
       this.flashLeft -= dt;
-      lightning.w = this.flashLeft > 0 ? 1 + this.random() * 0.6 : Math.max(0, lightning.w - dt * 18);
+      // Reduced Flashing: a glow in the clouds a quarter as bright.
+      const dim = this.reducedFlashing ? 0.25 : 1;
+      lightning.w = this.flashLeft > 0 ? (1 + this.random() * 0.6) * dim : Math.max(0, lightning.w - dt * 18);
     }
     // The HI, blinking back twice.
     const hi = this.sky.uniform<Vector4>("uHi").value;
     if (this.hiBlink >= 0) {
       this.hiBlink += dt;
       const b = this.hiBlink;
-      hi.w = (b > 0.2 && b < 0.55) || (b > 0.8 && b < 1.15) ? 3.5 : 0;
+      hi.w = (b > 0.2 && b < 0.55) || (b > 0.8 && b < 1.15) ? (this.reducedFlashing ? 1.5 : 3.5) : 0;
       if (b > 1.3) this.hiBlink = -1;
     } else hi.w = 0;
     // The flag on the Moon.
@@ -509,8 +552,10 @@ export class SecretsWorld {
     this.astroT = -1;
     this.astroTurned = -1;
     this.astroGone = false;
+    this.astroSettle = 0;
     this.bagT = -1;
     this.bagDone = false;
+    this.toolsT = -1;
     this.duckT = -1;
     this.duckSpin = -1;
     this.handWave = -1;

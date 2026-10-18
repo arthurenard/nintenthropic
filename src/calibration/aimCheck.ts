@@ -13,6 +13,7 @@
  * nothing to steer onto a target.
  */
 import type { CalibrationTarget, TargetNoun } from "../engine/types";
+import { AimController } from "../input/aim";
 import type { Point } from "../input/filter";
 import { apply, fitAffine, fitScaled, gain, type Matrix } from "../input/homography";
 import { AIM_RADIUS, MIN_ERRORS, READY_SCORE, measure, type Measure, type Vector } from "./score";
@@ -90,6 +91,10 @@ export interface CheckStats {
   spans: number[];
   /** How many shots were taken with the fingertip near the edge of the picture. */
   edgeShots: number;
+  /** How many shots were refused, the fingertip not having moved enough to learn from. */
+  refused?: number;
+  /** How many shots came with no aim seen before the fold ("Raise Your Thumb First"). */
+  unaimed?: number;
 }
 
 /** A palm span under this, in fractions of the picture, is a hand too far from the camera to read well. */
@@ -114,6 +119,7 @@ export function tipFor(stats: CheckStats): string {
     if (span < FAR_SPAN) return "Move a little closer to your camera.";
     if (span > NEAR_SPAN) return "Sit back a little from your camera.";
   }
+  if ((stats.refused ?? 0) >= 2) return "Move your whole hand toward each one, not just your finger.";
   return "Keep your finger still as your thumb folds.";
 }
 
@@ -228,6 +234,8 @@ export class AimCheck {
   private history: { time: number; pointer: Point }[] = [];
   private lastShot = Number.NEGATIVE_INFINITY;
   private lastFrame = Number.NEGATIVE_INFINITY;
+  /** When a hand was last seen, s. */
+  private handAt = Number.NEGATIVE_INFINITY;
   private readonly stats: CheckStats = { frames: 0, framesWithoutHand: 0, spans: [], edgeShots: 0 };
 
   constructor({ saved, targets, viewport, noun }: AimCheckOptions) {
@@ -273,8 +281,11 @@ export class AimCheck {
     this.stats.frames++;
     if (!o.pointer) this.stats.framesWithoutHand++;
     else if (o.span !== undefined) this.stats.spans.push(o.span);
-    // A lost hand, or a camera gone quiet, has nothing to say about the aim.
-    if (!o.pointer || time - this.lastFrame > STALE) this.history = [];
+    // A hand lost for longer than the trigger bridges (AimController.GRACE), or a camera gone quiet, has nothing to
+    // say about the aim. A frame or two dropped as the thumb folds is bridged here too, or the shot the trigger keeps
+    // through them would arrive with no aim and be refused ("Raise Your Thumb First") from a player who did.
+    if (o.pointer) this.handAt = time;
+    if (time - this.handAt > AimController.GRACE || time - this.lastFrame > STALE) this.history = [];
     this.lastFrame = time;
     // Keep the last thumb-up aim, rather than the fingertip after firing. The
     // window rolls only while the thumb is up; once the fold begins it holds
@@ -289,7 +300,9 @@ export class AimCheck {
     this.lastShot = time;
     const target = this.lit;
     if (!this.history.length) {
+      this.stats.unaimed = (this.stats.unaimed ?? 0) + 1;
       this.words = { title: "Raise Your Thumb First", detail: "Point with it up, then fold it to fire." };
+      this.uncounted();
       return { target, outcome: "unaimed", landed: null, error: null };
     }
     const pointer: Point = [median(this.history.map((s) => s.pointer[0])), median(this.history.map((s) => s.pointer[1]))];
@@ -316,17 +329,30 @@ export class AimCheck {
     const errors = scored ? [...this.errors, error] : this.errors;
     const measured = measure(errors);
     this.pool.push({ pointer, target: [target.x, target.y], id: target.id });
+    const wasSaved = this.fit === "saved";
     // The shot that proves the aim does not also change it: the map that
     // earned the score is the one the game is played on.
     if (!measured.ready && !this.refit()) {
       // Two shots from the same spot cannot say which way the hand moves.
       this.pool.pop();
+      this.stats.refused = (this.stats.refused ?? 0) + 1;
       this.words = { title: "Move Your Finger", detail: `That was the same spot as the last. Point at the lit ${this.noun.one}.` };
+      this.uncounted();
       return { target, outcome: "refused", landed: null, error: null };
     }
 
     if (scored) this.errors.push(error);
     this.measure = measured;
+    // A saved aim the camera has moved away from since (a laptop's lid
+    // tilted, another game's stage) misses the same way on every shot: a
+    // bias of R/2 or more, the camera's and not the player's, as the scaled
+    // map's misses are. Once the shots have fitted an aim of their own, those
+    // misses are not held against it: they kept a returning player to nine
+    // shots, three more than a first check.
+    if (wasSaved && this.fit !== "saved" && Math.hypot(...measured.bias) >= AIM_RADIUS / 2) {
+      this.errors.length = 0;
+      this.measure = measure(this.errors);
+    }
     this.shots++;
     this.uses.set(target.id, (this.uses.get(target.id) ?? 0) + 1);
     const distance = error ? Math.hypot(error[0], error[1]) : null;
@@ -340,6 +366,20 @@ export class AimCheck {
     this.words = this.say();
     if (!this.done) this.lit = this.next();
     return { target, outcome: hit ? "hit" : "miss", landed, error: distance };
+  }
+
+  /**
+   * A shot that did not count (refused, or with no aim seen). A hand whose
+   * fingertip hardly moves as it aims is refused again and again, and a
+   * camera reading too few frames a second never shows an aim before the
+   * fold: such tries count towards Play Anyway as shots do, so nobody is
+   * trapped in the check.
+   */
+  private uncounted(): void {
+    if (this.canPlayAnyway || this.shots + (this.stats.refused ?? 0) + (this.stats.unaimed ?? 0) < PLAY_ANYWAY_AFTER) return;
+    this.canPlayAnyway = true;
+    this.tip = tipFor(this.stats);
+    this.words = { title: "Still Learning", detail: this.tip };
   }
 
   /** Refits the map after a shot; false if the shots cannot determine one. */

@@ -261,8 +261,8 @@ export class JarStage implements CalibrationStage {
         }
         continue;
       }
-      // Leaving: sink and fade, quickly and quietly.
-      j.fade = Math.max(0, j.fade - dt * 2.5);
+      // Leaving: sink and fade, quickly and quietly (and never back to whole, whatever a frame's step).
+      j.fade = Math.min(0.999, Math.max(0, j.fade - dt * 2.5));
       j.group.scale.setScalar((j.height / JAR_HEIGHT) * (0.6 + 0.4 * j.fade));
       j.glass.opacity = 0.62 * j.fade;
       if (j.fade <= 0) {

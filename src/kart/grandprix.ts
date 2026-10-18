@@ -7,7 +7,7 @@
  * Points go 15, 12, 10, 8, 6, 4, 2, 1 by place. Ties in the standings go to
  * the better place in the last race. A bot keeps its name, colour and driver
  * through the cup; a player who leaves keeps their row, and their kart
- * carries on as a bot.
+ * carries on as a bot, winning points for that row.
  */
 import type { GrandPrixState, LobbySettings, RaceResult, RacerSetup } from "./contract";
 import { CUPS } from "./track/tracks";
@@ -74,6 +74,12 @@ export class GrandPrixRun {
   /** 0-based: the race being run or just run. */
   race = 0;
   private entries: Entry[];
+  /**
+   * The rows of the grid `grid()` gave last, by kart id. A player who has left
+   * races on as a bot (`player: null`), so their kart no longer names their
+   * row by itself; this does.
+   */
+  private gridded: Entry[] | null = null;
 
   private constructor(
     readonly cup: string,
@@ -118,7 +124,11 @@ export class GrandPrixRun {
     }
     for (const row of result.standings) {
       const racer = racers.find((candidate) => candidate.id === row.kart);
-      const entry = racer ? this.entries.find((candidate) => candidate.key === keyOf(racer)) : undefined;
+      if (!racer) continue;
+      // The row the grid put this kart in (a departed player's kart earns for their row, not for a bot's of the same
+      // name); else the one its racer names.
+      const gridded = this.gridded?.[row.kart];
+      const entry = gridded && gridded.racer.name === racer.name && gridded.racer.colour === racer.colour ? gridded : this.entries.find((candidate) => candidate.key === keyOf(racer));
       if (!entry) continue;
       entry.place = row.place;
       entry.gain = pointsFor(row.place);
@@ -148,7 +158,8 @@ export class GrandPrixRun {
       if (fresh) entry.racer = { ...fresh };
       else entry.racer = { ...entry.racer, player: null, skill: entry.racer.skill ?? 0.6 };
     }
-    return rankOf(this.entries, (e) => e.points, (e) => e.place).map((entry, i) => ({ ...entry.racer, id: i }));
+    this.gridded = rankOf(this.entries, (e) => e.points, (e) => e.place);
+    return this.gridded.map((entry, i) => ({ ...entry.racer, id: i }));
   }
 
   /** The standings as the room publishes them. */

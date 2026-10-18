@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildQueue } from "./match";
 import { mulberry32 } from "../../../engine/rules/rng";
 import type { LaneId } from "./types";
-import { fogFor, isMechanicWave, sightFor, waveSpec } from "./waves";
+import { fogFor, isMechanicWave, PLAIN_WAVE_LINES, sightFor, waveSpec } from "./waves";
 
 const ALL = new Set<LaneId>(["road", "corn", "trees", "bus", "booth", "fence"]);
 
@@ -77,6 +77,18 @@ describe("the wave table", () => {
     expect([6, 12, 18].every(isMechanicWave)).toBe(true);
     expect([1, 5, 7, 11, 13].some(isMechanicWave)).toBe(false);
     expect(waveSpec(12).subtitle).toBe("The Mechanic is back.");
+  });
+
+  it("says the night's own lines on a plain wave, and that the fog thickens only while it does", () => {
+    const lines = Array.from({ length: 18 }, (_, i) => waveSpec(i + 7).subtitle);
+    for (const line of lines) expect(line).not.toBe("They keep coming.");
+    for (const line of PLAIN_WAVE_LINES) expect(lines).toContain(line);
+    for (let w = 7; w <= 24; w++) {
+      if (waveSpec(w).subtitle === "The fog is getting thicker.") expect(fogFor(w)).toBeGreaterThan(fogFor(w - 1));
+    }
+    expect(waveSpec(7).subtitle).toBe("The fog is getting thicker.");
+    // No two plain waves in a row say the same.
+    for (let w = 8; w <= 24; w++) expect(waveSpec(w).subtitle).not.toBe(waveSpec(w - 1).subtitle);
   });
 
   it("reads about 80 m of road on wave 1, and less as the fog thickens", () => {

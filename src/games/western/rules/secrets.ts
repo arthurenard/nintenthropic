@@ -14,11 +14,11 @@ export type SecretId =
   | "high_noon";
 
 export const SECRET_NAMES: Record<SecretId, string> = {
-  bell: "The Bell",
-  vane: "The Weather Vane",
+  bell: "Three Tolls",
+  vane: "Pointing at You",
   chicken: "Chicken of Steel",
-  water_tower: "The Water Tower",
-  piano: "The Piano",
+  water_tower: "Spring a Leak",
+  piano: "Honky-Tonk",
   tumbleweeds: "Giant Tumbleweed",
   poster: "Wanted: The Hand",
   high_noon: "High Noon",

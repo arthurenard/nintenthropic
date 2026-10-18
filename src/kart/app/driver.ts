@@ -456,6 +456,12 @@ export class DriverScreen {
 
   private pollPad(): void {
     if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") return;
+    // A button still down from the screen before (the A that pressed its Continue) is not a press here: it would choose
+    // the first driver and skip the stage before anyone saw it.
+    navPresses(
+      navigator.getGamepads().find((candidate) => candidate?.connected),
+      this.pads,
+    );
     this.padTimer = window.setInterval(() => {
       if (!this.visible || document.hidden || document.querySelector("dialog[open]")) return;
       const pad = navigator.getGamepads().find((candidate) => candidate?.connected);

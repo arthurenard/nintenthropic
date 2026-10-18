@@ -1,4 +1,4 @@
-import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Object3D, type ToneMapping } from "three";
+import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Material, type Mesh, type Object3D, type Texture, type ToneMapping } from "three";
 import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark, TargetNoun } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
@@ -7,12 +7,13 @@ import { chromeKeepOut, fitFraming, WEAPON_DOCK, type Framing, type Sight } from
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
-import type { Actor, Vehicle } from "./rules/actors";
-import { landingMils, rangeAt, roundAt, timeOfFlight } from "./rules/ballistics";
+import { Vehicle, type Actor } from "./rules/actors";
+import { landingMils, rangeAt, rangeUnderDot, roundAt, timeOfFlight } from "./rules/ballistics";
 import type { StageSpec } from "./rules/jobs";
 import { Mission, type AlertCause, type MissionListener, type NearPass } from "./rules/mission";
 import { fadeNear, landmarksOf, liftLabel, nearestOf, placeMarks, ON_HIM, rimArrow, whereWords, whoIsMarked, type CamMan, type Head, type Landmark, type Marked } from "./rules/finding";
 import { fallCard } from "./rules/notes";
+import { Polyline } from "./rules/path";
 import type { Award, StageBonuses } from "./rules/scoring";
 import { LastOne, Spotter } from "./rules/spotter";
 import { HIP_SPREAD, REVEAL_SECONDS } from "./rules/tuning";
@@ -22,6 +23,7 @@ import { Ambient } from "./world/ambient";
 import { loadAssets, type RidgeAssets } from "./world/assets";
 import { Cast } from "./world/cast";
 import { seenStretch } from "./world/duckPath";
+import { settleNests, type NestWorld } from "./world/nestSpot";
 import { Effects } from "./world/effects";
 import { Foreground } from "./world/foreground";
 import { DAWN } from "./world/grade";
@@ -67,6 +69,8 @@ interface Scheduled {
 const tmp = new Vector3();
 const tmp2 = new Vector3();
 const TRAIL_POINT = new Vector3();
+/** The line through Relaxed's holdover dot, for ranging it. */
+const DOT_LINE = new Vector3();
 /** How much the eye opens up for a scoped view in the shade: at most two stops (art/ridge/README.md). */
 const SCOPE_ADAPT = 3.2;
 
@@ -153,6 +157,10 @@ export class OverwatchRidge implements Game, MissionListener {
   private readonly lastShots = new Map<HostileRole, { at: Vector3; time: number }>();
   /** What a player can point at in the valley, for describing where the last man is. */
   private landmarks: Landmark[] | null = null;
+  /** How many of each of the valley's own the player has hit this run (the herd keeps count). */
+  private readonly innocents = new Map<string, number>();
+  /** The goat's leaps this run: it was unimpressed the first time, and stays so. */
+  private goatHops = 0;
 
   private phase: "loading" | "calibration" | "playing" | "failing" | "dying" | "over" = "loading";
   private paused = false;
@@ -180,6 +188,8 @@ export class OverwatchRidge implements Game, MissionListener {
   private readoutKey = "";
   private readoutClock = 0;
   private range: number | null = null;
+  /** What Relaxed's holdover dot is worked out for: the range where its own line lands (rangeUnderDot). */
+  private dotRange: number | null = null;
   private rangeClock = 0;
   private framings: { check: Framing; play: Framing } | null = null;
   private framed: { width: number; height: number } | null = null;
@@ -291,7 +301,9 @@ export class OverwatchRidge implements Game, MissionListener {
   /**
    * The valley's plan, with the duck swimming only the stretch of its river
    * the scope can see: the far bend lies behind the bank, and the duck's slow
-   * swim would spend the round there (see duckPath.ts).
+   * swim would spend the round there (see duckPath.ts). And the counter-
+   * sniper lying in each nest where the ridge can see him, not inside the
+   * rock or behind the back of the belfry's opening (see nestSpot.ts).
    */
   private get plan(): Plan {
     if (!this.seenPlan) {
@@ -300,9 +312,33 @@ export class OverwatchRidge implements Game, MissionListener {
       const ground = this.stage.heightfield;
       // A duck sits a hand above the water: seen if the eye reaches its middle and its top.
       const seen = (p: { x: number; y: number; z: number }) => [0.12, 0.2].every((h) => ground.segmentHit(eye.x, eye.y, eye.z, p.x, p.y + h, p.z) < 0);
-      this.seenPlan = { ...valley.plan, duck: seenStretch(valley.plan.duck, seen) };
+      this.seenPlan = { ...valley.plan, duck: seenStretch(valley.plan.duck, seen), nests: settleNests(valley.plan.nests, eye, this.nestWorld()) };
     }
     return this.seenPlan;
+  }
+
+  /** The valley's solids and its ground, as a nest is settled in them. */
+  private nestWorld(): NestWorld {
+    const ground = this.stage.heightfield;
+    const queries = this.stage.queries;
+    const hit = { point: new Vector3(), normal: new Vector3(), distance: 0, object: null as Object3D | null };
+    const a = new Vector3();
+    const dir = new Vector3();
+    return {
+      clear: (from, to) => {
+        a.set(from.x, from.y, from.z);
+        dir.set(to.x - from.x, to.y - from.y, to.z - from.z);
+        const length = dir.length();
+        dir.divideScalar(length || 1);
+        return !queries.cast(a, dir, length - 0.02, hit) && ground.segmentHit(from.x, from.y, from.z, to.x, to.y, to.z, 2) < 0;
+      },
+      floor: (x, z, top) => {
+        const g = ground.height(x, z);
+        if (g > top) return null;
+        const s = queries.cast(a.set(x, top, z), dir.set(0, -1, 0), top - g, hit);
+        return s ? Math.max(g, s.point.y) : g;
+      },
+    };
   }
 
   private newMission(): void {
@@ -314,12 +350,20 @@ export class OverwatchRidge implements Game, MissionListener {
     this.reveals.clear();
     this.lastShots.clear();
     this.marked = false;
+    this.innocents.clear();
+    this.goatHops = 0;
   }
 
   /** Compile every shader before play: a shader first compiled mid-shot is a dropped frame at the worst time. */
   private async warmUp(): Promise<void> {
     const r = this.ctx.renderer;
     const scene = this.stage.scene;
+    // The convoy's trucks and the officer's jeep only come on later in a run: on the road now, dressed as they will
+    // be, so their shaders are compiled and their pictures on the card (the first truck held the picture for a
+    // quarter of a second as the convoy's stage began).
+    const road = this.plan.road.length > 1 ? new Polyline(this.plan.road) : null;
+    const ghosts = road ? (["truck", "jeep"] as const).map((kind, k) => new Vehicle(-1 - k, kind, road, k * 12, 0)) : [];
+    for (const v of ghosts) this.cast.vehicleSpawn(v);
     const hidden: Object3D[] = [];
     scene.traverse((o) => {
       if (!o.visible) {
@@ -329,6 +373,14 @@ export class OverwatchRidge implements Game, MissionListener {
     });
     try {
       if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
+      for (const v of ghosts) {
+        this.cast.vehicles.get(v.id)?.root.traverse((o) => {
+          const materials = (o as Mesh).isMesh ? [(o as Mesh).material].flat() : [];
+          for (const m of materials as (Material & Record<string, unknown>)[]) {
+            for (const value of Object.values(m)) if ((value as Texture | null)?.isTexture) r.initTexture(value as Texture);
+          }
+        });
+      }
       await breathe();
       this.post.render(0);
       this.scope.zoom = 1;
@@ -338,6 +390,7 @@ export class OverwatchRidge implements Game, MissionListener {
       // Compiling ahead is an optimisation; the first frames will do it otherwise.
     }
     for (const o of hidden) o.visible = false;
+    for (const v of ghosts) this.cast.vehicleGone(v);
   }
 
   /** Back to the state after load, for another game on this instance. */
@@ -554,11 +607,19 @@ export class OverwatchRidge implements Game, MissionListener {
     this.scope.render(this.ctx.renderer, this.camera.camera, dot, this.recoilFlash);
   }
 
-  /** Relaxed's help in the scope: where the round will land at the range under the reticle. */
+  /** Relaxed's help in the scope: where the round will land, on whatever it would land on. */
   private holdoverDot(): { right: number; down: number } | null {
-    if (!this.mission.tuning.holdoverDot || !this.scope.scoped || this.range === null) return null;
+    const range = this.dotRange ?? this.range;
+    if (!this.mission.tuning.holdoverDot || !this.scope.scoped || range === null) return null;
     const dir = tmp.set(0, 0, -1).applyQuaternion(this.camera.camera.quaternion);
-    return landingMils(this.range, dir, this.mission.wind.speed);
+    return landingMils(range, dir, this.mission.wind.speed);
+  }
+
+  /** The range where the line through the holdover dot lands, settled (see rangeUnderDot). */
+  private rangeUnderDot(cam: PerspectiveCamera, sight: Vector3): number | null {
+    return rangeUnderDot(this.range, sight, this.mission.wind.speed, (at) =>
+      this.rangeAlong(cam.position, DOT_LINE.set(at.right / 1000, -at.down / 1000, -1).applyQuaternion(cam.quaternion).normalize()),
+    );
   }
 
   resize(width: number, height: number, pixelRatio: number): void {
@@ -978,7 +1039,9 @@ export class OverwatchRidge implements Game, MissionListener {
       this.rangeClock = 0.1;
       const cam = this.camera.camera;
       const dir = this.scope.showing ? tmp.set(0, 0, -1).applyQuaternion(cam.quaternion) : tmp.set(this.scope.look.x * 2 - 1, 1 - this.scope.look.y * 2, 0.5).unproject(this.wide).sub(this.wide.position).normalize();
-      this.range = this.rangeAlong(cam.position, dir.clone());
+      const sight = dir.clone();
+      this.range = this.rangeAlong(cam.position, sight);
+      this.dotRange = this.mission.tuning.holdoverDot && this.scope.showing ? this.rangeUnderDot(cam, sight) : null;
       // Is the sun on what the reticle rests on? (For the eye's adaptation through the glass.)
       if (this.range !== null) {
         const p = tmp2.copy(dir).multiplyScalar(this.range).add(cam.position);
@@ -1521,7 +1584,9 @@ export class OverwatchRidge implements Game, MissionListener {
 
   innocentHit(a: Actor, award: Award): void {
     this.popupAt(new Vector3(a.pos.x, a.pos.y + 2.2, a.pos.z), this.awardText(award), "danger");
-    this.hints.say(innocentWord(a.role), 2);
+    const count = (this.innocents.get(a.role) ?? 0) + 1;
+    this.innocents.set(a.role, count);
+    this.hints.say(innocentWord(a.role, count), 2);
     this.syncHint();
     if (a.role === "cow") this.sound.at("ridge_cow_moo", a.pos, 1);
   }
@@ -1615,11 +1680,33 @@ export class OverwatchRidge implements Game, MissionListener {
 
   goatHop(a: Actor): void {
     this.sound.at("ridge_goat", a.pos, 1, 1, 0.1);
+    // The first leap is the secret ("Unimpressed"); after that it says so itself, from its new ledge.
+    if (++this.goatHops < 2) return;
+    const ledge = new Vector3(a.home.x, a.home.y + 1.4, a.home.z);
+    this.later(1.3, () => {
+      if (a.alive && this.phase === "playing") this.popupAt(ledge, "Still unimpressed.");
+    });
   }
 
   eagleLands(a: Actor): void {
     this.sound.at("ridge_eagle", a.pos, 1);
     this.later(3, () => this.sound.at("ridge_eagle", this.assets.valley.plan.eagleRock, 0.8));
+    this.watchEagle(a, 0);
+  }
+
+  /** Once the eagle has settled on its rock and had a good look at you, a word on how that is going. */
+  private watchEagle(a: Actor, waited: number): void {
+    if (!a.alive || this.phase !== "playing" || waited > 30) return;
+    if (a.activity !== "perched") {
+      this.later(0.25, () => this.watchEagle(a, waited + 0.25));
+      return;
+    }
+    this.later(2.5, () => {
+      if (!a.alive || this.phase !== "playing") return;
+      // Just over its head: an arm's length from the eye, a metre higher would be off the top of the view.
+      const head = this.cast.headOf(a.id, new Vector3()) ?? new Vector3(a.pos.x, a.pos.y + 0.5, a.pos.z);
+      this.popupAt(head.add(tmp.set(0, 0.15, 0)), "It isn’t blinking.");
+    });
   }
 
   // --- for the dev harness and the tests -------------------------------------------------------

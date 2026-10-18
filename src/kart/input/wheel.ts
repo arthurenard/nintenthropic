@@ -55,6 +55,12 @@ export const WHEEL = {
     window: 0.3,
     /** No second hop for this long after one, seconds. */
     cooldown: 0.5,
+    /**
+     * A hop while the drift is still held lets go of it this long first, so
+     * the kart sees a fresh lift (three ticks: a dropped input or two cannot
+     * hide it), seconds.
+     */
+    release: 0.05,
   },
   drift: {
     /** The drift ends when |steer| has stayed below this... */
@@ -244,6 +250,8 @@ export class WheelReader {
   private presses = 0;
   private hopTrail: { t: number; y: number }[] = [];
   private hopAllowedAt = -Infinity;
+  /** Until then the drift reads as let go, for a hop that came while it was already held. */
+  private releaseUntil = -Infinity;
   private auto: { samples: { t: number; a: number }[]; done: (() => void) | undefined } | null = null;
   private progress = 0;
 
@@ -326,6 +334,7 @@ export class WheelReader {
     this.drifting = false;
     this.straightSince = null;
     this.hopTrail.length = 0;
+    this.releaseUntil = -Infinity;
     this.gestures.reset();
     this.restartAutoLevel();
   }
@@ -580,6 +589,10 @@ export class WheelReader {
       if (seconds <= 0) continue;
       const rise = (earlier.y - centre) / span; // up the picture is down in y
       if (rise >= WHEEL.hop.rise && rise / seconds >= WHEEL.hop.speed) {
+        // The kart hops on the drift being pressed, not on it being held. Still held from an
+        // earlier hop (one that was only a hop, or a drift a spin-out ended, the wheel never
+        // straightened since), this lift would be lost: let go a moment, and press again.
+        if (this.drifting) this.releaseUntil = t + WHEEL.hop.release;
         this.drifting = true;
         this.straightSince = null;
         this.hopAllowedAt = t + WHEEL.hop.cooldown;
@@ -693,7 +706,7 @@ export class WheelReader {
       steer: shapeSteer(this.angleAt(), this.steering),
       throttle,
       brake: mode === "brake" ? 1 : 0,
-      drift: this.drifting,
+      drift: this.drifting && t >= this.releaseUntil,
       itemPresses: this.presses,
       horn: this.gestures.horns,
       emote: this.gestures.emoteAt(t),

@@ -40,6 +40,9 @@ import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
+import { shadowInView } from "./casters";
+import { RescueDrone } from "./drone";
+import { outliving } from "./outliving";
 import { Effects } from "./effects";
 import { RenderEggs } from "./eggs";
 import { Hud } from "./hud";
@@ -49,7 +52,7 @@ import { loadKartArt } from "./art";
 import { createProceduralKart } from "./kartModel";
 import { layoutViews, type ViewLayout } from "./layout";
 import { FAR_DISTANCE } from "./kartSpec";
-import { PostChain, type DrawViews } from "./post";
+import { DIVIDER, PostChain, type DrawViews } from "./post";
 import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
@@ -140,7 +143,7 @@ export interface GripRenderer extends RaceRenderer {
   /** The GPU timer's totals over the frames since the last reset (mean ms; 0 where unavailable). */
   gpuMean(label: "views" | "post", reset?: boolean): number;
   /** Everything the dev page's bench may need to take apart: the live objects. */
-  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void };
+  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void; setCasterCulling(on: boolean): void };
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -164,7 +167,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   renderer.toneMapping = NoToneMapping;
   renderer.autoClear = false;
   renderer.shadowMap.type = PCFShadowMap;
-  renderer.setClearColor(new Color(0x0b0b0d), 1);
+  renderer.setClearColor(new Color(DIVIDER), 1);
 
   const gpu = gpuName(renderer.getContext());
   const guessed = guessTier(gpu, typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4, { splitScreen: true });
@@ -199,6 +202,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let things: Things | null = null;
   let itemFx: ItemFx | null = null;
   let skids: Skids | null = null;
+  /** A drone nobody has called, hidden: each kart makes its own at its first fall, and this one has the warm-up build their shaders. */
+  let standInDrone: RescueDrone | null = null;
   let actors = new Map<number, KartActor>();
   let racers: readonly RacerSetup[] = [];
   let layout: ViewLayout = { views: [], free: null };
@@ -223,8 +228,12 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   /** Draws every view, scissored, into the post chain's HDR target. */
   let profiling = false;
   let timer: GpuTimer | null = null;
-  /** Each view draws only the scenery its frustum reaches (off, for comparing pictures: they must be the same). */
+  /**
+   * Each view draws only the scenery its frustum reaches, and its shadow pass only the karts whose shadow it can see
+   * (off, for comparing pictures: they must be the same).
+   */
   let culling = true;
+  let casterCulling = true;
   const timings: FrameTimings = { update: 0, submit: 0, draw: 0, hud: 0, gpuViews: -1, gpuPost: -1 };
   const smooth = (key: "update" | "submit" | "draw" | "hud", ms: number) => {
     timings[key] += (ms - timings[key]) * 0.1;
@@ -239,7 +248,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.setRenderTarget(target);
     renderer.clear(true, true, false);
     target.scissorTest = true;
-    for (const [index, v] of frameViews.entries()) {
+    for (let index = 0; index < frameViews.length; index++) {
+      const v = frameViews[index]!;
       const x = Math.floor(v.rect.x * pr);
       const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
       const h = Math.ceil(v.rect.h * pr);
@@ -258,6 +268,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       _frustum.setFromProjectionMatrix(_projScreen);
       if (culling) world.cull(index, _frustum);
       else world.uncull();
+      if (settings.shadowMap > 0) {
+        const reach = settings.shadowRange * 2;
+        for (const a of actors.values()) a.casters.set(a.root, !casterCulling || shadowInView(_frustum, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach));
+      }
       renderer.render(scene, v.eye);
     }
     target.scissorTest = false;
@@ -340,8 +354,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
    * Compiles every shader this race can ask for, and draws two pictures through the whole post chain, while the
    * loading screen is up: the first frames of the countdown (and the first boost, the first banana) then cost
    * what any other does, instead of the 150 to 230 ms a first draw took compiling thirty-odd programs.
-   * What is hidden now (a kart's flames, the item pool) is shown for the length of it, so it is drawn the way
-   * it will be, and put back. The first picture is from the start line; the second from the origin, where the
+   * What is hidden now (a kart's flames, the item pool, and the hidden stand-ins for what is made when first
+   * needed: a slick, a storm cloud, a comet's bubble, the rescue drone) is shown for the length of it, so it is
+   * drawn the way it will be, and put back. The first picture is from the start line; the second from the origin, where the
    * karts stand until the first frame, so the shadow map's box has them in it and builds their depth shaders.
    */
   const warmUp = async (): Promise<void> => {
@@ -362,8 +377,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     });
     for (const o of hidden) o.visible = true;
     try {
-      // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)...
-      await renderer.compileAsync(scene, eyes[0].eye).catch(() => {});
+      // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)... though never
+      // waited on for long: a context lost meanwhile would never say they are ready, and the pictures build what is left.
+      await Promise.race([renderer.compileAsync(scene, eyes[0].eye), new Promise((resolve) => setTimeout(resolve, 8000))]).catch(() => {});
       // ...and the pictures build what remains, the way a frame does.
       for (const e of eyes) {
         if (disposed || !world) break;
@@ -390,6 +406,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     itemFx = null;
     skids?.dispose();
     skids = null;
+    standInDrone?.dispose();
+    standInDrone = null;
     world?.dispose();
     world = null;
     clearBake(kartBake);
@@ -429,6 +447,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       skids = new Skids();
       dynamic.add(skids.mesh);
       for (const r of racers) makeActor(r);
+      standInDrone = new RescueDrone();
+      dynamic.add(standInDrone.root);
       markShadows(dynamic);
       hud.setTrack(world.geometry, racers);
       eggs.load(world.style.id, world.geometry);
@@ -507,7 +527,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
           const fz = Math.cos(k.heading);
           const rx = -Math.cos(k.heading);
           const rz = Math.sin(k.heading);
-          for (const s of [-1, 1]) {
+          for (let s = -1; s <= 1; s += 2) {
             effects.glowNow(k.x + fx * 1.55 + rx * s * 0.2, k.y + 0.52, k.z + fz * 1.55 + rz * s * 0.2, 1.0, 1.0, 0.92, 0.7, 0.8);
             effects.glowNow(k.x - fx * 1.3 + rx * s * 0.4, k.y + 0.9, k.z - fz * 1.3 + rz * s * 0.4, 0.55, 1.0, 0.1, 0.08, 0.7);
           }
@@ -613,6 +633,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
     dispose(): void {
       disposed = true;
+      // Found before the world goes, let go of after: else what outlives the race keeps this renderer (outliving.ts).
+      const shared = outliving(renderer, scene);
       disposeWorld();
       eggs.dispose();
       hud.dispose();
@@ -620,6 +642,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       timer?.dispose();
       shadowTexture.dispose();
       lightTexture.dispose();
+      for (const thing of shared) thing.dispose();
       renderer.dispose();
       // Give the context itself back: each race (and each restart) makes a canvas of its own, and a browser allows only sixteen.
       renderer.forceContextLoss();
@@ -673,8 +696,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       scene,
       post,
       world: () => world,
+      /** Both kinds of culling: the scenery and the shadow pass's karts (tools/perf/same.mjs proves the picture the same). */
       setCulling(on: boolean) {
         culling = on;
+        casterCulling = on;
+      },
+      /** The shadow pass's karts alone (for measuring what that culling saves). */
+      setCasterCulling(on: boolean) {
+        casterCulling = on;
       },
     },
   };

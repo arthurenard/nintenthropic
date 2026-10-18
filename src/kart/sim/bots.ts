@@ -129,9 +129,9 @@ function worthUsing(w: World, k: KartState, fwd: number): boolean {
     // Well down the field, with a pack to cut through.
     case "storm":
       return aheadCount(w, k) >= 2;
-    // It flies to the leader, or to the runner-up when the bot leads.
+    // It flies to the leader, or to the runner-up when the bot leads: someone still racing.
     case "skyrocket":
-      return w.state.karts.length > 1;
+      return rocketTarget(w, k.id) !== undefined;
     case "blast":
       return blastWanted(w, k, true);
     case "slick":

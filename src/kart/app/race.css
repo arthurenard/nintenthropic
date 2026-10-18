@@ -636,9 +636,19 @@ body[data-screen="race"] #sound-button {
     padding: 18px 22px;
   }
   #pause-sheet[open] {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     align-items: start;
     gap: 12px 20px;
+  }
+  /* Graphics goes under its name and fills the row: four choices side by side are wider than half a phone. */
+  #pause-sheet .graphics-row .segmented {
+    width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  #pause-sheet .graphics-row .segmented [role="radio"] {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 14px;
   }
   #pause-sheet > .sheet-head {
     grid-column: 1;
@@ -733,7 +743,7 @@ body[data-screen="race"] #sound-button {
   display: none;
 }
 
-/* "Duck found! 3 of 9", in the viewport of the player who found it (in the .view-notes layer, like "Show Both Hands"). */
+/* "Duck 3 of 9. Hooked.", in the viewport of the player who found it (in the .view-notes layer, like "Show Both Hands"). */
 .view-toast {
   position: absolute;
   z-index: 3;
@@ -757,6 +767,13 @@ body[data-screen="race"] #sound-button {
   width: 24px;
   height: 24px;
   color: var(--gold);
+}
+/* A word between friends ("Got Finn."): no symbol, and gone in two seconds. */
+.view-toast.quick {
+  padding-inline: 20px;
+  animation:
+    lost-in 250ms var(--ease),
+    fade-out 300ms var(--ease) 1.7s forwards;
 }
 
 /* The Konami code: gold washes over the whole page, once. */

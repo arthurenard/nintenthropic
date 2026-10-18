@@ -65,7 +65,8 @@ export function tipText(id: TipId, input: InputKind | undefined, scope: Settings
     case "ridge.bolt":
       return "Raise your thumb to work the bolt.";
     case "ridge.drop":
-      return "It drops with distance. Aim a mark higher for every hundred metres past the first two.";
+      // In the reticle's own terms: the marks below the centre are labelled in hundreds of metres.
+      return "It drops with distance. Put the mark for his range on him: 4 is 400 m.";
     case "ridge.wind":
       return "The wind pushes the round. Aim into it.";
     case "ridge.civilian":
@@ -95,8 +96,16 @@ export function reloadHint(input: InputKind | undefined): string {
   return "Point off the screen to reload.";
 }
 
-/** A calm word after someone the valley lives with is hit: who it was. */
-export function innocentWord(role: string): string {
+/**
+ * A calm word after someone the valley lives with is hit: who it was. The
+ * herd and the flock keep count over a run (`count`: this one's number among
+ * its kind), and it shows.
+ */
+export function innocentWord(role: string, count = 1): string {
+  if (count >= 2 && (role === "cow" || role === "sheep")) {
+    if (count >= 3) return role === "cow" ? "The herd has noticed." : "The flock has noticed.";
+    return `That was another ${role}.`;
+  }
   switch (role) {
     case "farmer":
       return "That was the farmer.";

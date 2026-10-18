@@ -11,7 +11,7 @@ import { Dead as DeadClass, offsetPath, paceOf, type Dead } from "./rules/dead";
 import { takenBy } from "./rules/felled";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import type { Award, WaveBonuses } from "./rules/scoring";
-import type { SecretId, SignLetter } from "./rules/secrets";
+import { catLine, DUCK_LINE, type SecretId, type SignLetter } from "./rules/secrets";
 import type { Survivor } from "./rules/survivors";
 import type { DeadKind, DeathCause, HitPart, LaneId } from "./rules/types";
 import type { WaveSpec } from "./rules/waves";
@@ -26,7 +26,7 @@ import { Flashlight } from "./world/flashlight";
 import { NIGHT } from "./world/grade";
 import { JarStage } from "./world/jars";
 import { RoadQueries } from "./world/queries";
-import { burstMoment, clipSpeeds, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
+import { burstMoment, clipSpeeds, drawOnce, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
 import type { Surface } from "./world/road";
 import { SecretsWorld } from "./world/secretsWorld";
 import { withNightFog } from "./world/shading";
@@ -47,6 +47,11 @@ export interface NightOptions {
 
 /** How long the view takes to close in on the road when a round begins. */
 const FRAMING_EASE = 1.6;
+/**
+ * Figures for the dead, made at load: the rules never have more of them up
+ * at once (MatchOptions.figures), so none walks without a body to show it.
+ */
+const WALKER_FIGURES = 22;
 const HIT_SOUND: Record<Surface, string> = {
   asphalt: "night_hit_ground",
   dirt: "night_hit_ground",
@@ -223,13 +228,20 @@ export class DeadOfNight implements Game, MatchListener {
     const catT = nightTemplate("cat", this.assets.cat, rim);
     const parent = this.stage.dynamic;
     this.pools = {
-      walker: new RigPool(walkerT, 22, parent),
+      walker: new RigPool(walkerT, WALKER_FIGURES, parent),
       mechanic: new RigPool(mechanicT, 1, parent),
       survivor: new RigPool(survivorT, 1, parent),
       cat: new RigPool(catT, 1, parent),
     };
-    // Every figure under the night's own fog, one program between them.
-    for (const pool of Object.values(this.pools)) for (const r of pool.rigs) for (const m of rigMaterials(r)) withNightFog(m, u, "rig");
+    // Every figure under the night's own fog, one program between them, drawn once a frame.
+    for (const pool of Object.values(this.pools)) {
+      for (const r of pool.rigs) {
+        for (const m of rigMaterials(r)) {
+          withNightFog(m, u, "rig");
+          drawOnce(m);
+        }
+      }
+    }
     await breathe();
 
     this.flashlight = new Flashlight(this.stage.scene);
@@ -329,6 +341,7 @@ export class DeadOfNight implements Game, MatchListener {
       listener: this,
       yaw: this.camera.yaw,
       difficulty: this.ctx.settings.difficulty,
+      figures: WALKER_FIGURES,
     });
     this.match.health.immortal = this.options.immortal === true;
   }
@@ -442,6 +455,8 @@ export class DeadOfNight implements Game, MatchListener {
     const m = this.match as unknown as { queue: unknown[]; spawnTimer: number };
     m.queue = [{ kind: "walker", lane: "road" }];
     m.spawnTimer = 1e9;
+    // The title card's end starts the spawning clock again: no room on the road keeps the one in the queue waiting.
+    this.match.spec = { ...this.match.spec, maxActive: 0 };
   }
 
   update(dt: number, _now: number, aim: Aim): void {
@@ -574,6 +589,7 @@ export class DeadOfNight implements Game, MatchListener {
     for (const p of Object.values(this.pools ?? {})) p.dispose();
     this.effects?.dispose();
     this.eyeshine?.dispose();
+    this.secretsWorld?.dispose();
     this.queries?.dispose();
     this.stage?.dispose();
     if (this.previousToneMapping !== null) this.ctx.renderer.toneMapping = this.previousToneMapping;
@@ -981,7 +997,11 @@ export class DeadOfNight implements Game, MatchListener {
     this.secretsWorld.moonShot(howl);
   }
 
-  catStartled(_startles: number): void {
+  catStartled(startles: number): void {
+    // Over where it sat, before it leaps: each scare costs it a life (it has plenty).
+    const line = catLine(startles);
+    const at = this.secretsWorld.catCenter();
+    if (line && at) this.popupAt(tmp2.copy(at).setY(at.y + 0.45), line, "gold");
     this.secretsWorld.catStartled();
   }
 
@@ -991,6 +1011,12 @@ export class DeadOfNight implements Game, MatchListener {
 
   duckSqueak(_squeaks: number): void {
     this.secretsWorld.duckSqueak();
+    const duck = this.assets.road.secrets.duck;
+    if (duck) {
+      duck.getWorldPosition(tmp2);
+      tmp2.y += 0.4;
+      this.popupAt(tmp2, DUCK_LINE, "gold");
+    }
   }
 
   secretFound(id: SecretId, name: string, found: number, total: number): void {

@@ -49,9 +49,10 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   the end) instead of a single race, and can flip every track left for right
   with **Mirror Mode**. Details below.
 - **Tricks.** Clap to honk (a Honk! bubble over your kart, and a horn the
-  karts near you hear), raise both open hands high to cheer, wave one open
-  hand to say hello (a cheering driver cheers on the podium too). Keyboard:
-  H, C, V; gamepad: Y. A clap is not a brake and a cheer is not an item.
+  karts near you hear; a bot within 15 m usually honks back), raise both
+  open hands high to cheer, wave one open hand to say hello (a cheering
+  driver cheers on the podium too). Keyboard: H, C, V; gamepad: Y. A clap is
+  not a brake and a cheer is not an item.
 - **Eggs.** A rubber duck hides off the racing line on every track (drive up
   to it for a squeak and a toast; find them all and Dabble joins). Two karts
   over the line within 0.15 s for a top-three place get a **photo finish**. A
@@ -68,13 +69,13 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
 | --- | --- |
 | Nitro | A burst of speed, now. |
 | Triple Nitro | Three bursts, one per use. |
-| Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second). |
+| Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second); a kart flying off a ramp passes over it. |
 | Seeker | A puck that follows the track to the kart one place ahead. |
 | Slick | A puddle of oil dropped behind you. Whoever drives through it spins. |
 | Triple Puck | Three Pucks, one per use; they orbit your kart until fired. |
 | Comet | Six seconds untouchable (pucks, slicks, hazards and bumps pass through), 15% faster, the grass no slower than the road; the karts it touches spin. |
-| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared. |
-| Skyrocket | Flies high over the track to the leader (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
+| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared, and so is a kart the drone is carrying or has just set down. |
+| Skyrocket | Flies high over the track to the leader of those still racing (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
 | Blast | An instant ring of force, 7 m round you: spins karts inside it and destroys Pucks, Seekers, Slicks, Decoys and Skyrockets there. |
 | Decoy Box | Dropped behind like a Slick, but it looks like an item box (a duller colour, a wink). Whoever drives into it spins. |
 
@@ -90,8 +91,10 @@ Three laps by default (the room may choose 1-5). Up to eight karts: the
 players, and bots filling the grid when the room wants them (on by default,
 six karts in all). Countdown 3-2-1-Go; the race ends when every player has
 finished, or 25 s after the first player finished — the rest are placed by
-how far round they got. A finished player's kart drives itself on. A player
-who leaves mid-race is replaced by a bot.
+how far round they got. A finished kart (a player's too) drives itself on,
+with nothing in hand: it drops its item at the line and the boxes give it
+none, so a lap of honour spins no one still racing. A player who leaves
+mid-race is replaced by a bot.
 
 ### Grand Prix and Mirror
 
@@ -109,7 +112,7 @@ their new places with a mark for who rose or fell (`app/standings.ts`). Bots
 keep their names, colours and drivers (`RacerSetup`) through the cup; the
 leader starts on pole. The cup runs on the settings it began with. A latecomer
 is turned away ("started"); a guest who leaves keeps their row and their kart
-races on as a bot.
+races on as a bot, winning points for that row.
 
 The **podium** (`render/podium.ts`, `createPodium(canvas)`, shown by
 `app/podium.ts`) is a 3D ceremony: the top three drivers in their karts on a
@@ -200,7 +203,11 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
 - **Speed.** Top 24 m/s on the road, ~90% of it in 3 s. Off the road (more
   than half the width from the centre) top speed falls to 11 m/s with drag.
   A barrier stands 6 m beyond each edge: hitting it kills the speed into it,
-  loses 30% of the rest, and makes a `wall` event.
+  loses 30% of the rest, and makes a `wall` event. Brushing it (under 3 m/s
+  into it) wears 3 m/s off the speed each second (it was 5% of the speed a
+  tick, which had a kart on the outside of a bend crawling in a second).
+  Nose against it and nearly stopped, the wheel turns the kart as it would at
+  4 m/s, so a kart that met it head-on is never wedged.
 - **Turning.** Yaw rate up to ~2.2 rad/s, rising with speed from nothing at a
   standstill to full by 6 m/s, a little less at top speed. Grip pulls the
   velocity toward the heading quickly (a slight slide, never ice).
@@ -214,17 +221,21 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
 - **Boost.** Top speed +35% and strong acceleration while it lasts. Nitro
   1.5 s, a pad 1.0 s, a start boost 1.0 s.
 - **Start.** The countdown is 3 s plus half a second of "ready". Throttle
-  rising from 0 to 1 in the last 0.6 s before Go gives the start boost;
-  throttle held since before 1.2 s floods the engine (no drive for 0.6 s
-  after Go). Bots get a start boost by skill.
+  rising from 0 to 1 in the last second before Go (while the lights say 1)
+  gives the start boost; throttle held since before 1.2 s floods the engine
+  (no drive for 0.6 s after Go). Bots get a start boost by skill. (The window
+  was 0.6 s: hands closed as the 1 came up reached the sim about 0.8 s before
+  Go, after the fist's 0.12 s hold and the camera, and missed it.)
 - **Karts touch.** Circles of radius 1.1 m push apart, the faster one
   shoving harder; a `bump` event.
 - **Item boxes.** A row of five across the road at each of the track's
   `itemRows`; a box taken comes back after 3 s. Roulette 1.0 s. Odds by place
   (above). Puck: 40 m/s, 6 s, bounces off barriers, hits within 1.4 m.
   Seeker: 36 m/s along the centre line toward the kart one place ahead,
-  homing within 30 m. Slick: dropped 2.5 m behind, stays until driven through
-  (at most 12 on the track; the oldest goes). A hit spins the kart 1.2 s,
+  homing within 30 m (along the road as well as straight across, so it
+  never turns for a kart beyond the barrier on the next finger). Slick:
+  dropped 2.5 m behind, stays until driven through (at most 12 on the
+  track; the oldest goes). A hit spins the kart 1.2 s,
   cuts its speed to a fifth, and ends its drift. Decoy: a slick that looks
   like a box (at most 8). Odds are three rows (`oddsFirst`, `oddsMid`,
   `oddsLast` in `tuning.ts`) blended by place. Comet 6 s (+15% top speed, no
@@ -352,7 +363,9 @@ only those karts' physics against the world as it is.
   then closed within 0.6 s with the other a fist all along → one item press;
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
   between the palms) by at least a quarter span → hop; drift held from the
-  hop until |steer| < 0.15 for 200 ms or a brake.
+  hop until |steer| < 0.15 for 200 ms or a brake. A hop while the drift is
+  still held (after a hop that was only a hop, or a drift a spin-out ended)
+  lets go of it for 50 ms first, so the kart sees a fresh press and hops.
 - **Tricks** (`gestures.ts`, in hand lengths, a hand's span being twice the
   wrist-to-knuckle size): a **clap** (palms from at least one hand length
   apart to within 0.6 and back to 0.9 inside half a second, not from a brake
@@ -489,6 +502,28 @@ memory goes with it; four restarts in one page grew the JS heap from 113 to 117 
   and medium.
 - *Shaders and first pictures at load* (`warmUp` in `renderer.ts`): compile in parallel (`compileAsync`), then draw two
   pictures through the whole post chain with the hidden things (flames, the item pool) shown, then clear the canvas.
+  Hidden stand-ins for what appears only later (a slick, the storm cloud, the comet's bubble, the rescue drone;
+  `standIns.test.ts`) are built with them, so none of those builds its shaders mid-race (each was a 250-480 ms
+  freeze); the podium does the same before its first picture. Both waits give up (8 s, 1.5 s) so a lost context cannot
+  hang them. It costs about 0.3 s more behind the loading screen.
+- *Shadow casters per view* (`casters.ts`): a kart whose shadow a view cannot see is left out of that view's shadow
+  pass. `same.mjs`: identical pictures on all nine tracks, 1 and 4 views.
+- *A colour-only resolve*: each view's multisampled picture is resolved without the depth nobody reads, 0.7 to 1.4 ms
+  less GPU time a frame, identical pixels.
+- *What outlives a race* (`outliving.ts`): three r186's shared lookup texture, and Grip Prix's shared materials and
+  geometries, keep dispose listeners that held every renderer alive (a renderer, six scenes, about fifty materials
+  and twenty render targets a race). The race, the podium and the driver stage dispose them as they go: flat over
+  five races.
+
+  Before and after these four (`bench.mjs --bases`, high tier, medians of two on a loaded machine: trust the calls
+  and triangles over the milliseconds):
+
+  | | Draw calls | Kilo-triangles | Frame (ms) |
+  | --- | --- | --- | --- |
+  | Meadow, 1 view | 157 → 115 | 667 → 567 | 7.0 → 5.9 |
+  | Meadow, 4 views | 677 → 578 | 2929 → 2708 | 10.5 → 8.1 |
+  | Canyon, 1 view | 172 → 130 | 639 → 507 | |
+  | Canyon, 4 views | 754 → 614 | 2752 → 2396 | |
 - *Ground tiles of 40 cells* instead of 20: a fifth fewer draw calls, same picture.
 - *Lesser tiers*: karts are welded into one mesh from 26 m (medium) and 18 m (low) instead of 34 m; ground tiles of 60
   and 80 cells; bloom's thresholded copy at half size. The high tier keeps all of its detail: the same still of every
@@ -601,8 +636,7 @@ the footnote says which tier Auto uses here.
 drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
 
 **Next.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
-models at all); caster culling for the shadow pass (karts behind a view's camera, 23% of the draw calls at four views are
-the shadow pass); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
+models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
 tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
 
@@ -684,13 +718,36 @@ tight type, springy motion; a white pill is the one main action of a screen;
    player's colour that comes up in turn (last place first, the winner last),
    the medal colours for the top three, the fastest lap in gold; the title is
    gold, silver or bronze for a podium place and white otherwise; Race Again
-   (the host), Back to Lobby. **Standings** (a Grand Prix, between races) wear
+   (the host), Back to Lobby. Under the title, a line on how it went for the
+   one player on this screen, kinder and funnier further down the table
+   (`eggs.ts` `resultLine`: "By a mile.", "1.4 s behind Pebble.", "You saw
+   more of the track than anyone.", "The drone knows you by name now."), or,
+   for friends sharing a screen, who beat whom ("Ada beat Maya, Finn and
+   Kit.", `sofaLine`). **Standings** (a Grand Prix, between races) wear
    the same, on the postcard of the race just run; the **Podium** (its end)
-   has its own stage.
+   has its own stage, and says to a player who did not win how close they
+   came ("You took silver, 3 points behind.", `podiumLine`).
+
+In a race, a hit between two people on the sofa earns a word in each one's
+view ("Got Finn." for one, "Maya got you." for the other, "Own goal." for a
+puck that comes back), at most one a view every 2.5 s (`eggs.ts` `taunts`);
+a bot at either end says nothing. Each track's duck says where it was found
+("Duck 3 of 9. Fished out of the sink."), and a duck found on a mirrored
+track counts for its track.
+
+**A gamepad** finds its way round the menus (`padnav.ts`): the d-pad or the
+stick moves a visible focus ring to the nearest thing that way, A presses,
+B steps back only where leaving loses nothing (You, the wheel check, a
+sheet), and Start opens and closes the pause sheet. The driver stage reads
+the pad itself, and in a race the pad drives.
 
 Troubles say what happened and what to do: "There's no race with that code.
 Check it and try again.", "This race is full.", "The host left the race.",
-"Lost the connection to the race." — each with the way back as a button.
+"Lost the connection to the race.", and for a code that never answers, "Can't
+Reach the Race" ("Join from the same Wi-Fi as the host, then try again.") —
+each with the way back as a button. A guest who has heard nothing from the
+host for 2.5 s (a ping goes every second) sees "Waiting for <host>" over the
+race instead of a world frozen without a word (`net/guest.ts` `QUIET_MS`).
 
 The arcade (`index.html`) gains a heading per kind of game: **Shooting**
 (the four) and **Racing** (Grip Prix). A `GameEntry` may say `page:

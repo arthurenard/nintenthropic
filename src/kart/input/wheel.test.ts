@@ -553,6 +553,46 @@ describe("hop and drift", () => {
     expect(rig.last.input.drift).toBe(true);
   });
 
+  it("a second lift while the drift is still held lets go of it for a moment, so the kart sees a fresh hop", () => {
+    const rig = driving();
+    // Turned 18°: a hop, but too little turn for the kart to drift (the sim wants |steer| over 0.3), yet enough to hold the flag.
+    rig.wheel(1, { angle: 18 });
+    lift(rig, 18, 0.25, 0.1);
+    expect(rig.last.input.drift).toBe(true);
+    expect(Math.abs(rig.last.input.steer)).toBeGreaterThan(WHEEL.drift.straight);
+    expect(Math.abs(rig.last.input.steer)).toBeLessThan(0.3);
+    // Down again slowly (no hop) and turned harder into the bend: the flag is still up, so a plain lift now would be lost.
+    rig.run(0.6, (t) => wheelHands({ angle: 30, centre: [0.5, 0.2 + 0.25 * Math.min(1, t / 0.6)] }));
+    expect(rig.last.input.drift).toBe(true);
+    // A second sharp lift: the drift reads as let go for a few ticks, then held again.
+    const seen: boolean[] = [];
+    const start = rig.now;
+    for (let i = 0; i < 24; i++) {
+      rig.run(1 / 60, () => wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, (rig.now - start) / 100)] }));
+      seen.push(rig.last.input.drift);
+    }
+    const dropped = seen.indexOf(false);
+    expect(dropped).toBeGreaterThan(0);
+    const back = seen.indexOf(true, dropped);
+    expect(back - dropped).toBeGreaterThanOrEqual(2);
+    expect(back - dropped).toBeLessThanOrEqual(4);
+    expect(seen.slice(back).every(Boolean)).toBe(true);
+  });
+
+  it("does not let go for the first lift: a fresh hop is pressed at once", () => {
+    const rig = driving();
+    rig.wheel(1, { angle: 30 });
+    const seen: boolean[] = [];
+    const start = rig.now;
+    for (let i = 0; i < 24; i++) {
+      rig.run(1 / 60, () => wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, (rig.now - start) / 100)] }));
+      seen.push(rig.last.input.drift);
+    }
+    const pressed = seen.indexOf(true);
+    expect(pressed).toBeGreaterThan(0);
+    expect(seen.slice(pressed).every(Boolean)).toBe(true);
+  });
+
   it("does not hop twice from one lift", () => {
     const rig = driving();
     rig.wheel(1, { angle: 30 });

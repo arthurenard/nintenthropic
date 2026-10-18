@@ -131,6 +131,8 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "use"; kart: number; item: ItemKind }
   | { type: "hit"; kart: number; by: number | null; cause: HitCause }
   | { type: "boost"; kart: number; source: "nitro" | "pad" | "drift" | "start"; level: number }
+  /** The throttle went down too early in the countdown: at Go the engine floods (and coughs) instead of driving. */
+  | { type: "flood"; kart: number }
   | { type: "drift-level"; kart: number; level: 1 | 2 }
   | { type: "bump"; a: number; b: number; strength: number }
   | { type: "wall"; kart: number; strength: number }

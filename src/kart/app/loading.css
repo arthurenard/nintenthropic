@@ -95,15 +95,19 @@
   font-weight: 550;
   color: rgba(255, 255, 255, 0.96);
 }
+/* Centred by its margins rather than by left: 50%, which would let it grow only half the screen wide and wrap a short tip. */
 .loading-tip {
   position: absolute;
   z-index: 1;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: max(36px, calc(env(safe-area-inset-bottom) + 24px));
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 10px;
+  width: fit-content;
   max-width: calc(100% - 2 * var(--margin));
+  margin-inline: auto;
   min-height: 44px;
   padding: 10px 20px 10px 16px;
   border: 1px solid var(--glass-line);
@@ -116,7 +120,6 @@
   font-weight: 550;
   letter-spacing: -0.005em;
   text-shadow: none;
-  transform: translateX(-50%);
   transition:
     opacity 260ms var(--ease),
     transform 360ms var(--pop);
@@ -131,7 +134,20 @@
 }
 .loading-tip.out {
   opacity: 0;
-  transform: translateX(-50%) translateY(6px);
+  transform: translateY(6px);
+}
+
+/* A phone on its side: the name, the bar and the tip all fit, the tip a size down at the very foot. */
+@media (max-height: 520px) {
+  .loading-card {
+    gap: 8px;
+  }
+  .loading-tip {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    min-height: 36px;
+    padding: 6px 16px 6px 12px;
+    font-size: 14px;
+  }
 }
 
 :root[data-reduce-motion] {
@@ -139,6 +155,6 @@
     animation: fade-in 250ms var(--ease) backwards;
   }
   .loading-tip.out {
-    transform: translateX(-50%);
+    transform: none;
   }
 }

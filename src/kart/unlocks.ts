@@ -11,7 +11,18 @@
  * player's own decide their driver and their kart's paint.
  */
 
+import { MIRROR_SUFFIX } from "./track/mirror";
+
 export type UnlockId = "duck-driver" | "secret-track" | "golden";
+
+/**
+ * The track a duck belongs to. A race in Mirror Mode reports the mirror's id
+ * (the track's plus "-mirror"), but it is the same track and the same duck:
+ * finding it there counts, and finding it again on the original does not.
+ */
+function duckOf(track: string): string {
+  return track.endsWith(MIRROR_SUFFIX) ? track.slice(0, -MIRROR_SUFFIX.length) : track;
+}
 
 export interface Unlocks {
   /** Track ids whose duck this device's players have driven into. */
@@ -33,8 +44,10 @@ export function loadUnlocks(): Unlocks {
     const raw = localStorage.getItem(KEY);
     if (!raw) return blank();
     const parsed = JSON.parse(raw) as Partial<Unlocks>;
+    // A duck found in Mirror Mode before it counted for its track was kept under the mirror's id: it counts now.
+    const ducks = Array.isArray(parsed.ducks) ? parsed.ducks.filter((d): d is string => typeof d === "string").map(duckOf) : [];
     return {
-      ducks: Array.isArray(parsed.ducks) ? parsed.ducks.filter((d): d is string => typeof d === "string") : [],
+      ducks: [...new Set(ducks)],
       cups: Array.isArray(parsed.cups) ? parsed.cups.filter((c): c is string => typeof c === "string") : [],
       konami: parsed.konami === true,
     };
@@ -63,11 +76,12 @@ export function isUnlocked(id: UnlockId, unlocks: Unlocks, all: { duckTracks: re
   }
 }
 
-/** Records a duck found on `track`; true when it is the first time. */
+/** Records a duck found on `track` (a race's track id: a mirrored track's is its track's); true when it is the first time. */
 export function foundDuck(track: string): boolean {
   const u = loadUnlocks();
-  if (u.ducks.includes(track)) return false;
-  u.ducks.push(track);
+  const id = duckOf(track);
+  if (u.ducks.includes(id)) return false;
+  u.ducks.push(id);
   save(u);
   return true;
 }

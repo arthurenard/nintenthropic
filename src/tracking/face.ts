@@ -6,16 +6,21 @@
  * nothing that leaves the device.
  */
 import { FaceLandmarker } from "@mediapipe/tasks-vision";
+import type { GpuWatch } from "./gpu";
 
 export { eyesFrom } from "./eyes";
 
 /** Where the WebAssembly runtime is (the loader script and the binary). */
 export type Fileset = Parameters<typeof FaceLandmarker.createFromOptions>[0];
 
-/** Creates the face landmarker from its model's bytes, on the GPU where it can, else the CPU. */
-export async function createFaceLandmarker(fileset: Fileset, model: ArrayBuffer, prefer: "GPU" | "CPU"): Promise<{ landmarker: FaceLandmarker; delegate: "GPU" | "CPU" }> {
-  const create = (delegate: "GPU" | "CPU") =>
-    FaceLandmarker.createFromOptions(fileset, {
+/**
+ * Creates the face landmarker from its model's bytes, on the GPU where it can, else the CPU; on the GPU, on a canvas
+ * `gpu` watches, when given one (gpu.ts).
+ */
+export async function createFaceLandmarker(fileset: Fileset, model: ArrayBuffer, prefer: "GPU" | "CPU", gpu?: GpuWatch): Promise<{ landmarker: FaceLandmarker; delegate: "GPU" | "CPU" }> {
+  const create = async (delegate: "GPU" | "CPU") => {
+    const canvas = gpu?.canvasFor(delegate);
+    const landmarker = await FaceLandmarker.createFromOptions(fileset, {
       runningMode: "VIDEO",
       numFaces: 1,
       outputFaceBlendshapes: true,
@@ -24,7 +29,10 @@ export async function createFaceLandmarker(fileset: Fileset, model: ArrayBuffer,
       minFacePresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
       baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate },
+      ...(canvas ? { canvas } : {}),
     });
+    return gpu ? gpu.watch(landmarker, canvas) : landmarker;
+  };
   if (prefer === "GPU") {
     try {
       return { landmarker: await create("GPU"), delegate: "GPU" };

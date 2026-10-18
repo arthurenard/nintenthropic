@@ -44,7 +44,11 @@ export type KartSound =
   | "final-lap"
   | "finish-win"
   | "finish-ok"
-  | "cheer";
+  | "cheer"
+  /** The photo finish's camera. */
+  | "shutter"
+  /** The Konami code: Handheld's gold sting, the same as the arcade's (a core cue, loaded with the engine). */
+  | "gold";
 
 export const SOUND_CUES: Record<KartSound, string> = {
   "ui-select": "kart_ui_select",
@@ -60,4 +64,6 @@ export const SOUND_CUES: Record<KartSound, string> = {
   "finish-win": "kart_finish_win",
   "finish-ok": "kart_finish_ok",
   cheer: "kart_cheer",
+  shutter: "kart_shutter",
+  gold: "ui_gold",
 };

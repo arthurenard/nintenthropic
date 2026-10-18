@@ -1,7 +1,7 @@
 // Grip Prix's easter eggs on the real page: the Konami code on the start screen
 // (a golden flash, a toast, the unlock kept), a honk on H with its bubble over
 // the kart, and the duck found by driving up to it (a toast in the player's
-// viewport, "Duck found! 1 of 9"). Chrome is muted and the preference says so.
+// viewport, "Duck 1 of 9. Paddling in the pond."). Chrome is muted and the preference says so.
 import { expect, test, type Page } from "@playwright/test";
 import { duckSpot } from "../src/kart/sim/eggs";
 import { planFor } from "../src/kart/sim/plan";
@@ -55,14 +55,14 @@ test("the Konami code on the start screen unlocks the golden kart, with a flash 
 
   // Up, up, down, down, left, right, left, right, B, A.
   for (const key of KONAMI) await page.keyboard.press(key);
-  await expect(page.locator("#toast")).toHaveText("Golden Kart unlocked — and a secret track.");
+  await expect(page.locator("#toast")).toHaveText("A golden kart, and a secret track.");
   await expect(page.locator("#gold-flash")).toHaveClass(/go/);
   expect((await unlocks(page))?.konami).toBe(true);
 
   // Again: it is already theirs.
   await page.waitForTimeout(300);
   for (const key of KONAMI) await page.keyboard.press(key);
-  await expect(page.locator("#toast")).toHaveText("The Golden Kart is already yours.");
+  await expect(page.locator("#toast")).toHaveText("Still gold.");
   expect(errors).toEqual([]);
 });
 
@@ -210,7 +210,7 @@ test("driving up to the duck tells you, in your own viewport, and it is kept", a
   await press([]);
 
   await expect(toast).toHaveCount(1);
-  await expect(toast).toHaveText("Duck found! 1 of 9");
+  await expect(toast).toHaveText("Duck 1 of 9. Paddling in the pond.");
   await shot(page, info, "eggs-duck-found", 100);
   expect((await unlocks(page))?.ducks).toEqual(["meadow-loop"]);
   expect(errors).toEqual([]);

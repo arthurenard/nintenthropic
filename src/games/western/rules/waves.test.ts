@@ -59,6 +59,13 @@ describe("the wave table", () => {
     }
   });
 
+  it("says something new under the later waves' titles, in turn", () => {
+    const later = [7, 8, 9].map((w) => waveSpec(w).subtitle);
+    expect(later).toEqual(["They keep coming.", "Nobody told them to stop.", "The gang has cousins."]);
+    expect(waveSpec(10).subtitle).toBe("Black Jack is back.");
+    for (let w = 7; w <= 30; w++) expect(waveSpec(w).subtitle).toMatch(/^[A-Z][^.]*\.$/);
+  });
+
   it("keeps the first waves near, so the town can be learned a stretch at a time", () => {
     expect(waveSpec(1).reach).toBe(30);
     expect(waveSpec(2).reach).toBe(40);

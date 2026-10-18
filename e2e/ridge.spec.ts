@@ -205,12 +205,13 @@ test("Overwatch Ridge marks the men, not the locals, and says which way to pan; 
   await expect.poll(faded, { timeout: 5_000 }).toBe(0);
 
   // One of them fires at the player: his flash on the lens, his caret whole with a ring pinging round him, and an arc on
-  // the view's edge pointing his way. The picture is taken at once: the flash is gone in a fifth of a second.
+  // the view's edge pointing his way. The ping lasts a second, and a picture on a busy machine can take longer: it is
+  // looked for first, and the picture taken after.
   expect(await gameDebug(page, `debug.fireFrom(${hostile[0]!.id})`)).toBe(true);
-  await shot(page, info, "ridge-08-shot-fired", 0);
   await expect(page.locator(".spot.shot")).toHaveCount(1);
   await expect(page.locator(".spot")).toHaveCount(3);
   await expect(page.locator("#arcs .arc.soft")).toHaveCount(1);
+  await shot(page, info, "ridge-08-shot-fired", 0);
   await expect(page.locator(".spot.shot")).toHaveCount(0, { timeout: 5_000 });
 
   // Through the scope, looking at the hillside away from them: no carets, and an arrow on the glass's rim toward them.
@@ -270,8 +271,8 @@ test("Overwatch Ridge reveals whoever fires at you, with Aim Assist off, and say
   // A man fires at the player: his flash, a ring pinging round a mark over him, and an arc on the view's edge
   // pointing his way - the one man, and only for a moment.
   const hostile = ((await people(page)) as Man[]).filter((p) => p.side === "hostile").sort((a, b) => a.distance - b.distance);
+  // (The ping lasts a second: it is looked for before the picture, which can take longer on a busy machine.)
   expect(await gameDebug(page, `debug.fireFrom(${hostile[0]!.id})`)).toBe(true);
-  await shot(page, info, "ridge-10-shot-fired-assist-off", 0);
   await expect(page.locator(".spot.shot")).toHaveCount(1);
   await expect(page.locator(".spot")).toHaveCount(1);
   await expect(page.locator(".spot-ring")).toHaveCount(1);
@@ -281,6 +282,7 @@ test("Overwatch Ridge reveals whoever fires at you, with Aim Assist off, and say
   const stage = (await page.locator("#stage").boundingBox())!;
   expect(hostile[0]!.x).toBeLessThan(0.5);
   expect(arc.x + arc.width / 2).toBeLessThan(stage.x + stage.width / 2);
+  await shot(page, info, "ridge-10-shot-fired-assist-off", 0);
   // He is not marked for good: a few seconds on, the mark is gone.
   await expect(page.locator(".spot")).toHaveCount(0, { timeout: 8_000 });
   // A hit has its own arc, whole rather than soft, and the red edge.

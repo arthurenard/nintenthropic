@@ -52,7 +52,7 @@ describe("the kart pack", () => {
       // surfaces
       "kart_surf_ice", "kart_surf_snow", "kart_surf_sand", "kart_surf_mud", "kart_surf_grass",
       // the duck, the horn, the interface
-      "kart_duck", "kart_horn", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
+      "kart_duck", "kart_horn", "kart_shutter", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
     ];
     for (const cue of wanted) expect(KART, cue).toContain(cue);
     expect(KART.length).toBe(wanted.length);

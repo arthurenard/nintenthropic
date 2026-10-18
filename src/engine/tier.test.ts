@@ -25,6 +25,16 @@ describe("the GPU tier guess", () => {
     expect(guessTier("ANGLE (Qualcomm, Adreno (TM) 740)")).toBe("low");
     expect(guessTier("ANGLE (Qualcomm, Qualcomm(R) Adreno(TM) X1-85 GPU)")).toBe("medium");
   });
+
+  it("tells a Ryzen laptop's graphics from the desktop cards that share their name", () => {
+    expect(guessTier("ANGLE (AMD, AMD Radeon(TM) RX Vega 10 Graphics (0x000015DD) Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe("medium");
+    expect(guessTier("ANGLE (AMD, AMD Radeon(TM) Vega 8 Graphics (0x000015D8) Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe("medium");
+    expect(guessTier("AMD Radeon Vega 8 Graphics (raven, LLVM 15.0.7, DRM 3.49, 6.1.0)")).toBe("medium");
+    expect(guessTier("ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001681) Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe("medium");
+    expect(guessTier("ANGLE (AMD, Radeon RX Vega (0x0000687F) Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe("high");
+    expect(guessTier("ANGLE (AMD, AMD Radeon RX 6700 XT (0x000073DF) Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe("high");
+    expect(guessTier("ANGLE (AMD, AMD Radeon Pro 5500M OpenGL Engine, OpenGL 4.1)")).toBe("high");
+  });
 });
 
 describe("a GPU drawn in software", () => {

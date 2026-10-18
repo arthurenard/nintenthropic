@@ -179,6 +179,24 @@ describe("the end of the race", () => {
     expect(r.result()).toEqual(result);
   });
 
+  it("places two karts over the line on one tick by when each crossed it, so places and times agree", () => {
+    const r = race(HARBOUR_LIGHTS, racers(2, 0), { laps: 1 });
+    toGo(r);
+    const length = HARBOUR_GEO.length;
+    // Kart 0 is quick but 0.3 m short of the line; kart 1 is slow but only 0.05 m short: it crosses first, though kart 0 ends
+    // the tick further past.
+    for (const [id, short, speed, offset] of [[0, 0.3, 30, -3], [1, 0.05, 10, 3]] as const) {
+      const s = length - short;
+      const p = HARBOUR_GEO.point(s, offset);
+      const h = HARBOUR_GEO.heading(s);
+      patch(r, id, { x: p.x, z: p.z, s, offset, progress: length - short, heading: h, vx: Math.sin(h) * speed, vz: Math.cos(h) * speed, lapStart: 0 });
+    }
+    const events = run(r, 1, () => new Map([[0, input({ throttle: 1 })], [1, input({ throttle: 1 })]]));
+    const finishes = events.filter((e) => e.type === "finish") as Extract<RaceEvent, { type: "finish" }>[];
+    expect(finishes.map((e) => [e.kart, e.place])).toEqual([[1, 1], [0, 2]]);
+    expect(finishes[0]!.time).toBeLessThanOrEqual(finishes[1]!.time);
+  });
+
   it("keeps a best lap for those that finished", () => {
     const r = twoPlayers();
     r.handOver(0);

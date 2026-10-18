@@ -88,7 +88,7 @@ export function hudScale(w: number, h: number): number {
  * and bottom: on the right edge, centred on the split (side by side: in the
  * middle of the screen). Three: the free quadrant, which also holds the
  * standings. Four: small in the middle, where the quadrants meet, with a
- * compact standings strip beside it.
+ * compact standings strip beside it where the quadrants are wide enough.
  */
 export type MapMode = "corner" | "edge" | "centre" | "free";
 
@@ -136,9 +136,8 @@ export function mapPlacement(layout: ViewLayout, aspect = 1.5, rows = 8): MapPla
     return { mode: "corner", rect: { x: m, y: H - m - h, w, h }, scale: full, canvas, strip: null };
   }
 
-  const withStrip = n >= 4;
   // The box grows with its scale, so find the scale it fits the screen at, then size it.
-  const sizeAt = (s: number) => {
+  const sizeAt = (s: number, withStrip: boolean) => {
     const canvas = mapCanvasSize(s, aspect);
     const strip = withStrip ? { w: Math.round(STRIP_W * s) } : null;
     const w = canvas.w + MAP_PAD * 2 * s + MAP_BORDER + (strip ? strip.w + STRIP_GAP * s : 0);
@@ -146,9 +145,13 @@ export function mapPlacement(layout: ViewLayout, aspect = 1.5, rows = 8): MapPla
     return { canvas, strip, w, h };
   };
   let scale = Math.max(0.6, Math.min(1.35, full * 0.85));
-  const probe = sizeAt(scale);
+  // With four, a standings strip beside the map, where the quadrants are wide enough to spare it: four players side by
+  // side on a phone held upright have quadrants so narrow that map and strip would cover half of each, lap panel and all.
+  const narrowest = Math.min(...layout.views.map((r) => r.w));
+  const withStrip = n >= 4 && sizeAt(scale, true).w <= narrowest * 0.8;
+  const probe = sizeAt(scale, withStrip);
   scale = Math.max(0.3, scale * Math.min(1, (W * 0.5) / probe.w, (H * 0.45) / probe.h));
-  const { canvas, strip, w, h } = sizeAt(scale);
+  const { canvas, strip, w, h } = sizeAt(scale, withStrip);
 
   const a = layout.views[0]!;
   const b = layout.views[1]!;
@@ -166,15 +169,18 @@ export function mapPlacement(layout: ViewLayout, aspect = 1.5, rows = 8): MapPla
 /**
  * How far to nudge a view's corner furniture clear of a map that overlaps it:
  * the place (bottom right) moves left by `place`, the lap panel (top left)
- * right by `lap`, both px. `u` is the view's HUD scale.
+ * right by `lap`, or, in a view too narrow for the map, the panel and the item
+ * slot side by side along its top, down by `lapDown`; all px. `u` is the view's
+ * HUD scale.
  */
-export function clearance(view: Rect, card: Rect, u: number): { place: number; lap: number } {
+export function clearance(view: Rect, card: Rect, u: number): { place: number; lap: number; lapDown: number } {
   const hits = (band: Rect) => card.x < band.x + band.w && band.x < card.x + card.w && card.y < band.y + band.h && band.y < card.y + card.h;
   const gap = 10 * u;
   const placeBand: Rect = { x: view.x + view.w - 160 * u, y: view.y + view.h - 130 * u, w: 160 * u, h: 130 * u };
   const lapBand: Rect = { x: view.x, y: view.y, w: 200 * u, h: 110 * u };
-  return {
-    place: hits(placeBand) ? Math.max(0, view.x + view.w - card.x + gap) : 0,
-    lap: hits(lapBand) ? Math.max(0, card.x + card.w - view.x + gap) : 0,
-  };
+  const place = hits(placeBand) ? Math.max(0, view.x + view.w - card.x + gap) : 0;
+  const lap = hits(lapBand) ? Math.max(0, card.x + card.w - view.x + gap) : 0;
+  // Margin, nudge, the panel (146 units), a gap and the slot (76), and the margin again (hud.css's --item-x).
+  if (lap > 0 && lap + (24 + 146 + 8 + 76 + 24) * u > view.w) return { place, lap: 0, lapDown: Math.max(0, card.y + card.h - view.y + gap) };
+  return { place, lap, lapDown: 0 };
 }

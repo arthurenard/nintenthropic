@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BREATHER } from "../rules/tuning";
-import { BELOW_LIMB, monotone, moonAt, MOON_TOP, nightFor, PASS_SINK, RISE_START, SET_AZIMUTH, SET_END, skyAt } from "./orbit";
+import { BELOW_LIMB, BREATHER_GROUND_RATE, monotone, moonAt, MOON_TOP, NIGHT_MID, nightFor, PASS_SINK, RISE_START, SET_AZIMUTH, SET_END, skyAt, turnUntilNight } from "./orbit";
 
 const DEG = Math.PI / 180;
 const DIP = 20.3 * DEG;
@@ -80,6 +80,19 @@ describe("the orbit's sky", () => {
     const dusk = nightFor({ elevation: -DIP - 1.2 * DEG, azimuth: 0 }, DIP);
     expect(dusk).toBeGreaterThan(0);
     expect(dusk).toBeLessThan(1);
+  });
+
+  it("says how far the ground turns before the night's middle, so its lights can be set where they will be seen", () => {
+    expect(NIGHT_MID).toBeGreaterThan(SET_END);
+    expect(NIGHT_MID).toBeLessThan(RISE_START);
+    expect(skyAt({ kind: "breather", t: NIGHT_MID }, DAY, DIP).night).toBe(1);
+    // From the breather's start: the whole run to the night, at the breather's rate.
+    expect(turnUntilNight(0)).toBeCloseTo(NIGHT_MID * BREATHER_GROUND_RATE, 9);
+    expect(turnUntilNight(0)).toBeGreaterThan(4 * DEG);
+    // Placed just before dark (the storm), only the rest of the way; at or past the middle, nothing.
+    expect(turnUntilNight(SET_END - 0.4)).toBeCloseTo((NIGHT_MID - SET_END + 0.4) * BREATHER_GROUND_RATE, 9);
+    expect(turnUntilNight(NIGHT_MID)).toBe(0);
+    expect(turnUntilNight(BREATHER)).toBe(0);
   });
 
   it("raises the Moon from under the limb to its height over it", () => {

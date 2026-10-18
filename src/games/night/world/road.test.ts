@@ -17,10 +17,11 @@ import { playFraming, playSights, secretSpots } from "./sights";
 let road: RoadLayout;
 let queries: RoadQueries;
 
+// Building the whole placeholder road takes seconds on a busy machine: more than a hook's usual ten.
 beforeAll(() => {
   road = readRoad(buildPlaceholderRoad());
   queries = new RoadQueries(road);
-});
+}, 60_000);
 
 /** The aim check's view: the road's own lens, at 16:10. */
 function checkCamera(): PerspectiveCamera {

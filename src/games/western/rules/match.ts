@@ -252,6 +252,9 @@ export class Match implements BanditWorld {
         if (this.duelist && (this.duelist.role !== "duelist" || !this.duelist.alive)) {
           this.duelist = null;
           this.phase = "combat";
+          // The wave's fighting starts now: the walk and the standoff are
+          // not time the gang grows bold over.
+          this.phaseT = 0;
           this.spawnTimer = 1.2;
         }
         break;
@@ -271,6 +274,9 @@ export class Match implements BanditWorld {
       case "dead":
         this.stepBandits(dt);
         this.stepTownsfolk(dt);
+        // A stick already lit plays out over the fall, landing and going
+        // off, rather than hanging in the air under the results.
+        this.stepSticks(dt);
         break;
     }
   }
@@ -657,12 +663,16 @@ export class Match implements BanditWorld {
     stick.state = "exploded";
     this.listener.dynamiteExplode(stick, shotInAir);
     const at = stick.position;
-    for (const b of this.bandits) {
-      if (!b.inPlay) continue;
-      const dx = b.pos.x - at.x;
-      const dy = b.pos.y + 1 - at.y;
-      const dz = b.pos.z - at.z;
-      if (dx * dx + dy * dy + dz * dz <= DYNAMITE_BLAST_RADIUS * DYNAMITE_BLAST_RADIUS) this.kill(b, "blast");
+    // After the fall a blast is only a picture: no one else goes down, and
+    // the score the results show is the score at the fall.
+    if (this.phase !== "dead") {
+      for (const b of this.bandits) {
+        if (!b.inPlay) continue;
+        const dx = b.pos.x - at.x;
+        const dy = b.pos.y + 1 - at.y;
+        const dz = b.pos.z - at.z;
+        if (dx * dx + dy * dy + dz * dz <= DYNAMITE_BLAST_RADIUS * DYNAMITE_BLAST_RADIUS) this.kill(b, "blast");
+      }
     }
     const px = at.x - this.eye.x;
     const pz = at.z - this.eye.z;
@@ -826,7 +836,9 @@ export class Match implements BanditWorld {
   private kill(b: Bandit, part: HitPart | "blast"): void {
     if (!b.alive) return;
     const running = b.state === "running";
-    const quickDraw = part !== "blast" && this.time - b.emergedAt <= QUICK_DRAW_WINDOW;
+    // Drawn on the moment he showed himself; never on the duelist before
+    // the bell, who has not drawn yet (he has no moment to beat).
+    const quickDraw = part !== "blast" && Number.isFinite(b.emergedAt) && this.time - b.emergedAt <= QUICK_DRAW_WINDOW;
     if (b.lit && !b.released) {
       const stick = this.freeStick();
       if (stick) {
@@ -896,6 +908,8 @@ export class Match implements BanditWorld {
 
   /** The preacher answers the bell: he comes to the church door for a look. */
   spawnPreacher(cover: Cover): Townsperson {
+    // Rung for again while he is still at the door: he is already looking.
+    for (const p of this.townsfolk) if (p.role === "preacher" && p.state !== "gone") return p;
     const p = new Townsperson(this.nextId++, "preacher", cover, 2.6);
     p.state = "hidden";
     p.dur = 0.9;
@@ -904,6 +918,20 @@ export class Match implements BanditWorld {
   }
 
   // --- the end --------------------------------------------------------------------
+
+  /**
+   * The results are up: a stick still burning goes out where it is, so
+   * nothing fizzes or bangs under the card. Returns how many it put out.
+   */
+  snuffSticks(): number {
+    let n = 0;
+    for (const s of this.sticks) {
+      if (s.state === "exploded") continue;
+      s.state = "exploded";
+      n++;
+    }
+    return n;
+  }
 
   results(): Results {
     const s = this.scorer;

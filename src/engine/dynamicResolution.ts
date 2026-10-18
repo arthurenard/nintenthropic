@@ -10,7 +10,8 @@
  * down is quick (half a second of slow frames); coming back up is slow (two
  * seconds of easy ones). A step up that does not hold goes straight back and
  * waits twice as long before trying again, so the picture does not pump
- * between two sizes.
+ * between two sizes. Asked to (`restoreFutile`), it also undoes a run of
+ * steps down that bought no quicker frame, and leaves it at that.
  */
 export interface DynamicResolutionOptions {
   min?: number;
@@ -19,6 +20,15 @@ export interface DynamicResolutionOptions {
   target?: number;
   /** The starting scale, from the GPU tier guess. */
   initial?: number;
+  /**
+   * Give the pixels back when fewer of them bought no quicker frame: the
+   * frame rate is held by something else - a browser saving the battery at
+   * 30 fps (Chrome's Energy Saver, Low Power Mode), or a busy main thread -
+   * and a blurred picture would cost the player for nothing. Off by default:
+   * a game that answers a machine that cannot keep up by lowering its
+   * effects (Grip Prix, through StrainWatch) needs the floor to see it.
+   */
+  restoreFutile?: boolean;
 }
 
 /** Frames per judgement: about half a second at 60 fps. */
@@ -37,6 +47,15 @@ const REMEMBER_MOST = 3600;
 const TRIAL = WINDOW * EASY_WINDOWS * 2;
 const STEP_DOWN = 0.1;
 const STEP_UP = 0.05;
+/**
+ * restoreFutile: a descent is judged once this far below where it began (a
+ * third less on each side, about half the pixels) or at the floor; if the
+ * frames are not at least FUTILE_GAIN quicker by then, it is undone.
+ */
+const FUTILE_DEPTH = 0.3;
+const FUTILE_GAIN = 0.95;
+/** Restored, the scale is held while the frames stay within this band of what they were; outside it, something changed. */
+const FUTILE_BAND: readonly [number, number] = [0.8, 1.25];
 /** An interval this long is a hitch - a tab switch, a paused debugger - not a trend. */
 const HITCH = 250;
 
@@ -53,12 +72,18 @@ export class DynamicResolution {
   private blockedUntil = 0;
   private backoff = REMEMBER;
   private probe: { from: number; at: number } | null = null;
+  private readonly restoreFutile: boolean;
+  /** restoreFutile: where the current run of steps down began, and how long its frames took then. */
+  private descent: { from: number; interval: number } | null = null;
+  /** restoreFutile: fewer pixels were found to buy nothing at frames this long; held until they change. */
+  private futile: number | null = null;
 
   constructor(options: DynamicResolutionOptions = {}) {
     this.min = options.min ?? 0.6;
     this.max = options.max ?? 1;
     this.target = options.target ?? 1000 / 60;
     this.scale = this.clamp(options.initial ?? this.max);
+    this.restoreFutile = options.restoreFutile ?? false;
   }
 
   /** One frame's interval, in ms. True when the scale changed. */
@@ -86,8 +111,35 @@ export class DynamicResolution {
     const sorted = [...this.window].sort((a, b) => a - b);
     const average = (sorted[(WINDOW >> 1) - 1]! + sorted[WINDOW >> 1]!) / 2;
     this.window = [];
+    const slow = average > this.target * SLOW;
 
-    if (average > this.target * SLOW && this.scale > this.min) {
+    if (this.restoreFutile) {
+      // How long the frames take, to tell whether fewer pixels helped: the
+      // mean of the middle of the window, so one hitch does not decide it.
+      let sum = 0;
+      for (let i = 3; i < WINDOW - 3; i++) sum += sorted[i]!;
+      const interval = sum / (WINDOW - 6);
+      if (!slow) {
+        this.descent = null;
+        this.futile = null;
+      } else if (this.futile !== null) {
+        if (interval > this.futile * FUTILE_BAND[0] && interval < this.futile * FUTILE_BAND[1]) {
+          this.easyWindows = 0;
+          return false;
+        }
+        this.futile = null; // heavier or lighter: the pixels may matter now
+      } else if (this.descent && (this.descent.from - this.scale >= FUTILE_DEPTH - 1e-9 || this.scale <= this.min + 1e-9) && interval > this.descent.interval * FUTILE_GAIN) {
+        const from = this.descent.from;
+        this.descent = null;
+        this.futile = interval;
+        this.probe = null;
+        this.blockedFrom = Number.POSITIVE_INFINITY;
+        return this.set(from);
+      }
+      if (slow && !this.descent && !this.probe && this.scale > this.min) this.descent = { from: this.scale, interval };
+    }
+
+    if (slow && this.scale > this.min) {
       const back = this.probe ? this.probe.from : this.scale - STEP_DOWN;
       this.backoff = this.probe ? Math.min(this.backoff * 2, REMEMBER_MOST) : REMEMBER;
       this.blockedFrom = this.scale;
@@ -116,6 +168,9 @@ export class DynamicResolution {
     this.blockedFrom = Number.POSITIVE_INFINITY;
     this.probe = null;
     this.backoff = REMEMBER;
+    this.descent = null;
+    // What the frames were found to be held by (the browser's own cap) is
+    // the page's, not the game's or the round's: it stays.
     this.scale = this.clamp(scale);
   }
 

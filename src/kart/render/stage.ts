@@ -54,6 +54,7 @@ import { WebGLUnavailable } from "../../engine/common";
 import { loadStageArt } from "./art";
 import type { KartModel } from "./kart";
 import { createProceduralKart } from "./kartModel";
+import { outliving } from "./outliving";
 import { PostChain } from "./post";
 import { LOOKS } from "./world/look";
 
@@ -528,11 +529,14 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp);
       canvas.removeEventListener("pointercancel", onUp);
+      // Else the karts' shared material and three's shared table keep this renderer (outliving.ts).
+      const shared = outliving(renderer, scene);
       for (const { model } of built.values()) model.dispose();
       built.clear();
       for (const thing of owned) thing.dispose();
       key.shadow.map?.dispose();
       post.dispose();
+      for (const thing of shared) thing.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },

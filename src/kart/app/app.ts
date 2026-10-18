@@ -30,12 +30,13 @@ import { Backdrop } from "./backdrop";
 import { CheckScreen } from "./check";
 import { DriverScreen, driverAccess, type DriverChoice, type DriverSeat } from "./driver";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
+import { PadMenus } from "./padnav";
 import { crew, loadYou, playerCount, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
 import { PodiumScreen } from "./podium";
 import { ResultsScreen } from "./results";
-import { kartOf, localPlayers, previewColours } from "./roster";
+import { kartOf, localPlayers, previewColours, screenOfRoom } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
 import { GraphicsControls } from "./graphicsui";
 import { SoundControls } from "./soundui";
@@ -121,7 +122,7 @@ export class KartApp {
         host: () => void this.open("host"),
         join: (code) => void this.open("join", code),
         practice: () => void this.open("practice"),
-        konami: () => this.services.sound.play("cheer"),
+        konami: () => this.services.sound.play("gold"),
       },
       // A phone that came with a link to join is on its way to a room: no time for the key art.
       { art: !options.join },
@@ -161,6 +162,7 @@ export class KartApp {
       again: () => this.again(),
       lobby: () => this.backToLobby(),
       next: () => this.nextInCup(),
+      photo: () => this.services.sound.play("shutter"),
     });
     this.standingsScreen = new StandingsScreen({ next: () => this.nextInCup(), leave: () => this.leave() });
     this.podiumScreen = new PodiumScreen(services, {
@@ -222,6 +224,8 @@ export class KartApp {
     motion.addEventListener("change", apply);
     apply();
     this.listenForSound();
+    // A gamepad moves about the menus as the keyboard does, and its Start pauses a race.
+    new PadMenus({ screen: () => this.screen, pause: () => this.raceScreen.pause() });
     this.show("start");
     const code = this.options.join;
     if (code) {
@@ -644,6 +648,7 @@ export class KartApp {
       trackName: this.trackName(lobby),
       grandPrix: lobby.grandPrix ?? null,
       still: this.raceScreen.photo,
+      rescues: this.raceScreen.rescued,
     });
     this.show("results");
     this.backdrop.set(trackOfRace(lobby.settings, lobby.grandPrix));
@@ -729,11 +734,26 @@ export class KartApp {
   }
 
   private loadFailed(kind: RaceFailure): void {
-    const session = this.session;
     showTrouble(kind, [
-      { label: "Try Again", run: () => session && this.enterRace(session.lobby()) },
+      { label: "Try Again", run: () => this.rejoin() },
       { label: "Leave Race", run: () => this.leave() },
     ]);
+  }
+
+  /**
+   * Back to wherever the room has got to: the race again if it is still on, else its results, the cup's screens or the
+   * lobby. (The room goes on while a trouble's sheet is up, and a race that has ended cannot be loaded again.)
+   */
+  private rejoin(): void {
+    const session = this.session;
+    if (!session) return;
+    const lobby = session.lobby();
+    const screen = screenOfRoom(lobby);
+    if (screen === "race") this.enterRace(lobby);
+    else if (screen === "results") this.showResults(lobby);
+    else if (screen === "standings") this.showStandings(lobby);
+    else if (screen === "podium") this.showPodium(lobby);
+    else this.showLobby(lobby);
   }
 
   // --- leaving, and the room closing ----------------------------------------------------------------------------------
@@ -812,6 +832,14 @@ export class KartApp {
         break;
       case "version":
         showTrouble("version", [{ label: "Reload", run: () => location.reload() }, toStart]);
+        break;
+      case "network":
+        // A code that never answered is not a connection lost: without a relay, players on different networks may not meet.
+        if (kind === "join" && code) {
+          showTrouble("unreachable", [{ label: "Try Again", run: () => void this.open("join", code) }, toStart]);
+          break;
+        }
+        showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);
         break;
       default:
         showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);

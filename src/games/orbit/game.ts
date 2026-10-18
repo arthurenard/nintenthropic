@@ -6,6 +6,7 @@ import { mulberry32 } from "../../engine/rules/rng";
 import { ScreenFlash } from "../../engine/world/flash";
 import { checkFraming } from "../../engine/world/framing";
 import { contractName } from "../../engine/world/names";
+import { disposeTree } from "../../engine/world/scene";
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
@@ -16,10 +17,10 @@ import { Match, type MatchListener } from "./rules/match";
 import type { Mark } from "./rules/panes";
 import type { PassSpec } from "./rules/passes";
 import type { Award, PassBonuses } from "./rules/scoring";
-import { ASTRONAUT_PASS, DUCK_PASS, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
+import { ASTRONAUT_PASS, duckPass, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
 import { ALARM_BELOW, BREATHER, DERELICT_DEPTH, INTEGRITY_MAX, KINDS } from "./rules/tuning";
 import { normalize, scale, type V3 } from "./rules/vec";
-import { HintLine, tipText, ventHint, type TipId } from "./tips";
+import { droneShotLine, HintLine, tipText, ventHint, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type OrbitAssets } from "./world/assets";
 import { R as PLANET_R } from "./world/atmosphere";
@@ -30,7 +31,7 @@ import { DroneView } from "./world/droneView";
 import { Effects } from "./world/effects";
 import { Glass } from "./world/glass";
 import { readDerelict, readLibrary } from "./world/library";
-import { BREATHER_GROUND_RATE, GROUND_RATE, MOON_RADIUS, moonAt, RISE_START, SET_END, skyAt, type SkyMoment } from "./world/orbit";
+import { BREATHER_GROUND_RATE, GROUND_RATE, MOON_RADIUS, moonAt, RISE_START, SET_END, skyAt, turnUntilNight, type SkyMoment } from "./world/orbit";
 import { ProximityRings, type RingShown } from "./world/rings";
 import { RunningLights } from "./world/runningLights";
 import { laneClearance, readScenery, type Scenery } from "./world/scenery";
@@ -57,14 +58,30 @@ const tmp = new Vector3();
 const tmp2 = new Vector3();
 /** How far out on the screen (NDC) the drone may work: clear of the corner panel and the heat ring. */
 const DRONE_VIEW = { x: 0.8, top: 0.72, bottom: 0.7 };
+/**
+ * The night-side storm flickers from this far into a breather (s) - the
+ * ground under the view is dark well before the sun is down - until a
+ * moment after sunrise begins: some three seconds to catch three flashes.
+ */
+const STORM_FROM = SET_END - 1.0;
+/**
+ * Where the storm is in the view (NDC) in the middle of the night: in the
+ * centre window, low and to the left, where the player looks most (and
+ * through glass: the frame round it hid it once), well clear of the HI.
+ */
+const STORM_SPOT = { x: -0.12, y: -0.2 };
 /** The other nights' countries are turned this far, so they do not stand square to the view. */
 const OTHER_NIGHT_TURN = (30 * Math.PI) / 180;
 /** Where the "HI" is put in the view (NDC): low in the right-hand window, clear of the centre pane. */
 const HI_SPOT = { x: 0.6, y: -0.28 };
-/** How wide the HI is drawn, as a fraction of the view's width (of the art's 16:9 frame), and how wide the art wrote it (km). */
-const HI_WIDTH = 0.022;
+/**
+ * How wide the HI is drawn in the middle of its night, as a fraction of the
+ * view's width (of the art's 16:9 frame) - a pair of letters among the
+ * towns you notice, not a sign - and how wide the art wrote it (km).
+ */
+const HI_WIDTH = 0.017;
 const HI_SOURCE_KM = 130;
-/** How near the HI a shot must land (km on the ground) to find it: the letters are some 50 km across as drawn. */
+/** How near the HI a shot must land (km on the ground) to find it: generous, the letters are some 25 km across as drawn. */
 const HI_REACH_KM = 80;
 
 /** A (longitude, latitude) in degrees as a direction in the planet's frame (three's sphere: y north, x longitude 0). */
@@ -266,7 +283,6 @@ export class OrbitalDecay implements Game, MatchListener {
     this.floats = new Floats(this.scenery.floats, this.visualRandom);
     this.floats.reducedMotion = ctx.settings.reducedMotion;
     // Everything lit at run time through the one tone curve.
-    for (const root of [...this.debris.materials().map(() => null)]) void root;
     for (const v of Object.values(library)) for (const variant of v) {
       stage.tone.patchTree(variant.whole);
       for (const p of variant.pieces) stage.tone.patchTree(p);
@@ -393,7 +409,8 @@ export class OrbitalDecay implements Game, MatchListener {
    * - a find, not a headline; on the other nights the next of the night
    * map's brightest countries (found at load) in the centre of the view. It
    * is set as the breather begins, while the sun is still up and no light
-   * shows, and the lights then turn with the ground.
+   * shows, for where the ground will have turned by the middle of the night,
+   * and the lights then turn with the ground.
    */
   private placeNight(): void {
     const other = this.litRegions[otherCountry(this.nights) % Math.max(1, this.litRegions.length)];
@@ -402,7 +419,7 @@ export class OrbitalDecay implements Game, MatchListener {
     const spot = this.groundPoint(hiNight ? HI_SPOT.x : 0.02, hiNight ? HI_SPOT.y : -0.08);
     if (!spot) return;
     const world = spot.clone();
-    const toPlanet = this.stage.planetRotation.clone().invert();
+    const toPlanet = this.rotationAtNight().invert();
     const at = spot.applyQuaternion(toPlanet).normalize();
     const right = new Vector3(1, 0, 0).applyQuaternion(this.scenery.eyeQuaternion).applyQuaternion(toPlanet);
     const east = right.addScaledVector(at, -right.dot(at)).normalize();
@@ -462,6 +479,12 @@ export class OrbitalDecay implements Game, MatchListener {
     const frameWidth = 2 * (16 / 9);
     const zoom = ((HI_SOURCE_KM / STEP_KM) * dx) / (HI_WIDTH * frameWidth);
     return { lean: (xn - x0) / dx, rise: (ye - y0) / dx, stretch: (yn - y0) / dx, zoom: Math.min(8, Math.max(2, zoom)) };
+  }
+
+  /** The planet's turn into the world as it will be in the middle of this breather's night. */
+  private rotationAtNight(): Quaternion {
+    const t = this.sky.kind === "breather" ? this.sky.t : 0;
+    return new Quaternion().setFromAxisAngle(this.stage.orbitAxis, turnUntilNight(t)).multiply(this.stage.planetRotation);
   }
 
   /** The planet's surface point seen through the art's view at NDC (sx, sy), as a unit direction from its centre. */
@@ -567,6 +590,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.nightPlaced = false;
     this.hiShown = false;
     this.stage.sky.uniform<Matrix3>("uNightMap").value.identity();
+    this.stage.sky.uniform<number>("uNightScale").value = 1;
     this.stage.sky.uniform<Vector4>("uHiLens").value.setW(1);
     this.flash.reset();
     this.post.set("flash", 0);
@@ -621,6 +645,7 @@ export class OrbitalDecay implements Game, MatchListener {
     const reducedFlashing = this.ctx.settings.reducedFlashing;
     this.effects.reducedFlashing = reducedFlashing;
     this.beams.reducedFlashing = reducedFlashing;
+    this.secrets.reducedFlashing = reducedFlashing;
     this.camera.reducedMotion = this.ctx.settings.reducedMotion;
     this.time += dt;
     this.runSchedule();
@@ -673,16 +698,15 @@ export class OrbitalDecay implements Game, MatchListener {
     }
     if (!breather) this.nightPlaced = false;
     if (breather) {
-      const night = this.sky.t > SET_END - 0.4 && this.sky.t < RISE_START + 0.3;
+      const night = this.sky.t > STORM_FROM && this.sky.t < RISE_START + 0.3;
       if (night && !this.stormStarted) {
         this.stormStarted = true;
-        const spot = this.groundPoint(0.3, -0.22);
-        if (spot) this.secrets.startStorm(spot.applyQuaternion(this.stage.planetRotation.clone().invert()));
+        // Where it will be in the middle of the night: it drifts with the ground, a few hundred km.
+        const spot = this.groundPoint(STORM_SPOT.x, STORM_SPOT.y);
+        if (spot) this.secrets.startStorm(spot.applyQuaternion(this.rotationAtNight().invert()));
       }
       if (!night && this.secrets.stormOn) this.secrets.stopStorm();
     }
-    const lightning = this.stage.sky.uniform<Vector4>("uLightning").value;
-    if (this.ctx.settings.reducedFlashing) lightning.w *= 0.25;
     this.aurora += ((this.match.secrets.aurora ? 1 : 0) - this.aurora) * Math.min(1, dt * 0.5);
     this.stage.sky.uniform<number>("uAurora").value = this.aurora * (0.35 + 0.65 * this.stage.night);
     // The Moon, from its pass on, rising over the limb.
@@ -779,6 +803,11 @@ export class OrbitalDecay implements Game, MatchListener {
     this.glass?.dispose();
     this.beams?.dispose();
     this.rings?.dispose();
+    // What the scene does not hold: the debris library and the Derelict
+    // (loose, for cloning), and what is left of the files the walk-ons and
+    // the drone were taken from. Each load builds its own, so none is kept.
+    this.debris?.dispose();
+    if (this.assets) for (const rest of [this.assets.debris, this.assets.derelict, this.assets.drone, this.assets.extras]) disposeTree(rest);
     this.stage?.dispose();
     if (this.previousToneMapping !== null) this.ctx.renderer.toneMapping = this.previousToneMapping;
   }
@@ -843,8 +872,9 @@ export class OrbitalDecay implements Game, MatchListener {
         const onPlanet = dir.clone().multiplyScalar(hit).sub(c).normalize().applyQuaternion(this.stage.planetRotation.clone().invert());
         const sunP = this.stage.sunDirection.clone().applyQuaternion(this.stage.planetRotation.clone().invert());
         const km = (a: Vector3) => Math.acos(Math.min(1, Math.max(-1, onPlanet.dot(a)))) * PLANET_R;
-        const storm = this.secrets.stormOn && km(this.secrets.storm) < 220 && this.secrets.takeFlash();
         const hi = this.stage.night > 0.5 && this.hiShown && km(this.hiAt) < HI_REACH_KM && this.hiAt.dot(sunP) < 0;
+        // The HI's reach is the tighter: a shot at the letters is for them, even as the storm beside them flashes.
+        const storm = !hi && this.secrets.stormOn && km(this.secrets.storm) < 220 && this.secrets.takeFlash();
         return { storm, hi };
       },
     };
@@ -981,7 +1011,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.pushReadouts(true);
     // The pass's walk-ons.
     if (pass === ASTRONAUT_PASS) this.later(4, () => this.secrets.startAstronaut());
-    if (pass === DUCK_PASS) this.later(9, () => this.secrets.startDuck());
+    if (duckPass(pass)) this.later(9, () => this.secrets.startDuck());
     if (pass === TOOLBAG_PASS) this.later(12, () => this.secrets.startToolbag());
     if (pass >= MOON_PASS && this.moonT < 0) this.moonT = 0;
   }
@@ -1156,11 +1186,11 @@ export class OrbitalDecay implements Game, MatchListener {
     }
   }
 
-  droneShot(award: Award): void {
+  droneShot(award: Award, hits: number, mending: boolean): void {
     this.sound.play("orbit_drone_hit", { volume: 0.9 });
     this.effects.deflect(this.droneView.center, tmp.copy(this.camera.camera.position).sub(this.droneView.center).normalize(), this.droneView.center.distanceTo(this.camera.camera.position));
     this.popupAt(this.droneView.center, this.awardText(award), "danger");
-    this.hints.say("That was the drone.", 2);
+    this.hints.say(droneShotLine(hits, mending), 2);
     this.syncHint();
   }
 
@@ -1199,20 +1229,17 @@ export class OrbitalDecay implements Game, MatchListener {
   }
 
   secretFound(id: SecretId, name: string, found: number, total: number): void {
-    const at = new Vector3();
     switch (id) {
-      case "astronaut": {
-        const shot = this.shooter.result.target;
-        this.secrets.astronautShot(shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at);
+      case "astronaut":
+        this.astronautShot();
         break;
-      }
       case "toolbag":
         this.secrets.toolbagShot();
         break;
       case "duck":
         this.secrets.duckShot();
-        at.copy(this.shooter.result.point);
-        this.popupAt(at, "In space, no one can hear you squeak.", "gold");
+        // A line to read, not a number to catch: on the hint line, for long enough.
+        this.hints.say("In space, no one can hear you squeak.", 3.5);
         break;
       case "arm":
         this.secrets.armShot();
@@ -1229,6 +1256,7 @@ export class OrbitalDecay implements Game, MatchListener {
       default:
         break;
     }
+    this.syncHint();
     const announce = () => {
       if (this.phase !== "playing") return;
       this.hud.secret(name, found, total);
@@ -1236,6 +1264,27 @@ export class OrbitalDecay implements Game, MatchListener {
     };
     // Its show plays first, the toast after it.
     this.later(id === "message" ? 1.3 : id === "astronaut" ? 1.2 : 0.3, announce);
+  }
+
+  secretAgain(id: SecretId): void {
+    // The ones still there to be shot play their show again: the arm waves
+    // back every time, the flag glints, the HI says hello again, and the
+    // spacewalker, back at work, is no more impressed (or no less flat).
+    if (id === "arm") this.secrets.armShot();
+    else if (id === "moon") this.secrets.flag();
+    else if (id === "message") this.secrets.blinkHi();
+    else if (id === "astronaut") this.astronautShot();
+  }
+
+  /** The spacewalker: shot near, a thumbs-down; shot square on, there was never anyone there. */
+  private astronautShot(): void {
+    const shot = this.shooter.result.target;
+    const square = shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at;
+    this.secrets.astronautShot(square);
+    if (square) {
+      this.hints.say("Only a sticker.", 2.5);
+      this.syncHint();
+    }
   }
 
   flashShot(count: number, aurora: boolean): void {

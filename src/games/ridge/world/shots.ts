@@ -64,8 +64,6 @@ export interface Flight {
   /** It went through glass on its way (a windshield) at this distance. */
   glassAt: number;
   done: boolean;
-  /** The points of its path so far, for the vapour trail. */
-  path: Vector3[];
   tag: number;
 }
 
@@ -104,7 +102,6 @@ export class Shooter {
       near: new Map(),
       glassAt: -1,
       done: false,
-      path: [new Vector3().copy(origin)],
       tag: this.nextTag++,
     };
     this.flights.push(f);
@@ -223,7 +220,6 @@ export class Shooter {
           break;
         }
         f.x = x1;
-        f.path.push(P1.clone());
       }
       if (!f.done && f.x >= f.stopAt - 1e-6) {
         f.done = true;

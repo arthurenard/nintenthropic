@@ -212,8 +212,9 @@ export class SecretsWorld {
 
   // --- the cat -------------------------------------------------------------------------------
 
+  /** Where the cat sits, or null while it hisses and leaps: a shot then is no new scare, as it has not yet moved on from the last. */
   catCenter(): Vector3 | null {
-    if (!this.cat || this.catState === "leap") return null;
+    if (!this.cat || this.catState !== "sit") return null;
     return tmp.copy(this.cat.root.position).setY(this.cat.root.position.y + 0.15);
   }
 
@@ -352,6 +353,11 @@ export class SecretsWorld {
     this.catShine += (target - this.catShine) * Math.min(1, dt * 14);
     if (this.catShine > 0.02) this.eyeshine.add(left, right, this.catShine);
     if (this.catEyesMat) shineEyes(this.catEyesMat, this.catShine);
+  }
+
+  /** The drive-in's picture, which the scene no longer holds once the reel has run out. */
+  dispose(): void {
+    this.screenMaterial?.dispose();
   }
 
   /** Everything back as it was (a new night). */

@@ -93,6 +93,48 @@ describe("the hand as an input", () => {
     expect(input.sample(t).offscreen).toBe(false);
   });
 
+  it("still fires a shot whose next frame lost the hand before the game read it", () => {
+    // Two camera frames between two of the game's (a frame that took long): the fold's, then one without the hand,
+    // which the tracker drops most often mid-fold. The shot is the trigger's, and it goes where it was aimed.
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 20, indexTip: [0.4, 0.6] }, (t += 33));
+    expect(input.sample(t).fired).toBe(false);
+    for (let i = 0; i < 2; i++) camera.show({ thumbDegrees: 75, indexTip: [0.4, 0.6] }, (t += 33));
+    camera.show(null, (t += 33));
+    const shot = input.sample(t + 5);
+    expect(shot.fired).toBe(true);
+    expect(shot.offscreen).toBe(false);
+    expect(shot.x).toBeCloseTo(1 / 3, 2);
+    expect(shot.y).toBeCloseTo(2 / 3, 2);
+    // Once: the next read is the hand lost.
+    const after = input.sample(t + 10);
+    expect(after.fired).toBe(false);
+    expect(after.tracking).toBe(false);
+    // A camera gone quiet since does not fire it late.
+    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 20, indexTip: [0.4, 0.6] }, (t += 33));
+    for (let i = 0; i < 2; i++) camera.show({ thumbDegrees: 75, indexTip: [0.4, 0.6] }, (t += 33));
+    camera.show(null, (t += 33));
+    expect(input.sample(t + STALE_FRAME + 50).fired).toBe(false);
+  });
+
+  it("fires a last round taken on the screen, though the hand swung off it before the game read the shot", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    for (let i = 0; i < 2; i++) camera.show({ thumbDegrees: 75, indexTip: [0.5, 0.5] }, (t += 33));
+    // Then away past the right edge, to reload, while the game was busy with a long frame.
+    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 75, indexTip: [0.98, 0.5] }, (t += 33));
+    const shot = input.sample(t + 5);
+    expect(shot.fired).toBe(true);
+    expect(shot.offscreen).toBe(false);
+    expect(shot.x).toBeCloseTo(0.5, 2);
+    // The next read is the swing: off the screen, the reload.
+    const after = input.sample(t + 10);
+    expect(after.fired).toBe(false);
+    expect(after.offscreen).toBe(true);
+  });
+
   it("holds the trigger's state but not the aim while the hand is gone", () => {
     const { camera, input } = setup();
     let t = 0;
@@ -147,6 +189,37 @@ describe("the hand as an input", () => {
     // One frame far past the edge, then gone: the smoothed aim has not got there yet.
     camera.show({ thumbDegrees: 20, indexTip: [0.9, 0.5] }, (t += 33));
     camera.show(null, (t += 33));
+    expect(input.sample(t + 5).offscreen).toBe(true);
+  });
+
+  it("does not reload for a frame lost as the thumb folds, aiming near an edge", () => {
+    // Aiming at 0.95 of the view, the fold's kick takes the raw aim past the edge's margin for a frame, and the
+    // tracker loses the hand on the next (most likely mid-fold): a shot, and no reload the player never asked for.
+    const { camera, input } = setup();
+    let t = 0;
+    const aim = 0.2 + 0.95 * 0.6;
+    for (let i = 0; i < 12; i++) camera.show({ thumbDegrees: 20, indexTip: [aim, 0.5] }, (t += 33));
+    camera.show({ thumbDegrees: 45, indexTip: [aim + 0.03, 0.52] }, (t += 33));
+    camera.show({ thumbDegrees: 75, indexTip: [aim + 0.06, 0.55] }, (t += 33));
+    const reads = [input.sample(t + 5)];
+    camera.show(null, (t += 33));
+    for (let at = t + 5; at < t + 33; at += 8) reads.push(input.sample(at));
+    camera.show(null, (t += 33));
+    for (let at = t + 5; at < t + 33; at += 8) reads.push(input.sample(at));
+    camera.show({ thumbDegrees: 75, indexTip: [aim + 0.03, 0.52] }, (t += 33));
+    reads.push(input.sample(t + 5));
+    expect(reads.filter((read) => read.fired)).toHaveLength(1);
+    expect(reads.some((read) => read.offscreen)).toBe(false);
+  });
+
+  it("still counts a swing too fast for the filter as leaving with the thumb down, once the hand stays gone", () => {
+    // A player who fires their last round and swings off to reload with the thumb still folded.
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 10; i++) camera.show({ thumbDegrees: 75, indexTip: [0.5, 0.5] }, (t += 33));
+    camera.show({ thumbDegrees: 75, indexTip: [0.9, 0.5] }, (t += 33));
+    const leftAt = t;
+    while (t < leftAt + 200) camera.show(null, (t += 33));
     expect(input.sample(t + 5).offscreen).toBe(true);
   });
 

@@ -3,7 +3,7 @@ import { mulberry32 } from "../../../engine/rules/rng";
 import { Dead, horizontalDistance, offsetPath } from "./dead";
 import type { Match } from "./match";
 import { makeMatch, testPlan, type Recorder } from "./testkit";
-import { ATTACKS, BLOATER_BURST_DAMAGE, BREATHER, CLIMB_TIME, DIFFICULTY, LUNGE_TIME, STAGGER_BACK, VAULT_TIME, WAVE_INTRO } from "./tuning";
+import { ATTACKS, BLOATER_BURST_DAMAGE, BREATHER, CLIMB_TIME, CRAWLER_SHORT, DIFFICULTY, LUNGE_TIME, STAGGER_BACK, VAULT_TIME, WAVE_INTRO } from "./tuning";
 import type { DeadKind, LaneId } from "./types";
 
 const DT = 1 / 60;
@@ -85,6 +85,39 @@ describe("the wave director", () => {
     });
     expect(most).toBeLessThanOrEqual(m.spec.maxActive);
     expect(most).toBeGreaterThan(2);
+  });
+
+  it("never has more of the dead up than the world has figures for, falling ones included", () => {
+    // Wave 13 lets 24 walk at once; the world has figures for 22. One without
+    // a figure would walk up unseen, and nothing could shoot it.
+    const { m, rec } = makeMatch(4, { start: { wave: 13 }, figures: 22 });
+    m.health.immortal = true;
+    expect(m.spec.maxActive).toBeGreaterThan(22);
+    let most = 0;
+    const count = () => {
+      let up = 0;
+      for (const d of m.dead) if (d.state !== "dead" && d.kind !== "mechanic") up++;
+      most = Math.max(most, up);
+    };
+    run(m, 60, count);
+    expect(most).toBe(22);
+    const before = rec.count("deadSpawn");
+    // Three go down at once: their figures go to the next only once each fall is over.
+    for (const d of m.dead.filter((x) => x.shootable).slice(0, 3)) {
+      m.rifle.reset();
+      m.trigger();
+      m.resolveShot({ kind: "dead", dead: d, part: "head" });
+    }
+    run(m, 0.5, count);
+    expect(rec.count("deadSpawn")).toBe(before);
+    run(m, 10, count);
+    expect(rec.count("deadSpawn")).toBe(before + 3);
+    expect(most).toBe(22);
+    // Without a limit, the wave's own crowd is the only one.
+    const free = makeMatch(4, { start: { wave: 13 } });
+    free.m.health.immortal = true;
+    run(free.m, 60);
+    expect(free.m.dead.filter((d) => d.alive).length).toBe(free.m.spec.maxActive);
   });
 
   it("takes a breather between waves: the bodies go, health comes back, the next wave's card", () => {
@@ -199,6 +232,24 @@ describe("the dead", () => {
     m.trigger();
     m.resolveShot({ kind: "dead", dead: d, part: "limb" });
     expect(d.alive).toBe(false);
+  });
+
+  it("a crawler claws from out in front of the sandbags, where it can be seen and shot, not from behind them", () => {
+    for (const lane of ["road", "trees"] as const) {
+      const { m, rec } = combat();
+      quiet(m);
+      const walker = send(m, "walker", lane, 0);
+      const crawler = send(m, "crawler", lane, 0);
+      m.health.immortal = true;
+      run(m, 120);
+      expect(walker.state).toBe("attacking");
+      expect(crawler.state).toBe("attacking");
+      expect(rec.all("deadStrike").some((e) => e.args[0] === crawler.id)).toBe(true);
+      // Its place, CRAWLER_SHORT farther from the eye than the one it holds; a walker stands on its own.
+      const out = (d: Dead) => horizontalDistance(d.pos, m.eye) - horizontalDistance(d.slot!.pos, m.eye);
+      expect(out(crawler)).toBeCloseTo(CRAWLER_SHORT, 1);
+      expect(out(walker)).toBeCloseTo(0, 2);
+    }
   });
 
   it("climb out of the bus and vault the fence before they walk", () => {

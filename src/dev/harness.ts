@@ -341,7 +341,8 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
   let simNow = 0;
   const loop = (now: number) => {
     if (running) {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      // The first frame's time can come before `last` was taken: never a step backwards (as engine/host.ts).
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;
       frame(dt, now);
     }

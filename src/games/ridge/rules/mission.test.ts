@@ -319,7 +319,7 @@ describe("the valley's secrets", () => {
     for (let i = 0; i < 3; i++) miss(m, eagle, 4);
     expect(rec.count("eagleLands")).toBe(1);
     run(m, 2);
-    expect(rec.last("secretFound")?.args.slice(0, 2)).toEqual(["eagle", "The Eagle"]);
+    expect(rec.last("secretFound")?.args.slice(0, 2)).toEqual(["eagle", "Staring Contest"]);
   });
 
   it("sends the goat to a higher ledge for a round landing near it", () => {

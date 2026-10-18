@@ -280,3 +280,21 @@ export function uiStart(t: Take): Mono {
   t.put(out, thump(t, 0.15, 150, 55, 0.002, 0.04), 0.08, 0.35);
   return out;
 }
+
+/**
+ * The photo finish: a camera's shutter, the mirror flipping up and the blind
+ * snapping shut a beat later, each a hard click with a short ring of the body.
+ */
+export function shutter(t: Take): Mono {
+  const out = t.canvas(0.3);
+  const clack = (at: number, low: number, high: number, ring: number, gain: number): void => {
+    t.put(out, click(t.sr, t.rng, 0.004, low, high), at, gain);
+    const body = t.canvas(0.06);
+    addMode(body, t.sr, 0, ring * t.rng.range(0.98, 1.02), 1, 0.008, 0);
+    addMode(body, t.sr, 0, ring * 2.3, 0.4, 0.005, 1);
+    t.put(out, body, at, 0.35 * gain);
+  };
+  clack(0, 1800, 9000, 1900, 1);
+  clack(0.065, 1200, 6000, 1400, 0.75);
+  return out;
+}

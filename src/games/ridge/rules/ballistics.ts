@@ -191,3 +191,32 @@ export function landingMils(range: number, dir: V3, windX: number, m: RoundModel
   const right = (f.cross.x * rx + f.cross.y * ry + f.cross.z * rz) * carried;
   return { right: range > 0 ? (1000 * right) / range : 0, down: holdMils(range, m) };
 }
+
+/**
+ * The range Relaxed's holdover dot is worked out for: where the dot's own
+ * line meets the valley, settled. The rangefinder ranges what the reticle
+ * rests on, and held over a man far off, the reticle rests on the hill behind
+ * him: a dot worked out for the hill fell metres below him, and a player who
+ * put it on him shot over his head. So the line through the dot is ranged,
+ * the dot worked out again for that, a few times, until it stops moving.
+ * `rangeAlong` ranges the line through a point of the scope (milliradians
+ * right and down of the centre); null where it meets nothing.
+ */
+export function rangeUnderDot(
+  start: number | null,
+  dir: V3,
+  windX: number,
+  rangeAlong: (at: { right: number; down: number }) => number | null,
+  steps = 3,
+  m: RoundModel = ROUND,
+): number | null {
+  let r = start;
+  for (let k = 0; k < steps && r !== null; k++) {
+    const next = rangeAlong(landingMils(r, dir, windX, m));
+    if (next === null) break;
+    const settled = Math.abs(next - r) < 1;
+    r = next;
+    if (settled) break;
+  }
+  return r;
+}

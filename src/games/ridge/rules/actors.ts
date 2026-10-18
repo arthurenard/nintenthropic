@@ -35,6 +35,8 @@ export class Actor {
   place = "";
   /** Where he stands his post, or where he took cover. */
   readonly home: V3 = { x: 0, y: 0, z: 0 };
+  /** The patch of pasture a grazing animal keeps to: its wanderings are round this, never a walk away. */
+  readonly patch: V3 = { x: 0, y: 0, z: 0 };
   walker: PathWalker | null = null;
   /** The vehicle he rides in, and where. */
   vehicle: Vehicle | null = null;
@@ -102,10 +104,14 @@ export class Actor {
   }
 }
 
-/** The vehicles' sizes, metres, and where the driver and the troops sit (vehicle space: +Z forward, +X left). */
-export const VEHICLE_SPECS: Readonly<Record<VehicleKind, { length: number; driver: V3; tail: number; cruise: number }>> = {
-  truck: { length: 6.8, driver: { x: 0.5, y: 1.6, z: 1.0 }, tail: -3.5, cruise: 8 },
-  jeep: { length: 3.4, driver: { x: 0.3, y: 0.9, z: -0.25 }, tail: -1.8, cruise: 9 },
+/**
+ * The vehicles' sizes, metres (the art's: the truck to the top of its canvas,
+ * the jeep without its aerial), and where the driver and the troops sit
+ * (vehicle space: +Z forward, +X left).
+ */
+export const VEHICLE_SPECS: Readonly<Record<VehicleKind, { length: number; width: number; height: number; driver: V3; tail: number; cruise: number }>> = {
+  truck: { length: 6.8, width: 2.5, height: 2.85, driver: { x: 0.5, y: 1.6, z: 1.0 }, tail: -3.5, cruise: 8 },
+  jeep: { length: 3.4, width: 1.6, height: 1.9, driver: { x: 0.3, y: 0.9, z: -0.25 }, tail: -1.8, cruise: 9 },
 };
 
 /**
@@ -241,6 +247,38 @@ export class Vehicle {
     this.vel.x = sin * this.speed;
     this.vel.z = cos * this.speed;
     this.vel.y = 0;
+  }
+
+  /** Whether the straight line from `a` to `b` passes through the vehicle's bulk (grown by `pad` metres): a sight line it hides. */
+  blocks(a: V3, b: V3, pad = 0): boolean {
+    const spec = VEHICLE_SPECS[this.kind];
+    const sin = Math.sin(this.heading);
+    const cos = Math.cos(this.heading);
+    // Both ends in the vehicle's own space (toWorld, the other way).
+    const ax = a.x - this.pos.x;
+    const az = a.z - this.pos.z;
+    const bx = b.x - this.pos.x;
+    const bz = b.z - this.pos.z;
+    const from = [ax * cos - az * sin, a.y - this.pos.y, ax * sin + az * cos] as const;
+    const to = [bx * cos - bz * sin, b.y - this.pos.y, bx * sin + bz * cos] as const;
+    const lo = [-spec.width / 2 - pad, 0, -spec.length / 2 - pad];
+    const hi = [spec.width / 2 + pad, spec.height + pad, spec.length / 2 + pad];
+    let t0 = 0;
+    let t1 = 1;
+    for (let k = 0; k < 3; k++) {
+      const d = to[k]! - from[k]!;
+      if (Math.abs(d) < 1e-9) {
+        if (from[k]! < lo[k]! || from[k]! > hi[k]!) return false;
+        continue;
+      }
+      let ta = (lo[k]! - from[k]!) / d;
+      let tb = (hi[k]! - from[k]!) / d;
+      if (ta > tb) [ta, tb] = [tb, ta];
+      t0 = Math.max(t0, ta);
+      t1 = Math.min(t1, tb);
+      if (t0 > t1) return false;
+    }
+    return true;
   }
 
   /** A point in the vehicle's own space (+Z forward, +X to its left), in the valley. */

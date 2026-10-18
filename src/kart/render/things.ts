@@ -157,6 +157,12 @@ export class Things {
     });
     this.sheenMat = new MeshBasicMaterial({ color: 0x6674b8, transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
     this.resources = [this.puck, this.seeker, this.rocket, ...this.puddles, this.slickMat, this.sheenMat];
+    // A slick nobody dropped, kept hidden: the renderer's warm-up shows what is hidden while the loading screen is up,
+    // so the oil's shader is built then and not the first time a slick comes into view (a stall of 300 ms and more).
+    const standIn = new Group();
+    standIn.add(new Mesh(this.puddles[0]!, this.slickMat), new Mesh(this.puddles[0]!, this.sheenMat));
+    standIn.visible = false;
+    this.group.add(standIn);
   }
 
   private make(t: ThingView): Visual {

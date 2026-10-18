@@ -4,7 +4,23 @@ import { TRACKS } from "../track/tracks";
 import { enterKonami, foundDuck, isUnlocked, loadUnlocks, wonCup } from "../unlocks";
 import { CHARACTERS } from "../characters";
 import { CUPS } from "../track/tracks";
-import { KONAMI, KonamiDetector, PHOTO_GAP, duckTracks, konamiKey, padPresses, photoFinish, recordDuck, tipsFor, tricksFor, type KonamiKey } from "./eggs";
+import {
+  KONAMI,
+  KonamiDetector,
+  PHOTO_GAP,
+  duckTracks,
+  konamiKey,
+  padPresses,
+  photoFinish,
+  podiumLine,
+  recordDuck,
+  resultLine,
+  sofaLine,
+  taunts,
+  tipsFor,
+  tricksFor,
+  type KonamiKey,
+} from "./eggs";
 
 /** A localStorage that lives in the test. */
 function storage(): void {
@@ -125,15 +141,120 @@ describe("the duck found", () => {
     expect(duckTracks()).toHaveLength(9);
   });
 
-  it("says how many are found, the first time on each track, and when it is all of them says Dabble joins", () => {
+  it("says how many are found and what that duck was up to, the first time on each track, and when it is all of them says Dabble joins", () => {
     const tracks = duckTracks();
-    expect(recordDuck(tracks[0]!)).toBe("Duck found! 1 of 9");
-    expect(recordDuck(tracks[0]!)).toBeNull();
-    expect(recordDuck(tracks[1]!)).toBe("Duck found! 2 of 9");
-    expect(recordDuck(tracks[2]!)).toBe("Duck found! 3 of 9");
-    for (const track of tracks.slice(3, -1)) recordDuck(track);
-    expect(recordDuck(tracks.at(-1)!)).toBe("You found every duck — Dabble joins the race!");
+    expect(recordDuck("meadow-loop")).toBe("Duck 1 of 9. Paddling in the pond.");
+    expect(recordDuck("meadow-loop")).toBeNull();
+    expect(recordDuck("kitchen-rally")).toBe("Duck 2 of 9. Fished out of the sink.");
+    expect(recordDuck("fun-fair")).toBe("Duck 3 of 9. Hooked.");
+    for (const track of tracks) if (track !== tracks.at(-1)) recordDuck(track);
+    expect(recordDuck(tracks.at(-1)!)).toBe("Every duck found. Dabble joins the race.");
     expect(recordDuck(tracks.at(-1)!)).toBeNull();
+  });
+
+  it("has a line for every track's duck, in the toast's voice: full stops, no dashes, no shouting", () => {
+    storage();
+    for (const [i, track] of duckTracks().slice(0, -1).entries()) {
+      const words = recordDuck(track)!;
+      expect(words, track).toMatch(new RegExp(`^Duck ${i + 1} of 9\\. [A-Z][^—!]*\\.$`));
+    }
+  });
+
+  it("counts a mirrored track's duck as that track's own: the same duck, found once", () => {
+    expect(recordDuck("glacier-pass-mirror")).toBe("Duck 1 of 9. Ice fishing.");
+    expect(loadUnlocks().ducks).toEqual(["glacier-pass"]);
+    expect(recordDuck("glacier-pass")).toBeNull();
+  });
+});
+
+describe("hits between friends", () => {
+  // Karts 4 and 5 are Maya and Finn; 0 is a bot.
+  const players = new Map([
+    [4, "Maya"],
+    [5, "Finn"],
+  ]);
+
+  it("tells the one who hit and the one who was hit, each in their own viewport", () => {
+    expect(taunts({ kart: 5, by: 4 }, players, [4, 5])).toEqual([
+      { kart: 4, words: "Got Finn." },
+      { kart: 5, words: "Maya got you." },
+    ]);
+    // Finn's race is on another screen: only Maya hears of it here.
+    expect(taunts({ kart: 5, by: 4 }, players, [4])).toEqual([{ kart: 4, words: "Got Finn." }]);
+  });
+
+  it("calls a player's own item coming back at them an own goal", () => {
+    expect(taunts({ kart: 4, by: 4 }, players, [4, 5])).toEqual([{ kart: 4, words: "Own goal." }]);
+    expect(taunts({ kart: 4, by: 4 }, players, [5])).toEqual([]);
+  });
+
+  it("leaves the bots, and the storms nobody threw, to the race", () => {
+    expect(taunts({ kart: 0, by: 4 }, players, [4, 5])).toEqual([]);
+    expect(taunts({ kart: 4, by: 0 }, players, [4, 5])).toEqual([]);
+    expect(taunts({ kart: 4, by: null }, players, [4, 5])).toEqual([]);
+  });
+});
+
+describe("the line under the result", () => {
+  const facts = { place: 1, field: 6, time: 60, winner: "Maya", winnerTime: 60, secondTime: 62, rescues: 0 };
+
+  it("says how a win went: by a mile, by a whisker, or nothing when it was just a win", () => {
+    expect(resultLine({ ...facts, secondTime: 66 })).toBe("By a mile.");
+    expect(resultLine({ ...facts, secondTime: null })).toBe("By a mile.");
+    expect(resultLine({ ...facts, secondTime: 60.3 })).toBe("By a whisker.");
+    expect(resultLine(facts)).toBeNull();
+  });
+
+  it("tells the runner-up how far behind they were, in tabular tenths", () => {
+    expect(resultLine({ ...facts, place: 2, winner: "Pebble", time: 61.44 })).toBe("1.4 s behind Pebble.");
+    expect(resultLine({ ...facts, place: 2, winner: "Pebble", time: 60.05 })).toBe("A whisker behind Pebble.");
+  });
+
+  it("is kindest, and funniest, at the bottom of the table", () => {
+    expect(resultLine({ ...facts, place: 6, time: 80 })).toBe("You saw more of the track than anyone.");
+    expect(resultLine({ ...facts, place: 3, time: 70, rescues: 3 })).toBe("The drone knows you by name now.");
+    expect(resultLine({ ...facts, place: 4, time: null })).toBe("The race ended before you did.");
+    // Last of three is only third; two rescues are only bad luck.
+    expect(resultLine({ ...facts, place: 3, field: 3, time: 70 })).toBeNull();
+    expect(resultLine({ ...facts, place: 4, time: 70, rescues: 2 })).toBeNull();
+  });
+});
+
+describe("the line for friends on one screen", () => {
+  it("says who beat whom, best first", () => {
+    expect(sofaLine(["Maya", "Finn"])).toBe("Maya beat Finn.");
+    expect(sofaLine(["Ada", "Maya", "Finn", "Kit"])).toBe("Ada beat Maya, Finn and Kit.");
+    expect(sofaLine(["Maya"])).toBeNull();
+    expect(sofaLine([])).toBeNull();
+  });
+});
+
+describe("the line on the podium", () => {
+  const rows = [
+    { name: "Maya", points: 45 },
+    { name: "Pebble", points: 40 },
+    { name: "Juno", points: 30 },
+    { name: "Otto", points: 30 },
+    { name: "Pip", points: 1 },
+  ];
+
+  it("says who won, with how many points", () => {
+    expect(podiumLine(rows, [0], "Acorn Cup")).toBe("You won the Acorn Cup, with 45 points.");
+    expect(podiumLine(rows, [], "Acorn Cup")).toBe("Maya wins the Acorn Cup, with 45 points.");
+    expect(podiumLine(rows, [3], "Acorn Cup")).toBe("Maya wins the Acorn Cup, with 45 points.");
+  });
+
+  it("tells silver and bronze how close they came, and the last that it took the scenic route", () => {
+    expect(podiumLine(rows, [1], "Comet Cup")).toBe("Maya wins the Comet Cup, with 45 points. You took silver, 5 points behind.");
+    expect(podiumLine(rows, [2], "Comet Cup")).toBe("Maya wins the Comet Cup, with 45 points. You took bronze, 15 points behind.");
+    expect(podiumLine([rows[0]!, { name: "Kit", points: 45 }], [1], "Comet Cup")).toBe("Maya wins the Comet Cup, with 45 points. You took silver, level on points.");
+    expect(podiumLine(rows, [4], "Comet Cup")).toBe("Maya wins the Comet Cup, with 45 points. You took the scenic route.");
+  });
+
+  it("speaks to nobody in particular when several of this screen's players are on the table", () => {
+    expect(podiumLine(rows, [1, 2], "Acorn Cup")).toBe("Maya wins the Acorn Cup, with 45 points.");
+    expect(podiumLine(rows, [0, 4], "Acorn Cup")).toBe("You won the Acorn Cup, with 45 points.");
+    expect(podiumLine([], [], "Acorn Cup")).toBe("");
   });
 });
 
@@ -169,8 +290,9 @@ describe("the tricks", () => {
 });
 
 describe("the tips while a race loads", () => {
-  it("teach a wheel player the four things their hands do", () => {
-    expect(tipsFor("wheel")).toEqual(["Open both hands to brake.", "Flick one hand to use an item.", "Hop to drift.", "Clap to honk."]);
+  it("teach a wheel player the four things their hands do, the flying start, and their manners", () => {
+    expect(tipsFor("wheel").slice(0, 4)).toEqual(["Open both hands to brake.", "Flick one hand to use an item.", "Hop to drift.", "Clap to honk."]);
+    expect(tipsFor("wheel")).toContain("Close your fists just before Go for a flying start.");
     // A device with no controls of its own (a screen that only shows) is told the hands' way.
     expect(tipsFor(null)).toEqual(tipsFor("wheel"));
   });

@@ -84,11 +84,14 @@ export interface MatchListener {
   paneFailed(pane: number, breach: Breach): void;
   alarm(on: boolean): void;
   drone(event: "launch" | "arrive" | "done" | "home" | "back"): void;
-  droneShot(award: Award): void;
+  /** The drone was shot: what it cost, how many times this game, and whether it was at a pane, mending. */
+  droneShot(award: Award, hits: number, mending: boolean): void;
   laser(event: "vent" | "vented" | "cooled" | "overheat"): void;
   streakUp(multiplier: number): void;
   score(value: number): void;
   secretFound(id: SecretId, name: string, found: number, total: number): void;
+  /** A secret already found, found again: its show plays again, without the toast. */
+  secretAgain(id: SecretId): void;
   /** A lightning flash shot in the storm: how many this breather, and whether the aurora came. */
   flashShot(count: number, aurora: boolean): void;
 }
@@ -653,8 +656,9 @@ export class Match {
       }
       case "drone": {
         const award = scorer.drone();
+        const mending = this.drone.pane !== null;
         this.drone.shot();
-        this.listener.droneShot(award);
+        this.listener.droneShot(award, this.drone.hits, mending);
         this.listener.score(scorer.score);
         return;
       }
@@ -756,6 +760,7 @@ export class Match {
 
   private found(id: SecretId): void {
     if (this.secrets.find(id)) this.listener.secretFound(id, SECRET_NAMES[id], this.secrets.count, SECRETS_TOTAL);
+    else this.listener.secretAgain(id);
   }
 
   // --- the end --------------------------------------------------------------------

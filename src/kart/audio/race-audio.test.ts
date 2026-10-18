@@ -378,6 +378,17 @@ describe("loops that follow state", () => {
     expect(bus.running("kart_drift")).toBe(0);
   });
 
+  it("squeals for the player's own kart and the nearest three others, however many drift together", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    const pack = [kart(0, { x: 0, speed: 20, drift: 1, driftLevel: 1 })];
+    for (let id = 1; id <= 7; id++) pack.push(kart(id, { x: 4 * id, speed: 20, drift: 1, driftLevel: 1 }));
+    for (let i = 0; i < 10; i++) frame(pack);
+    expect(bus.running("kart_drift")).toBe(4);
+    const heard = bus.loops.filter((l) => l.cue === "kart_drift" && !l.stopped).map((l) => l.sets.at(-1)?.distance ?? l.options.distance);
+    // The player's own (at no distance) and the three nearest, 4, 8 and 12 m away.
+    expect(heard.sort((a, b) => a! - b!)).toEqual([0, 4, 8, 12]);
+  });
+
   it("does not squeal in the air, off the road or at a crawl", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
     frame([kart(0, { speed: 20, drift: 1, hop: 0.5 })]);
@@ -447,10 +458,11 @@ describe("loops that follow state", () => {
     expect(bus.cues).toContain("kart_item_ready");
   });
 
-  it("coughs when the start floods, once, and not when the kart is away", () => {
+  it("coughs when the sim says the start flooded, and not for a kart that was only slow away", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }, { kart: 1, pan: 0.5 }]);
-    frame([kart(0, { speed: 0 }), kart(1, { speed: 2.5 })], { time: 0.3 });
-    frame([kart(0, { speed: 0 }), kart(1, { speed: 3 })], { time: 0.4 });
+    // Kart 1 sat still at Go without flooding (the throttle came late): no cough for it.
+    frame([kart(0, { speed: 0 }), kart(1, { speed: 0 })], { time: 0.3 }, [ev("flood", { kart: 0 })]);
+    frame([kart(0, { speed: 0 }), kart(1, { speed: 0 })], { time: 0.4 });
     expect(bus.cues.filter((c) => c === "kart_flood")).toHaveLength(1);
   });
 

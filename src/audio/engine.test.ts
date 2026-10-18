@@ -51,7 +51,12 @@ class FakeContext {
   destination = new Node();
   sources: Source[] = [];
   filters: { type: string; frequency: Param; Q: Param }[] = [];
-  createGain(): Node & { gain: Param } { return Object.assign(new Node(), { gain: new Param(1) }); }
+  gains: (Node & { gain: Param })[] = [];
+  createGain(): Node & { gain: Param } {
+    const g = Object.assign(new Node(), { gain: new Param(1) });
+    this.gains.push(g);
+    return g;
+  }
   createStereoPanner(): Node & { pan: Param } { return Object.assign(new Node(), { pan: new Param(0) }); }
   createBiquadFilter(): Node & { type: string; frequency: Param; Q: Param } {
     const f = Object.assign(new Node(), { type: "lowpass", frequency: new Param(350), Q: new Param(1) });
@@ -123,6 +128,46 @@ describe("the engine", () => {
     expect(Math.min(...ctx.sources.slice(n).map((s) => s.startedAt!))).toBe(0);
   });
 
+  it("keeps a hit on a far man as loud as on a near one, and darker, but lets a stray shot's thud fall away", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5); // no level variation
+    const { e, ctx } = engine();
+    /** The direct sound's gain (the second gain a voice makes, after its output) and its air (the first filter). */
+    const voice = (cue: string, distance: number): { gain: number; cutoff: number } => {
+      const g = ctx.gains.length;
+      const f = ctx.filters.length;
+      ctx.currentTime += 1; // apart, so no minimum gap or cap is in play
+      e.play(cue, { distance });
+      return { gain: ctx.gains[g + 1]!.gain.value, cutoff: ctx.filters[f]!.frequency.value };
+    };
+    const near = voice("hit_flesh", 12);
+    const far = voice("hit_flesh", 45);
+    expect(far.gain).toBeCloseTo(near.gain, 9);
+    expect(far.cutoff).toBeLessThan(near.cutoff);
+    expect(voice("hit_flesh", 3).gain).toBeGreaterThan(near.gain); // closer than that is louder still
+    expect(voice("hit_wood", 45).gain).toBeLessThan(voice("hit_wood", 12).gain * 0.8);
+  });
+
+  it("hushes, for a pause, what has not begun: a far shot on its way, the echoes not yet back, but not the interface", () => {
+    const { e, ctx } = engine();
+    const made = (play: () => void): Source[] => {
+      const n = ctx.sources.length;
+      play();
+      return ctx.sources.slice(n);
+    };
+    const shot = made(() => e.play("revolver_shot"));
+    const far = made(() => e.play("bandit_shot", { distance: 40 }));
+    const later = made(() => e.play("hit_wood", { delay: 0.4 }));
+    const tap = made(() => e.play("ui_confirm", { delay: 0.5 }));
+    ctx.currentTime = 0.02;
+    e.hush();
+    const [direct, ...echoes] = shot;
+    expect(direct!.stoppedAt).toBeNull(); // begun: it plays out
+    expect(echoes.length).toBeGreaterThan(0);
+    for (const s of echoes) expect(s.stoppedAt, `echo at ${s.startedAt}`).toBe(s.startedAt! > 0.02 ? 0.02 : null);
+    for (const s of [...far, ...later]) expect(s.stoppedAt).toBe(0.02);
+    for (const s of tap) expect(s.stoppedAt).toBeNull();
+  });
+
   it("honours delay and rate, and varies the rate only a little", () => {
     const { e, ctx } = engine();
     e.play("hit_wood", { delay: 0.5, rate: 1.5 });
@@ -180,6 +225,32 @@ describe("the engine", () => {
     stop();
     expect(src.stoppedAt).toBeGreaterThan(0);
     stop(); // twice is harmless
+  });
+
+  it("lets a loop's nodes go at once when it stops while the sound is off, rather than waiting on a clock that stands still", async () => {
+    const { e, ctx } = engine(true);
+    await Promise.resolve();
+    expect(ctx.state).toBe("suspended");
+    e.library.renderNow("wind");
+    const before = ctx.sources.length;
+    const stop = e.loop("wind");
+    const src = ctx.sources.slice(before).find((s) => s.loop)!;
+    expect(src.outputs.length).toBeGreaterThan(0);
+    stop();
+    expect(src.stoppedAt).not.toBeNull();
+    expect(src.outputs).toEqual([]);
+    expect(src.onended).toBeNull();
+    // Running, it fades as before, and lets go when the source has ended.
+    e.setMuted(false);
+    ctx.state = "running";
+    const n = ctx.sources.length;
+    const stopRunning = e.loop("wind");
+    const running = ctx.sources.slice(n).find((s) => s.loop)!;
+    stopRunning();
+    expect(running.stoppedAt).toBeGreaterThan(0);
+    expect(running.outputs.length).toBeGreaterThan(0);
+    running.onended!();
+    expect(running.outputs).toEqual([]);
   });
 
   it("muffles and ducks when hurt, and slows the world in slow motion", () => {

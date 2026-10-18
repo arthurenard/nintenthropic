@@ -140,6 +140,11 @@ export class Bandit {
     return this.state !== "reserve" && this.alive;
   }
 
+  /** The High Noon duelist, still walking his paces or standing off: the bell has not tolled. */
+  get beforeTheBell(): boolean {
+    return this.role === "duelist" && this.emergedAt === Number.POSITIVE_INFINITY;
+  }
+
   private enter(state: BanditState, dur: number): void {
     this.state = state;
     this.t = 0;
@@ -310,6 +315,9 @@ export class Bandit {
 
   startHide(w: BanditWorld): void {
     this.enter("hiding", Math.max(HIDE_TIME[this.cover.emerge], this.walkOut() / WALK_OUT_SPEED));
+    // From where he is: a man staggered halfway out of cover (or halfway
+    // back in) goes back from there, rather than first popping all the way out.
+    this.t = (1 - this.exposure) * this.dur;
     w.events.banditHide(this);
   }
 

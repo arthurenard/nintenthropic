@@ -6,6 +6,7 @@ import {
   landingMils,
   rangeAt,
   rangeMarkMils,
+  rangeUnderDot,
   ROUND,
   roundAt,
   sightFrame,
@@ -116,5 +117,28 @@ describe("the round in the world", () => {
   it("uses the game's gravity, gentler than the Earth's, as the design's drop needs", () => {
     expect(ROUND.g).toBeGreaterThan(2);
     expect(ROUND.g).toBeLessThan(9.81);
+  });
+});
+
+describe("Relaxed's holdover dot", () => {
+  // A man 950 m off on a dam; above him the slope behind at 1,300 m, below him the dam's crest a few metres short.
+  const dir = { x: 0, y: -0.06, z: -1 };
+  const man = 950;
+  const onHim = holdMils(man);
+  const valley = (at: { right: number; down: number }) => (Math.abs(at.down - onHim) <= 1 ? man : at.down > onHim ? man - 15 : 1300);
+
+  it("is worked out for where its own line lands, not for the hill behind the reticle", () => {
+    // Held over him so the round lands on him: the reticle rests on the slope behind.
+    expect(valley({ right: 0, down: 0 })).toBe(1300);
+    const settled = rangeUnderDot(1300, dir, 0, valley);
+    expect(settled).toBe(man);
+    expect(landingMils(settled!, dir, 0).down).toBeCloseTo(onHim, 6);
+  });
+
+  it("stays as the rangefinder has it when the reticle is on what the dot falls on", () => {
+    expect(rangeUnderDot(300, dir, 3, () => 300)).toBe(300);
+    expect(rangeUnderDot(null, dir, 3, () => 300)).toBeNull();
+    // A line into the sky keeps the last range it had.
+    expect(rangeUnderDot(700, dir, 3, () => null)).toBe(700);
   });
 });

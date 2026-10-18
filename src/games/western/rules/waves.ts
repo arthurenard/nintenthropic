@@ -81,6 +81,9 @@ export function reachFor(wave: number): number {
   return Number.POSITIVE_INFINITY;
 }
 
+/** The waves past the sixth, in turn: the gang is not running out. */
+const ONWARD = ["They keep coming.", "Nobody told them to stop.", "The gang has cousins."] as const;
+
 function subtitleFor(wave: number): string {
   switch (wave) {
     case 1:
@@ -96,7 +99,7 @@ function subtitleFor(wave: number): string {
     case 6:
       return "Iron plates. Aim for the head.";
     default:
-      return isBossWave(wave) ? "Black Jack is back." : "They keep coming.";
+      return isBossWave(wave) ? "Black Jack is back." : (ONWARD[(wave - 7) % ONWARD.length] as string);
   }
 }
 

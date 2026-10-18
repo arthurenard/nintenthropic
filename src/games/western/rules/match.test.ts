@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Bandit } from "./bandit";
-import type { Cover } from "./types";
+import type { V3 } from "../../../engine/rules/raymath";
+import type { Cover, Role } from "./types";
 import { buildQueue, Match, pickBossCovers, type StartOptions } from "./match";
 import { mulberry32 } from "../../../engine/rules/rng";
 import { Recorder, testCovers } from "./testkit";
-import { INTERMISSION, WAVE_INTRO } from "./tuning";
+import { DIFFICULTY, INTERMISSION, WAVE_INTRO } from "./tuning";
 import { waveSpec } from "./waves";
 
 const DT = 1 / 60;
@@ -274,7 +275,45 @@ describe("dynamite", () => {
     // His own stick, far from you, does not hurt you.
     expect(hits.length === 0 || rec.count("dynamiteExplode") > hits.length).toBe(true);
   });
+
+  it("a stick in the air when you fall lands and goes off, and changes nothing after", () => {
+    const { m, rec } = makeMatch(13, { wave: 4 });
+    m.health.immortal = true;
+    run(m, 60, () => {
+      if (m.phase !== "dead" && m.sticks.some((s) => s.airborne && s.age > 0.2)) fall(m);
+    });
+    expect(m.phase).toBe("dead");
+    const fellAt = rec.log.findIndex((e) => e.name === "playerDeath");
+    const after = rec.log.slice(fellAt);
+    // It did not hang in the air: it went off, over the fall...
+    expect(after.some((e) => e.name === "dynamiteExplode")).toBe(true);
+    expect(m.sticks.every((s) => s.state === "exploded")).toBe(true);
+    // ...as a picture only: no one else went down and the score stood still.
+    expect(after.some((e) => e.name === "banditDeath" || e.name === "score" || e.name === "playerHit")).toBe(false);
+  });
+
+  it("the results put out a stick still burning, without a bang", () => {
+    const { m, rec } = makeMatch(13, { wave: 4 });
+    m.health.immortal = true;
+    let snuffed = -1;
+    run(m, 10, () => {
+      if (m.phase !== "dead" && m.sticks.some((s) => s.airborne && s.age > 0.2)) {
+        fall(m);
+        snuffed = m.snuffSticks();
+      }
+    });
+    expect(snuffed).toBeGreaterThanOrEqual(1);
+    expect(m.sticks.every((s) => s.state === "exploded")).toBe(true);
+    const fellAt = rec.log.findIndex((e) => e.name === "playerDeath");
+    expect(rec.log.slice(fellAt).some((e) => e.name === "dynamiteExplode")).toBe(false);
+  });
 });
+
+/** The player falls now, to a bandit's bullet. */
+function fall(m: Match): void {
+  m.health.immortal = false;
+  (m as unknown as { damagePlayer(amount: number, from: V3, source: "bullet", role: Role, cover: Cover | null): void }).damagePlayer(1000, m.eye, "bullet", "gunman", null);
+}
 
 describe("townsfolk", () => {
   it("appear during a wave, and shooting one costs 200 and Clean Hands", () => {
@@ -395,6 +434,48 @@ describe("secrets through the match", () => {
     const death = rec.log.find((e) => e.name === "banditDeath");
     expect((death?.args[2] as { labels: string[] }).labels).toContain("Quick Draw");
     expect(m.phase).toBe("combat");
+  });
+
+  it("shot in the back on his ten paces, the duelist is no Quick Draw", () => {
+    const { m, rec } = makeMatch(20, { duel: true });
+    run(m, 2);
+    const d = m.bandits[0] as Bandit;
+    expect(d.state).toBe("walking");
+    m.trigger();
+    m.resolveShot({ kind: "bandit", bandit: d, part: "head" });
+    const death = rec.last("banditDeath");
+    expect((death?.args[2] as { labels: string[] }).labels).toEqual(["Headshot"]);
+  });
+
+  it("the duel's walk and standoff are not counted toward the gang's boldness", () => {
+    const { m, rec } = makeMatch(20, { duel: true });
+    m.health.immortal = true;
+    let combatAt = -1;
+    run(m, 30, () => {
+      const d = m.bandits[0] as Bandit;
+      if (d.alive && rec.count("duelBell") > 0) {
+        m.trigger();
+        m.resolveShot({ kind: "bandit", bandit: d, part: "head" });
+      }
+      if (combatAt < 0 && m.phase === "combat") combatAt = m.time;
+    });
+    expect(combatAt).toBeGreaterThan(5);
+    // Thirty seconds in all, but under the boldness clock's 25 s of fighting.
+    expect(m.time - combatAt).toBeLessThan(DIFFICULTY.standard.boldAfter);
+    expect(m.boldness()).toBe(1);
+  });
+
+  it("rung for again while the preacher is at the door, he does not come out twice", () => {
+    const { m } = makeMatch(21);
+    const doors = testCovers()[0] as Cover;
+    const first = m.spawnPreacher(doors);
+    run(m, 1);
+    expect(m.spawnPreacher(doors)).toBe(first);
+    expect(m.townsfolk.filter((p) => p.role === "preacher")).toHaveLength(1);
+    // Once he has gone back in, the next three tolls bring him out again.
+    run(m, 8);
+    expect(first.state).toBe("gone");
+    expect(m.spawnPreacher(doors)).not.toBe(first);
   });
 
   it("the duelist walks out from his cover to the town's mark in the street", () => {
