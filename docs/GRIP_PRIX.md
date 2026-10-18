@@ -9,7 +9,7 @@ one big screen in split screen, or both.
 
 It is the second kind of game in Super Claude Bros. The four shooting games aim
 a finger pistol; Grip Prix holds a wheel. It lives on its own page, `race.html`,
-and the arcade lists it under its own heading, Racing.
+and has its own tile on the landing, beside Finger Guns.
 
 Nothing here is borrowed. The karts, drivers, items, tracks and names are
 Grip Prix's own (no plumbers, no shells, no question-mark boxes).
@@ -165,7 +165,7 @@ The camera picture never leaves the device. What goes over the network is
 each player's steering, a few bytes sixty times a second, and the race as the
 host runs it.
 
-## Parts and owners
+## Parts
 
 Everything is under `src/kart/`. Each part is built against
 `src/kart/contract.ts` and nothing else of another part's.
@@ -178,7 +178,7 @@ Everything is under `src/kart/`. Each part is built against
 | Net | `net/` | `hostSession`, `joinSession`, `soloSession` → `Session`; transports (PeerJS WebRTC, BroadcastChannel, in-memory). |
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
-| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium; the arcade's Racing heading. |
+| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
 | Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Super Claude Bros. sound. |
 
 ### Coordinates
@@ -198,15 +198,14 @@ unordered things: the same setup and inputs replay the same race on the same
 device. Devices need not agree bit for bit — the host's race is the truth and
 guests only predict their own karts between its snapshots.
 
-Starting numbers (tune by driving; keep them in one `tuning.ts`):
+The numbers (all in `sim/tuning.ts`):
 
 - **Speed.** Top 24 m/s on the road, ~90% of it in 3 s. Off the road (more
   than half the width from the centre) top speed falls to 11 m/s with drag.
   A barrier stands 6 m beyond each edge: hitting it kills the speed into it,
   loses 30% of the rest, and makes a `wall` event. Brushing it (under 3 m/s
-  into it) wears 3 m/s off the speed each second (it was 5% of the speed a
-  tick, which had a kart on the outside of a bend crawling in a second).
-  Nose against it and nearly stopped, the wheel turns the kart as it would at
+  into it) wears 3 m/s off the speed each second, so a kart on the outside
+  of a bend is slowed, not stopped. Nose against it and nearly stopped, the wheel turns the kart as it would at
   4 m/s, so a kart that met it head-on is never wedged.
 - **Turning.** Yaw rate up to ~2.2 rad/s, rising with speed from nothing at a
   standstill to full by 6 m/s, a little less at top speed. Grip pulls the
@@ -224,8 +223,8 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
   rising from 0 to 1 in the last second before Go (while the lights say 1)
   gives the start boost; throttle held since before 1.2 s floods the engine
   (no drive for 0.6 s after Go). Bots get a start boost by skill. (The window
-  was 0.6 s: hands closed as the 1 came up reached the sim about 0.8 s before
-  Go, after the fist's 0.12 s hold and the camera, and missed it.)
+  is a whole second because hands closed as the 1 comes up reach the sim about
+  0.8 s before Go, after the fist's 0.12 s hold and the camera.)
 - **Karts touch.** Circles of radius 1.1 m push apart, the faster one
   shoving harder; a `bump` event.
 - **Item boxes.** A row of five across the road at each of the track's
@@ -388,8 +387,9 @@ only those karts' physics against the world as it is.
 ## Render (`src/kart/render/`)
 
 Bright, clean, low-poly toys in strong sunlight: flat-shaded karts, soft
-gradients, saturated but not garish. Built in code (no downloaded art yet);
-each model behind a small factory, so a Blender-made glTF can replace it.
+gradients, saturated but not garish. Every model is built in code behind a
+small factory, and the Blender-made glTF from `art/kart/` replaces it where
+that file exists (`render/art.ts`).
 
 - **The world** from `TrackGeometry`: the road ribbon (with the height),
   kerbs striped on the outside of tight bends, a chequered start line under
@@ -453,8 +453,6 @@ a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels
   per player. `trackrace.mjs`: the tracker beside a race (`e2e/trackrace.html`), 1 to 4 players each beside as many
   views, before and after, alternating rounds (`--rounds n`), `--soft` on a software GPU. Their pictures: a hand photo
   per player, or two fists per player (`e2e/crowd.js`, `?players=N`).
-- A worktree whose `node_modules` is a link needs a Vite config that adds the real `node_modules` to `server.fs.allow`,
-  or Three's Draco decoder is refused (403) and every Blender model falls back to its code-built stand-in.
 
 **What the numbers said.** On this machine a frame is limited by the number of GL calls, not by triangles or pixels:
 the main thread sits in `uniformMatrix4fv` and the draw calls waiting for the GPU process (a quarter to a half of
@@ -643,7 +641,7 @@ the footnote says which tier Auto uses here.
 3D podium after a Grand Prix. What it still does is 3D for the driver picker and the lobby's portraits (the karts' and
 drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
 
-**Next.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
+**Not done yet.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
 tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
@@ -659,12 +657,12 @@ tight type, springy motion; a white pill is the one main action of a screen;
    calm) with a slow drift, the Grip Prix wordmark (heavy italic, a chequered
    strip, speed lines) and a glass menu on the left: Host a Race (the white
    pill), the race code field and its Join a Race button in one capsule,
-   Practice; "Up to 4 players" under it. Until the art is drawn, or where it is
-   not fetched, the page's own meadow and road stand in. A phone that came with
+   Practice; "Up to 4 players" under it. Where the art is missing or not
+   fetched, the page's own meadow and road stand in. A phone that came with
    a `?join=` link does not fetch the art at all (it is on its way to a room).
    The back link goes to the Super Claude Bros. landing (`./`). `race.html`
    carries `assets/kart/icon-180.png` as its icon and Apple touch icon.
-2. **You** (`you.ts`). One calm card: your name (a friendly default), how you
+2. **Who's Driving?** (`you.ts`). One calm card: your name (a friendly default), how you
    drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and
    Players on This Camera (1 to 4, each with a name). Remembered.
 3. **Choose Your Driver** (`driver.ts`, `driverStats.ts`, `render/stage.ts`).
@@ -701,7 +699,7 @@ tight type, springy motion; a white pill is the one main action of a screen;
    each friend still to come ("Join with code ABCD"). On the right, the race:
    Single Race or Grand Prix as a large segmented control; for a single race a
    carousel of postcards, one for each track, snapping, with its name and cup
-   (`assets/kart/tracks/<id>.webp`, 960 x 540; until one is drawn the track's
+   (`assets/kart/tracks/<id>.webp`, 960 x 540; where one is missing the track's
    own outline from `TrackGeometry`, in white over its world's colours,
    stands in: `trackArt.ts`); the screen stands on the chosen track's postcard
    (or the chosen cup's first), blurred, dimmed and veiled, crossfading when the
@@ -757,9 +755,9 @@ each with the way back as a button. A guest who has heard nothing from the
 host for 2.5 s (a ping goes every second) sees "Waiting for <host>" over the
 race instead of a world frozen without a word (`net/guest.ts` `QUIET_MS`).
 
-The arcade (`index.html`) gains a heading per kind of game: **Shooting**
-(the four) and **Racing** (Grip Prix). A `GameEntry` may say `page:
-"race.html"`; its Play opens that page.
+The landing (`index.html`) gives Grip Prix a tile of its own beside Finger
+Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
+`GameEntry` with `page: "race.html"` and no `create`.
 
 ## Tests
 
@@ -781,7 +779,7 @@ The arcade (`index.html`) gains a heading per kind of game: **Shooting**
   timings are `tools/perf/` (not run by CI).
 - End to end (Playwright, `?net=local`, muted): a host and two guests in tabs
   of one browser join by code, drive by keyboard and finish a one-lap race;
-  practice against bots; the arcade's Racing heading opens the page.
+  practice against bots; the landing's Race opens the page.
 
 ## The couch: four friends, one big screen
 
@@ -848,14 +846,8 @@ front of them (or a laptop), and the TV is the host's screen.
   and its mirror, with what turns looked at as it sweeps, and every steep
   surface (a wall, a hull's side, a trunk) walked over a third of a metre at
   a time, so a solid whose roof is above 5 m and whose floor is below the
-  road is caught by its sides: Harbour Lights' two ships stood across the
-  start straight and the far straight that way (their sterns on the road,
-  the karts driving through the hull), a palm tree stood in the middle of a
-  finger of the palm island, and the meadow's pond had its reeds on the
-  verge, none of which a surface seen from above could show. The ships are
-  now moored alongside the quay, in the water (`turn` 0, 115 and 120 m out),
-  the pond is a little smaller (0.9) and centred in its hairpin, and a dozen
-  landmarks moved a few metres:
+  road is caught by its sides (a ship's hull across a straight, which a
+  surface seen from above would not show):
   `src/kart/render/world/corridor.test.ts` (the code-built world, and the
   lower quality tiers' ground and scenery) and `corridor.art.test.ts` (the
   Blender world: `nodeArt.ts` decodes the Draco files in Node and files them
@@ -863,8 +855,8 @@ front of them (or a laptop), and the TV is the host's screen.
   `CORRIDOR_REPORT=1` prints how far each offender must move. The chase
   camera is held to the same margin (`cameraSpace.ts`): it slides back toward
   the road in a bend, rises over rising ground and stays under a roof.
-- **The duck** (`duck`): every Super Claude Bros. game hides a rubber duck.
-  Every track has one somewhere off the racing line.
+- **The duck** (`duck`): as in three of the shooting games, a rubber duck
+  hides on every track, somewhere off the racing line.
 - **Bank** (`bank`): the road leans into its bends (for the picture).
 
 ### What each theme can build
@@ -931,6 +923,6 @@ seen from above — the hand you play with. The road runs up and down every fing
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
 another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
-minimap is a hand. The duck sunbathes on a towel in the middle of the palm.
+minimap is a hand. The duck sunbathes, in sunglasses, in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).

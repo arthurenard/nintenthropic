@@ -2,7 +2,7 @@
   "name": "handy",
   "private": true,
   "version": "0.3.0",
-  "description": "An arcade you play with your hand, in your browser.",
+  "description": "Super Claude Bros.: games you play with your hands in the browser, four finger-gun shooters and a kart racer for up to four.",
   "type": "module",
   "scripts": {
     "dev": "vite",

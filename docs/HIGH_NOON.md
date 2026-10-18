@@ -1,6 +1,6 @@
 # High Noon — game design
 
-The flagship of the web-native Super Claude Bros. A realistic western gunfight
+The first game of Super Claude Bros. A realistic western gunfight
 you play with a finger pistol: bandits take cover in a sun-baked town, lean out,
 aim and fire back, and you survive wave after wave. It must look and feel like
 something Apple would put on stage — see [DESIGN.md](DESIGN.md) for the
@@ -207,8 +207,7 @@ from Relaxed's numbers to Standard's. A player who keeps shooting rarely feels
 it; one who stops is overrun, as on Standard, only later.
 
 The balance tests play the same simulated players over both, 24 games each
-(`rules/difficulty.test.ts`; Standard's own tests in `rules/balance.test.ts`
-are untouched and still pass unchanged):
+(`rules/difficulty.test.ts`; Standard's own are in `rules/balance.test.ts`):
 
 | Simulated player | Standard: falls on wave (median) | Relaxed |
 | --- | --- | --- |
@@ -300,8 +299,9 @@ Delightful, discoverable, never in the way. The results card counts "Secrets
    his paces, he goes down all the same, and the hint line says it was "Not
    very sporting."
 
-Also: typing the Konami code on the title screen unlocks the **Golden Revolver**
-(a gold cylinder in the HUD and golden muzzle flashes) for the session.
+Also: typing the Konami code on the landing or in the arcade unlocks the
+**Golden Revolver** (a gold cylinder in the HUD and golden muzzle flashes) for
+the visit.
 
 ## Feel
 

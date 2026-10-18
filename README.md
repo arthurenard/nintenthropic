@@ -4,6 +4,8 @@
 your thumb to fire. It runs in your browser, sees your hand through your
 webcam, and never sends the picture anywhere.
 
+**Play it at https://www.arthurenard.me/super-claude-bros/**
+
 ![Dust Creek at golden hour](public/assets/western/poster.webp)
 
 ## The games
@@ -31,21 +33,11 @@ Prix](#play-grip-prix)).
 
 ## Play
 
-Super Claude Bros. is a website: open it in a current browser on a computer with
-a webcam, choose **Play** on the Finger Guns tile (or **Race** for Grip Prix),
-choose a game in the arcade's row, choose **Play**, and allow the camera. A link
-to a game (`…/#high-noon`) opens the arcade on it, and `…/#arcade` opens the
-arcade on the game you chose last; `./` is the landing, with the two side by
-side.
-
-To run it on your own machine:
-
-```bash
-npm install
-npm run dev
-```
-
-Then open http://127.0.0.1:5173.
+Open the site in a current browser on a computer with a webcam, choose
+**Play** on the Finger Guns tile (or **Race** for Grip Prix), choose a game in
+the arcade's row, choose **Play**, and allow the camera. A link to a game
+(`…/#high-noon`) opens the arcade on it, and `…/#finger-guns` on the game you
+chose last. To run it on your own machine, see [Development](#development).
 
 **How to aim.** Hold your hand like a pistol; the crosshair follows your index
 fingertip. Fold your thumb down to fire, raise it to cock again. If your
@@ -68,8 +60,8 @@ The eye adapts to you: it follows how far your eyes read open, learns how far
 yours shut, and keeps the scope while your pointing hand hides your face (until
 you open the eye, or ten seconds). A small eye beside the magazine says whether
 your face is seen and fills as the eye closes; Settings' **Eye Test** shows
-your own picture and each eye's reading live. Men a few pixels tall at 300 m
-are marked in the first two stages (and on Relaxed) so you know where to look.
+your own picture and each eye's reading live. With Aim Assist on, men a few
+pixels tall at 300 m are marked so you know where to look.
 
 **Before every game, a quick aim check.** You warm up on the game's own
 targets (bottles along the street in High Noon, mason jars in Dead of Night,
@@ -96,15 +88,16 @@ and tap with two fingers to reload or vent.
 **Settings** — the gear in the corner, or Settings on the pause sheet — has
 the difficulty (Relaxed is slower and gentler, for a first evening or a tired
 arm), the volume, a larger or high-contrast crosshair, how steady the aim is
-held, which camera to use, whether the camera's picture stays in the corner in
-play, Reduce Motion and Reduce Flashing, and, for Overwatch Ridge, Close One Eye
-to Scope, whether the Scope button holds or toggles, and an Eye Test. Everything is
-remembered in your browser; Forget Saved Aim and Reset Everything clear it.
+held, Aim Assist, which camera to use, whether the camera's picture stays in
+the corner in play, Reduce Motion and Reduce Flashing, and, for Overwatch
+Ridge, Close One Eye to Scope, whether the Scope button holds or toggles, and
+an Eye Test. Everything is remembered in your browser; Forget Saved Aim and
+Reset Everything clear it.
 
-**Records.** Your best score is kept for each game and difficulty, and apart for your
-hand and for a mouse or touch screen (which is far easier to aim). The arcade
-shows the one to beat under Play; the results say when you beat it, and by how
-much.
+**Records.** Your best score is kept for each game and difficulty, and apart
+for your hand and for a mouse or touch screen (which is far easier to aim).
+The arcade shows the one to beat under Play; the results say when you beat
+it, and by how much.
 
 Super Claude Bros. can be installed as an app from the browser (Install Super
 Claude Bros., or Add to Dock / Add to Home Screen); it opens full screen.
@@ -122,9 +115,9 @@ flip the tracks with Mirror Mode.
 npm run play
 ```
 
-That starts the site and opens http://localhost:5191/race.html. Choose
-**Practice** to race the bots alone, or **Host a Race** to open a room. Over
-plain `localhost` the camera needs no certificate.
+That starts the site and opens http://127.0.0.1:5191/race.html. Choose
+**Practice** to race the bots alone, or **Host a Race** to open a room. On
+this computer's own address the camera needs no certificate.
 
 **With friends' phones** it is built for a sofa: the computer on the TV hosts
 the race, and each friend's phone (or laptop), propped up in front of them, is
@@ -157,9 +150,9 @@ introduction goes through it; no race data does). Friends in other places can
 join with the code too, though with no relay a strict network may refuse. Press
 **F** in the race for full screen on the TV, and **M** to turn sound off and on
 (the same preference as the arcade's; Music and Effects have their own sliders
-in the pause sheet). Keyboards and gamepads drive as well:
-choose them on the "Who's Driving?" screen. The camera picture never leaves
-the device; only each player's steering goes over the network.
+in the pause sheet). Keyboards and gamepads drive as well: choose them on the
+"Who's Driving?" screen. The camera picture never leaves the device; only
+each player's steering goes over the network.
 
 ## Privacy
 
@@ -171,8 +164,9 @@ through the scope); only the two eyes' blink scores are kept, only in that
 game (and in Settings' Eye Test, which shows your own picture on your own
 screen), and they never leave the device either. To fit the scope to you, two
 numbers - how far your eye reads open and shut - are remembered in your
-browser. Super Claude Bros. has no server and no
-analytics; the only files it downloads are its own.
+browser. Super Claude Bros. has no server of its own and no analytics; the
+only files it downloads are its own, and Grip Prix's rooms meet through the
+public PeerJS broker (see above).
 
 ## Requirements
 
@@ -188,30 +182,34 @@ three games never load it.
 
 ```bash
 npm install
-npm run dev          # the site, with hot reload
-npm run play         # Grip Prix on this computer, http://localhost:5191/race.html
+npm run dev          # the site, with hot reload, at http://127.0.0.1:5173
+npm run play         # Grip Prix on this computer, http://127.0.0.1:5191/race.html
 npm run party        # Grip Prix over HTTPS on your network, for phones (see above)
 npm run typecheck
-npx vitest run       # unit tests
-npx playwright test  # end to end in headless Chrome (muted), with a fake camera
+npm test             # unit tests (Vitest)
+npm run e2e          # end to end in headless Chrome (muted), with a fake camera
 npm run build        # the static site, into dist/
 ```
 
-- `src/app/`, `src/ui/`: the page — screens, the glass HUD, the aim check.
+- `index.html`, `src/app/`, `src/ui/`: the arcade's page — screens, the glass
+  HUD, the aim check.
 - `src/tracking/`, `src/input/`, `src/calibration/`: the camera, hand tracking
   (in a worker), the trigger and the aim map.
 - `src/engine/`: the game host; `src/engine/types.ts` is the contract every
   game is built against.
 - `src/audio/`: the Web Audio engine and every sound, synthesised in code.
 - `src/games/western/`, `night/`, `orbit/`, `ridge/`: High Noon, Dead of
-  Night, Orbital Decay and Overwatch Ridge (each with a `dev.html` the dev
-  server serves: the game alone, the mouse as the gun).
-- `art/western/`, `night/`, `orbit/`, `ridge/`: the Blender scripts that build
-  each game's world and people. Everything under `public/assets/` is made by
-  these scripts — there are no downloaded assets. Name stages after `--` to
-  run some (`-- bake export`); the folders' READMEs (all but `western`) list
-  them, with `--quick` for a rough pass. Orbital Decay and Overwatch Ridge take
-  the better part of an hour:
+  Night, Orbital Decay and Overwatch Ridge (each with a `dev.html`: the game
+  alone in the `src/dev/` harness, the mouse as the gun).
+- `race.html`, `src/kart/`: Grip Prix — its sim, network, wheel and renderer.
+- `e2e/`: the Playwright tests; `tools/`: icons, benchmarks, track postcards and the trailer.
+- `art/western/`, `night/`, `orbit/`, `ridge/`, `kart/`: the Blender scripts
+  that build each game's world and people. Everything under `public/assets/`
+  is made by them or captured from the games themselves — there are no
+  downloaded assets. Name stages after `--` to run some (`-- bake export`);
+  the folders' READMEs (all but `western`) list them, with `--quick` for a
+  rough pass. Orbital Decay and Overwatch Ridge take the better part of an
+  hour:
 
   ```bash
   B=/Applications/Blender.app/Contents/MacOS/Blender
@@ -224,17 +222,20 @@ npm run build        # the static site, into dist/
   ```
 
 CI runs the type check, the unit tests, the build and the end-to-end tests on
-every push. Once the repository is public, every push to `main` also publishes
-the site on GitHub Pages (enable it under Settings → Pages → GitHub Actions).
+every push to `main` and every pull request. The site is the static build in
+`dist/`, deployed on Vercel at the address above; its paths are relative, so
+the same build works at a domain's root or under a path.
 
 The design language is in [docs/DESIGN.md](docs/DESIGN.md), the architecture
 and its contracts in [docs/WEB_ARCHITECTURE.md](docs/WEB_ARCHITECTURE.md), and
-the games' designs in [docs/HIGH_NOON.md](docs/HIGH_NOON.md),
-[docs/DEAD_OF_NIGHT.md](docs/DEAD_OF_NIGHT.md),
-[docs/ORBITAL_DECAY.md](docs/ORBITAL_DECAY.md) and
-[docs/OVERWATCH_RIDGE.md](docs/OVERWATCH_RIDGE.md). The answer to the
-September 2026 product review, item by item, is in
-[docs/REVIEW_RESPONSE.md](docs/REVIEW_RESPONSE.md).
+each game's design beside them: [High Noon](docs/HIGH_NOON.md), [Dead of
+Night](docs/DEAD_OF_NIGHT.md), [Orbital Decay](docs/ORBITAL_DECAY.md),
+[Overwatch Ridge](docs/OVERWATCH_RIDGE.md), [Grip Prix](docs/GRIP_PRIX.md).
 
-Super Claude Bros. (first Handy, then Handheld) began as a Python desktop app;
-that version is kept in git under the tag `python-final`.
+Super Claude Bros. was called Handy, then Handheld, and began as a Python
+desktop app; that version is kept in git under the tag `python-final`.
+
+## Licence
+
+The code is MIT ([LICENSE](LICENSE)). MediaPipe's model bundles in
+`public/models/` are Apache-2.0, by Google ([public/models/README.md](public/models/README.md)).

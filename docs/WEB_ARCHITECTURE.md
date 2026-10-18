@@ -1,12 +1,13 @@
-# Super Claude Bros. on the web — architecture and contracts
+# Super Claude Bros. — architecture and contracts
 
 Super Claude Bros. is a static website. Everything — hand tracking, the games,
 the 3D rendering, the sound — runs in the player's browser. There is no server
 beyond whatever hosts the files, and the camera picture never leaves the device.
 
-This document is the contract the parts are built against. The interface rules
-are in [DESIGN.md](DESIGN.md); the first game's design is in
-[HIGH_NOON.md](HIGH_NOON.md).
+This document is the contract the shooting games and the arcade's page are
+built against. The interface rules are in [DESIGN.md](DESIGN.md); the first
+game's design is in [HIGH_NOON.md](HIGH_NOON.md); Grip Prix, which has its own
+parts under `src/kart/`, is described in [GRIP_PRIX.md](GRIP_PRIX.md).
 
 ## Principles
 
@@ -33,15 +34,16 @@ are in [DESIGN.md](DESIGN.md); the first game's design is in
 | Sound | Web Audio, every sound synthesised in TypeScript at load |
 | Unit tests | Vitest (`src/**/*.test.ts`) |
 | End-to-end | Playwright driving the installed Google Chrome with a fake camera and `--mute-audio` |
-| Hosting | Any static host (`npm run build` → `dist/`); a GitHub Pages workflow |
+| Hosting | Any static host (`npm run build` → `dist/`); the public site is on Vercel |
 
 ## Repository layout
 
 ```
-index.html            the page
+index.html            the arcade's page (the landing and the four shooters)
+race.html             Grip Prix's page
 src/
-  main.ts             boots the app
-  app/                screens: landing, calibration, play, pause, results, share
+  main.ts             boots the arcade
+  app/                screens: landing, arcade, aim check, play, pause, results, share
   ui/                 design-language components and styles (from DESIGN.md)
   engine/             the game host: renderer, loop, dynamic resolution, asset loading
     types.ts          THE CONTRACT between app, input, audio and games (below)
@@ -56,15 +58,19 @@ src/
   games/
     index.ts          the games, as the arcade shows them
     western/          High Noon
+    night/            Dead of Night
+    orbit/            Orbital Decay
+    ridge/            Overwatch Ridge
     range/            the Test Range (dev and test builds only: ?range=1)
+  kart/               Grip Prix (see GRIP_PRIX.md)
 public/
   models/             MediaPipe .task bundles
   mediapipe/          tasks-vision WebAssembly files (copied from node_modules
                       whenever Vite starts; not committed)
-  assets/western/     town.glb, sky.webp, characters, props (exported by art/)
-art/
-  western/            Blender build scripts: `blender -b -P art/western/build_town.py`
+  assets/<game>/      each game's models, skies and posters (exported by art/)
+art/<game>/           the Blender scripts that build them
 e2e/                  Playwright tests and fixtures
+tools/                the app icon, performance benchmarks, track postcards, the trailer
 ```
 
 Three's Draco decoder needs no copy under `public/`: since r186 `DRACOLoader`
@@ -72,8 +78,8 @@ names its decoder files with `new URL(..., import.meta.url)`, which Vite serves
 from `node_modules` in dev and emits, hashed, into the build. The asset loader
 uses its glTF-only build.
 
-The Python engine (`handy/`, `tests/`, `pyproject.toml`) is retired once the web
-version ships; it stays in git history under the tag `python-final`.
+The project began as a Python desktop app; none of that code is in the tree,
+and it is kept in git history under the tag `python-final`.
 
 ## Runtime architecture
 
@@ -224,8 +230,8 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   not yet begun - a delayed call, a far shot on its way, an echo not yet
   back - are cancelled; `Sound.pause()` calls it), `CalibrationStage.begin()`
   (above).
-- `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
-  the desktop: a wave, integrity, wind), wave titles, damage direction, hit
+- `HudSink` — how a game reports score, readouts (label/value/meter/tone: a
+  wave, integrity, wind), wave titles, damage direction, hit
   markers, secrets, and the end of the game (`GameOver` with stats), and its
   weapon in the bottom-right corner: `ammo(left, capacity, reloading, style)`
   draws a revolver's cylinder (the default) or, with `{ kind: "magazine",
@@ -257,12 +263,12 @@ own, and keep in your folder only what is truly your game's.
 
 ### A new game, step by step
 
-1. **Its entry** in `src/games/index.ts` is already there for the coming
-   games: fill in `about`, point `poster` at your 16:9 poster under
+1. **Its entry** in `src/games/index.ts`: an `id`, `title`, `blurb` and
+   `about`, a `poster` pointing at your 16:9 poster under
    `public/assets/<folder>/` (until it exists your `backdrop` stands in, so
-   tune it to your game's light), set `uses` (`scope`, `eye`) and `stage`
-   (the shape your art holds), and add `create` when it can be played - the
-   arcade then offers Play instead of Coming Soon.
+   tune it to your game's light), `uses` (`scope`, `eye`) and `stage` (the
+   shape your art holds). Until it has `create` the arcade shows it as Coming
+   Soon; with it, Play.
 2. **Its aim check** is its own `CalibrationStage`: targets spread over the
    corners, edges and centre of the view, in your world.
 3. **Its HUD** goes through `HudSink`: `score`, `readouts` (one small panel:
@@ -383,7 +389,7 @@ three shots.
   the shots taken.
 
 - **What is fitted.** An affine map from the fingertip's position in the
-  (mirrored) camera image to the viewport, as the desktop's shot setup did. The
+  (mirrored) camera image to the viewport. The
   hand position for each shot is the median of the thumb-up samples just before
   the fold, so the motion of firing does not move the aim.
 - **Learning.** With no saved aim for this camera: the first two shots at
@@ -423,9 +429,10 @@ three shots.
 ## What the browser keeps
 
 Everything is a convenience in `localStorage` (the Golden Revolver in
-`sessionStorage`, for the visit): versioned keys under `handy.`, JSON, every
-read checked and every write allowed to fail, so a window that stores nothing
-plays the same without remembering (`src/app/prefs.ts`).
+`sessionStorage`, for the visit): versioned keys under `handy.` (the
+project's first name), JSON, every read checked and every write allowed to
+fail, so a window that stores nothing plays the same without remembering
+(`src/app/prefs.ts`; Grip Prix keeps its own under `handy.kart.`).
 
 - `handy.settings.v1` — the Settings sheet: volume, difficulty, crosshair,
   Aim Steadiness (Steady unless chosen otherwise), Aim Assist (on unless turned
@@ -451,8 +458,12 @@ plays the same without remembering (`src/app/prefs.ts`).
   if it has gone.
 - `handy.scope.v1` — the Scope group of Settings: `{ eye, button }`, shown
   only while a game with a scope can be played.
+- `handy.eye.v1` — how far this player's eye reads open and shut, learned for
+  the scope (`src/input/scope.ts`).
 - `handy.game.v1` — the game chosen in the arcade (the address's
-  `#<game>` or `?game=<game>` wins over it).
+  `#<game>` or `?game=<game>` wins over it); `handy.space.v1` — the landing's
+  tile last gone through.
+- `handy.unlocks.v1` (in `sessionStorage`) — the golden weapon, for the visit.
 - `handy.muted.v1`, `handy.control.v1`,
   `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
 
@@ -532,8 +543,7 @@ the environment light for dynamic objects.
 
 - **Unit (Vitest):** the aim pipeline (filter, trigger, affine fit, the aim
   score), game rules (waves, health regeneration, scoring, bandit state
-  machines), HUD formatting, storage. The Python tests are the reference for
-  anything ported.
+  machines), HUD formatting, storage.
 - **Test builds** (`vite build --mode e2e`; never production) add hooks:
   `?input=script` swaps the camera and tracker for a scripted hand that drives
   the real aim pipeline, and `?fail=camera-denied|camera-busy|camera-missing|
@@ -546,5 +556,6 @@ the environment light for dynamic objects.
 - **End to end (Playwright, installed Chrome, `--mute-audio`):** landing →
   camera priming → aim check → High Noon → pause → results, with a fake camera
   (`--use-file-for-fake-video-capture`) showing a hand; and the whole flow with
-  the mouse. Screenshots of every state are part of the review.
+  the mouse. The tests save a screenshot of every state they reach, which CI
+  keeps with the report.
 - **Silence:** nothing a developer runs may play sound through the speakers.

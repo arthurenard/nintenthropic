@@ -35,7 +35,7 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests
-        run: npx vitest run
+        run: npm test
 
       - name: Build
         run: npm run build
@@ -46,7 +46,7 @@ jobs:
       # tracker to its CPU delegate, and the camera is Chrome's fake one
       # playing a still picture of a hand.
       - name: End to end
-        run: npx playwright test
+        run: npm run e2e
 
       - name: Keep the report, traces and screenshots
         if: ${{ !cancelled() }}

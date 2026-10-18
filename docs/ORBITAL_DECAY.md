@@ -1,6 +1,6 @@
 # Orbital Decay — game design
 
-The third game of the web-native Super Claude Bros. Four hundred kilometres up,
+The third game of Super Claude Bros. Four hundred kilometres up,
 in the glass cupola of a space station, as a cloud of wreckage from a satellite
 collision crosses your orbit. You have the station's point-defence laser and
 seven windows between you and the vacuum. It must look and feel like something
@@ -174,7 +174,7 @@ pane worn down over time. Keep the drone working: don't shoot it."
    Shoot it: "Lost and Found" — it bursts into floating tools.
 3. **The duck.** A yellow rubber duck drifts through the debris field. Shoot
    it: it spins away, and the line under the view reads "In space, no one can
-   hear you squeak." (Every game hides one duck.)
+   hear you squeak." (Dead of Night and Overwatch Ridge hide one too.)
 4. **The arm.** Shoot the robotic arm's hand: it waves back (every time).
 5. **The capsule.** A crew member peers out of the docked capsule's window.
    Shoot near the capsule: they pull down the shade.
@@ -286,10 +286,10 @@ downloaded.
 
 The cupola's windows, the planet at sunrise, a fragment glinting in the sun.
 
-### As delivered by the art pass (details in `art/orbit/README.md`)
+### As built (details in `art/orbit/README.md`)
 
-Nothing above is renamed or dropped; these are the conventions the
-contract left open, and a few additions.
+Nothing above is renamed or dropped; these fill in what the contract left
+open, with a few additions.
 
 - **Frame and light.** Vertical field of view 62° (`camera.player` extras
   `fov_deg`), pitch 20°, altitude 420 km, the limb about 11° above the view's
