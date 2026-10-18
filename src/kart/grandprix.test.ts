@@ -133,6 +133,28 @@ describe("a Grand Prix run", () => {
     expect(bob).toMatchObject({ key: "p2", player: null, points: 15 });
   });
 
+  it("gives the points a departed player's kart wins as a bot to their own row, even with a bot's name", () => {
+    // Ann has taken the name of a bot in the field.
+    const field = grid().map((r) => (r.name === "Ann" ? { ...r, name: "Pebble" } : r));
+    const run = GrandPrixRun.begin("acorn", field);
+    run.record(finish([4, 3, 0, 1, 2]), field);
+    run.leave([0, 2]);
+    run.advance();
+    const next = run.grid([]);
+    expect(next.every((r) => r.player === null)).toBe(true);
+    // Bob's kart and Ann's ("Pebble") come first and second; the bot Pebble last.
+    const id = (name: string, colour: string) => next.find((r) => r.name === name && r.colour === colour)!.id;
+    const ann = id("Pebble", "#FF453A");
+    const bob = id("Bob", "#30D158");
+    const pebble = id("Pebble", "#FF9F0A");
+    const others = next.map((r) => r.id).filter((k) => k !== ann && k !== bob && k !== pebble);
+    run.record(finish([bob, ann, ...others, pebble]), next);
+    const points = run.state().points;
+    expect(points.find((p) => p.key === "p2")).toMatchObject({ points: 15 + 15, place: 1 });
+    expect(points.find((p) => p.key === "p0")).toMatchObject({ points: 12 + 12, place: 2 });
+    expect(points.find((p) => p.key === "b:Pebble")).toMatchObject({ points: 10 + 6, place: 5 });
+  });
+
   it("takes a player's fresh details from the room (a new name) but keeps their row", () => {
     const run = GrandPrixRun.begin("acorn", grid());
     run.record(finish([3, 4, 0, 1, 2]), grid());

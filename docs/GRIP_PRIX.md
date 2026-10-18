@@ -109,7 +109,7 @@ their new places with a mark for who rose or fell (`app/standings.ts`). Bots
 keep their names, colours and drivers (`RacerSetup`) through the cup; the
 leader starts on pole. The cup runs on the settings it began with. A latecomer
 is turned away ("started"); a guest who leaves keeps their row and their kart
-races on as a bot.
+races on as a bot, winning points for that row.
 
 The **podium** (`render/podium.ts`, `createPodium(canvas)`, shown by
 `app/podium.ts`) is a 3D ceremony: the top three drivers in their karts on a
