@@ -185,7 +185,8 @@ export function bakedLit<M extends MeshStandardMaterial>(material: M, uniforms: 
   return material;
 }
 
-const patched = new WeakSet<Material>();
+/** The uniforms a patched material reads, by material: the latest it was given. */
+const patched = new WeakMap<Material, BakeUniforms>();
 
 /**
  * Lets a material that already has its own shader patches (the karts') read
@@ -193,15 +194,21 @@ const patched = new WeakSet<Material>();
  * tunnel goes into its shade. Not the occlusion: a kart stands a metre above
  * the road and is not hidden by the barrier beside it. The uniforms are the
  * material's own copy; `shareBake` copies a world's maps into them.
+ *
+ * The karts' material is one for every race, and every race has a renderer and
+ * uniforms of its own: patched once, it reads whichever uniforms it was given
+ * last when a renderer builds its shader (each builds its own), so the second
+ * race's karts go into the shade as the first's did.
  */
 export function addBakedSun<M extends MeshStandardMaterial>(material: M, uniforms: BakeUniforms): M {
-  if (patched.has(material)) return material;
-  patched.add(material);
+  const already = patched.has(material);
+  patched.set(material, uniforms);
+  if (already) return material;
   const before = material.onBeforeCompile.bind(material);
   const key = material.customProgramCacheKey.bind(material);
   material.onBeforeCompile = (shader, renderer) => {
     before(shader, renderer);
-    for (const [k, u] of Object.entries(uniforms)) shader.uniforms[k] = u;
+    for (const [k, u] of Object.entries(patched.get(material) ?? uniforms)) shader.uniforms[k] = u;
     shader.vertexShader = shader.vertexShader.replace("#include <common>", COMMON_VERTEX).replace("#include <project_vertex>", WORLD_POS);
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", COMMON_FRAGMENT).replace("#include <lights_fragment_begin>", LIGHTS_BEGIN);
   };

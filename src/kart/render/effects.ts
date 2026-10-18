@@ -131,6 +131,19 @@ class Sprites {
     col.needsUpdate = true;
     size.needsUpdate = true;
   }
+
+  /** Every particle gone (the next update hides them). */
+  clear(): void {
+    this.age.fill(1);
+    this.life.fill(1);
+  }
+
+  /** How many particles are alive. */
+  get live(): number {
+    let n = 0;
+    for (let i = 0; i < this.n; i++) if (this.age[i]! < this.life[i]!) n++;
+    return n;
+  }
 }
 
 
@@ -330,8 +343,15 @@ export class Effects {
 
   /** A glow for this frame only. */
   glowNow(x: number, y: number, z: number, size: number, r: number, g: number, b: number, a: number): void {
-    this.now.emit(x, y, z, 0, 0, 0, 0.03, size, size, [r, g, b, a], [r, g, b, a]);
+    // Dozens a frame (every lamp at night, every item's light): one colour reused, since emit copies it.
+    const c = this.glowColour;
+    c[0] = r;
+    c[1] = g;
+    c[2] = b;
+    c[3] = a;
+    this.now.emit(x, y, z, 0, 0, 0, 0.03, size, size, c, c);
   }
+  private readonly glowColour: [number, number, number, number] = [0, 0, 0, 0];
 
   /** One soft mote of a moving thing's trail. */
   trail(x: number, y: number, z: number, r: number, g: number, b: number, size = 0.4): void {
@@ -821,10 +841,18 @@ export class Effects {
     this.streaks.update(step);
   }
 
-  /** Forgets per-kart state (a new race). */
+  /** Forgets per-kart state and lets every particle go (a new race: the last one's smoke and confetti do not hang over the grid). */
   clear(): void {
     this.state.clear();
     this.streaks.clear();
+    this.add.clear();
+    this.norm.clear();
+    this.now.clear();
+  }
+
+  /** Particles alive, of the lasting kinds (light and smoke). */
+  get live(): number {
+    return this.add.live + this.norm.live;
   }
 
   dispose(): void {

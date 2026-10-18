@@ -2,7 +2,7 @@
  * The picture's side of Grip Prix's small delights, behind one door so the
  * renderer needs only a few lines for all of them:
  *
- *   - a `horn` puts a "Honk!" bubble over the kart in every viewport that sees it
+ *   - a `horn` puts a "Honk!" bubble over the kart in every viewport that sees it (the duck quacks, the robot beeps)
  *   - a `duck` sends the world's rubber duck off for a day (landmarks/duckFlight.ts)
  *   - a player's win on the Fun Fair sets off fireworks over the finish line
  */
@@ -10,9 +10,16 @@ import type { Group, PerspectiveCamera } from "three";
 import type { KartView, RaceEvent, RacerSetup } from "../contract";
 import type { TrackGeometry, TrackTheme } from "../track/geometry";
 import { Bubbles } from "./bubbles";
+import type { Species } from "./drivers";
 import { Fireworks } from "./fireworks";
+import { shownSpecies } from "./kartModel";
 import type { Rect } from "./layout";
 import { flyDuck, resetDuck } from "./world/landmarks/duckFlight";
+
+/** What a driver's horn says: Dabble quacks, Rivet beeps, everyone else honks. */
+export function honkWord(species: Species): string {
+  return species === "duck" ? "Quack!" : species === "robot" ? "Beep." : "Honk!";
+}
 
 export class RenderEggs {
   readonly bubbles: Bubbles;
@@ -54,7 +61,8 @@ export class RenderEggs {
   onEvent(e: RaceEvent, racers: readonly RacerSetup[], time: number): void {
     switch (e.type) {
       case "horn":
-        this.bubbles.say(e.kart, "Honk!", time);
+        // The bubble speaks for whoever is in the kart (the one the picture shows, for a racer who chose nobody).
+        this.bubbles.say(e.kart, honkWord(shownSpecies(racers.find((r) => r.id === e.kart) ?? { id: e.kart })), time);
         break;
       case "duck":
         flyDuck(time);

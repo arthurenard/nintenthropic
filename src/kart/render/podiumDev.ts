@@ -6,14 +6,14 @@
  *   &t=4          jump the clock ahead this many seconds (for a still picture)
  */
 import { loadKartArt } from "./art";
-import { createPodium } from "./podium";
+import { createPodium, podiumReady } from "./podium";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 // The modelled art first (what of it exists), as the game loads it before a race.
 loadKartArt("meadow").then(start, start);
 
-function start(): void {
+async function start(): Promise<void> {
   const podium = createPodium(canvas, { reduceMotion: params.get("calm") === "1" });
   podium.show([
     { name: "Kit", colour: "#FF453A" },
@@ -25,6 +25,8 @@ function start(): void {
   window.addEventListener("resize", fit);
   let last = performance.now();
   const ahead = Number(params.get("t") ?? 0);
+  // The ceremony waits for its shaders (podium.ts): jump ahead from its beginning.
+  await podiumReady(podium);
   for (let t = 0; t < ahead; t += 1 / 30) podium.frame(1 / 30);
   function loop(now: number): void {
     podium.frame((now - last) / 1000);

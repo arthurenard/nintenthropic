@@ -2,7 +2,7 @@
  * The minimap: the track's outline and a dot per kart in its colour. A kart a
  * player on this screen is driving has a larger dot with a white ring and
  * their place in it; the leader wears a small gold crown. Drawn on a small 2D
- * canvas every frame (a few hundred line segments and eight dots: far cheaper
+ * canvas every frame (an outline traced once and eight dots: far cheaper
  * than anything the 3D view does).
  *
  * North is +z, drawn up the screen, with +x to the left: that is the world as
@@ -50,10 +50,13 @@ export class Minimap {
   private start: [number, number, number, number] = [0, 0, 0, 1];
   /** Width over height of the outline's bounds: what the canvas should be shaped like. */
   aspect = 1;
+  private path: Path2D | null = null;
+  private pathKey = "";
 
   setTrack(track: TrackGeometry): void {
     const step = Math.max(1, Math.round(4 / track.spacing));
     this.points = [];
+    this.path = null;
     let minX = Infinity;
     let maxX = -Infinity;
     let minZ = Infinity;
@@ -73,6 +76,22 @@ export class Minimap {
     this.aspect = this.bw / this.bh;
     const s0 = track.at(0);
     this.start = [s0.x, s0.z, s0.tx, s0.tz];
+  }
+
+  /** The track's outline at a size, traced once and kept until the size or the track changes (the map is drawn every frame). */
+  private outline(w: number, h: number, pad: number): Path2D {
+    const key = `${w}x${h}:${pad}`;
+    if (this.path && this.pathKey === key) return this.path;
+    const path = new Path2D();
+    this.points.forEach((p, i) => {
+      const [x, y] = this.project(p[0], p[1], w, h, pad);
+      if (i === 0) path.moveTo(x, y);
+      else path.lineTo(x, y);
+    });
+    path.closePath();
+    this.path = path;
+    this.pathKey = key;
+    return path;
   }
 
   /** World (x, z) to canvas pixels for a canvas of `w` x `h`. */
@@ -99,23 +118,13 @@ export class Minimap {
     const pad = 18 * ui;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    const trace = () => {
-      ctx.beginPath();
-      this.points.forEach((p, i) => {
-        const [x, y] = this.project(p[0], p[1], w, h, pad);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.closePath();
-    };
-    trace();
+    const outline = this.outline(w, h, pad);
     ctx.strokeStyle = "rgba(0,0,0,0.55)";
     ctx.lineWidth = 9 * ui;
-    ctx.stroke();
-    trace();
+    ctx.stroke(outline);
     ctx.strokeStyle = "rgba(255,255,255,0.88)";
     ctx.lineWidth = 5 * ui;
-    ctx.stroke();
+    ctx.stroke(outline);
 
     // The start line.
     const [sx, sy] = this.project(this.start[0], this.start[1], w, h, pad);
