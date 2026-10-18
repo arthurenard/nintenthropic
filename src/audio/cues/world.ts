@@ -9,38 +9,10 @@
  */
 import { highpass, lowpass, svf } from "../dsp/filters";
 import { loopify, wrap } from "../dsp/master";
-import type { Rng } from "../dsp/rng";
 import { type Mono, adsr, normalize, shapeBy, wobble } from "../dsp/signal";
 import { addMetal, addMode, bandNoise, brown, click, decayInPlace, pink, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { addShard, bubble, burst, creak, knock, nWave, puff, saturate, scatter, thump, wanderTrack } from "./kit";
-
-/** A periodic gust curve over ``length`` samples: a few sines with whole cycles, so it loops exactly. */
-function gustCurve(n: number, length: number, rng: Rng, strength: number): Float32Array {
-  const parts = [1, 2, 3, 5].map((k) => ({ k, a: rng.range(0.3, 1) / k ** 0.6, ph: rng.range(0, 6.28) }));
-  // Evaluated every 32 samples and interpolated: a gust takes seconds, and
-  // four sines and a power per sample were the wind's single largest cost.
-  const step = 32;
-  const coarse = new Float32Array(Math.ceil(n / step) + 2);
-  let lo = Infinity, hi = -Infinity;
-  for (let k = 0; k < coarse.length; k++) {
-    let v = 0;
-    for (const p of parts) v += p.a * Math.sin((2 * Math.PI * p.k * k * step) / length + p.ph);
-    coarse[k] = v;
-    if (k * step < length) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-  }
-  for (let k = 0; k < coarse.length; k++) {
-    const u = Math.min(1, Math.max(0, (coarse[k]! - lo) / Math.max(1e-6, hi - lo)));
-    coarse[k] = 1 - strength + strength * u ** 1.6;
-  }
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const k = Math.floor(i / step);
-    const f = (i - k * step) / step;
-    out[i] = coarse[k]! + (coarse[k + 1]! - coarse[k]!) * f;
-  }
-  return out;
-}
+import { addShard, bubble, burst, creak, knock, nWave, periodicCurve, puff, saturate, scatter, thump, wanderTrack } from "./kit";
 
 /**
  * Desert wind down the street, stereo: a low bed whose brightness rises with
@@ -59,33 +31,28 @@ export function wind(t: Take): Mono[] {
   const seconds = r.range(6.5, 7.5);
   const length = t.n(seconds);
   const n = length + t.n(0.8);
-  const gustL = gustCurve(n, length, r, 0.75);
-  const channels: Mono[] = [];
-  for (let c = 0; c < 1; c++) {
-    const rc = r.fork(c);
-    const gust = gustL;
-    const bed = pink(n, rc);
-    svf(bed, t.sr, "lp", (u) => (260 + 700 * gust[Math.floor(u * n)]!) * t.p, 0.8, 64);
-    highpass(bed, t.sr, 45, 2);
-    normalize(bed);
-    const walk = wanderTrack(n, rc, 0.8, t.sr);
-    const whistle = svf(white(n, rc), t.sr, "bp",
-      (u) => (380 + 900 * walk(u)) * t.p * (0.85 + 0.3 * gust[Math.floor(u * n)]!), rc.range(14, 22), 64);
-    // A two-pole band-pass has shallow skirts: on white noise it leaks hiss
-    // across the whole band. The low-pass keeps the whistle a whistle.
-    lowpass(whistle, t.sr, 2400, 2);
-    normalize(whistle);
-    const grit = bandNoise(n, t.sr, rc, 2800, 9000, 2);
-    const flick = wobble(n, t.sr, 30, () => rc.next());
-    const out = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      const g = gust[i]!;
-      const sand = g > 0.65 ? (g - 0.65) * (0.6 + 0.4 * flick[i]!) : 0;
-      out[i] = bed[i]! * g * 0.9 + whistle[i]! * g * g * 0.35 + grit[i]! * sand * 0.25;
-    }
-    channels.push(loopify(out, length));
+  const gust = periodicCurve(n, length, r, [1, 2, 3, 5], 0.75);
+  const rc = r.fork(0);
+  const bed = pink(n, rc);
+  svf(bed, t.sr, "lp", (u) => (260 + 700 * gust[Math.floor(u * n)]!) * t.p, 0.8, 64);
+  highpass(bed, t.sr, 45, 2);
+  normalize(bed);
+  const walk = wanderTrack(n, rc, 0.8, t.sr);
+  const whistle = svf(white(n, rc), t.sr, "bp",
+    (u) => (380 + 900 * walk(u)) * t.p * (0.85 + 0.3 * gust[Math.floor(u * n)]!), rc.range(14, 22), 64);
+  // A two-pole band-pass has shallow skirts: on white noise it leaks hiss
+  // across the whole band. The low-pass keeps the whistle a whistle.
+  lowpass(whistle, t.sr, 2400, 2);
+  normalize(whistle);
+  const grit = bandNoise(n, t.sr, rc, 2800, 9000, 2);
+  const flick = wobble(n, t.sr, 30, () => rc.next());
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = gust[i]!;
+    const sand = g > 0.65 ? (g - 0.65) * (0.6 + 0.4 * flick[i]!) : 0;
+    out[i] = bed[i]! * g * 0.9 + whistle[i]! * g * g * 0.35 + grit[i]! * sand * 0.25;
   }
-  const left = channels[0]!;
+  const left = loopify(out, length);
   const shift = t.n(r.range(0.35, 0.6));
   const right = new Float32Array(length);
   for (let i = 0; i < length; i++) right[i] = left[(i - shift + length) % length]!;
@@ -138,7 +105,7 @@ export function bellStrike(t: Take, nominal: number, seconds: number, bright: nu
   }
   t.put(out, burst(t, 0.01, 300, t.c(4000), 0.0002, 0.0018), 0, t.g(0.6));
   t.put(out, burst(t, 0.05, 150, 1400, 0.0006, 0.01), 0, t.g(0.35));
-  // The last half second eases out (the hum is still faintly there).
+  // The last tenth eases out (the hum is still faintly there).
   shapeBy(out, (u) => (u < 0.9 ? 1 : 0.5 + 0.5 * Math.cos((Math.PI * (u - 0.9)) / 0.1)), 64);
   return out;
 }
@@ -195,7 +162,6 @@ export function vaneSpin(t: Take): Mono {
   // A clang where the shot struck it.
   t.put(out, click(t.sr, r, 0.003, 1500, 14000), 0, t.g(0.8));
   addMetal(out, t.sr, r, 0, r.range(1200, 1700), 0.05, 0.35);
-  let turns = 0;
   let next = r.range(0.05, 0.3);
   const air = white(n, r);
   svf(air, t.sr, "bp", (u) => 500 + 1300 * speed(u) / w0, 1.2, 64);
@@ -221,7 +187,6 @@ export function vaneSpin(t: Take): Mono {
       const sq = creak(t, len, (v) => rate * (1 + 0.15 * Math.sin(Math.PI * v)), [[900, 6, 1], [1900, 7, 0.5], [3100, 8, 0.2]], 0.2);
       adsr(sq, t.sr, 0.02, 0.05, 0.6, len * 0.4);
       t.put(out, sq, at, t.g(0.35 * (0.4 + 0.6 * (1 - u))));
-      turns++;
       next = phase + r.range(0.95, 1.05);
     }
   }
@@ -232,7 +197,6 @@ export function vaneSpin(t: Take): Mono {
   adsr(last, t.sr, 0.05, 0.1, 0.6, 0.15);
   t.put(out, last, end - 0.35, t.g(0.3));
   addMetal(out, t.sr, r, end, r.range(800, 1100), 0.03, 0.2, [1, 1.47, 2.2]);
-  void turns;
   return out;
 }
 

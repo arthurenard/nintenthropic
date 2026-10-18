@@ -1,45 +1,19 @@
 /**
- * The six newer Grip Prix items, as sounds (the older ones are in
- * ./kart-events.ts). Each is a toy-box sound like the rest: a comet's six
+ * Five of the Grip Prix items, in six sounds (the nitro, the pucks and the
+ * oil slick are in ./kart-events.ts, the seeker's whistle in
+ * ./kart-motion.ts). Each is a toy-box sound like the rest: a comet's six
  * seconds of glitter, a storm's electric crack and the thunder after it, a
  * skyrocket's launch with its whistle and its burst, a blast's thump, and the
  * item box that turned out not to be one (the box smash, gone wrong). Pitched
- * parts sit in C major, as the other pack's do.
+ * parts sit in C major, as those in ./kart-events.ts do.
  */
-import { bandpass, highpass, lowpass, svf } from "../dsp/filters";
-import { type Mono, normalize, shapeBy } from "../dsp/signal";
+import { midiHz, sampled, smooth } from "../dsp/curves";
+import { bandpass, highpass, lowpass } from "../dsp/filters";
+import { type Mono, shapeBy } from "../dsp/signal";
 import { addMode, bandNoise, click, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { type Voice, modal } from "../dsp/voices";
 import { thump } from "./kit";
-import { ar, drive, expo, midiHz, sampled, smooth, tone } from "./kart-kit";
-
-/** A glassy ping voice for the sparkles. */
-const PING: Voice = modal({
-  partials: [[1, 1, 1], [2.76, 0.4, 0.5], [5.4, 0.2, 0.25]],
-  tau: 0.22, free: true, hammer: { level: 0.1, tau: 0.002, low: 9000 },
-});
-
-function ping(out: Mono, t: Take, at: number, midi: number, gain = 1, vel = 0.8): void {
-  t.put(out, PING({ sr: t.sr, freq: midiHz(midi) * t.rng.range(0.998, 1.002), hold: 0.1, vel, rng: t.rng.fork(`${midi}${at}`) }), at, gain);
-}
-
-/** A sweeping band of air: noise through a band-pass whose centre glides from ``from`` to ``to``. */
-function whoosh(t: Take, seconds: number, from: number, to: number, q: number, envelope: (u: number) => number): Mono {
-  const buf = white(t.n(seconds), t.rng);
-  svf(buf, t.sr, "bp", (u) => from * Math.pow(to / from, u), q);
-  normalize(buf);
-  return shapeBy(buf, envelope);
-}
-
-const swoosh = (rise: number, power = 1.6) => (u: number): number => smooth(u / rise) * Math.pow(Math.max(0, 1 - u), power);
-
-/** A pitch-gliding sine with a few harmonics. */
-function glide(t: Take, seconds: number, from: number, to: number, curve = 1, h2 = 0, h3 = 0): Mono {
-  const n = t.n(seconds);
-  const f = sampled(n, (u) => from * Math.pow(to / from, Math.pow(u, curve)));
-  return tone(n, t.sr, f, h2, h3);
-}
+import { ar, drive, expo, glide, ping, swoosh, tone, whoosh } from "./kart-kit";
 
 /** The C-major pentatonic, high up: where the glitter lives (MIDI notes). */
 const GLITTER = [84, 86, 88, 91, 93, 96, 98, 100, 103];
@@ -117,7 +91,7 @@ export function stormCrack(t: Take): Mono {
   // The thunder: a rumble that swells a moment after, rolling.
   const rumble = lowpass(bandNoise(t.n(1.9), t.sr, t.rng, 40, 520, 2), t.sr, 420 * t.cutoff, 2);
   const n = rumble.length;
-  const roll = sampled(n, (u) => 0.55 + 0.45 * Math.sin(2 * Math.PI * (5 + 3 * u) * u * 1.9 + 1));
+  const roll = sampled(n, (u) => 0.55 + 0.45 * Math.sin(2 * Math.PI * (5 + 3 * u) * u * 1.9 + 1), 16);
   for (let i = 0; i < n; i++) rumble[i]! *= roll[i]!;
   shapeBy(rumble, (u) => smooth(u / 0.06) * Math.pow(Math.max(0, 1 - u), 1.7), 64);
   t.put(out, rumble, 0.08, 1.15);
@@ -197,18 +171,15 @@ export function decoyPop(t: Take): Mono {
   for (let k = 0; k < 8; k++) {
     addMode(out, t.sr, t.rng.range(0.005, 0.14), t.rng.range(2500, 9000), t.rng.range(0.1, 0.28), t.rng.range(0.012, 0.045), t.rng.range(0, 6.28));
   }
-  // The wrong chime: it starts where the right one would, then slips a half-step flat and keeps falling.
+  // The wrong chime: it starts where the right one would, then lands a quarter-tone flat and keeps falling.
   ping(out, t, 0.07, 84, 0.7);
   ping(out, t, 0.17, 90.5, 0.7);
   ping(out, t, 0.27, 83, 0.6);
   // The wah: a slide whistle going down with a wobble.
   const n = t.n(0.7);
-  const f = sampled(n, (u) => 520 * t.p * Math.pow(0.42, u) * (1 + 0.035 * Math.sin(2 * Math.PI * 6 * u * 0.7)));
+  const f = sampled(n, (u) => 520 * t.p * Math.pow(0.42, u) * (1 + 0.035 * Math.sin(2 * Math.PI * 6 * u * 0.7)), 16);
   const wah = tone(n, t.sr, f, 0.35, 0.12);
   shapeBy(wah, (u) => smooth(u / 0.05) * smooth((1 - u) / 0.35));
   t.put(out, wah, 0.38, 0.38);
   return lowpass(out, t.sr, 11000, 1);
 }
-
-/** Exposed for the tests: the pieces a rendered take is made of. */
-export const KART_ITEM_RECIPES = { cometGlitter, stormCrack, skyrocketLaunch, skyrocketBurst, blastWump, decoyPop };

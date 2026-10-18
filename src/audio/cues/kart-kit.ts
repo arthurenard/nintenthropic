@@ -1,37 +1,18 @@
 /**
- * Small tools the Grip Prix sounds share: curves, a glissando oscillator,
- * toy notes, and the loop makers (periodic by construction for tones,
- * wrapped grains and cross-faded noise for textures).
+ * Small tools the Grip Prix sounds share: a glissando oscillator, the
+ * glassy ping and the sweeping air of the events and the items, envelopes,
+ * and the loop makers (periodic by construction for tones, wrapped grains
+ * and cross-faded noise for textures).
  */
+import { midiHz, sampled, smooth } from "../dsp/curves";
+import { svf } from "../dsp/filters";
 import { loopify } from "../dsp/master";
-import { type Mono, shapeBy } from "../dsp/signal";
+import { type Mono, normalize, shapeBy } from "../dsp/signal";
+import { white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { type SubSpec, subtractive } from "../dsp/voices";
+import { type Voice, modal, softClip } from "../dsp/voices";
 
 export const TAU = Math.PI * 2;
-
-export const lerp = (a: number, b: number, u: number): number => a + (b - a) * Math.min(1, Math.max(0, u));
-/** A smoothstep of u clamped to 0..1. */
-export const smooth = (u: number): number => {
-  const x = Math.min(1, Math.max(0, u));
-  return x * x * (3 - 2 * x);
-};
-/** Equal-tempered ratio for a number of semitones. */
-export const semi = (n: number): number => Math.pow(2, n / 12);
-export const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
-
-/** A curve of u = 0..1 sampled every ``step`` samples, linear between: envelopes and pitch tracks are slow. */
-export function sampled(n: number, fn: (u: number) => number, step = 16): Float32Array {
-  const out = new Float32Array(n);
-  let a = fn(0);
-  for (let i = 0; i < n; i += step) {
-    const j = Math.min(n, i + step);
-    const b = fn(j / n);
-    for (let k = i; k < j; k++) out[k] = a + ((b - a) * (k - i)) / step;
-    a = b;
-  }
-  return out;
-}
 
 /**
  * A sine on a frequency track with optional second and third harmonics: a
@@ -61,18 +42,40 @@ export function tone(n: number, sr: number, freq: Float32Array, h2 = 0, h3 = 0):
   return out;
 }
 
-/** Soft clip (Padé tanh), flat past ±3. */
-export function soft(x: number): number {
-  if (x >= 3) return 1;
-  if (x <= -3) return -1;
-  const x2 = x * x;
-  return (x * (27 + x2)) / (27 + 9 * x2);
+/** A glassy ping voice for the sparkles. */
+const PING: Voice = modal({
+  partials: [[1, 1, 1], [2.76, 0.4, 0.5], [5.4, 0.2, 0.25]],
+  tau: 0.22, free: true, hammer: { level: 0.1, tau: 0.002, low: 9000 },
+});
+
+/** One ping, placed on ``out``. */
+export function ping(out: Mono, t: Take, at: number, midi: number, gain = 1, vel = 0.8): void {
+  t.put(out, PING({ sr: t.sr, freq: midiHz(midi) * t.rng.range(0.998, 1.002), hold: 0.1, vel, rng: t.rng.fork(`${midi}${at}`) }), at, gain);
+}
+
+/** A sweeping band of air: noise through a band-pass whose centre glides from ``from`` to ``to`` (exponentially). */
+export function whoosh(t: Take, seconds: number, from: number, to: number, q: number, envelope: (u: number) => number): Mono {
+  const n = t.n(seconds);
+  const buf = white(n, t.rng);
+  svf(buf, t.sr, "bp", (u) => from * Math.pow(to / from, u), q);
+  normalize(buf);
+  return shapeBy(buf, envelope);
+}
+
+/** Fast rise, slow fall. */
+export const swoosh = (rise: number, power = 1.6) => (u: number): number => smooth(u / rise) * Math.pow(Math.max(0, 1 - u), power);
+
+/** A pitch-gliding sine with a few harmonics, between two frequencies on a curve. */
+export function glide(t: Take, seconds: number, from: number, to: number, curve = 1, h2 = 0, h3 = 0): Mono {
+  const n = t.n(seconds);
+  const f = sampled(n, (u) => from * Math.pow(to / from, Math.pow(u, curve)), 16);
+  return tone(n, t.sr, f, h2, h3);
 }
 
 /** Drive a buffer through the soft clip in place, level-compensated at unity. */
 export function drive(buf: Mono, amount: number): Mono {
-  const norm = soft(amount);
-  for (let i = 0; i < buf.length; i++) buf[i] = soft(amount * buf[i]!) / norm;
+  const norm = softClip(amount);
+  for (let i = 0; i < buf.length; i++) buf[i] = softClip(amount * buf[i]!) / norm;
   return buf;
 }
 
@@ -96,12 +99,6 @@ export function expo(buf: Mono, sr: number, tau: number, attack = 0.001): Mono {
     e *= k;
   }
   return buf;
-}
-
-/** A toy note through the subtractive engine, placed on ``out`` at ``at`` seconds. */
-export function playNote(out: Mono, t: Take, spec: SubSpec, at: number, midi: number, hold: number, vel = 0.85, gain = 1): void {
-  const voice = subtractive(spec);
-  t.put(out, voice({ sr: t.sr, freq: midiHz(midi), hold, vel, rng: t.rng.fork(`${midi}@${at}`) }), at, gain);
 }
 
 /**

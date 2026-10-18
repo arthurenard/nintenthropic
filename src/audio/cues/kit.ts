@@ -3,9 +3,9 @@
  * one) shaped for a job — the noise of a blast, the thump of a body, the
  * tinkle of a shard — so a recipe reads as a list of the events in the sound.
  */
-import { bandpass, biquad, highpass, lowpass, svf, tilt } from "../dsp/filters";
+import { biquad, highpass, lowpass, tilt } from "../dsp/filters";
 import type { Rng } from "../dsp/rng";
-import { type Mono, normalize, perc } from "../dsp/signal";
+import { type Mono, normalize, perc, wobble } from "../dsp/signal";
 import { addMode, bandNoise, chirp, decayInPlace, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
 
@@ -145,17 +145,6 @@ export function creak(
   return normalize(out);
 }
 
-/**
- * Wind through a gap: noise through a narrow band-pass whose centre wanders
- * between ``low`` and ``high``, the whistle a real wind finds and loses.
- */
-export function whistleNoise(t: Take, n: number, rng: Rng, low: number, high: number, q: number, rate: number): Mono {
-  const walk = wanderTrack(n, rng, rate);
-  const src = white(n, rng);
-  const ratio = high / low;
-  return svf(src, t.sr, "bp", (u) => low * Math.pow(ratio, walk(u)), q, 32);
-}
-
 /** A smooth random walk in [0, 1], changing direction about ``rate`` times a second. */
 export function wanderTrack(n: number, rng: Rng, rate: number, sr = 44100): (u: number) => number {
   const stops = Math.max(2, Math.round(((n / sr) * rate) + 2));
@@ -219,7 +208,70 @@ export function puff(t: Take, seconds: number, cutoff: number, attack: number, t
   return decayInPlace(buf, t.sr, attack, tau);
 }
 
-/** Band-pass a buffer in place between two corners (convenience re-export for recipes). */
-export function band(buf: Mono, t: Take, low: number, high: number, order = 2): Mono {
-  return bandpass(buf, t.sr, low, high, order);
+/**
+ * Band noise under a rectified slow wobble, so its level flickers: the wet,
+ * gritty part of an impact — flesh, soil, spray, a crackle.
+ */
+export function flicker(t: Take, seconds: number, low: number, high: number, rate: number): Mono {
+  const n = t.n(seconds);
+  const buf = bandNoise(n, t.sr, t.rng, low, high, 2);
+  const flick = wobble(n, t.sr, rate, () => t.rng.next());
+  for (let i = 0; i < n; i++) {
+    const a = Math.abs(flick[i]!);
+    buf[i]! *= a * Math.sqrt(a);
+  }
+  return normalize(buf);
+}
+
+/**
+ * One lub-dub of a heart: the valves closing, felt more than heard, with
+ * enough 100–200 Hz for a laptop's speakers. ``lub`` and ``dub`` are where
+ * the two thumps' pitches start, Hz.
+ */
+export function lubDub(t: Take, gap: number, strength: number, lub = 70, dub = 90): Mono {
+  const out = t.canvas(gap + 0.35);
+  t.put(out, thump(t, 0.25, lub * t.p, 38 * t.p, 0.006, 0.04, 0.5), 0, strength);
+  t.put(out, burst(t, 0.2, 30, 180, 0.005, 0.035, 4), 0, strength * 0.9);
+  t.put(out, thump(t, 0.2, dub * t.p, 50 * t.p, 0.004, 0.028, 0.5), gap, strength * 0.7);
+  t.put(out, burst(t, 0.15, 40, 240, 0.004, 0.025, 4), gap, strength * 0.55);
+  // The chest wall: a muffled knock that makes it audible on small speakers.
+  biquad(out, t.sr, "peak", 140, 1.2, 6);
+  lowpass(out, t.sr, 420, 2);
+  return out;
+}
+
+/**
+ * A slow curve that repeats exactly every ``length`` samples — a few sines,
+ * each a whole number of cycles in the loop — scaled into [1 − depth, 1] and
+ * bent by ``bend`` (above 1: long lulls and shorter swells): the gusts of a
+ * wind loop, the swell of a river. Evaluated every 32 samples and
+ * interpolated: a gust takes seconds, and a few sines and a power per
+ * sample would be a wind loop's largest cost.
+ */
+export function periodicCurve(n: number, length: number, rng: Rng, harmonics: readonly number[], depth: number, bend = 1.6): Float32Array {
+  const parts = harmonics.map((k) => ({ k, a: rng.range(0.3, 1) / k ** 0.6, ph: rng.range(0, 6.28) }));
+  const step = 32;
+  const coarse = new Float32Array(Math.ceil(n / step) + 2);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let k = 0; k < coarse.length; k++) {
+    let v = 0;
+    for (const p of parts) v += p.a * Math.sin((2 * Math.PI * p.k * k * step) / length + p.ph);
+    coarse[k] = v;
+    if (k * step < length) {
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+  }
+  for (let k = 0; k < coarse.length; k++) {
+    const u = Math.min(1, Math.max(0, (coarse[k]! - lo) / Math.max(1e-6, hi - lo)));
+    coarse[k] = 1 - depth + depth * u ** bend;
+  }
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = Math.floor(i / step);
+    const f = (i - k * step) / step;
+    out[i] = coarse[k]! + (coarse[k + 1]! - coarse[k]!) * f;
+  }
+  return out;
 }

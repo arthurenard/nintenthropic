@@ -3,7 +3,7 @@
  *
  * A *voice* turns one note (a pitch, how long the key is held, how hard it is
  * struck) into a mono buffer that starts at the note's first sample and runs
- * on through its release. Five engines cover what a toy-box orchestra needs:
+ * on through its release. Six engines cover what a toy-box orchestra needs:
  *
  *   subtractive  oscillators → low-pass filter → amplifier: basses, pads,
  *                brass, leads, a fuzzed guitar
@@ -12,6 +12,8 @@
  *   organ        drawbar sines with a key click and a rotating-speaker shimmer
  *   fm           two-operator FM: electric piano, glassy bells
  *   breathy      a sine with breath and a scoop: a whistle, a flute
+ *
+ * Beside them, ``drumHit`` plays one hit of a small synthesised drum kit.
  *
  * Each is built once from a plain-data spec (a *preset*) and called for every
  * note, so an instrument is a few numbers and the sequencer never needs to
@@ -23,7 +25,7 @@
  */
 import type { Rng } from "./rng";
 import { type Mono, samples } from "./signal";
-import { addMode, addString } from "./sources";
+import { addMode, addString, polyBlep } from "./sources";
 
 /** One note to play. */
 export interface NoteSpec {
@@ -44,19 +46,6 @@ export type Voice = ((note: NoteSpec) => Mono) & {
 };
 
 const TAU = 2 * Math.PI;
-
-/** A band-limiting correction at a saw's or pulse's jump (PolyBLEP): the alias-free edge. */
-function polyBlep(phase: number, dt: number): number {
-  if (phase < dt) {
-    const x = phase / dt;
-    return x + x - x * x - 1;
-  }
-  if (phase > 1 - dt) {
-    const x = (phase - 1) / dt;
-    return x * x + x + x + 1;
-  }
-  return 0;
-}
 
 /** A cheap tanh-like soft clip (Padé), flat past ±3: the grit of a fuzzed guitar. */
 export function softClip(x: number): number {
@@ -460,7 +449,7 @@ export interface FmSpec {
   /** Modulation index at the strike, and the time constant it falls with. */
   index: number;
   indexTau: number;
-  /** A second, fixed ratio of the carrier added for body (0 for none): level. */
+  /** How much of the modulator's last output is fed back into its own phase (0 for none), which roughens the tone. */
   feedback?: number;
   /** Amplitude: time constant of the decay, and the release after the key goes up. */
   tau: number;

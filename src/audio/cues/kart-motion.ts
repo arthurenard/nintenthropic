@@ -74,8 +74,9 @@ interface EngineRecipe {
 
 function engine(t: Take, r: EngineRecipe): Mono {
   const n = t.n(r.seconds);
-  // The take's pitch wanders a little: four takes, four slightly different engines.
-  // An even number of cycles lets the subharmonics fit the loop.
+  // The take's pitch wanders a little, so each take is a slightly different engine.
+  // A multiple of four cycles, so the subharmonics and the rattle (down to a
+  // quarter of the firing rate) are whole numbers of cycles in the loop too.
   const unit = Math.max(4, Math.round(r.f0 * t.p * r.seconds / 4) * 4);
   const parts: Part[] = [];
   for (let k = 1; k <= r.maxK; k++) {
@@ -277,7 +278,7 @@ export function surfaceMud(t: Take): Mono {
   const body = noiseLoop(t, seconds, (m) => lowpass(brown(m, t.rng), t.sr, 420, 2), 0.3);
   normalize(body);
   times(body, cyclic(n, 3, 0.6, t.rng.range(0, TAU)));
-  const pops = grains(t, seconds, 9, (s) => {
+  const pops = grains(t, seconds, 9, () => {
     const g = bubble(t, t.rng.range(140, 520), t.rng.range(0.012, 0.03), 1.8);
     return g.length > 0 ? g : new Float32Array(1);
   });

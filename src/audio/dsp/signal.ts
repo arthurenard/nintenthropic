@@ -37,24 +37,10 @@ export function peak(buf: Mono): number {
   return p;
 }
 
-export function rms(buf: Mono, from = 0, to = buf.length): number {
-  let s = 0;
-  for (let i = from; i < to; i++) s += buf[i]! * buf[i]!;
-  return Math.sqrt(s / Math.max(1, to - from));
-}
-
 /** Scale to a unit (or given) peak; silence stays silence. */
 export function normalize(buf: Mono, to = 1): Mono {
   const p = peak(buf);
   return p > 0 ? scale(buf, to / p) : buf;
-}
-
-export function db(decibels: number): number {
-  return Math.pow(10, decibels / 20);
-}
-
-export function toDb(gain: number): number {
-  return 20 * Math.log10(Math.max(gain, 1e-12));
 }
 
 /**
@@ -161,14 +147,5 @@ export function wobble(n: number, sr: number, rate: number, next: () => number):
     const s = u * u * (3 - 2 * u);
     out[i] = a + (b - a) * s;
   }
-  return out;
-}
-
-/** Sum of channels to one (for measurements). */
-export function mixdown(channels: Channels): Mono {
-  const first = channels[0]!;
-  if (channels.length === 1) return first;
-  const out = new Float32Array(first.length);
-  for (const ch of channels) for (let i = 0; i < out.length; i++) out[i]! += ch[i]! / channels.length;
   return out;
 }

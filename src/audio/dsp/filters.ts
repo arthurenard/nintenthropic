@@ -1,9 +1,9 @@
 /**
- * Time-domain filters. The Python version shaped spectra with FFTs; here
- * every filter is a recursive one (biquads and state-variable filters),
- * which costs a handful of multiplies per sample and lets a filter move over
- * time — a whistle that wanders, a mouth that closes — which a single FFT
- * cannot do.
+ * Time-domain filters. The original Python version (git tag
+ * ``python-final``) shaped spectra with FFTs; here every filter is a
+ * recursive one (biquads and state-variable filters), which costs a handful
+ * of multiplies per sample and lets a filter move over time — a whistle
+ * that wanders, a mouth that closes — which a single FFT cannot do.
  */
 import type { Mono } from "./signal";
 
@@ -218,9 +218,4 @@ export function resonate(buf: Mono, sr: number, freq: number, q: number, amount:
   const band = biquad(Float32Array.from(buf), sr, "bandpass", freq, q);
   for (let i = 0; i < buf.length; i++) buf[i]! += amount * band[i]!;
   return buf;
-}
-
-/** Remove the mean and a little sub-audio drift (a one-pole high-pass at 20 Hz). */
-export function dcBlock(buf: Mono, sr: number): Mono {
-  return onePoleHighpass(buf, sr, 18);
 }

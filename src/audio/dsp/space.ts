@@ -40,7 +40,6 @@ export function room(input: Mono, sr: number, rng: Rng, o: RoomOptions): [Mono, 
   const base = [1433, 1601, 1867, 2053, 2251, 2399, 2617, 2797];
   const lens = base.map((b) => Math.max(8, Math.round(b * size * (sr / 44100) * rng.range(0.97, 1.03))));
   const lines = lens.map((len) => new Float32Array(len));
-  const idx = new Array<number>(8).fill(0);
   // Per-line loss for the requested T60 at DC, and the low-pass coefficient
   // that makes the highs die ``damping`` times as long.
   const damping = o.damping ?? 0.4;
@@ -89,7 +88,6 @@ export function room(input: Mono, sr: number, rng: Rng, o: RoomOptions): [Mono, 
     left[i] = dry + wet * (s0 - s2 + s4 - s6);
     right[i] = dry + wet * (s1 - s3 + s5 - s7);
   }
-  void idx;
   return [left, right];
 }
 

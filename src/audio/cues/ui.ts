@@ -4,10 +4,10 @@
  * speak of, and never compete with the world: small wooden and glassy bars,
  * struck gently.
  */
+import { midiHz } from "../dsp/curves";
 import { type Mono, fade } from "../dsp/signal";
 import { addMode, click } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { midiHz } from "./music";
 
 /** How long a soft mallet takes to press into the bar: long enough that the onset is not a click. */
 const PRESS = 0.0015;

@@ -11,6 +11,7 @@
  * Its cues are a pack of their own ("orbit"), synthesised when the game
  * loads, and joined to the table (./table.ts) as ORBIT_CUES.
  */
+import { midiHz } from "../dsp/curves";
 import { bandpass, highpass, lowpass, svf } from "../dsp/filters";
 import { type Mono, adsr, fade, normalize, shapeBy, tailOff } from "../dsp/signal";
 import { addMetal, addMode, bandNoise, click, pink, sweep, white } from "../dsp/sources";
@@ -89,7 +90,7 @@ function babble(t: Take, seconds: number): Mono {
  * the air handlers and its harmonics, moving air, a coolant pump's slow
  * throb far down the hull - the sound of a place that is always running.
  */
-export function orbitHum(t: Take): Mono[] {
+function orbitHum(t: Take): Mono[] {
   const r = t.rng;
   const length = t.n(r.range(5.5, 6.5));
   const n = length + t.n(0.6);
@@ -126,7 +127,7 @@ export function orbitHum(t: Take): Mono[] {
  * The master alarm: soft and insistent, two tones a fourth apart, over and
  * over - telling, not shouting.
  */
-export function orbitAlarm(t: Take): Mono {
+function orbitAlarm(t: Take): Mono {
   const period = t.j(0.8, 0.03);
   const out = t.canvas(period * 2 + 0.3);
   const lo = 587 * t.p;
@@ -140,7 +141,7 @@ export function orbitAlarm(t: Take): Mono {
 }
 
 /** The radio's Quindar tone: the beep that opens a transmission from the ground. */
-export function orbitQuindar(t: Take): Mono {
+function orbitQuindar(t: Take): Mono {
   const out = t.canvas(0.5);
   tone(out, t, 0.01, 2525 * t.p, 0.25, 0.8, 0.004, 0.01, 0);
   t.put(out, staticNoise(t, 0.4), 0.05, 0.1);
@@ -148,7 +149,7 @@ export function orbitQuindar(t: Take): Mono {
 }
 
 /** A burst of radio: the intro beep, a few words from the ground, the outro beep. */
-export function orbitRadio(t: Take): Mono {
+function orbitRadio(t: Take): Mono {
   const r = t.rng;
   const words = r.range(0.8, 1.3);
   const out = t.canvas(words + 0.75);
@@ -160,7 +161,7 @@ export function orbitRadio(t: Take): Mono {
 }
 
 /** The heat gauge's tick: a small, dry click. */
-export function orbitHeatTick(t: Take): Mono {
+function orbitHeatTick(t: Take): Mono {
   const out = t.canvas(0.08);
   t.put(out, click(t.sr, t.rng, 0.0015, 1800, 9000), 0, 0.6);
   addMode(out, t.sr, 0, 3200 * t.p, 0.35, t.d(0.008), 0);
@@ -168,7 +169,7 @@ export function orbitHeatTick(t: Take): Mono {
 }
 
 /** The HUD's ring appearing: a soft, high blip. */
-export function orbitRing(t: Take): Mono {
+function orbitRing(t: Take): Mono {
   const out = t.canvas(0.14);
   tone(out, t, 0.002, 1760 * t.p, 0.07, 0.8, 0.005, 0.05, 0.05);
   return out;
@@ -181,7 +182,7 @@ export function orbitRing(t: Take): Mono {
  * in a blink, the discharge's crackle, and the thump of the mount through
  * the structure under your feet. The loudest thing in the game.
  */
-export function orbitLaser(t: Take): Mono {
+function orbitLaser(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(0.55));
   const charge = sweep(t.n(0.07), t.sr, (u) => (1400 + 4200 * Math.pow(u, 1.4)) * t.p);
@@ -198,7 +199,7 @@ export function orbitLaser(t: Take): Mono {
 }
 
 /** Overheated: a relay drops, the capacitor's whine winds down, a low buzz of the interlock. */
-export function orbitOverheat(t: Take): Mono {
+function orbitOverheat(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(1.1));
   t.put(out, click(t.sr, r, 0.004, 400, 6000), 0, t.g(1));
@@ -215,7 +216,7 @@ export function orbitOverheat(t: Take): Mono {
 }
 
 /** Venting: a valve's clunk and the coolant's hiss rushing out through the mount. */
-export function orbitVent(t: Take): Mono {
+function orbitVent(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(0.9));
   t.put(out, click(t.sr, r, 0.003, 300, 5000), 0, t.g(0.8));
@@ -236,7 +237,7 @@ export function orbitVent(t: Take): Mono {
  * racing out through the pane, the glass ringing in its frame, and the
  * frame taking the blow.
  */
-export function orbitCrack(t: Take): Mono {
+function orbitCrack(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(1.1));
   t.put(out, click(t.sr, r, 0.003, 2000, 16000), 0, t.g(1.4));
@@ -257,7 +258,7 @@ export function orbitCrack(t: Take): Mono {
  * A strike on the station: a dull boom that comes through the structure,
  * the hull's low modes ringing on and a groan as it settles.
  */
-export function orbitBoom(t: Take): Mono {
+function orbitBoom(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(1.9));
   t.put(out, thump(t, 1.6, 90 * t.p, 34 * t.p, 0.004, t.d(0.3), 0.5), 0, t.g(1));
@@ -273,7 +274,7 @@ export function orbitBoom(t: Take): Mono {
 }
 
 /** The hull ticking and creaking as it goes from sun to shadow. */
-export function orbitCreak(t: Take): Mono {
+function orbitCreak(t: Take): Mono {
   const r = t.rng;
   const len = r.range(0.5, 1.0);
   const out = creak(t, len, (u) => 40 + 160 * Math.sin(Math.PI * u), [
@@ -286,7 +287,7 @@ export function orbitCreak(t: Take): Mono {
 }
 
 /** A pane failing: the air roaring out through the hole, then nothing at all. */
-export function orbitDecompress(t: Take): Mono[] {
+function orbitDecompress(t: Take): Mono[] {
   const r = t.rng;
   const seconds = t.L(2.0);
   const n = t.n(seconds);
@@ -310,7 +311,7 @@ export function orbitDecompress(t: Take): Mono[] {
 }
 
 /** The cupola's shutters slamming shut, one after another. */
-export function orbitShutter(t: Take): Mono {
+function orbitShutter(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(1.3));
   for (let k = 0; k < 3; k++) {
@@ -324,7 +325,7 @@ export function orbitShutter(t: Take): Mono {
 }
 
 /** The crew sealing chips from inside: an applicator's clicks and a soft hiss. */
-export function orbitSeal(t: Take): Mono {
+function orbitSeal(t: Take): Mono {
   const r = t.rng;
   const out = t.canvas(t.L(1.1));
   for (let k = 0; k < 3; k++) t.put(out, click(t.sr, r, 0.003, 800, 7000), 0.05 + k * r.range(0.15, 0.25), 0.4);
@@ -337,7 +338,7 @@ export function orbitSeal(t: Take): Mono {
 // --- the drone and the Derelict (heard only as the station's warnings) --------------
 
 /** The drone's telemetry faults: two quick low beeps from the panel. */
-export function orbitDroneHit(t: Take): Mono {
+function orbitDroneHit(t: Take): Mono {
   const out = t.canvas(0.55);
   tone(out, t, 0.01, 392 * t.p, 0.12, 0.8, 0.006, 0.03, 0.2);
   tone(out, t, 0.2, 330 * t.p, 0.18, 0.8, 0.006, 0.05, 0.2);
@@ -345,7 +346,7 @@ export function orbitDroneHit(t: Take): Mono {
 }
 
 /** The proximity alarm for the Derelict: a low, pulsing tone, three times. */
-export function orbitDerelict(t: Take): Mono {
+function orbitDerelict(t: Take): Mono {
   const out = t.canvas(1.8);
   for (let k = 0; k < 3; k++) {
     tone(out, t, 0.02 + k * 0.5, 440 * t.p, 0.3, 0.8, 0.03, 0.12, 0.25);
@@ -367,59 +368,57 @@ function chime(out: Mono, t: Take, at: number, freq0: number, amp: number, tau0:
   addMode(out, t.sr, at, freq * 1.003, amp * 0.25, tau * 0.8, 0);
 }
 
-const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
-
 /** A pass begins: the Quindar beep, and three calm notes rising (D major, open). */
-export function orbitPassStart(t: Take): Mono[] {
+function orbitPassStart(t: Take): Mono[] {
   const dry = t.canvas(1.6);
   tone(dry, t, 0.0, 2525, 0.2, 0.35, 0.004, 0.01, 0);
-  [62, 69, 74].forEach((m, k) => chime(dry, t, 0.28 + k * 0.16, hz(m + 12), 0.5, 0.5));
+  [62, 69, 74].forEach((m, k) => chime(dry, t, 0.28 + k * 0.16, midiHz(m + 12), 0.5, 0.5));
   tailOff(dry, t.sr, 0.4);
   return room(dry, t.sr, t.rng, { t60: 1.2, size: 0.5, mix: 0.25, predelay: 0.01, tail: 0.3 });
 }
 
 /** A pass cleared: two notes resolving, and the ground's outro beep. */
-export function orbitPassClear(t: Take): Mono[] {
+function orbitPassClear(t: Take): Mono[] {
   const dry = t.canvas(2.0);
-  chime(dry, t, 0.02, hz(78), 0.55, 0.6);
-  chime(dry, t, 0.22, hz(86), 0.6, 0.9);
+  chime(dry, t, 0.02, midiHz(78), 0.55, 0.6);
+  chime(dry, t, 0.22, midiHz(86), 0.6, 0.9);
   tone(dry, t, 1.2, 2475, 0.2, 0.25, 0.004, 0.01, 0);
   tailOff(dry, t.sr, 0.4);
   return room(dry, t.sr, t.rng, { t60: 1.4, size: 0.5, mix: 0.25, predelay: 0.01, tail: 0.3 });
 }
 
 /** The streak's step: a bright blip (the game raises it a note a step). */
-export function orbitStreak(t: Take): Mono {
+function orbitStreak(t: Take): Mono {
   const out = t.canvas(0.5);
-  chime(out, t, 0.004, hz(86), 0.7, 0.12);
-  chime(out, t, 0.06, hz(93), 0.6, 0.16);
+  chime(out, t, 0.004, midiHz(86), 0.7, 0.12);
+  chime(out, t, 0.06, midiHz(93), 0.6, 0.16);
   return tailOff(out, t.sr, 0.15);
 }
 
 /** A secret found: a sparkle of chimes climbing. */
-export function orbitSecret(t: Take): Mono {
+function orbitSecret(t: Take): Mono {
   const out = t.canvas(1.8);
-  [74, 78, 81, 86, 90].forEach((m, k) => chime(out, t, 0.02 + k * 0.07, hz(m), 0.45, 0.4));
+  [74, 78, 81, 86, 90].forEach((m, k) => chime(out, t, 0.02 + k * 0.07, midiHz(m), 0.45, 0.4));
   return roomMono(tailOff(out, t.sr, 0.4), t.sr, t.rng, { t60: 1.0, size: 0.5, mix: 0.25, predelay: 0.01, tail: 0.2 });
 }
 
 /** The golden laser: the capacitor sings up an arpeggio. */
-export function orbitGolden(t: Take): Mono[] {
+function orbitGolden(t: Take): Mono[] {
   const dry = t.canvas(2.4);
   const sing = sweep(t.n(0.5), t.sr, (u) => 800 + 3200 * u);
   shapeBy(sing, (u) => Math.sin(Math.PI * u));
   t.put(dry, sing, 0, 0.15);
-  [74, 78, 81, 86, 90, 93].forEach((m, k) => chime(dry, t, 0.3 + k * 0.08, hz(m), 0.4, 0.7));
+  [74, 78, 81, 86, 90, 93].forEach((m, k) => chime(dry, t, 0.3 + k * 0.08, midiHz(m), 0.4, 0.7));
   tailOff(dry, t.sr, 0.5);
   return room(dry, t.sr, t.rng, { t60: 1.6, size: 0.8, mix: 0.3, predelay: 0.015, tail: 0.2 });
 }
 
 /** The end: a low, grave fall, and the station's hum going quiet under it. */
-export function orbitGameOver(t: Take): Mono[] {
+function orbitGameOver(t: Take): Mono[] {
   const dry = t.canvas(3.4);
-  chime(dry, t, 0.02, hz(62), 0.7, 1.4);
-  chime(dry, t, 0.55, hz(57), 0.7, 1.6);
-  chime(dry, t, 1.1, hz(50), 0.8, 2.2);
+  chime(dry, t, 0.02, midiHz(62), 0.7, 1.4);
+  chime(dry, t, 0.55, midiHz(57), 0.7, 1.6);
+  chime(dry, t, 1.1, midiHz(50), 0.8, 2.2);
   const wash = bandNoise(t.n(2.6), t.sr, t.rng, 80, 600, 2);
   adsr(wash, t.sr, 0.6, 1, 0.3, 1.2);
   t.put(dry, wash, 0.4, 0.08);

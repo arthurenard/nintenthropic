@@ -7,30 +7,14 @@
  * None of them are words; the gang's deaths in particular are exhales and
  * grunts, short and breathy, because anything more is a cartoon.
  */
-import { bandpass, biquad, highpass, lowpass } from "../dsp/filters";
+import { type Curve, lerp, sampled } from "../dsp/curves";
+import { bandpass, highpass, lowpass } from "../dsp/filters";
 import { wrap } from "../dsp/master";
 import { type Mono, adsr, fade, normalize, shapeBy } from "../dsp/signal";
 import { addMode, formants, glottal, white } from "../dsp/sources";
 import { roomMono } from "../dsp/space";
 import type { Take } from "../dsp/take";
-import { burst, puff, thump } from "./kit";
-
-type Curve = (u: number) => number;
-
-/** A function of u sampled into an array every ``step`` samples, linearly between. */
-function sampled(n: number, fn: Curve, step = 32): Float32Array {
-  const out = new Float32Array(n);
-  let a = fn(0);
-  for (let i = 0; i < n; i += step) {
-    const j = Math.min(n, i + step);
-    const b = fn(j / n);
-    for (let k = i; k < j; k++) out[k] = a + ((b - a) * (k - i)) / step;
-    a = b;
-  }
-  return out;
-}
-
-const lerp = (a: number, b: number, u: number): number => a + (b - a) * Math.min(1, Math.max(0, u));
+import { burst, lubDub, puff, thump } from "./kit";
 
 interface VocalOptions {
   /** Fundamental in Hz over u = 0..1. */
@@ -51,7 +35,11 @@ interface VocalOptions {
   rasp?: number;
 }
 
-/** One vocal gesture ``seconds`` long. */
+/**
+ * One vocal gesture ``seconds`` long. The night and the ridge have their
+ * own: each growls with a different shape (a sine here, a parabola there, a
+ * triangle on the ridge), and each pack's takes are tuned to its own.
+ */
 function vocal(t: Take, seconds: number, o: VocalOptions): Mono {
   const n = t.n(seconds);
   const f0 = sampled(n, o.f0);
@@ -410,21 +398,6 @@ export function dogBarkDistant(t: Take): Mono {
   const echo = lowpass(Float32Array.from(dry), t.sr, 1100, 2);
   t.put(out, echo, 0.24, 0.3);
   t.put(out, echo, 0.5, 0.12);
-  return out;
-}
-
-/** One lub-dub: the valves closing, felt more than heard, with enough 100–200 Hz for a laptop's speakers. */
-function lubDub(t: Take, gap: number, strength: number): Mono {
-  const out = t.canvas(gap + 0.35);
-  const lub = thump(t, 0.25, 70 * t.p, 38 * t.p, 0.006, 0.04, 0.5);
-  t.put(out, lub, 0, strength);
-  t.put(out, burst(t, 0.2, 30, 180, 0.005, 0.035, 4), 0, strength * 0.9);
-  const dub = thump(t, 0.2, 90 * t.p, 50 * t.p, 0.004, 0.028, 0.5);
-  t.put(out, dub, gap, strength * 0.7);
-  t.put(out, burst(t, 0.15, 40, 240, 0.004, 0.025, 4), gap, strength * 0.55);
-  // The chest wall: a muffled knock that makes it audible on small speakers.
-  biquad(out, t.sr, "peak", 140, 1.2, 6);
-  lowpass(out, t.sr, 420, 2);
   return out;
 }
 
