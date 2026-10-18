@@ -125,6 +125,23 @@ describe("dynamic resolution that gives back pixels which bought nothing", () =>
     expect(6 + 14 * resolution.scale ** 2).toBeLessThanOrEqual(VSYNC);
   });
 
+  it("says the pixels are spent when they were found to buy nothing, or have run out, and not otherwise", () => {
+    const capped = new DynamicResolution(options);
+    run(capped, () => 2 * VSYNC, 60 * 30);
+    expect(capped.scale).toBe(1);
+    expect(capped.spent).toBe(true);
+    const floored = new DynamicResolution(options);
+    run(floored, (scale) => 5 + 40 * scale * scale, 60 * 30);
+    expect(floored.scale).toBe(0.6);
+    expect(floored.spent).toBe(true);
+    const easy = new DynamicResolution(options);
+    run(easy, () => 9, 60 * 30);
+    expect(easy.spent).toBe(false);
+    // The cap lifted: the frames are quick again, and nothing is spent.
+    run(capped, () => 9, 60 * 5);
+    expect(capped.spent).toBe(false);
+  });
+
   it("keeps what it learned of the browser over a pause", () => {
     const resolution = new DynamicResolution(options);
     run(resolution, () => 2 * VSYNC, 60 * 30);
@@ -172,6 +189,54 @@ describe("the strain watch", () => {
     // The scale takes a few seconds to reach the floor, then six more there.
     expect(told).toBeGreaterThan(6);
     expect(told).toBeLessThan(16);
+  });
+
+  it("keeps how long the frames took while it strained: their median, so a hitch or two does not decide it", () => {
+    const watch = new StrainWatch(6);
+    expect(watch.interval).toBeNull();
+    let told = false;
+    for (let i = 0; i < 400 && !told; i++) told = watch.frame(i % 50 === 0 ? 0.2 : 1 / 30, true);
+    expect(told).toBe(true);
+    expect(watch.interval).toBeCloseTo(1000 / 30, 6);
+    // What came before the count started again is not part of it.
+    const later = new StrainWatch(1);
+    frames(later, 0.9, true, 1 / 10);
+    later.frame(0.05, false);
+    expect(frames(later, 1, true, 1 / 20)).toBe(1);
+    expect(later.interval).toBeCloseTo(50, 6);
+  });
+
+  it("says a race kept up once it has run long enough without straining, and not after it has strained", () => {
+    const keptUp = new StrainWatch(6, 30);
+    frames(keptUp, 29, false);
+    expect(keptUp.steady).toBe(false);
+    frames(keptUp, 2, false);
+    expect(keptUp.steady).toBe(true);
+    const strained = new StrainWatch(6, 30);
+    frames(strained, 10, true);
+    frames(strained, 40, false);
+    expect(strained.steady).toBe(false);
+    expect(new StrainWatch(6).steady).toBe(false);
+  });
+
+  it("speaks for a browser held at 30 fps while the picture stays sharp, with the frames it was held to", () => {
+    const resolution = new DynamicResolution({ restoreFutile: true, initial: 0.85 });
+    const watch = new StrainWatch(6);
+    let told = -1;
+    let seconds = 0;
+    const scales: number[] = [];
+    for (let i = 0; i < 30 * 60 && told < 0; i++) {
+      resolution.sample(2 * VSYNC);
+      seconds += (2 * VSYNC) / 1000;
+      scales.push(resolution.scale);
+      if (watch.frame((2 * VSYNC) / 1000, resolution.spent)) told = seconds;
+    }
+    expect(told).toBeGreaterThan(6);
+    expect(told).toBeLessThan(20);
+    expect(resolution.scale).toBe(0.85);
+    expect(watch.interval).toBeCloseTo(2 * VSYNC, 6);
+    // It looked once, then gave the pixels back: at its floor for no longer than the look.
+    expect(scales.filter((scale) => scale === 0.6).length).toBeLessThan(60);
   });
 
   it("never fires for a machine that keeps up, whatever its tier", () => {

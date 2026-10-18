@@ -11,6 +11,8 @@ import {
   loadGraphics,
   loadLevels,
   loadYou,
+  noteKeptUp,
+  noteStrain,
   playerCount,
   saveCeiling,
   saveFpsReadout,
@@ -172,6 +174,73 @@ describe("the Graphics setting", () => {
     expect(loadCeiling(storage, 1_000_000 + 13 * day)).toBe("medium");
     expect(loadCeiling(storage, 1_000_000 + CEILING_DAYS * day)).toBeNull();
     expect(saveCeiling("low", undefined)).toBe(false);
+  });
+
+  const CAPPED = 1000 / 30;
+
+  it("gives the tier back to a browser holding the page to 30 fps, after one race shows a lower one is no quicker", () => {
+    const storage = memory();
+    // Chrome's Energy Saver: a race at High strains, so the next one tries Medium...
+    expect(noteStrain("high", CAPPED, storage)).toBe("medium");
+    expect(loadCeiling(storage)).toBe("medium");
+    // ...which runs at the same 30 fps: it was not the tier. High again,
+    expect(noteStrain("medium", CAPPED + 0.4, storage)).toBe("high");
+    expect(loadCeiling(storage)).toBe("high");
+    // and a race straining at that pace from now on changes nothing.
+    for (let race = 0; race < 5; race++) expect(noteStrain("high", CAPPED - 0.3, storage)).toBe("high");
+    expect(loadCeiling(storage)).toBe("high");
+  });
+
+  it("keeps a lower tier that made the races quicker, and goes lower while each step helps", () => {
+    const storage = memory();
+    // A GPU that manages 20 fps at High.
+    expect(noteStrain("high", 50, storage)).toBe("medium");
+    // Medium holds 60 fps through a race: it stays, and is no longer on trial.
+    noteKeptUp("medium", storage);
+    expect(loadCeiling(storage)).toBe("medium");
+    // So a later heavy race at Medium tries Low, judged from Medium's frames now, not High's.
+    expect(noteStrain("medium", 50, storage)).toBe("low");
+    expect(noteStrain("low", 50, storage)).toBe("medium");
+    expect(loadCeiling(storage)).toBe("medium");
+
+    const other = memory();
+    // Medium was quicker than High (30 fps against 20) but still strained: Low is tried...
+    expect(noteStrain("high", 50, other)).toBe("medium");
+    expect(noteStrain("medium", CAPPED, other)).toBe("low");
+    // ...and was no quicker than Medium: back to Medium, where it settles.
+    expect(noteStrain("low", CAPPED, other)).toBe("medium");
+    expect(noteStrain("medium", CAPPED, other)).toBe("medium");
+    expect(loadCeiling(other)).toBe("medium");
+  });
+
+  it("forgets the trials and the paces with the ceiling: after a couple of weeks, or when the player chooses", () => {
+    const day = 86_400_000;
+    const storage = memory();
+    noteStrain("high", CAPPED, storage, 1_000_000);
+    noteStrain("medium", CAPPED, storage, 1_000_000);
+    expect(noteStrain("high", CAPPED, storage, 1_000_000 + 13 * day)).toBe("high");
+    // Two weeks on, the pace is forgotten: a race straining at it tries Medium again.
+    expect(noteStrain("high", CAPPED, storage, 1_000_000 + 13 * day + CEILING_DAYS * day)).toBe("medium");
+    saveGraphics("auto", storage);
+    expect(loadCeiling(storage)).toBeNull();
+    expect(noteStrain("high", CAPPED, storage)).toBe("medium");
+    // A lowest tier that strains has nowhere to go; nothing to keep without a storage.
+    expect(noteStrain("low", 50, memory())).toBeNull();
+    expect(noteStrain("high", 50, undefined)).toBe("medium");
+    noteKeptUp("high", undefined);
+  });
+
+  it("reads a ceiling kept before trials existed, and anything odd as nothing", () => {
+    const old = memory({ "handy.kart.ceiling.v1": JSON.stringify({ tier: "medium", at: Date.now() }) });
+    expect(loadCeiling(old)).toBe("medium");
+    // Not on trial: a strain under it tries the tier below.
+    expect(noteStrain("medium", CAPPED, old)).toBe("low");
+    for (const odd of [{ held: -1, at: Date.now() }, { trial: { tier: "high", interval: 30 }, at: Date.now() }, { tier: "medium", at: "today" }, null, 7]) {
+      expect(loadCeiling(memory({ "handy.kart.ceiling.v1": JSON.stringify(odd) })), JSON.stringify(odd)).toBeNull();
+    }
+    // A trial with no sensible pace is a plain ceiling.
+    const bent = memory({ "handy.kart.ceiling.v1": JSON.stringify({ tier: "medium", at: Date.now(), trial: { tier: "high", interval: "fast" } }) });
+    expect(noteStrain("medium", CAPPED, bent)).toBe("low");
   });
 
   it("keeps the frame-rate readout off until it is turned on", () => {

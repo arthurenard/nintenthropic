@@ -65,8 +65,10 @@ import { addBakedSun, clearBake, makeBakeUniforms, shareBake } from "./world/sha
 import { glowTexture } from "./world/textures";
 import { styleFor } from "./world/themes";
 
-/** Seconds at the lowest resolution before the renderer says it is straining (see `onStrain`). */
+/** Seconds with the pixels spent before the renderer says it is straining (see `onStrain`). */
 export const STRAIN_SECONDS = 6;
+/** Seconds of racing without straining before the renderer says the tier kept up (see `onKeptUp`). */
+export const KEPT_UP_SECONDS = 30;
 
 const _projScreen = new Matrix4();
 const _frustum = new Frustum();
@@ -80,11 +82,14 @@ export interface RaceRendererOptions {
    */
   ceiling?: Tier | null;
   /**
-   * Called once, with the tier in use, when dynamic resolution has sat at its lowest for
-   * `STRAIN_SECONDS` of racing: the picture could not be made cheap enough by pixels alone.
-   * The app turns it into a lower ceiling for the next race (prefs.ts).
+   * Called once, with the tier in use and how long its frames took (ms, the median), when the
+   * frames have stayed slow for `STRAIN_SECONDS` with nothing left for pixels to do: dynamic
+   * resolution at its floor, or fewer pixels found to buy nothing. The app turns it into a lower
+   * ceiling for the next race, on trial until that race shows whether it was quicker (prefs.ts).
    */
-  onStrain?: (tier: Tier) => void;
+  onStrain?: (tier: Tier, interval: number) => void;
+  /** Called once, with the tier in use, when the race has run `KEPT_UP_SECONDS` without straining. */
+  onKeptUp?: (tier: Tier) => void;
   /** Makes a kart's model; the procedural toy by default, a glTF loader later. */
   kartFactory?: KartFactory;
   /**
@@ -173,7 +178,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const guessed = guessTier(gpu, typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4, { splitScreen: true });
   const tier: Tier = options.quality && options.quality !== "auto" ? options.quality : capTier(guessed, options.ceiling);
   const settings: QualitySettings = QUALITY[tier];
-  const resolution = new DynamicResolution({ initial: options.resolutionScale ?? INITIAL_SCALE[tier] });
+  // Fewer pixels that buy no quicker frame are given back (a browser holding the page to 30 fps to save the battery).
+  const resolution = new DynamicResolution({ initial: options.resolutionScale ?? INITIAL_SCALE[tier], restoreFutile: true });
   renderer.shadowMap.enabled = settings.shadowMap > 0;
 
   const calm =
@@ -292,8 +298,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     });
   };
   let shadowSweep = 0;
-  /** Tells the app (once) when dynamic resolution has sat at its lowest for STRAIN_SECONDS. */
-  const strain = new StrainWatch(STRAIN_SECONDS);
+  /** Tells the app (once) when the pixels have been spent for STRAIN_SECONDS, or that the race kept up. */
+  const strain = new StrainWatch(STRAIN_SECONDS, KEPT_UP_SECONDS);
+  let keptUpTold = false;
 
   canvas.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
@@ -490,8 +497,12 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       time += dt;
       if (dtRaw > 0 && options.resolutionScale === undefined) {
         if (resolution.sample(dtRaw * 1000)) applySize();
-        // Pixels were the cheap way to save time; if they have run out and the frames are still slow, the next race starts a tier lower.
-        if (strain.frame(dtRaw, resolution.scale <= resolution.min + 1e-6)) options.onStrain?.(tier);
+        // Pixels were the cheap way to save time; if they have done all they can and the frames are still slow, the next race tries a tier lower.
+        if (strain.frame(dtRaw, resolution.spent)) options.onStrain?.(tier, strain.interval ?? dtRaw * 1000);
+        if (!keptUpTold && strain.steady) {
+          keptUpTold = true;
+          options.onKeptUp?.(tier);
+        }
       }
 
       // A new race starts the tick count over.

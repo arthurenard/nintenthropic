@@ -5,7 +5,7 @@
  * are versioned and hold JSON.
  */
 import { CHARACTERS, characterById } from "../characters";
-import { TIERS, type Tier } from "../render/quality";
+import { TIERS, lowerTier, type Tier } from "../render/quality";
 import { cleanName, defaultName } from "./format";
 import type { SoundLevels, Steering } from "./services";
 
@@ -184,22 +184,78 @@ export function saveGraphics(choice: Graphics, storage: Storage | undefined = lo
 
 /**
  * The safety net's memory: the highest tier "Auto" may use on this device,
- * set when a race ran at the lowest resolution for seconds on end (see
- * render/renderer.ts, onStrain). Null when nothing has gone wrong, or when
- * it was set long enough ago that the device may have changed (a laptop on
- * battery then on the mains, a new driver): `CEILING_DAYS`.
+ * set when a race could not keep up (see render/renderer.ts, onStrain, and
+ * `noteStrain` below). Null when nothing has gone wrong, or when it was set
+ * long enough ago that the device may have changed (a laptop on battery then
+ * on the mains, a new driver): `CEILING_DAYS`.
  */
 export function loadCeiling(storage: Storage | undefined = local(), now = Date.now()): TierName | null {
-  const saved = read<{ tier?: unknown; at?: unknown }>(storage, KEYS.ceiling);
-  if (!saved || !isTier(saved.tier) || typeof saved.at !== "number") return null;
-  return now - saved.at < CEILING_DAYS * 86_400_000 ? saved.tier : null;
+  return ceilingRecord(storage, now)?.tier ?? null;
 }
 
-/** How long the safety net's ceiling holds before Auto tries the device's own tier again. */
+/** How long the safety net remembers anything before Auto tries the device's own tier again. */
 export const CEILING_DAYS = 14;
 
 export function saveCeiling(tier: TierName, storage: Storage | undefined = local(), now = Date.now()): boolean {
   return write(storage, KEYS.ceiling, { tier, at: now });
+}
+
+/**
+ * What the safety net keeps. `trial`: the ceiling was set when a race at
+ * `trial.tier` strained with frames of `trial.interval` ms, and has not yet
+ * shown that it makes them quicker. `held`: frames this long were found to be
+ * no quicker a tier lower (a browser holding the page to 30 fps to save the
+ * battery), so a race straining at that pace is left alone.
+ */
+interface CeilingRecord {
+  tier?: TierName;
+  at: number;
+  trial?: { tier: TierName; interval: number };
+  held?: number;
+}
+
+/** A ceiling on trial is kept only if the race under it ran frames at least this much quicker. */
+const QUICKER = 0.9;
+/** Frames within this band of a pace found no quicker a tier lower are that pace again. */
+const SAME_PACE: readonly [number, number] = [0.8, 1.25];
+
+const isInterval = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+function ceilingRecord(storage: Storage | undefined, now: number): CeilingRecord | null {
+  const saved = read<{ tier?: unknown; at?: unknown; trial?: { tier?: unknown; interval?: unknown }; held?: unknown }>(storage, KEYS.ceiling);
+  if (!saved || typeof saved !== "object" || typeof saved.at !== "number" || now - saved.at >= CEILING_DAYS * 86_400_000) return null;
+  const record: CeilingRecord = { at: saved.at };
+  if (isTier(saved.tier)) record.tier = saved.tier;
+  const trial = saved.trial;
+  if (record.tier && trial && isTier(trial.tier) && isInterval(trial.interval)) record.trial = { tier: trial.tier, interval: trial.interval };
+  if (isInterval(saved.held)) record.held = saved.held;
+  return record.tier || record.held !== undefined ? record : null;
+}
+
+/**
+ * The safety net's answer to a race that strained at `tier` with frames of
+ * `interval` ms; returns the ceiling Auto has now. Usually that is the tier
+ * below, on trial. A tier below that was tried and ran no quicker was not what
+ * held the frames back: it is undone, and the pace is remembered, so a strain
+ * at that pace changes nothing.
+ */
+export function noteStrain(tier: TierName, interval: number, storage: Storage | undefined = local(), now = Date.now()): TierName | null {
+  const saved = ceilingRecord(storage, now);
+  if (saved?.trial && saved.tier === tier && interval > saved.trial.interval * QUICKER) {
+    write(storage, KEYS.ceiling, { tier: saved.trial.tier, at: now, held: saved.trial.interval });
+    return saved.trial.tier;
+  }
+  if (saved?.held !== undefined && interval > saved.held * SAME_PACE[0] && interval < saved.held * SAME_PACE[1]) return saved.tier ?? null;
+  const lower = lowerTier(tier);
+  if (!lower) return saved?.tier ?? null;
+  write(storage, KEYS.ceiling, { tier: lower, at: now, trial: { tier, interval } });
+  return lower;
+}
+
+/** A race at `tier` kept up: a ceiling on trial there has shown it helps, and stays as it is. */
+export function noteKeptUp(tier: TierName, storage: Storage | undefined = local(), now = Date.now()): void {
+  const saved = ceilingRecord(storage, now);
+  if (saved?.trial && saved.tier === tier) write(storage, KEYS.ceiling, { tier: saved.tier, at: saved.at });
 }
 
 export function clearCeiling(storage: Storage | undefined = local()): void {

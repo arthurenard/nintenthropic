@@ -13,11 +13,10 @@ import { TRACKS } from "../track/tracks";
 import type { DriverControl, RaceRenderer, Session } from "../contract";
 import { gamepadControl, keyboardControl, wheelControl, WheelPreview, type Seat, type WheelControl as ReadWheel } from "../input";
 import { hostSession, joinSession, localTransport, peerTransport, soloSession, type NetOptions } from "../net";
-import { lowerTier } from "../render/quality";
 import { createSimRace } from "../sim/race";
 import { CameraStack } from "./camera";
 import { lazyPodium, lazyRenderer } from "./lazyRenderer";
-import { loadCeiling, loadGraphics, loadYou, playerCount, saveCeiling } from "./prefs";
+import { loadCeiling, loadGraphics, loadYou, noteKeptUp, noteStrain, playerCount } from "./prefs";
 import { KartSounds } from "./sound";
 import {
   SessionFailure,
@@ -117,12 +116,8 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
         return createRaceRenderer(canvas, hudRoot, {
           quality: choice,
           ceiling: auto ? loadCeiling() : null,
-          onStrain: auto
-            ? (tier) => {
-                const lower = lowerTier(tier);
-                if (lower) saveCeiling(lower);
-              }
-            : undefined,
+          onStrain: auto ? (tier, interval) => noteStrain(tier, interval) : undefined,
+          onKeptUp: auto ? (tier) => noteKeptUp(tier) : undefined,
         });
       });
     },
