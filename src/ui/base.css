@@ -112,6 +112,12 @@ svg {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* Words about a key ("Press P to resume."), said only where there is a keyboard: a touch screen alone has none. */
+@media (hover: none) and (pointer: coarse) {
+  .keys {
+    display: none;
+  }
+}
 
 /* --- type ---------------------------------------------------------------- */
 
