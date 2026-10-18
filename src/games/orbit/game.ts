@@ -578,6 +578,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.nightPlaced = false;
     this.hiShown = false;
     this.stage.sky.uniform<Matrix3>("uNightMap").value.identity();
+    this.stage.sky.uniform<number>("uNightScale").value = 1;
     this.stage.sky.uniform<Vector4>("uHiLens").value.setW(1);
     this.flash.reset();
     this.post.set("flash", 0);
