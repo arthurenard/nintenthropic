@@ -225,6 +225,14 @@ export interface AudioBus {
   setFilter(name: "hurt" | "slowmo", amount: number): void;
   readonly muted: boolean;
   /**
+   * The game is paused: cancel every one-shot of the game's that has not
+   * begun yet (one asked for with a delay, a far sound on its way, an echo
+   * not yet back), so none sounds over the pause sheet. What already plays
+   * plays out; the interface's sounds are left be. Optional: a bus without
+   * delays need not have it.
+   */
+  hush?(): void;
+  /**
    * The street the listener stands in, in metres (to the facades left and
    * right, the building behind, the far end), for the echoes. Optional: a
    * game passes what it knows; the sound engine keeps its defaults for the rest.

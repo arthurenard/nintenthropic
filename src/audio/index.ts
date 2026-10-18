@@ -66,6 +66,8 @@ export class NullAudioBus implements AudioEngine {
 
   setFilter(_name: "hurt" | "slowmo", _amount: number): void {}
 
+  hush(): void {}
+
   load(_pack: Pack, onProgress?: (fraction: number) => void): Promise<void> {
     onProgress?.(1);
     return Promise.resolve();

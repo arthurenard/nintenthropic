@@ -50,10 +50,14 @@ interface Voice extends VoiceInfo {
   /** Not slowed by slow motion (the slow-motion boom itself). */
   exempt: boolean;
   sources: AudioBufferSourceNode[];
+  /** When each source starts, context time (the echoes after the direct sound). */
+  starts: number[];
   rates: number[];
   nodes: AudioNode[];
   out: GainNode;
   endsAt: number;
+  /** The interface's own (a pause leaves it be). */
+  ui: boolean;
 }
 
 interface LoopState {
@@ -560,6 +564,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     head.connect(gain).connect(panner).connect(out);
     nodes.push(gain, panner);
     sources.push(src);
+    const starts = [when];
 
     // The reverb send, taken before distance attenuation (far is wetter).
     if (spec.reverb) {
@@ -588,6 +593,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
         echo.start(when + tap.delay);
         nodes.push(echo, lp, g, p);
         sources.push(echo);
+        starts.push(when + tap.delay);
         tail = Math.max(tail, tap.delay);
       }
     }
@@ -606,10 +612,12 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       duration,
       exempt,
       sources,
+      starts,
       rates: sources.map(() => baseRate),
       nodes,
       out,
       endsAt: when + tail + duration / rate + 0.05,
+      ui: spec.bus === "ui",
     };
     let live = sources.length;
     for (const s of sources) {
@@ -621,6 +629,28 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       };
     }
     this.voices.push(voice);
+  }
+
+  /**
+   * The world is paused: whatever it was about to say goes unsaid - a far
+   * shot still on its way, a delayed call, the echoes not yet back - so
+   * nothing of the game sounds over the pause sheet. What has begun plays
+   * out (cutting it would click), and the interface's sounds are left be.
+   */
+  hush(): void {
+    if (this.closed) return;
+    const now = this.ctx.currentTime;
+    for (const voice of this.voices) {
+      if (voice.ui) continue;
+      voice.sources.forEach((source, k) => {
+        if (voice.starts[k]! <= now) return;
+        try {
+          source.stop(now);
+        } catch {
+          // Already stopped.
+        }
+      });
+    }
   }
 
   /** Fade a voice out fast and let it go (stolen for a newer sound). */

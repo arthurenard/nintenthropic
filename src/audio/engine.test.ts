@@ -147,6 +147,27 @@ describe("the engine", () => {
     expect(voice("hit_wood", 45).gain).toBeLessThan(voice("hit_wood", 12).gain * 0.8);
   });
 
+  it("hushes, for a pause, what has not begun: a far shot on its way, the echoes not yet back, but not the interface", () => {
+    const { e, ctx } = engine();
+    const made = (play: () => void): Source[] => {
+      const n = ctx.sources.length;
+      play();
+      return ctx.sources.slice(n);
+    };
+    const shot = made(() => e.play("revolver_shot"));
+    const far = made(() => e.play("bandit_shot", { distance: 40 }));
+    const later = made(() => e.play("hit_wood", { delay: 0.4 }));
+    const tap = made(() => e.play("ui_confirm", { delay: 0.5 }));
+    ctx.currentTime = 0.02;
+    e.hush();
+    const [direct, ...echoes] = shot;
+    expect(direct!.stoppedAt).toBeNull(); // begun: it plays out
+    expect(echoes.length).toBeGreaterThan(0);
+    for (const s of echoes) expect(s.stoppedAt, `echo at ${s.startedAt}`).toBe(s.startedAt! > 0.02 ? 0.02 : null);
+    for (const s of [...far, ...later]) expect(s.stoppedAt).toBe(0.02);
+    for (const s of tap) expect(s.stoppedAt).toBeNull();
+  });
+
   it("honours delay and rate, and varies the rate only a little", () => {
     const { e, ctx } = engine();
     e.play("hit_wood", { delay: 0.5, rate: 1.5 });

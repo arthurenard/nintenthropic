@@ -76,6 +76,9 @@ export class Sound {
       e.stop?.();
       e.stop = null;
     }
+    // A far shot still on its way, an echo still to come back: the world
+    // has stopped, and what it was about to say goes with it.
+    this.bus.hush?.();
     // Being hurt brings a heartbeat and a muffle with it; a paused game is
     // not being hurt, so neither carries on over the pause menu.
     this.bus.setFilter("hurt", 0);
