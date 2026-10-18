@@ -478,7 +478,10 @@ export class App {
       const { EngineHost } = await import("../engine/host");
       this.host = new EngineHost($<HTMLCanvasElement>("world"));
       this.host.onContextLost = () => {
-        this.endSession();
+        // A game's view with no game in it has no way out (its Pause and Esc
+        // answer only a game): the page goes back to the arcade, and says why.
+        if (document.body.dataset.view === "game") this.back();
+        else this.endSession();
         this.trouble("context");
       };
     }
