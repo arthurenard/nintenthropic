@@ -46,6 +46,7 @@ import type { RacerSetup } from "../contract";
 import type { KartFactory, KartModel, KartPose } from "./kart";
 import { createProceduralKart } from "./kartModel";
 import { useStudioEnvironment } from "./kartMaterial";
+import { outliving } from "./outliving";
 import { TAU, clamp } from "./math";
 
 /** A winner on the podium. */
@@ -417,9 +418,12 @@ export function createPodium(canvas: HTMLCanvasElement, options: PodiumOptions =
     dispose() {
       if (disposed) return;
       disposed = true;
+      // Else the karts' shared material and three's shared table keep this renderer (outliving.ts).
+      const shared = outliving(renderer, scene);
       clearWinners();
       for (const thing of disposables) thing.dispose();
       confetti.dispose();
+      for (const thing of shared) thing.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     },

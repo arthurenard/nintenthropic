@@ -42,6 +42,7 @@ import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
 import { shadowInView } from "./casters";
 import { RescueDrone } from "./drone";
+import { outliving } from "./outliving";
 import { Effects } from "./effects";
 import { RenderEggs } from "./eggs";
 import { Hud } from "./hud";
@@ -631,6 +632,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
     dispose(): void {
       disposed = true;
+      // Found before the world goes, let go of after: else what outlives the race keeps this renderer (outliving.ts).
+      const shared = outliving(renderer, scene);
       disposeWorld();
       eggs.dispose();
       hud.dispose();
@@ -638,6 +641,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       timer?.dispose();
       shadowTexture.dispose();
       lightTexture.dispose();
+      for (const thing of shared) thing.dispose();
       renderer.dispose();
       // Give the context itself back: each race (and each restart) makes a canvas of its own, and a browser allows only sixteen.
       renderer.forceContextLoss();
