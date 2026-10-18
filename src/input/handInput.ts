@@ -249,7 +249,8 @@ export class HandInput implements InputSource {
       armed: reading.armed,
       fired,
       travel: reading.travel,
-      offscreen: this.offscreen,
+      // A shot is as it was taken: on the screen, though the hand has swung off it since (the last round, then the reload).
+      offscreen: fired ? this.shotOffscreen : this.offscreen,
       capturedAt: this.capturedAt,
       scope,
     };

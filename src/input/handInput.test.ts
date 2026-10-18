@@ -118,6 +118,23 @@ describe("the hand as an input", () => {
     expect(input.sample(t + STALE_FRAME + 50).fired).toBe(false);
   });
 
+  it("fires a last round taken on the screen, though the hand swung off it before the game read the shot", () => {
+    const { camera, input } = setup();
+    let t = 0;
+    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 20, indexTip: [0.5, 0.5] }, (t += 33));
+    for (let i = 0; i < 2; i++) camera.show({ thumbDegrees: 75, indexTip: [0.5, 0.5] }, (t += 33));
+    // Then away past the right edge, to reload, while the game was busy with a long frame.
+    for (let i = 0; i < 6; i++) camera.show({ thumbDegrees: 75, indexTip: [0.98, 0.5] }, (t += 33));
+    const shot = input.sample(t + 5);
+    expect(shot.fired).toBe(true);
+    expect(shot.offscreen).toBe(false);
+    expect(shot.x).toBeCloseTo(0.5, 2);
+    // The next read is the swing: off the screen, the reload.
+    const after = input.sample(t + 10);
+    expect(after.fired).toBe(false);
+    expect(after.offscreen).toBe(true);
+  });
+
   it("holds the trigger's state but not the aim while the hand is gone", () => {
     const { camera, input } = setup();
     let t = 0;
