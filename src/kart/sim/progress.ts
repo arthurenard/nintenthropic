@@ -65,10 +65,11 @@ export function updateProgress(w: World, emit: Emit): void {
     if (k.progress >= laps * length) finishers.push(k);
   }
 
-  // Several karts can finish on one tick: the one furthest past the line was first.
-  finishers.sort((a, b) => b.progress - a.progress || a.id - b.id);
-  for (const k of finishers) {
-    const at = q3(Math.max(k.lapStart, Math.min(now, now - (k.progress - laps * length) / Math.max(1, Math.abs(forwardSpeed(k))))));
+  // Several karts can finish on one tick: the one that crossed the line first, by its speed, was first (a fast kart can be
+  // further past it than a slow one that crossed before it), so the places and the times agree for a photo finish.
+  const crossings = finishers.map((k) => ({ k, at: q3(Math.max(k.lapStart, Math.min(now, now - (k.progress - laps * length) / Math.max(1, Math.abs(forwardSpeed(k)))))) }));
+  crossings.sort((a, b) => a.at - b.at || b.k.progress - a.k.progress || a.k.id - b.k.id);
+  for (const { k, at } of crossings) {
     const time = at - k.lapStart;
     if (time > 0 && (k.bestLap === null || time < k.bestLap)) k.bestLap = q3(time);
     k.finished = at;
@@ -76,9 +77,13 @@ export function updateProgress(w: World, emit: Emit): void {
     state.home.push(k.id);
     k.finalPlace = state.home.length;
     k.place = k.finalPlace;
-    // From here the kart drives itself.
+    // From here the kart drives itself, on a lap of honour: with nothing in hand to throw at those still racing.
     k.ai = true;
     k.bot.presses = k.presses;
+    k.item = null;
+    k.uses = 0;
+    k.roll = 0;
+    k.rolled = null;
     emit({ type: "finish", kart: k.id, place: k.finalPlace, time: at });
   }
 

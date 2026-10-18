@@ -24,10 +24,10 @@ export const CHARACTERS: readonly Character[] = [
   { id: "pepper", name: "Pepper", weight: "light", species: "penguin", blurb: "Never met an ice patch she didn't like." },
   { id: "moss", name: "Moss", weight: "light", species: "frog", blurb: "Hops into every drift." },
   { id: "kit", name: "Kit", weight: "middle", species: "fox", blurb: "Knows the inside line." },
-  { id: "juniper", name: "Juniper", weight: "middle", species: "otter", blurb: "Loves the harbour at night." },
+  { id: "juniper", name: "Juniper", weight: "middle", species: "otter", blurb: "Takes the wet line on purpose." },
   { id: "mango", name: "Mango", weight: "middle", species: "cat", blurb: "Lands on all four wheels." },
   { id: "bramble", name: "Bramble", weight: "heavy", species: "bear", blurb: "Bumps first, apologises later." },
-  { id: "rivet", name: "Rivet", weight: "heavy", species: "robot", blurb: "Built for the long straights." },
+  { id: "rivet", name: "Rivet", weight: "heavy", species: "robot", blurb: "Never blinks. Never brakes." },
   { id: "dabble", name: "Dabble", weight: "middle", species: "duck", blurb: "Found every duck. Became one.", unlock: "duck-driver" },
 ];
 

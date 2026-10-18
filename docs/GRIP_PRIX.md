@@ -49,9 +49,10 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   the end) instead of a single race, and can flip every track left for right
   with **Mirror Mode**. Details below.
 - **Tricks.** Clap to honk (a Honk! bubble over your kart, and a horn the
-  karts near you hear), raise both open hands high to cheer, wave one open
-  hand to say hello (a cheering driver cheers on the podium too). Keyboard:
-  H, C, V; gamepad: Y. A clap is not a brake and a cheer is not an item.
+  karts near you hear; a bot within 15 m usually honks back), raise both
+  open hands high to cheer, wave one open hand to say hello (a cheering
+  driver cheers on the podium too). Keyboard: H, C, V; gamepad: Y. A clap is
+  not a brake and a cheer is not an item.
 - **Eggs.** A rubber duck hides off the racing line on every track (drive up
   to it for a squeak and a toast; find them all and Dabble joins). Two karts
   over the line within 0.15 s for a top-three place get a **photo finish**. A
@@ -68,13 +69,13 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
 | --- | --- |
 | Nitro | A burst of speed, now. |
 | Triple Nitro | Three bursts, one per use. |
-| Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second). |
+| Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second); a kart flying off a ramp passes over it. |
 | Seeker | A puck that follows the track to the kart one place ahead. |
 | Slick | A puddle of oil dropped behind you. Whoever drives through it spins. |
 | Triple Puck | Three Pucks, one per use; they orbit your kart until fired. |
 | Comet | Six seconds untouchable (pucks, slicks, hazards and bumps pass through), 15% faster, the grass no slower than the road; the karts it touches spin. |
-| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared. |
-| Skyrocket | Flies high over the track to the leader (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
+| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared, and so is a kart the drone is carrying or has just set down. |
+| Skyrocket | Flies high over the track to the leader of those still racing (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
 | Blast | An instant ring of force, 7 m round you: spins karts inside it and destroys Pucks, Seekers, Slicks, Decoys and Skyrockets there. |
 | Decoy Box | Dropped behind like a Slick, but it looks like an item box (a duller colour, a wink). Whoever drives into it spins. |
 
@@ -90,8 +91,10 @@ Three laps by default (the room may choose 1-5). Up to eight karts: the
 players, and bots filling the grid when the room wants them (on by default,
 six karts in all). Countdown 3-2-1-Go; the race ends when every player has
 finished, or 25 s after the first player finished — the rest are placed by
-how far round they got. A finished player's kart drives itself on. A player
-who leaves mid-race is replaced by a bot.
+how far round they got. A finished kart (a player's too) drives itself on,
+with nothing in hand: it drops its item at the line and the boxes give it
+none, so a lap of honour spins no one still racing. A player who leaves
+mid-race is replaced by a bot.
 
 ### Grand Prix and Mirror
 
@@ -109,7 +112,7 @@ their new places with a mark for who rose or fell (`app/standings.ts`). Bots
 keep their names, colours and drivers (`RacerSetup`) through the cup; the
 leader starts on pole. The cup runs on the settings it began with. A latecomer
 is turned away ("started"); a guest who leaves keeps their row and their kart
-races on as a bot.
+races on as a bot, winning points for that row.
 
 The **podium** (`render/podium.ts`, `createPodium(canvas)`, shown by
 `app/podium.ts`) is a 3D ceremony: the top three drivers in their karts on a
@@ -200,7 +203,11 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
 - **Speed.** Top 24 m/s on the road, ~90% of it in 3 s. Off the road (more
   than half the width from the centre) top speed falls to 11 m/s with drag.
   A barrier stands 6 m beyond each edge: hitting it kills the speed into it,
-  loses 30% of the rest, and makes a `wall` event.
+  loses 30% of the rest, and makes a `wall` event. Brushing it (under 3 m/s
+  into it) wears 3 m/s off the speed each second (it was 5% of the speed a
+  tick, which had a kart on the outside of a bend crawling in a second).
+  Nose against it and nearly stopped, the wheel turns the kart as it would at
+  4 m/s, so a kart that met it head-on is never wedged.
 - **Turning.** Yaw rate up to ~2.2 rad/s, rising with speed from nothing at a
   standstill to full by 6 m/s, a little less at top speed. Grip pulls the
   velocity toward the heading quickly (a slight slide, never ice).
@@ -214,17 +221,21 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
 - **Boost.** Top speed +35% and strong acceleration while it lasts. Nitro
   1.5 s, a pad 1.0 s, a start boost 1.0 s.
 - **Start.** The countdown is 3 s plus half a second of "ready". Throttle
-  rising from 0 to 1 in the last 0.6 s before Go gives the start boost;
-  throttle held since before 1.2 s floods the engine (no drive for 0.6 s
-  after Go). Bots get a start boost by skill.
+  rising from 0 to 1 in the last second before Go (while the lights say 1)
+  gives the start boost; throttle held since before 1.2 s floods the engine
+  (no drive for 0.6 s after Go). Bots get a start boost by skill. (The window
+  was 0.6 s: hands closed as the 1 came up reached the sim about 0.8 s before
+  Go, after the fist's 0.12 s hold and the camera, and missed it.)
 - **Karts touch.** Circles of radius 1.1 m push apart, the faster one
   shoving harder; a `bump` event.
 - **Item boxes.** A row of five across the road at each of the track's
   `itemRows`; a box taken comes back after 3 s. Roulette 1.0 s. Odds by place
   (above). Puck: 40 m/s, 6 s, bounces off barriers, hits within 1.4 m.
   Seeker: 36 m/s along the centre line toward the kart one place ahead,
-  homing within 30 m. Slick: dropped 2.5 m behind, stays until driven through
-  (at most 12 on the track; the oldest goes). A hit spins the kart 1.2 s,
+  homing within 30 m (along the road as well as straight across, so it
+  never turns for a kart beyond the barrier on the next finger). Slick:
+  dropped 2.5 m behind, stays until driven through (at most 12 on the
+  track; the oldest goes). A hit spins the kart 1.2 s,
   cuts its speed to a fifth, and ends its drift. Decoy: a slick that looks
   like a box (at most 8). Odds are three rows (`oddsFirst`, `oddsMid`,
   `oddsLast` in `tuning.ts`) blended by place. Comet 6 s (+15% top speed, no
@@ -352,7 +363,9 @@ only those karts' physics against the world as it is.
   then closed within 0.6 s with the other a fist all along → one item press;
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
   between the palms) by at least a quarter span → hop; drift held from the
-  hop until |steer| < 0.15 for 200 ms or a brake.
+  hop until |steer| < 0.15 for 200 ms or a brake. A hop while the drift is
+  still held (after a hop that was only a hop, or a drift a spin-out ended)
+  lets go of it for 50 ms first, so the kart sees a fresh press and hops.
 - **Tricks** (`gestures.ts`, in hand lengths, a hand's span being twice the
   wrist-to-knuckle size): a **clap** (palms from at least one hand length
   apart to within 0.6 and back to 0.9 inside half a second, not from a brake

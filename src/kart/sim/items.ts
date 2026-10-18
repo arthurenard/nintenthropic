@@ -53,15 +53,21 @@ function drawItem(w: World, place: number, racers: number): ItemKind {
 export function hitKart(victim: KartState, by: number | null, cause: HitCause, emit: Emit, seconds?: number): boolean {
   if (victim.spin > 0 || victim.immune > 0 || victim.comet > 0 || victim.rescue > 0) return false;
   spinOut(victim, seconds);
-  emit({ type: "hit", kart: victim.id, by, cause });
+  // Spun by one's own item says so, for the picture's "Oops." and its sound.
+  emit(by === victim.id ? { type: "hit", kart: victim.id, by, cause, own: true } : { type: "hit", kart: victim.id, by, cause });
   return true;
 }
 
-/** The kart a skyrocket flies to: the leader, or the runner-up when the user leads. */
+/**
+ * The kart a skyrocket flies to: the leader of those still racing, or the
+ * runner-up when the user leads. A kart already home is not in the race any
+ * more (the storm spares it too): a rocket sent after it would be wasted on a
+ * lap of honour.
+ */
 export function rocketTarget(w: World, owner: number): KartState | undefined {
   let best: KartState | undefined;
   for (const k of w.state.karts) {
-    if (k.id !== owner && (best === undefined || k.place < best.place)) best = k;
+    if (k.id !== owner && k.finished === null && (best === undefined || k.place < best.place)) best = k;
   }
   return best;
 }
@@ -168,14 +174,18 @@ export function pressItem(w: World, k: KartState, input: DriveInput, full: boole
   }
 }
 
-/** A storm over the pack: every kart ahead of the user (everyone else when none is) spins briefly and then crawls. A Comet is spared. */
+/**
+ * A storm over the pack: every kart ahead of the user (everyone else when none
+ * is) spins briefly and then crawls. A Comet is spared, and so is a kart the
+ * drone is carrying or has just set down, which nothing can touch.
+ */
 function storm(w: World, user: KartState, emit: Emit): void {
   const state = w.state;
   state.stormAt = state.tick;
   const others = state.karts.filter((o) => o.id !== user.id && o.finished === null);
   const ahead = others.filter((o) => o.place < user.place);
   for (const victim of ahead.length > 0 ? ahead : others) {
-    if (victim.comet > 0) continue;
+    if (victim.comet > 0 || victim.rescue > 0 || victim.immune > 0) continue;
     victim.zap = ticks(I.storm.zap);
     hitKart(victim, user.id, "storm", emit, I.storm.spin);
     emit({ type: "strike", kart: victim.id, item: "storm", x: victim.x, z: victim.z });
@@ -212,12 +222,16 @@ function barrierLimit(w: World, s: number, side: 1 | -1): number {
   return w.geo.at(s).width / 2 + barrierDistance(terrain, s, side) - 0.3;
 }
 
-/** Whichever kart a thing at (x, z) with this reach hits first (lowest id), or null. */
+/**
+ * Whichever kart a thing at (x, z) with this reach hits first (lowest id), or
+ * null. Pucks and seekers skim the road: a kart flying over one off a ramp is
+ * out of its reach, as it is out of a hazard's.
+ */
 function kartHit(w: World, x: number, z: number, reach: number, owner: number, age: number, grace: number): KartState | null {
   const r2 = reach * reach;
   for (const k of w.state.karts) {
     if (k.id === owner && age < grace) continue;
-    if (k.spin > 0 || k.immune > 0 || k.comet > 0 || k.rescue > 0) continue;
+    if (k.spin > 0 || k.immune > 0 || k.comet > 0 || k.rescue > 0 || k.air > TUNING.hazard.clearHeight) continue;
     const dx = k.x - x;
     const dz = k.z - z;
     if (dx * dx + dz * dz < r2) return k;
@@ -264,11 +278,13 @@ function stepSeeker(w: World, seeker: Seeker, emit: Emit): boolean {
   seeker.age++;
   seeker.life--;
   if (seeker.life <= 0) return false;
-  // Aim at the target once close, else follow the track's centre line a little way ahead.
+  // Aim at the target once close, else follow the track's centre line a little way ahead. Close means along the road
+  // too: where the track doubles back (the fingers of the palm island) the target can be near across the barrier, and a
+  // seeker that turned for it would only grind along the barrier between.
   let ax: number;
   let az: number;
   const target = seeker.target >= 0 ? w.kart(seeker.target) : undefined;
-  if (target && Math.hypot(target.x - seeker.x, target.z - seeker.z) < S.homing) {
+  if (target && Math.abs(w.geo.delta(seeker.s, target.s)) < S.homing && Math.hypot(target.x - seeker.x, target.z - seeker.z) < S.homing) {
     ax = target.x;
     az = target.z;
   } else {
@@ -396,9 +412,10 @@ export function stepItems(w: World, emit: Emit): void {
       const dz = k.z - site.z;
       if (dx * dx + dz * dz >= reach2) continue;
       // Every kart breaks the box it drives through, as in any kart racer;
-      // only one with empty hands gets an item from it.
+      // only one with empty hands gets an item from it, and one still racing
+      // (a kart home already drives on with nothing to use on the others).
       state.boxes[b] = ticks(I.respawn);
-      if (k.item !== null || k.roll > 0) {
+      if (k.item !== null || k.roll > 0 || k.finished !== null) {
         emit({ type: "box", kart: k.id });
         break;
       }
