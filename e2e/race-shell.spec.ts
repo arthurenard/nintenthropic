@@ -204,6 +204,22 @@ test("pausing: Escape and the button open a sheet; practice waits, Resume counts
   await expect.poll(() => phase(page), { timeout: 30_000 }).toBe("countdown");
 });
 
+test("the loading screen: the track's name, its bar and the tip each in their own place, from the first frame", async ({ page }) => {
+  await practiceToLobby(page);
+  const lobby = (await state(page)).lobby!;
+  await page.evaluate((room) => window.gripTest!.loading(room, 0.4), lobby);
+  // At once, while the card is still rising (its rise once carried the tip up over the bar), and when it has settled.
+  for (const wait of [50, 1200]) {
+    await page.waitForTimeout(wait);
+    const status = (await page.locator("#race-loading-title").boundingBox())!;
+    const tip = (await page.locator("#loading-tip").boundingBox())!;
+    expect(tip.y, `the tip, ${wait} ms in`).toBeGreaterThanOrEqual(status.y + status.height);
+    expect(tip.y + tip.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    expect(tip.x).toBeGreaterThanOrEqual(0);
+    expect(tip.x + tip.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
+});
+
 test("the host's lobby, Grand Prix and Mirror included, is never wider than the screen, and its long choices stay in their track", async ({ page }) => {
   await host(page, "Maya");
   await page.getByRole("radio", { name: "Grand Prix" }).click();

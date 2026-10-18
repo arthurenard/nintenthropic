@@ -72,7 +72,12 @@ export class PadMenus {
       if (screen !== "race") return;
       const pause = $<HTMLDialogElement>("pause-sheet");
       if (pause.open) pause.close();
-      else if (!sheet) this.hooks.pause();
+      else if (!sheet) {
+        this.hooks.pause();
+        // The sheet opens on Resume: ringed, as the pad is what will move from it.
+        const resume = document.activeElement;
+        if (pause.open && resume instanceof HTMLElement) show(resume);
+      }
       return;
     }
     // The stage has its own pad, and a race's pad is the wheel: only a sheet over them is ours.
