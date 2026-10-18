@@ -1,4 +1,4 @@
-import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Object3D, type ToneMapping } from "three";
+import { Euler, PerspectiveCamera, SRGBColorSpace, Vector3, type Material, type Mesh, type Object3D, type Texture, type ToneMapping } from "three";
 import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, RimArrow, SpotterMark, TargetNoun } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
 import { mulberry32 } from "../../engine/rules/rng";
@@ -7,12 +7,13 @@ import { chromeKeepOut, fitFraming, WEAPON_DOCK, type Framing, type Sight } from
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
-import type { Actor, Vehicle } from "./rules/actors";
+import { Vehicle, type Actor } from "./rules/actors";
 import { landingMils, rangeAt, rangeUnderDot, roundAt, timeOfFlight } from "./rules/ballistics";
 import type { StageSpec } from "./rules/jobs";
 import { Mission, type AlertCause, type MissionListener, type NearPass } from "./rules/mission";
 import { fadeNear, landmarksOf, liftLabel, nearestOf, placeMarks, ON_HIM, rimArrow, whereWords, whoIsMarked, type CamMan, type Head, type Landmark, type Marked } from "./rules/finding";
 import { fallCard } from "./rules/notes";
+import { Polyline } from "./rules/path";
 import type { Award, StageBonuses } from "./rules/scoring";
 import { LastOne, Spotter } from "./rules/spotter";
 import { HIP_SPREAD, REVEAL_SECONDS } from "./rules/tuning";
@@ -357,6 +358,12 @@ export class OverwatchRidge implements Game, MissionListener {
   private async warmUp(): Promise<void> {
     const r = this.ctx.renderer;
     const scene = this.stage.scene;
+    // The convoy's trucks and the officer's jeep only come on later in a run: on the road now, dressed as they will
+    // be, so their shaders are compiled and their pictures on the card (the first truck held the picture for a
+    // quarter of a second as the convoy's stage began).
+    const road = this.plan.road.length > 1 ? new Polyline(this.plan.road) : null;
+    const ghosts = road ? (["truck", "jeep"] as const).map((kind, k) => new Vehicle(-1 - k, kind, road, k * 12, 0)) : [];
+    for (const v of ghosts) this.cast.vehicleSpawn(v);
     const hidden: Object3D[] = [];
     scene.traverse((o) => {
       if (!o.visible) {
@@ -366,6 +373,14 @@ export class OverwatchRidge implements Game, MissionListener {
     });
     try {
       if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
+      for (const v of ghosts) {
+        this.cast.vehicles.get(v.id)?.root.traverse((o) => {
+          const materials = (o as Mesh).isMesh ? [(o as Mesh).material].flat() : [];
+          for (const m of materials as (Material & Record<string, unknown>)[]) {
+            for (const value of Object.values(m)) if ((value as Texture | null)?.isTexture) r.initTexture(value as Texture);
+          }
+        });
+      }
       await breathe();
       this.post.render(0);
       this.scope.zoom = 1;
@@ -375,6 +390,7 @@ export class OverwatchRidge implements Game, MissionListener {
       // Compiling ahead is an optimisation; the first frames will do it otherwise.
     }
     for (const o of hidden) o.visible = false;
+    for (const v of ghosts) this.cast.vehicleGone(v);
   }
 
   /** Back to the state after load, for another game on this instance. */
