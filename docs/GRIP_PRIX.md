@@ -68,13 +68,13 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
 | --- | --- |
 | Nitro | A burst of speed, now. |
 | Triple Nitro | Three bursts, one per use. |
-| Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second). |
+| Puck | Fired straight ahead; bounces off the barriers; spins out what it hits (you too, after half a second); a kart flying off a ramp passes over it. |
 | Seeker | A puck that follows the track to the kart one place ahead. |
 | Slick | A puddle of oil dropped behind you. Whoever drives through it spins. |
 | Triple Puck | Three Pucks, one per use; they orbit your kart until fired. |
 | Comet | Six seconds untouchable (pucks, slicks, hazards and bumps pass through), 15% faster, the grass no slower than the road; the karts it touches spin. |
-| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared. |
-| Skyrocket | Flies high over the track to the leader (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
+| Storm | A dark cloud over every kart ahead of you: each spins briefly (0.7 s), then crawls at 60% speed for 3 s. A Comet is spared, and so is a kart the drone is carrying or has just set down. |
+| Skyrocket | Flies high over the track to the leader of those still racing (the runner-up when you lead) and bursts there: everyone within 9 m spins. A ring on the road and a warning on their screen show it coming. |
 | Blast | An instant ring of force, 7 m round you: spins karts inside it and destroys Pucks, Seekers, Slicks, Decoys and Skyrockets there. |
 | Decoy Box | Dropped behind like a Slick, but it looks like an item box (a duller colour, a wink). Whoever drives into it spins. |
 

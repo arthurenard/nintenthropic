@@ -58,11 +58,16 @@ export function hitKart(victim: KartState, by: number | null, cause: HitCause, e
   return true;
 }
 
-/** The kart a skyrocket flies to: the leader, or the runner-up when the user leads. */
+/**
+ * The kart a skyrocket flies to: the leader of those still racing, or the
+ * runner-up when the user leads. A kart already home is not in the race any
+ * more (the storm spares it too): a rocket sent after it would be wasted on a
+ * lap of honour.
+ */
 export function rocketTarget(w: World, owner: number): KartState | undefined {
   let best: KartState | undefined;
   for (const k of w.state.karts) {
-    if (k.id !== owner && (best === undefined || k.place < best.place)) best = k;
+    if (k.id !== owner && k.finished === null && (best === undefined || k.place < best.place)) best = k;
   }
   return best;
 }
@@ -169,14 +174,18 @@ export function pressItem(w: World, k: KartState, input: DriveInput, full: boole
   }
 }
 
-/** A storm over the pack: every kart ahead of the user (everyone else when none is) spins briefly and then crawls. A Comet is spared. */
+/**
+ * A storm over the pack: every kart ahead of the user (everyone else when none
+ * is) spins briefly and then crawls. A Comet is spared, and so is a kart the
+ * drone is carrying or has just set down, which nothing can touch.
+ */
 function storm(w: World, user: KartState, emit: Emit): void {
   const state = w.state;
   state.stormAt = state.tick;
   const others = state.karts.filter((o) => o.id !== user.id && o.finished === null);
   const ahead = others.filter((o) => o.place < user.place);
   for (const victim of ahead.length > 0 ? ahead : others) {
-    if (victim.comet > 0) continue;
+    if (victim.comet > 0 || victim.rescue > 0 || victim.immune > 0) continue;
     victim.zap = ticks(I.storm.zap);
     hitKart(victim, user.id, "storm", emit, I.storm.spin);
     emit({ type: "strike", kart: victim.id, item: "storm", x: victim.x, z: victim.z });
@@ -213,12 +222,16 @@ function barrierLimit(w: World, s: number, side: 1 | -1): number {
   return w.geo.at(s).width / 2 + barrierDistance(terrain, s, side) - 0.3;
 }
 
-/** Whichever kart a thing at (x, z) with this reach hits first (lowest id), or null. */
+/**
+ * Whichever kart a thing at (x, z) with this reach hits first (lowest id), or
+ * null. Pucks and seekers skim the road: a kart flying over one off a ramp is
+ * out of its reach, as it is out of a hazard's.
+ */
 function kartHit(w: World, x: number, z: number, reach: number, owner: number, age: number, grace: number): KartState | null {
   const r2 = reach * reach;
   for (const k of w.state.karts) {
     if (k.id === owner && age < grace) continue;
-    if (k.spin > 0 || k.immune > 0 || k.comet > 0 || k.rescue > 0) continue;
+    if (k.spin > 0 || k.immune > 0 || k.comet > 0 || k.rescue > 0 || k.air > TUNING.hazard.clearHeight) continue;
     const dx = k.x - x;
     const dz = k.z - z;
     if (dx * dx + dz * dz < r2) return k;
