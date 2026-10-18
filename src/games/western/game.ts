@@ -30,7 +30,7 @@ import { RigPool } from "../../engine/world/character";
 import { highNoonTemplate, streetRim } from "./world/rigs";
 import { DynamiteView } from "./world/dynamiteView";
 import { Hammer } from "../../engine/rules/hammer";
-import { innocentWord, reloadHint } from "./hints";
+import { bossWoundWord, chickenWord, innocentWord, reloadHint, UNSPORTING } from "./hints";
 import { HintLine, tipText, type TipId } from "./tips";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "../../engine/world/framing";
@@ -395,10 +395,13 @@ export class HighNoon implements Game, MatchListener {
    * bottles standing again, the picture and the sound unmuffled.
    */
   private rearm(): void {
+    this.quietFuses();
     this.cast.reset();
     this.ambient.reset();
     this.effects.clearAll();
     this.secretsWorld.reset();
+    // The windows shot out last game are glazed again.
+    for (const pane of this.assets.town.glass.values()) pane.visible = true;
     this.newMatch();
     this.bottles.reset();
     this.schedule.length = 0;
@@ -458,6 +461,8 @@ export class HighNoon implements Game, MatchListener {
     this.hints.setQuiet(false);
     // How to reload, at the start of every game until they have done it.
     this.offerTip("western.reload");
+    // Read each round, as the page's HUD is: unlocked since this game loaded, it is gold from now.
+    this.golden = this.ctx.settings.unlocks.has("golden");
     if (this.golden) {
       this.hud.weaponFinish?.("gold");
       this.sound.play("golden_unlock", { volume: 0.8, delay: 0.4 });
@@ -860,10 +865,23 @@ export class HighNoon implements Game, MatchListener {
     }
     if (t > 5.2 && this.phase === "dying") {
       this.phase = "over";
+      // A stick still in the air goes out quietly: the world stops drawing
+      // under the card, and its fizz would go on under it for ever, as would
+      // a tumbleweed's roll and the water tower's trickle. The wind blows on.
+      this.match.snuffSticks();
+      this.quietFuses();
+      this.ambient.hush();
+      this.secretsWorld.hush();
       const results: Results = this.match.results();
       this.hud.gameOver({ ...results });
       this.sound.play("game_over");
     }
+  }
+
+  /** Every fuse's fizz stopped: the sticks', and any still in a thrower's hand. */
+  private quietFuses(): void {
+    for (const s of this.match.sticks) this.sound.stopLoop(`fuse.s${s.id}`);
+    for (const b of this.match.bandits) this.sound.stopLoop(`fuse.b${b.id}`);
   }
 
   private later(seconds: number, run: () => void): void {
@@ -957,6 +975,8 @@ export class HighNoon implements Game, MatchListener {
 
   banditWound(b: Bandit, part: HitPart): void {
     this.cast.wound(b, part, this.shotPoint);
+    const word = b.role === "boss" ? bossWoundWord(b.health) : null;
+    if (word) this.popupAt(tmp2.set(b.pos.x, b.pos.y + 2.05, b.pos.z), word);
   }
 
   banditDeath(b: Bandit, part: HitPart | "blast", award: Award): void {
@@ -967,6 +987,10 @@ export class HighNoon implements Game, MatchListener {
     const special = award.labels.includes("Headshot") || award.labels.includes("Quick Draw") || award.labels.includes("Black Jack");
     this.popupAt(tmp2, this.awardText(award), special ? "gold" : "");
     if (award.labels.includes("Quick Draw")) this.sound.play("quick_draw", { volume: 0.9, delay: 0.05 });
+    if (b.beforeTheBell) {
+      this.hints.say(UNSPORTING, 2);
+      this.syncHint();
+    }
     this.pushReadouts(false);
   }
 
@@ -1035,7 +1059,7 @@ export class HighNoon implements Game, MatchListener {
     // they stood, and a calm word on the line about who it was.
     tmp2.set(p.pos.x, p.pos.y + 2.05, p.pos.z);
     this.popupAt(tmp2, this.awardText(award), "danger");
-    this.hints.say(innocentWord(p.role), 2);
+    this.hints.say(innocentWord(p.role, this.match.scorer.townsfolkHit), 2);
     this.syncHint();
   }
 
@@ -1077,7 +1101,11 @@ export class HighNoon implements Game, MatchListener {
     if (tune) this.secretsWorld.pianoTune();
   }
 
-  chickenStartled(_hits: number): void {}
+  chickenStartled(hits: number): void {
+    const word = chickenWord(hits);
+    const at = this.ambient.chickenCenterOrNull();
+    if (word && at) this.popupAt(at, word);
+  }
 
   tumbleweedShot(count: number, giantEarned: boolean): void {
     if (giantEarned) this.popupAt(this.shotPoint, "Wait for it…", "gold");
@@ -1095,6 +1123,9 @@ export class HighNoon implements Game, MatchListener {
     // first, and the toast after it. (The rules announce the find before the
     // shot has set the vane spinning: its length is read a frame later.)
     if (id === "vane") this.later(0, () => this.later(this.secretsWorld.vaneShowLeft() + 0.2, announce));
+    // The giant tumbleweed is found as the breather begins; it is announced
+    // once it has rolled into view (see intermission()).
+    else if (id === "tumbleweeds") this.later(1.8, announce);
     else announce();
   }
 

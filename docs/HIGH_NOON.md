@@ -96,7 +96,8 @@ Variations, introduced wave by wave:
   farther away.
 - **The boss, "Black Jack" Carver** (wave 5, then every fifth wave): a long
   duster and a scar, takes three body shots or one headshot, moves between
-  three covers, and his gang fires cover for him.
+  three covers, and his gang fires cover for him. The first two body shots
+  are made light of over him: "Just a scratch.", then "Two scratches."
 
 **Hits:** a headshot always kills. A body shot kills an ordinary bandit; armoured
 ones (wave 6+, a visible iron plate) need two. Hit reactions and deaths are
@@ -126,7 +127,9 @@ They are visibly different: no guns, pale clothes, hands up when bullets fly.
 A townsperson shot is said in words, so it reads without the sound and
 without the red: "−200 Townsperson" rises where they stood, in the danger
 tone, and the hint line says calmly who it was — "That was the barber." — for
-two seconds. They flinch and go back inside; nothing more is shown.
+two seconds. A second in the same game is counted ("That was the barber.
+That makes two."), and from the third, "The town has noticed." They flinch
+and go back inside; nothing more is shown.
 
 ## Waves
 
@@ -142,6 +145,9 @@ two seconds. They flinch and go back inside; nothing more is shown.
 A wave ends when every bandit in it is down. Then a four-second breather: the
 bell tolls, a title card slides in ("Wave 3"), health refills, a tumbleweed rolls
 across, and the next wave begins. There is no clock: you last until you fall.
+Past wave 6 the cards take turns under the title: "They keep coming.",
+"Nobody told them to stop.", "The gang has cousins." (and "Black Jack is
+back." on his waves).
 
 ## Scoring
 
@@ -266,26 +272,33 @@ that uses them.
 ## Secrets (easter eggs)
 
 Delightful, discoverable, never in the way. The results card counts "Secrets
-2 / 8".
+2 / 8", and each find's toast names it (in brackets below).
 
-1. **The bell.** Shoot the church bell: it tolls. Toll it three times in a row
-   and the church doors creak open — the preacher peers out and shakes his head.
-2. **The weather vane.** Shoot it and it spins wildly, then creaks to a stop
-   pointing at you.
-3. **The chicken.** A chicken pecks along the boardwalk. Shoot near it: a burst
-   of feathers, an outraged cluck, and it runs off unharmed. Hit it three times
-   in one game: **Chicken of Steel**.
-4. **The water tower.** A shot springs a leak — a stream of water that splashes
-   in the dust for the rest of the game.
-5. **The piano.** Shoot the piano through the saloon window: a honky-tonk chord.
-   Play three notes and it plays a few bars of a tune.
-6. **Tumbleweeds.** Shoot five in one game and a *giant* tumbleweed rolls
-   through the next breather.
-7. **The wanted poster.** The sheriff's board has a poster of a finger-gun hand:
-   "WANTED — THE HAND. $5,000". Shoot it and it flutters down.
-8. **High noon, for real.** Play when your clock reads between 12:00 and 12:05:
-   the sun stands overhead, shadows vanish under the eaves, and the first wave
-   opens with a duel — one bandit, a ten-pace standoff, and a bell.
+1. **The bell** (Three Tolls). Shoot the church bell: it tolls. Toll it three
+   times in a row and the church doors creak open — the preacher peers out and
+   shakes his head (once at a time, however often he is rung for).
+2. **The weather vane** (Pointing at You). Shoot it and it spins wildly, then
+   creaks to a stop pointing at you.
+3. **The chicken** (Chicken of Steel). A chicken pecks along the boardwalk.
+   Shoot near it: a burst of feathers, an outraged cluck, and it runs off
+   unharmed, while the words where it stood say "The chicken is fine." (and
+   the second time, "The chicken is still fine."). Hit it three times in one
+   game: **Chicken of Steel**.
+4. **The water tower** (Spring a Leak). A shot springs a leak — a stream of
+   water that splashes in the dust for the rest of the game.
+5. **The piano** (Honky-Tonk). Shoot the piano through the saloon window: a
+   honky-tonk chord. Play three notes and it plays a few bars of a tune.
+6. **Tumbleweeds** (Giant Tumbleweed). Shoot five in one game and a *giant*
+   tumbleweed rolls through the next breather.
+7. **The wanted poster** (Wanted: The Hand). The sheriff's board has a poster
+   of a finger-gun hand: "WANTED — THE HAND. $5,000". Shoot it and it
+   flutters down.
+8. **High noon, for real** (High Noon). Play when your clock reads between
+   12:00 and 12:05: the sun stands overhead, shadows vanish under the eaves,
+   and the first wave opens with a duel — one bandit, a ten-pace standoff,
+   and a bell. Shot as the bell tolls, he is a Quick Draw; shot before it, on
+   his paces, he goes down all the same, and the hint line says it was "Not
+   very sporting."
 
 Also: typing the Konami code on the title screen unlocks the **Golden Revolver**
 (a gold cylinder in the HUD and golden muzzle flashes) for the session.
