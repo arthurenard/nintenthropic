@@ -17,6 +17,7 @@
 import {
   AnimationMixer,
   Color,
+  DoubleSide,
   Group,
   LoopOnce,
   LoopRepeat,
@@ -258,6 +259,13 @@ export class Rig {
           const c = m.clone() as MeshStandardMaterial;
           c.transparent = true;
           c.depthWrite = true;
+          // Transparent (so a body can fade) and two-sided, three would draw
+          // every figure twice, back faces then front, resolving its shader
+          // each time: Dead of Night's tenth wave went from 256 draw calls to
+          // 194 and its frame's main-thread time from about 3 ms to 1.75 with
+          // one pass, and the picture is the same (a figure is solid until it
+          // fades, and then gone in a moment).
+          if (c.side === DoubleSide) c.forceSinglePass = true;
           patchMaterial(c, this.lighting, template.rim);
           this.materials.push(c);
           this.baseColors.push(c.color ? c.color.getHex() : 0xffffff);
@@ -404,8 +412,10 @@ export class Rig {
     LEFT.set(1, 0, 0).applyQuaternion(tmpQ);
     UPW.set(0, 1, 0).applyQuaternion(tmpQ);
     if (aiming && chest) {
-      // Pitch the chest toward the target, measured in the rig's own frame.
-      this.root.updateMatrixWorld();
+      // Pitch the chest toward the target, measured in the rig's own frame:
+      // the root's matrix is all that needs to be current (not the whole
+      // skeleton under it, which bend() brings up to date bone by bone).
+      this.root.updateWorldMatrix(true, false);
       tmpV.copy(this.aimTarget);
       this.root.worldToLocal(tmpV);
       const horiz = Math.hypot(tmpV.x, tmpV.z);
@@ -425,36 +435,45 @@ export class Rig {
     }
   }
 
-  /** Refresh the world positions of the joints (after the last render's matrices). */
+  /**
+   * Refresh the world positions of the joints, from the rig as it stands
+   * now. The rig's matrices are brought up to date in one pass and each
+   * joint read from its bone: asking each bone for its world position
+   * instead walks all its parents again, fifteen times over, for every man
+   * a shot or a mark asks about every frame.
+   */
   updateJoints(): Joints {
     const j = this.joints;
-    const get = (name: string, out: Vector3) => {
-      const b = this.bones.get(name);
-      if (b) b.getWorldPosition(out);
-      return b;
-    };
-    const head = get("head", j.head);
+    this.root.updateWorldMatrix(true, true);
+    const head = this.joint("head", j.head);
     if (head) {
       // The head's centre sits a little above its bone, along the head's up.
       tmpQ.setFromRotationMatrix(tmpM.extractRotation(head.matrixWorld));
       tmpV2.copy(UP).applyQuaternion(tmpQ);
       j.head.addScaledVector(tmpV2, 0.09);
     }
-    get("hips", j.hips);
-    get("neck", j.neck);
-    get("upper_arm.L", j.shoulderL);
-    get("upper_arm.R", j.shoulderR);
-    get("forearm.L", j.elbowL);
-    get("forearm.R", j.elbowR);
-    get("hand.L", j.handL);
-    get("hand.R", j.handR);
-    get("thigh.L", j.thighL);
-    get("thigh.R", j.thighR);
-    get("shin.L", j.kneeL);
-    get("shin.R", j.kneeR);
-    get("foot.L", j.footL);
-    get("foot.R", j.footR);
+    this.joint("hips", j.hips);
+    this.joint("neck", j.neck);
+    this.joint("upper_arm.L", j.shoulderL);
+    this.joint("upper_arm.R", j.shoulderR);
+    this.joint("forearm.L", j.elbowL);
+    this.joint("forearm.R", j.elbowR);
+    this.joint("hand.L", j.handL);
+    this.joint("hand.R", j.handR);
+    this.joint("thigh.L", j.thighL);
+    this.joint("thigh.R", j.thighR);
+    this.joint("shin.L", j.kneeL);
+    this.joint("shin.R", j.kneeR);
+    this.joint("foot.L", j.footL);
+    this.joint("foot.R", j.footR);
     return j;
+  }
+
+  /** One joint's world position from its bone's current matrix (updateJoints has just made them current). */
+  private joint(name: string, out: Vector3): Object3D | undefined {
+    const b = this.bones.get(name);
+    if (b) out.setFromMatrixPosition(b.matrixWorld);
+    return b;
   }
 
   /** Put the props back and stand the rig up for its next use. */

@@ -30,8 +30,18 @@ export interface GenerationReport {
 
 interface Slot {
   worker: Worker;
-  busy: RenderJob | null;
+  /** The jobs handed to it and not yet answered, oldest first. */
+  busy: RenderJob[];
 }
+
+/**
+ * Jobs each worker holds at once. With one, a worker that finishes waits
+ * for the page to hand it the next, and while a game loads the page is busy
+ * for a hundred milliseconds at a time (parsing its art, compiling its
+ * shaders): the workers would sit idle through every such stretch. With two
+ * the next is already there.
+ */
+const IN_FLIGHT = 2;
 
 /** Envelope block size used by render.ts's envelopeOf. */
 export const ENVELOPE_BLOCK = 0.02;
@@ -63,7 +73,7 @@ export class SoundLibrary {
     for (let k = 0; k < workers; k++) {
       try {
         const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: "handy-audio" });
-        const slot: Slot = { worker, busy: null };
+        const slot: Slot = { worker, busy: [] };
         worker.onmessage = (event: MessageEvent<RenderReply>) => this.received(slot, event.data);
         worker.onerror = () => this.lost(slot);
         this.slots.push(slot);
@@ -205,12 +215,15 @@ export class SoundLibrary {
       this.pumpMainThread();
       return;
     }
-    for (const slot of this.slots) {
-      if (slot.busy) continue;
-      const job = this.nextJob();
-      if (!job) return;
-      slot.busy = job;
-      slot.worker.postMessage([job]);
+    for (let depth = 1; depth <= IN_FLIGHT; depth++) {
+      // A round at each depth, so every idle worker gets a job before any gets a second.
+      for (const slot of this.slots) {
+        if (slot.busy.length >= depth) continue;
+        const job = this.nextJob();
+        if (!job) return;
+        slot.busy.push(job);
+        slot.worker.postMessage([job]);
+      }
     }
   }
 
@@ -244,7 +257,8 @@ export class SoundLibrary {
   }
 
   private received(slot: Slot, reply: RenderReply): void {
-    slot.busy = null;
+    const k = slot.busy.findIndex((job) => job.id === reply.id);
+    if (k >= 0) slot.busy.splice(k, 1);
     if (this.disposed) return;
     if ("error" in reply) {
       console.warn(`Handheld audio: could not synthesise "${reply.cue}": ${reply.error}`);
@@ -261,10 +275,7 @@ export class SoundLibrary {
     const index = this.slots.indexOf(slot);
     if (index >= 0) this.slots.splice(index, 1);
     slot.worker.terminate();
-    if (slot.busy) {
-      this.queue.unshift(slot.busy);
-      slot.busy = null;
-    }
+    this.queue.unshift(...slot.busy.splice(0));
     this.pump();
   }
 

@@ -38,6 +38,9 @@ export function guessTier(gpu: string, cores = 8, hints: TierHints = {}): Qualit
   // Safari and iPads give the family, not the chip. Only the core count tells a Pro or Max from the rest.
   else if (/apple/.test(name)) tier = hints.splitScreen && cores >= BIG_APPLE_CORES ? "high" : "medium";
   else if (/geforce (mx|gt )/.test(name)) tier = "medium";
+  // A Ryzen laptop's graphics share its name with the desktop cards ("Radeon
+  // RX Vega 10 Graphics"); the cards themselves are "Radeon RX Vega" alone.
+  else if (/vega \d+ graphics/.test(name)) tier = "medium";
   else if (/geforce|rtx|gtx|quadro|radeon (rx|pro)|nvidia/.test(name)) tier = "high";
   else if (/intel/.test(name)) tier = /iris xe|arc/.test(name) ? "medium" : "low";
   // A GPU is rarely better than the machine around it.

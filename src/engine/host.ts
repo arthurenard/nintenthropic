@@ -20,13 +20,36 @@ export const MAX_PIXEL_RATIO = 2;
 
 export { IDLE_AIM, WebGLUnavailable, type FrameInfo };
 
+/**
+ * Calls `changed` whenever the device's pixel ratio changes (the window
+ * moved to another screen, or the page was zoomed), for the life of the
+ * page. A media query matches one ratio, so each change asks again with the
+ * new one.
+ */
+export function watchPixelRatio(changed: () => void, scope: Pick<Window, "devicePixelRatio" | "matchMedia"> = window): void {
+  if (typeof scope.matchMedia !== "function") return;
+  const query = scope.matchMedia(`(resolution: ${scope.devicePixelRatio || 1}dppx)`);
+  query.addEventListener(
+    "change",
+    () => {
+      changed();
+      watchPixelRatio(changed, scope);
+    },
+    { once: true },
+  );
+}
+
 /** Recent frame timings, for the debug overlay and the performance report. */
 export class FrameStats {
   readonly interval = new Samples();
   readonly work = new Samples();
 
   record(interval: number, work: number): void {
-    if (interval > 250) return; // a hitch, not a frame
+    // Over 250 ms is a hitch, not a frame. Nothing at all is the loop's
+    // first frame: its time is when the browser began that frame, which can
+    // be before start() was called (after a long load, by hundreds of ms),
+    // and a negative interval would drag the mean below zero.
+    if (!(interval > 0) || interval > 250) return;
     this.interval.push(interval);
     this.work.push(work);
   }
@@ -80,10 +103,17 @@ export class EngineHost {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.gpu = gpuName(this.renderer.getContext());
     const tier = guessTier(this.gpu, navigator.hardwareConcurrency || 4);
-    this.resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier] });
+    // A browser saving the battery holds the page to 30 fps whatever is drawn:
+    // the shooters stay sharp there rather than blur for nothing.
+    this.resolution = new DynamicResolution({ initial: INITIAL_SCALE[tier], restoreFutile: true });
     this.quality = { scale: this.resolution.scale, tier };
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
+    // The canvas keeps its size when the window moves to a screen of another
+    // density, so the observer never hears of it: without this a game moved
+    // from a 1x monitor to a Retina laptop stays blurred, and one moved the
+    // other way draws four times the pixels the screen can show.
+    watchPixelRatio(() => this.resize());
     canvas.addEventListener("webglcontextlost", (event) => {
       event.preventDefault();
       this.stop();

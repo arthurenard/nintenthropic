@@ -50,10 +50,14 @@ interface Voice extends VoiceInfo {
   /** Not slowed by slow motion (the slow-motion boom itself). */
   exempt: boolean;
   sources: AudioBufferSourceNode[];
+  /** When each source starts, context time (the echoes after the direct sound). */
+  starts: number[];
   rates: number[];
   nodes: AudioNode[];
   out: GainNode;
   endsAt: number;
+  /** The interface's own (a pause leaves it be). */
+  ui: boolean;
 }
 
 interface LoopState {
@@ -296,14 +300,34 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       this.loops.delete(state);
       const { source, gain, nodes } = state;
       if (!source || !gain) return;
-      const now = this.ctx.currentTime;
-      const fadeOut = Math.max(0.02, spec.fadeOut ?? 0.3);
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(gain.gain.value, now);
-      gain.gain.linearRampToValueAtTime(0, now + fadeOut);
-      source.stop(now + fadeOut + 0.02);
-      source.onended = () => nodes.forEach((n) => n.disconnect());
+      this.endLoop(source, gain, nodes, Math.max(0.02, spec.fadeOut ?? 0.3));
     };
+  }
+
+  /**
+   * A loop's ending: a fade, and its nodes let go once the source has
+   * stopped. A context that is not running (muted, the tab hidden) is heard
+   * by no one and its clock stands still, so a fade there would hold the
+   * nodes until it runs again - for a player who keeps the sound off, never,
+   * and every round's ambience would pile up - so they go at once.
+   */
+  private endLoop(source: AudioBufferSourceNode, gain: GainNode, nodes: AudioNode[], fadeOut: number): void {
+    if (this.ctx.state !== "running") {
+      source.onended = null;
+      try {
+        source.stop();
+      } catch {
+        // Never started.
+      }
+      for (const n of nodes) n.disconnect();
+      return;
+    }
+    const now = this.ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0, now + fadeOut);
+    source.stop(now + fadeOut + 0.02);
+    source.onended = () => nodes.forEach((n) => n.disconnect());
   }
 
   /**
@@ -317,12 +341,14 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     const spec = this.spec(cue);
     if (!spec || this.closed) return { set: () => {}, stop: () => {} };
     let stopped = false;
-    let params: Required<Omit<LoopParams, "distance">> & { distance: number } = {
+    const params: Required<LoopParams> = {
       rate: options.rate ?? 1,
       volume: Math.max(0, options.volume ?? 1),
       pan: clamp(options.pan ?? 0, -1, 1),
       distance: Math.max(0, options.distance ?? 0),
     };
+    /** What the playing nodes were last told, so a set that changes nothing schedules nothing. */
+    const applied = { rate: Number.NaN, level: Number.NaN, pan: Number.NaN, distance: Number.NaN };
     let live: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode; air: BiquadFilterNode; nodes: AudioNode[] } | null = null;
     const target = (): number => db(spec.level) * params.volume * distanceGain(params.distance);
     const begin = (): void => {
@@ -350,35 +376,37 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       src.connect(air).connect(gain).connect(pan).connect(this.buses[spec.bus]);
       src.start(now + Math.max(0, options.delay ?? 0), Math.random() * take.buffer.duration);
       live = { src, gain, pan, air, nodes: [src, air, gain, pan] };
+      applied.rate = clamp(params.rate, 0.1, 8);
+      applied.level = target();
+      applied.pan = params.pan;
+      applied.distance = params.distance;
     };
     if (this.library.get(cue)) begin();
     else void this.library.request(cue).then(begin);
     return {
       set: (next, glide = 0.06) => {
-        params = { ...params, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined && Number.isFinite(v))) };
-        params.pan = clamp(params.pan, -1, 1);
-        params.volume = Math.max(0, params.volume);
-        params.distance = Math.max(0, params.distance);
+        // Field by field, allocating nothing, and only what changed goes to
+        // the nodes: a race steers a couple of dozen of these every frame.
+        if (Number.isFinite(next.rate)) params.rate = next.rate as number;
+        if (Number.isFinite(next.volume)) params.volume = Math.max(0, next.volume as number);
+        if (Number.isFinite(next.pan)) params.pan = clamp(next.pan as number, -1, 1);
+        if (Number.isFinite(next.distance)) params.distance = Math.max(0, next.distance as number);
         if (!live || stopped) return;
         const now = this.ctx.currentTime;
         const tau = Math.max(0.005, glide / 3);
-        live.src.playbackRate.setTargetAtTime(clamp(params.rate, 0.1, 8), now, tau);
-        live.gain.gain.setTargetAtTime(target(), now, tau);
-        live.pan.pan.setTargetAtTime(params.pan, now, tau);
-        live.air.frequency.setTargetAtTime(airCutoff(params.distance), now, tau);
+        const rate = clamp(params.rate, 0.1, 8);
+        const level = target();
+        if (rate !== applied.rate) live.src.playbackRate.setTargetAtTime((applied.rate = rate), now, tau);
+        if (level !== applied.level) live.gain.gain.setTargetAtTime((applied.level = level), now, tau);
+        if (params.pan !== applied.pan) live.pan.pan.setTargetAtTime((applied.pan = params.pan), now, tau);
+        if (params.distance !== applied.distance) live.air.frequency.setTargetAtTime(airCutoff((applied.distance = params.distance)), now, tau);
       },
       stop: () => {
         if (stopped) return;
         stopped = true;
         if (!live) return;
         const { src, gain, nodes } = live;
-        const now = this.ctx.currentTime;
-        const fadeOut = Math.max(0.02, spec.fadeOut ?? 0.15);
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + fadeOut);
-        src.stop(now + fadeOut + 0.02);
-        src.onended = () => nodes.forEach((n) => n.disconnect());
+        this.endLoop(src, gain, nodes, Math.max(0.02, spec.fadeOut ?? 0.15));
         live = null;
       },
     };
@@ -528,12 +556,15 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       nodes.push(air);
     }
     const gain = ctx.createGain();
-    gain.gain.value = level * distanceGain(d);
+    // Feedback is held to the level it has near by; the air and the walls still say how far.
+    const loudness = distanceGain(spec.feedback ? Math.min(d, spec.feedback) : d);
+    gain.gain.value = level * loudness;
     const panner = ctx.createStereoPanner();
     panner.pan.value = pan;
     head.connect(gain).connect(panner).connect(out);
     nodes.push(gain, panner);
     sources.push(src);
+    const starts = [when];
 
     // The reverb send, taken before distance attenuation (far is wetter).
     if (spec.reverb) {
@@ -562,6 +593,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
         echo.start(when + tap.delay);
         nodes.push(echo, lp, g, p);
         sources.push(echo);
+        starts.push(when + tap.delay);
         tail = Math.max(tail, tap.delay);
       }
     }
@@ -573,17 +605,19 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       cue,
       priority,
       start: when,
-      gain: level * distanceGain(d),
+      gain: level * loudness,
       playbackRate: rate,
       envelope: take.envelope,
       block: ENVELOPE_BLOCK,
       duration,
       exempt,
       sources,
+      starts,
       rates: sources.map(() => baseRate),
       nodes,
       out,
       endsAt: when + tail + duration / rate + 0.05,
+      ui: spec.bus === "ui",
     };
     let live = sources.length;
     for (const s of sources) {
@@ -595,6 +629,28 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       };
     }
     this.voices.push(voice);
+  }
+
+  /**
+   * The world is paused: whatever it was about to say goes unsaid - a far
+   * shot still on its way, a delayed call, the echoes not yet back - so
+   * nothing of the game sounds over the pause sheet. What has begun plays
+   * out (cutting it would click), and the interface's sounds are left be.
+   */
+  hush(): void {
+    if (this.closed) return;
+    const now = this.ctx.currentTime;
+    for (const voice of this.voices) {
+      if (voice.ui) continue;
+      voice.sources.forEach((source, k) => {
+        if (voice.starts[k]! <= now) return;
+        try {
+          source.stop(now);
+        } catch {
+          // Already stopped.
+        }
+      });
+    }
   }
 
   /** Fade a voice out fast and let it go (stolen for a newer sound). */

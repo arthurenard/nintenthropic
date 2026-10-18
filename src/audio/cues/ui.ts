@@ -80,3 +80,24 @@ export function calibDone(t: Take): Mono {
   bar(out, t, 3 * 0.078, 91, 0.7, t.d(0.45));
   return out;
 }
+
+/**
+ * Gold: the oldest secret there is (a game's Konami unlock). Three bars
+ * rising through D major, quicker and higher than the aim check's
+ * arpeggio, the last one glassy and left to shimmer: a beating pair of
+ * partials, as a struck glass has, so it glints rather than rings.
+ */
+export function uiGold(t: Take): Mono {
+  const out = t.canvas(0.5);
+  const r = t.rng;
+  bar(out, t, 0, 86, 0.5, t.d(0.08));
+  bar(out, t, t.j(0.065, 0.06), 90, 0.55, t.d(0.09));
+  const f = midiHz(93) * Math.pow(2, r.range(-4, 4) / 1200);
+  strike(out, t, 0.13, f, [
+    [1, 0.6, t.d(0.2)],
+    [r.range(1.003, 1.006), t.g(0.3, 2), t.d(0.17)],
+    [2.76, t.g(0.14, 3) * r.sign(), t.d(0.05)],
+    [3.93, t.g(0.07, 3) * r.sign(), t.d(0.03)],
+  ]);
+  return out;
+}

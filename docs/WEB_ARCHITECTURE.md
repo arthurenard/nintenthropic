@@ -220,7 +220,10 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   stage's shape its art can hold; 1.1 and unlimited if unset), and `create`,
   absent while the game is Coming Soon.
 - Optional members a game may use: `AudioBus.setSpace(space)` (the street's
-  walls, for the echoes), `CalibrationStage.begin()` (above).
+  walls, for the echoes), `AudioBus.hush()` (a pause: the game's one-shots
+  not yet begun - a delayed call, a far shot on its way, an echo not yet
+  back - are cancelled; `Sound.pause()` calls it), `CalibrationStage.begin()`
+  (above).
 - `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
   the desktop: a wave, integrity, wind), wave titles, damage direction, hit
   markers, secrets, and the end of the game (`GameOver` with stats), and its
@@ -290,7 +293,7 @@ own, and keep in your folder only what is truly your game's.
 | `names.ts` | The asset contract's dotted names (`cover.saloon_door`, `shoulder.L`): three.js strips the dots, `contractName(o)` gives them back; `findNode`, `nodesWithPrefix`, `extraString`, `extraNumber`, and `nameNode` for placeholders built in code. |
 | `playerCamera.ts` | `PlayerCamera(eye, orientation, fov, { near, far, groundY })`: a standing first-person eye with a slow breath, a kick when the gun fires (`kick`), a flinch when hit (`flinch(direction, amount)`), a shake (`rumble`), the slow fall at death (`setDeath(progress, side)`), framings eased from one to the next (`setFraming(framing, seconds)`), `still` for the aim check and `reducedMotion`. |
 | `framing.ts` | Fitting a lens to a fixed eye: `fitFraming(sights, aspect, options)` finds the tightest field of view and pitch that show every point the fight happens at (`Sight`s, in the art camera's space), targets clear of the page's chrome (`chromeKeepOut(width, height, hand, { panel, dock })`, with `WEAPON_DOCK` for each weapon's corner); `checkFraming` widens the art's own lens for a narrow window. Pure maths, tested without a renderer. |
-| `sound.ts` | `Sound(bus, camera)`: cues placed in the world (`at(cue, position)` works out pan and distance from the camera), named loops that survive a pause (stopped on `pause`, started again on `resume`), and the `hurt` filter held over a pause (a paused game is not being hurt). |
+| `sound.ts` | `Sound(bus, camera)`: cues placed in the world (`at(cue, position)` works out pan and distance from the camera), named loops that survive a pause (stopped on `pause`, started again on `resume`), the one-shots still to come hushed on `pause`, and the `hurt` filter held over a pause (a paused game is not being hurt). |
 | `sky.ts` | `SkyLight(renderer, scene, texture, intensity)`: an equirectangular sky as the background and, through PMREM, the environment light; `asSky(texture)`; `horizonColour(texture)` for the fog to meet the sky without a seam. |
 | `scene.ts` | `fitShadowCamera(sun, box)` spends the shadow map on the part of the world that matters; `shadowMapSize(tier)`; `disposeTree(root)`. |
 | `queries.ts` | `SceneryQueries(solids, moving)`: rays against the scenery fast enough to ask dozens of times a frame (a `TriangleGrid` of 2 m columns): `cast` (where a bullet lands), `groundAt` (under a falling body), `lightReaches` (is the sun on him). |

@@ -40,6 +40,19 @@ describe("Sound over a pause", () => {
     expect(filters.at(-1)).toEqual(["hurt", 0.2]);
   });
 
+  it("hushes what the world was about to say when it pauses, once, and works with a bus that has no hush", () => {
+    const { bus } = recordingBus();
+    let hushed = 0;
+    const sound = new Sound({ ...bus, hush: () => hushed++ }, new PerspectiveCamera());
+    sound.at("ridge_rifle_echo", { x: 0, y: 0, z: -300 }, 1, 1, 0.9);
+    sound.pause();
+    sound.pause();
+    expect(hushed).toBe(1);
+    sound.resume();
+    expect(hushed).toBe(1);
+    expect(() => new Sound(bus, new PerspectiveCamera()).pause()).not.toThrow();
+  });
+
   it("passes slow motion through as it is", () => {
     const { bus, filters } = recordingBus();
     const sound = new Sound(bus, new PerspectiveCamera());
