@@ -122,7 +122,7 @@ export class KartApp {
         host: () => void this.open("host"),
         join: (code) => void this.open("join", code),
         practice: () => void this.open("practice"),
-        konami: () => this.services.sound.play("cheer"),
+        konami: () => this.services.sound.play("gold"),
       },
       // A phone that came with a link to join is on its way to a room: no time for the key art.
       { art: !options.join },

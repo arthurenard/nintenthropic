@@ -1702,7 +1702,7 @@ export class App {
     prefs.unlocks = this.settings.unlocks;
     // Every game's weapon is gilded, and only until the tab is closed (prefs.unlocks).
     toast("Golden guns, until you go.", { icon: "star", tone: "gold" });
-    this.audio.play("ui_confirm");
+    this.audio.play("ui_gold");
   }
 
   // --- settings, records and preferences ----------------------------------------------------
