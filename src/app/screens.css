@@ -703,6 +703,26 @@ body[data-view="game"] {
     flex-basis: min(72cqw, 320px);
   }
 }
+/* A phone on its side: the hero is one short screen, its name, its words
+   and Play in view at once, and the row follows below it. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .arcade-main {
+    --hero-min: 100dvh;
+  }
+  .feature {
+    padding: calc(var(--nav) + 16px) var(--margin) 20px;
+  }
+  .feature-text {
+    gap: 10px;
+  }
+  .hero-title {
+    font-size: clamp(32px, 6vw, 44px);
+  }
+  .hero-about {
+    font-size: 15px;
+    line-height: 1.35;
+  }
+}
 
 /* --- reduced motion (the system's or the player's: see base.css) ------------------------------------------ */
 
