@@ -5,7 +5,7 @@
  */
 export type SecretId = "eat" | "scarecrow" | "booth" | "drivein" | "moon" | "cat" | "radio" | "duck";
 
-/** What the toast calls each one when it is found: what happened, not where. */
+/** What the toast calls each one when it is found: mostly what happened (Wrong Number), not where. */
 export const SECRET_NAMES: Record<SecretId, string> = {
   eat: "Eat",
   scarecrow: "The Scarecrow",
