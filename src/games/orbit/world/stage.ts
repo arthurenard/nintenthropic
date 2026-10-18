@@ -39,6 +39,8 @@ import { Tone } from "./tone";
 const tmp = new Vector3();
 /** The eye's adaptation to the dark and back, seconds (its time constant). */
 const EYE_ADAPT = 0.7;
+/** While the sky changes, the environment light is made again this often (s): fifteen times a second hides the steps. */
+const ENV_CHANGING_EVERY = 1 / 15;
 
 export class Stage {
   readonly scene = new Scene();
@@ -210,12 +212,14 @@ export class Stage {
   }
 
   /**
-   * The environment light again, if it is due: every frame while the sky is
-   * changing (a breather), every couple of seconds otherwise.
+   * The environment light again, if it is due: a few times a second while
+   * the sky is changing (a breather: the light goes over seconds, and each
+   * refresh draws the sky six times and blurs it), at once for a jump (no
+   * time passed), every couple of seconds otherwise.
    */
   refreshEnvironment(dt: number, changing: boolean): void {
     this.envAge += dt;
-    if (!changing && this.envAge < 2) return;
+    if (this.envAge < (changing ? (dt > 0 ? ENV_CHANGING_EVERY : 0) : 2)) return;
     this.envAge = 0;
     const raw = this.sky.uniform<number>("uRaw");
     raw.value = 1;
