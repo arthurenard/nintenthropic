@@ -310,6 +310,9 @@ export class Bandit {
 
   startHide(w: BanditWorld): void {
     this.enter("hiding", Math.max(HIDE_TIME[this.cover.emerge], this.walkOut() / WALK_OUT_SPEED));
+    // From where he is: a man staggered halfway out of cover (or halfway
+    // back in) goes back from there, rather than first popping all the way out.
+    this.t = (1 - this.exposure) * this.dur;
     w.events.banditHide(this);
   }
 

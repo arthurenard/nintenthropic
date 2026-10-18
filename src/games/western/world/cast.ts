@@ -325,8 +325,9 @@ export class Cast {
     if (!v) return;
     if (b.role === "dynamiter") v.rig.hold("gun.revolver");
     const clip = { lean_left: "lean_left_in", lean_right: "lean_right_in", rise: "sink", step_out: "step_in" }[b.cover.emerge];
-    // The clip takes as long as he does: it ends as he arrives, not before.
-    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur));
+    // The clip takes as long as he does: it ends as he arrives, not before
+    // (from part way, when he was staggered short of all the way out).
+    v.rig.play(clip, 0.1, false, v.rig.duration(clip) / Math.max(0.05, b.dur - b.t));
   }
 
   run(b: Bandit): void {

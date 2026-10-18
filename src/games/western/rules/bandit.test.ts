@@ -156,6 +156,34 @@ describe("coming out from the cover's ready spot", () => {
     expect(b.dur).toBeGreaterThan(EMERGE_TIME.step_out);
   });
 
+  it("hit halfway out (an iron plate, Black Jack), he staggers and goes back from there, not from all the way out", () => {
+    for (const leaving of [false, true]) {
+      const w = new FakeWorld(6);
+      const b = new Bandit(4, "gunman", corner);
+      b.spawn(0.05);
+      // Halfway out, or halfway back in.
+      for (let i = 0; i < 1200; i++) {
+        w.time += DT;
+        b.step(DT, w);
+        if (!leaving && b.state === "emerging" && b.exposure >= 0.5) break;
+        if (leaving && b.state === "hiding" && b.exposure <= 0.5) break;
+      }
+      expect(b.exposure).toBeGreaterThan(0.3);
+      expect(b.exposure).toBeLessThan(0.7);
+      const hitAt = b.pos.x;
+      b.stagger();
+      let furthest = hitAt;
+      for (let i = 0; i < 1200 && b.state !== "hidden"; i++) {
+        w.time += DT;
+        b.step(DT, w);
+        furthest = Math.max(furthest, b.pos.x);
+      }
+      // Never further out than where the bullet found him (the exposed spot is at −8.4).
+      expect(furthest).toBeCloseTo(hitAt, 6);
+      expect(b.state).toBe("hidden");
+    }
+  });
+
   it("runs into a cover as far as its ready spot", () => {
     const w = new FakeWorld(3);
     w.run = corner;
