@@ -30,7 +30,7 @@ import { DroneView } from "./world/droneView";
 import { Effects } from "./world/effects";
 import { Glass } from "./world/glass";
 import { readDerelict, readLibrary } from "./world/library";
-import { BREATHER_GROUND_RATE, GROUND_RATE, MOON_RADIUS, moonAt, RISE_START, SET_END, skyAt, type SkyMoment } from "./world/orbit";
+import { BREATHER_GROUND_RATE, GROUND_RATE, MOON_RADIUS, moonAt, RISE_START, SET_END, skyAt, turnUntilNight, type SkyMoment } from "./world/orbit";
 import { ProximityRings, type RingShown } from "./world/rings";
 import { RunningLights } from "./world/runningLights";
 import { laneClearance, readScenery, type Scenery } from "./world/scenery";
@@ -61,10 +61,14 @@ const DRONE_VIEW = { x: 0.8, top: 0.72, bottom: 0.7 };
 const OTHER_NIGHT_TURN = (30 * Math.PI) / 180;
 /** Where the "HI" is put in the view (NDC): low in the right-hand window, clear of the centre pane. */
 const HI_SPOT = { x: 0.6, y: -0.28 };
-/** How wide the HI is drawn, as a fraction of the view's width (of the art's 16:9 frame), and how wide the art wrote it (km). */
-const HI_WIDTH = 0.022;
+/**
+ * How wide the HI is drawn in the middle of its night, as a fraction of the
+ * view's width (of the art's 16:9 frame) - a pair of letters among the
+ * towns you notice, not a sign - and how wide the art wrote it (km).
+ */
+const HI_WIDTH = 0.017;
 const HI_SOURCE_KM = 130;
-/** How near the HI a shot must land (km on the ground) to find it: the letters are some 50 km across as drawn. */
+/** How near the HI a shot must land (km on the ground) to find it: generous, the letters are some 25 km across as drawn. */
 const HI_REACH_KM = 80;
 
 /** A (longitude, latitude) in degrees as a direction in the planet's frame (three's sphere: y north, x longitude 0). */
@@ -393,7 +397,8 @@ export class OrbitalDecay implements Game, MatchListener {
    * - a find, not a headline; on the other nights the next of the night
    * map's brightest countries (found at load) in the centre of the view. It
    * is set as the breather begins, while the sun is still up and no light
-   * shows, and the lights then turn with the ground.
+   * shows, for where the ground will have turned by the middle of the night,
+   * and the lights then turn with the ground.
    */
   private placeNight(): void {
     const other = this.litRegions[otherCountry(this.nights) % Math.max(1, this.litRegions.length)];
@@ -402,7 +407,7 @@ export class OrbitalDecay implements Game, MatchListener {
     const spot = this.groundPoint(hiNight ? HI_SPOT.x : 0.02, hiNight ? HI_SPOT.y : -0.08);
     if (!spot) return;
     const world = spot.clone();
-    const toPlanet = this.stage.planetRotation.clone().invert();
+    const toPlanet = this.rotationAtNight().invert();
     const at = spot.applyQuaternion(toPlanet).normalize();
     const right = new Vector3(1, 0, 0).applyQuaternion(this.scenery.eyeQuaternion).applyQuaternion(toPlanet);
     const east = right.addScaledVector(at, -right.dot(at)).normalize();
@@ -462,6 +467,12 @@ export class OrbitalDecay implements Game, MatchListener {
     const frameWidth = 2 * (16 / 9);
     const zoom = ((HI_SOURCE_KM / STEP_KM) * dx) / (HI_WIDTH * frameWidth);
     return { lean: (xn - x0) / dx, rise: (ye - y0) / dx, stretch: (yn - y0) / dx, zoom: Math.min(8, Math.max(2, zoom)) };
+  }
+
+  /** The planet's turn into the world as it will be in the middle of this breather's night. */
+  private rotationAtNight(): Quaternion {
+    const t = this.sky.kind === "breather" ? this.sky.t : 0;
+    return new Quaternion().setFromAxisAngle(this.stage.orbitAxis, turnUntilNight(t)).multiply(this.stage.planetRotation);
   }
 
   /** The planet's surface point seen through the art's view at NDC (sx, sy), as a unit direction from its centre. */
@@ -676,8 +687,9 @@ export class OrbitalDecay implements Game, MatchListener {
       const night = this.sky.t > SET_END - 0.4 && this.sky.t < RISE_START + 0.3;
       if (night && !this.stormStarted) {
         this.stormStarted = true;
+        // Where it will be in the middle of the night: it drifts with the ground, a few hundred km.
         const spot = this.groundPoint(0.3, -0.22);
-        if (spot) this.secrets.startStorm(spot.applyQuaternion(this.stage.planetRotation.clone().invert()));
+        if (spot) this.secrets.startStorm(spot.applyQuaternion(this.rotationAtNight().invert()));
       }
       if (!night && this.secrets.stormOn) this.secrets.stopStorm();
     }
@@ -843,8 +855,9 @@ export class OrbitalDecay implements Game, MatchListener {
         const onPlanet = dir.clone().multiplyScalar(hit).sub(c).normalize().applyQuaternion(this.stage.planetRotation.clone().invert());
         const sunP = this.stage.sunDirection.clone().applyQuaternion(this.stage.planetRotation.clone().invert());
         const km = (a: Vector3) => Math.acos(Math.min(1, Math.max(-1, onPlanet.dot(a)))) * PLANET_R;
-        const storm = this.secrets.stormOn && km(this.secrets.storm) < 220 && this.secrets.takeFlash();
         const hi = this.stage.night > 0.5 && this.hiShown && km(this.hiAt) < HI_REACH_KM && this.hiAt.dot(sunP) < 0;
+        // The HI's reach is the tighter: a shot at the letters is for them, even as the storm beside them flashes.
+        const storm = !hi && this.secrets.stormOn && km(this.secrets.storm) < 220 && this.secrets.takeFlash();
         return { storm, hi };
       },
     };
