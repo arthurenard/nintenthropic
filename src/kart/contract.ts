@@ -129,7 +129,8 @@ export type RaceEvent = { id: number; tick: number } & (
   /** Drove through an item box already holding an item: the box breaks, nothing is given. */
   | { type: "box"; kart: number }
   | { type: "use"; kart: number; item: ItemKind }
-  | { type: "hit"; kart: number; by: number | null; cause: HitCause }
+  /** `own`: the kart's own item spun it (its puck back off a barrier, its own slick); left out otherwise. */
+  | { type: "hit"; kart: number; by: number | null; cause: HitCause; own?: boolean }
   | { type: "boost"; kart: number; source: "nitro" | "pad" | "drift" | "start"; level: number }
   | { type: "drift-level"; kart: number; level: 1 | 2 }
   | { type: "bump"; a: number; b: number; strength: number }

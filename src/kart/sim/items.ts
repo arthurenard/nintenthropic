@@ -53,7 +53,8 @@ function drawItem(w: World, place: number, racers: number): ItemKind {
 export function hitKart(victim: KartState, by: number | null, cause: HitCause, emit: Emit, seconds?: number): boolean {
   if (victim.spin > 0 || victim.immune > 0 || victim.comet > 0 || victim.rescue > 0) return false;
   spinOut(victim, seconds);
-  emit({ type: "hit", kart: victim.id, by, cause });
+  // Spun by one's own item says so, for the picture's "Oops." and its sound.
+  emit(by === victim.id ? { type: "hit", kart: victim.id, by, cause, own: true } : { type: "hit", kart: victim.id, by, cause });
   return true;
 }
 
