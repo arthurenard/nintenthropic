@@ -25,6 +25,12 @@
   overflow: hidden;
   --u: 1;
   --m: calc(24px * var(--u));
+  /* The item slot's centre: the middle of the view, or clear of the lap panel in a view too narrow for both (two or
+     four players side by side on a phone held upright), the panel being 146 units wide and the slot 76. */
+  --item-x: min(max(50%, calc(var(--m) + var(--clear-lap, 0px) + 192px * var(--u))), calc(100% - var(--m) - 38px * var(--u)));
+  /* Where the banners go, under the slot (and under the lap panel, which is 67 units tall, when a map moved it down). */
+  --below: calc(var(--m) + max(90px * var(--u), var(--clear-lap-y, 0px) + 76px * var(--u)));
+  container-type: inline-size;
 }
 
 /* Glass: blurred world behind, a hairline edge. Without the blur (low quality,
@@ -45,7 +51,7 @@
 .gp-lap {
   position: absolute;
   left: calc(var(--m) + var(--clear-lap, 0px));
-  top: var(--m);
+  top: calc(var(--m) + var(--clear-lap-y, 0px));
   padding: calc(9px * var(--u)) calc(16px * var(--u)) calc(10px * var(--u));
   min-width: calc(112px * var(--u));
 }
@@ -69,7 +75,7 @@
 /* The item slot, top centre. */
 .gp-item {
   position: absolute;
-  left: 50%;
+  left: var(--item-x);
   top: var(--m);
   width: calc(76px * var(--u));
   height: calc(76px * var(--u));
@@ -155,10 +161,10 @@
 /* How to use the item, beside the slot, for a player who never has. It fades in and out (never moves). */
 .gp-hint {
   position: absolute;
-  left: calc(50% + 38px * var(--u) + 14px * var(--u));
+  left: calc(var(--item-x) + 38px * var(--u) + 14px * var(--u));
   top: calc(var(--m) + 38px * var(--u));
   transform: translateY(-50%);
-  max-width: calc(50% - 52px * var(--u) - var(--m));
+  max-width: calc(100% - var(--item-x) - 52px * var(--u) - var(--m));
   padding: calc(8px * var(--u)) calc(18px * var(--u));
   border-radius: 999px;
   font-size: max(14px, calc(21px * var(--u)));
@@ -170,6 +176,22 @@
 }
 .gp-hint.gp-on {
   opacity: 1;
+}
+/* A narrow view (a quadrant on a small screen, two players side by side on a phone held upright) has no room beside
+   the slot: the words go under it, and step aside while a banner has that place. */
+@container (max-width: 520px) {
+  .gp-hint {
+    left: var(--item-x);
+    top: var(--below);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 2 * var(--m));
+    box-sizing: border-box;
+    text-align: center;
+  }
+  .gp-bannered .gp-hint.gp-on {
+    opacity: 0;
+  }
 }
 
 /* A skyrocket on its way to this view's kart. */
@@ -188,7 +210,7 @@
 .gp-incoming-banner {
   position: absolute;
   left: 50%;
-  top: calc(var(--m) + 90px * var(--u));
+  top: var(--below);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -198,8 +220,15 @@
   font-size: calc(22px * var(--u));
   font-weight: 600;
   letter-spacing: -0.01em;
-  white-space: nowrap;
+  /* One line, unless the view is too narrow for "Skyrocket incoming: use your Blast": then two, never cut off. */
+  width: max-content;
+  max-width: calc(100% - 2 * var(--m));
+  box-sizing: border-box;
+  text-align: center;
   color: #ff453a;
+}
+.gp-incoming-ring {
+  flex: none;
 }
 .gp-incoming-ring {
   width: calc(26px * var(--u));
@@ -251,7 +280,7 @@
 .gp-banner {
   position: absolute;
   left: 50%;
-  top: calc(var(--m) + 90px * var(--u));
+  top: var(--below);
   transform: translate(-50%, calc(-12px * var(--u)));
   padding: calc(10px * var(--u)) calc(22px * var(--u));
   border-radius: 999px;

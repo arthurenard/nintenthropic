@@ -8,7 +8,7 @@
  * The map is on screen in every layout (layout.ts's mapPlacement): bottom left
  * with one view, on the right edge at the split with two, in the free quadrant
  * with the standings beside it with three, and small in the middle with a
- * compact standings strip with four.
+ * compact standings strip with four (where it fits).
  *
  * It only touches the DOM when a value changes, so a steady frame costs a few
  * comparisons per viewport.
@@ -62,6 +62,14 @@ function setRect(node: HTMLElement, r: Rect): void {
 /** The free quadrant holds only a map and a list, so its type runs larger than the play views'. */
 function freeScale(rect: Rect): number {
   return Math.max(0.7, Math.min(1.35, hudScale(rect.w, rect.h) * 1.6));
+}
+
+/**
+ * Which banner shows under the item slot when more than one would: a skyrocket on its way (something to do about it),
+ * then going the wrong way, then the final lap. They share one place, so never two at once.
+ */
+export function bannerFor(incoming: boolean, wrongWay: boolean, finalLap: boolean): "incoming" | "wrong" | "final" | null {
+  return incoming ? "incoming" : wrongWay ? "wrong" : finalLap ? "final" : null;
 }
 
 function restart(node: HTMLElement, cls: string): void {
@@ -221,6 +229,7 @@ export class Hud {
       const c = clearance(v.rect, place.rect, v.scale);
       v.root.style.setProperty("--clear-place", `${Math.round(c.place)}px`);
       v.root.style.setProperty("--clear-lap", `${Math.round(c.lap)}px`);
+      v.root.style.setProperty("--clear-lap-y", `${Math.round(c.lapDown)}px`);
     }
   }
 
@@ -259,7 +268,6 @@ export class Hud {
     const wrong = el("div", "gp-banner gp-wrong gp-glass", root);
     wrong.textContent = "Wrong Way";
     wrong.setAttribute("aria-live", "assertive");
-    wrong.style.top = `calc(var(--m) + 90px * var(--u))`;
 
     const count = el("div", "gp-count", root);
     count.setAttribute("aria-live", "polite");
@@ -398,7 +406,7 @@ export class Hud {
     // The item slot.
     this.updateItem(v, kart);
     this.updateHint(v, kart);
-    this.updateIncoming(v, kart, view);
+    const incoming = this.updateIncoming(v, kart, view);
 
     // Final lap: by event, or by the lap counter when no event reached us.
     if (!v.shownFinal && view.laps > 1 && kart.lap === view.laps && !done) {
@@ -406,8 +414,11 @@ export class Hud {
       if (v.finalUntil < 0) v.finalUntil = this.clock + 2.6;
     }
     if (kart.lap < view.laps) v.shownFinal = false;
-    v.finalLap.classList.toggle("gp-on", this.clock < v.finalUntil && !done);
-    v.wrong.classList.toggle("gp-on", kart.wrongWay && !done && view.phase === "racing");
+    // The banners share one place under the item slot: one at a time.
+    const banner = bannerFor(incoming, kart.wrongWay && !done && view.phase === "racing", this.clock < v.finalUntil && !done);
+    v.finalLap.classList.toggle("gp-on", banner === "final");
+    v.wrong.classList.toggle("gp-on", banner === "wrong");
+    v.root.classList.toggle("gp-bannered", banner !== null);
 
     // Countdown.
     let text = "";
@@ -493,7 +504,7 @@ export class Hud {
   }
 
   /** A skyrocket flying to this kart: red edges, "Incoming", and what to do about it. */
-  private updateIncoming(v: ViewHud, kart: KartView, view: RaceView): void {
+  private updateIncoming(v: ViewHud, kart: KartView, view: RaceView): boolean {
     let near = -1;
     for (const t of view.things) {
       if (t.kind !== "skyrocket" || t.target !== v.kartId) continue;
@@ -501,9 +512,10 @@ export class Hud {
     }
     const on = near >= 0 && kart.finished === null;
     v.incoming.classList.toggle("gp-on", on);
-    if (!on) return;
+    if (!on) return false;
     v.incoming.style.setProperty("--near", near.toFixed(2));
     setText(v.incomingText, kart.item === "blast" && !kart.rolling ? "Skyrocket incoming: use your Blast" : "Skyrocket incoming");
+    return true;
   }
 
   private updateFree(f: FreeHud, view: RaceView): void {
