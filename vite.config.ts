@@ -174,6 +174,10 @@ function devPagesAssets(): Plugin {
 
 export default defineConfig(async ({ mode }) => {
   const party = mode === "party";
+  // Where node_modules really is: a worktree links it to the main checkout's, outside the folder the dev server
+  // may read from, and Three's Draco decoder was refused there (every Blender model fell back to its stand-in).
+  const fs = (await import("node:fs" as string)) as { realpathSync(path: URL): string };
+  const modules = fs.realpathSync(new URL("./node_modules", import.meta.url));
   let origin: string | null = null;
   const plugins: Plugin[] = [vendorFiles(), devPagesAssets()];
   if (party) {
@@ -182,10 +186,10 @@ export default defineConfig(async ({ mode }) => {
     const { default: basicSsl } = await import("@vitejs/plugin-basic-ssl");
     plugins.push(basicSsl(), partyBanner(origin));
   }
-  return baseConfig(party, origin, plugins);
+  return baseConfig(party, origin, plugins, modules);
 });
 
-function baseConfig(party: boolean, origin: string | null, plugins: Plugin[]): UserConfig {
+function baseConfig(party: boolean, origin: string | null, plugins: Plugin[], modules: string): UserConfig {
   return {
     base: "./",
     plugins,
@@ -209,7 +213,10 @@ function baseConfig(party: boolean, origin: string | null, plugins: Plugin[]): U
     // The tracking worker is an ES module: it loads MediaPipe's module build.
     worker: { format: "es" },
     // A party listens on every address of this computer, on a port it can say out loud (the page names it).
-    server: party ? { host: true, port: PARTY_PORT, strictPort: true } : { host: "127.0.0.1", port: 5173 },
+    server: {
+      ...(party ? { host: true, port: PARTY_PORT, strictPort: true } : { host: "127.0.0.1", port: 5173 }),
+      fs: { allow: [".", modules] },
+    },
     preview: { host: "127.0.0.1", port: 4173 },
     test: { environment: "node", include: ["src/**/*.test.ts"] },
   };
