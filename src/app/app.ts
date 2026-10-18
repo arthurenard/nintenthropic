@@ -216,6 +216,8 @@ export class App {
   private tracking = false;
   /** The small loop that watches for the hand while the world is held. */
   private holdLoop = 0;
+  /** The loading sheet of a game getting ready: put away with it, before it has even shown, by Cancel or Back. */
+  private loadingSheet: LoadingSheet | null = null;
 
   constructor(private readonly options: AppOptions = {}) {
     this.settings = {
@@ -513,6 +515,7 @@ export class App {
       const eye = this.readsEye(entry, control) && !this.options.scripted;
       const firstTime = hand && !this.options.scripted && ((!this.tracker && !prefs.downloaded) || (eye && !this.tracker?.hasFace));
       loading = new LoadingSheet(firstTime);
+      this.loadingSheet = loading;
       const sheet = loading;
       const progress = new Progress((fraction) => sheet.set(fraction));
 
@@ -584,6 +587,7 @@ export class App {
       this.fail(error);
     } finally {
       if (run === this.generation) this.busy = false;
+      if (this.loadingSheet === loading) this.loadingSheet = null;
       this.renderArcade();
     }
   }
@@ -1359,6 +1363,9 @@ export class App {
   back(): void {
     this.generation++;
     this.busy = false;
+    // A sheet still waiting for its moment to show must not show over the arcade.
+    this.loadingSheet?.close();
+    this.loadingSheet = null;
     if (this.session) this.choose(this.session.entry, "link");
     this.endSession();
     this.releaseCamera();
@@ -1615,6 +1622,13 @@ export class App {
     // (Choose a Game is on the sheet); Resume puts the game's address back.
     const followAddress = () => {
       const view = document.body.dataset.view;
+      if (view === "game" && !this.session) {
+        // Still getting ready, there is no round to keep: Back is Cancel, to where the address now says.
+        const route = parseRoute(location, this.shooting);
+        this.back();
+        this.arrive(route);
+        return;
+      }
       if (view === "game") this.pause();
       if (view !== "landing" && view !== "arcade") return;
       this.arrive(parseRoute(location, this.shooting));

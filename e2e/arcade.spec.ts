@@ -119,6 +119,30 @@ test("the browser's Back in a game pauses it, and never leaves the page with the
   expect(errors).toEqual([]);
 });
 
+test("the browser's Back while a game gets ready cancels it, to where the address says", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await returningVisitor(page, { "handy.control.v1": "mouse" });
+  // The town takes its time to arrive, so the game is still getting ready when Back is pressed.
+  await page.route("**/assets/western/**", async (route) => {
+    await new Promise((done) => setTimeout(done, 4000));
+    await route.continue().catch(() => {});
+  });
+  await page.goto("/");
+  await page.getByRole("link", { name: "Play" }).click();
+  await card(page, "High Noon").click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => (await snapshot(page)).view).toBe("game");
+  expect((await snapshot(page)).phase).toBeNull();
+  await page.goBack();
+  await expect(page.locator("#landing")).toBeVisible();
+  // The game that was loading never turns up afterwards, nor does its loading sheet.
+  await page.waitForTimeout(6000);
+  expect(await snapshot(page)).toMatchObject({ view: "landing", phase: null });
+  await expect(page.locator("#loading")).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 test("the landing: two equal tiles, and the way into each", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
