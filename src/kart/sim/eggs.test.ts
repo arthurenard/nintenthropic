@@ -168,6 +168,42 @@ describe("the bots", () => {
     }
   });
 
+  it("honk back at a person who honks close by, a moment later, once, and never for a kart a person drives", () => {
+    const r = race(MEADOW_LOOP, racers(2, 6, 1), { seed: 4 });
+    // On the grid, in the countdown: kart 0 honks once, kart 1 (a person too) never does.
+    run(r, 90, () => new Map([[0, input()], [1, input()]]));
+    const at = r.tick;
+    const near = new Set(r.view().karts.filter((k) => k.id >= 2 && Math.hypot(k.x - view(r, 0).x, k.z - view(r, 0).z) <= EGGS.answerRadius).map((k) => k.id));
+    expect(near.size).toBeGreaterThan(1);
+    const events = run(r, 2 * TICK_HZ, (tick) => new Map([[0, input({ horn: tick >= at ? 1 : 0 })], [1, input()]]));
+    expect(hornsOf(events, 0).map((e) => e.tick)).toEqual([at]);
+    expect(hornsOf(events, 1)).toEqual([]);
+    const answers = events.filter((e) => e.type === "horn" && e.kart !== 0) as Extract<RaceEvent, { type: "horn" }>[];
+    expect(answers.length).toBeGreaterThan(0);
+    for (const e of answers) {
+      expect(near.has(e.kart), `kart ${e.kart} is too far to hear`).toBe(true);
+      expect(e.tick - at).toBeGreaterThanOrEqual(EGGS.answerDelay.least * TICK_HZ);
+      expect(e.tick - at).toBeLessThanOrEqual((EGGS.answerDelay.least + EGGS.answerDelay.spread) * TICK_HZ + 1);
+    }
+    expect(new Set(answers.map((e) => e.kart)).size).toBe(answers.length);
+    // A second honk a moment later: those that answered are quiet for a while.
+    const later = run(r, 2 * TICK_HZ, () => new Map([[0, input({ horn: 2 })], [1, input()]]));
+    expect(later.filter((e) => e.type === "horn" && answers.some((a) => a.kart === e.kart))).toEqual([]);
+  });
+
+  it("answer a honk the same way in a race restored halfway through", () => {
+    const honk = (tick: number) => new Map([[0, input({ horn: tick >= 100 ? 1 : 0 })]]);
+    const whole = race(MEADOW_LOOP, racers(1, 7, 0.5), { seed: 6 });
+    const all = run(whole, 200, honk).filter((e) => e.type === "horn");
+    const first = race(MEADOW_LOOP, racers(1, 7, 0.5), { seed: 6 });
+    run(first, 110, honk);
+    const resumed = race(MEADOW_LOOP, racers(1, 7, 0.5), { seed: 6 });
+    resumed.restore(JSON.parse(JSON.stringify(first.snapshot())));
+    const rest = run(resumed, 90, honk).filter((e) => e.type === "horn");
+    expect(rest.map((e) => [e.kart, e.tick])).toEqual(all.filter((e) => e.tick >= 110).map((e) => [e.kart, e.tick]));
+    expect(rest.length).toBeGreaterThan(0);
+  });
+
   it("honk more the sharper they are", () => {
     const count = (skill: number) => {
       let total = 0;
