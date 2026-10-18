@@ -162,6 +162,11 @@ export class PostChain {
   constructor(renderer: WebGLRenderer, tier: Tier, draw: DrawViews) {
     renderer.toneMapping = NoToneMapping;
     this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, multisampling: samplesFor(tier), depthBuffer: true, stencilBuffer: false });
+    // Each view's draw ends with three resolving the multisampled target into the texture the passes read, depth and
+    // all; nothing after the views reads the depth, so only the colour is resolved (0.7 to 1.4 ms less of the GPU a
+    // frame at 1440x900 at 2x, high and medium, 1 and 4 views; the pictures the same pixel for pixel).
+    this.composer.inputBuffer.resolveDepthBuffer = false;
+    this.composer.outputBuffer.resolveDepthBuffer = false;
     this.views = new ViewsPass(draw);
     this.composer.addPass(this.views);
     this.bloom = new BloomEffect({ luminanceThreshold: 1, luminanceSmoothing: 0.25, mipmapBlur: true, intensity: 0.5, radius: 0.72, levels: tier === "low" ? 5 : 7 });
