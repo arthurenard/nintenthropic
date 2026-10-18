@@ -30,6 +30,7 @@ import { Backdrop } from "./backdrop";
 import { CheckScreen } from "./check";
 import { DriverScreen, driverAccess, type DriverChoice, type DriverSeat } from "./driver";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
+import { PadMenus } from "./padnav";
 import { crew, loadYou, playerCount, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
@@ -222,6 +223,8 @@ export class KartApp {
     motion.addEventListener("change", apply);
     apply();
     this.listenForSound();
+    // A gamepad moves about the menus as the keyboard does, and its Start pauses a race.
+    new PadMenus({ screen: () => this.screen, pause: () => this.raceScreen.pause() });
     this.show("start");
     const code = this.options.join;
     if (code) {
