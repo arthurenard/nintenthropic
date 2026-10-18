@@ -446,6 +446,6 @@ test("a window resized mid-round keeps the crosshair where the shots land", asyn
   await shot(page, info, "resize-01-aimed", 0);
   // ...and the shot lands there: the vane spins, and it is a secret found.
   await shoot(page, vane!.x, vane!.y);
-  await expect(page.locator(".secret")).toContainText("The Weather Vane", { timeout: 15_000 });
+  await expect(page.locator(".secret")).toContainText("Pointing at You", { timeout: 15_000 });
   expect(errors).toEqual([]);
 });
