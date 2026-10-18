@@ -98,6 +98,12 @@ function pullShade(s: ShadePull, k: number): void {
 /** The tool bag's drift across the view, in front of all the station (its nearest arm is 11 m out): from/to as (x, y) on screen (-1..1) and metres out. */
 const BAG_FROM: [number, number, number] = [-0.95, 0.2, 8.5];
 const BAG_TO: [number, number, number] = [0.95, -0.02, 7.5];
+/**
+ * A shot at the storm counts for a flash this long (s) after it: the time a
+ * hand takes to see it, point and fold - a flash itself is gone in a tenth
+ * of a second. Each flash counts once.
+ */
+const FLASH_WINDOW = 0.9;
 /** How long (s) the tools drift after the bag bursts before they are let go: by then specks tens of metres out. */
 const TOOLS_FOR = 30;
 
@@ -173,6 +179,8 @@ export class SecretsWorld {
   /** The storm's place on the planet (its frame), for this breather. */
   readonly storm = new Vector3(0, 1, 0);
   stormOn = false;
+  /** Settings.reducedFlashing: the storm's flashes and the HI's blink are softer. */
+  reducedFlashing = false;
 
   constructor(
     extras: Object3D,
@@ -375,16 +383,19 @@ export class SecretsWorld {
     this.stormOn = true;
     this.nextFlash = 0.3 + this.random() * 0.5;
     this.sky.uniform<Vector4>("uLightning").value.set(this.storm.x, this.storm.y, this.storm.z, 0);
+    // Its thunderhead, for the flashes to light (gathered in the dark).
+    this.sky.uniform<number>("uStormCell").value = 1;
   }
 
   stopStorm(): void {
     this.stormOn = false;
     this.sky.uniform<Vector4>("uLightning").value.w = 0;
+    this.sky.uniform<number>("uStormCell").value = 0;
   }
 
   /** Is the storm flashing (or has it just)? A shot now counts. */
   get flashing(): boolean {
-    return this.stormOn && this.time - this.lastFlash < 0.4;
+    return this.stormOn && this.time - this.lastFlash < FLASH_WINDOW;
   }
 
   /** Did a shot land on a flash already counted? One flash, one count. */
@@ -516,14 +527,16 @@ export class SecretsWorld {
         this.nextFlash = this.random() < 0.4 ? 0.09 + this.random() * 0.1 : 0.5 + this.random() * 0.9;
       }
       this.flashLeft -= dt;
-      lightning.w = this.flashLeft > 0 ? 1 + this.random() * 0.6 : Math.max(0, lightning.w - dt * 18);
+      // Reduced Flashing: a glow in the clouds a quarter as bright.
+      const dim = this.reducedFlashing ? 0.25 : 1;
+      lightning.w = this.flashLeft > 0 ? (1 + this.random() * 0.6) * dim : Math.max(0, lightning.w - dt * 18);
     }
     // The HI, blinking back twice.
     const hi = this.sky.uniform<Vector4>("uHi").value;
     if (this.hiBlink >= 0) {
       this.hiBlink += dt;
       const b = this.hiBlink;
-      hi.w = (b > 0.2 && b < 0.55) || (b > 0.8 && b < 1.15) ? 3.5 : 0;
+      hi.w = (b > 0.2 && b < 0.55) || (b > 0.8 && b < 1.15) ? (this.reducedFlashing ? 1.5 : 3.5) : 0;
       if (b > 1.3) this.hiBlink = -1;
     } else hi.w = 0;
     // The flag on the Moon.

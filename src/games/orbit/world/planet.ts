@@ -102,6 +102,7 @@ uniform float uMoonShow;
 uniform float uFlag;
 uniform float uAurora;
 uniform vec4 uLightning;
+uniform float uStormCell;
 uniform vec4 uHi;
 uniform mat3 uNightMap;
 uniform float uNightScale;
@@ -431,6 +432,13 @@ void main() {
   Tri tcd = triAt(drifted(pc, uCloudShift));
   float dome;
   float ca = cloudCover(cloud, tcd, dome);
+  // The night's storm brings its own thunderhead, some 80 km across, so its
+  // lightning has a cloud to light wherever the night is placed (open sky
+  // would show nothing at all).
+  if (uStormCell > 0.0) {
+    float cell = uStormCell * exp(-sq(acos(clamp(dot(xc, uLightning.xyz), -1.0, 1.0)) * R / 40.0));
+    ca = max(ca, cell * (0.55 + 0.45 * dome));
+  }
   // Cloudlet tops as a height field, domed by the detail, for their relief.
   float hCloud = CLOUDLET_H * pow(ca, 1.5) * (0.45 + 0.55 * dome) * (1.0 - smoothstep(4.0, 6.0, tcd.fine));
   vec3 dpx = dFdx(pc);
@@ -603,6 +611,7 @@ export class PlanetSky {
         uFlag: { value: 0 },
         uAurora: { value: 0 },
         uLightning: { value: new Vector4(0, 1, 0, 0) },
+        uStormCell: { value: 0 },
         uHi: { value: new Vector4(0, 1, 0, 0) },
         uNightMap: { value: new Matrix3() },
         uNightScale: { value: 1 },

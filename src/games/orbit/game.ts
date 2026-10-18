@@ -57,6 +57,18 @@ const tmp = new Vector3();
 const tmp2 = new Vector3();
 /** How far out on the screen (NDC) the drone may work: clear of the corner panel and the heat ring. */
 const DRONE_VIEW = { x: 0.8, top: 0.72, bottom: 0.7 };
+/**
+ * The night-side storm flickers from this far into a breather (s) - the
+ * ground under the view is dark well before the sun is down - until a
+ * moment after sunrise begins: some three seconds to catch three flashes.
+ */
+const STORM_FROM = SET_END - 1.0;
+/**
+ * Where the storm is in the view (NDC) in the middle of the night: in the
+ * centre window, low and to the left, where the player looks most (and
+ * through glass: the frame round it hid it once), well clear of the HI.
+ */
+const STORM_SPOT = { x: -0.12, y: -0.2 };
 /** The other nights' countries are turned this far, so they do not stand square to the view. */
 const OTHER_NIGHT_TURN = (30 * Math.PI) / 180;
 /** Where the "HI" is put in the view (NDC): low in the right-hand window, clear of the centre pane. */
@@ -633,6 +645,7 @@ export class OrbitalDecay implements Game, MatchListener {
     const reducedFlashing = this.ctx.settings.reducedFlashing;
     this.effects.reducedFlashing = reducedFlashing;
     this.beams.reducedFlashing = reducedFlashing;
+    this.secrets.reducedFlashing = reducedFlashing;
     this.camera.reducedMotion = this.ctx.settings.reducedMotion;
     this.time += dt;
     this.runSchedule();
@@ -685,17 +698,15 @@ export class OrbitalDecay implements Game, MatchListener {
     }
     if (!breather) this.nightPlaced = false;
     if (breather) {
-      const night = this.sky.t > SET_END - 0.4 && this.sky.t < RISE_START + 0.3;
+      const night = this.sky.t > STORM_FROM && this.sky.t < RISE_START + 0.3;
       if (night && !this.stormStarted) {
         this.stormStarted = true;
         // Where it will be in the middle of the night: it drifts with the ground, a few hundred km.
-        const spot = this.groundPoint(0.3, -0.22);
+        const spot = this.groundPoint(STORM_SPOT.x, STORM_SPOT.y);
         if (spot) this.secrets.startStorm(spot.applyQuaternion(this.rotationAtNight().invert()));
       }
       if (!night && this.secrets.stormOn) this.secrets.stopStorm();
     }
-    const lightning = this.stage.sky.uniform<Vector4>("uLightning").value;
-    if (this.ctx.settings.reducedFlashing) lightning.w *= 0.25;
     this.aurora += ((this.match.secrets.aurora ? 1 : 0) - this.aurora) * Math.min(1, dt * 0.5);
     this.stage.sky.uniform<number>("uAurora").value = this.aurora * (0.35 + 0.65 * this.stage.night);
     // The Moon, from its pass on, rising over the limb.
