@@ -465,6 +465,26 @@ body[data-view="game"] {
 .menu > .footnote {
   text-align: center;
 }
+/* A short window (a phone on its side): the choices in two columns under
+   Resume, so every one of them is in view without scrolling. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .menu {
+    width: min(560px, calc(100vw - 2 * var(--margin)));
+    padding-top: 24px;
+  }
+  .menu[open] {
+    gap: 12px;
+  }
+  .menu-list {
+    grid-template-columns: 1fr 1fr;
+  }
+  .menu-list .button {
+    min-height: 44px;
+  }
+  .menu-list > :first-child {
+    grid-column: 1 / -1;
+  }
+}
 
 /* --- results -------------------------------------------------------------------------------------- */
 
