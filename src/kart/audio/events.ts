@@ -33,12 +33,13 @@ export interface Order {
 const RADIUS = { big: 45, medium: 32, small: 20 } as const;
 
 function order(cue: string, who: Listener, own: boolean, o: Partial<Order> & { radius?: number } = {}): Order | null {
-  const { radius, ...rest } = o;
+  // `volume` is taken out with `radius`: left in `rest`, it would undo the distance's fall-off below.
+  const { radius, volume, ...rest } = o;
   const reach = own ? 1 : falloff(who.distance, radius ?? RADIUS.medium);
   if (reach <= 0.02) return null;
   return {
     cue,
-    volume: (o.volume ?? 1) * (own ? 1 : 0.8 * reach),
+    volume: (volume ?? 1) * (own ? 1 : 0.8 * reach),
     pan: who.pan,
     distance: own ? 0 : who.distance,
     rate: 1,
