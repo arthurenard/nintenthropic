@@ -833,6 +833,14 @@ export class KartApp {
       case "version":
         showTrouble("version", [{ label: "Reload", run: () => location.reload() }, toStart]);
         break;
+      case "network":
+        // A code that never answered is not a connection lost: without a relay, players on different networks may not meet.
+        if (kind === "join" && code) {
+          showTrouble("unreachable", [{ label: "Try Again", run: () => void this.open("join", code) }, toStart]);
+          break;
+        }
+        showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);
+        break;
       default:
         showTrouble("network", [kind === "host" ? { label: "Try Again", run: () => void this.open("host") } : toStart, ...(kind === "host" ? [toStart] : [])]);
     }
