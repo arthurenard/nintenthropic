@@ -11,8 +11,8 @@
  * everything glossy reflects the world it is in.
  *
  * Speed matters more than polish in the plumbing. The track is built once
- * into merged, frustum-culled chunks; scenery is instanced; particles are two
- * pooled point clouds; the karts are a dozen draw calls each. A frame with
+ * into merged, frustum-culled chunks; scenery is instanced; particles are
+ * three pooled point clouds; the karts are a dozen draw calls each. A frame with
  * four viewports walks the same scene four times, so everything static is
  * kept few and large. Dynamic resolution, from the engine, adjusts the pixel
  * count to hold the frame rate.
@@ -90,7 +90,7 @@ export interface RaceRendererOptions {
   onStrain?: (tier: Tier, interval: number) => void;
   /** Called once, with the tier in use, when the race has run `KEPT_UP_SECONDS` without straining. */
   onKeptUp?: (tier: Tier) => void;
-  /** Makes a kart's model; the procedural toy by default, a glTF loader later. */
+  /** Makes a kart's model: by default createProceduralKart (the Blender kart once its art is loaded, the code-built one otherwise). */
   kartFactory?: KartFactory;
   /**
    * The picture turns a spun-out kart round itself (true), or the sim already
@@ -231,7 +231,6 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   /** The views of the frame being drawn: the post chain's first pass walks them. */
   const frameViews: { rect: { x: number; y: number; w: number; h: number }; eye: PerspectiveCamera; at: { x: number; y: number; z: number } }[] = [];
 
-  /** Draws every view, scissored, into the post chain's HDR target. */
   let profiling = false;
   let timer: GpuTimer | null = null;
   /**
@@ -244,6 +243,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const smooth = (key: "update" | "submit" | "draw" | "hud", ms: number) => {
     timings[key] += (ms - timings[key]) * 0.1;
   };
+  /** Draws every view, scissored, into the post chain's HDR target. */
   const drawViews: DrawViews = (target: WebGLRenderTarget) => {
     if (!world) return;
     const t0 = profiling ? performance.now() : 0;
@@ -359,7 +359,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
   /**
    * Compiles every shader this race can ask for, and draws two pictures through the whole post chain, while the
-   * loading screen is up: the first frames of the countdown (and the first boost, the first banana) then cost
+   * loading screen is up: the first frames of the countdown (and the first boost, the first slick) then cost
    * what any other does, instead of the 150 to 230 ms a first draw took compiling thirty-odd programs.
    * What is hidden now (a kart's flames, the item pool, and the hidden stand-ins for what is made when first
    * needed: a slick, a storm cloud, a comet's bubble, the rescue drone) is shown for the length of it, so it is
@@ -385,7 +385,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     for (const o of hidden) o.visible = true;
     try {
       // Most of the programs compile side by side where the browser can (KHR_parallel_shader_compile)... though never
-      // waited on for long: a context lost meanwhile would never say they are ready, and the pictures build what is left.
+      // waited on for long: a context lost meanwhile would never say they are ready.
       await Promise.race([renderer.compileAsync(scene, eyes[0].eye), new Promise((resolve) => setTimeout(resolve, 8000))]).catch(() => {});
       // ...and the pictures build what remains, the way a frame does.
       for (const e of eyes) {

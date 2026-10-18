@@ -8,8 +8,8 @@
  *    an HDR target, kart shadows in a 2048 map, the world's sun shadow baked
  *    at 3072 and its occlusion at 2048, grass tufts and flowers.
  *  - medium: 2x MSAA, 1024 kart shadows, a 2048/1024 bake, fewer tufts.
- *  - low: SMAA instead of MSAA, one 512 kart shadow map shared by the views,
- *    a coarse bake, no tufts, no occlusion map, smaller targets.
+ *  - low: SMAA instead of MSAA, a 512 kart shadow map, a coarse bake, no
+ *    tufts, no occlusion map, smaller targets.
  */
 import type { Quality } from "../../engine/types";
 

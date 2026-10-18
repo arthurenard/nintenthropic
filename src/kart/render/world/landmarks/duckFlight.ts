@@ -8,6 +8,7 @@
  * every frame. The take-off time lives here, in one place, because there is
  * one duck in a world and the picture's renderer is what hears the event.
  */
+import { smoothstep } from "../../math";
 
 /** The day's timetable, seconds from the squeak. */
 export const DUCK_DAY = {
@@ -40,11 +41,6 @@ export interface DuckPose {
   squash: number;
 }
 
-const smooth = (x: number): number => {
-  const c = Math.min(1, Math.max(0, x));
-  return c * c * (3 - 2 * c);
-};
-
 /**
  * Where the duck is `elapsed` seconds after it was found, or null once it is
  * back to its usual self (the bobbing the model does by itself). `t` is the
@@ -58,7 +54,7 @@ export function duckPose(elapsed: number, t: number): DuckPose | null {
   if (elapsed < d.squeak) {
     // A squeak: squashed, then stretched as it hops, then up it goes.
     const k = elapsed / d.squeak;
-    return { ...rest, y: 1.2 * Math.sin(Math.PI * k), squash: 1 - 0.22 * Math.sin(Math.PI * Math.min(1, k * 1.6)) + 0.1 * smooth(k - 0.5), yaw: Math.PI * smooth(k) };
+    return { ...rest, y: 1.2 * Math.sin(Math.PI * k), squash: 1 - 0.22 * Math.sin(Math.PI * Math.min(1, k * 1.6)) + 0.1 * smoothstep(0, 1, k - 0.5), yaw: Math.PI * smoothstep(0, 1, k) };
   }
   if (elapsed < d.flying) {
     // Off over the fence, away from the road (tail to the road: it has turned), climbing, flapping.
@@ -67,9 +63,9 @@ export function duckPose(elapsed: number, t: number): DuckPose | null {
       ...rest,
       yaw: Math.PI,
       z: -d.range * f * f,
-      y: 1.2 + d.height * smooth(f) + 1.4 * Math.sin(elapsed * 17),
+      y: 1.2 + d.height * smoothstep(0, 1, f) + 1.4 * Math.sin(elapsed * 17),
       x: 6 * Math.sin(f * 3),
-      pitch: -0.5 * smooth(f * 1.5),
+      pitch: -0.5 * smoothstep(0, 1, f * 1.5),
       roll: 0.45 * Math.sin(elapsed * 15),
     };
   }
@@ -77,7 +73,7 @@ export function duckPose(elapsed: number, t: number): DuckPose | null {
 
   // Paddling home from behind, slowing as it arrives, rocking a little with each stroke.
   const g = (elapsed - d.away) / (d.home - d.away);
-  const left = 1 - smooth(g);
+  const left = 1 - smoothstep(0, 1, g);
   return {
     ...rest,
     z: -d.from * left,

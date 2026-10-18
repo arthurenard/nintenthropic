@@ -5,13 +5,13 @@
  */
 import { Group, Mesh, type Material, type Object3D } from "three";
 import { byHeight, grid, MeshBuilder, mixRgb, pipe, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
-import { disc, flutedPipe, hash, hazardGlass, icicle, noisyArch, puffPart, ribbon, vec } from "./snow";
-import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
+import { disc, flutedPipe, hash, hazardGlass, icicle, noisyArch, puffPart, ribbon, vec } from "./rockKit";
+import type { Halo, HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 
 /** Lava, from white-hot to cooling crust. */
-// (Kept near 1 on the strongest channel: the tone mapping washes anything much brighter out to pale peach.)
+// (Above 1 is over-bright, so the bloom takes it; much brighter and the tone mapping washes it out to pale peach.)
 const LAVA_HOT: Rgb = [1.9, 1.3, 0.35];
 const LAVA: Rgb = [1.4, 0.48, 0.07];
 const LAVA_DEEP: Rgb = [1.0, 0.24, 0.04];
@@ -20,8 +20,6 @@ const GLOW_HALO: Rgb = [2.6, 0.95, 0.28];
 const BASALT_LOW: Rgb = [0.08, 0.036, 0.028];
 const BASALT_MID: Rgb = [0.02, 0.019, 0.025];
 const BASALT_HI: Rgb = [0.085, 0.074, 0.095];
-
-type Halo = { x: number; y: number; z: number; size: number; colour: readonly [number, number, number]; alpha: number; twinkle?: number };
 
 /** A facet-by-facet basalt shade: warm from the lava below at the foot, cold and grey up high. */
 const basaltShade = (y0: number, y1: number, seed: number): Shade => (p, i, j) => {
@@ -34,7 +32,7 @@ const basaltShade = (y0: number, y1: number, seed: number): Shade => (p, i, j) =
 
 const volcano: LandmarkSpec = {
   footprint: 110,
-  build(ctx) {
+  build() {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const glass = new MeshBuilder();
@@ -89,7 +87,7 @@ const volcano: LandmarkSpec = {
       const u = hash(k, 9);
       glow.blob(Math.cos(a) * (6 + u * 22), H + 8 + u * 42 + (k % 3) * 6, Math.sin(a) * (6 + u * 22), 1.4 + hash(k, 4) * 2.4, 1.4 + hash(k, 5) * 2.4, 1.4 + hash(k, 6) * 2.4, hash(k, 3) > 0.4 ? LAVA : LAVA_HOT, 0);
     }
-    // Rivers of lava down the flanks: bright zigzag strips from the rim, forking and cooling as they go.
+    // Rivers of lava down the flanks: bright zigzag strips from the rim, cooling as they go.
     const sample = (iF: number, th: number): V3 => {
       const i0 = Math.max(0, Math.min(rowsY.length - 2, Math.floor(iF)));
       const ti = iF - i0;
@@ -182,7 +180,6 @@ const volcano: LandmarkSpec = {
       const p = sample(2.5, sk.th);
       halos.push({ x: p[0] * 1.05, y: p[1] + 6, z: p[2] * 1.05, size: 46, colour: [2.5, 0.8, 0.2], alpha: 0.28, twinkle: 0.2 });
     }
-    void ctx;
     return { lit, glow, glass, moving, halos };
   },
 };
@@ -270,7 +267,7 @@ const lavaFall: LandmarkSpec = {
         },
       });
     }
-    // Glowing lip, and lava spilling over the black columns beside the chute.
+    // The chute's glowing lip.
     glow.quad([-6.4, 36.15, -0.2], [6.4, 36.15, -0.2], [6.4, 36.15, 1.2], [-6.4, 36.15, 1.2], LAVA_HOT);
     // The pool at the foot, a crusted skin of black plates on a glowing surface.
     const poolC: V3 = [0, 0.35, 13];
@@ -322,7 +319,7 @@ const lavaFall: LandmarkSpec = {
 
 const basaltColumns: LandmarkSpec = {
   footprint: 26,
-  build(ctx) {
+  build() {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const rad = 2.98;
@@ -362,7 +359,6 @@ const basaltColumns: LandmarkSpec = {
       { x: 0, y: 3, z: 8, size: 50, colour: GLOW_HALO, alpha: 0.28, twinkle: 0.12 },
       { x: 0, y: 10, z: 0, size: 70, colour: [2.4, 0.8, 0.25], alpha: 0.18, twinkle: 0.1 },
     ];
-    void ctx;
     return { lit, glow, halos };
   },
 };
@@ -473,13 +469,13 @@ const obsidianArch: LandmarkSpec = {
     const half = ctx.span / 2;
     const thick = (t: number) => 3 + 2.4 * Math.sin(Math.PI * t);
     // Glassy black: mostly very dark with the odd facet catching the light brightly.
-    const glass: Shade = (p, i, j) => {
+    const obsidian: Shade = (p, i, j) => {
       const v = hash(i, j, 7);
       const spark = Math.pow(v, 14);
       const base = mixRgb([0.0012, 0.0012, 0.0025], [0.008, 0.006, 0.012], Math.max(0, Math.min(1, p[1] / 22)));
       return mixRgb(base, [0.4, 0.17, 0.08], spark);
     };
-    noisyArch(lit, { halfIn: hw, topIn: top, legs, thick: (t) => thick(t), z0: -half, z1: half, steps: Math.max(4, Math.round(ctx.span / 5)), arcSteps: 10, rough: 1.1, seed: 12, skirt: 3, inner: glass, outer: glass });
+    noisyArch(lit, { halfIn: hw, topIn: top, legs, thick: (t) => thick(t), z0: -half, z1: half, steps: Math.max(4, Math.round(ctx.span / 5)), arcSteps: 10, rough: 1.1, seed: 12, skirt: 3, inner: obsidian, outer: obsidian });
     // Glowing veins: seams that follow the arch round the inside, and a zigzag along each face.
     const z0s = [-half * 0.7, -half * 0.25, half * 0.25, half * 0.7];
     z0s.forEach((z, zi) => {
@@ -517,7 +513,7 @@ const obsidianArch: LandmarkSpec = {
       lit.add(shapes.cone(4), xf(x, y + h / 2, (hash(k, 2) - 0.5) * half, 0.9 + hash(k, 3) * 0.8, h, 0.9, k, 0.3 * Math.cos(a), -0.35 * Math.cos(a)), ramp([0.04, 0.03, 0.06], [0.9, 0.8, 1.1]));
     }
     // Rubble of black glass at the feet.
-    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) rockBlob(lit, s * (hw + 4 + k * 2.2), 0, (hash(k, s + 3) - 0.5) * half * 1.4, 2.4, 1.8, 2.2, glass, k + s * 5, { detail: 0, roughness: 0.3, flatBase: true });
+    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) rockBlob(lit, s * (hw + 4 + k * 2.2), 0, (hash(k, s + 3) - 0.5) * half * 1.4, 2.4, 1.8, 2.2, obsidian, k + s * 5, { detail: 0, roughness: 0.3, flatBase: true });
     const halos: Halo[] = [
       { x: 0, y: top + 1, z: 0, size: 30, colour: [3.0, 0.95, 0.3], alpha: 0.5, twinkle: 0.2 },
       { x: -hw + 2, y: 6, z: 0, size: 14, colour: GLOW_HALO, alpha: 0.28, twinkle: 0.15 },
@@ -549,7 +545,7 @@ const hotSpring: LandmarkSpec = {
     const wy = 0.62;
     disc(glow, [0, wy - 0.12, 0], R, "y", 24, [0.9, 2.5, 2.1], [0.12, 0.85, 0.75]);
     disc(glass, [0, wy + 0.04, 0], R, "y", 24, rgb("#4fe0c8"), rgb("#1f9fa0"));
-    disc(glow, [0.5, wy + 0.0, 0], 4.2, "y", 14, [1.6, 3.4, 2.8], [0.5, 1.6, 1.4]);
+    disc(glow, [0.5, wy, 0], 4.2, "y", 14, [1.6, 3.4, 2.8], [0.5, 1.6, 1.4]);
     // A rim of black rock, stepped: low at the front, rising in terraces behind.
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * Math.PI * 2;
@@ -592,9 +588,9 @@ const hotSpring: LandmarkSpec = {
       lit.box(bx + s * 1.3, 0.75, bz, 0.22, 1.1, 0.7, rgb("#5b3a22"));
       lit.box(bx + s * 1.4, 1.3, bz - 0.4, 0.2, 1.5, 0.2, rgb("#5b3a22"));
     }
-    for (let k = 0; k < 4; k++) lit.box(bx - 0.9 + k * 0.6, 1.62, bz + 0.0, 0.5, 0.06, 0.88, k % 2 === 0 ? rgb("#e8554a") : rgb("#f5f1e6"));
+    for (let k = 0; k < 4; k++) lit.box(bx - 0.9 + k * 0.6, 1.62, bz, 0.5, 0.06, 0.88, k % 2 === 0 ? rgb("#e8554a") : rgb("#f5f1e6"));
     lit.box(bx, 2.05, bz - 0.85, 2.4, 1.4, 0.12, rgb("#f5f1e6"), 0, -0.35);
-    for (let k = 0; k < 3; k++) lit.box(bx, 2.0 - k * 0.35 + 0.3, bz - 0.9 - k * 0.0, 2.42, 0.2, 0.14, rgb("#e8554a"), 0, -0.35);
+    for (let k = 0; k < 3; k++) lit.box(bx, 2.0 - k * 0.35 + 0.3, bz - 0.9, 2.42, 0.2, 0.14, rgb("#e8554a"), 0, -0.35);
     lit.add(shapes.cylinder(6), xf(bx + 4.6, 0.12, bz + 0.6, 0.5, 0.25, 0.3), rgb("#f5f1e6")); // a pair of slippers
     lit.add(shapes.cylinder(6), xf(bx + 5.3, 0.12, bz + 0.9, 0.5, 0.25, 0.3), rgb("#f5f1e6"));
     // Steam: translucent wisps rising from the water and thinning out.

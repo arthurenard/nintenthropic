@@ -39,7 +39,7 @@ function duck(ctx: LandmarkContext): LandmarkModel {
     case "snow": {
       const red = rgb("#e8453c");
       const white = rgb("#ffffff");
-      for (let k = 0; k < 6; k++) lit.blob(Math.sin(k * 1.1) * 0.15, 1.82, 0.3 + k * 0.0, 0.8 - k * 0.0, 0.2, 0.8, k % 2 ? white : red, 0, 0);
+      for (let i = 0; i < 6; i++) lit.blob(Math.sin(i * 1.1) * 0.15, 1.82, 0.3, 0.8, 0.2, 0.8, i % 2 ? white : red, 0, 0);
       lit.blob(0, 2.95, 0.85, 0.55, 0.42, 0.55, red, 1);
       lit.blob(0, 3.4, 0.85, 0.17, 0.17, 0.17, white, 0);
       break;

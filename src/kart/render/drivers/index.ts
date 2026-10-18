@@ -1,13 +1,14 @@
 /**
- * The drivers who sit in the karts: nine low-poly creatures built in code
- * (one file each), and the rig that poses them: arms on the wheel that
- * follow its turn and lean with the body, a head that looks into the bend,
- * a cheer and a wave from the player's gesture, a happy bounce at the
- * finish, a dizzy wobble in a spin-out.
+ * The drivers who sit in the karts: nine smooth creatures modelled in
+ * drivers.glb (fromArt.ts), each with a stand-in built in code (one file
+ * each) for when the art is not loaded, and the rig that poses them: arms on
+ * the wheel that follow its turn and lean with the body, a head that looks
+ * into the bend, a cheer and a wave from the player's gesture, a happy bounce
+ * at the finish, a dizzy wobble in a spin-out.
  *
- * A driver is a few merged meshes (body, head, one arm shared by both sides,
- * and bits that move on their own: tails, antennae, a scarf's end), so eight
- * karts cost little.
+ * A driver is a few merged meshes (body, head, one arm geometry for both
+ * sides or one for each, and bits that move on their own: tails, antennae, a
+ * scarf's end), so eight karts cost little.
  */
 import {
   BufferGeometry,
@@ -27,7 +28,7 @@ import { SURF, kartMaterial, withStudioFallback } from "../kartMaterial";
 import { ARM_LEN, HEAD_AT, SHOULDER_Y, SHOULDER_Z, look, type Look } from "./parts";
 import type { Bit, BitState, DriverBuild, DriverMotion, Species } from "./types";
 
-export type { Bit, BitState, DriverBuild, DriverMotion, Species } from "./types";
+export type { DriverMotion, Species } from "./types";
 import { buildBear } from "./bear";
 import { buildCat } from "./cat";
 import { buildDuck } from "./duck";
@@ -53,7 +54,6 @@ const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
 
 /** The steering wheel in the driver's space (kartModel.ts holds the wheel itself): its centre, tilt and the radius hands hold. */
 export const WHEEL = { centre: [0, 0.12, 0.52] as V3, tilt: -0.95, grip: 0.15, turn: 1.5 };
-
 
 /** Drivers are drawn a little larger than life so they read from the chase camera. */
 export const DRIVER_SCALE = 1.14;
@@ -171,7 +171,7 @@ export class Driver {
     const dt = Number.isFinite(this.last) ? clamp(m.time - this.last, 0, 0.1) : 0;
     this.last = m.time;
     const t = m.time;
-    const snap = Number.isFinite(dt) && dt === 0 ? 1 : 0;
+    const snap = dt === 0 ? 1 : 0;
     const to = (now: number, goal: number, rate: number): number => (snap ? goal : damp(now, goal, rate, dt));
     this.cheer = to(this.cheer, m.emote === "cheer" || m.twirl > 0 ? 1 : 0, 14);
     this.wave = to(this.wave, m.emote === "wave" ? 1 : 0, 14);

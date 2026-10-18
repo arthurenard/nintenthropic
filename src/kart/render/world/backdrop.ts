@@ -81,13 +81,14 @@ function tileTexture(): CanvasTexture {
   return tex;
 }
 
-export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, bake: BakeUniforms): Backdrop | null {
+export function buildBackdrop(style: ThemeStyle, terrain: Terrain, worldOwn: Own, bake: BakeUniforms): Backdrop | null {
   const group = new Group();
   const disposables: { dispose(): void }[] = [];
   const updates: ((t: number) => void)[] = [];
-  const track = <T extends { dispose(): void }>(d: T): T => {
+  // Whatever is made here is disposed with the backdrop, and handed to the world's list as well.
+  const own = <T extends { dispose(): void }>(d: T): T => {
     disposables.push(d);
-    own.push(d);
+    worldOwn.push(d);
     return d;
   };
   const cx = (terrain.minX + terrain.maxX) / 2;
@@ -97,18 +98,18 @@ export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, bak
 
   switch (style.id) {
     case "kitchen":
-      kitchen(group, track, cx, cz, hx, hz);
+      kitchen(group, own, cx, cz, hx, hz);
       break;
     case "volcano":
-      volcano(group, track, cx, cz, hx, hz);
+      volcano(group, own, cx, cz, hx, hz);
       break;
     case "space":
-      space(group, track, updates, terrain, cx, cz, hx, hz);
+      space(group, own, updates, cx, cz, hx, hz);
       break;
     case "palm": {
-      const sea = oceanMaterial({ deep: "#0a6fa8", shallow: "#35d6c8", alpha: 0.82, shore: 5.5, level: SEA_LEVEL, foam: 1, roughness: 0.07, ripple: 6, anisotropy: 4 }, bake);
-      own.push(sea);
-      const geo = track(new PlaneGeometry(7000, 7000, 1, 1));
+      const sea = oceanMaterial({ deep: "#0a6fa8", shallow: "#35d6c8", alpha: 0.82, shore: 5.5, level: SEA_LEVEL, foam: 1, roughness: 0.07, anisotropy: 4 }, bake);
+      worldOwn.push(sea);
+      const geo = own(new PlaneGeometry(7000, 7000, 1, 1));
       geo.rotateX(-Math.PI / 2);
       const uv = geo.getAttribute("uv");
       for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * 7000) / 6, (uv.getY(i) * 7000) / 6);
@@ -138,34 +139,34 @@ export function buildBackdrop(style: ThemeStyle, terrain: Terrain, own: Own, bak
 
 // ─── The kitchen: tiled walls, a window of gold light, the floor far below ──
 
-function kitchen(group: Group, track: <T extends { dispose(): void }>(d: T) => T, cx: number, cz: number, hx: number, hz: number): void {
+function kitchen(group: Group, own: <T extends { dispose(): void }>(d: T) => T, cx: number, cz: number, hx: number, hz: number): void {
   const floorY = -(DROP_DEPTH.kitchen + 8) - 0.5;
-  // The floor of the room, black and cream squares fading away into the haze.
-  const floorTex = track(checker(256, "#efe4cf", "#7f95ab", 2));
+  // The floor of the room, cream and slate squares fading away into the haze.
+  const floorTex = own(checker(256, "#efe4cf", "#7f95ab", 2));
   floorTex.repeat.set(1200, 1200);
-  const floorGeo = track(new PlaneGeometry(33600, 33600));
+  const floorGeo = own(new PlaneGeometry(33600, 33600));
   floorGeo.rotateX(-Math.PI / 2);
-  const floor = new Mesh(floorGeo, track(new MeshLambertMaterial({ map: floorTex })));
+  const floor = new Mesh(floorGeo, own(new MeshLambertMaterial({ map: floorTex })));
   floor.position.set(cx, floorY, cz);
   floor.frustumCulled = false;
   group.add(floor);
 
   // Two walls make the corner of the room the counter is pushed into: the window wall (the sun side) and a side wall.
-  const tiles = track(tileTexture());
+  const tiles = own(tileTexture());
   const wallTop = 330;
   const tileTop = 74;
   const plaster = rgb("#f0dcc0");
   const cab = rgb("#f1e6d0");
   const cabDark = rgb("#c9aa7c");
-  const wallMat = track(new MeshLambertMaterial({ map: tiles }));
-  const solid = track(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
-  const glow = track(new MeshBasicMaterial({ vertexColors: true, side: DoubleSide }));
+  const wallMat = own(new MeshLambertMaterial({ map: tiles }));
+  const solid = own(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+  const glow = own(new MeshBasicMaterial({ vertexColors: true, side: DoubleSide }));
   const south = cz - hz * 0.93;
   const west = cx - hx * 0.93;
   const wallLen = Math.max(hx, hz) * 2.6;
   const addWall = (alongX: boolean) => {
     // Tiles from the counter up, rows of them below as cabinet fronts, plaster above.
-    const geo = track(new PlaneGeometry(wallLen, tileTop));
+    const geo = own(new PlaneGeometry(wallLen, tileTop));
     const uv = geo.getAttribute("uv");
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (wallLen / 12), uv.getY(i) * (tileTop / 12));
     const m = new Mesh(geo, wallMat);
@@ -198,7 +199,7 @@ function kitchen(group: Group, track: <T extends { dispose(): void }>(d: T) => T
       box(alongX, origin + u, 128, 56, 46, 22.6, cabDark);
       box(alongX, origin + u + 24, 112, 2.2, 14, 24.4, rgb("#d6dbe4"));
     }
-    // Cabinet fronts under the counter, below the floor of the picture's reach: only the faces near the counter edge show.
+    // Cabinet fronts under the counter: only the strip near the counter's edge is ever in the picture.
     box(alongX, origin, -26, wallLen, 52, 1.5, cab);
   }
   // The window in the south wall: a bright pane in a white frame, with a halo of afternoon.
@@ -215,8 +216,8 @@ function kitchen(group: Group, track: <T extends { dispose(): void }>(d: T) => T
   for (const sx of [-1, 1]) b.box(wx + sx * (ww / 2 + 3), wy + wh / 2, wall0 + 3, 6, wh + 12, 6, frame);
   b.box(wx, wy + wh / 2, wall0 + 3, 4, wh, 4, frame);
   b.box(wx, wy + wh * 0.5, wall0 + 3, ww, 4, 4, frame);
-  const solidGeo = track(b.build());
-  const glowGeo = track(g.build());
+  const solidGeo = own(b.build());
+  const glowGeo = own(g.build());
   group.add(new Mesh(solidGeo, solid), new Mesh(glowGeo, glow));
   // The glow around the window, a big soft sprite.
   const halo = makePoints(2, true);
@@ -231,7 +232,7 @@ function kitchen(group: Group, track: <T extends { dispose(): void }>(d: T) => T
   size.setX(1, 170);
   halo.renderOrder = 4;
   group.add(halo);
-  track({
+  own({
     dispose() {
       halo.geometry.dispose();
       (halo.material as Material).dispose();
@@ -241,7 +242,7 @@ function kitchen(group: Group, track: <T extends { dispose(): void }>(d: T) => T
 
 // ─── The volcano: a great cone with a lit crater and a plume of smoke ───────
 
-function volcano(group: Group, track: <T extends { dispose(): void }>(d: T) => T, cx: number, cz: number, hx: number, hz: number): void {
+function volcano(group: Group, own: <T extends { dispose(): void }>(d: T) => T, cx: number, cz: number, hx: number, hz: number): void {
   const rnd = seededRandom(77);
   const b = new MeshBuilder();
   const g = new MeshBuilder();
@@ -257,7 +258,7 @@ function volcano(group: Group, track: <T extends { dispose(): void }>(d: T) => T
   const sides = 22;
   const ringPt = (k: number, a: number) => {
     const t = k / rings;
-    const r = R * Math.pow(1 - t, 1.25) + 34 * (1 - t) * (1 - t) * 0;
+    const r = R * Math.pow(1 - t, 1.25);
     const ridge = 1 + 0.12 * Math.sin(a * 7 + k * 0.6) + 0.07 * Math.sin(a * 13);
     const rr = k === rings ? 38 : r * ridge;
     return [baseX + Math.cos(a) * rr, -30 + t * H * (1 + 0.04 * Math.sin(a * 3)), baseZ + Math.sin(a) * rr] as const;
@@ -291,20 +292,20 @@ function volcano(group: Group, track: <T extends { dispose(): void }>(d: T) => T
     const r = 40 + t * 120;
     smoke.blob(baseX + t * t * 260 + (rnd() - 0.5) * 30, H + 30 + t * 520, baseZ + (rnd() - 0.5) * 40, r, r * 0.8, r, mixRgb(rgb("#3a2a2e"), rgb("#7a5148"), t * 0.5 + rnd() * 0.2), 1);
   }
-  const lit = track(new MeshLambertMaterial({ vertexColors: true }));
-  const emissive = track(new MeshBasicMaterial({ vertexColors: true, fog: false }));
-  const smokeMat = track(new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false, emissive: new Color(0.12, 0.04, 0.03) }));
-  const mesh = new Mesh(track(b.build()), lit);
-  const glowMesh = new Mesh(track(g.build()), emissive);
-  const smokeMesh = new Mesh(track(smoke.build()), smokeMat);
+  const lit = own(new MeshLambertMaterial({ vertexColors: true }));
+  const emissive = own(new MeshBasicMaterial({ vertexColors: true, fog: false }));
+  const smokeMat = own(new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false, emissive: new Color(0.12, 0.04, 0.03) }));
+  const mesh = new Mesh(own(b.build()), lit);
+  const glowMesh = new Mesh(own(g.build()), emissive);
+  const smokeMesh = new Mesh(own(smoke.build()), smokeMat);
   smokeMesh.renderOrder = 2;
   for (const m of [mesh, glowMesh, smokeMesh]) m.frustumCulled = false;
   group.add(mesh, glowMesh, smokeMesh);
 }
 
-// ─── Space: a ringed planet below the road, moons, a far sun's glare ────────
+// ─── Space: a ringed planet below the road, its moons, drifting dust ────────
 
-function space(group: Group, track: <T extends { dispose(): void }>(d: T) => T, updates: ((t: number) => void)[], terrain: Terrain, cx: number, cz: number, hx: number, hz: number): void {
+function space(group: Group, own: <T extends { dispose(): void }>(d: T) => T, updates: ((t: number) => void)[], cx: number, cz: number, hx: number, hz: number): void {
   const rnd = seededRandom(3);
   const b = new MeshBuilder();
   const glassRing = new MeshBuilder();
@@ -348,10 +349,10 @@ function space(group: Group, track: <T extends { dispose(): void }>(d: T) => T, 
   // Moons.
   b.blob(cx + hx * 0.8, 260, cz - hz * 0.7, 70, 70, 70, { bottom: rgb("#6c6a82"), top: rgb("#cfcde6") }, 2);
   b.blob(cx - hx * 1.1, 520, cz + hz * 0.2, 36, 36, 36, { bottom: rgb("#8a5a50"), top: rgb("#e8b8a8") }, 1);
-  const mat = track(new MeshLambertMaterial({ vertexColors: true, fog: false }));
-  const glassMat = track(new MeshLambertMaterial({ vertexColors: true, fog: false, transparent: true, opacity: 0.45, depthWrite: false, side: DoubleSide }));
-  const planet = new Mesh(track(b.build()), mat);
-  const rings = new Mesh(track(glassRing.build()), glassMat);
+  const mat = own(new MeshLambertMaterial({ vertexColors: true, fog: false }));
+  const glassMat = own(new MeshLambertMaterial({ vertexColors: true, fog: false, transparent: true, opacity: 0.45, depthWrite: false, side: DoubleSide }));
+  const planet = new Mesh(own(b.build()), mat);
+  const rings = new Mesh(own(glassRing.build()), glassMat);
   planet.frustumCulled = rings.frustumCulled = false;
   group.add(planet, rings);
   // Specks of dust and ice drifting between the road and the stars.
@@ -368,7 +369,7 @@ function space(group: Group, track: <T extends { dispose(): void }>(d: T) => T, 
   }
   dp.needsUpdate = dc.needsUpdate = ds.needsUpdate = true;
   group.add(dust);
-  track({
+  own({
     dispose() {
       dust.geometry.dispose();
       (dust.material as Material).dispose();

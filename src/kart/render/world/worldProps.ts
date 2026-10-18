@@ -1,9 +1,10 @@
 /**
- * The small shapes that dress the six newer worlds, scattered as instances
- * (sceneryWorlds.ts): crumbs and fruit on the kitchen counter, snowy pines,
- * basalt and charred trees, fairground trees with fairy lights, floating
- * asteroids, palms. Same house style as props.ts: faceted, vertex coloured,
- * a darker foot so each sits on the ground, base on y = 0.
+ * The small shapes that dress the kitchen, snow, volcano, funfair, space and
+ * palm worlds, scattered as instances (sceneryWorlds.ts): crumbs and fruit on
+ * the kitchen counter, snowy pines, basalt and charred trees, fairground trees
+ * with fairy lights, floating asteroids, palms. Same house style as props.ts,
+ * which dresses the meadow, the canyon and the harbour: faceted, vertex
+ * coloured, a darker foot so each sits on the ground, base on y = 0.
  */
 import type { BufferGeometry } from "three";
 import { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, xf, type Rgb } from "./builder";

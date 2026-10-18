@@ -11,13 +11,12 @@
  * post-process bloom picks up what is over-bright).
  *
  * The reflections come from `scene.environment`, which the renderer feeds from
- * the sky. A scene without one (the turntable, a portrait, an older build)
- * gets a bright studio-sky environment the first time a kart is drawn.
+ * the sky. A scene without one (the turntable, a portrait) gets a bright
+ * studio-sky environment the first time a kart is drawn.
  */
 import {
   BackSide,
   Color,
-  Float32BufferAttribute,
   Mesh,
   MeshBasicMaterial,
   MeshPhysicalMaterial,
@@ -27,7 +26,6 @@ import {
   ShaderMaterial,
   SphereGeometry,
   Vector3,
-  type BufferGeometry,
   type Object3D,
   type Texture,
   type WebGLProgramParametersWithUniforms,
@@ -110,15 +108,6 @@ export function syncKartLook(): void {
   rimUniform.value.copy(kartLook.rim).multiplyScalar(kartLook.rimStrength);
 }
 syncKartLook();
-
-/** Gives a merged geometry its surface attribute (the same surface for every vertex). */
-export function withSurf(geometry: BufferGeometry, surf: Surf): BufferGeometry {
-  const n = geometry.getAttribute("position").count;
-  const a = new Float32Array(n * 4);
-  for (let i = 0; i < n; i++) a.set(surf, i * 4);
-  geometry.setAttribute("aSurf", new Float32BufferAttribute(a, 4));
-  return geometry;
-}
 
 // ── The studio-sky environment for scenes that bring none ───────────────────
 

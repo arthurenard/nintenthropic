@@ -14,8 +14,8 @@
  * the player's colour; the kart stands in a soft contact shadow.
  *
  * It rests at a front three-quarter, the driver's face in view. After a few
- * idle seconds it begins to turn slowly; choosing another driver (or letting
- * go of a drag and waiting) brings it round to the front again. A new rider
+ * idle seconds it begins to turn slowly; choosing another driver brings it
+ * round to the front again, and a drag let go of coasts to a stop. A new rider
  * springs in on the plinth, the driver waving once. The canvas is transparent:
  * the page's backdrop is the background.
  *
@@ -369,7 +369,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
       const root: Object3D = current.model.root;
       const grow = calm ? 1 : Math.max(0.001, springIn(t));
       root.scale.setScalar(grow);
-      // The rider turns in as they land, a half turn that settles into the spin.
+      // The rider turns in as they land, about a third of a turn that settles into the spin.
       const entering = calm ? 0 : (1 - Math.min(1, t / SPRING_FOR)) ** 3 * Math.PI * 0.6;
       root.rotation.y = spin + entering;
       current.model.pose({

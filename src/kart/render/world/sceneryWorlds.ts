@@ -1,6 +1,7 @@
 /**
- * What stands about in the six newer worlds, scattered as instances with the
- * same machinery as the first three (scenery.ts): crumbs, fruit and grains on
+ * What stands about in the kitchen, snow, volcano, funfair, space and palm
+ * worlds, scattered as instances with the same machinery that dresses the
+ * meadow, the canyon and the harbour (scenery.ts): crumbs, fruit and grains on
  * the counter; snowy pines, drifts and far lit cabins; basalt, charred trees
  * and embers beside the lava; fairground trees, stalls and lamps; floating
  * rocks in space; palms, bushes and boats on the island's sea.
@@ -9,7 +10,7 @@ import type { Material } from "three";
 import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import { hasSceneryArt } from "./sceneryArt";
-import * as p from "./props2";
+import * as p from "./worldProps";
 import type { Item, SceneryTools } from "./scenery";
 import { SEA_LEVEL } from "./terrain";
 

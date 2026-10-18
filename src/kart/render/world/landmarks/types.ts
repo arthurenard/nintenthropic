@@ -15,7 +15,7 @@
  * stands about the origin. Colours are linear RGB (`rgb("#ff8800")`); a
  * component above 1 glows (it is drawn unlit, in the `glow` builder).
  */
-import type { BufferGeometry, Object3D } from "three";
+import type { Object3D } from "three";
 import type { TrackTheme } from "../../../track/geometry";
 import type { MeshBuilder, V3 } from "../builder";
 
@@ -27,8 +27,8 @@ export interface LandmarkContext {
   /** Night or dusk scenes: windows and lamps can glow. */
   night: boolean;
   /**
-   * The `scale` the track asked for (default 1). The layer scales ordinary
-   * landmarks itself; a span landmark reads it to size its decorations.
+   * The `scale` the track asked for (default 1). The layer scales the model
+   * itself.
    */
   scale: number;
   /**
@@ -109,7 +109,7 @@ export interface HazardContext {
   rnd: () => number;
   theme: TrackTheme;
   night: boolean;
-  /** The shared materials: lit (vertex colours, Lambert) and glow (vertex colours, unlit). */
+  /** The shared materials: lit (vertex colours, standard) and glow (vertex colours, unlit). */
   lit: import("three").Material;
   glow: import("three").Material;
 }
@@ -144,6 +144,3 @@ export interface HazardModel {
 export interface HazardSpec {
   build(ctx: HazardContext): HazardModel;
 }
-
-/** A unit helper for models: the geometry of a builder, for a Mesh. */
-export type Built = BufferGeometry;

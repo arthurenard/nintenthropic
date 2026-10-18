@@ -1,6 +1,6 @@
 /** Mango the cat: pointed ears through a helmet, striped, whiskers, and a tall tail that curls. */
 import { MeshBuilder, rgb } from "../kartBuilder";
-import { INK, WHITE, armGeometry, body, helmet, eyes, fur, horn, legs, orb, surfaceZ, type Look } from "./parts";
+import { WHITE, armGeometry, body, helmet, eyes, fur, horn, legs, orb, surfaceZ, type Look } from "./parts";
 import type { DriverBuild } from "./types";
 
 const FUR = rgb("#ffae42");
@@ -13,7 +13,7 @@ export function buildCat(l: Look): DriverBuild {
   body(t, l, { w: 0.24, d: 0.19, belly: CREAM });
   legs(t, l, CREAM, 0.082);
   // Stripes across the shoulders, under the bib.
-  for (const sx of [-1, 1]) for (const k of [0, 1]) t.box(sx * (0.2 - k * 0.0), 0.5 - k * 0.07, -0.02 - k * 0.0, 0.06, 0.035, 0.28, STRIPE, 0, 0, sx * 0.4);
+  for (const sx of [-1, 1]) for (const k of [0, 1]) t.box(sx * 0.2, 0.5 - k * 0.07, -0.02, 0.06, 0.035, 0.28, STRIPE, 0, 0, sx * 0.4);
 
   const h = new MeshBuilder();
   const r = [0.3, 0.26, 0.27] as const;
@@ -33,7 +33,6 @@ export function buildCat(l: Look): DriverBuild {
     horn(h, [sx * 0.17, 0.2, 0.01], [sx * 0.225, 0.46, -0.02], 0.07, PINK, 4, 0.03);
   }
   helmet(h, l, [0, 0.05, -0.01], [0.31, 0.28, 0.29], 0.4);
-  void INK;
 
   // A tail that rises behind the seat and curls over, rings of stripe.
   const tail = new MeshBuilder();
@@ -46,7 +45,7 @@ export function buildCat(l: Look): DriverBuild {
     [0, 0.46, -0.16, 0.084],
     [0, 0.53, -0.09, 0.082],
   ];
-  links.forEach(([x, y, z, rad], i) => orb(tail, [x, y, z], [rad, rad * 1.1, rad], fur(i % 2 === 0 || i === 6 ? FUR : STRIPE), 1));
+  links.forEach(([x, y, z, rad], i) => orb(tail, [x, y, z], [rad, rad * 1.1, rad], fur(i % 2 === 0 ? FUR : STRIPE), 1));
 
   return {
     torso: t.build(),

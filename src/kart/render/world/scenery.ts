@@ -2,8 +2,9 @@
  * The things standing around the track, placed well clear of the road:
  * trees, bushes, flowers and a windmill in the meadow; mesas, boulders and
  * cacti in the canyon; container yards, warehouses, cranes and ships at the
- * harbour. Each kind is one InstancedMesh (one draw call, and the camera
- * skips it when none is in view).
+ * harbour (the other worlds' are in sceneryWorlds.ts). Each kind is an
+ * InstancedMesh, and each view draws only the instances its frustum reaches
+ * (cull.ts).
  *
  * Positions come from a seeded random source, so a track looks the same every
  * time it loads; distance from the road comes from the terrain (which knows
@@ -16,7 +17,6 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshStandardMaterial,
   Quaternion,
   StaticDrawUsage,
   Vector3,
@@ -225,7 +225,7 @@ export function buildScenery(
     art.forEach((g, k) => add(instanced(geo(g), material, items.filter((_, i) => i % art.length === k))));
   };
 
-  // The ground facts of a random point, or null where it is out of bounds.
+  // A random point on the map, 30 m in from its rim.
   const pick = () => {
     const x = terrain.minX + 30 + rnd() * (terrain.maxX - terrain.minX - 60);
     const z = terrain.minZ + 30 + rnd() * (terrain.maxZ - terrain.minZ - 60);
@@ -439,7 +439,6 @@ export function buildScenery(
       const m = new Mesh(shipGeo, material);
       m.position.set(s.x, WATER_LEVEL - 1.2, s.z);
       m.rotation.y = rnd() * Math.PI;
-      m.scale.setScalar(1.0);
       add(m);
     }
 
@@ -511,8 +510,6 @@ export function buildScenery(
       blocked,
     });
   }
-
-  // (The clouds are painted in the sky now: see sky.ts.)
 
   return {
     group,

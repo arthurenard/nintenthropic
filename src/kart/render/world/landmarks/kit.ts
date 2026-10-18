@@ -1,16 +1,18 @@
 /**
  * Helpers for building landmarks and hazards: surfaces of revolution (a
  * teapot, a tower), tubes (a rail, a handle), swept profiles (a tunnel, an
- * arch), faceted rocks and prisms. All of them write triangles into a
- * MeshBuilder (world/builder.ts), flat shaded, vertex coloured.
+ * arch), faceted rocks and prisms, and `stamp` and `orient` for placing a
+ * piece built once. All of them write triangles into a MeshBuilder
+ * (world/builder.ts), flat shaded, vertex coloured. The rock and ice shapes
+ * that three of the worlds share are in rockKit.ts.
  *
  * A `Shade` colours a surface: one colour, or a function of the point (and
  * its place in the grid), which is how a gradient from a dark foot to a
  * bright top, or stripes, are painted. Every material that draws landmarks
  * is double sided, so winding order does not matter here.
  */
-import { Matrix4 } from "three";
-import { MeshBuilder, mixRgb, shapes, xf, type Rgb, type V3 } from "../builder";
+import { Matrix4, Quaternion, Vector3 } from "three";
+import { MeshBuilder, mixRgb, shapes, type Rgb, type V3 } from "../builder";
 
 export { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, xf, type Rgb, type V3 } from "../builder";
 
@@ -32,12 +34,6 @@ export function byHeight(y0: number, y1: number, bottom: Rgb, top: Rgb): Shade {
 /** Alternating colours: stripes by the row or column index. */
 export function stripes(a: Rgb, b: Rgb, by: "row" | "col" = "col", every = 1): Shade {
   return (_p, i, j) => (Math.floor((by === "row" ? i : j) / every) % 2 === 0 ? a : b);
-}
-
-/** A colour nudged a little by `rnd`, so repeated things are not clones. */
-export function jitter(c: Rgb, rnd: () => number, amount = 0.1): Rgb {
-  const k = 1 + (rnd() - 0.5) * 2 * amount;
-  return [c[0] * k, c[1] * k, c[2] * k];
 }
 
 /**
@@ -200,16 +196,31 @@ export function pipe(b: MeshBuilder, a: V3, c: V3, radius: number, shade: Shade,
   tube(b, [a, c], { radius, sides, shade, caps: true });
 }
 
-/** Points along a circular arc in a plane: centre, two axes, radius, from/to angle, count. */
-export function arc(centre: V3, axisA: V3, axisB: V3, radius: number, a0: number, a1: number, count: number): V3[] {
-  const out: V3[] = [];
-  for (let k = 0; k < count; k++) {
-    const a = a0 + ((a1 - a0) * k) / (count - 1);
-    const ca = Math.cos(a) * radius;
-    const sa = Math.sin(a) * radius;
-    out.push([centre[0] + axisA[0] * ca + axisB[0] * sa, centre[1] + axisA[1] * ca + axisB[1] * sa, centre[2] + axisA[2] * ca + axisB[2] * sa]);
+/** Copies every triangle of `src` into `dst` through a matrix: a piece built once, then placed many times, tilted or turned. */
+export function stamp(dst: MeshBuilder, src: MeshBuilder, m: Matrix4): void {
+  const p = src.position;
+  const c = src.color;
+  const e = m.elements;
+  const at = (i: number): V3 => [
+    e[0]! * p[i]! + e[4]! * p[i + 1]! + e[8]! * p[i + 2]! + e[12]!,
+    e[1]! * p[i]! + e[5]! * p[i + 1]! + e[9]! * p[i + 2]! + e[13]!,
+    e[2]! * p[i]! + e[6]! * p[i + 1]! + e[10]! * p[i + 2]! + e[14]!,
+  ];
+  for (let i = 0; i < p.length; i += 9) {
+    dst.tri(at(i), at(i + 3), at(i + 6), [c[i]!, c[i + 1]!, c[i + 2]!], [c[i + 3]!, c[i + 4]!, c[i + 5]!], [c[i + 6]!, c[i + 7]!, c[i + 8]!]);
   }
-  return out;
+}
+
+const _up = new Vector3(0, 1, 0);
+const _q = new Quaternion();
+
+/** A unit shape stood on `pos` with its +y along `dir`: a crystal growing out of rock, a nozzle on a ring, a tuft of husk on a coconut. */
+export function orient(b: MeshBuilder, shape: ReturnType<typeof shapes.cone>, pos: V3, dir: V3, sx: number, sy: number, sz: number, paint: Rgb | { bottom: Rgb; top: Rgb }): void {
+  const d = new Vector3(dir[0], dir[1], dir[2]).normalize();
+  _q.setFromUnitVectors(_up, d);
+  // The shape is centred, so its middle sits half a length out along `dir`.
+  const m = new Matrix4().compose(new Vector3(pos[0] + d.x * sy * 0.5, pos[1] + d.y * sy * 0.5, pos[2] + d.z * sy * 0.5), _q, new Vector3(sx, sy, sz));
+  b.add(shape, m, paint);
 }
 
 export interface TorusOptions {
@@ -230,7 +241,6 @@ export function torus(b: MeshBuilder, R: number, r: number, o: TorusOptions): vo
   const tubeN = o.tubeSegments ?? 6;
   const at = o.at ?? [0, 0, 0];
   const [a0, a1] = o.arc ?? [0, Math.PI * 2];
-  const full = !o.arc || Math.abs(a1 - a0 - Math.PI * 2) < 1e-6;
   const place = (u: number, v: number): V3 => {
     const ring = R + Math.cos(v) * r;
     const a = Math.cos(u) * ring;
@@ -246,9 +256,8 @@ export function torus(b: MeshBuilder, R: number, r: number, o: TorusOptions): vo
     }
   };
   const rows: V3[][] = [];
-  const count = full ? ringN : ringN + 1;
-  for (let i = 0; i <= count - (full ? 0 : 1); i++) {
-    const u = a0 + ((a1 - a0) * i) / (count - (full ? 0 : 1));
+  for (let i = 0; i <= ringN; i++) {
+    const u = a0 + ((a1 - a0) * i) / ringN;
     const row: V3[] = [];
     for (let k = 0; k < tubeN; k++) row.push(place(u, (k / tubeN) * Math.PI * 2));
     rows.push(row);
@@ -355,7 +364,7 @@ export function dome2D(halfWidth: number, height: number, count = 12, legs = 0):
   return out;
 }
 
-export interface ArchOptions {
+export interface ArchBandOptions {
   /** Clear width and height inside, metres. */
   width: number;
   height: number;
@@ -374,7 +383,7 @@ export interface ArchOptions {
  * a gateway, a bridge's span, a ring gate's frame. Inner and outer surfaces
  * plus the front and back faces. The band is `thickness` thick all round.
  */
-export function archBand(b: MeshBuilder, o: ArchOptions): void {
+export function archBand(b: MeshBuilder, o: ArchBandOptions): void {
   const at = o.at ?? [0, 0, 0];
   const legs = o.legs ?? 0;
   const seg = o.segments ?? 12;
@@ -398,9 +407,4 @@ export function archBand(b: MeshBuilder, o: ArchOptions): void {
   grid(b, [row(outer, -d), row(outer, d)], o.shade);
   grid(b, [row(inner, d), row(outer, d)], o.shade);
   grid(b, [row(inner, -d), row(outer, -d)], o.shade);
-}
-
-/** A transform from a position, yaw/pitch/roll (radians, YXZ) and a scale: for `lathe`'s `matrix` option. */
-export function placed(x: number, y: number, z: number, yaw = 0, pitch = 0, roll = 0, scale = 1): Matrix4 {
-  return xf(x, y, z, scale, scale, scale, yaw, pitch, roll);
 }

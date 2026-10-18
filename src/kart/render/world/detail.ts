@@ -1,8 +1,8 @@
 /**
  * Tileable surface detail, drawn in code at load: height fields turned into
- * normal maps (the relief of asphalt, grass, sand, snow, rock) and the
- * roughness that goes with them. These are what catch the sun at a low
- * angle and make a road look like a road from a metre away.
+ * normal maps (the relief of asphalt, grass, sand, snow, rock). These are
+ * what catch the sun at a low angle and make a road look like a road from a
+ * metre away.
  */
 import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, NoColorSpace, RepeatWrapping } from "three";
 import { seededRandom } from "../../../engine/random";
@@ -118,7 +118,7 @@ export function detailNormal(kind: DetailKind, size: number, anisotropy: number,
       return normalMapOf(h, size, 7.5, anisotropy);
     }
     case "grass": {
-      // Blades: short bright strokes at random angles on top of clumps.
+      // Clumps of soft noise, with small bumps over them for the blades.
       const f = noiseField(size, rnd, 32, 2, 0.6);
       for (let i = 0; i < f.length; i++) h[i] = h[i]! * 0.5 + f[i]! * 0.5;
       for (let i = 0; i < size * size * 0.02; i++) bump(h, size, rnd() * size, rnd() * size, 1 + rnd() * 1.6, 0.4 + rnd() * 0.5);
@@ -146,7 +146,7 @@ export function detailNormal(kind: DetailKind, size: number, anisotropy: number,
       return normalMapOf(ridged, size, 9, anisotropy);
     }
     case "water": {
-      // Ripples: ridged noise (crests), stretched a little so they run across the wind.
+      // Ripples: ridged noise, for the crests.
       const ridged = new Float32Array(size * size);
       for (let i = 0; i < ridged.length; i++) ridged[i] = 1 - Math.abs(h[i]! * 2 - 1);
       return normalMapOf(ridged, size, 3.4, anisotropy);

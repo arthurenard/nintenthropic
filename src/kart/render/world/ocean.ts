@@ -21,8 +21,6 @@ export interface OceanOptions {
   level: number;
   foam: number;
   roughness: number;
-  /** Metres one repeat of the ripples covers. */
-  ripple: number;
   anisotropy: number;
 }
 
@@ -34,7 +32,7 @@ export interface Ocean {
 
 export function oceanMaterial(o: OceanOptions, bake: BakeUniforms): Ocean {
   const normal = detailNormal("water", 256, o.anisotropy);
-  // The plane's uv is 0..1 over its whole size; the ripples tile by the metre.
+  // The ripples tile by the plane's uv, which its maker scales to a repeat every few metres.
   const uniforms = {
     uTime: { value: 0 },
     uWaterY: { value: o.level },

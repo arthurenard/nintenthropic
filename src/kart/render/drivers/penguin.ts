@@ -15,7 +15,7 @@ export function buildPenguin(l: Look): DriverBuild {
   const h = new MeshBuilder();
   const r = [0.3, 0.27, 0.285] as const;
   orb(h, [0, 0, 0], r, fur(DARK), 2);
-  // The white face, cut in a heart round the eyes.
+  // The white face, round the eyes.
   const face = { c: [0, -0.05, 0.1] as const, r: [0.225, 0.2, 0.2] as const };
   orb(h, [...face.c], [...face.r], fur(WHITE), 1);
   eyes(h, 0.1, 0.03, surfaceZ([...face.c], [...face.r], 0.1, 0.03) - 0.004, 0.04);

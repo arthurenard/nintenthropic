@@ -280,7 +280,7 @@ export interface KeepOut {
   r: number;
 }
 
-/** A landmark as the track gives it, or placed by the world itself: `lift` raises it (the duck on a stool), `abs` puts it at a world position instead of beside the road. */
+/** A landmark as the track gives it, or placed by the world itself: `lift` raises it (the rubber duck, by the track's `duck.y`), `abs` puts it at a world position instead of beside the road. */
 export type PlacedLandmark = Landmark & { lift?: number; abs?: { x: number; z: number; yaw: number } };
 
 /** The roof of a thing over the road: how high its lowest surface above a kart's reach is, every `step` metres from `s0` along the lap. */
@@ -312,8 +312,6 @@ export interface PlaceEnv {
   wall?(s: number, side: -1 | 1): number;
   /** The ground's height at a point. */
   groundAt(x: number, z: number): number;
-  /** Fraction of optional detail to keep (quality). Landmarks themselves are always built. */
-  detail?: number;
 }
 
 const CHUNK_METRES = 300;
@@ -689,8 +687,6 @@ interface Actor {
   travel: number;
   near: number;
   state: HazardState;
-  marker: Mesh | null;
-  scale: number;
 }
 
 export interface HazardLayer {
@@ -708,8 +704,6 @@ export function buildHazards(env: PlaceEnv, defs: readonly HazardDef[], mats: La
   const shadowGeo = new PlaneGeometry(1, 1);
   shadowGeo.rotateX(-Math.PI / 2);
   disposables.push(shadowGeo);
-  const markerGeo = new BufferGeometry();
-  disposables.push(markerGeo);
 
   defs.forEach((def, index) => {
     const spec = HAZARDS[def.kind];
@@ -752,8 +746,6 @@ export function buildHazards(env: PlaceEnv, defs: readonly HazardDef[], mats: La
       travel: 0,
       near: def.at * track.length,
       state: { time: 0, travel: 0, speed: 0, cycle: 0, height: 0, active: true, heading: 1 },
-      marker,
-      scale,
     });
   });
 
@@ -799,9 +791,3 @@ export function buildHazards(env: PlaceEnv, defs: readonly HazardDef[], mats: La
     },
   };
 }
-
-// ─── Small helpers shared with the rest of the world ─────────────────────────
-
-/** The checked name of a hazard kind the picture can draw, for tests and the dev tracks. */
-export const knownHazard = (kind: string): boolean => kind in HAZARDS;
-export const knownLandmark = (kind: string): boolean => kind in LANDMARKS;

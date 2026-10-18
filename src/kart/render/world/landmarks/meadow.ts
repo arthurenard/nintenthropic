@@ -4,7 +4,7 @@
  * model is a few clean shapes with a dark foot and a bright top, and a few bright accents.
  */
 import type { Paint } from "../builder";
-import { byHeight, extrudeZ, lathe, MeshBuilder, mixRgb, ramp, rgb, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
+import { byHeight, extrudeZ, lathe, MeshBuilder, mixRgb, ramp, rgb, scaleRgb, shapes, xf, type Rgb, type Shade, type V3 } from "./kit";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
 const TAU = Math.PI * 2;
@@ -19,22 +19,6 @@ const STONE = rgb("#9aa0a6");
 const STRAW = rgb("#e9c456");
 const GRASS = rgb("#4fb33f");
 const GRASS_D = rgb("#2f8a35");
-const BLUE_SKY = rgb("#6fb6ee");
-
-/** A cubic Bezier through four control points, `n` pieces. */
-function bezier(a: V3, b: V3, c: V3, d: V3, n: number): V3[] {
-  const out: V3[] = [];
-  for (let k = 0; k <= n; k++) {
-    const t = k / n;
-    const u = 1 - t;
-    const w0 = u * u * u;
-    const w1 = 3 * u * u * t;
-    const w2 = 3 * u * t * t;
-    const w3 = t * t * t;
-    out.push([a[0] * w0 + b[0] * w1 + c[0] * w2 + d[0] * w3, a[1] * w0 + b[1] * w1 + c[1] * w2 + d[1] * w3, a[2] * w0 + b[2] * w1 + c[2] * w2 + d[2] * w3]);
-  }
-  return out;
-}
 
 /** A convex polygon in the x-y plane, thickened along z and capped at both ends. */
 function slab(b: MeshBuilder, poly: readonly (readonly [number, number])[], z0: number, z1: number, shade: Shade, steps = 1): void {
@@ -72,7 +56,6 @@ const windmill: LandmarkSpec = {
     const lit = new MeshBuilder();
     const plaster = rgb("#f6efe0");
     const stone = rgb("#8e969e");
-    const roof = rgb("#8a3a2c");
     // A stone footing sunk into the field, then the tower: eight sides, tapering, banded in plaster and timber.
     lathe(lit, [[0, -1.5], [4.7, -1.5], [4.7, 1.2], [4.25, 1.5], [0, 1.5]], { segments: 8, shade: byHeight(-1.5, 1.5, scaleRgb(stone, 0.6), stone), phase: Math.PI / 8 });
     lathe(lit, [[3.95, 1.4], [3.8, 3.5], [3.3, 6.2], [2.85, 8.4], [2.75, 8.8]], {
@@ -88,7 +71,7 @@ const windmill: LandmarkSpec = {
       lit.rod([Math.cos(a) * r0, 1.5, Math.sin(a) * r0], [Math.cos(a) * r1, 8.6, Math.sin(a) * r1], 0.36, ramp(WOOD_D, WOOD));
     }
     for (const y of [3.4, 6.0]) lathe(lit, [[3.75 - (y - 3.4) * 0.19, y - 0.2], [3.95 - (y - 3.4) * 0.19, y - 0.2], [3.95 - (y - 3.4) * 0.19, y + 0.2], [3.75 - (y - 3.4) * 0.19, y + 0.2]], { segments: 8, phase: Math.PI / 8, shade: WOOD });
-    // The door, with a stone step, and windows with white frames and shutters.
+    // The door, with a stone step, and windows with white frames.
     lit.box(0, 2.35, 3.9, 2.3, 3.2, 0.5, ramp(WOOD_D, WOOD));
     lit.box(0, 4.0, 3.95, 2.3, 0.7, 0.5, ramp(WOOD_D, WOOD), 0, 0, 0);
     lit.box(0, 1.25, 4.6, 3.2, 0.5, 1.4, ramp(scaleRgb(stone, 0.8), stone));
@@ -195,7 +178,7 @@ const barn: LandmarkSpec = {
     const f = L;
     const doorW = 3.5;
     for (const sx of [-1, 1]) {
-      lit.box(sx * doorW * 0.5 + 0, 3.55, f + 0.1, doorW, 7.1, 0.4, ramp(scaleRgb(RED_D, 0.85), scaleRgb(RED, 0.95)));
+      lit.box(sx * doorW * 0.5, 3.55, f + 0.1, doorW, 7.1, 0.4, ramp(scaleRgb(RED_D, 0.85), scaleRgb(RED, 0.95)));
     }
     lit.box(0, 3.55, f + 0.05, 0.3, 7.2, 0.5, rgb("#1e1612"));
     const trim = WHITE;
@@ -259,14 +242,7 @@ const pond: LandmarkSpec = {
     const lit = new MeshBuilder();
     const glass = new MeshBuilder();
     const R = 13;
-    // The bank: a low rim of mud and grass round the water, a little ragged.
-    const bank: [number, number][] = [];
-    const n = 24;
-    for (let k = 0; k <= n; k++) {
-      const a = (k / n) * TAU;
-      const j = 0.4 * Math.sin(a * 3 + 0.5) + 0.3 * Math.sin(a * 5);
-      bank.push([Math.cos(a) * (R - 0.8 + j), a]);
-    }
+    // The bank: a low rim of mud and grass round the water.
     lathe(lit, [[R - 1.8, 0.25], [R - 0.8, 0.5], [R + 1.5, 0.45], [R + 2.6, 0.0], [R + 3.0, -0.6]], {
       segments: 24,
       shade: (_p, i) => (i < 2 ? rgb("#6b5a3a") : mixRgb(rgb("#6b5a3a"), GRASS_D, Math.min(1, i / 3))),
@@ -328,7 +304,7 @@ const pond: LandmarkSpec = {
     lit.blob(3.5, 0.65, 2.3, 0.4, 0.28, 0.5, rgb("#58c04a"), 0);
     lit.blob(3.38, 0.9, 2.55, 0.12, 0.12, 0.12, rgb("#fff"), 0);
     lit.blob(3.62, 0.9, 2.55, 0.12, 0.12, 0.12, rgb("#fff"), 0);
-    // The jetty: planks on posts reaching out from the bank toward the road.
+    // The jetty: planks on posts, out over the water from the road-side bank.
     const jx = 0;
     for (let k = 0; k < 11; k++) lit.box(jx, 0.95, R + 1.2 - k * 1.0, 3.0, 0.22, 0.88, ramp(WOOD_D, WOOD));
     for (const sx of [-1, 1]) {
@@ -442,7 +418,7 @@ const hotAirBalloon: LandmarkSpec = {
     // A wide golden band and the burner's collar.
     lathe(env, [[7.95, base + 15.6], [8.1, base + 15.6], [8.1, base + 16.6], [7.95, base + 16.6]], { segments: 12, shade: rgb("#e8b830") });
     lathe(env, [[2.5, base + 3.6], [2.7, base + 3.6], [2.7, base + 4.6], [2.5, base + 4.6]], { segments: 12, shade: rgb("#3a3a42") });
-    // The basket: wicker with a rim, a little flag, four posts up to the skirt.
+    // The basket: wicker with a rim, and four posts up to the skirt.
     const wick = rgb("#b8864a");
     env.box(0, base - 0.2, 0, 3.4, 2.2, 3.4, ramp(scaleRgb(wick, 0.7), wick));
     env.box(0, base + 0.95, 0, 3.7, 0.3, 3.7, scaleRgb(wick, 1.15));
@@ -494,7 +470,7 @@ const hotAirBalloon: LandmarkSpec = {
 function sheep(b: MeshBuilder, x: number, z: number, yaw: number, k: number, headDown: boolean, rnd: () => number): void {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  // local (lx forward right, ly up, lz forward) -> world
+  // Local to world: lx across the body, ly up, lz the way it faces.
   const P = (lx: number, ly: number, lz: number): V3 => [x + (lx * c + lz * s) * k, ly * k, z + (-lx * s + lz * c) * k];
   const wool = rgb("#f7f3e6");
   const woolD = scaleRgb(wool, 0.72);

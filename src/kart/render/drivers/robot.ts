@@ -1,4 +1,4 @@
-/** Rivet the robot: a boxy steel body with a glowing chest lamp, headphone ears and a blinking antenna in the kart's colour. */
+/** Rivet the robot: a boxy steel body with a glowing chest lamp, headphone ears in the kart's colour and a blinking red antenna. */
 import { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, xf, type Rgb } from "../kartBuilder";
 import { INK, armGeometry, dome, orb, shell, tube, type Look } from "./parts";
 import { SURF } from "../kartMaterial";

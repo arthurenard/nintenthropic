@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TrackGeometry, type TrackDef } from "../../track/geometry";
 import { analyseFeatures, inMetres, RAMP_HEIGHT, RAMP_LENGTH, rampHeight, WALL_DISTANCE } from "./features";
 
-/** A long straight with a bend at each end: 600 m or so, with room for features. */
+/** An oval, two 200 m straights and a bend at each end (about 900 m round), with room for features. */
 function track(extra: Partial<TrackDef> = {}): TrackDef {
   return {
     id: "t",

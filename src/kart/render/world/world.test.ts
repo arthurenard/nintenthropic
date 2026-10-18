@@ -77,8 +77,8 @@ describe("the track's meshes", () => {
   }
 
   it("puts the barriers 6 m beyond the road's edge: nothing solid stands closer", { timeout: 30_000 }, () => {
-    // The kerbs and verge are flat; look at what stands tall near the road: the lowest vertex of anything
-    // above 0.3 m must be at least 6 m out. Check the deco chunk at the middle of the first straight.
+    // The kerbs and verge are flat; look at what stands tall near the road: every vertex of the decoration
+    // more than 0.45 m above the road must be at least WALL_MIN out.
     const style = styleFor("meadow");
     const terrain = Terrain.build(geometry, style, 8);
     const meshes = buildTrackMeshes(geometry, style, terrain, quality);
@@ -91,7 +91,7 @@ describe("the track's meshes", () => {
         const y = pos.getY(i);
         const proj = geometry.project(x, z);
         const lateral = Math.abs(proj.offset) - proj.sample.width / 2;
-        // Skip the start gantry's legs (which stand 1.9 m out, by design) and the sign boards: tall things only.
+        // Skip 5 m either side of the start line (the gantry and its banner): tall things only.
         if (proj.s > geometry.length - 5 || proj.s < 5) continue;
         if (y - proj.sample.y > 0.45 && lateral < WALL_MIN) nearTall++;
       }

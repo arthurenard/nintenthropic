@@ -1,7 +1,7 @@
 /**
  * Measures what the picture puts where the sim lets a kart (or the camera behind it) be: the drivable area of a track,
- * sampled every couple of metres, against the ground, landmarks and scenery the world builds. corridor.test.ts asserts
- * on it; the same machinery can score where a landmark could stand instead.
+ * sampled every couple of metres, against the ground, landmarks and scenery the world builds. corridor.test.ts and
+ * corridor.art.test.ts assert on it.
  */
 import { Group, Matrix4, Mesh, MeshLambertMaterial, Vector3, type BufferGeometry, type InstancedMesh, type Object3D } from "three";
 import { barrierDistance, buildTerrain as buildSimTerrain, gapAt, isOpen, type Terrain as SimTerrain } from "../../sim/terrain";
@@ -11,7 +11,7 @@ import { QUALITY, type Tier } from "../quality";
 import { buildBackdrop } from "./backdrop";
 import { Bank } from "./bank";
 import { SOLID_MARGIN } from "./features";
-import { buildLandmarks, landmarkMaterials, type LandmarkMaterials, type PlaceEnv, type PlacedLandmark } from "./landmarks/place";
+import { buildLandmarks, landmarkMaterials, type PlaceEnv, type PlacedLandmark } from "./landmarks/place";
 import { buildScenery } from "./scenery";
 import { buildTrackMeshes } from "./track";
 import { makeBakeUniforms } from "./shading";
@@ -305,15 +305,6 @@ function dropLayer(layer: { group: Group; update(time: number): void }, grid: Sp
     layer.update(t);
     for (const part of moving) dropOnto(part, grid, who, lowest);
   }
-}
-
-/** What one landmark puts in the drivable area (its worst spot), or null if it is clear of it. */
-export function landmarkOffender(probe: Probe, lm: PlacedLandmark, mats: LandmarkMaterials, who = lm.kind): Offender | null {
-  const lowest = new Map<number, Hit>();
-  const layer = buildLandmarks(probe.env, [lm], mats);
-  dropLayer(layer, probe.grid, who, lowest);
-  layer.dispose();
-  return worstOf(probe, lowest).get(who) ?? null;
 }
 
 function worstOf(probe: Probe, lowest: Map<number, Hit>): Map<string, Offender> {

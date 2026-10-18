@@ -103,7 +103,7 @@ export class CulledInstances {
     mesh.frustumCulled = false;
   }
 
-  /** How many cells (for the tests and the stats). */
+  /** How many cells (for the tests). */
   get cellCount(): number {
     return this.cells.length;
   }

@@ -111,7 +111,7 @@ export function buildBarriers(b: TrackBuild): void {
   }
 }
 
-// ─── The first three worlds ──────────────────────────────────────────────────
+// ─── The meadow, the canyon and the harbour ──────────────────────────────────
 
 function tyres(b: TrackBuild): void {
   const steps = b.quality.detailedTyres ? 8 : 6;
@@ -186,7 +186,6 @@ function fence(b: TrackBuild): void {
       lastZ = z;
       lastY = y;
     });
-    lastX = NaN;
   }
 }
 
@@ -232,7 +231,7 @@ function bollards(b: TrackBuild): void {
   }
 }
 
-// ─── The newer worlds ────────────────────────────────────────────────────────
+// ─── The kitchen, snow, volcano, funfair, space and palm ─────────────────────
 
 /** Sugar cubes, two high, in a slightly untidy wall; every so often a pastel one. */
 function sugar(b: TrackBuild): void {
@@ -272,10 +271,10 @@ function snowbank(b: TrackBuild): void {
       const r = hash1(k * 5 + side * 11);
       const sc = 0.9 + r * 0.5;
       bld.blob(x, y + 0.35, z, 1.45 * sc, 0.95 * sc, 1.5 * sc, { bottom: shade, top: white }, 0, r * 6);
-      // A smaller lump on the road side, so the bank rolls instead of standing like a wall.
-      bld.blob(x + dz * -side * 0.55 * 0 + dz * 0.0, y + 1.1, z, 0.9 * sc, 0.6 * sc, 0.95 * sc, { bottom: scaleRgb(shade, 1.05), top: white }, 0, r * 3);
+      // A smaller lump on top, so the bank rolls instead of standing like a wall.
+      bld.blob(x, y + 1.1, z, 0.9 * sc, 0.6 * sc, 0.95 * sc, { bottom: scaleRgb(shade, 1.05), top: white }, 0, r * 3);
       if (k % 12 === 6) {
-        // A slalom pole leaning a little toward the road, with a flag.
+        // A slalom pole a little behind the bank's crest, with a flag.
         const px = x - dz * side * 0.2;
         const pz = z + dx * side * 0.2;
         for (let band = 0; band < 5; band++) bld.post(px, y + 0.9 + band * 0.55, pz, 0.06, 0.55, band % 2 === 0 ? red : pole, 6);

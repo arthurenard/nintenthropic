@@ -1,5 +1,5 @@
 /**
- * What the six newer items look like, beyond the particles (effects.ts):
+ * What six of the items look like, beyond the particles (effects.ts):
  *
  *   comet      a bubble of gold and rainbow round the kart, a glow and a
  *              sparkling trail behind it; it blinks as the six seconds run out
@@ -12,8 +12,8 @@
  *   decoy      shards of a box, when it is driven into
  *
  * The rocket and the decoy themselves are things (things.ts, world/boxes.ts).
- * Everything is pooled or per kart; nothing is allocated while racing apart
- * from the first time a kart needs a cloud or a bubble.
+ * Everything is pooled or kept per kart, made the first time a kart needs it
+ * (a cloud, a bubble, the pucks round it).
  */
 import {
   AdditiveBlending,
@@ -34,7 +34,7 @@ import {
   SphereGeometry,
   type Object3D,
 } from "three";
-import type { KartView, RaceEvent, RaceView, ThingView } from "../contract";
+import type { KartView, RaceEvent, RaceView } from "../contract";
 import type { Effects } from "./effects";
 import { clamp, damp } from "./math";
 
@@ -42,7 +42,6 @@ import { clamp, damp } from "./math";
 const BURST_RADIUS = 9;
 const BLAST_RADIUS = 7;
 const ZAP_SECONDS = 3;
-const COMET_SECONDS = 6;
 const SQUASH_SECONDS = 0.7;
 
 type Rgb = readonly [number, number, number];
@@ -178,7 +177,7 @@ interface Cloud {
   rain: number;
 }
 
-/** What the picture needs of a kart's model: the group it moves. */
+/** What the picture needs of a kart's actor: the group it moves. */
 export interface ActorHandle {
   root: Object3D;
 }
@@ -197,7 +196,7 @@ export class ItemFx {
   private readonly auraGeometry = new SphereGeometry(1, 28, 18);
   private readonly orbits = new Map<number, Group>();
   private readonly squashed = new Set<number>();
-  /** A storm cloud's puffs and a comet's bubble that nobody has, hidden (see the constructor). */
+  /** The material of the hidden comet's bubble that nobody has (see the constructor). */
   private readonly standInAura = auraMaterial();
   private lightning = 0;
   private rnd = 11;
@@ -400,7 +399,7 @@ export class ItemFx {
       const actor = actors.get(k.id);
       this.comet(k, shown, actor, dt, time);
       this.zapped(k, shown, actor, dt, time);
-      this.orbit(k, shown, dt, time);
+      this.orbit(k, shown, time);
     }
   }
 
@@ -511,7 +510,7 @@ export class ItemFx {
     }
   }
 
-  private orbit(k: KartView, at: KartView, dt: number, time: number): void {
+  private orbit(k: KartView, at: KartView, time: number): void {
     const holding = k.item === "puck3" && !k.rolling && k.rescue <= 0 ? Math.max(0, Math.min(3, k.itemUses)) : 0;
     let ring = this.orbits.get(k.id);
     if (holding === 0) {
@@ -532,7 +531,6 @@ export class ItemFx {
       this.orbits.set(k.id, ring);
     }
     ring.position.set(at.x, at.y + at.hop + 0.8, at.z);
-    void dt;
     ring.children.forEach((m, i) => {
       m.visible = i < holding;
       const a = time * 3.4 + (i * Math.PI * 2) / holding;
@@ -569,5 +567,3 @@ export class ItemFx {
     this.auraGeometry.dispose();
   }
 }
-
-export type { ThingView };

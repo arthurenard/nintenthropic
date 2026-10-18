@@ -604,20 +604,6 @@ export class ItemBoxes {
     if (this.flashes.instanceColor) this.flashes.instanceColor.needsUpdate = true;
   }
 
-  /** World positions of the boxes now showing, for the pickup sparkle. */
-  nearest(x: number, z: number, within: number, slots: readonly BoxSlot[]): BoxSlot | null {
-    let best: BoxSlot | null = null;
-    let bestD = within * within;
-    for (const s of slots) {
-      const d = (s.x - x) ** 2 + (s.z - z) ** 2;
-      if (d < bestD) {
-        bestD = d;
-        best = s;
-      }
-    }
-    return best;
-  }
-
   dispose(): void {
     for (const r of this.resources) r.dispose();
     for (const m of [this.back, this.front, this.pool, this.shards, this.flashes]) m.dispose();

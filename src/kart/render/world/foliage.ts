@@ -48,7 +48,7 @@ export interface Foliage {
 interface Growth {
   /** Share of the quality's tuft budget this world gets. */
   share: number;
-  /** Tuft colours (multiplied into the ground's own colour, so they belong to it). */
+  /** Tuft colours (mixed into the ground's own colour, so they belong to it). */
   tint: [Rgb, Rgb];
   /** Blade height range, metres (before the per-tuft scale). */
   height: [number, number];
@@ -146,7 +146,7 @@ function flowerParts(): { stem: BufferGeometry; petals: BufferGeometry } {
     const a1 = ((i + 1) / ring) * Math.PI * 2;
     stem.triN([cx, h + 0.035, cz], [cx + Math.cos(a1) * 0.04, h + 0.012, cz + Math.sin(a1) * 0.04], [cx + Math.cos(a0) * 0.04, h + 0.012, cz + Math.sin(a0) * 0.04], [4, 3, 0.4], eye, eye, UP, UP, UP);
   }
-  // Petals: five rounded wedges around the eye, tilted up a little at their tips.
+  // Petals: six rounded wedges around the eye, tilted up a little at their tips.
   const white: Rgb = [1, 1, 1];
   const shade: Rgb = [0.72, 0.72, 0.72];
   const n = 6;

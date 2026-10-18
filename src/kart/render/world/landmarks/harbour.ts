@@ -5,8 +5,8 @@
  */
 import { Group, Mesh, type Object3D } from "three";
 import type { Paint } from "../builder";
-import { byHeight, extrudeZ, grid, lathe, MeshBuilder, mixRgb, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
-import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
+import { byHeight, extrudeZ, grid, lathe, MeshBuilder, mixRgb, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, xf, type Rgb, type V3 } from "./kit";
+import type { Halo, HazardSpec, LandmarkSpec, MovingPart } from "./types";
 
 const TAU = Math.PI * 2;
 
@@ -28,25 +28,11 @@ const WINDOW: Rgb = [3.0, 2.4, 1.0];
 
 const BOX_COLOURS: Rgb[] = [lift("#c8402b", 1.7), lift("#2f6cb8", 1.8), lift("#2f9a5f", 1.7), lift("#e0a21b", 1.6), lift("#dcdcd6", 1.4), lift("#e0702a", 1.7), lift("#7a58a0", 1.8), lift("#2aa0a8", 1.7)];
 
-/** A cubic Bezier through four control points, `n` pieces. */
-function bezier(a: V3, b: V3, c: V3, d: V3, n: number): V3[] {
-  const out: V3[] = [];
-  for (let k = 0; k <= n; k++) {
-    const t = k / n;
-    const u = 1 - t;
-    const w0 = u * u * u;
-    const w1 = 3 * u * u * t;
-    const w2 = 3 * u * t * t;
-    const w3 = t * t * t;
-    out.push([a[0] * w0 + b[0] * w1 + c[0] * w2 + d[0] * w3, a[1] * w0 + b[1] * w1 + c[1] * w2 + d[1] * w3, a[2] * w0 + b[2] * w1 + c[2] * w2 + d[2] * w3]);
-  }
-  return out;
-}
-
-/** A shipping container, length along x: corrugated on the road side, with a door end and a label on some. */
+/** A shipping container's length, width and height, metres. */
 const CL = 6.4;
 const CW = 2.7;
 const CH = 2.8;
+/** A shipping container, length along x: corrugated on the road side, with a label on some. */
 function container(b: MeshBuilder, x: number, y: number, z: number, col: Rgb, rnd: () => number, ribs = true): void {
   b.box(x, y + CH / 2, z, CL, CH, CW, ramp(scaleRgb(col, 0.62), col));
   if (ribs) {
@@ -61,7 +47,7 @@ function container(b: MeshBuilder, x: number, y: number, z: number, col: Rgb, rn
 }
 
 /** A tall lamp post: a pole, an arm toward `dir` (+1 / -1 along z) and a sodium head; adds its halo. */
-function lamp(lit: MeshBuilder, glow: MeshBuilder, halos: { x: number; y: number; z: number; size: number; colour: readonly [number, number, number]; alpha: number; twinkle?: number }[], x: number, z: number, h: number, dir = 1): void {
+function lamp(lit: MeshBuilder, glow: MeshBuilder, halos: Halo[], x: number, z: number, h: number, dir = 1): void {
   lit.post(x, -0.5, z, 0.3, h + 0.5, ramp(STEEL_D, STEEL), 6, 0.6);
   lit.post(x, 0, z, 0.55, 0.7, ramp(STEEL_D, STEEL), 6);
   lit.rod([x, h - 0.3, z], [x, h + 0.7, z + dir * 1.8], 0.3, STEEL);
@@ -69,8 +55,6 @@ function lamp(lit: MeshBuilder, glow: MeshBuilder, halos: { x: number; y: number
   glow.box(x, h + 0.34, z + dir * 2.2, 1.3, 0.14, 1.7, SODIUM);
   halos.push({ x, y: h + 0.1, z: z + dir * 2.2, size: 9, colour: SODIUM_HALO, alpha: 0.5, twinkle: 0.08 });
 }
-
-type Halos = Parameters<typeof lamp>[2];
 
 // ─── Crane ───────────────────────────────────────────────────────────────────
 
@@ -99,7 +83,7 @@ const crane: LandmarkSpec = {
   build() {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
-    const halos: Halos = [];
+    const halos: Halo[] = [];
     const redP = ramp(scaleRgb(CRANE_RED, 0.7), CRANE_RED);
     const whiteP = ramp(scaleRgb(CRANE_WHITE, 0.75), CRANE_WHITE);
     // The quay: a concrete apron with a yellow edge line and bollards, sunk into the ground.
@@ -155,7 +139,7 @@ const crane: LandmarkSpec = {
       glow.box(0, boomTip[1] - (boomTip[2] - z) * 0.17 + 2.6, z, 1.4, 0.3, 1.0, SODIUM);
       halos.push({ x: 0, y: boomTip[1] - (boomTip[2] - z) * 0.17 + 2.4, z, size: 8, colour: [2.8, 2.2, 1.1], alpha: 0.4 });
     }
-    // The driver's cab slung under the trolley half way out, with a lit window.
+    // The driver's cab slung under the boom half way out, with a lit window.
     const cabZ = 17;
     const cabY = topY + 7.2 - (boomTip[2] - cabZ) * 0.17 - 1.5;
     lit.box(0, cabY - 2.0, cabZ, 3.2, 2.8, 3.4, whiteP);
@@ -200,7 +184,7 @@ const lighthouse: LandmarkSpec = {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const glass = new MeshBuilder();
-    const halos: Halos = [];
+    const halos: Halo[] = [];
     const red = lift("#d8382a", 1.7);
     const white = lift("#f2f4f8", 1.6);
     const rockC = lift("#59616d", 1.5);
@@ -254,8 +238,8 @@ const lighthouse: LandmarkSpec = {
     halos.push({ x: 0, y: 37.0, z: 0, size: 34, colour: [2.4, 2.0, 1.2], alpha: 0.22 });
     const beam = new MeshBuilder();
     for (const dir of [1, -1]) {
-      const near = (z: number, w: number, h: number): V3[] => [[-w, 37.0 - h, z], [w, 37.0 - h, z], [w, 37.0 + h, z], [-w, 37.0 + h, z]];
-      grid(beam, [near(dir * 1.6, 0.8, 0.8), near(dir * 80, 9, 7)], (p) => scaleRgb([2.2, 2.0, 1.2], Math.max(0.35, 1 - Math.abs(p[2]) / 90)), true);
+      const section = (z: number, w: number, h: number): V3[] => [[-w, 37.0 - h, z], [w, 37.0 - h, z], [w, 37.0 + h, z], [-w, 37.0 + h, z]];
+      grid(beam, [section(dir * 1.6, 0.8, 0.8), section(dir * 80, 9, 7)], (p) => scaleRgb([2.2, 2.0, 1.2], Math.max(0.35, 1 - Math.abs(p[2]) / 90)), true);
     }
     // A keeper's cottage with lit windows and a red roof.
     const cx = -13;
@@ -283,7 +267,7 @@ const lighthouse: LandmarkSpec = {
   },
 };
 
-/** A pitched roof over a box: two sloped slabs and two gable triangles, centred on (x, z), eaves at y. */
+/** A pitched roof over a box: two sloped slabs over a flat ceiling slab, centred on (x, z), eaves at y. */
 function slabRoof(b: MeshBuilder, x: number, y: number, z: number, w: number, d: number, rise: number, col: Rgb): void {
   const half = w / 2;
   const ang = Math.atan2(rise, half);
@@ -301,7 +285,7 @@ const ship: LandmarkSpec = {
   build(ctx) {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
-    const halos: Halos = [];
+    const halos: Halo[] = [];
     const rnd = ctx.rnd;
     // The dock basin: a slab of dark water along the quay and a concrete quay wall in front, so the ship floats in something.
     const waterC: Rgb = [0.06, 0.13, 0.3];
@@ -318,12 +302,12 @@ const ship: LandmarkSpec = {
     prism(lit, plan.map(([x, z]): [number, number] => [x * 0.985, z * 0.94]), 6.2, 6.5, lift("#6a6f78", 1.4));
     lit.box(-8, 6.9, 7.6, 96, 0.9, 0.3, lift("#d5d9df", 1.4));
     lit.box(-8, 6.9, -7.6, 96, 0.9, 0.3, lift("#d5d9df", 1.4));
-    // The bow: a forecastle with a mast, an anchor and a bright foam beard at the waterline.
+    // The bow: a forecastle with a mast, and a bright foam beard at the waterline.
     lit.box(40, 7.2, 0, 8, 1.6, 8, ramp(scaleRgb(NAVY, 0.9), lift("#6a6f78", 1.4)));
     lit.post(41, 8, 0, 0.25, 6, ramp(STEEL_D, STEEL), 6);
     lit.blob(46, 0.6, 3.2, 2.2, 0.35, 0.9, [1.4, 1.7, 2.0], 0, 0.6);
     lit.blob(46, 0.6, -3.2, 2.2, 0.35, 0.9, [1.4, 1.7, 2.0], 0, -0.6);
-    // Containers: five across and up to four high, in bays from the bridge to the bow.
+    // Containers: five across and up to five high, in bays from the bridge to the bow.
     for (let bay = 0; bay < 9; bay++) {
       const x = -17 + bay * (CL + 0.2);
       if (x > 34) continue;
@@ -370,7 +354,7 @@ const ship: LandmarkSpec = {
         halos.push({ x, y: 9.2, z, size: 6, colour: SODIUM_HALO, alpha: 0.4 });
       }
     }
-    // Navigation lights on the bow and a lit port-side doorway.
+    // A red navigation light on the bow.
     glow.blob(45, 8.6, 3.0, 0.3, 0.3, 0.3, [4, 0.3, 0.3], 0);
     halos.push({ x: 45, y: 8.6, z: 3.4, size: 4.5, colour: [3.2, 0.3, 0.3], alpha: 0.5, twinkle: 0.25 });
     return { lit, glow, halos };
@@ -384,7 +368,7 @@ const containers: LandmarkSpec = {
   build(ctx) {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
-    const halos: Halos = [];
+    const halos: Halo[] = [];
     const rnd = ctx.rnd;
     // The base slab, with yellow edge lines, and a hazard-striped crossing left open in the middle of the block.
     lit.box(0, -0.2, 0, 52, 1.2, 22, ramp(CONCRETE_D, CONCRETE));
@@ -411,10 +395,10 @@ const containers: LandmarkSpec = {
         }
       }
     }
-    // Chain-link fencing at the corners, and two tall lamps with sodium heads.
+    // Two tall lamps with sodium heads.
     lamp(lit, glow, halos, -25, 9.5, 16, 1);
     lamp(lit, glow, halos, 25, 9.5, 16, 1);
-    // A hand pallet jack and a few traffic cones by the crossing.
+    // A few traffic cones by the crossing.
     for (let k = 0; k < 3; k++) {
       lit.add(shapes.cone(8), xf(4.2 + k * 0.9, 1.0, 8.4, 0.35, 1.0, 0.35), ramp(lift("#e0501e", 1.6), lift("#ff8a50", 1.6)));
       lit.box(4.2 + k * 0.9, 0.5, 8.4, 0.9, 0.12, 0.9, BLACK);
@@ -430,7 +414,7 @@ const warehouse: LandmarkSpec = {
   build(ctx) {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
-    const halos: Halos = [];
+    const halos: Halo[] = [];
     const rnd = ctx.rnd;
     const W = 42;
     const D = 19;
@@ -462,7 +446,7 @@ const warehouse: LandmarkSpec = {
         glow.box(x0 + tw + 0.08, H + 1.6, wz + 1.5, 0.08, 3.2, 3.1, [2.2, 2.0, 1.3]);
       }
     }
-    // The loading dock: a raised concrete platform along the front with steps, bumpers, a half-open roller door and a closed one.
+    // The loading dock: a raised concrete platform along the front with bumpers, a half-open roller door and a closed one.
     lit.box(-4, 0.9, D / 2 + 1.7, 28, 1.8, 3.4, ramp(CONCRETE_D, CONCRETE));
     lit.box(-4, 1.85, D / 2 + 3.3, 28, 0.08, 0.5, YELLOW);
     for (const x of [-12, -4, 4]) lit.box(x, 2.6, D / 2 + 0.2, 1.0, 1.0, 0.5, BLACK);
@@ -505,7 +489,7 @@ const buoy: LandmarkSpec = {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const glass = new MeshBuilder();
-    const halos: Halos = [];
+    const halos: Halo[] = [];
     // A little pontoon the buoys are moored beside: planks on floats, with bollards and a ladder.
     lit.box(0, 0.3, 8.5, 12, 0.8, 5.4, ramp(lift("#3a2a1a", 1.5), lift("#9a7448", 1.6)));
     for (let k = 0; k < 6; k++) lit.box(-5 + k * 2, 0.77, 8.5, 0.12, 0.1, 5.4, lift("#3a2a1a", 1.5));
@@ -519,13 +503,13 @@ const buoy: LandmarkSpec = {
     lit.post(-5.4, 0.7, 6.2, 0.1, 1.2, STEEL, 4);
     halos.push({ x: -5.4, y: 2.1, z: 6.2, size: 4.5, colour: SODIUM_HALO, alpha: 0.5 });
     // Three buoys of different make: a red can, a white sphere on a stem and a green cone, each on its own chain, bobbing.
-    const makers: { x: number; z: number; col: Rgb; tint: Rgb; kind: "can" | "sphere" | "cone"; phase: number; halo: readonly [number, number, number] }[] = [
+    const buoys: { x: number; z: number; col: Rgb; tint: Rgb; kind: "can" | "sphere" | "cone"; phase: number; halo: readonly [number, number, number] }[] = [
       { x: -4.2, z: -1.0, col: lift("#e8402e", 2.4), tint: lift("#ff8a70", 2.2), kind: "can", phase: 0, halo: [3.6, 0.35, 0.25] },
       { x: 0.6, z: -3.6, col: lift("#f2f4f8", 1.7), tint: [1.9, 2.0, 2.2], kind: "sphere", phase: 1.8, halo: [3.4, 3.4, 3.2] },
       { x: 4.8, z: -0.4, col: lift("#2f9a5f", 1.9), tint: lift("#5fe08c", 1.8), kind: "cone", phase: 3.4, halo: [0.35, 3.6, 0.8] },
     ];
     const moving: MovingPart[] = [];
-    makers.forEach((m, n) => {
+    buoys.forEach((m, n) => {
       const body = new MeshBuilder();
       const light = new MeshBuilder();
       if (m.kind === "can") {
@@ -539,7 +523,7 @@ const buoy: LandmarkSpec = {
         lathe(body, [[0.2, -0.6], [1.4, -0.6], [1.5, 0.3], [0.6, 2.4], [0.28, 3.0]], { at: [m.x, 0, m.z], segments: 10, shade: byHeight(-0.6, 3, scaleRgb(m.col, 0.65), m.tint) });
       }
       // The lamp cage on top: three struts and a bright lens.
-      const ly = m.kind === "can" ? 2.4 : m.kind === "sphere" ? 3.0 : 3.0;
+      const ly = m.kind === "can" ? 2.4 : 3.0;
       for (let k = 0; k < 3; k++) {
         const a = (k / 3) * TAU + n;
         body.rod([m.x + Math.cos(a) * 0.55, ly, m.z + Math.sin(a) * 0.55], [m.x, ly + 1.4, m.z], 0.12, STEEL_D);
@@ -628,7 +612,6 @@ const crab: HazardSpec = {
       hand.rotation.y = sz * 0.5;
       hand.add(new Mesh(fixed.build(), legMat));
       const hinge = new Group();
-      hinge.position.set(0, 0.0, 0);
       hinge.add(new Mesh(moving.build(), legMat));
       hand.add(hinge);
       grp.add(hand);
@@ -729,7 +712,7 @@ const forklift: HazardSpec = {
       radius: 2.2,
       update(s) {
         for (const w of wheels) w.grp.rotation.x = wheelAngle(s.travel, root, w.r);
-        // The beacon flashes amber, twice a second.
+        // The beacon flashes amber, about once a second.
         const on = Math.sin(s.time * 7) > -0.2 ? 1 : 0.35;
         beaconGlow.scale.setScalar(on);
         beaconGlow.position.y = 3.45 * (1 - on);
@@ -740,7 +723,6 @@ const forklift: HazardSpec = {
   },
 };
 
-// BEGIN EXPORTS
 export const LANDMARKS: Record<string, LandmarkSpec> = {
   crane,
   lighthouse,

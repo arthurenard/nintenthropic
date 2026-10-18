@@ -88,7 +88,7 @@ export function portrait(characterId: string | undefined, options: PortraitOptio
     const { renderer, scene, camera } = stage(size);
     const driver = createDriver(character.species, colour);
     driver.update({ time: 0.9, steer: 0.0, lean: 0, twirl: 0, emote: framing === "wave" ? "wave" : null });
-    // A quarter turn toward the light, so the face and a shoulder show.
+    // A slight turn toward the light, so the face and a shoulder show.
     driver.root.rotation.y = -0.32;
     driver.root.updateMatrixWorld(true);
     if (options.silhouette) {

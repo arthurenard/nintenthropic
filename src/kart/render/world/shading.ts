@@ -27,7 +27,7 @@ export interface BakeUniforms {
   uSunDirW: Uniform<Vector4>;
   /** Occlusion (r) and top height (g), over the world rect. */
   uAoMap: Uniform<Texture | null>;
-  /** minX, minZ, 1/sizeX, 1/sizeZ */
+  /** minX, maxZ, 1/sizeX, -1/sizeZ */
   uAoRect: Uniform<Vector4>;
   /** x: height at g = 0, y: height range, z: strength, w: 1 when a map is bound. */
   uAoInfo: Uniform<Vector4>;
@@ -238,7 +238,7 @@ export function shareBake(target: BakeUniforms, source: BakeUniforms): void {
   target.uAoInfo.value.copy(source.uAoInfo.value);
 }
 
-/** True for materials that should not cast into the baked sun map (glass, glows, ribbons of light). */
+/** True for materials that cast into the baked sun map; glass, glows and ribbons of light do not. */
 export function castsShadow(material: Material | Material[]): boolean {
   const m = Array.isArray(material) ? material[0] : material;
   if (!m) return false;

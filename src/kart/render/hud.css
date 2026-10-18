@@ -1,7 +1,7 @@
 /* Grip Prix's HUD: one layer of HTML per viewport, over the canvas.
    DESIGN.md's language: the world is the hero, chrome is quiet glass in the
    corners, the system face with tabular figures, 250 ms eases. Everything
-   scales with --u (1 at a 900 px tall view), set per viewport by hud.ts. */
+   scales with --u (1 at a view about 860 px tall), set per viewport by hud.ts. */
 
 .gp-hud {
   position: absolute;
@@ -130,7 +130,7 @@
 .gp-item svg {
   position: relative;
 }
-/* The newer items glow in their own colour. */
+/* The comet, the storm, the skyrocket, the blast and the decoy glow in their own colour. */
 .gp-item[data-item="comet"] svg { fill: #ffd60a; stroke: #ffd60a; }
 .gp-item[data-item="storm"] svg { fill: #b9c8ff; stroke: #b9c8ff; }
 .gp-item[data-item="skyrocket"] svg { fill: #ff6a55; stroke: #ff6a55; }
@@ -434,8 +434,6 @@
 }
 .gp-free .gp-map {
   position: relative;
-  left: auto;
-  bottom: auto;
   flex: 1 1 55%;
   display: grid;
   place-items: center;

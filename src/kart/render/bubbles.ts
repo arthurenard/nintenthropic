@@ -34,7 +34,7 @@ export function bubbleLook(age: number, calm = false): BubbleLook {
   const fadeOut = Math.min(1, (BUBBLE_LIFE - age) / 0.35);
   const opacity = Math.max(0, Math.min(fadeIn, fadeOut));
   if (calm) return { opacity, scale: 1, rise: 0 };
-  // Out of nothing to a little over full size in 0.16 s, settling by 0.3 s.
+  // From a third of its size to a little over full size in 0.16 s, settling by 0.3 s.
   const pop = age < 0.16 ? 0.35 + 0.8 * (age / 0.16) : age < 0.3 ? 1.15 - 0.15 * ((age - 0.16) / 0.14) : 1;
   return { opacity, scale: pop, rise: 26 * Math.min(1, age / BUBBLE_LIFE) };
 }
@@ -69,10 +69,6 @@ export class Bubbles {
   say(kart: number, text: string, time: number): void {
     this.bubbles = this.bubbles.filter((b) => b.kart !== kart);
     this.bubbles.push({ id: this.nextId++, kart, text, born: time });
-  }
-
-  get count(): number {
-    return this.bubbles.length;
   }
 
   /** Puts the bubbles in viewport `index`, whose picture was just drawn with `eye`. */

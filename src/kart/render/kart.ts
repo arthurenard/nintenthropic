@@ -2,10 +2,9 @@
  * The karts' side of the picture: what a model must offer (`KartModel`,
  * made by a `KartFactory`) and the actor that poses it from a KartView.
  *
- * The procedural toy is in kartModel.ts. Being behind a small factory, a
- * Blender-made glTF can replace it later without touching anything else: all
- * the renderer needs from a model is a root to place and a `pose()` to
- * animate. The actor owns
+ * The models are made by kartModel.ts: the Blender-made kart once its art is
+ * loaded (kartArt.ts), the code-built one otherwise. All the renderer needs
+ * from a model is a root to place and a `pose()` to animate. The actor owns
  * what is true of every kart whatever it looks like: where it is, the roll,
  * pitch and lean it shows from its motion, the spin-out, the hop, the lean
  * of a banked road, a trick's twirl in the air, the long fall when it leaves
@@ -66,7 +65,7 @@ export interface KartModel {
   dispose(): void;
 }
 
-/** Makes the model for one racer. A glTF loader can stand in for the procedural one. */
+/** Makes the model for one racer (createProceduralKart, unless a caller brings its own). */
 export type KartFactory = (racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">) => KartModel;
 
 // ─── The actor ─────────────────────────────────────────────────────────────
@@ -153,11 +152,8 @@ export class KartActor {
   roadY = 0;
   /** What the chase camera should look at, which holds the road's height while the kart falls away. */
   anchor = { x: 0, y: 0, z: 0 };
-  /** Where the kart is now, for effects and the cameras. */
-  yaw = 0;
+  /** The road's slope under it, eased: it pitches the kart and its shadow. */
   slope = 0;
-  /** True while the drone has it (and the drone is still in the air after). */
-  rescuing = false;
   /** True while it is still dropping, before the hook has it. */
   falling = false;
 
@@ -169,7 +165,6 @@ export class KartActor {
   private droneLast = { x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0 };
   private settle = { x: 0, y: 0, z: 0 };
   private tumble = { x: 0, y: 0, z: 0 };
-  private lastLift = 0;
   private rampBonus = 0;
 
   constructor(
@@ -223,7 +218,6 @@ export class KartActor {
     // it had and gives it back as it flies (or at once, if it was too slow to fly).
     if (surf.ramp > 0.02) this.rampBonus = surf.ramp;
     else this.rampBonus *= Math.exp(-dt * (view.hop > 0.2 ? 2.4 : 12));
-    this.lastLift = ctx.surface ? surf.lift : 0;
     const roll = ctx.rollAt ? ctx.rollAt(proj.s) : 0;
     // The banked road's plane, seen from the kart: how much it tips the kart's nose and its side.
     const rrx = -t.tz;
@@ -233,9 +227,9 @@ export class KartActor {
     const rx = -Math.cos(view.heading);
     const rz = Math.sin(view.heading);
     const tanRoll = Math.tan(roll);
-    const edge = Math.abs(proj.offset) < t.width / 2 + 0.5;
-    const bankPitch = edge ? Math.atan(-tanRoll * (rrx * fx + rrz * fz)) : 0;
-    const bankRoll = edge ? Math.atan(tanRoll * (rrx * rx + rrz * rz)) : 0;
+    const onBankedRoad = Math.abs(proj.offset) < t.width / 2 + 0.5;
+    const bankPitch = onBankedRoad ? Math.atan(-tanRoll * (rrx * fx + rrz * fz)) : 0;
+    const bankRoll = onBankedRoad ? Math.atan(tanRoll * (rrx * rx + rrz * rz)) : 0;
     this.tiltX = damp(this.tiltX, -bankPitch, 14, dt);
     this.tiltZ = damp(this.tiltZ, bankRoll, 14, dt);
 
@@ -315,7 +309,6 @@ export class KartActor {
         kx = lerp(fallX, f.toX, move);
         kz = lerp(fallZ, f.toZ, move);
         const carryY = Math.max(f.toY + 3.2, fallY + 0.5);
-        ky = lerp(fallY, carryY, lift);
         if (tt > tRelease) {
           const r = smoothstep(0, 1, clamp((tt - tRelease) / 0.45));
           ky = lerp(carryY, f.toY, r);
@@ -344,7 +337,6 @@ export class KartActor {
         rotY = lerp(f.heading + wrap(this.tumble.y), view.heading, settled);
       }
       this.updateDrone(ctx, f, tt, tFall, tRelease, hang, px, py, pz, time);
-      this.rescuing = true;
       this.falling = tt <= tFall;
       this.anchor.x = px;
       this.anchor.z = pz;
@@ -364,7 +356,6 @@ export class KartActor {
       this.anchor.y = baseY + view.hop * 0.7;
       this.falling = false;
       if (this.droneOut >= 0) this.flyAway(dt, time);
-      else this.rescuing = false;
       const k = Math.exp(-dt * 9);
       this.settle.x *= k;
       this.settle.y *= k;
@@ -383,7 +374,6 @@ export class KartActor {
     this.z = pz;
     this.root.position.set(px, py, pz);
     this.root.rotation.set(rotX, rotY, rotZ, "YXZ");
-    this.yaw = view.heading;
 
     // Motion-driven attitude.
     this.accel = damp(this.accel, dt > 0 ? (speed - this.lastSpeed) / dt : 0, 8, dt);
@@ -499,7 +489,6 @@ export class KartActor {
   private flyAway(dt: number, time: number): void {
     if (!this.drone) {
       this.droneOut = -1;
-      this.rescuing = false;
       return;
     }
     this.droneOut += dt;
@@ -514,9 +503,6 @@ export class KartActor {
     if (this.droneOut > 1.4) {
       this.drone.hide();
       this.droneOut = -1;
-      this.rescuing = false;
-    } else {
-      this.rescuing = true;
     }
   }
 

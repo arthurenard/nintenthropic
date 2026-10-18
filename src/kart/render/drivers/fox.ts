@@ -25,7 +25,7 @@ export function buildFox(l: Look): DriverBuild {
   // Ears: tall pyramids, dark-tipped, cream inside.
   for (const sx of [-1, 1]) {
     horn(h, [sx * 0.15, 0.2, -0.04], [sx * 0.25, 0.58, -0.1], 0.125, { bottom: FUR, top: DARK }, 4, 0.06);
-    horn(h, [sx * 0.15, 0.2, -0.0], [sx * 0.235, 0.5, -0.06], 0.075, { bottom: CREAM, top: CREAM }, 4, 0.03);
+    horn(h, [sx * 0.15, 0.2, 0], [sx * 0.235, 0.5, -0.06], 0.075, CREAM, 4, 0.03);
   }
   helmet(h, l, [0, 0.05, -0.01], [0.305, 0.28, 0.29], 0.4);
 

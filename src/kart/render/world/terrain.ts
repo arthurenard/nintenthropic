@@ -589,7 +589,7 @@ export class Terrain {
 
   /**
    * The volcano's lava as a surface over every cell that has any, cut into
-   * tiles like the ground. Null if the world has none.
+   * tiles like the ground. Empty if the world has none.
    */
   buildLava(tile = 20): BufferGeometry[] {
     if (!this.anyLava) return [];

@@ -29,21 +29,21 @@ import { styleFor } from "./world/themes";
 
 /** Loads the modelled art (unless ?art=0 asks for the code-built kart), then shows the turntable. */
 export function runTurntable(canvas: HTMLCanvasElement, params: URLSearchParams): void {
+  const theme = (params.get("theme") as TrackTheme | null) ?? "meadow";
   if (params.get("art") === "0") {
-    build(canvas, params);
+    build(canvas, params, theme);
     return;
   }
-  const theme = (params.get("theme") as TrackTheme | null) ?? "meadow";
-  loadKartArt(theme).then(() => build(canvas, params), () => build(canvas, params));
+  loadKartArt(theme).then(() => build(canvas, params, theme), () => build(canvas, params, theme));
 }
 
-function build(canvas: HTMLCanvasElement, params: URLSearchParams): void {
+function build(canvas: HTMLCanvasElement, params: URLSearchParams, theme: TrackTheme): void {
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  const style = styleFor((params.get("theme") as "meadow" | "canyon" | "harbour" | null) ?? "meadow");
+  const style = styleFor(theme);
   const scene = new Scene();
   scene.background = new Color(style.sky.horizon);
   scene.fog = new Fog(style.fog.colour, 40, 200);

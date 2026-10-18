@@ -10,7 +10,7 @@
  * under the flight"). The sim decides what a kart does; this decides what the
  * picture shows.
  */
-import { inStretch, type Surface, type Stretch, type TrackGeometry, type TrackTheme } from "../../track/geometry";
+import { inStretch, type Surface, type TrackGeometry, type TrackTheme } from "../../track/geometry";
 
 /** A barrier's inner face stands this far beyond the road's edge unless a verge moves it: the sim's wall. */
 export const WALL_DISTANCE = 6;
@@ -216,10 +216,8 @@ export function rampHeight(ramps: readonly RampShape[], s: number, lap: number):
   return 0;
 }
 
-/** The part of a stretch, as metres, that contains `s` (wrapping over the start line). */
+/** Whether `s` lies in a stretch given in metres (one that may wrap over the start line). */
 export function inMetres(patch: { from: number; to: number }, s: number, lap: number): boolean {
   const f = ((s % lap) + lap) % lap;
   return patch.from <= patch.to ? f >= patch.from && f <= patch.to : f >= patch.from || f <= patch.to;
 }
-
-export type { Stretch };

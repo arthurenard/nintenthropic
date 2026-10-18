@@ -82,7 +82,7 @@ export interface World {
   setStartLights(state: number | "go" | "off"): void;
   /** `time` is the picture's clock; `raceTime` the race's (the hazards move on it, as in the sim). */
   update(time: number, dt: number, raceTime?: number): void;
-  /** Puts the scene's fog and environment in place. */
+  /** Puts the scene's fog in place (the environment comes with `prepare`). */
   install(scene: Scene): void;
   /**
    * Makes what needs the GPU, once, with the live renderer: the sky as the
@@ -116,7 +116,8 @@ export async function createWorld(
   const style = theme ?? styleFor(def.theme);
   const group = new Group();
   const disposables: { dispose(): void }[] = [];
-  const track = <T extends { dispose(): void }>(d: T): T => {
+  // Everything the world makes for itself, disposed with it.
+  const own = <T extends { dispose(): void }>(d: T): T => {
     disposables.push(d);
     return d;
   };
@@ -135,11 +136,11 @@ export async function createWorld(
   bake.uSunInfo.value.z = look.shadow;
   const ground = groundMaterial(style, quality, disposables, bake);
   const roadMat = roadMaterial(style, quality, disposables, bake);
-  const deco = track(bakedLit(new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }), bake, "deco")) as Material;
+  const deco = own(bakedLit(new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }), bake, "deco")) as Material;
   let lavaAnim: Animated | null = null;
 
   const addStatic = (g: BufferGeometry, material: Material, order = 0): Mesh => {
-    track(g);
+    own(g);
     const m = new Mesh(g, material);
     m.matrixAutoUpdate = false;
     m.updateMatrix();
@@ -168,29 +169,29 @@ export async function createWorld(
   for (const g of meshes.deco) addStatic(g, deco);
   if (!space) for (const g of meshes.verge) addStatic(g, ground.material);
   if (meshes.pools) {
-    const mat = track(new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false })) as Material;
+    const mat = own(new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false })) as Material;
     addStatic(meshes.pools, mat, 3);
   }
   if (meshes.additive) addStatic(meshes.additive, additiveMaterial(disposables), 3);
   for (const p of meshes.patches) addStatic(p.geometry, patchMaterial(p.kind, quality, disposables, bake), 2);
-  const chevrons = track(chevronTexture(quality.anisotropy)) as CanvasTexture;
+  const chevrons = own(chevronTexture(quality.anisotropy)) as CanvasTexture;
   chevrons.wrapT = RepeatWrapping;
   if (meshes.pads) {
-    const padMat = track(new MeshBasicMaterial({ map: chevrons, color: new Color(2.1, 2.1, 2.3), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })) as Material;
+    const padMat = own(new MeshBasicMaterial({ map: chevrons, color: new Color(2.1, 2.1, 2.3), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })) as Material;
     addStatic(meshes.pads, padMat, 1);
   }
 
   // The gantry's banner and the start lights.
-  const banner = track(bannerTexture(quality.anisotropy)) as CanvasTexture;
-  const bannerGeo = track(new PlaneGeometry(meshes.banner.width, meshes.banner.height)) as PlaneGeometry;
-  const bannerMat = track(new MeshBasicMaterial({ map: banner, side: DoubleSide, color: style.night ? new Color(0.78, 0.82, 0.95) : new Color(1, 1, 1) })) as Material;
+  const banner = own(bannerTexture(quality.anisotropy)) as CanvasTexture;
+  const bannerGeo = own(new PlaneGeometry(meshes.banner.width, meshes.banner.height)) as PlaneGeometry;
+  const bannerMat = own(new MeshBasicMaterial({ map: banner, side: DoubleSide, color: style.night ? new Color(0.78, 0.82, 0.95) : new Color(1, 1, 1) })) as Material;
   const bannerMesh = new Mesh(bannerGeo, bannerMat);
   bannerMesh.position.set(meshes.banner.x, meshes.banner.y, meshes.banner.z);
   bannerMesh.rotation.y = meshes.banner.yaw;
   group.add(bannerMesh);
 
-  const bulbGeo = track(new SphereGeometry(0.42, 16, 10)) as SphereGeometry;
-  const bulbMats = meshes.startLights.map(() => track(new MeshBasicMaterial({ color: new Color(0.06, 0.03, 0.03) })) as MeshBasicMaterial);
+  const bulbGeo = own(new SphereGeometry(0.42, 16, 10)) as SphereGeometry;
+  const bulbMats = meshes.startLights.map(() => own(new MeshBasicMaterial({ color: new Color(0.06, 0.03, 0.03) })) as MeshBasicMaterial);
   meshes.startLights.forEach((p, i) => {
     const b = new Mesh(bulbGeo, bulbMats[i]!);
     b.position.set(p[0], p[1], p[2]);
@@ -201,7 +202,7 @@ export async function createWorld(
   onProgress(0.5);
   await breathe();
   const mats = landmarkMaterials(bake);
-  track(mats);
+  own(mats);
   const groundAt = (x: number, z: number) => terrain.heightAt(x, z);
   const env = {
     track: geometry,
@@ -216,17 +217,17 @@ export async function createWorld(
   const placed: PlacedLandmark[] = [...(def.landmarks ?? [])];
   if (def.duck) placed.push({ kind: "rubber-duck", at: def.duck.at, offset: def.duck.offset, lift: def.duck.y ?? 0 });
   const landmarks: LandmarkLayer = buildLandmarks(env, placed, mats);
-  track(landmarks);
+  own(landmarks);
   group.add(landmarks.group);
-  const shadowTex = track(glowTexture(0, 1.0));
+  const shadowTex = own(glowTexture(0, 1.0));
   const hazards: HazardLayer = buildHazards(env, def.hazards ?? [], mats, shadowTex);
-  track(hazards);
+  own(hazards);
   group.add(hazards.group);
 
   // Glows: lamps (static) and the three start lights (changing).
   const staticGlows = meshes.glows;
   const glowPoints: Points = makePoints(staticGlows.length + meshes.startLights.length, true);
-  track({
+  own({
     dispose() {
       glowPoints.geometry.dispose();
       (glowPoints.material as Material).dispose();
@@ -277,7 +278,7 @@ export async function createWorld(
 
   // Scenery, kept clear of the landmarks.
   const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, landmarks.keepOut, bake);
-  track(scenery);
+  own(scenery);
   group.add(scenery.group);
   // Tufts and flowers beyond the barriers, within reach of the track.
   const reach = (() => {
@@ -295,7 +296,7 @@ export async function createWorld(
   })();
   const foliage = buildFoliage(style, terrain, quality, bake, landmarks.keepOut, reach);
   if (foliage) {
-    track(foliage);
+    own(foliage);
     group.add(foliage.group);
   }
   onProgress(0.86);
@@ -303,22 +304,22 @@ export async function createWorld(
 
   // Sky, water, backdrop, light.
   const sky = createSky(style);
-  track(sky);
+  own(sky);
   group.add(sky.group);
 
   let water: Water | null = null;
   if (style.id === "harbour") {
     const cx = (terrain.minX + terrain.maxX) / 2;
     const cz = (terrain.minZ + terrain.maxZ) / 2;
-    water = createWater(style, { x: cx, z: cz }, bake, quality.anisotropy);
-    track(water);
+    water = createWater({ x: cx, z: cz }, bake, quality.anisotropy);
+    own(water);
     group.add(water.mesh);
   }
   const backdrop = buildBackdrop(style, terrain, disposables, bake);
   if (backdrop) group.add(backdrop.group);
 
   const boxes = new ItemBoxes();
-  track(boxes);
+  own(boxes);
   group.add(boxes.group);
 
   const hemi = new HemisphereLight(style.light.skyColour, style.light.groundColour, style.light.hemiIntensity * look.fill);
@@ -345,7 +346,7 @@ export async function createWorld(
   const fog = new Fog(style.fog.colour, style.fog.near, style.fog.far);
   let envTexture: Texture | null = null;
   let baked: Baked | null = null;
-  /** The part of the world the baked light covers: the track and a margin, and the heights from below its lowest road to above its tallest landmark. */
+  /** The part of the world the baked light covers: the track and a margin, and the heights from 14 m below its lowest road to 70 m above its highest. */
   const playBounds = () => {
     let minX = Infinity;
     let maxX = -Infinity;

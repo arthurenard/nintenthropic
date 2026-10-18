@@ -1,9 +1,9 @@
 /**
  * Particles: drift sparks (blue, then orange), boost flames, dust off the
- * road, tyre smoke, bump puffs and the confetti of a win. Two pooled
- * systems, one drawn additively (light) and one with ordinary blending
- * (smoke and dust), each a single draw call over a ring buffer of sprites.
- * Nothing is allocated while racing.
+ * road, tyre smoke, bump puffs and the confetti at the finish. Three pooled
+ * systems, two drawn additively (light, and glows that last one frame) and
+ * one with ordinary blending (smoke and dust), each a single draw call over a
+ * ring buffer of sprites, and a pool of speed lines.
  */
 import { AdditiveBlending, BufferAttribute, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, ShaderMaterial, type Points } from "three";
 import type { KartView, RaceEvent } from "../contract";
@@ -146,7 +146,6 @@ class Sprites {
   }
 }
 
-
 /**
  * Speed lines: thin soft streaks standing in the air round a fast kart that it
  * rushes past (a pool of camera-facing quads stretched along the heading).
@@ -273,14 +272,11 @@ interface Emit {
   dust: number;
   smoke: number;
   star: number;
-  lastLevel: number;
-  lastBoost: number;
   snow: number;
   ice: number;
   mud: number;
   sand: number;
   trail: number;
-  trick: number;
   lines: number;
 }
 
@@ -313,7 +309,7 @@ export class Effects {
   private readonly state = new Map<number, Emit>();
   private rnd = 1;
   private dust: [number, number, number] = [0.8, 0.7, 0.5];
-  /** Switch off the shakes and flashes for players who asked for less motion. */
+  /** Leaves out the speed lines for players who asked for less motion (the cameras drop their shakes themselves). */
   calm = false;
   /** Which world this is, for what a fall looks like (embers over lava, stars in space). */
   world = "meadow";
@@ -589,7 +585,7 @@ export class Effects {
         for (let i = 0; i < n; i++) {
           const a = (i / n) * Math.PI * 2 + this.r() * 0.4;
           const sp = 3.2 + this.r() * 3.2;
-          this.norm.emit(k.x + Math.cos(a) * 0.9, k.y + 0.2, k.z + Math.sin(a) * 0.9, Math.cos(a) * sp, 0.4 + this.r() * 1.0, Math.sin(a) * sp, 0.6 + this.r() * 0.4, 0.7, 2.6, [0.95 + d[0] * 0.0, 0.94, 0.9, 0.62], [d[0], d[1], d[2], 0], 0, 2.4);
+          this.norm.emit(k.x + Math.cos(a) * 0.9, k.y + 0.2, k.z + Math.sin(a) * 0.9, Math.cos(a) * sp, 0.4 + this.r() * 1.0, Math.sin(a) * sp, 0.6 + this.r() * 0.4, 0.7, 2.6, [0.95, 0.94, 0.9, 0.62], [d[0], d[1], d[2], 0], 0, 2.4);
         }
         for (let i = 0; i < 7; i++) {
           const a = this.r() * Math.PI * 2;
@@ -630,7 +626,7 @@ export class Effects {
   kart(k: KartView, dt: number, vis?: Visual): void {
     let st = this.state.get(k.id);
     if (!st) {
-      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, lastLevel: 0, lastBoost: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, trick: 0, lines: 0 };
+      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, lines: 0 };
       this.state.set(k.id, st);
     }
     // Falling or being carried: the kart is not where the sim says, and none of the driving effects apply.
@@ -748,7 +744,7 @@ export class Effects {
         const height = 0.2 + this.r() * 2.9;
         const length = clamp(fast * 0.05, 1.2, 3.8) * (0.6 + this.r() * 0.9);
         const warm = k.boost > 0;
-        this.streaks.add(k.x + fx * ahead + rx * lat, k.y + height, k.z + fz * ahead + rz * lat, fx, fz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, warm ? 1.5 : 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
+        this.streaks.add(k.x + fx * ahead + rx * lat, k.y + height, k.z + fz * ahead + rz * lat, fx, fz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
       }
     } else {
       st.lines = 0;
@@ -784,7 +780,7 @@ export class Effects {
         while (st.ice >= 1) {
           st.ice -= 1;
           const p = wheel(this.r() < 0.5 ? -1 : 1, 0.06);
-          // Bright glints skittering out behind the wheels, and a pale streak where it slides.
+          // Bright glints skittering out behind the wheels.
           this.add.emit(p[0] + this.spread() * 0.4, p[1], p[2] + this.spread() * 0.4, -fx * (2 + this.r() * 4) + this.spread() * 1.5, 0.3 + this.r() * 1.2, -fz * (2 + this.r() * 4) + this.spread() * 1.5, 0.35 + this.r() * 0.3, 0.2, 0.03, [1.5, 2.0, 2.4, 1], [0.6, 1.2, 2.0, 0], -3, 1.0);
         }
       } else if (surf === "mud") {
@@ -829,8 +825,6 @@ export class Effects {
     } else {
       st.star = 0;
     }
-    st.lastLevel = k.driftLevel;
-    st.lastBoost = k.boost;
   }
 
   update(dt: number): void {

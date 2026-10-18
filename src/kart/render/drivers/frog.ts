@@ -1,4 +1,4 @@
-/** Moss the frog: eyes on stalks inside big goggles, a wide grin, a throat that puffs. */
+/** Moss the frog: eyes on bumps inside big goggles, a wide grin, a throat that puffs. */
 import { MeshBuilder, rgb, xf } from "../kartBuilder";
 import { INK, armGeometry, body, eye, fur, headBand, legs, orb, type Look } from "./parts";
 import type { DriverBuild } from "./types";
@@ -32,7 +32,7 @@ export function buildFrog(l: Look): DriverBuild {
   }
   headBand(h, head, 0.1, { bottom: l.low, top: l.top }, 0.075, 1.045);
   // A strap over the crown, flush with the head.
-  h.box(0, 0.152, -0.02, 0.07, 0.024, 0.3, l.kart, 0, 0.0);
+  h.box(0, 0.152, -0.02, 0.07, 0.024, 0.3, l.kart);
 
   const sac = new MeshBuilder();
   orb(sac, [0, 0, 0], [0.12, 0.075, 0.1], fur(BELLY), 1);
