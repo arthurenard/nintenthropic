@@ -6,12 +6,12 @@
  * everything is arithmetic on Float32Arrays that end up in a file.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 export const SR = 48000;
 export const TAU = 2 * Math.PI;
-export const FFMPEG = "/opt/homebrew/bin/ffmpeg";
+export const FFMPEG = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
 
 export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 export const db = (x) => Math.pow(10, x / 20);
@@ -135,19 +135,6 @@ export function biquad(x, type, f0, q, gainDb = 0) {
   return y;
 }
 
-/** A one-pole low-pass whose cutoff may follow a function of time. */
-export function onePole(x, fc) {
-  const y = new Float32Array(x.length);
-  let s = 0;
-  for (let i = 0; i < x.length; i++) {
-    const f = typeof fc === "function" ? fc(i / SR) : fc;
-    const a = 1 - Math.exp((-TAU * f) / SR);
-    s += a * (x[i] - s);
-    y[i] = s;
-  }
-  return y;
-}
-
 // --- oscillators -----------------------------------------------------------------------------------------
 
 function polyBlep(t, dt) {
@@ -186,16 +173,6 @@ export function reversed(x) {
   const y = new Float32Array(x.length);
   for (let i = 0; i < x.length; i++) y[i] = x[x.length - 1 - i];
   return y;
-}
-
-// --- a stereo track with mono sends ---------------------------------------------------------------------------
-
-export class Stem {
-  constructor(n) {
-    this.n = n;
-    this.l = new Float32Array(n);
-    this.r = new Float32Array(n);
-  }
 }
 
 // --- FFT convolution (reverb) --------------------------------------------------------------------------------------

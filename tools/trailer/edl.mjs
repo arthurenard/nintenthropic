@@ -1,5 +1,5 @@
 /**
- * The trailer's cut, on the 120 BPM grid (a beat is 0.5 s, a bar 2 s; see PLAN.md).
+ * The trailer's cut, on the 120 BPM grid (a beat is 0.5 s, a bar 2 s; see README.md).
  * A cut either enters its source at `in` seconds, or `align`s one of the clip's
  * moments (shooters.json / race.json) to `at` seconds after the cut, so a hit
  * lands on a beat. Titles are the cards' alpha overlays; flashes are white,

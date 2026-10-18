@@ -1,8 +1,7 @@
 /**
- * The frame renderer for the trailer's shooter clips (an adaptation of
- * tools/promo/capture.ts). One clip per page load (?clip=hn-hero ...), stepped
- * from Node one frame at a time (window.promo.step / post), so the footage is
- * smooth whatever the machine's speed:
+ * The frame renderer for the trailer's shooter clips. One clip per page load
+ * (?clip=hn-hero ...), stepped from Node one frame at a time (window.capture.step
+ * / post), so the footage is smooth whatever the machine's speed:
  *
  *  - a game is the real game, run through its dev harness (src/dev/harness.ts,
  *    ?manual=1) with a scripted hand (aim.ts); the hand picture (Pip) is hidden;
@@ -13,7 +12,7 @@
  *    every CSS animation and transition is scrubbed to the simulated time, so
  *    the HUD's pops and fades slow down with the game;
  *  - every sound a game asks for is written down with its simulated time
- *    (window.promo.events()).
+ *    (window.capture.events()).
  *
  * See README.md.
  */
@@ -25,7 +24,6 @@ import { $ } from "../../../src/ui/dom";
 import { Shooter } from "./aim";
 import { DIRECTORS, type Env, type Target } from "./directors";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface AudioEvent {
   /** Simulated seconds since the page's game began. */
   t: number;
@@ -114,7 +112,7 @@ function settle(): void {
   }
 }
 
-class Promo {
+class Capture {
   cfg!: Config;
   ready: Promise<void>;
   private handy: any = null;
@@ -267,4 +265,4 @@ class Promo {
   }
 }
 
-(window as any).promo = new Promo();
+(window as any).capture = new Capture();

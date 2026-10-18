@@ -4,7 +4,7 @@
  * the wide ones). All of it is synthesised: oscillators, noise, envelopes and
  * filters. Shared by the music (compose.mjs) and the mixer's extra effects.
  */
-import { SR, TAU, Svf, clamp, db, fadeIn, fadeOut, filter, mtof, pulseAt, reversed, rng, sawAt, secs, whiteNoise } from "./dsp.mjs";
+import { SR, TAU, Svf, clamp, fadeIn, fadeOut, filter, mtof, pulseAt, reversed, rng, sawAt, secs, whiteNoise } from "./dsp.mjs";
 
 const norm = (x, peak = 1) => {
   let p = 0;

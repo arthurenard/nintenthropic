@@ -11,7 +11,7 @@
  * The dev server must be running on port 4901 (it is shared: never start or stop it from here). Never a sound is played.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { FFMPEG, HERE, launch, OUT } from "./lib.mjs";
 import { CLIPS } from "./plan.mjs";
 import { shoot } from "./shoot.mjs";

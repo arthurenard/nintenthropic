@@ -1,6 +1,6 @@
 # Grip Prix, filmed for the trailer
 
-Eight clips of Grip Prix for the 40-second Super Claude Bros. trailer (bars 12-17, the part after the "So is this." card),
+Eight clips of Grip Prix for the 40-second Super Claude Bros. trailer (bars 12-17, the part after the "Now grab the wheel." card),
 filmed from the game itself: the real sim, the real renderer and its Blender art, the real HUD, stepped exactly one
 video frame at a time in a muted headless Chrome. Nothing is faked: no stand-in karts, no generated images. The
 sounds of each clip are the race's own, rendered offline from the same frames; nothing is ever played.
@@ -13,8 +13,8 @@ node tools/trailer/race/capture.mjs --no-frames          # sound and manifest ag
 node tools/trailer/race/capture.mjs --dsf 1              # draw at 1x instead of 2x: twice as quick, a little less smooth
 ```
 
-The dev server must be running on port 4901 (`npx vite --port 4901 --strictPort`; it is shared with the other
-trailer jobs, so this folder never starts or stops it). Everything is written to `tools/trailer/out/` (git-ignored):
+The dev server must be running on port 4901 (`npx vite --port 4901 --strictPort`); the capture never starts or stops
+it. Everything is written to `tools/trailer/out/` (git-ignored):
 
 | File | |
 | --- | --- |
@@ -43,18 +43,18 @@ clip) of the things that want a beat.
 
 ## How it works
 
-- **`src/kart/render/dev.ts`** (the only file outside this folder that was touched): `?manual=1` stops the page's
+- **`src/kart/render/dev.ts`** (the trailer's one hook in the game's code): `?manual=1` stops the page's
   animation-frame loop and adds `__grip.advance(dt = 1/60, before?)`, which steps the source exactly `dt`, draws one
   frame and returns the frame's view (`before(view)` runs just ahead of the draw: that is where a free camera is set);
   `?seed=` hands a seed to the real sim (`?sim=1`). Everything else is built on those and on what the page already exposed.
 - **`lib.mjs`**: muted headless Chrome on the GPU (`--mute-audio --use-angle=metal --ignore-gpu-blocklist --enable-gpu
   --enable-gpu-rasterization`), the page, and an init script that makes the run repeatable: `Math.random` is a seeded
   generator and `performance.now` is pinned to the simulated clock (camera kicks, spin-out sparkles and the like are the
-  same every time), the HUD's CSS animations are scrubbed to the simulated time (as `tools/promo/capture.ts` does) and
-  the WebGL canvas keeps its drawing buffer, so a screenshot never catches a blank one.
+  same every time), the HUD's CSS animations are paused and scrubbed to the simulated time on every frame, and the
+  WebGL canvas keeps its drawing buffer, so a screenshot never catches a blank one.
 - **`shoot.mjs`**: runs a clip. `skip` simulated seconds without drawing (the page's `?skip=`), `pre` drawn frames that
-  are not kept, then `frames` PNGs; it records every frame's view. If the shared dev server reloads the page half way
-  (it does when another job makes it re-optimise dependencies) the clip is filmed again from the start.
+  are not kept, then `frames` PNGs; it records every frame's view. If the dev server reloads the page half way (it
+  does when it re-optimises dependencies) the clip is filmed again from the start.
 - **`rig.mjs`**: the cameras and helpers the directors use inside the page (`window.__rig`): points on the track, a
   chase camera of its own (the game's keeps a fixed distance and is blocked by a kart that overtakes close by), an orbit
   that rides along a kart and swings round it. A director may also set things up in the sim through its own debug

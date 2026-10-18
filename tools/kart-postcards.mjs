@@ -12,9 +12,8 @@
 // Each card is drawn in quality high with the HUD hidden and the sound muted, the dev page held still (shot.ts),
 // downscaled with Pillow's LANCZOS and encoded by cwebp (-m 6 -sharp_yuv) at the highest quality that fits MAX_BYTES.
 // Needs python3 with Pillow, cwebp (brew install webp) and Chrome. After each card it says which karts are in the
-// frame (3 to 5 wanted; their length in pixels of the 960 px card) and which landmarks. Where node_modules is a link
-// (a worktree of the repo), vite must be allowed to serve the real one (server.fs.allow), or the Draco decoder is
-// refused and this stops: the pictures would show the code-built stand-ins, not the Blender art.
+// frame (3 to 5 wanted; their length in pixels of the 960 px card) and which landmarks. If a Blender model fails to
+// load, this stops: the pictures would show the code-built stand-ins, not the Blender art.
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -298,7 +297,7 @@ try {
     const raw = join(work, `${id}-full.png`);
     await page.screenshot({ path: raw, type: "png" });
     await page.close();
-    if (fatal.length) throw new Error(`${id}: the art did not load (${fatal.join(", ")}). Where node_modules is a link (a worktree), vite must be allowed to serve the real one (server.fs.allow).`);
+    if (fatal.length) throw new Error(`${id}: the art did not load (${fatal.join(", ")}): the dev server must be able to serve node_modules (vite.config.ts allows its real path).`);
     if (stats.tier !== "high" || stats.resolutionScale < 1) throw new Error(`${id}: rendered at tier ${stats.tier}, scale ${stats.resolutionScale}: not full quality`);
     const small = draft ? join(outDir, `${id}.png`) : join(work, `${id}.png`);
     execFileSync("python3", ["-c", PY_DOWNSCALE, raw, small]);

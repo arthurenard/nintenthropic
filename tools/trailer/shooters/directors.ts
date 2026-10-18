@@ -3,17 +3,58 @@
  * of what can be shot (viewport fractions) and says where the hand should go;
  * its `script` stages moments (a bandit out of a barrel, a bloater among the
  * dead, a slab of debris let through to crack the glass) through the games'
- * own debug switches, in the games' real machinery. Adapted from
- * tools/promo/directors.ts.
+ * own debug switches, in the games' real machinery. The Shooter (aim.ts) turns
+ * where the hand should go into smooth, human-looking motion.
  */
-import type { Director as PromoDirector, Env, Target } from "../../promo/directors";
-import type { ShooterOptions } from "./aim";
+import type { ShooterOptions, Want } from "./aim";
 
-export type { Env, Target };
+/** Something the game says can be shot, from its debug view (positions are viewport fractions). */
+export interface Target {
+  kind: string;
+  id: number;
+  x: number;
+  y: number;
+  hx?: number;
+  hy?: number;
+  state?: string;
+  role?: string;
+  distance: number;
+  clear?: boolean;
+  closing?: number;
+  side?: string;
+  activity?: string;
+}
 
-/** The promo's director, with this folder's Shooter options (aim.ts). */
-export interface Director extends Omit<PromoDirector, "shooter"> {
+/** What a director sees, once a frame. */
+export interface Env {
+  handy: any;
+  game: any;
+  /** Seconds since the game began (all frames, pre-roll included). */
+  t: number;
+  /** Seconds since the first recorded frame (negative during the pre-roll). */
+  local: number;
+  dt: number;
+  aim: { x: number; y: number };
+  /** A smoothed velocity for a thing on screen, by key. */
+  vel(key: string, x: number, y: number): [number, number];
+  /** What the game says can be shot now. */
+  targets(): Target[];
+  /** Shots the hand has fired so far. */
+  fired: number;
+  /** A place for a director to keep its notes. */
+  memo: Record<string, any>;
+}
+
+export interface Director {
+  rest: { x: number; y: number };
+  /** Where the hand idles at a recorded time, when it should not just stay put (a sweep of the beam). */
+  restAt?(local: number): { x: number; y: number };
+  /** Things that happen at a recorded time (local seconds): staging a bandit, raising the scope. */
+  script?: { at: number; run(env: Env): void }[];
   shooter?: ShooterOptions;
+  pick(env: Env): Want | null;
+  /** Anything else once a frame (a scope, a reload). */
+  frame?(env: Env): void;
 }
 
 const onScreen = (x: number, y: number, m = 0.04) => x > m && x < 1 - m && y > m && y < 1 - m;
@@ -224,7 +265,7 @@ function orbit(o: OrbitShot): Director {
         q.done = true;
         const f = m.send(q.s.kind, "pane", { pane: q.s.to, lane, speed: q.s.speed });
         if (q.s.spare) (env.memo["spare"] ??= new Set<number>()).add(f.id);
-        // For tuning: when it was sent and when it will reach the glass (local seconds), as window.promo.memo.log.
+        // For tuning: when it was sent and when it will reach the glass (local seconds), as window.capture.memo.log.
         (env.memo["log"] ??= []).push({ i: q.i, kind: q.s.kind, sent: +env.local.toFixed(2), strike: f.strike ? +(env.local + f.strike.time - m.time).toFixed(2) : null, wanted: q.s.hit });
       }
     },

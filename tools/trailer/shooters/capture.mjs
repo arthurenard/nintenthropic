@@ -19,7 +19,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { launch, ORIGIN } from "../../promo/frames.mjs";
+import { launch, ORIGIN } from "./browser.mjs";
 import { momentsOf } from "./moments.mjs";
 import { CLIPS } from "./plan.mjs";
 
@@ -62,16 +62,16 @@ async function captureOnce(browser, clip, o) {
   const seed = o.seed ?? clip.seed;
   const query = `clip=${clip.id}&w=${w}&h=${h}&dpr=1&manual=1&skipcalib=1&tips=seen&seed=${seed}${clip.query ? `&${clip.query}` : ""}`;
   await page.goto(`${ORIGIN}/tools/trailer/shooters/capture.html?${query}`);
-  await page.evaluate(() => window.promo.ready);
+  await page.evaluate(() => window.capture.ready);
   await page.clock.pauseAt(1_000_000);
-  await page.evaluate((cfg) => window.promo.init(cfg), { rate, pre, frames });
+  await page.evaluate((cfg) => window.capture.init(cfg), { rate, pre, frames });
   const t0 = Date.now();
   let shot = 0;
   for (let a = 0; a < pre + frames; a++) {
-    await page.evaluate((n) => window.promo.step(n), a);
+    await page.evaluate((n) => window.capture.step(n), a);
     const ms = Math.round(((a + 1) * 1000) / rate) - Math.round((a * 1000) / rate);
     await page.clock.runFor(ms);
-    await page.evaluate((n) => window.promo.post(n), a);
+    await page.evaluate((n) => window.capture.post(n), a);
     const r = a - pre;
     if (o.onFrame) await o.onFrame(page, r);
     if (r >= 0 && r % every === 0) {
@@ -81,12 +81,12 @@ async function captureOnce(browser, clip, o) {
     }
     if (o.log && a % 120 === 0) console.log(`[${clip.id}] frame ${a}/${pre + frames}  ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
-  const raw = await page.evaluate(() => window.promo.events());
+  const raw = await page.evaluate(() => window.capture.events());
   // Times relative to the clip's first frame; a slow clip's are in PLAYBACK seconds (simulated time x slow).
   const origin = pre / rate;
   const events = raw.map((e) => ({ ...e, t: +((e.t - origin) * clip.slow).toFixed(4) }));
-  const shots = (await page.evaluate(() => window.promo.shots())).map((s) => +((s - origin) * clip.slow).toFixed(4));
-  const hud = (await page.evaluate(() => window.promo.hud())).map((e) => ({ ...e, t: +((e.t - origin) * clip.slow).toFixed(4) }));
+  const shots = (await page.evaluate(() => window.capture.shots())).map((s) => +((s - origin) * clip.slow).toFixed(4));
+  const hud = (await page.evaluate(() => window.capture.hud())).map((e) => ({ ...e, t: +((e.t - origin) * clip.slow).toFixed(4) }));
   writeFileSync(`${o.out}/events.json`, JSON.stringify(events));
   // Not a deliverable: the hit markers and floating scores the HUD showed, the moments' raw material.
   writeFileSync(`${o.out}/hud.json`, JSON.stringify(hud));

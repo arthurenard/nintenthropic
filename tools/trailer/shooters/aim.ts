@@ -1,6 +1,4 @@
 /**
- * (Adapted from tools/promo/aim.ts: `maxSpeed`, how fast the hand may be moving and still fire, is a parameter.)
- *
  * A hand that aims like a person: a slightly under-damped spring chases the
  * point it wants, so a move starts gently, arrives with a hint of overshoot
  * and settles, with a faint tremor on top. A Shooter fires when the hand has
@@ -69,7 +67,6 @@ export class Shooter {
   private wanderT = 0;
   private readonly rand: () => number;
   private readonly o: Required<ShooterOptions>;
-  private goal: { x: number; y: number } = { x: 0.5, y: 0.5 };
   private readonly phase: number[];
 
   constructor(options: ShooterOptions = {}) {
@@ -83,7 +80,6 @@ export class Shooter {
     this.x = x;
     this.y = y;
     this.vx = this.vy = 0;
-    this.goal = { x, y };
   }
 
   /**
@@ -97,13 +93,11 @@ export class Shooter {
       // Lead a moving target by a fraction of a second, as a shooter would.
       tx = want.x + (want.vx ?? 0) * 0.12;
       ty = want.y + (want.vy ?? 0) * 0.12;
-      this.goal = { x: tx, y: ty };
     } else {
       // Idle: drift around the resting point, slowly.
       this.wanderT += dt;
       tx = rest.x + Math.sin(this.wanderT * 0.7 + this.phase[0]!) * 0.035;
       ty = rest.y + Math.sin(this.wanderT * 0.53 + this.phase[1]!) * 0.02;
-      this.goal = { x: tx, y: ty };
     }
     const w = this.o.omega;
     const z = this.o.zeta;
