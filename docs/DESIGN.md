@@ -233,7 +233,8 @@ first, a few big words, one white pill). Stacked, one above the other, on a phon
   its tile too (`handy.space.v1` remembers which tile was last gone through).
   Moving between the spaces is history: the browser's Back comes back. In a
   game, Back pauses it (Choose a Game is on the sheet), so a round is never lost
-  to it; Resume puts the game's address back.
+  to it; Resume puts the game's address back. While a game is getting ready,
+  Back is Cancel.
 
 The bar over the landing and the arcade is frosted glass (64 tall): Handheld,
 Privacy, sound, Settings. In the arcade Handheld has a chevron (the way back to the
