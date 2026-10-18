@@ -352,7 +352,9 @@ only those karts' physics against the world as it is.
   then closed within 0.6 s with the other a fist all along → one item press;
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
   between the palms) by at least a quarter span → hop; drift held from the
-  hop until |steer| < 0.15 for 200 ms or a brake.
+  hop until |steer| < 0.15 for 200 ms or a brake. A hop while the drift is
+  still held (after a hop that was only a hop, or a drift a spin-out ended)
+  lets go of it for 50 ms first, so the kart sees a fresh press and hops.
 - **Tricks** (`gestures.ts`, in hand lengths, a hand's span being twice the
   wrist-to-knuckle size): a **clap** (palms from at least one hand length
   apart to within 0.6 and back to 0.9 inside half a second, not from a brake
