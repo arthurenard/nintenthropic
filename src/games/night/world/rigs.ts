@@ -5,7 +5,7 @@
  * it; the pace each gait was made for; how a rig is dressed as one kind of
  * the dead or another; where its eyes are; and the night's rim light.
  */
-import { Color, Matrix4, Mesh, Vector3, type AnimationClip, type Material, type MeshStandardMaterial, type Object3D } from "three";
+import { Color, DoubleSide, Matrix4, Mesh, Vector3, type AnimationClip, type Material, type MeshStandardMaterial, type Object3D } from "three";
 import type { LoadedAsset } from "../../../engine/types";
 import { rimLight, templateFrom, type CharacterTemplate, type Rig } from "../../../engine/world/character";
 import { contractName } from "../../../engine/world/names";
@@ -258,6 +258,19 @@ export function shineEyes(mat: MeshStandardMaterial, shine: number): void {
 export function darkEyes(mat: MeshStandardMaterial | null): MeshStandardMaterial | null {
   if (mat) shineEyes(mat, 0);
   return mat;
+}
+
+/**
+ * A figure's material drawn in one pass. The engine makes every rig's
+ * material transparent (so a body can fade away) and the art's are
+ * two-sided: three.js draws such a material twice a frame, its back faces
+ * then its front, and works its shader program out afresh before each (a
+ * sixth of the frame's time on the main thread with a crowd on the road).
+ * The figures are opaque but while a body fades, so one pass draws them
+ * just as well.
+ */
+export function drawOnce(m: Material): void {
+  if (m.side === DoubleSide) m.forceSinglePass = true;
 }
 
 /** Every material a rig draws with, for the night's fog. */

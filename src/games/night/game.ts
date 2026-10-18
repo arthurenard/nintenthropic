@@ -26,7 +26,7 @@ import { Flashlight } from "./world/flashlight";
 import { NIGHT } from "./world/grade";
 import { JarStage } from "./world/jars";
 import { RoadQueries } from "./world/queries";
-import { burstMoment, clipSpeeds, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
+import { burstMoment, clipSpeeds, drawOnce, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
 import type { Surface } from "./world/road";
 import { SecretsWorld } from "./world/secretsWorld";
 import { withNightFog } from "./world/shading";
@@ -233,8 +233,15 @@ export class DeadOfNight implements Game, MatchListener {
       survivor: new RigPool(survivorT, 1, parent),
       cat: new RigPool(catT, 1, parent),
     };
-    // Every figure under the night's own fog, one program between them.
-    for (const pool of Object.values(this.pools)) for (const r of pool.rigs) for (const m of rigMaterials(r)) withNightFog(m, u, "rig");
+    // Every figure under the night's own fog, one program between them, drawn once a frame.
+    for (const pool of Object.values(this.pools)) {
+      for (const r of pool.rigs) {
+        for (const m of rigMaterials(r)) {
+          withNightFog(m, u, "rig");
+          drawOnce(m);
+        }
+      }
+    }
     await breathe();
 
     this.flashlight = new Flashlight(this.stage.scene);
