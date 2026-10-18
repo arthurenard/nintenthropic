@@ -195,8 +195,8 @@ her bicycle 15.2k.
 
 ## Where this goes beyond or departs from the contract
 
-- **Extra nodes**: `gun.rifle.scoped` + `socket.glint` (asked for),
-  `gun.rifle.slung` on a new `socket.back`, `socket.hand.L`, `var.coat.officer`.
+- **Extra nodes**: `gun.rifle.scoped` + `socket.glint`, `gun.rifle.slung` on
+  a new `socket.back`, `socket.hand.L`, `var.coat.officer`.
 - **Extra clips**: soldier `wounded`, `death_kneel` (the second hit while
   kneeling), `prone_fire`, `prone_death`, `drive_death`, `fire_burst`,
   `prone_fire_burst`; civilian `run`, `death`. The contract's clips are all
@@ -206,7 +206,7 @@ her bicycle 15.2k.
 - **The bicycle is bones on the civilian rig** (not deform bones, not in any
   weights), so its channels ride in the same `cycle` animation; every other
   clip keys them at rest.
-- **The child** is the adult rig at `extras.scale` 0.64 (as proposed).
+- **The child** is the adult rig at `extras.scale` 0.64.
 - `idle`, the deaths and `wound_kneel` start from `idle`'s pose (a sentry's
   rifle at the low ready), not `aim`: crossfade ~0.1 s from whatever plays.
 

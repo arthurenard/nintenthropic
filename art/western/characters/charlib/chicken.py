@@ -11,7 +11,7 @@ import time
 import numpy as np
 import bpy
 from mathutils import Vector
-from . import sdf as S, polygonize as PG, bl, abake as AB, materials as MT, skin as SKN, anim as A, pipeline as PL, character as C
+from . import sdf as S, bl, abake as AB, materials as MT, skin as SKN, anim as A, pipeline as PL, character as C
 from .texture import srgb, smoothstep, value_noise, fbm
 
 BONES = [("body", None), ("neck", "body"), ("head", "neck"), ("tail", "body"),

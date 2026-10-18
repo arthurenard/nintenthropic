@@ -534,31 +534,3 @@ def project_to_surface(sdf, P, iters=6, clamp=0.02):
         s = np.minimum(1.0, clamp / np.maximum(ln, 1e-9))
         P -= step * s[:, None]
     return P
-
-
-def raycast(sdf, O, D, tmax, steps=48):
-    """First exit of rays O + t D (O inside the shape) by marching then bisection.
-    Returns t (tmax where no exit was found)."""
-    O = np.asarray(O, F)
-    D = np.asarray(D, F)
-    n = len(O)
-    ts = np.linspace(0, 1, steps + 1)[1:] * np.asarray(tmax, F).reshape(-1, 1) if np.ndim(tmax) else np.linspace(0, tmax, steps + 1)[1:][None, :].repeat(n, 0)
-    lo = np.zeros(n, F)
-    hi = np.full(n, np.nan, F)
-    prev = np.zeros(n, F)
-    for j in range(ts.shape[1]):
-        t = ts[:, j].astype(F)
-        d = sdf(O + D * t[:, None])
-        hit = (d >= 0) & np.isnan(hi)
-        hi[hit] = t[hit]
-        lo[hit] = prev[hit]
-        prev = np.where(np.isnan(hi), t, prev)
-    found = ~np.isnan(hi)
-    hi = np.where(found, hi, ts[:, -1])
-    for _ in range(20):
-        mid = 0.5 * (lo + hi)
-        d = sdf(O + D * mid[:, None])
-        out = d >= 0
-        hi = np.where(out, mid, hi)
-        lo = np.where(out, lo, mid)
-    return np.where(found, 0.5 * (lo + hi), ts[:, -1]), found

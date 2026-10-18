@@ -16,7 +16,7 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-from .geo import Builder, T, R, fillet, polyline_normals, arclen, solidify, boolean, rng
+from .geo import Builder, T, R, fillet, polyline_normals, solidify, boolean, rng
 from .vehicle import Vehicle
 from . import wheels as W
 

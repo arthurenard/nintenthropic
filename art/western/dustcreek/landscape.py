@@ -2,16 +2,14 @@
 desert floor around the town, and the ridge behind the church.
 
 The street ground is a dense height field (a few cm per quad near the
-player) because ruts and hoofprints only look real when the low sun makes
-them cast little shadows. That dense mesh is what Cycles bakes; the exported
-street is a lighter mesh that reads the same baked picture (see bake.py).
+player) because wheel ruts only look real when the low sun makes them cast
+little shadows; the hoofprints are drawn by the dirt shader. That dense mesh
+is what Cycles bakes; the exported street is a lighter mesh that reads the
+same baked picture (see bake.py).
 """
-
-import math
 
 import bpy
 import numpy as np
-from mathutils import Vector
 
 from .core import rng, tag
 from .nodes import new_material
@@ -93,59 +91,6 @@ def height_field(X, Y, r):
     return H, rut, lane
 
 
-def stamp_prints(X, Y, H, r, n_hoof=1400):
-    """Hoofprints (crescent dents) along the lanes and scattered; bootprints
-    near the boardwalks. X/Y are 2D grids (possibly non-uniform) — we stamp
-    by searching the index window for each print."""
-    xs = X[0, :]
-    ys = Y[:, 0]
-    pm = np.zeros_like(H)
-    ls = lanes()
-
-    def stamp(px, py, ang, L, W, depth, shape='hoof'):
-        i0 = np.searchsorted(ys, py - 0.25)
-        i1 = np.searchsorted(ys, py + 0.25)
-        j0 = np.searchsorted(xs, px - 0.25)
-        j1 = np.searchsorted(xs, px + 0.25)
-        if i1 <= i0 or j1 <= j0:
-            return
-        sx = X[i0:i1, j0:j1] - px
-        sy = Y[i0:i1, j0:j1] - py
-        c, s = math.cos(ang), math.sin(ang)
-        u = c * sx + s * sy
-        v = -s * sx + c * sy
-        if shape == 'hoof':
-            # a U: ellipse minus a smaller notch at the heel
-            e = (u / (W / 2)) ** 2 + (v / (L / 2)) ** 2
-            notch = ((u / (W / 4.5)) ** 2 + ((v + L * 0.42) / (L / 3.2)) ** 2)
-            m = np.clip(1.2 - e, 0, 1) * np.clip(notch - 0.4, 0, 1) ** 0.5
-        else:
-            e = (u / (W / 2)) ** 2 + (v / (L / 2)) ** 4
-            m = np.clip(1.1 - e, 0, 1)
-        m = np.minimum(m * 3, 1.0)
-        H[i0:i1, j0:j1] -= depth * m
-        pm[i0:i1, j0:j1] = np.maximum(pm[i0:i1, j0:j1], m)
-
-    for i in range(n_hoof):
-        f, _ = ls[r.randrange(len(ls))]
-        py = r.uniform(-6, 70)
-        cx = float(f(np.array(py)))
-        px = cx + r.gauss(0, 0.35)
-        if r.random() < 0.3:
-            px = r.uniform(-7, 7)
-        ang = r.gauss(0, 0.25) + (math.pi if r.random() < 0.5 else 0)
-        stamp(px, py, ang, 0.13, 0.12, r.uniform(0.012, 0.022), 'hoof')
-    for i in range(500):
-        side = r.choice((-1, 1))
-        px = side * r.uniform(5.5, 7.4)
-        py = r.uniform(-4, 50)
-        ang = r.gauss(0, 0.6) + (math.pi if r.random() < 0.5 else 0)
-        for k in range(r.randint(1, 5)):
-            off = (k % 2) * 0.16 - 0.08
-            stamp(px + off * math.cos(ang), py + k * 0.7, ang, 0.27, 0.1, 0.01, 'boot')
-    return pm
-
-
 def street_ground(lib, col, dense=True):
     """The dense street height field as an object named `ground.street`."""
     r = rng("ground")
@@ -172,8 +117,8 @@ def street_ground(lib, col, dense=True):
 
 
 def ground_z(x, y):
-    """Street surface height at (x, y) (same field as the dense mesh, minus
-    the sub-centimetre prints), for placing stones, grass and props."""
+    """Street surface height at (x, y) (the same field as the dense mesh),
+    for placing stones, grass and props."""
     X = np.array([[float(x)]])
     Y = np.array([[float(y)]])
     H, _, _ = height_field(X, Y, None)
@@ -233,7 +178,6 @@ def terrain(lib, col):
     bm.from_mesh(ob.data)
     kill = []
     for f in bm.faces:
-        c = f.calc_center_median()
         xs_ = [v.co.x for v in f.verts]
         ys_ = [v.co.y for v in f.verts]
         if (min(xs_) >= STREET_X[0] - 0.01 and max(xs_) <= STREET_X[1] + 0.01 and

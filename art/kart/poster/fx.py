@@ -10,7 +10,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 import kit
-from kit import hexl, gm, T, RX, RY, RZ, S
+from kit import hexl, gm, T, S
 import world as W
 
 

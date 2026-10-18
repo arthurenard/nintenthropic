@@ -14,11 +14,10 @@ game may add its own swing on top).
 
 Blender space: facing -Y, left +X, hooves on z = 0; withers 1.44 m.
 """
-import math
 import numpy as np
 from mathutils import Vector
 from . import lib as L, quad as Q
-from .lib import S, A, srgb, smoothstep, value_noise, fbm, Frame, nrm, chain, flow_noise, add, pulse
+from .lib import S, srgb, smoothstep, value_noise, fbm, Frame, nrm, chain, flow_noise, add, pulse
 
 NAME = "cow"
 # the head is carried nose-down; it is sculpted in its own frame (origin at the poll)

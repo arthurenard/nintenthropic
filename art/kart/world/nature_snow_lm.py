@@ -7,7 +7,7 @@ import math
 from mathutils import Vector as V, noise
 
 from naturekit import Model, empty, grad_z, hexc, mix, mul, post, rod, smooth_path, smoothstep, spinner, varied, TAU
-from nature_snow import SNOW, SNOW_SHADE, snow_on
+from nature_snow import SNOW, SNOW_SHADE
 
 LOG = hexc("#8a5a35")
 LOG_D = hexc("#4d2f1c")
@@ -172,7 +172,7 @@ def ice_arch():
     # The shell: translucent ice, thin and a little pointed at the crown (a gothic arch).
     shell = Model("icearch.shell", seed=26)
     core = Model("icearch.core", seed=27)
-    rings, rings_in = [], []
+    rings = []
     for si in range(slices + 1):
         u = si / slices
         zz = -half + 2 * half * u
@@ -274,7 +274,6 @@ def gondola():
     steel_d = hexc("#566271")
     red = hexc("#d6392f")
     # Two lattice pylons with a cross-arm and sheave wheels, on concrete feet.
-    cables = []
     for sx in (-1, 1):
         x = sx * 36.0
         m.box((x, 0, 0.6), (6.0, 6.0, 1.6), (0, 0, 0), hexc("#9aa3ad"), bevel=0.1)

@@ -5,7 +5,7 @@ import math
 
 from mathutils import Vector as V, noise
 
-from naturekit import Model, empty, hexc, mix, mul, smooth_path, smoothstep, tint, varied, TAU
+from naturekit import Model, hexc, mix, smoothstep, varied
 
 SNOW = hexc("#f6faff")
 SNOW_SHADE = hexc("#b4c9ea")

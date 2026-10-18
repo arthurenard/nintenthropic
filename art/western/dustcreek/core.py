@@ -16,7 +16,6 @@ import math
 import random
 
 import bpy
-import bmesh
 from mathutils import Matrix, Vector
 
 # One seed for the whole town: the build is reproducible bit for bit.
@@ -51,13 +50,6 @@ def collection(name, parent=None):
         col = bpy.data.collections.new(name)
         (parent or bpy.context.scene.collection).children.link(col)
     return col
-
-
-def link(obj, col):
-    for c in list(obj.users_collection):
-        c.objects.unlink(obj)
-    col.objects.link(obj)
-    return obj
 
 
 def tag(obj, **props):
@@ -338,18 +330,6 @@ def smooth(ob, angle=40):
     return ob
 
 
-def bm_to_object(bm, name, col, mats=(), **props):
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    for m in mats:
-        me.materials.append(m)
-    ob = bpy.data.objects.new(name, me)
-    col.objects.link(ob)
-    tag(ob, **props)
-    return ob
-
-
 def facing_matrix(forward, up=(0, 0, 1)):
     """Rotation (3x3) whose local -Y points along `forward` and local +Z stays
     as close to `up` as possible.
@@ -377,8 +357,9 @@ def axis_matrix(y_axis, up=(0, 0, 1)):
 
 
 def setup_gpu(scene=None):
-    """Cycles on the Metal GPU (falls back to CPU if none). Headless builds
-    share the machine with other jobs, so we only ever ask for the GPU."""
+    """Cycles on the GPU: the first of Metal, OptiX, CUDA, HIP and oneAPI that
+    has a device (Cycles falls back to the CPU if none does). The CPU is never
+    added alongside the GPU, so a headless build leaves it free for other work."""
     prefs = bpy.context.preferences.addons['cycles'].preferences
     for t in ('METAL', 'OPTIX', 'CUDA', 'HIP', 'ONEAPI'):
         try:

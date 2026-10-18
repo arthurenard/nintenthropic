@@ -17,7 +17,7 @@ wood ~0.1-0.35, dry dirt ~0.25-0.45) so the baked light is physically sane.
 
 import bpy
 
-from .nodes import G, new_material, new_group, group_node
+from .nodes import new_material, new_group, group_node
 
 _LIB = {}
 
@@ -462,7 +462,3 @@ def build_library():
 
 def get(name):
     return _LIB[name]
-
-
-def lib():
-    return _LIB

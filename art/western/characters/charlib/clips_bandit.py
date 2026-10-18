@@ -15,7 +15,6 @@ from .anim import Clip, hand_rot
 
 AIM_ROT = hand_rot("R", (0.0, -1.0, 0.0), (0.0, 0.0, 1.0))           # gun level, straight ahead
 UP_ROT = hand_rot("R", (0.05, -0.25, 1.0), (0.0, 1.0, 0.0))          # muzzle up by the shoulder
-LOW_ROT = hand_rot("R", (0.0, -0.55, -0.85), (0.0, -0.8, 0.5))        # muzzle down, ahead of the boot
 
 STANCE = {
     "ik.foot.L": (0.125, -0.075, 0.102), "rot.foot.L": (0, 0, 16), "pole.foot.L": (0.25, -1, 0),

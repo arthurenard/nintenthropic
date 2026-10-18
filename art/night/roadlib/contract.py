@@ -25,7 +25,7 @@ import bpy
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
-from .common import EYE, DC, empty, tag, toward_player, facing, viewport, point_for_viewport, to_gltf, rng
+from .common import EYE, DC, empty, tag, toward_player, facing, viewport, to_gltf, rng
 from . import layout as L, world, meshkit as K
 
 # aim-check targets: (n, viewport x, viewport y at 4:3), corners, edges, centre
@@ -252,8 +252,8 @@ def build_calib(col, bvh):
         p, on, ex = spots[n]
         centre = p + Vector((0, 0, JAR_H / 2))
         vis, blocker = seen(bvh, centre)
-        ob = empty(f"calib.{n}", p, col, size=0.1, display='SPHERE', jar_base=1, jar_height_m=JAR_H, on=on,
-                   distance_m=round((p - EYE).length, 1), **{f"vp_{k}": v for k, v in vps(centre).items()}, **ex)
+        empty(f"calib.{n}", p, col, size=0.1, display='SPHERE', jar_base=1, jar_height_m=JAR_H, on=on,
+              distance_m=round((p - EYE).length, 1), **{f"vp_{k}": v for k, v in vps(centre).items()}, **ex)
         report.append(dict(n=n, on=on, pos=[round(c, 2) for c in p], dist=round((p - EYE).length, 1),
                            seen=vis, blocker=blocker, **vps(centre)))
     return report

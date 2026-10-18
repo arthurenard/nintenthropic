@@ -4,9 +4,9 @@ import random
 
 from mathutils import Vector
 
-from wlib import (C, Landmark, RevSurf, TAU, aim, arc_pts, bezier, by_height, catmull, chrome, faceted, mix, mul, ngon, shiny, smooth_profile,
-                  smoothstep, with_breaks)
-from wtext import Plane, text, text_width
+from wlib import (C, Landmark, RevSurf, TAU, chrome, faceted, mix, mul, shiny, smooth_profile,
+                  with_breaks)
+from wtext import Plane, text
 
 RED = C("#d63a2a")
 WHITE = C("#f2f0ea")
@@ -119,7 +119,6 @@ def warehouse() -> Landmark:
     lm.rbox((x1 - x0 + 0.6, 0.7, 0.9), at=((x0 + x1) / 2, 1.0, z1 + 0.1), bevel=0.1, col=WALL_D, mat="lit")
     # the gable roof: a triangle section, ribbed, with a lit skylight strip along the ridge
     ridge = 12.8
-    tri = [(x0 - 0.8, 8.4), (x1 + 0.8, 8.4), ((x0 + x1) / 2 + 0.0, ridge)]
     # a roof running along z: build it as two sloped slabs
     half = (x1 - x0 + 1.6) / 2
     ang = math.degrees(math.atan2(ridge - 8.4, half))
@@ -157,11 +156,11 @@ def warehouse() -> Landmark:
     # sign, tall on the front wall
     lm.rbox((13.0, 2.6, 0.5), at=(x0 + 9.0, 10.8, z1 + 0.6), bevel=0.12, col=NAVY, mat="glossy")
     text(lm, Plane((x0 + 9.0, 10.8, z1 + 0.88), (0, 0, 1)), "WAREHOUSE 7", 1.35, (1.0, 0.82, 0.4), at=(0.0, -0.68), lift=0.04, mat="glow", pad=0.1)
-    # crates and a pallet stack, a bollard or two
+    # four crates in a row, and a line of bollards
     rnd = random.Random(8)
-    for i in range(7):
+    for i in range(4):
         s = rnd.uniform(1.3, 2.1)
-        lm.rbox((s, s, s), at=(x0 + 1.6 + (i % 4) * 2.4, 1.4 + s / 2, z1 + 1.4 + (i // 4) * 0.0), rot=(0, rnd.uniform(-6, 6), 0), bevel=0.08, bseg=1, col=mix(C("#a0733d"), C("#c28f52"), rnd.random()), mat="matte") if i < 4 else None
+        lm.rbox((s, s, s), at=(x0 + 1.6 + i * 2.4, 1.4 + s / 2, z1 + 1.4), rot=(0, rnd.uniform(-6, 6), 0), bevel=0.08, bseg=1, col=mix(C("#a0733d"), C("#c28f52"), rnd.random()), mat="matte")
     for sx in range(6):
         lm.cylinder(r=0.28, h=1.0, at=(x0 + 3 + sx * 7.0, 0.3, z1 + 5.4), segs=8, rb=0.08, rt=0.08, col=C("#e5c223"), mat="glossy")
     lamp_post(lm, x1 + 3.0, z1 + 5.0, 9.5, face=(0, -1))
@@ -173,7 +172,6 @@ def warehouse() -> Landmark:
 
 def one_buoy(m, at):
     x, _, z = at
-    seg = lambda n: faceted(lambda p, nn: RED if int(((p.y - 0.6) / 0.9)) % 2 == 0 else WHITE)
     prof = [(0.0, 0.0), (1.9, 0.0), (2.4, 0.6), (2.5, 1.4), (2.0, 2.4), (1.2, 3.4), (0.9, 3.9), (0.9, 4.1), (0.0, 4.1)]
     m.lathe([(r, y) for r, y in prof], at=(x, 0, z), segs=24, col=faceted(lambda p, n: RED if int(max(0.0, p.y - 0.6) / 1.0) % 2 == 0 else WHITE), mat="glossy")
     m.torus(R=2.35, r=0.28, at=(x, 0.7, z), segs=28, sides=8, col=C("#222a36"), mat="glossy")
@@ -204,7 +202,6 @@ def buoy() -> Landmark:
 def lighthouse() -> Landmark:
     lm = Landmark("lighthouse", ao=0.75, ao_dist=6.0, rays=14)
     prof = smooth_profile([(0.0, -0.6), (7.6, -0.6), (7.4, 1.0), (6.6, 12.0), (5.3, 26.0), (4.4, 34.0)], 5) + [(4.4, 34.2), (5.6, 34.4), (6.3, 34.6), (6.3, 35.2), (0.0, 35.2)]
-    bands = [(0.0, 11.0), (11.0, 22.0), (22.0, 34.0)]
 
     def col(p, n):
         y = p.y

@@ -12,7 +12,7 @@ import math
 import bpy
 from mathutils import Vector, Matrix
 
-from .common import rng, tag, empty, DC
+from .common import rng, tag
 from . import layout as L, meshkit as K, world
 from .meshkit import MeshBuilder, Frame
 
@@ -23,7 +23,6 @@ W = Frame()
 # The canopy
 
 def canopy(lib, col):
-    r = rng("canopy")
     mb = MeshBuilder("canopy.metal")
     x0, x1, y0, y1, zs = L.CANOPY
     # the deck and its fascia band (white, a faded red stripe)
@@ -221,7 +220,6 @@ def truck(lib, col):
     Modelled upright in its own frame (x right, y forward, z up) and turned
     onto its side: the tyres and chassis face the road, the passenger door
     faces the sky (the cat's seat)."""
-    r = rng("truck")
     tail = Vector((*L.TRUCK['tail'], 0.0))
     front = Vector((*L.TRUCK['front'], 0.0))
     fwd = (front - tail).normalized()
@@ -529,7 +527,6 @@ def neon_letters(lib, col):
         ob = K.emit(mb, col, lib, 'station', 'glass', smooth_angle=60)
         ob.name = f"secret.sign.{name}"
         ob.data.name = ob.name
-        c = f.p(x + w / 2, -0.09, z0 + sh / 2)
         tag(ob, letter=name, glyph=gl, neon=1)
         K.emit(standoff, col, lib, 'station', 'metal')
         obs.append(ob)
@@ -540,7 +537,6 @@ def neon_letters(lib, col):
 
 
 def pole_sign(lib, col, lights):
-    r = rng("polesign")
     f = sign_frame()
     bw = 5.0
     z0, z1 = L.SIGN_Z

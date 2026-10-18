@@ -15,7 +15,6 @@ import math
 import os
 import time
 
-import bmesh
 import bpy
 import numpy as np
 from mathutils import Matrix

@@ -215,7 +215,7 @@ def colour(q, x, y, g, floor):
     hay = np.zeros(n)
     path = np.zeros(n)
     fid = q["fid"]
-    sl, dl = q["s_loc"], q["d_loc"]
+    sl = q["s_loc"]
     # each field its own shade: soil, aspect, when it was manured
     c = c * (1 + 0.16 * (fid - 0.5))[None] * (1 + np.array([0.10, 0.0, -0.14])[:, None] * (_hash(fid, 7.0) - 0.5))
     mown = st == 0
@@ -238,7 +238,6 @@ def colour(q, x, y, g, floor):
     # cow paths: winding lines where a slow noise crosses zero, worn to earth
     cp = np.abs(N.fbm(x, y, SEED + 17, 2, scale=1 / 45.0))
     paths = smoothstep(0.035, 0.012, cp) * smoothstep(0.0, 0.3, N.fbm(x, y, SEED + 18, 2, scale=1 / 25.0))
-    aft = st == 4
     ac = c * np.array([0.88, 1.22, 0.92])[:, None]
     out = np.where(mown[None], mc, np.where(hayf[None], hc, np.where(meadow[None], mc2, np.where(past[None], pc, ac))))
     # the uncut strip the mower leaves along a boundary, nettles by a wall

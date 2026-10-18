@@ -3,9 +3,9 @@ stone-bridge, lava-fall). Blender coordinates: z up, a landmark's front is -y.""
 
 import math
 
-from mathutils import Vector as V, noise
+from mathutils import Vector as V
 
-from naturekit import Model, empty, hexc, mix, mul, smooth_path, smoothstep, tint, varied, TAU
+from naturekit import Model, hexc, mix, smooth_path, smoothstep, tint, varied, TAU
 
 BASALT_D = hexc("#1b171f")
 BASALT_M = hexc("#2d2733")
@@ -45,7 +45,6 @@ def basalt_spire(i):
     m = Model(f"scenery.spire.{i}", seed=320 + i)
     cols = [(1.4, 0.0, 0.0, 6.2, 0.4), (-0.6, 1.1, 0.0, 4.4, 0.3), (1.1, -1.2, 0.0, 3.2, 0.25), (-1.2, -0.6, 0.0, 2.2, 0.22)] if i == 0 else [(0.0, 0.0, 0.0, 7.6, 0.45), (1.3, 0.7, 0.0, 5.0, 0.35), (-1.2, 0.5, 0.0, 3.8, 0.3), (0.4, -1.3, 0.0, 2.6, 0.26), (-0.4, 1.4, 0.0, 1.8, 0.2)]
     for k, (x, y, z, h, r) in enumerate(cols):
-        top = BASALT_L
         col = basalt(k + i * 7, warm=0.25)
         r *= 1.45
         # A hexagonal column, a little crooked, with a broken, tilted top.

@@ -9,7 +9,7 @@ spread, the thumb out - which reads at forty metres as reaching.
 
 import numpy as np
 
-from .common import S, HN, C, bl, srgb, smoothstep, value_noise, fbm
+from .common import S, HN, srgb, smoothstep, fbm
 from . import meshfix as MF
 from . import heads as H
 

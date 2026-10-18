@@ -7,12 +7,11 @@ import math
 
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 import kit
 import world as W
 import fx
-from kit import hexl, PLAYER_COLOURS
 
 DEG = math.pi / 180
 
@@ -140,7 +139,7 @@ def dress_meadow(m, rng, vis, cam_loc, cam_az, hfov, *, windmill_at=None, trees=
                  rmin=26.0, rmax=520.0, near_road=16.0, windmill=True, windmill_yaw=None, view_cone=1.35, tree_scale=1.0, bush_scale=1.0, flower_scale=1.0, windmill_scale=1.6):
     """The meadow's props: trees and pines in groves, bushes and flowers along the verges, rocks, and the windmill on its hill.
     Positions are drawn from the camera's own view (log-spaced distance, within its cone) and kept clear of the road."""
-    road, terr = m.road, m.terrain
+    road = m.road
     placed = []
     kinds_tree = ["scenery.tree.0", "scenery.tree.1", "scenery.tree.2", "scenery.tree.3", "scenery.tree.4", "scenery.pine.0", "scenery.pine.1"]
     kinds_bush = ["scenery.bush.0", "scenery.bush.1", "scenery.bush.2"]

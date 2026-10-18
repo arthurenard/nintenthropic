@@ -19,7 +19,7 @@ location), so the export is plain glTF.
 """
 import math
 import numpy as np
-from mathutils import Matrix, Vector, Quaternion, Euler
+from mathutils import Matrix, Vector, Euler
 from .skeleton import BONES, JOINTS, bone_frame
 
 FPS = 30
@@ -99,9 +99,6 @@ class Rig:
                 G[b] = G[p] @ r
                 pos[b] = pos[p] + G[p] @ (self.head[b] - self.head[p])
         return G, pos
-
-    def tail_pos(self, b, G, pos):
-        return pos[b] + G[b] @ (self.tail[b] - self.head[b])
 
     def local_quat(self, b, R):
         """Blender pose quaternion (bone-local) for an armature-axes rotation."""
@@ -228,9 +225,6 @@ class Clip:
 
     def sample(self, t):
         return {k: self.value(k, t) for k in self.ch}
-
-
-BODY_BONES = [b for b, _ in BONES]
 
 
 def chestify(rig, pose):

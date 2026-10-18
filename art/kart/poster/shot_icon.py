@@ -58,7 +58,6 @@ def build(res=(1024, 1024), samples=256, preview=False, **over):
     g.name = "meadow"
     m, nt, b = W._mat("meadow.ground")
     tc = nt.nodes.new("ShaderNodeTexCoord")
-    sep = W._sep(nt, tc.outputs["Object"])
     # broad, soft mowing bands that fan out from the horizon, and a little grain of colour
     r = W._noise(nt, tc.outputs["Object"], 0.05, 2.0, 0.5, 0.4)
     col = W._mix(nt, hexl("#86e04f")[:3], hexl("#5fc83d")[:3], W._math(nt, "MULTIPLY", W._math(nt, "SUBTRACT", r, 0.35), 2.5, clamp=True))

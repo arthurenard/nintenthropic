@@ -76,14 +76,6 @@ def ring_points():
     return np.vstack(pts)
 
 
-def _polyline_edges(xy, base, closed=False):
-    n = len(xy)
-    e = [(base + i, base + i + 1) for i in range(n - 1)]
-    if closed:
-        e.append((base + n - 1, base))
-    return e
-
-
 def constraint_lines():
     """Polylines the triangulation must follow: the road's edges, the lanes',
     the river's water edges. Sampled at the local mesh spacing."""

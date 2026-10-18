@@ -79,7 +79,6 @@ def fold(bm, point, axis, normal, angle):
     p = Vector(point)
     ax = Vector(axis).normalized()
     n = Vector(normal).normalized()
-    R = Matrix.Rotation(angle, 3, ax)
     for v in bm.verts:
         d = v.co - p
         s = d.dot(n)

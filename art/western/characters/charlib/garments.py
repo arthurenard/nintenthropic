@@ -1,6 +1,5 @@
 """Garment game meshes built with ring topology (see rings.py) and snapped
 onto the garment fields of body.py."""
-import math
 import numpy as np
 from . import sdf as S, rings as R
 from .skeleton import JOINTS
@@ -211,8 +210,6 @@ def build_shirt(bp, field, M=24, arm_n=12, name="shirt"):
 
 def build_trousers(bp, field, M=24, leg_n=14):
     rm = R.RingMesh()
-    zs = [1.078, 1.036, 0.978, 0.918, 0.868]
-    from .body import P as _p
     prof = [(1.078, 0.162, 0.115, 0.004), (1.036, 0.164, 0.119, 0.006), (0.978, 0.172, 0.124, 0.010),
             (0.918, 0.172, 0.121, 0.008), (0.868, 0.158, 0.110, 0.005)]
     Pr = []
@@ -269,7 +266,6 @@ def build_vest(bp, field, M=24):
     the neck and two points at the front hem."""
     rm = R.RingMesh()
     zs = [1.030, 1.080, 1.130, 1.185, 1.240, 1.290, 1.338, 1.400, 1.462, 1.498]
-    h = M // 2
 
     def skip(i, j):
         z = zs[i]
@@ -394,7 +390,6 @@ def dress_field():
     parts = [top, bust]
     for tag in ("L", "R"):
         sh, el, wr = arm_path(tag)
-        s = 1 if tag == "L" else -1
         # a set-in sleeve with a slight cap: a puff standing above the
         # shoulder line cannot be followed by the armhole ring and leaves a
         # step on the shoulder
@@ -469,7 +464,7 @@ def build_apron(field, top=1.07, bottom=0.46, n_u=14):
         rm.bridge(rings[k], rings[k + 1], zs[k], zs[k + 1], "apron", closed=False, ua=ua)
     R.snap_and_relax(rm, field, iters=0)
     # the apron is a thin shell and its rings land on the inner face, where
-    # the field's gradient points back at the body: orient it the old way,
-    # away from the body's axis
+    # the field's gradient points back at the body: with no field, its faces
+    # are oriented away from the body's axis instead (rings.orient_outward)
     rm.field = None
     return rm

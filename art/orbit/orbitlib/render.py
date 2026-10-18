@@ -13,9 +13,9 @@ import os
 
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
-from . import world, imgio
+from . import world
 
 F32 = np.float32
 VIEW_TRANSFORM = 'AgX'

@@ -11,9 +11,8 @@ object per (part, material set) with per-face random values and 'grain' /
 import math
 
 import bmesh
-import bpy
 import numpy as np
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
 from .common import DC
 

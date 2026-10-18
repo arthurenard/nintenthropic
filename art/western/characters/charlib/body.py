@@ -9,7 +9,6 @@ fold displacement that only the normal map will carry.
 
 World space (Blender): Z up, facing -Y, left = +X, boot soles on z = 0.
 """
-import math
 import numpy as np
 from . import sdf as S
 from .skeleton import JOINTS
@@ -118,7 +117,6 @@ def shirt(p):
 
 def trousers(p):
     hp, lg = p["hips"], p["legs"]
-    fem = p["female"]
     st = [
         (1.075, 0.160 * hp, 0.113, 0.004),   # waistband, over the shirt
         (1.030, 0.163 * hp, 0.118, 0.006),
@@ -143,14 +141,6 @@ def trousers(p):
         legs.append(S.RoundCone(kn, bt + np.array([0, 0, 0.015]), 0.060 * lg, 0.056 * lg))
         legs.append(S.Ellipsoid(bt + np.array([0, 0.002, 0.03]), (0.060 * lg, 0.060 * lg, 0.035)))
     return S.Union([pelvis] + legs, k=0.03)
-
-
-def body_field(p):
-    """Shirt and trousers as one closed field, cut open at the collar, the
-    sleeve ends and the boot tops (those caps are removed from the mesh)."""
-    sh = shirt(p)
-    tr = trousers(p)
-    return S.Union([sh, tr], k=0.012)
 
 
 def cuts(p):

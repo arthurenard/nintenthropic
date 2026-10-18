@@ -259,7 +259,6 @@ if "distance" in WHAT:
             rig.location = (0, 0, 0)
 
 if "lineup" in WHAT:
-    import bpy as _b
     world(0.8)
     sun(25, 170, 4.0)
     ground()

@@ -17,7 +17,7 @@ import time
 
 import bpy
 import numpy as np
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
 from .common import S, A, AB, MT, SKN, bl, srgb, smoothstep, value_noise, fbm, log
 from . import eyes as EY, assemble

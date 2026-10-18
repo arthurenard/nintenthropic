@@ -26,7 +26,6 @@ ROAD_X = -0.6            # Route 9's centre line
 LANE_W = 3.3             # each lane
 ROAD_HALF = LANE_W + 0.3  # asphalt edge from the centre line (incl. edge strip)
 SHOULDER = 1.0           # gravel beyond the asphalt
-ROAD_Y0 = 6.6            # the asphalt starts where the station's concrete apron ends
 CROSS_Y = 25.0           # the crossroads' centre line
 CROSS_HALF = 3.3         # the county road's half width
 FARM_ROAD_X = -12.0      # west of here the county road is gravel (the farm road)
@@ -50,7 +49,6 @@ BIN = (2.95, 3.05)                    # an oil drum on the island's far end
 TRUCK = dict(tail=(-5.1, 2.6), front=(-3.81, 7.33))
 CANOPY = (-5.6, 6.2, -6.0, 6.0, 4.35)   # x0, x1, y0, y1 (front fascia), soffit height
 CANOPY_POSTS = [(-3.9, 5.5), (5.4, 5.35), (-3.9, -4.6), (5.4, -4.6)]
-BEHIND_PUMPS = [(-2.2, -1.6), (2.4, -1.6)]   # the second island, behind the player
 
 # ---------------------------------------------------------------------------
 # The station: Miller's Gas & Eats (the diner wing runs north along the road)

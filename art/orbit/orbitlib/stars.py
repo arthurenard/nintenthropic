@@ -99,7 +99,7 @@ def generate(W=4096, H=2048, seed=SEED, log=print):
     # unresolved star haze in the band: fine speckle
     speck = np.clip(f.fbm(D, 400.0, 2, first=20), 0, 1) ** 3
     img += (speck * band * dust)[..., None] * F32(0.02)
-    log(f"  milky way done")
+    log("  milky way done")
     # ---- stars ----
     n = 42000
     m = 1.0 + 7.8 * rng.random(n) ** 0.42           # faint stars far outnumber bright ones

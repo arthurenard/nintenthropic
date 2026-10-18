@@ -5,7 +5,7 @@ import math
 
 from mathutils import Vector as V, noise
 
-from naturekit import Model, empty, hexc, mix, mul, smooth_path, smoothstep, tint, varied, TAU
+from naturekit import Model, hexc, mix, mul, smooth_path, smoothstep, tint, varied, TAU
 
 # The strata of the canyon walls, bottom to top: oxide red, burnt orange, cream, rust.
 STRATA = [hexc("#8f2e1f"), hexc("#c9532e"), hexc("#f0a05a"), hexc("#f6d7a0"), hexc("#a63a24"), hexc("#dd6f36"), hexc("#f4cf94")]
@@ -135,7 +135,6 @@ def shrub(i):
 
 def layered_rock(i):
     m = Model(f"scenery.rock.{i}", seed=150 + i)
-    band = 0.28
     if i == 0:
         # A stepped butte: four ledges, each a little narrower and a little crooked.
         col = strata(0.0, 5.0, 1.5, seed=1, top_dust=0.5)

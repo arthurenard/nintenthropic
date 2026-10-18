@@ -15,7 +15,7 @@ import os
 import sys
 
 import bpy
-from mathutils import Euler, Matrix, Quaternion, Vector
+from mathutils import Matrix, Vector
 
 # ── Where things are ────────────────────────────────────────────────────────
 

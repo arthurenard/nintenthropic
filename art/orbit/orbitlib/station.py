@@ -5,7 +5,7 @@ Laid out for the view, not for an engineering drawing: every structure is
 placed by where it lands on the player's screen (NDC x, y in -1..1 on a
 16:9 screen) and how far away it is, then built in the world around that.
 
-    the main truss        across the top, above the limb, 18 m out
+    the main truss        across the top, above the limb, 30 m out
     two solar wings       from the truss ends, reaching forward, cells to the sun
     two radiators         hanging down left and right, edge-on to the sun
     the robotic arm       from the truss, its hand in the right window
@@ -20,9 +20,6 @@ aluminium, yellow EVA handrails, solar cells. Everything is lit at runtime
 
 import math
 
-import bmesh
-import bpy
-import numpy as np
 from mathutils import Matrix, Vector
 
 from . import bl, world
@@ -238,7 +235,6 @@ def module(g, a, b, radius, rnd, ports=True):
     ax.normalize()
     u = ax.orthogonal().normalized()
     v = ax.cross(u)
-    I = Matrix.Identity(4)
     M = bl.frame(a, u, v, ax)
     # the blanket skin in panels (lathe segments with a gap line)
     nseg = 8
@@ -563,7 +559,7 @@ def build(lib, col, c_con):
         ('2', t_mid + X * 3.2 - Y * 1.5 - truss_up * 1.2, 'white'),     # top-centre, truss
         ('3', t_mid + X * 15.0 - Y * 1.5 - truss_up * 1.2, 'green'),    # top-right, truss
         ('4', r_tipL + r_alongL * 0.1, 'red'),     # left, the left radiator's tip
-        ('5', wpos + wax * 0.0 + Vector((0, 0, 0.42)), 'white'),  # centre, on the arm's wrist
+        ('5', wpos + Vector((0, 0, 0.42)), 'white'),  # centre, on the arm's wrist
         ('6', r_tip + r_along * 0.1, 'green'),     # right, the right radiator's tip
         ('7', m_end - mod_axis * 3.0 + Z * 2.2, 'red'),            # bottom-left, on top of the module
         ('8', t_base - Z * 0.47 + X * 0.41, 'white'),            # bottom-centre, the turret's ring
@@ -585,7 +581,6 @@ def build(lib, col, c_con):
     for i, p in enumerate(route, 1):
         bl.empty(f"drone.path.{i}", c_con, loc=p, size=0.25)
     # where it hovers to mend each pane: 1.1 m outside the glass
-    from . import cupola as C
     for n, pane in _pane_centres().items():
         c, nrm = pane
         bl.empty(f"drone.work.{n}", c_con, matrix=bl.look_matrix(c + nrm * 1.1, -nrm, (0, 0, 1)), size=0.2, pane=n)

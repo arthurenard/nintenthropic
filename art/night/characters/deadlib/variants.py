@@ -13,7 +13,7 @@ They share the walker's eyes (every dead head seats its eyeballs the same).
 
 import numpy as np
 
-from .common import S, BD, G, R, C, PT, bl, srgb, smoothstep, value_noise, fbm, JOINTS
+from .common import S, BD, PT, srgb, smoothstep, value_noise, fbm, JOINTS
 from . import meshfix as MF
 from . import heads as H, bodies, outfits as O, hair as HR
 

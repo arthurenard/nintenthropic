@@ -13,7 +13,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-from . import pipeline, bake, core
+from . import pipeline, bake
 from .nodes import new_material
 
 

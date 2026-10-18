@@ -21,8 +21,6 @@ WESTERN_CHARS = os.path.join(ART, "western", "characters")
 if WESTERN_CHARS not in sys.path:
     sys.path.append(WESTERN_CHARS)
 
-import numpy as np  # noqa: E402
-
 from charlib import sdf as S, polygonize as PG, bl, abake as AB, materials as MT, skeleton as SK  # noqa: E402,F401
 from charlib import skin as SKN, anim as A, character as C, head as HD, body as BD, hands as HN  # noqa: E402,F401
 from charlib import garments as G, rings as R, gear as GR, outfits as OF, paint as PT, texture as T  # noqa: E402,F401
@@ -33,8 +31,3 @@ from charlib.skeleton import BONE_NAMES, JOINTS  # noqa: E402,F401
 
 def log(*a):
     print("[night]", *a, flush=True)
-
-
-def rngs(tag):
-    import random
-    return random.Random(f"deadofnight:{tag}")

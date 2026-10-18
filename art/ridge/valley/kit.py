@@ -128,7 +128,6 @@ def frame(c, rot, z=0.0):
 def planar_uv(P, ts):
     """U along the face's horizontal direction, V along its steepest ascent
     (world up for walls); metres over the tile size."""
-    e1 = P[1] - P[0]
     nrm = np.cross(P[1] - P[0], P[-1] - P[0])
     if np.linalg.norm(nrm) < 1e-9 and len(P) > 3:
         nrm = np.cross(P[2] - P[0], P[3] - P[0])

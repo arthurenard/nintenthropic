@@ -7,7 +7,7 @@ the low sun gives every pebble a shadow, and that is what sells the dirt.
 import math
 
 import bmesh
-from mathutils import Vector, Matrix, noise as mnoise
+from mathutils import Vector, noise as mnoise
 
 from .core import MeshBuilder, Frame, rng
 from .nodes import new_material

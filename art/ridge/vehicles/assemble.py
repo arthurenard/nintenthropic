@@ -12,7 +12,7 @@ import math
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 
 from .geo import a2b, empty
 from .vehicle import facing_rot

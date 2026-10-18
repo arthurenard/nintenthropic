@@ -18,7 +18,6 @@ import os
 import bpy
 import numpy as np
 
-from . import layout as L
 from . import scene as S
 from . import noise as N
 from .scene import new_material

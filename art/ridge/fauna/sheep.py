@@ -191,7 +191,6 @@ class Sculpt:
         Pf = P.astype(np.float32)
         n = len(P)
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
-        ax = np.abs(x)
         d_fl = self.fleece(Pf)
         d_lg = np.min([lg(Pf) for lg in self.legs + self.hooves], axis=0)
         d_hd = self.head(Pf)

@@ -9,11 +9,10 @@ separate `secret.*` objects whose origins sit where they pivot.
 
 import math
 
-import bpy
 import bmesh
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
-from .core import Frame, MeshBuilder, rng, tag, smooth
+from .core import Frame, MeshBuilder, rng, tag
 from . import carpentry as C
 from .carpentry import Opening
 from . import buildings as B
@@ -60,7 +59,6 @@ def livery(lib, col):
     pitch = 40.0
     rise = (W / 2) * math.tan(math.radians(pitch))
     gtop = lambda s: e + max(0.0, rise * (1 - abs(s) / (W / 2)))
-    near = -1
     s_door = 0.6
     big = Opening('hole', s_door, 0.0, 3.8, 3.9, casing=0.12)
     loft = Opening('hole', s_door, 6.0, 1.5, 1.7, casing=0.1)
@@ -308,7 +306,6 @@ def church(lib, col):
     # cornice + spire (octagonal pyramid of shingles)
     ct = bz + 2.8
     wood.box(F, (-TW / 2 - 0.2, ty0 - 0.2, ct), (TW / 2 + 0.2, ty0 + TW + 0.2, ct + 0.25), 'trim_white', grain_axis=0)
-    sp = MeshBuilder("tmp_spire")
     cy = ty0 + TW / 2
     lathe(wood, F.sub((0, cy, ct + 0.25)), [(TW * 0.62, 0.0), (TW * 0.5, 0.35), (0.05, SPIRE_TOP - ct - 0.25)],
           'shingle', seg=8)
@@ -440,8 +437,7 @@ def water_tower(lib, col, x=21.0, y=45.0):
         bot = Vector((sx * 2.6, sy * 2.6, 0.0))
         legs.append((bot, top))
         wood.board(F, bot, top, 0.3, 0.3, 'wood_post', up=(sx, sy, 0))
-        wood.box(F, (bot.x - 0.35, bot.y - 0.35, -0.1), (bot.x + 0.35, bot.y + 0.35, 0.35), 'stone_rubble' if False else
-                 'wood_dark', grain_axis=0)
+        wood.box(F, (bot.x - 0.35, bot.y - 0.35, -0.1), (bot.x + 0.35, bot.y + 0.35, 0.35), 'wood_dark', grain_axis=0)
     for k in range(4):
         a0, a1 = legs[k], legs[(k + 1) % 4]
         for t0, t1 in ((0.05, 0.5), (0.5, 0.95)):
@@ -478,8 +474,7 @@ def water_tower(lib, col, x=21.0, y=45.0):
         u0, u1 = a0 * R, a1 * R
         tank.add_face([tf.p(*q) for q in p], 'wood_tank', rr, grain=[(0, u0), (0, u1), (Ht, u1), (Ht, u0)],
                       local=[(0, 0), (0, 1), (Ht, 1), (Ht, 0)])
-    tank.quad(tf, [(math.cos(2 * math.pi * i / seg) * R, math.sin(2 * math.pi * i / seg) * R, 0.0) for i in range(seg)][::-1]
-              if False else [(-R, -R, 0.0), (-R, R, 0.0), (R, R, 0.0), (R, -R, 0.0)], 'wood_dark')
+    tank.quad(tf, [(-R, -R, 0.0), (-R, R, 0.0), (R, R, 0.0), (R, -R, 0.0)], 'wood_dark')
     for k in range(6):
         z = 0.3 + k * (Ht - 0.5) / 5
         tank.cylinder(tf, (0, 0, z), R + 0.02, 0.06, 'iron_rusty', segments=seg, caps=(False, False))

@@ -13,7 +13,7 @@ import os
 import bpy
 from mathutils import Vector
 
-from . import pipeline, post, layout as L
+from . import pipeline, post
 from .common import EYE
 
 # name: (location, look_at, lens mm)

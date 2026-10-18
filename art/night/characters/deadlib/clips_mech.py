@@ -11,7 +11,6 @@ Same conventions as clips_dead (armature axes: x his left, y back, z up).
 """
 
 from charlib.anim import Clip, hand_rot
-from charlib.clips_bandit import P
 from .clips_dead import STAND, with_, lagged, FOOT_Z, LEAN
 
 IRON_UP = hand_rot("R", (0.2, 0.4, 0.9), (0.0, 0.9, -0.4))       # shaft up behind the shoulder

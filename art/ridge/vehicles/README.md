@@ -73,7 +73,7 @@ The truck's rear nodes 3–6 each carry a dual pair (one node, both tyres).
 - Radius: truck 0.485 m (7.50-20 tyres), jeep 0.362 m (6.00-16). The wheels
   rest on y = 0.
 
-### Seats (the numbers agreed with the character artist)
+### Seats (numbers shared with the soldier's `drive` clip)
 
 Each `seat.*` empty is on the floor directly under the hips, same orientation
 as the soldier's root (+Z forward). Built to the `drive` clip: seat cushion top

@@ -12,8 +12,6 @@ import math
 import bpy
 from mathutils import Vector
 
-from .core import axis_matrix
-
 # Azimuth measured from -Y (straight behind the player) toward +X (right).
 SUN_AZ_DEG = 30.0
 SUN_EL_DEG = 10.5
@@ -81,9 +79,6 @@ def build_sun(col):
     d.angle = math.radians(SUN_ANGLE_DEG)
     ob = bpy.data.objects.new("SunLamp", d)
     # lamps shine along local -Z: make local +Z point at the sun
-    m = axis_matrix(sun_vector())  # local +Y -> sun_vector
-    # rotate so that +Z (not +Y) points at the sun
-    from mathutils import Matrix
     q = sun_vector().to_track_quat('Z', 'Y')
     ob.rotation_euler = q.to_euler()
     col.objects.link(ob)

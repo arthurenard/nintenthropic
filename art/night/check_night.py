@@ -414,7 +414,6 @@ def check_road(path):
         e = m.get("extras", {})
         R.need(e.get("surface") in SURFACES, f"{m.get('name')}: extras.surface {e.get('surface')!r}")
         R.need(isinstance(e.get("glow"), (int, float)), f"{m.get('name')}: extras.glow missing")
-    lit_size = {}
     for m in baked:
         e = m.get("extras", {})
         pbr = m.get("pbrMetallicRoughness", {})

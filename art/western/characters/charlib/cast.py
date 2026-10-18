@@ -6,9 +6,7 @@ dark coats, a red or black bandana - while the townsfolk are pale and
 unarmed, as the design asks.
 """
 import time
-import numpy as np
-import bpy
-from . import bl, abake as AB, materials as MT, skeleton as SK, pipeline as PL, character as C, head as HD, body as BD
+from . import bl, skeleton as SK, pipeline as PL, character as C, head as HD, body as BD
 from . import hands as HN, clips_bandit as CB
 
 LOG = PL.log
@@ -74,7 +72,6 @@ BOSS = dict(
 
 
 def boss_revolver_paint(P):
-    import numpy as np
     from . import paint as PT
     from .texture import srgb
     c, r, m = PT.metal(P, (0.70, 0.70, 0.68), 0.22, seed=141)
@@ -141,7 +138,6 @@ UNDERTAKER = dict(
 def apron_job(name="apron"):
     import numpy as np
     from . import garments as G, rings as R, paint as PT
-    from .texture import srgb
     f = G.apron_field()
     rm = G.build_apron(f)
     ob = R.to_blender(rm, name)

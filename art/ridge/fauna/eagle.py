@@ -22,9 +22,8 @@ spread, legs down, the feet on z = 0 at the origin. Perched, the body tilts
 """
 import math
 import numpy as np
-from mathutils import Vector
 from . import lib as L
-from .lib import S, A, srgb, smoothstep, value_noise, fbm, Frame, nrm, chain, flow_noise, add, pulse
+from .lib import S, A, srgb, smoothstep, value_noise, fbm, Frame, nrm, chain, flow_noise, add
 
 NAME = "eagle"
 HEAD = Frame((0, -0.255, 0.385), (0, -1.0, -0.08))
@@ -280,7 +279,7 @@ class Sculpt:
         P = np.asarray(P, np.float64)
         n = len(P)
         reg = self.regions(P)
-        x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        y, z = P[:, 1], P[:, 2]
         brown = srgb(0.20, 0.13, 0.08)
         edge_c = srgb(0.36, 0.25, 0.15)
         gold = srgb(0.74, 0.54, 0.27)
@@ -359,10 +358,6 @@ class Sculpt:
         return np.clip(c, 0, 1), np.clip(r, 0.05, 1), np.zeros(n)
 
     # -- wings
-    @staticmethod
-    def wing_uv(P, s):
-        return P[:, 1], s * P[:, 0]
-
     def wing_paint(self, s, folded=False):
         def paint(P):
             P = np.asarray(P, np.float64)
@@ -646,7 +641,6 @@ def decimate_head_first(ob, head_mask_fn, rest_tris, head_tris):
     """Two decimation passes on one mesh (no seam): the body to its budget
     with the head masked, then the head to its own with the rest masked -
     the head keeps several times the density a single pass would give it."""
-    import bpy
     for mask_head, target in ((True, None), (False, rest_tris + head_tris)):
         V = L.bl.verts_np(ob)
         keep = head_mask_fn(V) if mask_head else ~head_mask_fn(V)
@@ -674,7 +668,6 @@ def decimate_head_first(ob, head_mask_fn, rest_tris, head_tris):
 
 
 def build(quick=False, size=1024):
-    import bpy
     with L.stage("eagle: sculpt"):
         sc = Sculpt()
     sk = skeleton()

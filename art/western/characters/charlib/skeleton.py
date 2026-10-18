@@ -10,7 +10,6 @@ from standard anthropometric ratios (acromion 0.818 H, eyes 0.936 H, wrist
 ~0.49 H...). Bandits, the boss and the townsfolk all share it, so one clip
 library drives everyone; builds differ in the meshes, not the joints.
 """
-import math
 import numpy as np
 
 # bone name, parent, and whether it deforms (socket.gun is an empty, not a bone)

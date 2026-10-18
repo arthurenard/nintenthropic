@@ -24,7 +24,7 @@ import os
 import sys
 import bpy
 import numpy as np
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 

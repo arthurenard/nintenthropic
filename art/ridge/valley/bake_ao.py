@@ -13,7 +13,6 @@ darkens the ambient light only, as it should).
 """
 
 import math
-import os
 import time
 
 import bpy

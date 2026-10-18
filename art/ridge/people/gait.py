@@ -100,7 +100,3 @@ class Gait:
                 x = sx * self.x + (x_off[0] if side == "L" else x_off[1])
                 clip.key(t, "linear", **{f"ik__foot__{side}": (x, y, z), f"rot__foot__{side}": (pitch, 0.0, sx * self.toe_out),
                                          f"pole__foot__{side}": (sx * 0.12, -1.0, 0.15)})
-
-    def stance_mid(self, side):
-        """Clip time (fraction of T) of a leg's mid-stance."""
-        return ((0.0 if side == "L" else 0.5) + self.duty * 0.5) % 1.0

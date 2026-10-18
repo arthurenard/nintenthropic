@@ -20,7 +20,8 @@ libraries (`art/western/dustcreek` for the town pipeline,
 ## Building
 
 All commands from the repository root. `-t 4` keeps Blender to four threads
-(other jobs share the machine); Cycles renders and bakes on the GPU (Metal).
+(leaving the rest of the machine free); Cycles renders and bakes on the GPU
+(Metal).
 
 ```sh
 B=/Applications/Blender.app/Contents/MacOS/Blender
@@ -53,8 +54,7 @@ python3 art/night/check_night.py
 node art/night/tools/draco_check.cjs public/assets/night/road.glb
 ```
 
-Run times on this Mac (M-series, sharing it with two other bakes):
-see [Timings](#timings).
+Run times on an M-series Mac: see [Timings](#timings).
 
 Review renders go to `art/night/build/review/` (git-ignored, like the .blend
 files and the intermediate bakes in `art/night/build/`).
@@ -62,9 +62,9 @@ files and the intermediate bakes in `art/night/build/`).
 ## Decisions the contract left open
 
 These match what the game reads (`src/games/night/world/road.ts`,
-`stage.ts`, `shading.ts`, `rigs.ts`, `assets.ts`). The few places where
-the art and the game's code still differ are listed at the end, under
-[For the game to adapt](#for-the-game-to-adapt).
+`stage.ts`, `shading.ts`, `rigs.ts`, `assets.ts`). What the game does on its
+side to meet them is listed at the end, under
+[How the game meets the art](#how-the-game-meets-the-art).
 
 ### The two layers of a baked group: how `lit` and `albedo` travel
 
@@ -142,9 +142,9 @@ them: `tools/draco_check.cjs`.
   apart, 4 m out (a figure's shoulders at 26° at the ends). `extras.vp`,
   `clip: claw`.
 - `lane.<id>.<n>` carry `spread` (road 1.5, corn 0.8, trees 1.1) and
-  `width_m`. The tree line now comes out of the pines east of the motel and
+  `width_m`. The tree line comes out of the pines east of the motel and
   walks along its front, off the right of the screen, before it crosses
-  the lot into view (its old waypoints in the lot were 27–38° right).
+  the lot into view.
 - `spawn.bus` is the **foot of the bus's door** and `spawn.fence` the
   **rail**, both with `spread` 0.3 and the clip in `extras.clip`. The game
   carries the dead along the first stretch of the spawn's path while the
@@ -232,31 +232,28 @@ them: `tools/draco_check.cjs`.
   and a separate mesh (hide it and throw a loose copy when it flies off);
   `prop.tyre_iron` is under `socket.weapon` (on `hand.R`).
 
-### For the game to adapt
+### How the game meets the art
 
-Where the art cannot follow the game's current code, or should not:
-
-1. **`uStreetTint = SODIUM × flicker_scale`** (road.glb's scene extras,
-   8.25): the flicker maps are divided by it to fit 8 bits. With the tint at
-   `SODIUM × 1` the lamp only dims to about 1/8 of its pool.
+1. **`uStreetTint` is `SODIUM × flicker_scale`** (road.glb's scene extras,
+   8.25; `stage.ts`): the flicker maps are divided by it to fit 8 bits, so
+   with the tint at `SODIUM × 1` the lamp would only dim to about 1/8 of its
+   pool.
 2. **The corn's attributes** arrive as `_albedo` and `_flicker` (glTF's rule
-   for custom names): `geometry.setAttribute("albedo", …_albedo)` and
-   `("street", …_flicker)` before `bakedMaterial` sees them.
-3. **`dressDead`**: `char.runner`, `char.bloater` and `char.crawler` are
-   whole people. Give them no `var.hair.*` and no `var.outfit.*` (today a
-   runner gets an outfit and all three may get a hair piece).
-4. **`CLIP_SPEED`** should match the clips (or read `extras.clips`):
-   shamble 0.85 (not 1.0), limp 0.7 (0.85), drag 0.6 (0.75), crawl 0.5
-   (0.45), run_lantern 4.4 (4.2).
+   for custom names); `stage.ts` renames them `albedo` and `street` before
+   `bakedMaterial` sees them.
+3. **`dressDead`** shows `char.runner`, `char.bloater` and `char.crawler` as
+   they come: whole people, with no `var.hair.*` or `var.outfit.*` over them.
+4. **Clip speeds** come from `extras.clips` (`clipSpeeds` in `rigs.ts`), with
+   `CLIP_SPEED` as the fallback.
 5. **The radio** is a wide-screen secret (32.6° right, behind the diner's
-   window as the design has it "at the right edge"): leave it out of the
-   play framing's sights below ~1.5:1, or the framing falls back to the
-   widest and the radio is still off screen. Bringing it into a 4:3 view
-   would mean moving the diner north and baking again.
+   window as the design has it "at the right edge"): the play framing only
+   aims for it from about 1.5:1 (`RADIO_ASPECT` in `sights.ts`), or it would
+   fall back to the widest framing and the radio would still be off screen.
+   Bringing it into a 4:3 view would mean moving the diner north and baking
+   again.
 6. **The cat** is first seen on a fence post, then the Gas & Eats sign, the
    wrecked car, the motel sign (the design's pickup cab, canopy and phone
-   booth are out of the play view or too close to other secrets); the
-   design doc's secret text is updated to match.
+   booth are out of the play view or too close to other secrets).
 7. There is no `belly` node on the bloater (above).
 
 ## How it is made
@@ -287,7 +284,7 @@ that reads each subimage by index. The western file is untouched.
 
 ## Timings
 
-On this Mac (Apple silicon, Metal, `-t 4`, while two other agents baked):
+On an Apple-silicon Mac (Metal, `-t 4`, with other bakes running alongside):
 
 | step | time |
 |---|---|

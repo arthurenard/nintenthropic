@@ -13,7 +13,7 @@ Fingers flex toward -X. A left hand is the same sculpt mirrored in world X.
 import math
 import numpy as np
 from . import sdf as S
-from .skeleton import JOINTS, hand_frame
+from .skeleton import hand_frame
 
 # finger: (MCP position (x, y, z), phalanx lengths, radii at MCP and tip, splay deg)
 FINGERS = {
@@ -77,7 +77,6 @@ def thumb_chain(pose):
 def hand_sdf(pose="relaxed", scale=1.0, female=0.0, forearm_len=0.19, sleeve="rolled"):
     """The right hand (and forearm) in the canonical frame."""
     parts = []
-    k = 0.012
     fs = 1 - 0.1 * female
     # palm: a rounded slab, thicker at the heel of the hand
     palm = S.Box((-0.001, 0.052, -0.001), (0.005 * fs, 0.034, 0.030 * fs), None, rad=0.0105)

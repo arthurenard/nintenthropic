@@ -7,8 +7,6 @@ the dead are not - with the lantern held out and steady so its light leads.
     wave         "Don't shoot!": the free arm waving high, the lantern raised (loops)
 """
 
-import math
-
 from charlib.anim import Clip, hand_rot
 from charlib.clips_bandit import P, breathe
 from .clips_dead import foot_track, FOOT_Z, with_, lagged

@@ -1,13 +1,12 @@
 """The fun fair's landmarks: dusk, every ride lit. Candy colours, brass, and bulbs everywhere (the glowing material, one
 sphere each)."""
 import math
-import random
 
 from mathutils import Vector
 
-from wlib import (C, Landmark, RevSurf, TAU, aim, arc_pts, bezier, by_height, catmull, chrome, cyl_profile, faceted, mix, mul, ngon, petal, rot2, shiny,
-                  smooth_profile, smoothstep, with_breaks)
-from wtext import Plane, text, text_width
+from wlib import (C, Landmark, TAU, by_height, chrome, faceted, mix, mul, shiny,
+                  smooth_profile, smoothstep)
+from wtext import Plane, text
 
 RED = C("#ff3355")
 ORANGE = C("#ff8a2a")
@@ -221,7 +220,7 @@ def cat(m, body, stripe):
         m.tube([(sx * 0.5, -0.1, -0.9), (sx * 0.5, -1.2, -1.1)], r=0.42, sides=6, col=body, mat="glossy")
     m.sphere(0.14, at=(0, 0.3, 1.62), segs=5, rings=4, col=PINK, mat="glossy")
     for k in range(3):
-        m.rbox((1.5, 0.14, 0.18), at=(0, 0.88 - k * 0.0, -0.6 + k * 0.5), col=stripe, mat="glossy")
+        m.rbox((1.5, 0.14, 0.18), at=(0, 0.88, -0.6 + k * 0.5), col=stripe, mat="glossy")
     tail = [(0, 0.2 + math.sin(t * 3.4) * 1.5, -1.3 - math.sin(t * 2.2) * 0.9 + t * 0.4) for t in [i / 7 for i in range(8)]]
     m.tube(tail, r=0.2, sides=6, col=stripe, mat="glossy")
     m.rbox((0.9, 0.14, 0.9), at=(0, 0.9, 0), col=TEAL, mat="glossy")

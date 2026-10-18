@@ -4,9 +4,8 @@ import math
 
 from mathutils import Vector
 
-from wlib import (C, Landmark, RevSurf, TAU, aim, bezier, catmull, chrome, cyl_profile, mix, mul, ngon, petal, rot2, shift2, shiny,
-                  smooth_profile, smoothstep, with_breaks, arc_pts)
-from wtext import Plane, text
+from wlib import (C, Landmark, RevSurf, TAU, aim, bezier, chrome, mix, mul, ngon, petal, rot2, shiny,
+                  smooth_profile, smoothstep, with_breaks)
 
 CHINA = C("#f6f1e6")
 BLUE = C("#1d55cc")

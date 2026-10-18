@@ -26,7 +26,6 @@ WRIST = {"R": np.array(JOINTS["hand.R"][0], float), "L": np.array(JOINTS["hand.L
 _eL, _eR = HD._eyes(HD.P())
 EYE = {"L": HD.HEAD_ORIGIN + np.asarray(_eL, float), "R": HD.HEAD_ORIGIN + np.asarray(_eR, float)}
 MOUTH = HD.HEAD_ORIGIN + np.array([0.0, -0.100, -0.066])
-POCKET_R = np.array([-0.128, -0.100, 1.395])      # the hollow in front of the right shoulder a butt sits in
 TORSO = ("hips", "spine", "chest", "neck", "head")
 
 
@@ -146,21 +145,6 @@ def rifle_held(T, forend=FOREND, palm=0.55, left=True):
 
 def rifle_T(grip, barrel, top):
     return T_of(frame(barrel, top), v(grip))
-
-
-def butt_gap(pose, T):
-    """How far the butt plate's centre is from the shoulder pocket (m), and
-    that offset in the chest's frame - for tuning a shouldered pose."""
-    G, pos = torso_fk(pose)
-    pocket = at(G, pos, "chest", POCKET_R)
-    b = T[:3, :3] @ v(BUTT) + T[:3, 3]
-    return float(np.linalg.norm(b - pocket)), rot(G, "chest").T @ (b - pocket)
-
-
-def with_hands(pose, ch):
-    out = dict(pose)
-    out.update(ch)
-    return out
 
 
 def chest_carry(pose):

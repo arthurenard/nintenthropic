@@ -9,12 +9,8 @@ saw cut. Pieces keep the whole's coordinates: the caller parents them
 under the whole with their origin moved to their own centre of mass.
 """
 
-import math
-import random
-
 import bmesh
 import bpy
-import numpy as np
 from mathutils import Vector, noise as mnoise
 
 

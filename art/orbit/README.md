@@ -64,8 +64,9 @@ are imported read-only; nothing under `art/western/` is modified.
   solar wings turn their cells toward the player, the station's blankets
   rake in hard light, and sunlight falls through the left-hand windows onto
   the right of the frame. With the sun ahead the player would see the dark
-  side of everything; keep it on the player's side of the view in play. The `sun` node's −Z points along the sunlight; its extras
-  `sun_toward` give the vector toward the sun.
+  side of everything; keep it on the player's side of the view in play. The
+  `sun` node's −Z points along the sunlight; its extras `sun_toward` give the
+  vector toward the sun.
 - **Light units.** Sun irradiance is 20 (Blender W/m²); every render and
   bake is exposed **−3.2 stops** and tone-mapped with **AgX (Medium High
   Contrast)**. To match at runtime: a directional light of intensity
@@ -160,8 +161,7 @@ player's screen and how far it is.
 All equirect, **north at the top row, longitude −180° at the left edge**
 (u = lon/360° + 0.5), 2:1. In three.js a `SphereGeometry` with its default
 UVs shows them correctly as the child of the `planet` node (the node's
-local glTF +Y is north, +X longitude 0, −Z longitude 90° E). Formats, sizes
-and layouts are unchanged from the first delivery.
+local glTF +Y is north, +X longitude 0, −Z longitude 90° E).
 
 | File | Size | Encoding |
 | --- | --- | --- |

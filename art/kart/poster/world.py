@@ -4,7 +4,6 @@ spline, rolling hills and mowing stripes, the game's own trees, bushes, flowers 
 and a warm sun, and the glossy item boxes. Blender frame: z up, the scene's "north" is +y.
 """
 import math
-import random
 
 import bpy
 import bmesh
@@ -252,7 +251,6 @@ def sun_disc(scene, sun_dir, distance=3000.0, radius_deg=2.4, colour="#fff6dc", 
             # radial falloff glow, transparent at the rim
             tc = nt.nodes.new("ShaderNodeTexCoord")
             sep = _sep(nt, tc.outputs["Generated"])
-            r = _math(nt, "MULTIPLY", _math(nt, "ABSOLUTE", _math(nt, "SUBTRACT", sep[0], 0.5)), 2.0)
             r2 = nt.nodes.new("ShaderNodeVectorMath")
             r2.operation = "LENGTH"
             vec = _comb(nt, _math(nt, "SUBTRACT", sep[0], 0.5), _math(nt, "SUBTRACT", sep[1], 0.5))
@@ -440,33 +438,6 @@ class Road:
         o = bpy.data.objects.new("road.dashes", mesh)
         bpy.context.scene.collection.objects.link(o)
         o.data.materials.append(material)
-        return o
-
-    def start_line(self, s, rows=2, cols=14, depth=1.2):
-        """A chequered start/finish line across the road at arc length s."""
-        verts, faces, cid = [], [], []
-        w = self.width - 1.7
-        cw = w / cols
-        rd = depth / rows
-        for r in range(rows):
-            for c in range(cols):
-                u0 = -w / 2 + c * cw
-                quad = [(s + r * rd, u0), (s + r * rd, u0 + cw), (s + (r + 1) * rd, u0 + cw), (s + (r + 1) * rd, u0)]
-                for ss, uu in quad:
-                    verts.append(tuple(self.point(ss, uu, 0.016)))
-                n = len(verts)
-                faces.append((n - 4, n - 3, n - 2, n - 1))
-                cid.append((r + c) % 2)
-        mesh = bpy.data.meshes.new("road.start")
-        mesh.from_pydata(verts, [], faces)
-        mesh.update()
-        o = bpy.data.objects.new("road.start", mesh)
-        bpy.context.scene.collection.objects.link(o)
-        white = paint_material("start.white", "#f7f7f2", 0.5, coat=0.1)
-        black = paint_material("start.black", "#16181d", 0.55, coat=0.1)
-        o.data.materials.append(white)
-        o.data.materials.append(black)
-        mesh.polygons.foreach_set("material_index", cid)
         return o
 
 

@@ -21,17 +21,15 @@ _ALBEDO, _FLICKER (street, the same units), _SWAY; material extras
 `bake: "vertex"`.
 """
 
-import math
 import os
 
 import bpy
 import bmesh
 import numpy as np
-from mathutils import Vector
 
 from . import pipeline, bake, post, world, layout as L
 from . import ground as _ground  # noqa: F401  (puts High Noon's charlib on the path)
-from .common import tag, DN, DC
+from .common import tag, DN
 from dustcreek import bake as DB
 
 
@@ -197,7 +195,6 @@ def export_ground(col, mat_for, shadow_mat):
     ys = GR.y_axis(0.4)
     X, Y, H, attrs = GR.fields(xs, ys)
     ob = GR.grid_object("ground.export", X, Y, H, col, attrs=attrs)
-    gb = bpy.data.objects.get('ground')
     DB.projective_uv(ob, None)
     surf = GR.surface_of_faces(ob)
     # drop faces that can never be seen (collapsed by the projection)

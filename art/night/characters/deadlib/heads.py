@@ -338,7 +338,6 @@ def head_paint(V, p, look, is_ear=False):
     col = col * (1 - 0.9 * inner[:, None]) + srgb(0.08, 0.04, 0.05) * 0.9 * inner[:, None]
     rough = rough - 0.2 * inner
     # teeth: yellow-grey, dark at the gums
-    m = d["mouth"]
     th = teeth_node(p)
     if th is not None:
         # teeth where the surface is the teeth themselves (not the lips over them)

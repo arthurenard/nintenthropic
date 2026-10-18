@@ -20,7 +20,6 @@ Faces glTF +Z (Blender -Y), like every character in Super Claude Bros. Node layo
 import math
 
 import bmesh
-import bpy
 from mathutils import Matrix, Vector
 
 from . import bl

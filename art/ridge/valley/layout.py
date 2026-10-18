@@ -93,10 +93,6 @@ class Curve:
             return np.stack([np.interp(s, self.s, self.xy[:, 0]), np.interp(s, self.s, self.xy[:, 1])], -1)
         return np.interp(s, self.s, self.values[key])
 
-    def point3(self, s, key='z'):
-        xy = self.at(s)
-        return np.array([xy[0], xy[1], self.at(s, key)])
-
     def nearest(self, x, y, max_dist=None):
         """(distance, arc position, signed side) of points to the curve;
         side > 0 left of the direction of travel. With max_dist, vectorised

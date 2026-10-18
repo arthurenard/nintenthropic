@@ -16,9 +16,6 @@ armature, one clip library, one 2048 atlas for everything but the eyes.
 
 import time
 
-import bpy
-import numpy as np
-
 from .common import SK, bl, log
 from . import bodies, hair, outfits, eyes, assemble, variants
 

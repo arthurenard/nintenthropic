@@ -21,7 +21,7 @@ import sys
 
 import bpy
 import numpy as np
-from mathutils import Vector, Euler
+from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
@@ -436,8 +436,8 @@ def scope():
         goat = next(a for a in ANIMALS if a.name == "goat")
         # a grey rock face at 600 m with a ledge; the goat stands on the ledge
         plane("rv_ground", 3000, grass)
-        cliff = plane("rv_cliff", 200, rock, (0, 612, 100), (math.radians(80), 0, 0))
-        ledge = plane("rv_ledge", 6, rock, (0, 606.0, 80), (0, 0, 0))
+        plane("rv_cliff", 200, rock, (0, 612, 100), (math.radians(80), 0, 0))
+        plane("rv_ledge", 6, rock, (0, 606.0, 80), (0, 0, 0))
         g = clone(goat, "rv_goat")
         g.location = (0, 607.4, 80)
         g.rotation_euler = (0, 0, math.radians(70))

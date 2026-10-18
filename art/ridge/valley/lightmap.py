@@ -25,7 +25,6 @@ import time
 import numpy as np
 
 from . import layout as L
-from . import mesh as M
 from .noise import Grid, smoothstep
 
 CELL = 4.0

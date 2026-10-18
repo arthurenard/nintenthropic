@@ -18,8 +18,8 @@ import time
 import numpy as np
 import bpy
 from . import env, assemble as AS, parts as PA, wear as W, wear_civ as WC, bicycle as BK, kin as K
-from charlib import bl, sdf as S, body as BD, head as HD, garments as G, rings as R, skeleton as SK
-from charlib import character as C, pipeline as PL, outfits as OF, gear as GR
+from charlib import bl, sdf as S, body as BD, head as HD, garments as G, skeleton as SK
+from charlib import character as C, pipeline as PL, outfits as OF
 from charlib.texture import srgb, HAIR
 
 # a child's fair hair, lighter than any grown-up's in the valley (a dark bowl of

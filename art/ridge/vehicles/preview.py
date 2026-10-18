@@ -3,7 +3,6 @@ build): back faces culled so a face pointing the wrong way shows as a hole,
 cavity on so the panel shapes read. For shape work only; the real review
 renders the exported GLB (review.py)."""
 
-import math
 import os
 
 import bpy
@@ -56,7 +55,7 @@ def render_views(roots, out_dir, tag, res=(1400, 900)):
         # show only this vehicle
         for ob in sc.objects:
             if ob.type in ('MESH',):
-                ob.hide_render = not (ob in root.children_recursive)
+                ob.hide_render = ob not in root.children_recursive
         size = 7.0 if root.name == "truck" else 3.6
         h = 1.4 if root.name == "truck" else 0.8
         views = {

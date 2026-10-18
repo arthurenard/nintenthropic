@@ -10,9 +10,9 @@ Bake groups: 'west' (the fence, the west poles, left-side debris), 'station'
 import math
 
 import bpy
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
-from .common import rng, tag, DC
+from .common import rng, tag
 from . import layout as L, meshkit as K, world
 from .meshkit import MeshBuilder, Frame
 from .ground import ground_z
@@ -154,7 +154,7 @@ def power_line(lib, col):
     for (x, y) in br:
         g = group_for(x, y)
         mb, mt, _ = get(g)
-        tops.append(power_pole(mb, mt, x, y, r, 2, h=8.5, rot=math.atan2(y - 25, x) * 0 + math.pi / 2))
+        tops.append(power_pole(mb, mt, x, y, r, 2, h=8.5, rot=math.pi / 2))
     # tee off the main line at the first west pole south of the crossroads
     for a, b in zip(tops[:-1], tops[1:]):
         for pa, pb in zip(a, b):
@@ -176,7 +176,6 @@ def power_line(lib, col):
 # The streetlight
 
 def streetlight(lib, col, lights):
-    r = rng("streetlight")
     px, py = L.STREETLIGHT_POLE
     hx, hy, hz = L.STREETLIGHT_HEAD
     z = ground_z(px, py)
@@ -278,8 +277,7 @@ def phone_booth(lib, col, lights):
     lp.box(f, (-0.2, -0.2, h - 0.05), (0.2, 0.2, h - 0.01), 'fluoro')
     K.emit(mb, col, lib, 'station', 'metal')
     K.emit(sh, col, lib, 'station', 'glass')
-    b = K.emit(band, col, lib, 'station', 'metal')
-    import numpy as np
+    K.emit(band, col, lib, 'station', 'metal')
     ob = K.emit(lp, col, lib, 'station', 'glass')
     from .contract import set_origin
     c = f.p(0, 0, h - 0.03)
@@ -307,7 +305,6 @@ def octagon(r_):
 
 def signs(lib, col):
     from . import signpaint as SP
-    r = rng("signs")
     mb = MeshBuilder("signs.posts")
     faces = MeshBuilder("signs.faces")
     img = SP.mask("stop", 0.76, 0.76, lambda ms: (ms.text("STOP", 0.38, 0.30, 0.2, face='/System/Library/Fonts/Supplemental/Futura.ttc',

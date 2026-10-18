@@ -10,7 +10,7 @@ frame and created at export.
 
 import math
 
-from .geo import Builder, a2b, empty
+from .geo import Builder
 from . import wheels as W
 
 # faces whose material is one of these are unwrapped at a lower texel density

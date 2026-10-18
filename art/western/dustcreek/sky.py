@@ -21,8 +21,8 @@ import bmesh
 import numpy as np
 from mathutils import Vector, noise as mnoise
 
-from .core import rng, tag, collection, MeshBuilder, Frame
-from .nodes import new_material, G
+from .core import rng, tag
+from .nodes import new_material
 from .materials import lin
 from . import lighting
 
@@ -247,7 +247,6 @@ def render_sky(ctx, scene, w=4096, h=2048, samples=96, name="sky", noon=False):
     far world visible, in the Three.js equirect convention (u=0.25 looks
     down the street, u=0.5 is +X; top row is up)."""
     from . import post, pipeline
-    town_cols = [c for c in bpy.data.collections if c.name not in ("farworld",)]
     hidden = []
     for ob in scene.objects:
         if ob.type in ('MESH', 'CURVE') and not any(c.name == 'farworld' for c in ob.users_collection):

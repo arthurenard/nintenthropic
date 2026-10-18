@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 
 function findDecoder() {
-  // node_modules may sit above a git worktree: walk up from here
+  // node_modules may sit in a folder above this one: walk up from here
   let dir = __dirname;
   for (let i = 0; i < 12; i++) {
     const p = path.join(dir, 'node_modules/three/examples/jsm/libs/draco/draco_decoder.js');

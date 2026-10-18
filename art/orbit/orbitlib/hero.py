@@ -104,11 +104,6 @@ def polyline(x, y, pts):
     return best, side, along
 
 
-def _sub(p, arr):
-    ys, xs, _, _ = region(p)
-    return arr[ys, xs]
-
-
 # ---------------------------------------------------------------------------
 
 def coast(p):
@@ -166,7 +161,6 @@ def climate(p):
     """Dry between the coast and the range (a hot desert: no rain from the
     trades that come over land), wetter on the range's seaward slopes where
     the monsoon breaks, steppe on the plateau beyond."""
-    H4, W4 = p.H4, p.W4
     lon = np.degrees(p.LON4)
     lat = np.degrees(p.LAT4)
     x, y = to_xy(lon, lat)

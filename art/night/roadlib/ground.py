@@ -18,7 +18,7 @@ import math
 import bpy
 import numpy as np
 
-from .common import lin, tag, rng, DN, WESTERN
+from .common import lin, tag, DN, WESTERN
 from . import layout as L
 
 import sys

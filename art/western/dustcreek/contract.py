@@ -22,7 +22,7 @@ import math
 import os
 
 import bpy
-from mathutils import Vector, Matrix
+from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from .core import empty, tag, facing_matrix, axis_matrix, MeshBuilder, Frame, rng
@@ -33,10 +33,6 @@ from . import props as P
 
 EYE = Vector((0.0, 0.0, pipeline.EYE))
 DECK = B.DECK_Z
-
-
-def to_gltf(v):
-    return [round(v.x, 4), round(v.z, 4), round(-v.y, 4)]
 
 
 def face_player(p):
@@ -123,7 +119,6 @@ def build_covers(col, blds, lm, bvh):
     specs = []   # (id, kind, emerge, level, exposed, hidden)
     liv_anchors = lm['livery'][1]
     church_anchors = lm['church'][3]
-    wt_anchors = lm['water_tower'][2]
 
     def door_cover(cid, b, key, level=0, depth_in=0.32, out=0.75, floor=None):
         a = b.anchors[key]

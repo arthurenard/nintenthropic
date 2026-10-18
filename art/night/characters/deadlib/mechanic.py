@@ -14,14 +14,12 @@ The rig is the shared humanoid scaled 1.15 at its root (feet stay on the
 origin), so every walker clip plays on him; he adds roar, mask_off, swing.
 """
 
-import math
 import time
 
 import bpy
 import numpy as np
-from mathutils import Matrix
 
-from .common import S, SK, BD, HN, PT, bl, srgb, smoothstep, value_noise, fbm, JOINTS, log
+from .common import S, SK, BD, HN, PT, bl, srgb, smoothstep, value_noise, fbm, log
 from . import heads as H, bodies, outfits as O, eyes, assemble
 from . import meshfix as MF
 
@@ -31,7 +29,6 @@ SCALE = 1.15
 def mask_part(coll=None):
     """A flip-down welding helmet: a moulded shell over the face and the
     sides of the head, a dark filter lens, the headband ratchet."""
-    head = H.head_sdf(H.P(width=1.1, jaw=1.25, dead=dict(sunken=0.5, gaunt=0.3, mouth=0.3)))
     outer = S.Ellipsoid((0.0, -0.035, -0.02), (0.108, 0.105, 0.135))
     inner = S.Ellipsoid((0.0, -0.030, -0.02), (0.100, 0.097, 0.127))
     shell = S.Subtract(outer, inner)
@@ -162,7 +159,6 @@ def build(path, size=1024, quick=False):
         return c, r, m
     jobs.append(O.shirt_part(bp, "mech.coveralls.top", top))
     jobs.append(O.trousers_part(bp, "mech.coveralls.legs", legs))
-    from .common import G as _G, R as _R
     af = welding_apron()
     ap = MF.decimated("mech.apron", af, (-0.32, -0.34, 0.40), (0.32, 0.10, 1.58), 0.0016, 700 if quick else 1000, None, symmetry=True)
     jobs.append(dict(ob=ap, field=af, paint=apron_paint, origin=np.zeros(3), weight=0.6, ao_field=af, smart_uv=True, uv_angle=70,

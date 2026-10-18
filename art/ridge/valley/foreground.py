@@ -114,8 +114,6 @@ def build(ter, col, plates=None):
     objs.append(g)
     log(f"grass: {len(F):,} triangles")
     # boulders and outcrops on the slope below (clear of the plates' lines)
-    import bmesh
-    from mathutils import Vector
     rocks = []
     for k in range(34):
         b = rng.uniform(-44, 44)

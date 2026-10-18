@@ -301,7 +301,6 @@ def denoise(arr, albedo=None, normal=None):
         imgs.append(im)
         return im
     src = mk(arr, "__dn_in")
-    main = bpy.context.scene
     sc = bpy.data.scenes.new("__denoise")
     sc.render.engine = 'CYCLES'
     sc.cycles.samples = 1

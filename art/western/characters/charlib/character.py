@@ -29,7 +29,6 @@ def decimated(name, field, lo, hi, res, tris, coll=None, M=None, o=None, blur=1.
 def sleeve_folds(bp):
     """Cloth folds as a small displacement: compression rings inside the elbow,
     drape lines down the torso, blousing over the belt."""
-    from .garments import point_on_arm
     def f(P):
         z = P[:, 2]
         d = np.zeros(len(P))

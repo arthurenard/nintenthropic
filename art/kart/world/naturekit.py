@@ -71,13 +71,6 @@ def grad_z(z0, z1, c0, c1, jitter=0.0, seed=0, scale=1.0):
     return f
 
 
-def lit_by_normal(c_dark, c_light, lo=-0.6, hi=0.9):
-    """Colour by how far up the surface faces: sunlit tops, shaded undersides (a baked key light)."""
-    def f(p, n):
-        return mix(c_dark, c_light, smoothstep(lo, hi, n.z))
-    return f
-
-
 def varied(fn, amount=0.12, scale=0.5, seed=0):
     """Wraps a colour (or colour function) with soft noise in value and hue."""
     def f(p, n):
@@ -136,9 +129,6 @@ class Model:
             c = (col[0], col[1], col[2], 1.0)
             for v in verts:
                 v[layer] = c
-
-    def stats(self):
-        return {m: len(bm.faces) for m, (bm, _) in self._parts.items()}
 
     # -- the one primitive everything else is built from
     def loft(self, rings, col, mat="lit", close=True, cap_start=None, cap_end=None, loop=False, ngon=False):
@@ -303,7 +293,6 @@ class Model:
 
     def prism(self, poly, z0, z1, col=(0.5, 0.5, 0.5), mat="lit", caps=True):
         """A polygon in the xy plane (counter-clockwise, convex or not), extruded from z0 to z1."""
-        n = len(poly)
         rings = [[V((x, y, z0)) for x, y in poly], [V((x, y, z1)) for x, y in poly]]
         made = self.loft(rings, col, mat)
         if caps:

@@ -13,14 +13,12 @@ The station outside stays in the scene while baking (it shades and is
 reflected); the glass is hidden so light passes.
 """
 
-import math
-import os
 import time
 
 import bpy
 import numpy as np
 
-from . import atlas, pipeline, render, world, imgio, bl
+from . import atlas, pipeline, render, bl
 
 ATLAS = (4096, 4096)
 QUALITY = 1.15          # texels per screen pixel on a 1440 px tall screen

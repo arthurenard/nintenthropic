@@ -86,14 +86,6 @@ class GLB:
                 par[c] = i
         return par
 
-    def path_of(self, idx):
-        par = self.parents()
-        names = []
-        while idx is not None:
-            names.append(self.nodes[idx].get("name", "?"))
-            idx = par.get(idx)
-        return "/".join(reversed(names))
-
     def mesh_triangles(self, mesh_index):
         tris = 0
         for p in self.json["meshes"][mesh_index]["primitives"]:

@@ -42,8 +42,6 @@ for p in (HERE, os.path.join(REPO, "art", "western"), os.path.join(REPO, "art", 
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import bpy  # noqa: E402
-
 BUILD = os.path.join(HERE, "build")
 ASSETS = os.path.join(REPO, "public", "assets", "ridge")
 

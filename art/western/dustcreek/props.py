@@ -53,8 +53,7 @@ def barrel(mb, metal, f, r, h=0.88, rad=0.29, lid=True):
         mb.add_face([f.p(*a), f.p(*b), f.p(*c), f.p(*d)], 'wood_barrel', 0.3)
     # hoops
     for t in (0.07, 0.3, 0.7, 0.93):
-        s = 1.0 - 0.14 * abs(t - 0.5) ** 1.6 * 2
-        s = 0.86 + (1.0 - 0.86) * (1 - abs(t - 0.5) * 2) ** 0.5 if True else s
+        s = 0.86 + (1.0 - 0.86) * (1 - abs(t - 0.5) * 2) ** 0.5
         metal.cylinder(f, (0, 0, t * h - 0.025), rad * s + 0.006, 0.05, 'iron_rusty', segments=seg,
                        caps=(False, False))
 
@@ -65,7 +64,6 @@ def crate(mb, f, r, sx=0.7, sy=0.55, sz=0.55, mat='wood_crate', slats=3):
     t = 0.022
     # side boards (horizontal) on +-x and +-y faces
     for (axis, sign) in ((0, -1), (0, 1), (1, -1), (1, 1)):
-        L = sy if axis == 0 else sx
         for k in range(slats):
             z0 = k * sz / slats + g / 2
             z1 = (k + 1) * sz / slats - g / 2
@@ -213,7 +211,7 @@ def wheel(mb, metal, f, r, radius=0.6, width=0.07, spokes=12, broken=0):
 def wagon(mb, metal, f, r):
     """The broken freight wagon: bed on its axles, front-left wheel off and
     lying in the dirt, the bed dropped onto its front corner."""
-    L, W, H = 3.4, 1.25, 0.55
+    L, W = 3.4, 1.25
     # frame (tilted: front-left corner on the ground)
     bed = f.sub((0, 0, 0.0))
     tilt_f = bed.sub((0, 0, 0.93)).sub(rot_y=math.radians(6.0), rot_x=math.radians(-7.5))

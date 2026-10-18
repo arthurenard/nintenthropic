@@ -7,10 +7,9 @@ Bake group 'far' (and 'west'/'east' for the cars by the road).
 
 import math
 
-import bpy
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
-from .common import rng, tag, DC
+from .common import rng, tag
 from . import layout as L, meshkit as K
 from .meshkit import MeshBuilder, Frame
 from .ground import ground_z

@@ -15,7 +15,6 @@ import math
 import os
 
 import bpy
-import numpy as np
 from mathutils import Vector
 
 from . import layout as L
@@ -100,7 +99,7 @@ def place_group(objs, pos, heading, show=None, action=None, frame=10):
     roots = [o for o in objs if o.parent is None]
     for r in roots:
         r.location = pos
-        r.rotation_euler = (math.radians(90) if False else 0.0, 0.0, heading)
+        r.rotation_euler = (0.0, 0.0, heading)
     if show is not None:
         for o in objs:
             if o.type == 'MESH':

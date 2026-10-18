@@ -6,7 +6,6 @@ depend on UI context that a headless build does not have.
 import bpy
 import bmesh
 import numpy as np
-from mathutils import Matrix, Vector
 
 
 def clear_scene():
@@ -71,11 +70,6 @@ def set_verts(ob, v):
     ob.data.update()
 
 
-def faces_np(ob):
-    """Polygons as a python list of vertex index tuples."""
-    return [tuple(p.vertices) for p in ob.data.polygons]
-
-
 def tri_count(ob):
     return sum(len(p.vertices) - 2 for p in ob.data.polygons)
 
@@ -114,24 +108,6 @@ def decimate(ob, target_tris, symmetry=True):
     return ob
 
 
-def subdivide(ob, levels):
-    m = ob.modifiers.new("sub", "SUBSURF")
-    m.levels = levels
-    m.render_levels = levels
-    m.uv_smooth = "PRESERVE_BOUNDARIES"
-    m.boundary_smooth = "PRESERVE_CORNERS"
-    return apply_modifiers(ob)
-
-
-def triangulate(ob):
-    bm = bmesh.new()
-    bm.from_mesh(ob.data)
-    bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method="BEAUTY", ngon_method="BEAUTY")
-    bm.to_mesh(ob.data)
-    bm.free()
-    ob.data.update()
-
-
 def recalc_normals(ob, inside=False):
     bm = bmesh.new()
     bm.from_mesh(ob.data)
@@ -162,25 +138,6 @@ def set_active(ob):
     ob.select_set(True)
 
 
-def set_attr(ob, name, values, domain="POINT", dtype="FLOAT"):
-    me = ob.data
-    if name in me.attributes:
-        me.attributes.remove(me.attributes[name])
-    a = me.attributes.new(name, dtype, domain)
-    key = "value" if dtype in ("FLOAT", "INT", "BOOLEAN") else ("vector" if dtype == "FLOAT_VECTOR" else "color")
-    a.data.foreach_set(key, np.asarray(values, np.float32 if dtype != "INT" else np.int32).ravel())
-    return a
-
-
-def set_color_attr(ob, name, rgba, domain="POINT"):
-    me = ob.data
-    if name in me.color_attributes:
-        me.color_attributes.remove(me.color_attributes[name])
-    a = me.color_attributes.new(name, "FLOAT_COLOR", domain)
-    a.data.foreach_set("color", np.asarray(rgba, np.float32).ravel())
-    return a
-
-
 def loop_vertex_indices(me):
     li = np.empty(len(me.loops), np.int32)
     me.loops.foreach_get("vertex_index", li)
@@ -200,7 +157,3 @@ def get_uv(ob, name=None):
     uv = np.empty(len(me.loops) * 2, np.float32)
     layer.data.foreach_get("uv", uv)
     return uv.reshape(-1, 2)
-
-
-def world_matrix_np(ob):
-    return np.array(ob.matrix_world, np.float64)

@@ -13,10 +13,9 @@ import time
 import bpy
 import numpy as np
 
-from . import layout as L
 from . import mesh as M
 from . import scene as S
-from .scene import new_material, G
+from .scene import new_material
 
 
 def log(*a):

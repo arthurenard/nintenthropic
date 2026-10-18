@@ -12,9 +12,7 @@ stage turns into bandit cover points.
 
 import math
 
-from mathutils import Vector
-
-from .core import Frame, MeshBuilder, rng, tag
+from .core import Frame, MeshBuilder, rng
 from . import carpentry as C
 from .carpentry import Opening
 
@@ -226,7 +224,7 @@ class Building:
     def _cornice(self):
         """Projecting cornice with brackets, at the top of the flat part of the
         false front (or at a given height)."""
-        F, W, r = self.F, self.W, self.r
+        F, W = self.F, self.W
         h = min(self.front_top(-W / 2), self.front_top(W / 2)) - 0.25
         cm = self.trim
         wood = self.wood
@@ -263,7 +261,6 @@ class Building:
                     self.metal.cylinder(f.sub((s, -0.05, o.z)), (0, 0, 0), 0.012, o.h, 'iron', segments=6)
             if kw.get('shutters'):
                 for sgn in (-1, 1):
-                    s0 = o.s0 - o.casing - o.w / 2 if sgn < 0 else o.s1 + o.casing
                     sh_mat = kw['shutters']
                     ang = self.r.uniform(-0.25, 0.1)
                     hf = f.sub((o.s0 - o.casing if sgn < 0 else o.s1 + o.casing, -0.06, o.z))
@@ -329,7 +326,7 @@ class Building:
             sb = min(s + pw, W / 2 + 0.02)
             dz = r.uniform(-0.006, 0.006)
             wood.box(F, (s + 0.004, -P, z - 0.04 + dz), (sb - 0.004, 0.0, z + dz), 'wood_floor', grain_axis=1,
-                     skip=('-y',) if False else ())
+                     skip=())
             s = sb
         # fascia board at the street edge + sill
         wood.box(F, (-W / 2, -P - 0.04, 0.0), (W / 2, -P + 0.02, z - 0.04), 'wood_raw', grain_axis=0)
