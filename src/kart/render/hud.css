@@ -563,7 +563,9 @@
 
 /* Reduce Motion (the system's or Settings'): fade, never move. */
 :root[data-reduce-motion] .gp-hud *,
-.gp-hud.gp-calm * {
+:root[data-reduce-motion] .gp-hud *::before,
+.gp-hud.gp-calm *,
+.gp-hud.gp-calm *::before {
   animation: none !important;
 }
 :root[data-reduce-motion] .gp-banner,
