@@ -148,7 +148,9 @@ hand fell around wave 16, and the game was not as hard as the others. On
 Standard a steady hand now falls around wave 9, a slow, wild one around 5 or 6
 and the slowest around 3 or 4 (`rules/balance.test.ts` plays them out). What
 gets harder is the crowd: each wave the dead come closer together, more of
-them at once (`maxActive`), and a wave dragged out turns against you after
+them at once (`maxActive`, though never more than the 22 figures the night
+makes for them, falling ones included: one past that would walk up unseen),
+and a wave dragged out turns against you after
 10 s rather than 25 (the fog thickens and they quicken, to 1.7 times their
 pace).
 
