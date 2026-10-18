@@ -74,6 +74,14 @@ export class DelegateWatch {
     this.recent.length = 0;
   }
 
+  /** The worker's landmarker was made again on `delegate` (its GPU went: gpu.ts): the old one's times say nothing now. */
+  restarted(delegate: Delegate, now: number): void {
+    this.delegate = delegate;
+    this.recent.length = 0;
+    this.skip = SETTLE;
+    this.triedAt = now;
+  }
+
   get busy(): boolean {
     return this.trying;
   }

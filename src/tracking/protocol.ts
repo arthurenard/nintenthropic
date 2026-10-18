@@ -58,6 +58,8 @@ export type FromWorker =
   | { type: "failed"; message: string }
   | { type: "face-ready"; delegate: "GPU" | "CPU" }
   | { type: "face-failed"; message: string }
+  /** The hand's landmarkers were made again, their GPU gone (gpu.ts), and read now on this delegate. */
+  | { type: "restarted"; delegate: "GPU" | "CPU" }
   /** A try of the other delegate is over: the one kept, and the median time each took, ms (null: it could not be made). */
   | { type: "tried"; kept: "GPU" | "CPU"; times: { GPU: number | null; CPU: number | null } }
   | {

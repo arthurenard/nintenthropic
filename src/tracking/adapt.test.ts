@@ -62,6 +62,18 @@ describe("when a tracking worker tries the other delegate", () => {
   });
 });
 
+describe("a worker whose landmarker was made again (its GPU went)", () => {
+  it("reads on the delegate it was made on, measured afresh, and is not asked to try for a while", () => {
+    const watch = new DelegateWatch("GPU");
+    feed(watch, 70, SETTLE + LOOK - 3);
+    watch.restarted("CPU", 5000);
+    expect(watch.delegate).toBe("CPU");
+    // The old landmarker's slow frames are forgotten, the first of the new one's left out, and no try within RETRY_MS.
+    expect(feed(watch, 70, Math.floor(RETRY_MS / 33) - 5, 5033).proposal).toBeNull();
+    expect(feed(watch, 70, 200, 5000 + RETRY_MS).proposal).toBe("GPU");
+  });
+});
+
 describe("a worker slow on both delegates", () => {
   it("is asked again less and less often, not every minute", () => {
     const watch = new DelegateWatch("GPU");

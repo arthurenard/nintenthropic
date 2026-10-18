@@ -14,10 +14,15 @@
  * lanes), handed their column of the picture. Asked to ("try", adapt.ts), a
  * worker makes a landmarker on the other delegate beside its own, reads frames
  * with each in turn, and keeps the quicker.
+ *
+ * A landmarker whose GPU went (Chrome restarted its GPU's process) finds
+ * nothing from then on, without a word: it is noticed after the frame it
+ * failed on and made again (gpu.ts, rebuild).
  */
 import type { FaceLandmarker } from "@mediapipe/tasks-vision";
 import { HandLandmarker } from "@mediapipe/tasks-vision";
 import { createFaceLandmarker, eyesFrom, type Fileset } from "./face";
+import { GpuWatch } from "./gpu";
 import type { FromWorker, ToWorker } from "./protocol";
 import { seenHands } from "./hands";
 import { gpuName, isSoftwareGpu } from "../engine/tier";
@@ -45,6 +50,16 @@ let prefer: "GPU" | "CPU" = "GPU";
 let delegate: "GPU" | "CPU" = "CPU";
 /** Makes another hand landmarker like the first, on a delegate (for a try of the other one). */
 let makeAnother: ((delegate: "GPU" | "CPU") => Promise<HandLandmarker>) | null = null;
+/** The contexts of the landmarkers reading on the GPU, asked after every frame (gpu.ts). */
+const gpu = new GpuWatch();
+/** The face's model, kept to make the face landmarker again should its GPU go. */
+let faceModel: ArrayBuffer | null = null;
+/** Landmarkers being made again, their GPU gone (until they are, what they read is answered with nothing found). */
+let rebuilding = false;
+/** How often the GPU has gone under this worker: once, the landmarkers go back to it; again, they read on the CPU. */
+let losses = 0;
+/** When the next try to make lost landmarkers again may begin, ms (one that failed waits a while). */
+let rebuildAfter = 0;
 
 /**
  * A try of the other delegate (protocol "try"): the other landmarker, once made, reads every other camera frame, and
@@ -67,7 +82,7 @@ const median = (values: number[]): number | null => {
 
 function startTrial(message: Extract<ToWorker, { type: "try" }>): void {
   // One landmarker reading the whole picture only (a worker with tiles of its own does not try), one try at a time.
-  if (trial || more.length || !makeAnother || message.delegate === delegate) {
+  if (trial || rebuilding || more.length || !makeAnother || message.delegate === delegate) {
     post({ type: "tried", kept: delegate, times: { GPU: null, CPU: null } });
     return;
   }
@@ -95,12 +110,12 @@ function trialReader(): { landmarker: HandLandmarker; which: "mine" | "other" } 
   return current.turn++ % 2 ? { landmarker: current.other, which: "other" } : { landmarker: landmarker!, which: "mine" };
 }
 
-/** Closes a landmarker no longer wanted; one that will not close is let go anyway. */
-function letGo(landmarker: HandLandmarker): void {
+/** Closes a landmarker no longer wanted; one that will not close (its GPU gone) is let go anyway. */
+function letGo(landmarker: { close(): void }): void {
   try {
     landmarker.close();
   } catch (error) {
-    console.warn("A hand landmarker could not be closed.", error);
+    console.warn("A landmarker could not be closed.", error);
   }
 }
 
@@ -144,8 +159,9 @@ function trialRead(which: "mine" | "other", ms: number, ok: boolean): void {
 
 const post = (message: FromWorker) => scope.postMessage(message);
 
-async function addFace(model: ArrayBuffer, files: Fileset | null = later): Promise<"GPU" | "CPU"> {
+async function addFace(model: ArrayBuffer, files: Fileset | null = later, on: "GPU" | "CPU" = prefer): Promise<"GPU" | "CPU"> {
   if (!files) throw new Error("the runtime is not loaded");
+  faceModel = model;
   // A module worker loads the runtime's loader with import(), which runs it
   // once: it hands MediaPipe its factory (self.ModuleFactory) the first
   // time only, and the hand's landmarker took that. The factory is the
@@ -153,9 +169,10 @@ async function addFace(model: ArrayBuffer, files: Fileset | null = later): Promi
   const loader = (await import(/* @vite-ignore */ files.wasmLoaderPath)) as { default?: unknown };
   const global = self as unknown as { ModuleFactory?: unknown };
   global.ModuleFactory ??= loader.default;
-  const made = await createFaceLandmarker(files, model, prefer);
-  face?.close();
+  const made = await createFaceLandmarker(files, model, on, gpu);
+  const old = face;
   face = made.landmarker;
+  if (old) letGo(old);
   return made.delegate;
 }
 
@@ -175,8 +192,9 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
   later = { wasmLoaderPath: message.loader, wasmBinaryPath: message.binary };
   prefer = message.prefer;
   const tiles = Math.max(1, Math.round(message.tiles ?? 1));
-  const create = (delegate: "GPU" | "CPU", runtime: Fileset = files) =>
-    HandLandmarker.createFromOptions(runtime, {
+  const create = async (delegate: "GPU" | "CPU", runtime: Fileset = files) => {
+    const canvas = gpu.canvasFor(delegate);
+    const made = await HandLandmarker.createFromOptions(runtime, {
       runningMode: "VIDEO",
       // One hand for the shooting games, deliberately: a second costs time
       // (measured in input/trust.ts, which keeps a passer-by's hand from
@@ -188,7 +206,10 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
       minHandPresenceConfidence: message.confidence ?? 0.5,
       minTrackingConfidence: 0.5,
       baseOptions: { modelAssetBuffer: new Uint8Array(message.model), delegate },
+      ...(canvas ? { canvas } : {}),
     });
+    return gpu.watch(made, canvas);
+  };
   try {
     delegate = "CPU";
     // A GPU that is the CPU drawing (a blocklisted driver's fallback) reads a hand in seconds where the CPU takes tens of ms.
@@ -267,45 +288,110 @@ function cropped(image: VideoFrame | ImageBitmap, crop: { x: number; y: number; 
   return canvas;
 }
 
+/** Whether any landmarker here has lost its GPU. */
+const anyLost = (): boolean => gpu.lost(landmarker) || more.some((one) => gpu.lost(one)) || gpu.lost(trial?.other) || gpu.lost(face);
+
+/**
+ * Makes again every landmarker whose GPU went: on the GPU the first time (Chrome brings its GPU back within a second
+ * or so), on the CPU after that, or where the GPU will not have it. A try of the other delegate under way ends, as
+ * one that could not be made does. The landmarkers they replace are let go once the new ones are made.
+ */
+async function rebuild(): Promise<void> {
+  rebuilding = true;
+  losses++;
+  // What was lost was on the GPU: back to it once, unless it has come back drawn in software.
+  const on: "GPU" | "CPU" = losses === 1 && !softwareGpu() ? "GPU" : "CPU";
+  try {
+    const current = trial;
+    if (current) {
+      trial = null;
+      if (current.other) letGo(current.other);
+      post({ type: "tried", kept: delegate, times: { GPU: null, CPU: null } });
+    }
+    if (gpu.lost(landmarker) || more.some((one) => gpu.lost(one))) {
+      const old = [landmarker!, ...more];
+      const make = async (which: "GPU" | "CPU") => {
+        const made: HandLandmarker[] = [];
+        try {
+          for (let i = 0; i < old.length; i++) made.push(await makeAnother!(which));
+        } catch (error) {
+          made.forEach(letGo);
+          throw error;
+        }
+        return made;
+      };
+      let now = on;
+      let made: HandLandmarker[];
+      try {
+        made = await make(on);
+      } catch (error) {
+        if (on === "CPU") throw error;
+        console.warn("Hand tracking on the GPU is unavailable since it restarted; using the CPU.", error);
+        now = "CPU";
+        made = await make("CPU");
+      }
+      [landmarker, ...more] = made as [HandLandmarker, ...HandLandmarker[]];
+      delegate = now;
+      old.forEach(letGo);
+      post({ type: "restarted", delegate });
+    }
+    if (gpu.lost(face) && faceModel) await addFace(faceModel, later, on);
+    console.info(`Tracking started again after the GPU restarted (the hand on the ${delegate}).`);
+  } catch (error) {
+    rebuildAfter = performance.now() + 5000;
+    console.warn("Tracking could not be started again after the GPU restarted; trying again in a moment.", error);
+  } finally {
+    rebuilding = false;
+  }
+}
+
 function read(message: Extract<ToWorker, { type: "frame" }>): void {
   const began = performance.now();
   let hands: SeenHand[] = [];
-  const withFace = message.face === true && face !== null;
+  // A GPU gone since the last frame: nothing is found on it, so what read on it waits for the landmarkers made again.
+  if (!rebuilding && makeAnother && began >= rebuildAfter && anyLost()) void rebuild();
+  const handsLost = gpu.lost(landmarker) || more.some((one) => gpu.lost(one));
+  const withFace = message.face === true && face !== null && !gpu.lost(face);
   let which: "mine" | "other" = "mine";
   let ok = true;
   try {
-    if (more.length) hands = readTiles(message.image, message.timestamp);
-    else {
-      const reader = trialReader();
-      which = reader.which;
-      hands = seenHands(reader.landmarker.detectForVideo(message.crop ? cropped(message.image, message.crop) : message.image, message.timestamp));
-    }
-  } catch (error) {
-    // One bad frame (a camera mid-reconfiguration) is skipped, not fatal.
-    ok = false;
-    console.warn("A camera frame could not be read.", error);
-  }
-  const inference = performance.now() - began;
-  post({
-    type: "result",
-    sequence: message.sequence,
-    capturedAt: message.capturedAt,
-    hands,
-    inference,
-    face: withFace,
-  });
-  trialRead(which, inference, ok);
-  if (withFace) {
-    const faceBegan = performance.now();
-    let eyes: FaceReading | null = null;
     try {
-      eyes = eyesFrom(face!.detectForVideo(message.image, message.timestamp));
+      if (handsLost) ok = false;
+      else if (more.length) hands = readTiles(message.image, message.timestamp);
+      else {
+        const reader = trialReader();
+        which = reader.which;
+        hands = seenHands(reader.landmarker.detectForVideo(message.crop ? cropped(message.image, message.crop) : message.image, message.timestamp));
+      }
     } catch (error) {
-      console.warn("A camera frame's face could not be read.", error);
+      // One bad frame (a camera mid-reconfiguration) is skipped, not fatal.
+      ok = false;
+      console.warn("A camera frame could not be read.", error);
     }
-    post({ type: "face-result", sequence: message.sequence, capturedAt: message.capturedAt, eyes, inference: performance.now() - faceBegan });
+    const inference = performance.now() - began;
+    post({
+      type: "result",
+      sequence: message.sequence,
+      capturedAt: message.capturedAt,
+      hands,
+      inference,
+      face: withFace,
+    });
+    trialRead(which, inference, ok);
+    if (withFace) {
+      const faceBegan = performance.now();
+      let eyes: FaceReading | null = null;
+      try {
+        eyes = eyesFrom(face!.detectForVideo(message.image, message.timestamp));
+      } catch (error) {
+        console.warn("A camera frame's face could not be read.", error);
+      }
+      post({ type: "face-result", sequence: message.sequence, capturedAt: message.capturedAt, eyes, inference: performance.now() - faceBegan });
+    }
+  } finally {
+    // An unclosed camera frame holds one of the camera's few buffers: a handful and the camera stalls.
+    message.image.close();
   }
-  message.image.close();
 }
 
 scope.onmessage = (event: MessageEvent<ToWorker>) => {

@@ -112,7 +112,12 @@ abstract class BaseTracker implements Tracker {
   protected video: HTMLVideoElement | null = null;
   protected running = false;
   frameAt = 0;
+  /**
+   * The callback asked for next, and which kind it is: a video frame's and an animation frame's ids are counted apart,
+   * so cancelling one's id as the other would cancel someone else's (the game loop's next frame, say).
+   */
   private handle = 0;
+  private handleKind: "video" | "animation" | null = null;
   private lastMediaTime = -1;
   private lastTimestamp = -1;
   private readonly listeners = new Set<(frame: HandFrame) => void>();
@@ -190,9 +195,9 @@ abstract class BaseTracker implements Tracker {
 
   stop(): void {
     this.running = false;
-    const video = this.video;
-    if (typeof video?.cancelVideoFrameCallback === "function") video.cancelVideoFrameCallback(this.handle);
-    cancelAnimationFrame(this.handle);
+    if (this.handleKind === "video") this.video?.cancelVideoFrameCallback(this.handle);
+    else if (this.handleKind === "animation") cancelAnimationFrame(this.handle);
+    this.handleKind = null;
   }
 
   get isRunning(): boolean {
@@ -269,6 +274,7 @@ abstract class BaseTracker implements Tracker {
     const video = this.video;
     if (!this.running || !video) return;
     if (typeof video.requestVideoFrameCallback === "function") {
+      this.handleKind = "video";
       this.handle = video.requestVideoFrameCallback((now, metadata) => {
         this.schedule();
         this.frameAt = performance.now();
@@ -280,6 +286,7 @@ abstract class BaseTracker implements Tracker {
     } else {
       // Without it, poll with the display and read a frame only when the
       // video has moved on.
+      this.handleKind = "animation";
       this.handle = requestAnimationFrame((now) => {
         this.schedule();
         if (this.running && video.currentTime !== this.lastMediaTime) {
@@ -324,6 +331,9 @@ class WorkerTracker extends BaseTracker {
         if (this.running) this.publish(message.hands, message.capturedAt);
       } else if (message.type === "tried") {
         this.watch?.tried(message.kept, performance.now());
+      } else if (message.type === "restarted") {
+        this.started = message.delegate;
+        this.watch?.restarted(message.delegate, performance.now());
       } else if (message.type === "face-result") {
         this.busy = false;
         if (this.running) this.publishFace(message.eyes, message.capturedAt, message.inference);
@@ -331,7 +341,8 @@ class WorkerTracker extends BaseTracker {
     });
   }
 
-  private readonly started: "GPU" | "CPU";
+  /** The delegate the landmarker was started on, or made again on after its GPU went (gpu.ts). */
+  private started: "GPU" | "CPU";
 
   /** The delegate the landmarker reads with now (it can change once a try of the other has been made: adapt.ts). */
   get delegate(): "GPU" | "CPU" {
@@ -537,6 +548,11 @@ class LaneTracker extends BaseTracker {
     if (message.type === "tried") {
       lane.watch?.tried(message.kept, performance.now());
       this.trials.end();
+      return;
+    }
+    if (message.type === "restarted") {
+      lane.delegate = message.delegate;
+      lane.watch?.restarted(message.delegate, performance.now());
       return;
     }
     if (message.type !== "result") return;
