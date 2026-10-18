@@ -197,6 +197,8 @@ export class ItemFx {
   private readonly auraGeometry = new SphereGeometry(1, 28, 18);
   private readonly orbits = new Map<number, Group>();
   private readonly squashed = new Set<number>();
+  /** A storm cloud's puffs and a comet's bubble that nobody has, hidden (see the constructor). */
+  private readonly standInAura = auraMaterial();
   private lightning = 0;
   private rnd = 11;
   private nextWave = 0;
@@ -217,6 +219,13 @@ export class ItemFx {
       this.group.add(bolt.mesh);
       this.bolts.push(bolt);
     }
+    // The clouds and bubbles are made when a kart first needs one; these hidden stand-ins are shown by the renderer's
+    // warm-up, so their shaders are built behind the loading screen rather than at the first storm or comet (a stall of
+    // 300 ms and more), and they hold on to them all race (a comet's bubble lets its own material go when it ends).
+    const standIn = new Group();
+    standIn.add(new Mesh(this.cloudGeometry, this.cloudDark), new Mesh(this.cloudGeometry, this.cloudLight), new Mesh(this.auraGeometry, this.standInAura));
+    standIn.visible = false;
+    this.group.add(standIn);
   }
 
   private r(): number {
@@ -556,6 +565,7 @@ export class ItemFx {
     this.cloudGeometry.dispose();
     this.cloudDark.dispose();
     this.cloudLight.dispose();
+    this.standInAura.dispose();
     this.auraGeometry.dispose();
   }
 }

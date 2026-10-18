@@ -40,6 +40,7 @@ import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera } from "./cameras";
+import { RescueDrone } from "./drone";
 import { Effects } from "./effects";
 import { RenderEggs } from "./eggs";
 import { Hud } from "./hud";
@@ -199,6 +200,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let things: Things | null = null;
   let itemFx: ItemFx | null = null;
   let skids: Skids | null = null;
+  /** A drone nobody has called, hidden: each kart makes its own at its first fall, and this one has the warm-up build their shaders. */
+  let standInDrone: RescueDrone | null = null;
   let actors = new Map<number, KartActor>();
   let racers: readonly RacerSetup[] = [];
   let layout: ViewLayout = { views: [], free: null };
@@ -340,8 +343,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
    * Compiles every shader this race can ask for, and draws two pictures through the whole post chain, while the
    * loading screen is up: the first frames of the countdown (and the first boost, the first banana) then cost
    * what any other does, instead of the 150 to 230 ms a first draw took compiling thirty-odd programs.
-   * What is hidden now (a kart's flames, the item pool) is shown for the length of it, so it is drawn the way
-   * it will be, and put back. The first picture is from the start line; the second from the origin, where the
+   * What is hidden now (a kart's flames, the item pool, and the hidden stand-ins for what is made when first
+   * needed: a slick, a storm cloud, a comet's bubble, the rescue drone) is shown for the length of it, so it is
+   * drawn the way it will be, and put back. The first picture is from the start line; the second from the origin, where the
    * karts stand until the first frame, so the shadow map's box has them in it and builds their depth shaders.
    */
   const warmUp = async (): Promise<void> => {
@@ -390,6 +394,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     itemFx = null;
     skids?.dispose();
     skids = null;
+    standInDrone?.dispose();
+    standInDrone = null;
     world?.dispose();
     world = null;
     clearBake(kartBake);
@@ -429,6 +435,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       skids = new Skids();
       dynamic.add(skids.mesh);
       for (const r of racers) makeActor(r);
+      standInDrone = new RescueDrone();
+      dynamic.add(standInDrone.root);
       markShadows(dynamic);
       hud.setTrack(world.geometry, racers);
       eggs.load(world.style.id, world.geometry);
