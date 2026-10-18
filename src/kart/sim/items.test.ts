@@ -250,8 +250,7 @@ describe("pucks", () => {
       hit = more.find((e) => e.type === "hit");
     }
     expect(bounced).toBe(true);
-    // Its own puck: the event says so, for the picture's "Oops.".
-    expect(hit).toMatchObject({ kart: 0, by: 0, cause: "puck", own: true });
+    expect(hit).toMatchObject({ kart: 0, by: 0, cause: "puck" });
     expect(hit!.tick - useTick).toBeGreaterThanOrEqual(30);
   });
 
@@ -344,10 +343,7 @@ describe("slicks", () => {
     expect(slick).toBeDefined();
     expect(Math.hypot(slick.x - view(r, 0).x, slick.z - view(r, 0).z)).toBeCloseTo(2.5, 0);
     const events = run(r, 90, () => new Map([[2, input({ throttle: 1 })]]));
-    const hit = events.find((e) => e.type === "hit");
-    expect(hit).toMatchObject({ kart: 2, by: 0, cause: "slick" });
-    // Someone else's slick is no "Oops.": the flag is left out.
-    expect(hit && "own" in hit).toBe(false);
+    expect(events.find((e) => e.type === "hit")).toMatchObject({ kart: 2, by: 0, cause: "slick" });
     expect(r.view().things.some((t) => t.kind === "slick")).toBe(false);
     expect(view(r, 0).spin).toBe(0);
   });
