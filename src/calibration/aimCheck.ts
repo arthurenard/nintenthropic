@@ -91,6 +91,10 @@ export interface CheckStats {
   spans: number[];
   /** How many shots were taken with the fingertip near the edge of the picture. */
   edgeShots: number;
+  /** How many shots were refused, the fingertip not having moved enough to learn from. */
+  refused?: number;
+  /** How many shots came with no aim seen before the fold ("Raise Your Thumb First"). */
+  unaimed?: number;
 }
 
 /** A palm span under this, in fractions of the picture, is a hand too far from the camera to read well. */
@@ -115,6 +119,7 @@ export function tipFor(stats: CheckStats): string {
     if (span < FAR_SPAN) return "Move a little closer to your camera.";
     if (span > NEAR_SPAN) return "Sit back a little from your camera.";
   }
+  if ((stats.refused ?? 0) >= 2) return "Move your whole hand toward each one, not just your finger.";
   return "Keep your finger still as your thumb folds.";
 }
 
@@ -295,7 +300,9 @@ export class AimCheck {
     this.lastShot = time;
     const target = this.lit;
     if (!this.history.length) {
+      this.stats.unaimed = (this.stats.unaimed ?? 0) + 1;
       this.words = { title: "Raise Your Thumb First", detail: "Point with it up, then fold it to fire." };
+      this.uncounted();
       return { target, outcome: "unaimed", landed: null, error: null };
     }
     const pointer: Point = [median(this.history.map((s) => s.pointer[0])), median(this.history.map((s) => s.pointer[1]))];
@@ -328,7 +335,9 @@ export class AimCheck {
     if (!measured.ready && !this.refit()) {
       // Two shots from the same spot cannot say which way the hand moves.
       this.pool.pop();
+      this.stats.refused = (this.stats.refused ?? 0) + 1;
       this.words = { title: "Move Your Finger", detail: `That was the same spot as the last. Point at the lit ${this.noun.one}.` };
+      this.uncounted();
       return { target, outcome: "refused", landed: null, error: null };
     }
 
@@ -357,6 +366,20 @@ export class AimCheck {
     this.words = this.say();
     if (!this.done) this.lit = this.next();
     return { target, outcome: hit ? "hit" : "miss", landed, error: distance };
+  }
+
+  /**
+   * A shot that did not count (refused, or with no aim seen). A hand whose
+   * fingertip hardly moves as it aims is refused again and again, and a
+   * camera reading too few frames a second never shows an aim before the
+   * fold: such tries count towards Play Anyway as shots do, so nobody is
+   * trapped in the check.
+   */
+  private uncounted(): void {
+    if (this.canPlayAnyway || this.shots + (this.stats.refused ?? 0) + (this.stats.unaimed ?? 0) < PLAY_ANYWAY_AFTER) return;
+    this.canPlayAnyway = true;
+    this.tip = tipFor(this.stats);
+    this.words = { title: "Still Learning", detail: this.tip };
   }
 
   /** Refits the map after a shot; false if the shots cannot determine one. */
