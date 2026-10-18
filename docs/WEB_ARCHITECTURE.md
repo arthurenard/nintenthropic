@@ -99,7 +99,11 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   on a busy or ordinary machine, where on the page it halved the frame rate).
   The hop costs about 5 ms of latency. A frame that arrives while the last is
   still being read is skipped, never queued. Browsers that cannot run it in a
-  worker track on the page.
+  worker track on the page. When the browser restarts its graphics, a GPU
+  landmarker goes on reading but finds no hand, without an error: each one
+  reads on a canvas of its own whose context is checked after every frame,
+  and a lost one is made again, on the GPU the first time and on the CPU
+  after that (`src/tracking/gpu.ts`), so the hand comes back in about 2 s.
 - Input turns a HandFrame into an **Aim** once per new frame (never twice for
   the same frame), and the engine reads the latest Aim every animation frame.
   The crosshair may be extrapolated forward by the measured tracking delay
@@ -118,7 +122,12 @@ engine host (rAF loop, renderer, resize, pause) ──► game.update(dt, now, a
   screen; so is a hand the camera lost as it left the picture across an edge
   (pointing past the view, or its fingertip at the picture's own edge), for
   up to 1.2 s after it goes. A hand that vanished mid-view is only lost, and a
-  camera frame older than 400 ms is no hand at all.
+  camera frame older than 400 ms is no hand at all. The fold's kick can carry
+  the raw aim past the edge as a shot is fired near it: when only the raw aim
+  went past while the thumb was folding, the hand must stay gone 120 ms
+  before it counts as a reload. A shot carries the off-screen state it was
+  fired in, so the last round still fires when the hand swings off to reload
+  straight after it.
 - **The scope** (a game whose entry says `uses: { scope: true }`: Overwatch
   Ridge). `Aim.scope` follows Shift, the right mouse button (which in such a
   game scopes instead of reloading; a left click while it is held still
@@ -395,9 +404,13 @@ three shots.
   prove); a returning player's three.
 - **Done** when `aim ≥ 95%` over at least three predictive errors and the bias
   is under `R / 2`. The map that earned the score is the one saved and played
-  on. A saved fit starts measuring from the first shot. After 12
-  shots below 95%, offer **Play Anyway** with one specific tip (light, framing,
-  distance) — never trap the player.
+  on. A saved fit starts measuring from the first shot; once the shots have
+  fitted a new map, the saved one's misses with a bias of `R / 2` or more are
+  dropped from the score, so a returning player whose camera has moved is set
+  in about six shots, not nine. After 12 tries below 95%, the shots it could
+  not use counted among them (a fingertip that barely moves, a camera too slow
+  to read the fold), offer **Play Anyway** with one specific tip (light,
+  framing, distance, moving the whole hand) — never trap the player.
 - **Stored** per camera (`deviceId`), video size and game in `localStorage`,
   and as the camera's latest: a game with no aim of its own yet starts from
   the latest (any game's), measured from its first shot, so a player set up
