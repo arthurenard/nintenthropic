@@ -436,6 +436,17 @@ describe("secrets through the match", () => {
     expect(m.phase).toBe("combat");
   });
 
+  it("shot in the back on his ten paces, the duelist is no Quick Draw", () => {
+    const { m, rec } = makeMatch(20, { duel: true });
+    run(m, 2);
+    const d = m.bandits[0] as Bandit;
+    expect(d.state).toBe("walking");
+    m.trigger();
+    m.resolveShot({ kind: "bandit", bandit: d, part: "head" });
+    const death = rec.last("banditDeath");
+    expect((death?.args[2] as { labels: string[] }).labels).toEqual(["Headshot"]);
+  });
+
   it("the duel's walk and standoff are not counted toward the gang's boldness", () => {
     const { m, rec } = makeMatch(20, { duel: true });
     m.health.immortal = true;

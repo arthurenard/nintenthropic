@@ -140,6 +140,11 @@ export class Bandit {
     return this.state !== "reserve" && this.alive;
   }
 
+  /** The High Noon duelist, still walking his paces or standing off: the bell has not tolled. */
+  get beforeTheBell(): boolean {
+    return this.role === "duelist" && this.emergedAt === Number.POSITIVE_INFINITY;
+  }
+
   private enter(state: BanditState, dur: number): void {
     this.state = state;
     this.t = 0;

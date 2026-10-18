@@ -344,6 +344,18 @@ describe("the bandit state machine", () => {
     expect(b.emergedAt).toBeCloseTo(bell, 1);
   });
 
+  it("knows whether the bell has tolled: shot before it, it was not very sporting", () => {
+    const w = new FakeWorld(1);
+    const b = new Bandit(1, "duelist", byId("saloon_door"));
+    b.startDuel({ x: -8.6, y: 0, z: -24 }, { x: -1, y: 0, z: -21.5 });
+    stepFor(b, w, 2);
+    expect(b.beforeTheBell).toBe(true);
+    stepFor(b, w, DUEL_PACES * DUEL_PACE_TIME + DUEL_STANDOFF);
+    expect(b.beforeTheBell).toBe(false);
+    // An ordinary gunman never is.
+    expect(new Bandit(2, "gunman", byId("saloon_door")).beforeTheBell).toBe(false);
+  });
+
   it("dies and stays dead", () => {
     const w = new FakeWorld(1);
     const b = new Bandit(1, "gunman", byId("saloon_door"));

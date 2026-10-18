@@ -30,7 +30,7 @@ import { RigPool } from "../../engine/world/character";
 import { highNoonTemplate, streetRim } from "./world/rigs";
 import { DynamiteView } from "./world/dynamiteView";
 import { Hammer } from "../../engine/rules/hammer";
-import { chickenWord, innocentWord, reloadHint } from "./hints";
+import { bossWoundWord, chickenWord, innocentWord, reloadHint, UNSPORTING } from "./hints";
 import { HintLine, tipText, type TipId } from "./tips";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "../../engine/world/framing";
@@ -972,6 +972,8 @@ export class HighNoon implements Game, MatchListener {
 
   banditWound(b: Bandit, part: HitPart): void {
     this.cast.wound(b, part, this.shotPoint);
+    const word = b.role === "boss" ? bossWoundWord(b.health) : null;
+    if (word) this.popupAt(tmp2.set(b.pos.x, b.pos.y + 2.05, b.pos.z), word);
   }
 
   banditDeath(b: Bandit, part: HitPart | "blast", award: Award): void {
@@ -982,6 +984,10 @@ export class HighNoon implements Game, MatchListener {
     const special = award.labels.includes("Headshot") || award.labels.includes("Quick Draw") || award.labels.includes("Black Jack");
     this.popupAt(tmp2, this.awardText(award), special ? "gold" : "");
     if (award.labels.includes("Quick Draw")) this.sound.play("quick_draw", { volume: 0.9, delay: 0.05 });
+    if (b.beforeTheBell) {
+      this.hints.say(UNSPORTING, 2);
+      this.syncHint();
+    }
     this.pushReadouts(false);
   }
 
@@ -1114,6 +1120,9 @@ export class HighNoon implements Game, MatchListener {
     // first, and the toast after it. (The rules announce the find before the
     // shot has set the vane spinning: its length is read a frame later.)
     if (id === "vane") this.later(0, () => this.later(this.secretsWorld.vaneShowLeft() + 0.2, announce));
+    // The giant tumbleweed is found as the breather begins; it is announced
+    // once it has rolled into view (see intermission()).
+    else if (id === "tumbleweeds") this.later(1.8, announce);
     else announce();
   }
 

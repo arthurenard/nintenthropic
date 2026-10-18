@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chickenWord, innocentWord, reloadHint } from "./hints";
+import { bossWoundWord, chickenWord, innocentWord, reloadHint } from "./hints";
 
 describe("reloadHint", () => {
   it("speaks to the hand, the mouse and the touch screen in their own terms", () => {
@@ -32,5 +32,14 @@ describe("chickenWord", () => {
     expect(chickenWord(2)).toBe("The chicken is still fine.");
     expect(chickenWord(3)).toBeNull();
     expect(chickenWord(4)).toBeNull();
+  });
+});
+
+describe("bossWoundWord", () => {
+  it("makes light of Black Jack's first two wounds, and says nothing of the third", () => {
+    expect(bossWoundWord(2)).toBe("Just a scratch.");
+    expect(bossWoundWord(1)).toBe("Two scratches.");
+    expect(bossWoundWord(0)).toBeNull();
+    expect(bossWoundWord(3)).toBeNull();
   });
 });

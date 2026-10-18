@@ -836,7 +836,9 @@ export class Match implements BanditWorld {
   private kill(b: Bandit, part: HitPart | "blast"): void {
     if (!b.alive) return;
     const running = b.state === "running";
-    const quickDraw = part !== "blast" && this.time - b.emergedAt <= QUICK_DRAW_WINDOW;
+    // Drawn on the moment he showed himself; never on the duelist before
+    // the bell, who has not drawn yet (he has no moment to beat).
+    const quickDraw = part !== "blast" && Number.isFinite(b.emergedAt) && this.time - b.emergedAt <= QUICK_DRAW_WINDOW;
     if (b.lit && !b.released) {
       const stick = this.freeStick();
       if (stick) {

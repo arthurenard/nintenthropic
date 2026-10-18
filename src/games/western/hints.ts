@@ -40,6 +40,19 @@ function whoWasShot(role: TownsfolkRole): string {
 }
 
 /**
+ * Black Jack hit and still standing, said over him: his first wound, then
+ * his second. The third body shot (or any to the head) brings him down.
+ */
+export function bossWoundWord(healthLeft: number): string | null {
+  if (healthLeft === 2) return "Just a scratch.";
+  if (healthLeft === 1) return "Two scratches.";
+  return null;
+}
+
+/** The duelist shot before the bell: he goes down all the same, but the town saw. */
+export const UNSPORTING = "Not very sporting.";
+
+/**
  * The chicken's first two near misses, said where it stood (the third makes
  * it the Chicken of Steel, and the toast says so); after that, nothing.
  */
