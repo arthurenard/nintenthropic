@@ -212,8 +212,9 @@ export class SecretsWorld {
 
   // --- the cat -------------------------------------------------------------------------------
 
+  /** Where the cat sits, or null while it hisses and leaps: a shot then is no new scare, as it has not yet moved on from the last. */
   catCenter(): Vector3 | null {
-    if (!this.cat || this.catState === "leap") return null;
+    if (!this.cat || this.catState !== "sit") return null;
     return tmp.copy(this.cat.root.position).setY(this.cat.root.position.y + 0.15);
   }
 

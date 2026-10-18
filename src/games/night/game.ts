@@ -11,7 +11,7 @@ import { Dead as DeadClass, offsetPath, paceOf, type Dead } from "./rules/dead";
 import { takenBy } from "./rules/felled";
 import { Match, type MatchListener, type Results } from "./rules/match";
 import type { Award, WaveBonuses } from "./rules/scoring";
-import type { SecretId, SignLetter } from "./rules/secrets";
+import { catLine, DUCK_LINE, type SecretId, type SignLetter } from "./rules/secrets";
 import type { Survivor } from "./rules/survivors";
 import type { DeadKind, DeathCause, HitPart, LaneId } from "./rules/types";
 import type { WaveSpec } from "./rules/waves";
@@ -987,7 +987,11 @@ export class DeadOfNight implements Game, MatchListener {
     this.secretsWorld.moonShot(howl);
   }
 
-  catStartled(_startles: number): void {
+  catStartled(startles: number): void {
+    // Over where it sat, before it leaps: each scare costs it a life (it has plenty).
+    const line = catLine(startles);
+    const at = this.secretsWorld.catCenter();
+    if (line && at) this.popupAt(tmp2.copy(at).setY(at.y + 0.45), line, "gold");
     this.secretsWorld.catStartled();
   }
 
@@ -997,6 +1001,12 @@ export class DeadOfNight implements Game, MatchListener {
 
   duckSqueak(_squeaks: number): void {
     this.secretsWorld.duckSqueak();
+    const duck = this.assets.road.secrets.duck;
+    if (duck) {
+      duck.getWorldPosition(tmp2);
+      tmp2.y += 0.4;
+      this.popupAt(tmp2, DUCK_LINE, "gold");
+    }
   }
 
   secretFound(id: SecretId, name: string, found: number, total: number): void {

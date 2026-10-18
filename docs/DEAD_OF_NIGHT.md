@@ -209,6 +209,8 @@ goes. Keep the road clear."
 ## Secrets (easter eggs)
 
 Delightful, discoverable, never in the way. "Secrets 2 of 8" on the results.
+Their names, as the toast says them: Eat, The Scarecrow, Wrong Number, The
+Late Show, Something Howled Back, Nine Lives, Easy Listening, The Duck.
 
 1. **Gas & Eats.** The neon sign reads GAS & EATS. Shoot out letters until it
    reads EAT (shoot G, A, S, &, S): the sign sputters, and a groan from the
@@ -225,12 +227,14 @@ Delightful, discoverable, never in the way. "Secrets 2 of 8" on the results.
    time: a second howl answers, much closer.
 6. **The cat.** A black cat sits on a fence post by the corn. Shoot near it:
    it hisses and relocates to the top of the Gas & Eats sign, the wrecked
-   car's roof, the motel sign. It survives everything.
+   car's roof, the motel sign, and each scare costs it a life ("8 lives
+   left.", "7 lives left."). It survives everything.
 7. **The radio.** Through the station window behind the counter (visible at the
    right edge of a wide screen; off screen below about 1.5:1), a radio. Shoot it: it plays a few bars of a 1950s ballad
    (synthesised) until the next wave.
 8. **The duck.** A yellow rubber duck bobs in a puddle by the pumps. Shoot it:
-   it squeaks and spins. (Every game hides one duck. Find them all.)
+   it squeaks and spins ("The duck is fine."). (Every game hides one duck.
+   Find them all.)
 
 Konami on the arcade: the Golden Revolver → in Dead of Night, a golden rifle
 and a golden beam.

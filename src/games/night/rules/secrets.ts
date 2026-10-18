@@ -5,14 +5,15 @@
  */
 export type SecretId = "eat" | "scarecrow" | "booth" | "drivein" | "moon" | "cat" | "radio" | "duck";
 
+/** What the toast calls each one when it is found: what happened, not where. */
 export const SECRET_NAMES: Record<SecretId, string> = {
   eat: "Eat",
   scarecrow: "The Scarecrow",
-  booth: "The Phone Booth",
-  drivein: "The Drive-In",
-  moon: "The Moon",
+  booth: "Wrong Number",
+  drivein: "The Late Show",
+  moon: "Something Howled Back",
   cat: "Nine Lives",
-  radio: "The Radio",
+  radio: "Easy Listening",
   duck: "The Duck",
 };
 
@@ -30,6 +31,17 @@ export const MOON_HOWL = 3;
 export const MOON_ANSWER = 4;
 /** Shots near the cat before it has been everywhere: it survives everything. */
 export const CAT_STARTLES = 3;
+
+/**
+ * What a scare costs the cat, as the popup over it says ("8 lives left.");
+ * nothing on the last, when the secret's own name says the rest.
+ */
+export function catLine(startles: number): string | null {
+  return startles >= 1 && startles < CAT_STARTLES ? `${9 - startles} lives left.` : null;
+}
+
+/** The duck, shot: whatever happens on Route 9, it is fine. */
+export const DUCK_LINE = "The duck is fine.";
 
 /** What a shot at one of the secrets is, as the world's ray tests found it. */
 export type SecretShot =

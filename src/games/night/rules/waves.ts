@@ -95,6 +95,12 @@ export function fogFor(wave: number): number {
   return clamp(0.0155 + 0.0014 * (wave - 1), 0.0155, 0.029);
 }
 
+/**
+ * The night's own lines for a wave with nothing new in it, taken in turn
+ * (High Noon's "They keep coming." is the west's).
+ */
+export const PLAIN_WAVE_LINES: readonly string[] = ["Keep the road clear.", "The road is never empty.", "More of them.", "The corn is moving again."];
+
 function subtitleFor(wave: number): string {
   switch (wave) {
     case 1:
@@ -106,11 +112,14 @@ function subtitleFor(wave: number): string {
     case 4:
       return "Bloaters. Shoot them early.";
     case 5:
-      return "They keep coming.";
+      return "More of them.";
     case 6:
       return "The Mechanic.";
     default:
-      return isMechanicWave(wave) ? "The Mechanic is back." : wave % 2 ? "The fog is getting thicker." : "They keep coming.";
+      if (isMechanicWave(wave)) return "The Mechanic is back.";
+      // Said only while it is true: the fog stops thickening at wave 11.
+      if (wave % 2 === 1 && fogFor(wave) > fogFor(wave - 1)) return "The fog is getting thicker.";
+      return PLAIN_WAVE_LINES[wave % PLAIN_WAVE_LINES.length] as string;
   }
 }
 
