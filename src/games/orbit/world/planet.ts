@@ -400,14 +400,23 @@ void main() {
   vec3 albedo = sampleMap(tAlbedo, mg).rgb;
   float water = sampleMap(tWater, mg).r;
   // The lights: the night map read through the turn the game chose for
-  // this night (a lit country under the view; none by day).
-  vec3 lights = sampleMap(tNight, mapAt(hiLens(uNightMap * ng), 0.0)).rgb;
+  // this night (a lit country under the view; none by day). Where it is
+  // read is worked out here, in uniform flow; it is fetched, with the
+  // streets that break it up, only where the ground is in the dark - most
+  // of the planet in a pass, so most pixels skip four fetches.
+  MapAt mn = mapAt(hiLens(uNightMap * ng), 0.0);
+  float darkG = smoothstep(0.06, -0.08, dot(ng, s));
   // The detail under the map's pixel: terrain and water at two scales, streets at a finer one.
   Tri tgd = triAt(xg);
   vec4 dg1 = detailAt(tgd, 1.0);
   vec4 dg2 = detailAt(tgd, 4.0);
   vec4 det = mix(dg1, dg2, 0.4);
-  float streetsAt = detailAt(tgd, 8.0).r;
+  vec3 lights = vec3(0.0);
+  float streetsAt = 0.0;
+  if (darkG > 0.0) {
+    lights = sampleMap(tNight, mn).rgb;
+    streetsAt = detailAt(tgd, 8.0).r;
+  }
   // The relief: the height map's slopes (decoded to km), a little of the detail's.
   float hC = sampleMap(tHeight, mg).r;
   float hU = sampleMapAt(tHeight, mg, vec2(uHeightTexel * 0.35, 0.0)).r;
@@ -488,7 +497,7 @@ void main() {
     // Near the horizon the sea mirrors the sky.
     Lg += water * (0.02 + 0.98 * pow(1.0 - ndv, 5.0)) * SUN_E * vec3(0.02, 0.035, 0.07) * clamp(muG + 0.1, 0.0, 1.0);
     // City lights in the dark, broken into streets and blocks; the "HI" blinks back when asked.
-    float dark = smoothstep(0.06, -0.08, muG);
+    float dark = darkG;
     float hiBoost = 1.0 + uHi.w * exp(-pow(acos(clamp(dot(ng, uHi.xyz), -1.0, 1.0)) * R / 45.0, 2.0));
     // Broken hard into streets and blocks (mean 1), evened out where the
     // streets are finer than a pixel. Not in the environment light: at the
