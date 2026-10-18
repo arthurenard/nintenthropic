@@ -282,7 +282,6 @@ export class OrbitalDecay implements Game, MatchListener {
     this.floats = new Floats(this.scenery.floats, this.visualRandom);
     this.floats.reducedMotion = ctx.settings.reducedMotion;
     // Everything lit at run time through the one tone curve.
-    for (const root of [...this.debris.materials().map(() => null)]) void root;
     for (const v of Object.values(library)) for (const variant of v) {
       stage.tone.patchTree(variant.whole);
       for (const p of variant.pieces) stage.tone.patchTree(p);
