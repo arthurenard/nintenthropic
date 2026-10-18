@@ -330,8 +330,15 @@ export class Effects {
 
   /** A glow for this frame only. */
   glowNow(x: number, y: number, z: number, size: number, r: number, g: number, b: number, a: number): void {
-    this.now.emit(x, y, z, 0, 0, 0, 0.03, size, size, [r, g, b, a], [r, g, b, a]);
+    // Dozens a frame (every lamp at night, every item's light): one colour reused, since emit copies it.
+    const c = this.glowColour;
+    c[0] = r;
+    c[1] = g;
+    c[2] = b;
+    c[3] = a;
+    this.now.emit(x, y, z, 0, 0, 0, 0.03, size, size, c, c);
   }
+  private readonly glowColour: [number, number, number, number] = [0, 0, 0, 0];
 
   /** One soft mote of a moving thing's trail. */
   trail(x: number, y: number, z: number, r: number, g: number, b: number, size = 0.4): void {

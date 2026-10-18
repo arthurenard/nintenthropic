@@ -525,7 +525,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
           const fz = Math.cos(k.heading);
           const rx = -Math.cos(k.heading);
           const rz = Math.sin(k.heading);
-          for (const s of [-1, 1]) {
+          for (let s = -1; s <= 1; s += 2) {
             effects.glowNow(k.x + fx * 1.55 + rx * s * 0.2, k.y + 0.52, k.z + fz * 1.55 + rz * s * 0.2, 1.0, 1.0, 0.92, 0.7, 0.8);
             effects.glowNow(k.x - fx * 1.3 + rx * s * 0.4, k.y + 0.9, k.z - fz * 1.3 + rz * s * 0.4, 0.55, 1.0, 0.1, 0.08, 0.7);
           }
