@@ -30,7 +30,7 @@ import { RigPool } from "../../engine/world/character";
 import { highNoonTemplate, streetRim } from "./world/rigs";
 import { DynamiteView } from "./world/dynamiteView";
 import { Hammer } from "../../engine/rules/hammer";
-import { innocentWord, reloadHint } from "./hints";
+import { chickenWord, innocentWord, reloadHint } from "./hints";
 import { HintLine, tipText, type TipId } from "./tips";
 import { Effects } from "./world/effects";
 import { checkFraming, chromeKeepOut, fitFraming, type Framing, type Sight } from "../../engine/world/framing";
@@ -1050,7 +1050,7 @@ export class HighNoon implements Game, MatchListener {
     // they stood, and a calm word on the line about who it was.
     tmp2.set(p.pos.x, p.pos.y + 2.05, p.pos.z);
     this.popupAt(tmp2, this.awardText(award), "danger");
-    this.hints.say(innocentWord(p.role), 2);
+    this.hints.say(innocentWord(p.role, this.match.scorer.townsfolkHit), 2);
     this.syncHint();
   }
 
@@ -1092,7 +1092,11 @@ export class HighNoon implements Game, MatchListener {
     if (tune) this.secretsWorld.pianoTune();
   }
 
-  chickenStartled(_hits: number): void {}
+  chickenStartled(hits: number): void {
+    const word = chickenWord(hits);
+    const at = this.ambient.chickenCenterOrNull();
+    if (word && at) this.popupAt(at, word);
+  }
 
   tumbleweedShot(count: number, giantEarned: boolean): void {
     if (giantEarned) this.popupAt(this.shotPoint, "Wait for it…", "gold");

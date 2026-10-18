@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isHighNoon, SecretTracker } from "./secrets";
+import { isHighNoon, SECRET_NAMES, SECRETS_TOTAL, SecretTracker } from "./secrets";
 
 describe("secrets", () => {
   it("the bell: three tolls in a row open the church doors", () => {
@@ -58,6 +58,11 @@ describe("secrets", () => {
     expect(s.giantRolled()).toBe(true);
     expect(s.giantPending).toBe(false);
     expect(s.tumbleweed().giant).toBe(false);
+  });
+
+  it("names each of the eight, the ones you play for by what you did", () => {
+    expect(Object.keys(SECRET_NAMES)).toHaveLength(SECRETS_TOTAL);
+    expect(SECRET_NAMES).toMatchObject({ bell: "Three Tolls", vane: "Pointing at You", water_tower: "Spring a Leak", piano: "Honky-Tonk" });
   });
 
   it("high noon is 12:00 to 12:05 on the player's clock", () => {
