@@ -19,7 +19,7 @@ import type { Award, PassBonuses } from "./rules/scoring";
 import { ASTRONAUT_PASS, DUCK_PASS, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
 import { ALARM_BELOW, BREATHER, DERELICT_DEPTH, INTEGRITY_MAX, KINDS } from "./rules/tuning";
 import { normalize, scale, type V3 } from "./rules/vec";
-import { HintLine, tipText, ventHint, type TipId } from "./tips";
+import { droneShotLine, HintLine, tipText, ventHint, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type OrbitAssets } from "./world/assets";
 import { R as PLANET_R } from "./world/atmosphere";
@@ -1169,11 +1169,11 @@ export class OrbitalDecay implements Game, MatchListener {
     }
   }
 
-  droneShot(award: Award): void {
+  droneShot(award: Award, hits: number, mending: boolean): void {
     this.sound.play("orbit_drone_hit", { volume: 0.9 });
     this.effects.deflect(this.droneView.center, tmp.copy(this.camera.camera.position).sub(this.droneView.center).normalize(), this.droneView.center.distanceTo(this.camera.camera.position));
     this.popupAt(this.droneView.center, this.awardText(award), "danger");
-    this.hints.say("That was the drone.", 2);
+    this.hints.say(droneShotLine(hits, mending), 2);
     this.syncHint();
   }
 
@@ -1216,7 +1216,10 @@ export class OrbitalDecay implements Game, MatchListener {
     switch (id) {
       case "astronaut": {
         const shot = this.shooter.result.target;
-        this.secrets.astronautShot(shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at);
+        const at = shot.kind === "secret" && shot.shot.secret === "astronaut" && shot.shot.at;
+        this.secrets.astronautShot(at);
+        // Shot square on, there was never anyone there.
+        if (at) this.popupAt(this.shooter.result.point, "Only a sticker.", "gold");
         break;
       }
       case "toolbag":

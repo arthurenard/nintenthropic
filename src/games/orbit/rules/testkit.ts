@@ -55,7 +55,7 @@ export class Recorder implements MatchListener {
   paneFailed(pane: number, breach: Breach) { this.note("paneFailed", pane, breach); }
   alarm(on: boolean) { this.note("alarm", on); }
   drone(event: string) { this.note("drone", event); }
-  droneShot(award: Award) { this.note("droneShot", award); }
+  droneShot(award: Award, hits: number, mending: boolean) { this.note("droneShot", award, hits, mending); }
   laser(event: string) { this.note("laser", event); }
   streakUp(m: number) { this.note("streakUp", m); }
   score(v: number) { this.note("score", v); }

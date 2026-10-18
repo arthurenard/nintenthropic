@@ -9,11 +9,11 @@ export const SECRET_NAMES: Record<SecretId, string> = {
   astronaut: "The Spacewalker",
   toolbag: "Lost and Found",
   duck: "The Duck",
-  arm: "A Wave from the Arm",
+  arm: "It Waved Back",
   capsule: "Privacy, Please",
   storm: "The Aurora",
   moon: "Flag on the Moon",
-  message: "Hello, World",
+  message: "Somebody’s Home",
 };
 
 export const SECRETS_TOTAL = 8;

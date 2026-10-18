@@ -344,6 +344,12 @@ describe("the drone and the secrets", () => {
     expect(match.scorer.score).toBe(200);
     expect(listener.count("droneShot")).toBe(1);
     expect(match.drone.knocked).toBe(true);
+    // Docked, it was mending nothing; the next time it is caught at a window.
+    expect(listener.last("droneShot")?.args.slice(1)).toEqual([1, false]);
+    match.drone.state = "mending";
+    match.drone.to = 2;
+    match.resolveShot({ kind: "drone" });
+    expect(listener.last("droneShot")?.args.slice(1)).toEqual([2, true]);
   });
 
   it("calls up the aurora after three lightning flashes in one breather", () => {
