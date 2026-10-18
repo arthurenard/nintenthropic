@@ -73,6 +73,7 @@ import {
   finishWin,
   horn,
   lapChime,
+  shutter,
   uiBack,
   uiJoin,
   uiLeave,
@@ -160,6 +161,8 @@ export const KART_CUES: Record<string, CueSpec> = {
   // --- Handheld's rubber duck, and a horn ---------------------------------------------------------------------------------------
   kart_duck: { recipe: duckSqueak, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.03, minGap: 0.2, expect: [0.4, 1.0] },
   kart_horn: { recipe: horn, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.01, minGap: 0.1, expect: [0.5, 1.2] },
+  // The photo finish's flash: the screen's own camera, so it bypasses the world like the interface.
+  kart_shutter: { recipe: shutter, pack: "kart", bus: "ui", level: -7, priority: 2, maxInstances: 1, vary: 0.02, minGap: 0.3, expect: [0.15, 0.4] },
 
   // --- the interface -----------------------------------------------------------------------------------------------------------
   kart_ui_select: { recipe: uiSelect, pack: "kart", bus: "ui", level: -12, priority: 1, maxInstances: 2, vary: 0, minGap: 0.03, expect: [0.1, 0.6] },

@@ -468,7 +468,7 @@ class RaceAudioImpl implements RaceAudio {
 
     const karts = new Map<number, KartView>();
     for (const k of view.karts) karts.set(k.id, k);
-    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps };
+    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps, racers: view.racers };
 
     this.phases(view);
     this.events(view.events, scene);
