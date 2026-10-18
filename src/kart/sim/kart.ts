@@ -282,6 +282,17 @@ function checkHazards(w: World, k: KartState, emit: Emit): void {
   }
 }
 
+/** Is the kart standing at the barrier (where `placeOnTrack` last stood it back), facing into it? */
+function noseOnBarrier(w: World, k: KartState): boolean {
+  const side = k.offset > 0 ? 1 : -1;
+  const terrain = w.plan.terrain;
+  if (isOpen(terrain, k.s, side)) return false;
+  const c = w.geo.at(k.s);
+  if (Math.abs(k.offset) < c.width / 2 + barrierDistance(terrain, k.s, side) - TUNING.barrierInset - 0.05) return false;
+  // The way out through the barrier, on this side, against the way the kart faces.
+  return Math.sin(k.heading) * -c.tz * side + Math.cos(k.heading) * c.tx * side > 0;
+}
+
 /**
  * Where the kart is on the track, with the barriers: finds s and offset,
  * stands the kart back inside the barrier if it went through (killing the
@@ -328,9 +339,14 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
         }
         if (report) emit({ type: "wall", kart: k.id, strength: Math.min(1, into / W.fullStrength) });
       } else {
-        const scrape = Math.max(0, 1 - W.scrape * TICK);
-        k.vx *= scrape;
-        k.vz *= scrape;
+        // A scrape wears W.scrape m/s off the speed each second. (It took that share of the speed each tick, 5%: a kart
+        // brushing the barrier round the outside of a bend, which it touches on every tick, was down to a crawl in a second.)
+        const speed = Math.hypot(k.vx, k.vz);
+        if (speed > 0) {
+          const keep = Math.max(0, speed - W.scrape * TICK) / speed;
+          k.vx *= keep;
+          k.vz *= keep;
+        }
       }
     }
   }
@@ -522,8 +538,10 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     }
     k.steer += (steerTarget - k.steer) * (1 - Math.exp(-S.response * TICK));
 
-    // Turning: the heading comes round, the velocity follows by the grip.
-    k.heading = wrapAngle(k.heading - yawRate(k.steer, fwd) * TICK * (fwd >= 0 ? 1 : -1));
+    // Turning: the heading comes round, the velocity follows by the grip. Nose against the barrier, it comes round as at a
+    // walking pace however slow the kart is.
+    const turning = throttle > 0 && !braking && fwd < W.pivot && noseOnBarrier(w, k) ? W.pivot : fwd;
+    k.heading = wrapAngle(k.heading - yawRate(k.steer, turning) * TICK * (turning >= 0 ? 1 : -1));
     const sin = Math.sin(k.heading);
     const cos = Math.cos(k.heading);
     let along = k.vx * sin + k.vz * cos;

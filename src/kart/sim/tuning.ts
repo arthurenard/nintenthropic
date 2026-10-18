@@ -218,6 +218,13 @@ export const TUNING = {
     nudge: 0.5,
     /** Hit speed (m/s) that makes a wall event of strength 1. */
     fullStrength: 20,
+    /**
+     * Nose against the barrier and slower than this (m/s), with the throttle
+     * on: the wheel turns the kart as it would at this speed (the tyres
+     * scrabble it round), so a kart that met the barrier head-on is never
+     * wedged there.
+     */
+    pivot: 4,
   },
 
   items: {

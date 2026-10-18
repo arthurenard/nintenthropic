@@ -200,7 +200,11 @@ Starting numbers (tune by driving; keep them in one `tuning.ts`):
 - **Speed.** Top 24 m/s on the road, ~90% of it in 3 s. Off the road (more
   than half the width from the centre) top speed falls to 11 m/s with drag.
   A barrier stands 6 m beyond each edge: hitting it kills the speed into it,
-  loses 30% of the rest, and makes a `wall` event.
+  loses 30% of the rest, and makes a `wall` event. Brushing it (under 3 m/s
+  into it) wears 3 m/s off the speed each second (it was 5% of the speed a
+  tick, which had a kart on the outside of a bend crawling in a second).
+  Nose against it and nearly stopped, the wheel turns the kart as it would at
+  4 m/s, so a kart that met it head-on is never wedged.
 - **Turning.** Yaw rate up to ~2.2 rad/s, rising with speed from nothing at a
   standstill to full by 6 m/s, a little less at top speed. Grip pulls the
   velocity toward the heading quickly (a slight slide, never ice).

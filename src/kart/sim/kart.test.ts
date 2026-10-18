@@ -104,6 +104,44 @@ describe("barriers", () => {
     expect(fastest).toBeGreaterThan(20);
   });
 
+  /** Stands kart 0 at the right-hand barrier 60 m up the straight, turned `into` degrees toward it, going `speed`. */
+  function atBarrier(into: number, speed: number) {
+    const r = solo();
+    const s = 60;
+    const limit = harbour.at(s).width / 2 + 6 - 0.8;
+    const p = harbour.point(s, limit);
+    const h = harbour.heading(s) - (into * Math.PI) / 180;
+    patch(r, 0, { x: p.x, z: p.z, s, offset: limit, progress: s, heading: h, vx: Math.sin(h) * speed, vz: Math.cos(h) * speed });
+    return { r, limit };
+  }
+
+  it("let a kart brushing along them keep its speed: a scrape wears off 3 m/s a second, no more", () => {
+    // Nose 5° into the barrier, on the grass beside it, flat out: it touches on every tick.
+    const { r } = atBarrier(5, 10);
+    let touching = 0;
+    for (let i = 0; i < 60; i++) {
+      run(r, 1, () => input({ throttle: 1 }));
+      if (Math.abs(harbour.project(view(r).x, view(r).z).offset) > HARBOUR_LIGHTS.width / 2 + 5) touching++;
+    }
+    expect(touching).toBeGreaterThan(50);
+    // It took 5% of the speed a tick, and a kart on the barrier was down to 2 m/s in a second.
+    expect(view(r).speed).toBeGreaterThan(7);
+  });
+
+  it("never wedge a kart that met them head-on: the wheel brings it round, and it drives off", () => {
+    for (const steer of [-1, 1]) {
+      const { r, limit } = atBarrier(90, 0);
+      run(r, 120, () => input({ throttle: 1, steer }));
+      const k = view(r);
+      expect(k.speed, `steer ${steer}`).toBeGreaterThan(3);
+      expect(Math.abs(harbour.project(k.x, k.z).offset), `steer ${steer}`).toBeLessThan(limit - 0.5);
+    }
+    // With the wheel straight it stays put, nose to the barrier: the wheel is what frees it.
+    const { r } = atBarrier(90, 0);
+    run(r, 90, () => input({ throttle: 1 }));
+    expect(Math.abs(view(r).speed)).toBeLessThan(0.5);
+  });
+
   it("hold a kart that is shoved at them", () => {
     const r = solo();
     for (const side of [1, -1]) {
