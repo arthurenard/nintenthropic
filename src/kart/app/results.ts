@@ -10,7 +10,7 @@
  */
 import type { GrandPrixState, LobbyState, RaceResult, RacerSetup, Session } from "../contract";
 import { $, element, setText } from "../../ui/dom";
-import { photoFinish, resultLine, type PhotoFinish } from "./eggs";
+import { photoFinish, resultLine, sofaLine, type PhotoFinish } from "./eggs";
 import { cupById, pointsFor } from "../grandprix";
 import { lapsLabel, ordinal, raceTime } from "./format";
 import { hostName, standingRows, type StandingRow } from "./roster";
@@ -69,7 +69,8 @@ export class ResultsScreen {
     if (only && only.place <= 3) title.dataset.place = String(only.place);
     else delete title.dataset.place;
 
-    // Under it, a word on how it went for that one player, and who set the fastest lap.
+    // Under it, a word on how it went for that one player (or, for friends on one screen, who beat whom), and who set the
+    // fastest lap.
     const first = rows.find((row) => row.place === 1);
     const line = only
       ? resultLine({
@@ -81,7 +82,7 @@ export class ResultsScreen {
           secondTime: rows.find((row) => row.place === 2)?.time ?? null,
           rescues: rescues?.get(only.kart) ?? 0,
         })
-      : null;
+      : sofaLine([...mine].sort((a, b) => a.place - b.place).map((row) => row.name));
     const fastest = rows.find((row) => row.fastest);
     const words = [line, fastest ? `Fastest lap: ${fastest.name}, ${raceTime(fastest.bestLap)}.` : null].filter(Boolean).join(" ");
     const sub = $("results-sub");

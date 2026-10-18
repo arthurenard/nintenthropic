@@ -11,6 +11,7 @@ import type { DriverControl, RaceResult } from "../contract";
 import { loadUnlocks, foundDuck } from "../unlocks";
 import { MIRROR_SUFFIX } from "../track/mirror";
 import { TRACKS } from "../track/tracks";
+import { list } from "./format";
 
 // ─── The Konami code ─────────────────────────────────────────────────────────
 
@@ -223,6 +224,12 @@ export function resultLine(facts: FinishFacts): string | null {
     return gap < 0.1 ? `A whisker behind ${winner}.` : `${gap.toFixed(1)} s behind ${winner}.`;
   }
   return null;
+}
+
+/** Two to four players on one screen: who got the bragging rights. `names` are theirs, best place first. */
+export function sofaLine(names: readonly string[]): string | null {
+  if (names.length < 2) return null;
+  return `${names[0]} beat ${list(names.slice(1))}.`;
 }
 
 /** One row of a cup's final standings, as the podium needs it. */

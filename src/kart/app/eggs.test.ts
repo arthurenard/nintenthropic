@@ -15,6 +15,7 @@ import {
   podiumLine,
   recordDuck,
   resultLine,
+  sofaLine,
   taunts,
   tipsFor,
   tricksFor,
@@ -216,6 +217,15 @@ describe("the line under the result", () => {
     // Last of three is only third; two rescues are only bad luck.
     expect(resultLine({ ...facts, place: 3, field: 3, time: 70 })).toBeNull();
     expect(resultLine({ ...facts, place: 4, time: 70, rescues: 2 })).toBeNull();
+  });
+});
+
+describe("the line for friends on one screen", () => {
+  it("says who beat whom, best first", () => {
+    expect(sofaLine(["Maya", "Finn"])).toBe("Maya beat Finn.");
+    expect(sofaLine(["Ada", "Maya", "Finn", "Kit"])).toBe("Ada beat Maya, Finn and Kit.");
+    expect(sofaLine(["Maya"])).toBeNull();
+    expect(sofaLine([])).toBeNull();
   });
 });
 
