@@ -9,6 +9,7 @@
  */
 import { Group, Mesh, Object3D, Quaternion, Vector3, type Material } from "three";
 import { contractName, findNode } from "../../../engine/world/names";
+import { disposablesUnder, type Disposable } from "../../../engine/world/scene";
 import type { Fragment } from "../rules/debris";
 import { tankShows } from "../rules/debris";
 import type { Effects } from "./effects";
@@ -323,6 +324,28 @@ export class DebrisView {
     for (const id of [...this.views.keys()]) this.remove(id);
     for (const d of this.drifters) d.obj.removeFromParent();
     this.drifters.length = 0;
+  }
+
+  /**
+   * Lets go of what the scene does not hold when the game is put away: the
+   * library's wholes and pieces and the Derelict's parts (kept loose, out of
+   * any scene, for the views to clone) and the views parked in the pool.
+   * The page frees what came from files itself; stand-ins built in code
+   * (development, tests) are freed only here.
+   */
+  dispose(): void {
+    const loose = new Set<Disposable>();
+    for (const list of Object.values(this.library)) {
+      for (const v of list) {
+        disposablesUnder(v.whole, loose);
+        for (const p of v.pieces) disposablesUnder(p, loose);
+      }
+    }
+    disposablesUnder(this.derelict.root, loose);
+    for (const p of this.derelict.pieces) disposablesUnder(p, loose);
+    for (const parked of this.pool.values()) for (const o of parked) disposablesUnder(o, loose);
+    for (const d of this.drifters) disposablesUnder(d.obj, loose);
+    for (const d of loose) d.dispose();
   }
 
   /** Every material the debris uses, for warming up and the tone. */

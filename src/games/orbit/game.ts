@@ -6,6 +6,7 @@ import { mulberry32 } from "../../engine/rules/rng";
 import { ScreenFlash } from "../../engine/world/flash";
 import { checkFraming } from "../../engine/world/framing";
 import { contractName } from "../../engine/world/names";
+import { disposeTree } from "../../engine/world/scene";
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
@@ -802,6 +803,11 @@ export class OrbitalDecay implements Game, MatchListener {
     this.glass?.dispose();
     this.beams?.dispose();
     this.rings?.dispose();
+    // What the scene does not hold: the debris library and the Derelict
+    // (loose, for cloning), and what is left of the files the walk-ons and
+    // the drone were taken from. Each load builds its own, so none is kept.
+    this.debris?.dispose();
+    if (this.assets) for (const rest of [this.assets.debris, this.assets.derelict, this.assets.drone, this.assets.extras]) disposeTree(rest);
     this.stage?.dispose();
     if (this.previousToneMapping !== null) this.ctx.renderer.toneMapping = this.previousToneMapping;
   }
