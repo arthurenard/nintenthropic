@@ -12,7 +12,7 @@ import { trackByRaceId } from "../src/kart/track/mirror";
 export const state = (page: Page): Promise<KartAppSnapshot> =>
   page.evaluate(() => window.gripTest!.state()) as Promise<KartAppSnapshot>;
 
-/** The race's name, when the page is on a screen. */
+/** The screen the page is on (start, lobby, race, results...). */
 export const screenOf = async (page: Page): Promise<string> => (await state(page)).screen;
 
 /** Opens Grip Prix over the in-browser network (tabs of one browser are the room). */
@@ -70,8 +70,6 @@ export class KeyboardDriver {
   private done: Promise<void> = Promise.resolve();
   private readonly held = new Set<string>();
   private geometry: { id: string; geometry: TrackGeometry } | null = null;
-  /** Counts the loop's turns, so a test can tell it is alive. */
-  turns = 0;
 
   constructor(
     private readonly page: Page,
@@ -120,7 +118,6 @@ export class KeyboardDriver {
       } catch {
         // The page is between screens.
       }
-      this.turns++;
       const race = snapshot?.race;
       const id = snapshot?.mine[this.which];
       const kart = race && id !== null && id !== undefined ? race.karts.find((candidate) => candidate.id === id) : undefined;
@@ -179,7 +176,6 @@ export class WheelDrivers {
   private running = false;
   private done: Promise<void> = Promise.resolve();
   private geometry: { id: string; geometry: TrackGeometry } | null = null;
-  turns = 0;
 
   constructor(
     private readonly page: Page,
@@ -215,7 +211,6 @@ export class WheelDrivers {
       } catch {
         // The page is between screens.
       }
-      this.turns++;
       const race = snapshot?.race;
       if (!race || snapshot?.screen !== "race" || race.phase === "countdown") {
         await this.set(race?.phase === "countdown" ? null : Array.from({ length: this.players }, () => 0));

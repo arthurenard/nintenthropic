@@ -7,9 +7,10 @@ const env: Record<string, string | undefined> =
   (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 
 /**
- * A picture of the page, in HANDY_SHOTS (or the test's own output folder),
- * under the project's size. By default it waits for entrance animations (450
- * ms springs) to settle; `settle` 0 catches a moment as it happens.
+ * A picture of the page, in E2E_SHOTS (or the test's own output folder),
+ * in a folder named after the Playwright project. By default it waits for
+ * entrance animations (450 ms springs) to settle; `settle` 0 catches a
+ * moment as it happens.
  */
 export async function shot(
   page: Page,
@@ -19,7 +20,7 @@ export async function shot(
   /** Only this part of the page (CSS pixels), for a close-up. */
   clip?: { x: number; y: number; width: number; height: number },
 ): Promise<void> {
-  const folder = env.HANDY_SHOTS ?? info.outputDir;
+  const folder = env.E2E_SHOTS ?? info.outputDir;
   if (settle) await page.waitForTimeout(settle);
   await page.screenshot({ path: `${folder}/${info.project.name}/${name}.png`, ...(clip ? { clip } : {}) });
 }
@@ -67,13 +68,13 @@ export type Snapshot = {
 };
 
 export function snapshot(page: Page): Promise<Snapshot> {
-  return page.evaluate(() => window.handyTest!.snapshot() as unknown as Snapshot);
+  return page.evaluate(() => window.arcadeTest!.snapshot() as unknown as Snapshot);
 }
 
 export function pose(page: Page, value: HandPose | null): Promise<void> {
   if (value?.indexTip) aimedAt.set(page, aimOf(value.indexTip));
   else aimedAt.delete(page);
-  return page.evaluate((p) => window.handyTest!.pose(p), value);
+  return page.evaluate((p) => window.arcadeTest!.pose(p), value);
 }
 
 /** The point of the view a fingertip aims at: fingertipFor, the other way. */
@@ -97,11 +98,11 @@ export async function moveTo(page: Page, x: number, y: number): Promise<void> {
     const steps = Math.ceil(Math.hypot(x - from[0], y - from[1]) / 0.3);
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
-      await page.evaluate((p) => window.handyTest!.pose(p), handAt(from[0] + (x - from[0]) * t, from[1] + (y - from[1]) * t));
+      await page.evaluate((p) => window.arcadeTest!.pose(p), handAt(from[0] + (x - from[0]) * t, from[1] + (y - from[1]) * t));
       await page.waitForTimeout(30);
     }
   }
-  await page.evaluate((p) => window.handyTest!.pose(p), handAt(x, y));
+  await page.evaluate((p) => window.arcadeTest!.pose(p), handAt(x, y));
   aimedAt.set(page, [x, y]);
 }
 
@@ -143,7 +144,7 @@ export async function playWithHand(page: Page, url = "/?input=script#arcade"): P
 
 /** The game's own view, for the tests that need to know where things are (dev and test builds). */
 export function gameDebug(page: Page, script: string): Promise<unknown> {
-  return page.evaluate(`(() => { const debug = window.handyTest.internals().session.game.debug; return ${script}; })()`);
+  return page.evaluate(`(() => { const debug = window.arcadeTest.internals().session.game.debug; return ${script}; })()`);
 }
 
 /**

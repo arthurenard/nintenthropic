@@ -3,13 +3,13 @@
  *
  * The screens (this folder) know nothing of PeerJS, MediaPipe, three.js or
  * the sim: they ask a `Services` for what they need and talk to it in the
- * contract's types (../contract.ts). `fakes.ts` holds stand-ins for all of it;
- * main.ts picks one `Services`, on one marked line. To wire the real parts,
- * write a `createServices()` that builds this interface from net/, input/,
- * render/ and tracking/, and swap that line.
+ * contract's types (../contract.ts). services.real.ts builds this interface
+ * from net/, input/, render/ and the hand tracker, and main.ts hands it to
+ * the screens.
  */
 import type { KartSound, MusicKind } from "../audio";
 import type { DriverControl, RaceRenderer, RaceView, Session, SessionClosed, TrackDef } from "../contract";
+import type { Steering } from "../input";
 import type { PodiumRenderer } from "../render/podium";
 import type { TrackerCounts } from "./handsFirst";
 
@@ -39,21 +39,17 @@ export class SessionFailure extends Error {
 
 // --- the wheel --------------------------------------------------------------------------------------------
 
-/** How far the wheel turns for full lock (Settings, Steering): Gentle 50°, Normal 40°, Quick 30°. */
-export type Steering = "gentle" | "normal" | "quick";
-
-export const STEERING_DEGREES: Readonly<Record<Steering, number>> = { gentle: 50, normal: 40, quick: 30 };
+/**
+ * How far the wheel turns for full lock (the You screen's Steering): Gentle 50°, Normal 40°, Quick 30°. The wheel's
+ * own type (input/wheel.ts, with its STEERING_LOCK), so the screens and the reader cannot disagree.
+ */
+export type { Steering };
 
 export interface WheelOptions {
   /**
-   * Two players on one camera: the picture is split down the middle, and
-   * this wheel is the left half's or the right half's. Absent: the whole picture.
-   */
-  half?: "left" | "right";
-  /**
-   * Up to four players on one camera: the picture is split into `of` equal
+   * Two to four players on one camera: the picture is split into `of` equal
    * columns and this wheel is column `index` (0 is the leftmost as the
-   * player sees themself). Absent: the whole picture (or the `half`).
+   * player sees themself). Absent: the whole picture.
    */
   seat?: { index: number; of: number };
   steering: Steering;
@@ -171,11 +167,11 @@ export interface SoundReport {
 }
 
 /**
- * Grip Prix's sound for the screens. Super Claude Bros. has one sound preference (on or
- * off, shared with the arcade) and a master volume; the race page adds the
- * music and the effects. Browsers start audio only after a gesture, so
- * nothing is made until `wake` (the page's first click or key press), and
- * with sound off nothing is made at all.
+ * Grip Prix's sound for the screens. The site has one sound preference, on or
+ * off, which every game shares, and a master volume in the arcade's Settings;
+ * Grip Prix adds its own Music and Effects sliders. Browsers start audio only
+ * after a gesture, so nothing is made until `wake` (the page's first click or
+ * key press), and with sound off nothing is made at all.
  */
 export interface SoundService {
   readonly muted: boolean;
@@ -225,7 +221,7 @@ export interface Services {
   previewColumns(container: HTMLElement, seats: readonly ColumnSeat[], size: "corner" | "large"): Disposable;
   /**
    * The podium's picture, on a canvas of its own: the ceremony after a Grand Prix. May throw WebGLUnavailable.
-   * Absent in stand-ins, whose podium is the final standings alone.
+   * Optional: without it (or where it throws) the podium is the final standings alone.
    */
   podium?(canvas: HTMLCanvasElement): PodiumRenderer;
   /** The tracks the host may choose from, in order. */

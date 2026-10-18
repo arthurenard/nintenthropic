@@ -27,10 +27,8 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-from . import bl, shapes, fracture
+from . import bl, shapes
 from .bl import rng
-
-DENSITY = {'alu': 2700.0 * 0.35, 'box': 600.0, 'panel': 180.0, 'solar': 60.0, 'core': 3000.0}
 
 
 def to_object(bm, name, mats, col, uv_scale=1.0, faceted=None):
@@ -108,7 +106,7 @@ def shrapnel_tube(r):
         if abs(abs(z) - 0.1) < 1e-4:
             v.co.z += r.uniform(-0.025, 0.012) * (1 if z > 0 else -1)
     # give the wall thickness
-    ret = bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.003)
+    bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.003)
     shapes.crumple(bm, 0.004, 25.0, r.uniform(0, 9))
     shapes.transform(bm, Matrix.Rotation(math.radians(90), 4, 'Y'))
     for f in bm.faces:
@@ -140,7 +138,6 @@ def shrapnel_nutplate(r):
         g.cyl(Matrix.Identity(4), (x, y, 0.006), (x, y, 0.012), 0.009, 'steel', seg=6, smooth=False)
         g.cyl(Matrix.Identity(4), (x, y, -0.04), (x, y, 0.006), 0.004, 'steel', seg=8)
     idx = {'torn_alu': 0, 'burnt': 1, 'steel': 2}
-    base = len(bm.verts)
     vs = [bm.verts.new(v) for v in g.V]
     bm.verts.ensure_lookup_table()
     for f, m in zip(g.F, g.FM):
@@ -486,8 +483,6 @@ def build(col, pieces_col=None):
     """Build every whole at the origin of its own grid slot. Returns
     [(object, kind, fracture_seed_count)]."""
     out = []
-    r = rng("debris")
-    x = 0.0
 
     def place(ob, row, i):
         # spread out while baking (so nothing shades anything else); the

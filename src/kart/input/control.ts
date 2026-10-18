@@ -28,7 +28,11 @@ export interface WheelControl extends DriverControl {
   /** The level offset in degrees, to be kept between visits and given back with this setter. */
   level: number;
   readonly levelled: boolean;
-  /** Takes the wheel as it is now for level; false when both hands are not in view. */
+  /**
+   * Takes the wheel as it is now for level; false when both hands are not in
+   * view, or when the wheel is turned too far to be level (which forgets the
+   * level it had).
+   */
   setLevel(): boolean;
   resetLevel(): void;
   /** Sets the level once the wheel has been held level and still for a second; `levelProgress` says how far along. */
@@ -41,7 +45,7 @@ export interface WheelControl extends DriverControl {
 
 /**
  * Drives with both hands, read from `source` (the tracker, which must be
- * looking for two hands, or four for two players on one camera).
+ * looking for two hands for each player on the camera: up to eight for four).
  *
  * The control runs on its own clock (`options.now`, performance.now by
  * default) rather than the `now` sample() is given: the camera's frames

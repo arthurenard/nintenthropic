@@ -6,7 +6,7 @@
  *     const audio = createRaceAudio(ctx.audio, { volumes: { music: 0.8, effects: 1 } });
  *     await audio.load(track.theme, setProgress);      // the kart sounds, and the track's music
  *     // every animation frame, with the view the renderer draws:
- *     audio.frame(view, localKarts, dt);
+ *     audio.frame(view, localKarts(session.views()), dt);
  *
  * and ``music("menu")``, ``music("results-win")`` and so on on the other
  * screens. It turns every RaceEvent into its sound, runs the loops that
@@ -22,6 +22,7 @@
 import type { AudioBus } from "../../engine/types";
 import { loadSoundPack } from "../../audio";
 import type { Pack } from "../../audio";
+import { volumeGain } from "../../audio/routing";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
 import type { KartView, RaceEvent, RaceView } from "../contract";
 import {
@@ -37,7 +38,7 @@ import {
 import { type Order, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
-import { type MusicTrack, MusicPlayer, beatTimes, sliderGain } from "./music/player";
+import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
 import { type PieceId, THEME_PIECES } from "./music/pieces";
 import { MUSIC_SAMPLE_RATE, type RenderedMusic } from "./music/render";
 import { type LocalKart, type Scene, falloff, hearThing, listenerAt, localOf } from "./scene";
@@ -48,7 +49,7 @@ export type { LocalKart } from "./scene";
 export interface RaceAudioOptions {
   /** Where music is synthesised: "auto" uses a Worker when the page can. */
   render?: "auto" | "worker" | "main";
-  /** The two sliders, 0..1 each (a slider's position: half way is a quarter of the power). Default 1 and 1. */
+  /** The two sliders, 0..1 each (a slider's position is squared: half way is a quarter of the level, about 12 dB down). Default 1 and 1. */
   volumes?: { music?: number; effects?: number };
   /** Stand-ins for tests. */
   renderer?: MusicRenderer;
@@ -199,7 +200,6 @@ class RaceAudioImpl implements RaceAudio {
   private trackId: string | null = null;
   private raceMusicStarted = false;
   private finalSwitched = false;
-  private finishAt = -10;
   private readonly seen: number[] = [];
   private readonly seenSet = new Set<number>();
 
@@ -218,7 +218,8 @@ class RaceAudioImpl implements RaceAudio {
   private loadedTheme: TrackTheme | null = null;
   private readonly tracks = new Map<string, MusicTrack>();
   private readonly inflight = new Map<string, Promise<MusicTrack | null>>();
-  private wanted: { piece: PieceId; key: string } | null = null;
+  /** The track last asked for ("meadow", "meadow-final"), while it renders and then plays. */
+  private wantedKey: string | null = null;
   private playingKey: string | null = null;
   private pendingFinal = false;
 
@@ -293,20 +294,19 @@ class RaceAudioImpl implements RaceAudio {
   music(kind: MusicKind | null): void {
     if (this.disposed || !this.player) return;
     if (kind === null) {
-      this.wanted = null;
+      this.wantedKey = null;
       this.playingKey = null;
       this.player.stop(0.8);
       return;
     }
     const piece = pieceFor(kind, this.loadedTheme);
     if (!piece) return;
-    const key = piece;
-    if (this.playingKey === key || this.wanted?.key === key) return;
-    this.wanted = { piece, key };
+    if (this.playingKey === piece || this.wantedKey === piece) return;
+    this.wantedKey = piece;
     this.finalSwitched = false;
     void this.track(piece, false).then((track) => {
-      if (!track || this.disposed || !this.wanted || this.wanted.key !== key) return;
-      this.playingKey = key;
+      if (!track || this.disposed || this.wantedKey !== piece) return;
+      this.playingKey = piece;
       this.player!.play(track, 0.9);
       if (this.pendingFinal && piece === this.loadedTheme) this.switchToFinal();
     });
@@ -356,7 +356,7 @@ class RaceAudioImpl implements RaceAudio {
     if (this.raceMusicStarted) return;
     this.raceMusicStarted = true;
     this.playingKey = null;
-    this.wanted = null;
+    this.wantedKey = null;
     this.music("race");
   }
 
@@ -370,7 +370,7 @@ class RaceAudioImpl implements RaceAudio {
     if (ready && this.playingKey === theme) {
       this.pendingFinal = false;
       this.playingKey = key;
-      this.wanted = { piece: theme as PieceId, key };
+      this.wantedKey = key;
       this.player.switchTo(ready);
       return;
     }
@@ -385,7 +385,7 @@ class RaceAudioImpl implements RaceAudio {
       if (!track || this.disposed || !this.pendingFinal || this.playingKey !== theme) return;
       this.pendingFinal = false;
       this.playingKey = key;
-      this.wanted = { piece: theme as PieceId, key };
+      this.wantedKey = key;
       this.player!.switchTo(track);
     });
   }
@@ -399,7 +399,7 @@ class RaceAudioImpl implements RaceAudio {
   }
 
   private get fx(): number {
-    return sliderGain(this.volumes.effects);
+    return volumeGain(this.volumes.effects);
   }
 
   pause(): void {
@@ -479,7 +479,6 @@ class RaceAudioImpl implements RaceAudio {
     this.engineLoops(scene, step);
     this.stateLoops(view, scene, step);
     this.roulette(scene);
-    // The flooded start coughs on the sim's own `flood` event, and the duck squeaks on its `duck` event (sim/eggs.ts).
     this.finalLapFallback(view, scene);
     this.lastPhase = view.phase;
   }
@@ -493,11 +492,10 @@ class RaceAudioImpl implements RaceAudio {
       this.pendingFinal = false;
       this.rolls.clear();
       this.puckHeading.clear();
-      this.finishAt = -10;
-      if (this.playingKey === `${this.loadedTheme}-final` && this.wanted) {
+      if (this.playingKey === `${this.loadedTheme}-final` && this.wantedKey) {
         // The last race ended in its final-lap music: the next one starts from the normal version.
         this.playingKey = null;
-        this.wanted = null;
+        this.wantedKey = null;
       }
     }
     if (view.phase === "racing" && !this.raceMusicStarted) this.startRaceMusic();
@@ -513,7 +511,6 @@ class RaceAudioImpl implements RaceAudio {
       if (this.seen.length > 256) this.seenSet.delete(this.seen.shift()!);
       orders.push(...ordersFor(e, scene));
       if (e.type === "final-lap" && localOf(scene, e.kart) && !this.finalSwitched) this.switchToFinal();
-      if (e.type === "finish" && localOf(scene, e.kart)) this.finishAt = this.clock;
     }
     // The most important first; no more than a handful at once, and no cue more than twice.
     orders.sort((a, b) => b.priority - a.priority);
@@ -574,7 +571,7 @@ class RaceAudioImpl implements RaceAudio {
       const own = w.local !== null;
       const timbre = own ? w.index % ENGINE_CUES.length : (w.id + 2) % ENGINE_CUES.length;
       const pitch = own ? PLAYER_PITCH[w.index % PLAYER_PITCH.length]! : 0.95 + 0.012 * (w.id % 8);
-      // Others are quieter, by their distance as well as by the air.
+      // Another kart's engine starts at about half a lone player's own (0.7 × 0.8) and fades out by ENGINE_RADIUS; the engine's own distance roll-off and air come on top.
       const level = own ? trim : 0.7 * falloff(w.distance, ENGINE_RADIUS) * 0.8;
       let v = this.engines.get(w.id);
       if (!v) {
@@ -790,7 +787,6 @@ class RaceAudioImpl implements RaceAudio {
       }
     }
   }
-
 }
 
 /** The sound of a Grip Prix race. ``bus`` is the shared audio engine (``ctx.audio``). */

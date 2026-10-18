@@ -11,7 +11,7 @@ import { $, announce, element, setText } from "../../ui/dom";
 import { GP_STANDINGS_MS, cupById } from "../grandprix";
 import { ordinal } from "./format";
 import { hostName, localPlayers } from "./roster";
-import { colourDot, focusHeading } from "./ui";
+import { calm, colourDot, focusHeading } from "./ui";
 import "./grandprix.css";
 
 export interface StandingsHooks {
@@ -34,9 +34,12 @@ type Row = GrandPrixState["points"][number];
 /** When each beat of the animation happens after the screen comes up, ms. */
 const SHOW_GAINS = 650;
 const COUNT_UP = 1350;
+const SHOW_MOVES = 2200;
+/** How long the count-up and the rows' slide to their new places last, ms. */
 const COUNT_FOR = 1100;
 const SLIDE_FOR = 900;
-const SHOW_MOVES = 2200;
+/** How long the rows take to rise as the screen comes up: the last of eight rises 560 ms, 70 ms after the one before (grandprix.css). */
+const ENTER_FOR = 1100;
 
 const easeOut = (f: number): number => 1 - Math.pow(1 - Math.min(1, Math.max(0, f)), 3);
 
@@ -87,7 +90,7 @@ export class StandingsScreen {
     const items = rows.map(({ row }, index) => this.item(row, mine, index));
     const start = [...rows].sort((a, b) => a.was - b.was || a.now - b.now);
     const byRow = new Map(rows.map((r, i) => [r, items[i]!]));
-    const calm = document.documentElement.hasAttribute("data-reduce-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = calm();
 
     const show = (order: typeof rows, rank: (r: (typeof rows)[number]) => number, total: (r: (typeof rows)[number]) => number) => {
       this.list.replaceChildren(...order.map((r) => byRow.get(r)!));
@@ -111,8 +114,8 @@ export class StandingsScreen {
     this.list.classList.remove("gains", "moves");
     // The rows rise one after the other the first moment they are there; once they have, the sliding of the count-up must not start them again.
     this.list.classList.add("entering");
-    this.later(1100, () => this.list.classList.remove("entering"));
-    if (calm) return finish();
+    this.later(ENTER_FOR, () => this.list.classList.remove("entering"));
+    if (still) return finish();
 
     // Where they stood, with the points they had.
     show(start, (r) => r.was, (r) => r.before);

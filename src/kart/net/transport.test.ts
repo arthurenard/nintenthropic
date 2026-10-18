@@ -319,7 +319,7 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
       ]),
     );
 
-    // The twin connections were opened as the two kinds PeerJS has.
+    // A guest who hangs up is heard on the host's end of the link.
     const closed: string[] = [];
     onHost.onClose((close) => closed.push(close.reason));
     onGuest.close();
@@ -351,7 +351,7 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
     expect(got).toEqual(["kept", "fresh"]);
   });
 
-  it("reads the broker from VITE_PEER_* when they are set", () => {
+  it("takes nothing from VITE_PEER_* when none of them is set", () => {
     // Nothing is set in the test environment: the library's own defaults apply.
     expect(brokerFromEnv()).toEqual({});
   });

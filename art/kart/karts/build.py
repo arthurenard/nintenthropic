@@ -219,7 +219,6 @@ def lathe(profile, seg, mat, loop=True, seg_mats=None):
         rings.append([bm.verts.new((r * math.cos(math.tau * j / seg), h, r * math.sin(math.tau * j / seg))) for j in range(seg)])
     n = len(profile)
     pairs = n if loop else n - 1
-    mats = []
     for i in range(pairs):
         a, b = rings[i], rings[(i + 1) % n]
         for j in range(seg):
@@ -356,23 +355,6 @@ def rounded_poly(pts, radius, per=4):
             t = k / per
             q = (1 - t) ** 2 * s + 2 * (1 - t) * t * p1 + t * t * e
             out.append((q.x, q.y))
-    return out
-
-
-def mirror_x(m):
-    c = M()
-    c.v = [(-p[0], p[1], p[2]) for p in m.v]
-    c.f = [list(reversed(f)) for f in m.f]
-    c.m = list(m.m)
-    c.s = list(m.s)
-    return c
-
-
-def sym(m):
-    """A right-hand part and its mirror image."""
-    out = M()
-    out.add(m)
-    out.add(mirror_x(m))
     return out
 
 

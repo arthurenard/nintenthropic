@@ -2,7 +2,8 @@
    but the race and the podium stands on the same sky (the page's own light,
    deepened so white words keep their contrast); the controls sit on frosted
    glass over it. The race, the HUD and the wheel check's pictures are in
-   race.css; each menu screen has its own file (title, driver, lobby, results). */
+   race.css; each menu screen has its own file (title, driver, lobby, loading,
+   results, and grandprix for the standings and the podium). */
 
 :root {
   /* The sky the menus stand on, top to foot; the sun's warmth comes in from the top right. */

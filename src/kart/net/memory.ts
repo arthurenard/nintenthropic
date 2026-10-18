@@ -35,8 +35,6 @@ export class MemoryNetwork {
   private random: () => number;
   /** Room code → the host's transport. */
   readonly rooms = new Map<string, MemoryTransport>();
-  /** Counts what went over each channel, for the tests. */
-  readonly sent = { reliable: 0, unreliable: 0, dropped: 0 };
 
   constructor(options: { seed?: number; conditions?: Partial<Conditions> } = {}) {
     this.random = seeded(options.seed ?? 1);
@@ -77,11 +75,6 @@ export class MemoryNetwork {
     this.now = target;
   }
 
-  /** True when nothing is in flight. */
-  get idle(): boolean {
-    return this.queue.length === 0;
-  }
-
   /** The delay for one message under today's conditions. */
   delay(): number {
     return this.conditions.latency + this.random() * this.conditions.jitter;
@@ -109,16 +102,11 @@ class MemoryLink extends LinkBase {
     const remote = this.remote;
     const network = this.network;
     if (channel === "reliable") {
-      network.sent.reliable++;
       const at = Math.max(network.now + network.delay(), this.lastReliable);
       this.lastReliable = at;
       network.schedule(at - network.now, () => remote.receive(channel, data));
     } else {
-      network.sent.unreliable++;
-      if (network.lost()) {
-        network.sent.dropped++;
-        return;
-      }
+      if (network.lost()) return;
       network.schedule(network.delay(), () => remote.receive(channel, data));
     }
   }
@@ -187,13 +175,9 @@ export class MemoryTransport implements Transport {
     this.incoming.add(listener);
   }
 
+  /** A pretend network has no broker to lose, so this never fires. */
   onError(listener: (error: TransportError) => void): void {
     this.errors.add(listener);
-  }
-
-  /** Reports a broker failure, for tests. */
-  fail(error: TransportError): void {
-    this.errors.emit(error);
   }
 
   /** Cuts every link without a goodbye, as a lost connection would. */

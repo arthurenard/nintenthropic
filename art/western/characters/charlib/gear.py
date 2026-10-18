@@ -3,7 +3,6 @@
 All in world space around the shared skeleton. Boots are built for one side
 and mirrored, so the pair is identical.
 """
-import math
 import numpy as np
 from . import sdf as S
 from .skeleton import JOINTS
@@ -52,7 +51,7 @@ def boot_sdf(side="L", top=0.40, heel=0.038, toe="narrow", shaft_r=0.052, spur=T
     # pull straps: two small loops above the rim at the sides
     for sd in (1, -1):
         c = X(p_top + np.array([sd * 0.052, 0.0, 0.006]))
-        extras.append(S.Torus(c, 0.011, 0.0022, S.rot_y(90) if True else None))
+        extras.append(S.Torus(c, 0.011, 0.0022, S.rot_y(90)))
     if spur:
         # spur: a strap over the instep and a rowel behind the heel
         extras.append(S.Torus(X((x0, 0.030, 0.050)), 0.047, 0.0035, S.rot_x(-35)))
@@ -63,14 +62,6 @@ def boot_sdf(side="L", top=0.40, heel=0.038, toe="narrow", shaft_r=0.052, spur=T
     hole = S.RoundCone(X(p_top - d * 0.035), X(p_top + d * 0.03), shaft_r - 0.006, shaft_r - 0.003)
     boot = S.Subtract(boot, hole, k=0.002)
     return boot, p_top
-
-
-def boot_paint_zones(P, side="L"):
-    """(sole, heel side, stitched shaft, spur metal) masks."""
-    s = 1.0 if side == "L" else -1.0
-    x = P[:, 0] * s
-    sole = (P[:, 2] < 0.017).astype(float)
-    return sole
 
 
 def belt_sdf(z_front, z_back, width, thick=0.006, rx=0.170, ry=0.124, cy=0.008, tilt_x=0.0):

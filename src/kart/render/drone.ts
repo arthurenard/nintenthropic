@@ -21,9 +21,6 @@ const ARMS: readonly V3[] = [
   [-1.45, 0.25, -1.35],
 ];
 
-/** How long the cable is when it hangs fully out, metres. */
-export const CABLE_MAX = 6;
-
 export class RescueDrone {
   readonly root = new Group();
   private readonly rotors: Group[] = [];
@@ -126,7 +123,7 @@ export class RescueDrone {
     this.root.visible = false;
   }
 
-  /** Poses the drone: where, which way, how far the cable is paid out (0..CABLE_MAX), and the clock for the rotors. */
+  /** Poses the drone: where, which way, how far the cable is paid out (0..6 m), and the clock for the rotors. */
   pose(x: number, y: number, z: number, yaw: number, pitch: number, roll: number, cable: number, time: number): void {
     this.root.visible = true;
     this.root.position.set(x, y, z);

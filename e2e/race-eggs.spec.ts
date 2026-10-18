@@ -23,7 +23,7 @@ const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "Ar
 
 const unlocks = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("grip-prix.unlocks") ?? "null") as { konami: boolean; ducks: string[] } | null);
 
-/** Practice with the keyboard, one lap, into the race and past the loading screen. */
+/** Practice with the keyboard (one lap, unless told otherwise), into the race and past the loading screen. */
 async function practiceRace(page: Page, laps = "1") {
   await open(page);
   await page.getByRole("button", { name: "Practice" }).click();

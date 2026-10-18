@@ -13,7 +13,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-from . import post, world
+from . import post
 from .common import EYE, setup_gpu
 
 

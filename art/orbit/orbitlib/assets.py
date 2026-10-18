@@ -3,10 +3,8 @@ built in a fresh scene, baked into one PBR atlas with a uniform texel
 density (weighted per object), and exported with its contract nodes."""
 
 import math
-import os
 import time
 
-import bmesh
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
@@ -328,7 +326,7 @@ def stage_extras(ctx):
     _finish(objs)
     bag.location = (0, 0, 0)
     duck.location = (0, 0, 0)
-    sticker = sticker_object(ctx, col, compose_sticker(ctx, art))
+    sticker_object(ctx, col, compose_sticker(ctx, art))
     export.gltf_export(ctx.asset("extras.glb"), tangents=True, quality=88)
     bpy.ops.wm.save_as_mainfile(filepath=ctx.path("extras.blend"), compress=True)
     log(f"  extras done in {time.time() - t:.1f}s")

@@ -5,7 +5,6 @@ import os
 import time
 
 import bpy
-from mathutils import Vector
 
 from . import core, materials, lighting, signs
 

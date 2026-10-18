@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../../engine/rules/rng";
-import { IDLE_INPUT, TICK_HZ, type DriveInput, type RaceEvent } from "../contract";
+import { TICK_HZ, type DriveInput, type RaceEvent } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { CANYON_RUN, HARBOUR_LIGHTS, MEADOW_LOOP, TRACKS } from "../track/tracks";
 import { GO_TICK } from "./kart";
-import { createRace } from "./race";
 import { give, input, patch, race, racers, reach, run, toGo, view, type Script } from "./testing";
 
 /** Inputs for two people that wander about like hands do, from a seeded source. */
@@ -120,7 +119,7 @@ describe("handing a kart to the bots", () => {
 });
 
 describe("the end of the race", () => {
-  /** Two people and four bots; whoever is `drivers` is handed to the bots' hands and so finishes (their place in the race is still a player's). */
+  /** Two people and four bots, past the countdown; each test hands the people it wants home to the bots (their place in the race is still a player's). */
   function twoPlayers() {
     const r = race(HARBOUR_LIGHTS, racers(2, 4, 0.9), { laps: 1, seed: 11 });
     toGo(r);
@@ -453,7 +452,7 @@ describe("the view", () => {
       expect(k.y).toBeCloseTo(p.sample.y, 1);
     }
     for (const t of v.things) {
-      expect(["box", "puck", "seeker", "slick"]).toContain(t.kind);
+      expect(["box", "puck", "seeker", "slick", "decoy", "skyrocket"]).toContain(t.kind);
       for (const key of ["id", "x", "y", "z", "heading"] as const) expect(Number.isFinite(t[key])).toBe(true);
     }
     expect(new Set(v.things.map((t) => t.id)).size).toBe(v.things.length);
@@ -525,6 +524,5 @@ describe("speed", () => {
       each = Math.min(each, (performance.now() - started) / count);
     }
     expect(each).toBeLessThan(0.3);
-    void IDLE_INPUT;
   });
 });

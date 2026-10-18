@@ -12,7 +12,6 @@ import {
   BufferAttribute,
   BufferGeometry,
   CircleGeometry,
-  Color,
   CylinderGeometry,
   DodecahedronGeometry,
   DoubleSide,
@@ -47,7 +46,6 @@ import {
   GOAT_LEDGES,
   GOAT_LIFT,
   HOUSES,
-  NESTS,
   noise,
   PASTURE,
   platePositions,
@@ -60,7 +58,6 @@ import {
   TOWER_HEIGHT,
   TUNNEL,
   YETI_ROCK,
-  type XZ,
 } from "./layout";
 import { buildingTextures, type BuildingSurface } from "./textures";
 
@@ -478,8 +475,6 @@ function village(root: Object3D, b: Batch, M: Materials, ground: Ground): void {
   bellMesh.name = "secret.bell.mesh";
   bell.add(bellMesh);
   root.add(bell);
-  // A counter-sniper's sandbags on the belfry floor.
-  void NESTS;
 }
 
 function dam(root: Object3D, b: Batch, M: Materials): void {
@@ -578,10 +573,9 @@ function rocks(root: Object3D, b: Batch, M: Materials, ground: Ground): void {
     g.computeVertexNormals();
     return g;
   };
-  // The eagle's rock, right in front of the scope, and the rifle's rest.
-  // The eagle's rock stands on the slope just below the brink: its top is where the eagle perches.
-  // Its top is exactly the plan's perch (the true ground plus the height),
-  // its foot sunk into the mesh's ground, whichever is lower on the steep slope.
+  // The eagle's rock, on the slope just below the brink right in front of the scope. Its top is
+  // exactly the plan's perch (the true ground plus the height), its foot sunk into the mesh's
+  // ground, whichever is lower on the steep slope.
   const [ex, ey, ez] = EAGLE_ROCK;
   const top = terrainHeight(ex, ez) + ey;
   const foot = Math.min(ground(ex, ez), terrainHeight(ex, ez)) - 0.3;
@@ -662,7 +656,6 @@ function rocks(root: Object3D, b: Batch, M: Materials, ground: Ground): void {
   yeti.position.set(yx + 4.2, yy, yz + 0.5);
   yeti.rotation.y = Math.atan2(-(yx + 4.2), -yz);
   root.add(yeti);
-  void Color;
 }
 
 /** Every building and thing in the valley, with the secrets' named props. */
@@ -682,5 +675,3 @@ export function buildStructures(ground: Ground): Group {
   b.build("buildings", root);
   return root;
 }
-
-export type { XZ };

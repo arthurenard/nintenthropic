@@ -23,7 +23,6 @@ and a few things adrift on tethers.
 
 import math
 
-import bpy
 from mathutils import Matrix, Vector
 
 from . import bl, world
@@ -105,7 +104,7 @@ def build(lib, col):
     build needs (panes, floats, the contract empties)."""
     P = pitch_matrix()
     r = rng("cupola")
-    out = {'panes': {}, 'floats': [], 'shutters': []}
+    out = {'panes': {}, 'floats': []}
 
     # ---------------- the forging: top plate and six facets ----------------
     shell = Geo("cupola.shell")
@@ -401,46 +400,6 @@ def centre_pane(lib, col, P):
     return ob
 
 
-def shutter(lib, col, P, F, n):
-    """The outer shutter of a side window, folded open against the dome's
-    skin below the window. Its origin is on the hinge (the window's outer
-    edge) and its local X runs along the hinge: closing it is a rotation
-    about X (see README)."""
-    wc = window_corners(F, -0.06)
-    hinge_a, hinge_b = wc[3] - F['n'] * SHELL, wc[2] - F['n'] * SHELL
-    mid = (hinge_a + hinge_b) / 2
-    w = (hinge_b - hinge_a).length
-    h = (wc[3] - wc[0]).length
-    g = Geo(f"shutter.{n}")
-    x = (hinge_b - hinge_a).normalized()
-    # open: the panel lies along +s (down the facet), outside the skin
-    y = F['s']
-    z = -F['n']
-    M = bl.frame((0, 0, 0), x, y, z)
-    g.box(M, (w, h * 0.96, 0.022), 'white_paint', center=(0, h * 0.5, 0.02), bevel=0.004)
-    g.box(M, (w * 0.8, h * 0.7, 0.01), 'beta_cloth', center=(0, h * 0.5, 0.034))
-    g.cyl(M, (-w / 2, 0, 0.01), (w / 2, 0, 0.01), 0.012, 'alu_bare', seg=10)
-    ob = g.build(col, lib)
-    ob.matrix_world = P @ Matrix.Translation(mid)
-    bl.tag(ob, pane=n, surface='metal', hinge_axis="x", closed_angle_deg=180.0)
-    return ob
-
-
-def centre_shutter(lib, col, P):
-    g = Geo("shutter.0")
-    R = R_CW + 0.12
-    hinge = Vector((R_CW + 0.02, A_TOP + SHELL + 0.006, 0.0))
-    # folded back: the disc stands out along the axis beside the window
-    pts = [(R * 0.98 * math.cos(2 * math.pi * i / 40), R * 0.98 * math.sin(2 * math.pi * i / 40)) for i in range(40)]
-    # open, the disc lies folded back on the top plate's outer skin to the
-    # right of the window: sheet (X, Y, Z) -> cupola (x, z, y)
-    g.sheet(Matrix(((1, 0, 0, R * 0.98), (0, 0, 1, 0), (0, 1, 0, 0), (0, 0, 0, 1))), pts, 0.022, 'white_paint')
-    ob = g.build(col, lib)
-    ob.matrix_world = P @ Matrix.Translation(hinge)
-    bl.tag(ob, pane=0, surface='metal', hinge_axis="z", closed_angle_deg=180.0)
-    return ob
-
-
 def laptop(lib, col, P):
     """A station laptop on an articulated arm, clamped to the lower-right
     rib, its screen turned toward the player."""
@@ -581,7 +540,6 @@ def floats(lib, col, P):
             g.box(M, (0.12, 0.002, 0.16), 'label', center=(0, 0, 0))
             g.cyl(M, (-0.045, -0.004, 0.07), (-0.045, 0.004, 0.07), 0.01, 'steel', seg=12, caps=(False, False))
         elif what == 'plush':
-            from mathutils import Vector as V
             M = bl.look_matrix(obj_c, Vector((0.2, 1.0, 0.3)), (0, 0, 1))
             import bmesh
             bm = bmesh.new()

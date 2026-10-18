@@ -5,6 +5,7 @@
  * painted at load (no image files) for what a flat colour cannot say.
  */
 import { CanvasTexture, Color, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, type Texture } from "three";
+import { mulberry32 } from "../../../engine/rules/rng";
 
 function canvas(size: number, paint: (g: CanvasRenderingContext2D, size: number) => void, colour = true): Texture {
   const c = document.createElement("canvas");
@@ -17,17 +18,6 @@ function canvas(size: number, paint: (g: CanvasRenderingContext2D, size: number)
   return t;
 }
 
-function seeded(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** Solar cells: dark blue squares, their silver bus bars, the gaps between. */
 export function solarCells(): Texture {
   return canvas(256, (g, s) => {
@@ -35,7 +25,7 @@ export function solarCells(): Texture {
     g.fillRect(0, 0, s, s);
     const n = 4;
     const cell = s / n;
-    const r = seeded(5);
+    const r = mulberry32(5);
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const shade = 20 + Math.floor(r() * 10);
@@ -53,7 +43,7 @@ export function crinkle(seed = 3): Texture {
   return canvas(
     256,
     (g, s) => {
-      const r = seeded(seed);
+      const r = mulberry32(seed);
       g.fillStyle = "#808080";
       g.fillRect(0, 0, s, s);
       for (let i = 0; i < 900; i++) {

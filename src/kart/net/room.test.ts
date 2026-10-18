@@ -131,7 +131,7 @@ describe("a room", () => {
   it("refuses a guest of another protocol version", async () => {
     const world = new World({ latency: 20 });
     const { host, code } = await openRoom(world);
-    // A hand-made guest speaking version 0.
+    // A hand-made guest speaking the version before this one.
     const link = await (async () => {
       const t = world.net.transport();
       const pending = t.connect(code);

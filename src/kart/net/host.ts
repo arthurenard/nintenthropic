@@ -10,10 +10,11 @@
  *   1. turns the time since the last frame into whole 1/60 s ticks (at most 5),
  *   2. for each tick gathers one input per player kart — this device's controls
  *      sampled right now, a guest's taken from its queue, a departed guest's
- *      from the autopilot — and steps the race,
+ *      from the autopilot if the sim could not take the kart over — and steps
+ *      the race,
  *   3. every second tick sends every guest a snapshot (30 Hz, unreliable) with
- *      the last input of theirs it applied, and the events since the last
- *      batch (reliable),
+ *      the last input of theirs it applied, and after every frame that ran a
+ *      tick, the events since the last batch (reliable),
  *   4. returns the view to draw.
  * When the tab is hidden no frames come, so a timer runs the same advance.
  */
@@ -215,8 +216,9 @@ export class HostSession implements Session {
     link.onClose(() => this.onLinkClosed(link));
   }
 
-  private send(link: Link, message: ToGuest, channel: "reliable" | "unreliable" = "reliable"): void {
-    link.send(channel, encode(message));
+  /** One message to one guest, on the reliable channel (snapshots, the only unreliable ones, go out in `sendSnapshot`). */
+  private send(link: Link, message: ToGuest): void {
+    link.send("reliable", encode(message));
   }
 
   private broadcast(message: ToGuest, except?: string): void {

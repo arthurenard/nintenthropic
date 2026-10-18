@@ -1,12 +1,9 @@
 """The space world's landmarks: a glowing ribbon of road in the dark, a ringed planet, a station, ring gates, satellites, rock."""
 import math
-import random
 
 from mathutils import Vector
 
-from wlib import (C, Landmark, RevSurf, TAU, aim, arc_pts, bezier, by_height, catmull, chrome, faceted, mix, mul, ngon, path_frames, shiny, smooth_profile,
-                  smoothstep, with_breaks)
-from wtext import Plane, text
+from wlib import (C, Landmark, TAU, aim, chrome, faceted, mix, mul, smoothstep, with_breaks)
 
 HULL = C("#d9e0ea")
 HULL_D = C("#7a8699")
@@ -62,7 +59,6 @@ def ringed_planet() -> Landmark:
     lm.lathe(prof, at=tuple(PC), segs=128, col=planet_col, mat="matte")
     # the rings: bands of solid dust and faint glass, tilted
     tilt = (24.0, 0.0, -9.0)
-    rnd = random.Random(6)
     edges = [285.0, 296.0, 312.0, 320.0, 338.0, 362.0, 368.0, 392.0, 414.0, 420.0, 440.0, 458.0]
     cols = [C("#8a7a66"), C("#e9d8b4"), C("#a89478"), C("#f3e6c8"), C("#c8b08a"), C("#efe0bc"), C("#b49a78"), C("#e4d2ac"), C("#9c8668"), C("#f0e4c4"), C("#bba184")]
     for i in range(len(edges) - 1):

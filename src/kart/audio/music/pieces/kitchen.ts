@@ -3,9 +3,9 @@
  * swing combo. F major at 140 beats a minute with the off-beats swung, a
  * walking upright, a Rhodes comping jazz sixths and sevenths, a muted trumpet
  * with a vibraphone answering it in the gaps, brushes and a ride. 32 bars,
- * about 55 seconds: the hook (A), a lyrical B, a bridge into A-flat with the
- * trumpet laid out (C), and the hook once more with celesta sparkle (A2),
- * which turns round on a ii-V back to the top.
+ * about 55 seconds: the hook (A), a lyrical B, a bridge into A-flat led by
+ * the vibes with the trumpet down to two sighs (C), and the hook once more
+ * with celesta sparkle (A2), which turns round on a ii-V back to the top.
  */
 import { bass, chords, drums, tune } from "./dsl";
 import type { PieceSpec } from "../score";
@@ -25,7 +25,7 @@ const ANSWER = "r:24 a5:2 c6:2 a5:2 f5:2 r:24 g5:2 bb5:2 g5:2 e5:2 r:64";
 const ANSWER2 = "r:24 a5:2 c6:2 a5:2 f5:2 r:24 g5:2 bb5:2 g5:2 e5:2 r:14 c6:2 r:32 r:14 a4:2";
 
 // The closing hook ends with a rising run into the top of the loop (bars 7 and 8).
-const A3 =
+const A_LAST =
   "a4:2 c5:2 f5:2 a5:4 g5:2 f5:2 r:2 | d5:2 f5:6 r:8 | " +
   "bb4:2 d5:2 g5:2 bb5:4 a5:2 g5:2 r:2 | e5:2 g5:6 r:8 | " +
   "a4:2 c5:2 f5:2 a5:4 c6:2 a5:2 r:2 | c5:2 e5:2 g5:4 a5:2 f#5:2 d5:4 | " +
@@ -125,9 +125,9 @@ export const kitchen: PieceSpec = {
       parts: {
         bass: bass("walk", { floor: 38 }),
         chords: chords("charleston", { roll: 0.01 }),
-        lead: tune(A3),
+        lead: tune(A_LAST),
         vibes: tune(ANSWER2),
-        celesta: tune(A3, { shift: 12, vel: 0.55 }),
+        celesta: tune(A_LAST, { shift: 12, vel: 0.55 }),
         drums: drums(grooveB, { fill: fillA, fillEvery: 4, crash: true }),
       },
     },

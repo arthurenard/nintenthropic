@@ -20,7 +20,6 @@ sticker of the spacewalker.
 import math
 
 import bmesh
-import bpy
 from mathutils import Matrix, Vector
 
 from . import bl
@@ -211,7 +210,6 @@ def toolbag(lib, col):
 
 def duck(lib, col):
     g = Geo("duck")
-    I = Matrix.Identity(4)
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=18, radius=1.0)
     for v in bm.verts:

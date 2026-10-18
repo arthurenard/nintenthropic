@@ -18,7 +18,6 @@ export interface PlanetPlace {
   center: Vector3;
   /** Its frame (three's sphere: y north, x longitude 0) to the world. */
   rotation: Quaternion;
-  radiusKm: number;
   altitudeKm: number;
   /** The faint "HI" of city lights, and a thunderstorm, as (longitude, latitude) degrees, if the art says. */
   hi: [number, number] | null;
@@ -38,7 +37,6 @@ export interface Scenery {
   /** pane.center and pane.1…6, by id. */
   panes: Map<number, Mesh>;
   layout: Layout;
-  hudAnchor: Object3D | null;
   floats: Object3D[];
   emitter: Object3D | null;
   /** calib.1…9 in order, with the colour of each running light. */
@@ -200,7 +198,6 @@ export function readScenery(cupola: Group, station: Group): Scenery {
   const planet: PlanetPlace = {
     center: planetNode ? world(planetNode) : new Vector3(0, -6791000, -1200000),
     rotation: planetNode ? planetNode.getWorldQuaternion(new Quaternion()) : new Quaternion(),
-    radiusKm: (planetNode ? extraNumber(planetNode, "radius_m") : undefined) !== undefined ? extraNumber(planetNode!, "radius_m")! / 1000 : 6371,
     altitudeKm: (planetNode ? extraNumber(planetNode, "altitude_m") : undefined) !== undefined ? extraNumber(planetNode!, "altitude_m")! / 1000 : 420,
     hi: lonLatExtra(planetNode, "hi_lonlat"),
     storm: lonLatExtra(planetNode, "storm_lonlat"),
@@ -267,7 +264,6 @@ export function readScenery(cupola: Group, station: Group): Scenery {
     planet,
     panes,
     layout,
-    hudAnchor: findNode(cupola, "hud.anchor"),
     floats,
     emitter: need(station, "emitter"),
     calib,

@@ -8,10 +8,6 @@ expressions compose: g.mul(g.noise(v, 4), 0.5).
 import bpy
 
 
-def _sock(x):
-    return x
-
-
 class G:
     def __init__(self, tree):
         self.t = tree

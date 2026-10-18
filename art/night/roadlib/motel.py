@@ -11,7 +11,7 @@ import math
 import bpy
 from mathutils import Vector
 
-from .common import rng, tag
+from .common import rng
 from . import layout as L, meshkit as K, world
 from .meshkit import MeshBuilder, Frame
 from .ground import ground_z
@@ -160,7 +160,6 @@ def star(cx, cz, r_out, r_in, n=5, rot=90.0):
 
 def sign(lib, col):
     from . import signpaint as SP
-    r = rng("motelsign")
     sx, sy = L.MOTEL_SIGN
     z = ground_z(sx, sy)
     f = Frame((sx, sy, z), math.radians(-12))

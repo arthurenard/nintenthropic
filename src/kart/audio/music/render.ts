@@ -25,7 +25,7 @@ import { midiToHz } from "./theory";
 export const MUSIC_RMS_DB = -18;
 /** No sample of a rendered piece is louder than this, dBFS. */
 export const MUSIC_PEAK_DB = -1;
-/** The rate music is rendered at; Web Audio resamples it to the device on playback. */
+/** The rate music is rendered at by default, and the lowest a race uses: a race renders at the device's own rate (44.1 or 48 kHz) so playing it needs no resampling. */
 export const MUSIC_SAMPLE_RATE = 32000;
 
 export interface MusicRenderOptions extends CompileOptions {

@@ -10,7 +10,7 @@ import os
 
 import bpy
 
-from .common import DN, lin
+from .common import DN
 from dustcreek import signs as DS
 
 _OUT = None
@@ -36,7 +36,6 @@ def metal_sign(key, img, bg, fill, shadow=None, accent=None, wear=0.45, rust=0.5
     uv = g.uv('local')
     c = g.image(img, uv, out='Color', extension='CLIP')
     R, Gc, B = g.sep_rgb(c)
-    pos = g.geo('Position')
     paint = g.rgb(bg)
     if shadow is not None:
         paint = g.mix(Gc, paint, g.rgb(shadow))
@@ -48,7 +47,3 @@ def metal_sign(key, img, bg, fill, shadow=None, accent=None, wear=0.45, rust=0.5
     g.output(g.out(n, "BSDF"))
     m["surface"] = surface
     return m
-
-
-def wood_sign(key, img, bg, fill, shadow=None, wear=0.5):
-    return DS.sign_material(key, img, bg, fill, shadow=shadow, wear=wear, bleach=0.4, dirt=0.6)

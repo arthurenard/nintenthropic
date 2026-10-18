@@ -5,9 +5,10 @@
  * loud. RaceAudio only applies these numbers (smoothed) to the running loops.
  */
 import type { KartView } from "../contract";
+import { TUNING } from "../sim/tuning";
 
-/** The kart's top speed on the road, m/s (docs/GRIP_PRIX.md); engine pitch is scaled against it. */
-export const TOP_SPEED = 24;
+/** The kart's top speed on the road, m/s, the sim's own (docs/GRIP_PRIX.md); engine pitch is scaled against it. */
+export const TOP_SPEED = TUNING.drive.topSpeed;
 
 /** The four engine timbres, in the order local players take them. */
 export const ENGINE_CUES = ["kart_engine_a", "kart_engine_b", "kart_engine_c", "kart_engine_d"] as const;

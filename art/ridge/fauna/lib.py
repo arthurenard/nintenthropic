@@ -731,32 +731,6 @@ def bake_job(at, ob, field, paint, relief=None, grad_eps=5e-4):
     return len(r0[0]), 0 if r1 is None else len(r1[0])
 
 
-def bake_border(at, ob, field, paint, grad_eps=5e-4):
-    """Bake the texels raster_border finds, exactly as Atlas.bake does its own."""
-    r = raster_border(ob, at.size, at.known)
-    if r is None:
-        return 0
-    pix, P, N, T, B = r
-    Q = S.project_to_surface(field, P, iters=5, clamp=0.012)
-    g = S.gradient(field, Q, grad_eps)
-    n_hi = g / np.maximum(np.linalg.norm(g, axis=1), 1e-9)[:, None]
-    bad = ~np.isfinite(n_hi).all(1) | ((n_hi * N).sum(1) < -0.2)
-    n_hi[bad] = N[bad]
-    ts = np.stack([(n_hi * T).sum(1), (n_hi * B).sum(1), (n_hi * N).sum(1)], 1)
-    ts /= np.maximum(np.linalg.norm(ts, axis=1), 1e-9)[:, None]
-    alb, rough, metal = paint(Q)
-    y, x = pix[:, 1], pix[:, 0]
-    at.albedo[y, x] = alb
-    at.normal[y, x] = ts * 0.5 + 0.5
-    at.orm[y, x, 0] = 1.0
-    at.orm[y, x, 1] = rough
-    at.orm[y, x, 2] = metal
-    at.known[y, x] = True
-    at.dbgQ[y, x] = Q
-    at.dbgN[y, x] = n_hi
-    return len(pix)
-
-
 def uv_by_parts(ob, parts, angle=70):
     """Smart-project a mesh one anatomical part at a time.
 

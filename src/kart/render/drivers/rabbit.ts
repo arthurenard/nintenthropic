@@ -1,6 +1,6 @@
 /** Bun the rabbit: tall ears through a helmet, a pom-pom tail, a buck tooth. */
 import { MeshBuilder, rgb } from "../kartBuilder";
-import { INK, WHITE, armGeometry, body, helmet, eyes, fur, legs, orb, surfaceZ, type Look } from "./parts";
+import { WHITE, armGeometry, body, helmet, eyes, fur, legs, orb, surfaceZ, type Look } from "./parts";
 import type { DriverBuild } from "./types";
 
 const FUR = rgb("#f3ede6");
@@ -30,7 +30,6 @@ export function buildRabbit(l: Look): DriverBuild {
   // The helmet: a cap over the crown with a peak.
   helmet(h, l, [0, 0.045, -0.01], [0.315, 0.29, 0.31], 0.42);
   orb(h, [0, 0.33, -0.01], [0.05, 0.03, 0.05], WHITE, 0);
-  void INK;
 
   const tail = new MeshBuilder();
   orb(tail, [0, 0, 0], [0.13, 0.12, 0.12], fur(CHEEK), 1);

@@ -9,7 +9,7 @@
 import type { Difficulty } from "../../../engine/types";
 import { chance, pick, pickIndex, range, shuffle, type Random } from "../../../engine/rules/rng";
 import { Fragment, shootable, tankShows, type Heading, type Tumble } from "./debris";
-import { Drone, type DroneState } from "./drone";
+import { Drone } from "./drone";
 import { breachNote, type Breach } from "./felled";
 import { Laser, type LaserResult } from "./laser";
 import { neighbourPane, paneById, type Layout, type PaneSpec } from "./layout";
@@ -782,10 +782,5 @@ export class Match {
       secretsFound: this.secrets.count,
       secretsTotal: SECRETS_TOTAL,
     };
-  }
-
-  /** The drone's state, for the world. */
-  get droneState(): DroneState {
-    return this.drone.state;
   }
 }

@@ -10,8 +10,9 @@ export interface TierHints {
   /**
    * The game draws up to four views of the world at once (Grip Prix's split
    * screen), which asks four times the vertices and draw calls of one: a
-   * base Apple chip, or a browser that only says "Apple GPU" (Safari, an
-   * iPad), starts a step lower than for a game with one view.
+   * base Apple M chip starts a step lower than for a game with one view
+   * (medium, not high). A browser that only says "Apple GPU" (Safari, an
+   * iPad) starts at medium, unless its core count says a Pro or a Max.
    */
   splitScreen?: boolean;
 }

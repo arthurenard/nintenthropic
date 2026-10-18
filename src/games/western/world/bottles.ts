@@ -15,6 +15,7 @@ import type { CalibrationStage, CalibrationTarget } from "../../../engine/types"
 import type { Effects } from "./effects";
 import type { RayHit, TownQueries } from "./queries";
 import type { Sound } from "../../../engine/world/sound";
+import { placeTarget } from "../../../engine/world/targets";
 import { surfaceOf, type TownLayout } from "./town";
 
 interface Bottle {
@@ -194,7 +195,6 @@ export class BottleStage implements CalibrationStage {
   private hits = 0;
   private glintTimer = 0;
   private time = 0;
-  active = true;
   /** This check has been ended (done) and not begun again. */
   private ended = false;
 
@@ -266,7 +266,7 @@ export class BottleStage implements CalibrationStage {
         liquid,
         base,
         center: base.clone().add(new Vector3(0, 0.15 * scale, 0)),
-        height: 0.305 * scale,
+        height: BOTTLE_HEIGHT * scale,
         alive: true,
         hidden: false,
         fade: 1,
@@ -286,24 +286,12 @@ export class BottleStage implements CalibrationStage {
     return this.bottles.find((b) => b.id === id);
   }
 
-  /** Where each standing bottle is on screen, and how big its centre zone is. */
+  /** Where each standing bottle is on screen, and how big its centre zone is: half the bottle's height. */
   targets(): CalibrationTarget[] {
     this.targetList.length = 0;
-    const cam = this.camera;
-    cam.updateMatrixWorld();
-    const minSide = Math.min(1, cam.aspect);
-    const tanHalf = Math.tan((cam.fov * Math.PI) / 360);
+    this.camera.updateMatrixWorld();
     for (const b of this.bottles) {
-      if (!b.alive) continue;
-      ndc.copy(b.center).project(cam);
-      if (ndc.z > 1) continue;
-      b.target.x = (ndc.x + 1) / 2;
-      b.target.y = (1 - ndc.y) / 2;
-      // Half the bottle's height, as a fraction of the smaller view side;
-      // never below the 3.5% the aim score is measured against.
-      const dist = tmp.copy(b.center).sub(cam.position).length();
-      const half = b.height / 2 / (dist * 2 * tanHalf * minSide);
-      b.target.radius = Math.max(0.035, half);
+      if (!b.alive || !placeTarget(b.target, this.camera, b.center, b.height / 2)) continue;
       if (b.target.x < 0 || b.target.x > 1 || b.target.y < 0 || b.target.y > 1) continue;
       this.targetList.push(b.target);
     }
@@ -371,7 +359,6 @@ export class BottleStage implements CalibrationStage {
 
   /** Stand every bottle back up (a new aim check). */
   reset(): void {
-    this.active = true;
     this.ended = false;
     this.hits = 0;
     for (const b of this.bottles) {
@@ -379,7 +366,7 @@ export class BottleStage implements CalibrationStage {
       b.alive = true;
       b.fade = 1;
       b.group.visible = true;
-      b.group.scale.setScalar(b.height / 0.305);
+      b.group.scale.setScalar(b.height / BOTTLE_HEIGHT);
       b.glass.opacity = 0.72;
     }
   }
@@ -390,7 +377,7 @@ export class BottleStage implements CalibrationStage {
       if (!b.alive || b.fade >= 1) continue;
       // Leaving: sink and fade, quickly and quietly.
       b.fade = Math.max(0, b.fade - dt * 2.5);
-      const s = (b.height / 0.305) * (0.6 + 0.4 * b.fade);
+      const s = (b.height / BOTTLE_HEIGHT) * (0.6 + 0.4 * b.fade);
       b.group.scale.setScalar(s);
       b.glass.opacity = 0.72 * b.fade;
       if (b.fade <= 0) {
@@ -412,9 +399,5 @@ export class BottleStage implements CalibrationStage {
         }
       }
     }
-  }
-
-  get finished(): boolean {
-    return this.bottles.every((b) => !b.alive);
   }
 }

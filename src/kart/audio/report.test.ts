@@ -11,6 +11,7 @@ import { describe, it } from "vitest";
 import { cuesInPack } from "../../audio/cues/table";
 import { renderTake } from "../../audio/render";
 import { drawSpectrogram, drawWaveform, estimatePitch, meanOf, peakOfBuffer, rmsOf, spectralCentroid, stack, toDb, type Picture } from "./analysis";
+import { FINAL_LAP } from "./music/loader";
 import { PIECES, THEME_PIECES } from "./music/pieces";
 import { MUSIC_SAMPLE_RATE, renderPiece } from "./music/render";
 
@@ -92,7 +93,7 @@ describe.skipIf(!OUT)("report", () => {
       if (!id.includes(ONLY)) continue;
       for (const final of [false, true]) {
         if (final && !(THEME_PIECES as readonly string[]).includes(id)) continue;
-        const r = renderPiece(PIECES[id as keyof typeof PIECES], { sampleRate: MUSIC_SAMPLE_RATE, tempoScale: final ? 1.1 : 1, transpose: final ? 1 : 0 });
+        const r = renderPiece(PIECES[id as keyof typeof PIECES], { sampleRate: MUSIC_SAMPLE_RATE, ...(final ? FINAL_LAP : {}) });
         const ch = r.left;
         const pic = stack([drawWaveform(ch, 1200, 90), drawSpectrogram(ch, r.sampleRate, 1200, 200, 12000)]);
         fs.writeFileSync(`${OUT}/music/${id}${final ? "-final" : ""}.png`, png(pic, zlib));

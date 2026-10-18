@@ -4,12 +4,12 @@
  * tapered tube, a lathed wheel) welded into one indexed BufferGeometry with
  * smooth normals, vertex colours and a per-vertex surface (kartMaterial.ts).
  *
- * It offers the same calls as world/builder's flat-shaded `MeshBuilder` (`add`
- * with a unit shape, a matrix and a paint, `box`, `rod`, `blob`), so the
- * drivers' recipes keep working; the shapes are simply round now.
+ * It offers the same calls as world/builder's low-poly `MeshBuilder` (`add`
+ * with a unit shape, a matrix and a paint, `box`, `rod`, `blob`), so a recipe
+ * reads the same with either; here every shape comes out smooth and round.
  *
- * `detail` scales how finely round things are cut: 1 for the kart you look
- * at, less for the far version.
+ * `withDetail` sets how finely round things are cut while a model is built:
+ * 1 for the kart you look at, less for the far version.
  */
 import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, LatheGeometry, Matrix3, Matrix4, SphereGeometry, TorusGeometry, Vector2, Vector3 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
@@ -105,14 +105,6 @@ export class MeshBuilder {
   readonly index: number[] = [];
   /** The surface the next shapes are made of. */
   surf: Surf = SURF.fur;
-
-  get triangles(): number {
-    return this.index.length / 3;
-  }
-
-  get empty(): boolean {
-    return this.index.length === 0;
-  }
 
   /** Runs `fn` with another surface. */
   as<T>(surf: Surf, fn: () => T): T {

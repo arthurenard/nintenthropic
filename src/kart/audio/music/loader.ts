@@ -1,10 +1,9 @@
 /**
  * Making the music, off the page's critical path. A piece is synthesised once
- * (~0.4 s of DSP for a minute of music on a laptop; see MUSIC.md in the
- * notes of the final report) in a Worker so no frame is held; where Workers
- * are unavailable (a strict policy, Node under tests) the same stages run on
- * the main thread one at a time with a yield between, so no frame is held
- * for longer than one part's worth of synthesis.
+ * (about 0.4 s of DSP for a minute of music on a laptop) in a Worker so no
+ * frame is held; where Workers are unavailable (a strict policy, Node under
+ * tests) the same stages run on the main thread one at a time with a yield
+ * between, so no frame is held for longer than one part's worth of synthesis.
  */
 import { PIECES, type PieceId } from "./pieces";
 import type { MusicJob, MusicReply } from "./protocol";

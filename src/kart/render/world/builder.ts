@@ -1,8 +1,8 @@
 /**
  * Low-poly geometry assembled in code: many small shapes (a tree, a tyre, a
  * fence post) welded into one vertex-coloured BufferGeometry, so a whole
- * stretch of the track costs one draw call. Everything is flat shaded: each
- * triangle gets its own normal, which is what gives the toy look.
+ * stretch of the track costs one draw call. Each shape keeps its own normals:
+ * smooth on a ball or a post, flat on a box, which is what gives the toy look.
  *
  * Colours are linear RGB triples (what three keeps internally), so they can be
  * written straight into a vertex attribute.
@@ -41,7 +41,7 @@ export function scaleRgb(a: Rgb, k: number): Rgb {
 /** One colour, or a ramp from the shape's base to its top (a cheap baked ambient occlusion). */
 export type Paint = Rgb | { bottom: Rgb; top: Rgb };
 
-/** A unit shape as flat triangles: positions only, with its height range for ramps. */
+/** A unit shape as triangles: positions, normals where it has its own, and its height range for ramps. */
 export interface Shape {
   readonly positions: Float32Array;
   /** The shape's own normal at each corner: smooth on a ball or a cylinder's side, flat on a box's faces. */
@@ -247,7 +247,7 @@ export class MeshBuilder {
     this.add(shapes.ball(detail), xf(cx, cy, cz, rx, ry, rz, yaw), paint);
   }
 
-  /** Everything added so far as a BufferGeometry (flat shaded, vertex coloured), with bounds computed. */
+  /** Everything added so far as a BufferGeometry (vertex coloured), with bounds computed. */
   build(): BufferGeometry {
     const g = new BufferGeometry();
     g.setAttribute("position", new Float32BufferAttribute(this.position, 3));

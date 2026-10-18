@@ -59,7 +59,7 @@ def eyeball(e, gaze):
             rr = 0.5 * t / math.pi
             UV.append((0.5 + rr * math.cos(ph), 0.5 + rr * math.sin(ph)))
         rings.append(ring)
-    F, FUV = [], []
+    F = []
     for i in range(len(rings) - 1):
         ra, rb = rings[i], rings[i + 1]
         if len(ra) == 1:

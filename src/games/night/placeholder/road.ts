@@ -55,10 +55,6 @@ const SODIUM = new Color(1.0, 0.56, 0.23);
 const NEON_RED = new Color(1.0, 0.16, 0.24);
 const CANDLE = new Color(1.0, 0.55, 0.24);
 
-export interface PlaceholderRoad {
-  root: Group;
-}
-
 export function buildPlaceholderRoad(): Group {
   const light: NightLight = {
     moon: MOON_LIGHT,
@@ -126,11 +122,11 @@ export function buildPlaceholderRoad(): Group {
   b.ground(9, 120, 6, -8, 0, 4, () => grass, { surface: "dirt", detail: tex.dirt, uvScale: 3 });
   b.ground(-120, 120, 40, 6, 0, 8, () => grass, { surface: "dirt", detail: tex.dirt, uvScale: 3 });
 
-  buildStation(b, tex, jitter);
+  buildStation(b, tex);
   buildBarricade(b, tex, jitter, rand);
   buildLeft(b, tex, jitter, rand);
-  buildRight(b, tex, jitter, rand);
-  buildFar(b, tex, jitter, rand);
+  buildRight(b, tex, rand);
+  buildFar(b, tex);
   buildSign(b);
   buildCorn(b, rand);
   const named = b.finish();
@@ -244,7 +240,7 @@ function buildOccluders(b: NightBuilder): void {
   occ([4.2, 0, -8.3], [5.9, 1.9, -2.9]); // pickup
 }
 
-function buildStation(b: NightBuilder, tex: Tex, jitter: Jitter): void {
+function buildStation(b: NightBuilder, tex: Tex): void {
   const paint = col("#8d8f86");
   const trim = col("#a33a2e");
   // The canopy over the forecourt: its slab, its fascia, four columns.
@@ -370,7 +366,7 @@ function buildLeft(b: NightBuilder, tex: Tex, jitter: Jitter, rand: () => number
   }
 }
 
-function buildRight(b: NightBuilder, tex: Tex, jitter: Jitter, rand: () => number): void {
+function buildRight(b: NightBuilder, tex: Tex, rand: () => number): void {
   // The streetlight at the crossroads: pole, arm, and the lamp head that glows.
   b.cylinder([5.6, 3.9, -24], 0.13, 7.8, col("#56554f"), { surface: "metal", radiusTop: 0.09, segments: 8 });
   b.box([4.6, 7.65, -24], [2.2, 0.1, 0.1], col("#56554f"), { surface: "metal" });
@@ -419,7 +415,7 @@ function buildRight(b: NightBuilder, tex: Tex, jitter: Jitter, rand: () => numbe
   }
 }
 
-function buildFar(b: NightBuilder, tex: Tex, jitter: Jitter, rand: () => number): void {
+function buildFar(b: NightBuilder, tex: Tex): void {
   // The burned-out school bus across the road at 45 m.
   const charred = col("#2a2622");
   const rust = col("#5a3a26");

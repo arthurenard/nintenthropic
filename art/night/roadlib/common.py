@@ -120,16 +120,6 @@ def viewport(p, aspect=4 / 3):
     return 0.5 + 0.5 * d.dot(right) / z / tx, 0.5 - 0.5 * d.dot(up) / z / ty
 
 
-def point_for_viewport(vx, vy, z, aspect=4 / 3):
-    """Where the ray through viewport (vx, vy) meets the plane of height z."""
-    fwd, right, up = cam_basis()
-    ty = math.tan(math.radians(VFOV_DEG / 2))
-    tx = ty * aspect
-    d = fwd + right * ((vx - 0.5) * 2 * tx) + up * ((0.5 - vy) * 2 * ty)
-    t = (z - EYE.z) / d.z
-    return EYE + d * t
-
-
 def setup_gpu(scene=None):
     """Cycles on the Metal GPU (CPU only if there is none)."""
     DC.setup_gpu(scene)

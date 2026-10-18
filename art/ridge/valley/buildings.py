@@ -8,7 +8,6 @@ running 0.8 m into the ground so no uneven edge ever shows a gap.
 """
 
 import math
-import time
 
 import numpy as np
 

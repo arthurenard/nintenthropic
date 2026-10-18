@@ -3,9 +3,9 @@ giant-ring, wristwatch). Blender coordinates: z up, a landmark's front is -y."""
 
 import math
 
-from mathutils import Vector as V, noise
+from mathutils import Vector as V
 
-from naturekit import Model, empty, hexc, mix, mul, smooth_path, smoothstep, tint, varied, TAU
+from naturekit import Model, hexc, mix, mul, smooth_path, smoothstep, varied, TAU
 
 TRUNK_D = hexc("#6e4a2e")
 TRUNK_L = hexc("#c59a68")

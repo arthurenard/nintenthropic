@@ -7,20 +7,14 @@ import math
 
 from mathutils import Vector as V, noise
 
-from naturekit import Model, empty, grad_z, hexc, mix, mul, post, rod, smooth_path, smoothstep, spinner, tint, varied, TAU
-from nature_volcano import BASALT_D, BASALT_M, BASALT_L, LAVA, LAVA_HOT, LAVA_DEEP, basalt
+from naturekit import Model, empty, grad_z, hexc, mix, mul, post, smoothstep, spinner, tint, varied, TAU
+from nature_volcano import BASALT_M, LAVA, LAVA_HOT, LAVA_DEEP, basalt
 
 LAVA_CRUST = (0.42, 0.09, 0.02)
 
 
 def n3(x, y, z, seed=0.0):
     return noise.noise(V((x + seed * 17.3, y - seed * 9.1, z + seed * 4.7)))
-
-
-def lava_ribbon(g, pts, widths, col_at, side, thick=0.25):
-    """A flowing strip of lava lying along a draped path."""
-    n = len(pts)
-    g.blade(pts, side, lambda t: widths(t), thick, lambda p, nn: col_at(p), mat="glow", fold=0.12, tip_point=False)
 
 
 def lava_col(top_z, bottom_z):
@@ -69,7 +63,6 @@ def volcano():
     g.tube(rim_pts, [1.5] * 36, 5, lambda p, n: LAVA_HOT if n3(p.x * 0.3, p.y * 0.3, 0, 7) > 0 else LAVA, mat="glow", loop=True)
     g.lathe([(7.0, H + 0.0), (4.0, H + 14.0), (0.0, H + 38.0)], 8, (0, 0, 0), lambda p, n: mix(LAVA, LAVA_HOT, smoothstep(H, H + 36, p.z)), mat="glow", cap_start=True)
     g.lathe([(11.0, H - 3.0), (6.0, H + 6.0), (0.0, H + 18.0)], 8, (2, -1, 0), lambda p, n: mix(LAVA_DEEP, LAVA, smoothstep(H - 3, H + 16, p.z)), mat="glow", cap_start=True)
-    rng = m.rng
     for k in range(16):
         a = k * 2.4
         u = ((k * 7) % 10) / 10
@@ -136,7 +129,6 @@ def stone_bridge():
     W = (2 * half - 2 * abut - 2 * pier) / 3.0
     deck_under = -1.7
     bottom = -14.5
-    rise = 7.5
     # Walk along the bottom from the left end to the right end: abutment foot, then each arch's curve, each pier's foot.
     spans = []
     cur = -half + abut

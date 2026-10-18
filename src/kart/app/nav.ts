@@ -39,24 +39,6 @@ export function navPresses(pad: Pick<Gamepad, "buttons" | "axes"> | null | undef
   return pressed;
 }
 
-/** A key on the keyboard as a menu reads it, or null for any other. */
-export function navKey(event: Pick<KeyboardEvent, "key">): NavKey | null {
-  switch (event.key) {
-    case "ArrowLeft":
-      return "left";
-    case "ArrowRight":
-      return "right";
-    case "ArrowUp":
-      return "up";
-    case "ArrowDown":
-      return "down";
-    case "Enter":
-      return "confirm";
-    default:
-      return null;
-  }
-}
-
 /** Where a move lands in a grid of `count` things, `columns` across, from `at`: edges stop (nothing wraps off the grid). */
 export function moveIn(at: number, key: NavKey, count: number, columns: number): number {
   const delta = key === "left" ? -1 : key === "right" ? 1 : key === "up" ? -columns : key === "down" ? columns : 0;

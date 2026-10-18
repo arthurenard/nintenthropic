@@ -3,9 +3,10 @@
  * road, grass, ice, mud...), the barriers and the open edges, braking and
  * reversing, the hop and drift with their mini-turbos, jumps off ramps and
  * their tricks, falling and the drone that fetches the kart, a track's
- * hazards, boost, the start. Nothing here looks at another kart or at the
+ * hazards, boost, the start. Apart from `bumpKarts`, which the race calls
+ * once every kart has moved, nothing here looks at another kart or at the
  * items; the race does (race.ts, items.ts), which is also why `predict` can
- * run just this.
+ * run `stepKart` alone.
  */
 import { TICK, TICK_HZ, type DriveInput, type RacerSetup } from "../contract";
 import { WEIGHTS, weightOf } from "../characters";
@@ -46,7 +47,7 @@ export function newBotMemory(): BotMemory {
   return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false, cut: 0 };
 }
 
-/** A kart on the grid: pairs side by side, each pair a little further back, the first on pole. */
+/** A kart on the grid: left and right in turn, each a little further back than the one before, the first on pole. */
 export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): KartState {
   const race = TUNING.race;
   const behind = race.gridFirst + place * race.gridStep;
@@ -339,8 +340,8 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
         }
         if (report) emit({ type: "wall", kart: k.id, strength: Math.min(1, into / W.fullStrength) });
       } else {
-        // A scrape wears W.scrape m/s off the speed each second. (It took that share of the speed each tick, 5%: a kart
-        // brushing the barrier round the outside of a bend, which it touches on every tick, was down to a crawl in a second.)
+        // A scrape wears W.scrape m/s off the speed each second, a flat amount and not a share of the speed: a kart
+        // brushing the barrier round the outside of a bend touches it on every tick, and keeps its pace.
         const speed = Math.hypot(k.vx, k.vz);
         if (speed > 0) {
           const keep = Math.max(0, speed - W.scrape * TICK) / speed;
@@ -522,12 +523,12 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
         // Letting go, or a brake, ends it and gives the boost the charge earned; running out of speed gives nothing.
         endDrift(k, fwd >= DR.minSpeed, emit);
       } else {
-        // Always turning into the drift: 0.4 of a full turn with the wheel straightened out, 1.4 with it hard over.
+        // Always turning into the drift: 0.4 of a full turn with the wheel hard the other way, 0.9 with it straight, 1.4 with it hard over.
         const own = steerIn * k.drift;
         const turn = DR.steerBase + DR.steerRange * own;
         steerTarget = k.drift * turn;
         if (!k.offroad) {
-          const tightness = clamp((turn - 0.4) / 1.0, 0, 1);
+          const tightness = clamp((turn - (DR.steerBase - DR.steerRange)) / (2 * DR.steerRange), 0, 1);
           k.charge += DR.rateLoose + (DR.rateTight - DR.rateLoose) * tightness;
           const level = k.charge >= LEVEL_2 ? 2 : k.charge >= LEVEL_1 ? 1 : 0;
           if (level > k.level) {

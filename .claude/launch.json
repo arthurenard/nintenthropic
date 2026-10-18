@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "handy-web",
+      "name": "web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
     },
     {
-      "name": "promo-4901",
+      "name": "trailer-4901",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "4901", "--strictPort"],
       "port": 4901

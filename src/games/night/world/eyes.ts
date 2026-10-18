@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Points, ShaderMaterial, type IUniform } from "three";
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Points, ShaderMaterial, type IUniform } from "three";
 import type { V3 } from "../../../engine/rules/raymath";
 import type { NightUniforms } from "./shading";
 
@@ -61,8 +61,8 @@ export class Eyeshine {
     const g = new BufferGeometry();
     this.posAttr = new BufferAttribute(this.positions, 3);
     this.shineAttr = new BufferAttribute(this.shine, 1);
-    this.posAttr.setUsage(35048);
-    this.shineAttr.setUsage(35048);
+    this.posAttr.setUsage(DynamicDrawUsage);
+    this.shineAttr.setUsage(DynamicDrawUsage);
     g.setAttribute("position", this.posAttr);
     g.setAttribute("aShine", this.shineAttr);
     g.setDrawRange(0, 0);

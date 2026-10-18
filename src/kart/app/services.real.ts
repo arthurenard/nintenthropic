@@ -1,7 +1,8 @@
 /**
  * The real parts behind the screens: the room from net/ over the sim, the
  * renderer, the wheel on the camera and the tracker, the keyboard and the
- * gamepad. main.ts picks this; `fakes.ts` stays for the screens' unit tests.
+ * gamepad. main.ts picks this; in tests, testHooks.ts stands in for the
+ * camera and the tracker.
  *
  * Nothing here decides how anything looks or what anything says: it only
  * joins the parts, and turns their failures into the reasons the screens
@@ -127,9 +128,8 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     },
     controls: {
       wheel(wheelOptions: WheelOptions): Wheel {
-        const half = wheelOptions.half ?? null;
         const seat = wheelOptions.seat && wheelOptions.seat.of > 1 ? wheelOptions.seat : null;
-        const inner = wheelControl(source, { steering: wheelOptions.steering, seat, half, aspect });
+        const inner = wheelControl(source, { steering: wheelOptions.steering, seat, aspect });
         // The check holds the wheel level for a second; the reader does that by itself and sets the level when done.
         const level: WheelLevel = {
           progress: () => inner.levelProgress,

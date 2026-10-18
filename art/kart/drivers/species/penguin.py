@@ -16,7 +16,6 @@ BLUSH = H.lin("#f59aa6")
 def build():
     parts = []
     skull = S.ellipsoid((0, 0, 0), (0.3, 0.27, 0.285))
-    face = skull
 
     def albedo(P, N):
         out = np.tile(DARK, (len(P), 1))

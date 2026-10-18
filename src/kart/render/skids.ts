@@ -1,6 +1,6 @@
 /**
- * Tyre marks: dark strips laid behind the rear wheels while a kart drifts,
- * spins or brakes hard on the road, fading away over a few seconds. One
+ * Tyre marks: dark strips laid behind the rear wheels while a kart drifts or
+ * spins on the road, fading away over nine seconds. One
  * dynamic mesh of pooled quads in a ring buffer, one draw call, nothing
  * allocated while racing.
  */

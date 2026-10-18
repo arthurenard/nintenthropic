@@ -17,7 +17,6 @@ def build():
     parts = []
     base = S.ellipsoid((0, -0.04, 0), (0.335, 0.2, 0.28))
     bumps = S.mirror(S.ellipsoid((0.15, 0.15, 0.075), (0.118, 0.108, 0.118)))
-    brow = S.ellipsoid((0, 0.05, 0.05), (0.27, 0.12, 0.2))
     head = S.union(base, bumps, k=0.05)
     spots = S.union(S.mirror(S.ellipsoid((0.2, 0.0, 0.0), (0.05, 0.04, 0.06))), S.ellipsoid((0, 0.15, -0.12), (0.05, 0.04, 0.05)), k=0.02)
 

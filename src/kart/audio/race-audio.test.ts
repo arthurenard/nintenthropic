@@ -9,7 +9,7 @@ import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types"
 import type { KartView, RaceEvent, RaceView, ThingView, TrackDef } from "../contract";
 import { createRaceAudio, type LocalKart, type RaceAudio } from "./race-audio";
 import { localKarts } from "./scene";
-import type { MusicRenderer } from "./music/loader";
+import { FINAL_LAP, type MusicRenderer } from "./music/loader";
 import type { MusicTrack } from "./music/player";
 import type { RenderedMusic } from "./music/render";
 
@@ -23,7 +23,7 @@ function kart(id: number, over: Partial<KartView> = {}): KartView {
   };
 }
 
-const TRACK = { id: "t", name: "T", theme: "meadow", laps: 3, points: [], width: 12, itemRows: [], duck: { at: 0.5, offset: 3 } } as unknown as TrackDef;
+const TRACK = { id: "t", name: "T", theme: "meadow", laps: 3, points: [], width: 12, itemRows: [] } as unknown as TrackDef;
 
 function view(karts: KartView[], over: Partial<RaceView> = {}, events: RaceEvent[] = [], things: ThingView[] = []): RaceView {
   return { tick: 0, phase: "racing", countdown: 0, time: 5, laps: 3, track: TRACK, racers: [], karts, things, events, ...over };
@@ -116,7 +116,7 @@ class FakeRenderer implements MusicRenderer {
     this.requests.push(final ? `${id}-final` : id);
     return Promise.resolve({
       id, sampleRate: 32000, left: new Float32Array(4), right: new Float32Array(4), loopSamples: 4, duration: 1,
-      bars: [], tempoScale: final ? 1.1 : 1, transpose: final ? 1 : 0,
+      bars: [], tempoScale: final ? FINAL_LAP.tempoScale : 1, transpose: final ? FINAL_LAP.transpose : 0,
       stats: { rmsDb: -18, peakDb: -2, renderMs: 1, parts: {}, warnings: [] },
     });
   }
@@ -464,13 +464,6 @@ describe("loops that follow state", () => {
     frame([kart(0, { speed: 0 }), kart(1, { speed: 0 })], { time: 0.3 }, [ev("flood", { kart: 0 })]);
     frame([kart(0, { speed: 0 }), kart(1, { speed: 0 })], { time: 0.4 });
     expect(bus.cues.filter((c) => c === "kart_flood")).toHaveLength(1);
-  });
-
-  it("leaves the duck to its own event: driving past it is silent", () => {
-    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
-    frame([kart(0, { lapProgress: 0.49 })]);
-    frame([kart(0, { lapProgress: 0.51 })]);
-    expect(bus.cues.filter((c) => c === "kart_duck")).toHaveLength(0);
   });
 });
 

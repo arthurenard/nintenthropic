@@ -1,16 +1,12 @@
 """The fun fair, continued: entrance arch, roller coaster, helter-skelter, food stall, hook-a-duck."""
 import math
-import random
 
 from mathutils import Vector
 
-from funfair import (BLUE, BRASS, CANDY, CREAM, DARK, GOLD, GREEN, HOT, LIGHTS, NAVY, ORANGE, PINK, PURPLE, RED, STEEL, TEAL, WARM, WHITE, YELLOW, BUILDERS,
+from funfair import (BLUE, BRASS, CANDY, CREAM, DARK, GOLD, NAVY, ORANGE, PINK, RED, STEEL, WARM, WHITE, YELLOW, BUILDERS,
                      bulb, candy, light, striped_rod)
-from wlib import (C, Landmark, RevSurf, TAU, aim, arc_pts, basis_matrix, bezier, by_height, catmull, chrome, faceted, mix, mul, ngon, path_frames, shiny,
-                  smooth_profile, smoothstep)
-from wtext import Plane, text, text_width
-
-SKY = C("#7fd4ff")
+from wlib import (C, Landmark, TAU, basis_matrix, by_height, catmull, faceted, mix, mul, path_frames, smooth_profile, smoothstep)
+from wtext import Plane, text
 
 
 def onion(r, h, bulge=1.25):
@@ -112,7 +108,6 @@ def coaster() -> Landmark:
         t, s, u = fr[i]
         bulb(lm, tuple(p + s * 1.35 + u * 0.12), 0.26, light(i // 3))
     # supports
-    rnd = random.Random(2)
     for i in range(0, n, 7):
         p = pts[i]
         if abs(p.x) < 8.6 or p.y < 3.0:
@@ -177,7 +172,6 @@ def helter_skelter() -> Landmark:
     end = Vector(path[-1])
     path += [(end.x, end.y - 0.12 * k, end.z + 1.4 * k) for k in range(1, 6)]
     slide_prof = [(-1.55, 0.85), (-1.25, 0.85), (-1.25, 0.28), (1.25, 0.28), (1.25, 0.85), (1.55, 0.85), (1.55, 0.0), (-1.55, 0.0)]
-    n_helix = steps + 1
     lm.sweep(path, slide_prof, up=(0, 1, 0), col=faceted(lambda p, n: RED if int((((math.atan2(p.z, p.x) % TAU) / TAU) * 18) + p.y * 0.0) % 2 == 0 else CREAM), mat="glossy", caps=True)
     for k in range(0, steps, 5):
         x, y, z = path[k]

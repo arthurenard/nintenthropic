@@ -118,7 +118,7 @@ describe("culling a scatter of instances for a view", () => {
     expect(new Set(drawn(mesh)).size).toBe(spots.length);
   });
 
-  it("makes cells of about a cell, and sorts without losing or duplicating an instance", () => {
+  it("makes cells about CELL metres across, and sorts without losing or duplicating an instance", () => {
     const { mesh, spots } = field(2000);
     const cull = new CulledInstances(mesh);
     // 600 m across at 48 m a cell: at most 14 x 14 of them, and a good many.

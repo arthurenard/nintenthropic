@@ -1,13 +1,12 @@
 """Review renders: the player's view at two aspect ratios, close-ups of
 every building and secret, and the unlit (baked-texture-only) check."""
 
-import math
 import os
 
 import bpy
 from mathutils import Vector
 
-from . import pipeline, core
+from . import pipeline
 
 # name: (location, look_at, lens_mm or None for player fov, resolution)
 CLOSEUPS = {
@@ -48,7 +47,7 @@ def render(scene, path, w, h, samples, fog=True):
 
 def figures(scene):
     """Stand a plain 1.8 m figure (dark coat, pale hat band) on every
-    exposed cover point: the readability check the gameplay team asked for."""
+    exposed cover point, to check that a man standing there reads clearly."""
     import bmesh
     from .nodes import new_material
     m, g = new_material("figure")

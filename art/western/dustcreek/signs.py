@@ -18,7 +18,7 @@ import bmesh
 from mathutils import Vector, Matrix
 
 from .core import rng
-from .nodes import G, new_material, group_node
+from .nodes import new_material, group_node
 from .materials import lin
 
 FONT_DIRS = ["/System/Library/Fonts/Supplemental", "/System/Library/Fonts", "/Library/Fonts"]
@@ -277,7 +277,6 @@ class MaskScene:
         path = os.path.join(OUT_DIR, f"{self.key}.png")
         sc = self.scene
         sc.render.filepath = path
-        win_scene = bpy.context.window.scene if bpy.context.window else None
         bpy.ops.render.render(write_still=True, scene=sc.name)
         # clean up: the scene and its throwaway data
         for ob in list(sc.collection.objects):
@@ -346,7 +345,6 @@ def paper_material(key, mask, paper=lin(214, 196, 158), ink=lin(34, 26, 20), red
     col = g.image(mask, uv, out='Color', extension='CLIP')
     R, Gc, B = g.sep_rgb(col)
     u, v, _ = g.separate(uv)
-    pos = g.geo('Position')
     fib = g.noise(g.vmul(uv, (60, 60, 1)), scale=4.0, detail=8.0, rough=0.7)
     stain = g.noise(g.vmul(uv, (2.5, 2.5, 1)), scale=2.0, detail=6.0, rough=0.6, w=None)
     edge = g.math('MINIMUM', g.math('MINIMUM', u, g.sub(1.0, u)), g.math('MINIMUM', v, g.sub(1.0, v)))
@@ -402,7 +400,6 @@ def finger_gun(ms, cx, cy, s, ch='R', line=0.012):
     # fingernail
     ms.polyline(P([(0.53, 0.12), (0.555, 0.10), (0.55, 0.075)]), lw * 0.6 * s, ch=ch)
     # engraving hatch shading under the palm and on the curled fingers
-    r = ms.r
     for i in range(14):
         t = i / 13
         x0 = -0.22 + t * 0.34

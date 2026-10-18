@@ -1,6 +1,6 @@
 /**
  * Grip Prix's wheel on its own, at /src/kart/input/dev.html on the dev server
- * (`npx vite --port 5182`): the first thing to try with real hands.
+ * (`npm run dev`): the first thing to try with real hands.
  *
  * It opens the camera, loads the hand tracker looking for two hands (four for
  * "Two on This Camera"), and shows the mirrored picture with the wheel the
@@ -8,13 +8,14 @@
  * angle, the steer, the grip, the mode, the drift, the item presses. Nothing
  * is sent anywhere; nothing makes a sound.
  *
- * window.__wheelDev gives tests (and the console) the controls and the tracker.
+ * window.__wheelDev gives the console the controls and the tracker.
  */
 import "../../ui/base.css";
 import "../../app/settings.css";
 import "./dev.css";
 import { CameraError, openCamera, type Camera } from "../../tracking/camera";
 import { lanesFor, tilesFor } from "../../tracking/hands";
+import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
 import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { $, element, replay, setText } from "../../ui/dom";
 import type { WheelStatus } from "../contract";
@@ -354,7 +355,7 @@ let levelRing: SVGElement | null = null;
 const arrivals: number[] = [];
 let stopCounting: (() => void) | null = null;
 
-/** Frames read a second, for each player's column (two players each read in a worker of their own publish a frame each). */
+/** Frames read a second, for each player's column (two players, each read in a worker of their own, publish a frame each). */
 function fps(): number {
   const now = performance.now();
   while (arrivals.length && now - arrivals[0]! > 1000) arrivals.shift();
@@ -442,8 +443,10 @@ async function start(): Promise<void> {
     if (mine !== generation) return;
     let wasm = 0;
     let model = 0;
+    // Each download weighed by its size, so the percentage moves as the bytes do.
     const progress = () => {
-      if (blocking && mine === generation) blocking = { title: "Getting ready…", detail: `${Math.round(((wasm * 11.8 + model * 7.8) / 19.6) * 100)}%` };
+      const fraction = (wasm * WASM_BYTES + model * MODEL_BYTES) / (WASM_BYTES + MODEL_BYTES);
+      if (blocking && mine === generation) blocking = { title: "Getting ready…", detail: `${Math.round(fraction * 100)}%` };
     };
     const hands = state.two ? 4 : 2;
     const tiles = tilesFor(hands);

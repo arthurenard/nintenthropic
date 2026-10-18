@@ -2,8 +2,7 @@
 
 Grip Prix's modelled art, built from nothing by the scripts in this folder in
 Blender 5.1 run headless (`/Applications/Blender.app/Contents/MacOS/Blender -b
--P art/kart/<part>/build.py`). Never drive an open Blender window. Nothing is
-downloaded. The look: a bright, glossy, rounded toy world in warm sunlight —
+-P art/kart/<part>/build.py`). Nothing is downloaded. The look: a bright, glossy, rounded toy world in warm sunlight —
 a polished console kart racer, with only original designs.
 
 Each file is optional: whatever is missing, the game draws its code-built
@@ -106,9 +105,8 @@ Each card is drawn at 3x in quality high (2880x1620, muted, HUD hidden), brought
 and encoded by `cwebp` at the highest quality that fits. The script says which karts and landmarks are in each frame.
 A kart's `yaw` turns it about the road's direction: the three night cards (harbour-lights, glacier-pass, starlight-ribbon) put
 every kart at about pi, so the camera ahead sees their backs (tail lamps and flames); seen head on, the headlights bloomed
-into big white blobs on the road. In a git worktree whose `node_modules` is a link, vite must be allowed to serve the real folder
-(`server.fs.allow`), or the Draco decoder is refused and the pictures would show the code-built stand-ins; the script
-stops when a model fails to load. `shot.ts` is imported by `dev.ts` only, so none of it reaches the game's bundle.
+into big white blobs on the road. The script stops when a model fails to load, since the picture would show the
+code-built stand-ins. `shot.ts` is imported by `dev.ts` only, so none of it reaches the game's bundle.
 
 ## The key art (`art/kart/poster/`)
 

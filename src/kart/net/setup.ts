@@ -11,7 +11,6 @@ import {
   type RaceSetup,
 } from "../contract";
 import { CHARACTERS } from "../characters";
-import { trackById } from "../track/tracks";
 import type { TrackDef } from "../track/geometry";
 import { raceTrack } from "../track/mirror";
 import { seeded } from "./util";
@@ -60,7 +59,8 @@ export function buildSetup(
     const j = Math.floor(random() * (i + 1));
     [drivers[i], drivers[j]] = [drivers[j]!, drivers[i]!];
   }
-  // More bots than free drivers: the rest are shared out among all of them.
+  // There are as many starting drivers as karts on a full grid, so every bot finds a free one. Should the grid ever
+  // outgrow the drivers, the extra bots would share the drivers the players picked.
   const spare = starters.filter((id) => !drivers.includes(id));
 
   const racers: RacerSetup[] = [];

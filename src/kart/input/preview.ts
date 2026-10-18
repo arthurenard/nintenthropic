@@ -49,7 +49,7 @@ export interface WheelPreviewOptions {
   size?: PreviewSize;
   /** Players sharing a camera: show only this column of the picture, the one this player's wheel is in. */
   seat?: Seat | null;
-  /** Two on one camera, the old way to say it: the left or right half. */
+  /** Two on one camera, said as a side: a shorthand for `seat` 0 or 1 of 2. */
   half?: "left" | "right" | null;
   /** The picture's width over its height until the video says (default 16:9). */
   aspect?: number;
@@ -57,7 +57,7 @@ export interface WheelPreviewOptions {
 
 // ─── Geometry, without a DOM ────────────────────────────────────────────────
 
-/** How a camera picture (or half of it) sits in a canvas, filling it. */
+/** How a camera picture (or one player's column of it) sits in a canvas, filling it. */
 export interface PictureFit {
   /** Canvas pixels per picture height. */
   scale: number;
@@ -71,9 +71,9 @@ export interface PictureFit {
 
 /**
  * Fills a canvas with the picture (cropping the overflow, as `object-fit:
- * cover` does), or with its left or right half. Everything the wheel draws
- * goes through `point`, so it lands on the hand it belongs to whatever the
- * canvas's shape.
+ * cover` does), or with one player's column of it (a `Seat`, or "left" or
+ * "right" for a half). Everything the wheel draws goes through `point`, so it
+ * lands on the hand it belongs to whatever the canvas's shape.
  */
 export function fitPicture(width: number, height: number, aspect: number, part: "left" | "right" | Seat | null = null): PictureFit {
   const seat = part === null ? null : typeof part === "string" ? halfSeat(part) : part;
@@ -107,8 +107,8 @@ export class WheelPreview {
   readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
   private video: HTMLVideoElement | null = null;
-  private size: PreviewSize;
-  private seat: Seat | null;
+  private readonly size: PreviewSize;
+  private readonly seat: Seat | null;
   /** More than one player on the picture: every column is drawn, each with its player's name (see `followColumns`). */
   private columns = 0;
   private aspect: number;
@@ -141,21 +141,6 @@ export class WheelPreview {
   /** The camera whose picture is shown (null: none yet, a dark panel). */
   attach(video: HTMLVideoElement | null): void {
     this.video = video;
-    this.style();
-  }
-
-  setSize(size: PreviewSize): void {
-    this.size = size;
-    this.style();
-  }
-
-  setHalf(half: "left" | "right" | null): void {
-    this.seat = seatOf({ half });
-    this.style();
-  }
-
-  setSeat(seat: Seat | null): void {
-    this.seat = seatOf({ seat });
     this.style();
   }
 
@@ -210,7 +195,7 @@ export class WheelPreview {
 
   /** One picture: the camera, then the wheel on it. */
   draw(status: WheelStatus | null, extras: PreviewExtras = {}): void {
-    const { context: g, canvas } = this;
+    const { canvas } = this;
     const width = canvas.width;
     const height = canvas.height;
     const fit = fitPicture(width, height, this.aspectNow(), this.seat);

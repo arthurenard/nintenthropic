@@ -22,7 +22,6 @@ import time
 
 import numpy as np
 
-from . import layout as L
 from . import mesh as M
 from . import noise as N
 from . import landcover as LC
@@ -56,7 +55,7 @@ def compose_color(W, info, x, y):
     """Macro albedo (linear) from the material weights and the fields."""
     n = W.shape[1]
     n1, n2, n3 = info['n1'], info['n2'], info['n3']
-    alt, slope, flow, curv = info['alt'], info['slope'], info['flow'], info['curv']
+    alt, slope, curv = info['alt'], info['slope'], info['curv']
     z = info['z']
     r = np.hypot(x, y)
     fine = N.fbm(x, y, 8801, octaves=3, scale=1 / 14.0)

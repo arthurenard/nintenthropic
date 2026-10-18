@@ -8,7 +8,7 @@
  * streak. Secrets, the breather's sky and the Derelict's armoured body
  * neither build nor break a streak.
  */
-import { Streak } from "../../../engine/rules/streak";
+import { Scorekeeper } from "../../../engine/rules/score";
 import {
   ACCURACY_BONUS_MAX,
   DERELICT_POINTS,
@@ -48,11 +48,7 @@ export function farBonus(distance: number): number {
 
 export type HitWhat = "vaporise" | "split" | "strip" | "tank" | "breakup";
 
-export class Scorer {
-  score = 0;
-  private readonly run = new Streak(STREAK_STEP, STREAK_MAX_MULTIPLIER);
-  shots = 0;
-  hits = 0;
+export class Scorer extends Scorekeeper {
   /** Debris vaporised outright (shrapnel, shards, pieces). */
   vaporised = 0;
   /** Fragments split. */
@@ -60,38 +56,11 @@ export class Scorer {
   derelicts = 0;
   droneHits = 0;
 
-  private passShots = 0;
-  private passHits = 0;
   private passDamaged = false;
   private passDroneHit = false;
 
-  get multiplier(): number {
-    return this.run.multiplier;
-  }
-
-  get streak(): number {
-    return this.run.count;
-  }
-
-  get bestStreak(): number {
-    return this.run.best;
-  }
-
-  get accuracy(): number {
-    return this.shots === 0 ? 0 : this.hits / this.shots;
-  }
-
-  /** A shot that counts toward accuracy, and whether it hit. Returns true if the multiplier went up. */
-  shot(hit: boolean): boolean {
-    this.shots++;
-    this.passShots++;
-    if (!hit) {
-      this.run.break();
-      return false;
-    }
-    this.hits++;
-    this.passHits++;
-    return this.run.hit();
+  constructor() {
+    super(STREAK_STEP, STREAK_MAX_MULTIPLIER);
   }
 
   /** Points for a hit on debris `distance` metres away. */
@@ -135,9 +104,8 @@ export class Scorer {
   drone(): Award {
     this.droneHits++;
     this.passDroneHit = true;
-    this.shots++;
-    this.passShots++;
-    this.run.break();
+    // A shot that counts, and a miss: the streak is broken.
+    this.shot(false);
     this.score = Math.max(0, this.score - DRONE_PENALTY);
     return { points: -DRONE_PENALTY, labels: ["Drone"], multiplier: 1 };
   }
@@ -148,14 +116,11 @@ export class Scorer {
 
   /** The end of a pass: its bonuses are added to the score and the pass's tallies reset. */
   endPass(): PassBonuses {
-    const accuracy = this.passShots === 0 ? 0 : this.passHits / this.passShots;
-    const accuracyPoints = Math.round((accuracy * ACCURACY_BONUS_MAX) / 10) * 10;
+    const { accuracy, accuracyPoints } = this.endRound(ACCURACY_BONUS_MAX);
     const notAScratch = this.passDamaged ? 0 : NOT_A_SCRATCH_BONUS;
     const goodNeighbour = this.passDroneHit ? 0 : GOOD_NEIGHBOUR_BONUS;
     const total = accuracyPoints + notAScratch + goodNeighbour;
     this.score += total;
-    this.passShots = 0;
-    this.passHits = 0;
     this.passDamaged = false;
     this.passDroneHit = false;
     return { accuracy, accuracyPoints, notAScratch, goodNeighbour, total };

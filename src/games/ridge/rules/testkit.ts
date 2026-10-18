@@ -8,7 +8,7 @@ import { mulberry32 } from "../../../engine/rules/rng";
 import type { Difficulty } from "../../../engine/types";
 import { layoutPlan } from "../placeholder/plan";
 import type { Actor, Vehicle } from "./actors";
-import { drop, holdMils, timeOfFlight, windMils } from "./ballistics";
+import { holdMils, timeOfFlight, windMils } from "./ballistics";
 import { Mission, type AlertCause, type MissionListener } from "./mission";
 import type { StageSpec } from "./jobs";
 import type { Award, StageBonuses } from "./scoring";
@@ -240,7 +240,6 @@ export function playRun(seed: number, skill: Skill, options: { difficulty?: Diff
         }
       },
     });
-    void drop;
   }
   return { stage: m.stage, cleared: m.stagesCleared, time: t, ending: m.ending, score: m.scorer.score, mission: m, rec };
 }
@@ -275,8 +274,7 @@ function chooseTarget(m: Mission): SimTarget | null {
     const o = shootable.find((a) => a.role === "officer");
     if (o) return asTarget(o);
   }
-  const objective = shootable.filter((a) => a.objective);
-  const pool = objective.length ? objective : [];
+  const pool = shootable.filter((a) => a.objective);
   if (!pool.length) return null;
   // The wounded first, then the nearest.
   pool.sort((a, b) => (b.wounds - a.wounds) || dist(a.pos, m.plan.eye) - dist(b.pos, m.plan.eye));

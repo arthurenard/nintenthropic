@@ -1,12 +1,16 @@
-import { Matrix3, Matrix4, Mesh, Quaternion, Raycaster, SRGBColorSpace, Vector2, Vector3, Vector4, type Material, type Object3D, type Texture, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, TargetNoun } from "../../engine/types";
+import { Matrix3, Matrix4, Mesh, Quaternion, Raycaster, SRGBColorSpace, Vector2, Vector3, Vector4, type Object3D, type ToneMapping } from "three";
+import type { Aim, CalibrationStage, Game, GameContext, HudSink, Readout } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
+import { announceGolden, awardText, HintShown, popupAt, showBonuses, streakReadout, viewportOf, type PopupTone } from "../../engine/hud";
+import { breathe, CalibrationProxy, Schedule } from "../../engine/round";
 import { assistFactor } from "../../engine/rules/assist";
+import { HintLine } from "../../engine/rules/hints";
 import { mulberry32 } from "../../engine/rules/rng";
+import { streakRate } from "../../engine/rules/streak";
 import { ScreenFlash } from "../../engine/world/flash";
 import { checkFraming } from "../../engine/world/framing";
 import { contractName } from "../../engine/world/names";
-import { disposeTree } from "../../engine/world/scene";
+import { disposeTree, warmUp } from "../../engine/world/scene";
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
 import { Sound } from "../../engine/world/sound";
@@ -20,7 +24,7 @@ import type { Award, PassBonuses } from "./rules/scoring";
 import { ASTRONAUT_PASS, duckPass, MOON_PASS, TOOLBAG_PASS, type SecretId } from "./rules/secrets";
 import { ALARM_BELOW, BREATHER, DERELICT_DEPTH, INTEGRITY_MAX, KINDS } from "./rules/tuning";
 import { normalize, scale, type V3 } from "./rules/vec";
-import { droneShotLine, HintLine, tipText, ventHint, type TipId } from "./tips";
+import { droneShotLine, LEARNED_BY_DOING, tipText, ventHint, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type OrbitAssets } from "./world/assets";
 import { R as PLANET_R } from "./world/atmosphere";
@@ -47,11 +51,6 @@ export interface OrbitOptions {
   immortal?: boolean;
   /** Load the art from this folder instead of assets/orbit/ (the harness's asset tests). */
   assetBase?: string;
-}
-
-interface Scheduled {
-  at: number;
-  run: () => void;
 }
 
 const tmp = new Vector3();
@@ -91,42 +90,6 @@ function lonLatDir(lon: number, lat: number): Vector3 {
   return new Vector3(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
 }
 
-function breathe(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-/**
- * Before load() the aim check has nothing to show; afterwards this forwards
- * to the running lights. If the host runs the aim check again on this
- * instance after a game (Play Again), the first call puts the station back.
- */
-class CalibrationProxy implements CalibrationStage {
-  readonly noun: TargetNoun = { one: "light", many: "lights" };
-  target: RunningLights | null = null;
-  onUse: () => void = () => {};
-  onBegin: () => void = () => {};
-  begin(): void {
-    this.onBegin();
-  }
-  targets(): CalibrationTarget[] {
-    this.onUse();
-    return this.target ? this.target.targets() : [];
-  }
-  light(id: string | null): void {
-    this.onUse();
-    this.target?.light(id);
-  }
-  hit(id: string): void {
-    this.target?.hit(id);
-  }
-  miss(id: string, x: number, y: number): void {
-    this.target?.miss(id, x, y);
-  }
-  done(): void {
-    this.target?.done();
-  }
-}
-
 /**
  * Orbital Decay: the Game the app hosts. It owns the world (the cupola, the
  * station, the planet, the debris, the drone, the secrets) and the rules
@@ -137,7 +100,8 @@ export class OrbitalDecay implements Game, MatchListener {
   readonly id = "orbit";
   readonly title = "Orbital Decay";
   readonly calibration: CalibrationStage;
-  private readonly calibrationProxy = new CalibrationProxy();
+  /** The running lights, once they exist; and the station put back when the aim check comes round again after a game. */
+  private readonly calibrationProxy = new CalibrationProxy({ one: "light", many: "lights" });
 
   private ctx!: GameContext;
   private hud!: HudSink;
@@ -170,13 +134,13 @@ export class OrbitalDecay implements Game, MatchListener {
   /** The dev harness's hold on the sky, for screenshots of any moment. */
   private skyHeld: SkyMoment | null = null;
   private groundAngle = 0;
-  private hints = new HintLine(new Set());
-  private hintShown: string | null = null;
+  private hints = new HintLine(new Set(), LEARNED_BY_DOING);
+  private readonly hintShown = new HintShown();
   private golden = false;
   private ventKey = false;
   private readoutKey = "";
   private heatShown = "";
-  private readonly schedule: Scheduled[] = [];
+  private readonly schedule = new Schedule(() => this.time);
   private failT = -1;
   private passT = 0;
   private moonT = -1;
@@ -187,7 +151,6 @@ export class OrbitalDecay implements Game, MatchListener {
   private width = 1280;
   private height = 720;
   private bufferHeight = 720;
-  private dpr = 1;
   private readonly driftPhase = new Vector3(0.3, 1.7, 2.9);
   /** Where the art wrote its "HI" (the planet's frame), and where the game shows it this breather. */
   private readonly hiSource = new Vector3(0, 1, 0);
@@ -320,7 +283,12 @@ export class OrbitalDecay implements Game, MatchListener {
     this.resize(ctx.canvas.clientWidth || 1280, ctx.canvas.clientHeight || 720, renderer.getPixelRatio());
     this.applySky(0, true);
     await breathe();
-    await this.warmUp(library, derelict);
+    // Every shader compiled before play - the debris of every kind, the
+    // drone, the extras, the effects, the post chain: a shader first compiled
+    // as a slab comes at the glass is a dropped frame at the worst time.
+    const loose = this.setOut(library, derelict);
+    await warmUp(renderer, stage.scene, this.camera.camera, () => this.post.render(0));
+    for (const o of loose) o.removeFromParent();
     await sounds;
     window.addEventListener("keydown", this.onKey);
     this.ambient.start();
@@ -404,9 +372,9 @@ export class OrbitalDecay implements Game, MatchListener {
    * the night would be black. At night only lights show, so the night map
    * is read through a turn that puts a lit region under the view instead,
    * as the art's own night renders do: on every third night the country
-   * round the "HI" (secret 8), the letters small (HI_LENS_SCALE times
-   * smaller than the map has them) and upright, low in the right-hand window
-   * - a find, not a headline; on the other nights the next of the night
+   * round the "HI" (secret 8), the letters small (HI_WIDTH of the view
+   * across, through the planet's lens) and upright, low in the right-hand
+   * window - a find, not a headline; on the other nights the next of the night
    * map's brightest countries (found at load) in the centre of the view. It
    * is set as the breather begins, while the sun is still up and no light
    * shows, for where the ground will have turned by the middle of the night,
@@ -498,25 +466,22 @@ export class OrbitalDecay implements Game, MatchListener {
   }
 
   private newMatch(): void {
-    const variants: Record<string, number[]> = {};
     this.match = new Match({
       random: this.ctx.random,
       layout: this.scenery.layout,
       listener: this,
       difficulty: this.ctx.settings.difficulty,
-      variants: variants as never,
+      variants: this.debris.variantCounts(),
     });
     this.match.glass.immortal = this.options.immortal === true;
   }
 
   /**
-   * Compile every shader before play: the debris of every kind, the drone,
-   * the extras, the effects, the post chain. A shader first compiled as a
-   * slab comes at the glass is a dropped frame at the worst time.
+   * A copy of every piece of debris and of the Derelict, set out in the
+   * scene far ahead for the warm-up to compile: the library itself is loose,
+   * kept for cloning. The game takes the copies away again after.
    */
-  private async warmUp(library: ReturnType<typeof readLibrary>, derelict: ReturnType<typeof readDerelict>): Promise<void> {
-    const r = this.ctx.renderer;
-    const scene = this.stage.scene;
+  private setOut(library: ReturnType<typeof readLibrary>, derelict: ReturnType<typeof readDerelict>): Object3D[] {
     const shown: Object3D[] = [];
     const add = (o: Object3D) => {
       const c = o.clone(true);
@@ -530,37 +495,7 @@ export class OrbitalDecay implements Game, MatchListener {
       for (const p of v.pieces) add(p);
     }
     add(derelict.root);
-    const hidden: Object3D[] = [];
-    scene.traverse((o) => {
-      if (!o.visible) {
-        hidden.push(o);
-        o.visible = true;
-      }
-    });
-    try {
-      const textures = new Set<Texture>();
-      scene.traverse((o) => {
-        const m = (o as Mesh).material;
-        for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
-          for (const v of Object.values(mat as Material)) if ((v as Texture | null)?.isTexture) textures.add(v as Texture);
-        }
-      });
-      let since = performance.now();
-      for (const t of textures) {
-        r.initTexture(t);
-        if (performance.now() - since > 40) {
-          await breathe();
-          since = performance.now();
-        }
-      }
-      if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
-      await breathe();
-      this.post.render(0);
-    } catch {
-      // Compilation is an optimisation; the first frames will do it otherwise.
-    }
-    for (const o of hidden) o.visible = false;
-    for (const s of shown) s.removeFromParent();
+    return shown;
   }
 
   /**
@@ -579,7 +514,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.floats.reset();
     this.lights.reset();
     this.newMatch();
-    this.schedule.length = 0;
+    this.schedule.clear();
     this.failT = -1;
     this.moonT = -1;
     this.aurora = 0;
@@ -626,15 +561,11 @@ export class OrbitalDecay implements Game, MatchListener {
     this.hud.heat?.(0, false);
     this.match.start(pass);
     this.ambient.running = true;
-    this.hints = new HintLine(this.ctx.settings.tipsSeen);
+    this.hints = new HintLine(this.ctx.settings.tipsSeen, LEARNED_BY_DOING);
     this.hints.setQuiet(false);
     // How to vent, at the start of every game until they have done it.
     this.offerTip("orbit.heat");
-    if (this.golden) {
-      this.hud.weaponFinish?.("gold");
-      this.sound.play("orbit_golden", { volume: 0.8, delay: 0.4 });
-      this.later(1.0, () => this.hud.popup(0.5, 0.62, "Golden Laser", "gold"));
-    }
+    if (this.golden) announceGolden(this.hud, this.sound, this.schedule, "orbit_golden", "Golden Laser");
     this.pushReadouts(true);
   }
 
@@ -648,7 +579,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.secrets.reducedFlashing = reducedFlashing;
     this.camera.reducedMotion = this.ctx.settings.reducedMotion;
     this.time += dt;
-    this.runSchedule();
+    this.schedule.run();
 
     if (this.phase === "calibration") {
       this.match.laser.cold = true;
@@ -774,7 +705,6 @@ export class OrbitalDecay implements Game, MatchListener {
     if (!this.post) return;
     this.width = width;
     this.height = height;
-    this.dpr = pixelRatio;
     this.bufferHeight = height * pixelRatio;
     this.camera.setAspect(width / Math.max(1, height));
     this.post.setSize(width, height);
@@ -829,7 +759,7 @@ export class OrbitalDecay implements Game, MatchListener {
     let to = tmp2.copy(cam.position).addScaledVector(tmp, 60);
     for (const t of this.lights.targets()) {
       if (Math.hypot((t.x - x) * this.width, (t.y - y) * this.height) / Math.min(this.width, this.height) < t.radius * 1.3) {
-        const n = this.scenery.calib.find((c, i) => `light.${i + 1}` === t.id)?.node;
+        const n = this.scenery.calib.find((_, i) => `light.${i + 1}` === t.id)?.node;
         if (n) to = n.getWorldPosition(tmp2);
       }
     }
@@ -883,21 +813,11 @@ export class OrbitalDecay implements Game, MatchListener {
   // --- HUD helpers --------------------------------------------------------------------------
 
   private project(at: Vector3): { x: number; y: number } | null {
-    tmp.copy(at).project(this.camera.camera);
-    if (tmp.z > 1) return null;
-    return { x: (tmp.x + 1) / 2, y: (1 - tmp.y) / 2 };
+    return viewportOf(this.camera.camera, at);
   }
 
-  private popupAt(at: Vector3, text: string, tone: "" | "gold" | "danger" = ""): void {
-    const p = this.project(at);
-    if (!p) return;
-    this.hud.popup(Math.min(0.94, Math.max(0.06, p.x)), Math.min(0.9, Math.max(0.1, p.y)), text, tone);
-  }
-
-  private awardText(award: Award): string {
-    const sign = award.points >= 0 ? "+" : "−";
-    const label = award.labels.length ? ` ${award.labels.join(" · ")}` : "";
-    return `${sign}${Math.abs(award.points).toLocaleString("en-US")}${label}`;
+  private popupAt(at: Vector3, text: string, tone: PopupTone = ""): void {
+    popupAt(this.hud, this.camera.camera, at, text, tone);
   }
 
   private offerTip(id: TipId): void {
@@ -906,11 +826,9 @@ export class OrbitalDecay implements Game, MatchListener {
     this.syncHint();
   }
 
+  /** Tell the HUD what the hint line shows, when it changes. */
   private syncHint(): void {
-    const text = this.hints.text;
-    if (text === this.hintShown) return;
-    this.hintShown = text;
-    this.hud.hint(text);
+    this.hintShown.tell(this.hud, this.hints);
   }
 
   /** The corner panel: the pass, the glass (the cupola in miniature), the streak. */
@@ -933,7 +851,7 @@ export class OrbitalDecay implements Game, MatchListener {
         segments: panes.map((v) => ({ value: v / INTEGRITY_MAX, tone: tone(v) })),
         segmentLayout: "ring",
       },
-      { label: "Streak", value: `×${mult}`, meter: (mult - 1) / 3, tone: mult >= 4 ? "warning" : "" },
+      streakReadout(mult),
     ];
     this.hud.readouts(list);
   }
@@ -972,20 +890,6 @@ export class OrbitalDecay implements Game, MatchListener {
     this.rings.show(list.slice(0, 14), dt);
   }
 
-  private later(seconds: number, run: () => void): void {
-    this.schedule.push({ at: this.time + seconds, run });
-  }
-
-  private runSchedule(): void {
-    for (let i = this.schedule.length - 1; i >= 0; i--) {
-      const s = this.schedule[i] as Scheduled;
-      if (this.time >= s.at) {
-        this.schedule.splice(i, 1);
-        s.run();
-      }
-    }
-  }
-
   /** The glass gives way: the burst, the air going, the shutters, the card, the results. */
   private updateFailure(dt: number): void {
     this.failT += dt;
@@ -1010,19 +914,18 @@ export class OrbitalDecay implements Game, MatchListener {
     this.passT = 0;
     this.pushReadouts(true);
     // The pass's walk-ons.
-    if (pass === ASTRONAUT_PASS) this.later(4, () => this.secrets.startAstronaut());
-    if (duckPass(pass)) this.later(9, () => this.secrets.startDuck());
-    if (pass === TOOLBAG_PASS) this.later(12, () => this.secrets.startToolbag());
+    if (pass === ASTRONAUT_PASS) this.schedule.later(4, () => this.secrets.startAstronaut());
+    if (duckPass(pass)) this.schedule.later(9, () => this.secrets.startDuck());
+    if (pass === TOOLBAG_PASS) this.schedule.later(12, () => this.secrets.startToolbag());
     if (pass >= MOON_PASS && this.moonT < 0) this.moonT = 0;
   }
 
   passClear(_pass: number, b: PassBonuses): void {
     this.sound.play("orbit_pass_clear");
-    const lines: [string, "" | "gold"][] = [];
-    if (b.accuracyPoints > 0) lines.push([`+${b.accuracyPoints} Accuracy ${Math.round(b.accuracy * 100)}%`, ""]);
-    if (b.notAScratch > 0) lines.push([`+${b.notAScratch} Not a Scratch`, "gold"]);
-    if (b.goodNeighbour > 0) lines.push([`+${b.goodNeighbour} Good Neighbour`, ""]);
-    lines.forEach(([text, tone], i) => this.later(0.35 + i * 0.45, () => this.hud.popup(0.5, 0.56 + i * 0.05, text, tone)));
+    showBonuses(this.hud, this.schedule, b, [
+      [b.notAScratch, "Not a Scratch", "gold"],
+      [b.goodNeighbour, "Good Neighbour", ""],
+    ]);
     this.hints.setNeed(null);
     this.hints.clearWord();
     this.syncHint();
@@ -1031,8 +934,8 @@ export class OrbitalDecay implements Game, MatchListener {
   breather(_next: number): void {
     this.stormStarted = false;
     // The hull ticks as it goes from sun to shadow, and again coming back.
-    this.later(1.6, () => this.ambient.creak());
-    this.later(BREATHER - 1.2, () => this.ambient.creak());
+    this.schedule.later(1.6, () => this.ambient.creak());
+    this.schedule.later(BREATHER - 1.2, () => this.ambient.creak());
   }
 
   sealed(_panes: number[]): void {
@@ -1044,7 +947,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.debris.add(f, this.match.time);
     if (f.kind === "derelict") {
       this.sound.play("orbit_derelict", { volume: 0.9 });
-      this.later(0.8, () => this.offerTip("orbit.derelict"));
+      this.schedule.later(0.8, () => this.offerTip("orbit.derelict"));
     }
   }
 
@@ -1061,7 +964,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.debris.remove(f.id);
     const p = this.project(at);
     if (p) this.hud.hitMarker(p.x, p.y, "kill");
-    this.popupAt(at, this.awardText(award), award.labels.includes("Far") ? "gold" : "");
+    this.popupAt(at, awardText(award), award.labels.includes("Far") ? "gold" : "");
   }
 
   split(parent: Fragment, _pieces: Fragment[], award: Award): void {
@@ -1070,8 +973,8 @@ export class OrbitalDecay implements Game, MatchListener {
     this.debris.remove(parent.id);
     const p = this.project(at);
     if (p) this.hud.hitMarker(p.x, p.y, "hit");
-    this.popupAt(at, this.awardText(award));
-    this.later(0.4, () => this.offerTip("orbit.split"));
+    this.popupAt(at, awardText(award));
+    this.schedule.later(0.4, () => this.offerTip("orbit.split"));
   }
 
   stripped(f: Fragment, award: Award): void {
@@ -1081,7 +984,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.debris.strip(f.id);
     const p = this.project(at);
     if (p) this.hud.hitMarker(p.x, p.y, "hit");
-    this.popupAt(at, this.awardText(award));
+    this.popupAt(at, awardText(award));
   }
 
   tankHit(f: Fragment, hits: number, award: Award): void {
@@ -1091,7 +994,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.effects.split(at, this.drift(f), at.distanceTo(this.camera.camera.position));
     const p = this.project(at);
     if (p) this.hud.hitMarker(p.x, p.y, "headshot");
-    this.popupAt(at, `${this.awardText(award)} ${hits} of 3`, "gold");
+    this.popupAt(at, `${awardText(award)} ${hits} of 3`, "gold");
   }
 
   breakup(f: Fragment, _pieces: Fragment[], award: Award): void {
@@ -1103,7 +1006,7 @@ export class OrbitalDecay implements Game, MatchListener {
     this.flash.kick(0.12, this.ctx.settings.reducedFlashing);
     const p = this.project(at);
     if (p) this.hud.hitMarker(p.x, p.y, "kill");
-    this.popupAt(at, this.awardText(award), "gold");
+    this.popupAt(at, awardText(award), "gold");
     this.sound.play("orbit_secret", { volume: 0.6, rate: 0.75 });
   }
 
@@ -1165,14 +1068,14 @@ export class OrbitalDecay implements Game, MatchListener {
     this.camera.rumble(this.ctx.settings.reducedMotion ? 0.4 : 1.6);
     this.flash.kick(0.35, this.ctx.settings.reducedFlashing);
     // The air goes, and with it every sound; the shutters slam.
-    this.later(1.9, () => this.sound.stopAll());
-    this.later(0.9, () => {
+    this.schedule.later(1.9, () => this.sound.stopAll());
+    this.schedule.later(0.9, () => {
       this.glass.slam();
       this.sound.play("orbit_shutter");
       this.camera.rumble(0.9);
     });
     // The results' own words: "Breached on Pass 4", and what broke the glass.
-    this.later(1.7, () => this.hud.banner(`Breached on Pass ${breach.pass}`, breachCause(breach)));
+    this.schedule.later(1.7, () => this.hud.banner(`Breached on Pass ${breach.pass}`, breachCause(breach)));
   }
 
   alarm(on: boolean): void {
@@ -1189,7 +1092,7 @@ export class OrbitalDecay implements Game, MatchListener {
   droneShot(award: Award, hits: number, mending: boolean): void {
     this.sound.play("orbit_drone_hit", { volume: 0.9 });
     this.effects.deflect(this.droneView.center, tmp.copy(this.camera.camera.position).sub(this.droneView.center).normalize(), this.droneView.center.distanceTo(this.camera.camera.position));
-    this.popupAt(this.droneView.center, this.awardText(award), "danger");
+    this.popupAt(this.droneView.center, awardText(award), "danger");
     this.hints.say(droneShotLine(hits, mending), 2);
     this.syncHint();
   }
@@ -1219,8 +1122,7 @@ export class OrbitalDecay implements Game, MatchListener {
   }
 
   streakUp(multiplier: number): void {
-    const semitones = multiplier >= 4 ? 7 : multiplier === 3 ? 4 : 0;
-    this.sound.play("orbit_streak", { rate: Math.pow(2, semitones / 12) });
+    this.sound.play("orbit_streak", { rate: streakRate(multiplier) });
     this.pushReadouts(true);
   }
 
@@ -1263,7 +1165,7 @@ export class OrbitalDecay implements Game, MatchListener {
       this.sound.play("orbit_secret", { delay: 0.1 });
     };
     // Its show plays first, the toast after it.
-    this.later(id === "message" ? 1.3 : id === "astronaut" ? 1.2 : 0.3, announce);
+    this.schedule.later(id === "message" ? 1.3 : id === "astronaut" ? 1.2 : 0.3, announce);
   }
 
   secretAgain(id: SecretId): void {
@@ -1354,7 +1256,7 @@ export class OrbitalDecay implements Game, MatchListener {
         this.pushReadouts(true);
         return this.match.send("shrapnel", "pane", { pane: 0, speed: 45 }).id;
       },
-      /** Strike a pane now, as a fragment of this kind would. */
+      /** Strike a pane now, at this cost, as a fragment would. */
       strike: (pane: number, cost: number) => {
         const p = this.glass.pane(pane);
         if (!p) return;

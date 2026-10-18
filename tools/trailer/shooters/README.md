@@ -1,7 +1,7 @@
 # The trailer's shooter clips
 
 Eight short, real gameplay clips of the four Finger Guns shooters for the
-trailer's fast montage (see `../PLAN.md`): 1920x1080 PNG frames at 60 fps, 3.5 s
+trailer's fast montage (see `../README.md`): 1920x1080 PNG frames at 60 fps, 3.5 s
 each (the slow-motion one 5 s), captured frame by frame from the games' own dev
 harnesses in headless, muted Chrome. Nothing is faked: the game runs, a scripted
 hand aims and fires through the games' own input, and the HUD (score, ammo,
@@ -51,21 +51,23 @@ node tools/trailer/shooters/capture.mjs --only dn-2 --preview --every 3 --size 1
 
 `--pre`, `--frames` and `--seed` override a take's pre-roll (simulated seconds),
 length and seed. `probe.mjs <clip> "<expression>"` evaluates JavaScript in the
-page (`window.__handy.game.debug`, `window.promo`).
+page (`window.__harness.game.debug`, `window.capture`).
 
 ## How it works
 
-- `capture.html` / `capture.ts`: the frame renderer, adapted from
-  `tools/promo/capture.ts`. One clip per page load; `capture.mjs` steps it one
-  frame at a time (`step`, run Playwright's clock, `post`, screenshot). A frame
-  is 1/60 s of game time, or 1/120 s for a slow clip, where the game is stepped
-  by hand (`game.update(1/120)`) because the harness steps 1/60 at the least; CSS
-  animations are scrubbed to the simulated time, so the HUD pops slow down too.
+- `capture.html` / `capture.ts`: the frame renderer. One clip per page load;
+  `capture.mjs` steps it one frame at a time (`step`, run Playwright's clock,
+  `post`, screenshot). A frame is 1/60 s of game time, or 1/120 s for a slow
+  clip, where the game is stepped by hand (`game.update(1/120)`) because the
+  harness steps 1/60 at the least; CSS animations are scrubbed to the simulated
+  time, so the HUD pops slow down too.
 - `directors.ts`: one director per clip, a script that stages the moment
   through the games' own debug switches (a bandit out of a cover, a dynamiter's
   stick, a bloater among the dead, a fragment sent down a lane) and picks the
-  hand's target. `aim.ts` is the promo's spring-damped hand with one extra
-  option (`maxSpeed`, for fast targets).
+  hand's target. `aim.ts` is the hand: a slightly under-damped spring with a
+  faint tremor, which fires once it has settled on the target (`maxSpeed`, how
+  fast it may still be moving, is raised for fast targets).
+- `browser.mjs`: the muted headless Chrome, and the dev server's address.
 - `plan.mjs`: per clip, the seed, the pre-roll, the length, the harness query.
 - `moments.mjs`: turns the game's own record of a take (audio cues, hit
   markers) into the manifest's `moments`, so they are exact.

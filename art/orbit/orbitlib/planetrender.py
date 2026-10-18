@@ -50,11 +50,6 @@ SUN_COLOR = np.array([1.0, 0.985, 0.96], F32)
 SUN_RADIUS = math.radians(0.268)
 
 
-def srgb_to_lin(a):
-    a = a.astype(F32)
-    return np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4).astype(F32)
-
-
 class Maps:
     """The delivered maps as float arrays, linear where they are colour."""
 
@@ -69,10 +64,6 @@ class Maps:
         self.det_g = None if detail is None else np.ascontiguousarray(detail[..., 1])
         self.det_b = None if detail is None else np.ascontiguousarray(detail[..., 2])
         self.stars = stars
-
-    @classmethod
-    def from_planet(cls, p, stars=None):
-        return cls(p.albedo, p.clouds, p.night, p.water, p.height, p.detail_rgb, stars)
 
 
 # ---------------------------------------------------------------------------
@@ -330,11 +321,8 @@ def _render_chunk(O, D, sun, maps, st):
     tau = np.zeros((n, 3), F32)
     S = st.samples
     ds = (seg / S)[:, None]
-    # sample positions biased toward the end of the path (where the air is
-    # densest for ground-hitting rays) by a mild power curve
+    # march the path in S equal steps, sampling each at its middle
     for i in range(S):
-        f0 = (i / S)
-        f1 = ((i + 1) / S)
         fm = (i + 0.5) / S
         t = ta0 + seg * fm
         x = O + D * t[:, None]
@@ -553,54 +541,3 @@ def equirect_rays(W, H, frame_from_world=None):
     if frame_from_world is not None:
         d = d @ np.asarray(frame_from_world, F32).T
     return d
-
-
-def filmic_preview(L):
-    """A quick tone curve for previews outside Blender (the build itself
-    goes through Blender's AgX)."""
-    x = np.maximum(L, 0)
-    a, b, c, d, e = 2.51, 0.03, 2.43, 0.59, 0.14
-    y = (x * (a * x + b)) / (x * (c * x + d) + e)
-    y = np.clip(y, 0, 1)
-    return np.where(y <= 0.0031308, y * 12.92, 1.055 * np.power(y, 1 / 2.4) - 0.055)
-
-
-def local_frame(lon_deg, lat_deg):
-    """East, north, up unit vectors at a point on the planet."""
-    lo, la = math.radians(lon_deg), math.radians(lat_deg)
-    up = np.array([math.cos(la) * math.cos(lo), math.cos(la) * math.sin(lo), math.sin(la)], F32)
-    east = np.array([-math.sin(lo), math.cos(lo), 0.0], F32)
-    north = np.cross(up, east)
-    return east, north, up
-
-
-def orbit_camera(lon_deg, lat_deg, alt_km, heading_deg, depression_deg, roll_deg=0.0):
-    """Eye position and camera rotation (columns right, up, back) for a
-    camera above (lon, lat) looking along `heading` (clockwise from north)
-    and `depression` degrees below the local horizontal."""
-    east, north, up = local_frame(lon_deg, lat_deg)
-    eye = up * (R + alt_km)
-    hd = math.radians(heading_deg)
-    fwd_h = north * math.cos(hd) + east * math.sin(hd)
-    dp = math.radians(depression_deg)
-    fwd = fwd_h * math.cos(dp) - up * math.sin(dp)
-    right = np.cross(fwd, up)
-    right /= np.linalg.norm(right)
-    cup = np.cross(right, fwd)
-    rl = math.radians(roll_deg)
-    r2 = right * math.cos(rl) + cup * math.sin(rl)
-    u2 = -right * math.sin(rl) + cup * math.cos(rl)
-    rot = np.stack([r2, u2, -fwd], 1).astype(F32)
-    return eye.astype(F32), rot
-
-
-def sun_from(lon_deg, lat_deg, heading_deg, elev_deg, az_deg):
-    """Sun direction given its elevation above the station's local horizon
-    and its azimuth relative to the view heading (0 = straight ahead,
-    +90 = to the right)."""
-    east, north, up = local_frame(lon_deg, lat_deg)
-    a = math.radians(heading_deg + az_deg)
-    e = math.radians(elev_deg)
-    h = north * math.cos(a) + east * math.sin(a)
-    s = h * math.cos(e) + up * math.sin(e)
-    return (s / np.linalg.norm(s)).astype(F32)

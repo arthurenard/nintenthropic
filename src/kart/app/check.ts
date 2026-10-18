@@ -45,7 +45,11 @@ const TURNED = 20;
 const HOLD = 350;
 /** After the last step, how long "Ready" shows before the check hands on, ms. */
 const READY_FOR = 1500;
-/** Hands gone this long, ms, and the words say so. */
+/**
+ * Fewer than two hands this long, ms, and the words say so. Longer than the race's LOST_FOR because the check counts
+ * from the moment a hand drops out of the wheel's count, where the race counts from the wheel's own "lost", which has
+ * already waited 0.3 s.
+ */
 const LOST_FOR = 600;
 
 interface Entry {

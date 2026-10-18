@@ -104,8 +104,8 @@ export function dome(b: MeshBuilder, at: V3, r: V3, paint: Paint, coverage = 0.5
 }
 
 /**
- * A racing helmet: the clear-coated shell, a pale rim round its edge, a
- * stripe over the crown in the kart's colour and a mirrored peak. `at` and
+ * A racing helmet: the clear-coated shell in the kart's colour, a pale rim
+ * round its edge, a white stripe over the crown and a mirrored peak. `at` and
  * `r` are the shell's centre and radii (as for `dome`).
  */
 export function helmet(b: MeshBuilder, l: Look, at: V3, r: V3, coverage = 0.42, o: { peak?: boolean; stripe?: boolean } = {}): void {

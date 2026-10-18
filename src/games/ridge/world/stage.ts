@@ -6,8 +6,7 @@
  * low warm sun whose reach the light map decides; and the groups the game
  * fills with people, vehicles and effects.
  */
-import { Color, DirectionalLight, Group, Mesh, Scene, Vector2, Vector3, type Material, type ShaderMaterial, type Texture, type WebGLRenderer } from "three";
-import type { Quality } from "../../../engine/types";
+import { Color, DirectionalLight, Group, Mesh, Scene, Vector2, Vector3, type Material, type Object3D, type ShaderMaterial, type Texture, type WebGLRenderer } from "three";
 import { SceneryQueries } from "../../../engine/world/queries";
 import { disposeTree } from "../../../engine/world/scene";
 import { SkyLight } from "../../../engine/world/sky";
@@ -17,9 +16,8 @@ import { Heightfield } from "./heightfield";
 import { buildLightMap, type LightMap } from "./lightmap";
 import { terrainMaterial } from "./terrain";
 import { terrainArtMaterial, type TerrainArtInputs } from "./terrainArt";
-import { mistMaterial } from "./water";
 import type { ValleyLayout } from "./valley";
-import { waterMaterial } from "./water";
+import { mistMaterial, waterMaterial } from "./water";
 
 /** How much brighter the real valley is lit than the placeholder (its albedos are real ones). */
 const ART_LIGHT = 2.9;
@@ -251,8 +249,6 @@ export class Stage {
     for (const m of this.forestMaterials) (m.uniforms["uSway"]!.value as Vector2).set(windX * 0.035, 0);
   }
 
-  setQuality(_q: Quality): void {}
-
   dispose(): void {
     this.sky.dispose();
     this.lightMap?.dispose();
@@ -301,7 +297,7 @@ function horizonCopy(image: CanvasImageSource, map: HorizonCopy["map"]): Horizon
   return { data: g.getImageData(0, 0, width, height).data, width, height, map };
 }
 
-function findMesh(o: import("three").Object3D): Mesh | null {
+function findMesh(o: Object3D): Mesh | null {
   let found: Mesh | null = null;
   o.traverse((c) => {
     if (!found && (c as Mesh).isMesh) found = c as Mesh;
@@ -319,6 +315,3 @@ function patchAll(mesh: Mesh, atmosphere: AtmosphereUniforms, sunFromMap: boolea
     patchStandard(m, atmosphere, sunFromMap);
   }
 }
-
-export { patchAll };
-export type { Color };

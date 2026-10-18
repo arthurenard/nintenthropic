@@ -6,45 +6,16 @@
  * Pitched pieces (the pings, the arpeggios) sit in C major so any two that
  * overlap agree.
  */
+import { sampled, smooth } from "../dsp/curves";
 import { bandpass, highpass, lowpass, svf } from "../dsp/filters";
 import { type Mono, normalize, shapeBy } from "../dsp/signal";
 import { addMode, bandNoise, click, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { type Voice, modal } from "../dsp/voices";
 import { bubble, thump } from "./kit";
-import { ar, drive, expo, lerp, midiHz, sampled, semi, smooth, tone } from "./kart-kit";
+import { ar, drive, expo, glide, ping, swoosh, tone, whoosh } from "./kart-kit";
 
-/** A glassy ping voice for the sparkles. */
-const PING: Voice = modal({
-  partials: [[1, 1, 1], [2.76, 0.4, 0.5], [5.4, 0.2, 0.25]],
-  tau: 0.22, free: true, hammer: { level: 0.1, tau: 0.002, low: 9000 },
-});
-
-/** One ping, placed on ``out``. */
-function ping(out: Mono, t: Take, at: number, midi: number, gain = 1, vel = 0.8): void {
-  t.put(out, PING({ sr: t.sr, freq: midiHz(midi) * t.rng.range(0.998, 1.002), hold: 0.1, vel, rng: t.rng.fork(`${midi}${at}`) }), at, gain);
-}
-
-/** A sweeping band of air: noise through a band-pass whose centre glides from ``from`` to ``to`` (exponentially). */
-function whoosh(t: Take, seconds: number, from: number, to: number, q: number, envelope: (u: number) => number): Mono {
-  const n = t.n(seconds);
-  const buf = white(n, t.rng);
-  svf(buf, t.sr, "bp", (u) => from * Math.pow(to / from, u), q);
-  normalize(buf);
-  return shapeBy(buf, envelope);
-}
-
-/** Fast rise, slow fall. */
-const swoosh = (rise: number, power = 1.6) => (u: number): number => smooth(u / rise) * Math.pow(Math.max(0, 1 - u), power);
 /** A swell that peaks in the middle. */
 const swell = (u: number): number => Math.sin(Math.PI * Math.min(1, Math.max(0, u))) ** 1.3;
-
-/** A pitch-gliding sine with a few harmonics, between two frequencies on a curve. */
-function glide(t: Take, seconds: number, from: number, to: number, curve = 1, h2 = 0, h3 = 0): Mono {
-  const n = t.n(seconds);
-  const f = sampled(n, (u) => from * Math.pow(to / from, Math.pow(u, curve)));
-  return tone(n, t.sr, f, h2, h3);
-}
 
 // --- the drift -------------------------------------------------------------------------------------------
 
@@ -217,10 +188,8 @@ export function puckBounce(t: Take): Mono {
 export function slickSplat(t: Take): Mono {
   const out = t.canvas(0.8);
   const splat = bandNoise(t.n(0.3), t.sr, t.rng, 250, 2600, 2);
-  const n = splat.length;
   svf(splat, t.sr, "lp", (u) => 3200 * Math.pow(0.12, u), 1.1);
   expo(splat, t.sr, 0.06, 0.003);
-  void n;
   t.put(out, splat, 0, 1);
   t.put(out, thump(t, 0.15, 170, 70, 0.002, 0.04), 0, 0.7);
   for (let k = 0; k < 5; k++) t.put(out, bubble(t, t.rng.range(250, 800), t.rng.range(0.015, 0.035), 1.8), t.rng.range(0.05, 0.4), t.rng.range(0.3, 0.7));
@@ -235,7 +204,7 @@ export function hit(t: Take): Mono {
   t.put(out, thump(t, 0.2, 230, 62, 0.001, 0.05), 0, 1);
   t.put(out, bandNoise(t.n(0.04), t.sr, t.rng, 600, 5000, 2), 0, 0.5);
   const n = t.n(0.8);
-  const f = sampled(n, (u) => 1150 * Math.pow(0.17, u) * (1 + 0.05 * Math.sin(2 * Math.PI * 9 * u * 0.8)));
+  const f = sampled(n, (u) => 1150 * Math.pow(0.17, u) * (1 + 0.05 * Math.sin(2 * Math.PI * 9 * u * 0.8)), 16);
   const whirl = tone(n, t.sr, f, 0.35, 0.1);
   shapeBy(whirl, (u) => smooth(u / 0.03) * (1 - u) ** 1.2);
   t.put(out, whirl, 0.05, 0.55);
@@ -249,7 +218,7 @@ export function hit(t: Take): Mono {
 export function spinout(t: Take): Mono {
   const out = t.canvas(1.1);
   const n = t.n(0.7);
-  const f = sampled(n, (u) => 1600 * Math.pow(0.4, u) * (1 + 0.06 * Math.sin(2 * Math.PI * 7 * u * 0.7)));
+  const f = sampled(n, (u) => 1600 * Math.pow(0.4, u) * (1 + 0.06 * Math.sin(2 * Math.PI * 7 * u * 0.7)), 16);
   const squeal = tone(n, t.sr, f, 0.5, 0.25);
   shapeBy(squeal, (u) => smooth(u / 0.05) * smooth((1 - u) / 0.3));
   t.put(out, squeal, 0, 0.7);
@@ -313,7 +282,7 @@ export function wallScrape(t: Take): Mono {
 export function jump(t: Take): Mono {
   const out = t.canvas(0.65);
   const n = t.n(0.4);
-  const f = sampled(n, (u) => 190 * Math.pow(2.9, Math.pow(u, 0.7)) * (1 + 0.07 * Math.sin(2 * Math.PI * 16 * u * 0.4) * (1 - u)));
+  const f = sampled(n, (u) => 190 * Math.pow(2.9, Math.pow(u, 0.7)) * (1 + 0.07 * Math.sin(2 * Math.PI * 16 * u * 0.4) * (1 - u)), 16);
   const boing = tone(n, t.sr, f, 0.35, 0.12);
   shapeBy(boing, (u) => smooth(u / 0.03) * (1 - u) ** 0.8);
   t.put(out, boing, 0, 0.9);
@@ -352,7 +321,7 @@ export function land(t: Take): Mono {
 export function fall(t: Take): Mono {
   const out = t.canvas(1.8);
   const n = t.n(1.6);
-  const f = sampled(n, (u) => 2100 * Math.pow(0.17, Math.pow(u, 0.85)) * (1 + 0.012 * Math.sin(2 * Math.PI * 7 * u * 1.6)));
+  const f = sampled(n, (u) => 2100 * Math.pow(0.17, Math.pow(u, 0.85)) * (1 + 0.012 * Math.sin(2 * Math.PI * 7 * u * 1.6)), 16);
   const whistle = tone(n, t.sr, f, 0.18, 0.05);
   shapeBy(whistle, (u) => smooth(u / 0.03) * smooth((1 - u) / 0.3));
   t.put(out, whistle, 0, 1);
@@ -386,12 +355,9 @@ export function hazard(t: Take): Mono {
   expo(crash, t.sr, 0.09, 0.002);
   t.put(out, crash, 0.01, 0.55);
   const n = t.n(0.7);
-  const f = sampled(n, (u) => 1500 * Math.pow(0.17, u) * (1 + 0.025 * Math.sin(2 * Math.PI * 6 * u * 0.7)));
+  const f = sampled(n, (u) => 1500 * Math.pow(0.17, u) * (1 + 0.025 * Math.sin(2 * Math.PI * 6 * u * 0.7)), 16);
   const slide = tone(n, t.sr, f, 0.12, 0.03);
   shapeBy(slide, (u) => smooth(u / 0.04) * smooth((1 - u) / 0.25));
   t.put(out, slide, 0.18, 0.5);
   return out;
 }
-
-void lerp;
-void semi;

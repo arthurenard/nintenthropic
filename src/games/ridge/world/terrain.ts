@@ -11,7 +11,7 @@
  * air in front of it (atmosphere.ts). Detail where the targets are: the
  * splat's fine map covers the play area at a couple of metres a texel.
  */
-import { Color, ShaderMaterial, Vector4, type DataArrayTexture, type Texture } from "three";
+import { ShaderMaterial, Vector4, type DataArrayTexture, type Texture } from "three";
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from "./atmosphere";
 
 export interface SplatSet {
@@ -57,7 +57,6 @@ uniform float uHasCoarse;
 uniform sampler2DArray uTiles;
 uniform float uNear[6];
 uniform float uFar[6];
-uniform vec3 uTint;
 varying vec3 vWorld;
 varying vec3 vNormalW;
 ${ATMOSPHERE_GLSL}
@@ -155,7 +154,7 @@ void main() {
   }
   sum = max(sum, 1e-4);
   vec4 c = (grass * w[0] + rock * w[1] + scree * w[2] + snow * w[3] + dirt * w[4] + road * w[5]) / sum;
-  vec3 albedo = c.rgb * (0.8 + macro * 0.4) * uTint;
+  vec3 albedo = c.rgb * (0.8 + macro * 0.4);
   float grassShare = w[0] / sum;
   // Grass is drier and paler in broad drifts and on the high ground, lusher low by the water.
   float drift = smoothstep(0.35, 0.75, atmoNoise(wp.xz * 0.0045 + 3.7));
@@ -193,7 +192,6 @@ void main() {
   float sun = smoothstep(light.r - 0.012, light.r + 0.012, uSunElev);
   float ao = light.g;
   float lambert = max(dot(nb, uSunDir), 0.0);
-  // Snow and wet rock catch a little shine toward the eye from the low sun.
   vec3 direct = uSunColor * lambert * sun;
   vec3 ambient = atmoAmbient(nb, ao);
   vec3 col = albedo * (direct + ambient);
@@ -221,7 +219,6 @@ export function terrainMaterial(inputs: TerrainInputs, atmosphere: AtmosphereUni
       uTiles: { value: inputs.tiles },
       uNear: { value: inputs.scales.near },
       uFar: { value: inputs.scales.far },
-      uTint: { value: new Color(1, 1, 1) },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,

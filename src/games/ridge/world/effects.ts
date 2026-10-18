@@ -9,7 +9,7 @@
  */
 import { Color, Vector3, type Group, type Points, type ShaderMaterial } from "three";
 import { DecalPool } from "../../../engine/fx/decals";
-import { ParticleSystem, type ParticleStyle } from "../../../engine/fx/particles";
+import { ParticleSystem, scatter, type ParticleStyle } from "../../../engine/fx/particles";
 import { bulletHoleTexture, particleAtlas } from "../../../engine/fx/textures";
 import type { Quality } from "../../../engine/types";
 import { ATMOSPHERE_GLSL, type AtmosphereUniforms } from "./atmosphere";
@@ -78,8 +78,8 @@ function patchParticles(points: Points, atmosphere: AtmosphereUniforms, additive
 }
 
 /**
- * The effects. `scaleFor` gives the view's height at one metre (for flares
- * sized on screen); the game sets it whenever the lens changes (the scope).
+ * The effects. `setScale` gives them the view's height at one metre (for
+ * flares sized on screen); the game calls it whenever the lens changes (the scope).
  */
 export class Effects {
   readonly additive: ParticleSystem;
@@ -95,7 +95,7 @@ export class Effects {
   constructor(
     root: Group,
     quality: Quality,
-    private readonly atmosphere: AtmosphereUniforms,
+    atmosphere: AtmosphereUniforms,
   ) {
     const atlas = particleAtlas();
     const n = quality.tier === "low" ? 900 : quality.tier === "medium" ? 1500 : 2400;
@@ -141,12 +141,6 @@ export class Effects {
     this.alpha.emit(at.x, at.y, at.z, (r() - 0.5) * 0.05, 0.03, (r() - 0.5) * 0.05, VAPOUR, (size / 0.06) * strength);
   }
 
-  private scatter(n: Vector3, spread: number, out: Vector3): Vector3 {
-    const r = this.random;
-    out.set(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1).multiplyScalar(spread).add(n);
-    return out.normalize();
-  }
-
   /** A round lands. `toward` is the way it came from (for the spray's direction). */
   impact(surface: Surface, at: Vector3, normal: Vector3, toward: Vector3): void {
     const r = this.random;
@@ -154,12 +148,12 @@ export class Effects {
     switch (surface) {
       case "rock":
       case "stone":
-        for (let i = 0; i < 6; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(t1, 0.8, v).multiplyScalar(1 + r() * 2).toArray(), STONE_DUST, 1);
-        for (let i = 0; i < 8; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(t1, 1, v).multiplyScalar(3 + r() * 5).toArray(), CHIP);
-        for (let i = 0; i < 5; i++) this.additive.emit(at.x, at.y, at.z, ...this.scatter(t1, 1, v).multiplyScalar(4 + r() * 6).toArray(), SPARK, this.reducedFlashing ? 0.4 : 1);
+        for (let i = 0; i < 6; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 0.8, v).multiplyScalar(1 + r() * 2).toArray(), STONE_DUST, 1);
+        for (let i = 0; i < 8; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 1, v).multiplyScalar(3 + r() * 5).toArray(), CHIP);
+        for (let i = 0; i < 5; i++) this.additive.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 1, v).multiplyScalar(4 + r() * 6).toArray(), SPARK, this.reducedFlashing ? 0.4 : 1);
         break;
       case "metal":
-        for (let i = 0; i < 10; i++) this.additive.emit(at.x, at.y, at.z, ...this.scatter(t1, 1, v).multiplyScalar(4 + r() * 8).toArray(), SPARK, this.reducedFlashing ? 0.4 : 1);
+        for (let i = 0; i < 10; i++) this.additive.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 1, v).multiplyScalar(4 + r() * 8).toArray(), SPARK, this.reducedFlashing ? 0.4 : 1);
         this.additive.emit(at.x, at.y, at.z, 0, 0, 0, FLASH, this.reducedFlashing ? 0.25 : 0.6);
         break;
       case "water":
@@ -167,21 +161,21 @@ export class Effects {
         break;
       case "glass":
         this.additive.emit(at.x, at.y, at.z, 0, 0, 0, GLASS, 1);
-        for (let i = 0; i < 10; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(t1, 1.1, v).multiplyScalar(1 + r() * 3).toArray(), SHARD);
+        for (let i = 0; i < 10; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 1.1, v).multiplyScalar(1 + r() * 3).toArray(), SHARD);
         break;
       case "wood":
-        for (let i = 0; i < 4; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(t1, 0.8, v).multiplyScalar(0.6 + r() * 1.4).toArray(), WOOD);
-        for (let i = 0; i < 8; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(t1, 0.9, v).multiplyScalar(2 + r() * 4).toArray(), SPLINTER);
+        for (let i = 0; i < 4; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 0.8, v).multiplyScalar(0.6 + r() * 1.4).toArray(), WOOD);
+        for (let i = 0; i < 8; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 0.9, v).multiplyScalar(2 + r() * 4).toArray(), SPLINTER);
         break;
       case "snow":
-        for (let i = 0; i < 7; i++) this.alpha.emit(at.x, at.y + 0.2, at.z, ...this.scatter(t1, 0.7, v).multiplyScalar(1 + r() * 2).toArray(), SNOW, 1.2);
+        for (let i = 0; i < 7; i++) this.alpha.emit(at.x, at.y + 0.2, at.z, ...scatter(this.random, t1, 0.7, v).multiplyScalar(1 + r() * 2).toArray(), SNOW, 1.2);
         break;
       case "cloth":
-        for (let i = 0; i < 4; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(t1, 0.8, v).multiplyScalar(0.5 + r()).toArray(), BODY, 1);
+        for (let i = 0; i < 4; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, t1, 0.8, v).multiplyScalar(0.5 + r()).toArray(), BODY, 1);
         break;
       default: // grass, dirt
-        for (let i = 0; i < 7; i++) this.alpha.emit(at.x, at.y + 0.1, at.z, ...this.scatter(t1, 0.7, v).multiplyScalar(0.8 + r() * 2).toArray(), DUST, 1);
-        for (let i = 0; i < 10; i++) this.alpha.emit(at.x, at.y + 0.05, at.z, ...this.scatter(t1, 0.5, v).multiplyScalar(3 + r() * 4).toArray(), TURF);
+        for (let i = 0; i < 7; i++) this.alpha.emit(at.x, at.y + 0.1, at.z, ...scatter(this.random, t1, 0.7, v).multiplyScalar(0.8 + r() * 2).toArray(), DUST, 1);
+        for (let i = 0; i < 10; i++) this.alpha.emit(at.x, at.y + 0.05, at.z, ...scatter(this.random, t1, 0.5, v).multiplyScalar(3 + r() * 4).toArray(), TURF);
         break;
     }
   }
@@ -189,7 +183,7 @@ export class Effects {
   /** A round striking a man: a puff of dust from his clothes, dark, brief. */
   body(at: Vector3, away: Vector3): void {
     const r = this.random;
-    for (let i = 0; i < 5; i++) this.alpha.emit(at.x, at.y, at.z, ...this.scatter(away, 0.6, v).multiplyScalar(0.6 + r() * 1.2).toArray(), BODY);
+    for (let i = 0; i < 5; i++) this.alpha.emit(at.x, at.y, at.z, ...scatter(this.random, away, 0.6, v).multiplyScalar(0.6 + r() * 1.2).toArray(), BODY);
   }
 
   splash(at: Vector3, scale: number): void {

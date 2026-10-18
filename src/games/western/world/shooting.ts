@@ -2,8 +2,9 @@ import { Box3, Mesh, Object3D, Raycaster, Vector2, Vector3, type Intersection, t
 import type { Bandit } from "../rules/bandit";
 import type { Dynamite } from "../rules/dynamite";
 import type { ShotTarget } from "../rules/match";
-import { assistFactor, choose, secretFactor } from "../../../engine/rules/assist";
-import { effectiveRadius, probePoint, probeSegment, type RayProbe } from "../../../engine/rules/raymath";
+import { assistAngle, assistFactor, choose, secretFactor } from "../../../engine/rules/assist";
+import { weighBody, weighInnocent, type BodyHit, type BodyShape } from "../../../engine/rules/bodyShot";
+import { effectiveRadius, probePoint, type RayProbe } from "../../../engine/rules/raymath";
 import type { Settings } from "../../../engine/types";
 import type { SecretId } from "../rules/secrets";
 import type { Townsperson } from "../rules/townsfolk";
@@ -60,8 +61,12 @@ export interface ShootableWorld {
 
 const ndc = new Vector2();
 const probe: RayProbe = { t: 0, miss: 0 };
-const closest = new Vector3();
 const tmp = new Vector3();
+const body: BodyHit = { part: "body", t: 0, score: 0, physical: false };
+const innocent = { hit: false, t: 0 };
+
+/** A bandit's head and torso, metres, for a shot (engine/rules/bodyShot.ts weighs it). */
+const BANDIT: BodyShape = { head: 0.13, torso: 0.2, upright: true };
 
 interface Candidate {
   kind: "bandit" | "townsfolk" | "dynamite" | "chicken" | "tumbleweed" | "secret";
@@ -120,12 +125,6 @@ export class Shooter {
     for (let i = 0; i < 32; i++) this.candidates.push(blank());
   }
 
-  /** Where one fraction of the smaller view side is, as a tangent of angle. */
-  private tanFor(fraction: number): number {
-    const tanHalf = Math.tan((this.camera.fov * Math.PI) / 360);
-    return fraction * 2 * tanHalf * Math.min(1, this.camera.aspect);
-  }
-
   /** Cast a shot through viewport position (x, y) in fractions. */
   shoot(x: number, y: number): ShotResult {
     const res = this.result;
@@ -154,122 +153,43 @@ export class Shooter {
     };
     // Aim Assist, live: the tables wider, or exact (a tolerance of none).
     const boost = assistFactor(this.settings.aimAssist);
-    const aTorso = Math.atan(this.tanFor(ASSIST.torso * boost));
-    const aHead = Math.atan(this.tanFor(ASSIST.head * boost));
+    const aTorso = assistAngle(this.camera, ASSIST.torso * boost);
+    const aHead = assistAngle(this.camera, ASSIST.head * boost);
     // The nearest innocent the shot passes close beside (not through): no help beyond it.
     let guardAt = Number.POSITIVE_INFINITY;
 
     for (const v of this.cast.bandits) {
       const b = v.b;
       if (!b.shootable) continue;
-      const j = v.rig.updateJoints();
-      probePoint(o, d, j.head, probe);
-      if (probe.t <= 0) continue;
-      const tH = probe.t;
-      const missH = probe.miss;
-      const rH = effectiveRadius(0.13, tH, aHead);
-      probeSegment(o, d, j.hips, j.neck, probe);
-      const tT = probe.t;
-      const missT = probe.miss;
-      const rT = effectiveRadius(0.2, tT, aTorso);
-      // Limbs: physical only, a clean hit on an arm or a leg.
-      let limbT = 0;
-      let limbScore = Number.POSITIVE_INFINITY;
-      const limb = (a: Vector3, bb: Vector3, r: number) => {
-        probeSegment(o, d, a, bb, probe);
-        const s = probe.miss / r;
-        if (s < limbScore) {
-          limbScore = s;
-          limbT = probe.t;
-        }
-      };
-      limb(j.shoulderL, j.elbowL, 0.065);
-      limb(j.elbowL, j.handL, 0.055);
-      limb(j.shoulderR, j.elbowR, 0.065);
-      limb(j.elbowR, j.handR, 0.055);
-      limb(j.thighL, j.kneeL, 0.09);
-      limb(j.kneeL, j.footL, 0.07);
-      limb(j.thighR, j.kneeR, 0.09);
-      limb(j.kneeR, j.footR, 0.07);
-      // A shot passing above the neck is a headshot or a miss, never a body shot.
-      closest.copy(d).multiplyScalar(tH).add(o);
-      const aboveNeck = closest.y > j.neck.y + 0.03;
-      const scoreH = missH / rH;
-      const scoreT = missT / rT;
-      // The shot passes through one of his real shapes, whatever zone the allowance calls it: with
-      // assist an arm's hit can read as the body's, and must still be a real hit, not a near miss.
-      const real = missH <= 0.13 || missT <= 0.2 || limbScore <= 1;
-      let part: HitPart | null = null;
-      let score = 0;
-      let t = 0;
-      let physical = false;
-      if (aboveNeck) {
-        if (scoreH <= 1) {
-          part = "head";
-          score = scoreH;
-          t = tH;
-          physical = missH <= 0.13;
-        }
-      } else if (limbScore <= 1 && limbScore < scoreT && missT > 0.2) {
-        part = "limb";
-        score = limbScore * 0.5;
-        t = limbT;
-        physical = true;
-      } else if (scoreT <= 1 || scoreH <= 1) {
-        if (scoreH <= 1 && scoreH < scoreT) {
-          part = "head";
-          score = scoreH;
-          t = tH;
-          physical = real;
-        } else {
-          part = "body";
-          score = scoreT;
-          t = tT;
-          physical = real;
-        }
-      }
-      if (!part) continue;
+      const hit = weighBody(o, d, v.rig.updateJoints(), BANDIT, aHead, aTorso, body);
+      if (!hit) continue;
       const c = add();
       c.kind = "bandit";
       c.bandit = b;
-      c.part = part;
-      c.t = t;
-      c.score = score;
-      c.physical = physical;
+      c.part = hit.part;
+      c.t = hit.t;
+      c.score = hit.score;
+      c.physical = hit.physical;
     }
 
     for (const v of this.cast.townsfolk) {
       const p = v.p;
       if (!p.shootable) continue;
-      const j = v.rig.updateJoints();
-      probePoint(o, d, j.head, probe);
-      let hit = probe.t > 0 && probe.miss <= 0.14;
-      let t = probe.t;
-      if (!hit) {
-        probeSegment(o, d, j.hips, j.neck, probe);
-        hit = probe.t > 0 && probe.miss <= 0.22;
-        t = probe.t;
-      }
-      if (!hit) {
-        // Close beside one, as near as a bandit's torso would be helped: prefer no hit to a wrong one.
-        probePoint(o, d, j.head, probe);
-        const headT = probe.t;
-        const nearHead = probe.t > 0 && probe.miss <= effectiveRadius(0.14, probe.t, aTorso);
-        probeSegment(o, d, j.hips, j.neck, probe);
-        const nearBody = probe.t > 0 && probe.miss <= effectiveRadius(0.22, probe.t, aTorso);
-        if (nearHead) guardAt = Math.min(guardAt, headT);
-        if (nearBody) guardAt = Math.min(guardAt, probe.t);
+      // Close beside one, as near as a bandit's torso would be helped, is no hit, and no help beyond them either.
+      const shot = weighInnocent(o, d, v.rig.updateJoints(), aTorso, innocent);
+      if (!shot.hit) {
+        guardAt = Math.min(guardAt, shot.t);
         continue;
       }
       const c = add();
       c.kind = "townsfolk";
       c.person = p;
-      c.t = t;
+      c.t = shot.t;
       c.score = 0;
       c.physical = true;
     }
 
-    const aDyn = Math.atan(this.tanFor(ASSIST.dynamite * boost));
+    const aDyn = assistAngle(this.camera, ASSIST.dynamite * boost);
     for (const s of this.world.sticks()) {
       if (!s.airborne) continue;
       tmp.set(s.position.x, s.position.y, s.position.z);
@@ -285,7 +205,7 @@ export class Shooter {
       c.physical = probe.miss <= 0.18;
     }
 
-    const aWeed = Math.atan(this.tanFor(ASSIST.tumbleweed * boost));
+    const aWeed = assistAngle(this.camera, ASSIST.tumbleweed * boost);
     const weeds = this.world.tumbleweeds();
     for (let i = 0; i < weeds.length; i++) {
       const w = weeds[i];
@@ -305,7 +225,7 @@ export class Shooter {
     const chicken = this.world.chicken();
     if (chicken) {
       probePoint(o, d, chicken, probe);
-      const r = effectiveRadius(0.25, probe.t, Math.atan(this.tanFor(ASSIST.chicken * boost)));
+      const r = effectiveRadius(0.25, probe.t, assistAngle(this.camera, ASSIST.chicken * boost));
       if (probe.t > 0 && probe.miss <= r) {
         const c = add();
         c.kind = "chicken";
@@ -316,7 +236,7 @@ export class Shooter {
     }
 
     // A secret's own allowance is never boosted: assist does not trigger one the player was not aiming at.
-    const aSecret = Math.atan(this.tanFor(ASSIST.secret * secretFactor(this.settings.aimAssist)));
+    const aSecret = assistAngle(this.camera, ASSIST.secret * secretFactor(this.settings.aimAssist));
     for (const [id, center, radius] of [
       ["bell", this.world.bellCenter(), 0.55],
       ["vane", this.world.vaneCenter(), 0.6],

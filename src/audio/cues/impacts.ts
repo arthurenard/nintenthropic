@@ -3,20 +3,11 @@
  * dirt, iron, glass and water. These are the player's feedback, so each has
  * a crisp front that reads at 40 m and a body that says what was hit.
  */
-import { biquad, highpass, lowpass, svf } from "../dsp/filters";
-import { type Mono, adsr, normalize, shapeBy, wobble } from "../dsp/signal";
+import { lowpass } from "../dsp/filters";
+import { type Mono, adsr, normalize, shapeBy } from "../dsp/signal";
 import { addMetal, addMode, bandNoise, click, decayInPlace, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { addShard, bubble, burst, creak, knock, nWave, puff, scatter, thump } from "./kit";
-
-/** Noise that flickers: rectified slow noise as its envelope. The wet part of an impact. */
-function squelch(t: Take, seconds: number, low: number, high: number, rate: number): Mono {
-  const n = t.n(seconds);
-  const buf = bandNoise(n, t.sr, t.rng, low, high, 2);
-  const flick = wobble(n, t.sr, rate, () => t.rng.next());
-  for (let i = 0; i < n; i++) buf[i]! *= Math.abs(flick[i]!) ** 1.5;
-  return normalize(buf);
-}
+import { addShard, bubble, burst, creak, flicker, knock, nWave, puff, scatter, thump } from "./kit";
 
 /**
  * A bullet into a body: the slap of cloth and skin (the part that carries
@@ -24,18 +15,16 @@ function squelch(t: Take, seconds: number, low: number, high: number, rate: numb
  * flicker. Never a splat: it has to be heard fifty times a game.
  */
 export function hitFlesh(t: Take): Mono {
-  const r = t.rng;
   const out = t.canvas(0.4);
   t.put(out, burst(t, 0.04, 700 * t.p, t.c(4500), 0.0004, t.d(0.006), 2), 0, t.g(0.9));
   t.put(out, burst(t, 0.03, t.c(2500), 9000, 0.0003, 0.004, 2), 0, t.g(0.35));
   t.put(out, burst(t, 0.25, 55, 420 * t.p, 0.0012, t.d(0.04), 4), 0, t.g(1.0));
   t.put(out, thump(t, 0.2, 150 * t.p, 62 * t.p, 0.001, t.d(0.035), 0.5), 0, t.g(0.75));
-  const wet = squelch(t, 0.2, 800, 3800, 160);
+  const wet = flicker(t, 0.2, 800, 3800, 160);
   decayInPlace(wet, t.sr, 0.003, t.d(0.035));
   t.put(out, wet, 0.004, t.g(0.3));
   // Dust and cloth puffed out of the coat.
   t.put(out, puff(t, 0.12, 5000, 0.004, 0.025), 0.003, t.g(0.12));
-  void r;
   return out;
 }
 
@@ -56,7 +45,7 @@ export function hitHeadshot(t: Take): Mono {
   addMode(out, t.sr, 0, 2150 * t.p, 0.2, t.d(0.009), r.range(0, 6));
   t.put(out, burst(t, 0.2, 60, 380 * t.p, 0.001, t.d(0.03), 4), 0, t.g(0.75));
   t.put(out, thump(t, 0.15, 180 * t.p, 70 * t.p, 0.001, t.d(0.03), 0.5), 0, t.g(0.5));
-  const wet = squelch(t, 0.2, 900, 4200, 200);
+  const wet = flicker(t, 0.2, 900, 4200, 200);
   decayInPlace(wet, t.sr, 0.002, t.d(0.03));
   t.put(out, wet, 0.003, t.g(0.28));
   // The hat or the dust behind: a scatter of fine grains.
@@ -85,7 +74,7 @@ export function hitDirt(t: Take): Mono {
   t.put(out, burst(t, 0.12, 50, 320 * t.p, 0.0008, t.d(0.028), 4), 0, t.g(1.0));
   t.put(out, thump(t, 0.12, 120 * t.p, 55 * t.p, 0.001, t.d(0.025), 0.5), 0, t.g(0.6));
   t.put(out, burst(t, 0.04, 500, 3500, 0.0003, 0.005), 0, t.g(0.55));
-  const spray = squelch(t, 0.3, 1500, 8500, 400);
+  const spray = flicker(t, 0.3, 1500, 8500, 400);
   decayInPlace(spray, t.sr, 0.004, t.d(0.06));
   t.put(out, spray, 0.003, t.g(0.4));
   scatter(out, t, r.int(12, 20), 0.03, 0.45, 1800, 9000, 0.22, 1.4);
@@ -151,7 +140,7 @@ export function hitWater(t: Take): Mono {
   t.put(out, burst(t, 0.03, 400, t.c(3200), 0.0003, 0.005), 0, t.g(0.8));
   t.put(out, bubble(t, r.range(320, 520) * t.p, t.d(0.03), r.range(1.8, 2.6)), 0.002, t.g(0.9));
   t.put(out, burst(t, 0.1, 60, 300, 0.001, 0.02, 4), 0, t.g(0.5));
-  const splash = squelch(t, 0.4, 700, t.c(7000), 300);
+  const splash = flicker(t, 0.4, 700, t.c(7000), 300);
   adsr(splash, t.sr, 0.01, 0.06, 0.4, 0.2);
   decayInPlace(splash, t.sr, 0, t.d(0.11));
   t.put(out, splash, 0.006, t.g(0.55));
@@ -310,13 +299,4 @@ export function shutterBang(t: Take): Mono {
     rattle += r.range(0.025, 0.06);
   }
   return out;
-}
-
-/** Shared by recipes that want a whoosh swept through a band: re-exported for the world. */
-export function sweptAir(t: Take, seconds: number, from: number, to: number, q: number): Mono {
-  const buf = white(t.n(seconds), t.rng);
-  svf(buf, t.sr, "bp", (u) => from * Math.pow(to / from, u), q);
-  highpass(buf, t.sr, 150, 2);
-  biquad(buf, t.sr, "lowpass", 9000);
-  return normalize(buf);
 }

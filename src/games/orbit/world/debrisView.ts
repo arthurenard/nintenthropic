@@ -8,10 +8,10 @@
  * coming apart into its pieces.
  */
 import { Group, Mesh, Object3D, Quaternion, Vector3, type Material } from "three";
-import { contractName, findNode } from "../../../engine/world/names";
+import { contractName } from "../../../engine/world/names";
 import { disposablesUnder, type Disposable } from "../../../engine/world/scene";
 import type { Fragment } from "../rules/debris";
-import { tankShows } from "../rules/debris";
+import type { MatchOptions } from "../rules/match";
 import type { Effects } from "./effects";
 import type { DerelictParts, Library, Variant } from "./library";
 
@@ -69,6 +69,20 @@ export class DebrisView {
   ) {
     this.group.name = "orbit.debris";
     parent.add(this.group);
+  }
+
+  /**
+   * How many variants of each kind the art has, and how many pieces each one
+   * comes apart into: what the match needs to choose a model for each fragment
+   * and to break it along the art's own cracks. Empty with the stand-ins.
+   */
+  variantCounts(): MatchOptions["variants"] {
+    const counts: NonNullable<MatchOptions["variants"]> = {};
+    for (const [kind, list] of Object.entries(this.library) as [keyof Library, Variant[]][]) {
+      if (list.length > 0) counts[kind] = list.map((v) => v.pieces.length);
+    }
+    if (this.derelict.pieces.length > 0) counts.derelict = [this.derelict.pieces.length];
+    return counts;
   }
 
   private variantFor(f: Fragment): { source: Object3D; size: number; key: string; wrap: boolean } | null {
@@ -217,12 +231,12 @@ export class DebrisView {
       obj.scale.setScalar(v.root.scale.x);
       this.group.add(obj);
       const out = obj.position.clone().sub(v.root.position).normalize();
-      const vel = this.velocity(v.f, out).add(out.multiplyScalar(1.5 + this.random() * 2));
+      const vel = this.velocity(v.f).add(out.multiplyScalar(1.5 + this.random() * 2));
       this.drifters.push({ obj, vel, axis: new Vector3(this.random() - 0.5, this.random() - 0.5, this.random() - 0.5).normalize(), spin: 0.8 + this.random() * 1.5, life: 8 });
     }
   }
 
-  private velocity(f: Fragment, out: Vector3): Vector3 {
+  private velocity(f: Fragment): Vector3 {
     const s = 1 / 60;
     const a = f.position(this.time);
     const b = f.position(this.time + s);
@@ -244,7 +258,7 @@ export class DebrisView {
         const tank = this.tankAt(v.f.id, tmp);
         if (tank) {
           const out = tmp2.copy(tank).sub(v.root.position).normalize();
-          const vel = this.velocity(v.f, new Vector3());
+          const vel = this.velocity(v.f);
           this.effects.plume(tank, out, vel, Math.min(1.5, (v.plumeUntil - t) * 0.8) * v.root.scale.x);
         }
       }
@@ -314,11 +328,6 @@ export class DebrisView {
     this.effects.glint(tmp.copy(pos), d, Math.min(1, best) * this.sunlight, blue);
   }
 
-  /** Whether the rules would let a shot land on the tank now (for the shots). */
-  tankOpen(f: Fragment, t: number): boolean {
-    return tankShows(f, t, this.eye);
-  }
-
   /** Everything away (a new game). */
   clear(): void {
     for (const id of [...this.views.keys()]) this.remove(id);
@@ -373,5 +382,3 @@ function findNodeIn(root: Object3D, pattern: RegExp): Object3D | null {
   });
   return found;
 }
-
-export { findNode };

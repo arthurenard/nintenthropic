@@ -1,4 +1,5 @@
 import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type Texture } from "three";
+import { mulberry32 } from "../rules/rng";
 
 /**
  * Sprite art for effects, painted into canvases at load (no image files):
@@ -9,17 +10,6 @@ import { CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, 
  */
 export const ATLAS_CELLS = 5;
 
-function seeded(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 export function particleAtlas(): Texture {
   const cell = 128;
   const c = document.createElement("canvas");
@@ -27,7 +17,7 @@ export function particleAtlas(): Texture {
   c.height = cell;
   const g = c.getContext("2d");
   if (!g) throw new Error("2D canvas unavailable");
-  const r = seeded(99);
+  const r = mulberry32(99);
   // 0: soft dot.
   {
     const grad = g.createRadialGradient(cell / 2, cell / 2, 0, cell / 2, cell / 2, cell / 2);
@@ -125,7 +115,7 @@ export function bulletHoleTexture(): Texture {
   c.height = s;
   const g = c.getContext("2d");
   if (!g) throw new Error("2D canvas unavailable");
-  const r = seeded(7);
+  const r = mulberry32(7);
   const scorch = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
   scorch.addColorStop(0, "rgba(20,14,10,0.55)");
   scorch.addColorStop(0.5, "rgba(30,22,16,0.25)");

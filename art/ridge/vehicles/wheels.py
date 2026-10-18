@@ -9,8 +9,6 @@ if each wheel had its own. The procedural paint is radially symmetric
 spins.
 """
 
-import math
-
 from .geo import Builder
 
 # Military cross-country tyres: 7.50-20 on the truck, 6.00-16 on the jeep.

@@ -11,8 +11,6 @@ import math
 
 from mathutils import Vector
 
-from .core import Frame, rng
-
 
 class Opening:
     """A rough opening in a wall. kind: 'window' | 'door' | 'hole'."""
@@ -195,14 +193,6 @@ def backing_panel(mb, f, s0, s1, z0, top, openings, mat, y=0.004):
             mb.quad(f, [(a, y, c), (b, y, c), (b, y, db), (a, y, da)], mat, rand=0.5)
 
 
-def trim_board(mb, f, a, b, width, thick, mat, y=-0.03, r=None):
-    """A flat trim board in the wall plane from (s,z) a to b."""
-    a3 = Vector((a[0], y - thick / 2, a[1]))
-    b3 = Vector((b[0], y - thick / 2, b[1]))
-    mb.board(f, a3, b3, width, thick, mat, up=(0, -1, 0), rand=(r.random() if r else None),
-             skip=())
-
-
 def casing(mb, f, o, mat, r, sill=True, head_cap=True, depth=0.035, reveal=0.1):
     """Window/door casing: side boards, a head casing with drip cap, and for
     windows a projecting sill with an apron under it."""
@@ -372,11 +362,9 @@ def gable_roof(mb, f, s0, s1, y0, y1, eave, pitch_deg, mat, r, overhang=0.35, st
     sm = (s0 + s1) / 2
     rise = (w / 2) * math.tan(math.radians(pitch_deg))
     ridge = eave + rise
-    slope_len = math.hypot(w / 2 + overhang, rise + overhang * math.tan(math.radians(pitch_deg)))
     for side in (-1, 1):
         # slope frame: origin at ridge, x down-slope toward the eave on this side
         ang = math.radians(pitch_deg)
-        ex = side
         edge = Vector((sm + side * (w / 2 + overhang), 0, eave - overhang * math.tan(ang)))
         top = Vector((sm, 0, ridge))
         d = (edge - top)
@@ -405,7 +393,6 @@ def gable_roof(mb, f, s0, s1, y0, y1, eave, pitch_deg, mat, r, overhang=0.35, st
                 xb = L - i * expo + 0.04
                 xa = max(xa, 0)
                 lift = 0.012 * ((i % 2) + 1)
-                sub = sf.sub((0, 0, 0)).sub(rot_y=-0.06)
                 mb.box(sf.sub((xa, 0, 0)).sub(rot_y=-math.atan2(0.02, expo)), (0, ya, 0.0),
                        (xb - xa, yb, 0.022 + lift * 0.3), mat, rand=r.random(), grain_axis=1,
                        uv_offset=(0, i * 0.37))

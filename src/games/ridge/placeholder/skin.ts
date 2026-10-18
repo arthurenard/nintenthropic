@@ -11,25 +11,21 @@ import {
   Euler,
   Group,
   IcosahedronGeometry,
-  InterpolateSmooth,
   Matrix3,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
-  PropertyBinding,
   Quaternion,
-  QuaternionKeyframeTrack,
   Skeleton,
   SkinnedMesh,
   SphereGeometry,
   Vector3,
-  VectorKeyframeTrack,
   type ColorRepresentation,
-  type KeyframeTrack,
   type Material,
 } from "three";
 import { nameNode } from "../../../engine/world/names";
+import { makeClip, pose, quatOf, type ClipKey, type ClipOptions, type Pose } from "../../../engine/world/poses";
 
 /**
  * The kit Overwatch Ridge's placeholder figures are built from: the shared
@@ -453,95 +449,16 @@ export function triangles(root: Object3D): number {
   return n;
 }
 
-// --- poses and clips -------------------------------------------------------------
-
-/** Bone rotations in degrees, applied yaw (Y), then pitch (X), then roll (Z). */
-export type Pose = Record<string, V3>;
-
-export interface Key {
-  t: number;
-  pose: Pose;
-  /** Offset of the root bone (the hips) from its rest position, metres. */
-  root?: V3;
-}
+// --- poses and clips (each clip built by engine/world/poses.ts) ------------------
 
 const DEG = Math.PI / 180;
 const _euler = new Euler();
-
-export function quatOf(r: V3, out = new Quaternion()): Quaternion {
-  return out.setFromEuler(_euler.set(r[0] * DEG, r[1] * DEG, r[2] * DEG, "YXZ"));
-}
 
 const round = (x: number) => Math.round(x * 100) / 100;
 
 export function degreesOf(q: Quaternion): V3 {
   _euler.setFromQuaternion(q, "YXZ");
   return [round(_euler.x / DEG), round(_euler.y / DEG), round(_euler.z / DEG)];
-}
-
-/** Merge poses: later ones win, bone by bone. */
-export function pose(...parts: Pose[]): Pose {
-  return Object.assign({}, ...parts) as Pose;
-}
-
-/** Mirror a pose left to right. */
-export function mirror(p: Pose): Pose {
-  const out: Pose = {};
-  for (const [bone, [x, y, z]] of Object.entries(p)) {
-    const other = bone.endsWith(".L") ? bone.slice(0, -2) + ".R" : bone.endsWith(".R") ? bone.slice(0, -2) + ".L" : bone;
-    out[other] = [x, -y, -z];
-  }
-  return out;
-}
-
-export interface ClipOptions {
-  /** The bone that carries the translation (the hips; an animal's body). */
-  root: string;
-  /** Where that bone rests. */
-  rest: V3;
-  /**
-   * Bones given a track in every clip whether a key names them or not, at
-   * rest where not, as a Blender action keyed on the whole armature is; a
-   * crossfade then always has both ends to blend.
-   */
-  bones?: readonly string[];
-}
-
-/**
- * Build an AnimationClip from key poses, the way the Blender actions will
- * arrive: a quaternion track per bone, named by the glTF loader's sanitised
- * node names, and the root bone's translation. Bones a key does not name
- * are at rest in it.
- */
-export function makeClip(name: string, keys: readonly Key[], o: ClipOptions, smooth = true): AnimationClip {
-  const bones = new Set<string>(o.bones ?? []);
-  for (const k of keys) for (const b of Object.keys(k.pose)) bones.add(b);
-  const times = keys.map((k) => k.t);
-  const tracks: KeyframeTrack[] = [];
-  const q = new Quaternion();
-  for (const bone of bones) {
-    const values: number[] = [];
-    let prev: Quaternion | null = null;
-    for (const k of keys) {
-      quatOf(k.pose[bone] ?? [0, 0, 0], q);
-      // Keep successive keys on the same hemisphere so slerp takes the short way.
-      if (prev && prev.dot(q) < 0) q.set(-q.x, -q.y, -q.z, -q.w);
-      prev = q.clone();
-      values.push(q.x, q.y, q.z, q.w);
-    }
-    tracks.push(new QuaternionKeyframeTrack(`${PropertyBinding.sanitizeNodeName(bone)}.quaternion`, times, values));
-  }
-  if (o.bones || keys.some((k) => k.root)) {
-    const values: number[] = [];
-    for (const k of keys) {
-      const r = k.root ?? [0, 0, 0];
-      values.push(o.rest[0] + r[0], o.rest[1] + r[1], o.rest[2] + r[2]);
-    }
-    const track = new VectorKeyframeTrack(`${PropertyBinding.sanitizeNodeName(o.root)}.position`, times, values);
-    if (smooth && keys.length > 2) track.setInterpolation(InterpolateSmooth);
-    tracks.push(track);
-  }
-  return new AnimationClip(name, keys[keys.length - 1]?.t ?? 0, tracks);
 }
 
 /** A humanoid clip: every bone keyed, the hips' translation too. */
@@ -558,7 +475,7 @@ export class ClipSet {
     private readonly options: ClipOptions,
   ) {}
 
-  add(name: string, keys: readonly Key[], smooth = true): AnimationClip {
+  add(name: string, keys: readonly ClipKey[], smooth = true): AnimationClip {
     this.misses.set(name, this.poser.takeWorstMiss());
     const clip = makeClip(name, keys, this.options, smooth);
     this.clips.push(clip);
@@ -686,7 +603,7 @@ export class Poser {
    * above the ground: exactly (a body lying down, a boot on the ground) or,
    * with `liftOnly`, only if it would be below (a body in mid-fall).
    */
-  settle(pts: SkinPoints, k: Key, floor = 0, liftOnly = false): Key {
+  settle(pts: SkinPoints, k: ClipKey, floor = 0, liftOnly = false): ClipKey {
     const dy = floor - this.lowest(pts, k.pose, k.root);
     if (liftOnly && dy <= 0) return k;
     const r = k.root ?? [0, 0, 0];
@@ -700,10 +617,10 @@ export class Poser {
    * so the new keys' own blends are checked too. For clips whose root
    * moves linearly (a smooth curve could still dip between the keys).
    */
-  keepAbove(pts: SkinPoints, keys: readonly Key[], tolerance = 0.01): Key[] {
+  keepAbove(pts: SkinPoints, keys: readonly ClipKey[], tolerance = 0.01): ClipKey[] {
     let list = [...keys];
     for (let pass = 0; pass < 2; pass++) {
-      const out: Key[] = [];
+      const out: ClipKey[] = [];
       list.forEach((b, i) => {
         const a = list[i - 1];
         if (a) {
@@ -721,7 +638,7 @@ export class Poser {
 }
 
 /** A key part way from `a` to `b`, as the mixer blends them: each bone slerped, the root lerped. */
-export function blendKeys(a: Key, b: Key, f: number): Key {
+export function blendKeys(a: ClipKey, b: ClipKey, f: number): ClipKey {
   const p: Pose = {};
   const qa = new Quaternion();
   const qb = new Quaternion();
@@ -965,8 +882,8 @@ function footAt(phase: number, o: GaitOptions): FootAt {
  * allow; the upper body from `upper`. Keys at even phases, the last the same
  * as the first so it loops.
  */
-export function gait(poser: Poser, o: GaitOptions): Key[] {
-  const keys: Key[] = [];
+export function gait(poser: Poser, o: GaitOptions): ClipKey[] {
+  const keys: ClipKey[] = [];
   const leg = 0.85;
   const track = o.track ?? 0.1;
   for (let i = 0; i <= o.samples; i++) {
@@ -999,16 +916,4 @@ export function gait(poser: Poser, o: GaitOptions): Key[] {
     keys.push({ t: round((i / o.samples) * o.period * 1000) / 1000, pose: p, root });
   }
   return keys;
-}
-
-/** A small deterministic random source, so every build of a figure is the same. */
-export function random(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }

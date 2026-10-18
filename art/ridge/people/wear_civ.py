@@ -10,9 +10,8 @@ over a pale shirt under a straw hat, the cyclist's red and yellow, the
 shepherd's red jacket and mustard scarf, the boy's yellow jumper), and no
 hat is a round dome.
 """
-import math
 import numpy as np
-from charlib import sdf as S, rings as R, garments as G, body as BD, head as HD, paint as PT, gear as GR
+from charlib import sdf as S, rings as R, garments as G, body as BD, head as HD, paint as PT
 from charlib.texture import srgb, smoothstep, value_noise, fbm
 from charlib.skeleton import JOINTS
 from . import wear as W
@@ -253,7 +252,6 @@ def legwear_paint(skin_tone="fair", sock_top=None, sock=(0.82, 0.80, 0.74), stoc
     stockings (stocking: a colour over the skin). `under` = (z, colour): above
     z the legs are under a garment - painted its colour, so a chink in it
     never shows skin."""
-    from charlib.texture import SKIN
     base = _legwear(skin_tone, sock_top, sock, stocking, seed)
 
     def paint(P):

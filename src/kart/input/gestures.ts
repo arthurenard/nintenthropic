@@ -9,8 +9,9 @@
  * Pure like the wheel: it is fed what the wheel has already read (where each
  * palm is, how big it looks, whether it is open) and the time, and touches no
  * camera or clock. Every distance is measured in hand lengths (a hand's span,
- * wrist to fingertip: twice the wrist-to-knuckle size the reader gives), so
- * it means the same near the camera and far from it.
+ * wrist to fingertip: twice the wrist-to-knuckle size the reader gives), and
+ * the wave's swing in that size itself, so each means the same near the
+ * camera and far from it.
  *
  * The wheel stands aside while one of these is under way: palms pressed
  * together or both open hands held high in a cheer are not a brake, a lifted
@@ -125,21 +126,6 @@ export class Gestures {
     this.wave(t, aspect, left, right);
   }
 
-  /** Forgets the hands, not the horns. */
-  reset(): void {
-    this.apartAt = -Infinity;
-    this.closeSince = null;
-    this.lastRatio = this.prevRatio = Infinity;
-    this.lastBoth = -Infinity;
-    this.raisedSince = null;
-    this.raisedAt = -Infinity;
-    this.cheering = false;
-    this.trails.left.length = 0;
-    this.trails.right.length = 0;
-    this.waveUntil = -Infinity;
-    this.lastFrame = -Infinity;
-  }
-
   /**
    * The palms are together, or just were, or both open hands are cheering:
    * the wheel does not brake, hop or flick an item meanwhile.
@@ -214,7 +200,7 @@ export class Gestures {
     const length = left.size + right.size;
     const bothOpen = left.grip === "open" && right.grip === "open";
     // The usual height: learnt from the wheel held in fists, followed slowly.
-    if (!bothOpen && left.grip === "fist" && right.grip === "fist" && !this.cheering) {
+    if (left.grip === "fist" && right.grip === "fist" && !this.cheering) {
       this.rest = this.rest === null ? centre : this.rest + (centre - this.rest) * Math.min(1, dt / c.follow);
       this.restTime += dt;
     }

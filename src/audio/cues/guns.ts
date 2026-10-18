@@ -200,7 +200,6 @@ export function reloadSpin(t: Take): Mono {
   const rate0 = r.range(26, 34);
   const rate1 = r.range(7, 10);
   let at = start;
-  let k = 0;
   while (at < stop) {
     const u = (at - start) / (stop - start);
     const level = 0.5 * (1 - 0.5 * u) * r.range(0.75, 1.1);
@@ -209,7 +208,6 @@ export function reloadSpin(t: Take): Mono {
     addMode(out, t.sr, at, 7300 * t.p * r.range(0.98, 1.02), level * 0.15, 0.0025, r.range(0, 6));
     const rate = rate0 * Math.pow(rate1 / rate0, u);
     at += (1 / rate) * r.range(0.93, 1.07);
-    k++;
   }
   // Under the ratchet, the whir of the cylinder on its pin.
   const whir = white(t.n(stop - start), r);
@@ -227,7 +225,6 @@ export function reloadSpin(t: Take): Mono {
   t.put(out, click(t.sr, r, 0.004, 900, t.c(12000)), snap, t.g(0.9));
   addMetal(out, t.sr, r, snap, 1950 * t.p, t.d(0.02), 0.55);
   t.put(out, burst(t, 0.05, 90, 600, 0.0005, t.d(0.01), 4), snap, t.g(0.7));
-  void k;
   return out;
 }
 

@@ -8,7 +8,6 @@ import { Mesh, PlaneGeometry } from "three";
 import { oceanMaterial } from "./ocean";
 import type { BakeUniforms } from "./shading";
 import { WATER_LEVEL } from "./terrain";
-import type { ThemeStyle } from "./themes";
 
 export interface Water {
   mesh: Mesh;
@@ -16,14 +15,13 @@ export interface Water {
   dispose(): void;
 }
 
-export function createWater(style: ThemeStyle, centre: { x: number; z: number }, bake: BakeUniforms, anisotropy = 4): Water {
-  void style;
+export function createWater(centre: { x: number; z: number }, bake: BakeUniforms, anisotropy = 4): Water {
   const geometry = new PlaneGeometry(6000, 6000, 1, 1);
   geometry.rotateX(-Math.PI / 2);
   // The ripples tile every 7 m over the whole plane.
   const uv = geometry.getAttribute("uv");
   for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * 6000) / 7, (uv.getY(i) * 6000) / 7);
-  const ocean = oceanMaterial({ deep: "#07213f", shallow: "#14507a", alpha: 1, shore: 3, level: WATER_LEVEL, foam: 0.5, roughness: 0.05, ripple: 7, anisotropy }, bake);
+  const ocean = oceanMaterial({ deep: "#07213f", shallow: "#14507a", alpha: 1, shore: 3, level: WATER_LEVEL, foam: 0.5, roughness: 0.05, anisotropy }, bake);
   const mesh = new Mesh(geometry, ocean.material);
   mesh.position.set(centre.x, WATER_LEVEL, centre.z);
   mesh.frustumCulled = false;

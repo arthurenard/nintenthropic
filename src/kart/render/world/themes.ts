@@ -73,21 +73,23 @@ export interface ThemeStyle {
     shoulder: string;
     dash: boolean;
   };
-  /** The two mowing/paving stripes of the verge, and the barrier the theme uses. */
+  /** The two mowing/paving stripes of the verge. */
   verge: [string, string];
   kerb: [string, string];
   barrier: BarrierStyle;
   /** Dust thrown up off the road. */
   dust: string;
-  /** World margin around the track's bounds, metres, and the ground's grid cell. */
+  /** World margin around the track's bounds, metres. */
   margin: number;
   /** Street lamps with pools of light along the road (the harbour). */
   lamps: boolean;
-  /** Bunting along the start straight (daytime worlds). */
+  /** Bunting along the start straight (the meadow, the canyon and the palm island). */
   bunting: boolean;
 }
 
-const FIRST_THEMES: Record<"meadow" | "canyon" | "harbour", ThemeStyle> = {
+/** Every world's look, by theme. */
+export const THEMES: Record<TrackTheme, ThemeStyle> = {
+  // A bright morning in farm country: a clear blue sky, green fields, tyre walls along the road.
   meadow: {
     id: "meadow",
     night: false,
@@ -116,6 +118,7 @@ const FIRST_THEMES: Record<"meadow" | "canyon" | "harbour", ThemeStyle> = {
     lamps: false,
     bunting: true,
   },
+  // The warm last hour of the day in a canyon: red sandstone, dust and a big sky going to gold.
   canyon: {
     id: "canyon",
     night: false,
@@ -144,6 +147,7 @@ const FIRST_THEMES: Record<"meadow" | "canyon" | "harbour", ThemeStyle> = {
     lamps: false,
     bunting: true,
   },
+  // A night quay under sodium lamps: deep blue sky, steel and rust, warm lit windows.
   harbour: {
     id: "harbour",
     night: true,
@@ -172,9 +176,6 @@ const FIRST_THEMES: Record<"meadow" | "canyon" | "harbour", ThemeStyle> = {
     lamps: true,
     bunting: false,
   },
-};
-
-const NEW_THEMES: Record<"kitchen" | "snow" | "volcano" | "funfair" | "space" | "palm", ThemeStyle> = {
   // Toy karts on a giant counter in late-afternoon light: warm gold, long soft shadows, a walnut road on pale marble.
   kitchen: {
     id: "kitchen",
@@ -352,8 +353,6 @@ const NEW_THEMES: Record<"kitchen" | "snow" | "volcano" | "funfair" | "space" | 
     bunting: true,
   },
 };
-
-export const THEMES: Record<TrackTheme, ThemeStyle> = { ...FIRST_THEMES, ...NEW_THEMES };
 
 export function styleFor(theme: TrackTheme): ThemeStyle {
   return THEMES[theme] ?? THEMES.meadow;

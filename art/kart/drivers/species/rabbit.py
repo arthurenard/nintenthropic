@@ -8,7 +8,6 @@ from rig import Part
 FUR = H.lin("#f3ede6")
 CHEEK = H.lin("#fffaf4")
 PINK = H.lin("#f2a2b6")
-SHADE = H.lin("#d8cfc6")
 
 
 def ear_shape():
@@ -28,7 +27,6 @@ def build():
 
     def albedo(P, N):
         out = np.tile(FUR, (len(P), 1))
-        out = S.mix(out, SHADE, S.smoothstep(0.2, 0.0, -P[:, 1] + 0.15) * 0.0)
         out = S.mix(out, CHEEK, S.inside(S.union(cheeks, muzzle, k=0.03), 0.05)(P) * 0.9)
         return out * H.furvar(P, 0.035)
 

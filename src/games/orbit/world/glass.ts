@@ -20,6 +20,7 @@ import {
   Vector3,
   type BufferGeometry,
 } from "three";
+import { mulberry32 } from "../../../engine/rules/rng";
 import type { Mark } from "../rules/panes";
 
 const SIZE = 512;
@@ -101,17 +102,6 @@ interface Pane {
 const raycaster = new Raycaster();
 const tmp = new Vector3();
 
-function seeded(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 export class Glass {
   private readonly panes = new Map<number, Pane>();
   /** Where each mark was drawn on its pane (UV), worked out once. */
@@ -168,7 +158,7 @@ export class Glass {
     }
   }
 
-  /** The shutters' materials (to be tone-mapped with the rest). */
+  /** The shutters, for their materials to be tone-mapped with the rest. */
   get shutterMeshes(): Mesh[] {
     return [...this.panes.values()].map((p) => p.shutter);
   }
@@ -303,7 +293,7 @@ export class Glass {
  * face is turned (which ones catch the sun).
  */
 function drawMark(g: CanvasRenderingContext2D, x: number, y: number, size: Mark["size"], left: number, seed: number): void {
-  const r = seeded(seed * 9973 + 17);
+  const r = mulberry32(seed * 9973 + 17);
   const scale = SIZE / 512;
   const reach = (size === "chip" ? 16 : size === "crack" ? 62 : 150) * scale * (0.85 + r() * 0.3);
   g.save();
@@ -321,7 +311,6 @@ function drawMark(g: CanvasRenderingContext2D, x: number, y: number, size: Mark[
   g.fill();
   // Radial cracks, wandering as glass does, each with its own tilt.
   const rays = size === "chip" ? 4 + Math.floor(r() * 3) : size === "crack" ? 6 + Math.floor(r() * 4) : 10 + Math.floor(r() * 6);
-  const ends: [number, number][] = [];
   for (let i = 0; i < rays; i++) {
     let a = (i / rays) * Math.PI * 2 + (r() - 0.5) * 0.6;
     let px = x;
@@ -348,7 +337,6 @@ function drawMark(g: CanvasRenderingContext2D, x: number, y: number, size: Mark[
       }
     }
     g.stroke();
-    ends.push([a, len]);
   }
   // A web: rings of cracks joining the rays.
   if (size === "web") {

@@ -2,7 +2,8 @@
  * What Grip Prix remembers between visits, as the arcade's prefs do: a
  * convenience, never a need. A window that stores nothing plays the same,
  * and anything stored that does not look right reads as the default. Keys
- * are versioned and hold JSON.
+ * are versioned and hold JSON. They keep the arcade's first name, Handy:
+ * renaming them would forget every returning player's choices.
  */
 import { CHARACTERS, characterById } from "../characters";
 import { TIERS, lowerTier, type Tier } from "../render/quality";
@@ -163,7 +164,6 @@ export type TierName = Tier;
 
 /** The Graphics setting: "auto" lets the game pick for the device, the others hold a tier. */
 export type Graphics = "auto" | TierName;
-export const GRAPHICS: readonly Graphics[] = ["auto", ...TIER_NAMES];
 
 const isTier = (value: unknown): value is TierName => TIER_NAMES.includes(value as TierName);
 

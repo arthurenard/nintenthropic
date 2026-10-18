@@ -12,7 +12,6 @@ map. Faces with glowing materials (running lights, lamps) are kept out of
 the atlas and get a constant emissive material the game can blink.
 """
 
-import os
 import time
 
 import bpy

@@ -410,9 +410,9 @@ export function stepItems(w: World, emit: Emit): void {
       const dx = k.x - site.x;
       const dz = k.z - site.z;
       if (dx * dx + dz * dz >= reach2) continue;
-      // Every kart breaks the box it drives through, as in any kart racer;
-      // only one with empty hands gets an item from it, and one still racing
-      // (a kart home already drives on with nothing to use on the others).
+      // Every kart breaks the box it drives through, as in any kart racer,
+      // but only a kart with empty hands that is still racing gets an item
+      // from it (one already home drives on with nothing to use on the others).
       state.boxes[b] = ticks(I.respawn);
       if (k.item !== null || k.roll > 0 || k.finished !== null) {
         emit({ type: "box", kart: k.id });

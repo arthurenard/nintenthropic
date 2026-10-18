@@ -47,16 +47,6 @@ def vec(x, y, z):
     return np.array([x, y, z], np.float64)
 
 
-def rot_x(a):
-    c, s = math.cos(a), math.sin(a)
-    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
-
-
-def rot_y(a):
-    c, s = math.cos(a), math.sin(a)
-    return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
-
-
 def forward():
     p = math.radians(PITCH_DEG)
     return vec(0.0, math.cos(p), math.sin(p))
@@ -72,13 +62,6 @@ def camera_rotation():
 
 def camera_euler():
     return (math.radians(90.0 + PITCH_DEG), 0.0, 0.0)
-
-
-def from_view(elev_deg, az_deg):
-    """A world direction from elevation above the station's horizontal and
-    azimuth from the view's heading (+ to the right)."""
-    e, a = math.radians(elev_deg), math.radians(az_deg)
-    return vec(math.cos(e) * math.sin(a), math.cos(e) * math.cos(a), math.sin(e))
 
 
 def nadir():

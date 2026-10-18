@@ -11,7 +11,7 @@ import math
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 from .geo import Builder, T, R, fillet, polyline_normals, solidify, boolean
 from .vehicle import Vehicle

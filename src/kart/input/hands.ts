@@ -55,7 +55,6 @@ export interface HandReading {
   size: number;
   /** Fingers out, 0..4. */
   fingers: number;
-  score: number;
 }
 
 const distance = (a: Landmark, b: Landmark): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -101,7 +100,6 @@ export function readHand(hand: SeenHand, aspect: number): HandReading {
     y: centre.y,
     size: Math.hypot((knuckle.x - wrist.x) * aspect, knuckle.y - wrist.y),
     fingers: fingersOut(hand.world),
-    score: hand.score,
   };
 }
 

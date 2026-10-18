@@ -9,7 +9,7 @@ with their silver grid; black rubber seals; velcro; cables.
 
 Every material is built by `pbr()` from a recipe that returns sockets for
 colour, roughness, metalness, a height (for bump) and emission. Besides the
-Principled BSDF it wires three Emission nodes (EM_color, EM_rough,
+Principled BSDF it wires four Emission nodes (EM_color, EM_rough,
 EM_metal, EM_emit) that `route()` can switch the output to, which is how
 the PBR bakes read each channel exactly (see pbrbake.py). Colours are
 scene-linear albedos inside real-world ranges.
@@ -23,7 +23,7 @@ Recipes read:
 
 import bpy
 
-from dustcreek.nodes import G, new_material, new_group, group_node   # read-only import of High Noon's DSL
+from dustcreek.nodes import new_material   # read-only import of High Noon's DSL
 
 LIB = {}
 
@@ -174,7 +174,6 @@ def crinkle(g, scale=14.0, seed=0.0):
     creases (Voronoi cells, distorted), plus wrinkles at two scales."""
     p = g.vadd(obj(g), (seed * 13.1, seed * 5.3, seed * 2.9))
     pw = g.vadd(p, g.vmul(g.node('ShaderNodeTexNoise', inputs={'Vector': p, 'Scale': scale * 0.35, 'Detail': 3.0}, out='Color'), (0.08, 0.08, 0.08)))
-    cells = g.voronoi(pw, scale=scale, feature='F1', out='Distance', rand=1.0)
     edge = g.voronoi(pw, scale=scale, feature='DISTANCE_TO_EDGE', out='Distance', rand=1.0)
     facet = g.node('ShaderNodeTexVoronoi', inputs={'Vector': pw, 'Scale': scale, 'Randomness': 1.0}, out='Color',
                    feature='F1', voronoi_dimensions='3D')
@@ -596,7 +595,6 @@ def debris_materials():
     pbr('torn_white', torn_white)
 
     def honeycomb(g):
-        uv = uvtex(g)
         vor = g.voronoi(g.vmul(obj(g), (1, 1, 1)), scale=160.0, feature='DISTANCE_TO_EDGE', rand=0.15)
         wall = g.smooth(vor, 0.06, 0.02)
         base = g.mix(wall, g.rgb(lin(50, 46, 40)), g.rgb(lin(196, 190, 170)))

@@ -14,7 +14,6 @@ Initial positions are analytic (ellipses and circles); then every vertex is
 snapped onto the garment's field and the junctions are relaxed so the quads
 even out. UVs come straight from the ring grid: one island per tube.
 """
-import math
 import numpy as np
 from . import sdf as S
 
@@ -145,7 +144,6 @@ def to_blender(rm, name, coll=None):
     """Mesh object with one UV map; islands are laid out side by side (the
     atlas packer rearranges them anyway)."""
     from . import bl
-    import bpy
     ob = bl.mesh_from_arrays(name, np.array(rm.V, np.float32), rm.F, coll)
     # lay islands out on a strip, each scaled to its real size (u,v are metres)
     uv = []

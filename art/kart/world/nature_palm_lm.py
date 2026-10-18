@@ -6,7 +6,7 @@ import math
 
 from mathutils import Vector as V, noise
 
-from naturekit import Model, empty, grad_z, hexc, mix, mul, post, rod, smooth_path, smoothstep, tint, varied, TAU
+from naturekit import Model, empty, grad_z, hexc, mix, mul, post, rod, smooth_path, smoothstep, varied, TAU
 
 SAND = hexc("#f0d79c")
 SAND_D = hexc("#d6b278")
@@ -114,7 +114,6 @@ def sandcastle():
     sand = lambda lo, hi: varied(lambda p, n: mix(SAND_W, mix(SAND_D, SAND, smoothstep(lo, hi, p.z) * 0.9 + 0.1 * n.z), smoothstep(-0.5, 1.5, p.z)), 0.05, 0.5)
     # The mound the whole thing stands on and a ring moat of shallow water, a plank bridge across it.
     m.lathe([(17.0, -0.8), (15.0, 0.35), (12.5, 0.7), (0.0, 0.7)], 36, (0, 0, 0), sand(0, 1.0), cap_end=True)
-    water.lathe([(14.6, 0.52), (17.2, 0.5), (17.2, 0.44)], 36, (0, 0, 0), (0.45, 0.78, 0.95), mat="glass") if False else None
     # The curtain wall: a square of crenellated sand walls with four round corner towers.
     S = 10.0
     wall_h = 4.4
@@ -245,7 +244,6 @@ def wristwatch():
     navy = hexc("#1f3556")
     # The case: a steel drum, its axis along the road; a gold bezel on the face (the +y side is toward the oncoming karts).
     t = 2.4
-    m.lathe([(Rc, -t), (Rc + 0.35, -t + 0.4), (Rc + 0.35, t - 0.5), (Rc, t)], 40, (0, 0, 0), varied(lambda p, n: mix(steel_d, steel, 0.4 + 0.5 * smoothstep(-0.5, 0.9, n.z)), 0.03, 0.4), rot=(-math.pi / 2, 0, 0)) if False else None
     cc = V((0, 0, zc))
     # lathe about z, tilted to lie along y: build with rot about x by -90 deg so +z axis points to +y.
     m.lathe([(0.0, -t), (Rc, -t), (Rc + 0.4, -t + 0.5), (Rc + 0.4, t - 0.6), (Rc, t), (Rc - 0.9, t + 0.1)], 40, cc, varied(lambda p, n: mix(steel_d, steel, 0.4 + 0.5 * smoothstep(-0.5, 0.9, n.z)), 0.03, 0.4), rot=(-math.pi / 2, 0, 0), cap_start=True)

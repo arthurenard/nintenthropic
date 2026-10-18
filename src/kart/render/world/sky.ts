@@ -142,7 +142,6 @@ void main() {
   if (uClouds > 0.5 && h > 0.0) {
     vec2 sx = normalize(sd.xz + 1e-4);
     float fade = smoothstep(0.02, 0.22, h);
-    float top = 0.0;
     for (int L = 0; L < 2; L++) {
       float fl = float(L);
       float scale = mix(1.15, 2.4, fl);
@@ -178,7 +177,6 @@ void main() {
         float lit = step(0.72, h21(floor(w)) ) * step(0.2, fract(w.x)) * step(0.25, fract(w.y)) * step(h, top - 0.004);
         rcol += vec3(1.0, 0.8, 0.45) * lit * 1.4;
       }
-      // Lit on the sun's side: a thin bright rim along the top.
       col = mix(col, rcol, m);
     }
   }

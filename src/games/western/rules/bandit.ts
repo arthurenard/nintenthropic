@@ -116,8 +116,6 @@ export class Bandit {
   readonly heading = { x: 0, z: 1 };
   pace = 0;
   death: DeathChoice | null = null;
-  /** The cover's floor under him when he died, for bodies that fall. */
-  diedAt = 0;
 
   constructor(
     readonly id: number,

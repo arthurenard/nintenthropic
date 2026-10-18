@@ -1,4 +1,6 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
   Color,
   DynamicDrawUsage,
   Euler,
@@ -7,7 +9,6 @@ import {
   Matrix4,
   Quaternion,
   Vector3,
-  type BufferGeometry,
   type Material,
 } from "three";
 
@@ -21,6 +22,15 @@ export interface DebrisStyle {
   /** Radians per second. */
   spin: number;
   drag: number;
+}
+
+/** A shard of glass for a pool of them: a thin irregular triangle, a few centimetres across. */
+export function shardGeometry(): BufferGeometry {
+  const g = new BufferGeometry();
+  const p = [0, 0.05, 0, -0.03, -0.03, 0.002, 0.035, -0.02, -0.002, 0, 0.05, 0, 0.035, -0.02, -0.002, -0.03, -0.03, 0.002];
+  g.setAttribute("position", new BufferAttribute(new Float32Array(p), 3));
+  g.computeVertexNormals();
+  return g;
 }
 
 const m = new Matrix4();

@@ -1,4 +1,5 @@
 import type { V3 } from "../../../engine/rules/raymath";
+import { copy } from "./bandit";
 import { DYNAMITE_GROUND_FUSE, DYNAMITE_MAX_FLIGHT, GRAVITY } from "./tuning";
 import type { Cover } from "./types";
 
@@ -20,9 +21,7 @@ export class Dynamite {
   age = 0;
   /** Seconds left before it goes off once on the ground. */
   fuse = DYNAMITE_GROUND_FUSE;
-  /** Which bandit threw it, for the blast's credits and his own demise. */
-  throwerId = -1;
-  /** Where he threw it from, for saying what felled the player. */
+  /** Where it was thrown from, for saying what felled the player. */
   thrownFrom: Cover | null = null;
   constructor(readonly id: number) {}
 
@@ -77,12 +76,6 @@ export class Dynamite {
   get airborne(): boolean {
     return this.state === "flying";
   }
-}
-
-function copy(out: V3, v: V3): void {
-  out.x = v.x;
-  out.y = v.y;
-  out.z = v.z;
 }
 
 /** The launch velocity that carries a body from `a` to `b` in `time` seconds under gravity. */

@@ -43,7 +43,7 @@ def player_camera(col):
 
 
 def stage_scene(ctx):
-    from . import mats, ground, build_all
+    from . import mats, build_all
     t = time.time()
     scene = reset_scene()
     setup_gpu(scene)

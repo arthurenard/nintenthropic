@@ -1,7 +1,8 @@
 /**
  * Grip Prix's sound pack: a toy-box kart racer, every sound synthesised in
- * code like the rest of Super Claude Bros. The recipes are in ./kart-motion.ts (what a
- * kart sounds like as it moves), ./kart-events.ts (what happens to it) and
+ * code like the rest of Super Claude Bros. The recipes are in
+ * ./kart-motion.ts (what a kart sounds like as it moves), ./kart-events.ts
+ * (what happens to it), ./kart-items.ts (five of the items) and
  * ./kart-jingles.ts (the tunes and the interface); this is only the table
  * that says how each is played.
  *
@@ -122,7 +123,7 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_puck_bounce: { recipe: puckBounce, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.04, expect: [0.2, 0.6] },
   kart_slick_splat: { recipe: slickSplat, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.4, 1.1] },
 
-  // --- the newer items: a comet's glitter (as long as the comet lasts), a storm, a skyrocket, a blast, a decoy ----------------
+  // --- more items (./kart-items.ts): a comet's glitter (as long as the comet lasts), a storm, a skyrocket, a blast, a decoy ---
   kart_comet: { recipe: cometGlitter, pack: "kart", bus: "sfx", level: -8, priority: 2, maxInstances: 3, vary: 0, expect: [5.8, 6.6] },
   kart_storm: { recipe: stormCrack, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [1.8, 2.5] },
   kart_skyrocket: { recipe: skyrocketLaunch, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, expect: [1.4, 2.1] },

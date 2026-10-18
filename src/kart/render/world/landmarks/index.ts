@@ -1,7 +1,9 @@
 /**
  * The registry of everything the picture can build beside, over or on the
- * road, by the names the tracks use (docs/GRIP_PRIX.md). One file per theme;
- * `common.ts` holds what several themes share (the rubber duck, rocks).
+ * road, by the names the tracks use (docs/GRIP_PRIX.md). One module per
+ * theme: a file, or a folder for the funfair, the kitchen and the snow, whose
+ * models are many. `common.ts` holds what every theme shares (the rubber
+ * duck); kit.ts and rockKit.ts hold the shapes they are all built from.
  *
  * A name the picture does not know is left out (a landmark) or drawn as a
  * plain marker ball (a hazard), never an error: a track written before a

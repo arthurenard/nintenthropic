@@ -14,7 +14,7 @@ particular nation: no insignia, no emblems.
 """
 import math
 import numpy as np
-from charlib import sdf as S, rings as R, garments as G, body as BD, head as HD, paint as PT
+from charlib import sdf as S, rings as R, garments as G, head as HD, paint as PT
 from charlib.texture import srgb, smoothstep, value_noise, fbm
 from charlib.skeleton import JOINTS
 
@@ -132,7 +132,6 @@ def cloth_folds(bp, blouse=0.0018):
     """charlib's shirt folds, gentler: a soft blousing only just above the
     belt, the drape down the torso, bunched rings inside the elbows, gathers
     at the armpits."""
-    from charlib.garments import point_on_arm
 
     def f(P):
         z = P[:, 2]
@@ -708,7 +707,6 @@ def pack_field():
 def pack_paint(seed=0):
     def paint(P):
         col, r, m = PT.fabric(P, (0.24, 0.25, 0.17), "canvas", dust_amt=0.3, fade=0.35, seed=seed + 90, grime=0.4)
-        x, y, z = P[:, 0], P[:, 1], P[:, 2]
         q = P - PACK_C
         roll = (q[:, 2] > 0.14)
         col[roll] = col[roll] * 0.6 + srgb(0.16, 0.14, 0.10) * 0.4

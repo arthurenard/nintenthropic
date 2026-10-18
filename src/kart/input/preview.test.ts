@@ -12,6 +12,12 @@ describe("which part of the camera's picture fills a canvas", () => {
     expect(half.point(1, 1)[0]).toBeCloseTo(800, 5);
     // The right half of the mirrored picture is the left half of the camera's own.
     expect(half.source(1920, 1080)).toEqual({ x: 0, y: 0, width: 960, height: 1080 });
+    // And the left half is the left of the mirrored picture: the camera's own right half.
+    const left = fitPicture(800, 900, 16 / 9, "left");
+    expect(left.point(0, 0)[0]).toBeCloseTo(0, 5);
+    expect(left.point(0.25, 0.5)[0]).toBeCloseTo(400, 5);
+    expect(left.point(0.5, 0)[0]).toBeCloseTo(800, 5);
+    expect(left.source(1920, 1080)).toEqual({ x: 960, y: 0, width: 960, height: 1080 });
   });
 
   it("puts a player's column where their hands are drawn, for any of up to four", () => {

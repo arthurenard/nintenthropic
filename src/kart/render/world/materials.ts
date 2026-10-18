@@ -2,7 +2,7 @@
  * The materials the world is drawn with, by theme: the ground (with the
  * detail texture and, in the volcano, a glow from within), the road (a glass
  * ribbon in space, cracked and glowing under the volcano), the patches that
- * change how the road drives, additive light ribbons, lava and the sea.
+ * change how the road drives, additive light ribbons and lava.
  *
  * Every function adds what it makes to `own`, which the world disposes.
  */
@@ -17,7 +17,6 @@ import {
   UniformsLib,
   UniformsUtils,
   Vector2,
-  Vector3,
   type Material,
   type Texture,
   type WebGLProgramParametersWithUniforms,
@@ -197,60 +196,6 @@ export interface Animated {
 export function lavaMaterial(own: Own): Animated {
   const uniforms = UniformsUtils.merge([UniformsLib.fog, { uTime: { value: 0 } }]);
   const material = new ShaderMaterial({ vertexShader: lavaVertex, fragmentShader: lavaFragment, uniforms, fog: true });
-  own.push(material);
-  return {
-    material,
-    update(time) {
-      uniforms.uTime!.value = time;
-    },
-  };
-}
-
-// ─── The sea around the palm island ──────────────────────────────────────────
-
-const seaVertex = lavaVertex;
-
-const seaFragment = /* glsl */ `
-uniform float uTime;
-uniform vec3 uSky;
-uniform vec3 uSunDir;
-uniform vec3 uSunColour;
-varying vec3 vWorld;
-#include <fog_pars_fragment>
-void main() {
-  vec2 p = vWorld.xz;
-  float t = uTime;
-  float a = cos(p.x * 0.35 + t * 1.1) + 0.6 * cos(p.x * 1.1 - p.y * 0.9 + t * 1.8) + 0.35 * cos(p.y * 2.3 + t * 2.4);
-  float b = cos(p.y * 0.31 - t * 0.8) + 0.6 * cos(p.y * 1.3 + p.x * 0.8 - t * 1.5) + 0.35 * cos(p.x * 2.1 - t * 2.1);
-  vec3 n = normalize(vec3(a * 0.045, 1.0, b * 0.045));
-  vec3 v = normalize(cameraPosition - vWorld);
-  float fres = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-  vec3 r = reflect(-v, n);
-  float spec = pow(max(dot(r, normalize(uSunDir)), 0.0), 220.0);
-  // Sparkles on the ripples.
-  float g = pow(max(0.0, sin(p.x * 2.9 + t * 1.3) * sin(p.y * 3.3 - t * 1.1) * sin((p.x + p.y) * 1.9 + t * 0.7)), 5.0);
-  vec3 tint = vec3(0.1, 0.8, 0.82);
-  vec3 col = mix(tint, uSky, fres * 0.8) + uSunColour * spec * 2.4 + uSky * g * 0.5;
-  // Mostly clear over the shallows so the sand shows through; milkier with the glancing angle.
-  float alpha = clamp(0.42 + fres * 0.4 + spec * 0.5 + g * 0.3, 0.0, 0.92);
-  gl_FragColor = vec4(col, alpha);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  #include <fog_fragment>
-}
-`;
-
-export function seaMaterial(style: ThemeStyle, own: Own): Animated {
-  const uniforms = UniformsUtils.merge([
-    UniformsLib.fog,
-    {
-      uTime: { value: 0 },
-      uSky: { value: new Color(style.sky.horizon) },
-      uSunDir: { value: new Vector3(...style.sky.sunDir).normalize() },
-      uSunColour: { value: new Color(style.sky.sunColour) },
-    },
-  ]);
-  const material = new ShaderMaterial({ vertexShader: seaVertex, fragmentShader: seaFragment, uniforms, fog: true, transparent: true, depthWrite: false });
   own.push(material);
   return {
     material,

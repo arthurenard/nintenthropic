@@ -1,4 +1,4 @@
-// (d) Hand play when things go wrong between the camera and the game: a hand
+// Hand play when things go wrong between the camera and the game: a hand
 // that goes (the round waits for it and counts the player back in), a camera
 // that stops (the round waits under a sheet with the fixes), the results
 // played again with a fold of the thumb, the idle world at rest, and a window
@@ -115,12 +115,12 @@ test("another hand coming into the picture neither takes the aim nor fires", asy
   const seen = await page.evaluate(
     async ({ theirs, mine }) => {
       const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-      const host = window.handyTest!.internals().host!;
+      const host = window.arcadeTest!.internals().host!;
       const before = host.aim(performance.now());
-      window.handyTest!.pose(theirs);
+      window.arcadeTest!.pose(theirs);
       await sleep(150);
       const during = host.aim(performance.now());
-      window.handyTest!.pose(mine);
+      window.arcadeTest!.pose(mine);
       await sleep(250);
       return { before, during, after: host.aim(performance.now()) };
     },
@@ -174,7 +174,7 @@ test("a camera that stops sending pictures mid-round: Try Again keeps the round"
   await shoot(page, 0.5, 0.6);
   await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "5 of 6 rounds");
   const checkBefore = (await state(page)).lastCheck;
-  await page.evaluate(() => window.handyTest!.stall(true));
+  await page.evaluate(() => window.arcadeTest!.stall(true));
   await expect(page.locator("#alert")).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("#alert-title")).toHaveText("Camera Stopped");
   await expect(page.locator("#alert-body")).toHaveText("Your camera stopped sending a picture. Check it, then Try Again.");
@@ -188,7 +188,7 @@ test("a camera that stops sending pictures mid-round: Try Again keeps the round"
   await page.keyboard.press("Escape");
   await expect(page.locator("#alert")).toBeVisible();
 
-  await page.evaluate(() => window.handyTest!.stall(false));
+  await page.evaluate(() => window.arcadeTest!.stall(false));
   await page.getByRole("button", { name: "Try Again" }).click();
   await expect.poll(async () => (await state(page)).held, { timeout: 10_000 }).toBe(false);
   const back = await state(page);
@@ -205,7 +205,7 @@ test("a camera unplugged mid-round: carry on with the mouse", async ({ page }, i
   await playWithHand(page);
   await shoot(page, 0.5, 0.6);
   await expect(page.locator("#cylinder")).toHaveAttribute("aria-label", "5 of 6 rounds");
-  await page.evaluate(() => window.handyTest!.unplug());
+  await page.evaluate(() => window.arcadeTest!.unplug());
   await expect(page.locator("#alert")).toBeVisible();
   await expect(page.locator("#alert-title")).toHaveText("Camera Stopped");
   await expect(page.locator("#alert-body")).toHaveText("Your camera disconnected. Reconnect it, then Try Again.");
@@ -230,8 +230,8 @@ test("another camera after Try Again starts the round afresh with its own aim ch
   const errors = watchErrors(page);
   await playWithHand(page);
   await page.evaluate(() => {
-    window.handyTest!.device("another-camera");
-    window.handyTest!.unplug();
+    window.arcadeTest!.device("another-camera");
+    window.arcadeTest!.unplug();
   });
   await expect(page.locator("#alert")).toBeVisible();
   await page.getByRole("button", { name: "Try Again" }).click();
@@ -254,9 +254,9 @@ test("the results: a fold of the thumb plays again, and the world rests", async 
         const results = document.getElementById("results") as HTMLDialogElement;
         const wait = () => {
           if (!results.open) return void setTimeout(wait, 10);
-          setTimeout(() => window.handyTest!.pose(folded), 250);
+          setTimeout(() => window.arcadeTest!.pose(folded), 250);
           setTimeout(() => {
-            window.handyTest!.pose(up);
+            window.arcadeTest!.pose(up);
             resolve();
           }, 450);
         };
@@ -265,7 +265,7 @@ test("the results: a fold of the thumb plays again, and the world rests", async 
     { up: handAt(0.5, 0.5), folded: handAt(0.5, 0.5, 72) },
   );
   await page.evaluate(() =>
-    window.handyTest!.hud().gameOver({
+    window.arcadeTest!.hud().gameOver({
       outcome: "Fell on Wave 2",
       won: false,
       score: 2450,
@@ -342,7 +342,7 @@ test("getting ready offline says so, with the fix", async ({ page, context }, in
 
 test("graphics that restart mid-round leave the player at the arcade, never in an empty game", async ({ page }) => {
   await playWithHand(page);
-  await page.evaluate(() => window.handyTest!.internals().host!.renderer.getContext().getExtension("WEBGL_lose_context")!.loseContext());
+  await page.evaluate(() => window.arcadeTest!.internals().host!.renderer.getContext().getExtension("WEBGL_lose_context")!.loseContext());
   await expect(page.locator("#alert-title")).toHaveText("Something Went Wrong");
   expect((await state(page)).view).toBe("arcade");
   // Esc dismisses the sheet: the arcade is there to play from, not a game with no way out.
@@ -396,15 +396,15 @@ test("every new state, at every size", async ({ page }, info) => {
     await expect.poll(async () => (await state(page)).hold, { timeout: 5_000 }).toBe("count");
     await shot(page, info, `sizes-${size.name}-2-count`, 150);
     await expect.poll(async () => (await state(page)).held, { timeout: 5_000 }).toBe(false);
-    await page.evaluate(() => window.handyTest!.stall(true));
+    await page.evaluate(() => window.arcadeTest!.stall(true));
     await expect(page.locator("#alert")).toBeVisible({ timeout: 10_000 });
     await shot(page, info, `sizes-${size.name}-3-camera-stopped`);
-    await page.evaluate(() => window.handyTest!.stall(false));
+    await page.evaluate(() => window.arcadeTest!.stall(false));
     await page.getByRole("button", { name: "Try Again" }).click();
     await expect.poll(async () => (await state(page)).held, { timeout: 10_000 }).toBe(false);
   }
   await page.evaluate(() =>
-    window.handyTest!.hud().gameOver({
+    window.arcadeTest!.hud().gameOver({
       outcome: "Fell on Wave 3",
       won: false,
       score: 8120,
@@ -440,7 +440,7 @@ test("a window resized mid-round keeps the crosshair where the shots land", asyn
   await pose(page, handAt(vane!.x, vane!.y));
   await page.waitForTimeout(500);
   // The crosshair is drawn where the hand points, in the new view...
-  const aim = (await page.evaluate(() => window.handyTest!.internals().host!.aim(performance.now()))) as { x: number; y: number };
+  const aim = (await page.evaluate(() => window.arcadeTest!.internals().host!.aim(performance.now()))) as { x: number; y: number };
   expect(Math.abs(aim.x - vane!.x)).toBeLessThan(0.006);
   expect(Math.abs(aim.y - vane!.y)).toBeLessThan(0.006);
   await shot(page, info, "resize-01-aimed", 0);

@@ -5,7 +5,7 @@ import math
 
 from mathutils import Vector as V, noise
 
-from naturekit import Model, empty, grad_z, hexc, lit_by_normal, mix, mul, smoothstep, tint, varied, TAU
+from naturekit import Model, grad_z, hexc, mix, mul, smoothstep, tint, varied
 
 BARK = hexc("#9a6638")
 BARK_D = hexc("#4d2f1a")

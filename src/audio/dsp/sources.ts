@@ -110,17 +110,6 @@ export function addMode(
   }
 }
 
-export interface Mode {
-  freq: number;
-  amp: number;
-  tau: number;
-}
-
-/** Many partials at once, each with a random phase. */
-export function addModes(out: Mono, sr: number, at: number, modes: Mode[], rng: Rng): void {
-  for (const m of modes) addMode(out, sr, at, m.freq, m.amp, m.tau, rng.range(0, 2 * Math.PI));
-}
-
 /**
  * A small struck piece of metal: a short inharmonic stack (the ratios of a
  * free plate) with a bright noise edge, the upper modes dying first.
@@ -355,8 +344,8 @@ export function formants(src: Mono, sr: number, list: Formant[]): Mono {
   return out;
 }
 
-/** PolyBLEP: the correction that removes a sawtooth's aliasing at each wrap. */
-function polyBlep(ph: number, dt: number): number {
+/** PolyBLEP: the correction that removes a sawtooth's or a pulse's aliasing at each jump. */
+export function polyBlep(ph: number, dt: number): number {
   if (ph < dt) {
     const x = ph / dt;
     return x + x - x * x - 1;
@@ -389,14 +378,4 @@ export function saw(n: number, sr: number, freq: Float32Array | number, width = 
     if (ph >= 1) ph -= 1;
   }
   return out;
-}
-
-/** Interpolate a value along evenly spaced stops, u = 0..1. */
-export function along(stops: readonly number[], u: number): number {
-  if (stops.length === 1) return stops[0]!;
-  const x = Math.min(Math.max(u, 0), 1) * (stops.length - 1);
-  const k = Math.min(Math.floor(x), stops.length - 2);
-  const t = x - k;
-  const s = t * t * (3 - 2 * t);
-  return stops[k]! + (stops[k + 1]! - stops[k]!) * s;
 }

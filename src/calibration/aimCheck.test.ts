@@ -1,5 +1,6 @@
 // The aim check, driven through the real aim pipeline (AimController) by
-// synthetic hands, as tests/test_shot_calibration.py drives the desktop's.
+// synthetic hands, as the Python version's tests/test_shot_calibration.py
+// drove its own.
 import { describe, expect, it } from "vitest";
 import type { CalibrationTarget } from "../engine/types";
 import { gaussian, seededRandom } from "../engine/random";

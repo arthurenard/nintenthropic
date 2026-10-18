@@ -43,7 +43,7 @@ interface Slot {
  */
 const IN_FLIGHT = 2;
 
-/** Envelope block size used by render.ts's envelopeOf. */
+/** Seconds per block of a take's envelope: the default of dsp/master.ts's envelopeOf, which render.ts uses. */
 export const ENVELOPE_BLOCK = 0.02;
 
 export class SoundLibrary {
@@ -53,7 +53,7 @@ export class SoundLibrary {
   private readonly queued = new Set<string>();
   private readonly slots: Slot[] = [];
   private readonly packs = new Map<string, Promise<void>>();
-  private readonly packListeners: { names: Set<string>; left: number; total: number; tick: () => void }[] = [];
+  private readonly packListeners: { names: Set<string>; left: number; tick: () => void }[] = [];
   private nextId = 1;
   private cpuMs = 0;
   private mainThreadTimer: ReturnType<typeof setTimeout> | null = null;
@@ -72,7 +72,7 @@ export class SoundLibrary {
     this.sampleRate = Math.min(48000, Math.max(22050, ctx.sampleRate));
     for (let k = 0; k < workers; k++) {
       try {
-        const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: "handy-audio" });
+        const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: "audio" });
         const slot: Slot = { worker, busy: [] };
         worker.onmessage = (event: MessageEvent<RenderReply>) => this.received(slot, event.data);
         worker.onerror = () => this.lost(slot);
@@ -114,7 +114,6 @@ export class SoundLibrary {
       const listener = {
         names: new Set(names),
         left: jobs.length,
-        total,
         tick: () => {
           listener.left--;
           onProgress?.(1 - listener.left / Math.max(1, total));

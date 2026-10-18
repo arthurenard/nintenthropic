@@ -81,12 +81,6 @@ export class SimSource implements RaceViewSource {
     this.patch(id, { x: p.x, z: p.z, s, offset, progress: s, heading: h, vx: Math.sin(h) * speed, vz: Math.cos(h) * speed });
   }
 
-  /** Where a kart is, for the dev page's camera. */
-  pose(id: number): { x: number; y: number; z: number; heading: number } {
-    const row = (this.race.snapshot().k as number[][])[id]!;
-    return { x: row[KART_AT.x]!, y: this.geometry.at(row[KART_AT.s]!).y, z: row[KART_AT.z]!, heading: row[KART_AT.heading]! };
-  }
-
   private patch(id: number, values: Partial<Record<keyof typeof KART_AT, number>>): void {
     const snap = JSON.parse(JSON.stringify(this.race.snapshot())) as { k: number[][] };
     const row = snap.k[id]!;
@@ -146,11 +140,7 @@ export class SimSource implements RaceViewSource {
     }
   }
 
-  /** The last view handed out (the dev page's camera reads where things are from it). */
-  latest: RaceView | null = null;
-
   view(): RaceView {
-    this.latest = this.race.view();
-    return this.latest;
+    return this.race.view();
   }
 }

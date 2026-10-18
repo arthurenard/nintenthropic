@@ -2,7 +2,8 @@
  * A stopwatch for the GPU, built on EXT_disjoint_timer_query_webgl2 where the
  * browser offers it (desktop Chrome does; Safari does not). The dev page and
  * the bench (tools/perf/bench.mjs) turn it on to say how much of a frame the
- * scene, the shadow passes and the post chain each cost; a game never does.
+ * views (each scene with its shadow passes) and the post chain cost; a game
+ * never does.
  *
  * Sections are timed one at a time (queries of this kind cannot nest), and a
  * result arrives a few frames after the section ran, so a reading is a running

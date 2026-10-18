@@ -32,7 +32,7 @@ body[data-screen="race"] {
 }
 
 
-/* --- 3. the wheel check ------------------------------------------------------------------------------------- */
+/* --- 4. the wheel check ------------------------------------------------------------------------------------- */
 
 .check-inner {
   display: grid;
@@ -71,8 +71,7 @@ body[data-screen="race"] {
     0 0 0 1px var(--hairline),
     var(--shadow);
 }
-.wheel-view canvas,
-.fake-preview {
+.wheel-view canvas {
   position: absolute;
   inset: 0;
   display: block;
@@ -241,7 +240,7 @@ body[data-screen="race"] {
   background: #fff;
 }
 
-/* --- 5. the race ------------------------------------------------------------------------------------------------ */
+/* --- 6. the race ------------------------------------------------------------------------------------------------ */
 
 .race {
   position: fixed;
@@ -550,44 +549,6 @@ body[data-screen="race"] #sound-button {
 }
 .menu > .footnote:empty {
   display: none;
-}
-
-/* The renderer's stand-in HUD (fakes.ts): just enough to see the screens. */
-.fake-hud {
-  position: absolute;
-  pointer-events: none;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-.fake-hud-top {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  margin: 0;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.fake-hud-place {
-  position: absolute;
-  right: 20px;
-  bottom: 12px;
-  margin: 0;
-  font-size: 56px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
-}
-.fake-hud-centre {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  margin: 0;
-  font-size: 96px;
-  font-weight: 700;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
 }
 
 @media (max-width: 600px) {

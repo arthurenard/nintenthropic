@@ -12,8 +12,9 @@
  * (everything welded into one mesh) takes over beyond a few dozen metres.
  *
  * Built facing +z; its left is +x (so its right is -x), the way
- * `rotation.y = heading` expects (contract.ts). A Blender glTF can replace
- * the whole thing behind `KartFactory` (kart.ts) without anything noticing.
+ * `rotation.y = heading` expects (contract.ts). Once the Blender-made kart is
+ * loaded, `createProceduralKart` returns that instead (kartArt.ts), behind the
+ * same `KartModel`.
  */
 import { AdditiveBlending, BufferGeometry, Group, LOD, Matrix4, Mesh, MeshBasicMaterial, TorusGeometry, Vector3 } from "three";
 import { CHARACTERS } from "../characters";
@@ -78,7 +79,7 @@ function capScale(z: number): number {
   return Math.sqrt(Math.max(0, 1 - (1 - u) * (1 - u)));
 }
 
-/** The point on the tub at station z, angle t (0 at the bottom centre, round through the right side to the top, to the left side). */
+/** The point on the tub at station z, angle t (0 at the bottom centre, round through the left side (+x) to the top, to the right side). */
 function tubPoint(k: Key, t: number, out: Vector3): Vector3 {
   const s = capScale(k.z);
   const hw = k.hw * s;
@@ -298,7 +299,7 @@ function wheelGeometry(spec: { r: number; w: number }, cap: Rgb, lod: number, go
   return b.build();
 }
 
-/** A wheel standing with its axis along x, outer face toward `side` (+1 the left, -1 the right), centred on the origin. */
+/** A wheel standing with its axis along x, outer face toward `side` (+1 the left, -1 the right), centred at (x, 0, 0). */
 function placeWheel(geometry: BufferGeometry, side: 1 | -1, x: number): { geometry: BufferGeometry; matrix: Matrix4 } {
   const m = new Matrix4().makeTranslation(x, 0, 0);
   m.multiply(new Matrix4().makeRotationZ(-side * (Math.PI / 2)));
@@ -452,7 +453,6 @@ function buildChassis(accent: Rgb, golden: boolean, id: number, lod: number): Bu
   return b.build();
 }
 
-
 /** The steering wheel, in its own space (ring in the xy plane, facing +z). */
 function steeringGeometry(accent: Rgb): BufferGeometry {
   const b = new MeshBuilder();
@@ -481,7 +481,7 @@ function steeringGeometry(accent: Rgb): BufferGeometry {
 function flameGeometry(): BufferGeometry {
   const b = new MeshBuilder();
   const cone = (r: number, len: number, hot: Rgb, tip: Rgb) => b.add(shapes.cone(10), xf(0, 0, -len / 2, r, len, r, 0, -Math.PI / 2, 0), { bottom: hot, top: tip });
-  // Orange sheath, yellow body, white-blue core; a base glow. Over-bright so the bloom takes it.
+  // Orange sheath, yellow body, white-blue core. Over-bright so the bloom takes it.
   cone(0.17, 1.9, [2.2, 0.95, 0.12], [0.9, 0.12, 0.0]);
   cone(0.125, 1.35, [2.6, 1.7, 0.35], [1.0, 0.4, 0.03]);
   cone(0.07, 0.85, [2.4, 2.6, 3.0], [0.4, 1.0, 2.6]);
@@ -531,9 +531,8 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   const chassisGeo = buildChassis(accent, golden, racer.id, 0);
   const steeringGeo = steeringGeometry(accent);
   const frontGeo = wheelGeometry(WHEEL_FRONT, accent, 0, golden);
-  const rearL = wheelGeometry(WHEEL_REAR, accent, 0, golden);
-  const frontL = frontGeo;
-  const rearGeo = mergeBaked([placeWheel(rearL, 1, WHEEL_REAR.x), placeWheel(rearL, -1, -WHEEL_REAR.x)]);
+  const rearWheel = wheelGeometry(WHEEL_REAR, accent, 0, golden);
+  const rearGeo = mergeBaked([placeWheel(rearWheel, 1, WHEEL_REAR.x), placeWheel(rearWheel, -1, -WHEEL_REAR.x)]);
   const flameGeo = flameGeometry();
 
   const root = new Group();
@@ -572,7 +571,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   for (const sx of [-1, 1] as const) {
     const pivot = new Group();
     pivot.position.set(sx * WHEEL_FRONT.x, WHEEL_FRONT.y, WHEEL_FRONT.z);
-    const g = placeWheel(frontL, sx, 0);
+    const g = placeWheel(frontGeo, sx, 0);
     const geo = mergeBaked([g]);
     const mesh = new Mesh(geo, material);
     mesh.castShadow = true;
@@ -657,7 +656,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
     dispose() {
       for (const g of [chassisGeo, steeringGeo, frontGeo, rearGeo, flameGeo, farGeo]) g.dispose();
       for (const f of fronts) f.mesh.geometry.dispose();
-      rearL.dispose();
+      rearWheel.dispose();
       driver.dispose();
     },
   };

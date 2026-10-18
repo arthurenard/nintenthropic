@@ -189,7 +189,6 @@ def burlap(name, color=lin(104, 84, 56)):
     col = g.mix(g.mul(seam_u, 0.15), col, g.hsv(col, v=0.7))
     mud = g.mul(g.sub(1.0, g.smooth(z, 0.05, 0.55)), g.madd(mid, 0.8, 0.2))
     col = g.mix(g.mul(mud, 0.8), col, g.rgb(lin(46, 36, 26)))
-    seam = g.sub(1.0, g.smooth(g.math('ABSOLUTE', g.sub(v, 0.5)), 0.44, 0.5))
     w = DN.group_node(g, bpy.data.node_groups["R9_Wet"], {"Color": col, "Rough": 0.95, "Porous": 1.0, "Wet": 1.0})
     h = g.add(g.mul(weave, 0.4), g.mul(slub, 0.5))
     bsdf = g.principled(g.out(w, 'Color'), rough=g.out(w, 'Rough'), sheen=0.3,

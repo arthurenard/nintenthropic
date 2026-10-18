@@ -29,7 +29,6 @@ import bmesh
 import numpy as np
 
 from . import scene as S
-from . import noise as N
 from .imgio import write as write_img
 
 SPEC = {

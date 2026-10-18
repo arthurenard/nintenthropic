@@ -2,7 +2,7 @@
  * The features a track adds to its road, drawn: ramps (a cookbook in the
  * kitchen, a ski-jump in the snow, rock in the canyon...), open edges (the
  * shelf and the long fall below it), gaps in the road, boost strips, the
- * patches that change how the road drives (ice, mud, sand, snow), the
+ * patches that change how the road drives (ice, mud, sand, snow, grass), the
  * space ribbon's glowing edges and the fair's strings of bulbs.
  *
  * Everything that is solid is vertex coloured into the track's chunks; patches
@@ -91,7 +91,7 @@ function cliffColour(theme: string, down: number, total: number, i: number, s: n
 export function buildOpenEdges(b: TrackBuild): void {
   if (!b.features.anyDrop) return;
   const theme = b.style.id;
-  if (theme === "space") return; // the ribbon's own edge glows (spaceEdges)
+  if (theme === "space") return; // the ribbon's own edge glows (buildSpaceEdges)
   const sh = shelf(theme);
   const depth = DROP_DEPTH[theme];
   for (const side of SIDES) {
@@ -117,8 +117,8 @@ export function buildOpenEdges(b: TrackBuild): void {
       const top1 = b.P(i + 1, s1, -0.03);
       const total0 = lerp(GROUND_SINK, depth, o0);
       const total1 = lerp(GROUND_SINK, depth, o1);
-      // Horizontal bands so the colour can change down the wall. A deep wall's first three stops are
-      // metres (the lip, the doors' top); the rest, and all of a shallow wall's, are fractions of its height.
+      // A deep wall's first three stops are metres (the lip, the doors' top); the rest, and all of a shallow
+      // wall's, are fractions of its height.
       const stops = depth > 20 ? [0, 1.9, 5, 0.3, 0.6, 1.0] : [0, 0.12, 0.45, 0.8, 1.0];
       const down = (k: number, total: number): number => {
         const stop = stops[k]!;
@@ -212,7 +212,6 @@ interface RampSkin {
   back: (u: number, fromTop: number) => Rgb;
   /** Cut the side walls and the lip's face into bands this high (metres), for pages and planks. Default: one band. */
   band?: number;
-  lipColour?: Rgb;
   decorate?: (b: TrackBuild, r: RampShape, lipIndex: number) => void;
 }
 
@@ -393,7 +392,7 @@ export function buildRamps(b: TrackBuild): void {
         bld.quad(at(foot0, top0, a0), at(foot1, top1, a0), at(foot1, top1, a1), at(foot0, top0, a1), dark, dark, col, col);
       }
     }
-    // The lip itself catches the light.
+    // Whatever the world adds to its ramps (the fair's bulbs).
     skin.decorate?.(b, r, lipIndex);
     if (b.style.id === "snow" || b.style.id === "kitchen" || b.style.id === "volcano") {
       // A flag at each corner of the lip, so the jump is seen from far off.
@@ -402,7 +401,7 @@ export function buildRamps(b: TrackBuild): void {
         const flag: Rgb = b.style.id === "snow" ? rgb("#ff7a1a") : b.style.id === "kitchen" ? rgb("#2f7fd6") : [3.2, 1.0, 0.2];
         bld.post(p[0], p[1], p[2], 0.07, 3.4, rgb("#e8ebf2"), 6);
         const dir: V3 = [b.S(lipIndex).tx, 0, b.S(lipIndex).tz];
-        bld.tri([p[0], p[1] + 3.4, p[2]], [p[0] + dir[0] * 1.4 - dir[2] * 0.0, p[1] + 3.0, p[2] + dir[2] * 1.4], [p[0], p[1] + 2.6, p[2]], flag);
+        bld.tri([p[0], p[1] + 3.4, p[2]], [p[0] + dir[0] * 1.4, p[1] + 3.0, p[2] + dir[2] * 1.4], [p[0], p[1] + 2.6, p[2]], flag);
         bld.tri([p[0], p[1] + 3.4, p[2]], [p[0], p[1] + 2.6, p[2]], [p[0] + dir[0] * 1.4, p[1] + 3.0, p[2] + dir[2] * 1.4], flag);
       }
     }
@@ -453,9 +452,9 @@ export function buildPatches(b: TrackBuild): PatchGeometry[] {
       for (let k = 0; k < cols; k++) {
         const u0 = k / cols;
         const u1 = (k + 1) / cols;
-        const o = (j: number, u: number, width: number) => p.offset + (u - 0.5) * width;
-        const edge = (u: number) => smoothstep(0, 0.22, Math.min(u, 1 - u)) * (p.width > 0 ? 1 : 1);
-        const corner = (j: number, u: number, width: number, f: number): [V3, number] => [b.P(j, o(j, u, width), 0.04), f * edge(u)];
+        const o = (u: number, width: number) => p.offset + (u - 0.5) * width;
+        const edge = (u: number) => smoothstep(0, 0.22, Math.min(u, 1 - u));
+        const corner = (j: number, u: number, width: number, f: number): [V3, number] => [b.P(j, o(u, width), 0.04), f * edge(u)];
         const quad = [corner(i, u0, w, f0), corner(i, u1, w, f0), corner(i + 1, u1, w1, f1), corner(i + 1, u0, w1, f1)];
         const uvs = [
           [u0, along / 6],

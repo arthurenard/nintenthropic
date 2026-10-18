@@ -1,12 +1,13 @@
-# Super Claude Bros. on the web — architecture and contracts
+# Super Claude Bros. — architecture and contracts
 
 Super Claude Bros. is a static website. Everything — hand tracking, the games,
 the 3D rendering, the sound — runs in the player's browser. There is no server
 beyond whatever hosts the files, and the camera picture never leaves the device.
 
-This document is the contract the parts are built against. The interface rules
-are in [DESIGN.md](DESIGN.md); the first game's design is in
-[HIGH_NOON.md](HIGH_NOON.md).
+This document is the contract the shooting games and the arcade's page are
+built against. The interface rules are in [DESIGN.md](DESIGN.md); the first
+game's design is in [HIGH_NOON.md](HIGH_NOON.md); Grip Prix, which has its own
+parts under `src/kart/`, is described in [GRIP_PRIX.md](GRIP_PRIX.md).
 
 ## Principles
 
@@ -33,18 +34,20 @@ are in [DESIGN.md](DESIGN.md); the first game's design is in
 | Sound | Web Audio, every sound synthesised in TypeScript at load |
 | Unit tests | Vitest (`src/**/*.test.ts`) |
 | End-to-end | Playwright driving the installed Google Chrome with a fake camera and `--mute-audio` |
-| Hosting | Any static host (`npm run build` → `dist/`); a GitHub Pages workflow |
+| Hosting | Any static host (`npm run build` → `dist/`); the public site is on Vercel |
 
 ## Repository layout
 
 ```
-index.html            the page
+index.html            the arcade's page (the landing and the four shooters)
+race.html             Grip Prix's page
 src/
-  main.ts             boots the app
-  app/                screens: landing, calibration, play, pause, results, share
+  main.ts             boots the arcade
+  app/                screens: landing, arcade, aim check, play, pause, results, share
   ui/                 design-language components and styles (from DESIGN.md)
   engine/             the game host: renderer, loop, dynamic resolution, asset loading
     types.ts          THE CONTRACT between app, input, audio and games (below)
+    round.ts, hud.ts  what every shooter's Game does the same way (below)
     world/            what every realistic 3D game shares (see "Building a game")
     rules/            pure rules every game shares: health, streak, hints, rng...
     fx/               particles, decals, debris, lights, their textures
@@ -56,15 +59,19 @@ src/
   games/
     index.ts          the games, as the arcade shows them
     western/          High Noon
+    night/            Dead of Night
+    orbit/            Orbital Decay
+    ridge/            Overwatch Ridge
     range/            the Test Range (dev and test builds only: ?range=1)
+  kart/               Grip Prix (see GRIP_PRIX.md)
 public/
   models/             MediaPipe .task bundles
   mediapipe/          tasks-vision WebAssembly files (copied from node_modules
                       whenever Vite starts; not committed)
-  assets/western/     town.glb, sky.webp, characters, props (exported by art/)
-art/
-  western/            Blender build scripts: `blender -b -P art/western/build_town.py`
+  assets/<game>/      each game's models, skies and posters (exported by art/)
+art/<game>/           the Blender scripts that build them
 e2e/                  Playwright tests and fixtures
+tools/                the app icon, performance benchmarks, track postcards, the trailer
 ```
 
 Three's Draco decoder needs no copy under `public/`: since r186 `DRACOLoader`
@@ -72,8 +79,8 @@ names its decoder files with `new URL(..., import.meta.url)`, which Vite serves
 from `node_modules` in dev and emits, hashed, into the build. The asset loader
 uses its glTF-only build.
 
-The Python engine (`handy/`, `tests/`, `pyproject.toml`) is retired once the web
-version ships; it stays in git history under the tag `python-final`.
+The project began as a Python desktop app; none of that code is in the tree,
+and it is kept in git history under the tag `python-final`.
 
 ## Runtime architecture
 
@@ -224,8 +231,8 @@ The TypeScript interfaces in `src/engine/types.ts` are the contract. In short:
   not yet begun - a delayed call, a far shot on its way, an echo not yet
   back - are cancelled; `Sound.pause()` calls it), `CalibrationStage.begin()`
   (above).
-- `HudSink` — how a game reports score, readouts (label/value/meter/tone, as on
-  the desktop: a wave, integrity, wind), wave titles, damage direction, hit
+- `HudSink` — how a game reports score, readouts (label/value/meter/tone: a
+  wave, integrity, wind), wave titles, damage direction, hit
   markers, secrets, and the end of the game (`GameOver` with stats), and its
   weapon in the bottom-right corner: `ammo(left, capacity, reloading, style)`
   draws a revolver's cylinder (the default) or, with `{ kind: "magazine",
@@ -257,12 +264,12 @@ own, and keep in your folder only what is truly your game's.
 
 ### A new game, step by step
 
-1. **Its entry** in `src/games/index.ts` is already there for the coming
-   games: fill in `about`, point `poster` at your 16:9 poster under
+1. **Its entry** in `src/games/index.ts`: an `id`, `title`, `blurb` and
+   `about`, a `poster` pointing at your 16:9 poster under
    `public/assets/<folder>/` (until it exists your `backdrop` stands in, so
-   tune it to your game's light), set `uses` (`scope`, `eye`) and `stage`
-   (the shape your art holds), and add `create` when it can be played - the
-   arcade then offers Play instead of Coming Soon.
+   tune it to your game's light), `uses` (`scope`, `eye`) and `stage` (the
+   shape your art holds). Until it has `create` the arcade shows it as Coming
+   Soon; with it, Play.
 2. **Its aim check** is its own `CalibrationStage`: targets spread over the
    corners, edges and centre of the view, in your world.
 3. **Its HUD** goes through `HudSink`: `score`, `readouts` (one small panel:
@@ -297,12 +304,23 @@ own, and keep in your folder only what is truly your game's.
 | `sky.ts` | `SkyLight(renderer, scene, texture, intensity)`: an equirectangular sky as the background and, through PMREM, the environment light; `asSky(texture)`; `horizonColour(texture)` for the fog to meet the sky without a seam. |
 | `scene.ts` | `fitShadowCamera(sun, box)` spends the shadow map on the part of the world that matters; `shadowMapSize(tier)`; `disposeTree(root)`. |
 | `queries.ts` | `SceneryQueries(solids, moving)`: rays against the scenery fast enough to ask dozens of times a frame (a `TriangleGrid` of 2 m columns): `cast` (where a bullet lands), `groundAt` (under a falling body), `lightReaches` (is the sun on him). |
+| `layout.ts` | `readEye(root, position, fov)`: the player's eye from the art's named nodes; `surfaceFromArt(mesh, surfaces, guess)`: what a mesh is made of, for a bullet. |
+| `targets.ts` | `placeTarget(target, camera, centre, half)`: an aim-check target where a point of the world is in the view, its zone never under the 3.5% the aim score is measured against. |
+| `poses.ts` | Clips made in code from a few key poses, for the placeholders that stand in for the characters' art: `pose`, `mirror`, `quatOf`, `makeClip`. |
 | `art.ts` | `Art(ctx, files, options, onProgress)`: a game's glTF and textures through the engine's protected download, weighted into one progress bar. Every file is required: in production one that does not load fails the load with a `DownloadError` ("Couldn’t Load the Game", Try Again). In development and tests a missing file may be stood in for by a placeholder built in code, which your game imports behind `import.meta.env.MODE !== "production"` (so a production build drops it) and hands to `gltf(name, standIn)` / `texture(name, standIn)`; `probe()` first asks which files are really there. |
 
 `src/engine/fx/` holds the particle system, decals, debris, the pooled
 lights and their textures; High Noon's `world/effects.ts` shows how a game
 builds its own presets (dust, sparks, a muzzle flash, a reduced-flashing
 variant of each) on them.
+
+`src/engine/round.ts` and `src/engine/hud.ts` hold what every shooter's
+`Game` does the same way. `round.ts`: `breathe()` between the long steps of
+loading, `CalibrationProxy` (the aim check's stand-in until the game's own
+targets exist) and `Schedule` (things to do a moment from now on the game's
+clock). `hud.ts`: `awardText`, `popupAt` (a popup over a point of the world),
+`showBonuses`, `announceGolden`, `streakReadout`, and `HintShown` and
+`HurtShown`, which pass the hint line and the hurt on only when they change.
 
 ### `src/engine/rules/`: pure rules
 
@@ -313,6 +331,9 @@ variant of each) on them.
 | `hints.ts` | `HintLine(tipsSeen, learnedByDoing)`: the hint line's one urgent need, a brief word, and one-time tips queued one at a time for four seconds, never twice (`Settings.tipsSeen`, ids prefixed with your game's name). Read `text` every frame and pass it to `hud.hint` when it changes. |
 | `hammer.ts` | `Hammer`: the frames on which the re-arm's soft click should sound as the thumb comes back up after a shot, and never when it should not. |
 | `rng.ts` | `range`, `chance`, `pick`, `shuffle` over `GameContext.random`, and `mulberry32` for a replayable `?seed=`: route every decision through the seeded source and a seed replays a round exactly. |
+| `score.ts` | `Scorekeeper`: the score, shots and hits, a round's own accuracy and the streak multiplier, for a game's `Scorer` to extend with what its points are for (High Noon, Dead of Night, Orbital Decay). |
+| `pressure.ts` | The late-wave pressure High Noon and Dead of Night share: `boldnessAfter`, `pressureOf`, and `wearToward`, which wears an easier difficulty's allowances off toward Standard's as a wave drags on. |
+| `bodyShot.ts` | `weighBody` and `weighInnocent`: a shot weighed against a figure on the shared humanoid armature (a sphere for the head, capsules for the torso and limbs). |
 | `raymath.ts` | Ray against sphere and capsule (a head, a torso, a limb) with an honest angular tolerance: aim assist that is not a magnet. |
 | `assist.ts` | Aim Assist for every game that has it: `assistFactor(on)` scales a shooter's table of tolerances (`ASSIST_BOOST` = 1.35 on, none off), `secretFactor(on)` keeps a secret's allowance as it is (never boosted, so a secret is not triggered by a shot that was not aimed at it), and `choose(...)` picks what a shot hit: a real hit first, else the best near miss, never an innocent and never past one the shot passed close beside. |
 
@@ -343,7 +364,7 @@ and the silent `NullAudioBus`, after a short aim check on the game's own
 targets. Query parameters: `?seed=`, `?wave=`, `?difficulty=relaxed`,
 `?flashing=reduced`, `?tips=seen`, `?assetBase=/folder/`, `?god=1`,
 `?golden=1`, `?quality=`, `?input=mouse|touch|hand`, `?skipcalib=1`,
-`?manual=1` (drive it from `window.__handy`: `advance(seconds)`,
+`?manual=1` (drive it from `window.__harness`: `advance(seconds)`,
 `bench(frames)`, `mouse.aimAt/fire/reloadGesture`, and `hud.log` of every
 HudSink call), `?w=&h=&dpr=`; a game reads its own from `HarnessParams`
 (High Noon's `?noon=1`).
@@ -383,7 +404,7 @@ three shots.
   the shots taken.
 
 - **What is fitted.** An affine map from the fingertip's position in the
-  (mirrored) camera image to the viewport, as the desktop's shot setup did. The
+  (mirrored) camera image to the viewport. The
   hand position for each shot is the median of the thumb-up samples just before
   the fold, so the motion of firing does not move the aim.
 - **Learning.** With no saved aim for this camera: the first two shots at
@@ -423,9 +444,10 @@ three shots.
 ## What the browser keeps
 
 Everything is a convenience in `localStorage` (the Golden Revolver in
-`sessionStorage`, for the visit): versioned keys under `handy.`, JSON, every
-read checked and every write allowed to fail, so a window that stores nothing
-plays the same without remembering (`src/app/prefs.ts`).
+`sessionStorage`, for the visit): versioned keys under `handy.` (the
+project's first name), JSON, every read checked and every write allowed to
+fail, so a window that stores nothing plays the same without remembering
+(`src/app/prefs.ts`; Grip Prix keeps its own under `handy.kart.`).
 
 - `handy.settings.v1` — the Settings sheet: volume, difficulty, crosshair,
   Aim Steadiness (Steady unless chosen otherwise), Aim Assist (on unless turned
@@ -451,8 +473,12 @@ plays the same without remembering (`src/app/prefs.ts`).
   if it has gone.
 - `handy.scope.v1` — the Scope group of Settings: `{ eye, button }`, shown
   only while a game with a scope can be played.
+- `handy.eye.v1` — how far this player's eye reads open and shut, learned for
+  the scope (`src/input/scope.ts`).
 - `handy.game.v1` — the game chosen in the arcade (the address's
-  `#<game>` or `?game=<game>` wins over it).
+  `#<game>` or `?game=<game>` wins over it); `handy.space.v1` — the landing's
+  tile last gone through.
+- `handy.unlocks.v1` (in `sessionStorage`) — the golden weapon, for the visit.
 - `handy.muted.v1`, `handy.control.v1`,
   `handy.camera-opened.v1`, `handy.downloaded.v1` — small flags.
 
@@ -532,19 +558,19 @@ the environment light for dynamic objects.
 
 - **Unit (Vitest):** the aim pipeline (filter, trigger, affine fit, the aim
   score), game rules (waves, health regeneration, scoring, bandit state
-  machines), HUD formatting, storage. The Python tests are the reference for
-  anything ported.
+  machines), HUD formatting, storage.
 - **Test builds** (`vite build --mode e2e`; never production) add hooks:
   `?input=script` swaps the camera and tracker for a scripted hand that drives
   the real aim pipeline, and `?fail=camera-denied|camera-busy|camera-missing|
   camera-insecure|model|game|webgl` shows each error, and `?range=1` adds
   the Test Range to the arcade (`src/games/range/`: a timed game with a
   scope, `?weapon=cylinder|magazine|heat`), whose scripted eyes the tests set
-  with `handyTest.eyes()`. `e2e/smoke.html` and `e2e/tracker.html` (with
+  with `arcadeTest.eyes()`. `e2e/smoke.html` and `e2e/tracker.html` (with
   `?face=N` for the face on every Nth frame) load and time the tracker alone
   on the dev server.
 - **End to end (Playwright, installed Chrome, `--mute-audio`):** landing →
   camera priming → aim check → High Noon → pause → results, with a fake camera
   (`--use-file-for-fake-video-capture`) showing a hand; and the whole flow with
-  the mouse. Screenshots of every state are part of the review.
+  the mouse. The tests save a screenshot of every state they reach, which CI
+  keeps with the report.
 - **Silence:** nothing a developer runs may play sound through the speakers.

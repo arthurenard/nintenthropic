@@ -6,7 +6,8 @@
  *   voices ─► world bus ├─► muffle (low-pass) ─► duck ─┐
  *   reverb return ──────┘                              │
  *   voices ─► ui bus ──────────────────────────────────┼─► master (volume, mute) ─► limiter ─► soft clip ─► speakers
- *   heartbeat, death ─► self bus ──────────────────────┘
+ *   heartbeat, death ─► self bus ──────────────────────┤
+ *   a game's music ─► music bus ───────────────────────┘
  *
  * A voice is one take of a cue: its source, the air's low-pass for its
  * distance, its level and pan, a send to the town's reverb, and up to five
@@ -47,7 +48,7 @@ const MIX_GAIN = 0.9;
 const REVERB_RETURN = 0.55;
 
 interface Voice extends VoiceInfo {
-  /** Not slowed by slow motion (the slow-motion boom itself). */
+  /** Not slowed by slow motion: the interface, a steady cue, the slow-motion boom itself. */
   exempt: boolean;
   sources: AudioBufferSourceNode[];
   /** When each source starts, context time (the echoes after the direct sound). */

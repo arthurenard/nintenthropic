@@ -194,7 +194,8 @@ interface View {
   wheels: Object3D[];
   crank: Object3D | null;
   sunCheck: number;
-  lastRole: string;
+  /** The activity his clothes and props were last chosen for. */
+  dressedFor: string;
 }
 
 export interface VehicleView {
@@ -347,7 +348,7 @@ export class Cast implements MovingWorld {
     rig.root.visible = !a.hidden;
     rig.root.scale.setScalar(a.scale);
     const bicycle = rig.model.getObjectByName("bicycle") ?? null;
-    const view: View = { actor: a, kind, rig, pool, clip: "", activity: "", bicycle, wheels: [], crank: null, sunCheck: 0, lastRole: "" };
+    const view: View = { actor: a, kind, rig, pool, clip: "", activity: "", bicycle, wheels: [], crank: null, sunCheck: 0, dressedFor: "" };
     if (bicycle) {
       bicycle.visible = a.role === "cyclist";
       bicycle.traverse((o) => {
@@ -483,9 +484,9 @@ export class Cast implements MovingWorld {
     const rig = view.rig;
     const hidden = a.hidden || a.activity === "hidden";
     rig.root.visible = !hidden;
-    if (view.lastRole !== a.activity && (view.kind === "soldier" || view.kind === "civilian")) {
+    if (view.dressedFor !== a.activity && (view.kind === "soldier" || view.kind === "civilian")) {
       dress(rig, a);
-      view.lastRole = a.activity;
+      view.dressedFor = a.activity;
     }
     // Where: the seat of a vehicle, or his feet on the ground (or the tower's boards, the dam, the bridge).
     const seat = a.seat === "driver" ? this.seatOf(a) : null;
@@ -598,7 +599,12 @@ export class Cast implements MovingWorld {
     return best;
   }
 
-  /** A man: head, body and limbs from his joints, as High Noon's shooter tests them. */
+  /**
+   * A man: head, body and limbs from his joints, the limbs as wide as the
+   * engine's weighBody makes them. Not weighBody itself: a round here is one
+   * stretch of its flight, every shape it passes is a hit for `consider` to
+   * sort nearest first, and only a hostile's body is helped.
+   */
   private humanHit(view: View, a: Vector3, len: number, consider: (t: number, hit: Omit<MovingHit, "t" | "point" | "normal">) => void): void {
     const act = view.actor;
     const j = view.rig.updateJoints();

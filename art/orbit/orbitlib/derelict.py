@@ -21,14 +21,13 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-from . import bl, shapes, fracture
-from .bl import Geo, rng
+from . import bl, shapes
+from .bl import Geo
 
 BX, BY, BZ = 1.5, 1.3, 1.9      # bus size
 
 
 def build(lib, col):
-    r = rng("derelict")
     I = Matrix.Identity(4)
     root = bl.empty("derelict", col, loc=(0, 0, 0), size=1.0, kind='derelict', surface='metal',
                     note="shoot the tank; the body shrugs off the laser")
@@ -140,13 +139,3 @@ def build(lib, col):
     anob.parent = root
     bl.tag(anob, surface='metal')
     return root, body
-
-
-def fracture_body(body, cut_mat, final_mat, rect, col, map_fn):
-    """Break the bus into chunks: seeds spread through its volume."""
-    r = rng("derelict:fracture")
-    seeds = []
-    for i in range(7):
-        seeds.append(Vector((r.uniform(-0.6, 0.6), r.uniform(-0.5, 0.5), -0.8 + 1.6 * (i + 0.5) / 7)))
-    pieces = fracture.split(body, seeds, cut_mat, r, jag=0.04)
-    return pieces

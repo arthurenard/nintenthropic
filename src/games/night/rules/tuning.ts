@@ -79,9 +79,7 @@ export const GAIT_SPEED: Readonly<Record<Gait, number>> = {
 };
 /**
  * How the dead's gaits are shared out: the lurch and the shamble carry most
- * of them, the limp and the drag are the odd one out. (They were a quarter
- * each; at the pace the dead walk now, a drag would play its clip at twice
- * the speed it was made for.)
+ * of them, the limp and the drag are the odd ones out.
  */
 export const GAIT_WEIGHT: Readonly<Record<Gait, number>> = {
   "walk.shamble": 0.3,
@@ -91,9 +89,9 @@ export const GAIT_WEIGHT: Readonly<Record<Gait, number>> = {
 };
 /**
  * How hurried a walker is: its pace as a multiple of its gait's own
- * (GAIT_SPEED), drawn from this range. Standard's dead walk about a third
- * faster than the night first walked them (1.26 m/s on average, from 0.95),
- * and their clips play 15-60% quicker than they were made, never more.
+ * (GAIT_SPEED), drawn from this range. Standard's dead walk at 1.26 m/s on
+ * average, and their clips play 15-60% quicker than they were made, never
+ * more.
  */
 export const WALKER_HURRY: readonly [number, number] = [1.15, 1.6];
 export const RUNNER_SPEED = 4.2;
@@ -189,7 +187,7 @@ export const STREAK_MAX_MULTIPLIER = 4;
 
 /** The title card's time before the first wave's dead start to come. */
 export const WAVE_INTRO = 2;
-/** The breather between waves: the fog thins, the bell counts, health comes back. It was 6 s; the night lets up for less now. */
+/** The breather between waves: the fog thins, the bell counts, health comes back. */
 export const BREATHER = 4;
 export const MECHANIC_EVERY = 6;
 
@@ -232,14 +230,13 @@ export interface DifficultyTuning {
 /**
  * Standard is the game as designed: tense from the first waves, a steady
  * hand falling around wave 9. Relaxed is for a first evening, a younger
- * player or a tired arm, and carries the same hands to about where Standard
- * used to (waves 16, 9 and 6): the dead walk at half the pace (as slowly as
- * the night first walked them) and claw for 20 instead of 25 (five quick
- * claws to fall, not four), health comes back after 3 s at 40 a second, the
- * fog is a little thinner, a bloater swells for longer at the barricade
- * before it bursts, and one shot takes the Mechanic's mask off. As a wave
- * drags on, the pressure wears these allowances away toward Standard's, so
- * it is still a night you can lose.
+ * player or a tired arm, and carries the same hands to about waves 16, 9
+ * and 6: the dead walk at half the pace and claw for 20 instead of 25
+ * (five quick claws to fall, not four), health comes back after 3 s at 40
+ * a second, the fog is a little thinner, a bloater swells for longer at the
+ * barricade before it bursts, and one shot takes the Mechanic's mask off.
+ * As a wave drags on, the pressure wears these allowances away toward
+ * Standard's, so it is still a night you can lose.
  */
 export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>> = {
   standard: {

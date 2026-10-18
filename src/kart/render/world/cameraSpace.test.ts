@@ -18,7 +18,6 @@ describe("the chase camera's room", () => {
       const space = createCameraSpace(geo, terrain, terrain.features, layer.roofs, bank);
       let worstGround = Infinity;
       let worstOut = -Infinity;
-      let moved = 0;
       let tried = 0;
       const pos = new Vector3();
       for (let s = 0; s < geo.length; s += 7) {
@@ -36,10 +35,8 @@ describe("the chase camera's room", () => {
               const heading = Math.atan2(c.tx, c.tz) + turn;
               const { distance, height } = chaseOffsets(1, 1, 0.8);
               pos.set(kx - Math.sin(heading) * distance, c.y + height, kz - Math.cos(heading) * distance);
-              const before = pos.clone();
               space.fit(pos, { x: kx, y: c.y, z: kz });
               tried++;
-              if (!pos.equals(before)) moved++;
               worstGround = Math.min(worstGround, pos.y - terrain.heightAt(pos.x, pos.z));
               const p = geo.project(pos.x, pos.z);
               const pSide = p.offset > 0 ? 1 : -1;
@@ -55,8 +52,6 @@ describe("the chase camera's room", () => {
       expect(tried).toBeGreaterThan(50);
       expect(worstGround, "camera above the ground").toBeGreaterThanOrEqual(0.8);
       expect(worstOut, "camera beyond the barrier's margin").toBeLessThanOrEqual(0.01);
-      // The camera does swing out in a bend: the margin is doing something on at least some of these tracks (not asserted per track).
-      void moved;
     });
   }
 

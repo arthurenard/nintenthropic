@@ -8,12 +8,11 @@ somewhere are oriented so their glTF +Z is the way the person faces.
 Waypoints lie on the ground (or the water) where the game puts the feet.
 """
 
-import json
 import math
 
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 from . import layout as L
 from . import scene as S
@@ -63,7 +62,6 @@ def curve_points(ter, curve, s0, s1, step, up=0.0, z_from=None):
 # ---------------------------------------------------------------------------
 
 def build(ter, col, binfo):
-    t_nodes = []
     rd = L.road()
     rz = getattr(ter.fine, 'road_z', None)
     zroad = (lambda s: float(np.interp(s, rd.s, rz))) if rz is not None else None
@@ -76,8 +74,8 @@ def build(ter, col, binfo):
     pts = [(float(p[0]), float(p[1]), L.DAM_CREST_Z) for p in (dm.at(s) for s in np.arange(0, dm.length - 20, 12.0))]
     pts.append(tuple(map(float, L.TUNNEL)))
     path(col, "path.dam", pts, note="the crest road from its far-bank end to the tunnel's mouth (the officer's drive)")
-    tun = S.empty("tunnel", tuple(map(float, L.TUNNEL)), col, size=3.0, display='CUBE',
-                  note="the tunnel's mouth, where the dam road enters the mountain")
+    S.empty("tunnel", tuple(map(float, L.TUNNEL)), col, size=3.0, display='CUBE',
+            note="the tunnel's mouth, where the dam road enters the mountain")
     # --- the patrol: the near-bank road from the checkpoint down-valley and back
     s_cp = rd.nearest(np.array([L.CHECKPOINT_C[0]]), np.array([L.CHECKPOINT_C[1]]))[1][0]
     pts = curve_points(ter, rd, s_cp - 230.0, s_cp - 12.0, 12.0, z_from=zroad)
@@ -88,7 +86,6 @@ def build(ter, col, binfo):
     path(col, "path.cyclist", pts, note="she cycles up the valley road, through the checkpoint, over the bridge")
     # --- the cheese: from the cart down the lane, over the road, to the river
     lane = L.farm_lane()
-    cart = binfo.get('farm', {}).get('cart', {})
     pts = curve_points(ter, lane, 3.0, lane.length, 6.0, up=0.32)
     riv = L.river()
     end = lane.at(lane.length)
@@ -171,7 +168,6 @@ def build(ter, col, binfo):
         exposed = (float(tw[0] + e[0] * 1.1), float(tw[1] + e[1] * 1.1), float(zf))
         hidden = (float(tw[0] - e[0] * 0.4), float(tw[1] - e[1] * 0.4), float(zf))
         nests.append((exposed, hidden, e, "chapel belfry: prone behind the parapet of the opening facing the ridge"))
-    gc = L.GOAT_CRAG_C
     top = _crag_top(ter)
     e = toward_eye(top[:2])
     nests.append(((float(top[0] + e[0] * 3.0), float(top[1] + e[1] * 3.0), float(_z(ter, top[:2] + e * 3.0))),
@@ -251,17 +247,6 @@ def _crag_top(ter):
 
 # ---------------------------------------------------------------------------
 
-def view_dir(vx, vy, aspect):
-    ty = math.tan(math.radians(L.VFOV_DEG / 2))
-    sx = (vx * 2 - 1) * ty * aspect
-    sy = (1 - vy * 2) * ty
-    p = math.radians(L.PITCH_DEG)
-    fwd = np.array([0.0, math.cos(p), math.sin(p)])
-    right = np.array([1.0, 0.0, 0.0])
-    up = np.cross(right, fwd)
-    d = fwd + sx * right + sy * up
-    return d / np.linalg.norm(d)
-
 
 def viewport(p, aspect):
     p = np.asarray(p, float)
@@ -272,24 +257,6 @@ def viewport(p, aspect):
     z = p @ fwd
     ty = math.tan(math.radians(L.VFOV_DEG / 2))
     return (0.5 + (p @ right) / z / (ty * aspect) / 2, 0.5 - (p @ up) / z / ty / 2)
-
-
-def _hit(ter, d, tmax=2000.0):
-    t = 5.0
-    while t < tmax:
-        q = d * t
-        if q[2] < _z(ter, q[:2]):
-            lo, hi = t / 1.01 - 0.5, t
-            for _ in range(20):
-                m = (lo + hi) / 2
-                qq = d * m
-                if qq[2] < _z(ter, qq[:2]):
-                    hi = m
-                else:
-                    lo = m
-            return hi
-        t = t * 1.01 + 0.5
-    return None
 
 
 def plates(ter, col):
@@ -331,7 +298,6 @@ def plates(ter, col):
 
 def secrets(ter, col, binfo):
     # the goat's ledges on the crag's face (the game hops it from one to the next)
-    top = _crag_top(ter)
     c = L.GOAT_CRAG_C
     u = c / np.linalg.norm(c)
     v = np.array([u[1], -u[0]])

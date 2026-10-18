@@ -16,14 +16,14 @@
  * Query parameters: ?seed=N, ?wave=N (the game's start wave, if it has
  * waves), ?difficulty=relaxed, ?flashing=reduced, ?tips=seen (as if every
  * one-time tip had been shown already), ?assetBase=/some/folder/ (load the
- * art from there instead, to try an export in progress), ?god=1,
+ * art from there instead, to try an export in progress), ?god=1, ?assist=0,
  * ?golden=1, ?quality=low|medium|high, ?input=mouse|touch|hand (what the
  * game is told the player aims with; unset, as for the hand), ?skipcalib=1,
- * ?manual=1 (no real-time loop: drive it from window.__handy), ?w=&h=&dpr=
+ * ?manual=1 (no real-time loop: drive it from window.__harness), ?w=&h=&dpr=
  * (a fixed stage size, for benchmarks). A game reads any of its own
  * (High Noon's ?noon=1) from HarnessParams.
  *
- * window.__handy: game (with its own `debug`, if it has one), hud (with .log
+ * window.__harness: game (with its own `debug`, if it has one), hud (with .log
  * of every HudSink call), mouse (aimAt, fire, reloadGesture, scoping),
  * advance(seconds), bench(frames), pause(), play(), finishCalib().
  */
@@ -236,7 +236,6 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
     hud,
     assets: assetLoader(),
     settings: {
-      duration: 60,
       reducedMotion: false,
       reducedFlashing: params.reducedFlashing,
       difficulty: params.difficulty,
@@ -358,7 +357,7 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
 
   const gl = renderer.getContext();
   const pixel = new Uint8Array(4);
-  const handy = {
+  const harness = {
     game,
     hud,
     mouse,
@@ -412,6 +411,6 @@ async function run<G extends Game>(options: HarnessOptions<G>, params: HarnessPa
     calib,
     finishCalib,
   };
-  (window as unknown as { __handy: typeof handy }).__handy = handy;
+  (window as unknown as { __harness: typeof harness }).__harness = harness;
   document.body.dataset["ready"] = "1";
 }

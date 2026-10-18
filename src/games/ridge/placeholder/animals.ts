@@ -1,6 +1,7 @@
 import { Group, Matrix4, Quaternion, Vector3, type AnimationClip } from "three";
 import type { LoadedAsset } from "../../../engine/types";
 import { nameNode } from "../../../engine/world/names";
+import { mirror, pose, type ClipKey, type Pose } from "../../../engine/world/poses";
 import {
   ClipSet,
   Materials,
@@ -13,11 +14,7 @@ import {
   cap,
   cyl,
   degreesOf,
-  mirror,
-  pose,
   type BoneDef,
-  type Key,
-  type Pose,
   type SkinPoints,
   type V3,
 } from "./skin";
@@ -113,7 +110,7 @@ interface QuadWalk {
  * cannot sweep as far as a real leg with its extra joints, so the planted
  * stretch is capped at what they reach; past that the hooves slide a little.
  */
-function quadWalk(poser: Poser, q: QuadShape, o: QuadWalk): Key[] {
+function quadWalk(poser: Poser, q: QuadShape, o: QuadWalk): ClipKey[] {
   const upperLen = q.legTop - q.knee;
   const lowerLen = q.knee - q.foot;
   const legLen = upperLen + lowerLen;
@@ -121,7 +118,7 @@ function quadWalk(poser: Poser, q: QuadShape, o: QuadWalk): Key[] {
   const reach = Math.sqrt(Math.max(0, (0.985 * legLen) ** 2 - drop * drop));
   const stride = Math.min(o.speed * o.period * o.duty, 1.9 * reach);
   const offsets: Record<LegName, number> = { BL: 0, FL: 0.25, BR: 0.5, FR: 0.75 };
-  const keys: Key[] = [];
+  const keys: ClipKey[] = [];
   for (let i = 0; i <= o.samples; i++) {
     const phase = (i % o.samples) / o.samples;
     const root: V3 = [0, -q.stand + 0.008 * Math.cos(4 * Math.PI * phase), 0];
@@ -181,7 +178,7 @@ function grazerClips(g: Grazer): AnimationClip[] {
   const down = grazePitch(poser, q, lean);
   const grazing = (chew: number, sway: number): Pose =>
     pose(lean, { neck: [down.neck + sway, sway * 1.5, 0], head: [down.head, sway, 0], jaw: [chew, 0, 0], tail: [10, sway * 4, 0] });
-  const grazeKeys: Key[] = [];
+  const grazeKeys: ClipKey[] = [];
   const n = g.chews * 2;
   for (let i = 0; i <= n; i++) {
     const t = (i / n) * g.grazeLoop;
@@ -502,14 +499,14 @@ function eagleClips(points: SkinPoints): AnimationClip[] {
   // Legs tucked back under the tail in flight.
   const tucked: Pose = both({ "leg.L": [75, 0, 0], "foot.L": [40, 0, 0] });
   const spread = (dihedral: number, tip: number): Pose => both({ "wing.L": [0, 0, dihedral], "wingtip.L": [0, 0, tip] });
-  const glide = (roll: number, look: number): Key => ({
+  const glide = (roll: number, look: number): ClipKey => ({
     t: 0,
     pose: pose(tucked, spread(6, 4), { body: [0, 0, roll], "wing.L": [0, 0, 6 - roll], "wing.R": [0, 0, -6 - roll], tail: [0, -roll, 0], neck: [0, look * 0.5, 0], head: [0, look, -roll] }),
   });
-  const at = (t: number, k: Key): Key => ({ ...k, t });
+  const at = (t: number, k: ClipKey): ClipKey => ({ ...k, t });
   set.add("eagle.glide", [at(0, glide(0, 0)), at(0.5, glide(5, 10)), at(1, glide(0, 0)), at(1.5, glide(-5, -10)), at(2, glide(0, 0))]);
 
-  const flapKey = (t: number, wing: number, tip: number, lift: number): Key => ({
+  const flapKey = (t: number, wing: number, tip: number, lift: number): ClipKey => ({
     t,
     pose: pose(tucked, both({ "wing.L": [0, wing < 0 ? -8 : 4, wing], "wingtip.L": [0, 0, tip] }), { tail: [wing * 0.1, 0, 0] }),
     root: [0, lift, 0],
@@ -519,7 +516,7 @@ function eagleClips(points: SkinPoints): AnimationClip[] {
   // Landing: pitch up, wings thrown forward and up to brake, talons reaching, then down onto them and fold.
   const flare: Pose = pose(both({ "wing.L": [-30, -25, 55], "wingtip.L": [0, -15, 20], "leg.L": [-30, 0, 0], "foot.L": [-20, 0, 0] }), { body: [-45, 0, 0], neck: [35, 0, 0], head: [10, 0, 0], tail: [25, 0, 0] });
   const perched: Pose = pose(foldedWing(), both({ "leg.L": [36, 0, 0], "foot.L": [0, 0, 0] }), { body: [-36, 0, 0], neck: [26, 0, 0], head: [10, 0, 0], tail: [18, 0, 0] });
-  const settle = (k: Key, liftOnly = false) => poser.settle(points, k, 0, liftOnly);
+  const settle = (k: ClipKey, liftOnly = false) => poser.settle(points, k, 0, liftOnly);
   set.add(
     "eagle.land",
     poser.keepAbove(points, [
@@ -542,7 +539,7 @@ function goatClips(points: SkinPoints): AnimationClip[] {
   const poser = new Poser(defs, "body");
   const set = new ClipSet(poser, { root: "body", rest: q.body, bones: defs.map(([n]) => n) });
   const root: V3 = [0, -q.stand, 0];
-  const stand = (t: number, p: Pose, r: V3 = root, moved: Partial<Record<LegName, V3>> = {}): Key => ({ t, pose: plantAll(poser, q, p, r, moved), root: r });
+  const stand = (t: number, p: Pose, r: V3 = root, moved: Partial<Record<LegName, V3>> = {}): ClipKey => ({ t, pose: plantAll(poser, q, p, r, moved), root: r });
   set.add("goat.stand", [
     stand(0, { neck: [0, 0, 0], tail: [0, 0, 0] }),
     stand(0.8, { neck: [-4, 18, 0], head: [2, 12, 0], jaw: [6, 0, 0] }),
@@ -558,7 +555,7 @@ function goatClips(points: SkinPoints): AnimationClip[] {
   const tuckHind: Pose = { "leg.BL": [-30, 0, 0], "shin.BL": [-70, 0, 0], "leg.BR": [-30, 0, 0], "shin.BR": [-70, 0, 0] };
   const driveHind: Pose = { "leg.BL": [35, 0, 0], "shin.BL": [-5, 0, 0], "foot.BL": [40, 0, 0], "leg.BR": [35, 0, 0], "shin.BR": [-5, 0, 0], "foot.BR": [40, 0, 0] };
   const reachFront: Pose = { "leg.FL": [-25, 0, 0], "shin.FL": [5, 0, 0], "leg.FR": [-25, 0, 0], "shin.FR": [5, 0, 0] };
-  const aloft = (k: Key) => poser.settle(points, k, 0, true);
+  const aloft = (k: ClipKey) => poser.settle(points, k, 0, true);
   set.add(
     "goat.hop",
     poser.keepAbove(points, [
@@ -596,7 +593,7 @@ function dogClips(points: SkinPoints): AnimationClip[] {
   const set = new ClipSet(poser, { root: "body", rest: q.body, bones: defs.map(([n]) => n) });
   const root: V3 = [0, -q.stand, 0];
   // idle: standing, panting, the tail wagging, looking about.
-  const idle: Key[] = [];
+  const idle: ClipKey[] = [];
   for (let i = 0; i <= 8; i++) {
     const t = i * 0.25;
     const wag = i % 2 ? 22 : -22;
@@ -615,14 +612,14 @@ function dogClips(points: SkinPoints): AnimationClip[] {
     "leg.BR": [bl[0] - 8, 0, 0],
     "shin.BR": bs,
   });
-  const run: Key[] = [
+  const run: ClipKey[] = [
     { t: 0, pose: pose({ body: [6, 0, 0], neck: [10, 0, 0], tail: [10, 0, 0] }, legs([35, 0, 0], [10, 0, 0], [-45, 0, 0], [-10, 0, 0])), root },
     { t: 0.125, pose: pose({ body: [-4, 0, 0], neck: [4, 0, 0], tail: [0, 0, 0] }, legs([-30, 0, 0], [70, 0, 0], [25, 0, 0], [-5, 0, 0])), root: [0, 0.04, 0] },
     { t: 0.25, pose: pose({ body: [-2, 0, 0], neck: [-4, 0, 0], tail: [-10, 0, 0] }, legs([-55, 0, 0], [10, 0, 0], [50, 0, 0], [-10, 0, 0])), root: [0, 0.07, 0] },
     { t: 0.375, pose: pose({ body: [4, 0, 0], neck: [6, 0, 0], tail: [0, 0, 0] }, legs([-15, 0, 0], [5, 0, 0], [0, 0, 0], [-60, 0, 0])), root },
   ];
   const settled = run.map((k) => poser.settle(points, k, 0, k.t === 0.125 || k.t === 0.25));
-  set.add("dog.run", poser.keepAbove(points, [...settled, { ...(settled[0] as Key), t: 0.5 }]));
+  set.add("dog.run", poser.keepAbove(points, [...settled, { ...(settled[0] as ClipKey), t: 0.5 }]));
   return set.clips;
 }
 

@@ -59,10 +59,9 @@ function startRace(): void {
   const karts = Number(params.get("karts") ?? 8) || 8;
   const laps = Number(params.get("laps") ?? 0) || undefined;
 
-  // The stand-in source. To try the real sim, make `source` an adapter over it: a RaceViewSource whose
-  // `step` runs the race on its fixed tick with the keyboard's DriveInput and whose `view` is `race.view()`.
   // ?inject=<css>: a style added to the page (to try what a rule costs, e.g. no backdrop blur on the HUD's glass).
   if (params.has("inject")) document.head.append(Object.assign(document.createElement("style"), { textContent: params.get("inject") ?? "" }));
+  // The race: demo.ts's stand-in, or with ?sim=1 the real sim (simSource.ts). Both are a RaceViewSource, so the picture cannot tell.
   const useSim = params.get("sim") === "1";
   const demo: ReturnType<typeof createDemoRace> | SimSource = useSim
     ? new SimSource(track, {

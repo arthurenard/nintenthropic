@@ -166,7 +166,7 @@ describe("the Blender kart as the game draws it", () => {
     expect(g.getAttribute("color")).not.toBe(base.geometry.getAttribute("color"));
   });
 
-  it("makes the golden kart's paint and trim gold, and its racing stripe the racer's colour; its wheels keep their rims chrome-free of the body gold", () => {
+  it("makes the golden kart's paint and trim gold, and its racing stripe the racer's colour; its wheels' rims are gold too, their painted caps the racer's", () => {
     const gold = bakeArt(art().get("kart.body")!, "body", true);
     expect(gold.tint[0]).toBe(0); // the paint is gold, not the racer's
     expect(gold.geometry.getAttribute("aSurf").getX(0)).toBeCloseTo(SURF.gold[0], 5);

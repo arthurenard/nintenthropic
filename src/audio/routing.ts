@@ -72,7 +72,7 @@ export interface StreetSpace {
   far: number;
 }
 
-/** Dust Creek as HIGH_NOON.md describes it: a 13 m street, the church about 60 m away. */
+/** Dust Creek as docs/HIGH_NOON.md describes it: a 13 m street, the church about 60 m away. */
 export const DUST_CREEK: StreetSpace = { left: 6, right: 7, behind: 11, depth: 62, facade: 0.7, back: 0.6, far: 0.9 };
 
 export interface EchoTap {

@@ -15,7 +15,6 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 
 import bpy  # noqa: E402
-import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
@@ -24,7 +23,7 @@ tris = int(argv[argv.index("--tris") + 1]) if "--tris" in argv else 6000
 OUT = os.path.join(os.path.dirname(HERE), "build", "review", "characters")
 os.makedirs(OUT, exist_ok=True)
 
-from deadlib import heads as H, eyes as EY, bodies, assemble, variants  # noqa: E402
+from deadlib import heads as H, eyes as EY, bodies, variants  # noqa: E402
 from deadlib.common import bl, AB, MT  # noqa: E402
 
 t0 = time.time()

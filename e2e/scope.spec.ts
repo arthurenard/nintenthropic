@@ -6,10 +6,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { handAt, passAimCheck, pose, shot, returningVisitor, snapshot } from "./helpers";
 
 type ScopeState = { active: boolean; buttons: boolean; eye: boolean; mode: string } | null;
-const scope = async (page: Page) => (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { scope: ScopeState })).scope;
-const crosshairHidden = async (page: Page) => (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { crosshairHidden: boolean })).crosshairHidden;
-const gameScoped = (page: Page) => page.evaluate(() => (window.handyTest!.internals().session!.game as unknown as { debug: { scoped(): boolean } }).debug.scoped());
-const eyes = (page: Page, left: number, right: number) => page.evaluate(([l, r]) => window.handyTest!.eyes(l === -1 ? null : { blinkLeft: l!, blinkRight: r! }), [left, right]);
+const scope = async (page: Page) => (await page.evaluate(() => window.arcadeTest!.snapshot() as unknown as { scope: ScopeState })).scope;
+const crosshairHidden = async (page: Page) => (await page.evaluate(() => window.arcadeTest!.snapshot() as unknown as { crosshairHidden: boolean })).crosshairHidden;
+const gameScoped = (page: Page) => page.evaluate(() => (window.arcadeTest!.internals().session!.game as unknown as { debug: { scoped(): boolean } }).debug.scoped());
+const eyes = (page: Page, left: number, right: number) => page.evaluate(([l, r]) => window.arcadeTest!.eyes(l === -1 ? null : { blinkLeft: l!, blinkRight: r! }), [left, right]);
 
 async function playRange(page: Page, query = "", control: "mouse" | "hand" = "mouse"): Promise<void> {
   await returningVisitor(page, control === "mouse" ? { "handy.control.v1": "mouse" } : {});
@@ -163,11 +163,11 @@ test("the eye's model loads with the first game that reads it, and the face is r
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 90_000 }).toBe("check");
   await expect
-    .poll(async () => (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { tracker: { stats: { frames: number; face: { frames: number } | null } } | null })).tracker?.stats.face?.frames ?? 0, {
+    .poll(async () => (await page.evaluate(() => window.arcadeTest!.snapshot() as unknown as { tracker: { stats: { frames: number; face: { frames: number } | null } } | null })).tracker?.stats.face?.frames ?? 0, {
       timeout: 30_000,
     })
     .toBeGreaterThan(10);
-  const stats = (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { tracker: { stats: { frames: number; face: { frames: number } } } })).tracker.stats;
+  const stats = (await page.evaluate(() => window.arcadeTest!.snapshot() as unknown as { tracker: { stats: { frames: number; face: { frames: number } } } })).tracker.stats;
   expect(stats.face.frames / stats.frames).toBeGreaterThan(0.35);
   expect(stats.face.frames / stats.frames).toBeLessThan(0.65);
   // Back in the arcade, a game that does not read the eye leaves the face alone.
@@ -176,9 +176,9 @@ test("the eye's model loads with the first game that reads it, and the face is r
   await page.getByRole("radiogroup", { name: "Games" }).getByRole("radio", { name: /^High Noon/ }).click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("check");
-  await page.evaluate(() => window.handyTest!.resetStats());
+  await page.evaluate(() => window.arcadeTest!.resetStats());
   await page.waitForTimeout(1_500);
-  const after = (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { tracker: { stats: { frames: number; face: unknown } } })).tracker.stats;
+  const after = (await page.evaluate(() => window.arcadeTest!.snapshot() as unknown as { tracker: { stats: { frames: number; face: unknown } } })).tracker.stats;
   expect(after.frames).toBeGreaterThan(10);
   expect(after.face).toBeNull();
 });

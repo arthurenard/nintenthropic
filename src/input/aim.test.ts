@@ -1,5 +1,6 @@
-// Ported from tests/test_aiming.py and the trigger cases of
-// tests/test_shot_calibration.py: one camera, the same poses, the same numbers.
+// Ported from the Python version's tests/test_aiming.py and the trigger cases
+// of its tests/test_shot_calibration.py (git tag `python-final`): one camera,
+// the same poses, the same numbers.
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
 import { AimController, DEFAULT_STEADINESS, Recoil, STEADINESS, type AimOptions, type AimReading, type Steadiness } from "./aim";
@@ -344,7 +345,7 @@ describe("recoil", () => {
 });
 
 describe("Aim Steadiness", () => {
-  it("is the desktop's filter when Balanced, exactly", () => {
+  it("is the Python version's filter when Balanced, exactly", () => {
     expect(STEADINESS.balanced).toEqual({ minCutoff: 1.2, beta: 0.8 });
     expect(new AimController({ ...STEADINESS.balanced }).smoothing).toEqual({ minCutoff: 1.2, beta: 0.8 });
   });

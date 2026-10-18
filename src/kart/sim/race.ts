@@ -37,8 +37,8 @@ import { ticks, TUNING } from "./tuning";
 const EVENT_BACKLOG = 400;
 
 /**
- * A race, with one thing more than the contract asks: `handOver`, which
- * makes a kart (a player who left) drive itself from now on, as a bot.
+ * A race whose `handOver` is always there (the contract makes it optional):
+ * it makes a kart (a player who left) drive itself from now on, as a bot.
  */
 export interface SimRace extends Race {
   handOver(kart: number): void;
@@ -131,9 +131,9 @@ class Sim implements SimRace {
     const racing = state.tick >= GO_TICK;
 
     // 3, 2, 1, Go: the "ready" half-second first.
-    const since = state.tick - ticks(0.5);
+    const since = state.tick - ticks(TUNING.start.ready);
     if (since >= 0 && since % TICK_HZ === 0 && state.tick <= GO_TICK) {
-      this.emit({ type: "countdown", n: (3 - since / TICK_HZ) as 3 | 2 | 1 | 0 });
+      this.emit({ type: "countdown", n: (TUNING.start.countdown - since / TICK_HZ) as 3 | 2 | 1 | 0 });
     }
 
     // The best player on the road, for the bots' rubber band.

@@ -104,7 +104,7 @@ def hat_mesh(kind, name, coll=None, n=26):
     the crown from inside the band to the top, then the brim - top face out
     to a rolled edge and bottom face back in - so a thin brim never tears the
     way a decimated one does, and a dome stays round."""
-    from . import rings as R, bl
+    from . import rings as R
     k = HATS[kind]
     f, *_ = hat_field(kind)
     A, B = HAT_A, HAT_B
@@ -148,7 +148,6 @@ def hat_mesh(kind, name, coll=None, n=26):
         pts = np.stack([a * np.sin(th), -b * np.cos(th), zz - 0.003], 1)
         brim_bot.append(rm.ring(pts))
     ua = np.linspace(0, 1, n + 1)
-    seq = [rings[0]] * 0
     # crown faces (outward)
     for i in range(len(rings) - 1):
         rm.bridge(rings[i + 1], rings[i], i + 1, i, "crown", ua=ua)
@@ -164,12 +163,6 @@ def hat_mesh(kind, name, coll=None, n=26):
     rm.V = list(V.astype(np.float64))
     ob = R.to_blender(rm, name, coll)
     return ob, f
-
-
-def hat_mesh_orient(ob):
-    """Crown and brim faces must point out of the felt: flip any face whose
-    normal points into the field."""
-    return ob
 
 
 def bonnet_field():
@@ -263,7 +256,7 @@ def bandana_field(p):
     b = S.Union([band, knot], k=0.008)
 
     def folds(P):
-        x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        x, z = P[:, 0], P[:, 2]
         r = np.hypot(x, z + 0.03)
         ang = np.arctan2(z + 0.03, x)
         # folds radiate from where the cloth hangs off the nose

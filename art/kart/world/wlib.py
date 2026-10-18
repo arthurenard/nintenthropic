@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import math
 import os
-import sys
 import time
 from contextlib import contextmanager
 
@@ -703,7 +702,6 @@ def _hemisphere(k: int):
     golden = math.pi * (3 - math.sqrt(5))
     for i in range(k):
         u = (i + 0.5) / k
-        r = math.sqrt(u)
         phi = i * golden
         z = 0.16 + 0.84 * math.sqrt(1 - u)  # never grazing: a faceted curve must not shade itself
         xy = math.sqrt(max(0.0, 1 - z * z))
@@ -989,8 +987,6 @@ def with_breaks(points, breaks, eps=0.012):
             y2 = pts[i + 1][1]
             for b in sorted(breaks):
                 if min(y, y2) + 1e-6 < b < max(y, y2) - 1e-6:
-                    t = (b - y) / (y2 - y)
-                    rb = r + (pts[i + 1][0] - r) * t
                     out.append((r + (pts[i + 1][0] - r) * ((b - eps - y) / (y2 - y)), b - eps))
                     out.append((r + (pts[i + 1][0] - r) * ((b + eps - y) / (y2 - y)), b + eps))
     return out
@@ -1009,10 +1005,6 @@ def petal(length, width, n=7, base=0.0):
 def rot2(poly, ang):
     c, s = math.cos(ang), math.sin(ang)
     return [(u * c - v * s, u * s + v * c) for u, v in poly]
-
-
-def shift2(poly, du, dv):
-    return [(u + du, v + dv) for u, v in poly]
 
 
 def path_frames(points, up=(0, 1, 0)):

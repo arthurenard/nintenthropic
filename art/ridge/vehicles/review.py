@@ -83,7 +83,6 @@ def ground():
     nt = m.node_tree
     nt.nodes.clear()
     N = nt.nodes.new
-    tc = N('ShaderNodeTexCoord')
     geo = N('ShaderNodeNewGeometry')
     sep = N('ShaderNodeSeparateXYZ')
     nt.links.new(geo.outputs['Position'], sep.inputs[0])

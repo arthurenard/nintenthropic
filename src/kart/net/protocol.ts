@@ -6,7 +6,7 @@
  *
  * Which channel carries what:
  *
- *   reliable    hello, welcome, reject, configure, ready, lobby, start,
+ *   reliable    hello, welcome, reject, configure, ready, lost, lobby, start,
  *               events, results, ping, pong, leave
  *   unreliable  in (a guest's inputs), snap (the host's race, 30 times a second)
  *
@@ -51,7 +51,8 @@ export interface WirePlayer {
  *
  * `horn` is the count of honks, ever (like itemPresses); `emote` is 0 none,
  * 1 cheer, 2 wave. The last two are sent only when there is something to
- * say, and read as none when absent, so older senders still work.
+ * say, and read as none when absent, so the packets that go sixty times a
+ * second stay as short as they can.
  */
 export type WireInput = [number, number, number, number, 0 | 1, number, number?, number?];
 

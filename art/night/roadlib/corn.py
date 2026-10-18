@@ -23,7 +23,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-from .common import rng, tag, empty, lin
+from .common import rng, tag, empty
 from . import layout as L
 from .ground import ground_z
 
@@ -181,7 +181,6 @@ def spots():
                 if math.hypot(x - L.SCARECROW[0], y - L.SCARECROW[1]) < 0.9:
                     continue
                 # the corn lane: a trampled line where they have come through
-                cx = L.FENCE_X
                 if north and abs(y - 37.5) < 0.5 and x > -30 and r.random() < 0.5:
                     continue
                 out.append((x + r.uniform(-0.06, 0.06), y, det))

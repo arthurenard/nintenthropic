@@ -1,4 +1,5 @@
-// Ported from tests/test_filtering.py: the same cases, the same numbers.
+// Ported from the Python version's tests/test_filtering.py (git tag
+// `python-final`): the same cases, the same numbers.
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
 import { MedianOf3, OneEuroFilter, PointFilter, Velocity, smoothingFactor } from "./filter";

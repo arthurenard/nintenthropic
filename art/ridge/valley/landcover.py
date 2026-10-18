@@ -60,7 +60,6 @@ def flow_accumulation(g):
     zp = np.pad(z, 1, mode='edge')
     best = np.zeros((ny, nx))
     tgt = np.full((ny, nx), -1, np.int64)
-    idx = np.arange(ny * nx).reshape(ny, nx)
     for dj, di, dist in ((-1, -1, 1.414), (-1, 0, 1), (-1, 1, 1.414), (0, -1, 1), (0, 1, 1), (1, -1, 1.414),
                          (1, 0, 1), (1, 1, 1.414)):
         nb = zp[1 + dj:1 + dj + ny, 1 + di:1 + di + nx]

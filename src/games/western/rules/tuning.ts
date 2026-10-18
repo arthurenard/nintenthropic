@@ -213,3 +213,6 @@ export const DIFFICULTY: Readonly<Record<Difficulty, Readonly<DifficultyTuning>>
     flightFactor: 1.2,
   },
 };
+
+/** The numbers a difficulty's allowances wear toward, as a long wave's pressure climbs. */
+export const WORN: readonly (keyof DifficultyTuning)[] = ["aimFactor", "glintLead", "hitFactor", "damageFactor", "regenDelay", "regenRate", "lightTime", "flightFactor"];

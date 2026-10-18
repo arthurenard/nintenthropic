@@ -6,9 +6,15 @@
  * colour for as long as they hold the slot, and nobody else gets it.
  */
 import { characterById } from "../characters";
-import { MAX_PLAYERS, PLAYER_COLOURS, type DriverControl, type LobbyPlayer } from "../contract";
+import {
+  MAX_PLAYERS,
+  PLAYER_COLOURS,
+  type DriverControl,
+  type LobbyPlayer,
+  type LobbySettings,
+  type LobbyState,
+} from "../contract";
 import { CUPS, TRACKS } from "../track/tracks";
-import type { LobbySettings, LobbyState } from "../contract";
 import { clamp } from "./util";
 import type { WirePlayer } from "./protocol";
 

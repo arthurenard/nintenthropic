@@ -9,7 +9,7 @@ transform. The glb shows it unlit, so the browser pays nothing for it.
 UV layout is driven by the fact that the player never moves:
 - Street ground + terrain use a *camera-projection* layout (UV = where the
   point lands on screen): texel density exactly follows screen density,
-  and the dense rut/hoofprint height field bakes onto a much lighter export
+  and the dense rut height field bakes onto a much lighter export
   mesh without losing anything, because both project to the same UVs.
 - Everything else: Smart UV islands, each scaled by how many screen pixels
   per metre it covers from the eye (1/distance, with visibility tested by
@@ -23,7 +23,7 @@ import time
 import bpy
 import bmesh
 import numpy as np
-from mathutils import Vector, Matrix
+from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from . import core, post, pipeline, lighting
@@ -106,10 +106,6 @@ def join_groups(scene):
     return joined
 
 
-def group_objects(scene, group):
-    return [o for o in scene.objects if is_static(o) and o.get('group') == group]
-
-
 # ---------------------------------------------------------------------------
 # UVs
 
@@ -177,7 +173,7 @@ def shelf_pack(items, margin, aspect=1.0):
     Returns (scale, placements[(x, y, rotated)]) filling a 1 x 1 square
     (x runs to `aspect` if the atlas is wider than tall; UVs are normalised
     later). Height-sorted shelves, binary search on the global scale."""
-    order = sorted(range(len(items)), key=lambda i: -max(items[i][0], items[i][1]) if False else -items[i][1])
+    order = sorted(range(len(items)), key=lambda i: -items[i][1])
 
     def try_pack(sc, place=False):
         x = y = shelf_h = 0.0
@@ -326,7 +322,6 @@ def projective_uv(ob, bvh_terrain=None):
     front = np.einsum('ij,ij->i', nrm, np.array(EYE) - cen) > 0
     minz = np.minimum.reduceat(z[lv], ls)
     ok = front & (minz > 0.25)
-    uvf = np.stack([u, v], -1)
     inside = (np.abs(tx) < TX * 1.3) & (ty > TY0 * 1.3) & (ty < TY1 + 0.3)
     anyin = np.maximum.reduceat(inside[lv].astype(np.int8), ls) > 0
     ok &= anyin

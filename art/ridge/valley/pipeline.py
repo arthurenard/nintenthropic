@@ -160,7 +160,7 @@ def stage_forest(ctx):
     F = LC.Fields(ter)
     inst = FO.place(ter, F, quick=ctx.quick)
     FO.save(os.path.join(ctx.build, "forest.npz"), inst)
-    sc = open_blend(ctx)
+    open_blend(ctx)
     col = S.collection("forest_review", bpy.data.collections["Valley"])
     for o in list(col.objects):
         bpy.data.objects.remove(o)
@@ -200,7 +200,7 @@ def stage_water(ctx):
     """River, reservoir, mist ribbons, and the roads' surfaces."""
     from . import water as W, bmats
     ter = load_terrain(ctx)
-    sc = open_blend(ctx)
+    open_blend(ctx)
     root = bpy.data.collections["Valley"]
     col = S.collection("water", root)
     rcol = S.collection("roads", root)

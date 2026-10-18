@@ -48,12 +48,6 @@ def srgb(c):
     return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4).astype(F32)
 
 
-def to_srgb8(lin):
-    lin = np.clip(lin, 0, 1)
-    s = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
-    return np.clip(np.round(s * 255), 0, 255).astype(np.uint8)
-
-
 def lerp(a, b, t):
     return a + (b - a) * t
 
@@ -451,7 +445,6 @@ class Planet:
     # 4. Surface colour
 
     def surface(self):
-        H, W = self.H, self.W
         T = self.up(self.T4)
         P = self.up(self.P4mm)
         land = self.land
@@ -915,7 +908,6 @@ class Planet:
             dots = C[cand] @ C[k]
             for j in cand[np.argsort(-dots)[:2]]:
                 edges.add((min(k, j), max(k, j)))
-        land = self.land
         for (a, b) in edges:
             A, B = C[a], C[b]
             ang = math.acos(min(1.0, max(-1.0, float(A @ B))))

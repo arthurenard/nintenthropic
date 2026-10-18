@@ -1,13 +1,14 @@
 /**
- * Smooths the aim and turns the thumb's fold into discrete shots (a port of
- * the desktop's AimController and Recoil, for the browser's single camera).
+ * Smooths the aim and turns the thumb's fold into discrete shots (ported from
+ * the Python version's AimController and Recoil, for the browser's single
+ * camera).
  */
 import { MedianOf3, PointFilter, type Point } from "./filter";
 import { apply, boxMapping, type Matrix } from "./homography";
 import { pointer as fingertip, thumbPull, type Hand } from "./hand";
 
 /** Before any aim has been learned: the fingertip's usual sweep, stretched
- * over the screen (as the desktop's default). */
+ * over the screen (the Python version's default). */
 export const DEFAULT_MAPPING: Matrix = boxMapping([0.15, 0.15], [0.85, 0.85]);
 
 /**
@@ -44,9 +45,9 @@ export interface Smoothing {
 
 /**
  * The player's Aim Steadiness, as the filter's settings. Balanced is the
- * desktop's, tuned in play; Steady holds a shaky hand still at the cost of a
- * little lag, Responsive follows quick moves closely and trembles a little
- * more.
+ * Python version's, tuned in play; Steady holds a shaky hand still at the
+ * cost of a little lag, Responsive follows quick moves closely and trembles
+ * a little more.
  */
 export const STEADINESS = {
   responsive: { minCutoff: 2.2, beta: 1.2 },

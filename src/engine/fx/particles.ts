@@ -3,14 +3,25 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  DynamicDrawUsage,
   NormalBlending,
   Points,
   ShaderMaterial,
   UniformsLib,
   UniformsUtils,
   type Texture,
+  type Vector3,
 } from "three";
 import { ATLAS_CELLS } from "./textures";
+
+/**
+ * A random direction round `n` (a unit vector), into `out`, for what an
+ * effect throws off: `spread` 0 straight along it, 1 anywhere in front.
+ */
+export function scatter(random: () => number, n: Vector3, spread: number, out: Vector3): Vector3 {
+  out.set(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1).multiplyScalar(spread).add(n);
+  return out.normalize();
+}
 
 /** How a kind of particle looks and moves. Made once per effect, reused for every emit. */
 export interface ParticleStyle {
@@ -144,7 +155,7 @@ export class ParticleSystem {
     this.posAttr = new BufferAttribute(this.pos, 3);
     this.colAttr = new BufferAttribute(this.color, 4);
     this.parAttr = new BufferAttribute(this.params, 3);
-    for (const a of [this.posAttr, this.colAttr, this.parAttr]) a.setUsage(35048 /* DynamicDrawUsage */);
+    for (const a of [this.posAttr, this.colAttr, this.parAttr]) a.setUsage(DynamicDrawUsage);
     g.setAttribute("position", this.posAttr);
     g.setAttribute("aColor", this.colAttr);
     g.setAttribute("aParams", this.parAttr);

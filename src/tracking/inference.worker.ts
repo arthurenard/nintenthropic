@@ -198,9 +198,9 @@ async function init(message: Extract<ToWorker, { type: "init" }>): Promise<void>
       runningMode: "VIDEO",
       // One hand for the shooting games, deliberately: a second costs time
       // (measured in input/trust.ts, which keeps a passer-by's hand from
-      // taking the aim). Grip Prix asks for two, or four for two wheels on
-      // one camera. Players sharing a camera in tiles (tiles.ts) get their share of the hands
-      // in each tile.
+      // taking the aim). Grip Prix asks for two for each player on the
+      // camera. Players sharing a camera in tiles (tiles.ts) get their share
+      // of the hands in each tile.
       numHands: tiles > 1 ? Math.max(1, Math.ceil((message.hands ?? 2) / tiles)) : (message.hands ?? 1),
       minHandDetectionConfidence: message.confidence ?? 0.5,
       minHandPresenceConfidence: message.confidence ?? 0.5,

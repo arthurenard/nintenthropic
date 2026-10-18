@@ -2,7 +2,7 @@
 // eight bots and loads the Blender art, in Chrome on Metal, with the frame-rate limit off so the frame time is the
 // work and not the display's refresh.
 //
-//   npx vite --port 5198 --strictPort        (a worktree whose node_modules is a link: see docs/GRIP_PRIX.md, Performance)
+//   npx vite --port 5198 --strictPort
 //   node tools/perf/bench.mjs                                   every track, 1 and 4 views, every tier
 //   node tools/perf/bench.mjs --tracks canyon-run,fun-fair --views 4 --tiers high,low
 //   node tools/perf/bench.mjs --seconds 8 --out perf.json      (default 6 s measured after 2 s warm-up)

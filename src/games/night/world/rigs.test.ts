@@ -1,4 +1,4 @@
-import { DoubleSide, Group, MeshStandardMaterial, Object3D } from "three";
+import { Group, Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../../../engine/rules/rng";
 import type { LoadedAsset } from "../../../engine/types";
@@ -8,7 +8,7 @@ import { shippedExtras } from "../rules/testkit";
 import { GAIT_SPEED, GAIT_WEIGHT, WALKER_HURRY } from "../rules/tuning";
 import { GAITS } from "../rules/types";
 import { waveSpec } from "../rules/waves";
-import { burstMoment, CLIP_SPEED, clipSpeeds, drawOnce, dressDead, GAIT_LADDER, gaitForPace, MAX_PLAYBACK } from "./rigs";
+import { burstMoment, CLIP_SPEED, clipSpeeds, dressDead, GAIT_LADDER, gaitForPace, MAX_PLAYBACK } from "./rigs";
 
 /** A rig as dressDead sees it: the walker file's bodies and variations, and what it was dressed in. */
 function fakeRig(): { rig: Rig; worn: () => string[] } {
@@ -104,19 +104,6 @@ describe("a file's clips", () => {
     expect(burstMoment(asset({ clips: { bloat_burst: { burst_s: 1.32 } } }))).toBe(1.32);
     expect(burstMoment(asset({}))).toBe(1.32);
     expect(burstMoment(asset({ clips: { bloat_burst: { burst_s: 0.9 } } }))).toBe(0.9);
-  });
-});
-
-describe("a figure's materials", () => {
-  it("are drawn once a frame: two-sided and fadeable, they would be drawn twice and their programs worked out twice", () => {
-    // As the engine leaves a rig's own copy of a material: transparent, so a body can fade.
-    const twoSided = new MeshStandardMaterial({ side: DoubleSide, transparent: true });
-    const oneSided = new MeshStandardMaterial({ transparent: true });
-    drawOnce(twoSided);
-    drawOnce(oneSided);
-    expect(twoSided.forceSinglePass).toBe(true);
-    expect(twoSided.transparent).toBe(true);
-    expect(oneSided.forceSinglePass).toBe(false);
   });
 });
 

@@ -60,7 +60,6 @@ def place(ter, F, quick=False):
     rng = np.random.default_rng(SEED + 1)
     n = len(x)
     keep = np.zeros(n, bool)
-    info = {}
     CH = 400_000
     dens = np.zeros(n)
     alt = np.zeros(n)

@@ -39,7 +39,7 @@ function place(r: SimRace, track: TrackDef, s: number, offset: number, speed: nu
   patch(r, kart, { x: p.x, z: p.z, heading: h, vx: Math.sin(h) * speed, vz: Math.cos(h) * speed, s, offset, progress: s, ...extra });
 }
 
-/** Steps kart 0 with `drive(tick, view)` until `until` says stop (or `limit` ticks), collecting the events. */
+/** Steps kart 0 with the input `drive` gives for each tick until `until` says stop (or `limit` ticks), collecting the events. */
 function drive(r: SimRace, drive: (tick: number) => Partial<DriveInput>, until: (events: RaceEvent[]) => boolean, limit = 900): RaceEvent[] {
   const events: RaceEvent[] = [];
   for (let i = 0; i < limit && !until(events); i++) events.push(...run(r, 1, () => input(drive(r.tick))));
@@ -300,7 +300,7 @@ describe("a gap in the road", () => {
 });
 
 describe("the ground", () => {
-  /** Kart 0 at `s` with `speed`, on `track`, driven by `input` for `ticks`; returns what it did. */
+  /** Kart 0 at `s` with `speed`, on `track`, driven by `drive` for `ticks`; returns the race. */
   function trial(track: TrackDef, s: number, speed: number, ticks: number, drive: Partial<DriveInput>, offset = 0) {
     const r = race(track, racers(1, 0));
     toGo(r);

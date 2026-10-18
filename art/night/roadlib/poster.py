@@ -16,10 +16,9 @@ import math
 import os
 
 import bpy
-import numpy as np
 from mathutils import Vector
 
-from . import pipeline, post, world, layout as L
+from . import pipeline, post
 from .common import EYE, setup_gpu, DN
 
 # (dressing, clip, frame, x, y, yaw deg)
@@ -47,7 +46,6 @@ def import_figure(path, dressing, clip, frame, x, y, yaw, eyes=9.0):
         top = top.parent
     top.location = (x, y, 0.0)
     top.rotation_euler = (top.rotation_euler[0], top.rotation_euler[1], math.radians(yaw))
-    act = bpy.data.actions.get(clip)
     rig.animation_data_create()
     for tr in list(rig.animation_data.nla_tracks):
         rig.animation_data.nla_tracks.remove(tr)
@@ -140,7 +138,6 @@ def render(ctx):
     if os.path.exists(walker):
         for dressing, clip, frame, x, y, yaw in CAST:
             figures.append(import_figure(walker, dressing, clip, frame, x, y, yaw))
-        m = bpy.data.materials.get("eyes")
         for mm in [mm for mm in bpy.data.materials if mm.name.startswith("eyes")]:
             for nd in mm.node_tree.nodes:
                 if nd.type == 'BSDF_PRINCIPLED':

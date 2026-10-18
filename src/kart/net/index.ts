@@ -3,7 +3,7 @@
  * make a `Session` (contract.ts); the transports are what they talk over.
  */
 export { hostSession } from "./host";
-export { joinSession, VERSION_MISMATCH } from "./guest";
+export { joinSession } from "./guest";
 export { soloSession } from "./solo";
 export { defaultTransport, type NetOptions } from "./options";
 export { CODE_ALPHABET, joinCodeFrom, joinUrl, makeCode, parseCode } from "./codes";

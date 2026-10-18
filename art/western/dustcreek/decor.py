@@ -214,7 +214,6 @@ def bank(b, lib, col):
 
 def sheriff(b, lib, col):
     F = b.F
-    P = B.WALK_DEPTH
     sm = make_sign(lib, 'sheriff', 5.4, 0.95, combo(text_line("SHERIFF", size=0.66, shadow=(0.025, -0.025),
                                                               spacing=1.2), border(0.06, 0.03)),
                    bg=lin(120, 34, 26), fill=CREAM, shadow=DARK, accent=CREAM, wear=0.55)
@@ -280,14 +279,12 @@ def sheriff(b, lib, col):
     it = b.interior
     it.box(F.sub((b.s_near(0.3), 2.5, B.DECK_Z)), (-0.7, 0, 0), (0.7, 0.8, 0.78), 'wood_dark', grain_axis=0)
     for k in range(14):
-        it.cylinder(F.sub((b.s_near(0.95) * 0.0 + (-2.8 + k * 0.2) * -b.near, 5.2, B.DECK_Z)), (0, 0, 0), 0.015,
+        it.cylinder(F.sub(((-2.8 + k * 0.2) * -b.near, 5.2, B.DECK_Z)), (0, 0, 0), 0.015,
                     b.eave - B.DECK_Z - 0.1, 'iron_black', segments=6)
 
 
 def hotel(b, lib, col):
     F, Wd, r = b.F, b.W, b.r
-    P = B.WALK_DEPTH
-    h = b.porch_h
     wd = b.wood
     # A narrow balcony at the upper floor, on brackets above the porch roof,
     # in front of the three windows. Kept shallow (1.1 m) with a low rail:

@@ -617,7 +617,7 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
     // (The keyboard may be remembered from before: back to the wheel.)
     await page.getByRole("radio", { name: "Wheel" }).click();
     await page.getByRole("button", { name: "Continue" }).click();
-  await chooseDrivers(page);
+    await chooseDrivers(page);
   };
 
   // A camera the browser refuses: try again, or drive with the keyboard.

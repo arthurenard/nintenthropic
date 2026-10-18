@@ -5,13 +5,14 @@
  * original, in C or G major, and their pitches are exact so that they sit
  * with the music (which is in tune with them) instead of against it.
  */
+import { midiHz, sampled, smooth } from "../dsp/curves";
 import { bandpass, highpass, lowpass } from "../dsp/filters";
 import { type Mono, normalize, shapeBy } from "../dsp/signal";
 import { addMode, bandNoise, click, formants, saw, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
 import { type SubSpec, type Voice, drumHit, modal, subtractive } from "../dsp/voices";
 import { thump } from "./kit";
-import { ar, expo, midiHz, sampled, smooth } from "./kart-kit";
+import { ar, expo } from "./kart-kit";
 
 // --- the instruments of the jingles ---------------------------------------------------------------------
 
@@ -158,7 +159,7 @@ export function cheer(t: Take): Mono {
     const len = r.range(0.7, 1.6);
     const n = t.n(len);
     const f0 = r.range(150, 330) * t.p;
-    const track = sampled(n, (u) => f0 * (0.9 + 0.22 * Math.min(1, u * 3) - 0.1 * u) * (1 + 0.012 * Math.sin(2 * Math.PI * 6 * u * len)));
+    const track = sampled(n, (u) => f0 * (0.9 + 0.22 * Math.min(1, u * 3) - 0.1 * u) * (1 + 0.012 * Math.sin(2 * Math.PI * 6 * u * len)), 16);
     const src = saw(n, t.sr, track, 0.25, r.next());
     // "aah" or "ooh": two formant sets.
     const aah = r.chance(0.65);

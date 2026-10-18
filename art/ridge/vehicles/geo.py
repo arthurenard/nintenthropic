@@ -20,7 +20,6 @@ import random
 
 import bmesh
 import bpy
-import numpy as np
 from mathutils import Matrix, Vector
 
 SEED = 1944
@@ -534,13 +533,6 @@ def boolean(ob, cutters, op='DIFFERENCE'):
         if me.users == 0:
             bpy.data.meshes.remove(me)
     return ob
-
-
-def delete_object(ob):
-    me = ob.data
-    bpy.data.objects.remove(ob)
-    if me is not None and me.users == 0:
-        bpy.data.meshes.remove(me)
 
 
 def tri_count(ob):

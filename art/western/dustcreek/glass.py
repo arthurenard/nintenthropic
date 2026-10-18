@@ -7,10 +7,9 @@ film of dust thickest in the bottom corners. For the glTF export the panes
 get a plain standard material instead (see export.py).
 """
 
-import bpy
 from mathutils import Matrix, Vector
 
-from .core import MeshBuilder, tag
+from .core import MeshBuilder
 from .nodes import new_material
 from .materials import lin
 

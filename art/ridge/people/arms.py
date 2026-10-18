@@ -16,10 +16,9 @@ the game only toggles visibility.
 - gun.rifle.slung     the rifle hung on the right shoulder, muzzle up (on
                       socket.back, which rides the chest)
 """
-import math
 import numpy as np
 from charlib import sdf as S, paint as PT
-from charlib.texture import srgb, smoothstep, value_noise, fbm
+from charlib.texture import srgb, smoothstep, value_noise
 
 BORE_Z = 0.052          # the rifle's bore above the centre of the fist
 MUZZLE_Y = 0.770
@@ -95,7 +94,6 @@ def rifle_paint(scoped=False):
 
     def paint(P):
         x, y, z = P[:, 0], P[:, 1], P[:, 2]
-        n = len(P)
         c, r, m = PT.metal(P, BLUED, 0.42, rust=0.12, seed=201)
         # oiled walnut: the stock, the forend and the handguard
         wood = ((y < 0.045) & (z < bz - 0.010)) | ((y > 0.03) & (y < 0.67) & (z < bz - 0.011)) | ((y > 0.245) & (y < 0.565) & (z > bz + 0.006))
@@ -181,7 +179,7 @@ def mg_field():
 
 
 def mg_paint(P):
-    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    y, z = P[:, 1], P[:, 2]
     bz = MG_BORE_Z
     c, r, m = PT.metal(P, (0.085, 0.088, 0.085), 0.55, rust=0.15, seed=211)
     stock = (y < -0.035) & (y > -0.350)

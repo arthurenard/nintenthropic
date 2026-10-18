@@ -54,7 +54,7 @@ export function rock(): BufferGeometry {
   return b.build();
 }
 
-/** A tuft of flowers: white, so each instance's colour picks its petals. Kept to about 70 triangles. */
+/** A tuft of flowers: white, so each instance's colour picks its petals. Kept to about 160 triangles. */
 export function flowers(): BufferGeometry {
   const b = new MeshBuilder();
   const stem = rgb("#3f9a3a");
@@ -116,17 +116,6 @@ export function barn(): BufferGeometry {
   b.box(2.9, 6.1, 0, 6.6, 0.35, 8.4, roof, 0, 0, -0.62);
   b.box(0, 3.0, 3.8, 3.3, 3.6, 0.2, trim);
   b.box(0, 3.0, 3.85, 3.0, 3.3, 0.2, scaleRgb(red, 0.7));
-  return b.build();
-}
-
-export function cloud(seed: number, lit: Rgb, shade: Rgb): BufferGeometry {
-  const b = new MeshBuilder();
-  const bumps = 5 + (seed % 3);
-  for (let i = 0; i < bumps; i++) {
-    const a = (i / bumps) * 2 - 1;
-    const r = 0.9 + 0.5 * Math.sin(i * 2.1 + seed);
-    b.blob(a * 2.1, 0.25 + 0.35 * Math.cos(i * 1.7 + seed), Math.sin(i * 3.3 + seed) * 0.5, r * 1.15, r * 0.8, r * 0.95, ramp(shade, lit), 1);
-  }
   return b.build();
 }
 
@@ -280,28 +269,5 @@ export function ship(): BufferGeometry {
       }
     }
   }
-  return b.build();
-}
-
-export function warehouseLamp(): BufferGeometry {
-  const b = new MeshBuilder();
-  const steel = rgb("#2f3548");
-  b.post(0, 0, 0, 0.16, 5.5, steel, 6);
-  b.box(0, 5.6, 0, 0.9, 0.2, 0.5, [4, 3, 1.6]);
-  return b.build();
-}
-
-export function barrels(): BufferGeometry {
-  const b = new MeshBuilder();
-  const cols = [rgb("#d9473b"), rgb("#2f6bff"), rgb("#ffb703")];
-  [
-    [0, 0, 0],
-    [0.9, 0.2, 1],
-    [-0.5, 0.9, 2],
-    [0.4, -0.9, 0],
-  ].forEach(([x, z, c]) => {
-    const col = cols[c!]!;
-    b.post(x!, 0, z!, 0.4, 1.0, ramp(scaleRgb(col, 0.6), col), 8);
-  });
   return b.build();
 }

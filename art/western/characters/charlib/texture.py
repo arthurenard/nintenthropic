@@ -1,12 +1,12 @@
-"""Per-vertex painting of the high-poly sculpts, in numpy.
+"""Painting in numpy: colour helpers, value noise and fBm, and the skin's paint.
 
 The large-scale look of a face or a garment - where the skin reddens, where the
 stubble is, the line a hat leaves on a sun-browned forehead, dust gathering
-toward the hem - is painted here as vertex colours on the dense sculpt, then
-baked into the game atlas. Fine grain (pores, weave, leather grain) is added by
-the bake materials' own noise, which is cheaper at texel scale.
+toward the hem - is a function of points on the sculpt, which the atlas bake
+(abake.py) evaluates at every texel. Fine relief (skin grain, wrinkles) is a
+displacement of the sculpt's field instead (head.skin_detail), so the normal
+map carries it.
 """
-import math
 import numpy as np
 
 

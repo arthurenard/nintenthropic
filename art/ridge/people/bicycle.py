@@ -20,7 +20,7 @@ import numpy as np
 import bpy
 from mathutils import Vector, Matrix
 from charlib import sdf as S, paint as PT, bl, character as C
-from charlib.texture import srgb, smoothstep, value_noise, fbm
+from charlib.texture import srgb, value_noise
 
 R_WHEEL = 0.350           # 28-inch wheel, tyre on
 R_RIM = 0.316
@@ -124,7 +124,6 @@ def frame_field():
 
 
 def frame_paint(P):
-    n = len(P)
     col, r, m = PT.metal(P, (0.025, 0.026, 0.028), 0.30, seed=501)
     m[:] = 0.0                      # enamel
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
@@ -206,7 +205,6 @@ def spokes_field(hub, n=32):
 
 def wheel_paint(hub):
     def paint(P):
-        n = len(P)
         q = P - hub
         r_ = np.hypot(q[:, 1], q[:, 2])
         col, r, m = PT.metal(P, (0.60, 0.60, 0.60), 0.22, seed=511)

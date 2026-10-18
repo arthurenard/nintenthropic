@@ -10,7 +10,6 @@ share a silhouette. Bake group 'trees'.
 
 import math
 
-import bpy
 from mathutils import Vector, noise as mnoise
 
 from .common import rng

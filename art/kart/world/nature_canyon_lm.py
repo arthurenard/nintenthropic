@@ -6,8 +6,8 @@ import math
 
 from mathutils import Vector as V, noise
 
-from naturekit import Model, empty, grad_z, hexc, mix, mul, post, rod, smoothstep, varied, TAU
-from nature_canyon import STRATA, strata
+from naturekit import Model, empty, grad_z, hexc, mix, post, rod, smoothstep, varied, TAU
+from nature_canyon import strata
 
 
 def n3(x, y, z, seed=0.0):
@@ -173,7 +173,7 @@ def water_tower():
     for q in range(22):
         z = 0.7 + q * 0.8
         f = z / 18.0
-        rod(m, (2.6 + 0.4 * 0 - 0.4 * f, -3.6 + 0.4 * f, z), (3.0 - 0.4 * f, -3.6 + 0.4 * f, z), 0.04, hexc("#6b7480"))
+        rod(m, (2.6 - 0.4 * f, -3.6 + 0.4 * f, z), (3.0 - 0.4 * f, -3.6 + 0.4 * f, z), 0.04, hexc("#6b7480"))
     # The tank: a wooden barrel, staves running up it, iron hoops, a conical roof with a finial.
     prof = [(0.0, 18.0), (3.9, 18.0), (4.5, 19.5), (4.9, 22.5), (4.6, 25.5), (4.2, 27.0)]
     m.lathe(prof, 28, (0, 0, 0), varied(lambda p, n: mix(wood_d, wood, 0.35 + 0.5 * smoothstep(18, 27, p.z)), 0.06, 1.3, 6), mod=lambda j, k: 1.0 if j % 2 else 0.985, cap_start=True)

@@ -1,8 +1,7 @@
 /**
- * The frame renderer for the trailer's shooter clips (an adaptation of
- * tools/promo/capture.ts). One clip per page load (?clip=hn-hero ...), stepped
- * from Node one frame at a time (window.promo.step / post), so the footage is
- * smooth whatever the machine's speed:
+ * The frame renderer for the trailer's shooter clips. One clip per page load
+ * (?clip=hn-hero ...), stepped from Node one frame at a time (window.capture.step
+ * / post), so the footage is smooth whatever the machine's speed:
  *
  *  - a game is the real game, run through its dev harness (src/dev/harness.ts,
  *    ?manual=1) with a scripted hand (aim.ts); the hand picture (Pip) is hidden;
@@ -13,7 +12,7 @@
  *    every CSS animation and transition is scrubbed to the simulated time, so
  *    the HUD's pops and fades slow down with the game;
  *  - every sound a game asks for is written down with its simulated time
- *    (window.promo.events()).
+ *    (window.capture.events()).
  *
  * See README.md.
  */
@@ -25,7 +24,6 @@ import { $ } from "../../../src/ui/dom";
 import { Shooter } from "./aim";
 import { DIRECTORS, type Env, type Target } from "./directors";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface AudioEvent {
   /** Simulated seconds since the page's game began. */
   t: number;
@@ -114,10 +112,10 @@ function settle(): void {
   }
 }
 
-class Promo {
+class Capture {
   cfg!: Config;
   ready: Promise<void>;
-  private handy: any = null;
+  private harness: any = null;
   private game: any = null;
   private pip: Pip | null = null;
   private shooter = new Shooter();
@@ -151,13 +149,13 @@ class Promo {
       };
       poll();
     });
-    this.handy = (window as any).__handy;
-    this.game = this.handy.game;
+    this.harness = (window as any).__harness;
+    this.game = this.harness.game;
     this.shooter = new Shooter({ seed: 11, ...(this.director.shooter ?? {}) });
     this.shooter.place(this.director.rest.x, this.director.rest.y);
     this.pip = new Pip();
     // Note what the game asks the HUD for (the harness keeps a log of it, but only its last 2000 calls).
-    const log = this.handy.hud.log as { m: string; a: unknown[] }[];
+    const log = this.harness.hud.log as { m: string; a: unknown[] }[];
     const push = log.push.bind(log);
     log.push = (...entries) => {
       for (const e of entries) {
@@ -183,7 +181,7 @@ class Promo {
     const t = a * dt;
     simT = t;
     const env: Env = {
-      handy: this.handy,
+      harness: this.harness,
       game: this.game,
       t,
       dt,
@@ -206,21 +204,21 @@ class Promo {
     this.shooter.advanceTick(dt);
     const shown = this.shooter.shown;
     this.lastAim = { x: this.shooter.x, y: this.shooter.y };
-    const mouse = this.handy.mouse;
+    const mouse = this.harness.mouse;
     mouse.aimAt(shown.x, shown.y);
     if (fires) {
       mouse.fire();
       this.notes.push({ t: env.local, what: "fire" });
     }
     if (this.rate === 60) {
-      this.handy.advance(1 / 60, true);
+      this.harness.advance(1 / 60, true);
     } else {
       // Slow motion: the harness steps 1/60 s at the least, so step the game by hand, as it does.
       this.simNow += 1000 / this.rate;
       const aim = mouse.sample(this.simNow);
       this.game.update(1 / this.rate, this.simNow, aim);
       this.game.render();
-      this.handy.crosshair.draw(aim, this.simNow, null);
+      this.harness.crosshair.draw(aim, this.simNow, null);
     }
   }
 
@@ -263,8 +261,8 @@ class Promo {
   }
   /** For tuning: the harness's HUD log. */
   hudLog(): unknown[] {
-    return this.handy?.hud?.log ?? [];
+    return this.harness?.hud?.log ?? [];
   }
 }
 
-(window as any).promo = new Promo();
+(window as any).capture = new Capture();

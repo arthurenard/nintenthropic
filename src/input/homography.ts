@@ -1,6 +1,6 @@
 /**
- * The map from hand space to screen space, and fitting it (a port of the
- * desktop's homography.py).
+ * The map from hand space to screen space, and fitting it (ported from
+ * homography.py, in the Python version: git tag `python-final`).
  *
  * Where the camera sits relative to the screen changes the shape of that map. A
  * webcam above a laptop screen sees a very different sweep from one off to the
@@ -9,7 +9,7 @@
  * that; an affine map covers the rotation and shear, which is what the aim
  * check fits from the shots the player takes. Every map is kept as a 3x3
  * homography, row-major, so that a projective map is applied, and its gain
- * measured, exactly as the desktop does.
+ * measured, exactly as the Python version did.
  */
 import type { Point } from "./filter";
 
@@ -31,8 +31,6 @@ export const MAX_CONDITION = 1e3;
  * mirrored: a fingertip a little past the line lands in the opposite corner.
  */
 export const HORIZON = 1e-6;
-
-export const IDENTITY: Matrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 /** The plain axis-aligned map, as a homography: `low` to 0, `high` to 1. */
 export function boxMapping(low: Point, high: Point): Matrix {

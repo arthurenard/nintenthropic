@@ -6,16 +6,8 @@ down +Y (the glTF export turns that into -Z). Left is -X. Facades stand at
 x = +-10 m behind 2.6 m boardwalks; the church closes the street at y ~ 62.
 """
 
-import math
-
-import bpy
-from mathutils import Vector
-
-from .core import Frame, MeshBuilder, rng, collection, tag
 from . import buildings as B
-from . import carpentry as C
 from . import signs as S
-from .materials import lin
 
 L, R = 'L', 'R'
 

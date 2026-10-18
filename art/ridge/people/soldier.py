@@ -23,7 +23,6 @@ from mathutils import Matrix
 from . import env, assemble as AS, parts as PA, wear as W, arms as AR, ghillie as GH
 from charlib import bl, sdf as S, body as BD, head as HD, hands as HN, garments as G, rings as R, skeleton as SK
 from charlib import character as C, pipeline as PL
-from charlib.texture import srgb
 
 log = env.log
 
@@ -157,7 +156,6 @@ def kit_jobs(sockets_M):
     jobs = []
     Mg = sockets_M["socket.gun"][0]
     Ml = sockets_M["socket.hand.L"][0]
-    Mb = sockets_M["socket.back"][0]
 
     def prop(name, field, paint, lo, hi, res, tris, M4, socket, weight):
         M, o = M4[:3, :3], M4[:3, 3]

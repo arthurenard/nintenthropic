@@ -19,7 +19,6 @@ import random
 
 import bmesh
 import bpy
-import numpy as np
 from mathutils import Matrix, Vector
 
 SEED = 1998            # the year the first station module flew
@@ -462,13 +461,6 @@ def orient_normals(ob, eye=None):
     bm.to_mesh(ob.data)
     bm.free()
     ob.data.update()
-
-
-def apply_all(ob):
-    """Apply modifiers and transforms (bake and export want plain meshes)."""
-    bpy.context.view_layer.objects.active = ob
-    for m in list(ob.modifiers):
-        bpy.ops.object.modifier_apply(modifier=m.name)
 
 
 def join(objs, name):

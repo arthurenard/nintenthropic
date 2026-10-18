@@ -26,7 +26,7 @@ const ITEM = ["KeyE", "ShiftLeft", "ShiftRight"];
 const HORN = ["KeyH"];
 const CHEER = ["KeyC"];
 const WAVE = ["KeyV"];
-/** Keys the page would otherwise scroll with (or press a focused button with). */
+/** Keys the page would otherwise scroll with. On a focused button they are left alone, so Space still presses it. */
 const SCROLLS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"]);
 
 /** Full lock per second while a key is held, and coming back to the centre. */

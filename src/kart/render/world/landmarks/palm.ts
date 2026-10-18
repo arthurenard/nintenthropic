@@ -4,14 +4,11 @@
  * Five Finger Circuit: a sunny island shaped like an open hand on a turquoise
  * sea. Sand, palms and bright beach toys, lit by a midday sun, so everything
  * here is solid and colourful; `glow` is only a touch (a lantern, a gem's
- * sparkle), and the one glass piece is the watch crystal.
+ * sparkle), and the glass is the watch crystal and the sandcastle's moat.
  */
 import { Group, Matrix4, Mesh, Quaternion, Vector3 } from "three";
-import { archBand, byHeight, grid, lathe, MeshBuilder, mixRgb, ramp, rgb, rockBlob, scaleRgb, shapes, stripes, torus, tube, xf, type Rgb, type V3 } from "./kit";
+import { archBand, byHeight, grid, lathe, MeshBuilder, mixRgb, orient, ramp, rgb, rockBlob, scaleRgb, shapes, stamp, stripes, torus, tube, xf, type Rgb, type V3 } from "./kit";
 import type { Halo, HazardSpec, LandmarkSpec, MovingPart } from "./types";
-
-export const LANDMARKS: Record<string, LandmarkSpec> = {};
-export const HAZARDS: Record<string, HazardSpec> = {};
 
 const TAU = Math.PI * 2;
 
@@ -45,43 +42,30 @@ const WHITE = rgb("#fffaf0");
 const GOLD = rgb("#ffc233");
 const GOLD_DARK = rgb("#b8801a");
 const DARK = rgb("#2a2018");
+const STEEL_GREY = rgb("#8a8a98");
 const G_WARM: Rgb = [3.4, 2.1, 0.9];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** A pseudo random number from an integer, for scatter that must not move between builds. */
 const hash = (i: number): number => {
   const h = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return h - Math.floor(h);
 };
 
-/** Copies every triangle of `src` into `dst` through a matrix. */
-function stamp(dst: MeshBuilder, src: MeshBuilder, m: Matrix4): void {
-  const p = src.position;
-  const c = src.color;
-  const e = m.elements;
-  const at = (i: number): V3 => [
-    e[0]! * p[i]! + e[4]! * p[i + 1]! + e[8]! * p[i + 2]! + e[12]!,
-    e[1]! * p[i]! + e[5]! * p[i + 1]! + e[9]! * p[i + 2]! + e[13]!,
-    e[2]! * p[i]! + e[6]! * p[i + 1]! + e[10]! * p[i + 2]! + e[14]!,
-  ];
-  for (let i = 0; i < p.length; i += 9) {
-    dst.tri(at(i), at(i + 3), at(i + 6), [c[i]!, c[i + 1]!, c[i + 2]!], [c[i + 3]!, c[i + 4]!, c[i + 5]!], [c[i + 6]!, c[i + 7]!, c[i + 8]!]);
-  }
-}
-
-const _up = new Vector3(0, 1, 0);
-const _q = new Quaternion();
-
-/** A unit shape stood on `pos` with its +y along `dir`. */
-function orient(b: MeshBuilder, shape: ReturnType<typeof shapes.cone>, pos: V3, dir: V3, sx: number, sy: number, sz: number, paint: Rgb | { bottom: Rgb; top: Rgb }): void {
-  const d = new Vector3(dir[0], dir[1], dir[2]).normalize();
-  _q.setFromUnitVectors(_up, d);
-  b.add(shape, new Matrix4().compose(new Vector3(pos[0] + d.x * sy * 0.5, pos[1] + d.y * sy * 0.5, pos[2] + d.z * sy * 0.5), _q, new Vector3(sx, sy, sz)), paint);
-}
-
 /** A mound of sand, wide and low, to bed a thing into the ground. */
 function sandMound(b: MeshBuilder, cx: number, cz: number, r: number, h: number, segments = 12): void {
   lathe(b, [[0, -1.2], [r, -1.2], [r * 0.97, -0.1], [r * 0.7, h * 0.55], [r * 0.38, h * 0.9], [0, h]], { at: [cx, 0, cz], segments, shade: byHeight(-0.2, h, SAND_DARK, SAND_LIGHT), caps: "top" });
+}
+
+/** A five-armed starfish lying flat. */
+function starfish(b: MeshBuilder, x: number, z: number, col: Rgb, r = 1.0): void {
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * TAU + 0.4;
+    b.tri([x, 0.2, z], [x + Math.cos(a - 0.4) * r * 0.42, 0.14, z + Math.sin(a - 0.4) * r * 0.42], [x + Math.cos(a) * r, 0.06, z + Math.sin(a) * r], col, col, scaleRgb(col, 0.8));
+    b.tri([x, 0.2, z], [x + Math.cos(a) * r, 0.06, z + Math.sin(a) * r], [x + Math.cos(a + 0.4) * r * 0.42, 0.14, z + Math.sin(a + 0.4) * r * 0.42], col, scaleRgb(col, 0.8), col);
+  }
+  b.blob(x, 0.2, z, 0.2 * r, 0.1 * r, 0.2 * r, mixRgb(col, WHITE, 0.4), 0);
 }
 
 /** Rich glossy colours for a beach ball panel number. */
@@ -142,7 +126,7 @@ function frond(b: MeshBuilder, base: V3, az: number, len: number, rise: number, 
   }
 }
 
-LANDMARKS["palm-tree"] = {
+const palmTree: LandmarkSpec = {
   footprint: 6,
   build() {
     const lit = new MeshBuilder();
@@ -157,7 +141,7 @@ LANDMARKS["palm-tree"] = {
     tube(lit, path, { radius: (t) => 0.98 - 0.46 * t, sides: 7, shade: (_p, i) => (i % 2 === 0 ? TRUNK_A : TRUNK_B) });
     lit.blob(0, 0.2, 0, 1.5, 1.0, 1.5, ramp(TRUNK_B, TRUNK_A), 0);
     sandMound(lit, 0, 0, 4.2, 1.1);
-    // The crown: ten fronds, a few young ones standing up, and five coconuts, turning as one on the top.
+    // The crown: eleven fronds, a few young ones standing up, and five coconuts, turning as one on the top.
     const top = path[path.length - 1]!;
     const crown = new MeshBuilder();
     crown.blob(top[0], top[1] + 0.2, top[2], 0.85, 0.7, 0.85, ramp(COCONUT, TRUNK_B), 0);
@@ -214,7 +198,12 @@ function thatchSide(b: MeshBuilder, x0: number, x1: number, zEave: number, yEave
   }
 }
 
-LANDMARKS["beach-hut"] = {
+/** Sand piled round the stilts. */
+function sandSkirt(b: MeshBuilder): void {
+  lathe(b, [[0, -1.2], [8, -1.2], [8.2, -0.6], [7.6, -0.1]], { at: [0, 0, 1], segments: 12, shade: byHeight(-1.2, 0, SAND_DARK, SAND), caps: "bottom" });
+}
+
+const beachHut: LandmarkSpec = {
   footprint: 9,
   build() {
     const lit = new MeshBuilder();
@@ -240,7 +229,7 @@ LANDMARKS["beach-hut"] = {
       const x = -4 + i * 0.47;
       if (x > -1.1 && x < 1.1) continue; // the doorway
       const inWindow = x > 1.7 && x < 3.5;
-      pole(x, inWindow ? F + 0.3 : F + 0.3, inWindow ? 3.9 : wallTop, 2.2, i);
+      pole(x, F + 0.3, inWindow ? 3.9 : wallTop, 2.2, i);
       if (inWindow) pole(x, 5.5, wallTop, 2.2, i);
     }
     lit.box(0, 3.5, -3.0, 8.4, 0.2, 0.2, rgb("#7a5a2a"));
@@ -258,7 +247,7 @@ LANDMARKS["beach-hut"] = {
     grid(lit, sh, (_p, i) => (i === 0 ? scaleRgb(CORAL, 0.8) : CORAL));
     lit.rod([1.8, 4.5, 3.9], [1.8, 2.7, 3.9], 0.18, WOOD);
     lit.box(2.6, 5.0, 3.1, 1.8, 0.1, 0.1, WHITE);
-    // The porch: deck, railing posts, steps, a ladder.
+    // The porch railing: two posts and two rails.
     for (const x of [-4.1, 4.1]) lit.post(x, F + 0.2, 5.2, 0.24, 3.4, ramp(WOOD_DARK, WOOD), 6);
     lit.box(0, F + 1.3, 5.2, 8.2, 0.2, 0.2, WOOD);
     lit.box(0, F + 0.7, 5.2, 8.2, 0.14, 0.2, WOOD);
@@ -269,7 +258,7 @@ LANDMARKS["beach-hut"] = {
       lit.tri([s * 4.8, 6.1, 3.7], [s * 4.8, 6.1, -3.6], [s * 4.8, 9.2, -0.1], THATCH_B, THATCH_B, THATCH_A);
     }
     lit.box(0, 9.55, -0.1, 10.2, 0.5, 0.9, ramp(THATCH_B, THATCH_A));
-    // A rope ladder-style ladder from the sand to the deck, left of the porch.
+    // A wooden ladder from the sand to the deck, left of the porch.
     for (const x of [-2.6, -1.4]) lit.rod([x, -1.0, 7.4], [x, F + 0.8, 5.5], 0.2, WOOD);
     for (let q = 0; q < 5; q++) {
       const t = (q + 0.5) / 5;
@@ -306,11 +295,6 @@ LANDMARKS["beach-hut"] = {
   },
 };
 
-/** Sand piled round the stilts. */
-function sandSkirt(b: MeshBuilder): void {
-  lathe(b, [[0, -1.2], [8, -1.2], [8.2, -0.6], [7.6, -0.1]], { at: [0, 0, 1], segments: 12, shade: byHeight(-1.2, 0, SAND_DARK, SAND), caps: "bottom" });
-}
-
 // ─── Surfboards ──────────────────────────────────────────────────────────────
 
 /** A surfboard standing on its tail (y up the board, x across, deck facing +z) with a lean, two colour gradient, stripes, stringer and fins. */
@@ -340,13 +324,12 @@ function surfboard(b: MeshBuilder, x: number, z: number, y0: number, L: number, 
     rowsTop.push(rt);
     rowsBot.push(rb);
   }
-  const paint = (p: V3, i: number, j: number): Rgb => {
+  const paint = (_p: V3, i: number, j: number): Rgb => {
     const t = i / N;
     const u = -1 + (2 * j) / M;
     if (Math.abs(u) < 0.13) return WHITE;
     const bandStripe = (t > 0.22 && t < 0.27) || (t > 0.7 && t < 0.75);
     if (bandStripe) return stripe;
-    void p;
     const g = Math.min(1, Math.max(0, t * 1.1 - 0.05));
     return g < 0.5 ? mixRgb(a, SAND_LIGHT, g * 1.1) : mixRgb(mixRgb(a, SAND_LIGHT, 0.55), c, (g - 0.5) * 2);
   };
@@ -360,18 +343,16 @@ function surfboard(b: MeshBuilder, x: number, z: number, y0: number, L: number, 
     }
   }
   // Fins stand off the back, near the tail.
-  const finY = y0 + 0.2 * L;
   const finLen = 0.16 * L;
   const offs = fins === 3 ? [-0.38, 0, 0.38] : [0];
   offs.forEach((o, k) => {
     const base = P(o * 1.2, 0.16 + (k === 1 ? 0.0 : 0.02), -0.3);
     const h = k === 1 || fins === 1 ? 0.2 * L * 0.4 : 0.14 * L * 0.4;
-    b.add(shapes.cone(4), xf(base[0], base[1] + finLen * 0.5 * 0.0, base[2] - h * 0.5, 0.28, h, finLen, 0, -Math.PI / 2), ramp(scaleRgb(a, 0.7), mixRgb(a, WHITE, 0.2)));
+    b.add(shapes.cone(4), xf(base[0], base[1], base[2] - h * 0.5, 0.28, h, finLen, 0, -Math.PI / 2), ramp(scaleRgb(a, 0.7), mixRgb(a, WHITE, 0.2)));
   });
-  void finY;
 }
 
-LANDMARKS.surfboard = {
+const surfboards: LandmarkSpec = {
   footprint: 6,
   build() {
     const lit = new MeshBuilder();
@@ -396,19 +377,9 @@ LANDMARKS.surfboard = {
   },
 };
 
-/** A five-armed starfish lying flat. */
-function starfish(b: MeshBuilder, x: number, z: number, col: Rgb, r = 1.0): void {
-  for (let k = 0; k < 5; k++) {
-    const a = (k / 5) * TAU + 0.4;
-    b.tri([x, 0.2, z], [x + Math.cos(a - 0.4) * r * 0.42, 0.14, z + Math.sin(a - 0.4) * r * 0.42], [x + Math.cos(a) * r, 0.06, z + Math.sin(a) * r], col, col, scaleRgb(col, 0.8));
-    b.tri([x, 0.2, z], [x + Math.cos(a) * r, 0.06, z + Math.sin(a) * r], [x + Math.cos(a + 0.4) * r * 0.42, 0.14, z + Math.sin(a + 0.4) * r * 0.42], col, scaleRgb(col, 0.8), col);
-  }
-  b.blob(x, 0.2, z, 0.2 * r, 0.1 * r, 0.2 * r, mixRgb(col, WHITE, 0.4), 0);
-}
-
 // ─── Sandcastle ──────────────────────────────────────────────────────────────
 
-LANDMARKS.sandcastle = {
+const sandcastle: LandmarkSpec = {
   footprint: 13,
   build() {
     const lit = new MeshBuilder();
@@ -477,11 +448,9 @@ LANDMARKS.sandcastle = {
   },
 };
 
-const STEEL_GREY = rgb("#8a8a98");
-
 // ─── Beach towel ─────────────────────────────────────────────────────────────
 
-LANDMARKS["beach-towel"] = {
+const beachTowel: LandmarkSpec = {
   footprint: 11,
   build() {
     const lit = new MeshBuilder();
@@ -562,7 +531,7 @@ LANDMARKS["beach-towel"] = {
       lit.blob(x, 0.3 + tilt, z, 0.62, 0.1, 1.4, WHITE, 0, yaw);
       const dx = Math.sin(yaw);
       const dz = Math.cos(yaw);
-      lit.rod([x + dx * 0.7, 0.55 + tilt, z + dz * 0.7], [x - 0.6 * dz, 0.7 + tilt, z + 0.6 * dx - dz * 0.0], 0.15, YELLOW);
+      lit.rod([x + dx * 0.7, 0.55 + tilt, z + dz * 0.7], [x - 0.6 * dz, 0.7 + tilt, z + 0.6 * dx], 0.15, YELLOW);
       lit.rod([x + dx * 0.7, 0.55 + tilt, z + dz * 0.7], [x + 0.6 * dz, 0.7 + tilt, z - 0.6 * dx], 0.15, YELLOW);
     }
     // The beach ball, standing on the towel, and a little parasol in the corner.
@@ -593,21 +562,21 @@ function gem(b: MeshBuilder, glow: MeshBuilder, x: number, y: number, z: number,
   glow.add(shapes.cylinder(8), xf(x, y + 5.22 * s, z, 1.7 * s, 0.1 * s, 1.36 * s), [2.2, 2.6, 3.4]);
 }
 
-LANDMARKS["giant-ring"] = {
+const giantRing: LandmarkSpec = {
   span: true,
   defaultSpan: 10,
   build() {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const halos: Halo[] = [];
-    // Centre 9 m up, the band 3.3 m wide and 2.2 m deep: the opening is 25.7 m wide at road level and 24.7 m high.
+    // Centre 9 m up, the band 2.9 m wide and 2.2 m deep: the opening is 25.7 m wide at road level and 24.7 m high.
     // The lower part sinks into the ground, so the band is only built down to just below the road.
     const C = 9;
     const RC = 16.8;
     const reach = (128 * Math.PI) / 180;
     const NSEG = 40;
     const prof: [number, number, number][] = [
-      // radial offset, z, shade code (0 outer groove, 1 bevel, 2 inner, 3 flat)
+      // radial offset, z, shade code (0 outer groove, 1 bevel, 2 inner)
       [1.1, 0.7, 0],
       [1.1, -0.7, 0],
       [0.85, -1.45, 1],
@@ -678,7 +647,23 @@ LANDMARKS["giant-ring"] = {
 
 // ─── Wristwatch ──────────────────────────────────────────────────────────────
 
-LANDMARKS.wristwatch = {
+/** 5 x 7 block digits (1 2 3 6 9) as boxes, reading left to right along +x. */
+const DIGITS: Record<string, readonly (readonly [number, number, number, number])[]> = {
+  "1": [[2, 0, 3, 7], [1, 5, 2, 6], [1, 0, 4, 1]],
+  "2": [[0, 6, 5, 7], [4, 4, 5, 6], [0, 3, 5, 4], [0, 1, 1, 3], [0, 0, 5, 1]],
+  "3": [[0, 6, 5, 7], [1, 3, 5, 4], [0, 0, 5, 1], [4, 0, 5, 7]],
+  "6": [[0, 0, 1, 7], [1, 6, 5, 7], [1, 3, 5, 4], [1, 0, 5, 1], [4, 1, 5, 3]],
+  "9": [[4, 0, 5, 7], [0, 6, 4, 7], [0, 3, 4, 4], [0, 4, 1, 6], [0, 0, 4, 1]],
+};
+
+/** One of the DIGITS as boxes 0.25 m deep: `x` is its left edge, `y` its baseline, `cell` one cell in metres. */
+function blockDigits(b: MeshBuilder, ch: string, x: number, y: number, z: number, cell: number, col: Rgb): void {
+  for (const [c0, r0, c1, r1] of DIGITS[ch] ?? []) {
+    b.box(x + ((c0 + c1) / 2) * cell, y + ((r0 + r1) / 2) * cell, z, (c1 - c0) * cell, (r1 - r0) * cell, 0.25, col);
+  }
+}
+
+const wristwatch: LandmarkSpec = {
   span: true,
   defaultSpan: 14,
   build(ctx) {
@@ -699,7 +684,7 @@ LANDMARKS.wristwatch = {
       // Centre line (an ellipse over straight legs of 2 m) at angle phi from the right foot over the top.
       const ca = Math.cos(phi);
       const sa = Math.sin(phi);
-      const ex = (a + off * 0.0) * ca;
+      const ex = a * ca;
       const ey = 2 + (bb - 2) * sa;
       const tx = -(a * sa);
       const ty = (bb - 2) * ca;
@@ -747,7 +732,7 @@ LANDMARKS.wristwatch = {
     lit.add(shapes.cylinder(10), xf(R + 0.9, CY, 0, 1.2, 1.7, 1.2, 0, 0, Math.PI / 2), ramp(GOLD_DARK, GOLD));
     lit.add(shapes.cylinder(10), xf(R + 1.9, CY, 0, 1.0, 0.9, 1.0, 0, 0, Math.PI / 2), CHROME);
     for (const s of [-1, 1]) lit.rod([Math.cos(s * 0.55) * (R + 0.2), CY + Math.sin(s * 0.55) * (R + 0.2), 0], [Math.cos(s * 0.55) * (R + 1.5), CY + Math.sin(s * 0.55) * (R + 1.5), 0], 0.7, CHROME);
-    // The dial: hour blocks, four numerals, a minute track, and the hands at ten past ten.
+    // The dial: hour blocks, four numerals, and the hands at ten past ten.
     const DZ = -1.3;
     for (let k = 0; k < 12; k++) {
       const ang = (k / 12) * TAU;
@@ -777,7 +762,7 @@ LANDMARKS.wristwatch = {
     hand(60, 8.0, 1.6, 0.5, DZ - 0.95, rgb("#17235e"));
     hand(160, 8.6, 2.0, 0.2, DZ - 1.25, RED);
     lit.blob(0, CY, DZ - 1.35, 0.55, 0.55, 0.3, GOLD, 0);
-    // A tiny logo window and a date window.
+    // A tiny logo window.
     lit.box(0, CY - 3.2, DZ - 0.1, 2.0, 1.1, 0.2, WHITE);
     const halos: Halo[] = [];
     halos.push({ x: 0, y: CY + 6, z: -4.6, size: 7, colour: [2.4, 2.6, 3.2], alpha: 0.35, twinkle: 0.5 });
@@ -785,24 +770,9 @@ LANDMARKS.wristwatch = {
   },
 };
 
-/** 5 x 7 block digits (1 2 3 6 9) as boxes, reading left to right along +x. */
-const DIGITS: Record<string, readonly (readonly [number, number, number, number])[]> = {
-  "1": [[2, 0, 3, 7], [1, 5, 2, 6], [1, 0, 4, 1]],
-  "2": [[0, 6, 5, 7], [4, 4, 5, 6], [0, 3, 5, 4], [0, 1, 1, 3], [0, 0, 5, 1]],
-  "3": [[0, 6, 5, 7], [1, 3, 5, 4], [0, 0, 5, 1], [4, 0, 5, 7]],
-  "6": [[0, 0, 1, 7], [1, 6, 5, 7], [1, 3, 5, 4], [1, 0, 5, 1], [4, 1, 5, 3]],
-  "9": [[4, 0, 5, 7], [0, 6, 4, 7], [0, 3, 4, 4], [0, 4, 1, 6], [0, 0, 4, 1]],
-};
-
-function blockDigits(b: MeshBuilder, ch: string, x: number, y: number, z: number, cell: number, col: Rgb): void {
-  for (const [c0, r0, c1, r1] of DIGITS[ch] ?? []) {
-    b.box(x + ((c0 + c1) / 2) * cell, y + ((r0 + r1) / 2) * cell, z, (c1 - c0) * cell, (r1 - r0) * cell, 0.25, col);
-  }
-}
-
 // ─── Hazards ─────────────────────────────────────────────────────────────────
 
-HAZARDS.coconut = {
+const coconut: HazardSpec = {
   build(ctx) {
     const b = new MeshBuilder();
     // A hairy brown nut: a lumpy ball with a pale husk patch, three dark eyes and a few stray fibres.
@@ -833,7 +803,7 @@ HAZARDS.coconut = {
   },
 };
 
-HAZARDS["beach-ball"] = {
+const beachBallHazard: HazardSpec = {
   build(ctx) {
     const b = beachBall(1.4);
     const inner = new Group();
@@ -851,3 +821,14 @@ HAZARDS["beach-ball"] = {
   },
 };
 
+export const LANDMARKS: Record<string, LandmarkSpec> = {
+  "palm-tree": palmTree,
+  "beach-hut": beachHut,
+  surfboard: surfboards,
+  sandcastle,
+  "beach-towel": beachTowel,
+  "giant-ring": giantRing,
+  wristwatch,
+};
+
+export const HAZARDS: Record<string, HazardSpec> = { coconut, "beach-ball": beachBallHazard };

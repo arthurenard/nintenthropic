@@ -2,8 +2,9 @@
 
 What goes where:
 - valley.glb: the terrain chunks (a plain material whose base colour points
-  at terrain/color.webp through UV1 - the game swaps in its terrain shader,
-  the inputs of which terrain.splat's extras list), the buildings, bridge,
+  at terrain/color.webp through the log-polar UV1, which is the file's
+  TEXCOORD_0 once the tiles' UV0 is dropped - the game swaps in its terrain
+  shader, the inputs of which terrain.splat's extras list), the buildings, bridge,
   dam and props (PBR materials from the tiles, baked AO on UV1 when the bake
   has run), the roads, the water, the forest's impostor cards with every tree
   as EXT_mesh_gpu_instancing (patched in after Blender's export), and every

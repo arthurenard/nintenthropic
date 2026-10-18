@@ -4,9 +4,9 @@
  * race, and three's own lookup table for glossy materials (one texture for
  * every renderer there ever is, in r186). A renderer that has drawn one of
  * them leaves a dispose listener on it, and the listener keeps the whole
- * renderer (its scene graph, its caches) for as long as the thing lives: every
- * race used to leave its renderer behind. Disposing them as the renderer goes
- * lets go of it; whatever draws them next uploads them again.
+ * renderer (its scene graph, its caches) for as long as the thing lives, so
+ * without this every race would leave its renderer behind. Disposing them as
+ * the renderer goes lets go of it; whatever draws them next uploads them again.
  */
 import type { Material, Mesh, Object3D, Texture, WebGLRenderer } from "three";
 

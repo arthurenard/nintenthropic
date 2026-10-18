@@ -7,8 +7,9 @@
  * Every day world gets a warm sun and a cool sky fill (the split that makes
  * a render read as sunlight, not as a lamp), a little extra vibrance, and a
  * bloom that only catches what is brighter than white: boosts, sparks,
- * lamps, the sun's glint. The night worlds keep their dark mood by pulling
- * the exposure down and letting the lamps and emissives carry the picture.
+ * lamps, the sun's glint. The night worlds keep their dark mood in their own
+ * colours, with the exposure a touch up and the lamps and emissives carrying
+ * the picture.
  */
 import type { TrackTheme } from "../../track/geometry";
 

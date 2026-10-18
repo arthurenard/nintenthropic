@@ -1,4 +1,4 @@
-import { HintLine as Line } from "../../engine/rules/hints";
+import { offScreenHint } from "../../engine/rules/hints";
 import type { InputKind, Settings } from "../../engine/types";
 
 /**
@@ -79,21 +79,13 @@ export function tipText(id: TipId, input: InputKind | undefined, scope: Settings
 /**
  * A lesson is learned when it has been shown - or, for the scope, which is
  * shown at the start of every game until then, when the player has looked
- * through it by themselves.
+ * through it by themselves (the game's HintLine is made with these).
  */
-const LEARNED_BY_DOING: readonly TipId[] = ["ridge.scope"];
-
-export class HintLine extends Line {
-  constructor(seen: Set<string>) {
-    super(seen, LEARNED_BY_DOING);
-  }
-}
+export const LEARNED_BY_DOING: readonly TipId[] = ["ridge.scope"];
 
 /** How to reload, in the player's terms (the right button scopes in this game, so a mouse reloads with R). */
 export function reloadHint(input: InputKind | undefined): string {
-  if (input === "mouse") return "Press R to reload.";
-  if (input === "touch") return "Tap with two fingers to reload.";
-  return "Point off the screen to reload.";
+  return offScreenHint(input, "reload", "Press R");
 }
 
 /**

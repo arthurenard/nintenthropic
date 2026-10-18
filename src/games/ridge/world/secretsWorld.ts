@@ -10,18 +10,18 @@
 import { Box3, CircleGeometry, InstancedMesh, Matrix4, MeshBasicMaterial, Quaternion, Vector3, type Object3D } from "three";
 import type { Sound } from "../../../engine/world/sound";
 import { Polyline } from "../rules/path";
+import { SPEED_OF_SOUND } from "../rules/tuning";
 import type { V3 } from "../rules/types";
 import type { Effects } from "./effects";
 import type { Heightfield } from "./heightfield";
 import type { ValleySecrets } from "./valley";
 
-const SPEED_OF_SOUND = 343;
 const tmp = new Vector3();
 
 export class SecretsWorld {
   private bellSwing = 0;
   private bellSpin = 0;
-  private cheese: { line: Polyline; s: number; speed: number; bounce: number; spin: number; done: boolean } | null = null;
+  private cheese: { line: Polyline; s: number; speed: number; spin: number; done: boolean } | null = null;
   private readonly cheeseHome: { parent: Object3D | null; position: Vector3; quaternion: Quaternion } | null;
   private yetiT = -1;
   private readonly yetiHome: Vector3 | null;
@@ -104,7 +104,7 @@ export class SecretsWorld {
     this.s.cheese!.rotation.set(Math.PI / 2, 0, 0);
     const root = this.s.yeti?.parent ?? this.s.bell?.parent ?? null;
     root?.add(c);
-    this.cheese = { line: new Polyline([{ x: start.x, y: start.y, z: start.z }, ...this.cheesePath.slice(1)]), s: 0, speed: 0.5, bounce: 0, spin: 0, done: false };
+    this.cheese = { line: new Polyline([{ x: start.x, y: start.y, z: start.z }, ...this.cheesePath.slice(1)]), s: 0, speed: 0.5, spin: 0, done: false };
     this.sound.at("ridge_cheese_roll", start, 1);
     return this.late(start);
   }
@@ -151,7 +151,6 @@ export class SecretsWorld {
       c.speed = Math.min(9, c.speed + dt * 3.2);
       c.s += c.speed * dt;
       const p = c.line.pointAt(c.s, { x: 0, y: 0, z: 0 });
-      c.bounce = Math.max(0, c.bounce + dt * 6 - (c.bounce > 0.5 ? 0 : 0)) % 1;
       const hop = Math.abs(Math.sin(c.s * 0.9)) * Math.min(0.6, c.speed * 0.08);
       const ground = this.heightfield.height(p.x, p.z);
       this.s.cheese.position.set(p.x, Math.max(ground, p.y) + 0.42 + hop, p.z);

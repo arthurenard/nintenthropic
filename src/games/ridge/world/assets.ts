@@ -63,7 +63,7 @@ export async function loadAssets(ctx: GameContext, onProgress: (fraction: number
   const [valleyAsset, soldier, civilian, vehicles, animals] = await Promise.all([model("valley"), model("soldier"), model("civilian"), model("vehicles"), model("animals")]);
   const sky = asSky(await art.texture("sky", kit ? () => kit.standInSky() : null));
   const valley = readValley(valleyAsset.scene as Group);
-  const terrainArt = art.real.valley && valley.terrainArt ? await loadTerrainArt(ctx, art.url("valley"), valley.terrainArt, valley.terrainMeshes[0] ?? null) : null;
+  const terrainArt = art.real.valley && valley.terrainArt ? await loadTerrainArt(art.url("valley"), valley.terrainArt, valley.terrainMeshes[0] ?? null) : null;
   return { valley, terrainArt, sky, soldier, civilian, vehicles, animals, real: art.real };
 }
 
@@ -72,8 +72,7 @@ export async function loadAssets(ctx: GameContext, onProgress: (fraction: number
  * them) and its eight tiles, stacked into three texture arrays. The macro
  * colour map is the one the glTF's own terrain material already loaded.
  */
-async function loadTerrainArt(ctx: GameContext, valleyUrl: string, spec: TerrainArtSpec, chunk: Mesh | null): Promise<TerrainArtInputs> {
-  void ctx;
+async function loadTerrainArt(valleyUrl: string, spec: TerrainArtSpec, chunk: Mesh | null): Promise<TerrainArtInputs> {
   const dir = valleyUrl.slice(0, valleyUrl.lastIndexOf("/") + 1);
   // Data, not pictures: decoded exactly as stored - no premultiplying by alpha (a splat's
   // alpha is a weight, zero across most of the valley), no colour conversion - and, like

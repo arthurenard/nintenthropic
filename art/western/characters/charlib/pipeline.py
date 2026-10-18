@@ -14,8 +14,8 @@ import time
 import numpy as np
 import bpy
 from mathutils import Matrix
-from . import bl, abake as AB, materials as MT, skeleton as SK, skin as SKN, anim as A, character as C
-from . import outfits as OF, garments as G, rings as R, body as BD, head as HD, hands as HN, sdf as S
+from . import bl, abake as AB, materials as MT, skin as SKN, anim as A, character as C
+from . import outfits as OF, garments as G, rings as R, head as HD, sdf as S
 from .skeleton import BONE_NAMES
 
 
@@ -219,7 +219,6 @@ def bake_clips(rig, clips, log=log):
     R_ = A.Rig()
     acts = []
     for name, maker in clips.items():
-        t = time.time()
         clip = maker()
         act = A.bake_clip(R_, clip, rig)
         acts.append(act)

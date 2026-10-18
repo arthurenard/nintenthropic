@@ -10,8 +10,8 @@
  * the final lap is the same score at 1.1× the tempo and a semitone up.
  *
  * Parts come in five kinds. Bass, chords and arpeggios are *generated* from
- * the section's chord symbols and a named rhythm (see ./patterns.ts); a
- * melody is written out in a little notation, "e5:2 g5:2 a5:4 | r:4 ...", one
+ * the section's chord symbols: bass and chords from a named rhythm (see
+ * ./patterns.ts), arpeggios from a run of chord-tone indices; a melody is written out in a little notation, "e5:2 g5:2 a5:4 | r:4 ...", one
  * token per note (name, then length in steps; `r` is a rest, `+` stacks a
  * chord, `!` accents, `'` is staccato); drums are rows of characters, one per
  * step ("x...x...": x a hit, X an accent, o a ghost note).
@@ -71,7 +71,7 @@ export interface DrumsPart {
   kind: "drums";
   /** Per drum, one bar of characters (16 for 4/4, 12 for a waltz); a shorter row repeats to fill the bar. */
   groove: Partial<Record<DrumKind, string>>;
-  /** In the last steps of every ``fillEvery``-th bar these rows replace the groove's (right-aligned to the bar's end); the hats stop. */
+  /** In the last steps of every ``fillEvery``-th bar these rows replace the groove's (right-aligned to the bar's end); the hats, shaker and ride stop. */
   fill?: Partial<Record<DrumKind, string>>;
   fillEvery?: number;
   /** A crash on the first beat of the section. */
@@ -280,8 +280,8 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
     for (let b = 0; b < section.bars; b++) bars.push({ start: clock + b * barDur, dur: barDur, beats, bpm: bpm * tempoScale, section: sectionIndex, index: b });
     const barAt = (b: number): ScoreBar => bars[firstBar + b]!;
 
-    /** The time of step ``step`` of bar ``b`` of this section. */
-    const when = (b: number, step: number): number => barAt(b).start + stepOffset(barAt(b), step, swing, 1) * 1; // bpm already scaled in the bar
+    /** The time of step ``step`` of bar ``b`` of this section (the bar's bpm already carries the tempo scale, so none is applied again). */
+    const when = (b: number, step: number): number => barAt(b).start + stepOffset(barAt(b), step, swing, 1);
 
     const slip = (): number => (humanise ? rng.range(-0.005, 0.005) : 0);
     const force = (v: number): number => Math.min(1, Math.max(0.05, v * level * (humanise ? rng.range(0.93, 1.07) : 1)));

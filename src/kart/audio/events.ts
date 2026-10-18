@@ -33,12 +33,13 @@ export interface Order {
 const RADIUS = { big: 45, medium: 32, small: 20 } as const;
 
 function order(cue: string, who: Listener, own: boolean, o: Partial<Order> & { radius?: number } = {}): Order | null {
-  const { radius, ...rest } = o;
+  // `volume` is taken out with `radius`: left in `rest`, it would undo the distance's fall-off below.
+  const { radius, volume, ...rest } = o;
   const reach = own ? 1 : falloff(who.distance, radius ?? RADIUS.medium);
   if (reach <= 0.02) return null;
   return {
     cue,
-    volume: (o.volume ?? 1) * (own ? 1 : 0.8 * reach),
+    volume: (volume ?? 1) * (own ? 1 : 0.8 * reach),
     pan: who.pan,
     distance: own ? 0 : who.distance,
     rate: 1,
@@ -110,7 +111,7 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       if (!who) return [];
       const own = !!localOf(scene, event.kart);
       if (event.item === "blast") return keep(order("kart_blast", who, own, { radius: RADIUS.big, priority: own ? 3 : 1, ...(own ? { duck: { depth: 0.6, hold: 0.5 } } : {}) }));
-      // One bolt on each kart it zaps: the closer ones a moment sooner, so a storm cracks across the pack.
+      // One bolt on each kart it zaps, a few hundredths of a second apart by kart number, so a storm crackles across the pack instead of landing as one bang.
       return keep(order("kart_storm", who, own, { radius: RADIUS.big, priority: own ? 3 : 1, delay: 0.035 * (event.kart % 4), ...(own ? { duck: { depth: 0.5, hold: 1.0 } } : {}) }));
     }
 
@@ -236,12 +237,12 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       // Each kart's horn sits a little differently in pitch, so two honks together are two horns. Dabble has no horn: Dabble quacks.
       const who = hearKart(scene, event.kart);
       const own = !!localOf(scene, event.kart);
-      const duck = scene.racers?.find((racer) => racer.id === event.kart)?.character === "dabble";
-      return who ? keep(order(duck ? "kart_duck" : "kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
+      const quacks = scene.racers?.find((racer) => racer.id === event.kart)?.character === "dabble";
+      return who ? keep(order(quacks ? "kart_duck" : "kart_horn", who, own, { radius: RADIUS.big, rate: 0.88 + ((event.kart * 5) % 8) * 0.04, priority: own ? 3 : 2 })) : [];
     }
 
     case "duck": {
-      // Found: a squeak a beat after the drive-by one, higher, so it is told from it.
+      // Found: the duck squeaks for the kart that reached it, a beat later and pitched up, so it is not taken for Dabble's quack.
       const who = hearKart(scene, event.kart);
       const own = !!localOf(scene, event.kart);
       return who ? keep(order("kart_duck", who, own, { radius: RADIUS.big, rate: 1.3, delay: 0.12, priority: 3 })) : [];

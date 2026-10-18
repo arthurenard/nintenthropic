@@ -50,10 +50,10 @@ so one can be rerun once those before it have run):
 | `poster` | `poster.webp` | 2.5 min |
 | `characters`, `vehicles`, `animals` | `soldier.glb` + `civilian.glb`, `vehicles.glb`, `animals.glb` | see their READMEs |
 
-All the valley stages take about 25 minutes on an M-series Mac (35 when
-it is shared with other bakes); `characters` 5–15 min, `vehicles` a few minutes, `animals`
-10–18 min. With no stage named, all of them run. `--quick` halves every resolution and
-cuts samples for iteration. `RIDGE_REUSE_TERRAIN=1` skips the erosion
+All the valley stages take about 25 minutes on an M-series Mac;
+`characters` 5–15 min, `vehicles` a few minutes, `animals` 10–18 min. With
+no stage named, all of them run. `--quick` halves every resolution and cuts
+samples for iteration. `RIDGE_REUSE_TERRAIN=1` skips the erosion
 simulation when `build/terrain.npz` exists; `RIDGE_REUSE_IMPOSTORS=1` skips
 re-rendering the tree atlases. Output is deterministic (every random draw is
 seeded). The build never plays sound and uses Cycles on the GPU (Metal).
@@ -117,12 +117,11 @@ Splat weights sum to 1 across the eight channels.
 `splat0`, `splat1` and `light` are **lossless** WebP with a straight
 (unassociated) alpha that is data, never a premultiplier; the alpha is
 floored at 1/255 so no encoder throws away the colour under it (read
-`a < 2/255` as 0). Until the second pass they were not: the exported splat
-maps had lost their RGB wherever alpha was 0 and `light.webp`'s RGB was
-premultiplied by its alpha (OpenImageIO treats a fourth channel as a
-premultiplying alpha unless told otherwise). `check.py` now decodes them and
-proves the eight weights sum to 1 and that colour survives under every
-transparent texel, the impostor atlases' included.
+`a < 2/255` as 0). Both take care: a WebP encoder drops the RGB wherever
+alpha is 0, and OpenImageIO treats a fourth channel as a premultiplying alpha
+unless told otherwise. `check.py` decodes them and proves the eight weights
+sum to 1 and that colour survives under every transparent texel, the impostor
+atlases' included.
 
 ### The tiles
 
@@ -388,11 +387,10 @@ the anti-tiling past ~500 m if the frame time needs it.
 `art/ridge/build/review/` (git-ignored): `valley_wide.png`,
 `valley_wide_21x9.png`, the 6× scope views `valley_scope_<site>.png`
 (checkpoint, bridge, chapel, chapel_tower_12x, dam, tunnel, farm, village,
-river, river_far, goat_crag, cliff, yeti, peaks at 3×) — the first pass's
-are kept in `before/` — the people placed in the valley
-`valley_people_*.png`, and the characters' and animals' turnarounds, game
-distance views and clip contact sheets under `people/`, `fauna/` and
-`vehicles/`.
+river, river_far, goat_crag, cliff, yeti, peaks at 3×), the people placed
+in the valley `valley_people_*.png`, and the characters' and animals'
+turnarounds, game distance views and clip contact sheets under `people/`,
+`fauna/` and `vehicles/`.
 
 ## Code map
 

@@ -361,7 +361,6 @@ def shrub(H, rng, spread=1.0, tone="alder"):
     carrying leaf sprays - a rounded mass as wide as it is tall. The
     juniper is a low dense cushion."""
     g = Geo()
-    R = H * 0.55 * spread
     stems = int(rng.integers(6, 11)) if tone != "juniper" else 14
     leaf_s = 0.55 if tone != "juniper" else 0.4
     for k in range(stems):

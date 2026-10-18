@@ -11,7 +11,7 @@ export type ToWorker =
       binary: string;
       model: ArrayBuffer;
       prefer: "GPU" | "CPU";
-      /** How many hands the landmarker looks for: 1 in the shooting games (see input/trust.ts); 2 for Grip Prix's wheel, 4 for two wheels on one camera. */
+      /** How many hands the landmarker looks for: 1 in the shooting games (see input/trust.ts); 2 for each Grip Prix player on the camera. */
       hands?: number;
       /** Detection and presence confidence, 0..1 (0.5 when absent; lower for three or four players on one camera, see handConfidence). */
       confidence?: number;

@@ -9,7 +9,7 @@ type Target = { id: number; role: string; side: string; activity: string; distan
 type Mission = { stage: number; phase: string; rounds: number; score: number };
 
 const eyes = (page: Page, left: number, right: number) =>
-  page.evaluate(([l, r]) => window.handyTest!.eyes(l === -1 ? null : { blinkLeft: l!, blinkRight: r! }), [left, right]);
+  page.evaluate(([l, r]) => window.arcadeTest!.eyes(l === -1 ? null : { blinkLeft: l!, blinkRight: r! }), [left, right]);
 
 const mission = (page: Page) =>
   gameDebug(page, "(() => { const m = debug.mission(); return { stage: m.stage, phase: m.phase, rounds: m.rifle.rounds, score: m.scorer.score }; })()") as Promise<Mission>;
@@ -263,7 +263,7 @@ test("Overwatch Ridge reveals whoever fires at you, with Aim Assist off, and say
   await page.mouse.move(720, 760);
   await gameDebug(page, "debug.still(true)");
   await expect.poll(() => mission(page).then((m) => m.phase), { timeout: 15_000 }).toBe("combat");
-  expect(await page.evaluate(() => (window.handyTest!.snapshot() as unknown as { aimAssist: boolean }).aimAssist)).toBe(false);
+  expect(await page.evaluate(() => (window.arcadeTest!.snapshot() as unknown as { aimAssist: boolean }).aimAssist)).toBe(false);
   // Aim Assist off: nobody is marked as they stand.
   await page.waitForTimeout(1_500);
   await expect(page.locator(".spot")).toHaveCount(0);
@@ -572,7 +572,7 @@ test("Settings' Eye Test with the real camera: your own picture, the face landma
   expect(await picture.evaluate((video: HTMLVideoElement) => video.videoWidth > 0 && !video.paused)).toBe(true);
   // The face is read on every frame while the test runs, in the tracker's worker.
   await expect
-    .poll(async () => (await page.evaluate(() => window.handyTest!.snapshot() as unknown as { tracker: { stats: { face: { frames: number } | null } } | null })).tracker?.stats.face?.frames ?? 0, {
+    .poll(async () => (await page.evaluate(() => window.arcadeTest!.snapshot() as unknown as { tracker: { stats: { face: { frames: number } | null } } | null })).tracker?.stats.face?.frames ?? 0, {
       timeout: 30_000,
     })
     .toBeGreaterThan(10);

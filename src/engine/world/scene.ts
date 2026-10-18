@@ -1,20 +1,25 @@
 /**
  * Small pieces every realistic world's stage needs: a sun whose shadow map
  * covers only the part of the world that matters, a shadow resolution for
- * each quality tier, and letting go of a scene's GPU memory.
+ * each quality tier, every shader and texture made ready before play, and
+ * letting go of a scene's GPU memory.
  */
 import {
   Box3,
   Vector3,
   type BufferGeometry,
+  type Camera,
   type DirectionalLight,
   type InstancedMesh,
   type Material,
+  type Mesh,
   type Object3D,
   type ShaderMaterial,
   type SkinnedMesh,
   type Texture,
+  type WebGLRenderer,
 } from "three";
+import { breathe } from "../round";
 import type { Quality } from "../types";
 
 /**
@@ -54,6 +59,48 @@ export function shadowMapSize(tier: Quality["tier"]): number {
   return tier === "high" ? 2048 : tier === "medium" ? 1024 : 0;
 }
 
+/**
+ * Every shader compiled and every texture uploaded before play: a shader
+ * first compiled in the middle of a fight is a dropped frame at the worst
+ * time. Whatever is hidden is shown for it and hidden again after. The
+ * textures go up a few at a time between breaths: uploaded all in the first
+ * frame they froze the page (and its progress bar) for a quarter of a
+ * second. Then `firstFrame` draws one real frame with everything shown, since
+ * the shadow pass's depth shaders and the post chain only compile when they
+ * are drawn. It is an optimisation: if it fails, the first frames of play do
+ * the work instead.
+ */
+export async function warmUp(renderer: WebGLRenderer, scene: Object3D, camera: Camera, firstFrame: () => void): Promise<void> {
+  const hidden: Object3D[] = [];
+  scene.traverse((o) => {
+    if (!o.visible) {
+      hidden.push(o);
+      o.visible = true;
+    }
+  });
+  try {
+    const textures = new Set<Texture>();
+    scene.traverse((o) => {
+      const m = (o as Mesh).material;
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) addTextures(mat, (t) => textures.add(t));
+    });
+    let since = performance.now();
+    for (const t of textures) {
+      renderer.initTexture(t);
+      if (performance.now() - since > 40) {
+        await breathe();
+        since = performance.now();
+      }
+    }
+    await renderer.compileAsync(scene, camera);
+    await breathe();
+    firstFrame();
+  } catch {
+    // Compiling ahead is an optimisation; the first frames will do it otherwise.
+  }
+  for (const o of hidden) o.visible = false;
+}
+
 /** Something that holds GPU memory and lets go of it. */
 export interface Disposable {
   dispose(): void;
@@ -75,17 +122,21 @@ export function disposablesUnder(root: Object3D, into = new Set<Disposable>()): 
     if (skeleton) into.add(skeleton);
     if (!part.material) return;
     for (const mat of Array.isArray(part.material) ? part.material : [part.material]) {
-      for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) into.add(v as Texture);
-      const uniforms = (mat as Partial<ShaderMaterial>).uniforms;
-      if (uniforms) {
-        for (const { value } of Object.values(uniforms)) {
-          for (const v of Array.isArray(value) ? (value as unknown[]) : [value]) if ((v as Texture | null)?.isTexture) into.add(v as Texture);
-        }
-      }
+      addTextures(mat, (t) => into.add(t));
       into.add(mat);
     }
   });
   return into;
+}
+
+/** Every texture a material draws with: its own maps, and any its shader keeps in its uniforms. */
+function addTextures(mat: Material, add: (texture: Texture) => void): void {
+  for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) add(v as Texture);
+  const uniforms = (mat as Partial<ShaderMaterial>).uniforms;
+  if (!uniforms) return;
+  for (const { value } of Object.values(uniforms)) {
+    for (const v of Array.isArray(value) ? (value as unknown[]) : [value]) if ((v as Texture | null)?.isTexture) add(v as Texture);
+  }
 }
 
 /**

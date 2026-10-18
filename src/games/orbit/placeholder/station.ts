@@ -15,7 +15,6 @@ import {
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
-  Color,
   CylinderGeometry,
   Group,
   LatheGeometry,
@@ -468,6 +467,5 @@ export function buildPlaceholderStation(): Group {
   planet.quaternion.copy(planetRotation());
   Object.assign(planet.userData, { radius_m: R_KM * 1000, altitude_m: ALT_KM * 1000, hi_lonlat: [...PLACEHOLDER_HI], storm_lonlat: [...PLACEHOLDER_STORM] });
   root.add(planet);
-  void Color;
   return root;
 }

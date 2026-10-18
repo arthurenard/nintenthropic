@@ -2,8 +2,8 @@
  * The loading screen: while a race's world is built, the track's postcard
  * fills the window (blurred and darkened, so the words keep their contrast),
  * with the track's name big, its cup (and, in a Grand Prix, which race of the
- * cup this is), a progress bar, and a tip about the hands that changes
- * every few seconds. The race screen asks for it and tells it how far the
+ * cup this is), a progress bar, and a tip for whatever this player drives
+ * with (hands, keys or a pad) that changes every few seconds. The race screen asks for it and tells it how far the
  * world has got; this knows nothing of the race.
  */
 import type { DriverControl, GrandPrixState, LobbySettings } from "../contract";
@@ -13,7 +13,7 @@ import { trackById } from "../track/tracks";
 import { tipsFor } from "./eggs";
 import { lapsLabel } from "./format";
 import { cupOfTrack, outlinePicture, postcardUrl } from "./trackArt";
-import { setBar } from "./ui";
+import { calm, setBar } from "./ui";
 
 /** What the screen says about the race being loaded. */
 export interface RaceWords {
@@ -97,7 +97,7 @@ export class LoadingScreen {
       line.replaceChildren(icon("hand"), element("span", undefined, next));
       line.classList.remove("out");
     };
-    if (first || document.documentElement.hasAttribute("data-reduce-motion")) {
+    if (first || calm()) {
       set();
       return;
     }

@@ -3,11 +3,10 @@
  * grain of the kitchen's road, glowing cracks in the volcano's basalt, a
  * glass lattice for the space ribbon; the marble of the counter, the
  * cobbles of the fairground, the sand's ripples; and the patches that
- * change how the road drives (ice, mud, sand, snow).
+ * change how the road drives (ice, mud, sand, snow, grass).
  *
  * All drawn on a canvas at load, tileable, in greys where the ground's own
- * vertex colour does the tinting. Drawn, not downloaded, like every Super Claude Bros.
- * asset until art exists.
+ * vertex colour does the tinting.
  */
 import { CanvasTexture, ClampToEdgeWrapping, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace } from "three";
 import { seededRandom } from "../../../engine/random";

@@ -9,7 +9,6 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   ConeGeometry,
   CylinderGeometry,
   DataTexture,
@@ -52,9 +51,7 @@ import {
   TUNNEL,
   VILLAGE_ROAD,
   FARM_LANE,
-  platePositions,
   YETI_ROCK,
-  type XZ,
 } from "./layout";
 
 /** Where the terrain's detail splat covers, metres: [x0, z0, x1, z1]. */
@@ -454,11 +451,6 @@ function marker(name: string, p: { x: number; y: number; z: number }, extras: Re
   return o;
 }
 
-export interface PlaceholderValley {
-  root: Group;
-  grid: TerrainGrid;
-}
-
 /** The whole placeholder valley.glb scene. */
 export function buildPlaceholderValley(): Group {
   const root = nameNode(new Group(), "valley");
@@ -525,10 +517,7 @@ export function buildPlaceholderValley(): Group {
     const inv = new Matrix4().copy(o.matrixWorld).invert();
     hidden.position.copy(new Vector3(nest.hidden.x, nest.hidden.y, nest.hidden.z).applyMatrix4(inv));
   });
-  // The aim check's plates hang from their posts (built with the structures); their pivots are named there.
-  void platePositions;
   root.userData["placeholder"] = true;
   root.updateMatrixWorld(true);
-  void Color;
   return root;
 }

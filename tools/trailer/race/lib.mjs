@@ -50,7 +50,8 @@ export const INIT = () => {
     if (typeof type === "string" && type.startsWith("webgl")) attributes = { ...(attributes || {}), preserveDrawingBuffer: true };
     return getContext.call(this, type, attributes);
   };
-  // The HUD's CSS animations and transitions follow the simulated clock, not the wall clock (see scrub() in tools/promo/capture.ts).
+  // The HUD's CSS animations and transitions follow the simulated clock, not the wall clock: each is paused when first seen,
+  // then set to the simulated time since then on every frame.
   const tracked = new WeakMap();
   window.__scrub = (nowMs) => {
     for (const a of document.getAnimations()) {

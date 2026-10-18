@@ -9,7 +9,7 @@
  * Models are made once and shared; each thing on the track is a small
  * object that follows its ThingView by id.
  */
-import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, type Material, type Object3D } from "three";
+import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, type Object3D } from "three";
 import type { ThingView } from "../contract";
 import type { Effects } from "./effects";
 import { MeshBuilder, rgb, shapes, xf } from "./kartBuilder";
@@ -295,5 +295,3 @@ export class Things {
     for (const r of this.resources) r.dispose();
   }
 }
-
-export type { Material };

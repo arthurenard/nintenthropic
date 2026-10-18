@@ -23,7 +23,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-from .common import DN, lin
+from .common import DN
 from . import layout as L
 
 MOON_COLOR = (0.62, 0.75, 1.0)
@@ -69,8 +69,6 @@ def sky_tree(nt, for_sky_image=False):
     M = moon_vector()
     cosm = g.vmath('DOT_PRODUCT', D, tuple(M), out='Value')
     ang = g.math('ARCCOSINE', g.math('MINIMUM', cosm, 1.0))      # radians from the moon
-    el = g.math('ARCSINE', g.math('MAXIMUM', g.math('MINIMUM', dz, 1.0), -1.0))
-    up = g.smooth(dz, -0.02, 0.6)
     # dome: dark blue overhead, a paler band at the horizon (fog-lit air)
     zen = g.rgb((0.0055, 0.0085, 0.018))
     hor = g.rgb((0.042, 0.052, 0.072))

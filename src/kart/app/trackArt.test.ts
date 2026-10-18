@@ -68,7 +68,7 @@ describe("the colours and the cups", () => {
     expect(cupOfTrack("five-finger-circuit")).toBeNull();
   });
 
-  it("find a postcard by the track's id, where the art agent renders them", () => {
+  it("find a postcard by the track's id, where tools/kart-postcards.mjs renders them", () => {
     expect(postcardUrl("meadow-loop")).toBe("assets/kart/tracks/meadow-loop.webp");
   });
 });

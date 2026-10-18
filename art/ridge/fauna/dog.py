@@ -16,7 +16,7 @@ import math
 import numpy as np
 from mathutils import Vector
 from . import lib as L, quad as Q
-from .lib import S, A, srgb, smoothstep, value_noise, fbm, Frame, nrm, chain, flow_noise, add, pulse
+from .lib import S, srgb, smoothstep, fbm, Frame, nrm, chain, flow_noise, add, pulse
 
 NAME = "dog"
 HEAD = Frame((0, -0.46, 0.76), (0, -0.24, -0.06))

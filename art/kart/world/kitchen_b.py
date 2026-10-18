@@ -4,9 +4,9 @@ import random
 
 from mathutils import Vector
 
-from kitchen import (APPLE_RED, BLACK, BLUE, BLUE_DEEP, BLUE_PALE, CHINA, GOLD, STEEL, STEEL_DK, WHITE, china_gloss, glossy, gloss_fruit, noise)
-from wlib import C, Landmark, RevSurf, TAU, aim, arc_pts, bezier, catmull, chrome, mix, mul, ngon, petal, rot2, shift2, shiny, smooth_profile, smoothstep, with_breaks
-from wtext import Plane, text, text_width
+from kitchen import (BLACK, GOLD, STEEL, STEEL_DK, WHITE, china_gloss, glossy, noise)
+from wlib import C, Landmark, RevSurf, TAU, bezier, catmull, chrome, mix, ngon, smooth_profile, smoothstep, with_breaks
+from wtext import Plane, text
 
 BAKELITE = C("#2a2422")
 RED = C("#e0412e")
@@ -65,7 +65,6 @@ def toaster() -> Landmark:
         for s in (-1, 1):
             lm.rbox((15.4, 0.1, 0.4), at=(0, 14.82, zc + s * 1.0), col=(1.0, 0.45, 0.12), mat="glow")
     # toast
-    shape = bread(14.2, 12.4)
     for zc, y0, hh in ((3.7, 13.6, 11.4), (-3.7, 13.8, 13.4)):
         poly = bread(14.2, hh)
         lm.prism_xy(poly, 1.5, at=(0, y0, zc), bevel=0.25, col=TOAST_CRUST, mat="matte")
@@ -104,7 +103,6 @@ def grater() -> Landmark:
     poly = outer + list(reversed(inner))
     lm.prism_xy(poly, L, at=(0, 0, 0), bevel=0.35, col=lambda p, n: (STEEL_DK(p, n) if n.y < -0.3 or (abs(p.x) < 11.9 and p.y < 19.9) else STEEL(p, n)), mat="metal")
     # the grating: punched teeth over the four outer faces, dark openings on the inner roof with the light coming through
-    rnd = random.Random(7)
     faces = [
         # (start, end) of each outer face in the xy plane, normal
         ((-13.4, 1.4), (-13.4, 9.4)),
@@ -258,13 +256,12 @@ def book(lm, at, size, yaw, cloth, trim, title=None, spine_to=-1):
 
 def cookbook() -> Landmark:
     lm = Landmark("cookbook", ao=0.8)
-    place1 = book(lm, (0.0, 0.0, 0.0), (30.0, 6.2, 21.5), 0, C("#b3262b"), GOLD)
-    place2 = book(lm, (-1.5, 6.2, 0.5), (26.5, 5.0, 19.5), 7, C("#2f7d4a"), C("#f4dc8a"), spine_to=1)
-    place3 = book(lm, (1.0, 11.2, -0.5), (24.5, 4.2, 17.5), -9, C("#e08a1a"), C("#fff1c8"))
+    book(lm, (0.0, 0.0, 0.0), (30.0, 6.2, 21.5), 0, C("#b3262b"), GOLD)
+    book(lm, (-1.5, 6.2, 0.5), (26.5, 5.0, 19.5), 7, C("#2f7d4a"), C("#f4dc8a"), spine_to=1)
+    book(lm, (1.0, 11.2, -0.5), (24.5, 4.2, 17.5), -9, C("#e08a1a"), C("#fff1c8"))
     # the top book's cover: a gold frame, a fork and spoon, the title
     top = 11.2 + 4.2 + 0.02
     yaw = math.radians(-9)
-    cs, sn = math.cos(yaw), math.sin(yaw)
     ox, oz = 1.0, -0.5
     pl = Plane((ox, top, oz), (0, 1, 0), up=(math.sin(yaw), 0, -math.cos(yaw)))
     inset = [(-10.5, -7.2), (10.5, -7.2), (10.5, 7.2), (-10.5, 7.2)]
@@ -299,8 +296,6 @@ def cereal_box() -> Landmark:
     bx = -1.0
     front_z = D / 2 + 0.02
     lm.rbox((W, H, D), at=(bx, H / 2, 0), bevel=0.45, bseg=2, col=SUN_YELLOW, mat="glossy")
-    # sides
-    side = Plane((bx + W / 2 + 0.02, 0, 0), (1, 0, 0))
     # front art: a sun with rays, a banner, the name
     fp = Plane((bx, 0, front_z), (0, 0, 1))
     lm.decal(fp, [(-W / 2 + 0.6, 0.8), (W / 2 - 0.6, 0.8), (W / 2 - 0.6, 7.0), (-W / 2 + 0.6, 7.0)], C("#2a8fd6"), 0.04, "glossy")
@@ -439,7 +434,7 @@ def fork_arch() -> Landmark:
     def width(i):
         x = xs[i]
         if x < -6.0:
-            return 1.55 + 0.25 * smoothstep(-17.5, -14.0, x) * 0 + 0.25 * (1 - smoothstep(-17.5, -13.0, x))
+            return 1.55 + 0.25 * (1 - smoothstep(-17.5, -13.0, x))
         if x < 3.5:
             return 1.55 + (6.2 - 1.55) * smoothstep(-6.0, 3.5, x)
         return 6.2
@@ -449,7 +444,6 @@ def fork_arch() -> Landmark:
              , col=col, mat="metal")
     # the four tines down to the counter, from the palm
     tail = path[int(n * 0.66):]
-    m = len(tail)
     for k, zc in enumerate((-4.65, -1.55, 1.55, 4.65)):
         pts = [(p[0], p[1], zc) for p in tail]
         lm.sweep(pts, [(0.85 * math.cos(TAU * i / 16), 1.45 * math.sin(TAU * i / 16)) for i in range(16)], up=(0, 0, 1),
@@ -482,11 +476,9 @@ def spoon_arch() -> Landmark:
     dish = []
     for i in range(k + 1):
         s = -1 + 2 * i / k
-        dish.append((0.7 + 1.5 * (1 - s * s) * 0 - 1.9 * (1 - s * s) + 1.9, s * 6.2))
-    top = [(-0.5 * (1 - s * s) + 0.0, 6.2 * s) for s in [(-1 + 2 * i / k) for i in range(k + 1)]]
+        dish.append((0.7 - 1.9 * (1 - s * s) + 1.9, s * 6.2))
     outer_c = [(0.6 + 1.6 * (1 - s * s), 6.2 * s) for s in [(-1 + 2 * i / k) for i in range(k + 1)]]
     inner_c = [(-0.4 + 1.6 * (1 - s * s), 6.2 * s) for s in [(-1 + 2 * i / k) for i in range(k + 1)]]
-    outer_c, inner_c = outer_c, inner_c
     section = outer_c + list(reversed(inner_c))
     def head_w(t):
         rise = smoothstep(0.0, 0.34, t) ** 0.8
@@ -552,10 +544,8 @@ def wall_clock() -> Landmark:
     sec.prism_xy(hand_poly(13.2, 0.3, 3.0, tip=False), 0.12, at=(0, cy, zh + 0.9), col=RED, mat="glossy")
     sec.cylinder(r=0.55, h=0.3, at=(0, cy, zh + 0.8), rot=(90, 0, 0), segs=14, col=RED, mat="glossy")
     mn = lm.spin("minute", "z", (0, cy, zh + 0.5), -0.0017453)
-    ang_m = math.radians(-50)
-    cs, sn = math.cos(ang_m), math.sin(ang_m)
     rotate = lambda poly, a: [(x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a)) for x, y in poly]
-    mn.prism_xy([(x, y + cy) for x, y in rotate(hand_poly(12.6, 1.1, 1.8), math.radians(-8 * 6.0 * 0 + 48))], 0.35, at=(0, 0, zh + 0.5), col=BLACK, mat="glossy")
+    mn.prism_xy([(x, y + cy) for x, y in rotate(hand_poly(12.6, 1.1, 1.8), math.radians(48))], 0.35, at=(0, 0, zh + 0.5), col=BLACK, mat="glossy")
     hr = lm.spin("hour", "z", (0, cy, zh + 0.2), -0.000145)
     hr.prism_xy([(x, y + cy) for x, y in rotate(hand_poly(8.6, 1.5, 1.6), math.radians(-60))], 0.35, at=(0, 0, zh + 0.2), col=BLACK, mat="glossy")
     lm.cylinder(r=0.9, h=0.5, at=(0, cy, zh + 1.1), rot=(90, 0, 0), segs=16, col=BLACK, mat="glossy")

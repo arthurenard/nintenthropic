@@ -27,7 +27,7 @@ below has its own generator, and the map is their union:
 Values are cloud opacity (0..1). Solid cloud is drawn with crisp edges
 (1-3 map pixels); fields of small cloud are left as partial cover, which
 the renderer breaks into cloudlets with detail.webp (see planetrender).
-Global mean about 0.55, very uneven.
+Global mean about 0.33, very uneven.
 """
 
 import math
@@ -94,7 +94,6 @@ def splat(p, arr, lon, lat, radius_rad, fn):
 # ---------------------------------------------------------------------------
 
 def build(p):
-    H, W = p.H, p.W
     lat = p.LAT
     dlat = np.degrees(np.abs(lat))
     slat = np.degrees(lat)

@@ -24,7 +24,6 @@ import {
   Scene,
   Vector3,
   WebGLCubeRenderTarget,
-  type Material,
   type WebGLRenderer,
   type WebGLRenderTarget,
 } from "three";
@@ -178,13 +177,10 @@ export class Stage {
     return this.planetNow;
   }
 
-  /** A planet-frame direction in the world. */
-  planetToWorld(dir: Vector3, out = new Vector3()): Vector3 {
-    return out.copy(dir).applyQuaternion(this.planetNow);
-  }
-
-  /** Where the sun is and how dark it is. */
-  /** `dt` is how long since the last (0 for "at once": a jump, a screenshot). */
+  /**
+   * Where the sun is and how dark it is. `dt` is how long since the last (0
+   * for "at once": a jump, a screenshot).
+   */
   setSky(state: SkyState, dt = 0): void {
     this.fromStation(state.sun, this.sunDirection);
     this.night = state.night;
@@ -212,7 +208,7 @@ export class Stage {
   }
 
   /**
-   * The environment light again, if it is due: a few times a second while
+   * The environment light again, if it is due: fifteen times a second while
    * the sky is changing (a breather: the light goes over seconds, and each
    * refresh draws the sky six times and blurs it), at once for a jump (no
    * time passed), every couple of seconds otherwise.
@@ -258,11 +254,6 @@ export class Stage {
     box.min.max(new Vector3(-45, -40, -60));
     box.max.min(new Vector3(45, 40, 5));
     fitShadowCamera(this.sun, box);
-  }
-
-  /** Materials the world may want to find (the baked cupola's). */
-  get bakedMaterials(): Material[] {
-    return this.cupolaMaterials.map((c) => c.m);
   }
 
   dispose(): void {

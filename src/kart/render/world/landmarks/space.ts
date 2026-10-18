@@ -7,11 +7,8 @@
  * around a centre some way above y = 0 and the track lifts them as it likes.
  */
 import { DoubleSide, Group, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from "three";
-import { byHeight, grid, lathe, MeshBuilder, mixRgb, pipe, ramp, rgb, rockBlob, scaleRgb, shapes, stripes, torus, tube, xf, type Rgb, type V3 } from "./kit";
+import { byHeight, grid, lathe, MeshBuilder, mixRgb, orient, pipe, ramp, rgb, rockBlob, scaleRgb, shapes, stamp, stripes, torus, tube, xf, type Rgb, type V3 } from "./kit";
 import type { Halo, HazardSpec, LandmarkSpec, MovingPart } from "./types";
-
-export const LANDMARKS: Record<string, LandmarkSpec> = {};
-export const HAZARDS: Record<string, HazardSpec> = {};
 
 const TAU = Math.PI * 2;
 
@@ -22,12 +19,8 @@ const HULL = rgb("#dfe8f5");
 const TEAL = rgb("#14c8be");
 const DEEP_TEAL = rgb("#0a6e78");
 const ORANGE = rgb("#ff8a3a");
-const NAVY = rgb("#16205c");
 const BLUE = rgb("#2a5ad8");
 const PANEL = rgb("#1b3aa8");
-const MAGENTA = rgb("#ff3fd0");
-const VIOLET = rgb("#7a4dff");
-const GOLD = rgb("#e8b13c");
 const FOIL = rgb("#f2c04a");
 const STEEL = rgb("#a9b4d0");
 const DARK = rgb("#1a1a3a");
@@ -44,33 +37,6 @@ const NEON: Rgb[] = [G_CYAN, G_PINK, G_GOLD, G_WHITE];
 const neonAt = (i: number): Rgb => NEON[((i % NEON.length) + NEON.length) % NEON.length]!;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Copies every triangle of `src` into `dst` through a matrix (one hand-built piece, placed many times or tilted). */
-function stamp(dst: MeshBuilder, src: MeshBuilder, m: Matrix4): void {
-  const p = src.position;
-  const c = src.color;
-  const e = m.elements;
-  const at = (i: number): V3 => [
-    e[0]! * p[i]! + e[4]! * p[i + 1]! + e[8]! * p[i + 2]! + e[12]!,
-    e[1]! * p[i]! + e[5]! * p[i + 1]! + e[9]! * p[i + 2]! + e[13]!,
-    e[2]! * p[i]! + e[6]! * p[i + 1]! + e[10]! * p[i + 2]! + e[14]!,
-  ];
-  for (let i = 0; i < p.length; i += 9) {
-    dst.tri(at(i), at(i + 3), at(i + 6), [c[i]!, c[i + 1]!, c[i + 2]!], [c[i + 3]!, c[i + 4]!, c[i + 5]!], [c[i + 6]!, c[i + 7]!, c[i + 8]!]);
-  }
-}
-
-const _up = new Vector3(0, 1, 0);
-const _q = new Quaternion();
-
-/** A unit shape stood on `pos` with its +y along `dir` (a crystal growing out of rock, a nozzle on a ring). */
-function orient(b: MeshBuilder, shape: ReturnType<typeof shapes.cone>, pos: V3, dir: V3, sx: number, sy: number, sz: number, paint: Rgb | { bottom: Rgb; top: Rgb }): void {
-  const d = new Vector3(dir[0], dir[1], dir[2]).normalize();
-  _q.setFromUnitVectors(_up, d);
-  // The shape is centred, so its middle sits half a length out along `dir`.
-  const m = new Matrix4().compose(new Vector3(pos[0] + d.x * sy * 0.5, pos[1] + d.y * sy * 0.5, pos[2] + d.z * sy * 0.5), _q, new Vector3(sx, sy, sz));
-  b.add(shape, m, paint);
-}
 
 const norm = (v: V3): V3 => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
@@ -127,7 +93,7 @@ function bandColour(lat: number, j: number): Rgb {
   return scaleRgb(mixRgb(a[1], b[1], t * t * (3 - 2 * t)), 1.45 + 0.07 * Math.sin(j * 1.7 + lat * 0.35));
 }
 
-LANDMARKS["ringed-planet"] = {
+const ringedPlanet: LandmarkSpec = {
   build() {
     const R = 220;
     const CY = 220;
@@ -169,10 +135,7 @@ LANDMARKS["ringed-planet"] = {
       orient(lit, shapes.ball(1), [eye[0], eye[1], eye[2]], c0, 18, 6, 12, rgb("#7a2e1e"));
     }
 
-    // The atmosphere: a faint blue shell, and soft halos behind for the rim light.
-    const shell: [number, number][] = [];
-    for (let lat = -90; lat <= 90; lat += 15) shell.push([R * 1.035 * Math.cos((lat * Math.PI) / 180), R * 1.035 * Math.sin((lat * Math.PI) / 180)]);
-    void shell;
+    // The atmosphere: soft halos behind the globe for the rim light.
     halos.push({ x: 0, y: CY, z: -60, size: 560, colour: [0.35, 0.75, 1.8], alpha: 0.5, twinkle: 0 });
     halos.push({ x: 0, y: CY, z: -20, size: 480, colour: [0.5, 0.9, 1.6], alpha: 0.22, twinkle: 0 });
     halos.push({ x: 0, y: CY, z: -40, size: 500, colour: [0.9, 0.5, 1.4], alpha: 0.2, twinkle: 0 });
@@ -218,10 +181,10 @@ LANDMARKS["ringed-planet"] = {
 
 // ─── Ring gate ───────────────────────────────────────────────────────────────
 
-LANDMARKS["ring-gate"] = {
+const ringGate: LandmarkSpec = {
   span: true,
   defaultSpan: 12,
-  build(ctx) {
+  build() {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const glass = new MeshBuilder();
@@ -245,7 +208,7 @@ LANDMARKS["ring-gate"] = {
       inner2.push([Math.cos(a) * (RC - TR - 1.5), C + Math.sin(a) * (RC - TR - 1.5), 0]);
     }
     grid(glass, [inner, inner2], [0.5, 0.9, 1.5]);
-    // Chasing lights: dashes of colour running round both faces of the band.
+    // Lights: dashes of colour round both faces of the band.
     const dashes = 38;
     for (let k = 0; k < dashes; k++) {
       const a = arc[0] + 0.06 + ((arc[1] - arc[0] - 0.12) * k) / (dashes - 1);
@@ -276,14 +239,13 @@ LANDMARKS["ring-gate"] = {
       const a = arc[0] + 0.1 + ((arc[1] - arc[0] - 0.2) * k) / 13;
       halos.push({ x: Math.cos(a) * RC, y: C + Math.sin(a) * RC, z: 0, size: 7, colour: neonAt(k), alpha: 0.4, twinkle: 0.35 });
     }
-    void ctx;
     return { lit, glow, glass, halos };
   },
 };
 
 // ─── Asteroid cluster ────────────────────────────────────────────────────────
 
-LANDMARKS.asteroid = {
+const asteroidCluster: LandmarkSpec = {
   footprint: 0,
   build() {
     const lit = new MeshBuilder();
@@ -333,7 +295,7 @@ LANDMARKS.asteroid = {
 
 // ─── Satellite ───────────────────────────────────────────────────────────────
 
-LANDMARKS.satellite = {
+const satellite: LandmarkSpec = {
   footprint: 0,
   build() {
     const CY = 14;
@@ -355,7 +317,7 @@ LANDMARKS.satellite = {
     body.box(0, CY, 4.6, 2.6, 2.6, 0.3, DARK);
     bglow.add(shapes.ball(1), xf(0, CY, 4.8, 1.0, 1.0, 0.4), G_CYAN);
     body.box(0, CY + 3.05, -0.5, 4.4, 0.5, 6.0, ramp(DEEP_TEAL, TEAL));
-    // The dish: a paraboloid bowl on a bent arm, with a feed horn on three struts.
+    // The dish: a paraboloid bowl on a bent arm.
     pipe(body, [0, CY + 3.1, -1.5], [0, CY + 5.8, -0.5], 0.28, STEEL, 6);
     pipe(body, [0, CY + 5.8, -0.5], [0, CY + 7.0, 1.4], 0.28, STEEL, 6);
     const dish: [number, number][] = [[0.0, 0], [0.9, 0.08], [1.8, 0.32], [2.7, 0.72], [3.6, 1.28], [3.7, 1.4]];
@@ -376,7 +338,7 @@ LANDMARKS.satellite = {
       body.add(shapes.cylinder(10), xf(s * 2.0, CY - 3.7, -1, 1.0, 3.8, 1.0, 0, Math.PI / 2), ramp(rgb("#9aa4c4"), WHITE));
       body.blob(s * 2.0, CY - 3.7, 0.9, 1.0, 1.0, 1.0, WHITE, 0);
     }
-    // Blinking lights: red to port, green to starboard.
+    // Blinking lights, red and green, one on each side.
     bglow.add(shapes.ball(0), xf(-3.5, CY + 2.9, 4.4, 0.35), G_RED);
     bglow.add(shapes.ball(0), xf(3.5, CY + 2.9, 4.4, 0.35), G_GREEN);
     halos.push({ x: -3.5, y: CY + 2.9, z: 4.4, size: 7, colour: [4, 0.4, 0.5], alpha: 0.8, twinkle: 0.95 });
@@ -424,7 +386,7 @@ LANDMARKS.satellite = {
 
 // ─── Space station ───────────────────────────────────────────────────────────
 
-LANDMARKS["space-station"] = {
+const spaceStation: LandmarkSpec = {
   footprint: 0,
   build() {
     const CY = 24;
@@ -456,7 +418,7 @@ LANDMARKS["space-station"] = {
       for (let k = 0; k < 4; k++) locGlow.box(s * (18.5 + k * 1.7), 3.62, 0, 0.9, 0.12, 1.2, [2.6, 3.2, 3.8]);
     }
     along(0, 4.8, 1.0, ORANGE);
-    // Cupola: a lit dome on the end module.
+    // Cupola: a lit dome on the spine.
     loc.blob(-21, 3.6, 0, 2.0, 1.2, 2.0, rgb("#6d7699"), 0);
     locGlow.add(shapes.ball(1), xf(-21, 4.1, 0, 1.5, 0.95, 1.5), [2.6, 3.4, 4]);
     // Solar arrays on masts standing off the spine, up and down.
@@ -502,7 +464,7 @@ LANDMARKS["space-station"] = {
     const wg = new MeshBuilder();
     const RW = 17;
     const TW = 2.9;
-    // Pale hull in bands, with an orange belt round the outer edge (two of the eight columns of the tube).
+    // Pale hull in bands, with an orange belt round one flank (two of the eight columns of the tube).
     torus(wl, RW, TW, {
       at: [0, 0, 0],
       facing: "x",
@@ -549,7 +511,7 @@ LANDMARKS["space-station"] = {
 
 // ─── Nebula ──────────────────────────────────────────────────────────────────
 
-LANDMARKS.nebula = {
+const nebula: LandmarkSpec = {
   footprint: 0,
   build() {
     const CY = 50;
@@ -614,7 +576,7 @@ LANDMARKS.nebula = {
 
 const _axis = new Vector3(0.35, 0.8, 0.45).normalize();
 
-HAZARDS.asteroid = {
+const asteroid: HazardSpec = {
   build(ctx) {
     const rock = new MeshBuilder();
     const crystal = new MeshBuilder();
@@ -643,7 +605,7 @@ function glassMaterial(): MeshBasicMaterial {
   return cometGlass;
 }
 
-HAZARDS.comet = {
+const comet: HazardSpec = {
   build(ctx) {
     const core = new MeshBuilder();
     const shell = new MeshBuilder();
@@ -685,3 +647,14 @@ HAZARDS.comet = {
     };
   },
 };
+
+export const LANDMARKS: Record<string, LandmarkSpec> = {
+  "ringed-planet": ringedPlanet,
+  "ring-gate": ringGate,
+  asteroid: asteroidCluster,
+  satellite,
+  "space-station": spaceStation,
+  nebula,
+};
+
+export const HAZARDS: Record<string, HazardSpec> = { asteroid, comet };

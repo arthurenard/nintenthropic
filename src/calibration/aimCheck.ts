@@ -204,7 +204,7 @@ export class AimCheck {
   mapping: Matrix | null;
   /** Counts changes to `mapping`, so the input can be told to follow. */
   mappingVersion = 0;
-  /** The kind of map in force, for tests and the debug overlay. */
+  /** The kind of map in force: a scaled first guess is learned from but never scored (see shoot). */
   fit: "saved" | "none" | "scaled" | "affine";
   readonly returning: boolean;
   /** Every predictive error, in fractions of the smaller viewport side. */

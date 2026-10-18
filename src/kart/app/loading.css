@@ -1,5 +1,5 @@
 /* The loading screen: the track's postcard, blurred and darkened, fills the window; its name is big, the
-   progress is a thin bar, and a tip about the hands changes at the foot. */
+   progress is a thin bar, and a tip for the player's hands, keys or pad changes at the foot. */
 
 .race-loading {
   position: absolute;

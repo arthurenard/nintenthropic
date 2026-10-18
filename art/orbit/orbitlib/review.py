@@ -285,7 +285,6 @@ def asset_shots(ctx, fname):
         elif setup in ('astronaut', 'toolbag', 'duck', 'sticker'):
             _only(sc, setup)
             if setup == 'toolbag':
-                bag = bpy.data.objects.get('toolbag.bag')
                 for o in sc.objects:
                     if o.name.startswith('toolbag.tool'):
                         o.location = o.location * 3.0 + Vector((0, 0, 0.12))

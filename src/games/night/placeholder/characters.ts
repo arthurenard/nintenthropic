@@ -25,6 +25,7 @@ import {
   Vector3,
   type Material,
 } from "three";
+import { mulberry32 } from "../../../engine/rules/rng";
 import type { LoadedAsset } from "../../../engine/types";
 import { nameNode } from "../../../engine/world/names";
 import { CAT, catClips, catKit, deadClips, HUMANOID, humanoidKit, mechanicClips, scaledHumanoid, survivorClips, type BoneDef, type Vec3 } from "./clips";
@@ -295,18 +296,6 @@ function noise3(x: number, y: number, z: number, seed: number): number {
 function smooth(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
-}
-
-/** A seeded random stream, so every build is the same figure. */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function sample(p: Paint, local: Vector3, world: Vector3): Color {
@@ -731,7 +720,8 @@ function hair(sk: Skel, kind: 1 | 2 | 3 | 4, seed: number): BufferGeometry {
   const s = new Parts(sk);
   const k = sk.k;
   const C = headCentre(sk);
-  const r = rng(seed);
+  // Seeded, so every build of a figure gives it the same hair.
+  const r = mulberry32(seed);
   const tone = (base: string, spread = 0.18): Paint => ({ v: (w) => new Color(base).multiplyScalar(1 - spread / 2 + spread * noise3(w.x * 40, w.y * 40, w.z * 40, seed)) });
   switch (kind) {
     case 1:

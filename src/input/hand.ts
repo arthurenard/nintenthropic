@@ -1,6 +1,6 @@
 /**
- * Turns hand landmarks into a pointer and a trigger measurement (a port of the
- * geometry in the desktop's aiming.py).
+ * Turns hand landmarks into a pointer and a trigger measurement (ported from
+ * the geometry in aiming.py, in the Python version: git tag `python-final`).
  *
  * The player holds their hand like a pistol and points it at the screen. Seen
  * from the webcam the index finger is then heavily foreshortened, so aiming is

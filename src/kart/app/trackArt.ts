@@ -3,8 +3,8 @@
  * (assets/kart/tracks/<id>.webp, 960 x 540) in the lobby's carousel, on the
  * cup cards and behind the loading screen and the results.
  *
- * Until a postcard is drawn, or where it never comes (a track whose art is not
- * rendered yet), the track is its own picture: its outline, from the same
+ * Until a postcard is drawn, or where it never comes (a slow or failed fetch),
+ * the track is its own picture: its outline, from the same
  * TrackGeometry the sim drives on, in white over the colours of its world, with
  * a flag at the start line. The postcard fades in over it when it arrives, so
  * a card never changes size or goes blank.

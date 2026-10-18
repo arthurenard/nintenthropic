@@ -18,34 +18,6 @@ export const LIMITER_KNEE = 0.8;
 /** The limiter's asymptote: no finished sample reaches it. */
 export const LIMITER_CEILING = 0.98;
 
-/**
- * A gated RMS in dBFS: 100 ms blocks every 25 ms; blocks under −60 dBFS are
- * ignored (silence, pre-delay), then blocks more than 10 dB under the mean,
- * so a long quiet tail does not drag a sharp sound's loudness down.
- */
-export function loudnessDb(channels: Channels, sr: number): number {
-  const n = channels[0]!.length;
-  const size = Math.min(n, samples(sr, 0.1));
-  const hop = samples(sr, 0.025);
-  // Running sum of squares, so every block is O(1).
-  const cum = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) {
-    let s = 0;
-    for (const ch of channels) s += ch[i]! * ch[i]!;
-    cum[i + 1] = cum[i]! + s / channels.length;
-  }
-  const powers: number[] = [];
-  for (let start = 0; start + size <= n; start += hop) {
-    const p = (cum[start + size]! - cum[start]!) / size;
-    if (p > 1e-6) powers.push(p);
-  }
-  if (powers.length === 0) return -Infinity;
-  const mean = powers.reduce((a, b) => a + b, 0) / powers.length;
-  const kept = powers.filter((p) => p > mean * 0.1);
-  const m = kept.reduce((a, b) => a + b, 0) / Math.max(1, kept.length);
-  return 10 * Math.log10(m);
-}
-
 /** The highest RMS over any ``window`` seconds (hop 5 ms), in dBFS: a sound's loudest moment. */
 export function momentaryMaxDb(channels: Channels, sr: number, window = 0.05): number {
   const n = channels[0]!.length;
@@ -68,14 +40,6 @@ export function momentaryMaxDb(channels: Channels, sr: number, window = 0.05): n
   }
   const p = Math.max(best, 0) / size;
   return p > 1e-12 ? 10 * Math.log10(p) : -Infinity;
-}
-
-/** Linear below the knee, then a tanh bend that never reaches the ceiling. */
-export function softLimitSample(x: number, knee = LIMITER_KNEE, ceiling = LIMITER_CEILING): number {
-  const m = Math.abs(x);
-  if (m <= knee) return x;
-  const bent = knee + (ceiling - knee) * Math.tanh((m - knee) / (ceiling - knee));
-  return x < 0 ? -bent : bent;
 }
 
 export interface FinishOptions {

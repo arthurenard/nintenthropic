@@ -41,7 +41,7 @@ describe("the kart pack", () => {
       "kart_spark_blue", "kart_spark_orange", "kart_mini_turbo", "kart_boost_whoosh", "kart_boost_pad", "kart_start_boost", "kart_flood",
       // item boxes and items
       "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_puck_fire", "kart_puck_bounce", "kart_seeker", "kart_slick_splat",
-      // the newer items
+      // the comet, the items that strike from afar, the decoy
       "kart_comet", "kart_storm", "kart_skyrocket", "kart_skyrocket_burst", "kart_blast", "kart_decoy_pop",
       // hits, bumps, walls
       "kart_hit", "kart_spinout", "kart_bump", "kart_wall_thud", "kart_wall_scrape",
@@ -122,7 +122,7 @@ describe("the kart pack", () => {
       karts: new Map([[0, { id: 0, x: 0, z: 0, heading: 0 } as never], [1, { id: 1, x: 3, z: 0, heading: 0 } as never], [5, { id: 5, x: 4, z: 0, heading: 0 } as never], [2, { id: 2, x: 5, z: 0, heading: 0 } as never], [3, { id: 3, x: 6, z: 0, heading: 0 } as never]]),
       laps: 3,
     };
-    // The scripted race uses every kind of event; try each against the local kart and the others.
+    // The scripted race uses nearly every kind of event (the flood, the horn and the duck are named above); try each against the local kart and the others.
     for (const { event } of SIM_EVENTS) {
       for (const kart of [0, 1]) {
         const e = { id: 1, tick: 0, ...event, ...("kart" in event ? { kart } : {}) } as RaceEvent;

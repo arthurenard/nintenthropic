@@ -1,6 +1,7 @@
 /**
- * One test track per new world for the renderer's dev page (`?track=dev-kitchen`
- * ... `dev-palm`), each using every feature the picture draws (ramps, drops, a
+ * One test track for each of the kitchen, snow, volcano, funfair, space and
+ * palm worlds, for the renderer's dev page (`?track=dev-kitchen` ...
+ * `dev-palm`), each using every feature the picture draws (ramps, drops, a
  * verge, surfaces, banking, hazards, landmarks, the duck) so a change to the
  * picture can be judged on all of them at once. They are written with nothing
  * but the shapes of track/geometry.ts, so the real tracks just work.
@@ -10,7 +11,8 @@
  * can still solve two free straights). Fractions of the lap (`at`) are
  * measured from the start line; ramps and gaps sit on the straights.
  */
-import type { HazardDef, Landmark, TrackDef, TrackPoint, TrackTheme } from "../track/geometry";
+import type { HazardDef, Landmark, TrackDef, TrackPoint } from "../track/geometry";
+import { smoothstep } from "./math";
 
 export type Move = ["s", number] | ["a", number, number];
 
@@ -56,12 +58,10 @@ export function trace(moves: readonly Move[], step = 22): { points: { x: number;
 /** Metres between where the moves end and the start line: the road's last straight into it. */
 const LEAD_IN = 24;
 
-/** A straight whose length is left to `closeLoop`: put two in a road, on stretches that point in different directions. */
-export const FREE: Move = ["s", -1];
-
 /**
- * Solves the two FREE straights so the road ends `leadIn` metres short of the start line, heading along it:
- * moving a straight only slides everything after it, so the end is linear in the two lengths.
+ * Solves the two free straights (a negative length, `["s", -1]`, on stretches that point in different directions) so the
+ * road ends `leadIn` metres short of the start line, heading along it: moving a straight only slides everything after it,
+ * so the end is linear in the two lengths.
  */
 export function closeLoop(moves: readonly Move[], leadIn = LEAD_IN): Move[] {
   const free = moves.map((m, i) => (m[0] === "s" && m[1] < 0 ? i : -1)).filter((i) => i >= 0);
@@ -106,11 +106,6 @@ export function turtle(moves: readonly Move[], height: (t: number) => number = (
   });
 }
 
-const smooth = (a: number, b: number, t: number): number => {
-  const k = Math.min(1, Math.max(0, (t - a) / (b - a)));
-  return k * k * (3 - 2 * k);
-};
-
 /** Landmark helper: a name, where, how far from the road, and optional extras. */
 const L = (kind: string, at: number, offset: number, extra: Partial<Landmark> = {}): Landmark => ({ kind, at, offset, ...extra });
 const H = (kind: string, at: number, motion: HazardDef["motion"], period: number, radius: number, extra: Partial<HazardDef> = {}): HazardDef => ({
@@ -132,7 +127,7 @@ export const DEV_KITCHEN: TrackDef = {
   theme: "kitchen",
   laps: 2,
   width: 16,
-  points: turtle(KITCHEN_MOVES, (t) => 0.5 * smooth(0.3, 0.4, t) * (1 - smooth(0.45, 0.55, t))),
+  points: turtle(KITCHEN_MOVES, (t) => 0.5 * smoothstep(0.3, 0.4, t) * (1 - smoothstep(0.45, 0.55, t))),
   itemRows: [0.12, 0.38, 0.62, 0.86],
   boostPads: [{ at: 0.06, offset: 0 }, { at: 0.5, offset: -3 }],
   blurb: "A giant kitchen counter at teatime.",
@@ -183,7 +178,7 @@ export const DEV_SNOW: TrackDef = {
   theme: "snow",
   laps: 2,
   width: 15,
-  points: turtle(SNOW_MOVES, (t) => 4.5 * Math.sin(t * Math.PI * 2) + 3 * smooth(0.2, 0.4, t) * (1 - smooth(0.6, 0.8, t))),
+  points: turtle(SNOW_MOVES, (t) => 4.5 * Math.sin(t * Math.PI * 2) + 3 * smoothstep(0.2, 0.4, t) * (1 - smoothstep(0.6, 0.8, t))),
   itemRows: [0.1, 0.35, 0.6, 0.85],
   boostPads: [{ at: 0.05, offset: 0 }],
   bank: 14,
@@ -406,5 +401,3 @@ export const DEV_TRACKS: TrackDef[] = [DEV_KITCHEN, DEV_SNOW, DEV_VOLCANO, DEV_F
 export function devTrackById(id: string): TrackDef | undefined {
   return DEV_TRACKS.find((t) => t.id === id);
 }
-
-export type { TrackTheme };

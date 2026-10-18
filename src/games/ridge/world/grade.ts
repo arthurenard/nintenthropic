@@ -5,7 +5,7 @@ import type { GradeOptions } from "../../../engine/world/post";
  * (engine/world/post.ts): a filmic curve for a scene lit from dark blue
  * shade to sunlit snow, the shade kept cool and the sunlit gold warm, and a
  * gentle lift so the valley floor's shadow still shows its detail. `scoped`
- * (0..1) adds a touch of the glass: a little more contrast and a cool cast.
+ * (0..1) adds a touch of the glass: a little more contrast.
  */
 export const DAWN: GradeOptions = {
   glsl: /* glsl */ `

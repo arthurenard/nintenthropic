@@ -44,7 +44,11 @@ export interface RaceContext {
   players: LobbyPlayer[];
 }
 
-/** Hands gone this long, ms, before "Show Both Hands" appears (a flicker does not count). */
+/**
+ * Hands gone this long, ms, before "Show Both Hands" appears (a flicker does not count). Shorter than the wheel check's
+ * LOST_FOR because it counts from the wheel's own "lost", which has already waited 0.3 s with no hand in view
+ * (input/wheel.ts, `noHands.mode`): the pill comes about 0.6 s after the hands go.
+ */
 const LOST_FOR = 300;
 /** Hands gone this long, ms, before the host's big screen is told (it says it in their viewport). */
 const REPORT_AFTER = 1500;
@@ -78,7 +82,7 @@ export class RaceScreen {
   /** The race's resolution while the hand tracker beside it is short of the GPU (handsFirst.ts). */
   private readonly handsFirst = new HandsFirst();
   private veilKey = "";
-  private notesKey = "";
+  private pillsKey = "";
   /** The easter eggs: the last event looked at, the tick it was on, the finishes so far, and the photo finish's still. */
   private eggEvent = -1;
   private eggTick = 0;
@@ -133,10 +137,6 @@ export class RaceScreen {
     });
   }
 
-  get active(): boolean {
-    return this.running;
-  }
-
   /** The last race view drawn: the results use its grid for names and colours. */
   get lastView(): RaceView | null {
     return this.view;
@@ -162,7 +162,7 @@ export class RaceScreen {
     this.shownViews = "";
     this.shownKinds = "";
     this.veilKey = "";
-    this.notesKey = "";
+    this.pillsKey = "";
     this.eggEvent = -1;
     this.eggTick = 0;
     this.finishes = [];
@@ -187,7 +187,7 @@ export class RaceScreen {
     const lobby = ctx.session.lobby();
     this.loadingUi.begin(raceWords(lobby.settings, lobby.grandPrix), ctx.controls[0]?.kind ?? null);
     this.loading(true, 0);
-    this.note();
+    this.pauseNote();
     const loop = (now: number) => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
@@ -230,7 +230,7 @@ export class RaceScreen {
     if (!this.running || !ctx || this.sheet.open) return;
     // Practice and a room watched on the host's screen stop for everyone; a screen of its own only covers itself.
     this.stopped = ctx.session.pause();
-    this.note();
+    this.pauseNote();
     this.tricks();
     this.sheet.showModal();
     $("pause-resume").focus();
@@ -271,7 +271,7 @@ export class RaceScreen {
   }
 
   /** What the pause sheet tells you: whether the race waits, and what leaving does. */
-  private note(): void {
+  private pauseNote(): void {
     const session = this.ctx?.session;
     if (!session) return;
     $("pause-restart").hidden = session.role === "guest";
@@ -602,11 +602,11 @@ export class RaceScreen {
       return;
     }
     $("lost-hands").hidden = true;
-    if (this.mode === "world") this.notes(now, lobby);
+    if (this.mode === "world") this.handPills(now, lobby);
   }
 
   /** The "Show Both Hands" pills, each centred high in the viewport of the player whose hands are gone. */
-  private notes(now: number, lobby: LobbyState): void {
+  private handPills(now: number, lobby: LobbyState): void {
     const ctx = this.ctx!;
     const views = ctx.session.views();
     const box = $("race-stage").getBoundingClientRect();
@@ -627,8 +627,8 @@ export class RaceScreen {
       });
     });
     const key = JSON.stringify(pills);
-    if (key === this.notesKey) return;
-    this.notesKey = key;
+    if (key === this.pillsKey) return;
+    this.pillsKey = key;
     $("view-notes").replaceChildren(
       ...pills.map((pill) => {
         const note = element("p", "lost-hands glass view-note");

@@ -1,12 +1,9 @@
 """The harbour, continued: the ship."""
 import math
-import random
 
-from mathutils import Vector
-
-from harbour import (BUILDERS, CONTAINER_COLOURS, DARK, GREEN_L, LAMP, NAVY, RED, RED_L, STEEL, WHITE, WINDOW, bulb, paint)
-from wlib import C, Landmark, TAU, faceted, mix, mul, shiny, smoothstep
-from wtext import Plane, text
+from harbour import (BUILDERS, CONTAINER_COLOURS, DARK, GREEN_L, NAVY, RED, RED_L, WHITE, WINDOW, bulb, paint)
+from wlib import C, Landmark, faceted, smoothstep
+from wtext import Plane
 
 
 def hull_half_beam(t):
@@ -17,7 +14,7 @@ def hull_half_beam(t):
 
 
 def deck_y(t):
-    return 7.0 + 2.4 * smoothstep(0.82, 1.0, t) + 0.5 * (1 - smoothstep(0.0, 0.1, t)) * 0.0
+    return 7.0 + 2.4 * smoothstep(0.82, 1.0, t)
 
 
 def hull_ring(x, L0=-70.0, L1=74.0, lift=0.0):
@@ -49,7 +46,7 @@ def ship() -> Landmark:
 
     lm.loft(rings, closed=True, caps=True, col=faceted(lambda p, n: hull_col(p, n)), mat="glossy")
     # foam round the waterline
-    outline_in, outline_out = [], []
+    outline_in = []
     for i in range(0, 37):
         r = hull_ring(xs[i])
         outline_in.append((xs[i], 0.12, r[0][2] + 0.0))
@@ -62,7 +59,6 @@ def ship() -> Landmark:
         outer.append((x + (1.8 if x > 60 else 0.0), y, z + sg * 1.3))
     lm.loft([inner, outer], closed=True, caps=False, col=(0.92, 0.97, 1.0), mat="lit")
     # containers on deck: stacks, tier by tier
-    rnd = random.Random(14)
     CL, CW, CH = 11.8, 4.8, 5.0
     k = 0
     for bay in range(7):

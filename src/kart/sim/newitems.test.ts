@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { DriveInput, RaceEvent, RacerSetup } from "../contract";
+import type { DriveInput, RaceEvent } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
 import { itemOdds } from "./items";
 import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
 import { ITEM_KINDS } from "./state";
+import { botField } from "./trackStats";
 import { TUNING } from "./tuning";
 
 const harbour = TrackGeometry.build(HARBOUR_LIGHTS);
@@ -30,11 +31,6 @@ function addThing(r: R, table: "p" | "e" | "l" | "d" | "r", row: number[]): void
 const trap = (id: number, x: number, z: number, s: number): number[] => [id, 99, x, z, s, 0, 0];
 const near = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.hypot(a.x - b.x, a.z - b.z);
 const kinds = (r: R, kind: string) => r.view().things.filter((t) => t.kind === kind);
-
-/** Eight bots of every skill from sharp to gentle. */
-function field(): RacerSetup[] {
-  return Array.from({ length: 8 }, (_, i) => ({ id: i, name: `Bot ${i}`, colour: "#ffffff", player: null, skill: 1 - i * 0.1 }));
-}
 
 describe("puck3", () => {
   it("is three pucks, one per press, and then the item is gone", () => {
@@ -219,7 +215,7 @@ describe("storm", () => {
   it("is dealt once in fifteen seconds at most, over a whole race of bots", { timeout: 60000 }, () => {
     let storms = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const r = race(TRACKS[seed % TRACKS.length]!, field(), { laps: 3, seed });
+      const r = race(TRACKS[seed % TRACKS.length]!, botField(), { laps: 3, seed });
       const drawn: number[] = [];
       for (const e of run(r, 60 * 150)) if (e.type === "pickup" && e.item === "storm") drawn.push(e.tick);
       for (let i = 1; i < drawn.length; i++) expect(drawn[i]! - drawn[i - 1]!).toBeGreaterThanOrEqual(15 * 60);
@@ -318,14 +314,14 @@ describe("skyrocket", () => {
     expect(kinds(r, "skyrocket")).toHaveLength(0);
     expect(events.filter((e) => e.type === "strike").map((e) => (e.type === "strike" ? e.item : ""))).toEqual(["blast"]);
     expect(events.find((e) => e.type === "hit" && e.cause === "skyrocket")).toBeUndefined();
-    // The blast itself spins the neighbour inside its ring.
+    // A blast never spins its own user.
     expect(view(r, 0).spin).toBe(0);
   });
 
   it("is at most one in the air or in hand over a whole race of bots", { timeout: 60000 }, () => {
     let rockets = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const r = race(TRACKS[seed % TRACKS.length]!, field(), { laps: 3, seed });
+      const r = race(TRACKS[seed % TRACKS.length]!, botField(), { laps: 3, seed });
       for (let i = 0; i < 60 * 150; i++) {
         r.step(new Map());
         for (const e of r.takeEvents()) if (e.type === "use" && e.item === "skyrocket") rockets++;
@@ -469,9 +465,9 @@ describe("the odds by place", () => {
 });
 
 describe("determinism and snapshots", () => {
-  it("replays the same race with the new items in it, and a restored race carries on the same", { timeout: 60000 }, () => {
-    const a = race(TRACKS[0]!, field(), { laps: 3, seed: 7 });
-    const b = race(TRACKS[0]!, field(), { laps: 3, seed: 7 });
+  it("replays the same race, items and all, and a restored race carries on the same", { timeout: 60000 }, () => {
+    const a = race(TRACKS[0]!, botField(), { laps: 3, seed: 7 });
+    const b = race(TRACKS[0]!, botField(), { laps: 3, seed: 7 });
     let sizeMax = 0;
     const eventsA: RaceEvent[] = [];
     const eventsB: RaceEvent[] = [];
@@ -489,7 +485,7 @@ describe("determinism and snapshots", () => {
     expect(eventsA.some((e) => e.type === "use" && (e.item === "comet" || e.item === "decoy" || e.item === "blast"))).toBe(true);
     expect(sizeMax).toBeLessThan(3072);
     // Restore the middle snapshot into a fresh race and run on: the same ending.
-    const c = race(TRACKS[0]!, field(), { laps: 3, seed: 7 });
+    const c = race(TRACKS[0]!, botField(), { laps: 3, seed: 7 });
     c.restore(saved!);
     const eventsC: RaceEvent[] = [];
     for (let i = 60 * 40 + 1; i < 60 * 70; i++) eventsC.push(...run(c, 1));

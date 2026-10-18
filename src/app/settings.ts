@@ -6,8 +6,8 @@
  * and is remembered; the difficulty and the camera wait for the next round
  * where one is in play, and the sheet says so.
  *
- * The sheet only shows and edits the player's Preferences; the app puts
- * them into effect (SettingsHost.changed).
+ * The sheet only shows and edits the player's Preferences; the page puts
+ * them into effect (SettingsHost.changed, in settingsHost.ts).
  */
 import type { Difficulty, GameEntry } from "../engine/types";
 import type { Steadiness } from "../input/aim";
@@ -18,10 +18,10 @@ import type { CrosshairStyle } from "./crosshair";
 import type { Preferences, ScopePreferences } from "./prefs";
 import { closeSheet, openSheet } from "./sheets";
 
-declare const __HANDY_VERSION__: string;
+declare const __APP_VERSION__: string;
 
 /** The version of Super Claude Bros., from package.json (Vite writes it in at build time). */
-export const VERSION: string = typeof __HANDY_VERSION__ === "string" ? __HANDY_VERSION__ : "dev";
+export const VERSION: string = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
 
 /** What the Eye Test is told: the camera is getting ready, it could not start, or the face as read now. */
 export type EyeTestState =

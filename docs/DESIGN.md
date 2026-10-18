@@ -195,7 +195,7 @@ soft shadow. No hand is drawn: the games are played with yours. The ticks make i
 gun sight, never a bullseye. It reads down to the 16 px tab icon. It is pure vector,
 drawn in `tools/icons/mark.mjs`, and `node tools/icons/render.mjs` writes the app
 icons and the favicon to `public/icons/`. The wordmark, the Finger Guns tile, the
-share card and the promo use `icon-192.png` or `icon-512.png`. Never redraw the mark
+share card and the trailer use `icon-192.png` or `icon-512.png`. Never redraw the mark
 elsewhere, and never use it as a button icon.
 
 ## Sound
@@ -219,8 +219,8 @@ phone.
 - **Grip Prix** (bright): its sunny poster, the same shape of words
   ("Racing · Up to 4 Players", "Grip the wheel. Race your friends."), and
   Race, which goes to race.html. The poster is
-  `public/assets/kart/poster.webp`, its badge `icon.png`; until they exist the
-  game's backdrop and no badge stand in.
+  `public/assets/kart/poster.webp`, its badge `icon.png`; where they are
+  missing the game's backdrop and no badge stand in.
 - **How It Plays**, quiet under each pill, opens a sheet with that family's
   gesture in words and its three steps, lit one after another (Point, Fold your
   thumb, Fire; or Grip, Turn left, Turn right). No hand is drawn anywhere in

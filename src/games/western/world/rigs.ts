@@ -3,7 +3,7 @@
  * (engine/world/character.ts) plays them: the four kinds, what each clip
  * falls back to when a file lacks it, and the street's rim light.
  */
-import { Color, type AnimationClip, type Mesh, type Object3D } from "three";
+import { Color, type AnimationClip } from "three";
 import type { LoadedAsset } from "../../../engine/types";
 import { rimLight, templateFrom, type CharacterTemplate } from "../../../engine/world/character";
 
@@ -53,22 +53,5 @@ export function streetRim(noon: boolean) {
 
 /** A kind's template, with High Noon's fallbacks and the street's rim. */
 export function highNoonTemplate(kind: CharacterKind, asset: LoadedAsset, rim: ReturnType<typeof streetRim>, extraClips: readonly AnimationClip[] = []): CharacterTemplate {
-  singlePass(asset.scene);
   return templateFrom(kind, asset, extraClips, { fallbacks: CLIP_FALLBACKS, rim });
-}
-
-/**
- * Every rig is drawn see-through, so a body can fade away, and three draws a
- * see-through double-sided material twice - its back faces, then its front -
- * flipping its side and looking its shader up again for each: twice the
- * skinning, and a lookup's worth of garbage, for every figure every frame.
- * Opaque in play, one pass looks the same. The rigs' own materials are
- * cloned from these, flag and all.
- */
-export function singlePass(scene: Object3D): void {
-  scene.traverse((o) => {
-    const m = (o as Mesh).material;
-    if (!m) return;
-    for (const mat of Array.isArray(m) ? m : [m]) mat.forceSinglePass = true;
-  });
 }

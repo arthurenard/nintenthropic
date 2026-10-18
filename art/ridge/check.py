@@ -8,7 +8,6 @@ contract node, extra, bone, clip and budget the game builds against, prints
 sizes and triangle counts, and exits non-zero on any contract error.
 """
 
-import json
 import math
 import os
 import re
@@ -86,10 +85,6 @@ def sequence(names, prefix):
     idx = sorted(int(m.group(1)) for n in names if n and (m := rx.match(n)))
     ok = idx == list(range(1, len(idx) + 1))
     return idx, ok
-
-
-def node_pos(n):
-    return n.get("translation", [0.0, 0.0, 0.0])
 
 
 def world_positions(g):
@@ -283,10 +278,6 @@ def occlusion_maps(r, g):
     return decoded
 
 
-def skinned_meshes(g):
-    return [n for n in g.nodes if "mesh" in n and "skin" in n]
-
-
 def check_bones(r, g):
     skins = g.json.get("skins", [])
     if not r.need(skins, "no skin"):
@@ -412,7 +403,7 @@ def check_valley(path):
         kinds.setdefault(k, []).append(p)
     r.need(len(posts) >= 6, f"only {len(posts)} posts")
     r.need(set(kinds) >= POST_KINDS, f"post kinds present: {sorted(kinds)}")
-    r.info(f"posts: " + ", ".join(f"{k}: {len(v)}" for k, v in sorted(kinds.items())))
+    r.info("posts: " + ", ".join(f"{k}: {len(v)}" for k, v in sorted(kinds.items())))
     # sniper nests
     nests = [n for n in names if n and re.match(r"^sniper\.\d+$", n)]
     r.need(len(nests) >= 2, f"only {len(nests)} sniper nests")
@@ -506,7 +497,6 @@ def check_vehicles(path):
     if not r.need(os.path.exists(path), "vehicles.glb missing"):
         return r
     g = GLB.load(path)
-    by_idx = {i: n for i, n in enumerate(g.nodes)}
     for root in ("truck", "jeep"):
         ri = g.node_index(root)
         if not r.need(ri is not None, f"{root} missing"):

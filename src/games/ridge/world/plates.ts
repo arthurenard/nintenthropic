@@ -32,7 +32,6 @@ const BACK = new Vector3(0, 0, 1);
 
 export class PlateStage implements CalibrationStage {
   private readonly plates: Plate[] = [];
-  private lit: string | null = null;
   /** Rounds that missed, on their way into the ground beside a plate. */
   private readonly misses: { at: Vector3; t: number }[] = [];
   active = true;
@@ -100,7 +99,8 @@ export class PlateStage implements CalibrationStage {
       tmp.copy(p.centre).project(cam);
       p.target.x = (tmp.x + 1) / 2;
       p.target.y = (1 - tmp.y) / 2;
-      // The painted circle's size on screen, and never less than a hand can hit.
+      // The painted circle's size on screen, and never less than a hand can hit. (Not the engine's
+      // placeTarget: a plate's zone is held between 3.4% and 6% of the view, and its circle drawn to match.)
       const d = p.centre.distanceTo(cam.position);
       const px = (1.45 / d / Math.tan((cam.fov * Math.PI) / 360)) * (height / 2);
       p.target.radius = Math.max(0.034, Math.min(0.06, px / side));
@@ -124,7 +124,6 @@ export class PlateStage implements CalibrationStage {
   }
 
   light(id: string | null): void {
-    this.lit = id;
     for (const p of this.plates) p.ring.visible = p.id === id && this.active;
   }
 
@@ -178,10 +177,6 @@ export class PlateStage implements CalibrationStage {
       p.swing += p.spin * dt;
       p.pivot.rotation.x = p.swing;
     }
-  }
-
-  get litId(): string | null {
-    return this.lit;
   }
 
   /** The plates' centres, for framing the aim check's view on them. */

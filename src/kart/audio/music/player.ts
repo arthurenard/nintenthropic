@@ -7,6 +7,7 @@
  * The timing arithmetic (where the next beat falls, which beat of the other
  * version matches it) is in pure functions at the top, tested in Node.
  */
+import { volumeGain } from "../../../audio/routing";
 import type { ScoreBar } from "./score";
 
 /** A piece ready to play. */
@@ -37,9 +38,6 @@ export function nextBeat(beats: Float32Array, duration: number, position: number
   return { index: 0, wait: duration - p + (beats[0] ?? 0) };
 }
 
-/** Linear-to-slider volume: perceptual, like the engine's master. */
-export const sliderGain = (v: number): number => (v > 0 ? Math.min(1, v) ** 2 : 0);
-
 /** Music sits this far under its rendered level in the mix (the engine's ambience and the effects come first). */
 export const MUSIC_TRIM = 0.64;
 
@@ -69,7 +67,7 @@ export class MusicPlayer {
     this.filter.frequency.value = 20000;
     this.filter.Q.value = 0.5;
     this.master = ctx.createGain();
-    this.master.gain.value = MUSIC_TRIM * sliderGain(this.volume);
+    this.master.gain.value = MUSIC_TRIM * volumeGain(this.volume);
     this.duckGain.connect(this.filter).connect(this.master).connect(destination);
   }
 
@@ -98,7 +96,7 @@ export class MusicPlayer {
    * Change to another version of the same piece (the final lap) on the next
    * beat: the new one starts at the matching beat of its own loop, after a
    * brief equal-power crossfade, so the bar count and the groove carry on.
-   * Does nothing useful if nothing is playing (then it just plays).
+   * If nothing is playing, it simply starts the track.
    */
   switchTo(track: MusicTrack, fade = 0.06): void {
     if (this.disposed) return;
@@ -132,7 +130,7 @@ export class MusicPlayer {
     g.setTargetAtTime(1, now + attack + hold, release / 3);
   }
 
-  /** The music's slider, 0..1 (perceptual: half way is a quarter of the power). */
+  /** The music's slider, 0..1, squared like the engine's master volume: half way is a quarter of the level, about 12 dB down. */
   setVolume(v: number): void {
     this.volume = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
     this.applyMaster();
@@ -160,7 +158,7 @@ export class MusicPlayer {
 
   private applyMaster(): void {
     const now = this.ctx.currentTime;
-    const target = MUSIC_TRIM * sliderGain(this.volume) * (this.paused ? 0.45 : 1);
+    const target = MUSIC_TRIM * volumeGain(this.volume) * (this.paused ? 0.45 : 1);
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setValueAtTime(this.master.gain.value, now);
     this.master.gain.setTargetAtTime(target, now, 0.04);

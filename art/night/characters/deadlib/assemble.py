@@ -17,7 +17,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix
 
-from .common import AB, MT, SK, SKN, bl, S, log, BONE_NAMES
+from .common import AB, MT, SKN, bl, log
 
 
 def bake_atlas(jobs, size, name):

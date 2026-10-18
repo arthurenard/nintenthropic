@@ -22,7 +22,7 @@ type Extra = {
   smoothing: { minCutoff: number; beta: number } | null;
 };
 
-const extra = (page: Page) => page.evaluate(() => window.handyTest!.snapshot() as unknown as Extra);
+const extra = (page: Page) => page.evaluate(() => window.arcadeTest!.snapshot() as unknown as Extra);
 
 const storedKeys = (page: Page) =>
   page.evaluate(() => {
@@ -37,7 +37,7 @@ const storedKeys = (page: Page) =>
 const endRound = (page: Page, score: number, outcome = "Fell on Wave 2", note?: string) =>
   page.evaluate(
     ({ score, outcome, note }) =>
-      window.handyTest!.hud().gameOver({
+      window.arcadeTest!.hud().gameOver({
         outcome,
         won: false,
         score,
@@ -196,7 +196,7 @@ test("difficulty persists across a reload, reaches the game, and keeps its own r
   await expect(page.locator("#home-best")).toHaveText("Your best on Relaxed: 4,321 · Fell on Wave 3");
   await shot(page, info, "settings-04-arcade-record");
 
-  // Standard keeps its own records, and the hand its own.
+  // Standard keeps its own records.
   await page.getByRole("button", { name: "Settings" }).click();
   await pickDifficulty(page, "Standard");
   await page.getByRole("button", { name: "Done" }).click();

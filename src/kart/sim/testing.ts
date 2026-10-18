@@ -70,7 +70,7 @@ export function view(r: SimRace, id = 0): KartView {
   return r.view().karts.find((k) => k.id === id)!;
 }
 
-/** Sets some of a kart's numbers (by `KART_AT` name) in the race, through a snapshot. Items are given by name. */
+/** Sets some of a kart's numbers (by `KART_AT` name) in the race, through a snapshot. An item goes in as its index in ITEM_KINDS (-1 for none); `give` puts one in a kart's hand by name. */
 export function patch(r: SimRace, index: number, values: Partial<Record<keyof typeof KART_AT, number>>): void {
   const snap = r.snapshot();
   const row = (snap.k as number[][])[index]!;

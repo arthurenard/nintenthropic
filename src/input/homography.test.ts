@@ -1,4 +1,4 @@
-// Ported from tests/test_homography.py.
+// Ported from the Python version's tests/test_homography.py (git tag `python-final`).
 import { describe, expect, it } from "vitest";
 import { gaussian, seededRandom } from "../engine/random";
 import type { Point } from "./filter";

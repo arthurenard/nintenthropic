@@ -19,7 +19,7 @@ import math
 
 import numpy as np
 
-from .common import S, BD, G, R, GR, OF, HD, C, PT, bl, srgb, smoothstep, value_noise, fbm, JOINTS
+from .common import S, BD, G, R, GR, PT, srgb, smoothstep, value_noise, fbm, JOINTS
 from . import meshfix as MF
 from . import heads as H
 
@@ -27,7 +27,6 @@ from . import heads as H
 def grave_wear(P, col, rough, amount=1.0, seed=0, stains=True, tears=True, mud=True):
     """Age any garment paint for the grave, in place."""
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
-    n = len(P)
     if mud:
         m = np.clip((0.75 - z) / 0.75, 0, 1) ** 1.3 * (0.4 + 0.9 * fbm(P, 16, 3, seed=seed + 1))
         m += 0.5 * smoothstep(0.55, 0.8, fbm(P, 9, 3, seed=seed + 2)) * smoothstep(0.7, 0.4, z)
@@ -245,7 +244,6 @@ UNIFORM_HEM = 0.47
 
 
 def uniform_field():
-    from .common import C as _C
     from charlib.garments import arm_path, _table_profile
     from charlib.body import _frame_z
     top = S.Tube([(0, t[3], t[0]) for t in UNIFORM_TORSO], [t[1] for t in UNIFORM_TORSO], [t[2] for t in UNIFORM_TORSO])

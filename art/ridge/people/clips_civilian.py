@@ -40,7 +40,6 @@ def staff_hand(p=(0.244, -0.100, 0.930), tilt=0.0):
 
 
 STAND = P(TORSO, ARM_R, staff_hand(), {"pole.hand.L": POLE_L})
-STAND_CARRY_L = K.chest_carry(STAND)
 
 
 def idle():
@@ -103,9 +102,6 @@ def run():
               upper_arm__L=(-8 + 40 * sw, 40, 0), forearm__L=(-75 - 10 * sw, 0, 0), hand__L=(0, 0, 0),
               ikw__hand__R=(0, 0, 0), ikw__hand__L=(0, 0, 0))
     return c
-
-
-PALM_R = hand_rot("R", (0.0, 0.0, 1.0), (1.0, 0.0, 0.0))
 
 
 def wave():

@@ -12,10 +12,10 @@ runtime, and its streetlight flickers, so each group gets:
   albedo  the surfaces' own colour (sRGB), for the game's albedo x beam.
   orm     R: the streetlight's flicker mask - the fraction of the displayed
              `lit` that is the streetlight's (1 - lum(lit without it) /
-             lum(lit)); the game shows lit x (1 - mask x (1 - flicker)).
-          G: roughness (so the beam glints on wet asphalt and puddles)
+             lum(lit)), which export.py turns into the game's flicker maps.
+          G: roughness (baked, but not shipped: the export reads R only)
           B: 0 (nothing on Route 9 is bare polished metal)
-          at half resolution.
+          at half resolution, in art/night/build/ only.
 
 UV layout follows High Noon's (dustcreek.bake, reused): the ground uses a
 camera-projection layout (texel density = screen density from the eye,
@@ -25,13 +25,11 @@ on-screen density (1/distance, visibility ray-cast) and shelf-packed.
 The corn is baked to vertex colours instead (see corn.py).
 """
 
-import math
 import os
 import time
 
 import bpy
 import numpy as np
-from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from .common import setup_gpu

@@ -33,9 +33,9 @@ export interface DynamicResolutionOptions {
 
 /** Frames per judgement: about half a second at 60 fps. */
 const WINDOW = 30;
-/** Slower than this multiple of the target, on average, is too slow. */
+/** Slower than this multiple of the target, by the window's median, is too slow. */
 const SLOW = 1.2;
-/** Faster than this multiple, on average, is room to spare. */
+/** Faster than this multiple, by the window's median, is room to spare. */
 const EASY = 1.05;
 /** Easy windows in a row before the scale goes back up (two seconds). */
 const EASY_WINDOWS = 4;
@@ -109,9 +109,9 @@ export class DynamicResolution {
     // the tracker compiling a shader - is one frame and says nothing about
     // the resolution.
     const sorted = [...this.window].sort((a, b) => a - b);
-    const average = (sorted[(WINDOW >> 1) - 1]! + sorted[WINDOW >> 1]!) / 2;
+    const median = (sorted[(WINDOW >> 1) - 1]! + sorted[WINDOW >> 1]!) / 2;
     this.window = [];
-    const slow = average > this.target * SLOW;
+    const slow = median > this.target * SLOW;
 
     if (this.restoreFutile) {
       // How long the frames take, to tell whether fewer pixels helped: the
@@ -147,7 +147,7 @@ export class DynamicResolution {
       this.probe = null;
       return this.set(back);
     }
-    if (average < this.target * EASY) {
+    if (median < this.target * EASY) {
       this.easyWindows++;
       const next = this.clamp(this.scale + STEP_UP);
       if (this.easyWindows >= EASY_WINDOWS && next > this.scale + 1e-9 && next < this.blockedFrom - 1e-9) {

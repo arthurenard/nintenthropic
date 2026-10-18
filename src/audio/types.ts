@@ -1,4 +1,4 @@
-import type { AudioBus } from "../engine/types";
+import type { AudioBus, CueOptions } from "../engine/types";
 import type { Pack } from "./cues/table";
 import type { GenerationReport } from "./library";
 import type { StreetSpace } from "./routing";
@@ -36,7 +36,7 @@ export interface SteerableAudio {
   /** The audio clock and graph these belong to. */
   readonly ctx: BaseAudioContext;
   /** Like ``AudioBus.loop`` but steerable (see LoopControl). */
-  controlledLoop(cue: string, options?: import("../engine/types").CueOptions): LoopControl;
+  controlledLoop(cue: string, options?: CueOptions): LoopControl;
   /**
    * A bus for long pieces a game renders and plays itself (music): a node to
    * connect buffer sources to. It joins the master after the street's muffle,

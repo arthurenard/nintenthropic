@@ -1,6 +1,6 @@
 # Dead of Night — game design
 
-The second game of the web-native Super Claude Bros. A night at the last gas
+The second game of Super Claude Bros. A night at the last gas
 station on a country road: the power is out, the fog is in, and the dead are
 walking up the road. You have a lever-action rifle, a flashlight under its
 barrel, and a barricade. It must look and feel like something Apple would put on
@@ -76,8 +76,7 @@ the bus and the phone booth also open the first waves, see Waves).
 
 - **Walkers** — the most of them. A shambling walk with a varied gait (mostly
   a lurch or a shamble, now and then a limp or a drag, arms up or hanging),
-  1.26 m/s on average on Standard - a third faster than the night first
-  walked them - and faster as the waves go on. A walker's pace is its gait's
+  1.26 m/s on average on Standard, and faster as the waves go on. A walker's pace is its gait's
   own (the speed its clip was made for: 1.1 m/s lurching, 0.85 shambling, 0.7
   limping, 0.6 dragging) made 15-60% quicker, and its clip plays at that pace
   over the one it was made for, so the feet never slide; a pace that would
@@ -143,10 +142,7 @@ catches their lantern first.
 | 6 | The Mechanic + 20 | Boss |
 | 7+ | +6 each | More runners, a bigger crowd at once, thicker fog, faster walkers (+9% a wave) |
 
-The night was once slower to start (runners from wave 3, crawlers from 4,
-bloaters from 5, three more dead a wave, the dead a third slower): a steady
-hand fell around wave 16, and the game was not as hard as the others. On
-Standard a steady hand now falls around wave 9, a slow, wild one around 5 or 6
+On Standard a steady hand falls around wave 9, a slow, wild one around 5 or 6
 and the slowest around 3 or 4 (`rules/balance.test.ts` plays them out). What
 gets harder is the crowd: each wave the dead come closer together, more of
 them at once (`maxActive`, though never more than the 22 figures the night
@@ -165,14 +161,12 @@ view, and, on wave 1, from behind the phone booth 22 m out, whose walker is
 the first to reach the barricade, a little over twenty seconds in. Nothing
 begins in the open: every one begins in a surprise's cover, in the corn, or
 out in the fog (a figure at no more than half clarity). The wave's other dead
-follow at shorter gaps than before on these waves (1.7–3 s; they were
-2.6–4.4 s on wave 1 and 2–3.6 s on waves 2 and 3), and wave 1 lets five be in
-play at once (it was four). From wave 4 on they come one at a time, at the
+follow at shorter gaps on these waves (1.7–3 s), and wave 1 lets five be in
+play at once. From wave 4 on they come one at a time, at the
 table's gaps and the fog's reach (`OPENINGS` in `rules/waves.ts`,
 `OPENING_REACH` and `OPENING_STAGGER` in `rules/tuning.ts`).
 
-A wave ends when every one of it is down. Then a **breather** (4 s; it was
-6): the fog
+A wave ends when every one of it is down. Then a **breather** (4 s): the fog
 thins, the streetlight steadies and buzzes back to full, a distant church bell
 counts the wave, the title card slides in ("Wave 3"), health refills, and the
 crickets start again. There is no clock: you last until the night takes you.
@@ -193,8 +187,8 @@ Relaxed: the dead walk at half Standard's pace, claw for 20 instead of 25
 (five in quick succession to fall, not four), health returns after 3 s at
 40/s, the fog is a little thinner, bloaters burst with a wider warning, the
 Mechanic needs one shot on the mask, and a wave has to drag on for 30 s
-before it turns against you. It carries the same hands to about where Standard
-used to (a steady hand to wave 15, a wild one to 9, the slowest to 6).
+before it turns against you. It carries a steady hand to about wave 15, a
+wild one to 9, the slowest to 6.
 Standard is the game as designed. Records are apart.
 
 ## One-time tips (Settings.tipsSeen)
@@ -240,8 +234,8 @@ Late Show, Something Howled Back, Nine Lives, Easy Listening, The Duck.
    right edge of a wide screen; off screen below about 1.5:1), a radio. Shoot it: it plays a few bars of a 1950s ballad
    (synthesised) until the next wave.
 8. **The duck.** A yellow rubber duck bobs in a puddle by the pumps. Shoot it:
-   it squeaks and spins ("The duck is fine."). (Every game hides one duck.
-   Find them all.)
+   it squeaks and spins ("The duck is fine."). (Orbital Decay, Overwatch
+   Ridge and every Grip Prix track hide one too.)
 
 Konami on the arcade: the Golden Revolver → in Dead of Night, a golden rifle
 and a golden beam.
@@ -274,8 +268,8 @@ closes in from the same eye, as in High Noon.
 All glTF is Y-up, metres, player at the origin, eyes at 1.7 m, looking along
 −Z (north up the road). Everything is made by `art/night/` Blender scripts —
 nothing downloaded — reusing High Noon's pipeline and character library
-(`art/western/`, imported read-only; extend it in `art/night/`, don't edit the
-western scripts).
+(`art/western/`, which the night's scripts import and extend in `art/night/`
+rather than change).
 
 ### `public/assets/night/road.glb` — Route 9
 

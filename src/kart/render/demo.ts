@@ -1,13 +1,15 @@
 /**
- * A stand-in for the real sim, so the renderer can be built and judged on
- * its own: eight karts round the track, the first drivable (or on autopilot
- * when no key is pressed), with a script of fake drifts, boosts, items,
- * spin-outs, bumps and finishes so every effect shows.
+ * The dev page's scripted race, so the renderer can be judged on its own:
+ * eight karts round the track, the first drivable (or on autopilot when no
+ * key is pressed), with a script of fake drifts, boosts, items, spin-outs,
+ * bumps and finishes so every effect shows. It is the dev page's default
+ * (?sim=1 runs the real sim instead, simSource.ts), and the only source with
+ * the hooks a posed picture needs (shot.ts).
  *
  * It is clearly NOT the sim: nothing here is deterministic across devices,
  * karts do not really collide, and the physics is a few lines. It produces
- * `RaceView`s of exactly the shape the real sim does, so the dev page can
- * swap this for `createRace(...).view()` and the picture will not know.
+ * `RaceView`s of exactly the shape the real sim does, so the picture cannot
+ * tell which it is drawing.
  */
 import { CHARACTERS } from "../characters";
 import {
@@ -24,7 +26,7 @@ import {
 import { TrackGeometry } from "../track/geometry";
 import { angleDiff, clamp, damp } from "./math";
 
-/** What the person at the keyboard asks (all optional: nothing pressed means the autopilot drives). */
+/** What the person at the keyboard asks (`null` when no key has been pressed for a while: then the autopilot drives). */
 export interface DemoInput {
   steer: number;
   throttle: number;
@@ -34,7 +36,7 @@ export interface DemoInput {
   itemPresses: number;
 }
 
-/** Anything that can feed the renderer: the demo now, the real sim's session later. */
+/** Anything that can feed the dev page's renderer: this demo, or the real sim (simSource.ts). */
 export interface RaceViewSource {
   readonly racers: readonly RacerSetup[];
   readonly track: TrackDef;
@@ -98,7 +100,7 @@ export class DemoRace implements RaceViewSource {
   private finishedAt = -1;
   private rnd = 7;
   private lastPresses = 0;
-  /** Whether boxes are sent as things (the real sim will) or left to the track's rows. */
+  /** Whether boxes are sent as things (as the real sim does) or left to the track's rows. */
   boxesAsThings = true;
   /** For the dev page: fields forced onto a kart's view whatever the demo does (a trick, a fall, a surface). */
   private overrides = new Map<number, Partial<KartView>>();
@@ -637,9 +639,7 @@ export class DemoRace implements RaceViewSource {
           k.drift = 0;
           k.driftLevel = 0;
           this.emit({ type: "hit", kart: k.id, by: t.owner, cause: t.kind as "puck" | "seeker" | "slick" });
-          if (t.kind !== "slick") t.ttl = 0;
-          else t.ttl = Math.min(t.ttl, 30);
-          if (t.kind === "slick") t.ttl = 0;
+          t.ttl = 0;
         }
       }
     }

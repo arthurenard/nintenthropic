@@ -20,9 +20,9 @@ import time
 
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 
-from .common import S, SK, BD, HN, HD, C, PT, PG, G, R, bl, srgb, smoothstep, value_noise, fbm, JOINTS, log
+from .common import S, SK, BD, HN, HD, PT, PG, bl, srgb, smoothstep, value_noise, log
 from . import outfits as O, assemble
 from . import meshfix as MF
 

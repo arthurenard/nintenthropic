@@ -16,9 +16,8 @@ burlap strips in dull greens, tans and browns.
 """
 import math
 import numpy as np
-from charlib import sdf as S, bl, abake as AB, body as BD, head as HD, paint as PT, character as C
-from charlib.texture import srgb, smoothstep, value_noise, fbm
-from . import wear as W
+from charlib import sdf as S, bl, body as BD, head as HD, character as C
+from charlib.texture import srgb, value_noise, fbm
 
 JUTE = [srgb(0.34, 0.30, 0.20), srgb(0.24, 0.24, 0.15), srgb(0.20, 0.19, 0.12), srgb(0.30, 0.26, 0.17),
         srgb(0.17, 0.18, 0.12), srgb(0.38, 0.34, 0.24), srgb(0.22, 0.20, 0.14)]
@@ -40,7 +39,7 @@ def suit_field(spec, tf, wf):
 
     def f(P):
         d = swollen(P).astype(np.float64)
-        x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        z = P[:, 2]
         # the hood is closed over the face: a scrim veil he sees through (a
         # pale face in a dark hood is the one thing a spotter would find)
         # open at the wrists and above the boots
@@ -86,7 +85,7 @@ def strands(field, suit_ob, rng, n=900, veil=40):
     ok &= cen[:, 2] > 0.24
     w = area * ok
     pick = rng.choice(len(tri), size=n, p=w / w.sum())
-    roots, dirs = [], []
+    roots = []
     for i in pick:
         u, v_ = rng.random(), rng.random()
         if u + v_ > 1:

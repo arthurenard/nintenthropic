@@ -32,7 +32,7 @@ byte against `--no-holds`).
 | `t-four` | 2 s | yes | centred, one line, 80 px 700: "Up to 4 players. One camera." The second sentence follows 0.15 s behind; out from 1.65 s. Stronger shadow and scrim for busy footage. |
 | `end` | 6 s | no | Sized to stay readable on a phone (X shows the video ~360 px wide). The app icon (280 px) over a soft sunset glow (0.0-0.6), "Super Claude Bros." (160 px, 0.3-0.9), "Games you play with your hands." (68 px, 85% white, 1.0-1.6), a row of two families, [app icon] "Finger Guns" and [kart icon] "Grip Prix" (96 px tiles, 48 px labels, 2.2-2.8), "In your browser. No controller." (44 px, 70% white, 3.0-3.5). The stack glides up 2.1-2.9 s to make room for the row. Fade to pure black 5.3 s to the last frame. |
 
-Type is the system face (`-apple-system`, SF Pro in Chrome on this Mac) with the
+Type is the system face (`-apple-system`, SF Pro in Chrome on a Mac) with the
 tracking from `docs/DESIGN.md`. Easing is a soft cubic-bezier; nothing bounces or wipes.
 
 ## The end card's icons
@@ -45,5 +45,5 @@ a hairline). To override one, put `app.png`, `finger-guns.png` or `grip-prix.png
 `SLOT` in `cards.js` and `cards.html`; their final rects are in `cards.json`
 (`slots`; the stack is still gliding before 2.9 s).
 
-`tools/icons/mark.mjs` exports `SIGHT` (the sight's measures) for the hook and
-turn cards; `markSvg()`'s output is unchanged by it.
+`tools/icons/mark.mjs` exports `SIGHT` (the sight's measures, the same ones
+`markSvg()` draws the app icon from) for the hook and turn cards.

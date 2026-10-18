@@ -19,7 +19,7 @@
          The lobby, the results and the standings lay their track's postcard over it (.menu-photo, backdrop.ts); the driver's screen makes it a studio. -->
     <div class="menu-sky" aria-hidden="true"><div class="menu-photo" id="menu-photo"></div><i class="menu-sun"></i><i class="menu-cloud m1"></i><i class="menu-cloud m2"></i></div>
 
-    <!-- 1. Start: the key art (or, until it is drawn, a bright meadow and a road), the wordmark, and the three ways in. -->
+    <!-- 1. Start: the key art (or, until it has loaded, a bright meadow and a road), the wordmark, and the three ways in. -->
     <section id="screen-start" class="screen start" aria-labelledby="start-title">
       <div class="start-world" aria-hidden="true">
         <div class="start-fallback">
@@ -65,7 +65,7 @@
           <svg class="gp-speed" viewBox="0 0 120 64" aria-hidden="true">
             <path d="M6 12h74M0 32h96M12 52h62" />
           </svg>
-          <h1 class="gp-mark" id="start-title"><span class="gp-grip">Grip</span> <span class="gp-prix">Prix</span></h1>
+          <h1 class="gp-mark" id="start-title">Grip <span class="gp-prix">Prix</span></h1>
           <i class="gp-flag" aria-hidden="true"></i>
           <p class="start-tag">Grip the wheel. Race your friends.</p>
         </div>
@@ -99,7 +99,7 @@
     </section>
 
     <!-- 2. You: a name, how you drive, and who is on this camera. The driver comes next. -->
-    <section id="screen-you" class="screen page you" hidden aria-labelledby="you-title">
+    <section id="screen-you" class="screen page" hidden aria-labelledby="you-title">
       <header class="bar">
         <button id="you-back" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
@@ -186,7 +186,7 @@
         </div>
         <div class="driver-stage" id="driver-stage">
           <img class="stage-photo" id="driver-photo" alt="" width="640" height="640" hidden />
-          <p class="stage-hint" id="driver-hint" aria-hidden="true">Drag to turn</p>
+          <p class="stage-hint" aria-hidden="true">Drag to turn</p>
         </div>
         <div class="driver-info">
           <h2 class="driver-name" id="driver-name" aria-live="polite">Bun</h2>
@@ -202,7 +202,7 @@
         <div class="driver-dock" id="driver-dock" role="radiogroup" aria-label="Drivers"></div>
         <div class="driver-actions">
           <button id="driver-continue" class="button primary large">Continue</button>
-          <p class="keys-hint" id="driver-keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> Choose <kbd>Return</kbd> Continue</p>
+          <p class="keys-hint" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> Choose <kbd>Return</kbd> Continue</p>
         </div>
       </div>
     </section>
@@ -230,7 +230,7 @@
     </section>
 
     <!-- 5. The lobby: the room on the left (the code, who is here), the race on the right. -->
-    <section id="screen-lobby" class="screen page lobby" hidden aria-labelledby="lobby-title">
+    <section id="screen-lobby" class="screen page" hidden aria-labelledby="lobby-title">
       <header class="bar">
         <button id="lobby-leave" class="button back glass">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg><span id="lobby-leave-label">Leave</span>
@@ -260,7 +260,7 @@
           <section class="racers" aria-labelledby="group-players">
             <h2 class="section-title" id="group-players">Racers <span class="num" id="racer-count"></span></h2>
             <div class="racer-list" id="lobby-players"></div>
-            <p class="group-foot" id="foot-players"></p>
+            <p class="group-foot" id="foot-racers"></p>
           </section>
           <section class="screen-choice glass" id="group-screen" aria-labelledby="group-showme" hidden>
             <div class="screen-choice-head">
@@ -423,7 +423,7 @@
         </div>
         <ol class="st-rows num" id="gp-rows" aria-label="Grand Prix standings"></ol>
         <div class="st-foot">
-          <div class="st-next glass" id="gp-next-card">
+          <div class="st-next glass">
             <div class="st-next-words">
               <p class="eyebrow" id="gp-next-eyebrow">Next Up</p>
               <p class="title3" id="gp-next-name"></p>
@@ -552,10 +552,7 @@
       <symbol id="i-exclamation" viewBox="0 0 24 24"><path d="M12 5.2v9.2" stroke-width="2.2" /><circle fill="currentColor" stroke="none" cx="12" cy="18.8" r="1.45" /></symbol>
       <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 16.4 0" /><path d="M6.8 12.7a7.3 7.3 0 0 1 10.4 0" /><path d="M9.8 15.8a3 3 0 0 1 4.4 0" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /></symbol>
       <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3.8 9.6a11.6 11.6 0 0 1 5.5-3.1M13.9 6.1a11.6 11.6 0 0 1 6.3 3.5" /><path d="M6.8 12.7a7.3 7.3 0 0 1 3.4-2M17.2 12.7a7.3 7.3 0 0 0-2.3-1.6" /><path d="M9.8 15.8a3 3 0 0 1 3.2-.8" /><circle fill="currentColor" stroke="none" cx="12" cy="18.6" r="1.2" /><path d="M5.2 4.4 18.8 19.6" /></symbol>
-      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="4.5" width="6.2" height="6.2" rx="1.6" /><rect x="4.5" y="13.3" width="6.2" height="6.2" rx="1.6" /><rect x="13.3" y="13.3" width="6.2" height="6.2" rx="1.6" /></symbol>
       <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14.5 5.8 8.3 12l6.2 6.2" /></symbol>
-      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.5 5.8 15.7 12l-6.2 6.2" /></symbol>
-      <symbol id="i-chevron-updown" viewBox="0 0 24 24"><path d="M8.2 9.4 12 5.6l3.8 3.8M8.2 14.6 12 18.4l3.8-3.8" /></symbol>
       <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.2 13.8a3.9 3.9 0 0 0 5.5 0l3-3a3.9 3.9 0 0 0-5.5-5.5l-1 1" /><path d="M13.8 10.2a3.9 3.9 0 0 0-5.5 0l-3 3a3.9 3.9 0 0 0 5.5 5.5l1-1" /></symbol>
       <symbol id="i-wheel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" /><circle cx="12" cy="12" r="2.3" /><path d="M3.7 10.4l6 1.1M20.3 10.4l-6 1.1M12 14.3v6.2" /></symbol>
       <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.8" y="6.2" width="18.4" height="11.6" rx="2.6" /><path d="M6.6 10.2h.01M10.2 10.2h.01M13.8 10.2h.01M17.4 10.2h.01M8 14h8" /></symbol>
@@ -567,10 +564,8 @@
       <symbol id="i-weight" viewBox="0 0 24 24"><path d="M9.4 7.6a3.6 3.6 0 1 1 5.2 0" /><path d="M7.3 8.2h9.4l2.2 10a1.7 1.7 0 0 1-1.7 2.1H6.8A1.7 1.7 0 0 1 5.1 18.2z" /></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.6" y="10.6" width="12.8" height="9.4" rx="2.4" /><path d="M8.6 10.6V8.2a3.4 3.4 0 0 1 6.8 0v2.4" /></symbol>
       <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4.2l1.5 4.3 4.3 1.5-4.3 1.5L10 15.8l-1.5-4.3L4.2 10l4.3-1.5z" /><path d="M18 14.2l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></symbol>
-      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13" /></symbol>
       <symbol id="i-person-plus" viewBox="0 0 24 24"><circle cx="9.6" cy="8.4" r="3.5" /><path d="M3.4 19.6c.5-3.6 3.1-5.7 6.2-5.7s5.7 2.1 6.2 5.7" /><path d="M18.6 8.2v6M15.6 11.2h6" /></symbol>
       <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7.4 4.4h9.2v5.2a4.6 4.6 0 0 1-9.2 0z" /><path d="M7.4 6H4.6v1.4a3 3 0 0 0 3 3M16.6 6h2.8v1.4a3 3 0 0 1-3 3" /><path d="M12 14.2v3.2M8.6 20h6.8M9.6 20v-2.6h4.8V20" /></symbol>
-      <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.7" /><path d="M4.8 20c.6-3.8 3.4-6 7.2-6s6.6 2.2 7.2 6" /></symbol>
     </svg>
     <script type="module" src="/src/kart/main.ts"></script>
   </body>

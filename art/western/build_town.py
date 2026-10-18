@@ -27,8 +27,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import bpy  # noqa: E402
-
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 BUILD = os.path.join(HERE, "build")
 ASSETS = os.path.join(REPO, "public", "assets", "western")

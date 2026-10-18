@@ -85,7 +85,7 @@ export function templateFrom(kind: string, asset: LoadedAsset, extraClips: reado
 }
 
 /** Every rig's materials compile to one shader program. */
-const PATCH_KEY = "handy-rig";
+const PATCH_KEY = "character-rig";
 
 /** What each rig's shader reads besides the scene's lights. */
 export interface RigLighting {

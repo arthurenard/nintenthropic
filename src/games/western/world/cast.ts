@@ -88,8 +88,6 @@ export class Cast {
   private readonly tumblers = new Tumblers(8);
   private readonly hatMeshes: Mesh[] = [];
   private time = 0;
-  private frame = 0;
-  golden = false;
   /** For each cover up high, which way a man shot there goes over (set at load). */
   falls: ReadonlyMap<string, FallPath> = new Map();
 
@@ -566,7 +564,6 @@ export class Cast {
 
   update(dt: number, time: number): void {
     this.time = time;
-    this.frame++;
     for (let i = this.bandits.length - 1; i >= 0; i--) {
       const v = this.bandits[i] as BanditView;
       if (this.updateBandit(v, dt)) {

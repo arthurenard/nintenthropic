@@ -1,4 +1,4 @@
-// (b) The camera flow with Chrome's fake camera showing a still picture of a
+// The camera flow with Chrome's fake camera showing a still picture of a
 // hand: the camera's question, getting ready (the tracker's wasm and model,
 // and the game), and the aim check with MediaPipe finding the hand in every
 // camera frame.

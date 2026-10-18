@@ -65,10 +65,10 @@
               hands: Number(params.get("hands") ?? 2),
               confidence: params.has("confidence") ? Number(params.get("confidence")) : undefined,
               tiles: params.has("tiles") ? Number(params.get("tiles")) : undefined,
-            // ?lanes=GPU,CPU,CPU: each tile in a worker of its own, on these delegates.
-            lanes: params.has("lanes") ? params.get("lanes").split(",") : undefined,
-            // ?adapt=1: a slow worker tries the other delegate (adapt.ts), as Grip Prix asks.
-            adapt: params.get("adapt") === "1",
+              // ?lanes=GPU,CPU,CPU: each tile in a worker of its own, on these delegates.
+              lanes: params.has("lanes") ? params.get("lanes").split(",") : undefined,
+              // ?adapt=1: a slow worker tries the other delegate (adapt.ts), as Grip Prix asks.
+              adapt: params.get("adapt") === "1",
             },
           );
         const tracker = await make();

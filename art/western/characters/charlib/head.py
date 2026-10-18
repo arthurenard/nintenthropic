@@ -82,7 +82,7 @@ def _fissure(eye, p):
         q = Pt - eye
         lat = q[:, 0] * side                                  # + toward the outer corner
         tilt = 0.07 * lat + 0.0003
-        uu = np.clip((lat + 0.0025) / (W + 0.0025 * np.sign(-lat) * 0 + 1e-9), -1, 1)
+        uu = np.clip((lat + 0.0025) / (W + 1e-9), -1, 1)
         ul = np.clip((lat - 0.002) / W, -1, 1)
         zu = 0.0046 * op * (1 - uu * uu) ** 0.55 + tilt
         zl = -0.0047 * op * (1 - ul * ul) ** 0.85 + tilt
@@ -97,7 +97,6 @@ def skull(p, low=False):
     jaw = p["jaw"] * (1 - 0.12 * p["sex"])
     age = p["age"]
     fem = p["sex"]
-    parts = []
     cran = ovoid((0, 0.010, 0.034), (0.0745 * w, 0.092, 0.080), taper=0.07)
     forehead = S.Ellipsoid((0, -0.048, 0.046), (0.064 * w, 0.046, 0.060))
     head = S.Union([cran, forehead], k=0.02)
@@ -252,10 +251,6 @@ def hair_thickness(Pt, p):
     return t
 
 
-def hair_mask(Pt, p):
-    return (hair_thickness(Pt, p) > 0.0008).astype(np.float32)
-
-
 def brow_field(Pt, p):
     """Eyebrow volume: a band over each brow ridge, thicker at the inner end."""
     out = np.zeros(len(Pt))
@@ -388,75 +383,6 @@ def ear_sdf(p, side=1):
 
 # ------------------------------------------------------------------ game meshes
 
-def _warp(n, knots, weights, lo, hi):
-    """n+1 samples between lo and hi, denser where `weights` (at `knots`) is high."""
-    x = np.linspace(lo, hi, 2001)
-    w = np.interp(x, knots, weights)
-    c = np.concatenate([[0], np.cumsum(0.5 * (w[1:] + w[:-1]) * np.diff(x))])
-    c /= c[-1]
-    return np.interp(np.linspace(0, 1, n + 1), c, x)
-
-
-def low_head_grid(field, n_az=36, n_el=24, n_neck=3):
-    """Cast rays from inside the skull onto the (smoothed) head field on a
-    face-weighted latitude/longitude grid; the neck is a short tube below.
-    Returns vertices, quads/tris and per-loop UVs (the grid parameter itself,
-    so the face - which has most rows and columns - gets most of the texels)."""
-    az = _warp(n_az, [-180, -120, -70, 0, 70, 120, 180], [0.45, 0.6, 1.0, 1.15, 1.0, 0.6, 0.45], -180, 180)[:-1]
-    el = _warp(n_el - 1, [-60, -35, 0, 25, 45, 90], [0.8, 1.1, 1.2, 1.0, 0.55, 0.4], -60, 84)
-    C = np.array([0, 0.005, 0.0], np.float32)
-    rows = []
-    # neck rows, bottom up: horizontal rays from the neck axis
-    for z in np.linspace(-0.200, -0.128, n_neck):
-        yax = np.interp(z, [-0.205, -0.072], [0.030, 0.014])
-        a = np.radians(az)
-        D = np.stack([np.sin(a), -np.cos(a), np.zeros_like(a)], 1).astype(np.float32)
-        O = np.tile(np.array([0, yax, z], np.float32), (len(a), 1))
-        t, ok = S.raycast(field, O, D, 0.12)
-        rows.append(O + D * t[:, None])
-    for e in el:
-        a = np.radians(az)
-        er = math.radians(e)
-        D = np.stack([np.sin(a) * math.cos(er), -np.cos(a) * math.cos(er), np.full_like(a, math.sin(er))], 1).astype(np.float32)
-        O = np.tile(C, (len(a), 1))
-        t, ok = S.raycast(field, O, D, 0.16)
-        rows.append(O + D * t[:, None])
-    # crown pole
-    t, ok = S.raycast(field, C[None], np.array([[0, 0.05, 1]], np.float32) / np.linalg.norm([0, 0.05, 1]), 0.16)
-    pole = C + np.array([0, 0.05, 1], np.float32) / np.linalg.norm([0, 0.05, 1]) * t[0]
-    V = np.concatenate(rows + [pole[None]], 0)
-    nr, nc = len(rows), len(az)
-    faces, uvs = [], []
-    vrow = np.linspace(0, 1, nr + 1)
-    for r in range(nr - 1):
-        for c in range(nc):
-            c2 = (c + 1) % nc
-            a, b = r * nc + c, r * nc + c2
-            d_, e_ = (r + 1) * nc + c, (r + 1) * nc + c2
-            faces.append((a, b, e_, d_))
-            u0, u1 = c / nc, (c + 1) / nc
-            uvs.append([(u0, vrow[r]), (u1, vrow[r]), (u1, vrow[r + 1]), (u0, vrow[r + 1])])
-    pi = len(V) - 1
-    for c in range(nc):
-        c2 = (c + 1) % nc
-        faces.append(((nr - 1) * nc + c, (nr - 1) * nc + c2, pi))
-        uvs.append([(c / nc, vrow[nr - 1]), ((c + 1) / nc, vrow[nr - 1]), ((c + 0.5) / nc, 1.0)])
-    # the grid's u runs from the back seam around to the back seam (az -180..180)
-    return V, faces, uvs
-
-
-def relax_rows(V, nc, nrows, field, iters=3):
-    """A light tangential smoothing of the ray-cast grid (rays fan out unevenly
-    where the surface is oblique), re-projected onto the field each time."""
-    for _ in range(iters):
-        G = V[: nrows * nc].reshape(nrows, nc, 3)
-        avg = G.copy()
-        avg[1:-1] = 0.25 * (np.roll(G, 1, 1) + np.roll(G, -1, 1))[1:-1] + 0.25 * (G[:-2] + G[2:])
-        G = 0.5 * G + 0.5 * avg
-        V[: nrows * nc] = G.reshape(-1, 3)
-        V[: nrows * nc] = S.project_to_surface(field, V[: nrows * nc], iters=3, clamp=0.004)
-    return V
-
 
 def skin_detail(field, p):
     """Fine relief for the texture bake: skin grain, and with age the forehead
@@ -480,17 +406,6 @@ def skin_detail(field, p):
         wr = age * (0.00030 * fore * lines + 0.00022 * crow)
         return (grain + wr).astype(np.float32)
     return S.Displace(field, f, 0.0006)
-
-
-_AZ_W = ([-180, -120, -70, -25, 0, 25, 70, 120, 180], [0.45, 0.6, 1.0, 1.3, 1.4, 1.3, 1.0, 0.6, 0.45])
-_EL_W = ([-84, -60, -35, 0, 25, 45, 90], [0.55, 0.9, 1.2, 1.3, 1.0, 0.45, 0.35])
-
-
-def _cdf(knots, weights, lo, hi):
-    x = np.linspace(lo, hi, 4001)
-    w = np.interp(x, knots, weights)
-    c = np.concatenate([[0], np.cumsum(0.5 * (w[1:] + w[:-1]) * np.diff(x))])
-    return x, c / c[-1]
 
 
 def head_uv(ob, face_scale=2.2):

@@ -1,9 +1,10 @@
 /**
- * The stock rhythms a band plays without being told: bass lines, chord
- * comping and drum grooves, as small tables of (step, what, how long) over a
- * bar of sixteenth-note steps. A section of a piece names one ("walk",
- * "offbeat") and the sequencer fits it to the chords. Steps count sixteenths
- * from the start of the bar; a 4/4 bar has 16 steps, a waltz bar 12.
+ * The stock rhythms a band plays without being told: bass lines and chord
+ * comping, as small tables of (step, what, how long) over a bar of
+ * sixteenth-note steps. A section of a piece names one ("walk", "offbeat")
+ * and the sequencer fits it to the chords; the drums are written out in each
+ * piece instead. Steps count sixteenths from the start of the bar; a 4/4 bar
+ * has 16 steps, a waltz bar 12.
  *
  * Patterns for 4/4 are written over 16 steps and folded for shorter slots (a
  * bar shared by two chords gets the first half of the pattern for each), and
@@ -11,7 +12,7 @@
  */
 
 /** What a bass note is, relative to the chord. */
-export type BassDegree = "r" | "5" | "8" | "3" | "7" | "-5" | "-8" | "a";
+export type BassDegree = "r" | "5" | "8" | "3" | "a";
 
 interface BassStep {
   step: number;
@@ -113,14 +114,8 @@ export function degreeSemitones(degree: BassDegree, chordIntervals: readonly num
       return 7;
     case "8":
       return 12;
-    case "-5":
-      return -5;
-    case "-8":
-      return -12;
     case "3":
       return chordIntervals[1] ?? 4;
-    case "7":
-      return chordIntervals[3] ?? 10;
     case "a":
       return 0;
   }

@@ -1,7 +1,7 @@
-// What the platform gives the coming games beyond High Noon's HUD: a rifle's
-// magazine and a laser's heat in the weapon's corner (and the gold of the
-// golden weapon on each), a timed round's clock, and a stage of the shape a
-// game's art can hold - each photographed in every state, on the Test Range.
+// What the HUD offers beyond High Noon's cylinder: a rifle's magazine and a
+// laser's heat in the weapon's corner (and the gold of the golden weapon on
+// each), a timed round's clock, and a stage of the shape a game's art can
+// hold - each photographed in every state, on the Test Range.
 import { expect, test, type Page } from "@playwright/test";
 import { shot, returningVisitor, snapshot } from "./helpers";
 
@@ -14,12 +14,12 @@ async function range(page: Page, weapon: string): Promise<void> {
 }
 
 /** Stages the HUD through the page's own HudSink (the game's next frame may redraw the weapon, so the game is paused first). */
-const hud = (page: Page, script: string) => page.evaluate(`(() => { const hud = window.handyTest.hud(); ${script} })()`);
+const hud = (page: Page, script: string) => page.evaluate(`(() => { const hud = window.arcadeTest.hud(); ${script} })()`);
 const corner = { x: 1440 - 260, y: 900 - 150, width: 260, height: 150 };
 
 test("a rifle's magazine: ready, working the action, open and empty, reloading, and gold", async ({ page }, info) => {
   await range(page, "magazine");
-  await page.evaluate(() => window.handyTest!.internals().host!.pause());
+  await page.evaluate(() => window.arcadeTest!.internals().host!.pause());
   const states: [string, string, RegExp][] = [
     ["ready", `hud.ammo(8, 8, false, { kind: "magazine", action: "ready" })`, /^8 of 8 rounds$/],
     ["cycling", `hud.ammo(7, 8, false, { kind: "magazine", action: "cycling" })`, /working the action/],
@@ -39,7 +39,7 @@ test("a rifle's magazine: ready, working the action, open and empty, reloading, 
 
 test("a laser's heat: cold, warm, near the top, venting, and gold", async ({ page }, info) => {
   await range(page, "heat");
-  await page.evaluate(() => window.handyTest!.internals().host!.pause());
+  await page.evaluate(() => window.arcadeTest!.internals().host!.pause());
   const states: [string, string, RegExp][] = [
     ["cold", `hud.heat(0, false)`, /^Heat 0%$/],
     ["warm", `hud.heat(0.4, false)`, /^Heat 40%$/],
@@ -62,7 +62,7 @@ test("a laser's heat: cold, warm, near the top, venting, and gold", async ({ pag
 test("a timed round's clock, and the gold cylinder", async ({ page }, info) => {
   await range(page, "cylinder");
   await expect(page.locator("#clock")).toHaveText(/^[01]:\d\d$/);
-  await page.evaluate(() => window.handyTest!.internals().host!.pause());
+  await page.evaluate(() => window.arcadeTest!.internals().host!.pause());
   await hud(page, `hud.clock(48); hud.weaponFinish("gold"); hud.ammo(4, 6, false); hud.secret("The Bell", 1, 8)`);
   await expect(page.locator("#clock")).toHaveText("0:48");
   await expect(page.locator("#clock")).toHaveAttribute("role", "timer");
@@ -125,7 +125,7 @@ for (const reduce of [false, true]) {
     await page.goto("/?range=1&weapon=magazine#test-range");
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
-    await page.evaluate(() => window.handyTest!.internals().host!.pause());
+    await page.evaluate(() => window.arcadeTest!.internals().host!.pause());
     await hud(
       page,
       `hud.ammo(7, 8, false, { kind: "magazine", action: "cycling" });

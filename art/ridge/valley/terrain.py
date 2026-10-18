@@ -17,7 +17,6 @@ contract nodes) asks the same function.
 """
 
 import math
-import os
 import time
 
 import numpy as np
@@ -157,21 +156,6 @@ def _dam_s(ax):
     return ax.s[np.argmin(np.linalg.norm(ax.xy - toe, axis=1))]
 
 
-def head_valley(x, y, z):
-    """The reservoir's valley above the dam: a trough cut into whatever the
-    side profiles made there, its bed rising toward the head; the lake fills
-    it to RESERVOIR_Z."""
-    res = L.reservoir()
-    d, s, _ = res.nearest(x, y, max_dist=900)
-    w = np.interp(s, res.s, res['w'])
-    bed = -40.0 + 0.022 * s                       # the old valley floor under the lake
-    trough = bed + 0.55 * np.clip(d - w * 0.5, 0, None) + 0.0006 * np.clip(d - w * 0.5, 0, None) ** 2
-    m = np.isfinite(d)
-    out = z.copy()
-    out[m] = np.minimum(z[m], trough[m])
-    return out
-
-
 def peaks(x, y):
     """Summit pyramids on the crest: sharp, faceted (a few planes)."""
     add = np.zeros(np.shape(x))
@@ -208,19 +192,6 @@ def great_cliff(x, y, u, bearing):
     face = lat * np.exp(-(t / 1.6) ** 2)
     step = step - q * 0.3 * smoothstep(0.55, 0.95, frac) * face
     return step, face
-
-
-def goat_crag(x, y):
-    """A rock tower at the far slope's foot, stepped with ledges."""
-    c = L.GOAT_CRAG_C
-    dx, dy = x - c[0], y - c[1]
-    ang = np.arctan2(dy, dx)
-    rr = np.hypot(dx * 1.0, dy * 1.35) * (1 + 0.12 * np.sin(5 * ang + 1.0) + 0.06 * np.sin(11 * ang))
-    h = 78.0 * smoothstep(58.0, 20.0, rr)
-    # ledges: quantise the flank into steps
-    q = 9.0
-    hs = np.floor(h / q) * q + q * smoothstep(0.55, 1.0, (h / q) % 1.0)
-    return np.where(rr < 58, hs, 0.0)
 
 
 # ---------------------------------------------------------------------------

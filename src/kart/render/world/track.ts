@@ -17,19 +17,15 @@ import type { QualitySettings } from "../quality";
 import { Bank } from "./bank";
 import { buildBarriers, SOFT_PUSH } from "./barriers";
 import { MeshBuilder, rgb, scaleRgb, type Rgb, type V3 } from "./builder";
-import { analyseFeatures, SOLID_MARGIN, WALL_DISTANCE as WALL, type Features } from "./features";
+import { SOLID_MARGIN, WALL_DISTANCE as WALL, type Features } from "./features";
 import { GROUND_SINK, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 import { ROAD_TILE } from "./textures";
 import type { Glow, TrackBuild } from "./trackContext";
 import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, type PatchGeometry } from "./trackFeatures";
 
-export type { Glow } from "./trackContext";
-
 /** Samples per chunk (about metres: the geometry samples every metre). */
 const CHUNK = 48;
-/** A barrier's inner face stands this far beyond the road's edge: the sim's wall (a verge can move it out). */
-export const WALL_DISTANCE = WALL;
 /** A bend counts as tight when it curves harder than this (radius under about 33 m) somewhere along it... */
 const TIGHT_PEAK = 1 / 33;
 /** ...and the stretch of it curving more than this (radius under about 52 m) is what gets kerbs and signs. */
@@ -83,7 +79,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   const n = track.samples.length;
   const spacing = track.spacing;
   const samples = track.samples;
-  const features = terrain.features ?? analyseFeatures(track);
+  const features = terrain.features;
   const bank = new Bank(track);
   const S = (i: number): TrackSample => samples[((i % n) + n) % n]!;
   /** A point `off` metres right of sample i's centre, lifted by dy, following the bank. */
@@ -144,7 +140,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const hw1 = b.width / 2;
     const v0 = (i * spacing) / ROAD_TILE;
     const v1 = ((i + 1) * spacing) / ROAD_TILE;
-    // Three strips across, so a banked road is not a single tilted plane through its middle.
+    // Four strips across, so a banked road is not a single tilted plane through its middle.
     const cols = bank.any ? 4 : 1;
     for (let k = 0; k < cols; k++) {
       const u0 = k / cols;
@@ -386,9 +382,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     // start has a gantry: two stout legs, a beam, a light box on its face, and the banner under it.
     const watch = (track.def.landmarks ?? []).some((l) => l.kind === "wristwatch" && Math.min(Math.abs(l.at * track.length), Math.abs(track.length - l.at * track.length)) < 20);
     // The legs stand beyond the barrier and the camera's margin (a kart can drive out to the barrier, so nothing solid may be
-    // on the verge): the beam is longer than the road is wide, and the banner hangs under it at the width it always had.
+    // on the verge): the beam is longer than the road is wide, and the banner under it spans the road and a little more.
     const leg = hw + Math.max(ctx.wall(0, -1), ctx.wall(0, 1)) + SOLID_MARGIN + 0.9;
-    const bannerLeg = hw + 1.9;
+    const bannerHalf = hw + 1.9;
     const base = g0.y;
     const white2 = rgb("#f4f5f8");
     const accent = rgb("#ff453a");
@@ -428,7 +424,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       y: beamY - 1.55,
       z: g0.z + fz * 0.52,
       yaw: Math.atan2(fx, fz),
-      width: bannerLeg * 2 - 0.4,
+      width: bannerHalf * 2 - 0.4,
       height: 1.75,
     };
   }

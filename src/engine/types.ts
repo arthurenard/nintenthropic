@@ -1,7 +1,7 @@
 /**
  * The contract between the app, the input, the audio and the games.
  *
- * Every part of Super Claude Bros. on the web is built against these types; see
+ * Every part of Super Claude Bros. is built against these types; see
  * docs/WEB_ARCHITECTURE.md for what each one means in play. Change them only
  * deliberately, and update every implementation in the same change.
  */
@@ -42,7 +42,7 @@ export interface InputSource {
   dispose(): void;
 }
 
-/** One small labelled value beside the score, as on the desktop. */
+/** One small labelled value beside the score. */
 export interface Readout {
   label: string;
   value: string;
@@ -83,8 +83,7 @@ export interface GameStats {
   secretsTotal: number;
 }
 
-/** How a game talks to the page's HTML interface. */
-/** How a rifle's rounds are shown (HudSink.ammo): the magazine, and the one in the chamber. */
+/** How the gun's rounds are shown (HudSink.ammo): a revolver's cylinder, or a rifle's magazine and the round in its chamber. */
 export interface AmmoStyle {
   /** A revolver's cylinder (the default) or a rifle's magazine. */
   kind: "cylinder" | "magazine";
@@ -132,6 +131,7 @@ export interface RimArrow {
   angle: number;
 }
 
+/** How a game talks to the page's HTML interface. */
 export interface HudSink {
   score(value: number): void;
   readouts(list: Readout[]): void;
@@ -257,8 +257,6 @@ export interface AssetLoader {
 export type Difficulty = "relaxed" | "standard";
 
 export interface Settings {
-  /** Round length for timed games; High Noon ignores it (it runs until you fall). */
-  duration: number;
   /** The player's choice, or the system's reduced-motion setting until they make one. */
   reducedMotion: boolean;
   /**
@@ -434,8 +432,9 @@ export interface StageShape {
   /**
    * The stage is never taller than 1 : minAspect: in a taller window (a
    * phone held upright) the world plays in a band across the middle. A
-   * world drawn from one fixed eye (High Noon's baked town) streaks below
-   * the frame its art was made for past its own figure. 1.1 if unset.
+   * world drawn from one fixed eye (High Noon's baked town) shows streaks
+   * below the frame its art was made for once the view is any taller. 1.1
+   * if unset.
    */
   minAspect?: number;
   /**

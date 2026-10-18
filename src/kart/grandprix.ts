@@ -51,8 +51,6 @@ interface Entry {
   points: number;
   /** Where it finished the last race, or null before one. */
   place: number | null;
-  /** Where it finished the race before that. */
-  was: number | null;
   /** Points won in the last race. */
   gain: number;
   /** Its rank before the last race (1-based), or null for the first. */
@@ -85,7 +83,7 @@ export class GrandPrixRun {
     readonly cup: string,
     racers: readonly RacerSetup[],
   ) {
-    this.entries = racers.map((racer) => ({ racer: { ...racer }, key: keyOf(racer), points: 0, place: null, was: null, gain: 0, rankWas: null }));
+    this.entries = racers.map((racer) => ({ racer: { ...racer }, key: keyOf(racer), points: 0, place: null, gain: 0, rankWas: null }));
   }
 
   /** A cup begins with its first race's grid. */
@@ -118,7 +116,6 @@ export class GrandPrixRun {
     const before = rankOf(this.entries, (e) => e.points, (e) => e.place);
     for (const entry of this.entries) {
       entry.rankWas = this.race === 0 ? null : before.indexOf(entry) + 1;
-      entry.was = entry.place;
       entry.gain = 0;
       entry.place = null;
     }

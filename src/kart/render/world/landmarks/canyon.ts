@@ -6,10 +6,8 @@
  */
 import { Group, Mesh, type Material } from "three";
 import { byHeight, grid, lathe, MeshBuilder, mixRgb, pipe, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
-import { beam, drift, flutedPipe, hash, hazardGlass, noisyArch, taper, vec } from "./snow";
-import type { HazardSpec, LandmarkSpec } from "./types";
-
-type Halo = { x: number; y: number; z: number; size: number; colour: readonly [number, number, number]; alpha: number; twinkle?: number };
+import { beam, drift, flutedPipe, hash, hazardGlass, noisyArch, taper, vec } from "./rockKit";
+import type { Halo, HazardSpec, LandmarkSpec } from "./types";
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +54,7 @@ function mesaRing(cx: number, cz: number, r: number, y: number, stretch: number,
   return out;
 }
 
-/** A flat-topped butte of strata: ledges, a talus apron at the foot, a darker cap, and cracks. Returns the top ring. */
+/** A flat-topped butte of strata: ledges, a talus apron at the foot, a darker cap, and cracks. */
 function mesaBody(lit: MeshBuilder, cx: number, cz: number, baseR: number, strata: Layer[], stretch: number, seed: number): void {
   const n = 13;
   let y = 0;
@@ -194,7 +192,7 @@ function saguaro(lit: MeshBuilder, x: number, z: number, h: number, seed: number
   const r = 0.75 + h * 0.035;
   flutedPipe(lit, [x, -0.6, z], [x, h, z], r, 6, cactusShade(0, h), r * 0.82, false);
   lit.blob(x, h, z, r * 0.82, r * 0.9, r * 0.82, ramp(CACTUS_LIGHT, scaleRgb(CACTUS_LIGHT, 1.15)), 1);
-  const arms = h > 9 ? 2 : h > 7 ? 1 + Math.floor(hash(seed, 1) * 2) : 0 + Math.floor(hash(seed, 2) * 2);
+  const arms = h > 9 ? 2 : h > 7 ? 1 + Math.floor(hash(seed, 1) * 2) : Math.floor(hash(seed, 2) * 2);
   for (let k = 0; k < arms; k++) {
     const s = (k + seed) % 2 === 0 ? 1 : -1;
     const ya = h * (0.38 + 0.2 * hash(seed, k, 3));
@@ -412,7 +410,7 @@ const mineCart: LandmarkSpec = {
     beam(lit, [px, 3.4, pz - 0.85], [px, 3.2, pz + 0.65], 0.2, 0.2, [1, 0, 0], IRON);
     lit.add(shapes.cone(4), xf(px, 3.3, pz - 1.1, 0.14, 0.7, 0.14, 0, Math.PI / 2), IRON);
     lit.add(shapes.cone(4), xf(px, 3.3, pz + 0.95, 0.14, 0.6, 0.14, 0, -Math.PI / 2), IRON);
-    // Spoil heaped by the entrance, and stones along the track.
+    // Spoil heaped by the entrance, and glints of ore.
     for (let k = 0; k < 6; k++) rockBlob(lit, mx + 2.2 + k * 0.5, 0, gauge + 3 + hash(k, 7) * 2.5, 0.9 + hash(k, 8), 0.6, 0.8, strataShade(50 + k, 1, 1), k + 8, { detail: 0, roughness: 0.3, flatBase: true });
     for (let k = 0; k < 4; k++) glow.add(shapes.ball(0), xf(cx - 1.0 + k * 0.6, 3.1, 0.3, 0.12, 0.12, 0.12), [3.6, 3.0, 1.3]);
     const halos: Halo[] = [

@@ -8,7 +8,7 @@ import { LANDMARKS, HAZARDS, THEME_HAZARDS, THEME_LANDMARKS } from "./index";
 import { bake, bakeBent, buildHazards, buildLandmarks, facingRoad, landmarkMaterials, roadFrameMap } from "./place";
 import type { Texture } from "three";
 
-function straight(bank?: number): TrackDef {
+function loop(bank?: number): TrackDef {
   return {
     id: "t",
     name: "t",
@@ -94,7 +94,7 @@ describe("bake and bakeBent", () => {
 
 describe("roadFrameMap", () => {
   it("puts x to the road's right, z along it and y up", () => {
-    const g = TrackGeometry.build(straight());
+    const g = TrackGeometry.build(loop());
     const map = roadFrameMap(g, new Bank(g), 100, 0);
     const base = g.point(100, 0);
     const p = map([3, 2, 10]);
@@ -105,7 +105,7 @@ describe("roadFrameMap", () => {
   });
 
   it("follows a bend: a point far along a curved road is where the road is", () => {
-    const g = TrackGeometry.build(straight());
+    const g = TrackGeometry.build(loop());
     const map = roadFrameMap(g, new Bank(g), 300, 0);
     const p = map([0, 0, 90]);
     const c = g.at(390);
@@ -114,7 +114,7 @@ describe("roadFrameMap", () => {
   });
 
   it("leans with the bank: the right-hand side is lower in a right-hand bend", () => {
-    const g = TrackGeometry.build(straight(14));
+    const g = TrackGeometry.build(loop(14));
     const bank = new Bank(g);
     // Find a spot in the first bend (it turns toward -x: a right-hand bend for a kart facing +z).
     const s = g.project(-60, 380).s;
@@ -155,7 +155,7 @@ describe("the registry", () => {
 });
 
 describe("buildLandmarks", () => {
-  const track = TrackGeometry.build(straight());
+  const track = TrackGeometry.build(loop());
   const env = { track, style: styleFor("space"), bank: new Bank(track), groundAt: () => 0 };
 
   it("leaves out a name it does not know", () => {
@@ -204,7 +204,7 @@ describe("buildLandmarks", () => {
 });
 
 describe("buildHazards", () => {
-  const track = TrackGeometry.build(straight());
+  const track = TrackGeometry.build(loop());
   const env = { track, style: styleFor("kitchen"), bank: new Bank(track), groundAt: () => 0 };
   const fake = {} as Texture;
 

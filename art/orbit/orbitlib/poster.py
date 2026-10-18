@@ -1,22 +1,17 @@
 """poster.webp: the game's face in the arcade and on shared cards.
 
-(Second pass.) The day side under the cupola - the first look's coast,
-desert, river and range - in low morning light, with the sun just clearing
-the limb in the round window. A sun at the limb would leave the ground
+The day side under the cupola - the first look's coast, desert, river and
+range - in low morning light, with the sun just clearing the limb in the
+round window, and a solar-wing shard a few metres out turned to throw the
+sun's glint straight into the eye. A sun at the limb would leave the ground
 below in night, so the picture is composed from two suns, as a poster may
 be: the ground, the station and the fragments are lit by the morning sun
 (LIGHT_ELEV above the horizon, ahead and to the left); the sky and the limb
 come from a render with the sun at the disc (SUN_NDC), which gives the
 sunrise band of orange and blue along the edge of the world.
 
-
-The cupola's windows, the planet at sunrise - the sun just clearing the
-limb in a band of orange and blue, the ground below still in night with
-its cities lit - and a torn panel from the debris field a few metres out,
-turned so it throws the sun's glint straight into the eye.
-
 Rendered from the full source scene (not the bake): Cycles for the cupola,
-the station and the fragment, the numpy renderer for the planet, composed
+the station and the fragments, the numpy renderer for the planet, composed
 in linear light with a soft bloom, then AgX.
 """
 
@@ -27,7 +22,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-from . import pipeline, render, world, bl, imgio
+from . import pipeline, render, world, bl
 
 W, H = 1600, 900
 SUN_NDC = (-0.06, 0.36)        # the sun just clearing the limb, inside the round window

@@ -1,11 +1,16 @@
-import { Box3, PCFShadowMap, SRGBColorSpace, Vector3, type Mesh, type Texture, type ToneMapping } from "three";
-import type { Aim, CalibrationStage, CalibrationTarget, Game, GameContext, HudSink, Readout, TargetNoun } from "../../engine/types";
+import { Box3, PCFShadowMap, SRGBColorSpace, Vector3, type ToneMapping } from "three";
+import type { Aim, CalibrationStage, Game, GameContext, HudSink, Readout } from "../../engine/types";
 import { loadSoundPack } from "../../audio/index";
+import { announceGolden, awardText, HintShown, HurtShown, popupAt, showBonuses, streakReadout, viewportOf, type PopupTone } from "../../engine/hud";
+import { breathe, CalibrationProxy, Schedule } from "../../engine/round";
+import { HintLine, reloadHint } from "../../engine/rules/hints";
 import { mulberry32 } from "../../engine/rules/rng";
+import { streakRate } from "../../engine/rules/streak";
 import { RigPool } from "../../engine/world/character";
 import { checkFraming, type Framing, type Sight } from "../../engine/world/framing";
 import { PlayerCamera } from "../../engine/world/playerCamera";
 import { PostFX } from "../../engine/world/post";
+import { warmUp } from "../../engine/world/scene";
 import { Sound } from "../../engine/world/sound";
 import { Dead as DeadClass, offsetPath, paceOf, type Dead } from "./rules/dead";
 import { takenBy } from "./rules/felled";
@@ -14,8 +19,8 @@ import type { Award, WaveBonuses } from "./rules/scoring";
 import { catLine, DUCK_LINE, type SecretId, type SignLetter } from "./rules/secrets";
 import type { Survivor } from "./rules/survivors";
 import type { DeadKind, DeathCause, HitPart, LaneId } from "./rules/types";
-import type { WaveSpec } from "./rules/waves";
-import { HintLine, reloadHint, survivorWord, tipText, type TipId } from "./tips";
+import { sightFor, type WaveSpec } from "./rules/waves";
+import { LEARNED_BY_DOING, survivorWord, tipText, type TipId } from "./tips";
 import { Ambient } from "./world/ambient";
 import { loadAssets, type NightAssets } from "./world/assets";
 import { BeamEffect, beamVolume, syncBeamCamera, type BeamVolume } from "./world/beam";
@@ -26,7 +31,7 @@ import { Flashlight } from "./world/flashlight";
 import { NIGHT } from "./world/grade";
 import { JarStage } from "./world/jars";
 import { RoadQueries } from "./world/queries";
-import { burstMoment, clipSpeeds, drawOnce, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
+import { burstMoment, clipSpeeds, nightRim, nightTemplate, rigMaterials } from "./world/rigs";
 import type { Surface } from "./world/road";
 import { SecretsWorld } from "./world/secretsWorld";
 import { withNightFog } from "./world/shading";
@@ -64,50 +69,8 @@ const HIT_SOUND: Record<Surface, string> = {
   water: "night_hit_water",
 };
 
-interface Scheduled {
-  at: number;
-  run: () => void;
-}
-
 const tmp = new Vector3();
 const tmp2 = new Vector3();
-
-/** A moment for the page between the long steps of getting ready, so the loading bar keeps moving. */
-function breathe(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-/**
- * Before load() the aim check has nothing to show; afterwards this forwards
- * to the jars. If the host runs the aim check again on this instance after
- * a game (Play Again), the first call puts the road back for it.
- */
-class CalibrationProxy implements CalibrationStage {
-  readonly noun: TargetNoun = { one: "jar", many: "jars" };
-  target: JarStage | null = null;
-  onUse: () => void = () => {};
-  onBegin: () => void = () => {};
-  begin(): void {
-    this.onBegin();
-  }
-  targets(): CalibrationTarget[] {
-    this.onUse();
-    return this.target ? this.target.targets() : [];
-  }
-  light(id: string | null): void {
-    this.onUse();
-    this.target?.light(id);
-  }
-  hit(id: string): void {
-    this.target?.hit(id);
-  }
-  miss(id: string, x: number, y: number): void {
-    this.target?.miss(id, x, y);
-  }
-  done(): void {
-    this.target?.done();
-  }
-}
 
 /**
  * Dead of Night: the Game the app hosts. It owns the world (the stage and
@@ -120,7 +83,8 @@ export class DeadOfNight implements Game, MatchListener {
   readonly id = "night";
   readonly title = "Dead of Night";
   readonly calibration: CalibrationStage;
-  private readonly calibrationProxy = new CalibrationProxy();
+  /** The jars, once they exist; and the road put back when the aim check comes round again after a night. */
+  private readonly calibrationProxy = new CalibrationProxy({ one: "jar", many: "jars" });
 
   private ctx!: GameContext;
   private hud!: HudSink;
@@ -147,18 +111,16 @@ export class DeadOfNight implements Game, MatchListener {
   private time = 0;
   private lastDt = 1 / 60;
   private deathT = 0;
-  private hurtDisplay = 0;
-  private hurtShown = -1;
-  private hurtFilter = -1;
+  private readonly hurt = new HurtShown();
   private readoutKey = "";
-  private hints = new HintLine(new Set());
-  private hintShown: string | null = null;
+  private hints = new HintLine(new Set(), LEARNED_BY_DOING);
+  private readonly hintShown = new HintShown();
   private golden = false;
   private tier: GameContext["quality"]["tier"] = "high";
   private reloadKey = false;
   private card = false;
   private hurtSide = 1;
-  private readonly schedule: Scheduled[] = [];
+  private readonly schedule = new Schedule(() => this.time);
   private readonly shotPoint = new Vector3();
   private shotKilled = false;
   private visualRandom = mulberry32(1958);
@@ -233,14 +195,9 @@ export class DeadOfNight implements Game, MatchListener {
       survivor: new RigPool(survivorT, 1, parent),
       cat: new RigPool(catT, 1, parent),
     };
-    // Every figure under the night's own fog, one program between them, drawn once a frame.
+    // Every figure under the night's own fog, one program between them.
     for (const pool of Object.values(this.pools)) {
-      for (const r of pool.rigs) {
-        for (const m of rigMaterials(r)) {
-          withNightFog(m, u, "rig");
-          drawOnce(m);
-        }
-      }
+      for (const r of pool.rigs) for (const m of rigMaterials(r)) withNightFog(m, u, "rig");
     }
     await breathe();
 
@@ -312,7 +269,10 @@ export class DeadOfNight implements Game, MatchListener {
     this.flashlight.reset(this.camera.camera);
     this.aimFlashlight(0.5, 0.5);
     await breathe();
-    await this.warmUp();
+    await warmUp(renderer, this.stage.scene, this.camera.camera, () => {
+      syncBeamCamera(this.volume, this.camera.camera);
+      this.post.render(0);
+    });
     this.tuneEcho();
     await sounds;
     window.addEventListener("keydown", this.onKey);
@@ -346,46 +306,6 @@ export class DeadOfNight implements Game, MatchListener {
     this.match.health.immortal = this.options.immortal === true;
   }
 
-  /** Every shader compiled before play: a shader first compiled mid-wave is a dropped frame at the worst time. */
-  private async warmUp(): Promise<void> {
-    const r = this.ctx.renderer;
-    const scene = this.stage.scene;
-    const shown: { visible: boolean; o: { visible: boolean } }[] = [];
-    scene.traverse((o) => {
-      if (!o.visible) {
-        shown.push({ visible: false, o });
-        o.visible = true;
-      }
-    });
-    try {
-      const textures = new Set<Texture>();
-      scene.traverse((o) => {
-        const m = (o as Mesh).material;
-        for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
-          for (const v of Object.values(mat)) if ((v as Texture | null)?.isTexture) textures.add(v as Texture);
-          const uniforms = (mat as { uniforms?: Record<string, { value: unknown }> }).uniforms;
-          if (uniforms) for (const un of Object.values(uniforms)) if ((un.value as Texture | null)?.isTexture) textures.add(un.value as Texture);
-        }
-      });
-      let since = performance.now();
-      for (const t of textures) {
-        r.initTexture(t);
-        if (performance.now() - since > 40) {
-          await breathe();
-          since = performance.now();
-        }
-      }
-      if ("compileAsync" in r) await r.compileAsync(scene, this.camera.camera);
-      else (r as { compile: (s: unknown, c: unknown) => void }).compile(scene, this.camera.camera);
-      await breathe();
-      syncBeamCamera(this.volume, this.camera.camera);
-      this.post.render(0);
-    } catch {
-      // Compilation is an optimisation; the first frames will do it otherwise.
-    }
-    for (const s of shown) s.o.visible = s.visible;
-  }
-
   /** Back to the state after load, for another night on this instance. */
   private rearm(): void {
     this.cast.reset();
@@ -394,7 +314,7 @@ export class DeadOfNight implements Game, MatchListener {
     this.ambient.reset();
     this.newMatch();
     this.jars.reset();
-    this.schedule.length = 0;
+    this.schedule.clear();
     this.camera.still = true;
     this.camera.setDeath(0, 1);
     if (this.framings) this.camera.setFraming(this.framings.check, 0);
@@ -402,7 +322,7 @@ export class DeadOfNight implements Game, MatchListener {
     this.flashlight.reset(this.camera.camera);
     this.deathT = 0;
     this.card = false;
-    this.hurtDisplay = 0;
+    this.hurt.value = 0;
     this.volume.uBlur.value = 0;
     this.post.set("fade", 0);
     this.post.set("hurt", 0);
@@ -421,7 +341,6 @@ export class DeadOfNight implements Game, MatchListener {
     // A fresh match either way: the difficulty is read here.
     else this.newMatch();
     this.jars.done();
-    this.jars.active = false;
     this.camera.still = false;
     this.camera.setDeath(0, 1);
     if (this.framings) this.camera.setFraming(this.framings.play, this.ctx.settings.reducedMotion ? 0 : FRAMING_EASE);
@@ -429,7 +348,7 @@ export class DeadOfNight implements Game, MatchListener {
     this.time = 0;
     this.deathT = 0;
     this.card = false;
-    this.hurtShown = -1;
+    this.hurt.retell();
     this.readoutKey = "";
     this.sound.filter("slowmo", 0);
     this.sound.filter("hurt", 0);
@@ -439,14 +358,10 @@ export class DeadOfNight implements Game, MatchListener {
     this.hud.health(0);
     this.match.start({ wave });
     if (this.options.quiet) this.hold();
-    this.hints = new HintLine(this.ctx.settings.tipsSeen);
+    this.hints = new HintLine(this.ctx.settings.tipsSeen, LEARNED_BY_DOING);
     this.hints.setQuiet(false);
     this.offerTip("night.reload");
-    if (this.golden) {
-      this.hud.weaponFinish?.("gold");
-      this.sound.play("night_golden", { volume: 0.8, delay: 0.4 });
-      this.later(1.0, () => this.hud.popup(0.5, 0.62, "Golden Rifle", "gold"));
-    }
+    if (this.golden) announceGolden(this.hud, this.sound, this.schedule, "night_golden", "Golden Rifle");
     this.pushReadouts(true);
   }
 
@@ -471,7 +386,7 @@ export class DeadOfNight implements Game, MatchListener {
       this.post.setQuality(this.ctx.quality);
     }
     this.time += dt;
-    this.runSchedule();
+    this.schedule.run();
     // The beam follows the aim; a lost hand leaves it where it was.
     if (aim.tracking) {
       this.aimAt.x = aim.x;
@@ -513,7 +428,7 @@ export class DeadOfNight implements Game, MatchListener {
     const target = playing ? m.fogDensity() : m.spec.fog * m.tuning.fogFactor * 0.85;
     this.fog += (target - this.fog) * Math.min(1, dt * 0.6);
     this.stage.setFog(this.fog);
-    this.cast.sight = Math.sqrt(Math.log(4)) / Math.max(1e-4, this.fog);
+    this.cast.sight = sightFor(this.fog);
     this.stage.u.uFogTime.value = this.time;
     this.volume.uFogTime.value = this.time;
     this.volume.uFogDensity.value = this.fog;
@@ -690,21 +605,11 @@ export class DeadOfNight implements Game, MatchListener {
   // --- HUD helpers --------------------------------------------------------------------------
 
   private project(at: Vector3): { x: number; y: number } | null {
-    tmp.copy(at).project(this.camera.camera);
-    if (tmp.z > 1) return null;
-    return { x: (tmp.x + 1) / 2, y: (1 - tmp.y) / 2 };
+    return viewportOf(this.camera.camera, at);
   }
 
-  private popupAt(at: Vector3, text: string, tone: "" | "gold" | "danger" = ""): void {
-    const p = this.project(at);
-    if (!p) return;
-    this.hud.popup(Math.min(0.94, Math.max(0.06, p.x)), Math.min(0.9, Math.max(0.1, p.y)), text, tone);
-  }
-
-  private awardText(award: Award): string {
-    const sign = award.points >= 0 ? "+" : "−";
-    const label = award.labels.length ? ` ${award.labels.join(" · ")}` : "";
-    return `${sign}${Math.abs(award.points).toLocaleString("en-US")}${label}`;
+  private popupAt(at: Vector3, text: string, tone: PopupTone = ""): void {
+    popupAt(this.hud, this.camera.camera, at, text, tone);
   }
 
   private offerTip(id: TipId): void {
@@ -713,11 +618,9 @@ export class DeadOfNight implements Game, MatchListener {
     this.syncHint();
   }
 
+  /** Tell the HUD what the hint line shows, when it changes. */
   private syncHint(): void {
-    const text = this.hints.text;
-    if (text === this.hintShown) return;
-    this.hintShown = text;
-    this.hud.hint(text);
+    this.hintShown.tell(this.hud, this.hints);
   }
 
   private showRifle(): void {
@@ -736,33 +639,22 @@ export class DeadOfNight implements Game, MatchListener {
     const list: Readout[] = [
       { label: "Wave", value: String(m.wave) },
       { label: "Dead", value: String(left), meter: m.phase === "breather" ? 0 : left / total },
-      { label: "Streak", value: `×${mult}`, meter: (mult - 1) / 3, tone: mult >= 4 ? "warning" : "" },
+      streakReadout(mult),
     ];
     this.hud.readouts(list);
   }
 
   private updateHurt(dt: number): void {
-    const hurt = this.match.health.hurt;
-    const shown = this.hurtDisplay;
-    if (hurt <= shown) this.hurtDisplay = shown + (hurt - shown) * Math.min(1, dt * 4);
-    else this.hurtDisplay = this.effects.reducedFlashing ? shown + (hurt - shown) * Math.min(1, dt * 10) : hurt;
-    const h = this.hurtDisplay;
+    const h = this.hurt.ease(this.match.health.hurt, dt, this.effects.reducedFlashing);
     this.post.set("hurt", h);
     this.post.set("desaturate", Math.min(1, h * 0.65 + (this.phase === "dying" || this.phase === "over" ? Math.min(1, this.deathT / 2) : 0)));
-    if (Math.abs(h - this.hurtShown) > 0.01) {
-      this.hurtShown = h;
-      this.hud.health(h);
-    }
-    if (Math.abs(h - this.hurtFilter) > 0.02) {
-      this.hurtFilter = h;
-      this.sound.filter("hurt", h);
-    }
+    this.hurt.tell(this.hud, this.sound);
   }
 
   /**
    * The fall: the flashlight drops from your hands and rolls on the asphalt,
    * its beam swinging across the canopy; the dead close in out of focus;
-   * black. A card - "The night took you on Wave 5." - then the results.
+   * black. A card - "Fell on Wave 5", and what took you - then the results.
    */
   private updateDeath(dt: number): void {
     this.deathT += dt;
@@ -786,20 +678,6 @@ export class DeadOfNight implements Game, MatchListener {
     }
   }
 
-  private later(seconds: number, run: () => void): void {
-    this.schedule.push({ at: this.time + seconds, run });
-  }
-
-  private runSchedule(): void {
-    for (let i = this.schedule.length - 1; i >= 0; i--) {
-      const s = this.schedule[i] as Scheduled;
-      if (this.time >= s.at) {
-        this.schedule.splice(i, 1);
-        s.run();
-      }
-    }
-  }
-
   // --- what the cast notices ------------------------------------------------------------------
 
   private cameIntoView(d: Dead): void {
@@ -811,7 +689,7 @@ export class DeadOfNight implements Game, MatchListener {
   private mechanicSeen(d: Dead): void {
     const v = this.cast.view(d);
     v?.rig.play("roar", 0.15, false);
-    this.later(1.9, () => {
+    this.schedule.later(1.9, () => {
       if (d.state === "approaching" && v) v.rig.play(v.gait, 0.3, true);
     });
     this.sound.at("night_mech_roar", d.pos, 1);
@@ -834,11 +712,10 @@ export class DeadOfNight implements Game, MatchListener {
 
   waveClear(_wave: number, b: WaveBonuses): void {
     this.sound.play("night_wave_clear");
-    const lines: [string, "" | "gold"][] = [];
-    if (b.accuracyPoints > 0) lines.push([`+${b.accuracyPoints} Accuracy ${Math.round(b.accuracy * 100)}%`, ""]);
-    if (b.untouched > 0) lines.push([`+${b.untouched} Untouched`, "gold"]);
-    if (b.cleanHands > 0) lines.push([`+${b.cleanHands} Clean Hands`, ""]);
-    lines.forEach(([text, tone], i) => this.later(0.35 + i * 0.45, () => this.hud.popup(0.5, 0.56 + i * 0.05, text, tone)));
+    showBonuses(this.hud, this.schedule, b, [
+      [b.untouched, "Untouched", "gold"],
+      [b.cleanHands, "Clean Hands", ""],
+    ]);
     this.hints.setNeed(null);
     this.hints.clearWord();
     this.syncHint();
@@ -847,7 +724,7 @@ export class DeadOfNight implements Game, MatchListener {
   /** The breather: the fog thins, the lamp steadies, a far bell counts the wave, the crickets start again. */
   breather(next: number): void {
     this.ambient.steady = true;
-    this.hurtDisplay = 0;
+    this.hurt.value = 0;
     const strokes = Math.min(next, 5);
     for (let i = 0; i < strokes; i++) this.sound.play("night_bell", { volume: 0.8, distance: 900, pan: -0.35, delay: 0.5 + i * 1.05 });
     this.pushReadouts(true);
@@ -875,7 +752,7 @@ export class DeadOfNight implements Game, MatchListener {
   maskOff(d: Dead, award: Award): void {
     this.cast.maskOff(d, this.shotPoint);
     tmp2.set(d.pos.x, d.pos.y + 2.3, d.pos.z);
-    this.popupAt(tmp2, this.awardText(award), "gold");
+    this.popupAt(tmp2, awardText(award), "gold");
   }
 
   deadDeath(d: Dead, cause: DeathCause, award: Award | null): void {
@@ -885,7 +762,7 @@ export class DeadOfNight implements Game, MatchListener {
     if (!award) return;
     tmp2.set(d.pos.x, d.pos.y + (d.kind === "crawler" ? 0.8 : 2.0), d.pos.z);
     const special = award.labels.some((l) => l === "Headshot" || l === "The Mechanic" || l === "Long Shot");
-    this.popupAt(tmp2, this.awardText(award), special ? "gold" : "");
+    this.popupAt(tmp2, awardText(award), special ? "gold" : "");
     this.pushReadouts(false);
   }
 
@@ -898,7 +775,7 @@ export class DeadOfNight implements Game, MatchListener {
     if (award && caught.length) {
       // Its own copy: the shared scratch vector will have moved on in a quarter second.
       const at = new Vector3(d.pos.x, d.pos.y + 2.4, d.pos.z);
-      this.later(0.25, () => this.popupAt(at, this.awardText(award), "gold"));
+      this.schedule.later(0.25, () => this.popupAt(at, awardText(award), "gold"));
     }
   }
 
@@ -916,7 +793,7 @@ export class DeadOfNight implements Game, MatchListener {
 
   survivorShot(s: Survivor, award: Award): void {
     tmp2.set(s.pos.x, s.pos.y + 2.0, s.pos.z);
-    this.popupAt(tmp2, this.awardText(award), "danger");
+    this.popupAt(tmp2, awardText(award), "danger");
     this.hints.say(survivorWord(s.role), 2);
     this.syncHint();
   }
@@ -940,8 +817,7 @@ export class DeadOfNight implements Game, MatchListener {
   }
 
   streakUp(multiplier: number): void {
-    const semitones = multiplier >= 4 ? 7 : multiplier === 3 ? 4 : 0;
-    this.sound.play("night_streak", { rate: Math.pow(2, semitones / 12) });
+    this.sound.play("night_streak", { rate: streakRate(multiplier) });
     this.pushReadouts(true);
   }
 
@@ -1027,7 +903,7 @@ export class DeadOfNight implements Game, MatchListener {
     };
     // Let the show play before the toast: the scarecrow's turn, the phones, the howl.
     const wait: Partial<Record<SecretId, number>> = { scarecrow: 1.6, booth: 2.5, moon: 2.4, eat: 1.2, drivein: 1.5 };
-    this.later(wait[id] ?? 0, announce);
+    this.schedule.later(wait[id] ?? 0, announce);
   }
 
   // --- for the dev harness ----------------------------------------------------------------------
@@ -1051,7 +927,7 @@ export class DeadOfNight implements Game, MatchListener {
       breather: () => {
         const m = this.match as unknown as { queue: unknown[]; dead: Dead[] };
         m.queue = [];
-        for (const d of m.dead) if (d.alive) d.die("head", this.match.time, 10);
+        for (const d of m.dead) if (d.alive) d.die("head");
         for (const d of m.dead) d.state = "dead";
       },
       /** Hurt the player (for the hurt state's pictures), as if from straight ahead. */
@@ -1066,7 +942,7 @@ export class DeadOfNight implements Game, MatchListener {
         const m = this.match as unknown as { nextId: number };
         const d = new DeadClass(m.nextId++, kind, l, offsetPath(l, 0), paceOf(kind, "walk.shamble", 1.3), "walk.shamble");
         if (kind === "mechanic") d.mask = this.match.tuning.maskHits;
-        d.spawn(this.match);
+        d.spawn();
         if (along !== 0) d.placeAt(along > 0 ? along : d.pathLength + along);
         this.match.dead.push(d);
         this.cast.spawn(d);

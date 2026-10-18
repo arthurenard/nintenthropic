@@ -10,8 +10,8 @@ import numpy as np
 
 from . import layout as L
 from . import kit as K
-from .kit import frame, xf, wall, gable_roof, gable_wall
-from .buildings import SURFACES, house, barn, BURY
+from .kit import frame, xf, wall
+from .buildings import SURFACES, house, barn
 
 
 def _h(ter, p):
@@ -75,7 +75,6 @@ def _flip():
 
 
 def build_farm(ter, col):
-    from . import scene as S
     rng = np.random.default_rng(2255)
     kit = K.Kit("farm")
     c = L.FARM_C
@@ -326,7 +325,7 @@ def build_bridge(ter, col):
         for i in range(len(xs) - 1):
             xa, xb = xs[i], xs[i + 1]
             za, zb = deck(xa) - 0.25, deck(xb) - 0.25
-            ia, ib = intrados((xa + xb) / 2), intrados((xa + xb) / 2)
+            ia = intrados((xa + xb) / 2)
             lo_a = intrados(xa) if intrados(xa) is not None else base
             lo_b = intrados(xb) if intrados(xb) is not None else base
             if ia is not None:
@@ -447,7 +446,7 @@ def build_dam(ter, col):
         o.name = "secret.siren"
         o.data.name = "secret.siren"
         o.location = siren_pos
-        o.rotation_euler = (0, 0, math.atan2(-sp[0], sp[1]) * 0 + math.atan2(-(0 - sp[0]), (0 - sp[1])) + math.pi)
+        o.rotation_euler = (0, 0, math.atan2(-(0 - sp[0]), (0 - sp[1])) + math.pi)
     # the valve house at the toe, the river's outlet
     vh = L.DAM_C - L.DAM_UP * 14.0 + L.DAM_AXIS * 16.0
     Mv = frame(vh, math.atan2(L.DAM_AXIS[1], L.DAM_AXIS[0]), L.DAM_BASE_Z + 1.5)

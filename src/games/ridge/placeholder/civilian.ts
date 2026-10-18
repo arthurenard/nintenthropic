@@ -1,6 +1,7 @@
 import { Group, Object3D, TorusGeometry, Vector3 } from "three";
 import type { LoadedAsset } from "../../../engine/types";
 import { nameNode } from "../../../engine/world/names";
+import { pose, quatOf, type ClipKey, type Pose } from "../../../engine/world/poses";
 import {
   ARM_L,
   ARM_R,
@@ -23,11 +24,7 @@ import {
   gait,
   humanBody,
   humanoid,
-  pose,
-  quatOf,
   type Armature,
-  type Key,
-  type Pose,
   type SkinPoints,
   type V3,
 } from "./skin";
@@ -296,7 +293,7 @@ export function civilianClips(points: SkinPoints): ClipSet {
     out = poser.reach(out, root, LEG_R, new Vector3(r[0], 0.05, r[1]), new Vector3(-0.15, 0, 1), quatOf([0, -8, 0]));
     return out;
   };
-  const stand = (t: number, body: Pose, root: V3 = [0, -0.012, 0]): Key => ({ t, pose: plant(body, root), root });
+  const stand = (t: number, body: Pose, root: V3 = [0, -0.012, 0]): ClipKey => ({ t, pose: plant(body, root), root });
   const cos = (phase: number) => Math.cos(2 * Math.PI * phase);
   const sin = (phase: number) => Math.sin(2 * Math.PI * phase);
 
@@ -335,7 +332,7 @@ export function civilianClips(points: SkinPoints): ClipSet {
 
   // cycle: on the saddle, leaning to the bars, the feet on the pedals the whole turn.
   const riding: Pose = { hips: [15, 0, 0], spine: [12, 0, 0], chest: [8, 0, 0], neck: [-14, 0, 0], head: [-12, 0, 0] };
-  const cycleKeys: Key[] = [];
+  const cycleKeys: ClipKey[] = [];
   const samples = 12;
   for (let i = 0; i <= samples; i++) {
     const t = (i / samples) * BICYCLE.cadence;
@@ -393,7 +390,7 @@ export function civilianClips(points: SkinPoints): ClipSet {
   // duck: down low, hands over the head, trembling.
   const duckBody = (tremble: number): Pose =>
     pose(CROUCH, { spine: [38, tremble, 0], chest: [18, 0, tremble], neck: [16, 0, 0], head: [20, tremble * 2, 0] });
-  const duck = (t: number, tremble: number): Key => {
+  const duck = (t: number, tremble: number): ClipKey => {
     const k = poser.settle(points, { t, pose: duckBody(tremble), root: CROUCH_ROOT });
     let p = k.pose;
     poser.set(p, k.root);

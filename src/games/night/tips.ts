@@ -1,4 +1,4 @@
-import { HintLine as Line, TIP_GAP, TIP_SECONDS } from "../../engine/rules/hints";
+import { reloadHint } from "../../engine/rules/hints";
 import type { InputKind } from "../../engine/types";
 import type { SurvivorRole } from "./rules/types";
 
@@ -12,19 +12,6 @@ import type { SurvivorRole } from "./rules/types";
 export type TipId = "night.reload" | "night.head" | "night.eyes" | "night.bloater" | "night.crawler";
 
 export const ALL_TIPS: readonly TipId[] = ["night.reload", "night.head", "night.eyes", "night.bloater", "night.crawler"];
-
-export { TIP_GAP, TIP_SECONDS };
-
-/**
- * How to reload, in the player's own terms. A mouse player told to "point
- * off the screen" would drag the pointer out of the window; the page turns
- * a right-click (and R) or a two-finger tap into the same gesture.
- */
-export function reloadHint(input: InputKind | undefined): string {
-  if (input === "mouse") return "Right-click or press R to reload.";
-  if (input === "touch") return "Tap with two fingers to reload.";
-  return "Point off the screen to reload.";
-}
 
 /** Each tip's words, in the player's own terms. */
 export function tipText(id: TipId, input: InputKind | undefined): string {
@@ -50,13 +37,6 @@ export function survivorWord(role: SurvivorRole): string {
 /**
  * A lesson is learned when it has been shown, or - for the reload, which
  * is shown at the start of every game until then - when the player has
- * done it by themselves.
+ * done it by themselves (the game's HintLine is made with these).
  */
-const LEARNED_BY_DOING: readonly TipId[] = ["night.reload"];
-
-/** The night's hint line: the reload is learned by doing it, every other tip by seeing it. */
-export class HintLine extends Line {
-  constructor(seen: Set<string>) {
-    super(seen, LEARNED_BY_DOING);
-  }
-}
+export const LEARNED_BY_DOING: readonly TipId[] = ["night.reload"];

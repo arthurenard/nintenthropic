@@ -7,7 +7,6 @@ node's Blender +Y axis to its glTF -Z: every "facing" empty below is built
 with bl.look_matrix so its glTF -Z points where it should.
 """
 
-import math
 import os
 
 import bpy

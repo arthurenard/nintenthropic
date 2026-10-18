@@ -8,6 +8,7 @@
  * (the ominous and lonely whistles), so a stinger landing over a piano note
  * never clashes.
  */
+import { midiHz } from "../dsp/curves";
 import { biquad, highpass, lowpass, svf } from "../dsp/filters";
 import { Rng, hashSeed } from "../dsp/rng";
 import { type Mono, adsr, normalize, shapeBy, tailOff } from "../dsp/signal";
@@ -17,8 +18,6 @@ import type { Take } from "../dsp/take";
 import { burst, thump } from "./kit";
 import { reloadSpin } from "./guns";
 import { bellStrike } from "./world";
-
-export const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
 // --- the saloon upright -----------------------------------------------------------
 

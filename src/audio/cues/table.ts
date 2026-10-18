@@ -4,19 +4,23 @@
  * mix, how much of the street's echo and the town's reverb, whether it
  * arrives late with distance, how it is varied each time.
  *
- * A new game adds its sounds here (under its own pack, so they are
- * synthesised only when that game loads) and nowhere else.
+ * High Noon's sounds and the shared ones (the interface, the heartbeat,
+ * slow motion's boom) are written out below. Every other game keeps its
+ * table in a file of its own beside this one (./night.ts, ./orbit.ts,
+ * ./ridge.ts, ./kart.ts), under its own pack so its sounds are synthesised
+ * only when that game loads, and the table is spread into CUES here. A new
+ * game does the same.
  *
- * The mix, in one place (dB at the bus, every take normalised to the same
- * loudness first):
+ * High Noon's mix, in one place (dB at the bus, every take normalised to the
+ * same loudness first):
  *
- *   0    the player's revolver: the loudest thing in the game
- *  −2    dynamite, the rifle (before distance)
- *  −3    the gang's revolvers (before distance, which takes more)
- *  −5…−8 hits and impacts: clear but under the shot that caused them
- *  −8…−12 the world's events: bell, shutters, doors, animals
- * −16…−22 beds: wind, fuse, trickle, tumbleweed
- * −14…−18 interface: soft, short
+ *    0      the player's revolver: the loudest thing in the game
+ *   −2      dynamite, the rifle (before distance)
+ *   −3      the gang's revolvers (before distance, which takes more)
+ *   −4…−10  hits and impacts: clear but under the shot that caused them
+ *   −7…−15  the world's events: bell, shutters, doors, animals
+ *  −14…−18  beds: wind, fuse, trickle, tumbleweed
+ *  −14…−20  interface: soft, short
  */
 import type { Recipe } from "../dsp/take";
 import {
@@ -413,10 +417,14 @@ export const CUES: Record<string, CueSpec> = {
     recipe: uiGold, pack: "core", bus: "ui", level: -14,
     priority: 2, maxInstances: 1, vary: 0, expect: [0.3, 0.7],
   },
+
+  // --- Dead of Night (./night.ts) -------------------------------------------------------
   ...NIGHT_CUES,
 
   // --- Orbital Decay (./orbit.ts) -------------------------------------------------------
   ...ORBIT_CUES,
+
+  // --- Overwatch Ridge (./ridge.ts) -----------------------------------------------------
   ...RIDGE_CUES,
 
   // --- Grip Prix (./kart.ts) -------------------------------------------------------------

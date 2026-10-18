@@ -287,7 +287,7 @@ function simSection(out: HTMLElement): void {
       "div",
       { className: "row" },
       el("h3", { textContent: "A scripted race, rendered offline" }),
-      el("p", { textContent: "Four local karts and three others: countdown, a flooded start, drifts, items, hits, a jump, a fall, the last lap and the finish. Rendered silently through the real engine; the Play button is yours." }),
+      el("p", { textContent: "Four local karts and three others: countdown, drifts, items, hits, a jump, a fall, the last lap and the finish. Rendered silently through the real engine; the Play button is yours." }),
       button("Render the mix", () => void run({}, "mix")),
       button("Effects only", () => void run({ music: false }, "effects only")),
       button("Music only", () => void run({ effects: false }, "music only")),

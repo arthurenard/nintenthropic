@@ -4,6 +4,7 @@ import type { Difficulty } from "../../../engine/types";
 import { Dynamite, flightTimeFor } from "./dynamite";
 import { felledNote, type Felled } from "./felled";
 import { damageDirection, PlayerHealth } from "../../../engine/rules/health";
+import { boldnessAfter, pressureOf, wearToward } from "../../../engine/rules/pressure";
 import type { V3 } from "../../../engine/rules/raymath";
 import { Revolver, type TriggerResult } from "./revolver";
 import { range, shuffle, type Random } from "../../../engine/rules/rng";
@@ -29,6 +30,7 @@ import {
   RIFLE_DAMAGE_FACTOR,
   THROW_HAND,
   WAVE_INTRO,
+  WORN,
   type DifficultyTuning,
 } from "./tuning";
 import type { Cover, HitPart, Role } from "./types";
@@ -438,15 +440,12 @@ export class Match implements BanditWorld {
    * climbing by boldRate a second to its boldMax.
    */
   boldness(): number {
-    if (this.phase !== "combat") return 1;
-    const t = this.baseline;
-    return Math.min(t.boldMax, 1 + Math.max(0, this.phaseT - t.boldAfter) * t.boldRate);
+    return this.phase === "combat" ? boldnessAfter(this.baseline, this.phaseT) : 1;
   }
 
   /** The late-wave pressure as a fraction: 0 (none yet) to 1 (the gang at its boldest). */
   pressure(): number {
-    const max = this.baseline.boldMax;
-    return max > 1 ? (this.boldness() - 1) / (max - 1) : 0;
+    return pressureOf(this.baseline, this.boldness());
   }
 
   /**
@@ -457,18 +456,7 @@ export class Match implements BanditWorld {
    * the baseline is Standard's own, and nothing moves.
    */
   private wear(): void {
-    const k = this.pressure();
-    const from = this.baseline;
-    const to = DIFFICULTY.standard;
-    const t = this.tuning;
-    t.aimFactor = from.aimFactor + (to.aimFactor - from.aimFactor) * k;
-    t.glintLead = from.glintLead + (to.glintLead - from.glintLead) * k;
-    t.hitFactor = from.hitFactor + (to.hitFactor - from.hitFactor) * k;
-    t.damageFactor = from.damageFactor + (to.damageFactor - from.damageFactor) * k;
-    t.regenDelay = from.regenDelay + (to.regenDelay - from.regenDelay) * k;
-    t.regenRate = from.regenRate + (to.regenRate - from.regenRate) * k;
-    t.lightTime = from.lightTime + (to.lightTime - from.lightTime) * k;
-    t.flightFactor = from.flightFactor + (to.flightFactor - from.flightFactor) * k;
+    wearToward(this.tuning, this.baseline, DIFFICULTY.standard, WORN, this.pressure());
   }
 
   fire(b: Bandit): void {
@@ -508,7 +496,6 @@ export class Match implements BanditWorld {
       y: 0.05,
       z: this.eye.z - range(this.random, 3.2, 5),
     };
-    stick.throwerId = b.id;
     stick.thrownFrom = b.cover;
     stick.launch(start, target, flightTimeFor(horizontalDistance(start, target), this.tuning.flightFactor));
     this.listener.banditThrow(b, stick);
@@ -842,7 +829,6 @@ export class Match implements BanditWorld {
     if (b.lit && !b.released) {
       const stick = this.freeStick();
       if (stick) {
-        stick.throwerId = b.id;
         stick.thrownFrom = b.cover;
         stick.drop({ x: b.pos.x, y: b.pos.y + 0.1, z: b.pos.z }, DYNAMITE_DROP_FUSE);
         this.listener.dynamiteDropped(stick, b);
@@ -858,7 +844,6 @@ export class Match implements BanditWorld {
     // A body left lying at a cover makes it a last resort for the next man;
     // if one is sent there anyway, the body is taken away first.
     if (!choice.fall && !running) this.bodies.add(b.cover.id);
-    b.diedAt = this.time;
     b.die(choice);
     const award = this.scorer.kill({
       headshot: part === "head",
@@ -1046,7 +1031,7 @@ export function pickBossCovers(covers: readonly Cover[]): Cover[] {
   return chosen;
 }
 
-/** Where the duelist comes from: a `duel`-tagged cover, the saloon's door, or the nearest street door past 15 m. */
+/** Where the duelist comes from: a `duel`-tagged cover, the saloon's door, or else the door or street-level cover nearest 22 m out. */
 export function pickDuelCover(covers: readonly Cover[]): Cover {
   const tagged = covers.find((c) => c.tags.includes("duel"));
   if (tagged) return tagged;

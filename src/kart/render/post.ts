@@ -96,7 +96,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   c += (n - 0.5) * (1.1 / 255.0) * max(0.15, sqrt(gLuma(c)));
   // Between the views (and in the quadrant three views leave free) nothing is drawn: each view's picture is resolved from
-  // the multisampled target inside its own scissor only, so what lies there is whatever an older frame left. The divider.
+  // the multisampled target inside its own scissor only, and what lies between is whatever an older frame left, so it is
+  // painted the divider's colour.
   outputColor = vec4(inView ? max(c, vec3(0.0)) : uDivider, inputColor.a);
 }
 `;
@@ -199,11 +200,6 @@ export class PostChain {
   set timer(timer: GpuTimer | null) {
     this.stopwatch = timer;
     this.views.timer = timer;
-  }
-
-  /** The post passes' pieces, for taking the chain apart while measuring. */
-  get parts(): { bloom: BloomEffect; passes: readonly Pass[] } {
-    return { bloom: this.bloom, passes: this.composer.passes };
   }
 
   render(dt: number): void {

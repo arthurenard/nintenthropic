@@ -4,9 +4,9 @@
  * (src/kart/audio) for the menus' music and the interface's sounds, and a
  * fresh one for every race.
  *
- * Super Claude Bros. has one sound preference, on or off, which the arcade shares
- * (`prefs.muted`), and a master volume (the arcade's Settings). The race page
- * adds Music and Effects sliders, remembered here. With sound off nothing is
+ * The site has one sound preference, on or off, which every game shares
+ * (`prefs.muted`), and a master volume (the arcade's Settings). Grip Prix
+ * adds its own Music and Effects sliders, remembered here. With sound off nothing is
  * made: no engine, no music rendered, no code fetched, until it is turned on.
  *
  * The audio code is fetched when sound wakes, not with the page, so the start
@@ -153,23 +153,4 @@ export class KartSounds implements SoundService {
       paused: race?.paused ?? false,
     };
   }
-}
-
-/** Sound that makes none: for the screens' tests, where there is nothing to hear. */
-export function silentSound(): SoundService {
-  let muted = true;
-  let sliders: SoundLevels = { music: 0.8, effects: 1 };
-  return {
-    get muted() {
-      return muted;
-    },
-    setMuted: (value) => void (muted = value),
-    levels: () => ({ ...sliders }),
-    setLevels: (levels) => void (sliders = { ...sliders, ...levels }),
-    wake() {},
-    music() {},
-    play() {},
-    race: () => ({ load: async (_theme, progress) => progress?.(1), frame() {}, pause() {}, resume() {}, dispose() {} }),
-    report: () => ({ awake: false, muted, music: null, engines: 0, paused: false }),
-  };
 }

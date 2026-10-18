@@ -6,7 +6,7 @@
  * fall.
  */
 import { describe, expect, it } from "vitest";
-import { TrackGeometry, inStretch, type TrackDef, type TrackTheme } from "../track/geometry";
+import { TrackGeometry, inStretch, type TrackTheme } from "../track/geometry";
 import { CUPS, TRACKS, trackById } from "../track/tracks";
 import { planFor } from "./plan";
 import { trackStats } from "./trackStats";
@@ -82,7 +82,7 @@ describe.each(TRACKS)("$name", (track) => {
     }
   });
 
-  it("keeps the start line and the grid clear: nothing but road for 45 m before it and 15 m after", () => {
+  it("keeps the start line and the grid clear: nothing but road for 48 m before it and 18 m after", () => {
     const near = (s: number) => {
       const d = geo.delta(0, s);
       return d > -48 && d < 18;

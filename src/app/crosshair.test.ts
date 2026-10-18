@@ -6,7 +6,7 @@ const STANDARD: CrosshairStyle = { size: "standard", highContrast: false };
 const LARGE: CrosshairStyle = { size: "large", highContrast: false };
 
 describe("the crosshair's size", () => {
-  it("is the desktop's by default: about 22 px across the ring at 1440x900", () => {
+  it("is the Python version's by default: about 22 px across the ring at 1440x900", () => {
     const { unit, weight, thin, outline } = crosshairMetrics(1440, 900, 1, STANDARD);
     expect(unit).toBeCloseTo(0.75 * 1.5, 9);
     expect(weight).toBeCloseTo(2.25, 9);

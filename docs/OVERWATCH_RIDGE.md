@@ -1,6 +1,6 @@
 # Overwatch Ridge — game design
 
-The fourth game of the web-native Super Claude Bros. First light over an alpine
+The fourth game of Super Claude Bros. First light over an alpine
 valley: you lie on a ridge with a bolt-action rifle and a spotter's readout, and
 the valley below you is where the job is. Close one eye and the scope brings it
 six times closer. It must look and feel like something Apple would put on stage
@@ -162,8 +162,8 @@ direction and strength, shown as it comes).
 A man 300 m away is a few pixels tall in the wide view, and nothing says where
 to look. So the game helps, calmly, and never helps the shot itself
 (`rules/finding.ts`, `rules/spotter.ts`, the HUD's marks). The marks name the
-**people**, never a place: a "Checkpoint" pill over the road was read as a
-game checkpoint, and is gone.
+**people**, never a place (a "Checkpoint" pill over the road would read as a
+game checkpoint).
 
 - **With Aim Assist** (Settings; on unless the player turns it off - the
   game reads it live) **a small mark floats over each hostile** while the view
@@ -269,7 +269,8 @@ crossed the bridge. The driver is the quick stop; the engine takes three." ·
    three times: it lands on the rock right in front of your scope and stares at
    you. "It isn’t blinking."
 7. **The duck.** A yellow rubber duck floats down the river. Shoot it: it
-   bobs, and the popup reads "Duck at 412 m." (Every game hides one duck.)
+   bobs, and the popup reads "Duck at 412 m." (Dead of Night and Orbital
+   Decay hide one too.)
 8. **The echo** ("Echo, Echo, Echo"). Shoot the great cliff face across the
    valley: your shot's echo comes back three times, the last one sounding like
    a distant shot from someone else.
@@ -300,12 +301,12 @@ framing is the wide view; the scope comes after.
 Y-up, metres; the player's eye at the origin, 60 m above the valley floor,
 looking along −Z across the valley. Everything made by `art/ridge/` Blender
 scripts; nothing downloaded; humans built on the shared character library
-(`art/western/`, read-only; extend it in `art/ridge/`).
+(`art/western/`, extended in `art/ridge/` rather than changed).
 
 **This valley is seen through a 6× scope**, so High Noon's trick of baking
 light from one eye into projected textures is not enough: surfaces need real
-UVs and texel density where the targets are. Recommended approach, the art's
-call (documented in `art/ridge/README.md`):
+UVs and texel density where the targets are. The plan (what was built differs
+in places: see **As built** below and `art/ridge/README.md`):
 - **Terrain** as a heightfield mesh (or tiles) with a **splat map** blending
   tileable PBR materials made in Blender (grass, rock, scree, snow, dirt,
   road stone), plus a baked **light/AO map** on a second UV; the game renders

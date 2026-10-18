@@ -27,7 +27,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as I from "./instruments.mjs";
 import {
-  SR, Svf, biquad, clamp, compress, convolveStereo, db, fadeIn, fadeOut, filter, limit, makeIR, measure, mtof, panGains, pingPong,
+  SR, Svf, biquad, clamp, compress, convolveStereo, db, fadeOut, filter, limit, makeIR, measure, mtof, panGains, pingPong,
   reversed, rng, secs, smoothstep, softClip, toDb, whiteNoise, writeWav,
 } from "./dsp.mjs";
 

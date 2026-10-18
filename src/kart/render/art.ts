@@ -9,7 +9,7 @@
  *
  * Files, under public/assets/kart/ (each a Draco-compressed .glb):
  *   karts.glb                 the kart: "kart.body", "kart.wheel" (one wheel,
- *                             placed four times), "kart.trim" ...
+ *                             placed four times), "kart.steering"
  *   drivers.glb               "driver.<species>.<part>": head, torso, arm.L,
  *                             arm.R, helmet (pivots at the joints)
  *   world-<theme>.glb         "landmark.<kind>" and "scenery.<kind>.<n>"
