@@ -119,8 +119,11 @@ export class RaceScreen {
     });
     window.addEventListener("keydown", (event) => this.key(event));
     document.addEventListener("visibilitychange", () => {
+      if (!document.hidden || !this.running) return;
       // A tab put away while practising: the race waits, behind the sheet.
-      if (document.hidden && this.running && this.ctx?.session.role === "solo") this.pause();
+      if (this.ctx?.session.role === "solo") this.pause();
+      // A hidden page gets no frames, and the frame is what quiets the engines: they would drone on behind the other tabs.
+      this.hush(true);
     });
   }
 
@@ -246,6 +249,14 @@ export class RaceScreen {
     }
   }
 
+  /** The race's sound held still (engines silent, music muffled), or let go again. */
+  private hush(on: boolean): void {
+    if (on === this.hushed) return;
+    this.hushed = on;
+    if (on) this.sound?.pause();
+    else this.sound?.resume();
+  }
+
   /** What the pause sheet tells you: whether the race waits, and what leaving does. */
   private note(): void {
     const session = this.ctx?.session;
@@ -294,13 +305,8 @@ export class RaceScreen {
     if (this.mode === "pending") this.choose(view);
     // While the room is stopped the picture holds still, effects and cameras too.
     const dt = lobby.pause ? 0 : seconds;
-    // The engines fall silent and the music is muffled behind the sheet, and through the host's pause.
-    const hush = this.sheet.open || !!lobby.pause;
-    if (hush !== this.hushed) {
-      this.hushed = hush;
-      if (hush) this.sound?.pause();
-      else this.sound?.resume();
-    }
+    // The engines fall silent and the music is muffled behind the sheet, through the host's pause, and while the page is away.
+    this.hush(this.sheet.open || !!lobby.pause || document.hidden);
     if (this.mode === "world" && this.renderer && this.loaded) {
       const views = ctx.session.views();
       const key = views.join(",");
