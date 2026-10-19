@@ -73,7 +73,7 @@
             </div>
           </article>
         </div>
-        <p class="footnote landing-foot">Your camera picture stays on this computer.</p>
+        <p class="footnote landing-foot">Your camera picture stays on <span class="this-device">this computer</span>.</p>
       </main>
     </div>
 
@@ -97,6 +97,10 @@
               <button id="switch-control" class="link">Use Mouse or Trackpad</button>
             </p>
             <p class="subhead home-best num" id="home-best" hidden></p>
+            <p class="footnote camera-note" id="camera-note" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg>Plays best with the camera off to one side: an external
+              webcam, or the game on a second screen.
+            </p>
             <p class="coming-soon subhead" id="feature-soon" hidden>Coming Soon</p>
           </div>
         </section>
@@ -213,7 +217,7 @@
         <!-- Last, so the crosshair is never hidden behind the corners' chrome. -->
         <canvas class="overlay" id="crosshair" aria-hidden="true"></canvas>
       </div>
-      <p class="turn-hint footnote secondary" aria-hidden="true">Turn your phone sideways for a bigger view.</p>
+      <p class="turn-hint footnote secondary" aria-hidden="true">Turn your screen sideways for a bigger view.</p>
     </section>
 
     <!-- Sheets. -->
@@ -330,12 +334,12 @@
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="privacy-title">Your Camera Stays Here</h2>
       <p class="body secondary">
-        Super Claude Bros. runs in your browser. Your camera picture is read on this computer to find your hand, and it is never
+        Super Claude Bros. runs in your browser. Your camera picture is read on <span class="this-device">this computer</span> to find your hand, and it is never
         saved or uploaded.
       </p>
       <p class="subhead secondary" id="privacy-eye">
         In Overwatch Ridge it also reads whether one of your eyes is closed, for the scope: only that, only in that
-        game, and in Settings’ Eye Test when you start it. Nothing leaves this computer.
+        game, and in Settings’ Eye Test when you start it. Nothing leaves <span class="this-device">this computer</span>.
       </p>
       <p class="subhead secondary">
         The first game with your hand downloads about 20 MB, once. After that, your browser keeps it.
@@ -559,7 +563,7 @@
       <span class="alert-icon danger"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg></span>
       <h2 class="title2" id="confirm-title">Reset Everything?</h2>
       <p class="body secondary" id="confirm-body">
-        This clears your records, saved aim and settings on this computer, and starts Super Claude Bros. afresh.
+        This clears your records, saved aim and settings on <span class="this-device">this computer</span>, and starts Super Claude Bros. afresh.
       </p>
       <div class="sheet-actions">
         <button class="button destructive wide" id="confirm-reset">Reset</button>

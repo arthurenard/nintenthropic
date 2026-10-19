@@ -280,15 +280,22 @@ the four shooters in a row beneath it. Grip Prix is not in the row.
    is.
 2. Before the browser asks for the camera, say why and what happens to the
    picture: "Super Claude Bros. needs your camera to see your hand. The picture
-   stays on this computer."
-3. Aim setup is the Target Range and feels like part of the game: large targets,
+   stays on this computer." On a phone or a tablet the words fit what is in
+   hand: "this device", and Use Touch where a computer offers Use Mouse or
+   Trackpad. Play is focused on arrival for the keys, but not on a touch
+   screen, where Safari would ring it before the first tap.
+3. Under Play, while the hand is the control, a footnote says where the camera
+   wants to be: "Plays best with the camera off to one side: an external
+   webcam, or the game on a second screen." A laptop's own camera, straight
+   ahead, sees a pointed finger end on.
+4. Aim setup is the Target Range and feels like part of the game: large targets,
    a small celebration on each shot, a calm ring that fills as the aim is
    learned. The player points their finger at the lit target; there is no
    crosshair to steer until the aim is set ("Aim Set", and the crosshair
    follows the finger from there), and the words say so in the game's own
    noun ("Point at the Lit Bottle"). A returning player whose saved aim still
    fits needs three shots, with Adjust Aim one click away.
-4. A download on first use shows real progress ("Getting ready… 45%"), not a
+5. A download on first use shows real progress ("Getting ready… 45%"), not a
    spinner.
 
 ## Results

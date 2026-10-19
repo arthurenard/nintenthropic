@@ -13,6 +13,7 @@ import type { GameEntry } from "../engine/types";
 import { siteUrl } from "../engine/fetch";
 import { backdropCss } from "../ui/backdrop";
 import { $, element } from "../ui/dom";
+import { thisDevice } from "../ui/touch";
 import { posterInto } from "./arcade";
 import type { Tile } from "./route";
 
@@ -118,7 +119,7 @@ const HOW: Record<Tile, { eyebrow: string; title: string; gesture: GestureKind; 
     title: "Finger Pistol",
     gesture: "pistol",
     body: () =>
-      "Point your finger at the screen like a gun. Fold your thumb to fire. Your camera sees your hand, and the picture never leaves this computer.",
+      `Point your finger at the screen like a gun. Fold your thumb to fire. Your camera sees your hand, and the picture never leaves ${thisDevice()}.`,
   },
   "grip-prix": {
     eyebrow: "Grip Prix",

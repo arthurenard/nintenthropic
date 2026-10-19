@@ -4,6 +4,7 @@
  * happened and what to do, in one or two lines, with the fix as a button.
  */
 import { $, icon, setText } from "../ui/dom";
+import { pointerChoice } from "../ui/touch";
 
 export function openSheet(id: string): HTMLDialogElement {
   const sheet = $<HTMLDialogElement>(id);
@@ -157,7 +158,7 @@ export function showTrouble(
     const button = $<HTMLButtonElement>(id);
     button.hidden = !label;
     if (!label) continue;
-    setText(button, atHome && label === "Choose a Game" ? "Not Now" : label);
+    setText(button, atHome && label === "Choose a Game" ? "Not Now" : label === "Use Mouse or Trackpad" ? pointerChoice() : label);
     button.onclick = () => {
       closeSheet("alert");
       fixes[label]();

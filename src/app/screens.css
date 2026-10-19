@@ -741,3 +741,20 @@ body[data-view="game"] {
     color: var(--label);
   }
 }
+
+/* Where the camera wants to be, said quietly under Play: a laptop's own
+   camera, straight ahead, sees a pointed finger end on, so the hand reads
+   better from one side - an external webcam, or the game on a second screen. */
+.camera-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: -4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.camera-note svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}

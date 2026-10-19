@@ -18,7 +18,7 @@ import type { GameEntry, InputKind, Settings } from "../engine/types";
 import { ARCADE, GRIP_PRIX, playable } from "../games/index";
 import { AimController } from "../input/aim";
 import { $, replay, toast } from "../ui/dom";
-import { touchOnly } from "../ui/touch";
+import { thisDevice, touchOnly } from "../ui/touch";
 import { HeroArt, pickGame, posterInto, Shelf, shooters } from "./arcade";
 import { drawArcade } from "./arcadeScreen";
 import { Crosshair } from "./crosshair";
@@ -208,7 +208,8 @@ export class App {
       // The address names the game the arcade is on, whichever way it was reached.
       const address = this.addressFor(route);
       if (address !== `${location.pathname}${location.search}${location.hash}`) history.replaceState(history.state, "", address);
-      if (!remembered) $("play").focus({ preventScroll: true });
+      // Play waits under the keys; a touch screen has none, and Safari would ring it before the first tap.
+      if (!remembered && !touchOnly()) $("play").focus({ preventScroll: true });
       return;
     }
     this.showView("landing");
@@ -436,6 +437,8 @@ export class App {
   // --- the page's own controls -----------------------------------------------------------------
 
   private wire(): void {
+    // The page's own words say where the picture stays: on a phone or a tablet, this device.
+    for (const word of document.querySelectorAll(".this-device")) word.textContent = thisDevice();
     // The first gesture on the page makes the sound engine; every button
     // after it answers with the interface's soft tap, or a rising pair of
     // notes for the ones that set something going.
