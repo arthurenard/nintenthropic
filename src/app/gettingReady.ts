@@ -14,7 +14,7 @@ import type { Game, GameContext, GameEntry, InputKind, Settings } from "../engin
 import { CameraError, cameraPermission } from "../tracking/camera";
 import { ModelError } from "../tracking/errors";
 import { $, setText } from "../ui/dom";
-import { touchOnly } from "../ui/touch";
+import { pointerChoice, thisDevice, touchOnly } from "../ui/touch";
 import type { HandCamera } from "./handCamera";
 import type { Hud } from "./hud";
 import { prefs } from "./prefs";
@@ -56,9 +56,10 @@ export async function askForCamera(eye: boolean, trouble: (kind: Trouble) => voi
   setText(
     "prime-body",
     eye
-      ? "Super Claude Bros. needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on this computer."
-      : "Super Claude Bros. needs your camera to see your hand. The picture stays on this computer.",
+      ? `Super Claude Bros. needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on ${thisDevice()}.`
+      : `Super Claude Bros. needs your camera to see your hand. The picture stays on ${thisDevice()}.`,
   );
+  setText("prime-mouse", pointerChoice());
   return new Promise((resolve) => {
     const sheet = openSheet("prime");
     const done = (value: InputKind | null) => {

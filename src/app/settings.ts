@@ -14,6 +14,7 @@ import type { Steadiness } from "../input/aim";
 import type { EyeView } from "../input/scope";
 import { listCameras } from "../tracking/camera";
 import { $, setText, toast } from "../ui/dom";
+import { thisDevice } from "../ui/touch";
 import type { CrosshairStyle } from "./crosshair";
 import type { Preferences, ScopePreferences } from "./prefs";
 import { closeSheet, openSheet } from "./sheets";
@@ -383,7 +384,7 @@ export class SettingsSheet {
     const status = $("eye-test-status");
     const picture = $("eye-test-video");
     if (state.kind === "getting-ready") {
-      setText(status, state.fraction > 0 ? `Getting ready… ${Math.round(state.fraction * 100)}%` : "Getting ready… Allow the camera if your browser asks. The picture stays on this computer.");
+      setText(status, state.fraction > 0 ? `Getting ready… ${Math.round(state.fraction * 100)}%` : `Getting ready… Allow the camera if your browser asks. The picture stays on ${thisDevice()}.`);
       return;
     }
     if (state.kind === "blocked") {

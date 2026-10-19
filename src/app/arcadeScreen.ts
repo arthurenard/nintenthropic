@@ -9,7 +9,7 @@ import type { Difficulty, GameEntry, InputKind } from "../engine/types";
 import { ARCADE, playable } from "../games/index";
 import { $, icon, setText } from "../ui/dom";
 import { formatScore } from "../ui/format";
-import { touchOnly } from "../ui/touch";
+import { pointerChoice, thisDevice } from "../ui/touch";
 import type { HeroArt, Shelf } from "./arcade";
 import { controlClass, hasSavedAim, readBest } from "./prefs";
 import { difficultyLabel } from "./results";
@@ -41,9 +41,11 @@ export function drawArcade(entry: GameEntry, shelf: Shelf, hero: HeroArt, state:
   const label = $("control-label");
   const hand = state.control === "hand";
   label.replaceChildren(icon(hand ? "hand" : "mouse"), hand ? "Finger Pistol" : state.control === "touch" ? "Touch" : "Mouse or Trackpad");
-  setText("switch-control", hand ? (touchOnly() ? "Use Touch" : "Use Mouse or Trackpad") : "Use Finger Pistol");
+  setText("switch-control", hand ? pointerChoice() : "Use Finger Pistol");
   $("switch-control").hidden = state.scripted;
   $("adjust").hidden = !(here && hand && hasSavedAim());
+  // A laptop's own camera, straight ahead, sees a pointed finger end on: said once, quietly, under Play.
+  $("camera-note").hidden = !(here && hand && !state.scripted);
   $<HTMLButtonElement>("play").disabled = state.busy;
   showBest(entry, state);
 }
@@ -57,7 +59,7 @@ function sayWhoReadsTheEye(): void {
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
   setText(
     line,
-    `In ${list} it also reads whether one of your eyes is closed, for the scope: only that, only in ${names.length > 1 ? "those games" : "that game"}, and in Settings’ Eye Test when you start it. Nothing leaves this computer.`,
+    `In ${list} it also reads whether one of your eyes is closed, for the scope: only that, only in ${names.length > 1 ? "those games" : "that game"}, and in Settings’ Eye Test when you start it. Nothing leaves ${thisDevice()}.`,
   );
 }
 
