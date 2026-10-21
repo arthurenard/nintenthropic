@@ -273,9 +273,11 @@ only those karts' physics against the world as it is.
   one (inputs, snapshots).
 - **Signalling.** PeerJS's public broker by default, configurable with
   `VITE_PEER_HOST`, `VITE_PEER_PORT`, `VITE_PEER_PATH`, `VITE_PEER_KEY` to
-  run one's own; STUN `stun:stun.l.google.com:19302`, no TURN. Players on the
-  same Wi-Fi always connect; across the internet most do. The broker sees
-  only that two browsers want to talk.
+  run one's own; STUN `stun:stun.l.google.com:19302`, no TURN, by choice:
+  online play is for one local network. Players on the same Wi-Fi connect
+  directly; players on different networks often can't, and the start screen
+  ("on several devices on the same Wi-Fi"), the lobby's hint and the troubles
+  say so. The broker sees only that two browsers want to talk.
 - **Room codes.** Four letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`; the host's
   peer id is `grip-prix-v1-<CODE>`. A code in use is drawn again.
 - **The host** runs the race on the fixed tick from accumulated time (never
@@ -749,7 +751,8 @@ the pad itself, and in a race the pad drives.
 
 Troubles say what happened and what to do: "There's no race with that code.
 Check it and try again.", "This race is full.", "The host left the race.",
-"Lost the connection to the race.", and for a code that never answers, "Can't
+"Lost the connection to the race. Make sure everyone is on the same Wi-Fi,
+then try again.", and for a code that never answers, "Can't
 Reach the Race" ("Join from the same Wi-Fi as the host, then try again.") —
 each with the way back as a button. A guest who has heard nothing from the
 host for 2.5 s (a ping goes every second) sees "Waiting for <host>" over the

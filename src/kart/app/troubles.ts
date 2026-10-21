@@ -46,7 +46,7 @@ export const TROUBLES: Record<TroubleKind, TroubleWords> = {
   network: {
     icon: "wifi-off",
     title: "Connection Lost",
-    body: "Lost the connection to the race. Check your network, then try again.",
+    body: "Lost the connection to the race. Make sure everyone is on the same Wi-Fi, then try again.",
   },
   unreachable: {
     icon: "wifi-off",

@@ -144,10 +144,11 @@ prints the address. Then:
    Grand Prix**). The host's pause stops the race for everyone, and resumes
    with a 3-2-1.
 
-Everyone on the same Wi-Fi connects directly. The devices find each other
-through a public PeerJS broker, so the network needs internet access (only the
-introduction goes through it; no race data does). Friends in other places can
-join with the code too, though with no relay a strict network may refuse. Press
+Racing on several devices needs everyone on the same Wi-Fi: the devices
+connect directly, with no relay, so players on different networks usually
+can't reach each other (the start screen, the lobby and the troubles say so).
+They find each other through a public PeerJS broker, so the network needs
+internet access (only the introduction goes through it; no race data does). Press
 **F** in the race for full screen on the TV, and **M** to turn sound off and on
 (the same preference as the arcade's; Music and Effects have their own sliders
 in the pause sheet). Keyboards and gamepads drive as well: choose them on the

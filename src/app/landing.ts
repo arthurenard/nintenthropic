@@ -126,7 +126,7 @@ const HOW: Record<Tile, { eyebrow: string; title: string; gesture: GestureKind; 
     title: "Grip the Wheel",
     gesture: "wheel",
     body: (grip) =>
-      grip?.about ?? "Hold your fists up like a wheel and turn it. Race up to three friends, each on their own camera or all on one big screen.",
+      grip?.about ?? "Hold your fists up like a wheel and turn it. Race up to three friends, all on one big screen or each on their own device on the same Wi-Fi.",
   },
 };
 

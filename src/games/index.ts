@@ -167,7 +167,7 @@ export const GRIP_PRIX: GameEntry = {
   title: "Grip Prix",
   blurb: "Grip the wheel. Race your friends.",
   about:
-    "Hold your fists up like a wheel and turn it. Drift round the bends, grab a nitro, and race up to three friends, each on their own camera or all on one big screen.",
+    "Hold your fists up like a wheel and turn it. Drift round the bends, grab a nitro, and race up to three friends, all on one big screen or each on their own device on the same Wi-Fi.",
   poster: "assets/kart/poster.webp",
   // A sunny meadow: a clear blue sky over bright grass, the sun high on the right.
   backdrop: {
