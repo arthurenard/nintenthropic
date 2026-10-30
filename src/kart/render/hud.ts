@@ -72,6 +72,14 @@ export function bannerFor(incoming: boolean, wrongWay: boolean, finalLap: boolea
   return incoming ? "incoming" : wrongWay ? "wrong" : finalLap ? "final" : null;
 }
 
+/** Seconds between two pops of the place (karts side by side can swap it back and forth every frame). */
+export const PLACE_POP = 0.35;
+
+/** How the place shows a change: springing up for a place won, sinking in for a place lost. */
+export function placeChange(from: number, to: number): "gp-gain" | "gp-lose" {
+  return to < from ? "gp-gain" : "gp-lose";
+}
+
 function restart(node: HTMLElement, cls: string): void {
   node.classList.remove(cls);
   void node.offsetWidth;
@@ -105,6 +113,12 @@ interface ViewHud {
   lastHint: string;
   hintOn: boolean;
   lastPlace: number;
+  /** When the place last popped (two karts side by side swap places back and forth: it pops at most every PLACE_POP s). */
+  placeAt: number;
+  /** The view's edges glowing once as the final lap begins. */
+  finalGlow: HTMLElement;
+  glowed: boolean;
+  lastFinal: boolean;
   lastItem: string;
   lastCount: string;
   lastLap: number;
@@ -194,6 +208,11 @@ export class Hud {
       v.teacher.reset();
       v.finalUntil = -1;
       v.shownFinal = false;
+      v.glowed = false;
+      v.placeAt = -9;
+      v.lastFinal = false;
+      v.lapCount.classList.remove("gp-final");
+      v.finalGlow.classList.remove("gp-on");
       v.lastLap = 0;
       v.lastPlace = -1;
     }
@@ -262,7 +281,11 @@ export class Hud {
     const placeN = el("span", "gp-place-n", place);
     const placeS = el("span", "gp-place-s", place);
 
-    const finalLap = el("div", "gp-banner gp-glass", root);
+    // The final lap: the edges of the view glow orange once as it begins (under everything else), and the banner says so.
+    const finalGlow = el("div", "gp-final-glow", root);
+    finalGlow.setAttribute("aria-hidden", "true");
+    root.prepend(finalGlow);
+    const finalLap = el("div", "gp-banner gp-final-lap gp-glass", root);
     finalLap.textContent = "Final Lap";
     finalLap.setAttribute("aria-live", "polite");
     const wrong = el("div", "gp-banner gp-wrong gp-glass", root);
@@ -307,6 +330,10 @@ export class Hud {
       lastHint: "",
       hintOn: false,
       lastPlace: -1,
+      placeAt: -9,
+      finalGlow,
+      glowed: false,
+      lastFinal: false,
       lastItem: "",
       lastCount: "",
       lastLap: 0,
@@ -392,13 +419,18 @@ export class Hud {
       v.lastLap = kart.lap;
     }
 
-    // Place.
+    // Place: a place won springs up, a place lost sinks in (at most one every PLACE_POP seconds).
     if (kart.place !== v.lastPlace) {
       const o = ordinal(kart.place);
       setText(v.placeN, o.number);
       setText(v.placeS, o.suffix);
       v.place.classList.toggle("gp-first", kart.place === 1);
-      if (v.lastPlace > 0) restart(v.place, "gp-pop");
+      if (v.lastPlace > 0 && !done && this.clock - v.placeAt >= PLACE_POP) {
+        const cls = placeChange(v.lastPlace, kart.place);
+        v.place.classList.remove("gp-gain", "gp-lose");
+        restart(v.place, cls);
+        v.placeAt = this.clock;
+      }
       v.lastPlace = kart.place;
     }
     v.place.style.display = done ? "none" : "";
@@ -419,6 +451,16 @@ export class Hud {
     v.finalLap.classList.toggle("gp-on", banner === "final");
     v.wrong.classList.toggle("gp-on", banner === "wrong");
     v.root.classList.toggle("gp-bannered", banner !== null);
+    // The last lap is orange in the lap panel all the way round, and its first moment glows round the view's edges.
+    const finalNow = view.laps > 1 && kart.lap === view.laps && !done;
+    if (finalNow !== v.lastFinal) {
+      v.lastFinal = finalNow;
+      v.lapCount.classList.toggle("gp-final", finalNow);
+    }
+    if (banner === "final" && !v.glowed) {
+      v.glowed = true;
+      restart(v.finalGlow, "gp-on");
+    }
 
     // Countdown.
     let text = "";

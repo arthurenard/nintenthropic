@@ -219,6 +219,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let racers: readonly RacerSetup[] = [];
   let layout: ViewLayout = { views: [], free: null };
   let viewKarts: number[] = [0];
+  /** The karts the views follow, for the effects (theirs get the full show). */
+  let watched: ReadonlySet<number> = new Set(viewKarts);
   let cameras: ChaseCamera[] = [];
   let width = canvas.clientWidth || 800;
   let height = canvas.clientHeight || 600;
@@ -341,6 +343,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
   const relayout = () => {
     layout = layoutViews(viewKarts.length, width, height);
+    watched = new Set(viewKarts);
     while (cameras.length < viewKarts.length) cameras.push(new ChaseCamera());
     cameras.length = viewKarts.length;
     for (const c of cameras) c.calm = calm;
@@ -540,6 +543,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       lastTick = view.tick;
       raceLaps = view.laps;
 
+      effects.focus = watched;
       // Karts, standing where the road really is (its banking and any ramp lift them) and, when they have fallen, where the drone has them.
       const byId = new Map<number, KartView>();
       const ctx = actorContext();
