@@ -30,7 +30,12 @@ const FILES = {
 };
 
 const assets = new Assets();
-const nodes = new Map<string, Object3D>();
+/** The karts' and the drivers' models, the same in every world. */
+const shared = new Map<string, Object3D>();
+/** Each world file's landmarks and scenery, kept apart: a world loaded for an earlier race must not dress the next one (a snowy pine in the meadow). */
+const worlds = new Map<string, Map<string, Object3D>>();
+/** The world the last race (or gallery) asked for: its landmarks and scenery are the ones looked up. */
+let current: TrackTheme | null = null;
 const loading = new Map<string, Promise<void>>();
 const settled = new Set<string>();
 
@@ -46,10 +51,14 @@ function load(file: string): Promise<void> {
     pending = (async () => {
       try {
         const { scene } = await assets.gltf(file);
+        const world = new Map<string, Object3D>();
         scene.traverse((o) => {
           const name = contractName(o);
-          if (name && (name.startsWith("kart.") || name.startsWith("driver.") || name.startsWith("landmark.") || name.startsWith("scenery."))) nodes.set(name, o);
+          if (!name) return;
+          if (name.startsWith("kart.") || name.startsWith("driver.")) shared.set(name, o);
+          else if (name.startsWith("landmark.") || name.startsWith("scenery.")) world.set(name, o);
         });
+        if (world.size > 0) worlds.set(file, world);
       } catch {
         // Not built yet, or not reachable: the code-built stand-ins carry on.
       } finally {
@@ -63,6 +72,7 @@ function load(file: string): Promise<void> {
 
 /** Loads what exists of the karts, the drivers and `theme`'s world; never fails (a missing file leaves the stand-ins). */
 export async function loadKartArt(theme: TrackTheme, onProgress?: (fraction: number) => void): Promise<void> {
+  current = theme;
   const files = [FILES.karts, FILES.drivers, FILES.world(theme)];
   let done = 0;
   await Promise.all(files.map((file) => load(file).then(() => onProgress?.(++done / files.length))));
@@ -85,16 +95,24 @@ export function driverArtSettled(): boolean {
 
 /** A fresh copy of the named model, or null when there is none (use the stand-in). Geometry and materials are shared with the original. */
 export function artNode(name: string): Object3D | null {
-  const node = nodes.get(name);
+  const node = lookup(name).get(name);
   return node ? node.clone(true) : null;
 }
 
 /** Is there a model by this name (without copying it)? */
 export function hasArt(name: string): boolean {
-  return nodes.has(name);
+  return lookup(name).has(name);
 }
 
-/** Every loaded name starting with `prefix` (scenery variants: "scenery.pine."). */
+/** Every loaded name starting with `prefix` (scenery variants: "scenery.pine."), the current world's only for landmarks and scenery. */
 export function artNames(prefix: string): string[] {
-  return [...nodes.keys()].filter((n) => n.startsWith(prefix)).sort();
+  return [...lookup(prefix).keys()].filter((n) => n.startsWith(prefix)).sort();
+}
+
+const NONE = new Map<string, Object3D>();
+
+/** Where a name is kept: the current world's file for landmarks and scenery, the shared models for the rest. */
+function lookup(name: string): Map<string, Object3D> {
+  if (name.startsWith("landmark.") || name.startsWith("scenery.")) return (current && worlds.get(FILES.world(current))) || NONE;
+  return shared;
 }
