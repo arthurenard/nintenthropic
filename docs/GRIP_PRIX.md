@@ -428,7 +428,7 @@ only those karts' physics against the world as it is.
   filled for a fist and hollow when open. Small in a corner during the race,
   large on the wheel check and on a big-screen player's own device.
 - **The dev page** `src/kart/input/dev.html`: the camera, the preview, and the
-  numbers (angle, steer, grip, mode, drift, item presses, frame rate), with
+  numbers (angle, steer, grip, mode, drift, item presses, shakes, frame rate), with
   the Steering setting. The first thing to try with real hands.
 
 ## Render (`src/kart/render/`)

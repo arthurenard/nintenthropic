@@ -40,7 +40,7 @@ export const TUNING = {
     reverseTop: 7,
     reverseTau: 0.6,
     /** Nothing goes faster than this, whatever bumps, slides and hills do: a boosted top speed and a little over. */
-    maxSpeed: 38,
+    maxSpeed: 36,
     /** A spinning kart sheds speed with this rate constant (1/s). */
     spinDrag: 2.5,
   },
