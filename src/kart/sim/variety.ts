@@ -9,7 +9,7 @@
  */
 import type { Corner } from "./plan";
 import { clamp, type KartState, type World } from "./state";
-import { KNOBS, noise, type Style } from "./temperament";
+import { noise, type Style } from "./temperament";
 import { TUNING } from "./tuning";
 
 const B = TUNING.bots;
@@ -85,14 +85,8 @@ export function takeOf(w: World, k: KartState, style: Style, bend: BendNear, fee
     drift: roll(ROLL.skipDrift) < B.driftSkip * (1.2 - k.skill) ? "skip" : "normal",
     mistake: null,
   };
-  if (!KNOBS.variety) {
-    take.cut = 1;
-    take.brake = 0;
-    take.pace = 1;
-    take.drift = "normal";
-  }
   // No mistakes beside an open edge, on ice, or on a lap of honour.
-  if (bend.c.open || bend.c.ice || k.finished !== null || !KNOBS.mistakes) return take;
+  if (bend.c.open || bend.c.ice || k.finished !== null) return take;
   const chance = B.mistakeRate * (1 - B.mistakeSkill * k.skill) * style.mistakes * (1 + B.mistakeMood * feeling);
   if (roll(ROLL.mistake) >= chance) return take;
   const kind = roll(ROLL.kind);
@@ -137,7 +131,7 @@ export function wideness(w: World, bend: BendNear, sAim: number): number {
  * or 0. `calm` says the road here is fit for one (no open edge, no ramp, no bend, no ice).
  */
 export function wobble(w: World, k: KartState, style: Style, calm: boolean): number {
-  if (!calm || k.finished !== null || !KNOBS.mistakes) return 0;
+  if (!calm || k.finished !== null) return 0;
   const cell = Math.floor(k.progress / B.wobbleCell);
   const roll = (salt: number): number => noise(w.setup.seed, k.id, cell, 77, salt);
   if (roll(ROLL.wobble) >= B.wobbleRate * (1 - 0.7 * k.skill) * style.mistakes) return 0;

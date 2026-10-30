@@ -18,6 +18,22 @@ function row(name: string, s: PackStats): string {
 }
 const HEAD = `${"".padEnd(22)}${["pass/l", "clean", "lead", "you", "spread", "near", "fight", "bump", "hits", "place", "finish", "line", "lapsd"].map((h) => h.padStart(6)).join("")}`;
 
+describe("the pack", () => {
+  it("is a fight round the player that a sharp driver from the back still wins more of than a middling one", { timeout: 600000 }, () => {
+    const tracks = TRACKS.filter((_, i) => i % 2 === 0);
+    const races = (player: number) => tracks.flatMap((track) => [1, 2].map((seed) => packStats(track, { player, seed })));
+    const sharp = meanStats(races(1));
+    const middling = meanStats(races(0.5));
+    expect(sharp.finished && middling.finished).toBe(true);
+    // Skill counts: the sharp driver finishes higher on average.
+    expect(sharp.playerPlace).toBeLessThan(middling.playerPlace);
+    // A fight: places change hands cleanly every lap, and the middling driver has company most of the race.
+    expect(middling.cleanPerLap).toBeGreaterThan(2);
+    expect(middling.nearPlayer).toBeGreaterThan(1.5);
+    expect(middling.fightShare).toBeGreaterThan(0.5);
+  });
+});
+
 describe.runIf(REPORT)("the pack, reported", () => {
   const seeds = (ENV.PACK_SEEDS ?? "1,2,3,4").split(",").map(Number);
   const runs: { name: string; options: PackOptions }[] = [

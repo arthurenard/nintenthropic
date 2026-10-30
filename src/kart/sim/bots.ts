@@ -31,7 +31,7 @@ import { GO_TICK, forwardSpeed, yawRate } from "./kart";
 import { tableAt, type Corner } from "./plan";
 import { racecraft, type Fight } from "./racecraft";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
-import { KNOBS, noise, styleOf, wander, type Style } from "./temperament";
+import { noise, styleOf, wander, type Style } from "./temperament";
 import { isOpen } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 import { bendNear, mood, takeOf, wideness, wobble, type BendNear, type Take } from "./variety";
@@ -377,7 +377,7 @@ export function botInput(w: World, k: KartState): DriveInput {
   if (bendAim && takeAim) cutShare += (takeAim.cut - 1) * bendWeight(w, bendAim.c, sAim);
   if (bendOut && takeOut) cutShare += (takeOut.cut - 1) * bendWeight(w, bendOut.c, sAim);
   const cut = tableAt(plan, plan.line, sAim) * cutShare;
-  const wandering = KNOBS.wander ? clamp(0.45 * laneOf(k) + 0.75 * wander(k.progress, B.laneWander, w.setup.seed, k.id, 5), -1, 1) : laneOf(k);
+  const wandering = clamp(0.45 * laneOf(k) + wander(k.progress, B.laneWander, w.setup.seed, k.id, 5), -1, 1);
   const lane = wandering * B.laneShare * style.laneWidth * half * (1 - Math.min(1, Math.abs(cut) / Math.max(room, 0.1)));
   let aimOffset = clamp(cut + lane, -roomLeft, roomRight);
 
@@ -395,7 +395,8 @@ export function botInput(w: World, k: KartState): DriveInput {
 
   // The karts round it: passing, a slipstream, covering the inside, leaning on a neighbour.
   const bendKart = bendNear(w, k, k.s);
-  const fight = KNOBS.racecraft ? racecraft(w, k, style, aimOffset, roomLeft, roomRight, look, bendKart, !beside) : { offset: aimOffset, cap: Infinity, pace: 1, attacking: -1, defending: -1, drafting: false };
+  const lineAim = aimOffset;
+  const fight = racecraft(w, k, style, aimOffset, roomLeft, roomRight, look, bendKart, !beside);
   aimOffset = fight.offset;
 
   // A ramp is taken straight on.
@@ -422,8 +423,8 @@ export function botInput(w: World, k: KartState): DriveInput {
   const dodging = dodge(w, k, fwd, aimOffset, dodgeLeft, dodgeRight);
   aimOffset = dodging.offset;
 
-  // Swinging across the road for a hazard: look nearer, so the wheel goes over harder.
-  const swing = Math.abs(dodging.offset - beforeDodge);
+  // Swinging across the road for a hazard, or round a kart it is catching fast: look nearer, so the wheel goes over harder.
+  const swing = Math.max(Math.abs(dodging.offset - beforeDodge), fight.closing > 5 ? Math.abs(beforeDodge - lineAim) : 0);
   const sSteer = swing > 1.5 ? k.s + clamp(look * (1 - 0.55 * Math.min(1, swing / 6)), 7, look) : sAim;
   const aim = geo.point(sSteer, aimOffset);
   let aimX = aim.x;
@@ -490,7 +491,7 @@ export function botInput(w: World, k: KartState): DriveInput {
       const a = w.rng.next();
       const b = w.rng.next();
       m.next = ticks(4 + 6 * b);
-      const lapse = KNOBS.freeze ? (0.65 - 0.65 * k.skill) * Math.min(1, style.mistakes) : 0;
+      const lapse = (0.65 - 0.65 * k.skill) * Math.min(1, style.mistakes);
       if (a < lapse && !beside && !cutting) m.freeze = ticks(0.35 + 0.5 * b);
     }
   }

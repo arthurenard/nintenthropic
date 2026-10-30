@@ -298,8 +298,8 @@ export const TUNING = {
     /** Of the room between the road's middle and its edge (less a margin), a bot cuts this much at most. */
     cutShare: 0.7,
     edgeMargin: 2.8,
-    /** A bot's own lane, as a share of the road's half-width, at most. */
-    laneShare: 0.3,
+    /** A bot's own lane, as a share of the road's half-width, at most (times its temperament's `laneWidth`): a place of its own on the grid that wanders across the road over `laneWander` metres. */
+    laneShare: 0.4,
     /** Looks this far ahead: base + per m/s of speed, between the limits. */
     lookBase: 5,
     lookPerSpeed: 0.6,
@@ -357,9 +357,9 @@ export const TUNING = {
      * quick ones stay worth beating), or pushes up to `push`, by `span`
      * metres; never past the road's top speed.
      */
-    rubberStart: 60,
-    rubberSpan: 140,
-    easeOff: 0.06,
+    rubberStart: 40,
+    rubberSpan: 120,
+    easeOff: 0.08,
     easeSkill: 0.5,
     push: 0.05,
     /** Stuck: slower than this for this long and a bot backs up for a while. */
@@ -400,7 +400,7 @@ export const TUNING = {
     styles: {
       aggressive: { mistakes: 1, lineJitter: 0.25, laneWidth: 1, brakeJitter: 6, corner: 1.012, attack: 1, defend: 0.6, lean: 1, lunge: 1, verge: 0.5, patience: 0.6, holdMax: 1.6 },
       careful: { mistakes: 0.35, lineJitter: 0.12, laneWidth: 0.6, brakeJitter: 3, corner: 0.992, attack: 0.45, defend: 1, lean: 0, lunge: 0, verge: 0, patience: 1.3, holdMax: 1 },
-      erratic: { mistakes: 2.2, lineJitter: 0.45, laneWidth: 1.5, brakeJitter: 12, corner: 1, attack: 0.75, defend: 0.25, lean: 0.4, lunge: 0.7, verge: 1, patience: 0.4, holdMax: 0.6 },
+      erratic: { mistakes: 1.8, lineJitter: 0.45, laneWidth: 1.5, brakeJitter: 12, corner: 1, attack: 0.75, defend: 0.25, lean: 0.4, lunge: 0.7, verge: 1, patience: 0.4, holdMax: 0.6 },
       steady: { mistakes: 0.5, lineJitter: 0.1, laneWidth: 0.5, brakeJitter: 2, corner: 1, attack: 0.7, defend: 0.6, lean: 0, lunge: 0.2, verge: 0, patience: 1, holdMax: 1 },
     },
 
@@ -420,7 +420,7 @@ export const TUNING = {
      * braking late (`lateBrake` metres, `hotPace` more speed), missing the
      * apex, or botching the drift.
      */
-    mistakeRate: 0.2,
+    mistakeRate: 0.14,
     mistakeSkill: 0.75,
     mistakeMood: 0.6,
     lateBrake: 18,
@@ -434,28 +434,42 @@ export const TUNING = {
 
     /**
      * Racecraft (racecraft.ts). A bot attacks a kart up to `attackRange` (plus
-     * `attackReach` times its `attack`) metres ahead that it is catching,
-     * passing `passGap` metres to one side of it: the inside of a bend coming
-     * within `diveReach` metres, else the side with room. On a straight it
-     * first tucks in behind (`draftFrom` metres and nearer, within
-     * `draftWidth` across) and pulls out at `draftPull`. It covers the inside
-     * from a kart up to `defendRange` metres behind, keeps `followGap` metres
-     * off a kart's tail it cannot get by, and leans `leanIn` metres into a
-     * kart beside it.
+     * `attackReach` times its `attack`) metres ahead that it is catching (or
+     * `attackTime` seconds ahead at the speed it is catching it), passing
+     * `passGap` metres to one side of it: the inside of a bend coming within
+     * `diveReach` metres (braking `diveLunge` later, times its `lunge`), else
+     * the side with room. On a straight, catching it by less than
+     * `draftClosing` m/s, it first tucks in behind (`draftFrom` metres and
+     * nearer, within `draftWidth` across) and pulls out at `draftPull`. It
+     * covers the inside from a kart up to `defendRange` metres behind, keeps
+     * off the tail of a kart it cannot get by (`followGap` and below), and
+     * leans `leanIn` metres into a kart beside it (a chance of `leanChance`
+     * times its `lean` per 50 m).
      */
     attackRange: 18,
     attackReach: 14,
     passGap: 2.9,
+    /** Once this far (metres) off the line of the kart it is passing, it keeps to that side. */
+    commitWidth: 0.7,
     diveReach: 55,
     diveLunge: 0.05,
     draftFrom: 30,
     draftWidth: 1.8,
+    draftClosing: 3,
     draftPull: 9,
     defendRange: 14,
     followGap: 5,
-    /** Closing on a kart's tail no faster than this (m/s; twice it for the aggressive): a nudge, not a ram. */
+    /** A bot catching a kart fast starts going round it this many seconds before it would reach it. */
+    attackTime: 2.2,
+    /** Behind a kart it cannot get by, it brakes as if at this deceleration (m/s^2) to arrive at its tail... */
+    followBrake: 20,
+    /** ...closing no faster than this (m/s; twice it for the aggressive): a nudge, not a ram. */
     nudge: 1.5,
     leanIn: 1.3,
     leanChance: 0.3,
+    /** A puck that will pass within `puckClear` metres in the next `puckLook` seconds: a bot that sees it (by skill) swerves `puckSwerve` metres away. */
+    puckLook: 0.9,
+    puckClear: 2,
+    puckSwerve: 2.6,
   },
 } as const;

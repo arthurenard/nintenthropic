@@ -54,9 +54,6 @@ export function noise(...parts: number[]): number {
   return (h >>> 0) / 4294967296;
 }
 
-/** TEMPORARY switches for diagnosis. */
-export const KNOBS = { racecraft: true, mistakes: true, variety: true, wander: true, freeze: true, cap: true, lean: true };
-
 /** -1..1, smooth along `x` (metres of progress), a new value every `period`: a drift that never repeats. */
 export function wander(x: number, period: number, ...parts: number[]): number {
   const f = x / period;
