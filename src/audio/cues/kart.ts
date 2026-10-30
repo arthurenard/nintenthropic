@@ -35,6 +35,7 @@ import {
   surfaceMud,
   surfaceSand,
   surfaceSnow,
+  windRush,
 } from "./kart-motion";
 import {
   boostPad,
@@ -44,6 +45,7 @@ import {
   droneDrop,
   fall,
   flood,
+  heavyLanding,
   hazard,
   hit,
   itemReady,
@@ -74,6 +76,8 @@ import {
   finishWin,
   horn,
   lapChime,
+  placeDown,
+  placeUp,
   shutter,
   uiBack,
   uiJoin,
@@ -98,7 +102,7 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_growl: { recipe: engineGrowl, pack: "kart", bus: "sfx", level: -14, loop: true, priority: 2, fadeIn: 0.08, fadeOut: 0.25, vary: 0, expect: [0.9, 1.1] },
 
   // --- the drift and the ground ------------------------------------------------------------------------
-  kart_drift: { recipe: driftScreech, pack: "kart", bus: "sfx", level: -14, loop: true, priority: 2, fadeIn: 0.05, fadeOut: 0.12, vary: 0, expect: [0.5, 0.7] },
+  kart_drift: { recipe: driftScreech, pack: "kart", bus: "sfx", level: -12, loop: true, priority: 2, fadeIn: 0.05, fadeOut: 0.12, vary: 0, expect: [0.5, 0.7] },
   kart_surf_ice: { recipe: surfaceIce, pack: "kart", bus: "sfx", level: -22, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.4, 1.8] },
   kart_surf_snow: { recipe: surfaceSnow, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.6, 2.0] },
   kart_surf_sand: { recipe: surfaceSand, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.5, 1.9] },
@@ -143,6 +147,10 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_jump: { recipe: jump, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.03, minGap: 0.1, expect: [0.3, 0.9] },
   kart_trick: { recipe: trick, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0, minGap: 0.1, expect: [0.5, 1.2] },
   kart_land: { recipe: land, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.1, expect: [0.3, 0.9] },
+  // Under the landing of a long jump, louder the longer the flight (the player's own karts only).
+  kart_thud: { recipe: heavyLanding, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 2, vary: 0.04, minGap: 0.15, expect: [0.5, 1.0] },
+  // The wind round a fast kart, loudest in the air (steered: the player's own karts only).
+  kart_wind: { recipe: windRush, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 1, fadeIn: 0.3, fadeOut: 0.4, vary: 0, expect: [1.3, 1.7] },
   kart_fall: { recipe: fall, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.2, expect: [1.2, 2.1] },
   kart_drone_drop: { recipe: droneDrop, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.1, expect: [0.3, 0.9] },
 
@@ -150,6 +158,9 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_beep_low: { recipe: beepLow, pack: "kart", bus: "ui", level: -4, priority: 3, maxInstances: 1, vary: 0, expect: [0.2, 0.6] },
   kart_beep_high: { recipe: beepHigh, pack: "kart", bus: "ui", level: -3, priority: 3, maxInstances: 1, vary: 0, expect: [0.5, 1.2] },
   kart_lap: { recipe: lapChime, pack: "kart", bus: "ui", level: -5, priority: 3, maxInstances: 2, vary: 0, minGap: 0.2, expect: [0.7, 1.6] },
+  // A place won or lost: two notes, up or down, soft (at most one in a third of a second: karts side by side swap places).
+  kart_place_up: { recipe: placeUp, pack: "kart", bus: "ui", level: -9, priority: 2, maxInstances: 1, vary: 0, minGap: 0.3, expect: [0.3, 0.8] },
+  kart_place_down: { recipe: placeDown, pack: "kart", bus: "ui", level: -11, priority: 1, maxInstances: 1, vary: 0, minGap: 0.3, expect: [0.3, 0.8] },
   kart_final_lap: { recipe: finalLap, pack: "kart", bus: "ui", level: -2, priority: 3, maxInstances: 1, vary: 0, minGap: 0.5, expect: [1.5, 2.8] },
   kart_finish_win: { recipe: finishWin, pack: "kart", bus: "ui", level: -1, priority: 3, maxInstances: 1, vary: 0, expect: [2.8, 5] },
   kart_finish_ok: { recipe: finishOk, pack: "kart", bus: "ui", level: -2, priority: 3, maxInstances: 1, vary: 0, expect: [1.8, 3.8] },

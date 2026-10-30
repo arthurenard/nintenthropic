@@ -193,7 +193,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Super Claude Bros. sound. |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | Engines (pitched by speed and how hard they work), the drift's screech and its three spark levels, the wind at speed, in the air and in a slipstream, boosts, landings (a thud under a hard one, by the sim's strength), items, a place won or lost, countdown — synthesised like every Super Claude Bros. sound. |
 
 ### Coordinates
 
@@ -470,21 +470,53 @@ that file exists (`render/art.ts`).
   (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
-  drift sparks (blue, then orange), boost flames, dust off the road, a spin,
-  a hop, a puff on a bump.
+  drift sparks (blue, then orange, then violet for the third charge, the charge
+  glowing and pulsing at the rear wheels), boost flames (long, flickering, a
+  flash at the pipes as a boost catches), streaks of wind rushing past a
+  watched kart along its course from about 21 m/s, drawn in closer and thicker
+  in a slipstream as it charges, and many more on a boost (none for Reduce
+  Motion), dust off the road, a spin, a
+  hop, a puff on a bump. The karts the views follow get the full show; the rest
+  of the pack throws fewer sparks and flames (`Effects.focus`), so a pack
+  drifting round a hairpin does not use up the particles of the karts watched.
 - **Things.** The puck, the seeker (with a red glow and a fin), the slick (a
   glossy dark puddle).
 - **Split screen.** One kart: the whole canvas. Two: top and bottom on a wide
   screen, side by side on a tall one. Three or four: quadrants; with three,
   the fourth shows the map and the standings. One renderer, one scene, a
   scissored viewport and chase camera per view.
-- **Chase camera.** Behind and above, eased; the field of view widens with
-  speed and boost; through the countdown it settles from high over the grid.
+- **Chase camera** (`render/cameras.ts`). Behind and above, eased, following
+  the way the kart goes (`KartView.course`; a spun kart does not whirl it), and
+  alive: it leans into a bend with the wheel (in a drift, with the drift's side,
+  whatever the wheel), and tilts with a banked road as seen along its own
+  heading (`bankSeen`; together at most 9 degrees); it sits lower behind a
+  climb and aims up it, higher on a descent and aims down over a crest (the
+  road's heights behind and ahead from `TrackGeometry`, a ramp's wedge among
+  them: `rampSeen` holds the lip's height for 18 m past it, so the camera aims
+  up the wedge at the jump, and `cameraSpace` keeps it out of the wedge); it
+  aims a little into the bend ahead (the road's turn over the next 14 to 24 m);
+  in a drift it sits 60% of the way from the nose to the course and moves out
+  to the side of the slide, so the slide shows; off a jump it rises and pulls
+  back to see the landing, and lands with a sprung dip as hard as the sim's
+  `land` strength (the camera's own eye on the kart's height is the fallback;
+  the two count once). Knocks shake it (bumps and walls by their strength,
+  hits, strikes), landings too, rough ground rumbles it; the field of view
+  widens with speed and boost, with a quick punch as a boost begins and a pop
+  on a trick's kick at the lip; on a boost and flat out the outer part of the view streams
+  outward from where the kart is heading (the rush, in the post chain). Through
+  the countdown it settles from high over the grid. With Reduce Motion it keeps
+  only what frames the road: no lean, tilt, shake, thump, punch or rush. Another
+  kart within 3.4 m of a view's lens (on its kart's tail) is left out of that
+  view, or it would fill the picture.
 - **Each viewport's HUD** (HTML over the canvas, DESIGN.md's glass and type):
-  place large ("1st", "2nd"…) bottom-right, lap ("Lap 2/3") and time
+  place large ("1st", "2nd"…) bottom-right, springing up out of a flash for a
+  place won and sinking in for a place lost (at most every 0.35 s: karts side
+  by side swap places back and forth), lap ("Lap 2/3") and time
   top-left, the item in a glass slot top-centre (turning through the items
   while it rolls), "Final Lap", "Wrong Way", the countdown in the centre, the
-  place on finishing. A minimap (the track's outline, a dot per kart, players
+  place on finishing. The final lap is orange (attention, not alarm): the lap
+  in its panel all the way round, the banner, which pops in, and the view's
+  edges, which glow twice as it begins. A minimap (the track's outline, a dot per kart, players
   ringed) bottom-left when there is one view, in the free quadrant with three.
 - **Fast.** 60 fps with four viewports on a MacBook with tracking running:
   the engine's quality tiers and dynamic resolution, instanced scenery that
@@ -704,6 +736,16 @@ the footnote says which tier Auto uses here.
 (`views()` is empty: `app/race.ts` shows the controller), fetches none of `world-*.glb`, and no longer builds the
 3D podium after a Grand Prix. What it still does is 3D for the driver picker and the lobby's portraits (the karts' and
 drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
+
+**The living camera and the frenzy** (2026-10-30) add no shader program (87 and 85 programs on Canyon Run and Starlight
+Ribbon before and after: everything new is uniforms in shaders already built at load) and no draw call: the camera reads
+the road with one `project` and three `at` a view, the near-kart check is a distance a kart a view, the wind's streaks
+and the bigger sparks share the existing pools (the karts not watched throw fewer). The rush is the costly part: while
+a view's kart boosts (or goes past its top speed), each of that view's pixels outside the middle reads the picture
+seven times (high; five on medium; it is off on low and while not boosting, one uniform test a pixel). Measured with
+`bench.mjs --bases` (high and medium, 1 and 4 views, medians of two) on a machine at a load average of 650 to 950: frame
+time, CPU and GPU within the noise (which was ±15 to 45% between runs of the same page); an A/B of the rush alone on one
+frame redrawn could not be read at that load (the same frame took 3 to 25 ms of post). To measure on a quiet machine.
 
 **Not done yet.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);

@@ -39,7 +39,7 @@ import { DynamicResolution, StrainWatch } from "../../engine/dynamicResolution";
 import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
-import { ChaseCamera } from "./cameras";
+import { ChaseCamera, rampSeen, type CameraRoad } from "./cameras";
 import { shadowInView } from "./casters";
 import { RescueDrone } from "./drone";
 import { outliving } from "./outliving";
@@ -69,6 +69,9 @@ import { styleFor } from "./world/themes";
 export const STRAIN_SECONDS = 6;
 /** Seconds of racing without straining before the renderer says the tier kept up (see `onKeptUp`). */
 export const KEPT_UP_SECONDS = 30;
+
+/** Metres from a view's lens inside which another kart is left out of that view: closer, it would fill the picture. */
+const NEAR_LENS = 3.4;
 
 const _projScreen = new Matrix4();
 const _frustum = new Frustum();
@@ -148,7 +151,7 @@ export interface GripRenderer extends RaceRenderer {
   /** The GPU timer's totals over the frames since the last reset (mean ms; 0 where unavailable). */
   gpuMean(label: "views" | "post", reset?: boolean): number;
   /** Everything the dev page's bench may need to take apart: the live objects. */
-  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; setCulling(on: boolean): void; setCasterCulling(on: boolean): void };
+  readonly inspect: { renderer: WebGLRenderer; scene: Scene; post: PostChain; world(): World | null; cameras(): readonly ChaseCamera[]; setCulling(on: boolean): void; setCasterCulling(on: boolean): void };
 }
 
 export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLElement, options: RaceRendererOptions = {}): GripRenderer {
@@ -204,6 +207,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   /** The karts' material reads the world's baked sun shadow through uniforms of its own. */
   const kartBake = makeBakeUniforms();
   let world: World | null = null;
+  /** What the chase cameras read of the world's road: its slope, its bends, its banking. */
+  let cameraRoad: CameraRoad | null = null;
   let effects: Effects | null = null;
   let things: Things | null = null;
   let itemFx: ItemFx | null = null;
@@ -214,6 +219,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   let racers: readonly RacerSetup[] = [];
   let layout: ViewLayout = { views: [], free: null };
   let viewKarts: number[] = [0];
+  /** The karts the views follow, for the effects (theirs get the full show). */
+  let watched: ReadonlySet<number> = new Set(viewKarts);
   let cameras: ChaseCamera[] = [];
   let width = canvas.clientWidth || 800;
   let height = canvas.clientHeight || 600;
@@ -229,7 +236,9 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const boxLift = new Map<number, number>();
   let debugCamera: PerspectiveCamera | null = null;
   /** The views of the frame being drawn: the post chain's first pass walks them. */
-  const frameViews: { rect: { x: number; y: number; w: number; h: number }; eye: PerspectiveCamera; at: { x: number; y: number; z: number } }[] = [];
+  const frameViews: { rect: { x: number; y: number; w: number; h: number }; eye: PerspectiveCamera; at: { x: number; y: number; z: number }; kart: number }[] = [];
+  /** Karts left out of the view being drawn because they are right in front of its lens (a kart on your tail would fill the picture). */
+  const tooNear: KartActor[] = [];
 
   let profiling = false;
   let timer: GpuTimer | null = null;
@@ -278,7 +287,18 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         const reach = settings.shadowRange * 2;
         for (const a of actors.values()) a.casters.set(a.root, !casterCulling || shadowInView(_frustum, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach));
       }
+      // Another kart within a few metres of the lens (on this view's kart's tail) is left out of this view.
+      const eye = v.eye.position;
+      for (const a of actors.values()) {
+        if (a.id === v.kart || !a.root.visible) continue;
+        if ((a.x - eye.x) ** 2 + (a.y + 0.7 - eye.y) ** 2 + (a.z - eye.z) ** 2 < NEAR_LENS * NEAR_LENS) {
+          a.root.visible = false;
+          tooNear.push(a);
+        }
+      }
       renderer.render(scene, v.eye);
+      for (const a of tooNear) a.root.visible = true;
+      tooNear.length = 0;
     }
     target.scissorTest = false;
     if (profiling) smooth("draw", performance.now() - t0);
@@ -323,6 +343,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
   const relayout = () => {
     layout = layoutViews(viewKarts.length, width, height);
+    watched = new Set(viewKarts);
     while (cameras.length < viewKarts.length) cameras.push(new ChaseCamera());
     cameras.length = viewKarts.length;
     for (const c of cameras) c.calm = calm;
@@ -391,7 +412,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const e of eyes) {
         if (disposed || !world) break;
         frameViews.length = 0;
-        frameViews.push({ rect: { x: 0, y: 0, w: width, h: height }, eye: e.eye, at: { x: e.at.x, y: e.at.y, z: e.at.z } });
+        frameViews.push({ rect: { x: 0, y: 0, w: width, h: height }, eye: e.eye, at: { x: e.at.x, y: e.at.y, z: e.at.z }, kart: -1 });
         post.render(0);
       }
     } finally {
@@ -417,6 +438,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     standInDrone = null;
     world?.dispose();
     world = null;
+    cameraRoad = null;
     clearBake(kartBake);
   };
 
@@ -433,6 +455,16 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         return;
       }
       world = built;
+      const geometry = built.geometry;
+      const bank = built.bank;
+      const ramps = built.features.ramps;
+      // The road as the camera follows its slope: a ramp's wedge is part of it (a climb to the lip), so the camera aims up it.
+      const at = (s: number) => {
+        const c = geometry.at(s);
+        const wedge = ramps.length ? rampSeen(ramps, s, geometry.length) : 0;
+        return wedge > 0 ? { y: c.y + wedge, tx: c.tx, tz: c.tz } : c;
+      };
+      cameraRoad = { project: (x, z, near) => geometry.project(x, z, near), at, rollAt: (s) => bank.rollAt(s) };
       scene.add(world.group);
       scene.fog = null;
       world.install(scene);
@@ -518,6 +550,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       lastTick = view.tick;
       raceLaps = view.laps;
 
+      effects.focus = watched;
       // Karts, standing where the road really is (its banking and any ramp lift them) and, when they have fallen, where the drone has them.
       const byId = new Map<number, KartView>();
       const ctx = actorContext();
@@ -576,11 +609,20 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         effects.onEvent(e, kartAt);
         itemFx.onEvent(e, kartAt);
         eggs.onEvent(e, view.racers, time);
-        const shake = e.type === "bump" ? 0.35 : e.type === "wall" ? 0.5 : e.type === "hit" ? 0.8 : e.type === "strike" && e.item !== "storm" ? 0.6 : 0;
+        const shake =
+          e.type === "bump" ? 0.2 + 0.35 * e.strength : e.type === "wall" ? 0.25 + 0.45 * e.strength : e.type === "hit" ? 0.8 : e.type === "strike" && e.item !== "storm" ? 0.6 : 0;
         if (shake > 0) {
           viewKarts.forEach((id, i) => {
             const involved = e.type === "bump" ? e.a === id || e.b === id : "kart" in e && e.kart === id;
             if (involved) cameras[i]?.kick(shake);
+          });
+        }
+        // A landing as hard as the sim says thumps the camera; a trick's kick at the lip pops its lens.
+        if (e.type === "land" || (e.type === "trick" && e.kick)) {
+          viewKarts.forEach((id, i) => {
+            if (id !== e.kart) return;
+            if (e.type === "land") cameras[i]?.land(e.strength ?? 0.4);
+            else cameras[i]?.pop(0.8);
           });
         }
       }
@@ -605,15 +647,19 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         const cam = cameras[i];
         if (!rect || !kart || !cam) return;
         const actor = actors.get(id);
-        const follow = actor ? { ...kart, x: actor.anchor.x, y: actor.anchor.y, z: actor.anchor.z } : kart;
-        cam.update(follow, view, dt, rect.w / rect.h, space);
+        // The anchor holds the road's height while the kart falls; in a jump the camera rises with most of the kart's height as drawn.
+        const followY = actor ? (kart.rescue > 0 ? actor.anchor.y : Math.max(actor.anchor.y, actor.roadY + 0.7 * (actor.y - actor.roadY))) : kart.y;
+        const follow = actor ? { ...kart, x: actor.anchor.x, y: followY, z: actor.anchor.z } : kart;
+        cam.update(follow, view, dt, rect.w / rect.h, space, cameraRoad ?? undefined);
+        // The rush streams from where this view's kart is heading (none for a posed picture).
+        post.setRush(i, debugCamera && i === 0 ? 0 : cam.rush, cam.focus.x, cam.focus.y);
         let eye = cam.camera;
         if (debugCamera && i === 0) {
           debugCamera.aspect = rect.w / rect.h;
           debugCamera.updateProjectionMatrix();
           eye = debugCamera;
         }
-        frameViews.push({ rect, eye, at: { x: follow.x, y: follow.y, z: follow.z } });
+        frameViews.push({ rect, eye, at: { x: follow.x, y: follow.y, z: follow.z }, kart: id });
       });
       post.setTiles(layout.views, width, height);
       const tSubmit = profiling ? performance.now() : 0;
@@ -707,6 +753,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       scene,
       post,
       world: () => world,
+      cameras: () => cameras,
       /** Both kinds of culling: the scenery and the shadow pass's karts (tools/perf/same.mjs proves the picture the same). */
       setCulling(on: boolean) {
         culling = on;

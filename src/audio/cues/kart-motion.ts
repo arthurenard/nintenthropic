@@ -342,3 +342,22 @@ export function droneRotors(t: Take): Mono {
   circular(out, (twice) => lowpass(twice, t.sr, 5200, 2));
   return out;
 }
+
+/**
+ * The wind past a fast kart and round one in the air: a broad rush of air that swells and eases, and
+ * a thin hiss riding on it. Steered by the game (louder and higher with speed, loudest off a jump).
+ */
+export function windRush(t: Take): Mono {
+  const seconds = 1.5;
+  const n = t.n(seconds);
+  const r = t.rng;
+  const rush = noiseLoop(t, seconds, (m) => bandpass(pink(m, r), t.sr, 220, 2200, 2), 0.3);
+  normalize(rush);
+  times(rush, cyclic(n, 3, 0.35, r.range(0, TAU)));
+  const hiss = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 2800, 7500, 2));
+  normalize(hiss);
+  times(hiss, cyclic(n, 5, 0.55, r.range(0, TAU)));
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = rush[i]! * 0.85 + hiss[i]! * 0.2;
+  return out;
+}
