@@ -315,13 +315,19 @@ The numbers (all in `sim/tuning.ts`):
     mistake: running wide on the way out (to just short of the edge, half a
     metre over it for the erratic, half as far out of a hairpin), braking late
     and carrying too much speed, missing the apex, or letting a drift go
-    before it charges. Now and then a wobble on a straight. None of it beside an open edge or on ice. Mistakes per bend:
-    11% at skill 0, a quarter of that at skill 1, times 0.35 (careful), 1
-    (aggressive) or 1.8 (erratic).
+    before it charges. Now and then a wobble on a straight. None of it beside
+    an open edge or on ice. Mistakes per bend: 11% at skill 0, a quarter of
+    that at skill 1, times 0.35 (careful), 1 (aggressive) or 1.8 (erratic).
+    In a slide it steers by the way it is going (`courseOf`), and a slide
+    carrying it wide it saves by holding the wheel hard against it, which
+    straightens the kart out. From skill 0.5 it may shake the wheel at a trick ramp's
+    lip to kick the jump (its skill times 1 aggressive, 0.9 erratic, 0.5
+    careful), and tricks in the air by skill otherwise.
   - *Racecraft* against every kart, bot or person: catching one, it picks a
     side (the inside of a bend coming up, else the side with room) and keeps to
-    it once committed, tucking into the slipstream first on a straight at much
-    the same pace; boxed in, it lifts and drops in behind, never ramming (it
+    it once committed; on a straight at much the same pace it first tucks into
+    the other's wake (`draft`) and goes by when the slingshot flings it out;
+    boxed in, it lifts and drops in behind, never ramming (it
     closes on a tail at a nudge's 1.5 m/s, 3 for the aggressive). It covers the
     inside of the next bend from a kart close behind (careful always), but not
     once that kart is alongside; it leans on a kart beside it in a level fight
@@ -337,9 +343,9 @@ The numbers (all in `sim/tuning.ts`):
     the aggressive); and anything else used after 14 s at the latest (22 s for
     the aggressive, 8 s for the erratic).
   - *Pack.* A gentle rubber band, never past the road's top speed: a bot
-    more than 15 m ahead of the best player eases off by up to 9% (4.5% for
-    a sharp one, so the quick ones stay worth beating) at 115 m; one more
-    than 15 m behind pushes up to 6% but no faster than a kart's top speed,
+    more than 5 m ahead of the best player eases off by up to 10% (5% for a
+    sharp one, so the quick ones stay worth beating) at 95 m; one more than
+    5 m behind pushes up to 6% but no faster than a kart's top speed,
     and corners as if half as skilful again; well ahead of the player a bot
     also makes more mistakes, well behind fewer.
     `packStats.ts` races the bots and a scripted player (`PACK_REPORT=1 npx

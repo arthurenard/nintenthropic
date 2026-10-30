@@ -438,6 +438,8 @@ export const TUNING = {
     cutNitroBefore: 6,
     /** A bot tricks off a ramp when an id-and-lap lottery falls under its skill times (1 - this), plus this for a bot sharper than 0.45. */
     trickBase: 0.2,
+    /** A bot this sharp or sharper may shake the wheel at a lip to kick the jump (its temperament's `kick` times its skill is the chance). */
+    kickSkill: 0.5,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.4,
     /** and starts steering clear of one this far (metres) before the point it is aiming at. */
@@ -457,6 +459,8 @@ export const TUNING = {
     easeSkill: 0.5,
     push: 0.06,
     press: 0.5,
+    /** With no person racing, the band holds the bots to the middle of the field this hard (a share of the above). */
+    fieldShare: 0.5,
     /** Stuck: slower than this for this long and a bot backs up for a while. */
     stuckSpeed: 1.5,
     stuckTime: 1.0,
@@ -489,14 +493,16 @@ export const TUNING = {
      * kart beside it, `lunge` how much later it brakes diving up an inside;
      * `verge` 0..1 its nerve for a verge cut (with a drift's boost, not only a
      * Nitro); `patience` scales its wait before using an item and `holdMax`
-     * how long it will hold one for the right moment. `steady` is a person's
-     * kart the bots drive (handed over, or home and on its lap of honour).
+     * how long it will hold one for the right moment; `kick` times its skill is
+     * its chance of shaking the wheel at a ramp's lip for a bigger jump (from
+     * `kickSkill` up). `steady` is a person's kart the bots drive (handed
+     * over, or home and on its lap of honour).
      */
     styles: {
-      aggressive: { mistakes: 1, lineJitter: 0.25, laneWidth: 1, brakeJitter: 6, corner: 1.012, attack: 1, defend: 0.6, lean: 1, lunge: 1, verge: 0.5, patience: 0.6, holdMax: 1.6 },
-      careful: { mistakes: 0.35, lineJitter: 0.12, laneWidth: 0.6, brakeJitter: 3, corner: 0.992, attack: 0.45, defend: 1, lean: 0, lunge: 0, verge: 0, patience: 1.3, holdMax: 1 },
-      erratic: { mistakes: 1.8, lineJitter: 0.45, laneWidth: 1.5, brakeJitter: 12, corner: 1, attack: 0.75, defend: 0.25, lean: 0.4, lunge: 0.7, verge: 1, patience: 0.4, holdMax: 0.6 },
-      steady: { mistakes: 0.5, lineJitter: 0.1, laneWidth: 0.5, brakeJitter: 2, corner: 1, attack: 0.7, defend: 0.6, lean: 0, lunge: 0.2, verge: 0, patience: 1, holdMax: 1 },
+      aggressive: { mistakes: 1, lineJitter: 0.25, laneWidth: 1, brakeJitter: 6, corner: 1.012, attack: 1, defend: 0.6, lean: 1, lunge: 1, verge: 0.5, patience: 0.6, holdMax: 1.6, kick: 1 },
+      careful: { mistakes: 0.35, lineJitter: 0.12, laneWidth: 0.6, brakeJitter: 3, corner: 0.992, attack: 0.45, defend: 1, lean: 0, lunge: 0, verge: 0, patience: 1.3, holdMax: 1, kick: 0.5 },
+      erratic: { mistakes: 1.8, lineJitter: 0.45, laneWidth: 1.5, brakeJitter: 12, corner: 1, attack: 0.75, defend: 0.25, lean: 0.4, lunge: 0.7, verge: 1, patience: 0.4, holdMax: 0.6, kick: 0.9 },
+      steady: { mistakes: 0.5, lineJitter: 0.1, laneWidth: 0.5, brakeJitter: 2, corner: 1, attack: 0.7, defend: 0.6, lean: 0, lunge: 0.2, verge: 0, patience: 1, holdMax: 1, kick: 0.8 },
     },
 
     /** A bend (plan.ts `corners`): the road turning one way at least this tightly (1/m, smoothed), and this tight at its apex. */
@@ -537,10 +543,11 @@ export const TUNING = {
      * `attackTime` seconds ahead at the speed it is catching it), passing
      * `passGap` metres to one side of it: the inside of a bend coming within
      * `diveReach` metres (braking `diveLunge` later, times its `lunge`), else
-     * the side with room. On a straight, catching it by less than
-     * `draftClosing` m/s, it first tucks in behind (`draftFrom` metres and
-     * nearer, within `draftWidth` across) and pulls out at `draftPull`. It
-     * covers the inside from a kart up to `defendRange` metres behind, keeps
+     * the side with room. On a straight, within `draftClosing` m/s of its pace,
+     * it first tucks into its wake (`draft` above: from `draftApproach` metres
+     * beyond the wake's reach down to `draftPull` metres beyond its near end)
+     * until the slingshot flings it out, then goes by. It covers the inside
+     * from a kart up to `defendRange` metres behind, keeps
      * off the tail of a kart it cannot get by (`followGap` and below), and
      * leans `leanIn` metres into a kart beside it (a chance of `leanChance`
      * times its `lean` per 50 m).
@@ -552,10 +559,9 @@ export const TUNING = {
     commitWidth: 0.7,
     diveReach: 55,
     diveLunge: 0.05,
-    draftFrom: 30,
-    draftWidth: 1.8,
+    draftApproach: 10,
     draftClosing: 3,
-    draftPull: 9,
+    draftPull: 2,
     defendRange: 14,
     followGap: 5,
     /** A bot catching a kart fast starts going round it this many seconds before it would reach it. */

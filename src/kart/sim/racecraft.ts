@@ -94,17 +94,29 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
     const ours: 1 | -1 = heading >= target.offset ? 1 : -1;
     // How far back it starts going for it: by temperament, and further the faster it is catching up (a kart spun out ahead).
     const reach = Math.max(keen, closing * B.attackTime);
-    if ((closing > 0.3 && targetAt < reach) || targetAt < B.followGap + 4) {
+    // The slipstream (kart.ts): right behind it on a straight at much the same pace, tuck into its wake while the wake
+    // charges; flung out of it (or boosting anyway), go by.
+    const D = TUNING.draft;
+    const straight = bend === null || bend.toFrom > targetAt + 40;
+    const slung = k.draft < 0 || k.boost > 0;
+    const wake =
+      rival &&
+      straight &&
+      !slung &&
+      style.attack > 0.3 &&
+      Math.abs(target.offset - k.offset) < D.side &&
+      closing > -1 &&
+      closing < B.draftClosing &&
+      targetAt > D.near + B.draftPull &&
+      targetAt < D.reach + B.draftApproach;
+    if (wake) {
+      fight.offset = aim + (target.offset - aim) * style.attack;
+      fight.drafting = true;
+      fight.attacking = target.id;
+    } else if ((closing > 0.3 && targetAt < reach) || targetAt < B.followGap + 4 || (slung && rival && targetAt < D.reach)) {
       // A bend soon enough to dive into: its start within reach, its apex beyond the kart ahead.
       const dive = bend !== null && bend.toFrom < B.diveReach && bend.toApex > targetAt && !bend.c.open;
-      const straight = bend === null || bend.toFrom > targetAt + 40;
-      const lined = Math.abs(target.offset - k.offset) < B.draftWidth;
-      if (rival && straight && lined && closing < B.draftClosing && targetAt > B.draftPull && targetAt < B.draftFrom && style.attack > 0.3) {
-        // Much the same pace: tuck in behind it, in its slipstream, before pulling out.
-        fight.offset = aim + (target.offset - aim) * style.attack;
-        fight.drafting = true;
-        fight.attacking = target.id;
-      } else {
+      {
         let side: 1 | -1;
         const roomRight = right - target.offset;
         const roomLeft = target.offset + left;

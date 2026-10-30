@@ -27,7 +27,7 @@
 import { IDLE_INPUT, TICK_HZ, type DriveInput } from "../contract";
 import { hazardAt } from "../track/hazards";
 import { rocketTarget } from "./items";
-import { GO_TICK, forwardSpeed, yawRate } from "./kart";
+import { GO_TICK, courseOf, forwardSpeed, yawRate } from "./kart";
 import { tableAt, type Corner } from "./plan";
 import { racecraft, type Fight } from "./racecraft";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
@@ -62,13 +62,30 @@ function topShare(k: KartState): number {
  * The rubber band: a bot far ahead of the best player eases off a few per
  * cent, one far behind pushes a few per cent, but never past the road's own
  * top speed (a sharp bot behind gets no more than any kart has). It scales
- * the speed it plans for and, in the physics, its top speed (kart.ts).
+ * the speed it plans for and, in the physics, its top speed (kart.ts). With
+ * no person on the road (bots alone, or every person home) the middle of the
+ * field (the karts still racing, on average) holds it together instead, half
+ * as hard.
  */
 export function rubberBand(w: World, k: KartState): number {
-  if (w.bestPlayer === null || k.player) return 1;
-  const gap = k.progress - w.bestPlayer;
-  if (gap > B.rubberStart) return 1 - B.easeOff * (1 - B.easeSkill * k.skill) * Math.min(1, (gap - B.rubberStart) / B.rubberSpan);
-  if (gap < -B.rubberStart) return Math.min(1 / topShare(k), 1 + B.push * Math.min(1, (-gap - B.rubberStart) / B.rubberSpan));
+  if (k.player || k.finished !== null) return 1;
+  let anchor = w.bestPlayer;
+  let share = 1;
+  if (anchor === null) {
+    let sum = 0;
+    let n = 0;
+    for (const o of w.state.karts) {
+      if (o.finished !== null) continue;
+      sum += o.progress;
+      n++;
+    }
+    if (n < 2) return 1;
+    anchor = sum / n;
+    share = B.fieldShare;
+  }
+  const gap = k.progress - anchor;
+  if (gap > B.rubberStart) return 1 - share * B.easeOff * (1 - B.easeSkill * k.skill) * Math.min(1, (gap - B.rubberStart) / B.rubberSpan);
+  if (gap < -B.rubberStart) return Math.min(1 / topShare(k), 1 + share * B.push * Math.min(1, (-gap - B.rubberStart) / B.rubberSpan));
   return 1;
 }
 
@@ -238,6 +255,25 @@ function rampAhead(w: World, k: KartState): number {
     if (d > -6 && d < nearest) nearest = d;
   }
   return nearest;
+}
+
+/**
+ * Whether the bot shakes the wheel now, a moment before the lip of a ramp it
+ * can trick off, to kick the jump higher and further: the sharp and the bold
+ * (a lottery by skill and temperament, settled by kart, lap and ramp), never
+ * the gentle.
+ */
+function kicks(w: World, k: KartState, style: Style, fwd: number): boolean {
+  if (k.prime !== 0 || k.flight > 0 || k.spin > 0 || fwd < TUNING.ramp.minSpeed || k.skill < B.kickSkill) return false;
+  const ramps = w.plan.terrain.ramps;
+  for (let i = 0; i < ramps.length; i++) {
+    const ramp = ramps[i]!;
+    const d = w.geo.delta(k.s, ramp.s);
+    // Inside the time a shake keeps the kick ready (`ramp.kickBefore`), with some to spare.
+    if (!ramp.trick || d <= 0 || d > fwd * TUNING.ramp.kickBefore * 0.6) continue;
+    return noise(w.setup.seed, k.id, k.lap, i, 61) < k.skill * style.kick;
+  }
+  return false;
 }
 
 /** The distance along the lap to the lip of the next ramp with a gap beyond it, or Infinity. */
@@ -478,11 +514,12 @@ export function botInput(w: World, k: KartState): DriveInput {
     }
   }
 
-  // Pure pursuit: the turn that would bring the kart onto the aim point, as a wheel angle.
+  // Pure pursuit: the turn that would bring the kart onto the aim point, as a wheel angle. In a slide the nose is off the way
+  // the kart goes, so it is the way it goes that is brought round.
   const dx = aimX - k.x;
   const dz = aimZ - k.z;
   const dist = Math.max(1, Math.hypot(dx, dz));
-  const err = wrapAngle(Math.atan2(dx, dz) - k.heading);
+  const err = wrapAngle(Math.atan2(dx, dz) - (k.drift !== 0 ? courseOf(k) : k.heading));
   const sine = Math.abs(err) > Math.PI / 2 ? Math.sign(err) : Math.sin(err);
   const speed = Math.max(fwd, 4);
   const wanted = (speed * 2 * sine) / dist;
@@ -539,7 +576,9 @@ export function botInput(w: World, k: KartState): DriveInput {
     m.drifting = true;
   }
   if (k.drift !== 0) {
-    // In a drift the wheel is remapped to 0.4..1.4 of a full turn into it.
+    // In a drift the wheel is remapped to 0.4..1.4 of a full turn into it. Turning too much, the wheel goes hard the other way,
+    // and held there it straightens the kart out of the slide (`drift.against`), boost and all: how it saves a slide that is
+    // carrying it wide.
     const own = clamp((Math.abs(steer) - DR.steerBase) / DR.steerRange, -1, 1);
     steer = Math.sign(steer) === k.drift ? own * k.drift : -k.drift;
   }
@@ -585,5 +624,8 @@ export function botInput(w: World, k: KartState): DriveInput {
   }
   m.presses = presses;
 
-  return { steer, throttle, brake, drift: m.drifting, itemPresses: presses };
+  // A shake of the wheel just before a ramp's lip kicks the jump (the sharp and the bold).
+  const shakes = k.shakes + (kicks(w, k, style, fwd) ? 1 : 0);
+
+  return { steer, throttle, brake, drift: m.drifting, itemPresses: presses, shakes };
 }

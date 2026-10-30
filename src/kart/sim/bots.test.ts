@@ -212,7 +212,7 @@ describe("the rubber band", () => {
     expect(gentle.top).toBeLessThanOrEqual(TUNING.drive.topSpeed + 0.05);
   });
 
-  it("leaves bots alone when there is no player to be near", () => {
+  it("with no player, holds the bots to the middle of the field: two equal bots side by side are neither held back nor pushed on", () => {
     const r = race(ARENA, racers(0, 2, 1), { seed: 1 });
     toGo(r);
     run(r, 60 * 30);
