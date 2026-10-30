@@ -6,9 +6,11 @@
  * loaded (kartArt.ts), the code-built one otherwise. All the renderer needs
  * from a model is a root to place and a `pose()` to animate. The actor owns
  * what is true of every kart whatever it looks like: where it is, the roll,
- * pitch and lean it shows from its motion, the spin-out, the hop, the lean
- * of a banked road, a trick's twirl in the air, the long fall when it leaves
- * the road and the rescue drone that fishes it out, and its blob shadow.
+ * pitch and lean it shows from its motion (the body rolls with how hard it
+ * turns, dives under the brake, noses up and down a jump's arc), the
+ * spin-out, the hop, the springs squashing on a landing and bouncing back,
+ * the lean of a banked road, a trick's twirl in the air, the long fall when it
+ * leaves the road and the rescue drone that fishes it out, and its blob shadow.
  *
  * Built facing +z; its left is +x (so its right is -x), which is what
  * `rotation.y = heading` expects (contract.ts).
@@ -90,9 +92,9 @@ export interface ActorContext {
 }
 
 const SPIN_TURNS = 2;
-/** How long a trick's twirl takes, seconds, and how many turns the driver makes. */
+/** How long a trick's twirl takes, seconds: the kart spins a whole turn flat in the air and the driver twirls once on top. */
 const TRICK_TIME = 0.75;
-const TRICK_TURNS = 2;
+const TRICK_TURNS = 1;
 /** The stylised fall: gravity, and the longest drop the picture shows before the drone has the kart. */
 const FALL_G = 24;
 const FALL_MAX = 9;
@@ -135,6 +137,12 @@ export class KartActor {
   private flame = 0;
   private hop = 0;
   private lastSpeed = 0;
+  /** The heading last frame and how fast it is turning (rad/s, eased): how hard the kart corners, which rolls the body. */
+  private lastHeading: number | null = null;
+  private yawRate = 0;
+  /** The kart's height in the world last frame and how fast it is rising (m/s, eased): a jump's arc pitches it, a landing's speed squashes it. */
+  private lastHigh: number | null = null;
+  private climb = 0;
   private spinMax = 0;
   private near = 0;
   private accel = 0;
@@ -165,7 +173,6 @@ export class KartActor {
   private droneLast = { x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0 };
   private settle = { x: 0, y: 0, z: 0 };
   private tumble = { x: 0, y: 0, z: 0 };
-  private rampBonus = 0;
 
   constructor(
     readonly id: number,
@@ -214,10 +221,10 @@ export class KartActor {
     const slope = Math.atan(((ahead - behind) / 4) * along);
     this.slope = damp(this.slope, slope, 12, dt);
     const surf = ctx.surface ? ctx.surface(view.x, view.z, proj.s) : { lift: 0, ramp: 0, s: proj.s, offset: proj.offset };
-    // Off the end of a ramp the sim's kart is level with the road again; the picture's has climbed the wedge, so it keeps the height
-    // it had and gives it back as it flies (or at once, if it was too slow to fly).
-    if (surf.ramp > 0.02) this.rampBonus = surf.ramp;
-    else this.rampBonus *= Math.exp(-dt * (view.hop > 0.2 ? 2.4 : 12));
+    // The sim counts a ramp's wedge as road and leaves the lip from its top: up the wedge the kart stands on it (with its hop),
+    // off the lip it is the sim's height over the road. Whichever is higher, so a frame drawn between the tick before the lip and
+    // the one after (the newer tick's height, a position between the two) neither doubles the wedge nor drops through it.
+    const above = view.hop >= surf.ramp ? view.hop - surf.ramp : view.hop;
     const roll = ctx.rollAt ? ctx.rollAt(proj.s) : 0;
     // The banked road's plane, seen from the kart: how much it tips the kart's nose and its side.
     const rrx = -t.tz;
@@ -244,8 +251,6 @@ export class KartActor {
     }
 
     const baseY = view.y + surf.lift;
-    // The shadow stays on the road (and the wedge); only the kart carries the leftover height.
-    const flyBonus = surf.ramp > 0.02 ? 0 : this.rampBonus;
     this.roadY = baseY;
     let px = view.x;
     let py = baseY;
@@ -254,11 +259,13 @@ export class KartActor {
     let rotZ = this.tiltZ;
     let rotY = view.heading + spinYaw;
 
-    // A trick in the air: the driver twirls and the kart wobbles about its length.
+    // A trick in the air: the kart spins a whole turn flat, the driver twirls on top, and it wobbles about its length.
     let twirl = 0;
     if (view.trick > 0 && view.rescue <= 0) {
       const u = clamp(view.trick / TRICK_TIME);
-      twirl = TAU * TRICK_TURNS * (u * u * (3 - 2 * u));
+      const turn = u * u * (3 - 2 * u);
+      twirl = TAU * TRICK_TURNS * turn;
+      rotY += TAU * turn;
       rotZ += Math.sin(view.trick * 11) * 0.22 * (1 - u * 0.6);
     }
 
@@ -367,7 +374,7 @@ export class KartActor {
     if (!rescuing) this.lastGood = { x: view.x, y: baseY, z: view.z, heading: view.heading, speed };
 
     // A hop is the body lifting off its wheels; a jump (several metres) lifts the whole kart, wheels and all.
-    const jump = rescuing ? 0 : Math.max(0, view.hop - 0.4) + flyBonus;
+    const jump = rescuing ? 0 : Math.max(0, above - 0.4);
     py += jump;
     this.x = px;
     this.y = py;
@@ -379,21 +386,43 @@ export class KartActor {
     this.accel = damp(this.accel, dt > 0 ? (speed - this.lastSpeed) / dt : 0, 8, dt);
     this.lastSpeed = speed;
     const spinning = view.spin > 0;
-    const rollTarget = -(view.steer * (0.04 + 0.06 * sr) + view.drift * 0.075) * (spinning ? 0.3 : 1);
-    this.roll = damp(this.roll, rollTarget, 10, dt);
-    const pitchTarget = clamp(this.slope * 0.9 + this.accel * 0.0032 + (view.boost > 0 ? 0.03 : 0), -0.2, 0.2);
-    this.pitch = damp(this.pitch, pitchTarget, 9, dt);
+    // How hard it corners: the heading's turn rate times the speed, the sideways pull the body rolls away from.
+    if (dt > 0 && this.lastHeading !== null && !rescuing) {
+      const turned = view.heading - this.lastHeading;
+      const rate = (turned - TAU * Math.round(turned / TAU)) / dt;
+      // A jump in the heading (a restart, a set-down) is no turn.
+      this.yawRate = damp(this.yawRate, Math.abs(rate) < 8 ? rate : 0, 10, dt);
+    }
+    this.lastHeading = view.heading;
+    const airNow = rescuing ? 0 : Math.max(0, above);
+    const grounded = airNow < 0.3;
+    const cornering = grounded && !spinning ? -this.yawRate * speed : 0;
+    const rollTarget = -clamp(cornering * 0.0042, -0.17, 0.17) - (spinning ? 0 : view.drift * 0.05);
+    this.roll = damp(this.roll, rollTarget, 9, dt);
+    // Its rise and fall in the world, for the nose in the air and the squash of a landing.
+    const worldHigh = py;
+    if (dt > 0 && this.lastHigh !== null && !rescuing) {
+      const rising = (worldHigh - this.lastHigh) / dt;
+      this.climb = damp(this.climb, Math.abs(rising) < 40 ? rising : 0, 14, dt);
+    }
+    this.lastHigh = rescuing ? null : worldHigh;
+    const groundPitch = this.slope * 0.9 + this.accel * 0.0032 + (view.boost > 0 ? 0.03 : 0);
+    // In the air the nose follows the arc: up off the lip, down coming in to land.
+    const airPitch = Math.atan2(this.climb, Math.max(6, Math.abs(speed))) * 0.75;
+    const pitchTarget = clamp(airNow > 0.6 ? airPitch : groundPitch, -0.32, 0.32);
+    this.pitch = damp(this.pitch, pitchTarget, airNow > 0.6 ? 5 : 9, dt);
     const leanTarget = clamp(view.steer * 0.3 + view.drift * 0.22, -0.55, 0.55);
     this.lean = damp(this.lean, leanTarget, 12, dt);
-    this.slide = damp(this.slide, -view.drift * 0.2 * (spinning ? 0 : 1), 8, dt);
+    // The sim swings the kart's tail out in a drift; the body adds only a touch more of its own.
+    this.slide = damp(this.slide, -view.drift * 0.05 * (spinning ? 0 : 1), 8, dt);
     this.flame = damp(this.flame, view.boost > 0 && !rescuing ? 1 : 0, view.boost > 0 ? 16 : 10, dt);
-    this.hop = damp(this.hop, rescuing ? 0 : Math.min(view.hop, 0.4), 30, dt);
-    // The suspension: a landing or a hit presses the body down onto its springs, which let it bob back.
-    const airNow = rescuing ? 0 : Math.max(0, view.hop) + flyBonus;
+    this.hop = damp(this.hop, rescuing ? 0 : Math.min(above, 0.4), 30, dt);
+    // The suspension: a landing presses the body down onto its springs as hard as it came down, a hit jolts it, and the springs
+    // let it bounce back.
     if (dt > 0) {
-      if (this.lastAir > 0.18 && airNow < 0.1) this.suspV += clamp(this.lastAir * 4 + 3, 3, 14);
+      if (this.lastAir > 0.18 && airNow < 0.1) this.suspV += clamp(-this.climb * 1.1 + 2, 3, 16);
       if (view.spin > 0 && this.lastSpin <= 0) this.suspV += 6;
-      this.suspV += (-210 * this.susp - 15 * this.suspV) * dt;
+      this.suspV += (-210 * this.susp - 13 * this.suspV) * dt;
       this.susp = clamp(this.susp + this.suspV * dt, -1, 1);
     }
     this.lastAir = airNow;

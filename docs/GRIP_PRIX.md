@@ -25,9 +25,22 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   standstill and the kart reverses. You still steer while reversing — open
   hands are tracked as well as fists.
 - **Hop and drift.** Lift the wheel sharply (both hands jerk up) while
-  turning: the kart hops into a drift that way. Sparks grow blue, then
-  orange; straighten the wheel to let go, and the kart boosts — longer for
-  orange. A hop going straight is only a hop.
+  turning, or hold the wheel near full lock at speed for a moment: the kart
+  hops into a power-slide that way, its tail swinging out. Turn into the
+  slide to tighten it (the tail swings further), against it to run wider;
+  hold it hard against the slide and the kart straightens out of it.
+  Sparks grow blue, then orange, then white-hot; straighten the wheel (or
+  turn it hard the other way) to let go, and the kart boosts — longer for
+  each colour. A hop going straight is only a hop.
+- **Jumps and tricks.** Ramps throw the kart into the air, and so does the
+  top of a hill taken fast. In the air, shake the wheel (quick left and right
+  turns) or lift it as for a hop: the kart twirls, and boosts when it lands.
+  Shake right at a ramp's lip and the kart springs off higher and further,
+  and boosts longer.
+- **Slipstream.** Tuck in right behind another kart: you go a little faster
+  and, after a moment, are flung out past it with a boost.
+- **Hills.** A climb slows you a little; coming down, you gather speed and
+  carry it out of the dip.
 - **Items.** Drive through an item box for an item (eleven kinds, below).
   Flick one hand open and closed again (under 0.6 s, the other hand staying a
   fist) to use it. Both hands opening together is a brake, never an item.
@@ -60,8 +73,9 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   screen (arrows, B, A; or a gamepad's d-pad, B, A) for a **golden kart** and
   the secret track, Five Finger Circuit, which winning both cups opens too.
 - **Keyboard and gamepad** drive too (testing, accessibility): arrows or
-  WASD, Space to drift, E or Shift for the item; a gamepad's left stick,
-  triggers, A to drift, B or X for the item.
+  WASD, Space to drift (and to trick in the air), Left-Right-Left quickly to
+  shake, E or Shift for the item; a gamepad's left stick, triggers, A to
+  drift, the stick flicked left-right-left to shake, B or X for the item.
 
 ### Items
 
@@ -209,14 +223,38 @@ The numbers (all in `sim/tuning.ts`):
   4 m/s, so a kart that met it head-on is never wedged.
 - **Turning.** Yaw rate up to ~2.2 rad/s, rising with speed from nothing at a
   standstill to full by 6 m/s, a little less at top speed. Grip pulls the
-  velocity toward the heading quickly (a slight slide, never ice).
+  velocity toward the heading quickly (a slight slide, never ice), turning
+  88% of the sideways speed it takes into forward speed. A nose more than
+  15° off the way the kart goes (a slide let go, a shove) swings back toward
+  it as the grip takes hold. `KartView.speed` is the whole speed, even in a
+  slide (negative reversing); `course` is the way it goes.
 - **Brake.** 30 m/s²; held at a standstill for 0.3 s it reverses, up to 7 m/s.
 - **Hop and drift.** `drift` rising at over 10 m/s with |steer| > 0.3 hops
-  (0.25 s, up to 0.35 m) into a drift that way: the steer is remapped so the
-  kart always turns into the drift (0.4..1.4 of full turn), grip is lower,
-  and charge builds faster the tighter it turns: level 1 at 1.0 s, level 2 at
-  2.2 s. `drift` falling (or a brake) ends it: level 1 boosts 0.7 s, level 2
-  1.4 s. Off the road the charge does not build.
+  (0.25 s, up to 0.35 m) into a drift that way: a power-slide. The way the
+  kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
+  drift 1, straight 0, against it -1: 0.4..1.4), and its nose swings out to
+  0.42 + 0.16 × own radians inside that (15°..33°), most of the way within the
+  hop; it keeps 97% of the top speed; ice lets it slide on instead of coming
+  round. Charge builds faster the tighter it turns: level 1 (blue) at 1.0 s,
+  level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling
+  turn. `drift` falling, a brake, or the wheel held at own ≤ -0.8 for 0.25 s
+  (the way out of a slide toward the other side of the road) ends it: boosts
+  of 0.7, 1.3 and 1.9 s.
+  Off the road the charge does not build. Let go, the nose comes back to the
+  way the kart goes within a quarter of a second.
+- **Hills.** Gravity pulls 9 m/s² per unit of grade along the road (from
+  `TrackGeometry` heights, read over 2 m either side): a 10% climb settles at
+  about 22.8 m/s. Downhill the top speed rises by 1.1 × the steepest descent
+  of the last 22 m, so a kart carries what it gathered out of the dip.
+- **Crests.** Where the road bows over a crest faster than gravity (12.5
+  m/s²) can follow it down (the speed squared times its curvature over 1.08
+  times gravity), the kart leaves it: a skim that stays driveable until it is
+  0.3 m up, then a jump (`jump` with `crest`), tricks and all.
+- **Slipstream.** 2 to 14 m behind another kart, within 1.8 m of its line,
+  both over 14 m/s and going the same way (within 0.5 rad): the top speed is
+  3% higher and after 1.5 s in the wake the kart is flung out with a 0.7 s
+  boost (`boost` with source `draft`), then rests 2.5 s before a wake charges
+  it again; `KartView.draft` is the charge.
 - **Boost.** Top speed +35% and strong acceleration while it lasts. Nitro
   1.5 s, a pad 1.0 s, a start boost 1.0 s.
 - **Start.** The countdown is 3 s plus half a second of "ready". Throttle
@@ -226,7 +264,9 @@ The numbers (all in `sim/tuning.ts`):
   is a whole second because hands closed as the 1 comes up reach the sim about
   0.8 s before Go, after the fist's 0.12 s hold and the camera.)
 - **Karts touch.** Circles of radius 1.1 m push apart, the faster one
-  shoving harder; a `bump` event.
+  shoving harder (restitution 0.6); a shove off a kart's middle turns it (one
+  clipped at the tail swings its nose the other way, up to 0.2 rad); a
+  `bump` event.
 - **Item boxes.** A row of five across the road at each of the track's
   `itemRows`; a box taken comes back after 3 s. Roulette 1.0 s. Odds by place
   (above). Puck: 40 m/s, 6 s, bounces off barriers, hits within 1.4 m.
@@ -363,10 +403,19 @@ only those karts' physics against the world as it is.
 - **Gestures** as in "How it plays": both open for 150 ms → brake; one open
   then closed within 0.6 s with the other a fist all along → one item press;
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
-  between the palms) by at least a quarter span → hop; drift held from the
-  hop until |steer| < 0.15 for 200 ms or a brake. A hop while the drift is
-  still held (after a hop that was only a hop, or a drift a spin-out ended)
-  lets go of it for 50 ms first, so the kart sees a fresh press and hops.
+  between the palms) by at least a quarter span → hop; the wheel held at
+  |steer| ≥ 0.85 for 0.22 s with fists → a hop too (the sim drifts only at
+  speed, so a slow hairpin stays a turn); drift held from the hop until
+  |steer| < 0.15 for 200 ms, the wheel turned against the drift past 0.5 for
+  0.1 s (an S-bend), or a brake. A hop while the drift is still held (after a
+  hop that was only a hop, or a drift a spin-out ended) lets go of it for 50
+  ms first, so the kart sees a fresh press and hops.
+- **Shakes** (`shake.ts`): the wheel's angle swinging back 14° the other way
+  twice within 0.55 s (no second for 0.35 s) → `shakes` +1, a count like the
+  item presses (on the wire too). Not while braking, clapping or cheering.
+  Keys: the arrows from one to the other and back; a pad: the stick or
+  d-pad likewise. The sim uses a shake only in the air (a trick) or within
+  0.3 s before a lip (a kick), so the steering of a slalom does nothing.
 - **Tricks** (`gestures.ts`, in hand lengths, a hand's span being twice the
   wrist-to-knuckle size): a **clap** (palms from at least one hand length
   apart to within 0.6 and back to 0.9 inside half a second, not from a brake
@@ -383,7 +432,7 @@ only those karts' physics against the world as it is.
   filled for a fist and hollow when open. Small in a corner during the race,
   large on the wheel check and on a big-screen player's own device.
 - **The dev page** `src/kart/input/dev.html`: the camera, the preview, and the
-  numbers (angle, steer, grip, mode, drift, item presses, frame rate), with
+  numbers (angle, steer, grip, mode, drift, item presses, shakes, frame rate), with
   the Steering setting. The first thing to try with real hands.
 
 ## Render (`src/kart/render/`)
@@ -407,7 +456,13 @@ that file exists (`render/art.ts`).
   with its hands on the wheel as it turns; cheering or waving with the player's
   gesture, bouncing at the finish, dizzy in a spin-out; the golden kart has a
   gold tub with the player's colour on its stripe, spoiler and hubs; body roll
-  and pitch from the motion; a blob shadow. Effects:
+  from how hard it corners (the heading's turn rate times the speed), pitch
+  from the slope, the throttle and the brake, the nose following a jump's arc,
+  the springs squashing on a landing as hard as it came down and bouncing
+  back, a whole flat turn in the air for a trick; a blob shadow
+  (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
+  the lip it rides the sim's height, which starts at the wedge's top, so the
+  two meet without a step. Effects:
   drift sparks (blue, then orange, the charge glowing and pulsing at the rear
   wheels), boost flames (long, flickering, a flash at the pipes as a boost
   catches), streaks of wind rushing past a watched kart from about 21 m/s and
@@ -800,12 +855,16 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
 ## Tests
 
 - Unit (Vitest): the geometry; the sim (a bot laps every track in a sane time
-  and never leaves it, braking reverses, a drift charges and boosts, items
+  and never leaves it, braking reverses, a drift slides, tightens, widens,
+  straightens out and charges three boosts, jumps leave the wedge the picture
+  draws and land pointing where they fly, a shake tricks only in the air and
+  kicks at the lip, crests throw and hills pull, the slipstream slings, items
   hit, places and laps count, the race ends, `snapshot`/`restore` round-trips,
   the same seed replays); the net (lobby joins and leaves, a full room, inputs
   in order under loss, prediction converging, the host leaving); the wheel
   (angles, the level, fists and open hands from recorded landmarks, every
-  gesture, hands lost).
+  gesture, a drift started at full lock and let go against it, shakes,
+  hands lost).
 - Performance (Vitest): the tier guess for each GPU family (and the split-screen
   rules), the safety net's watch and its ceiling in prefs, the per-view culling of
   instances (everything the frustum reaches is drawn once with its colour, a buffer is
@@ -840,13 +899,22 @@ front of them (or a laptop), and the TV is the host's screen.
 
 `TrackDef` (track/geometry.ts) says, beyond the road itself:
 
-- **Ramps** (`ramps`): a ramp across the road; fast enough over its lip and
-  the kart flies (about a second). The hop gesture (or Space) in the air is a
-  **trick**: the driver spins, and the kart boosts on landing (0.8 s). The
-  picture draws a 16 m wedge, 2.4 m high, ending at the lip; the sim's `hop`
-  is 0 up the wedge and at the lip. Jumps can cross a gap: a `drops` entry
-  with `gap: true` and side `both`, starting just past the lip — a kart that
-  lands short falls.
+- **Ramps** (`ramps`): a ramp across the road, a wedge 16 m long rising to
+  2.4 m × lift / 7 at its lip (the sim's `wedgeAt` and the picture's
+  `rampHeight` are the same curve, and a test holds them to it). The sim
+  counts the wedge as road and launches from its top: over 9 m/s the kart is
+  thrown up at lift × 0.72 m/s at top speed (about 1.2 s in the air, the arc's
+  top some 3.5 m over the road), slower it only drops off the end. In the air
+  the kart points where it flies (its nose swings round at 4/s) and the wheel
+  turns its flight up to 0.55 rad/s, enough to bring a jump taken at an angle
+  back over the road. The hop gesture (or Space) or a shake in the air is a
+  **trick**: the kart twirls, and boosts on landing (0.8 s). A shake within
+  0.3 s before the lip or 0.2 s after it **kicks** the jump: 1.8 m/s more
+  lift, 6% more speed, and a 1.1 s boost on landing. Jumps can cross a gap: a
+  `drops` entry with `gap: true` and side `both`, starting just past the lip —
+  a kart that lands short falls, and one shoved over the lip by another
+  between its own steps jumps rather than falls. A kart higher than 2.4 m
+  flies over an item box.
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a

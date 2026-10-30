@@ -5,11 +5,13 @@
  *   left stick (or the d-pad)   steer
  *   right trigger               throttle
  *   left trigger                brake, and back up if held at a standstill
- *   A                           drift, held
+ *   A                           drift, held (in the air: a trick)
+ *   the stick left, right, left  a shake (in the air: a trick)
  *   B or X                      use the item
  *   Y                           honk
  */
 import type { DriveInput, DriverControl } from "../contract";
+import { ShakeCounter } from "./shake";
 
 /** Stick travel that does nothing: a resting stick is never exactly centred. */
 const DEAD_ZONE = 0.15;
@@ -40,17 +42,20 @@ export function gamepadControl(index?: number, pads: Pads = browserPads): Driver
   let itemWasDown = false;
   let hornWasDown = false;
   let horns = 0;
+  // The stick (or the d-pad) from well over one way to well over the other, and back.
+  const shaker = new ShakeCounter(1.2);
 
   return {
     kind: "gamepad",
     wheel: null,
-    sample(): DriveInput {
+    sample(now: number): DriveInput {
       const list = pads();
       const pad = index === undefined ? list.find((candidate) => candidate?.connected) : list[index];
       if (!pad?.connected) {
         itemWasDown = false;
         hornWasDown = false;
-        return { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: presses, horn: horns };
+        shaker.reset();
+        return { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: presses, horn: horns, shakes: shaker.count };
       }
       const button = (i: number) => pad.buttons[i];
       const value = (i: number) => {
@@ -70,13 +75,16 @@ export function gamepadControl(index?: number, pads: Pads = browserPads): Driver
         return v < TRIGGER_FLOOR ? 0 : Math.min(1, v);
       };
       const brake = trigger(BUTTON.brake);
+      const steer = dpad !== 0 ? dpad : shapeStick(pad.axes[0] ?? 0);
+      shaker.push(now / 1000, steer);
       return {
-        steer: dpad !== 0 ? dpad : shapeStick(pad.axes[0] ?? 0),
+        steer,
         throttle: trigger(BUTTON.throttle),
         brake,
         drift: pressed(BUTTON.drift),
         itemPresses: presses,
         horn: horns,
+        shakes: shaker.count,
       };
     },
     dispose() {
