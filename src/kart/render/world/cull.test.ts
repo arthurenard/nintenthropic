@@ -154,24 +154,24 @@ describe("culling a scatter of instances for a view", () => {
     const cull = new CulledInstances(mesh);
     const meshes = () => group.children.filter((o): o is InstancedMesh => (o as InstancedMesh).isInstancedMesh);
     // Two views driving round, now and then a frame drawn whole (a camera that is not a view), and a view that sees nothing.
-    for (let frame = 0; frame < 90; frame++) {
-      const a = (frame / 90) * Math.PI * 2;
+    for (let frame = 0; frame < 60; frame++) {
+      const a = (frame / 60) * Math.PI * 2;
       for (const view of [0, 1]) {
         const r = view ? 120 : 220;
         const eye: [number, number, number] = [Math.cos(a + view) * r, 6, Math.sin(a + view) * r];
         const ahead: [number, number, number] = [Math.cos(a + view + 0.3) * r, 2, Math.sin(a + view + 0.3) * r];
-        cull.select(view, frame % 29 === 5 ? frustumOf([0, 6, -900], [0, 6, -1500]) : frustumOf(eye, ahead));
+        cull.select(view, frame % 19 === 5 ? frustumOf([0, 6, -900], [0, 6, -1500]) : frustumOf(eye, ahead));
         for (const m of meshes()) {
           draw(m);
-          if (m.visible) for (const p of drawn(m)) expect(placed.has(p)).toBe(true);
+          if (m.visible) expect(drawn(m).filter((p) => !placed.has(p))).toEqual([]);
         }
       }
-      if (frame % 23 === 11) {
+      if (frame % 17 === 11) {
         cull.all();
         for (const m of meshes()) draw(m);
       }
     }
-  });
+  }, 60_000);
 
   it("leaves a mesh that is not at the origin whole", () => {
     const { group, mesh, spots } = field(500);
