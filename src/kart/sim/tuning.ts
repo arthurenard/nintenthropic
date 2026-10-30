@@ -70,7 +70,7 @@ export const TUNING = {
     /** The steer eases toward the wheel with this rate (1/s), so the front wheels do not snap. */
     response: 18,
     /** Of the sideways speed the ground's grip removes, this share comes out as forward speed; the rest is scrubbed. */
-    slideKept: 0.92,
+    slideKept: 0.88,
     /**
      * A nose turned further than this from the way the kart is going (radians:
      * the end of a power-slide, a shove) swings back toward it at `align` (1/s,
@@ -205,9 +205,9 @@ export const TUNING = {
     rateLoose: 0.7,
     rateTight: 1.3,
     /** Charge needed, in seconds of a middling turn: blue, orange, and the hottest. */
-    level1: 0.9,
-    level2: 1.9,
-    level3: 3.1,
+    level1: 1.0,
+    level2: 2.1,
+    level3: 3.4,
     boost1: 0.7,
     boost2: 1.3,
     boost3: 1.9,

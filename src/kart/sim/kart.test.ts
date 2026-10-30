@@ -240,7 +240,7 @@ describe("hop and drift", () => {
       expect(held[name], name).toBeGreaterThan(16);
       expect(held[name], name).toBeLessThan(36);
       // A drift is not a brake: nearly all of the speed is still there.
-      expect(Math.hypot(view(r).speed / Math.cos((held[name]! * Math.PI) / 180)), name).toBeGreaterThan(Math.min(speed, 24) * 0.94);
+      expect(view(r).speed, name).toBeGreaterThan(Math.min(speed, 24) * 0.94);
     }
     // Into the drift the tail swings further; against it, less.
     expect(held.into).toBeGreaterThan(held.straight! + 5);
@@ -311,13 +311,13 @@ describe("hop and drift", () => {
       const level = view(r).driftLevel;
       if (level > 0 && reached[level - 1]! < 0) reached[level - 1] = i;
     }
-    // A middling turn (the wheel straight in a drift) is 0.9 s, 1.9 s and 3.1 s.
-    expect(reached[0]).toBeGreaterThan(48);
-    expect(reached[0]).toBeLessThan(60);
-    expect(reached[1]).toBeGreaterThan(108);
-    expect(reached[1]).toBeLessThan(120);
-    expect(reached[2]).toBeGreaterThan(180);
-    expect(reached[2]).toBeLessThan(192);
+    // A middling turn (the wheel straight in a drift) is 1.0 s, 2.1 s and 3.4 s.
+    expect(reached[0]).toBeGreaterThan(54);
+    expect(reached[0]).toBeLessThan(66);
+    expect(reached[1]).toBeGreaterThan(120);
+    expect(reached[1]).toBeLessThan(132);
+    expect(reached[2]).toBeGreaterThan(198);
+    expect(reached[2]).toBeLessThan(210);
     expect(events.filter((e) => e.type === "drift-level").map((e) => (e.type === "drift-level" ? e.level : 0))).toEqual([1, 2, 3]);
     // Let go: boost, 1.9 s for the third, and the speed goes past the normal top.
     const speedBefore = view(r).speed;

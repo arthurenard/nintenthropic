@@ -189,7 +189,7 @@ export interface KartView {
    * Optional: absent, the heading.
    */
   course?: number;
-  /** m/s along the heading (negative reversing). */
+  /** m/s the kart is going, the whole of its speed even in a slide (negative reversing). */
   speed: number;
   /** The steer it is answering, -1..1 (the front wheels, the driver's lean). In a drift, the wheel as held (it may point against the slide). */
   steer: number;

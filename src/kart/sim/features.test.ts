@@ -151,7 +151,8 @@ describe("ramps", () => {
     // Drifting right into the lip, the nose 25° right of the way it goes, the wheel against the slide.
     const h = planFor(track).geo.heading(299);
     patch(r, 0, { heading: h - 0.44, drift: 1, prevDrift: 1 });
-    const events = drive(r, () => ({ throttle: 1, steer: -1, drift: true }), (e) => e.some((x) => x.type === "land"), 200);
+    // Then the wheel straight and the drift let go in the air.
+    const events = drive(r, () => (view(r).hop > 0 ? { throttle: 1 } : { throttle: 1, steer: -1, drift: true }), (e) => e.some((x) => x.type === "land"), 200);
     expect(first(events, "jump")).toBeDefined();
     const k = view(r);
     const slip = Math.abs(((k.heading - k.course! + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);

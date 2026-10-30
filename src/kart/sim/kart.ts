@@ -148,7 +148,7 @@ export function settle(k: KartState): void {
  * power-slide, its nose 30° off the way it goes, is still going as fast as it is.
  */
 export function forwardSpeed(k: KartState): number {
-  const speed = Math.hypot(k.vx, k.vz);
+  const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
   return k.vx * Math.sin(k.heading) + k.vz * Math.cos(k.heading) < 0 ? -speed : speed;
 }
 
@@ -173,7 +173,7 @@ export function yawRate(steer: number, speed: number): number {
 
 /** Brings a velocity down to `limit` m/s if it is over. */
 export function capSpeed(k: KartState, limit: number): void {
-  const speed = Math.hypot(k.vx, k.vz);
+  const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
   if (speed > limit) {
     k.vx *= limit / speed;
     k.vz *= limit / speed;
@@ -223,7 +223,7 @@ export function viewHop(k: KartState): number {
 
 /** The way the kart is going, as a heading: its velocity's direction (the heading when it is nearly still). */
 export function courseOf(k: KartState): number {
-  return Math.hypot(k.vx, k.vz) > 0.5 ? Math.atan2(k.vx, k.vz) : k.heading;
+  return Math.sqrt(k.vx * k.vx + k.vz * k.vz) > 0.5 ? Math.atan2(k.vx, k.vz) : k.heading;
 }
 
 /** Over the edge, or into a gap: the kart is lost to the drone for a while, and keeps its item. */
@@ -364,7 +364,7 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
         k.vx *= W.keep;
         k.vz *= W.keep;
         // Glance off: the nose turns toward the way the kart is now going, rather than into the barrier again.
-        if (Math.hypot(k.vx, k.vz) > 1) {
+        if (Math.sqrt(k.vx * k.vx + k.vz * k.vz) > 1) {
           const going = Math.atan2(k.vx, k.vz);
           k.heading = wrapAngle(k.heading + wrapAngle(going - k.heading) * W.nudge);
         }
@@ -372,7 +372,7 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
       } else {
         // A scrape wears W.scrape m/s off the speed each second, a flat amount and not a share of the speed: a kart
         // brushing the barrier round the outside of a bend touches it on every tick, and keeps its pace.
-        const speed = Math.hypot(k.vx, k.vz);
+        const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
         if (speed > 0) {
           const keep = Math.max(0, speed - W.scrape * TICK) / speed;
           k.vx *= keep;
@@ -592,7 +592,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
   if (k.drift !== 0) {
     // The power-slide: the kart goes round the way it is going, faster into the drift and slower against it, while
     // its tail swings out until the nose is `slip` inside that. Slippery ground lets it slide on instead of coming round.
-    const speed = Math.hypot(k.vx, k.vz);
+    const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
     const own = clamp(steerIn * k.drift, -1, 1);
     const turn = DR.steerBase + DR.steerRange * own;
     const bite = Math.min(1, ground.gripDrift / GROUND.road.gripDrift) * k.mods.grip;
@@ -625,7 +625,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     const turning = throttle > 0 && !braking && fwd < W.pivot && noseOnBarrier(w, k) ? W.pivot : fwd;
     k.heading = wrapAngle(k.heading - yawRate(k.steer, turning) * TICK * (turning >= 0 ? 1 : -1));
     // A nose swung far from the way the kart goes (a slide let go, a shove) comes back toward it as the grip takes hold.
-    const speed = Math.hypot(k.vx, k.vz);
+    const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
     if (speed > 2 && fwd > 0) {
       const slip = wrapAngle(k.heading - Math.atan2(k.vx, k.vz));
       const excess = Math.abs(slip) - S.slipFree;
@@ -640,7 +640,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     // The grip turns the velocity toward the heading: the speed stays (less a little scrubbed off for the slide), the sideways part becomes forward.
     const grip = ground.grip * k.mods.grip;
     const lost = across * (1 - Math.exp(-grip * TICK));
-    const speedBefore = Math.hypot(along, across);
+    const speedBefore = Math.sqrt(along * along + across * across);
     across -= lost;
     const speedAfter = Math.max(0, speedBefore - (1 - S.slideKept) * Math.abs(lost));
     along = Math.sqrt(Math.max(0, speedAfter * speedAfter - across * across)) * (along >= 0 ? 1 : -1);
@@ -696,7 +696,7 @@ function flyControl(k: KartState, steerIn: number, driftIn: boolean, shook: bool
   k.steer += (steerIn - k.steer) * (1 - Math.exp(-S.response * TICK));
   const turn = k.steer * R.airTurn * TICK;
   k.heading = wrapAngle(k.heading - turn);
-  const speed = Math.hypot(k.vx, k.vz);
+  const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
   if (speed > 0.5) {
     const course = wrapAngle(Math.atan2(k.vx, k.vz) - turn);
     k.vx = speed * Math.sin(course);
@@ -841,8 +841,8 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
       const nx = d > 1e-6 ? dx / d : 1;
       const nz = d > 1e-6 ? dz / d : 0;
       // A heavy driver is hard to shove (its mass counts for more); a light one is knocked about.
-      const wa = (1 + Math.hypot(a.vx, a.vz) / B.weightPerSpeed) / a.mods.shoved;
-      const wb = (1 + Math.hypot(b.vx, b.vz) / B.weightPerSpeed) / b.mods.shoved;
+      const wa = (1 + Math.sqrt(a.vx * a.vx + a.vz * a.vz) / B.weightPerSpeed) / a.mods.shoved;
+      const wb = (1 + Math.sqrt(b.vx * b.vx + b.vz * b.vz) / B.weightPerSpeed) / b.mods.shoved;
       const overlap = reach - d;
       const shareA = wb / (wa + wb);
       a.x += nx * overlap * shareA;
@@ -853,7 +853,7 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
       moved.add(b.id);
       const closing = -((a.vx - b.vx) * nx + (a.vz - b.vz) * nz);
       if (closing > 0) {
-        const faster = Math.max(Math.hypot(a.vx, a.vz), Math.hypot(b.vx, b.vz));
+        const faster = Math.max(Math.sqrt(a.vx * a.vx + a.vz * a.vz), Math.sqrt(b.vx * b.vx + b.vz * b.vz));
         const impulse = ((1 + B.restitution) * closing) / (1 / wa + 1 / wb);
         shove(a, nx, nz, impulse / wa);
         shove(b, -nx, -nz, impulse / wb);
@@ -892,12 +892,12 @@ function shove(k: KartState, nx: number, nz: number, dv: number): void {
 export function slipstream(w: World, emit: Emit): void {
   const karts = w.state.karts;
   for (const a of karts) {
-    const va = Math.hypot(a.vx, a.vz);
+    const va = Math.sqrt(a.vx * a.vx + a.vz * a.vz);
     let wake = false;
     if (a.rescue === 0 && a.spin === 0 && a.flight === 0 && va > DRAFT.minSpeed) {
       for (const b of karts) {
         if (b === a || b.rescue > 0 || b.flight > 0) continue;
-        const vb = Math.hypot(b.vx, b.vz);
+        const vb = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
         if (vb < DRAFT.minSpeed) continue;
         const dx = b.vx / vb;
         const dz = b.vz / vb;
