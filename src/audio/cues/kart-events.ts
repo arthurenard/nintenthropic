@@ -110,6 +110,13 @@ export function backfire(t: Take): Mono {
   return lowpass(out, t.sr, 7000, 2);
 }
 
+/** Another kart going by close and fast: a short swish of air, its band sliding down as the kart draws past. */
+export function passSwish(t: Take): Mono {
+  const out = t.canvas(0.5);
+  t.put(out, whoosh(t, 0.45, 2800 * t.p, 650 * t.p, 1.5, swoosh(0.4, 2.2)), 0, 1);
+  return out;
+}
+
 // --- boosts ---------------------------------------------------------------------------------------------------
 
 /** A boost's whoosh: a long rush of air, a low fwoom under it. */

@@ -446,6 +446,24 @@ describe("engines", () => {
     expect(coming / going).toBeLessThan(1.25);
   });
 
+  it("swishes when a kart goes by close and fast, from its side, and not when it creeps by or passes far off", () => {
+    const pass = (x: number, faster: number): { pan: number }[] => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      for (let i = 0; i <= 600; i++) {
+        const t = i / 60;
+        frame([kart(0, { x: 0, z: 19 * t, speed: 19 }), kart(1, { x, z: -30 + (19 + faster) * t, speed: 19 + faster })]);
+      }
+      return bus.played.filter((p) => p.cue === "kart_pass").map((p) => ({ pan: p.options.pan! }));
+    };
+    const close = pass(3.5, 8);
+    expect(close).toHaveLength(1);
+    // +x is the kart's left.
+    expect(close[0]!.pan).toBeLessThan(-0.2);
+    expect(pass(-3.5, 8)[0]!.pan).toBeGreaterThan(0.2);
+    expect(pass(3.5, 1.5)).toHaveLength(0);
+    expect(pass(12, 8)).toHaveLength(0);
+  });
+
   it("silences an engine carried off by the drone", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
     for (let i = 0; i < 30; i++) frame([kart(0, { speed: 10 })]);

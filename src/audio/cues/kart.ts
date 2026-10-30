@@ -2,9 +2,9 @@
  * Grip Prix's sound pack: a toy-box kart racer, every sound synthesised in
  * code like the rest of Super Claude Bros. The recipes are in
  * ./kart-motion.ts (what a kart sounds like as it moves), ./kart-events.ts
- * (what happens to it), ./kart-items.ts (five of the items) and
- * ./kart-jingles.ts (the tunes and the interface); this is only the table
- * that says how each is played.
+ * (what happens to it), ./kart-items.ts (five of the items),
+ * ./kart-jingles.ts (the tunes and the interface) and ./kart-ambience.ts
+ * (the places); this is only the table that says how each is played.
  *
  * Levels are dB at the bus, every take having been normalised to the same
  * loudness first (see ../dsp/master.ts). The mix, in one place:
@@ -12,13 +12,16 @@
  *   −1…−4   what the player must not miss: the finish fanfares, the final-lap
  *           jingle, the countdown, being hit, a hazard, starting
  *   −4…−7   the player's own actions: boosts, items, jumps, bumps, walls
- *   −7…−11  sparks, ticks, the crowd, the horn's neighbours
- *   −10…−22 loops: engines (steered by speed and distance), the drift's
- *           squeal, the surface under the wheels, the whistle of a seeker
+ *   −7…−12  sparks, ticks, the crowd, the horn's neighbours, a kart going by
+ *   −10…−22 loops: engines (two layers each, steered by revs and distance),
+ *           their rasp, the drift's squeal and its sparks, the road and the
+ *           surface under the wheels, the whistle of a seeker
+ *   −16…−20 the places, played lower still (src/kart/audio/ambience.ts)
  *   −9…−13  the interface, soft and short
  *
- * The music (see src/kart/audio/music) plays at about −23 dBFS RMS under all
- * of it: a bed the effects stand on, a little quieter than they are.
+ * The music (see src/kart/audio/music) plays under all of it: over a race of
+ * bots (tools/listen) about −20.5 LUFS against the effects' −19.8, a bed the
+ * effects stand on, a little quieter than they are.
  */
 import {
   ambBird,
@@ -76,6 +79,7 @@ import {
   land,
   miniTurbo,
   nitroUse,
+  passSwish,
   puckBounce,
   puckFire,
   rouletteTick,
@@ -152,6 +156,8 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_super_turbo: { recipe: superTurbo, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0, minGap: 0.05, expect: [0.6, 1.1] },
   // Flung out of a slipstream.
   kart_slingshot: { recipe: slingshot, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.05, expect: [0.5, 0.95] },
+  // Another kart going by close and fast: a swish of air.
+  kart_pass: { recipe: passSwish, pack: "kart", bus: "sfx", level: -12, priority: 0, maxInstances: 2, vary: 0.04, minGap: 0.2, expect: [0.3, 0.55] },
   // Lifting off at high revs: the exhaust pops (the player's own karts only).
   kart_backfire: { recipe: backfire, pack: "kart", bus: "sfx", level: -11, priority: 1, maxInstances: 2, vary: 0.05, minGap: 0.3, expect: [0.12, 0.6] },
   kart_mini_turbo: { recipe: miniTurbo, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.02, minGap: 0.05, expect: [0.3, 0.8] },

@@ -234,6 +234,9 @@ interface EngineVoice {
   /** Lifting off after pulling: the exhaust may pop (the player's own karts). */
   armed: boolean;
   poppedAt: number;
+  /** Another kart: which side of its listener it was on, ahead (1) or behind (-1), and when it last swished by. */
+  side: number;
+  passedAt: number;
 }
 
 interface Looper {
@@ -653,12 +656,15 @@ class RaceAudioImpl implements RaceAudio {
     orders.sort((a, b) => b.priority - a.priority);
     const count = new Map<string, number>();
     let started = 0;
+    // Four players make four times the happenings: their everyday sounds come down a little (to 0.71 for four), what
+    // must be heard does not.
+    const many = Math.pow(Math.max(1, scene.locals.length), -0.25);
     for (const o of orders) {
       if (started >= MAX_ORDERS && o.priority < 3) continue;
       const n = count.get(o.cue) ?? 0;
       if (n >= MAX_PER_CUE && o.priority < 3) continue;
       count.set(o.cue, n + 1);
-      this.start(o);
+      this.start(o.distance === 0 && o.priority < 3 ? { ...o, volume: o.volume * many } : o);
       started++;
     }
   }
@@ -732,6 +738,8 @@ class RaceAudioImpl implements RaceAudio {
           phase: (w.id * 2.399963) % (2 * Math.PI),
           armed: false,
           poppedAt: -9,
+          side: 0,
+          passedAt: -9,
         };
         this.engines.set(w.id, v);
       } else if (dt > 0) {
@@ -756,6 +764,7 @@ class RaceAudioImpl implements RaceAudio {
       if (!own) {
         const listener = scene.karts.get(w.listener);
         v.doppler = ease(v.doppler, listener ? doppler(k, listener) : 1, dt, 0.08);
+        if (listener) this.passBy(v, k, listener, w.pan);
       }
       // A little unsteadiness, as a real engine never holds a note quite still.
       const t = this.clock;
@@ -788,6 +797,21 @@ class RaceAudioImpl implements RaceAudio {
       const rate = { light: 1.15, middle: 1, heavy: 0.82, electric: 1 }[v.family];
       this.start({ cue: "kart_backfire", volume: 0.7 * trim, pan, distance: 0, rate, delay: 0, priority: 1 });
     }
+  }
+
+  /** A kart going by close and fast swishes past: when it crosses from behind its listener to ahead (or back) within a few metres. */
+  private passBy(v: EngineVoice, k: KartView, listener: KartView, pan: number): void {
+    const dx = k.x - listener.x;
+    const dz = k.z - listener.z;
+    const ahead = dx * Math.sin(listener.heading) + dz * Math.cos(listener.heading);
+    const beside = Math.abs(-dx * Math.cos(listener.heading) + dz * Math.sin(listener.heading));
+    const side = ahead >= 0 ? 1 : -1;
+    const crossed = v.side !== 0 && side !== v.side;
+    v.side = side;
+    const closing = Math.abs(k.speed - listener.speed);
+    if (!crossed || beside > 6 || closing < 3 || Math.abs(listener.speed) < 6 || this.clock - v.passedAt < 1.5) return;
+    v.passedAt = this.clock;
+    this.start({ cue: "kart_pass", volume: Math.min(1, 0.45 + 0.08 * closing) * (1 - beside / 9), pan, distance: beside, rate: Math.min(1.25, 0.9 + 0.025 * closing), delay: 0, priority: 0 });
   }
 
   private silence(v: EngineVoice): void {
