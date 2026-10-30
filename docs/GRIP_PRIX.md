@@ -179,7 +179,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Super Claude Bros. sound. |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | Engines (pitched by speed and how hard they work), the drift's screech, the wind at speed and in the air, boosts, landings (a thud under a long one), items, a place won or lost, countdown — synthesised like every Super Claude Bros. sound. |
 
 ### Coordinates
 
@@ -408,21 +408,46 @@ that file exists (`render/art.ts`).
   gesture, bouncing at the finish, dizzy in a spin-out; the golden kart has a
   gold tub with the player's colour on its stripe, spoiler and hubs; body roll
   and pitch from the motion; a blob shadow. Effects:
-  drift sparks (blue, then orange), boost flames, dust off the road, a spin,
-  a hop, a puff on a bump.
+  drift sparks (blue, then orange, the charge glowing and pulsing at the rear
+  wheels), boost flames (long, flickering, a flash at the pipes as a boost
+  catches), streaks of wind rushing past a watched kart from about 21 m/s and
+  many more on a boost (none for Reduce Motion), dust off the road, a spin, a
+  hop, a puff on a bump. The karts the views follow get the full show; the rest
+  of the pack throws fewer sparks and flames (`Effects.focus`), so a pack
+  drifting round a hairpin does not use up the particles of the karts watched.
 - **Things.** The puck, the seeker (with a red glow and a fin), the slick (a
   glossy dark puddle).
 - **Split screen.** One kart: the whole canvas. Two: top and bottom on a wide
   screen, side by side on a tall one. Three or four: quadrants; with three,
   the fourth shows the map and the standings. One renderer, one scene, a
   scissored viewport and chase camera per view.
-- **Chase camera.** Behind and above, eased; the field of view widens with
-  speed and boost; through the countdown it settles from high over the grid.
+- **Chase camera** (`render/cameras.ts`). Behind and above, eased, following
+  the way the kart goes (a spun kart does not whirl it), and alive: it leans
+  into a bend with the wheel and the drift, and tilts with a banked road as
+  seen along its own heading (`bankSeen`; together at most 9 degrees); it sits
+  lower behind a climb and aims up it, higher on a descent and aims down over a
+  crest (the road's heights behind and ahead from `TrackGeometry`); it aims a
+  little into the bend ahead (the road's turn over the next 14 to 24 m); in a
+  slide it stays between the heading and the way the kart goes and moves out to
+  the side of the slide, so the slide shows; off a jump it rises and pulls back
+  to see the landing, and lands with a sprung dip (a thump). Knocks shake it
+  (bumps and walls by their strength, hits, strikes), landings too, rough ground
+  rumbles it; the field of view widens with speed and boost, with a quick punch
+  as a boost begins; on a boost and flat out the outer part of the view streams
+  outward from where the kart is heading (the rush, in the post chain). Through
+  the countdown it settles from high over the grid. With Reduce Motion it keeps
+  only what frames the road: no lean, tilt, shake, thump, punch or rush. Another
+  kart within 3.4 m of a view's lens (on its kart's tail) is left out of that
+  view, or it would fill the picture.
 - **Each viewport's HUD** (HTML over the canvas, DESIGN.md's glass and type):
-  place large ("1st", "2nd"…) bottom-right, lap ("Lap 2/3") and time
+  place large ("1st", "2nd"…) bottom-right, springing up out of a flash for a
+  place won and sinking in for a place lost (at most every 0.35 s: karts side
+  by side swap places back and forth), lap ("Lap 2/3") and time
   top-left, the item in a glass slot top-centre (turning through the items
   while it rolls), "Final Lap", "Wrong Way", the countdown in the centre, the
-  place on finishing. A minimap (the track's outline, a dot per kart, players
+  place on finishing. The final lap is orange (attention, not alarm): the lap
+  in its panel all the way round, the banner, which pops in, and the view's
+  edges, which glow twice as it begins. A minimap (the track's outline, a dot per kart, players
   ringed) bottom-left when there is one view, in the free quadrant with three.
 - **Fast.** 60 fps with four viewports on a MacBook with tracking running:
   the engine's quality tiers and dynamic resolution, instanced scenery that
