@@ -3,14 +3,18 @@
  * one multisampled half-float target (so a boost pad or a lamp can be
  * brighter than white); then ONE pass over the whole canvas does bloom on
  * what is brighter than white, the tone curve, the theme's colour grade and,
- * for each view tile separately, a vignette.
+ * for each view tile separately, a vignette and the rush: on a boost (and
+ * flat out) the outer part of the view is smeared outward from where the kart
+ * is heading, a few samples along the line from that point, so the world
+ * streams past. The rush costs one uniform test a pixel while it is off, and
+ * is left out on the low tier.
  *
  * Anti-aliasing is MSAA on the target (4x high, 2x medium); the low tier has
  * none on the target and runs SMAA over the finished picture instead.
  *
  * The renderer's own tone mapping stays off: the grade effect is the tone map.
  */
-import { BlendFunction, BloomEffect, Effect, EffectComposer, EffectPass, Pass, SMAAEffect, SMAAPreset } from "postprocessing";
+import { BlendFunction, BloomEffect, Effect, EffectAttribute, EffectComposer, EffectPass, Pass, SMAAEffect, SMAAPreset } from "postprocessing";
 import { Color, HalfFloatType, NoToneMapping, PerspectiveCamera, ShaderChunk, Uniform, Vector4, type WebGLRenderer, type WebGLRenderTarget } from "three";
 import type { GpuTimer } from "./gpuTimer";
 import type { Tier } from "./quality";
@@ -51,11 +55,54 @@ uniform vec4 uTiles[4];
 uniform int uTileCount;
 uniform float uCanvasAspect;
 uniform vec3 uDivider;
+/** Per view tile: the rush's strength 0..1, unused, and the point it streams from (0..1 of the tile from its bottom left). */
+uniform vec4 uRush[4];
+/** Samples along the rush's line: 0 leaves it out (the low tier). */
+uniform int uRushTaps;
 
 float gLuma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  // Which view tile this pixel is in, where in it, and that view's rush.
+  bool inView = uTileCount == 0;
+  vec4 tile = vec4(0.0, 0.0, 1.0, 1.0);
+  vec2 q = uv;
+  vec4 rush = vec4(0.0);
+  for (int i = 0; i < 4; i++) {
+    if (i >= uTileCount) break;
+    vec4 t = uTiles[i];
+    vec2 qi = (uv - t.xy) / t.zw;
+    if (qi.x >= 0.0 && qi.x <= 1.0 && qi.y >= 0.0 && qi.y <= 1.0) {
+      inView = true;
+      tile = t;
+      q = qi;
+      rush = uRush[i];
+    }
+  }
+
   vec3 c = max(inputColor.rgb, vec3(0.0));
+
+  // The rush: the outer part of the view smeared outward along the line from the point the world streams from. Only the
+  // scene's part is smeared (what bloom added stays), and never across into another view.
+  if (uRushTaps > 0 && rush.x > 0.03) {
+    vec2 fromPoint = (q - rush.zw) * vec2(tile.z / tile.w * uCanvasAspect, 1.0);
+    float m = smoothstep(0.3, 0.85, length(fromPoint)) * rush.x;
+    if (m > 0.01) {
+      vec2 d = uv - (tile.xy + rush.zw * tile.zw);
+      vec2 lo = tile.xy + texelSize;
+      vec2 hi = tile.xy + tile.zw - texelSize;
+      vec3 here = max(texture2D(inputBuffer, uv).rgb, vec3(0.0));
+      vec3 sum = here;
+      float n = 1.0;
+      for (int k = 1; k <= 6; k++) {
+        if (k > uRushTaps) break;
+        sum += max(texture2D(inputBuffer, clamp(uv - d * (float(k) * 0.009 * m), lo, hi)).rgb, vec3(0.0));
+        n += 1.0;
+      }
+      c = max(c + sum / n - here, vec3(0.0));
+    }
+  }
+
   if (uTone == 0) c = ACESFilmicToneMapping(c);
   else if (uTone == 1) c = AgXToneMapping(c);
   else c = NeutralToneMapping(c);
@@ -78,17 +125,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 
   // Vignette, per view tile.
   float v = 1.0;
-  bool inView = uTileCount == 0;
-  for (int i = 0; i < 4; i++) {
-    if (i >= uTileCount) break;
-    vec4 t = uTiles[i];
-    vec2 q = (uv - t.xy) / t.zw;
-    if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
-      inView = true;
-      vec2 d = (q - 0.5) * vec2(t.z / t.w * uCanvasAspect, 1.0);
-      float r = length(d) * 1.25;
-      v = 1.0 - uVignette * smoothstep(0.5, 1.15, r);
-    }
+  if (uTileCount > 0 && inView) {
+    vec2 d = (q - 0.5) * vec2(tile.z / tile.w * uCanvasAspect, 1.0);
+    float r = length(d) * 1.25;
+    v = 1.0 - uVignette * smoothstep(0.5, 1.15, r);
   }
   c *= v;
 
@@ -108,10 +148,14 @@ export const DIVIDER = 0x0b0b0d;
 export class GradeEffect extends Effect {
   /** The view tiles: the whole canvas is one view until told otherwise. */
   private readonly tiles: Vector4[] = [new Vector4(0, 0, 1, 1), new Vector4(), new Vector4(), new Vector4()];
+  private readonly rush: Vector4[] = [new Vector4(), new Vector4(), new Vector4(), new Vector4()];
 
-  constructor() {
+  /** `taps`: samples along the rush's line (0 leaves the rush out). */
+  constructor(taps = 6) {
     super("GripGrade", GRADE, {
       blendFunction: BlendFunction.SET,
+      // The rush reads the picture around the pixel, not only under it.
+      attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map<string, Uniform>([
         ["toneMappingExposure", new Uniform(1)],
         ["uTone", new Uniform(0)],
@@ -125,9 +169,17 @@ export class GradeEffect extends Effect {
         ["uTileCount", new Uniform(1)],
         ["uCanvasAspect", new Uniform(1)],
         ["uDivider", new Uniform(new Color(DIVIDER))],
+        ["uRush", new Uniform([new Vector4(), new Vector4(), new Vector4(), new Vector4()])],
+        ["uRushTaps", new Uniform(taps)],
       ]),
     });
     (this.uniforms.get("uTiles") as Uniform).value = this.tiles;
+    (this.uniforms.get("uRush") as Uniform).value = this.rush;
+  }
+
+  /** View `index`'s rush: 0..1, streaming out from (x, y), fractions of the view from its bottom left. */
+  setRush(index: number, strength: number, x: number, y: number): void {
+    this.rush[index]?.set(strength, 0, x, y);
   }
 
   setLook(look: Look): void {
@@ -154,7 +206,7 @@ const samplesFor = (tier: Tier): number => (tier === "high" ? 4 : tier === "medi
 
 export class PostChain {
   readonly composer: EffectComposer;
-  private readonly grade = new GradeEffect();
+  private readonly grade: GradeEffect;
   private readonly bloom: BloomEffect;
   /** The effects need a camera to be built with; none of them looks through it. */
   private readonly camera = new PerspectiveCamera();
@@ -163,6 +215,8 @@ export class PostChain {
 
   constructor(renderer: WebGLRenderer, tier: Tier, draw: DrawViews) {
     renderer.toneMapping = NoToneMapping;
+    // The rush's samples: six on the high tier, four on medium, none on low (where every full-screen read counts).
+    this.grade = new GradeEffect(tier === "high" ? 6 : tier === "medium" ? 4 : 0);
     this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType, multisampling: samplesFor(tier), depthBuffer: true, stencilBuffer: false });
     // Each view's draw ends with three resolving the multisampled target into the texture the passes read, depth and
     // all; nothing after the views reads the depth, so only the colour is resolved (0.7 to 1.4 ms less of the GPU a
@@ -189,6 +243,11 @@ export class PostChain {
 
   setTiles(tiles: readonly { x: number; y: number; w: number; h: number }[], width: number, height: number): void {
     this.grade.setTiles(tiles, width, height);
+  }
+
+  /** View `index`'s rush (the camera's `rush` and `focus`): 0 is none. */
+  setRush(index: number, strength: number, x: number, y: number): void {
+    this.grade.setRush(index, strength, x, y);
   }
 
   /** `width` x `height` are CSS pixels; the renderer's pixel ratio is already set. */

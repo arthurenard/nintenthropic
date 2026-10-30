@@ -86,8 +86,12 @@ export interface KartState {
   drift: -1 | 0 | 1;
   /** Charge, in ticks of a middling turn. */
   charge: number;
-  level: 0 | 1 | 2;
+  level: 0 | 1 | 2 | 3;
   prevDrift: boolean;
+  /** Ticks the wheel has been held hard against the drift. */
+  counter: number;
+  /** Ticks in the wake of another kart (the slipstream's charge); below zero, the rest after its boost, counting up. */
+  draft: number;
 
   // Boost, spin, flood, reverse. All in ticks.
   boost: number;
@@ -118,14 +122,23 @@ export interface KartState {
   /** What it is driving on (worked out from where it is, so not kept in a snapshot). */
   ground: Ground;
 
-  // In the air off a ramp (the hop above is the small one) and falling off the edge.
-  /** Metres above the road, and the upward speed. */
+  // In the air off a ramp or a crest (the hop above is the small one) and falling off the edge.
+  /** Metres above the road, and the upward speed (in the world: the road's own rise is in it). 0 on the ground. */
   air: number;
   vy: number;
-  /** 0 on the ground, 1 in a jump, 2 in a jump where a trick is allowed. */
+  /**
+   * 0 on the ground (a kart just off a crest, not yet high enough to be a jump, is 0 with `aloft` counting), 1 in a
+   * jump (or dropping off a ramp's lip too slow to fly), 2 in a jump where a trick is allowed.
+   */
   flight: 0 | 1 | 2;
   /** Ticks since a trick began in the air, or 0. */
   trick: number;
+  /** Ticks since the kart left the ground (up to 255), 0 on it. */
+  aloft: number;
+  /** The shake count (DriveInput.shakes) the kart has acted on. */
+  shakes: number;
+  /** On the ground: ticks left in which a shake just made kicks a jump off a lip. In the air: -1 once a shake has kicked this jump. */
+  prime: number;
   /** Ticks left of a rescue (0: none). */
   rescue: number;
   /** Ticks left in which hazards and items pass through the kart. */

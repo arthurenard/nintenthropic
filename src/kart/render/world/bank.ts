@@ -1,8 +1,11 @@
 /**
- * Banked bends, for the picture only: the road leans into its bends the way
- * a velodrome does. The track says how much (`bank`, radians per 1/m of
- * curvature); this works out the lean at every sample and how much higher or
- * lower than the centre line any point across the road sits.
+ * Banked bends and twisting road, for the picture only: the road leans the
+ * way its points say (`TrackPoint.bank`, eased from point to point, so a
+ * hairpin can be banked like a velodrome and an S tilt one way then the
+ * other), plus, on a track that asks (`TrackDef.bank`, radians per 1/m of
+ * curvature), into every bend by how hard it turns. This works out the lean
+ * at every sample and how much higher or lower than the centre line any
+ * point across the road sits.
  *
  * The sim knows nothing of it: its karts drive on the flat centre line's
  * height. So every picture that puts something on the road (the road itself,
@@ -14,8 +17,10 @@
  */
 import type { TrackGeometry } from "../../track/geometry";
 
-/** The steepest lean, radians (about 18 degrees): beyond it a bend would look like a wall. */
-export const MAX_ROLL = 0.32;
+/** The steepest lean, radians (about 20 degrees): beyond it a bend would look like a wall. */
+export const MAX_ROLL = 0.35;
+
+const built = new WeakMap<TrackGeometry, Bank>();
 
 export class Bank {
   /** Roll at each of the track's samples. */
@@ -30,16 +35,26 @@ export class Bank {
     this.roll = new Float32Array(n);
     this.halfWidths = Float32Array.from(track.samples, (s) => s.width / 2);
     const bank = track.def.bank ?? 0;
-    this.any = bank !== 0;
+    this.any = bank !== 0 || track.samples.some((s) => s.bank !== 0);
     if (!this.any) return;
     // Curvature from sample differences is a little jittery; a moving average over about 9 m calms it.
     const reach = Math.max(1, Math.round(4 / track.spacing));
     for (let i = 0; i < n; i++) {
       let sum = 0;
-      for (let k = -reach; k <= reach; k++) sum += track.samples[(i + k + n) % n]!.curvature;
-      const roll = (sum / (reach * 2 + 1)) * bank;
+      if (bank !== 0) for (let k = -reach; k <= reach; k++) sum += track.samples[(i + k + n) % n]!.curvature;
+      const roll = track.samples[i]!.bank + (sum / (reach * 2 + 1)) * bank;
       this.roll[i] = Math.max(-MAX_ROLL, Math.min(MAX_ROLL, roll));
     }
+  }
+
+  /** The same banking for the same track, built once (the ground, the road and the world all ask for it). */
+  static of(track: TrackGeometry): Bank {
+    let bank = built.get(track);
+    if (!bank) {
+      bank = new Bank(track);
+      built.set(track, bank);
+    }
+    return bank;
   }
 
   /** The lean at distance `s` along the lap, radians. */

@@ -64,6 +64,10 @@
 .gp-lap-count.gp-pop {
   animation: gp-pop 260ms var(--gp-spring);
 }
+/* The last lap: orange (attention, not alarm) all the way round. */
+.gp-lap-count.gp-final {
+  color: #ff9f0a;
+}
 .gp-lap-time {
   font-size: calc(22px * var(--u));
   font-weight: 600;
@@ -272,6 +276,32 @@
 }
 .gp-place.gp-pop {
   animation: gp-pop 260ms var(--gp-spring);
+}
+/* A place won springs up out of a flash; a place lost sinks in. */
+.gp-place.gp-gain {
+  transform-origin: 70% 85%;
+  animation: gp-gain 460ms var(--gp-spring);
+}
+.gp-place.gp-lose {
+  transform-origin: 70% 85%;
+  animation: gp-lose 420ms var(--gp-ease);
+}
+
+/* The final lap's first moment: the view's edges glow orange, twice, and fade. */
+.gp-final-glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  box-shadow: inset 0 0 calc(130px * var(--u)) calc(12px * var(--u)) rgba(255, 159, 10, 0.62);
+}
+.gp-final-glow.gp-on {
+  animation: gp-final-glow 1700ms ease-out;
+}
+.gp-banner.gp-final-lap {
+  color: #ff9f0a;
+}
+.gp-banner.gp-final-lap.gp-on {
+  animation: gp-final-in 560ms var(--gp-spring);
 }
 
 /* Banners: Final Lap, Wrong Way. */
@@ -503,6 +533,54 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+@keyframes gp-gain {
+  0% {
+    transform: translateY(calc(14px * var(--u))) scale(1.5);
+    filter: brightness(1.8);
+  }
+  60% {
+    filter: brightness(1.15);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes gp-lose {
+  0% {
+    transform: translateY(calc(-10px * var(--u))) scale(0.78);
+    opacity: 0.55;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes gp-final-glow {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  32% {
+    opacity: 0.3;
+  }
+  48% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes gp-final-in {
+  0% {
+    transform: translate(-50%, 0) scale(1.4);
+  }
+  100% {
+    transform: translate(-50%, 0) scale(1);
   }
 }
 @keyframes gp-take {

@@ -4,7 +4,9 @@
  * instead of floating over a flat plane.
  *
  * Close to the road the ground follows the nearest stretch of road exactly
- * (a little below it, so the verge strip lies on top without a crack). Farther
+ * (a little below it, so the verge strip lies on top without a crack), leaning
+ * with the road where it is banked: level with the edge beside it, the high
+ * side's verge on an embankment and the low side's in a cutting. Farther
  * out it relaxes to the theme's landscape: rolling hills in the meadow, stepped
  * canyon walls, a quay that ends in water at the harbour; a flat marble
  * counter, snowfields under mountains, black basalt among rivers of lava, a
@@ -20,6 +22,7 @@
 import { BufferGeometry, Float32BufferAttribute, Uint32BufferAttribute } from "three";
 import type { TrackGeometry } from "../../track/geometry";
 import { clamp, fbm2, lerp, noise2, smoothstep } from "../math";
+import { Bank } from "./bank";
 import { mixRgb, rgb, scaleRgb, type Rgb } from "./builder";
 import { analyseFeatures, DROP_DEPTH, DROP_REACH, WALL_DISTANCE, type Features } from "./features";
 import type { ThemeStyle } from "./themes";
@@ -39,6 +42,8 @@ export interface GroundInfo {
   edge: number;
   /** The road's own height at the nearest sample. */
   roadY: number;
+  /** How much higher than the centre line the road is across from here (its banking; beyond the edge, the edge's). */
+  lift: number;
   /** The smoothed height of the roads around, for hills that follow them. */
   level: number;
   /** s of the nearest sample. */
@@ -76,6 +81,8 @@ export class Terrain {
   readonly features: Features;
   /** The world's floor under an open edge, relative to the road (negative). */
   readonly dropDepth: number;
+  /** The road's banking, which the ground beside it follows. */
+  readonly bank: Bank;
   private anyLava = false;
 
   private constructor(
@@ -95,6 +102,7 @@ export class Terrain {
     this.cell = cell;
     this.features = features;
     this.dropDepth = -DROP_DEPTH[style.id];
+    this.bank = Bank.of(track);
     this.heights = new Float32Array(nx * nz);
     this.edges = new Float32Array(nx * nz);
     this.walls = new Float32Array(nx * nz).fill(WALL_DISTANCE);
@@ -165,7 +173,8 @@ export class Terrain {
     const near = samples[bi]!;
     const d = Math.sqrt(best);
     const lateral = (x - near.x) * -near.tz + (z - near.z) * near.tx;
-    return { d, edge: d - near.width / 2, roadY: near.y, level: sumW > 1e-6 ? sumWY / sumW : near.y, s: near.s, i: bi, lateral };
+    const lift = this.bank.liftAt(bi, lateral);
+    return { d, edge: d - near.width / 2, roadY: near.y, lift, level: sumW > 1e-6 ? sumWY / sumW : near.y, s: near.s, i: bi, lateral };
   }
 
   private fill(): void {
@@ -225,7 +234,7 @@ export class Terrain {
   }
 
   private heightOf(x: number, z: number, g: GroundInfo, rim: number, idx: number): number {
-    const near = g.roadY - GROUND_SINK;
+    const near = g.roadY + g.lift - GROUND_SINK;
     const e = g.edge;
     const follow = 1 - smoothstep(14, 80, e);
     let far: number;

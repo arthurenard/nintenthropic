@@ -20,6 +20,7 @@ describe("mirrorTrack", () => {
         expect(mirror.points[i]!.z).toBe(point.z);
         expect(mirror.points[i]!.y).toBe(point.y);
         expect(mirror.points[i]!.width).toBe(point.width);
+        expect(mirror.points[i]!.bank).toBe(point.bank === undefined ? undefined : negated(point.bank));
       });
       expect(mirror.boostPads?.map((p) => p.offset)).toEqual(def.boostPads?.map((p) => negated(p.offset)));
       expect(mirror.boostPads?.map((p) => p.at)).toEqual(def.boostPads?.map((p) => p.at));
@@ -51,6 +52,8 @@ describe("mirrorTrack", () => {
         expect(q.x).toBeCloseTo(-p.x, 3);
         expect(q.z).toBeCloseTo(p.z, 3);
         expect(q.curvature).toBeCloseTo(-p.curvature, 4);
+        expect(q.y).toBeCloseTo(p.y, 6);
+        expect(q.bank).toBeCloseTo(-p.bank, 6);
         // A place right of the road is left of its mirror, on the other side of the world.
         const pr = a.point(s, 4);
         const qr = b.point(s, -4);

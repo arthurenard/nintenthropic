@@ -12,6 +12,14 @@ import { ITEM_KINDS, ITEM_USES } from "./state";
 import { barrierDistance, isOpen } from "./terrain";
 import { TUNING } from "./tuning";
 
+/**
+ * A track with its heights taken out (its own id, so the plan cache keeps it apart): the flat road the driving and
+ * item tests were written on, now that Harbour Lights' start straight crosses a humpback bridge a kart flies off.
+ */
+export function level(def: TrackDef): TrackDef {
+  return { ...def, id: `${def.id}-level`, points: def.points.map(({ y: _y, ...p }) => p) };
+}
+
 /** A wide round arena, so a kart can drift in circles without ever leaving the road. */
 export const ARENA: TrackDef = {
   id: "arena",

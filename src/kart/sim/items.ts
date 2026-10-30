@@ -406,7 +406,7 @@ export function stepItems(w: World, emit: Emit): void {
     }
     const site = sites[b]!;
     for (const k of karts) {
-      if (k.rescue > 0) continue;
+      if (k.rescue > 0 || k.air > I.boxClear) continue;
       const dx = k.x - site.x;
       const dz = k.z - site.z;
       if (dx * dx + dz * dz >= reach2) continue;

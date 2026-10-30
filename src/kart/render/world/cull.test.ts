@@ -127,6 +127,52 @@ describe("culling a scatter of instances for a view", () => {
     expect(new Set(drawn(mesh)).size).toBe(spots.length);
   });
 
+  it("leaves on the GPU exactly what each view draws, frame after frame, as three uploads it", () => {
+    // What the GPU holds of a mesh's matrices, kept the way three's WebGLAttributes keeps it: the whole array when first
+    // drawn, then, whenever the version has moved, the update ranges (or the whole array when there are none). Only a
+    // mesh that is drawn (visible) is uploaded.
+    const gpu = new Map<InstancedMesh, { data: Float32Array; version: number }>();
+    const draw = (mesh: InstancedMesh) => {
+      if (!mesh.visible) return;
+      const attr = mesh.instanceMatrix;
+      const array = attr.array as Float32Array;
+      let held = gpu.get(mesh);
+      if (!held) gpu.set(mesh, (held = { data: array.slice(), version: attr.version }));
+      else if (held.version !== attr.version) {
+        if (attr.updateRanges.length === 0) held.data.set(array);
+        for (const r of attr.updateRanges) held.data.set(array.subarray(r.start, r.start + r.count), r.start);
+        attr.clearUpdateRanges();
+        held.version = attr.version;
+      }
+      // What the draw reads, the first `count` instances, is what the mesh holds.
+      let stale = 0;
+      for (let k = 0; k < mesh.count * 16; k++) if (held.data[k] !== array[k]) stale++;
+      expect(stale).toBe(0);
+    };
+    const { group, mesh, spots } = field();
+    const placed = new Set(spots.map((s) => `${s.x.toFixed(2)},${s.z.toFixed(2)}`));
+    const cull = new CulledInstances(mesh);
+    const meshes = () => group.children.filter((o): o is InstancedMesh => (o as InstancedMesh).isInstancedMesh);
+    // Two views driving round, now and then a frame drawn whole (a camera that is not a view), and a view that sees nothing.
+    for (let frame = 0; frame < 60; frame++) {
+      const a = (frame / 60) * Math.PI * 2;
+      for (const view of [0, 1]) {
+        const r = view ? 120 : 220;
+        const eye: [number, number, number] = [Math.cos(a + view) * r, 6, Math.sin(a + view) * r];
+        const ahead: [number, number, number] = [Math.cos(a + view + 0.3) * r, 2, Math.sin(a + view + 0.3) * r];
+        cull.select(view, frame % 19 === 5 ? frustumOf([0, 6, -900], [0, 6, -1500]) : frustumOf(eye, ahead));
+        for (const m of meshes()) {
+          draw(m);
+          if (m.visible) expect(drawn(m).filter((p) => !placed.has(p))).toEqual([]);
+        }
+      }
+      if (frame % 17 === 11) {
+        cull.all();
+        for (const m of meshes()) draw(m);
+      }
+    }
+  }, 60_000);
+
   it("leaves a mesh that is not at the origin whole", () => {
     const { group, mesh, spots } = field(500);
     group.position.set(1000, 0, 0);

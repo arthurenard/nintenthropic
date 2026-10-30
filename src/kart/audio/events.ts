@@ -29,6 +29,9 @@ export interface Order {
   duck?: { depth: number; hold: number };
 }
 
+/** A landing at least this hard (the sim's `land` strength, 0..1) thuds under its sound. */
+export const THUD_FROM = 0.25;
+
 /** How far a kind of sound carries from another kart, metres. */
 const RADIUS = { big: 45, medium: 32, small: 20 } as const;
 
@@ -133,7 +136,10 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       const own = !!localOf(scene, event.kart);
       switch (event.source) {
         case "drift":
-          return keep(order("kart_mini_turbo", who, own, { radius: RADIUS.medium, rate: event.level >= 2 ? 1.12 : 1, volume: event.level >= 2 ? 1 : 0.8 }));
+          return keep(order("kart_mini_turbo", who, own, { radius: RADIUS.medium, rate: event.level >= 3 ? 1.22 : event.level >= 2 ? 1.12 : 1, volume: event.level >= 2 ? 1 : 0.8 }));
+        // Flung out of another kart's slipstream: the nitro's rush of air, a little higher and lighter.
+        case "draft":
+          return keep(order("kart_boost_whoosh", who, own, { radius: RADIUS.medium, rate: 1.1, volume: 0.8 }));
         case "nitro":
           return keep(order("kart_boost_whoosh", who, own, { radius: RADIUS.medium }));
         case "pad":
@@ -147,7 +153,8 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     case "drift-level": {
       const who = hearKart(scene, event.kart);
       if (!who) return [];
-      return keep(order(event.level === 2 ? "kart_spark_orange" : "kart_spark_blue", who, !!localOf(scene, event.kart), { radius: RADIUS.small, volume: 1 }));
+      // Blue, orange, and the hottest: the orange spark's crackle a major third higher.
+      return keep(order(event.level >= 2 ? "kart_spark_orange" : "kart_spark_blue", who, !!localOf(scene, event.kart), { radius: RADIUS.small, volume: 1, rate: event.level >= 3 ? 1.26 : 1 }));
     }
 
     case "bump": {
@@ -203,16 +210,25 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     }
 
     case "trick": {
-      const who = hearKart(scene, event.kart);
-      return who ? keep(order("kart_trick", who, !!localOf(scene, event.kart), { radius: RADIUS.small })) : [];
-    }
-
-    case "land": {
+      // A kick at the lip (the wheel shaken) throws the kart higher: its spiral a little higher, with a gust under it.
       const who = hearKart(scene, event.kart);
       if (!who) return [];
       const own = !!localOf(scene, event.kart);
       return keep(
+        order("kart_trick", who, own, { radius: RADIUS.small, rate: event.kick ? 1.1 : 1 }),
+        event.kick ? order("kart_boost_whoosh", who, own, { radius: RADIUS.small, volume: 0.45, rate: 1.2 }) : null,
+      );
+    }
+
+    case "land": {
+      // Down again; a hard landing (the sim's strength, 1 at about 10 m/s) thuds under it, deeper and louder the harder.
+      const who = hearKart(scene, event.kart);
+      if (!who) return [];
+      const own = !!localOf(scene, event.kart);
+      const hard = event.strength ?? 0;
+      return keep(
         order("kart_land", who, own, { radius: RADIUS.small }),
+        hard >= THUD_FROM ? order("kart_thud", who, own, { radius: RADIUS.small, volume: 0.4 + 0.6 * hard, rate: 1.06 - 0.12 * hard }) : null,
         event.boost ? order("kart_boost_whoosh", who, own, { radius: RADIUS.small, volume: 0.55, delay: 0.04 }) : null,
       );
     }

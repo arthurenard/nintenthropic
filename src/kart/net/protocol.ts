@@ -23,7 +23,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
@@ -47,14 +47,14 @@ export interface WirePlayer {
  * hundredths, so both ends (the guest predicting, the host driving) use exactly
  * the same values.
  *
- *   [seq, steer, throttle, brake, drift, itemPresses, horn, emote]
+ *   [seq, steer, throttle, brake, drift, itemPresses, horn, emote, shakes]
  *
  * `horn` is the count of honks, ever (like itemPresses); `emote` is 0 none,
- * 1 cheer, 2 wave. The last two are sent only when there is something to
- * say, and read as none when absent, so the packets that go sixty times a
- * second stay as short as they can.
+ * 1 cheer, 2 wave; `shakes` the count of shakes, ever. The last three are sent
+ * only when there is something to say, and read as none when absent, so the
+ * packets that go sixty times a second stay as short as they can.
  */
-export type WireInput = [number, number, number, number, 0 | 1, number, number?, number?];
+export type WireInput = [number, number, number, number, 0 | 1, number, number?, number?, number?];
 
 const EMOTES = [null, "cheer", "wave"] as const;
 
@@ -127,6 +127,7 @@ export function decode(data: string): Message | null {
 export function encodeInput(seq: number, input: DriveInput): WireInput {
   const horn = Math.max(0, Math.floor(input.horn ?? 0));
   const emote = Math.max(0, EMOTES.indexOf(input.emote ?? null));
+  const shakes = Math.max(0, Math.floor(input.shakes ?? 0));
   const wire: WireInput = [
     seq,
     Math.round(clamp(input.steer, -1, 1) * 100),
@@ -135,7 +136,8 @@ export function encodeInput(seq: number, input: DriveInput): WireInput {
     input.drift ? 1 : 0,
     Math.max(0, Math.floor(input.itemPresses)),
   ];
-  if (horn > 0 || emote > 0) wire.push(horn, emote);
+  if (horn > 0 || emote > 0 || shakes > 0) wire.push(horn, emote);
+  if (shakes > 0) wire.push(shakes);
   return wire;
 }
 
@@ -153,6 +155,8 @@ export function decodeInput(wire: readonly (number | undefined)[]): DriveInput {
   if (horn > 0) input.horn = horn;
   const emote = EMOTES[Math.floor(num(wire[7]))];
   if (emote) input.emote = emote;
+  const shakes = Math.max(0, Math.floor(num(wire[8])));
+  if (shakes > 0) input.shakes = shakes;
   return input;
 }
 

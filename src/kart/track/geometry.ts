@@ -114,6 +114,13 @@ export interface TrackPoint {
   y?: number;
   /** The road's width here, metres (the track's `width` if unset). */
   width?: number;
+  /**
+   * How far the road leans here, radians: + tips its right-hand side down (the way a right-hander is banked), - its
+   * left (0 if unset). It eases from point to point, so a run of points leaning one way then the other is a twisting
+   * road; a lean against the bend is an off-camber corner. The picture draws it (render/world/bank.ts); mirror mode
+   * negates it.
+   */
+  bank?: number;
 }
 
 export interface TrackDef {
@@ -159,7 +166,10 @@ export interface TrackDef {
   landmarks?: Landmark[];
   /** Where the rubber duck hides (every Super Claude Bros. game has one). */
   duck?: { at: number; offset: number; y?: number };
-  /** How far the road leans into its bends, for the picture: radians per 1/m of curvature (0 = flat). */
+  /**
+   * How far the road leans into its bends everywhere, for the picture: radians per 1/m of curvature (0 = flat). Added to
+   * each point's own `bank`.
+   */
   bank?: number;
   /** Hidden until it is unlocked. */
   secret?: boolean;
@@ -181,6 +191,8 @@ export interface TrackSample {
   tx: number;
   tz: number;
   width: number;
+  /** The points' own lean here, radians (+ the right side low): see TrackPoint.bank. The track's `bank` comes on top. */
+  bank: number;
   /** Signed curvature, 1/m: + bends right, - left. */
   curvature: number;
 }
@@ -193,7 +205,7 @@ export interface Projection {
 }
 
 /** A closed centripetal Catmull-Rom curve through `points`, evaluated at `t` in [0, 1) of segment `i`. */
-function catmull(points: readonly TrackPoint[], fallbackWidth: number, i: number, t: number): { x: number; y: number; z: number; width: number } {
+function catmull(points: readonly TrackPoint[], fallbackWidth: number, i: number, t: number): { x: number; y: number; z: number; width: number; bank: number } {
   const n = points.length;
   const p = (k: number) => points[((k % n) + n) % n]!;
   const [p0, p1, p2, p3] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
@@ -212,12 +224,15 @@ function catmull(points: readonly TrackPoint[], fallbackWidth: number, i: number
     return ((t2 - u) / (t2 - t1)) * b1 + ((u - t1) / (t2 - t1)) * b2;
   };
   const w = (q: TrackPoint) => q.width ?? fallbackWidth;
+  const ease = t * t * (3 - 2 * t);
   return {
     x: value(p0.x, p1.x, p2.x, p3.x),
     y: value(p0.y ?? 0, p1.y ?? 0, p2.y ?? 0, p3.y ?? 0),
     z: value(p0.z, p1.z, p2.z, p3.z),
-    // Width eases from point to point along a smoothstep, not the curve, which could overshoot and pinch the road to a sliver.
-    width: w(p1) + (w(p2) - w(p1)) * (t * t * (3 - 2 * t)),
+    // Width and lean ease from point to point along a smoothstep, not the curve, which could overshoot and pinch the road
+    // to a sliver (or tip it past the lean either point asks for).
+    width: w(p1) + (w(p2) - w(p1)) * ease,
+    bank: (p1.bank ?? 0) + ((p2.bank ?? 0) - (p1.bank ?? 0)) * ease,
   };
 }
 
@@ -242,7 +257,7 @@ export class TrackGeometry {
     const n = def.points.length;
     if (n < 4) throw new Error(`${def.id}: a track needs at least four points`);
     // A fine polyline first, to measure arc length.
-    const fine: { x: number; y: number; z: number; width: number; s: number }[] = [];
+    const fine: { x: number; y: number; z: number; width: number; bank: number; s: number }[] = [];
     const steps = 48;
     let s = 0;
     for (let i = 0; i < n; i++) {
@@ -275,6 +290,7 @@ export class TrackGeometry {
         y: a.y + (b.y - a.y) * f,
         z: a.z + (b.z - a.z) * f,
         width: a.width + (b.width - a.width) * f,
+        bank: a.bank + (b.bank - a.bank) * f,
         tx: 0,
         tz: 1,
         curvature: 0,
@@ -333,6 +349,7 @@ export class TrackGeometry {
       tx: tx / t,
       tz: tz / t,
       width: a.width + (b.width - a.width) * f,
+      bank: a.bank + (b.bank - a.bank) * f,
       curvature: a.curvature + (b.curvature - a.curvature) * f,
     };
   }

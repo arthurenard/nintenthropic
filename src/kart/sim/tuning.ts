@@ -39,10 +39,25 @@ export const TUNING = {
     reverseDelay: 0.3,
     reverseTop: 7,
     reverseTau: 0.6,
-    /** Nothing goes faster than this, whatever bumps and slides do: a boosted top speed and a little over. */
+    /** Nothing goes faster than this, whatever bumps, slides and hills do: a boosted top speed and a little over. */
     maxSpeed: 36,
     /** A spinning kart sheds speed with this rate constant (1/s). */
     spinDrag: 2.5,
+  },
+
+  /**
+   * Hills. Along the road's grade (rise per metre the way the kart goes) gravity
+   * pulls at `pull` m/s^2 per unit of grade: a kart slows climbing and gathers
+   * speed coming down. Downhill the top speed rises by `downTop` per unit of
+   * grade, and the steepest of the descent over the last `carry` metres counts,
+   * so the speed a kart gathered is carried out of the dip rather than braked
+   * off at its foot. The grade is read over `span` metres either side.
+   */
+  slope: {
+    pull: 9,
+    downTop: 1.1,
+    carry: 22,
+    span: 2,
   },
 
   steer: {
@@ -55,7 +70,15 @@ export const TUNING = {
     /** The steer eases toward the wheel with this rate (1/s), so the front wheels do not snap. */
     response: 18,
     /** Of the sideways speed the ground's grip removes, this share comes out as forward speed; the rest is scrubbed. */
-    slideKept: 0.85,
+    slideKept: 0.88,
+    /**
+     * A nose turned further than this from the way the kart is going (radians:
+     * the end of a power-slide, a shove) swings back toward it at `align` (1/s,
+     * on the road; less on slippery ground), as the grip pulls the travel round to
+     * meet it. Ordinary steering never slides this far.
+     */
+    slipFree: 0.26,
+    align: 7,
   },
 
   hop: {
@@ -97,25 +120,47 @@ export const TUNING = {
 
   ramp: {
     /**
-     * Upward speed at the lip at top speed, m/s, unless the ramp says: about
-     * 1.1 s in the air. (The picture draws a ramp as a wedge 16 m long and 2.4 m
-     * high ending at the lip and has the kart climb it; the sim's height, the
-     * `hop`, is 0 on it and at the lip, and the jump rises from there.)
+     * A ramp's `lift` (TrackDef: 7 unless it says) sets how big it is: a wedge
+     * `length` metres long rising to `height` x lift / 7 at the lip (the picture
+     * draws the same wedge: render/world/features.ts), and the jump. The kart
+     * climbs the wedge as part of the road and leaves the lip from its top,
+     * rising at lift x `launch` m/s at top speed: about 1.2 s in the air, the
+     * top of the arc some 3.5 m over the road.
      */
     lift: 7,
+    length: 16,
+    height: 2.4,
+    launch: 0.72,
     gravity: 12.5,
     /** The lift scales with speed over top speed, between these. */
     minShare: 0.4,
     maxShare: 1.3,
-    /** Slower than this the ramp is only a bump. */
+    /** Slower than this the kart only rolls off the lip and drops. */
     minSpeed: 9,
-    /** In the air the wheel turns the kart this share of what it does on the road, and the velocity follows the heading at this rate (1/s). */
-    airYaw: 0.3,
-    airGrip: 0.8,
+    /** In the air the wheel turns the way the kart flies this fast (rad/s at full lock), and its nose swings round to it at `airAlign` (1/s). */
+    airTurn: 0.55,
+    airAlign: 4,
     /** A kart this much higher than another passes over it. */
     passOver: 1.1,
-    /** A trick in the air boosts on landing for this long. */
+    /** A trick in the air boosts on landing for this long; a trick with a shake right at the lip for `kickBoost`. */
     trickBoost: 0.8,
+    kickBoost: 1.1,
+    /**
+     * Shaking the wheel this long before the lip, or this long after it, kicks the
+     * jump: `kickLift` more upward speed (m/s) and `kickSpeed` more speed.
+     */
+    kickBefore: 0.3,
+    kickAfter: 0.2,
+    kickLift: 1.8,
+    kickSpeed: 1.06,
+    /**
+     * Over a crest the road falls away: where its curvature times the speed
+     * squared outdoes the pull of gravity by `crest`, the kart leaves the road and
+     * flies. A flight that never rises `quiet` metres off the road is not a jump
+     * (no sound, no trick).
+     */
+    crest: 1.08,
+    quiet: 0.3,
   },
 
   /** Falling off an open edge, and the drone that fetches the kart. */
@@ -139,22 +184,64 @@ export const TUNING = {
     clearHeight: 0.8,
   },
 
+  /**
+   * A drift is a power-slide: the kart goes round the way it is travelling,
+   * its tail out and its nose `slip` radians inside that, the wheel holding it.
+   * Into the drift (own way: 1) it comes round tighter and the tail swings
+   * further; against it (other way: -1) it runs wider with the tail tucked in.
+   */
   drift: {
-    /** In a drift the steer is remapped to base + range * (own way: 1, other way: -1): 0.4..1.4 of a full turn. */
+    /** The way it goes turns at base + range * own of a full turn: 0.4..1.4. */
     steerBase: 0.9,
     steerRange: 0.5,
+    /** The nose is slip + slipRange * own inside the way it goes: 15°..33°. */
+    slip: 0.42,
+    slipRange: 0.16,
+    /** The tail swings out to it at this rate (1/s): most of the way within the hop. */
+    swing: 9,
+    /** Of the top speed, a drift keeps this much. */
+    keep: 0.97,
     /** Charge grows at 1.0 per tick at a middling turn, 0.7 at the loosest and 1.3 at the tightest. */
     rateLoose: 0.7,
     rateTight: 1.3,
-    /** Charge needed, in seconds of a middling turn. */
+    /** Charge needed, in seconds of a middling turn: blue, orange, and the hottest. */
     level1: 1.0,
-    level2: 2.2,
+    level2: 2.1,
+    level3: 3.4,
     boost1: 0.7,
-    boost2: 1.4,
+    boost2: 1.3,
+    boost3: 1.9,
     /** Slower than this the drift is over (no boost). */
     minSpeed: 4,
     /** A brake this hard ends a drift (the boost is still earned). */
     endBrake: 0.5,
+    /**
+     * The wheel held this hard against the drift (own at or below minus this)
+     * for `againstTime` seconds straightens the kart out of it (the boost is
+     * still earned): the way out of a slide toward the other side of the road.
+     */
+    against: 0.8,
+    againstTime: 0.25,
+  },
+
+  /**
+   * Slipstream: right behind another kart (within `reach` metres behind it and
+   * `side` metres either side of its line, both faster than `minSpeed` and going
+   * the same way within `angle`), a kart pushes less air: its top speed is
+   * `top` higher, and after `charge` seconds there it is flung out with a boost
+   * of `boost` seconds; then `rest` seconds before a wake charges it again. Out of
+   * the wake the charge drains twice as fast.
+   */
+  draft: {
+    reach: 14,
+    near: 2,
+    side: 1.8,
+    minSpeed: 14,
+    angle: 0.5,
+    top: 1.03,
+    charge: 1.5,
+    boost: 0.7,
+    rest: 2.5,
   },
 
   boost: {
@@ -189,7 +276,11 @@ export const TUNING = {
 
   bump: {
     /** How lively a bump is: at 0 the karts would move on together, at 1 they would part as fast as they met. */
-    restitution: 0.35,
+    restitution: 0.6,
+    /** A shove off the middle turns the kart: radians per m/s of sideways shove per metre off its middle. */
+    yaw: 0.035,
+    /** ...but never more than this. */
+    maxYaw: 0.2,
     /** A kart weighs 1 + speed / this much in a bump. */
     weightPerSpeed: 12,
     /** Closing speed that makes a bump of strength 1. */
@@ -228,6 +319,8 @@ export const TUNING = {
      * Any less and a kart could drive a wheel through the glass and nothing would happen.
      */
     pickupRadius: 2.3,
+    /** A kart higher in the air than this flies over a box. */
+    boxClear: 2.4,
     respawn: 3,
     roulette: 1.0,
     puck: { speed: 40, life: 6, hitRadius: 1.4, ownerGrace: 0.5, spawnAhead: 2.5 },
@@ -298,8 +391,8 @@ export const TUNING = {
     /** Of the room between the road's middle and its edge (less a margin), a bot cuts this much at most. */
     cutShare: 0.7,
     edgeMargin: 2.8,
-    /** A bot's own lane, as a share of the road's half-width, at most. */
-    laneShare: 0.3,
+    /** A bot's own lane, as a share of the road's half-width, at most (times its temperament's `laneWidth`): a place of its own on the grid that wanders across the road over `laneWander` metres. */
+    laneShare: 0.4,
     /** Looks this far ahead: base + per m/s of speed, between the limits. */
     lookBase: 5,
     lookPerSpeed: 0.6,
@@ -345,17 +438,29 @@ export const TUNING = {
     cutNitroBefore: 6,
     /** A bot tricks off a ramp when an id-and-lap lottery falls under its skill times (1 - this), plus this for a bot sharper than 0.45. */
     trickBase: 0.2,
+    /** A bot this sharp or sharper may shake the wheel at a lip to kick the jump (its temperament's `kick` times its skill is the chance). */
+    kickSkill: 0.5,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.4,
     /** and starts steering clear of one this far (metres) before the point it is aiming at. */
     slickNotice: 30,
     /** A bot reads its speed plan this many seconds ahead of itself. */
     planAhead: 0.2,
-    /** Rubber band: a bot more than `start` metres from the best player eases off up to `easeOff`, or pushes up to `push`, by `span` metres. */
-    rubberStart: 60,
-    rubberSpan: 140,
-    easeOff: 0.06,
-    push: 0.05,
+    /**
+     * Rubber band: a bot more than `start` metres from the best player eases
+     * off up to `easeOff` (less by `easeSkill` of it for a sharp bot, so the
+     * quick ones stay worth beating), or pushes up to `push`, by `span`
+     * metres; never past the road's top speed. Well behind it also corners as
+     * if up to `press` more skilful.
+     */
+    rubberStart: 5,
+    rubberSpan: 90,
+    easeOff: 0.1,
+    easeSkill: 0.5,
+    push: 0.06,
+    press: 0.5,
+    /** With no person racing, the band holds the bots to the middle of the field this hard (a share of the above). */
+    fieldShare: 0.5,
     /** Stuck: slower than this for this long and a bot backs up for a while. */
     stuckSpeed: 1.5,
     stuckTime: 1.0,
@@ -373,7 +478,103 @@ export const TUNING = {
     itemWaitFast: 0.7,
     /** A bot holds any item that would spin someone (itself, or whoever it storms or sends a rocket to) within this far (metres) before the lip of a jump over a gap. */
     itemGapQuiet: 140,
-    /** And uses it regardless after this long. */
+    /** And uses it regardless after this long (times its temperament's `holdMax`); a Slick, a Decoy or a Blast it may keep in hand for as long as it likes. */
     itemHoldMax: 14,
+
+    /**
+     * Temperaments (temperament.ts): how a bot races, beside how well (skill).
+     * `mistakes` scales how often it errs; `lineJitter` how much its cut into a
+     * bend changes from lap to lap (a share), `laneWidth` how far it wanders
+     * across the road on the straights (times laneShare), `brakeJitter` how
+     * far (metres, either way) its braking point moves; `corner` scales the
+     * speed it carries through bends; `attack` 0..1 how keen it is to pass
+     * (and how far ahead it starts), `defend` 0..1 how often it covers the
+     * inside from a kart close behind, `lean` 0..1 how often it leans on a
+     * kart beside it, `lunge` how much later it brakes diving up an inside;
+     * `verge` 0..1 its nerve for a verge cut (with a drift's boost, not only a
+     * Nitro); `patience` scales its wait before using an item and `holdMax`
+     * how long it will hold one for the right moment; `kick` times its skill is
+     * its chance of shaking the wheel at a ramp's lip for a bigger jump (from
+     * `kickSkill` up). `steady` is a person's kart the bots drive (handed
+     * over, or home and on its lap of honour).
+     */
+    styles: {
+      aggressive: { mistakes: 1, lineJitter: 0.25, laneWidth: 1, brakeJitter: 6, corner: 1.012, attack: 1, defend: 0.6, lean: 1, lunge: 1, verge: 0.5, patience: 0.6, holdMax: 1.6, kick: 1 },
+      careful: { mistakes: 0.35, lineJitter: 0.12, laneWidth: 0.6, brakeJitter: 3, corner: 0.992, attack: 0.45, defend: 1, lean: 0, lunge: 0, verge: 0, patience: 1.3, holdMax: 1, kick: 0.5 },
+      erratic: { mistakes: 1.8, lineJitter: 0.45, laneWidth: 1.5, brakeJitter: 12, corner: 1, attack: 0.75, defend: 0.25, lean: 0.4, lunge: 0.7, verge: 1, patience: 0.4, holdMax: 0.6, kick: 0.9 },
+      steady: { mistakes: 0.5, lineJitter: 0.1, laneWidth: 0.5, brakeJitter: 2, corner: 1, attack: 0.7, defend: 0.6, lean: 0, lunge: 0.2, verge: 0, patience: 1, holdMax: 1, kick: 0.8 },
+    },
+
+    /** A bend (plan.ts `corners`): the road turning one way at least this tightly (1/m, smoothed), and this tight at its apex. */
+    cornerCurvature: 1 / 150,
+    cornerPeak: 1 / 70,
+    /** A bot wanders across its lane over this many metres. */
+    laneWander: 140,
+    /** Lap to lap, the speed a bot carries through a bend varies by up to this share either way. */
+    paceJitter: 0.02,
+    /**
+     * Mistakes, per bend: this chance at skill 0, less by `mistakeSkill` of it
+     * at skill 1, times the temperament's `mistakes`, and up to `mistakeMood`
+     * of it more for a bot well ahead of the best player (or less, well
+     * behind). Never in a bend by an open edge or on ice. A mistake is running
+     * wide (out to the edge of the road, or a metre over it for the erratic),
+     * braking late (`lateBrake` metres, `hotPace` more speed), missing the
+     * apex, or botching the drift.
+     */
+    mistakeRate: 0.11,
+    mistakeSkill: 0.75,
+    mistakeMood: 0.6,
+    lateBrake: 18,
+    hotPace: 0.1,
+    /** Bends a bot does not drift, at skill 0 (none at skill 1.2). */
+    driftSkip: 0.25,
+    /** A wobble on a straight: this chance per `wobbleCell` metres at skill 0 (times `mistakes`, less with skill), this much wheel (more for the erratic). */
+    wobbleRate: 0.18,
+    wobbleCell: 100,
+    wobbleSteer: 0.22,
+    /** Running wide aims this far (metres) inside the road's edge (`wideOver` further out for the erratic, whose `verge` is 1: over it); half as far out of a bend tighter than `hairpin` (1/m). */
+    wideEdge: 0.9,
+    wideOver: 1.4,
+    hairpin: 1 / 20,
+
+    /**
+     * Racecraft (racecraft.ts). A bot attacks a kart up to `attackRange` (plus
+     * `attackReach` times its `attack`) metres ahead that it is catching (or
+     * `attackTime` seconds ahead at the speed it is catching it), passing
+     * `passGap` metres to one side of it: the inside of a bend coming within
+     * `diveReach` metres (braking `diveLunge` later, times its `lunge`), else
+     * the side with room. On a straight, within `draftClosing` m/s of its pace,
+     * it first tucks into its wake (`draft` above: from `draftApproach` metres
+     * beyond the wake's reach down to `draftPull` metres beyond its near end)
+     * until the slingshot flings it out, then goes by. It covers the inside
+     * from a kart up to `defendRange` metres behind, keeps
+     * off the tail of a kart it cannot get by (`followGap` and below), and
+     * leans `leanIn` metres into a kart beside it (a chance of `leanChance`
+     * times its `lean` per 50 m).
+     */
+    attackRange: 18,
+    attackReach: 14,
+    passGap: 2.9,
+    /** Once this far (metres) off the line of the kart it is passing, it keeps to that side. */
+    commitWidth: 0.7,
+    diveReach: 55,
+    diveLunge: 0.05,
+    draftApproach: 10,
+    draftClosing: 3,
+    draftPull: 2,
+    defendRange: 14,
+    followGap: 5,
+    /** A bot catching a kart fast starts going round it this many seconds before it would reach it. */
+    attackTime: 2.2,
+    /** Behind a kart it cannot get by, it brakes as if at this deceleration (m/s^2) to arrive at its tail... */
+    followBrake: 20,
+    /** ...closing no faster than this (m/s; twice it for the aggressive): a nudge, not a ram. */
+    nudge: 1.5,
+    leanIn: 1.3,
+    leanChance: 0.3,
+    /** A puck that will pass within `puckClear` metres in the next `puckLook` seconds: a bot that sees it (by skill) swerves `puckSwerve` metres away. */
+    puckLook: 0.9,
+    puckClear: 2,
+    puckSwerve: 2.6,
   },
 } as const;

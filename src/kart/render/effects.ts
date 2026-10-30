@@ -294,11 +294,16 @@ const BLUE0 = [0.3, 1.05, 3.4, 1] as const;
 const BLUE1 = [0.08, 0.3, 2.0, 0] as const;
 const ORANGE0 = [3.0, 1.1, 0.08, 1] as const;
 const ORANGE1 = [2.2, 0.3, 0.0, 0] as const;
+/** The third, hottest charge: violet, the white-hot core going pink. */
+const VIOLET0 = [2.3, 0.75, 3.8, 1] as const;
+const VIOLET1 = [1.3, 0.15, 2.8, 0] as const;
 const WHITE0 = [2.4, 2.2, 1.8, 0.95] as const;
 const WHITE1 = [1.6, 0.9, 0.3, 0] as const;
 /** The hot centre of a spark or a flame. */
 const HOT0 = [3.6, 3.3, 2.8, 1] as const;
 const HOT1 = [2.4, 1.4, 0.5, 0] as const;
+/** m/s above which a watched kart starts to see the wind's streaks: most of its top speed on the road (24). */
+const WIND_SPEED = 21;
 
 export class Effects {
   readonly group = new Group();
@@ -308,11 +313,18 @@ export class Effects {
   private readonly streaks: Streaks;
   private readonly state = new Map<number, Emit>();
   private rnd = 1;
+  /** Seconds of effects so far: the flicker of a flame, the pulse of a drift's charge. */
+  private clock = 0;
   private dust: [number, number, number] = [0.8, 0.7, 0.5];
   /** Leaves out the speed lines for players who asked for less motion (the cameras drop their shakes themselves). */
   calm = false;
   /** Which world this is, for what a fall looks like (embers over lava, stars in space). */
   world = "meadow";
+  /**
+   * The karts a view follows. Theirs get the full show (the wind's streaks at speed, the most sparks and flame); the
+   * others' are thinner, so a pack drifting round a hairpin does not use up the particles of the karts being watched.
+   */
+  focus: ReadonlySet<number> = new Set();
 
   constructor(capacity: number) {
     this.add = new Sprites(Math.round(capacity * 0.65), true);
@@ -459,7 +471,9 @@ export class Effects {
   boostBurst(k: KartView, strong: boolean): void {
     const fx = Math.sin(k.heading);
     const fz = Math.cos(k.heading);
-    const n = strong ? 26 : 14;
+    const n = strong ? 34 : 20;
+    // A flash at the pipes as the boost catches.
+    this.flash(k.x - fx * 1.3, k.y + KART_EXHAUST.y + 0.1, k.z - fz * 1.3, strong ? 3.4 : 2.6, 2.6, 1.3, 0.3, 0.2);
     for (let i = 0; i < n; i++) {
       const spreadX = this.spread() * 1.2;
       const spreadY = this.r() * 1.2;
@@ -530,8 +544,8 @@ export class Effects {
       case "drift-level": {
         const k = kartAt(e.kart);
         if (!k) return;
-        const c0 = e.level === 1 ? BLUE0 : ORANGE0;
-        const c1 = e.level === 1 ? BLUE1 : ORANGE1;
+        const c0 = e.level === 1 ? BLUE0 : e.level === 2 ? ORANGE0 : VIOLET0;
+        const c1 = e.level === 1 ? BLUE1 : e.level === 2 ? ORANGE1 : VIOLET1;
         const fx = Math.sin(k.heading);
         const fz = Math.cos(k.heading);
         const rx = -Math.cos(k.heading);
@@ -539,7 +553,7 @@ export class Effects {
         for (const side of [-1, 1]) {
           const x = k.x + rx * side * KART_REAR_WHEEL.right + fx * KART_REAR_WHEEL.forward;
           const z = k.z + rz * side * KART_REAR_WHEEL.right + fz * KART_REAR_WHEEL.forward;
-          this.flash(x, k.y + 0.3, z, e.level === 1 ? 2.4 : 3, c0[0] * 0.8, c0[1] * 0.8, c0[2] * 0.8, 0.22);
+          this.flash(x, k.y + 0.3, z, e.level === 1 ? 2.4 : e.level === 2 ? 3 : 3.6, c0[0] * 0.8, c0[1] * 0.8, c0[2] * 0.8, 0.22);
           for (let i = 0; i < 14; i++) {
             const vx = rx * side * (1 + this.r() * 4) - fx * 2 + this.spread() * 0.8;
             const vy = 2 + this.r() * 4;
@@ -651,20 +665,23 @@ export class Effects {
     ];
 
     // Drift sparks: a few pale ones while it builds, then blue, then orange; each a hot white core with a coloured streak behind.
+    // A kart a view follows throws more and bigger ones; the rest of the pack fewer.
+    const watched = this.focus.has(k.id);
     if (k.drift !== 0 && !k.offroad) {
       const level = k.driftLevel;
-      const rate = level === 0 ? 22 : level === 1 ? 150 : 210;
+      const rate = (level === 0 ? 26 : level === 1 ? 160 : level === 2 ? 230 : 270) * (watched ? 1 : 0.55);
       st.spark += rate * dt;
-      const c0 = level === 0 ? WHITE0 : level === 1 ? BLUE0 : ORANGE0;
-      const c1 = level === 0 ? WHITE1 : level === 1 ? BLUE1 : ORANGE1;
-      const size = level === 0 ? 0.17 : level === 1 ? 0.34 : 0.42;
-      // The charge shows as a glow at each rear wheel, too.
+      const c0 = level === 0 ? WHITE0 : level === 1 ? BLUE0 : level === 2 ? ORANGE0 : VIOLET0;
+      const c1 = level === 0 ? WHITE1 : level === 1 ? BLUE1 : level === 2 ? ORANGE1 : VIOLET1;
+      const size = (level === 0 ? 0.2 : level === 1 ? 0.44 : level === 2 ? 0.56 : 0.64) * (watched ? 1 : 0.85);
+      // The charge shows as a glow at each rear wheel, too, pulsing a little as it burns.
       if (level > 0) {
-        const glow = level === 1 ? [0.35, 0.95, 3.2] : [3.2, 1.2, 0.1];
+        const glow = level === 1 ? [0.35, 0.95, 3.2] : level === 2 ? [3.2, 1.2, 0.1] : [2.4, 0.7, 3.6];
+        const pulse = 1 + 0.12 * Math.sin(this.clock * 31 + k.id);
         for (const side of [-1, 1]) {
           const p = wheel(side, 0.2);
-          this.glowNow(p[0], p[1], p[2], level === 1 ? 1.9 : 2.3, glow[0]!, glow[1]!, glow[2]!, 0.7);
-          this.glowNow(p[0], p[1] + 0.1, p[2], 0.7, glow[0]! * 1.4, glow[1]! * 1.4, glow[2]! * 1.4, 0.8);
+          this.glowNow(p[0], p[1], p[2], (level === 1 ? 2.3 : level === 2 ? 3.0 : 3.5) * pulse, glow[0]!, glow[1]!, glow[2]!, 0.75);
+          this.glowNow(p[0], p[1] + 0.1, p[2], 0.85 * pulse, glow[0]! * 1.4, glow[1]! * 1.4, glow[2]! * 1.4, 0.85);
         }
       }
       while (st.spark >= 1) {
@@ -672,11 +689,11 @@ export class Effects {
         const side = this.r() < 0.5 ? -1 : 1;
         const p = wheel(side, 0.14);
         // Thrown out sideways and back, with a flick up, falling quickly.
-        const out = 1.2 + this.r() * 3.6;
+        const out = 1.2 + this.r() * (level >= 2 ? 4.6 : 3.6);
         const vx = rx * side * out - fx * (1.5 + this.r() * 3) + this.spread() * 0.8;
-        const vy = 1.8 + this.r() * 3.8;
+        const vy = 1.8 + this.r() * (level >= 2 ? 4.8 : 3.8);
         const vz = rz * side * out - fz * (1.5 + this.r() * 3) + this.spread() * 0.8;
-        const life = 0.24 + this.r() * 0.32;
+        const life = 0.24 + this.r() * 0.36;
         this.add.emit(p[0], p[1], p[2], vx, vy, vz, life, size, 0.04, c0, c1, -16, 0.4);
         if (level > 0) {
           // The white-hot core, and two motes of streak trailing back along its path.
@@ -696,14 +713,15 @@ export class Effects {
       st.smoke = 0;
     }
 
-    // Boost flames out of both exhausts.
+    // Boost flames out of both exhausts: long, hot, flickering.
     if (k.boost > 0) {
+      const flicker = 1 + 0.18 * Math.sin(this.clock * 47 + k.id * 3) * Math.sin(this.clock * 29);
       for (const side of [-1, 1]) {
         const ex = KART_EXHAUST.right * side;
         const back = KART_EXHAUST.forward - 0.5;
-        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.2, 2.4, 0.9, 0.12, 0.55);
+        this.glowNow(k.x + rx * ex + fx * back, k.y + KART_EXHAUST.y + 0.05, k.z + rz * ex + fz * back, 1.6 * flicker, 2.6, 1.0, 0.14, 0.6);
       }
-      st.flame += 210 * dt;
+      st.flame += (watched ? 250 : 150) * dt;
       while (st.flame >= 1) {
         st.flame -= 1;
         const side = this.r() < 0.5 ? -1 : 1;
@@ -714,11 +732,11 @@ export class Effects {
           k.x + rx * ex + fx * back,
           k.y + KART_EXHAUST.y + 0.08,
           k.z + rz * ex + fz * back,
-          -fx * (4 + this.r() * 5) + this.spread() * 0.5,
+          -fx * (5 + this.r() * 6) + this.spread() * 0.5,
           this.spread() * 0.6,
-          -fz * (4 + this.r() * 5) + this.spread() * 0.5,
-          0.2 + this.r() * 0.22,
-          blue ? 0.4 : 0.68,
+          -fz * (5 + this.r() * 6) + this.spread() * 0.5,
+          0.22 + this.r() * 0.24,
+          blue ? 0.5 : 0.86,
           0.08,
           blue ? [0.5, 1.2, 3.0, 0.9] : [2.8, 1.2, 0.15, 0.9],
           blue ? [0.1, 0.3, 2.0, 0] : [1.8, 0.3, 0.0, 0],
@@ -732,19 +750,27 @@ export class Effects {
       st.flame = 0;
     }
 
-    // Speed lines: streaks hanging in the air that a fast kart (or one on a boost) rushes past.
+    // Speed lines: streaks hanging in the air that a kart rushes past, along the way it goes (in a drift the nose points
+    // elsewhere): a few at top speed (the wind) for a kart a view follows, more and closer in another kart's slipstream as
+    // it charges, many on a boost for any.
     const fast = Math.abs(k.speed);
-    if (!this.calm && (k.boost > 0 || fast > 30) && k.hop < 3) {
-      const power = k.boost > 0 ? 1 : clamp((fast - 30) / 22) * 0.55;
-      st.lines += (k.boost > 0 ? 55 : 24 * power) * dt;
+    const draft = watched ? (k.draft ?? 0) : 0;
+    const windy = watched && (fast > WIND_SPEED || draft > 0.1);
+    if (!this.calm && (k.boost > 0 || windy) && k.hop < 3) {
+      const power = k.boost > 0 ? 1 : Math.max(clamp((fast - WIND_SPEED) / 10) * 0.6, draft * 0.8);
+      st.lines += (k.boost > 0 ? (watched ? 60 : 30) : 8 + 26 * power + 30 * draft) * dt;
+      const course = k.course ?? k.heading;
+      const cx = Math.sin(course);
+      const cz = Math.cos(course);
       while (st.lines >= 1) {
         st.lines -= 1;
         const ahead = 2 + this.r() * 22;
-        const lat = (this.r() < 0.5 ? -1 : 1) * (1.7 + this.r() * 5.5);
+        // In a slipstream the air is drawn in close round the kart.
+        const lat = (this.r() < 0.5 ? -1 : 1) * (draft > 0.1 && k.boost <= 0 ? 1.2 + this.r() * 2.6 : 1.7 + this.r() * 5.5);
         const height = 0.2 + this.r() * 2.9;
         const length = clamp(fast * 0.05, 1.2, 3.8) * (0.6 + this.r() * 0.9);
         const warm = k.boost > 0;
-        this.streaks.add(k.x + fx * ahead + rx * lat, k.y + height, k.z + fz * ahead + rz * lat, fx, fz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
+        this.streaks.add(k.x + cx * ahead - cz * lat, k.y + height, k.z + cz * ahead + cx * lat, cx, cz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
       }
     } else {
       st.lines = 0;
@@ -829,6 +855,7 @@ export class Effects {
 
   update(dt: number): void {
     const step = clamp(dt, 0, 0.1);
+    this.clock += step;
     this.add.update(step);
     this.norm.update(step);
     this.now.update(step);

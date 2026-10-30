@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TrackGeometry } from "../../track/geometry";
 import { MEADOW_LOOP } from "../../track/tracks";
 import { QUALITY } from "../quality";
+import { Bank } from "./bank";
 import { buildScenery } from "./scenery";
 import { Terrain } from "./terrain";
 import { styleFor, THEMES } from "./themes";
@@ -20,6 +21,8 @@ function finite(g: BufferGeometry): boolean {
 
 const quality = QUALITY.high;
 const geometry = TrackGeometry.build(MEADOW_LOOP);
+/** Meadow Loop's bends lean: heights beside the road are measured from the banked road's edge, not the centre line. */
+const bank = Bank.of(geometry);
 
 describe("terrain", () => {
   const style = styleFor("meadow");
@@ -28,12 +31,12 @@ describe("terrain", () => {
   it("sits just under the road next to it, so the verge lies on top", () => {
     for (const s of [10, 200, 400, 640, 900]) {
       const c = geometry.at(s);
-      const p = geometry.point(s, c.width / 2 + 3);
-      const q = geometry.point(s, -(c.width / 2 + 3));
-      for (const pt of [p, q]) {
+      for (const offset of [c.width / 2 + 3, -(c.width / 2 + 3)]) {
+        const pt = geometry.point(s, offset);
+        const road = pt.y + bank.lift(s, offset);
         const h = terrain.heightAt(pt.x, pt.z);
-        expect(h).toBeLessThan(pt.y - 0.2);
-        expect(h).toBeGreaterThan(pt.y - 1.6);
+        expect(h).toBeLessThan(road - 0.2);
+        expect(h).toBeGreaterThan(road - 1.6);
       }
     }
   });
@@ -93,7 +96,7 @@ describe("the track's meshes", () => {
         const lateral = Math.abs(proj.offset) - proj.sample.width / 2;
         // Skip 5 m either side of the start line (the gantry and its banner): tall things only.
         if (proj.s > geometry.length - 5 || proj.s < 5) continue;
-        if (y - proj.sample.y > 0.45 && lateral < WALL_MIN) nearTall++;
+        if (y - (proj.sample.y + bank.lift(proj.s, proj.offset)) > 0.45 && lateral < WALL_MIN) nearTall++;
       }
     }
     expect(nearTall).toBe(0);

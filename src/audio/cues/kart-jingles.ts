@@ -299,3 +299,19 @@ export function shutter(t: Take): Mono {
   clack(0.065, 1200, 6000, 1400, 0.75);
   return out;
 }
+
+/** A place won: two quick glass notes stepping up a fifth. */
+export function placeUp(t: Take): Mono {
+  const out = t.canvas(0.55);
+  note(out, t, GLOCK, 0, 86, 0.08, 0.7);
+  note(out, t, GLOCK, 0.07, 93, 0.12, 0.8);
+  return out;
+}
+
+/** A place lost: two softer notes stepping down. */
+export function placeDown(t: Take): Mono {
+  const out = t.canvas(0.55);
+  note(out, t, MARIMBA, 0, 84, 0.08, 0.6);
+  note(out, t, MARIMBA, 0.08, 77, 0.12, 0.6);
+  return out;
+}

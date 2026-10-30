@@ -361,3 +361,17 @@ export function hazard(t: Take): Mono {
   t.put(out, slide, 0.18, 0.5);
   return out;
 }
+
+/** Down from a long jump: a deep thud through the chassis, the springs crunching and rattling as they take it. */
+export function heavyLanding(t: Take): Mono {
+  const out = t.canvas(0.75);
+  t.put(out, thump(t, 0.45, 125, 36, 0.002, 0.13), 0, 1);
+  const crunch = bandNoise(t.n(0.2), t.sr, t.rng, 120, 1500, 2);
+  expo(crunch, t.sr, 0.05, 0.002);
+  t.put(out, crunch, 0, 0.5);
+  const rattle = glide(t, 0.32, 220, 150, 1, 0.4, 0.2);
+  const n = rattle.length;
+  for (let i = 0; i < n; i++) rattle[i]! *= Math.exp((-i / n) * 6) * (0.6 + 0.4 * Math.cos((2 * Math.PI * 19 * i) / t.sr));
+  t.put(out, rattle, 0.02, 0.35);
+  return out;
+}

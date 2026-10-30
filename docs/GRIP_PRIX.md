@@ -25,9 +25,22 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   standstill and the kart reverses. You still steer while reversing — open
   hands are tracked as well as fists.
 - **Hop and drift.** Lift the wheel sharply (both hands jerk up) while
-  turning: the kart hops into a drift that way. Sparks grow blue, then
-  orange; straighten the wheel to let go, and the kart boosts — longer for
-  orange. A hop going straight is only a hop.
+  turning, or hold the wheel near full lock at speed for a moment: the kart
+  hops into a power-slide that way, its tail swinging out. Turn into the
+  slide to tighten it (the tail swings further), against it to run wider;
+  hold it hard against the slide and the kart straightens out of it.
+  Sparks grow blue, then orange, then white-hot; straighten the wheel (or
+  turn it hard the other way) to let go, and the kart boosts — longer for
+  each colour. A hop going straight is only a hop.
+- **Jumps and tricks.** Ramps throw the kart into the air, and so does the
+  top of a hill taken fast. In the air, shake the wheel (quick left and right
+  turns) or lift it as for a hop: the kart twirls, and boosts when it lands.
+  Shake right at a ramp's lip and the kart springs off higher and further,
+  and boosts longer.
+- **Slipstream.** Tuck in right behind another kart: you go a little faster
+  and, after a moment, are flung out past it with a boost.
+- **Hills.** A climb slows you a little; coming down, you gather speed and
+  carry it out of the dip.
 - **Items.** Drive through an item box for an item (eleven kinds, below).
   Flick one hand open and closed again (under 0.6 s, the other hand staying a
   fist) to use it. Both hands opening together is a brake, never an item.
@@ -43,7 +56,8 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   (x1.4); **middle** (Kit, Juniper, Mango, Dabble) are the baseline; **heavy**
   (Bramble, Rivet) accelerate 10% slower and grip a little less but top out
   3% higher and shove back (x0.6). Small differences: skill decides races.
-  Bots drive the drivers nobody picked and keep them all cup long.
+  Bots drive the drivers nobody picked and keep them all cup long, each with
+  a temperament of its own (aggressive, careful or erratic; "Sim", Bots).
 - **Grand Prix and Mirror.** The host can race a **cup** (four tracks in a
   row, points 15, 12, 10, 8, 6, 4, 2, 1, standings between races, a podium at
   the end) instead of a single race, and can flip every track left for right
@@ -60,8 +74,9 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   screen (arrows, B, A; or a gamepad's d-pad, B, A) for a **golden kart** and
   the secret track, Five Finger Circuit, which winning both cups opens too.
 - **Keyboard and gamepad** drive too (testing, accessibility): arrows or
-  WASD, Space to drift, E or Shift for the item; a gamepad's left stick,
-  triggers, A to drift, B or X for the item.
+  WASD, Space to drift (and to trick in the air), Left-Right-Left quickly to
+  shake, E or Shift for the item; a gamepad's left stick, triggers, A to
+  drift, the stick flicked left-right-left to shake, B or X for the item.
 
 ### Items
 
@@ -179,7 +194,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart` | Engines, drift, boosts, items, countdown — synthesised like every Super Claude Bros. sound. |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | Engines (pitched by speed and how hard they work), the drift's screech and its three spark levels, the wind at speed, in the air and in a slipstream, boosts, landings (a thud under a hard one, by the sim's strength), items, a place won or lost, countdown — synthesised like every Super Claude Bros. sound. |
 
 ### Coordinates
 
@@ -209,14 +224,38 @@ The numbers (all in `sim/tuning.ts`):
   4 m/s, so a kart that met it head-on is never wedged.
 - **Turning.** Yaw rate up to ~2.2 rad/s, rising with speed from nothing at a
   standstill to full by 6 m/s, a little less at top speed. Grip pulls the
-  velocity toward the heading quickly (a slight slide, never ice).
+  velocity toward the heading quickly (a slight slide, never ice), turning
+  88% of the sideways speed it takes into forward speed. A nose more than
+  15° off the way the kart goes (a slide let go, a shove) swings back toward
+  it as the grip takes hold. `KartView.speed` is the whole speed, even in a
+  slide (negative reversing); `course` is the way it goes.
 - **Brake.** 30 m/s²; held at a standstill for 0.3 s it reverses, up to 7 m/s.
 - **Hop and drift.** `drift` rising at over 10 m/s with |steer| > 0.3 hops
-  (0.25 s, up to 0.35 m) into a drift that way: the steer is remapped so the
-  kart always turns into the drift (0.4..1.4 of full turn), grip is lower,
-  and charge builds faster the tighter it turns: level 1 at 1.0 s, level 2 at
-  2.2 s. `drift` falling (or a brake) ends it: level 1 boosts 0.7 s, level 2
-  1.4 s. Off the road the charge does not build.
+  (0.25 s, up to 0.35 m) into a drift that way: a power-slide. The way the
+  kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
+  drift 1, straight 0, against it -1: 0.4..1.4), and its nose swings out to
+  0.42 + 0.16 × own radians inside that (15°..33°), most of the way within the
+  hop; it keeps 97% of the top speed; ice lets it slide on instead of coming
+  round. Charge builds faster the tighter it turns: level 1 (blue) at 1.0 s,
+  level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling
+  turn. `drift` falling, a brake, or the wheel held at own ≤ -0.8 for 0.25 s
+  (the way out of a slide toward the other side of the road) ends it: boosts
+  of 0.7, 1.3 and 1.9 s.
+  Off the road the charge does not build. Let go, the nose comes back to the
+  way the kart goes within a quarter of a second.
+- **Hills.** Gravity pulls 9 m/s² per unit of grade along the road (from
+  `TrackGeometry` heights, read over 2 m either side): a 10% climb settles at
+  about 22.8 m/s. Downhill the top speed rises by 1.1 × the steepest descent
+  of the last 22 m, so a kart carries what it gathered out of the dip.
+- **Crests.** Where the road bows over a crest faster than gravity (12.5
+  m/s²) can follow it down (the speed squared times its curvature over 1.08
+  times gravity), the kart leaves it: a skim that stays driveable until it is
+  0.3 m up, then a jump (`jump` with `crest`), tricks and all.
+- **Slipstream.** 2 to 14 m behind another kart, within 1.8 m of its line,
+  both over 14 m/s and going the same way (within 0.5 rad): the top speed is
+  3% higher and after 1.5 s in the wake the kart is flung out with a 0.7 s
+  boost (`boost` with source `draft`), then rests 2.5 s before a wake charges
+  it again; `KartView.draft` is the charge.
 - **Boost.** Top speed +35% and strong acceleration while it lasts. Nitro
   1.5 s, a pad 1.0 s, a start boost 1.0 s.
 - **Start.** The countdown is 3 s plus half a second of "ready". Throttle
@@ -226,7 +265,9 @@ The numbers (all in `sim/tuning.ts`):
   is a whole second because hands closed as the 1 comes up reach the sim about
   0.8 s before Go, after the fist's 0.12 s hold and the camera.)
 - **Karts touch.** Circles of radius 1.1 m push apart, the faster one
-  shoving harder; a `bump` event.
+  shoving harder (restitution 0.6); a shove off a kart's middle turns it (one
+  clipped at the tail swings its nose the other way, up to 0.2 rad); a
+  `bump` event.
 - **Item boxes.** A row of five across the road at each of the track's
   `itemRows`; a box taken comes back after 3 s. Roulette 1.0 s. Odds by place
   (above). Puck: 40 m/s, 6 s, bounces off barriers, hits within 1.4 m.
@@ -250,13 +291,65 @@ The numbers (all in `sim/tuning.ts`):
   cutting back across the line. Places by progress (finished karts by finish
   time). Wrong way: facing more than 110° from the track's direction at
   speed for 1.5 s.
-- **Bots.** Follow a racing line (inside of each bend by its curvature, plus
-  a lane of their own), slow before a bend to `sqrt(a / |curvature|)` with a
-  lookahead, drift long bends, use items sensibly (Nitro on a straight, Puck
-  with a kart ahead in line, Slick when someone is close behind). `skill`
-  0..1 scales top speed (0.92..1.0), reactions and mistakes. Gentle rubber
-  band: a bot far ahead of the best player eases off a few percent, one far
-  behind pushes a few percent.
+- **Bots** (`bots.ts`, `temperament.ts`, `variety.ts`, `racecraft.ts`; their
+  numbers in `tuning.ts` `bots`). A bot is only another source of
+  `DriveInput`. It follows a racing line (inside of each bend by its
+  curvature) plus a lane of its own that wanders across the road, slows before
+  a bend to `sqrt(a / |curvature|)` with a lookahead, and drifts long bends.
+  `skill` 0..1 scales top speed (0.92..1.0), reactions and mistakes.
+  - *Temperament*, beside skill: **aggressive** (dives up the inside, brakes
+    late, leans on a kart alongside, holds a Puck for a clean shot, waits for a
+    crowd round the leader with a Skyrocket), **careful** (clean, narrow lines,
+    covers the inside, rarely errs, saves a Nitro for a long straight) or
+    **erratic** (wide, changing lines, big braking-point swings, twice the
+    mistakes, the odd verge cut with only a drift's boost). The bots of a grid
+    are ranked by a hash of name and driver and dealt the three in turn, so
+    every grid of three or more has all three and a bot keeps its temperament
+    through a cup. A person's kart the bots drive (handed over, or on its lap
+    of honour) is **steady**.
+  - *No two laps alike.* The track's bends are listed once (`plan.ts`
+    `corners`); each time round each bend a bot rolls (a hash of the seed, the
+    kart, the bend and the lap: nothing new in the snapshot, and the same race
+    replays) how deep it cuts in, where it brakes (±2 to ±12 m by temperament),
+    how much speed it carries (±2%), whether it drifts, and whether it makes a
+    mistake: running wide on the way out (to just short of the edge, half a
+    metre over it for the erratic, half as far out of a hairpin), braking late
+    and carrying too much speed, missing the apex, or letting a drift go
+    before it charges. Now and then a wobble on a straight. None of it beside
+    an open edge or on ice. Mistakes per bend: 11% at skill 0, a quarter of
+    that at skill 1, times 0.35 (careful), 1 (aggressive) or 1.8 (erratic).
+    In a slide it steers by the way it is going (`courseOf`), and a slide
+    carrying it wide it saves by holding the wheel hard against it, which
+    straightens the kart out. From skill 0.5 it may shake the wheel at a trick ramp's
+    lip to kick the jump (its skill times 1 aggressive, 0.9 erratic, 0.5
+    careful), and tricks in the air by skill otherwise.
+  - *Racecraft* against every kart, bot or person: catching one, it picks a
+    side (the inside of a bend coming up, else the side with room) and keeps to
+    it once committed; on a straight at much the same pace it first tucks into
+    the other's wake (`draft`) and goes by when the slingshot flings it out;
+    boxed in, it lifts and drops in behind, never ramming (it
+    closes on a tail at a nudge's 1.5 m/s, 3 for the aggressive). It covers the
+    inside of the next bend from a kart close behind (careful always), but not
+    once that kart is alongside; it leans on a kart beside it in a level fight
+    (aggressive often); and it swerves from a Puck it sees coming (always, when
+    sharp).
+  - *Items with intent*: a Nitro out of a bend onto a straight or on a long
+    straight (to finish a pass, for the bold); a Puck only with a kart lined up
+    and the road straight between; a Seeker at once, or (careful) with the kart
+    ahead within 150 m; a Slick or Decoy kept in hand until a kart is close on
+    its tail and in line (a lone leader holds it); a Comet on a straight, or to
+    be untouchable when something is coming for it; a Blast when a skyrocket,
+    puck or seeker is about to hit, or with karts all round (one is enough for
+    the aggressive); and anything else used after 14 s at the latest (22 s for
+    the aggressive, 8 s for the erratic).
+  - *Pack.* A gentle rubber band, never past the road's top speed: a bot
+    more than 5 m ahead of the best player eases off by up to 10% (5% for a
+    sharp one, so the quick ones stay worth beating) at 95 m; one more than
+    5 m behind pushes up to 6% but no faster than a kart's top speed,
+    and corners as if half as skilful again; well ahead of the player a bot
+    also makes more mistakes, well behind fewer.
+    `packStats.ts` races the bots and a scripted player (`PACK_REPORT=1 npx
+    vitest run src/kart/sim/pack.test.ts --silent=false` prints a table).
 - **The race's end** as in "A race" above. `result()` gives the standings.
 
 `snapshot()` is plain JSON and small (round numbers to millimetres and
@@ -363,10 +456,19 @@ only those karts' physics against the world as it is.
 - **Gestures** as in "How it plays": both open for 150 ms → brake; one open
   then closed within 0.6 s with the other a fist all along → one item press;
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
-  between the palms) by at least a quarter span → hop; drift held from the
-  hop until |steer| < 0.15 for 200 ms or a brake. A hop while the drift is
-  still held (after a hop that was only a hop, or a drift a spin-out ended)
-  lets go of it for 50 ms first, so the kart sees a fresh press and hops.
+  between the palms) by at least a quarter span → hop; the wheel held at
+  |steer| ≥ 0.85 for 0.22 s with fists → a hop too (the sim drifts only at
+  speed, so a slow hairpin stays a turn); drift held from the hop until
+  |steer| < 0.15 for 200 ms, the wheel turned against the drift past 0.5 for
+  0.1 s (an S-bend), or a brake. A hop while the drift is still held (after a
+  hop that was only a hop, or a drift a spin-out ended) lets go of it for 50
+  ms first, so the kart sees a fresh press and hops.
+- **Shakes** (`shake.ts`): the wheel's angle swinging back 14° the other way
+  twice within 0.55 s (no second for 0.35 s) → `shakes` +1, a count like the
+  item presses (on the wire too). Not while braking, clapping or cheering.
+  Keys: the arrows from one to the other and back; a pad: the stick or
+  d-pad likewise. The sim uses a shake only in the air (a trick) or within
+  0.3 s before a lip (a kick), so the steering of a slalom does nothing.
 - **Tricks** (`gestures.ts`, in hand lengths, a hand's span being twice the
   wrist-to-knuckle size): a **clap** (palms from at least one hand length
   apart to within 0.6 and back to 0.9 inside half a second, not from a brake
@@ -383,7 +485,7 @@ only those karts' physics against the world as it is.
   filled for a fist and hollow when open. Small in a corner during the race,
   large on the wheel check and on a big-screen player's own device.
 - **The dev page** `src/kart/input/dev.html`: the camera, the preview, and the
-  numbers (angle, steer, grip, mode, drift, item presses, frame rate), with
+  numbers (angle, steer, grip, mode, drift, item presses, shakes, frame rate), with
   the Steering setting. The first thing to try with real hands.
 
 ## Render (`src/kart/render/`)
@@ -399,7 +501,14 @@ that file exists (`render/art.ts`).
   barriers 6 m beyond each edge (tyre walls, fences, bollards by theme),
   boost pads (animated chevrons), item boxes (turning translucent cubes with a
   glowing emblem), scenery instanced well clear of the road (trees, rocks,
-  cacti, lamps, cranes by theme), a sky dome and fog.
+  cacti, lamps, cranes by theme), a sky dome and fog. The scenery and the
+  grass tufts are kept out by the sim's own barrier, measured from each
+  stretch of road (`world/clearance.ts`; the terrain grid's interpolated
+  guess at it was out by a verge's width where a verge ends), every instance
+  with its whole footprint at the size it is drawn; and whatever stands on
+  the ground stands on the lowest ground under its own footing, so nothing
+  hangs over a slope (a thing that would sink deeper than its height, on a
+  cliff's lip, is left out).
 - **Karts.** Chassis, four wheels turning with the speed and the front two
   with the steer, the driver (one of nine creatures, modelled in Blender, `art/kart/drivers/`,
   and posed by `render/drivers/`, whose code-built creatures stand in when the
@@ -407,22 +516,60 @@ that file exists (`render/art.ts`).
   with its hands on the wheel as it turns; cheering or waving with the player's
   gesture, bouncing at the finish, dizzy in a spin-out; the golden kart has a
   gold tub with the player's colour on its stripe, spoiler and hubs; body roll
-  and pitch from the motion; a blob shadow. Effects:
-  drift sparks (blue, then orange), boost flames, dust off the road, a spin,
-  a hop, a puff on a bump.
+  from how hard it corners (the heading's turn rate times the speed), pitch
+  from the slope, the throttle and the brake, the nose following a jump's arc,
+  the springs squashing on a landing as hard as it came down and bouncing
+  back, a whole flat turn in the air for a trick; a blob shadow
+  (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
+  the lip it rides the sim's height, which starts at the wedge's top, so the
+  two meet without a step. Effects:
+  drift sparks (blue, then orange, then violet for the third charge, the charge
+  glowing and pulsing at the rear wheels), boost flames (long, flickering, a
+  flash at the pipes as a boost catches), streaks of wind rushing past a
+  watched kart along its course from about 21 m/s, drawn in closer and thicker
+  in a slipstream as it charges, and many more on a boost (none for Reduce
+  Motion), dust off the road, a spin, a
+  hop, a puff on a bump. The karts the views follow get the full show; the rest
+  of the pack throws fewer sparks and flames (`Effects.focus`), so a pack
+  drifting round a hairpin does not use up the particles of the karts watched.
 - **Things.** The puck, the seeker (with a red glow and a fin), the slick (a
   glossy dark puddle).
 - **Split screen.** One kart: the whole canvas. Two: top and bottom on a wide
   screen, side by side on a tall one. Three or four: quadrants; with three,
   the fourth shows the map and the standings. One renderer, one scene, a
   scissored viewport and chase camera per view.
-- **Chase camera.** Behind and above, eased; the field of view widens with
-  speed and boost; through the countdown it settles from high over the grid.
+- **Chase camera** (`render/cameras.ts`). Behind and above, eased, following
+  the way the kart goes (`KartView.course`; a spun kart does not whirl it), and
+  alive: it leans into a bend with the wheel (in a drift, with the drift's side,
+  whatever the wheel), and tilts with a banked road as seen along its own
+  heading (`bankSeen`; together at most 9 degrees); it sits lower behind a
+  climb and aims up it, higher on a descent and aims down over a crest (the
+  road's heights behind and ahead from `TrackGeometry`, a ramp's wedge among
+  them: `rampSeen` holds the lip's height for 18 m past it, so the camera aims
+  up the wedge at the jump, and `cameraSpace` keeps it out of the wedge); it
+  aims a little into the bend ahead (the road's turn over the next 14 to 24 m);
+  in a drift it sits 60% of the way from the nose to the course and moves out
+  to the side of the slide, so the slide shows; off a jump it rises and pulls
+  back to see the landing, and lands with a sprung dip as hard as the sim's
+  `land` strength (the camera's own eye on the kart's height is the fallback;
+  the two count once). Knocks shake it (bumps and walls by their strength,
+  hits, strikes), landings too, rough ground rumbles it; the field of view
+  widens with speed and boost, with a quick punch as a boost begins and a pop
+  on a trick's kick at the lip; on a boost and flat out the outer part of the view streams
+  outward from where the kart is heading (the rush, in the post chain). Through
+  the countdown it settles from high over the grid. With Reduce Motion it keeps
+  only what frames the road: no lean, tilt, shake, thump, punch or rush. Another
+  kart within 3.4 m of a view's lens (on its kart's tail) is left out of that
+  view, or it would fill the picture.
 - **Each viewport's HUD** (HTML over the canvas, DESIGN.md's glass and type):
-  place large ("1st", "2nd"…) bottom-right, lap ("Lap 2/3") and time
+  place large ("1st", "2nd"…) bottom-right, springing up out of a flash for a
+  place won and sinking in for a place lost (at most every 0.35 s: karts side
+  by side swap places back and forth), lap ("Lap 2/3") and time
   top-left, the item in a glass slot top-centre (turning through the items
   while it rolls), "Final Lap", "Wrong Way", the countdown in the centre, the
-  place on finishing. A minimap (the track's outline, a dot per kart, players
+  place on finishing. The final lap is orange (attention, not alarm): the lap
+  in its panel all the way round, the banner, which pops in, and the view's
+  edges, which glow twice as it begins. A minimap (the track's outline, a dot per kart, players
   ringed) bottom-left when there is one view, in the free quadrant with three.
 - **Fast.** 60 fps with four viewports on a MacBook with tracking running:
   the engine's quality tiers and dynamic resolution, instanced scenery that
@@ -643,6 +790,16 @@ the footnote says which tier Auto uses here.
 3D podium after a Grand Prix. What it still does is 3D for the driver picker and the lobby's portraits (the karts' and
 drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
 
+**The living camera and the frenzy** (2026-10-30) add no shader program (87 and 85 programs on Canyon Run and Starlight
+Ribbon before and after: everything new is uniforms in shaders already built at load) and no draw call: the camera reads
+the road with one `project` and three `at` a view, the near-kart check is a distance a kart a view, the wind's streaks
+and the bigger sparks share the existing pools (the karts not watched throw fewer). The rush is the costly part: while
+a view's kart boosts (or goes past its top speed), each of that view's pixels outside the middle reads the picture
+seven times (high; five on medium; it is off on low and while not boosting, one uniform test a pixel). Measured with
+`bench.mjs --bases` (high and medium, 1 and 4 views, medians of two) on a machine at a load average of 650 to 950: frame
+time, CPU and GPU within the noise (which was ±15 to 45% between runs of the same page); an A/B of the rush alone on one
+frame redrawn could not be read at that load (the same frame took 3 to 25 ms of post). To measure on a quiet machine.
+
 **Not done yet.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
@@ -765,16 +922,25 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
 ## Tests
 
 - Unit (Vitest): the geometry; the sim (a bot laps every track in a sane time
-  and never leaves it, braking reverses, a drift charges and boosts, items
+  and never leaves it, braking reverses, a drift slides, tightens, widens,
+  straightens out and charges three boosts, jumps leave the wedge the picture
+  draws and land pointing where they fly, a shake tricks only in the air and
+  kicks at the lip, crests throw and hills pull, the slipstream slings, items
   hit, places and laps count, the race ends, `snapshot`/`restore` round-trips,
-  the same seed replays); the net (lobby joins and leaves, a full room, inputs
+  the same seed replays); the bots (`bots.test.ts`: temperaments mixed on every
+  grid and kept through a cup, laps that differ, a pass on a side without a
+  touch, the inside covered, Nitros saved for a straight, a Slick held for a
+  kart on its tail, a Puck dodged, a band that never passes top speed;
+  `pack.test.ts`: a sharp scripted driver beats a gentle one, in company); the net (lobby joins and leaves, a full room, inputs
   in order under loss, prediction converging, the host leaving); the wheel
   (angles, the level, fists and open hands from recorded landmarks, every
-  gesture, hands lost).
+  gesture, a drift started at full lock and let go against it, shakes,
+  hands lost).
 - Performance (Vitest): the tier guess for each GPU family (and the split-screen
   rules), the safety net's watch and its ceiling in prefs, the per-view culling of
   instances (everything the frustum reaches is drawn once with its colour, a buffer is
-  rewritten only when its cells change), the tracker's tile schedule, the lazy
+  rewritten only when its cells change, and what the GPU holds of it, uploaded as
+  three uploads it, is what the view draws), the tracker's tile schedule, the lazy
   renderers, the workers per player (`lanesFor`, a frame for one column is no news
   to another player's wheel, the column just read wins a shared hand), the try of
   the other delegate (`adapt.ts`) and the hands first (`handsFirst.ts`: steps down
@@ -805,13 +971,22 @@ front of them (or a laptop), and the TV is the host's screen.
 
 `TrackDef` (track/geometry.ts) says, beyond the road itself:
 
-- **Ramps** (`ramps`): a ramp across the road; fast enough over its lip and
-  the kart flies (about a second). The hop gesture (or Space) in the air is a
-  **trick**: the driver spins, and the kart boosts on landing (0.8 s). The
-  picture draws a 16 m wedge, 2.4 m high, ending at the lip; the sim's `hop`
-  is 0 up the wedge and at the lip. Jumps can cross a gap: a `drops` entry
-  with `gap: true` and side `both`, starting just past the lip — a kart that
-  lands short falls.
+- **Ramps** (`ramps`): a ramp across the road, a wedge 16 m long rising to
+  2.4 m × lift / 7 at its lip (the sim's `wedgeAt` and the picture's
+  `rampHeight` are the same curve, and a test holds them to it). The sim
+  counts the wedge as road and launches from its top: over 9 m/s the kart is
+  thrown up at lift × 0.72 m/s at top speed (about 1.2 s in the air, the arc's
+  top some 3.5 m over the road), slower it only drops off the end. In the air
+  the kart points where it flies (its nose swings round at 4/s) and the wheel
+  turns its flight up to 0.55 rad/s, enough to bring a jump taken at an angle
+  back over the road. The hop gesture (or Space) or a shake in the air is a
+  **trick**: the kart twirls, and boosts on landing (0.8 s). A shake within
+  0.3 s before the lip or 0.2 s after it **kicks** the jump: 1.8 m/s more
+  lift, 6% more speed, and a 1.1 s boost on landing. Jumps can cross a gap: a
+  `drops` entry with `gap: true` and side `both`, starting just past the lip —
+  a kart that lands short falls, and one shoved over the lip by another
+  between its own steps jumps rather than falls. A kart higher than 2.4 m
+  flies over an item box.
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a
@@ -852,15 +1027,32 @@ front of them (or a laptop), and the TV is the host's screen.
   road is caught by its sides (a ship's hull across a straight, which a
   surface seen from above would not show):
   `src/kart/render/world/corridor.test.ts` (the code-built world, and the
-  lower quality tiers' ground and scenery) and `corridor.art.test.ts` (the
+  lower quality tiers' ground, scenery and grass) and `corridor.art.test.ts` (the
   Blender world: `nodeArt.ts` decodes the Draco files in Node and files them
   where `art.ts` would, so the real landmarks and scenery are measured).
-  `CORRIDOR_REPORT=1` prints how far each offender must move. The chase
+  `CORRIDOR_REPORT=1` prints how far each offender must move. A third,
+  `scenery.clear.test.ts`, holds every scattered instance (scenery and
+  grass) to the sim's own rule (`kartSpace.ts`: the nearest stretch of road
+  and its barrier) through its final matrix and again as each view's culled
+  buffer holds it, at every tier, on every track and its mirror, with the
+  art and without: nothing 15 cm high on the road or the verge, nothing
+  solid in the camera's margin (grass may grow there), and nothing hanging
+  over a slope; `clearance.test.ts` checks the scatter's measure against
+  the sim's on every track, mirror and dev track. The chase
   camera is held to the same margin (`cameraSpace.ts`): it slides back toward
   the road in a bend, rises over rising ground and stays under a roof.
 - **The duck** (`duck`): as in three of the shooting games, a rubber duck
   hides on every track, somewhere off the racing line.
-- **Bank** (`bank`): the road leans into its bends (for the picture).
+- **Bank**: the road leans where its points say (`TrackPoint.bank`, radians,
+  + tipping the right side down, eased from point to point: banked hairpins,
+  S-bends that lean one way then the other, a twist on a straight) and, on a
+  track that sets `bank` (radians per 1/m of curvature), into every bend by how
+  hard it turns; the two add, up to 0.35 rad (`render/world/bank.ts`). For the
+  picture: the sim drives on the centre line's height. The ground, verge,
+  kerbs, barriers, lamps, karts and item boxes follow it, and mirror mode
+  flips it. The track maps (`track/maps/`, written by their test) draw the
+  height along the lap under the map, steep stretches in red and crests sharp
+  enough to fly over marked, and the lean.
 
 ### What each theme can build
 
@@ -882,43 +1074,62 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 
 **Acorn Cup**
 
-1. **Meadow Loop** (meadow): the gentle opener. Windmill on the hill, a pond
-   by the hairpin (the duck), hay bales, a hot-air balloon drifting over.
+1. **Meadow Loop** (meadow): the gentle opener. Up the windmill's hill
+   (eight metres, leaning into the long left-hander), down an S that leans
+   one way then the other, through a hollow and over a low hill to the pond
+   by the banked hairpin (the duck); hay bales, a hot-air balloon drifting
+   over.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under
    the cheese grater (a tunnel); a ramp off a cookbook over the sink (fall in
    and the drone fishes you out — the duck floats in the sink); spilt milk
    (ice) on a bend; the counter's edge is a long open drop on the outside of a
-   sweeping curve; oranges roll down the counter; a teacup spins. Everything is
+   sweeping curve (the bends lean into their turns, that one highest on its
+   open outside); oranges roll down the counter; a teacup spins. Everything is
    enormous: the teapot is thirty metres tall.
-3. **Harbour Lights** (harbour): night on the quay, cranes and ships, crabs
-   scuttling across the chicane.
-4. **Canyon Run** (canyon): the climb, the ridge road, a jump over a gap in
-   the ridge, boulders rolling down the descent, a sand cut inside the
-   hairpin for the brave.
+3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
+   humpback bridge over a dock and a swing bridge on the back straight to fly
+   over, right angles that lean a little into their turns, crabs scuttling
+   across the chicane.
+4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
+   a jump over a gap in the ridge, a lip to fly off into the tumble down
+   S-bends that lean one way and the other, boulders rolling down the
+   descent, a sand cut inside the hairpin for the brave.
 
 **Comet Cup**
 
 5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
    round the carousel; through the big top (a tunnel full of lights); under
    the rollercoaster; a teacup ride spinning beside the road and bumper cars
-   crossing a wide plaza; a ramp off the helter-skelter's foot; the hook-a-duck
-   stall (the duck); fireworks over the finish.
-6. **Glacier Pass** (snow): an alpine pass at blue hour. Ice patches on the
-   bends, a frozen lake (all ice, wide) to slide across, an ice cave glowing
-   blue, a ski-jump over a crevasse (a drop), penguins waddling across,
-   snowballs rolling down, a yeti who pops out of a snowdrift once a lap.
-   The duck sits by an ice-fishing hole on the lake.
-7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), a stone
-   bridge over lava with nothing either side, fireballs leaping from the lava,
-   boulders, a jump over a lava gap, the volcano smoking behind it all. The
-   duck relaxes in a hot spring.
+   crossing a wide plaza; a ramp off the helter-skelter's foot; a hump along
+   the top and a dip under the rollercoaster; the hairpin by the hook-a-duck
+   stall (the duck), banked hard; fireworks over the finish.
+6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
+   ice, wide, level) to slide across in the valley, then a climb of fifteen
+   metres to the pass and a corkscrew three quarters of the way round a
+   mountain hut, banked hard and falling all the way, a cliff on its outside
+   and ice on its tight inside line; a crest to fly over on the shoulder, a
+   twisting S that leans one way then the other through an ice cave glowing
+   blue, a long falling in-run to a ski-jump over a crevasse (a drop), and
+   moguls on the way home. Penguins waddle across, snowballs roll down at
+   you, a yeti pops out of a snowdrift once a lap. The duck sits by an
+   ice-fishing hole on the lake.
+7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
+   volcano's flank in switchbacks (two banked hairpins, boulders rolling down
+   the legs at you), along a ridge twenty-two metres up that weaves between
+   lava on the outside of its bends with fireballs leaping from it, then
+   straight down the mountain: over a brow to fly, a jump over a lava gap, and
+   a stone bridge over the lava lake with nothing either side, a boost strip
+   along its left half only. The volcano smokes behind it all; the duck
+   relaxes in a hot spring beside the second hairpin.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
-   over a ringed planet, banked bends and almost no barriers (fall and the
-   drone brings you back), boost strips, ring gates, a long jump between two
-   ribbons, asteroids orbiting the road. The duck floats in an astronaut's
-   helmet by a satellite.
+   over a ringed planet: up the twist, where the ribbon rolls one way and
+   then the other, two crests to fly along the top, a banked carousel round
+   the far end that falls all the way, back along a lower ribbon and down to
+   the long jump between two ribbons. Almost no barriers (fall and the drone
+   brings you back), boost strips, ring gates, asteroids orbiting the road.
+   The duck floats in an astronaut's helmet by a satellite.
 
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
@@ -926,6 +1137,7 @@ seen from above — the hand you play with. The road runs up and down every fing
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
 another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
-minimap is a hand. The duck sunbathes, in sunglasses, in the middle of the palm.
+minimap is a hand, tilted: every finger climbs to its tip and back. The duck
+sunbathes, in sunglasses, in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).

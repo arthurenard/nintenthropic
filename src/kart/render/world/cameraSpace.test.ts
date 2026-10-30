@@ -5,7 +5,7 @@ import { TRACKS } from "../../track/tracks";
 import { chaseOffsets } from "../cameras";
 import { createCameraSpace } from "./cameraSpace";
 import { makeProbe, placedLandmarks } from "./corridorProbe";
-import { SOLID_MARGIN } from "./features";
+import { rampHeight, SOLID_MARGIN } from "./features";
 import { buildLandmarks, landmarkMaterials } from "./landmarks/place";
 
 describe("the chase camera's room", () => {
@@ -54,6 +54,30 @@ describe("the chase camera's room", () => {
       expect(worstOut, "camera beyond the barrier's margin").toBeLessThanOrEqual(0.01);
     });
   }
+
+  it("keeps the camera out of a ramp's wedge, where it stands and between it and the kart", { timeout: 60_000 }, () => {
+    let ramps = 0;
+    for (const def of TRACKS) {
+      if (!def.ramps?.length) continue;
+      const probe = makeProbe(def);
+      const space = createCameraSpace(probe.geo, probe.terrain, probe.terrain.features, [], probe.bank);
+      for (const r of probe.terrain.features.ramps) {
+        ramps++;
+        // A kart halfway up the wedge and at the lip, a camera behind it down at the road's own height.
+        for (const ahead of [r.length / 2, 0]) {
+          const ks = r.lip - ahead;
+          const k = probe.geo.at(ks);
+          const ky = k.y + rampHeight(probe.terrain.features.ramps, ks, probe.geo.length);
+          const c = probe.geo.at(ks - 5);
+          const pos = new Vector3(c.x, c.y + 0.3, c.z);
+          space.fit(pos, { x: k.x, y: ky, z: k.z });
+          const wedge = rampHeight(probe.terrain.features.ramps, ks - 5, probe.geo.length);
+          expect(pos.y, `${def.id} camera over the wedge`).toBeGreaterThanOrEqual(c.y + wedge + 0.85);
+        }
+      }
+    }
+    expect(ramps).toBeGreaterThan(2);
+  });
 
   it("keeps the camera under the roof of a thing over the road, and the roofs are over a kart's reach", { timeout: 120_000 }, () => {
     let roofs = 0;

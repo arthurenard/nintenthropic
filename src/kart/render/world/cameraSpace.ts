@@ -3,13 +3,13 @@
  * drivable area and a camera's width beyond the barrier (corridor.test.ts), so
  * the camera is clear of it as long as it stays there: this holds it. It slides
  * back toward the road when a bend would swing it out past that margin, rises
- * when the ground is in the way, and stays under the roof of a tunnel or an arch.
+ * when the ground (or a ramp's wedge) is in the way, and stays under the roof of a tunnel or an arch.
  * Continuous in the camera's position, so it never makes the view jump.
  */
 import type { Vector3 } from "three";
 import type { TrackGeometry } from "../../track/geometry";
 import type { Bank } from "./bank";
-import { SOLID_MARGIN, type Features } from "./features";
+import { rampHeight, SOLID_MARGIN, type Features } from "./features";
 import type { Roof } from "./landmarks/place";
 import type { Terrain } from "./terrain";
 
@@ -49,12 +49,20 @@ export function createCameraSpace(track: TrackGeometry, terrain: Terrain, featur
         }
       }
 
-      // Not in the ground: above it where it is, and above it halfway to the kart, so a rise between them does not hide the kart.
-      const ground = terrain.heightAt(pos.x, pos.z) + FLOOR;
+      // Not in the ground, nor in a ramp's wedge (which stands on the road): above them where it is, and above them halfway
+      // to the kart, so a rise between them does not hide the kart.
+      const wedge = Math.abs(p.offset) < half ? rampHeight(features.ramps, p.s, track.length) : 0;
+      const ground = Math.max(terrain.heightAt(pos.x, pos.z), wedge > 0 ? p.sample.y + bank.lift(p.s, p.offset) + wedge : -Infinity) + FLOOR;
       if (pos.y < ground) pos.y = ground;
       const mx = (pos.x + kart.x) / 2;
       const mz = (pos.z + kart.z) / 2;
-      const need = terrain.heightAt(mx, mz) + FLOOR * 0.7;
+      let need = terrain.heightAt(mx, mz) + FLOOR * 0.7;
+      if (features.ramps.length) {
+        const ms = p.s + track.delta(p.s, kp.s) / 2;
+        const mo = (p.offset + kp.offset) / 2;
+        const midWedge = Math.abs(mo) < half ? rampHeight(features.ramps, ms, track.length) : 0;
+        if (midWedge > 0) need = Math.max(need, track.at(ms).y + bank.lift(ms, mo) + midWedge + FLOOR * 0.7);
+      }
       const line = (pos.y + kart.y + 1.3) / 2;
       if (need > line) pos.y += (need - line) * 2;
 

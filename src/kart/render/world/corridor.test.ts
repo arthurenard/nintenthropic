@@ -90,8 +90,8 @@ describe("the barrier's picture", () => {
           if (def.id !== "five-finger-circuit") expect(side.wall[i], `${def.id} hides a barrier at 6 m (sample ${i})`).toBeGreaterThan(WALL_DISTANCE);
         }
       }
-      // The two hairpin cuts hide plenty; the palm island's fingertips a little; the other tracks nothing.
-      if (def.id === "canyon-run" || def.id === "glacier-pass") expect(hidden, def.id).toBeGreaterThan(20);
+      // Canyon's hairpin cut hides plenty; the palm island's fingertips a little; the other tracks nothing.
+      if (def.id === "canyon-run") expect(hidden, def.id).toBeGreaterThan(20);
       else if (def.id === "five-finger-circuit") expect(hidden, def.id).toBeGreaterThan(0);
       else expect(hidden, def.id).toBe(0);
     }

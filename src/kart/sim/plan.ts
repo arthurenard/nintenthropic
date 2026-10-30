@@ -41,6 +41,23 @@ export interface CutSite {
   len: number;
 }
 
+/**
+ * A bend, for the bots' racecraft and their mistakes: from where the road
+ * starts to turn to where it straightens, its apex (where it is tightest), the
+ * way it turns (+1 right) and how tight it is there (1/m). `open` says an edge
+ * with no barrier is beside it or near (no mistakes, no lunges there), `ice`
+ * that the line through it crosses ice.
+ */
+export interface Corner {
+  from: number;
+  apex: number;
+  to: number;
+  dir: 1 | -1;
+  peak: number;
+  open: boolean;
+  ice: boolean;
+}
+
 export interface TrackPlan {
   geo: TrackGeometry;
   terrain: Terrain;
@@ -56,6 +73,10 @@ export interface TrackPlan {
   speed: Float64Array;
   /** How far a bend that starts here (tighter than the drift threshold, one way) goes on, metres; 0 on a straight. */
   bend: Float64Array;
+  /** The bends, in order along the lap (none on a track that never straightens, like a round arena). */
+  corners: Corner[];
+  /** Per sample: the bend it lies in, or the next one ahead (an index into `corners`; 0 when there are none). */
+  nextCorner: Uint16Array;
 }
 
 const cache = new WeakMap<TrackDef, TrackPlan>();
@@ -241,7 +262,78 @@ function buildPlan(def: TrackDef): TrackPlan {
     }
   }
 
-  return { geo, terrain, cuts: findCuts(def, geo, terrain), boxes, pads, curve, line, speed, bend };
+  const corners = findCorners(geo, terrain, curve, line);
+  const nextCorner = new Uint16Array(n);
+  for (let i = 0; i < n && corners.length > 0; i++) {
+    // The first bend whose end is still ahead of this sample.
+    let bestAhead = Infinity;
+    corners.forEach((c, index) => {
+      const ahead = geo.wrap(c.to - i * spacing);
+      if (ahead < bestAhead) {
+        bestAhead = ahead;
+        nextCorner[i] = index;
+      }
+    });
+  }
+
+  return { geo, terrain, cuts: findCuts(def, geo, terrain), boxes, pads, curve, line, speed, bend, corners, nextCorner };
+}
+
+/**
+ * The bends: runs of the road turning one way (smoothed over 8 m more, so a
+ * wiggle is not two bends) at least as tight as `cornerCurvature`, whose
+ * tightest point is at least `cornerPeak`.
+ */
+function findCorners(geo: TrackGeometry, terrain: Terrain, curve: Float64Array, line: Float64Array): Corner[] {
+  const bots = TUNING.bots;
+  const n = curve.length;
+  const spacing = geo.spacing;
+  const length = geo.length;
+  const smooth = blur(curve, spacing, 8);
+  const at = (i: number) => smooth[((i % n) + n) % n]!;
+  const bending = (i: number) => Math.abs(at(i)) >= bots.cornerCurvature;
+  // Start on a straight, so no bend is cut in two by the start of the scan.
+  let start = -1;
+  for (let i = 0; i < n && start < 0; i++) if (!bending(i)) start = i;
+  if (start < 0) return [];
+  const corners: Corner[] = [];
+  let i = 0;
+  while (i < n) {
+    if (!bending(start + i)) {
+      i++;
+      continue;
+    }
+    const dir: 1 | -1 = at(start + i) > 0 ? 1 : -1;
+    let j = i;
+    let peak = 0;
+    let apex = 0;
+    while (j < n && bending(start + j) && at(start + j) * dir > 0) {
+      const here = (start + j) % n;
+      if (Math.abs(curve[here]!) > peak) {
+        peak = Math.abs(curve[here]!);
+        apex = here;
+      }
+      j++;
+    }
+    const from = ((start + i) % n) * spacing;
+    const run = (j - i) * spacing;
+    if (peak >= bots.cornerPeak && run >= 6) {
+      let open = false;
+      let ice = false;
+      for (let d = -30; d <= run + 30; d += 2) {
+        const idx = Math.round(geo.wrap(from + d) / spacing) % n;
+        if (terrain.openLeft[idx] === 1 || terrain.openRight[idx] === 1) open = true;
+        const s = geo.wrap(from + d);
+        for (const patch of terrain.patches) {
+          if (patch.kind === "ice" && inSpan(s, patch, length) && line[idx]! >= patch.lo - 2 && line[idx]! <= patch.hi + 2) ice = true;
+        }
+      }
+      corners.push({ from, apex: apex * spacing, to: geo.wrap(from + run), dir, peak, open, ice });
+    }
+    i = j;
+  }
+  corners.sort((a, b) => a.from - b.from);
+  return corners;
 }
 
 /**

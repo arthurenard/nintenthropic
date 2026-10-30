@@ -11,6 +11,7 @@ import { QUALITY, type Tier } from "../quality";
 import { buildBackdrop } from "./backdrop";
 import { Bank } from "./bank";
 import { SOLID_MARGIN } from "./features";
+import { buildFoliage, foliageBounds } from "./foliage";
 import { buildLandmarks, landmarkMaterials, type PlaceEnv, type PlacedLandmark } from "./landmarks/place";
 import { buildScenery } from "./scenery";
 import { buildTrackMeshes } from "./track";
@@ -398,8 +399,10 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
         const pSide = p.offset > 0 ? 1 : -1;
         const past = Math.abs(p.offset) - p.sample.width / 2 - barrierDistance(sim, p.s, pSide);
         if (past < 0 || isOpen(sim, p.s, pSide)) continue;
-        if (terrain.heightAt(x, z) - p.sample.y > 2) {
-          if (!flank || past < flank.beyond) flank = { what: "first flank", s: p.s, beyond: past, height: terrain.heightAt(x, z) - p.sample.y, depth: -past };
+        // Measured from the road's edge there (lift holds the edge's height beyond it): on a banked bend it is not the centre line's.
+        const road = p.sample.y + probe.bank.lift(p.s, p.offset);
+        if (terrain.heightAt(x, z) - road > 2) {
+          if (!flank || past < flank.beyond) flank = { what: "first flank", s: p.s, beyond: past, height: terrain.heightAt(x, z) - road, depth: -past };
           break;
         }
       }
@@ -434,6 +437,13 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
     }
   }
   scenery.dispose();
+  // The tufts and flowers beyond the barrier: grass a metre tall is not for the road or the verge either (in the camera's
+  // margin it may grow: a camera passes through grass).
+  const foliage = buildFoliage(probe.style, terrain, quality, makeBakeUniforms(), keepOut, foliageBounds(geo.samples));
+  if (foliage) {
+    dropOnto(foliage.group, probe.grid, "foliage", lowest, (p) => p.margin);
+    foliage.dispose();
+  }
   // The volcano's great cone is the one backdrop that can come near the road (the others build from textures, and stand far off).
   if (things && probe.style.id === "volcano") {
     const own: { dispose(): void }[] = [];

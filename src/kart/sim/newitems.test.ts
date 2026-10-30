@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { DriveInput, RaceEvent } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS, TRACKS } from "../track/tracks";
+import { HARBOUR_LIGHTS as HARBOUR_AS_BUILT, TRACKS } from "../track/tracks";
 import { itemOdds } from "./items";
-import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
+import { count, give, input, level, patch, race, racers, run, toGo, view } from "./testing";
 import { ITEM_KINDS } from "./state";
 import { botField } from "./trackStats";
 import { TUNING } from "./tuning";
 
+/** Harbour Lights with its bridges levelled: these tests drive its start straight as the flat road it was. */
+const HARBOUR_LIGHTS = level(HARBOUR_AS_BUILT);
 const harbour = TrackGeometry.build(HARBOUR_LIGHTS);
 type R = ReturnType<typeof race>;
 
