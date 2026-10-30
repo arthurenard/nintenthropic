@@ -56,7 +56,8 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   (x1.4); **middle** (Kit, Juniper, Mango, Dabble) are the baseline; **heavy**
   (Bramble, Rivet) accelerate 10% slower and grip a little less but top out
   3% higher and shove back (x0.6). Small differences: skill decides races.
-  Bots drive the drivers nobody picked and keep them all cup long.
+  Bots drive the drivers nobody picked and keep them all cup long, each with
+  a temperament of its own (aggressive, careful or erratic; "Sim", Bots).
 - **Grand Prix and Mirror.** The host can race a **cup** (four tracks in a
   row, points 15, 12, 10, 8, 6, 4, 2, 1, standings between races, a podium at
   the end) instead of a single race, and can flip every track left for right
@@ -290,13 +291,65 @@ The numbers (all in `sim/tuning.ts`):
   cutting back across the line. Places by progress (finished karts by finish
   time). Wrong way: facing more than 110° from the track's direction at
   speed for 1.5 s.
-- **Bots.** Follow a racing line (inside of each bend by its curvature, plus
-  a lane of their own), slow before a bend to `sqrt(a / |curvature|)` with a
-  lookahead, drift long bends, use items sensibly (Nitro on a straight, Puck
-  with a kart ahead in line, Slick when someone is close behind). `skill`
-  0..1 scales top speed (0.92..1.0), reactions and mistakes. Gentle rubber
-  band: a bot far ahead of the best player eases off a few percent, one far
-  behind pushes a few percent.
+- **Bots** (`bots.ts`, `temperament.ts`, `variety.ts`, `racecraft.ts`; their
+  numbers in `tuning.ts` `bots`). A bot is only another source of
+  `DriveInput`. It follows a racing line (inside of each bend by its
+  curvature) plus a lane of its own that wanders across the road, slows before
+  a bend to `sqrt(a / |curvature|)` with a lookahead, and drifts long bends.
+  `skill` 0..1 scales top speed (0.92..1.0), reactions and mistakes.
+  - *Temperament*, beside skill: **aggressive** (dives up the inside, brakes
+    late, leans on a kart alongside, holds a Puck for a clean shot, waits for a
+    crowd round the leader with a Skyrocket), **careful** (clean, narrow lines,
+    covers the inside, rarely errs, saves a Nitro for a long straight) or
+    **erratic** (wide, changing lines, big braking-point swings, twice the
+    mistakes, the odd verge cut with only a drift's boost). The bots of a grid
+    are ranked by a hash of name and driver and dealt the three in turn, so
+    every grid of three or more has all three and a bot keeps its temperament
+    through a cup. A person's kart the bots drive (handed over, or on its lap
+    of honour) is **steady**.
+  - *No two laps alike.* The track's bends are listed once (`plan.ts`
+    `corners`); each time round each bend a bot rolls (a hash of the seed, the
+    kart, the bend and the lap: nothing new in the snapshot, and the same race
+    replays) how deep it cuts in, where it brakes (±2 to ±12 m by temperament),
+    how much speed it carries (±2%), whether it drifts, and whether it makes a
+    mistake: running wide on the way out (to just short of the edge, half a
+    metre over it for the erratic, half as far out of a hairpin), braking late
+    and carrying too much speed, missing the apex, or letting a drift go
+    before it charges. Now and then a wobble on a straight. None of it beside
+    an open edge or on ice. Mistakes per bend: 11% at skill 0, a quarter of
+    that at skill 1, times 0.35 (careful), 1 (aggressive) or 1.8 (erratic).
+    In a slide it steers by the way it is going (`courseOf`), and a slide
+    carrying it wide it saves by holding the wheel hard against it, which
+    straightens the kart out. From skill 0.5 it may shake the wheel at a trick ramp's
+    lip to kick the jump (its skill times 1 aggressive, 0.9 erratic, 0.5
+    careful), and tricks in the air by skill otherwise.
+  - *Racecraft* against every kart, bot or person: catching one, it picks a
+    side (the inside of a bend coming up, else the side with room) and keeps to
+    it once committed; on a straight at much the same pace it first tucks into
+    the other's wake (`draft`) and goes by when the slingshot flings it out;
+    boxed in, it lifts and drops in behind, never ramming (it
+    closes on a tail at a nudge's 1.5 m/s, 3 for the aggressive). It covers the
+    inside of the next bend from a kart close behind (careful always), but not
+    once that kart is alongside; it leans on a kart beside it in a level fight
+    (aggressive often); and it swerves from a Puck it sees coming (always, when
+    sharp).
+  - *Items with intent*: a Nitro out of a bend onto a straight or on a long
+    straight (to finish a pass, for the bold); a Puck only with a kart lined up
+    and the road straight between; a Seeker at once, or (careful) with the kart
+    ahead within 150 m; a Slick or Decoy kept in hand until a kart is close on
+    its tail and in line (a lone leader holds it); a Comet on a straight, or to
+    be untouchable when something is coming for it; a Blast when a skyrocket,
+    puck or seeker is about to hit, or with karts all round (one is enough for
+    the aggressive); and anything else used after 14 s at the latest (22 s for
+    the aggressive, 8 s for the erratic).
+  - *Pack.* A gentle rubber band, never past the road's top speed: a bot
+    more than 5 m ahead of the best player eases off by up to 10% (5% for a
+    sharp one, so the quick ones stay worth beating) at 95 m; one more than
+    5 m behind pushes up to 6% but no faster than a kart's top speed,
+    and corners as if half as skilful again; well ahead of the player a bot
+    also makes more mistakes, well behind fewer.
+    `packStats.ts` races the bots and a scripted player (`PACK_REPORT=1 npx
+    vitest run src/kart/sim/pack.test.ts --silent=false` prints a table).
 - **The race's end** as in "A race" above. `result()` gives the standings.
 
 `snapshot()` is plain JSON and small (round numbers to millimetres and
@@ -874,7 +927,11 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
   draws and land pointing where they fly, a shake tricks only in the air and
   kicks at the lip, crests throw and hills pull, the slipstream slings, items
   hit, places and laps count, the race ends, `snapshot`/`restore` round-trips,
-  the same seed replays); the net (lobby joins and leaves, a full room, inputs
+  the same seed replays); the bots (`bots.test.ts`: temperaments mixed on every
+  grid and kept through a cup, laps that differ, a pass on a side without a
+  touch, the inside covered, Nitros saved for a straight, a Slick held for a
+  kart on its tail, a Puck dodged, a band that never passes top speed;
+  `pack.test.ts`: a sharp scripted driver beats a gentle one, in company); the net (lobby joins and leaves, a full room, inputs
   in order under loss, prediction converging, the host leaving); the wheel
   (angles, the level, fists and open hands from recorded landmarks, every
   gesture, a drift started at full lock and let go against it, shakes,

@@ -391,8 +391,8 @@ export const TUNING = {
     /** Of the room between the road's middle and its edge (less a margin), a bot cuts this much at most. */
     cutShare: 0.7,
     edgeMargin: 2.8,
-    /** A bot's own lane, as a share of the road's half-width, at most. */
-    laneShare: 0.3,
+    /** A bot's own lane, as a share of the road's half-width, at most (times its temperament's `laneWidth`): a place of its own on the grid that wanders across the road over `laneWander` metres. */
+    laneShare: 0.4,
     /** Looks this far ahead: base + per m/s of speed, between the limits. */
     lookBase: 5,
     lookPerSpeed: 0.6,
@@ -438,17 +438,29 @@ export const TUNING = {
     cutNitroBefore: 6,
     /** A bot tricks off a ramp when an id-and-lap lottery falls under its skill times (1 - this), plus this for a bot sharper than 0.45. */
     trickBase: 0.2,
+    /** A bot this sharp or sharper may shake the wheel at a lip to kick the jump (its temperament's `kick` times its skill is the chance). */
+    kickSkill: 0.5,
     /** A bot steers at least this far (metres) clear of the middle of a slick. */
     slickClearance: 3.4,
     /** and starts steering clear of one this far (metres) before the point it is aiming at. */
     slickNotice: 30,
     /** A bot reads its speed plan this many seconds ahead of itself. */
     planAhead: 0.2,
-    /** Rubber band: a bot more than `start` metres from the best player eases off up to `easeOff`, or pushes up to `push`, by `span` metres. */
-    rubberStart: 60,
-    rubberSpan: 140,
-    easeOff: 0.06,
-    push: 0.05,
+    /**
+     * Rubber band: a bot more than `start` metres from the best player eases
+     * off up to `easeOff` (less by `easeSkill` of it for a sharp bot, so the
+     * quick ones stay worth beating), or pushes up to `push`, by `span`
+     * metres; never past the road's top speed. Well behind it also corners as
+     * if up to `press` more skilful.
+     */
+    rubberStart: 5,
+    rubberSpan: 90,
+    easeOff: 0.1,
+    easeSkill: 0.5,
+    push: 0.06,
+    press: 0.5,
+    /** With no person racing, the band holds the bots to the middle of the field this hard (a share of the above). */
+    fieldShare: 0.5,
     /** Stuck: slower than this for this long and a bot backs up for a while. */
     stuckSpeed: 1.5,
     stuckTime: 1.0,
@@ -466,7 +478,103 @@ export const TUNING = {
     itemWaitFast: 0.7,
     /** A bot holds any item that would spin someone (itself, or whoever it storms or sends a rocket to) within this far (metres) before the lip of a jump over a gap. */
     itemGapQuiet: 140,
-    /** And uses it regardless after this long. */
+    /** And uses it regardless after this long (times its temperament's `holdMax`); a Slick, a Decoy or a Blast it may keep in hand for as long as it likes. */
     itemHoldMax: 14,
+
+    /**
+     * Temperaments (temperament.ts): how a bot races, beside how well (skill).
+     * `mistakes` scales how often it errs; `lineJitter` how much its cut into a
+     * bend changes from lap to lap (a share), `laneWidth` how far it wanders
+     * across the road on the straights (times laneShare), `brakeJitter` how
+     * far (metres, either way) its braking point moves; `corner` scales the
+     * speed it carries through bends; `attack` 0..1 how keen it is to pass
+     * (and how far ahead it starts), `defend` 0..1 how often it covers the
+     * inside from a kart close behind, `lean` 0..1 how often it leans on a
+     * kart beside it, `lunge` how much later it brakes diving up an inside;
+     * `verge` 0..1 its nerve for a verge cut (with a drift's boost, not only a
+     * Nitro); `patience` scales its wait before using an item and `holdMax`
+     * how long it will hold one for the right moment; `kick` times its skill is
+     * its chance of shaking the wheel at a ramp's lip for a bigger jump (from
+     * `kickSkill` up). `steady` is a person's kart the bots drive (handed
+     * over, or home and on its lap of honour).
+     */
+    styles: {
+      aggressive: { mistakes: 1, lineJitter: 0.25, laneWidth: 1, brakeJitter: 6, corner: 1.012, attack: 1, defend: 0.6, lean: 1, lunge: 1, verge: 0.5, patience: 0.6, holdMax: 1.6, kick: 1 },
+      careful: { mistakes: 0.35, lineJitter: 0.12, laneWidth: 0.6, brakeJitter: 3, corner: 0.992, attack: 0.45, defend: 1, lean: 0, lunge: 0, verge: 0, patience: 1.3, holdMax: 1, kick: 0.5 },
+      erratic: { mistakes: 1.8, lineJitter: 0.45, laneWidth: 1.5, brakeJitter: 12, corner: 1, attack: 0.75, defend: 0.25, lean: 0.4, lunge: 0.7, verge: 1, patience: 0.4, holdMax: 0.6, kick: 0.9 },
+      steady: { mistakes: 0.5, lineJitter: 0.1, laneWidth: 0.5, brakeJitter: 2, corner: 1, attack: 0.7, defend: 0.6, lean: 0, lunge: 0.2, verge: 0, patience: 1, holdMax: 1, kick: 0.8 },
+    },
+
+    /** A bend (plan.ts `corners`): the road turning one way at least this tightly (1/m, smoothed), and this tight at its apex. */
+    cornerCurvature: 1 / 150,
+    cornerPeak: 1 / 70,
+    /** A bot wanders across its lane over this many metres. */
+    laneWander: 140,
+    /** Lap to lap, the speed a bot carries through a bend varies by up to this share either way. */
+    paceJitter: 0.02,
+    /**
+     * Mistakes, per bend: this chance at skill 0, less by `mistakeSkill` of it
+     * at skill 1, times the temperament's `mistakes`, and up to `mistakeMood`
+     * of it more for a bot well ahead of the best player (or less, well
+     * behind). Never in a bend by an open edge or on ice. A mistake is running
+     * wide (out to the edge of the road, or a metre over it for the erratic),
+     * braking late (`lateBrake` metres, `hotPace` more speed), missing the
+     * apex, or botching the drift.
+     */
+    mistakeRate: 0.11,
+    mistakeSkill: 0.75,
+    mistakeMood: 0.6,
+    lateBrake: 18,
+    hotPace: 0.1,
+    /** Bends a bot does not drift, at skill 0 (none at skill 1.2). */
+    driftSkip: 0.25,
+    /** A wobble on a straight: this chance per `wobbleCell` metres at skill 0 (times `mistakes`, less with skill), this much wheel (more for the erratic). */
+    wobbleRate: 0.18,
+    wobbleCell: 100,
+    wobbleSteer: 0.22,
+    /** Running wide aims this far (metres) inside the road's edge (`wideOver` further out for the erratic, whose `verge` is 1: over it); half as far out of a bend tighter than `hairpin` (1/m). */
+    wideEdge: 0.9,
+    wideOver: 1.4,
+    hairpin: 1 / 20,
+
+    /**
+     * Racecraft (racecraft.ts). A bot attacks a kart up to `attackRange` (plus
+     * `attackReach` times its `attack`) metres ahead that it is catching (or
+     * `attackTime` seconds ahead at the speed it is catching it), passing
+     * `passGap` metres to one side of it: the inside of a bend coming within
+     * `diveReach` metres (braking `diveLunge` later, times its `lunge`), else
+     * the side with room. On a straight, within `draftClosing` m/s of its pace,
+     * it first tucks into its wake (`draft` above: from `draftApproach` metres
+     * beyond the wake's reach down to `draftPull` metres beyond its near end)
+     * until the slingshot flings it out, then goes by. It covers the inside
+     * from a kart up to `defendRange` metres behind, keeps
+     * off the tail of a kart it cannot get by (`followGap` and below), and
+     * leans `leanIn` metres into a kart beside it (a chance of `leanChance`
+     * times its `lean` per 50 m).
+     */
+    attackRange: 18,
+    attackReach: 14,
+    passGap: 2.9,
+    /** Once this far (metres) off the line of the kart it is passing, it keeps to that side. */
+    commitWidth: 0.7,
+    diveReach: 55,
+    diveLunge: 0.05,
+    draftApproach: 10,
+    draftClosing: 3,
+    draftPull: 2,
+    defendRange: 14,
+    followGap: 5,
+    /** A bot catching a kart fast starts going round it this many seconds before it would reach it. */
+    attackTime: 2.2,
+    /** Behind a kart it cannot get by, it brakes as if at this deceleration (m/s^2) to arrive at its tail... */
+    followBrake: 20,
+    /** ...closing no faster than this (m/s; twice it for the aggressive): a nudge, not a ram. */
+    nudge: 1.5,
+    leanIn: 1.3,
+    leanChance: 0.3,
+    /** A puck that will pass within `puckClear` metres in the next `puckLook` seconds: a bot that sees it (by skill) swerves `puckSwerve` metres away. */
+    puckLook: 0.9,
+    puckClear: 2,
+    puckSwerve: 2.6,
   },
 } as const;
