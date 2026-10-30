@@ -29,7 +29,9 @@ import { seededRandom } from "../../../engine/random";
 import { clamp, fbm2, smoothstep } from "../math";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb, type V3 } from "./builder";
+import { Clearance } from "./clearance";
 import { CulledInstances } from "./cull";
+import { WALL_DISTANCE } from "./features";
 import type { KeepOut } from "./landmarks/place";
 import { bakedLit, type BakeUniforms } from "./shading";
 import type { Terrain } from "./terrain";
@@ -55,7 +57,11 @@ interface Growth {
   /** The flowers: share of the tufts, and their colours. Empty for none. */
   flowers: number;
   petals: string[];
-  /** How near the barrier the growth starts and how far it reaches, metres beyond the road's edge. */
+  /**
+   * How near the barrier the growth starts and how far it reaches: metres beyond the road's edge where the barrier stands at
+   * the usual 6 m, and measured from the barrier itself, so a wide verge (the sand cut inside a hairpin) pushes the growth out
+   * with it, as it does the scenery: nothing grows where a kart can drive.
+   */
   from: number;
   to: number;
 }
@@ -174,6 +180,21 @@ const _e = new Euler();
 const _p = new Vector3();
 const _s = new Vector3();
 
+/** Where the tufts and flowers are scattered: the track's own box and 55 m round it (what the world passes as `bounds`). */
+export function foliageBounds(samples: readonly { x: number; z: number }[]): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const s of samples) {
+    minX = Math.min(minX, s.x);
+    maxX = Math.max(maxX, s.x);
+    minZ = Math.min(minZ, s.z);
+    maxZ = Math.max(maxZ, s.z);
+  }
+  return { minX: minX - 55, maxX: maxX + 55, minZ: minZ - 55, maxZ: maxZ + 55 };
+}
+
 export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: QualitySettings, bake: BakeUniforms, keepOut: readonly KeepOut[], bounds: { minX: number; maxX: number; minZ: number; maxZ: number }): Foliage | null {
   const growth = GROWTH[style.id];
   if (!growth || quality.tufts <= 0) return null;
@@ -205,7 +226,8 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
   const material = bakedLit(new MeshStandardMaterial({ vertexColors: true, side: DoubleSide, roughness: 0.85, metalness: 0 }), bake, "tuft", sway);
   disposables.push(material);
 
-  // ── Where things grow: beyond the barrier, in patches ──
+  // ── Where things grow: beyond the barrier (measured from the road itself, clearance.ts), in patches ──
+  const clearance = new Clearance(terrain);
   const want = Math.round(quality.tufts * growth.share);
   const spots: { x: number; z: number; y: number; scale: number; yaw: number; flower: boolean; tint: number }[] = [];
   let tries = 0;
@@ -213,7 +235,7 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
   while (spots.length < want && tries++ < want * 40) {
     const x = bounds.minX + rnd() * (bounds.maxX - bounds.minX);
     const z = bounds.minZ + rnd() * (bounds.maxZ - bounds.minZ);
-    const edge = terrain.edgeAt(x, z);
+    const edge = clearance.beyond(x, z) + WALL_DISTANCE;
     if (edge < growth.from || edge > growth.to) continue;
     // Thickest by the barrier, thinning out with distance; in clumps, not an even carpet.
     const near = 1 - smoothstep(0, 1, (edge - growth.from) / span);
