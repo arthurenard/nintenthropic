@@ -13,3 +13,6 @@ art/**/_renders/
 # The trailer (tools/trailer/): clips, cards, music and encodes are large and never committed.
 tools/trailer/out/
 __pycache__/
+
+# Offline renders for listening (tools/listen/render.mjs)
+tools/listen/out/

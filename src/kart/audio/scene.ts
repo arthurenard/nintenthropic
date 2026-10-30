@@ -60,9 +60,10 @@ export function listenerAt(scene: Scene, x: number, z: number): Listener | null 
     const dz = z - k.z;
     const distance = Math.hypot(dx, dz);
     if (best && distance >= best.distance) continue;
-    // The kart's right is (-cos h, sin h): a place beside it is to one ear, ahead or behind it is centred.
-    const lateral = (dx * -Math.cos(k.heading) + dz * Math.sin(k.heading)) / (distance + 6);
-    best = { local, distance, pan: clamp(local.pan * 0.5 + lateral * 0.7, -1, 1) };
+    // The kart's right is (-cos h, sin h): a place beside it is to one ear, ahead or behind it is centred. A kart a few
+    // metres to one side is well over to that side, so one going by sweeps across.
+    const lateral = (dx * -Math.cos(k.heading) + dz * Math.sin(k.heading)) / (distance + 3);
+    best = { local, distance, pan: clamp(local.pan * 0.5 + lateral * 0.85, -1, 1) };
   }
   return best;
 }

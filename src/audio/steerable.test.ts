@@ -73,14 +73,14 @@ describe("steerable loops", () => {
   async function ready(): Promise<{ e: WebAudioEngine; ctx: FakeContext }> {
     const ctx = new FakeContext();
     const e = new WebAudioEngine(ctx as unknown as AudioContext, { muted: false, workers: 0 });
-    for (const cue of ["kart_engine_a", "kart_engine_b", "kart_drift"]) e.library.renderNow(cue);
+    for (const cue of ["kart_engine_light_lo", "kart_engine_middle_lo", "kart_drift"]) e.library.renderNow(cue);
     return { e, ctx };
   }
 
   it("starts one looping source at the rate asked", async () => {
     const { e, ctx } = await ready();
     const before = ctx.sources.length;
-    e.controlledLoop("kart_engine_a", { rate: 0.8, pan: -0.5, distance: 20 });
+    e.controlledLoop("kart_engine_light_lo", { rate: 0.8, pan: -0.5, distance: 20 });
     const added = ctx.sources.slice(before);
     expect(added).toHaveLength(1);
     expect(added[0]!.loop).toBe(true);
@@ -92,7 +92,7 @@ describe("steerable loops", () => {
 
   it("moves the pitch, level, pan and distance while it plays, and ignores nonsense", async () => {
     const { e, ctx } = await ready();
-    const loop = e.controlledLoop("kart_engine_b", { rate: 1, volume: 1 });
+    const loop = e.controlledLoop("kart_engine_middle_lo", { rate: 1, volume: 1 });
     const source = ctx.sources.at(-1)!;
     const gain = ctx.gains.at(-1)!.gain;
     const pan = ctx.pans.at(-1)!.pan;
@@ -112,7 +112,7 @@ describe("steerable loops", () => {
 
   it("tells the nodes only what changed, so a race steering every frame does not pile up automation", async () => {
     const { e, ctx } = await ready();
-    const loop = e.controlledLoop("kart_engine_b", { rate: 1.2, volume: 0.5, pan: 0.3, distance: 12 });
+    const loop = e.controlledLoop("kart_engine_middle_lo", { rate: 1.2, volume: 0.5, pan: 0.3, distance: 12 });
     const params = [ctx.sources.at(-1)!.playbackRate, ctx.gains.at(-1)!.gain, ctx.pans.at(-1)!.pan, ctx.filters.at(-1)!.frequency];
     const calls = params.map((p) => vi.spyOn(p, "setTargetAtTime"));
     loop.set({ rate: 1.2, volume: 0.5, pan: 0.3, distance: 12 }); // as it started
@@ -143,8 +143,8 @@ describe("steerable loops", () => {
     const ctx = new FakeContext();
     const e = new WebAudioEngine(ctx as unknown as AudioContext, { muted: false, workers: 0 });
     const before = ctx.sources.length;
-    const early = e.controlledLoop("kart_engine_c", { rate: 1.2 });
-    const cancelled = e.controlledLoop("kart_engine_d", {});
+    const early = e.controlledLoop("kart_engine_heavy_lo", { rate: 1.2 });
+    const cancelled = e.controlledLoop("kart_engine_electric_lo", {});
     cancelled.stop();
     await e.load("kart");
     await new Promise((r) => setTimeout(r, 0));

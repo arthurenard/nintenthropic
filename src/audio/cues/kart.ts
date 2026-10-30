@@ -21,13 +21,34 @@
  * of it: a bed the effects stand on, a little quieter than they are.
  */
 import {
-  engineBuzz,
+  ambBird,
+  ambBleep,
+  ambBreeze,
+  ambBubble,
+  ambCreak,
+  ambCrowd,
+  ambDing,
+  ambGull,
+  ambHawk,
+  ambHum,
+  ambLava,
+  ambRumble,
+  ambWater,
+} from "./kart-ambience";
+import {
+  engineElectricHi,
+  engineElectricLo,
+  engineGrit,
   engineGrowl,
+  engineHeavyHi,
+  engineHeavyLo,
   engineIdle,
-  enginePutt,
-  engineRasp,
-  engineWhirr,
+  engineLightHi,
+  engineLightLo,
+  engineMiddleHi,
+  engineMiddleLo,
   driftScreech,
+  driftSparks,
   droneRotors,
   seekerWhistle,
   surfaceGrass,
@@ -35,9 +56,11 @@ import {
   surfaceMud,
   surfaceSand,
   surfaceSnow,
+  tyreRoad,
   windRush,
 } from "./kart-motion";
 import {
+  backfire,
   boostPad,
   boostWhoosh,
   boxSmash,
@@ -57,10 +80,12 @@ import {
   puckFire,
   rouletteTick,
   slickSplat,
+  slingshot,
   sparkBlue,
   sparkOrange,
   spinout,
   startBoost,
+  superTurbo,
   trick,
   wallScrape,
   wallThud,
@@ -94,15 +119,26 @@ import type { CueSpec } from "./table";
  */
 export const KART_CUES: Record<string, CueSpec> = {
   // --- engines: loops the game steers (rate = pitch, volume, pan, distance) ---------------------------
-  kart_engine_a: { recipe: engineBuzz, pack: "kart", bus: "sfx", level: -13, loop: true, priority: 2, fadeIn: 0.15, fadeOut: 0.2, vary: 0, expect: [0.8, 1.0] },
-  kart_engine_b: { recipe: enginePutt, pack: "kart", bus: "sfx", level: -12, loop: true, priority: 2, fadeIn: 0.15, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
-  kart_engine_c: { recipe: engineWhirr, pack: "kart", bus: "sfx", level: -14, loop: true, priority: 2, fadeIn: 0.15, fadeOut: 0.2, vary: 0, expect: [0.7, 0.9] },
-  kart_engine_d: { recipe: engineRasp, pack: "kart", bus: "sfx", level: -14, loop: true, priority: 2, fadeIn: 0.15, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
+  // Each engine twice, low and high in its revs (src/kart/audio/engines.ts crosses them over), all equally loud.
+  kart_engine_light_lo: { recipe: engineLightLo, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [1.1, 1.3] },
+  kart_engine_light_hi: { recipe: engineLightHi, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [1.0, 1.2] },
+  kart_engine_middle_lo: { recipe: engineMiddleLo, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [1.1, 1.3] },
+  kart_engine_middle_hi: { recipe: engineMiddleHi, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [1.0, 1.2] },
+  kart_engine_heavy_lo: { recipe: engineHeavyLo, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [1.2, 1.4] },
+  kart_engine_heavy_hi: { recipe: engineHeavyHi, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [1.1, 1.3] },
+  kart_engine_electric_lo: { recipe: engineElectricLo, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
+  kart_engine_electric_hi: { recipe: engineElectricHi, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
+  // The rasp of a working engine, steered with the load (the player's own karts only).
+  kart_engine_grit: { recipe: engineGrit, pack: "kart", bus: "sfx", level: -16, loop: true, priority: 2, fadeIn: 0.08, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
   kart_idle: { recipe: engineIdle, pack: "kart", bus: "sfx", level: -15, loop: true, priority: 2, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [0.9, 1.1] },
   kart_growl: { recipe: engineGrowl, pack: "kart", bus: "sfx", level: -14, loop: true, priority: 2, fadeIn: 0.08, fadeOut: 0.25, vary: 0, expect: [0.9, 1.1] },
 
   // --- the drift and the ground ------------------------------------------------------------------------
   kart_drift: { recipe: driftScreech, pack: "kart", bus: "sfx", level: -12, loop: true, priority: 2, fadeIn: 0.05, fadeOut: 0.12, vary: 0, expect: [0.5, 0.7] },
+  // The sparks fizzing under the squeal, hotter at each level (the player's own karts only).
+  kart_drift_sparks: { recipe: driftSparks, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 2, fadeIn: 0.06, fadeOut: 0.15, vary: 0, expect: [1.1, 1.3] },
+  // The tyres rolling on the road, quiet, growing with speed (the player's own karts only).
+  kart_tyre_road: { recipe: tyreRoad, pack: "kart", bus: "sfx", level: -20, loop: true, priority: 1, fadeIn: 0.15, fadeOut: 0.12, vary: 0, expect: [1.5, 1.7] },
   kart_surf_ice: { recipe: surfaceIce, pack: "kart", bus: "sfx", level: -22, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.4, 1.8] },
   kart_surf_snow: { recipe: surfaceSnow, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.6, 2.0] },
   kart_surf_sand: { recipe: surfaceSand, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.5, 1.9] },
@@ -112,6 +148,12 @@ export const KART_CUES: Record<string, CueSpec> = {
   // --- sparks and boosts ----------------------------------------------------------------------------------
   kart_spark_blue: { recipe: sparkBlue, pack: "kart", bus: "sfx", level: -9, priority: 2, maxInstances: 4, vary: 0, minGap: 0.05, expect: [0.2, 0.7] },
   kart_spark_orange: { recipe: sparkOrange, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0, minGap: 0.05, expect: [0.2, 0.8] },
+  // Under the mini-turbo when the hottest (third) charge is let go.
+  kart_super_turbo: { recipe: superTurbo, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0, minGap: 0.05, expect: [0.6, 1.1] },
+  // Flung out of a slipstream.
+  kart_slingshot: { recipe: slingshot, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.05, expect: [0.5, 0.95] },
+  // Lifting off at high revs: the exhaust pops (the player's own karts only).
+  kart_backfire: { recipe: backfire, pack: "kart", bus: "sfx", level: -11, priority: 1, maxInstances: 2, vary: 0.05, minGap: 0.3, expect: [0.12, 0.6] },
   kart_mini_turbo: { recipe: miniTurbo, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.02, minGap: 0.05, expect: [0.3, 0.8] },
   kart_boost_whoosh: { recipe: boostWhoosh, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.8, 1.5] },
   kart_boost_pad: { recipe: boostPad, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.01, minGap: 0.05, expect: [0.4, 1.0] },
@@ -169,6 +211,21 @@ export const KART_CUES: Record<string, CueSpec> = {
   // --- loops of the air ---------------------------------------------------------------------------------------------------
   kart_seeker: { recipe: seekerWhistle, pack: "kart", bus: "sfx", level: -11, loop: true, priority: 3, fadeIn: 0.1, fadeOut: 0.15, vary: 0, expect: [0.6, 1.0] },
   kart_drone: { recipe: droneRotors, pack: "kart", bus: "sfx", level: -11, loop: true, priority: 3, fadeIn: 0.15, fadeOut: 0.25, vary: 0, expect: [0.8, 1.2] },
+
+  // --- the places: very quiet beds (two of each, apart in the stereo field) and things far off (src/kart/audio/ambience.ts) ---
+  kart_amb_breeze: { recipe: ambBreeze, pack: "kart", bus: "sfx", level: -24, loop: true, priority: 0, fadeIn: 1.5, fadeOut: 1, vary: 0, expect: [2.3, 2.5] },
+  kart_amb_water: { recipe: ambWater, pack: "kart", bus: "sfx", level: -24, loop: true, priority: 0, fadeIn: 1.5, fadeOut: 1, vary: 0, expect: [2.3, 2.5] },
+  kart_amb_hum: { recipe: ambHum, pack: "kart", bus: "sfx", level: -24, loop: true, priority: 0, fadeIn: 1.5, fadeOut: 1, vary: 0, expect: [1.9, 2.1] },
+  kart_amb_rumble: { recipe: ambRumble, pack: "kart", bus: "sfx", level: -22, loop: true, priority: 0, fadeIn: 1.5, fadeOut: 1, vary: 0, expect: [2.3, 2.5] },
+  kart_amb_crowd: { recipe: ambCrowd, pack: "kart", bus: "sfx", level: -24, loop: true, priority: 0, fadeIn: 1.5, fadeOut: 1, vary: 0, expect: [2.3, 2.5] },
+  kart_amb_bird: { recipe: ambBird, pack: "kart", bus: "sfx", level: -18, priority: 0, maxInstances: 2, vary: 0.06, minGap: 0.3, expect: [0.2, 0.95] },
+  kart_amb_gull: { recipe: ambGull, pack: "kart", bus: "sfx", level: -18, priority: 0, maxInstances: 2, vary: 0.05, minGap: 0.5, expect: [0.5, 1.35] },
+  kart_amb_hawk: { recipe: ambHawk, pack: "kart", bus: "sfx", level: -18, priority: 0, maxInstances: 1, vary: 0.04, minGap: 1, expect: [0.8, 1.1] },
+  kart_amb_bubble: { recipe: ambBubble, pack: "kart", bus: "sfx", level: -18, priority: 0, maxInstances: 2, vary: 0.06, minGap: 0.3, expect: [0.1, 0.85] },
+  kart_amb_creak: { recipe: ambCreak, pack: "kart", bus: "sfx", level: -18, priority: 0, maxInstances: 1, vary: 0.06, minGap: 1, expect: [0.6, 1.05] },
+  kart_amb_lava: { recipe: ambLava, pack: "kart", bus: "sfx", level: -16, priority: 0, maxInstances: 2, vary: 0.08, minGap: 0.3, expect: [0.3, 0.85] },
+  kart_amb_bleep: { recipe: ambBleep, pack: "kart", bus: "sfx", level: -20, priority: 0, maxInstances: 1, vary: 0, minGap: 0.5, expect: [0.2, 0.75] },
+  kart_amb_ding: { recipe: ambDing, pack: "kart", bus: "sfx", level: -20, priority: 0, maxInstances: 1, vary: 0.01, minGap: 1, expect: [0.8, 1.55] },
 
   // --- The rubber duck, and a horn ----------------------------------------------------------------------------------------------
   kart_duck: { recipe: duckSqueak, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.03, minGap: 0.2, expect: [0.4, 1.0] },

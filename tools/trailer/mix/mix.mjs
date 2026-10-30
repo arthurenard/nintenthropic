@@ -11,7 +11,7 @@
  *            events.json, already shifted by the editor), or several files joined with commas:
  *              { t, type: "play" | "loop" | "stop" | "set" | "filter", cue?, options?, id?, clip?, name?, amount? }
  *            Cue names are the games' own (src/audio/cues/*: Finger Guns' revolver_shot, calib_hit...,
- *            Grip Prix's kart_hit, kart_boost_pad, kart_engine_a... ). A file may also be an object
+ *            Grip Prix's kart_hit, kart_boost_pad, kart_engine_middle_lo... ). A file may also be an object
  *            { events: [...], sfx: [...] }. See mix.ts for how loops, stops and "set" steering pair up.
  * --sfx      an optional list of extra one-shot trailer effects (see sfx.mjs for names and what `t` means):
  *              { t, sfx: "whoosh" | "impact" | "hit" | "boom" | "riser" | "downlifter" | "swell" | "tick" | "snap" | "sparkle" | "zap",

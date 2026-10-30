@@ -149,10 +149,28 @@ export function noiseLoop(t: Take, seconds: number, make: (samples: number) => M
   return loopify(make(n + t.n(overlap)), n);
 }
 
-/** A slow modulator that repeats exactly every loop: ``cycles`` whole sine cycles in ``n`` samples, in [1 - depth, 1]. */
+/**
+ * A slow modulator that repeats exactly every loop: ``cycles`` whole sine cycles in ``n`` samples, in [1 - depth, 1].
+ * A rotating phasor (re-aimed every 4096 samples so it never drifts) rather than a sin() a sample: the loops use
+ * dozens of these.
+ */
 export function cyclic(n: number, cycles: number, depth: number, phase = 0): Float32Array {
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = 1 - depth * (0.5 - 0.5 * Math.sin((TAU * cycles * i) / n + phase));
+  const w = (TAU * cycles) / n;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < n; i++) {
+    if ((i & 4095) === 0) {
+      re = Math.cos(w * i + phase);
+      im = Math.sin(w * i + phase);
+    }
+    out[i] = 1 - depth * (0.5 - 0.5 * im);
+    const nr = re * cw - im * sw;
+    im = re * sw + im * cw;
+    re = nr;
+  }
   return out;
 }
 
