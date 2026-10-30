@@ -860,7 +860,16 @@ front of them (or a laptop), and the TV is the host's screen.
   the road in a bend, rises over rising ground and stays under a roof.
 - **The duck** (`duck`): as in three of the shooting games, a rubber duck
   hides on every track, somewhere off the racing line.
-- **Bank** (`bank`): the road leans into its bends (for the picture).
+- **Bank**: the road leans where its points say (`TrackPoint.bank`, radians,
+  + tipping the right side down, eased from point to point: banked hairpins,
+  S-bends that lean one way then the other, a twist on a straight) and, on a
+  track that sets `bank` (radians per 1/m of curvature), into every bend by how
+  hard it turns; the two add, up to 0.35 rad (`render/world/bank.ts`). For the
+  picture: the sim drives on the centre line's height. The ground, verge,
+  kerbs, barriers, lamps, karts and item boxes follow it, and mirror mode
+  flips it. The track maps (`track/maps/`, written by their test) draw the
+  height along the lap under the map, steep stretches in red and crests sharp
+  enough to fly over marked, and the lean.
 
 ### What each theme can build
 
@@ -883,19 +892,23 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 **Acorn Cup**
 
 1. **Meadow Loop** (meadow): the gentle opener. Up the windmill's hill
-   (eight metres), down an S that leans one way then the other, through a
-   hollow and over a low hill to the pond by the banked hairpin (the duck);
-   hay bales, a hot-air balloon drifting over.
+   (eight metres), down an S over the meadow, through a hollow and over a low
+   hill to the pond by the hairpin (the duck); hay bales, a hot-air balloon
+   drifting over. Its bends are left level: world.test.ts measures the
+   ground and the kerbs on this track from the centre line's height.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under
    the cheese grater (a tunnel); a ramp off a cookbook over the sink (fall in
    and the drone fishes you out — the duck floats in the sink); spilt milk
    (ice) on a bend; the counter's edge is a long open drop on the outside of a
-   sweeping curve; oranges roll down the counter; a teacup spins. Everything is
+   sweeping curve (the bends lean into their turns, that one highest on its
+   open outside); oranges roll down the counter; a teacup spins. Everything is
    enormous: the teapot is thirty metres tall.
-3. **Harbour Lights** (harbour): night on the quay, cranes and ships, crabs
-   scuttling across the chicane.
+3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
+   humpback bridge over a dock and a swing bridge on the back straight to fly
+   over, right angles that lean a little into their turns, crabs scuttling
+   across the chicane.
 4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
    a jump over a gap in the ridge, a lip to fly off into the tumble down
    S-bends that lean one way and the other, boulders rolling down the
@@ -906,8 +919,9 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
    round the carousel; through the big top (a tunnel full of lights); under
    the rollercoaster; a teacup ride spinning beside the road and bumper cars
-   crossing a wide plaza; a ramp off the helter-skelter's foot; the hook-a-duck
-   stall (the duck); fireworks over the finish.
+   crossing a wide plaza; a ramp off the helter-skelter's foot; a hump along
+   the top and a dip under the rollercoaster; the hairpin by the hook-a-duck
+   stall (the duck), banked hard; fireworks over the finish.
 6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
    ice, wide, level) to slide across in the valley, then a climb of fifteen
    metres to the pass and a corkscrew three quarters of the way round a
@@ -940,6 +954,7 @@ seen from above — the hand you play with. The road runs up and down every fing
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
 another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
-minimap is a hand. The duck sunbathes, in sunglasses, in the middle of the palm.
+minimap is a hand, tilted: every finger climbs to its tip and back. The duck
+sunbathes, in sunglasses, in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).
