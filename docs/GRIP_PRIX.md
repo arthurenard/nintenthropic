@@ -944,7 +944,16 @@ front of them (or a laptop), and the TV is the host's screen.
   the road in a bend, rises over rising ground and stays under a roof.
 - **The duck** (`duck`): as in three of the shooting games, a rubber duck
   hides on every track, somewhere off the racing line.
-- **Bank** (`bank`): the road leans into its bends (for the picture).
+- **Bank**: the road leans where its points say (`TrackPoint.bank`, radians,
+  + tipping the right side down, eased from point to point: banked hairpins,
+  S-bends that lean one way then the other, a twist on a straight) and, on a
+  track that sets `bank` (radians per 1/m of curvature), into every bend by how
+  hard it turns; the two add, up to 0.35 rad (`render/world/bank.ts`). For the
+  picture: the sim drives on the centre line's height. The ground, verge,
+  kerbs, barriers, lamps, karts and item boxes follow it, and mirror mode
+  flips it. The track maps (`track/maps/`, written by their test) draw the
+  height along the lap under the map, steep stretches in red and crests sharp
+  enough to fly over marked, and the lean.
 
 ### What each theme can build
 
@@ -966,43 +975,62 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 
 **Acorn Cup**
 
-1. **Meadow Loop** (meadow): the gentle opener. Windmill on the hill, a pond
-   by the hairpin (the duck), hay bales, a hot-air balloon drifting over.
+1. **Meadow Loop** (meadow): the gentle opener. Up the windmill's hill
+   (eight metres), down an S over the meadow, through a hollow and over a low
+   hill to the pond by the hairpin (the duck); hay bales, a hot-air balloon
+   drifting over. Its bends are left level: world.test.ts measures the
+   ground and the kerbs on this track from the centre line's height.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under
    the cheese grater (a tunnel); a ramp off a cookbook over the sink (fall in
    and the drone fishes you out — the duck floats in the sink); spilt milk
    (ice) on a bend; the counter's edge is a long open drop on the outside of a
-   sweeping curve; oranges roll down the counter; a teacup spins. Everything is
+   sweeping curve (the bends lean into their turns, that one highest on its
+   open outside); oranges roll down the counter; a teacup spins. Everything is
    enormous: the teapot is thirty metres tall.
-3. **Harbour Lights** (harbour): night on the quay, cranes and ships, crabs
-   scuttling across the chicane.
-4. **Canyon Run** (canyon): the climb, the ridge road, a jump over a gap in
-   the ridge, boulders rolling down the descent, a sand cut inside the
-   hairpin for the brave.
+3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
+   humpback bridge over a dock and a swing bridge on the back straight to fly
+   over, right angles that lean a little into their turns, crabs scuttling
+   across the chicane.
+4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
+   a jump over a gap in the ridge, a lip to fly off into the tumble down
+   S-bends that lean one way and the other, boulders rolling down the
+   descent, a sand cut inside the hairpin for the brave.
 
 **Comet Cup**
 
 5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
    round the carousel; through the big top (a tunnel full of lights); under
    the rollercoaster; a teacup ride spinning beside the road and bumper cars
-   crossing a wide plaza; a ramp off the helter-skelter's foot; the hook-a-duck
-   stall (the duck); fireworks over the finish.
-6. **Glacier Pass** (snow): an alpine pass at blue hour. Ice patches on the
-   bends, a frozen lake (all ice, wide) to slide across, an ice cave glowing
-   blue, a ski-jump over a crevasse (a drop), penguins waddling across,
-   snowballs rolling down, a yeti who pops out of a snowdrift once a lap.
-   The duck sits by an ice-fishing hole on the lake.
-7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), a stone
-   bridge over lava with nothing either side, fireballs leaping from the lava,
-   boulders, a jump over a lava gap, the volcano smoking behind it all. The
-   duck relaxes in a hot spring.
+   crossing a wide plaza; a ramp off the helter-skelter's foot; a hump along
+   the top and a dip under the rollercoaster; the hairpin by the hook-a-duck
+   stall (the duck), banked hard; fireworks over the finish.
+6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
+   ice, wide, level) to slide across in the valley, then a climb of fifteen
+   metres to the pass and a corkscrew three quarters of the way round a
+   mountain hut, banked hard and falling all the way, a cliff on its outside
+   and ice on its tight inside line; a crest to fly over on the shoulder, a
+   twisting S that leans one way then the other through an ice cave glowing
+   blue, a long falling in-run to a ski-jump over a crevasse (a drop), and
+   moguls on the way home. Penguins waddle across, snowballs roll down at
+   you, a yeti pops out of a snowdrift once a lap. The duck sits by an
+   ice-fishing hole on the lake.
+7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
+   volcano's flank in switchbacks (two banked hairpins, boulders rolling down
+   the legs at you), along a ridge twenty-two metres up that weaves between
+   lava on the outside of its bends with fireballs leaping from it, then
+   straight down the mountain: over a brow to fly, a jump over a lava gap, and
+   a stone bridge over the lava lake with nothing either side, a boost strip
+   along its left half only. The volcano smokes behind it all; the duck
+   relaxes in a hot spring beside the second hairpin.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
-   over a ringed planet, banked bends and almost no barriers (fall and the
-   drone brings you back), boost strips, ring gates, a long jump between two
-   ribbons, asteroids orbiting the road. The duck floats in an astronaut's
-   helmet by a satellite.
+   over a ringed planet: up the twist, where the ribbon rolls one way and
+   then the other, two crests to fly along the top, a banked carousel round
+   the far end that falls all the way, back along a lower ribbon and down to
+   the long jump between two ribbons. Almost no barriers (fall and the drone
+   brings you back), boost strips, ring gates, asteroids orbiting the road.
+   The duck floats in an astronaut's helmet by a satellite.
 
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
@@ -1010,6 +1038,7 @@ seen from above — the hand you play with. The road runs up and down every fing
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
 another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
-minimap is a hand. The duck sunbathes, in sunglasses, in the middle of the palm.
+minimap is a hand, tilted: every finger climbs to its tip and back. The duck
+sunbathes, in sunglasses, in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).
