@@ -47,6 +47,7 @@ const KICK_BEFORE = ticks(R.kickBefore);
 const KICK_AFTER = ticks(R.kickAfter);
 /** Ticks in a wake that charge a slipstream's boost. */
 export const DRAFT_FULL = ticks(DRAFT.charge);
+const DRAFT_REST = ticks(DRAFT.rest);
 const DRAFT_COS = Math.cos(DRAFT.angle);
 
 const finite = (v: number): number => (Number.isFinite(v) ? v : 0);
@@ -582,7 +583,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
   const boosted = k.boost > 0;
   let top = ground.top * k.band * k.mods.topSpeed * (k.comet > 0 ? I.comet.speed : k.zap > 0 ? I.storm.speed : 1);
   if (boosted) top = ground.rough ? ground.boostTop * k.band * k.mods.topSpeed : top * D.boostSpeed;
-  top *= downhill * (k.draft > 0 ? DRAFT.top : 1);
+  top *= downhill * (k.draft > 0 && k.draft < DRAFT_FULL ? DRAFT.top : 1);
 
   // The speed is worked on along a direction: the way the kart is going in a drift, its nose otherwise.
   let sin: number;
@@ -911,13 +912,18 @@ export function slipstream(w: World, emit: Emit): void {
         break;
       }
     }
+    // Just flung out: a rest (counted below zero) before the next wake charges anything.
+    if (a.draft < 0) {
+      a.draft++;
+      continue;
+    }
     if (!wake) {
       a.draft = Math.max(0, a.draft - 2);
       continue;
     }
     a.draft++;
     if (a.draft >= DRAFT_FULL) {
-      a.draft = 0;
+      a.draft = -DRAFT_REST;
       giveBoost(a, DRAFT.boost);
       emit({ type: "boost", kart: a.id, source: "draft", level: 1 });
     }

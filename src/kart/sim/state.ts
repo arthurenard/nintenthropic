@@ -88,7 +88,7 @@ export interface KartState {
   charge: number;
   level: 0 | 1 | 2 | 3;
   prevDrift: boolean;
-  /** Ticks in the wake of another kart (the slipstream's charge). */
+  /** Ticks in the wake of another kart (the slipstream's charge); below zero, the rest after its boost, counting up. */
   draft: number;
 
   // Boost, spin, flood, reverse. All in ticks.

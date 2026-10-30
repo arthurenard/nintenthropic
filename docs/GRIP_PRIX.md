@@ -232,7 +232,7 @@ The numbers (all in `sim/tuning.ts`):
   (0.25 s, up to 0.35 m) into a drift that way: a power-slide. The way the
   kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
   drift 1, straight 0, against it -1: 0.4..1.4), and its nose swings out to
-  0.45 + 0.16 × own radians inside that (17°..35°), most of the way within the
+  0.42 + 0.16 × own radians inside that (15°..33°), most of the way within the
   hop; it keeps 97% of the top speed; ice lets it slide on instead of coming
   round. Charge builds faster the tighter it turns: level 1 (blue) at 1.0 s,
   level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling
@@ -247,10 +247,11 @@ The numbers (all in `sim/tuning.ts`):
   m/s²) can follow it down (the speed squared times its curvature over 1.08
   times gravity), the kart leaves it: a skim that stays driveable until it is
   0.3 m up, then a jump (`jump` with `crest`), tricks and all.
-- **Slipstream.** 2 to 16 m behind another kart, within 1.9 m of its line,
+- **Slipstream.** 2 to 14 m behind another kart, within 1.8 m of its line,
   both over 14 m/s and going the same way (within 0.5 rad): the top speed is
-  4% higher and after 1.4 s in the wake the kart is flung out with a 0.8 s
-  boost (`boost` with source `draft`); `KartView.draft` is the charge.
+  3% higher and after 1.5 s in the wake the kart is flung out with a 0.7 s
+  boost (`boost` with source `draft`), then rests 2.5 s before a wake charges
+  it again; `KartView.draft` is the charge.
 - **Boost.** Top speed +35% and strong acceleration while it lasts. Nitro
   1.5 s, a pad 1.0 s, a start boost 1.0 s.
 - **Start.** The countdown is 3 s plus half a second of "ready". Throttle

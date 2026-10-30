@@ -226,7 +226,7 @@ describe("hop and drift", () => {
     return (((((k.heading - (k.course ?? k.heading)) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * (180 / Math.PI);
   };
 
-  it("is a power-slide: the tail swings out within the hop and holds 17-35° by the wheel, and the speed is kept", () => {
+  it("is a power-slide: the tail swings out within the hop and holds 15-33° by the wheel, and the speed is kept", () => {
     const held: Record<string, number> = {};
     for (const [name, wheel] of [["into", 1], ["straight", 0], ["against", -0.6]] as const) {
       const r = arena();

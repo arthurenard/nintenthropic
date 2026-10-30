@@ -194,8 +194,8 @@ export const TUNING = {
     /** The way it goes turns at base + range * own of a full turn: 0.4..1.4. */
     steerBase: 0.9,
     steerRange: 0.5,
-    /** The nose is slip + slipRange * own inside the way it goes: 17°..35°. */
-    slip: 0.45,
+    /** The nose is slip + slipRange * own inside the way it goes: 15°..33°. */
+    slip: 0.42,
     slipRange: 0.16,
     /** The tail swings out to it at this rate (1/s): most of the way within the hop. */
     swing: 9,
@@ -222,17 +222,19 @@ export const TUNING = {
    * `side` metres either side of its line, both faster than `minSpeed` and going
    * the same way within `angle`), a kart pushes less air: its top speed is
    * `top` higher, and after `charge` seconds there it is flung out with a boost
-   * of `boost` seconds. Out of the wake the charge drains twice as fast.
+   * of `boost` seconds; then `rest` seconds before a wake charges it again. Out of
+   * the wake the charge drains twice as fast.
    */
   draft: {
-    reach: 16,
+    reach: 14,
     near: 2,
-    side: 1.9,
+    side: 1.8,
     minSpeed: 14,
     angle: 0.5,
-    top: 1.04,
-    charge: 1.4,
-    boost: 0.8,
+    top: 1.03,
+    charge: 1.5,
+    boost: 0.7,
+    rest: 2.5,
   },
 
   boost: {
