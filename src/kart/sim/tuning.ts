@@ -39,10 +39,25 @@ export const TUNING = {
     reverseDelay: 0.3,
     reverseTop: 7,
     reverseTau: 0.6,
-    /** Nothing goes faster than this, whatever bumps and slides do: a boosted top speed and a little over. */
+    /** Nothing goes faster than this, whatever bumps, slides and hills do: a boosted top speed and a little over. */
     maxSpeed: 36,
     /** A spinning kart sheds speed with this rate constant (1/s). */
     spinDrag: 2.5,
+  },
+
+  /**
+   * Hills. Along the road's grade (rise per metre the way the kart goes) gravity
+   * pulls at `pull` m/s^2 per unit of grade: a kart slows climbing and gathers
+   * speed coming down. Downhill the top speed rises by `downTop` per unit of
+   * grade, and the steepest of the descent over the last `carry` metres counts,
+   * so the speed a kart gathered is carried out of the dip rather than braked
+   * off at its foot. The grade is read over `span` metres either side.
+   */
+  slope: {
+    pull: 9,
+    downTop: 1.1,
+    carry: 22,
+    span: 2,
   },
 
   steer: {
@@ -55,7 +70,15 @@ export const TUNING = {
     /** The steer eases toward the wheel with this rate (1/s), so the front wheels do not snap. */
     response: 18,
     /** Of the sideways speed the ground's grip removes, this share comes out as forward speed; the rest is scrubbed. */
-    slideKept: 0.85,
+    slideKept: 0.88,
+    /**
+     * A nose turned further than this from the way the kart is going (radians:
+     * the end of a power-slide, a shove) swings back toward it at `align` (1/s,
+     * on the road; less on slippery ground), as the grip pulls the travel round to
+     * meet it. Ordinary steering never slides this far.
+     */
+    slipFree: 0.26,
+    align: 7,
   },
 
   hop: {
@@ -97,25 +120,47 @@ export const TUNING = {
 
   ramp: {
     /**
-     * Upward speed at the lip at top speed, m/s, unless the ramp says: about
-     * 1.1 s in the air. (The picture draws a ramp as a wedge 16 m long and 2.4 m
-     * high ending at the lip and has the kart climb it; the sim's height, the
-     * `hop`, is 0 on it and at the lip, and the jump rises from there.)
+     * A ramp's `lift` (TrackDef: 7 unless it says) sets how big it is: a wedge
+     * `length` metres long rising to `height` x lift / 7 at the lip (the picture
+     * draws the same wedge: render/world/features.ts), and the jump. The kart
+     * climbs the wedge as part of the road and leaves the lip from its top,
+     * rising at lift x `launch` m/s at top speed: about 1.2 s in the air, the
+     * top of the arc some 3.5 m over the road.
      */
     lift: 7,
+    length: 16,
+    height: 2.4,
+    launch: 0.72,
     gravity: 12.5,
     /** The lift scales with speed over top speed, between these. */
     minShare: 0.4,
     maxShare: 1.3,
-    /** Slower than this the ramp is only a bump. */
+    /** Slower than this the kart only rolls off the lip and drops. */
     minSpeed: 9,
-    /** In the air the wheel turns the kart this share of what it does on the road, and the velocity follows the heading at this rate (1/s). */
-    airYaw: 0.3,
-    airGrip: 0.8,
+    /** In the air the wheel turns the way the kart flies this fast (rad/s at full lock), and its nose swings round to it at `airAlign` (1/s). */
+    airTurn: 0.55,
+    airAlign: 4,
     /** A kart this much higher than another passes over it. */
     passOver: 1.1,
-    /** A trick in the air boosts on landing for this long. */
+    /** A trick in the air boosts on landing for this long; a trick with a shake right at the lip for `kickBoost`. */
     trickBoost: 0.8,
+    kickBoost: 1.1,
+    /**
+     * Shaking the wheel this long before the lip, or this long after it, kicks the
+     * jump: `kickLift` more upward speed (m/s) and `kickSpeed` more speed.
+     */
+    kickBefore: 0.3,
+    kickAfter: 0.2,
+    kickLift: 1.8,
+    kickSpeed: 1.06,
+    /**
+     * Over a crest the road falls away: where its curvature times the speed
+     * squared outdoes the pull of gravity by `crest`, the kart leaves the road and
+     * flies. A flight that never rises `quiet` metres off the road is not a jump
+     * (no sound, no trick).
+     */
+    crest: 1.08,
+    quiet: 0.3,
   },
 
   /** Falling off an open edge, and the drone that fetches the kart. */
@@ -139,22 +184,64 @@ export const TUNING = {
     clearHeight: 0.8,
   },
 
+  /**
+   * A drift is a power-slide: the kart goes round the way it is travelling,
+   * its tail out and its nose `slip` radians inside that, the wheel holding it.
+   * Into the drift (own way: 1) it comes round tighter and the tail swings
+   * further; against it (other way: -1) it runs wider with the tail tucked in.
+   */
   drift: {
-    /** In a drift the steer is remapped to base + range * (own way: 1, other way: -1): 0.4..1.4 of a full turn. */
+    /** The way it goes turns at base + range * own of a full turn: 0.4..1.4. */
     steerBase: 0.9,
     steerRange: 0.5,
+    /** The nose is slip + slipRange * own inside the way it goes: 15°..33°. */
+    slip: 0.42,
+    slipRange: 0.16,
+    /** The tail swings out to it at this rate (1/s): most of the way within the hop. */
+    swing: 9,
+    /** Of the top speed, a drift keeps this much. */
+    keep: 0.97,
     /** Charge grows at 1.0 per tick at a middling turn, 0.7 at the loosest and 1.3 at the tightest. */
     rateLoose: 0.7,
     rateTight: 1.3,
-    /** Charge needed, in seconds of a middling turn. */
+    /** Charge needed, in seconds of a middling turn: blue, orange, and the hottest. */
     level1: 1.0,
-    level2: 2.2,
+    level2: 2.1,
+    level3: 3.4,
     boost1: 0.7,
-    boost2: 1.4,
+    boost2: 1.3,
+    boost3: 1.9,
     /** Slower than this the drift is over (no boost). */
     minSpeed: 4,
     /** A brake this hard ends a drift (the boost is still earned). */
     endBrake: 0.5,
+    /**
+     * The wheel held this hard against the drift (own at or below minus this)
+     * for `againstTime` seconds straightens the kart out of it (the boost is
+     * still earned): the way out of a slide toward the other side of the road.
+     */
+    against: 0.8,
+    againstTime: 0.25,
+  },
+
+  /**
+   * Slipstream: right behind another kart (within `reach` metres behind it and
+   * `side` metres either side of its line, both faster than `minSpeed` and going
+   * the same way within `angle`), a kart pushes less air: its top speed is
+   * `top` higher, and after `charge` seconds there it is flung out with a boost
+   * of `boost` seconds; then `rest` seconds before a wake charges it again. Out of
+   * the wake the charge drains twice as fast.
+   */
+  draft: {
+    reach: 14,
+    near: 2,
+    side: 1.8,
+    minSpeed: 14,
+    angle: 0.5,
+    top: 1.03,
+    charge: 1.5,
+    boost: 0.7,
+    rest: 2.5,
   },
 
   boost: {
@@ -189,7 +276,11 @@ export const TUNING = {
 
   bump: {
     /** How lively a bump is: at 0 the karts would move on together, at 1 they would part as fast as they met. */
-    restitution: 0.35,
+    restitution: 0.6,
+    /** A shove off the middle turns the kart: radians per m/s of sideways shove per metre off its middle. */
+    yaw: 0.035,
+    /** ...but never more than this. */
+    maxYaw: 0.2,
     /** A kart weighs 1 + speed / this much in a bump. */
     weightPerSpeed: 12,
     /** Closing speed that makes a bump of strength 1. */
@@ -228,6 +319,8 @@ export const TUNING = {
      * Any less and a kart could drive a wheel through the glass and nothing would happen.
      */
     pickupRadius: 2.3,
+    /** A kart higher in the air than this flies over a box. */
+    boxClear: 2.4,
     respawn: 3,
     roulette: 1.0,
     puck: { speed: 40, life: 6, hitRadius: 1.4, ownerGrace: 0.5, spawnAhead: 2.5 },
