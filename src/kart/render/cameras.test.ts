@@ -224,8 +224,10 @@ describe("the camera's life", () => {
     drive(c, 2, () => ({ drift: 1, steer: 0.5, heading: -0.52, course: 0 }));
     const look = new Vector3(0, 0, -1).applyQuaternion(c.camera.quaternion);
     const yaw = Math.atan2(look.x, look.z);
-    expect(Math.abs(yaw)).toBeLessThan(0.3);
+    // Looking a little to the right of the course, well short of the nose, from out to the left (+x) of the slide.
     expect(yaw).toBeLessThan(0);
+    expect(yaw).toBeGreaterThan(-0.4);
+    expect(c.camera.position.x).toBeGreaterThan(0.4);
   });
 
   it("counts a landing once when both the sim and its own eye report it", () => {

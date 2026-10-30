@@ -315,7 +315,9 @@ export class ChaseCamera {
     const narrow = clamp(aspect / 1.6, 0.6, 1);
     const sideTarget = spinning || rescued ? 0 : clamp(-kart.drift * 0.5 + this.slip * 1.1, -1.3, 1.3) * smoothstep(0.15, 0.55, speedRatio) * narrow * (calm ? 0.5 : 1);
     this.side = this.fresh ? sideTarget : damp(this.side, sideTarget, 2.5, dt);
-    const aimTarget = spinning || rescued ? 0 : (clamp(turn * 0.22, -0.13, 0.13) - kart.steer * 0.04 * sr) * (calm ? 0.5 : 1);
+    // Which way the kart is turning: the wheel, or in a drift the drift's side (the wheel may be held against the slide).
+    const turning = drifting ? kart.drift * 0.9 : kart.steer;
+    const aimTarget = spinning || rescued ? 0 : (clamp(turn * 0.22, -0.13, 0.13) - turning * 0.04 * sr) * (calm ? 0.5 : 1);
     this.aim = this.fresh ? aimTarget : damp(this.aim, aimTarget, 2.5, dt);
 
     const { distance, height } = chaseOffsets(speedRatio, this.boost, aspect);
@@ -386,7 +388,7 @@ export class ChaseCamera {
     else cam.lookAt(this.target.x, this.target.y + this.thump * 1.3 * live, this.target.z);
 
     // Lean into the bend with the wheel and the drift, and with the road's own banking.
-    const lean = -(kart.steer * sr * 0.05 + kart.drift * 0.03) * (spinning || rescued ? 0.3 : 1);
+    const lean = -(turning * sr * 0.05 + kart.drift * 0.025) * (spinning || rescued ? 0.3 : 1);
     const rollTarget = calm ? 0 : clamp(lean - bank * 0.55, -MAX_ROLL, MAX_ROLL) * live;
     this.roll = this.fresh ? rollTarget : damp(this.roll, rollTarget, 4.5, dt);
     cam.rotateZ(this.roll + shake * 0.022 * wobble(t, 33.3, 19.1, 2.2));
