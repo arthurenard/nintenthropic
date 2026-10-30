@@ -38,24 +38,51 @@ export interface EngineTarget {
  * Pitch follows speed (a run from a low idle at a standstill to a shriek at
  * top speed and past it on a boost), drops a little in a drift and off the
  * road, climbs when the wheels leave the ground, sags in a spin-out, and the
- * engine is cut while the drone carries the kart.
+ * engine is cut while the drone carries the kart. `load` (-1..1, the kart's
+ * acceleration: `engineLoad`) is the engine working: pulling hard it sings a
+ * little higher and louder, braking or held back it drops and quietens.
  */
-export function engineTarget(k: KartView): EngineTarget {
+export function engineTarget(k: KartView, load = 0): EngineTarget {
   const f = k.speed / TOP_SPEED;
   const forward = Math.max(0, f);
+  const work = clamp(load, -1, 1);
   let rate = f >= 0 ? 0.64 + 1.1 * Math.pow(Math.min(forward, 1.6), 0.9) : 0.64 + 0.5 * Math.min(1, -f * 3);
   if (k.boost > 0) rate *= 1.1;
   if (k.drift !== 0) rate *= 0.95;
   if (k.offroad) rate *= 0.94;
   if (k.hop > 0.3) rate *= 1.15;
   if (k.spin > 0) rate *= 0.75;
+  rate *= 1 + (work > 0 ? 0.06 : 0.04) * work;
   const carried = k.rescue > 0;
   const speed = Math.abs(k.speed);
   const alive = carried ? 0 : 1;
-  const engine = alive * (k.spin > 0 ? 0.55 : 1) * smoothstep(0.2, 2.5, speed) * (0.55 + 0.45 * Math.min(1, forward));
+  const engine =
+    alive * (k.spin > 0 ? 0.55 : 1) * smoothstep(0.2, 2.5, speed) * (0.55 + 0.45 * Math.min(1, forward)) * (1 + 0.18 * Math.max(0, work) - 0.15 * Math.max(0, -work));
   const idle = alive * (1 - smoothstep(0.4, 4.5, speed)) * (k.spin > 0 ? 0.6 : 1);
   const growl = alive * (k.boost > 0 ? 1 : 0);
   return { rate, engine, idle, growl };
+}
+
+/** How hard the engine is working, -1..1, from the kart's acceleration (m/s²): about 10 m/s² pulling away is full load. */
+export function engineLoad(acceleration: number): number {
+  return clamp(acceleration / 10, -1, 1);
+}
+
+export interface WindTarget {
+  rate: number;
+  volume: number;
+}
+
+/**
+ * The wind round the player's own kart: nothing at a cruise, rising toward top speed and past it on a boost, and
+ * loudest in the air off a jump (a hop's few centimetres make none). Carried by the drone, none.
+ */
+export function windTarget(k: KartView): WindTarget {
+  if (k.rescue > 0) return { rate: 1, volume: 0 };
+  const speed = Math.abs(k.speed);
+  const air = smoothstep(0.5, 2.2, k.hop);
+  const volume = Math.min(1, smoothstep(15, 30, speed) * 0.6 + air * 0.55 + (k.boost > 0 ? 0.15 : 0));
+  return { rate: 0.75 + 0.4 * clamp(speed / TOP_SPEED, 0, 1.3) + 0.12 * air, volume };
 }
 
 export interface DriftTarget {
@@ -70,7 +97,7 @@ export function driftTarget(k: KartView): DriftTarget {
   return {
     on,
     rate: 0.88 + 0.3 * clamp(Math.abs(k.speed) / TOP_SPEED, 0, 1) + 0.09 * k.driftLevel,
-    volume: 0.6 + 0.22 * k.driftLevel,
+    volume: Math.min(1, 0.55 + 0.2 * k.driftLevel + 0.15 * Math.abs(k.steer)),
   };
 }
 

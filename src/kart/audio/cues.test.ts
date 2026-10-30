@@ -48,7 +48,9 @@ describe("the kart pack", () => {
       // countdown, laps, finishing
       "kart_beep_low", "kart_beep_high", "kart_lap", "kart_final_lap", "kart_finish_win", "kart_finish_ok", "kart_cheer",
       // air
-      "kart_jump", "kart_trick", "kart_land", "kart_fall", "kart_drone", "kart_drone_drop", "kart_hazard",
+      "kart_jump", "kart_trick", "kart_land", "kart_thud", "kart_fall", "kart_drone", "kart_drone_drop", "kart_hazard", "kart_wind",
+      // a place won or lost
+      "kart_place_up", "kart_place_down",
       // surfaces
       "kart_surf_ice", "kart_surf_snow", "kart_surf_sand", "kart_surf_mud", "kart_surf_grass",
       // the duck, the horn, the interface
@@ -59,7 +61,7 @@ describe("the kart pack", () => {
   });
 
   it("marks the loops as loops and the one-shots as not", () => {
-    const loops = ["kart_engine_a", "kart_engine_b", "kart_engine_c", "kart_engine_d", "kart_idle", "kart_growl", "kart_drift", "kart_seeker", "kart_drone", ...Object.values(SURFACE_CUES)];
+    const loops = ["kart_engine_a", "kart_engine_b", "kart_engine_c", "kart_engine_d", "kart_idle", "kart_growl", "kart_drift", "kart_seeker", "kart_drone", "kart_wind", ...Object.values(SURFACE_CUES)];
     for (const cue of KART) expect(!!CUES[cue]!.loop, cue).toBe(loops.includes(cue));
   });
 
@@ -116,7 +118,7 @@ describe("the kart pack", () => {
   });
 
   it("asks only for cues that exist: every name the code plays is in the table", () => {
-    const names = new Set<string>([...Object.values(SOUND_CUES), ...ENGINE_CUES, ...Object.values(SURFACE_CUES), "kart_idle", "kart_growl", "kart_drift", "kart_seeker", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood", "kart_duck", "kart_puck_bounce"]);
+    const names = new Set<string>([...Object.values(SOUND_CUES), ...ENGINE_CUES, ...Object.values(SURFACE_CUES), "kart_idle", "kart_growl", "kart_drift", "kart_seeker", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood", "kart_duck", "kart_puck_bounce", "kart_wind", "kart_thud", "kart_place_up", "kart_place_down"]);
     const scene = {
       locals: [{ kart: 0, pan: 0 }],
       karts: new Map([[0, { id: 0, x: 0, z: 0, heading: 0 } as never], [1, { id: 1, x: 3, z: 0, heading: 0 } as never], [5, { id: 5, x: 4, z: 0, heading: 0 } as never], [2, { id: 2, x: 5, z: 0, heading: 0 } as never], [3, { id: 3, x: 6, z: 0, heading: 0 } as never]]),

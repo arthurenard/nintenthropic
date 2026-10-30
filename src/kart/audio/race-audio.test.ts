@@ -646,3 +646,61 @@ describe("localKarts", () => {
     expect(localKarts([])).toEqual([]);
   });
 });
+
+describe("the player's own kart, livelier", () => {
+  it("works the engine: pulling away it sings higher and louder than holding the same speed", () => {
+    const steady = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 30; i++) steady.frame([kart(0, { speed: 12 })]);
+    const pulling = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 30; i++) pulling.frame([kart(0, { speed: 12 - (30 - i) * 0.12 })]);
+    const a = steady.bus.lastSet("kart_engine_a")!;
+    const b = pulling.bus.lastSet("kart_engine_a")!;
+    expect(b.rate!).toBeGreaterThan(a.rate! * 1.02);
+    expect(b.volume!).toBeGreaterThan(a.volume!);
+  });
+
+  it("blows the wind at top speed and loudest in the air, and none at a cruise", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 12 })]);
+    expect(bus.running("kart_wind")).toBe(0);
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 26 })]);
+    expect(bus.running("kart_wind")).toBe(1);
+    const fast = bus.lastSet("kart_wind")!.volume!;
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 26, hop: 2.5 })]);
+    expect(bus.lastSet("kart_wind")!.volume!).toBeGreaterThan(fast * 1.5);
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 8 })]);
+    expect(bus.running("kart_wind")).toBe(0);
+  });
+
+  it("thuds under the landing of a long flight, harder the longer it flew, and not after a hop", () => {
+    const fly = (seconds: number, height: number) => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      for (let t = 0; t < seconds; t += 1 / 60) frame([kart(0, { speed: 20, hop: height })]);
+      frame([kart(0, { speed: 20, hop: 0 })]);
+      return bus.played.filter((p) => p.cue === "kart_thud");
+    };
+    expect(fly(0.25, 0.35)).toHaveLength(0);
+    const short = fly(0.5, 1.5);
+    const long = fly(1.2, 3);
+    expect(short).toHaveLength(1);
+    expect(long).toHaveLength(1);
+    expect(long[0]!.options.volume!).toBeGreaterThan(short[0]!.options.volume!);
+    expect(long[0]!.options.rate!).toBeLessThan(short[0]!.options.rate!);
+  });
+
+  it("plays two notes up for a place won and down for a place lost, not too often and not off the grid", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    frame([kart(0, { place: 4 })], { time: 0.5 });
+    frame([kart(0, { place: 3 })], { time: 0.6 });
+    expect(bus.cues).not.toContain("kart_place_up");
+    frame([kart(0, { place: 3 })], { time: 5 });
+    frame([kart(0, { place: 2 })], { time: 5.1 });
+    expect(bus.cues.filter((c) => c === "kart_place_up")).toHaveLength(1);
+    // Swapping straight back with the kart alongside: no second note so soon.
+    frame([kart(0, { place: 3 })], { time: 5.12 });
+    expect(bus.cues).not.toContain("kart_place_down");
+    for (let i = 0; i < 60; i++) frame([kart(0, { place: 3 })], { time: 5.2 + i / 60 });
+    frame([kart(0, { place: 4 })], { time: 6.5 });
+    expect(bus.cues.filter((c) => c === "kart_place_down")).toHaveLength(1);
+  });
+});

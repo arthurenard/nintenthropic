@@ -32,8 +32,10 @@ import {
   crowdTrim,
   driftTarget,
   ease,
+  engineLoad,
   engineTarget,
   surfaceTarget,
+  windTarget,
 } from "./engines";
 import { type Order, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
@@ -97,6 +99,8 @@ export interface RaceAudioStats {
   surfaces: number;
   seekers: number;
   drones: number;
+  /** The wind round the player's own karts. */
+  winds: number;
   /** Sounds started in the last frame. */
   fired: number;
   /** The music playing, by piece id ("meadow", "meadow-final"), or null. */
@@ -116,6 +120,8 @@ const LOOP_RADIUS = 45;
 const MAX_SEEKERS = 3;
 /** Other karts' drift squeals heard at once, besides the local karts' own. */
 const MAX_OTHER_DRIFTS = 3;
+/** Seconds between two notes for a kart's place changing (karts side by side swap places back and forth). */
+const PLACE_GAP = 0.6;
 
 interface EngineVoice {
   timbre: number;
@@ -123,6 +129,9 @@ interface EngineVoice {
   idle: LoopControl | null;
   growl: LoopControl | null;
   growlQuietFor: number;
+  /** The kart's speed a frame ago and how hard its engine is working (-1..1, eased). */
+  lastSpeed: number;
+  load: number;
   rate: number;
   vols: { engine: number; idle: number; growl: number };
   sent: { rate: number; engine: number; idle: number; growl: number; pan: number; distance: number };
@@ -209,6 +218,10 @@ class RaceAudioImpl implements RaceAudio {
   private readonly surfaces = new Map<number, Looper>();
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
+  private readonly winds = new Map<number, Looper>();
+  /** The player's own karts: seconds in the air so far, and the place last heard. */
+  private readonly flights = new Map<number, number>();
+  private readonly places = new Map<number, { place: number; at: number }>();
   private readonly rolls = new Map<number, { next: number; count: number }>();
   private readonly puckHeading = new Map<number, { heading: number; t: number }[]>();
   private readonly lastBounce = new Map<number, number>();
@@ -437,6 +450,7 @@ class RaceAudioImpl implements RaceAudio {
       surfaces: this.surfaces.size,
       seekers: this.seekers.size,
       drones: this.drones.size,
+      winds: this.winds.size,
       fired: this.fired,
       music: this.playingKey,
       paused: this.paused,
@@ -478,6 +492,7 @@ class RaceAudioImpl implements RaceAudio {
     }
     this.engineLoops(scene, step);
     this.stateLoops(view, scene, step);
+    this.ownMoments(view, scene, step);
     this.roulette(scene);
     this.finalLapFallback(view, scene);
     this.lastPhase = view.phase;
@@ -491,6 +506,8 @@ class RaceAudioImpl implements RaceAudio {
       this.finalSwitched = false;
       this.pendingFinal = false;
       this.rolls.clear();
+      this.flights.clear();
+      this.places.clear();
       this.puckHeading.clear();
       if (this.playingKey === `${this.loadedTheme}-final` && this.wantedKey) {
         // The last race ended in its final-lap music: the next one starts from the normal version.
@@ -567,7 +584,13 @@ class RaceAudioImpl implements RaceAudio {
     const trim = crowdTrim(scene.locals.length);
     for (const w of wanted) {
       const k = scene.karts.get(w.id)!;
-      const target = engineTarget(k);
+      // How hard the engine works: the kart's acceleration (in speed, whichever way it goes), eased.
+      const had = this.engines.get(w.id);
+      if (had && dt > 0) {
+        had.load = ease(had.load, engineLoad((Math.abs(k.speed) - Math.abs(had.lastSpeed)) / dt), dt, 0.15);
+        had.lastSpeed = k.speed;
+      }
+      const target = engineTarget(k, had?.load ?? 0);
       const own = w.local !== null;
       const timbre = own ? w.index % ENGINE_CUES.length : (w.id + 2) % ENGINE_CUES.length;
       const pitch = own ? PLAYER_PITCH[w.index % PLAYER_PITCH.length]! : 0.95 + 0.012 * (w.id % 8);
@@ -582,6 +605,8 @@ class RaceAudioImpl implements RaceAudio {
           idle: this.loop("kart_idle", { ...first, rate: 0.92 + 0.07 * timbre }),
           growl: null,
           growlQuietFor: 0,
+          lastSpeed: k.speed,
+          load: 0,
           rate: target.rate,
           vols: { engine: 0, idle: 0, growl: 0 },
           sent: { rate: -1, engine: -1, idle: -1, growl: -1, pan: 9, distance: -1 },
@@ -677,6 +702,18 @@ class RaceAudioImpl implements RaceAudio {
     this.release(this.surfaces, surfaces);
     this.release(this.drones, drones);
 
+    // The wind round the player's own karts: started once it is worth hearing, kept until it has all but gone.
+    const winds = new Set<number>();
+    for (const l of scene.locals) {
+      const k = scene.karts.get(l.kart)!;
+      const w = windTarget(k);
+      if (w.volume > (this.winds.has(l.kart) ? 0.01 : 0.05)) {
+        winds.add(l.kart);
+        this.drive(this.winds, l.kart, "kart_wind", { rate: w.rate, volume: w.volume * fx * crowdTrim(scene.locals.length), pan: l.pan, distance: 0 }, dt);
+      }
+    }
+    this.release(this.winds, winds);
+
     // Homing pucks whistle on their way; any puck's bounce off a wall is heard.
     const seekers: { id: number; distance: number; pan: number }[] = [];
     const live = new Set<number>();
@@ -705,6 +742,36 @@ class RaceAudioImpl implements RaceAudio {
       (loop as Looper & { lastDistance: number }).lastDistance = s.distance;
     }
     this.release(this.seekers, heard);
+  }
+
+  /**
+   * What happens to the player's own karts that no event says: coming down from a long flight (a thud under the
+   * landing, deeper and louder the longer it flew), and a place won or lost (two notes up or down, at most one every
+   * PLACE_GAP seconds a kart, and not in the shuffle off the grid).
+   */
+  private ownMoments(view: RaceView, scene: Scene, dt: number): void {
+    for (const l of scene.locals) {
+      const k = scene.karts.get(l.kart)!;
+      const flown = this.flights.get(l.kart) ?? 0;
+      if (k.hop > 0.5 && k.rescue <= 0) {
+        this.flights.set(l.kart, flown + dt);
+      } else if (k.hop < 0.15) {
+        if (flown > 0.3) {
+          const f = Math.min(1, flown);
+          this.start({ cue: "kart_thud", volume: 0.4 + 0.6 * f, pan: l.pan, distance: 0, rate: 1.06 - 0.12 * f, delay: 0, priority: 2 });
+        }
+        this.flights.delete(l.kart);
+      }
+
+      const heard = this.places.get(l.kart);
+      if (heard && k.place !== heard.place && view.phase === "racing" && view.time > 2 && k.finished === null && this.clock - heard.at >= PLACE_GAP) {
+        const up = k.place < heard.place;
+        this.start({ cue: up ? "kart_place_up" : "kart_place_down", volume: up ? 1 : 0.8, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: up ? 2 : 1 });
+        heard.at = this.clock;
+      }
+      if (heard) heard.place = k.place;
+      else this.places.set(l.kart, { place: k.place, at: -9 });
+    }
   }
 
   /** Start a looper if it is not running, else move it. Returns it. */
@@ -736,7 +803,7 @@ class RaceAudioImpl implements RaceAudio {
       v.growl?.stop();
     }
     this.engines.clear();
-    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones] as Map<number, Looper>[]) {
+    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.winds] as Map<number, Looper>[]) {
       for (const l of map.values()) l.loop.stop();
       map.clear();
     }
