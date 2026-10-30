@@ -310,9 +310,9 @@ describe("engines", () => {
   it("idles on the grid and drives off in four different engines for four players", () => {
     const { bus, frame } = setup([{ kart: 0, pan: -0.6 }, { kart: 1, pan: -0.2 }, { kart: 2, pan: 0.2 }, { kart: 3, pan: 0.6 }]);
     frame([kart(0), kart(1), kart(2), kart(3)], { phase: "countdown" });
-    // The two-stroke, the thumper and the V-twin idle; the motor is silent at a standstill.
+    // The two-stroke, the thumper and the V-twin idle; the motor hums low on its own.
     expect(bus.loops.filter((l) => l.cue === "kart_idle" && !l.stopped)).toHaveLength(3);
-    expect(bus.layers()).toHaveLength(0);
+    expect(bus.layers().map((l) => l.cue)).toEqual(["kart_engine_electric_lo"]);
     for (let i = 0; i < 30; i++) frame([kart(0, { speed: 8 }), kart(1, { speed: 8 }), kart(2, { speed: 8 }), kart(3, { speed: 8 })]);
     const layers = bus.layers();
     expect(new Set(layers.map((l) => l.cue))).toEqual(new Set(["kart_engine_light_lo", "kart_engine_middle_lo", "kart_engine_heavy_lo", "kart_engine_electric_lo"]));

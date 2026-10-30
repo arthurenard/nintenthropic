@@ -33,6 +33,7 @@ export const JOBS = [
   { name: "race-glacier", spec: { race: "glacier-pass", seconds: 60, views: [3] } },
   { name: "race-volcano", spec: { race: "volcano-rush", seconds: 60, views: [6] } },
   { name: "race-kitchen-4", spec: { race: "kitchen-rally", seconds: 50, views: [0, 1, 2, 3] } },
+  ...["meadow", "kitchen", "harbour", "canyon", "funfair", "snow", "volcano", "space", "palm"].map((theme) => ({ name: `place-${theme}`, spec: { scene: `place-${theme}`, music: false } })),
 ];
 
 /** The stretches of the solo scenes (scenes.ts), for a measure of each. */
@@ -82,7 +83,13 @@ function balance(left, right, sr) {
 
 async function main() {
   mkdirSync(OUT, { recursive: true });
-  const server = await createServer({ root: ROOT, server: { port: 4931, strictPort: false, host: "127.0.0.1" }, logLevel: "warn" });
+  // No reloads while it renders: an edit to the source mid-run must not navigate a page out from under a render (each
+  // run starts its own server, so it serves the source as it was when the run began).
+  const server = await createServer({
+    root: ROOT,
+    server: { port: 4931, strictPort: false, host: "127.0.0.1", hmr: false, watch: { ignored: ["**/*"] } },
+    logLevel: "warn",
+  });
   await server.listen();
   const origin = server.resolvedUrls.local[0].replace(/\/$/, "");
   const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--mute-audio", "--disable-renderer-backgrounding", "--disable-background-timer-throttling"] });

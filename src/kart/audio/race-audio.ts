@@ -763,7 +763,9 @@ class RaceAudioImpl implements RaceAudio {
       const pitch = v.revs * v.pitch * v.doppler * unsteady;
       const level = (own ? trim : rivalLevel(w.distance, rank++)) * fx;
       const mix = layerMix(v.revs);
-      v.lo.drive(level * v.engine * mix.lo, pitch / REV_LO, w.pan, w.distance, dt);
+      // A motor does not idle: standing still, it hums low on its own low layer instead.
+      const standby = IDLE_RATE[v.family] > 0 ? 0 : 0.4 * v.idling;
+      v.lo.drive(level * (v.engine * mix.lo + standby), pitch / REV_LO, w.pan, w.distance, dt);
       v.hi.drive(level * v.engine * mix.hi, pitch / REV_HI, w.pan, w.distance, dt);
       // The rasp, the idle and the growl: the player's own karts in full, others only their idle on the grid and their boost.
       const firing = GRIT_RATE[v.family];

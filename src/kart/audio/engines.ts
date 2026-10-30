@@ -138,10 +138,11 @@ export function engineTarget(k: KartView, work = 0): EngineTarget {
 
 /**
  * How hard the engine is working, -1..1: the kart's acceleration (m/s²) and the road's slope (rise over run) together,
- * as the force the engine must find: about 9 m/s² pulling away, or a 1-in-5 climb at a steady speed, is full load.
+ * as the force the engine must find: about 8 m/s² pulling away, or a 1-in-3 climb at a steady speed, is full load (a
+ * toy kart's hills count for more than gravity alone would make them: a climb must be heard).
  */
 export function engineWork(acceleration: number, slope = 0): number {
-  return clamp((acceleration + 9.8 * 1.6 * slope) / 9, -1, 1);
+  return clamp((acceleration + 9.8 * 2.5 * slope) / 8, -1, 1);
 }
 
 /** The share of each layer at these revs: an equal-power crossover from the low layer to the high one. */

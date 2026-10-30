@@ -135,8 +135,9 @@ describe("the kart pack", () => {
     expect(Math.max(...actions) - Math.min(...actions)).toBeLessThan(8);
     expect(mean(mustHear)).toBeGreaterThan(mean(actions) - 0.5);
     expect(mean(actions)).toBeGreaterThan(mean(beds) + 3);
-    // The places sit well under the engines and the road: a bed, not a sound.
-    expect(Math.max(...places)).toBeLessThan(mean(beds) - 6);
+    // The places sit well under the engines: a bed, not a sound.
+    expect(Math.max(...places)).toBeLessThan(Math.min(...ENGINE_CUES.map(atMaster)) - 6);
+    expect(mean(places)).toBeLessThan(mean(beds) - 3);
     // And everything is well clear of silence and of the limiter (the places quieter still, but there).
     for (const cue of KART) {
       expect(atMaster(cue), cue).toBeLessThan(-8);

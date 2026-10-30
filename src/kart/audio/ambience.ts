@@ -36,15 +36,15 @@ export const AMBIENCE: Record<TrackTheme, Ambience> = {
   // Larks over a summer meadow.
   meadow: { beds: [{ cue: "kart_amb_breeze", rate: 1, volume: 0.8 }], spots: [bird([0.9, 1.12])] },
   // A giant kitchen: the fridge hums, a pot bubbles on the stove.
-  kitchen: { beds: [{ cue: "kart_amb_hum", rate: 1, volume: 0.7 }], spots: [{ cue: "kart_amb_bubble", every: [3, 7], distance: [15, 35], rate: [0.85, 1.15], volume: 1 }] },
+  kitchen: { beds: [{ cue: "kart_amb_hum", rate: 1, volume: 0.8 }], spots: [{ cue: "kart_amb_bubble", every: [3, 7], distance: [15, 35], rate: [0.85, 1.15], volume: 1 }] },
   // Water lapping at the quay, a sea breeze, the gulls.
   harbour: {
-    beds: [{ cue: "kart_amb_water", rate: 1, volume: 0.85 }, { cue: "kart_amb_breeze", rate: 0.9, volume: 0.45 }],
+    beds: [{ cue: "kart_amb_water", rate: 1, volume: 1 }, { cue: "kart_amb_breeze", rate: 0.9, volume: 0.6 }],
     spots: [{ cue: "kart_amb_gull", every: [4, 9], distance: [20, 50], rate: [0.9, 1.1], volume: 1 }],
   },
   // A dry wind down the canyon, a hawk high over it.
   canyon: {
-    beds: [{ cue: "kart_amb_breeze", rate: 0.72, volume: 1 }],
+    beds: [{ cue: "kart_amb_breeze", rate: 0.72, volume: 0.9 }],
     spots: [{ cue: "kart_amb_hawk", every: [8, 15], distance: [35, 70], rate: [0.92, 1.06], volume: 1 }],
   },
   // The crowd at the fair, the generators' hum, the high striker's bell.
@@ -54,7 +54,7 @@ export const AMBIENCE: Record<TrackTheme, Ambience> = {
   },
   // A thin cold wind, the ice creaking.
   snow: {
-    beds: [{ cue: "kart_amb_breeze", rate: 1.2, volume: 0.75 }],
+    beds: [{ cue: "kart_amb_breeze", rate: 1.2, volume: 0.9 }],
     spots: [{ cue: "kart_amb_creak", every: [6, 13], distance: [20, 45], rate: [0.8, 1.2], volume: 1 }],
   },
   // The mountain's rumble, lava blorping in its pools.
@@ -64,12 +64,12 @@ export const AMBIENCE: Record<TrackTheme, Ambience> = {
   },
   // A spaceship's deep drone and the hiss of the void, a radio bleeping somewhere.
   space: {
-    beds: [{ cue: "kart_amb_hum", rate: 0.62, volume: 0.45 }, { cue: "kart_amb_breeze", rate: 0.5, volume: 0.5 }],
+    beds: [{ cue: "kart_amb_hum", rate: 0.62, volume: 0.7 }, { cue: "kart_amb_breeze", rate: 0.5, volume: 0.75 }],
     spots: [{ cue: "kart_amb_bleep", every: [3, 8], distance: [15, 40], rate: [1, 1], volume: 1 }],
   },
   // Surf on the beach, wind in the palms, tropical birds.
   palm: {
-    beds: [{ cue: "kart_amb_water", rate: 0.75, volume: 0.8 }, { cue: "kart_amb_breeze", rate: 0.9, volume: 0.45 }],
+    beds: [{ cue: "kart_amb_water", rate: 0.75, volume: 1 }, { cue: "kart_amb_breeze", rate: 0.9, volume: 0.65 }],
     spots: [bird([1.25, 1.5], [3, 7])],
   },
 };

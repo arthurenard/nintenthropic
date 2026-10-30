@@ -16,13 +16,13 @@ import { addMode, bandNoise, brown, pink, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
 import { modal } from "../dsp/voices";
 import { bubble } from "./kit";
-import { TAU, circular, cyclic, expo, grains, noiseLoop, times, tone } from "./kart-kit";
+import { TAU, addCycles, circular, cyclic, expo, grains, noiseLoop, times, tone } from "./kart-kit";
 
 // --- beds ------------------------------------------------------------------------------------------------
 
 /** A breeze: soft air that swells and eases, a rustle of leaves on top. */
 export function ambBreeze(t: Take): Mono {
-  const seconds = 2.4;
+  const seconds = 2.0;
   const n = t.n(seconds);
   const r = t.rng;
   const air = noiseLoop(t, seconds, (m) => bandpass(pink(m, r), t.sr, 140, 1800, 2), 0.4);
@@ -39,7 +39,7 @@ export function ambBreeze(t: Take): Mono {
 
 /** Water lapping at a quay: low sloshes and the small bubbles they leave. */
 export function ambWater(t: Take): Mono {
-  const seconds = 2.4;
+  const seconds = 2.0;
   const n = t.n(seconds);
   const r = t.rng;
   const slosh = noiseLoop(t, seconds, (m) => lowpass(brown(m, r), t.sr, 650, 2), 0.4);
@@ -60,28 +60,28 @@ export function ambHum(t: Take): Mono {
   const seconds = 2.0;
   const n = t.n(seconds);
   const r = t.rng;
-  // 55 Hz and its harmonics, whole cycles in the loop (110 of them in two seconds): cyclic() is a sine of whole cycles.
+  // 55 Hz and its harmonics, whole cycles in the loop (110 of them in two seconds).
   const cycles = Math.round(55 * seconds);
   const hum = new Float32Array(n);
-  for (const [k, a] of [[1, 1], [3, 0.35], [5, 0.15], [2, 0.3], [7, 0.06]] as const) {
-    const s = cyclic(n, cycles * k, 2, r.range(0, TAU));
-    for (let i = 0; i < n; i++) hum[i]! += a * s[i]!;
-  }
+  // The motor's hum and the buzz of its windings: odd harmonics reaching up into the range a small speaker plays.
+  const partials = [[1, 1], [2, 0.3], [3, 0.45], [5, 0.3], [7, 0.2], [9, 0.14], [11, 0.1], [13, 0.07], [15, 0.05]] as const;
+  for (const [k, a] of partials) addCycles(hum, cycles * k, a, r.range(0, TAU));
   normalize(hum);
   times(hum, cyclic(n, 1, 0.2, r.range(0, TAU)));
-  const fan = noiseLoop(t, seconds, (m) => bandpass(pink(m, r), t.sr, 180, 1400, 2), 0.3);
+  const fan = noiseLoop(t, seconds, (m) => bandpass(pink(m, r), t.sr, 250, 2400, 2), 0.3);
   normalize(fan);
+  times(fan, cyclic(n, 3, 0.2, r.range(0, TAU)));
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = 0.6 * hum[i]! + 0.55 * fan[i]!;
+  for (let i = 0; i < n; i++) out[i] = 0.55 * hum[i]! + 0.6 * fan[i]!;
   return out;
 }
 
-/** The ground's rumble by a volcano: a deep, uneven roar with the odd far-off thump in it. */
+/** The ground's rumble by a volcano: a deep, uneven roar, the odd far-off thump in it, and lava crackling. */
 export function ambRumble(t: Take): Mono {
-  const seconds = 2.4;
+  const seconds = 2.0;
   const n = t.n(seconds);
   const r = t.rng;
-  const roar = noiseLoop(t, seconds, (m) => lowpass(brown(m, r), t.sr, 160, 2), 0.4);
+  const roar = noiseLoop(t, seconds, (m) => bandpass(brown(m, r), t.sr, 45, 420, 2), 0.4);
   normalize(roar);
   times(roar, cyclic(n, 2, 0.5, r.range(0, TAU)));
   times(roar, cyclic(n, 5, 0.3, r.range(0, TAU)));
@@ -92,20 +92,26 @@ export function ambRumble(t: Take): Mono {
     for (let i = 0; i < len; i++) {
       const u = i / len;
       g[i] = Math.sin(ph) * Math.exp(-u * 7) * smooth(u / 0.04);
-      ph += (TAU * (55 - 25 * u)) / t.sr;
+      ph += (TAU * (95 - 45 * u)) / t.sr;
     }
     return g.map((v) => v * s);
   });
-  const hiss = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 1500, 5000, 2), 0.4);
-  times(hiss, cyclic(n, 7, 0.8, r.range(0, TAU)));
+  const crackle = grains(t, seconds, 70, (s) => {
+    const len = t.n(r.range(0.001, 0.004));
+    const g = white(len, r);
+    for (let i = 0; i < len; i++) g[i]! *= Math.exp((-3 * i) / len) * s * s;
+    return g;
+  });
+  circular(crackle, (twice) => bandpass(twice, t.sr, 900, 5000, 2));
+  normalize(crackle);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = roar[i]! + 0.6 * thumps[i]! + 0.05 * hiss[i]!;
+  for (let i = 0; i < n; i++) out[i] = roar[i]! + 0.6 * thumps[i]! + 0.18 * crackle[i]!;
   return out;
 }
 
 /** A crowd far off: many voices' murmur, no words, rising and falling. */
 export function ambCrowd(t: Take): Mono {
-  const seconds = 2.4;
+  const seconds = 2.0;
   const n = t.n(seconds);
   const r = t.rng;
   const out = new Float32Array(n);
@@ -114,12 +120,38 @@ export function ambCrowd(t: Take): Mono {
   for (const [low, high] of [[300, 1100], [450, 1700], [700, 2600]] as const) {
     const breath = noiseLoop(t, seconds, (m) => bandpass(white(m, r), t.sr, low, high, 2), 0.25);
     normalize(breath);
+    // Each talker: syllables (0.1..1) times phrases (0.3..1), whole cycles of each in the loop; summed in place.
     const env = new Float32Array(n);
     for (let v = 0; v < 5; v++) {
-      const syllables = cyclic(n, Math.round(r.range(3, 6) * seconds), 0.9, r.range(0, TAU));
-      const phrase = cyclic(n, Math.max(1, Math.round(r.range(0.4, 1.2) * seconds)), 0.7, r.range(0, TAU));
+      const ws = (TAU * Math.round(r.range(3, 6) * seconds)) / n;
+      const wp = (TAU * Math.max(1, Math.round(r.range(0.4, 1.2) * seconds))) / n;
+      const ps = r.range(0, TAU);
+      const pp = r.range(0, TAU);
       const g = r.range(0.6, 1);
-      for (let i = 0; i < n; i++) env[i]! += g * syllables[i]! * phrase[i]!;
+      // Two rotating phasors (re-aimed every 4096 samples): no sin() a sample.
+      const cs = Math.cos(ws);
+      const ss = Math.sin(ws);
+      const cp = Math.cos(wp);
+      const sp = Math.sin(wp);
+      let rs = 0;
+      let is = 0;
+      let rp = 0;
+      let ip = 0;
+      for (let i = 0; i < n; i++) {
+        if ((i & 4095) === 0) {
+          rs = Math.cos(ws * i + ps);
+          is = Math.sin(ws * i + ps);
+          rp = Math.cos(wp * i + pp);
+          ip = Math.sin(wp * i + pp);
+        }
+        env[i]! += g * (0.55 + 0.45 * is) * (0.65 + 0.35 * ip);
+        const ns = rs * cs - is * ss;
+        is = rs * ss + is * cs;
+        rs = ns;
+        const np = rp * cp - ip * sp;
+        ip = rp * sp + ip * cp;
+        rp = np;
+      }
     }
     for (let i = 0; i < n; i++) out[i]! += breath[i]! * env[i]!;
   }

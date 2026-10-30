@@ -180,12 +180,12 @@ const HEAVY: Omit<PulseEngine, "hz" | "seconds"> = {
 const NOTE = { light: 110, middle: 84, heavy: 46, electric: 58 } as const;
 
 /** Engine light, low and high in its revs. */
-export const engineLightLo = (t: Take): Mono => pulseEngine(t, { ...LIGHT, hz: NOTE.light * REV_LO, seconds: 1.2 });
-export const engineLightHi = (t: Take): Mono => pulseEngine(t, { ...LIGHT, hz: NOTE.light * REV_HI, seconds: 1.1 });
-export const engineMiddleLo = (t: Take): Mono => pulseEngine(t, { ...MIDDLE, hz: NOTE.middle * REV_LO, seconds: 1.2 });
-export const engineMiddleHi = (t: Take): Mono => pulseEngine(t, { ...MIDDLE, hz: NOTE.middle * REV_HI, seconds: 1.1 });
-export const engineHeavyLo = (t: Take): Mono => pulseEngine(t, { ...HEAVY, hz: NOTE.heavy * REV_LO, seconds: 1.3 });
-export const engineHeavyHi = (t: Take): Mono => pulseEngine(t, { ...HEAVY, hz: NOTE.heavy * REV_HI, seconds: 1.2 });
+export const engineLightLo = (t: Take): Mono => pulseEngine(t, { ...LIGHT, hz: NOTE.light * REV_LO, seconds: 1 });
+export const engineLightHi = (t: Take): Mono => pulseEngine(t, { ...LIGHT, hz: NOTE.light * REV_HI, seconds: 1 });
+export const engineMiddleLo = (t: Take): Mono => pulseEngine(t, { ...MIDDLE, hz: NOTE.middle * REV_LO, seconds: 1 });
+export const engineMiddleHi = (t: Take): Mono => pulseEngine(t, { ...MIDDLE, hz: NOTE.middle * REV_HI, seconds: 1 });
+export const engineHeavyLo = (t: Take): Mono => pulseEngine(t, { ...HEAVY, hz: NOTE.heavy * REV_LO, seconds: 1 });
+export const engineHeavyHi = (t: Take): Mono => pulseEngine(t, { ...HEAVY, hz: NOTE.heavy * REV_HI, seconds: 1 });
 
 /**
  * Rivet's electric motor: a deep whirr of the rotor's poles with a second
@@ -441,15 +441,18 @@ export function surfaceSand(t: Take): Mono {
 export function surfaceMud(t: Take): Mono {
   const seconds = 1.8;
   const n = t.n(seconds);
-  const body = noiseLoop(t, seconds, (m) => lowpass(brown(m, t.rng), t.sr, 420, 2), 0.3);
+  const body = noiseLoop(t, seconds, (m) => lowpass(brown(m, t.rng), t.sr, 700, 2), 0.3);
   normalize(body);
   times(body, cyclic(n, 3, 0.6, t.rng.range(0, TAU)));
-  const pops = grains(t, seconds, 9, () => {
-    const g = bubble(t, t.rng.range(140, 520), t.rng.range(0.012, 0.03), 1.8);
+  const pops = grains(t, seconds, 12, () => {
+    const g = bubble(t, t.rng.range(180, 650), t.rng.range(0.012, 0.03), 1.8);
     return g.length > 0 ? g : new Float32Array(1);
   });
+  // The squelch of the tyres pulling out of it: a wet mid-band slurp that swells with each turn of the wheel.
+  const squelch = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, t.rng, 350, 1400, 2), 0.3);
+  times(squelch, cyclic(n, 7, 0.85, t.rng.range(0, TAU)));
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = body[i]! * 0.7 + pops[i]! * 0.8;
+  for (let i = 0; i < n; i++) out[i] = body[i]! * 0.6 + pops[i]! * 1.1 + squelch[i]! * 0.25;
   return out;
 }
 

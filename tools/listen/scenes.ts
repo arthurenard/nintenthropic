@@ -329,6 +329,11 @@ export function moments(): Scene {
   });
 }
 
+/** A track's place alone: no karts on it, so only its beds and its far-off happenings are heard. */
+export function place(theme: TrackDef["theme"], seconds = 12): Scene {
+  return scripted({ seconds, theme, go: 0, racers: [], views: [], start: () => ({ x: 0, z: 0 }), state: () => ({}), events: [] });
+}
+
 /** The scripted four-player race of src/kart/audio/simulate.ts. */
 export function script4(): Scene {
   return { seconds: SIM_LENGTH, theme: "meadow", views: SIM_LOCALS.map((l) => l.kart), locals: SIM_LOCALS.map((l) => ({ ...l })), view: simView };
@@ -343,6 +348,7 @@ export const SCENES: Record<string, () => Scene> = {
   pack,
   moments,
   script4,
+  ...Object.fromEntries((["meadow", "kitchen", "harbour", "canyon", "funfair", "snow", "volcano", "space", "palm"] as const).map((theme) => [`place-${theme}`, () => place(theme)])),
 };
 
 /** Who drives each kart of a real race in the listening tool: the cast in turn. */

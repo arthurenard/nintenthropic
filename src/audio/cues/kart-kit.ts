@@ -174,6 +174,27 @@ export function cyclic(n: number, cycles: number, depth: number, phase = 0): Flo
   return out;
 }
 
+/** Add ``amp`` times a sine of ``cycles`` whole cycles over the buffer into it, in place: a loop's partial, allocating nothing. */
+export function addCycles(out: Float32Array, cycles: number, amp: number, phase = 0): Float32Array {
+  const n = out.length;
+  const w = (TAU * cycles) / n;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < n; i++) {
+    if ((i & 4095) === 0) {
+      re = Math.cos(w * i + phase);
+      im = Math.sin(w * i + phase);
+    }
+    out[i]! += amp * im;
+    const nr = re * cw - im * sw;
+    im = re * sw + im * cw;
+    re = nr;
+  }
+  return out;
+}
+
 /** Multiply two buffers in place: ``a *= b``. */
 export function times(a: Mono, b: Float32Array): Mono {
   const n = Math.min(a.length, b.length);

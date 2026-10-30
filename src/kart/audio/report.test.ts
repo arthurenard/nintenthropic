@@ -3,7 +3,9 @@
  * renders every cue of the kart pack and every piece of music offline (in
  * Node, so nothing is ever played), writes a waveform-and-spectrogram PNG for
  * each and a text summary of their levels. KART_AUDIO_ONLY narrows it to
- * names containing that text. Without the variable it does nothing.
+ * names containing that text; KART_AUDIO_WAV=1 also writes each cue's first
+ * take as a WAV file, to listen to later. Without the variable it does
+ * nothing.
  *
  *   KART_AUDIO_REPORT=/tmp/kart npx vitest run src/kart/audio/report.test.ts
  */
@@ -23,6 +25,33 @@ interface NodeApi {
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 const OUT = env.KART_AUDIO_REPORT;
 const ONLY = env.KART_AUDIO_ONLY ?? "";
+const WAV = !!env.KART_AUDIO_WAV;
+
+/** A 16-bit PCM WAV of one or two channels. */
+function wav(channels: Float32Array[], sr: number): Uint8Array {
+  const n = channels[0]!.length;
+  const c = channels.length;
+  const out = new Uint8Array(44 + n * 2 * c);
+  const v = new DataView(out.buffer);
+  const text = (at: number, s: string): void => {
+    for (let i = 0; i < s.length; i++) out[at + i] = s.charCodeAt(i);
+  };
+  text(0, "RIFF");
+  v.setUint32(4, 36 + n * 2 * c, true);
+  text(8, "WAVE");
+  text(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, c, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2 * c, true);
+  v.setUint16(32, 2 * c, true);
+  v.setUint16(34, 16, true);
+  text(36, "data");
+  v.setUint32(40, n * 2 * c, true);
+  for (let i = 0; i < n; i++) for (let k = 0; k < c; k++) v.setInt16(44 + (i * c + k) * 2, Math.max(-32768, Math.min(32767, Math.round(channels[k]![i]! * 32767))), true);
+  return out;
+}
 
 function crc32(bytes: Uint8Array): number {
   let c: number;
@@ -83,6 +112,16 @@ describe.skipIf(!OUT)("report", () => {
       const ch = take.channels[0]!;
       const pic = stack([drawWaveform(ch, 900, 110), drawSpectrogram(ch, sr, 900, 220, 16000)]);
       fs.writeFileSync(`${OUT}/cues/${cue}.png`, png(pic, zlib));
+      if (WAV) {
+        // A loop goes round for four seconds or so, as it would play.
+        const times = take.loop ? Math.max(1, Math.round((4 * sr) / ch.length)) : 1;
+        const channels = take.channels.map((c) => {
+          const out = new Float32Array(c.length * times);
+          for (let k = 0; k < times; k++) out.set(c, k * c.length);
+          return out;
+        });
+        fs.writeFileSync(`${OUT}/cues/${cue}.wav`, wav(channels, sr));
+      }
       const pitch = estimatePitch(ch, sr, Math.floor(ch.length * 0.3), Math.min(4096, Math.floor(ch.length * 0.3)), 60, 3000);
       lines.push(
         `${cue.padEnd(22)} ${(ch.length / sr).toFixed(2).padStart(5)}s peak ${toDb(peakOfBuffer(ch)).toFixed(1).padStart(6)} rms ${toDb(rmsOf(ch)).toFixed(1).padStart(6)} ` +
