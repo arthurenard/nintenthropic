@@ -84,10 +84,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 
   // The rush: the outer part of the view smeared outward along the line from the point the world streams from. Only the
   // scene's part is smeared (what bloom added stays), and never across into another view.
-  if (uRushTaps > 0 && rush.x > 0.003) {
+  if (uRushTaps > 0 && rush.x > 0.03) {
     vec2 fromPoint = (q - rush.zw) * vec2(tile.z / tile.w * uCanvasAspect, 1.0);
-    float m = smoothstep(0.2, 0.8, length(fromPoint)) * rush.x;
-    if (m > 0.004) {
+    float m = smoothstep(0.3, 0.85, length(fromPoint)) * rush.x;
+    if (m > 0.01) {
       vec2 d = uv - (tile.xy + rush.zw * tile.zw);
       vec2 lo = tile.xy + texelSize;
       vec2 hi = tile.xy + tile.zw - texelSize;

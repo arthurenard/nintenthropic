@@ -347,7 +347,7 @@ export class ChaseCamera {
     cam.updateProjectionMatrix();
 
     // How hard the world rushes past, and from where (far ahead along the way the kart goes).
-    const rushTarget = calm ? 0 : clamp(this.boost * 0.65 + smoothstep(0.92, 1.2, speedRatio) * 0.3 + this.punch * 0.3) * live;
+    const rushTarget = calm ? 0 : clamp(this.boost * 0.65 + smoothstep(1.02, 1.25, speedRatio) * 0.3 + this.punch * 0.3) * live;
     this.rush = this.fresh ? rushTarget : damp(this.rush, rushTarget, 6, dt);
     if (this.rush > 0.001) {
       cam.updateMatrixWorld();
