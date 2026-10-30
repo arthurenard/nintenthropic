@@ -30,6 +30,7 @@ import { fbm2, smoothstep } from "../math";
 import { makePoints } from "../points";
 import type { QualitySettings } from "../quality";
 import { MeshBuilder, rgb, type Rgb } from "./builder";
+import { Clearance } from "./clearance";
 import { CulledInstances } from "./cull";
 import { SOLID_MARGIN, WALL_DISTANCE } from "./features";
 import { hasSceneryArt, sceneryVariants } from "./sceneryArt";
@@ -61,6 +62,11 @@ export interface Item {
   sy: number;
   sz: number;
   colour?: Rgb;
+  /**
+   * The ground's height under its middle, where it stands on the ground (its `y` was set from it): it is lowered to the
+   * lowest ground under its footing, so it never hangs over a slope. Things afloat (boats, rocks in space) have none.
+   */
+  ground?: number;
 }
 
 const _m = new Matrix4();
@@ -120,24 +126,52 @@ export interface SceneryTools {
   blocked(x: number, z: number, margin?: number): boolean;
 }
 
-/** How far, horizontally, a geometry reaches from its origin at heights a kart can meet, and how tall it is: worked out once. */
-const reaches = new WeakMap<BufferGeometry, { radius: number; height: number }>();
-function reachOf(geometry: BufferGeometry): { radius: number; height: number } {
+/**
+ * What instancing needs to know of a geometry, worked out once: how far, horizontally, it reaches from its origin at heights
+ * a kart can meet (`radius`) and at all (`foot`); where its footing is (`feet`: (x, z) pairs of its lowest 15 cm, at most
+ * 256 of them); how tall it is; and how far below its origin its lowest point is (`low`: negative for a model with a skirt
+ * to bury the difference on a slope, positive for one whose base was modelled above y = 0).
+ */
+interface Reach {
+  radius: number;
+  foot: number;
+  feet: number[];
+  height: number;
+  low: number;
+}
+const reaches = new WeakMap<BufferGeometry, Reach>();
+function reachOf(geometry: BufferGeometry): Reach {
   let r = reaches.get(geometry);
   if (!r) {
     const pos = geometry.getAttribute("position");
     let radius = 0;
+    let foot = 0;
     let height = 0;
+    let low = Infinity;
+    for (let i = 0; i < pos.count; i++) low = Math.min(low, pos.getY(i));
+    const footing: number[] = [];
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i);
+      const out = Math.hypot(pos.getX(i), pos.getZ(i));
       height = Math.max(height, y);
-      if (y > 0.2) radius = Math.max(radius, Math.hypot(pos.getX(i), pos.getZ(i)));
+      foot = Math.max(foot, out);
+      if (y > 0.2) radius = Math.max(radius, out);
+      if (y < low + 0.15) footing.push(i);
     }
-    r = { radius, height };
+    const feet: number[] = [];
+    const step = Math.max(1, footing.length / 256);
+    for (let k = 0; k < footing.length; k += step) feet.push(pos.getX(footing[Math.floor(k)]!), pos.getZ(footing[Math.floor(k)]!));
+    r = { radius, foot, feet, height, low };
     reaches.set(geometry, r);
   }
   return r;
 }
+
+/**
+ * A thing that would have to sink deeper than its own height to reach the lowest ground under its footing stands on too
+ * steep a slope (a cliff's lip, a bank above lava) and is left out.
+ */
+const STEEPEST = 1;
 
 export interface Spec {
   count: number;
@@ -167,22 +201,40 @@ export function buildScenery(
   const animated: ((t: number) => void)[] = [];
   /** Every instanced kind, culled for each view. */
   const culls: CulledInstances[] = [];
+  /** Where the sim's barrier is, measured from the road itself (the terrain's grid is out by a verge's width where a verge ends). */
+  const clearance = new Clearance(terrain);
+  /** How far beyond the barrier a point is, as the scatter counts it: from where the usual barrier stands, 6 m beyond the road's edge, so a verge pushes everything out with it. */
+  const edgeOf = (x: number, z: number): number => clearance.beyond(x, z) + WALL_DISTANCE;
   /**
    * Instances, but never one whose body reaches within a camera's width of the sim's barrier (the scatter keeps their
-   * centres clear; a big boulder or drift is wider than that): the picture shows nothing solid where a kart can be.
+   * centres clear; a big boulder or drift is wider than that), nor anything low that reaches inside the barrier: the
+   * picture shows nothing standing where a kart can be. Measured with the instance's own size, as it will be drawn.
    */
   const instanced = (geometry: BufferGeometry, mat: Material, items: Item[]): InstancedMesh | null => {
-    const { radius, height } = reachOf(geometry);
-    const clear = items.filter((it) => {
-      if (height * it.sy < 0.45) return true;
-      // The body's rim, all round: the nearest road to the middle is not always the one the rim reaches.
-      const r = radius * Math.max(it.sx, it.sz);
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        if (terrain.clearAt(it.x + Math.sin(a) * r, it.z + Math.cos(a) * r) < SOLID_MARGIN + 0.3) return false;
+    const { radius, foot, feet, height, low } = reachOf(geometry);
+    const clear: Item[] = [];
+    for (const it of items) {
+      const spread = Math.max(it.sx, it.sz);
+      if (height * it.sy < 0.45 ? clearance.at(it.x, it.z, foot * spread, 1) < 0 : clearance.at(it.x, it.z, radius * spread, SOLID_MARGIN + 1) < SOLID_MARGIN + 0.3) continue;
+      if (it.ground === undefined) {
+        clear.push(it);
+        continue;
       }
-      return terrain.clearAt(it.x, it.z) >= SOLID_MARGIN + 0.3;
-    });
+      // Standing on the lowest ground under its footing (as it will be drawn: turned and scaled), so no side of it hangs in the
+      // air over a slope: what its skirt (if it has one) does not reach down to, it sinks; and a base modelled above y = 0 comes
+      // down to the ground.
+      let least = it.ground;
+      const cos = Math.cos(it.yaw);
+      const sin = Math.sin(it.yaw);
+      for (let k = 0; k < feet.length; k += 2) {
+        const fx = feet[k]! * it.sx;
+        const fz = feet[k + 1]! * it.sz;
+        least = Math.min(least, terrain.heightAt(it.x + fx * cos + fz * sin, it.z - fx * sin + fz * cos));
+      }
+      const drop = Math.max(0, it.ground - least + Math.min(0, low) * it.sy) + Math.max(0, low) * it.sy;
+      if (drop > STEEPEST * height * it.sy) continue;
+      clear.push(drop > 0 ? { ...it, y: it.y - drop } : it);
+    }
     const mesh = instancedMesh(geometry, mat, clear);
     if (mesh) culls.push(new CulledInstances(mesh));
     return mesh;
@@ -251,7 +303,7 @@ export function buildScenery(
       const cellKey = spec.cell ? key(x, z, spec.cell) : null;
       if (cellKey !== null && occupied.has(cellKey)) continue;
       // Measured from where the sim's barrier stands (6 m out by default): a verge pushes the scenery out with it.
-      const edge = terrain.clearAt(x, z) + WALL_DISTANCE;
+      const edge = edgeOf(x, z);
       if (edge < spec.minEdge || (spec.maxEdge !== undefined && edge > spec.maxEdge)) continue;
       if (spec.keep && rnd() > spec.keep(x, z, h, edge)) continue;
       if (spec.maxSlope !== undefined) {
@@ -261,7 +313,7 @@ export function buildScenery(
       if (cellKey !== null) occupied.add(cellKey);
       const sc = spec.scale[0] + rnd() * (spec.scale[1] - spec.scale[0]);
       const st = spec.stretch ? spec.stretch[0] + rnd() * (spec.stretch[1] - spec.stretch[0]) : 1;
-      items.push({ x, y: h + (spec.lift ?? -0.05), z, yaw: rnd() * Math.PI * 2, sx: sc, sy: sc * st, sz: sc, colour: tint(rnd) });
+      items.push({ x, y: h + (spec.lift ?? -0.05), z, yaw: rnd() * Math.PI * 2, sx: sc, sy: sc * st, sz: sc, colour: tint(rnd), ground: h });
     }
     return items;
   };
@@ -272,7 +324,7 @@ export function buildScenery(
     let tries = 4000;
     while (spots.length < count && tries-- > 0) {
       const { x, z } = pick();
-      const edge = terrain.clearAt(x, z) + WALL_DISTANCE;
+      const edge = edgeOf(x, z);
       const h = terrain.heightAt(x, z);
       if (edge < minEdge || edge > maxEdge || !accept(x, z, h) || blocked(x, z, 12)) continue;
       if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 70)) continue;
@@ -374,7 +426,7 @@ export function buildScenery(
           const levels = 1 + Math.floor(rnd() * rnd() * 4);
           const colour = palette[Math.floor(rnd() * palette.length)]!;
           for (let k = 0; k < levels; k++) {
-            stacks.push({ x, y: h + k * 2.6, z, yaw: yaw + (rnd() > 0.5 ? 0 : 0.02), sx: 1, sy: 1, sz: 1, colour });
+            stacks.push({ x, y: h + k * 2.6, z, yaw: yaw + (rnd() > 0.5 ? 0 : 0.02), sx: 1, sy: 1, sz: 1, colour, ground: h });
           }
         }
       }
@@ -383,7 +435,7 @@ export function buildScenery(
 
     const wares = landmarkSpots(5, 30, 170, (_x, _z, h) => h > -0.3 && h < 4);
     const wh = geo(props.warehouse());
-    add(instanced(wh, material, wares.map((s) => ({ x: s.x, y: s.h - 0.1, z: s.z, yaw: Math.floor(rnd() * 4) * (Math.PI / 2), sx: 1, sy: 1, sz: 1 }))));
+    add(instanced(wh, material, wares.map((s) => ({ x: s.x, y: s.h - 0.1, z: s.z, yaw: Math.floor(rnd() * 4) * (Math.PI / 2), sx: 1, sy: 1, sz: 1, ground: s.h }))));
 
     // Cranes at the quay edge, booms out over the water.
     const crane = props.crane();

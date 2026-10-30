@@ -73,7 +73,7 @@ function snow(t: SceneryTools): void {
   t.variants("ice", p.iceCrystals, t.scatter({ count: 70, minEdge: 18, maxEdge: 200, cell: 8, scale: [0.9, 1.9], keep: above(-8) }));
   // A few lit cabins far off: a warm window in the blue dusk.
   const spots = t.landmarkSpots(7, 70, 280, (_x, _z, h) => h > -2 && h < 8);
-  const items: Item[] = spots.map((s) => ({ x: s.x, y: s.h - 0.1, z: s.z, yaw: t.rnd() * Math.PI * 2, sx: 1.6, sy: 1.6, sz: 1.6 }));
+  const items: Item[] = spots.map((s) => ({ x: s.x, y: s.h - 0.1, z: s.z, yaw: t.rnd() * Math.PI * 2, sx: 1.6, sy: 1.6, sz: 1.6, ground: s.h }));
   t.instanced(t.geo(p.farCabin()), items);
 }
 
