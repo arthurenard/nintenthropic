@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { KartView, RaceView } from "../contract";
 import { MEADOW_LOOP } from "../track/tracks";
 import { Vector3 } from "three";
-import { bankSeen, baseFov, chaseOffsets, ChaseCamera, COUNTDOWN_SPAN, MAX_ROLL, type CameraRoad } from "./cameras";
+import { bankSeen, baseFov, chaseOffsets, ChaseCamera, COUNTDOWN_SPAN, MAX_ROLL, RAMP_HOLD, rampSeen, type CameraRoad } from "./cameras";
 
 function kart(over: Partial<KartView> = {}): KartView {
   return {
@@ -226,6 +226,27 @@ describe("the camera's life", () => {
     calm.calm = true;
     drive(calm, 1, () => ({ boost: 1.2 }));
     expect(calm.rush).toBe(0);
+  });
+});
+
+describe("rampSeen", () => {
+  const ramps = [{ lip: 100, length: 16, height: 2.4 }];
+  it("climbs the wedge to the lip, then comes down gently past it instead of dropping at once", () => {
+    expect(rampSeen(ramps, 80, 1000)).toBe(0);
+    expect(rampSeen(ramps, 92, 1000)).toBeGreaterThan(0.5);
+    expect(rampSeen(ramps, 100, 1000)).toBeCloseTo(2.4, 6);
+    // Past the lip it keeps most of the height a few metres on, and none once well past it.
+    expect(rampSeen(ramps, 103, 1000)).toBeGreaterThan(2);
+    expect(rampSeen(ramps, 100 + RAMP_HOLD + 1, 1000)).toBe(0);
+    let last = Infinity;
+    for (let s = 100; s <= 100 + RAMP_HOLD; s += 1) {
+      const h = rampSeen(ramps, s, 1000);
+      expect(h).toBeLessThanOrEqual(last + 1e-9);
+      last = h;
+    }
+  });
+  it("finds a ramp across the start line", () => {
+    expect(rampSeen([{ lip: 5, length: 16, height: 2 }], 995, 1000)).toBeGreaterThan(0.3);
   });
 });
 

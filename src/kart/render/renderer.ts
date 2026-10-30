@@ -39,7 +39,7 @@ import { DynamicResolution, StrainWatch } from "../../engine/dynamicResolution";
 import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
-import { ChaseCamera, type CameraRoad } from "./cameras";
+import { ChaseCamera, rampSeen, type CameraRoad } from "./cameras";
 import { shadowInView } from "./casters";
 import { RescueDrone } from "./drone";
 import { outliving } from "./outliving";
@@ -457,7 +457,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       world = built;
       const geometry = built.geometry;
       const bank = built.bank;
-      cameraRoad = { project: (x, z, near) => geometry.project(x, z, near), at: (s) => geometry.at(s), rollAt: (s) => bank.rollAt(s) };
+      const ramps = built.features.ramps;
+      // The road as the camera follows its slope: a ramp's wedge is part of it (a climb to the lip), so the camera aims up it.
+      const at = (s: number) => {
+        const c = geometry.at(s);
+        const wedge = ramps.length ? rampSeen(ramps, s, geometry.length) : 0;
+        return wedge > 0 ? { y: c.y + wedge, tx: c.tx, tz: c.tz } : c;
+      };
+      cameraRoad = { project: (x, z, near) => geometry.project(x, z, near), at, rollAt: (s) => bank.rollAt(s) };
       scene.add(world.group);
       scene.fog = null;
       world.install(scene);

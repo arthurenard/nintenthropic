@@ -60,12 +60,33 @@ export function bankSeen(roll: number, tx: number, tz: number, yaw: number): num
 
 /**
  * What the camera reads of the road (the track's geometry and its banking): where a point is along the lap, the
- * centre line's height and direction anywhere on it, and how it leans.
+ * centre line's height (with any ramp's wedge on it) and direction anywhere on it, and how it leans.
  */
 export interface CameraRoad {
   project(x: number, z: number, near?: number): { s: number; offset: number; sample: { x: number; y: number; z: number; tx: number; tz: number; width: number } };
   at(s: number): { y: number; tx: number; tz: number };
   rollAt(s: number): number;
+}
+
+/** Metres past a ramp's lip over which the road the camera follows comes back down from the lip's height. */
+export const RAMP_HOLD = 18;
+
+/**
+ * How far above the flat road the camera takes the road to be because of a ramp: the wedge up to its lip (its foot
+ * to its lip, a little concave, as world/features.ts's `rampHeight` draws it), and then, though the wedge ends there,
+ * the lip's height easing back down over RAMP_HOLD metres. So the camera climbs the wedge like any slope and aims up
+ * it at the jump, instead of reading the lip as a crest and pitching down into the wedge just as the kart takes off.
+ */
+export function rampSeen(ramps: readonly { lip: number; length: number; height: number }[], s: number, lap: number): number {
+  let best = 0;
+  for (const r of ramps) {
+    let d = r.lip - s;
+    if (d > lap / 2) d -= lap;
+    if (d < -lap / 2) d += lap;
+    if (d >= 0 && d <= r.length) best = Math.max(best, r.height * Math.pow(1 - d / r.length, 1.4));
+    else if (d < 0 && -d < RAMP_HOLD) best = Math.max(best, r.height * smoothstep(0, 1, 1 + d / RAMP_HOLD));
+  }
+  return best;
 }
 
 /** Keeps the camera clear of the ground, the roofs and what stands beyond the barrier (world/cameraSpace.ts). */
@@ -229,10 +250,12 @@ export class ChaseCamera {
       const t = p.sample;
       // Which way along the lap the kart is going (the wrong way reads the road backwards).
       const dir = Math.sin(this.travel) * t.tx + Math.cos(this.travel) * t.tz >= 0 ? 1 : -1;
+      // The road's own heights (a ramp's wedge among them: the camera climbs it like any slope).
+      const here = road.at(p.s).y;
       const behind = road.at(p.s - dir * 6);
       const ahead = road.at(p.s + dir * (6 + 6 * sr));
-      climb = clamp((t.y - behind.y) / 6, -0.45, 0.45);
-      crest = clamp((ahead.y - t.y) / (6 + 6 * sr), -0.45, 0.45);
+      climb = clamp((here - behind.y) / 6, -0.45, 0.45);
+      crest = clamp((ahead.y - here) / (6 + 6 * sr), -0.45, 0.45);
       const far = road.at(p.s + dir * (14 + 10 * sr));
       turn = angleDiff(Math.atan2(t.tx * dir, t.tz * dir), Math.atan2(far.tx * dir, far.tz * dir));
       if (Math.abs(p.offset) < t.width / 2 + 2) bank = bankSeen(road.rollAt(p.s), t.tx, t.tz, this.yaw);
