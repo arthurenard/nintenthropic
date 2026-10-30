@@ -75,14 +75,16 @@ export interface WindTarget {
 
 /**
  * The wind round the player's own kart: nothing at a cruise, rising toward top speed and past it on a boost, and
- * loudest in the air off a jump (a hop's few centimetres make none). Carried by the drone, none.
+ * loudest in the air off a jump (a hop's few centimetres make none); in another kart's slipstream it rises, higher, as
+ * the draft charges. Carried by the drone, none.
  */
 export function windTarget(k: KartView): WindTarget {
   if (k.rescue > 0) return { rate: 1, volume: 0 };
   const speed = Math.abs(k.speed);
   const air = smoothstep(0.5, 2.2, k.hop);
-  const volume = Math.min(1, smoothstep(15, 30, speed) * 0.6 + air * 0.55 + (k.boost > 0 ? 0.15 : 0));
-  return { rate: 0.75 + 0.4 * clamp(speed / TOP_SPEED, 0, 1.3) + 0.12 * air, volume };
+  const draft = clamp(k.draft ?? 0, 0, 1);
+  const volume = Math.min(1, smoothstep(15, 30, speed) * 0.6 + air * 0.55 + draft * 0.35 + (k.boost > 0 ? 0.15 : 0));
+  return { rate: 0.75 + 0.4 * clamp(speed / TOP_SPEED, 0, 1.3) + 0.12 * air + 0.15 * draft, volume };
 }
 
 export interface DriftTarget {

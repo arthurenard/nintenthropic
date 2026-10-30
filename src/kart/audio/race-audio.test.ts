@@ -175,6 +175,10 @@ describe("events become sounds", () => {
     ["a start boost", ev("boost", { kart: 0, source: "start", level: 1 }), ["kart_start_boost"]],
     ["blue sparks", ev("drift-level", { kart: 0, level: 1 }), ["kart_spark_blue"]],
     ["orange sparks", ev("drift-level", { kart: 0, level: 2 }), ["kart_spark_orange"]],
+    ["the hottest sparks", ev("drift-level", { kart: 0, level: 3 }), ["kart_spark_orange"]],
+    ["a slipstream's fling", ev("boost", { kart: 0, source: "draft", level: 1 }), ["kart_boost_whoosh"]],
+    ["a hard landing", ev("land", { kart: 0, boost: false, strength: 0.8 }), ["kart_land", "kart_thud"]],
+    ["a kick at the lip", ev("trick", { kart: 0, kick: true }), ["kart_trick", "kart_boost_whoosh"]],
     ["a bump", ev("bump", { a: 0, b: 1, strength: 0.5 }), ["kart_bump"]],
     ["a hard wall", ev("wall", { kart: 0, strength: 0.9 }), ["kart_wall_thud"]],
     ["a scrape", ev("wall", { kart: 0, strength: 0.1 }), ["kart_wall_scrape"]],
@@ -244,6 +248,16 @@ describe("events become sounds", () => {
     frame([kart(0), kart(1)], {}, [ev("boost", { kart: 0, source: "drift", level: 1 }), ev("boost", { kart: 0, source: "drift", level: 2 })]);
     const rates = bus.played.map((p) => p.options.rate!).sort();
     expect(rates[1]!).toBeGreaterThan(rates[0]!);
+  });
+
+  it("gives the third, hottest charge its own pitch: its sparks and its mini-turbo above the second's", () => {
+    const rateOf = (events: RaceEvent[]) => {
+      const { bus, frame } = setup();
+      frame([kart(0), kart(1)], {}, events);
+      return bus.played[0]!.options.rate!;
+    };
+    expect(rateOf([ev("drift-level", { kart: 0, level: 3 })])).toBeGreaterThan(rateOf([ev("drift-level", { kart: 0, level: 2 })]));
+    expect(rateOf([ev("boost", { kart: 0, source: "drift", level: 3 })])).toBeGreaterThan(rateOf([ev("boost", { kart: 0, source: "drift", level: 2 })]));
   });
 
   it("gives each hazard kind its own small pitch", () => {
@@ -672,20 +686,29 @@ describe("the player's own kart, livelier", () => {
     expect(bus.running("kart_wind")).toBe(0);
   });
 
-  it("thuds under the landing of a long flight, harder the longer it flew, and not after a hop", () => {
-    const fly = (seconds: number, height: number) => {
+  it("thuds under a hard landing, deeper and louder the harder it came down, and not under a soft one", () => {
+    const land = (strength: number | undefined) => {
       const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
-      for (let t = 0; t < seconds; t += 1 / 60) frame([kart(0, { speed: 20, hop: height })]);
-      frame([kart(0, { speed: 20, hop: 0 })]);
+      frame([kart(0, { speed: 20 })], {}, [ev("land", { kart: 0, boost: false, ...(strength === undefined ? {} : { strength }) })]);
+      expect(bus.cues).toContain("kart_land");
       return bus.played.filter((p) => p.cue === "kart_thud");
     };
-    expect(fly(0.25, 0.35)).toHaveLength(0);
-    const short = fly(0.5, 1.5);
-    const long = fly(1.2, 3);
-    expect(short).toHaveLength(1);
-    expect(long).toHaveLength(1);
-    expect(long[0]!.options.volume!).toBeGreaterThan(short[0]!.options.volume!);
-    expect(long[0]!.options.rate!).toBeLessThan(short[0]!.options.rate!);
+    expect(land(undefined)).toHaveLength(0);
+    expect(land(0.1)).toHaveLength(0);
+    const firm = land(0.4);
+    const hard = land(1);
+    expect(firm).toHaveLength(1);
+    expect(hard).toHaveLength(1);
+    expect(hard[0]!.options.volume!).toBeGreaterThan(firm[0]!.options.volume!);
+    expect(hard[0]!.options.rate!).toBeLessThan(firm[0]!.options.rate!);
+  });
+
+  it("blows harder in another kart's slipstream as it charges", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 22 })]);
+    const plain = bus.lastSet("kart_wind")?.volume ?? 0;
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 22, draft: 0.9 })]);
+    expect(bus.lastSet("kart_wind")!.volume!).toBeGreaterThan(plain + 0.1);
   });
 
   it("plays two notes up for a place won and down for a place lost, not too often and not off the grid", () => {

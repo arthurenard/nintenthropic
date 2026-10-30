@@ -617,6 +617,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
             if (involved) cameras[i]?.kick(shake);
           });
         }
+        // A landing as hard as the sim says thumps the camera; a trick's kick at the lip pops its lens.
+        if (e.type === "land" || (e.type === "trick" && e.kick)) {
+          viewKarts.forEach((id, i) => {
+            if (id !== e.kart) return;
+            if (e.type === "land") cameras[i]?.land(e.strength ?? 0.4);
+            else cameras[i]?.pop(0.8);
+          });
+        }
       }
 
       // The start lights.

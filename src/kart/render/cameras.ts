@@ -25,6 +25,9 @@ export const COUNTDOWN_SPAN = 3.5;
 /** The most the picture leans, radians (about 9 degrees): the wheel, the drift and a banked road together. */
 export const MAX_ROLL = 0.16;
 
+/** Seconds within which two reports of a landing are the same landing. */
+const LAND_GAP = 0.4;
+
 /**
  * The vertical field of view to use for a view of this aspect, degrees. A
  * wide, short viewport (two players, one over the other) would otherwise
@@ -144,6 +147,9 @@ export class ChaseCamera {
   private punch = 0;
   private punchTo = 0;
   private lastBoost = 0;
+  /** The last landing: when, and how hard (the sim's event and the camera's own eye may both report it). */
+  private landedAt = -9;
+  private landed = 0;
   /** Where the kart was along the lap a frame ago (the road's lookups search only near it). */
   private near: number | undefined = undefined;
   /** Players who asked for less motion get no lean, tilt, shake or punch. */
@@ -169,6 +175,8 @@ export class ChaseCamera {
     this.punch = 0;
     this.punchTo = 0;
     this.lastBoost = 0;
+    this.landedAt = -9;
+    this.landed = 0;
   }
 
   /** A short shake: a bump, a hit (0..1, 1 the hardest). */
@@ -177,12 +185,27 @@ export class ChaseCamera {
     this.trauma = Math.min(1, this.trauma + strength * 0.7);
   }
 
-  /** A landing: the picture drops with the kart and springs back (0..1, 1 a long fall). */
+  /**
+   * A landing: the picture drops with the kart and springs back (0..1, 1 a long fall: the sim's `land` strength). The
+   * camera also notices a landing itself (the kart's height falling back to the road); the two are one landing, so a
+   * second within LAND_GAP seconds adds only what the first lacked.
+   */
   land(impact: number): void {
     if (this.calm) return;
     const k = clamp(impact);
-    this.thumpV -= 2.5 + 6 * k;
-    this.trauma = Math.min(1, this.trauma + 0.15 + 0.4 * k);
+    const extra = this.clock - this.landedAt < LAND_GAP ? Math.max(0, k - this.landed) : k;
+    if (extra <= 0) return;
+    const fresh = extra === k;
+    this.thumpV -= (fresh ? 2.5 : 0) + 6 * extra;
+    this.trauma = Math.min(1, this.trauma + (fresh ? 0.15 : 0) + 0.4 * extra);
+    this.landedAt = this.clock;
+    this.landed = fresh ? k : Math.max(this.landed, k);
+  }
+
+  /** A quick pop of the lens (a trick's kick at a ramp's lip), 0..1. */
+  pop(amount: number): void {
+    if (this.calm) return;
+    this.punchTo = Math.min(1.2, this.punchTo + clamp(amount) * 0.6);
   }
 
   /**
@@ -197,8 +220,10 @@ export class ChaseCamera {
     const sr = clamp(speedRatio);
     this.clock += dt;
 
-    // Which way the kart is really going, from where it has been.
-    if (!Number.isNaN(this.lastX) && dt > 1e-4) {
+    // Which way the kart is really going: the sim's course where it says, else from where the kart has been.
+    if (kart.course !== undefined && Math.abs(kart.speed) > 4) {
+      this.travel = kart.course;
+    } else if (!Number.isNaN(this.lastX) && dt > 1e-4) {
       const vx = (kart.x - this.lastX) / dt;
       const vz = (kart.z - this.lastZ) / dt;
       if (Math.hypot(vx, vz) > 4 && kart.speed > 0 && Math.hypot(vx, vz) < 90) this.travel = Math.atan2(vx, vz);
@@ -217,7 +242,7 @@ export class ChaseCamera {
 
     // Follow the heading, a little behind it in a slide so the slide shows; while spun out, hold the line of travel.
     const drifting = kart.drift !== 0;
-    const targetYaw = spinning ? this.travel : kart.heading - this.slip * (drifting ? 0.55 : 0.25);
+    const targetYaw = spinning ? this.travel : kart.heading - this.slip * (drifting ? 0.6 : 0.25);
     if (this.fresh) this.yaw = targetYaw;
     else this.yaw = dampAngle(this.yaw, targetYaw, spinning ? 3 : drifting ? 4 : 6, dt);
 

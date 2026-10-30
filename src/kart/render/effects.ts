@@ -294,6 +294,9 @@ const BLUE0 = [0.3, 1.05, 3.4, 1] as const;
 const BLUE1 = [0.08, 0.3, 2.0, 0] as const;
 const ORANGE0 = [3.0, 1.1, 0.08, 1] as const;
 const ORANGE1 = [2.2, 0.3, 0.0, 0] as const;
+/** The third, hottest charge: violet, the white-hot core going pink. */
+const VIOLET0 = [2.3, 0.75, 3.8, 1] as const;
+const VIOLET1 = [1.3, 0.15, 2.8, 0] as const;
 const WHITE0 = [2.4, 2.2, 1.8, 0.95] as const;
 const WHITE1 = [1.6, 0.9, 0.3, 0] as const;
 /** The hot centre of a spark or a flame. */
@@ -541,8 +544,8 @@ export class Effects {
       case "drift-level": {
         const k = kartAt(e.kart);
         if (!k) return;
-        const c0 = e.level === 1 ? BLUE0 : ORANGE0;
-        const c1 = e.level === 1 ? BLUE1 : ORANGE1;
+        const c0 = e.level === 1 ? BLUE0 : e.level === 2 ? ORANGE0 : VIOLET0;
+        const c1 = e.level === 1 ? BLUE1 : e.level === 2 ? ORANGE1 : VIOLET1;
         const fx = Math.sin(k.heading);
         const fz = Math.cos(k.heading);
         const rx = -Math.cos(k.heading);
@@ -550,7 +553,7 @@ export class Effects {
         for (const side of [-1, 1]) {
           const x = k.x + rx * side * KART_REAR_WHEEL.right + fx * KART_REAR_WHEEL.forward;
           const z = k.z + rz * side * KART_REAR_WHEEL.right + fz * KART_REAR_WHEEL.forward;
-          this.flash(x, k.y + 0.3, z, e.level === 1 ? 2.4 : 3, c0[0] * 0.8, c0[1] * 0.8, c0[2] * 0.8, 0.22);
+          this.flash(x, k.y + 0.3, z, e.level === 1 ? 2.4 : e.level === 2 ? 3 : 3.6, c0[0] * 0.8, c0[1] * 0.8, c0[2] * 0.8, 0.22);
           for (let i = 0; i < 14; i++) {
             const vx = rx * side * (1 + this.r() * 4) - fx * 2 + this.spread() * 0.8;
             const vy = 2 + this.r() * 4;
@@ -666,18 +669,18 @@ export class Effects {
     const watched = this.focus.has(k.id);
     if (k.drift !== 0 && !k.offroad) {
       const level = k.driftLevel;
-      const rate = (level === 0 ? 26 : level === 1 ? 160 : 230) * (watched ? 1 : 0.55);
+      const rate = (level === 0 ? 26 : level === 1 ? 160 : level === 2 ? 230 : 270) * (watched ? 1 : 0.55);
       st.spark += rate * dt;
-      const c0 = level === 0 ? WHITE0 : level === 1 ? BLUE0 : ORANGE0;
-      const c1 = level === 0 ? WHITE1 : level === 1 ? BLUE1 : ORANGE1;
-      const size = (level === 0 ? 0.2 : level === 1 ? 0.44 : 0.56) * (watched ? 1 : 0.85);
+      const c0 = level === 0 ? WHITE0 : level === 1 ? BLUE0 : level === 2 ? ORANGE0 : VIOLET0;
+      const c1 = level === 0 ? WHITE1 : level === 1 ? BLUE1 : level === 2 ? ORANGE1 : VIOLET1;
+      const size = (level === 0 ? 0.2 : level === 1 ? 0.44 : level === 2 ? 0.56 : 0.64) * (watched ? 1 : 0.85);
       // The charge shows as a glow at each rear wheel, too, pulsing a little as it burns.
       if (level > 0) {
-        const glow = level === 1 ? [0.35, 0.95, 3.2] : [3.2, 1.2, 0.1];
+        const glow = level === 1 ? [0.35, 0.95, 3.2] : level === 2 ? [3.2, 1.2, 0.1] : [2.4, 0.7, 3.6];
         const pulse = 1 + 0.12 * Math.sin(this.clock * 31 + k.id);
         for (const side of [-1, 1]) {
           const p = wheel(side, 0.2);
-          this.glowNow(p[0], p[1], p[2], (level === 1 ? 2.3 : 3.0) * pulse, glow[0]!, glow[1]!, glow[2]!, 0.75);
+          this.glowNow(p[0], p[1], p[2], (level === 1 ? 2.3 : level === 2 ? 3.0 : 3.5) * pulse, glow[0]!, glow[1]!, glow[2]!, 0.75);
           this.glowNow(p[0], p[1] + 0.1, p[2], 0.85 * pulse, glow[0]! * 1.4, glow[1]! * 1.4, glow[2]! * 1.4, 0.85);
         }
       }
@@ -686,9 +689,9 @@ export class Effects {
         const side = this.r() < 0.5 ? -1 : 1;
         const p = wheel(side, 0.14);
         // Thrown out sideways and back, with a flick up, falling quickly.
-        const out = 1.2 + this.r() * (level === 2 ? 4.6 : 3.6);
+        const out = 1.2 + this.r() * (level >= 2 ? 4.6 : 3.6);
         const vx = rx * side * out - fx * (1.5 + this.r() * 3) + this.spread() * 0.8;
-        const vy = 1.8 + this.r() * (level === 2 ? 4.8 : 3.8);
+        const vy = 1.8 + this.r() * (level >= 2 ? 4.8 : 3.8);
         const vz = rz * side * out - fz * (1.5 + this.r() * 3) + this.spread() * 0.8;
         const life = 0.24 + this.r() * 0.36;
         this.add.emit(p[0], p[1], p[2], vx, vy, vz, life, size, 0.04, c0, c1, -16, 0.4);
@@ -747,21 +750,27 @@ export class Effects {
       st.flame = 0;
     }
 
-    // Speed lines: streaks hanging in the air that a kart rushes past: a few at top speed (the wind) for a kart a view
-    // follows, many on a boost for any.
+    // Speed lines: streaks hanging in the air that a kart rushes past, along the way it goes (in a drift the nose points
+    // elsewhere): a few at top speed (the wind) for a kart a view follows, more and closer in another kart's slipstream as
+    // it charges, many on a boost for any.
     const fast = Math.abs(k.speed);
-    const windy = watched && fast > WIND_SPEED;
+    const draft = watched ? (k.draft ?? 0) : 0;
+    const windy = watched && (fast > WIND_SPEED || draft > 0.1);
     if (!this.calm && (k.boost > 0 || windy) && k.hop < 3) {
-      const power = k.boost > 0 ? 1 : clamp((fast - WIND_SPEED) / 10) * 0.6;
-      st.lines += (k.boost > 0 ? (watched ? 60 : 30) : 8 + 26 * power) * dt;
+      const power = k.boost > 0 ? 1 : Math.max(clamp((fast - WIND_SPEED) / 10) * 0.6, draft * 0.8);
+      st.lines += (k.boost > 0 ? (watched ? 60 : 30) : 8 + 26 * power + 30 * draft) * dt;
+      const course = k.course ?? k.heading;
+      const cx = Math.sin(course);
+      const cz = Math.cos(course);
       while (st.lines >= 1) {
         st.lines -= 1;
         const ahead = 2 + this.r() * 22;
-        const lat = (this.r() < 0.5 ? -1 : 1) * (1.7 + this.r() * 5.5);
+        // In a slipstream the air is drawn in close round the kart.
+        const lat = (this.r() < 0.5 ? -1 : 1) * (draft > 0.1 && k.boost <= 0 ? 1.2 + this.r() * 2.6 : 1.7 + this.r() * 5.5);
         const height = 0.2 + this.r() * 2.9;
         const length = clamp(fast * 0.05, 1.2, 3.8) * (0.6 + this.r() * 0.9);
         const warm = k.boost > 0;
-        this.streaks.add(k.x + fx * ahead + rx * lat, k.y + height, k.z + fz * ahead + rz * lat, fx, fz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
+        this.streaks.add(k.x + cx * ahead - cz * lat, k.y + height, k.z + cz * ahead + cx * lat, cx, cz, length, 0.035 + this.r() * 0.025, warm ? 2.4 : 1.2, 1.5, warm ? 0.7 : 2.2, (warm ? 0.6 : 0.4) * (0.5 + power * 0.5), 0.3 + this.r() * 0.15);
       }
     } else {
       st.lines = 0;

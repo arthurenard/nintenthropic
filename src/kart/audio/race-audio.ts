@@ -219,8 +219,7 @@ class RaceAudioImpl implements RaceAudio {
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
   private readonly winds = new Map<number, Looper>();
-  /** The player's own karts: seconds in the air so far, and the place last heard. */
-  private readonly flights = new Map<number, number>();
+  /** The place each of the player's own karts was last heard at. */
   private readonly places = new Map<number, { place: number; at: number }>();
   private readonly rolls = new Map<number, { next: number; count: number }>();
   private readonly puckHeading = new Map<number, { heading: number; t: number }[]>();
@@ -492,7 +491,7 @@ class RaceAudioImpl implements RaceAudio {
     }
     this.engineLoops(scene, step);
     this.stateLoops(view, scene, step);
-    this.ownMoments(view, scene, step);
+    this.ownMoments(view, scene);
     this.roulette(scene);
     this.finalLapFallback(view, scene);
     this.lastPhase = view.phase;
@@ -506,7 +505,6 @@ class RaceAudioImpl implements RaceAudio {
       this.finalSwitched = false;
       this.pendingFinal = false;
       this.rolls.clear();
-      this.flights.clear();
       this.places.clear();
       this.puckHeading.clear();
       if (this.playingKey === `${this.loadedTheme}-final` && this.wantedKey) {
@@ -745,24 +743,13 @@ class RaceAudioImpl implements RaceAudio {
   }
 
   /**
-   * What happens to the player's own karts that no event says: coming down from a long flight (a thud under the
-   * landing, deeper and louder the longer it flew), and a place won or lost (two notes up or down, at most one every
-   * PLACE_GAP seconds a kart, and not in the shuffle off the grid).
+   * What happens to the player's own karts that no event says: a place won or lost (two notes up or down, at most one
+   * every PLACE_GAP seconds a kart, and not in the shuffle off the grid). (A hard landing's thud comes with the sim's
+   * `land` event: events.ts.)
    */
-  private ownMoments(view: RaceView, scene: Scene, dt: number): void {
+  private ownMoments(view: RaceView, scene: Scene): void {
     for (const l of scene.locals) {
       const k = scene.karts.get(l.kart)!;
-      const flown = this.flights.get(l.kart) ?? 0;
-      if (k.hop > 0.5 && k.rescue <= 0) {
-        this.flights.set(l.kart, flown + dt);
-      } else if (k.hop < 0.15) {
-        if (flown > 0.3) {
-          const f = Math.min(1, flown);
-          this.start({ cue: "kart_thud", volume: 0.4 + 0.6 * f, pan: l.pan, distance: 0, rate: 1.06 - 0.12 * f, delay: 0, priority: 2 });
-        }
-        this.flights.delete(l.kart);
-      }
-
       const heard = this.places.get(l.kart);
       if (heard && k.place !== heard.place && view.phase === "racing" && view.time > 2 && k.finished === null && this.clock - heard.at >= PLACE_GAP) {
         const up = k.place < heard.place;

@@ -218,6 +218,29 @@ describe("the camera's life", () => {
     expect(c.camera.position.distanceTo(calmTwin.camera.position)).toBeLessThan(0.01);
   });
 
+  it("follows the course in a drift, so the kart is seen sliding with its nose inside the line", () => {
+    // Going straight up +z, the nose 30 degrees to the right (a right-hand drift): the camera looks mostly along +z.
+    const c = new ChaseCamera();
+    drive(c, 2, () => ({ drift: 1, steer: 0.5, heading: -0.52, course: 0 }));
+    const look = new Vector3(0, 0, -1).applyQuaternion(c.camera.quaternion);
+    const yaw = Math.atan2(look.x, look.z);
+    expect(Math.abs(yaw)).toBeLessThan(0.3);
+    expect(yaw).toBeLessThan(0);
+  });
+
+  it("counts a landing once when both the sim and its own eye report it", () => {
+    const once = new ChaseCamera();
+    const twice = new ChaseCamera();
+    drive(once, 0.5, () => ({}));
+    drive(twice, 0.5, () => ({}));
+    once.land(0.6);
+    twice.land(0.6);
+    twice.land(0.6);
+    drive(once, 0.1, () => ({}), undefined, 10);
+    drive(twice, 0.1, () => ({}), undefined, 10);
+    expect(twice.camera.position.y).toBeCloseTo(once.camera.position.y, 6);
+  });
+
   it("rushes on a boost and not for a calm player", () => {
     const c = new ChaseCamera();
     drive(c, 1, () => ({ boost: 1.2 }));
