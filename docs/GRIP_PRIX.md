@@ -668,6 +668,16 @@ the footnote says which tier Auto uses here.
 3D podium after a Grand Prix. What it still does is 3D for the driver picker and the lobby's portraits (the karts' and
 drivers' models, Draco's decoder, three transient WebGL contexts) before it knows it is only a wheel.
 
+**The living camera and the frenzy** (2026-10-30) add no shader program (87 and 85 programs on Canyon Run and Starlight
+Ribbon before and after: everything new is uniforms in shaders already built at load) and no draw call: the camera reads
+the road with one `project` and three `at` a view, the near-kart check is a distance a kart a view, the wind's streaks
+and the bigger sparks share the existing pools (the karts not watched throw fewer). The rush is the costly part: while
+a view's kart boosts (or goes past its top speed), each of that view's pixels outside the middle reads the picture
+seven times (high; five on medium; it is off on low and while not boosting, one uniform test a pixel). Measured with
+`bench.mjs --bases` (high and medium, 1 and 4 views, medians of two) on a machine at a load average of 650 to 950: frame
+time, CPU and GPU within the noise (which was ±15 to 45% between runs of the same page); an A/B of the rush alone on one
+frame redrawn could not be read at that load (the same frame took 3 to 25 ms of post). To measure on a quiet machine.
+
 **Not done yet.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
