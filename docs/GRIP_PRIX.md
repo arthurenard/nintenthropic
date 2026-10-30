@@ -820,12 +820,16 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
 ## Tests
 
 - Unit (Vitest): the geometry; the sim (a bot laps every track in a sane time
-  and never leaves it, braking reverses, a drift charges and boosts, items
+  and never leaves it, braking reverses, a drift slides, tightens, widens,
+  straightens out and charges three boosts, jumps leave the wedge the picture
+  draws and land pointing where they fly, a shake tricks only in the air and
+  kicks at the lip, crests throw and hills pull, the slipstream slings, items
   hit, places and laps count, the race ends, `snapshot`/`restore` round-trips,
   the same seed replays); the net (lobby joins and leaves, a full room, inputs
   in order under loss, prediction converging, the host leaving); the wheel
   (angles, the level, fists and open hands from recorded landmarks, every
-  gesture, hands lost).
+  gesture, a drift started at full lock and let go against it, shakes,
+  hands lost).
 - Performance (Vitest): the tier guess for each GPU family (and the split-screen
   rules), the safety net's watch and its ceiling in prefs, the per-view culling of
   instances (everything the frustum reaches is drawn once with its colour, a buffer is
