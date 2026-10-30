@@ -10,7 +10,8 @@
  *
  * On the road and the verge nothing rises 15 cm above the ground; within a camera's width beyond the barrier nothing solid
  * stands in the band a kart or its camera meets (0.45 to 5 m above the road), as corridor.test.ts has it (grass may: a
- * camera passes through it). corridor.test.ts
+ * camera passes through it). And whatever stands on the ground stands on it all round: no side of it hangs over a slope
+ * (boulders hung as much as 13 m in the air on the downhill side). corridor.test.ts
  * and corridor.art.test.ts measure the landmarks and the track's decoration with the same rule, triangle by triangle.
  */
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -28,7 +29,7 @@ import { buildLandmarks, landmarkMaterials, type KeepOut } from "./landmarks/pla
 import { loadWorldArt } from "./nodeArt";
 import { buildScenery } from "./scenery";
 import { makeBakeUniforms } from "./shading";
-import { Terrain } from "./terrain";
+import { SEA_LEVEL, Terrain, WATER_LEVEL } from "./terrain";
 import { styleFor } from "./themes";
 
 // What art.ts would hold: the theme's world file, or nothing (the code-built stand-ins).
@@ -99,6 +100,12 @@ class Inspector {
       a.fromBufferAttribute(pos, index ? index.getX(t) : t).applyMatrix4(world);
       b.fromBufferAttribute(pos, index ? index.getX(t + 1) : t + 1).applyMatrix4(world);
       c.fromBufferAttribute(pos, index ? index.getX(t + 2) : t + 2).applyMatrix4(world);
+      // A triangle that cannot come near where a kart can be (a far building's wall) is not walked over.
+      const mx = (a.x + b.x + c.x) / 3;
+      const mz = (a.z + b.z + c.z) / 3;
+      const spread = Math.sqrt(Math.max((a.x - mx) ** 2 + (a.z - mz) ** 2, (b.x - mx) ** 2 + (b.z - mz) ** 2, (c.x - mx) ** 2 + (c.z - mz) ** 2));
+      const middle = this.space.place(mx, mz, spread + this.space.reach + SOLID_MARGIN);
+      if (!middle || middle.past - spread > SOLID_MARGIN) continue;
       const nb = Math.max(1, Math.ceil(a.distanceTo(b) / STEP));
       const nc = Math.max(1, Math.ceil(a.distanceTo(c) / STEP));
       for (let i = 0; i <= nb; i++) {
@@ -173,6 +180,58 @@ function viewsAlong(geo: TrackGeometry, count: number): Frustum[] {
   return out;
 }
 
+/** How far over the ground a thing's footing may hang, metres. */
+const HOVER = 0.3;
+
+/**
+ * The instances under `root` whose footing (their lowest 10 cm, as drawn) hangs more than HOVER over the ground on any side:
+ * not a boat on the water, nor a container on another, nor a rock adrift in space (which has no ground).
+ */
+function hovering(root: Object3D, terrain: Terrain, water: number, label: string): string[] {
+  const out: string[] = [];
+  const m = new Matrix4();
+  const v = new Vector3();
+  root.traverse((o) => {
+    const mesh = o as InstancedMesh;
+    if (!mesh.isInstancedMesh) return;
+    const pos = mesh.geometry.getAttribute("position");
+    let low = Infinity;
+    for (let i = 0; i < pos.count; i++) low = Math.min(low, pos.getY(i));
+    // Where each one stands, to tell a container resting on another from one hanging in the air.
+    const stacks = new Map<string, number[]>();
+    for (let k = 0; k < mesh.count; k++) {
+      mesh.getMatrixAt(k, m);
+      const key = `${m.elements[12]!.toFixed(2)},${m.elements[14]!.toFixed(2)}`;
+      stacks.set(key, [...(stacks.get(key) ?? []), m.elements[13]!]);
+    }
+    let worst = 0;
+    let where = "";
+    for (let k = 0; k < mesh.count; k++) {
+      mesh.getMatrixAt(k, m);
+      const e = m.elements;
+      const sy = Math.hypot(e[4]!, e[5]!, e[6]!);
+      let gap = -Infinity;
+      let ground = Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        if ((pos.getY(i) - low) * sy > 0.1) continue;
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        const h = terrain.heightAt(v.x, v.z);
+        ground = Math.min(ground, h);
+        gap = Math.max(gap, v.y - h);
+      }
+      if (gap <= HOVER || ground < water) continue;
+      // Resting on another of its kind (a container on a stack).
+      if (stacks.get(`${e[12]!.toFixed(2)},${e[14]!.toFixed(2)}`)!.some((y) => y < e[13]! - 0.5)) continue;
+      if (gap > worst) {
+        worst = gap;
+        where = `(${e[12]!.toFixed(0)}, ${e[14]!.toFixed(0)})`;
+      }
+    }
+    if (worst > 0) out.push(`${label} ${mesh.geometry.uuid.slice(0, 6)} (${pos.count} vertices) hangs ${worst.toFixed(2)} m over the ground at ${where}`);
+  });
+  return out;
+}
+
 const line = (o: Offence) => `${o.what}: ${o.height.toFixed(2)} m high, ${o.past < 0 ? `${(-o.past).toFixed(1)} m inside the barrier` : `${o.past.toFixed(1)} m beyond the barrier`} at s=${o.s.toFixed(0)} (${o.x.toFixed(0)}, ${o.z.toFixed(0)})`;
 
 describe("the scenery and the tufts, as drawn", () => {
@@ -226,6 +285,8 @@ describe("the scenery and the tufts, as drawn", () => {
             scenery.uncull();
             foliage?.uncull();
             for (const o of inspector.offences.values()) found.push(line(o));
+            // Standing on the ground all round, not hanging over a slope (space has no ground; boats float on the water).
+            if (style.id !== "space") found.push(...hovering(scenery.group, terrain, style.id === "harbour" ? WATER_LEVEL - 0.5 : style.id === "palm" ? SEA_LEVEL - 0.5 : -Infinity, tier));
             scenery.dispose();
             foliage?.dispose();
           }

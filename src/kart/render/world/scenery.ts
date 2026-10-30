@@ -128,8 +128,8 @@ export interface SceneryTools {
 
 /**
  * What instancing needs to know of a geometry, worked out once: how far, horizontally, it reaches from its origin at heights
- * a kart can meet (`radius`) and at all (`foot`); where its footing is (`feet`: (x, z) pairs of its lowest 0.3 m, at most
- * 64 of them); how tall it is; and how far below its origin its lowest point is (`low`: negative for a model with a skirt
+ * a kart can meet (`radius`) and at all (`foot`); where its footing is (`feet`: (x, z) pairs of its lowest 15 cm, at most
+ * 256 of them); how tall it is; and how far below its origin its lowest point is (`low`: negative for a model with a skirt
  * to bury the difference on a slope, positive for one whose base was modelled above y = 0).
  */
 interface Reach {
@@ -156,10 +156,10 @@ function reachOf(geometry: BufferGeometry): Reach {
       height = Math.max(height, y);
       foot = Math.max(foot, out);
       if (y > 0.2) radius = Math.max(radius, out);
-      if (y < low + 0.3) footing.push(i);
+      if (y < low + 0.15) footing.push(i);
     }
     const feet: number[] = [];
-    const step = Math.max(1, footing.length / 64);
+    const step = Math.max(1, footing.length / 256);
     for (let k = 0; k < footing.length; k += step) feet.push(pos.getX(footing[Math.floor(k)]!), pos.getZ(footing[Math.floor(k)]!));
     r = { radius, foot, feet, height, low };
     reaches.set(geometry, r);

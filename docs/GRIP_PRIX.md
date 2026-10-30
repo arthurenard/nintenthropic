@@ -399,7 +399,14 @@ that file exists (`render/art.ts`).
   barriers 6 m beyond each edge (tyre walls, fences, bollards by theme),
   boost pads (animated chevrons), item boxes (turning translucent cubes with a
   glowing emblem), scenery instanced well clear of the road (trees, rocks,
-  cacti, lamps, cranes by theme), a sky dome and fog.
+  cacti, lamps, cranes by theme), a sky dome and fog. The scenery and the
+  grass tufts are kept out by the sim's own barrier, measured from each
+  stretch of road (`world/clearance.ts`; the terrain grid's interpolated
+  guess at it was out by a verge's width where a verge ends), every instance
+  with its whole footprint at the size it is drawn; and whatever stands on
+  the ground stands on the lowest ground under its own footing, so nothing
+  hangs over a slope (a thing that would sink deeper than its height, on a
+  cliff's lip, is left out).
 - **Karts.** Chassis, four wheels turning with the speed and the front two
   with the steer, the driver (one of nine creatures, modelled in Blender, `art/kart/drivers/`,
   and posed by `render/drivers/`, whose code-built creatures stand in when the
@@ -774,7 +781,8 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
 - Performance (Vitest): the tier guess for each GPU family (and the split-screen
   rules), the safety net's watch and its ceiling in prefs, the per-view culling of
   instances (everything the frustum reaches is drawn once with its colour, a buffer is
-  rewritten only when its cells change), the tracker's tile schedule, the lazy
+  rewritten only when its cells change, and what the GPU holds of it, uploaded as
+  three uploads it, is what the view draws), the tracker's tile schedule, the lazy
   renderers, the workers per player (`lanesFor`, a frame for one column is no news
   to another player's wheel, the column just read wins a shared hand), the try of
   the other delegate (`adapt.ts`) and the hands first (`handsFirst.ts`: steps down
@@ -852,10 +860,18 @@ front of them (or a laptop), and the TV is the host's screen.
   road is caught by its sides (a ship's hull across a straight, which a
   surface seen from above would not show):
   `src/kart/render/world/corridor.test.ts` (the code-built world, and the
-  lower quality tiers' ground and scenery) and `corridor.art.test.ts` (the
+  lower quality tiers' ground, scenery and grass) and `corridor.art.test.ts` (the
   Blender world: `nodeArt.ts` decodes the Draco files in Node and files them
   where `art.ts` would, so the real landmarks and scenery are measured).
-  `CORRIDOR_REPORT=1` prints how far each offender must move. The chase
+  `CORRIDOR_REPORT=1` prints how far each offender must move. A third,
+  `scenery.clear.test.ts`, holds every scattered instance (scenery and
+  grass) to the sim's own rule (`kartSpace.ts`: the nearest stretch of road
+  and its barrier) through its final matrix and again as each view's culled
+  buffer holds it, at every tier, on every track and its mirror, with the
+  art and without: nothing 15 cm high on the road or the verge, nothing
+  solid in the camera's margin (grass may grow there), and nothing hanging
+  over a slope; `clearance.test.ts` checks the scatter's measure against
+  the sim's on every track, mirror and dev track. The chase
   camera is held to the same margin (`cameraSpace.ts`): it slides back toward
   the road in a bend, rises over rising ground and stays under a roof.
 - **The duck** (`duck`): as in three of the shooting games, a rubber duck
