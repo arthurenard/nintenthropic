@@ -288,9 +288,6 @@ function plainLoop(bus: AudioBus, cue: string, initial: LoopParams): LoopControl
   };
 }
 
-/** Has a level moved enough to be worth telling the loop? Always when it reaches silence. */
-const changed = (now: number, sent: number): boolean => Math.abs(now - sent) > 0.004 || (now < 0.002 && sent >= 0.002);
-
 const isSteerable = (bus: AudioBus): bus is AudioBus & SteerableAudio => {
   const b = bus as Partial<SteerableAudio>;
   return typeof b.controlledLoop === "function" && typeof b.musicBus === "function" && !!b.ctx;

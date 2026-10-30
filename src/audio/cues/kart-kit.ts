@@ -201,27 +201,3 @@ export function times(a: Mono, b: Float32Array): Mono {
   for (let i = 0; i < n; i++) a[i]! *= b[i]!;
   return a;
 }
-
-/**
- * Start a periodic loop where it is calmest: an exactly periodic buffer has
- * no click wherever it is cut, but cutting it at a steep edge puts the
- * steepest step of the waveform at the seam, which is what a seam check (or
- * a tired ear) looks for. Rotates to the sample with the smallest step from
- * the one before it, near a zero crossing's lull rather than a pulse's edge.
- */
-export function calmSeam(buf: Mono): Mono {
-  const n = buf.length;
-  let best = 0;
-  let bestStep = Infinity;
-  for (let i = 0; i < n; i++) {
-    const step = Math.abs(buf[i]! - buf[(i + n - 1) % n]!) + 0.5 * Math.abs(buf[(i + 1) % n]! - buf[i]!);
-    if (step < bestStep) {
-      bestStep = step;
-      best = i;
-    }
-  }
-  if (best === 0) return buf;
-  const copy = Float32Array.from(buf);
-  for (let i = 0; i < n; i++) buf[i] = copy[(i + best) % n]!;
-  return buf;
-}

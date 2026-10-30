@@ -20,8 +20,8 @@
  *   −9…−13  the interface, soft and short
  *
  * The music (see src/kart/audio/music) plays under all of it: over a race of
- * bots (tools/listen) about −20.5 LUFS against the effects' −19.8, a bed the
- * effects stand on, a little quieter than they are.
+ * bots with the sliders at their defaults (tools/listen), about −23 LUFS
+ * against the effects' −19.7, a bed the effects stand on.
  */
 import {
   ambBird,

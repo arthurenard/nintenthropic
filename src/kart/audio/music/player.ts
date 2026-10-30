@@ -38,11 +38,8 @@ export function nextBeat(beats: Float32Array, duration: number, position: number
   return { index: 0, wait: duration - p + (beats[0] ?? 0) };
 }
 
-/**
- * Music sits this far under its rendered level in the mix (the engines and the effects come first): measured over a
- * three-lap race of bots (tools/listen), the music a decibel or so under the effects, a bed they stand on.
- */
-export const MUSIC_TRIM = 0.54;
+/** Music sits this far under its rendered level in the mix (the engine's ambience and the effects come first). */
+export const MUSIC_TRIM = 0.64;
 
 interface Voice {
   track: MusicTrack;

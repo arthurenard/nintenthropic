@@ -626,10 +626,10 @@ heard and let go after half a second of silence, and is told only what has moved
   (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' eight layers within
   3 dB, the places under the engines). The music dips under the big moments: the finish (to 0.3 of its level), the
   final lap (0.45), being hit, a storm's bolt or a skyrocket bursting near (0.5), a blast or a fall (0.6), the start
-  boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured over three laps of eight bots
-  on Meadow Loop with one kart in view: the whole mix −17.3 LUFS (true peak −2.1 dBTP), the effects −19.8 and the
-  music −20.5 (it was 2.7 LU over the effects before the engines were remade); each place alone −34 to −36. The audio
-  code takes about 0.04 ms a frame (0.06 with four views).
+  boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
+  over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
+  whole mix −18.1 LUFS (true peak −2.4 dBTP), the effects −19.7 (−21.8 before the engines were remade) and the music
+  −22.9; each place alone −34 to −36. The audio code takes about 0.03 ms a frame (0.06 with four views).
 - **Listening without hearing.** `node tools/listen/render.mjs --label <name>` renders scripted scenes (one kart of
   each weight through everything, karts going by, a pack of eight, the moments, each place alone) and real races of
   bots through the real engine and `RaceAudio` on an `OfflineAudioContext`, in a muted headless Chrome, writes them to

@@ -7,6 +7,7 @@
  *   await window.renderListen({ race: "meadow-loop", seconds: 90, views: [0], music: true })
  */
 import { WebAudioEngine } from "../../src/audio/engine";
+import { DEFAULT_LEVELS } from "../../src/kart/app/prefs";
 import { createRaceAudio, localKarts } from "../../src/kart/audio";
 import type { RaceView } from "../../src/kart/contract";
 import { createSimRace } from "../../src/kart/sim/race";
@@ -89,7 +90,8 @@ async function renderListen(spec: ListenSpec): Promise<ListenResult> {
   const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
   const engine = new WebAudioEngine(ctx as unknown as AudioContext, { muted: false, volume: 1 });
   ctx.onstatechange = null;
-  const audio = createRaceAudio(engine, { volumes: { music: spec.music === false ? 0 : 1, effects: spec.effects === false ? 0 : 1 } });
+  // The game's own sliders as a new player finds them (the music a little under the engines).
+  const audio = createRaceAudio(engine, { volumes: { music: spec.music === false ? 0 : DEFAULT_LEVELS.music, effects: spec.effects === false ? 0 : DEFAULT_LEVELS.effects } });
   await audio.load(scene.theme);
   const locals = scene.locals ?? localKarts(scene.views);
   const dt = 1 / FPS;
