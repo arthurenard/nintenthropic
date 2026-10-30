@@ -915,10 +915,14 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    moguls on the way home. Penguins waddle across, snowballs roll down at
    you, a yeti pops out of a snowdrift once a lap. The duck sits by an
    ice-fishing hole on the lake.
-7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), a stone
-   bridge over lava with nothing either side, fireballs leaping from the lava,
-   boulders, a jump over a lava gap, the volcano smoking behind it all. The
-   duck relaxes in a hot spring.
+7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
+   volcano's flank in switchbacks (two banked hairpins, boulders rolling down
+   the legs at you), along a ridge twenty-two metres up that weaves between
+   lava on the outside of its bends with fireballs leaping from it, then
+   straight down the mountain: over a brow to fly, a jump over a lava gap, and
+   a stone bridge over the lava lake with nothing either side, a boost strip
+   along its left half only. The volcano smokes behind it all; the duck
+   relaxes in a hot spring beside the second hairpin.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
    over a ringed planet, banked bends and almost no barriers (fall and the
    drone brings you back), boost strips, ring gates, a long jump between two
