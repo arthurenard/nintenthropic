@@ -518,6 +518,42 @@ describe("hop and drift", () => {
     expect(rig.last.input.drift).toBe(false);
   });
 
+  it("starts by itself when the wheel is held near full lock for a moment, and not on an ordinary turn", () => {
+    const rig = driving();
+    rig.wheel(2, { angle: 30 });
+    expect(rig.last.input.drift).toBe(false);
+    rig.wheel(0.1, { angle: 38 });
+    expect(rig.last.input.steer).toBeGreaterThan(0.85);
+    expect(rig.last.input.drift).toBe(false);
+    rig.wheel(0.25, { angle: 38 });
+    expect(rig.last.input.drift).toBe(true);
+    // It is let go as a hop's drift is: by straightening the wheel.
+    rig.wheel(0.5, { angle: 0 });
+    expect(rig.last.input.drift).toBe(false);
+  });
+
+  it("does not start by itself with the hands open (a brake) or gone", () => {
+    const rig = driving();
+    rig.wheel(1, { angle: 38, fingers: "open" });
+    expect(rig.last.input.drift).toBe(false);
+    rig.empty(1);
+    expect(rig.last.input.drift).toBe(false);
+  });
+
+  it("is let go by a hard turn the other way, so an S-bend is not one long slide", () => {
+    const rig = driving();
+    rig.wheel(1, { angle: 30 });
+    lift(rig, 30, 0.25, 0.1);
+    expect(rig.last.input.drift).toBe(true);
+    // A flick the other way under a tenth of a second is only a correction...
+    rig.wheel(0.05, { angle: -30, centre: [0.5, 0.2] });
+    rig.wheel(0.3, { angle: 30, centre: [0.5, 0.2] });
+    expect(rig.last.input.drift).toBe(true);
+    // ...held there, it lets go.
+    rig.wheel(0.25, { angle: -30, centre: [0.5, 0.2] });
+    expect(rig.last.input.drift).toBe(false);
+  });
+
   it("is still seen when the jerk costs a dropped frame", () => {
     const rig = driving();
     rig.wheel(1, { angle: 30 });
@@ -600,6 +636,42 @@ describe("hop and drift", () => {
     rig.wheel(0.4, { angle: 0, centre: [0.5, 0.2] });
     rig.wheel(0.4, { angle: 30, centre: [0.5, 0.2] });
     expect(rig.last.input.drift).toBe(false);
+  });
+});
+
+describe("a shake", () => {
+  /** The wheel swung `amplitude` degrees either way `perSecond` times a second, for `seconds`. */
+  const shake = (rig: Rig, amplitude: number, perSecond: number, seconds: number, fingers: WheelPose["fingers"] = "fist") =>
+    rig.run(seconds, (t) => wheelHands({ angle: amplitude * Math.sin(2 * Math.PI * perSecond * t), fingers }));
+
+  it("is the wheel turned quickly left and right: counted, and the count only goes up", () => {
+    const rig = driving();
+    expect(rig.last.input.shakes).toBe(0);
+    shake(rig, 22, 3, 0.5);
+    const once = rig.last.input.shakes!;
+    expect(once).toBeGreaterThanOrEqual(1);
+    rig.wheel(1, { angle: 0 });
+    expect(rig.last.input.shakes).toBe(once);
+    shake(rig, 22, 3, 0.5);
+    expect(rig.last.input.shakes).toBeGreaterThan(once);
+  });
+
+  it("is not steering: an S-bend, a wobble, or a turn held", () => {
+    const rig = driving();
+    // Full lock one way and the other, a second each.
+    shake(rig, 35, 0.5, 4);
+    // A small wobble, quick.
+    shake(rig, 5, 4, 2);
+    rig.wheel(1, { angle: 35 });
+    expect(rig.last.input.shakes).toBe(0);
+  });
+
+  it("is not open hands waving about (a brake)", () => {
+    const rig = driving();
+    rig.wheel(0.5, { angle: 0, fingers: "open" });
+    shake(rig, 22, 3, 1, "open");
+    expect(rig.last.status.mode).toBe("brake");
+    expect(rig.last.input.shakes).toBe(0);
   });
 });
 

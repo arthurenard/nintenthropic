@@ -26,7 +26,7 @@ import { mulberry32 } from "../../engine/rules/rng";
 import { botInput, rubberBand } from "./bots";
 import { Eggs } from "./eggs";
 import { stepItems, pressItem, rocketTarget } from "./items";
-import { GO_TICK, NO_EMIT, bumpKarts, forwardSpeed, newKart, placeOnTrack, settle, stepKart, viewHop } from "./kart";
+import { DRAFT_FULL, GO_TICK, NO_EMIT, bumpKarts, courseOf, forwardSpeed, newKart, placeOnTrack, settle, slipstream, stepKart, viewHop } from "./kart";
 import { planFor } from "./plan";
 import { standings, updatePlaces, updateProgress } from "./progress";
 import { applySnapshot, takeSnapshot } from "./snapshot";
@@ -164,6 +164,7 @@ class Sim implements SimRace {
         placeOnTrack(w, k, this.emit, true);
         settle(k);
       }
+      slipstream(w, this.emit);
     }
 
     updateProgress(w, this.emit);
@@ -206,10 +207,12 @@ class Sim implements SimRace {
         y: k.y,
         z: k.z,
         heading: k.heading,
+        course: courseOf(k),
         speed: forwardSpeed(k),
         steer: clamp(k.steer, -1, 1),
         drift: k.drift,
         driftLevel: k.level,
+        draft: clamp(k.draft / DRAFT_FULL, 0, 1),
         boost: k.boost / TICK_HZ,
         spin: k.spin / TICK_HZ,
         hop: viewHop(k),
