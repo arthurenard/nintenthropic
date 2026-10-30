@@ -294,7 +294,14 @@ describe("brake", () => {
     rig.wheel(0.3, { angle: 0, fingers: "open" });
     expect(rig.last.status.mode).toBe("brake");
     expect(rig.last.status.grip).toBe("open");
-    expect(rig.last.input).toMatchObject({ brake: 1, throttle: 0, drift: false });
+    expect(rig.last.input).toMatchObject({ brake: 1, throttle: 0, drift: false, slide: true });
+  });
+
+  it("is a slide too, turned or not: in a bend at speed the sim drifts on it instead", () => {
+    const rig = driving();
+    rig.wheel(0.5, { angle: 30, fingers: "open" });
+    expect(rig.last.input).toMatchObject({ brake: 1, slide: true });
+    expect(rig.last.input.steer).toBeGreaterThan(0.5);
   });
 
   it("lets go when the fists close again", () => {
@@ -302,7 +309,7 @@ describe("brake", () => {
     rig.wheel(0.6, { angle: 0, fingers: "open" });
     expect(rig.last.input.brake).toBe(1);
     rig.wheel(0.4, { angle: 0 });
-    expect(rig.last.input).toMatchObject({ brake: 0, throttle: 1 });
+    expect(rig.last.input).toMatchObject({ brake: 0, throttle: 1, slide: false });
     expect(rig.last.status.mode).toBe("drive");
   });
 
@@ -538,6 +545,17 @@ describe("hop and drift", () => {
     expect(rig.last.input.drift).toBe(false);
     rig.empty(1);
     expect(rig.last.input.drift).toBe(false);
+  });
+
+  it("does not start again by itself when open hands close at full lock, until the wheel has come off it", () => {
+    const rig = driving();
+    rig.wheel(1, { angle: 38, fingers: "open" });
+    rig.wheel(1, { angle: 38 });
+    expect(rig.last.status.mode).toBe("drive");
+    expect(rig.last.input.drift).toBe(false);
+    rig.wheel(0.5, { angle: 10 });
+    rig.wheel(0.5, { angle: 38 });
+    expect(rig.last.input.drift).toBe(true);
   });
 
   it("is let go by a hard turn the other way, so an S-bend is not one long slide", () => {

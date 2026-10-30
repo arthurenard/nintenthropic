@@ -383,6 +383,52 @@ describe("hop and drift", () => {
     expect(view(r).boost).toBeGreaterThan(1);
   });
 
+  /** The wheel's open hands: a brake that is a slide in a bend at speed. */
+  const open = (steer: number) => input({ brake: 1, slide: true, steer });
+
+  it("starts from open hands in a bend at speed, keeps the speed, and boosts when the hands close", () => {
+    const r = arena();
+    const before = view(r).speed;
+    run(r, 1, () => open(1));
+    expect(view(r).drift).toBe(1);
+    run(r, 130, () => open(1));
+    expect(view(r).drift).toBe(1);
+    expect(view(r).driftLevel).toBe(2);
+    expect(view(r).speed).toBeGreaterThan(before * 0.9);
+    const events = run(r, 2, () => input({ throttle: 1, steer: 1 }));
+    expect(view(r).drift).toBe(0);
+    expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 2 });
+  });
+
+  it("goes on when the hands open in a drift begun with a hop, and ends when they close", () => {
+    const r = arena();
+    run(r, 60, () => drift(1));
+    run(r, 60, () => open(0));
+    expect(view(r).drift).toBe(1);
+    const events = run(r, 2, () => input({ throttle: 1 }));
+    expect(view(r).drift).toBe(0);
+    expect(count(events, "boost")).toBe(1);
+  });
+
+  it("is no drift for open hands going straight, or slowly in a bend: they brake, and back up", () => {
+    const r = arena();
+    const before = view(r).speed;
+    run(r, 40, () => open(0));
+    expect(view(r).drift).toBe(0);
+    expect(view(r).speed).toBeLessThan(before - 15);
+    run(r, 120, () => open(1));
+    expect(view(r).drift).toBe(0);
+    expect(view(r).speed).toBeLessThan(-1);
+  });
+
+  it("is no drift for a brake in a bend from keys or a pad: only the wheel's open hands slide", () => {
+    const r = arena();
+    const before = view(r).speed;
+    run(r, 30, () => input({ brake: 1, steer: 1 }));
+    expect(view(r).drift).toBe(0);
+    expect(view(r).speed).toBeLessThan(before - 10);
+  });
+
   it("is ended by running out of speed, with nothing", () => {
     const r = arena();
     run(r, 130, () => drift(1));

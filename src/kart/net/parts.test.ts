@@ -65,6 +65,14 @@ describe("the wire format", () => {
     expect(decodeInput([3, 0, 100, 0, 0, 2, 0, 0, -4]).shakes).toBeUndefined();
   });
 
+  it("carries the wheel's slide beside the drift, and only when there is one", () => {
+    const input: DriveInput = { steer: 1, throttle: 0, brake: 1, drift: false, slide: true, itemPresses: 0 };
+    expect(encodeInput(1, input)).toEqual([1, 100, 0, 100, 2, 0]);
+    expect(decodeInput(encodeInput(1, input))).toEqual(input);
+    expect(decodeInput(encodeInput(1, { ...input, drift: true }))).toEqual({ ...input, drift: true });
+    expect(decodeInput(encodeInput(1, { ...input, slide: false })).slide).toBeUndefined();
+  });
+
   it("keeps wild values in range", () => {
     expect(decodeInput([1, 9999, -5, 400, 0, -3])).toEqual({ steer: 1, throttle: 0, brake: 1, drift: false, itemPresses: 0 });
     expect(decodeInput([1, Number.NaN, 0, 0, 0, 0]).steer).toBe(0);

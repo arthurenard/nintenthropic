@@ -298,9 +298,9 @@ export function tipsFor(kind: DriverControl["kind"] | null): string[] {
       ];
     default:
       return [
-        "Open both hands to brake.",
+        "Open both hands in a bend to drift, and close them to boost.",
+        "Open both hands on a straight to brake.",
         "Flick one hand to use an item.",
-        "Hop to drift.",
         "Clap to honk.",
         "Close your fists just before Go for a flying start.",
         "Wave as you overtake. It’s only polite.",

@@ -44,6 +44,13 @@ export interface DriveInput {
   /** Held to drift: true from the hop until the driver straightens up (the input decides). */
   drift: boolean;
   /**
+   * The brake is the wheel's open hands, which slide as well as brake: turned
+   * at speed (or already in a drift) the sim holds the drift with the throttle
+   * down instead of braking, and closing the hands lets it go. Keys and pads
+   * never set it. Optional: none is false.
+   */
+  slide?: boolean;
+  /**
    * How many times this driver has used an item, ever: a count, not a flag,
    * so a press is never lost or doubled when inputs are repeated or dropped
    * on the way to the host. The sim uses an item each time it goes up.

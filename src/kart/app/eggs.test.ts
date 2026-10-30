@@ -291,7 +291,7 @@ describe("the tricks", () => {
 
 describe("the tips while a race loads", () => {
   it("teach a wheel player the four things their hands do, the flying start, and their manners", () => {
-    expect(tipsFor("wheel").slice(0, 4)).toEqual(["Open both hands to brake.", "Flick one hand to use an item.", "Hop to drift.", "Clap to honk."]);
+    expect(tipsFor("wheel").slice(0, 4)).toEqual(["Open both hands in a bend to drift, and close them to boost.", "Open both hands on a straight to brake.", "Flick one hand to use an item.", "Clap to honk."]);
     expect(tipsFor("wheel")).toContain("Close your fists just before Go for a flying start.");
     // A device with no controls of its own (a screen that only shows) is told the hands' way.
     expect(tipsFor(null)).toEqual(tipsFor("wheel"));

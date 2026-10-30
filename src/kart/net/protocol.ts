@@ -23,7 +23,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
@@ -49,12 +49,13 @@ export interface WirePlayer {
  *
  *   [seq, steer, throttle, brake, drift, itemPresses, horn, emote, shakes]
  *
+ * `drift` holds bits: 1 the drift held, 2 the brake is the wheel's slide.
  * `horn` is the count of honks, ever (like itemPresses); `emote` is 0 none,
  * 1 cheer, 2 wave; `shakes` the count of shakes, ever. The last three are sent
  * only when there is something to say, and read as none when absent, so the
  * packets that go sixty times a second stay as short as they can.
  */
-export type WireInput = [number, number, number, number, 0 | 1, number, number?, number?, number?];
+export type WireInput = [number, number, number, number, 0 | 1 | 2 | 3, number, number?, number?, number?];
 
 const EMOTES = [null, "cheer", "wave"] as const;
 
@@ -133,7 +134,7 @@ export function encodeInput(seq: number, input: DriveInput): WireInput {
     Math.round(clamp(input.steer, -1, 1) * 100),
     Math.round(clamp(input.throttle, 0, 1) * 100),
     Math.round(clamp(input.brake, 0, 1) * 100),
-    input.drift ? 1 : 0,
+    ((input.drift ? 1 : 0) | (input.slide ? 2 : 0)) as 0 | 1 | 2 | 3,
     Math.max(0, Math.floor(input.itemPresses)),
   ];
   if (horn > 0 || emote > 0 || shakes > 0) wire.push(horn, emote);
@@ -147,9 +148,10 @@ export function decodeInput(wire: readonly (number | undefined)[]): DriveInput {
     steer: clamp(num(wire[1]), -100, 100) / 100,
     throttle: clamp(num(wire[2]), 0, 100) / 100,
     brake: clamp(num(wire[3]), 0, 100) / 100,
-    drift: num(wire[4]) === 1,
+    drift: (num(wire[4]) & 1) === 1,
     itemPresses: Math.max(0, Math.floor(num(wire[5]))),
   };
+  if ((num(wire[4]) & 2) === 2) input.slide = true;
   // Only when there is one, so an input that cannot honk reads as it always did.
   const horn = Math.max(0, Math.floor(num(wire[6])));
   if (horn > 0) input.horn = horn;

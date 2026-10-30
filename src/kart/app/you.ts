@@ -18,7 +18,7 @@ export interface YouHooks {
 /** What each way of driving needs to be told, in a line under the choice. */
 const ABOUT: Record<Drive, string> = {
   wheel:
-    "Hold your fists up like a wheel and turn it. Open your hands to brake. Steering is how far you turn for full lock: Gentle 50°, Normal 40°, Quick 30°.",
+    "Hold your fists up like a wheel and turn it. Open your hands to brake, or in a bend to drift. Steering is how far you turn for full lock: Gentle 50°, Normal 40°, Quick 30°.",
   keyboard: "Arrows or WASD to steer, Space to drift, E or Shift for your item.",
   gamepad: "Left stick to steer, the triggers to go and stop, A to drift, B or X for your item.",
 };
