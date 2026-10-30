@@ -75,22 +75,22 @@ export function mood(w: World, k: KartState): number {
 }
 
 export function takeOf(w: World, k: KartState, style: Style, bend: BendNear, feeling: number): Take {
-  const roll = (salt: number): number => noise(w.setup.seed, k.id, bend.pass, bend.index, salt);
-  const swing = (salt: number): number => roll(salt) * 2 - 1;
+  const seed = w.setup.seed;
+  const swing = (salt: number): number => noise(seed, k.id, bend.pass, bend.index, salt) * 2 - 1;
   const take: Take = {
     cut: clamp(1 + style.lineJitter * swing(ROLL.cut), 0.35, 1.3),
     brake: style.brakeJitter * swing(ROLL.brake),
     pace: style.corner * (1 + B.paceJitter * swing(ROLL.pace)),
     wide: 0,
-    drift: roll(ROLL.skipDrift) < B.driftSkip * (1.2 - k.skill) ? "skip" : "normal",
+    drift: noise(seed, k.id, bend.pass, bend.index, ROLL.skipDrift) < B.driftSkip * (1.2 - k.skill) ? "skip" : "normal",
     mistake: null,
   };
   // No mistakes beside an open edge, on ice, or on a lap of honour.
   if (bend.c.open || bend.c.ice || k.finished !== null) return take;
   const chance = B.mistakeRate * (1 - B.mistakeSkill * k.skill) * style.mistakes * (1 + B.mistakeMood * feeling);
-  if (roll(ROLL.mistake) >= chance) return take;
-  const kind = roll(ROLL.kind);
-  const size = 0.5 + 0.5 * roll(ROLL.size);
+  if (noise(seed, k.id, bend.pass, bend.index, ROLL.mistake) >= chance) return take;
+  const kind = noise(seed, k.id, bend.pass, bend.index, ROLL.kind);
+  const size = 0.5 + 0.5 * noise(seed, k.id, bend.pass, bend.index, ROLL.size);
   if (kind < 0.35) {
     take.mistake = "wide";
     take.wide = size;
@@ -133,10 +133,10 @@ export function wideness(w: World, bend: BendNear, sAim: number): number {
 export function wobble(w: World, k: KartState, style: Style, calm: boolean): number {
   if (!calm || k.finished !== null) return 0;
   const cell = Math.floor(k.progress / B.wobbleCell);
-  const roll = (salt: number): number => noise(w.setup.seed, k.id, cell, 77, salt);
-  if (roll(ROLL.wobble) >= B.wobbleRate * (1 - 0.7 * k.skill) * style.mistakes) return 0;
-  const start = cell * B.wobbleCell + 15 + 45 * roll(ROLL.wobbleAt);
-  const length = 20 + 25 * roll(ROLL.wobbleLong);
+  const seed = w.setup.seed;
+  if (noise(seed, k.id, cell, 77, ROLL.wobble) >= B.wobbleRate * (1 - 0.7 * k.skill) * style.mistakes) return 0;
+  const start = cell * B.wobbleCell + 15 + 45 * noise(seed, k.id, cell, 77, ROLL.wobbleAt);
+  const length = 20 + 25 * noise(seed, k.id, cell, 77, ROLL.wobbleLong);
   const into = k.progress - start;
   if (into < 0 || into > length) return 0;
   // Two or three swings, fading in and out.

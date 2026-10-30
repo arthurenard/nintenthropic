@@ -355,13 +355,15 @@ export const TUNING = {
      * Rubber band: a bot more than `start` metres from the best player eases
      * off up to `easeOff` (less by `easeSkill` of it for a sharp bot, so the
      * quick ones stay worth beating), or pushes up to `push`, by `span`
-     * metres; never past the road's top speed.
+     * metres; never past the road's top speed. Well behind it also corners as
+     * if up to `press` more skilful.
      */
-    rubberStart: 40,
+    rubberStart: 30,
     rubberSpan: 120,
     easeOff: 0.08,
     easeSkill: 0.5,
-    push: 0.05,
+    push: 0.06,
+    press: 0.5,
     /** Stuck: slower than this for this long and a bot backs up for a while. */
     stuckSpeed: 1.5,
     stuckTime: 1.0,
@@ -420,7 +422,7 @@ export const TUNING = {
      * braking late (`lateBrake` metres, `hotPace` more speed), missing the
      * apex, or botching the drift.
      */
-    mistakeRate: 0.14,
+    mistakeRate: 0.11,
     mistakeSkill: 0.75,
     mistakeMood: 0.6,
     lateBrake: 18,
@@ -431,6 +433,10 @@ export const TUNING = {
     wobbleRate: 0.18,
     wobbleCell: 100,
     wobbleSteer: 0.22,
+    /** Running wide aims this far (metres) inside the road's edge (`wideOver` further out for the erratic, whose `verge` is 1: over it); half as far out of a bend tighter than `hairpin` (1/m). */
+    wideEdge: 0.9,
+    wideOver: 1.4,
+    hairpin: 1 / 20,
 
     /**
      * Racecraft (racecraft.ts). A bot attacks a kart up to `attackRange` (plus

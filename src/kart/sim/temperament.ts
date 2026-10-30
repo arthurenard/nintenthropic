@@ -43,26 +43,31 @@ function hashString(text: string): number {
  * ones: the bots' dice, rolled by where they are rather than drawn from the
  * race's generator.
  */
-export function noise(...parts: number[]): number {
-  let h = 0x9e3779b9;
-  for (const part of parts) {
-    h = Math.imul(h ^ (part | 0), 0x85ebca6b);
-    h ^= h >>> 13;
-    h = Math.imul(h, 0xc2b2ae35);
-    h ^= h >>> 16;
-  }
+export function noise(a: number, b: number, c: number, d = 0, e = 0): number {
+  let h = mix(0x9e3779b9, a);
+  h = mix(h, b);
+  h = mix(h, c);
+  h = mix(h, d);
+  h = mix(h, e);
   return (h >>> 0) / 4294967296;
 }
 
+function mix(h: number, part: number): number {
+  h = Math.imul(h ^ (part | 0), 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  return h ^ (h >>> 16);
+}
+
 /** -1..1, smooth along `x` (metres of progress), a new value every `period`: a drift that never repeats. */
-export function wander(x: number, period: number, ...parts: number[]): number {
+export function wander(x: number, period: number, a: number, b: number, c: number): number {
   const f = x / period;
   const i = Math.floor(f);
   const t = f - i;
   const ease = t * t * (3 - 2 * t);
-  const a = noise(...parts, i);
-  const b = noise(...parts, i + 1);
-  return (a + (b - a) * ease) * 2 - 1;
+  const p = noise(a, b, c, i);
+  const q = noise(a, b, c, i + 1);
+  return (p + (q - p) * ease) * 2 - 1;
 }
 
 const cache = new WeakMap<RaceSetup, Map<number, Temperament>>();

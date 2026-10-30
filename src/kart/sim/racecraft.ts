@@ -50,13 +50,17 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
   const keen = B.attackRange + B.attackReach * style.attack;
   const range = Math.max(keen, Math.max(0, fwd) * B.attackTime);
 
-  // The kart in the way ahead, the nearest kart close behind, and those alongside.
+  // The kart in the way ahead, the nearest kart close behind, and those alongside (leaned on, or given room: `shove`).
   let target: KartState | null = null;
   let targetAt = Infinity;
   let chaser: KartState | null = null;
   let chaserAt = -Infinity;
+  let shove = 0;
+  const near = (range + 3) * (range + 3);
   for (const o of w.state.karts) {
     if (o.id === k.id || o.rescue > 0) continue;
+    // Far off as the crow flies is far off along the road too: not worth the working out.
+    if ((o.x - k.x) ** 2 + (o.z - k.z) ** 2 > near) continue;
     const ds = geo.delta(k.s, o.s);
     if (ds > 0 && ds < range && ds < targetAt) {
       // In the way: near where this kart will be across the road by the time it gets there.
@@ -69,13 +73,20 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
       chaser = o;
       chaserAt = ds;
     }
+    // Alongside: lean on it (by temperament, in a fight side by side at much the same pace), or give it room.
+    const across = o.offset - k.offset;
+    if (Math.abs(ds) > 2.8 || Math.abs(across) > 4.2 || o.comet > 0) continue;
+    const towards = across >= 0 ? 1 : -1;
+    const level = Math.abs(forwardSpeed(o) - fwd) < 3 && o.spin === 0 && o.zap === 0;
+    const leans = racing && calm && level && o.finished === null && k.ground !== "ice" && style.lean > 0 && noise(seed, k.id, o.id, Math.floor(k.progress / 50)) < style.lean * B.leanChance;
+    if (leans) shove += towards * B.leanIn;
+    else if (Math.abs(across) < 2 * TUNING.kartRadius + 0.3) shove -= towards * (2 * TUNING.kartRadius + 0.3 - Math.abs(across)) * 0.8;
   }
 
   if (target) {
     const theirs = forwardSpeed(target);
     const closing = fwd - theirs;
     const rival = racing && target.finished === null;
-    const fits = (offset: number): boolean => offset <= right + 0.3 && offset >= -left - 0.3;
     // Already alongside (its nose by our wheels): stay on the side we are on, or going to (half a second on, sideways).
     const alongside = targetAt < 2 * TUNING.kartRadius + 2.5;
     const road = geo.at(k.s);
@@ -104,10 +115,10 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
         else if (Math.abs(roomRight - roomLeft) > 1.5) side = roomRight > roomLeft ? 1 : -1;
         else side = noise(seed, k.id, target.id, Math.floor(k.progress / 200)) < 0.5 ? 1 : -1;
         let want = target.offset + side * B.passGap;
-        if (!fits(want)) {
+        if (!fits(want, left, right)) {
           // No room that side. Round the other, if there is room there and it is not alongside already (cutting across its tail).
           const other = target.offset - side * B.passGap;
-          if (fits(other) && !alongside) {
+          if (fits(other, left, right) && !alongside) {
             side = side > 0 ? -1 : 1;
             want = other;
           } else {
@@ -148,21 +159,13 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
     }
   }
 
-  // Alongside: lean on it (by temperament, in a fight side by side at much the same pace), or give it room.
-  for (const o of w.state.karts) {
-    if (o.id === k.id || o.rescue > 0 || o.comet > 0) continue;
-    const ds = geo.delta(k.s, o.s);
-    const across = o.offset - k.offset;
-    if (Math.abs(ds) > 2.8 || Math.abs(across) > 4.2) continue;
-    const towards = across >= 0 ? 1 : -1;
-    const level = Math.abs(forwardSpeed(o) - fwd) < 3 && o.spin === 0 && o.zap === 0;
-    const leans = racing && calm && level && o.finished === null && k.ground !== "ice" && style.lean > 0 && noise(seed, k.id, o.id, Math.floor(k.progress / 50)) < style.lean * B.leanChance;
-    if (leans) fight.offset += towards * B.leanIn;
-    else if (Math.abs(across) < 2 * TUNING.kartRadius + 0.3) fight.offset -= towards * (2 * TUNING.kartRadius + 0.3 - Math.abs(across)) * 0.8;
-  }
-
-  fight.offset = clamp(dodgePucks(w, k, fight.offset), -left, right);
+  fight.offset = clamp(dodgePucks(w, k, fight.offset + shove), -left, right);
   return fight;
+}
+
+/** Whether an offset is on the road's usable width (with a little to spare). */
+function fits(offset: number, left: number, right: number): boolean {
+  return offset <= right + 0.3 && offset >= -left - 0.3;
 }
 
 /**

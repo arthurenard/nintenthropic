@@ -72,15 +72,36 @@ export function rubberBand(w: World, k: KartState): number {
   return 1;
 }
 
-/** A threat coming for the bot: a skyrocket coming down on it, or a puck or seeker not its own close by and closing. */
+/** Whether the bot sees a threat coming (by skill; a sharp one always does), settled per thing. */
+function reacts(k: KartState, id: number): boolean {
+  return ((id * 7 + k.id * 13) % 10) / 10 < k.skill + 0.15;
+}
+
+/**
+ * A threat coming for the bot, within `near` metres: a skyrocket coming down
+ * on it, or a puck or seeker not its own, that it sees.
+ */
 function threatened(w: World, k: KartState, near: number): boolean {
   for (const rocket of w.state.skyrockets) {
     if (rocketTarget(w, rocket.owner)?.id !== k.id) continue;
     const at = w.geo.point(rocket.s, 0);
-    if (Math.hypot(at.x - k.x, at.z - k.z) < near) return true;
+    if (Math.hypot(at.x - k.x, at.z - k.z) < near && reacts(k, rocket.id)) return true;
   }
-  for (const thing of [...w.state.pucks, ...w.state.seekers]) {
-    if (thing.owner !== k.id && Math.hypot(thing.x - k.x, thing.z - k.z) < near) return true;
+  for (const puck of w.state.pucks) {
+    if (puck.owner !== k.id && Math.hypot(puck.x - k.x, puck.z - k.z) < near && reacts(k, puck.id)) return true;
+  }
+  for (const seeker of w.state.seekers) {
+    if (seeker.owner !== k.id && Math.hypot(seeker.x - k.x, seeker.z - k.z) < near && reacts(k, seeker.id)) return true;
+  }
+  return false;
+}
+
+/** A slick or decoy (not its own) in the bot's path within `near` metres, that it sees. */
+function trapAhead(k: KartState, traps: readonly { id: number; owner: number; x: number; z: number }[], near: number): boolean {
+  for (const trap of traps) {
+    if (trap.owner === k.id) continue;
+    const r = relative(k, trap.x, trap.z);
+    if (r.ahead > 1 && r.ahead < near && Math.abs(r.right) < 2.6 && reacts(k, trap.id)) return true;
   }
   return false;
 }
@@ -93,20 +114,9 @@ function threatened(w: World, k: KartState, near: number): boolean {
  */
 function blastWanted(w: World, k: KartState, style: Style, crowd: boolean): boolean {
   const near = TUNING.items.blast.radius - 1;
-  const reacts = (id: number): boolean => ((id * 7 + k.id * 13) % 10) / 10 < k.skill + 0.15;
-  for (const rocket of w.state.skyrockets) {
-    if (rocketTarget(w, rocket.owner)?.id !== k.id) continue;
-    const at = w.geo.point(rocket.s, 0);
-    if (Math.hypot(at.x - k.x, at.z - k.z) < near && reacts(rocket.id)) return true;
-  }
-  for (const thing of [...w.state.pucks, ...w.state.seekers]) {
-    if (thing.owner !== k.id && Math.hypot(thing.x - k.x, thing.z - k.z) < near && reacts(thing.id)) return true;
-  }
+  if (threatened(w, k, near)) return true;
   if (!crowd) return false;
-  for (const trap of [...w.state.slicks, ...w.state.decoys]) {
-    const r = relative(k, trap.x, trap.z);
-    if (trap.owner !== k.id && r.ahead > 1 && r.ahead < near && Math.abs(r.right) < 2.6 && reacts(trap.id)) return true;
-  }
+  if (trapAhead(k, w.state.slicks, near) || trapAhead(k, w.state.decoys, near)) return true;
   let beside = 0;
   for (const other of w.state.karts) {
     if (other.id !== k.id && other.comet === 0 && other.finished === null && Math.hypot(other.x - k.x, other.z - k.z) < near - 0.5) beside++;
@@ -368,11 +378,14 @@ export function botInput(w: World, k: KartState): DriveInput {
   const room = Math.max(0, half - B.edgeMargin);
   const beside = isOpen(terrain, k.s, -1) || isOpen(terrain, k.s, 1) || isOpen(terrain, k.s + 25, -1) || isOpen(terrain, k.s + 25, 1);
 
-  // The bend the aim is in or coming to, and the one it may be coming out of: how the bot takes each, this time round.
+  // The bend the kart is in or coming to, the one the aim is in or coming to, and the one the aim may be coming out of:
+  // how the bot takes each, this time round (each rolled once: they are often the same bend).
+  const bendKart = bendNear(w, k, k.s);
   const bendAim = bendNear(w, k, sAim);
   const bendOut = bendNear(w, k, sAim - 35);
-  const takeAim = bendAim ? takeOf(w, k, style, bendAim, feeling) : null;
-  const takeOut = bendOut && bendOut.index !== bendAim?.index ? takeOf(w, k, style, bendOut, feeling) : null;
+  const takeKart = bendKart ? takeOf(w, k, style, bendKart, feeling) : null;
+  const takeAim = bendAim ? (bendAim.index === bendKart?.index ? takeKart : takeOf(w, k, style, bendAim, feeling)) : null;
+  const takeOut = bendOut && bendOut.index !== bendAim?.index ? (bendOut.index === bendKart?.index ? takeKart : takeOf(w, k, style, bendOut, feeling)) : null;
   let cutShare = 1;
   if (bendAim && takeAim) cutShare += (takeAim.cut - 1) * bendWeight(w, bendAim.c, sAim);
   if (bendOut && takeOut) cutShare += (takeOut.cut - 1) * bendWeight(w, bendOut.c, sAim);
@@ -381,20 +394,19 @@ export function botInput(w: World, k: KartState): DriveInput {
   const lane = wandering * B.laneShare * style.laneWidth * half * (1 - Math.min(1, Math.abs(cut) / Math.max(room, 0.1)));
   let aimOffset = clamp(cut + lane, -roomLeft, roomRight);
 
-  // Running wide out of a bend (a mistake): toward the outside edge, a little over it for the erratic.
+  // Running wide out of a bend (a mistake): toward the outside edge (a little over it for the erratic), less out of a hairpin.
   const runWide = (bend: BendNear | null, take: Take | null): void => {
     if (!bend || !take || take.wide === 0) return;
-    const share = take.wide * wideness(w, bend, sAim);
+    const share = take.wide * wideness(w, bend, sAim) * (bend.c.peak > B.hairpin ? 0.5 : 1);
     if (share <= 0) return;
     const outside = -bend.c.dir;
-    const edge = outside * Math.max(0, half - 0.7 + 1.2 * style.verge);
+    const edge = outside * Math.max(0, half - B.wideEdge + B.wideOver * Math.max(0, 2 * style.verge - 1));
     aimOffset += (edge - aimOffset) * share;
   };
   runWide(bendAim, takeAim);
   runWide(bendOut, takeOut);
 
   // The karts round it: passing, a slipstream, covering the inside, leaning on a neighbour.
-  const bendKart = bendNear(w, k, k.s);
   const lineAim = aimOffset;
   const fight = racecraft(w, k, style, aimOffset, roomLeft, roomRight, look, bendKart, !beside);
   aimOffset = fight.offset;
@@ -504,7 +516,6 @@ export function botInput(w: World, k: KartState): DriveInput {
   const bendLength = tableAt(plan, plan.bend, k.s + 6);
   const bendTurn = tableAt(plan, plan.curve, k.s + 6);
   const bendLeft = tableAt(plan, plan.bend, k.s + 2);
-  const takeKart = bendKart ? takeOf(w, k, style, bendKart, feeling) : null;
   if (m.drifting) {
     // A botched drift lets go at the apex, before the charge has come to much.
     const botched = takeKart?.drift === "short" && bendKart !== null && bendKart.toApex < 0;
@@ -543,7 +554,7 @@ export function botInput(w: World, k: KartState): DriveInput {
     if (bendKart.toApex > 0) shift = takeKart.brake * (bendKart.toFrom > 0 ? 1 : clamp(bendKart.toApex / Math.max(1, bendKart.toApex - bendKart.toFrom), 0, 1));
     if (bendKart.toFrom < 70 && bendKart.toEnd > -10) pace = takeKart.pace * fight.pace;
   }
-  const sharp = Math.min(1, k.skill + 0.3 * Math.max(0, -feeling));
+  const sharp = Math.min(1, k.skill + B.press * Math.max(0, -feeling));
   const planned = tableAt(plan, plan.speed, k.s + Math.max(0, fwd) * B.planAhead - shift) * (0.88 + 0.12 * sharp) * pace;
   // On a verge cut it goes flat out; a hazard ahead may ask it to ease.
   // Close to a ramp it keeps its speed: a jump needs it, and a slow-down for a hazard is not worth a fall.
