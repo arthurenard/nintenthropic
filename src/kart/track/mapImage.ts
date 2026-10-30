@@ -3,7 +3,8 @@
  * the road with its width, kerbs on the tight bends, the start line, ramps,
  * open edges (red), gaps (the road missing), verges, patches of ice, mud and
  * boost strip, hazards (with their paths), item rows, boost pads, landmarks
- * by name, and the duck.
+ * by name, and the duck; under it, the road's height along the lap (steep
+ * stretches in red, crests sharp enough to fly over marked) and its lean.
  *
  * Drawn the way the minimap draws: north (+z) up the page and +x to the left,
  * the world as seen from above, so a right turn on the road turns right on
@@ -72,11 +73,13 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
   }
   const header = 92;
   const margin = 26;
-  const scale = Math.min((size - margin * 2) / (maxX - minX), (size - margin - header) / (maxZ - minZ));
+  /** The strip under the map: the height profile and the lean. */
+  const footer = 150;
+  const scale = Math.min((size - margin * 2) / (maxX - minX), (size - footer - header) / (maxZ - minZ));
   const cx = (minX + maxX) / 2;
   const cz = (minZ + maxZ) / 2;
   const px = (x: number) => size / 2 - (x - cx) * scale;
-  const py = (z: number) => header + (size - header - margin) / 2 - (z - cz) * scale;
+  const py = (z: number) => header + (size - header - footer) / 2 - (z - cz) * scale;
   const at = (s: number, offset: number): string => {
     const p = geo.point(s, offset);
     return `${px(p.x).toFixed(1)},${py(p.z).toFixed(1)}`;
@@ -265,10 +268,13 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     push(`<text x="${(px(p.x) + 11).toFixed(1)}" y="${(py(p.z) + 4).toFixed(1)}" font-size="12" font-weight="700" fill="${ink}" stroke="${background}" stroke-width="3" paint-order="stroke">duck</text>`);
   }
 
+  // The height along the lap, and the lean.
+  push(profileSvg(geo, { x: margin, y: size - footer + 12, width: size - margin * 2, height: footer - 40 }, ink, background));
+
   // Scale bar and the header.
   const bar = 100 * scale;
-  push(`<line x1="${margin}" y1="${size - 14}" x2="${margin + bar}" y2="${size - 14}" stroke="${ink}" stroke-width="3"/>`);
-  push(`<text x="${margin + bar + 8}" y="${size - 9}" font-size="12" fill="${ink}">100 m</text>`);
+  push(`<line x1="${margin}" y1="${size - footer}" x2="${margin + bar}" y2="${size - footer}" stroke="${ink}" stroke-width="3"/>`);
+  push(`<text x="${margin + bar + 8}" y="${size - footer + 5}" font-size="12" fill="${ink}">100 m</text>`);
   const lap = options.lapTime ? `  ·  lap ${options.lapTime.toFixed(0)} s` : "";
   push(`<text x="${margin}" y="34" font-size="26" font-weight="700" fill="${ink}">${esc(def.name)}${def.secret ? " (secret)" : ""}</text>`);
   push(`<text x="${margin}" y="56" font-size="14" fill="${ink}">${def.theme}  ·  ${geo.length.toFixed(0)} m  ·  road ${def.width} m  ·  ${def.laps} laps${lap}</text>`);
@@ -289,5 +295,59 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     push(`<text x="${x + 18}" y="${y + 1}" font-size="12" fill="${ink}">${label}</text>`);
   });
   push("</svg>");
+  return out.join("\n");
+}
+
+/** How steep counts as steep on the profile (a rise of 8 m in 100). */
+const STEEP = 0.08;
+/** A crest whose road turns down faster than this (1/m: a radius of 60 m) throws a kart at top speed into the air. */
+const FLYING_CREST = 1 / 60;
+
+/**
+ * The road's height along the lap as a strip: the profile (red where it climbs or falls more than 8%), a mark on every
+ * crest sharp enough to fly over at speed, the lowest and highest point, and under it the road's lean (blue: the right side
+ * low, orange: the left; the taller, the steeper).
+ */
+function profileSvg(geo: TrackGeometry, box: { x: number; y: number; width: number; height: number }, ink: string, background: string): string {
+  const out: string[] = [];
+  const step = 2;
+  const ys: number[] = [];
+  for (let s = 0; s <= geo.length; s += step) ys.push(geo.at(s).y);
+  const lo = Math.min(...ys);
+  const hi = Math.max(...ys);
+  const leanHeight = 22;
+  const plotHeight = box.height - leanHeight - 6;
+  const range = Math.max(4, hi - lo);
+  const sx = (s: number) => box.x + (s / geo.length) * box.width;
+  const sy = (y: number) => box.y + plotHeight - ((y - lo) / range) * plotHeight;
+  out.push(`<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${plotHeight}" fill="${ink}" opacity="0.06"/>`);
+  const area = ys.map((y, k) => `${sx(k * step).toFixed(1)},${sy(y).toFixed(1)}`);
+  out.push(`<polygon points="${sx(0).toFixed(1)},${box.y + plotHeight} ${area.join(" ")} ${sx((ys.length - 1) * step).toFixed(1)},${box.y + plotHeight}" fill="${ink}" opacity="0.14"/>`);
+  for (let k = 0; k + 1 < ys.length; k++) {
+    const grade = Math.abs(ys[k + 1]! - ys[k]!) / step;
+    const colour = grade > STEEP ? "#e5334b" : ink;
+    out.push(`<line x1="${sx(k * step).toFixed(1)}" y1="${sy(ys[k]!).toFixed(1)}" x2="${sx((k + 1) * step).toFixed(1)}" y2="${sy(ys[k + 1]!).toFixed(1)}" stroke="${colour}" stroke-width="2"/>`);
+  }
+  // Crests: where the road bends down over a few metres faster than a kart at speed can follow.
+  for (let s = 6; s < geo.length - 6; s += 2) {
+    const bend = (geo.at(s + 6).y - 2 * geo.at(s).y + geo.at(s - 6).y) / 36;
+    const prev = (geo.at(s + 4).y - 2 * geo.at(s - 2).y + geo.at(s - 8).y) / 36;
+    const next = (geo.at(s + 8).y - 2 * geo.at(s + 2).y + geo.at(s - 4).y) / 36;
+    if (bend < -FLYING_CREST && bend <= prev && bend <= next) {
+      out.push(`<circle cx="${sx(s).toFixed(1)}" cy="${(sy(geo.at(s).y) - 6).toFixed(1)}" r="4" fill="#ffd60a" stroke="#8a6d00" stroke-width="1"/>`);
+    }
+  }
+  out.push(`<text x="${box.x + 4}" y="${box.y + 12}" font-size="11" fill="${ink}" stroke="${background}" stroke-width="3" paint-order="stroke">height ${lo.toFixed(1)} to ${hi.toFixed(1)} m (red: steeper than ${STEEP * 100}%, dot: a crest to fly over)</text>`);
+  // The lean: + (blue) the right side low, - (orange) the left.
+  const mid = box.y + plotHeight + 6 + leanHeight / 2;
+  out.push(`<line x1="${box.x}" y1="${mid}" x2="${box.x + box.width}" y2="${mid}" stroke="${ink}" stroke-width="0.6" opacity="0.5"/>`);
+  for (let s = 0; s < geo.length; s += 4) {
+    const c = geo.at(s);
+    const roll = Math.max(-0.35, Math.min(0.35, c.bank + (geo.def.bank ?? 0) * c.curvature));
+    if (Math.abs(roll) < 0.01) continue;
+    const h = (roll / 0.35) * (leanHeight / 2);
+    out.push(`<rect x="${sx(s).toFixed(1)}" y="${(h > 0 ? mid - h : mid).toFixed(1)}" width="${Math.max(1, (4 / geo.length) * box.width).toFixed(1)}" height="${Math.abs(h).toFixed(1)}" fill="${roll > 0 ? "#0a84ff" : "#ff9f0a"}"/>`);
+  }
+  out.push(`<text x="${box.x + 4}" y="${mid + leanHeight / 2 + 12}" font-size="11" fill="${ink}" opacity="0.8">lean (blue: right side low, orange: left)  ·  s along the lap, 0 to ${geo.length.toFixed(0)} m</text>`);
   return out.join("\n");
 }

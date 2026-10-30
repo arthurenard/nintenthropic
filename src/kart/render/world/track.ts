@@ -80,7 +80,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   const spacing = track.spacing;
   const samples = track.samples;
   const features = terrain.features;
-  const bank = new Bank(track);
+  const bank = Bank.of(track);
   const S = (i: number): TrackSample => samples[((i % n) + n) % n]!;
   /** A point `off` metres right of sample i's centre, lifted by dy, following the bank. */
   const P = (i: number, off: number, dy = 0): V3 => {
@@ -132,7 +132,21 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
 
   // ── Road ──────────────────────────────────────────────────────────────────
   const WHITE: Rgb = [1, 1, 1];
+  /** The road's up at sample i: tipped back on a climb, forward on a descent, and sideways by its lean. */
+  const roadUp = (i: number): V3 => {
+    const a = S(i);
+    const grade = (S(i + 1).y - S(i - 1).y) / (2 * spacing);
+    const lean = Math.tan(bank.rollAt(i * spacing));
+    const x = -(grade * a.tx + lean * a.tz);
+    const z = lean * a.tx - grade * a.tz;
+    const len = Math.hypot(x, 1, z);
+    return [x / len, 1 / len, z / len];
+  };
+  let upHere = roadUp(0);
   for (let i = 0; i < n; i++) {
+    const upNext = roadUp(i + 1);
+    const up: V3 = [(upHere[0] + upNext[0]) / 2, (upHere[1] + upNext[1]) / 2, (upHere[2] + upNext[2]) / 2];
+    upHere = upNext;
     if (ctx.gap(i) || ctx.gap(i + 1)) continue;
     const a = S(i);
     const b = S(i + 1);
@@ -149,7 +163,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const l1 = -hw0 + u1 * hw0 * 2;
       const m0 = -hw1 + u0 * hw1 * 2;
       const m1 = -hw1 + u1 * hw1 * 2;
-      road[chunkOf(i)]!.quad(P(i, l0), P(i, l1), P(i + 1, m1), P(i + 1, m0), WHITE, WHITE, WHITE, WHITE, UP, [u0, v0, u1, v0, u1, v1, u0, v1]);
+      road[chunkOf(i)]!.quad(P(i, l0), P(i, l1), P(i + 1, m1), P(i + 1, m0), WHITE, WHITE, WHITE, WHITE, up, [u0, v0, u1, v0, u1, v1, u0, v1]);
     }
   }
 
@@ -343,9 +357,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
           bd.tri(D, F, E, ink);
         }
       }
-      // Two posts, reaching down to the ground behind the barrier.
+      // Two posts, reaching down to the ground behind the barrier (level with the road's edge there, banked or not).
       for (const sgn of [-1, 1]) {
-        bd.post(cx + rx * 1.3 * sgn - fx * 0.08, a.y - 0.7, cz + rz * 1.3 * sgn - fz * 0.08, 0.07, 3.3, postCol, 6);
+        bd.post(cx + rx * 1.3 * sgn - fx * 0.08, y0 - 1.0, cz + rz * 1.3 * sgn - fz * 0.08, 0.07, 3.3, postCol, 6);
       }
       last = i;
     }
@@ -493,16 +507,18 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const pz = a.z + a.tx * o;
       const bd = deco[chunkOf(i)]!;
       const h = 8.4;
-      bd.post(px, a.y - 0.3, pz, 0.2, h + 0.3, { bottom: scaleRgb(steel, 0.7), top: steel }, 8, 0.65);
+      // The pole stands on the ground beside the road, which leans with it: level with the road's edge on that side.
+      const foot = a.y + bank.liftAt(i, side * a.width);
+      bd.post(px, foot - 0.3, pz, 0.2, h + 0.3, { bottom: scaleRgb(steel, 0.7), top: steel }, 8, 0.65);
       // The arm leans out over the road (toward it: against the side the pole stands on).
       const toRoadX = side * a.tz;
       const toRoadZ = -side * a.tx;
       const ax = px + toRoadX * 1.7;
       const az = pz + toRoadZ * 1.7;
-      bd.box((px + ax) / 2, a.y + h - 0.1, (pz + az) / 2, 1.7, 0.16, 0.16, steel, Math.atan2(-(az - pz), ax - px));
-      bd.box(ax, a.y + h - 0.2, az, 1.15, 0.16, 0.5, [4.2, 3.2, 1.8], Math.atan2(-(az - pz), ax - px));
-      glows.push({ x: ax, y: a.y + h - 0.3, z: az, size: 4.2, colour: [1.0, 0.82, 0.45], alpha: 0.95 });
-      glows.push({ x: ax, y: a.y + h - 0.3, z: az, size: 13, colour: [1.0, 0.72, 0.35], alpha: 0.2 });
+      bd.box((px + ax) / 2, foot + h - 0.1, (pz + az) / 2, 1.7, 0.16, 0.16, steel, Math.atan2(-(az - pz), ax - px));
+      bd.box(ax, foot + h - 0.2, az, 1.15, 0.16, 0.5, [4.2, 3.2, 1.8], Math.atan2(-(az - pz), ax - px));
+      glows.push({ x: ax, y: foot + h - 0.3, z: az, size: 4.2, colour: [1.0, 0.82, 0.45], alpha: 0.95 });
+      glows.push({ x: ax, y: foot + h - 0.3, z: az, size: 13, colour: [1.0, 0.72, 0.35], alpha: 0.2 });
       // The pool on the road beneath: a grid whose brightness falls with distance.
       const R = 10;
       const gridN = 8;
@@ -520,7 +536,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
         const r = Math.hypot(u, v) / R;
         const fall = Math.pow(Math.max(0, 1 - r), 1.8) * 0.8;
         const c: Rgb = [1.0 * fall, 0.78 * fall, 0.42 * fall];
-        return [[wx, proj.sample.y + 0.045, wz], c];
+        return [[wx, proj.sample.y + bank.lift(proj.s, proj.offset) + 0.045, wz], c];
       };
       for (let gu = 0; gu < gridN; gu++) {
         for (let gv = 0; gv < gridN; gv++) {

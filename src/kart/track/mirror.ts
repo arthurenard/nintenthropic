@@ -2,8 +2,9 @@
  * Mirror mode: a track flipped left for right. Every point's x is negated,
  * which turns every right-hander into a left-hander, and every lateral thing
  * (metres right of the centre line, or a side of the road) follows: offsets
- * are negated, "left" and "right" swap, a landmark's turn is negated. What
- * runs along the lap (fractions, ramps, heights, widths) is untouched.
+ * are negated, "left" and "right" swap, a landmark's turn and a point's lean
+ * (`bank`) are negated. What runs along the lap (fractions, ramps, heights,
+ * widths) is untouched.
  *
  * The flipped track is a TrackDef like any other, memoised so that asking
  * twice gives the same object (the sim's and the picture's per-track caches
@@ -33,7 +34,7 @@ export function mirrorTrack(def: TrackDef): TrackDef {
   const mirrored: TrackDef = {
     ...def,
     id: def.id + MIRROR_SUFFIX,
-    points: def.points.map((point) => ({ ...point, x: flip(point.x) })),
+    points: def.points.map((point) => withDefined({ ...point, x: flip(point.x) }, "bank", flipped(point.bank))),
     boostPads: def.boostPads?.map((pad) => ({ ...pad, offset: flip(pad.offset) })),
     drops: def.drops?.map((drop) => (drop.side === "both" ? { ...drop } : { ...drop, side: swapSide(drop.side) })),
     verges: def.verges?.map((verge) => ({ ...verge, side: swapSide(verge.side) })),
