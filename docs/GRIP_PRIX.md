@@ -905,11 +905,16 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    the rollercoaster; a teacup ride spinning beside the road and bumper cars
    crossing a wide plaza; a ramp off the helter-skelter's foot; the hook-a-duck
    stall (the duck); fireworks over the finish.
-6. **Glacier Pass** (snow): an alpine pass at blue hour. Ice patches on the
-   bends, a frozen lake (all ice, wide) to slide across, an ice cave glowing
-   blue, a ski-jump over a crevasse (a drop), penguins waddling across,
-   snowballs rolling down, a yeti who pops out of a snowdrift once a lap.
-   The duck sits by an ice-fishing hole on the lake.
+6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
+   ice, wide, level) to slide across in the valley, then a climb of fifteen
+   metres to the pass and a corkscrew three quarters of the way round a
+   mountain hut, banked hard and falling all the way, a cliff on its outside
+   and ice on its tight inside line; a crest to fly over on the shoulder, a
+   twisting S that leans one way then the other through an ice cave glowing
+   blue, a long falling in-run to a ski-jump over a crevasse (a drop), and
+   moguls on the way home. Penguins waddle across, snowballs roll down at
+   you, a yeti pops out of a snowdrift once a lap. The duck sits by an
+   ice-fishing hole on the lake.
 7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), a stone
    bridge over lava with nothing either side, fireballs leaping from the lava,
    boulders, a jump over a lava gap, the volcano smoking behind it all. The
