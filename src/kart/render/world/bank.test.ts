@@ -116,7 +116,7 @@ describe("a road that leans where its points say", () => {
   });
 
   it("is followed by the ground: level with each edge beside it, up on the high side and down on the low", () => {
-    const terrain = Terrain.build(g, styleFor("meadow"), 2);
+    const terrain = Terrain.build(g, styleFor("meadow"), 4);
     const s = g.project(-60, 240).s;
     const c = g.at(s);
     for (const side of [-1, 1]) {

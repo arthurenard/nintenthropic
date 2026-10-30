@@ -610,7 +610,7 @@ export const GLACIER_PASS: TrackDef = {
     { from: 0.8, to: 0.833, kind: "ice", offset: 3.5, width: 7 },
   ],
   hazards: [
-    { kind: "penguin", motion: "cross", period: 6.5, radius: 1.6, at: 0.2, span: 9 },
+    { kind: "penguin", motion: "cross", period: 6.5, radius: 1.6, at: 0.2271, span: 9 },
     { kind: "penguin", motion: "cross", period: 7.2, phase: 0.4, radius: 1.6, at: 0.661, span: 9 },
     { kind: "snowball", motion: "roll", period: 5, radius: 2.2, offset: -2.5, at: 0.541, span: 0.033 },
     { kind: "snowball", motion: "roll", period: 5, phase: 0.55, radius: 2.2, offset: -2.5, at: 0.541, span: 0.033 },
@@ -752,7 +752,7 @@ export const VOLCANO_RUSH: TrackDef = {
     { kind: "fireball", motion: "bob", period: 6.2, phase: 0.2, radius: 2, offset: 3.4, at: 0.513 },
     { kind: "boulder", motion: "roll", period: 5.4, radius: 2.5, offset: -2.8, at: 0.3178, span: 0.035 },
     { kind: "boulder", motion: "roll", period: 5.4, phase: 0.5, radius: 2.5, offset: -2.8, at: 0.3178, span: 0.035 },
-    { kind: "geyser", motion: "bob", period: 6.8, radius: 2.4, offset: 0, at: 0.8045 },
+    { kind: "geyser", motion: "bob", period: 6.8, radius: 2.4, offset: 0, at: 0.7723 },
   ],
   landmarks: [
     { kind: "volcano", at: 0.4827, offset: 252, scale: 1.7 },
