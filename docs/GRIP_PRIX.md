@@ -976,10 +976,10 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 **Acorn Cup**
 
 1. **Meadow Loop** (meadow): the gentle opener. Up the windmill's hill
-   (eight metres), down an S over the meadow, through a hollow and over a low
-   hill to the pond by the hairpin (the duck); hay bales, a hot-air balloon
-   drifting over. Its bends are left level: world.test.ts measures the
-   ground and the kerbs on this track from the centre line's height.
+   (eight metres, leaning into the long left-hander), down an S that leans
+   one way then the other, through a hollow and over a low hill to the pond
+   by the banked hairpin (the duck); hay bales, a hot-air balloon drifting
+   over.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under

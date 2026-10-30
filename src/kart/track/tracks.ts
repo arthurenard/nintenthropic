@@ -14,48 +14,49 @@ import type { TrackDef } from "./geometry";
 
 /**
  * The gentle opener: a long start straight over a gentle rise, up the hill
- * with the windmill on it (eight metres), down into an S over the meadow,
+ * with the windmill on it (eight metres, leaning into the long left-hander),
+ * down into an S over the meadow that leans one way and then the other,
  * through a hollow, round a wide U-turn and back over a low hill, then down to
- * the pond and round its hairpin (the duck) onto the straight again. No drops,
- * no hazards. About 1 km.
+ * the pond and round its banked hairpin (the duck) onto the straight again. No
+ * drops, no hazards. About 1 km.
  */
 export const MEADOW_LOOP: TrackDef = {
   id: "meadow-loop",
   name: "Meadow Loop",
   theme: "meadow",
-  blurb: "A gentle opener: up the windmill's hill, down the S over the meadow, through the hollow, over the rise and round the hairpin by the pond.",
+  blurb: "A gentle opener: up the windmill's hill, down a leaning S over the meadow, through the hollow and round the banked hairpin by the pond.",
   laps: 3,
   width: 14,
   points: [
     { x: 0, z: 0 },
     { x: 0, z: 70, y: 0.8 },
     { x: 0, z: 140, y: 0.4 },
-    // Up the windmill's hill.
-    { x: 20, z: 185, y: 2.2 },
-    { x: 65, z: 205, y: 5.6 },
-    { x: 115, z: 195, y: 8.2 },
-    { x: 145, z: 165, y: 6.2 },
-    // Down into the S over the meadow, through the hollow and over a low hill.
-    { x: 165, z: 130, y: 3 },
-    { x: 200, z: 115, y: 1.8, width: 13 },
-    { x: 240, z: 125, y: 2.4, width: 13 },
-    { x: 270, z: 110, y: 1.6 },
-    { x: 280, z: 70, y: 0.6 },
+    // Up the windmill's hill, leaning into the long left-hander.
+    { x: 20, z: 185, y: 2.2, bank: -0.1 },
+    { x: 65, z: 205, y: 5.6, bank: -0.06 },
+    { x: 115, z: 195, y: 8.2, bank: -0.08 },
+    { x: 145, z: 165, y: 6.2, bank: -0.05 },
+    // Down into the S over the meadow, which leans one way and then the other.
+    { x: 165, z: 130, y: 3, bank: 0.1 },
+    { x: 200, z: 115, y: 1.8, width: 13, bank: 0.14 },
+    { x: 240, z: 125, y: 2.4, width: 13, bank: -0.14 },
+    { x: 270, z: 110, y: 1.6, bank: -0.12 },
+    { x: 280, z: 70, y: 0.6, bank: -0.04 },
     { x: 270, z: 20, y: -0.6 },
-    { x: 245, z: -20, y: 0.4 },
-    { x: 205, z: -35, y: 1.4, width: 16 },
-    { x: 160, z: -20, y: 2.6, width: 16 },
+    { x: 245, z: -20, y: 0.4, bank: -0.12 },
+    { x: 205, z: -35, y: 1.4, width: 16, bank: -0.14 },
+    { x: 160, z: -20, y: 2.6, width: 16, bank: -0.12 },
     { x: 140, z: 15, y: 3.2 },
-    { x: 115, z: 40, y: 2.4 },
-    { x: 80, z: 35, y: 1.2 },
+    { x: 115, z: 40, y: 2.4, bank: 0.14 },
+    { x: 80, z: 35, y: 1.2, bank: 0.14 },
     { x: 60, z: 0, y: 0.4 },
-    // Down by the pond and round its hairpin.
+    // Down by the pond and round the banked hairpin.
     { x: 54, z: -20 },
-    { x: 52, z: -38, y: -0.3 },
-    { x: 44, z: -56, y: -0.3 },
-    { x: 26, z: -64, y: -0.2 },
-    { x: 8, z: -56, y: -0.1 },
-    { x: 0, z: -38 },
+    { x: 52, z: -38, y: -0.3, bank: -0.06 },
+    { x: 44, z: -56, y: -0.3, bank: -0.2 },
+    { x: 26, z: -64, y: -0.2, bank: -0.24 },
+    { x: 8, z: -56, y: -0.1, bank: -0.2 },
+    { x: 0, z: -38, bank: -0.08 },
     { x: 0, z: -18 },
   ],
   itemRows: [0.22, 0.55, 0.82],
