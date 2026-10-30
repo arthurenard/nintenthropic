@@ -882,7 +882,7 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
   grid and kept through a cup, laps that differ, a pass on a side without a
   touch, the inside covered, Nitros saved for a straight, a Slick held for a
   kart on its tail, a Puck dodged, a band that never passes top speed;
-  `pack.test.ts`: a sharp scripted driver beats a middling one); the net (lobby joins and leaves, a full room, inputs
+  `pack.test.ts`: a sharp scripted driver beats a gentle one, in company); the net (lobby joins and leaves, a full room, inputs
   in order under loss, prediction converging, the host leaving); the wheel
   (angles, the level, fists and open hands from recorded landmarks, every
   gesture, a drift started at full lock and let go against it, shakes,
