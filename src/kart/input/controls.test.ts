@@ -35,7 +35,7 @@ describe("keyboardControl", () => {
   });
 
   it("does nothing until a key is pressed", () => {
-    expect(keys().run(0.5)).toEqual({ steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0, horn: 0, emote: null });
+    expect(keys().run(0.5)).toEqual({ steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0, horn: 0, shakes: 0, emote: null });
   });
 
   it("steers with the arrows and with A and D", () => {
@@ -176,6 +176,24 @@ describe("keyboardControl", () => {
     expect(k.run(0.1)).toMatchObject({ emote: null, horn: 2, itemPresses: 0, throttle: 0 });
   });
 
+  it("shakes with Left, Right, Left in quick succession, and not with one arrow tapped twice", () => {
+    const k = keys();
+    k.down("ArrowLeft");
+    k.run(0.05);
+    k.up("ArrowLeft");
+    k.run(0.05);
+    k.down("ArrowLeft");
+    k.run(0.05);
+    k.up("ArrowLeft");
+    expect(k.run(0.5).shakes).toBe(0);
+    for (const code of ["ArrowLeft", "ArrowRight", "ArrowLeft"]) {
+      k.down(code);
+      k.run(0.08);
+      k.up(code);
+    }
+    expect(k.run(0.1).shakes).toBe(1);
+  });
+
   it("stops listening when disposed", () => {
     const k = keys();
     k.control.dispose();
@@ -202,7 +220,7 @@ describe("gamepadControl", () => {
   });
 
   it("is idle with no pad, and with a disconnected one", () => {
-    const idle = { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0, horn: 0 };
+    const idle = { steer: 0, throttle: 0, brake: 0, drift: false, itemPresses: 0, horn: 0, shakes: 0 };
     expect(gamepadControl(undefined, pads()).sample(0)).toEqual(idle);
     expect(gamepadControl(undefined, pads(null, pad({ connected: false }))).sample(0)).toEqual(idle);
   });
@@ -245,6 +263,24 @@ describe("gamepadControl", () => {
   it("drifts while A is held", () => {
     expect(gamepadControl(undefined, pads(pad({ buttons: { 0: true } }))).sample(0).drift).toBe(true);
     expect(gamepadControl(undefined, pads(pad())).sample(0).drift).toBe(false);
+  });
+
+  it("shakes with the stick flicked left, right and left again", () => {
+    const stick = { x: 0 };
+    const live = gamepadControl(undefined, () => [pad({ axes: [stick.x, 0, 0, 0] })]);
+    let now = 0;
+    for (const x of [0, -1, -1, 1, 1, -1, -1, 0]) {
+      stick.x = x;
+      live.sample((now += 50));
+    }
+    expect(live.sample((now += 50)).shakes).toBe(1);
+    // Slowly, a second each way, it is only steering.
+    const slow = gamepadControl(undefined, () => [pad({ axes: [stick.x, 0, 0, 0] })]);
+    for (const x of [-1, 1, -1]) {
+      stick.x = x;
+      for (let i = 0; i < 20; i++) slow.sample((now += 50));
+    }
+    expect(slow.sample(now).shakes).toBe(0);
   });
 
   it("honks on each press of Y, once per press", () => {

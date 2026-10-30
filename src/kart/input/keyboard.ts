@@ -5,7 +5,8 @@
  *   Left / Right or A / D   steer
  *   Up or W                 throttle
  *   Down or S               brake, and back up if held at a standstill
- *   Space                   drift, held
+ *   Space                   drift, held (in the air: a trick)
+ *   Left, Right, Left fast  a shake (in the air: a trick)
  *   E or Shift              use the item
  *   H                       honk
  *   C / V                   cheer / wave, held
@@ -16,6 +17,7 @@
  * twitch like a mouse click.
  */
 import type { DriveInput, DriverControl } from "../contract";
+import { ShakeCounter } from "./shake";
 
 const LEFT = ["ArrowLeft", "KeyA"];
 const RIGHT = ["ArrowRight", "KeyD"];
@@ -50,6 +52,8 @@ export function keyboardControl(target: EventTarget = window): DriverControl {
   let last: number | null = null;
   let presses = 0;
   let horns = 0;
+  // From one arrow to the other and back: the keys' -1, 0, 1 must go all the way across.
+  const shaker = new ShakeCounter(1.5);
 
   const held = (keys: readonly string[]) => keys.some((key) => down.has(key));
 
@@ -81,6 +85,7 @@ export function keyboardControl(target: EventTarget = window): DriverControl {
       const seconds = last === null ? 0 : Math.min(LONGEST_STEP, Math.max(0, (now - last) / 1000));
       last = now;
       const goal = (held(RIGHT) ? 1 : 0) - (held(LEFT) ? 1 : 0);
+      shaker.push(now / 1000, goal);
       // Toward a key at the turning rate; toward the centre, or across it to the other key, at the faster one.
       const rate = goal !== 0 && Math.sign(goal) === Math.sign(steer || goal) ? TURN_RATE : RETURN_RATE;
       const step = rate * seconds;
@@ -93,6 +98,7 @@ export function keyboardControl(target: EventTarget = window): DriverControl {
         drift: held(DRIFT),
         itemPresses: presses,
         horn: horns,
+        shakes: shaker.count,
         emote: held(CHEER) ? "cheer" : held(WAVE) ? "wave" : null,
       };
     },

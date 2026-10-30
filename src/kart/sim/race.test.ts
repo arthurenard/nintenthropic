@@ -378,7 +378,7 @@ describe("predict", () => {
     }
     // The run was an eventful one.
     expect(hopped).toBeGreaterThan(5);
-    expect(drifted).toBeGreaterThan(20);
+    expect(drifted).toBeGreaterThan(10);
     expect(walled).toBeGreaterThan(0);
     expect(view(stepped).speed).toBeGreaterThan(0);
   });

@@ -21,6 +21,9 @@ export interface RampSite {
   s: number;
   lift: number;
   trick: boolean;
+  /** The wedge: its length up to the lip, and its height there (the picture draws the same: render/world/features.ts). */
+  length: number;
+  height: number;
 }
 
 /** Ground that differs from the road across part of its width. */
@@ -47,6 +50,14 @@ export interface Terrain {
   /** Per sample: the ground beyond the road's edge. */
   groundLeft: Ground[];
   groundRight: Ground[];
+  /** Per sample: the road's rise per metre, the way the lap runs (read over TUNING.slope.span either side). */
+  grade: Float32Array;
+  /** Per sample: how sharply the road bows over a crest, 1/m (+ over a crest, - in a dip). */
+  crest: Float32Array;
+  /** Per sample: the steepest fall per metre over the last TUNING.slope.carry metres, driving forward (0 if none)... */
+  fallBehind: Float32Array;
+  /** ...and over the next ones, for a kart going the other way. */
+  fallAhead: Float32Array;
 }
 
 /** Is `s` (0..length) inside `span`? */
@@ -96,12 +107,69 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
     const half = (surface.width ?? Infinity) / 2;
     return { ...spanOf(surface, length), kind: surface.kind, lo: middle - half, hi: middle + half };
   });
-  const ramps: RampSite[] = (def.ramps ?? []).map((ramp) => ({
-    s: geo.wrap(ramp.at * length),
-    lift: ramp.lift ?? TUNING.ramp.lift,
-    trick: ramp.trick !== false,
-  }));
-  return { length, spacing: geo.spacing, ramps, gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight };
+  const R = TUNING.ramp;
+  const ramps: RampSite[] = (def.ramps ?? []).map((ramp) => {
+    const lift = ramp.lift ?? R.lift;
+    return { s: geo.wrap(ramp.at * length), lift, trick: ramp.trick !== false, length: R.length, height: (R.height * lift) / R.lift };
+  });
+  return { length, spacing: geo.spacing, ramps, gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
+}
+
+/** The road's grade, its crests and dips, and how steep the descent just behind each place is: the hills the karts feel. */
+function hills(geo: TrackGeometry): Pick<Terrain, "grade" | "crest" | "fallBehind" | "fallAhead"> {
+  const n = geo.samples.length;
+  const spacing = geo.spacing;
+  const span = Math.max(spacing, TUNING.slope.span);
+  const y = (s: number) => geo.at(s).y;
+  const grade = new Float32Array(n);
+  const crest = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const s = i * spacing;
+    grade[i] = (y(s + span) - y(s - span)) / (2 * span);
+  }
+  // The bow over a crest is how fast the grade falls away, read over the same span.
+  const reach = Math.max(1, Math.round(span / spacing));
+  for (let i = 0; i < n; i++) crest[i] = -(grade[(i + reach) % n]! - grade[(i - reach + n) % n]!) / (2 * reach * spacing);
+  const back = Math.max(1, Math.round(TUNING.slope.carry / spacing));
+  const fallBehind = new Float32Array(n);
+  const fallAhead = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let behind = 0;
+    let ahead = 0;
+    for (let k = 0; k <= back; k++) {
+      behind = Math.max(behind, -grade[(i - k + n) % n]!);
+      ahead = Math.max(ahead, grade[(i + k) % n]!);
+    }
+    fallBehind[i] = behind;
+    fallAhead[i] = ahead;
+  }
+  return { grade, crest, fallBehind, fallAhead };
+}
+
+/** A table of the terrain's read at `s`, between samples. */
+export function tableAt(t: Terrain, table: Float32Array, s: number): number {
+  const n = table.length;
+  const u = (((s / t.spacing) % n) + n) % n;
+  const i = Math.floor(u);
+  const f = u - i;
+  return table[i]! + (table[(i + 1) % n]! - table[i]!) * f;
+}
+
+/**
+ * How high a ramp's wedge lifts the road at `s` (the ramp a kart is climbing),
+ * or 0: from its foot `length` metres before the lip up to `height` at it, a
+ * little concave so the wheels roll on. The picture's wedge (render/world/features.ts
+ * `rampHeight`) is the same curve.
+ */
+export function wedgeAt(t: Terrain, s: number): number {
+  for (const ramp of t.ramps) {
+    let d = ramp.s - s;
+    if (d > t.length / 2) d -= t.length;
+    if (d < -t.length / 2) d += t.length;
+    if (d < 0 || d > ramp.length) continue;
+    return ramp.height * Math.pow(1 - d / ramp.length, 1.4);
+  }
+  return 0;
 }
 
 /** The table sample nearest `s`. */

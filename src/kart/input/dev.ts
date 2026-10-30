@@ -5,7 +5,7 @@
  * It opens the camera, loads the hand tracker looking for two hands (four for
  * "Two on This Camera"), and shows the mirrored picture with the wheel the
  * game sees drawn on it, next to the numbers the kart would be given: the
- * angle, the steer, the grip, the mode, the drift, the item presses. Nothing
+ * angle, the steer, the grip, the mode, the drift, the item presses, the shakes. Nothing
  * is sent anywhere; nothing makes a sound.
  *
  * window.__wheelDev gives the console the controls and the tracker.
@@ -127,6 +127,7 @@ const ROWS: [string, string][] = [
   ["fingers", "Fingers Out"],
   ["drift", "Drift"],
   ["items", "Item Presses"],
+  ["shakes", "Shakes"],
   ["pedals", "Throttle · Brake"],
   ["level", "Level"],
 ];
@@ -137,6 +138,7 @@ interface Player {
   values: Map<string, HTMLElement>;
   bar: HTMLElement;
   items: number;
+  shakes: number;
   drifting: boolean;
 }
 
@@ -171,7 +173,7 @@ function buildPlayer(title: string | null, half: "left" | "right" | null): Playe
   }
   group.append(rows);
   playersHost.append(group);
-  return { control, preview, values, bar, items: 0, drifting: false };
+  return { control, preview, values, bar, items: 0, shakes: 0, drifting: false };
 }
 
 let players: Player[] = [];
@@ -400,6 +402,12 @@ function frame(now: number): void {
     if (input.itemPresses !== player.items) {
       player.items = input.itemPresses;
       replay(v.get("items")!, "pulse");
+    }
+    const shakes = input.shakes ?? 0;
+    set("shakes", String(shakes));
+    if (shakes !== player.shakes) {
+      player.shakes = shakes;
+      replay(v.get("shakes")!, "pulse");
     }
     set("pedals", `${input.throttle.toFixed(0)} · ${input.brake.toFixed(0)}`);
     set("level", control.levelled ? signed(control.level, 1, "°") : "Not Set");

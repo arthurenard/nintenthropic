@@ -55,6 +55,16 @@ describe("the wire format", () => {
     expect(quantiseInput(quantiseInput(input))).toEqual(quantiseInput(input));
   });
 
+  it("carries the horn, the emote and the shakes only when there is something to say", () => {
+    const input: DriveInput = { steer: 0, throttle: 1, brake: 0, drift: false, itemPresses: 2, shakes: 5 };
+    const wire = encodeInput(3, input);
+    expect(wire).toEqual([3, 0, 100, 0, 0, 2, 0, 0, 5]);
+    expect(decodeInput(wire)).toEqual(input);
+    expect(encodeInput(3, { ...input, shakes: 0 })).toEqual([3, 0, 100, 0, 0, 2]);
+    expect(decodeInput([3, 0, 100, 0, 0, 2]).shakes).toBeUndefined();
+    expect(decodeInput([3, 0, 100, 0, 0, 2, 0, 0, -4]).shakes).toBeUndefined();
+  });
+
   it("keeps wild values in range", () => {
     expect(decodeInput([1, 9999, -5, 400, 0, -3])).toEqual({ steer: 1, throttle: 0, brake: 1, drift: false, itemPresses: 0 });
     expect(decodeInput([1, Number.NaN, 0, 0, 0, 0]).steer).toBe(0);
