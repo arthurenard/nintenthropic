@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { KartView, RaceView } from "../contract";
 import { MEADOW_LOOP } from "../track/tracks";
-import { baseFov, chaseOffsets, ChaseCamera, COUNTDOWN_SPAN } from "./cameras";
+import { Vector3 } from "three";
+import { bankSeen, baseFov, chaseOffsets, ChaseCamera, COUNTDOWN_SPAN, MAX_ROLL, type CameraRoad } from "./cameras";
 
 function kart(over: Partial<KartView> = {}): KartView {
   return {
@@ -84,5 +85,154 @@ describe("ChaseCamera", () => {
     // The camera stayed behind the kart on the line of travel, within a few metres either side.
     expect(Math.abs(c.camera.position.x - before.x)).toBeLessThan(2.5);
     expect(c.camera.position.z).toBeLessThan(z - 3);
+  });
+});
+
+/** A straight road along +z, rising `grade` metres a metre from z = 0 (flat before it), leaning `roll` radians. */
+function road(grade = 0, roll = 0): CameraRoad {
+  const y = (z: number) => Math.max(0, z) * grade;
+  const sample = (s: number) => ({ x: 0, y: y(s), z: s, tx: 0, tz: 1, width: 12 });
+  return {
+    project: (x, z) => ({ s: z, offset: x, sample: sample(z) }),
+    at: (s) => sample(s),
+    rollAt: () => roll,
+  };
+}
+
+/** Drives `kart(t)` for `seconds`, the kart going up +z at its speed, and hands back the camera. */
+function drive(c: ChaseCamera, seconds: number, over: (t: number, z: number) => Partial<KartView>, r?: CameraRoad, start = 0): number {
+  let z = start;
+  for (let t = 0; t < seconds; t += 1 / 60) {
+    const extra = over(t, z);
+    z += ((extra.speed ?? 20) * 1) / 60;
+    c.update(kart({ z, y: r ? r.at(z).y : 0, speed: 20, ...extra }), view("racing"), 1 / 60, 1.6, undefined, r);
+  }
+  return z;
+}
+
+/** The camera's roll about its own view axis, radians, in rotateZ's sense (+ tips its right side up: the horizon's right end goes down). */
+function rollOf(c: ChaseCamera): number {
+  const up = new Vector3(0, 1, 0).applyQuaternion(c.camera.quaternion);
+  const right = new Vector3(1, 0, 0).applyQuaternion(c.camera.quaternion);
+  return Math.atan2(right.y, up.y);
+}
+
+describe("the camera's life", () => {
+  it("leans into a bend with the wheel, and not at all for a calm player", () => {
+    const c = new ChaseCamera();
+    drive(c, 1.5, () => ({ steer: 1 }));
+    expect(rollOf(c)).toBeLessThan(-0.02);
+    const calm = new ChaseCamera();
+    calm.calm = true;
+    drive(calm, 1.5, () => ({ steer: 1 }));
+    expect(Math.abs(rollOf(calm))).toBeLessThan(1e-3);
+  });
+
+  it("tilts with a banked road, the same way it leans into that bend, and never past its limit", () => {
+    const c = new ChaseCamera();
+    drive(c, 2, () => ({}), road(0, 0.3));
+    expect(rollOf(c)).toBeLessThan(-0.1);
+    expect(rollOf(c)).toBeGreaterThanOrEqual(-MAX_ROLL - 1e-3);
+    // Banked the other way, it tilts the other way.
+    const d = new ChaseCamera();
+    drive(d, 2, () => ({}), road(0, -0.3));
+    expect(rollOf(d)).toBeGreaterThan(0.1);
+  });
+
+  it("pitches up a climb and looks down over a crest", () => {
+    const flat = new ChaseCamera();
+    drive(flat, 2, () => ({}), road(0));
+    const climb = new ChaseCamera();
+    drive(climb, 2, () => ({}), road(0.3), 0);
+    const pitch = (c: ChaseCamera) => new Vector3(0, 0, -1).applyQuaternion(c.camera.quaternion).y;
+    expect(pitch(climb)).toBeGreaterThan(pitch(flat) + 0.08);
+    const descent = new ChaseCamera();
+    drive(descent, 2, () => ({}), road(-0.3), 0);
+    expect(pitch(descent)).toBeLessThan(pitch(flat) - 0.08);
+  });
+
+  it("swings out to the outside of a drift so the slide shows", () => {
+    // Drifting right: the kart's nose points right of the way it goes, and the camera moves out to the left (-x here).
+    const c = new ChaseCamera();
+    drive(c, 2, () => ({ drift: 1, steer: 0.6, heading: -0.45 }));
+    const straight = new ChaseCamera();
+    drive(straight, 2, () => ({}));
+    expect(c.camera.position.x).toBeGreaterThan(straight.camera.position.x - 5);
+    // Behind the kart, it sits toward the outside of the slide: left of the line straight behind the heading.
+    const k = { x: 0, heading: -0.45 };
+    const lateral = (c.camera.position.x - k.x) * -Math.cos(k.heading);
+    expect(lateral).toBeLessThan(0.2);
+  });
+
+  it("drops with a landing and springs back, but not for a calm player", () => {
+    // Two cameras over the same jump: the calm one only follows the kart down; the other drops below it and comes back.
+    const c = new ChaseCamera();
+    const calm = new ChaseCamera();
+    calm.calm = true;
+    const air = (t: number) => (t > 0.5 && t < 1.5 ? 2.5 * Math.sin(((t - 0.5) / 1) * Math.PI) : 0);
+    let dip = 0;
+    let z = 0;
+    for (let t = 0; t < 3; t += 1 / 60) {
+      z += 20 / 60;
+      const k = kart({ z, y: air(t) * 0.7, hop: air(t), speed: 20 });
+      c.update(k, view("racing"), 1 / 60, 1.6);
+      calm.update(k, view("racing"), 1 / 60, 1.6);
+      if (t > 1.5 && t < 1.9) dip = Math.max(dip, calm.camera.position.y - c.camera.position.y);
+      // Before the landing the two ride together.
+      if (t < 1.45) expect(Math.abs(calm.camera.position.y - c.camera.position.y)).toBeLessThan(1e-6);
+    }
+    expect(dip).toBeGreaterThan(0.1);
+    expect(dip).toBeLessThan(0.6);
+    expect(Math.abs(calm.camera.position.y - c.camera.position.y)).toBeLessThan(0.01);
+  });
+
+  it("punches the lens open as a boost begins, and a calm player's opens gently", () => {
+    const c = new ChaseCamera();
+    drive(c, 1, () => ({}));
+    const before = c.camera.fov;
+    let widest = 0;
+    drive(c, 0.4, () => ({ boost: 1.5 }));
+    widest = c.camera.fov;
+    expect(widest).toBeGreaterThan(before + 6);
+    const calm = new ChaseCamera();
+    calm.calm = true;
+    drive(calm, 1, () => ({}));
+    const calmBefore = calm.camera.fov;
+    drive(calm, 0.4, () => ({ boost: 1.5 }));
+    expect(calm.camera.fov - calmBefore).toBeLessThan((widest - before) * 0.5);
+  });
+
+  it("shakes on a knock and settles again", () => {
+    const c = new ChaseCamera();
+    drive(c, 1, () => ({}));
+    c.kick(0.8);
+    const z = drive(c, 0.1, () => ({}), undefined, 20);
+    const shaken = c.camera.position.clone();
+    const calmTwin = new ChaseCamera();
+    drive(calmTwin, 1, () => ({}));
+    drive(calmTwin, 0.1, () => ({}), undefined, 20);
+    expect(shaken.distanceTo(calmTwin.camera.position)).toBeGreaterThan(0.01);
+    // A second and a half later the shake is gone: the two cameras stand together again.
+    drive(c, 1.5, () => ({}), undefined, z);
+    drive(calmTwin, 1.5, () => ({}), undefined, z);
+    expect(c.camera.position.distanceTo(calmTwin.camera.position)).toBeLessThan(0.01);
+  });
+
+  it("rushes on a boost and not for a calm player", () => {
+    const c = new ChaseCamera();
+    drive(c, 1, () => ({ boost: 1.2 }));
+    expect(c.rush).toBeGreaterThan(0.5);
+    const calm = new ChaseCamera();
+    calm.calm = true;
+    drive(calm, 1, () => ({ boost: 1.2 }));
+    expect(calm.rush).toBe(0);
+  });
+});
+
+describe("bankSeen", () => {
+  it("is the road's whole lean looking along it, none across it, and reversed looking back", () => {
+    expect(bankSeen(0.3, 0, 1, 0)).toBeCloseTo(0.3, 6);
+    expect(Math.abs(bankSeen(0.3, 0, 1, Math.PI / 2))).toBeLessThan(1e-9);
+    expect(bankSeen(0.3, 0, 1, Math.PI)).toBeCloseTo(-0.3, 6);
   });
 });
