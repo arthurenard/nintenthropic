@@ -88,6 +88,8 @@ export interface KartState {
   charge: number;
   level: 0 | 1 | 2 | 3;
   prevDrift: boolean;
+  /** Ticks the wheel has been held hard against the drift. */
+  counter: number;
   /** Ticks in the wake of another kart (the slipstream's charge); below zero, the rest after its boost, counting up. */
   draft: number;
 

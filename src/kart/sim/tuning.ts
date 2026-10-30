@@ -215,6 +215,13 @@ export const TUNING = {
     minSpeed: 4,
     /** A brake this hard ends a drift (the boost is still earned). */
     endBrake: 0.5,
+    /**
+     * The wheel held this hard against the drift (own at or below minus this)
+     * for `againstTime` seconds straightens the kart out of it (the boost is
+     * still earned): the way out of a slide toward the other side of the road.
+     */
+    against: 0.8,
+    againstTime: 0.25,
   },
 
   /**

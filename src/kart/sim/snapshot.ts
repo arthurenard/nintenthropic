@@ -23,10 +23,10 @@ export const KART_AT = {
   lap: 26, lapStart: 27, bestLap: 28, finished: 29, finalPlace: 30, ai: 31,
   botPresses: 32, botWait: 33, botStuck: 34, botBack: 35, botNext: 36, botFreeze: 37, botSteer: 38, botDrifting: 39,
   botCut: 40, air: 41, vy: 42, flight: 43, trick: 44, rescue: 45, immune: 46,
-  comet: 47, zap: 48, draft: 49, aloft: 50, shakes: 51, prime: 52,
+  comet: 47, zap: 48, draft: 49, aloft: 50, shakes: 51, prime: 52, counter: 53,
 } as const;
 
-const KART_FIELDS = 53;
+const KART_FIELDS = 54;
 
 const item = (kind: KartState["item"]): number => (kind === null ? -1 : ITEM_KINDS.indexOf(kind));
 const kind = (index: number): KartState["item"] => (index < 0 ? null : (ITEM_KINDS[index] ?? null));
@@ -88,6 +88,7 @@ function packKart(k: KartState): number[] {
   a[KART_AT.aloft] = k.aloft;
   a[KART_AT.shakes] = k.shakes;
   a[KART_AT.prime] = k.prime;
+  a[KART_AT.counter] = k.counter;
   return a;
 }
 
@@ -147,6 +148,7 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.aloft = at("aloft");
   k.shakes = at("shakes");
   k.prime = at("prime");
+  k.counter = at("counter");
   // What follows from the rest.
   const c = w.geo.at(k.s);
   k.y = c.y;

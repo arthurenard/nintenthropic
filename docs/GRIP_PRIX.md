@@ -27,7 +27,8 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
 - **Hop and drift.** Lift the wheel sharply (both hands jerk up) while
   turning, or hold the wheel near full lock at speed for a moment: the kart
   hops into a power-slide that way, its tail swinging out. Turn into the
-  slide to tighten it (the tail swings further), against it to run wider.
+  slide to tighten it (the tail swings further), against it to run wider;
+  hold it hard against the slide and the kart straightens out of it.
   Sparks grow blue, then orange, then white-hot; straighten the wheel (or
   turn it hard the other way) to let go, and the kart boosts — longer for
   each colour. A hop going straight is only a hop.
@@ -236,7 +237,9 @@ The numbers (all in `sim/tuning.ts`):
   hop; it keeps 97% of the top speed; ice lets it slide on instead of coming
   round. Charge builds faster the tighter it turns: level 1 (blue) at 1.0 s,
   level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling
-  turn. `drift` falling (or a brake) ends it: boosts of 0.7, 1.3 and 1.9 s.
+  turn. `drift` falling, a brake, or the wheel held at own ≤ -0.8 for 0.25 s
+  (the way out of a slide toward the other side of the road) ends it: boosts
+  of 0.7, 1.3 and 1.9 s.
   Off the road the charge does not build. Let go, the nose comes back to the
   way the kart goes within a quarter of a second.
 - **Hills.** Gravity pulls 9 m/s² per unit of grade along the road (from

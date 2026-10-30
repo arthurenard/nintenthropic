@@ -213,10 +213,10 @@ describe("hop and drift", () => {
     expect(view(r).hop).toBeLessThanOrEqual(0.35 + 1e-9);
     run(r, 20, () => drift(1));
     expect(view(r).hop).toBe(0);
-    // The wheel hard the other way: still going round into the drift, at 0.4 of a full turn.
+    // The wheel well over the other way: still going round into the drift, at about half a full turn.
     const h = view(r).course!;
-    run(r, 30, () => drift(-1));
-    expect(h - view(r).course!).toBeGreaterThan(0.25);
+    run(r, 30, () => drift(-0.75));
+    expect(h - view(r).course!).toBeGreaterThan(0.3);
     expect(view(r).drift).toBe(1);
   });
 
@@ -265,12 +265,27 @@ describe("hop and drift", () => {
     };
     const into = turned(1, true);
     const straight = turned(0, true);
-    const against = turned(-1, true);
+    const against = turned(-0.75, true);
     expect(into).toBeGreaterThan(straight * 1.3);
-    expect(straight).toBeGreaterThan(against * 1.5);
-    // Still coming round the drift's way with the wheel hard against it.
+    expect(straight).toBeGreaterThan(against * 1.4);
+    // Still coming round the drift's way with the wheel well against it.
     expect(against).toBeGreaterThan(0.4);
     expect(into).toBeGreaterThan(turned(1, false) * 1.2);
+  });
+
+  it("straightens out when the wheel is held hard against it for a quarter second, with the boost it had earned", () => {
+    const r = arena();
+    run(r, 1, () => drift(1));
+    run(r, 70, () => drift(1));
+    expect(view(r).driftLevel).toBe(1);
+    // A flick against it is only a correction...
+    run(r, 10, () => drift(-1));
+    run(r, 5, () => drift(1));
+    expect(view(r).drift).toBe(1);
+    // ...held there, it is the way out.
+    const events = run(r, 16, () => drift(-1));
+    expect(view(r).drift).toBe(0);
+    expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 1 });
   });
 
   it("unwinds when let go: the nose comes back to the way the kart goes within half a second", () => {

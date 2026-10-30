@@ -40,6 +40,7 @@ const REVERSE_TICKS = ticks(D.reverseDelay);
 const LEVEL_1 = ticks(DR.level1);
 const LEVEL_2 = ticks(DR.level2);
 const LEVEL_3 = ticks(DR.level3);
+const AGAINST_TICKS = ticks(DR.againstTime);
 const FLOOD_AFTER = ticks(TUNING.start.floodAfter);
 const BOOST_WINDOW = ticks(TUNING.start.boostWindow);
 const RESCUE_TICKS = ticks(F.rescue);
@@ -80,6 +81,7 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     charge: 0,
     level: 0,
     prevDrift: false,
+    counter: 0,
     draft: 0,
     boost: 0,
     spin: 0,
@@ -194,6 +196,7 @@ function endDrift(k: KartState, boost: boolean, emit: Emit): void {
   k.drift = 0;
   k.charge = 0;
   k.level = 0;
+  k.counter = 0;
 }
 
 /** A hit: spun round, most of the speed gone, no drift, no boost. */
@@ -569,7 +572,9 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     k.level = 0;
   }
   // Letting go, or a brake, ends it and gives the boost the charge earned; running out of speed gives nothing.
-  if (k.drift !== 0 && (!driftIn || brakeIn > DR.endBrake || fwd < DR.minSpeed)) endDrift(k, fwd >= DR.minSpeed, emit);
+  // Held hard against the slide for a moment, the kart straightens out of it.
+  k.counter = k.drift !== 0 && steerIn * k.drift <= -DR.against ? k.counter + 1 : 0;
+  if (k.drift !== 0 && (!driftIn || brakeIn > DR.endBrake || fwd < DR.minSpeed || k.counter >= AGAINST_TICKS)) endDrift(k, fwd >= DR.minSpeed, emit);
 
   // Hills: gravity pulls along the road's grade, and a descent just behind raises the top speed while its pace lasts.
   const terrain = w.plan.terrain;
