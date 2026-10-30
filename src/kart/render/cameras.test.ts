@@ -230,6 +230,18 @@ describe("the camera's life", () => {
     expect(c.camera.position.x).toBeGreaterThan(0.4);
   });
 
+  it("reads the road ahead of the nose while backing up a hill, not the road behind it", () => {
+    // Reversing, the sim's course points behind the kart; the camera still faces the nose and must read that way.
+    const hill = road(0.12);
+    const told = new ChaseCamera();
+    const untold = new ChaseCamera();
+    drive(told, 1, () => ({ speed: -6, course: Math.PI }), hill, 60);
+    drive(untold, 1, () => ({ speed: -6 }), hill, 60);
+    expect(told.camera.position.distanceTo(untold.camera.position)).toBeLessThan(0.01);
+    const look = (c: ChaseCamera) => new Vector3(0, 0, -1).applyQuaternion(c.camera.quaternion);
+    expect(look(told).angleTo(look(untold))).toBeLessThan(0.01);
+  });
+
   it("counts a landing once when both the sim and its own eye report it", () => {
     const once = new ChaseCamera();
     const twice = new ChaseCamera();

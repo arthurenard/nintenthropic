@@ -23,7 +23,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;

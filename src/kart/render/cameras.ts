@@ -177,6 +177,9 @@ export class ChaseCamera {
     this.lastBoost = 0;
     this.landedAt = -9;
     this.landed = 0;
+    // A view switched to another kart mid-race starts level and at rest, not raised or wide from the last kart's jump or boost.
+    this.air = 0;
+    this.boost = 0;
   }
 
   /** A short shake: a bump, a hit (0..1, 1 the hardest). */
@@ -221,7 +224,7 @@ export class ChaseCamera {
     this.clock += dt;
 
     // Which way the kart is really going: the sim's course where it says, else from where the kart has been.
-    if (kart.course !== undefined && Math.abs(kart.speed) > 4) {
+    if (kart.course !== undefined && kart.speed > 4) {
       this.travel = kart.course;
     } else if (!Number.isNaN(this.lastX) && dt > 1e-4) {
       const vx = (kart.x - this.lastX) / dt;
