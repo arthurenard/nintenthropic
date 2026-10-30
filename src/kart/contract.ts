@@ -51,6 +51,13 @@ export interface DriveInput {
   itemPresses: number;
   /** How many times this driver has honked, ever (a count, as itemPresses). Optional: none is 0. */
   horn?: number;
+  /**
+   * How many times this driver has shaken the wheel (quick turns left and right,
+   * two reversals within half a second), ever: a count, as itemPresses. The sim
+   * acts on a shake only in the air (a trick) or just before a ramp's lip (a
+   * bigger jump), so steering corrections on the road do nothing. Optional: none is 0.
+   */
+  shakes?: number;
   /** What the driver is doing with their hands beyond driving, held while they do it (the input decides). */
   emote?: Emote | null;
 }
@@ -130,20 +137,26 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "box"; kart: number }
   | { type: "use"; kart: number; item: ItemKind }
   | { type: "hit"; kart: number; by: number | null; cause: HitCause }
-  | { type: "boost"; kart: number; source: "nitro" | "pad" | "drift" | "start"; level: number }
+  /** A boost begins: an item, a pad, a drift let go (`level` its sparks), the start, or a slipstream that flings the kart out. */
+  | { type: "boost"; kart: number; source: "nitro" | "pad" | "drift" | "start" | "draft"; level: number }
   /** The throttle went down too early in the countdown: at Go the engine floods (and coughs) instead of driving. */
   | { type: "flood"; kart: number }
-  | { type: "drift-level"; kart: number; level: 1 | 2 }
+  /** A drift's sparks change colour: 1 blue, 2 orange, 3 the hottest. */
+  | { type: "drift-level"; kart: number; level: 1 | 2 | 3 }
   | { type: "bump"; a: number; b: number; strength: number }
   | { type: "wall"; kart: number; strength: number }
   | { type: "lap"; kart: number; lap: number }
   | { type: "final-lap"; kart: number }
   | { type: "finish"; kart: number; place: number; time: number }
-  /** Off a ramp's lip into the air. */
-  | { type: "jump"; kart: number }
-  /** A trick in the air (it boosts on landing). */
-  | { type: "trick"; kart: number }
-  | { type: "land"; kart: number; boost: boolean }
+  /** Off a ramp's lip into the air, or (`crest`) off the top of a hill taken fast. */
+  | { type: "jump"; kart: number; crest?: boolean }
+  /**
+   * A trick in the air (it boosts on landing): the hop gesture or a shake.
+   * `kick`: a shake right at a ramp's lip, which also throws the jump higher and further.
+   */
+  | { type: "trick"; kart: number; kick?: boolean }
+  /** Down again after a jump; `strength` 0..1 is how hard it came down (about 10 m/s is 1). */
+  | { type: "land"; kart: number; boost: boolean; strength?: number }
   /** Over an edge with no barrier (or into lava): the rescue drone is on its way. */
   | { type: "fall"; kart: number }
   /** Set back on the road by the rescue drone. */
@@ -169,14 +182,23 @@ export interface KartView {
   y: number;
   z: number;
   heading: number;
+  /**
+   * The way it is going, as a heading (the direction of its velocity; the heading
+   * itself when nearly still). In a drift the nose (`heading`) is 17-35° inside
+   * this, the tail swung out: a chase camera that follows this shows the slide.
+   * Optional: absent, the heading.
+   */
+  course?: number;
   /** m/s along the heading (negative reversing). */
   speed: number;
-  /** The steer it is answering, -1..1 (the front wheels, the driver's lean). */
+  /** The steer it is answering, -1..1 (the front wheels, the driver's lean). In a drift, the wheel as held (it may point against the slide). */
   steer: number;
   /** -1 drifting left, 1 right, 0 not. */
   drift: -1 | 0 | 1;
-  /** 0 none, 1 first spark colour, 2 second: what a release would give. */
-  driftLevel: 0 | 1 | 2;
+  /** 0 none, 1 first spark colour (blue), 2 second (orange), 3 third (the hottest): what a release would give. */
+  driftLevel: 0 | 1 | 2 | 3;
+  /** 0..1: how far a slipstream behind another kart has charged (it boosts at 1); 0 out of any wake. Optional: none is 0. */
+  draft?: number;
   /** Seconds of boost left (0 when none). */
   boost: number;
   /** Seconds left of a spin-out (0 when none). */

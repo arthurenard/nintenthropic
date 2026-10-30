@@ -6,12 +6,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { TICK_HZ, type DriveInput, type RaceEvent, type TrackDef } from "../contract";
+import { rampHeight, RAMP_HEIGHT, RAMP_LENGTH } from "../render/world/features";
 import { TrackGeometry } from "../track/geometry";
-import { CANYON_RUN, trackById } from "../track/tracks";
+import { CANYON_RUN, TRACKS, trackById } from "../track/tracks";
 import { GO_TICK } from "./kart";
 import { planFor } from "./plan";
 import type { SimRace } from "./race";
 import { KART_AT } from "./snapshot";
+import { wedgeAt } from "./terrain";
 import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
 
 /**
@@ -46,6 +48,15 @@ function drive(r: SimRace, drive: (tick: number) => Partial<DriveInput>, until: 
   return events;
 }
 
+/** A wheel that keeps kart 0 on the middle of the road: toward the centre line 16 m ahead. */
+function steerFor(r: SimRace, track: TrackDef): number {
+  const geo = planFor(track).geo;
+  const k = view(r);
+  const aim = geo.point(geo.project(k.x, k.z).s + 16, 0);
+  const err = Math.atan2(aim.x - k.x, aim.z - k.z) - k.heading;
+  return Math.max(-1, Math.min(1, -Math.atan2(Math.sin(err), Math.cos(err)) * 2));
+}
+
 const first = <T extends RaceEvent["type"]>(events: RaceEvent[], type: T): Extract<RaceEvent, { type: T }> | undefined => events.find((e) => e.type === type) as Extract<RaceEvent, { type: T }> | undefined;
 
 describe("ramps", () => {
@@ -70,10 +81,11 @@ describe("ramps", () => {
     expect(jump).toBeDefined();
     expect(land).toBeDefined();
     const airborne = (land.tick - jump.tick) / TICK_HZ;
-    expect(airborne).toBeGreaterThan(0.9);
-    expect(airborne).toBeLessThan(1.3);
-    expect(apex).toBeGreaterThan(1.6);
-    expect(apex).toBeLessThan(3);
+    expect(airborne).toBeGreaterThan(1.0);
+    expect(airborne).toBeLessThan(1.35);
+    // From the wedge's top (2.4 m) up another metre or so.
+    expect(apex).toBeGreaterThan(3);
+    expect(apex).toBeLessThan(4.2);
     expect(count(events, "jump")).toBe(1);
     expect(land.boost).toBe(false);
     // Down on the road, still going.
@@ -97,29 +109,94 @@ describe("ramps", () => {
     expect(flight(20)).toBeLessThan(flight(26));
   });
 
-  it("start the jump from height 0 at the lip (the picture has the kart climb the ramp's wedge), rising from there", () => {
-    const r = race(track, racers(1, 0));
-    toGo(r);
-    place(r, track, 288, 0, 15);
-    let before = 0;
-    let after = 0;
-    let lip = false;
-    for (let i = 0; i < 40 && !lip; i++) {
-      run(r, 1, () => input({ throttle: 1 }));
-      const k = view(r);
-      const sOnTrack = planFor(track).geo.project(k.x, k.z).s;
-      if (sOnTrack < 300) before = Math.max(before, k.hop);
-      else {
-        lip = true;
-        after = k.hop;
+  it("leave the lip from the top of the wedge the picture draws: the kart's height runs on from the wedge's without a step", () => {
+    // The sim's wedge is the picture's, metre by metre, on every track.
+    for (const t of TRACKS) {
+      const geo = planFor(t).geo;
+      const terrain = planFor(t).terrain;
+      const shapes = (t.ramps ?? []).map((ramp) => ({ lip: ramp.at * geo.length, length: RAMP_LENGTH, height: (RAMP_HEIGHT * (ramp.lift ?? 7)) / 7, trick: true }));
+      for (const ramp of terrain.ramps) {
+        for (let d = -2; d <= 18; d += 0.5) expect(wedgeAt(terrain, ramp.s - d), `${t.id} ${d} m before the lip`).toBeCloseTo(rampHeight(shapes, ramp.s - d, geo.length), 3);
       }
     }
-    expect(before).toBe(0);
-    expect(after).toBeGreaterThanOrEqual(0);
-    expect(after).toBeLessThan(0.1);
-    run(r, 20, () => input({ throttle: 1 }));
-    expect(view(r).hop).toBeGreaterThan(0.5);
-    expect(view(r).y).toBeCloseTo(0, 1);
+    // Driven over: on the wedge the sim's own height is nil (the wedge is road), and from the lip the kart flies on from the wedge's top.
+    const r = race(track, racers(1, 0));
+    toGo(r);
+    place(r, track, 270, 0, 22);
+    const terrain = planFor(track).terrain;
+    let last = 0;
+    let steepest = 0;
+    let atLip = -1;
+    for (let i = 0; i < 100; i++) {
+      run(r, 1, () => input({ throttle: 1 }));
+      const k = view(r);
+      const s = planFor(track).geo.project(k.x, k.z).s;
+      // What the picture stands the kart at: the wedge where it is, or its height in the air, whichever is more.
+      const picture = Math.max(wedgeAt(terrain, s), k.hop);
+      if (s < 300) expect(k.hop).toBe(0);
+      else if (atLip < 0) atLip = k.hop;
+      if (i > 0) steepest = Math.max(steepest, Math.abs(picture - last));
+      last = picture;
+    }
+    expect(atLip).toBeGreaterThan(2.3);
+    expect(atLip).toBeLessThan(2.6);
+    // Never more than a tick's worth of climbing or flying between two ticks (22 m/s up a wedge of slope 0.2: 0.08 m).
+    expect(steepest).toBeLessThan(0.15);
+  });
+
+  it("point a kart where it flies: one that slides into the lip lands going straight, its nose where it goes", () => {
+    const r = race(track, racers(1, 0));
+    toGo(r);
+    place(r, track, 299, 0, 24);
+    // Drifting right into the lip, the nose 25° right of the way it goes, the wheel against the slide.
+    const h = planFor(track).geo.heading(299);
+    patch(r, 0, { heading: h - 0.44, drift: 1, prevDrift: 1 });
+    const events = drive(r, () => ({ throttle: 1, steer: -1, drift: true }), (e) => e.some((x) => x.type === "land"), 200);
+    expect(first(events, "jump")).toBeDefined();
+    const k = view(r);
+    const slip = Math.abs(((k.heading - k.course! + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+    expect(slip).toBeLessThan(0.05);
+    // And it goes on along the road rather than veering off where its nose had pointed.
+    const geo = planFor(track).geo;
+    const offset = geo.project(view(r).x, view(r).z).offset;
+    expect(Math.abs(offset)).toBeLessThan(3);
+    run(r, 30, () => input({ throttle: 1 }));
+    expect(Math.abs(geo.project(view(r).x, view(r).z).offset - offset)).toBeLessThan(0.5);
+  });
+
+  it("answer the wheel in the air: a kart that leaves the lip at an angle can steer itself back over the road", () => {
+    const landing = (steer: number): number => {
+      const r = race(track, racers(1, 0));
+      toGo(r);
+      // Crossing the lip 3 m right of the middle, 10° further right.
+      place(r, track, 297, 3, 24);
+      const h = planFor(track).geo.heading(297);
+      patch(r, 0, { heading: h - 0.17, vx: Math.sin(h - 0.17) * 24, vz: Math.cos(h - 0.17) * 24 });
+      drive(r, () => ({ throttle: 1, steer: view(r).hop > 0 ? steer : 0 }), (e) => e.some((x) => x.type === "land"), 200);
+      const k = view(r);
+      return planFor(track).geo.project(k.x, k.z).offset;
+    };
+    const held = landing(0);
+    const steered = landing(-1);
+    // Holding on, it comes down by the edge of the road; steered back, well inside it.
+    expect(held).toBeGreaterThan(6);
+    expect(steered).toBeLessThan(held - 3);
+    expect(Math.abs(steered)).toBeLessThan(5);
+  });
+
+  it("drop a kart too slow to fly off the end of the wedge, down to the road", () => {
+    const flat = stadium((f) => ({ ramps: [{ at: f(300) }] }));
+    const r = race(flat, racers(1, 0));
+    toGo(r);
+    place(r, flat, 298, 0, 5);
+    const events = drive(r, () => ({ throttle: 0 }), (e) => e.some((x) => x.type === "land"), 120);
+    expect(count(events, "jump")).toBe(0);
+    const land = first(events, "land")!;
+    expect(land).toBeDefined();
+    expect(land.boost).toBe(false);
+    // 2.4 m down: about 0.6 s, a hard landing.
+    expect(land.strength).toBeGreaterThan(0.5);
+    expect(view(r).hop).toBe(0);
   });
 
   it("turn the hop gesture in the air into a trick that boosts on landing, once", () => {
@@ -164,6 +241,208 @@ describe("ramps", () => {
       expect(first(events, "land")!.boost).toBe(false);
       expect(view(r).boost).toBe(0);
     }
+  });
+});
+
+describe("shaking the wheel", () => {
+  const track = stadium((f) => ({ ramps: [{ at: f(300) }] }));
+
+  /** Kart 0 from 230 m at 24 m/s over the ramp, its shake count going up by one at each tick `shakeAt` says. */
+  function over(shakeAt: (r: SimRace) => boolean, by = 1): { events: RaceEvent[]; apex: number; landedAt: number } {
+    const r = race(track, racers(1, 0));
+    toGo(r);
+    place(r, track, 230, 0, 24);
+    let shakes = 0;
+    let apex = 0;
+    const events = drive(
+      r,
+      () => {
+        if (shakeAt(r)) shakes += by;
+        apex = Math.max(apex, view(r).hop);
+        return { throttle: 1, shakes };
+      },
+      (e) => e.some((x) => x.type === "land"),
+      400,
+    );
+    const k = view(r);
+    return { events, apex, landedAt: planFor(track).geo.project(k.x, k.z).s - 300 };
+  }
+  const sAt = (r: SimRace): number => planFor(track).geo.project(view(r).x, view(r).z).s;
+
+  it("is a trick in the air: the kart twirls and boosts on landing", () => {
+    let done = false;
+    let high = 0;
+    // On the way down, past the top of the arc.
+    const { events } = over((r) => {
+      high = Math.max(high, view(r).hop);
+      if (done || high < 3.3 || view(r).hop > high - 0.3) return false;
+      done = true;
+      return true;
+    });
+    expect(count(events, "trick")).toBe(1);
+    expect(first(events, "trick")!.kick).toBeUndefined();
+    expect(first(events, "land")!.boost).toBe(true);
+  });
+
+  it("does nothing on the road, however much the wheel is shaken", () => {
+    const r = race(track, racers(1, 0));
+    toGo(r);
+    place(r, track, 100, 0, 24);
+    let shakes = 0;
+    const events = run(r, 120, () => input({ throttle: 1, shakes: ++shakes }));
+    expect(count(events, "trick")).toBe(0);
+    expect(view(r).boost).toBe(0);
+    expect(view(r).trick).toBe(0);
+  });
+
+  it("right at the lip kicks the jump higher and further, and boosts longer on landing; well before, it is only a shake on the road", () => {
+    const plain = over(() => false);
+    let done = false;
+    // About a tenth of a second before the lip.
+    const kicked = over((r) => {
+      if (done || sAt(r) < 297.5) return false;
+      done = true;
+      return true;
+    });
+    const kick = first(kicked.events, "trick")!;
+    expect(kick).toBeDefined();
+    expect(kick.kick).toBe(true);
+    expect(kicked.apex).toBeGreaterThan(plain.apex + 0.1);
+    expect(kicked.landedAt).toBeGreaterThan(plain.landedAt + 3);
+    expect(first(kicked.events, "land")!.boost).toBe(true);
+    // And just after the lip, as well.
+    done = false;
+    const after = over((r) => {
+      if (done || sAt(r) < 302) return false;
+      done = true;
+      return true;
+    });
+    expect(first(after.events, "trick")!.kick).toBe(true);
+    // Shaken 1.5 s before the lip: a trick only once in the air.
+    done = false;
+    const early = over((r) => {
+      if (done || sAt(r) < 265) return false;
+      done = true;
+      return true;
+    });
+    expect(count(early.events, "trick")).toBe(0);
+  });
+
+  it("is counted, not seen: a count sent again is no new shake, and one that jumped is one shake", () => {
+    let calls = 0;
+    // The same count every tick from mid-air on: one trick. A count going up by three at once: one trick too.
+    const { events } = over((r) => view(r).hop > 2 && calls++ === 0);
+    expect(count(events, "trick")).toBe(1);
+    calls = 0;
+    const jumped = over((r) => view(r).hop > 2 && calls++ === 0, 3);
+    expect(count(jumped.events, "trick")).toBe(1);
+  });
+});
+
+describe("crests and hills", () => {
+  /** The stadium with a sharp crest 2.5 m high at 180 m along its first straight. */
+  const crest = (() => {
+    const def = stadium();
+    const points = def.points.filter((p) => !(p.x === 0 && p.z > 0 && p.z < 400));
+    points.splice(1, 0, { x: 0, z: 100 }, { x: 0, z: 160 }, { x: 0, z: 180, y: 2.5 }, { x: 0, z: 200 }, { x: 0, z: 300 });
+    return { ...def, id: "crest", points };
+  })();
+  /** The stadium climbing 30 m up its first straight and coming down the second: 10% each way. */
+  const hill = (() => {
+    const def = stadium();
+    const points = def.points.map((p) => {
+      if (p.x === 0 && p.z >= 0 && p.z <= 300) return { ...p, y: p.z / 10 };
+      if (p.x === 200 && p.z >= 100 && p.z <= 400) return { ...p, y: (p.z - 100) / 10 };
+      if (p.z > 300) return { ...p, y: 30 };
+      return p;
+    });
+    return { ...def, id: "hill", points };
+  })();
+
+  it("throw a kart that takes a crest fast into a short flight, and leave a slow one on the road", () => {
+    const flight = (speed: number) => {
+      const r = race(crest, racers(1, 0));
+      toGo(r);
+      place(r, crest, 150, 0, speed, { boost: speed > 24 ? 600 : 0 });
+      let apex = 0;
+      const events = drive(
+        r,
+        () => {
+          apex = Math.max(apex, view(r).hop);
+          return { throttle: speed > 24 ? 1 : 0, steer: steerFor(r, crest) };
+        },
+        () => planFor(crest).geo.project(view(r).x, view(r).z).s > 260,
+        400,
+      );
+      return { events, apex };
+    };
+    const slow = flight(14);
+    expect(slow.apex).toBeLessThan(0.05);
+    expect(count(slow.events, "jump")).toBe(0);
+    const fast = flight(30);
+    expect(fast.apex).toBeGreaterThan(0.3);
+    expect(first(fast.events, "jump")!.crest).toBe(true);
+    expect(count(fast.events, "land")).toBe(1);
+    expect(count(fast.events, "fall")).toBe(0);
+  });
+
+  it("slow a kart climbing and let it gather speed coming down, and carry that speed on past the foot", () => {
+    const at = (s: number, until: number) => {
+      const r = race(hill, racers(1, 0));
+      toGo(r);
+      place(r, hill, s, 0, 24);
+      drive(r, () => ({ throttle: 1, steer: steerFor(r, hill) }), () => planFor(hill).geo.project(view(r).x, view(r).z).s > until, 900);
+      return view(r).speed;
+    };
+    const geo = planFor(hill).geo;
+    // Up the first straight; down the second, which starts about 714 m along.
+    const climbing = at(20, 280);
+    expect(climbing).toBeLessThan(23.3);
+    expect(climbing).toBeGreaterThan(21);
+    const down = geo.project(200, 380).s;
+    const descending = at(down, down + 270);
+    expect(descending).toBeGreaterThan(25.2);
+    // Just past the foot, still quicker than the flat's top speed.
+    const foot = geo.project(200, 100).s;
+    expect(at(down, foot + 12)).toBeGreaterThan(24.6);
+  });
+});
+
+describe("the slipstream", () => {
+  const track = stadium();
+
+  it("charges a kart close behind another and flings it out with a boost; out of line it does nothing", () => {
+    const behind = (offset: number) => {
+      const r = race(track, racers(2, 0));
+      toGo(r);
+      place(r, track, 60, 0, 22);
+      place(r, track, 53, offset, 22, {}, 1);
+      const events = run(r, 110, () => new Map([[0, input({ throttle: 1 })], [1, input({ throttle: 1 })]]));
+      return { events, draft: view(r, 1).draft ?? 0 };
+    };
+    const inLine = behind(0.3);
+    const boost = inLine.events.find((e) => e.type === "boost");
+    expect(boost).toMatchObject({ type: "boost", kart: 1, source: "draft" });
+    // The leader gets nothing from it.
+    expect(count(inLine.events, "boost", 0)).toBe(0);
+    const aside = behind(4);
+    expect(count(aside.events, "boost")).toBe(0);
+    expect(aside.draft).toBe(0);
+  });
+});
+
+describe("item boxes", () => {
+  it("are flown over by a kart high in the air, and taken by one on the road", () => {
+    const taken = (ramp: boolean) => {
+      const t = stadium((f) => ({ ramps: ramp ? [{ at: f(300) }] : [], itemRows: [f(316)] }));
+      const r = race(t, racers(1, 0));
+      toGo(r);
+      place(r, t, 270, 0, 24);
+      const events = run(r, 150, () => input({ throttle: 1 }));
+      return count(events, "pickup");
+    };
+    expect(taken(false)).toBe(1);
+    expect(taken(true)).toBe(0);
   });
 });
 
@@ -287,6 +566,19 @@ describe("a gap in the road", () => {
     // From there it gets up to speed and clears it.
     const again = drive(r, () => ({ throttle: 1 }), (e) => e.some((x) => x.type === "land" || x.type === "fall"), 600);
     expect(count(again, "fall")).toBe(0);
+  });
+
+  it("is jumped by a kart shoved over the lip by another, not fallen into", () => {
+    const r = race(track, racers(2, 0));
+    toGo(r);
+    // Kart 0 just short of the lip; kart 1 right behind and faster, so the bump pushes kart 0 over the lip between its own steps.
+    place(r, track, 299.55, 0, 22);
+    place(r, track, 297.5, 0, 30, {}, 1);
+    const events = run(r, 40, () => new Map([[0, input({ throttle: 1 })], [1, input({ throttle: 1 })]]));
+    expect(count(events, "bump")).toBeGreaterThan(0);
+    expect(count(events, "fall")).toBe(0);
+    expect(count(events, "jump", 0)).toBe(1);
+    expect(count(events, "jump", 1)).toBe(1);
   });
 
   it("drops a kart that drives into it without a ramp", () => {

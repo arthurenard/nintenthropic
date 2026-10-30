@@ -12,7 +12,9 @@
  *   - both hands open: brake, and the sim backs up if it is held
  *   - one hand opened and closed again, the other staying a fist: use the item
  *   - both hands jerked up: hop, which starts a drift the player lets go of by
- *     straightening the wheel
+ *     straightening the wheel (or turning it hard the other way); a wheel held
+ *     near full lock for a moment starts one too
+ *   - the wheel shaken left and right: a shake (a trick in the air)
  *   - hands out of the picture: hold the angle a moment, then ease to the centre
  *   - a clap (a horn), both open hands raised high (a cheer) and one open hand
  *     waving (a wave) are gestures.ts's
@@ -25,6 +27,7 @@ import type { DriveInput, WheelHand, WheelStatus } from "../contract";
 import type { HandFrame } from "../../tracking/types";
 import { Gestures, type GestureHand } from "./gestures";
 import { Grip, readHand, type HandReading } from "./hands";
+import { ShakeCounter } from "./shake";
 
 /** How much turn is full lock: Settings, Steering. */
 export type Steering = "gentle" | "normal" | "quick";
@@ -71,7 +74,20 @@ export const WHEEL = {
     straight: 0.15,
     /** ...for this long, seconds. */
     hold: 0.2,
+    /**
+     * A wheel held this near full lock (|steer|)... (the sim starts the drift
+     * only at speed, so a slow hairpin is only a turn)
+     */
+    lock: 0.85,
+    /** ...for this long starts a drift by itself, as a hop would, seconds. */
+    lockHold: 0.22,
+    /** Turned the other way past this (|steer|)... */
+    against: 0.5,
+    /** ...for this long, the drift is let go (and its boost given): an S-bend is not one long slide, seconds. */
+    againstHold: 0.1,
   },
+  /** A shake: the wheel's angle swinging back this many degrees the other way counts as a reversal (shake.ts has the rest). */
+  shake: { swing: 14 },
   /** One hand gone: hold the angle this long, then ease to the centre over `ease`, seconds. */
   oneHand: { hold: 0.4, ease: 0.6 },
   /** Both gone: steer eases to the centre after `hold` over `ease`; throttle stops after `throttle`; mode says lost after `mode`. */
@@ -251,7 +267,12 @@ export class WheelReader {
   private fade = 0;
   private braking = false;
   private drifting = false;
+  /** The way the drift goes, as far as the wheel can tell: the side it was turned to when it began (0: not yet). */
+  private driftSide = 0;
   private straightSince: number | null = null;
+  private lockSince: number | null = null;
+  private againstSince: number | null = null;
+  private readonly shaker = new ShakeCounter(WHEEL.shake.swing);
   private presses = 0;
   private hopTrail: { t: number; y: number }[] = [];
   private hopAllowedAt = -Infinity;
@@ -304,7 +325,11 @@ export class WheelReader {
       const fresh = t - this.lastBothSeen > WHEEL.held;
       this.lastBothSeen = t;
       this.turn(seen.left!, seen.right!, t, fresh);
+      // Palms pressed together or raised high swing the line between them every which way: no shake in that.
+      if (fresh || this.gestures.stands(t) || this.braking) this.shaker.reset();
+      else this.shaker.push(t, this.angle);
     } else {
+      this.shaker.reset();
       // The hop trail is kept: a sharp lift blurs the hands and often costs a frame
       // or two, which must not hide the very jerk being looked for. Its own
       // time window lets old points go.
@@ -583,8 +608,7 @@ export class WheelReader {
         // earlier hop (one that was only a hop, or a drift a spin-out ended, the wheel never
         // straightened since), this lift would be lost: let go a moment, and press again.
         if (this.drifting) this.releaseUntil = t + WHEEL.hop.release;
-        this.drifting = true;
-        this.straightSince = null;
+        this.startDrift(shapeSteer(this.angleAt(), this.steering));
         this.hopAllowedAt = t + WHEEL.hop.cooldown;
         this.hopTrail.length = 0;
         return;
@@ -636,20 +660,44 @@ export class WheelReader {
     this.fade = target < this.fade ? target : Math.min(target, this.fade + elapsed / WHEEL.recover);
     this.lastSettle = t;
 
+    const steer = shapeSteer(this.angleAt(), this.steering);
     if (this.drifting) {
+      if (this.driftSide === 0 && Math.abs(steer) > WHEEL.drift.straight * 2) this.driftSide = Math.sign(steer);
+      const against = this.driftSide !== 0 && steer * this.driftSide <= -WHEEL.drift.against;
+      this.againstSince = against ? (this.againstSince ?? t) : null;
       if (this.braking) {
-        this.drifting = false;
-        this.straightSince = null;
-      } else if (Math.abs(shapeSteer(this.angleAt(), this.steering)) < WHEEL.drift.straight) {
+        this.endDrift();
+      } else if (this.againstSince !== null && t - this.againstSince >= WHEEL.drift.againstHold) {
+        // Turned hard the other way: let go, so the kart can follow the wheel into the next bend.
+        this.endDrift();
+      } else if (Math.abs(steer) < WHEEL.drift.straight) {
         this.straightSince ??= t;
-        if (t - this.straightSince >= WHEEL.drift.hold) {
-          this.drifting = false;
-          this.straightSince = null;
-        }
+        if (t - this.straightSince >= WHEEL.drift.hold) this.endDrift();
       } else {
         this.straightSince = null;
       }
+    } else {
+      // Held near full lock with the hands on the wheel: a drift begins by itself, as if the wheel had been lifted.
+      const holding = this.modeAt(t) === "drive" && this.bothPresent(t) && Math.abs(steer) >= WHEEL.drift.lock;
+      this.lockSince = holding ? (this.lockSince ?? t) : null;
+      if (this.lockSince !== null && t - this.lockSince >= WHEEL.drift.lockHold) this.startDrift(steer);
     }
+  }
+
+  private startDrift(steer: number): void {
+    this.drifting = true;
+    this.driftSide = Math.abs(steer) > WHEEL.drift.straight * 2 ? Math.sign(steer) : 0;
+    this.straightSince = null;
+    this.lockSince = null;
+    this.againstSince = null;
+  }
+
+  private endDrift(): void {
+    this.drifting = false;
+    this.driftSide = 0;
+    this.straightSince = null;
+    this.againstSince = null;
+    this.lockSince = null;
   }
 
   /** The wheel's turn, degrees from level, as the kart should see it (smoothed, eased out when hands are gone). */
@@ -699,6 +747,7 @@ export class WheelReader {
       drift: this.drifting && t >= this.releaseUntil,
       itemPresses: this.presses,
       horn: this.gestures.horns,
+      shakes: this.shaker.count,
       emote: this.gestures.emoteAt(t),
     };
   }

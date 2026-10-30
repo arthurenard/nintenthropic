@@ -213,11 +213,73 @@ describe("hop and drift", () => {
     expect(view(r).hop).toBeLessThanOrEqual(0.35 + 1e-9);
     run(r, 20, () => drift(1));
     expect(view(r).hop).toBe(0);
-    // The wheel hard the other way: still turning into the drift, at 0.4 of a full turn.
-    const h = view(r).heading;
+    // The wheel hard the other way: still going round into the drift, at 0.4 of a full turn.
+    const h = view(r).course!;
     run(r, 30, () => drift(-1));
-    expect(h - view(r).heading).toBeGreaterThan(0.2);
+    expect(h - view(r).course!).toBeGreaterThan(0.25);
     expect(view(r).drift).toBe(1);
+  });
+
+  /** How far the nose is from the way the kart goes, degrees (+ nose to the left of it). */
+  const slip = (r: ReturnType<typeof race>): number => {
+    const k = view(r);
+    return (((((k.heading - (k.course ?? k.heading)) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * (180 / Math.PI);
+  };
+
+  it("is a power-slide: the tail swings out within the hop and holds 17-35° by the wheel, and the speed is kept", () => {
+    const held: Record<string, number> = {};
+    for (const [name, wheel] of [["into", 1], ["straight", 0], ["against", -0.6]] as const) {
+      const r = arena();
+      const speed = view(r).speed;
+      run(r, 1, () => drift(1));
+      run(r, 15, () => drift(wheel));
+      // Most of the way out within the quarter second of the hop.
+      expect(Math.abs(slip(r)), name).toBeGreaterThan(14);
+      run(r, 60, () => drift(wheel));
+      held[name] = -slip(r);
+      expect(held[name], name).toBeGreaterThan(16);
+      expect(held[name], name).toBeLessThan(36);
+      // A drift is not a brake: nearly all of the speed is still there.
+      expect(Math.hypot(view(r).speed / Math.cos((held[name]! * Math.PI) / 180)), name).toBeGreaterThan(Math.min(speed, 24) * 0.94);
+    }
+    // Into the drift the tail swings further; against it, less.
+    expect(held.into).toBeGreaterThan(held.straight! + 5);
+    expect(held.straight).toBeGreaterThan(held.against! + 5);
+  });
+
+  it("comes round tighter with the wheel into the drift and wider against it, tighter than the grip alone at full lock", () => {
+    const turned = (wheel: number, drifting: boolean): number => {
+      const r = arena();
+      const course = (): number => view(r).course ?? view(r).heading;
+      run(r, 1, () => drift(1, drifting));
+      const start = course();
+      let total = 0;
+      let last = start;
+      for (let i = 0; i < 60; i++) {
+        run(r, 1, () => (drifting ? drift(wheel) : input({ throttle: 1, steer: wheel })));
+        const now = course();
+        total += (((last - now + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+        last = now;
+      }
+      return total;
+    };
+    const into = turned(1, true);
+    const straight = turned(0, true);
+    const against = turned(-1, true);
+    expect(into).toBeGreaterThan(straight * 1.3);
+    expect(straight).toBeGreaterThan(against * 1.5);
+    // Still coming round the drift's way with the wheel hard against it.
+    expect(against).toBeGreaterThan(0.4);
+    expect(into).toBeGreaterThan(turned(1, false) * 1.2);
+  });
+
+  it("unwinds when let go: the nose comes back to the way the kart goes within half a second", () => {
+    const r = arena();
+    run(r, 1, () => drift(1));
+    run(r, 60, () => drift(1));
+    expect(Math.abs(slip(r))).toBeGreaterThan(25);
+    run(r, 30, () => input({ throttle: 1 }));
+    expect(Math.abs(slip(r))).toBeLessThan(4);
   });
 
   it("drifts left when the wheel is left", () => {
@@ -240,44 +302,52 @@ describe("hop and drift", () => {
     expect(view(slow).drift).toBe(0);
   });
 
-  it("charges level 1 at about a second and level 2 at about two seconds, and boosts on release", () => {
+  it("charges blue at about a second, orange at about two and the hottest at about three, and boosts on release", () => {
     const r = arena();
     const events = run(r, 1, () => drift(0.7));
-    let level1 = -1;
-    let level2 = -1;
-    for (let i = 1; i < 240 && level2 < 0; i++) {
-      events.push(...run(r, 1, () => drift(0.2)));
-      if (view(r).driftLevel === 1 && level1 < 0) level1 = i;
-      if (view(r).driftLevel === 2 && level2 < 0) level2 = i;
+    const reached = [-1, -1, -1];
+    for (let i = 1; i < 300 && reached[2]! < 0; i++) {
+      events.push(...run(r, 1, () => drift(0)));
+      const level = view(r).driftLevel;
+      if (level > 0 && reached[level - 1]! < 0) reached[level - 1] = i;
     }
-    // A middling turn is 1.0 s and 2.2 s; the turn here is a little tighter than middling.
-    expect(level1).toBeGreaterThan(50);
-    expect(level1).toBeLessThan(100);
-    expect(level2).toBeGreaterThan(level1 + 40);
-    expect(level2).toBeLessThan(220);
-    expect(events.filter((e) => e.type === "drift-level").map((e) => (e.type === "drift-level" ? e.level : 0))).toEqual([1, 2]);
-    // Let go: boost, 1.4 s for level 2, and the speed goes past the normal top.
+    // A middling turn (the wheel straight in a drift) is 0.9 s, 1.9 s and 3.1 s.
+    expect(reached[0]).toBeGreaterThan(48);
+    expect(reached[0]).toBeLessThan(60);
+    expect(reached[1]).toBeGreaterThan(108);
+    expect(reached[1]).toBeLessThan(120);
+    expect(reached[2]).toBeGreaterThan(180);
+    expect(reached[2]).toBeLessThan(192);
+    expect(events.filter((e) => e.type === "drift-level").map((e) => (e.type === "drift-level" ? e.level : 0))).toEqual([1, 2, 3]);
+    // Let go: boost, 1.9 s for the third, and the speed goes past the normal top.
     const speedBefore = view(r).speed;
     const released = run(r, 1, () => input({ throttle: 1, drift: false }));
     const boost = released.find((e) => e.type === "boost");
-    expect(boost).toMatchObject({ type: "boost", source: "drift", level: 2, kart: 0 });
-    expect(view(r).boost).toBeGreaterThan(1.35);
-    expect(view(r).boost).toBeLessThanOrEqual(1.4);
+    expect(boost).toMatchObject({ type: "boost", source: "drift", level: 3, kart: 0 });
+    expect(view(r).boost).toBeGreaterThan(1.85);
+    expect(view(r).boost).toBeLessThanOrEqual(1.9);
     expect(view(r).drift).toBe(0);
     expect(view(r).driftLevel).toBe(0);
-    run(r, 90, () => input({ throttle: 1 }));
-    expect(view(r).speed).toBeGreaterThan(Math.min(speedBefore, 24) + 0.5);
+    run(r, 12, () => input({ throttle: 1 }));
+    expect(view(r).speed).toBeGreaterThan(Math.max(speedBefore, 24) + 1);
   });
 
-  it("gives the shorter boost for level 1, and none for a drift let go at once", () => {
+  it("gives the shorter boosts for the cooler sparks, and none for a drift let go at once", () => {
     const r = arena();
     run(r, 1, () => drift(1));
-    for (let i = 0; i < 80; i++) run(r, 1, () => drift(1));
+    for (let i = 0; i < 60; i++) run(r, 1, () => drift(1));
     expect(view(r).driftLevel).toBe(1);
     const released = run(r, 1, () => input({ throttle: 1, drift: false }));
     expect(released.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 1 });
     expect(view(r).boost).toBeGreaterThan(0.65);
     expect(view(r).boost).toBeLessThanOrEqual(0.7);
+
+    const orange = arena();
+    run(orange, 100, () => drift(1));
+    expect(view(orange).driftLevel).toBe(2);
+    run(orange, 1, () => input({ throttle: 1, drift: false }));
+    expect(view(orange).boost).toBeGreaterThan(1.25);
+    expect(view(orange).boost).toBeLessThanOrEqual(1.3);
 
     const quick = arena();
     run(quick, 20, () => drift(1));
@@ -386,6 +456,20 @@ describe("karts that touch", () => {
     expect(b.speed).toBeGreaterThan(4);
     expect(a.speed).toBeLessThan(20);
     expect(count(run(r, 60), "bump")).toBeLessThanOrEqual(1);
+  });
+
+  it("turn a kart clipped off its middle: a shove at the tail swings its nose the other way", () => {
+    const r = race(HARBOUR_LIGHTS, racers(2, 0));
+    toGo(r);
+    const s = view(r).z;
+    // Kart 1 comes up on kart 0's right rear quarter, angled in, 8 m/s quicker.
+    patch(r, 0, { vz: 18, vx: 0, heading: 0, steer: 0 });
+    patch(r, 1, { x: view(r).x - 1.5, z: s - 1.4, s: s - 1.4, vz: 25, vx: 2, heading: 0.08, offset: -1.54, progress: s - 1.4 });
+    const events = run(r, 1, () => undefined);
+    expect(count(events, "bump")).toBe(1);
+    // Kart 0 was shoved to its left at the back: its nose swings right (the heading goes down).
+    expect(view(r, 0).heading).toBeLessThan(-0.03);
+    expect(view(r, 0).heading).toBeGreaterThan(-0.25);
   });
 });
 
