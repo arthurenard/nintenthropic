@@ -272,11 +272,11 @@ The numbers (all in `sim/tuning.ts`):
     kart, the bend and the lap: nothing new in the snapshot, and the same race
     replays) how deep it cuts in, where it brakes (±2 to ±12 m by temperament),
     how much speed it carries (±2%), whether it drifts, and whether it makes a
-    mistake: running wide on the way out (to the kerb, or a metre over it for
-    the erratic), braking late and carrying too much speed, missing the apex,
-    or letting a drift go before it charges. Now and then a wobble on a
-    straight. None of it beside an open edge or on ice. Mistakes per bend:
-    14% at skill 0, a quarter of that at skill 1, times 0.35 (careful), 1
+    mistake: running wide on the way out (to just short of the edge, half a
+    metre over it for the erratic, half as far out of a hairpin), braking late
+    and carrying too much speed, missing the apex, or letting a drift go
+    before it charges. Now and then a wobble on a straight. None of it beside an open edge or on ice. Mistakes per bend:
+    11% at skill 0, a quarter of that at skill 1, times 0.35 (careful), 1
     (aggressive) or 1.8 (erratic).
   - *Racecraft* against every kart, bot or person: catching one, it picks a
     side (the inside of a bend coming up, else the side with room) and keeps to
@@ -297,10 +297,11 @@ The numbers (all in `sim/tuning.ts`):
     the aggressive); and anything else used after 14 s at the latest (22 s for
     the aggressive, 8 s for the erratic).
   - *Pack.* A gentle rubber band, never past the road's top speed: a bot
-    more than 40 m ahead of the best player eases off by up to 8% (4% for a
-    sharp one) at 160 m, one more than 40 m behind pushes up to 5% but no
-    faster than a kart's top speed, and corners as well as it can; well ahead
-    of the player a bot also makes more mistakes, well behind fewer.
+    more than 15 m ahead of the best player eases off by up to 9% (4.5% for
+    a sharp one, so the quick ones stay worth beating) at 115 m; one more
+    than 15 m behind pushes up to 6% but no faster than a kart's top speed,
+    and corners as if half as skilful again; well ahead of the player a bot
+    also makes more mistakes, well behind fewer.
     `packStats.ts` races the bots and a scripted player (`PACK_REPORT=1 npx
     vitest run src/kart/sim/pack.test.ts --silent=false` prints a table).
 - **The race's end** as in "A race" above. `result()` gives the standings.
