@@ -10,10 +10,14 @@
  *
  * and ``music("menu")``, ``music("results-win")`` and so on on the other
  * screens. It turns every RaceEvent into its sound, runs the loops that
- * belong to a kart's state (engines pitched by speed, the drift squeal, the
- * surface, a seeker's whistle, the rescue drone), counts the race in, starts
- * the music at "Go" and switches it to its faster final-lap version when the
- * first local kart begins its last lap.
+ * belong to a kart's state (each engine in two layers pitched by its revs,
+ * the rasp of its load, the idle and the boost's growl; the drift's squeal
+ * and its sparks' fizz, the ground under the wheels, the wind, a seeker's
+ * whistle, the rescue drone), bends other karts' engines as they go by,
+ * plays the track's place very quietly underneath, counts the race in,
+ * starts the music at "Go", ducks it under the big moments and switches it
+ * to its faster final-lap version when the first local kart begins its last
+ * lap.
  *
  * It needs the Web Audio engine (src/audio) for steerable loops and music;
  * with any other AudioBus (a silent one, a test double) the effects still play
@@ -25,15 +29,27 @@ import type { Pack } from "../../audio";
 import { volumeGain } from "../../audio/routing";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
 import type { KartView, RaceEvent, RaceView } from "../contract";
+import { AMBIENCE, BED_PANS, SpotClock, rng } from "./ambience";
 import {
-  ENGINE_CUES,
+  ENGINE_LAYERS,
+  ENGINE_RADIUS,
+  type EngineFamily,
+  GRIT_RATE,
+  IDLE_RATE,
   PLAYER_PITCH,
+  REV_HI,
+  REV_LO,
   SURFACE_CUES,
   crowdTrim,
+  doppler,
   driftTarget,
   ease,
-  engineLoad,
+  engineFamily,
   engineTarget,
+  engineWork,
+  gritShare,
+  layerMix,
+  rivalLevel,
   surfaceTarget,
   windTarget,
 } from "./engines";
@@ -101,6 +117,10 @@ export interface RaceAudioStats {
   drones: number;
   /** The wind round the player's own karts. */
   winds: number;
+  /** Engine loops running (two layers crossing over, the rasp, the idle, the growl), over every kart heard. */
+  engineLoops: number;
+  /** The place's beds running. */
+  ambience: number;
   /** Sounds started in the last frame. */
   fired: number;
   /** The music playing, by piece id ("meadow", "meadow-final"), or null. */
@@ -108,10 +128,9 @@ export interface RaceAudioStats {
   paused: boolean;
 }
 
-/** At most this many engines at once (the four players' and the nearest others'). */
+/** At most this many karts' engines at once (the four players' and the nearest others'), and at most this many others. */
 const MAX_ENGINES = 6;
-/** How far another kart's engine carries, metres. */
-const ENGINE_RADIUS = 75;
+const MAX_RIVALS = 4;
 /** Most one-shots started in one frame, and of any one cue. */
 const MAX_ORDERS = 8;
 const MAX_PER_CUE = 2;
@@ -123,18 +142,101 @@ const MAX_OTHER_DRIFTS = 3;
 /** Seconds between two notes for a kart's place changing (karts side by side swap places back and forth). */
 const PLACE_GAP = 0.6;
 
+/** Below this a loop is not worth running. */
+const AUDIBLE = 0.003;
+
+/**
+ * One steerable loop that starts when it is first heard and is let go once it
+ * has been silent for ``hold`` seconds, telling the audio engine only what has
+ * moved since it last told it.
+ */
+class Layer {
+  loop: LoopControl | null = null;
+  private quietFor = 0;
+  private readonly sent = { rate: -1, volume: -1, pan: 9, distance: -1 };
+
+  constructor(
+    private readonly open: (cue: string, params: Required<LoopParams>) => LoopControl,
+    readonly cue: string,
+    private readonly hold = 0.5,
+  ) {}
+
+  get running(): boolean {
+    return this.loop !== null;
+  }
+
+  drive(volume: number, rate: number, pan: number, distance: number, dt: number): void {
+    if (volume > AUDIBLE) {
+      this.quietFor = 0;
+      if (!this.loop) {
+        this.loop = this.open(this.cue, { rate, volume, pan, distance });
+        this.remember(rate, volume, pan, distance);
+        return;
+      }
+    } else {
+      if (!this.loop) return;
+      this.quietFor += dt;
+      if (this.quietFor > this.hold) {
+        this.stop();
+        return;
+      }
+    }
+    const s = this.sent;
+    const moved =
+      Math.abs(rate - s.rate) > 0.0015 * s.rate ||
+      Math.abs(volume - s.volume) > 0.002 + 0.03 * s.volume ||
+      (volume <= AUDIBLE && s.volume > AUDIBLE) ||
+      Math.abs(pan - s.pan) > 0.01 ||
+      Math.abs(distance - s.distance) > 0.25;
+    if (!moved) return;
+    this.loop!.set({ rate, volume, pan, distance });
+    this.remember(rate, volume, pan, distance);
+  }
+
+  stop(): void {
+    this.loop?.stop();
+    this.loop = null;
+    this.quietFor = 0;
+    this.sent.rate = -1;
+  }
+
+  private remember(rate: number, volume: number, pan: number, distance: number): void {
+    this.sent.rate = rate;
+    this.sent.volume = volume;
+    this.sent.pan = pan;
+    this.sent.distance = distance;
+  }
+}
+
 interface EngineVoice {
-  timbre: number;
-  engine: LoopControl;
-  idle: LoopControl | null;
-  growl: LoopControl | null;
-  growlQuietFor: number;
-  /** The kart's speed a frame ago and how hard its engine is working (-1..1, eased). */
-  lastSpeed: number;
-  load: number;
-  rate: number;
-  vols: { engine: number; idle: number; growl: number };
-  sent: { rate: number; engine: number; idle: number; growl: number; pan: number; distance: number };
+  family: EngineFamily;
+  /** The kart's own pitch offset (two players with one engine are still two karts). */
+  pitch: number;
+  lo: Layer;
+  hi: Layer;
+  grit: Layer;
+  idle: Layer;
+  growl: Layer;
+  /** Where the kart was a frame ago, for its acceleration and the road's slope. */
+  last: { speed: number; x: number; y: number; z: number };
+  slope: number;
+  /** How hard the engine works, -1..1, eased. */
+  work: number;
+  /** The eased targets. */
+  revs: number;
+  engine: number;
+  rasp: number;
+  idling: number;
+  growling: number;
+  doppler: number;
+  /** A phase for its little unsteadiness, so no two engines wander together. */
+  phase: number;
+  /** Lifting off after pulling: the exhaust may pop (the player's own karts). */
+  armed: boolean;
+  poppedAt: number;
+  /** Another kart: which side of its listener it was on, ahead (1) or behind (-1), and when it last swished by. */
+  side: number;
+  passedAt: number;
 }
 
 interface Looper {
@@ -186,9 +288,6 @@ function plainLoop(bus: AudioBus, cue: string, initial: LoopParams): LoopControl
   };
 }
 
-/** Has a level moved enough to be worth telling the loop? Always when it reaches silence. */
-const changed = (now: number, sent: number): boolean => Math.abs(now - sent) > 0.004 || (now < 0.002 && sent >= 0.002);
-
 const isSteerable = (bus: AudioBus): bus is AudioBus & SteerableAudio => {
   const b = bus as Partial<SteerableAudio>;
   return typeof b.controlledLoop === "function" && typeof b.musicBus === "function" && !!b.ctx;
@@ -215,6 +314,8 @@ class RaceAudioImpl implements RaceAudio {
   // Loops by state.
   private readonly engines = new Map<number, EngineVoice>();
   private readonly drifts = new Map<number, Looper>();
+  /** The sparks' fizz under the player's own drifts. */
+  private readonly sparks = new Map<number, Layer>();
   private readonly surfaces = new Map<number, Looper>();
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
@@ -225,6 +326,15 @@ class RaceAudioImpl implements RaceAudio {
   private readonly puckHeading = new Map<number, { heading: number; t: number }[]>();
   private readonly lastBounce = new Map<number, number>();
   private fired = 0;
+
+  // The place: its beds (two of each, apart in the stereo field) and the far-off happenings.
+  private ambienceTheme: TrackTheme | null = null;
+  private beds: { layer: Layer; rate: number; volume: number; pan: number }[] = [];
+  private spots: SpotClock | null = null;
+
+  /** The music's duck now: how deep, and until when on this clock (a lighter one does not cut a deeper one short). */
+  private duckDepth = 1;
+  private duckUntil = -1;
 
   // Music.
   private loadedTheme: TrackTheme | null = null;
@@ -438,8 +548,17 @@ class RaceAudioImpl implements RaceAudio {
     const volume = order.volume * this.fx;
     if (volume < 0.004) return;
     this.bus.play(order.cue, { volume, pan: order.pan, rate: order.rate, delay: order.delay, distance: order.distance });
-    if (order.duck && this.player) this.player.duck(order.duck.depth, order.duck.hold);
+    if (order.duck) this.duck(order.duck.depth, order.duck.hold);
     this.fired++;
+  }
+
+  /** Pull the music down under a big moment, unless a deeper duck is already holding it down. */
+  private duck(depth: number, hold: number): void {
+    if (!this.player) return;
+    if (this.clock < this.duckUntil && depth > this.duckDepth) return;
+    this.duckDepth = depth;
+    this.duckUntil = this.clock + hold;
+    this.player.duck(depth, hold);
   }
 
   stats(): RaceAudioStats {
@@ -450,6 +569,8 @@ class RaceAudioImpl implements RaceAudio {
       seekers: this.seekers.size,
       drones: this.drones.size,
       winds: this.winds.size,
+      engineLoops: [...this.engines.values()].reduce((a, v) => a + [v.lo, v.hi, v.grit, v.idle, v.growl].filter((l) => l.running).length, 0),
+      ambience: this.beds.filter((b) => b.layer.running).length,
       fired: this.fired,
       music: this.playingKey,
       paused: this.paused,
@@ -491,6 +612,7 @@ class RaceAudioImpl implements RaceAudio {
     }
     this.engineLoops(scene, step);
     this.stateLoops(view, scene, step);
+    this.ambience(view.track.theme, step);
     this.ownMoments(view, scene);
     this.roulette(scene);
     this.finalLapFallback(view, scene);
@@ -531,12 +653,15 @@ class RaceAudioImpl implements RaceAudio {
     orders.sort((a, b) => b.priority - a.priority);
     const count = new Map<string, number>();
     let started = 0;
+    // Four players make four times the happenings: their everyday sounds come down a little (to 0.71 for four), what
+    // must be heard does not.
+    const many = Math.pow(Math.max(1, scene.locals.length), -0.25);
     for (const o of orders) {
       if (started >= MAX_ORDERS && o.priority < 3) continue;
       const n = count.get(o.cue) ?? 0;
       if (n >= MAX_PER_CUE && o.priority < 3) continue;
       count.set(o.cue, n + 1);
-      this.start(o);
+      this.start(o.distance === 0 && o.priority < 3 ? { ...o, volume: o.volume * many } : o);
       started++;
     }
   }
@@ -561,91 +686,133 @@ class RaceAudioImpl implements RaceAudio {
 
   private engineLoops(scene: Scene, dt: number): void {
     // Who gets an engine: every local kart, then the nearest others in earshot.
-    const wanted: { id: number; local: LocalKart | null; distance: number; pan: number; index: number }[] = scene.locals.map((l, index) => ({ id: l.kart, local: l, distance: 0, pan: l.pan, index }));
+    const wanted: { id: number; local: LocalKart | null; distance: number; pan: number; index: number; listener: number }[] = scene.locals.map((l, index) => ({
+      id: l.kart, local: l, distance: 0, pan: l.pan, index, listener: l.kart,
+    }));
     const others: typeof wanted = [];
     for (const k of scene.karts.values()) {
       if (localOf(scene, k.id)) continue;
       const who = listenerAt(scene, k.x, k.z);
-      if (who && who.distance <= ENGINE_RADIUS) others.push({ id: k.id, local: null, distance: who.distance, pan: who.pan, index: -1 });
+      if (who && who.distance <= ENGINE_RADIUS) others.push({ id: k.id, local: null, distance: who.distance, pan: who.pan, index: -1, listener: who.local.kart });
     }
     others.sort((a, b) => a.distance - b.distance);
-    wanted.push(...others.slice(0, Math.max(0, MAX_ENGINES - wanted.length)));
+    wanted.push(...others.slice(0, Math.max(0, Math.min(MAX_RIVALS, MAX_ENGINES - wanted.length))));
 
     const keep = new Set(wanted.map((w) => w.id));
     for (const [id, voice] of this.engines) {
       if (keep.has(id)) continue;
-      voice.engine.stop();
-      voice.idle?.stop();
-      voice.growl?.stop();
+      this.silence(voice);
       this.engines.delete(id);
     }
     const trim = crowdTrim(scene.locals.length);
+    const fx = this.fx;
+    let rank = 0;
     for (const w of wanted) {
       const k = scene.karts.get(w.id)!;
-      // How hard the engine works: the kart's acceleration (in speed, whichever way it goes), eased.
-      const had = this.engines.get(w.id);
-      if (had && dt > 0) {
-        had.load = ease(had.load, engineLoad((Math.abs(k.speed) - Math.abs(had.lastSpeed)) / dt), dt, 0.15);
-        had.lastSpeed = k.speed;
-      }
-      const target = engineTarget(k, had?.load ?? 0);
       const own = w.local !== null;
-      const timbre = own ? w.index % ENGINE_CUES.length : (w.id + 2) % ENGINE_CUES.length;
-      const pitch = own ? PLAYER_PITCH[w.index % PLAYER_PITCH.length]! : 0.95 + 0.012 * (w.id % 8);
-      // Another kart's engine starts at about half a lone player's own (0.7 × 0.8) and fades out by ENGINE_RADIUS; the engine's own distance roll-off and air come on top.
-      const level = own ? trim : 0.7 * falloff(w.distance, ENGINE_RADIUS) * 0.8;
       let v = this.engines.get(w.id);
       if (!v) {
-        const first = { rate: target.rate * pitch, volume: 0, pan: w.pan, distance: w.distance };
+        const character = scene.racers?.find((r) => r.id === w.id)?.character;
+        const family = engineFamily(character, own ? w.index : w.id);
+        const open = (cue: string, params: Required<LoopParams>): LoopControl => this.loop(cue, params);
         v = {
-          timbre,
-          engine: this.loop(ENGINE_CUES[timbre]!, first),
-          idle: this.loop("kart_idle", { ...first, rate: 0.92 + 0.07 * timbre }),
-          growl: null,
-          growlQuietFor: 0,
-          lastSpeed: k.speed,
-          load: 0,
-          rate: target.rate,
-          vols: { engine: 0, idle: 0, growl: 0 },
-          sent: { rate: -1, engine: -1, idle: -1, growl: -1, pan: 9, distance: -1 },
+          family,
+          pitch: own ? PLAYER_PITCH[w.index % PLAYER_PITCH.length]! : 0.96 + 0.011 * (w.id % 8),
+          lo: new Layer(open, ENGINE_LAYERS[family].lo),
+          hi: new Layer(open, ENGINE_LAYERS[family].hi),
+          grit: new Layer(open, "kart_engine_grit"),
+          idle: new Layer(open, "kart_idle", 1),
+          growl: new Layer(open, "kart_growl", 0.6),
+          last: { speed: k.speed, x: k.x, y: k.y, z: k.z },
+          slope: 0,
+          work: 0,
+          revs: engineTarget(k).revs,
+          engine: 0,
+          rasp: 0,
+          idling: 0,
+          growling: 0,
+          doppler: 1,
+          phase: (w.id * 2.399963) % (2 * Math.PI),
+          armed: false,
+          poppedAt: -9,
+          side: 0,
+          passedAt: -9,
         };
         this.engines.set(w.id, v);
+      } else if (dt > 0) {
+        // How hard the engine works: the kart's acceleration (in speed, whichever way it goes) and the climb under it.
+        const grounded = k.hop < 0.1 && k.rescue <= 0;
+        const run = Math.hypot(k.x - v.last.x, k.z - v.last.z);
+        const slope = grounded && run > 0.02 && run < 4 ? Math.max(-0.5, Math.min(0.5, (k.y - v.last.y) / run)) : 0;
+        v.slope = ease(v.slope, slope, dt, 0.25);
+        v.work = ease(v.work, engineWork((Math.abs(k.speed) - Math.abs(v.last.speed)) / dt, v.slope), dt, 0.15);
+        v.last.speed = k.speed;
+        v.last.x = k.x;
+        v.last.y = k.y;
+        v.last.z = k.z;
       }
-      // Smooth the target: a guest's karts jump between snapshots.
-      v.rate = ease(v.rate, target.rate, dt, 0.05);
-      v.vols.engine = ease(v.vols.engine, target.engine, dt, 0.06);
-      v.vols.idle = ease(v.vols.idle, target.idle, dt, 0.1);
-      v.vols.growl = ease(v.vols.growl, target.growl, dt, 0.1);
-      const fx = this.fx;
-      const rate = v.rate * pitch;
-      const engineVol = v.vols.engine * level * fx;
-      const idleVol = v.vols.idle * level * fx;
-      const growlVol = v.vols.growl * level * fx;
-      const s = v.sent;
-      const moved = Math.abs(rate - s.rate) > 0.004 || Math.abs(w.pan - s.pan) > 0.02 || Math.abs(w.distance - s.distance) > 0.5;
-      if (moved || changed(engineVol, s.engine)) v.engine.set({ rate, volume: engineVol, pan: w.pan, distance: w.distance });
-      if (v.idle && (moved || changed(idleVol, s.idle))) v.idle.set({ rate: (0.92 + 0.07 * v.timbre) * (1 + 0.25 * (rate / pitch - 0.64)), volume: idleVol, pan: w.pan, distance: w.distance });
-      // The growl loop exists only around a boost.
-      if (target.growl > 0 && !v.growl) v.growl = this.loop("kart_growl", { rate: rate * 0.85, volume: 0, pan: w.pan, distance: w.distance });
-      if (v.growl) {
-        if (growlVol > 0.004) {
-          v.growlQuietFor = 0;
-          v.growl.set({ rate: rate * 0.85, volume: growlVol, pan: w.pan, distance: w.distance });
-        } else if (target.growl === 0) {
-          v.growlQuietFor += dt;
-          if (v.growlQuietFor > 0.6) {
-            v.growl.stop();
-            v.growl = null;
-          }
-        }
+      const target = engineTarget(k, v.work);
+      // Smooth the targets (a guest's karts jump between snapshots): revs climb faster than they fall.
+      v.revs = ease(v.revs, target.revs, dt, target.revs > v.revs ? 0.07 : 0.12);
+      v.engine = ease(v.engine, target.engine, dt, 0.06);
+      v.rasp = ease(v.rasp, target.grit, dt, 0.08);
+      v.idling = ease(v.idling, target.idle, dt, 0.1);
+      v.growling = ease(v.growling, target.growl, dt, 0.1);
+      if (!own) {
+        const listener = scene.karts.get(w.listener);
+        v.doppler = ease(v.doppler, listener ? doppler(k, listener) : 1, dt, 0.08);
+        if (listener) this.passBy(v, k, listener, w.pan);
       }
-      s.rate = rate;
-      s.engine = engineVol;
-      s.idle = idleVol;
-      s.growl = growlVol;
-      s.pan = w.pan;
-      s.distance = w.distance;
+      // A little unsteadiness, as a real engine never holds a note quite still.
+      const t = this.clock;
+      const unsteady = 1 + 0.004 * Math.sin(2 * Math.PI * 1.7 * t + v.phase) + 0.0025 * Math.sin(2 * Math.PI * 4.3 * t + 2 * v.phase);
+      const pitch = v.revs * v.pitch * v.doppler * unsteady;
+      const level = (own ? trim : rivalLevel(w.distance, rank++)) * fx;
+      const mix = layerMix(v.revs);
+      // A motor does not idle: standing still, it hums low on its own low layer instead.
+      const standby = IDLE_RATE[v.family] > 0 ? 0 : 0.4 * v.idling;
+      v.lo.drive(level * (v.engine * mix.lo + standby), pitch / REV_LO, w.pan, w.distance, dt);
+      v.hi.drive(level * v.engine * mix.hi, pitch / REV_HI, w.pan, w.distance, dt);
+      // The rasp, the idle and the growl: the player's own karts in full, others only their idle on the grid and their boost.
+      const firing = GRIT_RATE[v.family];
+      v.grit.drive(own ? level * v.rasp * gritShare(v.family) * Math.min(1, 0.4 + v.engine) : 0, Math.min(2.4, pitch * firing), w.pan, w.distance, dt);
+      const idleRate = IDLE_RATE[v.family];
+      v.idle.drive(idleRate > 0 ? level * v.idling : 0, idleRate * v.pitch * (1 + 0.25 * (v.revs - 0.64)), w.pan, w.distance, dt);
+      v.growl.drive(level * v.growling * (own ? 1 : 0.6), pitch * 0.85 * (firing / 0.84), w.pan, w.distance, dt);
+      if (own) this.backfire(v, k, w.pan, trim);
     }
+  }
+
+  /** Lifting off hard after pulling at high revs, the player's own exhaust spits a few pops (at most one burst in two and a half seconds). */
+  private backfire(v: EngineVoice, k: KartView, pan: number, trim: number): void {
+    if (v.family === "electric") return;
+    if (v.work > 0.15 && v.revs > 1.2) v.armed = true;
+    const steady = k.hop < 0.1 && k.spin <= 0 && k.rescue <= 0 && Math.abs(k.speed) > 10;
+    if (v.armed && v.work < -0.3 && steady && this.clock - v.poppedAt > 2.5) {
+      v.armed = false;
+      v.poppedAt = this.clock;
+      const rate = { light: 1.15, middle: 1, heavy: 0.82, electric: 1 }[v.family];
+      this.start({ cue: "kart_backfire", volume: 0.7 * trim, pan, distance: 0, rate, delay: 0, priority: 1 });
+    }
+  }
+
+  /** A kart going by close and fast swishes past: when it crosses from behind its listener to ahead (or back) within a few metres. */
+  private passBy(v: EngineVoice, k: KartView, listener: KartView, pan: number): void {
+    const dx = k.x - listener.x;
+    const dz = k.z - listener.z;
+    const ahead = dx * Math.sin(listener.heading) + dz * Math.cos(listener.heading);
+    const beside = Math.abs(-dx * Math.cos(listener.heading) + dz * Math.sin(listener.heading));
+    const side = ahead >= 0 ? 1 : -1;
+    const crossed = v.side !== 0 && side !== v.side;
+    v.side = side;
+    const closing = Math.abs(k.speed - listener.speed);
+    if (!crossed || beside > 6 || closing < 3 || Math.abs(listener.speed) < 6 || this.clock - v.passedAt < 1.5) return;
+    v.passedAt = this.clock;
+    this.start({ cue: "kart_pass", volume: Math.min(1, 0.45 + 0.08 * closing) * (1 - beside / 9), pan, distance: beside, rate: Math.min(1.25, 0.9 + 0.025 * closing), delay: 0, priority: 0 });
+  }
+
+  private silence(v: EngineVoice): void {
+    for (const layer of [v.lo, v.hi, v.grit, v.idle, v.growl]) layer.stop();
   }
 
   // --- loops that follow state ------------------------------------------------------------------------------------------------------
@@ -662,14 +829,19 @@ class RaceAudioImpl implements RaceAudio {
       if (!who) continue;
       const near = own ? 1 : falloff(who.distance, LOOP_RADIUS);
 
-      // The drift's squeal (heard below, for the nearest few).
+      // The drift's squeal (heard below, for the nearest few), and under the player's own its sparks' fizz.
       const d = driftTarget(k);
       if (d.on && near > 0.05) {
         const volume = d.volume * near * (own ? 1 : 0.7) * fx;
         squeals.push({ id: k.id, own: !!own, distance: who.distance, params: { rate: d.rate, volume, pan: who.pan, distance: who.distance } });
       }
+      if (own) {
+        let fizz = this.sparks.get(k.id);
+        if (!fizz && d.sparks > 0) this.sparks.set(k.id, (fizz = new Layer((cue, p) => this.loop(cue, p), "kart_drift_sparks", 0.3)));
+        fizz?.drive(d.sparks * fx * crowdTrim(scene.locals.length), d.sparkRate, own.pan, 0, dt);
+      }
 
-      // The ground: only under the player's own wheels.
+      // The ground: only under the player's own wheels (the road's roll included).
       if (own) {
         const s = surfaceTarget(k);
         if (s.surface && s.volume > 0.01) {
@@ -697,6 +869,10 @@ class RaceAudioImpl implements RaceAudio {
       this.drive(this.drifts, s.id, "kart_drift", s.params, dt);
     }
     this.release(this.drifts, drifts);
+    for (const [id, fizz] of this.sparks) {
+      if (fizz.running || localOf(scene, id)) continue;
+      this.sparks.delete(id);
+    }
     this.release(this.surfaces, surfaces);
     this.release(this.drones, drones);
 
@@ -784,15 +960,36 @@ class RaceAudioImpl implements RaceAudio {
   }
 
   private stopLoops(): void {
-    for (const v of this.engines.values()) {
-      v.engine.stop();
-      v.idle?.stop();
-      v.growl?.stop();
-    }
+    for (const v of this.engines.values()) this.silence(v);
     this.engines.clear();
     for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.winds] as Map<number, Looper>[]) {
       for (const l of map.values()) l.loop.stop();
       map.clear();
+    }
+    for (const fizz of this.sparks.values()) fizz.stop();
+    this.sparks.clear();
+    for (const bed of this.beds) bed.layer.stop();
+    this.beds = [];
+    this.ambienceTheme = null;
+    this.spots = null;
+  }
+
+  // --- the place -----------------------------------------------------------------------------------------------------
+
+  /** The track's place, very quietly under it all: its beds, and now and then something far off. */
+  private ambience(theme: TrackTheme, dt: number): void {
+    const place = AMBIENCE[theme];
+    if (!place) return;
+    if (this.ambienceTheme !== theme) {
+      for (const bed of this.beds) bed.layer.stop();
+      this.ambienceTheme = theme;
+      this.beds = place.beds.flatMap((b) => BED_PANS.map((pan) => ({ layer: new Layer((cue, p) => this.loop(cue, p), b.cue, 0.2), rate: b.rate, volume: b.volume, pan })));
+      this.spots = new SpotClock(place.spots, rng(0x5eed + theme.length * 977), this.clock);
+    }
+    const fx = this.fx;
+    for (const bed of this.beds) bed.layer.drive(bed.volume * fx, bed.rate, bed.pan, 0, dt);
+    for (const spot of this.spots?.tick(this.clock) ?? []) {
+      this.start({ cue: spot.cue, volume: spot.volume, pan: spot.pan, distance: spot.distance, rate: spot.rate, delay: 0, priority: 0 });
     }
   }
 

@@ -194,7 +194,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | Engines (pitched by speed and how hard they work), the drift's screech and its three spark levels, the wind at speed, in the air and in a slipstream, boosts, landings (a thud under a hard one, by the sim's strength), items, a place won or lost, countdown — synthesised like every Super Claude Bros. sound. |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Super Claude Bros. sound ("Sound" below). |
 
 ### Coordinates
 
@@ -581,6 +581,62 @@ that file exists (`render/art.ts`).
   `?profile=1` times the frame and `?scale=1` holds the resolution (see
   "Performance").
 
+## Sound (`src/kart/audio/`, `src/audio/cues/kart*.ts`)
+
+Every sound is synthesised in code when the race loads (the `kart` pack: three takes of each, made in workers),
+nothing is sampled. `RaceAudio` (`race-audio.ts`) runs one race screen: it turns each `RaceEvent` into its sounds
+(`events.ts`, a pure table), runs the loops that follow the karts' state (`engines.ts`, pure functions of a
+`KartView`), plays the track's place (`ambience.ts`) and the music (`music/`). Each loop is started when it is first
+heard and let go after half a second of silence, and is told only what has moved since it was last told.
+
+- **Engines.** Four, by the driver: a light kart's buzzing two-stroke, a middleweight's single-cylinder thumper, a
+  heavy kart's V-twin (two firings a cycle, unevenly spaced: its lope), and Rivet the robot's electric motor, with its
+  windings' and gears' whine. Each is made as an exhaust hears it: every firing a push of gas, a sharp edge and a puff
+  of noise ringing the pipe's resonances, no two firings quite alike in time or strength. Each is made twice, low and
+  high in its revs, and the two cross over, so neither is played far from where it was made (a loop sped up sounds
+  thin, slowed down dull). The revs run from 0.64 just moving to about 1.75 at top speed; a boost adds 8%, the air 20%
+  (the wheels spin free), a drift 3%; off the road they fall 5% and in a spin-out 25%. How hard the engine works is
+  the kart's acceleration and the climb under it: working, it sings higher, louder and rougher (its rasp, a loop
+  pulsing on its firings, comes up); lifting off or rolling downhill it softens, and lifting off hard after pulling at
+  high revs, the exhaust pops (at most once in 2.5 s; not the motor's). Near a standstill the idle takes over (the motor hums). A
+  boost's growl roars under it. Each note wavers a little, as an engine never holds one quite still.
+- **Other karts.** Every local kart's engine and the nearest others' (at most four others, six karts in all), heard
+  from the nearest local kart: louder close (to nothing at 70 m, the engine's distance roll-off and air on top), the
+  nearest standing out of the pack (each further one stepped down), to the side it lies on (a kart 3.5 m to one side
+  is half way over), and bent by Doppler from the two karts' velocities, at a third of the real speed of sound so that
+  a kart going by at 8 m/s more falls two or three semitones as it passes; one that goes by within 6 m at 3 m/s more
+  swishes past. Their drift squeals (the three nearest) and events are heard by distance. With more than one player
+  on the screen, each player's engine is quieter (two at 0.71 each, four at a half) and their everyday sounds a little
+  (four at 0.71); what must be heard is not.
+- **Ground and contact.** The tyres roll on the road (quiet, growing to top speed, gone in the air); grass, sand,
+  snow, ice and mud each have their own. A drift squeals, each spark level a tone and a half higher and louder, and
+  from the first spark its sparks fizz under it, a major third higher at each level; let go, the mini-turbo, a step
+  up for each level, and from the third a whoomph and a run of glass. Bumps, walls and landings by the sim's
+  strength (a hard landing thuds).
+- **Moments.** The countdown's beeps; a start boost; nitro; a boost pad; a slipstream's fling (a stretched band let
+  go); off a ramp a spring's boing (lighter off a crest); a trick (a spiral of pings, a slide whistle's whee and a
+  swirl that goes once round the head, the one stereo sound a kart makes); landing; item boxes and every item; hits
+  and spin-outs; a place won or lost; a lap, the final lap and the finish.
+- **Places.** Each theme's beds, two copies of each apart in the stereo field, and something far off every few
+  seconds, 15 to 70 m away (so darker and quieter): a breeze and larks (meadow), a fridge's hum and a pot on the boil
+  (kitchen), water lapping, a sea breeze and gulls (harbour), a dry wind and a hawk (canyon), a crowd, generators and
+  the high striker's bell (funfair), a thin wind and creaking ice (snow), the mountain's rumble and lava (volcano), a
+  spaceship's drone, the void's hiss and a radio's bleeps (space), surf, wind in the palms and tropical birds (palm).
+- **The mix.** Levels are dB at the bus, in `src/audio/cues/kart.ts` (its header has the ladder); the tests hold it
+  (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' eight layers within
+  3 dB, the places under the engines). The music dips under the big moments: the finish (to 0.3 of its level), the
+  final lap (0.45), being hit, a storm's bolt or a skyrocket bursting near (0.5), a blast or a fall (0.6), the start
+  boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
+  over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
+  whole mix −18.1 LUFS (true peak −2.4 dBTP), the effects −19.7 (−21.8 before the engines were remade) and the music
+  −22.9; each place alone −34 to −36. The audio code takes about 0.03 ms a frame (0.06 with four views).
+- **Listening without hearing.** `node tools/listen/render.mjs --label <name>` renders scripted scenes (one kart of
+  each weight through everything, karts going by, a pack of eight, the moments, each place alone) and real races of
+  bots through the real engine and `RaceAudio` on an `OfflineAudioContext`, in a muted headless Chrome, writes them to
+  `tools/listen/out/<name>/` as WAV files with their loudness (BS.1770), true peak, spectrum and stereo width, and the
+  audio code's time a frame; `compare.mjs a b` sets two renders side by side. `KART_AUDIO_REPORT=dir KART_AUDIO_WAV=1
+  npx vitest run src/kart/audio/report.test.ts` writes each cue's picture and sound. Nothing is ever played.
+
 ## Performance
 
 Measured, then changed, in this order; everything below is on an Apple M4 Max in Chrome on Metal,
@@ -946,6 +1002,15 @@ Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
   the other delegate (`adapt.ts`) and the hands first (`handsFirst.ts`: steps down
   while frames drop, undone when they do not help, back up with room). Pictures and
   timings are `tools/perf/` (not run by CI).
+- Sound (Vitest, in Node, nothing played): every cue renders finite, unclipped and
+  of its length, its takes different, a loop without a click at its seam
+  (`src/audio/sounds.test.ts`); the kart pack's mix by kind, every take under the
+  bus's −1 dBFS ceiling, the engines' eight layers within 3 dB of each other,
+  brighter the lighter the kart and each on its note (`cues.test.ts`); RaceAudio
+  against a recording bus (`race-audio.test.ts`): the sound of every event, an
+  engine's revs, crossover, load and pops, a rival heard where it is at every step
+  of a pass and bent by Doppler, the surfaces, the sparks, the places, the music's
+  ducks, pause and mute.
 - End to end (Playwright, `?net=local`, muted): a host and two guests in tabs
   of one browser join by code, drive by keyboard and finish a one-lap race;
   practice against bots; the landing's Race opens the page.

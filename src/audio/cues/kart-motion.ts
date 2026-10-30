@@ -1,21 +1,24 @@
 /**
- * The sounds a Grip Prix kart makes while it moves: four engines of different
- * character, an idle, a growl for boost, the drift's squeal, the sound of each
+ * The sounds a Grip Prix kart makes while it moves: four engines (a light
+ * kart's two-stroke, a middleweight's thumper, a heavy kart's V-twin and a
+ * robot's electric motor), each recorded low and high in its revs, the rasp
+ * of an engine working hard, an idle, a growl for boost, the tyres' roll on
+ * the road, the drift's squeal and its sparks' fizz, the sound of each
  * surface under the wheels, a homing puck's whistle and the rescue drone's
- * rotors. All are loops, and all are steered at run time (the engine's pitch
- * follows the speedometer by playback rate), so each is built to be heard
- * stretched to a half and doubled.
+ * rotors. All are loops, and all are steered at run time (an engine's pitch
+ * follows its revs by playback rate), so each is built to be heard stretched.
  *
- * The tonal loops are periodic by construction: every component is a whole
- * number of cycles in the loop, so the seam is exactly as smooth as any other
- * moment. The textures are cross-faded or wrapped noise.
+ * The loops are periodic by construction: every component is a whole number
+ * of cycles in the loop, events that run past the end wrap round to the
+ * start, and filters run over the loop twice so they meet the seam already
+ * settled; the seam is exactly as smooth as any other moment.
  */
-import { bandpass, highpass, lowpass } from "../dsp/filters";
+import { biquad, bandpass, highpass, lowpass } from "../dsp/filters";
 import { type Mono, normalize } from "../dsp/signal";
 import { addMode, bandNoise, brown, pink, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
 import { bubble } from "./kit";
-import { TAU, addWrapped, calmSeam, circular, cyclic, drive, expo, grains, noiseLoop, times, tone } from "./kart-kit";
+import { TAU, addWrapped, circular, cyclic, drive, expo, grains, noiseLoop, times, tone } from "./kart-kit";
 
 // --- engines --------------------------------------------------------------------------------------
 
@@ -47,112 +50,220 @@ function sumParts(n: number, parts: Part[]): Mono {
   return out;
 }
 
-/** A gaussian bump, for shaping a harmonic series with formants. */
-const bump = (x: number, centre: number, width: number): number => Math.exp(-(((x - centre) / width) ** 2));
+/** A slow wander that repeats exactly every loop: a few whole sine cycles at random phases, about -1..1. */
+function wander(t: Take, n: number, cycles: readonly number[]): Mono {
+  const w = sumParts(n, cycles.map((c) => ({ cycles: c, amp: t.rng.range(0.6, 1), phase: t.rng.range(0, TAU) })));
+  return normalize(w);
+}
 
-interface EngineRecipe {
-  /** Fundamental (firing frequency) at playback rate 1, Hz. */
-  f0: number;
-  /** Loop length, seconds. */
+/**
+ * A combustion engine as its exhaust hears it: each firing a push of gas
+ * (a rounded pulse that carries the low thump), its sharp leading edge, and
+ * a puff of turbulent noise, all ringing the pipe's resonances. No two
+ * firings are quite alike in time or strength, which is what turns a tone
+ * into an engine.
+ */
+interface PulseEngine {
+  /** Engine cycles a second at playback rate 1: the note's fundamental (exact: the loop holds a whole number of them). */
+  hz: number;
+  /** Loop length, s (rounded to whole cycles). */
   seconds: number;
-  /** Harmonic amplitudes by number (k from 1), and the highest. */
-  harmonic: (k: number, hz: number) => number;
-  maxK: number;
-  /** Phase of every harmonic: 0 aligns them into a pulse, ±π/2 into a saw. */
-  phase: number;
-  /** Subharmonics: [fraction of f0 (1/2, 1/4...), amp]. */
-  subs?: [number, number][];
-  /** Amplitude modulation at a fraction of f0 (the rattle), depth 0..1. */
-  rattle?: { fraction: number; depth: number };
-  /** Soft-clip drive. */
+  /** One engine cycle's firings: [where in the cycle, 0..1, strength]. A single cylinder has one; a V-twin an uneven pair. */
+  pattern: readonly (readonly [number, number])[];
+  /** Firing to firing: timing (± fraction of a period) and strength (±). */
+  jitter: number;
+  wobble: number;
+  /** The push's width, a fraction of the firing period: narrow is buzzy, wide is round. */
+  width: number;
+  /** How hard each firing's sharp edge strikes the pipe, against its puff of gas (both ring the resonances). */
+  edge: number;
+  /** The pipe's and the body's resonances: [Hz, Q, gain]. */
+  formants: readonly (readonly [number, number, number])[];
+  /** The balance heard, each part levelled first: the push low-passed (the thump under it all), the pipe's ringing, the raw puffs. */
+  body: number;
+  bodyCut: number;
+  ring: number;
+  /** The exhaust's puff of noise on each firing. */
+  puff: { low: number; high: number; level: number; decay: number };
+  /** Soft-clip drive: the grain of a small engine flat out. */
   drive: number;
-  /** The exhaust: noise in this band, gated by each firing, at this level and sharpness. */
-  noise: { low: number; high: number; level: number; sharp: number };
-  /** Low-pass over everything, Hz (0 for none). */
   lowpass?: number;
 }
 
-function engine(t: Take, r: EngineRecipe): Mono {
-  const n = t.n(r.seconds);
-  // The take's pitch wanders a little, so each take is a slightly different engine.
-  // A multiple of four cycles, so the subharmonics and the rattle (down to a
-  // quarter of the firing rate) are whole numbers of cycles in the loop too.
-  const unit = Math.max(4, Math.round(r.f0 * t.p * r.seconds / 4) * 4);
-  const parts: Part[] = [];
-  for (let k = 1; k <= r.maxK; k++) {
-    const hz = (unit / r.seconds) * k;
-    const amp = r.harmonic(k, hz);
-    if (amp > 1e-3) parts.push({ cycles: unit * k, amp, phase: r.phase });
+function pulseEngine(t: Take, e: PulseEngine): Mono {
+  const sr = t.sr;
+  const r = t.rng;
+  const per = e.pattern.length;
+  const cycles = Math.max(4, Math.round(e.hz * e.seconds));
+  const n = Math.round((cycles * sr) / e.hz);
+  const cycleLen = n / cycles;
+  const period = cycleLen / per;
+  // The push: a half-sine and a slower, shallower pull back, so each firing carries no net offset.
+  const w = Math.max(3, Math.round(e.width * period));
+  const push = new Float32Array(3 * w);
+  for (let i = 0; i < w; i++) push[i] = Math.sin((Math.PI * i) / w);
+  for (let i = 0; i < 2 * w; i++) push[w + i] = -0.5 * Math.sin((Math.PI * i) / (2 * w));
+  const puffLen = Math.max(8, Math.round(e.puff.decay * period * 5));
+  const puffK = Math.exp(-1 / Math.max(1, e.puff.decay * period));
+  const thump = new Float32Array(n);
+  const ring = new Float32Array(n);
+  const gas = new Float32Array(n);
+  // Strength breathes slowly as well as varying firing to firing.
+  const breathe = wander(t, n, [2, 3, 5]);
+  for (let c = 0; c < cycles; c++) {
+    for (const [pos, strength] of e.pattern) {
+      // A third of a cycle in, so the loop's seam falls in a firing's tail and not on its onset.
+      const at = Math.round((c + pos + 0.37) * cycleLen + r.range(-1, 1) * e.jitter * period);
+      const k = ((at % n) + n) % n;
+      const a = strength * (1 + r.range(-1, 1) * e.wobble) * (1 + 0.5 * e.wobble * breathe[k]!);
+      addWrapped(thump, push, at, a);
+      ring[k]! += a * e.edge;
+      ring[(k + 1) % n]! -= 0.5 * a * e.edge;
+      let env = a * r.range(0.6, 1.2);
+      for (let i = 0; i < puffLen; i++) {
+        gas[(k + i) % n]! += env * (2 * r.next() - 1);
+        env *= puffK;
+      }
+    }
   }
-  for (const [fraction, amp] of r.subs ?? []) parts.push({ cycles: Math.round(unit * fraction), amp, phase: 0.4 });
-  const body = sumParts(n, parts);
-  if (r.rattle) {
-    const mod = cyclic(n, Math.round(unit * r.rattle.fraction), r.rattle.depth, t.rng.range(0, TAU));
-    times(body, mod);
+  circular(gas, (twice) => bandpass(twice, sr, e.puff.low, e.puff.high, 2));
+  normalize(gas);
+  // The pipe rings to each firing's edge and its puff of gas; the ringing is made and levelled apart from the thump,
+  // so the recipe's numbers are the balance heard.
+  const source = new Float32Array(n);
+  for (let i = 0; i < n; i++) source[i] = ring[i]! + 0.25 * gas[i]!;
+  const pipe = new Float32Array(n);
+  // Each take's pipe is a shade different.
+  const tune = r.range(0.97, 1.03);
+  for (const [hz, q, gain] of e.formants) {
+    const band = Float32Array.from(source);
+    circular(band, (twice) => biquad(twice, sr, "bandpass", hz * tune, q));
+    for (let i = 0; i < n; i++) pipe[i]! += gain * band[i]!;
   }
-  // Exhaust noise, a puff on each firing.
-  const noise = noiseLoop(t, r.seconds, (m) => bandNoise(m, t.sr, t.rng, r.noise.low, r.noise.high, 2));
-  const puff = new Float32Array(n);
-  for (let i = 0; i < n; i++) puff[i] = Math.pow(0.5 + 0.5 * Math.cos((TAU * unit * i) / n), r.noise.sharp);
-  times(noise, puff);
-  normalize(body);
-  for (let i = 0; i < n; i++) body[i] = body[i]! + r.noise.level * noise[i]!;
-  drive(body, r.drive);
-  if (r.lowpass) circular(body, (twice) => lowpass(twice, t.sr, r.lowpass!, 2));
-  return calmSeam(body);
-}
-
-/** Engine A: a two-stroke buzz, bright and busy. */
-export function engineBuzz(t: Take): Mono {
-  return engine(t, {
-    f0: 105, seconds: 0.9, harmonic: (k) => 1 / k ** 0.95, maxK: 28, phase: 0.0,
-    rattle: { fraction: 0.5, depth: 0.3 }, drive: 1.8, noise: { low: 600, high: 4200, level: 0.28, sharp: 2 },
-  });
-}
-
-/** Engine B: a four-stroke putt, round and lopsided. */
-export function enginePutt(t: Take): Mono {
-  return engine(t, {
-    f0: 66, seconds: 1.0, harmonic: (k) => Math.exp(-k / 4.5), maxK: 18, phase: -0.6,
-    subs: [[0.5, 0.75], [1.5, 0.28]], rattle: { fraction: 0.25, depth: 0.25 }, drive: 1.5,
-    noise: { low: 150, high: 900, level: 0.4, sharp: 3 }, lowpass: 2600,
-  });
-}
-
-/** Engine C: an electric whirr, nearly pure, with a rising whine. */
-export function engineWhirr(t: Take): Mono {
-  const n = t.n(0.8);
-  const unit = Math.max(4, Math.round(165 * t.p * 0.8));
-  const parts: Part[] = [
-    { cycles: unit, amp: 1, phase: 0 },
-    { cycles: unit * 2, amp: 0.38, phase: 1.1 },
-    { cycles: unit * 3, amp: 0.2, phase: 2.3 },
-    { cycles: unit * 4, amp: 0.09, phase: 0.2 },
-    // A second rotor a whisker off: slow beating.
-    { cycles: unit + 1, amp: 0.55, phase: 0.7 },
-    { cycles: 2 * (unit + 1), amp: 0.2, phase: 2 },
-    // The whine, from the motor's windings.
-    { cycles: Math.round(unit * 5.5), amp: 0.22, phase: 0.3 },
-    { cycles: Math.round(unit * 11), amp: 0.08, phase: 1.3 },
-  ];
-  const body = normalize(sumParts(n, parts));
-  // A little phase modulation at a low rate: a living pitch.
-  const wob = sumParts(n, [{ cycles: 3, amp: 1, phase: 0 }]);
+  normalize(pipe);
+  circular(thump, (twice) => lowpass(twice, sr, e.bodyCut, 2));
+  normalize(thump);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = body[i]! * (1 + 0.06 * wob[i]!);
-  const air = noiseLoop(t, 0.8, (m) => bandNoise(m, t.sr, t.rng, 1500, 7000, 2));
-  for (let i = 0; i < n; i++) out[i]! += 0.05 * air[i]!;
+  for (let i = 0; i < n; i++) out[i] = e.body * thump[i]! + e.ring * pipe[i]! + e.puff.level * gas[i]!;
+  normalize(out);
+  drive(out, e.drive);
+  if (e.lowpass) circular(out, (twice) => lowpass(twice, sr, e.lowpass!, 2));
   return out;
 }
 
-/** Engine D: a raspy square-wave rattle, nasal. */
-export function engineRasp(t: Take): Mono {
-  return engine(t, {
-    f0: 90, seconds: 1.0,
-    harmonic: (k, hz) => (k % 2 === 1 ? (1 / k) * (1 + 3 * bump(hz, 900, 260) + 2.2 * bump(hz, 2300, 500)) : 0),
-    maxK: 41, phase: 0, rattle: { fraction: 0.25, depth: 0.4 }, drive: 2.4,
-    noise: { low: 1000, high: 5000, level: 0.3, sharp: 1.5 },
-  });
+/** The revs (engines.ts) each layer was made at: the low layer covers a crawl to mid revs, the high one the rest. */
+const REV_LO = 0.9;
+const REV_HI = 1.6;
+
+/** A light kart: a two-stroke's ring-a-ding buzz, a narrow sharp push ringing a bright expansion pipe. */
+const LIGHT: Omit<PulseEngine, "hz" | "seconds"> = {
+  pattern: [[0, 1]], jitter: 0.018, wobble: 0.14, width: 0.2, edge: 1,
+  formants: [[1250, 3.2, 1], [2900, 4.5, 0.6], [5400, 5, 0.25], [640, 2.5, 0.45]],
+  body: 0.55, bodyCut: 700, ring: 1, puff: { low: 1500, high: 6500, level: 0.22, decay: 0.18 }, drive: 2.1,
+};
+
+/** A middleweight: a single-cylinder thumper, rounder, with a mid-range bark. */
+const MIDDLE: Omit<PulseEngine, "hz" | "seconds"> = {
+  pattern: [[0, 1], [0.5, 0.18]], jitter: 0.02, wobble: 0.16, width: 0.3, edge: 1,
+  formants: [[520, 2.8, 1], [1350, 3.8, 0.65], [2700, 4.5, 0.3]],
+  body: 0.8, bodyCut: 450, ring: 0.95, puff: { low: 400, high: 3200, level: 0.2, decay: 0.24 }, drive: 1.7,
+};
+
+/** A heavyweight: a V-twin's uneven lope (two firings close, then a gap), deep and chesty. */
+const HEAVY: Omit<PulseEngine, "hz" | "seconds"> = {
+  pattern: [[0, 1], [0.5625, 0.85]], jitter: 0.024, wobble: 0.18, width: 0.38, edge: 1,
+  formants: [[260, 2.4, 0.7], [720, 3, 1], [1700, 3.5, 0.6], [3200, 4, 0.2]],
+  body: 0.8, bodyCut: 320, ring: 1, puff: { low: 180, high: 2600, level: 0.22, decay: 0.3 }, drive: 1.9, lowpass: 5000,
+};
+
+/** Each engine's note at revs 1, Hz: its cycles a second (the V-twin fires twice in each). */
+const NOTE = { light: 110, middle: 84, heavy: 46, electric: 58 } as const;
+
+/** Engine light, low and high in its revs. */
+export const engineLightLo = (t: Take): Mono => pulseEngine(t, { ...LIGHT, hz: NOTE.light * REV_LO, seconds: 1 });
+export const engineLightHi = (t: Take): Mono => pulseEngine(t, { ...LIGHT, hz: NOTE.light * REV_HI, seconds: 1 });
+export const engineMiddleLo = (t: Take): Mono => pulseEngine(t, { ...MIDDLE, hz: NOTE.middle * REV_LO, seconds: 1 });
+export const engineMiddleHi = (t: Take): Mono => pulseEngine(t, { ...MIDDLE, hz: NOTE.middle * REV_HI, seconds: 1 });
+export const engineHeavyLo = (t: Take): Mono => pulseEngine(t, { ...HEAVY, hz: NOTE.heavy * REV_LO, seconds: 1 });
+export const engineHeavyHi = (t: Take): Mono => pulseEngine(t, { ...HEAVY, hz: NOTE.heavy * REV_HI, seconds: 1 });
+
+/**
+ * Rivet's electric motor: a deep whirr of the rotor's poles with a second
+ * rotor a whisker off (a slow beat), the windings' whine and the gears'
+ * higher one, and the faint buzz of the drive that switches it.
+ */
+function electric(t: Take, revs: number): Mono {
+  const r = t.rng;
+  const hz = NOTE.electric * revs;
+  const unit = Math.max(4, Math.round(hz));
+  // About a second, exactly ``unit`` cycles of the note.
+  const n = Math.round((unit * t.sr) / hz);
+  const seconds = n / t.sr;
+  const ph = (): number => r.range(0, TAU);
+  const parts: Part[] = [
+    { cycles: unit, amp: 0.8, phase: ph() },
+    { cycles: unit * 2, amp: 0.6, phase: ph() },
+    { cycles: unit * 3, amp: 0.32, phase: ph() },
+    { cycles: unit * 4, amp: 0.2, phase: ph() },
+    { cycles: unit * 6, amp: 0.14, phase: ph() },
+    { cycles: unit + 1, amp: 0.45, phase: ph() },
+    { cycles: 2 * unit + 1, amp: 0.2, phase: ph() },
+    // The whine of the windings and the gears: a sixth and a twelfth harmonic of the poles' rate up, a little sharp of them.
+    { cycles: Math.round(unit * 7.02), amp: 0.5 * r.range(0.85, 1.15), phase: ph() },
+    { cycles: Math.round(unit * 9), amp: 0.18, phase: ph() },
+    { cycles: Math.round(unit * 13.05), amp: 0.22 * r.range(0.85, 1.15), phase: ph() },
+    { cycles: Math.round(unit * 19.1), amp: 0.08, phase: ph() },
+  ];
+  const body = normalize(sumParts(n, parts));
+  const wob = wander(t, n, [3, 7]);
+  // The drive's switching buzz: a narrow pulse train three times the poles' rate, soft.
+  const buzz = new Float32Array(n);
+  const step = n / (unit * 3);
+  for (let k = 0; k < unit * 3; k++) {
+    const at = Math.round(k * step);
+    buzz[at % n]! += 1;
+    buzz[(at + 1) % n]! -= 1;
+  }
+  circular(buzz, (twice) => bandpass(twice, t.sr, 1200, 6000, 2));
+  normalize(buzz);
+  const air = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 1800, 7000, 2));
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = body[i]! * (1 + 0.08 * wob[i]!) + 0.25 * buzz[i]! + 0.05 * air[i]!;
+  drive(out, 1.3);
+  return out;
+}
+export const engineElectricLo = (t: Take): Mono => electric(t, REV_LO);
+export const engineElectricHi = (t: Take): Mono => electric(t, REV_HI);
+
+/**
+ * The rasp of an engine working hard: a burst of rough exhaust noise on
+ * every firing (100 a second at rate 1, pitched to each engine's own), now
+ * and then a spit of a crackle. Steered up as the kart pulls, climbs or
+ * ploughs on, and away as it lifts off.
+ */
+export function engineGrit(t: Take): Mono {
+  const sr = t.sr;
+  const r = t.rng;
+  const firings = Math.round(100 * 1.0);
+  const n = t.n(1.0);
+  const period = n / firings;
+  const out = new Float32Array(n);
+  const k = Math.exp(-1 / (0.2 * period));
+  const len = Math.round(period * 1.1);
+  for (let f = 0; f < firings; f++) {
+    const at = Math.round(f * period + r.range(-0.04, 0.04) * period);
+    const spit = r.next() < 0.08;
+    let env = (spit ? 1.6 : 1) * r.range(0.35, 1);
+    const kk = spit ? Math.exp(-1 / (0.08 * period)) : k;
+    for (let i = 0; i < len; i++) {
+      out[(((at + i) % n) + n) % n]! += env * (2 * r.next() - 1);
+      env *= kk;
+    }
+  }
+  circular(out, (twice) => bandpass(twice, sr, 750, 5200, 2));
+  normalize(out);
+  drive(out, 1.6);
+  return out;
 }
 
 /** Idling: a lumpy put-put, thirteen soft thumps in a second, no two quite alike. */
@@ -182,13 +293,35 @@ export function engineIdle(t: Take): Mono {
   return out;
 }
 
-/** The boost growl: a deeper, heavier engine for when the nitro is on. */
+/** The boost growl: a deeper, heavier engine roaring under the kart's own while the nitro burns. */
 export function engineGrowl(t: Take): Mono {
-  return engine(t, {
-    f0: 56, seconds: 1.0, harmonic: (k) => 1 / k ** 0.8, maxK: 30, phase: -1.2,
-    subs: [[0.5, 0.5]], rattle: { fraction: 0.5, depth: 0.45 }, drive: 4,
-    noise: { low: 100, high: 1400, level: 0.45, sharp: 2 }, lowpass: 3800,
+  return pulseEngine(t, {
+    hz: 56, seconds: 1.0, pattern: [[0, 1]], jitter: 0.03, wobble: 0.22, width: 0.32, edge: 0.6,
+    formants: [[320, 2.2, 1], [900, 3, 0.7], [2100, 4, 0.35]],
+    body: 1, bodyCut: 300, ring: 0.9, puff: { low: 250, high: 2600, level: 0.3, decay: 0.3 }, drive: 3.5, lowpass: 3800,
   });
+}
+
+// --- the road ------------------------------------------------------------------------------------------
+
+/**
+ * The tyres rolling on the road: a low roar of rubber on tarmac with a
+ * little texture of the grain in it, quiet, swelling with speed. It falls
+ * away in the air, which is half of what makes a jump feel airborne.
+ */
+export function tyreRoad(t: Take): Mono {
+  const seconds = 1.6;
+  const n = t.n(seconds);
+  const r = t.rng;
+  const roar = noiseLoop(t, seconds, (m) => bandpass(brown(m, r), t.sr, 55, 520, 2), 0.3);
+  normalize(roar);
+  times(roar, cyclic(n, 3, 0.25, r.range(0, TAU)));
+  const grain = noiseLoop(t, seconds, (m) => bandpass(pink(m, r), t.sr, 650, 2600, 2), 0.3);
+  normalize(grain);
+  times(grain, cyclic(n, 11, 0.5, r.range(0, TAU)));
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = roar[i]! + 0.32 * grain[i]!;
+  return out;
 }
 
 // --- the drift --------------------------------------------------------------------------------------
@@ -213,8 +346,41 @@ export function driftScreech(t: Take): Mono {
   const flutter = cyclic(n, 7, 0.45, r.range(0, TAU));
   times(squeal, flutter);
   const hiss = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 2200, 8000, 2));
+  // The rubber scrubbing sideways under it: a rougher, lower band that stutters with the grip.
+  const scrub = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 380, 1500, 2));
+  times(scrub, cyclic(n, 17, 0.6, r.range(0, TAU)));
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = squeal[i]! * 0.8 + hiss[i]! * 0.5;
+  for (let i = 0; i < n; i++) out[i] = squeal[i]! * 0.8 + hiss[i]! * 0.45 + scrub[i]! * 0.3;
+  return out;
+}
+
+/**
+ * The sparks of a drift, fizzing under the squeal: a dense crackle of tiny
+ * bright clicks over a hiss, with a glint of two high partials. Silent
+ * before the first spark; RaceAudio raises it and pitches it up at each
+ * level, so the charge is heard building before it is let go.
+ */
+export function driftSparks(t: Take): Mono {
+  const seconds = 1.2;
+  const n = t.n(seconds);
+  const r = t.rng;
+  const crackle = grains(t, seconds, 260, (s) => {
+    const len = t.n(r.range(0.0006, 0.0025));
+    const g = white(len, r);
+    for (let i = 0; i < len; i++) g[i]! *= Math.exp((-4 * i) / len) * (0.4 + s * s);
+    return g;
+  });
+  circular(crackle, (twice) => bandpass(twice, t.sr, 2400, 10000, 2));
+  normalize(crackle);
+  const hiss = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 4200, 10000, 2));
+  times(hiss, cyclic(n, 9, 0.5, r.range(0, TAU)));
+  const glint = sumParts(n, [
+    { cycles: Math.round(3150 * seconds), amp: 1, phase: r.range(0, TAU) },
+    { cycles: Math.round(4720 * seconds), amp: 0.6, phase: r.range(0, TAU) },
+  ]);
+  times(glint, cyclic(n, 23, 0.85, r.range(0, TAU)));
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = crackle[i]! * 0.8 + hiss[i]! * 0.35 + glint[i]! * 0.06;
   return out;
 }
 
@@ -275,15 +441,18 @@ export function surfaceSand(t: Take): Mono {
 export function surfaceMud(t: Take): Mono {
   const seconds = 1.8;
   const n = t.n(seconds);
-  const body = noiseLoop(t, seconds, (m) => lowpass(brown(m, t.rng), t.sr, 420, 2), 0.3);
+  const body = noiseLoop(t, seconds, (m) => lowpass(brown(m, t.rng), t.sr, 700, 2), 0.3);
   normalize(body);
   times(body, cyclic(n, 3, 0.6, t.rng.range(0, TAU)));
-  const pops = grains(t, seconds, 9, () => {
-    const g = bubble(t, t.rng.range(140, 520), t.rng.range(0.012, 0.03), 1.8);
+  const pops = grains(t, seconds, 12, () => {
+    const g = bubble(t, t.rng.range(180, 650), t.rng.range(0.012, 0.03), 1.8);
     return g.length > 0 ? g : new Float32Array(1);
   });
+  // The squelch of the tyres pulling out of it: a wet mid-band slurp that swells with each turn of the wheel.
+  const squelch = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, t.rng, 350, 1400, 2), 0.3);
+  times(squelch, cyclic(n, 7, 0.85, t.rng.range(0, TAU)));
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = body[i]! * 0.7 + pops[i]! * 0.8;
+  for (let i = 0; i < n; i++) out[i] = body[i]! * 0.6 + pops[i]! * 1.1 + squelch[i]! * 0.25;
   return out;
 }
 

@@ -27,7 +27,7 @@
     { "t": 19.2, "type": "play", "cue": "ridge_hit_dirt", "options": {} },
     { "t": 19.9, "type": "filter", "name": "slowmo", "amount": 0 },
     { "t": 22.0, "type": "play", "cue": "kart_start_boost", "options": {} },
-    { "t": 22.0, "type": "loop", "cue": "kart_engine_a", "options": { "rate": 1, "volume": 0.8 }, "id": 7 },
+    { "t": 22.0, "type": "loop", "cue": "kart_engine_middle_lo", "options": { "rate": 1, "volume": 0.8 }, "id": 7 },
     { "t": 23.0, "type": "set", "id": 7, "options": { "rate": 1.4, "volume": 1 } },
     { "t": 25.0, "type": "set", "id": 7, "options": { "rate": 1.7 } },
     { "t": 24.0, "type": "play", "cue": "kart_boost_pad", "options": {} },

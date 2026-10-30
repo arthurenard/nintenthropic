@@ -55,6 +55,68 @@ export function miniTurbo(t: Take): Mono {
   return out;
 }
 
+/**
+ * The hottest charge let go: under the mini-turbo, a deep whoomph of the
+ * fire catching, a run up the C major scale in glass, and the sparks' last
+ * crackle trailing off.
+ */
+export function superTurbo(t: Take): Mono {
+  const out = t.canvas(1.0);
+  t.put(out, thump(t, 0.45, 120, 38, 0.003, 0.12), 0, 1);
+  const roar = bandNoise(t.n(0.6), t.sr, t.rng, 160, 1800, 2);
+  shapeBy(roar, (u) => smooth(u / 0.06) * (1 - u) ** 2);
+  t.put(out, roar, 0, 0.55);
+  [84, 88, 91, 96, 100, 103].forEach((m, k) => ping(out, t, 0.03 + k * 0.045, m, 0.45 + 0.07 * k, 0.85));
+  const crackle = highpass(white(t.n(0.55), t.rng), t.sr, 4000, 2);
+  const n = crackle.length;
+  for (let i = 0; i < n; i++) crackle[i]! *= (t.rng.next() < 0.1 ? 1 : 0.12) * Math.exp((-i / n) * 5);
+  t.put(out, crackle, 0.05, 0.3);
+  return out;
+}
+
+/**
+ * Flung out of a slipstream: the snap of a stretched band let go (a quick
+ * springy zip up) and the air rushing past after it.
+ */
+export function slingshot(t: Take): Mono {
+  const out = t.canvas(0.85);
+  const n = t.n(0.2);
+  const f = sampled(n, (u) => 240 * Math.pow(5.5, Math.pow(u, 0.6)) * (1 + 0.06 * Math.sin(2 * Math.PI * 22 * u * 0.2) * (1 - u)), 16);
+  const zip = tone(n, t.sr, f, 0.3, 0.12);
+  shapeBy(zip, (u) => smooth(u / 0.04) * (1 - u) ** 0.7);
+  t.put(out, zip, 0, 0.7);
+  t.put(out, click(t.sr, t.rng, 0.002, 1500, 9000), 0, 0.35);
+  t.put(out, whoosh(t, 0.7, 900, 5600, 1.2, swoosh(0.12, 1.5)), 0.03, 0.85);
+  return out;
+}
+
+/**
+ * Lifting off at high revs: the exhaust spits two to four little pops, each
+ * a dull bang and a crackle, quickly dying away. Pitched to the engine.
+ */
+export function backfire(t: Take): Mono {
+  const out = t.canvas(0.55);
+  const count = 2 + Math.floor(t.rng.next() * 3);
+  let at = 0;
+  for (let k = 0; k < count; k++) {
+    const strength = Math.pow(0.7, k) * t.rng.range(0.8, 1.1);
+    const pop = thump(t, 0.06, t.rng.range(380, 520) * t.p, 90, 0.0008, 0.014);
+    const spit = bandNoise(t.n(0.03), t.sr, t.rng, 900, 6000, 2);
+    expo(spit, t.sr, 0.006, 0.0004);
+    for (let i = 0; i < spit.length; i++) pop[i]! += 0.6 * spit[i]!;
+    t.put(out, pop, at, strength);
+    at += t.rng.range(0.05, 0.14);
+  }
+  return lowpass(out, t.sr, 7000, 2);
+}
+
+/** Another kart going by close and fast: a short swish of air, its band sliding down as the kart draws past. */
+export function passSwish(t: Take): Mono {
+  const out = t.canvas(0.5);
+  t.put(out, whoosh(t, 0.45, 2800 * t.p, 650 * t.p, 1.5, swoosh(0.4, 2.2)), 0, 1);
+  return out;
+}
+
 // --- boosts ---------------------------------------------------------------------------------------------------
 
 /** A boost's whoosh: a long rush of air, a low fwoom under it. */
@@ -290,17 +352,36 @@ export function jump(t: Take): Mono {
   return out;
 }
 
-/** A trick in the air: a spiral of pings and a swirl of air that rises and falls. */
-export function trick(t: Take): Mono {
+/**
+ * A trick in the air: a spiral of pings up the scale, a slide whistle's
+ * cheeky "whee" up and back, and a swirl of air that goes once round the
+ * head, left to right and back (the one stereo sound a kart makes: the
+ * kart spins).
+ */
+export function trick(t: Take): Mono[] {
   const out = t.canvas(0.9);
   [88, 91, 95, 100, 103].forEach((m, k) => ping(out, t, k * 0.065, m, 0.7 + 0.06 * k, 0.8));
+  const wn = t.n(0.42);
+  const wf = sampled(wn, (u) => 700 * Math.pow(2.2, Math.sin(Math.PI * Math.min(1, u * 1.15))) * (1 + 0.025 * Math.sin(2 * Math.PI * 7 * u * 0.42)), 16);
+  const whee = tone(wn, t.sr, wf, 0.12, 0.04);
+  shapeBy(whee, (u) => smooth(u / 0.06) * smooth((1 - u) / 0.25));
+  t.put(out, whee, 0.02, 0.22);
   const n = t.n(0.6);
   const swirl = white(n, t.rng);
   svf(swirl, t.sr, "bp", (u) => 900 + 3200 * Math.sin(Math.PI * u), 1.6);
   normalize(swirl);
   shapeBy(swirl, (u) => swell(u));
-  t.put(out, swirl, 0, 0.5);
-  return out;
+  // Once round: the swirl's pan follows a cosine, centre to the left, round to the right and back.
+  const left = Float32Array.from(out);
+  const right = Float32Array.from(out);
+  for (let i = 0; i < n; i++) {
+    const a = Math.sin(2 * Math.PI * (i / n));
+    const gl = Math.sqrt(0.5 * (1 + a));
+    const gr = Math.sqrt(0.5 * (1 - a));
+    left[i]! += 0.5 * gl * swirl[i]!;
+    right[i]! += 0.5 * gr * swirl[i]!;
+  }
+  return [left, right];
 }
 
 /** Back on the road: a soft thump and the suspension settling with a small boing. */

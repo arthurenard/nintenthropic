@@ -135,13 +135,17 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       if (!who) return [];
       const own = !!localOf(scene, event.kart);
       switch (event.source) {
+        // Let go of a drift: the mini-turbo, a step higher for each spark level; the hottest gets its whoomph and run of glass under it, and the music dips for it.
         case "drift":
-          return keep(order("kart_mini_turbo", who, own, { radius: RADIUS.medium, rate: event.level >= 3 ? 1.22 : event.level >= 2 ? 1.12 : 1, volume: event.level >= 2 ? 1 : 0.8 }));
-        // Flung out of another kart's slipstream: the nitro's rush of air, a little higher and lighter.
+          return keep(
+            order("kart_mini_turbo", who, own, { radius: RADIUS.medium, rate: event.level >= 3 ? 1.22 : event.level >= 2 ? 1.12 : 1, volume: event.level >= 2 ? 1 : 0.8 }),
+            event.level >= 3 ? order("kart_super_turbo", who, own, { radius: RADIUS.medium, ...(own ? { duck: { depth: 0.72, hold: 0.45 } } : {}) }) : null,
+          );
+        // Flung out of another kart's slipstream: a stretched band let go.
         case "draft":
-          return keep(order("kart_boost_whoosh", who, own, { radius: RADIUS.medium, rate: 1.1, volume: 0.8 }));
+          return keep(order("kart_slingshot", who, own, { radius: RADIUS.medium }));
         case "nitro":
-          return keep(order("kart_boost_whoosh", who, own, { radius: RADIUS.medium }));
+          return keep(order("kart_boost_whoosh", who, own, { radius: RADIUS.medium, ...(own ? { duck: { depth: 0.78, hold: 0.8 } } : {}) }));
         case "pad":
           return keep(order("kart_boost_pad", who, own, { radius: RADIUS.small }));
         case "start":
@@ -205,8 +209,9 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     }
 
     case "jump": {
+      // Off a ramp's lip a spring's boing; off the top of a hill taken fast, lighter and higher.
       const who = hearKart(scene, event.kart);
-      return who ? keep(order("kart_jump", who, !!localOf(scene, event.kart), { radius: RADIUS.small })) : [];
+      return who ? keep(order("kart_jump", who, !!localOf(scene, event.kart), { radius: RADIUS.small, ...(event.crest ? { rate: 1.15, volume: 0.7 } : {}) })) : [];
     }
 
     case "trick": {
@@ -235,7 +240,8 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
 
     case "fall": {
       const who = hearKart(scene, event.kart);
-      return who ? keep(order("kart_fall", who, !!localOf(scene, event.kart), { radius: RADIUS.big, priority: localOf(scene, event.kart) ? 3 : 1 })) : [];
+      const own = !!localOf(scene, event.kart);
+      return who ? keep(order("kart_fall", who, own, { radius: RADIUS.big, priority: own ? 3 : 1, ...(own ? { duck: { depth: 0.6, hold: 1.0 } } : {}) })) : [];
     }
 
     case "rescued": {

@@ -149,10 +149,49 @@ export function noiseLoop(t: Take, seconds: number, make: (samples: number) => M
   return loopify(make(n + t.n(overlap)), n);
 }
 
-/** A slow modulator that repeats exactly every loop: ``cycles`` whole sine cycles in ``n`` samples, in [1 - depth, 1]. */
+/**
+ * A slow modulator that repeats exactly every loop: ``cycles`` whole sine cycles in ``n`` samples, in [1 - depth, 1].
+ * A rotating phasor (re-aimed every 4096 samples so it never drifts) rather than a sin() a sample: the loops use
+ * dozens of these.
+ */
 export function cyclic(n: number, cycles: number, depth: number, phase = 0): Float32Array {
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = 1 - depth * (0.5 - 0.5 * Math.sin((TAU * cycles * i) / n + phase));
+  const w = (TAU * cycles) / n;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < n; i++) {
+    if ((i & 4095) === 0) {
+      re = Math.cos(w * i + phase);
+      im = Math.sin(w * i + phase);
+    }
+    out[i] = 1 - depth * (0.5 - 0.5 * im);
+    const nr = re * cw - im * sw;
+    im = re * sw + im * cw;
+    re = nr;
+  }
+  return out;
+}
+
+/** Add ``amp`` times a sine of ``cycles`` whole cycles over the buffer into it, in place: a loop's partial, allocating nothing. */
+export function addCycles(out: Float32Array, cycles: number, amp: number, phase = 0): Float32Array {
+  const n = out.length;
+  const w = (TAU * cycles) / n;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < n; i++) {
+    if ((i & 4095) === 0) {
+      re = Math.cos(w * i + phase);
+      im = Math.sin(w * i + phase);
+    }
+    out[i]! += amp * im;
+    const nr = re * cw - im * sw;
+    im = re * sw + im * cw;
+    re = nr;
+  }
   return out;
 }
 
@@ -161,28 +200,4 @@ export function times(a: Mono, b: Float32Array): Mono {
   const n = Math.min(a.length, b.length);
   for (let i = 0; i < n; i++) a[i]! *= b[i]!;
   return a;
-}
-
-/**
- * Start a periodic loop where it is calmest: an exactly periodic buffer has
- * no click wherever it is cut, but cutting it at a steep edge puts the
- * steepest step of the waveform at the seam, which is what a seam check (or
- * a tired ear) looks for. Rotates to the sample with the smallest step from
- * the one before it, near a zero crossing's lull rather than a pulse's edge.
- */
-export function calmSeam(buf: Mono): Mono {
-  const n = buf.length;
-  let best = 0;
-  let bestStep = Infinity;
-  for (let i = 0; i < n; i++) {
-    const step = Math.abs(buf[i]! - buf[(i + n - 1) % n]!) + 0.5 * Math.abs(buf[(i + 1) % n]! - buf[i]!);
-    if (step < bestStep) {
-      bestStep = step;
-      best = i;
-    }
-  }
-  if (best === 0) return buf;
-  const copy = Float32Array.from(buf);
-  for (let i = 0; i < n; i++) buf[i] = copy[(i + best) % n]!;
-  return buf;
 }
