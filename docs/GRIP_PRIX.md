@@ -193,7 +193,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | Engines (pitched by speed and how hard they work), the drift's screech, the wind at speed and in the air, boosts, landings (a thud under a long one), items, a place won or lost, countdown — synthesised like every Super Claude Bros. sound. |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | Engines (pitched by speed and how hard they work), the drift's screech and its three spark levels, the wind at speed, in the air and in a slipstream, boosts, landings (a thud under a hard one, by the sim's strength), items, a place won or lost, countdown — synthesised like every Super Claude Bros. sound. |
 
 ### Coordinates
 
@@ -463,10 +463,12 @@ that file exists (`render/art.ts`).
   (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
-  drift sparks (blue, then orange, the charge glowing and pulsing at the rear
-  wheels), boost flames (long, flickering, a flash at the pipes as a boost
-  catches), streaks of wind rushing past a watched kart from about 21 m/s and
-  many more on a boost (none for Reduce Motion), dust off the road, a spin, a
+  drift sparks (blue, then orange, then violet for the third charge, the charge
+  glowing and pulsing at the rear wheels), boost flames (long, flickering, a
+  flash at the pipes as a boost catches), streaks of wind rushing past a
+  watched kart along its course from about 21 m/s, drawn in closer and thicker
+  in a slipstream as it charges, and many more on a boost (none for Reduce
+  Motion), dust off the road, a spin, a
   hop, a puff on a bump. The karts the views follow get the full show; the rest
   of the pack throws fewer sparks and flames (`Effects.focus`), so a pack
   drifting round a hairpin does not use up the particles of the karts watched.
@@ -477,18 +479,23 @@ that file exists (`render/art.ts`).
   the fourth shows the map and the standings. One renderer, one scene, a
   scissored viewport and chase camera per view.
 - **Chase camera** (`render/cameras.ts`). Behind and above, eased, following
-  the way the kart goes (a spun kart does not whirl it), and alive: it leans
-  into a bend with the wheel and the drift, and tilts with a banked road as
-  seen along its own heading (`bankSeen`; together at most 9 degrees); it sits
-  lower behind a climb and aims up it, higher on a descent and aims down over a
-  crest (the road's heights behind and ahead from `TrackGeometry`); it aims a
-  little into the bend ahead (the road's turn over the next 14 to 24 m); in a
-  slide it stays between the heading and the way the kart goes and moves out to
-  the side of the slide, so the slide shows; off a jump it rises and pulls back
-  to see the landing, and lands with a sprung dip (a thump). Knocks shake it
-  (bumps and walls by their strength, hits, strikes), landings too, rough ground
-  rumbles it; the field of view widens with speed and boost, with a quick punch
-  as a boost begins; on a boost and flat out the outer part of the view streams
+  the way the kart goes (`KartView.course`; a spun kart does not whirl it), and
+  alive: it leans into a bend with the wheel (in a drift, with the drift's side,
+  whatever the wheel), and tilts with a banked road as seen along its own
+  heading (`bankSeen`; together at most 9 degrees); it sits lower behind a
+  climb and aims up it, higher on a descent and aims down over a crest (the
+  road's heights behind and ahead from `TrackGeometry`, a ramp's wedge among
+  them: `rampSeen` holds the lip's height for 18 m past it, so the camera aims
+  up the wedge at the jump, and `cameraSpace` keeps it out of the wedge); it
+  aims a little into the bend ahead (the road's turn over the next 14 to 24 m);
+  in a drift it sits 60% of the way from the nose to the course and moves out
+  to the side of the slide, so the slide shows; off a jump it rises and pulls
+  back to see the landing, and lands with a sprung dip as hard as the sim's
+  `land` strength (the camera's own eye on the kart's height is the fallback;
+  the two count once). Knocks shake it (bumps and walls by their strength,
+  hits, strikes), landings too, rough ground rumbles it; the field of view
+  widens with speed and boost, with a quick punch as a boost begins and a pop
+  on a trick's kick at the lip; on a boost and flat out the outer part of the view streams
   outward from where the kart is heading (the rush, in the post chain). Through
   the countdown it settles from high over the grid. With Reduce Motion it keeps
   only what frames the road: no lean, tilt, shake, thump, punch or rush. Another
