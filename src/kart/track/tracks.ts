@@ -302,49 +302,60 @@ export const HARBOUR_LIGHTS: TrackDef = {
 };
 
 /**
- * A winding gorge: a long climb into the hills to a hairpin at the top (the
- * sand across its inside is a cut for the brave and a Nitro), a ridge road
- * about twelve metres above the start with a gap in it to jump, and a
- * tumbling descent past rolling boulders through a narrow neck (12 m) before
- * the final bends. Twisty rather than fast. About 1.1 km.
+ * A winding gorge: a steep climb (sixteen metres at up to 13%, an S that leans
+ * into each of its bends) to a hairpin at the top (the sand across its inside
+ * is a cut for the brave and a Nitro), a ridge road with a gap in it to jump,
+ * then the tumble: off a lip sharp enough to fly, down S-bends that lean one
+ * way and the other past rolling boulders, through a narrow neck (12 m), and
+ * a dip on the way out before the final bends. Twisty rather than fast. About
+ * 1.1 km.
  */
 export const CANYON_RUN: TrackDef = {
   id: "canyon-run",
   name: "Canyon Run",
   theme: "canyon",
-  blurb: "A winding gorge: climb to the hairpin, race the ridge and leap its gap, tumble down past rolling boulders, and cut the sand if you dare.",
+  blurb: "A winding gorge: climb steeply to the hairpin, race the ridge and leap its gap, fly off the lip and tumble down the leaning bends, and cut the sand if you dare.",
   laps: 3,
   width: 14,
   points: [
     { x: 0, z: 0 },
     { x: 0, z: 36 },
-    { x: -3, z: 71, y: 0.2 },
-    { x: -10, z: 107, y: 2.1 },
-    { x: -45, z: 129, y: 5.2 },
-    { x: -60, z: 156, y: 8.4 },
-    { x: -70, z: 185, y: 10.6 },
-    { x: -72, z: 208, y: 11.2 },
-    { x: -77, z: 221, y: 11.3 },
-    { x: -90, z: 226, y: 11.3 },
-    { x: -103, z: 221, y: 11.3 },
-    { x: -108, z: 208, y: 11.3 },
-    { x: -108, z: 180, y: 11.3 },
-    { x: -109, z: 130, y: 11.2 },
-    { x: -113, z: 80, y: 11.1 },
-    { x: -122, z: 40, y: 10.9 },
-    { x: -200, z: -5, y: 9.4 },
-    { x: -209, z: -40, y: 8.5 },
-    { x: -232, z: -80, y: 5.4 },
-    { x: -225, z: -119, y: 3.9, width: 12 },
-    { x: -184, z: -139, y: 2.4, width: 12 },
-    { x: -148, z: -148, y: 1.5, width: 12 },
-    { x: -129, z: -172, y: 2.8 },
-    { x: -90, z: -198, y: 4.0 },
-    { x: -52, z: -177, y: 3.2 },
-    { x: -48, z: -131, y: 2.1 },
-    { x: -43, z: -95, y: 1.5 },
-    { x: -14, z: -70, y: 0.4 },
-    { x: -4, z: -35, y: 0.2 },
+    { x: -3, z: 71, y: 0.3 },
+    // The climb: an S that leans into each of its bends, sixteen metres up at 12%.
+    { x: -10, z: 107, y: 3.6, bank: 0.14 },
+    { x: -45, z: 129, y: 8.2, bank: -0.16 },
+    { x: -60, z: 156, y: 12.8 },
+    { x: -70, z: 185, y: 15.8 },
+    { x: -72, z: 208, y: 16.3 },
+    // The hairpin at the top, the sand across its inside.
+    { x: -77, z: 221, y: 16.4, bank: 0.1 },
+    { x: -90, z: 226, y: 16.4, bank: 0.12 },
+    { x: -103, z: 221, y: 16.4, bank: 0.1 },
+    { x: -108, z: 208, y: 16.4 },
+    // The ridge road, and the gap in it.
+    { x: -108, z: 180, y: 16.3 },
+    { x: -109, z: 130, y: 16.2 },
+    { x: -113, z: 80, y: 16 },
+    { x: -122, z: 40, y: 15.6, bank: -0.16 },
+    // The tumble: a lip to fly off, then down through the S-bends, each leaning its own way.
+    { x: -154.6, z: 20, y: 15.3 },
+    { x: -170.2, z: 13.3, y: 14.9 },
+    { x: -181.1, z: 8.3, y: 12.6 },
+    { x: -200, z: -5, y: 10.4, bank: 0.18 },
+    { x: -209, z: -40, y: 8.6, bank: -0.18 },
+    { x: -232, z: -80, y: 6.2, bank: 0.15 },
+    // The neck: twelve metres between the walls.
+    { x: -225, z: -119, y: 4.4, width: 12, bank: 0.12 },
+    { x: -184, z: -139, y: 2.8, width: 12 },
+    { x: -148, z: -148, y: 1.6, width: 12, bank: -0.14 },
+    { x: -129, z: -172, y: 2.4 },
+    { x: -90, z: -198, y: 3.4, bank: 0.15 },
+    { x: -52, z: -177, y: 2.8, bank: 0.15 },
+    // A dip on the way out of the gorge.
+    { x: -48, z: -131, y: 0.6 },
+    { x: -43, z: -95, y: 1.4, bank: -0.12 },
+    { x: -14, z: -70, y: 0.5, bank: 0.12 },
+    { x: -4, z: -35, y: 0.1 },
   ],
   itemRows: [0.16, 0.31, 0.66, 0.9],
   boostPads: [
