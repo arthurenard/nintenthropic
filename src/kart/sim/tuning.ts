@@ -358,9 +358,9 @@ export const TUNING = {
      * metres; never past the road's top speed. Well behind it also corners as
      * if up to `press` more skilful.
      */
-    rubberStart: 15,
-    rubberSpan: 100,
-    easeOff: 0.09,
+    rubberStart: 5,
+    rubberSpan: 90,
+    easeOff: 0.1,
     easeSkill: 0.5,
     push: 0.06,
     press: 0.5,
