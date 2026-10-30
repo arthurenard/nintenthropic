@@ -531,7 +531,10 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   } else if (k.flight > 0) {
     flyControl(k, steerIn, driftIn, shook, emit);
   } else {
-    drive(w, k, steerIn, throttleIn, brakeIn, driftIn, shook, fwd, emit);
+    // The wheel's open hands brake, but in a bend at speed (or already drifting) they hold the drift with the throttle
+    // down instead: a brake into a bend is a slide, and closing the hands lets it go.
+    const slide = input.slide === true && brakeIn > 0 && (k.drift !== 0 || k.hop > 0 || (fwd > H.minSpeed && Math.abs(steerIn) > H.minSteer));
+    drive(w, k, steerIn, slide ? 1 : throttleIn, slide ? 0 : brakeIn, slide || driftIn, shook, fwd, emit);
   }
 
   // A kart off the ground (in a jump, or skimming a crest) rises and falls; one on it may be thrown off a crest or a lip.

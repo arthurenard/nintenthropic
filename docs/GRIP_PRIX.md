@@ -21,17 +21,19 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   steers. ±4° does nothing (a straight line stays straight); 40° is full
   lock (Settings: Steering, Gentle 50° / Normal 40° / Quick 30°), on a curve
   that is gentle near the centre.
-- **Brake and back up.** Open both hands: brake. Keep them open at a
-  standstill and the kart reverses. You still steer while reversing — open
-  hands are tracked as well as fists.
-- **Hop and drift.** Lift the wheel sharply (both hands jerk up) while
-  turning, or hold the wheel near full lock at speed for a moment: the kart
-  hops into a power-slide that way, its tail swinging out. Turn into the
-  slide to tighten it (the tail swings further), against it to run wider;
-  hold it hard against the slide and the kart straightens out of it.
-  Sparks grow blue, then orange, then white-hot; straighten the wheel (or
-  turn it hard the other way) to let go, and the kart boosts — longer for
-  each colour. A hop going straight is only a hop.
+- **Brake and back up.** Open both hands, going straight or slowly: brake.
+  Keep them open at a standstill and the kart reverses. You still steer while
+  reversing — open hands are tracked as well as fists.
+- **Drift.** Open both hands in a bend at speed, as if braking into it: the
+  kart hops into a power-slide that way, its tail swinging out, and keeps its
+  speed while the hands stay open. Lifting the wheel sharply (both hands jerk
+  up) while turning, or holding it near full lock at speed for a moment, does
+  the same with the fists closed. Turn into the slide to tighten it (the tail
+  swings further), against it to run wider; hold it hard against the slide
+  and the kart straightens out of it. Sparks grow blue, then orange, then
+  white-hot; close your hands to let go (with fists, straighten the wheel or
+  turn it hard the other way), and the kart boosts — longer for each colour.
+  A hop going straight is only a hop.
 - **Jumps and tricks.** Ramps throw the kart into the air, and so does the
   top of a hill taken fast. In the air, shake the wheel (quick left and right
   turns) or lift it as for a hop: the kart twirls, and boosts when it lands.
@@ -240,7 +242,11 @@ The numbers (all in `sim/tuning.ts`):
   level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling
   turn. `drift` falling, a brake, or the wheel held at own ≤ -0.8 for 0.25 s
   (the way out of a slide toward the other side of the road) ends it: boosts
-  of 0.7, 1.3 and 1.9 s.
+  of 0.7, 1.3 and 1.9 s. The wheel's brake comes with `slide` (its open
+  hands): at over 10 m/s with |steer| > 0.3, or in a drift or its hop, it is
+  `drift` held with the throttle down instead of a brake, so a brake into a
+  bend slides and the hands closing let go; going straight or slower it
+  brakes. Keys and pads never slide.
   Off the road the charge does not build. Let go, the nose comes back to the
   way the kart goes within a quarter of a second.
 - **Hills.** Gravity pulls 9 m/s² per unit of grade along the road (from
@@ -453,14 +459,17 @@ only those karts' physics against the world as it is.
 - **Fist or open.** From the world landmarks: a finger is out when its tip is
   much farther from the wrist than its middle joint; three or four fingers
   out is open, one or none a fist, with 120 ms of hold either way.
-- **Gestures** as in "How it plays": both open for 150 ms → brake; one open
+- **Gestures** as in "How it plays": both open for 150 ms → brake, with
+  `slide` (the sim drifts on it in a bend at speed); one open
   then closed within 0.6 s with the other a fist all along → one item press;
   the wheel's centre rising faster than 1.6 hand-spans a second (the distance
   between the palms) by at least a quarter span → hop; the wheel held at
-  |steer| ≥ 0.85 for 0.22 s with fists → a hop too (the sim drifts only at
+  |steer| ≥ 0.85 for 0.22 s with fists → a hop too (not again after open
+  hands until the wheel has come off the lock; the sim drifts only at
   speed, so a slow hairpin stays a turn); drift held from the hop until
   |steer| < 0.15 for 200 ms, the wheel turned against the drift past 0.5 for
-  0.1 s (an S-bend), or a brake. A hop while the drift is still held (after a
+  0.1 s (an S-bend), or a brake (whose slide then holds it, until the hands
+  close). A hop while the drift is still held (after a
   hop that was only a hop, or a drift a spin-out ended) lets go of it for 50
   ms first, so the kart sees a fresh press and hops.
 - **Shakes** (`shake.ts`): the wheel's angle swinging back 14° the other way

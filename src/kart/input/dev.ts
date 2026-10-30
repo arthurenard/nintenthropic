@@ -341,7 +341,7 @@ function buildSide(): void {
     "<span><b>Steer.</b> Turn the wheel. The angle between your hands steers.</span>",
     "<span><b>Brake.</b> Open both hands. Keep them open to back up.</span>",
     "<span><b>Item.</b> Flick one hand open and shut, the other staying a fist.</span>",
-    "<span><b>Drift.</b> Lift the wheel sharply while turning, then straighten it to let go.</span>",
+    "<span><b>Drift.</b> Open both hands in a bend at speed, then close them to let go. Or lift the wheel sharply while turning, and straighten it.</span>",
   ].join("");
   text.append(lines);
   guide.append(text);

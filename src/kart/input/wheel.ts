@@ -9,7 +9,8 @@
  *
  *   - the angle of the line from the left palm to the right palm steers
  *   - both fists: the kart drives itself (throttle 1)
- *   - both hands open: brake, and the sim backs up if it is held
+ *   - both hands open: brake, and the sim backs up if it is held; in a bend
+ *     at speed the sim drifts instead, until the hands close (`slide`)
  *   - one hand opened and closed again, the other staying a fist: use the item
  *   - both hands jerked up: hop, which starts a drift the player lets go of by
  *     straightening the wheel (or turning it hard the other way); a wheel held
@@ -271,6 +272,8 @@ export class WheelReader {
   private driftSide = 0;
   private straightSince: number | null = null;
   private lockSince: number | null = null;
+  /** The wheel has come off full lock since the hands last opened: a slide let go at full lock does not start another by itself. */
+  private lockReady = true;
   private againstSince: number | null = null;
   private readonly shaker = new ShakeCounter(WHEEL.shake.swing);
   private presses = 0;
@@ -661,6 +664,8 @@ export class WheelReader {
     this.lastSettle = t;
 
     const steer = shapeSteer(this.angleAt(), this.steering);
+    if (this.braking) this.lockReady = false;
+    else if (Math.abs(steer) < WHEEL.drift.lock) this.lockReady = true;
     if (this.drifting) {
       if (this.driftSide === 0 && Math.abs(steer) > WHEEL.drift.straight * 2) this.driftSide = Math.sign(steer);
       const against = this.driftSide !== 0 && steer * this.driftSide <= -WHEEL.drift.against;
@@ -678,7 +683,7 @@ export class WheelReader {
       }
     } else {
       // Held near full lock with the hands on the wheel: a drift begins by itself, as if the wheel had been lifted.
-      const holding = this.modeAt(t) === "drive" && this.bothPresent(t) && Math.abs(steer) >= WHEEL.drift.lock;
+      const holding = this.lockReady && this.modeAt(t) === "drive" && this.bothPresent(t) && Math.abs(steer) >= WHEEL.drift.lock;
       this.lockSince = holding ? (this.lockSince ?? t) : null;
       if (this.lockSince !== null && t - this.lockSince >= WHEEL.drift.lockHold) this.startDrift(steer);
     }
@@ -745,6 +750,8 @@ export class WheelReader {
       throttle,
       brake: mode === "brake" ? 1 : 0,
       drift: this.drifting && t >= this.releaseUntil,
+      // Open hands in a bend at speed are a drift, not a brake: the sim knows the speed, so it decides.
+      slide: mode === "brake",
       itemPresses: this.presses,
       horn: this.gestures.horns,
       shakes: this.shaker.count,
