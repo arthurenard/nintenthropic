@@ -464,196 +464,36 @@ describe("the item", () => {
   });
 });
 
-describe("hop and drift", () => {
-  /** The wheel at `angle` with its centre rising by `rise` picture heights over `seconds`. */
-  function lift(rig: Rig, angle: number, rise: number, seconds: number) {
-    const [cx, cy] = [0.5, 0.45];
-    rig.run(seconds, (t) => wheelHands({ angle, centre: [cx, cy - rise * Math.min(1, t / seconds)] }));
-    return rig.wheel(0.1, { angle, centre: [cx, cy - rise] });
-  }
-
-  it("a sharp lift of the turned wheel is a hop that starts a drift", () => {
+describe("drift", () => {
+  it("is open hands only: a sharp lift of the turned wheel is just a turn", () => {
     const rig = driving();
     rig.wheel(1, { angle: 30 });
-    expect(rig.last.input.drift).toBe(false);
-    // Half the wheel's width (0.25 of a picture height, the palms being 0.5 apart) in a tenth of a second.
-    lift(rig, 30, 0.25, 0.1);
-    expect(rig.last.input.drift).toBe(true);
-    expect(rig.last.input.steer).toBeGreaterThan(0.5);
-  });
-
-  it("holds the drift as long as the wheel stays turned", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.25, 0.1);
-    rig.wheel(3, { angle: 30, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(true);
-  });
-
-  it("lets go once the wheel has been straight for 200 ms, and not before", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.25, 0.1);
-    // A dip through the straight for less than 200 ms does not end it.
-    rig.wheel(0.1, { angle: 0, centre: [0.5, 0.2] });
+    let drift = false;
+    // Half the wheel's width (0.25 of a picture height, the palms being 0.5 apart) in a tenth of a second: once a hop.
+    rig.run(0.1, (t) => {
+      drift ||= rig.last.input.drift || rig.last.input.slide === true;
+      return wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, t / 0.1)] });
+    });
     rig.wheel(0.5, { angle: 30, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(true);
-    rig.wheel(0.15, { angle: 0, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(true);
-    rig.wheel(0.5, { angle: 0, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(false);
+    expect(drift).toBe(false);
+    expect(rig.last.input).toMatchObject({ throttle: 1, brake: 0, drift: false, slide: false });
   });
 
-  it("ends on a brake", () => {
+  it("does not start by itself at full lock: held there, the wheel only turns", () => {
+    const rig = driving();
+    rig.wheel(2, { angle: 60 });
+    expect(rig.last.input).toMatchObject({ throttle: 1, brake: 0, drift: false, slide: false });
+    expect(Math.abs(rig.last.input.steer)).toBe(1);
+  });
+
+  it("is the slide of open hands in a bend, let go when they close", () => {
     const rig = driving();
     rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.25, 0.1);
-    expect(rig.last.input.drift).toBe(true);
-    rig.wheel(0.5, { angle: 30, centre: [0.5, 0.2], fingers: "open" });
-    expect(rig.last.status.mode).toBe("brake");
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("a hop going straight is let go of almost at once: only a hop", () => {
-    const rig = driving();
-    rig.run(0.1, (t) => wheelHands({ angle: 0, centre: [0.5, 0.45 - 0.25 * Math.min(1, t / 0.1)] }));
-    // The drift flag goes up, for the sim to see with the steer under its 0.3...
-    expect(rig.last.input.drift).toBe(true);
-    expect(Math.abs(rig.last.input.steer)).toBeLessThan(0.3);
-    // ...and is gone a fifth of a second after.
-    rig.wheel(0.5, { angle: 0, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("starts by itself when the wheel is held near full lock for a moment, and not on an ordinary turn", () => {
-    const rig = driving();
-    rig.wheel(2, { angle: 30 });
-    expect(rig.last.input.drift).toBe(false);
-    rig.wheel(0.1, { angle: 38 });
-    expect(rig.last.input.steer).toBeGreaterThan(0.85);
-    expect(rig.last.input.drift).toBe(false);
-    rig.wheel(0.25, { angle: 38 });
-    expect(rig.last.input.drift).toBe(true);
-    // It is let go as a hop's drift is: by straightening the wheel.
-    rig.wheel(0.5, { angle: 0 });
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("does not start by itself with the hands open (a brake) or gone", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 38, fingers: "open" });
-    expect(rig.last.input.drift).toBe(false);
-    rig.empty(1);
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("does not start again by itself when open hands close at full lock, until the wheel has come off it", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 38, fingers: "open" });
-    rig.wheel(1, { angle: 38 });
-    expect(rig.last.status.mode).toBe("drive");
-    expect(rig.last.input.drift).toBe(false);
-    rig.wheel(0.5, { angle: 10 });
-    rig.wheel(0.5, { angle: 38 });
-    expect(rig.last.input.drift).toBe(true);
-  });
-
-  it("is let go by a hard turn the other way, so an S-bend is not one long slide", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.25, 0.1);
-    expect(rig.last.input.drift).toBe(true);
-    // A flick the other way under a tenth of a second is only a correction...
-    rig.wheel(0.05, { angle: -30, centre: [0.5, 0.2] });
-    rig.wheel(0.3, { angle: 30, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(true);
-    // ...held there, it lets go.
-    rig.wheel(0.25, { angle: -30, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("is still seen when the jerk costs a dropped frame", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    rig.run(0.2, (t) => (t > 0.05 && t < 0.09 ? [] : wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, t / 0.12)] })));
-    expect(rig.last.input.drift).toBe(true);
-  });
-
-  it("is not a slow lift", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.25, 1.5);
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("is not a small jerk: under a quarter of the wheel's width", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.08, 0.05);
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("is not a drop: only upwards", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, -0.25, 0.1);
-    expect(rig.last.input.drift).toBe(false);
-  });
-
-  it("is judged in wheel widths: a wheel held small and far hops with a smaller lift", () => {
-    const rig = new Rig();
-    rig.wheel(1, { angle: 30, span: 0.2 });
-    rig.run(0.1, (t) => wheelHands({ angle: 30, span: 0.2, centre: [0.5, 0.45 - 0.1 * Math.min(1, t / 0.1)] }));
-    expect(rig.last.input.drift).toBe(true);
-  });
-
-  it("a second lift while the drift is still held lets go of it for a moment, so the kart sees a fresh hop", () => {
-    const rig = driving();
-    // Turned 18°: a hop, but too little turn for the kart to drift (the sim wants |steer| over 0.3), yet enough to hold the flag.
-    rig.wheel(1, { angle: 18 });
-    lift(rig, 18, 0.25, 0.1);
-    expect(rig.last.input.drift).toBe(true);
-    expect(Math.abs(rig.last.input.steer)).toBeGreaterThan(WHEEL.drift.straight);
-    expect(Math.abs(rig.last.input.steer)).toBeLessThan(0.3);
-    // Down again slowly (no hop) and turned harder into the bend: the flag is still up, so a plain lift now would be lost.
-    rig.run(0.6, (t) => wheelHands({ angle: 30, centre: [0.5, 0.2 + 0.25 * Math.min(1, t / 0.6)] }));
-    expect(rig.last.input.drift).toBe(true);
-    // A second sharp lift: the drift reads as let go for a few ticks, then held again.
-    const seen: boolean[] = [];
-    const start = rig.now;
-    for (let i = 0; i < 24; i++) {
-      rig.run(1 / 60, () => wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, (rig.now - start) / 100)] }));
-      seen.push(rig.last.input.drift);
-    }
-    const dropped = seen.indexOf(false);
-    expect(dropped).toBeGreaterThan(0);
-    const back = seen.indexOf(true, dropped);
-    expect(back - dropped).toBeGreaterThanOrEqual(2);
-    expect(back - dropped).toBeLessThanOrEqual(4);
-    expect(seen.slice(back).every(Boolean)).toBe(true);
-  });
-
-  it("does not let go for the first lift: a fresh hop is pressed at once", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    const seen: boolean[] = [];
-    const start = rig.now;
-    for (let i = 0; i < 24; i++) {
-      rig.run(1 / 60, () => wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, (rig.now - start) / 100)] }));
-      seen.push(rig.last.input.drift);
-    }
-    const pressed = seen.indexOf(true);
-    expect(pressed).toBeGreaterThan(0);
-    expect(seen.slice(pressed).every(Boolean)).toBe(true);
-  });
-
-  it("does not hop twice from one lift", () => {
-    const rig = driving();
-    rig.wheel(1, { angle: 30 });
-    lift(rig, 30, 0.25, 0.1);
-    rig.wheel(0.4, { angle: 0, centre: [0.5, 0.2] });
-    rig.wheel(0.4, { angle: 30, centre: [0.5, 0.2] });
-    expect(rig.last.input.drift).toBe(false);
+    rig.wheel(0.4, { angle: 30, fingers: "open" });
+    expect(rig.last.input).toMatchObject({ brake: 1, slide: true, drift: false });
+    expect(rig.last.input.steer).toBeGreaterThan(0.5);
+    rig.wheel(0.4, { angle: 30 });
+    expect(rig.last.input).toMatchObject({ throttle: 1, brake: 0, slide: false, drift: false });
   });
 });
 

@@ -40,13 +40,13 @@ export const GESTURES = {
     coast: 0.25,
     /** No second horn for this long, seconds. */
     cooldown: 0.4,
-    /** After a clap the wheel stays out of the brake, item and hop for this long, seconds. */
+    /** After a clap the wheel stays out of the brake and the item for this long, seconds. */
     grace: 0.5,
   },
   cheer: {
     /**
      * The wheel's centre is this many hand lengths above its usual height (a
-     * hand lifted off the wheel to brake, or a hop's jerk, is not nearly so
+     * hand lifted off the wheel to brake, or the wheel jerked up, is not nearly so
      * far)...
      */
     raise: 2,
@@ -128,7 +128,7 @@ export class Gestures {
 
   /**
    * The palms are together, or just were, or both open hands are cheering:
-   * the wheel does not brake, hop or flick an item meanwhile.
+   * the wheel does not brake or flick an item meanwhile.
    */
   stands(t: number): boolean {
     return this.together(t) || t < this.graceUntil || this.cheeringAt(t);

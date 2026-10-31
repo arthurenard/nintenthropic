@@ -10,11 +10,9 @@
  *   - the angle of the line from the left palm to the right palm steers
  *   - both fists: the kart drives itself (throttle 1)
  *   - both hands open: brake, and the sim backs up if it is held; in a bend
- *     at speed the sim drifts instead, until the hands close (`slide`)
+ *     at speed the sim drifts instead, until the hands close (`slide`): the
+ *     wheel's only drift, so it never sets `drift`
  *   - one hand opened and closed again, the other staying a fist: use the item
- *   - both hands jerked up: hop, which starts a drift the player lets go of by
- *     straightening the wheel (or turning it hard the other way); a wheel held
- *     near full lock for a moment starts one too
  *   - the wheel shaken left and right: a shake (a trick in the air)
  *   - hands out of the picture: hold the angle a moment, then ease to the centre
  *   - a clap (a horn), both open hands raised high (a cheer) and one open hand
@@ -50,43 +48,6 @@ export const WHEEL = {
   flick: 0.6,
   /** Both hands opening within this of each other is a brake, never an item, seconds. */
   together: 0.25,
-  hop: {
-    /**
-     * The wheel's centre must rise faster than this many wheel widths (the
-     * distance between the palms) a second, so a wheel held small and far
-     * from the camera hops as readily as one held close...
-     */
-    speed: 1.6,
-    /** ...by at least this many wheel widths. */
-    rise: 0.25,
-    /** Looking back this far for the start of the rise, seconds. */
-    window: 0.3,
-    /** No second hop for this long after one, seconds. */
-    cooldown: 0.5,
-    /**
-     * A hop while the drift is still held lets go of it this long first, so
-     * the kart sees a fresh lift (three ticks: a dropped input or two cannot
-     * hide it), seconds.
-     */
-    release: 0.05,
-  },
-  drift: {
-    /** The drift ends when |steer| has stayed below this... */
-    straight: 0.15,
-    /** ...for this long, seconds. */
-    hold: 0.2,
-    /**
-     * A wheel held this near full lock (|steer|)... (the sim starts the drift
-     * only at speed, so a slow hairpin is only a turn)
-     */
-    lock: 0.85,
-    /** ...for this long starts a drift by itself, as a hop would, seconds. */
-    lockHold: 0.22,
-    /** Turned the other way past this (|steer|)... */
-    against: 0.5,
-    /** ...for this long, the drift is let go (and its boost given): an S-bend is not one long slide, seconds. */
-    againstHold: 0.1,
-  },
   /** A shake: the wheel's angle swinging back this many degrees the other way counts as a reversal (shake.ts has the rest). */
   shake: { swing: 14 },
   /** One hand gone: hold the angle this long, then ease to the centre over `ease`, seconds. */
@@ -267,20 +228,8 @@ export class WheelReader {
   private lastSettle = -Infinity;
   private fade = 0;
   private braking = false;
-  private drifting = false;
-  /** The way the drift goes, as far as the wheel can tell: the side it was turned to when it began (0: not yet). */
-  private driftSide = 0;
-  private straightSince: number | null = null;
-  private lockSince: number | null = null;
-  /** The wheel has come off full lock since the hands last opened: a slide let go at full lock does not start another by itself. */
-  private lockReady = true;
-  private againstSince: number | null = null;
   private readonly shaker = new ShakeCounter(WHEEL.shake.swing);
   private presses = 0;
-  private hopTrail: { t: number; y: number }[] = [];
-  private hopAllowedAt = -Infinity;
-  /** Until then the drift reads as let go, for a hop that came while it was already held. */
-  private releaseUntil = -Infinity;
   private auto: { samples: { t: number; a: number }[]; done: (() => void) | undefined } | null = null;
   private progress = 0;
 
@@ -333,14 +282,10 @@ export class WheelReader {
       else this.shaker.push(t, this.angle);
     } else {
       this.shaker.reset();
-      // The hop trail is kept: a sharp lift blurs the hands and often costs a frame
-      // or two, which must not hide the very jerk being looked for. Its own
-      // time window lets old points go.
       this.restartAutoLevel();
     }
     this.settle(t);
     this.gestures.frame(t, this.aspect, this.gestureHand("left", t), this.gestureHand("right", t), shapeSteer(this.angleAt(), this.steering), this.braking);
-    if (both) this.hop(seen.left!, seen.right!, t);
   }
 
   /**
@@ -591,34 +536,6 @@ export class WheelReader {
     this.progress = 0;
   }
 
-  /**
-   * Looks for the hop: the wheel's centre rising faster than WHEEL.hop.speed
-   * wheel widths (the distance between the palms) a second by at least
-   * WHEEL.hop.rise widths, within a short look back. Needs both hands, and no brake: open hands are not a wheel to lift.
-   */
-  private hop(left: HandReading, right: HandReading, t: number): void {
-    const centre = (left.y + right.y) / 2;
-    const span = Math.hypot((right.x - left.x) * this.aspect, right.y - left.y);
-    this.hopTrail.push({ t, y: centre });
-    while (this.hopTrail.length > 1 && t - this.hopTrail[0]!.t > WHEEL.hop.window) this.hopTrail.shift();
-    if (this.braking || this.gestures.stands(t) || t < this.hopAllowedAt || !(span > 0.02)) return;
-    for (const earlier of this.hopTrail) {
-      const seconds = t - earlier.t;
-      if (seconds <= 0) continue;
-      const rise = (earlier.y - centre) / span; // up the picture is down in y
-      if (rise >= WHEEL.hop.rise && rise / seconds >= WHEEL.hop.speed) {
-        // The kart hops on the drift being pressed, not on it being held. Still held from an
-        // earlier hop (one that was only a hop, or a drift a spin-out ended, the wheel never
-        // straightened since), this lift would be lost: let go a moment, and press again.
-        if (this.drifting) this.releaseUntil = t + WHEEL.hop.release;
-        this.startDrift(shapeSteer(this.angleAt(), this.steering));
-        this.hopAllowedAt = t + WHEEL.hop.cooldown;
-        this.hopTrail.length = 0;
-        return;
-      }
-    }
-  }
-
   /** A hand as the gestures see it, or null when it is not in the picture. */
   private gestureHand(side: Side, t: number): GestureHand | null {
     if (!this.slotPresent(side, t)) return null;
@@ -640,7 +557,7 @@ export class WheelReader {
     return slot.grip.state !== null && t - slot.seenAt <= WHEEL.held;
   }
 
-  /** Everything that moves with time alone, not only with a new frame: the brake, the easing, the drift's end. */
+  /** Everything that moves with time alone, not only with a new frame: the brake and the easing. */
   private settle(t: number): void {
     const left = this.slots.left;
     const right = this.slots.right;
@@ -662,47 +579,6 @@ export class WheelReader {
     const elapsed = Number.isFinite(this.lastSettle) ? Math.max(0, t - this.lastSettle) : 0;
     this.fade = target < this.fade ? target : Math.min(target, this.fade + elapsed / WHEEL.recover);
     this.lastSettle = t;
-
-    const steer = shapeSteer(this.angleAt(), this.steering);
-    if (this.braking) this.lockReady = false;
-    else if (Math.abs(steer) < WHEEL.drift.lock) this.lockReady = true;
-    if (this.drifting) {
-      if (this.driftSide === 0 && Math.abs(steer) > WHEEL.drift.straight * 2) this.driftSide = Math.sign(steer);
-      const against = this.driftSide !== 0 && steer * this.driftSide <= -WHEEL.drift.against;
-      this.againstSince = against ? (this.againstSince ?? t) : null;
-      if (this.braking) {
-        this.endDrift();
-      } else if (this.againstSince !== null && t - this.againstSince >= WHEEL.drift.againstHold) {
-        // Turned hard the other way: let go, so the kart can follow the wheel into the next bend.
-        this.endDrift();
-      } else if (Math.abs(steer) < WHEEL.drift.straight) {
-        this.straightSince ??= t;
-        if (t - this.straightSince >= WHEEL.drift.hold) this.endDrift();
-      } else {
-        this.straightSince = null;
-      }
-    } else {
-      // Held near full lock with the hands on the wheel: a drift begins by itself, as if the wheel had been lifted.
-      const holding = this.lockReady && this.modeAt(t) === "drive" && this.bothPresent(t) && Math.abs(steer) >= WHEEL.drift.lock;
-      this.lockSince = holding ? (this.lockSince ?? t) : null;
-      if (this.lockSince !== null && t - this.lockSince >= WHEEL.drift.lockHold) this.startDrift(steer);
-    }
-  }
-
-  private startDrift(steer: number): void {
-    this.drifting = true;
-    this.driftSide = Math.abs(steer) > WHEEL.drift.straight * 2 ? Math.sign(steer) : 0;
-    this.straightSince = null;
-    this.lockSince = null;
-    this.againstSince = null;
-  }
-
-  private endDrift(): void {
-    this.drifting = false;
-    this.driftSide = 0;
-    this.straightSince = null;
-    this.againstSince = null;
-    this.lockSince = null;
   }
 
   /** The wheel's turn, degrees from level, as the kart should see it (smoothed, eased out when hands are gone). */
@@ -749,8 +625,9 @@ export class WheelReader {
       steer: shapeSteer(this.angleAt(), this.steering),
       throttle,
       brake: mode === "brake" ? 1 : 0,
-      drift: this.drifting && t >= this.releaseUntil,
-      // Open hands in a bend at speed are a drift, not a brake: the sim knows the speed, so it decides.
+      // The wheel drifts only with open hands, which brake going straight or slowly and drift in a bend at speed: the
+      // sim knows the speed, so it decides.
+      drift: false,
       slide: mode === "brake",
       itemPresses: this.presses,
       horn: this.gestures.horns,
