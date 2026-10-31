@@ -26,17 +26,15 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   reversing — open hands are tracked as well as fists.
 - **Drift.** Open both hands in a bend at speed, as if braking into it: the
   kart hops into a power-slide that way, its tail swinging out, and keeps its
-  speed while the hands stay open. Lifting the wheel sharply (both hands jerk
-  up) while turning, or holding it near full lock at speed for a moment, does
-  the same with the fists closed. Turn into the slide to tighten it (the tail
+  speed while the hands stay open. Turn into the slide to tighten it (the tail
   swings further), against it to run wider; hold it hard against the slide
   and the kart straightens out of it. Sparks grow blue, then orange, then
-  white-hot; close your hands to let go (with fists, straighten the wheel or
-  turn it hard the other way), and the kart boosts — longer for each colour.
-  A hop going straight is only a hop.
+  white-hot; close your hands to let go, and the kart boosts — longer for
+  each colour. It is the wheel's only drift: however far the wheel is
+  turned, fists only steer.
 - **Jumps and tricks.** Ramps throw the kart into the air, and so does the
   top of a hill taken fast. In the air, shake the wheel (quick left and right
-  turns) or lift it as for a hop: the kart twirls, and boosts when it lands.
+  turns): the kart twirls, and boosts when it lands.
   Shake right at a ramp's lip and the kart springs off higher and further,
   and boosts longer.
 - **Slipstream.** Tuck in right behind another kart: you go a little faster
@@ -460,18 +458,9 @@ only those karts' physics against the world as it is.
   much farther from the wrist than its middle joint; three or four fingers
   out is open, one or none a fist, with 120 ms of hold either way.
 - **Gestures** as in "How it plays": both open for 150 ms → brake, with
-  `slide` (the sim drifts on it in a bend at speed); one open
-  then closed within 0.6 s with the other a fist all along → one item press;
-  the wheel's centre rising faster than 1.6 hand-spans a second (the distance
-  between the palms) by at least a quarter span → hop; the wheel held at
-  |steer| ≥ 0.85 for 0.22 s with fists → a hop too (not again after open
-  hands until the wheel has come off the lock; the sim drifts only at
-  speed, so a slow hairpin stays a turn); drift held from the hop until
-  |steer| < 0.15 for 200 ms, the wheel turned against the drift past 0.5 for
-  0.1 s (an S-bend), or a brake (whose slide then holds it, until the hands
-  close). A hop while the drift is still held (after a
-  hop that was only a hop, or a drift a spin-out ended) lets go of it for 50
-  ms first, so the kart sees a fresh press and hops.
+  `slide` (the sim drifts on it in a bend at speed: the wheel's
+  only drift, so it never sets `drift`); one open
+  then closed within 0.6 s with the other a fist all along → one item press.
 - **Shakes** (`shake.ts`): the wheel's angle swinging back 14° the other way
   twice within 0.55 s (no second for 0.35 s) → `shakes` +1, a count like the
   item presses (on the wire too). Not while braking, clapping or cheering.
@@ -486,7 +475,7 @@ only those karts' physics against the world as it is.
   (learnt from the fists), held 0.3 s → `emote: "cheer"` while they stay up;
   **one open hand** turning round twice in a second, the other a fist or down
   → `emote: "wave"`. While palms are together or a cheer is on, the wheel
-  does not brake, hop or flick an item. Keys: H honks, C and V hold cheer
+  does not brake or flick an item. Keys: H honks, C and V hold cheer
   and wave; a gamepad's Y honks.
 - **`WheelPreview`.** A canvas that draws the mirrored camera picture with
   the wheel on it: a ring through both palms turned with them, its colour the
@@ -1053,7 +1042,7 @@ front of them (or a laptop), and the TV is the host's screen.
   top some 3.5 m over the road), slower it only drops off the end. In the air
   the kart points where it flies (its nose swings round at 4/s) and the wheel
   turns its flight up to 0.55 rad/s, enough to bring a jump taken at an angle
-  back over the road. The hop gesture (or Space) or a shake in the air is a
+  back over the road. The drift button (Space, a pad's A) or a shake in the air is a
   **trick**: the kart twirls, and boosts on landing (0.8 s). A shake within
   0.3 s before the lip or 0.2 s after it **kicks** the jump: 1.8 m/s more
   lift, 6% more speed, and a 1.1 s boost on landing. Jumps can cross a gap: a

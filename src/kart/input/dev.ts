@@ -19,6 +19,7 @@ import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
 import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { $, element, replay, setText } from "../../ui/dom";
 import type { WheelStatus } from "../contract";
+import { TUNING } from "../sim/tuning";
 import { wheelControl, type WheelControl } from "./control";
 import { WheelPreview } from "./preview";
 import { STEERING_LOCK, WHEEL, type Steering } from "./wheel";
@@ -341,7 +342,7 @@ function buildSide(): void {
     "<span><b>Steer.</b> Turn the wheel. The angle between your hands steers.</span>",
     "<span><b>Brake.</b> Open both hands. Keep them open to back up.</span>",
     "<span><b>Item.</b> Flick one hand open and shut, the other staying a fist.</span>",
-    "<span><b>Drift.</b> Open both hands in a bend at speed, then close them to let go. Or lift the wheel sharply while turning, and straighten it.</span>",
+    "<span><b>Drift.</b> Open both hands in a bend at speed, then close them to let go.</span>",
   ].join("");
   text.append(lines);
   guide.append(text);
@@ -395,9 +396,11 @@ function frame(now: number): void {
     set("hands", String(status.hands));
     const fingers = control.fingers;
     set("fingers", `L ${fingers.left ?? "–"} · R ${fingers.right ?? "–"}`);
-    set("drift", input.drift ? "On" : "Off", input.drift ? "on" : "");
-    if (input.drift && !player.drifting) replay(v.get("drift")!, "pulse");
-    player.drifting = input.drift;
+    // The wheel drifts with open hands in a bend; whether it is going fast enough is the kart's to say, and there is no kart here.
+    const drift = input.drift || (input.slide === true && Math.abs(input.steer) > TUNING.hop.minSteer);
+    set("drift", drift ? "At speed" : "Off", drift ? "on" : "");
+    if (drift && !player.drifting) replay(v.get("drift")!, "pulse");
+    player.drifting = drift;
     set("items", String(input.itemPresses));
     if (input.itemPresses !== player.items) {
       player.items = input.itemPresses;

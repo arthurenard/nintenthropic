@@ -165,7 +165,7 @@ describe("the cheer", () => {
     expect(seen.emotes.has("cheer")).toBe(false);
   });
 
-  it("is not made by fists thrown up (that is a hop), nor by one raised hand", () => {
+  it("is not made by fists thrown up, nor by one raised hand", () => {
     const hop = driving();
     const seen = watch(hop, 1.5, (t) => fists({ centre: [0.5, 0.45 - 0.35 * Math.min(1, t / 0.5)] }));
     expect(seen.emotes.has("cheer")).toBe(false);
@@ -228,7 +228,7 @@ describe("the wave", () => {
 });
 
 describe("gestures and the wheel's own", () => {
-  it("leave the item flick, the hop and the brake as they were", () => {
+  it("leave the item flick, the wheel jerked up and the brake as they were", () => {
     const flick = driving();
     const [left, right] = fists();
     const item = watch(flick, 0.7, (t) => [left!, { ...right!, fingers: t > 0.1 && t < 0.4 ? "open" : "fist" }]);
@@ -236,10 +236,11 @@ describe("gestures and the wheel's own", () => {
     expect(item.horns).toBe(0);
     expect([...item.emotes]).toEqual([null]);
 
-    const hop = driving();
-    hop.wheel(1, { angle: 30 });
-    const jerk = watch(hop, 0.2, (t) => wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, t / 0.1)] }));
-    expect(jerk.drift).toBe(true);
+    // Once a hop; now the wheel drifts only with open hands, so it is nothing at all, and no cheer either.
+    const lifted = driving();
+    lifted.wheel(1, { angle: 30 });
+    const jerk = watch(lifted, 0.2, (t) => wheelHands({ angle: 30, centre: [0.5, 0.45 - 0.25 * Math.min(1, t / 0.1)] }));
+    expect(jerk.drift).toBe(false);
     expect(jerk.horns).toBe(0);
     expect(jerk.emotes.has("cheer")).toBe(false);
 

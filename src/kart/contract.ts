@@ -41,7 +41,7 @@ export interface DriveInput {
   throttle: number;
   /** 0..1. Held at a standstill it reverses (the sim decides when). */
   brake: number;
-  /** Held to drift: true from the hop until the driver straightens up (the input decides). */
+  /** Held to drift: true while the drift button is held (keys and pads; the wheel drifts with `slide`). */
   drift: boolean;
   /**
    * The brake is the wheel's open hands, which slide as well as brake: turned
@@ -158,7 +158,7 @@ export type RaceEvent = { id: number; tick: number } & (
   /** Off a ramp's lip into the air, or (`crest`) off the top of a hill taken fast. */
   | { type: "jump"; kart: number; crest?: boolean }
   /**
-   * A trick in the air (it boosts on landing): the hop gesture or a shake.
+   * A trick in the air (it boosts on landing): the drift button or a shake.
    * `kick`: a shake right at a ramp's lip, which also throws the jump higher and further.
    */
   | { type: "trick"; kart: number; kick?: boolean }

@@ -59,7 +59,7 @@ export interface Ramp {
   at: number;
   /** Upward speed it gives at the lip at top speed, m/s (default 7: about a second in the air). */
   lift?: number;
-  /** A trick here (the hop gesture, or Space, in the air) boosts on landing. Default true. */
+  /** A trick here (a shake, or Space, in the air) boosts on landing. Default true. */
   trick?: boolean;
 }
 
