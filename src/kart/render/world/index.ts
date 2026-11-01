@@ -53,6 +53,7 @@ import { Terrain } from "./terrain";
 import { styleFor, type ThemeStyle } from "./themes";
 import { bannerTexture, chevronTexture, glowTexture } from "./textures";
 import { buildTrackMeshes } from "./track";
+import { splitTwoPass } from "./twoPass";
 import { createWater, type Water } from "./water";
 
 const _r = new Vector3();
@@ -317,6 +318,9 @@ export async function createWorld(
   }
   const backdrop = buildBackdrop(style, terrain, disposables, bake);
   if (backdrop) group.add(backdrop.group);
+
+  // Everything that stands still is in: its glass draws as the two passes three would make of it, without remaking its program each time.
+  own(splitTwoPass(group));
 
   const boxes = new ItemBoxes();
   own(boxes);
