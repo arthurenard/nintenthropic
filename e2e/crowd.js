@@ -45,3 +45,58 @@ export function crowdPainter(canvas, image, params) {
     }
   };
 }
+
+/**
+ * What a race draws of the wheels (?wheels=N in e2e/tracker.html and e2e/trackrace.html): a wheel reader on the tracker for each of
+ * N players (seats of N) and their pictures of the camera in a corner, drawn every animation frame as the race does
+ * (app/race.ts, `corners`; app/services.real.ts): one for each player of one or two, one shared picture with the columns marked
+ * for three or four. The race's HUD asks each wheel's status once a frame too, and the sim samples each at 60 a second.
+ * Returns what to stop.
+ */
+export async function wheelPictures(tracker, video, players) {
+  const { wheelControl, WheelPreview } = await import("/src/kart/input/index.ts");
+  const aspect = () => (video.videoWidth > 0 && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : 16 / 9);
+  const controls = Array.from({ length: players }, (_, index) => wheelControl(tracker, { seat: players > 1 ? { index, of: players } : null, aspect }));
+  const style = document.createElement("style");
+  style.textContent =
+    ".wheel-box { position: fixed; right: 16px; bottom: 16px; z-index: 5; display: flex; gap: 8px; align-items: flex-end; } .wheel-view { position: relative; overflow: hidden; } .wheel-view canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }";
+  const box = document.createElement("div");
+  box.className = "wheel-box";
+  document.head.append(style);
+  document.body.append(box);
+  const pictures = [];
+  const view = (width, ratio) => {
+    const element = document.createElement("div");
+    element.className = "wheel-view";
+    element.style.cssText = `width: ${width}px; aspect-ratio: ${ratio}`;
+    box.append(element);
+    return element;
+  };
+  if (players >= 3) {
+    const picture = new WheelPreview({ size: "full", aspect: aspect() });
+    picture.attach(video);
+    picture.canvas.removeAttribute("style");
+    view(224, "16 / 9").append(picture.canvas);
+    const colours = ["#30D158", "#FF9F0A", "#0A84FF", "#FF453A"];
+    picture.followColumns(() => controls.map((control, i) => ({ name: `P${i + 1}`, colour: colours[i], status: control.wheel, extras: {} })), false);
+    pictures.push(picture);
+  } else {
+    for (const control of controls) {
+      const picture = new WheelPreview({ size: "full", seat: control.reader.seat, aspect: aspect() });
+      picture.attach(video);
+      picture.canvas.removeAttribute("style");
+      view(148, "4 / 3").append(picture.canvas);
+      picture.follow(() => ({ status: control.wheel, extras: {} }));
+      pictures.push(picture);
+    }
+  }
+  // The sim: a sample of each wheel's input every 16.7 ms.
+  const sim = setInterval(() => controls.forEach((control) => control.sample()), 1000 / 60);
+  return () => {
+    clearInterval(sim);
+    pictures.forEach((picture) => picture.dispose());
+    controls.forEach((control) => control.dispose());
+    box.remove();
+    style.remove();
+  };
+}
