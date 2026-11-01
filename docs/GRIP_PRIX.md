@@ -650,8 +650,13 @@ a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels
   configuration measured 190 and 275 fps an hour apart); `--cpu n` slows the page's main thread; `--soft` draws on a
   software GPU, where every triangle and pixel costs.
 - `same.mjs`: proves an optimisation leaves the picture alone (the same moment redrawn through the post chain with it
-  off and on, canvases compared). `shots.mjs`: the same posed still from two dev pages at each tier, with the
-  difference in 8-bit levels.
+  off and on, canvases compared); with `--against URL` it compares this dev page with another checkout's instead, the
+  same race stepped a sixtieth of a second at a time (`?manual=1`, `Math.random` and the page's clock fixed) and the
+  canvases compared byte for byte at frames 150, 500, 900 and 1500. `shots.mjs`: the same posed still from two dev pages
+  at each tier, with the difference in 8-bit levels.
+- `calls.mjs`: what a frame's draw calls are: one frame of the stepped race, each kind of object drawn (where it hangs
+  in the scene, the kind of mesh and material), how many times in the views and in their shadow passes, and a total for
+  each view. Calls and triangles are counted, so unlike a frame time they do not move with the machine's load.
 - `tracking.mjs`: the hand tracker for 1 to 4 players on one camera (`e2e/tracker.html`), before and after the workers
   per player. `trackrace.mjs`: the tracker beside a race (`e2e/trackrace.html`), 1 to 4 players each beside as many
   views, before and after, alternating rounds (`--rounds n`), `--soft` on a software GPU. Their pictures: a hand photo
@@ -853,6 +858,47 @@ seven times (high; five on medium; it is off on low and while not boosting, one 
 `bench.mjs --bases` (high and medium, 1 and 4 views, medians of two) on a machine at a load average of 650 to 950: frame
 time, CPU and GPU within the noise (which was ±15 to 45% between runs of the same page); an A/B of the rush alone on one
 frame redrawn could not be read at that load (the same frame took 3 to 25 ms of post). To measure on a quiet machine.
+
+**The playtest pass, measured and trimmed** (2026-11-01; `bench.mjs --bases` against dc83280, then against origin/main,
+high tier, resolution pinned, medians of 3 and 5 alternating rounds on a machine at a load average of 100 to 1000, where
+milliseconds moved ±15 to 45% and counts did not). The pass, 2026-10-30 against dc83280, changed no frame time that
+could be told from the noise, no program (85 to 87 on both) and no texture memory (218 MB, 235 MB of targets). It cost
+draw calls (meadow-loop, 4 views, 613 to 642; canyon-run 562 to 633: the reshaped tracks and the new scenery rules, the
+bench's races not being the same moment), 9 to 19% more garbage a frame (canyon-run, 4 views, 331 to 368 KB; 1 view 123 to
+139), and a first frame 0.35 to 0.7 s later (canyon-run, 4 views, 2.6 to 3.1 s). Triangles stayed within 6%.
+
+- *Three rebuilt a material's program all the time* (found by counting, in a scratch copy of three, why `setProgram` asked
+  for a program): three sorts draws by material and, each time the next draw is of another kind, works the program out
+  afresh (the parameters, a long cache key), which was a third to a half of a frame's garbage. Two causes, both older than the
+  pass. The decoration's material was drawn by plain meshes and by instanced scenery with and without a colour each, and
+  the flower stems shared the tufts' material: four rebuilds a view a frame. Each kind now draws with a twin of the material
+  (`twinOf` in `shading.ts`: the same patches, program key and uniforms, a material of its own). And a transparent
+  double-sided material (the glass of a landmark, a hazard's steam) is drawn by three in two passes, back faces and front,
+  by setting `side` and `needsUpdate` twice, so each pass works the program out again: 2 to 54 times a frame in four views
+  (27 objects in sight on Canyon Run, 22 on Glacier Pass, 21 on Starlight Ribbon, 1 to 2 on Meadow Loop). The world's
+  glass now draws as two materials in the geometry's two groups (`twoPass.ts`): the same two draws, back then front, in
+  the same place in the sort. Rebuilds a frame in four views, canyon-run: 73 to 0. Garbage a frame (heap sampling,
+  stepped race, 600 frames, 4 views): canyon-run 684 to 353 KB, starlight-ribbon 551 to 372; `bench.mjs --bases`, medians
+  of 5: canyon-run 155 to 140 KB with one view and 418 to 309 with four, glacier-pass 209 to 188 and 708 to 469,
+  meadow-loop 126 to 108 and 369 to 297, five-finger-circuit 264 to 218 and 538 to 408. Main-thread CPU, `Profiler`
+  over 400 stepped frames, 4 views, medians of 4 alternating rounds: `getProgram` 0.51 to 0 ms (canyon-run) and 0.50 to 0
+  (glacier-pass); `renderer.frame` 5.02 to 4.61 ms and 5.49 to 4.99 (the minimums did not agree: ±15%).
+- *The scatter at load* (`Clearance.at`, which the pass added for the tufts and the scenery): 450 ms of Canyon Run's 2.2 s
+  load, a fifth of it, from a distance worked out to every stretch of road near each candidate. Stretches and buckets that
+  cannot make the answer smaller are now passed over by their squared distance, with exactly the answer it gave (a test holds
+  it to the plain search on every track, mirror and dev track, `toBe`). 30 000 candidates round the road: Canyon Run 170 to
+  290 ms before, 35 after; Meadow Loop 114 to 176 before, 33 to 97 after. The first frame came 11 to 27% earlier with four
+  views in the bench (meadow-loop 3.6 to 2.7 s, five-finger-circuit 3.0 to 2.4, canyon-run 3.3 to 2.6) and 1 to 17% earlier
+  with one (the noise is as big as the smaller of those).
+- Pictures: `same.mjs --against origin/main`, byte for byte, at frames 150, 500, 900 and 1500 of the same race: identical on
+  all nine tracks, 1 and 4 views, high tier (the twins and the glass); identical again with `Clearance` on three tracks.
+  No sound, sim or tuning code touched.
+- *Not worth it, measured*: tracks cut into chunks of 96 m instead of 48 m. A view draws a chunk each of road, decoration
+  and verge, so draw calls fell 5 to 14% (canyon-run 708 to 617 with four views, meadow-loop 1009 to 951, glacier-pass 877
+  to 831, five-finger-circuit 673 to 627; the pictures identical), but triangles rose 0.2 to 4% and the main thread did not
+  come out quicker in three alternating rounds. Left at 48.
+- *Known, and outside `render/`*: `TrackGeometry.project` is a search along the whole line; the landmarks' placement
+  calls it for 330 to 370 ms of every Canyon Run load. A bucket search that keeps the answer would take most of it.
 
 **Not done yet.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
