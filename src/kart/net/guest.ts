@@ -50,7 +50,7 @@ import {
   type WireInput,
   type WirePlayer,
 } from "./protocol";
-import { DEFAULT_SETTINGS, kartsOnScreen } from "./roster";
+import { DEFAULT_SETTINGS, ScreenKarts, kartsOnScreen } from "./roster";
 import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, lerp, lerpAngle, token, wrapAngle } from "./util";
 import { DisplayClock, SnapshotBuffer, pictureOf } from "./view";
@@ -139,6 +139,7 @@ export class GuestSession implements Session {
   private own = new Map<number, Own>();
   /** Our karts this screen draws: the ones worth predicting. */
   private shown: number[] = [];
+  private onScreen = new ScreenKarts();
   /** Our copy of the race as `predict` or `restore` last left it: drawn from many times between ticks, so made once. */
   private picture: RaceView | null = null;
   private buffer = new SnapshotBuffer();
@@ -389,7 +390,7 @@ export class GuestSession implements Session {
   }
 
   views(): number[] {
-    return kartsOnScreen(this.lobbyState, this.myDevice);
+    return this.onScreen.of(this.lobbyState, this.myDevice);
   }
 
   frame(now: number): RaceView | null {

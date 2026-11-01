@@ -75,6 +75,26 @@ export function kartsOnScreen(lobby: LobbyState, device: string): number[] {
 }
 
 /**
+ * `kartsOnScreen` for a session that is asked every frame, more than once: worked out once for each lobby it is
+ * asked of (a lobby is never changed once made, a new one replaces it), and a new array handed out each time,
+ * since callers keep what they are given.
+ */
+export class ScreenKarts {
+  private lobby: LobbyState | null = null;
+  private device = "";
+  private karts: number[] = [];
+
+  of(lobby: LobbyState, device: string): number[] {
+    if (lobby !== this.lobby || device !== this.device) {
+      this.lobby = lobby;
+      this.device = device;
+      this.karts = kartsOnScreen(lobby, device);
+    }
+    return this.karts.slice();
+  }
+}
+
+/**
  * True when the race is watched on the host's screen by someone else's
  * players (a guest's device that is only a wheel): the host's pause then
  * has to stop the race for everyone, because they have no screen of their own

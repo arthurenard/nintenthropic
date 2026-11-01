@@ -55,7 +55,7 @@ import {
   type ToHost,
   type WirePlayer,
 } from "./protocol";
-import { DEFAULT_SETTINGS, Roster, cleanPlayer, kartsOnScreen, mergeSettings, sharesHostScreen } from "./roster";
+import { DEFAULT_SETTINGS, Roster, ScreenKarts, cleanPlayer, mergeSettings, sharesHostScreen } from "./roster";
 import { buildSetup } from "./setup";
 import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, token } from "./util";
@@ -120,6 +120,7 @@ export class HostSession implements Session {
   private kartSlots: Record<number, number> = {};
   private code: string | null = null;
   private lobbyCache: LobbyState | null = null;
+  private onScreen = new ScreenKarts();
   private local: LocalPlayerSetup[] = [];
 
   private guests = new Map<string, Guest>();
@@ -609,7 +610,7 @@ export class HostSession implements Session {
   }
 
   views(): number[] {
-    return kartsOnScreen(this.lobby(), this.device);
+    return this.onScreen.of(this.lobby(), this.device);
   }
 
   /** The timer's turn: when the tab is hidden (or frames have stopped for any reason) run what frames would have. */

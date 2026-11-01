@@ -3,7 +3,7 @@
  * grid, the view blending, and the autopilot.
  */
 import { describe, expect, it } from "vitest";
-import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type RaceView } from "../contract";
+import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type LobbyState, type RaceView } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { MEADOW_LOOP, TRACKS } from "../track/tracks";
 import { Autopilot } from "./autopilot";
@@ -12,7 +12,7 @@ import { CODE_ALPHABET, joinCodeFrom, joinUrl, makeCode, parseCode, peerIdFor } 
 import { EventFeed } from "./feed";
 import { gridKart, stepFakeKart } from "./fakeRace";
 import { decode, decodeInput, encode, encodeInput, encodeSnapshot, quantiseInput } from "./protocol";
-import { DEFAULT_SETTINGS, Roster, cleanName, cleanPlayer, mergeSettings } from "./roster";
+import { DEFAULT_SETTINGS, Roster, ScreenKarts, cleanName, cleanPlayer, kartsOnScreen, mergeSettings } from "./roster";
 import { BOT_NAMES, buildSetup } from "./setup";
 import { seeded } from "./util";
 import { DisplayClock, RENDER_LAG, SnapshotBuffer, blendViews } from "./view";
@@ -186,6 +186,28 @@ describe("the roster", () => {
     const first = roster.players();
     first[0]!.name = "Changed";
     expect(roster.players()[0]!.name).toBe("Ann");
+  });
+
+  it("says which karts a screen draws as `kartsOnScreen` does, a new array each time, and again for a new lobby", () => {
+    const lobby = (screens: string[], phase: LobbyState["phase"] = "racing"): LobbyState => ({
+      code: "ABCD",
+      host: "h",
+      players: screens.map((screen, slot) => ({ slot, name: `P${slot}`, colour: "#fff", device: slot === 0 ? "h" : `g${slot}`, screen, control: "keyboard", ready: true })),
+      settings: { ...DEFAULT_SETTINGS },
+      phase,
+      result: null,
+      karts: { 4: 0, 5: 1, 6: 2, 7: 3 },
+    });
+    const screen = new ScreenKarts();
+    const room = lobby(["h", "h", "g2", "h"]);
+    expect(screen.of(room, "h")).toEqual(kartsOnScreen(room, "h"));
+    expect(screen.of(room, "h")).toEqual([4, 5, 7]);
+    const first = screen.of(room, "h");
+    first.push(99);
+    expect(screen.of(room, "h")).toEqual([4, 5, 7]);
+    expect(screen.of(room, "g2")).toEqual([6]);
+    expect(screen.of(lobby(["h", "g1", "g2", "h"]), "h")).toEqual([4, 7]);
+    expect(screen.of(lobby(["h", "h", "g2", "h"], "lobby"), "h")).toEqual([]);
   });
 });
 
