@@ -17,11 +17,13 @@
 // still busy), the delay from the camera capturing a frame to its HandFrame, the page thread's cost per frame, the page
 // thread's CPU time a second (the browser's ThreadTime: it does not grow when the machine is busy and the page waits)
 // and the garbage it makes (growth of the JS heap a second, before any collection), and the page's own frame interval
-// p50/p95 (does tracking steal the game's frames?). A VideoFrame garbage collected without being closed (a leak: the
-// camera stalls after a handful) is a warning in the browser's console, and is counted.
+// p50/p95 (does tracking steal the game's frames?). The VideoFrames left open, on the page and in the workers (a leak: the
+// camera stalls after a handful), are counted (frames.mjs); the heap's growth is the noisiest of these, a collection
+// landing in or out of the window.
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { watchFrames } from "./frames.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(resolve(ROOT, "package.json"));
@@ -74,12 +76,7 @@ try {
       for (const [b, base] of BASES.entries()) {
         const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
         const page = await ctx.newPage();
-        let leaks = 0;
-        const watch = (message) => {
-          if (/VideoFrame/i.test(message.text()) && /garbage|closed/i.test(message.text())) leaks++;
-        };
-        page.on("console", watch);
-        page.on("worker", (worker) => worker.on("console", watch));
+        const frames = await watchFrames(page);
         const cdp = await ctx.newCDPSession(page);
         await cdp.send("Performance.enable");
         const metrics = async () => Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
@@ -90,6 +87,7 @@ try {
         await page.waitForFunction(() => window.smoke?.done, null, { timeout: 120000 });
         const m1 = await metrics();
         const r = await page.evaluate(() => window.smoke);
+        const leaks = await frames.open();
         await ctx.close();
         if (r.error) {
           console.log(c.label, "ERROR", r.error.slice(0, 300));

@@ -2,8 +2,7 @@
 <!-- The hand tracker beside a race, in one page, as in the game: a picture of a hand played as a 30 fps video and read
      by the tracker in its worker on the GPU delegate (?hands=2 ?tiles=1 ?copies=1 ?confidence=0.5 ?players=3
      ?lanes=GPU,CPU,CPU ?adapt=1, as e2e/tracker.html; ?first=1 lets the race give up pixels while the tracker drops
-     frames, as the game does: src/kart/app/handsFirst.ts; ?wheels=N draws N players' wheel readers and corner pictures
-     as a race does: crowd.js),
+     frames, as the game does: src/kart/app/handsFirst.ts),
      while the renderer's dev page (?race=<its query>, e.g. track=meadow-loop&sim=1&go=1&views=4&quality=high&art=0)
      draws a race in an iframe of the same page, sharing its main thread and the GPU. Served by the dev server only;
      tools/perf/trackrace.mjs reads window.smoke. -->
@@ -24,7 +23,7 @@
     <script type="module">
       import { loadTracker } from "/src/tracking/tracker.ts";
       import { HandsFirst } from "/src/kart/app/handsFirst.ts";
-      import { crowdPainter, wheelPictures } from "/e2e/crowd.js";
+      import { crowdPainter } from "/e2e/crowd.js";
       const params = new URLSearchParams(location.search);
       const report = (window.smoke = { error: null });
       try {
@@ -107,8 +106,6 @@
           report.raceReady = true;
           window.race = frameEl.contentWindow;
         }
-        // ?wheels=N: the wheel readers and corner pictures of N players, drawn beside the race as the game does (crowd.js).
-        const stopWheels = params.has("wheels") ? await wheelPictures(tracker, video, Number(params.get("wheels"))) : null;
         // ?first=1: the race gives up pixels while the tracker drops frames, as the game does (src/kart/app/handsFirst.ts).
         const first = params.get("first") === "1" && window.race ? new HandsFirst() : null;
         let keeping = !!first;
@@ -137,8 +134,6 @@
         await new Promise((resolve) => setTimeout(resolve, Number(params.get("warm") ?? 5) * 1000));
         tracker.resetStats();
         twin?.resetStats();
-        // tools/perf/trackrace.mjs reads the page thread's CPU time from here to the end.
-        report.began = true;
         framesSeen = withHands = handsTotal = scoreTotal = 0;
         camera = 0;
         const raceFrames = [];
@@ -172,7 +167,6 @@
         report.detection = framesSeen ? withHands / framesSeen : 0;
         report.handsPerFrame = framesSeen ? handsTotal / framesSeen : 0;
         report.meanScore = handsTotal ? scoreTotal / handsTotal : 0;
-        stopWheels?.();
         tracker.dispose();
         twin?.dispose();
       } catch (error) {
