@@ -77,8 +77,11 @@ export class RaceScreen {
   private lostSince: (number | null)[] = [];
   private reported = "";
   private shownViews = "";
-  /** What the renderer was last told each kart drives with (as a key). */
+  /** What the renderer was last told each kart drives with (as a key), and the lobby that was worked out from. */
   private shownKinds = "";
+  private kindsFor: LobbyState | null = null;
+  /** The race stage's size, CSS px, as `fit` last measured it (the pills are laid out against it every frame, and a measure each frame would flush the page's layout). */
+  private stage = { w: 0, h: 0 };
   /** The race's resolution while the hand tracker beside it is short of the GPU (handsFirst.ts). */
   private readonly handsFirst = new HandsFirst();
   private veilKey = "";
@@ -161,6 +164,7 @@ export class RaceScreen {
     this.view = null;
     this.shownViews = "";
     this.shownKinds = "";
+    this.kindsFor = null;
     this.veilKey = "";
     this.pillsKey = "";
     this.eggEvent = -1;
@@ -320,7 +324,8 @@ export class RaceScreen {
     this.last = now;
     const view = ctx.session.frame(now);
     const lobby = ctx.session.lobby();
-    this.hands(now, lobby);
+    const views = ctx.session.views();
+    this.hands(now, lobby, views);
     this.veil(lobby);
     if (!view) return;
     this.view = view;
@@ -330,7 +335,6 @@ export class RaceScreen {
     // The engines fall silent and the music is muffled behind the sheet, through the host's pause, and while the page is away.
     this.hush(this.sheet.open || !!lobby.pause || document.hidden);
     if (this.mode === "world" && this.renderer && this.loaded) {
-      const views = ctx.session.views();
       const key = views.join(",");
       if (key !== this.shownViews) {
         this.shownViews = key;
@@ -345,7 +349,7 @@ export class RaceScreen {
       this.eggs(view, lobby);
     }
     // Heard from the first frame, not from when the picture is ready: the lights count down meanwhile.
-    if (this.mode === "world") this.sound?.frame(view, ctx.session.views(), dt);
+    if (this.mode === "world") this.sound?.frame(view, views, dt);
     if (this.mode === "controller") {
       this.readouts(view);
       this.eggs(view, lobby);
@@ -413,6 +417,9 @@ export class RaceScreen {
   private teachItems(lobby: LobbyState): void {
     const ctx = this.ctx;
     if (!ctx || !this.renderer?.setControls) return;
+    // The lobby is the same object until something in it changes: nothing to work out again.
+    if (lobby === this.kindsFor) return;
+    this.kindsFor = lobby;
     const kinds: Record<number, DriverControl["kind"]> = {};
     ctx.players.forEach((player, i) => {
       const control = ctx.controls[i];
@@ -428,6 +435,7 @@ export class RaceScreen {
   private fit(): void {
     if (!this.renderer) return;
     const box = $("race-stage").getBoundingClientRect();
+    this.stage = { w: box.width, h: box.height };
     this.renderer.resize(Math.max(1, Math.round(box.width)), Math.max(1, Math.round(box.height)), window.devicePixelRatio || 1);
   }
 
@@ -579,7 +587,7 @@ export class RaceScreen {
    * their device has told the host (the room's `handsLost`). A device that is
    * only a controller says it on its own screen.
    */
-  private hands(now: number, lobby: LobbyState): void {
+  private hands(now: number, lobby: LobbyState, views: readonly number[]): void {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.controls.forEach((control, i) => {
@@ -602,15 +610,13 @@ export class RaceScreen {
       return;
     }
     $("lost-hands").hidden = true;
-    if (this.mode === "world") this.handPills(now, lobby);
+    if (this.mode === "world") this.handPills(now, lobby, views);
   }
 
   /** The "Show Both Hands" pills, each centred high in the viewport of the player whose hands are gone. */
-  private handPills(now: number, lobby: LobbyState): void {
+  private handPills(now: number, lobby: LobbyState, views: readonly number[]): void {
     const ctx = this.ctx!;
-    const views = ctx.session.views();
-    const box = $("race-stage").getBoundingClientRect();
-    const layout = layoutViews(views.length, box.width, box.height);
+    const layout = layoutViews(views.length, this.stage.w, this.stage.h);
     const pills: { x: number; y: number; text: string }[] = [];
     views.forEach((kart, i) => {
       const rect = layout.views[i];
