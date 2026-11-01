@@ -51,6 +51,7 @@ import {
   decodeInput,
   encode,
   encodeSnapshot,
+  packState,
   type ToGuest,
   type ToHost,
   type WirePlayer,
@@ -709,7 +710,7 @@ export class HostSession implements Session {
 
   private sendSnapshot(race: Race): void {
     if (this.guests.size === 0) return;
-    const state = JSON.stringify(race.snapshot());
+    const state = JSON.stringify(packState(race.snapshot()));
     for (const guest of this.guests.values()) {
       const acks: Record<number, number> = {};
       for (const remote of this.remote.values()) if (remote.device === guest.device) acks[remote.kart] = remote.applied;

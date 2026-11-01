@@ -8,6 +8,7 @@ import { IDLE_INPUT, type KartView } from "../contract";
 import { createSimRace } from "../sim/race";
 import { MEADOW_LOOP } from "../track/tracks";
 import { kartOf, player, scripted, World } from "./testkit";
+import { packState, unpackState } from "./protocol";
 import { pictureOf } from "./view";
 
 const kartView = (view: { karts: readonly KartView[] } | undefined, id: number): KartView => {
@@ -35,6 +36,32 @@ describe("the real sim's pictures", () => {
     race.step(new Map([[0, { ...IDLE_INPUT, throttle: 1 }]]));
     expect(kept.karts[0]!.x).toBe(x);
     expect(kept.events).toEqual([]);
+  });
+});
+
+describe("the real sim's snapshot on the wire", () => {
+  it("is a third smaller packed, and a race restored from it is the race restored from the whole, and goes on the same", () => {
+    const racers = [0, 1, 2, 3, 4, 5, 6, 7].map((id) => ({ id, name: `K${id}`, colour: "#fff", player: id >= 4 ? id - 4 : null, skill: 0.4 + id / 20 }));
+    const setup = { track: MEADOW_LOOP, laps: 2, seed: 21, racers };
+    const drive = (i: number) => new Map([4, 5, 6, 7].map((id) => [id, { ...IDLE_INPUT, throttle: 1, steer: Math.sin((i + id * 30) / 40) * 0.4, drift: i % 200 > 120, itemPresses: Math.floor(i / 150) }]));
+    const host = createSimRace(setup);
+    for (let i = 0; i < 900; i++) host.step(drive(i));
+    const snap = host.snapshot();
+    const whole = JSON.stringify(snap);
+    const sent = JSON.stringify(packState(snap));
+    expect(sent.length).toBeLessThan(whole.length * 0.8);
+
+    const direct = createSimRace(setup);
+    direct.restore(JSON.parse(whole));
+    const packed = createSimRace(setup);
+    packed.restore(unpackState(JSON.parse(sent))!);
+    expect(packed.snapshot()).toEqual(direct.snapshot());
+    for (let i = 900; i < 1100; i++) {
+      host.step(drive(i));
+      packed.step(drive(i));
+    }
+    // (Whole or packed, the wire has always written a negative zero as 0.)
+    expect(JSON.parse(JSON.stringify(packed.snapshot()))).toEqual(JSON.parse(JSON.stringify(host.snapshot())));
   });
 });
 

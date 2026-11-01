@@ -3,7 +3,7 @@
  * grid, the view blending, and the autopilot.
  */
 import { describe, expect, it } from "vitest";
-import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type LobbyState, type RaceView } from "../contract";
+import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type LobbyState, type RaceSnapshot, type RaceView } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { MEADOW_LOOP, TRACKS } from "../track/tracks";
 import { Autopilot } from "./autopilot";
@@ -11,7 +11,7 @@ import { TickClock } from "./clock";
 import { CODE_ALPHABET, joinCodeFrom, joinUrl, makeCode, parseCode, peerIdFor } from "./codes";
 import { EventFeed } from "./feed";
 import { gridKart, stepFakeKart } from "./fakeRace";
-import { decode, decodeInput, encode, encodeInput, encodeSnapshot, quantiseInput } from "./protocol";
+import { decode, decodeInput, encode, encodeInput, encodeSnapshot, packState, quantiseInput, unpackState } from "./protocol";
 import { DEFAULT_SETTINGS, Roster, ScreenKarts, cleanName, cleanPlayer, kartsOnScreen, mergeSettings } from "./roster";
 import { BOT_NAMES, buildSetup } from "./setup";
 import { seeded } from "./util";
@@ -91,6 +91,73 @@ describe("the wire format", () => {
     const state = { tick: 9, karts: [1, 2] };
     const text = encodeSnapshot(JSON.stringify(state), 99, { 3: 17 });
     expect(JSON.parse(text)).toEqual({ t: "snap", r: 99, acks: { 3: 17 }, state });
+  });
+
+  describe("a snapshot's kart table", () => {
+    const wire = (state: RaceSnapshot) => JSON.parse(JSON.stringify(packState(state))) as RaceSnapshot;
+    /** Rows like karts': mostly zeros and repeats, a few floats that change every time, some -1s, a 54-wide row (two words). */
+    const karts = (random: () => number, count: number, width = 54): number[][] =>
+      Array.from({ length: count }, () =>
+        Array.from({ length: width }, (_, i) => (i < 8 ? Math.round(random() * 1e5) / 1e3 - 20 : i % 7 === 0 ? -1 : random() < 0.25 ? Math.floor(random() * 5) : 0)),
+      );
+
+    it("comes back exactly as it would have been sent whole, for any table", () => {
+      const random = seeded(77);
+      for (let i = 0; i < 300; i++) {
+        const k = karts(random, 1 + Math.floor(random() * 12), [1, 5, 29, 30, 31, 54, 60, 61][i % 8]!);
+        // The same row twice, a row of nothing, and every kind of zero.
+        if (k.length > 2) {
+          k[1] = k[0]!.slice();
+          k[2] = k[2]!.map(() => 0);
+          k[0]![0] = -0;
+        }
+        const state = { tick: i, rng: 3, k, eg: [[1, 2]] };
+        const whole = JSON.parse(JSON.stringify(state)) as RaceSnapshot;
+        expect(unpackState(wire(state))).toEqual(whole);
+      }
+    });
+
+    it("is a third smaller than the table sent whole, for a table like a race's", () => {
+      const random = seeded(5);
+      let packed = 0;
+      let whole = 0;
+      for (let i = 0; i < 50; i++) {
+        const k = karts(random, 8);
+        // Four bots with the same bot fields, four players with none.
+        packed += JSON.stringify(packState({ tick: i, k }).kp).length;
+        whole += JSON.stringify(k).length;
+      }
+      expect(packed / whole).toBeLessThan(0.75);
+    });
+
+    it("leaves a snapshot with no table, or an odd one, as it is", () => {
+      const fake = { tick: 4, karts: [{ x: 1 }], places: 0 };
+      expect(packState(fake)).toBe(fake);
+      expect(unpackState(fake)).toBe(fake);
+      for (const k of [[], [[]], [[1, 2], [3]], [[1, "2"]], [[1, null]], "karts", 7, null]) {
+        const odd = { tick: 1, k } as unknown as RaceSnapshot;
+        expect(packState(odd)).toBe(odd);
+      }
+    });
+
+    it("is refused when it does not add up, never read as something else", () => {
+      const good = wire({ tick: 1, k: [[1, 0, 2], [1, 3, 2]] });
+      const kp = good.kp as unknown[];
+      expect(unpackState(good)).toEqual({ tick: 1, k: [[1, 0, 2], [1, 3, 2]] });
+      const bad = (packed: unknown) => unpackState({ tick: 1, kp: packed } as unknown as RaceSnapshot);
+      expect(bad("rows")).toBeNull();
+      expect(bad([])).toBeNull();
+      expect(bad([0, [0]])).toBeNull();
+      expect(bad([2.5, [0]])).toBeNull();
+      expect(bad([1e9, [0]])).toBeNull();
+      // A word missing; a value missing; a value too many; a word that is not a number; a row that is not a row.
+      expect(bad([3, []])).toBeNull();
+      expect(bad([3, [0b101, 7]])).toBeNull();
+      expect(bad([3, [0b001, 7, 8]])).toBeNull();
+      expect(bad([3, ["x", 7]])).toBeNull();
+      expect(bad([3, 5])).toBeNull();
+      expect(bad([...kp, [0, 5]])).toBeNull();
+    });
   });
 });
 

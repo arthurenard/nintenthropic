@@ -44,6 +44,7 @@ import {
   decodeInput,
   encode,
   encodeInput,
+  unpackState,
   type StartInfo,
   type ToGuest,
   type ToHost,
@@ -509,10 +510,12 @@ export class GuestSession implements Session {
   }
 
   /** The host's snapshot: take its word, replay what it has not heard yet, and ease out the difference. */
-  private onSnapshot(state: RaceSnapshot, acks: Record<number, number>): void {
+  private onSnapshot(sent: RaceSnapshot, acks: Record<number, number>): void {
     const race = this.race;
-    if (!race || !state || typeof state.tick !== "number") return;
-    if (!this.buffer.accepts(state.tick)) return;
+    if (!race || !sent || typeof sent.tick !== "number") return;
+    if (!this.buffer.accepts(sent.tick)) return;
+    const state = unpackState(sent);
+    if (!state) return;
 
     const t = this.env.now();
     const shown = this.shown.map((k) => this.own.get(k)!);
