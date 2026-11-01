@@ -825,6 +825,8 @@ class RaceAudioImpl implements RaceAudio {
     const squeals: { id: number; own: boolean; distance: number; params: Required<LoopParams> }[] = [];
     for (const k of view.karts) {
       const own = localOf(scene, k.id);
+      // Another kart is heard here only sliding (its squeal) or carried by the drone: no need to find who hears one that is not.
+      if (!own && k.drift === 0 && k.rescue <= 0) continue;
       const who = own ? { local: own, distance: 0, pan: own.pan } : listenerAt(scene, k.x, k.z);
       if (!who) continue;
       const near = own ? 1 : falloff(who.distance, LOOP_RADIUS);
@@ -892,7 +894,8 @@ class RaceAudioImpl implements RaceAudio {
     const seekers: { id: number; distance: number; pan: number }[] = [];
     const live = new Set<number>();
     for (const thing of view.things) {
-      if (!thing.active) continue;
+      // Only these two make a sound (the item boxes are most of the things): not worth finding who hears the rest.
+      if (!thing.active || (thing.kind !== "seeker" && thing.kind !== "puck")) continue;
       const who = hearThing(scene, thing);
       if (!who) continue;
       if (thing.kind === "seeker") {
