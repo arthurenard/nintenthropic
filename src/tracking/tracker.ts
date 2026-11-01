@@ -48,7 +48,7 @@ import { seenHands } from "./hands";
 import type { LandmarkerProgress } from "./landmarker";
 import { FACE_MODEL_BYTES, MODEL_BYTES, WASM_BYTES } from "./sizes";
 import type { FromWorker, ToWorker } from "./protocol";
-import { TileSchedule, joinTiles, tileRects, type Rect } from "./tiles";
+import { TileSchedule, joinPlaced, placeHands, tileRects, type Placed, type Rect } from "./tiles";
 import { DelegateWatch, TRY_FRAMES, Trials } from "./adapt";
 import type { FaceFrame, FaceReading, HandFrame, HandSource, SeenHand } from "./types";
 
@@ -428,8 +428,8 @@ interface Lane {
   tile: Rect | null;
   width: number;
   height: number;
-  /** What it found there, in the tile's own picture. */
-  hands: SeenHand[];
+  /** What it found there, put back in place in the whole picture (placeHands), once, when it was found. */
+  placed: Placed[];
   /** Learns which delegate is quicker for it (adapt.ts), when asked to. */
   watch: DelegateWatch | null;
   /** When the frame it is reading (or last read) was taken, ms. */
@@ -493,7 +493,7 @@ class LaneTracker extends BaseTracker {
     const height = video.videoHeight;
     if (!width || !height) return;
     const due = this.tileSchedule.next();
-    const tiles = tileRects(this.lanes.length, width, height);
+    const tiles = this.tilesFor(width, height);
     const timestamp = this.timestampFor(capturedAt);
     this.lanes.forEach((lane, i) => {
       if (!due[i]) return;
@@ -503,7 +503,7 @@ class LaneTracker extends BaseTracker {
         this.drop(since, false);
         return;
       }
-      const tile = evenTile(tiles[i]!, width);
+      const tile = tiles[i]!;
       const image = this.frameFor(video, capturedAt, tile);
       if (!image) return;
       lane.busy = true;
@@ -515,6 +515,17 @@ class LaneTracker extends BaseTracker {
       lane.worker.postMessage(message, [image]);
     });
     this.pageCost.push(performance.now() - began);
+  }
+
+  /** The columns for the picture's size, worked out when it changes and not on every camera frame. */
+  private columnsOf: { width: number; height: number; tiles: Rect[] } | null = null;
+
+  private tilesFor(width: number, height: number): Rect[] {
+    const have = this.columnsOf;
+    if (have && have.width === width && have.height === height) return have.tiles;
+    const tiles = tileRects(this.lanes.length, width, height).map((tile) => evenTile(tile, width));
+    this.columnsOf = { width, height, tiles };
+    return tiles;
   }
 
   /** Whether the browser cuts a VideoFrame to a column (visibleRect); where it cannot, the workers cut it. */
@@ -557,7 +568,8 @@ class LaneTracker extends BaseTracker {
     }
     if (message.type !== "result") return;
     lane.busy = false;
-    lane.hands = message.hands;
+    const tile = lane.tile;
+    lane.placed = tile ? placeHands(message.hands, tile, lane.width, lane.height) : [];
     if (!this.tileSchedule.quiet(index)) this.playedReads++;
     this.inference.push(message.inference);
     const proposal = lane.watch?.push(message.inference, performance.now());
@@ -569,11 +581,10 @@ class LaneTracker extends BaseTracker {
       lane.worker.postMessage(ask);
     }
     this.tileSchedule.record(this.lanes.map((_, i) => (i === index ? message.hands.length : null)));
-    const tile = lane.tile;
     if (!this.running || !tile) return;
     const seen = this.lanes.filter((one) => one.tile !== null);
-    const found = seen.map((one) => ({ tile: one.tile!, hands: one.hands }));
-    this.publish(joinTiles(found, lane.width, lane.height, seen.indexOf(lane)), message.capturedAt, [[tile.x / lane.width, (tile.x + tile.width) / lane.width]]);
+    const found = seen.map((one) => ({ tile: one.tile!, placed: one.placed }));
+    this.publish(joinPlaced(found, seen.indexOf(lane)), message.capturedAt, [[tile.x / lane.width, (tile.x + tile.width) / lane.width]]);
   }
 
   override dispose(): void {
@@ -718,7 +729,7 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
 
 /** A LaneTracker over workers whose landmarkers have started (startLanes; the tests give it stand-ins). */
 export function makeLaneTracker(workers: readonly { worker: Worker; delegate: "GPU" | "CPU" }[], adapt = false): Tracker & { readonly delegates: ("GPU" | "CPU")[] } {
-  return new LaneTracker(workers.map(({ worker, delegate }) => ({ worker, delegate, busy: false, tile: null, width: 0, height: 0, hands: [], watch: adapt ? new DelegateWatch(delegate) : null, sentAt: -Infinity })));
+  return new LaneTracker(workers.map(({ worker, delegate }) => ({ worker, delegate, busy: false, tile: null, width: 0, height: 0, placed: [], watch: adapt ? new DelegateWatch(delegate) : null, sentAt: -Infinity })));
 }
 
 /** Starts a worker for each tile, each with its own landmarker for two hands, on the delegate asked for it (LaneTracker). */
