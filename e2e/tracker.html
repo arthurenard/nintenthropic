@@ -3,8 +3,9 @@
      picture of a hand played as a 30 fps video, read frame by frame by the
      tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, ?confidence=0.4, ?tiles=4, ?copies=4,
      ?players=3 for three players' fists (e2e/crowd.js), ?lanes=GPU,CPU,CPU for a worker per tile, ?adapt=1 for a
-     slow worker to try the other delegate, and ?face=N to read the face too on every Nth frame, as a game that
-     reads the eye does), while a busy animation loop measures what the tracking costs the page's frames. -->
+     slow worker to try the other delegate, ?face=N to read the face too on every Nth frame, as a game that
+     reads the eye does, and ?wheels=N for N players' wheel readers and corner pictures drawn as a race draws them),
+     while a busy animation loop measures what the tracking costs the page's frames. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -16,7 +17,7 @@
     <video id="video" muted playsinline></video>
     <script type="module">
       import { loadTracker } from "/src/tracking/tracker.ts";
-      import { crowdPainter } from "/e2e/crowd.js";
+      import { crowdPainter, wheelPictures } from "/e2e/crowd.js";
       const params = new URLSearchParams(location.search);
       const report = (window.smoke = { error: null });
       try {
@@ -88,9 +89,12 @@
         let faces = 0;
         tracker.subscribeFace((face) => (faces += face.eyes ? 1 : 0));
         tracker.start(video);
+        const stopWheels = params.has("wheels") ? await wheelPictures(tracker, video, Number(params.get("wheels"))) : null;
         // Let the first frames compile their shaders, then measure.
         await new Promise((resolve) => setTimeout(resolve, 3000));
         tracker.resetStats();
+        // tools/perf/tracking.mjs reads the page thread's CPU time from here to the end.
+        report.began = true;
         const intervals = [];
         let last = performance.now();
         await new Promise((resolve) => {
@@ -110,6 +114,7 @@
         report.fps = report.tracker.frames / report.seconds;
         report.hands = hands;
         report.faces = faces;
+        stopWheels?.();
         tracker.dispose();
       } catch (error) {
         report.error = String(error?.stack || error);

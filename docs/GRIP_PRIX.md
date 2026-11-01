@@ -523,6 +523,61 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
 - **The dev page** `src/kart/input/dev.html`: the camera, the preview, and the
   numbers (angle, steer, grip, mode, drift, item presses, shakes, frame rate), with
   the Steering setting. The first thing to try with real hands.
+- **What reading the hands costs the page** (2026-11-01, after the playtest pass, the
+  sound pass and the open-hand drift; `tools/perf/input.mjs` for the page's JavaScript
+  in node, `tracking.mjs` for the page in Chrome). The page's side
+  of reading is small, and none of it was the open-hand drift's or the sound's: the
+  wheel reader alone, four players, cost 1.64 ms of CPU a second of play at dc83280, the
+  commit before them, and 1.32 at main (medians of five alternating rounds), and
+  allocated 1863 and 1827 KB a second. Handing a camera frame to the workers
+  (`LaneTracker.read`) is 0.1 ms of the page thread at one to four players (a
+  `VideoFrame` cut to each column with `visibleRect`, no copy), and no frame is left open:
+  `tools/perf/frames.mjs` counts the ones a page and its workers leave open (a frame
+  garbage collected unclosed is only a console warning, too late and too rare to count
+  on), and found none in a run of two players, while a worker made to leave its frames
+  open showed 378 in the same twenty seconds. What did grow with the players, and with their
+  square, was everything after it: each worker's answer was put back in place in the
+  picture with every other column's last answer (an object for every landmark of every
+  hand, again, each time), and every player's wheel was handed every published frame and
+  worked out the fingers of all the hands in it, the other players' too. Now an answer is
+  placed once, when it comes (`placeHands`, `joinPlaced`), the columns are worked out when
+  the picture's size changes, a reader looks at where a hand's palm is before anything
+  else and reads the fingers and size of its own two (`readPalm`, `finishReading`), and the
+  sim's sample and the screens' status each build only what they hand back
+  (`WheelReader.input`, `status`). Page thread CPU and garbage a second of play, the
+  tracker, the wheels, the sim's 60 samples and a status a frame (`input.mjs --against`,
+  medians of seven alternating rounds; the numbers of a busy machine, trust the ratios):
+
+  | players | before | after |
+  | --- | --- | --- |
+  | 1 | 0.83 ms, 560 KB | 0.48 ms, 523 KB |
+  | 2 | 1.68 ms, 1538 KB | 1.88 ms, 1112 KB |
+  | 3 | 4.07 ms, 3302 KB | 2.88 ms, 1899 KB |
+  | 4 | 8.11 ms, 7062 KB | 4.46 ms, 3263 KB |
+
+  (The milliseconds of one and two players are within the noise: the same two players read
+  1.72 and 1.55 ms with the sim's samples and statuses left out. The garbage is not.)
+
+  Just as before: random plays of one to four players (fists, open hands, item
+  flicks, claps, cheers, shakes, hands lost and found, strangers, misses; 56 plays of
+  twelve seconds) through the tracker, the wheels and the sim's samples give the same
+  published frames, inputs, statuses and finger counts to the last digit
+  (`input.mjs --same`). In Chrome, with a camera picture, the wheels and their corner
+  pictures drawn as a race draws them (`tracking.mjs --bases --wheels`, medians of three
+  alternating rounds), the page thread is 51.4 and 51.3 ms of CPU a second for one
+  player, 60.4 and 60.7 for two, 78.3 and 76.6 for three, 77.8 and 76.3 for four: the
+  saving is smaller than the pictures and the test page's own painting, and the reads a
+  second, the landmarker's time and the delay behind the camera did not move (for four,
+  15.6 and 15.9 reads a second, 45.9 and 47.3 ms, 59 and 60 ms).
+  Measured and left: a corner picture costs about 0.5 ms of CPU every time it is drawn
+  (the camera's 1080p frame into a small canvas is nearly all of it; the 2D drawing on top
+  is under a tenth), 28 ms a second at 60 draws; drawing every other frame took 68 to 62
+  ms of the page thread for four players, but for three or four players the shared
+  picture's wheels change on almost every frame (a column is published for each worker's
+  answer, up to 120 a second), so only the camera's part could be skipped, and for one or
+  two it is under 1% of a core. `Math.hypot` still allocates a number on every call (14%
+  of what is left); `Math.sqrt` of the squares is not the same to the last bit, and the
+  reading must stay what it was.
 
 ## Render (`src/kart/render/`)
 

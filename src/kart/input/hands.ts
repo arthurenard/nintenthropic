@@ -87,20 +87,30 @@ export function fingersOut(world: readonly Landmark[], outRatio: number = GRIP.o
 }
 
 /**
+ * Where a hand's palm is, and nothing else yet (`size` and `fingers` are 0 until `finishReading`): all that is needed to
+ * tell whose column of a shared picture a hand is in, which is asked of every hand in the frame, the other players' too.
+ */
+export function readPalm(hand: SeenHand): HandReading {
+  const centre = palmCentre(hand.landmarks);
+  return { x: 1 - centre.x, y: centre.y, size: 0, fingers: 0 };
+}
+
+/** The rest of a reading begun with `readPalm`, for a hand that counts. */
+export function finishReading(reading: HandReading, hand: SeenHand, aspect: number): HandReading {
+  const wrist = hand.landmarks[0]!;
+  const knuckle = hand.landmarks[9]!;
+  reading.size = Math.hypot((knuckle.x - wrist.x) * aspect, knuckle.y - wrist.y);
+  reading.fingers = fingersOut(hand.world);
+  return reading;
+}
+
+/**
  * Reads a hand. `aspect` is the picture's width over its height: the image
  * points are fractions of each, so a distance only means something once x is
  * stretched back by it.
  */
 export function readHand(hand: SeenHand, aspect: number): HandReading {
-  const centre = palmCentre(hand.landmarks);
-  const wrist = hand.landmarks[0]!;
-  const knuckle = hand.landmarks[9]!;
-  return {
-    x: 1 - centre.x,
-    y: centre.y,
-    size: Math.hypot((knuckle.x - wrist.x) * aspect, knuckle.y - wrist.y),
-    fingers: fingersOut(hand.world),
-  };
+  return finishReading(readPalm(hand), hand, aspect);
 }
 
 /**

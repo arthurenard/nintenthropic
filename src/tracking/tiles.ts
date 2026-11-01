@@ -114,6 +114,24 @@ export function untile(hand: SeenHand, tile: Rect, width: number, height: number
   return { ...hand, landmarks: hand.landmarks.map(place) };
 }
 
+/** A hand found in a tile, put back where it is in the whole picture, with its palm there (in the picture's pixels). */
+export interface Placed {
+  hand: SeenHand;
+  at: ReturnType<typeof palm>;
+}
+
+/**
+ * A tile's hands put back in place. A worker's answer is placed once, when it comes, and joined with the others' as often
+ * as they come (joinPlaced): placing every tile's hands again on every answer cost every landmark of every hand an object
+ * each time, which grew with the square of the players.
+ */
+export function placeHands(hands: readonly SeenHand[], tile: Rect, width: number, height: number): Placed[] {
+  return hands.map((found) => {
+    const hand = untile(found, tile, width, height);
+    return { hand, at: palm(hand, width, height) };
+  });
+}
+
 /**
  * What the tiles found, as one picture's hands: each put back in place, and a
  * hand that two tiles both saw (on a line between them) kept once, the
@@ -122,17 +140,25 @@ export function untile(hand: SeenHand, tile: Rect, width: number, height: number
  * covers. Left to right across the picture.
  */
 export function joinTiles(found: readonly { tile: Rect; hands: readonly SeenHand[] }[], width: number, height: number, fresh = -1): SeenHand[] {
-  const all = found.flatMap(({ tile, hands }, i) => hands.map((hand) => ({ hand: untile(hand, tile, width, height), first: i === fresh ? 1 : 0 })));
-  const kept: { hand: SeenHand; at: ReturnType<typeof palm> }[] = [];
+  return joinPlaced(
+    found.map(({ tile, hands }) => ({ tile, placed: placeHands(hands, tile, width, height) })),
+    fresh,
+  );
+}
+
+/** joinTiles, for hands already put in place (placeHands). */
+export function joinPlaced(found: readonly { tile: Rect; placed: readonly Placed[] }[], fresh = -1): SeenHand[] {
+  const all = found.flatMap(({ placed }, i) => placed.map((one) => ({ one, first: i === fresh ? 1 : 0 })));
+  const kept: Placed[] = [];
   const looked = found[fresh]?.tile;
-  for (const { hand, first } of all.sort((a, b) => b.first - a.first || b.hand.score - a.hand.score)) {
-    const at = palm(hand, width, height);
+  for (const { one, first } of all.sort((a, b) => b.first - a.first || b.one.hand.score - a.one.hand.score)) {
+    const at = one.at;
     // Where the fresh tile has just looked (but for its edges), what it did not see is not there: another tile's older
     // sighting of a hand that has moved since is left out, not kept as a third hand beside the two it found.
     if (looked && !first && at.x > looked.x + at.size / 2 && at.x < looked.x + looked.width - at.size / 2) continue;
     // The same hand if the palms are less than half a hand apart.
     if (kept.some((other) => Math.hypot(other.at.x - at.x, other.at.y - at.y) < 0.5 * Math.max(other.at.size, at.size))) continue;
-    kept.push({ hand, at });
+    kept.push(one);
   }
   return kept.sort((a, b) => a.at.x - b.at.x).map((one) => one.hand);
 }
