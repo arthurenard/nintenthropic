@@ -7,7 +7,7 @@
  * they are ~70 ms behind; the guest's own karts do not pay it (they are
  * predicted, see guest.ts).
  */
-import { TICK, type KartView, type RaceView, type ThingView } from "../contract";
+import { TICK, type KartView, type Race, type RaceView, type ThingView } from "../contract";
 import { clamp, lerp, lerpAngle } from "./util";
 
 /** How far behind the newest snapshot the others are drawn, seconds. */
@@ -17,17 +17,20 @@ const MAX_EXTRAPOLATION = 0.1;
 /** Snapshots kept: about half a second. */
 const KEEP = 16;
 
-/** A view that shares nothing mutable with the sim's. */
-export function cloneView(view: RaceView): RaceView {
-  return {
-    ...view,
-    karts: view.karts.map((k) => ({ ...k })),
-    things: view.things.map((t) => ({ ...t })),
-    events: [],
-  };
+/**
+ * The race's picture now, to keep. A race builds a new picture, karts and things and all, on every call to `view`, so
+ * there is nothing to copy (sim.test.ts holds the sim to that); only the events it hands over with it are dropped,
+ * since the feed tells them.
+ */
+export function pictureOf(race: Race): RaceView {
+  const view = race.view();
+  view.events = [];
+  return view;
 }
 
 function blendKart(a: KartView, b: KartView, f: number): KartView {
+  // A kart that has not moved (on the grid, or waiting for the light) is the newer one as it is.
+  if (a.x === b.x && a.y === b.y && a.z === b.z && a.heading === b.heading) return b;
   return {
     ...b,
     x: lerp(a.x, b.x, f),
@@ -40,6 +43,8 @@ function blendKart(a: KartView, b: KartView, f: number): KartView {
 function blendThing(a: ThingView, b: ThingView, f: number): ThingView {
   // A thing that changed kind or hid between the two is not the same thing: no gliding.
   if (a.kind !== b.kind || !a.active || !b.active) return b;
+  // Nor does one that stands still, which is every item box.
+  if (a.x === b.x && a.y === b.y && a.z === b.z && a.heading === b.heading) return b;
   return {
     ...b,
     x: lerp(a.x, b.x, f),
@@ -50,6 +55,23 @@ function blendThing(a: ThingView, b: ThingView, f: number): ThingView {
 }
 
 /**
+ * Each of `to` blended with the one of the same id in `from`. The two lists nearly always line up (the same karts in
+ * the same order, the same boxes, then whatever is flying), so each is looked at first in its own place; ids are
+ * looked up only once one does not line up.
+ */
+function blendEach<T extends { id: number }>(from: readonly T[], to: readonly T[], f: number, blend: (a: T, b: T, f: number) => T): T[] {
+  let byId: Map<number, T> | undefined;
+  return to.map((item, i) => {
+    let was = from[i];
+    if (was?.id !== item.id) {
+      byId ??= new Map(from.map((other) => [other.id, other]));
+      was = byId.get(item.id);
+    }
+    return was ? blend(was, item, f) : item;
+  });
+}
+
+/**
  * Between two views, `f` of the way from `a` to `b` (0..1): karts' (and
  * things') place and heading blend; everything else is `b`'s, the newer.
  * `f` beyond 1 carries on the same way past `b` (see `SnapshotBuffer.at`).
@@ -57,19 +79,7 @@ function blendThing(a: ThingView, b: ThingView, f: number): ThingView {
 export function blendViews(a: RaceView, b: RaceView, f: number): RaceView {
   if (a === b || f === 1) return b;
   if (f === 0) return a;
-  const before = new Map(a.karts.map((k) => [k.id, k]));
-  const things = new Map(a.things.map((t) => [t.id, t]));
-  return {
-    ...b,
-    karts: b.karts.map((k) => {
-      const was = before.get(k.id);
-      return was ? blendKart(was, k, f) : k;
-    }),
-    things: b.things.map((t) => {
-      const was = things.get(t.id);
-      return was ? blendThing(was, t, f) : t;
-    }),
-  };
+  return { ...b, karts: blendEach(a.karts, b.karts, f, blendKart), things: blendEach(a.things, b.things, f, blendThing) };
 }
 
 interface Frame {

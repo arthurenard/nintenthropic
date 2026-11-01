@@ -23,7 +23,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
@@ -110,6 +110,99 @@ export function encode(message: Message): string {
  */
 export function encodeSnapshot(stateJson: string, race: number, acks: Record<number, number>): string {
   return `{"t":"snap","r":${race},"acks":${JSON.stringify(acks)},"state":${stateJson}}`;
+}
+
+/** The fields of a row are told apart in words of this many bits: a number's bit operations reach 32 and the sign takes one. */
+const WORD = 30;
+/** The widest row a guest will unpack; it does not take the host's word for how wide a table is. */
+const MAX_WIDTH = 1024;
+
+/**
+ * Whether `rows` is a table: at least one row, every row an array of numbers, all of one width.
+ * (`k`, a race's kart table, is one; a stand-in race's snapshot has none.)
+ */
+function isTable(rows: unknown): rows is number[][] {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const width = (rows[0] as unknown[] | undefined)?.length;
+  if (!width || width > MAX_WIDTH) return false;
+  // (Counted loops: `for...of` over a table's numbers boxes every one of them, seven kilobytes a snapshot.)
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] as unknown;
+    if (!Array.isArray(row) || row.length !== width) return false;
+    for (let i = 0; i < width; i++) if (typeof row[i] !== "number") return false;
+  }
+  return true;
+}
+
+/**
+ * A snapshot ready to be written: its kart table `k` (a row of numbers a kart, most of them the same as the kart before
+ * or zero) becomes `kp`, the width and then each row as what differs from the row before it (the first from zeros): a
+ * word of bits for every 30 fields, one bit for each field that differs, then the values of those fields in order.
+ * About a third less to send. `unpackState` gives the table back exactly as `JSON.parse(JSON.stringify(k))` would have it.
+ * A snapshot without such a table is left as it is.
+ */
+export function packState(state: RaceSnapshot): RaceSnapshot {
+  const rows = state.k;
+  if (!isTable(rows)) return state;
+  const width = rows[0]!.length;
+  const words = Math.ceil(width / WORD);
+  const packed: (number | number[])[] = [width];
+  let base: readonly number[] = new Array<number>(width).fill(0);
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]!;
+    // Counted first, so that a row is made once, at its size.
+    let differ = 0;
+    for (let i = 0; i < width; i++) if (row[i] !== base[i]) differ++;
+    const coded = new Array<number>(words + differ);
+    let used = words;
+    for (let word = 0; word < words; word++) {
+      let bits = 0;
+      for (let bit = 0, i = word * WORD; bit < WORD && i < width; bit++, i++) {
+        if (row[i] === base[i]) continue;
+        bits |= 1 << bit;
+        coded[used++] = row[i]!;
+      }
+      coded[word] = bits;
+    }
+    packed.push(coded);
+    base = row;
+  }
+  // (`k` unset is left out of the JSON.)
+  return { ...state, k: undefined, kp: packed };
+}
+
+/**
+ * The snapshot as `packState` wrote it, with its kart table back as `k`; one without a packed table as it came. Null
+ * for one that does not add up (a guest takes nobody's word for a table's shape): it is to be ignored.
+ */
+export function unpackState(state: RaceSnapshot): RaceSnapshot | null {
+  const packed = state.kp;
+  if (packed === undefined) return state;
+  if (!Array.isArray(packed)) return null;
+  const width = packed[0];
+  if (typeof width !== "number" || !Number.isInteger(width) || width < 1 || width > MAX_WIDTH) return null;
+  const words = Math.ceil(width / WORD);
+  const rows: number[][] = [];
+  let base: number[] = new Array<number>(width).fill(0);
+  for (let r = 1; r < packed.length; r++) {
+    const coded = packed[r] as unknown;
+    if (!Array.isArray(coded) || coded.length < words) return null;
+    const row = base.slice();
+    let at = words;
+    for (let word = 0; word < words; word++) {
+      const bits = coded[word];
+      if (typeof bits !== "number") return null;
+      for (let bit = 0, i = word * WORD; bit < WORD && i < width; bit++, i++) {
+        if (((bits >>> bit) & 1) === 0) continue;
+        if (at >= coded.length) return null;
+        row[i] = coded[at++] as number;
+      }
+    }
+    if (at !== coded.length) return null;
+    rows.push(row);
+    base = row;
+  }
+  return { ...state, k: rows, kp: undefined };
 }
 
 /** A message from the wire, or null if it is not one of ours. Never throws. */

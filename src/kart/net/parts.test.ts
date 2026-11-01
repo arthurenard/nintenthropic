@@ -3,7 +3,7 @@
  * grid, the view blending, and the autopilot.
  */
 import { describe, expect, it } from "vitest";
-import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type RaceView } from "../contract";
+import { IDLE_INPUT, MAX_RACERS, TICK, type DriveInput, type KartView, type LobbyPlayer, type LobbyState, type RaceSnapshot, type RaceView } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { MEADOW_LOOP, TRACKS } from "../track/tracks";
 import { Autopilot } from "./autopilot";
@@ -11,8 +11,8 @@ import { TickClock } from "./clock";
 import { CODE_ALPHABET, joinCodeFrom, joinUrl, makeCode, parseCode, peerIdFor } from "./codes";
 import { EventFeed } from "./feed";
 import { gridKart, stepFakeKart } from "./fakeRace";
-import { decode, decodeInput, encode, encodeInput, encodeSnapshot, quantiseInput } from "./protocol";
-import { DEFAULT_SETTINGS, Roster, cleanName, cleanPlayer, mergeSettings } from "./roster";
+import { decode, decodeInput, encode, encodeInput, encodeSnapshot, packState, quantiseInput, unpackState } from "./protocol";
+import { DEFAULT_SETTINGS, Roster, ScreenKarts, cleanName, cleanPlayer, kartsOnScreen, mergeSettings } from "./roster";
 import { BOT_NAMES, buildSetup } from "./setup";
 import { seeded } from "./util";
 import { DisplayClock, RENDER_LAG, SnapshotBuffer, blendViews } from "./view";
@@ -91,6 +91,73 @@ describe("the wire format", () => {
     const state = { tick: 9, karts: [1, 2] };
     const text = encodeSnapshot(JSON.stringify(state), 99, { 3: 17 });
     expect(JSON.parse(text)).toEqual({ t: "snap", r: 99, acks: { 3: 17 }, state });
+  });
+
+  describe("a snapshot's kart table", () => {
+    const wire = (state: RaceSnapshot) => JSON.parse(JSON.stringify(packState(state))) as RaceSnapshot;
+    /** Rows like karts': mostly zeros and repeats, a few floats that change every time, some -1s, a 54-wide row (two words). */
+    const karts = (random: () => number, count: number, width = 54): number[][] =>
+      Array.from({ length: count }, () =>
+        Array.from({ length: width }, (_, i) => (i < 8 ? Math.round(random() * 1e5) / 1e3 - 20 : i % 7 === 0 ? -1 : random() < 0.25 ? Math.floor(random() * 5) : 0)),
+      );
+
+    it("comes back exactly as it would have been sent whole, for any table", () => {
+      const random = seeded(77);
+      for (let i = 0; i < 300; i++) {
+        const k = karts(random, 1 + Math.floor(random() * 12), [1, 5, 29, 30, 31, 54, 60, 61][i % 8]!);
+        // The same row twice, a row of nothing, and every kind of zero.
+        if (k.length > 2) {
+          k[1] = k[0]!.slice();
+          k[2] = k[2]!.map(() => 0);
+          k[0]![0] = -0;
+        }
+        const state = { tick: i, rng: 3, k, eg: [[1, 2]] };
+        const whole = JSON.parse(JSON.stringify(state)) as RaceSnapshot;
+        expect(unpackState(wire(state))).toEqual(whole);
+      }
+    });
+
+    it("is a third smaller than the table sent whole, for a table like a race's", () => {
+      const random = seeded(5);
+      let packed = 0;
+      let whole = 0;
+      for (let i = 0; i < 50; i++) {
+        const k = karts(random, 8);
+        // Four bots with the same bot fields, four players with none.
+        packed += JSON.stringify(packState({ tick: i, k }).kp).length;
+        whole += JSON.stringify(k).length;
+      }
+      expect(packed / whole).toBeLessThan(0.75);
+    });
+
+    it("leaves a snapshot with no table, or an odd one, as it is", () => {
+      const fake = { tick: 4, karts: [{ x: 1 }], places: 0 };
+      expect(packState(fake)).toBe(fake);
+      expect(unpackState(fake)).toBe(fake);
+      for (const k of [[], [[]], [[1, 2], [3]], [[1, "2"]], [[1, null]], "karts", 7, null]) {
+        const odd = { tick: 1, k } as unknown as RaceSnapshot;
+        expect(packState(odd)).toBe(odd);
+      }
+    });
+
+    it("is refused when it does not add up, never read as something else", () => {
+      const good = wire({ tick: 1, k: [[1, 0, 2], [1, 3, 2]] });
+      const kp = good.kp as unknown[];
+      expect(unpackState(good)).toEqual({ tick: 1, k: [[1, 0, 2], [1, 3, 2]] });
+      const bad = (packed: unknown) => unpackState({ tick: 1, kp: packed } as unknown as RaceSnapshot);
+      expect(bad("rows")).toBeNull();
+      expect(bad([])).toBeNull();
+      expect(bad([0, [0]])).toBeNull();
+      expect(bad([2.5, [0]])).toBeNull();
+      expect(bad([1e9, [0]])).toBeNull();
+      // A word missing; a value missing; a value too many; a word that is not a number; a row that is not a row.
+      expect(bad([3, []])).toBeNull();
+      expect(bad([3, [0b101, 7]])).toBeNull();
+      expect(bad([3, [0b001, 7, 8]])).toBeNull();
+      expect(bad([3, ["x", 7]])).toBeNull();
+      expect(bad([3, 5])).toBeNull();
+      expect(bad([...kp, [0, 5]])).toBeNull();
+    });
   });
 });
 
@@ -186,6 +253,28 @@ describe("the roster", () => {
     const first = roster.players();
     first[0]!.name = "Changed";
     expect(roster.players()[0]!.name).toBe("Ann");
+  });
+
+  it("says which karts a screen draws as `kartsOnScreen` does, a new array each time, and again for a new lobby", () => {
+    const lobby = (screens: string[], phase: LobbyState["phase"] = "racing"): LobbyState => ({
+      code: "ABCD",
+      host: "h",
+      players: screens.map((screen, slot) => ({ slot, name: `P${slot}`, colour: "#fff", device: slot === 0 ? "h" : `g${slot}`, screen, control: "keyboard", ready: true })),
+      settings: { ...DEFAULT_SETTINGS },
+      phase,
+      result: null,
+      karts: { 4: 0, 5: 1, 6: 2, 7: 3 },
+    });
+    const screen = new ScreenKarts();
+    const room = lobby(["h", "h", "g2", "h"]);
+    expect(screen.of(room, "h")).toEqual(kartsOnScreen(room, "h"));
+    expect(screen.of(room, "h")).toEqual([4, 5, 7]);
+    const first = screen.of(room, "h");
+    first.push(99);
+    expect(screen.of(room, "h")).toEqual([4, 5, 7]);
+    expect(screen.of(room, "g2")).toEqual([6]);
+    expect(screen.of(lobby(["h", "g1", "g2", "h"]), "h")).toEqual([4, 7]);
+    expect(screen.of(lobby(["h", "h", "g2", "h"], "lobby"), "h")).toEqual([]);
   });
 });
 
@@ -305,6 +394,71 @@ describe("blending views", () => {
     const a = view(0, [{}], { things: [thing(1, 0), thing(2, 0), thing(3, 0)] });
     const b = view(1, [{}], { things: [thing(1, 10), thing(3, 10, { active: false }), thing(4, 7)] });
     expect(blendViews(a, b, 0.5).things.map((t) => t.x)).toEqual([5, 10, 7]);
+  });
+
+  it("hands back what did not move as it is, and still finds a thing whose place in the list changed", () => {
+    const box = (id: number) => ({ id, kind: "box" as const, x: id * 3, y: 1, z: 2, heading: 0.5, active: true });
+    const a = view(0, [{ x: 4 }, { x: 0 }], { things: [box(0), box(1), box(2)] });
+    const b = view(1, [{ x: 4 }, { x: 10 }], { things: [box(1), box(2), { ...box(0), x: 9 }] });
+    const mid = blendViews(a, b, 0.5);
+    // The kart and the boxes that stand still are the newer view's own, not copies.
+    expect(mid.karts[0]).toBe(b.karts[0]);
+    expect(mid.karts[1]).not.toBe(b.karts[1]);
+    expect(mid.karts[1]!.x).toBe(5);
+    expect(mid.things[0]).toBe(b.things[0]);
+    expect(mid.things[1]).toBe(b.things[1]);
+    expect(mid.things[2]!.x).toBe(4.5);
+  });
+
+  it("blends as it always has: karts and things by id, in any order, against a plain version", () => {
+    const random = seeded(31);
+    const plain = (a: RaceView, b: RaceView, f: number): RaceView => {
+      const before = new Map(a.karts.map((k) => [k.id, k]));
+      const things = new Map(a.things.map((t) => [t.id, t]));
+      const glide = <T extends { x: number; y: number; z: number; heading: number }>(was: T, now: T): T => ({
+        ...now,
+        x: was.x + (now.x - was.x) * f,
+        y: was.y + (now.y - was.y) * f,
+        z: was.z + (now.z - was.z) * f,
+        heading: was.heading + Math.atan2(Math.sin(now.heading - was.heading), Math.cos(now.heading - was.heading)) * f,
+      });
+      return {
+        ...b,
+        karts: b.karts.map((k) => (before.has(k.id) ? glide(before.get(k.id)!, k) : k)),
+        things: b.things.map((t) => {
+          const was = things.get(t.id);
+          return was && was.kind === t.kind && was.active && t.active ? glide(was, t) : t;
+        }),
+      };
+    };
+    const kinds = ["box", "puck", "seeker"] as const;
+    const draw = (still: boolean): RaceView => {
+      const ids = [0, 1, 2, 3, 4, 5].filter(() => random() < 0.8).sort(() => random() - 0.5);
+      return view(
+        random(),
+        [0, 1, 2, 3].map((id) => ({ id, x: still ? id : random() * 50, z: still ? 1 : random() * 50, heading: still ? 0.2 : random() * 6 - 3, place: id + 1 })),
+        {
+          things: ids.map((id) => ({ id, kind: kinds[random() < 0.8 ? 0 : 1 + Math.floor(random() * 2)]!, x: still ? 7 : random() * 50, y: 0, z: 3, heading: 0, active: random() < 0.9 })),
+        },
+      );
+    };
+    for (let i = 0; i < 200; i++) {
+      const still = i % 4 === 0;
+      const a = draw(still);
+      const b = draw(still);
+      const f = random() * 1.2;
+      const got = blendViews(a, b, f);
+      const want = plain(a, b, f);
+      // Within rounding: the angles are blended the same way, by a different sum.
+      expect(got.karts.map((k) => k.id)).toEqual(want.karts.map((k) => k.id));
+      for (const [i, k] of got.karts.entries()) {
+        for (const key of ["x", "y", "z", "heading"] as const) expect(k[key]).toBeCloseTo(want.karts[i]![key], 9);
+      }
+      expect(got.things.map((t) => [t.id, t.kind, t.active])).toEqual(want.things.map((t) => [t.id, t.kind, t.active]));
+      for (const [i, t] of got.things.entries()) {
+        for (const key of ["x", "y", "z", "heading"] as const) expect(t[key]).toBeCloseTo(want.things[i]![key], 9);
+      }
+    }
   });
 });
 

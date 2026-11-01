@@ -44,16 +44,17 @@ import {
   decodeInput,
   encode,
   encodeInput,
+  unpackState,
   type StartInfo,
   type ToGuest,
   type ToHost,
   type WireInput,
   type WirePlayer,
 } from "./protocol";
-import { DEFAULT_SETTINGS, kartsOnScreen } from "./roster";
+import { DEFAULT_SETTINGS, ScreenKarts, kartsOnScreen } from "./roster";
 import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, lerp, lerpAngle, token, wrapAngle } from "./util";
-import { DisplayClock, SnapshotBuffer, cloneView } from "./view";
+import { DisplayClock, SnapshotBuffer, pictureOf } from "./view";
 
 const MAX_TICKS_PER_FRAME = 5;
 const MAX_TICKS_HIDDEN = 90;
@@ -139,6 +140,9 @@ export class GuestSession implements Session {
   private own = new Map<number, Own>();
   /** Our karts this screen draws: the ones worth predicting. */
   private shown: number[] = [];
+  private onScreen = new ScreenKarts();
+  /** Our copy of the race as `predict` or `restore` last left it: drawn from many times between ticks, so made once. */
+  private picture: RaceView | null = null;
   private buffer = new SnapshotBuffer();
   private display = new DisplayClock();
   private feed = new EventFeed();
@@ -349,7 +353,8 @@ export class GuestSession implements Session {
     this.lastFrameNow = null;
     this.lostSent = "";
     // Until the first snapshot there is only the grid as it begins.
-    const grid = cloneView(race.view());
+    const grid = pictureOf(race);
+    this.picture = null;
     this.buffer.push(0, grid);
 
     const mine = start.lobby.players.filter((p) => p.device === this.myDevice).map((p) => p.slot);
@@ -379,13 +384,14 @@ export class GuestSession implements Session {
 
   private endRace(): void {
     this.race = null;
+    this.picture = null;
     this.own.clear();
     this.shown = [];
     this.buffer.clear();
   }
 
   views(): number[] {
-    return kartsOnScreen(this.lobbyState, this.myDevice);
+    return this.onScreen.of(this.lobbyState, this.myDevice);
   }
 
   frame(now: number): RaceView | null {
@@ -405,12 +411,12 @@ export class GuestSession implements Session {
 
     let karts = base.karts;
     if (this.shown.length > 0) {
-      const predicted = new Map(race.view().karts.map((k) => [k.id, k]));
+      const predicted = this.ours(race).karts;
       const t = this.env.now();
       const into = stopped ? this.frozenAt : this.clock.fraction;
       karts = base.karts.map((snapshot) => {
         const own = this.own.get(snapshot.id);
-        const mine = predicted.get(snapshot.id);
+        const mine = own ? predicted.find((k) => k.id === snapshot.id) : undefined;
         if (!own || !mine || !this.shown.includes(snapshot.id)) return snapshot;
         const at = this.drawnAt(own, into, t);
         return {
@@ -456,6 +462,11 @@ export class GuestSession implements Session {
     };
   }
 
+  /** Our copy of the race as it stands: asked for once after it changes, however many frames are drawn from it. */
+  private ours(race: Race): RaceView {
+    return (this.picture ??= race.view());
+  }
+
   private fallback(): void {
     const now = this.env.now();
     if (pageHidden() || now - this.lastFrameAt > NO_FRAME_MS) this.advance(now, MAX_TICKS_HIDDEN);
@@ -487,8 +498,9 @@ export class GuestSession implements Session {
     }
     if (packet.length > 0) this.sendToHost({ t: "in", r: this.raceId, k: packet }, "unreliable");
     if (predicted.size > 0) {
-      race.predict([...predicted.keys()], predicted);
-      for (const k of race.view().karts) {
+      race.predict(this.shown, predicted);
+      this.picture = null;
+      for (const k of this.ours(race).karts) {
         const own = this.own.get(k.id);
         if (!own || !predicted.has(k.id)) continue;
         own.prev = own.curr;
@@ -498,10 +510,12 @@ export class GuestSession implements Session {
   }
 
   /** The host's snapshot: take its word, replay what it has not heard yet, and ease out the difference. */
-  private onSnapshot(state: RaceSnapshot, acks: Record<number, number>): void {
+  private onSnapshot(sent: RaceSnapshot, acks: Record<number, number>): void {
     const race = this.race;
-    if (!race || !state || typeof state.tick !== "number") return;
-    if (!this.buffer.accepts(state.tick)) return;
+    if (!race || !sent || typeof sent.tick !== "number") return;
+    if (!this.buffer.accepts(sent.tick)) return;
+    const state = unpackState(sent);
+    if (!state) return;
 
     const t = this.env.now();
     const shown = this.shown.map((k) => this.own.get(k)!);
@@ -511,7 +525,9 @@ export class GuestSession implements Session {
     for (const own of shown) before.set(own.kart, this.drawnAt(own, into, t));
 
     race.restore(state);
-    this.buffer.push(state.tick, cloneView(race.view()));
+    this.picture = null;
+    const restored = pictureOf(race);
+    this.buffer.push(state.tick, restored);
 
     for (const own of this.own.values()) {
       const ack = acks?.[own.kart] ?? 0;
@@ -530,7 +546,9 @@ export class GuestSession implements Session {
       race.predict([...inputs.keys()], inputs);
     }
 
-    for (const k of race.view().karts) {
+    // With nothing to replay, our copy is as the host left it: the picture just taken.
+    this.picture = steps > 0 ? null : restored;
+    for (const k of this.ours(race).karts) {
       const own = this.own.get(k.id);
       const was = before.get(k.id);
       if (!own || !was) continue;

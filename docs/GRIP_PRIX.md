@@ -433,6 +433,73 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   race and their slots free up in the lobby. A fifth player is turned away
   ("This race is full.").
 - **Solo.** `soloSession` is the host without a transport.
+- **The wire** (protocol 6). A snapshot is one JSON line, about 1.1 KB for
+  eight karts: the tick, the dice, the items in the air, the eggs, and the
+  kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
+  lap, the bot's own state...). A kart's row is mostly zeros and what the kart
+  before it has, so the table goes as its first row against zeros and each
+  row after as what differs from the row before it: a word of bits for every
+  30 fields, then the values of the fields that have a bit (`packState`,
+  `unpackState` in `protocol.ts`; the host writes it once for all guests). A
+  guest rebuilds the table exactly as it would have come whole (`sim.test.ts`
+  restores a race from each and runs the two on together); a table that does
+  not add up is dropped like a lost snapshot. A guest of another protocol is
+  refused, as before.
+
+**What the net costs** (2026-11-01). Measured on the real sim over the
+in-memory network: four devices with a player each and four bots (eight karts,
+the most a race holds), 20 s of racing over a line of 20 ms with 8 ms of
+jitter, every message counted at the link. "Before" is main at e18a55e, run
+alternately with this branch on a machine at a load average of 100 to 1000, so
+times are medians of six alternating runs (ranges in brackets) and allocations
+of three; bytes are exact and are the numbers to trust.
+
+| | before → after |
+| --- | --- |
+| a snapshot, 8 karts / 4 karts (bytes) | 1643 → 1080 / 883 → 592 |
+| host to each guest (KB/s; 30 snapshots and 2.5 other messages a second) | 49.3 → 32.4 |
+| host to three guests (KB/s) | 148.4 → 97.7 |
+| a guest to the host, one player (KB/s; 61 messages a second) | 7.5 → 7.5 |
+| a guest taking a snapshot: decode, unpack, restore, replay, picture (µs) | 45.5 → 33.5 (39-106 → 31-58) |
+| restoring one in the guest's race, alone (µs) | 12.5 → 6.5 |
+| a guest's frame: prediction and picture (µs) | 16.5 → 14.0 |
+| a guest's frame, allocated (KB) | 36.6 → 24.1 |
+| a blend of two pictures, allocated (KB) | 9.6 → 4.3 |
+| asking which karts a screen draws, allocated (bytes) | 2137 → 81 |
+| garbage collections in 20 s of the whole room | 39 → 34 |
+
+- **What grows.** A snapshot is about 104 bytes and 122 a kart (123 and 190
+  before): the host's upload is guests × karts × 30 a second, and nothing else
+  in the net grows with either. A guest sends the same 7.5 KB a second whatever
+  the room (18.9 with three players on one device). The playtest pass's five
+  new numbers a kart (49 → 54) added 5% to a snapshot (1560 → 1643 bytes, before
+  it was packed); the wheel's slide rides in a bit of the drift number and added
+  nothing.
+- **Time is small.** The net's share of a host frame is about 1.3 ms a second
+  (it was 1.5), on top of the sim's 3.6; a guest spends about 2 ms a second
+  (it was 2.6). What the net made was garbage: the host and each guest kept a
+  copy of every picture the sim built, a blend made two `Map`s and a copy of
+  every item box each frame, the app asked which karts it draws several times a
+  frame, and a snapshot was read field by field by name. Now a picture is kept
+  as the sim built it (`pictureOf`, which `sim.test.ts` holds the sim to);
+  `blendViews` returns what did not move and looks ids up only when the lists
+  do not line up; a guest asks its own copy of the race for its picture once
+  after it changes; a session works out `views()` once for each lobby
+  (`ScreenKarts`); and `unpackKart` reads by index. Packing the table adds a
+  little garbage back (5 KB a snapshot in the guest). Every view of every
+  device was byte for byte what it was in nine seeded rooms (loss, 30 and
+  144 Hz, three players on a guest, a guest leaving, a pause, a restart), and
+  every message was too until the table was packed.
+- **Left alone.** Halving the inputs to 30 packets a second would halve their
+  bytes and messages and delay a guest's input by half a tick on average at the
+  host: it changes the race. A snapshot against the last one a guest has
+  acknowledged would take about half again off the table, but needs
+  acknowledgements, a snapshot of its own for each guest and a full one when the
+  base is lost; the rest of the table is positions to the millimetre that change
+  every tick. Not ours: `Race.view()` builds all eight karts (8 KB a tick) to
+  give a guest the pose of its own, so a `pose(kart)` on the race would save most
+  of that; and a restore pays `TrackGeometry.at` (2 KB), the eggs' `every` and
+  `updatePlaces`' sort (1 KB) in the sim.
 
 ## Input (`src/kart/input/`, `src/tracking/`)
 
