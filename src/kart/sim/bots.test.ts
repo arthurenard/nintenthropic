@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RaceEvent, RacerSetup, TrackDef } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { HARBOUR_LIGHTS, MEADOW_LOOP, TRACKS } from "../track/tracks";
+import { LOOK_STEPS, roadAhead } from "./bots";
 import { planFor, tableAt, type Corner } from "./plan";
 import { roomField } from "./packStats";
 import { KART_AT } from "./snapshot";
@@ -487,5 +488,23 @@ describe("items with intent", () => {
     const events = run(r, 60 * 3, press(1));
     expect(events.some((e) => e.type === "use" && e.kart === 1)).toBe(true);
     expect(events.some((e) => e.type === "hit" && e.kart === 0)).toBe(false);
+  });
+});
+
+describe("a bot looking ahead for hazards", () => {
+  it("reads the road at each look-ahead step exactly as the track gives it", () => {
+    const into = new Float64Array(LOOK_STEPS.length * 4);
+    for (const track of TRACKS) {
+      const geo = TrackGeometry.build(track);
+      for (const s of [0, 3.7, geo.length * 0.31, geo.length - 2.2]) {
+        for (const speed of [8, 17.3, 31]) {
+          roadAhead(geo, s, speed, into);
+          LOOK_STEPS.forEach((t, step) => {
+            const at = geo.at(s + speed * t);
+            expect([into[4 * step], into[4 * step + 1], into[4 * step + 2], into[4 * step + 3]], `${track.id} ${s} ${speed} ${t}`).toEqual([at.x, at.z, at.tx, at.tz]);
+          });
+        }
+      }
+    }
   });
 });
