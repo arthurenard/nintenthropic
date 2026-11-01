@@ -22,26 +22,100 @@ const BUCKET = 16;
 /** Within this many metres beyond a barrier `beyond` checks the terrain's grid against the road itself; farther out the grid is near enough. */
 const NEAR = 40;
 
+/** What `at` keeps of the centre line's buckets: the stretches that start in one, and the most any of them can matter from afar. */
+interface Bucket {
+  stretches: Int32Array;
+  /** The largest, over its stretches, of `limit` (below). */
+  reach: number;
+}
+
 export class Clearance {
-  /** Indices of the centre line's samples in each bucket. */
-  private readonly buckets = new Map<number, number[]>();
+  /** The buckets in a grid from (`i0`, `j0`), `ni` by `nj`; undefined where no sample of the centre line falls. */
+  private readonly buckets: (Bucket | undefined)[] = [];
+  private readonly i0: number;
+  private readonly j0: number;
+  private readonly ni: number;
+  private readonly nj: number;
   /** The farthest any barrier stands from the centre line (half the widest road and the widest verge). */
   readonly reach: number;
-  private readonly track: TrackGeometry;
-  private readonly features: Features;
+  /**
+   * Each stretch of the centre line, from sample k to the next, as `at` measures it, worked out once: where it starts and
+   * which way it runs, its length, the barriers beside it, half its width, and `limit`, the most that its half width and its
+   * barrier can take off a distance (never more than `reach`): a stretch farther than that cannot make a point nearer.
+   */
+  private readonly ax: Float64Array;
+  private readonly az: Float64Array;
+  private readonly ex: Float64Array;
+  private readonly ez: Float64Array;
+  private readonly len2: Float64Array;
+  private readonly len: Float64Array;
+  private readonly left: Float64Array;
+  private readonly right: Float64Array;
+  private readonly half: Float64Array;
+  private readonly limit: Float64Array;
+  /** The longest stretch: how far one reaches from the bucket its first sample is in. */
+  private readonly slack: number;
 
   constructor(private readonly terrain: Terrain) {
-    const track = (this.track = terrain.track);
-    const features = (this.features = terrain.features);
+    const track = terrain.track;
+    const features = terrain.features;
+    const samples = track.samples;
+    const n = samples.length;
+    this.ax = new Float64Array(n);
+    this.az = new Float64Array(n);
+    this.ex = new Float64Array(n);
+    this.ez = new Float64Array(n);
+    this.len2 = new Float64Array(n);
+    this.len = new Float64Array(n);
+    this.left = new Float64Array(n);
+    this.right = new Float64Array(n);
+    this.half = new Float64Array(n);
+    this.limit = new Float64Array(n);
     let reach = 0;
-    track.samples.forEach((s, i) => {
-      const key = this.key(Math.floor(s.x / BUCKET), Math.floor(s.z / BUCKET));
-      const list = this.buckets.get(key);
-      if (list) list.push(i);
-      else this.buckets.set(key, [i]);
+    let longest = 0;
+    let minI = Infinity;
+    let maxI = -Infinity;
+    let minJ = Infinity;
+    let maxJ = -Infinity;
+    samples.forEach((s, i) => {
       reach = Math.max(reach, s.width / 2 + Math.max(features.wallLeft[i]!, features.wallRight[i]!));
+      minI = Math.min(minI, Math.floor(s.x / BUCKET));
+      maxI = Math.max(maxI, Math.floor(s.x / BUCKET));
+      minJ = Math.min(minJ, Math.floor(s.z / BUCKET));
+      maxJ = Math.max(maxJ, Math.floor(s.z / BUCKET));
     });
     this.reach = reach;
+    for (let k = 0; k < n; k++) {
+      const a = samples[k]!;
+      const b = samples[(k + 1) % n]!;
+      const ex = b.x - a.x;
+      const ez = b.z - a.z;
+      this.ax[k] = a.x;
+      this.az[k] = a.z;
+      this.ex[k] = ex;
+      this.ez[k] = ez;
+      this.len2[k] = ex * ex + ez * ez || 1;
+      this.len[k] = Math.sqrt(this.len2[k]!);
+      this.left[k] = Math.max(features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
+      this.right[k] = Math.max(features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
+      this.half[k] = Math.max(a.width, b.width) / 2;
+      this.limit[k] = Math.min(reach, this.half[k]! + Math.max(this.left[k]!, this.right[k]!));
+      longest = Math.max(longest, this.len[k]!);
+    }
+    this.slack = longest + 1e-6;
+    this.i0 = minI;
+    this.j0 = minJ;
+    this.ni = maxI - minI + 1;
+    this.nj = maxJ - minJ + 1;
+    const lists: number[][] = [];
+    for (let k = 0; k < n; k++) {
+      const s = samples[k]!;
+      const at = (Math.floor(s.x / BUCKET) - minI) * this.nj + (Math.floor(s.z / BUCKET) - minJ);
+      (lists[at] ??= []).push(k);
+    }
+    lists.forEach((list, at) => {
+      this.buckets[at] = { stretches: Int32Array.from(list), reach: Math.max(...list.map((k) => this.limit[k]!)) };
+    });
   }
 
   /**
@@ -55,48 +129,57 @@ export class Clearance {
     return Math.min(grid, this.at(x, z, 0, grid) + 0.5);
   }
 
-  private key(i: number, j: number): number {
-    return i * 100003 + j;
-  }
-
   /**
    * Metres beyond the barrier of the nearest point of a disk of radius `r` round (x, z): negative where any of it is
    * on the road or the verge inside the barrier. Looks no farther than `enough` metres beyond the barriers: a disk
    * farther out than that gets `enough`.
+   *
+   * It looks at the stretches of the centre line near it in the order they are filed, and takes the least. A stretch that
+   * cannot make that least smaller is passed over without working out its distance (a bucket of them by its square, one by
+   * its squared distance), which leaves what is found as it was.
    */
   at(x: number, z: number, r = 0, enough = 40): number {
-    const samples = this.track.samples;
-    const n = samples.length;
     const look = enough + r + this.reach;
     let best = enough;
-    const i0 = Math.floor((x - look) / BUCKET);
-    const i1 = Math.floor((x + look) / BUCKET);
-    const j0 = Math.floor((z - look) / BUCKET);
-    const j1 = Math.floor((z + look) / BUCKET);
+    const i0 = Math.max(this.i0, Math.floor((x - look) / BUCKET));
+    const i1 = Math.min(this.i0 + this.ni - 1, Math.floor((x + look) / BUCKET));
+    const j0 = Math.max(this.j0, Math.floor((z - look) / BUCKET));
+    const j1 = Math.min(this.j0 + this.nj - 1, Math.floor((z + look) / BUCKET));
     for (let i = i0; i <= i1; i++) {
+      // How far this column of buckets is from the point, across.
+      const colX = i * BUCKET;
+      const gx = x < colX ? colX - x : x > colX + BUCKET ? x - colX - BUCKET : 0;
       for (let j = j0; j <= j1; j++) {
-        const list = this.buckets.get(this.key(i, j));
-        if (!list) continue;
-        for (const k of list) {
+        const bucket = this.buckets[(i - this.i0) * this.nj + (j - this.j0)];
+        if (!bucket) continue;
+        const rowZ = j * BUCKET;
+        const gz = z < rowZ ? rowZ - z : z > rowZ + BUCKET ? z - rowZ - BUCKET : 0;
+        // Every stretch that starts in this bucket is within `slack` of its square, so none is nearer than this.
+        const gap = Math.sqrt(gx * gx + gz * gz) - this.slack;
+        if (gap > best + r + bucket.reach + 1e-6) continue;
+        const list = bucket.stretches;
+        for (let q = 0; q < list.length; q++) {
+          const k = list[q]!;
           // The stretch from this sample to the next.
-          const a = samples[k]!;
-          const b = samples[(k + 1) % n]!;
-          const ex = b.x - a.x;
-          const ez = b.z - a.z;
-          const len2 = ex * ex + ez * ez || 1;
-          const f = Math.min(1, Math.max(0, ((x - a.x) * ex + (z - a.z) * ez) / len2));
-          const dx = x - (a.x + ex * f);
-          const dz = z - (a.z + ez * f);
+          const ax = this.ax[k]!;
+          const az = this.az[k]!;
+          const ex = this.ex[k]!;
+          const ez = this.ez[k]!;
+          const f = Math.min(1, Math.max(0, ((x - ax) * ex + (z - az) * ez) / this.len2[k]!));
+          const dx = x - (ax + ex * f);
+          const dz = z - (az + ez * f);
+          const limit = this.limit[k]!;
+          // Too far for its distance to matter: skipped by the squares, with room to spare for the rounding of the exact test.
+          const near = best + r + limit;
+          if (near > 0 && dx * dx + dz * dz > near * near * 1.000001 + 1e-6) continue;
           const d = Math.hypot(dx, dz);
-          if (d - r - this.reach >= best) continue;
+          if (d - r - this.reach >= best || d - r - limit >= best + 1e-9) continue;
           // Which side of the stretch the disk is on (both, when it straddles the line through it).
-          const len = Math.sqrt(len2);
-          const lateral = (dx * -ez + dz * ex) / len;
-          const left = Math.max(this.features.wallLeft[k]!, this.features.wallLeft[(k + 1) % n]!);
-          const right = Math.max(this.features.wallRight[k]!, this.features.wallRight[(k + 1) % n]!);
+          const lateral = (dx * -ez + dz * ex) / this.len[k]!;
+          const left = this.left[k]!;
+          const right = this.right[k]!;
           const wall = Math.abs(lateral) < r ? Math.max(left, right) : lateral > 0 ? right : left;
-          const half = Math.max(a.width, b.width) / 2;
-          best = Math.min(best, d - r - half - wall);
+          best = Math.min(best, d - r - this.half[k]! - wall);
         }
       }
     }
