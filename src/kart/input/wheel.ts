@@ -23,9 +23,9 @@
  */
 import { OneEuroFilter } from "../../input/filter";
 import type { DriveInput, WheelHand, WheelStatus } from "../contract";
-import type { HandFrame } from "../../tracking/types";
+import type { HandFrame, SeenHand } from "../../tracking/types";
 import { Gestures, type GestureHand } from "./gestures";
-import { Grip, readHand, type HandReading } from "./hands";
+import { Grip, finishReading, readPalm, type HandReading } from "./hands";
 import { ShakeCounter } from "./shake";
 
 /** How much turn is full lock: Settings, Steering. */
@@ -131,10 +131,14 @@ export function seatZone(seat: Seat): readonly [number, number] {
  */
 export function readsSeat(frame: HandFrame, seat: Seat | null): boolean {
   if (!frame.read || !seat) return true;
-  const [from, to] = seatZone(seat);
-  // The column's middle in the camera's own picture (the zones are in the mirrored one).
-  const middle = 1 - (from + to) / 2;
-  return frame.read.some(([a, b]) => a <= middle && middle <= b);
+  // The column's middle in the camera's own picture (the zones are in the mirrored one). Asked of every player for every
+  // frame published, so it makes nothing to be thrown away.
+  const middle = 1 - (seat.index / seat.of + (seat.index + 1) / seat.of) / 2;
+  for (let i = 0; i < frame.read.length; i++) {
+    const span = frame.read[i]!;
+    if (span[0] <= middle && middle <= span[1]) return true;
+  }
+  return false;
 }
 
 /** The seat a half is: the left or the right of two. */
@@ -171,6 +175,8 @@ export interface WheelOutput {
 }
 
 type Side = "left" | "right";
+
+const SIDES = ["left", "right"] as const;
 
 /** What the reader remembers of one hand of the wheel. */
 interface Slot {
@@ -251,13 +257,13 @@ export class WheelReader {
     if (!readsSeat(frame, this.seat)) return;
     const t = this.advance(at);
     const seen = this.assign(this.candidates(frame, t), t);
-    for (const side of ["left", "right"] as const) {
+    for (const side of SIDES) {
       const slot = this.slots[side];
       // A hand back after a long absence is a stranger again: no hold against what it was.
       if (seen[side] && t - slot.seenAt > WHEEL.held) slot.grip.reset();
     }
     const before = { left: this.slots.left.grip.state, right: this.slots.right.grip.state };
-    for (const side of ["left", "right"] as const) {
+    for (const side of SIDES) {
       const slot = this.slots[side];
       const reading = seen[side];
       if (!reading) continue;
@@ -267,7 +273,7 @@ export class WheelReader {
     }
     // Grip changes are read once both hands have this frame's, so a flick
     // never sees the other hand a frame out of date.
-    for (const side of ["left", "right"] as const) {
+    for (const side of SIDES) {
       if (seen[side]) this.gripChanged(side, before[side], t);
     }
     if (seen.left || seen.right) this.lastAnySeen = t;
@@ -296,6 +302,20 @@ export class WheelReader {
     const t = this.advance(now);
     this.settle(t);
     return { status: this.statusAt(t), input: this.inputAt(t) };
+  }
+
+  /** Only the input at `now`, which is all the sim asks of it every tick. */
+  input(now: number): DriveInput {
+    const t = this.advance(now);
+    this.settle(t);
+    return this.inputAt(t);
+  }
+
+  /** Only what the camera sees at `now`, which is all the screens ask of it every frame. */
+  status(now: number): WheelStatus {
+    const t = this.advance(now);
+    this.settle(t);
+    return this.statusAt(t);
   }
 
   // ─── The level ────────────────────────────────────────────────────────────
@@ -391,18 +411,19 @@ export class WheelReader {
    * then those nearest the column's middle.
    */
   private candidates(frame: HandFrame, t: number): HandReading[] {
-    const found: { reading: HandReading; follows: number | null }[] = [];
+    const found: { hand: SeenHand; reading: HandReading; follows: number | null }[] = [];
     const seat = this.seat;
     const zone = seat ? seatZone(seat) : null;
     for (const hand of frame.hands) {
-      const reading = readHand(hand, this.aspect);
+      // Where the palm is, first: the frame has every player's hands in it, and a hand in another column goes no further.
+      const reading = readPalm(hand);
       const follows = zone !== null ? this.follows(reading, t) : null;
       if (seat && zone) {
         const grow = follows !== null ? SEAT_MARGIN : -SEAT_MARGIN;
         if (seat.index > 0 && reading.x < zone[0] - grow) continue;
         if (seat.index < seat.of - 1 && reading.x >= zone[1] + grow) continue;
       }
-      found.push({ reading, follows });
+      found.push({ hand, reading, follows });
     }
     if (found.length > 2 && zone) {
       const middle = (zone[0] + zone[1]) / 2;
@@ -412,7 +433,7 @@ export class WheelReader {
         return Math.abs(a.reading.x - middle) - Math.abs(b.reading.x - middle);
       });
     }
-    return found.slice(0, 2).map((one) => one.reading);
+    return found.slice(0, 2).map((one) => finishReading(one.reading, one.hand, this.aspect));
   }
 
   /**
@@ -422,7 +443,7 @@ export class WheelReader {
    */
   private follows(reading: HandReading, t: number): number | null {
     let nearest: number | null = null;
-    for (const side of ["left", "right"] as const) {
+    for (const side of SIDES) {
       const slot = this.slots[side];
       if (!slot.reading || t - slot.seenAt > WHEEL.held) continue;
       const far = this.distance(slot, reading);
