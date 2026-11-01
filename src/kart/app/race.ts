@@ -616,6 +616,11 @@ export class RaceScreen {
   /** The "Show Both Hands" pills, each centred high in the viewport of the player whose hands are gone. */
   private handPills(now: number, lobby: LobbyState, views: readonly number[]): void {
     const ctx = this.ctx!;
+    // `fit` keeps the stage's size once the picture is up; while the race is still loading, it is measured here.
+    if (!this.renderer) {
+      const box = $("race-stage").getBoundingClientRect();
+      this.stage = { w: box.width, h: box.height };
+    }
     const layout = layoutViews(views.length, this.stage.w, this.stage.h);
     const pills: { x: number; y: number; text: string }[] = [];
     views.forEach((kart, i) => {
