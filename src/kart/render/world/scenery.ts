@@ -34,7 +34,7 @@ import { Clearance } from "./clearance";
 import { CulledInstances } from "./cull";
 import { SOLID_MARGIN, WALL_DISTANCE } from "./features";
 import { hasSceneryArt, sceneryVariants } from "./sceneryArt";
-import type { BakeUniforms } from "./shading";
+import { twinOf, type BakeUniforms } from "./shading";
 import { landmarkFromArt } from "./landmarks/fromArt";
 import { bake, type KeepOut } from "./landmarks/place";
 import * as props from "./props";
@@ -235,9 +235,25 @@ export function buildScenery(
       if (drop > STEEPEST * height * it.sy) continue;
       clear.push(drop > 0 ? { ...it, y: it.y - drop } : it);
     }
-    const mesh = instancedMesh(geometry, mat, clear);
+    const mesh = instancedMesh(geometry, twin(mat, clear.some((it) => it.colour !== undefined)), clear);
     if (mesh) culls.push(new CulledInstances(mesh));
     return mesh;
+  };
+  /**
+   * The scenery's material is the track decoration's too, and plain meshes and instances (with colours, or without) are drawn
+   * one after the other in a view: each kind of instanced mesh draws with a twin of its own (shading.ts, `twinOf`).
+   */
+  const twins = new Map<Material, (Material | undefined)[]>();
+  const twin = (mat: Material, coloured: boolean): Material => {
+    const mine = twins.get(mat) ?? [];
+    twins.set(mat, mine);
+    const k = coloured ? 1 : 0;
+    if (!mine[k]) {
+      const t = twinOf(mat);
+      mine[k] = t;
+      disposables.push(() => t.dispose());
+    }
+    return mine[k]!;
   };
   const add = (o: Object3D | null) => {
     if (o) group.add(o);

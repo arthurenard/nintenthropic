@@ -10,6 +10,38 @@ import { KartSpace } from "./kartSpace";
 import { Terrain } from "./terrain";
 import { styleFor } from "./themes";
 
+/** `Clearance.at` as it was first written: every stretch of every bucket in reach, its distance worked out in full. */
+function plainAt(terrain: Terrain, buckets: Map<number, number[]>, reach: number, x: number, z: number, r: number, enough: number): number {
+  const samples = terrain.track.samples;
+  const features = terrain.features;
+  const n = samples.length;
+  const look = enough + r + reach;
+  let best = enough;
+  for (let i = Math.floor((x - look) / 16); i <= Math.floor((x + look) / 16); i++) {
+    for (let j = Math.floor((z - look) / 16); j <= Math.floor((z + look) / 16); j++) {
+      for (const k of buckets.get(i * 100003 + j) ?? []) {
+        const a = samples[k]!;
+        const b = samples[(k + 1) % n]!;
+        const ex = b.x - a.x;
+        const ez = b.z - a.z;
+        const len2 = ex * ex + ez * ez || 1;
+        const f = Math.min(1, Math.max(0, ((x - a.x) * ex + (z - a.z) * ez) / len2));
+        const dx = x - (a.x + ex * f);
+        const dz = z - (a.z + ez * f);
+        const d = Math.hypot(dx, dz);
+        if (d - r - reach >= best) continue;
+        const len = Math.sqrt(len2);
+        const lateral = (dx * -ez + dz * ex) / len;
+        const left = Math.max(features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
+        const right = Math.max(features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
+        const wall = Math.abs(lateral) < r ? Math.max(left, right) : lateral > 0 ? right : left;
+        best = Math.min(best, d - r - Math.max(a.width, b.width) / 2 - wall);
+      }
+    }
+  }
+  return best;
+}
+
 /** How far (metres) the two may differ: the sim measures from the curve through the samples, clearance.ts from the straight between them. */
 const SLACK = 0.15;
 
@@ -54,6 +86,35 @@ describe("how far beyond the barrier a point is (clearance.ts)", () => {
           if (least > 10) continue;
           expect(clearance.at(x, z, r, 30), `${def.id} ${tier}: a footprint of ${r.toFixed(1)} m at (${x.toFixed(1)}, ${z.toFixed(1)})`).toBeLessThanOrEqual(least + SLACK);
         }
+      }
+    }, 120_000);
+  }
+});
+
+// Worked out stretch by stretch with the far ones passed over, it has to give exactly what looking at all of them gives:
+// the scenery and the tufts stand where it says, and a different last digit could move one.
+describe("the search for the nearest stretch (clearance.ts)", () => {
+  const defs: TrackDef[] = [...TRACKS, ...TRACKS.map(mirrorTrack), ...DEV_TRACKS];
+  for (const def of defs) {
+    it(`${def.id}: gives the very answer of the plain search, for points, footprints and every horizon`, () => {
+      const geo = TrackGeometry.build(def);
+      const terrain = Terrain.build(geo, styleFor(def.theme), QUALITY.high.cell);
+      const clearance = new Clearance(terrain);
+      const buckets = new Map<number, number[]>();
+      let reach = 0;
+      geo.samples.forEach((s, i) => {
+        const key = Math.floor(s.x / 16) * 100003 + Math.floor(s.z / 16);
+        buckets.set(key, [...(buckets.get(key) ?? []), i]);
+        reach = Math.max(reach, s.width / 2 + Math.max(terrain.features.wallLeft[i]!, terrain.features.wallRight[i]!));
+      });
+      const rnd = seededRandom(def.id.length * 17 + 5);
+      const near = pointsNear(geo, 700, 3);
+      // And some from anywhere on the map, mostly far from the road.
+      for (let k = 0; k < 150; k++) near.push([terrain.minX + rnd() * (terrain.maxX - terrain.minX), terrain.minZ + rnd() * (terrain.maxZ - terrain.minZ)]);
+      for (const [x, z] of near) {
+        const r = rnd() < 0.4 ? 0 : 0.3 + rnd() * 7;
+        const enough = [1, 8, 30, 40, terrain.clearAt(x, z)][Math.floor(rnd() * 5)]!;
+        expect(clearance.at(x, z, r, enough), `${def.id} at (${x.toFixed(2)}, ${z.toFixed(2)}) r ${r.toFixed(2)} enough ${enough.toFixed(2)}`).toBe(plainAt(terrain, buckets, reach, x, z, r, enough));
       }
     }, 120_000);
   }

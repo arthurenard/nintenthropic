@@ -360,6 +360,44 @@ The numbers (all in `sim/tuning.ts`):
 milliradians; under 3 KB for eight karts). `predict(karts, inputs)` steps
 only those karts' physics against the world as it is.
 
+**What a step costs.** Measured in Node on the M4 Max with `process.cpuUsage`, not the clock: eight karts (four of them
+people's, handed to the bots to drive), a race of 5,400 ticks on each track, every second of it taken at the least of three
+runs (a busy machine only ever adds time to work that is the same every run), medians of three alternating processes, this
+checkout and the one before it. The machine's load moved the figures by up to a factor of two between half hours, so read
+each pair and not the column. A tick of eight karts takes 20 to 36 µs on Meadow Loop, which has no hazards, and 50 to 58 µs on
+the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame. `view()` is 2 to 4 µs, `snapshot()` 2 to 9,
+`result()` 0.1. The garbage a tick is counted by the scavenges of a 1 MB young generation (a scavenge, a megabyte), over
+6,000 ticks.
+
+| track | µs a tick before → after | KB of garbage a tick before → after |
+| --- | --- | --- |
+| Meadow Loop (no hazards) | 33 → 36 | 44 → 44 |
+| Kitchen Rally | 128 → 55 | 249 → 62 |
+| Harbour Lights | 73 → 58 | 142 → 66 |
+| Canyon Run | 95 → 54 | 201 → 71 |
+| Fun Fair | 124 → 58 | 195 → 60 |
+| Glacier Pass | 129 → 56 | 253 → 63 |
+| Volcano Rush | 190 → 58 | 303 → 65 |
+| Starlight Ribbon | 123 → 57 | 138 → 56 |
+| Five Finger Circuit | 132 → 50 | 234 → 73 |
+
+- *The hazard dodge* (`bots.ts`) was the whole of the difference. Each tick a bot asks whether a hazard is coming and, if the
+  way is not clear, tries 44 places across the road (four speeds, eleven shifts), 2.6 s ahead in steps of 0.15 s, asking
+  each time where each hazard will be and where the road is. But where a hazard is, is the same for every bot and every
+  place it tries, and the road ahead is the same for every shift at one speed. So each hazard's poses are worked out once a
+  tick, when the first bot looks at it (`hazardPoses`), the road once for each speed (`roadAhead`, read without making a
+  track sample; `bots.test.ts` holds it exactly equal to `TrackGeometry.at`), and a hazard plainly out of reach is not
+  measured with a square root. The garbage fell furthest, since a try was made of small objects (a pose of a dozen
+  numbers, a sample of ten, a point of three). It is exact: a whole race on each of the nine tracks, a hash of each second's
+  snapshot, every event and the last view and result, ends the same as before.
+- *Planning that could be done once a lap.* The plan of a track (its bends, the speeds it allows, the lines) is built once
+  and kept (`planFor`). What a bot rolls for a bend each lap (`takeOf`: how deep it cuts, where it brakes, whether it
+  makes a mistake) is a handful of hashes, worked out again every tick for the bend the kart is in and those its aim
+  is in; with `bendNear` it is 6% of a step, a microsecond or two, and not cached.
+- *Not done, measured.* The rest of a step is the physics and the 81-sample search for where each kart is on the road
+  (`project`, a tenth of a step, in the geometry); Meadow Loop's 44 KB a tick of garbage is the bots' per-tick objects (the
+  input handed to the kart, the bends it is near and how it takes them, the fight), 2.6 MB a second at 60 Hz.
+
 ## Net (`src/kart/net/`)
 
 - **Transport.** One interface, three makers: PeerJS (WebRTC data channels;
@@ -395,6 +433,73 @@ only those karts' physics against the world as it is.
   race and their slots free up in the lobby. A fifth player is turned away
   ("This race is full.").
 - **Solo.** `soloSession` is the host without a transport.
+- **The wire** (protocol 6). A snapshot is one JSON line, about 1.1 KB for
+  eight karts: the tick, the dice, the items in the air, the eggs, and the
+  kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
+  lap, the bot's own state...). A kart's row is mostly zeros and what the kart
+  before it has, so the table goes as its first row against zeros and each
+  row after as what differs from the row before it: a word of bits for every
+  30 fields, then the values of the fields that have a bit (`packState`,
+  `unpackState` in `protocol.ts`; the host writes it once for all guests). A
+  guest rebuilds the table exactly as it would have come whole (`sim.test.ts`
+  restores a race from each and runs the two on together); a table that does
+  not add up is dropped like a lost snapshot. A guest of another protocol is
+  refused, as before.
+
+**What the net costs** (2026-11-01). Measured on the real sim over the
+in-memory network: four devices with a player each and four bots (eight karts,
+the most a race holds), 20 s of racing over a line of 20 ms with 8 ms of
+jitter, every message counted at the link. "Before" is main at e18a55e, run
+alternately with this branch on a machine at a load average of 100 to 1000, so
+times are medians of six alternating runs (ranges in brackets) and allocations
+of three; bytes are exact and are the numbers to trust.
+
+| | before → after |
+| --- | --- |
+| a snapshot, 8 karts / 4 karts (bytes) | 1643 → 1080 / 883 → 592 |
+| host to each guest (KB/s; 30 snapshots and 2.5 other messages a second) | 49.3 → 32.4 |
+| host to three guests (KB/s) | 148.4 → 97.7 |
+| a guest to the host, one player (KB/s; 61 messages a second) | 7.5 → 7.5 |
+| a guest taking a snapshot: decode, unpack, restore, replay, picture (µs) | 45.5 → 33.5 (39-106 → 31-58) |
+| restoring one in the guest's race, alone (µs) | 12.5 → 6.5 |
+| a guest's frame: prediction and picture (µs) | 16.5 → 14.0 |
+| a guest's frame, allocated (KB) | 36.6 → 24.1 |
+| a blend of two pictures, allocated (KB) | 9.6 → 4.3 |
+| asking which karts a screen draws, allocated (bytes) | 2137 → 81 |
+| garbage collections in 20 s of the whole room | 39 → 34 |
+
+- **What grows.** A snapshot is about 104 bytes and 122 a kart (123 and 190
+  before): the host's upload is guests × karts × 30 a second, and nothing else
+  in the net grows with either. A guest sends the same 7.5 KB a second whatever
+  the room (18.9 with three players on one device). The playtest pass's five
+  new numbers a kart (49 → 54) added 5% to a snapshot (1560 → 1643 bytes, before
+  it was packed); the wheel's slide rides in a bit of the drift number and added
+  nothing.
+- **Time is small.** The net's share of a host frame is about 1.3 ms a second
+  (it was 1.5), on top of the sim's 3.6; a guest spends about 2 ms a second
+  (it was 2.6). What the net made was garbage: the host and each guest kept a
+  copy of every picture the sim built, a blend made two `Map`s and a copy of
+  every item box each frame, the app asked which karts it draws several times a
+  frame, and a snapshot was read field by field by name. Now a picture is kept
+  as the sim built it (`pictureOf`, which `sim.test.ts` holds the sim to);
+  `blendViews` returns what did not move and looks ids up only when the lists
+  do not line up; a guest asks its own copy of the race for its picture once
+  after it changes; a session works out `views()` once for each lobby
+  (`ScreenKarts`); and `unpackKart` reads by index. Packing the table adds a
+  little garbage back (5 KB a snapshot in the guest). Every view of every
+  device was byte for byte what it was in nine seeded rooms (loss, 30 and
+  144 Hz, three players on a guest, a guest leaving, a pause, a restart), and
+  every message was too until the table was packed.
+- **Left alone.** Halving the inputs to 30 packets a second would halve their
+  bytes and messages and delay a guest's input by half a tick on average at the
+  host: it changes the race. A snapshot against the last one a guest has
+  acknowledged would take about half again off the table, but needs
+  acknowledgements, a snapshot of its own for each guest and a full one when the
+  base is lost; the rest of the table is positions to the millimetre that change
+  every tick. Not ours: `Race.view()` builds all eight karts (8 KB a tick) to
+  give a guest the pose of its own, so a `pose(kart)` on the race would save most
+  of that; and a restore pays `TrackGeometry.at` (2 KB), the eggs' `every` and
+  `updatePlaces`' sort (1 KB) in the sim.
 
 ## Input (`src/kart/input/`, `src/tracking/`)
 
@@ -485,6 +590,61 @@ only those karts' physics against the world as it is.
 - **The dev page** `src/kart/input/dev.html`: the camera, the preview, and the
   numbers (angle, steer, grip, mode, drift, item presses, shakes, frame rate), with
   the Steering setting. The first thing to try with real hands.
+- **What reading the hands costs the page** (2026-11-01, after the playtest pass, the
+  sound pass and the open-hand drift; `tools/perf/input.mjs` for the page's JavaScript
+  in node, `tracking.mjs` for the page in Chrome). The page's side
+  of reading is small, and none of it was the open-hand drift's or the sound's: the
+  wheel reader alone, four players, cost 1.64 ms of CPU a second of play at dc83280, the
+  commit before them, and 1.32 at main (medians of five alternating rounds), and
+  allocated 1863 and 1827 KB a second. Handing a camera frame to the workers
+  (`LaneTracker.read`) is 0.1 ms of the page thread at one to four players (a
+  `VideoFrame` cut to each column with `visibleRect`, no copy), and no frame is left open:
+  `tools/perf/frames.mjs` counts the ones a page and its workers leave open (a frame
+  garbage collected unclosed is only a console warning, too late and too rare to count
+  on), and found none in a run of two players, while a worker made to leave its frames
+  open showed 378 in the same twenty seconds. What did grow with the players, and with their
+  square, was everything after it: each worker's answer was put back in place in the
+  picture with every other column's last answer (an object for every landmark of every
+  hand, again, each time), and every player's wheel was handed every published frame and
+  worked out the fingers of all the hands in it, the other players' too. Now an answer is
+  placed once, when it comes (`placeHands`, `joinPlaced`), the columns are worked out when
+  the picture's size changes, a reader looks at where a hand's palm is before anything
+  else and reads the fingers and size of its own two (`readPalm`, `finishReading`), and the
+  sim's sample and the screens' status each build only what they hand back
+  (`WheelReader.input`, `status`). Page thread CPU and garbage a second of play, the
+  tracker, the wheels, the sim's 60 samples and a status a frame (`input.mjs --against`,
+  medians of seven alternating rounds; the numbers of a busy machine, trust the ratios):
+
+  | players | before | after |
+  | --- | --- | --- |
+  | 1 | 0.83 ms, 560 KB | 0.48 ms, 523 KB |
+  | 2 | 1.68 ms, 1538 KB | 1.88 ms, 1112 KB |
+  | 3 | 4.07 ms, 3302 KB | 2.88 ms, 1899 KB |
+  | 4 | 8.11 ms, 7062 KB | 4.46 ms, 3263 KB |
+
+  (The milliseconds of one and two players are within the noise: the same two players read
+  1.72 and 1.55 ms with the sim's samples and statuses left out. The garbage is not.)
+
+  Just as before: random plays of one to four players (fists, open hands, item
+  flicks, claps, cheers, shakes, hands lost and found, strangers, misses; 56 plays of
+  twelve seconds) through the tracker, the wheels and the sim's samples give the same
+  published frames, inputs, statuses and finger counts to the last digit
+  (`input.mjs --same`). In Chrome, with a camera picture, the wheels and their corner
+  pictures drawn as a race draws them (`tracking.mjs --bases --wheels`, medians of three
+  alternating rounds), the page thread is 51.4 and 51.3 ms of CPU a second for one
+  player, 60.4 and 60.7 for two, 78.3 and 76.6 for three, 77.8 and 76.3 for four: the
+  saving is smaller than the pictures and the test page's own painting, and the reads a
+  second, the landmarker's time and the delay behind the camera did not move (for four,
+  15.6 and 15.9 reads a second, 45.9 and 47.3 ms, 59 and 60 ms).
+  Measured and left: a corner picture costs about 0.5 ms of CPU every time it is drawn
+  (the camera's 1080p frame into a small canvas is nearly all of it; the 2D drawing on top
+  is under a tenth), 28 ms a second at 60 draws; drawing every other frame took 68 to 62
+  ms of the page thread for four players, but for three or four players the shared
+  picture's wheels change on almost every frame (a column is published for each worker's
+  answer, up to 120 a second), so only the camera's part could be skipped, and for one or
+  two it is under 1% of a core. `Math.hypot` still allocates a number on every call (14%
+  of what is left); `Math.sqrt` of the squares is not the same to the last bit, and the
+  reading must stay what it was.
 
 ## Render (`src/kart/render/`)
 
@@ -627,7 +787,23 @@ heard and let go after half a second of silence, and is told only what has moved
   boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
   over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
   whole mix −18.1 LUFS (true peak −2.4 dBTP), the effects −19.7 (−21.8 before the engines were remade) and the music
-  −22.9; each place alone −34 to −36. The audio code takes about 0.03 ms a frame (0.06 with four views).
+  −22.9; each place alone −34 to −36.
+- **What it costs.** Measured over a race of eight bots on Kitchen Rally with four views (Meadow Loop with one), against
+  a bus that only counts, in Node on the M4 Max: the audio code takes 0.011 ms a frame with four views and 0.007 with one
+  (CPU time, the least of three runs for each second of the race, medians of three alternating runs of the checkout
+  before and this one; 0.017 and 0.010 before). In the page it is about 0.1 ms, nine tenths of it the browser's own
+  Web Audio calls: fifteen loops steered a frame with four views, six with one, each a few `AudioParam` changes, and
+  only what has moved is sent. Four views and eight bots run at most 30 steered loops at once (22 on average: four
+  engines' two layers and rasp, the tyres and the wind of each player, the rivals' layers, the place's beds), four
+  nodes each (the source, the air's low-pass, a gain, a panner), beside the one-shots and the music: at most 202 Web
+  Audio nodes alive (116 on average) in the offline render, 130 (75) with one view. All are let go: 50 s of four views
+  made 1,975 nodes and let go 1,942, the 33 left being the buses (in real time a stopped loop's nodes stay a fade-out
+  longer, 0.15 to 0.3 s). Its garbage a frame, by scavenges of a 1 MB young generation: 37 KB with four views, 25 after
+  RaceAudio stopped working out, for every item box on the road and every kart that makes no sound, who hears it. The
+  sound is the same: the calls made to the audio engine over seven races (every loop started, every `set`, every
+  one-shot, with all their numbers) hash the same before and after. A render with `tools/listen` cannot show it
+  bit for bit (the takes are made in workers, so two renders of one checkout differ); the loudness, range, peak,
+  brightness and width of the Kitchen Rally render, before and after, are in `compare.mjs`.
 - **Listening without hearing.** `node tools/listen/render.mjs --label <name>` renders scripted scenes (one kart of
   each weight through everything, karts going by, a pack of eight, the moments, each place alone) and real races of
   bots through the real engine and `RaceAudio` on an `OfflineAudioContext`, in a muted headless Chrome, writes them to
@@ -650,8 +826,13 @@ a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels
   configuration measured 190 and 275 fps an hour apart); `--cpu n` slows the page's main thread; `--soft` draws on a
   software GPU, where every triangle and pixel costs.
 - `same.mjs`: proves an optimisation leaves the picture alone (the same moment redrawn through the post chain with it
-  off and on, canvases compared). `shots.mjs`: the same posed still from two dev pages at each tier, with the
-  difference in 8-bit levels.
+  off and on, canvases compared); with `--against URL` it compares this dev page with another checkout's instead, the
+  same race stepped a sixtieth of a second at a time (`?manual=1`, `Math.random` and the page's clock fixed) and the
+  canvases compared byte for byte at frames 150, 500, 900 and 1500. `shots.mjs`: the same posed still from two dev pages
+  at each tier, with the difference in 8-bit levels.
+- `calls.mjs`: what a frame's draw calls are: one frame of the stepped race, each kind of object drawn (where it hangs
+  in the scene, the kind of mesh and material), how many times in the views and in their shadow passes, and a total for
+  each view. Calls and triangles are counted, so unlike a frame time they do not move with the machine's load.
 - `tracking.mjs`: the hand tracker for 1 to 4 players on one camera (`e2e/tracker.html`), before and after the workers
   per player. `trackrace.mjs`: the tracker beside a race (`e2e/trackrace.html`), 1 to 4 players each beside as many
   views, before and after, alternating rounds (`--rounds n`), `--soft` on a software GPU. Their pictures: a hand photo
@@ -854,6 +1035,47 @@ seven times (high; five on medium; it is off on low and while not boosting, one 
 time, CPU and GPU within the noise (which was ±15 to 45% between runs of the same page); an A/B of the rush alone on one
 frame redrawn could not be read at that load (the same frame took 3 to 25 ms of post). To measure on a quiet machine.
 
+**The playtest pass, measured and trimmed** (2026-11-01; `bench.mjs --bases` against dc83280, then against origin/main,
+high tier, resolution pinned, medians of 3 and 5 alternating rounds on a machine at a load average of 100 to 1000, where
+milliseconds moved ±15 to 45% and counts did not). The pass, 2026-10-30 against dc83280, changed no frame time that
+could be told from the noise, no program (85 to 87 on both) and no texture memory (218 MB, 235 MB of targets). It cost
+draw calls (meadow-loop, 4 views, 613 to 642; canyon-run 562 to 633: the reshaped tracks and the new scenery rules, the
+bench's races not being the same moment), 9 to 19% more garbage a frame (canyon-run, 4 views, 331 to 368 KB; 1 view 123 to
+139), and a first frame 0.35 to 0.7 s later (canyon-run, 4 views, 2.6 to 3.1 s). Triangles stayed within 6%.
+
+- *Three rebuilt a material's program all the time* (found by counting, in a scratch copy of three, why `setProgram` asked
+  for a program): three sorts draws by material and, each time the next draw is of another kind, works the program out
+  afresh (the parameters, a long cache key), which was a third to a half of a frame's garbage. Two causes, both older than the
+  pass. The decoration's material was drawn by plain meshes and by instanced scenery with and without a colour each, and
+  the flower stems shared the tufts' material: four rebuilds a view a frame. Each kind now draws with a twin of the material
+  (`twinOf` in `shading.ts`: the same patches, program key and uniforms, a material of its own). And a transparent
+  double-sided material (the glass of a landmark, a hazard's steam) is drawn by three in two passes, back faces and front,
+  by setting `side` and `needsUpdate` twice, so each pass works the program out again: 2 to 54 times a frame in four views
+  (27 objects in sight on Canyon Run, 22 on Glacier Pass, 21 on Starlight Ribbon, 1 to 2 on Meadow Loop). The world's
+  glass now draws as two materials in the geometry's two groups (`twoPass.ts`): the same two draws, back then front, in
+  the same place in the sort. Rebuilds a frame in four views, canyon-run: 73 to 0. Garbage a frame (heap sampling,
+  stepped race, 600 frames, 4 views): canyon-run 684 to 353 KB, starlight-ribbon 551 to 372; `bench.mjs --bases`, medians
+  of 5: canyon-run 155 to 140 KB with one view and 418 to 309 with four, glacier-pass 209 to 188 and 708 to 469,
+  meadow-loop 126 to 108 and 369 to 297, five-finger-circuit 264 to 218 and 538 to 408. Main-thread CPU, `Profiler`
+  over 400 stepped frames, 4 views, medians of 4 alternating rounds: `getProgram` 0.51 to 0 ms (canyon-run) and 0.50 to 0
+  (glacier-pass); `renderer.frame` 5.02 to 4.61 ms and 5.49 to 4.99 (the minimums did not agree: ±15%).
+- *The scatter at load* (`Clearance.at`, which the pass added for the tufts and the scenery): 450 ms of Canyon Run's 2.2 s
+  load, a fifth of it, from a distance worked out to every stretch of road near each candidate. Stretches and buckets that
+  cannot make the answer smaller are now passed over by their squared distance, with exactly the answer it gave (a test holds
+  it to the plain search on every track, mirror and dev track, `toBe`). 30 000 candidates round the road: Canyon Run 170 to
+  290 ms before, 35 after; Meadow Loop 114 to 176 before, 33 to 97 after. The first frame came 11 to 27% earlier with four
+  views in the bench (meadow-loop 3.6 to 2.7 s, five-finger-circuit 3.0 to 2.4, canyon-run 3.3 to 2.6) and 1 to 17% earlier
+  with one (the noise is as big as the smaller of those).
+- Pictures: `same.mjs --against origin/main`, byte for byte, at frames 150, 500, 900 and 1500 of the same race: identical on
+  all nine tracks, 1 and 4 views, high tier (the twins and the glass); identical again with `Clearance` on three tracks.
+  No sound, sim or tuning code touched.
+- *Not worth it, measured*: tracks cut into chunks of 96 m instead of 48 m. A view draws a chunk each of road, decoration
+  and verge, so draw calls fell 5 to 14% (canyon-run 708 to 617 with four views, meadow-loop 1009 to 951, glacier-pass 877
+  to 831, five-finger-circuit 673 to 627; the pictures identical), but triangles rose 0.2 to 4% and the main thread did not
+  come out quicker in three alternating rounds. Left at 48.
+- *Known, and outside `render/`*: `TrackGeometry.project` is a search along the whole line; the landmarks' placement
+  calls it for 330 to 370 ms of every Canyon Run load. A bucket search that keeps the answer would take most of it.
+
 **Not done yet.** Photo portraits for the driver picker where the room's race is on the host's screen (a phone then loads no
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
@@ -972,6 +1194,25 @@ race instead of a world frozen without a word (`net/guest.ts` `QUIET_MS`).
 The landing (`index.html`) gives Grip Prix a tile of its own beside Finger
 Guns, and its Race opens this page; in `src/games/index.ts` Grip Prix is a
 `GameEntry` with `page: "race.html"` and no `create`.
+
+**What the race screen does a frame** (the real page in headless Chrome on Metal, four players on one camera and four
+views, 1440x900 at 2x, a CDP profile of the main thread over 6 to 8 s, the checkout before and this one alternating,
+four rounds each; this machine's load made the milliseconds move by a third between runs of one page, so the counts
+below are the ones to trust). The main thread is busy 9 to 12 ms a frame; the picture takes 9 to 10 of them
+(`renderer.frame`), the room 0.2 to 0.3 (the host's tick, the sim's step inside it), the sound 0.1 to 0.3 (see "Sound"),
+the HUD 0.1 to 0.3, and the screen's own work between them under 0.05. The HUD changes the page's DOM 0.4 attributes
+and under two text nodes a frame with four views (the clock's tenths; `update` writes only what has changed, and an
+unchanged style value costs 0.1 µs to set again, so nothing there is worth guarding), and 146 µs of script a frame, three
+quarters of it the minimap's dots (`minimap.ts`: the `ctx.font` for a place in a dot makes the browser bring the page's
+styles up to date in the middle of the HUD's update, once a frame, which is why the HUD's time moves with what else
+changed the page since the last frame). What the screen itself did that it need not was one thing: the Show Both Hands
+pills measured the stage with `getBoundingClientRect` on every frame, which flushed styles and layout at the top of the
+frame and left the HUD's own flush to do it again (1.14 and 1.20 style recalculations a frame; 0.10 to 0.15 ms in the
+pills' code). The stage is now measured when it is resized (`fit`), the room's viewports are asked for once a frame
+(`kartsOnScreen` builds its list each time it is asked: three times before), and what each kart drives with is worked
+out when the lobby changes and not every frame: 1.0 style recalculation a frame (1.01, 1.00 in two runs) and 0.002 to
+0.016 ms in the pills' code. The flush that remains is the one the page must make once a frame; the style time in all
+(0.17 to 0.19 ms a frame) did not move.
 
 ## Tests
 

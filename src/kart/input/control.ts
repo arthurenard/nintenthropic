@@ -71,11 +71,11 @@ export function wheelControl(source: HandSource, options: WheelControlOptions = 
     reader,
     sample(): DriveInput {
       keepAspect();
-      return reader.sample(clock()).input;
+      return reader.input(clock());
     },
     get wheel(): WheelStatus {
       keepAspect();
-      return reader.sample(clock()).status;
+      return reader.status(clock());
     },
     get steering() {
       return reader.steering;

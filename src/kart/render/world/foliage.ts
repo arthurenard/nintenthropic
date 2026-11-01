@@ -33,7 +33,7 @@ import { Clearance } from "./clearance";
 import { CulledInstances } from "./cull";
 import { WALL_DISTANCE } from "./features";
 import type { KeepOut } from "./landmarks/place";
-import { bakedLit, type BakeUniforms } from "./shading";
+import { bakedLit, twinOf, type BakeUniforms } from "./shading";
 import type { Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 
@@ -291,7 +291,10 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
   if (flowerSpots.length > 0) {
     const parts = flowerParts();
     disposables.push(parts.stem, parts.petals);
-    const stems = new InstancedMesh(parts.stem, material, flowerSpots.length);
+    // The stems have no colour of their own, the tufts and petals have: a twin, so that the material does not change kind in between.
+    const stemMaterial = twinOf(material);
+    disposables.push(stemMaterial);
+    const stems = new InstancedMesh(parts.stem, stemMaterial, flowerSpots.length);
     const petals = new InstancedMesh(parts.petals, material, flowerSpots.length);
     const palette = growth.petals.map((c) => new Color(c));
     flowerSpots.forEach((s, i) => {

@@ -185,6 +185,19 @@ export function bakedLit<M extends MeshStandardMaterial>(material: M, uniforms: 
   return material;
 }
 
+/**
+ * A material of its own that looks and compiles as `material` does (the same patches, the same program, the same uniforms).
+ * Three builds a material's program afresh each time the next thing it draws is of another kind (a plain mesh after an
+ * instanced one, instances with colours after instances without), once in each view each frame: a material shared by kinds
+ * that are drawn one after the other costs a set of the program's parameters every time, so each kind draws with a twin.
+ */
+export function twinOf<M extends Material>(material: M): M {
+  const twin = material.clone() as M;
+  twin.onBeforeCompile = material.onBeforeCompile;
+  twin.customProgramCacheKey = material.customProgramCacheKey;
+  return twin;
+}
+
 /** The uniforms a patched material reads, by material: the latest it was given. */
 const patched = new WeakMap<Material, BakeUniforms>();
 
