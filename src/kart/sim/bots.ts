@@ -25,7 +25,8 @@
  * and drives off again from where the drone sets it down.
  */
 import { IDLE_INPUT, TICK_HZ, type DriveInput } from "../contract";
-import { hazardAt } from "../track/hazards";
+import type { TrackGeometry } from "../track/geometry";
+import { hazardAt, type HazardPose } from "../track/hazards";
 import { rocketTarget } from "./items";
 import { GO_TICK, courseOf, forwardSpeed, yawRate } from "./kart";
 import { tableAt, type Corner } from "./plan";
@@ -287,29 +288,86 @@ function gapAhead(w: World, k: KartState): number {
   return nearest;
 }
 
+/** The moments a bot looks ahead to for hazards: `hazardStep` apart, out to `hazardLook` seconds. */
+export const LOOK_STEPS: number[] = [];
+for (let t = B.hazardStep; t <= B.hazardLook + 1e-9; t += B.hazardStep) LOOK_STEPS.push(t);
+
 /**
- * Hazards: how much a kart that goes at `speed` along `offset` would run into
- * over the next couple of seconds (metres of overlap with their reach, 0 if
- * it is clear), their positions read from the race's clock.
+ * Where the hazards will be at each of those moments, by the race's clock `now`. Every bot, and every place across
+ * the road it tries, looks at the same poses, so each hazard's are worked out once a tick, when a bot first looks at
+ * it, and not once a bot and a try.
  */
-function hazardTrouble(w: World, k: KartState, now: number, relevant: number[], offset: number, speed: number): number {
-  const { geo } = w;
-  const hazards = w.plan.terrain.hazards;
+interface HazardLook {
+  now: number;
+  poses: (HazardPose[] | undefined)[];
+}
+
+const looks = new WeakMap<World, HazardLook>();
+
+function hazardPoses(w: World, now: number, index: number): HazardPose[] {
+  let look = looks.get(w);
+  if (!look) looks.set(w, (look = { now, poses: [] }));
+  if (look.now !== now) {
+    look.now = now;
+    look.poses.length = 0;
+  }
+  return (look.poses[index] ??= LOOK_STEPS.map((t) => hazardAt(w.geo, w.plan.terrain.hazards[index]!, now + t)));
+}
+
+/**
+ * Hazards: how much a kart that goes along `offset` would run into over the
+ * next couple of seconds (metres of overlap with their reach, 0 if it is
+ * clear). `road` is the road at each look-ahead step, `poses` the hazards in
+ * question at the same steps, and `clears` how near each may come.
+ */
+function hazardTrouble(k: KartState, road: Float64Array, poses: readonly HazardPose[][], clears: readonly number[], offset: number): number {
   let trouble = 0;
-  for (let t = B.hazardStep; t <= B.hazardLook + 1e-9; t += B.hazardStep) {
+  for (let step = 0; step < LOOK_STEPS.length; step++) {
+    const t = LOOK_STEPS[step]!;
     // It moves over to the offset as fast as a kart can swing across the road.
     const lateral = k.offset + clamp(offset - k.offset, -B.dodgeRate * t, B.dodgeRate * t);
-    const where = geo.point(k.s + speed * t, lateral);
-    for (const index of relevant) {
-      const hazard = hazards[index]!;
-      const pose = hazardAt(geo, hazard, now + t);
+    // The world point that far right of the road there (what `TrackGeometry.point` gives).
+    const x = road[4 * step]! - road[4 * step + 3]! * lateral;
+    const z = road[4 * step + 1]! + road[4 * step + 2]! * lateral;
+    for (let h = 0; h < poses.length; h++) {
+      const pose = poses[h]![step]!;
       if (!pose.active) continue;
-      const clear = hazard.radius + TUNING.kartRadius + B.hazardClear + (1 - k.skill) * 0.8;
-      const gap = Math.hypot(pose.x - where.x, pose.z - where.z);
+      const clear = clears[h]!;
+      // Plainly clear: no need for the square root.
+      const dx = pose.x - x;
+      const dz = pose.z - z;
+      if (dx * dx + dz * dz > clear * clear * 1.000001) continue;
+      const gap = Math.hypot(dx, dz);
       if (gap < clear) trouble += clear - gap;
     }
   }
   return trouble;
+}
+
+/** The road at each look-ahead step (x, z, then the direction tx, tz), filled in afresh by every `dodge`. */
+const ROAD = new Float64Array(LOOK_STEPS.length * 4);
+
+/**
+ * Reads into `into` the road at each look-ahead step for a kart at `s` going `speed` along it: the same whichever place
+ * across the road the bot tries. Each is what `geo.at` gives, worked out without making a sample (bots.test.ts holds
+ * them equal), since a hazard dodge reads dozens a tick.
+ */
+export function roadAhead(geo: TrackGeometry, s: number, speed: number, into: Float64Array): void {
+  const samples = geo.samples;
+  for (let step = 0; step < LOOK_STEPS.length; step++) {
+    const w = geo.wrap(s + speed * LOOK_STEPS[step]!);
+    const i = Math.floor(w / geo.spacing) % samples.length;
+    const a = samples[i]!;
+    const b = samples[(i + 1) % samples.length]!;
+    const f = (w - a.s) / geo.spacing;
+    const tx = a.tx + (b.tx - a.tx) * f;
+    const tz = a.tz + (b.tz - a.tz) * f;
+    const t = Math.hypot(tx, tz) || 1;
+    into[4 * step] = a.x + (b.x - a.x) * f;
+    into[4 * step + 1] = a.z + (b.z - a.z) * f;
+    into[4 * step + 2] = tx / t;
+    into[4 * step + 3] = tz / t;
+  }
 }
 
 /**
@@ -333,14 +391,19 @@ function dodge(w: World, k: KartState, fwd: number, aimOffset: number, limitLeft
   });
   if (relevant.length === 0) return { offset: aimOffset, speed: 1 };
   const now = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
+  const poses = relevant.map((index) => hazardPoses(w, now, index));
+  const clears = relevant.map((index) => hazards[index]!.radius + TUNING.kartRadius + B.hazardClear + (1 - k.skill) * 0.8);
   const base = clamp(aimOffset, -limitLeft, limitRight);
-  if (hazardTrouble(w, k, now, relevant, base, speed) === 0) return { offset: aimOffset, speed: 1 };
+  const road = ROAD;
+  roadAhead(geo, k.s, speed, road);
+  if (hazardTrouble(k, road, poses, clears, base) === 0) return { offset: aimOffset, speed: 1 };
   let best = { offset: aimOffset, speed: 1 };
   let bestCost = Infinity;
   for (const share of [1, 0.85, 0.7, 0.55]) {
+    if (share !== 1) roadAhead(geo, k.s, speed * share, road);
     for (const shift of [0, 2, -2, 4, -4, 6, -6, 8, -8, 11, -11]) {
       const offset = clamp(base + shift, -limitLeft, limitRight);
-      const trouble = hazardTrouble(w, k, now, relevant, offset, speed * share);
+      const trouble = hazardTrouble(k, road, poses, clears, offset);
       const cost = trouble * 100 + Math.abs(offset - aimOffset) + (1 - share) * 12;
       if (cost < bestCost) {
         bestCost = cost;
