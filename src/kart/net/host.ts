@@ -59,7 +59,7 @@ import { DEFAULT_SETTINGS, Roster, cleanPlayer, kartsOnScreen, mergeSettings, sh
 import { buildSetup } from "./setup";
 import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, token } from "./util";
-import { blendViews, cloneView } from "./view";
+import { blendViews, pictureOf } from "./view";
 
 /** A snapshot goes out every this many ticks: 60 / 2 = 30 a second. */
 const SNAPSHOT_EVERY = 2;
@@ -481,7 +481,7 @@ export class HostSession implements Session {
     this.paused = null;
     this.resumeAt = null;
     this.roster.clearLost();
-    this.prevView = this.currView = cloneView(this.race.view());
+    this.prevView = this.currView = pictureOf(this.race);
     this.frozenAt = 1;
     this.remote.clear();
     this.controls.clear();
@@ -603,7 +603,7 @@ export class HostSession implements Session {
     // Drawn at this frame's own time: some of the way from the tick before the last to the last. A screen that
     // refreshes at 120 Hz then moves every frame, not every other one; the price is under one tick of lateness.
     const prev = this.prevView ?? this.currView;
-    const curr = this.currView ?? (this.currView = cloneView(race.view()));
+    const curr = this.currView ?? (this.currView = pictureOf(race));
     const view = prev ? blendViews(prev, curr, this.paused ? this.frozenAt : this.clock.fraction) : curr;
     return { ...view, events: this.feed.drain() };
   }
@@ -630,11 +630,11 @@ export class HostSession implements Session {
     const ticks = this.clock.ticks(now, maxTicks);
     for (let i = 0; i < ticks; i++) {
       // The picture before the last tick, kept to draw between it and the one after.
-      if (i === ticks - 1) this.prevView = ticks === 1 && this.currView ? this.currView : cloneView(race.view());
+      if (i === ticks - 1) this.prevView = ticks === 1 && this.currView ? this.currView : pictureOf(race);
       this.tickOnce(race, now);
     }
     if (ticks > 0) {
-      this.currView = cloneView(race.view());
+      this.currView = pictureOf(race);
       this.sinceSnapshot += ticks;
       if (this.sinceSnapshot >= SNAPSHOT_EVERY) {
         this.sinceSnapshot = 0;

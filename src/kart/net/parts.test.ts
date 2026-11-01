@@ -306,6 +306,71 @@ describe("blending views", () => {
     const b = view(1, [{}], { things: [thing(1, 10), thing(3, 10, { active: false }), thing(4, 7)] });
     expect(blendViews(a, b, 0.5).things.map((t) => t.x)).toEqual([5, 10, 7]);
   });
+
+  it("hands back what did not move as it is, and still finds a thing whose place in the list changed", () => {
+    const box = (id: number) => ({ id, kind: "box" as const, x: id * 3, y: 1, z: 2, heading: 0.5, active: true });
+    const a = view(0, [{ x: 4 }, { x: 0 }], { things: [box(0), box(1), box(2)] });
+    const b = view(1, [{ x: 4 }, { x: 10 }], { things: [box(1), box(2), { ...box(0), x: 9 }] });
+    const mid = blendViews(a, b, 0.5);
+    // The kart and the boxes that stand still are the newer view's own, not copies.
+    expect(mid.karts[0]).toBe(b.karts[0]);
+    expect(mid.karts[1]).not.toBe(b.karts[1]);
+    expect(mid.karts[1]!.x).toBe(5);
+    expect(mid.things[0]).toBe(b.things[0]);
+    expect(mid.things[1]).toBe(b.things[1]);
+    expect(mid.things[2]!.x).toBe(4.5);
+  });
+
+  it("blends as it always has: karts and things by id, in any order, against a plain version", () => {
+    const random = seeded(31);
+    const plain = (a: RaceView, b: RaceView, f: number): RaceView => {
+      const before = new Map(a.karts.map((k) => [k.id, k]));
+      const things = new Map(a.things.map((t) => [t.id, t]));
+      const glide = <T extends { x: number; y: number; z: number; heading: number }>(was: T, now: T): T => ({
+        ...now,
+        x: was.x + (now.x - was.x) * f,
+        y: was.y + (now.y - was.y) * f,
+        z: was.z + (now.z - was.z) * f,
+        heading: was.heading + Math.atan2(Math.sin(now.heading - was.heading), Math.cos(now.heading - was.heading)) * f,
+      });
+      return {
+        ...b,
+        karts: b.karts.map((k) => (before.has(k.id) ? glide(before.get(k.id)!, k) : k)),
+        things: b.things.map((t) => {
+          const was = things.get(t.id);
+          return was && was.kind === t.kind && was.active && t.active ? glide(was, t) : t;
+        }),
+      };
+    };
+    const kinds = ["box", "puck", "seeker"] as const;
+    const draw = (still: boolean): RaceView => {
+      const ids = [0, 1, 2, 3, 4, 5].filter(() => random() < 0.8).sort(() => random() - 0.5);
+      return view(
+        random(),
+        [0, 1, 2, 3].map((id) => ({ id, x: still ? id : random() * 50, z: still ? 1 : random() * 50, heading: still ? 0.2 : random() * 6 - 3, place: id + 1 })),
+        {
+          things: ids.map((id) => ({ id, kind: kinds[random() < 0.8 ? 0 : 1 + Math.floor(random() * 2)]!, x: still ? 7 : random() * 50, y: 0, z: 3, heading: 0, active: random() < 0.9 })),
+        },
+      );
+    };
+    for (let i = 0; i < 200; i++) {
+      const still = i % 4 === 0;
+      const a = draw(still);
+      const b = draw(still);
+      const f = random() * 1.2;
+      const got = blendViews(a, b, f);
+      const want = plain(a, b, f);
+      // Within rounding: the angles are blended the same way, by a different sum.
+      expect(got.karts.map((k) => k.id)).toEqual(want.karts.map((k) => k.id));
+      for (const [i, k] of got.karts.entries()) {
+        for (const key of ["x", "y", "z", "heading"] as const) expect(k[key]).toBeCloseTo(want.karts[i]![key], 9);
+      }
+      expect(got.things.map((t) => [t.id, t.kind, t.active])).toEqual(want.things.map((t) => [t.id, t.kind, t.active]));
+      for (const [i, t] of got.things.entries()) {
+        for (const key of ["x", "y", "z", "heading"] as const) expect(t[key]).toBeCloseTo(want.things[i]![key], 9);
+      }
+    }
+  });
 });
 
 describe("the snapshot buffer", () => {
