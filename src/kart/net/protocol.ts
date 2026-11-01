@@ -138,7 +138,7 @@ function isTable(rows: unknown): rows is number[][] {
  * A snapshot ready to be written: its kart table `k` (a row of numbers a kart, most of them the same as the kart before
  * or zero) becomes `kp`, the width and then each row as what differs from the row before it (the first from zeros): a
  * word of bits for every 30 fields, one bit for each field that differs, then the values of those fields in order.
- * A third less to send. `unpackState` gives the table back exactly as `JSON.parse(JSON.stringify(k))` would have it.
+ * About a third less to send. `unpackState` gives the table back exactly as `JSON.parse(JSON.stringify(k))` would have it.
  * A snapshot without such a table is left as it is.
  */
 export function packState(state: RaceSnapshot): RaceSnapshot {

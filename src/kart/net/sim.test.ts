@@ -50,6 +50,8 @@ describe("the real sim's snapshot on the wire", () => {
     const whole = JSON.stringify(snap);
     const sent = JSON.stringify(packState(snap));
     expect(sent.length).toBeLessThan(whole.length * 0.8);
+    // Eight karts: what each guest is sent thirty times a second (about 1 KB at the time of writing, a third more sent whole).
+    expect(sent.length).toBeLessThan(1300);
 
     const direct = createSimRace(setup);
     direct.restore(JSON.parse(whole));

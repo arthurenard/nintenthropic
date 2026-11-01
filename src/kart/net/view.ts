@@ -17,19 +17,10 @@ const MAX_EXTRAPOLATION = 0.1;
 /** Snapshots kept: about half a second. */
 const KEEP = 16;
 
-/** A view that shares nothing mutable with the sim's. */
-export function cloneView(view: RaceView): RaceView {
-  return {
-    ...view,
-    karts: view.karts.map((k) => ({ ...k })),
-    things: view.things.map((t) => ({ ...t })),
-    events: [],
-  };
-}
-
 /**
  * The race's picture now, to keep. A race builds a new picture, karts and things and all, on every call to `view`, so
- * there is nothing to copy; only the events it hands over with it are dropped (the feed tells them).
+ * there is nothing to copy (sim.test.ts holds the sim to that); only the events it hands over with it are dropped,
+ * since the feed tells them.
  */
 export function pictureOf(race: Race): RaceView {
   const view = race.view();
