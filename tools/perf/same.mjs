@@ -7,6 +7,8 @@
 //   node tools/perf/same.mjs                                  every track, 1, 2 and 4 views, high tier
 //   node tools/perf/same.mjs --tracks meadow-loop --views 4 --tiers medium
 //   node tools/perf/same.mjs --save DIR                       also writes the pictures (PNG) to DIR
+//   node tools/perf/same.mjs --against URL                    instead: this dev page against another (a checkout of origin/main, say)
+//                                                             at the same moments of the same race, byte for byte (--at 150,500,900 frames)
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -28,12 +30,107 @@ const args = Object.fromEntries(
     }),
 );
 const BASE = args.base ?? "http://127.0.0.1:5198/src/kart/render/dev.html";
+const AGAINST = args.against;
+/** With --against: the frames of the race (stepped a sixtieth of a second at a time) at which the two pages' pictures are compared. */
+const AT = (args.at ?? "150,500,900").split(",").map(Number);
 const TRACKS = (args.tracks ?? "meadow-loop,kitchen-rally,harbour-lights,canyon-run,fun-fair,glacier-pass,volcano-rush,starlight-ribbon,five-finger-circuit").split(",");
 const VIEWS = (args.views ?? "1,2,4").split(",").map(Number);
 const TIERS = (args.tiers ?? "high").split(",");
 
 const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu", "--mute-audio"] });
 let failed = 0;
+
+/** One dev page, stepped exactly (?manual=1) with Math.random seeded alike and a clock of its own: the canvas at each frame in `AT`, read in the task that drew it. */
+async function steppedPictures(base, track, views, tier) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  await ctx.addInitScript(() => {
+    localStorage.setItem("handy.muted.v1", "true");
+    // The clock is the race's: a spun-out kart's sparkles circle by the page's clock.
+    window.__now = 0;
+    performance.now = () => window.__now;
+    let seed = 20261101;
+    Math.random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  });
+  const page = await ctx.newPage();
+  await page.goto(`${base}?track=${track}&sim=1&go=1&views=${views}&quality=${tier}&scale=1&manual=1`);
+  await page.waitForFunction(() => window.__grip?.advance, null, { timeout: 180000 });
+  const shots = [];
+  for (let i = 0, frame = 0; i < AT.length; i++) {
+    shots.push(
+      await page.evaluate(
+        ([from, to]) => {
+          for (let f = from; f < to; f++) {
+            window.__grip.advance(1 / 60);
+            window.__now += 1000 / 60;
+          }
+          return document.getElementById("canvas").toDataURL("image/png");
+        },
+        [frame, AT[i]],
+      ),
+    );
+    frame = AT[i];
+  }
+  await ctx.close();
+  return shots;
+}
+
+/** Compares pictures pixel by pixel in a page of their own: how many pixels differ at all, and the largest difference in 8-bit levels. */
+async function compare(pairs) {
+  const page = await (await browser.newContext()).newPage();
+  return page.evaluate(async (pairs) => {
+    const pixels = async (url) => {
+      const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext("2d");
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    };
+    return Promise.all(
+      pairs.map(async ([a, b]) => {
+        const [x, y] = await Promise.all([pixels(a), pixels(b)]);
+        let differ = 0;
+        let largest = 0;
+        for (let i = 0; i < x.length; i += 4) {
+          const d = Math.max(Math.abs(x[i] - y[i]), Math.abs(x[i + 1] - y[i + 1]), Math.abs(x[i + 2] - y[i + 2]));
+          if (d > 0) differ++;
+          if (d > largest) largest = d;
+        }
+        return { differ, largest, total: x.length / 4 };
+      }),
+    );
+  }, pairs);
+}
+
+if (AGAINST) {
+  try {
+    for (const track of TRACKS) {
+      for (const views of VIEWS) {
+        for (const tier of TIERS) {
+          const mine = await steppedPictures(BASE, track, views, tier);
+          const theirs = await steppedPictures(AGAINST, track, views, tier);
+          const results = await compare(mine.map((m, i) => [m, theirs[i]]));
+          const same = results.every((r) => r.differ === 0);
+          if (!same) failed++;
+          console.log(`${track.padEnd(20)} ${views}v ${tier.padEnd(6)} ${same ? "identical" : "DIFFERENT"} at frames ${AT.join(", ")}${same ? "" : ": " + results.map((r) => `${r.differ} pixels (largest ${r.largest} levels)`).join("; ")}`);
+          if (args.save && !same) {
+            mkdirSync(args.save, { recursive: true });
+            mine.forEach((m, i) => writeFileSync(`${args.save}/${track}-${views}v-${tier}-${AT[i]}-this.png`, Buffer.from(m.split(",")[1], "base64")));
+            theirs.forEach((m, i) => writeFileSync(`${args.save}/${track}-${views}v-${tier}-${AT[i]}-against.png`, Buffer.from(m.split(",")[1], "base64")));
+          }
+        }
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  process.exit(failed ? 1 : 0);
+}
+
 try {
   for (const track of TRACKS) {
     for (const views of VIEWS) {
