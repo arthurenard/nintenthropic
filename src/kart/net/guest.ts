@@ -498,7 +498,7 @@ export class GuestSession implements Session {
     }
     if (packet.length > 0) this.sendToHost({ t: "in", r: this.raceId, k: packet }, "unreliable");
     if (predicted.size > 0) {
-      race.predict(this.shown, predicted);
+      race.predict([...predicted.keys()], predicted);
       this.picture = null;
       for (const k of this.ours(race).karts) {
         const own = this.own.get(k.id);
