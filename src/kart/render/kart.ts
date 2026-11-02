@@ -9,8 +9,10 @@
  * pitch and lean it shows from its motion (the body rolls with how hard it
  * turns, dives under the brake, noses up and down a jump's arc), the
  * spin-out, the hop, the springs squashing on a landing and bouncing back,
- * the lean of a banked road, a trick's twirl in the air, the long fall when it
- * leaves the road and the rescue drone that fishes it out, and its blob shadow.
+ * the wobble as a drift starts (the body rocks out on its springs and rings
+ * down), the engine's tremble when it is slow, the lean of a banked road, a
+ * trick's twirl in the air, the long fall when it leaves the road and the
+ * rescue drone that fishes it out, and its blob shadow.
  *
  * Built facing +z; its left is +x (so its right is -x), which is what
  * `rotation.y = heading` expects (contract.ts).
@@ -98,6 +100,22 @@ const TRICK_TURNS = 1;
 /** The stylised fall: gravity, and the longest drop the picture shows before the drone has the kart. */
 const FALL_G = 24;
 const FALL_MAX = 9;
+/**
+ * The drift's wobble: the body's roll on its own spring, kicked as a drift begins. It is underdamped (about 2.7 Hz, a quarter of
+ * critical) so it rocks out to about 0.075 rad at the first swing, comes back through about a third of that, then a sixth, and is
+ * still within about 0.65 s. The kick is the roll speed it starts with, rad/s.
+ */
+const WOBBLE_K = 290;
+const WOBBLE_C = 9;
+const WOBBLE_KICK = 1.85;
+/** The engine's tremble: its size (radians of pitch and of roll), the speeds it is full below and gone above (m/s), and how fast it buzzes (rad/s). */
+const IDLE_PITCH = 0.0045;
+const IDLE_ROLL = 0.0035;
+const IDLE_FULL = 1.5;
+const IDLE_GONE = 4.5;
+const IDLE_RATE = 72;
+/** The most of the buzz one frame may turn through, radians: a slow frame would otherwise skip over it (aliasing) and look like jitter. */
+const IDLE_STEP = 1.9;
 
 /** The state of a fall and rescue, from the moment the kart leaves the road. */
 interface FallState {
@@ -153,6 +171,14 @@ export class KartActor {
   private suspV = 0;
   private lastAir = 0;
   private lastSpin = 0;
+  /** The drift's wobble: extra roll on a spring (radians, rad/s), and the drift last frame, to see one begin. */
+  private wob = 0;
+  private wobV = 0;
+  private lastDrift = 0;
+  /** The engine's tremble: how much of it shows (0..1, eased), and where its buzz has got to (radians; each kart starts elsewhere and buzzes a little differently). */
+  private idle = 0;
+  private buzz: number;
+  private readonly buzzRate: number;
   /** Where the kart is on screen (it differs from the view while it falls and is carried), and the height of the road under it. */
   x = 0;
   y = 0;
@@ -164,6 +190,8 @@ export class KartActor {
   slope = 0;
   /** True while it is still dropping, before the hook has it. */
   falling = false;
+  /** Players who asked for less motion: no wobble and no tremble (the cameras and the effects leave their motion out the same way). */
+  calm = false;
 
   // The rescue.
   private drone: RescueDrone | null = null;
@@ -180,6 +208,8 @@ export class KartActor {
     racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">,
     ctx: ActorContext,
   ) {
+    this.buzz = id * 2.4;
+    this.buzzRate = IDLE_RATE + ((id * 5) % 15);
     this.model = factory(racer);
     this.root.add(this.model.root);
     this.root.add(this.shadowGroup);
@@ -428,6 +458,29 @@ export class KartActor {
     this.lastAir = airNow;
     this.lastSpin = view.spin;
     this.wheelSpin += (rescuing ? 0 : speed * dt) / 0.4;
+    // A drift beginning rocks the body out toward the outside of the bend, on a roll spring of its own that rings back two or three
+    // times as it settles. It is stepped in small pieces (never over 1/90 s), so a slow frame rings the same as a quick one.
+    if (view.drift !== 0 && view.drift !== this.lastDrift && !spinning && !this.calm) this.wobV -= view.drift * WOBBLE_KICK;
+    this.lastDrift = view.drift;
+    if (dt > 0) {
+      const steps = Math.ceil(dt * 90);
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        this.wobV += (-WOBBLE_K * this.wob - WOBBLE_C * this.wobV) * h;
+        this.wob += this.wobV * h;
+      }
+      this.wob = clamp(this.wob, -0.15, 0.15);
+    }
+    // The engine's tremble: a grounded kart that is slow (or waiting on the grid) shivers a hair on its mounts, and it fades out as the
+    // speed picks up, where the rough road's shake below takes over.
+    const idleTarget = grounded && !spinning && !rescuing && !this.calm ? 1 - smoothstep(IDLE_FULL, IDLE_GONE, Math.abs(speed)) : 0;
+    this.idle = damp(this.idle, idleTarget, 10, dt);
+    // Its phase is stepped, not read off the clock: it is a fast buzz, and a slow frame would catch it too coarsely.
+    if (dt > 0) this.buzz += Math.min(this.buzzRate, IDLE_STEP / dt) * dt;
+    // Pitch and roll buzz at a slightly different rate, so the body traces a small loop rather than a line, and the size breathes a little.
+    const lope = this.idle * (0.8 + 0.2 * Math.sin(time * 7 + this.id * 1.7));
+    const buzzPitch = Math.sin(this.buzz) * IDLE_PITCH * lope;
+    const buzzRoll = Math.sin(this.buzz * 1.13 + 1.3) * IDLE_ROLL * lope;
 
     const rough = view.offroad || view.surface === "mud" ? 0.035 : 0.006;
     const shake = Math.sin(time * 61 + this.id * 7) * rough * clamp(sr * 1.5, 0, 1);
@@ -435,8 +488,8 @@ export class KartActor {
       steer: rescuing ? 0 : view.steer,
       wheelSpin: this.wheelSpin,
       lean: rescuing ? 0 : this.lean,
-      roll: rescuing ? 0 : this.roll,
-      pitch: rescuing ? 0 : this.pitch,
+      roll: rescuing ? 0 : this.roll + this.wob + buzzRoll,
+      pitch: rescuing ? 0 : this.pitch + buzzPitch,
       hop: this.hop,
       shake: rescuing ? 0 : shake,
       flame: this.flame,

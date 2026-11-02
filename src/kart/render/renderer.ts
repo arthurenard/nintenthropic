@@ -354,6 +354,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const makeActor = (r: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartActor => {
     const ctx = actorContext();
     const a = new KartActor(r.id, factory, r, ctx);
+    a.calm = calm;
     // The lesser tiers weld a kart into one mesh sooner (each kart is a dozen draw calls, and again in the shadow pass).
     if (settings.kartDetail < FAR_DISTANCE) {
       a.root.traverse((o) => {
