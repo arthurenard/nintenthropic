@@ -24,6 +24,7 @@
 import { OneEuroFilter } from "../../input/filter";
 import type { DriveInput, WheelHand, WheelStatus } from "../contract";
 import type { HandFrame, SeenHand } from "../../tracking/types";
+import { edgeWay, type Way } from "./edges";
 import { Gestures, type GestureHand } from "./gestures";
 import { Grip, finishReading, readPalm, type HandReading } from "./hands";
 import { ShakeCounter } from "./shake";
@@ -202,6 +203,9 @@ const FOLLOW = { base: 0.08, speed: 0.6 } as const;
  * inside a column to be taken for theirs.
  */
 export const SEAT_MARGIN = 0.02;
+
+/** The whole picture, as a zone: a wheel with no seat of its own. */
+const FULL = [0, 1] as const;
 
 const newSlot = (): Slot => ({ grip: new Grip(), reading: null, seenAt: -Infinity, openedAt: -Infinity, flickOk: false });
 
@@ -634,7 +638,22 @@ export class WheelReader {
       grip,
       mode: this.modeAt(t),
       levelled: this.isLevelled,
+      edge: this.edgeAt(t),
     };
+  }
+
+  /** Which way to move the hands to keep them in view (edges.ts); nothing while a clap or a cheer has them about. */
+  private edgeAt(t: number): Way | null {
+    if (this.gestures.stands(t)) return null;
+    const zone = this.seat ? seatZone(this.seat) : FULL;
+    return edgeWay(
+      SIDES.map((side) => {
+        const slot = this.slots[side];
+        return { reading: slot.reading, ago: t - slot.seenAt, present: this.slotPresent(side, t) };
+      }),
+      zone,
+      this.aspect,
+    );
   }
 
   private inputAt(t: number): DriveInput {

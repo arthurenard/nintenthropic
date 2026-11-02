@@ -7,7 +7,7 @@ import { duckSpot } from "../src/kart/sim/eggs";
 import { planFor } from "../src/kart/sim/plan";
 import { MEADOW_LOOP, TRACKS } from "../src/kart/track/tracks";
 import { shot } from "./helpers";
-import { chooseDrivers, open, state } from "./kart";
+import { chooseDrivers, open, pastHowTo, state } from "./kart";
 
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
@@ -31,6 +31,7 @@ async function practiceRace(page: Page, laps = "1") {
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
   await page.getByRole("radio", { name: laps, exact: true }).click();
   await page.getByRole("button", { name: "Start Race" }).click();
@@ -102,6 +103,7 @@ test("a wheel player claps to honk, raises both hands to cheer, and waves hello"
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await page.getByRole("button", { name: "Start Race" }).click();
@@ -254,6 +256,7 @@ test("the driver stage: arrows choose and Return goes on; Dabble is a locked sil
   await shot(page, info, "eggs-driver-locked", 700);
   // Return goes on, with the driver that is chosen (Rivet).
   await page.keyboard.press("Enter");
+  await pastHowTo(page);
   await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
   expect((await state(page)).lobby!.players[0]!.character).toBe("rivet");
 
@@ -275,6 +278,7 @@ test("the driver stage: arrows choose and Return goes on; Dabble is a locked sil
   await expect(golden).toHaveAttribute("aria-checked", "true");
   await shot(other, info, "eggs-driver-dabble-golden", 700);
   await other.getByRole("button", { name: "Continue" }).click();
+  await pastHowTo(other);
   await expect(other.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
   const me = (await state(other)).lobby!.players[0]!;
   expect([me.character, me.golden]).toEqual(["dabble", true]);
@@ -303,6 +307,7 @@ test("the driver stage is live 3D where the page can draw it, and turns when it 
   await shot(page, info, "eggs-driver-3d", 600);
   // The stage goes with the screen: its canvas is let go of.
   await page.getByRole("button", { name: "Continue" }).click();
+  await pastHowTo(page);
   await expect(page.getByRole("heading", { name: "Ready to Race" })).toBeVisible();
   await expect(page.locator("canvas.stage-canvas")).toHaveCount(0);
   expect(errors).toEqual([]);

@@ -193,7 +193,7 @@ Everything is under `src/kart/`. Each part is built against
 | Net | `net/` | `hostSession`, `joinSession`, `soloSession` → `Session`; transports (PeerJS WebRTC, BroadcastChannel, in-memory). |
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
-| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
+| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, how to drive, lobby, race, results, standings, podium. |
 | Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Super Claude Bros. sound ("Sound" below). |
 
 ### Coordinates
@@ -582,6 +582,19 @@ of three; bytes are exact and are the numbers to trust.
   → `emote: "wave"`. While palms are together or a cheer is on, the wheel
   does not brake or flick an item. Keys: H honks, C and V hold cheer
   and wave; a gamepad's Y honks.
+- **Hands near the edge** (`edges.ts`). A player leaning into a bend or
+  shifting in their chair drifts toward the side of the camera's view (or,
+  several on one camera, toward a neighbour's column) and loses a hand
+  before they know it. `WheelStatus.edge` says which way to move back in, as
+  the player sees themself (a fist near the right of the mirrored picture:
+  "left"), when a palm is within 1.3 hand sizes (and at least 0.06 picture
+  heights) of its zone's edge, or a hand last seen there went out within
+  1.5 s; nothing while a clap or a cheer has the hands about. The race
+  (`edgeHint.ts`) shows it once it has held 250 ms and keeps it 600 ms after
+  the hands are back, in the player's viewport where "Show Both Hands" goes
+  (an amber arrow: "Move Left", "Move Right", "Lower Your Hands", "Raise
+  Your Hands"), and gives way to "Show Both Hands" once the hands are lost.
+  It is this device's: a big screen is told only of lost hands.
 - **`WheelPreview`.** A canvas that draws the mirrored camera picture with
   the wheel on it: a ring through both palms turned with them, its colour the
   mode (green driving, amber braking, red lost), each hand a dot that is
@@ -1127,6 +1140,17 @@ tight type, springy motion; a white pill is the one main action of a screen;
    "Hold it level" (the level is set) → "Turn it" → "Open your hands to
    brake" → ready. After the first time, only "Hold it level". Back goes to
    the driver stage.
+4b. **How to Drive** (`howto.ts`, every visit, for hands, keys and pads
+   alike, after the check or straight after the driver stage): six glass
+   cards, one move each (Steer, Go, Brake, Drift and Boost, Use an Item,
+   Honk), said for what the player drives with: an icon and a line for hands
+   ("In a bend, open both hands to drift. Close them to boost."), the caps
+   for keys and pads. A card lights while its move is being made, and an
+   item or a honk pops its card, so the screen is tried, not only read; a
+   line under the cards gives the flying start and the trick. Continue goes
+   on to the lobby (the device says it is ready only then); for hands,
+   raising both open hands (the cheer) goes on too, so nobody has to let go
+   of the wheel for the mouse. Back goes to the driver stage.
 5. **Lobby** (`lobby.ts`, `lobby.css`). Two columns. On the left, the room:
    the host's join card (the QR code, the code large, Copy Link), a big card
    for every racer (their driver in their kart colour, name, how they drive
@@ -1178,8 +1202,8 @@ track counts for its track.
 
 **A gamepad** finds its way round the menus (`padnav.ts`): the d-pad or the
 stick moves a visible focus ring to the nearest thing that way, A presses,
-B steps back only where leaving loses nothing (You, the wheel check, a
-sheet), and Start opens and closes the pause sheet. The driver stage reads
+B steps back only where leaving loses nothing (You, the wheel check, How
+to Drive, a sheet), and Start opens and closes the pause sheet. The driver stage reads
 the pad itself, and in a race the pad drives.
 
 Troubles say what happened and what to do: "There's no race with that code.

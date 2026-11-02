@@ -320,6 +320,10 @@ body[data-screen="race"] {
   height: 24px;
   color: var(--danger);
 }
+/* Hands nearing the edge of the camera's view: the same pill, quieter, with the way to move. */
+.edge-note svg {
+  color: var(--warning);
+}
 @keyframes lost-in {
   from {
     opacity: 0;

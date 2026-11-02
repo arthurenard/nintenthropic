@@ -24,7 +24,7 @@ export interface PadHooks {
 const TARGETS = 'button:not(:disabled), a[href], input:not(:disabled):not([type="hidden"]), [tabindex="0"]';
 
 /** Where B goes back a step, by screen: only where leaving loses nothing (the lobby's Leave would close a room). */
-const BACK: Record<string, string> = { you: "you-back", check: "check-back" };
+const BACK: Record<string, string> = { you: "you-back", check: "check-back", howto: "howto-back" };
 
 /** How often the pad is looked at, ms. */
 const POLL_MS = 60;
