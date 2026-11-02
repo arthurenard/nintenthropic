@@ -312,7 +312,7 @@ const PUFF_SPEED = 8;
 const PUFF_RATE_STILL = 7.5;
 const PUFF_RATE_FAST = 5;
 /** A soft grey that thins to nothing. */
-const PUFF0 = [0.5, 0.5, 0.54, 0.34] as const;
+const PUFF0 = [0.52, 0.52, 0.56, 0.4] as const;
 const PUFF1 = [0.44, 0.44, 0.48, 0] as const;
 
 /** Where a kart's puff count starts, so a grid of idling karts does not puff in step. */
@@ -772,7 +772,7 @@ export class Effects {
       st.puff += lerp(PUFF_RATE_STILL, PUFF_RATE_FAST, Math.abs(k.speed) / PUFF_SPEED) * (0.92 + 0.04 * (k.id % 5)) * dt;
       while (st.puff >= 1) {
         st.puff -= 1;
-        const only = this.r() < 0.5 ? -1 : 1;
+        const only = watched ? 0 : this.r() < 0.5 ? -1 : 1;
         for (let side = -1; side <= 1; side += 2) {
           if (!watched && side !== only) continue;
           const ex = KART_EXHAUST.right * side;
@@ -785,8 +785,8 @@ export class Effects {
             0.5 + this.r() * 0.4,
             -fz * (0.6 + this.r() * 0.6) + this.spread() * 0.15,
             0.6 + this.r() * 0.3,
-            0.16,
-            0.46,
+            0.2,
+            0.55,
             PUFF0,
             PUFF1,
             0.25,

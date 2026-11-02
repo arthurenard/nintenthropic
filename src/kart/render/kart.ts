@@ -102,7 +102,7 @@ const FALL_G = 24;
 const FALL_MAX = 9;
 /**
  * The drift's wobble: the body's roll on its own spring, kicked as a drift begins. It is underdamped (about 2.7 Hz, a quarter of
- * critical) so it rocks out to about 0.075 rad at the first swing, comes back through about a third of that, then a sixth, and is
+ * critical) so it rocks out to about 0.075 rad at the first swing, comes back through about two fifths of that, then a sixth, and is
  * still within about 0.65 s. The kick is the roll speed it starts with, rad/s.
  */
 const WOBBLE_K = 290;

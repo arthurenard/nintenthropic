@@ -677,7 +677,15 @@ that file exists (`render/art.ts`).
   from how hard it corners (the heading's turn rate times the speed), pitch
   from the slope, the throttle and the brake, the nose following a jump's arc,
   the springs squashing on a landing as hard as it came down and bouncing
-  back, a whole flat turn in the air for a trick; a blob shadow
+  back, a wobble as a drift starts (the body rocks out toward the outside of
+  the bend on a roll spring of its own, about 0.075 rad at the first swing,
+  then back two or three times, still within 0.65 s), a light tremble when
+  slow or waiting on the grid (0.0045 rad of pitch and 0.0035 of roll at about
+  72 to 86 rad/s, each kart out of step with the next, full below 1.5 m/s and
+  gone by 4.5 m/s where the rough road's shake takes over; its phase is stepped
+  so no frame turns through more than 1.9 rad of it, which keeps it a buzz at
+  30 fps; none of this for Reduce Motion), a whole flat turn in the air for a
+  trick; a blob shadow
   (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
@@ -686,7 +694,10 @@ that file exists (`render/art.ts`).
   flash at the pipes as a boost catches), streaks of wind rushing past a
   watched kart along its course from about 21 m/s, drawn in closer and thicker
   in a slipstream as it charges, and many more on a boost (none for Reduce
-  Motion), dust off the road, a spin, a
+  Motion), small soft grey puffs from both exhausts every 0.13 to 0.2 s while a
+  grounded kart is under 8 m/s and not boosting (waiting on the grid, pulling
+  away; the karts no view follows puff from one pipe at a time, so half as
+  many), dust off the road, a spin, a
   hop, a puff on a bump. The karts the views follow get the full show; the rest
   of the pack throws fewer sparks and flames (`Effects.focus`), so a pack
   drifting round a hairpin does not use up the particles of the karts watched.
