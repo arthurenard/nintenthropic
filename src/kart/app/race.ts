@@ -15,9 +15,10 @@
  * a screen whose race is its own only covers itself and the race goes on.
  */
 import { WebGLUnavailable } from "../../engine/common";
-import type { DriverControl, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRenderer, RaceView, Session } from "../contract";
+import type { DriverControl, EdgeWay, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRenderer, RaceView, Session } from "../contract";
 import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
+import { EDGE_WORDS, EdgeHint } from "./edgeHint";
 import { PHOTO_GAP, recordDuck, taunts, tricksFor } from "./eggs";
 import { itemWords, lapLabel, list, ordinal } from "./format";
 import { FrameRate } from "./graphicsui";
@@ -75,6 +76,8 @@ export class RaceScreen {
   private watch: ResizeObserver | null = null;
   private previews: Disposable[] = [];
   private lostSince: (number | null)[] = [];
+  /** "Move Left" and the like, for each of this device's wheels: their hands are nearing the edge of the camera's view. */
+  private edges: EdgeHint[] = [];
   private reported = "";
   private shownViews = "";
   /** What the renderer was last told each kart drives with (as a key), and the lobby that was worked out from. */
@@ -182,6 +185,7 @@ export class RaceScreen {
     this.stopped = false;
     this.leaving = false;
     this.lostSince = ctx.controls.map(() => null);
+    this.edges = ctx.controls.map(() => new EdgeHint());
     this.handsFirst.reset();
     $("controller").hidden = true;
     $("race-previews").replaceChildren();
@@ -594,6 +598,8 @@ export class RaceScreen {
       const wheel = control.wheel;
       if (!wheel) return;
       this.lostSince[i] = wheel.mode === "lost" ? (this.lostSince[i] ?? now) : null;
+      // Lost hands have their own note: the edge's gives way to it.
+      this.edges[i]?.update(wheel.mode === "lost" ? null : (wheel.edge ?? null), now);
     });
     // Tell the room when it has gone on long enough to matter.
     const flags = ctx.controls.map((_, i) => this.lostFor(i, now) > REPORT_AFTER);
@@ -604,9 +610,15 @@ export class RaceScreen {
     }
     if (this.mode === "controller") {
       const lost = ctx.controls.flatMap((_, i) => (this.lostFor(i, now) > LOST_FOR ? [ctx.players[i]?.name ?? ""] : []));
+      // With nobody's hands lost, the first whose hands are nearing the edge.
+      const near = lost.length ? -1 : this.edges.findIndex((edge) => edge.shown !== null);
+      const way = this.edges[near]?.shown ?? null;
       const pill = $("lost-hands");
-      pill.hidden = lost.length === 0;
+      pill.hidden = lost.length === 0 && !way;
+      pill.classList.toggle("edge-note", !lost.length && way !== null);
+      pill.querySelector("use")?.setAttribute("href", way && !lost.length ? `#i-arrow-${way}` : "#i-hand");
       if (lost.length) setText("lost-hands-text", ctx.controls.length > 1 ? `${list(lost)}: Show Both Hands` : "Show Both Hands");
+      else if (way) setText("lost-hands-text", ctx.controls.length > 1 ? `${ctx.players[near]?.name ?? ""}: ${EDGE_WORDS[way]}` : EDGE_WORDS[way]);
       return;
     }
     $("lost-hands").hidden = true;
@@ -622,7 +634,7 @@ export class RaceScreen {
       this.stage = { w: box.width, h: box.height };
     }
     const layout = layoutViews(views.length, this.stage.w, this.stage.h);
-    const pills: { x: number; y: number; text: string }[] = [];
+    const pills: { x: number; y: number; text: string; way?: EdgeWay }[] = [];
     views.forEach((kart, i) => {
       const rect = layout.views[i];
       const slot = lobby.karts[kart];
@@ -630,11 +642,14 @@ export class RaceScreen {
       const player = lobby.players.find((candidate) => candidate.slot === slot);
       const local = ctx.players.findIndex((candidate) => candidate.slot === slot);
       const lost = (local >= 0 && this.lostFor(local, now) > LOST_FOR) || player?.handsLost === true;
-      if (!lost) return;
+      const way = lost || local < 0 ? null : (this.edges[local]?.shown ?? null);
+      if (!lost && !way) return;
+      const words = way ? EDGE_WORDS[way] : "Show Both Hands";
       pills.push({
         x: Math.round(rect.x + rect.w / 2),
         y: Math.round(rect.y + rect.h * 0.16),
-        text: views.length > 1 && player ? `${player.name}: Show Both Hands` : "Show Both Hands",
+        text: views.length > 1 && player ? `${player.name}: ${words}` : words,
+        ...(way ? { way } : {}),
       });
     });
     const key = JSON.stringify(pills);
@@ -642,7 +657,7 @@ export class RaceScreen {
     this.pillsKey = key;
     $("view-notes").replaceChildren(
       ...pills.map((pill) => {
-        const note = element("p", "lost-hands glass view-note");
+        const note = element("p", pill.way ? "lost-hands edge-note glass view-note" : "lost-hands glass view-note");
         note.setAttribute("role", "status");
         note.style.left = `${pill.x}px`;
         note.style.top = `${pill.y}px`;
@@ -650,7 +665,7 @@ export class RaceScreen {
         icon.setAttribute("viewBox", "0 0 24 24");
         icon.setAttribute("aria-hidden", "true");
         const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-        use.setAttribute("href", "#i-hand");
+        use.setAttribute("href", pill.way ? `#i-arrow-${pill.way}` : "#i-hand");
         icon.append(use);
         note.append(icon, element("span", undefined, pill.text));
         return note;

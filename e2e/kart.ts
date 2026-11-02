@@ -38,6 +38,13 @@ export async function keyboardPlayer(page: Page, name: string): Promise<void> {
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
+}
+
+/** How to Drive, the last screen before the lobby (after the wheel check, for hands): Continue. */
+export async function pastHowTo(page: Page, timeout = 20_000): Promise<void> {
+  await expect(page.locator("#screen-howto")).toBeVisible({ timeout });
+  await page.locator("#howto-continue").click();
 }
 
 /** Hosts a room as a keyboard driver; the room's code. */

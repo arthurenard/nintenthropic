@@ -29,6 +29,7 @@ import { cupById, trackOfRace } from "../grandprix";
 import { Backdrop } from "./backdrop";
 import { CheckScreen } from "./check";
 import { DriverScreen, driverAccess, type DriverChoice, type DriverSeat } from "./driver";
+import { HowToScreen } from "./howto";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
 import { PadMenus } from "./padnav";
 import { crew, loadYou, playerCount, saveYou, wheelChecked, type You } from "./prefs";
@@ -46,7 +47,7 @@ import { AwakeWhileRacing } from "./wake";
 import { closeTrouble, showTrouble, type Fix, type TroubleKind } from "./troubles";
 import { YouScreen } from "./you";
 
-export type ScreenName = "start" | "you" | "driver" | "check" | "lobby" | "race" | "results" | "standings" | "podium";
+export type ScreenName = "start" | "you" | "driver" | "check" | "howto" | "lobby" | "race" | "results" | "standings" | "podium";
 
 export interface KartAppOptions {
   /** `?net=local`: several tabs of one browser as the network (development, tests). */
@@ -78,6 +79,7 @@ export class KartApp {
   private readonly youScreen: YouScreen;
   private readonly driverScreen: DriverScreen;
   private readonly checkScreen: CheckScreen;
+  private readonly howToScreen: HowToScreen;
   private readonly lobbyScreen: LobbyScreen;
   private readonly raceScreen: RaceScreen;
   private readonly resultsScreen: ResultsScreen;
@@ -138,6 +140,10 @@ export class KartApp {
     this.checkScreen = new CheckScreen(services, {
       back: () => this.openDriver(),
       done: () => this.checkDone(),
+    });
+    this.howToScreen = new HowToScreen({
+      back: () => this.openDriver(),
+      done: () => this.howToDone(),
     });
     this.lobbyScreen = new LobbyScreen(
       services,
@@ -270,6 +276,7 @@ export class KartApp {
       you: "menu",
       driver: "menu",
       check: "menu",
+      howto: "menu",
       lobby: "lobby",
       race: null,
       standings: "results",
@@ -285,7 +292,7 @@ export class KartApp {
     // The driver stage is a WebGL renderer: it goes with the screen.
     if (this.screen === "driver" && screen !== "driver") this.driverScreen.close();
     this.screen = screen;
-    for (const name of ["start", "you", "driver", "check", "lobby", "race", "results", "standings", "podium"] as const) $(`screen-${name}`).hidden = name !== screen;
+    for (const name of ["start", "you", "driver", "check", "howto", "lobby", "race", "results", "standings", "podium"] as const) $(`screen-${name}`).hidden = name !== screen;
     document.body.dataset.screen = screen;
     // The lobby, the results and the standings stand on their track's postcard (they set it); every other screen on the sky or the studio.
     if (screen !== "lobby" && screen !== "results" && screen !== "standings") this.backdrop.set(null);
@@ -299,6 +306,7 @@ export class KartApp {
       you: "Who’s Driving?",
       driver: "Choose Your Driver",
       check: "Wheel Check",
+      howto: "How to Drive",
       lobby: "Lobby",
       race: "Race",
       results: "Results",
@@ -357,6 +365,7 @@ export class KartApp {
 
   private openYou(): void {
     this.checkScreen.stop();
+    this.howToScreen.stop();
     this.services.camera.stop();
     this.ready = false;
     this.youScreen.open(this.you, this.intent);
@@ -376,6 +385,7 @@ export class KartApp {
     const session = this.session;
     if (!session) return;
     this.checkScreen.stop();
+    this.howToScreen.stop();
     this.services.camera.stop();
     this.ready = false;
     const people = crew(this.you);
@@ -406,8 +416,7 @@ export class KartApp {
     this.makeControls();
     this.sendPlayers();
     if (you.drive !== "wheel") {
-      this.session.setReady(true);
-      this.enterLobby();
+      this.openHowTo();
       return;
     }
     this.driverScreen.setBusy(true);
@@ -435,6 +444,17 @@ export class KartApp {
   }
 
   private checkDone(): void {
+    this.openHowTo();
+  }
+
+  /** Every move, tried before the lobby: the last screen before the room, whatever this device drives with. */
+  private openHowTo(): void {
+    if (!this.session) return;
+    this.show("howto");
+    this.howToScreen.start(this.controls);
+  }
+
+  private howToDone(): void {
     this.session?.setReady(true);
     this.enterLobby();
   }
@@ -532,8 +552,7 @@ export class KartApp {
     this.services.camera.stop();
     this.makeControls();
     this.sendPlayers();
-    this.session?.setReady(true);
-    this.enterLobby();
+    this.openHowTo();
   }
 
   // --- the room's phases ----------------------------------------------------------------------------------------------
@@ -768,6 +787,7 @@ export class KartApp {
   private teardown(): void {
     window.clearTimeout(this.finishTimer);
     this.checkScreen.stop();
+    this.howToScreen.stop();
     this.raceScreen.end();
     this.endCupScreens();
     this.detach();

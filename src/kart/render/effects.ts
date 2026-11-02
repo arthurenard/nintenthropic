@@ -1,6 +1,7 @@
 /**
  * Particles: drift sparks (blue, then orange), boost flames, dust off the
- * road, tyre smoke, bump puffs and the confetti at the finish. Three pooled
+ * road, tyre smoke, the exhaust's puffs when a kart is slow, bump puffs and the
+ * confetti at the finish. Three pooled
  * systems, two drawn additively (light, and glows that last one frame) and
  * one with ordinary blending (smoke and dust), each a single draw call over a
  * ring buffer of sprites, and a pool of speed lines.
@@ -8,7 +9,7 @@
 import { AdditiveBlending, BufferAttribute, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, ShaderMaterial, type Points } from "three";
 import type { KartView, RaceEvent } from "../contract";
 import { KART_EXHAUST, KART_REAR_WHEEL } from "./kartModel";
-import { clamp } from "./math";
+import { clamp, lerp } from "./math";
 import { makePoints } from "./points";
 
 class Sprites {
@@ -269,6 +270,8 @@ class Streaks {
 interface Emit {
   spark: number;
   flame: number;
+  /** The exhaust's idling puffs. */
+  puff: number;
   dust: number;
   smoke: number;
   star: number;
@@ -304,6 +307,18 @@ const HOT0 = [3.6, 3.3, 2.8, 1] as const;
 const HOT1 = [2.4, 1.4, 0.5, 0] as const;
 /** m/s above which a watched kart starts to see the wind's streaks: most of its top speed on the road (24). */
 const WIND_SPEED = 21;
+/** m/s below which a kart's exhausts puff softly (waiting on the grid, pulling away, crawling), and the puffs a second then: most when still, fewest at the limit. */
+const PUFF_SPEED = 8;
+const PUFF_RATE_STILL = 7.5;
+const PUFF_RATE_FAST = 5;
+/** A soft grey that thins to nothing. */
+const PUFF0 = [0.52, 0.52, 0.56, 0.4] as const;
+const PUFF1 = [0.44, 0.44, 0.48, 0] as const;
+
+/** Where a kart's puff count starts, so a grid of idling karts does not puff in step. */
+function puffPhase(id: number): number {
+  return (id * 0.37) % 1;
+}
 
 export class Effects {
   readonly group = new Group();
@@ -640,7 +655,7 @@ export class Effects {
   kart(k: KartView, dt: number, vis?: Visual): void {
     let st = this.state.get(k.id);
     if (!st) {
-      st = { spark: 0, flame: 0, dust: 0, smoke: 0, star: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, lines: 0 };
+      st = { spark: 0, flame: 0, puff: puffPhase(k.id), dust: 0, smoke: 0, star: 0, snow: 0, ice: 0, mud: 0, sand: 0, trail: 0, lines: 0 };
       this.state.set(k.id, st);
     }
     // Falling or being carried: the kart is not where the sim says, and none of the driving effects apply.
@@ -748,6 +763,39 @@ export class Effects {
       }
     } else {
       st.flame = 0;
+    }
+
+    // Exhaust puffs: a grounded kart that is slow (waiting on the grid, pulling away, crawling) and not boosting breathes small soft
+    // grey puffs from its pipes every 0.13 to 0.2 s, drifting up and back as they grow and fade. A kart a view follows puffs from
+    // both pipes each time; the rest from one, so about half as many.
+    if (Math.abs(k.speed) < PUFF_SPEED && k.boost <= 0 && k.hop < 0.15 && k.drift === 0 && k.spin <= 0) {
+      st.puff += lerp(PUFF_RATE_STILL, PUFF_RATE_FAST, Math.abs(k.speed) / PUFF_SPEED) * (0.92 + 0.04 * (k.id % 5)) * dt;
+      while (st.puff >= 1) {
+        st.puff -= 1;
+        const only = watched ? 0 : this.r() < 0.5 ? -1 : 1;
+        for (let side = -1; side <= 1; side += 2) {
+          if (!watched && side !== only) continue;
+          const ex = KART_EXHAUST.right * side;
+          const back = KART_EXHAUST.forward - 0.15;
+          this.norm.emit(
+            k.x + rx * ex + fx * back,
+            k.y + KART_EXHAUST.y + 0.04,
+            k.z + rz * ex + fz * back,
+            -fx * (0.6 + this.r() * 0.6) + this.spread() * 0.15,
+            0.5 + this.r() * 0.4,
+            -fz * (0.6 + this.r() * 0.6) + this.spread() * 0.15,
+            0.6 + this.r() * 0.3,
+            0.2,
+            0.55,
+            PUFF0,
+            PUFF1,
+            0.25,
+            1.4,
+          );
+        }
+      }
+    } else {
+      st.puff = puffPhase(k.id);
     }
 
     // Speed lines: streaks hanging in the air that a kart rushes past, along the way it goes (in a drift the nose points

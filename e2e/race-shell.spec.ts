@@ -7,7 +7,7 @@
 // (desktop and phone). Rooms with several people are in race-room.spec.ts.
 import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
-import { WheelDrivers, chooseDrivers, host, join, onScreen, open, state } from "./kart";
+import { chooseDrivers, host, join, onScreen, open, pastHowTo, state, WheelDrivers } from "./kart";
 
 // The site's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays. The sound test turns it on.
 test.beforeEach(async ({ context }) => {
@@ -41,6 +41,7 @@ async function practiceToLobby(page: Page, laps = 1) {
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await expect(heading(page, "Ready to Race")).toBeVisible();
   await page.getByRole("radio", { name: String(laps), exact: true }).click();
 }
@@ -103,6 +104,19 @@ test("practice with the keyboard: you, the lobby, the race, and its pause and re
   await expect(page.getByRole("radiogroup", { name: "Drivers" }).getByRole("radio")).toHaveCount(9);
   await shot(page, info, "race-2e-driver", 800);
   await chooseDrivers(page);
+
+  // How to Drive, for the keys: a card lights while its key is down.
+  await expect(heading(page, "How to Drive")).toBeVisible();
+  await expect(page.locator(".move")).toHaveCount(6);
+  await expect(page.locator('.move[data-move="drift"] kbd')).toHaveText("Space");
+  await page.keyboard.down("ArrowUp");
+  await expect(page.locator('.move[data-move="go"]')).toHaveClass(/\bon\b/);
+  await shot(page, info, "race-2f-howto-keys", 300);
+  await page.keyboard.up("ArrowUp");
+  await expect(page.locator('.move[data-move="go"]')).not.toHaveClass(/\bon\b/);
+  await page.keyboard.press("KeyH");
+  await expect(page.locator('.move[data-move="honk"]')).toHaveClass(/\bon\b/);
+  await pastHowTo(page);
 
   // The lobby for practice: no code, no choice of where to watch, the players, the race to set.
   await expect(heading(page, "Ready to Race")).toBeVisible();
@@ -292,6 +306,16 @@ test("hosting with the wheel: the check, the code and its QR code, and the wheel
   await wheel({ angle: 0 });
   await shot(page, info, "race-3e-check-ready", 300);
 
+  // How to Drive, for hands: fists on the wheel light Go; turning it lights Steer; raising both open hands goes on.
+  await expect(heading(page, "How to Drive")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("#howto-cheer")).toBeVisible();
+  await expect(page.locator('.move[data-move="go"]')).toHaveClass(/\bon\b/, { timeout: 5_000 });
+  await wheel({ angle: 30 });
+  await expect(page.locator('.move[data-move="steer"]')).toHaveClass(/\bon\b/, { timeout: 5_000 });
+  await shot(page, info, "race-3f-howto-hands", 300);
+  await wheel({ angle: 0 });
+  await pastHowTo(page);
+
   // The lobby: the code large, a QR code of the join address, the players, and where the race shows.
   await expect(heading(page, "Your Race")).toBeVisible({ timeout: 10_000 });
   const code = (await page.locator("#lobby-code").textContent())!;
@@ -331,6 +355,12 @@ test("hosting with the wheel: the check, the code and its QR code, and the wheel
   await shot(page, info, "race-5c-lost-hands", 200);
   await wheel({ angle: 0 });
   await expect(page.locator(".view-note")).toHaveCount(0, { timeout: 5_000 });
+  // Drifting to the right of the camera's view: the way back in, before a hand is lost.
+  await wheel({ angle: 0, centre: [0.86, 0.45] });
+  await expect(page.locator(".view-note.edge-note")).toHaveText("Move Left", { timeout: 5_000 });
+  await shot(page, info, "race-5d-edge", 200);
+  await wheel({ angle: 0 });
+  await expect(page.locator(".view-note")).toHaveCount(0, { timeout: 5_000 });
   expect(errors).toEqual([]);
 });
 
@@ -346,6 +376,7 @@ test("a returning wheel player is asked only to hold it level", async ({ page },
   await expect(page.locator("#check-steps")).toBeHidden();
   await shot(page, info, "race-3f-check-returning", 300);
   await expect(page.locator("#check-title")).toHaveText("Ready", { timeout: 5_000 });
+  await pastHowTo(page);
   await expect(heading(page, "Ready to Race")).toBeVisible({ timeout: 10_000 });
 });
 
@@ -372,6 +403,7 @@ test("two on one camera: a second name, and each checked in their own picture", 
   await expect(page.locator(".check-picture")).toHaveCount(2);
   await expect(page.locator(".check-name").nth(1)).toHaveText("Finn");
   await shot(page, info, "race-3g-check-two", 400);
+  await pastHowTo(page);
   await expect(heading(page, "Ready to Race")).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(2);
   await expect(page.locator("#lobby-players")).toContainText("Finn");
@@ -418,6 +450,7 @@ test("four on one camera: names and drivers for each, one picture with four colu
   await expect(page.locator(".check-chip")).toHaveCount(4);
   await expect(page.locator(".check-chip .check-name")).toHaveText(["Maya", "Finn", "Ada", "Kit"]);
   await shot(page, info, "race-3h-check-four", 700);
+  await pastHowTo(page);
   await expect(heading(page, "Ready to Race")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#lobby-players .racer:not(.empty)")).toHaveCount(4);
   for (const name of ["Maya", "Finn", "Ada", "Kit"]) await expect(page.locator("#lobby-players")).toContainText(name);
@@ -551,6 +584,7 @@ test("joining: a link with no race behind it says so, and a real room's guests s
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await expect(heading(page, /Maya.s Race/)).toBeVisible();
   await expect(page.locator("#lobby-code")).toHaveText(code);
   await expect(page.locator("#lobby-waiting")).toHaveText("Waiting for Maya to start.");
@@ -625,6 +659,7 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
   await expect(trouble).toContainText("Your browser is blocking the camera for this page.");
   await shot(page, info, "race-7d-camera", 400);
   await trouble.getByRole("button", { name: "Drive With Keyboard" }).click();
+  await pastHowTo(page);
   await expect(heading(page, "Ready to Race")).toBeVisible();
   await expect(page.locator("#lobby-players")).toContainText("Keyboard");
 
@@ -650,6 +685,7 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
   await page.getByRole("button", { name: "Practice" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await start(page).click();
   await expect(trouble).toContainText("Your browser can’t draw 3D graphics right now.");
   await shot(page, info, "race-7g-webgl", 300);
@@ -685,6 +721,7 @@ test("sound: off by the arcade's preference, on with the speaker; music on the m
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await start(page).click();
   await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
@@ -785,6 +822,11 @@ test("a gamepad alone gets from the start screen into a race, with the focus rin
   await press("a");
   // The driver stage reads the pad itself: A goes on.
   await expect(heading(page, "Choose Your Driver")).toBeVisible();
+  await press("a");
+  // How to Drive: the first press lands on Continue, A goes on.
+  await expect(heading(page, "How to Drive")).toBeVisible();
+  await press("down");
+  expect((await focused()).name).toBe("howto-continue");
   await press("a");
   await expect(heading(page, "Ready to Race")).toBeVisible();
   await expect(page.locator("#lobby-players")).toContainText("Gamepad");

@@ -5,7 +5,7 @@
 // like every test here.
 import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
-import { KeyboardDriver, chooseDrivers, host, join, onScreen, open, state } from "./kart";
+import { chooseDrivers, host, join, KeyboardDriver, onScreen, open, pastHowTo, state } from "./kart";
 
 // The site's sound preference is off in these tests, as Chrome is muted too: no music is made, nothing plays.
 test.beforeEach(async ({ context }) => {
@@ -34,6 +34,7 @@ async function wheelGuest(page: Page, code: string, name: string): Promise<void>
   await page.getByRole("radio", { name: "Wheel" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page, 60_000);
   await expect(page.locator("#lobby-waiting")).toBeVisible({ timeout: 20_000 });
 }
 
@@ -281,6 +282,7 @@ test("practice against bots, all the way to the results and round again", async 
   await page.getByRole("radio", { name: "Keyboard" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await chooseDrivers(page);
+  await pastHowTo(page);
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await startButton(page).click();
   await expect(page.locator("canvas.race-canvas")).toBeVisible();

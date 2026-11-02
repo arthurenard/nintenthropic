@@ -193,7 +193,7 @@ Everything is under `src/kart/`. Each part is built against
 | Net | `net/` | `hostSession`, `joinSession`, `soloSession` → `Session`; transports (PeerJS WebRTC, BroadcastChannel, in-memory). |
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
-| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, lobby, race, results, standings, podium. |
+| App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, how to drive, lobby, race, results, standings, podium. |
 | Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Super Claude Bros. sound ("Sound" below). |
 
 ### Coordinates
@@ -582,6 +582,19 @@ of three; bytes are exact and are the numbers to trust.
   → `emote: "wave"`. While palms are together or a cheer is on, the wheel
   does not brake or flick an item. Keys: H honks, C and V hold cheer
   and wave; a gamepad's Y honks.
+- **Hands near the edge** (`edges.ts`). A player leaning into a bend or
+  shifting in their chair drifts toward the side of the camera's view (or,
+  several on one camera, toward a neighbour's column) and loses a hand
+  before they know it. `WheelStatus.edge` says which way to move back in, as
+  the player sees themself (a fist near the right of the mirrored picture:
+  "left"), when a palm is within 1.3 hand sizes (and at least 0.06 picture
+  heights) of its zone's edge, or a hand last seen there went out within
+  1.5 s; nothing while a clap or a cheer has the hands about. The race
+  (`edgeHint.ts`) shows it once it has held 250 ms and keeps it 600 ms after
+  the hands are back, in the player's viewport where "Show Both Hands" goes
+  (an amber arrow: "Move Left", "Move Right", "Lower Your Hands", "Raise
+  Your Hands"), and gives way to "Show Both Hands" once the hands are lost.
+  It is this device's: a big screen is told only of lost hands.
 - **`WheelPreview`.** A canvas that draws the mirrored camera picture with
   the wheel on it: a ring through both palms turned with them, its colour the
   mode (green driving, amber braking, red lost), each hand a dot that is
@@ -677,7 +690,15 @@ that file exists (`render/art.ts`).
   from how hard it corners (the heading's turn rate times the speed), pitch
   from the slope, the throttle and the brake, the nose following a jump's arc,
   the springs squashing on a landing as hard as it came down and bouncing
-  back, a whole flat turn in the air for a trick; a blob shadow
+  back, a wobble as a drift starts (the body rocks out toward the outside of
+  the bend on a roll spring of its own, about 0.075 rad at the first swing,
+  then back two or three times, still within 0.65 s), a light tremble when
+  slow or waiting on the grid (0.0045 rad of pitch and 0.0035 of roll at about
+  72 to 86 rad/s, each kart out of step with the next, full below 1.5 m/s and
+  gone by 4.5 m/s where the rough road's shake takes over; its phase is stepped
+  so no frame turns through more than 1.9 rad of it, which keeps it a buzz at
+  30 fps; none of this for Reduce Motion), a whole flat turn in the air for a
+  trick; a blob shadow
   (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
@@ -686,7 +707,10 @@ that file exists (`render/art.ts`).
   flash at the pipes as a boost catches), streaks of wind rushing past a
   watched kart along its course from about 21 m/s, drawn in closer and thicker
   in a slipstream as it charges, and many more on a boost (none for Reduce
-  Motion), dust off the road, a spin, a
+  Motion), small soft grey puffs from both exhausts every 0.13 to 0.2 s while a
+  grounded kart is under 8 m/s and not boosting (waiting on the grid, pulling
+  away; the karts no view follows puff from one pipe at a time, so half as
+  many), dust off the road, a spin, a
   hop, a puff on a bump. The karts the views follow get the full show; the rest
   of the pack throws fewer sparks and flames (`Effects.focus`), so a pack
   drifting round a hairpin does not use up the particles of the karts watched.
@@ -1127,6 +1151,17 @@ tight type, springy motion; a white pill is the one main action of a screen;
    "Hold it level" (the level is set) → "Turn it" → "Open your hands to
    brake" → ready. After the first time, only "Hold it level". Back goes to
    the driver stage.
+4b. **How to Drive** (`howto.ts`, every visit, for hands, keys and pads
+   alike, after the check or straight after the driver stage): six glass
+   cards, one move each (Steer, Go, Brake, Drift and Boost, Use an Item,
+   Honk), said for what the player drives with: an icon and a line for hands
+   ("In a bend, open both hands to drift. Close them to boost."), the caps
+   for keys and pads. A card lights while its move is being made, and an
+   item or a honk pops its card, so the screen is tried, not only read; a
+   line under the cards gives the flying start and the trick. Continue goes
+   on to the lobby (the device says it is ready only then); for hands,
+   raising both open hands (the cheer) goes on too, so nobody has to let go
+   of the wheel for the mouse. Back goes to the driver stage.
 5. **Lobby** (`lobby.ts`, `lobby.css`). Two columns. On the left, the room:
    the host's join card (the QR code, the code large, Copy Link), a big card
    for every racer (their driver in their kart colour, name, how they drive
@@ -1178,8 +1213,8 @@ track counts for its track.
 
 **A gamepad** finds its way round the menus (`padnav.ts`): the d-pad or the
 stick moves a visible focus ring to the nearest thing that way, A presses,
-B steps back only where leaving loses nothing (You, the wheel check, a
-sheet), and Start opens and closes the pause sheet. The driver stage reads
+B steps back only where leaving loses nothing (You, the wheel check, How
+to Drive, a sheet), and Start opens and closes the pause sheet. The driver stage reads
 the pad itself, and in a race the pad drives.
 
 Troubles say what happened and what to do: "There's no race with that code.

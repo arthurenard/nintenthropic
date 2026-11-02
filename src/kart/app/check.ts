@@ -9,7 +9,9 @@
  * their columns, with a chip for each (their colour, name, and the ring and
  * tick). The words say what the player furthest behind has still to do.
  */
+import type { EdgeWay } from "../contract";
 import { $, announce, element, icon, setText } from "../../ui/dom";
+import { EdgeHint } from "./edgeHint";
 import { setWheelChecked } from "./prefs";
 import type { Disposable, Services, WheelControl } from "./services";
 import { focusHeading } from "./ui";
@@ -39,6 +41,14 @@ const WORDS: Record<Step, readonly [title: string, detail: string]> = {
   ready: ["Ready", "Your wheel is set."],
 };
 
+/** Hands nearing the edge of the picture (or of the player's column): which way to move, as they see themself. */
+const EDGE_DETAIL: Record<EdgeWay, string> = {
+  left: "Move a little to your left.",
+  right: "Move a little to your right.",
+  down: "Lower your hands a little.",
+  up: "Raise your hands a little.",
+};
+
 /** How far the wheel must turn, degrees, to count as turned. */
 const TURNED = 20;
 /** A condition must hold this long, ms, to count (a flicker of a hand does not). */
@@ -60,6 +70,8 @@ interface Entry {
   left: boolean;
   right: boolean;
   lostSince: number | null;
+  /** Their hands nearing the edge of the picture. */
+  edge: EdgeHint;
   figure: HTMLElement;
   ring: SVGCircleElement;
   preview: Disposable;
@@ -175,7 +187,7 @@ export class CheckScreen {
       figure.append(caption);
     }
     const preview = together ? NO_PICTURE : this.services.preview(view, player.control, "large");
-    return { player, step: 0, since: null, left: false, right: false, lostSince: null, figure, ring: fill, preview };
+    return { player, step: 0, since: null, left: false, right: false, lostSince: null, edge: new EdgeHint(), figure, ring: fill, preview };
   }
 
   /** A player arrives at a step: the level starts afresh as they come to it. */
@@ -205,6 +217,7 @@ export class CheckScreen {
     const wheel = entry.player.control.wheel;
     // How long the hands have been gone, for the words.
     entry.lostSince = wheel.hands < 2 ? (entry.lostSince ?? now) : null;
+    entry.edge.update(wheel.mode === "lost" ? null : (wheel.edge ?? null), now);
     const holds = (condition: boolean) => {
       entry.since = condition ? (entry.since ?? now) : null;
       return entry.since !== null && now - entry.since >= HOLD;
@@ -248,6 +261,12 @@ export class CheckScreen {
     let detail = WORDS[step][1];
     if (step === "level" && behind.player.control.wheel.hands < 2) detail = "Hold both fists up, like a wheel.";
     if (step === "turn" && behind.left !== behind.right) detail = "Now the other way.";
+    // Hands nearing the edge, anyone's (named when there are several): where they sit now is where they will race.
+    const edging = step === "ready" ? undefined : behind.edge.shown ? behind : this.entries.find((entry) => entry.edge.shown);
+    if (edging?.edge.shown) {
+      const words = EDGE_DETAIL[edging.edge.shown];
+      detail = this.entries.length > 1 ? `${edging.player.name}: ${words.charAt(0).toLowerCase()}${words.slice(1)}` : words;
+    }
     if ((step === "level" || step === "turn" || step === "brake") && behind.lostSince !== null && now - behind.lostSince > LOST_FOR) {
       detail = "Show both hands.";
     }

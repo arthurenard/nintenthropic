@@ -387,7 +387,15 @@ export interface WheelStatus {
   mode: "drive" | "brake" | "lost";
   /** The level has been set (hold the wheel level at the start). */
   levelled: boolean;
+  /**
+   * Which way to move the hands to keep them in view, as the player sees themself, when one is near the edge of the
+   * picture (or of their column of a shared camera) or has just gone out past it; null or absent when both are well in.
+   */
+  edge?: EdgeWay | null;
 }
+
+/** A way to move the hands, as the player sees themself in the mirrored picture. */
+export type EdgeWay = "left" | "right" | "up" | "down";
 
 export interface WheelHand {
   /** The palm's centre in the mirrored picture, 0..1 (x right, y down). */
