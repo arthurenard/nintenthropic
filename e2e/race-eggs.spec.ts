@@ -78,7 +78,8 @@ test("H honks: a Honk! bubble over the kart, and the tricks are in the pause she
   await expect(bubble).toHaveCount(1);
   // The anchor is a point; the words are what can be seen.
   await expect(bubble.locator(".gp-bubble-body")).toBeVisible();
-  await expect(bubble).toHaveText("Honk!");
+  // The driver is picked at random on a first visit: a robot beeps and the duck quacks.
+  await expect(bubble).toHaveText(/^(Honk!|Beep\.|Quack!)$/);
   await shot(page, info, "eggs-honk", 150);
   // It floats up and goes.
   await expect(bubble).toHaveCount(0, { timeout: 5_000 });
