@@ -1,19 +1,21 @@
 // @ts-check
 /**
- * Grip Prix's relay logins: a Vercel function. A room's devices ask here
+ * Grip Prix's relay logins: a Vercel function, and on Cloudflare the same
+ * `answer` behind cloudflare/worker.js. A room's devices ask here
  * (POST api/ice.json) for the ICE servers to reach each other through: STUN
  * always, and a login for Cloudflare's TURN relay when this deployment holds a
  * TURN key, so two devices that cannot reach each other directly (different
  * networks, a strict router) still meet, through the relay.
  *
- * The key (TURN_KEY_ID and TURN_KEY_API_TOKEN, set in Vercel's settings)
- * never reaches a page: each answer is a fresh login that lapses after a day.
+ * The key (TURN_KEY_ID and TURN_KEY_API_TOKEN: Vercel's settings, or the
+ * Worker's secrets) never reaches a page: each answer is a fresh login that lapses after a day.
  * Without a key, or when Cloudflare does not answer in time, the answer is
  * STUN alone, which is how rooms worked before: devices meet only where they
  * can reach each other directly.
  *
  * Only the game's own pages are answered, by their Origin (which a browser
- * sends with every POST), so another site cannot spend the relay. The path has
+ * sends with every POST): a page at the function's own address, or one of the
+ * addresses below, so another site cannot spend the relay. The path has
  * an extension (vercel.json maps it here) because arthurenard.me, which serves
  * the game under /super-claude-bros/, sends a path without one to a trailing
  * slash.
@@ -43,12 +45,14 @@ const CLOUDFLARE_MS = 3000;
 const ORIGINS = new Set(["https://www.arthurenard.me", "https://arthurenard.me"]);
 
 /**
- * The game's own pages: the live site, this project's Vercel addresses, and a dev server on this computer.
+ * The game's own pages: one at the function's own address (`self`, wherever the site is served), the live site,
+ * this project's Vercel addresses, and a dev server on this computer.
  * @param {string | null} origin
+ * @param {string} [self]
  */
-export function allowed(origin) {
+export function allowed(origin, self) {
   if (!origin) return false;
-  if (ORIGINS.has(origin)) return true;
+  if (origin === self || ORIGINS.has(origin)) return true;
   let url;
   try {
     url = new URL(origin);
@@ -108,7 +112,7 @@ const direct = () => ({ iceServers: DIRECT_SERVERS, relay: false, ttl: DIRECT_TT
  */
 export async function answer(request, env, fetcher = fetch) {
   if (request.method !== "POST") return json(405, direct());
-  if (!allowed(request.headers.get("origin"))) return json(403, direct());
+  if (!allowed(request.headers.get("origin"), new URL(request.url).origin)) return json(403, direct());
   const id = env.TURN_KEY_ID?.trim();
   const token = env.TURN_KEY_API_TOKEN?.trim();
   if (!id || !token) return json(200, direct());

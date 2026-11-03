@@ -1,0 +1,16 @@
+// The site on Cloudflare (Workers with static assets). Cloudflare's Git
+// integration builds with `npm run build` and deploys with `npx wrangler deploy`;
+// the TURN key is two secrets, TURN_KEY_ID and TURN_KEY_API_TOKEN (README).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "super-claude-bros",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Only the relay logins run the script; everything else is a file.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
+}

@@ -229,15 +229,26 @@ npm run build        # the static site, into dist/
 
 CI runs the type check, the unit tests, the build and the end-to-end tests on
 every push to `main` and every pull request. The site is the static build in
-`dist/`, deployed on Vercel at the address above; its paths are relative, so
-the same build works at a domain's root or under a path. Beside it, Vercel
-runs one function, `api/ice.ts` (served as `api/ice.json`), which hands
-Grip Prix rooms their relay login. It needs a Cloudflare TURN key in the
-project's environment variables, `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`
-(a TURN key made in Cloudflare's dashboard, under Realtime; free for the
-first 1,000 GB a month); without them rooms still work, on one Wi-Fi. To try the relay on
-one computer, open `race.html?relay=only` in two windows: they connect
-through the relay or not at all.
+`dist/`; its paths are relative, so the same build works at a domain's root or
+under a path. Beside it runs one function, `api/ice.js` (served as
+`api/ice.json`), which hands Grip Prix rooms their relay login. Either host
+works:
+
+- **Cloudflare** (`wrangler.jsonc`): a Worker serves `dist/` as static files
+  (no bandwidth cap on the free plan) and runs only for `/api/`
+  (`cloudflare/worker.js`). Cloudflare's Git integration builds with
+  `npm run build` and deploys with `npx wrangler deploy`; the TURN key is two
+  secrets, `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`. `npm run build && npx
+  wrangler dev` runs it on this computer. Cloudflare serves `race.html` as
+  `/race`, by a redirect that keeps the join code.
+- **Vercel** (`vercel.json`): the same build, the function in `api/`, the key
+  in the project's environment variables under the same two names.
+
+The function answers only pages at its own address and the addresses listed in
+it. The TURN key is made in Cloudflare's dashboard, under Realtime (free for
+the first 1,000 GB a month); without it rooms still work, on one Wi-Fi. To try
+the relay on one computer, open `race.html?relay=only` in two windows: they
+connect through the relay or not at all.
 
 The design language is in [docs/DESIGN.md](docs/DESIGN.md), the architecture
 and its contracts in [docs/WEB_ARCHITECTURE.md](docs/WEB_ARCHITECTURE.md), and

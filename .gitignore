@@ -16,3 +16,7 @@ __pycache__/
 
 # Offline renders for listening (tools/listen/render.mjs)
 tools/listen/out/
+
+# Cloudflare (wrangler.jsonc): local state and local secrets
+.wrangler/
+.dev.vars*

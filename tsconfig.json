@@ -14,5 +14,5 @@
     "allowJs": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "e2e", "api", "vite.config.ts"]
+  "include": ["src", "e2e", "api", "cloudflare", "vite.config.ts"]
 }
