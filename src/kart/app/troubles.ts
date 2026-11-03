@@ -4,6 +4,7 @@
  * Voice). Nothing here is an error code or a stack trace.
  */
 import { $, icon, setText } from "../../ui/dom";
+import { relayReady } from "../net/ice";
 
 export type TroubleKind =
   | "not-found"
@@ -25,6 +26,8 @@ interface TroubleWords {
   icon: string;
   title: string;
   body: string;
+  /** What to say instead when the room had a relay, and players need not share a Wi-Fi (net/ice.ts). */
+  relayed?: string;
 }
 
 export const TROUBLES: Record<TroubleKind, TroubleWords> = {
@@ -47,11 +50,13 @@ export const TROUBLES: Record<TroubleKind, TroubleWords> = {
     icon: "wifi-off",
     title: "Connection Lost",
     body: "Lost the connection to the race. Make sure everyone is on the same Wi-Fi, then try again.",
+    relayed: "Lost the connection to the race. Make sure everyone is online, then try again.",
   },
   unreachable: {
     icon: "wifi-off",
     title: "Can’t Reach the Race",
     body: "The race didn’t answer. Join from the same Wi-Fi as the host, then try again.",
+    relayed: "The race didn’t answer. Check your internet connection, then try again.",
   },
   started: {
     icon: "exclamation",
@@ -112,7 +117,7 @@ export function showTrouble(kind: TroubleKind, fixes: readonly Fix[]): void {
   const words = TROUBLES[kind];
   $("trouble-icon").replaceChildren(icon(words.icon));
   setText("trouble-title", words.title);
-  setText("trouble-body", words.body);
+  setText("trouble-body", words.relayed && relayReady() ? words.relayed : words.body);
   const buttons = fixes.map((fix, i) => {
     const button = document.createElement("button");
     button.type = "button";

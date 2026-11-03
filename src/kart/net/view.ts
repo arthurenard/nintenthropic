@@ -4,14 +4,24 @@
  *
  * Other people's karts are drawn a moment in the past, between two snapshots
  * the guest already has, so they glide instead of stepping. The price is that
- * they are ~70 ms behind; the guest's own karts do not pay it (they are
- * predicted, see guest.ts).
+ * they are ~70 ms behind (more over an uneven line: `LagMeter`); the guest's
+ * own karts do not pay it (they are predicted, see guest.ts).
  */
 import { TICK, type KartView, type Race, type RaceView, type ThingView } from "../contract";
 import { clamp, lerp, lerpAngle } from "./util";
 
-/** How far behind the newest snapshot the others are drawn, seconds. */
+/** How far behind the newest snapshot the others are drawn on a steady line, seconds. */
 export const RENDER_LAG = 0.07;
+/** And at most, on the most uneven, seconds. */
+export const MAX_LAG = 0.25;
+/** Arrivals the lag is judged on: three seconds of snapshots. */
+const LAG_WINDOW = 90;
+/** The share of arrivals the lag covers: one straggler in ten is carried over (`SnapshotBuffer.at`) instead. */
+const LAG_SHARE = 0.9;
+/** Room kept over the snapshots' own spacing and their lateness, seconds. */
+const LAG_MARGIN = 0.02;
+/** One arrival this much later or sooner than the one before is not unevenness but a stop (a pause, a sleeping tab), seconds. */
+const LAG_BREAK = 0.5;
 /** How far past the newest snapshot a kart is carried on while the next is awaited, seconds. */
 const MAX_EXTRAPOLATION = 0.1;
 /** Snapshots kept: about half a second. */
@@ -148,8 +158,59 @@ export class SnapshotBuffer {
 }
 
 /**
+ * How far behind the newest snapshot to draw the others, from how unevenly
+ * snapshots arrive. An arrival's lateness is how much longer it took than the
+ * quickest of the last three seconds, and the lag covers nine in ten. On a
+ * steady line (one Wi-Fi) that is `RENDER_LAG`, as it always was; over the
+ * internet, where snapshots bunch up and straggle, it grows (to `MAX_LAG`)
+ * so the others still glide instead of stalling and leaping. It rises at
+ * once, and eases back down over a few seconds once the line steadies.
+ */
+export class LagMeter {
+  private offsets = new Float64Array(LAG_WINDOW);
+  private sorted = new Float64Array(LAG_WINDOW);
+  private count = 0;
+  private next = 0;
+  private last = Number.NaN;
+  private lag_ = RENDER_LAG;
+
+  get lag(): number {
+    return this.lag_;
+  }
+
+  reset(): void {
+    this.count = 0;
+    this.next = 0;
+    this.last = Number.NaN;
+    this.lag_ = RENDER_LAG;
+  }
+
+  /** A snapshot of host time `time` arrived at this device's time `at`, both seconds. Returns the lag. */
+  note(time: number, at: number): number {
+    const offset = at - time;
+    if (Math.abs(offset - this.last) > LAG_BREAK) {
+      this.count = 0;
+      this.next = 0;
+    }
+    this.last = offset;
+    this.offsets[this.next] = offset;
+    this.next = (this.next + 1) % LAG_WINDOW;
+    if (this.count < LAG_WINDOW) this.count++;
+    // Until the window is full, what it holds is its start.
+    const sorted = this.sorted.subarray(0, this.count);
+    sorted.set(this.offsets.subarray(0, this.count));
+    sorted.sort();
+    const lateness = sorted[Math.floor((this.count - 1) * LAG_SHARE)]! - sorted[0]!;
+    const target = clamp(2 * TICK + lateness + LAG_MARGIN, RENDER_LAG, MAX_LAG);
+    this.lag_ = target > this.lag_ ? target : lerp(this.lag_, target, 0.05);
+    return this.lag_;
+  }
+}
+
+/**
  * The host-time a guest draws the others at. It keeps pace with real time and
- * leans gently toward "newest snapshot minus the lag" — a little faster when
+ * leans gently toward "newest snapshot minus the lag" (`RENDER_LAG`, or the
+ * `LagMeter`'s) — a little faster when
  * behind, slower when ahead — so the uneven arrival of snapshots never shows
  * as a stutter, and it never runs backwards.
  */
@@ -161,8 +222,8 @@ export class DisplayClock {
   }
 
   /** Moves on by `dt` real seconds; `newest` is the host time of the latest snapshot. */
-  advance(dt: number, newest: number): number {
-    const target = newest - RENDER_LAG;
+  advance(dt: number, newest: number, lag = RENDER_LAG): number {
+    const target = newest - lag;
     if (Number.isNaN(this.time) || Math.abs(target - this.time) > 0.5) {
       this.time = target;
     } else {

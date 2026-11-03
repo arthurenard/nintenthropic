@@ -149,8 +149,8 @@ describe("the BroadcastChannel transport", () => {
   });
 });
 
-/** A stand-in for PeerJS: a broker in a Map, and connections that hand data across at once. */
-function fakePeerJs() {
+/** A stand-in for PeerJS: a broker in a Map, and connections that hand data across at once (`webrtc: false`: with no WebRTC connection under them to add a channel to). */
+function fakePeerJs(options: { webrtc?: boolean } = {}) {
   const peers = new Map<string, FakePeer>();
   // Real PeerJS answers over a socket: never before the caller has had time to listen.
   const later = (run: () => void) => void setTimeout(run, 0);
@@ -167,10 +167,42 @@ function fakePeerJs() {
     }
   }
 
+  /** A channel the two ends made themselves (`negotiated`): it reaches the other end's channel of the same id, if it has one. */
+  class FakeChannel {
+    readyState = "open";
+    bufferedAmount = 0;
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    constructor(
+      readonly owner: FakePC,
+      readonly init: RTCDataChannelInit,
+    ) {}
+    send(data: unknown) {
+      const theirs = this.owner.other?.channels.get(this.init.id ?? -1);
+      later(() => theirs?.readyState === "open" && theirs.onmessage?.({ data }));
+    }
+    close() {
+      this.readyState = "closed";
+    }
+  }
+
+  /** The WebRTC connection under one PeerJS connection: only what peer.ts asks of it. */
+  class FakePC {
+    channels = new Map<number, FakeChannel>();
+    other: FakePC | null = null;
+    createDataChannel(_label: string, init: RTCDataChannelInit) {
+      const channel = new FakeChannel(this, init);
+      channels.push(channel);
+      this.channels.set(init.id ?? -1, channel);
+      return channel;
+    }
+  }
+  const channels: FakeChannel[] = [];
+
   class FakeConn extends Emitter {
     open = false;
     other: FakeConn | null = null;
     dataChannel = { bufferedAmount: 0 };
+    peerConnection = options.webrtc === false ? undefined : new FakePC();
     constructor(
       readonly peer: string,
       readonly metadata: unknown,
@@ -192,6 +224,8 @@ function fakePeerJs() {
       });
     }
   }
+
+  const connections: FakeConn[] = [];
 
   class FakePeer extends Emitter {
     id: string;
@@ -215,6 +249,7 @@ function fakePeerJs() {
     }
     connect(id: string, options: { metadata?: unknown; reliable?: boolean; serialization?: string; label?: string }) {
       const mine = new FakeConn(id, options.metadata, options);
+      connections.push(mine);
       later(() => {
         const remote = peers.get(id);
         if (!remote) {
@@ -224,6 +259,10 @@ function fakePeerJs() {
         const theirs = new FakeConn(this.id, options.metadata, options);
         mine.other = theirs;
         theirs.other = mine;
+        if (mine.peerConnection && theirs.peerConnection) {
+          mine.peerConnection.other = theirs.peerConnection;
+          theirs.peerConnection.other = mine.peerConnection;
+        }
         remote.emit("connection", theirs);
         later(() => {
           mine.open = theirs.open = true;
@@ -240,13 +279,17 @@ function fakePeerJs() {
     }
   }
   const module = { Peer: FakePeer } as unknown as PeerModule;
-  return { module, peers };
+  return { module, peers, connections, channels };
 }
 
 describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
   const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 5));
+  /** Waits for `done` (a busy machine runs the stand-in's timers late), two seconds at most. */
+  const until = async (done: () => boolean) => {
+    for (let i = 0; i < 400 && !done(); i++) await flush();
+  };
 
-  it("registers the host as grip-prix-v1-<CODE>, with the STUN server and the broker settings", async () => {
+  it("registers the host as grip-prix-v1-<CODE>, with STUN alone (no site to ask) and the broker settings", async () => {
     const fake = fakePeerJs();
     const settings: Record<string, unknown>[] = [];
     const load = async () => ({
@@ -288,7 +331,30 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
     await expect(peerTransport({ load }).connect("ABCD")).rejects.toMatchObject({ kind: "network" });
   });
 
-  it("joins a guest's two connections into one link, with a reliable and an unordered channel", async () => {
+  it("connects with the ICE servers it is given, and through the relay alone when asked", async () => {
+    const fake = fakePeerJs();
+    const settings: Record<string, unknown>[] = [];
+    const load = async () => ({
+      Peer: class extends (fake.module.Peer as unknown as new (id?: string, s?: Record<string, unknown>) => object) {
+        constructor(id?: string, s?: Record<string, unknown>) {
+          super(id, s);
+          settings.push(s ?? {});
+        }
+      },
+    }) as unknown as PeerModule;
+    const relay = { urls: ["turn:relay.example:3478"], username: "u", credential: "c" };
+    const ice = async () => [{ urls: STUN }, relay];
+    const host = peerTransport({ load, ice });
+    await host.listen("WXYZ");
+    const guest = peerTransport({ load, ice, relayOnly: true });
+    await guest.connect("WXYZ");
+    expect(settings[0]!.config).toEqual({ iceServers: [{ urls: STUN }, relay] });
+    expect(settings[1]!.config).toEqual({ iceServers: [{ urls: STUN }, relay], iceTransportPolicy: "relay" });
+    host.close();
+    guest.close();
+  });
+
+  it("links a guest over one connection, with a lossy channel beside it that both ends make alike", async () => {
     const fake = fakePeerJs();
     const load = async () => fake.module;
     const host = peerTransport({ load });
@@ -298,9 +364,15 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
 
     const guest = peerTransport({ load });
     const onGuest = await guest.connect("ROOM");
-    await flush();
+    await until(() => links.length > 0);
     expect(links).toHaveLength(1);
     const onHost = links[0]!;
+    expect(fake.connections.map((c) => c.options)).toEqual([{ serialization: "raw", reliable: true, label: "r", metadata: expect.anything() }]);
+    // Never resent, in no order, and the same id at both ends, which is what lets them find each other unasked.
+    expect(fake.channels.map((c) => c.init)).toEqual([
+      { negotiated: true, id: 7, ordered: false, maxRetransmits: 0 },
+      { negotiated: true, id: 7, ordered: false, maxRetransmits: 0 },
+    ]);
 
     const seen: [string, Channel, string][] = [];
     onHost.onMessage((channel, data) => seen.push(["host", channel, data]));
@@ -309,6 +381,7 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
     onGuest.send("unreliable", "u");
     onHost.send("reliable", "R");
     onHost.send("unreliable", "U");
+    await until(() => seen.length >= 4);
     await flush();
     expect(seen).toEqual(
       expect.arrayContaining([
@@ -318,16 +391,63 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
         ["guest", "unreliable", "U"],
       ]),
     );
+    expect(seen).toHaveLength(4);
 
-    // A guest who hangs up is heard on the host's end of the link.
+    // A guest who hangs up is heard on the host's end of the link, and the lossy channel goes with it.
     const closed: string[] = [];
     onHost.onClose((close) => closed.push(close.reason));
     onGuest.close();
-    await flush();
+    await until(() => closed.length > 0);
     expect(closed).toEqual(["closed"]);
     expect(onHost.open).toBe(false);
+    expect(fake.channels.map((c) => c.readyState)).toEqual(["closed", "closed"]);
     host.close();
     guest.close();
+  });
+
+  it("sends unreliable messages the reliable way when the lossy channel cannot be made", async () => {
+    const fake = fakePeerJs({ webrtc: false });
+    const load = async () => fake.module;
+    const host = peerTransport({ load });
+    const links: Link[] = [];
+    host.onIncoming((link) => links.push(link));
+    await host.listen("ROOM");
+    const onGuest = await peerTransport({ load }).connect("ROOM");
+    await until(() => links.length > 0);
+    const got: string[] = [];
+    links[0]!.onMessage((channel, data) => got.push(`${channel}:${data}`));
+    onGuest.send("unreliable", "u");
+    await until(() => got.length > 0);
+    expect(got).toEqual(["reliable:u"]);
+  });
+
+  it("lets an old-shape guest (two connections) in far enough to be told the version is wrong", async () => {
+    const fake = fakePeerJs();
+    const load = async () => fake.module;
+    const host = peerTransport({ load, timeout: 200 });
+    const links: Link[] = [];
+    host.onIncoming((link) => links.push(link));
+    await host.listen("ROOM");
+    const old = new (fake.module.Peer as unknown as new (id?: string) => {
+      connect: (id: string, o: object) => { open: boolean; on: (e: string, h: (...a: never[]) => void) => void; send: (d: string) => void };
+      on: (e: string, h: () => void) => void;
+      open: boolean;
+    })();
+    await until(() => old.open);
+    const r = old.connect("grip-prix-v1-ROOM", { serialization: "raw", reliable: true, label: "r", metadata: { link: "abc", ch: "r" } });
+    const u = old.connect("grip-prix-v1-ROOM", { serialization: "raw", reliable: false, label: "u", metadata: { link: "abc", ch: "u" } });
+    await until(() => links.length > 0 && r.open && u.open);
+    expect(links).toHaveLength(1);
+    expect(r.open && u.open).toBe(true);
+    const heard: string[] = [];
+    r.on("data", (data: never) => heard.push(data));
+    links[0]!.send("reliable", '{"t":"reject","reason":"version"}');
+    await until(() => heard.length > 0);
+    expect(heard).toEqual(['{"t":"reject","reason":"version"}']);
+    // Its second connection is held only a while.
+    await until(() => !u.open);
+    expect(u.open).toBe(false);
+    host.close();
   });
 
   it("drops an unreliable message when that channel is badly backed up", async () => {
@@ -341,11 +461,11 @@ describe("the PeerJS transport (against a stand-in for PeerJS)", () => {
     await flush();
     const got: string[] = [];
     links[0]!.onMessage((_c, data) => got.push(data));
-    const conns = (onGuest as unknown as { u: { dataChannel: { bufferedAmount: number } } }).u;
-    conns.dataChannel.bufferedAmount = 10 * 1024 * 1024;
+    const lossy = (onGuest as unknown as { u: { bufferedAmount: number } }).u;
+    lossy.bufferedAmount = 10 * 1024 * 1024;
     onGuest.send("unreliable", "stale");
     onGuest.send("reliable", "kept");
-    conns.dataChannel.bufferedAmount = 0;
+    lossy.bufferedAmount = 0;
     onGuest.send("unreliable", "fresh");
     await flush();
     expect(got).toEqual(["kept", "fresh"]);

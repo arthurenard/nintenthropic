@@ -10,7 +10,8 @@
  *               events, results, ping, pong, leave
  *   unreliable  in (a guest's inputs), snap (the host's race, 30 times a second)
  *
- * Bump PROTOCOL_VERSION whenever a message changes shape.
+ * Bump PROTOCOL_VERSION whenever a message changes shape, or the way devices
+ * connect (7: one WebRTC connection with a lossy channel, see peer.ts).
  */
 import type {
   DriveInput,
@@ -23,7 +24,7 @@ import type {
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
