@@ -403,20 +403,23 @@
           <p class="title3" id="photo-finish-words"></p>
         </figcaption>
       </figure>
-      <div class="results-inner">
+      <div class="results-inner" id="results-inner">
         <div class="page-head center">
           <p class="eyebrow" id="results-eyebrow"></p>
           <h1 class="display" id="results-title" tabindex="-1">Results</h1>
           <p class="body secondary" id="results-sub" hidden></p>
         </div>
-        <div class="results-card glass">
-          <table class="standings num" id="standings">
-            <caption class="visually-hidden">Standings</caption>
-            <thead>
-              <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th><th scope="col" id="th-points" hidden>Points</th></tr>
-            </thead>
-            <tbody id="standings-body"></tbody>
-          </table>
+        <div class="results-body" id="results-body">
+          <div class="finish-photos" id="finish-photos" role="group" aria-label="Finish-line photos" hidden></div>
+          <div class="results-card glass" id="results-card">
+            <table class="standings num" id="standings">
+              <caption class="visually-hidden">Standings</caption>
+              <thead>
+                <tr><th scope="col">Place</th><th scope="col">Driver</th><th scope="col">Time</th><th scope="col">Best Lap</th><th scope="col" id="th-points" hidden>Points</th></tr>
+              </thead>
+              <tbody id="standings-body"></tbody>
+            </table>
+          </div>
         </div>
         <div class="results-actions">
           <button id="results-next" class="button primary large" hidden>Standings</button>
@@ -424,6 +427,9 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-restart" /></svg>Race Again
           </button>
           <button id="results-lobby" class="button secondary large">Back to Lobby</button>
+          <button id="results-share" class="button secondary large" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-share" /></svg>Share
+          </button>
         </div>
         <p class="footnote secondary" id="results-wait" hidden></p>
       </div>
@@ -488,7 +494,7 @@
     <dialog id="prime" class="sheet alert" aria-labelledby="prime-title">
       <span class="alert-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera" /></svg></span>
       <h2 class="title2" id="prime-title">Use Your Camera</h2>
-      <p class="body secondary">Grip Prix needs your camera to see your hands. The picture stays on this device.</p>
+      <p class="body secondary">Grip Prix needs your camera to see your hands. The picture stays on this device; only your photo at the finish line goes to the friends you race.</p>
       <div class="sheet-actions">
         <button class="button primary wide" id="prime-continue">Continue</button>
         <button class="button plain wide" id="prime-keys">Drive With Keyboard</button>
@@ -531,6 +537,10 @@
           <label class="row-label" for="pause-fps">Frame Rate</label>
           <button type="button" class="switch" role="switch" id="pause-fps" aria-checked="false"></button>
         </div>
+        <div class="row" id="photo-row" hidden>
+          <label class="row-label" for="pause-photo">Finish Photo</label>
+          <button type="button" class="switch" role="switch" id="pause-photo" aria-checked="true" aria-describedby="photo-note"></button>
+        </div>
       </div>
       <div class="menu-list">
         <button class="button primary wide" id="pause-resume">
@@ -548,6 +558,7 @@
         <ul id="pause-tricks-list"></ul>
       </div>
       <p class="footnote tertiary" id="graphics-note"></p>
+      <p class="footnote tertiary" id="photo-note" hidden>Your camera takes a photo as you cross the line, for the results. The friends you race see it too; it is never saved or uploaded.</p>
       <p class="footnote tertiary" id="pause-note"></p>
     </dialog>
 
@@ -591,6 +602,7 @@
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.6" y="10.6" width="12.8" height="9.4" rx="2.4" /><path d="M8.6 10.6V8.2a3.4 3.4 0 0 1 6.8 0v2.4" /></symbol>
       <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4.2l1.5 4.3 4.3 1.5-4.3 1.5L10 15.8l-1.5-4.3L4.2 10l4.3-1.5z" /><path d="M18 14.2l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></symbol>
       <symbol id="i-person-plus" viewBox="0 0 24 24"><circle cx="9.6" cy="8.4" r="3.5" /><path d="M3.4 19.6c.5-3.6 3.1-5.7 6.2-5.7s5.7 2.1 6.2 5.7" /><path d="M18.6 8.2v6M15.6 11.2h6" /></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3.8v10.4" /><path d="M8.4 7.2 12 3.6l3.6 3.6" /><path d="M8.6 10.2H7.2a1.9 1.9 0 0 0-1.9 1.9v6.2a1.9 1.9 0 0 0 1.9 1.9h9.6a1.9 1.9 0 0 0 1.9-1.9v-6.2a1.9 1.9 0 0 0-1.9-1.9h-1.4" /></symbol>
       <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7.4 4.4h9.2v5.2a4.6 4.6 0 0 1-9.2 0z" /><path d="M7.4 6H4.6v1.4a3 3 0 0 0 3 3M16.6 6h2.8v1.4a3 3 0 0 1-3 3" /><path d="M12 14.2v3.2M8.6 20h6.8M9.6 20v-2.6h4.8V20" /></symbol>
     </svg>
     <script type="module" src="/src/kart/main.ts"></script>

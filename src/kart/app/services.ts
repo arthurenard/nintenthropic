@@ -84,6 +84,12 @@ export interface ColumnSeat {
   colour: string;
 }
 
+/** A still taken from the camera for a finish-line photo: a small picture in memory until it is made a JPEG, or let go. */
+export interface Still {
+  /** The JPEG, as a data URL of at most MAX_PHOTO_CHARS (contract.ts), or null if it cannot be made. */
+  encode(): Promise<string | null>;
+}
+
 /** A picture of a wheel (the camera, mirrored, with the wheel drawn on it) that can be taken down. */
 export interface Disposable {
   dispose(): void;
@@ -219,6 +225,12 @@ export interface Services {
    * whose own columns would be narrow slivers.
    */
   previewColumns(container: HTMLElement, seats: readonly ColumnSeat[], size: "corner" | "large"): Disposable;
+  /**
+   * A still for a wheel player's finish-line photo: the camera's picture as it is at the call, mirrored as they see
+   * themself, their own column of it when they share the camera, small; made a JPEG only if it is the one kept (`Still`).
+   * Null for keys and pads, and with no picture. Nothing is kept here. Optional: without it nobody has a photo.
+   */
+  photo?(control: DriverControl): Still | null;
   /**
    * The podium's picture, on a canvas of its own: the ceremony after a Grand Prix. May throw WebGLUnavailable.
    * Optional: without it (or where it throws) the podium is the final standings alone.

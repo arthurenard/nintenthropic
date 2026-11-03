@@ -7,24 +7,26 @@
  * Which channel carries what:
  *
  *   reliable    hello, welcome, reject, configure, ready, lost, lobby, start,
- *               events, results, ping, pong, leave
+ *               events, results, photo, ping, pong, leave
  *   unreliable  in (a guest's inputs), snap (the host's race, 30 times a second)
  *
  * Bump PROTOCOL_VERSION whenever a message changes shape, or the way devices
- * connect (7: one WebRTC connection with a lossy channel, see peer.ts).
+ * connect (7: one WebRTC connection with a lossy channel, see peer.ts; 8: the
+ * finish-line photos).
  */
-import type {
-  DriveInput,
-  DriverControl,
-  LobbyState,
-  RaceEvent,
-  RaceResult,
-  RacerSetup,
-  RaceSnapshot,
+import {
+  MAX_PHOTO_CHARS,
+  type DriveInput,
+  type DriverControl,
+  type LobbyState,
+  type RaceEvent,
+  type RaceResult,
+  type RacerSetup,
+  type RaceSnapshot,
 } from "../contract";
 import { clamp } from "./util";
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 /** Each input packet carries this many of the latest inputs, so a lost packet costs nothing. */
 export const INPUTS_PER_PACKET = 6;
@@ -83,6 +85,8 @@ export type ToHost =
    * so a packet that wandered in late from the last race is not taken for this one's.
    */
   | { t: "in"; r: number; k: [kart: number, inputs: WireInput[]][] }
+  /** A finish-line photo of one of this device's players (their kart `kart` in race `r`), sent once the race is decided. */
+  | PhotoMessage
   | { t: "ping"; at: number }
   | { t: "leave" };
 
@@ -95,10 +99,31 @@ export type ToGuest =
   | { t: "snap"; r: number; acks: Record<number, number>; state: RaceSnapshot }
   | { t: "events"; events: RaceEvent[] }
   | { t: "results"; result: RaceResult; lobby: LobbyState }
+  /** Another device's finish-line photo, passed on by the host (and the host's own players'). */
+  | PhotoMessage
   | { t: "pong"; at: number }
   | { t: "leave" };
 
+/** A finish-line photo on the wire: the race (its seed), the kart, and the picture as a JPEG data URL (`isPhoto`). */
+export interface PhotoMessage {
+  t: "photo";
+  r: number;
+  kart: number;
+  jpeg: string;
+}
+
 export type Message = ToHost | ToGuest;
+
+const PHOTO_HEAD = "data:image/jpeg;base64,";
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * Whether `value` is a finish-line photo as one is sent: a JPEG data URL of base64 and nothing else, no longer than
+ * MAX_PHOTO_CHARS. Anything else from the wire is dropped before a screen could show it.
+ */
+export function isPhoto(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_PHOTO_CHARS && value.startsWith(PHOTO_HEAD) && BASE64.test(value.slice(PHOTO_HEAD.length));
+}
 
 export function encode(message: Message): string {
   return JSON.stringify(message);

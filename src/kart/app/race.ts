@@ -13,6 +13,11 @@
  * Pausing is the session's, like a console's: practice stops, and so does a
  * room watched on the host's screen ("Paused" on every device, then a 3-2-1);
  * a screen whose race is its own only covers itself and the race goes on.
+ *
+ * As each of this device's wheel players crosses the line, their camera takes
+ * a few stills and keeps the one that caught them celebrating: their
+ * finish-line photo (finishPhotos.ts says when and which), for the results here
+ * and, through the session, everywhere else in the room.
  */
 import { WebGLUnavailable } from "../../engine/common";
 import type { DriverControl, EdgeWay, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRenderer, RaceView, Session } from "../contract";
@@ -20,13 +25,15 @@ import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
 import { EDGE_WORDS, EdgeHint } from "./edgeHint";
 import { PHOTO_GAP, recordDuck, taunts, tricksFor } from "./eggs";
+import { FinishShutter, PhotoBurst, reaction } from "./finishPhotos";
 import { itemWords, lapLabel, list, ordinal } from "./format";
 import { FrameRate } from "./graphicsui";
 import { HandsFirst, type TrackerCounts } from "./handsFirst";
 import { LoadingScreen, raceWords } from "./loading";
+import { loadFinishPhoto, saveFinishPhoto } from "./prefs";
 import { hostName, kartOf } from "./roster";
-import type { Disposable, RaceSound, Services } from "./services";
-import { colourDot } from "./ui";
+import type { Disposable, RaceSound, Services, Still } from "./services";
+import { colourDot, Switch } from "./ui";
 
 export type RaceFailure = "load" | "webgl";
 
@@ -35,6 +42,8 @@ export interface RaceHooks {
   restart(): void;
   /** The renderer could not start or load the race. */
   failed(kind: RaceFailure): void;
+  /** A finish-line photo of one of this device's players is ready (their kart, the race it was, the JPEG). */
+  photo?(shot: { kart: number; race: number; photo: string }): void;
 }
 
 export interface RaceContext {
@@ -96,6 +105,12 @@ export class RaceScreen {
   private still: string | null = null;
   /** How many times the drone has carried each kart back to the road (the results tease about it). */
   private rescues = new Map<number, number>();
+  /** When this device's wheel players' finish-line photos are taken, and their karts (worked out once a lobby). */
+  private readonly shutter = new FinishShutter();
+  private cameraKarts: number[] = [];
+  private cameraFor: LobbyState | null = null;
+  /** The bursts of stills being taken after the line, by kart (they outlive `end` for the moment they need). */
+  private bursts = new Map<number, { burst: PhotoBurst<Still>; control: DriverControl; session: Session; race: number }>();
   /** When each viewport's kart was last taunted, ms. */
   private taunted = new Map<number, number>();
   private cards: { place: HTMLElement; lap: HTMLElement; item: HTMLElement; slot: number }[] = [];
@@ -105,6 +120,8 @@ export class RaceScreen {
   private readonly loadingUi = new LoadingScreen();
   /** The small frame-rate readout, when the pause sheet's Frame Rate switch has it on. */
   private readonly rate = new FrameRate($("race-fps"));
+  /** The pause sheet's Finish Photo switch (for a device with a wheel player): kept, and true for the photo still to come. */
+  private readonly photoSwitch = new Switch($<HTMLButtonElement>("pause-photo"), (on) => saveFinishPhoto(on));
 
   /** The readout on or off (the pause sheet's switch, and the setting as it was kept). */
   showFrameRate(on: boolean): void {
@@ -176,6 +193,8 @@ export class RaceScreen {
     this.still = null;
     this.rescues = new Map();
     this.taunted = new Map();
+    this.shutter.reset();
+    this.cameraFor = null;
     $("view-toasts").replaceChildren();
     this.reported = "";
     this.banner = "";
@@ -207,6 +226,8 @@ export class RaceScreen {
   end(): void {
     this.running = false;
     cancelAnimationFrame(this.raf);
+    // A burst cut short keeps the best still it has.
+    for (const kart of [...this.bursts.keys()]) this.develop(kart);
     this.loadingUi.end();
     this.leaving = true;
     if (this.sheet.open) this.sheet.close();
@@ -240,6 +261,11 @@ export class RaceScreen {
     this.stopped = ctx.session.pause();
     this.pauseNote();
     this.tricks();
+    // The Finish Photo switch, for a device whose players include one on the wheel (a camera to take it with).
+    const camera = ctx.controls.some((control) => control.kind === "wheel");
+    $("photo-row").hidden = !camera;
+    $("photo-note").hidden = !camera;
+    this.photoSwitch.on = loadFinishPhoto();
     this.sheet.showModal();
     $("pause-resume").focus();
   }
@@ -329,10 +355,13 @@ export class RaceScreen {
     const view = ctx.session.frame(now);
     const lobby = ctx.session.lobby();
     const views = ctx.session.views();
+    // (After the race is decided there are no more views, but a burst begun at the line goes on.)
+    this.burstOn(now);
     this.hands(now, lobby, views);
     this.veil(lobby);
     if (!view) return;
     this.view = view;
+    this.snapPhotos(view, lobby, now);
     if (this.mode === "pending") this.choose(view);
     // While the room is stopped the picture holds still, effects and cameras too.
     const dt = lobby.pause ? 0 : seconds;
@@ -538,6 +567,60 @@ export class RaceScreen {
     } catch {
       this.still = null;
     }
+  }
+
+  // --- the finish-line photos ---------------------------------------------------------------------------------
+
+  /** Every frame: a burst of stills for each of this device's wheel players whose kart has just crossed the line. */
+  private snapPhotos(view: RaceView, lobby: LobbyState, now: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.services.photo) return;
+    if (lobby !== this.cameraFor) {
+      this.cameraFor = lobby;
+      this.cameraKarts = ctx.players.flatMap((player, i) => {
+        const kart = kartOf(lobby, player.slot);
+        return kart !== null && ctx.controls[i]?.kind === "wheel" ? [kart] : [];
+      });
+    }
+    if (this.cameraKarts.length === 0) return;
+    for (const kart of this.shutter.due(view, this.cameraKarts)) {
+      // Turned off in the pause sheet: no photo is taken at all.
+      if (!loadFinishPhoto()) continue;
+      const index = ctx.players.findIndex((player) => kartOf(lobby, player.slot) === kart);
+      const control = ctx.controls[index];
+      if (!control) continue;
+      this.bursts.set(kart, { burst: new PhotoBurst<Still>(now), control, session: ctx.session, race: lobby.race ?? 0 });
+    }
+    // The first still at once, on the frame of the line.
+    this.burstOn(now);
+  }
+
+  /** The bursts under way: each still that is due, the best kept; a finished burst is developed. */
+  private burstOn(now: number): void {
+    if (this.bursts.size === 0 || !this.services.photo) return;
+    for (const [kart, { burst, control }] of this.bursts) {
+      if (burst.due(now)) burst.offer(this.services.photo(control), reaction(control.wheel), now);
+      if (burst.over) this.develop(kart);
+    }
+  }
+
+  /** A burst's kept still made a JPEG and handed on: to the room, and to the results here. */
+  private develop(kart: number): void {
+    const taking = this.bursts.get(kart);
+    this.bursts.delete(kart);
+    const still = taking?.burst.best;
+    if (!taking || !still) return;
+    const { session, race } = taking;
+    still.encode().then(
+      (jpeg) => {
+        if (!jpeg) return;
+        session.sharePhoto?.(kart, jpeg);
+        this.hooks.photo?.({ kart, race, photo: jpeg });
+      },
+      () => {
+        // No photo this time: the results show their driver instead.
+      },
+    );
   }
 
   // --- the wheel's picture ------------------------------------------------------------------------------------

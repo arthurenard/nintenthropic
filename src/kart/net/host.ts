@@ -51,6 +51,7 @@ import {
   decodeInput,
   encode,
   encodeSnapshot,
+  isPhoto,
   packState,
   type ToGuest,
   type ToHost,
@@ -150,6 +151,13 @@ export class HostSession implements Session {
   private sinceSnapshot = 0;
   /** The tick the race was decided at, once it is. */
   private endedAt: number | null = null;
+
+  /**
+   * The race's finish-line photos by kart, and the device each came from: kept until the next race starts, and passed
+   * on to every other device once the race is decided (none goes out while anyone is still racing).
+   */
+  private photos = new Map<number, { photo: string; from: string }>();
+  private photoListeners = new Emitter<{ kart: number; race: number; photo: string }>();
 
   private lobbyListeners = new Emitter<LobbyState>();
   private closeListeners = new Emitter<SessionClosed>();
@@ -290,6 +298,11 @@ export class HostSession implements Session {
       case "in":
         if (message.r === this.raceId) this.onInputs(guest.device, message.k);
         return;
+      case "photo":
+        if (message.r === this.raceId && this.keepPhoto(message.kart, message.jpeg, guest.device)) {
+          this.photoListeners.emit({ kart: message.kart, race: this.raceId, photo: message.jpeg });
+        }
+        return;
       case "ping":
         this.send(guest.link, { t: "pong", at: message.at });
         return;
@@ -299,6 +312,36 @@ export class HostSession implements Session {
       default:
         return;
     }
+  }
+
+  // ─── The finish-line photos ───────────────────────────────────────────────
+
+  /**
+   * Keeps a photo of `kart` from `device` for this race, if the kart is one of that device's players' and has none yet,
+   * and passes it on now unless the race is still being run (then it goes with the results). False when refused.
+   */
+  private keepPhoto(kart: unknown, photo: unknown, device: string): boolean {
+    if (typeof kart !== "number" || !isPhoto(photo) || this.photos.has(kart)) return false;
+    const slot = this.kartSlots[kart];
+    if (slot === undefined || this.roster.deviceOfSlot(slot) !== device) return false;
+    this.photos.set(kart, { photo, from: device });
+    if (this.phase !== "racing") this.passPhoto(kart);
+    return true;
+  }
+
+  /** One photo to every device but the one it came from. */
+  private passPhoto(kart: number): void {
+    const kept = this.photos.get(kart);
+    if (kept) this.broadcast({ t: "photo", r: this.raceId, kart, jpeg: kept.photo }, kept.from);
+  }
+
+  sharePhoto(kart: number, photo: string): void {
+    if (this.closedWith) return;
+    this.keepPhoto(kart, photo, this.device);
+  }
+
+  onPhoto(listener: (photo: { kart: number; race: number; photo: string }) => void): () => void {
+    return this.photoListeners.add(listener);
   }
 
   private onLinkClosed(link: Link): void {
@@ -492,6 +535,7 @@ export class HostSession implements Session {
     this.outEvents = [];
     this.sinceSnapshot = 0;
     this.clock.reset();
+    this.photos.clear();
 
     const mine = this.roster.slotsOf(this.device);
     for (const [kartText, slot] of Object.entries(karts)) {
@@ -746,6 +790,8 @@ export class HostSession implements Session {
     this.lobbyCache = null;
     const lobby = this.lobby();
     this.broadcast({ t: "results", result: this.result, lobby });
+    // Nobody is racing now: the photos taken at the line go round (the guests send theirs once they hear the results).
+    for (const kart of this.photos.keys()) this.passPhoto(kart);
     this.lobbyListeners.emit(lobby);
   }
 

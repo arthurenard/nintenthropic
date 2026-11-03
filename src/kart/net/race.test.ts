@@ -551,3 +551,91 @@ describe("the line's health", () => {
     expect(guest.link.rtt!).toBeLessThan(110);
   });
 });
+
+describe("finish-line photos", () => {
+  /** A photo as one is sent: a JPEG data URL (its "picture" says whose it is). */
+  const jpeg = (who: string) => `data:image/jpeg;base64,${btoa(`photo of ${who}`).replace(/=+$/, "")}`;
+
+  async function threeDevices(world: World) {
+    const host = world.host();
+    host.setLocalPlayers([player("Ann", straight())]);
+    await world.run(0.1);
+    const bob = world.guest(host.lobby().code!);
+    bob.setLocalPlayers([player("Bob", straight())]);
+    const cy = world.guest(host.lobby().code!);
+    cy.setLocalPlayers([player("Cy", straight())]);
+    await world.run(1);
+    const heard = new Map<string, { kart: number; race: number; photo: string; phase: string }[]>();
+    for (const [name, session] of [["Ann", host], ["Bob", bob], ["Cy", cy]] as const) {
+      heard.set(name, []);
+      session.onPhoto!((shot) => heard.get(name)!.push({ ...shot, phase: session.lobby().phase }));
+    }
+    return { host, bob, cy, heard };
+  }
+
+  it("go round the room once the race is decided, never while anyone is still racing", async () => {
+    const world = new World({ latency: 30, jitter: 10, loss: 0.05 }, 21);
+    world.keep = false;
+    const { host, bob, cy, heard } = await threeDevices(world);
+    host.configure({ laps: 1, racers: 4 });
+    host.start();
+    await world.run(1);
+    const karts = { Ann: kartOf(host, "Ann"), Bob: kartOf(host, "Bob"), Cy: kartOf(host, "Cy") };
+    // Each device's player is photographed mid-race (as if over the line already): nobody hears of it yet.
+    host.sharePhoto!(karts.Ann, jpeg("Ann"));
+    bob.sharePhoto!(karts.Bob, jpeg("Bob"));
+    cy.sharePhoto!(karts.Cy, jpeg("Cy"));
+    await world.run(3);
+    expect(host.lobby().phase).toBe("racing");
+    for (const list of heard.values()) expect(list).toEqual([]);
+
+    const ended = await world.until(() => [host, bob, cy].every((session) => session.lobby().phase === "results"), 80);
+    expect(ended).toBe(true);
+    await world.run(1);
+    const race = host.lobby().race!;
+    const got = (name: string) => heard.get(name)!.map((shot) => [shot.kart, shot.photo]).sort((a, b) => Number(a[0]) - Number(b[0]));
+    const expected = (...names: (keyof typeof karts)[]) => names.map((name) => [karts[name], jpeg(name)]).sort((a, b) => Number(a[0]) - Number(b[0]));
+    // Everyone has everyone else's, once, and none of their own back.
+    expect(got("Ann")).toEqual(expected("Bob", "Cy"));
+    expect(got("Bob")).toEqual(expected("Ann", "Cy"));
+    expect(got("Cy")).toEqual(expected("Ann", "Bob"));
+    for (const list of heard.values()) {
+      for (const shot of list) {
+        expect(shot.race).toBe(race);
+        expect(shot.phase).toBe("results");
+      }
+    }
+  });
+
+  it("are dropped unless they are a small JPEG of the sender's own kart, in this race", async () => {
+    const world = new World({ latency: 20 }, 22);
+    world.keep = false;
+    const { host, bob, heard } = await threeDevices(world);
+    host.configure({ laps: 1, racers: 4 });
+    host.start();
+    await world.run(1);
+    const ann = kartOf(host, "Ann");
+    const cyKart = kartOf(host, "Cy");
+    const bobKart = kartOf(host, "Bob");
+    // Someone else's kart, a picture that is not a JPEG, one too big to send, and one that is not base64.
+    bob.sharePhoto!(ann, jpeg("Bob as Ann"));
+    bob.sharePhoto!(cyKart, jpeg("Bob as Cy"));
+    host.sharePhoto!(cyKart, jpeg("Ann as Cy"));
+    bob.sharePhoto!(bobKart, "data:image/png;base64,iVBORw0KGgo");
+    bob.sharePhoto!(bobKart, `data:image/jpeg;base64,${"A".repeat(60_000)}`);
+    bob.sharePhoto!(bobKart, `data:image/jpeg;base64,"><script>`);
+    await world.until(() => host.lobby().phase === "results", 80);
+    await world.run(1);
+    for (const list of heard.values()) expect(list).toEqual([]);
+    // A good one after the results still goes: Bob's encoder was slow.
+    bob.sharePhoto!(bobKart, jpeg("Bob"));
+    await world.run(1);
+    expect(heard.get("Ann")!.map((shot) => shot.photo)).toEqual([jpeg("Bob")]);
+    expect(heard.get("Cy")!.map((shot) => shot.photo)).toEqual([jpeg("Bob")]);
+    expect(heard.get("Bob")).toEqual([]);
+    // Once is enough: a second photo of the same kart is not passed round.
+    bob.sharePhoto!(bobKart, jpeg("Bob again"));
+    await world.run(1);
+    expect(heard.get("Ann")).toHaveLength(1);
+  });
+});

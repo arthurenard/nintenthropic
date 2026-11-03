@@ -12,7 +12,17 @@ import { WebGLUnavailable } from "../../engine/common";
 import type { HandSource } from "../../tracking/types";
 import { TRACKS } from "../track/tracks";
 import type { DriverControl, RaceRenderer, Session } from "../contract";
-import { gamepadControl, keyboardControl, wheelControl, WheelPreview, type Seat, type WheelControl as ReadWheel } from "../input";
+import {
+  encodePhoto,
+  gamepadControl,
+  grabPhoto,
+  keyboardControl,
+  wheelControl,
+  WheelPreview,
+  type PhotoHand,
+  type Seat,
+  type WheelControl as ReadWheel,
+} from "../input";
 import { hostSession, joinSession, localTransport, peerTransport, soloSession, type NetOptions } from "../net";
 import { createSimRace } from "../sim/race";
 import { CameraStack } from "./camera";
@@ -34,6 +44,8 @@ import type { CameraService } from "./services";
 export interface StandIn {
   source: HandSource;
   camera: CameraService;
+  /** A real camera's picture behind the scripted hands (`?camera=real`: Chrome's fake one in the tests), for the wheel's picture and the photos. */
+  video?: () => HTMLVideoElement | null;
 }
 
 export interface RealServicesOptions {
@@ -60,6 +72,8 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
   const camera: CameraService = script ? script.camera : stack;
   const source: HandSource = script ? script.source : stack.source;
   const aspect = () => (script ? 16 / 9 : stack.aspect());
+  /** The video the wheels' pictures and photos are drawn from: the camera's, or none for scripted hands (unless the script has one). */
+  const video = (): HTMLVideoElement | null => (script ? (script.video?.() ?? null) : stack.video);
 
   const netOptions = (session: SessionOptions, extra: Partial<NetOptions> = {}): NetOptions => ({
     createRace: createSimRace,
@@ -159,7 +173,7 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     preview(container: HTMLElement, control: DriverControl, size: "corner" | "large"): Disposable {
       const wheel = isWheel(control) ? control : null;
       const picture = new WheelPreview({ size: "full", seat: wheel?.seat ?? null, aspect: aspect() });
-      picture.attach(script ? null : stack.video);
+      picture.attach(video());
       // The page sizes the picture (a box of its own shape that it fills); the preview's own styling is for pages that do not.
       picture.canvas.removeAttribute("style");
       container.append(picture.canvas);
@@ -178,7 +192,7 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
     },
     previewColumns(container: HTMLElement, seats, size): Disposable {
       const picture = new WheelPreview({ size: "full", aspect: aspect() });
-      picture.attach(script ? null : stack.video);
+      picture.attach(video());
       picture.canvas.removeAttribute("style");
       container.append(picture.canvas);
       const stop = picture.followColumns(() =>
@@ -200,6 +214,15 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
           picture.dispose();
         },
       };
+    },
+    photo(control) {
+      const from = video();
+      if (!isWheel(control) || !from) return null;
+      // Where the wheel sees the hands now: a picture or column of an awkward shape is cut round them.
+      const status = control.wheel;
+      const hands: PhotoHand[] = [status.left, status.right].filter((hand) => hand !== null);
+      const still = grabPhoto(from, control.seat, hands);
+      return still ? { encode: () => encodePhoto(still) } : null;
     },
     // Every track but the secret one, which has to be earned.
     tracks: TRACKS.filter((track) => !track.secret).map((track) => ({ id: track.id, name: track.name })),

@@ -7,10 +7,15 @@
  *                     camera; the tests move them with `gripTest.wheel(...)`
  *   ?camera=ask       the scripted camera says the browser will ask first, so
  *                     the page explains why before it does
+ *   ?camera=real      the scripted hands drive, but the camera is really opened
+ *                     (Chrome's fake one in the tests): the wheel's picture and
+ *                     the finish-line photos are of what it shows
  *   ?fail=<trouble>   camera-denied (or just camera), camera-busy,
  *                     camera-missing, camera-insecure, model, webgl: to see
  *                     each sheet
  */
+import { openCamera, type Camera } from "../../tracking/camera";
+import { cameraSize } from "../../tracking/hands";
 import type { HandFrame, HandSource } from "../../tracking/types";
 import { handFrame, wheelHands, type SynthHand, type WheelPose } from "../input/testHands";
 import type { LobbyState } from "../contract";
@@ -57,26 +62,33 @@ export class ScriptedWheel implements HandSource {
   }
 }
 
-/** A camera that is the script: always allowed, instantly up, or failing as asked. */
+/** A camera that is the script: always allowed, instantly up, or failing as asked; with `video`, a real camera's picture behind it. */
 export class ScriptedCamera implements CameraService {
+  private camera: Camera | null = null;
+
   constructor(
     readonly wheel: ScriptedWheel,
     private readonly fail: CameraTrouble | null,
     private readonly ask = false,
+    /** The video a real camera plays into (`?camera=real`), or null for none. */
+    readonly video: HTMLVideoElement | null = null,
   ) {}
 
   async permission(): Promise<"granted" | "denied" | "prompt"> {
     return this.fail === "denied" ? "denied" : this.ask ? "prompt" : "granted";
   }
 
-  async start(_hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void> {
+  async start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void> {
     if (this.fail) throw new CameraFailure(this.fail);
+    if (this.video && !this.camera) this.camera = await openCamera(this.video, { size: cameraSize(hands) });
     progress?.(1);
     this.wheel.start();
   }
 
   stop(): void {
     this.wheel.stop();
+    this.camera?.stop();
+    this.camera = null;
   }
 }
 
@@ -110,7 +122,20 @@ export function standIn(params: URLSearchParams): StandIn | null {
   if (!scripted && !trouble) return null;
   const wheel = new ScriptedWheel();
   if (scripted) installGripTest(wheel);
-  return { source: wheel, camera: new ScriptedCamera(wheel, trouble, params.get("camera") === "ask") };
+  const video = scripted && params.get("camera") === "real" ? hiddenVideo() : null;
+  return { source: wheel, camera: new ScriptedCamera(wheel, trouble, params.get("camera") === "ask", video), video: () => video };
+}
+
+/** A video for a real camera's picture, in the page and out of sight (as the real camera's is: camera.ts). */
+function hiddenVideo(): HTMLVideoElement {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  video.setAttribute("aria-hidden", "true");
+  Object.assign(video.style, { position: "fixed", left: "0", top: "0", width: "1px", height: "1px", opacity: "0.01", pointerEvents: "none" });
+  document.body.append(video);
+  return video;
 }
 
 export interface GripTest {
@@ -121,10 +146,10 @@ export interface GripTest {
   /** What the page shows and how the race stands. */
   state(): KartAppSnapshot | null;
   /**
-   * Puts up a screen that comes after a race, with this room (to look at it: no race is run). No spec calls it: it is
-   * for looking at those screens by hand, from the browser's console.
+   * Puts up a screen that comes after a race, with this room (to look at it: no race is run), and the results with these
+   * finish-line photos (by kart). No spec calls it: it is for looking at those screens by hand, from the browser's console.
    */
-  preview(screen: "results" | "standings" | "podium", lobby: LobbyState): void;
+  preview(screen: "results" | "standings" | "podium", lobby: LobbyState, photos?: Readonly<Record<number, string>>): void;
   /** Puts up the loading screen of the race this room would run, at this far (to look at it). */
   loading(lobby: LobbyState, fraction: number): void;
 }
@@ -148,7 +173,7 @@ function makeTest(wheel: ScriptedWheel | null): GripTest {
       return wheel?.running ?? false;
     },
     state: () => app?.snapshot() ?? null,
-    preview: (screen, lobby) => app?.preview(screen, lobby),
+    preview: (screen, lobby, photos) => app?.preview(screen, lobby, photos),
     loading(lobby, fraction) {
       // The race screen as the page shows it, with only its loading overlay up.
       for (const section of document.querySelectorAll<HTMLElement>("section.screen")) section.hidden = section.id !== "screen-race";
