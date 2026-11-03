@@ -1,28 +1,39 @@
 /**
  * The real transport: WebRTC data channels, introduced to each other by a
- * PeerJS broker (PeerJS's public one unless `VITE_PEER_*` names another).
+ * PeerJS broker (PeerJS's public one unless `VITE_PEER_*` names another), and
+ * connected with the ICE servers the site hands out (ice.ts: STUN, and a
+ * relay when the site has one, so devices on different networks still meet).
  *
- * The host registers under `grip-prix-v1-<CODE>`. A guest opens two
- * PeerJS data connections to it, one per channel of a `Link`:
+ * The host registers under `grip-prix-v1-<CODE>`. A guest opens one PeerJS
+ * data connection to it, and the two ends add a second channel to the same
+ * WebRTC connection themselves, one per channel of a `Link`:
  *
- *   "r"  reliable, ordered
- *   "u"  unordered (`reliable: false`)
+ *   "r"  PeerJS's own: reliable, ordered
+ *   "u"  a negotiated channel (both ends make it with the same id, so neither
+ *        waits for the other): unordered, never resent (`maxRetransmits: 0`)
  *
- * PeerJS has no lossy mode: its "unreliable" connection only drops the
- * ordering, so a lost packet is still resent and the rest wait behind it only
- * on the reliable one. That already keeps snapshots from queueing behind lobby
- * chatter. To keep a bad line from piling stale snapshots up, a send is
- * skipped when that channel already has more than 32 KB waiting.
+ * PeerJS has no lossy mode (its `reliable: false` only drops the ordering),
+ * and a snapshot or an input resent after it is stale is worse than none: the
+ * next one replaces it, and resending crowds the line exactly when it is bad.
+ * One WebRTC connection rather than PeerJS's one per channel also means one
+ * path to find through the routers (and one relay, where one is needed), so
+ * a guest connects sooner and less often fails halfway. To keep a bad line
+ * from piling stale messages up, an unreliable send is skipped when that
+ * channel already has more than 32 KB waiting.
+ *
+ * A guest of the old shape (two PeerJS connections, before protocol 7) is let
+ * in far enough to be told the room speaks another version.
  *
  * PeerJS is imported when a room is first hosted or joined, so a practice
  * race (which never gets here) never downloads it.
  *
  * The unit tests (transport.test.ts) drive it with a stand-in `Peer`; the real
- * thing can be tried by hand with src/kart/net/dev.html. There is no TURN
- * server (docs/GRIP_PRIX.md), so a strict NAT can keep two players apart.
+ * thing can be tried by hand with src/kart/net/dev.html, and the relay alone
+ * by opening the page with `?relay=only`.
  */
 import type { DataConnection, Peer, PeerJSOption } from "peerjs";
 import { peerIdFor } from "./codes";
+import { DIRECT, STUN, iceServers, relayOnlyFromUrl } from "./ice";
 import { LinkBase, TransportError, type Channel, type Link, type Transport } from "./transport";
 import { Emitter, seeded, token } from "./util";
 
@@ -38,10 +49,25 @@ export interface PeerOptions {
   broker?: { host?: string; port?: number; path?: string; key?: string; secure?: boolean };
   /** How long to wait for a connection to open, milliseconds. */
   timeout?: number;
+  /** The ICE servers to connect with (ice.ts's `iceServers` by default). */
+  ice?: () => Promise<RTCIceServer[]>;
+  /** Connect through a relay or not at all (`?relay=only` by default). */
+  relayOnly?: boolean;
 }
 
-export const STUN = "stun:stun.l.google.com:19302";
+export { STUN };
 const BACKLOG = 32 * 1024;
+/** The id both ends give the lossy channel. PeerJS's own channel takes 0 or 1. */
+const LOSSY_ID = 7;
+
+/** The lossy channel on a PeerJS connection's WebRTC connection, made the same way at both ends; null if it cannot be. */
+function lossyChannel(conn: DataConnection): RTCDataChannel | null {
+  try {
+    return conn.peerConnection?.createDataChannel("u", { negotiated: true, id: LOSSY_ID, ordered: false, maxRetransmits: 0 }) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** The broker settings from the environment (Vite's `import.meta.env`), only what is set. */
 export function brokerFromEnv(): NonNullable<PeerOptions["broker"]> {
@@ -67,43 +93,44 @@ function failure(error: { type?: string; message?: string }): TransportError {
   }
 }
 
-interface Pairing {
-  r?: DataConnection;
-  u?: DataConnection;
-  timer: ReturnType<typeof setTimeout>;
-}
-
 class PeerLink extends LinkBase {
+  /** `u` is the lossy channel; without one (it could not be made), unreliable messages go the reliable way. */
   constructor(
     peer: string,
     private r: DataConnection,
-    private u: DataConnection,
+    private u: RTCDataChannel | null,
   ) {
     super(peer);
-    for (const conn of [r, u]) {
-      conn.on("data", (data: unknown) => {
-        if (typeof data === "string") this.deliver(conn === r ? "reliable" : "unreliable", data);
-      });
-      conn.on("close", () => {
-        this.finish({ reason: "closed" });
-        this.drop();
-      });
-      conn.on("error", (error: Error) => {
-        this.finish({ reason: "error", message: error.message });
-        this.drop();
-      });
+    r.on("data", (data: unknown) => {
+      if (typeof data === "string") this.deliver("reliable", data);
+    });
+    r.on("close", () => {
+      this.finish({ reason: "closed" });
+      this.drop();
+    });
+    r.on("error", (error: Error) => {
+      this.finish({ reason: "error", message: error.message });
+      this.drop();
+    });
+    // The lossy channel ends with the connection it rides on, which says so: nothing to hear from it but messages.
+    if (u) {
+      u.onmessage = (event: MessageEvent) => {
+        if (typeof event.data === "string") this.deliver("unreliable", event.data);
+      };
     }
   }
 
   send(channel: Channel, data: string): void {
-    if (!this.open) return;
-    const conn = channel === "reliable" ? this.r : this.u;
-    if (!conn.open) return;
-    if (channel === "unreliable" && (conn.dataChannel?.bufferedAmount ?? 0) > BACKLOG) return;
+    if (!this.open || !this.r.open) return;
     try {
-      void conn.send(data);
+      if (channel === "reliable" || !this.u) {
+        void this.r.send(data);
+        return;
+      }
+      if (this.u.readyState !== "open" || this.u.bufferedAmount > BACKLOG) return;
+      this.u.send(data);
     } catch {
-      /* the channel closed under us: its close event will say so */
+      /* the channel closed under us: the connection's close event will say so */
     }
   }
 
@@ -112,13 +139,16 @@ class PeerLink extends LinkBase {
   }
 
   private drop(): void {
+    try {
+      this.u?.close();
+    } catch {
+      /* already closed */
+    }
     // `flush` lets a "leave" just sent go out before the channel shuts.
-    for (const conn of [this.r, this.u]) {
-      try {
-        conn.close({ flush: true });
-      } catch {
-        /* already closed */
-      }
+    try {
+      this.r.close({ flush: true });
+    } catch {
+      /* already closed */
     }
   }
 }
@@ -131,7 +161,8 @@ class PeerTransport implements Transport {
   private incoming = new Emitter<Link>();
   private errors = new Emitter<TransportError>();
   private peer: Peer | null = null;
-  private pairing = new Map<string, Pairing>();
+  /** Old-shape guests' second connections, held only until they have been told the version is wrong. */
+  private strays = new Set<DataConnection>();
   private links = new Set<PeerLink>();
   private closed = false;
   private timeout: number;
@@ -142,15 +173,15 @@ class PeerTransport implements Transport {
 
   private async make(id: string | undefined): Promise<Peer> {
     const load = this.options.load ?? (() => import("peerjs") as unknown as Promise<PeerModule>);
-    let module: PeerModule;
-    try {
-      module = await load();
-    } catch {
-      throw new TransportError("network", "Could not load the networking code. Check your connection.");
-    }
+    const ice = this.options.ice ?? (() => iceServers());
+    // The servers are asked for while PeerJS loads: neither waits on the other.
+    const [loaded, servers] = await Promise.all([load().catch(() => null), ice().catch(() => DIRECT)]);
+    if (!loaded) throw new TransportError("network", "Could not load the networking code. Check your connection.");
     const broker = { ...brokerFromEnv(), ...this.options.broker };
-    const settings: PeerJSOption = { ...broker, debug: 0, config: { iceServers: [{ urls: STUN }] } };
-    return new module.Peer(id, settings);
+    const config: RTCConfiguration = { iceServers: servers };
+    if (this.options.relayOnly ?? relayOnlyFromUrl()) config.iceTransportPolicy = "relay";
+    const settings: PeerJSOption = { ...broker, debug: 0, config };
+    return new loaded.Peer(id, settings);
   }
 
   async listen(code: string): Promise<void> {
@@ -183,36 +214,30 @@ class PeerTransport implements Transport {
     peer.on("disconnected", () => this.errors.emit(new TransportError("network", "Lost the signalling server.")));
   }
 
-  /** A guest's connection arrives: wait for its twin, then the link is ready. */
+  /** A guest's connection arrives: once it is open, add the lossy channel, and the link is ready. */
   private accept(conn: DataConnection): void {
     const meta = conn.metadata as { link?: unknown; ch?: unknown } | null | undefined;
     if (!meta || typeof meta.link !== "string" || (meta.ch !== "r" && meta.ch !== "u")) {
       conn.close();
       return;
     }
-    const key = `${conn.peer}/${meta.link}`;
-    let pairing = this.pairing.get(key);
-    if (!pairing) {
-      const timer = setTimeout(() => {
-        const half = this.pairing.get(key);
-        this.pairing.delete(key);
-        half?.r?.close();
-        half?.u?.close();
-      }, this.timeout);
-      pairing = { timer };
-      this.pairing.set(key, pairing);
+    if (meta.ch === "u") {
+      // An old-shape guest's second connection: its link waits for this one to open before it says hello (and hears
+      // that the room speaks another version), and nothing comes over it.
+      this.strays.add(conn);
+      const timer = setTimeout(() => conn.close(), this.timeout);
+      conn.on("close", () => {
+        clearTimeout(timer);
+        this.strays.delete(conn);
+      });
+      return;
     }
-    const held = pairing;
-    const channel = meta.ch;
+    const timer = setTimeout(() => conn.close(), this.timeout);
     conn.on("open", () => {
-      held[channel] = conn;
-      if (held.r?.open && held.u?.open) {
-        clearTimeout(held.timer);
-        this.pairing.delete(key);
-        const link = new PeerLink(conn.peer, held.r, held.u);
-        this.links.add(link);
-        this.incoming.emit(link);
-      }
+      clearTimeout(timer);
+      const link = new PeerLink(conn.peer, conn, lossyChannel(conn));
+      this.links.add(link);
+      this.incoming.emit(link);
     });
   }
 
@@ -238,28 +263,21 @@ class PeerTransport implements Transport {
       // Errors for the room (not found) and for the broker both arrive on the peer.
       peer.on("error", (error) => fail(failure(error)));
       peer.on("open", () => {
-        const open = (ch: "r" | "u") =>
-          peer.connect(host, {
-            serialization: "raw",
-            reliable: ch === "r",
-            label: ch,
-            metadata: { link: linkId, ch },
-          });
-        const r = open("r");
-        const u = open("u");
-        let ready = 0;
-        const check = () => {
-          if (++ready < 2 || settled) return;
+        const r = peer.connect(host, {
+          serialization: "raw",
+          reliable: true,
+          label: "r",
+          metadata: { link: linkId, ch: "r" },
+        });
+        r.on("open", () => {
+          if (settled) return;
           settled = true;
           clearTimeout(timer);
-          const link = new PeerLink(host, r, u);
+          const link = new PeerLink(host, r, lossyChannel(r));
           this.links.add(link);
           resolve(link);
-        };
-        r.on("open", check);
-        u.on("open", check);
+        });
         r.on("error", (error) => fail(failure(error)));
-        u.on("error", (error) => fail(failure(error)));
       });
     });
   }
@@ -277,12 +295,8 @@ class PeerTransport implements Transport {
     this.closed = true;
     for (const link of this.links) link.close();
     this.links.clear();
-    for (const half of this.pairing.values()) {
-      clearTimeout(half.timer);
-      half.r?.close();
-      half.u?.close();
-    }
-    this.pairing.clear();
+    for (const conn of this.strays) conn.close();
+    this.strays.clear();
     // Linger a moment so the last messages (a "leave") flush before the broker drops us.
     const peer = this.peer;
     if (peer) setTimeout(() => peer.destroy(), 300);

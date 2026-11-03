@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/api/ice.json", "destination": "/api/ice" }]
+}

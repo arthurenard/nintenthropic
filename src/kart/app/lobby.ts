@@ -18,6 +18,7 @@
 import { MAX_PLAYERS, type LobbyPlayer, type LobbySettings, type LobbyState, type Session } from "../contract";
 import { $, element, icon, setText, toast } from "../../ui/dom";
 import { cupById } from "../grandprix";
+import { relayReady } from "../net/ice";
 import { CUPS, TRACKS, trackById } from "../track/tracks";
 import { isUnlocked, loadUnlocks } from "../unlocks";
 import { duckTracks } from "./eggs";
@@ -26,6 +27,10 @@ import { joinUrl, spellCode } from "./format";
 import type { Services } from "./services";
 import { postcard, cupOfTrack } from "./trackArt";
 import { Segmented, Switch, calm, colourDot, focusHeading } from "./ui";
+
+/** The host's hint under the code: friends anywhere when the room has a relay, else only on the same Wi-Fi. */
+const FAR_HINT = "Friends anywhere type the code at Join a Race, or scan this.";
+const NEAR_HINT = "Friends on the same Wi-Fi type the code at Join a Race, or scan this.";
 
 export type ScreenChoice = "here" | "host";
 
@@ -157,6 +162,8 @@ export class LobbyScreen {
       $("lobby-copy").hidden = !host;
       $("lobby-url").hidden = !host;
       $("lobby-hint").hidden = !host;
+      // Hosting fetched the room's servers already: with a relay among them, friends can join from anywhere.
+      setText("lobby-hint", relayReady() ? FAR_HINT : NEAR_HINT);
       setText("lobby-url", this.url.replace(/^https?:\/\//, ""));
       if (host) void this.drawQr(this.url);
     }

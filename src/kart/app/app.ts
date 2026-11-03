@@ -855,7 +855,7 @@ export class KartApp {
         break;
       case "network":
       default:
-        // A code that never answered is not a connection lost: without a relay, players on different networks may not meet.
+        // A code that never answered is not a connection lost: without a relay (net/ice.ts), players on different networks may not meet.
         if (reason === "network" && kind === "join" && code) {
           showTrouble("unreachable", [{ label: "Try Again", run: () => void this.open("join", code) }, toStart]);
           break;

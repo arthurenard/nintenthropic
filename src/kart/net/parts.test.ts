@@ -15,7 +15,7 @@ import { decode, decodeInput, encode, encodeInput, encodeSnapshot, packState, qu
 import { DEFAULT_SETTINGS, Roster, ScreenKarts, cleanName, cleanPlayer, kartsOnScreen, mergeSettings } from "./roster";
 import { BOT_NAMES, buildSetup } from "./setup";
 import { seeded } from "./util";
-import { DisplayClock, RENDER_LAG, SnapshotBuffer, blendViews } from "./view";
+import { DisplayClock, LagMeter, MAX_LAG, RENDER_LAG, SnapshotBuffer, blendViews } from "./view";
 
 describe("room codes", () => {
   it("are four letters from the alphabet without I or O", () => {
@@ -529,6 +529,73 @@ describe("the display clock", () => {
     expect(shown - t0).toBeGreaterThan(0.1);
     // A huge gap resets it.
     expect(clock.advance(TICK, 50)).toBeCloseTo(50 - RENDER_LAG, 9);
+  });
+});
+
+describe("the lag meter", () => {
+  /** Feeds `seconds` of snapshots (every second tick) that each take `delay(i)` seconds to arrive; returns the lag. */
+  function feed(meter: LagMeter, seconds: number, delay: (i: number) => number, from = 0): number {
+    let lag = meter.lag;
+    for (let i = from; i < from + seconds * 30; i++) lag = meter.note(i * 2 * TICK, 100 + i * 2 * TICK + delay(i));
+    return lag;
+  }
+
+  /** Dice for the line's unevenness, the same every run. */
+  function dice(seed: number) {
+    let s = seed;
+    return () => ((s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  }
+
+  it("is RENDER_LAG on a steady line, however slow, and on one Wi-Fi's few milliseconds of unevenness", () => {
+    expect(new LagMeter().lag).toBe(RENDER_LAG);
+    expect(feed(new LagMeter(), 5, () => 0.15)).toBe(RENDER_LAG);
+    const roll = dice(1);
+    expect(feed(new LagMeter(), 5, () => 0.003 + roll() * 0.012)).toBe(RENDER_LAG);
+  });
+
+  it("grows with an uneven line, enough to cover nine arrivals in ten, and no further than MAX_LAG", () => {
+    const roll = dice(2);
+    // Up to 60 ms late at random: the lag covers ~54 ms of it on top of the spacing.
+    const lag = feed(new LagMeter(), 5, () => 0.04 + roll() * 0.06);
+    expect(lag).toBeGreaterThan(2 * TICK + 0.05);
+    expect(lag).toBeLessThan(2 * TICK + 0.06 + 0.02 + 0.001);
+    expect(feed(new LagMeter(), 5, () => roll() * 0.45)).toBe(MAX_LAG);
+  });
+
+  it("does not grow for one hiccup, rises at once for a bad line, and eases back once it steadies", () => {
+    const meter = new LagMeter();
+    feed(meter, 2, () => 0.05);
+    // The host stalls for a fifth of a second: six snapshots straggle in late, then all is well.
+    expect(feed(meter, 2, (i) => (i < 66 ? 0.05 + (66 - i) * 2 * TICK : 0.05), 60)).toBe(RENDER_LAG);
+    const roll = dice(3);
+    const bad = feed(meter, 1, () => 0.05 + roll() * 0.1, 120);
+    expect(bad).toBeGreaterThan(0.12);
+    // Steady again: it comes down, not at once, but within a few seconds.
+    const soon = feed(meter, 0.5, () => 0.05, 150);
+    expect(soon).toBeGreaterThan(0.1);
+    expect(feed(meter, 6, () => 0.05, 165)).toBeLessThan(RENDER_LAG + 0.002);
+  });
+
+  it("starts over after a stop (the host paused), rather than read the pause as lateness", () => {
+    const meter = new LagMeter();
+    feed(meter, 2, () => 0.05);
+    // The race stood still for 4 s: the host's clock did not move, this device's did.
+    expect(feed(meter, 2, () => 4.05, 60)).toBe(RENDER_LAG);
+  });
+
+  it("leads the display clock to a longer lag without a jump", () => {
+    const clock = new DisplayClock();
+    let newest = 5;
+    let shown = clock.advance(0, newest, RENDER_LAG);
+    for (let i = 0; i < 240; i++) {
+      newest += TICK;
+      const next = clock.advance(TICK, newest, 0.15);
+      expect(next).toBeGreaterThan(shown);
+      expect(next - shown).toBeLessThan(TICK * 1.2);
+      shown = next;
+    }
+    // Measured just after a frame's advance, which is a tick on from the target.
+    expect(newest - shown).toBeCloseTo(0.15 - TICK, 3);
   });
 });
 

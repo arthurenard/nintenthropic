@@ -405,14 +405,29 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   for development and the end-to-end tests), and an in-memory pair with
   latency, jitter and loss for unit tests. Each peer link has a reliable
   ordered channel (lobby, start, events, results) and an unreliable unordered
-  one (inputs, snapshots).
+  one (inputs, snapshots). Over PeerJS they share one WebRTC connection: a
+  guest opens one PeerJS connection (reliable), and both ends add a
+  negotiated channel to it (id 7, `ordered: false`, `maxRetransmits: 0`), so
+  nothing stale is ever resent and there is one path through the routers to
+  find, not two. A guest of the old shape (two connections, protocol 6) gets
+  far enough to be told the version is wrong.
 - **Signalling.** PeerJS's public broker by default, configurable with
   `VITE_PEER_HOST`, `VITE_PEER_PORT`, `VITE_PEER_PATH`, `VITE_PEER_KEY` to
-  run one's own; STUN `stun:stun.l.google.com:19302`, no TURN, by choice:
-  online play is for one local network. Players on the same Wi-Fi connect
-  directly; players on different networks often can't, and the start screen
-  ("on several devices on the same Wi-Fi"), the lobby's hint and the troubles
-  say so. The broker sees only that two browsers want to talk.
+  run one's own. The broker sees only that two browsers want to talk.
+- **The relay.** Devices that cannot reach each other directly (different
+  networks, a strict router) meet through Cloudflare's TURN relay. A room asks
+  the site's `api/ice.json` (a Vercel function, `api/ice.ts`) for its ICE
+  servers while PeerJS loads; the function holds the TURN key
+  (`TURN_KEY_ID`, `TURN_KEY_API_TOKEN` in Vercel's settings), answers only the
+  game's own pages (by Origin), and hands out a login that lapses after a
+  day, less the port-53 addresses browsers block. `net/ice.ts` keeps an answer
+  for half its life and falls back to STUN alone (a dev server, offline, no
+  key, slower than 4 s), which still connects one Wi-Fi. Only relayed pairs
+  cost anything (about 32 KB/s to each relayed guest, ~6 MB a three-minute
+  race), and Cloudflare's first 1,000 GB are free. The lobby's hint and the
+  network troubles say "anywhere" or "the same Wi-Fi" by whether this page
+  got a relay (`relayReady`). `?relay=only` connects through the relay or not
+  at all, to try it on one computer.
 - **Room codes.** Four letters from `ABCDEFGHJKLMNPQRSTUVWXYZ`; the host's
   peer id is `grip-prix-v1-<CODE>`. A code in use is drawn again.
 - **The host** runs the race on the fixed tick from accumulated time (never
@@ -424,7 +439,12 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   with each guest's last applied `seq` per kart; events go reliably, batched.
 - **A guest** keeps its own `Race`, built from the setup the host sent at the
   start. Others' karts are drawn about 70 ms behind the newest snapshot,
-  between two snapshots. Its own karts are predicted: on each snapshot,
+  between two snapshots; more when snapshots arrive unevenly (`LagMeter` in
+  `view.ts`: enough to cover nine arrivals in ten of the last three seconds,
+  250 ms at most, rising at once and easing back). On one Wi-Fi it stays at
+  70 ms; on a line 75 ms away with 90 ms of jitter the guest drew a guessed
+  (carried-on) picture in 1% of frames at a steady 70 ms and in none with it,
+  and on 100 ms with 150 ms of jitter, 5-9% against none. Its own karts are predicted: on each snapshot,
   `restore` it, replay the inputs the host has not yet applied with
   `predict`, and ease any visible jump out over 100 ms. Ping every second; the
   round trip shows in `link.rtt`.
@@ -433,7 +453,7 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   race and their slots free up in the lobby. A fifth player is turned away
   ("This race is full.").
 - **Solo.** `soloSession` is the host without a transport.
-- **The wire** (protocol 6). A snapshot is one JSON line, about 1.1 KB for
+- **The wire** (protocol 7; 7 changed only how devices connect). A snapshot is one JSON line, about 1.1 KB for
   eight karts: the tick, the dice, the items in the air, the eggs, and the
   kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
   lap, the bot's own state...). A kart's row is mostly zeros and what the kart
@@ -1222,7 +1242,9 @@ Check it and try again.", "This race is full.", "The host left the race.",
 "Lost the connection to the race. Make sure everyone is on the same Wi-Fi,
 then try again.", and for a code that never answers, "Can't
 Reach the Race" ("Join from the same Wi-Fi as the host, then try again.") —
-each with the way back as a button. A guest who has heard nothing from the
+each with the way back as a button. When the room had a relay, the two
+network ones say "Make sure everyone is online" and "Check your internet
+connection" instead. A guest who has heard nothing from the
 host for 2.5 s (a ping goes every second) sees "Waiting for <host>" over the
 race instead of a world frozen without a word (`net/guest.ts` `QUIET_MS`).
 

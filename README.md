@@ -144,11 +144,13 @@ prints the address. Then:
    Grand Prix**). The host's pause stops the race for everyone, and resumes
    with a 3-2-1.
 
-Racing on several devices needs everyone on the same Wi-Fi: the devices
-connect directly, with no relay, so players on different networks usually
-can't reach each other (the start screen, the lobby and the troubles say so).
-They find each other through a public PeerJS broker, so the network needs
-internet access (only the introduction goes through it; no race data does). Press
+On the live site friends can join from anywhere with the code: devices
+connect directly where they can, and through a relay (Cloudflare's TURN
+service) where they can't, such as on different networks. Run locally (`npm run
+party`) there is no relay, so everyone needs the same Wi-Fi; the lobby and
+the troubles say which. Devices find each other through a public PeerJS
+broker, so the network needs internet access (only the introduction goes
+through it; no race data does). Press
 **F** in the race for full screen on the TV, and **M** to turn sound off and on
 (the same preference as the arcade's; Music and Effects have their own sliders
 in the pause sheet). Keyboards and gamepads drive as well: choose them on the
@@ -165,9 +167,12 @@ through the scope); only the two eyes' blink scores are kept, only in that
 game (and in Settings' Eye Test, which shows your own picture on your own
 screen), and they never leave the device either. To fit the scope to you, two
 numbers - how far your eye reads open and shut - are remembered in your
-browser. Super Claude Bros. has no server of its own and no analytics; the
-only files it downloads are its own, and Grip Prix's rooms meet through the
-public PeerJS broker (see above).
+browser. Super Claude Bros. has no analytics, and its one server-side piece is a
+small function that hands Grip Prix rooms a login for Cloudflare's relay; the
+only files it downloads are its own, Grip Prix's rooms meet through the
+public PeerJS broker (see above), and players who can't reach each other
+directly race through Cloudflare's relay, which passes along their steering
+and the race, never a camera picture.
 
 ## Requirements
 
@@ -225,7 +230,14 @@ npm run build        # the static site, into dist/
 CI runs the type check, the unit tests, the build and the end-to-end tests on
 every push to `main` and every pull request. The site is the static build in
 `dist/`, deployed on Vercel at the address above; its paths are relative, so
-the same build works at a domain's root or under a path.
+the same build works at a domain's root or under a path. Beside it, Vercel
+runs one function, `api/ice.ts` (served as `api/ice.json`), which hands
+Grip Prix rooms their relay login. It needs a Cloudflare TURN key in the
+project's environment variables, `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`
+(a TURN key made in Cloudflare's dashboard, under Realtime; free for the
+first 1,000 GB a month); without them rooms still work, on one Wi-Fi. To try the relay on
+one computer, open `race.html?relay=only` in two windows: they connect
+through the relay or not at all.
 
 The design language is in [docs/DESIGN.md](docs/DESIGN.md), the architecture
 and its contracts in [docs/WEB_ARCHITECTURE.md](docs/WEB_ARCHITECTURE.md), and

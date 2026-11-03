@@ -9,8 +9,9 @@
  *      five before it (so one lost packet costs nothing), and steps its own
  *      karts ahead with `predict` — they answer the wheel at once, whatever
  *      the line's delay;
- *   2. builds the picture: other karts ~70 ms behind the newest snapshot,
- *      gliding between two (view.ts); its own karts as predicted.
+ *   2. builds the picture: other karts ~70 ms behind the newest snapshot
+ *      (more when snapshots arrive unevenly), gliding between two (view.ts);
+ *      its own karts as predicted.
  *
  * When a snapshot arrives the host's word wins: `restore` it, then replay the
  * inputs the host has not applied yet (the snapshot says which it has) with
@@ -21,6 +22,7 @@
 import {
   IDLE_INPUT,
   MAX_PLAYERS,
+  TICK,
   type DriveInput,
   type DriverControl,
   type LobbySettings,
@@ -54,7 +56,7 @@ import {
 import { DEFAULT_SETTINGS, ScreenKarts, kartsOnScreen } from "./roster";
 import { TransportError, type Link, type Transport } from "./transport";
 import { Emitter, clamp, lerp, lerpAngle, token, wrapAngle } from "./util";
-import { DisplayClock, SnapshotBuffer, pictureOf } from "./view";
+import { DisplayClock, LagMeter, SnapshotBuffer, pictureOf } from "./view";
 
 const MAX_TICKS_PER_FRAME = 5;
 const MAX_TICKS_HIDDEN = 90;
@@ -145,6 +147,7 @@ export class GuestSession implements Session {
   private picture: RaceView | null = null;
   private buffer = new SnapshotBuffer();
   private display = new DisplayClock();
+  private lag = new LagMeter();
   private feed = new EventFeed();
   private lastFrameNow: number | null = null;
   /** How far into a tick the frame stood when the host stopped the race: it stays there. */
@@ -348,6 +351,7 @@ export class GuestSession implements Session {
     this.lobbyState = start.lobby;
     this.buffer.clear();
     this.display.reset();
+    this.lag.reset();
     this.feed.clear();
     this.clock.reset();
     this.lastFrameNow = null;
@@ -406,7 +410,7 @@ export class GuestSession implements Session {
     const stopped = !!this.lobbyState.pause;
     const dt = this.lastFrameNow === null || stopped ? 0 : Math.max(0, now - this.lastFrameNow) / 1000;
     this.lastFrameNow = now;
-    const base = this.buffer.at(this.display.advance(dt, newest.time));
+    const base = this.buffer.at(this.display.advance(dt, newest.time, this.lag.lag));
     if (!base) return null;
 
     let karts = base.karts;
@@ -528,6 +532,7 @@ export class GuestSession implements Session {
     this.picture = null;
     const restored = pictureOf(race);
     this.buffer.push(state.tick, restored);
+    this.lag.note(state.tick * TICK, t / 1000);
 
     for (const own of this.own.values()) {
       const ack = acks?.[own.kart] ?? 0;

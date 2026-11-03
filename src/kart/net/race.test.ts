@@ -232,6 +232,63 @@ describe("other karts on a guest", () => {
   });
 });
 
+describe("over the internet", () => {
+  /** Ann hosts a bot race with Bob on another network: a long, uneven line that loses a little. */
+  async function farAway(seed: number) {
+    const world = new World({ latency: 75, jitter: 90, loss: 0.03 }, seed);
+    const { host, guest } = await twoPlayers(world, player("Bob", straight()));
+    host.configure({ racers: 4 });
+    host.start();
+    await world.run(4);
+    return { world, host, guest };
+  }
+
+  it("other karts still glide: the guest draws them as far behind as the line needs", async () => {
+    const { world, host, guest } = await farAway(13);
+    const bot = 0;
+    let last = kartIn(world.last(guest), bot);
+    const expected = 18 * TICK;
+    const ratios: number[] = [];
+    await world.run(8, () => {
+      const kart = kartIn(world.last(guest), bot);
+      ratios.push(Math.hypot(kart.x - last.x, kart.z - last.z) / expected);
+      last = kart;
+    });
+    // As smooth as on one Wi-Fi: snapshots straggle in up to 90 ms late, and the picture does not show it.
+    const smooth = ratios.filter((r) => r > 0.6 && r < 1.4).length / ratios.length;
+    expect(smooth).toBeGreaterThan(0.95);
+    expect(Math.max(...ratios)).toBeLessThan(2.2);
+    // Further behind than on a steady line (70 ms), and well short of the longest lag (250 ms) plus the line.
+    const gap = Math.hypot(kartIn(world.last(host), bot).x - last.x, kartIn(world.last(host), bot).z - last.z) / 18;
+    expect(gap).toBeGreaterThan(0.075 + 0.1);
+    expect(gap).toBeLessThan(0.075 + 0.09 + 0.25);
+  });
+
+  it("the guest's own kart answers at once and agrees with the host's when the line clears", async () => {
+    let drive = true;
+    const bobControl = scripted((now) => (drive ? { throttle: 1, steer: Math.sin(now / 700) * 0.8 } : { throttle: 0, brake: 1 }));
+    const world = new World({ latency: 75, jitter: 90, loss: 0.03 }, 14);
+    const { host, guest } = await twoPlayers(world, player("Bob", bobControl));
+    host.start();
+    const bob = kartOf(host, "Bob");
+    await world.run(1.5);
+    let last = kartIn(world.last(guest), bob);
+    let worst = 0;
+    await world.run(8, () => {
+      const kart = kartIn(world.last(guest), bob);
+      worst = Math.max(worst, Math.hypot(kart.x - last.x, kart.z - last.z) - kart.speed * TICK);
+      last = kart;
+    });
+    expect(worst).toBeLessThan(0.45);
+    drive = false;
+    world.net.setConditions({ jitter: 0, loss: 0 });
+    await world.run(6);
+    const mine = kartIn(world.last(guest), bob);
+    const truth = kartIn(world.last(host), bob);
+    expect(Math.hypot(mine.x - truth.x, mine.z - truth.z)).toBeLessThan(0.02);
+  });
+});
+
 describe("a guest who leaves mid-race", () => {
   it("frees the slot, and the kart keeps going", async () => {
     const world = new World({ latency: 30 }, 6);
