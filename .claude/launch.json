@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "cloudflare",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["wrangler", "dev", "--port", "8787"],
+      "port": 8787
+    },
+    {
       "name": "trailer-4901",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "4901", "--strictPort"],

@@ -1,11 +1,13 @@
 /**
- * The relay logins, both ends: the site's function (api/ice.ts) hands a relay
+ * The relay logins, both ends: the site's function (api/ice.js, behind
+ * cloudflare/worker.js on Cloudflare) hands a relay
  * only to the game's own pages and only while it holds a TURN key, and never
  * passes on what a browser cannot use; the page (ice.ts) keeps a good answer,
  * and falls back to STUN alone, never failing, when there is none.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { DIRECT_SERVERS, TTL, allowed, answer, usable, type IceAnswer } from "../../../api/ice";
+import worker from "../../../cloudflare/worker";
 import { DIRECT, forgetIce, iceServers, readAnswer, relayReady } from "./ice";
 
 const SITE = "https://www.arthurenard.me";
@@ -29,8 +31,8 @@ const CLOUDFLARE = {
   ],
 };
 
-const ask = (origin: string | null, method = "POST") =>
-  new Request("https://www.arthurenard.me/super-claude-bros/api/ice.json", { method, headers: origin ? { origin } : {} });
+const ask = (origin: string | null, method = "POST", at = "https://www.arthurenard.me/super-claude-bros/api/ice.json") =>
+  new Request(at, { method, headers: origin ? { origin } : {} });
 
 function cloudflare(reply: () => Response | Promise<Response>) {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -45,7 +47,7 @@ async function body(response: Response): Promise<IceAnswer> {
   return (await response.json()) as IceAnswer;
 }
 
-describe("the site's relay logins (api/ice.ts)", () => {
+describe("the site's relay logins (api/ice.js)", () => {
   it("answers the game's own pages, and no other site", () => {
     expect(allowed(SITE)).toBe(true);
     expect(allowed("https://arthurenard.me")).toBe(true);
@@ -57,6 +59,18 @@ describe("the site's relay logins (api/ice.ts)", () => {
     expect(allowed("https://someone-else.vercel.app")).toBe(false);
     expect(allowed(null)).toBe(false);
     expect(allowed("not a url")).toBe(false);
+  });
+
+  it("answers a page at its own address, wherever the site is served", async () => {
+    const self = "https://super-claude-bros.someone.workers.dev";
+    expect(allowed(self, self)).toBe(true);
+    expect(allowed("https://evil.example", self)).toBe(false);
+    expect(allowed(null, self)).toBe(false);
+    const cf = cloudflare(() => Response.json(CLOUDFLARE, { status: 201 }));
+    const response = await answer(ask("https://play.example", "POST", "https://play.example/api/ice.json"), KEY, cf.fetcher);
+    expect(response.status).toBe(200);
+    expect((await body(response)).relay).toBe(true);
+    expect((await answer(ask("https://evil.example", "POST", "https://play.example/api/ice.json"), KEY, cf.fetcher)).status).toBe(403);
   });
 
   it("asks Cloudflare for a day's login with the key, and passes on what a browser can use", async () => {
@@ -124,6 +138,28 @@ describe("the site's relay logins (api/ice.ts)", () => {
     expect(usable({ iceServers: [{ urls: "turn:a.example:3478", username: 1 }] })).toEqual([{ urls: ["turn:a.example:3478"] }]);
     expect(usable({ iceServers: [{ urls: ["http://a.example"] }, { urls: "turn:a.example:53" }] })).toBeNull();
     expect(usable(null)).toBeNull();
+  });
+});
+
+describe("the site on Cloudflare (cloudflare/worker.js)", () => {
+  function site() {
+    const files: string[] = [];
+    const env = {
+      ASSETS: { fetch: async (request: Request) => (files.push(new URL(request.url).pathname), new Response("file")) },
+    };
+    return { env, files };
+  }
+
+  it("answers the relay logins itself, with the Worker's secrets, and hands everything else to the files", async () => {
+    const { env, files } = site();
+    const login = await worker.fetch(ask("https://play.example", "POST", "https://play.example/api/ice.json"), env);
+    expect(login.headers.get("cache-control")).toBe("no-store");
+    // No secrets: STUN alone, as without a key on Vercel.
+    expect(await body(login)).toEqual({ iceServers: DIRECT_SERVERS, relay: false, ttl: 600 });
+    expect((await worker.fetch(ask("https://evil.example", "POST", "https://play.example/api/ice.json"), env)).status).toBe(403);
+    expect(await (await worker.fetch(new Request("https://play.example/race.html?join=ABCD"), env)).text()).toBe("file");
+    expect(await (await worker.fetch(new Request("https://play.example/api/other"), env)).text()).toBe("file");
+    expect(files).toEqual(["/race.html", "/api/other"]);
   });
 });
 

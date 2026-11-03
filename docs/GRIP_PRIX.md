@@ -416,10 +416,11 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   run one's own. The broker sees only that two browsers want to talk.
 - **The relay.** Devices that cannot reach each other directly (different
   networks, a strict router) meet through Cloudflare's TURN relay. A room asks
-  the site's `api/ice.json` (a Vercel function, `api/ice.ts`) for its ICE
-  servers while PeerJS loads; the function holds the TURN key
-  (`TURN_KEY_ID`, `TURN_KEY_API_TOKEN` in Vercel's settings), answers only the
-  game's own pages (by Origin), and hands out a login that lapses after a
+  the site's `api/ice.json` (`api/ice.js`: a Vercel function, or on
+  Cloudflare behind `cloudflare/worker.js`) for its ICE servers while PeerJS
+  loads; the function holds the TURN key (`TURN_KEY_ID`, `TURN_KEY_API_TOKEN`:
+  Vercel's settings or the Worker's secrets), answers only the game's own pages
+  (by Origin: its own address, or one it lists), and hands out a login that lapses after a
   day, less the port-53 addresses browsers block. `net/ice.ts` keeps an answer
   for half its life and falls back to STUN alone (a dev server, offline, no
   key, slower than 4 s), which still connects one Wi-Fi. Only relayed pairs
