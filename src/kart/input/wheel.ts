@@ -639,6 +639,7 @@ export class WheelReader {
       mode: this.modeAt(t),
       levelled: this.isLevelled,
       edge: this.edgeAt(t),
+      emote: this.gestures.emoteAt(t),
     };
   }
 

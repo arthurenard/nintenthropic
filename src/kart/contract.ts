@@ -29,6 +29,12 @@ export const MAX_PLAYERS = 4;
 /** Karts on the grid, bots included. */
 export const MAX_RACERS = 8;
 
+/**
+ * A finish-line photo (a player's camera as their kart crossed the line, `Session.sharePhoto`) is a JPEG as a data URL of
+ * at most this many characters: about 36 KB of picture. A longer one is not sent, and one that comes longer is dropped.
+ */
+export const MAX_PHOTO_CHARS = 48_000;
+
 /** The four players' colours (Apple's system colours, as DESIGN.md's palette), then the bots'. */
 export const PLAYER_COLOURS = ["#FF453A", "#0A84FF", "#30D158", "#FFD60A"] as const;
 export const BOT_COLOURS = ["#FF9F0A", "#BF5AF2", "#64D2FF", "#FF375F"] as const;
@@ -392,6 +398,8 @@ export interface WheelStatus {
    * picture (or of their column of a shared camera) or has just gone out past it; null or absent when both are well in.
    */
   edge?: EdgeWay | null;
+  /** Both open hands raised high ("cheer") or one waving ("wave"), as the input reads them; null or absent when neither. */
+  emote?: Emote | null;
 }
 
 /** A way to move the hands, as the player sees themself in the mirrored picture. */
@@ -566,6 +574,18 @@ export interface Session {
    * viewport. Call it when it changes; only a change is sent.
    */
   setHandsLost(lost: readonly boolean[]): void;
+  /**
+   * A finish-line photo of one of this device's players, for their kart in the race being run (or just run): a JPEG as a
+   * data URL of at most MAX_PHOTO_CHARS. It goes to the rest of the room once the race is decided (never while
+   * anyone is still racing), over the reliable channel, and is kept for that race only: in memory, never stored or
+   * uploaded. Optional: a session that cannot share leaves it out.
+   */
+  sharePhoto?(kart: number, photo: string): void;
+  /**
+   * Hears the other devices' finish-line photos as they come: the kart, the race (`LobbyState.race`) and the picture.
+   * Returns a function that stops listening. Optional, with `sharePhoto`.
+   */
+  onPhoto?(listener: (photo: { kart: number; race: number; photo: string }) => void): () => void;
   /**
    * Every animation frame: samples this device's controls at the fixed tick,
    * runs (host, solo) or follows (guest) the race, and returns what to draw,

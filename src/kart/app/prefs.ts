@@ -17,6 +17,7 @@ const KEYS = {
   graphics: "handy.kart.graphics.v1",
   ceiling: "handy.kart.ceiling.v1",
   fps: "handy.kart.fps.v1",
+  photo: "handy.kart.photo.v1",
 } as const;
 
 /** How a player drives. */
@@ -273,4 +274,13 @@ export function loadFpsReadout(storage: Storage | undefined = local()): boolean 
 
 export function saveFpsReadout(on: boolean, storage: Storage | undefined = local()): boolean {
   return write(storage, KEYS.fps, on);
+}
+
+/** The photo at the finish line, for the results and the friends raced (on until the player turns it off). */
+export function loadFinishPhoto(storage: Storage | undefined = local()): boolean {
+  return read<unknown>(storage, KEYS.photo) !== false;
+}
+
+export function saveFinishPhoto(on: boolean, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.photo, on);
 }

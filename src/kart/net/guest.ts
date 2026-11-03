@@ -46,6 +46,7 @@ import {
   decodeInput,
   encode,
   encodeInput,
+  isPhoto,
   unpackState,
   type StartInfo,
   type ToGuest,
@@ -154,6 +155,14 @@ export class GuestSession implements Session {
   private frozenAt = 0;
   /** The last hands-lost flags sent, to send only a change. */
   private lostSent = "";
+  /** This device's karts in the race being run or just run (they outlive it, for its photos). */
+  private ownKarts = new Set<number>();
+  /** Finish-line photos of ours waiting for the race to be decided, by kart; the karts whose photo has gone. */
+  private photosOut = new Map<number, string>();
+  private photosSent = new Set<number>();
+  /** The host has said how the race ended: our photos may go. */
+  private decided = false;
+  private photoListeners = new Emitter<{ kart: number; race: number; photo: string }>();
 
   private rtt_: number | null = null;
   private heard = 0;
@@ -273,7 +282,14 @@ export class GuestSession implements Session {
       case "results":
         this.endRace();
         this.lobbyState = message.lobby;
+        this.decided = true;
+        this.sendPhotos();
         this.lobbyListeners.emit(this.lobbyState);
+        return;
+      case "photo":
+        if (message.r === this.raceId && typeof message.kart === "number" && !this.ownKarts.has(message.kart) && isPhoto(message.jpeg)) {
+          this.photoListeners.emit({ kart: message.kart, race: this.raceId, photo: message.jpeg });
+        }
         return;
       case "pong": {
         const sample = this.env.now() - message.at;
@@ -330,6 +346,28 @@ export class GuestSession implements Session {
     if (this.open) this.sendToHost({ t: "lost", lost: flags });
   }
 
+  // ─── The finish-line photos ───────────────────────────────────────────────
+
+  sharePhoto(kart: number, photo: string): void {
+    if (this.closedWith || !this.ownKarts.has(kart) || this.photosSent.has(kart) || !isPhoto(photo)) return;
+    this.photosOut.set(kart, photo);
+    if (this.decided) this.sendPhotos();
+  }
+
+  /** Our photos to the host, which passes them on: only once the race is decided, so nobody still racing waits behind them. */
+  private sendPhotos(): void {
+    if (!this.open) return;
+    for (const [kart, jpeg] of this.photosOut) {
+      this.sendToHost({ t: "photo", r: this.raceId, kart, jpeg });
+      this.photosSent.add(kart);
+    }
+    this.photosOut.clear();
+  }
+
+  onPhoto(listener: (photo: { kart: number; race: number; photo: string }) => void): () => void {
+    return this.photoListeners.add(listener);
+  }
+
   /** Only the host chooses, and stops and starts the race. */
   configure(_settings: Partial<LobbySettings>): void {}
   start(): void {}
@@ -380,6 +418,10 @@ export class GuestSession implements Session {
         curr: at,
       });
     }
+    this.ownKarts = new Set(this.own.keys());
+    this.photosOut.clear();
+    this.photosSent.clear();
+    this.decided = false;
     // Only karts drawn here are worth predicting; the others (on the big screen) are just driven.
     const onScreen = new Set(kartsOnScreen(start.lobby, this.myDevice));
     this.shown = [...this.own.keys()].filter((k) => onScreen.has(k));

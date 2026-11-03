@@ -280,7 +280,7 @@ test("hosting with the wheel: the check, the code and its QR code, and the wheel
 
   // Before the browser asks for the camera, we say why.
   await expect(page.locator("#prime")).toBeVisible();
-  await expect(page.locator("#prime")).toContainText("The picture stays on this device.");
+  await expect(page.locator("#prime")).toContainText("The picture stays on this device; only your photo at the finish line goes to the friends you race.");
   await shot(page, info, "race-3a-prime", 400);
   await page.locator("#prime").getByRole("button", { name: "Continue" }).click();
 

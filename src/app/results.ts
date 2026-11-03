@@ -10,8 +10,9 @@
 import type { Difficulty, GameEntry, GameStats } from "../engine/types";
 import { siteUrl } from "../engine/fetch";
 import { paintBackdrop } from "../ui/backdrop";
-import { $, announce, element, setText, toast } from "../ui/dom";
+import { $, announce, element, setText } from "../ui/dom";
 import { formatScore, shareFileName } from "../ui/format";
+import { shareOrSave } from "../ui/share";
 import { posterInto } from "./arcade";
 import { judge, readBest, writeBest, type Best, type ControlClass, type Verdict } from "./prefs";
 
@@ -253,22 +254,5 @@ export async function shareResult(result: Result): Promise<void> {
   const canvas = await drawShareCard(result);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) return;
-  const name = shareFileName(result.game.title);
-  const file = new File([blob], name, { type: "image/png" });
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: `Super Claude Bros. · ${result.game.title}` });
-      return;
-    } catch (error) {
-      if ((error as Error).name === "AbortError") return; // the player closed the share sheet
-    }
-  }
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = name;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-  toast("Saved to your Downloads.", { icon: "check" });
+  await shareOrSave(blob, shareFileName(result.game.title), `Super Claude Bros. · ${result.game.title}`);
 }

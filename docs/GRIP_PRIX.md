@@ -111,6 +111,19 @@ with nothing in hand: it drops its item at the line and the boxes give it
 none, so a lap of honour spins no one still racing. A player who leaves
 mid-race is replaced by a bot.
 
+**The finish-line photo.** The moment to remember. As a wheel player's kart
+crosses the line their camera takes a few stills over the next second and
+keeps the one that caught them celebrating (both hands up beats a wave beats
+hands off the wheel; with none, the moment they crossed), and the results show
+it beside the table with their place, name and time, the best placed player's
+the biggest. A player still on the road when the race is decided is taken as
+it ends. Keyboard and gamepad players have no camera: their card is their
+driver's portrait in their colour. In a room every device sees every photo.
+**Share** on the results makes one picture of them all (to the share sheet, or
+saved). Nothing is kept otherwise, and the pause sheet's **Finish Photo**
+switch (on by default, shown to a device with a wheel player) turns it off.
+Details under Input, Net and App.
+
 ### Grand Prix and Mirror
 
 The host's lobby chooses **Single Race** or **Grand Prix**. A Grand Prix is a
@@ -176,9 +189,12 @@ typed, or by scanning the QR code on the host's screen, which opens
   screen by default. The room still holds four.
 - **Practice** is a room with no one else, and never touches the network.
 
-The camera picture never leaves the device. What goes over the network is
-each player's steering, a few bytes sixty times a second, and the race as the
-host runs it.
+The camera picture never leaves the device, but for one photo of each wheel
+player at the finish line (below), which goes to the room's other devices once
+the race is decided, peer to peer like everything else: never to a server,
+never stored, gone with the page. What goes over the network otherwise is each
+player's steering, a few bytes sixty times a second, and the race as the host
+runs it.
 
 ## Parts
 
@@ -454,7 +470,20 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   race and their slots free up in the lobby. A fifth player is turned away
   ("This race is full.").
 - **Solo.** `soloSession` is the host without a transport.
-- **The wire** (protocol 7; 7 changed only how devices connect). A snapshot is one JSON line, about 1.1 KB for
+- **Finish-line photos** (`sharePhoto`, `onPhoto` on the `Session`). A
+  device holds its players' photos until the race is decided: the host sends
+  its own (and any that came early) with the results, a guest sends its own
+  when it hears the results, and the host passes each on to every device but
+  the one it came from at once. So nothing the size of a photo goes over the
+  line while anyone is still racing (a reliable message that large would hold
+  up the snapshots behind it). A photo is a JPEG data URL of at most
+  `MAX_PHOTO_CHARS` (48,000 characters, about 36 KB; a typical one is 15 to 30
+  KB), and both ends drop anything else (`isPhoto`: base64 after
+  `data:image/jpeg;base64,`, nothing more), any kart the sender does not drive,
+  any race but this one, and a second photo of a kart. They are kept for one
+  race, in memory, and a new race (a restart too) starts with none.
+- **The wire** (protocol 8; 7 changed only how devices connect, 8 added the
+  `photo` message both ways). A snapshot is one JSON line, about 1.1 KB for
   eight karts: the tick, the dice, the items in the air, the eggs, and the
   kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
   lap, the bot's own state...). A kart's row is mostly zeros and what the kart
@@ -616,6 +645,21 @@ of three; bytes are exact and are the numbers to trust.
   (an amber arrow: "Move Left", "Move Right", "Lower Your Hands", "Raise
   Your Hands"), and gives way to "Show Both Hands" once the hands are lost.
   It is this device's: a big screen is told only of lost hands.
+- **The finish-line photo** (`photo.ts`). `grabPhoto` draws the camera's
+  current frame into a small canvas at once (about what the corner picture
+  costs a frame), mirrored as the player sees themself, and `encodePhoto` makes
+  it a JPEG afterwards with `toBlob`, off the race's frame: quality 0.8, then
+  0.66 and 0.52, then smaller, until it is under `MAX_PHOTO_CHARS`. What is cut
+  (`photoCrop`): the player's column of a shared camera (their `Seat`), else
+  the whole picture; a part narrower than 3:4 (three or four on one camera) is
+  cut to 3:4 with the player's hands 62% of the way down it, so their face is
+  in it (from a little above the middle with no hands seen), and one wider
+  than 16:9 to 16:9 round the hands. The size (`photoSize`): the longest side
+  at most 480 px and at most 140,000 pixels (480 x 270 for a 16:9 camera).
+  `Services.photo(control)` grabs one for a wheel, with the hands the wheel
+  sees, as a `Still` that is encoded only if it is the one kept; it is null
+  for keys and pads. `WheelStatus.emote` says when the hands cheer or wave, so
+  the photo can be the one that caught it.
 - **`WheelPreview`.** A canvas that draws the mirrored camera picture with
   the wheel on it: a ring through both palms turned with them, its colour the
   mode (green driving, amber braking, red lost), each hand a dot that is
@@ -1220,8 +1264,57 @@ tight type, springy motion; a white pill is the one main action of a screen;
    (`eggs.ts` `resultLine`: "By a mile.", "1.4 s behind Pebble.", "You saw
    more of the track than anyone.", "The drone knows you by name now."), or,
    for friends sharing a screen, who beat whom ("Ada beat Maya, Finn and
-   Kit.", `sofaLine`). **Standings** (a Grand Prix, between races) wear
-   the same, on the postcard of the race just run; the **Podium** (its end)
+   Kit.", `sofaLine`). **The finish-line photos** (`finishGallery.ts`): a
+   card for each player of the race (bots have none), in finishing order, the
+   photo filling it and, over its foot, their medal, colour, name and time;
+   the winner's card has the gold hairline the winner's row has. Beside the
+   table from 1100 px wide (the photos on the left, at most 540 px, the pair
+   in the middle), above it on a narrower screen. The best placed player's
+   card leads, the biggest, with a larger caption, and the others are at most
+   70% of its height, in rows of one height (`arrangePhotos`: the number of
+   rows that shows the most of the pictures within the room there is, the
+   table's height beside it, a third of the window above it), so no photo is
+   cut. `layoutPodium` tries the leader in a row of its own over the rest
+   (`arrangePodium`, which suits wide photos) and the leader as tall as there
+   is room for with the rest beside it (tall ones: two to four on one camera),
+   and keeps whichever shows more, the leader's card counted twice. They come
+   up after
+   the rows, in place order, and each photo develops like a print: a soft
+   flash, then the colour coming in (a cross-fade with Reduce Motion). A
+   keyboard or gamepad player's card, or one whose photo has not come yet (a
+   guest's comes a moment after the results), is their driver's portrait in
+   their colour, and a photo that comes later develops over it. With no photo
+   and none on the way (another device's wheel player's), there are no cards:
+   a race of keys and pads looks as it always did. The race screen takes the photos
+   (`race.ts`, `FinishShutter` in `finishPhotos.ts`): for each of this
+   device's wheel players, a burst (`PhotoBurst`: a still on that frame, then
+   one every 300 ms for 1.2 s, each a small canvas until one is kept) that
+   keeps the still most like celebrating by what the wheel saw as it was taken
+   (`reaction`, from `WheelStatus.emote` and the grip: a cheer, both open
+   hands raised, 3; a wave 2; hands let go of the wheel 1; else 0), the first
+   of the best, so with nothing better it is the frame of the line; only the
+   kept one is made a JPEG, when the burst ends (or the race screen does). A
+   burst starts once, on the first of the sim's `finish` event for
+   their kart (on the host and in practice, the frame that ran the tick it
+   crossed the line; on a guest, when the host's events come, a round trip
+   after its own screen drew the crossing, since a guest draws its own kart
+   ahead of the host's word: a tenth of a second or so), its kart finished in
+   the view (an event not seen while the race loaded), or the race decided
+   before they got there. The
+   pause sheet's Finish Photo switch (`handy.kart.photo.v1`), with a footnote
+   on who sees the photo, only on a device with a wheel player; off, no photo
+   is taken. The camera's question says it too: "The picture stays on this
+   device; only your photo at the finish line goes to the friends you race."
+   **Share** (once there is a photo) makes one picture of the cards
+   (`finishShare.ts`, 1200 x 630 as the arcade's results card): the track's
+   postcard blurred and darkened behind, Grip Prix's badge and name, the track
+   and its laps (or the cup and the race), and the cards laid out as on the
+   screen with place, name and time stamped on each, the winner's ringed in
+   gold. It goes where the arcade's card goes (`ui/share.ts`, shared by both):
+   the system's share sheet, or the Downloads with a toast. It is made only
+   when asked.
+   **Standings** (a Grand Prix, between races) wear the same, on the
+   postcard of the race just run; the **Podium** (its end)
    has its own stage, and says to a player who did not win how close they
    came ("You took silver, 3 points behind.", `podiumLine`).
 
@@ -1310,7 +1403,23 @@ out when the lobby changes and not every frame: 1.0 style recalculation a frame 
   ducks, pause and mute.
 - End to end (Playwright, `?net=local`, muted): a host and two guests in tabs
   of one browser join by code, drive by keyboard and finish a one-lap race;
-  practice against bots; the landing's Race opens the page.
+  practice against bots; the landing's Race opens the page. The finish-line
+  photos (`race-photo.spec.ts`, `?camera=real`: the scripted hands steer, and
+  Chrome's fake camera is really opened behind them): a wheel player's photo on
+  the results with their place and time and Share saving a 1200 x 630
+  picture, two on one camera with a half each and the better placed the
+  bigger, and a big-screen guest's photo on the host's results.
+- The finish-line photos (Vitest): taken on the tick of the sim's finish event
+  and once, from a finish whose event was not seen, and at the end for a
+  player still racing (`finishPhotos.test.ts`, on the real sim); the burst's
+  stills (the line's frame, then every 300 ms) and the one kept (a cheer over
+  the line, the first of the best); the layout (whole pictures, no overlap,
+  inside the space, the leader the biggest, stacked for wide photos and side
+  by side for tall ones); the crop
+  and size (`input/photo.test.ts`); the cards' rows; the room passing each
+  photo to every other device only once the race is decided, and dropping
+  anything that is not a small JPEG of the sender's own kart
+  (`net/race.test.ts`).
 
 ## The couch: four friends, one big screen
 

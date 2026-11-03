@@ -113,6 +113,8 @@ export class KartApp {
   /** The host's screen has been made the big screen for this room (once, for three or four on the camera). */
   private bigScreenSet = false;
   private racers: readonly RacerSetup[] = [];
+  /** The finish-line photos of the race the race screen shows (`raceId`), by kart: this device's and the room's. */
+  private photos = new Map<number, string>();
   private unlisten: (() => void)[] = [];
 
   constructor(
@@ -163,6 +165,7 @@ export class KartApp {
       leave: () => this.leave(),
       restart: () => this.restart(),
       failed: (kind) => this.loadFailed(kind),
+      photo: (shot) => this.gotPhoto(shot),
     });
     this.resultsScreen = new ResultsScreen({
       again: () => this.again(),
@@ -206,8 +209,10 @@ export class KartApp {
    * them up with the room's lobby as given. Only testHooks.ts (dev and test
    * builds) calls it.
    */
-  preview(screen: "results" | "standings" | "podium", lobby: LobbyState): void {
+  preview(screen: "results" | "standings" | "podium", lobby: LobbyState, photos: Readonly<Record<number, string>> = {}): void {
     if (!this.session) return;
+    this.raceId = lobby.race;
+    this.photos = new Map(Object.entries(photos).map(([kart, photo]) => [Number(kart), photo]));
     this.ready = true;
     if (screen === "results") this.showResults(lobby);
     else if (screen === "standings") this.showStandings(lobby);
@@ -354,6 +359,15 @@ export class KartApp {
     this.choice = null;
     this.bigScreenSet = false;
     this.unlisten = [session.onLobby((lobby) => this.lobbyChanged(lobby)), session.onClosed((reason) => this.closed(reason))];
+    if (session.onPhoto) this.unlisten.push(session.onPhoto((shot) => this.gotPhoto(shot)));
+  }
+
+  /** A finish-line photo, this device's or another's: kept for the race's results, and put on them if they are up. */
+  private gotPhoto(shot: { kart: number; race: number; photo: string }): void {
+    // (One made after the room was left is let go.)
+    if (!this.session || shot.race !== this.raceId) return;
+    this.photos.set(shot.kart, shot.photo);
+    if (this.screen === "results") this.resultsScreen.addPhoto(shot.kart, shot.photo);
   }
 
   private detach(): void {
@@ -640,6 +654,8 @@ export class KartApp {
     if (!session) return;
     window.clearTimeout(this.finishTimer);
     this.endCupScreens();
+    // A new race has photos of its own (a restart too: the race is named afresh).
+    if (lobby.race !== this.raceId) this.photos = new Map();
     this.raceId = lobby.race;
     const mine = localPlayers(lobby, session.device);
     this.show("race");
@@ -665,9 +681,12 @@ export class KartApp {
       racers: this.racers,
       laps: lobby.settings.laps,
       trackName: this.trackName(lobby),
+      trackId: trackOfRace(lobby.settings, lobby.grandPrix),
       grandPrix: lobby.grandPrix ?? null,
       still: this.raceScreen.photo,
       rescues: this.raceScreen.rescued,
+      photos: this.photos,
+      cameras: this.cameraKarts(lobby, session.device),
     });
     this.show("results");
     this.backdrop.set(trackOfRace(lobby.settings, lobby.grandPrix));
@@ -675,6 +694,20 @@ export class KartApp {
     const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));
     const first = result.standings.find((row) => row.place === 1);
     this.services.sound.music(first && mine.has(first.kart) ? "results-win" : "results");
+  }
+
+  /**
+   * The karts of other devices' wheel players: their finish-line photos may still be on the way (they come after the
+   * results, and only if their devices take them). This device's are taken during the race: there by now, or not at all.
+   */
+  private cameraKarts(lobby: LobbyState, device: string): Set<number> {
+    const karts = new Set<number>();
+    for (const player of lobby.players) {
+      if (player.control !== "wheel" || player.device === device) continue;
+      const kart = kartOf(lobby, player.slot);
+      if (kart !== null) karts.add(kart);
+    }
+    return karts;
   }
 
   /** The name of the track being raced (or just raced): the Grand Prix's race, or the room's chosen one. */
@@ -790,6 +823,9 @@ export class KartApp {
     this.howToScreen.stop();
     this.raceScreen.end();
     this.endCupScreens();
+    // The room's photos are the room's: gone with it.
+    this.photos = new Map();
+    this.resultsScreen.forgetPhotos();
     this.detach();
     const session = this.session;
     this.session = null;
