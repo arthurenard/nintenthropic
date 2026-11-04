@@ -4,7 +4,7 @@
 your thumb to fire. It runs in your browser, sees your hand through your
 webcam, and never sends the picture anywhere.
 
-**Play it at https://www.arthurenard.me/super-claude-bros/**
+**Play it at https://super-claude-bros.arthurenard.workers.dev**
 
 ![Dust Creek at golden hour](public/assets/western/poster.webp)
 
@@ -234,10 +234,11 @@ under a path. Beside it runs one function, `api/ice.js` (served as
 `api/ice.json`), which hands Grip Prix rooms their relay login. Either host
 works:
 
-- **Cloudflare** (`wrangler.jsonc`): a Worker serves `dist/` as static files
-  (no bandwidth cap on the free plan) and runs only for `/api/`
-  (`cloudflare/worker.js`). Cloudflare's Git integration builds with
-  `npm run build` and deploys with `npx wrangler deploy`; the TURN key is two
+- **Cloudflare** (`wrangler.jsonc`), where the game lives: a Worker serves
+  `dist/` as static files (no bandwidth cap on the free plan) and runs only for
+  `/api/` (`cloudflare/worker.js`). On every push to `main`, Cloudflare's Git
+  integration builds with `npm run build` and deploys with
+  `npx wrangler deploy`; the TURN key is two
   secrets, `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`. `npm run build && npx
   wrangler dev` runs it on this computer. Cloudflare serves `race.html` as
   `/race`, by a redirect that keeps the join code.
