@@ -6,7 +6,7 @@
  */
 import { fireworks } from "./fireworks";
 import { frost } from "./frost";
-import { clamp01, clearOf, easeOut, frac, ph, rnd, sine, sparkles, star, TAU, type Ctx, type Scene } from "./fxKit";
+import { clamp01, clearOf, easeOut, frac, ph, rnd, sine, smooth, sparkles, star, TAU, type Ctx, type Scene } from "./fxKit";
 import type { EffectId, Flourish, Look } from "./looks";
 import { cloud, crown, podium } from "./places";
 import { glint, leaves } from "./palms";
@@ -131,7 +131,7 @@ function steam(c: Ctx, s: Scene): void {
   c.strokeStyle = "#fff";
   c.lineWidth = Math.max(2, s.u * 0.02);
   for (let k = 0; k < 3; k++) {
-    const x0 = s.w * (0.18 + 0.32 * k);
+    const x0 = s.w * [0.08, 0.19, 0.92][k]!;
     for (let j = 0; j < 12; j++) {
       const a = j / 12;
       const b = (j + 1) / 12;
@@ -180,13 +180,11 @@ function flare(c: Ctx, s: Scene): void {
   c.beginPath();
   c.ellipse(x, y, s.u * 0.6, s.u * 0.014, 0, 0, TAU);
   c.fill();
-  // Ghosts of the sun along the line through the middle of the picture.
-  const mx = s.w / 2;
-  const my = s.h / 2;
-  for (const [f, r, a] of [[0.45, 0.04, 0.16], [0.85, 0.07, 0.1], [1.35, 0.035, 0.14]] as const) {
+  // Ghosts of the sun down the left edge, small and faint, away from the face.
+  for (const [gx, gy, r, a] of [[0.07, 0.34, 0.035, 0.14], [0.11, 0.5, 0.06, 0.09], [0.05, 0.66, 0.03, 0.12]] as const) {
     c.fillStyle = `rgba(255,190,120,${a * pulse})`;
     c.beginPath();
-    c.arc(x + (mx - x) * f * 1.4, y + (my - y) * f * 1.4, s.u * r, 0, TAU);
+    c.arc(s.w * gx, s.h * gy, s.u * r, 0, TAU);
     c.fill();
   }
   c.restore();
@@ -195,12 +193,14 @@ function flare(c: Ctx, s: Scene): void {
 function dustDevil(c: Ctx, s: Scene): void {
   const cx = s.w * (0.5 + 0.34 * sine(s.t, 1, 0.25));
   const base = s.h * 0.94;
+  // It dies down as it passes the middle, where the face is.
+  const edge = 0.15 + 0.85 * smooth(Math.abs(cx - s.w / 2) / (s.w * 0.3));
   c.fillStyle = "#d9a86a";
   for (let i = 0; i < 36; i++) {
     const hh = frac(i / 36 + ph(s.t, 1));
     const a = TAU * (ph(s.t, 3) + i * 0.37);
     const r = s.u * (0.015 + 0.075 * hh);
-    c.globalAlpha = 0.8 * Math.sin(Math.PI * hh) ** 0.7;
+    c.globalAlpha = 0.8 * edge * Math.sin(Math.PI * hh) ** 0.7;
     c.beginPath();
     c.arc(cx + Math.cos(a) * r, base - hh * s.u * 0.5 + Math.sin(a) * r * 0.25, s.u * (0.012 + 0.016 * hh), 0, TAU);
     c.fill();
@@ -296,7 +296,7 @@ function shooting(c: Ctx, s: Scene): void {
     const hx = s.w * (0.95 - 0.35 * i) + dx * q;
     const hy = s.h * (0.05 + 0.1 * i) + dy * q;
     const tail = c.createLinearGradient(hx, hy, hx - dx * 0.4, hy - dy * 0.4);
-    tail.addColorStop(0, `rgba(255,255,255,${Math.sin(Math.PI * q)})`);
+    tail.addColorStop(0, `rgba(255,255,255,${Math.sin(Math.PI * q) * (0.25 + 0.75 * clearOf(s, hx, hy))})`);
     tail.addColorStop(1, "rgba(180,170,255,0)");
     c.strokeStyle = tail;
     c.beginPath();

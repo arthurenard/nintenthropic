@@ -1675,14 +1675,33 @@ tight type, springy motion; a white pill is the one main action of a screen;
    (Harbour); a sun flare, a dust devil and a tumbleweed (Canyon); fireworks
    and confetti (Fun Fair); frost creeping in, snow and glitter (Glacier);
    embers and a lava glow (Volcano); a ringed planet, twinkles and shooting
-   stars (Starlight); palm-leaf shadows, bubbles and a sun glint (Five Finger).
-   By place (`flourishFor`): the winner has a bobbing crown and a gold show,
-   second and third silver and bronze sparkles, the last of three or more a
-   small rain cloud. Each effect (`effects.ts`) is a pure function of the clock
+   stars (Starlight); palm-frond shadows, bubbles and a sun glint (Five Finger).
+   The **fireworks** (`fireworks.ts`) are real bursts: a rocket climbing in an
+   arc from a corner with a tail of sparks, a white flash as it goes off, then
+   sparks that fly out fast and slow down (drag), droop (gravity), leave short
+   streaks and fade, a pistil of a second colour, and a crackle of glitter as
+   the last die; they go off at the sides and above the head, so a face in the
+   middle is never under one. The **frost** (`frost.ts`) grows in from the edges
+   and corners only: a frosted haze along each edge and feathery ferns of ice
+   (stem, branches, twigs) that creep out and back, translucent, with a cool
+   shadow under the white so they show on a bright picture, and crystals that
+   glint. The **palms** (`palms.ts`) are fronds from the two top corners, each
+   with a curved midrib and tapered leaflets that rustle, a soft-edged shadow
+   over a warm patch of sun, and the sun's glint below the stamp. Everything
+   that drifts over the whole card (snow, petals, confetti, sprinkles, bubbles,
+   glitter) shrinks over the middle (`clearOf`, `fxKit.ts`), and the butterflies,
+   steam, dust devil, balloon and lighthouse beam keep to the sides or the top.
+   By place (`flourishFor`, `places.ts`): the winner has a bobbing crown, a gold
+   show at the sides (not where the track has fireworks of its own), a gold
+   shimmer running round the frame once a loop and the camera's flash as the
+   card comes up (the page's CSS; a clip's first 0.4 s has it too: `intro` on
+   `drawFx`, never in the loop or the frozen picture), second and third silver
+   and bronze sparkles, the last of three or more a small rain cloud that
+   drips: drops fall and splash low on the card, and beads run down the glass. Each effect (`effects.ts`) is a pure function of the clock
    and the card's size, with no state, and repeats within `LOOP` (4 s): so the
    shared picture can freeze it on its best frame (`Look.peak`), a clip can loop
    without a join, and the tests compare frames. `player.ts` draws them on one
-   canvas per card, one loop for all at most 30 times a second at no more than
+   canvas per card, one loop for all at most 60 times a second at no more than
    1.25 pixels a px, only for cards that are on screen (IntersectionObserver)
    while the page shows; Reduce Motion draws the best frame once. The page's
    grade is CSS (`filter` on the picture, a soft-light wash, a vignette), the

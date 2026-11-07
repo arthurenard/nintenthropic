@@ -8,8 +8,8 @@ import { drawFx } from "./effects";
 import { flourishFor, LOOP, type Look } from "./looks";
 import { stampText } from "./compose";
 
-/** The longest a frame may be skipped for, ms: a 30 fps cap. */
-const FRAME_MS = 30;
+/** The shortest time between two frames, ms: every frame of a 60 Hz screen (the effects cost a tenth of a millisecond a card). */
+const FRAME_MS = 14;
 /** The most the canvas is sharper than the page, in pixels per px: the effects are soft, and four cards must be cheap. */
 const MAX_SCALE = 1.25;
 

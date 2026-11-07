@@ -30,7 +30,7 @@ function stems(s: Scene): Stem[] {
   const along = s.w > s.h ? 7 : 5;
   const up = s.w > s.h ? 4 : 6;
   edge(along, 1, (f) => [s.w * f, 0, Math.PI / 2], 0.2);
-  edge(along, 2, (f) => [s.w * f, s.h, -Math.PI / 2], 0.17);
+  edge(along - 2, 2, (f) => [s.w * f, s.h, -Math.PI / 2], 0.11);
   edge(up, 3, (f) => [0, s.h * f, 0], 0.2);
   edge(up, 4, (f) => [s.w, s.h * f, Math.PI], 0.2);
   // The corners grow longest, three each, fanned across the diagonal.

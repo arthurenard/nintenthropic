@@ -100,7 +100,7 @@ export const LOOKS: Record<string, Look> = {
     vignette: 0.4,
     night: 0.55,
     effects: ["beam", "fireworks"],
-    peak: 1.7,
+    peak: 0.95,
     accent: "#ffd479",
   },
   "canyon-run": {
@@ -122,7 +122,7 @@ export const LOOKS: Record<string, Look> = {
     vignette: 0.34,
     night: 0.36,
     effects: ["fireworks", "confetti"],
-    peak: 1.9,
+    peak: 0.8,
     accent: "#ff5fa8",
   },
   "glacier-pass": {
