@@ -77,9 +77,16 @@ export interface HazardDef {
    * How it moves. "cross": back and forth across the road. "roll": along the
    * road against the traffic, from `at` for `span` of the lap, then again.
    * "bob": up out of the ground and down again at `offset` (harmless while
-   * down). "orbit": round a circle of radius `span` metres centred at `offset`.
+   * down). "orbit": round a circle of radius `span` metres centred at `offset` (a sweeper's arm is several, at
+   * different radii and the same phase: `sweeper` in track/pieces.ts).
+   *
+   * The timed set pieces (track/pieces.ts), all pure functions of the race clock like the rest: "swing": a wrecking
+   * ball on a chain across the road, `span` metres either side of `offset`, low through the middle of its swing and
+   * lifting clear at each end. "crush": a block (or icicle) that hangs, shakes with a lamp lit (`warn`), falls, lies
+   * a moment and rises, at `offset`. "slide": crosses the whole road once a cycle from out of sight to out of sight
+   * (a negative `span` goes right to left), with a lamp lit before it comes.
    */
-  motion: "cross" | "roll" | "bob" | "orbit";
+  motion: "cross" | "roll" | "bob" | "orbit" | "swing" | "crush" | "slide";
   /** Seconds for one cycle. */
   period: number;
   /** 0..1 of the cycle at time 0, so several of a kind are not in step. */
@@ -90,6 +97,10 @@ export interface HazardDef {
   offset?: number;
   /** "cross": metres either side of `offset` (default to the road's edges). "roll": the fraction of the lap it rolls. "orbit": the circle's radius, metres. */
   span?: number;
+  /** "orbit": which way it turns, seen from above: 1 (default) or -1. */
+  dir?: 1 | -1;
+  /** "crush": how high its underside hangs when it is up, metres (default 3.2 x radius + 2.5): a cave's icicle hangs lower than a quarry's block. */
+  top?: number;
 }
 
 /** A set piece the picture builds beside the road (a giant teapot, a ferris wheel); the sim ignores it. */

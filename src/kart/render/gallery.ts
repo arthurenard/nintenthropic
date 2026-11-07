@@ -44,6 +44,7 @@ import { Bank } from "./world/bank";
 import { MeshBuilder, rgb } from "./world/builder";
 import { HAZARDS, LANDMARKS, THEME_HAZARDS, THEME_LANDMARKS } from "./world/landmarks";
 import { buildHazards, buildLandmarks, landmarkMaterials, type HazardLayer, type LandmarkLayer } from "./world/landmarks/place";
+import { buildPieces, isPiece } from "./world/pieces";
 import { sceneryVariants } from "./world/sceneryArt";
 import { createSky } from "./world/sky";
 import { glowTexture } from "./world/textures";
@@ -214,10 +215,10 @@ function build(kind: string, opts: { offset?: number; span?: number; scale?: num
       motion,
       period: 4,
       radius: Number(params.get("radius") ?? 1.4),
-      span: motion === "cross" ? 6 : motion === "roll" ? 0.02 : motion === "orbit" ? 8 : undefined,
+      span: motion === "cross" ? 6 : motion === "roll" ? 0.02 : motion === "orbit" ? 8 : motion === "swing" ? 5 : undefined,
       offset: motion === "orbit" ? 12 : 0,
     };
-    hazards = buildHazards(env, [def], mats, shadow);
+    hazards = isPiece(def) ? buildPieces(env, [def], mats, shadow) : buildHazards(env, [def], mats, shadow);
     stage.add(hazards.group);
     radius = 4.5;
     focus.set(0, 1.4, 500);

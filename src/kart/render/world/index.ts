@@ -42,6 +42,7 @@ import { buildBackdrop } from "./backdrop";
 import { bakeStatic, type Baked } from "./bake";
 import { ItemBoxes } from "./boxes";
 import { rampHeight, type Features } from "./features";
+import { buildPieces, isPiece } from "./pieces";
 import { buildHazards, buildLandmarks, landmarkMaterials, type HazardLayer, type LandmarkLayer, type PlacedLandmark } from "./landmarks/place";
 import { additiveMaterial, groundMaterial, lavaMaterial, patchMaterial, roadMaterial, type Animated } from "./materials";
 import { buildFoliage } from "./foliage";
@@ -221,9 +222,14 @@ export async function createWorld(
   own(landmarks);
   group.add(landmarks.group);
   const shadowTex = own(glowTexture(0, 1.0));
-  const hazards: HazardLayer = buildHazards(env, def.hazards ?? [], mats, shadowTex);
+  const hazardDefs = def.hazards ?? [];
+  const hazards: HazardLayer = buildHazards(env, hazardDefs.filter((h) => !isPiece(h)), mats, shadowTex);
   own(hazards);
   group.add(hazards.group);
+  // The timed set pieces (crushers, pendulums, sweepers, carts) are instanced, one draw per kind.
+  const pieces: HazardLayer = buildPieces(env, hazardDefs, mats, shadowTex);
+  own(pieces);
+  group.add(pieces.group);
 
   // Glows: lamps (static) and the three start lights (changing).
   const staticGlows = meshes.glows;
@@ -404,6 +410,7 @@ export async function createWorld(
       backdrop?.update(time);
       landmarks.update(time);
       hazards.update(raceTime, dt);
+      pieces.update(raceTime, dt);
     },
     install(scene) {
       scene.fog = fog;
