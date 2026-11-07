@@ -645,11 +645,27 @@ of three; bytes are exact and are the numbers to trust.
   kept by continuity (each frame's nearest to the last), so a wheel turned
   past 90° does not swap them. Angle = `atan2(dy, dx)` from the left palm to
   the right, + when the right hand is lower (turning right). A One Euro filter
-  smooths it with little lag. The level (an offset) is set by holding the
+  (`WHEEL.smoothing`, 2 Hz and beta 0.1) smooths it; on made-up noise of 0.4 to
+  1 degree (simulated hands; on Arthur's recording the filter lag is 7 ms median, camera to steer 29 ms) it trails a wheel turned 30 degrees a second by 27 ms (the first
+  settings, 1.5 Hz and 0.05: 40 ms) and one turned 90 by 13 ms (was 20), and
+  rests within 0.1 degree of as still, which the 4 degree dead zone hides.
+  Between camera frames (30 a second, the kart ticking at 60) the angle carries
+  on at the wheel's speed (`WHEEL.lead`, at most 45 ms, the slower of the
+  smoothed speed and the last step, none when they disagree, fading out when
+  no frame comes), so the steer glides instead of stepping, and a fifth of the
+  frame's measured age on arrival (`compensate`) is made up too; a wheel
+  stopping at 30 degrees from 200 a second goes 3 degrees past at most
+  (`quality.test.ts`). The level (an offset) is set by holding the
   wheel level for a second.
 - **Fist or open.** From the world landmarks: a finger is out when its tip is
   much farther from the wrist than its middle joint; three or four fingers
-  out is open, one or none a fist, with 120 ms of hold either way.
+  out is open, one or none a fist, with 120 ms of hold either way, and the
+  change must be backed by two frames however slowly the camera gives them
+  (`GRIP.frames`; three or four players on one camera are read at 10 to 20
+  frames a second, where 120 ms is a frame or two). A hand's first frame back
+  in the picture takes its state at once but is not braked on until a second
+  frame says the same (`Grip.steady`): a hand misread as open for one frame,
+  at any frame rate from 10 to 30, never brakes (`quality.test.ts`).
 - **Gestures** as in "How it plays": both open for 150 ms → brake, with
   `slide` (the sim drifts on it in a bend at speed: the wheel's
   only drift, so it never sets `drift`); one open
