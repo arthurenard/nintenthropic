@@ -43,7 +43,7 @@ export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** The hazard kinds each theme's tracks may use, with how each moves (hazards.ts). */
-export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; motion: "cross" | "roll" | "bob" | "orbit" }[]>> = {
+export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; motion: "cross" | "roll" | "bob" | "orbit" | "swing" | "crush" | "slide" }[]>> = {
   meadow: [],
   canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }],
   harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }],

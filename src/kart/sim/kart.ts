@@ -11,7 +11,7 @@
 import { TICK, TICK_HZ, type DriveInput, type RacerSetup } from "../contract";
 import { WEIGHTS, weightOf } from "../characters";
 import { mulberry32 } from "../../engine/rules/rng";
-import { hazardAt } from "../track/hazards";
+import { hazardAt, hazardReach } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
 import { barrierDistance, gapAt, groundAt, isOpen, rescueSpot, tableAt, type RampSite } from "./terrain";
@@ -302,8 +302,8 @@ function checkHazards(w: World, k: KartState, emit: Emit): void {
   const time = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
   for (const hazard of hazards) {
     // Far down the road, and not one that roams that far: not worth the working out.
-    const reach = (hazard.motion === "roll" ? (hazard.span ?? 0.05) * geo.length : hazard.motion === "orbit" ? (hazard.span ?? 8) : 0) + hazard.radius + TUNING.kartRadius + 12;
-    if (Math.abs(geo.delta(k.s, hazard.at * geo.length)) > reach + (hazard.motion === "cross" ? (hazard.span ?? 12) : 0)) continue;
+    const reach = hazardReach(hazard, geo.length) + hazard.radius + TUNING.kartRadius + 12;
+    if (Math.abs(geo.delta(k.s, hazard.at * geo.length)) > reach) continue;
     const pose = hazardAt(geo, hazard, time);
     if (!pose.active) continue;
     const dx = pose.x - k.x;
