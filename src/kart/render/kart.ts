@@ -60,6 +60,14 @@ export interface KartPose {
   dizzy?: boolean;
   /** The suspension's compression, about -1..1: + squashes the body onto its wheels (a landing, a hit), - lets it spring up. */
   squash?: number;
+  /** 0..1: the brake lights, lit while the kart slows hard (worked out from its speed falling, so it needs nothing from the sim). */
+  brake?: number;
+  /** -1..1: the driver glances back over a shoulder (+ the left, +x) at a kart close behind. */
+  lookBack?: number;
+  /** 0..1: at rest (stopped on the grid): the driver breathes and looks about. */
+  rest?: number;
+  /** 0..1: the eyes held shut this much, for a still picture (a blink is the driver's own). */
+  shut?: number;
 }
 
 export interface KartModel {
@@ -136,6 +144,12 @@ interface FallState {
 const _inv = new Quaternion();
 const _off = new Vector3();
 
+/** Every kart on screen, so a driver can see who is behind. */
+const LIVE = new Set<KartActor>();
+/** A glance back lasts this long, seconds, and comes at most this often. */
+const GLANCE_FOR = 0.75;
+const GLANCE_EVERY = 3.2;
+
 export class KartActor {
   readonly root = new Group();
   readonly model: KartModel;
@@ -155,6 +169,14 @@ export class KartActor {
   private flame = 0;
   private hop = 0;
   private lastSpeed = 0;
+  /** The brake lights' glow (eased), the glance back (eased) and the time it began and when the next may, and how much the kart is at rest. */
+  private brakeGlow = 0;
+  private back = 0;
+  private glanceFrom = -9;
+  private glanceNext = 1.5;
+  private restEase = 0;
+  /** Where the kart is, for the others to see who is behind them (see `lookBackAt`). */
+  private spot = { x: 0, z: 0, heading: 0, speed: 0, live: false };
   /** The heading last frame and how fast it is turning (rad/s, eased): how hard the kart corners, which rolls the body. */
   private lastHeading: number | null = null;
   private yawRate = 0;
@@ -209,6 +231,7 @@ export class KartActor {
     ctx: ActorContext,
   ) {
     this.buzz = id * 2.4;
+    LIVE.add(this);
     this.buzzRate = IDLE_RATE + ((id * 5) % 15);
     this.model = factory(racer);
     this.root.add(this.model.root);
@@ -232,6 +255,30 @@ export class KartActor {
       pool.renderOrder = 3;
       this.shadowGroup.add(pool);
     }
+  }
+
+  private glanceSide = 1;
+
+  /**
+   * +1 or -1 (the side to look over: + the driver's left) when another kart is close behind this one and a little to a side, 0 when none is.
+   * Close: 2 to 11 m back, within 3.5 m of the line, and it is not slower by much (a kart far behind and falling back is no worry).
+   */
+  private lookBackAt(): number {
+    const fx = Math.sin(this.spot.heading);
+    const fz = Math.cos(this.spot.heading);
+    let best = 0;
+    let bestBack = 12;
+    for (const o of LIVE) {
+      if (o === this || !o.spot.live) continue;
+      const dx = o.spot.x - this.spot.x;
+      const dz = o.spot.z - this.spot.z;
+      const back = -(dx * fx + dz * fz);
+      const side = dx * fz - dz * fx;
+      if (back < 2 || back > 11 || Math.abs(side) > 3.5 || back >= bestBack) continue;
+      bestBack = back;
+      best = side >= 0 ? 1 : -1;
+    }
+    return best;
   }
 
   /** Poses the kart from `view`; `time` is the clock, for the little shakes. */
@@ -482,6 +529,26 @@ export class KartActor {
     const buzzPitch = Math.sin(this.buzz) * IDLE_PITCH * lope;
     const buzzRoll = Math.sin(this.buzz * 1.13 + 1.3) * IDLE_ROLL * lope;
 
+    // Brake lights: lit while the speed is falling hard on the ground, not by a spin-out or a fall.
+    const slowing = grounded && !spinning && !rescuing && speed > 1.5 ? smoothstep(2.2, 6.5, -this.accel) : 0;
+    this.brakeGlow = damp(this.brakeGlow, slowing, slowing > this.brakeGlow ? 34 : 9, dt);
+    // The glance back: a driver with a kart close behind looks round now and then, over the shoulder on its side.
+    this.spot.x = view.x;
+    this.spot.z = view.z;
+    this.spot.heading = view.heading;
+    this.spot.speed = speed;
+    this.spot.live = !rescuing;
+    const follower = !rescuing && !spinning && grounded && speed > 6 ? this.lookBackAt() : 0;
+    if (follower !== 0 && time - this.glanceFrom > GLANCE_EVERY && time >= this.glanceNext && !this.calm) {
+      this.glanceFrom = time;
+      this.glanceSide = follower;
+      this.glanceNext = time + GLANCE_EVERY;
+    }
+    const glancing = time - this.glanceFrom < GLANCE_FOR && time >= this.glanceFrom;
+    this.back = damp(this.back, glancing ? this.glanceSide : 0, glancing ? 9 : 6, dt);
+    const stopped = !rescuing && !spinning && grounded ? 1 - smoothstep(0.4, 2.5, Math.abs(speed)) : 0;
+    this.restEase = damp(this.restEase, stopped, 3, dt);
+
     const rough = view.offroad || view.surface === "mud" ? 0.035 : 0.006;
     const shake = Math.sin(time * 61 + this.id * 7) * rough * clamp(sr * 1.5, 0, 1);
     this.model.pose({
@@ -501,6 +568,9 @@ export class KartActor {
       finished: view.lap > ctx.laps && !rescuing,
       dizzy: spinning && !rescuing,
       squash: rescuing ? 0 : this.susp,
+      brake: this.brakeGlow,
+      lookBack: this.back,
+      rest: this.restEase,
     });
 
     // Shadow lies on the road, shrinking and paling while the kart is in the air or being carried.
@@ -589,6 +659,7 @@ export class KartActor {
   }
 
   dispose(): void {
+    LIVE.delete(this);
     this.model.dispose();
     this.drone?.dispose();
     for (const r of this.resources) r.dispose();

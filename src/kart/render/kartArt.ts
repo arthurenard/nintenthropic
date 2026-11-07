@@ -24,6 +24,7 @@ import type { RacerSetup } from "../contract";
 import { artNode, hasArt } from "./art";
 import type { Driver } from "./drivers";
 import { mergeBaked, rgb, type Rgb } from "./kartBuilder";
+import { brakeLights } from "./brakeLights";
 import { SURF, kartMaterial, withStudioFallback, type Surf } from "./kartMaterial";
 import { FAR_DISTANCE, KART_EXHAUST, STEERING, WHEEL_FRONT, WHEEL_REAR } from "./kartSpec";
 import type { KartModel } from "./kart";
@@ -39,6 +40,8 @@ export interface ArtKit {
   flameMaterial: Material;
   /** The kart's number, written on its plate: a geometry in the kart's own frame. */
   plate(id: number, accent: Rgb): BufferGeometry;
+  /** This driver's own touches of coachwork (kartExtras.ts), welded into the body; null for none. */
+  extras?(accent: Rgb, golden: boolean): BufferGeometry | null;
   driver(): Driver;
 }
 
@@ -97,6 +100,8 @@ function emitted(material: MeshStandardMaterial, fallback: Rgb): Rgb {
 export interface Base {
   geometry: BufferGeometry;
   tint: Uint8Array;
+  /** Which vertices belong to the tail lamps (the material "tail"), which light up when the kart brakes. */
+  tail?: Uint8Array;
 }
 
 const bases = new Map<string, Base | null>();
@@ -126,6 +131,7 @@ export function bakeArt(node: Object3D, part: Part, golden: boolean): Base {
   const surfs: number[] = [];
   const index: number[] = [];
   const tint: number[] = [];
+  const tail: number[] = [];
   const m = new Matrix4();
   const nm = new Matrix3();
   const p = new Vector3();
@@ -154,6 +160,7 @@ export function bakeArt(node: Object3D, part: Part, golden: boolean): Base {
       color.push(base[0] * ao, base[1] * aoG, base[2] * aoB);
       surfs.push(look.surf[0], look.surf[1], look.surf[2], look.surf[3]);
       tint.push(look.tint ? 1 : 0);
+      tail.push(material.name === "tail" ? 1 : 0);
     }
     const idx = geometry.index;
     if (idx) for (let i = 0; i < idx.count; i++) index.push(idx.getX(i) + first);
@@ -167,7 +174,7 @@ export function bakeArt(node: Object3D, part: Part, golden: boolean): Base {
   geometry.setIndex(index);
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
-  return { geometry, tint: Uint8Array.from(tint) };
+  return { geometry, tint: Uint8Array.from(tint), tail: Uint8Array.from(tail) };
 }
 
 /** A racer's copy of a base: the buffers are shared, only the colours differ. */
@@ -216,12 +223,16 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
   // ── The racer's geometry: the buffers are shared, the colours are theirs ──
   const racerBody = forRacer(body, accent);
   const plateGeo = kit.plate(racer.id, accent);
+  const extrasGeo = kit.extras?.(accent, golden) ?? null;
   const bodyGeo = mergeBaked([
     { geometry: racerBody, matrix: new Matrix4() },
     { geometry: plateGeo, matrix: new Matrix4() },
+    ...(extrasGeo ? [{ geometry: extrasGeo, matrix: new Matrix4() }] : []),
   ]);
   racerBody.dispose();
   plateGeo.dispose();
+  extrasGeo?.dispose();
+  const brake = brakeLights(body);
   const wheelGeo = forRacer(wheel, accent);
   // The front wheels turn about their hubs: each is its own mesh, drawn about its hub. The rear pair is one mesh on the rear axle.
   const frontGeo = [placed(wheelGeo, -1, FRONT_SCALE, [0, 0, 0]), placed(wheelGeo, 1, FRONT_SCALE, [0, 0, 0])];
@@ -256,6 +267,8 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
     wheelPivot.add(wheelRim);
   }
   bodyGroup.add(wheelPivot);
+
+  if (brake) bodyGroup.add(brake.mesh);
 
   const flames: Mesh[] = [];
   for (const sx of [-1, 1]) {
@@ -321,7 +334,8 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
       bodyGroup.scale.set(1 + squash * 0.035, 1 - squash * 0.06, 1 + squash * 0.035);
       farBody.position.y = bodyGroup.position.y;
       farBody.rotation.copy(bodyGroup.rotation);
-      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy });
+      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut });
+      brake?.show(p.brake ?? 0);
       if (wheelRim) wheelRim.rotation.z = -p.steer * STEERING.turn;
       for (const f of fronts) {
         f.pivot.rotation.y = -p.steer * 0.5;
@@ -339,7 +353,7 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
       }
     },
     dispose() {
-      for (const g of [bodyGeo, ...frontGeo, rearGeo, steeringGeo, flameGeo, farGeo]) g?.dispose();
+      for (const g of [bodyGeo, ...frontGeo, rearGeo, steeringGeo, flameGeo, farGeo, brake?.mesh.geometry]) g?.dispose();
       driver.dispose();
     },
   };

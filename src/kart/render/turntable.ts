@@ -83,6 +83,10 @@ function build(canvas: HTMLCanvasElement, params: URLSearchParams, theme: TrackT
   const emote = (params.get("emote") as Emote | null) ?? null;
   const finished = params.get("finished") === "1";
   const dizzy = params.get("dizzy") === "1";
+  const brake = Number(params.get("brake") ?? 0);
+  const lookBack = Number(params.get("back") ?? 0);
+  const shut = Number(params.get("shut") ?? 0);
+  const rest = Number(params.get("rest") ?? 0);
   const frozen = params.has("t") ? Number(params.get("t")) : null;
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -111,6 +115,10 @@ function build(canvas: HTMLCanvasElement, params: URLSearchParams, theme: TrackT
         emote,
         finished,
         dizzy,
+        brake,
+        lookBack,
+        shut,
+        rest,
       });
       // Angle 0 is behind the kart (it faces +z, so behind is -z).
       const lx = props ? Number(params.get("lx") ?? 9) : x;

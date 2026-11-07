@@ -53,4 +53,10 @@ export interface DriverMotion {
   emote?: Emote | null;
   finished?: boolean;
   dizzy?: boolean;
+  /** -1..1: glancing back over a shoulder (+ the left one, +x) at a kart close behind. */
+  lookBack?: number;
+  /** 0..1: how much at rest (on the grid, stopped): the driver breathes and looks about. */
+  rest?: number;
+  /** 0..1: how shut the eyes are, at least (a blink's own timing is the driver's). */
+  shut?: number;
 }
