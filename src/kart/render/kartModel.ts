@@ -511,7 +511,7 @@ function artKit(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden"
       b.as(SURF.plastic, () => digit(b, String((id % 9) + 1), 0, PLATE.y, PLATE.z - 0.008, 0.18, mixRgb(accent, [0, 0, 0], 0.55)));
       return b.build();
     },
-    extras: (accent, golden) => kartExtras(species, accent, golden),
+    extras: (accent, golden, weight) => kartExtras(species, accent, golden, weight),
     driver: () => createDriver(species, racer.colour, [...DRIVER_AT], kartMaterial(), racer.id),
   };
 }

@@ -20,12 +20,14 @@
  * position, normal and surface buffers are shared by every kart).
  */
 import { BufferGeometry, Float32BufferAttribute, Group, LOD, Matrix3, Matrix4, Mesh, Vector3, type Material, type MeshStandardMaterial, type Object3D } from "three";
+import type { Weight } from "../characters";
 import type { RacerSetup } from "../contract";
 import { artNode, hasArt } from "./art";
 import type { Driver } from "./drivers";
 import { mergeBaked, rgb, type Rgb } from "./kartBuilder";
 import { brakeLights } from "./brakeLights";
 import { SURF, kartMaterial, withStudioFallback, type Surf } from "./kartMaterial";
+import { bodyClass, liveryColour, liveryNode, liveryOf } from "./livery";
 import { FAR_DISTANCE, KART_EXHAUST, STEERING, WHEEL_FRONT, WHEEL_REAR } from "./kartSpec";
 import type { KartModel } from "./kart";
 
@@ -41,7 +43,7 @@ export interface ArtKit {
   /** The kart's number, written on its plate: a geometry in the kart's own frame. */
   plate(id: number, accent: Rgb): BufferGeometry;
   /** This driver's own touches of coachwork (kartExtras.ts), welded into the body; null for none. */
-  extras?(accent: Rgb, golden: boolean): BufferGeometry | null;
+  extras?(accent: Rgb, golden: boolean, weight: Weight): BufferGeometry | null;
   driver(): Driver;
 }
 
@@ -49,8 +51,8 @@ export type Part = "body" | "wheel" | "steering";
 
 interface Look {
   surf: Surf;
-  /** The racer's colour is multiplied in. */
-  tint: boolean;
+  /** The racer's colour is multiplied in (1), or their livery's second colour (2). */
+  tint: 0 | 1 | 2;
   /** Replaces the material's own base colour. */
   colour?: Rgb;
 }
@@ -60,33 +62,35 @@ function lookOf(material: MeshStandardMaterial, part: Part, golden: boolean): Lo
   const gold = golden && part === "body";
   switch (material.name) {
     case "paint":
-      return gold ? { surf: SURF.gold, tint: false, colour: GOLD } : { surf: SURF.paint, tint: true };
+      return gold ? { surf: SURF.gold, tint: 0, colour: GOLD } : { surf: SURF.paint, tint: 1 };
     case "trim":
-      return gold ? { surf: SURF.gold, tint: false, colour: GOLD } : { surf: SURF.trim, tint: false };
+      return gold ? { surf: SURF.gold, tint: 0, colour: GOLD } : { surf: SURF.trim, tint: 0 };
+    case "livery":
+      return { surf: SURF.trim, tint: 2 };
     case "stripe":
-      return gold ? { surf: SURF.trim, tint: true } : { surf: SURF.trim, tint: false };
+      return gold ? { surf: SURF.trim, tint: 1 } : { surf: SURF.trim, tint: 0 };
     case "seat":
-      return { surf: SURF.cloth, tint: true };
+      return { surf: SURF.cloth, tint: 1 };
     case "chrome":
-      return { surf: SURF.chrome, tint: false };
+      return { surf: SURF.chrome, tint: 0 };
     case "rim":
-      return golden && part === "wheel" ? { surf: SURF.gold, tint: false, colour: GOLD } : { surf: SURF.chrome, tint: false };
+      return golden && part === "wheel" ? { surf: SURF.gold, tint: 0, colour: GOLD } : { surf: SURF.chrome, tint: 0 };
     case "steel":
-      return { surf: SURF.steel, tint: false };
+      return { surf: SURF.steel, tint: 0 };
     case "rubber":
     case "tread":
-      return { surf: SURF.rubber, tint: false };
+      return { surf: SURF.rubber, tint: 0 };
     case "plastic":
-      return { surf: SURF.plastic, tint: false };
+      return { surf: SURF.plastic, tint: 0 };
     case "glass":
-      return { surf: SURF.glass, tint: false };
+      return { surf: SURF.glass, tint: 0 };
     case "lamp":
     case "tail":
-      return { surf: SURF.lamp, tint: false, colour: emitted(material, material.name === "tail" ? [2.8, 0.1, 0.07] : [1.9, 1.75, 1.35]) };
+      return { surf: SURF.lamp, tint: 0, colour: emitted(material, material.name === "tail" ? [2.8, 0.1, 0.07] : [1.9, 1.75, 1.35]) };
   }
-  if (material.emissive.r + material.emissive.g + material.emissive.b > 0.01) return { surf: SURF.lamp, tint: false, colour: emitted(material, [1.9, 1.75, 1.35]) };
-  if (material.metalness > 0.8) return { surf: material.roughness < 0.2 ? SURF.chrome : SURF.steel, tint: false };
-  return { surf: SURF.plastic, tint: false };
+  if (material.emissive.r + material.emissive.g + material.emissive.b > 0.01) return { surf: SURF.lamp, tint: 0, colour: emitted(material, [1.9, 1.75, 1.35]) };
+  if (material.metalness > 0.8) return { surf: material.roughness < 0.2 ? SURF.chrome : SURF.steel, tint: 0 };
+  return { surf: SURF.plastic, tint: 0 };
 }
 
 /** The colour an emissive material gives off (the glTF's emissive colour times its strength), over-bright so the bloom takes it. */
@@ -159,7 +163,7 @@ export function bakeArt(node: Object3D, part: Part, golden: boolean): Base {
       const aoB = col ? col.getZ(i) : 1;
       color.push(base[0] * ao, base[1] * aoG, base[2] * aoB);
       surfs.push(look.surf[0], look.surf[1], look.surf[2], look.surf[3]);
-      tint.push(look.tint ? 1 : 0);
+      tint.push(look.tint);
       tail.push(material.name === "tail" ? 1 : 0);
     }
     const idx = geometry.index;
@@ -178,7 +182,7 @@ export function bakeArt(node: Object3D, part: Part, golden: boolean): Base {
 }
 
 /** A racer's copy of a base: the buffers are shared, only the colours differ. */
-export function forRacer(base: Base, accent: Rgb): BufferGeometry {
+export function forRacer(base: Base, accent: Rgb, second: Rgb = accent): BufferGeometry {
   const src = base.geometry;
   const g = new BufferGeometry();
   for (const name of ["position", "normal", "aSurf"]) g.setAttribute(name, src.getAttribute(name));
@@ -187,9 +191,10 @@ export function forRacer(base: Base, accent: Rgb): BufferGeometry {
   const to = new Float32Array(from.length);
   for (let i = 0; i < base.tint.length; i++) {
     const k = base.tint[i]!;
-    to[i * 3] = from[i * 3]! * (k ? accent[0] : 1);
-    to[i * 3 + 1] = from[i * 3 + 1]! * (k ? accent[1] : 1);
-    to[i * 3 + 2] = from[i * 3 + 2]! * (k ? accent[2] : 1);
+    const c = k === 2 ? second : accent;
+    to[i * 3] = from[i * 3]! * (k ? c[0] : 1);
+    to[i * 3 + 1] = from[i * 3 + 1]! * (k ? c[1] : 1);
+    to[i * 3 + 2] = from[i * 3 + 2]! * (k ? c[2] : 1);
   }
   g.setAttribute("color", new Float32BufferAttribute(to, 3));
   g.boundingSphere = src.boundingSphere!.clone();
@@ -213,23 +218,32 @@ function placed(wheel: BufferGeometry, side: 1 | -1, scale: number, at: readonly
 /** The Blender kart for `racer`, or null when its art is not loaded. */
 export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden">, kit: ArtKit, get: (name: string) => Object3D | null = artNode): KartModel | null {
   const golden = racer.golden === true;
-  const body = baseOf("kart.body", "body", golden, get);
-  const wheel = baseOf("kart.wheel", "wheel", golden, get);
+  // The body is the weight class's (light, middle or heavy); a file without it gives the one `kart.body`.
+  const weight = bodyClass(racer.character);
+  const body = (weight !== "middle" && baseOf(`kart.body.${weight}`, "body", golden, get)) || baseOf("kart.body", "body", golden, get);
+  const wheel = (weight !== "middle" && baseOf(`kart.wheel.${weight}`, "wheel", golden, get)) || baseOf("kart.wheel", "wheel", golden, get);
   if (!body || !wheel) return null;
   const steering = baseOf("kart.steering", "steering", golden, get);
   const accent = rgb(racer.colour);
+  const want = liveryOf(racer.character);
+  // The second colour: the driver's own, kept off the golden kart (gold and cream) and off paint it would vanish into.
+  const second: Rgb = golden ? [0.98, 0.93, 0.78] : liveryColour(accent, want.colour);
+  const livery = baseOf(liveryNode(weight, want.pattern), "body", golden, get);
   const material = kartMaterial();
 
   // ── The racer's geometry: the buffers are shared, the colours are theirs ──
-  const racerBody = forRacer(body, accent);
+  const racerBody = forRacer(body, accent, second);
+  const liveryGeo = livery ? forRacer(livery, accent, second) : null;
   const plateGeo = kit.plate(racer.id, accent);
-  const extrasGeo = kit.extras?.(accent, golden) ?? null;
+  const extrasGeo = kit.extras?.(accent, golden, weight) ?? null;
   const bodyGeo = mergeBaked([
     { geometry: racerBody, matrix: new Matrix4() },
     { geometry: plateGeo, matrix: new Matrix4() },
+    ...(liveryGeo ? [{ geometry: liveryGeo, matrix: new Matrix4() }] : []),
     ...(extrasGeo ? [{ geometry: extrasGeo, matrix: new Matrix4() }] : []),
   ]);
   racerBody.dispose();
+  liveryGeo?.dispose();
   plateGeo.dispose();
   extrasGeo?.dispose();
   const brake = brakeLights(body);
