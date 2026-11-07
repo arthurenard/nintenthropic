@@ -97,6 +97,8 @@ export class MusicPlayer {
   private readonly duckGain: GainNode;
   private readonly filter: BiquadFilterNode;
   private readonly master: GainNode;
+  private readonly shelf: BiquadFilterNode;
+  private intensity = 0;
   private voice: Voice | null = null;
   private comet: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private cometWanted = false;
@@ -113,7 +115,11 @@ export class MusicPlayer {
     this.filter.Q.value = 0.5;
     this.master = ctx.createGain();
     this.master.gain.value = MUSIC_TRIM * volumeGain(this.volume);
-    this.duckGain.connect(this.filter).connect(this.master).connect(destination);
+    this.shelf = ctx.createBiquadFilter();
+    this.shelf.type = "highshelf";
+    this.shelf.frequency.value = 3500;
+    this.shelf.gain.value = 0;
+    this.duckGain.connect(this.filter).connect(this.shelf).connect(this.master).connect(destination);
   }
 
   /** What is playing, if anything. */
@@ -252,6 +258,20 @@ export class MusicPlayer {
     g.setTargetAtTime(1, now + attack + hold, release / 3);
   }
 
+  /**
+   * How hard the race is going, 0..1 (the leading local kart's lap, from the first to the last): the music opens up a
+   * little as it goes, a high shelf rising to +3 dB and the level by half a dB, slowly, so no one hears it move.
+   */
+  setIntensity(level: number): void {
+    if (this.disposed) return;
+    const v = Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0;
+    if (Math.abs(v - this.intensity) < 0.02) return;
+    this.intensity = v;
+    const now = this.ctx.currentTime;
+    this.shelf.gain.setTargetAtTime(3 * v, now, 2.5);
+    this.applyMaster();
+  }
+
   /** The music's slider, 0..1, squared like the engine's master volume: half way is a quarter of the level, about 12 dB down. */
   setVolume(v: number): void {
     this.volume = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
@@ -274,13 +294,14 @@ export class MusicPlayer {
     setTimeout(() => {
       this.duckGain.disconnect();
       this.filter.disconnect();
+      this.shelf.disconnect();
       this.master.disconnect();
     }, 200);
   }
 
   private applyMaster(): void {
     const now = this.ctx.currentTime;
-    const target = MUSIC_TRIM * volumeGain(this.volume) * (this.paused ? 0.45 : 1);
+    const target = MUSIC_TRIM * volumeGain(this.volume) * (this.paused ? 0.45 : 1) * (1 + 0.06 * this.intensity);
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setValueAtTime(this.master.gain.value, now);
     this.master.gain.setTargetAtTime(target, now, 0.04);

@@ -128,10 +128,17 @@ export function guitar(spec: GuitarSpec): Voice {
         out[i]! += spec.click * 0.9 * lp * Math.exp(-i / (0.0018 * sr)) * (0.4 + 0.6 * vel);
       }
     }
+    riseIn(out, sr);
     const fade = Math.min(total >> 1, 64);
     for (let i = 0; i < fade; i++) out[total - 1 - i]! *= i / fade;
     return out;
   };
+}
+
+/** A 1.2 ms rise at the start of a plucked note: the strike is still sharp, but a note on the first beat of a loop does not open it with a step. */
+export function riseIn(buf: Mono, sr: number, seconds = 0.0012): void {
+  const n = Math.min(buf.length >> 1, Math.max(2, Math.round(seconds * sr)));
+  for (let i = 0; i < n; i++) buf[i]! *= i / n;
 }
 
 // --- electric piano ----------------------------------------------------------------------------

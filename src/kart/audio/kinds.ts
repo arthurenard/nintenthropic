@@ -13,7 +13,7 @@ export type TrackTheme = TrackDef["theme"];
  * faster final-lap version, which the race switches to by itself); "race"
  * means the theme loaded with ``load``. "menu" and "lobby" share a tune.
  */
-export type MusicKind = TrackTheme | "race" | "menu" | "lobby" | "results" | "results-win" | "podium";
+export type MusicKind = TrackTheme | "race" | "menu" | "lobby" | "results" | "results-win" | "podium" | "jingle-win" | "jingle-lose";
 
 /** The piece that plays for a kind (a theme's own tune; "lobby" is the menu's). */
 export function pieceFor(kind: MusicKind, loaded: TrackTheme | null): PieceId | null {

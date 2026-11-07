@@ -122,8 +122,10 @@ export function rotary(left: Mono, right: Mono, sr: number, rate: number, depth:
     const tap = (buf: Float32Array, d: number): number => {
       let rd = wi - d;
       if (rd < 0) rd += size;
-      const i0 = Math.floor(rd);
-      const f = rd - i0;
+      let i0 = Math.floor(rd);
+      // (A tap a hair behind zero rounds up to the buffer's size: it belongs at the start.)
+      if (i0 >= size) i0 -= size;
+      const f = rd - Math.floor(rd);
       const i1 = i0 + 1 === size ? 0 : i0 + 1;
       return buf[i0]! * (1 - f) + buf[i1]! * f;
     };

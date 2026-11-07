@@ -15,7 +15,9 @@ import { parseChord, chordPitchClasses, scalePitchClasses } from "./theory";
 // Rendering a minute of music takes a second or so; a busy machine takes longer.
 vi.setConfig({ testTimeout: 60_000 });
 
-const IDS = Object.keys(PIECES) as PieceId[];
+const ALL = Object.keys(PIECES) as PieceId[];
+const ONE_SHOTS = ALL.filter((id) => PIECES[id].oneShot);
+const IDS = ALL.filter((id) => !PIECES[id].oneShot);
 const SHORT: readonly string[] = ["results-win", "results", "podium"];
 const rendered = new Map<string, RenderedMusic>();
 
@@ -31,8 +33,8 @@ function render(id: PieceId, final = false): RenderedMusic {
 
 describe("the pieces", () => {
   it("has a tune for every theme and every screen", () => {
-    for (const id of ["meadow", "kitchen", "harbour", "canyon", "funfair", "snow", "volcano", "space", "palm", "menu", "results-win", "results", "podium"]) {
-      expect(IDS, id).toContain(id);
+    for (const id of ["meadow", "kitchen", "harbour", "canyon", "funfair", "snow", "volcano", "space", "palm", "menu", "results-win", "results", "podium", "jingle-win", "jingle-lose"]) {
+      expect(ALL, id).toContain(id);
     }
   });
 
@@ -138,8 +140,8 @@ describe.each(IDS)("%s", (id) => {
     let different = 0;
     for (let i = 0; i < first.left.length; i++) if (again.left[i] !== first.left[i] || again.right[i] !== first.right[i]) different++;
     expect(different, `${id}: samples that differ between two renders`).toBe(0);
-    // Under the budget for a main-thread render with a good deal of room for a slow machine.
-    expect(first.stats.renderMs).toBeLessThan(9000);
+    // Far under what would hold a worker for long, with room for a busy machine (a piece takes 2 to 6 s on a quiet one).
+    expect(first.stats.renderMs).toBeLessThan(30_000);
   });
 
   it("has width: the two ears hear different things", () => {

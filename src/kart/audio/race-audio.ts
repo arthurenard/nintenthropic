@@ -77,7 +77,7 @@ export interface RaceAudioOptions {
 
 /** What RaceAudio needs of a music player. */
 export type MusicPlayerLike = Pick<MusicPlayer, "play" | "switchTo" | "stop" | "duck" | "setVolume" | "setPaused" | "dispose" | "current"> &
-  Partial<Pick<MusicPlayer, "setComet">>;
+  Partial<Pick<MusicPlayer, "setComet" | "setIntensity">>;
 
 export interface RaceAudio {
   /**
@@ -614,6 +614,12 @@ class RaceAudioImpl implements RaceAudio {
     this.finalLapFallback(view, scene);
     // A local kart under a Comet: the music's glittering layer plays over the race.
     this.player?.setComet?.(scene.locals.some((l) => (scene.karts.get(l.kart)?.comet ?? 0) > 0));
+    // The music opens up as the race goes on: the furthest lap of a local kart, first lap 0, last lap 1.
+    if (view.phase === "racing" && view.laps > 1) {
+      let lap = 1;
+      for (const l of scene.locals) lap = Math.max(lap, scene.karts.get(l.kart)?.lap ?? 1);
+      this.player?.setIntensity?.((lap - 1) / (view.laps - 1));
+    }
     this.lastPhase = view.phase;
   }
 

@@ -508,6 +508,9 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
     sections.push({ name: section.name, start: sectionStart, end: clock });
   });
 
+  // (A humanising slip before the first beat would cut the start off a note that opens the loop.)
+  for (const n of notes) if (n.time < 0) n.time = 0;
+  for (const h of hits) if (h.time < 0) h.time = 0;
   notes.sort((a, b) => a.time - b.time);
   hits.sort((a, b) => a.time - b.time);
   return { id: spec.id, duration: clock, bars, notes, hits, sections, warnings, tempoScale, transpose };

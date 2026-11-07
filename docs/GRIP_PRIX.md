@@ -900,6 +900,60 @@ heard and let go after half a second of silence, and is told only what has moved
   audio code's time a frame; `compare.mjs a b` sets two renders side by side. `KART_AUDIO_REPORT=dir KART_AUDIO_WAV=1
   npx vitest run src/kart/audio/report.test.ts` writes each cue's picture and sound. Nothing is ever played.
 
+### The music (`src/kart/audio/music/`)
+
+Thirteen pieces and two jingles, all written for the game, all synthesised in the page (nothing sampled, nothing
+borrowed): one tune for each track's world (Meadow Loop folk-pop with a whistle, an accordion and a strummed steel
+guitar; Kitchen Rally a swing combo with an upright, a Rhodes, a muted trumpet and brushes; Harbour Lights a night
+lounge with a sax and a sea song's triplet lilt; Canyon Run a surf-western with a spring-drenched twang and a gallop;
+Fun Fair a calliope waltz that becomes a brass march; Glacier Pass icy bells, a choir and glittering arpeggios;
+Volcano Rush driven twin guitars over rock toms; Starlight Ribbon a pumping supersaw synthwave; Five Finger Circuit a
+calypso on steel pans), the menu and lobby, the two result screens, the podium and the win and lose jingles.
+
+- **Writing.** A piece is sections of bars (`pieces/*.ts`): chord symbols with extensions, a tune written note by note
+  (call and response in the rests), and generated bass, comping and arpeggio parts from named rhythms (`patterns.ts`:
+  walking and walk-and-push upright lines, slap, calypso, surf, lilt, rolling, pulse and gallop basses; Charleston,
+  bossa, sparse and pushed comps). Most pieces open with an intro or a build, state the tune, answer it, change
+  colour in a bridge, and finish with a *lift* (the chorus again a tone higher with the band swelling: `shift` on a
+  section, with `withFinale` in `pieces/dsl.ts`) and a two-bar *turn* on the dominant that falls into the first chord,
+  so the seam of the loop is a turnaround, not a restart. Volcano Rush and Five Finger Circuit kick their last chorus a
+  tone up in place. A race theme is 69 to 83 seconds before it loops.
+- **The band.** `synth.ts` adds the engines the old presets could not be: `guitar` (a Karplus-Strong string with a
+  wooden body's resonances and a pick's click), `rhodes` (two FM pairs, a tine's bark, a hammer's thunk, shorter as it
+  climbs), `buzz` (stacked band-limited saws through a moving filter, with a scoop, a swell, a late vibrato, a breath
+  and optional vowel formants: brass section and stabs, muted trumpet, sax, accordion and musette, supersaws, string
+  ensemble, choir), and `layer` (a slap bass is a thumb and a pop; a steel pan a modal bell and an FM shimmer). The
+  drums (`kit.ts`) are layered with real transients: a beater's tick over a pitched body over a sub, a snare's crack
+  over its wires and shell, hats and cymbals from six detuned metal squares; six kit styles (pop, rock, brush, electro,
+  latin, march) and the shared kit for congas, shakers and the rest.
+- **Production.** Each part has a channel strip (`RackEntry`: high-pass, low-pass, peaking EQ, drive, rotary speaker,
+  tremolo or auto-pan, chorus, width, compressor, and `duck`, the sidechain pump that dips it at every kick); the
+  parts are balanced by loudness, sent to the room (with pre-delay and damping) and the ping-pong echo, folded into a
+  seamless loop, opened with a touch of air and width, glued by a bus compressor (2.8:1, 6 ms attack), rounded by a
+  breath of saturation and held by a look-ahead limiter that works round the loop, so a produced crest of 12 dB over a
+  loudness of −18 dBFS (`CREST_DB`), the peaks at −6 and never past −1. Music is quiet under the effects as before
+  (`MUSIC_TRIM`); the race mix and the ducking stay in `race-audio.ts`.
+- **Dynamic.** At the final lap the piece switches on the next beat to its version 1.1 times faster and a semitone
+  higher (`FINAL_LAP`), with a brass *stinger* (two bars and its tail, six to seven seconds) in the new key, made with that version, landing on the
+  downbeat while the music ducks to 0.55 under it. While a local kart burns a Comet (`KartView.comet`), a one-bar layer
+  of tambourine, shaker and bell pings in the theme's key loops over the music, coming in on the next bar line and
+  leaving in half a second (`MusicPlayer.setComet`). The music opens up with the race: a high shelf rising to +3 dB
+  and half a dB of level from the first lap to the last (`setIntensity`). The jingles (`music("jingle-win")`,
+  `music("jingle-lose")`) are one-shots, a fanfare of brass over timpani and a rueful descent on a muted trumpet.
+- **Off the main thread, and what it costs.** The worker renders a piece in one go (about 2 to 4 s of one core for
+  a race theme at 32 kHz on a quiet machine, 1.5 times that at 48 kHz; the stages are the fallback's slices) while
+  the loading bar shows its progress; the final-lap version, its stinger and the comet layer render in the background
+  after the race loads. A race theme is 16 to 21 MB at 32 kHz (24 to 32 MB at 48 kHz) and its final-lap version 16
+  to 19; `RaceAudio` keeps only the current theme's pair, the menu's and the screens'.
+- **Checking without hearing.** `production.test.ts` holds the tools (a limiter that lets nothing through, a pump, a
+  compressor), the kits (a kick is low, a hat high, every kit finite and ending in silence), the instruments (each plays
+  the pitch asked, finite, ending in silence), the crest and loudness, the lift being the chorus a tone up, the
+  jingles, the comet layer and the stinger; `pieces.test.ts` holds each piece (in tune with its own chords, the right
+  length, loud but not too loud, balanced, seamless where it loops, the same every time, wide).
+  `MUSIC_OUT=<folder> npx vitest run src/kart/audio/music/measure.test.ts` renders every piece and its final-lap
+  version offline to WAV files with a `summary.json` (loudness, peak, crest, limiter depth, the share of energy in five
+  bands, centroid, stereo width, render time, size); nothing is ever played.
+
 ## Performance
 
 Measured, then changed, in this order; everything below is on an Apple M4 Max in Chrome on Metal,

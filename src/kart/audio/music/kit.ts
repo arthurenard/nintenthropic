@@ -74,7 +74,9 @@ function finish(out: Mono, vel: number): Mono {
   let peak = 0;
   for (let i = 0; i < out.length; i++) peak = Math.max(peak, Math.abs(out[i]!));
   const norm = peak > 0 ? g / peak : 0;
-  for (let i = 0; i < out.length; i++) out[i]! *= norm;
+  // A 0.4 ms rise (the ear still hears the strike) so a hit on the very first beat does not start the loop with a step.
+  const rise = Math.min(out.length >> 1, 14);
+  for (let i = 0; i < out.length; i++) out[i]! *= norm * (i < rise ? i / rise : 1);
   const fade = Math.min(out.length >> 1, 48);
   for (let i = 0; i < fade; i++) out[out.length - 1 - i]! *= i / fade;
   return out;

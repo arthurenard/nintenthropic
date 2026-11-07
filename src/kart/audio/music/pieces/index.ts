@@ -9,6 +9,7 @@ import { canyon } from "./canyon";
 import { bass, chords, drums, tune, withFinale } from "./dsl";
 import { funfair } from "./funfair";
 import { harbour } from "./harbour";
+import { jingleLose, jingleWin } from "./jingles";
 import { kitchen } from "./kitchen";
 import { meadow } from "./meadow";
 import { menu } from "./menu";
@@ -101,6 +102,8 @@ export const PIECES = {
   }),
   palm,
   menu,
+  "jingle-win": jingleWin,
+  "jingle-lose": jingleLose,
   "results-win": resultsWin,
   results: resultsDone,
   podium,

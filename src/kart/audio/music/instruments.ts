@@ -5,7 +5,7 @@
  * decides how anything sounds.
  */
 import { type Voice, breathy, fm, modal, organ, plucked, subtractive } from "../../../audio/dsp/voices";
-import { buzz, drive, guitar, layer, rhodes, shaped } from "./synth";
+import { buzz, drive, guitar, layer, rhodes, riseIn, shaped } from "./synth";
 
 export const INSTRUMENTS = {
   // --- basses --------------------------------------------------------------------------------------
@@ -148,7 +148,7 @@ export const INSTRUMENTS = {
   // --- the produced band: layered and body-modelled instruments ----------------------------------------------------------------
   /** An upright bass: a damped string with the wood's thump under it. */
   upright: layer(
-    { voice: plucked({ t60: 0.9, brightness: 0.3, hardness: 1600, position: 0.3, damp: 0.07 }), gain: 1 },
+    { voice: shaped(plucked({ t60: 0.9, brightness: 0.3, hardness: 1600, position: 0.3, damp: 0.07 }), (buf, n) => riseIn(buf, n.sr)), gain: 1 },
     { voice: subtractive({ oscs: [{ wave: "sine" }], cutoff: 500, attack: 0.003, decay: 0.12, sustain: 0.1, release: 0.06, fixedPhase: true }), gain: 0.55 },
   ),
   /** A slap bass: the thumb's thud, the string's pop an octave up, a flick of noise. */
