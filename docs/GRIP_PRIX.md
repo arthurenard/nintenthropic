@@ -882,7 +882,7 @@ heard and let go after half a second of silence, and is told only what has moved
   - *Each item.* Nitro: a gas hiss, two sparks, a whump and a jet's roar climbing through a resonance with a
     turbine's whine (the triple's is the same behind a ratchet of three clicks, higher). Puck: a solid thunk and a
     whirring disc; off a barrier a wooden knock and a clear metallic ping. Seeker: a launch and a sonar ping, a loop
-    of homing beeps (`kart_seeker`, pitch bent by the closing speed, which also quickens the beeps), and a three-beep
+    of homing beeps (`kart_seeker`, rate bent by the closing speed and up to a third faster inside 40 m, so the beeps quicken as it closes in), and a three-beep
     lock on the kart it hits. Slick: a gloopy splat with bubbles when dropped and a wet skid under the spin-out when it
     catches someone. Triple puck: three pucks circling the player's own kart hum while it holds them (`kart_orbit`,
     higher for each one fired). Comet: six seconds, lit by a run of bells, then a bed of detuned saws whose filter
