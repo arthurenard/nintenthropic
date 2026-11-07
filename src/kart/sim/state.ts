@@ -115,6 +115,8 @@ export interface KartState {
   s: number;
   offset: number;
   offroad: boolean;
+  /** Pressed against a barrier this tick (heard as a scrape; not part of a snapshot). */
+  rub: boolean;
   /** Net distance travelled along the lap from the start line, metres (negative on the grid). */
   progress: number;
   /** The boost pad (index + 1) the kart is on, -1 on a boost strip, or 0. */

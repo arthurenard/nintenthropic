@@ -6,6 +6,8 @@
  *   node tools/listen/cues.mjs --label before --root /path/to/older/checkout
  *   node tools/listen/cues.mjs --label after --only kart_engine_heavy_mid,kart_surf_snow --takes 3
  *
+ *   --shots DIR   also draws a spectrogram PNG per cue into DIR (ffmpeg showspectrumpic; <label>-<cue>.png)
+ *
  * Measures, per cue (take 0 unless --takes says more, averaged):
  *   centroid, rolloff  where the energy sits (Hz; 85 % of it lies under the rolloff)
  *   crest              peak over RMS, dB: a smooth drone has a low one, grains and clicks a high one
@@ -16,6 +18,7 @@
  *   width              side over mid, dB (-15 is near mono, -6 clearly wide, 0 fully decorrelated)
  *   mono               how much of the stereo level survives summing to mono, dB (0 is perfectly mono-compatible)
  */
+import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -29,6 +32,7 @@ const label = arg("label", "latest");
 const root = resolve(arg("root", resolve(HERE, "../..")));
 const only = arg("only", null)?.split(",");
 const takes = Number(arg("takes", 1));
+const shots = arg("shots", null);
 const SR = 44100;
 const OUT = resolve(HERE, "out", `cues-${label}`);
 
@@ -150,7 +154,13 @@ for (const cue of names) {
     // The firing note: the engine's cycles a second (the V-twin's firings come twice a cycle but its cycle is the note).
     const f0 = m ? NOTES[m[1]] * (REVS[m[2]][label.startsWith("before") || label.startsWith("base") ? 0 : 1]) : null;
     list.push({ ...measure(l, r, f0), ms: +ms.toFixed(1), seconds: +(l.length / SR).toFixed(2) });
-    if (k === 0) writeFileSync(`${OUT}/${cue}.wav`, wav16(l, r, SR));
+    if (k === 0) {
+      writeFileSync(`${OUT}/${cue}.wav`, wav16(l, r, SR));
+      if (shots) {
+        mkdirSync(shots, { recursive: true });
+        spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", `${OUT}/${cue}.wav`, "-lavfi", "showspectrumpic=s=900x360:legend=0:scale=log:fscale=log", `${shots}/${label}-${cue}.png`]);
+      }
+    }
   }
   const avg = {};
   for (const key of Object.keys(list[0])) avg[key] = list[0][key] === null ? null : +(list.reduce((a, b) => a + b[key], 0) / list.length).toFixed(2);

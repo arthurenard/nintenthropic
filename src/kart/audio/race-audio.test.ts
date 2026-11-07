@@ -369,6 +369,14 @@ describe("the ground, the air and the contact", () => {
     expect(bus.running("kart_scrape")).toBe(0);
   });
 
+  it("scrapes for as long as the kart's state says it is against the barrier, with no event at all", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 120; i++) frame([kart(0, { speed: 16, rub: true })]);
+    expect(bus.running("kart_scrape")).toBe(1);
+    for (let i = 0; i < 40; i++) frame([kart(0, { speed: 16 })]);
+    expect(bus.running("kart_scrape")).toBe(0);
+  });
+
   it("scrapes louder the faster the kart rubs along", () => {
     const level = (speed: number): number => {
       const { bus, frame } = setup([{ kart: 0, pan: 0 }]);

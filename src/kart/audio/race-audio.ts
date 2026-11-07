@@ -245,7 +245,7 @@ interface EngineVoice {
   /** Lifting off after pulling: the exhaust may pop (the player's own karts). */
   armed: boolean;
   poppedAt: number;
-  /** The gear it was in a frame ago (a step up under power barks), and when it last shifted. */
+  /** The gear it was in a frame ago (a step up under power barks), and when it last shifted: the player's own karts only (rivals never bark). */
   gear: number;
   shiftedAt: number;
   /** Another kart: which side of its listener it was on, ahead (1) or behind (-1), and when it last swished by. */
@@ -891,7 +891,7 @@ class RaceAudioImpl implements RaceAudio {
       if (d.on && near > 0.05) {
         // A spark tier reached bends the squeal up in a chirp that settles over a fifth of a second.
         let chirp = this.chirps.get(k.id);
-        if (!chirp) this.chirps.set(k.id, (chirp = { level: k.driftLevel, bend: 0 }));
+        if (!chirp) this.chirps.set(k.id, (chirp = { level: 0, bend: 0 }));
         if (k.driftLevel > chirp.level) chirp.bend = 1;
         chirp.level = k.driftLevel;
         chirp.bend = ease(chirp.bend, 0, dt, 0.18);
@@ -963,11 +963,20 @@ class RaceAudioImpl implements RaceAudio {
         drafts.add(l.kart);
         this.drive(this.drafts, l.kart, "kart_draft", { rate: dr.rate, volume: dr.volume * fx * crowdTrim(scene.locals.length), pan: l.pan, distance: 0 }, dt);
       }
-      const rub = this.scrapeUntil.get(l.kart);
+      // Contact is read from the kart's state, so a gentle rub along a barrier sounds for as long as it lasts; a hard
+      // hit's event adds its short tail on top. A hold of a tenth of a second bridges the ticks the contact skips.
+      let rub = this.scrapeUntil.get(l.kart);
+      if (k.rub) {
+        if (rub) rub.until = Math.max(rub.until, this.clock + 0.1);
+        else this.scrapeUntil.set(l.kart, (rub = { until: this.clock + 0.1, strength: 0 }));
+      } else if (rub && this.clock >= rub.until) {
+        this.scrapeUntil.delete(l.kart);
+        rub = undefined;
+      }
       if (rub && this.clock < rub.until && k.hop < 0.3 && k.rescue <= 0) {
-        // The harder the hit, the shorter the rub and the less of it left: the volume follows the speed along the wall.
+        // The volume follows the speed along the wall (a hard hit's tail is softer).
         const speed = Math.abs(k.speed);
-        const volume = Math.min(1, 0.25 + speed / TOP_SPEED) * (1 - 0.5 * rub.strength) * Math.min(1, (rub.until - this.clock) / 0.12);
+        const volume = Math.min(1, 0.25 + speed / TOP_SPEED) * (1 - 0.5 * rub.strength) * Math.min(1, (rub.until - this.clock) / 0.1);
         scrapes.add(l.kart);
         this.drive(this.scrapes, l.kart, "kart_scrape", { rate: 0.8 + 0.5 * Math.min(1, speed / TOP_SPEED), volume: volume * fx * crowdTrim(scene.locals.length), pan: l.pan, distance: 0 }, dt);
       }

@@ -897,15 +897,17 @@ heard and let go after half a second of silence, and is told only what has moved
   that settles over a fifth of a second. From the first spark its sparks fizz under it, a major third higher at each
   level, with ringing glints; let go, the mini-turbo, a step up for each level, and from the third a whoomph and a run
   of glass. A barrier scraped along is a loop that lasts as long as the contact (`kart_scrape`: plastic and metal
-  dragging with a flickering grip, the panel ringing at its own pitches, grit under it; each wall report from the sim
-  holds it 0.35 s more, its level follows the speed along the wall; another kart's scrape is still heard as a one-shot).
+  dragging with a flickering grip, the panel ringing at its own pitches, grit under it; the kart's `rub` flag (set by
+  the sim on every tick it is pressed on a barrier, a gentle rub included) keeps it going, held a tenth of a second
+  across skipped ticks, a hard hit adds its 0.35 s tail, its level follows the speed along the wall; another kart's scrape is still heard as a one-shot).
   The chassis creaks at a hard bump or landing (`kart_creak`, the player's own kart: a short stick-slip groan, falling).
   Bumps, walls and landings by the sim's strength (a hard landing thuds), and by the driver's weight (a light kart's
   land and bump are pitched up to 14 % higher, a heavy kart's down to 16 % lower). The wind (`kart_wind`: a rush that
   swells differently in each ear, a thin whistle, buffeting, a fine hiss) rises with speed and is loudest in the air;
   in another kart's wake the torn air of the slipstream (`kart_draft`: a deep roar with fast buffeting, a ripping band
   sweeping up and down, wide) rises as the draft charges. Not done: a kerb's rumble strip and water's splash (the sim
-  reports neither a kerb nor water under a kart).
+  reports neither a kerb nor water under a kart; they need a kerb flag and a water ground from the tracks). Spectrograms
+  of old against new: `node tools/listen/cues.mjs --label after --shots DIR` (and `--label before --root <old checkout>`).
 - **Moments.** The countdown's beeps; a start boost; nitro; a boost pad; a slipstream's fling (a stretched band let
   go); off a ramp a spring's boing (lighter off a crest); a trick (a spiral of pings, a slide whistle's whee and a
   swirl that goes once round the head, the one stereo sound a kart makes); landing; item boxes and every item; hits
