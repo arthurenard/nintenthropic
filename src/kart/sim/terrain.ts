@@ -35,8 +35,12 @@ export interface Patch extends Span {
 }
 
 export interface Terrain {
+  /** The lap's length (also for a branch road: its tables cover only the stretch from `origin`). */
   length: number;
   spacing: number;
+  /** A branch road's tables start here (metres along the lap) and clamp at their ends; the loop's wrap (origin 0, open false). */
+  origin: number;
+  open: boolean;
   ramps: RampSite[];
   gaps: Span[];
   patches: Patch[];
@@ -70,9 +74,44 @@ function spanOf(stretch: Stretch, length: number): Span {
   return { from: stretch.from * length, to: stretch.to * length };
 }
 
+/** How far beyond the road's edge a kart can go where a branch leaves it: the barrier is out of the way (a wide verge). */
+export const GATE_DISTANCE = 40;
+/** Two roads whose edges are closer than this have no barrier between them: a kart goes from one to the other. */
+export const GATE_GAP = 14;
+
+/**
+ * Where a road is open to another: for each sample of `geo`, whether the other road's edge is within `GATE_GAP` on each
+ * side. The main road is open to its branches and a branch to the main road, so a branch leaves it and rejoins it with no
+ * barrier across the way (a flare where the two roads run together, a wedge of grass between them as they part).
+ */
+export function junctionGates(geo: TrackGeometry): { left: Uint8Array; right: Uint8Array } {
+  const n = geo.samples.length;
+  const left = new Uint8Array(n);
+  const right = new Uint8Array(n);
+  const others: TrackGeometry[] = geo.open ? [(geo as unknown as { main: TrackGeometry }).main] : geo.routes;
+  for (const other of others) {
+    const covers = other.open ? (other as unknown as { covers(s: number): boolean }).covers.bind(other) : () => true;
+    for (let i = 0; i < n; i++) {
+      const a = geo.samples[i]!;
+      if (!covers(a.s)) continue;
+      const b = other.at(a.s);
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const d = Math.hypot(dx, dz);
+      if (d - a.width / 2 - b.width / 2 >= GATE_GAP) continue;
+      // Which side of this road the other is on: its right is (-tz, tx).
+      const lateral = dx * -a.tz + dz * a.tx;
+      if (d < 0.5 || lateral > 0) right[i] = 1;
+      if (d < 0.5 || lateral < 0) left[i] = 1;
+    }
+  }
+  return { left, right };
+}
+
 export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
   const length = geo.length;
   const n = geo.samples.length;
+  const frac = (i: number) => geo.samples[i]!.s / length;
   const openLeft = new Uint8Array(n);
   const openRight = new Uint8Array(n);
   const barrierLeft = new Float32Array(n).fill(TUNING.barrierGap);
@@ -85,14 +124,14 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
   for (const drop of def.drops ?? []) {
     if (drop.gap) gaps.push(spanOf(drop, length));
     for (let i = 0; i < n; i++) {
-      if (!inStretch((i * geo.spacing) / length, drop)) continue;
+      if (!inStretch(frac(i), drop)) continue;
       if (drop.side !== "right") openLeft[i] = 1;
       if (drop.side !== "left") openRight[i] = 1;
     }
   }
   for (const verge of def.verges ?? []) {
     for (let i = 0; i < n; i++) {
-      if (!inStretch((i * geo.spacing) / length, verge)) continue;
+      if (!inStretch(frac(i), verge)) continue;
       if (verge.side === "left") {
         barrierLeft[i] = verge.distance;
         if (verge.surface) groundLeft[i] = verge.surface;
@@ -101,6 +140,11 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
         if (verge.surface) groundRight[i] = verge.surface;
       }
     }
+  }
+  const gates = junctionGates(geo);
+  for (let i = 0; i < n; i++) {
+    if (gates.left[i]) barrierLeft[i] = Math.max(barrierLeft[i]!, GATE_DISTANCE);
+    if (gates.right[i]) barrierRight[i] = Math.max(barrierRight[i]!, GATE_DISTANCE);
   }
   const patches: Patch[] = (def.surfaces ?? []).map((surface) => {
     const middle = surface.offset ?? 0;
@@ -112,7 +156,7 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
     const lift = ramp.lift ?? R.lift;
     return { s: geo.wrap(ramp.at * length), lift, trick: ramp.trick !== false, length: R.length, height: (R.height * lift) / R.lift };
   });
-  return { length, spacing: geo.spacing, ramps, gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
+  return { length, spacing: geo.spacing, origin: geo.origin, open: geo.open, ramps, gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
 }
 
 /** The road's grade, its crests and dips, and how steep the descent just behind each place is: the hills the karts feel. */
@@ -121,15 +165,19 @@ function hills(geo: TrackGeometry): Pick<Terrain, "grade" | "crest" | "fallBehin
   const spacing = geo.spacing;
   const span = Math.max(spacing, TUNING.slope.span);
   const y = (s: number) => geo.at(s).y;
+  // A branch road's tables stop at its ends; the loop's wrap round.
+  const idx = geo.open ? (i: number) => Math.max(0, Math.min(n - 1, i)) : (i: number) => ((i % n) + n) % n;
+  // Metres of real road per metre of the lap: a grade is a rise per metre driven.
+  const stretch = geo.stretch;
   const grade = new Float32Array(n);
   const crest = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const s = i * spacing;
-    grade[i] = (y(s + span) - y(s - span)) / (2 * span);
+    const s = geo.samples[i]!.s;
+    grade[i] = (y(s + span) - y(s - span)) / (2 * span * stretch);
   }
   // The bow over a crest is how fast the grade falls away, read over the same span.
   const reach = Math.max(1, Math.round(span / spacing));
-  for (let i = 0; i < n; i++) crest[i] = -(grade[(i + reach) % n]! - grade[(i - reach + n) % n]!) / (2 * reach * spacing);
+  for (let i = 0; i < n; i++) crest[i] = -(grade[idx(i + reach)]! - grade[idx(i - reach)]!) / (2 * reach * spacing * stretch);
   const back = Math.max(1, Math.round(TUNING.slope.carry / spacing));
   const fallBehind = new Float32Array(n);
   const fallAhead = new Float32Array(n);
@@ -137,8 +185,8 @@ function hills(geo: TrackGeometry): Pick<Terrain, "grade" | "crest" | "fallBehin
     let behind = 0;
     let ahead = 0;
     for (let k = 0; k <= back; k++) {
-      behind = Math.max(behind, -grade[(i - k + n) % n]!);
-      ahead = Math.max(ahead, grade[(i + k) % n]!);
+      behind = Math.max(behind, -grade[idx(i - k)]!);
+      ahead = Math.max(ahead, grade[idx(i + k)]!);
     }
     fallBehind[i] = behind;
     fallAhead[i] = ahead;
@@ -149,6 +197,11 @@ function hills(geo: TrackGeometry): Pick<Terrain, "grade" | "crest" | "fallBehin
 /** A table of the terrain's read at `s`, between samples. */
 export function tableAt(t: Terrain, table: Float32Array, s: number): number {
   const n = table.length;
+  if (t.open) {
+    const u = openIndex(t, s);
+    const i = Math.floor(u);
+    return table[i]! + (table[Math.min(n - 1, i + 1)]! - table[i]!) * (u - i);
+  }
   const u = (((s / t.spacing) % n) + n) % n;
   const i = Math.floor(u);
   const f = u - i;
@@ -172,9 +225,19 @@ export function wedgeAt(t: Terrain, s: number): number {
   return 0;
 }
 
+/** Where `s` falls in a branch road's tables, as a position clamped to them. */
+function openIndex(t: Terrain, s: number): number {
+  let rel = s - t.origin;
+  rel -= Math.round(rel / t.length) * t.length;
+  const last = t.openLeft.length - 1;
+  const u = rel / t.spacing;
+  return u < 0 ? 0 : u > last ? last : u;
+}
+
 /** The table sample nearest `s`. */
 export function sampleAt(t: Terrain, s: number): number {
   const n = t.openLeft.length;
+  if (t.open) return Math.round(openIndex(t, s));
   return ((Math.round(s / t.spacing) % n) + n) % n;
 }
 

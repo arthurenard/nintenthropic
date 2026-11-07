@@ -556,6 +556,8 @@ const ROUTE_STICKY = 1.5;
 
 /** Metres of road the curve leaves the main road along before it turns off, and rejoins it along. */
 const ROUTE_LEAD = 18;
+/** Metres the branch follows the main road's own line for before it turns off (and before it rejoins). */
+const ROUTE_HUG = 14;
 
 const smooth01 = (t: number): number => {
   const c = Math.min(1, Math.max(0, t));
@@ -639,7 +641,16 @@ export class RouteRoad extends TrackGeometry {
       bank: p.bank ?? 0,
     }));
     const point = (c: TrackSample): TrackPoint => ({ x: c.x, z: c.z, y: c.y, width: c.width, bank: c.bank });
-    const list: TrackPoint[] = [point(main.at(from - ROUTE_LEAD)), point(a), ...waypoints, point(b), point(main.at(to + ROUTE_LEAD))];
+    // ...and a point 14 m along the main road at each end, so the branch leaves and joins it along its heading.
+    const list: TrackPoint[] = [
+      point(main.at(from - ROUTE_LEAD)),
+      point(a),
+      point(main.at(from + ROUTE_HUG)),
+      ...waypoints,
+      point(main.at(to - ROUTE_HUG)),
+      point(b),
+      point(main.at(to + ROUTE_LEAD)),
+    ];
     if (list.length < 4) throw new Error(`${main.def.id}/${def.id}: a route needs a waypoint`);
     // A fine polyline to measure the arc length of.
     const fine: { x: number; y: number; z: number; width: number; bank: number; s: number }[] = [];

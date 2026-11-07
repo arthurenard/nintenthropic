@@ -13,6 +13,7 @@ import { WEIGHTS, weightOf } from "../characters";
 import { mulberry32 } from "../../engine/rules/rng";
 import { hazardAt } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
+import { onRoute } from "./routes";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
 import { barrierDistance, gapAt, groundAt, isOpen, rescueSpot, tableAt, type RampSite } from "./terrain";
 import { ticks, TUNING } from "./tuning";
@@ -93,6 +94,7 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     roll: 0,
     rolled: null,
     presses: 0,
+    route: 0,
     s,
     offset,
     offroad: false,
@@ -335,19 +337,23 @@ function noseOnBarrier(w: World, k: KartState): boolean {
  * what it is driving on. An open edge has no barrier: over it, or in a gap
  * in the road, a kart on the ground falls.
  */
-export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean): void {
-  const geo = w.geo;
-  const terrain = w.plan.terrain;
-  let p = geo.project(k.x, k.z, k.s);
+export function placeOnTrack(world: World, k: KartState, emit: Emit, report: boolean): void {
+  const race = world.main ?? world;
+  let p = race.geo.project(k.x, k.z, k.s, k.route);
   let half = p.sample.width / 2;
   // Well off the road by the answer near where it was: it may have crossed to another part (over a verge, skipping some road). The whole lap says.
   if (Math.abs(p.offset) > half + 1.5) {
-    const elsewhere = geo.project(k.x, k.z);
+    const elsewhere = race.geo.project(k.x, k.z, undefined, k.route);
     if (Math.abs(elsewhere.offset) < Math.abs(p.offset) - 1.5) {
       p = elsewhere;
       half = p.sample.width / 2;
     }
   }
+  // Which road it is on (the main road or a branch): everything after reads that road's own terrain.
+  k.route = p.route;
+  const w = onRoute(race, k.route);
+  const geo = w.geo;
+  const terrain = w.plan.terrain;
   let offset = p.offset;
   const side = offset > 0 ? 1 : -1;
   const open = isOpen(terrain, p.s, side);
@@ -459,7 +465,9 @@ function alongTrack(w: World, k: KartState): number {
  * Advances one kart by one tick with this input. `emit` hears what happens (a
  * no-op when predicting).
  */
-export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit): void {
+export function stepKart(world: World, k: KartState, input: DriveInput, emit: Emit): void {
+  // Everything below reads the road the kart is on: the main road, or a branch.
+  let w = onRoute(world, k.route);
   const racing = k.t >= GO_TICK;
   // Inputs can come off the network: anything that is not a number is nothing.
   const steerIn = clamp(finite(input.steer), -1, 1);
@@ -542,6 +550,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   k.x += k.vx * TICK;
   k.z += k.vz * TICK;
   placeOnTrack(w, k, emit, true);
+  w = onRoute(w, k.route);
   if (k.rescue === 0 && !grounded) fly(w, k, emit);
   else if (k.rescue === 0) overCrest(w, k);
   if (k.rescue === 0 && k.flight === 0) launchOffRamps(w, k, prevS, emit);

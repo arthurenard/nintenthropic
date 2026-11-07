@@ -59,7 +59,12 @@ export interface Corner {
 }
 
 export interface TrackPlan {
+  /** The road this plan is of: the loop, or (in `routes`) a branch. */
   geo: TrackGeometry;
+  /** 0 for the main road, 1.. for a branch. */
+  route: number;
+  /** The plans of the branch roads (`routes[r - 1]` is route `r`): each has its own terrain, line and speeds, in the lap's metres. */
+  routes: TrackPlan[];
   terrain: Terrain;
   /** Verge cuts that really work: the line stays inside the barrier and saves a good share of the road. */
   cuts: CutSite[];
@@ -91,7 +96,7 @@ export function planFor(def: TrackDef): TrackPlan {
 }
 
 /** A circular Gaussian blur of `values`, sigma in metres. */
-function blur(values: Float64Array, spacing: number, sigma: number): Float64Array {
+function blur(values: Float64Array, spacing: number, sigma: number, open = false): Float64Array {
   const n = values.length;
   const reach = Math.ceil((sigma * 2.5) / spacing);
   const weights: number[] = [];
@@ -104,7 +109,7 @@ function blur(values: Float64Array, spacing: number, sigma: number): Float64Arra
   const out = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     let sum = 0;
-    for (let k = -reach; k <= reach; k++) sum += values[(((i + k) % n) + n) % n]! * weights[k + reach]!;
+    for (let k = -reach; k <= reach; k++) sum += values[open ? Math.max(0, Math.min(n - 1, i + k)) : (((i + k) % n) + n) % n]! * weights[k + reach]!;
     out[i] = sum / total;
   }
   return out;
@@ -112,9 +117,20 @@ function blur(values: Float64Array, spacing: number, sigma: number): Float64Arra
 
 function buildPlan(def: TrackDef): TrackPlan {
   const geo = TrackGeometry.build(def);
+  const plan = buildRoadPlan(def, geo);
+  plan.routes = geo.routes.map((road) => buildRoadPlan(road.def, road));
+  return plan;
+}
+
+function buildRoadPlan(def: TrackDef, geo: TrackGeometry): TrackPlan {
   const n = geo.samples.length;
   const spacing = geo.spacing;
   const bots = TUNING.bots;
+  const open = geo.open;
+  /** Sample `i`, a branch road's ends clamping and the loop wrapping. */
+  const at = open ? (i: number) => Math.max(0, Math.min(n - 1, i)) : (i: number) => ((i % n) + n) % n;
+  /** Where sample `i` is, in the lap's metres. */
+  const sOf = (i: number) => geo.samples[i]!.s;
 
   const boxes: BoxSite[] = [];
   const perRow = TUNING.items.boxesPerRow;
@@ -136,8 +152,8 @@ function buildPlan(def: TrackDef): TrackPlan {
   // The racing line: toward the inside of each bend, by how tight it is.
   const raw = new Float64Array(n);
   for (let i = 0; i < n; i++) raw[i] = geo.samples[i]!.curvature;
-  const curve = blur(raw, spacing, 5);
-  const cutting = blur(raw, spacing, 16);
+  const curve = blur(raw, spacing, 5, open);
+  const cutting = blur(raw, spacing, 16, open);
   const line = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const room = Math.max(0, geo.samples[i]!.width / 2 - bots.edgeMargin);
@@ -148,7 +164,7 @@ function buildPlan(def: TrackDef): TrackPlan {
   // after, and is back to itself 28 m after.
   for (const ramp of terrain.ramps) {
     for (let i = 0; i < n; i++) {
-      let d = ramp.s - i * spacing;
+      let d = ramp.s - sOf(i);
       d -= Math.round(d / length) * length;
       if (d < -34 || d > 52) continue;
       line[i] = line[i]! * Math.min(1, Math.max(0, (Math.abs(d - 8) - 12) / 24));
@@ -160,7 +176,7 @@ function buildPlan(def: TrackDef): TrackPlan {
   for (const patch of terrain.patches) {
     const middle = (patch.lo + patch.hi) / 2;
     for (let i = 0; i < n; i++) {
-      if (!inSpan(i * spacing, patch, length)) continue;
+      if (!inSpan(sOf(i), patch, length)) continue;
       const room = Math.max(0, geo.samples[i]!.width / 2 - bots.edgeMargin);
       const here = line[i]!;
       if (patch.kind === "boost") {
@@ -180,7 +196,7 @@ function buildPlan(def: TrackDef): TrackPlan {
       }
     }
   }
-  const eased = blur(adjust, spacing, 4);
+  const eased = blur(adjust, spacing, 4, open);
   for (let i = 0; i < n; i++) {
     const room = Math.max(0, geo.samples[i]!.width / 2 - bots.edgeMargin);
     line[i] = Math.max(-room, Math.min(room, line[i]! + eased[i]!));
@@ -197,8 +213,8 @@ function buildPlan(def: TrackDef): TrackPlan {
   const reach = Math.max(2, Math.round(4 / spacing));
   const lineCurve = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const a = (i - reach + n) % n;
-    const b = (i + reach) % n;
+    const a = at(i - reach);
+    const b = at(i + reach);
     const ax = px[i]! - px[a]!;
     const az = pz[i]! - pz[a]!;
     const bx = px[b]! - px[i]!;
@@ -207,19 +223,19 @@ function buildPlan(def: TrackDef): TrackPlan {
     lineCurve[i] = Math.abs(turn) / (reach * spacing);
   }
   // Smoothed for steadiness, but not so much that the peak of a tight hairpin is lost: the kart must be slow enough for the tightest part of the line.
-  const blurred = blur(lineCurve, spacing, 6);
+  const blurred = blur(lineCurve, spacing, 6, open);
   const smooth = new Float64Array(n);
   const window = Math.max(1, Math.round(6 / spacing));
   for (let i = 0; i < n; i++) {
     let peak = 0;
-    for (let k = -window; k <= window; k++) peak = Math.max(peak, lineCurve[(i + k + n) % n]!);
+    for (let k = -window; k <= window; k++) peak = Math.max(peak, lineCurve[at(i + k)]!);
     smooth[i] = Math.max(blurred[i]!, bots.peakShare * peak);
   }
   const speed = new Float64Array(n);
   const brake = new Float64Array(n).fill(bots.planBrake);
   for (let i = 0; i < n; i++) {
     const curvature = Math.max(smooth[i]!, 1e-4);
-    const s = i * spacing;
+    const s = sOf(i);
     // Bends beside an open edge are taken a little easier; on ice much easier, and with a poor brake.
     const open = terrain.openLeft[i] === 1 || terrain.openRight[i] === 1;
     let v = Math.min(bots.planCap, Math.sqrt((open ? bots.dropLateral : bots.lateral) / curvature));
@@ -240,8 +256,9 @@ function buildPlan(def: TrackDef): TrackPlan {
   // Slow down in time: no sample may be faster than the next allows after braking over the gap. Twice round, for the loop.
   for (let pass = 0; pass < 2; pass++) {
     for (let i = n - 1; i >= 0; i--) {
-      const next = speed[(i + 1) % n]!;
-      const allowed = Math.sqrt(next * next + 2 * Math.min(brake[i]!, brake[(i + 1) % n]!) * spacing);
+      if (open && i === n - 1) continue;
+      const next = speed[at(i + 1)]!;
+      const allowed = Math.sqrt(next * next + 2 * Math.min(brake[i]!, brake[at(i + 1)]!) * spacing);
       if (speed[i]! > allowed) speed[i] = allowed;
     }
   }
@@ -251,18 +268,19 @@ function buildPlan(def: TrackDef): TrackPlan {
   for (let pass = 0; pass < 2; pass++) {
     for (let i = n - 1; i >= 0; i--) {
       const here = curve[i]!;
-      const next = curve[(i + 1) % n]!;
+      const next = curve[at(i + 1)]!;
       if (Math.abs(here) < bots.driftCurvature) {
         bend[i] = 0;
-      } else if (Math.sign(here) === Math.sign(next) && Math.abs(next) >= bots.driftCurvature) {
-        bend[i] = bend[(i + 1) % n]! + spacing;
+      } else if (Math.sign(here) === Math.sign(next) && Math.abs(next) >= bots.driftCurvature && !(open && i === n - 1)) {
+        bend[i] = bend[at(i + 1)]! + spacing;
       } else {
         bend[i] = spacing;
       }
     }
   }
 
-  const corners = findCorners(geo, terrain, curve, line);
+  // A branch has no listed bends (the bots take it clean); the loop's are found as ever.
+  const corners = open ? [] : findCorners(geo, terrain, curve, line);
   const nextCorner = new Uint16Array(n);
   for (let i = 0; i < n && corners.length > 0; i++) {
     // The first bend whose end is still ahead of this sample.
@@ -276,7 +294,7 @@ function buildPlan(def: TrackDef): TrackPlan {
     });
   }
 
-  return { geo, terrain, cuts: findCuts(def, geo, terrain), boxes, pads, curve, line, speed, bend, corners, nextCorner };
+  return { geo, route: geo.route, routes: [], terrain, cuts: open ? [] : findCuts(def, geo, terrain), boxes, pads, curve, line, speed, bend, corners, nextCorner };
 }
 
 /**
@@ -380,6 +398,12 @@ function barrierOf(terrain: Terrain, s: number, offset: number): number {
 /** A per-sample table read at `s`, interpolated. */
 export function tableAt(plan: TrackPlan, table: Float64Array, s: number): number {
   const geo = plan.geo;
+  if (geo.open) {
+    const last = table.length - 1;
+    const u = Math.max(0, Math.min(last, geo.delta(geo.origin, s) / geo.spacing));
+    const i = Math.floor(u);
+    return table[i]! + (table[Math.min(last, i + 1)]! - table[i]!) * (u - i);
+  }
   const w = geo.wrap(s);
   const f = w / geo.spacing;
   const i = Math.floor(f) % table.length;

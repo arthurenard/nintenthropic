@@ -7,6 +7,7 @@
  * written is exactly what the race holds.
  */
 import type { RaceSnapshot } from "../contract";
+import { onRoute } from "./routes";
 import { groundAt } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 import { settle } from "./kart";
@@ -149,9 +150,12 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.prime = a[KART_AT.prime]!;
   k.counter = a[KART_AT.counter]!;
   // What follows from the rest.
-  const c = w.geo.at(k.s);
+  const race = w.main ?? w;
+  k.route = race.geo.routes.length > 0 ? race.geo.project(k.x, k.z, k.s).route : 0;
+  const road = onRoute(race, k.route);
+  const c = road.geo.at(k.s);
   k.y = c.y;
-  k.ground = groundAt(w.plan.terrain, k.s, k.offset, c.width / 2);
+  k.ground = groundAt(road.plan.terrain, k.s, k.offset, c.width / 2);
   k.offroad = TUNING.ground[k.ground].rough;
   k.wrongWay = k.wrong >= ticks(TUNING.race.wrongTime);
   k.t = w.state.tick;

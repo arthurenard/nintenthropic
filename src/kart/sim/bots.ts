@@ -29,6 +29,7 @@ import type { TrackGeometry } from "../track/geometry";
 import { hazardAt, type HazardPose } from "../track/hazards";
 import { rocketTarget } from "./items";
 import { GO_TICK, courseOf, forwardSpeed, yawRate } from "./kart";
+import { onRoute, steeringRoute } from "./routes";
 import { tableAt, type Corner } from "./plan";
 import { racecraft, type Fight } from "./racecraft";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
@@ -355,6 +356,15 @@ const ROAD = new Float64Array(LOOK_STEPS.length * 4);
 export function roadAhead(geo: TrackGeometry, s: number, speed: number, into: Float64Array): void {
   const samples = geo.samples;
   for (let step = 0; step < LOOK_STEPS.length; step++) {
+    if (geo.open) {
+      // A branch road clamps at its ends.
+      const c = geo.at(s + speed * LOOK_STEPS[step]!);
+      into[4 * step] = c.x;
+      into[4 * step + 1] = c.z;
+      into[4 * step + 2] = c.tx;
+      into[4 * step + 3] = c.tz;
+      continue;
+    }
     const w = geo.wrap(s + speed * LOOK_STEPS[step]!);
     const i = Math.floor(w / geo.spacing) % samples.length;
     const a = samples[i]!;
@@ -430,10 +440,12 @@ function bendWeight(w: World, c: Corner, s: number): number {
   return 1;
 }
 
-export function botInput(w: World, k: KartState): DriveInput {
+export function botInput(world: World, k: KartState): DriveInput {
   const m = k.bot;
   if (k.t < GO_TICK) return { ...IDLE_INPUT, itemPresses: m.presses };
 
+  // The road it steers by: its own, or the branch it has chosen to take (alternate routes, routes.ts).
+  const w = onRoute(world, steeringRoute(world, k));
   const { geo, plan } = w;
   const terrain = plan.terrain;
   const fwd = forwardSpeed(k);
