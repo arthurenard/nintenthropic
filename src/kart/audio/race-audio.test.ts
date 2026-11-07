@@ -232,13 +232,13 @@ describe("events become sounds", () => {
   const cases: [string, RaceEvent, string[]][] = [
     ["a pickup", ev("pickup", { kart: 0, item: "puck" }), ["kart_box_smash"]],
     ["nitro", ev("use", { kart: 0, item: "nitro" }), ["kart_nitro"]],
-    ["triple nitro", ev("use", { kart: 0, item: "nitro3" }), ["kart_nitro"]],
+    ["triple nitro", ev("use", { kart: 0, item: "nitro3" }), ["kart_nitro_triple"]],
     ["a puck", ev("use", { kart: 0, item: "puck" }), ["kart_puck_fire"]],
-    ["a seeker", ev("use", { kart: 0, item: "seeker" }), ["kart_puck_fire"]],
+    ["a seeker", ev("use", { kart: 0, item: "seeker" }), ["kart_seeker_launch"]],
     ["a slick", ev("use", { kart: 0, item: "slick" }), ["kart_slick_splat"]],
     ["hit by a puck", ev("hit", { kart: 0, by: 1, cause: "puck" }), ["kart_hit"]],
-    ["hit by a seeker", ev("hit", { kart: 0, by: 1, cause: "seeker" }), ["kart_hit"]],
-    ["spinning on a slick", ev("hit", { kart: 0, by: null, cause: "slick" }), ["kart_spinout"]],
+    ["hit by a seeker", ev("hit", { kart: 0, by: 1, cause: "seeker" }), ["kart_hit", "kart_seeker_lock"]],
+    ["spinning on a slick", ev("hit", { kart: 0, by: null, cause: "slick" }), ["kart_spinout", "kart_slick_skid"]],
     ["a drift boost", ev("boost", { kart: 0, source: "drift", level: 1 }), ["kart_mini_turbo"]],
     ["a nitro boost", ev("boost", { kart: 0, source: "nitro", level: 1 }), ["kart_boost_whoosh"]],
     ["a pad", ev("boost", { kart: 0, source: "pad", level: 1 }), ["kart_boost_pad"]],
@@ -262,7 +262,7 @@ describe("events become sounds", () => {
     ["a jump", ev("jump", { kart: 0 }), ["kart_jump"]],
     ["a trick", ev("trick", { kart: 0 }), ["kart_trick"]],
     ["a landing", ev("land", { kart: 0, boost: false }), ["kart_land"]],
-    ["a boosted landing", ev("land", { kart: 0, boost: true }), ["kart_land", "kart_boost_whoosh"]],
+    ["a boosted landing", ev("land", { kart: 0, boost: true }), ["kart_land", "kart_boost_whoosh", "kart_land_cheer"]],
     ["falling", ev("fall", { kart: 0 }), ["kart_fall"]],
     ["being rescued", ev("rescued", { kart: 0 }), ["kart_drone_drop"]],
     ["a hazard", ev("hazard", { kart: 0, kind: "boulder" }), ["kart_hazard"]],
@@ -819,6 +819,41 @@ describe("loops that follow state", () => {
     expect(bus.running("kart_drone")).toBe(0);
   });
 
+  it("keeps eight karts firing at once to a bounded number of sounds", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    const karts = Array.from({ length: 8 }, (_, i) => kart(i, { x: i * 3, z: 0 }));
+    const items = ["nitro", "puck", "seeker", "slick", "comet", "skyrocket", "puck3", "nitro3"] as const;
+    frame(karts, {}, [...karts.map((k, i) => ev("use", { kart: k.id, item: items[i]! })), ...karts.map((k) => ev("hit", { kart: k.id, by: null, cause: "slick" })), ...karts.map((k) => ev("pickup", { kart: k.id, item: "puck" }))]);
+    // Eight a frame from the others, plus what the player's own kart must hear (the cap spares priority 3).
+    expect(bus.played.length).toBeLessThanOrEqual(8 + 6);
+    // No cue sounds more than twice at the same instant but the player's own.
+    const count = new Map<string, number>();
+    for (const p of bus.played) count.set(p.cue, (count.get(p.cue) ?? 0) + 1);
+    for (const [cue, n] of count) expect(n, cue).toBeLessThanOrEqual(3);
+  });
+
+  it("hums while a player's kart holds the triple puck, higher for each puck fired, and stops when none is left", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 5; i++) frame([kart(0, { item: "puck3", itemUses: 3 })]);
+    expect(bus.running("kart_orbit")).toBe(1);
+    const full = bus.lastSet("kart_orbit")!;
+    for (let i = 0; i < 30; i++) frame([kart(0, { item: "puck3", itemUses: 1 })]);
+    expect(bus.lastSet("kart_orbit")!.rate!).toBeGreaterThan(full.rate!);
+    // Not while the reel still turns, and not for a kart that is another's to hear.
+    frame([kart(0, { item: null, itemUses: 0 })]);
+    expect(bus.running("kart_orbit")).toBe(0);
+  });
+
+  it("sounds a cheer or a wave once, as the emote begins", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    frame([kart(0)]);
+    for (let i = 0; i < 20; i++) frame([kart(0, { emote: "cheer" })]);
+    expect(bus.cues.filter((c) => c === "kart_emote_cheer")).toHaveLength(1);
+    frame([kart(0, { emote: null })]);
+    frame([kart(0, { emote: "wave" })]);
+    expect(bus.cues.filter((c) => c === "kart_emote_wave")).toHaveLength(1);
+  });
+
   it("ticks the item roulette, slower and higher, and chimes when it lands", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
     for (let i = 0; i < 70; i++) frame([kart(0, { rolling: true })], {}, [], [], 1 / 60);
@@ -828,6 +863,25 @@ describe("loops that follow state", () => {
     expect(bus.cues).not.toContain("kart_item_ready");
     frame([kart(0, { rolling: false, item: "puck" })]);
     expect(bus.cues).toContain("kart_item_ready");
+    expect(bus.cues).toContain("kart_get_puck");
+  });
+
+  it("quickens a seeker's beeps as it closes in", () => {
+    const rateAt = (z: number): number => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      const thing: ThingView = { id: 77, kind: "seeker", x: 0, y: 0, z, heading: 0, active: true };
+      for (let i = 0; i < 5; i++) frame([kart(0, { z: 0 })], {}, [], [thing], 0.1);
+      return bus.lastSet("kart_seeker")!.rate!;
+    };
+    expect(rateAt(10)).toBeGreaterThan(rateAt(35) + 0.1);
+    expect(rateAt(35)).toBeGreaterThan(rateAt(80));
+  });
+
+  it("makes no emote sound for a kart that has finished (the sim's own cheer)", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    frame([kart(0)]);
+    for (let i = 0; i < 5; i++) frame([kart(0, { emote: "cheer", finished: 40 })]);
+    expect(bus.cues).not.toContain("kart_emote_cheer");
   });
 
   it("coughs when the sim says the start flooded, and not for a kart that was only slow away", () => {

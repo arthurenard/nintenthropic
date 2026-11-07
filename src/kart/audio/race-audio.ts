@@ -28,7 +28,7 @@ import { loadSoundPack } from "../../audio";
 import type { Pack } from "../../audio";
 import { volumeGain } from "../../audio/routing";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
-import type { KartView, RaceEvent, RaceView } from "../contract";
+import type { Emote, KartView, RaceEvent, RaceView } from "../contract";
 import { AMBIENCE, BED_PANS, SpotClock, rng } from "./ambience";
 import {
   ENGINE_LAYERS,
@@ -59,7 +59,7 @@ import {
   TOP_SPEED,
   windTarget,
 } from "./engines";
-import { type Order, ordersFor } from "./events";
+import { type Order, chimeOrder, emoteOrder, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
 import { type MusicTrack, MusicPlayer, makeMusicTrack } from "./music/player";
@@ -334,6 +334,8 @@ class RaceAudioImpl implements RaceAudio {
   private readonly surfaces = new Map<number, Looper>();
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
+  /** The hum of the pucks orbiting a player's kart that holds a triple puck. */
+  private readonly orbits = new Map<number, Looper>();
   private readonly winds = new Map<number, Looper>();
   /** The slipstream's torn air round the player's own karts in a wake. */
   private readonly drafts = new Map<number, Looper>();
@@ -344,6 +346,8 @@ class RaceAudioImpl implements RaceAudio {
   private readonly chirps = new Map<number, { level: number; bend: number }>();
   /** The place each of the player's own karts was last heard at. */
   private readonly places = new Map<number, { place: number; at: number }>();
+  /** The emote each own kart was last making, so its sound is heard once as it begins. */
+  private readonly emotes = new Map<number, Emote | null>();
   private readonly rolls = new Map<number, { next: number; count: number }>();
   private readonly puckHeading = new Map<number, { heading: number; t: number }[]>();
   private readonly lastBounce = new Map<number, number>();
@@ -686,6 +690,7 @@ class RaceAudioImpl implements RaceAudio {
       this.pendingFinal = false;
       this.rolls.clear();
       this.places.clear();
+      this.emotes.clear();
       this.puckHeading.clear();
       if (this.playingKey === `${this.loadedTheme}-final` && this.wantedKey) {
         // The last race ended in its final-lap music: the next one starts from the normal version.
@@ -911,6 +916,7 @@ class RaceAudioImpl implements RaceAudio {
     const drifts = new Set<number>();
     const surfaces = new Set<number>();
     const drones = new Set<number>();
+    const orbits = new Set<number>();
     const squeals: { id: number; own: boolean; distance: number; params: Required<LoopParams> }[] = [];
     for (const k of view.karts) {
       const own = localOf(scene, k.id);
@@ -960,6 +966,13 @@ class RaceAudioImpl implements RaceAudio {
         drones.add(k.id);
         this.drive(this.drones, k.id, "kart_drone", { rate: 1, volume: near * (own ? 1 : 0.8) * fx, pan: who.pan, distance: who.distance }, dt);
       }
+
+      // Three pucks circling the player's own kart hum as they go; a puck fewer is a voice fewer, higher.
+      if (own && k.item === "puck3" && !k.rolling && k.rescue <= 0) {
+        orbits.add(k.id);
+        const left = Math.max(1, Math.min(3, k.itemUses));
+        this.drive(this.orbits, k.id, "kart_orbit", { rate: 1 + 0.07 * (3 - left), volume: (0.55 + 0.15 * left) * fx * crowdTrim(scene.locals.length), pan: own.pan, distance: 0 }, dt);
+      }
     }
     // Every local kart's squeal, and the nearest few others': a whole pack drifting round a hairpin is a choir otherwise.
     squeals.sort((a, b) => (a.own === b.own ? a.distance - b.distance : a.own ? -1 : 1));
@@ -974,6 +987,7 @@ class RaceAudioImpl implements RaceAudio {
     }
     this.release(this.surfaces, surfaces);
     this.release(this.drones, drones);
+    this.release(this.orbits, orbits);
 
     // The wind round the player's own karts: started once it is worth hearing, kept until it has all but gone.
     const winds = new Set<number>();
@@ -1041,7 +1055,9 @@ class RaceAudioImpl implements RaceAudio {
       const have = this.seekers.get(s.id);
       // A little doppler: the whistle rises as it comes closer and falls as it goes.
       const closing = have ? (have.lastDistance - s.distance) / Math.max(dt, 1 / 120) : 0;
-      const rate = 1 + 0.1 * Math.max(-1, Math.min(1, closing / 40));
+      // And its beeps quicken as it closes in: up to a third faster inside 40 m.
+      const near = 1 - Math.max(0, Math.min(1, s.distance / 40));
+      const rate = (1 + 0.1 * Math.max(-1, Math.min(1, closing / 40))) * (1 + 0.33 * near);
       const volume = (0.35 + 0.65 * falloff(s.distance, 90)) * fx;
       const loop = this.drive(this.seekers, s.id, "kart_seeker", { rate, volume, pan: s.pan, distance: s.distance }, dt);
       (loop as Looper & { lastDistance: number }).lastDistance = s.distance;
@@ -1065,6 +1081,14 @@ class RaceAudioImpl implements RaceAudio {
       }
       if (heard) heard.place = k.place;
       else this.places.set(l.kart, { place: k.place, at: -9 });
+      // A cheer or a wave, as it begins.
+      // (Only one a person made: a finished kart's cheer is the sim's own, and the finish has its fanfare.)
+      const emote = k.finished === null ? k.emote ?? null : null;
+      if (emote !== (this.emotes.get(l.kart) ?? null)) {
+        const o = emoteOrder(emote, l.pan);
+        if (o) this.start(o);
+        this.emotes.set(l.kart, emote);
+      }
     }
   }
 
@@ -1093,7 +1117,7 @@ class RaceAudioImpl implements RaceAudio {
   private stopLoops(): void {
     for (const v of this.engines.values()) this.silence(v);
     this.engines.clear();
-    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.winds, this.drafts, this.scrapes] as Map<number, Looper>[]) {
+    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.orbits, this.winds, this.drafts, this.scrapes] as Map<number, Looper>[]) {
       for (const l of map.values()) l.loop.stop();
       map.clear();
     }
@@ -1167,7 +1191,10 @@ class RaceAudioImpl implements RaceAudio {
         }
       } else if (r) {
         this.rolls.delete(l.kart);
-        if (k.item !== null) this.start({ cue: "kart_item_ready", volume: 1, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: 3 });
+        if (k.item !== null) {
+          this.start({ cue: "kart_item_ready", volume: 1, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: 3 });
+          this.start(chimeOrder(k.item, l.pan));
+        }
       }
     }
   }
