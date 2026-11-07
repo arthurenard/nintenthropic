@@ -753,6 +753,11 @@ body[data-screen="race"] #sound-button {
     lost-in 300ms var(--ease),
     fade-out 400ms var(--ease) 3s forwards;
 }
+@media (prefers-reduced-motion: reduce) {
+  .view-toast.rival-intro {
+    animation: fade-out 400ms var(--ease) 3s forwards;
+  }
+}
 .rival-intro .rival-line {
   font-size: 22px;
   font-weight: 700;

@@ -1754,6 +1754,11 @@ is kind: nothing here is a leaderboard of shame, and nothing appears in
 Practice alone (no ledger is made for a `solo` session). It works the same for
 keyboard, pad and wheel players: it reads the race's events, not the controls.
 
+**One sheet per device.** Each device keeps its own ledger from the events it
+saw, so a guest who joins mid-session counts from when they arrived (and a tab
+that was hidden may miss a few events): two screens in one room can show
+slightly different grudges or awards. The host does not send a shared tally.
+
 **Bookkeeping.** `Rivalries` (one per room, made in `KartApp.attach`, cleared in
 `teardown`) is fed by the race screen from the race events, which every screen
 already receives (the host's and the guests' alike), so **nothing new travels
@@ -1763,7 +1768,8 @@ over the wire** and the sim is untouched:
   decoy, skyrocket, blast, comet, storm) is attributed to its sender; a hazard
   (`by: null`) and a kart's own item (`by === kart`) count for no one;
 - a `bump` counts as a hit only when it is hard (strength 0.85 and up) and one
-  kart was clearly quicker (3 m/s): the quicker one rammed;
+  kart was clearly quicker (3 m/s): the quicker one rammed (two Comets bumping
+  count for no one). A bump spins no one, so the numbers say "hits", not spin-outs;
 - `finish(standings)`, once per race, counts head-to-head (who finished ahead
   of whom, for every pair with at least one person in it), places gained from the
   grid, and photo finishes (neighbours within 0.15 s of each other).
@@ -1784,7 +1790,7 @@ with the one ahead first, and the bigger the hit total the bigger the grudge.
 - The race intro: as the countdown begins (or, after a slow load, in the race's
   first seconds), a glass pill calls out the biggest
   grudge among the karts in this race ("Kit vs Mango: 3-1", and under it what
-  the numbers count, "Spin-outs between them" or "Who finishes ahead").
+  the numbers count, "Hits between them" or "Who finishes ahead").
 - A **nemesis** is whoever has hit you the most (two hits for a person, three
   for a bot, a bot's hits weighing a little less), or else your closest
   head-to-head. A small chevron in their colour hovers over their kart in your

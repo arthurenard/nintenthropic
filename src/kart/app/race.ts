@@ -542,7 +542,8 @@ export class RaceScreen {
       if (event.type === "hit") note = rivals.hit(event);
       else if (event.type === "bump") {
         const speed = (kart: number) => view.karts.find((candidate) => candidate.id === kart)?.speed ?? 0;
-        note = rivals.bump(event.a, event.b, event.strength, { a: speed(event.a), b: speed(event.b) });
+        const comet = (kart: number) => (view.karts.find((candidate) => candidate.id === kart)?.comet ?? 0) > 0;
+        note = rivals.bump(event.a, event.b, event.strength, { a: speed(event.a), b: speed(event.b) }, { a: comet(event.a), b: comet(event.b) });
       }
       if (note) {
         this.marksKey = "";

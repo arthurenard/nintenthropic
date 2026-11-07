@@ -6,8 +6,9 @@
  * little marker, the sting of a Revenge, and the silly, kind awards at the end.
  *
  * Pure bookkeeping, no page and no clock: the screens feed it the race's
- * events (`hit`, `bump`) and its result (`finish`), the same on every device
- * because the events travel to every screen. The pictures are the screens'.
+ * events (`hit`, `bump`) and its result (`finish`). Each device keeps its own
+ * sheet from the events it saw, so a guest who joins mid-session counts from
+ * when they arrived (and a hidden tab may miss some): screens can differ a little. The pictures are the screens'.
  *
  * A hit is attributed to whoever sent it (a puck, a seeker, a slick, a decoy, a
  * skyrocket, a blast, a storm, a Comet's bump). A plain bump counts only when it
@@ -93,7 +94,7 @@ export function grudgeLine(grudge: Grudge): string {
 
 /** The small line under it: what the numbers count. */
 export function grudgeBasis(grudge: Grudge): string {
-  return grudge.basis === "hits" ? "Spin-outs between them" : "Who finishes ahead";
+  return grudge.basis === "hits" ? "Hits between them" : "Who finishes ahead";
 }
 
 // ─── The score sheet ─────────────────────────────────────────────────────────
@@ -455,8 +456,9 @@ export class Rivalries {
    * Two karts bumped: a hit only if it was hard and one was clearly the quicker (that one rammed). The speeds are the
    * karts' as the view had them at the time.
    */
-  bump(a: number, b: number, strength: number, speeds: { a: number; b: number }): HitNote | null {
+  bump(a: number, b: number, strength: number, speeds: { a: number; b: number }, comets?: { a: boolean; b: boolean }): HitNote | null {
     if (!this.running || this.running.done || strength < HARD_BUMP) return null;
+    if (comets?.a && comets.b) return null; // two untouchable karts bounce off each other: no one was hit
     const x = this.person(a);
     const y = this.person(b);
     if (!x || !y) return null;

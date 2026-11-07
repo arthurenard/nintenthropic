@@ -735,12 +735,13 @@ body[data-screen="race"] .pause-card.glass {
 }
 @media (max-width: 520px) {
   .award {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
-      "title"
-      "who"
-      "detail";
+      "title who"
+      "detail detail";
+    column-gap: 12px;
     row-gap: 1px;
+    padding: 8px 14px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

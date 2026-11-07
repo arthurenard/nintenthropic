@@ -63,6 +63,7 @@ describe("the ledger's hits", () => {
     r.begin(1, racers, null);
     expect(r.bump(0, 1, 0.5, { a: 30, b: 10 })).toBeNull();
     expect(r.bump(0, 1, 0.95, { a: 20, b: 19 })).toBeNull();
+    expect(r.bump(0, 1, 0.95, { a: 12, b: 26 }, { a: true, b: true })).toBeNull();
     const note = r.bump(0, 1, 0.95, { a: 12, b: 26 });
     expect(note?.source).toBe("bump");
     expect(note?.by.name).toBe("Mango");
