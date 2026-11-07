@@ -145,8 +145,8 @@ export interface PieceFx {
   reverb: { t60: number; size: number; mix: number; predelay?: number; damping?: number };
   /** Ping-pong delay: time in beats, feedback 0..0.8, darkness (low-pass Hz), return level. */
   delay?: { beats: number; feedback: number; tone: number; mix: number };
-  /** The bus: glue compression threshold (dBFS, default -22), stereo width (default 1.12) and air (high shelf dB at 9 kHz, default 1.5). */
-  master?: { glue?: number; width?: number; air?: number };
+  /** The bus: glue compression threshold (dBFS, default -22), stereo width (default 1.12) air (high shelf dB at 9 kHz, default 1.5) and loudness (dB around the shared -18 dBFS RMS, -3..+2, so a calm piece sits a little under a driving one). */
+  master?: { glue?: number; width?: number; air?: number; loud?: number };
 }
 
 export interface PieceSpec {

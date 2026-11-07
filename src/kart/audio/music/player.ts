@@ -100,7 +100,7 @@ export class MusicPlayer {
   private readonly shelf: BiquadFilterNode;
   private intensity = 0;
   private voice: Voice | null = null;
-  private comet: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private comet: { parts: { source: AudioBufferSourceNode; gain: GainNode }[]; timer: ReturnType<typeof setTimeout> | null } | null = null;
   private cometWanted = false;
   private volume = 1;
   private paused = false;
@@ -157,44 +157,64 @@ export class MusicPlayer {
     else this.stopComet(this.ctx.currentTime, 0.5);
   }
 
-  private startComet(when?: number, offset?: number): void {
+  /** Bring the layer in at ``when`` (default: the next bar line of the music), then keep it on the music's bars. */
+  private startComet(when?: number): void {
     const v = this.voice;
     if (!v || !v.track.comet || this.comet) return;
-    const track = v.track;
     let at = when;
     if (at === undefined) {
-      const bars = track.barStarts ?? track.beats;
-      const { wait } = nextBeat(bars, track.duration, this.position(), 0.03);
+      const bars = v.track.barStarts ?? v.track.beats;
+      const { wait } = nextBeat(bars, v.track.duration, this.position(), 0.03);
       at = this.ctx.currentTime + wait;
     }
-    void offset;
+    this.comet = { parts: [], timer: null };
+    this.cometSegment(this.comet, v, at, true);
+  }
+
+  /**
+   * One run of the layer, from ``at`` to the music's next loop restart. Looping on its own it would drift against a
+   * piece whose bars differ in length (a waltz bridge), so each loop of the music gets a fresh run, scheduled shortly
+   * before the restart, and every run starts on a bar line.
+   */
+  private cometSegment(comet: NonNullable<MusicPlayer["comet"]>, v: Voice, at: number, fresh: boolean): void {
+    if (this.disposed) return;
+    const duration = v.track.duration;
+    const restart = v.origin + Math.floor((at - v.origin) / duration + 1e-6) * duration + duration;
     const source = this.ctx.createBufferSource();
-    source.buffer = track.comet!;
+    source.buffer = v.track.comet!;
     source.loop = true;
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0, Math.max(0, at - 0.001));
-    gain.gain.linearRampToValueAtTime(1, at + 0.35);
+    gain.gain.setValueAtTime(fresh ? 0 : 1, Math.max(0, at - 0.001));
+    if (fresh) gain.gain.linearRampToValueAtTime(1, at + 0.35);
     source.connect(gain).connect(this.duckGain);
     source.start(at);
-    this.comet = { source, gain };
+    source.stop(restart);
+    comet.parts.push({ source, gain });
+    comet.timer = setTimeout(() => {
+      comet.timer = null;
+      if (this.comet === comet && this.voice === v) this.cometSegment(comet, v, restart, false);
+    }, Math.max(0, restart - this.ctx.currentTime - 0.6) * 1000);
   }
 
   private stopComet(when: number, fade: number): void {
     const c = this.comet;
     if (!c) return;
     this.comet = null;
-    try {
-      c.gain.gain.cancelScheduledValues(when);
-      c.gain.gain.setValueAtTime(c.gain.gain.value, when);
-      c.gain.gain.linearRampToValueAtTime(0, when + fade);
-      c.source.stop(when + fade + 0.05);
-    } catch {
-      // Already stopped.
+    if (c.timer) clearTimeout(c.timer);
+    for (const { source, gain } of c.parts) {
+      try {
+        gain.gain.cancelScheduledValues(when);
+        gain.gain.setValueAtTime(gain.gain.value, when);
+        gain.gain.linearRampToValueAtTime(0, when + fade);
+        source.stop(when + fade + 0.05);
+      } catch {
+        // Already stopped.
+      }
+      source.onended = () => {
+        source.disconnect();
+        gain.disconnect();
+      };
     }
-    c.source.onended = () => {
-      c.source.disconnect();
-      c.gain.disconnect();
-    };
   }
 
   /**

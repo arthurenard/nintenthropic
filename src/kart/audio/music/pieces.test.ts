@@ -97,8 +97,9 @@ describe.each(IDS)("%s", (id) => {
 
   it("renders to the music's loudness, under the peak ceiling, with nothing broken in it", () => {
     const r = render(id);
-    expect(r.stats.rmsDb).toBeGreaterThan(MUSIC_RMS_DB - 0.6);
-    expect(r.stats.rmsDb).toBeLessThan(MUSIC_RMS_DB + 0.6);
+    const aim = MUSIC_RMS_DB + (PIECES[id as keyof typeof PIECES]?.fx.master?.loud ?? 0);
+    expect(r.stats.rmsDb).toBeGreaterThan(aim - 0.6);
+    expect(r.stats.rmsDb).toBeLessThan(aim + 0.6);
     expect(r.stats.peakDb).toBeLessThanOrEqual(MUSIC_PEAK_DB + 0.01);
     for (const ch of [r.left, r.right]) {
       for (let i = 0; i < ch.length; i += 7) if (!Number.isFinite(ch[i]!)) throw new Error(`${id}: non-finite sample at ${i}`);

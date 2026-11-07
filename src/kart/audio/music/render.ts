@@ -151,6 +151,7 @@ export class PieceRenderer {
     for (const name of parts) stages.push(() => this.renderPart(name));
     stages.push(() => this.effects());
     stages.push(() => this.master());
+    stages.push(() => this.limitBus());
     if (this.options.extras !== false && this.spec.race) stages.push(() => this.extras());
     return stages;
   }
@@ -384,12 +385,24 @@ export class PieceRenderer {
         }
         return g;
       };
-      const first = scaleTo(oneShot ? -16 : MUSIC_RMS_DB);
+      const target = MUSIC_RMS_DB + Math.min(2, Math.max(-3, m.loud ?? 0));
+      const first = scaleTo(oneShot ? -16 : target);
       for (const k of Object.keys(this.partLevels)) this.partLevels[k] = this.partLevels[k]! * first * first;
       // Glue: the bus compressor takes the peaks of the loudest moments down together, and a breath of saturation rounds them.
       compress(left, right, sr, { threshold: m.glue ?? -21, ratio: 2.8, attack: 0.006, release: 0.14, knee: 8 }, !oneShot);
       saturate(left, 1.5);
       saturate(right, 1.5);
+      this.bus = { left, right, length, target, scaleTo, sr, oneShot };
+    });
+  }
+
+  private bus: { left: Float32Array; right: Float32Array; length: number; target: number; scaleTo: (db: number) => number; sr: number; oneShot: boolean } | null = null;
+
+  /** The second half of the master: the limiter (the heaviest single stretch of work, so a stage of its own) and the numbers. */
+  private limitBus(): void {
+    this.timed(() => {
+      const { left, right, length, target, scaleTo, sr, oneShot } = this.bus!;
+      this.bus = null;
       const ceilingDb = oneShot ? ONESHOT_PEAK_DB : MUSIC_PEAK_DB;
       const ceiling = Math.pow(10, ceilingDb / 20);
       if (oneShot) {
@@ -402,10 +415,10 @@ export class PieceRenderer {
       } else {
         // Back to the music's loudness, the look-ahead limiter over the peaks, and once more since limiting lowers the loudness a little.
         for (let pass = 0; pass < 5; pass++) {
-          scaleTo(MUSIC_RMS_DB);
+          scaleTo(target);
           // The limiter holds the peaks a set height over the loudness (a produced track's 12 dB, not an open recording's 17): loud, dense, with the transients kept.
-          this.limiterDb = Math.max(this.limiterDb, limit(left, right, sr, Math.pow(10, (MUSIC_RMS_DB + CREST_DB) / 20), 0.004, 0.09));
-          const err = 20 * Math.log10(stereoRms(left, right)) - MUSIC_RMS_DB;
+          this.limiterDb = Math.max(this.limiterDb, limit(left, right, sr, Math.pow(10, (target + CREST_DB) / 20), 0.004, 0.09));
+          const err = 20 * Math.log10(stereoRms(left, right)) - target;
           if (Math.abs(err) < 0.12) break;
         }
         // (The saturation leans the wave a hair to one side: the mean is taken out again.)

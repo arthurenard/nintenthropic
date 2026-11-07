@@ -86,7 +86,7 @@ export const volcano: PieceSpec = {
   fx: {
     reverb: { t60: 1.2, size: 0.5, mix: 0.18, predelay: 0.01 },
     delay: { beats: 0.75, feedback: 0.28, tone: 3500, mix: 0.14 },
-    master: { air: 1, glue: -22 },
+    master: { air: 1, glue: -22, loud: 0.5 },
   },
   sections: [
     {
@@ -165,6 +165,20 @@ export const volcano: PieceSpec = {
         lead: tune(CHORUS_LAST),
         brass: tune(CHORUS_LAST, { shift: -12, vel: 0.8 }),
         drums: drums(chorusGroove, { fill, fillEvery: 4, crash: true }),
+      },
+    },
+    {
+      // Two bars on the dominant, so the lifted chorus drops back into the riff instead of jumping.
+      name: "Turn",
+      bars: 2,
+      level: 0.95,
+      chords: "A5 A5",
+      parts: {
+        bass: bass("root4", { vel: 0.8 }),
+        gtr: chords("gate16", { centre: 46, size: 3, vel: 0.8 }),
+        gtr2: chords("gate16", { centre: 46, size: 3, vel: 0.8 }),
+        lead: tune("r:16 | r:12 e5:2 d5:2"),
+        drums: drums({ hat: "x.x.x.x.x.x.x.x." }, { fill: { snare: "x.x.xxxx", "tom-high": "......x." }, fillEvery: 2, crash: true }),
       },
     },
   ],

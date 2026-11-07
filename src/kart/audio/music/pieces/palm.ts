@@ -142,5 +142,18 @@ export const palm: PieceSpec = {
         drums: drums(grooveFull, { fill, fillEvery: 4 }),
       },
     },
+    {
+      // Two bars on the dominant, so the lifted tune falls back home to G instead of jumping.
+      name: "Turn",
+      bars: 2,
+      level: 0.92,
+      chords: "D7sus4 D7",
+      parts: {
+        bass: bass("whole", { vel: 0.75 }),
+        uke: chords("hold2", { roll: 0.015, vel: 0.6 }),
+        lead: tune("r:16 | r:12 a4:2 f#4:2"),
+        drums: drums({ shaker: "xoxoxoxoxoxoxoxo", "conga-low": "x.......x......." }, { fill: { bongo: "xxxxxxxx", "conga-high": "x.x.xxxx" }, fillEvery: 2 }),
+      },
+    },
   ],
 };

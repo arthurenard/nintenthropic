@@ -63,7 +63,7 @@ export const snow: PieceSpec = {
   fx: {
     reverb: { t60: 2.2, size: 0.85, mix: 0.34, predelay: 0.03, damping: 0.25 },
     delay: { beats: 0.75, feedback: 0.35, tone: 4500, mix: 0.22 },
-    master: { air: 3 },
+    master: { air: 3, loud: -1.5 },
   },
   sections: [
     {

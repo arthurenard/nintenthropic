@@ -71,7 +71,7 @@ export const meadow: PieceSpec = {
   fx: {
     reverb: { t60: 1.4, size: 0.6, mix: 0.28, predelay: 0.018 },
     delay: { beats: 0.75, feedback: 0.3, tone: 3500, mix: 0.2 },
-    master: { air: 2 },
+    master: { air: 2, loud: -0.5 },
   },
   sections: [
     {
