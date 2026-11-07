@@ -447,6 +447,14 @@ export function botInput(w: World, k: KartState): DriveInput {
   // In the air off a ramp: wheel straight along the track, a trick for the keen.
   if (k.flight > 0) {
     m.drifting = false;
+    if (k.flight >= 3) {
+      // A planned flight (cannon, glide, lip): a glide is steered toward the middle of the road to land on its mark
+      // (each bot a little off it, by its number), a cannon along its own lane; a trick for the keen.
+      const lane = k.flight === 4 ? ((k.id * 7) % 5 - 2) * 0.35 : clamp(k.offset, -4, 4);
+      const aim = geo.point(k.s + 16, lane);
+      const toward = wrapAngle(Math.atan2(aim.x - k.x, aim.z - k.z) - k.heading);
+      return { steer: clamp(-toward * 2.5, -1, 1), throttle: 1, brake: 0, drift: k.flight === 3 && k.trick === 0 && !k.prevDrift && wantsTrick(k), itemPresses: presses };
+    }
     const err = wrapAngle(geo.heading(k.s + 12) - k.heading);
     return { steer: clamp(-err * 2, -1, 1), throttle: 1, brake: 0, drift: k.flight === 2 && k.trick === 0 && !k.prevDrift && wantsTrick(k), itemPresses: presses };
   }

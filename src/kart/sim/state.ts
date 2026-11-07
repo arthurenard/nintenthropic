@@ -128,9 +128,10 @@ export interface KartState {
   vy: number;
   /**
    * 0 on the ground (a kart just off a crest, not yet high enough to be a jump, is 0 with `aloft` counting), 1 in a
-   * jump (or dropping off a ramp's lip too slow to fly), 2 in a jump where a trick is allowed.
+   * jump (or dropping off a ramp's lip too slow to fly), 2 in a jump where a trick is allowed,
+   * 3 in a planned arc (a cannon or a lip: tricks allowed), 4 gliding under a parasol (sim/air.ts).
    */
-  flight: 0 | 1 | 2;
+  flight: 0 | 1 | 2 | 3 | 4;
   /** Ticks since a trick began in the air, or 0. */
   trick: number;
   /** Ticks since the kart left the ground (up to 255), 0 on it. */
