@@ -863,10 +863,67 @@ heard and let go after half a second of silence, and is told only what has moved
   from the first spark its sparks fizz under it, a major third higher at each level; let go, the mini-turbo, a step
   up for each level, and from the third a whoomph and a run of glass. Bumps, walls and landings by the sim's
   strength (a hard landing thuds).
-- **Moments.** The countdown's beeps; a start boost; nitro; a boost pad; a slipstream's fling (a stretched band let
-  go); off a ramp a spring's boing (lighter off a crest); a trick (a spiral of pings, a slide whistle's whee and a
-  swirl that goes once round the head, the one stereo sound a kart makes); landing; item boxes and every item; hits
-  and spin-outs; a place won or lost; a lap, the final lap and the finish.
+- **Moments and items (rebuilt from layers).** Nothing here is one oscillator and an envelope: each sound is a
+  transient (a click, a thump, a crack), a body (a ring, a roar, a siren) and a tail (an echo, debris, rain), cut from
+  the parts in `kart-synth.ts`: FM bells for metal and glass, a kalimba, a plucked string (Karplus-Strong) for the
+  twang of a mini-turbo or a slingshot, a brass stab, a stack of detuned saws, noise through a sweeping resonance
+  chopped into grains for whooshes with texture, showers of ringing shards, rain, sirens, tweets, and a few filtered
+  echoes for a shock wave. Pitched parts sit in C major, as the music does. The recipes are in `kart-items.ts` (the
+  box, the roulette and every item), `kart-events.ts` (sparks, boosts, the start), `kart-impacts.ts` (hits, bumps, the
+  air, the fall) and `kart-jingles.ts` (the tunes, the crowd, the horns, the interface).
+  - *The roulette.* Ticks of a wooden reel (pitch steered by `race-audio.ts`: they climb as the reel slows), the
+    ratchet's latch when it stops (`kart_item_ready`), and, a second after the pick-up (`ROULETTE`, the sim's own
+    roulette time), a chime of the item's own: nitro a fifth climbing with a puff of gas, triple nitro three pips and a
+    high one, puck two wooden taps, triple puck three climbing, seeker a sonar ping and its echo, slick a wet bubble
+    sliding down, comet a run of glass to the top, storm a bell against its tritone over a low tick of thunder, skyrocket
+    a whistle and a pop of stars, blast a thump under a wide chord, decoy the right chime a hair flat with a wink. Only
+    the player who took the box hears it; the box bursting (a crack, a crunch, shards, a rising sparkle) is heard by all
+    near.
+  - *Each item.* Nitro: a gas hiss, two sparks, a whump and a jet's roar climbing through a resonance with a
+    turbine's whine (the triple's is the same behind a ratchet of three clicks, higher). Puck: a solid thunk and a
+    whirring disc; off a barrier a wooden knock and a clear metallic ping. Seeker: a launch and a sonar ping, a loop
+    of homing beeps (`kart_seeker`, pitch bent by the closing speed, which also quickens the beeps), and a three-beep
+    lock on the kart it hits. Slick: a gloopy splat with bubbles when dropped and a wet skid under the spin-out when it
+    catches someone. Triple puck: three pucks circling the player's own kart hum while it holds them (`kart_orbit`,
+    higher for each one fired). Comet: six seconds, lit by a run of bells, then a bed of detuned saws whose filter
+    sweeps up every 1.5 s so it keeps rising, kalimba arpeggios and glitter, blinking faster in its last second and a
+    half and closed by two bells. Storm: a crack and a buzz, thunder rolling at irregular swells with its echoes, and
+    a patter of rain. Skyrocket: fuse crackle, a pop and a roar and a whistle that crosses the sky from the left to the
+    right (stereo), a siren for the kart it hunts (`kart_skyrocket_warn`: the leader of the others still racing, if it
+    is on this screen), and a burst of falling stars. Blast: a deep boom, a shock wave of air racing out and its echoes
+    coming back. Decoy: set down with a soft pok and a shimmer, and when driven into the box smash cut cheap, a cork's
+    pop, a "bip-boop" down a third and a slide whistle slipping off.
+  - *Impacts.* A hit (puck, rocket, blast, comet): a hard bonk, a clang of the chassis, a short whirl and three stars.
+    A spin-out (oil, decoy, storm): a skid's whirl winding down, a bonk, and four dizzy tweets circling, slower as the
+    head clears. Kart against kart by the sim's strength: a tap below 0.55 (a bumper's tok and squeak), a clonk with a
+    deep thump and a ringing bumper above it, louder and lower the harder. A barrier: a tyre stack's thud and a fence's
+    rattle. A hazard: a pipe's clang, debris and a sad trombone's wah-wah-waaah. A ramp: a plucked twang and a rubber
+    boing; a trick: pings spiralling up, a slide whistle and a ratchet of the spin round the head (stereo); a landing:
+    a chunk of suspension and two settles, a heavy one a thud with the frame ringing, and a trick landed is cheered
+    (`kart_land_cheer`, the player's own). Over the edge: two detuned whistles falling with a hollow "ooo", and the drone's
+    claw closing with a clunk; the drone letting go: a click, rotors, a boing and two notes.
+  - *Moments.* The countdown's blips climb the A major triad and Go is a brass-and-bell triad over a detuned pad and a
+    kick; a lap is a pluck, a tine and a chime up the triad with a swish of the line; the final lap is three hard
+    pick-ups and a brass chord with a crash, under two seconds and over before the music's own final-lap change
+    matters; a place won is two plucks up, one lost two marimba notes down; the finish is timpani, brass, a pad, a
+    crash, confetti cannons, a run of bells and a roaring crowd (second place and below a warmer, smaller one); the
+    results open with applause (`applause`, a `KartSound` the app asks for); a driver's cheer (both hands up) is a party
+    blower, confetti and a "yay", a wave a two-tine hello and a swish of the hand (`emoteOrder`, from the
+    emote on the kart's view, once as it begins); the photo finish's flash charges, then the shutter clacks and pops.
+  - *Horns.* A clap honks the driver's own horn (`HORNS` in `events.ts`): Bun a party blower, Pepper a bulb horn, Moss a
+    ribbit, Kit the classic two-tone, Juniper a steam whistle, Mango a bicycle bell, Bramble a tuba, Rivet a robot's
+    honk, Dabble a quack; each kart's a little different in pitch.
+  - *Voices.* Every cue has `maxInstances` (at most 5; most 2 to 4) and a `minGap`, the race audio stops a frame at
+    eight orders (priority 3 spared) and any cue at two (`race-audio.test.ts` fires eight karts' items, hits and
+    pick-ups at once and holds the count), and another kart's sounds fall off by distance (20, 32 or 45 m).
+  - *Measured* (`node tools/listen/cues.mjs`, each cue rendered offline at its table level; `sheet.py` makes
+    the spectrograms): all 94 cues unclipped, the highest true peak −5.6 dBTP at the bus, levels matched to the old
+    ones (a take is normalised to one loudness, so the mix is the table's levels, and a race's mix stays at about −16
+    LUFS: the scripted moments scene is −17.8 LUFS, short-term −15.4, −5.5 dBTP). Hits land harder and sooner: a boost
+    pad's attack 140 to 5 ms, the reel's landing 162 to 3 ms, a place won 72 to 2 ms, a skyrocket's launch 53 to 4 ms,
+    Go 23 to 5 ms; crest factor up on the strikes (hit 15.5 to 20.8 dB, puck fired 15 to 21, bump 14 to 19), a spin-out
+    a half second longer (0.9 to 1.5 s) for its tweets; the whole pack's first takes cost 1.0 s of DSP (0.7 before,
+    for 30 cues fewer: 94 and 64), in workers.
 - **Places.** Each theme's beds, two copies of each apart in the stereo field, and something far off every few
   seconds, 15 to 70 m away (so darker and quieter): a breeze and larks (meadow), a fridge's hum and a pot on the boil
   (kitchen), water lapping, a sea breeze and gulls (harbour), a dry wind and a hawk (canyon), a crowd, generators and
@@ -914,7 +971,8 @@ heard and let go after half a second of silence, and is told only what has moved
   each weight through everything, karts going by, a pack of eight, the moments, each place alone) and real races of
   bots through the real engine and `RaceAudio` on an `OfflineAudioContext`, in a muted headless Chrome, writes them to
   `tools/listen/out/<name>/` as WAV files with their loudness (BS.1770), true peak, spectrum and stereo width, and the
-  audio code's time a frame; `compare.mjs a b` sets two renders side by side. `KART_AUDIO_REPORT=dir KART_AUDIO_WAV=1
+  audio code's time a frame; `node tools/listen/cues.mjs --label <name> [--spectrograms DIR]` renders every effect on its own at its table
+  level and measures its length, attack time, crest factor, centroid, loudness and peak (`sheet.py` lays before and after spectrograms side by side); `compare.mjs a b` sets two renders side by side. `KART_AUDIO_REPORT=dir KART_AUDIO_WAV=1
   npx vitest run src/kart/audio/report.test.ts` writes each cue's picture and sound. Nothing is ever played.
 
 ## Performance

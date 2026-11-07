@@ -2,9 +2,12 @@
  * Grip Prix's sound pack: a toy-box kart racer, every sound synthesised in
  * code like the rest of Super Claude Bros. The recipes are in
  * ./kart-motion.ts (what a kart sounds like as it moves), ./kart-events.ts
- * (what happens to it), ./kart-items.ts (five of the items),
- * ./kart-jingles.ts (the tunes and the interface) and ./kart-ambience.ts
- * (the places); this is only the table that says how each is played.
+ * (a kart under power: drift sparks, boosts, the start), ./kart-items.ts
+ * (the box, the roulette and every item), ./kart-impacts.ts (hits, bumps,
+ * hazards, the air, the fall), ./kart-jingles.ts (the tunes, the crowd, the
+ * horns and the interface) and ./kart-ambience.ts (the places), all cut from
+ * the parts in ./kart-synth.ts; this is only the table that says how each is
+ * played.
  *
  * Levels are dB at the bus, every take having been normalised to the same
  * loudness first (see ../dsp/master.ts). The mix, in one place:
