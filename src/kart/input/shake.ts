@@ -14,8 +14,8 @@
 export const SHAKE = {
   /** Reversals that make a shake... */
   reversals: 2,
-  /** ...within this long, seconds. */
-  window: 0.55,
+  /** ...within this long, seconds (0.55 missed a person's natural quick turns right, left, right: 0.6 s between reversals). */
+  window: 0.7,
   /** No second shake for this long after one, seconds. */
   cooldown: 0.35,
 } as const;
