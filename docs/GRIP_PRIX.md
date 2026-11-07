@@ -608,7 +608,7 @@ of three; bytes are exact and are the numbers to trust.
   past 90° does not swap them. Angle = `atan2(dy, dx)` from the left palm to
   the right, + when the right hand is lower (turning right). A One Euro filter
   (`WHEEL.smoothing`, 2 Hz and beta 0.1) smooths it; on made-up noise of 0.4 to
-  1 degree it trails a wheel turned 30 degrees a second by 27 ms (the first
+  1 degree (simulated hands; on Arthur's recording the filter lag is 7 ms median, camera to steer 29 ms) it trails a wheel turned 30 degrees a second by 27 ms (the first
   settings, 1.5 Hz and 0.05: 40 ms) and one turned 90 by 13 ms (was 20), and
   rests within 0.1 degree of as still, which the 4 degree dead zone hides.
   Between camera frames (30 a second, the kart ticking at 60) the angle carries
