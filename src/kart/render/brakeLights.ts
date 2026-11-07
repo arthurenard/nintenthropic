@@ -11,7 +11,7 @@ import type { Base } from "./kartArt";
 import { MeshBuilder } from "./kartBuilder";
 
 /** The lamps' hot colour, over-bright so the bloom takes it. */
-const HOT: readonly [number, number, number] = [1.25, 0.07, 0.04];
+const HOT: readonly [number, number, number] = [2.0, 0.08, 0.04];
 
 let material: MeshBasicMaterial | null = null;
 

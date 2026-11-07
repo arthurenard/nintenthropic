@@ -41,7 +41,7 @@ import { buildRobot } from "./robot";
 import { driverFromArt } from "./fromArt";
 import { Lids } from "./face";
 
-const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
+export const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
   rabbit: buildRabbit,
   penguin: buildPenguin,
   frog: buildFrog,

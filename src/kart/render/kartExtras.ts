@@ -41,8 +41,8 @@ const MAKERS: Record<Species, Make> = {
     // An ice-blue dorsal fin, swept back, with a stripe in the kart's colour.
     const ice = rgb("#bfe6ff");
     b.as(SURF.trim, () => {
-      b.slab(0, 1.52, -1.1, 0.045, 0.62, 0.52, 0.02, ice, 0, 0.5);
-      b.slab(0, 1.58, -1.17, 0.052, 0.3, 0.2, 0.02, accent, 0, 0.5);
+      b.slab(0, 1.4, -1.12, 0.04, 0.42, 0.34, 0.018, ice, 0, 0.55);
+      b.slab(0, 1.45, -1.17, 0.048, 0.2, 0.14, 0.018, accent, 0, 0.55);
     });
   },
   frog(b) {
@@ -66,9 +66,9 @@ const MAKERS: Record<Species, Make> = {
   otter(b, accent) {
     // A surfboard strapped on behind the seat, standing up at the tail.
     const board = rgb("#f2fbff");
-    b.as(SURF.paint, () => b.blob(0, 1.5, -1.22, 0.2, 0.62, 0.05, board, 1, 0));
+    b.as(SURF.paint, () => b.blob(0, 1.42, -1.22, 0.19, 0.5, 0.05, board, 1, 0));
     b.as(SURF.trim, () => {
-      b.blob(0, 1.5, -1.265, 0.06, 0.58, 0.012, accent, 1);
+      b.blob(0, 1.42, -1.265, 0.06, 0.46, 0.012, accent, 1);
     });
     b.as(SURF.steel, () => {
       b.rod([-0.34, 1.0, -1.15], [0.34, 1.0, -1.15], 0.04, STEEL);
@@ -125,11 +125,11 @@ const MAKERS: Record<Species, Make> = {
 /** The crown the golden kart wears on its engine cover. */
 function crown(b: MeshBuilder): void {
   b.as(SURF.gold, () => {
-    b.lathe([[0.2, 0], [0.22, 0.12], [0.2, 0.14], [0.18, 0.01]], new Matrix4().setPosition(0, 1.17, -1.0), GOLD, 20);
+    b.lathe([[0.27, 0], [0.31, 0.16], [0.28, 0.19], [0.25, 0.01]], new Matrix4().setPosition(0, 1.3, -1.0), GOLD, 20);
     for (let k = 0; k < 5; k++) {
       const a = (k / 5) * Math.PI * 2;
-      b.spire(Math.cos(a) * 0.19, 1.28, -1.0 + Math.sin(a) * 0.19, 0.05, 0.16, GOLD, 5);
-      b.blob(Math.cos(a) * 0.19, 1.45, -1.0 + Math.sin(a) * 0.19, 0.035, 0.035, 0.035, [1.9, 0.5, 0.35], 0);
+      b.spire(Math.cos(a) * 0.28, 1.45, -1.0 + Math.sin(a) * 0.28, 0.07, 0.24, GOLD, 5);
+      b.blob(Math.cos(a) * 0.28, 1.72, -1.0 + Math.sin(a) * 0.28, 0.05, 0.05, 0.05, [1.9, 0.5, 0.35], 0);
     }
   });
 }
