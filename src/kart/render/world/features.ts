@@ -11,6 +11,7 @@
  * picture shows.
  */
 import { inStretch, type Surface, type TrackGeometry, type TrackTheme } from "../../track/geometry";
+import { GATE_DISTANCE, junctionGates } from "../../sim/terrain";
 
 /** A barrier's inner face stands this far beyond the road's edge unless a verge moves it: the sim's wall. */
 export const WALL_DISTANCE = 6;
@@ -98,16 +99,16 @@ export interface Features {
 }
 
 function fractionOf(track: TrackGeometry, i: number): number {
-  return (i * track.spacing) / track.length;
+  return track.samples[i]!.s / track.length;
 }
 
 /** Box-blurs a cyclic array over `reach` samples either side. */
-function blur(a: Float32Array, reach: number): Float32Array {
+function blur(a: Float32Array, reach: number, open = false): Float32Array {
   const n = a.length;
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     let sum = 0;
-    for (let k = -reach; k <= reach; k++) sum += a[(i + k + n) % n]!;
+    for (let k = -reach; k <= reach; k++) sum += a[open ? Math.max(0, Math.min(n - 1, i + k)) : (i + k + n) % n]!;
     out[i] = sum / (reach * 2 + 1);
   }
   return out;
@@ -148,8 +149,8 @@ export function analyseFeatures(track: TrackGeometry): Features {
   }
   // The edge opens and closes over about ten metres, not in one step.
   const reach = Math.max(1, Math.round(5 / track.spacing));
-  const left = blur(dropLeft, reach);
-  const right = blur(dropRight, reach);
+  const left = blur(dropLeft, reach, track.open);
+  const right = blur(dropRight, reach, track.open);
   let anyDrop = false;
   for (let i = 0; i < n; i++) if (left[i]! > 0.01 || right[i]! > 0.01) anyDrop = true;
 
@@ -164,14 +165,27 @@ export function analyseFeatures(track: TrackGeometry): Features {
 
   const hiddenLeft = new Uint8Array(n);
   const hiddenRight = new Uint8Array(n);
+  // Where a branch leaves or joins the road there is no barrier between the two: a kart goes from one to the other.
+  const gates = junctionGates(track);
   for (let i = 0; i < n; i++) {
+    if (gates.left[i]) {
+      wallLeft[i] = Math.max(wallLeft[i]!, GATE_DISTANCE);
+      hiddenLeft[i] = 1;
+    }
+    if (gates.right[i]) {
+      wallRight[i] = Math.max(wallRight[i]!, GATE_DISTANCE);
+      hiddenRight[i] = 1;
+    }
+  }
+  for (let i = 0; i < n && !track.open; i++) {
     const a = track.samples[i]!;
     for (const side of [-1, 1] as const) {
+      if ((side < 0 ? hiddenLeft : hiddenRight)[i]) continue;
       const wall = (side < 0 ? wallLeft : wallRight)[i]!;
       // The barrier's pieces stand from the wall's face out to two or three metres beyond it (a bank of snow is that deep).
       for (const beyond of [0.55, 1.2, 1.9, 2.6]) {
         const o = side * (a.width / 2 + wall + beyond);
-        const near = track.project(a.x - a.tz * o, a.z + a.tx * o);
+        const near = track.projectLoop(a.x - a.tz * o, a.z + a.tx * o);
         // Only a line that runs through another stretch's ground (the nearest road is a different stretch of the lap).
         if (Math.abs(track.delta(a.s, near.s)) <= 25) continue;
         // A wide verge's far barrier: wherever another stretch is the nearer road. An ordinary one: only where it stands inside

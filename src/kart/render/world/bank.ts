@@ -28,10 +28,15 @@ export class Bank {
   private readonly spacing: number;
   private readonly halfWidths: Float32Array;
   readonly any: boolean;
+  /** A branch road's samples start here (metres along the lap) and clamp at their ends. */
+  private readonly origin: number;
+  private readonly open: boolean;
 
   constructor(track: TrackGeometry) {
     const n = track.samples.length;
     this.spacing = track.spacing;
+    this.origin = track.origin;
+    this.open = track.open;
     this.roll = new Float32Array(n);
     this.halfWidths = Float32Array.from(track.samples, (s) => s.width / 2);
     const bank = track.def.bank ?? 0;
@@ -41,7 +46,7 @@ export class Bank {
     const reach = Math.max(1, Math.round(4 / track.spacing));
     for (let i = 0; i < n; i++) {
       let sum = 0;
-      if (bank !== 0) for (let k = -reach; k <= reach; k++) sum += track.samples[(i + k + n) % n]!.curvature;
+      if (bank !== 0) for (let k = -reach; k <= reach; k++) sum += track.samples[track.open ? Math.max(0, Math.min(n - 1, i + k)) : (i + k + n) % n]!.curvature;
       const roll = track.samples[i]!.bank + (sum / (reach * 2 + 1)) * bank;
       this.roll[i] = Math.max(-MAX_ROLL, Math.min(MAX_ROLL, roll));
     }
@@ -61,6 +66,12 @@ export class Bank {
   rollAt(s: number): number {
     if (!this.any) return 0;
     const n = this.roll.length;
+    if (this.open) {
+      const rel = s - this.origin;
+      const f = Math.max(0, Math.min(n - 1, rel / this.spacing));
+      const i = Math.floor(f);
+      return this.roll[i]! + (this.roll[Math.min(n - 1, i + 1)]! - this.roll[i]!) * (f - i);
+    }
     const f = s / this.spacing;
     const i = Math.floor(f);
     const u = f - i;
@@ -87,7 +98,7 @@ export class Bank {
   lift(s: number, offset: number): number {
     if (!this.any) return 0;
     const n = this.roll.length;
-    const i = ((Math.floor(s / this.spacing) % n) + n) % n;
+    const i = this.open ? Math.max(0, Math.min(n - 1, Math.floor((s - this.origin) / this.spacing))) : ((Math.floor(s / this.spacing) % n) + n) % n;
     const hw = this.halfWidths[i]!;
     const o = Math.max(-hw, Math.min(hw, offset));
     return -o * Math.tan(this.rollAt(s));

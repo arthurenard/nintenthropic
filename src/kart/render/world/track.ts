@@ -75,13 +75,18 @@ function surfaceStripes(kind: string): [Rgb, Rgb] | null {
   }
 }
 
-export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings, groundMetres = 64): TrackMeshes {
+export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings, groundMetres = 64, own?: Features): TrackMeshes {
   const n = track.samples.length;
   const spacing = track.spacing;
   const samples = track.samples;
-  const features = terrain.features;
+  // A branch road is built by the same code, open at both ends: its own features, no start line, no bunting.
+  const features = own ?? terrain.features;
+  const open = track.open;
+  /** Metres of road between samples (a branch's samples are spaced in the lap's metres). */
+  const realStep = spacing * track.stretch;
   const bank = Bank.of(track);
-  const S = (i: number): TrackSample => samples[((i % n) + n) % n]!;
+  const wrapI = open ? (i: number) => Math.max(0, Math.min(n - 1, i)) : (i: number) => ((i % n) + n) % n;
+  const S = (i: number): TrackSample => samples[wrapI(i)]!;
   /** A point `off` metres right of sample i's centre, lifted by dy, following the bank. */
   const P = (i: number, off: number, dy = 0): V3 => {
     const a = S(i);
@@ -98,10 +103,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
   /** The ground's uv of four corners, as quad() wants them. */
   const groundUv = (...p: V3[]): number[] => p.flatMap((q) => [q[0] / groundMetres, q[2] / groundMetres]);
-  const chunkOf = (i: number) => Math.min(chunks - 1, Math.floor(((i % n) + n) % n / CHUNK));
+  const chunkOf = (i: number) => Math.min(chunks - 1, Math.floor(wrapI(i) / CHUNK));
   const glows: Glow[] = [];
   const additive = new MeshBuilder();
-  const wrapI = (i: number) => ((i % n) + n) % n;
   const ctx: TrackBuild = {
     track,
     style,
@@ -135,8 +139,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   /** The road's up at sample i: tipped back on a climb, forward on a descent, and sideways by its lean. */
   const roadUp = (i: number): V3 => {
     const a = S(i);
-    const grade = (S(i + 1).y - S(i - 1).y) / (2 * spacing);
-    const lean = Math.tan(bank.rollAt(i * spacing));
+    const grade = (S(i + 1).y - S(i - 1).y) / (2 * realStep);
+    const lean = Math.tan(bank.rollAt(a.s));
     const x = -(grade * a.tx + lean * a.tz);
     const z = lean * a.tx - grade * a.tz;
     const len = Math.hypot(x, 1, z);
@@ -152,8 +156,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const b = S(i + 1);
     const hw0 = a.width / 2;
     const hw1 = b.width / 2;
-    const v0 = (i * spacing) / ROAD_TILE;
-    const v1 = ((i + 1) * spacing) / ROAD_TILE;
+    const v0 = (i * realStep) / ROAD_TILE;
+    const v1 = ((i + 1) * realStep) / ROAD_TILE;
     // Four strips across, so a banked road is not a single tilted plane through its middle.
     const cols = bank.any ? 4 : 1;
     for (let k = 0; k < cols; k++) {
@@ -366,10 +370,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
 
   // ── Start line and gantry at s = 0 ───────────────────────────────────────
-  const g0 = track.at(0);
   const startLights: V3[] = [];
   let banner = { x: 0, y: 0, z: 0, yaw: 0, width: 1, height: 1 };
-  {
+  if (!open) {
+    const g0 = track.at(0);
     const bd = deco[0]!;
     const hw = g0.width / 2;
     const cols = Math.max(8, Math.round(g0.width / 0.9 / 2) * 2);
@@ -444,7 +448,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
 
   // ── Bunting along the start straight, by day ─────────────────────────────
-  if (style.bunting) {
+  if (style.bunting && !open) {
     const flagColours = ["#ff453a", "#ffd60a", "#0a84ff", "#30d158", "#ffffff", "#ff9f0a", "#bf5af2"].map(rgb);
     const pole = rgb("#d8dce6");
     const string = rgb("#2b2e37");
@@ -495,9 +499,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const poolPos: number[] = [];
     const poolCol: number[] = [];
     const lampEvery = 46;
-    const count = Math.floor(track.length / lampEvery);
+    const lapSpan = open ? (n - 1) * spacing : track.length;
+    const count = Math.floor(lapSpan / lampEvery);
     for (let k = 0; k < count; k++) {
-      const s = (k + 0.5) * (track.length / count);
+      const s = (k + 0.5) * (lapSpan / count);
       const i = Math.round(s / spacing);
       const a = S(i);
       const side = k % 2 === 0 ? 1 : -1;
