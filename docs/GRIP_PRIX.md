@@ -1639,8 +1639,7 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 
    *Design note (round two).* The pass has weather, and the weather is on a
    timer. In the ice cave three icicles let go one after another down the
-   cave (each shakes, and its shadow reddens, a second before it drops; none
-   hangs in your line twice running), and out of the cave, on the in-run
+   cave (each shakes, and its shadow reddens, a second before it drops), and out of the cave, on the in-run
    to the ski-jump, two big snowballs thunder down, one each side in turn
    (an avalanche you read and slip between, then straight into the jump).
    The lake's kicker is the first wow moment, the corkscrew the second, the

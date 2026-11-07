@@ -210,7 +210,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
 
   // Parts: a unit cube, tinted per instance. Up to six per piece (chain, beam, two posts, lamp, rails).
   const pieceDefs = all.flatMap((k) => k.defs);
-  const partCap = Math.max(1, pieceDefs.length * 6);
+  const partCap = Math.max(1, pieceDefs.length * 8);
   const cube1 = new MeshBuilder();
   cube1.box(0, 0, 0, 1, 1, 1, [1, 1, 1]);
   const cubeGeo = cube1.build();
@@ -278,6 +278,11 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
   const SLEEPER = new Color(0.22, 0.13, 0.07);
   const POST = new Color(0.12, 0.12, 0.15);
   const ICE = new Color(0.55, 0.78, 0.95);
+  const TIMBER = new Color(0.42, 0.26, 0.14);
+  const CANDY = new Color(1.0, 0.86, 0.86);
+  const GOLD = new Color(1.6, 1.15, 0.3);
+  /** Things drawn once for a group of pieces (a gantry over a row of crushers, a sweeper's hub): this frame's keys. */
+  const seen = new Set<number>();
   const tint = new Color();
   const shade = new Color();
 
@@ -301,6 +306,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
     update(time) {
       partN = 0;
       shadowN = 0;
+      seen.clear();
       for (const kind of all) {
         const mesh = kind.mesh;
         for (let i = 0; i < kind.defs.length; i++) {
@@ -323,10 +329,27 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               x += _a.x * rattle;
               z += _a.z * rattle;
               yaw += rattle * 0.05;
-              // The piston or the rock above it, up to the ceiling or sky.
-              const up = roadY + crushTop(def) + def.radius * 6 + 14;
-              if (def.kind === "icicle") rod(x, y + 4.5 * kind.scale, z, x, y + 7 * kind.scale, z, 2.2 * kind.scale, ICE);
-              else rod(x, y + (def.kind === "mallet" ? 5.6 : 3.4) * kind.scale, z, x, up, z, 0.9 * kind.scale, IRON);
+              if (def.kind === "icicle") {
+                // Hangs from the cave's roof: only the root of it shows.
+                rod(x, y + 4.5 * kind.scale, z, x, y + 7 * kind.scale, z, 2.2 * kind.scale, ICE);
+              } else {
+                // A piston up to a gantry across the road (one for each row of them), on posts beyond the barrier.
+                const centre = def.at * track.length;
+                const beamY = roadY + crushTop(def) + 4.4 * kind.scale + 2.5;
+                rod(x, y + (def.kind === "mallet" ? 5.6 : 3.4) * kind.scale, z, x, beamY, z, 0.9 * kind.scale, IRON);
+                if (!seen.has(centre)) {
+                  seen.add(centre);
+                  const h = track.heading(centre);
+                  const half = track.at(centre).width / 2 + 8;
+                  const gx = Math.cos(h);
+                  const gz = -Math.sin(h);
+                  const c = track.point(centre, 0);
+                  const wood = def.kind === "mallet" ? CANDY : TIMBER;
+                  rod(c.x - gx * half, beamY + 0.5, c.z - gz * half, c.x + gx * half, beamY + 0.5, c.z + gz * half, 1.1, wood);
+                  rod(c.x - gx * half, beamY + 0.5, c.z - gz * half, c.x - gx * half, roadY - 2, c.z - gz * half, 1.2, wood);
+                  rod(c.x + gx * half, beamY + 0.5, c.z + gz * half, c.x + gx * half, roadY - 2, c.z + gz * half, 1.2, wood);
+                }
+              }
               blobShadow(x, roadY, z, def.radius * (1.8 + 1.2 * Math.min(1, pose.warn)) * (pose.y > 0.5 ? 1 : 1.05), shade.setRGB(0.03 + 0.7 * pose.warn * pose.warn, 0.04, 0.09 * (1 - pose.warn)));
               break;
             }
@@ -375,9 +398,15 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               break;
             }
             case "orbit": {
-              // The pole from the hub to the ball.
+              // The pole from the hub to the ball, and (once for the whole sweeper) a post at the hub.
               const c = track.point(def.at * track.length, def.offset ?? 0);
-              rod(c.x, roadY + 0.6, c.z, x, roadY + 1.3 * kind.scale, z, 0.34, IRON);
+              const hubKey = def.at * 1e4 + (def.offset ?? 0);
+              rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, 0.5, def.kind === "arm-ball" ? CANDY : IRON);
+              if (!seen.has(hubKey)) {
+                seen.add(hubKey);
+                rod(c.x, roadY, c.z, c.x, roadY + 5.5, c.z, 1.1, def.kind === "arm-ball" ? CANDY : IRON);
+                rod(c.x, roadY + 5.5, c.z, c.x, roadY + 6.3, c.z, 1.6, GOLD);
+              }
               blobShadow(x, roadY, z, def.radius * 2.2, shade.setRGB(0.03, 0.04, 0.09));
               break;
             }
