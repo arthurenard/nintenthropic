@@ -251,6 +251,62 @@ test("the host's lobby, Grand Prix and Mirror included, is never wider than the 
   }
 });
 
+test("Party Rules: the host deals a card, the race says it in a corner for a few seconds, the lobby remembers it", async ({ page }, info) => {
+  await practiceToLobby(page);
+  // The picker: Normal first, the cards, Shuffle and Today's Card; each says what it does.
+  const rules = page.getByRole("radiogroup", { name: "Rules" });
+  await expect(rules.getByRole("radio")).toHaveCount(12);
+  await expect(rules.getByRole("radio", { name: "Normal" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("radio", { name: "Today’s Card" }).click();
+  await expect(page.locator("#foot-rules")).toContainText("Today’s card is");
+  await page.getByRole("radio", { name: "Ice Day" }).click();
+  await expect(page.locator("#foot-rules")).toContainText("slippery");
+  await shot(page, info, "rules-lobby", 300);
+  // Nothing wider than the screen with the picker in.
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+
+  await start(page).click();
+  await expect(page.locator("canvas.race-canvas")).toBeVisible();
+  await expect.poll(async () => (await state(page)).lobby?.card, { timeout: 30_000 }).toBe("ice");
+  // The loading screen names the card (it may already be gone on a quick machine), the corner chip names it once the world is there.
+  await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
+  const chip = page.locator("#rule-chip");
+  await expect(chip).toBeVisible();
+  await expect(chip).toContainText("Ice Day");
+  await expect(chip).toContainText("slippery as ice");
+  await shot(page, info, "rules-race-chip", 300);
+  // It is a corner note, not a fixture: gone a few seconds into the race.
+  await expect(chip).toBeHidden({ timeout: 30_000 });
+
+  // The next room begins with the same card chosen.
+  await open(page);
+  await page.getByRole("button", { name: "Practice" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await chooseDrivers(page);
+  await pastHowTo(page);
+  await expect(heading(page, "Ready to Race")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Ice Day" })).toHaveAttribute("aria-checked", "true");
+});
+
+for (const [card, name] of [
+  ["bigheads", "Big Heads"],
+  ["tiny", "Tiny Karts"],
+] as const) {
+  test(`Party Rules: ${name} race, the picture at the start with the corner note`, async ({ page }, info) => {
+    await practiceToLobby(page);
+    await page.getByRole("radio", { name }).click();
+    await start(page).click();
+    await expect(page.locator("canvas.race-canvas")).toBeVisible();
+    await expect(page.locator("#race-loading")).toBeHidden({ timeout: 30_000 });
+    await expect.poll(async () => (await state(page)).lobby?.card).toBe(card);
+    await expect(page.locator("#rule-chip")).toContainText(name);
+    // The grid, the lights counting down: the drivers and karts at their size for the card.
+    await shot(page, info, `rules-${card}-grid`, 600);
+    await expect.poll(() => phase(page), { timeout: 30_000 }).toBe("racing");
+    await shot(page, info, `rules-${card}-go`, 1500);
+  });
+}
+
 test("on a phone on its side the pause sheet shows all its buttons", async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await practiceRace(page);

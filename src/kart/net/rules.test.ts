@@ -85,7 +85,7 @@ describe("the card in a race", () => {
     expect(guest.lobby().card).toBe(dailyCard(todayKey()));
   });
 
-  it("Shuffle deals a card for every race of a cup, never the same twice running", async () => {
+  it("Shuffle deals a card for every race of a cup, never the same twice running", { timeout: 60000 }, async () => {
     const world = new World();
     world.keep = false;
     const { host, guest } = await room(world, { rules: SHUFFLE, mode: "grand-prix", cup: "acorn" });

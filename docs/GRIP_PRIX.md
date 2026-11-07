@@ -180,6 +180,67 @@ or a cart with its load stands the way the original does and what was clear of
 the road on the original is clear on its mirror. The secret track is in
 the host's track list (single races) once the host's device has opened it.
 
+### Party Rules
+
+A single ruleset gets stale; a twist makes the same tracks feel new at almost
+no cost, and Today's Card gives a reason to open the link each day. The host's
+lobby has a **Rules** row of chips (`LobbySettings.rules`, in `app/lobby.ts`,
+built from `CHOICES` in `src/kart/rules.ts`): **Normal** (no twist, the
+default), nine cards, **Shuffle** (a card for every race) and **Today's
+Card** (one card for the whole date). Guests see the choice read-only, and
+the lobby's waiting line names it. The host's last choice is kept
+(`handy.kart.rules.v1`, `loadRules`/`saveRules` in `app/prefs.ts`) and given
+to the next room the host opens; an unknown or damaged value reads as Normal.
+
+The cards are data, in `rules.ts` (`CARDS`, each a name, a one-line
+explanation and a `RuleEffects`: multipliers, all 1 for "as usual"):
+
+| Card | What changes | Where it is read |
+| --- | --- | --- |
+| Tiny Karts | size 0.6 (kart and driver), turns 1.12x quicker | render (`KartActor.size`), sim (`KartState.size`: two karts touch when their smaller circles do; `turn` on the wheel and the drift's yaw) |
+| Big Heads | driver's head 1.8x | render (`KartPose.headScale`, `Driver.update`; the head rides a little higher) |
+| Heavy Day / Feather Day | every kart drives as a heavy / light, whoever its driver is | sim (`modsFor` in `kart.ts` picks the weight class) |
+| Ice Day | the road is as slippery as ice (the verge, boost strips and the track's own patches keep their ground); bots treat it as ice (`onIce`: no drifting, cuts or leaning) | sim (`groundOf` in `kart.ts`) |
+| Item Frenzy | boxes are back after 0.5 s (3 s usually), the strongest items (`STRONG_ITEMS`) 3x likelier | sim (`items.ts`: `boxRespawn`, `drawItem`) |
+| Pucks Only | boxes give only a puck or a three-pack, by the place's own odds | sim (`items.ts` `drawItem`) |
+| Turbo Day | top speed and pick-up +15%; the speed cap rises with it | sim (`modsFor`, `capSpeed`) |
+| Reverse Grid | a cup's last place starts on pole; in a single race (and a cup's first) the sharpest bots lead and the players start at the back, last slot first | net (`buildSetup`'s `rule`, `GrandPrixRun.grid(players, reverse)`) |
+
+**Mirror Madness** (the track flips every lap) is not a card: a track's
+geometry, plan, landmarks and every guest's copy are built once for a race, so
+flipping them mid-race is neither cheap nor safe. Mirror Mode stays the switch.
+
+**Dealing.** The host turns the choice into a card as each race begins
+(`dealCard(choice, seed, day, last)`): a card is itself; Shuffle draws from the
+race's seed and never the card just played; Today's Card reads only the date
+(`dailyCard(todayKey())`, the UTC calendar date hashed by FNV-1a, so the whole
+world has the same card on a date and the card changes from day to day). A race
+begun again from the pause keeps its card; Play Again from the results deals
+anew. A cup runs on the choice it began with, so Shuffle deals each of its
+four races a card. Only the card's id crosses the wire: `StartInfo.card`,
+`LobbyState.card` (the card of the race being run or last run, for the
+results and standings) and `LobbySettings.rules` (the choice). A guest builds
+its sim with `RaceSetup.rule` and the sim names it in `RaceView.rule`, which
+the picture reads; a card an older or newer build does not know changes
+nothing. Everything a card does is a function of the setup and the race's own
+state, so a guest's copy and a snapshot restore replay the host's race
+exactly (`sim/rules.test.ts`).
+
+**Saying it.** The loading screen shows the card's name and line under the
+track's name; for the first seven seconds of the race (the countdown
+included) a note with the same words sits at the foot of the screen
+(`#rule-chip`, `RaceScreen.ruleChip`), on every device, a phone that is only a
+wheel included; the results' eyebrow names the card ("Meadow Loop · 1 lap ·
+Ice Day") and the standings say "Points after Meadow Loop, raced under Ice
+Day."
+
+**Tests.** `rules.test.ts` (the cards, dealing, the date), `sim/rules.test.ts`
+(each effect, the replay, and six bots finishing a race under each card on
+Meadow Loop and Harbour Lights), `net/rules.test.ts` (the choice and the card
+over the wire, Shuffle through a cup, Reverse Grid), `app/rules.test.ts` (the
+kept choice and the words); e2e `race-shell.spec.ts` picks a card, sees it on
+the race and finds it remembered.
+
 ## Where people play
 
 A **room** has up to four players across any number of devices. One device
