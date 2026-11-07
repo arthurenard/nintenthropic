@@ -1,13 +1,16 @@
 /**
- * Turns a piece into audio: the score is played by the band, mixed with its
- * effects, folded into a seamless loop and set to the music's loudness. Pure
- * DSP on Float32Arrays (no Web Audio), so it runs in a Worker, on the main
- * thread in slices, and in Node under Vitest.
+ * Turns a piece into audio: the score is played by the band, each part is
+ * given its own channel strip (filters, EQ, drive, rotary or tremolo, chorus,
+ * compression, the kick's pump), the strips are mixed with the room and the
+ * echo, folded into a seamless loop, glued by a bus compressor, set to the
+ * music's loudness and held under a look-ahead limiter. Pure DSP on
+ * Float32Arrays (no Web Audio), so it runs in a Worker, on the main thread in
+ * slices, and in Node under Vitest.
  *
- * The work is cut into *stages* (one per part, then the effects, then the
- * master), so the caller can run them all at once in a Worker or one at a
- * time between frames on the main thread, never holding a frame longer than
- * one part's worth of synthesis.
+ * The work is cut into *stages* (one per part, then the effects, the master
+ * and the extras), so the caller can run them all at once in a Worker or one
+ * at a time between frames on the main thread, never holding a frame longer
+ * than one part's worth of synthesis.
  *
  * Repeated notes are rendered once and reused: a bar of a groove played
  * thirty times costs one bar of synthesis. A few variants per note are kept
@@ -16,15 +19,23 @@
 import { Rng, hashSeed } from "../../../audio/dsp/rng";
 import { biquad } from "../../../audio/dsp/filters";
 import { type DrumKind, type Voice, drumHit } from "../../../audio/dsp/voices";
-import { chorus, fold, panGains, peakOf, pingPong, removeMean, reverb, softLimit, stereoRms } from "./fx";
+import { cometSpec, stingerSpec } from "./extras";
+import { chorus, fold, panGains, peakOf, pingPong, removeMean, reverb, stereoRms } from "./fx";
 import { INSTRUMENTS, isInstrument } from "./instruments";
+import { kitHit } from "./kit";
+import { compress, limit, pumpEnvelope, rotary, saturate, tremolo, widen } from "./mix";
 import { type CompileOptions, type PieceSpec, type Score, type ScoreBar, compile } from "./score";
+import { drive } from "./synth";
 import { midiToHz } from "./theory";
 
 /** The music's loudness over the whole loop, dBFS RMS (both channels). */
 export const MUSIC_RMS_DB = -18;
 /** No sample of a rendered piece is louder than this, dBFS. */
 export const MUSIC_PEAK_DB = -1;
+/** How far over its loudness a piece's peaks are held, dB. */
+export const CREST_DB = 12;
+/** A one-shot's loudest sample, dBFS. */
+export const ONESHOT_PEAK_DB = -3;
 /** The rate music is rendered at by default, and the lowest a race uses: a race renders at the device's own rate (44.1 or 48 kHz) so playing it needs no resampling. */
 export const MUSIC_SAMPLE_RATE = 32000;
 
@@ -32,6 +43,15 @@ export interface MusicRenderOptions extends CompileOptions {
   sampleRate?: number;
   /** Seed for the voices' randomness; the same seed renders the same samples. */
   seed?: number;
+  /** Also make the invincibility layer and the final-lap stinger a race theme has (default true; the extras themselves are made without). */
+  extras?: boolean;
+}
+
+/** A short extra buffer that rides on a piece. */
+export interface ExtraAudio {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
 }
 
 export interface RenderedMusic {
@@ -39,7 +59,7 @@ export interface RenderedMusic {
   sampleRate: number;
   left: Float32Array;
   right: Float32Array;
-  /** The loop's length in samples (left.length). */
+  /** The buffer's length in samples (left.length): the loop's length, or a one-shot's whole length. */
   loopSamples: number;
   /** Seconds. */
   duration: number;
@@ -48,6 +68,12 @@ export interface RenderedMusic {
   tempoScale: number;
   transpose: number;
   stats: RenderStats;
+  /** False for a one-shot (a jingle, a stinger): play it once. */
+  loop?: boolean;
+  /** A race theme's invincibility layer: one bar that loops over the music while a comet burns. */
+  comet?: ExtraAudio;
+  /** A race theme's final-lap version: the fanfare that plays as the music lifts. */
+  stinger?: ExtraAudio;
 }
 
 export interface RenderStats {
@@ -58,6 +84,8 @@ export interface RenderStats {
   /** Each part's loudness relative to the whole mix, dB (before the master gain: the balance). */
   parts: Record<string, number>;
   warnings: string[];
+  /** The deepest the limiter had to pull the music down, dB. */
+  limiterDb?: number;
 }
 
 /** Parts are balanced against this: a part at level 0 has an active RMS of this many dBFS before the master. */
@@ -97,9 +125,12 @@ export class PieceRenderer {
   private mix: Mix | null = null;
   private result: RenderedMusic | null = null;
   private ms = 0;
+  private limiterDb = 0;
   private readonly partLevels: Record<string, number> = {};
   private readonly cache = new Map<string, Float32Array[]>();
   private readonly counters = new Map<string, number>();
+  private readonly pumps = new Map<number, Float32Array>();
+  private kickTimes: number[] | null = null;
 
   constructor(spec: PieceSpec, private readonly options: MusicRenderOptions = {}) {
     this.spec = spec;
@@ -120,6 +151,8 @@ export class PieceRenderer {
     for (const name of parts) stages.push(() => this.renderPart(name));
     stages.push(() => this.effects());
     stages.push(() => this.master());
+    stages.push(() => this.limitBus());
+    if (this.options.extras !== false && this.spec.race) stages.push(() => this.extras());
     return stages;
   }
 
@@ -172,6 +205,18 @@ export class PieceRenderer {
     return list[count % list.length]!;
   }
 
+  /** The pump of the piece's kicks at a depth, made once. */
+  private pump(depth: number): Float32Array {
+    const key = Math.round(depth * 100);
+    let env = this.pumps.get(key);
+    if (!env) {
+      if (!this.kickTimes) this.kickTimes = this.score.hits.filter((h) => h.kind.startsWith("kick")).map((h) => h.time);
+      env = pumpEnvelope(this.total, this.sr, this.kickTimes, depth);
+      this.pumps.set(key, env);
+    }
+    return env;
+  }
+
   private renderPart(name: string): void {
     this.timed(() => {
       const mix = this.mix!;
@@ -183,10 +228,11 @@ export class PieceRenderer {
       const [gl, gr] = panGains(rack.pan ?? 0);
       const isDrums = rack.inst === "drums";
       if (isDrums) {
+        const kit = rack.kit ?? "pop";
         for (const hit of this.score.hits) {
           if (hit.part !== name) continue;
           const vel = Math.round(hit.vel * 8) / 8;
-          const buf = this.voiceFor("drums", `${hit.kind}|${vel}`, () => drumHit(hit.kind, sr, this.rng.fork(`${hit.kind}${this.counters.size}`), vel));
+          const buf = this.voiceFor(`drums-${kit}`, `${hit.kind}|${vel}`, () => kitHit(kit, hit.kind, sr, this.rng.fork(`${hit.kind}${this.counters.size}`), vel));
           const [dl, dr] = panGains(DRUM_PAN[hit.kind] ?? 0);
           addAt(partL, buf, Math.round(hit.time * sr), dl);
           addAt(partR, buf, Math.round(hit.time * sr), dr);
@@ -207,30 +253,54 @@ export class PieceRenderer {
           addAt(partR, buf, at, gr);
         }
       }
+
+      // The channel strip: filters, EQ, drive, the movement of a rotary or a tremolo, the thickness of a chorus.
+      if (rack.highpass) {
+        biquad(partL, sr, "highpass", rack.highpass, 0.707);
+        biquad(partR, sr, "highpass", rack.highpass, 0.707);
+      }
       if (rack.lowpass) {
         biquad(partL, sr, "lowpass", rack.lowpass, 0.707);
         biquad(partR, sr, "lowpass", rack.lowpass, 0.707);
       }
+      for (const [f, q, db] of rack.eq ?? []) {
+        biquad(partL, sr, "peak", f, q, db);
+        biquad(partR, sr, "peak", f, q, db);
+      }
+      if (rack.drive && rack.drive > 1) {
+        drive(partL, rack.drive);
+        drive(partR, rack.drive);
+      }
+      if (rack.rotary) rotary(partL, partR, sr, rack.rotary.rate, rack.rotary.depth);
+      if (rack.tremolo) tremolo(partL, partR, sr, rack.tremolo.rate, rack.tremolo.depth, rack.tremolo.pan);
       if (rack.chorus) chorus(partL, partR, sr, rack.chorus);
+      if (rack.width !== undefined && rack.width !== 1) widen(partL, partR, rack.width);
 
       // Balance by loudness, not by whatever level an instrument happens to
       // synthesise at: the part is set so its *active* RMS (the stretches where
       // it plays) sits at the rack's level below the reference.
       const active = activeRms(partL, partR, sr);
       const gain = active > 1e-9 ? Math.pow(10, (REFERENCE_DB + rack.level) / 20) / active : 0;
+      for (let i = 0; i < partL.length; i++) {
+        partL[i]! *= gain;
+        partR[i]! *= gain;
+      }
+      if (rack.comp) compress(partL, partR, sr, rack.comp);
+      const env = rack.duck ? this.pump(rack.duck) : null;
       const { dryL, dryR, revSend, delSend } = mix;
-      const rev = (rack.reverb ?? 0) * gain;
-      const del = (rack.delay ?? 0) * gain;
+      const rev = rack.reverb ?? 0;
+      const del = rack.delay ?? 0;
       let sum = 0;
       for (let i = 0; i < partL.length; i++) {
-        const l = partL[i]!;
-        const r = partR[i]!;
-        dryL[i]! += gain * l;
-        dryR[i]! += gain * r;
+        const e = env ? env[i]! : 1;
+        const l = partL[i]! * e;
+        const r = partR[i]! * e;
+        dryL[i]! += l;
+        dryR[i]! += r;
         const m = 0.5 * (l + r);
         if (rev > 0) revSend[i]! += rev * m;
         if (del > 0) delSend[i]! += del * m;
-        if (i < this.loopSamples) sum += gain * gain * (l * l + r * r);
+        if (i < this.loopSamples) sum += l * l + r * r;
       }
       this.partLevels[name] = sum / (2 * this.loopSamples);
     });
@@ -244,7 +314,7 @@ export class PieceRenderer {
       const sr = this.sr;
       const n = this.total;
       if (revSend.some((v) => v !== 0)) {
-        const [l, r] = reverb(revSend, sr, this.rng.fork("reverb"), fx.reverb.t60, fx.reverb.size, 0.5);
+        const [l, r] = reverb(revSend, sr, this.rng.fork("reverb"), fx.reverb.t60, fx.reverb.size, 0.5, fx.reverb.predelay, fx.reverb.damping);
         const k = fx.reverb.mix;
         for (let i = 0; i < Math.min(n, l.length); i++) {
           dryL[i]! += k * l[i]!;
@@ -274,33 +344,93 @@ export class PieceRenderer {
   private master(): void {
     this.timed(() => {
       const mix = this.mix!;
+      const sr = this.sr;
       const N = this.loopSamples;
-      const left = fold(mix.dryL, N);
-      const right = fold(mix.dryR, N);
-      if (this.extraL && this.extraR) {
-        for (let i = 0; i < this.extraL.length; i++) {
-          left[(this.total + i) % N]! += this.extraGain * this.extraL[i]!;
-          right[(this.total + i) % N]! += this.extraGain * this.extraR[i]!;
+      const oneShot = !!this.spec.oneShot;
+      const m = this.spec.fx.master ?? {};
+      // The bus, before it is folded: a touch of air, the stereo field opened a little.
+      biquad(mix.dryL, sr, "highshelf", 9000, 0.7, m.air ?? 1.5);
+      biquad(mix.dryR, sr, "highshelf", 9000, 0.7, m.air ?? 1.5);
+      widen(mix.dryL, mix.dryR, m.width ?? 1.12);
+      let left: Float32Array;
+      let right: Float32Array;
+      if (oneShot) {
+        left = mix.dryL.slice(0, this.total);
+        right = mix.dryR.slice(0, this.total);
+        const fadeN = Math.round(0.4 * sr);
+        for (let i = 0; i < fadeN; i++) {
+          const g = i / fadeN;
+          left[left.length - 1 - i]! *= g;
+          right[right.length - 1 - i]! *= g;
         }
+      } else {
+        left = fold(mix.dryL, N);
+        right = fold(mix.dryR, N);
+        if (this.extraL && this.extraR) {
+          for (let i = 0; i < this.extraL.length; i++) {
+            left[(this.total + i) % N]! += this.extraGain * this.extraL[i]!;
+            right[(this.total + i) % N]! += this.extraGain * this.extraR[i]!;
+          }
+        }
+        removeMean(left);
+        removeMean(right);
       }
-      removeMean(left);
-      removeMean(right);
-      // To the music's loudness, then limit the peaks and, since limiting
-      // lowers the loudness a little, once more.
-      const ceiling = Math.pow(10, MUSIC_PEAK_DB / 20);
-      for (let pass = 0; pass < 3; pass++) {
+      const length = left.length;
+      const scaleTo = (db: number): number => {
         const rms = stereoRms(left, right);
-        const gain = rms > 0 ? Math.pow(10, MUSIC_RMS_DB / 20) / rms : 1;
-        for (let i = 0; i < N; i++) {
-          left[i]! *= gain;
-          right[i]! *= gain;
+        const g = rms > 0 ? Math.pow(10, db / 20) / rms : 1;
+        for (let i = 0; i < length; i++) {
+          left[i]! *= g;
+          right[i]! *= g;
         }
-        if (pass === 0) {
-          for (const k of Object.keys(this.partLevels)) this.partLevels[k] = this.partLevels[k]! * gain * gain;
+        return g;
+      };
+      const target = MUSIC_RMS_DB + Math.min(2, Math.max(-3, m.loud ?? 0));
+      const first = scaleTo(oneShot ? -16 : target);
+      for (const k of Object.keys(this.partLevels)) this.partLevels[k] = this.partLevels[k]! * first * first;
+      // Glue: the bus compressor takes the peaks of the loudest moments down together, and a breath of saturation rounds them.
+      compress(left, right, sr, { threshold: m.glue ?? -21, ratio: 2.8, attack: 0.006, release: 0.14, knee: 8 }, !oneShot);
+      saturate(left, 1.5);
+      saturate(right, 1.5);
+      this.bus = { left, right, length, target, scaleTo, sr, oneShot };
+    });
+  }
+
+  private bus: { left: Float32Array; right: Float32Array; length: number; target: number; scaleTo: (db: number) => number; sr: number; oneShot: boolean } | null = null;
+
+  /** The second half of the master: the limiter (the heaviest single stretch of work, so a stage of its own) and the numbers. */
+  private limitBus(): void {
+    this.timed(() => {
+      const { left, right, length, target, scaleTo, sr, oneShot } = this.bus!;
+      this.bus = null;
+      const ceilingDb = oneShot ? ONESHOT_PEAK_DB : MUSIC_PEAK_DB;
+      const ceiling = Math.pow(10, ceilingDb / 20);
+      if (oneShot) {
+        const peak = peakOf(left, right);
+        const g = peak > 0 ? ceiling / peak : 1;
+        for (let i = 0; i < length; i++) {
+          left[i]! *= g;
+          right[i]! *= g;
         }
-        if (peakOf(left, right) <= ceiling) break;
-        softLimit(left, ceiling * 0.75, ceiling * 0.995);
-        softLimit(right, ceiling * 0.75, ceiling * 0.995);
+      } else {
+        // Back to the music's loudness, the look-ahead limiter over the peaks, and once more since limiting lowers the loudness a little.
+        for (let pass = 0; pass < 5; pass++) {
+          scaleTo(target);
+          // The limiter holds the peaks a set height over the loudness (a produced track's 12 dB, not an open recording's 17): loud, dense, with the transients kept.
+          this.limiterDb = Math.max(this.limiterDb, limit(left, right, sr, Math.pow(10, (target + CREST_DB) / 20), 0.004, 0.09));
+          const err = 20 * Math.log10(stereoRms(left, right)) - target;
+          if (Math.abs(err) < 0.12) break;
+        }
+        // (The saturation leans the wave a hair to one side: the mean is taken out again.)
+        removeMean(left);
+        removeMean(right);
+        // (The limiter's last smoothing leaves nothing over, but a floating-point rounding is cut.)
+        for (let i = 0; i < length; i++) {
+          if (left[i]! > ceiling) left[i] = ceiling;
+          else if (left[i]! < -ceiling) left[i] = -ceiling;
+          if (right[i]! > ceiling) right[i] = ceiling;
+          else if (right[i]! < -ceiling) right[i] = -ceiling;
+        }
       }
       const rmsDb = 20 * Math.log10(stereoRms(left, right));
       const peakDb = 20 * Math.log10(peakOf(left, right));
@@ -308,18 +438,39 @@ export class PieceRenderer {
       for (const [k, v] of Object.entries(this.partLevels)) parts[k] = 10 * Math.log10(Math.max(v, 1e-12)) - rmsDb;
       this.mix = null;
       this.cache.clear();
+      this.pumps.clear();
       this.result = {
         id: this.spec.id,
-        sampleRate: this.sr,
+        sampleRate: sr,
         left,
         right,
-        loopSamples: N,
-        duration: this.score.duration,
+        loopSamples: length,
+        duration: oneShot ? length / sr : this.score.duration,
         bars: this.score.bars,
         tempoScale: this.score.tempoScale,
         transpose: this.score.transpose,
-        stats: { rmsDb, peakDb, renderMs: this.ms, parts, warnings: this.score.warnings },
+        loop: !oneShot,
+        stats: { rmsDb, peakDb, renderMs: this.ms, parts, warnings: this.score.warnings, limiterDb: this.limiterDb },
       };
+    });
+  }
+
+  /** A race theme's invincibility layer, and in its final-lap version the stinger. */
+  private extras(): void {
+    this.timed(() => {
+      const result = this.result!;
+      const sr = this.sr;
+      const level = Math.pow(10, -9 / 20);
+      const comet = new PieceRenderer(cometSpec(this.spec), { sampleRate: sr, tempoScale: this.score.tempoScale, extras: false }).run();
+      for (let i = 0; i < comet.left.length; i++) {
+        comet.left[i]! *= level;
+        comet.right[i]! *= level;
+      }
+      result.comet = { left: comet.left, right: comet.right, sampleRate: sr };
+      if (this.score.transpose > 0) {
+        const sting = new PieceRenderer(stingerSpec(this.spec), { sampleRate: sr, tempoScale: this.score.tempoScale, transpose: this.score.transpose, extras: false }).run();
+        result.stinger = { left: sting.left, right: sting.right, sampleRate: sr };
+      }
     });
   }
 }
@@ -338,7 +489,8 @@ export function activeRms(left: Float32Array, right: Float32Array, sr: number): 
     for (let i = s; i < end; i++) p += left[i]! * left[i]! + right[i]! * right[i]!;
     powers.push(p / (2 * (end - s)));
   }
-  const max = Math.max(...powers);
+  let max = 0;
+  for (const p of powers) if (p > max) max = p;
   if (max <= 0) return 0;
   let sum = 0;
   let count = 0;

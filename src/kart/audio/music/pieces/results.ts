@@ -51,16 +51,20 @@ export const resultsWin: PieceSpec = {
   bpm: 126,
   swing: 0.08,
   rack: {
-    bass: { inst: "bass-pop", level: -2, pan: -0.1 },
-    chords: { inst: "organ", level: -3.5, pan: 0.3, reverb: 0.15, chorus: 0.2 },
-    strings: { inst: "strings", level: -5, pan: -0.1, reverb: 0.3, chorus: 0.35 },
-    lead: { inst: "brass", level: 0, reverb: 0.25, delay: 0.1 },
-    low: { inst: "brass", level: -4, pan: -0.15, reverb: 0.2 },
-    glock: { inst: "glock", level: -5, pan: -0.3, reverb: 0.35, delay: 0.3 },
+    bass: { inst: "slap", level: -2, pan: -0.1, highpass: 40, duck: 0.12, comp: { threshold: -16, ratio: 3, attack: 0.008, release: 0.1 } },
+    chords: { inst: "organ-jazz", level: -3.5, pan: 0.3, reverb: 0.15, highpass: 180, rotary: { rate: 6.2, depth: 0.45 } },
+    strings: { inst: "string-ens", level: -5, pan: -0.1, reverb: 0.3, chorus: 0.3, highpass: 160 },
+    lead: { inst: "brass-section", level: 0, reverb: 0.25, delay: 0.1, highpass: 250 },
+    low: { inst: "brass-stab", level: -4, pan: -0.15, reverb: 0.2, highpass: 200 },
+    glock: { inst: "ice-bell", level: -5, pan: -0.3, reverb: 0.35, delay: 0.3 },
     arp: { inst: "celesta", level: -8, pan: 0.25, reverb: 0.3, delay: 0.2 },
-    drums: { inst: "drums", level: -3 },
+    drums: { inst: "drums", level: -3, kit: "rock" },
   },
-  fx: { reverb: { t60: 1.5, size: 0.65, mix: 0.28 }, delay: { beats: 0.75, feedback: 0.25, tone: 3500, mix: 0.18 } },
+  fx: {
+    reverb: { t60: 1.7, size: 0.7, mix: 0.28, predelay: 0.018 },
+    delay: { beats: 0.75, feedback: 0.25, tone: 3500, mix: 0.18 },
+    master: { air: 2 },
+  },
   sections: [
     {
       name: "Fanfare",
@@ -183,14 +187,18 @@ export const resultsDone: PieceSpec = {
   bpm: 100,
   swing: 0.28,
   rack: {
-    bass: { inst: "pizz", level: -1, pan: -0.1 },
-    chords: { inst: "epiano", level: -3.5, pan: 0.3, reverb: 0.2, chorus: 0.3 },
-    strings: { inst: "strings", level: -6, pan: -0.05, reverb: 0.3, chorus: 0.4, lowpass: 3500 },
-    lead: { inst: "vibes", level: 0, reverb: 0.3, delay: 0.2 },
+    bass: { inst: "upright", level: -1, pan: -0.1, highpass: 40, comp: { threshold: -17, ratio: 3, attack: 0.012, release: 0.12 } },
+    chords: { inst: "rhodes-soft", level: -3.5, pan: 0.3, reverb: 0.2, chorus: 0.25, highpass: 180, tremolo: { rate: 4.4, depth: 0.12, pan: true } },
+    strings: { inst: "string-ens", level: -6, pan: -0.05, reverb: 0.3, chorus: 0.35, lowpass: 3500, highpass: 160 },
+    lead: { inst: "vibes", level: 0, reverb: 0.3, delay: 0.2, highpass: 200 },
     echo: { inst: "celesta", level: -8, pan: -0.3, reverb: 0.4, delay: 0.3 },
-    drums: { inst: "drums", level: -4 },
+    drums: { inst: "drums", level: -4, kit: "brush" },
   },
-  fx: { reverb: { t60: 1.5, size: 0.6, mix: 0.3 }, delay: { beats: 0.75, feedback: 0.3, tone: 3200, mix: 0.2 } },
+  fx: {
+    reverb: { t60: 1.8, size: 0.65, mix: 0.3, predelay: 0.02 },
+    delay: { beats: 0.75, feedback: 0.3, tone: 3200, mix: 0.2 },
+    master: { air: 1 },
+  },
   sections: [
     {
       name: "A",

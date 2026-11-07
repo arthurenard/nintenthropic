@@ -104,6 +104,14 @@ class FakePlayer {
   volume = -1;
   paused = false;
   ducks: [number, number][] = [];
+  comet: boolean[] = [];
+  intensity: number[] = [];
+  setComet(on: boolean): void {
+    this.comet.push(on);
+  }
+  setIntensity(level: number): void {
+    this.intensity.push(level);
+  }
   play(track: MusicTrack): void {
     this.current = track;
     this.calls.push(`play ${track.id}`);
@@ -715,6 +723,35 @@ describe("music", () => {
     frame([kart(0), kart(1)], { phase: "racing" });
     await settle();
     expect(player.calls.at(-1)).toBe("play meadow");
+  });
+
+  it("opens the results with the win's or the loss's jingle, then their own music", async () => {
+    const { player, audio, frame } = setup();
+    await audio.load("meadow");
+    frame([kart(0), kart(1)], { phase: "racing" });
+    await settle();
+    audio.music("results-win");
+    await settle();
+    expect(player.calls).toEqual(["play meadow", "play jingle-win"]);
+    await new Promise((r) => setTimeout(r, 700));
+    expect(player.calls).toEqual(["play meadow", "play jingle-win", "play results-win"]);
+    frame([kart(0), kart(1)], { phase: "countdown" });
+    frame([kart(0), kart(1)], { phase: "racing" });
+    await settle();
+    audio.music("results");
+    await settle();
+    expect(player.calls.slice(-2)).toEqual(["play meadow", "play jingle-lose"]);
+  });
+
+  it("lets the comet layer and the race intensity go when the race is over", async () => {
+    const { player, audio, frame } = setup();
+    await audio.load("meadow");
+    frame([kart(0, { lap: 3, comet: 5 }), kart(1)], { phase: "racing" });
+    expect(player.comet.at(-1)).toBe(true);
+    expect(player.intensity.at(-1)).toBe(1);
+    frame([kart(0, { lap: 3 }), kart(1)], { phase: "results" as never });
+    expect(player.comet.at(-1)).toBe(false);
+    expect(player.intensity.at(-1)).toBe(0);
   });
 
   it("plays the screens' music on request: the lobby shares the menu's tune, null stops", async () => {

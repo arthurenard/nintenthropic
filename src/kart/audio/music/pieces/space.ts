@@ -70,18 +70,24 @@ export const space: PieceSpec = {
   name: "Starlight Ribbon",
   key: { tonic: "F#", scale: "minor" },
   bpm: 134,
+  race: true,
   rack: {
-    pad: { inst: "pad", level: -4, pan: -0.1, reverb: 0.35, chorus: 0.4 },
-    strings: { inst: "strings", level: -5, pan: 0.1, reverb: 0.4, chorus: 0.3 },
-    sub: { inst: "sub", level: -3, pan: 0 },
-    bass: { inst: "bass-synth", level: -2.5, pan: 0 },
-    arp: { inst: "pluck-synth", level: -7.5, pan: -0.35, reverb: 0.3, delay: 0.45 },
+    // The synthwave pump: pads and bass breathe out of the way of every kick.
+    pad: { inst: "supersaw", level: -4.5, pan: -0.1, reverb: 0.35, chorus: 0.4, highpass: 140, lowpass: 6500, duck: 0.45, width: 1.3 },
+    strings: { inst: "string-ens", level: -5, pan: 0.1, reverb: 0.4, chorus: 0.3, highpass: 160, duck: 0.35 },
+    sub: { inst: "sub", level: -3, pan: 0, duck: 0.5 },
+    bass: { inst: "bass-fat", level: -2.5, pan: 0, highpass: 38, duck: 0.4, comp: { threshold: -16, ratio: 3.5, attack: 0.006, release: 0.08 } },
+    arp: { inst: "arp-synth", level: -8, pan: -0.35, reverb: 0.3, delay: 0.45, highpass: 300, duck: 0.2 },
     star: { inst: "bell-fm", level: -8, pan: 0.4, reverb: 0.5, delay: 0.4 },
-    lead: { inst: "lead-saw", level: 0, pan: 0.05, reverb: 0.3, delay: 0.3 },
+    lead: { inst: "supersaw-lead", level: 0, pan: 0.05, reverb: 0.3, delay: 0.3, highpass: 300, comp: { threshold: -15, ratio: 2.5, attack: 0.012, release: 0.14 } },
     echo: { inst: "bell-fm", level: -6, pan: -0.25, reverb: 0.5, delay: 0.35 },
-    drums: { inst: "drums", level: -3.5 },
+    drums: { inst: "drums", level: -3.5, kit: "electro" },
   },
-  fx: { reverb: { t60: 2.4, size: 0.9, mix: 0.34 }, delay: { beats: 0.75, feedback: 0.42, tone: 4200, mix: 0.3 } },
+  fx: {
+    reverb: { t60: 2.6, size: 0.9, mix: 0.34, predelay: 0.03, damping: 0.3 },
+    delay: { beats: 0.75, feedback: 0.42, tone: 4200, mix: 0.3 },
+    master: { air: 2.5 },
+  },
   sections: [
     {
       name: "Launch",

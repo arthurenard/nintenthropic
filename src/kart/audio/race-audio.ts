@@ -56,7 +56,7 @@ import {
 import { type Order, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
-import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
+import { type MusicTrack, MusicPlayer, makeMusicTrack } from "./music/player";
 import { type PieceId, THEME_PIECES } from "./music/pieces";
 import { MUSIC_SAMPLE_RATE, type RenderedMusic } from "./music/render";
 import { type LocalKart, type Scene, falloff, hearThing, listenerAt, localOf } from "./scene";
@@ -76,7 +76,8 @@ export interface RaceAudioOptions {
 }
 
 /** What RaceAudio needs of a music player. */
-export type MusicPlayerLike = Pick<MusicPlayer, "play" | "switchTo" | "stop" | "duck" | "setVolume" | "setPaused" | "dispose" | "current">;
+export type MusicPlayerLike = Pick<MusicPlayer, "play" | "switchTo" | "stop" | "duck" | "setVolume" | "setPaused" | "dispose" | "current"> &
+  Partial<Pick<MusicPlayer, "setComet" | "setIntensity">>;
 
 export interface RaceAudio {
   /**
@@ -344,6 +345,7 @@ class RaceAudioImpl implements RaceAudio {
   private wantedKey: string | null = null;
   private playingKey: string | null = null;
   private pendingFinal = false;
+  private followUp: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly bus: AudioBus,
@@ -370,12 +372,7 @@ class RaceAudioImpl implements RaceAudio {
     this.makeTrack =
       options.makeTrack ??
       (steer
-        ? (r) => {
-            const buffer = steer.ctx.createBuffer(2, r.loopSamples, r.sampleRate);
-            buffer.copyToChannel(r.left as Float32Array<ArrayBuffer>, 0);
-            buffer.copyToChannel(r.right as Float32Array<ArrayBuffer>, 1);
-            return { id: r.id + (r.transpose ? "-final" : ""), buffer, beats: beatTimes(r.bars), duration: r.loopSamples / r.sampleRate };
-          }
+        ? (r) => makeMusicTrack(steer.ctx, r)
         : null);
     if (options.volumes) this.setVolumes(options.volumes);
   }
@@ -416,6 +413,8 @@ class RaceAudioImpl implements RaceAudio {
   music(kind: MusicKind | null): void {
     if (this.disposed || !this.player) return;
     if (kind === null) {
+      if (this.followUp) clearTimeout(this.followUp);
+      this.followUp = null;
       this.wantedKey = null;
       this.playingKey = null;
       this.player.stop(0.8);
@@ -424,12 +423,29 @@ class RaceAudioImpl implements RaceAudio {
     const piece = pieceFor(kind, this.loadedTheme);
     if (!piece) return;
     if (this.playingKey === piece || this.wantedKey === piece) return;
+    // Coming off the race, the results open with a short jingle (a win's or a loss's) before their own music.
+    const jingle: PieceId | null =
+      this.loadedTheme && this.playingKey?.startsWith(this.loadedTheme) ? (kind === "results-win" ? "jingle-win" : kind === "results" ? "jingle-lose" : null) : null;
     this.wantedKey = piece;
     this.finalSwitched = false;
-    void this.track(piece, false).then((track) => {
+    if (this.followUp) clearTimeout(this.followUp);
+    this.followUp = null;
+    void Promise.all([this.track(piece, false), jingle ? this.track(jingle, false) : Promise.resolve(null)]).then(([track, intro]) => {
       if (!track || this.disposed || this.wantedKey !== piece) return;
       this.playingKey = piece;
-      this.player!.play(track, 0.9);
+      if (intro && jingle) {
+        this.player!.play(intro, 0.25);
+        // The tune takes over as the jingle's tail dies away.
+        this.followUp = setTimeout(() => {
+          this.followUp = null;
+          if (!this.disposed && this.wantedKey === piece) this.player!.play(track, 1.4);
+          this.tracks.delete(jingle);
+        }, Math.max(0, intro.duration - 0.6) * 1000);
+      } else {
+        this.player!.play(track, 0.9);
+      }
+      // A race's music is tens of megabytes: the results' other tune, rendered ahead, is let go.
+      if (piece === "results" || piece === "results-win") this.tracks.delete(piece === "results" ? "results-win" : "results");
       if (this.pendingFinal && piece === this.loadedTheme) this.switchToFinal();
     });
   }
@@ -469,7 +485,8 @@ class RaceAudioImpl implements RaceAudio {
 
   /** Forget the tracks of other themes: a race's music is tens of megabytes. */
   private evict(theme: string): void {
-    const keep = new Set([theme, `${theme}-final`, "menu", "results", "results-win", "podium", this.playingKey]);
+    // The results' and podium's music render when they are wanted (a second's work): a race holds its own two versions and the menu.
+    const keep = new Set([theme, `${theme}-final`, "menu", this.playingKey]);
     for (const key of [...this.tracks.keys()]) if (!keep.has(key)) this.tracks.delete(key);
   }
 
@@ -581,6 +598,7 @@ class RaceAudioImpl implements RaceAudio {
     if (this.disposed) return;
     this.stopLoops();
     this.disposed = true;
+    if (this.followUp) clearTimeout(this.followUp);
     this.player?.dispose();
     this.renderer?.dispose();
     this.tracks.clear();
@@ -596,10 +614,16 @@ class RaceAudioImpl implements RaceAudio {
     this.clock += step;
     if (this.paused) return;
     if (this.bus.muted) {
+      this.player?.setComet?.(false);
       // Nothing to hear: let go of the loops, but keep the race's bookkeeping in step.
       this.stopLoops();
     }
 
+    // Between races the music is just the music: no comet layer, no race intensity carried over.
+    if (view.phase !== "racing") {
+      this.player?.setComet?.(false);
+      this.player?.setIntensity?.(0);
+    }
     const karts = new Map<number, KartView>();
     for (const k of view.karts) karts.set(k.id, k);
     const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps, racers: view.racers };
@@ -616,6 +640,14 @@ class RaceAudioImpl implements RaceAudio {
     this.ownMoments(view, scene);
     this.roulette(scene);
     this.finalLapFallback(view, scene);
+    // A local kart under a Comet: the music's glittering layer plays over the race.
+    this.player?.setComet?.(scene.locals.some((l) => (scene.karts.get(l.kart)?.comet ?? 0) > 0));
+    // The music opens up as the race goes on: the furthest lap of a local kart, first lap 0, last lap 1.
+    if (view.phase === "racing" && view.laps > 1) {
+      let lap = 1;
+      for (const l of scene.locals) lap = Math.max(lap, scene.karts.get(l.kart)?.lap ?? 1);
+      this.player?.setIntensity?.((lap - 1) / (view.laps - 1));
+    }
     this.lastPhase = view.phase;
   }
 
@@ -648,6 +680,8 @@ class RaceAudioImpl implements RaceAudio {
       if (this.seen.length > 256) this.seenSet.delete(this.seen.shift()!);
       orders.push(...ordersFor(e, scene));
       if (e.type === "final-lap" && localOf(scene, e.kart) && !this.finalSwitched) this.switchToFinal();
+      // Someone of ours is across the line: the results' music is made while the others finish.
+      if (e.type === "finish" && localOf(scene, e.kart)) this.preload("results");
     }
     // The most important first; no more than a handful at once, and no cue more than twice.
     orders.sort((a, b) => b.priority - a.priority);
