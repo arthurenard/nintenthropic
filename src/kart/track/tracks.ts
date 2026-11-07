@@ -83,7 +83,7 @@ export const MEADOW_LOOP: TrackDef = {
         { x: 144, z: 100, y: -0.3, bank: -0.1 },
         { x: 178, z: 104, y: 2.2 },
       ],
-      surfaces: [{ from: 0.44, to: 0.58, kind: "ice", offset: 0, width: 8 }],
+      surfaces: [{ from: 0.38, to: 0.64, kind: "ice", offset: 0, width: 9 }],
       landmarks: [
         { kind: "pond", at: 0.49, offset: 30, scale: 0.8 },
         { kind: "hay-bales", at: 0.3, offset: -26 },
@@ -102,14 +102,16 @@ export const MEADOW_LOOP: TrackDef = {
       appeal: 0.85,
       points: [
         { x: 252, z: 66, y: 0.4 },
-        { x: 228, z: 80, y: 0.1 },
-        { x: 202, z: 58, y: -0.3 },
+        { x: 214, z: 60, y: -0.3 },
         { x: 178, z: 50, y: 0.4 },
         { x: 146, z: 44, y: 1.5 },
       ],
       ramps: [{ at: 0.4 }],
       drops: [{ from: 0.408, to: 0.47, side: "both", gap: true }],
-      surfaces: [{ from: 0.8, to: 0.88, kind: "boost", width: 4 }],
+      surfaces: [
+        { from: 0.54, to: 0.62, kind: "mud" },
+        { from: 0.84, to: 0.9, kind: "boost", width: 3 },
+      ],
       landmarks: [
         { kind: "barn-run", at: 0.66, offset: 0, span: 30 },
       ],

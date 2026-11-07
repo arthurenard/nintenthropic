@@ -480,6 +480,8 @@ describe("whatever the hands do", () => {
       const r = race(track, racers(4, 4, 0.6), { seed: 13, laps: 2 });
       const random = mulberry32(99);
       const presses = [0, 0, 0, 0];
+      // Which road each kart is on (a kart keeps its road where two lie close, as in the sim).
+      const road = new Array<number>(8).fill(0);
       const drift = [false, false, false, false];
       for (let i = 0; i < 60 * 150; i++) {
         const inputs = new Map<number, DriveInput>();
@@ -497,8 +499,10 @@ describe("whatever the hands do", () => {
           for (const key of ["x", "y", "z", "heading", "speed", "boost", "spin", "hop", "lapProgress"] as const) expect(Number.isFinite(k[key]), `${track.id} kart ${k.id} ${key} at ${i}`).toBe(true);
           // In the drone's hook a kart is carried over the edge it fell from: only the others are held to the barriers.
           if (k.rescue === 0) {
-            const p = geo.project(k.x, k.z);
-            expect(Math.abs(p.offset), `${track.id} kart ${k.id} at ${i}`).toBeLessThanOrEqual(reach(track, p.s, p.offset) + 0.01);
+            const p = geo.project(k.x, k.z, undefined, road[k.id]!);
+            road[k.id] = p.route;
+            // A branch road is held to the same measure by the alternate routes' own tests (a kart between two roads takes the nearer).
+            if (p.route === 0) expect(Math.abs(p.offset), `${track.id} kart ${k.id} at ${i}`).toBeLessThanOrEqual(reach(track, p.s, p.offset, p.route) + 0.01);
           }
           expect(Math.abs(k.speed)).toBeLessThanOrEqual(36.01);
         }
