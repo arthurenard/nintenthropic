@@ -47,8 +47,9 @@ describe("a recording of real moves, read by the wheel", () => {
     expect(result.steadyJump).toBeLessThan(0.1);
   });
 
-  it("counts the shake of quick turns", () => {
-    expect(result.shakes).toBeGreaterThanOrEqual(1);
+  it("counts the shake of quick turns, and not the wobble of hands coming down afterwards", () => {
+    expect(result.shakes).toBe(1);
+    expect(result.falseShakes).toBe(0);
   });
 
   it("is as good with half the frames (a camera read at 15 a second, as three or four players on one camera are)", () => {

@@ -71,8 +71,12 @@ export const WHEEL = {
   flick: 0.6,
   /** Both hands opening within this of each other is a brake, never an item, seconds. */
   together: 0.25,
-  /** A shake: the wheel's angle swinging back this many degrees the other way counts as a reversal (shake.ts has the rest). */
-  shake: { swing: 14 },
+  /**
+   * A shake: the wheel's angle swinging back this many degrees the other way counts as a reversal (shake.ts has the
+   * rest). A person's shake swings 70 to 90 degrees a stroke (measured, fixtures/moves.json); the wobble of hands coming
+   * down from a cheer swings 13 or 14 and was counted at 14.
+   */
+  shake: { swing: 17 },
   /** One hand gone: hold the angle this long, then ease to the centre over `ease`, seconds. */
   oneHand: { hold: 0.4, ease: 0.6 },
   /** Both gone: steer eases to the centre after `hold` over `ease`; throttle stops after `throttle`; mode says lost after `mode`. */
