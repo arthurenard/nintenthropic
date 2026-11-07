@@ -786,6 +786,11 @@ function flyArc(w: World, k: KartState, emit: Emit): boolean {
     k.flight = 2;
     return false;
   }
+  // Steered out past an open edge: nothing under it, it falls (as a kart on the ground would).
+  if (Math.abs(k.offset) > w.geo.at(k.s).width / 2 + F.edge && isOpen(terrain, k.s, k.offset > 0 ? 1 : -1)) {
+    startFall(k, emit);
+    return true;
+  }
   if (k.aloft < 255) k.aloft++;
   if (k.trick > 0) k.trick = Math.min(k.trick + 1, 255);
   const d = w.geo.delta(site.s, k.s);

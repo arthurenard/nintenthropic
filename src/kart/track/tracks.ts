@@ -884,8 +884,8 @@ export const STARLIGHT_RIBBON: TrackDef = {
     { kind: "asteroid", motion: "orbit", period: 5.9, phase: 0.7, radius: 3, offset: 0, at: 0.6991, span: 6.4 },
     { kind: "comet", motion: "roll", period: 5.2, radius: 3, offset: -2, at: 0.1655, span: 0.0496 },
     // A meteor shower down the carousel's far side: two streaks, a beat apart, one each side of the ribbon.
-    { kind: "comet", motion: "roll", period: 5.5, radius: 2.0, offset: -5.5, at: 0.4633, span: 0.045 },
-    { kind: "comet", motion: "roll", period: 5.5, phase: 0.5, radius: 2.0, offset: 5.5, at: 0.4633, span: 0.045 },
+    { kind: "comet", motion: "roll", period: 5.5, radius: 2.0, offset: -5.5, at: 0.521, span: 0.04 },
+    { kind: "comet", motion: "roll", period: 5.5, phase: 0.5, radius: 2.0, offset: 5.5, at: 0.521, span: 0.04 },
     // A meteor shower over the carousel: two streaks come down the ribbon a beat apart.
   ],
   landmarks: [
