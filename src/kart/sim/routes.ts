@@ -49,6 +49,8 @@ const TAKES: Record<Temperament, { shortcut: number; split: number }> = {
 
 /** Metres before a junction a bot makes up its mind; it holds the choice until the branch has taken it. */
 export const ROUTE_LOOKAHEAD = 70;
+/** Metres before a branch ends that a bot on it steers by the main road it is rejoining. */
+const ROUTE_REJOIN = 22;
 
 /**
  * Whether this bot takes the branch `road` this lap: a die rolled by the seed, the kart, the lap and the route (the same
@@ -75,7 +77,11 @@ export function takesRoute(w: World, k: KartState, road: RouteRoad): boolean {
  */
 export function steeringRoute(w: World, k: KartState): number {
   const race = w.main ?? w;
-  if (k.route !== 0) return k.route;
+  if (k.route !== 0) {
+    // The last stretch of a branch is the main road's width again: steer by the road it is rejoining.
+    const road = race.geo.routes[k.route - 1]!;
+    return race.geo.delta(k.s, road.to) < ROUTE_REJOIN ? 0 : k.route;
+  }
   for (const road of race.geo.routes) {
     const ahead = race.geo.delta(k.s, road.from);
     if (ahead < -road.span || ahead > ROUTE_LOOKAHEAD) continue;
