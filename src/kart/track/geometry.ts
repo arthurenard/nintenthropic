@@ -83,6 +83,12 @@ export interface AirSection {
   /** The pad's middle, metres right of the centre line, and its width (default: the whole road). */
   offset?: number;
   width?: number;
+  /**
+   * A pad that is only live part of the time (a drawbridge's leaf, raised): the race clock's cycle of `period` seconds
+   * (offset by `phase`, a fraction) is within [`from`, `to`) of it, fractions of the cycle. Whatever the pad throws is
+   * a function of the race clock, so every device agrees; off, the pad does nothing and the kart drives over it.
+   */
+  timed?: { period: number; from: number; to: number; phase?: number };
 }
 
 /**

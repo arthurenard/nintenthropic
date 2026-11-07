@@ -23,6 +23,16 @@ export interface ArcSite {
   /** Metres of road the flight covers, and the top of its arc. */
   length: number;
   height: number;
+  /** Live only part of the clock's cycle (see AirSection.timed). */
+  timed?: AirSection["timed"];
+}
+
+/** Is a timed pad live at race time `time` seconds? (An untimed one always is.) */
+export function arcLive(site: ArcSite, time: number): boolean {
+  const t = site.timed;
+  if (!t) return true;
+  const cycle = (((time / t.period + (t.phase ?? 0)) % 1) + 1) % 1;
+  return cycle >= t.from && cycle < t.to;
 }
 
 /** A glide climbs for this share of its length, then floats down. */
@@ -42,6 +52,7 @@ export function buildArcs(def: TrackDef, geo: TrackGeometry): ArcSite[] {
       hi: Math.min(middle + reach, half * 4),
       length: a.length,
       height: a.height,
+      ...(a.timed ? { timed: a.timed } : {}),
     };
   });
 }

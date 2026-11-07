@@ -8,7 +8,16 @@ import { mirrorTrack } from "../track/mirror";
 import { trackById } from "../track/tracks";
 import { trackStats } from "./trackStats";
 
-const IDS = ["volcano-rush", "starlight-ribbon", "five-finger-circuit"];
+const IDS = ["volcano-rush", "starlight-ribbon", "five-finger-circuit", "meadow-loop", "kitchen-rally", "harbour-lights"];
+
+/**
+ * How many flights of this section a kart-lap is about to fly, at the least: a cannon or a glide takes the whole road, a lip
+ * only a part of it (half the bots find it) and a timed pad is only live part of the clock's cycle.
+ */
+function weight(a: NonNullable<ReturnType<typeof trackById>["air"]>[number]): number {
+  const live = a.timed ? a.timed.to - a.timed.from : 1;
+  return (a.kind === "lip" && a.width !== undefined ? 0.5 : 1) * live;
+}
 
 describe.each(IDS)("%s air sections", (id) => {
   const track = trackById(id)!;
@@ -45,7 +54,7 @@ describe.each(IDS)("%s air sections", (id) => {
       const stats = trackStats(t, { seed });
       const where = `${id} mirror ${mirror} seed ${seed}`;
       expect(stats.finished, `${where} finished`).toBe(true);
-      expect(stats.jumps / (8 * 3), where).toBeGreaterThanOrEqual(track.air!.length * 0.8);
+      expect(stats.jumps / (8 * 3), where).toBeGreaterThanOrEqual(track.air!.reduce((sum, a) => sum + weight(a), 0) * 0.8);
       expect(stats.fallRate, where).toBeLessThan(0.15);
       expect(stats.worstLap, where).toBeLessThanOrEqual(85);
     }

@@ -14,81 +14,114 @@ import type { TrackDef } from "./geometry";
 import { crosser, pendulum, stomperRow, sweeper } from "./pieces";
 
 /**
- * The gentle opener: a long start straight over a gentle rise, up the hill
- * with the windmill on it (eight metres, leaning into the long left-hander),
- * down into an S over the meadow that leans one way and then the other,
- * through a hollow, round a wide U-turn and back over a low hill, then down to
- * the pond and round its banked hairpin (the duck) onto the straight again. No
- * drops, no hazards. About 1 km.
+ * The gentle opener, a bigger and busier one than it was. Off the line the road passes the farm gate, kinks, and climbs the
+ * windmill's hill (eleven metres, a long left-hander with a strip of boost on its inside) with round hay bales rolling down
+ * it at you and a lip on the outside of the bend for a hop; or, from the straight, it takes the creek road, low through the
+ * hollow, over the ford (wet stones as slippery as ice) and up under two oaks that let go their acorns on a beat. The roads
+ * meet again on the way down from the crest, where a glide takes the kart off the brow and floats it 90 m down the hill over
+ * the pond to the meadow. Then the S over the meadow and the big U-turn, a flock of sheep crossing the bottom of it (the
+ * gate's lamp blinks before), with the barn cut across its inside (a hay ramp, a creek to fly and the barn itself). The
+ * road home is a low hill, and the banked hairpin round the pond (the duck). About 1.15 km.
  */
 export const MEADOW_LOOP: TrackDef = {
   id: "meadow-loop",
   name: "Meadow Loop",
   theme: "meadow",
-  blurb: "A gentle opener: up the windmill's hill, down a leaning S over the meadow, through the hollow and round the banked hairpin by the pond.",
+  blurb: "A gentle opener: up the windmill's hill or down the creek road, glide off the crest over the pond, past the crossing sheep and through the barn.",
   laps: 3,
   width: 14,
   points: [
     { x: 0, z: 0 },
-    { x: 0, z: 70, y: 0.8 },
-    { x: 0, z: 140, y: 0.4 },
-    // Up the windmill's hill, leaning into the long left-hander.
-    { x: 20, z: 185, y: 2.6, bank: -0.1 },
-    { x: 65, z: 205, y: 6.8, bank: -0.06 },
-    { x: 115, z: 195, y: 10.2, bank: -0.08 },
-    { x: 145, z: 165, y: 7.4, bank: -0.05 },
-    // Down into the S over the meadow, which leans one way and then the other.
-    { x: 165, z: 130, y: 3.2, bank: 0.1 },
-    { x: 200, z: 115, y: 1.8, width: 13, bank: 0.14 },
-    { x: 240, z: 125, y: 2.4, width: 13, bank: -0.14 },
-    { x: 270, z: 110, y: 1.6, bank: -0.12 },
-    { x: 280, z: 70, y: 0.6, bank: -0.04 },
-    { x: 270, z: 20, y: -1.4 },
-    { x: 245, z: -20, y: -0.2, bank: -0.12 },
-    { x: 205, z: -35, y: 1.4, width: 16, bank: -0.14 },
-    { x: 160, z: -20, y: 2.6, width: 16, bank: -0.12 },
-    { x: 140, z: 15, y: 3.2 },
-    { x: 115, z: 40, y: 2.4, bank: 0.14 },
-    { x: 80, z: 35, y: 1.2, bank: 0.14 },
-    { x: 60, z: 0, y: 0.4 },
+    { x: 0, z: 60, y: 0.3 },
+    { x: 0, z: 118, y: 0.8 },
+    // A quick kink at the farm gate, and up the windmill's hill.
+    { x: -8, z: 146, y: 1.2, bank: 0.1 },
+    { x: 2, z: 178, y: 2, bank: -0.1 },
+    { x: 30, z: 206, y: 3.6, bank: -0.12 },
+    { x: 74, z: 222, y: 5.4, bank: -0.12 },
+    { x: 120, z: 220, y: 7.6, bank: -0.12 },
+    { x: 160, z: 200, y: 9.4, bank: -0.12 },
+    { x: 186, z: 168, y: 10.6, bank: -0.08 },
+    { x: 196, z: 134, y: 11 },
+    // Down the east side, over the pond.
+    { x: 196, z: 104, y: 9.8 },
+    { x: 195, z: 72, y: 7.4 },
+    { x: 194, z: 40, y: 4.6 },
+    { x: 194, z: 8, y: 2.8 },
+    // The S over the meadow.
+    { x: 204, z: -22, y: 2.2, width: 13, bank: 0.12 },
+    { x: 188, z: -52, y: 1.4, width: 13, bank: -0.14 },
+    { x: 202, z: -80, y: 0.8, bank: -0.12 },
+    // The big U-turn.
+    { x: 196, z: -112, y: 0 },
+    { x: 166, z: -136, y: -1, width: 16, bank: -0.16 },
+    { x: 124, z: -134, y: -0.6, width: 16, bank: -0.14 },
+    { x: 98, z: -106, y: 0.6, bank: -0.1 },
+    { x: 92, z: -66, y: 2.2 },
+    { x: 94, z: -24, y: 3.2 },
+    { x: 82, z: 12, y: 4, bank: 0.14 },
+    { x: 50, z: 26, y: 3, bank: 0.14 },
+    { x: 34, z: 2, y: 1.6 },
     // Down by the pond and round the banked hairpin.
-    { x: 54, z: -20 },
-    { x: 52, z: -38, y: -0.3, bank: -0.06 },
-    { x: 44, z: -56, y: -0.3, bank: -0.2 },
-    { x: 26, z: -64, y: -0.2, bank: -0.24 },
-    { x: 8, z: -56, y: -0.1, bank: -0.2 },
-    { x: 0, z: -38, bank: -0.08 },
-    { x: 0, z: -18 },
+    { x: 28, z: -38, y: 0.2 },
+    { x: 24, z: -62, y: -0.3, bank: -0.2 },
+    { x: 8, z: -74, y: -0.2, bank: -0.24 },
+    { x: -6, z: -62, y: -0.1, bank: -0.2 },
+    { x: 0, z: -44 },
+    { x: 0, z: -24 },
   ],
-  itemRows: [0.22, 0.55, 0.82],
+  itemRows: [0.1959, 0.5975, 0.8326],
   boostPads: [
-    { at: 0.37, offset: 0 },
-    { at: 0.68, offset: 3 },
+    { at: 0.6269, offset: 0 },
+    { at: 0.8522, offset: 2 },
   ],
   // The inside line of the windmill's left-hander is a strip of boost for whoever hugs it.
-  surfaces: [{ from: 0.205, to: 0.275, kind: "boost", offset: -4, width: 3 }],
+  surfaces: [{ from: 0.1959, to: 0.2743, kind: "boost", offset: -4, width: 3 }],
+  // A lip on the outside of the climb for a hop, and the glide off the brow down the hill over the pond.
+  air: [
+    { kind: "lip", at: 0.2860, length: 32, height: 3, offset: 3, width: 6 },
+    { kind: "glide", at: 0.4305, length: 76, height: 8 },
+  ],
+  drops: [{ from: 0.4325, to: 0.4955, side: "both" }],
+  hazards: [
+    // Round hay bales roll down the climb at whoever goes up.
+    { kind: "hay-roll", at: 0.2057, motion: "roll", period: 6.2, radius: 1.35, offset: -3, span: 0.0607 },
+    { kind: "hay-roll", at: 0.2057, motion: "roll", period: 6.2, phase: 0.5, radius: 1.35, offset: 3, span: 0.0607 },
+    // The flock crosses once every beat, once the gate's lamp has blinked.
+    { kind: "sheep-flock", at: 0.6406, motion: "slide", period: 7.2, radius: 2.2, span: 12 },
+  ],
   routes: [
     {
-      // The low road: leaves the start straight, winds south of the windmill through the hollow and fords the creek (a stretch of wet stones, as slippery as ice), to join the
-      // meadow's S-bend again. The hill road is the high one (ten metres up) and the longer way; the creek is shorter but slow.
+      // The low road: leaves the start straight, winds south of the windmill through the hollow, fords the creek (a stretch of
+      // wet stones, as slippery as ice) and climbs out under two oaks that drop their acorns on a beat, to meet the hill road
+      // on its way down from the crest. The hill road is the high one, faster and longer; the creek road is shorter but slow.
       id: "creek-road",
       kind: "split",
-      from: 0.0997,
-      to: 0.41,
+      from: 0.0786,
+      to: 0.4040,
       width: 11,
       appeal: 0.55,
       points: [
-        { x: 30, z: 128, y: 0.3, bank: 0.1 },
-        { x: 64, z: 102, y: -0.8, bank: -0.1 },
-        { x: 104, z: 124, y: -1.4, bank: 0.1 },
-        { x: 144, z: 100, y: -0.3, bank: -0.1 },
-        { x: 178, z: 104, y: 2.2 },
+        { x: 26, z: 118, y: 0.4, bank: 0.1 },
+        { x: 56, z: 90, y: -0.8, bank: -0.1 },
+        { x: 92, z: 80, y: -1.6, bank: 0.1 },
+        { x: 128, z: 100, y: -1.4, bank: 0.1 },
+        { x: 152, z: 132, y: 1.5, bank: -0.1 },
+        { x: 168, z: 150, y: 4.5 },
+        { x: 182, z: 130, y: 8 },
       ],
-      surfaces: [{ from: 0.38, to: 0.64, kind: "ice", offset: 0, width: 9 }],
+      surfaces: [{ from: 0.28, to: 0.46, kind: "ice", offset: 0, width: 9 }],
+      hazards: [
+        { kind: "acorn", at: 0.7, motion: "crush", period: 4.4, radius: 1.3, offset: -3 },
+        { kind: "acorn", at: 0.7, motion: "crush", period: 4.4, phase: 0.33, radius: 1.3, offset: 3 },
+        { kind: "acorn", at: 0.8, motion: "crush", period: 4.4, phase: 0.66, radius: 1.3, offset: 0 },
+      ],
       landmarks: [
-        { kind: "pond", at: 0.49, offset: 30, scale: 0.8 },
-        { kind: "hay-bales", at: 0.3, offset: -26 },
-        { kind: "flower-field", at: 0.7, offset: -36 },
+        { kind: "oak", at: 0.7, offset: -13 },
+        { kind: "oak", at: 0.7, offset: 13, turn: 3.14 },
+        { kind: "pond", at: 0.38, offset: 30, scale: 0.8 },
+        { kind: "hay-bales", at: 0.15, offset: -26 },
+        { kind: "flower-field", at: 0.5, offset: -36 },
       ],
     },
     {
@@ -96,58 +129,53 @@ export const MEADOW_LOOP: TrackDef = {
       // door of the barn and out of the other onto a strip of boost. Narrow, and a fall costs more than it saves.
       id: "barn-cut",
       kind: "shortcut",
-      from: 0.503,
-      to: 0.765,
+      from: 0.5731,
+      to: 0.7430,
       width: 9,
-      flare: 26,
+      flare: 30,
       appeal: 0.85,
       points: [
-        { x: 252, z: 66, y: 0.4 },
-        { x: 214, z: 60, y: -0.3 },
-        { x: 178, z: 50, y: 0.4 },
-        { x: 146, z: 44, y: 1.5 },
+        { x: 184, z: -92, y: 0.4 },
+        { x: 154, z: -88, y: -0.3 },
+        { x: 130, z: -80, y: 0.4 },
+        { x: 112, z: -70, y: 1.5 },
       ],
       ramps: [{ at: 0.4 }],
       drops: [{ from: 0.408, to: 0.47, side: "both", gap: true }],
       surfaces: [
-        { from: 0.54, to: 0.62, kind: "mud" },
         { from: 0.84, to: 0.9, kind: "boost", width: 3 },
       ],
-      landmarks: [
-        { kind: "barn-run", at: 0.66, offset: 0, span: 30 },
-      ],
+      landmarks: [{ kind: "barn-run", at: 0.66, offset: 0, span: 30 }],
     },
   ],
   landmarks: [
-    { kind: "windmill", at: 0.242, offset: -58, scale: 1.6 },
-    { kind: "barn", at: 0.0532, offset: -36, turn: 0.3 },
-    { kind: "hay-bales", at: 0.029, offset: 17.5 },
-    { kind: "hay-bales", at: 0.1694, offset: -20 },
-    { kind: "sheep", at: 0.1355, offset: 30 },
-    { kind: "sheep", at: 0.1471, offset: 34, scale: 0.9 },
-    { kind: "hot-air-balloon", at: 0.1984, offset: -55, scale: 1.5 },
-    { kind: "flower-field", at: 0.2662, offset: 42 },
-    { kind: "hay-bales", at: 0.3194, offset: 17 },
-    { kind: "flower-field", at: 0.392, offset: 42, scale: 1.2 },
-    { kind: "barn", at: 0.5033, offset: 36, turn: 3.1 },
-    { kind: "flower-field", at: 0.5468, offset: 45 },
-    { kind: "hay-bales", at: 0.571, offset: 17 },
-    { kind: "sheep", at: 0.6194, offset: 30 },
-    { kind: "hot-air-balloon", at: 0.7017, offset: 65, scale: 1.3 },
-    { kind: "flower-field", at: 0.7937, offset: 40, scale: 1.2 },
-    { kind: "hay-bales", at: 0.842, offset: -17.5 },
-    { kind: "pond", at: 0.925, offset: -38, scale: 0.9 },
+    { kind: "windmill", at: 0.2690, offset: -52, scale: 1.6 },
+    { kind: "barn", at: 0.0521, offset: -36, turn: 0.3 },
+    { kind: "hay-bales", at: 0.0284, offset: 17.5 },
+    { kind: "sheep", at: 0.1327, offset: 30 },
+    { kind: "hot-air-balloon", at: 0.1943, offset: 55, scale: 1.5 },
+    { kind: "flower-field", at: 0.2608, offset: 42 },
+    { kind: "flower-field", at: 0.3840, offset: 42, scale: 1.2 },
+    { kind: "pond", at: 0.4653, offset: -34, scale: 1 },
+    { kind: "pond", at: 0.4702, offset: 34, scale: 1 },
+    { kind: "farm-gate", at: 0.6406, offset: -17.5 },
+    { kind: "farm-gate", at: 0.6406, offset: 17.5, turn: 3.14 },
+    { kind: "sheep", at: 0.6068, offset: 30 },
+    { kind: "hot-air-balloon", at: 0.6874, offset: 65, scale: 1.3 },
+    { kind: "hay-bales", at: 0.8248, offset: -17.5 },
+    { kind: "pond", at: 0.9250, offset: -38, scale: 0.9 },
   ],
-  duck: { at: 0.925, offset: -36 },
+  duck: { at: 0.9250, offset: -36 },
 };
 
 /**
- * Toy karts on a giant kitchen counter, late afternoon, the sun through the window. A chopping-board start
- * straight, round the fruit bowl, a chicane between the salt and the pepper, a ramp off a cookbook over the sink (fall in
- * and the drone fishes you out; the duck floats in the sink), spilt milk (ice) on the east bend, the counter's edge a
- * long open drop on the outside of the sweeping curve with oranges rolling down the straight after it, and under the
- * cheese grater past a spinning teacup. The bends lean into their turns, the curve along the counter's edge highest on
- * its open outside. About 1.2 km.
+ * Toy karts on a giant kitchen counter, late afternoon, the sun through the window. A chopping-board start straight, round
+ * the fruit bowl, a chicane between the salt and the pepper, then the sink: a ramp off a cookbook over it (fall in and the
+ * drone fishes you out; the duck floats there) or round it down the steel drainer, where a tap drips on a beat. The counter
+ * sweeps right round the oranges rolling at you (the cutlery drawer is the way across its inside), up to the mixer's
+ * spinning whisk, over the cooker (four metres up, a spatula to hop off) and down to the spilt milk on the corner. The last
+ * straight starts at the toaster: a pair of slots that fire the kart across the crumb tray, a pair of slices popping on the
+ * far side, and under the cheese grater home. The bends lean into their turns. About 1.25 km.
  */
 export const KITCHEN_RALLY: TrackDef = {
   id: "kitchen-rally",
@@ -155,96 +183,151 @@ export const KITCHEN_RALLY: TrackDef = {
   theme: "kitchen",
   laps: 3,
   width: 15,
-  blurb: "Toy karts on a giant kitchen counter: round the fruit bowl, between the salt and the pepper, under the cheese grater, over the sink.",
+  blurb: "Toy karts on a giant kitchen counter: over the sink or down the drainer, round the whisk, over the cooker and through the toaster's cannon.",
   points: [
-    { x: 0, z: 0 },
-    { x: 0, z: 31.6 },
-    { x: 0, z: 63.3 },
-    { x: -6.2, z: 87.4, bank: 0.14 },
-    { x: -23.3, z: 105.6, bank: 0.14 },
-    { x: -47.1, z: 113.2 },
-    { x: -71.7, z: 114.6 },
-    { x: -84.3, z: 117.2, bank: -0.12 },
-    { x: -95.7, z: 123.3 },
-    { x: -103.4, z: 128.9, bank: 0.12 },
-    { x: -120.6, z: 136.6, bank: 0.16 },
-    { x: -139.4, z: 136.6, bank: 0.16 },
-    { x: -156.6, z: 128.9, bank: 0.12 },
-    { x: -163.6, z: 123.8, bank: -0.12 },
-    { x: -175.7, z: 117.5, bank: -0.14 },
-    { x: -189.2, z: 115.1 },
-    { x: -229.5, z: 114.2 },
-    { x: -269.7, z: 113.4 },
-    { x: -310, z: 112.5 },
-    { x: -350.3, z: 111.6, width: 17.5 },
-    { x: -378.9, z: 103.9, width: 18, bank: 0.16 },
-    { x: -400.6, z: 83.9, width: 18, bank: 0.16 },
-    { x: -410.6, z: 56, width: 18 },
-    { x: -413.5, z: 28.4, width: 18 },
-    { x: -416.3, z: 0.8, width: 17.5 },
-    { x: -414.7, z: -20.4, width: 15.5, bank: 0.16 },
-    { x: -405.8, z: -39.8, bank: 0.16 },
-    { x: -390.7, z: -54.8 },
-    { x: -361.4, z: -74.9 },
-    { x: -332.1, z: -95.1 },
-    { x: -327.7, z: -97.8 },
-    { x: -300.7, z: -112.2 },
-    { x: -273.6, z: -126.7, y: 0.1 },
-    // Up onto the cooker top and down off it, round a banked turn at its highest.
-    { x: -255.1, z: -131.1, y: 0.5, bank: 0.16 },
-    { x: -236.8, z: -126.1, y: 1.5 },
-    { x: -215.4, z: -113.8, y: 2.7 },
-    { x: -194.1, z: -101.6, y: 3.5 },
-    { x: -181.7, z: -97.1, y: 3.7, bank: -0.14 },
-    { x: -168.4, z: -97.1, y: 3.7, bank: -0.14 },
-    { x: -156, z: -101.7, y: 3.3 },
-    { x: -136.4, z: -113.2, y: 2.2 },
-    { x: -116.9, z: -124.6, y: 1.0 },
-    { x: -99.7, z: -129.8, y: 0.3, bank: 0.16 },
-    { x: -82.1, z: -126.5 },
-    { x: -52.3, z: -113.1 },
-    { x: -22.4, z: -99.7 },
-    { x: -10.6, z: -91.3, bank: 0.14 },
-    { x: -2.7, z: -79.2, bank: 0.14 },
-    { x: 0, z: -65 },
-    { x: 0, z: -32.5 },
+    { x: 0.0, z: 0.0 },  // s 0
+    { x: 0.0, z: 16.1 },  // s 16
+    { x: 0.0, z: 32.2 },  // s 32
+    { x: 0.0, z: 48.3 },  // s 48
+    { x: 0.0, z: 64.4 },  // s 64
+    { x: 0.0, z: 80.5 },  // s 80
+    { x: 0.0, z: 96.5 },  // s 97
+    { x: -0.1, z: 112.6, bank: 0.03 },  // s 113
+    { x: -2.9, z: 128.4, bank: 0.14 },  // s 129
+    { x: -9.8, z: 142.9, bank: 0.14 },  // s 145
+    { x: -20.3, z: 155.0, bank: 0.14 },  // s 161
+    { x: -33.7, z: 163.9, bank: 0.14 },  // s 177
+    { x: -48.9, z: 169.0, bank: 0.14 },  // s 193
+    { x: -64.9, z: 169.8, bank: 0.03 },  // s 209
+    { x: -80.8, z: 167.3, bank: -0.04 },  // s 225
+    { x: -96.7, z: 164.6, bank: -0.10 },  // s 241
+    { x: -112.4, z: 166.8, bank: -0.03 },  // s 257
+    { x: -126.5, z: 174.6, bank: 0.06 },  // s 274
+    { x: -142.2, z: 177.3, bank: 0.02 },  // s 290
+    { x: -158.0, z: 174.7 },  // s 306
+    { x: -173.9, z: 171.9 },  // s 322
+    { x: -189.7, z: 169.1 },  // s 338
+    { x: -205.6, z: 166.3 },  // s 354
+    { x: -221.4, z: 163.5 },  // s 370
+    { x: -237.3, z: 160.8 },  // s 386
+    { x: -253.1, z: 158.0 },  // s 402
+    { x: -269.0, z: 155.2 },  // s 418
+    { x: -284.8, z: 152.2, bank: 0.01 },  // s 434
+    { x: -300.2, z: 147.7, width: 16.6, bank: 0.09 },  // s 451
+    { x: -314.9, z: 141.1, width: 17.9, bank: 0.12 },  // s 467
+    { x: -328.6, z: 132.8, width: 18, bank: 0.15 },  // s 483
+    { x: -341.2, z: 122.8, width: 18, bank: 0.16 },  // s 499
+    { x: -352.4, z: 111.2, width: 18, bank: 0.16 },  // s 515
+    { x: -362.0, z: 98.3, width: 18, bank: 0.16 },  // s 531
+    { x: -369.8, z: 84.3, width: 18, bank: 0.16 },  // s 547
+    { x: -375.8, z: 69.4, width: 18, bank: 0.16 },  // s 563
+    { x: -379.9, z: 53.8, width: 18, bank: 0.16 },  // s 579
+    { x: -381.8, z: 37.8, width: 18, bank: 0.16 },  // s 595
+    { x: -381.8, z: 21.8, width: 18, bank: 0.16 },  // s 611
+    { x: -379.6, z: 5.8, width: 18, bank: 0.16 },  // s 628
+    { x: -375.5, z: -9.7, width: 18, bank: 0.16 },  // s 644
+    { x: -369.4, z: -24.6, width: 18, bank: 0.16 },  // s 660
+    { x: -361.4, z: -38.5, width: 18, bank: 0.16 },  // s 676
+    { x: -351.7, z: -51.4, width: 18, bank: 0.16 },  // s 692
+    { x: -340.4, z: -62.8, width: 17.8, bank: 0.13 },  // s 708
+    { x: -327.8, z: -72.8, width: 16.3, bank: 0.10 },  // s 724
+    { x: -314.0, z: -81.0, bank: 0.01 },  // s 740
+    { x: -299.4, z: -87.9, y: 0.31, width: 19 },  // s 756
+    { x: -284.8, z: -94.7, y: 0.86, width: 19 },  // s 772
+    { x: -270.2, z: -101.5, y: 1.57, width: 19 },  // s 788
+    { x: -255.7, z: -108.3, y: 2.33, width: 19 },  // s 805
+    { x: -241.1, z: -115.1, y: 3.06, width: 16.5 },  // s 821
+    { x: -226.5, z: -121.9, y: 3.63, bank: -0.02 },  // s 837
+    { x: -213.3, z: -131.0, y: 3.96, bank: -0.08 },  // s 853
+    { x: -202.2, z: -142.7, y: 4, bank: 0.03 },  // s 869
+    { x: -189.7, z: -152.8, y: 4.03, bank: 0.08 },  // s 885
+    { x: -175.4, z: -160.1, y: 4.08 },  // s 901
+    { x: -160.9, z: -166.9, y: 4.13 },  // s 917
+    { x: -146.3, z: -173.7, y: 4.17 },  // s 933
+    { x: -131.7, z: -180.5, y: 4.2 },  // s 949
+    { x: -117.1, z: -187.3, y: 4.03 },  // s 965
+    { x: -102.5, z: -194.1, y: 3.23 },  // s 981
+    { x: -87.4, z: -199.3, y: 2.09, bank: 0.11 },  // s 998
+    { x: -71.3, z: -199.7, y: 0.96, bank: 0.15 },  // s 1014
+    { x: -56.0, z: -195.2, y: 0.17, bank: 0.15 },  // s 1030
+    { x: -42.7, z: -186.2, bank: 0.15 },  // s 1046
+    { x: -32.8, z: -173.6, bank: 0.15 },  // s 1062
+    { x: -27.2, z: -158.5 },  // s 1078
+    { x: -24.4, z: -142.7 },  // s 1094
+    { x: -21.6, z: -126.9 },  // s 1110
+    { x: -18.8, z: -111.0 },  // s 1126
+    { x: -16.0, z: -95.2 },  // s 1142
+    { x: -13.2, z: -79.3 },  // s 1158
+    { x: -10.4, z: -63.5 },  // s 1175
+    { x: -7.6, z: -47.6 },  // s 1191
+    { x: -4.8, z: -31.8 },  // s 1207
+    { x: -2.0, z: -15.9 },  // s 1223
   ],
-  itemRows: [0.0381, 0.2636, 0.6344, 0.8612],
+  itemRows: [0.0484, 0.2018, 0.4278, 0.7797],
   boostPads: [
-    { at: 0.3092, offset: 0 },
-    { at: 0.7272, offset: -3 },
-    { at: 0.9789, offset: 2 },
+    { at: 0.3794, offset: 0 },
+    { at: 0.7668, offset: 2 },
   ],
-  ramps: [
-    { at: 0.3346 },
-  ],
+  ramps: [{ at: 0.3245 }],
+  // The sink's gap, and the crumb tray under the toaster's cannon.
   drops: [
-    { from: 0.3363, to: 0.3473, side: "both", gap: true },
-    { from: 0.4166, to: 0.5097, side: "left" },
+    { from: 0.3277, to: 0.3390, side: "both", gap: true },
+    { from: 0.8927, to: 0.9395, side: "both", gap: true },
+  ],
+  air: [
+    // The spatula lying across the cooker's top: a kicker for a hop.
+    { kind: "lip", at: 0.7305, length: 34, height: 3.2, offset: -3, width: 6 },
+    // The toaster's slots fire a kart across the crumb tray.
+    { kind: "cannon", at: 0.8879, length: 70, height: 8 },
   ],
   surfaces: [
-    { from: 0.5531, to: 0.5784, kind: "ice" },
-    // The cooker's hob rings, a line of boost across its top for whoever keeps to the inside of the turn.
-    { from: 0.7125, to: 0.7425, kind: "boost", offset: 4, width: 3 },
+    // The cooker's hob rings: a line of boost up the climb.
+    { from: 0.6457, to: 0.6877, kind: "boost", offset: 0, width: 3 },
+    // Spilt milk on the corner.
+    { from: 0.8071, to: 0.8540, kind: "ice" },
   ],
   routes: [
     {
-      // The cutlery drawer: out of the straight early, across the inside of the big sweeping curve, down a ramp into a drawer pulled
-      // right out of the counter (walnut walls, felt underfoot, spoons and forks laid across overhead), a pea rolling across its
-      // middle and a line of boost to be had, and up out of it onto the road again. Narrow, and a third shorter than the curve.
+      // The drainer: round the sink on the right instead of jumping it. Down the steel draining board (ribbed, wet, slippery
+      // as ice) into a trough three metres below the counter, where the tap drips on a beat, and up the far end onto the
+      // counter again past where the others land. Two ways of much the same length; the drainer is the safe one.
+      id: "drainer",
+      kind: "split",
+      from: 0.2462,
+      to: 0.3648,
+      width: 10.5,
+      flare: 26,
+      appeal: 0.55,
+      points: [
+        { x: -178.1, z: 148.8, y: -1.2 },
+        { x: -201.9, z: 122.3, y: -3.2 },
+        { x: -235.0, z: 114.4, y: -3.2 },
+        { x: -271.1, z: 134.5, y: -1 },
+      ],
+      surfaces: [{ from: 0.28, to: 0.7, kind: "ice", width: 7 }],
+      hazards: [
+        { kind: "drip", at: 0.46, motion: "crush", period: 3.8, radius: 0.8, top: 6, offset: -3 },
+        { kind: "drip", at: 0.5, motion: "crush", period: 3.8, phase: 0.5, radius: 0.8, top: 6, offset: 3 },
+      ],
+      landmarks: [{ kind: "drainer", at: 0.5, offset: 0, span: 70 }],
+    },
+    {
+      // The cutlery drawer: out of the sweeping curve early, across its inside, down a ramp into a drawer pulled right out of
+      // the counter (walnut walls, felt underfoot, spoons and forks laid across overhead), a pea rolling across its middle and
+      // a line of boost to be had, and up out of it onto the road again. Narrow, and a fifth shorter than the curve.
       id: "cutlery-drawer",
       kind: "shortcut",
-      from: 0.364,
-      to: 0.618,
+      from: 0.3648,
+      to: 0.5973,
       width: 9,
       flare: 28,
       appeal: 0.85,
       points: [
-        { x: -362, z: 98, y: -0.5 },
-        { x: -362, z: 66, y: -2.2 },
-        { x: -356, z: 28, y: -2.4 },
-        { x: -350, z: -14, y: -2.4 },
-        { x: -346, z: -52, y: -1.2 },
+        { x: -312.2, z: 100.2, y: -0.6 },
+        { x: -314.0, z: 61.7, y: -2.2 },
+        { x: -308.1, z: 31.5, y: -2.4 },
+        { x: -313.6, z: 2.5, y: -1.2 },
+        { x: -318.0, z: -34.6, y: -0.3 },
       ],
       surfaces: [{ from: 0.4, to: 0.62, kind: "boost", offset: 0, width: 3 }],
       hazards: [{ kind: "pea", at: 0.36, motion: "cross", period: 4.4, radius: 1.5, span: 3.2 }],
@@ -255,186 +338,215 @@ export const KITCHEN_RALLY: TrackDef = {
     },
   ],
   hazards: [
-    { kind: "orange", motion: "roll", period: 4.6, radius: 2.4, offset: 0, at: 0.518, span: 0.0592 },
-    { kind: "orange", motion: "roll", period: 4.6, phase: 0.5, radius: 2.4, offset: 0, at: 0.518, span: 0.0592 },
-    { kind: "teacup", motion: "orbit", period: 5.5, radius: 2.2, offset: 14, at: 0.8026, span: 9 },
-    // The toaster pops: two slices spring up out of the road in turn, by the toaster.
-    { kind: "toast", motion: "bob", period: 3.6, radius: 1.1, offset: -3.5, at: 0.7255 },
-    { kind: "toast", motion: "bob", period: 3.6, phase: 0.5, radius: 1.1, offset: 3.5, at: 0.7255 },
+    // The oranges roll round the sweeping curve at whoever drives it.
+    { kind: "orange", motion: "roll", period: 6.4, radius: 1.7, offset: -3.4, at: 0.5004, span: 0.055 },
+    { kind: "orange", motion: "roll", period: 6.4, phase: 0.5, radius: 1.7, offset: 3.4, at: 0.5004, span: 0.055 },
+    // The mixer's whisk turns across the road: two beaters, half a turn apart.
+    ...sweeper({ kind: "whisk", at: 0.6312, offset: 0, length: 5.6, from: 2.6, period: 5.2, radius: 1.25, both: true }),
+    // The toast pops: two slices spring up out of the road in turn, by the toaster.
+    { kind: "toast", motion: "bob", period: 3.6, radius: 1.1, offset: -3.5, at: 0.9605 },
+    { kind: "toast", motion: "bob", period: 3.6, phase: 0.5, radius: 1.1, offset: 3.5, at: 0.9605 },
   ],
   landmarks: [
     { kind: "teapot", at: 0.0169, offset: 80, scale: 1.4, turn: 0.5 },
-    { kind: "fruit-bowl", at: 0.0863, offset: 62, scale: 1.2 },
-    { kind: "spoon-arch", at: 0.1275, offset: 0, span: 12 },
-    { kind: "salt-shaker", at: 0.1491, offset: -27.5 },
-    { kind: "pepper-mill", at: 0.1925, offset: 31.5 },
-    { kind: "wall-clock", at: 0.2636, offset: -90, scale: 1.4 },
-    { kind: "cookbook", at: 0.3177, offset: -30, turn: 0.2 },
-    { kind: "cookbook", at: 0.3583, offset: 34, scale: 1.2, turn: -0.4 },
-    { kind: "sink", at: 0.3414, offset: 0, span: 16 },
-    { kind: "window", at: 0.4216, offset: -100, scale: 2 },
-    { kind: "cereal-box", at: 0.236, offset: 48, scale: 1.2 },
-    { kind: "fork-arch", at: 0.4924, offset: 0, span: 10 },
-    { kind: "mug", at: 0.285, offset: -48 },
-    { kind: "toaster", at: 0.7255, offset: -40, turn: 1.57 },
-    { kind: "grater", at: 0.879, offset: 0, span: 40 },
-    { kind: "cereal-box", at: 0.8396, offset: -34, turn: 0.4 },
-    { kind: "mug", at: 0.9299, offset: 40, scale: 1.1 },
+    { kind: "fruit-bowl", at: 0.1291, offset: 62, scale: 1.2 },
+    { kind: "spoon-arch", at: 0.1824, offset: 0, span: 12 },
+    { kind: "salt-shaker", at: 0.2034, offset: -27.5 },
+    { kind: "pepper-mill", at: 0.2260, offset: 31.5 },
+    { kind: "wall-clock", at: 0.2696, offset: -90, scale: 1.4 },
+    { kind: "cookbook", at: 0.2954, offset: -30, turn: 0.2 },
+    { kind: "cookbook", at: 0.3551, offset: 34, scale: 1.2, turn: -0.4 },
+    { kind: "sink", at: 0.3334, offset: 0 },
+    { kind: "window", at: 0.3955, offset: -100, scale: 2 },
+    { kind: "cereal-box", at: 0.2421, offset: 48, scale: 1.2 },
+    { kind: "fork-arch", at: 0.4197, offset: 0, span: 10 },
+    { kind: "mug", at: 0.2276, offset: -48 },
+    { kind: "mixer", at: 0.6312, offset: 0, span: 16 },
+    { kind: "cooker", at: 0.6457, offset: 0, span: 56 },
+    { kind: "spatula", at: 0.7305, offset: 16, turn: 1.57 },
+    { kind: "toaster", at: 0.8879, offset: -42, turn: 1.57 },
+    { kind: "grater", at: 0.9766, offset: 0, span: 30 },
+    { kind: "cereal-box", at: 0.8394, offset: 38, turn: 0.4 },
+    { kind: "mug", at: 0.9282, offset: 40, scale: 1.1 },
   ],
-  duck: { at: 0.3414, offset: 4, y: 2.9 },
+  duck: { at: 0.3334, offset: 4, y: 2.9 },
 };
 
 /**
- * A quay circuit at night: a long straight along the water to the lighthouse,
- * over a humpback bridge across a dock (sharp enough to fly), a stack of right
- * angles round the warehouses, each leaning a little into its turn, a swing
- * bridge to fly on the back straight before the forklift crosses it, and a
- * chicane of four more right angles by the cranes, with crabs scuttling
- * across the road there. Wide (16 m) and fast. The duck sits by the
- * lighthouse. About 1.2 km.
+ * A quay circuit at night, a long headland loop. Off the line the quay runs along the water to the drawbridge, whose leaf
+ * rises and falls on the race clock (a lamp and a bell before it goes up; with the leaf raised the kart flies off its tip,
+ * with it lowered the bridge is just road), then sweeps left, up onto the sea wall and round the lighthouse hairpin with the
+ * open water on its outside, and down past the warehouses in a chicane. Then the ship: the main road goes up a gangway onto
+ * the deck of a cargo ship (boost down the deck, no barrier, a gantry crane over it) and off the stern in the ship's
+ * cannon, across the water to the pier; the quay beside it is the plain, safe way, with a forklift and the crabs crossing.
+ * Two cranes swing containers across the road, half a beat apart, before the dry-dock hairpin; the ferry ramp is a gap to fly
+ * on the way home. Wide (16 m) and fast. The duck sits by the lighthouse. About 1.2 km.
  */
 export const HARBOUR_LIGHTS: TrackDef = {
   id: "harbour-lights",
   name: "Harbour Lights",
   theme: "harbour",
-  blurb: "Night on the quay: over the humpback bridge along the water, round the warehouses, over the swing bridge and through the chicane where the crabs scuttle.",
+  blurb: "Night on the quay: fly the drawbridge when it is up, round the lighthouse, up the gangway and off the ship's cannon, then dodge the swinging containers.",
   laps: 3,
   width: 16,
   points: [
-    { x: 0, z: 0 },
-    { x: 0, z: 12 },
-    { x: 0, z: 75 },
-    // The bridge over the dock: a hump to fly.
-    { x: 0, z: 96, y: 0.2 },
-    { x: 0, z: 106, y: 1.6 },
-    { x: 0, z: 114, y: 2.5 },
-    { x: 0, z: 122, y: 1.7 },
-    { x: 0, z: 130, y: 0.2 },
-    { x: 0, z: 138 },
-    { x: 0, z: 200 },
-    { x: 2, z: 211, bank: -0.1 },
-    { x: 9, z: 221, bank: -0.13 },
-    { x: 19, z: 228, bank: -0.1 },
-    { x: 30, z: 230 },
-    { x: 95, z: 230 },
-    { x: 106, z: 228, bank: -0.1 },
-    { x: 116, z: 221, bank: -0.13 },
-    { x: 123, z: 211, bank: -0.1 },
-    { x: 125, z: 200 },
-    { x: 125, z: 180 },
-    { x: 127, z: 169, bank: 0.1 },
-    { x: 134, z: 159, bank: 0.13 },
-    { x: 144, z: 152, bank: 0.1 },
-    { x: 155, z: 150 },
-    { x: 235, z: 150 },
-    { x: 246, z: 148, bank: -0.1 },
-    { x: 256, z: 141, bank: -0.13 },
-    { x: 263, z: 131, bank: -0.1 },
-    { x: 265, z: 120 },
-    // The swing bridge on the back straight.
-    { x: 265, z: 108, y: 0.2 },
-    { x: 265, z: 100, y: 1.6 },
-    { x: 265, z: 92, y: 2.5 },
-    { x: 265, z: 84, y: 1.6 },
-    { x: 265, z: 76, y: 0.2 },
-    { x: 265, z: 70 },
-    { x: 265, z: 20 },
-    { x: 265, z: -30 },
-    { x: 263, z: -41, bank: -0.1 },
-    { x: 256, z: -51, bank: -0.13 },
-    { x: 246, z: -58, bank: -0.1 },
-    { x: 235, z: -60 },
-    { x: 200, z: -60 },
-    { x: 189, z: -58, bank: -0.1 },
-    { x: 179, z: -51, bank: -0.13 },
-    { x: 172, z: -41, bank: -0.1 },
-    { x: 170, z: -30 },
-    { x: 170, z: 5 },
-    { x: 168, z: 16, bank: 0.1 },
-    { x: 161, z: 26, bank: 0.13 },
-    { x: 151, z: 33, bank: 0.1 },
-    { x: 140, z: 35 },
-    { x: 110, z: 35 },
-    { x: 99, z: 33, bank: 0.1 },
-    { x: 89, z: 26, bank: 0.13 },
-    { x: 82, z: 16, bank: 0.1 },
-    { x: 80, z: 5 },
-    { x: 80, z: -50 },
-    { x: 78, z: -61, bank: -0.1 },
-    { x: 71, z: -71, bank: -0.13 },
-    { x: 61, z: -78, bank: -0.1 },
-    { x: 50, z: -80 },
-    { x: 30, z: -80 },
-    { x: 19, z: -78, bank: -0.1 },
-    { x: 9, z: -71, bank: -0.13 },
-    { x: 2, z: -61, bank: -0.1 },
-    { x: 0, z: -50 },
+    { x: 0.0, z: 0.0 },  // s 0
+    { x: 0.0, z: 16.0 },  // s 16
+    { x: 0.0, z: 32.0 },  // s 32
+    { x: 0.0, z: 48.0 },  // s 48
+    { x: 0.0, z: 64.0 },  // s 64
+    { x: 0.0, z: 80.0 },  // s 80
+    { x: 0.0, z: 95.9 },  // s 96
+    { x: 0.0, z: 111.9 },  // s 112
+    { x: 0.1, z: 127.9 },  // s 128
+    { x: 1.2, z: 143.9, bank: -0.04 },  // s 144
+    { x: 3.5, z: 159.7, bank: -0.05 },  // s 160
+    { x: 6.8, z: 175.4, bank: -0.05 },  // s 176
+    { x: 11.1, z: 190.7, bank: -0.05 },  // s 192
+    { x: 16.6, z: 205.8, y: 0.15, bank: -0.05 },  // s 208
+    { x: 23.1, z: 220.4, y: 1.2, bank: -0.05 },  // s 224
+    { x: 30.5, z: 234.5, y: 2.74, bank: -0.04 },  // s 240
+    { x: 39.0, z: 248.1, y: 4.19 },  // s 256
+    { x: 45.6, z: 262.6, y: 4.97, bank: 0.06 },  // s 272
+    { x: 46.8, z: 278.4, y: 5, bank: 0.16 },  // s 288
+    { x: 42.4, z: 293.7, y: 5, bank: 0.16 },  // s 304
+    { x: 32.9, z: 306.5, y: 5, bank: 0.16 },  // s 320
+    { x: 19.6, z: 315.2, y: 5, bank: 0.16 },  // s 336
+    { x: 4.1, z: 318.7, y: 5, bank: 0.16 },  // s 352
+    { x: -11.7, z: 316.6, y: 5, bank: 0.16 },  // s 368
+    { x: -25.7, z: 309.2, y: 5, bank: 0.11 },  // s 384
+    { x: -36.4, z: 297.4, y: 4.24 },  // s 400
+    { x: -45.3, z: 284.1, y: 2.4 },  // s 416
+    { x: -54.2, z: 270.8, y: 0.62, bank: -0.06 },  // s 432
+    { x: -63.2, z: 257.6, bank: -0.10 },  // s 448
+    { x: -74.1, z: 245.9, bank: -0.10 },  // s 464
+    { x: -88.0, z: 238.3, bank: -0.02 },  // s 480
+    { x: -102.8, z: 232.2, bank: 0.06 },  // s 496
+    { x: -115.0, z: 222.0, bank: 0.10 },  // s 512
+    { x: -123.3, z: 208.5, bank: 0.10 },  // s 528
+    { x: -127.0, z: 193.0 },  // s 544
+    { x: -128.7, z: 177.1, y: 0.68 },  // s 560
+    { x: -130.3, z: 161.2, y: 2.46, width: 15.6 },  // s 576
+    { x: -131.9, z: 145.2, y: 3, width: 14 },  // s 592
+    { x: -133.6, z: 129.3, y: 3, width: 14 },  // s 608
+    { x: -135.2, z: 113.4, y: 3, width: 14 },  // s 624
+    { x: -136.8, z: 97.5, y: 3, width: 14 },  // s 640
+    { x: -138.5, z: 81.6, y: 3, width: 14.4 },  // s 656
+    { x: -140.1, z: 65.7, y: 3 },  // s 672
+    { x: -141.7, z: 49.8, y: 3 },  // s 688
+    { x: -143.4, z: 33.9, y: 3 },  // s 704
+    { x: -145.0, z: 18.0, y: 2.33 },  // s 720
+    { x: -146.7, z: 2.1, y: 0.55 },  // s 736
+    { x: -147.2, z: -13.8, bank: 0.10 },  // s 752
+    { x: -142.0, z: -28.9, bank: 0.09 },  // s 768
+    { x: -132.2, z: -41.4, bank: -0.05 },  // s 784
+    { x: -125.9, z: -56.0, bank: -0.10 },  // s 800
+    { x: -125.5, z: -71.9 },  // s 816
+    { x: -127.2, z: -87.8 },  // s 832
+    { x: -128.8, z: -103.7 },  // s 848
+    { x: -130.4, z: -119.6 },  // s 864
+    { x: -132.1, z: -135.5 },  // s 880
+    { x: -133.6, z: -151.4 },  // s 895
+    { x: -131.2, z: -167.2, bank: 0.15 },  // s 911
+    { x: -123.4, z: -181.1, bank: 0.16 },  // s 927
+    { x: -111.4, z: -191.4, bank: 0.16 },  // s 943
+    { x: -96.4, z: -196.9, bank: 0.16 },  // s 959
+    { x: -80.5, z: -196.8, bank: 0.16 },  // s 975
+    { x: -65.6, z: -191.3, bank: 0.16 },  // s 991
+    { x: -53.6, z: -180.9, bank: 0.02 },  // s 1007
+    { x: -44.7, z: -167.6 },  // s 1023
+    { x: -36.7, z: -153.7, bank: 0.02 },  // s 1039
+    { x: -29.4, z: -139.5, bank: 0.03 },  // s 1055
+    { x: -22.9, z: -124.9, bank: 0.03 },  // s 1071
+    { x: -17.2, z: -110.0, bank: 0.03 },  // s 1087
+    { x: -12.2, z: -94.8, bank: 0.03 },  // s 1103
+    { x: -8.1, z: -79.3, bank: 0.03 },  // s 1119
+    { x: -4.8, z: -63.7, bank: 0.03 },  // s 1135
+    { x: -2.4, z: -47.9, bank: 0.03 },  // s 1151
+    { x: -0.8, z: -32.0, bank: 0.03 },  // s 1167
+    { x: -0.1, z: -16.0, bank: 0.03 },  // s 1183
   ],
-  itemRows: [0.124, 0.36, 0.6, 0.85],
+  itemRows: [0.0375, 0.3419, 0.6712, 0.7879],
   boostPads: [
-    { at: 0.04, offset: 0 },
-    { at: 0.5, offset: -3 },
-    { at: 0.74, offset: 3 },
+    { at: 0.3585, offset: 0 },
+    { at: 0.8588, offset: 3 },
   ],
-  // The ferry ramp: a slip into the water where the quay's long straight ends, a gap to fly with a trick lip, and the far slip to land on.
-  ramps: [{ at: 0.534 }],
-  drops: [{ from: 0.5357, to: 0.5462, side: "both", gap: true }],
+  // The ferry ramp: a slip into the water on the home straight, a gap to fly with a trick lip, and the far slip to land on.
+  ramps: [{ at: 0.9088 }],
+  drops: [
+    // The dock the drawbridge crosses, the sea wall's outer edge, the ship's deck, the water between the stern and the pier, the ferry slip.
+    { from: 0.0825, to: 0.1059, side: "both" },
+    { from: 0.2185, to: 0.3269, side: "left" },
+    { from: 0.4919, to: 0.5436, side: "both" },
+    { from: 0.5470, to: 0.5870, side: "both", gap: true },
+    { from: 0.9122, to: 0.9239, side: "both", gap: true },
+  ],
+  air: [
+    // The drawbridge's leaf: live only while it is raised.
+    { kind: "lip", at: 0.0792, length: 30, height: 3.4, timed: { period: 10, from: 0.7, to: 0.95 } },
+    // The ship's stern cannon: across the water to the pier.
+    { kind: "cannon", at: 0.5436, length: 56, height: 7 },
+  ],
+  surfaces: [
+    // A line of boost down the ship's deck.
+    { from: 0.4969, to: 0.5353, kind: "boost", offset: 0, width: 3 },
+  ],
   routes: [
     {
-      // The ship's deck: the quay is the quick, plain way; the other goes up a gangway onto the deck of a cargo ship moored beside
-      // the dock (four metres over the water, no barrier either side, stacks of containers and a gantry crane over it) and down a
-      // gangway at the other end. A line of boost down the deck pays for the longer way round, if nobody goes over the side.
-      id: "ship-deck",
+      // The quay: the plain way beside the ship, at ground level, with a forklift and crabs scuttling across. The main road goes
+      // over the deck (the way with the boost and the cannon); the quay is as long and has nothing to fall off.
+      id: "quay",
       kind: "split",
-      from: 0.03,
-      to: 0.157,
-      width: 10,
-      flare: 30,
-      appeal: 0.55,
+      from: 0.4336,
+      to: 0.6470,
+      width: 12,
+      flare: 26,
+      appeal: 0.3,
       points: [
-        { x: -16, z: 62, y: 0.1 },
-        { x: -38, z: 92, y: 1.2 },
-        { x: -46, z: 124, y: 3.6 },
-        { x: -46, z: 148, y: 3.5 },
-        { x: -38, z: 170, y: 1.4 },
+        { x: -108.8, z: 174.7 },
+        { x: -96.6, z: 137.3 },
+        { x: -100.1, z: 83.3 },
+        { x: -107.8, z: 27.8 },
+        { x: -131.5, z: -7.8 },
       ],
-      drops: [{ from: 0.34, to: 0.72, side: "both" }],
-      surfaces: [{ from: 0.4, to: 0.64, kind: "boost", offset: 0, width: 3 }],
-      landmarks: [{ kind: "ship-deck", at: 0.5, offset: 0, span: 56 }],
+      hazards: [
+        { kind: "crab", at: 0.3, motion: "cross", period: 5.2, radius: 1.3 },
+        { kind: "crab", at: 0.4, motion: "cross", period: 5.2, phase: 0.5, radius: 1.3 },
+        { kind: "forklift", at: 0.6, motion: "cross", period: 8, radius: 2.2 },
+      ],
+      landmarks: [
+        { kind: "containers", at: 0.2, offset: 24 },
+        { kind: "containers", at: 0.75, offset: 24, scale: 1.1 },
+      ],
     },
   ],
   hazards: [
-    { kind: "crab", at: 0.8509, motion: "cross", period: 5.2, radius: 1.3 },
-    { kind: "crab", at: 0.8773, motion: "cross", period: 5.2, phase: 0.5, radius: 1.3 },
-    { kind: "forklift", at: 0.41, motion: "cross", period: 8, radius: 2.2 },
-    // The gantry crane swings a container round over the dock road; time it.
-    { kind: "swing-box", at: 0.64, motion: "orbit", period: 6.4, radius: 2, offset: 0, span: 7 },
+    // Two cranes swing a container across the road each, half a beat apart.
+    pendulum({ kind: "cargo-box", at: 0.6971, offset: 0, reach: 6, period: 6.4, radius: 2 }),
+    pendulum({ kind: "cargo-box", at: 0.7237, offset: 0, reach: 6, period: 6.4, phase: 0.5, radius: 2 }),
   ],
   landmarks: [
-    { kind: "containers", at: 0.033, offset: -30 },
-    { kind: "buoy", at: 0.0826, offset: 75 },
-    { kind: "crane", at: 0.0991, offset: -29, scale: 1.2 },
-    { kind: "ship", at: 0.0661, offset: 115, scale: 2.2 },
-    { kind: "warehouse", at: 0.1322, offset: -45, scale: 1.4 },
-    { kind: "lighthouse", at: 0.1768, offset: 52, scale: 1.2 },
-    { kind: "buoy", at: 0.1983, offset: 36 },
-    { kind: "containers", at: 0.2354, offset: -30 },
-    { kind: "crane", at: 0.285, offset: -38.5, scale: 1.1 },
-    { kind: "warehouse", at: 0.3883, offset: -46 },
-    { kind: "containers", at: 0.4048, offset: -35.5, scale: 1.1 },
-    { kind: "buoy", at: 0.4626, offset: 32 },
-    { kind: "ship", at: 0.5039, offset: 120, scale: 2.0 },
-    { kind: "crane", at: 0.5039, offset: 27.5, scale: 1.3 },
-    { kind: "warehouse", at: 0.5452, offset: -44, scale: 1.3 },
-    { kind: "containers", at: 0.5659, offset: -31 },
-    { kind: "crane", at: 0.6476, offset: -36 },
-    { kind: "containers", at: 0.7476, offset: -28, scale: 1.2 },
-    { kind: "warehouse", at: 0.8261, offset: -40 },
-    { kind: "crane", at: 0.8344, offset: 30, scale: 1.2 },
-    { kind: "buoy", at: 0.9418, offset: 30 },
-    { kind: "containers", at: 0.8839, offset: -44 },
+    { kind: "containers", at: 0.0500, offset: -30 },
+    { kind: "drawbridge", at: 0.0792, offset: 0 },
+    { kind: "buoy", at: 0.1584, offset: 36 },
+    { kind: "lighthouse", at: 0.2727, offset: 52, scale: 1.2 },
+    { kind: "buoy", at: 0.3002, offset: -36 },
+    { kind: "warehouse", at: 0.3919, offset: -45, scale: 1.4 },
+    { kind: "warehouse", at: 0.4169, offset: 46 },
+    { kind: "ship", at: 0.5170, offset: -118, scale: 2.2 },
+    { kind: "ship-deck", at: 0.5170, offset: 0, span: 56 },
+    { kind: "crane", at: 0.5837, offset: 36, scale: 1.2 },
+    { kind: "containers", at: 0.6504, offset: -34, scale: 1.1 },
+    { kind: "crane", at: 0.6971, offset: -36, scale: 1.3 },
+    { kind: "crane", at: 0.7237, offset: 36, scale: 1.1 },
+    { kind: "warehouse", at: 0.7754, offset: 48, scale: 1.3 },
+    { kind: "buoy", at: 0.8088, offset: -34 },
+    { kind: "containers", at: 0.8672, offset: 33 },
+    { kind: "crane", at: 0.9172, offset: -30, scale: 1.2 },
+    { kind: "containers", at: 0.9797, offset: -36 },
+    { kind: "warehouse", at: 0.9422, offset: -42 },
   ],
-  duck: { at: 0.1834, offset: 58 },
+  duck: { at: 0.2752, offset: 58 },
 };
 
 /**

@@ -15,7 +15,7 @@ import { hazardAt, hazardReach } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
 import { onRoute } from "./routes";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
-import { AIR, arcAt, arcHeight, arcSlope, type ArcSite } from "./air";
+import { AIR, arcAt, arcHeight, arcLive, arcSlope, type ArcSite } from "./air";
 import { barrierDistance, gapAt, groundAt, isOpen, rescueSpot, tableAt, type RampSite } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
@@ -841,11 +841,13 @@ function launchOffArcs(w: World, k: KartState, prevS: number, emit: Emit): void 
   if (arcs.length === 0 || k.spin > 0) return;
   const half = w.geo.at(k.s).width / 2;
   if (Math.abs(k.offset) > half) return;
+  const time = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
   for (let i = 0; i < arcs.length; i++) {
     const site = arcs[i]!;
     const before = w.geo.delta(prevS, site.s);
     const after = w.geo.delta(k.s, site.s);
     if (before <= 0 || after > 0 || before > 8 || k.offset < site.lo || k.offset > site.hi) continue;
+    if (site.timed && !arcLive(site, time)) continue;
     launchArc(w, k, site, emit);
     return;
   }
