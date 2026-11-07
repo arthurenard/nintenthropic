@@ -728,7 +728,7 @@ function flyControl(w: World, k: KartState, steerIn: number, driftIn: boolean, s
   k.prevDrift = driftIn;
   if ((k.flight === 2 || k.flight === 3) && k.trick === 0 && (rising || shook)) {
     if (shook && k.flight === 2 && k.aloft <= KICK_AFTER) {
-      kick(k, emit);
+      kick(w, k, emit);
     } else {
       k.trick = 1;
       emit({ type: "trick", kart: k.id });
@@ -752,13 +752,13 @@ function flyControl(w: World, k: KartState, steerIn: number, driftIn: boolean, s
 }
 
 /** A shake at the lip: a trick, and the kart springs off higher and further. */
-function kick(k: KartState, emit: Emit): void {
+function kick(w: World, k: KartState, emit: Emit): void {
   k.trick = 1;
   k.prime = -1;
   k.vy += R.kickLift;
   k.vx *= R.kickSpeed;
   k.vz *= R.kickSpeed;
-  capSpeed(k, D.maxSpeed);
+  capSpeed(k, D.maxSpeed * Math.max(1, w.rule.topSpeed));
   emit({ type: "trick", kart: k.id, kick: true });
 }
 
@@ -931,7 +931,7 @@ function launch(w: World, k: KartState, ramp: RampSite, along: number, emit: Emi
   k.prime = 0;
   if (!fast) return;
   emit({ type: "jump", kart: k.id });
-  if (primed && ramp.trick && k.spin === 0) kick(k, emit);
+  if (primed && ramp.trick && k.spin === 0) kick(w, k, emit);
 }
 
 /**

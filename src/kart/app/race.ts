@@ -123,9 +123,10 @@ export class RaceScreen {
   private readonly loadingUi = new LoadingScreen();
   /** The small frame-rate readout, when the pause sheet's Frame Rate switch has it on. */
   private readonly rate = new FrameRate($("race-fps"));
-  /** The pause sheet's Finish Photo switch (for a device with a wheel player): kept, and true for the photo still to come. */
   /** The Party Rules chip now showing, as a key (the card and the race), so it is written once and gone after a few seconds. */
   private ruleChipKey = "";
+  private ruleChipTimer = 0;
+  /** The pause sheet's Finish Photo switch (for a device with a wheel player): kept, and true for the photo still to come. */
   private readonly photoSwitch = new Switch($<HTMLButtonElement>("pause-photo"), (on) => saveFinishPhoto(on));
 
   /** The readout on or off (the pause sheet's switch, and the setting as it was kept). */
@@ -219,6 +220,7 @@ export class RaceScreen {
     const lobby = ctx.session.lobby();
     this.loadingUi.begin(raceWords(lobby.settings, lobby.grandPrix, lobby.card), ctx.controls[0]?.kind ?? null);
     this.ruleChipKey = "";
+    window.clearTimeout(this.ruleChipTimer);
     $("rule-chip").hidden = true;
     this.loading(true, 0);
     this.pauseNote();
@@ -421,7 +423,8 @@ export class RaceScreen {
         // Fade out, then take it away (at once with reduced motion).
         this.ruleChipKey = "gone";
         chip.dataset.leaving = "";
-        window.setTimeout(() => {
+        window.clearTimeout(this.ruleChipTimer);
+        this.ruleChipTimer = window.setTimeout(() => {
           if (this.ruleChipKey === "gone") chip.hidden = true;
         }, calm() ? 0 : 450);
       }
