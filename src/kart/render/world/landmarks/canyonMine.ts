@@ -67,20 +67,30 @@ export const mineTunnel: LandmarkSpec = {
     const legs = 4.6;
     const half = ctx.span / 2;
     const lip = 2.4;
-    const thick = (t: number, zt: number) => (4.2 + 2.4 * Math.sin(Math.PI * t)) * (0.7 + 0.3 * Math.pow(Math.sin(Math.PI * zt), 0.5));
+    const thick = (t: number, zt: number) => (6.5 + 7 * Math.sin(Math.PI * t)) * (0.55 + 0.45 * Math.pow(Math.sin(Math.PI * zt), 0.5));
     const body = { halfIn: hw, topIn: top, legs, thick, steps: Math.max(6, Math.round(ctx.span / 3)), arcSteps: 14, rough: 0.55, seed: 11, skirt: 3 };
     noisyArch(lit, { ...body, z0: -half + lip, z1: half - lip, inner: rockShade(2, 0.62), outer: rockShade(7, 1.0, 2.8) });
     // The mouths: fatter, paler rock either end, and a hill of rubble on top, so it reads as a mesa with a hole through it.
     for (const s of [-1, 1]) {
       const z0 = s < 0 ? -half : half - lip - 0.01;
-      noisyArch(lit, { ...body, thick: (t) => 5.4 + 2.6 * Math.sin(Math.PI * t), steps: 2, rough: 0.9, seed: 30 + s, z0, z1: z0 + lip + 0.01, inner: rockShade(4, 0.8), outer: rockShade(9, 1.05, 2.8) });
+      noisyArch(lit, { ...body, thick: (t) => 8 + 8 * Math.sin(Math.PI * t), steps: 2, rough: 0.9, seed: 30 + s, z0, z1: z0 + lip + 0.01, inner: rockShade(4, 0.8), outer: rockShade(9, 1.05, 2.8) });
     }
-    for (let k = 0; k < 9; k++) {
-      const z = -half * 0.9 + (k / 8) * half * 1.8;
-      const x = (hash(k, 7) - 0.5) * 9;
-      const s = 4.2 + hash(k, 8) * 3.4;
-      rockBlob(lit, x, top + 4.4 + 2.4 * Math.sin((k / 8) * Math.PI), z, s * 1.2, s * 0.7, s, rockShade(40 + k, 1.05), k + 3, { detail: 1, roughness: 0.22, flatBase: true });
+    // The hill itself: buttresses of strata rock down both flanks (beyond the walls, so clear of the road), a heap of rubble over the
+    // crown and a dark cap, so it reads as a mesa with a hole through it rather than a pipe.
+    for (let k = 0; k < 14; k++) {
+      const s = k % 2 === 0 ? -1 : 1;
+      const z = -half * 0.95 + (Math.floor(k / 2) / 6) * half * 1.9;
+      const r = 5.5 + hash(k, 8) * 4.5;
+      const x = s * (hw + 5.5 + hash(k, 7) * 7);
+      rockBlob(lit, x, 0, z, r * 1.15, r * (1.6 + 0.6 * hash(k, 3)), r, rockShade(40 + k, 0.95 + 0.1 * hash(k, 5), 2.2), k + 3, { detail: 1, roughness: 0.3, flatBase: true });
     }
+    for (let k = 0; k < 8; k++) {
+      const z = -half * 0.85 + (k / 7) * half * 1.7;
+      const x = (hash(k, 17) - 0.5) * 12;
+      const r = 5 + hash(k, 18) * 3.5;
+      rockBlob(lit, x, top + 3 + 3.5 * Math.sin((k / 7) * Math.PI), z, r * 1.4, r * 0.8, r, rockShade(55 + k, 1.0, 2.2), k + 9, { detail: 1, roughness: 0.28, flatBase: true });
+    }
+    for (let k = 0; k < 3; k++) rockBlob(lit, (k - 1) * 6, top + 10.5 + 1.5 * Math.sin((k / 2) * Math.PI), (k - 1) * half * 0.5, 4.2, 2.2, 4.2, scaleRgb(CAP, 1.3), k + 21, { detail: 1, roughness: 0.25, flatBase: true });
     for (const s of [-1, 1]) for (let k = 0; k < 3; k++) drift(lit, s * (hw + 4.8 + k * 0.7), -half * 0.55 + k * half * 0.55, 3.8, 1.5, 3.4, (p) => scaleRgb(DUST, 0.8 + 0.12 * p[1]), k + s * 5);
     // Timber sets: two posts at the wall and a cap beam across, every 5 m; a lantern from each beam.
     const sets: number[] = [];
@@ -90,14 +100,14 @@ export const mineTunnel: LandmarkSpec = {
       for (const s of [-1, 1]) {
         lit.box(s * px, legs * 0.5 + 0.8, z, 0.62, legs + 1.6, 0.62, { bottom: TIMBER_DARK, top: TIMBER }, 0, 0, 0);
         // A diagonal brace from the post up under the beam, held above the camera's band.
-        beam(lit, [s * px, 5.2, z], [s * (px - 2.6), 6.5, z], 0.34, 0.34, [0, 0, 1], TIMBER_DARK, TIMBER);
+        beam(lit, [s * px, 5.5, z], [s * (px - 2.6), 6.6, z], 0.34, 0.34, [0, 0, 1], TIMBER_DARK, TIMBER);
       }
       lit.box(0, 6.1, z, 2 * px + 0.6, 0.55, 0.7, { bottom: TIMBER_DARK, top: TIMBER_PALE });
       // The lantern: an iron cage and a bright core, a short chain above it.
-      lit.rod([0, 6.0, z], [0, 5.5, z], 0.07, IRON);
-      lit.box(0, 5.2, z, 0.5, 0.55, 0.5, IRON);
-      glow.box(0, 5.2, z, 0.34, 0.4, 0.34, LAMP);
-      halos.push({ x: 0, y: 5.2, z, size: 11, colour: [3.2, 1.9, 0.7], alpha: 0.42, twinkle: 0.1 });
+      lit.rod([0, 6.0, z], [0, 5.8, z], 0.07, IRON);
+      lit.box(0, 5.55, z, 0.5, 0.5, 0.5, IRON);
+      glow.box(0, 5.55, z, 0.34, 0.36, 0.34, LAMP);
+      halos.push({ x: 0, y: 5.55, z, size: 11, colour: [3.2, 1.9, 0.7], alpha: 0.42, twinkle: 0.1 });
     }
     // The floor: sleepers and a pair of rails the length of the tunnel, one track down the middle, under 0.45 m so they may lie on the road.
     const rail = rgb("#6c6a6e");
