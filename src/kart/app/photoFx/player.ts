@@ -68,6 +68,7 @@ export class FxPlayer {
     figure.style.setProperty("--tint-foot", look.tint[1]);
     figure.style.setProperty("--tint-k", String(look.tint[2]));
     figure.style.setProperty("--vignette", String(look.vignette));
+    figure.style.setProperty("--night", String(look.night));
     figure.style.setProperty("--accent", look.accent);
     figure.dataset.look = look.id;
     const tint = document.createElement("div");

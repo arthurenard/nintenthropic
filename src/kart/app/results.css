@@ -431,6 +431,15 @@ tr[data-place="3"] .medal,
   height: 100%;
   pointer-events: none;
 }
+/* Over a bright picture the sky goes toward night, so the fireworks and lights show. */
+.shot.has-photo .shot-picture::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(4, 8, 30, var(--night, 0)) 0%, rgba(4, 8, 30, 0) 75%);
+  pointer-events: none;
+}
 .shot-tint {
   z-index: 1;
   display: none;

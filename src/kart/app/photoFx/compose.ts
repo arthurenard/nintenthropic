@@ -35,6 +35,15 @@ export function paintGraded(c: Ctx, image: CanvasImageSource, x: number, y: numb
   c.globalAlpha = strength;
   c.fillStyle = wash;
   c.fillRect(x, y, w, h);
+  if (look.night > 0) {
+    const dusk = c.createLinearGradient(0, y, 0, y + h * 0.75);
+    dusk.addColorStop(0, `rgba(4,8,30,${look.night})`);
+    dusk.addColorStop(1, "rgba(4,8,30,0)");
+    c.globalCompositeOperation = "source-over";
+    c.globalAlpha = 1;
+    c.fillStyle = dusk;
+    c.fillRect(x, y, w, h);
+  }
   c.restore();
   paintVignette(c, x, y, w, h, look.vignette);
 }

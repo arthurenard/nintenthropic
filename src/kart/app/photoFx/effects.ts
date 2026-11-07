@@ -59,7 +59,7 @@ function burst(c: Ctx, cx: number, cy: number, radius: number, q: number, spokes
   c.globalAlpha = fade * (0.75 + 0.25 * Math.sin(q * 40));
   if (q < 0.18) {
     c.beginPath();
-    c.arc(cx, cy, radius * 0.22 * (1 - q / 0.18), 0, TAU);
+    c.arc(cx, cy, radius * 0.1 * (1 - q / 0.18), 0, TAU);
     c.fill();
   }
   c.beginPath();
@@ -105,7 +105,7 @@ function fireworks(c: Ctx, s: Scene, look: Look): void {
       continue;
     }
     const q = (p - 0.2) / 0.8;
-    burst(c, cx, cy, radius, q, fair ? 26 : 20, rnd(i, 4) * 3, s.u * 0.011);
+    burst(c, cx, cy, radius, q, fair ? 26 : 20, rnd(i, 4) * 3, s.u * 0.015);
     if (!fair) {
       // The water takes the light, wobbling.
       c.save();
@@ -301,9 +301,9 @@ function dustDevil(c: Ctx, s: Scene): void {
     const hh = frac(i / 36 + ph(s.t, 1));
     const a = TAU * (ph(s.t, 3) + i * 0.37);
     const r = s.u * (0.015 + 0.075 * hh);
-    c.globalAlpha = 0.5 * Math.sin(Math.PI * hh) ** 0.7;
+    c.globalAlpha = 0.8 * Math.sin(Math.PI * hh) ** 0.7;
     c.beginPath();
-    c.arc(cx + Math.cos(a) * r, base - hh * s.u * 0.5 + Math.sin(a) * r * 0.25, s.u * (0.008 + 0.01 * hh), 0, TAU);
+    c.arc(cx + Math.cos(a) * r, base - hh * s.u * 0.5 + Math.sin(a) * r * 0.25, s.u * (0.012 + 0.016 * hh), 0, TAU);
     c.fill();
   }
   c.globalAlpha = 1;
@@ -357,9 +357,9 @@ function snow(c: Ctx, s: Scene): void {
 
 function frost(c: Ctx, s: Scene): void {
   const grow = 0.62 + 0.2 * (0.5 - 0.5 * Math.cos(TAU * ph(s.t, 1)));
-  const reach = s.u * grow * 0.8;
+  const reach = s.u * grow * 0.55;
   c.lineCap = "round";
-  c.strokeStyle = "rgba(235,248,255,0.7)";
+  c.strokeStyle = "rgba(235,248,255,0.55)";
   c.lineWidth = Math.max(1, s.u * 0.005);
   c.beginPath();
   for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [s.w, 0, -1, 1], [0, s.h, 1, -1], [s.w, s.h, -1, -1]] as const) {
@@ -576,7 +576,7 @@ function crown(c: Ctx, s: Scene): void {
     c.fillRect(s.w * rnd(i, 10) + Math.sin(TAU * (p * 2 + i)) * s.u * 0.03, s.h * (-0.05 + 1.1 * p), s.u * 0.018, s.u * 0.011 * Math.cos(TAU * (p * 3 + i)));
   }
   const w = s.u * 0.2;
-  const x = s.w / 2;
+  const x = s.w * 0.3;
   const y = s.u * 0.06 + Math.sin(TAU * ph(s.t, 2)) * s.u * 0.008;
   const gold = c.createLinearGradient(x, y, x, y + w * 0.6);
   gold.addColorStop(0, "#fff1a8");
