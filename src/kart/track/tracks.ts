@@ -460,18 +460,20 @@ export const FUN_FAIR: TrackDef = {
     { x: 7.4, z: 167.5, bank: -0.12 },
     { x: 27.5, z: 187.6, bank: -0.12 },
     { x: 55, z: 195 },
-    // Along the top over the big dipper, down under the rollercoaster and round the banked hairpin.
-    { x: 98.4, z: 195, y: 0.2 },
-    { x: 141.8, z: 195, y: 2.4 },
-    { x: 185.2, z: 195, y: 1.2 },
-    { x: 228.6, z: 195, y: 0.2 },
-    { x: 272, z: 195, y: -1.2 },
-    { x: 281, z: 192.6, y: -1.2, bank: -0.2 },
-    { x: 287.6, z: 186, y: -1, bank: -0.3 },
-    { x: 290, z: 177, y: -0.8, bank: -0.32 },
-    { x: 290, z: 174, y: -0.8, bank: -0.32 },
-    { x: 287.6, z: 165, y: -0.6, bank: -0.3 },
-    { x: 281, z: 158.4, y: -0.4, bank: -0.2 },
+    // Along the top on the rollercoaster's own course: the lift hill (six and a half metres at 5%) with a weave
+    // either side of the crest, then the plunge (nearly nine metres in under ninety) to the dip under the
+    // coaster, and round the banked hairpin.
+    { x: 98.4, z: 201, y: 0.8, bank: 0.06 },
+    { x: 141.8, z: 214, y: 4.6, bank: 0.1 },
+    { x: 185.2, z: 203, y: 6.4, bank: -0.1 },
+    { x: 228.6, z: 184, y: 1.2, bank: -0.1 },
+    { x: 272, z: 195, y: -2.4 },
+    { x: 281, z: 192.6, y: -2.2, bank: -0.2 },
+    { x: 287.6, z: 186, y: -1.8, bank: -0.3 },
+    { x: 290, z: 177, y: -1.5, bank: -0.32 },
+    { x: 290, z: 174, y: -1.4, bank: -0.32 },
+    { x: 287.6, z: 165, y: -1, bank: -0.3 },
+    { x: 281, z: 158.4, y: -0.6, bank: -0.2 },
     { x: 272, z: 156, y: -0.2 },
     { x: 236.3, z: 156 },
     { x: 200.7, z: 156 },
@@ -486,9 +488,10 @@ export const FUN_FAIR: TrackDef = {
     { x: 125, z: -70 },
     { x: 119.6, z: -90, bank: -0.14 },
     { x: 105, z: -104.6, bank: -0.14 },
+    // The hall of mirrors: a chicane under the swinging boats.
     { x: 85, z: -110 },
-    { x: 62.5, z: -110 },
-    { x: 40, z: -110 },
+    { x: 62.5, z: -102, bank: 0.1 },
+    { x: 40, z: -117, bank: -0.1 },
     { x: 20, z: -104.6, bank: -0.14 },
     { x: 5.4, z: -90, bank: -0.14 },
     { x: 0, z: -70 },
@@ -504,9 +507,18 @@ export const FUN_FAIR: TrackDef = {
     { at: 0.7485 },
   ],
   hazards: [
-    { kind: "bumper-car", motion: "cross", period: 5.2, radius: 2.1, offset: 0, at: 0.6593, span: 11 },
-    { kind: "bumper-car", motion: "cross", period: 5.2, phase: 0.35, radius: 2.1, offset: 0, at: 0.683, span: 11 },
-    { kind: "bumper-car", motion: "cross", period: 5.2, phase: 0.7, radius: 2.1, offset: 0, at: 0.7066, span: 11 },
+    // Test your strength: two mallets on the first straight, one up while the other comes down.
+    ...stomperRow({ kind: "mallet", at: 0.1075, lanes: [-3.5, 3.5], period: 4.2, stagger: 0.5, radius: 2.2 }),
+    // The funhouse: striped walls slide across the big top, one each way, a lamp lit before each.
+    crosser({ kind: "funhouse-panel", at: 0.4965, reach: 9, period: 5.2 }),
+    crosser({ kind: "funhouse-panel", at: 0.5205, reach: -9, period: 5.2, phase: 0.5 }),
+    // The carousel turns in the middle of the plaza: a bar of horses, two ways round, to time.
+    ...sweeper({ kind: "arm-ball", at: 0.663, offset: 0, length: 9.5, period: 6.5, both: true }),
+    { kind: "bumper-car", motion: "cross", period: 5.2, phase: 0.35, radius: 2.1, offset: 0, at: 0.695, span: 11 },
+    { kind: "bumper-car", motion: "cross", period: 5.2, phase: 0.7, radius: 2.1, offset: 0, at: 0.718, span: 11 },
+    // The pirate ships swing over the chicane, a beat apart.
+    pendulum({ kind: "swing-boat", at: 0.858, reach: 4.5, period: 3.4, radius: 2 }),
+    pendulum({ kind: "swing-boat", at: 0.88, reach: 4.5, period: 3.4, phase: 0.5, radius: 2 }),
     { kind: "teacup-ride", motion: "orbit", period: 7, radius: 2.6, offset: 26, at: 0.672, span: 14 },
     { kind: "teacup-ride", motion: "orbit", period: 6.4, phase: 0.3, radius: 2.6, offset: -25, at: 0.2605, span: 15 },
   ],
@@ -615,6 +627,8 @@ export const GLACIER_PASS: TrackDef = {
     { at: 0.862, offset: -2 },
   ],
   ramps: [
+    // A kicker on the frozen lake: a short hop on the ice, a trick for a boost.
+    { at: 0.233, lift: 5 },
     { at: 0.74 },
   ],
   drops: [
@@ -628,11 +642,17 @@ export const GLACIER_PASS: TrackDef = {
     { from: 0.8, to: 0.833, kind: "ice", offset: 3.5, width: 7 },
   ],
   hazards: [
-    { kind: "penguin", motion: "cross", period: 6.5, radius: 1.6, at: 0.2271, span: 9 },
-    { kind: "penguin", motion: "cross", period: 7.2, phase: 0.4, radius: 1.6, at: 0.661, span: 9 },
+    { kind: "penguin", motion: "cross", period: 6.5, radius: 1.6, at: 0.201, span: 9 },
     { kind: "snowball", motion: "roll", period: 5, radius: 2.2, offset: -2.5, at: 0.541, span: 0.033 },
     { kind: "snowball", motion: "roll", period: 5, phase: 0.55, radius: 2.2, offset: -2.5, at: 0.541, span: 0.033 },
     { kind: "yeti", motion: "bob", period: 8, phase: 0.1, radius: 2.4, offset: 3.4, at: 0.8736 },
+    // The ice cave: icicles let go on a timer, one after another down the cave, shaking first.
+    { kind: "icicle", at: 0.5985, motion: "crush", period: 4.5, phase: 0, radius: 1.5, offset: -3.4, top: 7 },
+    { kind: "icicle", at: 0.607, motion: "crush", period: 4.5, phase: 0.33, radius: 1.5, offset: 3.4, top: 7 },
+    { kind: "icicle", at: 0.6155, motion: "crush", period: 4.5, phase: 0.66, radius: 1.5, offset: -3.4, top: 7 },
+    // The avalanche path: big snowballs thunder down the in-run, one down each side in turn.
+    { kind: "snowball", motion: "roll", period: 4.6, radius: 2.2, offset: -4.2, at: 0.678, span: 0.03 },
+    { kind: "snowball", motion: "roll", period: 4.6, phase: 0.5, radius: 2.2, offset: 4.2, at: 0.678, span: 0.03 },
   ],
   landmarks: [
     { kind: "cabin", at: 0.0331, offset: 36 },
