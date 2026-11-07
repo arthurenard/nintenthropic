@@ -1492,13 +1492,20 @@ front of them (or a laptop), and the TV is the host's screen.
   `HazardPose.warn` (0..1) is the telegraph the picture shows; `top` is how
   high a crusher hangs. Helpers `sweeper`, `stomperRow` (a wave across the
   lanes, with gaps), `pendulum` and `crosser` spread a piece over its
-  hazards. The picture draws one instanced mesh per kind plus one for the
-  plain parts (chains, beams, rails, lamp posts) and one for the shadows:
-  a track of ten pieces is about six draw calls. Mirror mode negates the
-  `span` of a swing or slide so they stay in step with the flipped road.
+  hazards. The picture draws one instanced mesh per kind, one for the parts
+  that move, one for the parts that never do (gantries, beams, rails, lamp
+  posts: written once, on the first frame) and one for the shadows. Reduce
+  Motion turns the rattle and the lamp's flicker into a steady colour.
+  Mirror mode negates the `span` of a swing or slide (or flips `dir` when a
+  slide has no span) so they stay in step with the flipped road.
   The bots read the same poses a couple of seconds ahead, as for any hazard,
   and wait (slow to 55%) or gamble (a tighter line) by skill. Not built yet:
-  turntable platforms that carry a kart, floors and gates that rise.
+  turntable platforms that carry a kart, floors and gates that rise. Also
+  not built, from the round's wish list: the Canyon mine tunnel through the
+  mesa and a swaying rope bridge, a Fun Fair funhouse of mirrors and a Ferris
+  wheel to drive under with its swinging cars, the Glacier frozen waterfall
+  to drive behind and a real rolling avalanche. The Canyon and Glacier road
+  layouts are close to round one's; the set pieces are what changed.
 - **Landmarks** (`landmarks`): set pieces the picture builds, by name from
   the theme's list below; `span` for a thing over the road (a tunnel, an
   arch). What the picture builds never stands where a kart can be: nothing
