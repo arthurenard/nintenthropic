@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LoadGovernor, lookFor, MAX_LEVEL } from "./loadGovernor";
+import { keepLevel, keptLevel, LoadGovernor, lookFor, MAX_LEVEL } from "./loadGovernor";
 
 /** Feeds `seconds` of frames of `ms` each; the levels it passed through. */
 function run(g: LoadGovernor, ms: number, seconds: number, speed?: (level: number) => number): number[] {
@@ -41,6 +41,17 @@ describe("LoadGovernor", () => {
     const seen = run(g, 33.3, 60);
     expect(seen.length).toBeLessThanOrEqual(2);
     expect(g.level).toBe(0);
+  });
+
+  it("keeps a step that cut the main thread's work though the frames still come in whole refreshes", () => {
+    const g = new LoadGovernor();
+    const levels: number[] = [];
+    for (let i = 0; i < 60 * 40; i++) {
+      // 33 ms frames whatever the level (vsync), but each level builds the frame 15% quicker.
+      if (g.sample(33.3, 28 * 0.85 ** g.level)) levels.push(g.level);
+    }
+    expect(levels[0]).toBe(1);
+    expect(g.level).toBeGreaterThanOrEqual(3);
   });
 
   it("goes back up slowly when the load has gone, and only one step at a time", () => {
@@ -89,5 +100,35 @@ describe("lookFor", () => {
       expect(b.particles).toBeLessThan(a.particles);
       expect(b.rushTaps).toBeLessThanOrEqual(a.rushTaps);
     }
+  });
+});
+
+describe("what a device remembers", () => {
+  const memory = () => {
+    const data = new Map<string, string>();
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  };
+
+  it("starts a race at the level the last one ended at, for the same number of views", () => {
+    const m = memory();
+    keepLevel(m, 4, 3, 1000);
+    expect(keptLevel(m, 4, 2000)).toBe(3);
+    expect(keptLevel(m, 2, 2000)).toBe(0);
+  });
+
+  it("forgets after two weeks, and survives storage that is missing or broken", () => {
+    const m = memory();
+    keepLevel(m, 4, 2, 0);
+    expect(keptLevel(m, 4, 15 * 24 * 3600 * 1000)).toBe(0);
+    expect(keptLevel(null, 4)).toBe(0);
+    expect(() => keepLevel({ getItem: () => "not json", setItem: () => { throw new Error("full"); } }, 4, 1)).not.toThrow();
+    expect(keptLevel({ getItem: () => "{{" }, 4)).toBe(0);
+  });
+
+  it("lets pixels act only after the cheap steps", () => {
+    const g = new LoadGovernor();
+    expect(g.yields).toBe(false);
+    g.reset(2);
+    expect(g.yields).toBe(true);
   });
 });

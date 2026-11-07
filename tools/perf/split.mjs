@@ -124,6 +124,12 @@ async function once(browser, players, track, camera) {
   await page.getByRole("button", { name: "Start Race" }).click();
   await page.waitForFunction(() => window.gripTest.state()?.race, null, { timeout: 120000 });
   await page.locator("#race-loading").waitFor({ state: "hidden", timeout: 120000 });
+  // Programs linked from here on (the countdown too) are hitches: the pre-warm should have built them all.
+  await page.evaluate(() => {
+    window.__perf.armed = true;
+    window.__perf.programs.length = 0;
+    window.__perf.calls.length = 0;
+  });
   await page.evaluate((p) => window.gripTest.wheel(null), poses);
   await page.waitForFunction(() => window.gripTest.state()?.race?.phase === "racing", null, { timeout: 60000 });
   await page.evaluate((p) => window.gripTest.wheel(p), poses);
@@ -132,7 +138,6 @@ async function once(browser, players, track, camera) {
     const P = window.__perf;
     P.frames.length = 0;
     P.long.length = 0;
-    P.programs.length = 0;
     P.calls.length = 0;
     P.heap.length = 0;
     P.armed = true;
@@ -154,10 +159,13 @@ async function once(browser, players, track, camera) {
   }
   // The karts weave a little so the bots, items and bumps happen.
   const t0 = Date.now();
+  const trace = [];
   let k = 0;
   while (Date.now() - t0 < SECONDS * 1000) {
     const angles = poses.map((p, i) => ({ ...p, angle: Math.sin((k + i) / 3) * 25 }));
     await page.evaluate((p) => window.gripTest.wheel(p), angles).catch(() => {});
+    const st = await page.evaluate(() => window.__gripStats?.()).catch(() => null);
+    if (st) trace.push(`${st.loadLevel}/${st.resolutionScale}`);
     k++;
     await page.waitForTimeout(250);
   }
@@ -218,7 +226,7 @@ async function once(browser, players, track, camera) {
     gcDrops: drops, garbageKBps: Math.round(allocated / 1024 / secs),
     programsLinked: P.programs.length,
     callsMedian: pct(P.calls, 50), callsP99: pct(P.calls, 99),
-    worst, errors: errors.slice(0, 3), end: out.end,
+    worst, errors: errors.slice(0, 3), end: out.end && { tier: out.end.tier, level: out.end.loadLevel, scale: out.end.resolutionScale, pr: out.end.pixelRatio, calls: out.end.drawCalls, tris: out.end.triangles, programs: out.end.programs }, trace: trace.filter((x, i) => x !== trace[i - 1]).join(" "),
   };
 }
 

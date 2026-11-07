@@ -376,6 +376,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   })();
   const governor = new LoadGovernor();
   let governorSet = false;
+  let lastBusy = 0;
   const storage = (() => {
     try {
       return typeof localStorage !== "undefined" ? localStorage : null;
@@ -597,21 +598,25 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
     frame(view: RaceView, dtRaw: number): void {
       if (!world || !effects || !things || !itemFx || !skids || disposed || ctxLost) return;
-      const tStart = profiling ? performance.now() : 0;
+      const tFrame = performance.now();
+      const tStart = profiling ? tFrame : 0;
       const dt = Math.min(0.1, Math.max(0, dtRaw));
       time += dt;
+      // How long the last frame took the main thread to build (the one before this: its cost is known only when it is over).
+      const busyMs = lastBusy;
       if (!governorSet && view.phase !== "countdown") {
         // Each race starts at the level this device ended the last one at, for this many views.
         governorSet = true;
         governor.reset(forcedLevel ?? keptLevel(storage, viewKarts.length));
         applyLevel(governor.level);
       }
-      if (governorSet && forcedLevel === null && dtRaw > 0 && view.phase === "racing" && governor.sample(dtRaw * 1000)) {
+      if (governorSet && forcedLevel === null && dtRaw > 0 && view.phase === "racing" && governor.sample(dtRaw * 1000, busyMs)) {
         applyLevel(governor.level);
         keepLevel(storage, viewKarts.length, governor.level);
       }
       if (dtRaw > 0 && options.resolutionScale === undefined) {
-        if (resolution.sample(dtRaw * 1000)) applySize();
+        // Pixels wait while the governor still has its cheap steps to take (they cost the picture less).
+        if ((forcedLevel !== null || governor.yields || view.phase !== "racing") && resolution.sample(dtRaw * 1000)) applySize();
         // Pixels were the cheap way to save time; if they have done all they can and the frames are still slow, the next race tries a tier lower.
         if (strain.frame(dtRaw, resolution.spent)) options.onStrain?.(tier, strain.interval ?? dtRaw * 1000);
         if (!keptUpTold && strain.steady) {
@@ -752,6 +757,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       eggs.end(time);
 
       hud.update(view, dt);
+      lastBusy = performance.now() - tFrame;
       if (profiling) {
         const tEnd = performance.now();
         smooth("update", tSubmit - tStart);

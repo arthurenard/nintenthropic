@@ -53,12 +53,14 @@ export function lookFor(level: number, range: number): LoadLook {
 const WINDOW = 45;
 /** Slower than this multiple of the target, by the window's median, is slow. */
 const SLOW = 1.25;
+/** Slower than this multiple needs only one window to be believed. */
+const VERY_SLOW = 1.8;
 /** Quicker than this multiple is room to spare. */
 const EASY = 1.08;
 /** Slow windows in a row before a step down. */
 const SLOW_WINDOWS = 2;
 /** Frames left alone after a step for the frames to settle (about 2.5 s). */
-const SETTLE = 150;
+const SETTLE = 120;
 /** Easy windows in a row before a trial step up (about 12 s). */
 const EASY_WINDOWS = 16;
 /** A trial step up holds if it is still easy this many frames later (about 6 s). */
@@ -80,11 +82,12 @@ export class LoadGovernor {
   /** Frames seen: the clock of the governor. */
   private frames = 0;
   private window: number[] = [];
+  private busyWindow: number[] = [];
   private slowWindows = 0;
   private easyWindows = 0;
   private settleUntil = 0;
   /** The step just made down, to be judged: the interval it began from, and when to judge. */
-  private judging: { before: number; at: number } | null = null;
+  private judging: { before: number; busy: number; at: number } | null = null;
   /** A trial step up in progress: from which level, and when it began. */
   private trial: { from: number; at: number } | null = null;
   private trials = 0;
@@ -103,10 +106,11 @@ export class LoadGovernor {
     this.level = Math.max(0, Math.min(max, start));
   }
 
-  /** One frame's interval, ms. True when the level changed. */
-  sample(interval: number): boolean {
+  /** One frame's interval, ms, and how long the main thread took to build it (0 when not known). True when the level changed. */
+  sample(interval: number, busy = 0): boolean {
     if (!(interval > 0) || interval > HITCH) {
       this.window = [];
+      this.busyWindow = [];
       return false;
     }
     this.frames++;
@@ -117,12 +121,17 @@ export class LoadGovernor {
     }
     if (this.frames < this.settleUntil) {
       this.window = [];
+      this.busyWindow = [];
       return false;
     }
     this.window.push(interval);
+    this.busyWindow.push(busy);
     if (this.window.length < WINDOW) return false;
     const sorted = [...this.window].sort((a, b) => a - b);
     this.window = [];
+    const busySorted = this.busyWindow.sort((a, b) => a - b);
+    this.busyWindow = [];
+    const busyMedian = busySorted[WINDOW >> 1]!;
     const median = (sorted[(WINDOW >> 1) - 1]! + sorted[WINDOW >> 1]!) / 2;
     // The mean of the middle, for judging a step: one hitch should not decide it.
     let sum = 0;
@@ -135,9 +144,12 @@ export class LoadGovernor {
 
     // A step down is judged once the frames have settled after it.
     if (this.judging && this.frames >= this.judging.at) {
-      const { before } = this.judging;
+      const { before, busy } = this.judging;
       this.judging = null;
-      if (slow && mean > before * GAIN && this.level > 0) {
+      // Quicker frames are one sign that a step bought something; frames come in whole refreshes, so a step that took a
+      // tenth off the main thread's work may not show in them yet: the time the frame took to build is the other.
+      const helped = mean <= before * GAIN || (busy > 0 && busyMedian <= busy * GAIN);
+      if (slow && !helped && this.level > 0) {
         // Nothing came of it: put it back, and leave this alone while the frames stay as they are.
         this.futile = mean;
         return this.set(this.level - 1);
@@ -149,7 +161,8 @@ export class LoadGovernor {
       this.easyWindows = 0;
       if (this.futile !== null && mean > this.futile * BAND[0] && mean < this.futile * BAND[1]) return false;
       this.futile = null;
-      this.slowWindows++;
+      // Far over the target (under 30 fps): one window is enough.
+      this.slowWindows += median > this.target * VERY_SLOW ? SLOW_WINDOWS : 1;
       if (this.trial) {
         // The trial failed: back down at once, that step closed for twice as long as before.
         const from = this.trial.from;
@@ -162,7 +175,7 @@ export class LoadGovernor {
       }
       if (this.slowWindows >= SLOW_WINDOWS && this.level < this.max) {
         this.slowWindows = 0;
-        this.judging = { before: mean, at: this.frames + SETTLE };
+        this.judging = { before: mean, busy: busyMedian, at: this.frames + SETTLE };
         return this.set(this.level + 1);
       }
       return false;
@@ -181,6 +194,15 @@ export class LoadGovernor {
       this.easyWindows = 0;
     }
     return false;
+  }
+
+  /**
+   * Whether dynamic resolution may act too. The governor's first steps (a shared shadow pass, welded karts sooner, thinner
+   * particles) cost the picture the least, so pixels wait for them; they are free to go once those are spent, or when
+   * less drawing was found to buy nothing.
+   */
+  get yields(): boolean {
+    return this.level >= 2 || this.level >= this.max || this.futile !== null;
   }
 
   /** How long the last window's frames took (ms), for the tools. */
