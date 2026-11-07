@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { BoxGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Object3D } from "three";
 import { createDriver } from "./drivers";
+import { CHARACTERS } from "../characters";
 import { createArtKart, bakeArt, forRacer, resetArtKart, type ArtKit } from "./kartArt";
+import { liveryColour, liveryNode } from "./livery";
 import { MeshBuilder, rgb } from "./kartBuilder";
 import { SURF, kartMaterial } from "./kartMaterial";
 import { KART_HALF_WIDTH, KART_EXHAUST, WHEEL_FRONT, WHEEL_REAR } from "./kartSpec";
@@ -51,16 +53,44 @@ function nodeStats(json: Gltf, name: string): { tris: number; min: number[]; max
 }
 
 describe("the Blender kart's file (public/assets/kart/karts.glb)", () => {
-  it("holds the body, one wheel and the steering wheel, in the contract's budget", async () => {
+  it("holds a body for each weight class, a wheel for each, the steering wheel and every driver's livery, in the contract's budget", async () => {
     const { json, bytes } = await readGlb();
-    const body = nodeStats(json, "kart.body");
-    const wheel = nodeStats(json, "kart.wheel");
     const steering = nodeStats(json, "kart.steering");
-    expect(body.tris + wheel.tris + steering.tris).toBeLessThanOrEqual(12000);
-    expect(bytes).toBeLessThanOrEqual(600_000);
-    const known = new Set(["paint", "trim", "stripe", "chrome", "rim", "steel", "rubber", "tread", "plastic", "seat", "lamp", "tail", "glass"]);
+    for (const [body, wheel] of [["kart.body", "kart.wheel"], ["kart.body.light", "kart.wheel.light"], ["kart.body.heavy", "kart.wheel.heavy"]] as const) {
+      const b = nodeStats(json, body);
+      const w = nodeStats(json, wheel);
+      // One kart on screen is one body, one wheel (drawn four times) and the steering wheel.
+      expect(b.tris, body).toBeLessThanOrEqual(9500);
+      expect(b.tris + w.tris + steering.tris, body).toBeLessThanOrEqual(14000);
+      expect(b.materials).toContain("paint");
+      expect(b.materials).toContain("tail");
+    }
+    // The middle one is also named for its class.
+    expect(json.nodes.find((n) => n.name === "kart.body.middle")).toBeDefined();
+    expect(bytes).toBeLessThanOrEqual(1_000_000);
+    const known = new Set(["paint", "trim", "livery", "stripe", "chrome", "rim", "steel", "rubber", "tread", "plastic", "seat", "lamp", "tail", "glass"]);
     for (const m of json.materials) expect(known.has(m.name), `material ${m.name}`).toBe(true);
-    expect(body.materials).toContain("paint");
+    // Every driver's pattern exists on every class's body, and is small (it is welded into the body of the kart).
+    for (const c of CHARACTERS) {
+      for (const weight of ["light", "middle", "heavy"] as const) {
+        const l = nodeStats(json, liveryNode(weight, c.livery.pattern));
+        expect(l.materials).toEqual(["livery"]);
+        expect(l.tris).toBeLessThanOrEqual(1300);
+      }
+    }
+  });
+
+  it("gives the three weight classes bodies of their own: the buggy narrow, the muscle kart wide with its fenders", async () => {
+    const { json } = await readGlb();
+    const light = nodeStats(json, "kart.body.light");
+    const middle = nodeStats(json, "kart.body");
+    const heavy = nodeStats(json, "kart.body.heavy");
+    expect(light.max[0]! - light.min[0]!).toBeLessThan(middle.max[0]! - middle.min[0]! - 0.05);
+    expect(heavy.max[0]! - heavy.min[0]!).toBeGreaterThan(middle.max[0]! + 0.3);
+    // Wide, but no wider than the widest tyre the collisions know.
+    expect(heavy.max[0]).toBeLessThanOrEqual(KART_HALF_WIDTH + 0.02);
+    // All three keep the tailpipes where the flames come out.
+    for (const b of [light, middle, heavy]) expect(b.min[2]).toBeLessThan(KART_EXHAUST.forward);
   });
 
   it("is the code-built kart's size, so the wheels, the driver and the collisions still line up", async () => {
@@ -69,6 +99,13 @@ describe("the Blender kart's file (public/assets/kart/karts.glb)", () => {
     // Metres, y up, facing +z, resting on y = 0.2 (the tub's belly) and no wider than its sides and the chrome U round the nose.
     expect(body.min[0]).toBeGreaterThan(-0.85);
     expect(body.max[0]).toBeLessThan(0.85);
+    for (const name of ["kart.body.light", "kart.body.heavy"]) {
+      const b = nodeStats(json, name);
+      expect(b.min[1], name).toBeGreaterThan(0.1);
+      expect(b.max[1], name).toBeLessThan(2.4);
+      expect(b.min[2], name).toBeGreaterThan(-1.75);
+      expect(b.max[2], name).toBeLessThan(1.95);
+    }
     expect(body.min[1]).toBeGreaterThan(0.1);
     expect(body.max[1]).toBeLessThan(1.6);
     expect(body.min[2]).toBeGreaterThan(-1.75);
@@ -176,6 +213,60 @@ describe("the Blender kart as the game draws it", () => {
     const wheel = bakeArt(art().get("kart.wheel")!, "wheel", true);
     expect(wheel.tint[24]).toBe(1); // the wheel's painted cap stays the racer's
     expect(wheel.geometry.getAttribute("aSurf").getX(48)).toBeCloseTo(SURF.gold[0], 5); // the rim is gold
+  });
+
+  it("tints a livery with the driver's second colour, and swaps one that would vanish into the paint for a light or a dark", () => {
+    const livery = new Group();
+    livery.add(
+      (() => {
+        const m = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({ name: "livery", color: 0xffffff }));
+        const n = m.geometry.getAttribute("position").count;
+        m.geometry.setAttribute("color", new Float32BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+        return m;
+      })(),
+    );
+    const base = bakeArt(livery, "body", false);
+    expect(base.tint[0]).toBe(2);
+    const second = rgb("#00ff00");
+    const g = forRacer(base, rgb("#ff0000"), second);
+    expect(colourAt(g, 0)).toEqual([...second]);
+    // Cream on a yellow kart reads as nothing: the pattern goes dark. On a dark kart it goes light.
+    const yellow = rgb("#ffd60a");
+    const onYellow = liveryColour(yellow, "#fff1dc");
+    expect(onYellow[0] + onYellow[1] + onYellow[2]).toBeLessThan(0.6);
+    const navy = rgb("#0a1a4a");
+    const onNavy = liveryColour(navy, "#101a40");
+    expect(onNavy[0] + onNavy[1] + onNavy[2]).toBeGreaterThan(2.5);
+    // A colour that already reads is kept.
+    expect(liveryColour(rgb("#0a84ff"), "#ffb347")).toEqual(rgb("#ffb347"));
+  });
+
+  it("picks the body by the driver's weight class, and the driver's own pattern", () => {
+    const nodes = art();
+    for (const name of ["kart.body.light", "kart.body.heavy", "kart.wheel.light", "kart.wheel.heavy"]) nodes.set(name, nodes.get(name.startsWith("kart.body") ? "kart.body" : "kart.wheel")!.clone(true));
+    const asked: string[] = [];
+    const get = (n: string): Object3D | null => {
+      asked.push(n);
+      return nodes.get(n)?.clone(true) ?? null;
+    };
+    for (const [character, body, wheel, pattern] of [
+      ["bun", "kart.body.light", "kart.wheel.light", "kart.livery.light.spots"],
+      ["kit", "kart.body", "kart.wheel", "kart.livery.middle.flames"],
+      ["bramble", "kart.body.heavy", "kart.wheel.heavy", "kart.livery.heavy.chevrons"],
+    ] as const) {
+      resetArtKart();
+      asked.length = 0;
+      expect(createArtKart({ id: 1, colour: "#30D158", character }, kit, get)).not.toBeNull();
+      expect(asked, character).toContain(body);
+      expect(asked, character).toContain(wheel);
+      expect(asked, character).toContain(pattern);
+    }
+  });
+
+  it("falls back to the one kart.body when the file has no bodies by class", () => {
+    const nodes = art();
+    resetArtKart();
+    expect(createArtKart({ id: 1, colour: "#30D158", character: "bramble" }, kit, (n) => nodes.get(n)?.clone(true) ?? null)).not.toBeNull();
   });
 
   it("builds a model that the actor can pose: wheels spin, the front pair steers, the steering wheel turns, a far version takes over", () => {

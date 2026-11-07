@@ -24,7 +24,7 @@ export function liveryColour(accent: Rgb, wanted: string): Rgb {
   const want = rgb(wanted);
   const diff = Math.abs(luma(want) - luma(accent));
   const apart = Math.hypot(want[0] - accent[0], want[1] - accent[1], want[2] - accent[2]);
-  if (diff > 0.22 || apart > 0.7) return want;
+  if (diff > 0.22 || apart > 1.0) return want;
   return luma(accent) > 0.5 ? DARK : LIGHT;
 }
 
