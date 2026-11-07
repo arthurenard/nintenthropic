@@ -515,3 +515,25 @@ body[data-screen="podium"] {
     animation: fade-in 250ms var(--ease) backwards;
   }
 }
+
+/* The cup's awards (rivals.ts) under the final standings. */
+.podium-awards {
+  margin: 10px 0 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.podium-awards .award-list {
+  gap: 6px;
+  margin-top: 6px;
+}
+.podium-awards .award {
+  padding: 7px 12px;
+  animation-delay: calc(var(--i, 0) * 80ms + 1000ms);
+}
+.podium-awards .award-title,
+.podium-awards .award-who {
+  font-size: 15px;
+}
+.podium-awards .award-detail {
+  font-size: 13px;
+}

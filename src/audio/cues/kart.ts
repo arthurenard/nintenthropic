@@ -127,6 +127,7 @@ import {
   uiSelect,
   uiStart,
 } from "./kart-jingles";
+import { revenge } from "./kart-rivals";
 import type { CueSpec } from "./table";
 
 /**
@@ -247,6 +248,8 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_horn_tuba: { recipe: hornTuba, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.01, minGap: 0.1, reverb: 0.12, expect: [0.5, 1.3] },
   kart_horn_robot: { recipe: hornRobot, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.01, minGap: 0.1, reverb: 0.1, expect: [0.5, 1.1] },
   // The photo finish's flash: the screen's own camera, so it bypasses the world like the interface.
+  // Hitting your nemesis (rivals.ts): a cheeky little sting, the screen's own, so it bypasses the world like the interface.
+  kart_revenge: { recipe: revenge, pack: "kart", bus: "ui", level: -8, priority: 2, maxInstances: 1, vary: 0.02, minGap: 0.5, expect: [0.4, 1.0] },
   kart_shutter: { recipe: shutter, pack: "kart", bus: "ui", level: -7, priority: 2, maxInstances: 1, vary: 0.02, minGap: 0.3, expect: [0.2, 0.5] },
 
   // --- the interface -----------------------------------------------------------------------------------------------------------

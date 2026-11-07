@@ -111,7 +111,7 @@ describe("the kart pack", () => {
       // the places
       ...AMBIENCE_CUES,
       // the duck, the horn, the interface
-      "kart_duck", "kart_horn", ...Object.values(HORNS).filter((cue) => cue !== "kart_horn" && cue !== "kart_duck"), "kart_shutter", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
+      "kart_duck", "kart_horn", ...Object.values(HORNS).filter((cue) => cue !== "kart_horn" && cue !== "kart_duck"), "kart_shutter", "kart_revenge", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
     ];
     for (const cue of wanted) expect(KART, cue).toContain(cue);
     expect(KART.length).toBe(wanted.length);

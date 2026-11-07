@@ -19,6 +19,7 @@ import { cameraSize } from "../../tracking/hands";
 import type { HandFrame, HandSource } from "../../tracking/types";
 import { handFrame, wheelHands, type SynthHand, type WheelPose } from "../input/testHands";
 import type { LobbyState } from "../contract";
+import type { Rivalries } from "../rivals";
 import type { KartApp, KartAppSnapshot } from "./app";
 import { LoadingScreen, raceWords } from "./loading";
 import type { StandIn } from "./services.real";
@@ -150,6 +151,8 @@ export interface GripTest {
    * finish-line photos (by kart). No spec calls it: it is for looking at those screens by hand, from the browser's console.
    */
   preview(screen: "results" | "standings" | "podium", lobby: LobbyState, photos?: Readonly<Record<number, string>>): void;
+  /** The room's rivalries (rivals.ts), to feed it hits in a scripted race; null in Practice alone. */
+  rivals(): Rivalries | null;
   /** Puts up the loading screen of the race this room would run, at this far (to look at it). */
   loading(lobby: LobbyState, fraction: number): void;
 }
@@ -174,6 +177,7 @@ function makeTest(wheel: ScriptedWheel | null): GripTest {
     },
     state: () => app?.snapshot() ?? null,
     preview: (screen, lobby, photos) => app?.preview(screen, lobby, photos),
+    rivals: () => app?.rivalries() ?? null,
     loading(lobby, fraction) {
       // The race screen as the page shows it, with only its loading overlay up.
       for (const section of document.querySelectorAll<HTMLElement>("section.screen")) section.hidden = section.id !== "screen-race";

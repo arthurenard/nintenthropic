@@ -23,6 +23,7 @@ import { WebGLUnavailable } from "../../engine/common";
 import type { DriverControl, EdgeWay, ItemKind, KartView, LobbyPlayer, LobbyState, RaceRenderer, RaceView, Session } from "../contract";
 import { $, element, setText, toast } from "../../ui/dom";
 import { layoutViews } from "../render/layout";
+import { grudgeBasis, grudgeLine, type HitNote, type Rivalries } from "../rivals";
 import { EDGE_WORDS, EdgeHint } from "./edgeHint";
 import { PHOTO_GAP, recordDuck, taunts, tricksFor } from "./eggs";
 import { FinishShutter, PhotoBurst, reaction } from "./finishPhotos";
@@ -52,6 +53,8 @@ export interface RaceContext {
   controls: DriverControl[];
   /** This device's players in the lobby. */
   players: LobbyPlayer[];
+  /** The room's rivalries (rivals.ts): who hit whom, kept across its races. None in Practice alone. */
+  rivals?: Rivalries | null;
 }
 
 /**
@@ -113,6 +116,11 @@ export class RaceScreen {
   private bursts = new Map<number, { burst: PhotoBurst<Still>; control: DriverControl; session: Session; race: number }>();
   /** When each viewport's kart was last taunted, ms. */
   private taunted = new Map<number, number>();
+  /** The rivalries: the last event counted, whether this race's intro has been shown, who wears a nemesis marker (as a key), and the karts that just got a Revenge (on which tick). */
+  private rivalEvent = -1;
+  private introShown = false;
+  private marksKey = "";
+  private revenged = { tick: -1, karts: new Set<number>() };
   private cards: { place: HTMLElement; lap: HTMLElement; item: HTMLElement; slot: number }[] = [];
   private banner = "";
   private view: RaceView | null = null;
@@ -193,6 +201,10 @@ export class RaceScreen {
     this.still = null;
     this.rescues = new Map();
     this.taunted = new Map();
+    this.rivalEvent = -1;
+    this.introShown = false;
+    this.marksKey = "";
+    this.revenged = { tick: -1, karts: new Set() };
     this.shutter.reset();
     this.cameraFor = null;
     $("view-toasts").replaceChildren();
@@ -362,6 +374,7 @@ export class RaceScreen {
     if (!view) return;
     this.view = view;
     this.snapPhotos(view, lobby, now);
+    this.rivalry(view, lobby);
     if (this.mode === "pending") this.choose(view);
     // While the room is stopped the picture holds still, effects and cameras too.
     const dt = lobby.pause ? 0 : seconds;
@@ -379,6 +392,7 @@ export class RaceScreen {
       const hands = this.ctx?.controls.some((control) => control.kind === "wheel") ? (this.services.camera.counts?.() ?? null) : null;
       this.keepHands(now, hands);
       this.rate.tick(seconds, hands);
+      this.rivalSigns(view);
       this.eggs(view, lobby);
     }
     // Heard from the first frame, not from when the picture is ready: the lights count down meanwhile.
@@ -504,6 +518,89 @@ export class RaceScreen {
     }
   }
 
+  // --- rivalries ------------------------------------------------------------------------------------------------------
+
+  /**
+   * Every frame, before the picture is up: the race's hits go on the room's score sheet (rivals.ts), the same on every
+   * screen since the events reach them all. A hit that gets you back at your nemesis is a Revenge.
+   */
+  private rivalry(view: RaceView, lobby: LobbyState): void {
+    const rivals = this.ctx?.rivals;
+    if (!rivals) return;
+    const id = lobby.race ?? 0;
+    if (rivals.raceId !== id) {
+      // A new race (a restart too): its grid, and the events counted afresh.
+      rivals.begin(id, view.racers, lobby.grandPrix ? { cup: lobby.grandPrix.cup, race: lobby.grandPrix.race } : null);
+      this.rivalEvent = -1;
+      this.introShown = false;
+      this.marksKey = "";
+    }
+    for (const event of view.events) {
+      if (event.id <= this.rivalEvent) continue;
+      this.rivalEvent = event.id;
+      let note: HitNote | null = null;
+      if (event.type === "hit") note = rivals.hit(event);
+      else if (event.type === "bump") {
+        const speed = (kart: number) => view.karts.find((candidate) => candidate.id === kart)?.speed ?? 0;
+        note = rivals.bump(event.a, event.b, event.strength, { a: speed(event.a), b: speed(event.b) });
+      }
+      if (note) {
+        this.marksKey = "";
+        if (note.revenge) this.revenge(note, view, lobby);
+      }
+    }
+  }
+
+  /** Someone on this screen got their own back on their nemesis: a word in their viewport and a little sting. */
+  private revenge(note: HitNote, view: RaceView, lobby: LobbyState): void {
+    const ctx = this.ctx;
+    if (!ctx || this.mode !== "world") return;
+    const slot = lobby.karts[note.by.id];
+    if (slot === undefined || !ctx.players.some((player) => player.slot === slot)) return;
+    if (this.revenged.tick !== view.tick) this.revenged = { tick: view.tick, karts: new Set() };
+    this.revenged.karts.add(note.by.id);
+    this.toastIn(note.by.id, "Revenge!", null, 1800);
+    this.services.sound.play("revenge");
+  }
+
+  /**
+   * Once a frame, cheaply: the race intro calls out the room's biggest grudge when the countdown begins, and the
+   * renderer is told whose nemesis wears a marker when that changes.
+   */
+  private rivalSigns(view: RaceView): void {
+    const ctx = this.ctx;
+    const rivals = ctx?.rivals;
+    if (!ctx || !rivals || rivals.raceId === null) return;
+    if (!this.introShown && view.phase === "countdown") {
+      this.introShown = true;
+      const grudge = rivals.grudge();
+      if (grudge) this.intro(grudgeLine(grudge), grudgeBasis(grudge));
+    }
+    if (!this.renderer?.setRivals) return;
+    const views = ctx.session.views();
+    const key = `${rivals.raceId}|${views.join(",")}`;
+    if (key === this.marksKey) return;
+    this.marksKey = key;
+    const marks: Record<number, number> = {};
+    for (const kart of views) {
+      const nemesis = rivals.nemesis(kart);
+      if (nemesis !== null) marks[kart] = nemesis;
+    }
+    this.renderer.setRivals(marks);
+  }
+
+  /** A pill in the middle of the stage as the lights count down: "Kit vs Mango: 3-1", and what the numbers count. */
+  private intro(line: string, basis: string): void {
+    const box = $("race-stage").getBoundingClientRect();
+    const pill = element("p", "view-toast rival-intro glass");
+    pill.setAttribute("role", "status");
+    pill.style.left = `${Math.round(box.width / 2)}px`;
+    pill.style.top = `${Math.round(box.height * 0.2)}px`;
+    pill.append(element("span", "rival-line", line), element("span", "rival-basis", basis));
+    $("view-toasts").append(pill);
+    window.setTimeout(() => pill.remove(), 3500);
+  }
+
   /** One of this device's players drove up to the duck: the first time on this track, they are told how many are found. */
   private duckFound(kart: number, view: RaceView, lobby: LobbyState): void {
     const ctx = this.ctx;
@@ -521,6 +618,8 @@ export class RaceScreen {
     if (!ctx || this.mode !== "world") return;
     const players = new Map(view.racers.flatMap((racer) => (racer.player !== null ? [[racer.id, racer.name] as const] : [])));
     for (const taunt of taunts(event, players, ctx.session.views())) {
+      // A Revenge has its own word for the one who got it: "Got Finn." would say it twice.
+      if (this.revenged.tick === view.tick && this.revenged.karts.has(taunt.kart) && taunt.kart === event.by) continue;
       // A volley of pucks is one taunt, not five.
       if (now - (this.taunted.get(taunt.kart) ?? -Infinity) < TAUNT_GAP) continue;
       this.taunted.set(taunt.kart, now);
