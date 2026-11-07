@@ -24,7 +24,7 @@
  * for them; with a boost and the nerve for it, cuts across a verge;
  * and drives off again from where the drone sets it down.
  */
-import { IDLE_INPUT, TICK_HZ, type DriveInput } from "../contract";
+import { IDLE_INPUT, TICK, TICK_HZ, type DriveInput } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
 import { hazardAt, type HazardPose } from "../track/hazards";
 import { rocketTarget } from "./items";
@@ -352,10 +352,10 @@ const ROAD = new Float64Array(LOOK_STEPS.length * 4);
  * across the road the bot tries. Each is what `geo.at` gives, worked out without making a sample (bots.test.ts holds
  * them equal), since a hazard dodge reads dozens a tick.
  */
-export function roadAhead(geo: TrackGeometry, s: number, speed: number, into: Float64Array): void {
+export function roadAhead(geo: TrackGeometry, s: number, speed: number, into: Float64Array, metres?: Float64Array): void {
   const samples = geo.samples;
   for (let step = 0; step < LOOK_STEPS.length; step++) {
-    const w = geo.wrap(s + speed * LOOK_STEPS[step]!);
+    const w = geo.wrap(s + (metres ? metres[step]! : speed * LOOK_STEPS[step]!));
     const i = Math.floor(w / geo.spacing) % samples.length;
     const a = samples[i]!;
     const b = samples[(i + 1) % samples.length]!;
@@ -368,6 +368,39 @@ export function roadAhead(geo: TrackGeometry, s: number, speed: number, into: Fl
     into[4 * step + 2] = tx / t;
     into[4 * step + 3] = tz / t;
   }
+}
+
+/** How far (metres) a bot has gone along the road at each look-ahead step when it slows from `speed` to `target`; see `slowing`. */
+const SLOWED = new Float64Array(LOOK_STEPS.length);
+const SUBSTEP = B.hazardStep / 2;
+const DRIVE = TUNING.drive;
+
+/**
+ * Where a bot that eases off for a hazard will be at each look-ahead step. It does not drop to the slower speed at once:
+ * it holds the whole brake, whose pull builds up as the pedal is held (from the build-up it has now, `stand` ticks) and
+ * eases toward the reverse, so the first moments slow it little. A bot planning with an instant change of speed would
+ * reach a crossing thing later than it thinks. The kart stops braking within 1.5 m/s of the target, as the drive does.
+ */
+function slowing(speed: number, target: number, stand: number, into: Float64Array): Float64Array {
+  let v = speed;
+  let pedal = stand * TICK;
+  let at = 0;
+  let metres = 0;
+  for (let step = 0; step < LOOK_STEPS.length; step++) {
+    for (; at < LOOK_STEPS[step]! - 1e-9; at += SUBSTEP) {
+      if (v > target + 1.5) {
+        pedal = Math.min(pedal + SUBSTEP, DRIVE.brakeRamp * 6);
+        const press = DRIVE.brakeFloor + (1 - DRIVE.brakeFloor) * (1 - Math.exp(-pedal / DRIVE.brakeRamp));
+        v += (-DRIVE.reverseTop - v) * (1 - Math.exp(-DRIVE.brakeRate * press * SUBSTEP));
+      } else {
+        pedal = Math.max(0, pedal - SUBSTEP * DRIVE.brakeFade);
+        v = Math.max(v, target);
+      }
+      metres += v * SUBSTEP;
+    }
+    into[step] = metres;
+  }
+  return into;
 }
 
 /**
@@ -410,8 +443,8 @@ function dodge(w: World, k: KartState, fwd: number, aimOffset: number, limitLeft
   if (hazardTrouble(k, road, poses, clears, base) === 0) return { offset: aimOffset, speed: 1 };
   let best = { offset: aimOffset, speed: 1 };
   let bestCost = Infinity;
-  for (const share of [1, 0.85, 0.7, 0.55]) {
-    if (share !== 1) roadAhead(geo, k.s, speed * share, road);
+  for (const share of [1, 0.85, 0.7, 0.55, 0.4, 0.25]) {
+    if (share !== 1) roadAhead(geo, k.s, speed * share, road, slowing(speed, speed * share, k.stand, SLOWED));
     for (const shift of [0, 2, -2, 4, -4, 6, -6, 8, -8, 11, -11]) {
       const offset = clamp(base + shift, -limitLeft, limitRight);
       const trouble = hazardTrouble(k, road, poses, clears, offset);
@@ -686,6 +719,8 @@ export function botInput(w: World, k: KartState): DriveInput {
   if (fwd > target + 1.5 && fwd > 8) {
     throttle = 0;
     brake = clamp((fwd - target) / 8, 0.35, 1);
+    // Easing off for a hazard holds the whole pedal, as `slowing` plans (a light touch builds up too slowly to be there in time).
+    if (dodging.speed < 1) brake = 1;
   } else if (fwd > target) {
     throttle = 0;
   }

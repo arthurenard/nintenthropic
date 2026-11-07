@@ -513,12 +513,12 @@ export const FUN_FAIR: TrackDef = {
     crosser({ kind: "funhouse-panel", at: 0.4965, reach: 9, period: 5.2 }),
     crosser({ kind: "funhouse-panel", at: 0.5205, reach: -9, period: 5.2, phase: 0.5 }),
     // The carousel turns in the middle of the plaza: a bar of horses, two ways round, to time.
-    ...sweeper({ kind: "arm-ball", at: 0.663, offset: 0, length: 9.5, period: 6.5, both: true }),
+    ...sweeper({ kind: "arm-ball", at: 0.663, offset: 0, length: 9.5, period: 6.5 }),
     { kind: "bumper-car", motion: "cross", period: 5.2, phase: 0.35, radius: 2.1, offset: 0, at: 0.695, span: 11 },
     { kind: "bumper-car", motion: "cross", period: 5.2, phase: 0.7, radius: 2.1, offset: 0, at: 0.718, span: 11 },
     // The pirate ships swing over the chicane, a beat apart.
-    pendulum({ kind: "swing-boat", at: 0.858, reach: 4.5, period: 3.4, radius: 2 }),
-    pendulum({ kind: "swing-boat", at: 0.88, reach: 4.5, period: 3.4, phase: 0.5, radius: 2 }),
+    pendulum({ kind: "swing-boat", at: 0.858, reach: 3.5, period: 3.4, radius: 2 }),
+    pendulum({ kind: "swing-boat", at: 0.88, reach: 3.5, period: 3.4, phase: 0.5, radius: 2 }),
     { kind: "teacup-ride", motion: "orbit", period: 7, radius: 2.6, offset: 26, at: 0.672, span: 14 },
     { kind: "teacup-ride", motion: "orbit", period: 6.4, phase: 0.3, radius: 2.6, offset: -25, at: 0.2605, span: 15 },
   ],
@@ -642,7 +642,7 @@ export const GLACIER_PASS: TrackDef = {
     { from: 0.8, to: 0.833, kind: "ice", offset: 3.5, width: 7 },
   ],
   hazards: [
-    { kind: "penguin", motion: "cross", period: 6.5, radius: 1.6, at: 0.201, span: 9 },
+    { kind: "penguin", motion: "cross", period: 6.5, radius: 1.6, at: 0.2195, span: 9 },
     { kind: "snowball", motion: "roll", period: 5, radius: 2.2, offset: -2.5, at: 0.541, span: 0.033 },
     { kind: "snowball", motion: "roll", period: 5, phase: 0.55, radius: 2.2, offset: -2.5, at: 0.541, span: 0.033 },
     { kind: "yeti", motion: "bob", period: 8, phase: 0.1, radius: 2.4, offset: 3.4, at: 0.8736 },

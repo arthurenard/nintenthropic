@@ -2017,9 +2017,9 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    to the dip under the coaster; the hairpin by the hook-a-duck stall (the
    duck), banked hard; back through the big top, where striped funhouse walls
    slide across the road one each way; the plaza, where a carousel turns in
-   the middle (a bar of horses to time, two ways round) with bumper cars
+   the middle (one arm of horses to time) with bumper cars
    crossing and a teacup ride beside; a ramp off the helter-skelter's foot;
-   the hall of mirrors chicane under two pirate ships swinging a beat apart;
+   the hall of mirrors chicane under two pirate ships swinging a beat apart (3.5 m either side of the middle);
    fireworks over the finish.
 
    *Design note (round two).* The fair is a ride, so it has a ride's
