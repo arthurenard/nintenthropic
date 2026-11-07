@@ -392,7 +392,7 @@ export const HARBOUR_LIGHTS: TrackDef = {
       ],
       drops: [{ from: 0.26, to: 0.78, side: "both" }],
       surfaces: [{ from: 0.4, to: 0.64, kind: "boost", offset: 0, width: 3 }],
-      landmarks: [{ kind: "ship-deck", at: 0.5, offset: 0, span: 84 }],
+      landmarks: [{ kind: "ship-deck", at: 0.5, offset: 0, span: 56 }],
     },
   ],
   hazards: [
@@ -406,7 +406,6 @@ export const HARBOUR_LIGHTS: TrackDef = {
     { kind: "crane", at: 0.0991, offset: -29, scale: 1.2 },
     { kind: "ship", at: 0.0661, offset: 115, scale: 2.2 },
     { kind: "warehouse", at: 0.1322, offset: -45, scale: 1.4 },
-    { kind: "crane", at: 0.157, offset: 24.5 },
     { kind: "lighthouse", at: 0.1768, offset: 52, scale: 1.2 },
     { kind: "buoy", at: 0.1983, offset: 36 },
     { kind: "containers", at: 0.2354, offset: -30 },

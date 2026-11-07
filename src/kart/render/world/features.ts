@@ -178,6 +178,18 @@ export function analyseFeatures(track: TrackGeometry): Features {
       if (gates.right[i]! > WALL_DISTANCE + 0.2) hiddenRight[i] = 1;
     }
   }
+  // A branch lying on the road it leaves (or joins) has no barrier of its own there: the road's stands for it.
+  if (track.open) {
+    const road = (track as unknown as { main: TrackGeometry }).main;
+    for (let i = 0; i < n; i++) {
+      const a = track.samples[i]!;
+      const m = road.projectLoop(a.x, a.z).sample;
+      if (Math.hypot(m.x - a.x, m.z - a.z) < 3.2) {
+        hiddenLeft[i] = 1;
+        hiddenRight[i] = 1;
+      }
+    }
+  }
   for (let i = 0; i < n && !track.open; i++) {
     const a = track.samples[i]!;
     for (const side of [-1, 1] as const) {

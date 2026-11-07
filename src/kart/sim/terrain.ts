@@ -116,7 +116,8 @@ export function junctionGates(geo: TrackGeometry): { left: Float32Array; right: 
       if (geo.open) {
         const r = asRoute(geo);
         const dir = near.s - r.from < r.to - near.s ? 1 : -1;
-        toward = r.main.at(near.s + dir * 36);
+        // Lying on the road it leaves (the flare), a branch is open on the side it goes off to; apart from it, on the side the road is.
+        toward = d < 2 ? geo.at(a.s + dir * 36) : r.main.at(near.s + dir * 36);
       } else {
         const r = asRoute(other);
         const dir = near.s - r.from < r.to - near.s ? 1 : -1;
