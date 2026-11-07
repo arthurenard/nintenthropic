@@ -36,7 +36,7 @@ export function hazardReach(hazard: HazardDef, trackLength: number): number {
     case "cross":
       return hazard.span ?? 12;
     case "swing":
-      return (hazard.span ?? 5) + Math.abs(hazard.offset ?? 0);
+      return Math.abs(hazard.span ?? 5) + Math.abs(hazard.offset ?? 0);
     case "slide":
       return Math.abs(hazard.span ?? 12);
     default:
@@ -100,7 +100,7 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
     case "swing": {
       // A wrecking ball on a long chain, swinging across the road. It is low (and dangerous) through the middle of
       // its swing and lifts clear of a kart's roof at each end.
-      const amp = hazard.span ?? 5;
+      const amp = hazard.span ?? 5; // signed: a negative span starts the swing the other way (mirror mode)
       const s = Math.sin(cycle * Math.PI * 2);
       const p = track.point(centre, offset + s * amp);
       const lift = s * s * hazard.radius * 2.6;
