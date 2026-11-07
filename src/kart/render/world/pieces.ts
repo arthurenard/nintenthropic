@@ -153,12 +153,18 @@ const _up = new Vector3(0, 1, 0);
 const _fwd = new Vector3(0, 0, 1);
 const _c = new Color();
 const WHITE = new Color(1, 1, 1);
+const LANES: readonly number[] = [-0.8, 0.8];
+
+/** Reduce Motion (the page's attribute, set by app.ts): no rattle and no flicker, a steady colour change instead. */
+const isCalm = (): boolean => typeof document !== "undefined" && document.documentElement.hasAttribute("data-reduce-motion");
 
 interface Kind {
   mesh: InstancedMesh;
   /** The defs drawn by this mesh, in instance order. */
   defs: HazardDef[];
   near: number[];
+  /** The road height under each piece, worked out once for those that stay in one place. */
+  roadY: number[];
   scale: number;
 }
 
@@ -186,11 +192,12 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
       const geo = b.build();
       disposables.push(geo);
       const mesh = new InstancedMesh(geo, mats.lit, 1);
-      k = { mesh, defs: [], near: [], scale: 1 };
+      k = { mesh, defs: [], near: [], roadY: [], scale: 1 };
       kinds.set(def.kind, k);
     }
     k.defs.push(def);
     k.near.push(def.at * track.length);
+    k.roadY.push(Number.NaN);
   }
   const all: Kind[] = [...kinds.values()];
   for (const k of all) {
@@ -221,6 +228,13 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
   parts.frustumCulled = false;
   parts.count = 0;
   group.add(parts);
+  // The parts that never move (gantries, beams, rails, posts) are written once, into a second unit-cube mesh.
+  const fixed = new InstancedMesh(cubeGeo, mats.lit, partCap);
+  fixed.instanceMatrix.setUsage(DynamicDrawUsage);
+  for (let i = 0; i < partCap; i++) fixed.setColorAt(i, WHITE);
+  fixed.frustumCulled = false;
+  fixed.count = 0;
+  group.add(fixed);
 
   // Shadows on the road: a plane per piece that casts one, tinted dark and reddening as it is about to act.
   const shadowCount = pieceDefs.length;
@@ -237,14 +251,18 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
   shadows.count = 0;
   group.add(shadows);
   for (const k of all) disposables.push({ dispose: () => k.mesh.dispose() });
-  disposables.push({ dispose: () => parts.dispose() }, { dispose: () => shadows.dispose() });
+  disposables.push({ dispose: () => parts.dispose() }, { dispose: () => fixed.dispose() }, { dispose: () => shadows.dispose() });
 
   let partN = 0;
+  let fixedN = 0;
+  /** True during the first frame, when the parts that never move are written. */
+  let building = true;
+  let calm = false;
   let shadowN = 0;
 
   /** A unit cube from `a` to `b`, `t` thick, tinted `colour`. */
   function rod(ax: number, ay: number, az: number, bx: number, by: number, bz: number, t: number, colour: Color): void {
-    if (partN >= partCap) return;
+    if (partN >= partCap || fixedN >= partCap) return;
     _a.set(ax, ay, az);
     _b.set(bx, by, bz);
     const len = _a.distanceTo(_b);
@@ -253,17 +271,25 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
     _b.sub(_a).divideScalar(len);
     _q.setFromUnitVectors(_fwd, _b);
     _s.set(t, t, len);
-    parts.setMatrixAt(partN, _m.compose(_p, _q, _s));
-    parts.setColorAt(partN, colour);
-    partN++;
+    if (building) {
+      fixed.setMatrixAt(fixedN, _m.compose(_p, _q, _s));
+      fixed.setColorAt(fixedN++, colour);
+    } else {
+      parts.setMatrixAt(partN, _m.compose(_p, _q, _s));
+      parts.setColorAt(partN++, colour);
+    }
   }
   /** An axis-aligned cube at `x, y, z` of size `sx, sy, sz`, yawed by `yaw`. */
   function cube(x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw: number, colour: Color): void {
-    if (partN >= partCap) return;
+    if (partN >= partCap || fixedN >= partCap) return;
     _q.setFromAxisAngle(_up, yaw);
-    parts.setMatrixAt(partN, _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)));
-    parts.setColorAt(partN, colour);
-    partN++;
+    if (building) {
+      fixed.setMatrixAt(fixedN, _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)));
+      fixed.setColorAt(fixedN++, colour);
+    } else {
+      parts.setMatrixAt(partN, _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)));
+      parts.setColorAt(partN++, colour);
+    }
   }
   function blobShadow(x: number, y: number, z: number, size: number, colour: Color): void {
     if (shadowN >= shadows.instanceMatrix.count) return;
@@ -289,23 +315,47 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
   /** The instance colour for a piece about to act: its own colours flushing to hot, in a pulse that quickens. */
   function flush(warn: number, time: number, into: Color): Color {
     if (warn <= 0) return into.copy(WHITE);
-    const pulse = 0.55 + 0.45 * Math.sin(time * (10 + warn * 14));
+    const pulse = calm ? 0.8 : 0.55 + 0.45 * Math.sin(time * (10 + warn * 14));
     const k = warn * pulse;
     return into.setRGB(1 + 1.6 * k, 1 - 0.55 * k, 1 - 0.7 * k);
   }
 
   function roadAt(pose: HazardPose, kind: Kind, index: number): number {
+    const known = kind.roadY[index]!;
+    if (!Number.isNaN(known)) return known;
     let proj = track.project(pose.x, pose.z, kind.near[index]);
     if (Math.hypot(proj.sample.x - pose.x, proj.sample.z - pose.z) > 60) proj = track.project(pose.x, pose.z);
     kind.near[index] = proj.s;
-    return proj.sample.y + env.bank.lift(proj.s, proj.offset);
+    const y = proj.sample.y + env.bank.lift(proj.s, proj.offset);
+    // Pieces that run along the road (rolling) change height; those that stay across it do not.
+    if (kind.defs[index]!.motion !== "roll") kind.roadY[index] = y;
+    return y;
   }
 
   return {
     group,
     update(time) {
+      if (building) {
+        // The first frame writes the parts that never move, once; then the frame is drawn in full.
+        frame(time);
+        fixed.count = fixedN;
+        fixed.instanceMatrix.needsUpdate = true;
+        if (fixed.instanceColor) fixed.instanceColor.needsUpdate = true;
+        building = false;
+      }
+      frame(time);
+    },
+    dispose() {
+      for (const d of disposables) d.dispose();
+      group.removeFromParent();
+    },
+  };
+
+  function frame(time: number): void {
+    {
       partN = 0;
       shadowN = 0;
+      calm = isCalm();
       seen.clear();
       for (const kind of all) {
         const mesh = kind.mesh;
@@ -324,20 +374,20 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
           switch (def.motion) {
             case "crush": {
               // The shake: a rattle sideways and a tilt that grows through the warning.
-              const rattle = pose.warn < 1 ? pose.warn * 0.16 * Math.sin(time * 52 + i * 3) : 0;
+              const rattle = !calm && pose.warn < 1 ? pose.warn * 0.16 * Math.sin(time * 52 + i * 3) : 0;
               _a.set(Math.cos(pose.heading), 0, -Math.sin(pose.heading));
               x += _a.x * rattle;
               z += _a.z * rattle;
               yaw += rattle * 0.05;
               if (def.kind === "icicle") {
                 // Hangs from the cave's roof: only the root of it shows.
-                rod(x, y + 4.5 * kind.scale, z, x, y + 7 * kind.scale, z, 2.2 * kind.scale, ICE);
+                if (!building) rod(x, y + 4.5 * kind.scale, z, x, y + 7 * kind.scale, z, 2.2 * kind.scale, ICE);
               } else {
                 // A piston up to a gantry across the road (one for each row of them), on posts beyond the barrier.
                 const centre = def.at * track.length;
                 const beamY = roadY + crushTop(def) + 4.4 * kind.scale + 2.5;
-                rod(x, y + (def.kind === "mallet" ? 5.6 : 3.4) * kind.scale, z, x, beamY, z, 0.9 * kind.scale, IRON);
-                if (!seen.has(centre)) {
+                if (!building) rod(x, y + (def.kind === "mallet" ? 5.6 : 3.4) * kind.scale, z, x, beamY, z, 0.9 * kind.scale, IRON);
+                if (building && !seen.has(centre)) {
                   seen.add(centre);
                   const h = track.heading(centre);
                   const half = track.at(centre).width / 2 + 8;
@@ -358,15 +408,17 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               const c = track.point(def.at * track.length, def.offset ?? 0);
               const hubY = roadY + 12;
               const eyeY = y + 3.45 * kind.scale;
-              rod(c.x, hubY, c.z, x, eyeY, z, 0.28, IRON);
+              if (!building) rod(c.x, hubY, c.z, x, eyeY, z, 0.28, IRON);
               const half = track.at(def.at * track.length).width / 2 + 9;
               const h = track.heading(def.at * track.length);
               // The beam across the road, on a post at each end beyond the barrier.
               const dx = Math.cos(h);
               const dz = -Math.sin(h);
-              rod(c.x - dx * half, hubY + 0.4, c.z - dz * half, c.x + dx * half, hubY + 0.4, c.z + dz * half, 0.8, BEAM);
-              rod(c.x - dx * half, hubY + 0.4, c.z - dz * half, c.x - dx * half, roadY - 2, c.z - dz * half, 0.9, POST);
-              rod(c.x + dx * half, hubY + 0.4, c.z + dz * half, c.x + dx * half, roadY - 2, c.z + dz * half, 0.9, POST);
+              if (building) {
+                rod(c.x - dx * half, hubY + 0.4, c.z - dz * half, c.x + dx * half, hubY + 0.4, c.z + dz * half, 0.8, BEAM);
+                rod(c.x - dx * half, hubY + 0.4, c.z - dz * half, c.x - dx * half, roadY - 2, c.z - dz * half, 0.9, POST);
+                rod(c.x + dx * half, hubY + 0.4, c.z + dz * half, c.x + dx * half, roadY - 2, c.z + dz * half, 0.9, POST);
+              }
               blobShadow(x, roadY, z, def.radius * 2.2 * Math.max(0.5, 1 - pose.y / 6), shade.setRGB(0.03, 0.04, 0.09));
               tilt = 0;
               yaw = 0;
@@ -377,23 +429,23 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               // Rails across the road under its path (sleepers, two rails), and a lamp post at the way in.
               const centre = def.at * track.length;
               const half = Math.abs(def.span ?? track.at(centre).width / 2 + 3);
-              const d = (def.span ?? 1) < 0 ? -1 : 1;
+              const d = def.dir ?? ((def.span ?? 1) < 0 ? -1 : 1);
               const h = track.heading(centre);
               const dx = Math.cos(h);
               const dz = -Math.sin(h);
               const c = track.point(centre, def.offset ?? 0);
               const gy = roadAtCentre(centre, def.offset ?? 0);
-              for (const side of [-0.8, 0.8]) rod(c.x - dx * half - dz * side, gy + 0.12, c.z - dz * half + dx * side, c.x + dx * half - dz * side, gy + 0.12, c.z + dz * half + dx * side, 0.16, RAIL);
-              for (let n = -2; n <= 2; n++) cube(c.x + dx * n * (half / 2.2) * 0.9, gy + 0.05, c.z + dz * n * (half / 2.2) * 0.9, 0.35, 0.1, 2.2, h, SLEEPER);
+              if (building) for (const side of LANES) rod(c.x - dx * half - dz * side, gy + 0.12, c.z - dz * half + dx * side, c.x + dx * half - dz * side, gy + 0.12, c.z + dz * half + dx * side, 0.16, RAIL);
+              if (building) for (let n = -2; n <= 2; n++) cube(c.x + dx * n * (half / 2.2) * 0.9, gy + 0.05, c.z + dz * n * (half / 2.2) * 0.9, 0.35, 0.1, 2.2, h, SLEEPER);
               // A lamp on a post where it comes in.
               const ex = c.x - dx * half * d;
               const ez = c.z - dz * half * d;
-              cube(ex, gy + 1.6, ez, 0.25, 3.2, 0.25, 0, POST);
+              if (building) cube(ex, gy + 1.6, ez, 0.25, 3.2, 0.25, 0, POST);
               flush(pose.warn, time, tint);
-              tint.r = tint.r * 0.35 + (pose.warn > 0 ? 2.2 * (0.5 + 0.5 * Math.sin(time * 16)) : 0.1);
+              tint.r = tint.r * 0.35 + (pose.warn > 0 ? 2.2 * (calm ? 0.8 : 0.5 + 0.5 * Math.sin(time * 16)) : 0.1);
               tint.g = pose.warn > 0 ? 0.1 : 0.12;
               tint.b = pose.warn > 0 ? 0.08 : 0.12;
-              cube(ex, gy + 3.35, ez, 0.7, 0.55, 0.7, 0, tint);
+              if (!building) cube(ex, gy + 3.35, ez, 0.7, 0.55, 0.7, 0, tint);
               if (!hidden) blobShadow(x, roadY, z, def.radius * 2.2, shade.setRGB(0.03, 0.04, 0.09));
               break;
             }
@@ -401,8 +453,8 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               // The pole from the hub to the ball, and (once for the whole sweeper) a post at the hub.
               const c = track.point(def.at * track.length, def.offset ?? 0);
               const hubKey = def.at * 1e4 + (def.offset ?? 0);
-              rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, 0.5, def.kind === "arm-ball" ? CANDY : IRON);
-              if (!seen.has(hubKey)) {
+              if (!building) rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, 0.5, def.kind === "arm-ball" ? CANDY : IRON);
+              if (building && !seen.has(hubKey)) {
                 seen.add(hubKey);
                 rod(c.x, roadY, c.z, c.x, roadY + 5.5, c.z, 1.1, def.kind === "arm-ball" ? CANDY : IRON);
                 rod(c.x, roadY + 5.5, c.z, c.x, roadY + 6.3, c.z, 1.6, GOLD);
@@ -434,12 +486,8 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
       shadows.count = shadowN;
       shadows.instanceMatrix.needsUpdate = true;
       if (shadows.instanceColor) shadows.instanceColor.needsUpdate = true;
-    },
-    dispose() {
-      for (const d of disposables) d.dispose();
-      group.removeFromParent();
-    },
-  };
+    }
+  }
 
   function roadAtCentre(s: number, offset: number): number {
     const p = track.at(s);

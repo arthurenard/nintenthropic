@@ -34,7 +34,11 @@ function withDefined<T extends object, K extends keyof T>(object: T, key: K, val
 function mirrorHazard(hazard: HazardDef): HazardDef {
   const out = withDefined({ ...hazard }, "offset", flipped(hazard.offset));
   if (hazard.motion === "swing") out.span = -(hazard.span ?? 5);
-  else if (hazard.motion === "slide" && hazard.span !== undefined) out.span = -hazard.span;
+  else if (hazard.motion === "slide") {
+    // Without a span the direction is `dir` (left to right when absent): it flips instead.
+    if (hazard.span !== undefined) out.span = -hazard.span;
+    if (hazard.span === undefined || hazard.dir !== undefined) out.dir = (hazard.dir ?? 1) === 1 ? -1 : 1;
+  }
   return out;
 }
 

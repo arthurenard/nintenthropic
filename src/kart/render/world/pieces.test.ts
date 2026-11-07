@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InstancedMesh, Matrix4, Vector3, type Texture } from "three";
 import { TrackGeometry, type HazardDef, type TrackDef } from "../../track/geometry";
 import { CRUSH, hazardAt } from "../../track/hazards";
@@ -55,8 +55,8 @@ describe("the set piece layer", () => {
     const mats = landmarkMaterials();
     const layer = buildPieces(env, pieces, mats, fake);
     const meshes = layer.group.children.filter((c): c is InstancedMesh => c instanceof InstancedMesh);
-    // Crusher, ball, cart, arm ball, icicle; the parts; the shadows.
-    expect(meshes.length).toBe(7);
+    // Crusher, ball, cart, arm ball, icicle; the moving parts; the fixed parts; the shadows.
+    expect(meshes.length).toBe(8);
     layer.dispose();
     mats.dispose();
   });
@@ -97,6 +97,41 @@ describe("the set piece layer", () => {
     layer.update(1.5, 1 / 60);
     cart.getMatrixAt(0, m);
     expect(new Vector3().setFromMatrixScale(m).x).toBeGreaterThan(0.5);
+    layer.dispose();
+    mats.dispose();
+  });
+
+  it("writes the parts that never move once, and keeps them as the clock runs", () => {
+    const mats = landmarkMaterials();
+    const layer = buildPieces(env, pieces, mats, fake);
+    const meshes = layer.group.children.filter((c): c is InstancedMesh => c instanceof InstancedMesh);
+    layer.update(1, 1 / 60);
+    const shared = meshes.filter((m) => m.count > 0 && meshes.some((o) => o !== m && o.geometry === m.geometry));
+    const snaps = shared.map((m) => Array.from(m.instanceMatrix.array.slice(0, m.count * 16)));
+    const counts = shared.map((m) => m.count);
+    layer.update(2.7, 1 / 60);
+    // Of the meshes that share the unit cube, the one holding the fixed parts has not changed at all.
+    const same = shared.filter((m, i) => m.count === counts[i] && Array.from(m.instanceMatrix.array.slice(0, m.count * 16)).every((v, k) => v === snaps[i]![k]));
+    expect(same.length).toBeGreaterThanOrEqual(1);
+    layer.dispose();
+    mats.dispose();
+  });
+
+  it("with Reduce Motion the warning is a steady colour, with no rattle", () => {
+    const mats = landmarkMaterials();
+    const row = stomperRow({ at: 0.05, lanes: [-4], period: 4.4 });
+    const t = row[0]!.period * ((CRUSH.warn + CRUSH.fall) / 2);
+    const x = (layer: ReturnType<typeof buildPieces>, time: number): number => {
+      const m = new Matrix4();
+      const crusher = layer.group.children.find((c): c is InstancedMesh => c instanceof InstancedMesh && c.count === 1)!;
+      layer.update(time, 1 / 60);
+      crusher.getMatrixAt(0, m);
+      return new Vector3().setFromMatrixPosition(m).x + new Vector3().setFromMatrixPosition(m).z * 1000;
+    };
+    vi.stubGlobal("document", { documentElement: { hasAttribute: () => true } });
+    const layer = buildPieces(env, row, mats, fake);
+    expect(x(layer, t)).toBeCloseTo(x(layer, t + 0.013), 6);
+    vi.unstubAllGlobals();
     layer.dispose();
     mats.dispose();
   });

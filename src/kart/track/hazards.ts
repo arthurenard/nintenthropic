@@ -158,7 +158,7 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
       // Something that crosses the whole road once a cycle, from out of sight on one side to out of sight on the
       // other (a negative `span` goes right to left), then waits: a lamp and a whistle come first.
       const half = Math.abs(hazard.span ?? f.width / 2 + 3);
-      const d = (hazard.span ?? 1) < 0 ? -1 : 1;
+      const d = hazard.dir ?? ((hazard.span ?? 1) < 0 ? -1 : 1);
       const run = 0.5;
       const lead = 0.22;
       if (cycle < run) {

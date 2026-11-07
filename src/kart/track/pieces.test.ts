@@ -177,4 +177,20 @@ describe("the bots", () => {
     expect(stats.stuck).toBeLessThan(5);
     expect(stats.hazardHits / (8 * 2), JSON.stringify(stats.hitsBy)).toBeLessThan(0.6);
   });
+
+  it("sends a cart with no span the other way in a mirror", () => {
+    const cart: HazardDef = { kind: "ore-cart", at: 0.2, motion: "slide", period: 6, radius: 1.4 };
+    const flat: TrackDef = track([cart]);
+    const mirror = mirrorTrack(flat);
+    const a = TrackGeometry.build(flat);
+    const b = TrackGeometry.build(mirror);
+    const t = cart.period * 0.1;
+    const early = hazardAt(a, cart, t);
+    const mirrored = hazardAt(b, mirror.hazards![0]!, t);
+    const later = hazardAt(a, cart, cart.period * 0.4);
+    const laterMirrored = hazardAt(b, mirror.hazards![0]!, cart.period * 0.4);
+    // The cart travels the opposite way across the road, so the mirrored one still moves the same way in the mirrored frame.
+    expect(Math.sign(later.x - early.x)).toBe(-Math.sign(laterMirrored.x - mirrored.x) || 0);
+    expect(mirror.hazards![0]!.dir).toBe(-1);
+  });
 });
