@@ -167,3 +167,21 @@ describe("a lip", () => {
     expect(first(fly(track, 195, 4, 6, () => ({ throttle: 0 })).events, "jump")).toBeUndefined();
   });
 });
+
+describe("a flight robbed of its speed", () => {
+  it("still lands within the flight's length at the floor speed (a hit, a storm or a wall mid-glide cannot leave a kart hanging)", () => {
+    for (const kind of ["cannon", "glide", "lip"] as const) {
+      const track = stadium((f) => [{ kind, at: f(200), length: 60, height: 8 }]);
+      const r = race(track, racers(1, 0));
+      toGo(r);
+      place(r, track, 190, 0, 25);
+      run(r, 60, () => input({ throttle: 1 }));
+      expect(view(r).hop, kind).toBeGreaterThan(0);
+      // The storm: speed gone, mid-flight.
+      patch(r, 0, { vx: 0, vz: 0 });
+      let landed = false;
+      for (let i = 0; i < 60 * 9 && !landed; i++) landed = run(r, 1, () => input({ throttle: 0 })).some((e) => e.type === "land");
+      expect(landed, `${kind} landed`).toBe(true);
+    }
+  });
+});

@@ -795,6 +795,16 @@ function flyArc(w: World, k: KartState, emit: Emit): boolean {
   if (k.trick > 0) k.trick = Math.min(k.trick + 1, 255);
   const d = w.geo.delta(site.s, k.s);
   if (d < site.length) {
+    // A hit or a spin that robs the kart of its speed in flight must not leave it hanging: the flight carries on at a floor speed.
+    const floor = site.kind === "lip" ? AIR.lipFloor : AIR.flightFloor;
+    const sp = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
+    if (sp < floor) {
+      const c = w.geo.at(k.s);
+      const nx = sp > 0.5 ? k.vx / sp : c.tx;
+      const nz = sp > 0.5 ? k.vz / sp : c.tz;
+      k.vx = nx * floor;
+      k.vz = nz * floor;
+    }
     const air = arcHeight(site, d);
     k.vy = (air - k.air) / TICK;
     k.air = air;

@@ -1483,6 +1483,13 @@ front of them (or a laptop), and the TV is the host's screen.
   above them: they are met when it comes down). The picture is `render/world/airPads.ts` (flat light, and posts
   beyond the barrier and the camera's margin, like the start gantry's legs) and `render/parasol.ts`; the map draws
   the flight as a band. Mirror mode flips the pad's offset.
+  A planned flight never slows below a floor speed (`AIR.flightFloor` 12 m/s, a lip 8): a storm, a hit or a wall in
+  mid-air cannot leave a kart hanging over the track, it carries on and lands. `sim/airTracks.test.ts` checks each air
+  track (and its mirror): landing run straight, no hazard, item row or boost pad under a flight, bots fly every
+  section, never fall, and finish across three seeds.
+  **Not built** (kept for the timed moving set pieces engine of the Track features section, or later): the
+  loop-the-loop ribbon, trick walls, vertical twists, the crumbling bridge over the lava, rock rain with a visible
+  build-up (Volcano's eruption is the paired lava bombs on a 7 s period), and the Five Finger beach waves.
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a

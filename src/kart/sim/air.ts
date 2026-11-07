@@ -76,6 +76,9 @@ export function arcAt(arcs: readonly ArcSite[], geo: TrackGeometry, s: number): 
 export const AIR = {
   /** A cannon throws the kart at least this fast along the road (m/s). */
   cannonSpeed: 21,
+  /** A planned flight never slows below this (m/s): a storm or a hit mid-flight cannot leave a kart hanging. */
+  flightFloor: 12,
+  lipFloor: 8,
   /** Slower than this a pad does nothing (a glide or lip); a cannon takes any kart. */
   minSpeed: 5,
   cannonMinSpeed: 2,

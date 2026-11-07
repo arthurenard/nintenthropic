@@ -886,7 +886,6 @@ export const STARLIGHT_RIBBON: TrackDef = {
     // A meteor shower down the carousel's far side: two streaks, a beat apart, one each side of the ribbon.
     { kind: "comet", motion: "roll", period: 5.5, radius: 2.0, offset: -5.5, at: 0.521, span: 0.04 },
     { kind: "comet", motion: "roll", period: 5.5, phase: 0.5, radius: 2.0, offset: 5.5, at: 0.521, span: 0.04 },
-    // A meteor shower over the carousel: two streaks come down the ribbon a beat apart.
   ],
   landmarks: [
     { kind: "ringed-planet", at: 0.0662, offset: 50, scale: 3.2 },
@@ -1036,7 +1035,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
   ],
   drops: [{ from: 0.7211, to: 0.798, side: "both" }],
   hazards: [
-    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.0815, span: 6 },
+    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.093, span: 6 },
     { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.18, span: 0.03 },
     { kind: "beach-ball", motion: "roll", period: 5, radius: 1.9, offset: 2.6, at: 0.653, span: 0.0478 },
     { kind: "crab", motion: "cross", period: 6.2, phase: 0.4, radius: 1.3, at: 0.888, span: 6 },

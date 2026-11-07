@@ -20,7 +20,6 @@ const LOOK: Record<ArcKind, { light: Rgb; post: Rgb }> = {
 export function buildAirPads(b: TrackBuild): void {
   const def = b.track.def;
   if (!def.air?.length) return;
-  const length = b.track.length;
   const P = (s: number, o: number, dy = 0.05): V3 => {
     const q = b.track.at(s);
     return [q.x - q.tz * o, q.y + b.bank.lift(s, o) + dy, q.z + q.tx * o];
@@ -32,7 +31,7 @@ export function buildAirPads(b: TrackBuild): void {
     const hi = Math.min(site.hi, half - 0.6);
     if (hi - lo < 1) continue;
     chevrons(b, site, look.light, lo, hi, P);
-    posts(b, site, look.post, look.light, length);
+    posts(b, site, look.post, look.light);
     if (site.kind === "glide") target(b, site, look.light, P);
   }
 }
@@ -62,7 +61,7 @@ function glowAt(p: V3): { x: number; y: number; z: number } {
 }
 
 /** Posts at the road's edges, beside the pad: a cannon's barrels point along the road and up. */
-function posts(b: TrackBuild, site: ArcSite, post: Rgb, light: Rgb, length: number): void {
+function posts(b: TrackBuild, site: ArcSite, post: Rgb, light: Rgb): void {
   const i = Math.round(site.s / b.spacing);
   const a = b.S(i);
   const bld = b.deco[b.chunkOf(i)]!;
@@ -82,7 +81,6 @@ function posts(b: TrackBuild, site: ArcSite, post: Rgb, light: Rgb, length: numb
       bld.blob(p[0], p[1] + 6.8, p[2], 0.55, 0.55, 0.55, scaleRgb(light, 0.7), 0);
     }
   }
-  void length;
 }
 
 /** Rings painted on the road where a glide comes down; landing inside the inner one gives the boost. */
