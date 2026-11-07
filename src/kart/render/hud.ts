@@ -160,6 +160,9 @@ export interface HudOptions {
   calm: boolean;
 }
 
+/** The shortest time between two drawings of the minimap, seconds (one frame at 60 fps is 0.0167: every second frame, the odd one more at 59). */
+const MAP_EVERY = 0.03;
+
 export class Hud {
   private views: ViewHud[] = [];
   private free: FreeHud | null = null;
@@ -374,6 +377,16 @@ export class Hud {
     return { root, canvas, place, strip };
   }
 
+  /** When the map was last drawn (the HUD's clock): its dots crawl across a few hundred pixels in a minute, so 30 a second is as good as 60 and half the 2D canvas work. */
+  private mapAt = -Infinity;
+
+  /** Whether the map is due a redraw now (a paused or first frame always draws once). */
+  private mapDue(): boolean {
+    if (this.clock - this.mapAt < MAP_EVERY && this.clock >= this.mapAt) return false;
+    this.mapAt = this.clock;
+    return true;
+  }
+
   update(view: RaceView, dt: number): void {
     this.clock += dt;
     this.dt = dt;
@@ -571,7 +584,7 @@ export class Hud {
       f.canvas.style.width = `${f.mapSize.w}px`;
       f.canvas.style.height = `${f.mapSize.h}px`;
     }
-    this.map.draw(f.canvas, f.mapSize.w, f.mapSize.h, this.dpr, scale * 1.15, view.karts, this.racers, this.local);
+    if (this.mapDue()) this.map.draw(f.canvas, f.mapSize.w, f.mapSize.h, this.dpr, scale * 1.15, view.karts, this.racers, this.local);
 
     this.updateStandings(f, view, false);
   }
@@ -579,7 +592,7 @@ export class Hud {
   /** The map in its glass box, and in the middle the strip of who is where. */
   private updateFloat(f: FloatHud, view: RaceView): void {
     const { canvas, scale } = f.place;
-    this.map.draw(f.canvas, canvas!.w, canvas!.h, this.dpr, scale, view.karts, this.racers, this.local);
+    if (this.mapDue()) this.map.draw(f.canvas, canvas!.w, canvas!.h, this.dpr, scale, view.karts, this.racers, this.local);
     if (f.strip) this.updateStandings(f.strip, view, true);
   }
 

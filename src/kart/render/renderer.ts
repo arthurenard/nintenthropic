@@ -273,9 +273,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       target.scissor.set(x, y, w, h);
       renderer.setRenderTarget(target);
       world.sky.group.position.copy(v.eye.position);
+      // The scene's matrices are worked out once a frame, by the first view's render (three does it on every render()); what the
+      // other views move on the way, the sky dome and the sun, is brought up to date by hand.
+      scene.matrixWorldAutoUpdate = index === 0;
+      if (index > 0) world.sky.group.updateMatrixWorld(true);
       const fovRad = (v.eye.fov * Math.PI) / 180;
       pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
       world.focusSun(v.at.x, v.at.y, v.at.z);
+      if (index > 0) world.sun.updateMatrixWorld();
       // This view's frustum decides which trees, rocks and tufts are drawn for it.
       v.eye.updateMatrixWorld();
       v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
@@ -300,6 +305,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const a of tooNear) a.root.visible = true;
       tooNear.length = 0;
     }
+    scene.matrixWorldAutoUpdate = true;
     target.scissorTest = false;
     if (profiling) smooth("draw", performance.now() - t0);
   };
