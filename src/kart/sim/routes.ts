@@ -47,8 +47,8 @@ const TAKES: Record<Temperament, { shortcut: number; split: number }> = {
   careful: { shortcut: 0.12, split: 0.5 },
 };
 
-/** Metres before a junction a bot makes up its mind; it holds the choice until the branch has taken it. */
-export const ROUTE_LOOKAHEAD = 70;
+/** Metres before a junction a bot starts steering by the branch (the main road's own plan, ramps and speeds apply until then: the branch lies on the main road for its flare); it holds the choice until the branch has taken it. */
+export const ROUTE_LOOKAHEAD = 14;
 /** Metres before a branch ends that a bot on it steers by the main road it is rejoining. */
 const ROUTE_REJOIN = 22;
 

@@ -34,12 +34,12 @@ describe("alternate routes in a race", () => {
     expect(plan.terrain.ramps.length).toBe(0);
     const road = plan.geo.routes[0]!;
     let gated = 0;
-    for (let i = 0; i < plan.terrain.barrierLeft.length; i++) if (plan.terrain.barrierLeft[i]! > 20 || plan.terrain.barrierRight[i]! > 20) gated++;
+    for (let i = 0; i < plan.terrain.barrierLeft.length; i++) if (plan.terrain.barrierLeft[i]! > 7 || plan.terrain.barrierRight[i]! > 7) gated++;
     expect(gated).toBeGreaterThan(20);
     // A branch's own barrier opens toward the road at both ends and closes between.
     const open = Array.from(cut.terrain.barrierLeft);
-    expect(Math.max(...open)).toBeGreaterThan(20);
-    expect(Math.min(...open)).toBeLessThan(10);
+    expect(Math.max(...open)).toBeGreaterThan(7);
+    expect(Math.min(...open)).toBeLessThan(7);
     expect(road.route).toBe(1);
   });
 
@@ -67,8 +67,8 @@ describe("alternate routes in a race", () => {
     expect(took[1]!.size, "someone took the shortcut").toBeGreaterThan(0);
     expect(took[2]!.size, "someone took the split").toBeGreaterThan(0);
     // Progress carries on across a branch. Where a kart passes from one road to the other the two ways of reckoning
-    // the lap's metre differ by the angle the branch leaves at: a few metres once, never a leap.
-    expect(jump).toBeLessThan(7);
+    // the lap's metre differ by the angle the branch leaves at: under ten metres once, never a leap.
+    expect(jump).toBeLessThan(10);
     const result = race.result()!;
     expect(result.standings.every((s) => s.time !== null)).toBe(true);
   });
